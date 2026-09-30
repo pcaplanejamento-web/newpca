@@ -1,9 +1,10 @@
+import { escopoMesa } from "@/lib/acesso-mesa";
 import { exigirSessao, recusa } from "@/lib/api-auth";
 import { conformidadeDosItens } from "@/lib/catalogo";
 import { type ItemDfdRow, listarItensDfds } from "@/lib/dfd";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
-import { unidadesDaSessao } from "@/lib/grupos";
-import { ok } from "@/lib/http";
+import { erro, ok } from "@/lib/http";
+import { redigirItens } from "@/lib/mesa-redacao";
 import { anoMarcadosDoPca } from "@/lib/pca-espaco";
 import { listarPadronizacao } from "@/lib/padronizacao";
 
@@ -27,7 +28,9 @@ export async function GET(req: Request) {
   const negado = recusa(g.acesso, doPca ? "pca" : "dfd", "visualizar");
   if (negado) return negado;
   let itens: ItemDfdRow[];
-  const un = await unidadesDaSessao(g.u);
+  const esc = await escopoMesa();
+  if (!esc) return erro("Faça login.", 401);
+  const un = esc.un;
   if (doPca) {
     // Com a visão dos MARCADOS ligada no PCA (o servidor decide), também os itens do ano dele ainda na Mesa do sistema.
     itens = (await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca))).filter((it) => un.acessivel(it.reparticaoId));
@@ -37,6 +40,8 @@ export async function GET(req: Request) {
     const repId = idDoFiltro(un.filtro);
     itens = repId === false ? [] : await listarItensDfds(repId ?? undefined, undefined, Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : null);
   }
+  // As LINHAS da pessoa ("só os meus", detalhe do papel): só os itens dos DFDs dela.
+  itens = redigirItens(itens, esc.meus);
   // Auxiliares: uma falha na conferência do catálogo ou no cadastro da padronização nunca derruba a lista (a coluna fica
   // "—"; as da padronização só não aparecem).
   const [catalogo, padronizacao] = await Promise.all([

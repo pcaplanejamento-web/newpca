@@ -808,6 +808,21 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual({ ...r }, { t: null, w: 0, v: null, s: 0 });
   });
 
+  it("0074 detalhes do papel: coluna com padrão '{}' (sem restrições) em todos os papéis + índices de criado_por", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0074")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("INSERT INTO papeis (nome, capacidades) VALUES ('Consulta', '{}')");
+    for (const arq of arquivos.filter((f) => f >= "0074")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    const linhas = a.prepare("SELECT detalhes AS d FROM papeis").all() as { d: string }[];
+    assert.ok(linhas.length >= 4);
+    for (const l of linhas) assert.equal(l.d, "{}");
+    const idx = (a.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as { name: string }[]).map((r) => r.name);
+    assert.ok(idx.includes("protocolos_dfd_criado_por_idx"));
+    assert.ok(idx.includes("dfds_criado_por_idx"));
+    a.exec("INSERT INTO papeis (nome, capacidades) VALUES ('Novo', '{}')");
+    assert.equal((a.prepare("SELECT detalhes AS d FROM papeis WHERE nome = 'Novo'").get() as { d: string }).d, "{}");
+  });
+
   it("0070 cargos: semeia os cargos já informados (sem repetir, sem caixa) e o nome é único sem caixa", () => {
     const a = new DatabaseSync(":memory:");
     const antes = arquivos.filter((f) => f < "0070");

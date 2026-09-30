@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import type { PcaResumo } from "@/lib/dfd";
 import { brl, num } from "@/lib/format";
 import { motivosNaoEnviar } from "@/lib/pca-core";
-import type { ProtocoloResumo } from "@/lib/protocolo";
+import type { ProtocoloNaMesa } from "@/lib/mesa-redacao";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { labelCls, selectCls } from "./formStyles";
@@ -40,7 +40,7 @@ export function EnviarAoPca({
   pcaFixo,
   onConcluido,
 }: {
-  selecionados: ProtocoloResumo[];
+  selecionados: ProtocoloNaMesa[];
   pcas: PcaResumo[];
   pcaFixo?: PcaResumo;
   onConcluido: () => void;
@@ -52,7 +52,7 @@ export function EnviarAoPca({
   const [enviando, setEnviando] = useState(false);
   const pca = destinos.find((p) => p.id === pcaId) ?? null;
 
-  const motivos = (p: ProtocoloResumo) =>
+  const motivos = (p: ProtocoloNaMesa) =>
     motivosNaoEnviar({
       anoProtocolo: p.anoPca,
       anoPca: pca?.ano ?? null,

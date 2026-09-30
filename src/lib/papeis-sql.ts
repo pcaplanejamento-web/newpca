@@ -149,7 +149,8 @@ export function consultaPapelDaChave(db: Db, chave: "admin" | "gestor" | "membro
 // o papel em uso (ou do sistema, ou o padrão) não se exclui.
 // ---------------------------------------------------------------------------------------------------------------
 
-export type DadosPapel = { nome: string; descricao: string | null; capacidades: string; padraoCadastro: boolean };
+/** `capacidades` e `detalhes` = o JSON já normalizado (os detalhes COMPACTOS — `compactarDetalhes`; ausente = `{}`). */
+export type DadosPapel = { nome: string; descricao: string | null; capacidades: string; detalhes?: string; padraoCadastro: boolean };
 
 /** Cria o papel no FIM da ordem; `padraoCadastro` = passa a ser o padrão (o anterior deixa de ser, no mesmo lote). */
 export function comandosCriarPapel(db: Db, d: DadosPapel) {
@@ -159,6 +160,7 @@ export function comandosCriarPapel(db: Db, d: DadosPapel) {
       nome: d.nome,
       descricao: d.descricao,
       capacidades: d.capacidades,
+      detalhes: d.detalhes ?? "{}",
       padraoCadastro: d.padraoCadastro,
       ordem: sql`(SELECT COALESCE(MAX(${papeis.ordem}), 0) + 1 FROM ${papeis})`,
     })

@@ -610,6 +610,21 @@ export const LOGICAS: LogicaRef[] = [
     configuravelEm: { rotulo: "Papéis" },
   },
   {
+    id: "rbac-detalhes",
+    dominio: "acesso",
+    titulo: "Detalhes do papel: o controle fino dentro das telas",
+    descricao:
+      "Na aba Detalhes do papel, o ADM restringe o que a pessoa vê e faz DENTRO das telas que abre — os detalhes só RETIRAM acesso e valem em qualquer grupo. Na Mesa do sistema e na de cada PCA: ver ou não o Responsável e a Distribuição (quem protocolou), alterar o Responsável em 3 níveis (não altera · só assume para si · qualquer pessoa do grupo), as LINHAS ('só os meus' = os protocolos em que a pessoa é o Responsável ou que ela protocolou, com os DFDs e itens deles) e o desempenho por pessoa do Dashboard.",
+    detalhes: [
+      "O que fica oculto não sai do servidor: as listas, os banners, o Dashboard, a exportação e o histórico chegam sem o dado (a troca de Responsável some do histórico de quem não o vê).",
+      "'Só os meus' vale nas listas, nos banners, nas buscas, nas conferências, na edição em massa, no vincular e na importação: fora das linhas da pessoa, o protocolo responde como o de unidade sem acesso. Não vale no Dashboard do PCA nem na consulta pública (o plano consolidado).",
+      "'Só assume para si' = assumir o protocolo sem responsável ou soltar o seu; tomar o de outra pessoa exige 'qualquer pessoa do grupo'. O responsável padrão do Perfil só entra ao protocolar se o papel permitir.",
+      "Sem o Responsável e sem a Distribuição, não há desempenho por pessoa. O Administrador ignora os detalhes (regra firme).",
+    ],
+    fonte: "papeis-detalhes-core (coerceDetalhes) + mesa-visao-core (visaoMesa / motivoResponsavel) + acesso-mesa (escopoMesa) + mesa-redacao",
+    configuravelEm: { rotulo: "Papéis" },
+  },
+  {
     id: "rbac-recurso",
     dominio: "acesso",
     titulo: "Cada registro segue a tela em que está",

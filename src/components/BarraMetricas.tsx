@@ -20,6 +20,9 @@ export function BarraMetricas({
   anos,
   resumo,
   aviso,
+  dados,
+  medidas,
+  periodo = true,
 }: {
   filtro: FiltroMetricas;
   onFiltro: (f: FiltroMetricas) => void;
@@ -27,22 +30,29 @@ export function BarraMetricas({
   anos: number[];
   resumo?: ReactNode;
   aviso?: ReactNode;
+  /** Os DADOS e as MEDIDAS que o papel permite (os detalhes tiram o que depende de um dado oculto) — sem = todos. */
+  dados?: readonly DadoMetricas[];
+  medidas?: readonly MedidaMetricas[];
+  /** O seletor de período (sem a data da protocolação à vista, não há período). */
+  periodo?: boolean;
 }) {
   const set = (p: Partial<FiltroMetricas>) => onFiltro({ ...filtro, ...p });
+  const opcoesDado = dados ? DADOS_METRICAS.filter((d) => dados.includes(d.value)) : DADOS_METRICAS;
+  const opcoesMedida = medidas ? MEDIDAS_METRICAS.filter((m) => medidas.includes(m.value)) : MEDIDAS_METRICAS;
   return (
     <section aria-label="Filtros das métricas" className="space-y-1.5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
-        <PeriodoPicker value={filtro.periodo} anos={anos} onChange={(periodo) => set({ periodo })} className="w-full min-w-0 sm:w-auto" />
+        {periodo && <PeriodoPicker value={filtro.periodo} anos={anos} onChange={(p) => set({ periodo: p })} className="w-full min-w-0 sm:w-auto" />}
         <div className="col-span-2 row-start-2 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:contents">
           <SelectField compacto label="Dado" value={filtro.dado} onChange={(e) => set({ dado: e.target.value as DadoMetricas })}>
-            {DADOS_METRICAS.map((d) => (
+            {opcoesDado.map((d) => (
               <option key={d.value} value={d.value}>
                 {d.label}
               </option>
             ))}
           </SelectField>
           <SelectField compacto label="Medida" value={filtro.medida} onChange={(e) => set({ medida: e.target.value as MedidaMetricas })}>
-            {MEDIDAS_METRICAS.map((m) => (
+            {opcoesMedida.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

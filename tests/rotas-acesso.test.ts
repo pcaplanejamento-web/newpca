@@ -98,6 +98,28 @@ describe("acesso das rotas da API", () => {
     assert.deepEqual(erros, []);
   });
 
+  // O ESCOPO DA MESA (os detalhes do papel: as linhas "só os meus" e o que ele vê): a rota marcada `visao` lê o escopo da
+  // requisição; nenhuma rota da Mesa usa o escopo de unidades por fora dele (uma rota nova não escapa das linhas).
+  it("as rotas da Mesa leem o escopo da Mesa (unidades + linhas + visão do papel)", () => {
+    const erros: string[] = [];
+    const DA_MESA = /^(dfd|protocolo|mesa)(\/|$)/;
+    for (const arq of arquivos) {
+      const k = chave(arq);
+      const regras = ROTAS_ACESSO[k] ?? {};
+      const fonte = readFileSync(arq, "utf8");
+      for (const [m, corpo] of metodos(fonte)) {
+        const r = regras[m];
+        const visao = !!r && (r.tipo === "tela" || r.tipo === "recurso") && r.visao === true;
+        const le = corpo.includes("escopoMesa(");
+        if (visao && !le) erros.push(`${m} ${k}: marcada visao, mas não chama escopoMesa(`);
+        if (le && !visao) erros.push(`${m} ${k}: chama escopoMesa( — marque naMesa( no mapa`);
+        if (DA_MESA.test(k) && /\bunidadesDaSessao\(|\bgetReparticaoContexto\(/.test(corpo)) erros.push(`${m} ${k}: usa o escopo de unidades por fora do escopoMesa(`);
+        if (DA_MESA.test(k) && r && r.tipo !== "publica" && r.tipo !== "interna" && !visao) erros.push(`${m} ${k}: rota da Mesa sem o escopo da Mesa`);
+      }
+    }
+    assert.deepEqual(erros, []);
+  });
+
   // A LIMPEZA dos papéis: o papel antigo (`role` admin | gestor | membro) não decide mais nada — quem é Administrador vem
   // do PAPEL (`u.admin`) e o que se faz em cada tela, das capacidades. `usuarios.role` segue gravado só como ESPELHO.
   it("ninguém decide acesso pelo `role` antigo (nem `exigirEditor`)", () => {

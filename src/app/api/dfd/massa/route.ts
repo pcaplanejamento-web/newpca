@@ -1,5 +1,5 @@
 import { motivoRecusa } from "@/lib/acesso";
-import { pcaDosProtocolos } from "@/lib/acesso-mesa";
+import { dfdNasLinhas, escopoMesa, MSG_SEM_ACESSO_DFD, pcaDosProtocolos } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
@@ -8,7 +8,6 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, listarCamposMassa } from "@/lib/dfd";
 import { aplicarMassaDfd, type CampoMassa } from "@/lib/dfd-tratamento";
 import { massaDfdsSchema } from "@/lib/dfd-validation";
-import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
@@ -51,7 +50,9 @@ export async function POST(req: Request) {
 
   const regras = await getRegrasAvaliacao();
   if (!editavelDe(regras, CHAVE_CAMPO[acao.campo])) return erro("Campo travado nas Configurações → Avaliação.", 403);
-  const { acessivel } = await unidadesDaSessao(a.u);
+  const esc = await escopoMesa();
+  if (!esc) return erro("Faça login.", 401);
+  const { acessivel } = esc;
   if (acao.campo === "reparticao" && !acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
   const respDestino = acao.campo === "reparticao" ? await carregarResponsaveis(acao.reparticaoId) : null;
 
@@ -70,8 +71,8 @@ export async function POST(req: Request) {
   };
   for (const d of dfds) {
     try {
-      if (!acessivel(d.reparticaoId)) {
-        falhas.push({ id: d.id, numero: d.numero, motivo: "Sem acesso à unidade deste DFD." });
+      if (!acessivel(d.reparticaoId) || !dfdNasLinhas(esc, d.id)) {
+        falhas.push({ id: d.id, numero: d.numero, motivo: acessivel(d.reparticaoId) ? MSG_SEM_ACESSO_DFD : "Sem acesso à unidade deste DFD." });
         continue;
       }
       // O PAPEL manipula na Mesa em que o DFD está (a do sistema ou a do PCA).

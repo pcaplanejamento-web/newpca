@@ -2,6 +2,7 @@ import { asc, count, eq, sql } from "drizzle-orm";
 import { papeis, usuarios } from "@/db/schema";
 import { getDb } from "./db";
 import { type Capacidades, coerceCapacidades } from "./papeis-core";
+import { compactarDetalhes, type DetalhesPapel, detalhesDoJson } from "./papeis-detalhes-core";
 import { comandoAtualizarPapel, comandoExcluirPapel, comandoMarcarPadrao, comandosCriarPapel } from "./papeis-sql";
 
 /**
@@ -16,6 +17,8 @@ export type PapelCadastro = {
   /** admin | gestor | membro nos papéis do SISTEMA; `null` nos criados pelo ADM. */
   chave: string | null;
   capacidades: Capacidades;
+  /** As RESTRIÇÕES dentro das telas (normalizadas; sem nenhuma = o padrão). */
+  detalhes: DetalhesPapel;
   padraoCadastro: boolean;
   ordem: number;
   /** Quantas pessoas têm o papel (todas; `ativas` = só as ativas). */
@@ -48,6 +51,7 @@ export async function listarPapeis(): Promise<PapelCadastro[]> {
     descricao: p.descricao,
     chave: p.chave,
     capacidades: lerCapacidades(p.capacidades),
+    detalhes: detalhesDoJson(p.detalhes),
     padraoCadastro: p.padraoCadastro,
     ordem: p.ordem,
     pessoas: uso.get(p.id)?.pessoas ?? 0,
@@ -72,10 +76,13 @@ export function nomeDuplicado(e: unknown): boolean {
   return /UNIQUE constraint failed: papeis\.nome/i.test(msg);
 }
 
+/** Os detalhes como vão ao banco: o COMPACTO (só o que difere do padrão — `{}` = sem restrições). */
+const detalhesParaGravar = (d: DetalhesPapel) => JSON.stringify(compactarDetalhes(d));
+
 /** Cria o papel (no fim da ordem); `padraoCadastro` = vira o padrão dos novos cadastros. Devolve o id. */
-export async function criarPapel(d: { nome: string; descricao: string | null; capacidades: Capacidades; padraoCadastro: boolean }): Promise<number> {
+export async function criarPapel(d: { nome: string; descricao: string | null; capacidades: Capacidades; detalhes: DetalhesPapel; padraoCadastro: boolean }): Promise<number> {
   const db = getDb();
-  const cmds = comandosCriarPapel(db, { ...d, capacidades: JSON.stringify(d.capacidades) });
+  const cmds = comandosCriarPapel(db, { ...d, capacidades: JSON.stringify(d.capacidades), detalhes: detalhesParaGravar(d.detalhes) });
   const [[novo]] = (await db.batch(cmds as unknown as Parameters<typeof db.batch>[0])) as unknown as [{ id: number }[]];
   return novo.id;
 }
@@ -86,7 +93,7 @@ export async function criarPapel(d: { nome: string; descricao: string | null; ca
  */
 export async function atualizarPapel(
   atual: PapelCadastro,
-  d: { nome?: string; descricao?: string | null; capacidades?: Capacidades; padraoCadastro?: boolean },
+  d: { nome?: string; descricao?: string | null; capacidades?: Capacidades; detalhes?: DetalhesPapel; padraoCadastro?: boolean },
 ): Promise<string | null> {
   if (atual.chave === "admin") return "O papel Administrador é fixo: tem acesso a tudo, inclusive à Administração.";
   if (d.padraoCadastro === false && atual.padraoCadastro) return "Há sempre um papel padrão dos novos cadastros — marque outro papel como padrão.";
@@ -95,6 +102,7 @@ export async function atualizarPapel(
     ...(d.nome !== undefined ? { nome: d.nome } : {}),
     ...(d.descricao !== undefined ? { descricao: d.descricao } : {}),
     ...(d.capacidades !== undefined ? { capacidades: JSON.stringify(d.capacidades) } : {}),
+    ...(d.detalhes !== undefined ? { detalhes: detalhesParaGravar(d.detalhes) } : {}),
   };
   const cmds = [comandoAtualizarPapel(db, atual.id, campos), ...(d.padraoCadastro && !atual.padraoCadastro ? [comandoMarcarPadrao(db, atual.id)] : [])];
   await db.batch(cmds as unknown as Parameters<typeof db.batch>[0]);
@@ -110,16 +118,32 @@ export async function excluirPapel(atual: PapelCadastro): Promise<string | null>
   return r.length ? null : "O papel passou a ser usado agora há pouco — recarregue e tente de novo.";
 }
 
-/** Um papel oferecido na tela de Usuários (a troca, a aprovação e o "Ver acesso"). */
-export type OpcaoPapel = { id: number; nome: string; descricao: string | null; chave: string | null; padraoCadastro: boolean; capacidades: Capacidades };
+/** Um papel oferecido na tela de Usuários (a troca, a aprovação e o "Ver acesso" — com as restrições do papel). */
+export type OpcaoPapel = {
+  id: number;
+  nome: string;
+  descricao: string | null;
+  chave: string | null;
+  padraoCadastro: boolean;
+  capacidades: Capacidades;
+  detalhes: DetalhesPapel;
+};
 
 /** Os papéis da tela de Usuários, na ordem do cadastro (o Administrador primeiro). */
 export async function opcoesPapel(): Promise<OpcaoPapel[]> {
   const linhas = await getDb()
-    .select({ id: papeis.id, nome: papeis.nome, descricao: papeis.descricao, chave: papeis.chave, padraoCadastro: papeis.padraoCadastro, capacidades: papeis.capacidades })
+    .select({
+      id: papeis.id,
+      nome: papeis.nome,
+      descricao: papeis.descricao,
+      chave: papeis.chave,
+      padraoCadastro: papeis.padraoCadastro,
+      capacidades: papeis.capacidades,
+      detalhes: papeis.detalhes,
+    })
     .from(papeis)
     .orderBy(asc(papeis.ordem), asc(papeis.id));
-  return linhas.map((p) => ({ ...p, capacidades: lerCapacidades(p.capacidades) }));
+  return linhas.map((p) => ({ ...p, capacidades: lerCapacidades(p.capacidades), detalhes: detalhesDoJson(p.detalhes) }));
 }
 
 /** O papel pelo id (nome + chave — a troca de papel de um usuário confere antes); `null` = não existe. */

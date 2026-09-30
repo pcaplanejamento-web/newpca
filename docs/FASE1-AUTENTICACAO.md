@@ -21,6 +21,9 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
   cadastrados em Configurações → Papéis) decide o que ela faz em cada uma — Visualizar · Manipular · Importar · Exportar ·
   Excluir · Configurar; o Administrador (fixo) faz tudo. `status` (`ativo`|`pendente`|`inativo`) em `usuarios`; o `role`
   antigo segue gravado só como espelho (nada decide por ele).
+- **Detalhes do papel** (`papeis.detalhes`, migração `0074`): dentro das telas que abre, o papel pode ver ou não o Responsável
+  e a Distribuição, alterar o Responsável em 3 níveis, ver só os próprios protocolos ("só os meus" — aplicado no servidor) e o
+  desempenho por pessoa. Só retiram acesso; o Administrador os ignora; o que fica oculto não sai do servidor.
 
 ## Fluxo de acesso
 - **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula (**exatamente 6 números**, com as 6 posições desenhadas no campo e um "(?)"), contato institucional = o WhatsApp da pessoa (ícone do WhatsApp e o "(?)"), cargo ou função (seleção da lista

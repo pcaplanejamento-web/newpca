@@ -1,4 +1,5 @@
 import { getAcesso, podeMesa } from "./acesso";
+import { escopoMesa } from "./acesso-mesa";
 import { getRegrasAvaliacao } from "./avaliacao";
 import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
@@ -8,6 +9,8 @@ import { idDoFiltro } from "./escopo-unidades-core";
 import { getGrupoAtivoId, unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
+import { redigirDfds, redigirProtocolos } from "./mesa-redacao";
+import { pessoasDesignaveis } from "./mesa-visao-core";
 import type { AtividadeTupla } from "./mesa-metricas";
 import { listarOrgaos } from "./orgaos";
 import { PODE_MESA_NADA } from "./papeis-core";
@@ -88,14 +91,20 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     // O botão "Dados completos" da barra (a preferência do usuário — a Mesa já ABRE assim, sem piscar).
     u ? listarPreferenciasTabela(u.id, PREF_DADOS_COMPLETOS) : Promise.resolve({} as Record<string, unknown>),
   ]);
-  const protocolos = pcaId ? protocolosBrutos.filter((p) => acessivel(p.reparticaoId)) : protocolosBrutos;
-  const dfds = pcaId ? dfdsBrutos.filter((d) => acessivel(d.reparticaoId)) : dfdsBrutos;
-  // Diretório de EXIBIÇÃO (foto + apelido): quem aparece nas colunas Responsável/Distribuição e não é do
-  // grupo (outro grupo, inativo) — só para mostrar, nunca como opção. O próprio usuário entra sempre: a Mesa pode abrir
-  // filtrada por ele (a foto dele no filtro de Responsável).
-  const doGrupo = new Set(pessoas.map((p) => p.id));
+  // A VISÃO do papel (detalhes) e as LINHAS da pessoa ("só os meus"): o que o papel não vê NÃO sai do servidor — a
+  // redação roda aqui, DEPOIS das listas memorizadas (compartilhadas entre as pessoas; nunca são alteradas).
+  const vis = ctx.pode.vis;
+  const meus = (await escopoMesa())?.meus ?? null;
+  const protocolos = redigirProtocolos(pcaId ? protocolosBrutos.filter((p) => acessivel(p.reparticaoId)) : protocolosBrutos, vis, meus);
+  const dfds = redigirDfds(pcaId ? dfdsBrutos.filter((d) => acessivel(d.reparticaoId)) : dfdsBrutos, vis, meus);
+  // As PESSOAS designáveis como Responsável (o nível do papel: todas do grupo · só a própria · nenhuma).
+  const designaveis = pessoasDesignaveis(vis, u?.id ?? null, pessoas);
+  // Diretório de EXIBIÇÃO (foto + apelido): quem aparece nas colunas Responsável/Distribuição (só as que o papel vê) e
+  // não é designável — só para mostrar, nunca como opção. O próprio usuário entra sempre: a Mesa pode abrir filtrada
+  // por ele (a foto dele no filtro de Responsável).
+  const doGrupo = new Set(designaveis.map((p) => p.id));
   const outrasPessoas = await pessoasPorIds(
-    [...protocolos.flatMap((p) => [p.responsavelId, p.distribuidorId]), u?.id].filter((id) => id != null && !doGrupo.has(id)),
+    [...protocolos.flatMap((p) => [p.responsavelId, p.distribuidorId]), u?.id].filter((id): id is number => id != null && !doGrupo.has(id)),
   );
   return {
     dfds,
@@ -106,13 +115,13 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     pcas: ctx.pcas,
     regras: ctx.regras,
     orgaos: ctx.orgaos,
-    pessoas,
+    pessoas: designaveis,
     outrasPessoas,
     situacoes,
     usuarioId: u?.id ?? null,
     pode: ctx.pode,
-    /** Filtro com que a Mesa ABRE (preferência do Perfil; na Mesa do PCA, todos). */
-    filtroInicial: pcaId ? FILTRO_MESA_TODOS : filtroInicialMesa(pref, u?.id ?? null),
+    /** Filtro com que a Mesa ABRE (preferência do Perfil; na Mesa do PCA — ou sem ver o Responsável —, todos). */
+    filtroInicial: pcaId || !vis.responsavel.ver ? FILTRO_MESA_TODOS : filtroInicialMesa(pref, u?.id ?? null),
     /** O PCA do cabeçalho que está filtrando a Mesa principal (`null` = todos). */
     pcaFiltro,
     /** Mesa do PCA: o ano dos MARCADOS ainda na Mesa do sistema que ela também mostra (`null` = visão desligada). */

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { getDb } from "./db";
 import { type Capacidades, coerceCapacidades } from "./papeis-core";
+import { type DetalhesPapel, detalhesDoJson } from "./papeis-detalhes-core";
 import { hashSenha, sha256Hex, toHex, verificarSenha } from "./password";
 import { urlFoto } from "./pessoa";
 import { papeis, sessoes, usuarios } from "@/db/schema";
@@ -36,7 +37,9 @@ export type UsuarioSessao = {
   trocarSenha: boolean;
 };
 
-export type PapelSessao = { id: number | null; nome: string; chave: string | null; capacidades: Capacidades };
+/** O papel da sessão: as AÇÕES por tela (`capacidades`) e os DETALHES — o controle fino dentro delas (colunas das Mesas,
+ * Responsável, linhas, histórico, edições — `papeis-detalhes-core.ts`; o Administrador os ignora). */
+export type PapelSessao = { id: number | null; nome: string; chave: string | null; capacidades: Capacidades; detalhes: DetalhesPapel };
 
 // ---------------------------------------------------------------------------
 // sessões
@@ -81,15 +84,22 @@ export async function encerrarSessaoAtual(): Promise<void> {
 /** O papel da pessoa: o `papel_id`; sem ele (legado), o papel do sistema de mesma chave que o `role`. */
 export const papelDoUsuarioSql = sql`COALESCE(${usuarios.papelId}, (SELECT p2.id FROM ${papeis} AS p2 WHERE p2.chave = ${usuarios.role}))`;
 
-/** O papel lido do banco → o da sessão (capacidades normalizadas; sem papel = nenhuma tela). */
-export function papelDaLinha(p: { id: number | null; nome: string | null; chave: string | null; capacidades: string | null }): PapelSessao {
+/** O papel lido do banco → o da sessão (capacidades e detalhes normalizados; sem papel = nenhuma tela; JSON inválido = o
+ * padrão dos detalhes, sem restrições). */
+export function papelDaLinha(p: {
+  id: number | null;
+  nome: string | null;
+  chave: string | null;
+  capacidades: string | null;
+  detalhes?: string | null;
+}): PapelSessao {
   let caps: Capacidades = {};
   try {
     caps = coerceCapacidades(JSON.parse(p.capacidades ?? "{}"));
   } catch {
     caps = {};
   }
-  return { id: p.id, nome: p.nome ?? "Sem papel", chave: p.chave, capacidades: caps };
+  return { id: p.id, nome: p.nome ?? "Sem papel", chave: p.chave, capacidades: caps, detalhes: detalhesDoJson(p.detalhes) };
 }
 
 /** As colunas da SESSÃO (com o papel) — `getUsuarioAtual` e quem monta a pessoa sem cookie (cron, feed .ics). Use com
@@ -108,6 +118,7 @@ export const colunasSessao = {
   papelNome: papeis.nome,
   papelChave: papeis.chave,
   papelCapacidades: papeis.capacidades,
+  papelDetalhes: papeis.detalhes,
   trocarSenha: usuarios.trocarSenha,
 };
 
@@ -124,13 +135,14 @@ type LinhaSessao = {
   papelNome: string | null;
   papelChave: string | null;
   papelCapacidades: string | null;
+  papelDetalhes: string | null;
   trocarSenha: boolean;
 };
 
 /** A linha de `colunasSessao` → a pessoa da sessão. */
 export function sessaoDaLinha(row: LinhaSessao): UsuarioSessao {
-  const { temFoto, versao, papelId, papelNome, papelChave, papelCapacidades, ...u } = row;
-  const papel = papelDaLinha({ id: papelId, nome: papelNome, chave: papelChave, capacidades: papelCapacidades });
+  const { temFoto, versao, papelId, papelNome, papelChave, papelCapacidades, papelDetalhes, ...u } = row;
+  const papel = papelDaLinha({ id: papelId, nome: papelNome, chave: papelChave, capacidades: papelCapacidades, detalhes: papelDetalhes });
   return { ...u, apelido: u.apelido ?? null, foto: urlFoto(u.id, !!temFoto, versao), admin: papel.chave === "admin", papel };
 }
 

@@ -92,7 +92,10 @@ import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea
 import { type GrupoOpcao, GruposDaPessoa } from "@/components/GruposDaPessoa";
 import { MatrizCapacidades } from "@/components/MatrizCapacidades";
 import { ResumoPapel } from "@/components/ResumoPapel";
+import { DetalhesPapelEditor } from "@/components/DetalhesPapelEditor";
+import { ResumoDetalhesPapel } from "@/components/ResumoDetalhesPapel";
 import { CAPACIDADES_MEMBRO, type Capacidades } from "@/lib/papeis-core";
+import { coerceDetalhes, type DetalhesPapel, detalhesPadrao } from "@/lib/papeis-detalhes-core";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
@@ -344,7 +347,7 @@ function DemoUsuario() {
         meuId={1}
         unidades={[{ id: 1, codigo: "SEPLAN", nome: "Secretaria de Planejamento", orgao: "Prefeitura Municipal de Rio Verde" }]}
         cargos={["Analista de Planejamento", "Diretor"]}
-        papeis={[{ id: 3, nome: "Membro", descricao: null, chave: "membro", padraoCadastro: true, capacidades: {} }]}
+        papeis={[{ id: 3, nome: "Membro", descricao: null, chave: "membro", padraoCadastro: true, capacidades: {}, detalhes: detalhesPadrao() }]}
         grupos={[{ id: 1, nome: "Planejamento e Custos", abas: ["dfd", "pca"] }]}
         envioEmail
         ocupado={false}
@@ -1085,9 +1088,13 @@ const GRUPOS_DEMO: GrupoOpcao[] = [
   { id: 3, nome: "Sem permissão", abas: [] },
 ];
 
+/** Os detalhes de exemplo (o gravado): "só os meus" e só assume para si. */
+const DETALHES_DEMO = coerceDetalhes({ mesa: { linhas: "meus", responsavel: { alterar: "si" } } });
+
 function PapeisDemo() {
   const [caps, setCaps] = useState<Capacidades>(CAPACIDADES_MEMBRO);
   const [grupos, setGrupos] = useState<number[]>([1]);
+  const [det, setDet] = useState<DetalhesPapel>(DETALHES_DEMO);
   return (
     <div className="space-y-[var(--gap-block)]">
       <p className="text-[12.5px] text-muted">
@@ -1108,8 +1115,24 @@ function PapeisDemo() {
           <Checkbox label="Caixa parcial (indeterminado)" indeterminado checked={false} onChange={() => {}} />
         </div>
       </div>
+      <p className="text-[12.5px] text-muted">
+        DetalhesPapelEditor (a aba &quot;Detalhes&quot; do papel — as restrições DENTRO das telas; as linhas que mudaram em relação ao
+        gravado ficam marcadas; sem <code>onChange</code>, só leitura):
+      </p>
+      <DetalhesPapelEditor valor={det} original={DETALHES_DEMO} onChange={setDet} />
+      <div className="grid gap-[var(--gap-block)] md:grid-cols-2">
+        <div className="space-y-2">
+          <p className="text-[12.5px] font-semibold text-text-2">ResumoDetalhesPapel (compacto — a coluna Detalhes da lista de papéis)</p>
+          <ResumoDetalhesPapel detalhes={det} compacto />
+          <ResumoDetalhesPapel detalhes={detalhesPadrao()} compacto />
+        </div>
+        <div className="space-y-2">
+          <p className="text-[12.5px] font-semibold text-text-2">ResumoDetalhesPapel (por extenso — o Perfil e o &quot;Ver acesso&quot;)</p>
+          <ResumoDetalhesPapel detalhes={det} />
+        </div>
+      </div>
       <p className="text-[12.5px] font-semibold text-text-2">AcessoDaPessoa (&quot;Ver acesso&quot;: o papel acima nos grupos marcados)</p>
-      <AcessoDaPessoa admin={false} papel={{ nome: "Membro (editado)", capacidades: caps }} grupos={GRUPOS_DEMO.filter((g) => grupos.includes(g.id))} />
+      <AcessoDaPessoa admin={false} papel={{ nome: "Membro (editado)", capacidades: caps, detalhes: det }} grupos={GRUPOS_DEMO.filter((g) => grupos.includes(g.id))} />
     </div>
   );
 }
@@ -3174,7 +3197,7 @@ export function Catalogo() {
         <AcessoRestrito mensagem="Somente administradores podem acessar esta área." />
       </Secao>
 
-      <Secao titulo="Papéis — MatrizCapacidades (Telas × Ações; marcar a linha/coluna; &quot;—&quot; = não se aplica) · ResumoPapel · GruposDaPessoa · AcessoDaPessoa (&quot;Ver acesso&quot;) · Checkbox parcial">
+      <Secao titulo="Papéis — MatrizCapacidades (Telas × Ações; marcar a linha/coluna; &quot;—&quot; = não se aplica) · ResumoPapel · DetalhesPapelEditor · ResumoDetalhesPapel · GruposDaPessoa · AcessoDaPessoa (&quot;Ver acesso&quot;) · Checkbox parcial">
         <PapeisDemo />
       </Secao>
 

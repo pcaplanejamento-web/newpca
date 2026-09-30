@@ -82,6 +82,9 @@ export const papeis = sqliteTable(
     descricao: text("descricao"),
     chave: text("chave"),
     capacidades: text("capacidades").notNull().default("{}"),
+    /** DETALHES (migração `0074`): o controle fino dentro das telas — colunas das Mesas, Responsável, linhas, histórico,
+     * edições (JSON COMPACTO, `papeis-detalhes-core.ts`; `{}` = sem restrições). */
+    detalhes: text("detalhes").notNull().default("{}"),
     padraoCadastro: integer("padrao_cadastro", { mode: "boolean" }).notNull().default(false),
     ordem: integer("ordem").notNull().default(0),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -388,6 +391,7 @@ export const dfdProtocolos = sqliteTable(
     index("protocolos_dfd_responsavel_idx").on(t.responsavelId),
     index("protocolos_dfd_situacao_idx").on(t.situacaoId),
     index("protocolos_dfd_pca_idx").on(t.pcaId),
+    index("protocolos_dfd_criado_por_idx").on(t.criadoPor),
   ],
 );
 
@@ -445,6 +449,7 @@ export const dfds = sqliteTable(
     index("dfds_reparticao_idx").on(t.reparticaoId),
     index("dfds_protocolo_idx").on(t.protocoloId),
     index("dfds_orgao_idx").on(t.orgaoId),
+    index("dfds_criado_por_idx").on(t.criadoPor),
   ],
 );
 

@@ -4,6 +4,7 @@ import { cache } from "react";
 import { grupos, permissoes, usuarioGrupos } from "@/db/schema";
 import { abasConhecidas } from "./abas";
 import type { AtorPasta } from "./tarefas-core";
+import { type VisaoMesa, visaoMesa } from "./mesa-visao-core";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 import {
@@ -153,7 +154,12 @@ export function atorPasta(a: Acesso): AtorPasta {
 
 /** O que o papel permite nas DUAS Mesas (a do sistema e a do PCA), no grupo ativo — cada recurso segue a sua. */
 export function podeMesa(a: Acesso): PodeMesa {
-  return { sistema: podeTela(a, "dfd"), pca: podeTela(a, "pca") };
+  return { sistema: podeTela(a, "dfd"), pca: podeTela(a, "pca"), vis: visaoDoAcesso(a) };
+}
+
+/** Os DETALHES do papel resolvidos para as Mesas (o Administrador = tudo, regra firme). */
+export function visaoDoAcesso(a: Acesso): VisaoMesa {
+  return visaoMesa(a.u.papel.detalhes, a.u.admin);
 }
 
 /** Os grupos da pessoa em que a tela ABRE (os quadros de tarefas, o calendário e os avisos seguem por grupo). `null` =

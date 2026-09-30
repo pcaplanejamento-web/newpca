@@ -202,6 +202,49 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   existia nunca; builder `auditoria-sql.ts`, testado no driver D1 real) e o DFD pela metade (`gravacaoParcial`); fora disso,
   Excluir. Sair de uma Mesa: reimportar um DFD que está em OUTRA Mesa (ex.: num protocolo enviado a um PCA) exige Importar
   também nela (e a análise já o marca "Não sobrescrevível").
+- **DETALHES DO PAPEL — o controle FINO dentro das telas (migração `0074`, aditiva — `papeis.detalhes` JSON COMPACTO, só o
+  que difere do padrão; `'{}'` = sem restrições = o comportamento de antes; + índices `criado_por` em `dfd_protocolos` e
+  `dfds`):** os detalhes só RETIRAM (o efetivo = a ação do papel **e** o detalhe; o Administrador os ignora — regra firme) e
+  valem em qualquer grupo. Núcleo PURO **`papeis-detalhes-core.ts`** (vocabulário, `CATALOGO_COLUNAS_MESA` — as colunas das 4
+  tabelas em 3 classes fixa/coluna/dado —, `coerceDetalhes` com as IMPLICAÇÕES: sem ver o Responsável não altera; sem
+  Responsável e sem Distribuição não há desempenho; Situação oculta não se altera; Valores ocultos não alteram itens/capa; sem
+  personalizar não publica nem modera —, `compactarDetalhes`, `diffDetalhes`/`textoDiffDetalhes`/`restringeAlgo`,
+  `resumoDetalhes`, `MODELOS_DETALHES`) + **`mesa-visao-core.ts`** (`VisaoMesa` = os detalhes resolvidos, levada ao cliente
+  em **`PodeMesa.vis`** — as telas perguntam a ela, nunca deduzem da ausência de um campo; `motivoResponsavel`,
+  `pessoasDesignaveis`, `padraoAoProtocolar`, `motivoResponsavelPadrao`, `metricasPermitidas`, `podeSubAcao`). A sessão lê o
+  papel com os detalhes (`PapelSessao.detalhes`, `visaoDoAcesso`). **ENTREGA 1 (no ar) — Pessoas e linhas, na Mesa do sistema
+  e na de cada PCA:** ver o **Responsável** (coluna, filtro do topo, célula, massa, Dashboard, histórico da troca), alterá-lo
+  em 3 níveis (**não altera · só assume para si** = assumir o SEM responsável ou soltar o seu — tomar o de outra pessoa exige
+  **qualquer pessoa do grupo**), ver a **Distribuição**, as **LINHAS** ("**só os meus**" = sou o Responsável OU protocolei;
+  o DFD avulso, quem criou) e o **desempenho por pessoa** (sem ele, `/api/mesa/execucao` devolve só as correções, sem
+  pessoas, e o Dashboard some com os Dados de pessoa, a medida Ações e a tabela). **O que o papel não vê NÃO SAI DO
+  SERVIDOR:** a REDAÇÃO (`mesa-redacao.ts`, puro, testado — roda por requisição DEPOIS dos `memoPorVersao`, copy-on-write,
+  nunca muda o cache compartilhado; campo oculto = chave AUSENTE) nas listas (`carregarMesa`), nos banners (`GET
+  /api/protocolo/[id]`, `GET /api/dfd/[id]`), nos itens e na execução; tipos **`ProtocoloNaMesa`/`DfdNaMesa`** (o TypeScript
+  obriga cada tela a tratar o campo ausente). **Escopo da Mesa por requisição:** **`escopoMesa()`** (`acesso-mesa.ts`, `cache`
+  do React) = as unidades + a visão + as LINHAS (`meus` = os ids pelos builders **`linhas-sql.ts`** — subconsulta, sem lista
+  de IN; testados no driver D1 real); `protocoloLegivel`/`dfdsLegiveisNaMesa`/`protocoloNasLinhas`/`dfdNasLinhas` em TODA
+  rota da Mesa (listas, detalhes, DELETE, históricos, conferências, itens, execução, massa, `pca/[id]/protocolos|itens`,
+  vincular, anti-sequestro do `POST /api/protocolo` e do `start-dfd`, `existentes` → `acessivel:false`) e na busca/conferência
+  dos VÍNCULOS de tarefa (`buscarVinculos`/`vinculoAcessivel`); fora das linhas responde como a unidade sem acesso (403, não
+  revela). O mapa **`rotas-acesso.ts`** marca essas rotas com **`naMesa(`** (`visao`) e o teste estático confere que chamam
+  `escopoMesa(` e que nenhuma rota da Mesa usa o escopo de unidades por fora dele. **Responsável** no servidor:
+  `motivoResponsavel` no `PATCH /api/protocolo/[id]` (403), na massa (falha por alvo), no padrão ao protocolar e no `PATCH
+  /api/perfil/preferencias`. **Histórico** (`historico-redacao.ts`, `redigirHistorico(linhas, regra)`): some a troca de um
+  campo que o papel não vê (pela CHAVE; a linha que ficou vazia sai) — `regraHistoricoMesa`; a **consulta PÚBLICA do PCA**
+  (`historicoPublico`) usa a `REGRA_PUBLICA` (sem autor, sem dados pessoais E sem Responsável/Situação — antes os nomes
+  vazavam no diff). `mascararTexto` mora em `dados-pessoais-core.ts`. **Telas:** a Mesa (`DfdsView`: colunas Responsável/
+  Distribuição, filtro do topo, célula — `podeTrocarResponsavel` —, massa, aviso "sai da sua Mesa" com "só os meus"; abre em
+  "todos" sem ver o Responsável), o Dashboard (`DashboardMesa.permitido` + `BarraMetricas` `dados`/`medidas`/`periodo`), o
+  **Perfil** (cards Mesa e Protocolação pelo nível; "Seu acesso" com as restrições) e **Configurações → Papéis** — o editor
+  em duas partes (`Segmented` **Telas e ações | Detalhes (N)**): **`DetalhesPapelEditor`** (DS — seção "Pessoas e linhas",
+  "Começar de" `MODELOS_DETALHES`, linhas alteradas marcadas; sem `onChange` = só leitura), a coluna **Detalhes**
+  (**`ResumoDetalhesPapel`** compacto — "N restrições") e a confirmação ao RETIRAR acesso de um papel em uso (capacidades OU
+  detalhes); "Ver acesso" e o banner do usuário mostram as restrições. Zod **`detalhesPapelSchema`** aceita SÓ os detalhes já
+  aplicados (os demais são descartados — nunca gravados "de enfeite"); auditoria `papel` com `textoDiffDetalhes`. **Próximas
+  entregas** (no mesmo modelo): E2 — colunas das Mesas por papel (`DataTable.ocultas`, edições sem as colunas ocultas),
+  histórico em 3 níveis (não vê · sem autores · completo) e edições salvas (personalizar · publicar · moderar); E3 — o
+  Manipular da Mesa dividido (sub-ações), dados pessoais mascarados e valores ocultos.
 - **CADASTRO INSTITUCIONAL + SENHA CONFIRMADA POR CÓDIGO (migração `0067`, aditiva — `usuarios.reparticao_id` FK set null
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
@@ -2988,7 +3031,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
   ex.: "Bloqueia importação/protocolação" e "Editável" na aba Avaliação), `formStyles`,
   **`MatrizCapacidades`** (a matriz Telas × Ações de um papel — editável ou só-leitura), **`ResumoPapel`** (o resumo das telas e
-  ações), **`GruposDaPessoa`** (os grupos de uma pessoa, com as telas de cada um) e **`AcessoDaPessoa`** (o "Ver acesso": o que
+  ações), **`DetalhesPapelEditor`** (os DETALHES do papel — as restrições dentro das telas; só leitura sem `onChange`),
+  **`ResumoDetalhesPapel`** (as restrições: "N restrições" compacto ou por extenso), **`GruposDaPessoa`** (os grupos de uma pessoa, com as telas de cada um) e **`AcessoDaPessoa`** (o "Ver acesso": o que
   a pessoa abre e faz em cada grupo),
   `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox [`indeterminado` = a caixa PARCIAL]/**`CampoLista`** [lista em chips — várias referências da
   renovação]/**`SelectField`** [`<select>` nativo no MESMO visual do campo — ex.: a classificação que a unidade de medida

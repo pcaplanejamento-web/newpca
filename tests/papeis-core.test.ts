@@ -265,7 +265,7 @@ describe("as duas Mesas — cada recurso segue a Mesa em que está", () => {
 
   it("o papel de cada Mesa vale só nos recursos dela", () => {
     const ctx = { admin: false, capacidades: coerceCapacidades({ dfd: ["visualizar", "manipular"], pca: ["visualizar"] }), abas: ["dfd", "pca"] };
-    const pode = { sistema: podeNaTela(ctx, "dfd"), pca: podeNaTela(ctx, "pca") };
+    const pode = { sistema: podeNaTela(ctx, "dfd"), pca: podeNaTela(ctx, "pca"), vis: PODE_MESA_NADA.vis };
     assert.equal(podeNoRecurso(pode, null).manipular, true);
     assert.equal(podeNoRecurso(pode, 3).manipular, false);
     assert.equal(podeNoRecurso(pode, 3).visualizar, true);

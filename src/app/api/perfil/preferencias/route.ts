@@ -4,6 +4,7 @@ import { preferenciasPerfilSchema } from "@/lib/auth-validation";
 import { getGrupoAtivoId } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { ROTULO_MESA_RESPONSAVEL } from "@/lib/mesa-filtros";
+import { motivoResponsavelPadrao, visaoMesa } from "@/lib/mesa-visao-core";
 import { definirMesaResponsavel, definirResponsavelPadrao, pessoaDoGrupo, responsavelPadraoGravado } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,16 @@ export async function PATCH(req: Request) {
   const { mesaResponsavel: mesa, responsavelPadraoId: alvo } = p.data;
   // Valida TUDO antes de gravar qualquer coisa (nada salvo pela metade). Salvar de novo o MESMO padrão (hoje fora do
   // grupo) não é uma escolha nova — nada muda.
-  const padraoMuda = alvo !== undefined && (alvo == null || alvo !== (await responsavelPadraoGravado(a.u.id)));
+  const gravado = alvo !== undefined ? await responsavelPadraoGravado(a.u.id) : null;
+  const padraoMuda = alvo !== undefined && (alvo == null || alvo !== gravado);
+  // Os DETALHES do papel: sem ver o Responsável, a Mesa não abre filtrada por ele; e o PADRÃO segue o nível de alterar
+  // (não altera = nenhum; só assume para si = só a própria pessoa).
+  const vis = visaoMesa(a.u.papel.detalhes, a.u.admin);
+  if (mesa !== undefined && !vis.responsavel.ver) return erro("Seu papel não mostra o Responsável na Mesa.", 403);
+  if (padraoMuda) {
+    const motivo = motivoResponsavelPadrao(vis, a.u.id, gravado, alvo);
+    if (motivo) return erro(motivo, 403);
+  }
   const grupoAtivo = await getGrupoAtivoId(a.u);
   if (padraoMuda && alvo != null && ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(alvo, grupoAtivo))))
     return erro("Escolha uma pessoa ativa do seu grupo.", 422);

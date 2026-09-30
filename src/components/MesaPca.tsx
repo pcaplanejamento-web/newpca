@@ -14,7 +14,7 @@ import {
   ROTULO_ACAO,
 } from "@/lib/pca-core";
 import type { ItemDfdRow } from "@/lib/dfd";
-import type { ProtocoloResumo } from "@/lib/protocolo";
+import type { ProtocoloNaMesa } from "@/lib/mesa-redacao";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import type { Column } from "./DataTable";
@@ -38,7 +38,7 @@ type Props = Omit<ComponentProps<typeof DfdsView>, "modoPca"> & {
   marcados?: boolean;
 };
 
-const incorporado = (p: ProtocoloResumo) => localDoProtocolo(p) === "incorporado";
+const incorporado = (p: ProtocoloNaMesa) => localDoProtocolo(p) === "incorporado";
 const ROTULO_ESCOPO: Record<Exclude<Escopo, "todos">, string> = { sistema: "Na Mesa do sistema", enviados: "Enviados", incorporados: "Incorporados" };
 const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: "incorporados" } as const;
 
@@ -56,7 +56,7 @@ const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: 
 export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcados = false, protocolos, dfds, ...mesa }: Props) {
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
-  const [incorporar, setIncorporar] = useState<ProtocoloResumo[] | null>(null);
+  const [incorporar, setIncorporar] = useState<ProtocoloNaMesa[] | null>(null);
   const [acoes, setAcoes] = useState<Record<number, AcaoDfdPca>>({});
   const [gravando, setGravando] = useState(false);
 
@@ -65,11 +65,11 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     for (const d of dfds) if (d.protocoloId != null) m.set(d.protocoloId, (m.get(d.protocoloId) ?? 0) + 1);
     return m;
   }, [dfds]);
-  const totalDfds = (p: ProtocoloResumo) => dfdsPorProto.get(p.id) ?? p.totalDfds;
-  const motivosInc = (p: ProtocoloResumo) =>
+  const totalDfds = (p: ProtocoloNaMesa) => dfdsPorProto.get(p.id) ?? p.totalDfds;
+  const motivosInc = (p: ProtocoloNaMesa) =>
     motivosNaoIncorporar({ enviadoAEste: p.pcaId === pca.id, incorporado: incorporado(p), totalDfds: totalDfds(p), dfdsEmOutroPca: emOutroPcaPorProtocolo[p.id] ?? 0 });
 
-  const motivosEnv = (p: ProtocoloResumo) =>
+  const motivosEnv = (p: ProtocoloNaMesa) =>
     motivosNaoEnviar({ anoProtocolo: p.anoPca, anoPca: pca.ano, totalDfds: totalDfds(p), fonteProtocolo: true, jaEmPca: null });
   const contagem = useMemo(() => {
     const c = { sistema: 0, enviados: 0, incorporados: 0 };
@@ -88,7 +88,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     return dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId));
   }, [dfds, protos, escopoEf]);
 
-  const colunaPca: Column<ProtocoloResumo> = {
+  const colunaPca: Column<ProtocoloNaMesa> = {
     key: "pca",
     header: marcados ? "Local" : "PCA",
     nowrap: true,
@@ -143,7 +143,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     }
   }
 
-  function abrirIncorporar(sel: ProtocoloResumo[]) {
+  function abrirIncorporar(sel: ProtocoloNaMesa[]) {
     const eleg = sel.filter((p) => motivosInc(p).length === 0);
     if (eleg.length === 0) {
       toast.error('Nenhum protocolo selecionado pode ser incorporado — passe o mouse em "Enviado" na coluna PCA para ver o motivo.');
@@ -210,7 +210,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
       ),
   };
 
-  function devolver(sel: ProtocoloResumo[], limpar: () => void) {
+  function devolver(sel: ProtocoloNaMesa[], limpar: () => void) {
     const alvo = sel.filter((p) => motivoNaoDevolver(p, pca.id) == null);
     if (!alvo.length || !confirm(`Devolver ${alvo.length} protocolo(s) à Mesa principal?`)) return;
     void executar({ acao: "devolver", ids: alvo.map((p) => p.id) }, (r) => `${num(r.alterados)} protocolo(s) devolvido(s) à Mesa principal.`, limpar);

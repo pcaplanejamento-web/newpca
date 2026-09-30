@@ -1,4 +1,4 @@
-import { dfdLegivel } from "@/lib/acesso-mesa";
+import { dfdLegivelNaMesa, escopoMesa, MSG_SEM_ACESSO_DFD, protocoloLegivel } from "@/lib/acesso-mesa";
 import { exigirAcesso, exigirSessao, intId, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
@@ -7,8 +7,8 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, type DfdDetalhe, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
 import { semValorUnitario } from "@/lib/dfd-tratamento";
 import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
-import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { redigirDfdDetalhe } from "@/lib/mesa-redacao";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { telaDoRecurso } from "@/lib/papeis-core";
 import { gravacaoParcial, motivoNaoExcluirDfd } from "@/lib/pca-core";
@@ -29,9 +29,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!id) return erro("ID inválido.");
   const dfd = await getDfd(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
-  if (!(await dfdLegivel((await unidadesDaSessao(a.u)).acessivel, dfd))) return erro("Sem acesso a este DFD.", 403);
+  // A unidade (a do DFD ou a do protocolo dele) E as LINHAS da pessoa ("só os meus").
+  const esc = await escopoMesa();
+  if (!esc || !(await dfdLegivelNaMesa(esc, dfd))) return erro(MSG_SEM_ACESSO_DFD, 403);
   const [unidade] = await unidadesConferencia([dfd.reparticaoId]);
-  return ok({ dfd, unidade: unidade ?? null });
+  return ok({ dfd: redigirDfdDetalhe(dfd, esc.vis), unidade: unidade ?? null });
 }
 
 /** Exclui o DFD — EXCLUIR na Mesa em que ele está. `?origem=reenvio` = excluído pelo reenvio do protocolo (não veio no
@@ -44,10 +46,10 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (!id) return erro("ID inválido.");
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
-  const { acessivel } = await unidadesDaSessao(a.u);
-  if (!acessivel(dfd.reparticaoId)) {
-    return erro("Sem acesso a este DFD.", 403);
-  }
+  const esc = await escopoMesa();
+  if (!esc) return erro(MSG_SEM_ACESSO_DFD, 403);
+  // Excluir exige a unidade do PRÓPRIO DFD no escopo (não basta a do protocolo) e as linhas da pessoa.
+  if (!esc.acessivel(dfd.reparticaoId) || !(await dfdLegivelNaMesa(esc, { ...dfd, id }))) return erro(MSG_SEM_ACESSO_DFD, 403);
   const alvo = await getDfd(id); // snapshot p/ o log antes de apagar (e os itens GRAVADOS, p/ o desfazer)
   const origem = new URL(req.url).searchParams.get("origem");
   // DESFAZER da importação que falhou no meio: só a gravação NOVA deste usuário que ficou pela metade.
@@ -104,11 +106,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const p = await parseCorpo(editarDfdSchema, req);
   if ("resp" in p) return p.resp;
 
-  const { acessivel } = await unidadesDaSessao(a.u);
+  const esc = await escopoMesa();
+  if (!esc) return erro("Faça login.", 401);
+  const { acessivel } = esc;
 
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
-  if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso a este DFD.", 403);
+  if (!acessivel(dfd.reparticaoId) || !(await dfdLegivelNaMesa(esc, { ...dfd, id }))) return erro(MSG_SEM_ACESSO_DFD, 403);
   // O PAPEL manipula na Mesa em que o DFD está (a do sistema ou a do PCA).
   const negado = recusa(a.acesso, telaDoRecurso(dfd.pcaId), "manipular");
   if (negado) return negado;
@@ -135,7 +139,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (p.data.protocoloId != null) {
       const proto = await getProtocoloReparticao(p.data.protocoloId);
       if (!proto) return erro("Protocolo não encontrado.", 404);
-      if (!acessivel(proto.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
+      if (!protocoloLegivel(esc, { id: p.data.protocoloId, reparticaoId: proto.reparticaoId })) return erro("Sem acesso ao protocolo de destino.", 403);
       // Mover o DFD PARA um protocolo de outra Mesa: o papel também manipula lá.
       const negadoDestino = recusa(a.acesso, telaDoRecurso(proto.pcaId), "manipular");
       if (negadoDestino) return negadoDestino;

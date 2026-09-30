@@ -231,6 +231,22 @@ describe("papéis: comandos no driver D1", () => {
       assert.deepEqual(await comandoAtualizarPapel(orm, 999, { nome: "X" }), []);
     });
 
+    it("os DETALHES: nascem '{}' (sem restrições) e se gravam/alteram como o JSON compacto", async () => {
+      const id = await criar("Consulta");
+      const detalhes = () => (db.prepare("SELECT detalhes FROM papeis WHERE id = ?").get(id) as { detalhes: string }).detalhes;
+      assert.equal(detalhes(), "{}");
+      const [criados] = (await orm.batch(
+        comandosCriarPapel(orm, { nome: "Só os meus", descricao: null, capacidades: "{}", detalhes: '{"mesa":{"linhas":"meus"}}', padraoCadastro: false }) as unknown as Parameters<
+          typeof orm.batch
+        >[0],
+      )) as unknown as [{ id: number }[]];
+      assert.equal((db.prepare("SELECT detalhes FROM papeis WHERE id = ?").get(criados[0].id) as { detalhes: string }).detalhes, '{"mesa":{"linhas":"meus"}}');
+      assert.equal((await comandoAtualizarPapel(orm, id, { detalhes: '{"mesa":{"distribuicao":false}}' })).length, 1);
+      assert.equal(detalhes(), '{"mesa":{"distribuicao":false}}');
+      // Os papéis do sistema (semeados antes da coluna) seguem sem restrições.
+      assert.equal((db.prepare("SELECT detalhes FROM papeis WHERE chave = 'gestor'").get() as { detalhes: string }).detalhes, "{}");
+    });
+
     it("marcar o padrão desmarca o anterior num comando; o Administrador nunca é o padrão", async () => {
       const id = await criar("Consulta");
       await comandoMarcarPadrao(orm, id);

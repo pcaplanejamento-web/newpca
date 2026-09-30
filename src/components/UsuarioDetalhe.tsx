@@ -5,6 +5,7 @@ import { filtrarNome, filtrarTelefone, formatarTelefone, matriculaValida, nomeVa
 import { dataBR, dataHoraBR } from "@/lib/format";
 import type { OpcaoPapel } from "@/lib/papeis";
 import { textoResumoCapacidades } from "@/lib/papeis-core";
+import { contarRestricoes, textoResumoDetalhes } from "@/lib/papeis-detalhes-core";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { Avatar } from "./Avatar";
 import { Badge, type Tone } from "./Badge";
@@ -66,8 +67,11 @@ export const STATUS_TONE: Record<Status, Tone> = { ativo: "emerald", pendente: "
 export const STATUS_LABEL: Record<Status, string> = { ativo: "Ativo", pendente: "Pendente", inativo: "Inativo" };
 /** O que o Administrador faz — a confirmação da troca, a ajuda e o banner dizem o mesmo. */
 export const DESCRICAO_ADMIN = "vê e altera TUDO, inclusive a Administração (usuários, grupos, permissões, papéis e configurações)";
-/** O que um papel faz, numa linha: o Administrador por extenso; os demais pelas telas e ações. */
-export const descricaoPapel = (p: OpcaoPapel) => (p.chave === "admin" ? DESCRICAO_ADMIN : textoResumoCapacidades(p.capacidades));
+/** O que um papel faz, numa linha: o Administrador por extenso; os demais pelas telas e ações (+ as restrições). */
+export const descricaoPapel = (p: OpcaoPapel) =>
+  p.chave === "admin"
+    ? DESCRICAO_ADMIN
+    : [textoResumoCapacidades(p.capacidades), contarRestricoes(p.detalhes) ? `restrições: ${textoResumoDetalhes(p.detalhes)}` : ""].filter(Boolean).join(" · ");
 export const mesmosIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 type Campo = "nome" | "email" | "matricula" | "telefone" | "cargo" | "unidade" | "grupos";

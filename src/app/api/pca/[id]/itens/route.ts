@@ -1,6 +1,6 @@
 import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { unidadesDaSessao } from "@/lib/grupos";
+import { dfdNasLinhas, escopoMesa } from "@/lib/acesso-mesa";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { getPcaEspaco, itensNumeradosDoPca, retirarItensDoPca } from "@/lib/pca-espaco";
 import { acaoItensPcaSchema } from "@/lib/pca-espaco-validation";
@@ -23,7 +23,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ("resp" in p) return p.resp;
   const ids = [...new Set(p.data.ids)];
 
-  const [{ acessivel }, numerados] = await Promise.all([unidadesDaSessao(a.u), itensNumeradosDoPca(pca.id, ids)]);
+  const [esc, numerados] = await Promise.all([escopoMesa(), itensNumeradosDoPca(pca.id, ids)]);
+  if (!esc) return erro("Faça login.", 401);
+  const { acessivel } = esc;
   const porItem = new Map(numerados.map((n) => [n.dfdItemId, n]));
   const alvo: typeof numerados = [];
   const falhas: { id: number; motivo: string }[] = [];
@@ -32,6 +34,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!n) falhas.push({ id, motivo: "Item não incorporado a este PCA" });
     else if (!n.ativo) falhas.push({ id, motivo: `Nº ${n.sequencial} já inativo` });
     else if (!acessivel(n.reparticaoId)) falhas.push({ id, motivo: "Sem acesso à unidade do item" });
+    else if (n.dfdId != null && !dfdNasLinhas(esc, n.dfdId)) falhas.push({ id, motivo: "Sem acesso a este item" });
     else alvo.push(n);
   }
   if (alvo.length) {

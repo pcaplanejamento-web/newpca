@@ -427,11 +427,11 @@ async function sincronizarAtivosPca(pcaId: number, usuarioId: number | null): Pr
 export async function itensNumeradosDoPca(
   pcaId: number,
   dfdItemIds: number[],
-): Promise<{ dfdItemId: number; sequencial: number; ativo: boolean; reparticaoId: number | null; dfdNumero: string | null }[]> {
-  const out: { dfdItemId: number; sequencial: number; ativo: boolean; reparticaoId: number | null; dfdNumero: string | null }[] = [];
+): Promise<{ dfdItemId: number; dfdId: number | null; sequencial: number; ativo: boolean; reparticaoId: number | null; dfdNumero: string | null }[]> {
+  const out: { dfdItemId: number; dfdId: number | null; sequencial: number; ativo: boolean; reparticaoId: number | null; dfdNumero: string | null }[] = [];
   for (const lote of lotesDeIds(dfdItemIds)) {
     const rows = await getDb()
-      .select({ dfdItemId: pcaItens.dfdItemId, sequencial: pcaItens.sequencial, ativo: pcaItens.ativo, reparticaoId: dfds.reparticaoId, dfdNumero: dfds.numero })
+      .select({ dfdItemId: pcaItens.dfdItemId, dfdId: pcaItens.dfdId, sequencial: pcaItens.sequencial, ativo: pcaItens.ativo, reparticaoId: dfds.reparticaoId, dfdNumero: dfds.numero })
       .from(pcaItens)
       .leftJoin(dfds, eq(pcaItens.dfdId, dfds.id))
       .where(and(eq(pcaItens.pcaId, pcaId), inArray(pcaItens.dfdItemId, lote)));

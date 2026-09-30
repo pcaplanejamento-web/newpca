@@ -2,6 +2,7 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { diffCapacidades, textoDiffCapacidades } from "@/lib/papeis-core";
+import { compactarDetalhes, diffDetalhes, textoDiffDetalhes } from "@/lib/papeis-detalhes-core";
 import { atualizarPapel, excluirPapel, getPapel, nomeDuplicado, nomePapelEmUso } from "@/lib/papeis";
 import { editarPapelSchema } from "@/lib/papeis-validation";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Altera o papel (nome, descrição, capacidades, padrão dos novos cadastros). O Administrador é fixo (403). */
+/** Altera o papel (nome, descrição, capacidades, detalhes, padrão dos novos cadastros). O Administrador é fixo (403). */
 export async function PATCH(req: Request, ctx: Ctx) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -30,9 +31,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (motivo) return erro(motivo, 409);
   const diff = d.capacidades ? diffCapacidades(atual.capacidades, d.capacidades) : [];
+  const diffDet = d.detalhes ? diffDetalhes(atual.detalhes, d.detalhes) : [];
   const partes = [
     d.nome !== undefined && d.nome !== atual.nome ? `nome "${atual.nome}" → "${d.nome}"` : "",
     diff.length ? textoDiffCapacidades(diff) : "",
+    diffDet.length ? `detalhes — ${textoDiffDetalhes(diffDet)}` : "",
     d.padraoCadastro && !atual.padraoCadastro ? "passou a ser o padrão dos novos cadastros" : "",
   ].filter(Boolean);
   await registrarAuditoria({
@@ -41,8 +44,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     entidade: "papel",
     entidadeId: atual.id,
     resumo: `Papel "${d.nome ?? atual.nome}" alterado${partes.length ? ` — ${partes.join("; ")}` : ""}${atual.pessoas ? ` (${atual.pessoas} ${atual.pessoas === 1 ? "pessoa" : "pessoas"})` : ""}`,
-    antes: { nome: atual.nome, descricao: atual.descricao, capacidades: atual.capacidades, padraoCadastro: atual.padraoCadastro },
-    depois: { ...d },
+    antes: { nome: atual.nome, descricao: atual.descricao, capacidades: atual.capacidades, detalhes: compactarDetalhes(atual.detalhes), padraoCadastro: atual.padraoCadastro },
+    depois: { ...d, ...(d.detalhes ? { detalhes: compactarDetalhes(d.detalhes) } : {}) },
   });
   return ok();
 }

@@ -2,15 +2,18 @@
 
 import { ABA_KEYS } from "@/lib/abas";
 import { type Capacidades, capacidadesEfetivas, rotuloTela, telasFechadasPeloPapel } from "@/lib/papeis-core";
+import { contarRestricoes } from "@/lib/papeis-detalhes-core";
 import { Callout } from "./Callout";
 import { type GrupoOpcao, telasDoGrupo } from "./GruposDaPessoa";
 import { IconAlert, IconLock } from "./icons";
 import { MatrizCapacidades } from "./MatrizCapacidades";
+import { ResumoDetalhesPapel } from "./ResumoDetalhesPapel";
 
 /**
  * "VER ACESSO" de uma pessoa (Usuários): o que ela abre e faz, grupo a grupo — o grupo libera as telas, o papel diz as
  * ações; a matriz só-leitura mostra só as telas que ABREM (calculada pelo núcleo, `capacidadesEfetivas`). Aponta as telas
- * que o grupo libera mas o papel deixa fechadas. O Administrador tem tudo, com ou sem grupo; sem grupo, nada abre.
+ * que o grupo libera mas o papel deixa fechadas e, no fim, as RESTRIÇÕES do papel dentro das telas (os detalhes — valem
+ * em qualquer grupo). O Administrador tem tudo, com ou sem grupo; sem grupo, nada abre.
  */
 export function AcessoDaPessoa({
   admin,
@@ -18,8 +21,8 @@ export function AcessoDaPessoa({
   grupos,
 }: {
   admin: boolean;
-  /** O papel da pessoa (`null` = sem papel — nada abre). */
-  papel: { nome: string; capacidades: Capacidades } | null;
+  /** O papel da pessoa (`null` = sem papel — nada abre); `detalhes` = as restrições dentro das telas. */
+  papel: { nome: string; capacidades: Capacidades; detalhes?: unknown } | null;
   /** Os grupos DA PESSOA, com as telas de cada um. */
   grupos: readonly GrupoOpcao[];
 }) {
@@ -70,6 +73,13 @@ export function AcessoDaPessoa({
           </section>
         );
       })}
+      {papel.detalhes != null && contarRestricoes(papel.detalhes) > 0 && (
+        <section className="space-y-2 border-t border-border pt-3" aria-label="Restrições do papel">
+          <h4 className="text-[14px] font-bold text-text">Restrições do papel</h4>
+          <p className="text-[12.5px] text-muted">Dentro das telas que abrem, em qualquer grupo:</p>
+          <ResumoDetalhesPapel detalhes={papel.detalhes} />
+        </section>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { estadoProtocoloCor } from "@/lib/dfd-tratamento";
 import { brl, brlCompact, dataBR, num, pct } from "@/lib/format";
 import { DIAS_ALERTA, type DfdPainel, type EstadoPainel, painelMesa, type ProtocoloPainel, ROTULO_ESTADO_PAINEL } from "@/lib/mesa-dashboard";
 import type { FiltroMesa } from "@/lib/mesa-filtros";
+import { METRICAS_TODAS, type MetricasPermitidas } from "@/lib/mesa-visao-core";
 import {
   anosComDados,
   type Atividade,
@@ -27,7 +28,7 @@ import {
   resumoMetricas,
   tituloGrafico,
 } from "@/lib/mesa-metricas";
-import { intervaloDoPeriodo, rotuloPeriodo, textoIntervalo } from "@/lib/periodo";
+import { intervaloDoPeriodo, PERIODO_TODO, rotuloPeriodo, textoIntervalo } from "@/lib/periodo";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { SituacaoCadastrada } from "@/lib/situacoes";
 import { Avatar } from "./Avatar";
@@ -81,6 +82,9 @@ type Origem =
  * só ela — os mesmos números da linha dela na visão da equipe. Agregação PURA (`painelMesa` + `mesa-metricas`); toda
  * barra/linha abre a ORIGEM dos dados (Σ = o número).
  */
+/** A grade das KPIs pelo NÚMERO delas (os detalhes do papel podem tirar algumas) — classes fixas do Tailwind. */
+const COLUNAS_KPI: Record<number, string> = { 1: "lg:grid-cols-1", 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" };
+
 export function DashboardMesa({
   protocolos,
   dfds,
@@ -91,6 +95,7 @@ export function DashboardMesa({
   responsavel,
   onAbrir,
   metricas,
+  permitido = METRICAS_TODAS,
 }: {
   /** A Mesa agora (com os filtros do topo) — as KPIs. */
   protocolos: ProtocoloPainel[];
@@ -107,8 +112,20 @@ export function DashboardMesa({
   /** Abre o banner do protocolo de uma linha da ORIGEM dos dados (a pilha da Mesa). */
   onAbrir?: (a: AberturaMesa) => void;
   metricas: MetricasDashboard;
+  /** O que os DETALHES do papel permitem (sem o dado oculto: o Dado, a Medida, as KPIs, o período e o desempenho por
+   * pessoa somem) — sem = tudo. */
+  permitido?: MetricasPermitidas;
 }) {
-  const { filtro, hoje } = metricas;
+  const { hoje } = metricas;
+  // O filtro EFETIVO: um Dado/Medida/período que o papel não permite cai no primeiro permitido (ou em todo o período).
+  const filtro = useMemo(() => {
+    const f = metricas.filtro;
+    return {
+      periodo: permitido.periodo ? f.periodo : PERIODO_TODO,
+      dado: permitido.dados.includes(f.dado) ? f.dado : (permitido.dados[0] ?? f.dado),
+      medida: permitido.medidas.includes(f.medida) ? f.medida : (permitido.medidas[0] ?? f.medida),
+    };
+  }, [metricas.filtro, permitido]);
   const idDesempenho = useId();
   const [origem, setOrigem] = useState<Origem | null>(null);
   const [mostrada, setMostrada] = useState<Origem | null>(null); // fica exibida enquanto o banner fecha
@@ -194,15 +211,30 @@ export function DashboardMesa({
     { key: "data", header: "Protocolação", nowrap: true, filter: "date", value: (o) => diaDoProtocolo(o.protocolo.criadoEm) ?? "", render: (o) => dataBR(diaDoProtocolo(o.protocolo.criadoEm)) },
     colunaNumero<OrigemMetricas<ProtocoloPainel>>({ value: (o) => o.protocolo.numero ?? "—" }),
     colunaNatureza<OrigemMetricas<ProtocoloPainel>>((o) => o.protocolo),
-    {
-      key: "pessoa",
-      header: rotuloDimensao,
-      align: "left",
-      nowrap: true,
-      value: (o) => nomePessoa(porDistribuicao ? (o.protocolo.distribuidorId ?? null) : o.protocolo.responsavelId),
-      render: (o) => rotuloPessoa(porDistribuicao ? (o.protocolo.distribuidorId ?? null) : o.protocolo.responsavelId),
-    },
-    { key: "estado", header: "Estado", nowrap: true, value: (o) => ROTULO_ESTADO_PAINEL[o.protocolo.estado], render: (o) => estadoTag(o.protocolo.estado) },
+    // A pessoa só com o dado dela à vista (os detalhes do papel podem ocultar o Responsável ou a Distribuição).
+    ...((porDistribuicao ? permitido.distribuicao : permitido.responsavel)
+      ? [
+          {
+            key: "pessoa",
+            header: rotuloDimensao,
+            align: "left" as const,
+            nowrap: true,
+            value: (o: OrigemMetricas<ProtocoloPainel>) => nomePessoa(porDistribuicao ? (o.protocolo.distribuidorId ?? null) : o.protocolo.responsavelId),
+            render: (o: OrigemMetricas<ProtocoloPainel>) => rotuloPessoa(porDistribuicao ? (o.protocolo.distribuidorId ?? null) : o.protocolo.responsavelId),
+          },
+        ]
+      : []),
+    ...(permitido.kpiConformidade
+      ? [
+          {
+            key: "estado",
+            header: "Estado",
+            nowrap: true,
+            value: (o: OrigemMetricas<ProtocoloPainel>) => ROTULO_ESTADO_PAINEL[o.protocolo.estado],
+            render: (o: OrigemMetricas<ProtocoloPainel>) => estadoTag(o.protocolo.estado),
+          },
+        ]
+      : []),
     ...(medida === "protocolos"
       ? []
       : [
@@ -222,14 +254,19 @@ export function DashboardMesa({
     { key: "data", header: evento === "reenvio" ? "Reenvio" : "Data", nowrap: true, filter: "date", value: (c) => c.dia, render: (c) => dataBR(c.dia) },
     colunaNumero<EventoOrigem<ProtocoloPainel>>({ value: (c) => c.protocolo.numero ?? "—" }),
     colunaNatureza<EventoOrigem<ProtocoloPainel>>((c) => c.protocolo),
-    {
-      key: "quem",
-      header: evento === "reenvio" ? "Reenviado por" : "Feita por",
-      align: "left",
-      nowrap: true,
-      value: (c) => (c.usuarioId != null ? nomePessoa(c.usuarioId) : "—"),
-      render: (c) => (c.usuarioId != null ? rotuloPessoa(c.usuarioId) : "—"),
-    },
+    // Quem fez só com o desempenho por pessoa (sem ele, o servidor nem manda quem foi).
+    ...(permitido.desempenho
+      ? [
+          {
+            key: "quem",
+            header: evento === "reenvio" ? "Reenviado por" : "Feita por",
+            align: "left" as const,
+            nowrap: true,
+            value: (c: EventoOrigem<ProtocoloPainel>) => (c.usuarioId != null ? nomePessoa(c.usuarioId) : "—"),
+            render: (c: EventoOrigem<ProtocoloPainel>) => (c.usuarioId != null ? rotuloPessoa(c.usuarioId) : "—"),
+          },
+        ]
+      : []),
     { key: "n", header: evento === "reenvio" ? "Reenvios" : "Ações", nowrap: true, filter: "range", numero: (c) => c.n, formatarFaixa: (n) => num(n), render: (c) => num(c.n) },
   ];
 
@@ -439,6 +476,7 @@ export function DashboardMesa({
   const falhasMesa = naoConferidosMesa > 0 ? ` · ${plural(naoConferidosMesa, "não conferido", "não conferidos")}` : "";
   const corSaudeMesa = pMesa.saude.erro > 0 ? cores.erro : pMesa.saude.atencao > 0 ? cores.atencao : cores.regular;
   const picoSemana = Math.max(0, ...pMesa.semanas);
+  const nKpis = 1 + [permitido.kpiValor, permitido.kpiConformidade, permitido.responsavel, permitido.kpiTempo].filter(Boolean).length;
 
   // ---- Linha do recorte + aviso do filtro do topo ----
   const execucao = metricas.erro ? (
@@ -455,14 +493,15 @@ export function DashboardMesa({
       {plural(resumo.correcoes, "correção", "correções")}
       {resumo.corrigidos ? ` (${plural(resumo.corrigidos, "protocolo", "protocolos")})` : ""}
       {/* Sem ninguém no recorte (os sem responsável) não há de quem contar ações. */}
-      {resumo.acoes != null && ` · ${plural(resumo.acoes, "ação", "ações")}`}
+      {permitido.desempenho && resumo.acoes != null && ` · ${plural(resumo.acoes, "ação", "ações")}`}
     </span>
   );
   const linhaRecorte = (
     <>
       <span>
         <strong className="font-semibold text-text-2">{janela}</strong> · {plural(resumo.protocolos, "protocolo", "protocolos")} ·{" "}
-        {plural(resumo.dfds, "DFD", "DFDs")} · {plural(resumo.itens, "item", "itens")} · {brlCompact(resumo.valor)}
+        {plural(resumo.dfds, "DFD", "DFDs")} · {plural(resumo.itens, "item", "itens")}
+        {permitido.kpiValor && ` · ${brlCompact(resumo.valor)}`}
       </span>
       {execucao}
     </>
@@ -484,16 +523,17 @@ export function DashboardMesa({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-5">
+      <div className={`grid grid-cols-2 gap-[var(--gap-block)] ${COLUNAS_KPI[nKpis] ?? "lg:grid-cols-5"}`}>
         <div className="col-span-2 lg:col-span-1">
           <KpiStat
             label="Protocolos na Mesa"
             value={num(totalMesa)}
             hint={`${plural(pMesa.dfds, "DFD", "DFDs")} · ${plural(pMesa.itens, "item", "itens")}`}
-            spark={picoSemana > 0 ? pMesa.semanas.map((n) => (n / picoSemana) * 100) : undefined}
+            spark={permitido.kpiTempo && picoSemana > 0 ? pMesa.semanas.map((n) => (n / picoSemana) * 100) : undefined}
           />
         </div>
-        <KpiStat label="Valor na Mesa" value={brlCompact(pMesa.valor)} cor="var(--sit-finalizado)" hint="somatória dos DFDs" />
+        {permitido.kpiValor && <KpiStat label="Valor na Mesa" value={brlCompact(pMesa.valor)} cor="var(--sit-finalizado)" hint="somatória dos DFDs" />}
+        {permitido.kpiConformidade && (
         <KpiStat
           label="Conformidade"
           value={conferidosMesa > 0 ? pct(pMesa.saude.regular, conferidosMesa) : "—"}
@@ -506,21 +546,35 @@ export function DashboardMesa({
                 : `${num(pMesa.saude.erro)} com erro · ${num(pMesa.saude.atencao)} em atenção`
           }
         />
-        <KpiStat
-          label="Com responsável"
-          value={totalMesa > 0 ? pct(totalMesa - pMesa.semResponsavel, totalMesa) : "—"}
-          cor={pMesa.semResponsavel > 0 ? "var(--warn)" : "var(--ok)"}
-          hint={pMesa.semResponsavel > 0 ? `${num(pMesa.semResponsavel)} sem responsável` : "todos com responsável"}
-        />
-        <KpiStat
-          label="Tempo médio na Mesa"
-          value={pMesa.diasMedio == null ? "—" : plural(Math.round(pMesa.diasMedio), "dia", "dias")}
-          cor="var(--sit-devolvido)"
-          hint={pMesa.acimaAlerta > 0 ? `${num(pMesa.acimaAlerta)} há mais de ${DIAS_ALERTA} dias` : `nenhum há mais de ${DIAS_ALERTA} dias`}
-        />
+        )}
+        {permitido.responsavel && (
+          <KpiStat
+            label="Com responsável"
+            value={totalMesa > 0 ? pct(totalMesa - pMesa.semResponsavel, totalMesa) : "—"}
+            cor={pMesa.semResponsavel > 0 ? "var(--warn)" : "var(--ok)"}
+            hint={pMesa.semResponsavel > 0 ? `${num(pMesa.semResponsavel)} sem responsável` : "todos com responsável"}
+          />
+        )}
+        {permitido.kpiTempo && (
+          <KpiStat
+            label="Tempo médio na Mesa"
+            value={pMesa.diasMedio == null ? "—" : plural(Math.round(pMesa.diasMedio), "dia", "dias")}
+            cor="var(--sit-devolvido)"
+            hint={pMesa.acimaAlerta > 0 ? `${num(pMesa.acimaAlerta)} há mais de ${DIAS_ALERTA} dias` : `nenhum há mais de ${DIAS_ALERTA} dias`}
+          />
+        )}
       </div>
 
-      <BarraMetricas filtro={filtro} onFiltro={metricas.onFiltro} anos={anos} resumo={linhaRecorte} aviso={aviso} />
+      <BarraMetricas
+        filtro={filtro}
+        onFiltro={metricas.onFiltro}
+        anos={anos}
+        resumo={linhaRecorte}
+        aviso={aviso}
+        dados={permitido.dados}
+        medidas={permitido.medidas}
+        periodo={permitido.periodo}
+      />
 
       <ChartCard
         title={titulo}
@@ -546,6 +600,7 @@ export function DashboardMesa({
         </div>
       </ChartCard>
 
+{permitido.desempenho && (
       <section aria-labelledby={idDesempenho} className="space-y-2">
         <div>
           <h3 id={idDesempenho} className="text-sm font-semibold text-text">
@@ -581,6 +636,7 @@ export function DashboardMesa({
           }
         />
       </section>
+)}
 
       <OrigemDados
         aberto={origem != null}

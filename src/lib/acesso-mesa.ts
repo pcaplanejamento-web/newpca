@@ -1,6 +1,11 @@
 import { inArray } from "drizzle-orm";
+import { cache } from "react";
 import { dfdProtocolos } from "@/db/schema";
+import { type Acesso, getAcesso, visaoDoAcesso } from "./acesso";
 import { getDb } from "./db";
+import { type UnidadesDaSessao, unidadesDaSessao } from "./grupos";
+import { consultaMeusDfds, consultaMeusProtocolos } from "./linhas-sql";
+import type { VisaoMesa } from "./mesa-visao-core";
 import { lotesDeIds } from "./reparticoes";
 
 /**
@@ -45,4 +50,58 @@ export async function dfdsLegiveis<T extends { reparticaoId: number | null; prot
 /** O DFD é LEGÍVEL? (a unidade dele ou a do protocolo dele no escopo) */
 export async function dfdLegivel(acessivel: Acessivel, dfd: { reparticaoId: number | null; protocoloId: number | null }): Promise<boolean> {
   return (await dfdsLegiveis(acessivel, [dfd])).length === 1;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// ESCOPO DA MESA por requisição: as UNIDADES (grupo) + as LINHAS ("só os meus", detalhe do papel) + a VISÃO do papel.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type EscopoMesa = {
+  acesso: Acesso;
+  un: UnidadesDaSessao;
+  /** A unidade está no escopo de acesso? (só a UNIDADE — a de destino de uma edição, as listas por unidade) */
+  acessivel: Acessivel;
+  /** Os detalhes do papel resolvidos para as Mesas. */
+  vis: VisaoMesa;
+  /** "Só os meus": os protocolos (Responsável ou quem protocolou) e os DFDs meus — `null` = todas as linhas. */
+  meus: { protocolos: ReadonlySet<number>; dfds: ReadonlySet<number> } | null;
+};
+
+/** O recurso fora das LINHAS da pessoa responde como o de unidade sem acesso (não revela que existe). */
+export const MSG_SEM_ACESSO_PROTOCOLO = "Sem acesso a este protocolo.";
+export const MSG_SEM_ACESSO_DFD = "Sem acesso a este DFD.";
+
+async function carregarMeus(usuarioId: number) {
+  const db = getDb();
+  const [ps, ds] = await Promise.all([consultaMeusProtocolos(db, usuarioId), consultaMeusDfds(db, usuarioId)]);
+  return { protocolos: new Set(ps.map((r) => r.id)), dfds: new Set(ds.map((r) => r.id)) };
+}
+
+/** O escopo da Mesa de quem está logado (ou `null`) — memorizado POR REQUISIÇÃO (listas, detalhes e escritas leem o
+ * mesmo). O Administrador vê todas as linhas (a visão dele não tem restrição). */
+export const escopoMesa = cache(async (): Promise<EscopoMesa | null> => {
+  const acesso = await getAcesso();
+  if (!acesso) return null;
+  const vis = visaoDoAcesso(acesso);
+  const [un, meus] = await Promise.all([unidadesDaSessao(acesso.u), vis.linhas === "meus" ? carregarMeus(acesso.u.id) : null]);
+  return { acesso, un, acessivel: un.acessivel, vis, meus };
+});
+
+/** O protocolo passa nas LINHAS da pessoa? (sem "só os meus", todos passam) */
+export const protocoloNasLinhas = (e: EscopoMesa, id: number) => !e.meus || e.meus.protocolos.has(id);
+/** O DFD passa nas LINHAS da pessoa? */
+export const dfdNasLinhas = (e: EscopoMesa, id: number) => !e.meus || e.meus.dfds.has(id);
+
+/** O protocolo é LEGÍVEL: a unidade no escopo **e** nas linhas da pessoa. */
+export const protocoloLegivel = (e: EscopoMesa, p: { id: number; reparticaoId: number | null }) => e.acessivel(p.reparticaoId) && protocoloNasLinhas(e, p.id);
+
+/** Os DFDs LEGÍVEIS: a regra da unidade (a do DFD ou a do protocolo dele) **e** as linhas da pessoa, na mesma ordem. */
+export async function dfdsLegiveisNaMesa<T extends { id: number; reparticaoId: number | null; protocoloId: number | null }>(e: EscopoMesa, dfds: T[]): Promise<T[]> {
+  const naLinha = e.meus ? dfds.filter((d) => dfdNasLinhas(e, d.id)) : dfds;
+  return dfdsLegiveis(e.acessivel, naLinha);
+}
+
+/** O DFD é LEGÍVEL? */
+export async function dfdLegivelNaMesa(e: EscopoMesa, dfd: { id: number; reparticaoId: number | null; protocoloId: number | null }): Promise<boolean> {
+  return (await dfdsLegiveisNaMesa(e, [dfd])).length === 1;
 }

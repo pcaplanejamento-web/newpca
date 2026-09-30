@@ -277,10 +277,11 @@ export function BarraEdicaoMassaProtocolos({
   situacoes = [],
   regras = regrasPadrao(),
   aplicando = false,
+  responsavel = true,
   onAplicar,
 }: {
   reparticoes: Rep[];
-  /** As pessoas do grupo (o responsável — escolhido pela FOTO e o APELIDO). */
+  /** As pessoas designáveis como responsável (escolhidas pela FOTO e o APELIDO — o nível do papel já as filtra). */
   pessoas?: Pessoa[];
   /** O usuário da sessão ("(eu)", primeiro da lista). */
   usuarioId?: number | null;
@@ -288,10 +289,12 @@ export function BarraEdicaoMassaProtocolos({
   situacoes?: { id: number; nome: string }[];
   regras?: RegrasAvaliacao;
   aplicando?: boolean;
+  /** O papel ALTERA o Responsável (os detalhes do papel: "não altera" tira o campo). */
+  responsavel?: boolean;
   onAplicar: (acao: AcaoMassaProtocolo) => void;
 }) {
   const campos: { value: CampoProto; label: string }[] = [
-    { value: "responsavel", label: "Responsável" },
+    ...(responsavel ? [{ value: "responsavel" as const, label: "Responsável" }] : []),
     ...(situacoes.length > 0 ? [{ value: "situacao" as const, label: "Situação" }] : []),
     ...(editavelDe(regras, "protocolo.reparticao") ? [{ value: "reparticao" as const, label: "Unidade" }] : []),
     { value: "assunto", label: "Assunto" },

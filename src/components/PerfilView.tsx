@@ -6,6 +6,7 @@ import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
 import { MESA_RESPONSAVEL, type MesaResponsavel, ROTULO_MESA_RESPONSAVEL } from "@/lib/mesa-filtros";
 import type { Capacidades } from "@/lib/papeis-core";
+import { contarRestricoes } from "@/lib/papeis-detalhes-core";
 import { APELIDO_MAX, type Pessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
@@ -36,6 +37,7 @@ import {
   IconUserX,
 } from "./icons";
 import { Switch } from "./Switch";
+import { ResumoDetalhesPapel } from "./ResumoDetalhesPapel";
 import { ResumoPapel } from "./ResumoPapel";
 import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
@@ -117,6 +119,7 @@ export function PerfilView({
   turnstile,
   protocolacao = null,
   mesaResponsavel = null,
+  mesaSoOsMeus = false,
   semModulos = null,
   seuAcesso = null,
   avisosEmail = null,
@@ -128,15 +131,19 @@ export function PerfilView({
   /** O captcha do ADM — antes de enviar o código da senha. */
   turnstile?: ConfigCaptcha;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
-   * PESSOAS DO GRUPO ativo (`foraDoGrupo` = o padrão gravado que não é mais do grupo — com a foto, sem re-escolha). */
-  protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: Pessoa | null } | null;
-  /** Com que RESPONSÁVEL a Mesa abre (só quem vê a Mesa; `null` = sem o card). */
+   * PESSOAS DO GRUPO ativo (`foraDoGrupo` = o padrão gravado que não é mais do grupo — com a foto, sem re-escolha).
+   * `soVoce` = o papel "só assume para si": a lista traz só a própria pessoa. */
+  protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: Pessoa | null; soVoce?: boolean } | null;
+  /** Com que RESPONSÁVEL a Mesa abre (só quem vê a Mesa e o Responsável; `null` = sem o card). */
   mesaResponsavel?: MesaResponsavel | null;
+  /** O papel mostra SÓ OS PROTOCOLOS da pessoa: o filtro da Mesa escolhe dentro deles. */
+  mesaSoOsMeus?: boolean;
   /** Por que a pessoa não abre NENHUMA tela (sem grupo, grupo sem telas ou papel sem Visualizar) — `null` = abre. */
   semModulos?: string | null;
   /** O ACESSO efetivo no grupo ativo: as telas que abre e as ações em cada uma (o grupo decide as telas; o papel, as
-   * ações). `null` = sem o card. */
-  seuAcesso?: { grupo: string | null; capacidades: Capacidades } | null;
+   * ações) + os DETALHES do papel (as restrições dentro das telas; `null` = o Administrador, sem restrições). `null` = sem
+   * o card. */
+  seuAcesso?: { grupo: string | null; capacidades: Capacidades; detalhes?: unknown } | null;
   /** Os avisos do sino que chegam por E-MAIL (só com o Resend ativo; `null` = sem o card). */
   avisosEmail?: PrefsEmail | null;
   /** A conta Google VINCULADA (só com o login com Google ativo; `null` = sem o card). `soGoogle` = sem senha. */
@@ -572,6 +579,12 @@ export function PerfilView({
               }
             >
               <ResumoPapel capacidades={seuAcesso.capacidades} vazio="Nenhuma tela liberada." />
+              {seuAcesso.detalhes != null && contarRestricoes(seuAcesso.detalhes) > 0 && (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="mb-2 text-[12.5px] text-muted">Restrições do papel dentro dessas telas:</p>
+                  <ResumoDetalhesPapel detalhes={seuAcesso.detalhes} />
+                </div>
+              )}
             </SecaoPerfil>
           )}
           {emailPrefs && (
@@ -632,7 +645,11 @@ export function PerfilView({
             <SecaoPerfil
               icone={<IconClipboard className="h-4 w-4" />}
               titulo="Mesa"
-              descricao="Com que responsável a Mesa abre — dá para trocar a qualquer momento no filtro da própria Mesa."
+              descricao={
+                mesaSoOsMeus
+                  ? "Seu papel mostra só os seus protocolos (em que você é o responsável ou que protocolou); aqui você escolhe com que responsável a Mesa abre, dentro deles."
+                  : "Com que responsável a Mesa abre — dá para trocar a qualquer momento no filtro da própria Mesa."
+              }
               onSubmit={salvarMesa}
               msg={msgMesa}
               acao={
@@ -662,7 +679,11 @@ export function PerfilView({
             <SecaoPerfil
               icone={<IconBriefcase className="h-4 w-4" />}
               titulo="Protocolação"
-              descricao="Todo protocolo novo que você protocolar já sai com este responsável (só as pessoas do seu grupo ativo)."
+              descricao={
+                protocolacao.soVoce
+                  ? "Seu papel só permite assumir para si: o protocolo novo que você protocolar pode já sair com você como responsável."
+                  : "Todo protocolo novo que você protocolar já sai com este responsável (só as pessoas do seu grupo ativo)."
+              }
               onSubmit={salvarPreferencia}
               msg={msgPref}
               acao={
@@ -685,7 +706,11 @@ export function PerfilView({
                 onChange={(v) => setRespPadrao(v ? Number(v) : null)}
               />
               {respPadrao != null && !protocolacao.pessoas.some((p) => p.id === respPadrao) && (
-                <p className="mt-2 text-[12px] text-[var(--warn)]">Esta pessoa não está mais no seu grupo ativo — troque ou remova o padrão.</p>
+                <p className="mt-2 text-[12px] text-[var(--warn)]">
+                  {protocolacao.soVoce
+                    ? "Seu papel só permite você como responsável padrão — troque ou remova o padrão."
+                    : "Esta pessoa não está mais no seu grupo ativo — troque ou remova o padrão."}
+                </p>
               )}
             </SecaoPerfil>
           )}

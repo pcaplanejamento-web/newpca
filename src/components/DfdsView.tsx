@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
-import type { DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
+import type { ItemDfdRow, PcaResumo } from "@/lib/dfd";
+import type { DfdNaMesa, ProtocoloNaMesa } from "@/lib/mesa-redacao";
+import { metricasPermitidas, ocultasDe, podeTrocarResponsavel } from "@/lib/mesa-visao-core";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
   type AcaoMassa,
@@ -45,7 +47,6 @@ import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
 import { estaTravado, motivoNaoExcluirDfd, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
-import type { ProtocoloResumo } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { SituacaoCadastrada } from "@/lib/situacoes";
 import { nomeExibicao, type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
@@ -126,10 +127,10 @@ type Sel = Set<string | number>;
 export type ModoPcaMesa = {
   pcaId: number;
   ferramenta?: ReactNode;
-  colunasProtocolo?: Column<ProtocoloResumo>[];
+  colunasProtocolo?: Column<ProtocoloNaMesa>[];
   /** As ÚNICAS ações da seleção de protocolos no PCA (sem o editor de massa). */
-  acoesProtocolos?: (selecionados: ProtocoloResumo[], limpar: () => void) => ReactNode;
-  rodapeProtocolos?: (linhas: ProtocoloResumo[]) => string;
+  acoesProtocolos?: (selecionados: ProtocoloNaMesa[], limpar: () => void) => ReactNode;
+  rodapeProtocolos?: (linhas: ProtocoloNaMesa[]) => string;
   /** Colunas extras da visão Itens (ex.: o sequencial do item no PCA). */
   colunasItens?: Column<ItemDfdRow>[];
   /** Ações da seleção de itens (ex.: "Retirar do PCA"); o editor de massa só aparece com itens NÃO incorporados. */
@@ -153,7 +154,7 @@ const SEM_INFO = {
   catalogoRotulo: "—",
 };
 /** O PCA (ano) de um DFD na Mesa: o do protocolo de origem; sem ele, o do próprio DFD (o item segue o DFD). */
-const anoPcaDoDfd = (d: DfdResumo | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
+const anoPcaDoDfd = (d: DfdNaMesa | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
 /** Mantém na seleção só as chaves que ainda existem (após recarregar as listas). */
 const podar = (sel: Sel, validas: Set<number>): Sel => {
   const n = new Set([...sel].filter((k) => validas.has(Number(k))));
@@ -161,10 +162,10 @@ const podar = (sel: Sel, validas: Set<number>): Sel => {
 };
 /** Chave da conferência de um DFD: muda quando o DFD é gravado (atualizadoEm), troca de unidade ou a
  * categoria do protocolo muda — só esses são reconferidos depois de um `router.refresh()`. */
-const chaveConf = (d: DfdResumo) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
+const chaveConf = (d: DfdNaMesa) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
 /** Chave da conferência AGREGADA de um protocolo: SÓ o que muda o estado — a capa (valor e assunto),
  * QUALQUER DFD dele gravado e o rastro dos sobrescritos. Trocar responsável/situação não reconfere nada. */
-const chaveProto = (p: ProtocoloResumo) =>
+const chaveProto = (p: ProtocoloNaMesa) =>
   `${p.id}|${p.dfdsAtualizadoEm ?? ""}|${p.totalDfds}|${p.valorTotal}|${p.sobrescritos}|${p.valorSobrescritos}|${p.valorCapa ?? ""}|${p.assunto ?? ""}`;
 /** Protocolos por requisição da conferência agregada (e ~DFDs por fatia: `FATIA_CONFERENCIA`). */
 const FATIA_PROTOCOLOS = 50;
@@ -205,8 +206,8 @@ export function DfdsView({
 }: {
   /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
   pode: PodeMesa;
-  dfds: DfdResumo[];
-  protocolos: ProtocoloResumo[];
+  dfds: DfdNaMesa[];
+  protocolos: ProtocoloNaMesa[];
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
   pcas?: PcaResumo[];
@@ -327,16 +328,16 @@ export function DfdsView({
       return n;
     });
   }, [protocolos]);
-  const situacaoDe = (p: ProtocoloResumo) => valorGestao(gestao, p.id, "situacaoId", p.situacaoId);
+  const situacaoDe = (p: ProtocoloNaMesa) => valorGestao(gestao, p.id, "situacaoId", p.situacaoId);
   const protocolosF = useMemo(
-    () => protocolos.filter((p) => passaFiltroMesa({ responsavelId: valorGestao(gestao, p.id, "responsavelId", p.responsavelId), assunto: p.assunto }, filtro)),
+    () => protocolos.filter((p) => passaFiltroMesa({ responsavelId: valorGestao(gestao, p.id, "responsavelId", p.responsavelId ?? null), assunto: p.assunto }, filtro)),
     [protocolos, filtro, gestao],
   );
   const dfdsF = useMemo(
     () =>
       filtroMesaAtivo(filtro)
         ? dfds.filter((d) =>
-            passaFiltroMesa({ responsavelId: valorGestao(gestao, d.protocoloId, "responsavelId", d.protocoloResponsavelId), assunto: d.protocoloAssunto }, filtro),
+            passaFiltroMesa({ responsavelId: valorGestao(gestao, d.protocoloId, "responsavelId", d.protocoloResponsavelId ?? null), assunto: d.protocoloAssunto }, filtro),
           )
         : dfds,
     [dfds, filtro, gestao],
@@ -396,7 +397,7 @@ export function DfdsView({
   const [execucao, setExecucao] = useState<{ atividades: Atividade[] | null; erro: boolean }>({ atividades: null, erro: false });
   const [pessoasExec, setPessoasExec] = useState<Pessoa[]>([]);
   const [tentarExec, setTentarExec] = useState(0);
-  const cacheExec = useRef<{ base: ProtocoloResumo[]; ano: number | undefined; tentativa: number } | null>(null);
+  const cacheExec = useRef<{ base: ProtocoloNaMesa[]; ano: number | undefined; tentativa: number } | null>(null);
   useEffect(() => {
     if (vista !== "dashboard" || modoPca) return;
     const c = cacheExec.current;
@@ -487,7 +488,7 @@ export function DfdsView({
     })();
     return () => ac.abort();
   }, [vista, dfds, ctxConf]);
-  const confDe = (d: DfdResumo): ConfLinha | undefined =>
+  const confDe = (d: DfdNaMesa): ConfLinha | undefined =>
     confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
   // ESTADO AGREGADO dos PROTOCOLOS (capa + TODOS os problemas dos DFDs/itens de cada um) — calculado no
@@ -512,8 +513,8 @@ export function DfdsView({
     }
     const faltam = protocolos.filter((p) => !alvo.m.has(chaveProto(p)));
     if (faltam.length === 0) return;
-    const fatias: ProtocoloResumo[][] = [];
-    let atual: ProtocoloResumo[] = [];
+    const fatias: ProtocoloNaMesa[][] = [];
+    let atual: ProtocoloNaMesa[] = [];
     let dfdsNaFatia = 0;
     for (const p of faltam) {
       if (atual.length > 0 && (atual.length >= FATIA_PROTOCOLOS || dfdsNaFatia + p.totalDfds > FATIA_CONFERENCIA)) {
@@ -556,7 +557,7 @@ export function DfdsView({
   }, [precisaConfProto, protocolos, ctxConf]);
   /** Estado do protocolo: o agregado do servidor. Até chegar, "Conferindo…"; se a conferência falhou, só o
    * que a CAPA já prova (problema real) — sem problema na capa é "Não conferido", nunca "Regular". */
-  const estadoDoProtocolo = (p: ProtocoloResumo): { conf: ConfProto; pendente: boolean; naoConferido: boolean } => {
+  const estadoDoProtocolo = (p: ProtocoloNaMesa): { conf: ConfProto; pendente: boolean; naoConferido: boolean } => {
     const atual = confProtoRef.current.ctx === ctxConf ? confProtoRef.current : null;
     const k = chaveProto(p);
     const c = atual?.m.get(k);
@@ -580,7 +581,22 @@ export function DfdsView({
   };
 
   /** GESTÃO na célula: responsável/situação gravados na hora (PATCH, origem "celula" no histórico). */
-  async function alterarGestao(p: ProtocoloResumo, campo: keyof Gestao, valor: number | null) {
+  /** Com "só os meus" (detalhe do papel), passar o Responsável a OUTRA pessoa (ou a ninguém) tira da Mesa o protocolo
+   * que a pessoa não protocolou. `null` = não sai; senão, o aviso (incerto quando a Distribuição não é visível). */
+  const avisoSaiDaMesa = (ps: readonly ProtocoloNaMesa[], novo: number | null): string | null => {
+    if (pode.vis.linhas !== "meus" || novo === usuarioId) return null;
+    const saem = ps.filter((p) => p.distribuidorId !== usuarioId);
+    if (saem.length === 0) return null;
+    const incerto = saem.some((p) => p.distribuidorId === undefined);
+    const quem = ps.length === 1 ? `O protocolo ${ps[0].numero}` : `${saem.length} protocolo(s)`;
+    return `${quem} ${incerto ? "pode(m) sair" : ps.length === 1 ? "sai" : "saem"} da sua Mesa: seu papel mostra só os protocolos em que você é o responsável ou que você protocolou.`;
+  };
+
+  async function alterarGestao(p: ProtocoloNaMesa, campo: keyof Gestao, valor: number | null) {
+    if (campo === "responsavelId") {
+      const aviso = avisoSaiDaMesa([p], valor);
+      if (aviso && !confirm(`${aviso} Continuar?`)) return;
+    }
     const k = `${p.id}:${campo}`;
     setSalvandoGestao((s) => new Set(s).add(k));
     setGestao((m) => new Map(m).set(p.id, { ...m.get(p.id), [campo]: valor }));
@@ -648,7 +664,7 @@ export function DfdsView({
     router.refresh();
   }
 
-  function abrirVincular(d: DfdResumo) {
+  function abrirVincular(d: DfdNaMesa) {
     setErro(null);
     setVincAlvo({ id: d.id, numero: d.numero, protocoloId: d.protocoloId });
     setVincSel(d.protocoloId);
@@ -748,7 +764,8 @@ export function DfdsView({
       acao.campo === "valorCapa"
         ? `Substituir o valor da capa pela somatória dos DFDs em ${ids.length} protocolo(s)?`
         : `Aplicar ${oQue} em ${ids.length} protocolo(s)?`;
-    if (!confirm(`${pergunta} Gravado diretamente no banco.`)) return;
+    const sai = acao.campo === "responsavel" ? avisoSaiDaMesa(protocolos.filter((p) => selProtos.has(p.id)), acao.responsavelId) : null;
+    if (!confirm(`${pergunta} Gravado diretamente no banco.${sai ? ` ${sai}` : ""}`)) return;
     setErro(null);
     const r = await emFatias("/api/protocolo/massa", fatiar(ids, FATIA_MASSA), acao, "protocolo(s)");
     setSelProtos(new Set());
@@ -871,8 +888,8 @@ export function DfdsView({
   // GESTÃO: Situação (só as do ADM) e Responsável = dropdown na própria célula; Distribuição = quem protocolou.
   const situacaoPorId = new Map(situacoes.map((x) => [x.id, x]));
   /** O responsável EXIBIDO (o editado na célula, se houver; senão o do servidor). */
-  const responsavelDe = (r: ProtocoloResumo) => {
-    const id = valorGestao(gestao, r.id, "responsavelId", r.responsavelId);
+  const responsavelDe = (r: ProtocoloNaMesa) => {
+    const id = valorGestao(gestao, r.id, "responsavelId", r.responsavelId ?? null);
     return pessoaDe(id, id === r.responsavelId ? r.responsavelNome : null);
   };
   // DASHBOARD de governança — só montado com o Dashboard aberto. As KPIs usam as MESMAS listas filtradas da Mesa; as
@@ -885,8 +902,8 @@ export function DfdsView({
     // Sem foco numa pessoa, o universo É a lista filtrada (os mesmos arrays — nada é mapeado duas vezes).
     const focado = filtro.responsavel !== "todos";
     const soAssunto: FiltroMesa = { ...FILTRO_MESA_TODOS, assunto: filtro.assunto };
-    const protocolosU = focado ? protocolos.filter((p) => passaFiltroMesa({ responsavelId: p.responsavelId, assunto: p.assunto }, soAssunto)) : protocolosF;
-    const dfdsU = focado ? dfds.filter((d) => passaFiltroMesa({ responsavelId: d.protocoloResponsavelId, assunto: d.protocoloAssunto }, soAssunto)) : dfdsF;
+    const protocolosU = focado ? protocolos.filter((p) => passaFiltroMesa({ responsavelId: p.responsavelId ?? null, assunto: p.assunto }, soAssunto)) : protocolosF;
+    const dfdsU = focado ? dfds.filter((d) => passaFiltroMesa({ responsavelId: d.protocoloResponsavelId ?? null, assunto: d.protocoloAssunto }, soAssunto)) : dfdsF;
     const pessoasDash = new Map<number, Pessoa>();
     const universoP = protocolosU.map((p): ProtocoloPainel => {
       const resp = responsavelDe(p);
@@ -903,7 +920,7 @@ export function DfdsView({
         responsavelId: resp?.id ?? null,
         situacaoId: situacaoDe(p),
         estado,
-        distribuidorId: p.distribuidorId,
+        distribuidorId: p.distribuidorId ?? null,
         anoPca: p.anoPca,
         dfdsErro: conf.dfdsComErro ?? null,
         dfdsAtencao: conf.dfdsEmAtencao ?? null,
@@ -914,7 +931,7 @@ export function DfdsView({
     for (const pe of pessoasExec) if (!pessoasDash.has(pe.id)) pessoasDash.set(pe.id, dirPessoas.get(pe.id) ?? pe);
     const foco = typeof filtro.responsavel === "number" && !pessoasDash.has(filtro.responsavel) ? pessoaDe(filtro.responsavel) : null;
     if (foco) pessoasDash.set(foco.id, foco);
-    const paraPainel = (d: DfdResumo): DfdPainel => ({
+    const paraPainel = (d: DfdNaMesa): DfdPainel => ({
       unidadeId: d.reparticaoId,
       unidade: d.reparticaoCodigo,
       unidadeNome: d.reparticaoNome,
@@ -934,8 +951,10 @@ export function DfdsView({
   }, [vista, filtro, protocolos, dfds, protocolosF, dfdsF, gestao, dirPessoas, pessoasExec, confProtoVersao, ctxConf, regras]);
 
   const travaResp = filtro.responsavel !== "todos" ? "Filtrado pelo seletor de responsável acima da tabela" : undefined;
+  // As colunas que os DETALHES do papel ocultam (Responsável, Distribuição…) — o servidor nem manda o dado.
+  const ocultasProto = ocultasDe(pode.vis, "protocolos");
   const travaAssunto = filtro.assunto != null ? "Filtrado pelo seletor de assunto acima da tabela" : undefined;
-  const colsProto: Column<ProtocoloResumo>[] = [
+  const colsProto: Column<ProtocoloNaMesa>[] = [
     {
       key: "estado",
       header: "Estado",
@@ -1010,7 +1029,11 @@ export function DfdsView({
             atual={p}
             extras={EXTRAS_CELULA}
             salvando={salvandoGestao.has(`${r.id}:responsavelId`)}
-            onChange={podeNoRecurso(pode, r.pcaId).manipular ? (v) => alterarGestao(r, "responsavelId", v ? Number(v) : null) : undefined}
+            onChange={
+              podeNoRecurso(pode, r.pcaId).manipular && podeTrocarResponsavel(pode.vis, usuarioId, p?.id ?? null)
+                ? (v) => alterarGestao(r, "responsavelId", v ? Number(v) : null)
+                : undefined
+            }
           />
         );
       },
@@ -1086,8 +1109,8 @@ export function DfdsView({
             header: "PCA",
             align: "center" as const,
             nowrap: true,
-            value: (r: ProtocoloResumo) => (r.anoPca != null ? String(r.anoPca) : "—"),
-            render: (r: ProtocoloResumo) => <CelulaPca pca={pcaDe(r.anoPca)} />,
+            value: (r: ProtocoloNaMesa) => (r.anoPca != null ? String(r.anoPca) : "—"),
+            render: (r: ProtocoloNaMesa) => <CelulaPca pca={pcaDe(r.anoPca)} />,
           },
         ]),
     {
@@ -1120,7 +1143,7 @@ export function DfdsView({
             header: "",
             filter: "none" as const,
             nowrap: true,
-            render: (r: ProtocoloResumo) =>
+            render: (r: ProtocoloNaMesa) =>
               pode.sistema.excluir && motivoNaoExcluirProtocolo(r) == null ? (
                 <div className="flex justify-end gap-1">
                   <Button
@@ -1773,7 +1796,7 @@ export function DfdsView({
     `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${dica ? " Use “Importar” no rodapé da tabela." : ""}`;
   const tabelaProtocolos = (
     <DataTable
-      columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
+      columns={(modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto).filter((c) => !ocultasProto.has(c.key))}
       rows={protocolosF}
       getKey={(r) => r.id}
       selectable={podeAqui.manipular}
@@ -1937,6 +1960,7 @@ export function DfdsView({
             {progressoMassa}
             <BarraEdicaoMassaProtocolos
               reparticoes={reparticoes}
+              responsavel={pode.vis.responsavel.ver && pode.vis.responsavel.alterar !== "nao"}
               pessoas={pessoas}
               usuarioId={usuarioId}
               situacoes={situacoes}
@@ -2015,17 +2039,20 @@ export function DfdsView({
           {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
           {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
-          <SeletorPessoa
-            variante="filtro"
-            rotulo="Responsável"
-            ariaLabel="Filtro: Responsável"
-            pessoas={opcoesResponsavel}
-            usuarioId={usuarioId}
-            valor={String(filtro.responsavel)}
-            ativo={filtro.responsavel !== "todos"}
-            extras={EXTRAS_FILTRO}
-            onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
-          />
+          {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
+          {pode.vis.responsavel.ver && (
+            <SeletorPessoa
+              variante="filtro"
+              rotulo="Responsável"
+              ariaLabel="Filtro: Responsável"
+              pessoas={opcoesResponsavel}
+              usuarioId={usuarioId}
+              valor={String(filtro.responsavel)}
+              ativo={filtro.responsavel !== "todos"}
+              extras={EXTRAS_FILTRO}
+              onChange={(v) => setFiltro((f) => ({ ...f, responsavel: v === "todos" || v === "sem" ? v : Number(v) }))}
+            />
+          )}
           <SeletorFiltro
             icone={<IconFilter className="h-4 w-4" />}
             rotulo="Assunto"
@@ -2058,6 +2085,7 @@ export function DfdsView({
               situacoes={situacoes}
               regras={regras}
               responsavel={filtro.responsavel}
+              permitido={metricasPermitidas(pode.vis)}
               onAbrir={setAberto}
               metricas={{
                 filtro: filtroMetricas,

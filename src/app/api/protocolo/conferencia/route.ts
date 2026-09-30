@@ -1,11 +1,11 @@
+import { escopoMesa, protocoloLegivel } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto } from "@/lib/avaliacao-core";
 import { avaliarLinhaDfd, avaliarProtocolo } from "@/lib/conferencia-dfd";
 import { type DfdDetalhe, listarDfdsCompletosDosProtocolos } from "@/lib/dfd";
 import { conferenciaProtocolosSchema } from "@/lib/dfd-validation";
-import { unidadesDaSessao } from "@/lib/grupos";
-import { ok, parseCorpo } from "@/lib/http";
+import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { listarProtocolosPorIds } from "@/lib/protocolo";
 import { unidadesConferencia } from "@/lib/reparticoes";
@@ -24,10 +24,10 @@ export async function POST(req: Request) {
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(conferenciaProtocolosSchema, req);
   if ("resp" in p) return p.resp;
-  const { acessivel } = await unidadesDaSessao(a.u);
-  const protocolos = (await listarProtocolosPorIds(p.data.ids)).filter(
-    (pr) => acessivel(pr.reparticaoId),
-  );
+  const esc = await escopoMesa();
+  if (!esc) return erro("Faça login.", 401);
+  // Só os protocolos LEGÍVEIS (a unidade no escopo e as linhas da pessoa — "só os meus").
+  const protocolos = (await listarProtocolosPorIds(p.data.ids)).filter((pr) => protocoloLegivel(esc, pr));
   const ids = protocolos.map((pr) => pr.id);
   const [dfds, regras, orgaos] = await Promise.all([
     ids.length > 0 ? listarDfdsCompletosDosProtocolos(ids) : Promise.resolve([]),

@@ -11,12 +11,15 @@ import type { AcaoPapel, Tela } from "./papeis-core.ts";
  * - `admin`: `exigirAdmin` (a Administração é só do papel Administrador);
  * - `pessoal`: só a sessão (o que é da própria pessoa);
  * - `publica`/`interna`: sem sessão (login e cadastro, consulta pública, cron com segredo, webhook assinado).
+ *
+ * `visao` (Mesa) = a rota lê o ESCOPO DA MESA da requisição (`escopoMesa(` — as unidades, as LINHAS "só os meus" e o que o
+ * papel vê); o teste confere que ela o chama e que nenhuma rota da Mesa usa o escopo de unidades por fora dele.
  */
 export type Metodo = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 export type RegraRota =
-  | { tipo: "tela"; telas: readonly Tela[]; acao: AcaoPapel; obs?: string }
-  | { tipo: "recurso"; telas: readonly Tela[]; acao: AcaoPapel; chamada?: string; acaoDe?: string; obs?: string }
+  | { tipo: "tela"; telas: readonly Tela[]; acao: AcaoPapel; obs?: string; visao?: true }
+  | { tipo: "recurso"; telas: readonly Tela[]; acao: AcaoPapel; chamada?: string; acaoDe?: string; obs?: string; visao?: true }
   | { tipo: "admin"; chamada?: string }
   | { tipo: "pessoal"; obs?: string }
   | { tipo: "publica"; obs: string }
@@ -36,6 +39,8 @@ const recurso = (telas: Tela | readonly Tela[], acao: AcaoPapel, chamada?: strin
   acaoDe,
   obs,
 });
+/** A regra de uma rota da MESA que lê o escopo da requisição (`escopoMesa(`): unidades + linhas + o que o papel vê. */
+const naMesa = (r: RegraRota): RegraRota => (r.tipo === "tela" || r.tipo === "recurso" ? { ...r, visao: true } : r);
 const ADMIN: RegraRota = { tipo: "admin" };
 /** A guarda do ADM num auxiliar do arquivo (`chamada`, que chama `exigirAdmin`). */
 const adminVia = (chamada: string): RegraRota => ({ tipo: "admin", chamada });
@@ -136,28 +141,29 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "catalogo/verificar": { POST: tela("catalogo", "importar") },
 
   // ── Mesa (a tela do RECURSO: protocolo num PCA → `pca`, senão `dfd`; LER = uma das duas Mesas + o escopo de unidades)
-  "dfd": { POST: recurso(MESA, "importar", "recusa(", "a Mesa de destino: a do protocolo; sem ele, a do DFD existente (novo avulso = sistema)") },
+  // (todas pelo ESCOPO DA MESA — `naMesa`: as unidades, as linhas "só os meus" e o que o papel vê).
+  "dfd": { POST: naMesa(recurso(MESA, "importar", "recusa(", "a Mesa de destino: a do protocolo; sem ele, a do DFD existente (novo avulso = sistema)")) },
   "dfd/[id]": {
-    GET: tela(MESA, "visualizar", "a unidade do DFD ou a do protocolo dele no escopo"),
-    PATCH: recurso(MESA, "manipular", "recusa(", "vincular: também Manipular na Mesa do protocolo de destino"),
-    DELETE: recurso(MESA, "excluir", "recusa(", "desfazer = Importar (só a gravação parcial própria); reenvio = Importar + Excluir"),
+    GET: naMesa(tela(MESA, "visualizar", "a unidade do DFD ou a do protocolo dele no escopo")),
+    PATCH: naMesa(recurso(MESA, "manipular", "recusa(", "vincular: também Manipular na Mesa do protocolo de destino")),
+    DELETE: naMesa(recurso(MESA, "excluir", "recusa(", "desfazer = Importar (só a gravação parcial própria); reenvio = Importar + Excluir")),
   },
-  "dfd/[id]/historico": { GET: tela(MESA, "visualizar") },
-  "dfd/conferencia": { POST: tela(MESA, "visualizar") },
-  "dfd/existentes": { POST: tela(MESA, "importar") },
-  "dfd/itens": { GET: recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema") },
-  "dfd/itens/massa": { POST: recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha") },
-  "dfd/massa": { POST: recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha") },
-  "mesa/execucao": { GET: tela("dfd", "visualizar", "o Dashboard da Mesa do sistema") },
-  "protocolo": { POST: recurso(MESA, "importar", "recusa(", "novo = Mesa do sistema; reenvio/mesmo nº = a Mesa em que ele está") },
+  "dfd/[id]/historico": { GET: naMesa(tela(MESA, "visualizar")) },
+  "dfd/conferencia": { POST: naMesa(tela(MESA, "visualizar")) },
+  "dfd/existentes": { POST: naMesa(tela(MESA, "importar")) },
+  "dfd/itens": { GET: naMesa(recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema")) },
+  "dfd/itens/massa": { POST: naMesa(recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha")) },
+  "dfd/massa": { POST: naMesa(recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha")) },
+  "mesa/execucao": { GET: naMesa(tela("dfd", "visualizar", "o Dashboard da Mesa do sistema (sem o desempenho por pessoa: só as correções, sem pessoas)")) },
+  "protocolo": { POST: naMesa(recurso(MESA, "importar", "recusa(", "novo = Mesa do sistema; reenvio/mesmo nº = a Mesa em que ele está")) },
   "protocolo/[id]": {
-    GET: tela(MESA, "visualizar"),
-    PATCH: recurso(MESA, "manipular", "recusa(", "capa, unidade, responsável e situação"),
-    DELETE: recurso(MESA, "excluir", "recusa(", "em cascata com os DFDs; num PCA, não se exclui"),
+    GET: naMesa(tela(MESA, "visualizar")),
+    PATCH: naMesa(recurso(MESA, "manipular", "recusa(", "capa, unidade, situação e o responsável (no nível do papel)")),
+    DELETE: naMesa(recurso(MESA, "excluir", "recusa(", "em cascata com os DFDs; num PCA, não se exclui")),
   },
-  "protocolo/[id]/historico": { GET: tela(MESA, "visualizar") },
-  "protocolo/conferencia": { POST: tela(MESA, "visualizar") },
-  "protocolo/massa": { POST: recurso(MESA, "manipular", "motivoRecusa(", "por protocolo — o que o papel não permite vira falha") },
+  "protocolo/[id]/historico": { GET: naMesa(tela(MESA, "visualizar")) },
+  "protocolo/conferencia": { POST: naMesa(tela(MESA, "visualizar")) },
+  "protocolo/massa": { POST: naMesa(recurso(MESA, "manipular", "motivoRecusa(", "por protocolo — o que o papel não permite vira falha")) },
 
   // ── Integrações (sessão) ─────────────────────────────────────────────────────────────────────────────────
   "integracoes/trello/boards": {
@@ -182,9 +188,9 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     DELETE: tela("pca", "excluir", "devolve os protocolos à Mesa e desfaz as incorporações"),
   },
   "pca/[id]/capa": { GET: tela("pca", "visualizar") },
-  "pca/[id]/itens": { POST: tela("pca", "excluir", "retirar itens do PCA") },
+  "pca/[id]/itens": { POST: naMesa(tela("pca", "excluir", "retirar itens do PCA")) },
   "pca/[id]/planilhas/[unidadeId]": { DELETE: tela("pca", "excluir") },
-  "pca/[id]/protocolos": { POST: tela("pca", "manipular", "enviar também exige Manipular na Mesa (recusa)") },
+  "pca/[id]/protocolos": { POST: naMesa(tela("pca", "manipular", "enviar também exige Manipular na Mesa (recusa)")) },
   "pca/[id]/consulta/dfd/[dfdId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
   "pca/[id]/consulta/historico": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
   "pca/[id]/consulta/protocolo/[protocoloId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },

@@ -1,12 +1,14 @@
 import { motivoRecusa } from "@/lib/acesso";
+import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloLegivel } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
 import { somatorioProcesso } from "@/lib/conferencia-dfd";
 import { massaProtocolosSchema } from "@/lib/dfd-validation";
-import { getGrupoAtivoId, unidadesDaSessao } from "@/lib/grupos";
+import { getGrupoAtivoId } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { motivoResponsavel } from "@/lib/mesa-visao-core";
 import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
 import { getSituacao } from "@/lib/situacoes";
@@ -29,7 +31,9 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const { ids, acao } = p.data;
 
-  const { acessivel } = await unidadesDaSessao(a.u);
+  const esc = await escopoMesa();
+  if (!esc) return erro("Faça login.", 401);
+  const { acessivel } = esc;
   if (acao.campo === "reparticao") {
     if (!editavelDe(await getRegrasAvaliacao(), "protocolo.reparticao")) return erro("Campo travado nas Configurações → Avaliação.", 403);
     if (!acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
@@ -48,6 +52,11 @@ export async function POST(req: Request) {
         falhas.push({ id: pr.id, numero: pr.numero, motivo: "Sem acesso à unidade deste protocolo." });
         continue;
       }
+      // As LINHAS da pessoa ("só os meus", detalhe do papel).
+      if (!protocoloLegivel(esc, pr)) {
+        falhas.push({ id: pr.id, numero: pr.numero, motivo: MSG_SEM_ACESSO_PROTOCOLO });
+        continue;
+      }
       // O PAPEL manipula na Mesa em que o protocolo está (a do sistema ou a do PCA).
       const semPapel = motivoRecusa(a.acesso, telaDoRecurso(pr.pcaId), "manipular");
       if (semPapel) {
@@ -63,7 +72,15 @@ export async function POST(req: Request) {
       let campos: CamposProtocolo | null = null;
       if (acao.campo === "reparticao") campos = pr.reparticaoId === acao.reparticaoId ? null : { reparticaoId: acao.reparticaoId };
       else if (acao.campo === "assunto") campos = (pr.assunto ?? "") === acao.valor ? null : { assunto: acao.valor };
-      else if (acao.campo === "responsavel") campos = pr.responsavelId === acao.responsavelId ? null : { responsavelId: acao.responsavelId };
+      else if (acao.campo === "responsavel") {
+        // O nível do papel (não altera · só assume para si · qualquer pessoa do grupo), protocolo a protocolo.
+        const motivo = motivoResponsavel(esc.vis, a.u.id, pr.responsavelId, acao.responsavelId);
+        if (motivo) {
+          falhas.push({ id: pr.id, numero: pr.numero, motivo });
+          continue;
+        }
+        campos = pr.responsavelId === acao.responsavelId ? null : { responsavelId: acao.responsavelId };
+      }
       else if (acao.campo === "situacao") campos = pr.situacaoId === acao.situacaoId ? null : { situacaoId: acao.situacaoId };
       else {
         // Valor da capa = somatória do processo (os DFDs + o rastro dos sobrescritos — a MESMA régua da

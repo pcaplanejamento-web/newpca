@@ -1,6 +1,6 @@
 import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { unidadesDaSessao } from "@/lib/grupos";
+import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { acaoSugerida, motivoNaoDevolver, motivosNaoEnviar, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
 import {
@@ -44,11 +44,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const negado = corpo.acao === "enviar" ? recusa(a.acesso, "dfd", "manipular") : null;
   if (negado) return negado;
 
-  const [{ acessivel }, protocolos, dfds] = await Promise.all([
-    unidadesDaSessao(a.u),
+  const [esc, protocolos, dfds] = await Promise.all([
+    escopoMesa(),
     listarProtocolosPorIds(corpo.ids),
     corpo.acao === "incorporar" ? dfdsDosProtocolos(corpo.ids) : Promise.resolve([]),
   ]);
+  if (!esc) return erro("Faça login.", 401);
+  const { acessivel } = esc;
   const emOutro = corpo.acao === "incorporar" ? await dfdsEmOutroPca(dfds.map((d) => d.id), pca.id) : new Map<number, number>();
 
   let alterados = 0;
@@ -57,6 +59,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const falha = (motivo: string) => falhas.push({ id: pr.id, numero: pr.numero, motivo });
     if (!acessivel(pr.reparticaoId)) {
       falha("Sem acesso à unidade deste protocolo.");
+      continue;
+    }
+    // As LINHAS da pessoa ("só os meus", detalhe do papel).
+    if (!protocoloNasLinhas(esc, pr.id)) {
+      falha(MSG_SEM_ACESSO_PROTOCOLO);
       continue;
     }
     try {

@@ -3,23 +3,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PapelCadastro } from "@/lib/papeis";
 import { type Capacidades, diffCapacidades, MAX_DESCRICAO_PAPEL, MAX_NOME_PAPEL, MODELOS_PAPEL, retiraAlgo, textoDiffCapacidades } from "@/lib/papeis-core";
+import { compactarDetalhes, contarRestricoes, type DetalhesPapel, detalhesPadrao, diffDetalhes, restringeAlgo, textoDiffDetalhes } from "@/lib/papeis-detalhes-core";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
+import { DetalhesPapelEditor } from "./DetalhesPapelEditor";
 import { ErroCarga } from "./ErroCarga";
 import { SelectField, TextArea, TextField } from "./Field";
 import { IconCopy, IconLock, IconPencil, IconPlus, IconSave, IconTrash } from "./icons";
 import { MatrizCapacidades } from "./MatrizCapacidades";
 import { Modal } from "./Modal";
+import { ResumoDetalhesPapel } from "./ResumoDetalhesPapel";
 import { ResumoPapel } from "./ResumoPapel";
+import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
-type Rascunho = { id: number | null; nome: string; descricao: string; capacidades: Capacidades; padraoCadastro: boolean };
+type Rascunho = { id: number | null; nome: string; descricao: string; capacidades: Capacidades; detalhes: DetalhesPapel; padraoCadastro: boolean };
+type AbaEditor = "telas" | "detalhes";
 
 async function chamar(url: string, init?: RequestInit): Promise<{ papeis?: PapelCadastro[]; id?: number }> {
   const r = await fetch(url, init).catch(() => null);
@@ -38,10 +43,11 @@ function motivoNaoExcluir(p: PapelCadastro): string | null {
 
 /**
  * PAPÉIS (Configurações → Papéis, só o ADM): o GRUPO decide QUAIS telas a pessoa abre; o PAPEL decide o que ela faz em
- * cada uma — Visualizar · Manipular · Importar · Exportar · Excluir · Configurar. Lista (nome + selos, o resumo das telas,
- * quantas pessoas) e o editor num banner: nome, descrição, "Padrão para novos cadastros", "Começar de" (modelos) e a
- * MATRIZ Telas × Ações. O Administrador é fixo (só consulta); Gestor e Membro se editam, não se excluem; alterar um papel
- * em uso que RETIRA capacidades pede confirmação (vale na hora para as pessoas dele).
+ * cada uma — Visualizar · Manipular · Importar · Exportar · Excluir · Configurar — e os DETALHES dentro delas (Responsável,
+ * Distribuição, linhas da Mesa, desempenho por pessoa). Lista (nome + selos, o resumo das telas, as restrições, quantas
+ * pessoas) e o editor num banner: nome, descrição, "Padrão para novos cadastros" e, em duas abas, "Começar de" (modelos) +
+ * a MATRIZ Telas × Ações | os DETALHES. O Administrador é fixo (só consulta); Gestor e Membro se editam, não se excluem;
+ * alterar um papel em uso que RETIRA acesso pede confirmação (vale na hora para as pessoas dele).
  */
 export function PapeisAdmin() {
   const [lista, setLista] = useState<PapelCadastro[] | null>(null);
@@ -49,6 +55,7 @@ export function PapeisAdmin() {
   const [rascunho, setRascunho] = useState<Rascunho | null>(null);
   const [consulta, setConsulta] = useState<PapelCadastro | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [aba, setAba] = useState<AbaEditor>("telas");
   const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async () => {
@@ -67,6 +74,8 @@ export function PapeisAdmin() {
 
   const atual = rascunho?.id != null ? (lista?.find((p) => p.id === rascunho.id) ?? null) : null;
   const diff = useMemo(() => (rascunho && atual ? diffCapacidades(atual.capacidades, rascunho.capacidades) : []), [rascunho, atual]);
+  const diffDet = useMemo(() => (rascunho && atual ? diffDetalhes(atual.detalhes, rascunho.detalhes) : []), [rascunho, atual]);
+  const restringe = retiraAlgo(diff) || restringeAlgo(diffDet);
   const nomeOk = !!rascunho && rascunho.nome.trim().length >= 2 && rascunho.nome.trim().length <= MAX_NOME_PAPEL;
   const alterado =
     !!rascunho &&
@@ -74,15 +83,28 @@ export function PapeisAdmin() {
       rascunho.nome.trim() !== atual.nome ||
       rascunho.descricao.trim() !== (atual.descricao ?? "") ||
       diff.length > 0 ||
+      diffDet.length > 0 ||
       rascunho.padraoCadastro !== atual.padraoCadastro);
 
-  const novo = () => setRascunho({ id: null, nome: "", descricao: "", capacidades: MODELOS_PAPEL[0].capacidades, padraoCadastro: false });
+  const abrir = (r: Rascunho) => {
+    setAba("telas");
+    setRascunho(r);
+  };
+  const novo = () => abrir({ id: null, nome: "", descricao: "", capacidades: MODELOS_PAPEL[0].capacidades, detalhes: detalhesPadrao(), padraoCadastro: false });
   const editar = (p: PapelCadastro) =>
     p.chave === "admin"
       ? setConsulta(p)
-      : setRascunho({ id: p.id, nome: p.nome, descricao: p.descricao ?? "", capacidades: p.capacidades, padraoCadastro: p.padraoCadastro });
+      : abrir({ id: p.id, nome: p.nome, descricao: p.descricao ?? "", capacidades: p.capacidades, detalhes: p.detalhes, padraoCadastro: p.padraoCadastro });
+  // O Administrador não tem detalhes (ignora): a cópia dele começa sem restrições.
   const duplicar = (p: PapelCadastro) =>
-    setRascunho({ id: null, nome: `Cópia de ${p.nome}`.slice(0, MAX_NOME_PAPEL), descricao: p.descricao ?? "", capacidades: p.capacidades, padraoCadastro: false });
+    abrir({
+      id: null,
+      nome: `Cópia de ${p.nome}`.slice(0, MAX_NOME_PAPEL),
+      descricao: p.descricao ?? "",
+      capacidades: p.capacidades,
+      detalhes: p.chave === "admin" ? detalhesPadrao() : p.detalhes,
+      padraoCadastro: false,
+    });
 
   const fechar = async () => {
     if (salvando) return;
@@ -93,11 +115,16 @@ export function PapeisAdmin() {
   async function salvar() {
     if (!rascunho || !nomeOk || salvando) return;
     const r = rascunho;
-    // Retirar capacidades de um papel EM USO vale na hora para as pessoas dele: confirma dizendo o quê e quantas.
-    if (atual && atual.pessoas > 0 && retiraAlgo(diff)) {
+    // Retirar acesso de um papel EM USO (capacidades ou detalhes) vale na hora para as pessoas dele: confirma dizendo o
+    // quê e quantas.
+    if (atual && atual.pessoas > 0 && restringe) {
+      const perdas = [
+        textoDiffCapacidades(diff.filter((d) => d.perdeu.length)),
+        textoDiffDetalhes(diffDet.filter((d) => d.restringe)),
+      ].filter(Boolean);
       const ok = await confirmar({
-        titulo: `Retirar capacidades de "${atual.nome}"?`,
-        texto: `${atual.pessoas} ${atual.pessoas === 1 ? "pessoa perde" : "pessoas perdem"} na hora: ${textoDiffCapacidades(diff.filter((d) => d.perdeu.length))}.`,
+        titulo: `Retirar acesso de "${atual.nome}"?`,
+        texto: `${atual.pessoas} ${atual.pessoas === 1 ? "pessoa perde" : "pessoas perdem"} na hora: ${perdas.join(" · ")}.`,
         confirmar: "Salvar assim",
         perigo: true,
       });
@@ -109,6 +136,7 @@ export function PapeisAdmin() {
         nome: r.nome.trim(),
         descricao: r.descricao.trim() || null,
         capacidades: r.capacidades,
+        detalhes: compactarDetalhes(r.detalhes),
         ...(r.padraoCadastro && !atual?.padraoCadastro ? { padraoCadastro: true } : {}),
       };
       if (r.id == null) await chamar("/api/admin/papeis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
@@ -165,6 +193,14 @@ export function PapeisAdmin() {
       filter: "none",
       minWidth: 220,
       render: (p) => (p.chave === "admin" ? <span className="text-[13px] text-text-2">Tudo, inclusive a Administração</span> : <ResumoPapel capacidades={p.capacidades} compacto />),
+    },
+    {
+      key: "detalhes",
+      header: "Detalhes",
+      nowrap: true,
+      // O filtro por "Sem restrições" / "N restrições" (a quantidade).
+      value: (p) => (p.chave === "admin" ? "Sem restrições" : contarRestricoes(p.detalhes) ? `${contarRestricoes(p.detalhes)} restrições` : "Sem restrições"),
+      render: (p) => (p.chave === "admin" ? <span className="text-[12.5px] text-faint">—</span> : <ResumoDetalhesPapel detalhes={p.detalhes} compacto />),
     },
     {
       key: "pessoas",
@@ -232,6 +268,11 @@ export function PapeisAdmin() {
               Visualizar (abrir e consultar) · Manipular (criar e editar) · Importar (trazer arquivos) · Exportar (baixar) ·
               Excluir (apagar registros) · Configurar (a configuração da tela e o que vale para todos). Toque numa célula para ver
               o que ela cobre naquela tela.
+            </TopicoAjuda>
+            <TopicoAjuda titulo="Detalhes">
+              Dentro das telas que o papel abre, os DETALHES só RETIRAM: ver ou não o Responsável e a Distribuição, alterar o
+              Responsável (não altera · só assume para si · qualquer pessoa do grupo), ver só os próprios protocolos e o
+              desempenho por pessoa do Dashboard. O que fica oculto não sai do servidor.
             </TopicoAjuda>
             <TopicoAjuda titulo="Administrador">
               Fixo: tem tudo, inclusive a Administração (usuários, grupos, permissões, papéis e configurações).
@@ -314,11 +355,29 @@ export function PapeisAdmin() {
                     : "Quem se cadastrar recebe o papel padrão."}
               </p>
             </div>
-            <MatrizCapacidades valor={rascunho.capacidades} original={atual?.capacidades} onChange={(c) => setRascunho({ ...rascunho, capacidades: c })} />
-            {atual && atual.pessoas > 0 && diff.length > 0 && (
-              <Callout kind={retiraAlgo(diff) ? "warn" : "info"}>
+            <Segmented<AbaEditor>
+              value={aba}
+              onChange={setAba}
+              ariaLabel="Parte do papel"
+              options={[
+                { value: "telas", label: "Telas e ações", curto: "Telas" },
+                {
+                  value: "detalhes",
+                  label: `Detalhes${contarRestricoes(rascunho.detalhes) ? ` (${contarRestricoes(rascunho.detalhes)})` : ""}`,
+                },
+              ]}
+            />
+            <div key={aba} className="animate-fade-in-up">
+              {aba === "telas" ? (
+                <MatrizCapacidades valor={rascunho.capacidades} original={atual?.capacidades} onChange={(c) => setRascunho({ ...rascunho, capacidades: c })} />
+              ) : (
+                <DetalhesPapelEditor valor={rascunho.detalhes} original={atual?.detalhes} onChange={(d) => setRascunho({ ...rascunho, detalhes: d })} />
+              )}
+            </div>
+            {atual && atual.pessoas > 0 && (diff.length > 0 || diffDet.length > 0) && (
+              <Callout kind={restringe ? "warn" : "info"}>
                 {atual.pessoas} {atual.pessoas === 1 ? "pessoa tem" : "pessoas têm"} este papel e {atual.pessoas === 1 ? "sente" : "sentem"} a mudança
-                na hora: {textoDiffCapacidades(diff)}.
+                na hora: {[textoDiffCapacidades(diff), textoDiffDetalhes(diffDet)].filter(Boolean).join(" · ")}.
               </Callout>
             )}
           </div>

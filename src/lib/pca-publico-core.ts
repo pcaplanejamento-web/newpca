@@ -1,5 +1,7 @@
 import type { LinhaHistorico } from "./auditoria-core.ts";
+import { mascararTexto } from "./dados-pessoais-core.ts";
 import type { DfdDetalhe, DfdItemRow } from "./dfd.ts";
+import { REGRA_PUBLICA, redigirHistorico } from "./historico-redacao.ts";
 import type { Solicitante } from "./reparticao-responsaveis.ts";
 
 /**
@@ -8,25 +10,7 @@ import type { Solicitante } from "./reparticao-responsaveis.ts";
  * histórico. Do solicitante (o responsável que pediu a consolidação) ficam só nome, função e o ato de nomeação.
  */
 
-/**
- * MÁSCARA de dados pessoais em TEXTO LIVRE (seções do DFD, capa, diff do histórico): CPF/CNPJ, e-mail, telefone e o
- * número após "matrícula" viram "•••". O resto do texto fica intacto.
- */
-const MASCARAS: [RegExp, string | ((m: string, ...g: string[]) => string)][] = [
-  [/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "•••"],
-  [/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, "•••"], // CNPJ
-  [/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{3}\.?\*{3}\.?\*{3}-?\d{2}\b|\*{3}\.\d{3}\.\d{3}-\*{2}/g, "•••"], // CPF (e mascarado)
-  [/(\bcpf\b\W{0,4})\d{11}\b/gi, (_m, r) => `${r}•••`],
-  [/\(?\b\d{2}\)?\s?9?\d{4}-\d{4}\b/g, "•••"], // telefone
-  [/(matr[ií]cula\W{0,6}(?:n[ºo°.]?\s*)?)[\d.\-/]+/gi, (_m, r) => `${r}•••`],
-];
-
-export function mascararTexto<T extends string | null | undefined>(t: T): T {
-  if (!t) return t;
-  let s: string = t;
-  for (const [re, sub] of MASCARAS) s = s.replace(re, sub as string);
-  return s as T;
-}
+export { mascararTexto } from "./dados-pessoais-core.ts";
 
 /** Responsável pela solicitação, sem matrícula nem dados da assinatura. */
 export type SolicitantePublico = Solicitante;
@@ -96,48 +80,13 @@ export function dfdPublico(d: DfdDetalhe, solicitante: Solicitante | null, ativo
   };
 }
 
-/** Rótulos/chaves de dado PESSOAL (nunca vão ao público no histórico). */
-const SENSIVEL = /cpf|cnpj|e-?mail|telefone|matr[ií]cula|documento|assinatura|usu[aá]rio/i;
-
-/** Tira do JSON legado (`antes`/`depois`) as chaves pessoais. */
-function jsonSemSensivel(bruto: string | null): string | null {
-  if (!bruto) return bruto;
-  const json = mascararTexto(bruto);
-  try {
-    const o: unknown = JSON.parse(json);
-    if (!o || typeof o !== "object" || Array.isArray(o)) return json;
-    return JSON.stringify(Object.fromEntries(Object.entries(o as Record<string, unknown>).filter(([k]) => !SENSIVEL.test(k))));
-  } catch {
-    return null;
-  }
-}
-
-/** Tira do `detalhe` (formato novo) as assinaturas e os campos pessoais. */
-function detalheSemSensivel(bruto: string | null): string | null {
-  if (!bruto) return bruto;
-  try {
-    const d = JSON.parse(mascararTexto(bruto)) as { campos?: { campo: string; rotulo: string }[]; assinaturas?: unknown; [k: string]: unknown };
-    const { assinaturas: _a, ...resto } = d;
-    return JSON.stringify({ ...resto, campos: (d.campos ?? []).filter((c) => !SENSIVEL.test(c.rotulo) && !SENSIVEL.test(c.campo)) });
-  } catch {
-    return null;
-  }
-}
-
 /**
- * HISTÓRICO PÚBLICO: só o que passou por um protocolo INCORPORADO ao PCA (`incorporados`), SEM o autor e sem os dados
- * pessoais/assinaturas do diff.
+ * HISTÓRICO PÚBLICO: só o que passou por um protocolo INCORPORADO ao PCA (`incorporados`), SEM o autor, sem os dados
+ * pessoais/assinaturas do diff e sem a gestão interna (Responsável e Situação — antes os nomes saíam no diff).
  */
 export function historicoPublico(linhas: LinhaHistorico[], incorporados: Set<number>): LinhaHistorico[] {
-  return linhas
-    .filter((l) => l.protocoloId != null && incorporados.has(l.protocoloId))
-    .map((l) => ({
-      ...l,
-      usuarioId: null,
-      usuarioNome: null,
-      resumo: mascararTexto(l.resumo),
-      antes: jsonSemSensivel(l.antes),
-      depois: jsonSemSensivel(l.depois),
-      detalhe: detalheSemSensivel(l.detalhe),
-    }));
+  return redigirHistorico(
+    linhas.filter((l) => l.protocoloId != null && incorporados.has(l.protocoloId)),
+    REGRA_PUBLICA,
+  );
 }

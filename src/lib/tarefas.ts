@@ -32,6 +32,8 @@ import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
 import { gruposDoUsuario, unidadesDaSessao } from "./grupos";
+import { condMeuDfd, condMeuProtocolo } from "./linhas-sql";
+import { visaoMesa } from "./mesa-visao-core";
 import { lotesDeIds } from "./reparticoes";
 import { linkEvento } from "./calendario-core";
 import { atorDe, notificar } from "./notificacoes";
@@ -1602,15 +1604,23 @@ export async function buscarVinculos(
       tipo === "orcamento" ? { id: l.id, rotulo: `${l.nome} ${l.ano ?? ""}`.trim(), detalhe: "" } : { id: l.id, rotulo: l.nome, detalhe: l.ano ? String(l.ano) : "" },
     );
   }
-  // O escopo de unidades da pessoa (o ADM e a "Geral" = todas; sem grupo/unidade = nenhuma).
+  // O escopo de unidades da pessoa (o ADM e a "Geral" = todas; sem grupo/unidade = nenhuma) e as LINHAS dela ("só os meus",
+  // detalhe do papel: os protocolos em que é Responsável ou que protocolou, e os DFDs deles).
   const { escopo: esc } = await unidadesDaSessao(u);
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
+  const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";
   if (tipo === "protocolo") {
     const linhas = await db
       .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto })
       .from(dfdProtocolos)
-      .where(and(or(like(dfdProtocolos.numero, termo), like(dfdProtocolos.idExterno, termo), like(dfdProtocolos.assunto, termo)), escopo(dfdProtocolos.reparticaoId)))
+      .where(
+        and(
+          or(like(dfdProtocolos.numero, termo), like(dfdProtocolos.idExterno, termo), like(dfdProtocolos.assunto, termo)),
+          escopo(dfdProtocolos.reparticaoId),
+          soMeus ? condMeuProtocolo(u.id) : undefined,
+        ),
+      )
       .orderBy(desc(dfdProtocolos.id))
       .limit(LIMITE);
     return linhas.map((l) => ({ id: l.id, rotulo: l.numero, detalhe: [l.idExterno ? `Id ${l.idExterno}` : "", l.assunto ?? ""].filter(Boolean).join(" · ") }));
@@ -1618,7 +1628,13 @@ export async function buscarVinculos(
   const linhas = await db
     .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto })
     .from(dfds)
-    .where(and(or(like(dfds.numero, termo), like(dfds.planejamento, termo), like(dfds.objeto, termo)), escopo(dfds.reparticaoId)))
+    .where(
+      and(
+        or(like(dfds.numero, termo), like(dfds.planejamento, termo), like(dfds.objeto, termo)),
+        escopo(dfds.reparticaoId),
+        soMeus ? condMeuDfd(db, u.id) : undefined,
+      ),
+    )
     .orderBy(desc(dfds.id))
     .limit(LIMITE);
   return linhas.map((l) => ({ id: l.id, rotulo: `DFD ${l.numero}`, detalhe: [l.planejamento ? `Planej. ${l.planejamento}` : "", l.objeto ?? ""].filter(Boolean).join(" · ") }));
@@ -1678,7 +1694,10 @@ export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: nu
   }
   if (!podeTela(a, "dfd").visualizar && !podeTela(a, "pca").visualizar) return false;
   const t = v.tipo === "protocolo" ? dfdProtocolos : dfds;
-  const [r] = await db.select({ rep: t.reparticaoId }).from(t).where(eq(t.id, v.id));
+  // As LINHAS da pessoa ("só os meus"): o protocolo/DFD tem de ser dela.
+  const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";
+  const cond = soMeus ? (v.tipo === "protocolo" ? condMeuProtocolo(u.id) : condMeuDfd(db, u.id)) : undefined;
+  const [r] = await db.select({ rep: t.reparticaoId }).from(t).where(and(eq(t.id, v.id), cond));
   if (!r) return false;
   return (await unidadesDaSessao(u)).acessivel(r.rep);
 }

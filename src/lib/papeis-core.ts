@@ -1,4 +1,5 @@
 import { ABA_KEYS, ABAS, type AbaKey } from "./abas.ts";
+import { VISAO_TUDO, type VisaoMesa } from "./mesa-visao-core.ts";
 
 /**
  * PAPÉIS — o que a pessoa FAZ em cada tela. Módulo PURO (cliente e servidor; testado): o GRUPO (com a permissão dele)
@@ -204,8 +205,14 @@ export function telasAbertas(ctx: ContextoAcesso): Tela[] {
  * em que ESTÁ: num PCA (enviado ou incorporado) é da Mesa do PCA; senão, da Mesa do sistema (também os marcados que a
  * Mesa de um PCA mostra).
  */
-export type PodeMesa = { sistema: PodeTela; pca: PodeTela };
-export const PODE_MESA_NADA: PodeMesa = Object.freeze({ sistema: PODE_NADA, pca: PODE_NADA });
+export type PodeMesa = {
+  sistema: PodeTela;
+  pca: PodeTela;
+  /** Os DETALHES do papel resolvidos para as Mesas (colunas, Responsável, linhas, histórico… — `mesa-visao-core.ts`): as
+   * MESMAS regras nas duas Mesas. */
+  vis: VisaoMesa;
+};
+export const PODE_MESA_NADA: PodeMesa = Object.freeze({ sistema: PODE_NADA, pca: PODE_NADA, vis: VISAO_TUDO });
 /** A tela de um recurso da Mesa pelo PCA do protocolo dele. */
 export const telaDoRecurso = (pcaId: number | null | undefined): Tela => (pcaId != null ? "pca" : "dfd");
 /** O que o papel permite num recurso da Mesa (pelo PCA do protocolo dele). */

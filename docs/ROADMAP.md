@@ -49,6 +49,23 @@ ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` +
   exatamente 6 números (desenhados no campo), tela de Usuários com o banner do usuário (edição por cadeado, validar dados,
   exigir nova senha) e o botão do WhatsApp na tabela.
 
+### Acesso FINO por papel (detalhes): colunas das Mesas, Responsável/Distribuição, linhas, histórico, edições e dados pessoais — em andamento
+Levantamento de tudo o que se acessa e o controle, no PAPEL (vale em qualquer grupo; só RETIRA; o Administrador ignora).
+- **Entrega 1 ✅ — Pessoas e linhas (migração `0074`):** aba **Detalhes** do papel (`DetalhesPapelEditor`, modelos "Sem
+  restrições" · "Consulta enxuta" · "Só os meus"); ver o **Responsável** e a **Distribuição**; alterar o Responsável em 3
+  níveis (não altera · só assume para si · qualquer pessoa do grupo); **"só os meus"** (Responsável OU quem protocolou) aplicado
+  NO SERVIDOR em todas as rotas da Mesa, nos banners, na importação (anti-sequestro) e nos vínculos de tarefa; **desempenho por
+  pessoa** no Dashboard. O que o papel não vê não sai do servidor (redação por requisição). Corrigido o **vazamento** dos nomes de
+  Responsável/Situação no histórico da consulta pública do PCA. Perfil mostra as restrições; "Ver acesso" e o banner do usuário
+  também.
+- 🔜 **Entrega 2:** colunas das 4 tabelas por papel (o servidor não envia; exportação e edições sem elas), histórico em 3 níveis
+  (não vê · sem autores · completo — protocolo, DFD, item e tarefa) e edições salvas (personalizar · publicar · moderar).
+- 🔜 **Entrega 3:** o Manipular da Mesa dividido (Situação, capa, DFD, itens, assinatura, massa, vincular, enviar/incorporar/
+  devolver) com o "Editável" da Avaliação conferido no servidor, dados pessoais mascarados, valores (R$) ocultos e os
+  alinhamentos (Imprimir do Calendário = Exportar; textos do catálogo de papéis).
+- 💡 Depois: aba Orçamento do PCA (mostra o CUBO do ano inteiro), reconferir o papel nos e-mails de aviso, foto por id,
+  autores dos comentários de tarefa, detalhes para Catálogo/Orçamento/Calendário.
+
 ### Texto do DFD em parágrafos + Atualizar que revisa + Dados completos na Mesa — entregue
 ✅ **Texto corrido na importação** (`texto-corrido.ts`): o PDF gravava uma quebra por linha VISUAL nas seções; agora a
 importação refaz os parágrafos pela geometria (vão entre linhas, até onde a linha vai) e pelo texto (palavra de ligação no

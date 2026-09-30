@@ -8,7 +8,7 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { appendDfdItens, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { algumCatalogoFundamental, bloqueantesCatalogo, semValorUnitario } from "@/lib/dfd-tratamento";
 import { dfdOpSchema, faltasObrigatorias, type StartDfdPayload } from "@/lib/dfd-validation";
-import { unidadesDaSessao } from "@/lib/grupos";
+import { dfdNasLinhas, escopoMesa, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { telaDoRecurso } from "@/lib/papeis-core";
@@ -38,12 +38,15 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const d = p.data;
 
-  const { acessivel } = await unidadesDaSessao(a.u);
+  const esc = await escopoMesa();
+  if (!esc) return erro("Faça login.", 401);
+  const { acessivel } = esc;
 
   if (d.mode === "append-dfd-itens") {
     const dfd = await getDfdReparticao(d.dfdId);
     if (!dfd) return erro("DFD não encontrado para acrescentar itens.", 404);
     if (!acessivel(dfd.reparticaoId)) return erro("Sem acesso à unidade deste DFD.", 403);
+    if (!dfdNasLinhas(esc, d.dfdId)) return erro("Sem acesso a este DFD.", 403);
     // O PAPEL importa na Mesa em que o DFD ficou (a do protocolo dele).
     const negadoLote = recusa(a.acesso, telaDoRecurso(dfd.pcaId), "importar");
     if (negadoLote) return negadoLote;
@@ -144,10 +147,16 @@ export async function POST(req: Request) {
   if (d.protocoloId != null) {
     if (!destino) return erro("Protocolo não encontrado.", 404);
     if (!acessivel(destino.reparticaoId)) return erro("Sem acesso ao protocolo de destino.", 403);
+    // … e nas LINHAS da pessoa ("só os meus": o protocolo em que ela é Responsável ou que ela protocolou).
+    if (!protocoloNasLinhas(esc, d.protocoloId)) return erro("Sem acesso ao protocolo de destino.", 403);
   }
   // Anti-sequestro: não sobrescrever/mover um DFD (mesmo `numero`) de uma unidade inacessível.
   if (existente && !acessivel(existente.reparticaoId)) {
     return erro("Já existe um DFD com esse número em outra unidade, sem acesso.", 403);
+  }
+  // … nem um DFD fora das LINHAS da pessoa ("só os meus").
+  if (existente && !dfdNasLinhas(esc, existente.id)) {
+    return erro("Já existe um DFD com esse número — fale com o Responsável pelo protocolo dele.", 403);
   }
   // TRAVA do PCA: não sobrescreve um DFD de protocolo INCORPORADO nem grava num protocolo incorporado.
   const travas = await travaDeProtocolos([existente?.protocoloId, d.protocoloId]);
