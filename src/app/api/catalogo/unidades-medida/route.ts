@@ -1,6 +1,7 @@
 import { exigirEditor, exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { getReparticaoFiltro } from "@/lib/grupos";
+import { idDoFiltro } from "@/lib/escopo-unidades-core";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { criarUnidadeMedida, listarClassificacoes, listarUnidadesMedida, prepararUnidade, usoDasUnidades } from "@/lib/padronizacao";
 import { unidadeMedidaSchema } from "@/lib/padronizacao-validation";
@@ -16,11 +17,12 @@ export async function GET(req: Request) {
   const g = await exigirUsuario();
   if ("erro" in g) return g.erro;
   const comUso = new URL(req.url).searchParams.get("uso") !== "0";
-  const rep = comUso ? await getReparticaoFiltro(g.u) : null;
+  // O uso nos DFDs segue a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = só o catálogo).
+  const rep = comUso ? idDoFiltro((await unidadesDaSessao(g.u)).filtro) : null;
   const [unidades, classificacoes, uso] = await Promise.all([
     listarUnidadesMedida(),
     listarClassificacoes(),
-    comUso ? usoDasUnidades(rep?.id) : Promise.resolve(undefined),
+    comUso ? usoDasUnidades(rep ?? undefined) : Promise.resolve(undefined),
   ]);
   return ok({ unidades, classificacoes, uso });
 }

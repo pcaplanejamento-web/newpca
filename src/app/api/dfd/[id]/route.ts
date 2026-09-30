@@ -1,3 +1,4 @@
+import { dfdLegivel } from "@/lib/acesso-mesa";
 import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
@@ -6,7 +7,7 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, type DfdDetalhe, excluirDfd, getDfd, getDfdAssinaturas, getDfdReparticao, reescreverDfdItens } from "@/lib/dfd";
 import { semValorUnitario } from "@/lib/dfd-tratamento";
 import { editarDfdSchema, type EditarDfdPayload } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { gravacaoParcial, motivoNaoExcluirDfd } from "@/lib/pca-core";
@@ -17,9 +18,9 @@ import { pcaDeProtocolos, respostaTravado, travaDeProtocolos } from "@/lib/trava
 
 export const dynamic = "force-dynamic";
 
-/** DFD completo (para o banner) + a sua UNIDADE com os responsáveis (a conferência usa a unidade real
- * do DFD, mesmo fora da lista do usuário). Leitura segue o escopo da LISTA (que em "Geral" mostra
- * tudo) — o aperto de segurança é nas ESCRITAS, abaixo. */
+/** DFD completo (para o banner) + a sua UNIDADE com os responsáveis (a conferência usa a unidade real do DFD). Só para
+ * quem o LÊ: a unidade do DFD ou a do protocolo dele no escopo (antes qualquer um lia, pelo id, a matrícula, o e-mail, o
+ * telefone e as assinaturas de qualquer DFD). */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
@@ -27,6 +28,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!id) return erro("ID inválido.");
   const dfd = await getDfd(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
+  if (!(await dfdLegivel((await unidadesDaSessao(a.u)).acessivel, dfd))) return erro("Sem acesso a este DFD.", 403);
   const [unidade] = await unidadesConferencia([dfd.reparticaoId]);
   return ok({ dfd, unidade: unidade ?? null });
 }
@@ -40,8 +42,8 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (!id) return erro("ID inválido.");
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
-  const { lista } = await getReparticaoContexto(a.u);
-  if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) {
+  const { acessivel } = await unidadesDaSessao(a.u);
+  if (!acessivel(dfd.reparticaoId)) {
     return erro("Sem acesso a este DFD.", 403);
   }
   const alvo = await getDfd(id); // snapshot p/ o log antes de apagar (e os itens GRAVADOS, p/ o desfazer)
@@ -87,8 +89,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const p = await parseCorpo(editarDfdSchema, req);
   if ("resp" in p) return p.resp;
 
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
 
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);

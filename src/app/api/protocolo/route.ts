@@ -3,7 +3,7 @@ import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { assuntoCadastrado, classificarAssunto, comportamentoNo, protocolarHabilitado } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
-import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
+import { getGrupoAtivoId, unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
 import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
@@ -38,8 +38,7 @@ export async function POST(req: Request) {
   if (regras.gate?.exigirAssunto && !assuntoCadastrado(protocolo.assunto, regras))
     return erro("Assunto do protocolo não cadastrado nas Configurações (Protocolação).", 422);
 
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
   if (protocolo.reparticaoId != null && !acessivel(protocolo.reparticaoId)) {
     return erro("Unidade do protocolo inválida ou sem acesso.", 403);
   }

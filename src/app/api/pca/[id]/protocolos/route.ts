@@ -1,8 +1,7 @@
 import { exigirEditor, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { acessivelNaLista } from "@/lib/mesa-dados";
 import { acaoSugerida, motivoNaoDevolver, motivosNaoEnviar, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
 import {
   devolverProtocolo,
@@ -42,12 +41,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ("resp" in p) return p.resp;
   const corpo = p.data;
 
-  const [{ lista }, protocolos, dfds] = await Promise.all([
-    getReparticaoContexto(a.u),
+  const [{ acessivel }, protocolos, dfds] = await Promise.all([
+    unidadesDaSessao(a.u),
     listarProtocolosPorIds(corpo.ids),
     corpo.acao === "incorporar" ? dfdsDosProtocolos(corpo.ids) : Promise.resolve([]),
   ]);
-  const acessivel = acessivelNaLista(lista);
   const emOutro = corpo.acao === "incorporar" ? await dfdsEmOutroPca(dfds.map((d) => d.id), pca.id) : new Map<number, number>();
 
   let alterados = 0;

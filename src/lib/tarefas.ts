@@ -30,7 +30,7 @@ import type { UsuarioSessao } from "./auth";
 import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
 import { dataIsoBrasilia } from "./format";
-import { getReparticaoContexto, gruposDoUsuario } from "./grupos";
+import { gruposDoUsuario, unidadesDaSessao } from "./grupos";
 import { lotesDeIds } from "./reparticoes";
 import { linkEvento } from "./calendario-core";
 import { atorDe, notificar } from "./notificacoes";
@@ -1597,9 +1597,10 @@ export async function buscarVinculos(u: UsuarioSessao, tipo: TipoVinculo, q: str
       tipo === "orcamento" ? { id: l.id, rotulo: `${l.nome} ${l.ano ?? ""}`.trim(), detalhe: "" } : { id: l.id, rotulo: l.nome, detalhe: l.ano ? String(l.ano) : "" },
     );
   }
-  const reps = (await getReparticaoContexto(u)).lista.map((r) => r.id);
+  // O escopo de unidades da pessoa (o ADM e a "Geral" = todas; sem grupo/unidade = nenhuma).
+  const { escopo: esc } = await unidadesDaSessao(u);
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
-    u.role === "admin" ? undefined : reps.length ? or(sql`${col} IS NULL`, inArray(col, reps.slice(0, 90))) : sql`${col} IS NULL`;
+    esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
   if (tipo === "protocolo") {
     const linhas = await db
       .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto })
@@ -1665,8 +1666,7 @@ export async function vinculoAcessivel(u: UsuarioSessao, v: { tipo: TipoVinculo;
   const t = v.tipo === "protocolo" ? dfdProtocolos : dfds;
   const [r] = await db.select({ rep: t.reparticaoId }).from(t).where(eq(t.id, v.id));
   if (!r) return false;
-  if (u.role === "admin" || r.rep == null) return true;
-  return (await getReparticaoContexto(u)).lista.some((x) => x.id === r.rep);
+  return (await unidadesDaSessao(u)).acessivel(r.rep);
 }
 
 // ─── Fase 3: avisos · recorrência · automações · modelos ─────────────────────────────────────────────────────

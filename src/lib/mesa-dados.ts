@@ -3,7 +3,8 @@ import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
 import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
-import { getGrupoAtivoId, getReparticaoContexto, getReparticaoFiltro } from "./grupos";
+import { idDoFiltro } from "./escopo-unidades-core";
+import { getGrupoAtivoId, unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
 import type { AtividadeTupla } from "./mesa-metricas";
@@ -18,12 +19,6 @@ import { dadosMatchPorReparticao, responsaveisPorReparticao } from "./reparticoe
 import { listarSituacoes } from "./situacoes";
 import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds } from "./usuarios";
 
-/** O escopo de acesso por unidade das rotas: sem unidade OU uma unidade da lista (admin = todas). */
-export function acessivelNaLista(lista: { id: number }[]) {
-  const ids = new Set(lista.map((r) => r.id));
-  return (reparticaoId: number | null | undefined) => reparticaoId == null || ids.has(reparticaoId);
-}
-
 /**
  * Dados da MESA (Protocolos · DFDs · Itens) — o MESMO carregamento da tela `/painel/mesa` e da aba Mesa do
  * PCA. Mesa PRINCIPAL: escopada pela unidade ativa do head (Geral = tudo) e pelo PCA do CABEÇALHO (todos = sem
@@ -37,8 +32,10 @@ export function acessivelNaLista(lista: { id: number }[]) {
  * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e se edita.
  */
 async function contextoBanners(u: UsuarioSessao | null) {
-  const repCtx = await getReparticaoContexto(u);
-  const ids = repCtx.lista.map((r) => r.id);
+  // As unidades ACESSÍVEIS (com a "Geral" no grupo ou o ADM, todas — os banners conferem e editam o de qualquer uma).
+  const un = await unidadesDaSessao(u);
+  const lista = await unidadesAcessiveis(un);
+  const ids = lista.map((r) => r.id);
   const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([
     responsaveisPorReparticao(ids),
     dadosMatchPorReparticao(ids),
@@ -46,7 +43,7 @@ async function contextoBanners(u: UsuarioSessao | null) {
     getRegrasAvaliacao(),
     listarOrgaos(),
   ]);
-  const reparticoes = repCtx.lista.map((r) => ({
+  const reparticoes = lista.map((r) => ({
     ...r,
     responsaveis: respMap[r.id] ?? RESPONSAVEIS_VAZIO,
     numeroInteressado: matchMap[r.id]?.numeroInteressado ?? null,
@@ -55,19 +52,18 @@ async function contextoBanners(u: UsuarioSessao | null) {
     orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
     oculto: matchMap[r.id]?.oculto ?? false,
   }));
-  return { lista: repCtx.lista, reparticoes, pcas, regras, orgaos, podeEditar: u?.role === "admin" || u?.role === "gestor" };
+  return { un, reparticoes, pcas, regras, orgaos, podeEditar: u?.role === "admin" || u?.role === "gestor" };
 }
 
 /** O prefixo das chaves das edições salvas das tabelas da Mesa (a principal e a do PCA têm as suas). */
 const prefixoEdicoesMesa = (pcaId?: number) => (pcaId ? "mesa-pca:" : "mesa:");
 
 export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
-  const [rep, ctx, pref] = await Promise.all([
-    getReparticaoFiltro(u),
-    contextoBanners(u),
-    pcaId ? ("todos" as const) : mesaResponsavelGravado(u?.id),
-  ]);
-  const acessivel = acessivelNaLista(ctx.lista);
+  const [ctx, pref] = await Promise.all([contextoBanners(u), pcaId ? ("todos" as const) : mesaResponsavelGravado(u?.id)]);
+  // Mesa principal: a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada). Mesa do PCA: o escopo de acesso.
+  const repId = idDoFiltro(ctx.un.filtro);
+  const nada = repId === false;
+  const acessivel = ctx.un.acessivel;
   // PCA do CABEÇALHO (só a Mesa principal — a do PCA já é de um PCA): filtra pelo ano do PCA do protocolo/DFD.
   // Mesa do PCA com a visão dos MARCADOS ligada (Configuração do PCA): também os do ano dele ainda na Mesa do sistema.
   const [pcaFiltro, anoMarcados] = await Promise.all([
@@ -76,11 +72,12 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
   ]);
   const ano = pcaFiltro?.ano ?? null;
   const [dfdsBrutos, protocolosBrutos, pessoas, situacoes, edicoes, prefCompletos] = await Promise.all([
-    pcaId ? listarDfds(undefined, pcaId, null, anoMarcados) : listarDfds(rep?.id, undefined, ano),
-    pcaId ? listarProtocolosDoPca(pcaId, anoMarcados) : listarProtocolos(rep?.id, ano),
+    pcaId ? listarDfds(undefined, pcaId, null, anoMarcados) : nada ? [] : listarDfds(repId ?? undefined, undefined, ano),
+    pcaId ? listarProtocolosDoPca(pcaId, anoMarcados) : nada ? [] : listarProtocolos(repId ?? undefined, ano),
     // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
     // situações cadastradas pelo ADM.
-    getGrupoAtivoId(u).then(listarPessoasDoGrupo),
+    // Sem grupo ativo, todas as pessoas só para o ADM (os demais, ninguém — não veem dado nenhum).
+    getGrupoAtivoId(u).then((g) => (g == null && !u?.admin ? [] : listarPessoasDoGrupo(g))),
     listarSituacoes(),
     // As EDIÇÕES SALVAS das tabelas desta Mesa (as do usuário e as públicas) — a do PCA tem as suas (outras colunas).
     carregarEdicoes(u?.id ?? null, prefixoEdicoesMesa(pcaId)),
@@ -100,8 +97,8 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     dfds,
     protocolos,
     reparticoes: ctx.reparticoes,
-    // Em "Geral" (rep=null) não há unidade ativa específica — Geral comporta qualquer unidade.
-    reparticaoAtivaId: rep?.id ?? null,
+    // Em "Geral" não há unidade ativa específica — Geral comporta qualquer unidade.
+    reparticaoAtivaId: repId || null,
     pcas: ctx.pcas,
     regras: ctx.regras,
     orgaos: ctx.orgaos,

@@ -2,7 +2,7 @@ import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
-import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
+import { getGrupoAtivoId, unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
 import { unidadesConferencia } from "@/lib/reparticoes";
@@ -23,15 +23,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (!id) return erro("ID inválido.");
   const protocolo = await getProtocolo(id);
   if (!protocolo) return erro("Protocolo não encontrado.", 404);
-  const { lista } = await getReparticaoContexto(a.u);
-  if (protocolo.reparticaoId != null && !lista.some((r) => r.id === protocolo.reparticaoId)) {
+  const { acessivel } = await unidadesDaSessao(a.u);
+  if (!acessivel(protocolo.reparticaoId)) {
     return erro("Sem acesso a este protocolo.", 403);
   }
   if (new URL(req.url).searchParams.get("completo") !== "1") return ok({ protocolo });
   const [dfds, sobrescritos] = await Promise.all([
     listarDfdsCompletosDoProtocolo(id),
     // O RASTRO dos DFDs sobrescritos por outro protocolo (cinza) — com o protocolo ATUAL de cada um.
-    listarSobrescritos(id, (rid) => rid == null || lista.some((r) => r.id === rid)),
+    listarSobrescritos(id, acessivel),
   ]);
   const unidades = await unidadesConferencia(dfds.map((d) => d.reparticaoId));
   return ok({ protocolo, dfds, unidades, sobrescritos });
@@ -50,8 +50,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   const proto = await getProtocolo(id);
   if (!proto) return erro("Protocolo não encontrado.", 404);
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
   if (!acessivel(proto.reparticaoId)) return erro("Sem acesso a este protocolo.", 403);
   // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.
   if (estaTravado(proto) && !edicaoPermitidaTravado(campos)) return erro(mensagemTravaPca(proto.pcaNome), 423);
@@ -59,7 +58,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return erro("Sem acesso à unidade de destino.", 403);
   }
   // Responsável: só uma pessoa ATIVA do GRUPO ativo de quem edita (manter o atual nunca é recusado).
-  if (campos.responsavelId != null && campos.responsavelId !== proto.responsavelId && !(await pessoaDoGrupo(campos.responsavelId, await getGrupoAtivoId(a.u))))
+  const grupoAtivo = await getGrupoAtivoId(a.u);
+  if (
+    campos.responsavelId != null &&
+    campos.responsavelId !== proto.responsavelId &&
+    ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(campos.responsavelId, grupoAtivo)))
+  )
     return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
   if (campos.situacaoId != null && !(await getSituacao(campos.situacaoId))) return erro("Situação não encontrada (Configurações → Situações).", 422);
 
@@ -87,8 +91,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (!id) return erro("ID inválido.");
   const proto = await getProtocoloReparticao(id);
   if (!proto) return erro("Protocolo não encontrado.", 404);
-  const { lista } = await getReparticaoContexto(a.u);
-  if (proto.reparticaoId != null && !lista.some((r) => r.id === proto.reparticaoId)) {
+  const { acessivel } = await unidadesDaSessao(a.u);
+  if (!acessivel(proto.reparticaoId)) {
     return erro("Sem acesso a este protocolo.", 403);
   }
   // Protocolo em um PCA (enviado ou incorporado) NÃO é excluído: o enviado volta pela "Devolver à Mesa" (e então sai

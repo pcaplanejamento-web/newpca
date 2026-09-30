@@ -6,7 +6,7 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { atualizarDfdCampos, listarCamposMassa } from "@/lib/dfd";
 import { aplicarMassaDfd, type CampoMassa } from "@/lib/dfd-tratamento";
 import { massaDfdsSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { bloqueiaAssinatura, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
@@ -48,8 +48,7 @@ export async function POST(req: Request) {
 
   const regras = await getRegrasAvaliacao();
   if (!editavelDe(regras, CHAVE_CAMPO[acao.campo])) return erro("Campo travado nas Configurações → Avaliação.", 403);
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
   if (acao.campo === "reparticao" && !acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
   const respDestino = acao.campo === "reparticao" ? await carregarResponsaveis(acao.reparticaoId) : null;
 

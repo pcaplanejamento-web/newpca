@@ -1,9 +1,9 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { conformidadeDosItens } from "@/lib/catalogo";
 import { type ItemDfdRow, listarItensDfds } from "@/lib/dfd";
-import { getReparticaoContexto, getReparticaoFiltro } from "@/lib/grupos";
+import { idDoFiltro } from "@/lib/escopo-unidades-core";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { ok } from "@/lib/http";
-import { acessivelNaLista } from "@/lib/mesa-dados";
 import { anoMarcadosDoPca } from "@/lib/pca-espaco";
 import { listarPadronizacao } from "@/lib/padronizacao";
 
@@ -23,15 +23,15 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const pca = Number(params.get("pca"));
   let itens: ItemDfdRow[];
+  const un = await unidadesDaSessao(g.u);
   if (Number.isInteger(pca) && pca > 0) {
-    const { lista } = await getReparticaoContexto(g.u);
-    const acessivel = acessivelNaLista(lista);
     // Com a visão dos MARCADOS ligada no PCA (o servidor decide), também os itens do ano dele ainda na Mesa do sistema.
-    itens = (await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca))).filter((it) => acessivel(it.reparticaoId));
+    itens = (await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca))).filter((it) => un.acessivel(it.reparticaoId));
   } else {
     const ano = Number(params.get("ano"));
-    const rep = await getReparticaoFiltro(g.u);
-    itens = await listarItensDfds(rep?.id, undefined, Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : null);
+    // A unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada).
+    const repId = idDoFiltro(un.filtro);
+    itens = repId === false ? [] : await listarItensDfds(repId ?? undefined, undefined, Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : null);
   }
   // Auxiliares: uma falha na conferência do catálogo ou no cadastro da padronização nunca derruba a lista (a coluna fica
   // "—"; as da padronização só não aparecem).

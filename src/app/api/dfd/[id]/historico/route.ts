@@ -1,7 +1,8 @@
+import { dfdLegivel } from "@/lib/acesso-mesa";
 import { exigirUsuario, intId } from "@/lib/api-auth";
 import { historicoDfd } from "@/lib/auditoria";
 import { getDfdReparticao } from "@/lib/dfd";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!id) return erro("ID inválido.");
   const dfd = await getDfdReparticao(id);
   if (!dfd) return erro("DFD não encontrado.", 404);
-  const { lista } = await getReparticaoContexto(a.u);
-  if (dfd.reparticaoId != null && !lista.some((r) => r.id === dfd.reparticaoId)) return erro("Sem acesso a este DFD.", 403);
+  if (!(await dfdLegivel((await unidadesDaSessao(a.u)).acessivel, dfd))) return erro("Sem acesso a este DFD.", 403);
   return ok({ historico: await historicoDfd(id) });
 }

@@ -3,7 +3,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { entradasCatalogo } from "@/lib/catalogo";
 import { aplicarPlanoItens, dfdsParaMassa, itensParaMassa } from "@/lib/dfd";
 import { MASSA_ITENS_MAX_DFDS, massaItensSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { type DiffItemDfd, diffItem } from "@/lib/comparar-protocolo";
 import { descreverAcaoItem, type ItemMassa, type PlanoMassaItens, planejarMassaItens } from "@/lib/massa-itens";
@@ -36,8 +36,7 @@ export async function POST(req: Request) {
     else porDfd.set(dfdId, [it]);
   }
   if (porDfd.size > MASSA_ITENS_MAX_DFDS) return erro(`No máximo ${MASSA_ITENS_MAX_DFDS} DFDs por requisição.`, 422);
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
 
   const dfds = await dfdsParaMassa([...porDfd.keys()]);
   const travas = await travaDeDfds(dfds.map((d) => d.id));

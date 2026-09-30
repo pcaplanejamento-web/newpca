@@ -1,5 +1,6 @@
 import { exigirUsuario } from "@/lib/api-auth";
-import { getReparticaoFiltro } from "@/lib/grupos";
+import { idDoFiltro } from "@/lib/escopo-unidades-core";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { ok } from "@/lib/http";
 import { descricoesDosItens } from "@/lib/padronizacao";
 
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const g = await exigirUsuario();
   if ("erro" in g) return g.erro;
-  const rep = await getReparticaoFiltro(g.u);
-  return ok({ descricoes: await descricoesDosItens(rep?.id) });
+  // Os itens de DFD seguem a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = só o catálogo).
+  const rep = idDoFiltro((await unidadesDaSessao(g.u)).filtro);
+  return ok({ descricoes: await descricoesDosItens(rep ?? undefined) });
 }

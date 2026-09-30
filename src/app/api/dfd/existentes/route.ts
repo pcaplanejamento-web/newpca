@@ -1,7 +1,7 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { dfdsPorNumeros } from "@/lib/dfd";
 import { existentesDfdSchema } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { ok, parseCorpo } from "@/lib/http";
 import { travaDeDfds } from "@/lib/trava-pca";
 
@@ -19,11 +19,11 @@ export async function POST(req: Request) {
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(existentesDfdSchema, req);
   if ("resp" in p) return p.resp;
-  const { lista } = await getReparticaoContexto(a.u);
+  const { acessivel } = await unidadesDaSessao(a.u);
   const achados = await dfdsPorNumeros(p.data.numeros);
   const travas = await travaDeDfds(achados.map((d) => d.id));
   const existentes = achados.map((d) =>
-    !travas.has(d.id) && (d.reparticaoId == null || lista.some((r) => r.id === d.reparticaoId))
+    !travas.has(d.id) && acessivel(d.reparticaoId)
       ? { ...d, acessivel: true }
       : { numero: d.numero, acessivel: false },
   );

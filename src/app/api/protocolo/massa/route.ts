@@ -4,7 +4,7 @@ import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
 import { somatorioProcesso } from "@/lib/conferencia-dfd";
 import { massaProtocolosSchema } from "@/lib/dfd-validation";
-import { getGrupoAtivoId, getReparticaoContexto } from "@/lib/grupos";
+import { getGrupoAtivoId, unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
@@ -27,13 +27,13 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const { ids, acao } = p.data;
 
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (rid: number | null) => rid == null || lista.some((r) => r.id === rid);
+  const { acessivel } = await unidadesDaSessao(a.u);
   if (acao.campo === "reparticao") {
     if (!editavelDe(await getRegrasAvaliacao(), "protocolo.reparticao")) return erro("Campo travado nas Configurações → Avaliação.", 403);
     if (!acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
   }
-  if (acao.campo === "responsavel" && acao.responsavelId != null && !(await pessoaDoGrupo(acao.responsavelId, await getGrupoAtivoId(a.u))))
+  const grupoAtivo = await getGrupoAtivoId(a.u);
+  if (acao.campo === "responsavel" && acao.responsavelId != null && ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(acao.responsavelId, grupoAtivo))))
     return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
   if (acao.campo === "situacao" && acao.situacaoId != null && !(await getSituacao(acao.situacaoId)))
     return erro("Situação não encontrada (Configurações → Situações).", 422);

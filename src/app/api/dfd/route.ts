@@ -8,7 +8,7 @@ import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { appendDfdItens, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
 import { algumCatalogoFundamental, bloqueantesCatalogo, semValorUnitario } from "@/lib/dfd-tratamento";
 import { dfdOpSchema, faltasObrigatorias, type StartDfdPayload } from "@/lib/dfd-validation";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { listarOrgaos } from "@/lib/orgaos";
 import { type Assinatura, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
@@ -37,8 +37,7 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const d = p.data;
 
-  const { lista } = await getReparticaoContexto(a.u);
-  const acessivel = (id: number | null | undefined) => id == null || lista.some((r) => r.id === id);
+  const { acessivel } = await unidadesDaSessao(a.u);
 
   if (d.mode === "append-dfd-itens") {
     const dfd = await getDfdReparticao(d.dfdId);
