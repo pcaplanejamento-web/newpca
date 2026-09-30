@@ -35,6 +35,8 @@ const dados = (n: number): DadosCadastro => ({
   matricula: `M${n}`,
   cargo: "Analista",
   reparticaoId: null,
+  telefone: n % 2 ? "64999990000" : null,
+  telefoneWhatsapp: n % 2 === 1,
 });
 
 describe("papéis: comandos no driver D1", () => {
@@ -60,8 +62,10 @@ describe("papéis: comandos no driver D1", () => {
       const [u] = await comandoCadastroPrimeiro(orm, dados(1));
       assert.deepEqual({ role: u.role, status: u.status }, { role: "admin", status: "ativo" });
       assert.deepEqual(linha(u.id), { role: "admin", status: "ativo", papel: idPapel("admin") });
-      const r = db.prepare("SELECT nome, email, matricula, cargo, email_verificado_em AS v FROM usuarios WHERE id = ?").get(u.id) as Record<string, unknown>;
-      assert.deepEqual({ ...r }, { nome: "Pessoa 1", email: "p1@rioverde.go.gov.br", matricula: "M1", cargo: "Analista", v: null });
+      const r = db
+        .prepare("SELECT nome, email, matricula, cargo, email_verificado_em AS v, telefone AS t, telefone_whatsapp AS w, trocar_senha AS s FROM usuarios WHERE id = ?")
+        .get(u.id) as Record<string, unknown>;
+      assert.deepEqual({ ...r }, { nome: "Pessoa 1", email: "p1@rioverde.go.gov.br", matricula: "M1", cargo: "Analista", v: null, t: "64999990000", w: 1, s: 0 });
     });
 
     it("dois 'primeiros' cadastros: só um vira Administrador — o outro não é criado", async () => {

@@ -32,6 +32,8 @@ ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` +
   avisos nas telas de Grupos, Permissões e Usuários) + a BASE dos papéis: migração `0069` (`papeis` + `usuarios.papel_id`,
   3 papéis do sistema que reproduzem as guardas de hoje), núcleo puro (`papeis-core.ts`, `escopo-unidades-core.ts`) e os
   comandos com trava (`papeis-sql.ts`: cadastro atômico, o último Administrador ativo nunca sai, desativar encerra as sessões).
+- **Usuários (migração `0072`):** telefone de contato + WhatsApp no cadastro, matrícula de 6 números, tela de Usuários na
+  tabela padrão com o banner do usuário (edição por cadeado, validar dados, exigir nova senha) e o botão do WhatsApp.
 - **Entrega 2:** sessão com o papel, acesso efetivo (grupo libera ∩ papel visualiza) em navegação, páginas e rotas;
   escopo de unidades em 3 estados (sem grupo não vê dado; "Geral" também no detalhe); guardas por tela + ação em todos os
   módulos, com modos só-leitura.

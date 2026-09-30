@@ -13,12 +13,18 @@ export function LinkExterno({
   icon,
   className = "",
   variante = "botao",
+  size = "md",
+  titulo,
 }: {
   href: string;
   children: ReactNode;
   icon?: ReactNode;
   className?: string;
   variante?: "botao" | "texto";
+  /** `xs` = AÇÃO DE LINHA de tabela compacta (a medida do `Button size="xs"`: cabe na linha no desktop, 44px no toque). */
+  size?: "md" | "xs";
+  /** O nome acessível + a dica (quando o texto à vista não diz tudo — ex.: "Conversar no WhatsApp"). */
+  titulo?: string;
 }) {
   if (variante === "texto")
     return (
@@ -32,12 +38,15 @@ export function LinkExterno({
         {children}
       </a>
     );
+  const tamanho = size === "xs" ? "h-11 px-2.5 text-[12px] lg:h-[calc(var(--h-control-sm)-6px)]" : "h-11 px-4 text-[13.5px] lg:h-[var(--h-control)]";
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex h-[var(--h-control)] shrink-0 items-center justify-center gap-2 rounded-control border border-border-2 bg-surface px-4 text-[13.5px] font-semibold text-text transition-[background-color,opacity,box-shadow] duration-[var(--motion-duration)] hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${className}`}
+      aria-label={titulo}
+      title={titulo}
+      className={`inline-flex ${tamanho} shrink-0 items-center justify-center gap-2 rounded-control border border-border-2 bg-surface font-semibold text-text transition-[background-color,opacity,box-shadow] duration-[var(--motion-duration)] hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${className}`}
     >
       {icon}
       {children}

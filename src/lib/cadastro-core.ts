@@ -7,7 +7,7 @@
 export const DOMINIO_INSTITUCIONAL = "rioverde.go.gov.br";
 
 /** Tamanhos máximos dos campos do cadastro. */
-export const LIMITES_CADASTRO = { nome: 120, matricula: 15, usuarioEmail: 64, senhaMin: 8, senhaMax: 128 } as const;
+export const LIMITES_CADASTRO = { nome: 120, matricula: 6, usuarioEmail: 64, senhaMin: 8, senhaMax: 128, telefone: 11 } as const;
 
 /** A parte antes do "@": letras minúsculas sem acento, números, ".", "_" e "-" — começa e termina em letra/número e
  * nunca tem ".." (o padrão das caixas institucionais). */
@@ -53,9 +53,12 @@ export function filtrarMatricula(v: string): string {
   return v.replace(/\D/g, "").slice(0, LIMITES_CADASTRO.matricula);
 }
 
-/** A matrícula é aceita: só dígitos (1 a 15), e não só zeros. */
+/** A MATRÍCULA funcional da Prefeitura tem EXATAMENTE 6 números (zeros à esquerda contam) — e não só zeros. */
+export const DIGITOS_MATRICULA = 6;
+
+/** A matrícula é aceita: exatamente 6 dígitos, não só zeros. */
 export function matriculaValida(m: string): boolean {
-  return /^\d{1,15}$/.test(m) && /[1-9]/.test(m);
+  return /^\d{6}$/.test(m) && /[1-9]/.test(m);
 }
 
 /** A CHAVE de comparação da matrícula (sem espaços nem os zeros à esquerda): "00123" e "123" são a MESMA — a régua do
@@ -70,6 +73,37 @@ export function violouMatriculaUnica(err: unknown): boolean {
   let e: unknown = err;
   for (let i = 0; e && i < 5; i++, e = (e as { cause?: unknown }).cause) if (/matricula_duplicada/.test(String((e as Error).message ?? e))) return true;
   return false;
+}
+
+/**
+ * TELEFONE de contato institucional (Brasil): guardado SÓ com os dígitos — DDD + número (10 dígitos = fixo; 11 = celular,
+ * começa com 9). Colar "+55 (64) 99999-0000" também vale: o "55" do país sai quando sobra um número completo.
+ */
+export function filtrarTelefone(v: string): string {
+  let d = v.replace(/\D/g, "");
+  if (d.length > LIMITES_CADASTRO.telefone && d.startsWith("55")) d = d.slice(2);
+  return d.slice(0, LIMITES_CADASTRO.telefone);
+}
+
+/** O telefone é aceito: DDD válido (11 a 99, sem zero) + 8 dígitos (fixo) ou 9 começando com 9 (celular). */
+export function telefoneValido(t: string): boolean {
+  return /^[1-9][1-9](?:[2-8]\d{7}|9\d{8})$/.test(t);
+}
+
+/** O telefone na tela: "(64) 99999-0000" / "(64) 3620-0000" — parcial enquanto digita; sem dígitos = "". */
+export function formatarTelefone(t: string | null | undefined): string {
+  const d = (t ?? "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length <= 2) return `(${d}`;
+  const ddd = d.slice(0, 2);
+  const resto = d.slice(2);
+  const corte = resto.length > 8 ? 5 : 4;
+  return resto.length <= corte ? `(${ddd}) ${resto}` : `(${ddd}) ${resto.slice(0, corte)}-${resto.slice(corte)}`;
+}
+
+/** O link de conversa do WhatsApp para o telefone (com o 55 do Brasil) — `null` quando o telefone não é válido. */
+export function linkWhatsapp(t: string | null | undefined): string | null {
+  return t && telefoneValido(t) ? `https://wa.me/55${t}` : null;
 }
 
 /** O problema da SENHA NOVA (ou `null`): 8 a 128 caracteres, ao menos uma letra e um número. */

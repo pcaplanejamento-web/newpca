@@ -27,6 +27,8 @@ export type UsuarioSessao = {
   foto: string | null;
   role: "admin" | "gestor" | "membro";
   status: "ativo" | "pendente" | "inativo";
+  /** O ADM exigiu uma SENHA NOVA: o painel leva a pessoa a `/nova-senha` antes de qualquer tela. */
+  trocarSenha: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -87,6 +89,7 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
       versao: usuarios.atualizadoEm,
       role: usuarios.role,
       status: usuarios.status,
+      trocarSenha: usuarios.trocarSenha,
     })
     .from(sessoes)
     .innerJoin(usuarios, eq(sessoes.usuarioId, usuarios.id))

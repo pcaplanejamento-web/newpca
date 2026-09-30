@@ -15,6 +15,12 @@ type CampoProps = {
   error?: string;
   /** DENSO: caixa de 44px e rótulo mais próximo (formulários longos que têm de caber na tela — o cadastro). */
   denso?: boolean;
+  /** Ao lado do rótulo (ex.: a `Ajuda compacta` que explica o campo). */
+  rotuloExtra?: ReactNode;
+  /** Desenho no FUNDO da área de digitação, atrás do texto (ex.: as 6 posições da matrícula). */
+  fundo?: ReactNode;
+  /** Classes a mais do `<input>` (ex.: fonte monoespaçada alinhada ao `fundo`). */
+  classeEntrada?: string;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "size">;
 
 /** Altura da caixa no padrão (54px) ou no modo DENSO (44px). */
@@ -24,20 +30,26 @@ const alturaCls = (denso?: boolean) => (denso ? "h-11 [@media(max-height:720px)]
  * O RÓTULO do campo. No modo DENSO o erro vai na MESMA linha do rótulo (à direita, cortado; o texto inteiro na dica) — o
  * formulário nunca cresce nem se mexe quando um erro aparece; nos demais modos, a mensagem fica abaixo da caixa (`Rodape`).
  */
-function Rotulo({ label, fid, denso, error, errId }: { label?: string; fid: string; denso?: boolean; error?: string; errId: string }) {
+function Rotulo({ label, fid, denso, error, errId, extra }: { label?: string; fid: string; denso?: boolean; error?: string; errId: string; extra?: ReactNode }) {
   if (!label && !(denso && error)) return null;
   if (!denso)
     return (
-      <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
-        {label}
-      </label>
-    );
-  return (
-    <div className="mb-1 flex min-w-0 items-baseline justify-between gap-2">
-      {label && (
-        <label htmlFor={fid} className="shrink-0 text-[13px] font-bold text-text">
+      <div className="mb-2 flex items-center gap-1.5">
+        <label htmlFor={fid} className="block text-[13.5px] font-bold text-text">
           {label}
         </label>
+        {extra}
+      </div>
+    );
+  return (
+    <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+      {label && (
+        <span className="flex shrink-0 items-center gap-1">
+          <label htmlFor={fid} className="text-[13px] font-bold text-text">
+            {label}
+          </label>
+          {extra}
+        </span>
       )}
       {error && (
         <span id={errId} title={error} className="min-w-0 truncate text-[11.5px] font-medium text-[var(--sit-devolvido)]">
@@ -64,16 +76,29 @@ const WRAP =
 const INPUT =
   "min-w-0 flex-1 bg-transparent text-[15px] text-text outline-none placeholder:text-faint";
 
-export function TextField({ label, icon, trailing, hint, error, denso, id, ...rest }: CampoProps) {
+export function TextField({ label, icon, trailing, hint, error, denso, rotuloExtra, fundo, classeEntrada = "", id, ...rest }: CampoProps) {
   const auto = useId();
   const fid = id ?? auto;
   const errId = `${fid}-erro`;
   return (
     <div className="min-w-0">
-      <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
+      <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} extra={rotuloExtra} />
       <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         {icon && <span className="shrink-0 text-muted">{icon}</span>}
-        <input id={fid} className={INPUT} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...rest} />
+        {fundo ? (
+          <span className="relative flex h-full min-w-0 flex-1 items-center">
+            {fundo}
+            <input
+              id={fid}
+              className={`${INPUT} relative h-full ${classeEntrada}`}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errId : undefined}
+              {...rest}
+            />
+          </span>
+        ) : (
+          <input id={fid} className={`${INPUT} ${classeEntrada}`} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...rest} />
+        )}
         {trailing}
       </div>
       <Rodape denso={denso} error={error} hint={hint} errId={errId} />

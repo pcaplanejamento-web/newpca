@@ -11,6 +11,8 @@ import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { comandoEncerrarSessoesSeInativo, comandoExcluirUsuario, comandoTrocarPapel, comandoTrocarStatus, consultaPapelDaChave } from "@/lib/papeis-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
+import { getIntegracoes } from "@/lib/integracoes";
+import { resendConfigurado } from "@/lib/integracoes-core";
 import { cargoCadastrado } from "@/lib/cargos";
 import { matriculaEmUso, MSG_MATRICULA_EM_USO, violouMatriculaUnica } from "@/lib/usuarios-unicos";
 
@@ -27,7 +29,7 @@ export async function PATCH(
 
   const corpo = await parseCorpo(adminUsuarioSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, email, matricula, cargo, reparticaoId, role, status } = corpo.data;
+  const { nome, email, matricula, cargo, reparticaoId, role, status, telefone, telefoneWhatsapp, validar, trocarSenha } = corpo.data;
 
   // Impede o admin de remover o próprio acesso (evita lockout).
   if (
@@ -36,6 +38,7 @@ export async function PATCH(
   ) {
     return erro("Você não pode remover o próprio acesso de administrador.");
   }
+  if (id === guard.u.id && trocarSenha) return erro("Para trocar a sua própria senha, use o Perfil.", 422);
 
   const db = getDb();
 
@@ -53,7 +56,19 @@ export async function PATCH(
   if (matricula && (await matriculaEmUso(matricula, id))) return erro(MSG_MATRICULA_EM_USO, 409);
 
   const [antes] = await db
-    .select({ nome: usuarios.nome, email: usuarios.email, matricula: usuarios.matricula, cargo: usuarios.cargo, reparticaoId: usuarios.reparticaoId, role: usuarios.role, status: usuarios.status })
+    .select({
+      nome: usuarios.nome,
+      email: usuarios.email,
+      matricula: usuarios.matricula,
+      cargo: usuarios.cargo,
+      reparticaoId: usuarios.reparticaoId,
+      telefone: usuarios.telefone,
+      telefoneWhatsapp: usuarios.telefoneWhatsapp,
+      role: usuarios.role,
+      status: usuarios.status,
+      dadosValidadosEm: usuarios.dadosValidadosEm,
+      trocarSenha: usuarios.trocarSenha,
+    })
     .from(usuarios)
     .where(eq(usuarios.id, id))
     .limit(1);
@@ -69,6 +84,10 @@ export async function PATCH(
   if (reparticaoId != null && reparticaoId !== antes.reparticaoId && !(await unidadeDeTrabalhoValida(reparticaoId)))
     return erro("Selecione uma unidade válida.", 422);
 
+  // A SENHA NOVA obrigatória vale pelo código enviado ao e-mail: sem o envio (Resend), a pessoa ficaria presa.
+  if (trocarSenha && !antes.trocarSenha && !resendConfigurado(await getIntegracoes()))
+    return erro("Configure o envio de e-mails (Integrações → Resend) antes de exigir uma senha nova: a troca é confirmada por código.", 409);
+
   // PAPEL e STATUS primeiro, pelos comandos com a TRAVA do último Administrador ativo (no próprio UPDATE — duas telas de
   // ADM ao mesmo tempo nunca deixam o sistema sem ADM); recusado ⇒ 409 e nada mais é gravado.
   if (role !== undefined) {
@@ -82,13 +101,26 @@ export async function PATCH(
     const [trocou] = await db.batch([comandoTrocarStatus(db, id, status), comandoEncerrarSessoesSeInativo(db, id)]);
     if (trocou.length === 0) return erro("Não é possível desativar o último Administrador ativo.", 409);
   }
-  const set = {
+  const dados = {
     ...(nome !== undefined ? { nome } : {}),
     ...(email !== undefined ? { email } : {}),
     ...(matricula !== undefined ? { matricula: matricula ? matricula : null } : {}),
     ...(cargoNovo !== undefined ? { cargo: cargoNovo ? cargoNovo : null } : {}),
     ...(reparticaoId !== undefined ? { reparticaoId } : {}),
+    ...(telefone !== undefined ? { telefone: telefone ? telefone : null } : {}),
+    ...(telefoneWhatsapp !== undefined ? { telefoneWhatsapp } : {}),
   };
+  // Sem telefone, não há WhatsApp.
+  if (dados.telefone === null) dados.telefoneWhatsapp = false;
+  // VALIDAÇÃO dos dados: validar carimba quem/quando; um dado que MUDOU desfaz a validação anterior (salvo se validou junto).
+  const mudouDado = (Object.keys(dados) as (keyof typeof dados)[]).some((k) => (dados[k] ?? null) !== (antes[k] ?? null));
+  const validacao =
+    validar === true
+      ? { dadosValidadosEm: sql`(CURRENT_TIMESTAMP)`, dadosValidadosPor: guard.u.nome }
+      : validar === false || (mudouDado && antes.dadosValidadosEm)
+        ? { dadosValidadosEm: null, dadosValidadosPor: null }
+        : {};
+  const set = { ...dados, ...validacao, ...(trocarSenha !== undefined ? { trocarSenha } : {}) };
   if (Object.keys(set).length > 0) {
     try {
       await db.update(usuarios).set({ ...set, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(usuarios.id, id));
@@ -104,22 +136,29 @@ export async function PATCH(
     depoisDaResposta(enviarEmailDireto([destino], (ctx) => emailAcessoLiberado({ nome: quem }, ctx)), "email");
   }
   // Log com destaque para PAPEL/STATUS (mudança de privilégio = alto valor).
-  const cs = (["nome", "email", "matricula", "cargo", "reparticaoId", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
-  const dd = diffCampos(antes as Record<string, unknown>, corpo.data as Record<string, unknown>, cs, {
+  const cs = (["nome", "email", "matricula", "cargo", "reparticaoId", "telefone", "telefoneWhatsapp", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
+  const dd = diffCampos(antes as Record<string, unknown>, { ...corpo.data, ...dados } as Record<string, unknown>, cs, {
     nome: "nome",
     email: "e-mail",
     matricula: "matrícula",
     cargo: "cargo/função",
     reparticaoId: "unidade",
+    telefone: "telefone",
+    telefoneWhatsapp: "WhatsApp",
     role: "papel",
     status: "status",
   });
+  // As ações do ADM sobre a conta (validar os dados, exigir senha nova) — só o FATO.
+  const fatos = [
+    validar === true ? "dados validados" : validar === false ? "validação dos dados desfeita" : mudouDado && antes.dadosValidadosEm ? "validação desfeita (dados alterados)" : "",
+    trocarSenha === true && !antes.trocarSenha ? "senha nova exigida" : trocarSenha === false && antes.trocarSenha ? "exigência de senha nova dispensada" : "",
+  ].filter(Boolean);
   await registrarAuditoria({
     usuario: guard.u,
     acao: "editar",
     entidade: "usuario",
     entidadeId: id,
-    resumo: `Usuário ${antes.nome}: ${dd.resumo || "editado"}`,
+    resumo: `Usuário ${antes.nome}: ${[dd.resumo, ...fatos].filter(Boolean).join("; ") || "editado"}`,
     antes: dd.antes,
     depois: dd.depois,
   });

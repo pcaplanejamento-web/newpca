@@ -130,6 +130,14 @@ export const usuarios = sqliteTable(
     papelId: integer("papel_id").references((): AnySQLiteColumn => papeis.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    // Contato institucional (migração `0072`): o TELEFONE (só dígitos: DDD + número) e se tem WHATSAPP.
+    telefone: text("telefone"),
+    telefoneWhatsapp: integer("telefone_whatsapp", { mode: "boolean" }).notNull().default(false),
+    // A VALIDAÇÃO dos dados pelo ADM (quando + o NOME de quem validou); editar um dado desfaz.
+    dadosValidadosEm: text("dados_validados_em"),
+    dadosValidadosPor: text("dados_validados_por"),
+    // TROCA DE SENHA OBRIGATÓRIA (o ADM exige): a pessoa cria uma senha nova antes de usar o sistema.
+    trocarSenha: integer("trocar_senha", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [
     uniqueIndex("usuarios_email_uq").on(t.email),

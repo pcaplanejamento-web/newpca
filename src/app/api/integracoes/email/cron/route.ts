@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   for (let i = 0; i < pessoas.length; i += 5)
     await Promise.all(
       pessoas.slice(i, i + 5).map((p) =>
-        derivarDaPessoa({ ...p, foto: null, role: p.role as "admin" | "gestor" | "membro", status: "ativo" }),
+        derivarDaPessoa({ ...p, foto: null, role: p.role as "admin" | "gestor" | "membro", status: "ativo", trocarSenha: false }),
       ),
     );
   const r = await enviarEmailsPendentes(100);

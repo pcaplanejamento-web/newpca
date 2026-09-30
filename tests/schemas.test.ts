@@ -41,11 +41,13 @@ import { uploadSchema } from "../src/lib/validation.ts";
 
 describe("auth-validation", () => {
   it("cadastroSchema: nome completo, matrícula, unidade, e-mail INSTITUCIONAL e senha forte", () => {
-    const base = { nome: "  Ana   Souza ", matricula: " 123 ", cargo: " Analista ", reparticaoId: 4, email: "  ANA@RIOVERDE.GO.GOV.BR ", senha: "senha123", codigo: "012345" };
+    const base = { nome: "  Ana   Souza ", matricula: " 123456 ", telefone: "(64) 3620-0000", cargo: " Analista ", reparticaoId: 4, email: "  ANA@RIOVERDE.GO.GOV.BR ", senha: "senha123", codigo: "012345" };
     const r = cadastroSchema.parse(base);
     assert.equal(r.email, "ana@rioverde.go.gov.br");
     assert.equal(r.nome, "Ana Souza");
-    assert.equal(r.matricula, "123");
+    assert.equal(r.matricula, "123456");
+    assert.equal(r.telefone, "6436200000");
+    assert.equal(r.telefoneWhatsapp, false);
     assert.equal(r.cargo, "Analista");
     // o cargo vem da lista do ADM (a rota confere); sem lista cadastrada ele é opcional
     assert.equal(cadastroSchema.safeParse({ ...base, cargo: undefined }).success, true);

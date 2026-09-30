@@ -7,6 +7,7 @@ import {
   nomeCompleto,
   nomeValido,
   problemaSenha,
+  telefoneValido,
   temControle,
 } from "./cadastro-core.ts";
 import { FINALIDADES_CODIGO } from "./codigo-email-core.ts";
@@ -29,7 +30,13 @@ const nomeSchema = z
   .refine(nomeCompleto, "Informe o nome completo (nome e sobrenome).")
   .refine(nomeValido, "O nome aceita só letras, espaços, apóstrofo e hífen.");
 /** MATRÍCULA: só dígitos (1 a 15). */
-const matriculaSchema = z.string().trim().min(1, "Informe a matrícula.").refine(matriculaValida, "A matrícula aceita só números (até 15 dígitos).");
+const matriculaSchema = z.string().trim().min(1, "Informe a matrícula.").refine(matriculaValida, "A matrícula tem exatamente 6 números.");
+/** TELEFONE de contato institucional: só os dígitos (DDD + número — a máscara da tela sai). */
+const telefoneSchema = z
+  .string()
+  .max(40)
+  .transform((t) => t.replace(/\D/g, ""))
+  .refine(telefoneValido, "Informe o telefone com DDD (fixo com 10 dígitos ou celular com 11).");
 /** Texto livre curto sem caracteres de controle/invisíveis. */
 const textoLimpo = (max: number) => z.string().trim().max(max).refine((v) => !temControle(v), "O campo tem caracteres não permitidos.");
 /** O código de confirmação enviado por e-mail: 6 dígitos. */
@@ -52,6 +59,9 @@ export const cadastroSchema = z.object({
   // O cargo/função escolhido na lista do ADM (o servidor confere; exigido quando há cargos cadastrados).
   cargo: textoLimpo(80).optional(),
   reparticaoId: z.number().int().positive("Selecione a unidade em que você trabalha."),
+  // O telefone de contato institucional (a equipe do Planejamento e Custos fala com a pessoa por ele) e se tem WhatsApp.
+  telefone: telefoneSchema,
+  telefoneWhatsapp: z.boolean().default(false),
   email: emailInstitucionalSchema,
   senha: senhaNovaSchema,
   // Sem código só no PRIMEIRO acesso do sistema (ainda não há quem configure o envio de e-mails).
@@ -115,6 +125,13 @@ export const adminUsuarioSchema = z.object({
   reparticaoId: z.number().int().positive().nullable().optional(),
   role: z.enum(["admin", "gestor", "membro"]).optional(),
   status: z.enum(["ativo", "pendente", "inativo"]).optional(),
+  // "" = sem telefone. Como a matrícula: só vai quando MUDOU.
+  telefone: z.union([z.literal(""), telefoneSchema]).optional(),
+  telefoneWhatsapp: z.boolean().optional(),
+  // VALIDAR os dados (true = o ADM conferiu; false = desfaz). Editar um dado já desfaz a validação.
+  validar: z.boolean().optional(),
+  // Exigir que a pessoa crie uma senha NOVA antes de usar o sistema (false = dispensa).
+  trocarSenha: z.boolean().optional(),
 });
 
 /** Um CARGO/FUNÇÃO cadastrado pelo ADM (Usuários → Cargos e funções). */

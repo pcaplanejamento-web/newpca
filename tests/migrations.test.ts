@@ -799,6 +799,15 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT cargo AS c FROM usuarios WHERE id = 9671").get() as { c: string }).c, "Analista");
   });
 
+  it("0072 contato do usuário: telefone + WhatsApp, validação dos dados e troca de senha obrigatória (padrões desligados)", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0072")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9721, 'Ana Souza', 'a9721@x', 'h')");
+    for (const arq of arquivos.filter((f) => f >= "0072")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    const r = a.prepare("SELECT telefone AS t, telefone_whatsapp AS w, dados_validados_em AS v, trocar_senha AS s FROM usuarios WHERE id = 9721").get() as Record<string, unknown>;
+    assert.deepEqual({ ...r }, { t: null, w: 0, v: null, s: 0 });
+  });
+
   it("0070 cargos: semeia os cargos já informados (sem repetir, sem caixa) e o nome é único sem caixa", () => {
     const a = new DatabaseSync(":memory:");
     const antes = arquivos.filter((f) => f < "0070");

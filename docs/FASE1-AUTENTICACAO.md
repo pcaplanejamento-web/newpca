@@ -20,7 +20,7 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - **RBAC:** `role` (`admin`|`gestor`|`membro`) + `status` (`ativo`|`pendente`|`inativo`) em `usuarios`.
 
 ## Fluxo de acesso
-- **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula, cargo ou função (seleção da lista
+- **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula (**exatamente 6 números**, com as 6 posições desenhadas no campo e um "(?)"), telefone de contato institucional (com o "(?)" e a marca de WhatsApp), cargo ou função (seleção da lista
   que o ADM cadastra em Usuários → Cargos e funções), unidade em que trabalha, o usuário do e-mail (o `@rioverde.go.gov.br`
   já vem preenchido), e-mail **@rioverde.go.gov.br** e
   senha → captcha (sempre) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →
@@ -32,11 +32,15 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
   seguem editáveis).
 - **Google:** conta nova não nasce pelo Google — cadastre-se e vincule o Google no Perfil. Os avisos por e-mail podem chegar
   no institucional ou na conta Google vinculada.
-- O **admin** aprova (ativa) os pendentes, muda papéis, desativa ou exclui — em `/painel/usuarios`.
+- O **admin** aprova (ativa) os pendentes, muda papéis, desativa ou exclui — em `/painel/usuarios` (tabela padrão; tocar na
+  linha abre o banner do usuário com todos os dados, edição por cadeado, **Validar dados** e **Exigir nova senha**; coluna com o
+  botão do WhatsApp).
+- **Senha nova exigida pelo ADM (migração `0072`):** no próximo acesso a pessoa vai para `/nova-senha` e só entra no painel
+  depois de criar a senha (confirmada pelo código no e-mail).
 - Login válido (com o captcha) → cookie de sessão → acesso ao `/painel`. "Sair" encerra a sessão.
 - **Segurança (migração `0071`):** captcha SEMPRE (Turnstile do ADM ou a verificação anti-robô própria); limite de
   tentativas por IP e por conta (8 senhas erradas em 15 min bloqueiam a conta por 15 min) → 429; campos só com dados
-  permitidos (nome só letras, matrícula só números, usuário do e-mail `a-z 0-9 . _ -`, senha com letras e números);
+  permitidos (nome só letras, matrícula com 6 números, telefone com DDD, usuário do e-mail `a-z 0-9 . _ -`, senha com letras e números);
   e-mail e **matrícula únicos** (também no banco, por gatilho); cabeçalhos de segurança e recusa de requisição de outro site.
 - **Tela:** no cadastro o captcha fica logo abaixo do botão, centralizado; os erros não movem a tela (o do campo na linha do
   rótulo, o do envio num aviso flutuante no canto).

@@ -9,14 +9,29 @@ import { IconAjuda } from "./icons";
  * flutuante, a explicação de uma tela ou ferramenta. Tira os textos de instrução da tela: fica limpo e a explicação
  * continua a um toque. O conteúdo é livre (`children`); `titulo` abre o painel.
  */
-export function Ajuda({ titulo, children, rotulo = "Ajuda" }: { titulo: string; children: ReactNode; rotulo?: string }) {
+export function Ajuda({
+  titulo,
+  children,
+  rotulo = "Ajuda",
+  compacta = false,
+}: {
+  titulo: string;
+  children: ReactNode;
+  rotulo?: string;
+  /** COMPACTA: o "(?)" pequeno AO LADO DO RÓTULO de um campo (visual de 20px, área de toque de 44px) — abre à esquerda. */
+  compacta?: boolean;
+}) {
   return (
     <Dropdown
       ariaLabel={`${rotulo}: ${titulo}`}
-      align="end"
-      width={360}
-      triggerClassName="grid h-11 w-11 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-      trigger={<IconAjuda className="h-[18px] w-[18px]" />}
+      align={compacta ? "start" : "end"}
+      width={compacta ? 300 : 360}
+      triggerClassName={
+        compacta
+          ? "relative grid h-5 w-5 place-items-center rounded-full text-muted transition-colors after:absolute after:-inset-3 after:content-[''] hover:text-accent"
+          : "grid h-11 w-11 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      }
+      trigger={<IconAjuda className={compacta ? "h-4 w-4" : "h-[18px] w-[18px]"} />}
     >
       <div className="space-y-3 p-1.5 text-[13px] leading-relaxed text-text-2">
         <p className="text-[14px] font-semibold text-text">{titulo}</p>

@@ -6,6 +6,8 @@ import { ok } from "@/lib/http";
 import { urlFoto } from "@/lib/pessoa";
 import { listarCargos } from "@/lib/cargos";
 import { listarUnidadesTrabalho } from "@/lib/reparticoes";
+import { getIntegracoes } from "@/lib/integracoes";
+import { resendConfigurado } from "@/lib/integracoes-core";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +15,7 @@ export async function GET() {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
 
-  const [lista, unidades, cargosLista] = await Promise.all([
+  const [lista, unidades, cargosLista, integ] = await Promise.all([
     getDb()
       .select({
         id: usuarios.id,
@@ -23,6 +25,12 @@ export async function GET() {
         emailVerificado: sql<number>`(${usuarios.emailVerificadoEm} IS NOT NULL)`,
         matricula: usuarios.matricula,
         cargo: usuarios.cargo,
+        telefone: usuarios.telefone,
+        telefoneWhatsapp: usuarios.telefoneWhatsapp,
+        dadosValidadosEm: usuarios.dadosValidadosEm,
+        dadosValidadosPor: usuarios.dadosValidadosPor,
+        trocarSenha: usuarios.trocarSenha,
+        atualizadoEm: usuarios.atualizadoEm,
         reparticaoId: usuarios.reparticaoId,
         unidade: reparticoes.nome,
         // A foto vai como URL (rota com cache), não o data-URL — a lista não pesa com muitos usuários.
@@ -37,6 +45,7 @@ export async function GET() {
       .orderBy(desc(usuarios.criadoEm)),
     listarUnidadesTrabalho(),
     listarCargos(),
+    getIntegracoes(),
   ]);
 
   return ok({
@@ -44,5 +53,7 @@ export async function GET() {
     unidades,
     cargos: cargosLista,
     meuId: guard.u.id,
+    // "Exigir nova senha" depende do envio do código por e-mail (Resend).
+    envioEmail: resendConfigurado(integ),
   });
 }

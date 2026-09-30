@@ -18,6 +18,8 @@ export default async function PainelLayout({
 }) {
   const usuario = await getUsuarioAtual();
   if (!usuario) redirect("/login");
+  // O ADM exigiu uma senha nova: nenhuma tela do painel antes de criá-la.
+  if (usuario.trocarSenha) redirect("/nova-senha");
 
   const [grupos, ativo, aparencia, pcas, versao] = await Promise.all([
     gruposDoUsuario(usuario.id),

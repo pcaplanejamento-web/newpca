@@ -35,6 +35,8 @@ export type DadosCadastro = {
   matricula: string | null;
   cargo: string | null;
   reparticaoId: number | null;
+  telefone: string | null;
+  telefoneWhatsapp: boolean;
 };
 
 /**
@@ -64,6 +66,11 @@ export function comandoCadastroPrimeiro(db: Db, d: DadosCadastro) {
       papelId: papeis.id,
       criadoEm: sql<string>`CURRENT_TIMESTAMP`.as("criado_em"),
       atualizadoEm: sql<string>`CURRENT_TIMESTAMP`.as("atualizado_em"),
+      telefone: sql<string | null>`${d.telefone}`.as("telefone"),
+      telefoneWhatsapp: sql<boolean>`${d.telefoneWhatsapp ? 1 : 0}`.as("telefone_whatsapp"),
+      dadosValidadosEm: sql<string | null>`NULL`.as("dados_validados_em"),
+      dadosValidadosPor: sql<string | null>`NULL`.as("dados_validados_por"),
+      trocarSenha: sql<boolean>`0`.as("trocar_senha"),
     })
     .from(papeis)
     .where(and(eq(papeis.chave, "admin"), sql`NOT EXISTS (SELECT 1 FROM ${usuarios})`));

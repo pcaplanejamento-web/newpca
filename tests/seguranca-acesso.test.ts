@@ -18,6 +18,10 @@ import {
   temControle,
   usuarioEmailValido,
   violouMatriculaUnica,
+  filtrarTelefone,
+  formatarTelefone,
+  linkWhatsapp,
+  telefoneValido,
 } from "../src/lib/cadastro-core.ts";
 import { cadastroSchema, cargoSchema, solicitarCodigoSchema } from "../src/lib/auth-validation.ts";
 import {
@@ -53,12 +57,16 @@ describe("campos do cadastro: só dados permitidos", () => {
     assert.equal(filtrarNome("  João1 <b>Silva</b>"), "João bSilvab");
     assert.equal(filtrarNome("Ana   Maria"), "Ana Maria");
   });
-  it("matrícula: só dígitos (até 15), não só zeros; a chave ignora os zeros à esquerda", () => {
+  it("matrícula: exatamente 6 dígitos, não só zeros; a chave ignora os zeros à esquerda", () => {
     assert.ok(matriculaValida("012345"));
+    assert.ok(!matriculaValida("12345"));
+    assert.ok(!matriculaValida("1234567"));
+    assert.ok(!matriculaValida("000000"));
     assert.ok(!matriculaValida("12-34"));
     assert.ok(!matriculaValida("0000"));
     assert.ok(!matriculaValida("1234567890123456"));
     assert.equal(filtrarMatricula("12.345-6 a"), "123456");
+    assert.equal(filtrarMatricula("1234567"), "123456");
     assert.equal(chaveMatricula(" 000123 "), "123");
   });
   it("e-mail institucional: usuário no padrão (letras, números, . _ -), sem '..' e o domínio certo", () => {
@@ -85,15 +93,42 @@ describe("campos do cadastro: só dados permitidos", () => {
     assert.ok(!temControle("Analista – Nível II"));
   });
   it("schemas: recusam o que não é permitido", () => {
-    const base = { nome: "Ana Souza", matricula: "123", reparticaoId: 1, email: "ana.souza@rioverde.go.gov.br", senha: "abc12345" };
+    const base = { nome: "Ana Souza", matricula: "123456", telefone: "(64) 99999-0000", reparticaoId: 1, email: "ana.souza@rioverde.go.gov.br", senha: "abc12345" };
     assert.ok(cadastroSchema.safeParse(base).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, matricula: "M-12" }).success);
+    assert.ok(!cadastroSchema.safeParse({ ...base, matricula: "12345" }).success);
+    assert.ok(!cadastroSchema.safeParse({ ...base, telefone: "" }).success);
+    assert.ok(!cadastroSchema.safeParse({ ...base, telefone: "(64) 8999-00001" }).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, nome: "Ana Souza 2" }).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, senha: "abcdefgh" }).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, cargo: "Analista‮" }).success);
     assert.ok(!solicitarCodigoSchema.safeParse({ email: "a@b.com", finalidade: "cadastro", matricula: "x1" }).success);
     assert.ok(cargoSchema.safeParse({ nome: "Analista (Nível II)" }).success);
     assert.ok(!cargoSchema.safeParse({ nome: "<img src=x>" }).success);
+  });
+});
+
+describe("telefone de contato institucional", () => {
+  it("filtra só os dígitos (DDD + número) e tira o 55 do país colado", () => {
+    assert.equal(filtrarTelefone("(64) 99999-0000"), "64999990000");
+    assert.equal(filtrarTelefone("+55 (64) 99999-0000"), "64999990000");
+    assert.equal(filtrarTelefone("64 3620 0000 ramal 12"), "64362000001");
+    assert.equal(filtrarTelefone("abc"), "");
+  });
+  it("aceita fixo (10) e celular (11, começa com 9); recusa DDD com zero e número incompleto", () => {
+    assert.ok(telefoneValido("6436200000"));
+    assert.ok(telefoneValido("64999990000"));
+    for (const t of ["", "649999", "0499999000", "6036200000", "64899990000", "6416200000", "649999900001"]) assert.equal(telefoneValido(t), false, t);
+  });
+  it("formata para a tela (parcial enquanto digita) e monta o link do WhatsApp só com número válido", () => {
+    assert.equal(formatarTelefone("64999990000"), "(64) 99999-0000");
+    assert.equal(formatarTelefone("6436200000"), "(64) 3620-0000");
+    assert.equal(formatarTelefone("649"), "(64) 9");
+    assert.equal(formatarTelefone("6"), "(6");
+    assert.equal(formatarTelefone(null), "");
+    assert.equal(linkWhatsapp("64999990000"), "https://wa.me/5564999990000");
+    assert.equal(linkWhatsapp("649"), null);
+    assert.equal(linkWhatsapp(null), null);
   });
 });
 
@@ -179,7 +214,7 @@ describe("banco: limite, desafio e matrícula única (driver D1)", () => {
   });
 
   it("matrícula repetida é recusada pelo banco (sem os zeros à esquerda), no cadastro e na troca", async () => {
-    const dados = (n: number, matricula: string) => ({ nome: `P ${n}`, email: `p${n}@rioverde.go.gov.br`, senhaHash: "h", matricula, cargo: null, reparticaoId: null });
+    const dados = (n: number, matricula: string) => ({ nome: `P ${n}`, email: `p${n}@rioverde.go.gov.br`, senhaHash: "h", matricula, cargo: null, reparticaoId: null, telefone: null, telefoneWhatsapp: false });
     await comandoCadastroPendente(orm, dados(1, "123"));
     await assert.rejects(() => comandoCadastroPendente(orm, dados(2, "000123")), (e) => violouMatriculaUnica(e));
     await comandoCadastroPendente(orm, dados(3, "456"));

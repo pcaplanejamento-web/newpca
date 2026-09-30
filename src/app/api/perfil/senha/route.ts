@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   await db.batch([
     db
       .update(usuarios)
-      .set({ senhaHash: await hashSenha(corpo.data.novaSenha), emailVerificadoEm: sql`COALESCE(${usuarios.emailVerificadoEm}, CURRENT_TIMESTAMP)`, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+      .set({ senhaHash: await hashSenha(corpo.data.novaSenha), emailVerificadoEm: sql`COALESCE(${usuarios.emailVerificadoEm}, CURRENT_TIMESTAMP)`, trocarSenha: false, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
       .where(eq(usuarios.id, a.u.id)),
     db.delete(sessoes).where(atual ? and(eq(sessoes.usuarioId, a.u.id), ne(sessoes.id, atual)) : eq(sessoes.usuarioId, a.u.id)),
   ]);

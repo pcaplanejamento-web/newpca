@@ -6,6 +6,9 @@ import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { CartaoAuth, ErroAuth } from "@/components/CartaoAuth";
 import { CampoCodigo, EtapaCodigo } from "@/components/CodigoEmail";
 import { VerificacaoRobo } from "@/components/VerificacaoRobo";
+import { CampoMatricula } from "@/components/CampoMatricula";
+import { BotaoWhatsapp, CampoTelefone } from "@/components/Telefone";
+import { type UsuarioAdmin, UsuarioDetalhe } from "@/components/UsuarioDetalhe";
 import { MarcaSistema } from "@/components/MarcaSistema";
 import { OpcoesUnidades } from "@/components/OpcoesUnidades";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
@@ -287,6 +290,72 @@ function DemoAcesso() {
         {/* VerificacaoRobo: o captcha próprio (sem o Turnstile) — marcar resolve o desafio do servidor (prova de trabalho). */}
         <VerificacaoRobo onToken={() => undefined} />
       </div>
+    </div>
+  );
+}
+
+/** USUÁRIOS: matrícula (6 posições no fundo), telefone (+ WhatsApp e o "(?)"), o botão de conversa e o BANNER do usuário. */
+const USUARIO_DEMO: UsuarioAdmin = {
+  id: 2,
+  nome: "Maria Clara Souza",
+  apelido: "Maria",
+  email: "maria.souza@rioverde.go.gov.br",
+  emailVerificado: true,
+  matricula: "045210",
+  cargo: "Analista de Planejamento",
+  telefone: "64999887766",
+  telefoneWhatsapp: true,
+  reparticaoId: 1,
+  unidade: "Secretaria de Planejamento",
+  foto: null,
+  role: "membro",
+  status: "ativo",
+  dadosValidadosEm: null,
+  dadosValidadosPor: null,
+  trocarSenha: false,
+  criadoEm: "2026-09-01T12:00:00Z",
+  atualizadoEm: "2026-09-01T12:00:00Z",
+};
+
+function DemoUsuario() {
+  const [mat, setMat] = useState("0452");
+  const [tel, setTel] = useState("6499988");
+  const [zap, setZap] = useState(true);
+  const [aberto, setAberto] = useState(false);
+  const [u, setU] = useState(USUARIO_DEMO);
+  return (
+    <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] sm:grid-cols-2">
+      <CampoMatricula label="Matrícula (CampoMatricula)" valor={mat} onValor={setMat} />
+      <CampoTelefone valor={tel} onValor={setTel} whatsapp={zap} onWhatsapp={setZap} />
+      <div className="flex flex-wrap items-center gap-2">
+        <BotaoWhatsapp telefone="64999887766" />
+        <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
+          Abrir o banner do usuário (UsuarioDetalhe)
+        </Button>
+      </div>
+      <UsuarioDetalhe
+        usuario={u}
+        aberto={aberto}
+        meuId={1}
+        unidades={[{ id: 1, codigo: "SEPLAN", nome: "Secretaria de Planejamento", orgao: "Prefeitura Municipal de Rio Verde" }]}
+        cargos={["Analista de Planejamento", "Diretor"]}
+        envioEmail
+        ocupado={false}
+        onFechar={() => setAberto(false)}
+        confirmarDescarte={async () => true}
+        onSalvar={async (p) => {
+          setU((x) => ({
+            ...x,
+            ...(p.validar ? { dadosValidadosEm: new Date().toISOString(), dadosValidadosPor: "Admin" } : p.validar === false ? { dadosValidadosEm: null } : {}),
+            ...(p.trocarSenha !== undefined ? { trocarSenha: p.trocarSenha } : {}),
+            atualizadoEm: new Date().toISOString(),
+          }));
+          return true;
+        }}
+        onPapel={() => undefined}
+        onStatus={() => undefined}
+        onExcluir={() => setAberto(false)}
+      />
     </div>
   );
 }
@@ -2660,6 +2729,9 @@ export function Catalogo() {
         <DemoAcesso />
       </Secao>
 
+      <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (máscara + WhatsApp + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">
+        <DemoUsuario />
+      </Secao>
       <Secao titulo="KPIs">
         <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
           <KpiStat label="Total de protocolos" value="122" delta={{ dir: "up", value: "8" }} spark={[30, 45, 40, 55, 60, 80, 95]} hint="esta semana" />

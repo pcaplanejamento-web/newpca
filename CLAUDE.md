@@ -126,7 +126,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (zera ao entrar), código 10/h por IP e 6/h por e-mail, cadastro 10/h por IP, senha 20/15 min por IP, desafio 60/10 min
     por IP → **429** `{esperarS}` + `Retry-After`. Higiene no cron dos e-mails (`limparSegurancaVencida`).
   - **Só dados permitidos** (a MESMA régua na tela — filtro ao digitar — e no Zod — `cadastro-core.ts`): nome só letras/
-    espaço/apóstrofo/hífen (nome e sobrenome), **matrícula só dígitos** (1–15), usuário do e-mail `[a-z0-9._-]` sem "..",
+    espaço/apóstrofo/hífen (nome e sobrenome), **matrícula = EXATAMENTE 6 dígitos** (`DIGITOS_MATRICULA`; não só zeros — a antiga fora do padrão segue valendo até o ADM trocar), **telefone** só dígitos (DDD + 8 fixo / 9 celular começando com 9 — `telefoneValido`), usuário do e-mail `[a-z0-9._-]` sem "..",
     senha nova 8–128 com **letras e números**, nenhum caractere de controle/invisível (cargo, apelido), nome de cargo com
     letras/números e `( ) / , . - º ª`.
   - **Sem duplicidade:** e-mail (índice único) e **MATRÍCULA** — conferida antes de enviar o código e antes de gastar o
@@ -224,8 +224,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     descrição + a ação no rodapé, `Button size="sm"`): Conta = Identificação (apelido editável + os dados em `CampoCongelado`,
     selo "Confirmado" no e-mail), Senha, Conta Google; Preferências = Avisos por e-mail, Mesa, Protocolação (o cartão
     Aparência saiu — o tema está no cabeçalho); `UsuariosAdmin` ganhou a coluna
-    **Unidade**, o cargo sob o nome, o ✓ do e-mail confirmado e, no "Editar usuário", o cargo e o seletor de unidade
-    (`adminUsuarioSchema.cargo/reparticaoId`; a unidade atual oculta continua valendo — só a que MUDOU é validada).
+    **Unidade** e o cargo/unidade no ADM (`adminUsuarioSchema.cargo/reparticaoId`; a unidade atual oculta continua valendo — só
+    a que MUDOU é validada).
+  - **CONTATO + CONTROLE DO ADM (migração `0072`, aditiva — `usuarios.telefone` [só dígitos], `telefone_whatsapp`,
+    `dados_validados_em`/`dados_validados_por` [o NOME de quem validou], `trocar_senha`):**
+    - **Cadastro:** **Matrícula** no **`CampoMatricula`** (as 6 posições desenhadas no FUNDO do campo — "0" apagado sobre um
+      traço, preenchidas ao digitar; `TextField.fundo` + `classeEntrada` monoespaçada) e **Telefone** no **`CampoTelefone`**
+      (máscara "(64) 99999-0000", o ícone do WhatsApp DENTRO do campo marca/desmarca — `aria-pressed`, verde); os dois com o
+      "(?)" ao lado do rótulo (**`Ajuda compacta`** via `TextField.rotuloExtra`) explicando a matrícula (6 números, única) e a
+      importância do telefone (contato da equipe do Planejamento e Custos). Grade: Nome · Matrícula|Telefone · Cargo|Unidade ·
+      E-mail · Senha|Confirmar — segue cabendo na tela sem rolar (medido 1280×650 a 1920×1080). Núcleo puro em
+      `cadastro-core.ts`: `filtrarTelefone` (tira o 55 colado), `telefoneValido`, `formatarTelefone`, `linkWhatsapp`.
+    - **Usuários (`UsuariosAdmin`) = a TABELA PADRÃO** (`DataTable scrollInterno density="compact"`, filtros por coluna,
+      `onRowClick` + `activeKey`): Usuário (foto + nome) · Unidade · Papel · Status (+ ícone "senha nova exigida") · Dados
+      (Validados/A validar) · **WhatsApp** (**`BotaoWhatsapp`** — link `wa.me/55…` no tamanho de ação de linha, `LinkExterno
+      size="xs"`; o toque não abre a linha; sem WhatsApp, o número em cinza). "Cargos e funções" e a Ajuda no rodapé da tabela.
+    - **Tocar na linha = o BANNER do usuário (`UsuarioDetalhe`, `Modal` xl, rodapé fixo):** todos os dados; cada um com o
+      CADEADO (`useCadeados` + `LinhaCampo`) para editar; "Salvar alterações" manda SÓ o que mudou (fechar com alteração
+      confirma); WhatsApp no cabeçalho. **Validar dados** carimba quem/quando ("Salvar e validar" com edição pendente;
+      "Desfazer validação") — o SERVIDOR desfaz a validação quando um dado MUDA de fato. **Exigir nova senha**
+      (`trocarSenha`; recusado sem o Resend — 409 — e para o próprio ADM; "Dispensar"). Papel (com a confirmação), Aprovar/
+      Desativar/Reativar e Excluir. Auditoria registra os fatos ("dados validados", "senha nova exigida").
+    - **Troca de senha OBRIGATÓRIA:** `UsuarioSessao.trocarSenha` → o layout do `/painel` redireciona a **`/nova-senha`**
+      (fora do painel: `NovaSenhaObrigatoria` = senha nova + captcha → código no e-mail → `POST /api/perfil/senha`; "Sair");
+      `/api/perfil/senha` e `/api/auth/senha` zeram a exigência.
   - **Google:** a conta NOVA nunca nasce pelo Google — o callback leva a `/login?modo=cadastro&erro=google-sem-cadastro`; o Google se
     vincula depois, no Perfil. **Avisos por e-mail:** Perfil → E-mail escolhe **onde** chegam — "E-mail institucional" | "Conta
     Google" (`PrefsEmail.destino`, só com o Google vinculado; `enderecoDosAvisos` no envio dos pendentes). O código de

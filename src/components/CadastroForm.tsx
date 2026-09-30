@@ -6,7 +6,6 @@ import {
   DOMINIO_INSTITUCIONAL,
   emailDaParteLocal,
   emailInstitucional,
-  filtrarMatricula,
   filtrarNome,
   LIMITES_CADASTRO,
   matriculaValida,
@@ -14,17 +13,21 @@ import {
   nomeValido,
   parteLocalEmail,
   problemaSenha,
+  telefoneValido,
 } from "@/lib/cadastro-core";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
+import { Ajuda } from "./Ajuda";
 import { Button } from "./Button";
 import { CartaoAuth, ConcluidoAuth, ErroAuth } from "./CartaoAuth";
 import { type ConfigCaptcha, EtapaCodigo, useCaptcha, useCodigoEmail } from "./CodigoEmail";
 import { OpcoesUnidades } from "./OpcoesUnidades";
 import { PasswordField, SelectField, TextField } from "./Field";
-import { IconArrowRight, IconIdCard, IconMail, IconUser } from "./icons";
+import { CampoMatricula } from "./CampoMatricula";
+import { CampoTelefone } from "./Telefone";
+import { IconArrowRight, IconMail, IconUser } from "./icons";
 
 /**
- * CADASTRO em 2 etapas (um dos modos da `TelaAcesso`): (1) nome completo, matrícula, cargo/função, unidade, e-mail INSTITUCIONAL e senha (+ captcha) → envia o código;
+ * CADASTRO em 2 etapas (um dos modos da `TelaAcesso`): (1) nome completo, matrícula, telefone (+ WhatsApp), cargo/função, unidade, e-mail INSTITUCIONAL e senha (+ captcha) → envia o código;
  * (2) o código de 6 dígitos confirma o e-mail e cria a conta (pendente de aprovação do ADM). `semCodigo` = o PRIMEIRO
  * acesso do sistema (ainda não há envio de e-mails configurado): cria direto.
  */
@@ -48,6 +51,9 @@ export function CadastroForm({
   const router = useRouter();
   const [nome, setNome] = useState("");
   const [matricula, setMatricula] = useState("");
+  // O telefone de contato institucional (só os dígitos) e se ele tem WhatsApp.
+  const [telefone, setTelefone] = useState("");
+  const [whatsapp, setWhatsapp] = useState(false);
   const [cargo, setCargo] = useState("");
   const [unidade, setUnidade] = useState("");
   // Só a parte antes do "@" — o domínio institucional é fixo no campo.
@@ -69,7 +75,9 @@ export function CadastroForm({
     if (!nomeCompleto(nome)) p.nome = "Informe o nome completo (nome e sobrenome).";
     else if (!nomeValido(nome)) p.nome = "O nome aceita só letras, espaços, apóstrofo e hífen.";
     if (!matricula) p.matricula = "Informe a matrícula.";
-    else if (!matriculaValida(matricula)) p.matricula = "A matrícula aceita só números.";
+    else if (!matriculaValida(matricula)) p.matricula = "A matrícula tem exatamente 6 números.";
+    if (!telefone) p.telefone = "Informe o telefone de contato.";
+    else if (!telefoneValido(telefone)) p.telefone = "Telefone com DDD: fixo com 10 dígitos ou celular com 11.";
     if (cargos.length > 0 && !cargo) p.cargo = "Selecione o seu cargo ou função.";
     if (!unidade) p.unidade = "Selecione a unidade em que você trabalha.";
     if (!emailInstitucional(email)) p.email = "Informe o seu usuário do e-mail institucional (o que vem antes do @).";
@@ -77,7 +85,7 @@ export function CadastroForm({
     if (ps) p.senha = ps;
     if (confirmar !== senha) p.confirmar = "A confirmação não coincide com a senha.";
     return p;
-  }, [nome, matricula, cargo, cargos.length, unidade, email, senha, confirmar]);
+  }, [nome, matricula, telefone, cargo, cargos.length, unidade, email, senha, confirmar]);
   const tocar = (campo: string) => () => setTocados((t) => (t.has(campo) ? t : new Set(t).add(campo)));
   const erroDe = (campo: string) => (tocados.has(campo) ? problemas[campo] : undefined);
 
@@ -91,6 +99,8 @@ export function CadastroForm({
         body: JSON.stringify({
           nome,
           matricula,
+          telefone,
+          telefoneWhatsapp: whatsapp,
           cargo,
           reparticaoId: Number(unidade),
           email,
@@ -126,7 +136,7 @@ export function CadastroForm({
 
   async function etapaDados(e: FormEvent) {
     e.preventDefault();
-    setTocados(new Set(["nome", "matricula", "cargo", "unidade", "email", "senha", "confirmar"]));
+    setTocados(new Set(["nome", "matricula", "telefone", "cargo", "unidade", "email", "senha", "confirmar"]));
     const primeiro = Object.values(problemas)[0];
     if (primeiro) {
       setErro(`Confira os campos destacados — ${primeiro}`);
@@ -206,21 +216,23 @@ export function CadastroForm({
             required
           />
         </div>
-        <div className={cargos.length ? "" : "sm:col-span-2"}>
-          <TextField
-            label="Matrícula"
-            icon={<IconIdCard className="h-5 w-5" />}
-            value={matricula}
-            onChange={(e) => setMatricula(filtrarMatricula(e.target.value))}
-            onBlur={tocar("matricula")}
-            error={erroDe("matricula")}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={LIMITES_CADASTRO.matricula}
-            denso
-            required
-          />
-        </div>
+        <CampoMatricula
+          label="Matrícula"
+          rotuloExtra={
+            <Ajuda titulo="A matrícula" rotulo="Ajuda da matrícula" compacta>
+              <p>
+                É a sua <strong className="text-text">matrícula funcional</strong> na Prefeitura: tem <strong className="text-text">exatamente 6 números</strong> —
+                com os zeros à esquerda, se houver (ex.: 012345).
+              </p>
+              <p>Ela identifica você no sistema e não pode repetir: cada matrícula pertence a uma só conta. Está no contracheque e no crachá.</p>
+            </Ajuda>
+          }
+          valor={matricula}
+          onValor={setMatricula}
+          onBlur={tocar("matricula")}
+          error={erroDe("matricula")}
+        />
+        <CampoTelefone valor={telefone} onValor={setTelefone} whatsapp={whatsapp} onWhatsapp={setWhatsapp} onBlur={tocar("telefone")} error={erroDe("telefone")} />
         {cargos.length > 0 && (
           <SelectField
             label="Cargo ou função"
@@ -241,7 +253,7 @@ export function CadastroForm({
             ))}
           </SelectField>
         )}
-        <div className="sm:col-span-2">
+        <div className={cargos.length ? "" : "sm:col-span-2"}>
           <SelectField
             label="Unidade em que trabalha"
             value={unidade}
