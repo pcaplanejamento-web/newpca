@@ -120,7 +120,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   = entrada no mapa.** `exigirEditor` (o antigo `role`) nenhuma rota usa — sai na limpeza.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
-- **PAPÉIS (migrações `0069`/`0070`, aditivas — EM IMPLANTAÇÃO, entrega 2 de 3):** o GRUPO (permissão) decide QUAIS telas; o
+- **PAPÉIS (migrações `0069`/`0071`, aditivas — EM IMPLANTAÇÃO, entrega 2 de 3):** o GRUPO (permissão) decide QUAIS telas; o
   **PAPEL** decide o que a pessoa FAZ em cada uma — **Visualizar · Manipular · Importar · Exportar · Excluir · Configurar**.
   Tabela `papeis` (nome, descrição, `chave` admin|gestor|membro nos do SISTEMA, `capacidades` JSON {tela: ações[]},
   `padrao_cadastro`) + `usuarios.papel_id` (set null); **`usuarios.role` segue gravado como ESPELHO** (leitores antigos). Núcleo
