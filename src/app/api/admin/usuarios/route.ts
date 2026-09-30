@@ -21,6 +21,7 @@ export async function GET() {
         email: usuarios.email,
         emailVerificado: sql<number>`(${usuarios.emailVerificadoEm} IS NOT NULL)`,
         matricula: usuarios.matricula,
+        cargo: usuarios.cargo,
         reparticaoId: usuarios.reparticaoId,
         unidade: reparticoes.nome,
         // A foto vai como URL (rota com cache), não o data-URL — a lista não pesa com muitos usuários.

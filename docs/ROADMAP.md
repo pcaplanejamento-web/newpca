@@ -1240,6 +1240,9 @@ falhas dizem o motivo (sessão expirada, autorização recusada, e-mail de outra
 @rioverde.go.gov.br confirmado por um código de 6 dígitos (captcha antes de cada envio, reenvio cronometrado); "Esqueci a
 senha" e a troca de senha do Perfil também pelo código; nome, e-mail, matrícula e unidade só o ADM altera; conta nova não
 nasce pelo Google (vincula-se no Perfil) e os avisos por e-mail podem ir ao institucional ou à conta Google.
+✅ **Tela única de acesso + Perfil reorganizado:** Entrar, Criar conta e Esqueci a senha na mesma tela, com o painel imersivo
+da marca do sistema no desktop; cargo ou função no cadastro; o Perfil com cabeçalho (foto, nome, cargo, unidade) e seções
+organizadas com botões padronizados.
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

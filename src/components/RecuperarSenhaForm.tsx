@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { Button } from "./Button";
@@ -10,10 +9,10 @@ import { PasswordField, TextField } from "./Field";
 import { IconArrowRight, IconMail } from "./icons";
 
 /**
- * "ESQUECI A SENHA" (e criar a senha de quem só entrava pelo Google), em 2 etapas: (1) o e-mail da conta + a nova senha
+ * "ESQUECI A SENHA" — um dos modos da `TelaAcesso` (e criar a senha de quem só entrava pelo Google), em 2 etapas: (1) o e-mail da conta + a nova senha
  * (+ captcha) → envia o código; (2) o código de 6 dígitos confirma a senha — com a conta ativa, já entra.
  */
-export function RecuperarSenhaForm({ turnstile }: { turnstile?: ConfigCaptcha }) {
+export function RecuperarSenhaForm({ onVoltar, turnstile }: { onVoltar: () => void; turnstile?: ConfigCaptcha }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -65,7 +64,7 @@ export function RecuperarSenhaForm({ turnstile }: { turnstile?: ConfigCaptcha })
 
   if (pendente)
     return (
-      <ConcluidoAuth titulo="Senha salva!">
+      <ConcluidoAuth titulo="Senha salva!" onVoltar={onVoltar}>
         A nova senha já vale. Sua conta ainda está <strong className="text-text-2">pendente de aprovação</strong> — você poderá entrar assim que
         for liberada.
       </ConcluidoAuth>
@@ -73,7 +72,7 @@ export function RecuperarSenhaForm({ turnstile }: { turnstile?: ConfigCaptcha })
 
   if (cod.destino)
     return (
-      <CartaoAuth titulo="Confirme a nova senha" etapa="Etapa 2 de 2" onSubmit={etapaCodigo}>
+      <CartaoAuth titulo="Confirme a nova senha" etapa="Etapa 2 de 2" subtitulo="Digite o código de 6 dígitos que enviamos." onSubmit={etapaCodigo}>
         <EtapaCodigo
           destino={cod.destino}
           codigo={codigo}
@@ -98,7 +97,12 @@ export function RecuperarSenhaForm({ turnstile }: { turnstile?: ConfigCaptcha })
     );
 
   return (
-    <CartaoAuth titulo="Redefinir a senha" etapa="Etapa 1 de 2" onSubmit={etapaDados}>
+    <CartaoAuth
+      titulo="Redefinir a senha"
+      etapa="Etapa 1 de 2"
+      subtitulo="Informe o e-mail da conta e a nova senha — um código de confirmação vai para o seu e-mail."
+      onSubmit={etapaDados}
+    >
       <div className="space-y-[var(--gap-block)]">
         <TextField
           label="E-mail da conta"
@@ -134,10 +138,10 @@ export function RecuperarSenhaForm({ turnstile }: { turnstile?: ConfigCaptcha })
       >
         Enviar código de confirmação
       </Button>
-      <div className="mt-5 text-center">
-        <Link href="/login" className="inline-flex min-h-11 items-center text-sm font-semibold text-accent hover:underline lg:min-h-0">
-          Voltar para o login
-        </Link>
+      <div className="mt-4 text-center">
+        <button type="button" onClick={onVoltar} className="inline-flex min-h-11 items-center text-sm font-semibold text-accent hover:underline lg:min-h-0">
+          Voltar para entrar
+        </button>
       </div>
     </CartaoAuth>
   );

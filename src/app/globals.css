@@ -29,6 +29,12 @@
   --track: #ebeef2;
   --sb-active: #f4f6f8;
   --kpi-bar: #dee2e8;
+  /* VITRINE das telas de acesso (o painel imersivo ao lado do login) — escura nos dois temas. */
+  --vitrine-bg: #0b0d24;
+  --vitrine-bg-2: #1b1e4b;
+  --vitrine-texto: #f5f6ff;
+  --vitrine-muted: #a9aed6;
+  --vitrine-ponto: #8b93ff;
   --ring: 0 1px 2px rgba(17, 17, 12, 0.05), 0 8px 24px -12px rgba(17, 17, 12, 0.16);
   /* Sombra suave de contorno (popovers/dropdowns/cards flutuantes) */
   --shadow-soft: 0 4px 16px -4px rgba(17, 17, 12, 0.12),
@@ -515,4 +521,34 @@
 }
 .rolagem-fina::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* VITRINE das telas de acesso: a constelação flutua devagar e os pontos cintilam (desligado sem movimento). */
+@keyframes vitrine-flutuar {
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+@keyframes vitrine-cintilar {
+  50% {
+    opacity: 0.25;
+  }
+}
+.animate-vitrine-flutuar {
+  animation: vitrine-flutuar 14s ease-in-out infinite;
+}
+.animate-vitrine-cintilar {
+  animation: vitrine-cintilar 4.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-vitrine-flutuar,
+  .animate-vitrine-cintilar {
+    animation: none;
+  }
+}
+[data-motion="off"] .animate-vitrine-flutuar,
+[data-motion="off"] .animate-vitrine-cintilar,
+[data-motion="reduced"] .animate-vitrine-flutuar,
+[data-motion="reduced"] .animate-vitrine-cintilar {
+  animation: none;
 }

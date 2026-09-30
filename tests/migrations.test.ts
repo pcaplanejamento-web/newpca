@@ -794,6 +794,8 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.throws(() => a.exec(ins));
     a.exec("INSERT INTO codigos_email (email, finalidade, codigo_hash, expira_em, enviado_em) VALUES ('a@x', 'senha', 'h', 'e', 'e')");
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM codigos_email").get() as { n: number }).n, 2);
+    a.exec("UPDATE usuarios SET cargo = 'Analista' WHERE id = 9671"); // 0068
+    assert.equal((a.prepare("SELECT cargo AS c FROM usuarios WHERE id = 9671").get() as { c: string }).c, "Analista");
   });
 
   it("índice único de e-mail existe", () => {

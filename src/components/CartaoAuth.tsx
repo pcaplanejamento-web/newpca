@@ -1,46 +1,41 @@
-import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
+import { Button } from "./Button";
 import { IconAlert, IconCheck } from "./icons";
 
-// A MOLDURA das telas de acesso (login, cadastro, "Esqueci a senha"): o cartão centrado com a marca, o título e o
-// subtítulo — a MESMA em todas; o conteúdo vem de cada formulário. 100% por token.
+// As peças do FORMULÁRIO das telas de acesso (entrar, criar conta, redefinir a senha) — o cabeçalho (etapa, título e
+// subtítulo), a mensagem de erro e o fim de um fluxo. A moldura (marca + vitrine) é a `TelaAcesso`. 100% por token.
 
-/** O cartão de acesso (um `<form>` quando há `onSubmit` — sem a validação nativa do navegador: as mensagens em pt-BR são
- * as do formulário e do servidor). `etapa` = "Etapa 1 de 2" acima do título. */
+/** Um passo do formulário de acesso (um `<form>` quando há `onSubmit` — sem a validação nativa do navegador: as mensagens
+ * em pt-BR são as do formulário e do servidor). `etapa` = "Etapa 1 de 2" acima do título. */
 export function CartaoAuth({
   titulo,
-  subtitulo = "PCA — Prefeitura de Rio Verde",
+  subtitulo,
   etapa,
   onSubmit,
   children,
-  largo = false,
 }: {
   titulo: string;
-  subtitulo?: string;
+  subtitulo?: ReactNode;
   etapa?: string;
   onSubmit?: (e: FormEvent) => void;
   children: ReactNode;
-  /** Cadastro (mais campos): um pouco mais largo e em 2 colunas a partir do `sm`. */
-  largo?: boolean;
 }) {
-  const cls = `w-full ${largo ? "max-w-lg" : "max-w-sm"} rounded-2xl border border-border bg-surface p-6 shadow-soft sm:p-8`;
   const conteudo = (
     <>
-      <div className="mb-6 flex flex-col items-center text-center">
-        <div className="grid h-12 w-12 place-items-center rounded-xl bg-text text-base font-black text-surface">RV</div>
-        {etapa && <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-faint">{etapa}</p>}
-        <h1 className={`${etapa ? "mt-1" : "mt-3"} text-lg font-bold text-text`}>{titulo}</h1>
-        <p className="text-xs text-muted">{subtitulo}</p>
+      <div className="mb-6">
+        {etapa && <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{etapa}</p>}
+        <h1 className="text-[26px] font-bold leading-tight tracking-tight text-text sm:text-[28px]">{titulo}</h1>
+        {subtitulo && <p className="mt-2 text-[14px] leading-relaxed text-muted">{subtitulo}</p>}
       </div>
       {children}
     </>
   );
   return onSubmit ? (
-    <form onSubmit={onSubmit} className={cls} noValidate>
+    <form onSubmit={onSubmit} noValidate className="w-full animate-fade-in-up">
       {conteudo}
     </form>
   ) : (
-    <div className={cls}>{conteudo}</div>
+    <div className="w-full animate-fade-in-up">{conteudo}</div>
   );
 }
 
@@ -49,7 +44,7 @@ export function ErroAuth({ children }: { children: ReactNode }) {
   return (
     <div
       role="alert"
-      className="mt-4 flex items-start gap-2 rounded-control p-3 text-sm"
+      className="mt-4 flex animate-fade-in-up items-start gap-2 rounded-control p-3 text-sm"
       style={{
         color: "var(--sit-devolvido)",
         background: "color-mix(in srgb, var(--sit-devolvido) 10%, transparent)",
@@ -62,18 +57,18 @@ export function ErroAuth({ children }: { children: ReactNode }) {
   );
 }
 
-/** O fim de um fluxo de acesso (conta criada, senha redefinida): o selo, a mensagem e o link de volta ao login. */
-export function ConcluidoAuth({ titulo, children }: { titulo: string; children: ReactNode }) {
+/** O fim de um fluxo de acesso (conta criada, senha salva): o selo, a mensagem e a volta para "Entrar". */
+export function ConcluidoAuth({ titulo, children, onVoltar }: { titulo: string; children: ReactNode; onVoltar: () => void }) {
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 text-center shadow-soft">
-      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-accent-soft text-accent">
+    <div className="w-full animate-fade-in-up">
+      <div className="grid h-12 w-12 place-items-center rounded-full bg-accent-soft text-accent">
         <IconCheck className="h-6 w-6" />
       </div>
-      <h2 className="mt-4 text-lg font-bold text-text">{titulo}</h2>
-      <p className="mt-2 text-sm text-muted">{children}</p>
-      <Link href="/login" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-accent hover:underline">
-        Voltar para o login
-      </Link>
+      <h1 className="mt-5 text-[26px] font-bold leading-tight tracking-tight text-text">{titulo}</h1>
+      <p className="mt-2 text-[14px] leading-relaxed text-muted">{children}</p>
+      <Button variant="secondary" onClick={onVoltar} className="mt-6 h-[52px] w-full text-[15px]">
+        Voltar para entrar
+      </Button>
     </div>
   );
 }

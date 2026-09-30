@@ -82,6 +82,8 @@ export const usuarios = sqliteTable(
     nome: text("nome").notNull(),
     senhaHash: text("senha_hash").notNull(),
     matricula: text("matricula"),
+    // Cargo ou função (migração `0068`) — informado no cadastro; só o ADM altera.
+    cargo: text("cargo"),
     foto: text("foto"), // data-URL base64 (avatar redimensionado no cliente)
     // Apelido (perfil) — o nome de EXIBIÇÃO no sistema (Mesa, seletores, cabeçalho); sem ele, o nome.
     apelido: text("apelido"),

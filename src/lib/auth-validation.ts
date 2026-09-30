@@ -18,7 +18,7 @@ export const solicitarCodigoSchema = z.object({
   token: z.string().max(4000).optional(),
 });
 
-/** CADASTRO: nome completo, matrícula, unidade, e-mail institucional, senha e o código que confirma o e-mail. */
+/** CADASTRO: nome completo, matrícula, cargo/função, unidade, e-mail institucional, senha e o código que confirma o e-mail. */
 export const cadastroSchema = z.object({
   nome: z
     .string()
@@ -27,6 +27,7 @@ export const cadastroSchema = z.object({
     .transform((n) => n.replace(/\s+/gu, " "))
     .refine(nomeCompleto, "Informe o nome completo (nome e sobrenome)."),
   matricula: z.string().trim().min(1, "Informe a matrícula.").max(60),
+  cargo: z.string().trim().min(2, "Informe o cargo ou a função.").max(80),
   reparticaoId: z.number().int().positive("Selecione a unidade em que você trabalha."),
   email: emailInstitucionalSchema,
   senha: senhaNovaSchema,
@@ -77,6 +78,7 @@ export const adminUsuarioSchema = z.object({
   nome: z.string().trim().min(2, "Nome muito curto.").max(120).optional(),
   email: emailSchema.optional(),
   matricula: z.string().trim().max(60).optional(),
+  cargo: z.string().trim().max(80).optional(),
   // A unidade em que a pessoa trabalha (`null` = nenhuma).
   reparticaoId: z.number().int().positive().nullable().optional(),
   role: z.enum(["admin", "gestor", "membro"]).optional(),

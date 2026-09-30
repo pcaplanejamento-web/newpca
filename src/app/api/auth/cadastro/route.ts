@@ -15,14 +15,14 @@ import { depoisDaResposta } from "@/lib/segundo-plano";
 export const dynamic = "force-dynamic";
 
 /**
- * CADASTRO: nome completo, matrícula, unidade, e-mail institucional e senha — o e-mail é CONFIRMADO pelo código de 6
+ * CADASTRO: nome completo, matrícula, cargo/função, unidade, e-mail institucional e senha — o e-mail é CONFIRMADO pelo código de 6
  * dígitos (enviado por `/api/auth/codigo`, depois do captcha). Só o PRIMEIRO usuário do sistema (vira ADM ativo) entra
  * sem código: ainda não há quem configure o envio de e-mails. Os demais ficam pendentes de aprovação.
  */
 export async function POST(req: Request) {
   const corpo = await parseCorpo(cadastroSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, email, matricula, reparticaoId, senha, codigo } = corpo.data;
+  const { nome, email, matricula, cargo, reparticaoId, senha, codigo } = corpo.data;
   const db = getDb();
 
   try {
@@ -42,6 +42,7 @@ export async function POST(req: Request) {
         nome,
         email,
         matricula,
+        cargo,
         reparticaoId,
         senhaHash: await hashSenha(senha),
         role: primeiro ? "admin" : "membro",
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
       entidade: "usuario",
       entidadeId: u.id,
       resumo: `${nome} criou uma conta (${u.status === "ativo" ? "ativa" : "pendente de aprovação"})`,
-      depois: { nome, email, matricula, reparticaoId, role: u.role, status: u.status },
+      depois: { nome, email, matricula, cargo, reparticaoId, role: u.role, status: u.status },
     });
 
     if (u.status === "ativo") {

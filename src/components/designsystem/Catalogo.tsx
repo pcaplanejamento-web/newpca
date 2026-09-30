@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { CartaoAuth, ErroAuth } from "@/components/CartaoAuth";
 import { CampoCodigo, EtapaCodigo } from "@/components/CodigoEmail";
+import { MarcaSistema } from "@/components/MarcaSistema";
 import { OpcoesUnidades } from "@/components/OpcoesUnidades";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
@@ -250,7 +251,7 @@ function DemoAcesso() {
   const [restante, setRestante] = useState(0);
   return (
     <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] lg:grid-cols-2">
-      <CartaoAuth titulo="Confirme o seu e-mail" etapa="Etapa 2 de 2">
+      <CartaoAuth titulo="Confirme o seu e-mail" etapa="Etapa 2 de 2" subtitulo="Digite o código de 6 dígitos que enviamos.">
         <EtapaCodigo
           destino="ana.souza@rioverde.go.gov.br"
           codigo={codigo}
@@ -263,6 +264,7 @@ function DemoAcesso() {
         <ErroAuth>Código incorreto. Confira os 6 dígitos no seu e-mail.</ErroAuth>
       </CartaoAuth>
       <div className="space-y-[var(--gap-block)]">
+        <MarcaSistema />
         <SelectField label="Unidade em que trabalha (OpcoesUnidades — por órgão)" defaultValue="" error="Selecione a unidade em que você trabalha.">
           <option value="" disabled>
             Selecione…
@@ -2646,7 +2648,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Acesso — CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha antes de cada envio, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
+      <Secao titulo="Acesso — TelaAcesso (/login: Entrar · Criar conta · Esqueci a senha na MESMA tela + VitrineAcesso imersiva no desktop) · MarcaSistema (logo do ADM) · CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha antes de cada envio, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
         <DemoAcesso />
       </Secao>
 

@@ -82,3 +82,13 @@ describe("destino dos avisos por e-mail", () => {
     assert.equal(enderecoDosAvisos(lerPrefsEmail(null), "a@rioverde.go.gov.br", "a@gmail.com"), "a@rioverde.go.gov.br");
   });
 });
+
+describe("tela única de acesso", () => {
+  it("modo da URL: entrar por padrão; cadastro e senha reconhecidos", async () => {
+    const { lerModoAcesso } = await import("../src/lib/modo-acesso.ts");
+    assert.equal(lerModoAcesso(undefined), "entrar");
+    assert.equal(lerModoAcesso("cadastro"), "cadastro");
+    assert.equal(lerModoAcesso(["senha", "x"]), "senha");
+    assert.equal(lerModoAcesso("<x>"), "entrar");
+  });
+});

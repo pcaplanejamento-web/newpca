@@ -23,6 +23,7 @@ type U = {
   email: string;
   emailVerificado: boolean;
   matricula: string | null;
+  cargo: string | null;
   reparticaoId: number | null;
   unidade: string | null;
   foto: string | null;
@@ -44,6 +45,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [edNome, setEdNome] = useState("");
   const [edEmail, setEdEmail] = useState("");
   const [edMatricula, setEdMatricula] = useState("");
+  const [edCargo, setEdCargo] = useState("");
   const [edUnidade, setEdUnidade] = useState("");
   const [salvandoEd, setSalvandoEd] = useState(false);
   const [erroEd, setErroEd] = useState<string | null>(null);
@@ -99,6 +101,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     setEdNome(u.nome);
     setEdEmail(u.email);
     setEdMatricula(u.matricula ?? "");
+    setEdCargo(u.cargo ?? "");
     setEdUnidade(u.reparticaoId == null ? "" : String(u.reparticaoId));
     setErroEd(null);
   }
@@ -116,6 +119,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
           nome: edNome,
           email: edEmail,
           matricula: edMatricula,
+          cargo: edCargo,
           // Só a unidade que MUDOU vai (manter uma unidade hoje oculta sempre vale).
           ...(edUnidade !== (editando.reparticaoId == null ? "" : String(editando.reparticaoId)) ? { reparticaoId: edUnidade ? Number(edUnidade) : null } : {}),
         }),
@@ -147,7 +151,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       header: "Usuário",
       minWidth: 240,
       filter: "none",
-      value: (u) => `${u.nome}${u.apelido ? ` ${u.apelido}` : ""}`,
+      value: (u) => `${u.nome}${u.apelido ? ` ${u.apelido}` : ""}${u.cargo ? ` ${u.cargo}` : ""}`,
       render: (u) => (
         <div className="flex items-center gap-2.5">
           <Avatar nome={u.nome} foto={u.foto} />
@@ -160,7 +164,9 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
               <span className="break-all">{u.email}</span>
               {u.emailVerificado && <IconBadgeCheck className="h-3.5 w-3.5 shrink-0 text-[var(--ok)]" aria-label="E-mail confirmado" />}
             </div>
-            {u.matricula && <div className="text-[11px] text-faint">Matrícula {u.matricula}</div>}
+            {(u.cargo || u.matricula) && (
+              <div className="text-[11px] text-faint">{[u.cargo, u.matricula && `Matrícula ${u.matricula}`].filter(Boolean).join(" · ")}</div>
+            )}
             {u.criadoEm && <div className="text-[11px] text-faint">desde {dataBR(u.criadoEm)}</div>}
           </div>
         </div>
@@ -266,6 +272,10 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             <div>
               <label className={labelCls}>Matrícula</label>
               <input className={inputCls} value={edMatricula} onChange={(e) => setEdMatricula(e.target.value)} placeholder="Opcional" />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="ed-cargo">Cargo ou função</label>
+              <input id="ed-cargo" className={inputCls} value={edCargo} onChange={(e) => setEdCargo(e.target.value)} maxLength={80} placeholder="Opcional" />
             </div>
             <div>
               <label className={labelCls} htmlFor="ed-unidade">Unidade em que trabalha</label>

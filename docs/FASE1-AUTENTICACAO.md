@@ -6,7 +6,7 @@ Núcleo da plataforma: separa o **público** do **interno** e adiciona controle 
 | Rota | Acesso | O quê |
 |---|---|---|
 | `/` | **Pública** | Página inicial institucional (com botão "Entrar") |
-| `/login`, `/cadastro`, `/recuperar-senha` | Pública | Autenticação (sem barra lateral) |
+| `/login` | Pública | **Tela única** de acesso: Entrar · Criar conta (`?modo=cadastro`) · Esqueci a senha (`?modo=senha`); `/cadastro` e `/recuperar-senha` redirecionam |
 | `/painel` | **Requer login** | Porta de entrada: redireciona à **Mesa** (ou ao 1º módulo liberado; sem nenhum, ao Perfil). O Dashboard do PCA fica em `/` (público) e na aba Dashboard de cada PCA |
 | `/painel/upload` | Requer login | Importação de planilha |
 | `/painel/usuarios` | **Admin** | Aprovar cadastros, definir papéis, ativar/excluir |
@@ -20,13 +20,13 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - **RBAC:** `role` (`admin`|`gestor`|`membro`) + `status` (`ativo`|`pendente`|`inativo`) em `usuarios`.
 
 ## Fluxo de acesso
-- **Cadastro institucional (2 etapas):** nome completo, matrícula, unidade em que trabalha, e-mail **@rioverde.go.gov.br** e
+- **Cadastro institucional (2 etapas):** nome completo, matrícula, cargo ou função, unidade em que trabalha, e-mail **@rioverde.go.gov.br** e
   senha → captcha (se ativo) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →
   conta criada **membro/pendente** com o e-mail confirmado.
 - **1º cadastro** → vira **admin/ativo** (bootstrap, sem código — ainda não há envio de e-mails configurado).
 - **Senha obrigatória:** trocar (Perfil), criar (quem só entrava pelo Google) ou redefinir ("Esqueci a senha") vale só com o
   código enviado ao e-mail; as outras sessões são encerradas.
-- **Nome, e-mail, matrícula e unidade** só o **admin** altera (Usuários → Editar); no Perfil ficam só-leitura (apelido e foto
+- **Nome, e-mail, matrícula, cargo e unidade** só o **admin** altera (Usuários → Editar); no Perfil ficam só-leitura (apelido e foto
   seguem editáveis).
 - **Google:** conta nova não nasce pelo Google — cadastre-se e vincule o Google no Perfil. Os avisos por e-mail podem chegar
   no institucional ou na conta Google vinculada.
@@ -38,7 +38,7 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - `src/app/api/auth/{cadastro,codigo,senha,login,logout,me}` — autenticação (código por e-mail em `codigo`).
 - `src/lib/cadastro-core.ts`, `codigo-email-core.ts` (puros, testados) e `codigo-email.ts` (D1) — regras do cadastro e do código.
 - `src/app/api/admin/usuarios` (+ `/[id]`) — listagem e gestão (admin).
-- `src/components/AuthForm.tsx` (login), `CadastroForm.tsx`, `RecuperarSenhaForm.tsx`, `CartaoAuth.tsx`, `CodigoEmail.tsx`,
+- `src/components/TelaAcesso.tsx` (tela única) + `VitrineAcesso.tsx` + `MarcaSistema.tsx`, `AuthForm.tsx` (entrar), `CadastroForm.tsx`, `RecuperarSenhaForm.tsx`, `CartaoAuth.tsx`, `CodigoEmail.tsx`,
   `UsuariosAdmin.tsx`, `AppShell.tsx` (menu + Sair).
 
 ## Pendente (próximas fases)

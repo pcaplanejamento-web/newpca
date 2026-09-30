@@ -24,7 +24,7 @@ export async function PATCH(
 
   const corpo = await parseCorpo(adminUsuarioSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, email, matricula, reparticaoId, role, status } = corpo.data;
+  const { nome, email, matricula, cargo, reparticaoId, role, status } = corpo.data;
 
   // Impede o admin de remover o próprio acesso (evita lockout).
   if (
@@ -47,7 +47,7 @@ export async function PATCH(
   }
 
   const [antes] = await db
-    .select({ nome: usuarios.nome, email: usuarios.email, matricula: usuarios.matricula, reparticaoId: usuarios.reparticaoId, role: usuarios.role, status: usuarios.status })
+    .select({ nome: usuarios.nome, email: usuarios.email, matricula: usuarios.matricula, cargo: usuarios.cargo, reparticaoId: usuarios.reparticaoId, role: usuarios.role, status: usuarios.status })
     .from(usuarios)
     .where(eq(usuarios.id, id))
     .limit(1);
@@ -60,6 +60,7 @@ export async function PATCH(
     ...(nome !== undefined ? { nome } : {}),
     ...(email !== undefined ? { email } : {}),
     ...(matricula !== undefined ? { matricula: matricula ? matricula : null } : {}),
+    ...(cargo !== undefined ? { cargo: cargo ? cargo : null } : {}),
     ...(reparticaoId !== undefined ? { reparticaoId } : {}),
     ...(role !== undefined ? { role } : {}),
     ...(status !== undefined ? { status } : {}),
@@ -73,11 +74,12 @@ export async function PATCH(
     depoisDaResposta(enviarEmailDireto([destino], (ctx) => emailAcessoLiberado({ nome: quem }, ctx)), "email");
   }
   // Log com destaque para PAPEL/STATUS (mudança de privilégio = alto valor).
-  const cs = (["nome", "email", "matricula", "reparticaoId", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
+  const cs = (["nome", "email", "matricula", "cargo", "reparticaoId", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
   const dd = diffCampos(antes as Record<string, unknown>, corpo.data as Record<string, unknown>, cs, {
     nome: "nome",
     email: "e-mail",
     matricula: "matrícula",
+    cargo: "cargo/função",
     reparticaoId: "unidade",
     role: "papel",
     status: "status",

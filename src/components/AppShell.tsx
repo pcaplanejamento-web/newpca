@@ -6,6 +6,7 @@ import { type ReactNode, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
+import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
 import { SincronizarDados } from "./SincronizarDados";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -84,33 +85,10 @@ function itemAtivo(pathname: string, item: NavItem): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-/** Identidade do site definida pelo ADM (Configurações → Identidade). */
-type Identidade = { nome?: string; subtitulo?: string; favicon?: string };
-
 function Brand({ compact = false, identidade }: { compact?: boolean; identidade?: Identidade }) {
-  const nome = identidade?.nome?.trim() || "Plataforma PCA";
-  const subtitulo = identidade?.subtitulo?.trim() || "Equipe PCA · Rio Verde";
-  const favicon = identidade?.favicon?.trim();
   return (
-    <Link href="/painel" className="flex items-center gap-2.5">
-      {favicon ? (
-        // biome-ignore lint/performance/noImgElement: favicon é data-URL base64 definida pelo ADM; next/image não otimiza data-URL.
-        <img
-          src={favicon}
-          alt=""
-          className="h-9 w-9 shrink-0 rounded-[10px] object-cover"
-        />
-      ) : (
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-text text-[13px] font-black text-surface">
-          RV
-        </div>
-      )}
-      {!compact && (
-        <div className="leading-tight">
-          <div className="text-[14px] font-semibold text-text">{nome}</div>
-          <div className="text-[11px] text-muted">{subtitulo}</div>
-        </div>
-      )}
+    <Link href="/painel" className="flex min-w-0 items-center">
+      <MarcaSistema identidade={identidade} compacta={compact} />
     </Link>
   );
 }

@@ -32,15 +32,15 @@ async function avisosEmailDe(usuarioId: number) {
   }
 }
 
-/** A identificação institucional (só leitura) + o que a conta tem: unidade, e-mail confirmado, senha e a conta Google. */
+/** A identificação institucional (só leitura) + o que a conta tem: unidade, cargo, e-mail confirmado, senha e a conta Google. */
 async function identidadeDe(usuarioId: number): Promise<IdentidadePerfil> {
   const [r] = await getDb()
-    .select({ unidade: reparticoes.nome, verificado: usuarios.emailVerificadoEm, senha: usuarios.senhaHash, googleEmail: usuarios.googleEmail })
+    .select({ unidade: reparticoes.nome, cargo: usuarios.cargo, verificado: usuarios.emailVerificadoEm, senha: usuarios.senhaHash, googleEmail: usuarios.googleEmail })
     .from(usuarios)
     .leftJoin(reparticoes, eq(reparticoes.id, usuarios.reparticaoId))
     .where(eq(usuarios.id, usuarioId))
     .limit(1);
-  return { unidade: r?.unidade ?? null, emailVerificado: !!r?.verificado, semSenha: r?.senha === SENHA_INUTILIZAVEL, googleEmail: r?.googleEmail ?? null };
+  return { unidade: r?.unidade ?? null, cargo: r?.cargo ?? null, emailVerificado: !!r?.verificado, semSenha: r?.senha === SENHA_INUTILIZAVEL, googleEmail: r?.googleEmail ?? null };
 }
 
 export default async function PerfilPage({ searchParams }: { searchParams: Promise<{ google?: string | string[]; motivo?: string | string[] }> }) {

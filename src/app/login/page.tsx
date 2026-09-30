@@ -1,25 +1,39 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AuthForm } from "@/components/AuthForm";
-import { getUsuarioAtual } from "@/lib/auth";
+import { TelaAcesso } from "@/components/TelaAcesso";
+import { getAparencia } from "@/lib/aparencia";
+import { contarUsuarios, getUsuarioAtual } from "@/lib/auth";
+import { COOKIE_GOOGLE_CONTA, lerContaLembrada, mensagemErroLogin } from "@/lib/google-oauth-core";
 import { getIntegracoes } from "@/lib/integracoes";
 import { googleConfigurado, turnstileConfigurado } from "@/lib/integracoes-core";
-import { COOKIE_GOOGLE_CONTA, lerContaLembrada, mensagemErroLogin } from "@/lib/google-oauth-core";
+import { lerModoAcesso } from "@/lib/modo-acesso";
+import { listarUnidadesTrabalho } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ erro?: string | string[]; motivo?: string | string[] }> }) {
+type Busca = { modo?: string | string[]; erro?: string | string[]; motivo?: string | string[] };
+
+/** A TELA ÚNICA de acesso: entrar, criar conta (`?modo=cadastro`) e redefinir a senha (`?modo=senha`). */
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Busca> }) {
   if (await getUsuarioAtual()) redirect("/painel");
-  const integ = await getIntegracoes();
-  const sp = await searchParams;
+  const [sp, integ, aparencia, unidades, total, jar] = await Promise.all([
+    searchParams,
+    getIntegracoes(),
+    getAparencia(),
+    listarUnidadesTrabalho(),
+    contarUsuarios(),
+    cookies(),
+  ]);
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-surface-2 p-4">
-      <AuthForm
-        turnstile={{ enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey }}
-        google={googleConfigurado(integ)}
-        googleConta={lerContaLembrada((await cookies()).get(COOKIE_GOOGLE_CONTA)?.value)}
-        erroInicial={mensagemErroLogin(sp.erro, sp.motivo)}
-      />
-    </main>
+    <TelaAcesso
+      modoInicial={lerModoAcesso(sp.modo)}
+      identidade={aparencia.identidade}
+      turnstile={{ enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey }}
+      google={googleConfigurado(integ)}
+      googleConta={lerContaLembrada(jar.get(COOKIE_GOOGLE_CONTA)?.value)}
+      unidades={unidades}
+      semCodigo={total === 0}
+      erroInicial={mensagemErroLogin(sp.erro, sp.motivo)}
+    />
   );
 }

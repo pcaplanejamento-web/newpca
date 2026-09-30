@@ -114,8 +114,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **CADASTRO INSTITUCIONAL + SENHA CONFIRMADA POR CÓDIGO (migração `0067`, aditiva — `usuarios.reparticao_id` FK set null
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
-  - **Cadastro** (`/cadastro` = `CadastroForm`, 2 etapas): **nome completo** (nome + sobrenome — `nomeCompleto`),
-    **matrícula**, **unidade** (`SelectField` + **`OpcoesUnidades`** por órgão — `listarUnidadesTrabalho`: sem ocultas nem a
+  - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
+    `entrar`|`cadastro`|`senha` — `lerModoAcesso`, puro em **`modo-acesso.ts`**; trocar de modo só faz `replaceState`, sem
+    recarregar; `/cadastro` e `/recuperar-senha` redirecionam para o modo). Esquerda = o formulário (`Segmented` Entrar | Criar
+    conta, transição `animate-fade-in-up`; `CadastroForm`/`RecuperarSenhaForm` por `next/dynamic` — só baixados ao abrir o
+    modo); direita (≥ `lg`) = **`VitrineAcesso`** imersiva (fundo escuro pelos tokens `--vitrine-*`, a constelação que flutua —
+    `animate-vitrine-flutuar/cintilar`, desligada sem movimento —, a manchete e os módulos; sem números inventados). A logo é a
+    **`MarcaSistema`** (o favicon da Identidade do ADM, senão o monograma "RV" + nome/subtítulo) — a MESMA do menu do
+    `AppShell` (`Brand` a usa); no celular fica no topo do formulário, no desktop na vitrine.
+  - **Cadastro** (`CadastroForm`, 2 etapas): **nome completo** (nome + sobrenome — `nomeCompleto`),
+    **matrícula**, **cargo ou função** (`usuarios.cargo`, migração **`0068`**, aditiva), **unidade** (`SelectField` + **`OpcoesUnidades`** por órgão — `listarUnidadesTrabalho`: sem ocultas nem a
     "Geral"; o servidor confere com `unidadeDeTrabalhoValida`), **e-mail INSTITUCIONAL** `@rioverde.go.gov.br`
     (`DOMINIO_INSTITUCIONAL`/`emailInstitucional`, núcleo puro **`cadastro-core.ts`** — sem zod, leve no navegador), senha +
     confirmação → "Enviar código" → o **código de 6 dígitos** confirma o e-mail e cria a conta **pendente** (os ADMs recebem o
@@ -133,17 +141,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `RecuperarSenhaForm`; também CRIA a senha de quem só entrava pelo Google) e `POST /api/perfil/senha` (`{novaSenha,
     codigo}` — sem a senha atual: o código prova a posse do e-mail; `sessaoAtualId` mantém a sessão atual e encerra as
     OUTRAS). Conta SEM senha (`SENHA_INUTILIZAVEL`) vê no Perfil "Criar senha" com o aviso de que é obrigatória.
-  - **Peças de tela** (catalogadas): **`CartaoAuth`** (a moldura única de login/cadastro/senha — `etapa`, `largo`, form
-    `noValidate`: as mensagens são as nossas, em pt-BR) + `ErroAuth` + `ConcluidoAuth`; **`CodigoEmail.tsx`** —
+  - **Peças de tela** (catalogadas): **`CartaoAuth`** (o passo do formulário — `etapa`, título, subtítulo; form
+    `noValidate`: as mensagens são as nossas, em pt-BR) + `ErroAuth` + `ConcluidoAuth` (`onVoltar` → Entrar); **`CodigoEmail.tsx`** —
     `useCaptcha` (o widget + `renovar`: o token vale uma vez), `useCodigoEmail` (envio + cronômetro), `CampoCodigo`
     (numérico, `one-time-code`) e `EtapaCodigo` (destino, campo, "Reenviar código em 0:45" → captcha + Reenviar, "Corrigir os
-    dados"). `SelectField` ganhou `error`. O `AuthForm` ficou só com o LOGIN ("Esqueci a senha" + "Criar conta"; saiu o
-    "Manter-me conectado", que não fazia nada).
-  - **Só o ADM altera nome, e-mail, matrícula e unidade:** o `perfilSchema` aceita SÓ apelido + foto (o resto é descartado);
-    o Perfil mostra esses dados em `CampoCongelado` (selo "Confirmado" no e-mail) com a nota; `UsuariosAdmin` ganhou a coluna
-    **Unidade**, o ✓ do e-mail confirmado e o seletor de unidade no "Editar usuário" (`adminUsuarioSchema.reparticaoId`; a
-    unidade atual oculta continua valendo — só a que MUDOU é validada).
-  - **Google:** a conta NOVA nunca nasce pelo Google — o callback leva a `/cadastro?erro=google-sem-cadastro`; o Google se
+    dados"). `SelectField` ganhou `error`. O `AuthForm` é o modo ENTRAR (`onEsqueci`; saiu o "Manter-me conectado", que não
+    fazia nada).
+  - **Só o ADM altera nome, e-mail, matrícula, cargo e unidade:** o `perfilSchema` aceita SÓ apelido + foto (o resto é
+    descartado). **Perfil (`PerfilView`) reorganizado:** o CABEÇALHO (foto com o botão de câmera — trocar/remover grava na
+    hora —, nome, apelido · cargo, selos Papel + Unidade e "Sair") e duas colunas de **`SecaoPerfil`** (ícone + título +
+    descrição + a ação no rodapé, `Button size="sm"`): Conta = Identificação (apelido editável + os dados em `CampoCongelado`,
+    selo "Confirmado" no e-mail), Senha, Conta Google; Preferências = Avisos por e-mail, Mesa, Protocolação (o cartão
+    Aparência saiu — o tema está no cabeçalho); `UsuariosAdmin` ganhou a coluna
+    **Unidade**, o cargo sob o nome, o ✓ do e-mail confirmado e, no "Editar usuário", o cargo e o seletor de unidade
+    (`adminUsuarioSchema.cargo/reparticaoId`; a unidade atual oculta continua valendo — só a que MUDOU é validada).
+  - **Google:** a conta NOVA nunca nasce pelo Google — o callback leva a `/login?modo=cadastro&erro=google-sem-cadastro`; o Google se
     vincula depois, no Perfil. **Avisos por e-mail:** Perfil → E-mail escolhe **onde** chegam — "E-mail institucional" | "Conta
     Google" (`PrefsEmail.destino`, só com o Google vinculado; `enderecoDosAvisos` no envio dos pendentes). O código de
     confirmação vai SEMPRE ao institucional.
@@ -3019,7 +3031,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   emissor/público/validade/e-mail verificado, `mensagemErroLogin`, `SENHA_INUTILIZAVEL`) + **`google-oauth.ts`**
   (`googleDaConfig`, `trocarCodigo` — host fixo, 10 s, sem redirecionamento). `GET /api/auth/google` (inicia) e `GET
   /api/auth/google/callback`: e-mail cadastrado ATIVO → sessão + auditoria "entrou com o Google"; pendente/inativo → o aviso;
-  e-mail NOVO → `/cadastro?erro=google-sem-cadastro` (a conta nasce SÓ pelo cadastro institucional — ver "Autenticação");
+  e-mail NOVO → `/login?modo=cadastro&erro=google-sem-cadastro` (a conta nasce SÓ pelo cadastro institucional — ver "Autenticação");
   erro → `/login?erro=<código>`. `AuthForm` (login) tem `google` (botão "Entrar com Google", `IconGoogle`) e `erroInicial`;
   as páginas `login`/`cadastro` leem `?erro=`. Setup em `docs/INTEGRACOES.md`.
   **VÍNCULO da conta Google + login com um clique (migração `0066`, aditiva — `usuarios.google_sub` ÚNICO + `google_email`):**

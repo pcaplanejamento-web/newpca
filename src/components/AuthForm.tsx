@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { Button } from "./Button";
@@ -9,14 +8,16 @@ import { type ConfigCaptcha, useCaptcha } from "./CodigoEmail";
 import { PasswordField, TextField } from "./Field";
 import { IconArrowRight, IconGoogle, IconMail } from "./icons";
 
-// Tela de LOGIN — e-mail + senha (com o captcha do ADM) ou a conta Google vinculada. O cadastro e o "Esqueci a senha"
-// têm telas próprias (`CadastroForm`/`RecuperarSenhaForm`), na MESMA moldura (`CartaoAuth`).
+// ENTRAR — e-mail + senha (com o captcha do ADM) ou a conta Google vinculada. Um dos modos da `TelaAcesso` (com Criar
+// conta e Esqueci a senha — `onEsqueci` troca o modo na MESMA tela).
 export function AuthForm({
+  onEsqueci,
   turnstile,
   google = false,
   googleConta = null,
   erroInicial = null,
 }: {
+  onEsqueci: () => void;
   /** Captcha do ADM — só renderiza/exige quando ativo E configurado. */
   turnstile?: ConfigCaptcha;
   /** Login com Google ativo (Integrações) → botão "Entrar com Google". */
@@ -60,7 +61,7 @@ export function AuthForm({
   }
 
   return (
-    <CartaoAuth titulo="Entrar na plataforma" onSubmit={submit}>
+    <CartaoAuth titulo="Bem-vindo de volta" subtitulo="Entre com o seu e-mail institucional e a senha." onSubmit={submit}>
       <div className="space-y-[var(--gap-block)]">
         <TextField
           label="E-mail"
@@ -74,10 +75,10 @@ export function AuthForm({
           required
         />
         <PasswordField value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required />
-        <div className="-mt-1 flex justify-end">
-          <Link href="/recuperar-senha" className="inline-flex min-h-11 items-center text-[13px] font-semibold text-accent hover:underline lg:min-h-0">
+        <div className="-mt-2 flex justify-end">
+          <button type="button" onClick={onEsqueci} className="inline-flex min-h-11 items-center text-[13px] font-semibold text-accent hover:underline lg:min-h-0">
             Esqueci a senha
-          </Link>
+          </button>
         </div>
         {captcha.widget}
       </div>
@@ -125,15 +126,6 @@ export function AuthForm({
         </>
       )}
 
-      <div className="mt-5 text-center">
-        <p className="text-sm text-muted">
-          Primeiro acesso?{" "}
-          <Link href="/cadastro" className="font-semibold text-accent hover:underline">
-            Criar conta
-          </Link>
-        </p>
-        <p className="mt-2 text-xs text-faint">Acesso restrito aos servidores da Prefeitura. O cadastro passa pela aprovação do administrador.</p>
-      </div>
     </CartaoAuth>
   );
 }

@@ -89,7 +89,7 @@ export async function GET(req: Request) {
 
     // Conta NOVA só pelo cadastro institucional (unidade, matrícula, e-mail confirmado e senha) — o Google se vincula
     // depois, no Perfil.
-    return ir("/cadastro?erro=google-sem-cadastro");
+    return ir("/login?modo=cadastro&erro=google-sem-cadastro");
   } catch (e) {
     console.error("[google] falha:", (e as Error).message);
     return falhou("google", "interno");

@@ -40,11 +40,13 @@ import { uploadSchema } from "../src/lib/validation.ts";
 
 describe("auth-validation", () => {
   it("cadastroSchema: nome completo, matrícula, unidade, e-mail INSTITUCIONAL e senha >= 8", () => {
-    const base = { nome: "  Ana   Souza ", matricula: " 123 ", reparticaoId: 4, email: "  ANA@RIOVERDE.GO.GOV.BR ", senha: "12345678", codigo: "012345" };
+    const base = { nome: "  Ana   Souza ", matricula: " 123 ", cargo: " Analista ", reparticaoId: 4, email: "  ANA@RIOVERDE.GO.GOV.BR ", senha: "12345678", codigo: "012345" };
     const r = cadastroSchema.parse(base);
     assert.equal(r.email, "ana@rioverde.go.gov.br");
     assert.equal(r.nome, "Ana Souza");
     assert.equal(r.matricula, "123");
+    assert.equal(r.cargo, "Analista");
+    assert.equal(cadastroSchema.safeParse({ ...base, cargo: " " }).success, false);
     assert.equal(cadastroSchema.safeParse({ ...base, nome: "Ana" }).success, false); // sem sobrenome
     assert.equal(cadastroSchema.safeParse({ ...base, email: "ana@gmail.com" }).success, false);
     assert.equal(cadastroSchema.safeParse({ ...base, email: "ana@rioverde.go.gov.br.com" }).success, false);
@@ -81,6 +83,7 @@ describe("auth-validation", () => {
     assert.equal(adminUsuarioSchema.safeParse({ role: "root" }).success, false);
     assert.equal(adminUsuarioSchema.safeParse({ reparticaoId: null }).success, true);
     assert.equal(adminUsuarioSchema.safeParse({ reparticaoId: 3 }).success, true);
+    assert.equal(adminUsuarioSchema.safeParse({ cargo: "Diretor" }).success, true);
   });
 });
 
