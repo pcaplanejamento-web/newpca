@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
+import { origemPermitida } from "./origem";
 import "./zod-config";
 
 // Helpers de resposta para as rotas de API — padronizam o envelope {ok,error}
@@ -16,7 +17,7 @@ export function erro(mensagem: string, status = 400) {
 }
 
 /**
- * Valida o corpo JSON com um schema zod. Retorna `{ data }` (ok) ou `{ resp }`
+ * Valida o corpo JSON com um schema zod (e recusa, 403, a requisição de OUTRO site — `origemPermitida`). Retorna `{ data }` (ok) ou `{ resp }`
  * (uma resposta 422 pronta). Uso: `const p = await parseCorpo(schema, req);
  * if ("resp" in p) return p.resp; const { data } = p;`
  */
@@ -24,6 +25,7 @@ export async function parseCorpo<T>(
   schema: ZodType<T>,
   req: Request,
 ): Promise<{ data: T } | { resp: NextResponse }> {
+  if (!origemPermitida(req)) return { resp: erro("Origem não permitida.", 403) };
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return {

@@ -163,6 +163,20 @@ export const codigosEmail = sqliteTable(
   (t) => [uniqueIndex("codigos_email_uq").on(t.email, t.finalidade)],
 );
 
+/** LIMITE DE TENTATIVAS do acesso (migração `0071`): a contagem da janela atual por chave (`login:ip:…`, `login:email:…`…);
+ * `inicio` em segundos Unix. */
+export const limitesAcesso = sqliteTable("limites_acesso", {
+  chave: text("chave").primaryKey(),
+  contagem: integer("contagem").notNull().default(0),
+  inicio: integer("inicio").notNull(),
+});
+
+/** DESAFIOS da verificação anti-robô própria (migração `0071`): cada um vale UMA vez até `expira_em` (segundos Unix). */
+export const desafiosAcesso = sqliteTable("desafios_acesso", {
+  id: text("id").primaryKey(),
+  expiraEm: integer("expira_em").notNull(),
+});
+
 /** Sessões (login por cookie). Guardamos apenas o hash do token. */
 export const sessoes = sqliteTable(
   "sessoes",

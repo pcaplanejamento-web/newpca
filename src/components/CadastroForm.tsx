@@ -2,7 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useMemo, useState } from "react";
-import { DOMINIO_INSTITUCIONAL, emailDaParteLocal, emailInstitucional, nomeCompleto, parteLocalEmail } from "@/lib/cadastro-core";
+import {
+  DOMINIO_INSTITUCIONAL,
+  emailDaParteLocal,
+  emailInstitucional,
+  filtrarMatricula,
+  filtrarNome,
+  LIMITES_CADASTRO,
+  matriculaValida,
+  nomeCompleto,
+  nomeValido,
+  parteLocalEmail,
+  problemaSenha,
+} from "@/lib/cadastro-core";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { Button } from "./Button";
 import { CartaoAuth, ConcluidoAuth, ErroAuth } from "./CartaoAuth";
@@ -55,11 +67,14 @@ export function CadastroForm({
   const problemas = useMemo(() => {
     const p: Record<string, string> = {};
     if (!nomeCompleto(nome)) p.nome = "Informe o nome completo (nome e sobrenome).";
-    if (!matricula.trim()) p.matricula = "Informe a matrícula.";
+    else if (!nomeValido(nome)) p.nome = "O nome aceita só letras, espaços, apóstrofo e hífen.";
+    if (!matricula) p.matricula = "Informe a matrícula.";
+    else if (!matriculaValida(matricula)) p.matricula = "A matrícula aceita só números.";
     if (cargos.length > 0 && !cargo) p.cargo = "Selecione o seu cargo ou função.";
     if (!unidade) p.unidade = "Selecione a unidade em que você trabalha.";
     if (!emailInstitucional(email)) p.email = "Informe o seu usuário do e-mail institucional (o que vem antes do @).";
-    if (senha.length < 8) p.senha = "A senha deve ter ao menos 8 caracteres.";
+    const ps = problemaSenha(senha);
+    if (ps) p.senha = ps;
     if (confirmar !== senha) p.confirmar = "A confirmação não coincide com a senha.";
     return p;
   }, [nome, matricula, cargo, cargos.length, unidade, email, senha, confirmar]);
@@ -73,10 +88,22 @@ export function CadastroForm({
       const res = await fetch("/api/auth/cadastro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, matricula, cargo, reparticaoId: Number(unidade), email, senha, ...(semCodigo ? {} : { codigo }) }),
+        body: JSON.stringify({
+          nome,
+          matricula,
+          cargo,
+          reparticaoId: Number(unidade),
+          email,
+          senha,
+          // O 1º acesso (sem código) confere o captcha aqui; os demais já o conferiram ao pedir o código.
+          ...(semCodigo ? { token: captcha.token } : { codigo }),
+        }),
       });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; pendente?: boolean };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Não foi possível criar a conta.");
+      if (!res.ok || !j.ok) {
+        if (semCodigo) captcha.renovar();
+        throw new Error(j.error ?? "Não foi possível criar a conta.");
+      }
       if (j.pendente) {
         setPendente(true);
         return;
@@ -91,8 +118,8 @@ export function CadastroForm({
   }
 
   async function enviarCodigo() {
-    const falha = await cod.enviar(email.trim().toLowerCase(), captcha.token);
-    if (captcha.usa) captcha.renovar(); // o token do captcha vale uma vez
+    const falha = await cod.enviar(email.trim().toLowerCase(), captcha.token, { matricula });
+    captcha.renovar(); // o token do captcha vale uma vez
     setErro(falha);
     if (!falha) setCodigo("");
   }
@@ -104,11 +131,11 @@ export function CadastroForm({
       setErro("Confira os campos destacados.");
       return;
     }
-    if (semCodigo) return criarConta();
     if (!captcha.pronto) {
       setErro("Confirme que você não é um robô.");
       return;
     }
+    if (semCodigo) return criarConta();
     await enviarCodigo();
   }
 
@@ -169,11 +196,11 @@ export function CadastroForm({
             label="Nome completo"
             icon={<IconUser className="h-5 w-5" />}
             value={nome}
-            onChange={(e) => setNome(e.target.value)}
+            onChange={(e) => setNome(filtrarNome(e.target.value))}
             onBlur={tocar("nome")}
             error={erroDe("nome")}
             autoComplete="name"
-            maxLength={120}
+            maxLength={LIMITES_CADASTRO.nome}
             denso
             required
           />
@@ -183,11 +210,12 @@ export function CadastroForm({
             label="Matrícula"
             icon={<IconIdCard className="h-5 w-5" />}
             value={matricula}
-            onChange={(e) => setMatricula(e.target.value)}
+            onChange={(e) => setMatricula(filtrarMatricula(e.target.value))}
             onBlur={tocar("matricula")}
             error={erroDe("matricula")}
             inputMode="numeric"
-            maxLength={60}
+            pattern="[0-9]*"
+            maxLength={LIMITES_CADASTRO.matricula}
             denso
             required
           />
@@ -242,7 +270,7 @@ export function CadastroForm({
             onBlur={tocar("email")}
             error={erroDe("email")}
             autoComplete="username"
-            maxLength={64}
+            maxLength={LIMITES_CADASTRO.usuarioEmail}
             denso
             required
           />
@@ -252,9 +280,10 @@ export function CadastroForm({
           onChange={(e) => setSenha(e.target.value)}
           onBlur={tocar("senha")}
           error={erroDe("senha")}
-          placeholder="Mín. 8 caracteres"
+          placeholder="Letras e números, mín. 8"
           autoComplete="new-password"
-          minLength={8}
+          minLength={LIMITES_CADASTRO.senhaMin}
+          maxLength={LIMITES_CADASTRO.senhaMax}
           denso
           required
         />
@@ -265,24 +294,28 @@ export function CadastroForm({
           onBlur={tocar("confirmar")}
           error={erroDe("confirmar")}
           autoComplete="new-password"
-          minLength={8}
+          minLength={LIMITES_CADASTRO.senhaMin}
+          maxLength={LIMITES_CADASTRO.senhaMax}
           denso
           required
         />
-        {!semCodigo && captcha.widget && <div className="sm:col-span-2">{captcha.widget}</div>}
       </div>
 
       {erro && <ErroAuth>{erro}</ErroAuth>}
 
-      <Button
-        type="submit"
-        variant="accent"
-        loading={cod.enviando || criando}
-        icon={!(cod.enviando || criando) && <IconArrowRight className="h-4 w-4" />}
-        className="mt-4 h-11 w-full text-[15px] [@media(max-height:720px)]:mt-3"
-      >
-        {semCodigo ? "Criar conta" : "Enviar código de confirmação"}
-      </Button>
+      {/* O captcha e o envio na MESMA linha (o cadastro cabe na tela sem rolar). */}
+      <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto] [@media(max-height:720px)]:mt-2.5">
+        {captcha.widget}
+        <Button
+          type="submit"
+          variant="accent"
+          loading={cod.enviando || criando}
+          icon={!(cod.enviando || criando) && <IconArrowRight className="h-4 w-4" />}
+          className="h-11 w-full text-[15px] sm:w-auto lg:h-11"
+        >
+          {semCodigo ? "Criar conta" : "Enviar código"}
+        </Button>
+      </div>
 
     </CartaoAuth>
   );

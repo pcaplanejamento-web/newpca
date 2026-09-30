@@ -6,6 +6,7 @@ import { enviarEmailsPendentes } from "@/lib/email";
 import { erro, ok } from "@/lib/http";
 import { derivarDaPessoa } from "@/lib/notificacoes";
 import { resendDaConfig } from "@/lib/resend-config";
+import { limparSegurancaVencida } from "@/lib/seguranca-acesso";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,12 @@ const PESSOAS_POR_PASSADA = 40;
 /**
  * O CRON dos E-MAILS (a cada 5 min, pelo `scheduled` do `worker.ts`): os avisos de PRAZO e LEMBRETE nascem na leitura do
  * sino — aqui eles são derivados para as pessoas ativas (em rodízio) mesmo sem ninguém abrir o sistema, e os e-mails
- * pendentes saem. Sem o Resend ativo, não faz nada.
+ * pendentes saem (sem o Resend ativo, só a higiene). Também a HIGIENE do acesso: as contagens de tentativas e os desafios
+ * anti-robô vencidos.
  */
 export async function POST(req: Request) {
   if (!(await cronAutorizado(req))) return erro("Não autorizado.", 401);
+  await limparSegurancaVencida().catch((e) => console.error("[cron] higiene do acesso:", (e as Error).message));
   if ("erro" in (await resendDaConfig())) return ok({ ativo: false });
   const db = getDb();
   const [{ n }] = await db.select({ n: count() }).from(usuarios).where(eq(usuarios.status, "ativo"));

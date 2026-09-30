@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { problemaSenha } from "@/lib/cadastro-core";
 import { type FormEvent, useState } from "react";
 import { Button } from "./Button";
 import { CartaoAuth, ConcluidoAuth, ErroAuth } from "./CartaoAuth";
@@ -26,14 +27,15 @@ export function RecuperarSenhaForm({ onVoltar, turnstile }: { onVoltar: () => vo
 
   async function enviarCodigo() {
     const falha = await cod.enviar(email.trim().toLowerCase(), captcha.token);
-    if (captcha.usa) captcha.renovar();
+    captcha.renovar();
     setErro(falha);
     if (!falha) setCodigo("");
   }
 
   async function etapaDados(e: FormEvent) {
     e.preventDefault();
-    if (senha.length < 8) return setErro("A senha deve ter ao menos 8 caracteres.");
+    const ps = problemaSenha(senha);
+    if (ps) return setErro(ps);
     if (senha !== confirmar) return setErro("A confirmação não coincide com a senha.");
     if (!captcha.pronto) return setErro("Confirme que você não é um robô.");
     await enviarCodigo();
@@ -111,7 +113,7 @@ export function RecuperarSenhaForm({ onVoltar, turnstile }: { onVoltar: () => vo
           inputMode="email"
           placeholder="voce@rioverde.go.gov.br"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value.replace(/\s/g, ""))}
           autoComplete="username"
           maxLength={160}
           required
@@ -123,9 +125,10 @@ export function RecuperarSenhaForm({ onVoltar, turnstile }: { onVoltar: () => vo
           hint="Mínimo de 8 caracteres."
           autoComplete="new-password"
           minLength={8}
+          maxLength={128}
           required
         />
-        <PasswordField label="Confirmar a nova senha" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} required />
+        <PasswordField label="Confirmar a nova senha" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required />
         {captcha.widget}
       </div>
       {erro && <ErroAuth>{erro}</ErroAuth>}

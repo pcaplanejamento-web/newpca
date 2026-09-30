@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { problemaSenha } from "@/lib/cadastro-core";
 import { type FormEvent, useRef, useState } from "react";
 import type { UsuarioSessao } from "@/lib/auth";
 import { MESA_RESPONSAVEL, type MesaResponsavel, ROTULO_MESA_RESPONSAVEL } from "@/lib/mesa-filtros";
@@ -313,7 +314,7 @@ export function PerfilView({
   async function enviarCodigoSenha() {
     setMsgSenha(null);
     const falha = await cod.enviar(usuario.email, captcha.token);
-    if (captcha.usa) captcha.renovar(); // o token do captcha vale uma vez
+    captcha.renovar(); // o token do captcha vale uma vez
     if (falha) setMsgSenha({ tipo: "erro", texto: falha });
     else setCodigo("");
   }
@@ -321,7 +322,8 @@ export function PerfilView({
   async function trocarSenha(e: FormEvent) {
     e.preventDefault();
     if (!cod.destino) {
-      if (novaSenha.length < 8) return setMsgSenha({ tipo: "erro", texto: "A senha deve ter ao menos 8 caracteres." });
+      const ps = problemaSenha(novaSenha);
+      if (ps) return setMsgSenha({ tipo: "erro", texto: ps });
       if (novaSenha !== confirmar) return setMsgSenha({ tipo: "erro", texto: "A confirmação não coincide." });
       if (!captcha.pronto) return setMsgSenha({ tipo: "erro", texto: "Confirme que você não é um robô." });
       return enviarCodigoSenha();
@@ -509,8 +511,8 @@ export function PerfilView({
             ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <PasswordField label="Nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" minLength={8} hint="Mínimo de 8 caracteres." />
-                  <PasswordField label="Confirmar" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} />
+                  <PasswordField label="Nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" minLength={8} maxLength={128} hint="Letras e números, mínimo de 8." />
+                  <PasswordField label="Confirmar" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} maxLength={128} />
                 </div>
                 {captcha.widget}
               </div>

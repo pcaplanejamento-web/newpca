@@ -5,9 +5,8 @@ import { usuarios } from "@/db/schema";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { criarSessao, definirCookieSessao, verificarSenha } from "@/lib/auth";
 import { loginSchema } from "@/lib/auth-validation";
-import { getIntegracoes } from "@/lib/integracoes";
-import { turnstileConfigurado } from "@/lib/integracoes-core";
-import { verificarTurnstile } from "@/lib/turnstile";
+import { erro, parseCorpo } from "@/lib/http";
+import { contarTentativa, esperaDe, ipDe, respostaLimite, verificarCaptcha, zerarTentativas } from "@/lib/seguranca-acesso";
 
 export const dynamic = "force-dynamic";
 
@@ -17,31 +16,19 @@ const HASH_ISCA =
   "pbkdf2$100000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
 
 export async function POST(req: Request) {
-  let json: unknown;
-  try {
-    json = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "JSON inválido." }, { status: 400 });
-  }
+  const corpo = await parseCorpo(loginSchema, req);
+  if ("resp" in corpo) return corpo.resp;
+  const { email, senha, token: captchaToken } = corpo.data;
 
-  const parsed = loginSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." },
-      { status: 422 },
-    );
-  }
+  // LIMITE DE TENTATIVAS: por IP (toda tentativa) e por CONTA (as senhas erradas — protege de força bruta distribuída).
+  const esperaIp = await contarTentativa("loginIp", ipDe(req));
+  if (esperaIp) return respostaLimite(esperaIp);
+  const esperaConta = await esperaDe("loginEmail", email);
+  if (esperaConta) return respostaLimite(esperaConta);
 
-  const { email, senha, token: captchaToken } = parsed.data;
-
-  // Captcha (Turnstile) — só quando o ADM ativou E configurou. Fail-open em erro de infra.
-  const integ = await getIntegracoes();
-  if (turnstileConfigurado(integ)) {
-    const cap = await verificarTurnstile(integ, captchaToken, req.headers.get("cf-connecting-ip"));
-    if (!cap.ok) {
-      return NextResponse.json({ ok: false, error: cap.motivo ?? "Falha na verificação anti-robô." }, { status: 400 });
-    }
-  }
+  // CAPTCHA sempre exigido (o Turnstile do ADM ou a verificação anti-robô própria).
+  const cap = await verificarCaptcha(req, captchaToken);
+  if (!cap.ok) return erro(cap.motivo, 400);
 
   try {
     const [u] = await getDb()
@@ -59,6 +46,7 @@ export async function POST(req: Request) {
 
     const ok = await verificarSenha(senha, u?.senhaHash ?? HASH_ISCA);
     if (!u || !ok) {
+      await contarTentativa("loginEmail", email);
       return NextResponse.json(
         { ok: false, error: "E-mail ou senha incorretos." },
         { status: 401 },
@@ -78,6 +66,7 @@ export async function POST(req: Request) {
       );
     }
 
+    await zerarTentativas("loginEmail", email);
     const token = await criarSessao(u.id);
     await definirCookieSessao(token);
     await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema` });

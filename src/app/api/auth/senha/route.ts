@@ -7,6 +7,7 @@ import { consumirCodigo } from "@/lib/codigo-email";
 import { MENSAGEM_CODIGO } from "@/lib/codigo-email-core";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { contarTentativa, ipDe, respostaLimite } from "@/lib/seguranca-acesso";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export async function POST(req: Request) {
   const corpo = await parseCorpo(redefinirSenhaSchema, req);
   if ("resp" in corpo) return corpo.resp;
   const { email, senha, codigo } = corpo.data;
+  const espera = await contarTentativa("senhaIp", ipDe(req));
+  if (espera) return respostaLimite(espera);
 
   try {
     const r = await consumirCodigo(email, "senha", codigo);

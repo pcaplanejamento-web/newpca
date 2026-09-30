@@ -1,12 +1,37 @@
 import { z } from "zod";
-import { DOMINIO_INSTITUCIONAL, emailInstitucional, nomeCompleto } from "./cadastro-core.ts";
+import {
+  DOMINIO_INSTITUCIONAL,
+  emailInstitucional,
+  LIMITES_CADASTRO,
+  matriculaValida,
+  nomeCompleto,
+  nomeValido,
+  problemaSenha,
+  temControle,
+} from "./cadastro-core.ts";
 import { FINALIDADES_CODIGO } from "./codigo-email-core.ts";
 import { MESA_RESPONSAVEL, type MesaResponsavel } from "./mesa-filtros.ts";
 import { APELIDO_MAX } from "./pessoa.ts";
 
 const emailSchema = z.string().trim().toLowerCase().email("E-mail inválido.").max(160);
 const emailInstitucionalSchema = emailSchema.refine(emailInstitucional, `Use o seu e-mail institucional (@${DOMINIO_INSTITUCIONAL}).`);
-const senhaNovaSchema = z.string().min(8, "A senha deve ter ao menos 8 caracteres.").max(200);
+/** A SENHA NOVA: 8 a 128 caracteres, com letras e números (`problemaSenha` — a mesma régua da tela). */
+const senhaNovaSchema = z.string().superRefine((s, ctx) => {
+  const p = problemaSenha(s);
+  if (p) ctx.addIssue({ code: "custom", message: p });
+});
+/** NOME (cadastro e ADM): só letras, espaço, apóstrofo, hífen e ponto; nome e sobrenome. */
+const nomeSchema = z
+  .string()
+  .trim()
+  .max(LIMITES_CADASTRO.nome, "Nome muito longo.")
+  .transform((n) => n.replace(/\s+/gu, " "))
+  .refine(nomeCompleto, "Informe o nome completo (nome e sobrenome).")
+  .refine(nomeValido, "O nome aceita só letras, espaços, apóstrofo e hífen.");
+/** MATRÍCULA: só dígitos (1 a 15). */
+const matriculaSchema = z.string().trim().min(1, "Informe a matrícula.").refine(matriculaValida, "A matrícula aceita só números (até 15 dígitos).");
+/** Texto livre curto sem caracteres de controle/invisíveis. */
+const textoLimpo = (max: number) => z.string().trim().max(max).refine((v) => !temControle(v), "O campo tem caracteres não permitidos.");
 /** O código de confirmação enviado por e-mail: 6 dígitos. */
 export const codigoSchema = z.string().trim().regex(/^\d{6}$/, "Informe os 6 dígitos do código.");
 
@@ -14,26 +39,25 @@ export const codigoSchema = z.string().trim().regex(/^\d{6}$/, "Informe os 6 dí
 export const solicitarCodigoSchema = z.object({
   email: emailSchema,
   finalidade: z.enum(FINALIDADES_CODIGO),
-  // Token do Turnstile (captcha). Opcional no schema; a rota exige quando o captcha está ativo.
+  // O captcha (token do Turnstile ou da verificação própria) — a rota SEMPRE confere.
   token: z.string().max(4000).optional(),
+  // No cadastro: a matrícula já usada é recusada antes de enviar o código.
+  matricula: matriculaSchema.optional(),
 });
 
 /** CADASTRO: nome completo, matrícula, cargo/função, unidade, e-mail institucional, senha e o código que confirma o e-mail. */
 export const cadastroSchema = z.object({
-  nome: z
-    .string()
-    .trim()
-    .max(120)
-    .transform((n) => n.replace(/\s+/gu, " "))
-    .refine(nomeCompleto, "Informe o nome completo (nome e sobrenome)."),
-  matricula: z.string().trim().min(1, "Informe a matrícula.").max(60),
+  nome: nomeSchema,
+  matricula: matriculaSchema,
   // O cargo/função escolhido na lista do ADM (o servidor confere; exigido quando há cargos cadastrados).
-  cargo: z.string().trim().max(80).optional(),
+  cargo: textoLimpo(80).optional(),
   reparticaoId: z.number().int().positive("Selecione a unidade em que você trabalha."),
   email: emailInstitucionalSchema,
   senha: senhaNovaSchema,
   // Sem código só no PRIMEIRO acesso do sistema (ainda não há quem configure o envio de e-mails).
   codigo: codigoSchema.optional(),
+  // O captcha — conferido aqui só no PRIMEIRO acesso (sem código); nos demais, antes de enviar o código.
+  token: z.string().max(4000).optional(),
 });
 
 /** Criar/redefinir a senha pelo código enviado ao e-mail ("Esqueci a senha"). */
@@ -42,6 +66,7 @@ export const redefinirSenhaSchema = z.object({ email: emailSchema, senha: senhaN
 export const loginSchema = z.object({
   email: emailSchema,
   senha: z.string().min(1, "Informe a senha.").max(200),
+  // O captcha — SEMPRE conferido pela rota.
   token: z.string().max(4000).optional(),
 });
 
@@ -58,7 +83,12 @@ const fotoSchema = z
  * `foto` ausente = mantém a atual ("" remove). */
 export const perfilSchema = z.object({
   // Apelido: o nome de EXIBIÇÃO no sistema (vazio = volta a valer o nome).
-  apelido: z.string().trim().max(APELIDO_MAX, `Apelido com no máximo ${APELIDO_MAX} caracteres.`).optional(),
+  apelido: z
+    .string()
+    .trim()
+    .max(APELIDO_MAX, `Apelido com no máximo ${APELIDO_MAX} caracteres.`)
+    .refine((v) => !temControle(v) && !/[<>]/.test(v), "O apelido tem caracteres não permitidos.")
+    .optional(),
   foto: fotoSchema.optional(),
 });
 
@@ -76,10 +106,11 @@ export const trocarSenhaSchema = z.object({ novaSenha: senhaNovaSchema, codigo: 
 
 /** Edição de um usuário pelo admin (todos os campos opcionais no PATCH). */
 export const adminUsuarioSchema = z.object({
-  nome: z.string().trim().min(2, "Nome muito curto.").max(120).optional(),
+  nome: nomeSchema.optional(),
   email: emailSchema.optional(),
-  matricula: z.string().trim().max(60).optional(),
-  cargo: z.string().trim().max(80).optional(),
+  // "" = sem matrícula. A tela manda só quando MUDOU (a antiga fora do padrão continua valendo).
+  matricula: z.union([z.literal(""), matriculaSchema]).optional(),
+  cargo: textoLimpo(80).optional(),
   // A unidade em que a pessoa trabalha (`null` = nenhuma).
   reparticaoId: z.number().int().positive().nullable().optional(),
   role: z.enum(["admin", "gestor", "membro"]).optional(),
@@ -87,7 +118,15 @@ export const adminUsuarioSchema = z.object({
 });
 
 /** Um CARGO/FUNÇÃO cadastrado pelo ADM (Usuários → Cargos e funções). */
-export const cargoSchema = z.object({ nome: z.string().trim().min(2, "Informe o nome do cargo ou função.").max(80) });
+export const cargoSchema = z.object({
+  nome: z
+    .string()
+    .trim()
+    .min(2, "Informe o nome do cargo ou função.")
+    .max(80)
+    .transform((n) => n.replace(/\s+/gu, " "))
+    .refine((n) => /^[\p{L}\p{N}][\p{L}\p{M}\p{N} ()/,.ºª'-]*$/u.test(n), "O nome aceita letras, números, espaços e ( ) / , . - º ª."),
+});
 
 export type CadastroInput = z.infer<typeof cadastroSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

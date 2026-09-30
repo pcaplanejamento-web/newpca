@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { filtrarMatricula, filtrarNome } from "@/lib/cadastro-core";
 import { dataBR } from "@/lib/format";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
@@ -171,11 +172,12 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       const r = await fetch(`/api/admin/usuarios/${editando.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        // Só o que MUDOU vai (um dado antigo fora do padrão de hoje continua valendo enquanto não for trocado).
         body: JSON.stringify({
-          nome: edNome,
-          email: edEmail,
-          matricula: edMatricula,
-          cargo: edCargo,
+          ...(edNome.trim() !== editando.nome ? { nome: edNome } : {}),
+          ...(edEmail.trim().toLowerCase() !== editando.email ? { email: edEmail } : {}),
+          ...(edMatricula !== (editando.matricula ?? "") ? { matricula: edMatricula } : {}),
+          ...(edCargo !== (editando.cargo ?? "") ? { cargo: edCargo } : {}),
           // Só a unidade que MUDOU vai (manter uma unidade hoje oculta sempre vale).
           ...(edUnidade !== (editando.reparticaoId == null ? "" : String(editando.reparticaoId)) ? { reparticaoId: edUnidade ? Number(edUnidade) : null } : {}),
         }),
@@ -334,15 +336,21 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
           <div className="space-y-3">
             <div>
               <label className={labelCls}>Nome completo</label>
-              <input className={inputCls} value={edNome} onChange={(e) => setEdNome(e.target.value)} required />
+              <input className={inputCls} value={edNome} onChange={(e) => setEdNome(filtrarNome(e.target.value))} maxLength={120} required />
             </div>
             <div>
               <label className={labelCls}>E-mail</label>
-              <input type="email" className={inputCls} value={edEmail} onChange={(e) => setEdEmail(e.target.value)} required />
+              <input type="email" className={inputCls} value={edEmail} onChange={(e) => setEdEmail(e.target.value.replace(/\s/g, ""))} maxLength={160} required />
             </div>
             <div>
               <label className={labelCls}>Matrícula</label>
-              <input className={inputCls} value={edMatricula} onChange={(e) => setEdMatricula(e.target.value)} placeholder="Opcional" />
+              <input
+                className={inputCls}
+                value={edMatricula}
+                onChange={(e) => setEdMatricula(filtrarMatricula(e.target.value))}
+                inputMode="numeric"
+                placeholder="Opcional — só números"
+              />
             </div>
             <SelectField id="ed-cargo" label="Cargo ou função" value={edCargo} onChange={(e) => setEdCargo(e.target.value)} denso>
               <option value="">Nenhum</option>

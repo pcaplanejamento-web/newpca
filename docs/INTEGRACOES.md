@@ -29,8 +29,9 @@ Protege os formulários de **login** e **cadastro** contra robôs.
    **Secret key**, clique **Salvar**.
 3. Clique **Testar conexão** (valida a secret) e depois confira o widget na tela de login.
 
-Enquanto o captcha não estiver **ativo + com site key + com secret**, o login/cadastro seguem
-**exatamente como hoje** (o widget nem carrega). Em falha de rede na verificação, o login **não trava**
+O captcha é **sempre exigido** (login, cadastro, código por e-mail, senha). Enquanto o Turnstile não estiver **ativo + com
+site key + com secret**, vale a **verificação anti-robô própria** do sistema ("Não sou um robô" — prova de trabalho no
+navegador, sem serviço externo); com ele configurado, o widget do Turnstile a substitui. Em falha de rede na verificação, o login **não trava**
 (fail-open); só reprova quando o Cloudflare responde que o desafio falhou.
 
 ## 2. Monitoramento (métricas do Worker)

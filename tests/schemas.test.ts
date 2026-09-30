@@ -40,8 +40,8 @@ import { uploadSchema } from "../src/lib/validation.ts";
 // um próximo passo de DRY para habilitar esses testes.
 
 describe("auth-validation", () => {
-  it("cadastroSchema: nome completo, matrícula, unidade, e-mail INSTITUCIONAL e senha >= 8", () => {
-    const base = { nome: "  Ana   Souza ", matricula: " 123 ", cargo: " Analista ", reparticaoId: 4, email: "  ANA@RIOVERDE.GO.GOV.BR ", senha: "12345678", codigo: "012345" };
+  it("cadastroSchema: nome completo, matrícula, unidade, e-mail INSTITUCIONAL e senha forte", () => {
+    const base = { nome: "  Ana   Souza ", matricula: " 123 ", cargo: " Analista ", reparticaoId: 4, email: "  ANA@RIOVERDE.GO.GOV.BR ", senha: "senha123", codigo: "012345" };
     const r = cadastroSchema.parse(base);
     assert.equal(r.email, "ana@rioverde.go.gov.br");
     assert.equal(r.nome, "Ana Souza");
@@ -69,12 +69,13 @@ describe("auth-validation", () => {
     assert.equal(perfilSchema.safeParse({ foto: "http://x/a.png" }).success, false);
   });
 
-  it("trocarSenhaSchema e redefinirSenhaSchema: senha >= 8 + código de 6 dígitos", () => {
-    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "12345678", codigo: "000111" }).success, true);
+  it("trocarSenhaSchema e redefinirSenhaSchema: senha forte (letras e números) + código de 6 dígitos", () => {
+    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "senha123", codigo: "000111" }).success, true);
     assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "123", codigo: "000111" }).success, false);
-    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "12345678" }).success, false);
-    assert.equal(redefinirSenhaSchema.safeParse({ email: "a@x.com", senha: "12345678", codigo: "123456" }).success, true);
-    assert.equal(redefinirSenhaSchema.safeParse({ email: "a@x.com", senha: "12345678", codigo: "12345" }).success, false);
+    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "12345678", codigo: "000111" }).success, false); // só números
+    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "senha123" }).success, false);
+    assert.equal(redefinirSenhaSchema.safeParse({ email: "a@x.com", senha: "senha123", codigo: "123456" }).success, true);
+    assert.equal(redefinirSenhaSchema.safeParse({ email: "a@x.com", senha: "senha123", codigo: "12345" }).success, false);
   });
 
   it("solicitarCodigoSchema: finalidade cadastro | senha", () => {

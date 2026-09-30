@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { CartaoAuth, ErroAuth } from "@/components/CartaoAuth";
 import { CampoCodigo, EtapaCodigo } from "@/components/CodigoEmail";
+import { VerificacaoRobo } from "@/components/VerificacaoRobo";
 import { MarcaSistema } from "@/components/MarcaSistema";
 import { OpcoesUnidades } from "@/components/OpcoesUnidades";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
@@ -278,6 +279,8 @@ function DemoAcesso() {
           />
         </SelectField>
         <CampoCodigo value={codigo} onChange={setCodigo} />
+        {/* VerificacaoRobo: o captcha próprio (sem o Turnstile) — marcar resolve o desafio do servidor (prova de trabalho). */}
+        <VerificacaoRobo onToken={() => undefined} />
       </div>
     </div>
   );
@@ -2648,7 +2651,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Acesso — TelaAcesso (/login: Entrar · Criar conta · Esqueci a senha na MESMA tela + VitrineAcesso imersiva no desktop) · MarcaSistema (logo do ADM) · CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha antes de cada envio, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
+      <Secao titulo="Acesso — TelaAcesso (/login: Entrar · Criar conta · Esqueci a senha na MESMA tela + VitrineAcesso imersiva no desktop) · MarcaSistema (logo do ADM) · CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha SEMPRE — Turnstile ou a VerificacaoRobo própria —, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
         <DemoAcesso />
       </Secao>
 
