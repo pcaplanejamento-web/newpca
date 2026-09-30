@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
 import { todosOsGruposComAbas } from "@/lib/acesso";
 import { exigirAdmin } from "@/lib/api-auth";
+import { papelDoUsuarioSql } from "@/lib/auth";
 import { ok } from "@/lib/http";
 import { urlFoto } from "@/lib/pessoa";
 import { listarCargos } from "@/lib/cargos";
@@ -31,7 +32,9 @@ export async function GET() {
         // A foto vai como URL (rota com cache), não o data-URL — a lista não pesa com muitos usuários.
         temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
         versao: usuarios.atualizadoEm,
-        papelId: usuarios.papelId,
+        // O papel EFETIVO — a MESMA regra da sessão (sem `papel_id`, o do sistema pela chave antiga): a tela nunca diz
+        // "Sem papel" de quem a sessão trata como Membro.
+        papelId: sql<number | null>`${papelDoUsuarioSql}`,
         status: usuarios.status,
         criadoEm: usuarios.criadoEm,
       })

@@ -4,6 +4,7 @@ import { depoisDaResposta } from "@/lib/segundo-plano";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { usuarioGrupos, usuarios } from "@/db/schema";
+import { papelDoUsuarioSql } from "@/lib/auth";
 import { adminUsuarioSchema } from "@/lib/auth-validation";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -70,7 +71,8 @@ export async function PATCH(
         matricula: usuarios.matricula,
         cargo: usuarios.cargo,
         reparticaoId: usuarios.reparticaoId,
-        papelId: usuarios.papelId,
+        // O papel EFETIVO (a regra da sessão — sem `papel_id`, o do sistema pela chave antiga).
+        papelId: sql<number | null>`${papelDoUsuarioSql}`,
         status: usuarios.status,
       })
       .from(usuarios)
