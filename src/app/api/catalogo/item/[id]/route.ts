@@ -1,6 +1,6 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { atualizarCatalogoItem, excluirCatalogoItem, removerItemDoCatalogo } from "@/lib/catalogo";
+import { atualizarCatalogoItem, excluirCatalogoItem, remocaoExcluiItem, removerItemDoCatalogo } from "@/lib/catalogo";
 import { patchItemSchema, removerDoCatalogoSchema } from "@/lib/catalogo-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * CÓDIGO é imutável (chave global): para trocá-lo, exclua e crie de novo.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "manipular");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -24,14 +24,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 /**
  * Corpo `{catalogoId}` opcional = REMOVER o item de UM catálogo (desfaz o compartilhamento;
- * se era o único catálogo, exclui o item). Sem corpo = EXCLUSÃO total. Só editor.
+ * se era o único catálogo, exclui o item). Sem corpo = EXCLUSÃO total. Manipular; o que exclui o item, Excluir.
  */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "manipular");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
   const rem = removerDoCatalogoSchema.safeParse(await req.json().catch(() => ({})));
+  // Tirar de UM catálogo = Manipular; se era o único (o item some) ou a exclusão total = Excluir.
+  const excluindo = !rem.success || (await remocaoExcluiItem(id, rem.data.catalogoId));
+  const negado = excluindo ? recusa(a.acesso, "catalogo", "excluir") : null;
+  if (negado) return negado;
   if (rem.success) {
     await removerItemDoCatalogo(id, rem.data.catalogoId);
     await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "catalogo_item", entidadeId: id, resumo: `Item #${id} removido do catálogo #${rem.data.catalogoId} (compartilhamento)`, antes: { catalogoId: rem.data.catalogoId } });

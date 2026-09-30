@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { compartilharItensNoCatalogo, getCatalogo } from "@/lib/catalogo";
 import { compartilharItensSchema } from "@/lib/catalogo-validation";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * dentro do `POST /api/catalogo` (`start-catalogo`).
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "importar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(compartilharItensSchema, req);
   if ("resp" in p) return p.resp;

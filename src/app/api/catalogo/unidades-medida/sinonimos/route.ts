@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { ok, parseCorpo } from "@/lib/http";
 import { gravarSinonimos, listarUnidadesMedida } from "@/lib/padronizacao";
@@ -19,7 +19,7 @@ type Falha = { texto: string; motivo: string };
  * atribui cada recusa à grafia certa).
  */
 export async function POST(req: Request) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("catalogo", "configurar");
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(sinonimosUnidadesSchema, req);
   if ("resp" in p) return p.resp;

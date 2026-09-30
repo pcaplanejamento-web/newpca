@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
 import { unidadesDaSessao } from "@/lib/grupos";
 import { ok } from "@/lib/http";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * enquanto o cadastro é editado). Carregada sob demanda, uma vez por abertura da tela.
  */
 export async function GET() {
-  const g = await exigirUsuario();
+  const g = await exigirAcesso("catalogo", "visualizar");
   if ("erro" in g) return g.erro;
   // Os itens de DFD seguem a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = só o catálogo).
   const rep = idDoFiltro((await unidadesDaSessao(g.u)).filtro);

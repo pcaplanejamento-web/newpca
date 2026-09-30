@@ -1,14 +1,14 @@
 import { CatalogoView } from "@/components/CatalogoView";
-import { getUsuarioAtual } from "@/lib/auth";
+import { acessoPagina } from "@/lib/acesso-pagina";
 import { getCatalogoItens, listarCatalogos } from "@/lib/catalogo";
 
 export const dynamic = "force-dynamic";
 
-// Módulo Catálogo (aba `catalogo`) — carrega a lista de catálogos + TODOS os itens
-// (agrupados no cliente, como o dashboard). Acesso pela aba; edição só p/ editor.
+// Módulo Catálogo (aba `catalogo`) — carrega a lista de catálogos + TODOS os itens (agrupados no cliente, como o
+// dashboard). A tela abre para quem o grupo libera e o papel visualiza; o que se faz nela segue o papel (`pode`).
 export default async function CatalogoPage() {
-  const u = await getUsuarioAtual();
+  const r = await acessoPagina("catalogo");
+  if (r.bloqueio) return r.bloqueio;
   const [catalogos, itens] = await Promise.all([listarCatalogos(), getCatalogoItens()]);
-  const podeEditar = u?.role === "admin" || u?.role === "gestor";
-  return <CatalogoView catalogos={catalogos} itens={itens} podeEditar={podeEditar} />;
+  return <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} />;
 }

@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { codigosEmConflito, criarCatalogoItem, getCatalogo } from "@/lib/catalogo";
 import { criarItemSchema } from "@/lib/catalogo-validation";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * rejeita (422) se já existir em QUALQUER catálogo. É salvo só com dígitos. Recalcula o total.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("catalogo", "manipular");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(criarItemSchema, req);
   if ("resp" in p) return p.resp;

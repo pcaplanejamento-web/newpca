@@ -1,4 +1,4 @@
-import { exigirEditor, exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { criarClassificacao, listarPadronizacao, prepararClassificacao } from "@/lib/padronizacao";
@@ -8,13 +8,13 @@ export const dynamic = "force-dynamic";
 
 /** Catálogo → Classificações: as classificações cadastradas e as unidades de medida (a classificação que cada uma indica). */
 export async function GET() {
-  const g = await exigirUsuario();
+  const g = await exigirAcesso("catalogo", "visualizar");
   if ("erro" in g) return g.erro;
   return ok({ ...(await listarPadronizacao()) });
 }
 
 export async function POST(req: Request) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("catalogo", "configurar");
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(classificacaoItemSchema, req);
   if ("resp" in p) return p.resp;

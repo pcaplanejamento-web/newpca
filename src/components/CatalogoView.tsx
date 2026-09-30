@@ -7,6 +7,7 @@ import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/ca
 import { itensIguais } from "@/lib/catalogo-conferencia";
 import { membrosDoItem } from "@/lib/catalogo-membros";
 import { exportarCatalogoPdf, exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
+import type { PodeTela } from "@/lib/papeis-core";
 import { dataBR } from "@/lib/format";
 import { criarCatalogoVazio, enviarCatalogoEmLotes } from "@/lib/importar-catalogo";
 import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
@@ -76,12 +77,17 @@ const selectCls =
 export function CatalogoView({
   catalogos,
   itens,
-  podeEditar,
+  pode,
 }: {
   catalogos: CatalogoResumo[];
   itens: CatalogoItemRow[];
-  podeEditar: boolean;
+  /** O que o papel permite no Catálogo (o grupo já liberou a tela). */
+  pode: PodeTela;
 }) {
+  // Manipular = criar/editar catálogos e itens (tipos, compartilhar); Importar = subir arquivo, atualizar e o modelo;
+  // Exportar = XLSX/PDF; Excluir = apagar catálogo/item; Configurar = a padronização (unidades de medida, classificações).
+  const podeEditar = pode.manipular;
+  const papelImporta = pode.importar;
   const router = useRouter();
   // Agrupa por PERTENCIMENTO: um item compartilhado aparece no bucket de cada catálogo em
   // que está ([catalogo_id, ...catalogos_extra]).
@@ -583,7 +589,7 @@ export function CatalogoView({
       erro={erroItem}
       catalogos={catalogosDoItem(item)}
       onSalvar={(campos) => salvarItem(item, campos)}
-      onExcluir={podeEditar ? () => excluirItem(item) : undefined}
+      onExcluir={pode.excluir ? () => excluirItem(item) : undefined}
       onRemoverCatalogo={podeEditar ? (cid) => removerDoCatalogo(item, cid) : undefined}
     />
   );
@@ -602,7 +608,7 @@ export function CatalogoView({
 
   function abrirNovo() {
     setPendingAlvo(null); // catálogo NOVO (não é atualização)
-    setNovoModo("manual");
+    setNovoModo(podeEditar ? "manual" : "importar");
     setNovoNome("");
     setNovoTipos([]);
     setErroImport(null);
@@ -634,7 +640,7 @@ export function CatalogoView({
         </div>
         {/* "Exportar modelo" ANTES do Segmented: sem ele (nas visões da padronização), as visões não saem do lugar. */}
         <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-          {podeEditar && !padronizacao && (
+          {papelImporta && !padronizacao && (
             <Button
               variant="secondary"
               icon={<IconDownload className="h-[18px] w-[18px]" />}
@@ -666,10 +672,10 @@ export function CatalogoView({
 
       {padronizacao ? (
         <div key={vista} className="animate-cat-morph">
-          {vista === "unidades" ? <UnidadesMedidaView podeEditar={podeEditar} /> : <ClassificacoesView podeEditar={podeEditar} />}
+          {vista === "unidades" ? <UnidadesMedidaView podeEditar={pode.configurar} /> : <ClassificacoesView podeEditar={pode.configurar} />}
         </div>
       ) : catalogos.length === 0 ? (
-        podeEditar ? (
+        podeEditar || papelImporta ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{addCard}</div>
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
@@ -721,7 +727,7 @@ export function CatalogoView({
                         Editar
                       </Button>
                     )}
-                    {podeEditar && (
+                    {papelImporta && (
                       <Button
                         variant="ghost"
                         aria-label={`Atualizar ${c.nome}`}
@@ -733,7 +739,7 @@ export function CatalogoView({
                         }}
                       />
                     )}
-                    {podeEditar && (
+                    {pode.excluir && (
                       <Button
                         variant="ghost"
                         aria-label={`Excluir ${c.nome}`}
@@ -745,7 +751,7 @@ export function CatalogoView({
                   </div>
                 </div>
               ))}
-              {podeEditar && addCard}
+              {(podeEditar || papelImporta) && addCard}
             </div>
           ) : (
             <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
@@ -799,14 +805,17 @@ export function CatalogoView({
         }
       >
         <div className="space-y-[var(--gap-block)]">
-          <Segmented<"manual" | "importar">
-            value={novoModo}
-            onChange={(v) => setNovoModo(v)}
-            options={[
-              { value: "manual", label: "Criar manualmente" },
-              { value: "importar", label: "Importar arquivo" },
-            ]}
-          />
+          {/* Criar à mão = Manipular; importar = Importar — só as que o papel permite (uma só: sem a escolha). */}
+          {podeEditar && papelImporta && (
+            <Segmented<"manual" | "importar">
+              value={novoModo}
+              onChange={(v) => setNovoModo(v)}
+              options={[
+                { value: "manual", label: "Criar manualmente" },
+                { value: "importar", label: "Importar arquivo" },
+              ]}
+            />
+          )}
           {novoModo === "manual" ? (
             <>
               <TextField label="Nome do catálogo" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} disabled={criandoCat} placeholder="Ex.: Material de expediente" />
@@ -978,7 +987,8 @@ export function CatalogoView({
                           onChange={(val) => setResolucoes((m) => new Map(m).set(existente.id, val))}
                           options={[
                             { value: "manter", label: "Manter existente" },
-                            { value: "substituir", label: "Substituir" },
+                            // Substituir EXCLUI o existente — só com Excluir no papel.
+                            ...(pode.excluir ? [{ value: "substituir" as const, label: "Substituir" }] : []),
                             { value: "compartilhar", label: "Compartilhar" },
                           ]}
                         />
@@ -1103,22 +1113,26 @@ export function CatalogoView({
                 Editar catálogo
               </Button>
             )}
-            <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => catalogoAberto && exportarCatalogoXlsx(catalogoAberto.nome, itensAberto)}>
-              XLSX
-            </Button>
-            <Button
-              variant="secondary"
-              icon={<IconDownload className="h-4 w-4" />}
-              onClick={() => {
-                try {
-                  if (catalogoAberto) exportarCatalogoPdf(catalogoAberto.nome, itensAberto);
-                } catch (e) {
-                  setErroImport(e instanceof Error ? e.message : "Falha ao exportar PDF.");
-                }
-              }}
-            >
-              PDF
-            </Button>
+            {pode.exportar && (
+              <>
+                <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => catalogoAberto && exportarCatalogoXlsx(catalogoAberto.nome, itensAberto)}>
+                  XLSX
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<IconDownload className="h-4 w-4" />}
+                  onClick={() => {
+                    try {
+                      if (catalogoAberto) exportarCatalogoPdf(catalogoAberto.nome, itensAberto);
+                    } catch (e) {
+                      setErroImport(e instanceof Error ? e.message : "Falha ao exportar PDF.");
+                    }
+                  }}
+                >
+                  PDF
+                </Button>
+              </>
+            )}
           </div>
           {barraTipoBusca}
           <DataTable

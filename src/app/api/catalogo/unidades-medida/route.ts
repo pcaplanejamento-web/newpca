@@ -1,4 +1,4 @@
-import { exigirEditor, exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
 import { unidadesDaSessao } from "@/lib/grupos";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * `?uso=0` = só o cadastro (a tela recarrega depois de gravar: o uso dos itens não muda com o cadastro).
  */
 export async function GET(req: Request) {
-  const g = await exigirUsuario();
+  const g = await exigirAcesso("catalogo", "visualizar");
   if ("erro" in g) return g.erro;
   const comUso = new URL(req.url).searchParams.get("uso") !== "0";
   // O uso nos DFDs segue a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = só o catálogo).
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const g = await exigirEditor();
+  const g = await exigirAcesso("catalogo", "configurar");
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(unidadeMedidaSchema, req);
   if ("resp" in p) return p.resp;
