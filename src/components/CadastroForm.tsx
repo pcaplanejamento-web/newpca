@@ -127,8 +127,9 @@ export function CadastroForm({
   async function etapaDados(e: FormEvent) {
     e.preventDefault();
     setTocados(new Set(["nome", "matricula", "cargo", "unidade", "email", "senha", "confirmar"]));
-    if (Object.keys(problemas).length) {
-      setErro("Confira os campos destacados.");
+    const primeiro = Object.values(problemas)[0];
+    if (primeiro) {
+      setErro(`Confira os campos destacados — ${primeiro}`);
       return;
     }
     if (!captcha.pronto) {
@@ -174,7 +175,7 @@ export function CadastroForm({
           }}
           disabled={criando}
         />
-        {erro && <ErroAuth>{erro}</ErroAuth>}
+        {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
         <Button type="submit" variant="accent" loading={criando} disabled={codigo.length !== 6} className="mt-6 h-[52px] w-full text-[15px]">
           Confirmar e criar conta
         </Button>
@@ -301,21 +302,19 @@ export function CadastroForm({
         />
       </div>
 
-      {erro && <ErroAuth>{erro}</ErroAuth>}
+      {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
 
-      {/* O captcha e o envio na MESMA linha (o cadastro cabe na tela sem rolar). */}
-      <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto] [@media(max-height:720px)]:mt-2.5">
-        {captcha.widget}
-        <Button
-          type="submit"
-          variant="accent"
-          loading={cod.enviando || criando}
-          icon={!(cod.enviando || criando) && <IconArrowRight className="h-4 w-4" />}
-          className="h-11 w-full text-[15px] sm:w-auto lg:h-11"
-        >
-          {semCodigo ? "Criar conta" : "Enviar código"}
-        </Button>
-      </div>
+      {/* O envio e, logo abaixo, o captcha centralizado. */}
+      <Button
+        type="submit"
+        variant="accent"
+        loading={cod.enviando || criando}
+        icon={!(cod.enviando || criando) && <IconArrowRight className="h-4 w-4" />}
+        className="mt-3 h-11 w-full text-[15px] lg:h-11 [@media(max-height:720px)]:mt-2.5"
+      >
+        {semCodigo ? "Criar conta" : "Enviar código de confirmação"}
+      </Button>
+      <div className="mt-2.5 flex justify-center [&>*]:w-full [&>*]:max-w-[300px]">{captcha.widget}</div>
 
     </CartaoAuth>
   );

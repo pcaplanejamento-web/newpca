@@ -221,7 +221,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Cadastro CABE NA TELA sem rolar (desktop, medido de 1280×650 a 1920×1080):** campos no modo **`denso`** do DS
     (`TextField`/`SelectField`/`PasswordField denso` = caixa de 44px e rótulo próximo; 40px em telas com altura ≤ 720px),
     `CartaoAuth denso` (etapa na linha do título; o subtítulo some em tela baixa), sem dicas soltas e respiros menores em
-    telas baixas (`[@media(max-height:820px)]` no topo da coluna E na vitrine — o seletor segue alinhado à logo).
+    telas baixas (`[@media(max-height:820px)]` no topo da coluna E na vitrine — o seletor segue alinhado à logo). O botão
+    "Enviar código de confirmação" ocupa a largura e o CAPTCHA vem LOGO ABAIXO, CENTRALIZADO (até 300px — o Turnstile ou a
+    `VerificacaoRobo`); para caber com ele, em tela baixa (desktop ≤ 820px de altura) o aviso do ADM sai no modo cadastro.
+    **Nada se mexe com erro:** no `denso` o erro do campo vai na LINHA DO RÓTULO (à direita, cortado, o texto inteiro na dica;
+    `aria-invalid` + `aria-describedby`) e o **`ErroAuth`** é FLUTUANTE (o `AvisoFlutuante`, `onFechar` limpa o erro no dono,
+    some em 9 s) em Entrar, Criar conta e Esqueci a senha — o erro do envio diz o 1º campo a corrigir.
   - **E-mail institucional = só a parte antes do "@"**: o domínio `@rioverde.go.gov.br` fica FIXO no fim do campo
     (`TextField trailing`); colar o e-mail inteiro vale (`parteLocalEmail`/`emailDaParteLocal`, `cadastro-core.ts`).
   - **CARGOS E FUNÇÕES do ADM (migração `0070`, tabela `cargos`: nome único sem caixa + ordem; semeada com os cargos já

@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import { Button } from "./Button";
-import { IconAlert, IconCheck } from "./icons";
+import { AvisoFlutuante } from "./AvisoFlutuante";
+import { IconCheck } from "./icons";
 
 // As peças do FORMULÁRIO das telas de acesso (entrar, criar conta, redefinir a senha) — o cabeçalho (etapa, título e
 // subtítulo), a mensagem de erro e o fim de um fluxo. A moldura (marca + vitrine) é a `TelaAcesso`. 100% por token.
@@ -49,21 +50,15 @@ export function CartaoAuth({
   );
 }
 
-/** A mensagem de erro das telas de acesso. */
-export function ErroAuth({ children }: { children: ReactNode }) {
+/**
+ * A mensagem de erro das telas de acesso — FLUTUANTE (o `AvisoFlutuante` do sistema, no canto do display): nunca empurra os
+ * campos nem o botão. `onFechar` limpa o erro no dono (X ou depois de alguns segundos).
+ */
+export function ErroAuth({ children, onFechar }: { children: ReactNode; onFechar: () => void }) {
   return (
-    <div
-      role="alert"
-      className="mt-4 flex animate-fade-in-up items-start gap-2 rounded-control p-3 text-sm"
-      style={{
-        color: "var(--sit-devolvido)",
-        background: "color-mix(in srgb, var(--sit-devolvido) 10%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--sit-devolvido) 30%, transparent)",
-      }}
-    >
-      <IconAlert className="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{children}</span>
-    </div>
+    <AvisoFlutuante kind="danger" onClose={onFechar} duracao={9000}>
+      {children}
+    </AvisoFlutuante>
   );
 }
 

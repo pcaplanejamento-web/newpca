@@ -17,9 +17,47 @@ type CampoProps = {
   denso?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "size">;
 
-/** Rótulo e altura da caixa no padrão (54px) ou no modo DENSO (44px). */
-const rotuloCls = (denso?: boolean) => `${denso ? "mb-1 text-[13px]" : "mb-2 text-[13.5px]"} block font-bold text-text`;
+/** Altura da caixa no padrão (54px) ou no modo DENSO (44px). */
 const alturaCls = (denso?: boolean) => (denso ? "h-11 [@media(max-height:720px)]:h-10" : "h-[54px]");
+
+/**
+ * O RÓTULO do campo. No modo DENSO o erro vai na MESMA linha do rótulo (à direita, cortado; o texto inteiro na dica) — o
+ * formulário nunca cresce nem se mexe quando um erro aparece; nos demais modos, a mensagem fica abaixo da caixa (`Rodape`).
+ */
+function Rotulo({ label, fid, denso, error, errId }: { label?: string; fid: string; denso?: boolean; error?: string; errId: string }) {
+  if (!label && !(denso && error)) return null;
+  if (!denso)
+    return (
+      <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
+        {label}
+      </label>
+    );
+  return (
+    <div className="mb-1 flex min-w-0 items-baseline justify-between gap-2">
+      {label && (
+        <label htmlFor={fid} className="shrink-0 text-[13px] font-bold text-text">
+          {label}
+        </label>
+      )}
+      {error && (
+        <span id={errId} title={error} className="min-w-0 truncate text-[11.5px] font-medium text-[var(--sit-devolvido)]">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A mensagem abaixo da caixa (fora do modo denso): o erro ou a dica. */
+function Rodape({ denso, error, hint, errId }: { denso?: boolean; error?: string; hint?: ReactNode; errId: string }) {
+  if (error && !denso)
+    return (
+      <p id={errId} className="mt-1.5 text-[12px] font-medium text-[var(--sit-devolvido)]">
+        {error}
+      </p>
+    );
+  return hint && !error ? <p className="mt-1.5 text-[12px] text-muted">{hint}</p> : null;
+}
 
 const WRAP =
   "flex items-center gap-2.5 rounded-control border bg-surface-2 px-3.5 transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent/20";
@@ -29,23 +67,16 @@ const INPUT =
 export function TextField({ label, icon, trailing, hint, error, denso, id, ...rest }: CampoProps) {
   const auto = useId();
   const fid = id ?? auto;
+  const errId = `${fid}-erro`;
   return (
-    <div>
-      {label && (
-        <label htmlFor={fid} className={rotuloCls(denso)}>
-          {label}
-        </label>
-      )}
+    <div className="min-w-0">
+      <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
       <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         {icon && <span className="shrink-0 text-muted">{icon}</span>}
-        <input id={fid} className={INPUT} {...rest} />
+        <input id={fid} className={INPUT} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...rest} />
         {trailing}
       </div>
-      {error ? (
-        <p className="mt-1.5 text-[12px] font-medium text-[var(--sit-devolvido)]">{error}</p>
-      ) : hint ? (
-        <p className="mt-1.5 text-[12px] text-muted">{hint}</p>
-      ) : null}
+      <Rodape denso={denso} error={error} hint={hint} errId={errId} />
     </div>
   );
 }
@@ -88,23 +119,22 @@ export function SelectField({
         </select>
       </div>
     );
+  const errId = `${fid}-erro`;
   return (
-    <div>
-      {label && (
-        <label htmlFor={fid} className={rotuloCls(denso)}>
-          {label}
-        </label>
-      )}
+    <div className="min-w-0">
+      <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
       <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
-        <select id={fid} className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60`} {...rest}>
+        <select
+          id={fid}
+          className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errId : undefined}
+          {...rest}
+        >
           {children}
         </select>
       </div>
-      {error ? (
-        <p className="mt-1.5 text-[12px] font-medium text-[var(--sit-devolvido)]">{error}</p>
-      ) : hint ? (
-        <p className="mt-1.5 text-[12px] text-muted">{hint}</p>
-      ) : null}
+      <Rodape denso={denso} error={error} hint={hint} errId={errId} />
     </div>
   );
 }
