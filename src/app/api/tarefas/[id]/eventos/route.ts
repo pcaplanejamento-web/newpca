@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { dataBR } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -11,11 +11,13 @@ export const dynamic = "force-dynamic";
 /** Cadastra um EVENTO na tarefa (bloco "Eventos" e o "Criar" do calendário) — qualquer pessoa do grupo do quadro; os
  * CONVIDADOS (pessoas do grupo) recebem o convite no sino. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return negado;
   const p = await parseCorpo(eventoSchema, req);
   if ("resp" in p) return p.resp;
   if ((await contarEventos(id)) >= MAX_EVENTOS_TAREFA) return erro(`Até ${MAX_EVENTOS_TAREFA} eventos por tarefa.`, 409);

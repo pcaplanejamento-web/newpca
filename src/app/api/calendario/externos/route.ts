@@ -1,5 +1,5 @@
 import { lerAgendaExterna, criarExterno, listarExternos } from "@/lib/agendas-externas";
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { eventosExternos, MAX_AGENDAS_EXTERNAS, urlAgendaValida } from "@/lib/ics-core";
@@ -11,7 +11,7 @@ const dataOk = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : n
 
 /** As AGENDAS EXTERNAS da pessoa; com `?de=&ate=` (≤ 400 dias), já com os eventos do intervalo (cada agenda com o seu erro). */
 export async function GET(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso("calendario", "visualizar");
   if ("erro" in a) return a.erro;
   const sp = new URL(req.url).searchParams;
   const de = dataOk(sp.get("de"));
@@ -31,9 +31,9 @@ export async function GET(req: Request) {
   return ok({ agendas });
 }
 
-/** Assina uma agenda: o link é conferido (baixado e lido) antes de gravar. */
+/** Assina uma agenda (Importar no Calendário): o link é conferido (baixado e lido) antes de gravar. */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso("calendario", "importar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(externoSchema, req);
   if ("resp" in p) return p.resp;

@@ -14,6 +14,7 @@ import {
   MAX_NOME_CONJUNTO,
   MAX_QUADROS_CONJUNTO,
   motivoNaoMoverParaPasta,
+  podePastaPublica,
   moverNaGrade,
   PALETA_ETIQUETAS,
   type PastasQuadros,
@@ -363,13 +364,13 @@ export function SecoesDeQuadros({
 
 /** Uma pasta NOVA ainda sem id do servidor (`novo-…`). */
 export const PASTA_NOVA = "novo-";
-/** A pasta em branco do "Nova pasta" — a pública só para editores (os demais criam a privada). */
+/** A pasta em branco do "Nova pasta" — a pública só para quem configura Tarefas (os demais criam a privada). */
 export const pastaEmBranco = (ator: AtorPasta): ConjuntoQuadros => ({
   id: `${PASTA_NOVA}${Date.now().toString(36)}`,
   nome: "",
   cor: PALETA_ETIQUETAS[15],
   quadros: [],
-  privado: !ator.editor,
+  privado: !podePastaPublica(ator),
   criadoPor: ator.id,
   grupoId: 0,
 });
@@ -619,12 +620,14 @@ function FormConjunto({
         <Switch
           checked={c.privado}
           onChange={tipo}
-          disabled={!ator.editor}
+          disabled={!podePastaPublica(ator, grupoId)}
           label={
             <span>
               <span className="block font-semibold text-text">Pasta privada</span>
               <span className="block text-[12px] text-muted">
-                {ator.editor ? "Só você vê a pasta; os quadros que entrarem ficam privados. Desligada, a pasta é de todo o grupo." : "Só você vê a pasta; os quadros que entrarem ficam privados. Pastas do grupo só os editores criam."}
+                {podePastaPublica(ator, grupoId)
+                  ? "Só você vê a pasta; os quadros que entrarem ficam privados. Desligada, a pasta é de todo o grupo."
+                  : "Só você vê a pasta; os quadros que entrarem ficam privados. Pastas do grupo só quem configura Tarefas cria."}
               </span>
             </span>
           }

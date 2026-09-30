@@ -1,13 +1,17 @@
 import { and, eq, like, or } from "drizzle-orm";
 import { edicoesTabela, usuarios } from "@/db/schema";
+import { type Acesso, motivoNoQuadro, motivoRecusa } from "./acesso";
 import { getDb } from "./db";
-import type { EdicaoTabela } from "./edicoes-tabela-core";
+import { type EdicaoTabela, telasDaChave } from "./edicoes-tabela-core";
+import type { AcaoPapel } from "./papeis-core";
 import { nomeExibicao } from "./pessoa";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
+import { quadroAcessivel } from "./tarefas";
 
 /**
  * EDIÇÕES SALVAS de tabela (migração `0041`) — acesso ao D1 (só escopo de request). O usuário vê as DELE e as PÚBLICAS;
- * só o dono (ou o ADM) atualiza/exclui.
+ * o dono grava a sua (publicar = Configurar na tela da tabela) e quem CONFIGURA a tela modera as públicas (`telasDaChave`
+ * + `acaoParaGravar`, núcleo puro).
  */
 export async function listarEdicoesTabela(usuarioId: number, prefixo: string): Promise<EdicaoTabela[]> {
   const linhas = await getDb()
@@ -44,8 +48,34 @@ export async function listarEdicoesTabela(usuarioId: number, prefixo: string): P
 }
 
 export async function getEdicaoTabela(id: number) {
-  const [e] = await getDb().select({ id: edicoesTabela.id, usuarioId: edicoesTabela.usuarioId }).from(edicoesTabela).where(eq(edicoesTabela.id, id));
+  const [e] = await getDb()
+    .select({ id: edicoesTabela.id, usuarioId: edicoesTabela.usuarioId, chave: edicoesTabela.chave, nome: edicoesTabela.nome, publico: edicoesTabela.publico })
+    .from(edicoesTabela)
+    .where(eq(edicoesTabela.id, id));
   return e ?? null;
+}
+
+/**
+ * O MOTIVO de recusar a AÇÃO na tabela da chave (`null` = pode): a tela dela no grupo ativo (a Mesa do sistema, a do PCA,
+ * o Orçamento ou o PCA — basta uma) ou, na Lista de um quadro de tarefas, o papel no GRUPO DO QUADRO. Chave de outra
+ * tabela (422) ou quadro que a pessoa não vê (404) também recusam.
+ */
+export async function recusaNaChave(acesso: Acesso, chave: string, acao: AcaoPapel): Promise<{ msg: string; status: number } | null> {
+  const t = telasDaChave(chave);
+  if (!t) return { msg: "Tabela desconhecida.", status: 422 };
+  if (t.quadroId != null) {
+    const q = await quadroAcessivel(acesso.u, t.quadroId);
+    if (!q) return { msg: "Quadro não encontrado.", status: 404 };
+    const m = motivoNoQuadro(acesso, q.grupoId, acao);
+    return m ? { msg: m, status: 403 } : null;
+  }
+  let primeiro: string | null = null;
+  for (const tela of t.telas) {
+    const m = motivoRecusa(acesso, tela, acao);
+    if (!m) return null;
+    primeiro ??= m;
+  }
+  return { msg: primeiro ?? "Sem permissão.", status: 403 };
 }
 
 export async function criarEdicaoTabela(usuarioId: number, d: { chave: string; nome: string; publico: boolean; valor: unknown }): Promise<number> {

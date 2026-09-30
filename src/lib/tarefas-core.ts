@@ -1216,30 +1216,40 @@ export function pastasDosQuadros(pastas: PastaGravada[], quadros: { id: number; 
   }));
 }
 
-/** Quem mexe nas pastas: o id e se é EDITOR (ADM/gestor) — ou ADM (entra na pasta privada órfã). */
-export type AtorPasta = { id: number; editor: boolean; admin?: boolean };
+/**
+ * Quem mexe nas pastas: o id, os GRUPOS em que o papel CONFIGURA Tarefas (organiza a pasta PÚBLICA do grupo) e os em que
+ * MANIPULA (a pasta PRIVADA é do dono, que precisa manipular no grupo dela) — `null` = todos (o ADM, que também entra na
+ * pasta privada órfã).
+ */
+export type AtorPasta = { id: number; configuraEm: number[] | null; manipulaEm: number[] | null; admin?: boolean };
+const noGrupoDoAtor = (lista: number[] | null, grupoId: number) => lista == null || lista.includes(grupoId);
+/** Pode criar uma pasta PÚBLICA — no grupo dela (`grupoId`) ou, sem ele, em algum grupo (o servidor confere o grupo). */
+export const podePastaPublica = (ator: AtorPasta, grupoId?: number | null): boolean =>
+  grupoId ? noGrupoDoAtor(ator.configuraEm, grupoId) : ator.configuraEm == null || ator.configuraEm.length > 0;
 /** O quadro que entra/sai de uma pasta. */
 export type QuadroPasta = { grupoId: number; privado: boolean; criadoPor: number | null };
 
-/** Pode ORGANIZAR a pasta (nome, cor, quadros, excluir)? A pública: editores; a privada: o dono (a órfã: o ADM). */
-export function podeEditarPasta(p: Pick<ConjuntoQuadros, "privado" | "criadoPor">, ator: AtorPasta): boolean {
-  if (p.privado) return p.criadoPor === ator.id || (p.criadoPor == null && !!ator.admin);
-  return ator.editor;
+/** Pode ORGANIZAR a pasta (nome, cor, quadros, excluir)? A pública: quem CONFIGURA Tarefas no grupo dela; a privada: o dono
+ * (que manipula no grupo — a órfã: o ADM). */
+export function podeEditarPasta(p: Pick<ConjuntoQuadros, "privado" | "criadoPor" | "grupoId">, ator: AtorPasta): boolean {
+  if (p.privado) return (p.criadoPor === ator.id && noGrupoDoAtor(ator.manipulaEm, p.grupoId)) || (p.criadoPor == null && !!ator.admin);
+  return noGrupoDoAtor(ator.configuraEm, p.grupoId);
 }
 
 /**
- * Por que o quadro NÃO pode sair de `origem` e ir para `destino` (`null` = a raiz)? `null` = pode. Pública: só editores,
+ * Por que o quadro NÃO pode sair de `origem` e ir para `destino` (`null` = a raiz)? `null` = pode. Pública: quem configura,
  * só quadro NÃO privado, do MESMO grupo. Privada: só o dono, só quadro criado por ELE, do mesmo grupo. Tirar: quem pode
  * organizar a pasta de origem. `tornarPublico` = o dono tira o quadro da privada deixando-o visível ao grupo.
  */
 export function motivoNaoMoverParaPasta(
   q: QuadroPasta,
-  origem: Pick<ConjuntoQuadros, "id" | "privado" | "criadoPor"> | null,
+  origem: Pick<ConjuntoQuadros, "id" | "privado" | "criadoPor" | "grupoId"> | null,
   destino: Pick<ConjuntoQuadros, "id" | "privado" | "criadoPor" | "grupoId"> | null,
   ator: AtorPasta,
   tornarPublico = false,
 ): string | null {
-  const falta = (p: Pick<ConjuntoQuadros, "privado">) => (p.privado ? "Só o dono organiza a pasta privada." : "Só editores organizam a pasta pública.");
+  const falta = (p: Pick<ConjuntoQuadros, "privado">) =>
+    p.privado ? "Só o dono organiza a pasta privada." : "Só quem configura Tarefas neste grupo organiza a pasta pública.";
   if (origem && !podeEditarPasta(origem, ator)) return falta(origem);
   if (!destino) return null;
   if (!podeEditarPasta(destino, ator)) return falta(destino);

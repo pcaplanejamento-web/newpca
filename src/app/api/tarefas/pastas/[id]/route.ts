@@ -1,4 +1,5 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { atorPasta } from "@/lib/acesso";
+import { exigirSessao, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarPasta, definirQuadrosDaPasta, excluirPastaDoBanco, pastaAcessivel, podeOrganizarPasta } from "@/lib/tarefas";
@@ -8,15 +9,17 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** A pasta, se a pessoa pode ORGANIZÁ-LA (a pública: editores; a privada: o dono). */
+/** A pasta, se a pessoa pode ORGANIZÁ-LA (a pública: Configurar Tarefas no grupo; a privada: o dono, com Manipular). */
 async function pastaOrganizavel(ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const p = id ? await pastaAcessivel(a.u, id) : null;
   if (!p) return { resp: erro("Pasta não encontrada.", 404) };
-  if (!podeOrganizarPasta(a.u, p)) return { resp: erro(p.privado ? "Só o dono organiza a pasta privada." : "Só editores organizam a pasta pública.", 403) };
-  return { u: a.u, p };
+  const ator = atorPasta(a.acesso);
+  if (!podeOrganizarPasta(ator, p))
+    return { resp: erro(p.privado ? "Só o dono organiza a pasta privada." : "Só quem configura Tarefas neste grupo organiza a pasta pública.", 403) };
+  return { u: a.u, ator, p };
 }
 
 /** Edita a pasta: nome, cor e os QUADROS de dentro (a lista completa, na ordem). A privacidade é fixa depois de criada. */
@@ -27,7 +30,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if ("resp" in b) return b.resp;
   const { quadros, ...d } = b.data;
   if (quadros) {
-    const motivo = await definirQuadrosDaPasta(r.u, r.p, quadros);
+    const motivo = await definirQuadrosDaPasta(r.u, r.ator, r.p, quadros);
     if (motivo) return erro(motivo, 422);
   }
   await atualizarPasta(Number(r.p.id), d);

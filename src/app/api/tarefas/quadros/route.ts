@@ -1,4 +1,5 @@
-import { exigirEditor, exigirUsuario } from "@/lib/api-auth";
+import { atorPasta, gruposDeTarefas } from "@/lib/acesso";
+import { exigirAcesso, exigirSessao, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getGrupoAtivoId, gruposDoUsuario } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -6,7 +7,7 @@ import { resolverImagemFundo } from "@/lib/imagem-fundo";
 import { listasDoPeriodo } from "@/lib/calendario-core";
 import { listarFeriados } from "@/lib/feriados";
 import { dataIsoBrasilia } from "@/lib/format";
-import { atorPasta, atualizarQuadro, copiarTemplatesDe, criarQuadro, criarQuadroDoModelo, gerarListasDoPeriodo, getModelo, getQuadro, listarPastas, listarQuadros, modeloQuadroDe, moverQuadroParaPasta, pastaAcessivel, quadroAcessivel } from "@/lib/tarefas";
+import { atualizarQuadro, copiarTemplatesDe, criarQuadro, criarQuadroDoModelo, gerarListasDoPeriodo, getModelo, getQuadro, listarPastas, listarQuadros, modeloQuadroDe, moverQuadroParaPasta, pastaAcessivel, quadroAcessivel } from "@/lib/tarefas";
 import { ordemDaGrade } from "@/lib/tarefas-dados";
 import { pastasDosQuadros } from "@/lib/tarefas-core";
 import { criarQuadroSchema } from "@/lib/tarefas-validation";
@@ -14,16 +15,16 @@ import { criarQuadroSchema } from "@/lib/tarefas-validation";
 export const dynamic = "force-dynamic";
 
 /**
- * Os QUADROS ativos que a pessoa vê (de TODOS os grupos dela — o ADM, todos; o privado só do dono), com as contagens do
+ * Os QUADROS ativos que a pessoa vê (dos grupos em que o papel VÊ Tarefas — o ADM, todos; o privado só do dono), com as contagens do
  * card, as PASTAS que ela vê e a ORDEM pessoal da grade — o "Mudar de quadros" usa o MESMO `QuadroCard` e as MESMAS seções da tela de Tarefas.
  */
 export async function GET() {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
-  const grupos = a.u.role === "admin" ? null : (await gruposDoUsuario(a.u.id)).map((g) => g.id);
+  const grupos = gruposDeTarefas(a.acesso, "visualizar");
   const [quadros, ordem, pastas] = await Promise.all([listarQuadros(grupos, dataIsoBrasilia(new Date().toISOString()), a.u.id), ordemDaGrade(a.u.id), listarPastas(grupos, a.u)]);
   // As pastas levam também os arquivados (editar a pasta aqui não os tira dela).
-  return ok({ quadros: quadros.filter((q) => !q.arquivado), conjuntos: { lista: pastasDosQuadros(pastas, quadros), ordem }, ator: atorPasta(a.u) });
+  return ok({ quadros: quadros.filter((q) => !q.arquivado), conjuntos: { lista: pastasDosQuadros(pastas, quadros), ordem }, ator: atorPasta(a.acesso) });
 }
 
 /**
@@ -34,7 +35,8 @@ export async function GET() {
  * `pastaId` = criado DENTRO da pasta (na privada, nasce privado).
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  // CRIAR quadro = Configurar Tarefas no GRUPO ATIVO (onde ele nasce).
+  const a = await exigirAcesso("tarefas", "configurar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(criarQuadroSchema, req);
   if ("resp" in p) return p.resp;
@@ -55,10 +57,12 @@ export async function POST(req: Request) {
     }
   const origem = templatesDe ? await quadroAcessivel(a.u, templatesDe) : null;
   if (templatesDe && !origem) return erro("Quadro dos templates não encontrado.", 404);
+  const negadoOrigem = origem ? recusaNoQuadro(a.acesso, origem, "visualizar") : null;
+  if (negadoOrigem) return negadoOrigem;
   let id: number;
   if (modeloId) {
     const m = await getModelo(modeloId);
-    if (m?.tipo !== "quadro" || (a.u.role !== "admin" && !(await gruposDoUsuario(a.u.id)).some((g) => g.id === m.grupoId)))
+    if (m?.tipo !== "quadro" || (!a.u.admin && !(await gruposDoUsuario(a.u.id)).some((g) => g.id === m.grupoId)))
       return erro("Modelo não encontrado.", 404);
     id = await criarQuadroDoModelo(grupoId, d, modeloQuadroDe(m), a.u.id);
   } else id = await criarQuadro(grupoId, d, a.u.id);
@@ -69,7 +73,7 @@ export async function POST(req: Request) {
   if (origem && novo) await copiarTemplatesDe(a.u, origem, novo);
   const criado = pasta ? await getQuadro(id) : null;
   if (pasta && criado) {
-    const motivo = await moverQuadroParaPasta(a.u, criado, pasta, {}, false);
+    const motivo = await moverQuadroParaPasta(a.u, atorPasta(a.acesso), criado, pasta, {}, false);
     if (motivo) return ok({ id, aviso: motivo });
   }
   await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "tarefa_quadro", entidadeId: id, resumo: `Quadro "${p.data.nome}" criado${privado ? " (privado)" : ""}` });

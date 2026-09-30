@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { aposMovimento, getLista, MSG_QUADRO_ARQUIVADO, moverTarefaDeQuadro, quadroAcessivel, tarefaAcessivel } from "@/lib/tarefas";
@@ -12,16 +12,20 @@ export const dynamic = "force-dynamic";
  * histórico; etiquetas pelo nome, só as pessoas do grupo do destino, equipes de mesmo nome. As automações do destino rodam.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return negado;
   const p = await parseCorpo(moverQuadroSchema, req);
   if ("resp" in p) return p.resp;
   if (p.data.quadroId === r.quadro.id) return erro("A tarefa já está neste quadro — troque a lista.", 422);
   const destino = await quadroAcessivel(a.u, p.data.quadroId);
   if (!destino) return erro("Quadro de destino não encontrado.", 404);
+  const negadoDestino = recusaNoQuadro(a.acesso, destino, "manipular", true);
+  if (negadoDestino) return negadoDestino;
   if (destino.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const lista = await getLista(p.data.listaId);
   if (!lista || lista.quadroId !== destino.id || lista.arquivada) return erro("Lista inválida.", 422);

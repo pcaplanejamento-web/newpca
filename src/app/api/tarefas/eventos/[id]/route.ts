@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { dataBR } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -10,15 +10,18 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** O evento e a tarefa dele, se o usuário vê a tarefa (membro do grupo do quadro); o PRIVADO só para quem participa. */
+/** O evento e a tarefa dele, se o papel mexe nas tarefas do quadro (Tarefas ou Calendário, no grupo dele); o PRIVADO só
+ * para quem participa — também para o Administrador (não se altera às cegas). */
 async function eventoAcessivel(ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const evento = id ? await getEvento(id) : null;
   const r = evento ? await tarefaAcessivel(a.u, evento.tarefaId) : null;
   if (!evento || !r) return { resp: erro("Evento não encontrado.", 404) };
-  if (evento.privado && a.u.role !== "admin" && !participaDoEvento(evento, a.u.id, r.tarefa.envolvidos)) return { resp: erro("Evento privado — só quem participa pode alterá-lo.", 403) };
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return { resp: negado };
+  if (evento.privado && !participaDoEvento(evento, a.u.id, r.tarefa.envolvidos)) return { resp: erro("Evento privado — só quem participa pode alterá-lo.", 403) };
   return { u: a.u, evento, r };
 }
 

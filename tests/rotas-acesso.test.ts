@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, it } from "node:test";
-import { type Metodo, PENDENTES, ROTAS_ACESSO } from "../src/lib/rotas-acesso.ts";
+import { type Metodo, ROTAS_ACESSO } from "../src/lib/rotas-acesso.ts";
 
 // TESTE ESTÁTICO do acesso das rotas: percorre `src/app/api/**/route.ts` e confere que TODO método exportado está no
 // mapa (`rotas-acesso.ts`) e chama a guarda que o mapa descreve — a permissão do grupo e o papel valem no SERVIDOR, não
-// só no menu. (As rotas ainda pendentes de migração ficam de fora enquanto a lista de PENDENTES não zera.)
+// só no menu.
 
 const API = join(process.cwd(), "src", "app", "api");
 
@@ -32,16 +32,18 @@ function metodos(fonte: string): Map<Metodo, string> {
 }
 
 const chave = (arquivo: string) => relative(API, arquivo).split(sep).slice(0, -1).join("/");
-const pendente = (k: string) => PENDENTES.some((p) => k.startsWith(p));
+
+/** As guardas pelo PAPEL (a tela que o grupo abre + a ação que o papel permite) — no método ou num auxiliar do arquivo. */
+const GUARDA_DO_PAPEL =
+  /\b(exigirAcesso|recusa|recusaNoQuadro|recusaNaChave|motivoRecusa|motivoNoQuadro|podeTela|podeNoQuadro|podeLigarTrello|gruposDeTarefas|gruposComTela|atorPasta)\(/;
 
 describe("acesso das rotas da API", () => {
   const arquivos = rotas(API);
 
-  it("toda rota tem os métodos no mapa (ou está pendente de migração)", () => {
+  it("toda rota tem os métodos no mapa", () => {
     const faltam: string[] = [];
     for (const arq of arquivos) {
       const k = chave(arq);
-      if (!ROTAS_ACESSO[k] && pendente(k)) continue;
       for (const m of metodos(readFileSync(arq, "utf8")).keys()) if (!ROTAS_ACESSO[k]?.[m]) faltam.push(`${m} ${k}`);
     }
     assert.deepEqual(faltam, []);
@@ -79,8 +81,16 @@ describe("acesso das rotas da API", () => {
           for (const t of r.telas) if (!tem(`"${t}"`)) falta(`a tela "${t}"`);
         }
         if (r.tipo === "recurso") {
-          if (!tem(r.chamada ?? "recusa(")) falta(r.chamada ?? "recusa(");
-          if (!tem(`"${r.acao}"`)) falta(`a ação "${r.acao}"`);
+          const chamada = r.chamada ?? "recusa(";
+          if (!tem(chamada)) falta(chamada);
+          // A chamada pode ser um AUXILIAR do arquivo (ex.: `listaDoEditor(ctx, "configurar")`): a guarda pelo papel e a
+          // ação ficam nele. A ação calculada por uma regra PURA (`acaoDe`, testada no núcleo) tem de ser chamada no arquivo.
+          const auxiliar = new RegExp(`^(?:async )?function ${chamada.slice(0, -1)}\\(`, "m").test(fonte);
+          const onde = auxiliar ? fonte : corpo;
+          if (!GUARDA_DO_PAPEL.test(onde)) falta("a guarda pelo papel (recusa…/motivo…/pode…)");
+          if (r.acaoDe) {
+            if (!fonte.includes(r.acaoDe)) falta(r.acaoDe);
+          } else if (!onde.includes(`"${r.acao}"`)) falta(`a ação "${r.acao}"`);
         }
         if (r.tipo !== "publica" && r.tipo !== "interna" && tem("exigirEditor(")) erros.push(`${m} ${k}: ainda usa exigirEditor(`);
       }

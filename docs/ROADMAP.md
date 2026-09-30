@@ -26,15 +26,19 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
-### Papéis configuráveis por tela + auditoria de Grupos, Permissões e Papel — em andamento (entrega 1 de 3)
-- **Entrega 1 (esta):** correções da administração (PATCH de grupo/permissão não apaga mais pessoas, unidades e telas;
+### Papéis configuráveis por tela + auditoria de Grupos, Permissões e Papel — em andamento (entrega 2 de 3)
+- **Entrega 1 ✅:** correções da administração (PATCH de grupo/permissão não apaga mais pessoas, unidades e telas;
   gravação do grupo num lote; impacto e confirmação ao excluir grupo; sigla GERAL reservada; confirmações do sistema e
   avisos nas telas de Grupos, Permissões e Usuários) + a BASE dos papéis: migração `0069` (`papeis` + `usuarios.papel_id`,
   3 papéis do sistema que reproduzem as guardas de hoje), núcleo puro (`papeis-core.ts`, `escopo-unidades-core.ts`) e os
   comandos com trava (`papeis-sql.ts`: cadastro atômico, o último Administrador ativo nunca sai, desativar encerra as sessões).
-- **Entrega 2:** sessão com o papel, acesso efetivo (grupo libera ∩ papel visualiza) em navegação, páginas e rotas;
-  escopo de unidades em 3 estados (sem grupo não vê dado; "Geral" também no detalhe); guardas por tela + ação em todos os
-  módulos, com modos só-leitura.
+- **Entrega 2 ✅:** sessão com o papel, acesso efetivo (grupo libera ∩ papel visualiza) em navegação, páginas e rotas;
+  escopo de unidades em 3 estados (sem grupo não vê dado; "Geral" também no detalhe); guardas por tela + ação em TODOS os
+  módulos — Mesa pela tela do recurso (protocolo num PCA → PCA), PCA, Catálogo, Orçamento, Tarefas pelo grupo DO QUADRO
+  (a tarefa e os eventos também pelo Calendário; pastas por grupo), Calendário (feed .ics pelo papel; evento privado só de
+  quem participa), vínculos pela tela do alvo e edições PÚBLICAS de tabela = Configurar (moderação + auditoria) —, o mapa
+  `rotas-acesso.ts` conferido por teste estático (toda rota mapeada e guardada) e os modos só-leitura (detalhe da tarefa,
+  quadro, comentários) com o que o papel não permite fora da tela.
 - **Entrega 3:** Configurações → **Papéis** (criar papéis, matriz telas × ações), Usuários com o papel do banco e os grupos,
   "Ver acesso", exportar .xlsx da Mesa.
 

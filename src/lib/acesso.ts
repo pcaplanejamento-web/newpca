@@ -3,9 +3,11 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { grupos, permissoes, usuarioGrupos } from "@/db/schema";
 import { abasConhecidas } from "./abas";
+import type { AtorPasta } from "./tarefas-core";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 import {
+  ACOES_PAPEL,
   type AcaoPapel,
   mensagemSemPermissao,
   mensagemTelaFechada,
@@ -91,6 +93,52 @@ export function motivoRecusa(a: Acesso, tela: Tela, acao: AcaoPapel, grupoId?: n
   const pode = podeTela(a, tela, grupoId);
   if (pode[acao]) return null;
   return pode.visualizar ? mensagemSemPermissao(tela, acao) : mensagemTelaFechada(tela);
+}
+
+/** As ações que a tela CALENDÁRIO também libera nas tarefas de um quadro (a tarefa e os eventos se mexem por ela). */
+const PELA_AGENDA: readonly AcaoPapel[] = ["visualizar", "manipular", "excluir"];
+
+/**
+ * O que o papel permite nas TAREFAS de um quadro — no GRUPO DO QUADRO (o link de um aviso de outro grupo da pessoa segue
+ * valendo): a tela Tarefas; com `pelaAgenda`, também a tela Calendário para ver, mexer e excluir a tarefa e os eventos
+ * (a configuração do quadro, a importação e a exportação são só de Tarefas). O Administrador pode tudo.
+ */
+export function podeNoQuadro(a: Acesso, grupoId: number, pelaAgenda = false): PodeTela {
+  const t = podeTela(a, "tarefas", grupoId);
+  if (!pelaAgenda || a.u.admin) return t;
+  const c = podeTela(a, "calendario", grupoId);
+  return Object.freeze(Object.fromEntries(ACOES_PAPEL.map((x) => [x, t[x] || (PELA_AGENDA.includes(x) && c[x])]))) as PodeTela;
+}
+
+/** O MOTIVO da recusa nas tarefas de um quadro (o `podeNoQuadro`); `null` = pode. */
+export function motivoNoQuadro(a: Acesso, grupoId: number, acao: AcaoPapel, pelaAgenda = false): string | null {
+  if (podeNoQuadro(a, grupoId, pelaAgenda)[acao]) return null;
+  const t = podeTela(a, "tarefas", grupoId);
+  const c = pelaAgenda ? podeTela(a, "calendario", grupoId) : PODE_NADA;
+  if (t.visualizar) return mensagemSemPermissao("tarefas", acao);
+  if (c.visualizar) return mensagemSemPermissao("calendario", acao);
+  return mensagemTelaFechada("tarefas");
+}
+
+/** Os GRUPOS em que o papel faz a AÇÃO nas tarefas (`podeNoQuadro`) — `null` = todos (o ADM). As listas de quadros, os
+ * destinos de copiar/mover e as buscas de tarefa seguem por grupo. */
+export function gruposDeTarefas(a: Acesso, acao: AcaoPapel = "visualizar", pelaAgenda = false): number[] | null {
+  if (a.u.admin) return null;
+  return a.grupos.filter((g) => podeNoQuadro(a, g.id, pelaAgenda)[acao]).map((g) => g.id);
+}
+
+/** Pode LIGAR o quadro ao Trello (e ver os boards da conta): Configurar Tarefas no grupo dele — o PRIVADO, só o dono. */
+export function podeLigarTrello(a: Acesso, q: { grupoId: number; privado: boolean; criadoPor: number | null }): boolean {
+  const configura = podeNoQuadro(a, q.grupoId).configurar;
+  return q.privado && q.criadoPor != null ? q.criadoPor === a.u.id && configura : configura;
+}
+
+/** Quem mexe nas PASTAS de quadros (a regra pura `motivoNaoMoverParaPasta`): os grupos em que o papel CONFIGURA Tarefas
+ * (a pasta pública) e em que MANIPULA (a privada, do dono) — o ADM, todos. */
+export function atorPasta(a: Acesso): AtorPasta {
+  if (a.u.admin) return { id: a.u.id, admin: true, configuraEm: null, manipulaEm: null };
+  const em = (acao: "configurar" | "manipular") => a.grupos.filter((g) => podeTela(a, "tarefas", g.id)[acao]).map((g) => g.id);
+  return { id: a.u.id, configuraEm: em("configurar"), manipulaEm: em("manipular") };
 }
 
 /** O que o papel permite nas DUAS Mesas (a do sistema e a do PCA), no grupo ativo — cada recurso segue a sua. */

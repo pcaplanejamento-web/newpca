@@ -52,7 +52,7 @@ export default async function PcaEspacoPage({
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
   if (aba === "dashboard") conteudo = await abaDashboard(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
-  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode.exportar);
+  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode);
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, pode);
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
@@ -112,7 +112,7 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
  * Aba ORÇAMENTO: os KPIs (dotação do CUBO do ANO do PCA × planejado) e, abaixo, o COMPARATIVO — a MESMA tabela cruzada da
  * tela do orçamento (na visão da Configuração do PCA, trocável) e o PCA × Orçamento por unidade. Um só orçamento do ano.
  */
-async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, podeExportar: boolean) {
+async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela) {
   const ref = await orcamentoDoAno(pca.ano);
   const [orc, comp] = await Promise.all([orcamentoDoPca(pca, ref), ref ? dadosComparativo(ref.id, usuarioId) : null]);
   return (
@@ -130,7 +130,8 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, podeExport
         unidades: orc.unidades,
       }}
       comparativo={ref && comp ? { titulo: `${ref.nome} ${ref.ano}`, visaoInicial: pca.orcamentoVisaoId, ...comp } : null}
-      podeExportar={podeExportar}
+      podeExportar={pode.exportar}
+      podePublicar={pode.configurar}
     />
   );
 }

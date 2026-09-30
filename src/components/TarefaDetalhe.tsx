@@ -152,6 +152,7 @@ export function TarefaDetalhe({
   hoje,
   usuarioId,
   podeExcluir,
+  somenteLeitura = false,
   onCopiarMover,
   onDuplicar,
   onFechar,
@@ -176,8 +177,10 @@ export function TarefaDetalhe({
   todas: Pessoa[];
   hoje: string;
   usuarioId: number;
-  /** Editor (admin/gestor): exclui a tarefa e modera comentários. */
+  /** O papel EXCLUI (Excluir): a tarefa e os comentários de outras pessoas. */
   podeExcluir: boolean;
+  /** O papel só VÊ as tarefas (sem Manipular): tudo só-leitura — sem salvar, concluir, arquivar, copiar nem comentar. */
+  somenteLeitura?: boolean;
   /** Copiar · Mover para outro quadro · Criar template (o host abre o diálogo). */
   onCopiarMover?: (id: number, modo: ModoCopia) => void;
   /** DUPLICA a tarefa logo abaixo, na mesma lista. */
@@ -761,6 +764,7 @@ export function TarefaDetalhe({
               pessoas={todas}
               usuarioId={usuarioId}
               podeModerar={podeExcluir}
+              somenteLeitura={somenteLeitura}
               onEnviar={(texto) => agir(() => chamar(`${base}/comentarios`, "POST", { texto }))}
               onEditar={(c, texto) => agir(() => chamar(`${base}/comentarios/${c.id}`, "PATCH", { texto }))}
               onExcluir={async (c) => {
@@ -806,10 +810,10 @@ export function TarefaDetalhe({
         const off = sujo || salvando != null;
         return (
           <div className="space-y-0.5">
-            {onDuplicar && item("Duplicar", <IconCopy className="h-4 w-4 text-muted" />, () => onDuplicar(t.id), off)}
-            {onCopiarMover && item("Copiar…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "copiar"), off)}
-            {onCopiarMover && item("Mover para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "mover"), off)}
-            {onCopiarMover && !t.template && item("Criar template…", <IconModelo className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "template"), off)}
+            {!somenteLeitura && onDuplicar && item("Duplicar", <IconCopy className="h-4 w-4 text-muted" />, () => onDuplicar(t.id), off)}
+            {!somenteLeitura && onCopiarMover && item("Copiar…", <IconCopy className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "copiar"), off)}
+            {!somenteLeitura && onCopiarMover && item("Mover para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "mover"), off)}
+            {!somenteLeitura && onCopiarMover && !t.template && item("Criar template…", <IconModelo className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "template"), off)}
             {item("Copiar link", <IconLink className="h-4 w-4 text-muted" />, () => {
               const url = `${window.location.origin}${linkTarefa(quadroId, t.id)}`;
               navigator.clipboard?.writeText(url).then(
@@ -818,8 +822,8 @@ export function TarefaDetalhe({
               );
             })}
             {trelloUrl && item("Abrir no Trello", <IconTrello className="h-4 w-4 text-muted" />, () => window.open(trelloUrl, "_blank", "noopener,noreferrer"))}
-            {off && onCopiarMover && <p className="px-2 pb-1 text-[11.5px] text-muted">Salve as alterações para copiar ou mover.</p>}
-            {!t.template && (
+            {!somenteLeitura && off && onCopiarMover && <p className="px-2 pb-1 text-[11.5px] text-muted">Salve as alterações para copiar ou mover.</p>}
+            {!somenteLeitura && !t.template && (
               <fieldset className="border-t border-border px-2 pt-2 pb-1">
                 <legend className="sr-only">Capa do cartão</legend>
                 <p className="mb-1.5 text-[12px] font-semibold text-muted">Capa do cartão</p>
@@ -889,7 +893,7 @@ export function TarefaDetalhe({
         }
         rodape={
           <div className="flex flex-wrap items-center gap-2">
-            {existente && (
+            {existente && !somenteLeitura && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -923,7 +927,7 @@ export function TarefaDetalhe({
               <Button variant="ghost" disabled={salvando != null} onClick={fechar}>
                 {sujo ? "Cancelar" : "Fechar"}
               </Button>
-              {existente && !existente.arquivada && !existente.template && (
+              {existente && !somenteLeitura && !existente.arquivada && !existente.template && (
                 <Button
                   variant="secondary"
                   disabled={!pode}
@@ -933,9 +937,11 @@ export function TarefaDetalhe({
                   {concluida ? "Reabrir" : "Concluir"}
                 </Button>
               )}
-              <Button loading={salvando === "salvar"} disabled={!pode || (!nova && !sujo)} onClick={() => salvar()}>
-                {nova ? "Criar tarefa" : "Salvar"}
-              </Button>
+              {!somenteLeitura && (
+                <Button loading={salvando === "salvar"} disabled={!pode || (!nova && !sujo)} onClick={() => salvar()}>
+                  {nova ? "Criar tarefa" : "Salvar"}
+                </Button>
+              )}
             </div>
           </div>
         }
@@ -958,7 +964,9 @@ export function TarefaDetalhe({
             <div className="flex min-h-0 flex-1 flex-col">{painelAtividade[0].children}</div>
           </div>
         ) : (
-        <div className="space-y-4">
+        // Só-leitura (o papel só VÊ): o fieldset desabilita TODOS os controles de dentro (os links seguem abrindo).
+        <fieldset disabled={somenteLeitura} className="m-0 min-w-0 space-y-4 border-0 p-0">
+          {somenteLeitura && <p className="text-[12px] text-muted">Somente leitura — seu papel não permite editar as tarefas deste quadro.</p>}
           {/* CÍRCULO de concluir + TÍTULO no lugar (como no Trello). */}
           <div className="flex items-start gap-2">
             {existente && !existente.template && !existente.arquivada && (
@@ -1074,7 +1082,7 @@ export function TarefaDetalhe({
             {arrasto && arrasto.indice >= r.blocos.length - (movendo ? 1 : 0) && <GuiaBloco />}
           </div>
           {arrasto && <ChipPreso rotulo={arrasto.rotulo} x={arrasto.x} y={arrasto.y} fantasma={arrastoBlocos.fantasma} />}
-        </div>
+        </fieldset>
         )}
       </Modal>
       {confirmacao}

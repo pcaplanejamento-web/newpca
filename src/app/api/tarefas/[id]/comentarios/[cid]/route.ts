@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { avisarSobreTarefa, editarComentario, excluirComentario, getComentario, lerMencoes, pessoasDoQuadro, tarefaAcessivel } from "@/lib/tarefas";
@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string; cid: string }> };
 
-/** O comentário DESTA tarefa: editar só o AUTOR; excluir o autor ou um editor (admin/gestor). */
+/** O comentário DESTA tarefa: o PRÓPRIO se edita/exclui com Manipular; o de OUTRA pessoa só se exclui, com Excluir. */
 async function comentario(ctx: Ctx, excluir: boolean) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const ps = await ctx.params;
   const id = intId(ps.id);
@@ -20,8 +20,10 @@ async function comentario(ctx: Ctx, excluir: boolean) {
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   const c = r && cid ? await getComentario(cid) : null;
   if (!r || !c || c.tarefaId !== r.tarefa.id) return { resp: erro("Comentário não encontrado.", 404) };
-  const editor = a.u.role === "admin" || a.u.role === "gestor";
-  if (c.usuarioId !== a.u.id && !(excluir && editor)) return { resp: erro("Só o autor pode alterar o comentário.", 403) };
+  const proprio = c.usuarioId === a.u.id;
+  if (!proprio && !excluir) return { resp: erro("Só o autor pode alterar o comentário.", 403) };
+  const negado = recusaNoQuadro(a.acesso, r.quadro, proprio ? "manipular" : "excluir", true);
+  if (negado) return { resp: negado };
   return { u: a.u, r, c };
 }
 

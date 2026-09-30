@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { calendarioTokens, usuarios } from "@/db/schema";
+import { calendarioTokens, papeis, usuarios } from "@/db/schema";
+import { colunasSessao, papelDoUsuarioSql, sessaoDaLinha, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 
 /**
@@ -44,11 +45,13 @@ export async function assinaturaDaPessoa(usuarioId: number): Promise<{ criadoEm:
 }
 
 /** O USUÁRIO (ATIVO) dono do token — `null` = link inválido, revogado ou de usuário inativo. */
-export async function usuarioDoToken(token: string) {
+export async function usuarioDoToken(token: string): Promise<UsuarioSessao | null> {
+  // A pessoa como a sessão a veria (com o PAPEL) — o feed segue as telas e as ações dela.
   const [r] = await getDb()
-    .select({ id: usuarios.id, nome: usuarios.nome, email: usuarios.email, role: usuarios.role, status: usuarios.status })
+    .select(colunasSessao)
     .from(calendarioTokens)
     .innerJoin(usuarios, eq(usuarios.id, calendarioTokens.usuarioId))
+    .leftJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
     .where(eq(calendarioTokens.tokenHash, await hashToken(token)));
-  return r && r.status === "ativo" ? r : null;
+  return r && r.status === "ativo" ? sessaoDaLinha(r) : null;
 }

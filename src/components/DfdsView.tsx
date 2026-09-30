@@ -250,6 +250,8 @@ export function DfdsView({
         setEdLista(l);
         setEdPadroes(p);
       },
+      // Publicar uma edição da tabela (todos veem) = Configurar a Mesa em que ela está.
+      podePublicar: (modoPca ? pode.pca : pode.sistema).configurar,
     };
   const [erro, setErro] = useState<string | null>(null);
   // DADOS COMPLETOS nas tabelas (o botão da barra): vale na hora e fica guardado como preferência do usuário — a Mesa

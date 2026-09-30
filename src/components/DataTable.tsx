@@ -84,6 +84,8 @@ export type EdicoesDaTabela = {
   padroes: Record<string, unknown>;
   /** Quem guarda a lista fora da tabela (a tabela que remonta volta com as edições novas). */
   onMudar?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
+  /** O papel CONFIGURA a tela da tabela: publica edições para todos e modera as públicas. */
+  podePublicar: boolean;
 };
 
 type OrdemAtual = { key: string | null; dir: "asc" | "desc" };
@@ -174,6 +176,7 @@ export function DataTable<R>({
     edicoes: edicoes?.lista ?? SEM_EDICOES,
     padroes: edicoes?.padroes ?? SEM_PADROES,
     onMudar: edicoes?.onMudar,
+    podePublicar: edicoes?.podePublicar ?? false,
     coerce: coerceLayoutTabela,
     igual: layoutTabelaIgual,
     padrao: LAYOUT_TABELA_PADRAO,

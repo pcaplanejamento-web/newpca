@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { aposMovimento, colocarTarefaApos, copiarTarefa, getLista, MSG_QUADRO_ARQUIVADO, quadroAcessivel, tarefaAcessivel } from "@/lib/tarefas";
@@ -12,16 +12,21 @@ export const dynamic = "force-dynamic";
  * template". A cópia de um cartão comum roda as automações do destino; o template, não.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "visualizar", true);
+  if (negado) return negado;
   const p = await parseCorpo(copiarTarefaSchema, req);
   if ("resp" in p) return p.resp;
   const d = p.data;
   const destino = d.quadroId === r.quadro.id ? r.quadro : await quadroAcessivel(a.u, d.quadroId);
   if (!destino) return erro("Quadro de destino não encontrado.", 404);
+  // A CÓPIA é criada no destino: Manipular lá.
+  const negadoDestino = recusaNoQuadro(a.acesso, destino, "manipular", true);
+  if (negadoDestino) return negadoDestino;
   if (destino.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const lista = await getLista(d.listaId);
   if (!lista || lista.quadroId !== destino.id || lista.arquivada) return erro("Lista inválida.", 422);

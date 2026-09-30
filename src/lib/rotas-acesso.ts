@@ -5,8 +5,9 @@ import type { AcaoPapel, Tela } from "./papeis-core.ts";
  * Módulo PURO — o teste `tests/rotas-acesso.test.ts` percorre as rotas e confere que TODO método está aqui e chama a
  * guarda descrita (a documentação que não mente). Tipos:
  * - `tela`: `exigirAcesso(telas, acao)` no início (as telas do grupo ativo; várias = basta uma);
- * - `recurso`: a tela vem do RECURSO (protocolo num PCA → `pca`, senão `dfd`; o grupo do quadro de tarefas) — a sessão
- *   primeiro e a recusa pela tela do recurso (`chamada` = o que a confere; padrão `recusa(`);
+ * - `recurso`: a tela vem do RECURSO (protocolo num PCA → `pca`, senão `dfd`; o grupo do quadro de tarefas; a tabela de
+ *   uma edição salva) — a sessão primeiro e a recusa pela tela do recurso (`chamada` = o que a confere, padrão `recusa(` —
+ *   pode ser um auxiliar do arquivo; `acaoDe` = a ação vem de uma regra PURA, testada no núcleo);
  * - `admin`: `exigirAdmin` (a Administração é só do papel Administrador);
  * - `pessoal`: só a sessão (o que é da própria pessoa);
  * - `publica`/`interna`: sem sessão (login e cadastro, consulta pública, cron com segredo, webhook assinado).
@@ -15,7 +16,7 @@ export type Metodo = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 export type RegraRota =
   | { tipo: "tela"; telas: readonly Tela[]; acao: AcaoPapel; obs?: string }
-  | { tipo: "recurso"; telas: readonly Tela[]; acao: AcaoPapel; chamada?: string; obs?: string }
+  | { tipo: "recurso"; telas: readonly Tela[]; acao: AcaoPapel; chamada?: string; acaoDe?: string; obs?: string }
   | { tipo: "admin"; chamada?: string }
   | { tipo: "pessoal"; obs?: string }
   | { tipo: "publica"; obs: string }
@@ -27,11 +28,12 @@ const tela = (telas: Tela | readonly Tela[], acao: AcaoPapel, obs?: string): Reg
   acao,
   obs,
 });
-const recurso = (telas: Tela | readonly Tela[], acao: AcaoPapel, chamada?: string, obs?: string): RegraRota => ({
+const recurso = (telas: Tela | readonly Tela[], acao: AcaoPapel, chamada?: string, obs?: string, acaoDe?: string): RegraRota => ({
   tipo: "recurso",
   telas: typeof telas === "string" ? [telas] : telas,
   acao,
   chamada,
+  acaoDe,
   obs,
 });
 const ADMIN: RegraRota = { tipo: "admin" };
@@ -42,6 +44,12 @@ const publica = (obs: string): RegraRota => ({ tipo: "publica", obs });
 const interna = (obs: string): RegraRota => ({ tipo: "interna", obs });
 
 const MESA = ["dfd", "pca"] as const;
+/** As tarefas e os eventos de um quadro: o papel no GRUPO DO QUADRO em Tarefas — ou no Calendário (ver, mexer, excluir). */
+const AGENDA = ["tarefas", "calendario"] as const;
+/** A recusa nas tarefas de um quadro, pelo papel no grupo dele. */
+const QUADRO = "recusaNoQuadro(";
+/** As telas das tabelas com EDIÇÕES SALVAS (a Mesa do sistema e a do PCA, o Comparativo do orçamento, a Lista de tarefas). */
+const TABELAS = ["dfd", "pca", "orcamento", "tarefas"] as const;
 
 /** Rota (caminho relativo a `src/app/api`, sem `/route.ts`) → método → regra. */
 export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = {
@@ -86,6 +94,16 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "auth/logout": { POST: publica("sair (encerra a sessão do cookie)") },
   "auth/me": { GET: publica("quem está logado (ou 401)") },
   "auth/senha": { POST: publica("esqueci a senha (código do e-mail)") },
+
+  // ── Calendário (o grupo ativo) ────────────────────────────────────────────────────────────────────────────
+  "calendario/assinatura": { POST: tela("calendario", "exportar", "gerar o link de assinatura (.ics)"), DELETE: pessoal("revogar o próprio link") },
+  "calendario/busca": { GET: tela("calendario", "visualizar") },
+  "calendario/externos": { GET: tela("calendario", "visualizar"), POST: tela("calendario", "importar", "assinar uma agenda externa") },
+  "calendario/externos/[id]": {
+    PATCH: recurso("calendario", "importar", "daPessoa(", "só a da própria pessoa"),
+    DELETE: recurso("calendario", "visualizar", "daPessoa(", "tirar a própria agenda"),
+  },
+  "calendario/ics/[token]": { GET: publica("o feed .ics pelo token: pessoa ativa, Exportar no Calendário e só os quadros dos grupos que o abrem") },
 
   // ── Catálogo ────────────────────────────────────────────────────────────────────────────────────────────
   "catalogo/[id]": { PATCH: tela("catalogo", "manipular"), DELETE: tela("catalogo", "excluir") },
@@ -132,6 +150,11 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "protocolo/conferencia": { POST: tela(MESA, "visualizar") },
   "protocolo/massa": { POST: recurso(MESA, "manipular", "motivoRecusa(", "por protocolo — o que o papel não permite vira falha") },
 
+  // ── Integrações (sessão) ─────────────────────────────────────────────────────────────────────────────────
+  "integracoes/trello/boards": {
+    GET: recurso("tarefas", "configurar", "podeLigarTrello(", "?quadro= — os boards da conta: quem liga ESTE quadro (o privado, só o dono)", "podeLigarTrello("),
+  },
+
   // ── Orçamento ───────────────────────────────────────────────────────────────────────────────────────────
   "orcamento": { POST: tela("orcamento", "importar", "importar o CUBO (em lotes)") },
   "orcamento/[id]": {
@@ -171,21 +194,87 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "usuarios/[id]/foto": { GET: pessoal("a foto (avatar) de uma pessoa") },
   "notificacoes": { GET: pessoal("o sino (derivados só dos grupos com Tarefas/Calendário)"), PATCH: pessoal() },
 
+  // ── Edições salvas de tabela (a tela da tabela da chave: salvar a sua = Visualizar; publicar/moderar = Configurar) ──
+  "tabela/edicoes": { POST: recurso(TABELAS, "visualizar", "recusaNaChave(", "pública = Configurar; chave de outra tabela = 422") },
+  "tabela/edicoes/[id]": {
+    PATCH: recurso(TABELAS, "visualizar", "paraGravar(", "o dono (publicar = Configurar); a pública de outra pessoa = Configurar; a privada, só o ADM", "acaoParaGravar("),
+    DELETE: recurso(TABELAS, "visualizar", "paraGravar(", "o dono exclui a sua sempre; a pública de outra pessoa = Configurar", "acaoParaGravar("),
+  },
+
+  // ── Tarefas (o papel no GRUPO DO QUADRO — o link de um aviso de outro grupo segue valendo; a tarefa e os eventos
+  //    também pelo Calendário) ─────────────────────────────────────────────────────────────────────────────────
+  "tarefas": { POST: recurso(AGENDA, "manipular", QUADRO, "criar a tarefa na lista") },
+  "tarefas/[id]": { GET: recurso(AGENDA, "visualizar", QUADRO), PATCH: recurso(AGENDA, "manipular", QUADRO), DELETE: recurso(AGENDA, "excluir", QUADRO) },
+  "tarefas/[id]/checklist": { POST: recurso(AGENDA, "manipular", QUADRO) },
+  "tarefas/[id]/checklist/[itemId]": {
+    PATCH: recurso(AGENDA, "manipular", "itemDaTarefa("),
+    DELETE: recurso(AGENDA, "manipular", "itemDaTarefa(", "tirar um item é mexer na tarefa"),
+  },
+  "tarefas/[id]/checklist/[itemId]/converter": { POST: recurso(AGENDA, "manipular", QUADRO) },
+  "tarefas/[id]/checklists": { POST: recurso(AGENDA, "manipular", QUADRO) },
+  "tarefas/[id]/comentarios": { POST: recurso(AGENDA, "manipular", QUADRO) },
+  "tarefas/[id]/comentarios/[cid]": {
+    PATCH: recurso(AGENDA, "manipular", "comentario(", "só o próprio comentário"),
+    DELETE: recurso(AGENDA, "manipular", "comentario(", "o próprio = Manipular; o de outra pessoa = Excluir"),
+  },
+  "tarefas/[id]/copiar": { POST: recurso(AGENDA, "manipular", QUADRO, "Visualizar a origem + Manipular no quadro de destino") },
+  "tarefas/[id]/eventos": { POST: recurso(AGENDA, "manipular", QUADRO) },
+  "tarefas/[id]/historico": { GET: recurso(AGENDA, "visualizar", QUADRO) },
+  "tarefas/[id]/mover": { POST: recurso(AGENDA, "manipular", QUADRO) },
+  "tarefas/[id]/mover-quadro": { POST: recurso(AGENDA, "manipular", QUADRO, "Manipular nos dois quadros") },
+  "tarefas/automacoes/[id]": { PATCH: recurso("tarefas", "configurar", "automacaoDoEditor("), DELETE: recurso("tarefas", "configurar", "automacaoDoEditor(") },
+  "tarefas/campos/[id]": { PATCH: recurso("tarefas", "configurar", "campoDoEditor("), DELETE: recurso("tarefas", "configurar", "campoDoEditor(") },
+  "tarefas/checklists/[id]": { PATCH: recurso(AGENDA, "manipular", "checklistAcessivel("), DELETE: recurso(AGENDA, "manipular", "checklistAcessivel(") },
+  "tarefas/destinos": { GET: recurso(AGENDA, "manipular", "gruposDeTarefas(", "os quadros em que se copia/move uma tarefa") },
+  "tarefas/do-vinculo": { GET: recurso(AGENDA, "visualizar", "gruposDeTarefas(", "as tarefas do alvo; os quadros para criar = Manipular") },
+  "tarefas/equipes/[id]": { PATCH: recurso("tarefas", "configurar", "equipeDoEditor("), DELETE: recurso("tarefas", "configurar", "equipeDoEditor(") },
+  "tarefas/etiquetas/[id]": { PATCH: recurso("tarefas", "configurar", "etiquetaDoEditor("), DELETE: recurso("tarefas", "configurar", "etiquetaDoEditor(") },
+  "tarefas/eventos/[id]": {
+    PATCH: recurso(AGENDA, "manipular", "eventoAcessivel(", "o PRIVADO, só quem participa (também para o ADM)"),
+    DELETE: recurso(AGENDA, "manipular", "eventoAcessivel(", "o PRIVADO, só quem participa (também para o ADM)"),
+  },
+  "tarefas/eventos/[id]/resposta": { POST: recurso(AGENDA, "visualizar", QUADRO, "só o convidado responde") },
+  "tarefas/fotos": { GET: recurso("tarefas", "configurar", "gruposDeTarefas(", "as fotos de fundo: quem configura quadros em algum grupo") },
+  "tarefas/listas/[id]": {
+    GET: recurso("tarefas", "visualizar", QUADRO, "quantos cartões (excluir a lista)"),
+    PATCH: recurso("tarefas", "configurar", "listaDoEditor("),
+    DELETE: recurso("tarefas", "excluir", "listaDoEditor("),
+  },
+  "tarefas/listas/[id]/ordenar": { POST: recurso("tarefas", "manipular", QUADRO, "ordenar os cartões da lista") },
+  "tarefas/massa": { POST: recurso(AGENDA, "manipular", QUADRO) },
+  "tarefas/modelos": { POST: recurso("tarefas", "configurar", QUADRO, "salvar o quadro como modelo") },
+  "tarefas/modelos/[id]": { DELETE: recurso("tarefas", "configurar", QUADRO, "quem salvou = Manipular; os demais = Configurar") },
+  "tarefas/pastas": { POST: recurso("tarefas", "configurar", QUADRO, "a pública = Configurar no grupo; a privada = Manipular (do dono)") },
+  "tarefas/pastas/[id]": {
+    PATCH: recurso("tarefas", "configurar", "pastaOrganizavel(", "a pública = Configurar; a privada = o dono com Manipular", "atorPasta("),
+    DELETE: recurso("tarefas", "configurar", "pastaOrganizavel(", "a pública = Configurar; a privada = o dono com Manipular", "atorPasta("),
+  },
+  "tarefas/pastas/mover": { POST: recurso("tarefas", "configurar", "atorPasta(", "a regra pura das pastas (origem e destino)", "atorPasta(") },
+  "tarefas/quadros": {
+    GET: recurso("tarefas", "visualizar", "gruposDeTarefas(", "os quadros dos grupos em que o papel vê Tarefas"),
+    POST: tela("tarefas", "configurar", "criar o quadro no grupo ativo (copiar templates: Visualizar no quadro de origem)"),
+  },
+  "tarefas/quadros/[id]": { PATCH: recurso("tarefas", "configurar", QUADRO, "o privado: só o dono o torna privado/público"), DELETE: recurso("tarefas", "excluir", QUADRO) },
+  "tarefas/quadros/[id]/automacoes": { POST: recurso("tarefas", "configurar", QUADRO) },
+  "tarefas/quadros/[id]/campos": { POST: recurso("tarefas", "configurar", "quadroDoEditor("), PATCH: recurso("tarefas", "configurar", "quadroDoEditor(") },
+  "tarefas/quadros/[id]/equipes": { POST: recurso("tarefas", "configurar", QUADRO) },
+  "tarefas/quadros/[id]/etiquetas": { POST: recurso("tarefas", "configurar", QUADRO) },
+  "tarefas/quadros/[id]/importar": { POST: recurso("tarefas", "importar", QUADRO, "importar do Trello (.json)") },
+  "tarefas/quadros/[id]/listas": {
+    POST: recurso("tarefas", "manipular", QUADRO, "limite, lista de concluídas e posição = Configurar"),
+    PATCH: recurso("tarefas", "configurar", "quadroDoEditor(", "a ordem das listas"),
+  },
+  "tarefas/quadros/[id]/listas/periodo": { POST: recurso("tarefas", "configurar", QUADRO) },
+  "tarefas/quadros/[id]/trello": {
+    GET: recurso("tarefas", "visualizar", "quadroDoEditor(", "o estado da ligação"),
+    POST: recurso("tarefas", "configurar", "quadroDoEditor(", "ligar/sincronizar: o privado, só o dono", "podeLigarTrello("),
+  },
+  "tarefas/vinculos": { GET: recurso(["dfd", "pca", "orcamento", "tarefas"], "visualizar", "podeTela(", "a busca na tela do alvo (tarefas: os quadros que o papel vê)") },
+
   // ── Internas (sem sessão, com segredo/assinatura) ───────────────────────────────────────────────────────
   "integracoes/email/cron": { POST: interna("cron dos e-mails (cabeçalho secreto)") },
   "integracoes/trello/cron": { POST: interna("cron do Trello (cabeçalho secreto)") },
   "integracoes/trello/webhook/[token]": { POST: interna("aviso do Trello (HMAC)") },
 };
-
-/**
- * PREFIXOS de rotas ainda na guarda antiga (`exigirEditor`/`exigirUsuario`) — migradas módulo a módulo; o teste as pula
- * enquanto não estão no mapa. Tem de ZERAR.
- */
-export const PENDENTES: readonly string[] = [
-  "calendario/",
-  "integracoes/trello/boards",
-  "tabela/",
-  "tarefas",
-];
 
 export { MESA };

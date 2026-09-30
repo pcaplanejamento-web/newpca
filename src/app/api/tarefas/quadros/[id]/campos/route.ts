@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { MAX_CAMPOS } from "@/lib/tarefas-core";
@@ -10,11 +10,13 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 async function quadroDoEditor(ctx: Ctx) {
-  const a = await exigirEditor();
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const q = id ? await quadroAcessivel(a.u, id) : null;
   if (!q) return { resp: erro("Quadro não encontrado.", 404) };
+  const negado = recusaNoQuadro(a.acesso, q, "configurar");
+  if (negado) return { resp: negado };
   if (q.arquivado) return { resp: erro(MSG_QUADRO_ARQUIVADO, 409) };
   return { u: a.u, q };
 }

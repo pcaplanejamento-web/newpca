@@ -1,4 +1,4 @@
-import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { aposMovimento, atualizarLista, cartoesNaLista, excluirLista, getLista, idsNaLista, quadroAcessivel } from "@/lib/tarefas";
@@ -8,29 +8,35 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-async function listaDoEditor(ctx: Ctx) {
-  const a = await exigirEditor();
+/** A lista, se o papel faz a AÇÃO no quadro dela (editar = Configurar; excluir = Excluir — só em Tarefas). */
+async function listaDoEditor(ctx: Ctx, acao: "configurar" | "excluir") {
+  const a = await exigirSessao();
   if ("erro" in a) return { resp: a.erro };
   const id = intId((await ctx.params).id);
   const l = id ? await getLista(id) : null;
   const q = l ? await quadroAcessivel(a.u, l.quadroId) : null;
   if (!l || !q) return { resp: erro("Lista não encontrada.", 404) };
+  const negado = recusaNoQuadro(a.acesso, q, acao);
+  if (negado) return { resp: negado };
   return { u: a.u, l, q };
 }
 
 /** Quantos cartões (inclusive arquivados) a lista tem — a confirmação da exclusão. */
 export async function GET(_req: Request, ctx: Ctx) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const l = id ? await getLista(id) : null;
-  if (!l || !(await quadroAcessivel(a.u, l.quadroId))) return erro("Lista não encontrada.", 404);
+  const q = l ? await quadroAcessivel(a.u, l.quadroId) : null;
+  if (!l || !q) return erro("Lista não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, q, "visualizar");
+  if (negado) return negado;
   return ok({ cartoes: await cartoesNaLista(l.id) });
 }
 
 /** Edita a lista (nome, limite WIP, "de concluídas", arquivada). */
 export async function PATCH(req: Request, ctx: Ctx) {
-  const r = await listaDoEditor(ctx);
+  const r = await listaDoEditor(ctx, "configurar");
   if ("resp" in r) return r.resp;
   const p = await parseCorpo(editarListaSchema, req);
   if ("resp" in p) return p.resp;
@@ -44,7 +50,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
  * arquivados) para o fim dela, no mesmo lote; sem, os cartões saem junto.
  */
 export async function DELETE(req: Request, ctx: Ctx) {
-  const r = await listaDoEditor(ctx);
+  const r = await listaDoEditor(ctx, "excluir");
   if ("resp" in r) return r.resp;
   const para = new URL(req.url).searchParams.get("moverPara");
   const destino = para ? await getLista(intId(para) ?? 0) : null;

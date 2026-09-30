@@ -77,6 +77,7 @@ export function OrcamentoComparativo({
   inicio,
   onMudarEdicoes,
   podeExportar = true,
+  podePublicar = false,
 }: {
   titulo: string;
   itens: OrcamentoItemRow[];
@@ -95,6 +96,8 @@ export function OrcamentoComparativo({
   onMudarEdicoes?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
   /** O papel exporta nesta tela (o XLSX da tabela cruzada). */
   podeExportar?: boolean;
+  /** O papel CONFIGURA a tela (Orçamento ou PCA): publica edições do layout para todos e modera as públicas. */
+  podePublicar?: boolean;
 }) {
   const [dimLinha, setDimLinha] = useState<DimensaoOrcamento>("unidade");
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
@@ -126,6 +129,7 @@ export function OrcamentoComparativo({
     igual: layoutIgual,
     padrao: LAYOUT_PADRAO,
     onMudar: onMudarEdicoes,
+    podePublicar,
     aoEscolher: () => setOrdemVista(null),
   });
   const { layout, editando, mudar } = editor;

@@ -34,6 +34,7 @@ export function QuadroKanban({
   onNova,
   onArquivar,
   onConcluir,
+  somenteLeitura = false,
   templates = [],
   onDoTemplate,
   onCopiarMover,
@@ -87,6 +88,8 @@ export function QuadroKanban({
   totais?: Map<number, number>;
   /** Chave (no aparelho) das listas RECOLHIDAS deste quadro; ausente = sem recolher. */
   chaveRecolhidas?: string;
+  /** O papel só VÊ as tarefas: sem arrastar, sem o menu do cartão, sem "Adicionar um cartão" e sem concluir (abrir segue). */
+  somenteLeitura?: boolean;
 }) {
   const [recolhidas, alternarRecolhida] = useSetLocal<number>(chaveRecolhidas);
   const rolo = useRef<HTMLDivElement>(null);
@@ -187,7 +190,7 @@ export function QuadroKanban({
         oculto={!presa && arrastoL.arrasto?.id === l.id}
         onPegar={presa || !onMoverLista ? undefined : (e) => arrastoL.iniciar(e, l.id)}
         onRenomear={presa || !onRenomearLista ? undefined : (nome) => onRenomearLista(l.id, nome)}
-        onNova={() => !presa && onNova(l.id)}
+        onNova={somenteLeitura ? undefined : () => !presa && onNova(l.id)}
         menu={presa ? undefined : menuLista?.(l)}
         extra={!presa && onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
       >
@@ -207,11 +210,11 @@ export function QuadroKanban({
                   hoje={hoje}
                   oculto={arrasto?.id === t.id}
                   onAbrir={() => !foiArrasto() && onAbrir(t.id)}
-                  onPegar={(e) => iniciar(e, t.id, l.id)}
-                  onTeclaMover={(d) => teclaMover(t, d)}
-                  acoes={menu(t, l, pos, cartoes.length)}
-                  onConcluir={t.template ? undefined : () => onConcluir(t.id)}
-                  onDuplicar={onDuplicar && (() => onDuplicar(t.id))}
+                  onPegar={somenteLeitura ? undefined : (e) => iniciar(e, t.id, l.id)}
+                  onTeclaMover={somenteLeitura ? undefined : (d) => teclaMover(t, d)}
+                  acoes={somenteLeitura ? undefined : menu(t, l, pos, cartoes.length)}
+                  onConcluir={somenteLeitura || t.template ? undefined : () => onConcluir(t.id)}
+                  onDuplicar={!somenteLeitura && onDuplicar ? () => onDuplicar(t.id) : undefined}
                 />
               )}
             </Fragment>

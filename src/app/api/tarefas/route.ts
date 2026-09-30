@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirSessao, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { aposMovimento, avisarAtribuicao, avisarConvite, conteudoTarefa, criarTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, listarCampos, membrosDasEquipes, MSG_QUADRO_ARQUIVADO, pessoasValidas, quadroAcessivel, tituloAutomatico, valoresValidos, vinculoAcessivel } from "@/lib/tarefas";
@@ -9,20 +9,22 @@ export const dynamic = "force-dynamic";
 
 /** Cria uma TAREFA (cartão) na lista — qualquer pessoa do grupo do quadro. Responsáveis = pessoas do grupo. */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(criarTarefaSchema, req);
   if ("resp" in p) return p.resp;
   const d = p.data;
   const q = await quadroAcessivel(a.u, d.quadroId);
   if (!q) return erro("Quadro não encontrado.", 404);
+  const negado = recusaNoQuadro(a.acesso, q, "manipular", true);
+  if (negado) return negado;
   if (q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const lista = await getLista(d.listaId);
   if (!lista || lista.quadroId !== q.id || lista.arquivada) return erro("Lista inválida.", 422);
   const pessoas = d.pessoas ?? [];
   const observadores = d.observadores ?? [];
   if (!(await pessoasValidas(q, [...pessoas, ...observadores]))) return erro("Só pessoas do quadro podem ser responsáveis ou observadoras.", 422);
-  for (const v of d.vinculos ?? []) if (!(await vinculoAcessivel(a.u, v))) return erro("Vínculo não encontrado.", 422);
+  for (const v of d.vinculos ?? []) if (!(await vinculoAcessivel(a.acesso, v))) return erro("Vínculo não encontrado.", 422);
   const equipes = await equipesDoQuadro(q.id, d.equipes ?? []);
   const eventos = d.eventos ?? [];
   const convidados = [...new Set(eventos.flatMap((e) => e.convidados ?? []))];

@@ -97,7 +97,8 @@ export function useEdicoesTabela(
 /**
  * SELETOR das edições salvas (no RODAPÉ da tabela): o LÁPIS (só o ícone) liga a edição; o seletor troca a edição em uso
  * ("Padrão do sistema", as minhas e as públicas com o autor); a ESTRELA marca a em uso como a minha PADRÃO (a tabela abre
- * nela); a lixeira exclui a minha. Na altura dos controles; 44px no toque.
+ * nela); a lixeira exclui a minha — e, com `podeModerar` (quem CONFIGURA a tela), também a PÚBLICA de outra pessoa. Na
+ * altura dos controles; 44px no toque.
  */
 export function SeletorEdicoes({
   minhas,
@@ -109,6 +110,7 @@ export function SeletorEdicoes({
   onExcluir,
   onEditar,
   disabled = false,
+  podeModerar = false,
 }: {
   minhas: EdicaoTabela[];
   publicas: EdicaoTabela[];
@@ -119,8 +121,11 @@ export function SeletorEdicoes({
   onExcluir: () => void;
   onEditar: () => void;
   disabled?: boolean;
+  /** Quem CONFIGURA a tela modera as edições PÚBLICAS de outras pessoas (pode excluí-las). */
+  podeModerar?: boolean;
 }) {
   const ehPadrao = (atual?.id ?? null) === padraoId;
+  const podeExcluir = !!atual && (atual.minha || (podeModerar && atual.publico));
   return (
     <div className="flex items-center gap-1">
       <Button size="sm" variant="icon" icon={<IconPencil className="h-4 w-4" />} aria-label="Editar a planilha" title="Editar a planilha" onClick={onEditar} disabled={disabled} />
@@ -164,12 +169,12 @@ export function SeletorEdicoes({
         onClick={onPadrao}
         disabled={disabled || ehPadrao}
       />
-      {atual?.minha && (
+      {atual && podeExcluir && (
         <Button
           size="sm"
           variant="icon"
           aria-label={`Excluir a edição ${atual.nome}`}
-          title="Excluir esta edição"
+          title={atual.minha ? "Excluir esta edição" : `Excluir esta edição pública (de ${atual.autor})`}
           icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
           onClick={onExcluir}
           disabled={disabled}
@@ -182,14 +187,17 @@ export function SeletorEdicoes({
 type Destino = "atualizar" | "nova";
 
 /**
- * SALVAR a edição da tabela: nome, **só para mim** ou **pública** (todos veem e usam) e "usar como minha padrão"; editando
- * uma edição MINHA, escolhe entre ATUALIZÁ-LA e salvar como NOVA (a de outra pessoa sempre vira uma nova, minha).
+ * SALVAR a edição da tabela: nome, **só para mim** ou **pública** (todos veem e usam — só com `podePublicar`, o Configurar
+ * da tela; sem ele, a edição é sempre só da pessoa e a sua pública, ao ser atualizada, deixa de ser pública) e "usar como
+ * minha padrão"; editando uma edição MINHA, escolhe entre ATUALIZÁ-LA e salvar como NOVA (a de outra pessoa sempre vira
+ * uma nova, minha).
  */
 export function SalvarEdicao({
   aberto,
   atual,
   ehPadrao,
   gravando,
+  podePublicar,
   onFechar,
   onSalvar,
 }: {
@@ -197,13 +205,17 @@ export function SalvarEdicao({
   atual: EdicaoTabela | null;
   ehPadrao: boolean;
   gravando: boolean;
+  /** O papel CONFIGURA a tela da tabela: pode publicar para todos. */
+  podePublicar: boolean;
   onFechar: () => void;
   onSalvar: (d: { nome: string; publico: boolean; atualizar: boolean; padrao: boolean }) => void;
 }) {
   const podeAtualizar = atual?.minha === true;
   const [destino, setDestino] = useState<Destino>(podeAtualizar ? "atualizar" : "nova");
   const [nome, setNome] = useState(podeAtualizar ? (atual?.nome ?? "") : "");
-  const [publico, setPublico] = useState(podeAtualizar ? (atual?.publico ?? false) : false);
+  const [publico, setPublico] = useState(podePublicar && podeAtualizar ? (atual?.publico ?? false) : false);
+  // Sem Configurar, a SUA pública, atualizada, deixa de ser pública (publicar exige Configurar).
+  const despublica = !podePublicar && podeAtualizar && destino === "atualizar" && atual?.publico === true;
   const [padrao, setPadrao] = useState(ehPadrao);
   const valido = nome.trim().length > 0 && nome.trim().length <= 60;
   return (
@@ -238,7 +250,7 @@ export function SalvarEdicao({
               if (v === "nova") setNome("");
               else {
                 setNome(atual?.nome ?? "");
-                setPublico(atual?.publico ?? false);
+                setPublico(podePublicar && (atual?.publico ?? false));
               }
             }}
             options={[
@@ -250,15 +262,24 @@ export function SalvarEdicao({
         <TextField label="Nome da edição" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Pessoal por elemento" maxLength={60} />
         <div className="space-y-2">
           <p className="text-[13.5px] font-bold text-text">Quem vê</p>
-          <Segmented<"eu" | "todos">
-            ariaLabel="Quem vê a edição"
-            value={publico ? "todos" : "eu"}
-            onChange={(v) => setPublico(v === "todos")}
-            options={[
-              { value: "eu", label: "Só para mim" },
-              { value: "todos", label: "Pública (todos)" },
-            ]}
-          />
+          {podePublicar ? (
+            <Segmented<"eu" | "todos">
+              ariaLabel="Quem vê a edição"
+              value={publico ? "todos" : "eu"}
+              onChange={(v) => setPublico(v === "todos")}
+              options={[
+                { value: "eu", label: "Só para mim" },
+                { value: "todos", label: "Pública (todos)" },
+              ]}
+            />
+          ) : (
+            <p className="text-[13px] text-muted">
+              Só para você.{" "}
+              {despublica
+                ? "Esta edição é pública: ao atualizar, ela passa a ser só sua (publicar exige Configurar nesta tela)."
+                : "Publicar para todos exige Configurar nesta tela."}
+            </p>
+          )}
         </div>
         <Checkbox checked={padrao} onChange={(e) => setPadrao(e.target.checked)} label="Usar como minha edição padrão (a tabela abre nela)" />
       </div>
@@ -284,10 +305,13 @@ export function useEditorEdicoes<L>({
   paraSalvar = (l) => l,
   aoEscolher,
   onMudar,
+  podePublicar,
 }: {
   chave: string;
   edicoes: EdicaoTabela[];
   padroes: Record<string, unknown>;
+  /** O papel CONFIGURA a tela da tabela: publica edições e modera as públicas de outras pessoas. */
+  podePublicar: boolean;
   onMudar?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
   coerce: (v: unknown) => L;
   igual: (a: L, b: L) => boolean;
@@ -329,8 +353,9 @@ export function useEditorEdicoes<L>({
     }, "Edição salva.");
   const excluir = async () => {
     const e = ed.atual;
-    if (!e || !(await confirmar({ titulo: `Excluir a edição "${e.nome}"?`, texto: e.publico ? "Ela é pública: some para todos." : undefined, confirmar: "Excluir", perigo: true })))
-      return;
+    if (!e) return;
+    const texto = !e.minha ? `Ela é pública, de ${e.autor}: some para todos.` : e.publico ? "Ela é pública: some para todos." : undefined;
+    if (!(await confirmar({ titulo: `Excluir a edição "${e.nome}"?`, texto, confirmar: "Excluir", perigo: true }))) return;
     await tentar(async () => {
       await ed.excluir(e);
       aoEscolher?.(coerce(undefined));
@@ -370,6 +395,7 @@ export function useEditorEdicoes<L>({
         atual={ed.atual}
         padraoId={ed.padraoId}
         disabled={o.disabled || ed.gravando}
+        podeModerar={podePublicar}
         onEditar={o.onEditar}
         onEscolher={escolher}
         onPadrao={() => tentar(() => ed.definirPadrao(ed.atual?.id ?? null), ed.atual ? `"${ed.atual.nome}" é a sua padrão.` : "A tabela abre no padrão do sistema.")}
@@ -385,6 +411,7 @@ export function useEditorEdicoes<L>({
           atual={ed.atual}
           ehPadrao={(ed.atual?.id ?? null) === ed.padraoId && ed.atual != null}
           gravando={ed.gravando}
+          podePublicar={podePublicar}
           onFechar={() => setSalvando(false)}
           onSalvar={salvar}
         />

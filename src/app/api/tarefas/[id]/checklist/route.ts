@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { criarItemChecklist, tarefaAcessivel } from "@/lib/tarefas";
@@ -9,11 +9,13 @@ export const dynamic = "force-dynamic";
 
 /** Acrescenta um item ao fim de um CHECKLIST da tarefa (sem `checklistId`, ao 1º) — qualquer pessoa do grupo do quadro. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   if (!id || !r) return erro("Tarefa não encontrada.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return negado;
   const p = await parseCorpo(checklistSchema, req);
   if ("resp" in p) return p.resp;
   const novo = await criarItemChecklist(id, p.data.texto, p.data.checklistId);

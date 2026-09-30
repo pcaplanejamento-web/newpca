@@ -44,7 +44,7 @@ export default async function OrcamentoEspacoPage({
     conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={pode.configurar} />;
   } else if (aba === "comparativo") {
     conteudo = (
-      <OrcamentoComparativo titulo={`${orcamento.nome} ${orcamento.ano}`} {...await dadosComparativo(id, acesso.u.id)} podeExportar={pode.exportar} />
+      <OrcamentoComparativo titulo={`${orcamento.nome} ${orcamento.ano}`} {...await dadosComparativo(id, acesso.u.id)} podeExportar={pode.exportar} podePublicar={pode.configurar} />
     );
   } else {
     const [itens, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVinculosOrcamento(), alvosVinculoOrcamento()]);

@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { etiquetasDoQuadroTodas, importarCartoes, importarEstrutura, importarVinculos, listasDoQuadro, MSG_QUADRO_ARQUIVADO, pessoasDoQuadro, quadroAcessivel } from "@/lib/tarefas";
@@ -12,11 +12,13 @@ export const dynamic = "force-dynamic";
  * contra o quadro (as de fora são ignoradas).
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   const q = id ? await quadroAcessivel(a.u, id) : null;
   if (!q) return erro("Quadro não encontrado.", 404);
+  const negado = recusaNoQuadro(a.acesso, q, "importar");
+  if (negado) return negado;
   if (q.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const p = await parseCorpo(importarTrelloSchema, req);
   if ("resp" in p) return p.resp;

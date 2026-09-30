@@ -42,7 +42,7 @@ export function ConfiguracaoQuadro({
   todas = pessoas,
   modelosQuadro,
   usuarioId,
-  podeEditar,
+  pode,
   onMudou,
 }: {
   quadro: Quadro;
@@ -59,9 +59,11 @@ export function ConfiguracaoQuadro({
   todas?: Pessoa[];
   modelosQuadro: { id: number; nome: string; criadoPor: number | null; listas: string[] }[];
   usuarioId: number;
-  podeEditar: boolean;
+  /** O que o PAPEL permite neste quadro: Configurar (as seções), Importar (o Trello .json) e Excluir (o quadro). */
+  pode: { configurar: boolean; importar: boolean; excluir: boolean };
   onMudou: () => void;
 }) {
+  const podeEditar = pode.configurar;
   const router = useRouter();
   const { confirmar, confirmacao } = useConfirmacao();
   const base: CamposQuadroValor = { nome: quadro.nome, cor: quadro.cor, descricao: quadro.descricao ?? "" };
@@ -139,10 +141,10 @@ export function ConfiguracaoQuadro({
     <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
       <Secao titulo="Quadro">
         <CamposQuadro valor={campos} onChange={setCampos} disabled={!podeEditar} semNome />
-        {podeEditar && (
+        {(podeEditar || pode.importar || pode.excluir) && (
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            <Switch checked={quadro.arquivado} disabled={ocupado != null} onChange={arquivarQuadro} label="Quadro arquivado" />
-            {quadro.criadoPor === usuarioId && (
+            {podeEditar && <Switch checked={quadro.arquivado} disabled={ocupado != null} onChange={arquivarQuadro} label="Quadro arquivado" />}
+            {podeEditar && quadro.criadoPor === usuarioId && (
               <Switch
                 checked={quadro.privado}
                 disabled={ocupado != null}
@@ -164,22 +166,28 @@ export function ConfiguracaoQuadro({
               />
             )}
             <div className="ml-auto flex flex-wrap justify-end gap-2">
-              <Button variant="ghost" size="sm" disabled={ocupado != null || quadro.arquivado} icon={<IconUpload className="h-4 w-4" />} onClick={() => setTrello(true)}>
-                Importar do Trello
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                loading={ocupado === "excluir"}
-                disabled={ocupado != null}
-                icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-                onClick={excluirQuadro}
-              >
-                Excluir quadro
-              </Button>
-              <Button size="sm" loading={ocupado === "quadro"} disabled={!sujo || ocupado != null} onClick={salvarQuadro}>
-                Salvar
-              </Button>
+              {pode.importar && (
+                <Button variant="ghost" size="sm" disabled={ocupado != null || quadro.arquivado} icon={<IconUpload className="h-4 w-4" />} onClick={() => setTrello(true)}>
+                  Importar do Trello
+                </Button>
+              )}
+              {pode.excluir && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={ocupado === "excluir"}
+                  disabled={ocupado != null}
+                  icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                  onClick={excluirQuadro}
+                >
+                  Excluir quadro
+                </Button>
+              )}
+              {podeEditar && (
+                <Button size="sm" loading={ocupado === "quadro"} disabled={!sujo || ocupado != null} onClick={salvarQuadro}>
+                  Salvar
+                </Button>
+              )}
             </div>
           </div>
         )}

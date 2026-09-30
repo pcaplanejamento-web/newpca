@@ -190,11 +190,14 @@ export function OrcamentoPca({
   dados,
   comparativo = null,
   podeExportar = true,
+  podePublicar = false,
 }: {
   dados: DadosOrcamentoPca;
   comparativo?: ComparativoPca | null;
   /** O papel exporta no PCA (o XLSX do comparativo). */
   podeExportar?: boolean;
+  /** O papel CONFIGURA o PCA: publica edições do layout do comparativo para todos. */
+  podePublicar?: boolean;
 }) {
   const [vista, setVista] = useState<Vista>("unidade");
   // As edições salvas do Comparativo ficam AQUI (trocar de vista remonta a tabela — ela volta com as edições novas).
@@ -288,6 +291,7 @@ export function OrcamentoPca({
           onMudarEdicoes={(lista, padroes) => setEdicoesComp({ lista, padroes })}
           inicio={trocaVista}
           podeExportar={podeExportar}
+          podePublicar={podePublicar}
         />
       ) : (
         <>

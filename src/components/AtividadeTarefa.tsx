@@ -34,6 +34,7 @@ export function AtividadeTarefa({
   pessoas,
   usuarioId,
   podeModerar,
+  somenteLeitura = false,
   onEnviar,
   onEditar,
   onExcluir,
@@ -44,8 +45,10 @@ export function AtividadeTarefa({
   /** As pessoas do grupo (fotos e sugestões de @menção). */
   pessoas: Pessoa[];
   usuarioId: number;
-  /** Editor (admin/gestor): exclui o comentário de outra pessoa. */
+  /** O papel EXCLUI: apaga o comentário de outra pessoa. */
   podeModerar: boolean;
+  /** O papel só VÊ: sem escrever, editar ou apagar o próprio comentário. */
+  somenteLeitura?: boolean;
   onEnviar: (texto: string) => Promise<boolean>;
   onEditar: (c: ComentarioTarefa, texto: string) => Promise<boolean>;
   onExcluir: (c: ComentarioTarefa) => void;
@@ -113,6 +116,7 @@ export function AtividadeTarefa({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
+      {!somenteLeitura && (
       <div className="relative shrink-0">
         {sugestoes.length > 0 && (
           <ul aria-label="Mencionar pessoa" className="absolute top-full right-0 left-0 z-10 mt-1 overflow-hidden rounded-card border border-border bg-surface shadow-soft">
@@ -161,6 +165,7 @@ export function AtividadeTarefa({
           <Button variant="accent" size="sm" loading={enviando} disabled={!texto.trim()} aria-label="Enviar comentário" icon={<IconEnviar className="h-4 w-4" />} onClick={enviar} />
         </div>
       </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <p className="text-[12px] font-semibold text-muted">Comentários e atividade</p>
         <Button variant="ghost" size="sm" aria-pressed={detalhes} onClick={alternarDetalhes}>
@@ -168,7 +173,9 @@ export function AtividadeTarefa({
         </Button>
       </div>
       <ol className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-        {fluxo.length === 0 && <li className="py-6 text-center text-[12.5px] text-muted">Nenhum comentário — comece a conversa acima.</li>}
+        {fluxo.length === 0 && (
+          <li className="py-6 text-center text-[12.5px] text-muted">{somenteLeitura ? "Nenhum comentário." : "Nenhum comentário — comece a conversa acima."}</li>
+        )}
         {detalhes && !historico.linhas && !historico.erro && (
           <li>
             <SkeletonLinhas linhas={2} />
@@ -179,7 +186,8 @@ export function AtividadeTarefa({
           if (x.tipo === "h") return <EventoHistorico key={`h${x.l.id}`} linha={x.l} />;
           const c = x.c;
           const autor = c.usuarioId != null ? porId.get(c.usuarioId) : undefined;
-          const meu = c.usuarioId === usuarioId;
+          // O próprio comentário: editar/apagar com Manipular (fora do só-leitura).
+          const meu = c.usuarioId === usuarioId && !somenteLeitura;
           return (
             <li key={`c${c.id}`} className="flex gap-2.5">
               <Avatar nome={autor?.nome ?? c.usuarioNome} foto={autor?.foto} size="sm" className="mt-0.5 shrink-0" />

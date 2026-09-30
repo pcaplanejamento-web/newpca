@@ -1,4 +1,5 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { atorPasta } from "@/lib/acesso";
+import { exigirSessao } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { moverQuadroParaPasta, pastaAcessivel, quadroAcessivel } from "@/lib/tarefas";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
  * o quadro vira privado; `tornarPublico` = saindo da privada, volta a ser do grupo (só o dono).
  */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(moverParaPastaSchema, req);
   if ("resp" in p) return p.resp;
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   const destino = p.data.pastaId ? await pastaAcessivel(a.u, p.data.pastaId) : null;
   if (p.data.pastaId && !destino) return erro("Pasta não encontrada.", 404);
   const mudouDePasta = (q.pastaId ?? null) !== (p.data.pastaId ?? null);
-  const motivo = await moverQuadroParaPasta(a.u, q, destino, { antesDe: p.data.antesDe, depoisDe: p.data.depoisDe }, !!p.data.tornarPublico);
+  const motivo = await moverQuadroParaPasta(a.u, atorPasta(a.acesso), q, destino, { antesDe: p.data.antesDe, depoisDe: p.data.depoisDe }, !!p.data.tornarPublico);
   if (motivo) return erro(motivo, 403);
   if (mudouDePasta)
     await registrarAuditoria({

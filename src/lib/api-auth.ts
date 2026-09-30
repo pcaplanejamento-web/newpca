@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { type Acesso, getAcesso, motivoRecusa } from "./acesso";
+import { type Acesso, getAcesso, motivoNoQuadro, motivoRecusa } from "./acesso";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import type { AcaoPapel, Tela } from "./papeis-core";
 
@@ -50,6 +50,13 @@ export async function exigirSessao(): Promise<Guarda | { erro: NextResponse }> {
  * `null` = pode. A mensagem diz o motivo: a tela fechada (grupo/papel) ou a ação que o papel não permite. */
 export function recusa(acesso: Acesso, tela: Tela, acao: AcaoPapel, grupoId?: number | null): NextResponse | null {
   const error = motivoRecusa(acesso, tela, acao, grupoId);
+  return error ? NextResponse.json({ ok: false, error }, { status: 403 }) : null;
+}
+
+/** A recusa (403) nas TAREFAS de um quadro — pelo papel no GRUPO DO QUADRO (`podeNoQuadro`); `pelaAgenda` = a tela
+ * Calendário também vale (a tarefa e os eventos). `null` = pode. */
+export function recusaNoQuadro(acesso: Acesso, q: { grupoId: number }, acao: AcaoPapel, pelaAgenda = false): NextResponse | null {
+  const error = motivoNoQuadro(acesso, q.grupoId, acao, pelaAgenda);
   return error ? NextResponse.json({ ok: false, error }, { status: 403 }) : null;
 }
 

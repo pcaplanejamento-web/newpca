@@ -1,4 +1,4 @@
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok } from "@/lib/http";
 import { aposMovimento, avisarAtribuicao, criarTarefa, excluirItemChecklist, getItemChecklist, getLista, MSG_QUADRO_ARQUIVADO, pessoasValidas, tarefaAcessivel } from "@/lib/tarefas";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * junto (o responsável só se ainda for do grupo) e o item sai do checklist. Qualquer pessoa do grupo do quadro.
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string; itemId: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirSessao();
   if ("erro" in a) return a.erro;
   const ps = await ctx.params;
   const id = intId(ps.id);
@@ -19,6 +19,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string; i
   const r = id ? await tarefaAcessivel(a.u, id) : null;
   const item = r && itemId ? await getItemChecklist(itemId) : null;
   if (!r || !item || item.tarefaId !== r.tarefa.id) return erro("Item não encontrado.", 404);
+  const negado = recusaNoQuadro(a.acesso, r.quadro, "manipular", true);
+  if (negado) return negado;
   if (r.quadro.arquivado) return erro(MSG_QUADRO_ARQUIVADO, 409);
   const lista = await getLista(r.tarefa.listaId);
   if (!lista) return erro("Lista inválida.", 422);

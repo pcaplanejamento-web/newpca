@@ -996,6 +996,8 @@ function EdicoesTabelaDemo() {
   const [atual, setAtual] = useState<number | null>(2);
   const [padraoId, setPadraoId] = useState<number | null>(2);
   const [salvar, setSalvar] = useState(false);
+  // Publicar/moderar = o papel CONFIGURA a tela da tabela; sem isso, a edição é só da pessoa.
+  const [configura, setConfigura] = useState(true);
   const { confirmar, confirmacao } = useConfirmacao();
   const e = (id: number, nome: string, minha: boolean, publico: boolean) => ({ id, chave: "k", nome, publico, minha, autor: "Ana", valor: {} });
   const minhas = [e(1, "Pessoal", true, false), e(2, "Por elemento", true, true)];
@@ -1012,9 +1014,19 @@ function EdicoesTabelaDemo() {
         onPadrao={() => setPadraoId(atual)}
         onExcluir={() => void confirmar({ titulo: "Excluir a edição?", confirmar: "Excluir", perigo: true })}
         onEditar={() => setSalvar(true)}
+        podeModerar={configura}
       />
+      <Checkbox checked={configura} onChange={(ev) => setConfigura(ev.target.checked)} label="O papel configura a tela (publica e modera)" />
       {salvar && (
-        <SalvarEdicao aberto atual={escolhida} ehPadrao={atual === padraoId} gravando={false} onFechar={() => setSalvar(false)} onSalvar={() => setSalvar(false)} />
+        <SalvarEdicao
+          aberto
+          atual={escolhida}
+          ehPadrao={atual === padraoId}
+          gravando={false}
+          podePublicar={configura}
+          onFechar={() => setSalvar(false)}
+          onSalvar={() => setSalvar(false)}
+        />
       )}
       {confirmacao}
     </div>
@@ -1458,7 +1470,7 @@ function TabelaHierarquiaDemo() {
         footer={`${sel.size} de ${linhas.length} selecionada(s) — o "selecionar todos" marca todas as filtradas, não só a página`}
         // EDIÇÃO da tabela (lápis no rodapé): arrastar, congelar, ocultar, ordenar, largura — e salvar (colunas + ordenação +
         // filtros), só para mim ou pública (salvar exige login).
-        edicoes={{ chave: "design-system:demo", lista: [], padroes: {} }}
+        edicoes={{ chave: "design-system:demo", lista: [], padroes: {}, podePublicar: true }}
       />
     </div>
   );
@@ -2115,7 +2127,7 @@ function TarefasDemo() {
     ],
     ordem: [],
   });
-  const atorDemo = { id: 1, editor: true };
+  const atorDemo = { id: 1, configuraEm: null, manipulaEm: null };
   const quadroDemo = {
     id: 1,
     grupoId: 1,
@@ -2177,7 +2189,7 @@ function TarefasDemo() {
           lista={{ id: 1, nome: "05 - OUTUBRO - 2026", ordem: 1, limiteWip: null, concluida: false, arquivada: false }}
           outras={[{ id: 2, nome: "06 - OUTUBRO - 2026", ordem: 2, limiteWip: null, concluida: false, arquivada: false }]}
           qtd={3}
-          podeEditar
+          pode={{ manipular: true, configurar: true, excluir: true }}
           onNova={() => {}}
           onOrdenar={() => {}}
           onMoverCartoes={() => {}}
@@ -2264,7 +2276,7 @@ function TarefasDemo() {
           aberto={arquivadosDemo}
           tarefas={cartoes.map((t, i) => ({ ...t, arquivada: i === 0 }))}
           listas={[{ id: 1, nome: "Em andamento", ordem: 1, limiteWip: null, concluida: false, arquivada: false }, { id: 9, nome: "Antiga", ordem: 2, limiteWip: null, concluida: false, arquivada: true }]}
-          podeEditar
+          pode={{ manipular: true, configurar: true, excluir: true }}
           onFechar={() => setArquivadosDemo(false)}
           onAbrir={() => {}}
           onExcluirLista={() => {}}
@@ -2747,7 +2759,7 @@ export function Catalogo() {
       <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
-      <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir) + SalvarEdicao (só para mim ou pública) + confirmação em card flutuante (useConfirmacao)">
+      <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir; quem configura a tela também exclui a pública de outra pessoa) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />
       </Secao>
       <Secao titulo="Gráficos de governança (HTML por token) — BarraSegmentada · BarrasH · Colunas">
