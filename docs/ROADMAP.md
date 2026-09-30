@@ -1242,7 +1242,9 @@ senha" e a troca de senha do Perfil também pelo código; nome, e-mail, matrícu
 nasce pelo Google (vincula-se no Perfil) e os avisos por e-mail podem ir ao institucional ou à conta Google.
 ✅ **Tela única de acesso + Perfil reorganizado:** Entrar, Criar conta e Esqueci a senha na mesma tela, com o painel imersivo
 da marca do sistema no desktop; cargo ou função no cadastro; o Perfil com cabeçalho (foto, nome, cargo, unidade) e seções
-organizadas com botões padronizados.
+organizadas com botões padronizados. Depois: "Entrar | Criar conta" fixo no alto (o formulário logo abaixo e o aviso na
+mesma largura), a constelação animada com profundidade (pontos surgem e somem) e os textos da tela de acesso cadastráveis
+em Configurações → Tela de acesso, com prévia.
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

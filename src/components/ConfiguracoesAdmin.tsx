@@ -1,5 +1,6 @@
 "use client";
 
+import { TextosAcessoAdmin } from "./TextosAcessoAdmin";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useRef, useState } from "react";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
@@ -71,6 +72,7 @@ function lerFavicon(file: File): Promise<string> {
 
 export function ConfiguracoesAdmin({
   identidade,
+  acesso,
   linhasTabela,
   pcas,
   regras,
@@ -79,6 +81,8 @@ export function ConfiguracoesAdmin({
   /** Aba aberta de início (`?aba=` — ex.: "situacoes", atalho da Configuração do PCA). */
   abaInicial?: string;
   identidade?: Aparencia["identidade"];
+  /** Os textos da tela de acesso gravados (Configurações → Tela de acesso). */
+  acesso?: Aparencia["acesso"];
   /** Linhas por página com que as tabelas de rolagem interna abrem (a escolha atual do ADM). */
   linhasTabela: LinhasTabela;
   pcas: PcaResumo[];
@@ -456,6 +460,7 @@ export function ConfiguracoesAdmin({
           inicial={abaInicial}
           tabs={[
             { key: "identidade", label: "Identidade", content: abaIdentidade },
+            { key: "acesso", label: "Tela de acesso", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
             { key: "tabelas", label: "Tabelas", content: abaTabelas },
             { key: "pcas", label: "PCAs", content: abaPcas },
             { key: "situacoes", label: "Situações", content: <SituacoesAdmin /> },

@@ -116,10 +116,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
     `entrar`|`cadastro`|`senha` — `lerModoAcesso`, puro em **`modo-acesso.ts`**; trocar de modo só faz `replaceState`, sem
-    recarregar; `/cadastro` e `/recuperar-senha` redirecionam para o modo). Esquerda = o formulário (`Segmented` Entrar | Criar
-    conta, transição `animate-fade-in-up`; `CadastroForm`/`RecuperarSenhaForm` por `next/dynamic` — só baixados ao abrir o
-    modo); direita (≥ `lg`) = **`VitrineAcesso`** imersiva (fundo escuro pelos tokens `--vitrine-*`, a constelação que flutua —
-    `animate-vitrine-flutuar/cintilar`, desligada sem movimento —, a manchete e os módulos; sem números inventados). A logo é a
+    recarregar; `/cadastro` e `/recuperar-senha` redirecionam para o modo). Esquerda = o formulário: o `Segmented` Entrar | Criar
+    conta FIXO no alto da coluna (mesma posição nos três modos — no "Esqueci a senha" nenhum fica marcado; não é centralizado
+    na vertical, então nunca pula), o formulário LOGO ABAIXO (transição `animate-fade-in-up`; `CadastroForm`/
+    `RecuperarSenhaForm` por `next/dynamic` — só baixados ao abrir o modo) e o AVISO do ADM fechando a coluna na MESMA largura
+    (440px); no desktop só essa coluna rola (`lg:h-dvh`). Direita (≥ `lg`) = **`VitrineAcesso`** imersiva (fundo escuro pelos
+    tokens `--vitrine-*`) com a **`ConstelacaoAnimada`** — um `<canvas>`: pontos em profundidades diferentes (os de perto
+    maiores, mais rápidos, com halo) que vagam ao acaso, SURGEM e SOMEM (ciclo de vida) e se ligam por linhas quando próximos
+    na mesma camada; densidade pela área (36–110), DPR ≤ 2, só roda com tamanho (no celular a vitrine não aparece → 0×0, nada
+    roda) e fica num quadro parado sem movimento (sistema ou `data-motion` do ADM). Os TEXTOS (rótulo, manchete, descrição, até
+    3 destaques, rodapé e o aviso) são do ADM: **Configurações → Tela de acesso** (`TextosAcessoAdmin`, com a PRÉVIA ao vivo =
+    a própria `VitrineAcesso previa`), gravados no blob da aparência (`acesso`, sem migração — `aparenciaSchema.acesso`,
+    `soAparencia`), lidos por **`textosAcesso`** (núcleo puro **`acesso-core.ts`**: vazio = o padrão `TEXTOS_ACESSO_PADRAO`;
+    destaque sem título some). Sem números inventados. A logo é a
     **`MarcaSistema`** (o favicon da Identidade do ADM, senão o monograma "RV" + nome/subtítulo) — a MESMA do menu do
     `AppShell` (`Brand` a usa); no celular fica no topo do formulário, no desktop na vitrine.
   - **Cadastro** (`CadastroForm`, 2 etapas): **nome completo** (nome + sobrenome — `nomeCompleto`),

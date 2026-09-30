@@ -38,7 +38,8 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - `src/app/api/auth/{cadastro,codigo,senha,login,logout,me}` — autenticação (código por e-mail em `codigo`).
 - `src/lib/cadastro-core.ts`, `codigo-email-core.ts` (puros, testados) e `codigo-email.ts` (D1) — regras do cadastro e do código.
 - `src/app/api/admin/usuarios` (+ `/[id]`) — listagem e gestão (admin).
-- `src/components/TelaAcesso.tsx` (tela única) + `VitrineAcesso.tsx` + `MarcaSistema.tsx`, `AuthForm.tsx` (entrar), `CadastroForm.tsx`, `RecuperarSenhaForm.tsx`, `CartaoAuth.tsx`, `CodigoEmail.tsx`,
+- `src/components/TelaAcesso.tsx` (tela única) + `VitrineAcesso.tsx` (+ `ConstelacaoAnimada.tsx`) + `MarcaSistema.tsx`;
+  textos da vitrine e o aviso em Configurações → Tela de acesso (`TextosAcessoAdmin`, `src/lib/acesso-core.ts`); `AuthForm.tsx` (entrar), `CadastroForm.tsx`, `RecuperarSenhaForm.tsx`, `CartaoAuth.tsx`, `CodigoEmail.tsx`,
   `UsuariosAdmin.tsx`, `AppShell.tsx` (menu + Sair).
 
 ## Pendente (próximas fases)

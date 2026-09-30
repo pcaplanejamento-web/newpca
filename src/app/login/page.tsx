@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { TelaAcesso } from "@/components/TelaAcesso";
+import { textosAcesso } from "@/lib/acesso-core";
 import { getAparencia } from "@/lib/aparencia";
 import { contarUsuarios, getUsuarioAtual } from "@/lib/auth";
 import { COOKIE_GOOGLE_CONTA, lerContaLembrada, mensagemErroLogin } from "@/lib/google-oauth-core";
@@ -28,6 +29,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <TelaAcesso
       modoInicial={lerModoAcesso(sp.modo)}
       identidade={aparencia.identidade}
+      textos={textosAcesso(aparencia.acesso)}
       turnstile={{ enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey }}
       google={googleConfigurado(integ)}
       googleConta={lerContaLembrada(jar.get(COOKIE_GOOGLE_CONTA)?.value)}
