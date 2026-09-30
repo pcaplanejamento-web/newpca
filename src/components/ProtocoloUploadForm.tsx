@@ -158,7 +158,7 @@ const MSG_SEM_ACESSO: MensagemDfd = {
   status: "erro",
   ancora: "reparticao",
   rotulo: "Não sobrescrevível",
-  texto: "Já existe um DFD com este número que não pode ser sobrescrito daqui — numa unidade sem acesso para você ou num protocolo incorporado a um PCA (travado). Mantenha o já cadastrado (botão \"Manter…\" no rodapé do DFD).",
+  texto: "Já existe um DFD com este número que não pode ser sobrescrito daqui — numa unidade sem acesso para você, num protocolo incorporado a um PCA (travado) ou numa Mesa em que o seu papel não permite importar. Mantenha o já cadastrado (botão \"Manter…\" no rodapé do DFD).",
 };
 /** A avaliação da linha + o erro de unidade sem acesso (a MESMA régua da célula, do painel e do rodapé). */
 function comSemAcesso(r: LinhaAvaliada): LinhaAvaliada {

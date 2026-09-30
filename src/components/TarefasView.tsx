@@ -5,7 +5,7 @@ import { useState } from "react";
 import { num } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
-import { type AtorPasta, type ConjuntoQuadros, MAX_CONJUNTOS, type PastasQuadros } from "@/lib/tarefas-core";
+import { type AtorPasta, type ConjuntoQuadros, MAX_CONJUNTOS, type PastasQuadros, podeCriarPasta } from "@/lib/tarefas-core";
 import { MESES } from "@/lib/normalize";
 import { mesSeguinte } from "@/lib/calendario-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
@@ -113,7 +113,7 @@ export function TarefasView({
           {atrasadas > 0 && <span style={{ color: "var(--danger)" }}> · {num(atrasadas)} atrasada{atrasadas === 1 ? "" : "s"}</span>} · do grupo ativo do cabeçalho
         </p>
         </div>
-        {quadros.length > 0 && conj.estado.lista.length < MAX_CONJUNTOS && (
+        {quadros.length > 0 && conj.estado.lista.length < MAX_CONJUNTOS && podeCriarPasta(ator) && (
           <Button
             size="sm"
             variant="secondary"

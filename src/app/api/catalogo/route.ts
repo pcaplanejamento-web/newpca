@@ -57,7 +57,9 @@ export async function POST(req: Request) {
     return ok({ catalogoId: d.catalogoId, inserted: r.inserted });
   }
 
-  // start-catalogo — novo (catalogoId nulo) ou atualização de um existente.
+  // start-catalogo — novo (catalogoId nulo) ou atualização de um existente. Sem itens novos, só quando compartilha os
+  // existentes (o "só compartilhar" também é importação).
+  if (d.rows.length === 0 && d.compartilharItens.length === 0) return erro("Nada para importar.", 422);
   const alvo = d.catalogoId;
   if (alvo != null && !(await getCatalogo(alvo))) return erro("Catálogo a atualizar não encontrado.", 404);
   // Guarda da unicidade global: ignora os conflitos que o usuário RESOLVEU com "substituir"

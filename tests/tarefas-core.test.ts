@@ -69,6 +69,7 @@ import {
   type PastasQuadros,
   motivoNaoMoverParaPasta,
   pastasDosQuadros,
+  podeCriarPasta,
   podeEditarPasta,
   podePastaPublica,
   itensDaGrade,
@@ -725,6 +726,13 @@ describe("pastas de quadros — públicas do grupo e privadas do dono", () => {
     assert.equal(podePastaPublica(editor), true);
     assert.equal(podePastaPublica(membro), false);
     assert.equal(podePastaPublica({ id: 1, configuraEm: null, manipulaEm: null }), true);
+  });
+
+  it("\"Nova pasta\" só para quem cria alguma: a pública (Configurar) ou a privada (Manipular) em algum grupo", () => {
+    assert.equal(podeCriarPasta(editor), true);
+    assert.equal(podeCriarPasta(membro), true); // o Membro manipula: cria a privada
+    assert.equal(podeCriarPasta({ id: 9, configuraEm: [], manipulaEm: [] }), false); // só Visualizar
+    assert.equal(podeCriarPasta({ id: 1, configuraEm: null, manipulaEm: null, admin: true }), true);
   });
 
   it("regras de mover: pública só quadro público do grupo; privada só quadro do dono; tirar exige poder na origem", () => {

@@ -259,13 +259,16 @@ export function CatalogoView({
     return itensIguais({ descricao: v.novoDesc, unidade: v.novoUnid }, { descricao: v.exDesc, unidade: v.exUnid });
   };
 
-  // Idênticos "Manter" cujo existente NÃO cobre o tiposPadrão → só mesclar tipos (como hoje).
+  // Idênticos "Manter" cujo existente NÃO cobre o tiposPadrão → só mesclar tipos (como hoje). Mesclar EDITA o item que já
+  // existe: só com Manipular (sem ele, os mantidos ficam como estão).
   const mesclarIds = useMemo(
     () =>
-      identicos
-        .filter((i) => (resolucoes.get(i.existente.id) ?? "manter") === "manter" && tiposPadrao.some((t) => !i.existente.tipos.includes(t)))
-        .map((i) => i.existente.id),
-    [identicos, tiposPadrao, resolucoes],
+      podeEditar
+        ? identicos
+            .filter((i) => (resolucoes.get(i.existente.id) ?? "manter") === "manter" && tiposPadrao.some((t) => !i.existente.tipos.includes(t)))
+            .map((i) => i.existente.id)
+        : [],
+    [identicos, tiposPadrao, resolucoes, podeEditar],
   );
   const substituirCount = useMemo(
     () => divergentes.filter((d) => resolucoes.get(d.existente.id) === "substituir").length,
@@ -288,13 +291,20 @@ export function CatalogoView({
     setProgresso(0);
     setErroImport(null);
     const jsonH = { "Content-Type": "application/json" };
+    // Cada passo confere a resposta: uma recusa (403) ou falha não fecha a importação como se tivesse dado certo.
+    const passo = async (url: string, init: RequestInit) => {
+      const r = await fetch(url, init);
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!r.ok || !j?.ok) throw new Error(j?.error ?? "Não foi possível concluir a importação — tente de novo.");
+    };
     try {
-      // Divergentes-compartilhar: grava a descrição/unidade ACORDADA no item EXISTENTE.
+      // Divergentes-compartilhar: grava a descrição/unidade ACORDADA no item EXISTENTE (editar o existente = Manipular; sem
+      // ele, o lado existente fica travado na tela e só o novo se ajusta — nada a gravar aqui).
       for (const d of divergentes) {
         if (resolucaoDe(d.existente.id) !== "compartilhar") continue;
         const v = valoresConflito(d);
         if (v.exDesc !== d.existente.descricao || (v.exUnid.trim() || null) !== (d.existente.unidade ?? null))
-          await fetch(`/api/catalogo/item/${d.existente.id}`, { method: "PATCH", headers: jsonH, body: JSON.stringify({ descricao: v.exDesc.trim(), unidade: v.exUnid.trim() || null }) });
+          await passo(`/api/catalogo/item/${d.existente.id}`, { method: "PATCH", headers: jsonH, body: JSON.stringify({ descricao: v.exDesc.trim(), unidade: v.exUnid.trim() || null }) });
       }
       const compartilharItens = [
         ...identicos.filter((i) => resolucaoDe(i.existente.id) === "compartilhar").map((i) => i.existente.id),
@@ -319,13 +329,16 @@ export function CatalogoView({
           (env, tot) => setProgresso(Math.round((env / tot) * 100)),
         );
       } else if (compartilharItens.length > 0) {
-        // Sem itens novos — cria/usa o catálogo alvo e compartilha os existentes nele.
-        const alvo = preview.catalogoId ?? (await criarCatalogoVazio(nomeCat.trim() || "Catálogo", tiposPadrao));
-        await fetch("/api/catalogo/compartilhar", { method: "POST", headers: jsonH, body: JSON.stringify({ catalogoId: alvo, itemIds: compartilharItens }) });
+        // Sem itens novos — num catálogo NOVO, a própria importação o cria e compartilha os existentes (Importar); num que
+        // já existe, só compartilha.
+        if (preview.catalogoId == null)
+          await enviarCatalogoEmLotes({ catalogoId: null, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens: [], compartilharItens }, []);
+        else
+          await passo("/api/catalogo/compartilhar", { method: "POST", headers: jsonH, body: JSON.stringify({ catalogoId: preview.catalogoId, itemIds: compartilharItens }) });
       }
-      // Idênticos "Manter" com tipo novo → o existente ganha os tipos (união).
+      // Idênticos "Manter" com tipo novo → o existente ganha os tipos (união; só com Manipular — `mesclarIds`).
       if (mesclarIds.length > 0)
-        await fetch("/api/catalogo/itens", { method: "PATCH", headers: jsonH, body: JSON.stringify({ ids: mesclarIds, tipos: tiposPadrao, modo: "mesclar" }) });
+        await passo("/api/catalogo/itens", { method: "PATCH", headers: jsonH, body: JSON.stringify({ ids: mesclarIds, tipos: tiposPadrao, modo: "mesclar" }) });
       setEnviando(false);
       setPreview(null);
       router.refresh();
@@ -905,8 +918,9 @@ export function CatalogoView({
                   <div>
                     <p className="text-[13.5px] font-bold text-text">Itens idênticos ({identicos.length})</p>
                     <p className="mt-0.5 text-xs text-muted">
-                      Já cadastrados (mesmo código, descrição e unidade) em outro catálogo. <strong>Manter</strong> = não importa (só
-                      soma os tipos ao existente); <strong>Compartilhar</strong> = o MESMO item nos dois catálogos.
+                      Já cadastrados (mesmo código, descrição e unidade) em outro catálogo. <strong>Manter</strong> = não importa
+                      {podeEditar ? " (só soma os tipos ao existente)" : ""}; <strong>Compartilhar</strong> = o MESMO item nos dois
+                      catálogos.
                     </p>
                   </div>
                   <div className="flex gap-1.5">
@@ -952,9 +966,10 @@ export function CatalogoView({
                 <div>
                   <p className="text-[13.5px] font-bold text-text">Conflitos a resolver ({divergentes.length})</p>
                   <p className="mt-0.5 text-xs text-muted">
-                    Mesmo código, dados diferentes. <strong>Manter</strong> (não importa este) · <strong>Substituir</strong> (exclui o
-                    existente e importa este) · <strong>Compartilhar</strong> (o mesmo item nos dois — <em>edite os dois lados para
-                    ficarem iguais</em>).
+                    Mesmo código, dados diferentes. <strong>Manter</strong> (não importa este)
+                    {pode.excluir ? <> · <strong>Substituir</strong> (exclui o existente e importa este)</> : null} ·{" "}
+                    <strong>Compartilhar</strong> (o mesmo item nos dois —{" "}
+                    <em>{podeEditar ? "edite os dois lados para ficarem iguais" : "ajuste o lado novo para ficar igual ao existente"}</em>).
                   </p>
                 </div>
                 {divergentes.map((d) => {
@@ -977,8 +992,9 @@ export function CatalogoView({
                         </div>
                         <div className="space-y-2 rounded-control border border-border-2 p-2.5">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Existente · {existente.catalogoNome}</p>
-                          <TextArea label="Descrição" value={v.exDesc} rows={2} onChange={(e) => setE({ exDesc: e.target.value })} />
-                          <TextField label="Unidade" value={v.exUnid} onChange={(e) => setE({ exUnid: e.target.value })} />
+                          {/* Editar o item que já existe = Manipular; sem ele, só o lado novo se ajusta. */}
+                          <TextArea label="Descrição" value={v.exDesc} rows={2} disabled={!podeEditar} onChange={(e) => setE({ exDesc: e.target.value })} />
+                          <TextField label="Unidade" value={v.exUnid} disabled={!podeEditar} onChange={(e) => setE({ exUnid: e.target.value })} />
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -994,7 +1010,7 @@ export function CatalogoView({
                         />
                         {r === "compartilhar" && !igual && (
                           <span className="text-xs font-medium" style={{ color: "var(--warn)" }}>
-                            Edite os dois lados para ficarem iguais.
+                            {podeEditar ? "Edite os dois lados para ficarem iguais." : "Ajuste o lado novo para ficar igual ao existente."}
                           </span>
                         )}
                         {r === "compartilhar" && igual && (

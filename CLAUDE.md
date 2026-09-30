@@ -196,7 +196,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar da Mesa:**
   as 4 tabelas (Protocolos, DFDs, Itens, Consolidada) ganham o **Exportar .xlsx** no rodapé (`DataTable.exportar` — as linhas
   filtradas e as colunas à vista da edição em uso; núcleo puro `exportar-tabela.ts`, SheetJS só no clique) para quem tem a
-  ação Exportar na Mesa em que está.
+  ação Exportar na Mesa em que está. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
+  orçamento e o catálogo que a PRÓPRIA pessoa CRIOU por importação na última hora (`?origem=desfazer` →
+  `criadoPorImportacaoRecente`: o 1º registro do histórico é o "importar" dela — o reenvio/atualização de um cadastro que já
+  existia nunca; builder `auditoria-sql.ts`, testado no driver D1 real) e o DFD pela metade (`gravacaoParcial`); fora disso,
+  Excluir. Sair de uma Mesa: reimportar um DFD que está em OUTRA Mesa (ex.: num protocolo enviado a um PCA) exige Importar
+  também nela (e a análise já o marca "Não sobrescrevível").
 - **CADASTRO INSTITUCIONAL + SENHA CONFIRMADA POR CÓDIGO (migração `0067`, aditiva — `usuarios.reparticao_id` FK set null
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
@@ -1869,8 +1874,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   protocolo" segue para o enviado); `DELETE /api/dfd/[id]` recusa (409 enviado / 423 incorporado — **`motivoNaoExcluirDfd`**,
   `pca-core`, testada); o reenvio de um protocolo em PCA mantém os gravados fora do envio. Única exceção: o DESFAZER da
   importação que falhou no meio (`apagarDfd` → `?origem=desfazer`, a garantia tudo-ou-nada por DFD) — só a gravação NOVA
-  deste usuário que ficou PELA METADE (**`gravacaoParcial`**: criada por ele e com menos itens gravados que o total declarado
-  no `start-dfd`; um DFD completo nunca, qualquer que seja a hora) sai de um protocolo ENVIADO; do incorporado, nunca (o
+  deste usuário que ficou PELA METADE (**`gravacaoParcial`**: criada por ele HÁ POUCO — `JANELA_DESFAZER_MIN`=60, pela criação
+  do DFD, que a sobrescrita mantém — e com menos itens gravados que o total declarado no `start-dfd`; um DFD completo ou
+  antigo nunca — um `start-dfd` forjado sobre um DFD antigo da pessoa não vira "desfazer") sai de um protocolo ENVIADO; do
+  incorporado, nunca (o
   histórico só diz "gravação desfeita após falha" quando é esse caso). Mover o DFD para outro protocolo ("Vincular a
   protocolo") segue permitido no ENVIADO — como o "Devolver à Mesa", é um caminho de SAÍDA do PCA; fora dele, o DFD volta a
   poder ser excluído.

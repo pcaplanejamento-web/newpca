@@ -1,8 +1,10 @@
+import { podeTela } from "@/lib/acesso";
 import { exigirAcesso } from "@/lib/api-auth";
 import { dfdsPorNumeros } from "@/lib/dfd";
 import { existentesDfdSchema } from "@/lib/dfd-validation";
 import { unidadesDaSessao } from "@/lib/grupos";
 import { ok, parseCorpo } from "@/lib/http";
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { travaDeDfds } from "@/lib/trava-pca";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +14,8 @@ export const dynamic = "force-dynamic";
  * vai SOBRESCREVER quem, em QUALQUER unidade (a lista da Mesa é filtrada pela unidade do cabeçalho). O DFD de
  * unidade SEM ACESSO volta só como `acessivel: false` (nada dele vaza) — o servidor recusa a sobrescrita
  * (anti-sequestro) e a tela avisa antes. O DFD de protocolo INCORPORADO a um PCA (travado) também volta como
- * `acessivel: false` — não pode ser sobrescrito enquanto estiver no PCA.
+ * `acessivel: false` — não pode ser sobrescrito enquanto estiver no PCA — e o que está numa Mesa em que o PAPEL não
+ * importa (ex.: a de um PCA): a gravação o recusaria.
  */
 export async function POST(req: Request) {
   const a = await exigirAcesso(["dfd", "pca"], "importar");
@@ -22,8 +25,8 @@ export async function POST(req: Request) {
   const { acessivel } = await unidadesDaSessao(a.u);
   const achados = await dfdsPorNumeros(p.data.numeros);
   const travas = await travaDeDfds(achados.map((d) => d.id));
-  const existentes = achados.map((d) =>
-    !travas.has(d.id) && acessivel(d.reparticaoId)
+  const existentes = achados.map(({ pcaId, ...d }) =>
+    !travas.has(d.id) && acessivel(d.reparticaoId) && podeTela(a.acesso, telaDoRecurso(pcaId)).importar
       ? { ...d, acessivel: true }
       : { numero: d.numero, acessivel: false },
   );

@@ -598,7 +598,8 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
       onAbrirPca={aberto.pca ? () => router.push(`/painel/pca/${aberto.pca?.pcaId}?aba=mesa`) : undefined}
       avisoPrazo={aberto.pca || aberto.externo || aberto.concluida ? null : avisoDiaNaoUtil(aberto.tarefaPrazo, feriadosPeriodo)}
       onDuplicar={
-        aberto.eventoId
+        // Duplicar CRIA um evento — Manipular (como Editar e Excluir ao lado).
+        aberto.eventoId && dados.pode.manipular
           ? () => {
               const ev = eventosDb.find((x) => x.id === aberto.eventoId);
               if (ev) setEdicao({ eventoId: null, tarefaId: String(ev.tarefaId), r: rascunhoEvento(ev) });

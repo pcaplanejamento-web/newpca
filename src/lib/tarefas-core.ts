@@ -1226,6 +1226,10 @@ const noGrupoDoAtor = (lista: number[] | null, grupoId: number) => lista == null
 /** Pode criar uma pasta PÚBLICA — no grupo dela (`grupoId`) ou, sem ele, em algum grupo (o servidor confere o grupo). */
 export const podePastaPublica = (ator: AtorPasta, grupoId?: number | null): boolean =>
   grupoId ? noGrupoDoAtor(ator.configuraEm, grupoId) : ator.configuraEm == null || ator.configuraEm.length > 0;
+/** Pode criar ALGUMA pasta — a pública (Configurar em algum grupo) ou a privada (Manipular em algum grupo)? Sem nenhuma, o
+ * botão "Nova pasta" não aparece (o servidor recusaria). */
+export const podeCriarPasta = (ator: AtorPasta): boolean =>
+  !!ator.admin || podePastaPublica(ator) || ator.manipulaEm == null || ator.manipulaEm.length > 0;
 /** O quadro que entra/sai de uma pasta. */
 export type QuadroPasta = { grupoId: number; privado: boolean; criadoPor: number | null };
 

@@ -67,9 +67,16 @@ describe("pca-core — incorporar, devolver e trava", () => {
     // Incorporado: nunca (a trava), nem o desfazer.
     assert.equal(motivoNaoExcluirDfd({ pcaId: 5, pcaIncorporadoEm: "2026-09-01" }, "PCA 2027", true), mensagemTravaPca("PCA 2027"));
   });
-  it("gravacaoParcial: o DFD criado pelo PRÓPRIO usuário com menos itens gravados que o declarado — em qualquer hora", () => {
-    const g = { criadoPor: 7, usuarioId: 7, totalItens: 1000, itensGravados: 400 };
+  it("gravacaoParcial: o DFD criado HÁ POUCO pelo PRÓPRIO usuário com menos itens gravados que o declarado", () => {
+    const agora = Date.parse("2026-09-30T14:30:00Z");
+    const g = { criadoPor: 7, usuarioId: 7, totalItens: 1000, itensGravados: 400, criadoEm: "2026-09-30 14:10:00", agora };
     assert.equal(gravacaoParcial(g), true);
+    // Um DFD ANTIGO da própria pessoa (a sobrescrita mantém a criação) nunca se "desfaz" — mesmo com o total forjado.
+    assert.equal(gravacaoParcial({ ...g, criadoEm: "2026-09-30 13:29:00" }), false);
+    assert.equal(gravacaoParcial({ ...g, criadoEm: "2025-01-01 10:00:00" }), false);
+    assert.equal(gravacaoParcial({ ...g, criadoEm: null }), false);
+    assert.equal(gravacaoParcial({ ...g, criadoEm: "lixo" }), false);
+    assert.equal(gravacaoParcial({ ...g, criadoEm: "2026-09-30 13:31:00" }), true); // dentro da janela de 60 min
     assert.equal(gravacaoParcial({ ...g, itensGravados: 1000 }), false); // completo: não se desfaz
     assert.equal(gravacaoParcial({ ...g, itensGravados: 1001 }), false);
     assert.equal(gravacaoParcial({ ...g, usuarioId: 8 }), false); // de outro usuário

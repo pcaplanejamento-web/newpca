@@ -1,8 +1,8 @@
 import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { criadoPorImportacaoRecente, registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { atualizarOrcamento, excluirOrcamento, getOrcamento, importadoAgoraPor } from "@/lib/orcamento";
+import { atualizarOrcamento, excluirOrcamento, getOrcamento } from "@/lib/orcamento";
 import { patchOrcamentoSchema } from "@/lib/orcamento-validation";
 
 export const dynamic = "force-dynamic";
@@ -37,13 +37,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 /** Excluir = Excluir. `?origem=desfazer` = o DESFAZER da importação que falhou no meio (ou o temporário do reenvio):
- * o orçamento que ESTA pessoa importou na última hora sai só com Importar. */
+ * o orçamento que ESTA pessoa CRIOU por importação na última hora sai só com Importar (`criadoPorImportacaoRecente` — um
+ * orçamento que já existia, mesmo com a planilha reenviada agora, nunca). */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirAcesso("orcamento", "visualizar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
-  const desfazer = new URL(req.url).searchParams.get("origem") === "desfazer" && (await importadoAgoraPor(id, a.u.id));
+  const desfazer = new URL(req.url).searchParams.get("origem") === "desfazer" && (await criadoPorImportacaoRecente("orcamento", id, a.u.id));
   const negado = recusa(a.acesso, "orcamento", desfazer ? "importar" : "excluir");
   if (negado) return negado;
   const alvo = await getOrcamento(id);

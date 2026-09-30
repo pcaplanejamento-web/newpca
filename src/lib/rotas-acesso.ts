@@ -112,7 +112,10 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "calendario/ics/[token]": { GET: publica("o feed .ics pelo token: pessoa ativa, Exportar no Calendário e só os quadros dos grupos que o abrem") },
 
   // ── Catálogo ────────────────────────────────────────────────────────────────────────────────────────────
-  "catalogo/[id]": { PATCH: tela("catalogo", "manipular"), DELETE: tela("catalogo", "excluir") },
+  "catalogo/[id]": {
+    PATCH: tela("catalogo", "manipular"),
+    DELETE: recurso("catalogo", "excluir", "recusa(", "o desfazer da própria importação (última hora) = Importar"),
+  },
   "catalogo/classificacoes/[id]": { PATCH: tela("catalogo", "configurar"), DELETE: tela("catalogo", "configurar") },
   "catalogo/classificacoes/itens": { GET: tela("catalogo", "visualizar") },
   "catalogo/classificacoes/ordem": { PATCH: tela("catalogo", "configurar") },

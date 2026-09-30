@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
-import { auditoria, orcamentoItens, orcamentos, orcamentoVinculos, orgaos, reparticoes } from "@/db/schema";
+import { orcamentoItens, orcamentos, orcamentoVinculos, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { comandosSubstituirLancamentos } from "./orcamento-sql";
 import { lotesDeIds } from "./reparticoes";
@@ -157,25 +157,6 @@ export async function substituirLancamentos(alvoId: number, origemId: number): P
 }
 
 /** Exclui um orçamento E seus lançamentos (explícito + cascade de backstop), atômico. */
-/** O orçamento foi IMPORTADO por esta pessoa na última hora? (o histórico guarda quem importou) — o desfazer de uma
- * importação que falhou no meio (ou o temporário do reenvio) apaga o parcial só com Importar. */
-export async function importadoAgoraPor(orcamentoId: number, usuarioId: number): Promise<boolean> {
-  const [r] = await getDb()
-    .select({ id: auditoria.id })
-    .from(auditoria)
-    .where(
-      and(
-        eq(auditoria.entidade, "orcamento"),
-        eq(auditoria.entidadeId, orcamentoId),
-        eq(auditoria.acao, "importar"),
-        eq(auditoria.usuarioId, usuarioId),
-        gte(auditoria.criadoEm, sql`datetime('now', '-60 minutes')`),
-      ),
-    )
-    .limit(1);
-  return !!r;
-}
-
 export async function excluirOrcamento(id: number): Promise<void> {
   const db = getDb();
   await db.batch([

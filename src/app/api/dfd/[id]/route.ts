@@ -54,7 +54,14 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   const desfeita =
     origem === "desfazer" &&
     !!alvo &&
-    gravacaoParcial({ criadoPor: dfd.criadoPor, usuarioId: a.u.id, totalItens: alvo.totalItens, itensGravados: alvo.itens.length });
+    gravacaoParcial({
+      criadoPor: dfd.criadoPor,
+      usuarioId: a.u.id,
+      totalItens: alvo.totalItens,
+      itensGravados: alvo.itens.length,
+      criadoEm: dfd.criadoEm,
+      agora: Date.now(),
+    });
   // O PAPEL, na Mesa em que o DFD está: o desfazer é da IMPORTAÇÃO; o reenvio importa E exclui; o resto, Excluir.
   const tela = telaDoRecurso(dfd.pcaId);
   const negado = desfeita

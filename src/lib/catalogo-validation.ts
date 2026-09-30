@@ -36,7 +36,8 @@ const startCatalogoSchema = z.object({
   nome: z.string().trim().min(1).max(200),
   tiposPadrao: tiposDfdSchema,
   totalItens: z.number().int().min(0),
-  rows: z.array(catalogoItemImportSchema).min(1).max(MAX_ROWS),
+  // Sem itens novos só quando compartilha itens existentes (a rota confere — "Nada para importar").
+  rows: z.array(catalogoItemImportSchema).max(MAX_ROWS),
   excluirItens: z.array(z.number().int().positive()).max(20000).default([]),
   // Itens EXISTENTES (idênticos) a COMPARTILHAR neste catálogo — o mesmo item nos dois.
   compartilharItens: z.array(z.number().int().positive()).max(20000).default([]),

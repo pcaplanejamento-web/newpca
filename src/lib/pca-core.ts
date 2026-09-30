@@ -155,18 +155,35 @@ export function motivoNaoExcluirProtocolo(
   return `Na Mesa do ${nomePca?.trim() || "PCA"} — protocolo em um PCA não é excluído (devolva-o à Mesa principal para excluir).`;
 }
 
+/** A janela do DESFAZER (min): a importação que acabou de falhar criou o DFD agora há pouco. */
+export const JANELA_DESFAZER_MIN = 60;
+
+/** O instante de um carimbo do banco ("AAAA-MM-DD HH:MM:SS", UTC — `CURRENT_TIMESTAMP`); `null` se ilegível. */
+export function instanteDoBanco(ts: string | null | undefined): number | null {
+  if (!ts) return null;
+  const t = Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(ts.trim()) ? ts.trim() : `${ts.trim().replace(" ", "T")}Z`);
+  return Number.isFinite(t) ? t : null;
+}
+
 /**
- * A gravação que ficou PELA METADE — o que o DESFAZER da importação pode apagar: o DFD criado por ESTE usuário com MENOS
- * itens gravados que o total declarado no `start-dfd`. Só uma importação interrompida deixa o DFD assim (salvar os itens
- * ou editá-los em massa recalcula o total); um DFD completo nunca é "pela metade", qualquer que seja a hora.
+ * A gravação que ficou PELA METADE — o que o DESFAZER da importação pode apagar: o DFD CRIADO há pouco (na janela
+ * `JANELA_DESFAZER_MIN`) por ESTE usuário com MENOS itens gravados que o total declarado no `start-dfd`. Só uma importação
+ * interrompida deixa o DFD assim (salvar os itens ou editá-los em massa recalcula o total); um DFD completo nunca é "pela
+ * metade". A criação RECENTE fecha o atalho de um `start-dfd` forjado sobre um DFD antigo da própria pessoa (a sobrescrita
+ * mantém a criação original) — excluí-lo segue exigindo Excluir.
  */
 export function gravacaoParcial(g: {
   criadoPor: number | null | undefined;
   usuarioId: number;
   totalItens: number | null | undefined;
   itensGravados: number;
+  criadoEm: string | null | undefined;
+  agora: number;
 }): boolean {
-  return g.criadoPor != null && g.criadoPor === g.usuarioId && (g.totalItens ?? 0) > g.itensGravados;
+  if (g.criadoPor == null || g.criadoPor !== g.usuarioId || (g.totalItens ?? 0) <= g.itensGravados) return false;
+  const criado = instanteDoBanco(g.criadoEm);
+  // Uma folga de 1 min para o relógio do servidor; depois da janela, não se desfaz mais.
+  return criado != null && g.agora - criado >= -60_000 && g.agora - criado <= JANELA_DESFAZER_MIN * 60_000;
 }
 
 /**

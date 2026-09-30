@@ -79,8 +79,15 @@ export async function POST(req: Request) {
   const existente = await getReparticaoDfdNumero(d.numero);
   // O PAPEL importa na Mesa de DESTINO: a do protocolo de destino; sem ele (o avulso, ou a sobrescrita que mantém o DFD
   // no protocolo dele), a do protocolo do DFD existente; o DFD novo avulso fica na Mesa do sistema.
-  const negado = recusa(a.acesso, telaDoRecurso(d.protocoloId != null ? destino?.pcaId : existente?.pcaId), "importar");
+  const telaDestino = telaDoRecurso(d.protocoloId != null ? destino?.pcaId : existente?.pcaId);
+  const negado = recusa(a.acesso, telaDestino, "importar");
   if (negado) return negado;
+  // O DFD que já existe em OUTRA Mesa (ex.: num protocolo enviado a um PCA) só SAI dela com o Importar também nela — a
+  // mesma régua do "vincular", que confere as duas Mesas.
+  if (existente && telaDoRecurso(existente.pcaId) !== telaDestino) {
+    const negadoOrigem = recusa(a.acesso, telaDoRecurso(existente.pcaId), "importar");
+    if (negadoOrigem) return negadoOrigem;
+  }
   const categoria =
     d.protocoloId != null ? classificarAssunto(destino?.assunto ?? null) : await categoriaDoProtocolo(existente?.protocoloId);
   const ctxAv = { dfdTipo: tipoCurtoDfd(d.tipo), categoria };

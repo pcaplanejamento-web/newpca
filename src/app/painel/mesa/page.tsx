@@ -28,7 +28,9 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
     const rp = await acessoPagina("pca");
     if (rp.bloqueio) return rp.bloqueio;
     const mp = await carregarMesaDoPca(rp.acesso.u, pca);
-    return <MesaPca key={pca.id} {...mp} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas)} atual={pca.id} />} />;
+    return (
+      <MesaPca key={pca.id} {...mp} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas)} atual={pca.id} sistema={mp.pode.sistema.visualizar} />} />
+    );
   }
   const r = await acessoPagina("dfd");
   if (r.bloqueio) return r.bloqueio;
@@ -38,7 +40,8 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   return (
     <DfdsView
       key="sistema"
-      seletorMesa={<SeletorMesa pcas={opcoesMesa(m.pcas)} atual={null} />}
+      // As Mesas dos PCAs só para quem visualiza o PCA (senão a opção levaria a "Acesso restrito").
+      seletorMesa={<SeletorMesa pcas={m.pode.pca.visualizar ? opcoesMesa(m.pcas) : []} atual={null} />}
       pode={m.pode}
       dfds={m.dfds}
       protocolos={m.protocolos}
