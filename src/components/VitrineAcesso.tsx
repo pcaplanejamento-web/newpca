@@ -20,7 +20,7 @@ export function VitrineAcesso({ identidade, textos, previa = false }: { identida
     >
       <ConstelacaoAnimada className="absolute inset-0" />
 
-      <div className={`relative flex flex-1 flex-col ${previa ? "p-6 sm:p-8" : "p-12 xl:p-16"}`}>
+      <div className={`relative flex flex-1 flex-col ${previa ? "p-6 sm:p-8" : "p-12 xl:p-16 [@media(max-height:820px)]:p-8 [@media(max-height:820px)]:px-12"}`}>
         <MarcaSistema identidade={identidade} tamanho="lg" claro />
 
         <div className={`my-auto max-w-xl ${previa ? "py-8" : "py-12"}`}>

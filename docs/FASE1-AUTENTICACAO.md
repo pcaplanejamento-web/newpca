@@ -20,7 +20,9 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 - **RBAC:** `role` (`admin`|`gestor`|`membro`) + `status` (`ativo`|`pendente`|`inativo`) em `usuarios`.
 
 ## Fluxo de acesso
-- **Cadastro institucional (2 etapas):** nome completo, matrícula, cargo ou função, unidade em que trabalha, e-mail **@rioverde.go.gov.br** e
+- **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula, cargo ou função (seleção da lista
+  que o ADM cadastra em Usuários → Cargos e funções), unidade em que trabalha, o usuário do e-mail (o `@rioverde.go.gov.br`
+  já vem preenchido), e-mail **@rioverde.go.gov.br** e
   senha → captcha (se ativo) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →
   conta criada **membro/pendente** com o e-mail confirmado.
 - **1º cadastro** → vira **admin/ativo** (bootstrap, sem código — ainda não há envio de e-mails configurado).

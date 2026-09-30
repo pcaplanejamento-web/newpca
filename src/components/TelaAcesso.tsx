@@ -32,6 +32,7 @@ export function TelaAcesso({
   google,
   googleConta,
   unidades,
+  cargos,
   semCodigo,
   erroInicial,
 }: {
@@ -43,6 +44,7 @@ export function TelaAcesso({
   google: boolean;
   googleConta: string | null;
   unidades: UnidadeTrabalho[];
+  cargos: string[];
   semCodigo: boolean;
   erroInicial: string | null;
 }) {
@@ -68,7 +70,7 @@ export function TelaAcesso({
 
   return (
     <main className="grid min-h-dvh bg-surface lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:overflow-hidden">
-      <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-12 xl:pt-16">
+      <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-12 xl:pt-16 lg:[@media(max-height:820px)]:pt-8">
         {/* No desktop a marca fica na vitrine. */}
         <div className="lg:hidden">
           <MarcaSistema identidade={identidade} />
@@ -87,16 +89,16 @@ export function TelaAcesso({
               ]}
             />
           </div>
-          <div className="mt-8 lg:mt-[max(2.5rem,8dvh)]">
+          <div className="mt-8 lg:mt-[clamp(0.75rem,3.5dvh,2.5rem)]">
             {modo === "entrar" ? (
               <AuthForm key="entrar" onEsqueci={() => irPara("senha")} turnstile={turnstile} google={google} googleConta={googleConta} erroInicial={erro} />
             ) : modo === "cadastro" ? (
-              <CadastroForm key="cadastro" onVoltar={() => irPara("entrar")} unidades={unidades} turnstile={turnstile} semCodigo={semCodigo} erroInicial={erro} />
+              <CadastroForm key="cadastro" onVoltar={() => irPara("entrar")} unidades={unidades} cargos={cargos} turnstile={turnstile} semCodigo={semCodigo} erroInicial={erro} />
             ) : (
               <RecuperarSenhaForm key="senha" onVoltar={() => irPara("entrar")} turnstile={turnstile} />
             )}
           </div>
-          <p className="mt-auto pt-10 text-center text-[12px] leading-relaxed text-faint lg:pb-10">{textos.aviso}</p>
+          <p className="mt-auto pt-5 text-center text-[12px] leading-relaxed text-faint lg:pb-6 lg:[@media(max-height:720px)]:pt-3 lg:[@media(max-height:720px)]:pb-4">{textos.aviso}</p>
         </div>
       </section>
       <VitrineAcesso identidade={identidade} textos={textos} />

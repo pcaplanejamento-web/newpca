@@ -1258,6 +1258,9 @@ organizadas com botões padronizados. Depois: "Entrar | Criar conta" fixo no alt
 mesma largura), a constelação animada com profundidade (pontos surgem e somem) e os textos da tela de acesso cadastráveis
 em Configurações → Tela de acesso, com prévia. Por fim: o seletor alinhado com a logo da vitrine e a constelação em malha
 triangulada (vizinhos mais próximos + triângulos), como no Dattago.
+✅ **Cargos e funções + cadastro sem rolagem:** o ADM cadastra os cargos em Usuários → Cargos e funções (renomear propaga
+para as pessoas); o cadastro escolhe numa seleção; o ADM troca o de qualquer usuário. O cadastro cabe na tela (campos
+densos) e o e-mail pede só o usuário, com o domínio institucional já preenchido.
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

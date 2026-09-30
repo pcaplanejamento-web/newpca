@@ -13,24 +13,30 @@ type CampoProps = {
   trailing?: ReactNode;
   hint?: ReactNode;
   error?: string;
+  /** DENSO: caixa de 44px e rótulo mais próximo (formulários longos que têm de caber na tela — o cadastro). */
+  denso?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "size">;
+
+/** Rótulo e altura da caixa no padrão (54px) ou no modo DENSO (44px). */
+const rotuloCls = (denso?: boolean) => `${denso ? "mb-1 text-[13px]" : "mb-2 text-[13.5px]"} block font-bold text-text`;
+const alturaCls = (denso?: boolean) => (denso ? "h-11 [@media(max-height:720px)]:h-10" : "h-[54px]");
 
 const WRAP =
   "flex items-center gap-2.5 rounded-control border bg-surface-2 px-3.5 transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent/20";
 const INPUT =
   "min-w-0 flex-1 bg-transparent text-[15px] text-text outline-none placeholder:text-faint";
 
-export function TextField({ label, icon, trailing, hint, error, id, ...rest }: CampoProps) {
+export function TextField({ label, icon, trailing, hint, error, denso, id, ...rest }: CampoProps) {
   const auto = useId();
   const fid = id ?? auto;
   return (
     <div>
       {label && (
-        <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
+        <label htmlFor={fid} className={rotuloCls(denso)}>
           {label}
         </label>
       )}
-      <div className={`${WRAP} h-[54px] ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+      <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         {icon && <span className="shrink-0 text-muted">{icon}</span>}
         <input id={fid} className={INPUT} {...rest} />
         {trailing}
@@ -50,6 +56,7 @@ export function SelectField({
   label,
   hint,
   error,
+  denso,
   id,
   compacto = false,
   children,
@@ -59,6 +66,8 @@ export function SelectField({
   hint?: ReactNode;
   /** O problema do campo (borda + mensagem na cor de erro — como no `TextField`). */
   error?: string;
+  /** DENSO: caixa de 44px (como o `TextField denso`). */
+  denso?: boolean;
   /** Compacto (barras de ferramentas, ao lado de `Button size="sm"`): `--h-control-sm` no desktop, 44px no toque; o
    * rótulo vira um prefixo discreto DENTRO da caixa. */
   compacto?: boolean;
@@ -82,11 +91,11 @@ export function SelectField({
   return (
     <div>
       {label && (
-        <label htmlFor={fid} className="mb-2 block text-[13.5px] font-bold text-text">
+        <label htmlFor={fid} className={rotuloCls(denso)}>
           {label}
         </label>
       )}
-      <div className={`${WRAP} h-[54px] ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+      <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         <select id={fid} className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60`} {...rest}>
           {children}
         </select>

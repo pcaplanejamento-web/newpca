@@ -799,6 +799,18 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT cargo AS c FROM usuarios WHERE id = 9671").get() as { c: string }).c, "Analista");
   });
 
+  it("0070 cargos: semeia os cargos já informados (sem repetir, sem caixa) e o nome é único sem caixa", () => {
+    const a = new DatabaseSync(":memory:");
+    const antes = arquivos.filter((f) => f < "0070");
+    for (const arq of antes) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash, cargo) VALUES (9701, 'A B', 'a9701@x', 'h', ' Analista '), (9702, 'C D', 'c9702@x', 'h', 'ANALISTA'), (9703, 'E F', 'e9703@x', 'h', 'Diretor'), (9704, 'G H', 'g9704@x', 'h', NULL)");
+    for (const arq of arquivos.filter((f) => f >= "0070")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    const nomes = (a.prepare("SELECT nome FROM cargos ORDER BY lower(nome)").all() as { nome: string }[]).map((r) => r.nome);
+    assert.equal(nomes.length, 2);
+    assert.equal(nomes[1], "Diretor");
+    assert.throws(() => a.exec("INSERT INTO cargos (nome) VALUES ('diretor')"));
+  });
+
   it("0069 papéis: 3 do sistema (sementes = núcleo), só o Membro é o padrão, cada pessoa com o papel do role", () => {
     const d = new DatabaseSync(":memory:");
     const i69 = arquivos.findIndex((f) => f.startsWith("0069"));

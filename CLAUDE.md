@@ -146,8 +146,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     destaque sem título some). Sem números inventados. A logo é a
     **`MarcaSistema`** (o favicon da Identidade do ADM, senão o monograma "RV" + nome/subtítulo) — a MESMA do menu do
     `AppShell` (`Brand` a usa); no celular fica no topo do formulário, no desktop na vitrine.
+  - **Cadastro CABE NA TELA sem rolar (desktop, medido de 1280×650 a 1920×1080):** campos no modo **`denso`** do DS
+    (`TextField`/`SelectField`/`PasswordField denso` = caixa de 44px e rótulo próximo; 40px em telas com altura ≤ 720px),
+    `CartaoAuth denso` (etapa na linha do título; o subtítulo some em tela baixa), sem dicas soltas e respiros menores em
+    telas baixas (`[@media(max-height:820px)]` no topo da coluna E na vitrine — o seletor segue alinhado à logo).
+  - **E-mail institucional = só a parte antes do "@"**: o domínio `@rioverde.go.gov.br` fica FIXO no fim do campo
+    (`TextField trailing`); colar o e-mail inteiro vale (`parteLocalEmail`/`emailDaParteLocal`, `cadastro-core.ts`).
+  - **CARGOS E FUNÇÕES do ADM (migração `0070`, tabela `cargos`: nome único sem caixa + ordem; semeada com os cargos já
+    informados):** Usuários → botão **"Cargos e funções"** → `Modal` com **`CargosAdmin`** (cadastrar/renomear no campo do
+    topo, ↑/↓ = a ordem da lista do cadastro — `AcoesCadastro` —, excluir com `useConfirmacao`; quantas pessoas usam cada um).
+    A pessoa guarda o NOME (`usuarios.cargo`): **renomear** renomeia o das pessoas no MESMO lote (`renomearCargo`);
+    **excluir** só tira da lista (as pessoas mantêm até o ADM trocar). D1 em **`cargos.ts`** (`listarCargos`,
+    `cargoCadastrado` — sem caixa, devolve o nome canônico); rotas `GET/POST /api/admin/cargos`, `PATCH/DELETE
+    /api/admin/cargos/[id]`, `PATCH /api/admin/cargos/ordem` (`exigirAdmin`, `cargoSchema`, auditoria `cargo`). O **cadastro**
+    escolhe o cargo numa **seleção** da lista (exigido quando há cargos; sem nenhum, o campo não aparece) — a rota confere a
+    unidade e o cargo ANTES de consumir o código; o ADM troca o de qualquer usuário no "Editar usuário" (`SelectField` da lista
+    + o atual "(fora da lista)"; o `PATCH` só aceita um cadastrado, manter o atual ou nenhum).
   - **Cadastro** (`CadastroForm`, 2 etapas): **nome completo** (nome + sobrenome — `nomeCompleto`),
-    **matrícula**, **cargo ou função** (`usuarios.cargo`, migração **`0068`**, aditiva), **unidade** (`SelectField` + **`OpcoesUnidades`** por órgão — `listarUnidadesTrabalho`: sem ocultas nem a
+    **matrícula**, **cargo ou função** (`usuarios.cargo`, migração **`0068`**, aditiva — escolhido na lista acima), **unidade** (`SelectField` + **`OpcoesUnidades`** por órgão — `listarUnidadesTrabalho`: sem ocultas nem a
     "Geral"; o servidor confere com `unidadeDeTrabalhoValida`), **e-mail INSTITUCIONAL** `@rioverde.go.gov.br`
     (`DOMINIO_INSTITUCIONAL`/`emailInstitucional`, núcleo puro **`cadastro-core.ts`** — sem zod, leve no navegador), senha +
     confirmação → "Enviar código" → o **código de 6 dígitos** confirma o e-mail e cria a conta **pendente** (os ADMs recebem o

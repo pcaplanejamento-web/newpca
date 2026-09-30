@@ -15,3 +15,17 @@ export function emailInstitucional(email: string): boolean {
 export function nomeCompleto(nome: string): boolean {
   return nome.trim().split(/\s+/u).filter((p) => p.length >= 2).length >= 2;
 }
+
+/**
+ * O que a pessoa digita no campo do e-mail institucional: SÓ a parte antes do "@" (o domínio já vem preenchido). Colar o
+ * e-mail inteiro também vale (fica a parte antes do "@"); espaços somem e tudo fica minúsculo.
+ */
+export function parteLocalEmail(v: string): string {
+  return v.split("@")[0].replace(/\s+/g, "").toLowerCase().slice(0, 64);
+}
+
+/** O e-mail institucional completo a partir da parte antes do "@" (vazia = ""). */
+export function emailDaParteLocal(local: string): string {
+  const l = parteLocalEmail(local);
+  return l ? `${l}@${DOMINIO_INSTITUCIONAL}` : "";
+}

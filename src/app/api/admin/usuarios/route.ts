@@ -4,6 +4,7 @@ import { reparticoes, usuarios } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { ok } from "@/lib/http";
 import { urlFoto } from "@/lib/pessoa";
+import { listarCargos } from "@/lib/cargos";
 import { listarUnidadesTrabalho } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export async function GET() {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
 
-  const [lista, unidades] = await Promise.all([
+  const [lista, unidades, cargosLista] = await Promise.all([
     getDb()
       .select({
         id: usuarios.id,
@@ -35,11 +36,13 @@ export async function GET() {
       .leftJoin(reparticoes, eq(reparticoes.id, usuarios.reparticaoId))
       .orderBy(desc(usuarios.criadoEm)),
     listarUnidadesTrabalho(),
+    listarCargos(),
   ]);
 
   return ok({
     usuarios: lista.map(({ temFoto, versao, emailVerificado, ...u }) => ({ ...u, emailVerificado: !!emailVerificado, foto: urlFoto(u.id, !!temFoto, versao) })),
     unidades,
+    cargos: cargosLista,
     meuId: guard.u.id,
   });
 }

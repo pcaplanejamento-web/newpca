@@ -11,6 +11,7 @@ import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { comandoEncerrarSessoesSeInativo, comandoExcluirUsuario, comandoTrocarPapel, comandoTrocarStatus, consultaPapelDaChave } from "@/lib/papeis-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
+import { cargoCadastrado } from "@/lib/cargos";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,13 @@ export async function PATCH(
     .where(eq(usuarios.id, id))
     .limit(1);
   if (!antes) return erro("Usuário não encontrado.", 404);
+  // O cargo/função: um da lista do ADM (o nome como está no cadastro), manter o atual ou "" (nenhum).
+  let cargoNovo = cargo;
+  if (cargo && cargo !== antes.cargo) {
+    const c = await cargoCadastrado(cargo);
+    if (!c) return erro("Escolha um cargo ou função cadastrado.", 422);
+    cargoNovo = c;
+  }
   // A unidade de trabalho nova tem de ser escolhível (nem oculta nem a "Geral"); manter a atual sempre vale.
   if (reparticaoId != null && reparticaoId !== antes.reparticaoId && !(await unidadeDeTrabalhoValida(reparticaoId)))
     return erro("Selecione uma unidade válida.", 422);
@@ -74,7 +82,7 @@ export async function PATCH(
     ...(nome !== undefined ? { nome } : {}),
     ...(email !== undefined ? { email } : {}),
     ...(matricula !== undefined ? { matricula: matricula ? matricula : null } : {}),
-    ...(cargo !== undefined ? { cargo: cargo ? cargo : null } : {}),
+    ...(cargoNovo !== undefined ? { cargo: cargoNovo ? cargoNovo : null } : {}),
     ...(reparticaoId !== undefined ? { reparticaoId } : {}),
   };
   if (Object.keys(set).length > 0) await db.update(usuarios).set({ ...set, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(usuarios.id, id));
