@@ -108,6 +108,17 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "catalogo/unidades-medida/sinonimos": { POST: tela("catalogo", "configurar") },
   "catalogo/verificar": { POST: tela("catalogo", "importar") },
 
+  // ── Orçamento ───────────────────────────────────────────────────────────────────────────────────────────
+  "orcamento": { POST: tela("orcamento", "importar", "importar o CUBO (em lotes)") },
+  "orcamento/[id]": {
+    PATCH: tela("orcamento", "configurar", "nome e ano"),
+    DELETE: recurso("orcamento", "excluir", "recusa(", "o desfazer da própria importação (última hora) = Importar"),
+  },
+  "orcamento/[id]/substituir": { POST: tela("orcamento", "importar", "reenviar a planilha") },
+  "orcamento/vinculos": { PUT: tela("orcamento", "configurar") },
+  "orcamento/visoes": { POST: tela("orcamento", "configurar") },
+  "orcamento/visoes/[id]": { PATCH: tela("orcamento", "configurar"), DELETE: tela("orcamento", "configurar") },
+
   // ── Pessoais (qualquer pessoa logada) ───────────────────────────────────────────────────────────────────
   "dados/versao": { GET: pessoal("a versão dos dados (sincronização)") },
   "grupos/ativo": { POST: pessoal("o grupo ativo do cabeçalho (entre os da pessoa)") },
@@ -136,7 +147,6 @@ export const PENDENTES: readonly string[] = [
   "dfd",
   "integracoes/trello/boards",
   "mesa/",
-  "orcamento",
   "pca",
   "protocolo",
   "tabela/",

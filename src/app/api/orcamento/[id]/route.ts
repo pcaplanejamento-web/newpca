@@ -1,15 +1,15 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { atualizarOrcamento, excluirOrcamento, getOrcamento } from "@/lib/orcamento";
+import { atualizarOrcamento, excluirOrcamento, getOrcamento, importadoAgoraPor } from "@/lib/orcamento";
 import { patchOrcamentoSchema } from "@/lib/orcamento-validation";
 
 export const dynamic = "force-dynamic";
 
-/** Edita (nome/ano) ou EXCLUI um orçamento — só editor. Excluir apaga os lançamentos. */
+/** Edita (nome/ano — Configurar) ou EXCLUI um orçamento (Excluir; apaga os lançamentos). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("orcamento", "configurar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -36,11 +36,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return ok();
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+/** Excluir = Excluir. `?origem=desfazer` = o DESFAZER da importação que falhou no meio (ou o temporário do reenvio):
+ * o orçamento que ESTA pessoa importou na última hora sai só com Importar. */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const a = await exigirAcesso("orcamento", "visualizar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const desfazer = new URL(req.url).searchParams.get("origem") === "desfazer" && (await importadoAgoraPor(id, a.u.id));
+  const negado = recusa(a.acesso, "orcamento", desfazer ? "importar" : "excluir");
+  if (negado) return negado;
   const alvo = await getOrcamento(id);
   await excluirOrcamento(id);
   await registrarAuditoria({

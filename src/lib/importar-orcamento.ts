@@ -46,7 +46,8 @@ async function postOrcamento(body: unknown): Promise<{ orcamentoId?: number }> {
 
 async function apagarOrcamento(id: number): Promise<void> {
   try {
-    await fetch(`/api/orcamento/${id}`, { method: "DELETE" });
+    // `origem=desfazer`: o parcial que ESTA importação criou sai só com Importar (sem precisar de Excluir no papel).
+    await fetch(`/api/orcamento/${id}?origem=desfazer`, { method: "DELETE" });
   } catch {
     // best-effort
   }

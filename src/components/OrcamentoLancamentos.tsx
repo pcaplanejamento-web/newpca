@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { exportarOrcamentoPdf, exportarOrcamentoXlsx } from "@/lib/exportar-orcamento";
 import { brl, num } from "@/lib/format";
 import type { OrcamentoItemRow, OrcamentoResumo } from "@/lib/orcamento";
+import type { PodeTela } from "@/lib/papeis-core";
 import { type AlvoVinculo, alvoDoTexto, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
@@ -61,13 +62,14 @@ const colValor = (key: string, header: string, get: (r: OrcamentoItemRow) => num
  */
 export function OrcamentoLancamentos({
   orcamento,
-  podeEditar,
+  pode,
   itens,
   vinculos,
   alvos,
 }: {
   orcamento: OrcamentoResumo;
-  podeEditar: boolean;
+  /** O que o papel permite: Exportar (XLSX/PDF) e Importar (reenviar a planilha). */
+  pode: Pick<PodeTela, "exportar" | "importar">;
   itens: OrcamentoItemRow[];
   vinculos: VinculoOrcamento[];
   alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
@@ -162,12 +164,16 @@ export function OrcamentoLancamentos({
             aria-label="Buscar nos lançamentos"
           />
         </div>
-        <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => exportarOrcamentoXlsx(titulo, filtrados)}>
-          XLSX
-        </Button>
-        <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportarPdf}>
-          PDF
-        </Button>
+        {pode.exportar && (
+          <>
+            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => exportarOrcamentoXlsx(titulo, filtrados)}>
+              XLSX
+            </Button>
+            <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportarPdf}>
+              PDF
+            </Button>
+          </>
+        )}
       </FerramentasAba>
       <DataTable
         columns={colunas}
@@ -179,7 +185,7 @@ export function OrcamentoLancamentos({
         onRowClick={(r) => setAberto(r)}
         activeKey={aberto?.id ?? null}
         acoesRodape={
-          podeEditar ? (
+          pode.importar ? (
             <Button
               size="sm"
               variant="secondary"
@@ -200,7 +206,7 @@ export function OrcamentoLancamentos({
       <Modal open={aberto != null} onClose={() => setAberto(null)} titulo="Detalhe do lançamento" size="lg">
         {aberto && detalhe ? <OrcamentoItemDetalhe key={aberto.id} item={aberto} vinculo={{ orgao: detalhe.orgao, unidade: detalhe.unidade }} /> : <div />}
       </Modal>
-      {podeEditar && <ImportarOrcamento iniciar={reenviar} alvo={orcamento} />}
+      {pode.importar && <ImportarOrcamento iniciar={reenviar} alvo={orcamento} />}
       {erro && (
         <AvisoFlutuante kind="danger" titulo="Não foi possível exportar" onClose={() => setErro(null)}>
           {erro}

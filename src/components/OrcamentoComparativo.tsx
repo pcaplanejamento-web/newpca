@@ -76,6 +76,7 @@ export function OrcamentoComparativo({
   visaoInicial = null,
   inicio,
   onMudarEdicoes,
+  podeExportar = true,
 }: {
   titulo: string;
   itens: OrcamentoItemRow[];
@@ -92,6 +93,8 @@ export function OrcamentoComparativo({
   inicio?: ReactNode;
   /** Quem guarda as edições FORA (a tabela remonta ao trocar de vista e volta com as edições novas). */
   onMudarEdicoes?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
+  /** O papel exporta nesta tela (o XLSX da tabela cruzada). */
+  podeExportar?: boolean;
 }) {
   const [dimLinha, setDimLinha] = useState<DimensaoOrcamento>("unidade");
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
@@ -276,9 +279,11 @@ export function OrcamentoComparativo({
             aria-label="Buscar nas linhas"
           />
         </div>
-        <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={!cruz || nVisiveis === 0}>
-          XLSX
-        </Button>
+        {podeExportar && (
+          <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={!cruz || nVisiveis === 0}>
+            XLSX
+          </Button>
+        )}
       </FerramentasAba>
 
       <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2">

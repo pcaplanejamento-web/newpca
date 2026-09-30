@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { num } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * cliente acabou de gravar em lotes) — num lote atômico; o orçamento mantém id/nome/ano. Só editor; auditoria.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("orcamento", "importar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
