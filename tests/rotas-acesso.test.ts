@@ -97,4 +97,26 @@ describe("acesso das rotas da API", () => {
     }
     assert.deepEqual(erros, []);
   });
+
+  // A LIMPEZA dos papéis: o papel antigo (`role` admin | gestor | membro) não decide mais nada — quem é Administrador vem
+  // do PAPEL (`u.admin`) e o que se faz em cada tela, das capacidades. `usuarios.role` segue gravado só como ESPELHO.
+  it("ninguém decide acesso pelo `role` antigo (nem `exigirEditor`)", () => {
+    const SRC = join(process.cwd(), "src");
+    const fontes = (dir: string): string[] =>
+      readdirSync(dir).flatMap((nome) => {
+        const p = join(dir, nome);
+        return statSync(p).isDirectory() ? fontes(p) : /\.(ts|tsx)$/.test(nome) ? [p] : [];
+      });
+    const PROIBIDOS: [RegExp, string][] = [
+      [/\bexigirEditor\(/, "exigirEditor("],
+      [/\b(?:u|atual|usuario|guard\.u|r\.u|g\.u|a\.u)\??\.role\b/, "o `role` da sessão"],
+      [/\brole\s*[!=]==?\s*["'](?:gestor|membro)["']/, "comparação com gestor/membro"],
+    ];
+    const erros: string[] = [];
+    for (const arq of fontes(SRC)) {
+      const texto = readFileSync(arq, "utf8");
+      for (const [re, nome] of PROIBIDOS) if (re.test(texto)) erros.push(`${relative(SRC, arq)}: ${nome}`);
+    }
+    assert.deepEqual(erros, []);
+  });
 });

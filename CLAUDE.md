@@ -117,7 +117,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `const g = await exigirX(); if ("erro" in g) return g.erro;`. O MAPA **`rotas-acesso.ts`** (rota → método → tela + ação,
   puro) é conferido pelo teste estático **`tests/rotas-acesso.test.ts`**: todo método de `src/app/api/**` está no mapa e
   chama a guarda descrita (a do auxiliar do arquivo vale; a ação calculada por regra pura — `acaoDe` — também). **Rota nova
-  = entrada no mapa.** `exigirEditor` (o antigo `role`) nenhuma rota usa — sai na limpeza.
+  = entrada no mapa.** O `role` antigo não decide mais nada: o Administrador vem do PAPEL (`u.admin` — `exigirAdmin`, as
+  páginas da Administração) e o teste estático PROÍBE `exigirEditor(`, o `role` da sessão e comparações com gestor/membro.
 - **SEGURANÇA DO ACESSO (migração `0071`, aditiva — tabelas `limites_acesso` + `desafios_acesso` e os gatilhos de matrícula
   única):**
   - **Sem login, nada:** o layout do `/painel` redireciona ao `/login`; TODA rota de API exige a sessão (as guardas acima) —
@@ -146,10 +147,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
-- **PAPÉIS (migrações `0069`/`0072`, aditivas — EM IMPLANTAÇÃO, entrega 2 de 3):** o GRUPO (permissão) decide QUAIS telas; o
+- **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o
   **PAPEL** decide o que a pessoa FAZ em cada uma — **Visualizar · Manipular · Importar · Exportar · Excluir · Configurar**.
   Tabela `papeis` (nome, descrição, `chave` admin|gestor|membro nos do SISTEMA, `capacidades` JSON {tela: ações[]},
-  `padrao_cadastro`) + `usuarios.papel_id` (set null); **`usuarios.role` segue gravado como ESPELHO** (leitores antigos). Núcleo
+  `padrao_cadastro`) + `usuarios.papel_id` (set null); **`usuarios.role` segue gravado só como ESPELHO** (a sessão não o lê
+  mais; o aviso de cadastro aos ADMs acha o Administrador pelo papel). Núcleo
   PURO **`papeis-core.ts`** (`CATALOGO_PAPEIS` = o que cada ação cobre por tela — Manipular no Orçamento e Configurar no
   Calendário "não se aplicam"; `coerceCapacidades` com as implicações — qualquer ação ⇒ Visualizar; **`podeNaTela`** = o
   grupo libera **E** o papel visualiza, o Administrador tudo; `PAPEIS_SISTEMA` — Gestor = tudo, Membro = consulta + exporta
@@ -175,7 +177,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   PCA · `tarefas:<quadro>:` → o grupo do quadro; outra chave = 422) — salvar a sua = Visualizar, **publicar ou moderar a
   pública de outra pessoa = Configurar** (`acaoParaGravar`, puro; o dono sempre despublica/exclui a sua; auditoria
   `edicao_tabela`); a tela: `SalvarEdicao.podePublicar`/`SeletorEdicoes.podeModerar` (`EdicoesDaTabela.podePublicar`).
-  Falta a entrega 3: a tela **Configurações → Papéis** (criar papéis) e o papel na tela de Usuários.
+  **Configurações → Papéis** (`PapeisAdmin`, contêiner; rotas `GET/POST /api/admin/papeis` e `PATCH/DELETE
+  /api/admin/papeis/[id]`, `exigirAdmin`, Zod `papeis-validation.ts` — capacidades normalizadas por `coerceCapacidades`,
+  tela/ação fora do catálogo = 422; D1 `papeis.ts` + os comandos com trava em `papeis-sql.ts`): lista (nome + selos
+  Fixo/Sistema/Padrão dos cadastros, `ResumoPapel`, quantas pessoas), criar/editar/duplicar/excluir (só o criado pelo ADM, que
+  ninguém tem e que não é o padrão — 409 com o motivo), o editor com **`MatrizCapacidades`** (DS — Telas × Ações, marcar
+  linha/coluna com a caixa PARCIAL, "—" onde não se aplica, células alteradas destacadas; no celular, um cartão por tela com
+  chaves), "Começar de" (`MODELOS_PAPEL`) e o `Switch` "Padrão para novos cadastros" (há sempre um — marcar um desmarca o
+  outro NO MESMO comando); nome único sem caixa (409, também pelo índice); o Administrador é só consulta (403); retirar
+  capacidades de um papel EM USO confirma (vale na hora); auditoria `papel` com o diff por tela (`textoDiffCapacidades`).
+  **Usuários** (`UsuariosAdmin`): o papel vem do banco (`opcoesPapel`; `PATCH /api/admin/usuarios/[id]` `{papelId}` →
+  `comandoTrocarPapel` com a trava do último ADM; confirmação — dar/tirar o Administrador em destaque), a coluna **Grupos**
+  (`CelulaLista`; "Sem grupo" em âmbar) e os grupos editados num LOTE só (`{grupos}` → `comandosGruposDoUsuario`,
+  `rbac-sql.ts`, INSERTs ≤ 40, ids conferidos antes — 422), **Aprovar** num modal com o papel (o padrão vem escolhido) e os
+  grupos (**`GruposDaPessoa`**, DS; avisa sem grupo; auditoria `aprovar` + o e-mail de acesso liberado), **Recusar** o
+  cadastro pendente (exclui; o histórico diz "recusado") e **"Ver acesso"** (**`AcessoDaPessoa`**, DS — por grupo, a
+  `MatrizCapacidades` só-leitura das telas que ABREM, `capacidadesEfetivas`, e as fechadas pelo papel —
+  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar da Mesa:**
+  as 4 tabelas (Protocolos, DFDs, Itens, Consolidada) ganham o **Exportar .xlsx** no rodapé (`DataTable.exportar` — as linhas
+  filtradas e as colunas à vista da edição em uso; núcleo puro `exportar-tabela.ts`, SheetJS só no clique) para quem tem a
+  ação Exportar na Mesa em que está.
 - **CADASTRO INSTITUCIONAL + SENHA CONFIRMADA POR CÓDIGO (migração `0067`, aditiva — `usuarios.reparticao_id` FK set null
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
@@ -2830,6 +2851,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   — nunca `innerWidth < 1024`, que diverge do CSS com a fonte do navegador ampliada);
   **`edicoes`** (`EdicoesDaTabela`, opt-in) = EDIÇÃO da tabela no cabeçalho + EDIÇÕES SALVAS (colunas + ordenação + filtros;
   pessoais ou públicas; a padrão abre a tabela) — as tabelas da Mesa;
+  **`exportar`** (`{nome}`, opt-in) = o botão **Exportar** (.xlsx) no rodapé: as linhas À VISTA (filtros das colunas, na ordem,
+  todas as páginas) e as colunas visíveis da edição em uso — o número como número, os vários valores unidos, as datas em
+  dd/mm/aaaa (`linhasPlanilhaTabela`, `exportar-tabela.ts`);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
@@ -2923,7 +2947,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   interessado · unidade e o "atual" marcado; a lista do `SeletorPessoa`),
   `Segmented` (com `disabled`), **`Switch`** (chave/toggle controlada — `role="switch"`, trilho `--accent`, alvo ≥44px;
   ex.: "Bloqueia importação/protocolação" e "Editável" na aba Avaliação), `formStyles`,
-  `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox/**`CampoLista`** [lista em chips — várias referências da
+  **`MatrizCapacidades`** (a matriz Telas × Ações de um papel — editável ou só-leitura), **`ResumoPapel`** (o resumo das telas e
+  ações), **`GruposDaPessoa`** (os grupos de uma pessoa, com as telas de cada um) e **`AcessoDaPessoa`** (o "Ver acesso": o que
+  a pessoa abre e faz em cada grupo),
+  `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox [`indeterminado` = a caixa PARCIAL]/**`CampoLista`** [lista em chips — várias referências da
   renovação]/**`SelectField`** [`<select>` nativo no MESMO visual do campo — ex.: a classificação que a unidade de medida
   indica] — ícone + foco accent), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
   **`CelulaClassificacao`**/**`CelulaUnidadeCadastrada`** (`EstadoCelula.tsx` — a classificação automática e a unidade
@@ -2978,7 +3005,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   blocos irmãos do MESMO registro (`avaliacao`, `integracoes`) ficam (antes o registro inteiro virava "{}").
 - **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin) reúne o **novo**
   + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
-  `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **Tabelas** (as LINHAS POR PÁGINA com que as
+  `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **Papéis** (`PapeisAdmin` — ver "PAPÉIS"),
+  **Tabelas** (as LINHAS POR PÁGINA com que as
   tabelas da Mesa abrem — 30/50/100/200; slot `tabelas` do mesmo `aparenciaSchema`, `linhasTabela`), **PCAs** (cadastrar/editar/ativar/excluir
   via `/api/admin/pcas`), **Avaliação** (`AvaliacaoAdmin` — níveis por ponto de Protocolo/DFD/Item + exceções por tipo
   de DFD e categoria de protocolo; ver "Avaliação configurável"), **Situações** (`SituacoesAdmin` — as situações do

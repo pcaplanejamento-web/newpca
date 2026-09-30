@@ -26,7 +26,7 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
-### Papéis configuráveis por tela + auditoria de Grupos, Permissões e Papel — em andamento (entrega 2 de 3)
+### Papéis configuráveis por tela + auditoria de Grupos, Permissões e Papel — entregue
 - **Entrega 1 ✅:** correções da administração (PATCH de grupo/permissão não apaga mais pessoas, unidades e telas;
   gravação do grupo num lote; impacto e confirmação ao excluir grupo; sigla GERAL reservada; confirmações do sistema e
   avisos nas telas de Grupos, Permissões e Usuários) + a BASE dos papéis: migração `0069` (`papeis` + `usuarios.papel_id`,
@@ -39,8 +39,12 @@ ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` +
   quem participa), vínculos pela tela do alvo e edições PÚBLICAS de tabela = Configurar (moderação + auditoria) —, o mapa
   `rotas-acesso.ts` conferido por teste estático (toda rota mapeada e guardada) e os modos só-leitura (detalhe da tarefa,
   quadro, comentários) com o que o papel não permite fora da tela.
-- **Entrega 3:** Configurações → **Papéis** (criar papéis, matriz telas × ações), Usuários com o papel do banco e os grupos,
-  "Ver acesso", exportar .xlsx da Mesa.
+- **Entrega 3 ✅:** Configurações → **Papéis** (criar, editar, duplicar e excluir papéis na matriz Telas × Ações; o
+  Administrador fixo; o padrão dos novos cadastros; confirmação ao retirar capacidades de um papel em uso), **Usuários** com o
+  papel do banco (troca com confirmação), a coluna e a edição dos **grupos** num lote, **Aprovar** com papel e grupos,
+  **Recusar** e **"Ver acesso"** (o que a pessoa abre e faz em cada grupo); **Permissões** explica grupo × papel; **Exportar
+  .xlsx** nas 4 tabelas da Mesa (só com a ação Exportar); limpeza — o `role` antigo não decide mais nada (teste estático
+  proíbe `exigirEditor` e o `role` da sessão) e a Referência do sistema mostra o catálogo de ações por tela.
 
 ### Texto do DFD em parágrafos + Atualizar que revisa + Dados completos na Mesa — entregue
 ✅ **Texto corrido na importação** (`texto-corrido.ts`): o PDF gravava uma quebra por linha VISUAL nas seções; agora a

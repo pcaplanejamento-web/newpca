@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       entidade: "usuario",
       entidadeId: u.id,
       resumo: `${nome} criou uma conta (${u.status === "ativo" ? "ativa" : "pendente de aprovação"})`,
-      depois: { nome, email, matricula, cargo, reparticaoId, role: u.role, status: u.status },
+      depois: { nome, email, matricula, cargo, reparticaoId, status: u.status },
     });
 
     if (u.status === "ativo") {

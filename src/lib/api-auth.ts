@@ -13,25 +13,14 @@ export async function exigirUsuario(): Promise<
   return { u };
 }
 
-/** Exige admin ou gestor (membros só leem). */
-export async function exigirEditor(): Promise<
-  { u: UsuarioSessao } | { erro: NextResponse }
-> {
-  const r = await exigirUsuario();
-  if ("erro" in r) return r;
-  if (r.u.role === "membro")
-    return { erro: NextResponse.json({ ok: false, error: "Sem permissão." }, { status: 403 }) };
-  return r;
-}
-
-/** Exige admin. */
+/** Exige o papel ADMINISTRADOR (a Administração: usuários, grupos, permissões, papéis e configurações). */
 export async function exigirAdmin(): Promise<
   { u: UsuarioSessao } | { erro: NextResponse }
 > {
   const r = await exigirUsuario();
   if ("erro" in r) return r;
-  if (r.u.role !== "admin")
-    return { erro: NextResponse.json({ ok: false, error: "Sem permissão." }, { status: 403 }) };
+  if (!r.u.admin)
+    return { erro: NextResponse.json({ ok: false, error: "Somente o Administrador pode fazer isto." }, { status: 403 }) };
   return r;
 }
 

@@ -27,8 +27,6 @@ export type UsuarioSessao = {
   matricula: string | null;
   /** URL da foto (rota com cache — `urlFoto`), nunca o data-URL: a sessão é lida em TODA requisição. */
   foto: string | null;
-  /** ESPELHO do papel (admin | gestor | membro) — use `admin` e `papel`. */
-  role: "admin" | "gestor" | "membro";
   status: "ativo" | "pendente" | "inativo";
   /** O papel Administrador (regra firme: vê e faz tudo, inclusive a Administração). */
   admin: boolean;
@@ -103,7 +101,6 @@ export const colunasSessao = {
   // A FOTO não é lida aqui (pode ter centenas de KB): só se existe + a versão da URL com cache.
   temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
   versao: usuarios.atualizadoEm,
-  role: usuarios.role,
   status: usuarios.status,
   papelId: papeis.id,
   papelNome: papeis.nome,
@@ -119,7 +116,6 @@ type LinhaSessao = {
   matricula: string | null;
   temFoto: number;
   versao: string | null;
-  role: "admin" | "gestor" | "membro";
   status: "ativo" | "pendente" | "inativo";
   papelId: number | null;
   papelNome: string | null;

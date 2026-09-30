@@ -1,7 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { grupoReparticoes, grupos, permissoes, reparticoes, usuarioGrupos } from "@/db/schema";
-import { ABAS, abasConhecidas } from "./abas";
+import { grupoReparticoes, grupos, reparticoes, usuarioGrupos } from "@/db/schema";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 import {
@@ -16,9 +15,9 @@ import {
 
 /**
  * RBAC por grupo. Um usuário pode estar em vários grupos e escolhe o ativo no
- * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais abas de
- * módulo) e as UNIDADES acessíveis (`grupo_reparticoes`) — que escopam os dados da
- * Mesa e do PCA. Admin ignora a permissão de abas e acessa todas as unidades.
+ * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais telas — o que se faz
+ * nelas é do PAPEL: `acesso.ts`) e as UNIDADES acessíveis (`grupo_reparticoes`) — que escopam
+ * os dados da Mesa e do PCA. O Administrador abre todas as telas e acessa todas as unidades.
  */
 const COOKIE_GRUPO = "pca_grupo";
 const COOKIE_REP = "pca_reparticao";
@@ -61,26 +60,6 @@ export async function definirGrupoAtivo(grupoId: number): Promise<void> {
     path: "/",
     maxAge: 30 * 86_400,
   });
-}
-
-/** Abas liberadas para o usuário no grupo ativo. Admin vê todas (regra firme). */
-export async function abasPermitidas(
-  usuario: UsuarioSessao,
-  grupo?: GrupoResumo | null,
-): Promise<Set<string>> {
-  if (usuario.admin) return new Set(ABAS.map((a) => a.key));
-  const g = grupo === undefined ? await getGrupoAtivo(usuario) : grupo;
-  if (!g?.permissaoId) return new Set();
-  const [p] = await getDb()
-    .select({ abas: permissoes.abas })
-    .from(permissoes)
-    .where(eq(permissoes.id, g.permissaoId))
-    .limit(1);
-  try {
-    return new Set(abasConhecidas(JSON.parse(p?.abas ?? "[]"))); // chaves de módulos removidos não valem
-  } catch {
-    return new Set();
-  }
 }
 
 /** Repartições que um grupo acessa (ordenadas pela ordem da tela de repartições). */

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function OrgaosPage() {
   const atual = await getUsuarioAtual();
-  if (atual?.role !== "admin") {
+  if (!atual?.admin) {
     return <AcessoRestrito mensagem="Somente administradores podem gerenciar órgãos." />;
   }
   return <OrgaosAdmin />;
