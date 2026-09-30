@@ -2,13 +2,14 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { reparticoes, usuarios } from "@/db/schema";
 import { type IdentidadePerfil, PerfilView } from "@/components/PerfilView";
-import { getUsuarioAtual, type UsuarioSessao } from "@/lib/auth";
+import { getAcesso, podeTela } from "@/lib/acesso";
+import type { UsuarioSessao } from "@/lib/auth";
 import { CHAVE_PREF_EMAIL, lerPrefsEmail } from "@/lib/email-core";
-import { abasPermitidas, getGrupoAtivo } from "@/lib/grupos";
 import { getIntegracoes } from "@/lib/integracoes";
 import { googleConfigurado, resendConfigurado, turnstileConfigurado } from "@/lib/integracoes-core";
 import { getDb } from "@/lib/db";
 import { mensagemVinculo, SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
+import { ACOES_PAPEL, type Capacidades, motivoSemModulos } from "@/lib/papeis-core";
 import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds, responsavelPadraoGravado } from "@/lib/usuarios";
 
@@ -44,15 +45,15 @@ async function identidadeDe(usuarioId: number): Promise<IdentidadePerfil> {
 }
 
 export default async function PerfilPage({ searchParams }: { searchParams: Promise<{ google?: string | string[]; motivo?: string | string[] }> }) {
-  const u = await getUsuarioAtual();
-  if (!u) redirect("/login");
-  const grupo = await getGrupoAtivo(u);
-  const editor = u.role === "admin" || u.role === "gestor";
+  const acesso = await getAcesso();
+  if (!acesso) redirect("/login");
+  const { u, grupoAtivo: grupo } = acesso;
+  // A Protocolação (responsável padrão) é de quem IMPORTA na Mesa.
+  const protocola = podeTela(acesso, "dfd").importar;
   const sp = await searchParams;
   const retornoGoogle = mensagemVinculo(sp.google, sp.motivo);
-  const [abas, protocolacao, mesaResponsavel, avisosEmail, identidade, integ] = await Promise.all([
-    abasPermitidas(u, grupo),
-    editor ? protocolacaoDe(u, grupo?.id ?? null) : null,
+  const [protocolacao, mesaResponsavel, avisosEmail, identidade, integ] = await Promise.all([
+    protocola ? protocolacaoDe(u, grupo?.id ?? null) : null,
     mesaResponsavelGravado(u.id),
     avisosEmailDe(u.id),
     identidadeDe(u.id),
@@ -60,16 +61,20 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
   ]);
   // A conta Google só com o login com Google ativo (sem ele, o card nem aparece).
   const contaGoogle = googleConfigurado(integ) ? { email: identidade.googleEmail, soGoogle: identidade.semSenha } : null;
-  // Sem nenhum módulo liberado no grupo ativo, o `/painel` traz para cá — o Perfil diz o que fazer. A preferência da Mesa
-  // (com que responsável ela abre) só para quem vê a Mesa.
+  // O ACESSO efetivo no grupo ativo (as telas que abre × as ações de cada uma). Sem nenhuma tela, o `/painel` traz para cá
+  // — o Perfil diz por quê. A preferência da Mesa (com que responsável ela abre) só para quem vê a Mesa.
+  const efetivo: Capacidades = Object.fromEntries(acesso.telas.map((t) => [t, ACOES_PAPEL.filter((a) => podeTela(acesso, t)[a])]));
+  const motivo = motivoSemModulos({ admin: u.admin, temGrupo: acesso.grupos.length > 0, abasDoGrupo: grupo?.abas ?? [], capacidades: u.papel.capacidades });
+  const semModulos = motivo && acesso.grupos.length > 1 ? `${motivo} Você também pode trocar o grupo ativo no cabeçalho.` : motivo;
   return (
     <PerfilView
       usuario={u}
       identidade={identidade}
       turnstile={{ enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey }}
       protocolacao={protocolacao}
-      mesaResponsavel={abas.has("dfd") ? mesaResponsavel : null}
-      semModulos={abas.size === 0}
+      mesaResponsavel={acesso.telas.includes("dfd") ? mesaResponsavel : null}
+      semModulos={semModulos}
+      seuAcesso={{ grupo: grupo?.nome ?? null, capacidades: efetivo }}
       avisosEmail={avisosEmail}
       contaGoogle={contaGoogle}
       retornoGoogle={retornoGoogle}

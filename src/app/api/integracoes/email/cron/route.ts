@@ -1,5 +1,6 @@
 import { asc, count, eq } from "drizzle-orm";
-import { usuarios } from "@/db/schema";
+import { papeis, usuarios } from "@/db/schema";
+import { colunasSessao, papelDoUsuarioSql, sessaoDaLinha } from "@/lib/auth";
 import { cronAutorizado } from "@/lib/cron";
 import { getDb } from "@/lib/db";
 import { enviarEmailsPendentes } from "@/lib/email";
@@ -25,19 +26,16 @@ export async function POST(req: Request) {
   const total = Number(n) || 0;
   const voltas = Math.max(1, Math.ceil(total / PESSOAS_POR_PASSADA));
   const passada = Math.floor(Date.now() / 300_000) % voltas;
+  // Cada pessoa como a sessão a veria (com o papel): os avisos seguem as telas que ela abre.
   const pessoas = await db
-    .select({ id: usuarios.id, email: usuarios.email, nome: usuarios.nome, apelido: usuarios.apelido, matricula: usuarios.matricula, role: usuarios.role, status: usuarios.status })
+    .select(colunasSessao)
     .from(usuarios)
+    .leftJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
     .where(eq(usuarios.status, "ativo"))
     .orderBy(asc(usuarios.id))
     .limit(PESSOAS_POR_PASSADA)
     .offset(passada * PESSOAS_POR_PASSADA);
-  for (let i = 0; i < pessoas.length; i += 5)
-    await Promise.all(
-      pessoas.slice(i, i + 5).map((p) =>
-        derivarDaPessoa({ ...p, foto: null, role: p.role as "admin" | "gestor" | "membro", status: "ativo" }),
-      ),
-    );
+  for (let i = 0; i < pessoas.length; i += 5) await Promise.all(pessoas.slice(i, i + 5).map((p) => derivarDaPessoa(sessaoDaLinha(p))));
   const r = await enviarEmailsPendentes(100);
   return ok({ ativo: true, pessoas: pessoas.length, ...r });
 }

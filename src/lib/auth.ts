@@ -1,9 +1,11 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { getDb } from "./db";
+import { type Capacidades, coerceCapacidades } from "./papeis-core";
 import { hashSenha, sha256Hex, toHex, verificarSenha } from "./password";
 import { urlFoto } from "./pessoa";
-import { sessoes, usuarios } from "@/db/schema";
+import { papeis, sessoes, usuarios } from "@/db/schema";
 
 /**
  * Autenticação própria e enxuta, 100% Web Crypto (compatível com Cloudflare
@@ -25,9 +27,16 @@ export type UsuarioSessao = {
   matricula: string | null;
   /** URL da foto (rota com cache — `urlFoto`), nunca o data-URL: a sessão é lida em TODA requisição. */
   foto: string | null;
+  /** ESPELHO do papel (admin | gestor | membro) — use `admin` e `papel`. */
   role: "admin" | "gestor" | "membro";
   status: "ativo" | "pendente" | "inativo";
+  /** O papel Administrador (regra firme: vê e faz tudo, inclusive a Administração). */
+  admin: boolean;
+  /** O PAPEL da pessoa: o que ela faz em cada tela (as telas vêm do grupo — `acesso.ts`). */
+  papel: PapelSessao;
 };
+
+export type PapelSessao = { id: number | null; nome: string; chave: string | null; capacidades: Capacidades };
 
 // ---------------------------------------------------------------------------
 // sessões
@@ -69,27 +78,76 @@ export async function encerrarSessaoAtual(): Promise<void> {
   jar.delete(COOKIE);
 }
 
-/** Usuário logado (ou null). Só retorna se a sessão é válida e o usuário ativo. */
-export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
+/** O papel da pessoa: o `papel_id`; sem ele (legado), o papel do sistema de mesma chave que o `role`. */
+export const papelDoUsuarioSql = sql`COALESCE(${usuarios.papelId}, (SELECT p2.id FROM ${papeis} AS p2 WHERE p2.chave = ${usuarios.role}))`;
+
+/** O papel lido do banco → o da sessão (capacidades normalizadas; sem papel = nenhuma tela). */
+export function papelDaLinha(p: { id: number | null; nome: string | null; chave: string | null; capacidades: string | null }): PapelSessao {
+  let caps: Capacidades = {};
+  try {
+    caps = coerceCapacidades(JSON.parse(p.capacidades ?? "{}"));
+  } catch {
+    caps = {};
+  }
+  return { id: p.id, nome: p.nome ?? "Sem papel", chave: p.chave, capacidades: caps };
+}
+
+/** As colunas da SESSÃO (com o papel) — `getUsuarioAtual` e quem monta a pessoa sem cookie (cron, feed .ics). Use com
+ * `.leftJoin(papeis, eq(papeis.id, papelDoUsuarioSql))`. */
+export const colunasSessao = {
+  id: usuarios.id,
+  email: usuarios.email,
+  nome: usuarios.nome,
+  apelido: usuarios.apelido,
+  matricula: usuarios.matricula,
+  // A FOTO não é lida aqui (pode ter centenas de KB): só se existe + a versão da URL com cache.
+  temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
+  versao: usuarios.atualizadoEm,
+  role: usuarios.role,
+  status: usuarios.status,
+  papelId: papeis.id,
+  papelNome: papeis.nome,
+  papelChave: papeis.chave,
+  papelCapacidades: papeis.capacidades,
+};
+
+type LinhaSessao = {
+  id: number;
+  email: string;
+  nome: string;
+  apelido: string | null;
+  matricula: string | null;
+  temFoto: number;
+  versao: string | null;
+  role: "admin" | "gestor" | "membro";
+  status: "ativo" | "pendente" | "inativo";
+  papelId: number | null;
+  papelNome: string | null;
+  papelChave: string | null;
+  papelCapacidades: string | null;
+};
+
+/** A linha de `colunasSessao` → a pessoa da sessão. */
+export function sessaoDaLinha(row: LinhaSessao): UsuarioSessao {
+  const { temFoto, versao, papelId, papelNome, papelChave, papelCapacidades, ...u } = row;
+  const papel = papelDaLinha({ id: papelId, nome: papelNome, chave: papelChave, capacidades: papelCapacidades });
+  return { ...u, apelido: u.apelido ?? null, foto: urlFoto(u.id, !!temFoto, versao), admin: papel.chave === "admin", papel };
+}
+
+/**
+ * Usuário logado (ou null). Só retorna se a sessão é válida e o usuário ativo. Lê o PAPEL junto (uma consulta) e é
+ * memorizado POR REQUISIÇÃO (`cache` do React): layout, página e rotas chamam à vontade.
+ */
+export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
   if (!token) return null;
   const tokenHash = await sha256Hex(token);
   const [row] = await getDb()
-    .select({
-      id: usuarios.id,
-      email: usuarios.email,
-      nome: usuarios.nome,
-      apelido: usuarios.apelido,
-      matricula: usuarios.matricula,
-      // A FOTO não é lida aqui (pode ter centenas de KB): só se existe + a versão da URL com cache.
-      temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
-      versao: usuarios.atualizadoEm,
-      role: usuarios.role,
-      status: usuarios.status,
-    })
+    .select(colunasSessao)
     .from(sessoes)
     .innerJoin(usuarios, eq(sessoes.usuarioId, usuarios.id))
+    .leftJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
     .where(
       and(
         eq(sessoes.tokenHash, tokenHash),
@@ -98,9 +156,8 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
     )
     .limit(1);
   if (row?.status !== "ativo") return null;
-  const { temFoto, versao, ...u } = row;
-  return { ...u, apelido: u.apelido ?? null, foto: urlFoto(u.id, !!temFoto, versao) };
-}
+  return sessaoDaLinha(row);
+});
 
 /** Quantos usuários existem (para o bootstrap do primeiro admin). */
 export async function contarUsuarios(): Promise<number> {

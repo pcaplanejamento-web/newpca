@@ -840,6 +840,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(nomes(d, "SELECT name FROM sqlite_master WHERE type='index'").includes("usuarios_papel_idx"));
   });
 
+  it("0070 ressincroniza o papel pelo role (só papéis do sistema; o criado pelo ADM fica); idempotente", () => {
+    const d = new DatabaseSync(":memory:");
+    const i70 = arquivos.findIndex((f) => f.startsWith("0070"));
+    assert.ok(i70 > 0, "migração 0070 ausente");
+    for (const arq of arquivos.slice(0, i70)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const id = (chave: string) => (d.prepare("SELECT id FROM papeis WHERE chave = ?").get(chave) as { id: number }).id;
+    d.exec("INSERT INTO papeis (id, nome) VALUES (9700, 'Consulta')");
+    d.exec(`INSERT INTO usuarios (id, email, nome, senha_hash, role, papel_id) VALUES
+      (9701, 'a@x', 'A', 'h', 'gestor', ${id("membro")}), (9702, 'b@x', 'B', 'h', 'membro', 9700),
+      (9703, 'c@x', 'C', 'h', 'admin', NULL), (9704, 'd@x', 'D', 'h', 'membro', ${id("membro")})`);
+    const sql = readFileSync(join(DIR, arquivos[i70]), "utf8");
+    d.exec(sql);
+    d.exec(sql);
+    const papel = (u: number) => (d.prepare("SELECT papel_id AS p FROM usuarios WHERE id = ?").get(u) as { p: number | null }).p;
+    assert.equal(papel(9701), id("gestor"), "trocado só no role pelo código antigo");
+    assert.equal(papel(9702), 9700, "papel criado pelo ADM não é tocado");
+    assert.equal(papel(9703), id("admin"), "sem papel ganha o do role");
+    assert.equal(papel(9704), id("membro"));
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));
