@@ -123,7 +123,8 @@ export function PermissoesAdmin() {
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          A permissão define QUAIS telas (módulos) as pessoas de um grupo acessam. Cada grupo aponta para uma permissão.
+          A permissão define QUAIS telas as pessoas de um grupo abrem (cada grupo aponta para uma). O que cada pessoa faz nelas —
+          visualizar, manipular, importar, exportar, excluir, configurar — é do PAPEL dela (Configurações → Papéis).
         </p>
         <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
           Nova permissão
@@ -146,13 +147,13 @@ export function PermissoesAdmin() {
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {p.abas.length ? (
-                  p.abas.map((k) => (
+                  naOrdem(p.abas).map((k) => (
                     <Badge key={k} tone="blue">
                       {labelAba(k)}
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-xs text-faint">Nenhuma aba liberada</span>
+                  <span className="text-xs text-faint">Nenhuma tela liberada</span>
                 )}
               </div>
               <div className="mt-4 flex justify-end gap-1.5">

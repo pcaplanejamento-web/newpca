@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
+import { AcessoDaPessoa } from "@/components/AcessoDaPessoa";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { CartaoAuth, ErroAuth } from "@/components/CartaoAuth";
 import { CampoCodigo, EtapaCodigo } from "@/components/CodigoEmail";
@@ -85,6 +86,10 @@ import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
+import { type GrupoOpcao, GruposDaPessoa } from "@/components/GruposDaPessoa";
+import { MatrizCapacidades } from "@/components/MatrizCapacidades";
+import { ResumoPapel } from "@/components/ResumoPapel";
+import { CAPACIDADES_MEMBRO, type Capacidades } from "@/lib/papeis-core";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
@@ -991,6 +996,41 @@ function TabelaCruzadaDemo() {
           resumo="3 linhas × 4 colunas"
         />
       </div>
+    </div>
+  );
+}
+
+const GRUPOS_DEMO: GrupoOpcao[] = [
+  { id: 1, nome: "Planejamento e Custos", abas: ["dfd", "pca", "orcamento", "tarefas", "calendario"] },
+  { id: 2, nome: "Compras", abas: ["dfd", "catalogo"] },
+  { id: 3, nome: "Sem permissão", abas: [] },
+];
+
+function PapeisDemo() {
+  const [caps, setCaps] = useState<Capacidades>(CAPACIDADES_MEMBRO);
+  const [grupos, setGrupos] = useState<number[]>([1]);
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <p className="text-[12.5px] text-muted">
+        MatrizCapacidades editável (as células alteradas em relação ao gravado ficam destacadas; a caixa da linha/coluna fica
+        PARCIAL — <code>Checkbox indeterminado</code> — quando só parte está marcada). No celular, um cartão por tela com chaves.
+      </p>
+      <MatrizCapacidades valor={caps} original={CAPACIDADES_MEMBRO} onChange={setCaps} />
+      <div className="grid gap-[var(--gap-block)] md:grid-cols-2">
+        <div className="space-y-2">
+          <p className="text-[12.5px] font-semibold text-text-2">ResumoPapel (compacto — a célula da lista de papéis)</p>
+          <ResumoPapel capacidades={caps} compacto />
+          <p className="pt-2 text-[12.5px] font-semibold text-text-2">ResumoPapel (por extenso — o Perfil)</p>
+          <ResumoPapel capacidades={caps} />
+        </div>
+        <div className="space-y-2">
+          <p className="text-[12.5px] font-semibold text-text-2">GruposDaPessoa (Usuários → Editar/Aprovar)</p>
+          <GruposDaPessoa grupos={GRUPOS_DEMO} selecionados={grupos} onChange={setGrupos} />
+          <Checkbox label="Caixa parcial (indeterminado)" indeterminado checked={false} onChange={() => {}} />
+        </div>
+      </div>
+      <p className="text-[12.5px] font-semibold text-text-2">AcessoDaPessoa (&quot;Ver acesso&quot;: o papel acima nos grupos marcados)</p>
+      <AcessoDaPessoa admin={false} papel={{ nome: "Membro (editado)", capacidades: caps }} grupos={GRUPOS_DEMO.filter((g) => grupos.includes(g.id))} />
     </div>
   );
 }
@@ -3052,6 +3092,10 @@ export function Catalogo() {
         <AcessoRestrito mensagem="Somente administradores podem acessar esta área." />
       </Secao>
 
+      <Secao titulo="Papéis — MatrizCapacidades (Telas × Ações; marcar a linha/coluna; &quot;—&quot; = não se aplica) · ResumoPapel · GruposDaPessoa · AcessoDaPessoa (&quot;Ver acesso&quot;) · Checkbox parcial">
+        <PapeisDemo />
+      </Secao>
+
       <Secao titulo="Sombra suave (contorno suave)">
         <div className="flex flex-wrap gap-4">
           <div className="rounded-card bg-surface p-5 shadow-soft">
@@ -3207,11 +3251,12 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha)">
+      <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha + Exportar .xlsx — as linhas filtradas e as colunas à vista)">
         <DataTable
           columns={COLUNAS}
           rows={PROTOS}
           getKey={(r) => r.id}
+          exportar={{ nome: "Protocolos (demonstração)" }}
           selectable
           selected={tsel}
           onSelected={setTsel}

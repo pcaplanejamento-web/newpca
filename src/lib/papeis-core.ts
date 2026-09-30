@@ -9,6 +9,10 @@ import { ABA_KEYS, ABAS, type AbaKey } from "./abas.ts";
  * ação fora do catálogo de uma tela "não se aplica" (não aparece e nunca é gravada).
  */
 
+/** Limites do papel (o Zod e os campos da tela usam os mesmos). */
+export const MAX_NOME_PAPEL = 40;
+export const MAX_DESCRICAO_PAPEL = 200;
+
 export const ACOES_PAPEL = ["visualizar", "manipular", "importar", "exportar", "excluir", "configurar"] as const;
 export type AcaoPapel = (typeof ACOES_PAPEL)[number];
 export type Tela = AbaKey;
@@ -359,6 +363,31 @@ export function resumoCapacidades(caps: Capacidades): ResumoTela[] {
     const acoes = c[t] ?? [];
     return { tela: t, rotulo: rotuloTela(t), acoes, tudo: acoes.length === acoesDaTela(t).length };
   });
+}
+
+/** "Mesa: tudo; PCA: Visualizar, Exportar" — o resumo numa linha (confirmações). Sem tela = "nenhuma tela". */
+export function textoResumoCapacidades(caps: Capacidades): string {
+  const linhas = resumoCapacidades(caps);
+  if (linhas.length === 0) return "nenhuma tela";
+  return linhas.map((l) => `${l.rotulo}: ${l.tudo ? "tudo" : l.acoes.map((a) => ROTULO_ACAO[a]).join(", ")}`).join("; ");
+}
+
+/** O acesso EFETIVO num grupo como capacidades (a matriz só-leitura do "Ver acesso"): as telas que ABREM, com as ações
+ * que o papel permite nelas (ADM = tudo o que se aplica). */
+export function capacidadesEfetivas(ctx: ContextoAcesso): Capacidades {
+  const out: Capacidades = {};
+  for (const tela of ABA_KEYS) {
+    const pode = podeNaTela(ctx, tela);
+    if (pode.visualizar) out[tela] = ACOES_PAPEL.filter((a) => pode[a] && aplicavel(tela, a));
+  }
+  return out;
+}
+
+/** As telas que o GRUPO libera mas o PAPEL não visualiza — ficam fechadas (o "Ver acesso" explica por quê). */
+export function telasFechadasPeloPapel(ctx: ContextoAcesso): Tela[] {
+  if (ctx.admin) return [];
+  const abas = new Set(ctx.abas);
+  return ABA_KEYS.filter((t) => abas.has(t) && !(ctx.capacidades[t] ?? []).includes("visualizar"));
 }
 
 // ---------------------------------------------------------------------------------------------------------------

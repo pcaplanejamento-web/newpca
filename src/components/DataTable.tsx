@@ -12,6 +12,8 @@ import {
   ordemDasColunas,
 } from "@/lib/colunas-layout";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
+import { baixarPlanilhaXlsx, linhasPlanilhaTabela, nomeArquivoPlanilha } from "@/lib/exportar-tabela";
+import { dataIsoBrasilia } from "@/lib/format";
 import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
@@ -29,11 +31,13 @@ import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas
 import { useEditorEdicoes } from "./EdicoesTabela";
 import { useLinhasTabela } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
+import { Button } from "./Button";
 import { ehDesktop } from "./espacamento";
-import { IconFilter, IconLock } from "./icons";
+import { IconDownload, IconFilter, IconLock } from "./icons";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
 import { RangeFilterHeader } from "./RangeFilterHeader";
+import { toast } from "./Toast";
 
 // Tabela do design system (spec §6.6 + pedidos do usuário): seleção de linhas,
 // **filtro em TODOS os cabeçalhos** — multi-select por padrão (inclusive colunas com VÁRIOS valores
@@ -117,6 +121,7 @@ export function DataTable<R>({
   acoesRodape,
   vazio,
   edicoes,
+  exportar,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -168,6 +173,12 @@ export function DataTable<R>({
    * troca de edição e a estrela marca a PADRÃO (a tabela abre nela). Sem ela, a tabela é a de sempre.
    */
   edicoes?: EdicoesDaTabela;
+  /**
+   * EXPORTAR (opt-in — ex.: as tabelas da Mesa, só com a ação Exportar do papel): o botão no rodapé baixa um .xlsx com as
+   * linhas À VISTA (os filtros das colunas, na ordem, todas as páginas) e as colunas visíveis da edição em uso
+   * (`linhasPlanilhaTabela`); `nome` = o nome do arquivo e da aba.
+   */
+  exportar?: { nome: string };
 }) {
   // A edição em uso (a padrão do usuário ao abrir) dá o layout das colunas e o ESTADO INICIAL da ordenação e dos filtros;
   // trocar de edição os aplica. Salvar leva a ordenação e os filtros do momento.
@@ -353,6 +364,28 @@ export function DataTable<R>({
     const vis = (k: string) => editando || !fora.has(k);
     return { fixadas: o.fixadas.filter(vis), livres: o.livres.filter(vis) };
   }, [chaves, lay.fixadas, lay.ordemManual, fora, editando]);
+  // EXPORTAR: as colunas VISÍVEIS (fora as ocultas, na ordem da edição em uso) e as linhas à vista (todas as páginas).
+  const [exportando, setExportando] = useState(false);
+  async function exportarPlanilha() {
+    if (!exportar || exportando) return;
+    const o = ordemDasColunas(chaves, lay.fixadas, lay.ordemManual);
+    const cols = [...o.fixadas, ...o.livres]
+      .filter((k) => !fora.has(k))
+      .map((k) => columns[indice.get(k) as number])
+      .filter((c): c is Column<R> => !!c);
+    const linhas = linhasPlanilhaTabela(
+      cols.map((c) => ({ cabecalho: c.header, data: c.filter === "date", valor: c.value, valores: c.valores, numero: c.numero })),
+      ordenadas,
+    );
+    setExportando(true);
+    try {
+      await baixarPlanilhaXlsx(nomeArquivoPlanilha(exportar.nome, dataIsoBrasilia(new Date().toISOString())), exportar.nome, linhas);
+    } catch {
+      toast.error("Não foi possível exportar — tente de novo.");
+    } finally {
+      setExportando(false);
+    }
+  }
   const rolagemRef = useRef<HTMLDivElement>(null);
   const tabelaRef = useRef<HTMLTableElement>(null);
   const { arrasto, vista, fantasma, iniciar, mover, congelar } = useArrastoColunas({
@@ -658,6 +691,20 @@ export function DataTable<R>({
               onMostrarTodas: () => editor.mudar((x) => ({ ...x, ocultas: [] })),
               semOcultas: lay.ocultas.length === 0,
             })}
+          {exportar && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void exportarPlanilha()}
+              loading={exportando}
+              disabled={ordenadas.length === 0}
+              icon={<IconDownload className="h-4 w-4" />}
+              aria-label={`Exportar ${exportar.nome} (.xlsx)`}
+              title="Exportar as linhas filtradas, com as colunas à vista (.xlsx)"
+            >
+              <span className="hidden sm:inline">Exportar</span>
+            </Button>
+          )}
           {acoesRodape}
           {scrollInterno && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">

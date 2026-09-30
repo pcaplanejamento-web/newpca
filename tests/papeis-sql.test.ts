@@ -6,10 +6,14 @@ import { beforeEach, describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import {
+  comandoAtualizarPapel,
   comandoCadastroPendente,
   comandoCadastroPrimeiro,
   comandoEncerrarSessoesSeInativo,
+  comandoExcluirPapel,
   comandoExcluirUsuario,
+  comandoMarcarPadrao,
+  comandosCriarPapel,
   comandoTrocarPapel,
   comandoTrocarStatus,
   consultaPapelDaChave,
@@ -187,6 +191,62 @@ describe("papéis: comandos no driver D1", () => {
     it("papel do sistema pela chave", async () => {
       const [g] = await consultaPapelDaChave(orm, "gestor");
       assert.equal(g.id, idPapel("gestor"));
+    });
+  });
+
+  describe("cadastro dos papéis (Configurações → Papéis)", () => {
+    const padroes = () => (db.prepare("SELECT nome FROM papeis WHERE padrao_cadastro = 1").all() as { nome: string }[]).map((r) => r.nome);
+    const papel = (id: number) => db.prepare("SELECT nome, capacidades, ordem, padrao_cadastro AS padrao FROM papeis WHERE id = ?").get(id) as
+      | { nome: string; capacidades: string; ordem: number; padrao: number }
+      | undefined;
+    const criar = async (nome: string, padraoCadastro = false) => {
+      const cmds = comandosCriarPapel(orm, { nome, descricao: null, capacidades: '{"dfd":["visualizar"]}', padraoCadastro });
+      const [criados] = (await orm.batch(cmds as unknown as Parameters<typeof orm.batch>[0])) as unknown as [{ id: number }[]];
+      return criados[0].id;
+    };
+
+    it("cria no FIM da ordem; marcado como padrão, o anterior deixa de ser (há sempre UM)", async () => {
+      const id = await criar("Consulta");
+      assert.equal(papel(id)?.ordem, 3);
+      assert.deepEqual(padroes(), ["Membro"]);
+      const id2 = await criar("Estagiário", true);
+      assert.deepEqual(padroes(), ["Estagiário"]);
+      assert.equal(papel(id2)?.ordem, 4);
+    });
+
+    it("o nome é único (o índice recusa o repetido)", async () => {
+      await criar("Consulta");
+      await assert.rejects(criar("Consulta"));
+    });
+
+    it("atualizar: nunca o Administrador; os demais sim (inclusive Gestor e Membro)", async () => {
+      assert.deepEqual(await comandoAtualizarPapel(orm, idPapel("admin"), { nome: "Chefe" }), []);
+      assert.equal(papel(idPapel("admin"))?.nome, "Administrador");
+      assert.equal((await comandoAtualizarPapel(orm, idPapel("membro"), { capacidades: "{}" })).length, 1);
+      assert.equal(papel(idPapel("membro"))?.capacidades, "{}");
+      assert.deepEqual(await comandoAtualizarPapel(orm, 999, { nome: "X" }), []);
+    });
+
+    it("marcar o padrão desmarca o anterior num comando; o Administrador nunca é o padrão", async () => {
+      const id = await criar("Consulta");
+      await comandoMarcarPadrao(orm, id);
+      assert.deepEqual(padroes(), ["Consulta"]);
+      assert.deepEqual(await comandoMarcarPadrao(orm, idPapel("admin")), []);
+      assert.deepEqual(padroes(), ["Consulta"], "recusado: nada muda");
+      assert.deepEqual(await comandoMarcarPadrao(orm, 999), []);
+      assert.deepEqual(padroes(), ["Consulta"]);
+    });
+
+    it("excluir: só o criado pelo ADM, que não é o padrão e que ninguém tem (conferido no comando)", async () => {
+      assert.deepEqual(await comandoExcluirPapel(orm, idPapel("gestor")), [], "do sistema");
+      const livre = await criar("Livre");
+      const emUso = await criar("Em uso");
+      const padrao = await criar("Padrão", true);
+      db.exec(`INSERT INTO usuarios (id, email, nome, senha_hash, role, status, papel_id) VALUES (50, 'u50@x', 'U50', 'h', 'membro', 'ativo', ${emUso})`);
+      assert.deepEqual(await comandoExcluirPapel(orm, emUso), [], "em uso");
+      assert.deepEqual(await comandoExcluirPapel(orm, padrao), [], "é o padrão");
+      assert.equal((await comandoExcluirPapel(orm, livre)).length, 1);
+      assert.equal(papel(livre), undefined);
     });
   });
 });

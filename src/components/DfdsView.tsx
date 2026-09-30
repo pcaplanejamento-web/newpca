@@ -1751,6 +1751,8 @@ export function DfdsView({
   // A Mesa em que se está: a do sistema ou a do PCA (os marcados da Mesa do sistema que a do PCA mostra conferem a do
   // sistema no servidor — o que o papel não permite volta como falha).
   const podeAqui = modoPca ? pode.pca : pode.sistema;
+  // Exportar as tabelas (.xlsx — as linhas filtradas e as colunas à vista): só com a ação Exportar do papel nesta Mesa.
+  const exportarComo = (nome: string) => (podeAqui.exportar ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : undefined);
   // Importar protocolo/DFD: só na Mesa do sistema (o protocolo novo entra nela).
   const podeImportar = pode.sistema.importar && !modoPca;
   const importa = podeImportar && (vista === "protocolos" || vista === "dfds");
@@ -1785,6 +1787,7 @@ export function DfdsView({
       density="compact"
       acoesRodape={botaoImportar}
       edicoes={edicoesDe("protocolos")}
+      exportar={exportarComo("Protocolos")}
       vazio={filtrado && protocolos.length > 0 ? semResultado : semDados("protocolo")}
       resumo={(linhas) =>
         modoPca?.rodapeProtocolos
@@ -1810,6 +1813,7 @@ export function DfdsView({
       regras={regras}
       acoesRodape={botaoImportar}
       edicoes={edicoesDe("dfds")}
+      exportar={exportarComo("DFDs")}
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
     />
   );
@@ -1831,6 +1835,7 @@ export function DfdsView({
       minWidth={(modoPca ? 1280 : 1460) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("itens")}
+      exportar={exportarComo("Itens")}
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
     />
@@ -1850,6 +1855,7 @@ export function DfdsView({
       minWidth={(modoPca ? 1640 : 1720) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("consolidada")}
+      exportar={exportarComo("Itens consolidados")}
       vazio={
         carregandoItens || itensF === null
           ? "Carregando itens…"

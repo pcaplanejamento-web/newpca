@@ -61,6 +61,16 @@ export async function gruposComAbas(usuarioId: number): Promise<GrupoAcesso[]> {
   return linhas.map((g) => ({ id: g.id, nome: g.nome, permissaoId: g.permissaoId, abas: lerAbas(g.abas) }));
 }
 
+/** TODOS os grupos com as telas que cada um libera (Usuários: escolher os grupos da pessoa e o "Ver acesso"). */
+export async function todosOsGruposComAbas(): Promise<GrupoAcesso[]> {
+  const linhas = await getDb()
+    .select({ id: grupos.id, nome: grupos.nome, permissaoId: grupos.permissaoId, abas: permissoes.abas })
+    .from(grupos)
+    .leftJoin(permissoes, eq(permissoes.id, grupos.permissaoId))
+    .orderBy(grupos.nome);
+  return linhas.map((g) => ({ id: g.id, nome: g.nome, permissaoId: g.permissaoId, abas: lerAbas(g.abas) }));
+}
+
 /** O acesso de uma pessoa num grupo ativo escolhido (sem cookie — o feed .ics, o cron). */
 export function montarAcesso(u: UsuarioSessao, lista: GrupoAcesso[], grupoAtivoId: number | null): Acesso {
   const grupoAtivo = lista.find((g) => g.id === grupoAtivoId) ?? lista[0] ?? null;

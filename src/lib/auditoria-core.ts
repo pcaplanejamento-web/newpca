@@ -51,6 +51,7 @@ export type EntidadeAuditoria =
   | "feriado"
   | "agenda_externa"
   | "edicao_tabela"
+  | "papel"
   | "sessao";
 
 /** Verbo (no passado) de cada ação — para a linha do histórico. */
@@ -101,6 +102,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   feriado: "Feriado",
   agenda_externa: "Agenda externa",
   edicao_tabela: "Edição de tabela",
+  papel: "Papel",
   sessao: "Sessão",
 };
 

@@ -9,6 +9,7 @@ import * as schema from "../src/db/schema.ts";
 import { grupos } from "../src/db/schema.ts";
 import {
   apagaConteudo,
+  comandosGruposDoUsuario,
   comandosMembros,
   comandosUnidades,
   idsInexistentes,
@@ -90,6 +91,26 @@ describe("grupos: builders no db.batch do D1", () => {
     assert.deepEqual(membros(700), [1000, 1001]);
     assert.deepEqual(unidades(700), [500]);
     assert.equal((db.prepare("SELECT nome FROM grupos WHERE id = 700").get() as { nome: string }).nome, "Compras");
+  });
+
+  it("troca os GRUPOS de uma pessoa (mais de 40 = vários INSERTs) sem tocar nas outras pessoas; aceita nenhum", async () => {
+    const muitos = Array.from({ length: 45 }, (_, i) => 710 + i);
+    const ins = db.prepare("INSERT INTO grupos (id, nome) VALUES (?, ?)");
+    for (const g of muitos) ins.run(g, `Grupo ${g}`);
+    const gruposDe = (u: number) =>
+      (db.prepare("SELECT grupo_id AS g FROM usuario_grupos WHERE usuario_id = ? ORDER BY grupo_id").all(u) as { g: number }[]).map((r) => r.g);
+    await lote(comandosGruposDoUsuario(orm, 1000, [701, ...muitos, 701]));
+    assert.deepEqual(gruposDe(1000), [701, ...muitos]);
+    assert.deepEqual(membros(700), [1001]);
+    await lote(comandosGruposDoUsuario(orm, 1000, []));
+    assert.deepEqual(gruposDe(1000), []);
+    assert.deepEqual(membros(701), [1002]);
+  });
+
+  it("TUDO OU NADA nos grupos da pessoa: um grupo inexistente desfaz o lote (ela não fica sem grupo)", async () => {
+    await assert.rejects(lote(comandosGruposDoUsuario(orm, 1000, [701, 999_999])));
+    assert.deepEqual(membros(700), [1000, 1001]);
+    assert.deepEqual(await idsInexistentes(orm, "grupos", [700, 701, 999_999]), [999_999]);
   });
 
   it("idsInexistentes lista os que faltam, em lotes (mais de 90 ids)", async () => {

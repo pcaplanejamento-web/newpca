@@ -29,6 +29,7 @@ import {
 } from "./icons";
 import { LinkCard } from "./LinkCard";
 import { Modal } from "./Modal";
+import { PapeisAdmin } from "./PapeisAdmin";
 import { ReferenciaSistema } from "./ReferenciaSistema";
 import { Segmented } from "./Segmented";
 import { SituacoesAdmin } from "./SituacoesAdmin";
@@ -422,7 +423,7 @@ export function ConfiguracoesAdmin({
       <LinkCard
         href="/painel/permissoes"
         titulo="Permissões"
-        descricao="Abas visíveis por grupo."
+        descricao="Telas que cada grupo abre (o papel diz o que a pessoa faz nelas)."
         icon={<IconShield className="h-5 w-5" />}
       />
       <LinkCard
@@ -451,7 +452,7 @@ export function ConfiguracoesAdmin({
       <div>
         <h1 className="text-xl font-bold text-text">Configurações</h1>
         <p className="mt-1 text-sm text-muted">
-          Identidade do site, tabelas, PCAs, situações do protocolo, avaliação e atalhos de administração.
+          Identidade do site, papéis, tabelas, PCAs, situações do protocolo, avaliação e atalhos de administração.
         </p>
       </div>
 
@@ -460,6 +461,7 @@ export function ConfiguracoesAdmin({
           inicial={abaInicial}
           tabs={[
             { key: "identidade", label: "Identidade", content: abaIdentidade },
+            { key: "papeis", label: "Papéis", content: <PapeisAdmin /> },
             { key: "acesso", label: "Tela de acesso", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
             { key: "tabelas", label: "Tabelas", content: abaTabelas },
             { key: "pcas", label: "PCAs", content: abaPcas },
