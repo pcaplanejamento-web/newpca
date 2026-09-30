@@ -20,7 +20,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [["html", { open: "never" }], ["list"]],
-  globalSetup: "./tests/e2e/global-setup",
+  // O seed do D1 local roda como `pretest:e2e` (hook do npm) ANTES do Playwright — garante
+  // que o banco está migrado/semeado antes do `next dev` subir (sem depender da ordem interna).
   timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {
