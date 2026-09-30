@@ -89,7 +89,7 @@ export function TelaAcesso({
               ]}
             />
           </div>
-          <div className="mt-8 lg:mt-[clamp(0.75rem,3.5dvh,2.5rem)]">
+          <div className="mt-8 lg:mt-[clamp(0.75rem,3.5dvh,2.5rem)] lg:[@media(max-height:820px)]:mt-3">
             {modo === "entrar" ? (
               <AuthForm key="entrar" onEsqueci={() => irPara("senha")} turnstile={turnstile} google={google} googleConta={googleConta} erroInicial={erro} />
             ) : modo === "cadastro" ? (
@@ -98,7 +98,14 @@ export function TelaAcesso({
               <RecuperarSenhaForm key="senha" onVoltar={() => irPara("entrar")} turnstile={turnstile} />
             )}
           </div>
-          <p className="mt-auto pt-5 text-center text-[12px] leading-relaxed text-faint lg:pb-6 lg:[@media(max-height:720px)]:pt-3 lg:[@media(max-height:720px)]:pb-4">{textos.aviso}</p>
+          {/* No cadastro em tela BAIXA (desktop ≤ 820px de altura) o aviso sai: o formulário e o captcha cabem sem rolar. */}
+          <p
+            className={`mt-auto pt-5 text-center text-[12px] leading-relaxed text-faint lg:pb-6 lg:[@media(max-height:720px)]:pt-3 lg:[@media(max-height:720px)]:pb-4 ${
+              modo === "cadastro" ? "lg:[@media(max-height:820px)]:hidden" : ""
+            }`}
+          >
+            {textos.aviso}
+          </p>
         </div>
       </section>
       <VitrineAcesso identidade={identidade} textos={textos} />

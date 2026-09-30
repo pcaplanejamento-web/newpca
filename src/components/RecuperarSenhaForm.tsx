@@ -91,7 +91,7 @@ export function RecuperarSenhaForm({ onVoltar, turnstile }: { onVoltar: () => vo
           disabled={salvando}
         />
         <p className="mt-3 text-[12px] text-faint">Se o e-mail não for de uma conta cadastrada, nenhum código é enviado.</p>
-        {erro && <ErroAuth>{erro}</ErroAuth>}
+        {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
         <Button type="submit" variant="accent" loading={salvando} disabled={codigo.length !== 6} className="mt-6 h-[52px] w-full text-[15px]">
           Confirmar e salvar a senha
         </Button>
@@ -131,7 +131,7 @@ export function RecuperarSenhaForm({ onVoltar, turnstile }: { onVoltar: () => vo
         <PasswordField label="Confirmar a nova senha" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required />
         {captcha.widget}
       </div>
-      {erro && <ErroAuth>{erro}</ErroAuth>}
+      {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
       <Button
         type="submit"
         variant="accent"

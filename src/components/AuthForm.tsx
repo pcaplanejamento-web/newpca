@@ -84,7 +84,7 @@ export function AuthForm({
         {captcha.widget}
       </div>
 
-      {erro && <ErroAuth>{erro}</ErroAuth>}
+      {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
 
       <Button
         type="submit"

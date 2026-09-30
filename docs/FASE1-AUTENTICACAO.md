@@ -38,6 +38,8 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
   tentativas por IP e por conta (8 senhas erradas em 15 min bloqueiam a conta por 15 min) → 429; campos só com dados
   permitidos (nome só letras, matrícula só números, usuário do e-mail `a-z 0-9 . _ -`, senha com letras e números);
   e-mail e **matrícula únicos** (também no banco, por gatilho); cabeçalhos de segurança e recusa de requisição de outro site.
+- **Tela:** no cadastro o captcha fica logo abaixo do botão, centralizado; os erros não movem a tela (o do campo na linha do
+  rótulo, o do envio num aviso flutuante no canto).
 
 ## Arquivos
 - `src/lib/auth.ts` — hash/verificação, sessões, cookie, `getUsuarioAtual()`.

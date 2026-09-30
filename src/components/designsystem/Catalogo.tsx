@@ -249,6 +249,8 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 /** Demo da CONFIRMAÇÃO POR CÓDIGO (cadastro, "Esqueci a senha", senha do Perfil) na moldura das telas de acesso. */
 function DemoAcesso() {
   const [codigo, setCodigo] = useState("");
+  // ErroAuth é flutuante (canto do display): a demo o mostra ao tocar em "Mostrar erro".
+  const [erroDemo, setErroDemo] = useState(false);
   const [restante, setRestante] = useState(0);
   return (
     <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] lg:grid-cols-2">
@@ -262,10 +264,13 @@ function DemoAcesso() {
           onReenviar={() => setRestante(45)}
           onVoltar={() => setCodigo("")}
         />
-        <ErroAuth>Código incorreto. Confira os 6 dígitos no seu e-mail.</ErroAuth>
+        {erroDemo && <ErroAuth onFechar={() => setErroDemo(false)}>Código incorreto. Confira os 6 dígitos no seu e-mail.</ErroAuth>}
       </CartaoAuth>
       <div className="space-y-[var(--gap-block)]">
         <MarcaSistema />
+        <Button size="sm" variant="secondary" onClick={() => setErroDemo(true)}>
+          Mostrar erro (ErroAuth flutuante)
+        </Button>
         <SelectField label="Unidade em que trabalha (OpcoesUnidades — por órgão)" defaultValue="" error="Selecione a unidade em que você trabalha.">
           <option value="" disabled>
             Selecione…

@@ -1264,7 +1264,8 @@ densos) e o e-mail pede só o usuário, com o domínio institucional já preench
 ✅ **Segurança do acesso:** captcha sempre exigido no login, cadastro e senha (Turnstile ou a verificação anti-robô
 própria); limite de tentativas por IP e por conta; campos só com dados permitidos (nome só letras, matrícula só números,
 senha com letras e números); e-mail e matrícula únicos (também no banco); cabeçalhos de segurança e bloqueio de requisição
-vinda de outro site.
+vinda de outro site. Depois: o captcha abaixo do botão (centralizado) no cadastro e os erros sem mover a tela (no rótulo
+do campo e em aviso flutuante).
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da
