@@ -3,6 +3,9 @@
 import type { SVGProps } from "react";
 import {
   Activity,
+  BadgeCheck,
+  IdCard,
+  MailCheck,
   AlertTriangle,
   ArrowDown,
   ArrowLeftRight,
@@ -160,6 +163,12 @@ export const IconImage = ImageIcon;
 export const IconSave = Save;
 export const IconPalette = Palette;
 export const IconMail = Mail;
+/** E-mail CONFIRMADO / código enviado ao e-mail. */
+export const IconMailCheck = MailCheck;
+/** Matrícula (identificação funcional). */
+export const IconIdCard = IdCard;
+/** Dado VERIFICADO (e-mail institucional confirmado). */
+export const IconBadgeCheck = BadgeCheck;
 export const IconLock = Lock;
 export const IconLockOpen = LockOpen;
 export const IconEye = Eye;

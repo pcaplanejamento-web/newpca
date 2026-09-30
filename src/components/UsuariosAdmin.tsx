@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { dataBR } from "@/lib/format";
+import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { Avatar } from "./Avatar";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { inputCls, labelCls, selectCls } from "./formStyles";
-import { IconAlert, IconCheck, IconPencil, IconSave, IconSpinner } from "./icons";
+import { IconAlert, IconBadgeCheck, IconCheck, IconPencil, IconSave, IconSpinner } from "./icons";
 import { Modal } from "./Modal";
+import { OpcoesUnidades } from "./OpcoesUnidades";
 import { SkeletonLinhas } from "./Skeleton";
 
 type Role = "admin" | "gestor" | "membro";
@@ -19,7 +21,10 @@ type U = {
   nome: string;
   apelido: string | null;
   email: string;
+  emailVerificado: boolean;
   matricula: string | null;
+  reparticaoId: number | null;
+  unidade: string | null;
   foto: string | null;
   role: Role;
   status: Status;
@@ -32,12 +37,14 @@ const ROLE_LABEL: Record<Role, string> = { admin: "Administrador", gestor: "Gest
 
 export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [lista, setLista] = useState<U[] | null>(null);
+  const [unidades, setUnidades] = useState<UnidadeTrabalho[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [editando, setEditando] = useState<U | null>(null);
   const [edNome, setEdNome] = useState("");
   const [edEmail, setEdEmail] = useState("");
   const [edMatricula, setEdMatricula] = useState("");
+  const [edUnidade, setEdUnidade] = useState("");
   const [salvandoEd, setSalvandoEd] = useState(false);
   const [erroEd, setErroEd] = useState<string | null>(null);
 
@@ -45,9 +52,10 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     setErro(null);
     try {
       const r = await fetch("/api/admin/usuarios");
-      const j = (await r.json()) as { ok?: boolean; error?: string; usuarios?: U[] };
+      const j = (await r.json()) as { ok?: boolean; error?: string; usuarios?: U[]; unidades?: UnidadeTrabalho[] };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar usuários.");
       setLista(j.usuarios ?? []);
+      setUnidades(j.unidades ?? []);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
       setLista([]);
@@ -91,6 +99,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     setEdNome(u.nome);
     setEdEmail(u.email);
     setEdMatricula(u.matricula ?? "");
+    setEdUnidade(u.reparticaoId == null ? "" : String(u.reparticaoId));
     setErroEd(null);
   }
 
@@ -103,7 +112,13 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       const r = await fetch(`/api/admin/usuarios/${editando.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: edNome, email: edEmail, matricula: edMatricula }),
+        body: JSON.stringify({
+          nome: edNome,
+          email: edEmail,
+          matricula: edMatricula,
+          // Só a unidade que MUDOU vai (manter uma unidade hoje oculta sempre vale).
+          ...(edUnidade !== (editando.reparticaoId == null ? "" : String(editando.reparticaoId)) ? { reparticaoId: edUnidade ? Number(edUnidade) : null } : {}),
+        }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -141,12 +156,22 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
               {u.nome} {u.id === meuId && <span className="text-faint">(você)</span>}
             </div>
             {u.apelido && <div className="text-[11px] text-text-2">Apelido: {u.apelido}</div>}
-            <div className="text-xs text-muted">{u.email}</div>
+            <div className="flex items-center gap-1 text-xs text-muted">
+              <span className="break-all">{u.email}</span>
+              {u.emailVerificado && <IconBadgeCheck className="h-3.5 w-3.5 shrink-0 text-[var(--ok)]" aria-label="E-mail confirmado" />}
+            </div>
             {u.matricula && <div className="text-[11px] text-faint">Matrícula {u.matricula}</div>}
             {u.criadoEm && <div className="text-[11px] text-faint">desde {dataBR(u.criadoEm)}</div>}
           </div>
         </div>
       ),
+    },
+    {
+      key: "unidade",
+      header: "Unidade",
+      minWidth: 180,
+      value: (u) => u.unidade ?? "—",
+      render: (u) => <span className={u.unidade ? "text-text-2" : "text-faint"}>{u.unidade ?? "—"}</span>,
     },
     {
       key: "role",
@@ -224,7 +249,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
       )}
       {erro && <Callout kind="danger">{erro}</Callout>}
 
-      <DataTable columns={colunas} rows={lista} getKey={(u) => u.id} pageSize={12} minWidth={720} />
+      <DataTable columns={colunas} rows={lista} getKey={(u) => u.id} pageSize={12} minWidth={900} />
 
       {/* Modal: editar dados do usuário */}
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo="Editar usuário">
@@ -241,6 +266,17 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             <div>
               <label className={labelCls}>Matrícula</label>
               <input className={inputCls} value={edMatricula} onChange={(e) => setEdMatricula(e.target.value)} placeholder="Opcional" />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="ed-unidade">Unidade em que trabalha</label>
+              <select id="ed-unidade" className={selectCls} value={edUnidade} onChange={(e) => setEdUnidade(e.target.value)}>
+                <option value="">Nenhuma</option>
+                {/* A unidade atual continua na lista mesmo que hoje esteja oculta. */}
+                {editando?.reparticaoId != null && !unidades.some((x) => x.id === editando.reparticaoId) && (
+                  <option value={editando.reparticaoId}>{editando.unidade ?? `Unidade ${editando.reparticaoId}`}</option>
+                )}
+                <OpcoesUnidades unidades={unidades} />
+              </select>
             </div>
           </div>
           {erroEd && (

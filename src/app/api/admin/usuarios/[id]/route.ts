@@ -9,6 +9,7 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export async function PATCH(
 
   const corpo = await parseCorpo(adminUsuarioSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, email, matricula, role, status } = corpo.data;
+  const { nome, email, matricula, reparticaoId, role, status } = corpo.data;
 
   // Impede o admin de remover o próprio acesso (evita lockout).
   if (
@@ -46,32 +47,38 @@ export async function PATCH(
   }
 
   const [antes] = await db
-    .select({ nome: usuarios.nome, email: usuarios.email, matricula: usuarios.matricula, role: usuarios.role, status: usuarios.status })
+    .select({ nome: usuarios.nome, email: usuarios.email, matricula: usuarios.matricula, reparticaoId: usuarios.reparticaoId, role: usuarios.role, status: usuarios.status })
     .from(usuarios)
     .where(eq(usuarios.id, id))
     .limit(1);
+  if (!antes) return erro("Usuário não encontrado.", 404);
+  // A unidade de trabalho nova tem de ser escolhível (nem oculta nem a "Geral"); manter a atual sempre vale.
+  if (reparticaoId != null && reparticaoId !== antes.reparticaoId && !(await unidadeDeTrabalhoValida(reparticaoId)))
+    return erro("Selecione uma unidade válida.", 422);
 
   const set = {
     ...(nome !== undefined ? { nome } : {}),
     ...(email !== undefined ? { email } : {}),
     ...(matricula !== undefined ? { matricula: matricula ? matricula : null } : {}),
+    ...(reparticaoId !== undefined ? { reparticaoId } : {}),
     ...(role !== undefined ? { role } : {}),
     ...(status !== undefined ? { status } : {}),
     atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
   await db.update(usuarios).set(set).where(eq(usuarios.id, id));
   // Acesso LIBERADO (pendente → ativo): a pessoa recebe o aviso por e-mail (com o Resend ativo; depois da resposta).
-  if (antes?.status === "pendente" && status === "ativo") {
+  if (antes.status === "pendente" && status === "ativo") {
     const destino = email ?? antes.email;
     const quem = nome ?? antes.nome;
     depoisDaResposta(enviarEmailDireto([destino], (ctx) => emailAcessoLiberado({ nome: quem }, ctx)), "email");
   }
   // Log com destaque para PAPEL/STATUS (mudança de privilégio = alto valor).
-  const cs = (["nome", "email", "matricula", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
+  const cs = (["nome", "email", "matricula", "reparticaoId", "role", "status"] as const).filter((c) => corpo.data[c] !== undefined);
   const dd = diffCampos(antes as Record<string, unknown>, corpo.data as Record<string, unknown>, cs, {
     nome: "nome",
     email: "e-mail",
     matricula: "matrícula",
+    reparticaoId: "unidade",
     role: "papel",
     status: "status",
   });
@@ -80,7 +87,7 @@ export async function PATCH(
     acao: "editar",
     entidade: "usuario",
     entidadeId: id,
-    resumo: `Usuário ${antes?.nome ?? id}: ${dd.resumo || "editado"}`,
+    resumo: `Usuário ${antes.nome}: ${dd.resumo || "editado"}`,
     antes: dd.antes,
     depois: dd.depois,
   });

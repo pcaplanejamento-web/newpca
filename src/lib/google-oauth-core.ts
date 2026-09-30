@@ -90,7 +90,7 @@ export type CandidatoGoogle = { id: number; googleSub: string | null };
  * 1. a conta Google VINCULADA a um usuário (pelo identificador `sub` — vale mesmo com outro e-mail);
  * 2. senão, o usuário do MESMO e-mail sem outra conta Google vinculada (e a conta passa a ficar vinculada);
  * 3. o mesmo e-mail já vinculado a OUTRA conta Google → recusa (`outra-conta`);
- * 4. ninguém → cadastro NOVO (pendente).
+ * 4. ninguém → `novo` (a pessoa faz o cadastro institucional e vincula o Google no Perfil).
  */
 export function decidirLoginGoogle(
   sub: string,
@@ -153,9 +153,9 @@ export const MENSAGEM_ERRO_LOGIN: Record<string, string> = {
   "google-outra-conta": "Este e-mail já está vinculado a OUTRA conta Google. Entre com a conta vinculada ou com e-mail e senha.",
   "google-desligado": "O login com Google não está ativo.",
   "google-cancelado": "O login com Google foi cancelado.",
-  "google-sem-contas": "O primeiro acesso do sistema precisa ser feito pelo cadastro com e-mail e senha.",
+  "google-sem-cadastro":
+    "Nenhuma conta usa este Google. Crie sua conta com o e-mail institucional; depois de aprovada, vincule o Google no Perfil para entrar com um clique.",
   pendente: "Sua conta ainda está pendente de aprovação por um administrador.",
-  "pendente-novo": "Conta criada com o Google. O acesso está pendente de aprovação por um administrador.",
   inativo: "Sua conta está inativa. Fale com um administrador.",
 };
 

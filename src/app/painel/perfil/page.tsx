@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { usuarios } from "@/db/schema";
-import { PerfilView } from "@/components/PerfilView";
+import { reparticoes, usuarios } from "@/db/schema";
+import { type IdentidadePerfil, PerfilView } from "@/components/PerfilView";
 import { getUsuarioAtual, type UsuarioSessao } from "@/lib/auth";
 import { CHAVE_PREF_EMAIL, lerPrefsEmail } from "@/lib/email-core";
 import { abasPermitidas, getGrupoAtivo } from "@/lib/grupos";
 import { getIntegracoes } from "@/lib/integracoes";
-import { googleConfigurado, resendConfigurado } from "@/lib/integracoes-core";
+import { googleConfigurado, resendConfigurado, turnstileConfigurado } from "@/lib/integracoes-core";
 import { getDb } from "@/lib/db";
 import { mensagemVinculo, SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
 import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
@@ -32,15 +32,15 @@ async function avisosEmailDe(usuarioId: number) {
   }
 }
 
-/** A conta Google vinculada — só com o login com Google ativo (sem ele, o card nem aparece). */
-async function contaGoogleDe(usuarioId: number) {
-  try {
-    if (!googleConfigurado(await getIntegracoes())) return null;
-    const [r] = await getDb().select({ email: usuarios.googleEmail, senha: usuarios.senhaHash }).from(usuarios).where(eq(usuarios.id, usuarioId)).limit(1);
-    return { email: r?.email ?? null, soGoogle: r?.senha === SENHA_INUTILIZAVEL };
-  } catch {
-    return null;
-  }
+/** A identificação institucional (só leitura) + o que a conta tem: unidade, e-mail confirmado, senha e a conta Google. */
+async function identidadeDe(usuarioId: number): Promise<IdentidadePerfil> {
+  const [r] = await getDb()
+    .select({ unidade: reparticoes.nome, verificado: usuarios.emailVerificadoEm, senha: usuarios.senhaHash, googleEmail: usuarios.googleEmail })
+    .from(usuarios)
+    .leftJoin(reparticoes, eq(reparticoes.id, usuarios.reparticaoId))
+    .where(eq(usuarios.id, usuarioId))
+    .limit(1);
+  return { unidade: r?.unidade ?? null, emailVerificado: !!r?.verificado, semSenha: r?.senha === SENHA_INUTILIZAVEL, googleEmail: r?.googleEmail ?? null };
 }
 
 export default async function PerfilPage({ searchParams }: { searchParams: Promise<{ google?: string | string[]; motivo?: string | string[] }> }) {
@@ -50,18 +50,23 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
   const editor = u.role === "admin" || u.role === "gestor";
   const sp = await searchParams;
   const retornoGoogle = mensagemVinculo(sp.google, sp.motivo);
-  const [abas, protocolacao, mesaResponsavel, avisosEmail, contaGoogle] = await Promise.all([
+  const [abas, protocolacao, mesaResponsavel, avisosEmail, identidade, integ] = await Promise.all([
     abasPermitidas(u, grupo),
     editor ? protocolacaoDe(u, grupo?.id ?? null) : null,
     mesaResponsavelGravado(u.id),
     avisosEmailDe(u.id),
-    contaGoogleDe(u.id),
+    identidadeDe(u.id),
+    getIntegracoes(),
   ]);
+  // A conta Google só com o login com Google ativo (sem ele, o card nem aparece).
+  const contaGoogle = googleConfigurado(integ) ? { email: identidade.googleEmail, soGoogle: identidade.semSenha } : null;
   // Sem nenhum módulo liberado no grupo ativo, o `/painel` traz para cá — o Perfil diz o que fazer. A preferência da Mesa
   // (com que responsável ela abre) só para quem vê a Mesa.
   return (
     <PerfilView
       usuario={u}
+      identidade={identidade}
+      turnstile={{ enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey }}
       protocolacao={protocolacao}
       mesaResponsavel={abas.has("dfd") ? mesaResponsavel : null}
       semModulos={abas.size === 0}

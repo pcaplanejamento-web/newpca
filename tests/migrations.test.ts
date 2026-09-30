@@ -781,6 +781,21 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM trello_membros WHERE usuario_id = 9620").get() as { n: number }).n, 0);
   });
 
+  it("0067 cadastro institucional: unidade do usuário (set null) e UM código por e-mail + finalidade", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO reparticoes (id, codigo, nome) VALUES (9670, 'SX', 'Sec X')");
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash, reparticao_id) VALUES (9671, 'Ana Souza', 'a9671@rioverde.go.gov.br', 'h', 9670)");
+    a.exec("DELETE FROM reparticoes WHERE id = 9670");
+    assert.equal((a.prepare("SELECT reparticao_id AS r FROM usuarios WHERE id = 9671").get() as { r: number | null }).r, null);
+    const ins = "INSERT INTO codigos_email (email, finalidade, codigo_hash, expira_em, enviado_em) VALUES ('a@x', 'cadastro', 'h', 'e', 'e')";
+    a.exec(ins);
+    assert.throws(() => a.exec(ins));
+    a.exec("INSERT INTO codigos_email (email, finalidade, codigo_hash, expira_em, enviado_em) VALUES ('a@x', 'senha', 'h', 'e', 'e')");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM codigos_email").get() as { n: number }).n, 2);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

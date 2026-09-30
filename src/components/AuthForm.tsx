@@ -4,23 +4,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { Button } from "./Button";
-import { Checkbox, PasswordField, TextField } from "./Field";
-import { IconAlert, IconArrowRight, IconCheck, IconGoogle, IconMail, IconUser } from "./icons";
-import { Turnstile } from "./Turnstile";
+import { CartaoAuth, ErroAuth } from "./CartaoAuth";
+import { type ConfigCaptcha, useCaptcha } from "./CodigoEmail";
+import { PasswordField, TextField } from "./Field";
+import { IconArrowRight, IconGoogle, IconMail } from "./icons";
 
-// Tela de acesso (login/cadastro) — referência dos componentes de entrada do
-// design system (prints do usuário): TextField/PasswordField com ícone e anel
-// de foco, Checkbox e Button "accent" com glow. 100% por token.
+// Tela de LOGIN — e-mail + senha (com o captcha do ADM) ou a conta Google vinculada. O cadastro e o "Esqueci a senha"
+// têm telas próprias (`CadastroForm`/`RecuperarSenhaForm`), na MESMA moldura (`CartaoAuth`).
 export function AuthForm({
-  mode,
   turnstile,
   google = false,
   googleConta = null,
   erroInicial = null,
 }: {
-  mode: "login" | "cadastro";
   /** Captcha do ADM — só renderiza/exige quando ativo E configurado. */
-  turnstile?: { enabled: boolean; siteKey: string };
+  turnstile?: ConfigCaptcha;
   /** Login com Google ativo (Integrações) → botão "Entrar com Google". */
   google?: boolean;
   /** A conta Google LEMBRADA neste aparelho → "Continuar como …" entra direto nela (sem escolher a conta). */
@@ -29,133 +27,62 @@ export function AuthForm({
   erroInicial?: string | null;
 }) {
   const router = useRouter();
-  const isCad = mode === "cadastro";
-  const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  const [lembrar, setLembrar] = useState(true);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(erroInicial);
-  const [pendente, setPendente] = useState(false);
-  const [tsToken, setTsToken] = useState<string | null>(null);
-  const [tsNonce, setTsNonce] = useState(0); // remonta o widget após erro (re-solve)
-  const usaCaptcha = !!turnstile?.enabled && !!turnstile?.siteKey;
+  const captcha = useCaptcha(turnstile);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (usaCaptcha && !tsToken) {
+    if (!captcha.pronto) {
       setErro("Confirme que você não é um robô.");
       return;
     }
     setLoading(true);
     setErro(null);
     try {
-      const captcha = usaCaptcha && tsToken ? { token: tsToken } : {};
-      const res = await fetch(isCad ? "/api/auth/cadastro" : "/api/auth/login", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isCad ? { nome, email, senha, ...captcha } : { email, senha, ...captcha }),
+        body: JSON.stringify({ email, senha, ...(captcha.token ? { token: captcha.token } : {}) }),
       });
-      const j = (await res.json()) as { ok?: boolean; error?: string; pendente?: boolean };
+      const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Ocorreu um erro.");
-      if (isCad && j.pendente) {
-        setPendente(true);
-        return;
-      }
       router.push("/painel");
       router.refresh();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Ocorreu um erro.");
-      if (usaCaptcha) {
-        setTsToken(null);
-        setTsNonce((n) => n + 1);
-      }
+      if (captcha.usa) captcha.renovar();
     } finally {
       setLoading(false);
     }
   }
 
-  if (pendente) {
-    return (
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 text-center shadow-soft">
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-accent-soft text-accent">
-          <IconCheck className="h-6 w-6" />
-        </div>
-        <h2 className="mt-4 text-lg font-bold text-text">Conta criada!</h2>
-        <p className="mt-2 text-sm text-muted">
-          Seu acesso está <strong className="text-text-2">pendente de aprovação</strong> por um
-          administrador. Você poderá entrar assim que for liberado.
-        </p>
-        <Link href="/login" className="mt-5 inline-block text-sm font-semibold text-accent hover:underline">
-          Voltar para o login
-        </Link>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-soft sm:p-8">
-      <div className="mb-6 flex flex-col items-center text-center">
-        <div className="grid h-12 w-12 place-items-center rounded-xl bg-text text-base font-black text-surface">
-          RV
-        </div>
-        <h1 className="mt-3 text-lg font-bold text-text">
-          {isCad ? "Criar conta" : "Entrar na plataforma"}
-        </h1>
-        <p className="text-xs text-muted">PCA — Prefeitura de Rio Verde</p>
-      </div>
-
+    <CartaoAuth titulo="Entrar na plataforma" onSubmit={submit}>
       <div className="space-y-[var(--gap-block)]">
-        {isCad && (
-          <TextField
-            label="Nome completo"
-            icon={<IconUser className="h-5 w-5" />}
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            autoComplete="name"
-            required
-          />
-        )}
         <TextField
-          label="Email ou usuário"
+          label="E-mail"
           icon={<IconMail className="h-5 w-5" />}
           type="email"
           inputMode="email"
-          placeholder="voce@empresa.com"
+          placeholder="voce@rioverde.go.gov.br"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          autoComplete={isCad ? "email" : "username"}
+          autoComplete="username"
           required
         />
-        <PasswordField
-          value={senha}
-          onChange={(e) => setSenha(e.target.value)}
-          autoComplete={isCad ? "new-password" : "current-password"}
-          required
-          minLength={isCad ? 8 : undefined}
-          hint={isCad ? "Mínimo de 8 caracteres." : undefined}
-        />
-        {!isCad && (
-          <Checkbox label="Manter-me conectado" checked={lembrar} onChange={(e) => setLembrar(e.target.checked)} />
-        )}
-        {usaCaptcha && turnstile && (
-          <Turnstile key={tsNonce} siteKey={turnstile.siteKey} onToken={setTsToken} />
-        )}
+        <PasswordField value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required />
+        <div className="-mt-1 flex justify-end">
+          <Link href="/recuperar-senha" className="inline-flex min-h-11 items-center text-[13px] font-semibold text-accent hover:underline lg:min-h-0">
+            Esqueci a senha
+          </Link>
+        </div>
+        {captcha.widget}
       </div>
 
-      {erro && (
-        <div
-          className="mt-4 flex items-start gap-2 rounded-control p-3 text-sm"
-          style={{
-            color: "var(--sit-devolvido)",
-            background: "color-mix(in srgb, var(--sit-devolvido) 10%, transparent)",
-            border: "1px solid color-mix(in srgb, var(--sit-devolvido) 30%, transparent)",
-          }}
-        >
-          <IconAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{erro}</span>
-        </div>
-      )}
+      {erro && <ErroAuth>{erro}</ErroAuth>}
 
       <Button
         type="submit"
@@ -164,7 +91,7 @@ export function AuthForm({
         icon={!loading && <IconArrowRight className="h-4 w-4" />}
         className="mt-6 h-[52px] w-full text-[15px]"
       >
-        {isCad ? "Criar conta" : "Entrar"}
+        Entrar
       </Button>
 
       {google && (
@@ -183,8 +110,6 @@ export function AuthForm({
               <span className="min-w-0 truncate">
                 Continuar como <span className="font-normal text-text-2">{googleConta}</span>
               </span>
-            ) : isCad ? (
-              "Criar conta com Google"
             ) : (
               "Entrar com Google"
             )}
@@ -201,16 +126,14 @@ export function AuthForm({
       )}
 
       <div className="mt-5 text-center">
-        <Link
-          href={isCad ? "/login" : "/cadastro"}
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          {isCad ? "Já tenho conta — entrar" : "Primeiro acesso ou esqueci a senha"}
-        </Link>
-        {!isCad && (
-          <p className="mt-3 text-xs text-muted">Acesso restrito. Solicite cadastro ao administrador PCA.</p>
-        )}
+        <p className="text-sm text-muted">
+          Primeiro acesso?{" "}
+          <Link href="/cadastro" className="font-semibold text-accent hover:underline">
+            Criar conta
+          </Link>
+        </p>
+        <p className="mt-2 text-xs text-faint">Acesso restrito aos servidores da Prefeitura. O cadastro passa pela aprovação do administrador.</p>
       </div>
-    </form>
+    </CartaoAuth>
   );
 }

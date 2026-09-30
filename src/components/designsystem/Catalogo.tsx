@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
+import { CartaoAuth, ErroAuth } from "@/components/CartaoAuth";
+import { CampoCodigo, EtapaCodigo } from "@/components/CodigoEmail";
+import { OpcoesUnidades } from "@/components/OpcoesUnidades";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
 import { RecorteImagem } from "@/components/RecorteImagem";
@@ -238,6 +241,43 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
       </h2>
       <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">{children}</div>
     </section>
+  );
+}
+
+/** Demo da CONFIRMAÇÃO POR CÓDIGO (cadastro, "Esqueci a senha", senha do Perfil) na moldura das telas de acesso. */
+function DemoAcesso() {
+  const [codigo, setCodigo] = useState("");
+  const [restante, setRestante] = useState(0);
+  return (
+    <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] lg:grid-cols-2">
+      <CartaoAuth titulo="Confirme o seu e-mail" etapa="Etapa 2 de 2">
+        <EtapaCodigo
+          destino="ana.souza@rioverde.go.gov.br"
+          codigo={codigo}
+          onCodigo={setCodigo}
+          restante={restante}
+          reenviando={false}
+          onReenviar={() => setRestante(45)}
+          onVoltar={() => setCodigo("")}
+        />
+        <ErroAuth>Código incorreto. Confira os 6 dígitos no seu e-mail.</ErroAuth>
+      </CartaoAuth>
+      <div className="space-y-[var(--gap-block)]">
+        <SelectField label="Unidade em que trabalha (OpcoesUnidades — por órgão)" defaultValue="" error="Selecione a unidade em que você trabalha.">
+          <option value="" disabled>
+            Selecione…
+          </option>
+          <OpcoesUnidades
+            unidades={[
+              { id: 1, codigo: "SEPLAN", nome: "Secretaria de Planejamento", orgao: "Prefeitura Municipal de Rio Verde" },
+              { id: 2, codigo: "SEMED", nome: "Secretaria de Educação", orgao: "Prefeitura Municipal de Rio Verde" },
+              { id: 3, codigo: "FMS", nome: "Fundo Municipal de Saúde", orgao: "Fundo Municipal de Saúde" },
+            ]}
+          />
+        </SelectField>
+        <CampoCodigo value={codigo} onChange={setCodigo} />
+      </div>
+    </div>
   );
 }
 
@@ -2604,6 +2644,10 @@ export function Catalogo() {
           <Switch label="Bloqueia importação/protocolação" checked={sw} onChange={setSw} />
           <Switch label="Desligada (desabilitada)" checked={false} onChange={() => {}} disabled />
         </div>
+      </Secao>
+
+      <Secao titulo="Acesso — CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha antes de cada envio, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
+        <DemoAcesso />
       </Secao>
 
       <Secao titulo="KPIs">

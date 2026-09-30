@@ -7,16 +7,34 @@ import { MESA_RESPONSAVEL, type MesaResponsavel, ROTULO_MESA_RESPONSAVEL } from 
 import { APELIDO_MAX, type Pessoa } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
+import { Badge } from "./Badge";
 import { Callout } from "./Callout";
+import { CampoCongelado } from "./CampoCadeado";
+import { type ConfigCaptcha, EtapaCodigo, useCaptcha, useCodigoEmail } from "./CodigoEmail";
 import { Checkbox, PasswordField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
-import { IconAlert, IconCamera, IconCheck, IconClipboard, IconGoogle, IconInfo, IconKey, IconLogout, IconMail, IconSave, IconTrash, IconUser, IconUserX } from "./icons";
+import {
+  IconAlert,
+  IconBadgeCheck,
+  IconCamera,
+  IconCheck,
+  IconClipboard,
+  IconGoogle,
+  IconInfo,
+  IconKey,
+  IconLogout,
+  IconMail,
+  IconSave,
+  IconTrash,
+  IconUser,
+  IconUserX,
+} from "./icons";
 import { Switch } from "./Switch";
 import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { ThemeToggle } from "./ThemeToggle";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
-import { CHAVE_PREF_EMAIL, type PrefsEmail, ROTULO_TIPO_EMAIL, TIPOS_EMAIL } from "@/lib/email-core";
+import { CHAVE_PREF_EMAIL, type DestinoEmail, type PrefsEmail, ROTULO_TIPO_EMAIL, TIPOS_EMAIL } from "@/lib/email-core";
 
 const ROLE_LABEL: Record<UsuarioSessao["role"], string> = {
   admin: "Administrador",
@@ -40,8 +58,20 @@ const cardCls = "rounded-card border border-border bg-surface p-[var(--pad-card)
 /** Responsável padrão: "" = nenhum (definir na Mesa). */
 const EXTRAS_PADRAO: ExtraPessoa[] = [{ valor: "", rotulo: "Nenhum (definir na Mesa)", icone: <IconUserX className="h-4 w-4" /> }];
 
+/** A IDENTIFICAÇÃO institucional (só leitura no Perfil — só o ADM altera) + o que a conta tem. */
+export type IdentidadePerfil = {
+  unidade: string | null;
+  emailVerificado: boolean;
+  /** Sem senha (entrava só pelo Google) — o Perfil pede para CRIAR a senha. */
+  semSenha: boolean;
+  /** O e-mail da conta Google vinculada (destino opcional dos avisos). */
+  googleEmail: string | null;
+};
+
 export function PerfilView({
   usuario,
+  identidade,
+  turnstile,
   protocolacao = null,
   mesaResponsavel = null,
   semModulos = false,
@@ -50,6 +80,9 @@ export function PerfilView({
   retornoGoogle = null,
 }: {
   usuario: UsuarioSessao;
+  identidade: IdentidadePerfil;
+  /** O captcha do ADM — antes de enviar o código da senha. */
+  turnstile?: ConfigCaptcha;
   /** Preferência de quem protocola (editores): o RESPONSÁVEL PADRÃO escolhido automaticamente — entre as
    * PESSOAS DO GRUPO ativo (`foraDoGrupo` = o padrão gravado que não é mais do grupo — com a foto, sem re-escolha). */
   protocolacao?: { pessoas: Pessoa[]; responsavelPadraoId: number | null; foraDoGrupo?: Pessoa | null } | null;
@@ -67,23 +100,23 @@ export function PerfilView({
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Dados do perfil
-  const [nome, setNome] = useState(usuario.nome);
+  // Dados do perfil: só o apelido e a foto (nome, e-mail, matrícula e unidade = o ADM)
   const [apelido, setApelido] = useState(usuario.apelido ?? "");
-  const [email, setEmail] = useState(usuario.email);
-  const [matricula, setMatricula] = useState(usuario.matricula ?? "");
   // Foto exibida (a URL da atual ou o data-URL recém-escolhido) + se MUDOU: só a alteração vai ao servidor.
   const [foto, setFoto] = useState<string | null>(usuario.foto ?? null);
   const [fotoAlterada, setFotoAlterada] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [msgPerfil, setMsgPerfil] = useState<Msg>(null);
 
-  // Trocar senha
-  const [senhaAtual, setSenhaAtual] = useState("");
+  // Senha (trocar ou CRIAR): a nova senha vale depois do código enviado ao e-mail (captcha antes de enviar)
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [semSenha, setSemSenha] = useState(identidade.semSenha);
   const [trocando, setTrocando] = useState(false);
   const [msgSenha, setMsgSenha] = useState<Msg>(null);
+  const captcha = useCaptcha(turnstile);
+  const cod = useCodigoEmail("senha");
 
   const [saindo, setSaindo] = useState(false);
 
@@ -120,6 +153,8 @@ export function PerfilView({
   const [emailPrefs, setEmailPrefs] = useState<PrefsEmail | null>(avisosEmail);
   const [salvandoEmail, setSalvandoEmail] = useState(false);
   const [msgEmail, setMsgEmail] = useState<Msg>(null);
+
+  const destinoAtual = emailPrefs?.destino === "google" && identidade.googleEmail ? identidade.googleEmail : usuario.email;
 
   async function salvarEmail(e: FormEvent) {
     e.preventDefault();
@@ -210,7 +245,7 @@ export function PerfilView({
       const res = await fetch("/api/perfil", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, apelido, email, matricula, ...(fotoAlterada ? { foto: foto ?? "" } : {}) }),
+        body: JSON.stringify({ apelido, ...(fotoAlterada ? { foto: foto ?? "" } : {}) }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -224,11 +259,21 @@ export function PerfilView({
     }
   }
 
+  async function enviarCodigoSenha() {
+    setMsgSenha(null);
+    const falha = await cod.enviar(usuario.email, captcha.token);
+    if (captcha.usa) captcha.renovar(); // o token do captcha vale uma vez
+    if (falha) setMsgSenha({ tipo: "erro", texto: falha });
+    else setCodigo("");
+  }
+
   async function trocarSenha(e: FormEvent) {
     e.preventDefault();
-    if (novaSenha !== confirmar) {
-      setMsgSenha({ tipo: "erro", texto: "A confirmação não coincide." });
-      return;
+    if (!cod.destino) {
+      if (novaSenha.length < 8) return setMsgSenha({ tipo: "erro", texto: "A senha deve ter ao menos 8 caracteres." });
+      if (novaSenha !== confirmar) return setMsgSenha({ tipo: "erro", texto: "A confirmação não coincide." });
+      if (!captcha.pronto) return setMsgSenha({ tipo: "erro", texto: "Confirme que você não é um robô." });
+      return enviarCodigoSenha();
     }
     setTrocando(true);
     setMsgSenha(null);
@@ -236,14 +281,17 @@ export function PerfilView({
       const res = await fetch("/api/perfil/senha", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ senhaAtual, novaSenha }),
+        body: JSON.stringify({ novaSenha, codigo }),
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao trocar a senha.");
-      setMsgSenha({ tipo: "ok", texto: "Senha alterada com sucesso." });
-      setSenhaAtual("");
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar a senha.");
+      setMsgSenha({ tipo: "ok", texto: semSenha ? "Senha criada. Agora você também entra com e-mail e senha." : "Senha alterada com sucesso." });
+      setSemSenha(false);
       setNovaSenha("");
       setConfirmar("");
+      setCodigo("");
+      cod.voltar();
+      router.refresh();
     } catch (err) {
       setMsgSenha({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro." });
     } finally {
@@ -277,7 +325,7 @@ export function PerfilView({
         <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
           {/* Foto */}
           <div className="flex flex-col items-center gap-2">
-            <Avatar nome={nome || usuario.nome} foto={foto} size="xl" />
+            <Avatar nome={usuario.nome} foto={foto} size="xl" />
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={escolherFoto} />
             <Button variant="secondary" onClick={() => fileRef.current?.click()} icon={<IconCamera className="h-4 w-4" />}>
               Alterar foto
@@ -296,12 +344,8 @@ export function PerfilView({
             )}
           </div>
 
-          {/* Campos */}
+          {/* Apelido (editável) + a identificação institucional (só o ADM altera) */}
           <div className="w-full flex-1 space-y-3">
-            <div>
-              <label className={labelCls} htmlFor="p-nome">Nome completo</label>
-              <input id="p-nome" className={inputCls} value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name" required />
-            </div>
             <div>
               <label className={labelCls} htmlFor="p-apelido">Apelido</label>
               <input
@@ -310,19 +354,33 @@ export function PerfilView({
                 value={apelido}
                 onChange={(e) => setApelido(e.target.value)}
                 maxLength={APELIDO_MAX}
-                placeholder={`Opcional — ex.: ${nome.trim().split(/\s+/u)[0] || "Ana"}`}
+                placeholder={`Opcional — ex.: ${usuario.nome.trim().split(/\s+/u)[0] || "Ana"}`}
                 autoComplete="nickname"
               />
               <p className="mt-1 text-[11px] text-faint">Como você aparece no sistema (Responsável, Distribuição, menus). Vazio = o nome.</p>
             </div>
-            <div>
-              <label className={labelCls} htmlFor="p-email">E-mail</label>
-              <input id="p-email" type="email" inputMode="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <CampoCongelado label="Nome completo" valor={usuario.nome} span />
+              <div className="sm:col-span-2">
+                <span className="mb-1 flex items-center gap-2 text-xs text-muted">
+                  E-mail institucional
+                  {identidade.emailVerificado && (
+                    <Badge tone="emerald">
+                      <IconBadgeCheck className="h-3 w-3" /> Confirmado
+                    </Badge>
+                  )}
+                </span>
+                <div className="min-h-[40px] break-all rounded-control border border-border bg-surface-2 px-3 py-2 text-sm font-medium leading-snug text-text">
+                  {usuario.email}
+                </div>
+              </div>
+              <CampoCongelado label="Matrícula" valor={usuario.matricula} />
+              <CampoCongelado label="Unidade em que trabalha" valor={identidade.unidade} />
             </div>
-            <div>
-              <label className={labelCls} htmlFor="p-matricula">Matrícula</label>
-              <input id="p-matricula" className={inputCls} value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="Opcional" />
-            </div>
+            <p className="flex items-start gap-1.5 text-[11px] text-faint">
+              <IconInfo className="mt-px h-3.5 w-3.5 shrink-0" />
+              Nome, e-mail, matrícula e unidade só podem ser alterados por um administrador.
+            </p>
             <div className="text-xs text-faint">
               Papel: <span className="font-semibold text-text-2">{ROLE_LABEL[usuario.role]}</span>
             </div>
@@ -338,21 +396,55 @@ export function PerfilView({
         </div>
       </form>
 
-      {/* Trocar senha */}
+      {/* Senha: trocar (ou CRIAR, para quem só entrava pelo Google) — confirmada pelo código enviado ao e-mail */}
       <form onSubmit={trocarSenha} className={cardCls}>
         <h3 className="flex items-center gap-2 text-sm font-bold text-text">
-          <IconKey className="h-4 w-4" /> Trocar senha
+          <IconKey className="h-4 w-4" /> {semSenha ? "Criar senha" : "Trocar senha"}
         </h3>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <PasswordField label="Senha atual" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} autoComplete="current-password" required />
-          <PasswordField label="Nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" minLength={8} required />
-          <PasswordField label="Confirmar" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} required />
+        {semSenha && (
+          <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />} className="mt-3">
+            Sua conta ainda não tem senha (você entra só pelo Google). Crie uma — ela é obrigatória.
+          </Callout>
+        )}
+        <div className="mt-4">
+          {cod.destino ? (
+            <EtapaCodigo
+              destino={cod.destino}
+              codigo={codigo}
+              onCodigo={setCodigo}
+              restante={cod.restante}
+              reenviando={cod.enviando}
+              onReenviar={enviarCodigoSenha}
+              captcha={captcha.widget}
+              podeReenviar={captcha.pronto}
+              onVoltar={() => {
+                setMsgSenha(null);
+                cod.voltar();
+              }}
+              disabled={trocando}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <PasswordField label="Nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} autoComplete="new-password" minLength={8} required />
+                <PasswordField label="Confirmar" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} autoComplete="new-password" minLength={8} required />
+              </div>
+              <p className="text-[12px] text-muted">Mínimo de 8 caracteres. Para confirmar, enviaremos um código de 6 dígitos para {usuario.email}.</p>
+              {captcha.widget}
+            </div>
+          )}
         </div>
         <Aviso msg={msgSenha} />
         <div className="mt-4 flex justify-end">
-          <Button type="submit" loading={trocando} icon={<IconKey className="h-[18px] w-[18px]" />}>
-            Trocar senha
-          </Button>
+          {cod.destino ? (
+            <Button type="submit" loading={trocando} disabled={codigo.length !== 6} icon={<IconKey className="h-[18px] w-[18px]" />}>
+              {semSenha ? "Confirmar e criar senha" : "Confirmar e trocar senha"}
+            </Button>
+          ) : (
+            <Button type="submit" loading={cod.enviando} icon={<IconMail className="h-[18px] w-[18px]" />}>
+              Enviar código
+            </Button>
+          )}
         </div>
       </form>
 
@@ -478,8 +570,24 @@ export function PerfilView({
             <Switch
               checked={emailPrefs.ligado}
               onChange={(ligado) => setEmailPrefs({ ...emailPrefs, ligado })}
-              label={`Receber avisos por e-mail em ${usuario.email}`}
+              label={`Receber avisos por e-mail em ${destinoAtual}`}
             />
+            {/* ONDE chegam: no institucional ou na conta Google vinculada (só com ela vinculada). */}
+            {identidade.googleEmail && (
+              <div className={emailPrefs.ligado ? "" : "opacity-60"}>
+                <p className={labelCls}>Receber no</p>
+                <Segmented<DestinoEmail>
+                  value={emailPrefs.destino}
+                  onChange={(destino) => setEmailPrefs({ ...emailPrefs, destino })}
+                  disabled={!emailPrefs.ligado}
+                  ariaLabel="Onde receber os avisos por e-mail"
+                  options={[
+                    { value: "institucional", label: "E-mail institucional", curto: "Institucional" },
+                    { value: "google", label: "Conta Google", curto: "Google" },
+                  ]}
+                />
+              </div>
+            )}
             <fieldset disabled={!emailPrefs.ligado} className={emailPrefs.ligado ? "" : "opacity-60"}>
               <legend className={labelCls}>Quais avisos</legend>
               <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">

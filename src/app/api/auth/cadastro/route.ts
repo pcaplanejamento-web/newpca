@@ -1,77 +1,52 @@
-import { enviarEmailDireto, emailsDosAdmins } from "@/lib/email";
-import { emailCadastroPendente } from "@/lib/email-core";
-import { depoisDaResposta } from "@/lib/segundo-plano";
-import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { eq, sql } from "drizzle-orm";
 import { usuarios } from "@/db/schema";
 import { registrarAuditoria } from "@/lib/auditoria";
-import {
-  contarUsuarios,
-  criarSessao,
-  definirCookieSessao,
-  hashSenha,
-} from "@/lib/auth";
+import { contarUsuarios, criarSessao, definirCookieSessao, hashSenha } from "@/lib/auth";
 import { cadastroSchema } from "@/lib/auth-validation";
-import { getIntegracoes } from "@/lib/integracoes";
-import { turnstileConfigurado } from "@/lib/integracoes-core";
-import { verificarTurnstile } from "@/lib/turnstile";
+import { consumirCodigo } from "@/lib/codigo-email";
+import { MENSAGEM_CODIGO } from "@/lib/codigo-email-core";
+import { getDb } from "@/lib/db";
+import { emailsDosAdmins, enviarEmailDireto } from "@/lib/email";
+import { emailCadastroPendente } from "@/lib/email-core";
+import { erro, ok, parseCorpo } from "@/lib/http";
+import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * CADASTRO: nome completo, matrícula, unidade, e-mail institucional e senha — o e-mail é CONFIRMADO pelo código de 6
+ * dígitos (enviado por `/api/auth/codigo`, depois do captcha). Só o PRIMEIRO usuário do sistema (vira ADM ativo) entra
+ * sem código: ainda não há quem configure o envio de e-mails. Os demais ficam pendentes de aprovação.
+ */
 export async function POST(req: Request) {
-  let json: unknown;
-  try {
-    json = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "JSON inválido." }, { status: 400 });
-  }
-
-  const parsed = cadastroSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." },
-      { status: 422 },
-    );
-  }
-
-  const { nome, email, senha, token: captchaToken } = parsed.data;
+  const corpo = await parseCorpo(cadastroSchema, req);
+  if ("resp" in corpo) return corpo.resp;
+  const { nome, email, matricula, reparticaoId, senha, codigo } = corpo.data;
   const db = getDb();
 
-  // Captcha (Turnstile) — só quando o ADM ativou E configurou. Fail-open em erro de infra.
-  const integ = await getIntegracoes();
-  if (turnstileConfigurado(integ)) {
-    const cap = await verificarTurnstile(integ, captchaToken, req.headers.get("cf-connecting-ip"));
-    if (!cap.ok) {
-      return NextResponse.json({ ok: false, error: cap.motivo ?? "Falha na verificação anti-robô." }, { status: 400 });
-    }
-  }
-
   try {
-    const [existe] = await db
-      .select({ id: usuarios.id })
-      .from(usuarios)
-      .where(eq(usuarios.email, email))
-      .limit(1);
-    if (existe) {
-      return NextResponse.json(
-        { ok: false, error: "Este e-mail já está cadastrado." },
-        { status: 409 },
-      );
-    }
-
-    // Primeiro usuário do sistema vira admin ativo; os demais entram pendentes.
     const primeiro = (await contarUsuarios()) === 0;
-    const senhaHash = await hashSenha(senha);
+    if (!primeiro) {
+      if (!codigo) return erro("Informe o código enviado ao seu e-mail.", 422);
+      const r = await consumirCodigo(email, "cadastro", codigo);
+      if (r !== "ok") return erro(MENSAGEM_CODIGO[r], 422);
+    }
+    if (!(await unidadeDeTrabalhoValida(reparticaoId))) return erro("Selecione uma unidade válida.", 422);
+    const [existe] = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.email, email)).limit(1);
+    if (existe) return erro("Este e-mail já está cadastrado.", 409);
 
     const [u] = await db
       .insert(usuarios)
       .values({
         nome,
         email,
-        senhaHash,
+        matricula,
+        reparticaoId,
+        senhaHash: await hashSenha(senha),
         role: primeiro ? "admin" : "membro",
         status: primeiro ? "ativo" : "pendente",
+        emailVerificadoEm: primeiro ? null : sql`(CURRENT_TIMESTAMP)`,
       })
       .returning({ id: usuarios.id, role: usuarios.role, status: usuarios.status });
 
@@ -81,30 +56,21 @@ export async function POST(req: Request) {
       entidade: "usuario",
       entidadeId: u.id,
       resumo: `${nome} criou uma conta (${u.status === "ativo" ? "ativa" : "pendente de aprovação"})`,
-      depois: { nome, email, role: u.role, status: u.status },
+      depois: { nome, email, matricula, reparticaoId, role: u.role, status: u.status },
     });
 
     if (u.status === "ativo") {
-      const token = await criarSessao(u.id);
-      await definirCookieSessao(token);
-      return NextResponse.json({
-        ok: true,
-        autenticado: true,
-        usuario: { nome, email, role: u.role },
-      });
+      await definirCookieSessao(await criarSessao(u.id));
+      return ok({ autenticado: true });
     }
-
-    // Pendente de aprovação por um admin — os ADMs recebem o aviso por e-mail (com o Resend ativo; depois da resposta).
+    // Pendente de aprovação — os ADMs recebem o aviso por e-mail (com o Resend ativo; depois da resposta).
     depoisDaResposta(
       emailsDosAdmins().then((admins) => enviarEmailDireto(admins, (ctx) => emailCadastroPendente({ nome, email }, ctx))),
       "email",
     );
-    return NextResponse.json({ ok: true, autenticado: false, pendente: true });
+    return ok({ autenticado: false, pendente: true });
   } catch (err) {
     console.error("Falha no cadastro:", err);
-    return NextResponse.json(
-      { ok: false, error: "Erro ao criar a conta. Tente novamente." },
-      { status: 500 },
-    );
+    return erro("Erro ao criar a conta. Tente novamente.", 500);
   }
 }

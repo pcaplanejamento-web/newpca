@@ -1,41 +1,31 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { exigirUsuario } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { usuarios } from "@/db/schema";
 import { perfilSchema } from "@/lib/auth-validation";
-import { erro, ok, parseCorpo } from "@/lib/http";
+import { ok, parseCorpo } from "@/lib/http";
 import { normalizarApelido } from "@/lib/pessoa";
 
 export const dynamic = "force-dynamic";
 
+/** O próprio perfil: SÓ o apelido e a foto — nome, e-mail, matrícula e unidade são alterados apenas pelo ADM. */
 export async function PATCH(req: Request) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
 
   const corpo = await parseCorpo(perfilSchema, req);
   if ("resp" in corpo) return corpo.resp;
+  const { apelido, foto } = corpo.data;
 
-  const { nome, email, apelido, matricula, foto } = corpo.data;
-  const db = getDb();
-
-  // E-mail é único: rejeita se já pertence a outro usuário.
-  const [dono] = await db
-    .select({ id: usuarios.id })
-    .from(usuarios)
-    .where(and(eq(usuarios.email, email), ne(usuarios.id, a.u.id)))
-    .limit(1);
-  if (dono) return erro("Este e-mail já está em uso.", 409);
-
-  const set = {
-    nome,
-    email,
-    ...(apelido !== undefined ? { apelido: normalizarApelido(apelido) } : {}),
-    matricula: matricula ? matricula : null,
-    ...(foto !== undefined ? { foto: foto ? foto : null } : {}),
-    atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-  };
-  await db.update(usuarios).set(set).where(eq(usuarios.id, a.u.id));
-  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "usuario", entidadeId: a.u.id, resumo: "Perfil atualizado (dados próprios)" });
+  await getDb()
+    .update(usuarios)
+    .set({
+      ...(apelido !== undefined ? { apelido: normalizarApelido(apelido) } : {}),
+      ...(foto !== undefined ? { foto: foto ? foto : null } : {}),
+      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+    })
+    .where(eq(usuarios.id, a.u.id));
+  await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "usuario", entidadeId: a.u.id, resumo: "Perfil atualizado (apelido/foto)" });
   return ok();
 }

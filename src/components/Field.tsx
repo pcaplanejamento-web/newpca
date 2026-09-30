@@ -49,6 +49,7 @@ export function TextField({ label, icon, trailing, hint, error, id, ...rest }: C
 export function SelectField({
   label,
   hint,
+  error,
   id,
   compacto = false,
   children,
@@ -56,6 +57,8 @@ export function SelectField({
 }: {
   label?: string;
   hint?: ReactNode;
+  /** O problema do campo (borda + mensagem na cor de erro — como no `TextField`). */
+  error?: string;
   /** Compacto (barras de ferramentas, ao lado de `Button size="sm"`): `--h-control-sm` no desktop, 44px no toque; o
    * rótulo vira um prefixo discreto DENTRO da caixa. */
   compacto?: boolean;
@@ -83,12 +86,16 @@ export function SelectField({
           {label}
         </label>
       )}
-      <div className={`${WRAP} h-[54px] border-border-2`}>
+      <div className={`${WRAP} h-[54px] ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         <select id={fid} className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60`} {...rest}>
           {children}
         </select>
       </div>
-      {hint && <p className="mt-1.5 text-[12px] text-muted">{hint}</p>}
+      {error ? (
+        <p className="mt-1.5 text-[12px] font-medium text-[var(--sit-devolvido)]">{error}</p>
+      ) : hint ? (
+        <p className="mt-1.5 text-[12px] text-muted">{hint}</p>
+      ) : null}
     </div>
   );
 }

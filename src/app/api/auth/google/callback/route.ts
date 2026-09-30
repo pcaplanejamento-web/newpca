@@ -3,10 +3,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { usuarios } from "@/db/schema";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { contarUsuarios, criarSessao, definirCookieSessao, getUsuarioAtual } from "@/lib/auth";
+import { criarSessao, definirCookieSessao, getUsuarioAtual } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { emailsDosAdmins, enviarEmailDireto } from "@/lib/email";
-import { emailCadastroPendente } from "@/lib/email-core";
 import {
   COOKIE_GOOGLE,
   COOKIE_GOOGLE_CONTA,
@@ -16,11 +14,9 @@ import {
   lerCookieGoogle,
   podeVincular,
   redirectUri,
-  SENHA_INUTILIZAVEL,
   VALIDADE_COOKIE_CONTA_S,
 } from "@/lib/google-oauth-core";
 import { googleDaConfig, trocarCodigo } from "@/lib/google-oauth";
-import { depoisDaResposta } from "@/lib/segundo-plano";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +24,8 @@ const COLS = { id: usuarios.id, nome: usuarios.nome, email: usuarios.email, stat
 
 /**
  * Volta do Google: confere o state (cookie curto), troca o código pelo id_token e — conforme o modo — ENTRA ou VINCULA.
- * Entrar: a conta Google vinculada (pelo `sub`, mesmo com outro e-mail) → senão o MESMO e-mail (e vincula) → senão cadastro
- * PENDENTE (os ADMs recebem o e-mail). A conta que entrou fica LEMBRADA neste aparelho ("Continuar como …").
+ * Entrar: a conta Google vinculada (pelo `sub`, mesmo com outro e-mail) → senão o MESMO e-mail (e vincula) → senão leva ao
+ * CADASTRO institucional (a conta nova nunca nasce pelo Google). A conta que entrou fica LEMBRADA neste aparelho ("Continuar como …").
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -61,7 +57,7 @@ export async function GET(req: Request) {
     console.error("[google] troca recusada:", r.motivo);
     return falhou("google-token", r.codigo);
   }
-  const { sub, email, nome } = r.identidade;
+  const { sub, email } = r.identidade;
 
   try {
     const db = getDb();
@@ -91,25 +87,9 @@ export async function GET(req: Request) {
       return ir("/painel", email);
     }
 
-    // O 1º usuário do sistema (que vira ADM) nasce pelo cadastro com senha, nunca pelo Google.
-    if ((await contarUsuarios()) === 0) return ir("/login?erro=google-sem-contas");
-    const [novo] = await db
-      .insert(usuarios)
-      .values({ nome, email, senhaHash: SENHA_INUTILIZAVEL, role: "membro", status: "pendente", googleSub: sub, googleEmail: email })
-      .returning({ id: usuarios.id });
-    await registrarAuditoria({
-      usuario: { id: novo.id, nome, email },
-      acao: "cadastro",
-      entidade: "usuario",
-      entidadeId: novo.id,
-      resumo: `${nome} criou uma conta com o Google (pendente de aprovação)`,
-      depois: { nome, email, role: "membro", status: "pendente" },
-    });
-    depoisDaResposta(
-      emailsDosAdmins().then((admins) => enviarEmailDireto(admins, (ctx) => emailCadastroPendente({ nome, email }, ctx))),
-      "email",
-    );
-    return ir("/login?erro=pendente-novo", email);
+    // Conta NOVA só pelo cadastro institucional (unidade, matrícula, e-mail confirmado e senha) — o Google se vincula
+    // depois, no Perfil.
+    return ir("/cadastro?erro=google-sem-cadastro");
   } catch (e) {
     console.error("[google] falha:", (e as Error).message);
     return falhou("google", "interno");

@@ -80,6 +80,8 @@ O token e o segredo ficam cifrados com a `INTEGRACOES_CHAVE` e nunca voltam à t
    **Tentar de novo** (Configuração → Trello).
 
 ## E-mail (Resend)
+**Obrigatório para o cadastro e para a senha:** o código de 6 dígitos que confirma o e-mail institucional (cadastro) e a
+senha (Perfil e "Esqueci a senha") sai pelo Resend — sem ele, a tela avisa "O envio de e-mails não está configurado".
 Envia por e-mail os avisos do sino (tarefa atribuída, menção, convite, prazo, lembrete…), o aviso de cadastro novo aos
 ADMs e a liberação de acesso à pessoa aprovada.
 1. **Domínio no Resend** (resend.com → Domínios → governarv.com.br, região São Paulo):
@@ -100,9 +102,10 @@ Os avisos de evento saem na hora; os de prazo e lembrete, na conferência a cada
 `INTEGRACOES_CHAVE`). A chave fica cifrada e nunca volta à tela.
 
 ## Login com Google (OAuth)
-Quem pode entrar: o e-mail JÁ cadastrado e ATIVO entra direto; e-mail cadastrado pendente/inativo recebe o aviso na
-tela de login; e-mail NOVO vira cadastro **pendente de aprovação** (os ADMs recebem o e-mail, com o Resend ativo). O 1º
-usuário do sistema nasce pelo cadastro com senha. Quem se cadastra pelo Google não tem senha (entra só pelo Google).
+Quem pode entrar: o e-mail JÁ cadastrado e ATIVO (ou a conta Google vinculada) entra direto; cadastrado pendente/inativo
+recebe o aviso na tela de login; e-mail NOVO é levado ao **cadastro institucional** (a conta nunca nasce pelo Google — nome
+completo, matrícula, unidade, e-mail @rioverde.go.gov.br confirmado por código e senha); depois de aprovado, vincula-se o
+Google no Perfil. Contas antigas que entravam só pelo Google veem no Perfil "Criar senha" (obrigatória).
 
 1. **Google Cloud Console** (console.cloud.google.com) → crie/escolha um projeto.
 2. **APIs e serviços → Tela de consentimento OAuth**: tipo **Externo**; nome do app, e-mail de suporte, domínio

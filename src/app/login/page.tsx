@@ -11,10 +11,15 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ erro?: string | string[]; motivo?: string | string[] }> }) {
   if (await getUsuarioAtual()) redirect("/painel");
   const integ = await getIntegracoes();
-  const turnstile = { enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey };
+  const sp = await searchParams;
   return (
     <main className="flex min-h-dvh items-center justify-center bg-surface-2 p-4">
-      <AuthForm mode="login" turnstile={turnstile} google={googleConfigurado(integ)} googleConta={lerContaLembrada((await cookies()).get(COOKIE_GOOGLE_CONTA)?.value)} erroInicial={mensagemErroLogin((await searchParams).erro, (await searchParams).motivo)} />
+      <AuthForm
+        turnstile={{ enabled: turnstileConfigurado(integ), siteKey: integ.turnstile.siteKey }}
+        google={googleConfigurado(integ)}
+        googleConta={lerContaLembrada((await cookies()).get(COOKIE_GOOGLE_CONTA)?.value)}
+        erroInicial={mensagemErroLogin(sp.erro, sp.motivo)}
+      />
     </main>
   );
 }

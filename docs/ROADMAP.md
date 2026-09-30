@@ -1232,11 +1232,14 @@ que envia um e-mail; os avisos do sino (atribuída, menção, convite, prazo, le
 escolhe quais no Perfil —, os ADMs recebem o aviso de cadastro novo e a pessoa aprovada, o de acesso liberado. Os de prazo e
 lembrete saem na conferência a cada 5 minutos.
 ✅ **Login com Google:** Integrações → Login com Google (Client ID + secret cifrado, a URI de redirecionamento a copiar e o
-teste); "Entrar com Google" no login e no cadastro (OAuth + PKCE); e-mail cadastrado entra, e-mail novo vira cadastro
-pendente de aprovação (os ADMs recebem o e-mail).
+teste); "Entrar com Google" no login (OAuth + PKCE); e-mail cadastrado entra (e-mail novo vai ao cadastro institucional).
 ✅ **Conta Google vinculada + login com um clique:** Perfil → "Conta Google" vincula a conta (entra mesmo com e-mail diferente
 do cadastro) e desvincula; o login lembra a conta no aparelho ("Continuar como …" entra direto, "Usar outra conta Google") e as
 falhas dizem o motivo (sessão expirada, autorização recusada, e-mail de outra conta).
+✅ **Cadastro institucional + senha confirmada por código:** cadastro com nome completo, matrícula, unidade e e-mail
+@rioverde.go.gov.br confirmado por um código de 6 dígitos (captcha antes de cada envio, reenvio cronometrado); "Esqueci a
+senha" e a troca de senha do Perfil também pelo código; nome, e-mail, matrícula e unidade só o ADM altera; conta nova não
+nasce pelo Google (vincula-se no Perfil) e os avisos por e-mail podem ir ao institucional ou à conta Google.
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

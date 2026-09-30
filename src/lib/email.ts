@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { usuarios } from "@/db/schema";
 import { getAparencia } from "./aparencia";
 import { getDb } from "./db";
-import { type ContextoEmail, type ConteudoEmail, emailDaNotificacao, lerPrefsEmail, NOME_SISTEMA_PADRAO, querEmail } from "./email-core";
+import { type ContextoEmail, type ConteudoEmail, emailDaNotificacao, enderecoDosAvisos, lerPrefsEmail, NOME_SISTEMA_PADRAO, querEmail } from "./email-core";
 import { comandoDevolverEmails, comandoReservarEmails, consultaPendentesEmail } from "./email-sql";
 import type { EmailResend } from "./resend-api";
 import { MAX_LOTE_RESEND } from "./resend-api";
@@ -66,7 +66,7 @@ export async function enviarEmailsPendentes(limite = 50): Promise<{ enviados: nu
       }
       const tipo = (TIPOS_NOTIFICACAO as readonly string[]).includes(p.tipo) ? (p.tipo as TipoNotificacao) : "automacao";
       const c = emailDaNotificacao({ tipo, titulo: p.titulo, texto: p.texto, link: p.link, atorNome: p.atorNome }, ctx);
-      envio.push({ id: p.id, email: paraResend(cfg.remetente, [p.email], c) });
+      envio.push({ id: p.id, email: paraResend(cfg.remetente, [enderecoDosAvisos(prefs, p.email, p.googleEmail)], c) });
     }
     for (const lote of emParticoes(envio, MAX_LOTE_RESEND)) {
       try {

@@ -100,10 +100,28 @@ export const usuarios = sqliteTable(
     // Conta Google VINCULADA (migração `0066`): o `sub` do Google (identificador estável) + o e-mail dela (exibição).
     googleSub: text("google_sub"),
     googleEmail: text("google_email"),
+    // Cadastro institucional (migração `0067`): a UNIDADE em que trabalha (só o ADM altera) e quando o e-mail foi CONFIRMADO.
+    reparticaoId: integer("reparticao_id").references((): AnySQLiteColumn => reparticoes.id, { onDelete: "set null" }),
+    emailVerificadoEm: text("email_verificado_em"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [uniqueIndex("usuarios_email_uq").on(t.email), uniqueIndex("usuarios_google_sub_uq").on(t.googleSub)],
+);
+
+/** CÓDIGOS de confirmação por e-mail (migração `0067`): só o HASH; UM por e-mail + finalidade (reenviar substitui). */
+export const codigosEmail = sqliteTable(
+  "codigos_email",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(),
+    finalidade: text("finalidade", { enum: ["cadastro", "senha"] }).notNull(),
+    codigoHash: text("codigo_hash").notNull(),
+    tentativas: integer("tentativas").notNull().default(0),
+    expiraEm: text("expira_em").notNull(),
+    enviadoEm: text("enviado_em").notNull(),
+  },
+  (t) => [uniqueIndex("codigos_email_uq").on(t.email, t.finalidade)],
 );
 
 /** Sessões (login por cookie). Guardamos apenas o hash do token. */

@@ -112,6 +112,41 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `exigirAdmin`. Uso: `const g = await exigirX(); if ("erro" in g) return g.erro;`.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
+- **CADASTRO INSTITUCIONAL + SENHA CONFIRMADA POR CÓDIGO (migração `0067`, aditiva — `usuarios.reparticao_id` FK set null
+  = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
+  - **Cadastro** (`/cadastro` = `CadastroForm`, 2 etapas): **nome completo** (nome + sobrenome — `nomeCompleto`),
+    **matrícula**, **unidade** (`SelectField` + **`OpcoesUnidades`** por órgão — `listarUnidadesTrabalho`: sem ocultas nem a
+    "Geral"; o servidor confere com `unidadeDeTrabalhoValida`), **e-mail INSTITUCIONAL** `@rioverde.go.gov.br`
+    (`DOMINIO_INSTITUCIONAL`/`emailInstitucional`, núcleo puro **`cadastro-core.ts`** — sem zod, leve no navegador), senha +
+    confirmação → "Enviar código" → o **código de 6 dígitos** confirma o e-mail e cria a conta **pendente** (os ADMs recebem o
+    e-mail). Só o PRIMEIRO usuário do sistema (vira ADM) entra sem código (`semCodigo` — ainda não há envio configurado).
+  - **Código** (núcleo puro **`codigo-email-core.ts`**, testado: `gerarCodigo` uniforme por rejeição, `hashCodigo` amarrado ao
+    e-mail + finalidade, validade `VALIDADE_CODIGO_MIN`=10, reenvio `REENVIO_CODIGO_S`=60, `MAX_TENTATIVAS_CODIGO`=5,
+    `conferirCodigoRegistro`, `MENSAGEM_CODIGO`; D1 em **`codigo-email.ts`**: `emitirCodigo` (upsert — reenviar substitui),
+    `consumirCodigo` (errado conta a tentativa; certo APAGA — não vale duas vezes), `descartarCodigo`). Rota **`POST
+    /api/auth/codigo`** (`solicitarCodigoSchema {email, finalidade cadastro|senha, token}`): **captcha ANTES de cada envio**
+    (Turnstile, quando o ADM ativou), exige o **Resend** (503 sem ele), `cadastro` = institucional e ainda não cadastrado;
+    `senha` = com sessão, SEMPRE o e-mail da conta; sem sessão, a resposta é a MESMA exista ou não a conta (não enumera);
+    reenvio antes do cronômetro = 429 `{esperarS}`; falha no envio descarta o código. E-mail `emailCodigo` (o código em
+    `layoutEmail.destaque`).
+  - **Senha é obrigatória e sempre confirmada por código:** `POST /api/auth/senha` ("Esqueci a senha" — `/recuperar-senha` =
+    `RecuperarSenhaForm`; também CRIA a senha de quem só entrava pelo Google) e `POST /api/perfil/senha` (`{novaSenha,
+    codigo}` — sem a senha atual: o código prova a posse do e-mail; `sessaoAtualId` mantém a sessão atual e encerra as
+    OUTRAS). Conta SEM senha (`SENHA_INUTILIZAVEL`) vê no Perfil "Criar senha" com o aviso de que é obrigatória.
+  - **Peças de tela** (catalogadas): **`CartaoAuth`** (a moldura única de login/cadastro/senha — `etapa`, `largo`, form
+    `noValidate`: as mensagens são as nossas, em pt-BR) + `ErroAuth` + `ConcluidoAuth`; **`CodigoEmail.tsx`** —
+    `useCaptcha` (o widget + `renovar`: o token vale uma vez), `useCodigoEmail` (envio + cronômetro), `CampoCodigo`
+    (numérico, `one-time-code`) e `EtapaCodigo` (destino, campo, "Reenviar código em 0:45" → captcha + Reenviar, "Corrigir os
+    dados"). `SelectField` ganhou `error`. O `AuthForm` ficou só com o LOGIN ("Esqueci a senha" + "Criar conta"; saiu o
+    "Manter-me conectado", que não fazia nada).
+  - **Só o ADM altera nome, e-mail, matrícula e unidade:** o `perfilSchema` aceita SÓ apelido + foto (o resto é descartado);
+    o Perfil mostra esses dados em `CampoCongelado` (selo "Confirmado" no e-mail) com a nota; `UsuariosAdmin` ganhou a coluna
+    **Unidade**, o ✓ do e-mail confirmado e o seletor de unidade no "Editar usuário" (`adminUsuarioSchema.reparticaoId`; a
+    unidade atual oculta continua valendo — só a que MUDOU é validada).
+  - **Google:** a conta NOVA nunca nasce pelo Google — o callback leva a `/cadastro?erro=google-sem-cadastro`; o Google se
+    vincula depois, no Perfil. **Avisos por e-mail:** Perfil → E-mail escolhe **onde** chegam — "E-mail institucional" | "Conta
+    Google" (`PrefsEmail.destino`, só com o Google vinculado; `enderecoDosAvisos` no envio dos pendentes). O código de
+    confirmação vai SEMPRE ao institucional.
 
 ## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
@@ -2984,13 +3019,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   emissor/público/validade/e-mail verificado, `mensagemErroLogin`, `SENHA_INUTILIZAVEL`) + **`google-oauth.ts`**
   (`googleDaConfig`, `trocarCodigo` — host fixo, 10 s, sem redirecionamento). `GET /api/auth/google` (inicia) e `GET
   /api/auth/google/callback`: e-mail cadastrado ATIVO → sessão + auditoria "entrou com o Google"; pendente/inativo → o aviso;
-  e-mail NOVO → usuário `membro`/`pendente` com senha inutilizável + e-mail aos ADMs (o 1º usuário do sistema nunca nasce
-  pelo Google); erro → `/login?erro=<código>`. `AuthForm` ganhou `google` (botão "Entrar/Criar conta com Google",
-  `IconGoogle`) e `erroInicial`; as páginas `login`/`cadastro` leem `?erro=`. Setup em `docs/INTEGRACOES.md`.
+  e-mail NOVO → `/cadastro?erro=google-sem-cadastro` (a conta nasce SÓ pelo cadastro institucional — ver "Autenticação");
+  erro → `/login?erro=<código>`. `AuthForm` (login) tem `google` (botão "Entrar com Google", `IconGoogle`) e `erroInicial`;
+  as páginas `login`/`cadastro` leem `?erro=`. Setup em `docs/INTEGRACOES.md`.
   **VÍNCULO da conta Google + login com um clique (migração `0066`, aditiva — `usuarios.google_sub` ÚNICO + `google_email`):**
   o login acha o usuário pelo `sub` do Google (mesmo com um e-mail DIFERENTE do cadastro) — regra pura **`decidirLoginGoogle`**:
   vinculada › mesmo e-mail sem outra conta (vincula na hora) › mesmo e-mail com OUTRA conta = recusa (`google-outra-conta`) ›
-  novo pendente; o cadastro novo já nasce vinculado. Perfil → cartão **"Conta Google"** (só com o Google ativo): "Vincular conta
+  `novo` (vai ao cadastro institucional). Perfil → cartão **"Conta Google"** (só com o Google ativo): "Vincular conta
   Google" (`/api/auth/google?vincular=1` → o cookie curto leva o MODO `e`/`v`; `podeVincular` recusa a conta de outro usuário →
   `?google=em-uso`; `MENSAGEM_VINCULO`) e "Desvincular" (`DELETE /api/perfil/google`; recusado a quem só entra pelo Google — sem
   senha). A conta que entrou fica LEMBRADA no aparelho (cookie httpOnly `pca_google_conta`, 1 ano): o login mostra "Continuar

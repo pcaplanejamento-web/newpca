@@ -29,30 +29,6 @@ export type UsuarioSessao = {
   status: "ativo" | "pendente" | "inativo";
 };
 
-/**
- * Troca a senha do usuário: confere a senha atual e grava o novo hash.
- * Retorna `false` se a senha atual estiver incorreta (o chamado decide a msg).
- */
-export async function atualizarSenha(
-  usuarioId: number,
-  atual: string,
-  nova: string,
-): Promise<boolean> {
-  const db = getDb();
-  const [row] = await db
-    .select({ senhaHash: usuarios.senhaHash })
-    .from(usuarios)
-    .where(eq(usuarios.id, usuarioId))
-    .limit(1);
-  if (!row || !(await verificarSenha(atual, row.senhaHash))) return false;
-  const novoHash = await hashSenha(nova);
-  await db
-    .update(usuarios)
-    .set({ senhaHash: novoHash, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
-    .where(eq(usuarios.id, usuarioId));
-  return true;
-}
-
 // ---------------------------------------------------------------------------
 // sessões
 // ---------------------------------------------------------------------------
@@ -73,6 +49,14 @@ export async function definirCookieSessao(token: string): Promise<void> {
     path: "/",
     maxAge: SESSAO_DIAS * 86_400,
   });
+}
+
+/** O id da sessão ATUAL (pelo cookie) — trocar a senha encerra as OUTRAS sessões e mantém esta. */
+export async function sessaoAtualId(): Promise<number | null> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  if (!token) return null;
+  const [r] = await getDb().select({ id: sessoes.id }).from(sessoes).where(eq(sessoes.tokenHash, await sha256Hex(token))).limit(1);
+  return r?.id ?? null;
 }
 
 export async function encerrarSessaoAtual(): Promise<void> {

@@ -13,7 +13,7 @@ const JANELA_EMAIL = "-2 days";
 
 /**
  * As notificações cujo E-MAIL está PENDENTE (as mais antigas primeiro), com o destinatário (e-mail, status) e a
- * preferência de e-mail dele (JSON cru — `lerPrefsEmail` interpreta; NULL = padrão).
+ * conta Google vinculada (destino opcional dos avisos) e a preferência de e-mail dele (JSON cru — `lerPrefsEmail` interpreta; NULL = padrão).
  */
 export function consultaPendentesEmail(db: Db, limite: number) {
   return db
@@ -25,6 +25,7 @@ export function consultaPendentesEmail(db: Db, limite: number) {
       link: notificacoes.link,
       atorNome: notificacoes.atorNome,
       email: usuarios.email,
+      googleEmail: usuarios.googleEmail,
       status: usuarios.status,
       prefs: preferenciasTabela.valor,
     })

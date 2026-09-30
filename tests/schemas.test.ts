@@ -14,6 +14,8 @@ import {
   cadastroSchema,
   perfilSchema,
   preferenciasPerfilSchema,
+  redefinirSenhaSchema,
+  solicitarCodigoSchema,
   trocarSenhaSchema,
 } from "../src/lib/auth-validation.ts";
 import { aparenciaSchema } from "../src/lib/theme-validation.ts";
@@ -37,32 +39,48 @@ import { uploadSchema } from "../src/lib/validation.ts";
 // um próximo passo de DRY para habilitar esses testes.
 
 describe("auth-validation", () => {
-  it("cadastroSchema normaliza e-mail e exige senha >= 8", () => {
-    const r = cadastroSchema.parse({ nome: " Ana ", email: "  ANA@X.COM ", senha: "12345678" });
-    assert.equal(r.email, "ana@x.com");
-    assert.equal(r.nome, "Ana");
-    assert.equal(cadastroSchema.safeParse({ nome: "Ana", email: "ana@x.com", senha: "1234" }).success, false);
+  it("cadastroSchema: nome completo, matrícula, unidade, e-mail INSTITUCIONAL e senha >= 8", () => {
+    const base = { nome: "  Ana   Souza ", matricula: " 123 ", reparticaoId: 4, email: "  ANA@RIOVERDE.GO.GOV.BR ", senha: "12345678", codigo: "012345" };
+    const r = cadastroSchema.parse(base);
+    assert.equal(r.email, "ana@rioverde.go.gov.br");
+    assert.equal(r.nome, "Ana Souza");
+    assert.equal(r.matricula, "123");
+    assert.equal(cadastroSchema.safeParse({ ...base, nome: "Ana" }).success, false); // sem sobrenome
+    assert.equal(cadastroSchema.safeParse({ ...base, email: "ana@gmail.com" }).success, false);
+    assert.equal(cadastroSchema.safeParse({ ...base, email: "ana@rioverde.go.gov.br.com" }).success, false);
+    assert.equal(cadastroSchema.safeParse({ ...base, matricula: "  " }).success, false);
+    assert.equal(cadastroSchema.safeParse({ ...base, reparticaoId: 0 }).success, false);
+    assert.equal(cadastroSchema.safeParse({ ...base, senha: "1234" }).success, false);
+    assert.equal(cadastroSchema.safeParse({ ...base, codigo: "12a456" }).success, false);
+    assert.equal(cadastroSchema.safeParse({ ...base, codigo: undefined }).success, true); // 1º acesso do sistema
   });
 
-  it("perfilSchema valida foto (data-url) e aceita vazio p/ limpar", () => {
-    assert.equal(perfilSchema.safeParse({ nome: "Ana", email: "a@x.com" }).success, true);
-    assert.equal(
-      perfilSchema.safeParse({ nome: "Ana", email: "a@x.com", foto: "data:image/png;base64,AAAA" }).success,
-      true,
-    );
-    assert.equal(perfilSchema.safeParse({ nome: "Ana", email: "a@x.com", foto: "" }).success, true);
-    assert.equal(perfilSchema.safeParse({ nome: "Ana", email: "a@x.com", foto: "http://x/a.png" }).success, false);
+  it("perfilSchema: só apelido e foto (nome/e-mail/matrícula não passam); foto data-url ou vazio", () => {
+    assert.deepEqual(perfilSchema.parse({ nome: "Outro", email: "o@x.com", matricula: "9", apelido: "Ana" }), { apelido: "Ana" });
+    assert.equal(perfilSchema.safeParse({ foto: "data:image/png;base64,AAAA" }).success, true);
+    assert.equal(perfilSchema.safeParse({ foto: "" }).success, true);
+    assert.equal(perfilSchema.safeParse({ foto: "http://x/a.png" }).success, false);
   });
 
-  it("trocarSenhaSchema exige nova senha >= 8", () => {
-    assert.equal(trocarSenhaSchema.safeParse({ senhaAtual: "x", novaSenha: "12345678" }).success, true);
-    assert.equal(trocarSenhaSchema.safeParse({ senhaAtual: "x", novaSenha: "123" }).success, false);
+  it("trocarSenhaSchema e redefinirSenhaSchema: senha >= 8 + código de 6 dígitos", () => {
+    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "12345678", codigo: "000111" }).success, true);
+    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "123", codigo: "000111" }).success, false);
+    assert.equal(trocarSenhaSchema.safeParse({ novaSenha: "12345678" }).success, false);
+    assert.equal(redefinirSenhaSchema.safeParse({ email: "a@x.com", senha: "12345678", codigo: "123456" }).success, true);
+    assert.equal(redefinirSenhaSchema.safeParse({ email: "a@x.com", senha: "12345678", codigo: "12345" }).success, false);
+  });
+
+  it("solicitarCodigoSchema: finalidade cadastro | senha", () => {
+    assert.equal(solicitarCodigoSchema.safeParse({ email: "a@x.com", finalidade: "cadastro" }).success, true);
+    assert.equal(solicitarCodigoSchema.safeParse({ email: "a@x.com", finalidade: "outra" }).success, false);
   });
 
   it("adminUsuarioSchema: todos opcionais, role/status por enum", () => {
     assert.equal(adminUsuarioSchema.safeParse({}).success, true);
     assert.equal(adminUsuarioSchema.safeParse({ role: "gestor" }).success, true);
     assert.equal(adminUsuarioSchema.safeParse({ role: "root" }).success, false);
+    assert.equal(adminUsuarioSchema.safeParse({ reparticaoId: null }).success, true);
+    assert.equal(adminUsuarioSchema.safeParse({ reparticaoId: 3 }).success, true);
   });
 });
 

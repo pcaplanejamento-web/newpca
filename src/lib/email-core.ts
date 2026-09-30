@@ -34,24 +34,29 @@ function umaLinha(s: string, max = 150): string {
  */
 export function layoutEmail(
   ctx: ContextoEmail,
-  m: { assunto: string; titulo: string; paragrafos: string[]; botao?: { rotulo: string; url: string }; rodape?: string },
+  m: { assunto: string; titulo: string; paragrafos: string[]; destaque?: string; botao?: { rotulo: string; url: string }; rodape?: string },
 ): ConteudoEmail {
   const nome = escaparHtml(ctx.nomeSistema || NOME_SISTEMA_PADRAO);
   const paras = m.paragrafos
     .filter((p) => p.trim())
     .map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.55;color:#374151">${escaparHtml(p)}</p>`)
     .join("");
+  // O DESTAQUE (ex.: o código de confirmação): grande, espaçado e fácil de copiar.
+  const destaque = m.destaque
+    ? `<p style="margin:8px 0 16px;font-family:'SFMono-Regular',Consolas,monospace;font-size:30px;font-weight:700;letter-spacing:8px;color:#111827">${escaparHtml(m.destaque)}</p>`
+    : "";
   const botao = m.botao
     ? `<p style="margin:20px 0 4px"><a href="${escaparHtml(m.botao.url)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 18px;border-radius:8px">${escaparHtml(m.botao.rotulo)}</a></p>`
     : "";
   const rodape = escaparHtml(m.rodape ?? "Você recebeu este e-mail porque participa da plataforma. Ajuste os avisos por e-mail no seu Perfil.");
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaparHtml(m.assunto)}</title></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Inter,Roboto,Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px"><tr><td style="padding:18px 24px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#6b7280">${nome}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:19px;line-height:1.35;color:#111827">${escaparHtml(m.titulo)}</h1>${paras}${botao}</td></tr><tr><td style="padding:14px 24px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.5;color:#9ca3af">${rodape}</td></tr></table></td></tr></table></body></html>`;
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaparHtml(m.assunto)}</title></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Inter,Roboto,Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px"><tr><td style="padding:18px 24px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#6b7280">${nome}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:19px;line-height:1.35;color:#111827">${escaparHtml(m.titulo)}</h1>${paras}${destaque}${botao}</td></tr><tr><td style="padding:14px 24px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.5;color:#9ca3af">${rodape}</td></tr></table></td></tr></table></body></html>`;
   const texto = [
     ctx.nomeSistema || NOME_SISTEMA_PADRAO,
     "",
     m.titulo,
     "",
     ...m.paragrafos.filter((p) => p.trim()),
+    ...(m.destaque ? ["", m.destaque] : []),
     ...(m.botao ? ["", `${m.botao.rotulo}: ${m.botao.url}`] : []),
     "",
     "—",
@@ -109,6 +114,18 @@ export function emailAcessoLiberado(p: { nome: string }, ctx: ContextoEmail): Co
   });
 }
 
+/** O CÓDIGO de confirmação (cadastro ou senha) — 6 dígitos, com a validade. */
+export function emailCodigo(p: { codigo: string; finalidade: "cadastro" | "senha"; validadeMin: number }, ctx: ContextoEmail): ConteudoEmail {
+  const cad = p.finalidade === "cadastro";
+  return layoutEmail(ctx, {
+    assunto: `${p.codigo} é o seu código de confirmação`,
+    titulo: cad ? "Confirme o seu e-mail institucional" : "Confirme a sua nova senha",
+    paragrafos: [cad ? "Use o código abaixo para confirmar o e-mail e concluir o cadastro na plataforma." : "Use o código abaixo para confirmar a nova senha da sua conta."],
+    destaque: p.codigo,
+    rodape: `O código vale por ${p.validadeMin} minutos. Se não foi você quem pediu, ignore este e-mail — nada será alterado.`,
+  });
+}
+
 /** O e-mail de TESTE da tela Integrações. */
 export function emailTeste(ctx: ContextoEmail): ConteudoEmail {
   return layoutEmail(ctx, {
@@ -126,17 +143,25 @@ export const CHAVE_PREF_EMAIL = "email:notificacoes";
 export const TIPOS_EMAIL = TIPOS_NOTIFICACAO;
 /** Ligados por padrão: o que pede ação da pessoa. Comentário, automação e resposta ficam só no sino. */
 export const TIPOS_EMAIL_PADRAO: readonly TipoNotificacao[] = ["atribuida", "mencionada", "convite", "vence_amanha", "atrasada", "lembrete"];
-export type PrefsEmail = { ligado: boolean; tipos: TipoNotificacao[] };
-export const PREFS_EMAIL_PADRAO: PrefsEmail = { ligado: true, tipos: [...TIPOS_EMAIL_PADRAO] };
+/** ONDE os avisos chegam: no e-mail institucional (o padrão) ou na conta Google vinculada. */
+export const DESTINOS_EMAIL = ["institucional", "google"] as const;
+export type DestinoEmail = (typeof DESTINOS_EMAIL)[number];
+export type PrefsEmail = { ligado: boolean; tipos: TipoNotificacao[]; destino: DestinoEmail };
+export const PREFS_EMAIL_PADRAO: PrefsEmail = { ligado: true, tipos: [...TIPOS_EMAIL_PADRAO], destino: "institucional" };
 
 /** Lê a preferência gravada (qualquer JSON → válido; sem nada = o padrão). */
 export function lerPrefsEmail(valor: unknown): PrefsEmail {
   if (!valor || typeof valor !== "object") return { ...PREFS_EMAIL_PADRAO, tipos: [...PREFS_EMAIL_PADRAO.tipos] };
-  const v = valor as { ligado?: unknown; tipos?: unknown };
+  const v = valor as { ligado?: unknown; tipos?: unknown; destino?: unknown };
   const tipos = Array.isArray(v.tipos)
     ? TIPOS_EMAIL.filter((t) => (v.tipos as unknown[]).includes(t))
     : [...TIPOS_EMAIL_PADRAO];
-  return { ligado: typeof v.ligado === "boolean" ? v.ligado : true, tipos };
+  return { ligado: typeof v.ligado === "boolean" ? v.ligado : true, tipos, destino: v.destino === "google" ? "google" : "institucional" };
+}
+
+/** O endereço que recebe os avisos: a conta Google vinculada quando escolhida (e existe); senão, o institucional. */
+export function enderecoDosAvisos(prefs: PrefsEmail, email: string, googleEmail: string | null | undefined): string {
+  return prefs.destino === "google" && googleEmail ? googleEmail : email;
 }
 
 /** A pessoa quer receber ESTE tipo por e-mail? */

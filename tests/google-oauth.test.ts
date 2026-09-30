@@ -100,7 +100,8 @@ describe("login com Google — núcleo", () => {
   });
 
   it("mensagens da volta: conhecidas e desconhecidas", () => {
-    assert.match(mensagemErroLogin("pendente-novo") ?? "", /pendente/);
+    assert.match(mensagemErroLogin("pendente") ?? "", /pendente/);
+    assert.match(mensagemErroLogin("google-sem-cadastro") ?? "", /e-mail institucional/);
     assert.equal(mensagemErroLogin("<script>"), null);
     assert.equal(mensagemErroLogin(undefined), null);
   });

@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { dfdProtocolos, dfds, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { RESPONSAVEIS_VAZIO, type Responsaveis, responsaveisEfetivos } from "./reparticao-responsaveis";
@@ -148,4 +148,27 @@ export async function unidadesConferencia(ids: (number | null | undefined)[]): P
     responsaveisPorReparticao(lotes.flat()),
   ]);
   return linhas.flat().map((l) => ({ ...l, responsaveis: resp[l.id] ?? RESPONSAVEIS_VAZIO }));
+}
+
+/** Uma unidade que se pode ESCOLHER como local de trabalho (cadastro, ADM): nem oculta nem a "Geral" virtual. */
+export type UnidadeTrabalho = { id: number; codigo: string; nome: string; orgao: string | null };
+
+/** As unidades de trabalho, agrupáveis pelo órgão (na ordem dos órgãos e, dentro deles, na das unidades). */
+export async function listarUnidadesTrabalho(): Promise<UnidadeTrabalho[]> {
+  return getDb()
+    .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgao: orgaos.nome })
+    .from(reparticoes)
+    .leftJoin(orgaos, eq(orgaos.id, reparticoes.orgaoId))
+    .where(and(eq(reparticoes.oculto, false), ne(reparticoes.codigo, "GERAL")))
+    .orderBy(sql`${orgaos.ordem} IS NULL`, asc(orgaos.ordem), asc(reparticoes.ordem), asc(reparticoes.id));
+}
+
+/** A unidade pode ser escolhida como local de trabalho? */
+export async function unidadeDeTrabalhoValida(id: number): Promise<boolean> {
+  const [r] = await getDb()
+    .select({ id: reparticoes.id })
+    .from(reparticoes)
+    .where(and(eq(reparticoes.id, id), eq(reparticoes.oculto, false), ne(reparticoes.codigo, "GERAL")))
+    .limit(1);
+  return !!r;
 }
