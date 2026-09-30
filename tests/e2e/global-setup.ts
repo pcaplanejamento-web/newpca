@@ -19,8 +19,8 @@ export default async function globalSetup(): Promise<void> {
   const hash = await hashSenha(E2E_SENHA);
   const sql = [
     `DELETE FROM usuarios WHERE email = '${E2E_EMAIL}';`,
-    `INSERT INTO usuarios (email, nome, senha_hash, role, status)`,
-    `VALUES ('${E2E_EMAIL}', 'E2E Admin', '${hash}', 'admin', 'ativo');`,
+    `INSERT INTO usuarios (email, nome, senha_hash, role, status, papel_id)`,
+    `VALUES ('${E2E_EMAIL}', 'E2E Admin', '${hash}', 'admin', 'ativo', (SELECT id FROM papeis WHERE chave = 'admin'));`,
   ].join("\n");
   mkdirSync("tests/e2e/.tmp", { recursive: true });
   const file = "tests/e2e/.tmp/seed.sql";

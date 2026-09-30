@@ -70,9 +70,30 @@ export const itens = sqliteTable(
 );
 
 /**
- * Usuários da plataforma. `role` = papel (RBAC básico); `status` controla o
- * acesso (o primeiro usuário cadastrado vira admin/ativo; os demais entram
- * como membro/pendente até um admin aprovar).
+ * PAPÉIS (migração `0069`): o que a pessoa FAZ em cada tela — `capacidades` = JSON {tela: ações[]} (Visualizar ·
+ * Manipular · Importar · Exportar · Excluir · Configurar; núcleo `papeis-core.ts`). O GRUPO decide QUAIS telas; o papel,
+ * as ações. `chave` = papel do SISTEMA (admin | gestor | membro; NULL = criado pelo ADM); UM é o padrão dos cadastros.
+ */
+export const papeis = sqliteTable(
+  "papeis",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    descricao: text("descricao"),
+    chave: text("chave"),
+    capacidades: text("capacidades").notNull().default("{}"),
+    padraoCadastro: integer("padrao_cadastro", { mode: "boolean" }).notNull().default(false),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("papeis_nome_uq").on(t.nome), uniqueIndex("papeis_chave_uq").on(t.chave)],
+);
+
+/**
+ * Usuários da plataforma. `papelId` = o PAPEL (o que faz em cada tela); `role` = o ESPELHO do papel (admin | gestor |
+ * membro — só distingue o Administrador para os leitores antigos); `status` controla o acesso (o primeiro usuário
+ * cadastrado vira Administrador ativo; os demais entram com o papel padrão, pendentes até um ADM aprovar).
  */
 export const usuarios = sqliteTable(
   "usuarios",
@@ -105,10 +126,16 @@ export const usuarios = sqliteTable(
     // Cadastro institucional (migração `0067`): a UNIDADE em que trabalha (só o ADM altera) e quando o e-mail foi CONFIRMADO.
     reparticaoId: integer("reparticao_id").references((): AnySQLiteColumn => reparticoes.id, { onDelete: "set null" }),
     emailVerificadoEm: text("email_verificado_em"),
+    // O PAPEL da pessoa (migração `0069`; NULL = o papel do sistema de mesma chave que o `role`).
+    papelId: integer("papel_id").references((): AnySQLiteColumn => papeis.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [uniqueIndex("usuarios_email_uq").on(t.email), uniqueIndex("usuarios_google_sub_uq").on(t.googleSub)],
+  (t) => [
+    uniqueIndex("usuarios_email_uq").on(t.email),
+    uniqueIndex("usuarios_google_sub_uq").on(t.googleSub),
+    index("usuarios_papel_idx").on(t.papelId),
+  ],
 );
 
 /** CÓDIGOS de confirmação por e-mail (migração `0067`): só o HASH; UM por e-mail + finalidade (reenviar substitui). */

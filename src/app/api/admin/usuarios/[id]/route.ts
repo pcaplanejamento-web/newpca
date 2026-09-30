@@ -9,6 +9,7 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { comandoEncerrarSessoesSeInativo, comandoExcluirUsuario, comandoTrocarPapel, comandoTrocarStatus, consultaPapelDaChave } from "@/lib/papeis-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -56,17 +57,27 @@ export async function PATCH(
   if (reparticaoId != null && reparticaoId !== antes.reparticaoId && !(await unidadeDeTrabalhoValida(reparticaoId)))
     return erro("Selecione uma unidade válida.", 422);
 
+  // PAPEL e STATUS primeiro, pelos comandos com a TRAVA do último Administrador ativo (no próprio UPDATE — duas telas de
+  // ADM ao mesmo tempo nunca deixam o sistema sem ADM); recusado ⇒ 409 e nada mais é gravado.
+  if (role !== undefined) {
+    const [papel] = await consultaPapelDaChave(db, role);
+    if (!papel) return erro("Papel não encontrado — recarregue a tela.", 409);
+    if ((await comandoTrocarPapel(db, id, papel.id)).length === 0)
+      return erro("Não é possível tirar o último Administrador ativo — torne outra pessoa Administrador antes.", 409);
+  }
+  if (status !== undefined) {
+    // Sem estar ativa, a pessoa perde as sessões no mesmo lote (reativar nunca ressuscita uma sessão antiga).
+    const [trocou] = await db.batch([comandoTrocarStatus(db, id, status), comandoEncerrarSessoesSeInativo(db, id)]);
+    if (trocou.length === 0) return erro("Não é possível desativar o último Administrador ativo.", 409);
+  }
   const set = {
     ...(nome !== undefined ? { nome } : {}),
     ...(email !== undefined ? { email } : {}),
     ...(matricula !== undefined ? { matricula: matricula ? matricula : null } : {}),
     ...(cargo !== undefined ? { cargo: cargo ? cargo : null } : {}),
     ...(reparticaoId !== undefined ? { reparticaoId } : {}),
-    ...(role !== undefined ? { role } : {}),
-    ...(status !== undefined ? { status } : {}),
-    atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
   };
-  await db.update(usuarios).set(set).where(eq(usuarios.id, id));
+  if (Object.keys(set).length > 0) await db.update(usuarios).set({ ...set, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(usuarios.id, id));
   // Acesso LIBERADO (pendente → ativo): a pessoa recebe o aviso por e-mail (com o Resend ativo; depois da resposta).
   if (antes.status === "pendente" && status === "ativo") {
     const destino = email ?? antes.email;
@@ -107,7 +118,8 @@ export async function DELETE(
   if (id === guard.u.id) return erro("Você não pode excluir a si mesmo.");
   const db = getDb();
   const [alvo] = await db.select({ nome: usuarios.nome, email: usuarios.email }).from(usuarios).where(eq(usuarios.id, id)).limit(1);
-  await db.delete(usuarios).where(eq(usuarios.id, id));
-  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "usuario", entidadeId: id, resumo: `Usuário ${alvo?.nome ?? id} excluído`, antes: alvo ?? null });
+  if (!alvo) return erro("Usuário não encontrado.", 404);
+  if ((await comandoExcluirUsuario(db, id)).length === 0) return erro("Não é possível excluir o último Administrador ativo.", 409);
+  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "usuario", entidadeId: id, resumo: `Usuário ${alvo.nome} excluído`, antes: alvo });
   return ok();
 }

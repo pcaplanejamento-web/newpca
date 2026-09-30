@@ -2,17 +2,24 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ABAS } from "@/lib/abas";
+import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { Checkbox, TextField } from "./Field";
 import { IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { SkeletonLinhas } from "./Skeleton";
+import { toast } from "./Toast";
 
 type Perm = { id: number; nome: string; abas: string[]; grupos: number };
 
 const labelAba = (k: string) => ABAS.find((a) => a.key === k)?.label ?? k;
+/** Ordem alfabética do português (acentos e caixa no lugar certo). */
+const COLLATOR = new Intl.Collator("pt-BR", { sensitivity: "base" });
+/** As abas na ORDEM da navegação (a ordem do clique não importa). */
+const naOrdem = (abas: string[]) => ABAS.map((a) => a.key).filter((k) => abas.includes(k));
 
 export function PermissoesAdmin() {
   const [lista, setLista] = useState<Perm[] | null>(null);
@@ -21,14 +28,17 @@ export function PermissoesAdmin() {
   const [nome, setNome] = useState("");
   const [abas, setAbas] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
+  const [erroModal, setErroModal] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState<number | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async () => {
     setErro(null);
     try {
       const r = await fetch("/api/admin/permissoes");
-      const j = (await r.json()) as { ok?: boolean; error?: string; permissoes?: Perm[] };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; permissoes?: Perm[] };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
-      setLista(j.permissoes ?? []);
+      setLista([...(j.permissoes ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
       setLista([]);
@@ -43,19 +53,20 @@ export function PermissoesAdmin() {
     setEditando("novo");
     setNome("");
     setAbas([]);
+    setErroModal(null);
   }
   function abrirEdicao(p: Perm) {
     setEditando(p);
     setNome(p.nome);
     setAbas(p.abas);
+    setErroModal(null);
   }
-  const toggleAba = (k: string) =>
-    setAbas((a) => (a.includes(k) ? a.filter((x) => x !== k) : [...a, k]));
+  const toggleAba = (k: string) => setAbas((a) => naOrdem(a.includes(k) ? a.filter((x) => x !== k) : [...a, k]));
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
     setSalvando(true);
-    setErro(null);
+    setErroModal(null);
     try {
       const novo = editando === "novo";
       const r = await fetch(novo ? "/api/admin/permissoes" : `/api/admin/permissoes/${(editando as Perm).id}`, {
@@ -63,21 +74,41 @@ export function PermissoesAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome, abas }),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
       setEditando(null);
+      toast.success(novo ? `Permissão "${nome.trim()}" criada.` : `Permissão "${nome.trim()}" salva.`);
       await carregar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao salvar.");
+      // O erro aparece DENTRO do modal (atrás dele ninguém o via).
+      setErroModal(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
       setSalvando(false);
     }
   }
 
   async function excluir(p: Perm) {
-    if (!confirm(`Excluir a permissão "${p.nome}"? Os grupos ficarão sem permissão.`)) return;
-    await fetch(`/api/admin/permissoes/${p.id}`, { method: "DELETE" });
-    await carregar();
+    const sim = await confirmar({
+      titulo: `Excluir a permissão "${p.nome}"?`,
+      texto: p.grupos
+        ? `${p.grupos} grupo(s) ficarão sem permissão — as pessoas deles deixam de ver as telas até o grupo receber outra.`
+        : "Nenhum grupo usa esta permissão.",
+      confirmar: "Excluir permissão",
+      perigo: p.grupos > 0,
+    });
+    if (!sim) return;
+    setExcluindo(p.id);
+    try {
+      const r = await fetch(`/api/admin/permissoes/${p.id}`, { method: "DELETE" });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao excluir.");
+      toast.success(`Permissão "${p.nome}" excluída.`);
+      await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao excluir.");
+    } finally {
+      setExcluindo(null);
+    }
   }
 
   if (lista === null) {
@@ -91,7 +122,9 @@ export function PermissoesAdmin() {
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Defina quais abas cada permissão libera. Os grupos apontam para uma permissão.</p>
+        <p className="text-sm text-muted">
+          A permissão define QUAIS telas (módulos) as pessoas de um grupo acessam. Cada grupo aponta para uma permissão.
+        </p>
         <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
           Nova permissão
         </Button>
@@ -126,7 +159,13 @@ export function PermissoesAdmin() {
                 <Button variant="ghost" onClick={() => abrirEdicao(p)} icon={<IconPencil className="h-3.5 w-3.5" />}>
                   Editar
                 </Button>
-                <Button variant="ghost" onClick={() => excluir(p)} style={{ color: "var(--danger)" }} icon={<IconTrash className="h-3.5 w-3.5" />}>
+                <Button
+                  variant="ghost"
+                  onClick={() => excluir(p)}
+                  loading={excluindo === p.id}
+                  style={{ color: "var(--danger)" }}
+                  icon={<IconTrash className="h-3.5 w-3.5" />}
+                >
                   Excluir
                 </Button>
               </div>
@@ -137,9 +176,10 @@ export function PermissoesAdmin() {
 
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Nova permissão" : "Editar permissão"}>
         <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
-          <TextField label="Nome da permissão" value={nome} onChange={(e) => setNome(e.target.value)} required />
+          {erroModal && <Callout kind="danger">{erroModal}</Callout>}
+          <TextField label="Nome da permissão" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={MAX_NOME_RBAC} required />
           <div>
-            <span className="mb-2 block text-[13.5px] font-bold text-text">Abas disponíveis</span>
+            <span className="mb-2 block text-[13.5px] font-bold text-text">Telas liberadas</span>
             <div className="space-y-2.5">
               {ABAS.map((a) => (
                 <Checkbox key={a.key} label={a.label} checked={abas.includes(a.key)} onChange={() => toggleAba(a.key)} />
@@ -156,6 +196,7 @@ export function PermissoesAdmin() {
           </div>
         </form>
       </Modal>
+      {confirmacao}
     </div>
   );
 }

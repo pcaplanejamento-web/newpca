@@ -112,6 +112,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `exigirAdmin`. Uso: `const g = await exigirX(); if ("erro" in g) return g.erro;`.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
+- **PAPÉIS (migração `0069`, aditiva — EM IMPLANTAÇÃO, entrega 1 de 3):** o GRUPO (permissão) decide QUAIS telas; o
+  **PAPEL** decide o que a pessoa FAZ em cada uma — **Visualizar · Manipular · Importar · Exportar · Excluir · Configurar**.
+  Tabela `papeis` (nome, descrição, `chave` admin|gestor|membro nos do SISTEMA, `capacidades` JSON {tela: ações[]},
+  `padrao_cadastro`) + `usuarios.papel_id` (set null); **`usuarios.role` segue gravado como ESPELHO** (leitores antigos). Núcleo
+  PURO **`papeis-core.ts`** (`CATALOGO_PAPEIS` = o que cada ação cobre por tela — Manipular no Orçamento e Configurar no
+  Calendário "não se aplicam"; `coerceCapacidades` com as implicações — qualquer ação ⇒ Visualizar; **`podeNaTela`** = o
+  grupo libera **E** o papel visualiza, o Administrador tudo; `PAPEIS_SISTEMA` — Gestor = tudo, Membro = consulta + exporta
+  e trabalha em Tarefas/Calendário, iguais às guardas de hoje) + **`escopo-unidades-core.ts`** (acesso em 3 estados:
+  todas · unidades · nenhuma). Comandos com a TRAVA NO PRÓPRIO SQL em **`papeis-sql.ts`** (testados no driver D1 real):
+  cadastro atômico (o 1º vira Administrador SÓ com a tabela vazia — `INSERT … SELECT … WHERE NOT EXISTS`; os demais, o
+  papel PADRÃO, pendentes), troca de papel/status e exclusão NUNCA tiram o último Administrador ATIVO (409), desativar
+  encerra as sessões no mesmo lote. Nesta etapa as guardas ainda são as do `role` (`exigirEditor`); as próximas ligam as
+  guardas por tela + ação e a tela **Configurações → Papéis**.
 - **CADASTRO INSTITUCIONAL + SENHA CONFIRMADA POR CÓDIGO (migração `0067`, aditiva — `usuarios.reparticao_id` FK set null
   = a UNIDADE em que trabalha, `usuarios.email_verificado_em`, tabela `codigos_email`: só o HASH, UM por e-mail + finalidade):**
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
@@ -174,6 +187,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um
 > **Órgão** (entidade nova, acima). NÃO confundir com a **Planilha (PCA)** (tabela `unidades`, arquivo
 > importado) nem com a **Unidade de medida** do item (`itens.unidade_medida`) — três conceitos distintos.
+- **Administração (Grupos/Permissões/Usuários):** PATCH com schemas PRÓPRIOS, sem os padrões da criação
+  (`grupoPatchSchema`/`permissaoPatchSchema` — o `.partial()` apagava pessoas/unidades/telas num PATCH só com o nome);
+  gravar o grupo = UM lote (**`rbac-sql.ts`**: `comandosMembros`/`comandosUnidades` em INSERTs de ≤ 40, ids conferidos antes
+  — `motivoIdsInvalidos` → 422; inexistente = 404); **excluir grupo** mostra o IMPACTO (`GET /api/admin/grupos/[id]` →
+  `impactoDoGrupo`: quadros de tarefas, pastas e modelos que somem em CASCATA) e exige `?confirmar=1` (409 sem ele); a sigla
+  **GERAL** é reservada também na edição e ao rebaixar/ligar "também unidade" (`ehCodigoGeral`). Telas com a confirmação do
+  sistema (`useConfirmacao`), erro dentro do modal, avisos flutuantes; trocar papel/desativar/excluir usuário confirmam.
+  Mensagens padrão do Zod em pt-BR (`zod-config.ts`, importado pelo `http.ts`).
 - **Grupos** (`grupos`): um usuário pertence a vários (`usuario_grupos`); escolhe o **grupo
   ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo tem **1 permissão** e acessa um conjunto
   de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`, `/painel/permissoes`,

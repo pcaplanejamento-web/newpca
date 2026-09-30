@@ -26,6 +26,18 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Papéis configuráveis por tela + auditoria de Grupos, Permissões e Papel — em andamento (entrega 1 de 3)
+- **Entrega 1 (esta):** correções da administração (PATCH de grupo/permissão não apaga mais pessoas, unidades e telas;
+  gravação do grupo num lote; impacto e confirmação ao excluir grupo; sigla GERAL reservada; confirmações do sistema e
+  avisos nas telas de Grupos, Permissões e Usuários) + a BASE dos papéis: migração `0069` (`papeis` + `usuarios.papel_id`,
+  3 papéis do sistema que reproduzem as guardas de hoje), núcleo puro (`papeis-core.ts`, `escopo-unidades-core.ts`) e os
+  comandos com trava (`papeis-sql.ts`: cadastro atômico, o último Administrador ativo nunca sai, desativar encerra as sessões).
+- **Entrega 2:** sessão com o papel, acesso efetivo (grupo libera ∩ papel visualiza) em navegação, páginas e rotas;
+  escopo de unidades em 3 estados (sem grupo não vê dado; "Geral" também no detalhe); guardas por tela + ação em todos os
+  módulos, com modos só-leitura.
+- **Entrega 3:** Configurações → **Papéis** (criar papéis, matriz telas × ações), Usuários com o papel do banco e os grupos,
+  "Ver acesso", exportar .xlsx da Mesa.
+
 ### Texto do DFD em parágrafos + Atualizar que revisa + Dados completos na Mesa — entregue
 ✅ **Texto corrido na importação** (`texto-corrido.ts`): o PDF gravava uma quebra por linha VISUAL nas seções; agora a
 importação refaz os parágrafos pela geometria (vão entre linhas, até onde a linha vai) e pelo texto (palavra de ligação no

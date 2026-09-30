@@ -3,6 +3,7 @@ import { reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
+import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
@@ -11,12 +12,10 @@ import { unidadeTemVinculo } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
 
-const CODIGO_GERAL = "GERAL";
-
 /** Recusa mexer na unidade VIRTUAL "Geral" (não é editável nem excluível). */
 async function ehGeral(id: number): Promise<boolean> {
   const [r] = await getDb().select({ codigo: reparticoes.codigo }).from(reparticoes).where(eq(reparticoes.id, id)).limit(1);
-  return (r?.codigo ?? "").toUpperCase() === CODIGO_GERAL;
+  return ehCodigoGeral(r?.codigo);
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {

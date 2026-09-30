@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { before, describe, it } from "node:test";
+import { papelSistema } from "../src/lib/papeis-core.ts";
 
 // Aplica toda a cadeia de migrações (drizzle/*.sql) num SQLite em memória —
 // mesmo dialeto do D1 — garantindo que a cadeia evolui sem erro e que o schema
@@ -796,6 +797,47 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT COUNT(*) AS n FROM codigos_email").get() as { n: number }).n, 2);
     a.exec("UPDATE usuarios SET cargo = 'Analista' WHERE id = 9671"); // 0068
     assert.equal((a.prepare("SELECT cargo AS c FROM usuarios WHERE id = 9671").get() as { c: string }).c, "Analista");
+  });
+
+  it("0069 papéis: 3 do sistema (sementes = núcleo), só o Membro é o padrão, cada pessoa com o papel do role", () => {
+    const d = new DatabaseSync(":memory:");
+    const i69 = arquivos.findIndex((f) => f.startsWith("0069"));
+    assert.ok(i69 > 0, "migração 0069 ausente");
+    for (const arq of arquivos.slice(0, i69)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO usuarios (id, email, nome, senha_hash, role) VALUES (9691, 'a@x', 'A', 'h', 'admin'), (9692, 'g@x', 'G', 'h', 'gestor'),
+      (9693, 'm@x', 'M', 'h', 'membro'), (9694, 'x@x', 'X', 'h', 'xyz')`);
+    for (const arq of arquivos.slice(i69)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec("PRAGMA foreign_keys = ON");
+    const papeis = d.prepare("SELECT id, chave, capacidades, padrao_cadastro AS padrao FROM papeis ORDER BY ordem").all() as {
+      id: number;
+      chave: string;
+      capacidades: string;
+      padrao: number;
+    }[];
+    assert.deepEqual(
+      papeis.map((p) => p.chave),
+      ["admin", "gestor", "membro"],
+    );
+    assert.deepEqual(
+      papeis.filter((p) => p.padrao).map((p) => p.chave),
+      ["membro"],
+    );
+    // As sementes do SQL = o núcleo (a tela e as guardas leem o mesmo).
+    for (const p of papeis) assert.deepEqual(JSON.parse(p.capacidades), papelSistema(p.chave)?.capacidades, p.chave);
+    const papelDe = (id: number) => (d.prepare("SELECT papel_id AS p FROM usuarios WHERE id = ?").get(id) as { p: number | null }).p;
+    const id = (chave: string) => papeis.find((p) => p.chave === chave)?.id;
+    assert.equal(papelDe(9691), id("admin"));
+    assert.equal(papelDe(9692), id("gestor"));
+    assert.equal(papelDe(9693), id("membro"));
+    assert.equal(papelDe(9694), null, "role desconhecido fica sem papel");
+    // Nome e chave únicos; excluir um papel deixa a pessoa sem papel (set null).
+    assert.throws(() => d.exec("INSERT INTO papeis (nome) VALUES ('Gestor')"));
+    assert.throws(() => d.exec("INSERT INTO papeis (nome, chave) VALUES ('Outro', 'membro')"));
+    d.exec("INSERT INTO papeis (id, nome) VALUES (9695, 'Consulta')");
+    d.exec("UPDATE usuarios SET papel_id = 9695 WHERE id = 9693");
+    d.exec("DELETE FROM papeis WHERE id = 9695");
+    assert.equal(papelDe(9693), null);
+    assert.ok(nomes(d, "SELECT name FROM sqlite_master WHERE type='index'").includes("usuarios_papel_idx"));
   });
 
   it("índice único de e-mail existe", () => {

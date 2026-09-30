@@ -1,20 +1,34 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
+import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { Checkbox, SearchField, TextField } from "./Field";
 import { selectCls } from "./formStyles";
 import { IconPencil, IconPlus, IconTrash, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { SkeletonLinhas } from "./Skeleton";
+import { toast } from "./Toast";
 
 type Grupo = { id: number; nome: string; permissaoId: number | null; membros: number[]; reparticoes: number[] };
 type PermOpt = { id: number; nome: string };
-type UserOpt = { id: number; nome: string; email: string };
-type RepOpt = { id: number; codigo: string; nome: string };
+type Status = "ativo" | "pendente" | "inativo";
+type UserOpt = { id: number; nome: string; email: string; status: Status };
+type RepOpt = { id: number; codigo: string; nome: string; oculto: boolean };
+
+/** Ordem alfabética do português (acentos e caixa no lugar certo — a do banco põe "Á" depois do "Z"). */
+const COLLATOR = new Intl.Collator("pt-BR", { sensitivity: "base" });
+const ehGeral = (r: RepOpt) => ehCodigoGeral(r.codigo);
+
+async function lerJson<T>(r: Response): Promise<T & { ok?: boolean; error?: string }> {
+  return (await r.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
+}
 
 export function GruposAdmin() {
   const [grupos, setGrupos] = useState<Grupo[] | null>(null);
@@ -22,6 +36,7 @@ export function GruposAdmin() {
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [repsDisp, setRepsDisp] = useState<RepOpt[]>([]);
   const [erro, setErro] = useState<string | null>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const [editando, setEditando] = useState<Grupo | "novo" | null>(null);
   const [nome, setNome] = useState("");
@@ -30,23 +45,18 @@ export function GruposAdmin() {
   const [reps, setReps] = useState<Set<number>>(new Set());
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [erroModal, setErroModal] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState<number | null>(null);
 
   const carregar = useCallback(async () => {
     setErro(null);
     try {
       const r = await fetch("/api/admin/grupos");
-      const j = (await r.json()) as {
-        ok?: boolean;
-        error?: string;
-        grupos?: Grupo[];
-        permissoes?: PermOpt[];
-        usuarios?: UserOpt[];
-        reparticoes?: RepOpt[];
-      };
+      const j = await lerJson<{ grupos?: Grupo[]; permissoes?: PermOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
-      setGrupos(j.grupos ?? []);
-      setPerms(j.permissoes ?? []);
-      setUsers(j.usuarios ?? []);
+      setGrupos([...(j.grupos ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
+      setPerms([...(j.permissoes ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
+      setUsers([...(j.usuarios ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setRepsDisp(j.reparticoes ?? []);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao carregar.");
@@ -59,14 +69,17 @@ export function GruposAdmin() {
   }, [carregar]);
 
   const nomePermissao = (id: number | null) => perms.find((p) => p.id === id)?.nome ?? "Sem permissão";
+  const geral = useMemo(() => repsDisp.find(ehGeral) ?? null, [repsDisp]);
 
   function abrirNovo() {
     setEditando("novo");
     setNome("");
-    setPermissaoId(perms[0]?.id ?? null);
+    // Nada pré-escolhido: a permissão decide as telas do grupo — o ADM escolhe de propósito.
+    setPermissaoId(null);
     setMembros(new Set());
     setReps(new Set());
     setBusca("");
+    setErroModal(null);
   }
   function abrirEdicao(g: Grupo) {
     setEditando(g);
@@ -75,16 +88,10 @@ export function GruposAdmin() {
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
     setBusca("");
+    setErroModal(null);
   }
-  const toggleMembro = (id: number) =>
-    setMembros((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-  const toggleRep = (id: number) =>
-    setReps((s) => {
+  const alternar = (set: (f: (s: Set<number>) => Set<number>) => void, id: number) =>
+    set((s) => {
       const n = new Set(s);
       if (n.has(id)) n.delete(id);
       else n.add(id);
@@ -99,7 +106,7 @@ export function GruposAdmin() {
   async function salvar(e: FormEvent) {
     e.preventDefault();
     setSalvando(true);
-    setErro(null);
+    setErroModal(null);
     try {
       const novo = editando === "novo";
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
@@ -107,21 +114,43 @@ export function GruposAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome, permissaoId, membros: [...membros], reparticoes: [...reps] }),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
+      const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
       setEditando(null);
+      toast.success(novo ? `Grupo "${nome.trim()}" criado.` : `Grupo "${nome.trim()}" salvo.`);
       await carregar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao salvar.");
+    } catch (err) {
+      // O erro aparece DENTRO do modal (atrás dele ninguém o via).
+      setErroModal(err instanceof Error ? err.message : "Erro ao salvar.");
     } finally {
       setSalvando(false);
     }
   }
 
   async function excluir(g: Grupo) {
-    if (!confirm(`Excluir o grupo "${g.nome}"? Os dados do grupo (protocolos) ficam sem grupo.`)) return;
-    await fetch(`/api/admin/grupos/${g.id}`, { method: "DELETE" });
-    await carregar();
+    setExcluindo(g.id);
+    try {
+      // O IMPACTO antes de perguntar: a exclusão cascateia quadros de tarefas, pastas e modelos do grupo.
+      const ri = await fetch(`/api/admin/grupos/${g.id}`);
+      const ji = await lerJson<{ texto?: string }>(ri);
+      if (!ri.ok || !ji.ok) throw new Error(ji.error ?? "Não foi possível conferir o grupo.");
+      const sim = await confirmar({
+        titulo: `Excluir o grupo "${g.nome}"?`,
+        texto: ji.texto,
+        confirmar: "Excluir grupo",
+        perigo: true,
+      });
+      if (!sim) return;
+      const r = await fetch(`/api/admin/grupos/${g.id}?confirmar=1`, { method: "DELETE" });
+      const j = await lerJson<object>(r);
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao excluir.");
+      toast.success(`Grupo "${g.nome}" excluído.`);
+      await carregar();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir.");
+    } finally {
+      setExcluindo(null);
+    }
   }
 
   if (grupos === null) {
@@ -132,11 +161,15 @@ export function GruposAdmin() {
     );
   }
 
+  const unidadesDoCard = (g: Grupo) =>
+    geral && g.reparticoes.includes(geral.id) ? "todas as unidades" : `${g.reparticoes.length} unidade(s)`;
+  const semPermissao = permissaoId == null;
+
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          Crie grupos, escolha a permissão e vincule pessoas. Membros do grupo compartilham permissão e dados.
+          O grupo reúne pessoas, a PERMISSÃO (quais telas elas acessam) e as UNIDADES (de quais unidades veem os dados).
         </p>
         <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
           Novo grupo
@@ -159,15 +192,25 @@ export function GruposAdmin() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="truncate font-bold text-text">{g.nome}</h3>
-                  <p className="truncate text-[12px] text-muted">{nomePermissao(g.permissaoId)}</p>
+                  <p className={`truncate text-[12px] ${g.permissaoId == null ? "text-[var(--warn)]" : "text-muted"}`}>
+                    {nomePermissao(g.permissaoId)}
+                  </p>
                 </div>
               </div>
-              <p className="mt-3 text-[12px] text-faint">{g.membros.length} pessoa(s)</p>
+              <p className="mt-3 text-[12px] text-faint">
+                {g.membros.length} pessoa(s) · {unidadesDoCard(g)}
+              </p>
               <div className="mt-3 flex justify-end gap-1.5">
                 <Button variant="ghost" onClick={() => abrirEdicao(g)} icon={<IconPencil className="h-3.5 w-3.5" />}>
                   Editar
                 </Button>
-                <Button variant="ghost" onClick={() => excluir(g)} style={{ color: "var(--danger)" }} icon={<IconTrash className="h-3.5 w-3.5" />}>
+                <Button
+                  variant="ghost"
+                  onClick={() => excluir(g)}
+                  loading={excluindo === g.id}
+                  style={{ color: "var(--danger)" }}
+                  icon={<IconTrash className="h-3.5 w-3.5" />}
+                >
                   Excluir
                 </Button>
               </div>
@@ -178,14 +221,17 @@ export function GruposAdmin() {
 
       <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo grupo" : "Editar grupo"} size="lg">
         <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
-          <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} required />
+          {erroModal && <Callout kind="danger">{erroModal}</Callout>}
+          <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={MAX_NOME_RBAC} required />
           <div>
-            <span className="mb-2 block text-[13.5px] font-bold text-text">Permissão do grupo</span>
+            <label htmlFor="grupo-permissao" className="mb-2 block text-[13.5px] font-bold text-text">
+              Permissão do grupo
+            </label>
             <select
+              id="grupo-permissao"
               value={permissaoId ?? ""}
               onChange={(e) => setPermissaoId(e.target.value ? Number(e.target.value) : null)}
               className={`${selectCls} w-full`}
-              aria-label="Permissão do grupo"
             >
               <option value="">Sem permissão</option>
               {perms.map((p) => (
@@ -194,6 +240,9 @@ export function GruposAdmin() {
                 </option>
               ))}
             </select>
+            {semPermissao && (
+              <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem permissão, as pessoas do grupo não veem nenhuma tela.</p>
+            )}
           </div>
           <div>
             <span className="mb-2 block text-[13.5px] font-bold text-text">
@@ -201,7 +250,7 @@ export function GruposAdmin() {
             </span>
             {repsDisp.length === 0 ? (
               <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">
-                Nenhuma unidade cadastrada. Crie em Unidades.
+                Nenhuma unidade cadastrada. Cadastre em Órgãos e Unidades.
               </p>
             ) : (
               <div className="max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
@@ -209,11 +258,13 @@ export function GruposAdmin() {
                   <div key={r.id} className="rounded-control p-1.5 hover:bg-surface-2">
                     <Checkbox
                       checked={reps.has(r.id)}
-                      onChange={() => toggleRep(r.id)}
+                      onChange={() => alternar(setReps, r.id)}
                       label={
                         <span className="flex items-center gap-2">
                           <span className="font-mono text-[10.5px] text-faint">{r.codigo}</span>
                           <span className="min-w-0 truncate text-[13px] text-text">{r.nome}</span>
+                          {ehGeral(r) && <Badge tone="blue">Todas as unidades</Badge>}
+                          {r.oculto && <Badge tone="slate">Oculta</Badge>}
                         </span>
                       }
                     />
@@ -232,12 +283,16 @@ export function GruposAdmin() {
                 <div key={u.id} className="rounded-control p-1.5 hover:bg-surface-2">
                   <Checkbox
                     checked={membros.has(u.id)}
-                    onChange={() => toggleMembro(u.id)}
+                    onChange={() => alternar(setMembros, u.id)}
                     label={
                       <span className="flex items-center gap-2.5">
                         <Avatar nome={u.nome} size="sm" />
                         <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-medium text-text">{u.nome}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-[13px] font-medium text-text">{u.nome}</span>
+                            {u.status === "pendente" && <Badge tone="amber">Pendente</Badge>}
+                            {u.status === "inativo" && <Badge tone="slate">Inativo</Badge>}
+                          </span>
                           <span className="block truncate text-[11px] text-muted">{u.email}</span>
                         </span>
                       </span>
@@ -260,6 +315,7 @@ export function GruposAdmin() {
           </div>
         </form>
       </Modal>
+      {confirmacao}
     </div>
   );
 }
