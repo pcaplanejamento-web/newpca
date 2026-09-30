@@ -1,3 +1,4 @@
+import { getAcesso, podeMesa } from "./acesso";
 import { getRegrasAvaliacao } from "./avaliacao";
 import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
@@ -9,6 +10,7 @@ import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
 import type { AtividadeTupla } from "./mesa-metricas";
 import { listarOrgaos } from "./orgaos";
+import { PODE_MESA_NADA } from "./papeis-core";
 import type { AcaoDfdPca } from "./pca-core";
 import { anoMarcadosDoPca, dfdsEmOutroPca, vinculosDoPca } from "./pca-espaco";
 import { getPcaFiltro, pcasDoFiltro } from "./pca-filtro";
@@ -29,19 +31,21 @@ import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds } from "./u
  */
 /**
  * O que os BANNERS gravados (`BannersMesa`: protocolo · DFD · item) precisam: as unidades ACESSÍVEIS enriquecidas com os
- * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e se edita.
+ * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e o que o PAPEL
+ * permite nas duas Mesas (cada protocolo segue a sua).
  */
 async function contextoBanners(u: UsuarioSessao | null) {
   // As unidades ACESSÍVEIS (com a "Geral" no grupo ou o ADM, todas — os banners conferem e editam o de qualquer uma).
   const un = await unidadesDaSessao(u);
   const lista = await unidadesAcessiveis(un);
   const ids = lista.map((r) => r.id);
-  const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([
+  const [respMap, matchMap, pcas, regras, orgaos, acesso] = await Promise.all([
     responsaveisPorReparticao(ids),
     dadosMatchPorReparticao(ids),
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
+    getAcesso(),
   ]);
   const reparticoes = lista.map((r) => ({
     ...r,
@@ -52,7 +56,7 @@ async function contextoBanners(u: UsuarioSessao | null) {
     orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
     oculto: matchMap[r.id]?.oculto ?? false,
   }));
-  return { un, reparticoes, pcas, regras, orgaos, podeEditar: u?.role === "admin" || u?.role === "gestor" };
+  return { un, reparticoes, pcas, regras, orgaos, pode: acesso ? podeMesa(acesso) : PODE_MESA_NADA };
 }
 
 /** O prefixo das chaves das edições salvas das tabelas da Mesa (a principal e a do PCA têm as suas). */
@@ -106,7 +110,7 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     outrasPessoas,
     situacoes,
     usuarioId: u?.id ?? null,
-    podeEditar: ctx.podeEditar,
+    pode: ctx.pode,
     /** Filtro com que a Mesa ABRE (preferência do Perfil; na Mesa do PCA, todos). */
     filtroInicial: pcaId ? FILTRO_MESA_TODOS : filtroInicialMesa(pref, u?.id ?? null),
     /** O PCA do cabeçalho que está filtrando a Mesa principal (`null` = todos). */
@@ -143,7 +147,7 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     emOutroPcaPorProtocolo,
     acaoPorProtocolo,
     marcados: m.anoMarcados != null,
-    podeEditar: m.podeEditar,
+    pode: m.pode,
     dfds: m.dfds,
     protocolos: m.protocolos,
     reparticoes: m.reparticoes,

@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { dfdsPorNumeros } from "@/lib/dfd";
 import { existentesDfdSchema } from "@/lib/dfd-validation";
 import { unidadesDaSessao } from "@/lib/grupos";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * `acessivel: false` — não pode ser sobrescrito enquanto estiver no PCA.
  */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso(["dfd", "pca"], "importar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(existentesDfdSchema, req);
   if ("resp" in p) return p.resp;

@@ -1,4 +1,5 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { motivoRecusa } from "@/lib/acesso";
+import { exigirAcesso } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
@@ -9,6 +10,7 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
 import { getSituacao } from "@/lib/situacoes";
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
@@ -21,7 +23,7 @@ export const dynamic = "force-dynamic";
  * em `falhas` com o motivo; o que já confere é pulado.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "manipular");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(massaProtocolosSchema, req);
   if ("resp" in p) return p.resp;
@@ -44,6 +46,12 @@ export async function POST(req: Request) {
     try {
       if (!acessivel(pr.reparticaoId)) {
         falhas.push({ id: pr.id, numero: pr.numero, motivo: "Sem acesso à unidade deste protocolo." });
+        continue;
+      }
+      // O PAPEL manipula na Mesa em que o protocolo está (a do sistema ou a do PCA).
+      const semPapel = motivoRecusa(a.acesso, telaDoRecurso(pr.pcaId), "manipular");
+      if (semPapel) {
+        falhas.push({ id: pr.id, numero: pr.numero, motivo: semPapel });
         continue;
       }
       // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.

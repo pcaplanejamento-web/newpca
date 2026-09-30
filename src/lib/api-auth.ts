@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { type Acesso, getAcesso, podeTela } from "./acesso";
+import { type Acesso, getAcesso, motivoRecusa } from "./acesso";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
-import { type AcaoPapel, mensagemSemPermissao, mensagemTelaFechada, type Tela } from "./papeis-core";
+import type { AcaoPapel, Tela } from "./papeis-core";
 
 /** Exige usuário autenticado. Retorna { u } ou { erro } (resposta 401). */
 export async function exigirUsuario(): Promise<
@@ -49,10 +49,8 @@ export async function exigirSessao(): Promise<Guarda | { erro: NextResponse }> {
 /** A recusa (403) quando a AÇÃO não é permitida na tela — no grupo ativo ou, com `grupoId`, no grupo do recurso.
  * `null` = pode. A mensagem diz o motivo: a tela fechada (grupo/papel) ou a ação que o papel não permite. */
 export function recusa(acesso: Acesso, tela: Tela, acao: AcaoPapel, grupoId?: number | null): NextResponse | null {
-  const pode = podeTela(acesso, tela, grupoId);
-  if (pode[acao]) return null;
-  const error = pode.visualizar ? mensagemSemPermissao(tela, acao) : mensagemTelaFechada(tela);
-  return NextResponse.json({ ok: false, error }, { status: 403 });
+  const error = motivoRecusa(acesso, tela, acao, grupoId);
+  return error ? NextResponse.json({ ok: false, error }, { status: 403 }) : null;
 }
 
 /** Exige a AÇÃO numa das telas (no grupo ativo) — várias telas = basta uma permitir. */

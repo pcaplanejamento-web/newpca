@@ -1,10 +1,11 @@
-import { exigirEditor, exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId, unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
 import { edicaoPermitidaTravado, estaTravado, mensagemTravaPca, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  * (cabeçalho/seções/assinaturas/itens) + as unidades deles com os responsáveis — o banner do protocolo
  * GRAVADO usa a MESMA conferência/componentes da análise. */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso(["dfd", "pca"], "visualizar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -40,7 +41,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 /** Edita um protocolo já gravado — o banner (capa/unidade) ou a célula da Mesa (responsável/situação).
  * Escopo por unidade; o responsável tem de ser uma pessoa ATIVA do grupo e a situação, uma cadastrada pelo ADM. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "manipular");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -52,6 +53,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!proto) return erro("Protocolo não encontrado.", 404);
   const { acessivel } = await unidadesDaSessao(a.u);
   if (!acessivel(proto.reparticaoId)) return erro("Sem acesso a este protocolo.", 403);
+  // O PAPEL manipula na Mesa em que o protocolo está (a do sistema ou a do PCA).
+  const negado = recusa(a.acesso, telaDoRecurso(proto.pcaId), "manipular");
+  if (negado) return negado;
   // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.
   if (estaTravado(proto) && !edicaoPermitidaTravado(campos)) return erro(mensagemTravaPca(proto.pcaNome), 423);
   if (campos.reparticaoId != null && !acessivel(campos.reparticaoId)) {
@@ -85,7 +89,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 /** Exclui o protocolo EM CASCATA (os DFDs vinculados e seus itens são apagados junto — `excluirProtocolo`). */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "excluir");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -99,7 +103,18 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   // da Mesa principal); o incorporado é permanente (423, a trava).
   const noPca = (await pcaDeProtocolos([id])).get(id);
   if (noPca) return erro(motivoNaoExcluirProtocolo(noPca, noPca.nome) ?? "Protocolo em um PCA não é excluído.", noPca.pcaIncorporadoEm ? 423 : 409);
+  // O PAPEL exclui na Mesa em que o protocolo está (fora de um PCA, a do sistema).
+  const negado = recusa(a.acesso, telaDoRecurso(proto.pcaId), "excluir");
+  if (negado) return negado;
   await excluirProtocolo(id);
-  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "protocolo", entidadeId: id, resumo: `Protocolo #${id} excluído (com os DFDs vinculados)`, protocoloId: id, origem: "exclusao" });
+  await registrarAuditoria({
+    usuario: a.u,
+    acao: "excluir",
+    entidade: "protocolo",
+    entidadeId: id,
+    resumo: `Protocolo ${proto.numero} excluído (com os DFDs vinculados)`,
+    protocoloId: id,
+    origem: "exclusao",
+  });
   return ok();
 }

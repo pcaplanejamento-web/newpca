@@ -41,6 +41,7 @@ import {
 } from "@/lib/padronizacao-core";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
+import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
 import { estaTravado, motivoNaoExcluirDfd, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
@@ -182,7 +183,7 @@ function valorGestao<K extends keyof Gestao>(g: Map<number, Gestao>, id: number 
 }
 
 export function DfdsView({
-  podeEditar,
+  pode,
   dfds,
   protocolos,
   reparticoes,
@@ -202,7 +203,8 @@ export function DfdsView({
   dadosCompletos = false,
   seletorMesa,
 }: {
-  podeEditar: boolean;
+  /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
+  pode: PodeMesa;
   dfds: DfdResumo[];
   protocolos: ProtocoloResumo[];
   reparticoes: Rep[];
@@ -818,12 +820,18 @@ export function DfdsView({
     const d = dfdPorId.get(l.key);
     const noPca = d ? { pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm } : null;
     // DFD de protocolo INCORPORADO a um PCA: travado (sem vincular/excluir — o servidor recusa também).
-    if (!podeEditar || !d || !noPca || estaTravado(noPca)) return null;
+    if (!d || !noPca || estaTravado(noPca)) return null;
+    // O PAPEL na Mesa em que o DFD está: vincular = Manipular; excluir = Excluir.
+    const podeDfd = podeNoRecurso(pode, noPca.pcaId);
+    const podeExcluirDfd = podeDfd.excluir && motivoNaoExcluirDfd(noPca) == null;
+    if (!podeDfd.manipular && !podeExcluirDfd) return null;
     return (
       <div className="flex justify-end gap-1">
-        <Button variant="ghost" size="xs" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
+        {podeDfd.manipular && (
+          <Button variant="ghost" size="xs" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
+        )}
         {/* DFD de protocolo em um PCA (enviado) não é excluído — o servidor recusa também. */}
-        {motivoNaoExcluirDfd(noPca) == null && (
+        {podeExcluirDfd && (
           <Button
             variant="ghost"
             size="xs"
@@ -968,7 +976,7 @@ export function DfdsView({
         <SeletorCelula
           valor={situacaoDe(r)}
           opcoes={situacoes}
-          onChange={podeEditar && situacoes.length > 0 ? (v) => alterarGestao(r, "situacaoId", v) : undefined}
+          onChange={podeNoRecurso(pode, r.pcaId).manipular && situacoes.length > 0 ? (v) => alterarGestao(r, "situacaoId", v) : undefined}
           vazio="Sem situação"
           salvando={salvandoGestao.has(`${r.id}:situacaoId`)}
           ariaLabel={`Situação do protocolo ${r.numero}`}
@@ -1000,7 +1008,7 @@ export function DfdsView({
             atual={p}
             extras={EXTRAS_CELULA}
             salvando={salvandoGestao.has(`${r.id}:responsavelId`)}
-            onChange={podeEditar ? (v) => alterarGestao(r, "responsavelId", v ? Number(v) : null) : undefined}
+            onChange={podeNoRecurso(pode, r.pcaId).manipular ? (v) => alterarGestao(r, "responsavelId", v ? Number(v) : null) : undefined}
           />
         );
       },
@@ -1111,7 +1119,7 @@ export function DfdsView({
             filter: "none" as const,
             nowrap: true,
             render: (r: ProtocoloResumo) =>
-              podeEditar && motivoNaoExcluirProtocolo(r) == null ? (
+              pode.sistema.excluir && motivoNaoExcluirProtocolo(r) == null ? (
                 <div className="flex justify-end gap-1">
                   <Button
                     variant="ghost"
@@ -1738,7 +1746,11 @@ export function DfdsView({
   // trocar de visão ou abrir o Dashboard nunca perde uma importação em curso).
   const filtrado = filtroMesaAtivo(filtro);
   const semResultado = "Nada com o responsável/assunto escolhido acima — ajuste ou limpe o filtro.";
-  const podeImportar = podeEditar && !modoPca;
+  // A Mesa em que se está: a do sistema ou a do PCA (os marcados da Mesa do sistema que a do PCA mostra conferem a do
+  // sistema no servidor — o que o papel não permite volta como falha).
+  const podeAqui = modoPca ? pode.pca : pode.sistema;
+  // Importar protocolo/DFD: só na Mesa do sistema (o protocolo novo entra nela).
+  const podeImportar = pode.sistema.importar && !modoPca;
   const importa = podeImportar && (vista === "protocolos" || vista === "dfds");
   const oQueImporta = vista === "protocolos" ? "protocolo" : "DFD";
   const rotuloImportar = `Importar ${oQueImporta}`;
@@ -1760,7 +1772,7 @@ export function DfdsView({
       columns={modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto}
       rows={protocolosF}
       getKey={(r) => r.id}
-      selectable={podeEditar}
+      selectable={podeAqui.manipular}
       selected={selProtos}
       onSelected={setSelProtos}
       onRowClick={(r) => setAberto({ tipo: "protocolo", id: r.id })}
@@ -1787,7 +1799,7 @@ export function DfdsView({
       unica
       scrollInterno
       reservaInferior={reserva}
-      selecionavel={podeEditar}
+      selecionavel={podeAqui.manipular}
       selected={selDfds}
       onSelected={setSelDfds}
       onRowClick={(id) => setAberto({ tipo: "dfd", id })}
@@ -1806,7 +1818,8 @@ export function DfdsView({
       columns={modoPca?.colunasItens ? [...modoPca.colunasItens, ...colsItens] : colsItens}
       rows={itensF ?? []}
       getKey={(r) => r.id}
-      selectable={podeEditar}
+      // Itens: a edição em massa (Manipular) e, na Mesa do PCA, "Retirar do PCA" (Excluir).
+      selectable={podeAqui.manipular || (!!modoPca && podeAqui.excluir)}
       selected={selItens}
       onSelected={setSelItens}
       onRowClick={(r) => setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.item, codigo: r.codigo } })}
@@ -1867,7 +1880,7 @@ export function DfdsView({
   );
   const tirar = (set: (f: (s: Sel) => Sel) => void) => (k: string | number) => set((s) => new Set([...s].filter((x) => x !== k)));
   let barraSelecao: ReactNode = null;
-  if (podeEditar && vista === "dfds" && (selDfds.size > 0 || aplicandoMassa)) {
+  if (podeAqui.manipular && vista === "dfds" && (selDfds.size > 0 || aplicandoMassa)) {
     const sel = dfdsF.filter((d) => selDfds.has(d.id));
     barraSelecao = (
       <BarraSelecaoDfds
@@ -1882,7 +1895,7 @@ export function DfdsView({
         <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} />
       </BarraSelecaoDfds>
     );
-  } else if (podeEditar && vista === "protocolos" && (selProtos.size > 0 || aplicandoMassa)) {
+  } else if (podeAqui.manipular && vista === "protocolos" && (selProtos.size > 0 || aplicandoMassa)) {
     const sel = protocolosF.filter((p) => selProtos.has(p.id));
     barraSelecao = (
       <BarraSelecao
@@ -1895,9 +1908,10 @@ export function DfdsView({
         acoes={
           modoPca ? (
             modoPca.acoesProtocolos?.(sel, () => setSelProtos(new Set()))
-          ) : (
+          ) : pode.pca.manipular ? (
+            // Enviar ao PCA tira da Mesa do sistema e põe na do PCA: Manipular nas duas.
             <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />
-          )
+          ) : undefined
         }
         resumo={
           <ResumoSelecao
@@ -1926,7 +1940,7 @@ export function DfdsView({
         )}
       </BarraSelecao>
     );
-  } else if (podeEditar && vista === "itens" && !consolidada && (selItens.size > 0 || aplicandoMassa)) {
+  } else if ((podeAqui.manipular || (!!modoPca && podeAqui.excluir)) && vista === "itens" && !consolidada && (selItens.size > 0 || aplicandoMassa)) {
     const sel = (itensF ?? []).filter((it) => selItens.has(it.id));
     barraSelecao = (
       <BarraSelecao
@@ -1940,7 +1954,7 @@ export function DfdsView({
         acoes={modoPca?.acoesItens?.(sel, () => setSelItens(new Set()))}
       >
         {/* Item INCORPORADO (com nº no PCA) é somente leitura — o editor de massa só vale para os não incorporados. */}
-        {sel.every((it) => it.pcaSequencial == null) && (
+        {podeAqui.manipular && sel.every((it) => it.pcaSequencial == null) && (
           <>
             {progressoMassa}
             <BarraEdicaoMassaItens aplicando={!!aplicandoMassa} onAplicar={aplicarMassaItens} />
@@ -2090,7 +2104,7 @@ export function DfdsView({
       <BannersMesa
         abrir={aberto}
         onFechar={() => setAberto(null)}
-        podeEditar={podeEditar}
+        pode={pode}
         reparticoes={reparticoes}
         reparticaoAtivaId={reparticaoAtivaId}
         regras={regras}

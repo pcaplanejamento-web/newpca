@@ -195,6 +195,18 @@ export function telasAbertas(ctx: ContextoAcesso): Tela[] {
   return ABA_KEYS.filter((t) => podeNaTela(ctx, t).visualizar);
 }
 
+/**
+ * As DUAS Mesas: a do sistema (tela `dfd`) e a do PCA (tela `pca`). Cada protocolo — e os DFDs e itens dele — segue a Mesa
+ * em que ESTÁ: num PCA (enviado ou incorporado) é da Mesa do PCA; senão, da Mesa do sistema (também os marcados que a
+ * Mesa de um PCA mostra).
+ */
+export type PodeMesa = { sistema: PodeTela; pca: PodeTela };
+export const PODE_MESA_NADA: PodeMesa = Object.freeze({ sistema: PODE_NADA, pca: PODE_NADA });
+/** A tela de um recurso da Mesa pelo PCA do protocolo dele. */
+export const telaDoRecurso = (pcaId: number | null | undefined): Tela => (pcaId != null ? "pca" : "dfd");
+/** O que o papel permite num recurso da Mesa (pelo PCA do protocolo dele). */
+export const podeNoRecurso = (p: PodeMesa, pcaId: number | null | undefined): PodeTela => (pcaId != null ? p.pca : p.sistema);
+
 /** O `role` gravado junto do papel (espelho para leitores antigos: só distingue o Administrador). */
 export function roleEspelho(chave: string | null | undefined): "admin" | "gestor" | "membro" {
   return chave === "admin" ? "admin" : chave === "gestor" ? "gestor" : "membro";

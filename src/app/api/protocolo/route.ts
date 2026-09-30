@@ -1,4 +1,4 @@
-import { exigirEditor } from "@/lib/api-auth";
+import { exigirAcesso, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { assuntoCadastrado, classificarAssunto, comportamentoNo, protocolarHabilitado } from "@/lib/avaliacao-core";
@@ -6,6 +6,7 @@ import { startProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId, unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
+import { telaDoRecurso } from "@/lib/papeis-core";
 import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
 import { pcaDeProtocolos, respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
 import { responsavelPadraoDe } from "@/lib/usuarios";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
  * — para escalar a milhares de DFDs sem estourar CPU/memória/subrequests do Worker.
  */
 export async function POST(req: Request) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso(["dfd", "pca"], "importar");
   if ("erro" in a) return a.erro;
 
   const p = await parseCorpo(startProtocoloSchema, req);
@@ -60,6 +61,10 @@ export async function POST(req: Request) {
   if (mesmoNumero && !acessivel(mesmoNumero.reparticaoId)) {
     return erro("Já existe um protocolo com esse número em outra unidade, sem acesso.", 403);
   }
+  // O PAPEL importa na Mesa em que o protocolo FICA: o reenviado (ou o de mesmo nº, cuja capa é sobrescrita) segue onde
+  // está — num PCA, a Mesa do PCA; o protocolo novo entra na Mesa do sistema.
+  const negado = recusa(a.acesso, telaDoRecurso((gravado ?? mesmoNumero)?.pcaId), "importar");
+  if (negado) return negado;
   // Anti-sequestro por Id: protocolar sobrescreve o protocolo de MESMO `idExterno` — mas não
   // se ele estiver numa unidade INACESSÍVEL (não deixa sequestrar/apagar via re-import).
   const mesmoId = protocolo.idExterno ? await getProtocoloPorIdExterno(protocolo.idExterno) : null;

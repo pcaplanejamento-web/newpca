@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto } from "@/lib/avaliacao-core";
 import { avaliarLinhaDfd, avaliarProtocolo } from "@/lib/conferencia-dfd";
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * /api/protocolo/[id]`): protocolo de unidade sem acesso é ignorado.
  */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso(["dfd", "pca"], "visualizar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(conferenciaProtocolosSchema, req);
   if ("resp" in p) return p.resp;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
+import type { PodeMesa } from "@/lib/papeis-core";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { type ItemRef, useDfdGravado } from "./DfdGravado";
 import { duracaoMotionMs, Modal, type ModalPainel } from "./Modal";
@@ -43,7 +44,7 @@ export const LARGURA = { item: 34, dfd: 52, protocolo: 50 } as const;
 export function BannersMesa({
   abrir,
   onFechar,
-  podeEditar,
+  pode,
   reparticoes,
   reparticaoAtivaId,
   regras,
@@ -56,7 +57,8 @@ export function BannersMesa({
   onFechar: () => void;
   /** Troca a pilha por OUTRA abertura (ex.: o protocolo ATUAL de um DFD sobrescrito — o rastro cinza). */
   onAbrir: (a: AberturaMesa) => void;
-  podeEditar: boolean;
+  /** O que o PAPEL permite nas duas Mesas — cada banner segue a Mesa do protocolo dele. */
+  pode: PodeMesa;
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
   regras: RegrasAvaliacao;
@@ -152,7 +154,7 @@ export function BannersMesa({
     // Com o protocolo JÁ na pilha, "Ver protocolo" some (no celular seria um clique sem efeito — ele já
     // está aberto, atrás do banner visível; o X volta até ele).
     onVerProtocolo: protoId == null ? verProtocolo : undefined,
-    podeEditar,
+    pode,
     reparticoes,
     reparticaoAtivaId,
     regras,
@@ -168,7 +170,7 @@ export function BannersMesa({
     protocoloId: protoId,
     onFechar: raiz === "protocolo" ? () => fecharTudo("proto") : () => setProtoId(null),
     empilhado: raiz === "protocolo" ? null : { dfdAtivo: dfdId, onVerDfd: trocarDfd },
-    podeEditar,
+    pode,
     reparticoes,
     reparticaoAtivaId,
     regras,

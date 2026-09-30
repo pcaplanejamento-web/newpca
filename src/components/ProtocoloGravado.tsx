@@ -28,6 +28,7 @@ import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { BarraSelecaoDfds } from "./BarraSelecao";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
 import { Button } from "./Button";
+import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
 import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
@@ -91,7 +92,7 @@ export function useProtocoloGravado({
   dfdInicial = null,
   onFechar,
   empilhado = null,
-  podeEditar: podeEditarBase,
+  pode,
   reparticoes,
   reparticaoAtivaId,
   regras,
@@ -109,7 +110,8 @@ export function useProtocoloGravado({
   onFechar: () => void;
   /** Entrou à direita de um DFD: a linha ativa é o DFD da pilha e clicar numa linha o troca. */
   empilhado?: { dfdAtivo: number | null; onVerDfd: (dfdId: number) => void } | null;
-  podeEditar: boolean;
+  /** O que o PAPEL permite nas duas Mesas — o protocolo (e os DFDs dele) segue a Mesa em que está. */
+  pode: PodeMesa;
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
   regras: RegrasAvaliacao;
@@ -127,7 +129,11 @@ export function useProtocoloGravado({
   const [proto, setProto] = useState<ProtocoloDetalhe | null>(null);
   // TRAVA do PCA: protocolo INCORPORADO ⇒ o banner inteiro (capa, DFDs, itens, reenvio) fica só-leitura.
   const travaPca = proto && estaTravado(proto) ? mensagemTravaPca(proto.pcaNome) : null;
-  const podeEditar = podeEditarBase && !travaPca;
+  // O PAPEL na Mesa em que o protocolo está: editar = Manipular; reenviar o PDF e sobrescrever um DFD = Importar (o reenvio
+  // que exclui os DFDs fora do PDF também pede Excluir).
+  const podeProto = podeNoRecurso(pode, proto?.pcaId);
+  const podeEditar = podeProto.manipular && !travaPca;
+  const podeImportar = podeProto.importar && !travaPca;
   const [orig, setOrig] = useState<Map<number, DfdDetalhe>>(new Map());
   const [ordem, setOrdem] = useState<number[]>([]);
   const [dfds, setDfds] = useState<Map<number, DfdParseado>>(new Map());
@@ -324,6 +330,8 @@ export function useProtocoloGravado({
   const dfdAberto = abertoId != null ? (dfds.get(abertoId) ?? null) : null;
   const repAbertoId = abertoId != null ? (repIds.get(abertoId) ?? null) : null;
   const editavelAberto = abertoId != null && editavelDfd(abertoId);
+  // Sobrescrever o DFD aberto com o arquivo novo (Importar) — de unidade acessível.
+  const sobrescreveAberto = podeImportar && abertoId != null && acessivel(orig.get(abertoId)?.reparticaoId ?? null);
   const conformidade = useConformidade(dfdAberto?.itens, dfdAberto?.tipo ?? null);
   const anoAberto = dfdAberto ? (dfdAberto.anoPca ?? proto?.anoPca ?? null) : null;
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
@@ -378,7 +386,7 @@ export function useProtocoloGravado({
       const r = await carregar(id, abertoId);
       if (!r || pedidoRef.current !== id) return;
       const { protocolo, lista, rascunhos } = r;
-      const podeTratar = podeEditarBase && !estaTravado(protocolo);
+      const podeTratar = podeNoRecurso(pode, protocolo.pcaId).manipular && !estaTravado(protocolo);
       const cat = classificarAssunto(protocolo.assunto);
       const revCapa = revisarCapa(capaDe(protocolo));
       const porDfd: AjusteRevisao[][] = [];
@@ -606,7 +614,7 @@ export function useProtocoloGravado({
                 {temErro ? "Relatório de erro" : "Relatório de atenção"}
               </Button>
             )}
-            {podeEditar && proto && !travado && (
+            {podeImportar && proto && !travado && (
               <Button
                 variant="secondary"
                 onClick={() => setReenviar((n) => n + 1)}
@@ -698,7 +706,7 @@ export function useProtocoloGravado({
               <IconClock className="h-4 w-4" /> Histórico
             </Button>
             {/* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */}
-            {editavelAberto && !salvando && (
+            {sobrescreveAberto && !salvando && (
               <Button
                 variant="secondary"
                 onClick={() => setSobrescreverDfd((n) => n + 1)}
@@ -791,9 +799,10 @@ export function useProtocoloGravado({
   /** Fora da pilha: o relatório (despacho) e o REENVIO do PDF são modais próprios. */
   const extra = (
     <>
-      {podeEditar && baseReenvio && (
+      {podeImportar && baseReenvio && (
         <ProtocoloUploadForm
           reenvio={baseReenvio}
+          podeExcluir={podeProto.excluir}
           iniciar={reenviar}
           onConcluido={() => {
             onAlterado();
@@ -806,7 +815,7 @@ export function useProtocoloGravado({
           orgaos={orgaos}
         />
       )}
-      {podeEditar && proto && gravadoAberto && editavelAberto && (
+      {proto && gravadoAberto && sobrescreveAberto && (
         <DfdUploadForm
           iniciar={sobrescreverDfd}
           sobrescrever={{

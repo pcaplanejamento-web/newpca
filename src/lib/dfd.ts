@@ -794,6 +794,8 @@ export async function getDfdReparticao(
   numero: string;
   planejamento: string | null;
   criadoPor: number | null;
+  /** O PCA do protocolo do DFD (a Mesa em que ele está — `null` = a do sistema). */
+  pcaId: number | null;
 } | null> {
   const [r] = await getDb()
     .select({
@@ -803,11 +805,13 @@ export async function getDfdReparticao(
       numero: dfds.numero,
       planejamento: dfds.planejamento,
       criadoPor: dfds.criadoPor,
+      pcaId: dfdProtocolos.pcaId,
     })
     .from(dfds)
+    .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(eq(dfds.id, id))
     .limit(1);
-  return r ?? null;
+  return r ? { ...r, pcaId: r.pcaId ?? null } : null;
 }
 
 /** Assinaturas + nome do arquivo de um DFD gravado (para reconferir a assinatura ao
@@ -869,13 +873,16 @@ export async function dfdsPorNumeros(numeros: string[]): Promise<DfdExistente[]>
 /** O DFD com esse `numero` (anti-sequestro e histórico no `start-dfd`); `null` se não existe. */
 export async function getReparticaoDfdNumero(
   numero: string,
-): Promise<{ id: number; reparticaoId: number | null; protocoloId: number | null; assinaturas: Assinatura[] } | null> {
+): Promise<{ id: number; reparticaoId: number | null; protocoloId: number | null; pcaId: number | null; assinaturas: Assinatura[] } | null> {
   const [r] = await getDb()
-    .select({ id: dfds.id, reparticaoId: dfds.reparticaoId, protocoloId: dfds.protocoloId, assinaturas: dfds.assinaturas })
+    .select({ id: dfds.id, reparticaoId: dfds.reparticaoId, protocoloId: dfds.protocoloId, pcaId: dfdProtocolos.pcaId, assinaturas: dfds.assinaturas })
     .from(dfds)
+    .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(eq(dfds.numero, numero))
     .limit(1);
-  return r ? { id: r.id, reparticaoId: r.reparticaoId, protocoloId: r.protocoloId, assinaturas: parseAssinaturas(r.assinaturas) } : null;
+  return r
+    ? { id: r.id, reparticaoId: r.reparticaoId, protocoloId: r.protocoloId, pcaId: r.pcaId ?? null, assinaturas: parseAssinaturas(r.assinaturas) }
+    : null;
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */

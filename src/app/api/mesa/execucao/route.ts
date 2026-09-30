@@ -1,4 +1,4 @@
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
 import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok } from "@/lib/http";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // CABEÇALHO com que a página foi carregada (`?ano=`; ausente = todos) e só os protocolos fora de um PCA. Devolve as
 // tuplas [protocolo, pessoa, dia, tipo, n] + as pessoas (foto + apelido) de quem agiu.
 export async function GET(req: Request) {
-  const g = await exigirUsuario();
+  const g = await exigirAcesso("dfd", "visualizar");
   if ("erro" in g) return g.erro;
   const q = execucaoMesaSchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!q.success) return erro("Parâmetros inválidos.", 422);

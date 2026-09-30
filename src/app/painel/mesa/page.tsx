@@ -1,7 +1,7 @@
 import { DfdsView } from "@/components/DfdsView";
 import { MesaPca } from "@/components/MesaPca";
 import { SeletorMesa } from "@/components/SeletorMesa";
-import { getUsuarioAtual } from "@/lib/auth";
+import { acessoPagina } from "@/lib/acesso-pagina";
 import type { PcaResumo } from "@/lib/dfd";
 import { carregarMesa, carregarMesaDoPca } from "@/lib/mesa-dados";
 import { getPcaEspaco } from "@/lib/pca-espaco";
@@ -19,23 +19,27 @@ export const dynamic = "force-dynamic";
 const opcoesMesa = (pcas: PcaResumo[]) => pcas.filter((p) => p.fonte === "protocolo").map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
 
 export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string }> }) {
-  const [u, sp] = await Promise.all([getUsuarioAtual(), searchParams]);
+  const sp = await searchParams;
   // `?pca=<id>` = a MESA DAQUELE PCA (a mesma da aba do espaço), escolhida no seletor da barra; PCA inexistente ou de
-  // lista = a Mesa do sistema.
+  // lista = a Mesa do sistema. Cada uma com o seu portão: a Mesa do PCA exige VISUALIZAR o PCA; a do sistema, a Mesa.
   const idPca = Number(sp.pca);
   const pca = Number.isInteger(idPca) && idPca > 0 ? await getPcaEspaco(idPca) : null;
   if (pca && pca.fonte === "protocolo") {
-    const mp = await carregarMesaDoPca(u, pca);
+    const rp = await acessoPagina("pca");
+    if (rp.bloqueio) return rp.bloqueio;
+    const mp = await carregarMesaDoPca(rp.acesso.u, pca);
     return <MesaPca key={pca.id} {...mp} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas)} atual={pca.id} />} />;
   }
-  const m = await carregarMesa(u);
+  const r = await acessoPagina("dfd");
+  if (r.bloqueio) return r.bloqueio;
+  const m = await carregarMesa(r.acesso.u);
   const alvo = lerVinculo(sp.abrir);
   const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
   return (
     <DfdsView
       key="sistema"
       seletorMesa={<SeletorMesa pcas={opcoesMesa(m.pcas)} atual={null} />}
-      podeEditar={m.podeEditar}
+      pode={m.pode}
       dfds={m.dfds}
       protocolos={m.protocolos}
       reparticoes={m.reparticoes}

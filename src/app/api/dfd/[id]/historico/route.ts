@@ -1,5 +1,5 @@
 import { dfdLegivel } from "@/lib/acesso-mesa";
-import { exigirUsuario, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { historicoDfd } from "@/lib/auditoria";
 import { getDfdReparticao } from "@/lib/dfd";
 import { unidadesDaSessao } from "@/lib/grupos";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Histórico de alterações DESTE DFD (campos, seções, assinaturas e ITENS — cada uma com a origem e o
  * protocolo por onde passou) — escopado por unidade (quem vê o DFD vê o histórico). */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso(["dfd", "pca"], "visualizar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");

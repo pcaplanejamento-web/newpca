@@ -5,7 +5,17 @@ import { grupos, permissoes, usuarioGrupos } from "@/db/schema";
 import { abasConhecidas } from "./abas";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
-import { PODE_NADA, type PodeTela, podeNaTela, type Tela, telasAbertas } from "./papeis-core";
+import {
+  type AcaoPapel,
+  mensagemSemPermissao,
+  mensagemTelaFechada,
+  PODE_NADA,
+  type PodeMesa,
+  type PodeTela,
+  podeNaTela,
+  type Tela,
+  telasAbertas,
+} from "./papeis-core";
 
 /**
  * ACESSO EFETIVO de quem está logado: o GRUPO (a permissão dele) libera as telas e o PAPEL diz o que se faz nelas —
@@ -73,6 +83,19 @@ export function podeTela(a: Acesso, tela: Tela, grupoId?: number | null): PodeTe
   const grupo = grupoId == null ? a.grupoAtivo : a.grupos.find((g) => g.id === grupoId);
   if (!grupo) return PODE_NADA;
   return podeNaTela({ admin: false, capacidades: a.u.papel.capacidades, abas: grupo.abas }, tela);
+}
+
+/** O MOTIVO da recusa quando a AÇÃO não é permitida na tela (a tela fechada — grupo/papel — ou a ação que o papel não
+ * permite); `null` = pode. As rotas respondem 403 com ele (`recusa`) e a MASSA o põe na falha de cada alvo. */
+export function motivoRecusa(a: Acesso, tela: Tela, acao: AcaoPapel, grupoId?: number | null): string | null {
+  const pode = podeTela(a, tela, grupoId);
+  if (pode[acao]) return null;
+  return pode.visualizar ? mensagemSemPermissao(tela, acao) : mensagemTelaFechada(tela);
+}
+
+/** O que o papel permite nas DUAS Mesas (a do sistema e a do PCA), no grupo ativo — cada recurso segue a sua. */
+export function podeMesa(a: Acesso): PodeMesa {
+  return { sistema: podeTela(a, "dfd"), pca: podeTela(a, "pca") };
 }
 
 /** Os grupos da pessoa em que a tela ABRE (os quadros de tarefas, o calendário e os avisos seguem por grupo). `null` =

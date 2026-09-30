@@ -1,5 +1,5 @@
 import { dfdsLegiveis } from "@/lib/acesso-mesa";
-import { exigirUsuario } from "@/lib/api-auth";
+import { exigirAcesso } from "@/lib/api-auth";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto } from "@/lib/avaliacao-core";
 import { avaliarLinhaDfd } from "@/lib/conferencia-dfd";
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * Leitura: só os DFDs que a pessoa LÊ (como `GET /api/dfd/[id]`).
  */
 export async function POST(req: Request) {
-  const a = await exigirUsuario();
+  const a = await exigirAcesso(["dfd", "pca"], "visualizar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(conferenciaDfdsSchema, req);
   if ("resp" in p) return p.resp;

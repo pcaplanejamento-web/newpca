@@ -108,6 +108,30 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "catalogo/unidades-medida/sinonimos": { POST: tela("catalogo", "configurar") },
   "catalogo/verificar": { POST: tela("catalogo", "importar") },
 
+  // ── Mesa (a tela do RECURSO: protocolo num PCA → `pca`, senão `dfd`; LER = uma das duas Mesas + o escopo de unidades)
+  "dfd": { POST: recurso(MESA, "importar", "recusa(", "a Mesa de destino: a do protocolo; sem ele, a do DFD existente (novo avulso = sistema)") },
+  "dfd/[id]": {
+    GET: tela(MESA, "visualizar", "a unidade do DFD ou a do protocolo dele no escopo"),
+    PATCH: recurso(MESA, "manipular", "recusa(", "vincular: também Manipular na Mesa do protocolo de destino"),
+    DELETE: recurso(MESA, "excluir", "recusa(", "desfazer = Importar (só a gravação parcial própria); reenvio = Importar + Excluir"),
+  },
+  "dfd/[id]/historico": { GET: tela(MESA, "visualizar") },
+  "dfd/conferencia": { POST: tela(MESA, "visualizar") },
+  "dfd/existentes": { POST: tela(MESA, "importar") },
+  "dfd/itens": { GET: recurso(MESA, "visualizar", "recusa(", "?pca= → a Mesa do PCA; senão a do sistema") },
+  "dfd/itens/massa": { POST: recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha") },
+  "dfd/massa": { POST: recurso(MESA, "manipular", "motivoRecusa(", "por DFD — o que o papel não permite vira falha") },
+  "mesa/execucao": { GET: tela("dfd", "visualizar", "o Dashboard da Mesa do sistema") },
+  "protocolo": { POST: recurso(MESA, "importar", "recusa(", "novo = Mesa do sistema; reenvio/mesmo nº = a Mesa em que ele está") },
+  "protocolo/[id]": {
+    GET: tela(MESA, "visualizar"),
+    PATCH: recurso(MESA, "manipular", "recusa(", "capa, unidade, responsável e situação"),
+    DELETE: recurso(MESA, "excluir", "recusa(", "em cascata com os DFDs; num PCA, não se exclui"),
+  },
+  "protocolo/[id]/historico": { GET: tela(MESA, "visualizar") },
+  "protocolo/conferencia": { POST: tela(MESA, "visualizar") },
+  "protocolo/massa": { POST: recurso(MESA, "manipular", "motivoRecusa(", "por protocolo — o que o papel não permite vira falha") },
+
   // ── Orçamento ───────────────────────────────────────────────────────────────────────────────────────────
   "orcamento": { POST: tela("orcamento", "importar", "importar o CUBO (em lotes)") },
   "orcamento/[id]": {
@@ -159,10 +183,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
  */
 export const PENDENTES: readonly string[] = [
   "calendario/",
-  "dfd",
   "integracoes/trello/boards",
-  "mesa/",
-  "protocolo",
   "tabela/",
   "tarefas",
 ];

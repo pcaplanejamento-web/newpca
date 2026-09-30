@@ -20,13 +20,16 @@ import {
   mensagemTelaFechada,
   motivoSemModulos,
   PAPEIS_SISTEMA,
+  PODE_MESA_NADA,
   PODE_NADA,
   PODE_TUDO,
   papelSistema,
   podeNaTela,
+  podeNoRecurso,
   resumoCapacidades,
   retiraAlgo,
   roleEspelho,
+  telaDoRecurso,
   telasAbertas,
   textoDiffCapacidades,
 } from "../src/lib/papeis-core.ts";
@@ -247,5 +250,22 @@ describe("mensagens", () => {
     assert.match(motivoSemModulos({ ...base, abasDoGrupo: ["nao-existe"] }) ?? "", /não libera nenhuma tela/);
     assert.match(motivoSemModulos({ ...base, capacidades: { pca: ["visualizar"] } }) ?? "", /Seu papel não permite visualizar/);
     assert.equal(motivoSemModulos(base), null);
+  });
+});
+
+describe("as duas Mesas — cada recurso segue a Mesa em que está", () => {
+  it("protocolo num PCA (enviado ou incorporado) é da Mesa do PCA; fora dele, da Mesa do sistema", () => {
+    assert.equal(telaDoRecurso(7), "pca");
+    assert.equal(telaDoRecurso(null), "dfd");
+    assert.equal(telaDoRecurso(undefined), "dfd");
+  });
+
+  it("o papel de cada Mesa vale só nos recursos dela", () => {
+    const ctx = { admin: false, capacidades: coerceCapacidades({ dfd: ["visualizar", "manipular"], pca: ["visualizar"] }), abas: ["dfd", "pca"] };
+    const pode = { sistema: podeNaTela(ctx, "dfd"), pca: podeNaTela(ctx, "pca") };
+    assert.equal(podeNoRecurso(pode, null).manipular, true);
+    assert.equal(podeNoRecurso(pode, 3).manipular, false);
+    assert.equal(podeNoRecurso(pode, 3).visualizar, true);
+    assert.deepEqual(podeNoRecurso(PODE_MESA_NADA, null), PODE_NADA);
   });
 });

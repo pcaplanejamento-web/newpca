@@ -7,6 +7,7 @@ import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
 import { editarItemDfd, indiceAposRemover, removerItemDfd, STATUS_MENSAGEM_COR, unificarItensDfd } from "@/lib/dfd-tratamento";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
 import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
@@ -79,7 +80,7 @@ export function useDfdGravado({
   modoItem = false,
   onFechar,
   onVerProtocolo,
-  podeEditar,
+  pode,
   reparticoes,
   reparticaoAtivaId,
   regras,
@@ -97,7 +98,8 @@ export function useDfdGravado({
   onFechar: () => void;
   /** "Ver protocolo" — a pilha empilha o protocolo à direita. Ausente = sem o botão. */
   onVerProtocolo?: (protocoloId: number) => void;
-  podeEditar: boolean;
+  /** O que o PAPEL permite nas duas Mesas — o DFD segue a Mesa do protocolo dele. */
+  pode: PodeMesa;
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
   regras: RegrasAvaliacao;
@@ -212,7 +214,10 @@ export function useDfdGravado({
     orig && estaTravado({ pcaId: orig.protocoloPcaId, pcaIncorporadoEm: orig.protocoloPcaIncorporadoEm })
       ? mensagemTravaPca(pcas.find((p) => p.id === orig.protocoloPcaId)?.nome)
       : null;
-  const editavel = podeEditar && acessivel && !travaPca;
+  // O PAPEL na Mesa em que o DFD está (a do protocolo dele): editar = Manipular; sobrescrever com o arquivo novo = Importar.
+  const podeDfd = podeNoRecurso(pode, orig?.protocoloPcaId);
+  const editavel = podeDfd.manipular && acessivel && !travaPca;
+  const podeSobrescrever = podeDfd.importar && acessivel && !travaPca;
   const reps: Rep[] = editavel || !unidade || reparticoes.some((r) => r.id === unidade.id) ? reparticoes : [...reparticoes, unidade];
   const rep = repId != null ? (reps.find((r) => r.id === repId) ?? null) : null;
   const categoria = classificarAssunto(orig?.protocoloAssunto ?? null);
@@ -264,7 +269,7 @@ export function useDfdGravado({
       const ok = detalhe.reparticaoId == null || reparticoes.some((x) => x.id === detalhe.reparticaoId);
       const trava = estaTravado({ pcaId: detalhe.protocoloPcaId, pcaIncorporadoEm: detalhe.protocoloPcaIncorporadoEm });
       if (rev.ajustes.length === 0) return void toast.success(`DFD ${detalhe.numero} atualizado — nada a tratar.`);
-      if (!podeEditar || !ok || trava)
+      if (!podeNoRecurso(pode, detalhe.protocoloPcaId).manipular || !ok || trava)
         return void toast.warning(`DFD ${detalhe.numero} atualizado. Há dados a tratar (${resumoRevisao(rev.ajustes)}), mas ele está só-leitura.`, 8000);
       setDfd(rev.dfd);
       setEditado(true);
@@ -340,7 +345,7 @@ export function useDfdGravado({
   /** "Sobrescrever DFD": sobe o arquivo NOVO deste DFD (mesmo nº) e escolhe, dado a dado, o que sobrescrever.
    * DFD sem protocolo com a importação avulsa desligada pelo ADM não oferece (o servidor recusaria no fim). */
   const botaoSobrescrever =
-    editavel && orig && !salvando && (orig.protocoloId != null || importarDfdHabilitado(regras)) ? (
+    podeSobrescrever && orig && !salvando && (orig.protocoloId != null || importarDfdHabilitado(regras)) ? (
       <Button
         variant="secondary"
         onClick={() => setSobrescrever((n) => n + 1)}
@@ -531,7 +536,7 @@ export function useDfdGravado({
 
   /** Fora da pilha: a SOBRESCRITA (lançador + banner da escolha por dado) é um modal próprio. */
   const extra =
-    editavel && orig ? (
+    podeSobrescrever && orig ? (
       <DfdUploadForm
         iniciar={sobrescrever}
         sobrescrever={{

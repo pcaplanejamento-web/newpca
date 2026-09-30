@@ -59,6 +59,7 @@ import { num } from "@/lib/format";
 import { buscarExistentes, enviarDfdEmLotes, type ExistenteImport } from "@/lib/importar-dfd";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
+import { mensagemSemPermissao, telaDoRecurso } from "@/lib/papeis-core";
 import { motivoNaoExcluirDfd } from "@/lib/pca-core";
 import { type Assinatura, type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
@@ -172,6 +173,7 @@ export function ProtocoloUploadForm({
   regras = regrasPadrao(),
   orgaos = [],
   reenvio = null,
+  podeExcluir = true,
   iniciar = 0,
   onConcluido,
 }: {
@@ -187,6 +189,8 @@ export function ProtocoloUploadForm({
    * Sem ele: importação normal ("Importar protocolo", no rodapé da tabela de protocolos da Mesa).
    */
   reenvio?: BaseReenvio | null;
+  /** (reenvio) O papel EXCLUI na Mesa do protocolo — sem isso, os DFDs gravados que não vieram no PDF ficam mantidos. */
+  podeExcluir?: boolean;
   /** Contador do BOTÃO do host (rodapé da tabela de protocolos da Mesa; no reenvio, o banner do protocolo
    * gravado): cada valor NOVO abre o lançador. */
   iniciar?: number;
@@ -1060,7 +1064,8 @@ export function ProtocoloUploadForm({
     .filter((x): x is DfdExistente => !!x);
   // Protocolo em um PCA (enviado): DFD não é excluído — os gravados fora do envio ficam MANTIDOS (o servidor recusaria).
   const semExcluirGravados = reenvio
-    ? motivoNaoExcluirDfd({ pcaId: reenvio.protocolo.pcaId, pcaIncorporadoEm: reenvio.protocolo.pcaIncorporadoEm }, reenvio.protocolo.pcaNome)
+    ? (motivoNaoExcluirDfd({ pcaId: reenvio.protocolo.pcaId, pcaIncorporadoEm: reenvio.protocolo.pcaIncorporadoEm }, reenvio.protocolo.pcaNome) ??
+      (podeExcluir ? null : mensagemSemPermissao(telaDoRecurso(reenvio.protocolo.pcaId), "excluir")))
     : null;
   const removidos = (reenvio?.dfds ?? [])
     .filter((g) => !numerosPdf.has(chaveDfd(g.numero)))
