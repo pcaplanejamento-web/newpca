@@ -24,7 +24,7 @@ type CampoProps = {
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "size">;
 
 /** Altura da caixa no padrão (54px) ou no modo DENSO (44px). */
-const alturaCls = (denso?: boolean) => (denso ? "h-11 [@media(max-height:720px)]:h-10" : "h-[54px]");
+const alturaCls = (denso?: boolean) => (denso ? "h-11 [@media(max-height:820px)]:h-10 lg:[@media(max-height:680px)]:h-[38px]" : "h-[54px]");
 
 /**
  * O RÓTULO do campo. No modo DENSO o erro vai na MESMA linha do rótulo (à direita, cortado; o texto inteiro na dica) — o
@@ -42,7 +42,7 @@ function Rotulo({ label, fid, denso, error, errId, extra }: { label?: string; fi
       </div>
     );
   return (
-    <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+    <div className="mb-1 flex min-w-0 items-center justify-between gap-2 lg:[@media(max-height:680px)]:mb-0.5">
       {label && (
         <span className="flex shrink-0 items-center gap-1">
           <label htmlFor={fid} className="text-[13px] font-bold text-text">
@@ -115,6 +115,7 @@ export function SelectField({
   denso,
   id,
   compacto = false,
+  textoEscolhido,
   children,
   ...rest
 }: {
@@ -127,6 +128,8 @@ export function SelectField({
   /** Compacto (barras de ferramentas, ao lado de `Button size="sm"`): `--h-control-sm` no desktop, 44px no toque; o
    * rótulo vira um prefixo discreto DENTRO da caixa. */
   compacto?: boolean;
+  /** O texto da opção ESCOLHIDA em até 2 linhas DENTRO da caixa (nomes longos — ex.: a unidade — nunca ficam cortados). */
+  textoEscolhido?: string;
   children: ReactNode;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
   const auto = useId();
@@ -148,10 +151,18 @@ export function SelectField({
   return (
     <div className="min-w-0">
       <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
-      <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+      <div className={`${WRAP} relative ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+        {textoEscolhido && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-3.5 right-9 flex items-center text-[13px] font-medium leading-[1.15] text-text sm:text-[14px]"
+          >
+            <span className="line-clamp-2 break-words">{textoEscolhido}</span>
+          </span>
+        )}
         <select
           id={fid}
-          className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60`}
+          className={`${INPUT} h-full cursor-pointer disabled:cursor-default disabled:opacity-60 ${textoEscolhido ? "!text-transparent [&_optgroup]:text-text [&_option]:text-text" : ""}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errId : undefined}
           {...rest}

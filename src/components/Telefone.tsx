@@ -4,19 +4,17 @@ import type { FocusEventHandler } from "react";
 import { filtrarTelefone, formatarTelefone, linkWhatsapp } from "@/lib/cadastro-core";
 import { Ajuda } from "./Ajuda";
 import { TextField } from "./Field";
-import { IconTelefone, IconWhatsapp } from "./icons";
+import { IconWhatsapp } from "./icons";
 import { LinkExterno } from "./LinkExterno";
 
 /**
- * TELEFONE DE CONTATO INSTITUCIONAL — o campo (cadastro e ADM) e o botão de conversa no WhatsApp. O valor é SÓ os dígitos
- * (`filtrarTelefone`); a tela mostra a máscara "(64) 99999-0000". O botão do WhatsApp fica DENTRO do campo, no fim: tocar
- * marca/desmarca que o número tem WhatsApp (`aria-pressed`, verde quando marcado). O "(?)" diz por que o telefone importa.
+ * CONTATO INSTITUCIONAL (cadastro) — o número de WHATSAPP com DDD pelo qual a equipe do Planejamento e Custos fala com a
+ * pessoa. O valor é SÓ os dígitos (`filtrarTelefone`); a tela mostra a máscara "(64) 99999-0000". O ícone do WhatsApp à
+ * esquerda diz que é o contato de WhatsApp que pedimos; o "(?)" explica por quê.
  */
 export function CampoTelefone({
   valor,
   onValor,
-  whatsapp,
-  onWhatsapp,
   error,
   onBlur,
   denso = true,
@@ -26,45 +24,31 @@ export function CampoTelefone({
   /** Só os dígitos. */
   valor: string;
   onValor: (digitos: string) => void;
-  whatsapp: boolean;
-  onWhatsapp: (tem: boolean) => void;
   error?: string;
   onBlur?: FocusEventHandler<HTMLInputElement>;
   denso?: boolean;
-  /** Mostra o "(?)" ao lado do rótulo (a explicação da importância do telefone). */
+  /** Mostra o "(?)" ao lado do rótulo (a explicação da importância do contato). */
   ajuda?: boolean;
   id?: string;
 }) {
   return (
     <TextField
       id={id}
-      label="Telefone"
+      label="Contato institucional"
       rotuloExtra={
         ajuda ? (
-          <Ajuda titulo="Por que o telefone?" rotulo="Ajuda do telefone" compacta>
+          <Ajuda titulo="Por que o contato institucional?" rotulo="Ajuda do contato institucional" compacta>
             <p>
-              É o telefone de <strong className="text-text">contato institucional</strong>: a equipe do Planejamento e Custos usa esse número para falar
-              com você sobre as suas demandas — um DFD a corrigir, um prazo, uma dúvida sobre o PCA.
+              É o seu número de <strong className="text-text">WhatsApp</strong>, com DDD: a equipe do Planejamento e Custos usa esse contato para falar com
+              você sobre as suas demandas — um DFD a corrigir, um prazo, uma dúvida sobre o PCA.
             </p>
-            <p>Informe o DDD. Se o número tem WhatsApp, toque no ícone do WhatsApp dentro do campo: a equipe poderá chamar você por lá.</p>
+            <p>Use um número em que você responda durante o expediente.</p>
           </Ajuda>
         ) : undefined
       }
-      icon={<IconTelefone className="h-5 w-5" />}
-      trailing={
-        <button
-          type="button"
-          onClick={() => onWhatsapp(!whatsapp)}
-          aria-pressed={whatsapp}
-          aria-label="Este telefone tem WhatsApp"
-          title={whatsapp ? "Tem WhatsApp — tocar desmarca" : "Tocar marca que o telefone tem WhatsApp"}
-          className={`relative -mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-control transition-colors duration-[var(--motion-duration)] after:absolute after:-inset-1 after:content-[''] ${
-            whatsapp ? "bg-[color-mix(in_oklab,var(--ok)_14%,transparent)] text-[var(--ok)]" : "text-faint hover:bg-surface-2 hover:text-text-2"
-          }`}
-        >
-          <IconWhatsapp className="h-5 w-5" />
-        </button>
-      }
+      icon={<IconWhatsapp className="h-5 w-5 text-[var(--ok)]" />}
+      // Números tabulares um pouco menores: "(64) 99999-0000" cabe inteiro na meia coluna do cadastro.
+      classeEntrada="!text-[14px] tabular-nums"
       inputMode="tel"
       autoComplete="tel-national"
       placeholder="(64) 99999-0000"

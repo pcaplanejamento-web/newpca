@@ -402,7 +402,7 @@ function Corpo({
               <Valor>{r.matricula || "—"}</Valor>
             )}
           </LinhaCampo>
-          <LinhaCampo label="Telefone" {...lock("telefone")}>
+          <LinhaCampo label="Contato institucional" {...lock("telefone")}>
             {abertos.has("telefone") ? (
               <>
                 <div className="flex items-center gap-2">
@@ -412,7 +412,7 @@ function Corpo({
                     onChange={(e) => set("telefone")(filtrarTelefone(e.target.value))}
                     inputMode="tel"
                     placeholder="(64) 99999-0000"
-                    aria-label="Telefone"
+                    aria-label="Contato institucional"
                   />
                   <button
                     type="button"

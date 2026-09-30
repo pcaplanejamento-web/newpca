@@ -23,7 +23,7 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
   antigo segue gravado só como espelho (nada decide por ele).
 
 ## Fluxo de acesso
-- **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula (**exatamente 6 números**, com as 6 posições desenhadas no campo e um "(?)"), telefone de contato institucional (com o "(?)" e a marca de WhatsApp), cargo ou função (seleção da lista
+- **Cadastro institucional (2 etapas, cabe na tela sem rolar):** nome completo, matrícula (**exatamente 6 números**, com as 6 posições desenhadas no campo e um "(?)"), contato institucional = o WhatsApp da pessoa (ícone do WhatsApp e o "(?)"), cargo ou função (seleção da lista
   que o ADM cadastra em Usuários → Cargos e funções), unidade em que trabalha, o usuário do e-mail (o `@rioverde.go.gov.br`
   já vem preenchido), e-mail **@rioverde.go.gov.br** e
   senha → captcha (sempre) → **código de 6 dígitos** no e-mail (validade 10 min, reenvio após 60 s, 5 tentativas) →

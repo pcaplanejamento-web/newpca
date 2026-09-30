@@ -280,11 +280,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **CONTATO + CONTROLE DO ADM (migração `0073`, aditiva — `usuarios.telefone` [só dígitos], `telefone_whatsapp`,
     `dados_validados_em`/`dados_validados_por` [o NOME de quem validou], `trocar_senha`):**
     - **Cadastro:** **Matrícula** no **`CampoMatricula`** (as 6 posições desenhadas no FUNDO do campo — "0" apagado sobre um
-      traço, preenchidas ao digitar; `TextField.fundo` + `classeEntrada` monoespaçada) e **Telefone** no **`CampoTelefone`**
-      (máscara "(64) 99999-0000", o ícone do WhatsApp DENTRO do campo marca/desmarca — `aria-pressed`, verde); os dois com o
-      "(?)" ao lado do rótulo (**`Ajuda compacta`** via `TextField.rotuloExtra`) explicando a matrícula (6 números, única) e a
-      importância do telefone (contato da equipe do Planejamento e Custos). Grade: Nome · Matrícula|Telefone · Cargo|Unidade ·
-      E-mail · Senha|Confirmar — segue cabendo na tela sem rolar (medido 1280×650 a 1920×1080). Núcleo puro em
+      traço, preenchidas ao digitar; `TextField.fundo` + `classeEntrada` monoespaçada) e o **Contato institucional** no
+      **`CampoTelefone`** (= o WhatsApp da pessoa: só o ÍCONE do WhatsApp à esquerda, máscara "(64) 99999-0000"; o cadastro
+      grava `telefone_whatsapp`=1); os dois com o "(?)" ao lado do rótulo (**`Ajuda compacta`** via `TextField.rotuloExtra`).
+      Grade: Nome · Matrícula|Contato · Cargo (inteira) · Unidade (inteira) · E-mail · Senha|Confirmar. **NENHUM TEXTO
+      CORTADO:** o `SelectField textoEscolhido` mostra a opção escolhida em até 2 linhas DENTRO da caixa (unidades de nome
+      longo — `rotuloUnidade`, `OpcoesUnidades.tsx`), placeholders curtos ("Mínimo 8"), fontes internas ajustadas (contato
+      14px tabular; domínio do e-mail 13,5px no celular). Cabe sem rolar no desktop: compacta em ≤ 960px de altura (sem o
+      aviso), ≤ 820px (caixas de 40px, sem subtítulo), ≤ 720px (título só para leitor de tela — o seletor Entrar | Criar conta
+      diz onde se está) e ≤ 680px (caixas de 38px, respiros menores). Medido de 360×740 a 1920×1080 (harness: cada
+      placeholder/valor/opção cabe na caixa). Núcleo puro em
       `cadastro-core.ts`: `filtrarTelefone` (tira o 55 colado), `telefoneValido`, `formatarTelefone`, `linkWhatsapp`.
     - **Usuários (`UsuariosAdmin`) = a TABELA PADRÃO** (`DataTable scrollInterno density="compact"`, filtros por coluna,
       `onRowClick` + `activeKey`): Usuário (foto + nome) · Unidade · Papel · Grupos · Status (+ ícone "senha nova exigida") · Dados

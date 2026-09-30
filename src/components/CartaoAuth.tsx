@@ -26,7 +26,8 @@ export function CartaoAuth({
 }) {
   const conteudo = (
     <>
-      <div className={denso ? "mb-3" : "mb-6"}>
+      {/* DENSO em tela BAIXA do desktop (≤ 720px de altura): sem o título — o seletor Entrar | Criar conta já diz onde se está. */}
+      <div className={denso ? "mb-3 lg:[@media(max-height:720px)]:sr-only" : "mb-6"}>
         {etapa && !denso && <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{etapa}</p>}
         {/* DENSO: a etapa vai na MESMA linha do título, à direita. */}
         <div className="flex items-baseline justify-between gap-3">
@@ -35,7 +36,7 @@ export function CartaoAuth({
         </div>
         {/* DENSO em tela baixa: sem o subtítulo (o formulário cabe sem rolar). */}
         {subtitulo && (
-          <p className={`${denso ? "mt-1 text-[13px] leading-snug [@media(max-height:720px)]:hidden" : "mt-2 text-[14px] leading-relaxed"} text-muted`}>{subtitulo}</p>
+          <p className={`${denso ? "mt-1 text-[13px] leading-snug [@media(max-height:820px)]:hidden" : "mt-2 text-[14px] leading-relaxed"} text-muted`}>{subtitulo}</p>
         )}
       </div>
       {children}

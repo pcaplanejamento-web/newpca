@@ -1,5 +1,8 @@
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 
+/** O rótulo de uma unidade de trabalho nas opções: "SIGLA — Nome" (sem sigla própria, só o nome). */
+export const rotuloUnidade = (u: UnidadeTrabalho) => (u.codigo && u.codigo !== u.nome ? `${u.codigo} — ${u.nome}` : u.nome);
+
 /** As opções de um `<select>` de UNIDADE DE TRABALHO, agrupadas pelo ÓRGÃO (`optgroup`) na ordem do cadastro — o seletor
  * nativo do celular mostra os grupos. Sem órgão, vão no fim, em "Outras". */
 export function OpcoesUnidades({ unidades }: { unidades: UnidadeTrabalho[] }) {
@@ -16,7 +19,7 @@ export function OpcoesUnidades({ unidades }: { unidades: UnidadeTrabalho[] }) {
         <optgroup key={orgao} label={orgao}>
           {lista.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.codigo && u.codigo !== u.nome ? `${u.codigo} — ${u.nome}` : u.nome}
+              {rotuloUnidade(u)}
             </option>
           ))}
         </optgroup>

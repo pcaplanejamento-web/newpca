@@ -20,14 +20,14 @@ import { Ajuda } from "./Ajuda";
 import { Button } from "./Button";
 import { CartaoAuth, ConcluidoAuth, ErroAuth } from "./CartaoAuth";
 import { type ConfigCaptcha, EtapaCodigo, useCaptcha, useCodigoEmail } from "./CodigoEmail";
-import { OpcoesUnidades } from "./OpcoesUnidades";
+import { OpcoesUnidades, rotuloUnidade } from "./OpcoesUnidades";
 import { PasswordField, SelectField, TextField } from "./Field";
 import { CampoMatricula } from "./CampoMatricula";
 import { CampoTelefone } from "./Telefone";
 import { IconArrowRight, IconMail, IconUser } from "./icons";
 
 /**
- * CADASTRO em 2 etapas (um dos modos da `TelaAcesso`): (1) nome completo, matrícula, telefone (+ WhatsApp), cargo/função, unidade, e-mail INSTITUCIONAL e senha (+ captcha) → envia o código;
+ * CADASTRO em 2 etapas (um dos modos da `TelaAcesso`): (1) nome completo, matrícula, contato institucional (WhatsApp), cargo/função, unidade, e-mail INSTITUCIONAL e senha (+ captcha) → envia o código;
  * (2) o código de 6 dígitos confirma o e-mail e cria a conta (pendente de aprovação do ADM). `semCodigo` = o PRIMEIRO
  * acesso do sistema (ainda não há envio de e-mails configurado): cria direto.
  */
@@ -51,11 +51,11 @@ export function CadastroForm({
   const router = useRouter();
   const [nome, setNome] = useState("");
   const [matricula, setMatricula] = useState("");
-  // O telefone de contato institucional (só os dígitos) e se ele tem WhatsApp.
+  // O contato institucional: o número de WhatsApp (só os dígitos).
   const [telefone, setTelefone] = useState("");
-  const [whatsapp, setWhatsapp] = useState(false);
   const [cargo, setCargo] = useState("");
   const [unidade, setUnidade] = useState("");
+  const unidadeEscolhida = unidades.find((u) => String(u.id) === unidade);
   // Só a parte antes do "@" — o domínio institucional é fixo no campo.
   const [usuarioEmail, setUsuarioEmail] = useState("");
   const email = emailDaParteLocal(usuarioEmail);
@@ -76,8 +76,8 @@ export function CadastroForm({
     else if (!nomeValido(nome)) p.nome = "O nome aceita só letras, espaços, apóstrofo e hífen.";
     if (!matricula) p.matricula = "Informe a matrícula.";
     else if (!matriculaValida(matricula)) p.matricula = "A matrícula tem exatamente 6 números.";
-    if (!telefone) p.telefone = "Informe o telefone de contato.";
-    else if (!telefoneValido(telefone)) p.telefone = "Telefone com DDD: fixo com 10 dígitos ou celular com 11.";
+    if (!telefone) p.telefone = "Informe o seu WhatsApp com DDD.";
+    else if (!telefoneValido(telefone)) p.telefone = "Número com DDD: 11 dígitos no celular.";
     if (cargos.length > 0 && !cargo) p.cargo = "Selecione o seu cargo ou função.";
     if (!unidade) p.unidade = "Selecione a unidade em que você trabalha.";
     if (!emailInstitucional(email)) p.email = "Informe o seu usuário do e-mail institucional (o que vem antes do @).";
@@ -100,7 +100,8 @@ export function CadastroForm({
           nome,
           matricula,
           telefone,
-          telefoneWhatsapp: whatsapp,
+          // O contato institucional é o WhatsApp.
+          telefoneWhatsapp: true,
           cargo,
           reparticaoId: Number(unidade),
           email,
@@ -201,7 +202,7 @@ export function CadastroForm({
       denso
       onSubmit={etapaDados}
     >
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 [@media(max-height:720px)]:gap-2">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 [@media(max-height:820px)]:gap-2 lg:[@media(max-height:680px)]:gap-1.5">
         <div className="sm:col-span-2">
           <TextField
             label="Nome completo"
@@ -232,10 +233,13 @@ export function CadastroForm({
           onBlur={tocar("matricula")}
           error={erroDe("matricula")}
         />
-        <CampoTelefone valor={telefone} onValor={setTelefone} whatsapp={whatsapp} onWhatsapp={setWhatsapp} onBlur={tocar("telefone")} error={erroDe("telefone")} />
+        <CampoTelefone valor={telefone} onValor={setTelefone} onBlur={tocar("telefone")} error={erroDe("telefone")} />
+        {/* Cargo e unidade em linhas INTEIRAS: o nome escolhido cabe sem cortar. */}
         {cargos.length > 0 && (
+          <div className="sm:col-span-2">
           <SelectField
             label="Cargo ou função"
+            textoEscolhido={cargo || undefined}
             value={cargo}
             onChange={(e) => setCargo(e.target.value)}
             onBlur={tocar("cargo")}
@@ -252,10 +256,12 @@ export function CadastroForm({
               </option>
             ))}
           </SelectField>
+          </div>
         )}
-        <div className={cargos.length ? "" : "sm:col-span-2"}>
+        <div className="sm:col-span-2">
           <SelectField
             label="Unidade em que trabalha"
+            textoEscolhido={unidadeEscolhida ? rotuloUnidade(unidadeEscolhida) : undefined}
             value={unidade}
             onChange={(e) => setUnidade(e.target.value)}
             onBlur={tocar("unidade")}
@@ -273,7 +279,7 @@ export function CadastroForm({
           <TextField
             label="E-mail institucional"
             icon={<IconMail className="h-5 w-5" />}
-            trailing={<span className="shrink-0 select-none text-[15px] text-muted">@{DOMINIO_INSTITUCIONAL}</span>}
+            trailing={<span className="shrink-0 select-none text-[13.5px] text-muted sm:text-[15px]">@{DOMINIO_INSTITUCIONAL}</span>}
             inputMode="email"
             autoCapitalize="none"
             spellCheck={false}
@@ -293,7 +299,7 @@ export function CadastroForm({
           onChange={(e) => setSenha(e.target.value)}
           onBlur={tocar("senha")}
           error={erroDe("senha")}
-          placeholder="Letras e números, mín. 8"
+          placeholder="Mínimo 8"
           autoComplete="new-password"
           minLength={LIMITES_CADASTRO.senhaMin}
           maxLength={LIMITES_CADASTRO.senhaMax}
@@ -322,11 +328,11 @@ export function CadastroForm({
         variant="accent"
         loading={cod.enviando || criando}
         icon={!(cod.enviando || criando) && <IconArrowRight className="h-4 w-4" />}
-        className="mt-3 h-11 w-full text-[15px] lg:h-11 [@media(max-height:720px)]:mt-2.5"
+        className="mt-3 h-11 w-full text-[15px] lg:h-11 [@media(max-height:820px)]:mt-2.5 lg:[@media(max-height:680px)]:mt-2"
       >
         {semCodigo ? "Criar conta" : "Enviar código de confirmação"}
       </Button>
-      <div className="mt-2.5 flex justify-center [&>*]:w-full [&>*]:max-w-[300px]">{captcha.widget}</div>
+      <div className="mt-2.5 flex justify-center lg:[@media(max-height:680px)]:mt-1.5 [&>*]:w-full [&>*]:max-w-[300px]">{captcha.widget}</div>
 
     </CartaoAuth>
   );

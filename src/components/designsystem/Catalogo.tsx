@@ -326,13 +326,12 @@ const USUARIO_DEMO: UsuarioAdmin = {
 function DemoUsuario() {
   const [mat, setMat] = useState("0452");
   const [tel, setTel] = useState("6499988");
-  const [zap, setZap] = useState(true);
   const [aberto, setAberto] = useState(false);
   const [u, setU] = useState(USUARIO_DEMO);
   return (
     <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] sm:grid-cols-2">
       <CampoMatricula label="Matrícula (CampoMatricula)" valor={mat} onValor={setMat} />
-      <CampoTelefone valor={tel} onValor={setTel} whatsapp={zap} onWhatsapp={setZap} />
+      <CampoTelefone valor={tel} onValor={setTel} />
       <div className="flex flex-wrap items-center gap-2">
         <BotaoWhatsapp telefone="64999887766" />
         <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
@@ -2787,7 +2786,7 @@ export function Catalogo() {
         <DemoAcesso />
       </Secao>
 
-      <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (máscara + WhatsApp + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">
+      <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (contato institucional = WhatsApp: máscara + ícone + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">
         <DemoUsuario />
       </Secao>
       <Secao titulo="KPIs">

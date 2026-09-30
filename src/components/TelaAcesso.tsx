@@ -70,7 +70,7 @@ export function TelaAcesso({
 
   return (
     <main className="grid min-h-dvh bg-surface lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:overflow-hidden">
-      <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-12 xl:pt-16 lg:[@media(max-height:820px)]:pt-8">
+      <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-12 xl:pt-16 lg:[@media(max-height:820px)]:pt-8 lg:[@media(max-height:680px)]:pb-4">
         {/* No desktop a marca fica na vitrine. */}
         <div className="lg:hidden">
           <MarcaSistema identidade={identidade} />
@@ -89,7 +89,7 @@ export function TelaAcesso({
               ]}
             />
           </div>
-          <div className="mt-8 lg:mt-[clamp(0.75rem,3.5dvh,2.5rem)] lg:[@media(max-height:820px)]:mt-3">
+          <div className="mt-8 lg:mt-[clamp(0.75rem,3.5dvh,2.5rem)] lg:[@media(max-height:820px)]:mt-3 lg:[@media(max-height:680px)]:mt-2">
             {modo === "entrar" ? (
               <AuthForm key="entrar" onEsqueci={() => irPara("senha")} turnstile={turnstile} google={google} googleConta={googleConta} erroInicial={erro} />
             ) : modo === "cadastro" ? (
@@ -98,10 +98,10 @@ export function TelaAcesso({
               <RecuperarSenhaForm key="senha" onVoltar={() => irPara("entrar")} turnstile={turnstile} />
             )}
           </div>
-          {/* No cadastro em tela BAIXA (desktop ≤ 820px de altura) o aviso sai: o formulário e o captcha cabem sem rolar. */}
+          {/* No cadastro em tela BAIXA (desktop ≤ 960px de altura) o aviso sai: o formulário e o captcha cabem sem rolar. */}
           <p
             className={`mt-auto pt-5 text-center text-[12px] leading-relaxed text-faint lg:pb-6 lg:[@media(max-height:720px)]:pt-3 lg:[@media(max-height:720px)]:pb-4 ${
-              modo === "cadastro" ? "lg:[@media(max-height:820px)]:hidden" : ""
+              modo === "cadastro" ? "lg:[@media(max-height:960px)]:hidden" : ""
             }`}
           >
             {textos.aviso}
