@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import type { FontePca, StatusPca } from "@/lib/pca-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
 import { selectCls } from "./formStyles";
 import { IconCheck, IconImage, IconLock, IconTrash } from "./icons";
@@ -70,11 +71,15 @@ function OpcaoFonte({
 export function PcaConfiguracao({
   pca,
   podeEditar,
+  podeExcluir,
   temDados,
   visoes,
 }: {
   pca: ConfigPca;
+  /** O papel CONFIGURA o PCA (nome, ano, fonte, publicar, capa, visão, marcados). */
   podeEditar: boolean;
+  /** O papel EXCLUI o PCA. */
+  podeExcluir: boolean;
   /** Descrição dos dados que TRAVAM a troca de fonte (ex.: "3 planilha(s)"); `null` = livre. */
   temDados: string | null;
   visoes: { id: number; nome: string; resumo: string }[];
@@ -86,6 +91,7 @@ export function PcaConfiguracao({
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   async function salvar(campos: Partial<ConfigPca>, chave: string, ok?: string) {
     setSalvando(chave);
@@ -105,8 +111,13 @@ export function PcaConfiguracao({
   }
 
   async function excluirPca() {
-    const extra = temDados ? ` Ele tem ${temDados}${pca.fonte === "lista" ? " — as planilhas e os itens são excluídos junto" : " — os DFDs continuam na Mesa, só saem do PCA"}.` : "";
-    if (!confirm(`Excluir o ${pca.nome}?${extra}`)) return;
+    // O IMPACTO antes: na lista, as planilhas e os itens somem; nos protocolos, os DFDs incorporados SAEM do PCA (a
+    // numeração dos itens também) e os protocolos enviados voltam à Mesa do sistema.
+    const extra = temDados
+      ? `Ele tem ${temDados}${pca.fonte === "lista" ? " — as planilhas e os itens são excluídos junto" : " — os DFDs incorporados saem do PCA (com a numeração dos itens) e os protocolos voltam à Mesa do sistema"}. `
+      : "";
+    const sim = await confirmar({ titulo: `Excluir o ${pca.nome}?`, texto: `${extra}Não pode ser desfeito.`, confirmar: "Excluir PCA", perigo: true });
+    if (!sim) return;
     setSalvando("excluir");
     const r = await fetch(`/api/pca/${pca.id}`, { method: "DELETE" });
     if (r.ok) {
@@ -275,7 +286,7 @@ export function PcaConfiguracao({
           </p>
         </section>
 
-        {podeEditar && (
+        {podeExcluir && (
           <section className={`${CARTAO} flex flex-wrap items-center justify-between gap-3`}>
             <div>
               <h2 className="font-bold text-text">Excluir PCA</h2>
@@ -340,6 +351,7 @@ export function PcaConfiguracao({
           {aviso.texto}
         </AvisoFlutuante>
       )}
+      {confirmacao}
     </div>
   );
 }

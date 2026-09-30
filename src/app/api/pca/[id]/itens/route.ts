@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * Auditoria com os números retirados.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("pca", "excluir");
   if ("erro" in a) return a.erro;
   const pcaId = intId((await ctx.params).id);
   if (!pcaId) return erro("ID inválido.");

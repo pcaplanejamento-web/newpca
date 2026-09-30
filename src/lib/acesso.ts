@@ -81,3 +81,10 @@ export function gruposComTela(a: Acesso, tela: Tela): number[] | null {
   if (a.u.admin) return null;
   return a.grupos.filter((g) => podeTela(a, tela, g.id).visualizar).map((g) => g.id);
 }
+
+/** A consulta do PCA em PREVIEW (ainda não publicado): só quem está logado e VISUALIZA o PCA (o grupo ativo libera e o
+ * papel visualiza — o ADM sempre). O publicado é de qualquer visitante. */
+export async function vePreviaPca(): Promise<boolean> {
+  const a = await getAcesso();
+  return !!a && podeTela(a, "pca").visualizar;
+}

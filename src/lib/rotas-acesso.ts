@@ -119,6 +119,21 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "orcamento/visoes": { POST: tela("orcamento", "configurar") },
   "orcamento/visoes/[id]": { PATCH: tela("orcamento", "configurar"), DELETE: tela("orcamento", "configurar") },
 
+  // ── PCA ─────────────────────────────────────────────────────────────────────────────────────────────────
+  "pca": { POST: tela("pca", "configurar", "criar o PCA (e a edição legada que une DFDs)") },
+  "pca/[id]": {
+    PATCH: tela("pca", "configurar", "nome, ano, fonte, publicar, capa, visão, marcados"),
+    DELETE: tela("pca", "excluir", "devolve os protocolos à Mesa e desfaz as incorporações"),
+  },
+  "pca/[id]/capa": { GET: tela("pca", "visualizar") },
+  "pca/[id]/itens": { POST: tela("pca", "excluir", "retirar itens do PCA") },
+  "pca/[id]/planilhas/[unidadeId]": { DELETE: tela("pca", "excluir") },
+  "pca/[id]/protocolos": { POST: tela("pca", "manipular", "enviar também exige Manipular na Mesa (recusa)") },
+  "pca/[id]/consulta/dfd/[dfdId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
+  "pca/[id]/consulta/historico": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
+  "pca/[id]/consulta/protocolo/[protocoloId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
+  "upload": { POST: tela("pca", "importar", "as planilhas de um PCA de lista") },
+
   // ── Pessoais (qualquer pessoa logada) ───────────────────────────────────────────────────────────────────
   "dados/versao": { GET: pessoal("a versão dos dados (sincronização)") },
   "grupos/ativo": { POST: pessoal("o grupo ativo do cabeçalho (entre os da pessoa)") },
@@ -147,11 +162,9 @@ export const PENDENTES: readonly string[] = [
   "dfd",
   "integracoes/trello/boards",
   "mesa/",
-  "pca",
   "protocolo",
   "tabela/",
   "tarefas",
-  "upload",
 ];
 
 export { MESA };

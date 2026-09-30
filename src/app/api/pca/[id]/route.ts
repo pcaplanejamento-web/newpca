@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { excluirPca } from "@/lib/dfd";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * (Preview/Publicado — publicado aparece na tela inicial), CAPA do card e a VISÃO do orçamento.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("pca", "configurar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
@@ -58,11 +58,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("pca", "excluir");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const pca = await getPcaEspaco(id);
+  if (!pca) return erro("PCA não encontrado.", 404);
   await excluirPca(id);
-  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "pca", entidadeId: id, resumo: `PCA #${id} excluído` });
+  await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "pca", entidadeId: id, resumo: `PCA "${pca.nome}" excluído`, antes: { nome: pca.nome, ano: pca.ano, fonte: pca.fonte } });
   return ok();
 }

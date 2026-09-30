@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { unidades } from "@/db/schema";
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok } from "@/lib/http";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /** Exclui UMA planilha do PCA (os itens caem em cascata). */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string; unidadeId: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("pca", "excluir");
   if ("erro" in a) return a.erro;
   const prm = await ctx.params;
   const pcaId = intId(prm.id);

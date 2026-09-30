@@ -1,4 +1,4 @@
-import { exigirEditor, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { unidadesDaSessao } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -30,7 +30,7 @@ const ROTULO: Record<"enviar" | "devolver" | "incorporar", string> = {
  * protocolo/DFDs/itens TRAVAM). Escopo por unidade em TODAS; a falha de um protocolo não derruba os demais (`falhas`); auditoria por protocolo com a ação REAL.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirEditor();
+  const a = await exigirAcesso("pca", "manipular");
   if ("erro" in a) return a.erro;
   const pcaId = intId((await ctx.params).id);
   if (!pcaId) return erro("ID inválido.");
@@ -40,6 +40,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const p = await parseCorpo(acaoProtocolosPcaSchema, req);
   if ("resp" in p) return p.resp;
   const corpo = p.data;
+  // ENVIAR tira o protocolo da Mesa do sistema: também Manipular na Mesa.
+  const negado = corpo.acao === "enviar" ? recusa(a.acesso, "dfd", "manipular") : null;
+  if (negado) return negado;
 
   const [{ acessivel }, protocolos, dfds] = await Promise.all([
     unidadesDaSessao(a.u),
