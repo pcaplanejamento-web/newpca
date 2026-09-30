@@ -1256,7 +1256,8 @@ nasce pelo Google (vincula-se no Perfil) e os avisos por e-mail podem ir ao inst
 da marca do sistema no desktop; cargo ou função no cadastro; o Perfil com cabeçalho (foto, nome, cargo, unidade) e seções
 organizadas com botões padronizados. Depois: "Entrar | Criar conta" fixo no alto (o formulário logo abaixo e o aviso na
 mesma largura), a constelação animada com profundidade (pontos surgem e somem) e os textos da tela de acesso cadastráveis
-em Configurações → Tela de acesso, com prévia.
+em Configurações → Tela de acesso, com prévia. Por fim: o seletor alinhado com a logo da vitrine e a constelação em malha
+triangulada (vizinhos mais próximos + triângulos), como no Dattago.
 🔜 **Próximo:** relatório de produtividade por grupo.
 ### Orçamento municipal (relatório CUBO): importar, cards + planilha, somente leitura — entregue
 ✅ Novo módulo **`orcamento`** (`/painel/orcamento` = `OrcamentoView`) para subir e consultar o **orçamento** da

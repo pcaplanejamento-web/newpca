@@ -19,7 +19,8 @@ const RecuperarSenhaForm = dynamic(() => import("./RecuperarSenhaForm").then((m)
 
 /**
  * A TELA ÚNICA de acesso (`/login?modo=`): ENTRAR · CRIAR CONTA · REDEFINIR A SENHA no MESMO lugar — o formulário à
- * esquerda e a VITRINE imersiva à direita (desktop). "Entrar | Criar conta" fica FIXO no alto da coluna (nunca pula
+ * esquerda e a VITRINE imersiva à direita (desktop). "Entrar | Criar conta" fica FIXO no alto da coluna — no desktop na
+ * MESMA LINHA da logo da vitrine (mesmo respiro do topo, `lg:pt-12 xl:pt-16` = o `p-12 xl:p-16` dela) — (nunca pula
  * quando o formulário muda de altura; no "Esqueci a senha" nenhum dos dois fica marcado) e o formulário vem logo abaixo;
  * o aviso do ADM fecha a coluna, na MESMA largura. No desktop só a coluna do formulário rola (a vitrine fica parada). Trocar de modo não recarrega a página: só atualiza o endereço (voltar/compartilhar o link abre o mesmo modo).
  */
@@ -67,23 +68,26 @@ export function TelaAcesso({
 
   return (
     <main className="grid min-h-dvh bg-surface lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:overflow-hidden">
-      <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-0">
+      <section className="flex min-h-dvh flex-col px-5 pt-6 pb-8 sm:px-10 lg:min-h-0 lg:overflow-y-auto lg:px-14 lg:pt-12 xl:pt-16">
         {/* No desktop a marca fica na vitrine. */}
         <div className="lg:hidden">
           <MarcaSistema identidade={identidade} />
         </div>
-        <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col pt-10 lg:pt-[max(3rem,14dvh)]">
-          <Segmented<ModoAcesso>
-            value={modo}
-            onChange={irPara}
-            ariaLabel="Entrar ou criar conta"
-            className="w-full shrink-0 [&>button]:flex-1"
-            options={[
-              { value: "entrar", label: "Entrar" },
-              { value: "cadastro", label: "Criar conta" },
-            ]}
-          />
-          <div className="mt-8">
+        <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col pt-10 lg:pt-0">
+          {/* No desktop, na MESMA linha da logo da vitrine (o mesmo respiro do topo e a altura da logo). */}
+          <div className="lg:flex lg:h-11 lg:items-center">
+            <Segmented<ModoAcesso>
+              value={modo}
+              onChange={irPara}
+              ariaLabel="Entrar ou criar conta"
+              className="w-full shrink-0 [&>button]:flex-1"
+              options={[
+                { value: "entrar", label: "Entrar" },
+                { value: "cadastro", label: "Criar conta" },
+              ]}
+            />
+          </div>
+          <div className="mt-8 lg:mt-[max(2.5rem,8dvh)]">
             {modo === "entrar" ? (
               <AuthForm key="entrar" onEsqueci={() => irPara("senha")} turnstile={turnstile} google={google} googleConta={googleConta} erroInicial={erro} />
             ) : modo === "cadastro" ? (

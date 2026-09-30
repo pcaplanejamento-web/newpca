@@ -130,13 +130,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **TELA ÚNICA DE ACESSO (`/login` = `TelaAcesso`):** Entrar · Criar conta · Esqueci a senha no MESMO lugar (`?modo=`
     `entrar`|`cadastro`|`senha` — `lerModoAcesso`, puro em **`modo-acesso.ts`**; trocar de modo só faz `replaceState`, sem
     recarregar; `/cadastro` e `/recuperar-senha` redirecionam para o modo). Esquerda = o formulário: o `Segmented` Entrar | Criar
-    conta FIXO no alto da coluna (mesma posição nos três modos — no "Esqueci a senha" nenhum fica marcado; não é centralizado
+    conta FIXO no alto da coluna — no desktop na MESMA LINHA da logo da vitrine (`lg:pt-12 xl:pt-16` + caixa de 44px = o
+    `p-12 xl:p-16` e a logo `lg` dela; medido: centros iguais de 1024 a 1920px) — (mesma posição nos três modos — no "Esqueci a senha" nenhum fica marcado; não é centralizado
     na vertical, então nunca pula), o formulário LOGO ABAIXO (transição `animate-fade-in-up`; `CadastroForm`/
     `RecuperarSenhaForm` por `next/dynamic` — só baixados ao abrir o modo) e o AVISO do ADM fechando a coluna na MESMA largura
     (440px); no desktop só essa coluna rola (`lg:h-dvh`). Direita (≥ `lg`) = **`VitrineAcesso`** imersiva (fundo escuro pelos
-    tokens `--vitrine-*`) com a **`ConstelacaoAnimada`** — um `<canvas>`: pontos em profundidades diferentes (os de perto
-    maiores, mais rápidos, com halo) que vagam ao acaso, SURGEM e SOMEM (ciclo de vida) e se ligam por linhas quando próximos
-    na mesma camada; densidade pela área (36–110), DPR ≤ 2, só roda com tamanho (no celular a vitrine não aparece → 0×0, nada
+    tokens `--vitrine-*`) com a **`ConstelacaoAnimada`** — um `<canvas>` no estilo "plexo" do Dattago: pontos em
+    profundidades diferentes (os de perto maiores, mais rápidos, com halo) que vagam ao acaso, SURGEM e SOMEM (ciclo de vida) e
+    se ligam aos `VIZINHOS`=3 mais próximos (alcance pela profundidade) — as ligações fecham TRIÂNGULOS, preenchidos com um véu
+    leve (triangulação viva); densidade pela área (40–120; ~60 fps em 1920×1080), DPR ≤ 2, só roda com tamanho (no celular a vitrine não aparece → 0×0, nada
     roda) e fica num quadro parado sem movimento (sistema ou `data-motion` do ADM). Os TEXTOS (rótulo, manchete, descrição, até
     3 destaques, rodapé e o aviso) são do ADM: **Configurações → Tela de acesso** (`TextosAcessoAdmin`, com a PRÉVIA ao vivo =
     a própria `VitrineAcesso previa`), gravados no blob da aparência (`acesso`, sem migração — `aparenciaSchema.acesso`,
