@@ -1676,6 +1676,18 @@ export function DfdsView({
           <span title="Média ponderada pela quantidade (Σ qtd × valor ÷ Σ qtd)">{brl(l.valorMedio)}</span>
         ),
     },
+    // O valor unitário MÉDIO da linha × o HISTÓRICO DE COMPRA do código (a MESMA régua e célula da visão Normal).
+    ...(historico
+      ? [
+          {
+            key: "historico",
+            header: "Histórico",
+            nowrap: true,
+            value: (l: Cons) => rotuloComparacaoHistorico(l.valorMedio, historico[normalizarCodigo(l.codigo)]),
+            render: (l: Cons) => <CelulaHistoricoCompra valor={l.valorMedio} referencia={historico[normalizarCodigo(l.codigo)]} />,
+          },
+        ]
+      : []),
     {
       key: "variacao",
       header: "Variação",

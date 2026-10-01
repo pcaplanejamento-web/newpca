@@ -142,7 +142,7 @@ alta > 50%), ordenada da maior para a menor, KPI "Variação alta" e o "Δ preç
 o importador as tira para não inflar o valor. ✅ **Comparação com os itens das Mesas** pelo código: o valor unitário do
 item × o VALOR ATUAL do histórico (a régua da variação — até 25% dentro, até 50% atenção, acima alerta); coluna
 **Histórico** na Mesa → Itens (o desvio na cor, filtro Acima/Abaixo/Dentro/Sem histórico) e o bloco **Histórico de
-compra** no detalhe do item (o erro por extenso + o banner do produto no histórico). 🔜 Levar o ponto às importâncias do
+compra** no detalhe do item e a coluna também na Consolidada (o médio da linha; o erro por extenso + o banner do produto no histórico). 🔜 Levar o ponto às importâncias do
 ADM (Avaliação → Item) e à visão Consolidada.
 
 ### Catálogo: cadastro de UNIDADES DE MEDIDA e CLASSIFICAÇÕES + comparação das unidades e classificação automática dos itens — entregue
