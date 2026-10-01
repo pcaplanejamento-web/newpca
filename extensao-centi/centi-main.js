@@ -5,33 +5,58 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 6;
+  const PROTOCOLO = 7;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
   const SESSAO = "__pcaCentiSessao";
   let base = "";
   let cabecalhos = null;
+  // Os cabeçalhos que a PRÓPRIA tela da Centi usou no salvar (confirmsave/save) e ao abrir um protocolo (load do módulo
+  // 102907): o salvar do anexo vai com eles — o último pedido da aba costuma ser de OUTRA tela (a pesquisa do DFD), com o
+  // contexto dela. `nomesSalvar` = os NOMES (só os nomes) que a tela mandou no salvar, para o erro dizer o que faltou.
+  let doSalvar = null;
+  let doProtocolo = null;
+  let nomesSalvar = null;
+  let tipoSalvar = null;
   // A sessão da Centi é POR ABA (sessionStorage): a última capturada vale também depois de um F5 ou de uma atualização.
   try {
     const salvo = JSON.parse(sessionStorage.getItem(SESSAO) || "null");
     if (salvo?.base && salvo?.cabecalhos) ({ base, cabecalhos } = salvo);
+    if (salvo?.doSalvar) ({ doSalvar, nomesSalvar, tipoSalvar } = salvo);
+    if (salvo?.doProtocolo) doProtocolo = salvo.doProtocolo;
   } catch {}
   const IGNORAR = /^(content-type|accept|content-length|x-ts)/i;
+  const SESSAO_CAB = /^(authorization|token|refreshtoken|company)$/i;
 
-  function guardar(url, hs) {
+  function guardar(url, hs, metodo) {
     const u = String(url);
     const i = u.indexOf("/restauth/");
     if (i < 0) return;
     const limpos = {};
     for (const [k, v] of Object.entries(hs)) if (!IGNORAR.test(k)) limpos[k] = v;
     // A sessão da Centi vai num destes cabeçalhos (no "operation" capturado: Refreshtoken + Company + Month).
-    if (!Object.keys(limpos).some((k) => /^(authorization|token|refreshtoken|company)$/i.test(k))) return;
+    if (!Object.keys(limpos).some((k) => SESSAO_CAB.test(k))) return;
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
+    const caminho = u.slice(i);
+    if (/^POST$/i.test(metodo || "") && /^\/restauth\/(confirmsave|save)(\?|$)/i.test(caminho)) {
+      doSalvar = limpos;
+      nomesSalvar = Object.keys(hs).map((k) => k.toLowerCase()).sort();
+      tipoSalvar = Object.entries(hs).find(([k]) => /^content-type$/i.test(k))?.[1] ?? null;
+    } else if (/[?&]entity=102907(&|$)/.test(caminho)) doProtocolo = limpos;
     try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos }));
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo }));
     } catch {}
+  }
+
+  // Os cabeçalhos do salvar: os da tela (salvar › protocolo › último pedido) com a SESSÃO sempre a mais recente.
+  function cabecalhosDoSalvar() {
+    const contexto = doSalvar ?? doProtocolo ?? cabecalhos;
+    const sessao = Object.fromEntries(Object.entries(cabecalhos).filter(([k]) => SESSAO_CAB.test(k) || /^month$/i.test(k)));
+    const r = {};
+    for (const [k, v] of Object.entries(contexto)) if (!Object.keys(sessao).some((s) => s.toLowerCase() === k.toLowerCase())) r[k] = v;
+    return { ...r, ...sessao };
   }
 
   const abrir = XMLHttpRequest.prototype.open;
@@ -39,6 +64,7 @@
   const enviar = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (m, url, ...r) {
     this.__pcaUrl = url;
+    this.__pcaMetodo = m;
     this.__pcaHs = {};
     return abrir.call(this, m, url, ...r);
   };
@@ -47,7 +73,7 @@
     return definir.call(this, k, v);
   };
   XMLHttpRequest.prototype.send = function (...r) {
-    if (this.__pcaUrl && !this.__pcaInterno) guardar(this.__pcaUrl, this.__pcaHs || {});
+    if (this.__pcaUrl && !this.__pcaInterno) guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo);
     return enviar.apply(this, r);
   };
   const buscar = window.fetch;
@@ -55,7 +81,7 @@
     try {
       const url = typeof rec === "string" ? rec : rec?.url;
       const hs = new Headers(init?.headers || (typeof rec === "object" ? rec.headers : undefined));
-      guardar(url, Object.fromEntries(hs.entries()));
+      guardar(url, Object.fromEntries(hs.entries()), init?.method || (typeof rec === "object" ? rec.method : "GET"));
     } catch {}
     return buscar.call(this, rec, init, ...resto);
   };
@@ -83,16 +109,16 @@
     return k ? String(cabecalhos[k]) : null;
   };
 
-  function executar(metodo, url, corpo, entidade, comoTexto = false) {
+  function executar(metodo, url, corpo, entidade, comoTexto = false, cab = cabecalhos, tipo = "application/json") {
     return new Promise((ok, falha) => {
       const x = new XMLHttpRequest();
       x.__pcaInterno = true;
       x.open(metodo, url);
       x.responseType = comoTexto ? "text" : "arraybuffer";
       const k = nomeEntidade();
-      for (const [n, v] of Object.entries(cabecalhos)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
+      for (const [n, v] of Object.entries(cab)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
       if (entidade && !k) x.setRequestHeader("Company", entidade);
-      if (corpo) x.setRequestHeader("Content-Type", "application/json");
+      if (corpo) x.setRequestHeader("Content-Type", tipo);
       x.setRequestHeader("Accept", "application/json, text/plain, */*");
       x.onload = () =>
         ok(
@@ -126,15 +152,19 @@
   // JSON da API da Centi (load/confirmsave/save): HTTP de erro ou corpo que não é JSON → o motivo, nunca segue às cegas.
   const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
   // `passo` entra no erro (load/confirmsave/save): diz ONDE a Centi recusou.
-  async function api(metodo, caminho, corpo, passo) {
+  async function api(metodo, caminho, corpo, passo, salvar = false) {
     const url = destino(caminho);
     if (!url) throw new Error("Destino fora da API da Centi.");
-    const r = await executar(metodo, url, corpo, null, true);
+    const cab = salvar ? cabecalhosDoSalvar() : cabecalhos;
+    const r = await executar(metodo, url, corpo, null, true, cab, (salvar && tipoSalvar) || "application/json");
     let j = null;
     try {
       j = JSON.parse(r.texto);
     } catch {}
-    if (r.status >= 400 || !j) throw new Error(`A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."}`);
+    if (r.status >= 400 || !j) {
+      const msg = `A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."}`;
+      throw new Error(salvar ? `${msg} ${A.dicaCabecalhos(nomesSalvar, Object.keys(cab), !!doProtocolo)}` : msg);
+    }
     return j;
   }
 
@@ -169,9 +199,9 @@
       .then((t) => A.tipoDoLoad(t, d.tipo))
       .catch(() => null);
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
-    const conf = await api("POST", "restauth/confirmsave", corpo, "confirmsave");
+    const conf = await api("POST", "restauth/confirmsave", corpo, "confirmsave", true);
     if (conf.Confirm === true) return { ok: false, erro: `A Centi pede confirmação: ${A.mensagens(conf.Message) || "sem mensagem"} — anexe pela tela da Centi.` };
-    const salvo = A.conferirSalvo(await api("POST", "restauth/save", corpo, "save"), d);
+    const salvo = A.conferirSalvo(await api("POST", "restauth/save", corpo, "save", true), d);
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
   }
 

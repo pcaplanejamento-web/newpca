@@ -62,7 +62,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.2.0"), false);
   assert.equal(versaoAtende("1.3.0"), false);
   assert.equal(versaoAtende("1.3.1"), false);
-  assert.equal(versaoAtende("1.3.2"), true);
+  assert.equal(versaoAtende("1.3.2"), false);
+  assert.equal(versaoAtende("1.3.3"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -331,4 +332,14 @@ test("anexo: o tipo vai como a tela da Centi manda (o registro do tipo carregado
   const corpo = A.montarSalvar(protocoloCenti([]).Entity, PEDIDO, new Date(), "g", reg);
   const campo = (o: J, k: string): J => o.Fields.find((f: J) => f.Key === k)?.Value;
   assert.deepEqual(campo(campo(corpo.Object, "Documentos")[0], "IdPessoaDocumentoTipo"), reg);
+});
+
+test("anexo: a dica do erro do salvar diz quais cabeçalhos da tela faltaram (só os nomes)", async () => {
+  const A = await pecasAnexo();
+  assert.match(A.dicaCabecalhos(null, ["Refreshtoken"], false), /Abra o protocolo/);
+  assert.match(A.dicaCabecalhos([], ["Refreshtoken"], true), /anexe UM documento/);
+  const tela = ["content-type", "accept", "refreshtoken", "company", "month", "modulekey", "x-ts-a"];
+  assert.equal(A.dicaCabecalhos(tela, ["Refreshtoken", "Company", "Month"], true), "Cabeçalhos do salvar da Centi que faltaram: modulekey.");
+  assert.match(A.dicaCabecalhos(tela, ["Refreshtoken", "Company", "Month", "Modulekey"], true), /anti-robô/);
+  assert.match(A.dicaCabecalhos(["refreshtoken"], ["Refreshtoken"], true), /mesmos/);
 });

@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p6";
+  const NOME = "__pcaCentiAnexo_p7";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
@@ -164,5 +164,23 @@
     return { sequencial: texto(valor(doc, "Sequencial")), documento: id };
   }
 
-  globalThis[NOME] = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, MODULO_PROTOCOLO, MODULO_TIPO });
+  /** A dica do erro do salvar, pelos NOMES dos cabeçalhos (nunca os valores): os que a tela da Centi mandou no salvar e o
+   * anexo não mandou (os anti-robô "x-ts…" a extensão não reproduz); sem o salvar da tela aprendido, como ensiná-lo. */
+  function dicaCabecalhos(nomesTela, nomesEnviados, protocoloAberto) {
+    if (!Array.isArray(nomesTela) || !nomesTela.length) {
+      return protocoloAberto
+        ? "Para a extensão aprender o salvar da Centi: anexe UM documento pela tela da Centi nesta aba e tente de novo."
+        : "Abra o protocolo na tela da Centi nesta aba (ou anexe UM documento por ela) e tente de novo.";
+    }
+    const enviados = new Set((nomesEnviados ?? []).map((n) => String(n).toLowerCase()));
+    const fixos = /^(content-type|content-length|accept)$/i;
+    const faltam = nomesTela.map((n) => String(n).toLowerCase()).filter((n) => !fixos.test(n) && !enviados.has(n));
+    const robo = faltam.filter((n) => n.startsWith("x-ts"));
+    const outros = faltam.filter((n) => !n.startsWith("x-ts"));
+    if (outros.length) return `Cabeçalhos do salvar da Centi que faltaram: ${outros.join(", ")}.`;
+    if (robo.length) return "O salvar da Centi exige a verificação anti-robô da própria tela — anexe por ela.";
+    return "Os cabeçalhos são os mesmos da tela da Centi.";
+  }
+
+  globalThis[NOME] = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, MODULO_PROTOCOLO, MODULO_TIPO });
 })();
