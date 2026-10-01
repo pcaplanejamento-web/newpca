@@ -140,7 +140,15 @@ export function pedidoEmitirDfd(id: string, cfg: ConfigCenti, agora: Date) {
 
 /** Um DFD de protocolo do sistema: o nº de planejamento (= o Id na Centi), o ano do PCA e o ÓRGÃO (a entidade da Centi
  * em que ele existe — `orgao` = a chave do mapa órgão → entidade). */
-export type DfdAutomacao = { numero: string; planejamento: string | null; anoPca: number | null; orgao: string | null; orgaoNome: string | null };
+export type DfdAutomacao = {
+  numero: string;
+  planejamento: string | null;
+  anoPca: number | null;
+  orgao: string | null;
+  orgaoNome: string | null;
+  /** A SIGLA da unidade do DFD (o "Por unidade"). */
+  sigla: string | null;
+};
 
 /** Um protocolo do sistema com os DFDs dele (a seleção "Por protocolo"). */
 export type ProtocoloAutomacao = {
@@ -167,9 +175,9 @@ export function chaveOrgaoCenti(orgaoId: number | null, orgaoEntidade: string | 
   return t ? `t:${t}` : null;
 }
 
-/** As opções da SAÍDA: a pasta "PCA <ano>" por cima, os PDFs separados / um por protocolo / um único, e a ordem dos DFDs
+/** As opções da SAÍDA: a pasta "PCA <ano>" por cima, os PDFs separados / um por protocolo / um por unidade / um único, e a ordem dos DFDs
  * pelo nº de planejamento. */
-export type FormatoSaida = "separados" | "protocolo" | "unico";
+export type FormatoSaida = "separados" | "protocolo" | "unidade" | "unico";
 export type OpcoesSaida = {
   pastaPca: boolean;
   formato: FormatoSaida;
@@ -186,7 +194,7 @@ export function lerOpcoesSaida(v: unknown): OpcoesSaida {
   const p = OPCOES_SAIDA_PADRAO;
   return {
     pastaPca: typeof o.pastaPca === "boolean" ? o.pastaPca : p.pastaPca,
-    formato: o.formato === "separados" || o.formato === "protocolo" || o.formato === "unico" ? o.formato : p.formato,
+    formato: o.formato === "separados" || o.formato === "protocolo" || o.formato === "unidade" || o.formato === "unico" ? o.formato : p.formato,
     ordenarPlanejamento: typeof o.ordenarPlanejamento === "boolean" ? o.ordenarPlanejamento : p.ordenarPlanejamento,
     escolherPasta: typeof o.escolherPasta === "boolean" ? o.escolherPasta : p.escolherPasta,
     conferir: typeof o.conferir === "boolean" ? o.conferir : p.conferir,
@@ -210,93 +218,155 @@ export function nomeSeguro(texto: string, max = MAX_NOME_PASTA): string {
 
 const soDigitos = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
 const anoDoProtocolo = (p: ProtocoloAutomacao) => p.anoPca ?? p.dfds.find((d) => d.anoPca)?.anoPca ?? null;
+const MAX_PROTOCOLOS_NOME = 8;
 
-/** A pasta (ou o PDF unido) do protocolo: "Nº do protocolo - SIGLA - PCA <ano>" ("/" do número vira "-"). */
-export function nomePastaProtocolo(p: Pick<ProtocoloAutomacao, "numero" | "sigla" | "anoPca" | "dfds">): string {
-  const ano = p.anoPca ?? p.dfds.find((d) => d.anoPca)?.anoPca ?? null;
-  const partes = [p.numero, p.sigla?.trim(), ano ? `PCA ${ano}` : null].filter(Boolean);
-  return nomeSeguro(partes.join(" - ")) || "Protocolo";
+/** O FINAL de todo nome: os protocolos por ano — "(1222, 2212) - 2026" (vários anos: "(5) - 2025 + (7) - 2026"); acima de
+ * 8 no mesmo ano, "(1, 2, … +N) - 2026". Sem protocolo, vazio. */
+export function sufixoProtocolos(numeros: readonly string[]): string {
+  const porAno = new Map<string, string[]>();
+  for (const n of numeros) {
+    const m = /^\s*([^/]+?)\s*(?:\/\s*(\d{4}))?\s*$/.exec(n);
+    if (!m) continue;
+    const lista = porAno.get(m[2] ?? "") ?? [];
+    if (!lista.includes(m[1])) lista.push(m[1]);
+    porAno.set(m[2] ?? "", lista);
+  }
+  return [...porAno.entries()]
+    .map(([ano, ns]) => {
+      const vis = ns.length > MAX_PROTOCOLOS_NOME ? [...ns.slice(0, MAX_PROTOCOLOS_NOME), `… +${ns.length - MAX_PROTOCOLOS_NOME}`] : ns;
+      return `(${vis.join(", ")})${ano ? ` - ${ano}` : ""}`;
+    })
+    .join(" + ");
 }
 
-/** O PDF de um DFD: "Planejamento P - DFD N - PCA <ano>.pdf" (sem o DFD conhecido, "Planejamento P.pdf"). */
-export function nomeArquivoDfd(id: string, dfd?: { numero: string; anoPca: number | null } | null): string {
-  const partes = [`Planejamento ${id}`, dfd ? `DFD ${dfd.numero}` : null, dfd?.anoPca ? `PCA ${dfd.anoPca}` : null].filter(Boolean);
-  return `${nomeSeguro(partes.join(" - "), 150)}.pdf`;
+const juntar = (partes: (string | number | null | undefined | false)[], max = MAX_NOME_PASTA) => nomeSeguro(partes.filter(Boolean).join(" - "), max);
+
+/** A pasta (ou o PDF unido) do protocolo: "SIGLA - PCA <ano> - (nº) - ano". */
+export function nomePastaProtocolo(p: Pick<ProtocoloAutomacao, "numero" | "sigla" | "anoPca" | "dfds">): string {
+  const ano = p.anoPca ?? p.dfds.find((d) => d.anoPca)?.anoPca ?? null;
+  return juntar([p.sigla?.trim(), ano ? `PCA ${ano}` : null, sufixoProtocolos([p.numero])]) || "Protocolo";
+}
+
+/** O PDF de um DFD: "Planejamento P - DFD N - PCA <ano> - (nº do protocolo) - ano.pdf". */
+export function nomeArquivoDfd(id: string, dfd?: { numero: string; anoPca: number | null } | null, protocolo?: string | null): string {
+  return `${juntar([`Planejamento ${id}`, dfd && `DFD ${dfd.numero}`, dfd?.anoPca && `PCA ${dfd.anoPca}`, protocolo && sufixoProtocolos([protocolo])], 150)}.pdf`;
 }
 
 const pastaPca = (ano: number | null) => (ano ? `PCA ${ano}` : "PCA sem ano");
-const porPlanejamento = <T extends { id: string }>(xs: T[]) => [...xs].sort((a, b) => Number(a.id) - Number(b.id));
 
-type Item = { t: TarefaCenti; dfd: DfdAutomacao | null; ano: number | null };
+/** Um DFD do plano: a tarefa + o que dá nome aos arquivos (ano, protocolo, unidade). */
+type Item = { t: TarefaCenti; dfd: DfdAutomacao | null; ano: number | null; protocolo: string | null; pastaProto: string | null };
+/** O DFD que NÃO é baixado de novo: `duplicado` (o mesmo planejamento no mesmo protocolo) ou `repetido` (já vem de outro
+ * protocolo escolhido) — `motivo` é o aviso da análise. */
+export type DfdRepetido = { chave: string; id: string; dfd: string; grupo: string; tipo: "duplicado" | "repetido"; motivo: string };
+
+/** Monta os ARQUIVOS da saída a partir dos DFDs (já sem repetidos), no formato escolhido. `protoPasta` = separados vão na
+ * pasta do protocolo (Por protocolo) ou na raiz (Por Id). */
+function montarArquivos(itens: Item[], op: OpcoesSaida, protoPasta: boolean): ArquivoSaida[] {
+  const ordenar = (xs: Item[]) => (op.ordenarPlanejamento ? [...xs].sort((a, b) => Number(a.t.id) - Number(b.t.id)) : xs);
+  const raiz = (ano: number | null) => (op.pastaPca ? [pastaPca(ano)] : []);
+  const protos = (xs: Item[]) => sufixoProtocolos(xs.map((i) => i.protocolo).filter((x): x is string => !!x));
+  const umAno = (xs: Item[]) => {
+    const anos = [...new Set(xs.map((i) => i.ano))];
+    return anos.length === 1 ? anos[0] : undefined;
+  };
+  const agrupar = (chave: (i: Item) => string) => {
+    const m = new Map<string, Item[]>();
+    for (const i of itens) m.set(chave(i), [...(m.get(chave(i)) ?? []), i]);
+    return [...m.values()];
+  };
+  if (op.formato === "separados")
+    return ordenar(itens).map((i) => ({
+      pastas: [...raiz(i.ano), ...(protoPasta && i.pastaProto ? [i.pastaProto] : [])],
+      nome: nomeArquivoDfd(i.t.id, i.dfd, i.protocolo),
+      partes: [i.t],
+    }));
+  if (op.formato === "protocolo")
+    return agrupar((i) => i.pastaProto ?? `#${i.t.chave}`).map((g) => ({
+      pastas: raiz(g[0].ano),
+      nome: `${g[0].pastaProto ?? juntar([`Planejamento ${g[0].t.id}`, protos(g)])}.pdf`,
+      partes: ordenar(g).map((i) => i.t),
+    }));
+  if (op.formato === "unidade")
+    return agrupar((i) => `${i.dfd?.sigla ?? ""}|${i.ano ?? ""}`).map((g) => ({
+      pastas: raiz(g[0].ano),
+      nome: `${juntar([g[0].dfd?.sigla ?? "Sem unidade", g[0].ano && `PCA ${g[0].ano}`, protos(g)]) || "DFDs"}.pdf`,
+      partes: ordenar(g).map((i) => i.t),
+    }));
+  if (!itens.length) return [];
+  const ano = umAno(itens);
+  return [{ pastas: op.pastaPca && ano !== undefined ? [pastaPca(ano)] : [], nome: `${juntar(["DFDs", ano && `PCA ${ano}`, protos(itens)]) || "DFDs"}.pdf`, partes: ordenar(itens).map((i) => i.t) }];
+}
 
 /** O PLANO da saída a partir dos protocolos escolhidos: DFD sem planejamento é pulado (`semPlanejamento` — a Centi não o
- * acha); o mesmo planejamento duas vezes no protocolo vira um só; pasta de protocolo repetida ganha "(id)". */
+ * acha) e cada planejamento é baixado UMA vez só — o repetido no mesmo protocolo (duplicado) ou já vindo de outro
+ * protocolo vai para `repetidos` com o aviso; pasta de protocolo repetida ganha "(id)". */
 export function planoDosProtocolos(
   protos: ProtocoloAutomacao[],
   op: OpcoesSaida,
-  hoje = "",
-): { arquivos: ArquivoSaida[]; semPlanejamento: { protocolo: string; dfd: string; grupo: string }[]; total: number } {
+): { arquivos: ArquivoSaida[]; semPlanejamento: { protocolo: string; dfd: string; grupo: string }[]; repetidos: DfdRepetido[]; total: number } {
   const semPlanejamento: { protocolo: string; dfd: string; grupo: string }[] = [];
+  const repetidos: DfdRepetido[] = [];
   const usados = new Set<string>();
-  const grupos: { nome: string; ano: number | null; itens: Item[] }[] = [];
+  const baixado = new Map<string, { protocolo: string; dfd: string }>();
+  const itens: Item[] = [];
   for (const p of protos) {
     let nome = nomePastaProtocolo(p);
     if (usados.has(nome)) nome = nomeSeguro(`${nome} (${p.id})`);
     usados.add(nome);
     const ano = anoDoProtocolo(p);
-    const vistos = new Set<string>();
-    const itens: Item[] = [];
     for (const d of p.dfds) {
       const id = soDigitos(d.planejamento);
       if (!id || id === "0") {
         semPlanejamento.push({ protocolo: p.numero, dfd: d.numero, grupo: nome });
         continue;
       }
-      if (vistos.has(id)) continue;
-      vistos.add(id);
-      itens.push({ t: { chave: `${p.id}:${id}`, id, dfd: d.numero, orgao: d.orgao, orgaoNome: d.orgaoNome, grupo: nome }, dfd: { ...d, anoPca: d.anoPca ?? ano }, ano: d.anoPca ?? ano });
+      const ja = baixado.get(id);
+      if (ja) {
+        const mesmo = ja.protocolo === p.numero;
+        repetidos.push({
+          chave: `rep:${p.id}:${d.numero}`,
+          id,
+          dfd: d.numero,
+          grupo: nome,
+          tipo: mesmo ? "duplicado" : "repetido",
+          motivo: mesmo ? `DFD duplicado — o planejamento ${id} também está no DFD ${ja.dfd}.` : `Já baixado no protocolo ${ja.protocolo} (DFD ${ja.dfd}).`,
+        });
+        continue;
+      }
+      baixado.set(id, { protocolo: p.numero, dfd: d.numero });
+      itens.push({
+        t: { chave: `${p.id}:${id}`, id, dfd: d.numero, orgao: d.orgao, orgaoNome: d.orgaoNome, grupo: nome },
+        dfd: { ...d, anoPca: d.anoPca ?? ano },
+        ano: d.anoPca ?? ano,
+        protocolo: p.numero,
+        pastaProto: nome,
+      });
     }
-    if (op.ordenarPlanejamento) itens.sort((a, b) => Number(a.t.id) - Number(b.t.id));
-    if (itens.length) grupos.push({ nome, ano, itens });
   }
-  const raiz = (ano: number | null) => (op.pastaPca ? [pastaPca(ano)] : []);
-  let arquivos: ArquivoSaida[];
-  if (op.formato === "separados")
-    arquivos = grupos.flatMap((g) => g.itens.map((i) => ({ pastas: [...raiz(g.ano), g.nome], nome: nomeArquivoDfd(i.t.id, i.dfd), partes: [i.t] })));
-  else if (op.formato === "protocolo") arquivos = grupos.map((g) => ({ pastas: raiz(g.ano), nome: `${g.nome}.pdf`, partes: g.itens.map((i) => i.t) }));
-  else {
-    let todos = grupos.flatMap((g) => g.itens.map((i) => i.t));
-    if (op.ordenarPlanejamento) todos = porPlanejamento(todos);
-    const anos = [...new Set(grupos.map((g) => g.ano))];
-    const umAno = anos.length === 1 ? anos[0] : undefined;
-    const nome =
-      grupos.length === 1
-        ? `${grupos[0].nome}.pdf`
-        : `${nomeSeguro(["DFDs", `${grupos.length} protocolos`, umAno ? `PCA ${umAno}` : null, hoje || null].filter(Boolean).join(" - "))}.pdf`;
-    arquivos = todos.length ? [{ pastas: op.pastaPca && umAno !== undefined ? [pastaPca(umAno)] : [], nome, partes: todos }] : [];
-  }
-  return { arquivos, semPlanejamento, total: grupos.reduce((s, g) => s + g.itens.length, 0) };
+  return { arquivos: montarArquivos(itens, op, true), semPlanejamento, repetidos, total: itens.length };
 }
 
-/** O PLANO dos Ids digitados: o DFD de cada um é procurado nos protocolos do sistema (nome do arquivo, ano e órgão). */
-export function planoDosIds(ids: string[], protos: ProtocoloAutomacao[], op: OpcoesSaida, hoje = ""): ArquivoSaida[] {
-  const indice = new Map<string, DfdAutomacao>();
-  for (const p of protos) for (const d of p.dfds) {
-    const id = soDigitos(d.planejamento);
-    if (id && !indice.has(id)) indice.set(id, { ...d, anoPca: d.anoPca ?? anoDoProtocolo(p) });
-  }
-  let itens = ids.map((id) => {
-    const dfd = indice.get(id) ?? null;
-    return { id, dfd, t: { chave: id, id, dfd: dfd?.numero ?? null, orgao: dfd?.orgao ?? null, orgaoNome: dfd?.orgaoNome ?? null, grupo: "" } as TarefaCenti };
+/** O PLANO dos Ids digitados: o DFD (e o protocolo) de cada um é procurado nos protocolos do sistema — nome, ano, unidade
+ * e órgão. */
+export function planoDosIds(ids: string[], protos: ProtocoloAutomacao[], op: OpcoesSaida): ArquivoSaida[] {
+  const indice = new Map<string, { dfd: DfdAutomacao; protocolo: string; pasta: string }>();
+  for (const p of protos)
+    for (const d of p.dfds) {
+      const id = soDigitos(d.planejamento);
+      if (id && !indice.has(id)) indice.set(id, { dfd: { ...d, anoPca: d.anoPca ?? anoDoProtocolo(p) }, protocolo: p.numero, pasta: nomePastaProtocolo(p) });
+    }
+  const itens: Item[] = ids.map((id) => {
+    const x = indice.get(id);
+    return {
+      t: { chave: id, id, dfd: x?.dfd.numero ?? null, orgao: x?.dfd.orgao ?? null, orgaoNome: x?.dfd.orgaoNome ?? null, grupo: "" },
+      dfd: x?.dfd ?? null,
+      ano: x?.dfd.anoPca ?? null,
+      protocolo: x?.protocolo ?? null,
+      pastaProto: x?.pasta ?? null,
+    };
   });
-  if (op.ordenarPlanejamento) itens = porPlanejamento(itens);
-  if (op.formato === "unico") {
-    const anos = [...new Set(itens.map((i) => i.dfd?.anoPca ?? null))];
-    const umAno = anos.length === 1 ? anos[0] : null;
-    const nome = `${nomeSeguro(["DFDs", `${itens.length} planejamentos`, umAno ? `PCA ${umAno}` : null, hoje || null].filter(Boolean).join(" - "))}.pdf`;
-    return itens.length ? [{ pastas: op.pastaPca && umAno ? [pastaPca(umAno)] : [], nome, partes: itens.map((i) => i.t) }] : [];
-  }
-  return itens.map((i) => ({ pastas: op.pastaPca ? [pastaPca(i.dfd?.anoPca ?? null)] : [], nome: nomeArquivoDfd(i.id, i.dfd), partes: [i.t] }));
+  return montarArquivos(itens, op, false);
 }
 
 /** CONFERE o PDF baixado: o texto das primeiras páginas tem o nº de planejamento pedido (e o do DFD, quando conhecido)

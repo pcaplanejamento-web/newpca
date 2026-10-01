@@ -30,6 +30,7 @@ export async function protocolosParaAutomacao(): Promise<ProtocoloAutomacao[]> {
         orgaoId: dfds.orgaoId,
         orgaoEntidade: dfds.orgaoEntidade,
         sigla: dfds.siglaSetor,
+        reparticaoId: dfds.reparticaoId,
       })
       .from(dfds)
       .where(isNotNull(dfds.protocoloId)),
@@ -51,6 +52,7 @@ export async function protocolosParaAutomacao(): Promise<ProtocoloAutomacao[]> {
       anoPca: d.anoPca ?? null,
       orgao: chaveOrgaoCenti(d.orgaoId, d.orgaoEntidade),
       orgaoNome: nomeOrgao ?? (d.orgaoEntidade?.trim() || null),
+      sigla: (d.reparticaoId != null ? siglaUnidade.get(d.reparticaoId) : null) ?? (d.sigla?.trim() || null),
     });
     if (d.sigla?.trim()) g.siglas.push(d.sigla.trim());
     porProto.set(d.protocoloId, g);

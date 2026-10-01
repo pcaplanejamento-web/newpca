@@ -56,7 +56,7 @@ const CHAVE_SAIDA = "automacao:centi-saida";
 const CHAVE_ENTIDADES = "automacao:centi-entidades";
 
 type Resposta = { ok: boolean; erro?: string; logado?: boolean; entidade?: string | null; status?: number; b64?: string };
-type Estado = "fila" | "baixando" | "ok" | "falha" | "pulado";
+type Estado = "fila" | "baixando" | "ok" | "falha" | "pulado" | "repetido";
 type Linha = TarefaCenti & { estado: Estado; erro?: string; amostra?: string; entidade?: string };
 type Modo = "protocolo" | "ids";
 type Ext = { versao: string } | null;
@@ -204,8 +204,8 @@ const hojeBR = () => {
   return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
 };
 
-const COR: Record<Estado, string> = { fila: "var(--muted)", baixando: "var(--info)", ok: "var(--ok)", falha: "var(--danger)", pulado: "var(--warn)" };
-const ROTULO: Record<Estado, string> = { fila: "Na fila", baixando: "Baixando…", ok: "Salvo", falha: "Falhou", pulado: "Sem planejamento" };
+const COR: Record<Estado, string> = { fila: "var(--muted)", baixando: "var(--info)", ok: "var(--ok)", falha: "var(--danger)", pulado: "var(--warn)", repetido: "var(--warn)" };
+const ROTULO: Record<Estado, string> = { fila: "Na fila", baixando: "Baixando…", ok: "Salvo", falha: "Falhou", pulado: "Sem planejamento", repetido: "Não baixado" };
 const mesmasChaves = (a: Linha[], b: Linha[]) => a.length === b.length && a.every((l, i) => l.chave === b[i].chave);
 const CARTAO = "rounded-card border border-border bg-surface shadow-ring";
 
@@ -236,7 +236,8 @@ const COLUNAS: Column<ProtocoloAutomacao>[] = [
 
 const FORMATOS: { value: FormatoSaida; label: string }[] = [
   { value: "separados", label: "Separados" },
-  { value: "protocolo", label: "Por protocolo" },
+  { value: "protocolo", label: "Protocolo" },
+  { value: "unidade", label: "Unidade" },
   { value: "unico", label: "Único" },
 ];
 
@@ -326,7 +327,7 @@ function Analise({ linhas, rodando }: { linhas: Linha[]; rodando: boolean }) {
     for (const l of linhas) m.set(l.grupo, [...(m.get(l.grupo) ?? []), l]);
     return [...m.entries()];
   }, [linhas]);
-  const validas = linhas.filter((l) => l.estado !== "pulado");
+  const validas = linhas.filter((l) => l.estado !== "pulado" && l.estado !== "repetido");
   const feitos = validas.filter((l) => l.estado === "ok" || l.estado === "falha").length;
   const ok = validas.filter((l) => l.estado === "ok").length;
   const falhas = validas.length - ok - validas.filter((l) => l.estado === "fila" || l.estado === "baixando").length;
@@ -352,7 +353,7 @@ function Analise({ linhas, rodando }: { linhas: Linha[]; rodando: boolean }) {
                     {g}
                   </span>
                   <span className="shrink-0 tabular-nums text-muted">
-                    {ls.filter((l) => l.estado === "ok").length}/{ls.filter((l) => l.estado !== "pulado").length}
+                    {ls.filter((l) => l.estado === "ok").length}/{ls.filter((l) => l.estado !== "pulado" && l.estado !== "repetido").length}
                   </span>
                 </div>
               )}
@@ -437,8 +438,8 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
 
   const { ids, excedente } = lerIdsCenti(texto);
   const escolhidos = useMemo(() => protocolos.filter((p) => sel.has(p.id)), [protocolos, sel]);
-  const doProtocolo = useMemo(() => planoDosProtocolos(escolhidos, saida, hojeBR()), [escolhidos, saida]);
-  const arquivos = useMemo(() => (modo === "protocolo" ? doProtocolo.arquivos : planoDosIds(ids, protocolos, saida, hojeBR())), [modo, doProtocolo, ids, protocolos, saida]);
+  const doProtocolo = useMemo(() => planoDosProtocolos(escolhidos, saida), [escolhidos, saida]);
+  const arquivos = useMemo(() => (modo === "protocolo" ? doProtocolo.arquivos : planoDosIds(ids, protocolos, saida)), [modo, doProtocolo, ids, protocolos, saida]);
   const totalDfds = arquivos.reduce((s, a) => s + a.partes.length, 0);
   // A análise antes de baixar: cada DFD do plano (na ordem) + os pulados por não terem planejamento.
   const previa = useMemo<Linha[]>(() => {
@@ -453,6 +454,9 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
     if (modo === "protocolo")
       for (const x of doProtocolo.semPlanejamento)
         fila.push({ chave: `sem:${x.protocolo}:${x.dfd}`, id: "", dfd: x.dfd, orgao: null, orgaoNome: null, grupo: x.grupo, estado: "pulado" });
+    if (modo === "protocolo")
+      for (const x of doProtocolo.repetidos)
+        fila.push({ chave: x.chave, id: x.id, dfd: x.dfd, orgao: null, orgaoNome: null, grupo: x.grupo, estado: "repetido", erro: x.motivo });
     return fila;
   }, [arquivos, modo, doProtocolo]);
 
@@ -651,12 +655,14 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
             nesta tela. A aba da Centi não precisa ser recarregada. Cada versão nova avisa no sino.
           </p>
           <p>
-            <strong>Por protocolo:</strong> marque um ou vários (tocar na linha abre o protocolo). Cada um vira a pasta “Nº -
-            SIGLA - PCA ano” com os PDFs “Planejamento P - DFD N - PCA ano”. DFD sem nº de planejamento é pulado.
+            <strong>Por protocolo:</strong> marque um ou vários (tocar na linha abre o protocolo). Cada um vira a pasta “SIGLA - PCA
+            ano - (nº) - ano” com os PDFs “Planejamento P - DFD N - PCA ano - (nº) - ano” — o protocolo sempre no fim (vários:
+            “(1222, 2212) - 2026”). DFD sem nº de planejamento é pulado; cada planejamento é baixado UMA vez (a análise avisa
+            o duplicado no protocolo e o que já veio de outro protocolo).
             <strong> Por Id:</strong> nºs de planejamento separados por “:” ({MAX_IDS_CENTI} no máximo).
           </p>
           <p>
-            <strong>Ajustes:</strong> PDFs separados, um por protocolo ou um único; pasta “PCA ano”; ordem pelo planejamento;
+            <strong>Ajustes:</strong> PDFs separados, unidos por protocolo, por unidade ou num único; pasta “PCA ano”; ordem pelo planejamento;
             escolher a pasta (desligado = Downloads, vários arquivos num .zip com as pastas); conferir cada PDF (precisa
             trazer o planejamento e o DFD pedidos, senão não é salvo).
           </p>

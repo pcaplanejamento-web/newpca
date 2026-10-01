@@ -63,47 +63,65 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
-  const { nomePastaProtocolo, nomeSeguro, nomeArquivoDfd, planoDosProtocolos, planoDosIds, chaveOrgaoCenti, candidatosEntidade, lerOpcoesSaida } = await import(
-    "../src/lib/automacao-centi-core.ts"
-  );
-  const d = (numero: string, planejamento: string | null, anoPca: number | null = null) => ({ numero, planejamento, anoPca, orgao: "o:3", orgaoNome: "FMS" });
-  assert.equal(nomePastaProtocolo({ numero: "144756/2026", sigla: "SMS", anoPca: 2027, dfds: [] }), "144756-2026 - SMS - PCA 2027");
-  assert.equal(nomePastaProtocolo({ numero: "1/2026", sigla: null, anoPca: null, dfds: [d("1", "2", 2028)] }), "1-2026 - PCA 2028");
-  assert.equal(nomeArquivoDfd("640", { numero: "531", anoPca: 2027 }), "Planejamento 640 - DFD 531 - PCA 2027.pdf");
+  const { nomePastaProtocolo, nomeSeguro, nomeArquivoDfd, planoDosProtocolos, planoDosIds, chaveOrgaoCenti, candidatosEntidade, lerOpcoesSaida, sufixoProtocolos } =
+    await import("../src/lib/automacao-centi-core.ts");
+  const d = (numero: string, planejamento: string | null, sigla = "SMS") => ({ numero, planejamento, anoPca: null, orgao: "o:3", orgaoNome: "FMS", sigla });
+  assert.equal(sufixoProtocolos(["1222/2026", "2212/2026", "1222/2026"]), "(1222, 2212) - 2026");
+  assert.equal(sufixoProtocolos(["5/2025", "7/2026"]), "(5) - 2025 + (7) - 2026");
+  assert.equal(sufixoProtocolos(Array.from({ length: 10 }, (_, i) => `${i + 1}/2026`)), "(1, 2, 3, 4, 5, 6, 7, 8, … +2) - 2026");
+  assert.equal(nomePastaProtocolo({ numero: "144756/2026", sigla: "SMS", anoPca: 2027, dfds: [] }), "SMS - PCA 2027 - (144756) - 2026");
+  assert.equal(nomeArquivoDfd("640", { numero: "531", anoPca: 2027 }, "144756/2026"), "Planejamento 640 - DFD 531 - PCA 2027 - (144756) - 2026.pdf");
   assert.equal(nomeArquivoDfd("7"), "Planejamento 7.pdf");
   assert.equal(nomeSeguro("a".repeat(200)).length, 120);
   assert.equal(chaveOrgaoCenti(4, "x"), "o:4");
   assert.equal(chaveOrgaoCenti(null, " Fundo Municipal de Saúde "), "t:FUNDO MUNICIPAL DE SAUDE");
   assert.equal(chaveOrgaoCenti(null, null), null);
   const p = (id: number, numero: string, dfds: ReturnType<typeof d>[]) => ({ id, numero, idExterno: null, assunto: "A", interessado: null, sigla: "SMS", anoPca: 2027, pca: null, dfds });
-  const protos = [p(1, "10/2026", [d("531", "900"), d("532", null), d("533", "0640"), d("534", "640")]), p(2, "10/2026", [d("700", "811")])];
+  const protos = [
+    p(1, "10/2026", [d("531", "900"), d("532", null), d("533", "0640"), d("534", "640")]),
+    p(2, "11/2026", [d("700", "811", "SME"), d("701", "900")]),
+  ];
   const op = lerOpcoesSaida({});
-  const sep = planoDosProtocolos(protos, op);
-  assert.deepEqual(
-    sep.arquivos.map((a) => [a.pastas.join("/"), a.nome]),
-    [
-      ["PCA 2027/10-2026 - SMS - PCA 2027", "Planejamento 640 - DFD 533 - PCA 2027.pdf"],
-      ["PCA 2027/10-2026 - SMS - PCA 2027", "Planejamento 900 - DFD 531 - PCA 2027.pdf"],
-      ["PCA 2027/10-2026 - SMS - PCA 2027 (2)", "Planejamento 811 - DFD 700 - PCA 2027.pdf"],
-    ],
-  );
-  assert.deepEqual(sep.semPlanejamento, [{ protocolo: "10/2026", dfd: "532", grupo: "10-2026 - SMS - PCA 2027" }]);
   assert.equal(op.escolherPasta, false);
   assert.equal(op.conferir, true);
+  const sep = planoDosProtocolos(protos, op);
+  assert.deepEqual(
+    sep.arquivos.map((a) => a.nome),
+    [
+      "Planejamento 640 - DFD 533 - PCA 2027 - (10) - 2026.pdf",
+      "Planejamento 811 - DFD 700 - PCA 2027 - (11) - 2026.pdf",
+      "Planejamento 900 - DFD 531 - PCA 2027 - (10) - 2026.pdf",
+    ],
+  );
+  assert.equal(sep.arquivos[0].pastas.join("/"), "PCA 2027/SMS - PCA 2027 - (10) - 2026");
+  assert.deepEqual(sep.semPlanejamento, [{ protocolo: "10/2026", dfd: "532", grupo: "SMS - PCA 2027 - (10) - 2026" }]);
+  // Um planejamento = um download: o duplicado no protocolo e o que já veio de outro protocolo ficam avisados.
+  assert.deepEqual(
+    sep.repetidos.map((r) => [r.dfd, r.tipo, r.motivo]),
+    [
+      ["534", "duplicado", "DFD duplicado — o planejamento 640 também está no DFD 533."],
+      ["701", "repetido", "Já baixado no protocolo 10/2026 (DFD 531)."],
+    ],
+  );
   assert.equal(sep.total, 3);
   const porProto = planoDosProtocolos(protos, { ...op, pastaPca: false, formato: "protocolo", ordenarPlanejamento: false });
   assert.deepEqual(porProto.arquivos.map((a) => [a.pastas.length, a.nome, a.partes.map((t) => t.id).join(",")]), [
-    [0, "10-2026 - SMS - PCA 2027.pdf", "900,640"],
-    [0, "10-2026 - SMS - PCA 2027 (2).pdf", "811"],
+    [0, "SMS - PCA 2027 - (10) - 2026.pdf", "900,640"],
+    [0, "SMS - PCA 2027 - (11) - 2026.pdf", "811"],
   ]);
-  const unico = planoDosProtocolos(protos, { ...op, pastaPca: true, formato: "unico", ordenarPlanejamento: true }, "01-10-2026");
+  const porUnidade = planoDosProtocolos(protos, { ...op, formato: "unidade" });
+  assert.deepEqual(porUnidade.arquivos.map((a) => [a.pastas.join("/"), a.nome, a.partes.map((t) => t.id).join(",")]), [
+    ["PCA 2027", "SMS - PCA 2027 - (10) - 2026.pdf", "640,900"],
+    ["PCA 2027", "SME - PCA 2027 - (11) - 2026.pdf", "811"],
+  ]);
+  const unico = planoDosProtocolos(protos, { ...op, formato: "unico" });
   assert.deepEqual(unico.arquivos.map((a) => [a.pastas.join("/"), a.nome, a.partes.map((t) => t.id).join(",")]), [
-    ["PCA 2027", "DFDs - 2 protocolos - PCA 2027 - 01-10-2026.pdf", "640,811,900"],
+    ["PCA 2027", "DFDs - PCA 2027 - (10, 11) - 2026.pdf", "640,811,900"],
   ]);
   const ids = planoDosIds(["811", "5"], protos, op);
   assert.deepEqual(ids.map((a) => [a.pastas.join("/"), a.nome, a.partes[0].orgao]), [
     ["PCA sem ano", "Planejamento 5.pdf", null],
-    ["PCA 2027", "Planejamento 811 - DFD 700 - PCA 2027.pdf", "o:3"],
+    ["PCA 2027", "Planejamento 811 - DFD 700 - PCA 2027 - (11) - 2026.pdf", "o:3"],
   ]);
   assert.deepEqual(candidatosEntidade("02: 03,x y", null), ["02", "03", "x", "y"]);
   assert.equal(candidatosEntidade("", "02")[0], "01");

@@ -3384,10 +3384,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nenhuma senha no sistema. **Por protocolo** (padrão; `Segmented` Por protocolo | Por Id): os protocolos do sistema numa
   `DataTable` com seleção (loader `protocolosParaAutomacao`, `automacao.ts` — todos, com a SIGLA da unidade e, por DFD, o
   planejamento, o ano do PCA e o ÓRGÃO — `chaveOrgaoCenti`). **Plano da saída** (puro: `planoDosProtocolos`/`planoDosIds` →
-  `ArquivoSaida {pastas, nome, partes}`): pasta do protocolo "Nº - SIGLA - PCA ano" (`nomePastaProtocolo`), PDF
-  "Planejamento P - DFD N - PCA ano" (`nomeArquivoDfd`), opções no aparelho (`OpcoesSaida`): pasta "PCA ano" por cima,
-  PDFs **separados | um por protocolo | um único** (unidos pelo `pdf-lib`, import dinâmico) e ordem pelo nº de
-  planejamento; DFD sem planejamento é pulado e avisado. Sem pasta escolhida (o seletor abre em Downloads), um arquivo vai
+  `ArquivoSaida {pastas, nome, partes}`): pasta do protocolo "SIGLA - PCA ano - (nº) - ano" (`nomePastaProtocolo`), PDF
+  "Planejamento P - DFD N - PCA ano - (nº) - ano" (`nomeArquivoDfd`) — o PROTOCOLO sempre no fim (`sufixoProtocolos`: "(1222,
+  2212) - 2026"; vários anos com " + "), opções no aparelho (`OpcoesSaida`): pasta "PCA ano" por cima,
+  PDFs **separados | um por protocolo | um por UNIDADE (a sigla da unidade do DFD) | um único** (unidos pelo `pdf-lib`, import dinâmico) e ordem pelo nº de
+  planejamento; DFD sem planejamento é pulado e avisado; cada PLANEJAMENTO é baixado UMA vez no lote (`repetidos`: "DFD
+  duplicado" no mesmo protocolo, "Já baixado no protocolo X" vindo de outro — avisados na análise). Sem pasta escolhida (o seletor abre em Downloads), um arquivo vai
   direto para Downloads e vários vão num **.zip com as pastas** (`zip-armazenar.ts`, STORE puro e testado). **Entidade da
   Centi por órgão** (extensão 1.2.0, protocolo 3: o `estado` devolve a entidade aberta — cabeçalho `Company` — e o `pedir`
   aceita `entidade` só naquele pedido): mapa órgão → entidade no aparelho; sem ele, a aberta; falhou e "Descobrir sozinho"

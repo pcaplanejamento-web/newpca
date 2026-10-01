@@ -1519,3 +1519,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ Saída configurável: pasta "PCA ano", protocolo "Nº - SIGLA - PCA ano", PDF "Planejamento P - DFD N - PCA ano", separados / um por protocolo / um único (unidos), ordem pelo planejamento, Downloads (.zip com as pastas) por padrão; entidade da Centi por órgão descoberta e lembrada (extensão 1.2.0).
 ✅ Tela sem rolar o navegador; "Baixar extensão" sempre à mão (zip montado na hora, com a logo do sistema); nova versão da extensão avisa os ADMs no sino.
 ✅ Ajustes num dropdown (escolher pasta opcional), Baixar no rodapé da tabela, Análise por DFD ao lado, protocolo abre o banner da Mesa, cada PDF conferido (planejamento + DFD no texto, tamanho gravado, páginas do unido); textos só no (?).
+✅ Nº do protocolo no fim de todo nome ("(1222, 2212) - 2026"), PDF unido por unidade e um download por planejamento (duplicados e já baixados avisados na análise).
