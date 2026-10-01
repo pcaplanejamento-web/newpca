@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 11;
+  const PROTOCOLO = 12;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -75,6 +75,27 @@
     return { ...r, ...sessao };
   }
 
+  // O TOKEN da Centi TROCA a cada resposta: o servidor devolve "token" e "refreshtoken" novos e a tela passa a usá-los
+  // (Authorization = "Bearer <token>"). A extensão acompanha — lê o token novo de TODA resposta (da tela e dela) e sempre
+  // manda o mais recente; com o antigo, o salvar dava "Erro inesperado" (500) e as renovações forçadas, 429.
+  function trocarToken(ler) {
+    const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+    if (!cabecalhos || !A) return;
+    const novo = A.comTokenNovo(cabecalhos, ler("token"), ler("refreshtoken"));
+    if (novo === cabecalhos) return;
+    cabecalhos = novo;
+    try {
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar }));
+    } catch {}
+  }
+  const tokenDoXhr = (x) => (n) => {
+    try {
+      return x.getResponseHeader(n) || null;
+    } catch {
+      return null;
+    }
+  };
+
   const abrir = XMLHttpRequest.prototype.open;
   const definir = XMLHttpRequest.prototype.setRequestHeader;
   const enviar = XMLHttpRequest.prototype.send;
@@ -90,17 +111,25 @@
   };
   XMLHttpRequest.prototype.send = function (...r) {
     if (this.__pcaUrl && !this.__pcaInterno) guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo, "xhr");
+    if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/")) this.addEventListener("load", () => trocarToken(tokenDoXhr(this)));
     return enviar.apply(this, r);
   };
   const buscar = window.fetch;
   window.fetch = function (rec, init, ...resto) {
-    if (init?.__pcaInterno) return buscar.call(this, rec, init, ...resto);
+    const comToken = (p) =>
+      p.then((r) => {
+        try {
+          if (String(r.url || "").includes("/restauth/")) trocarToken((n) => r.headers.get(n));
+        } catch {}
+        return r;
+      });
+    if (init?.__pcaInterno) return comToken(buscar.call(this, rec, init, ...resto));
     try {
       const url = typeof rec === "string" ? rec : rec?.url;
       const hs = new Headers(init?.headers || (typeof rec === "object" ? rec.headers : undefined));
       guardar(url, Object.fromEntries(hs.entries()), init?.method || (typeof rec === "object" ? rec.method : "GET"), "fetch");
     } catch {}
-    return buscar.call(this, rec, init, ...resto);
+    return comToken(buscar.call(this, rec, init, ...resto));
   };
 
   const TRAVAS = { AnexarAoProtocolo: "0", AssinarDocumento: "0", Sign: "0", SendMail: "0", StorageReport: "0", Background: "0" };
@@ -139,12 +168,15 @@
       if (entidade && !k) x.setRequestHeader("Company", entidade);
       if (corpo) x.setRequestHeader("Content-Type", tipo);
       x.setRequestHeader("Accept", "application/json, text/plain, */*");
-      x.onload = () =>
-        ok(
+      x.onload = () => {
+        // O token novo desta resposta vale JÁ para o próximo pedido (antes de a sequência continuar).
+        trocarToken(tokenDoXhr(x));
+        return ok(
           comoTexto
             ? { status: x.status, texto: String(x.response ?? ""), enviados: Object.keys(x.__pcaHs || {}) }
             : { ok: true, status: x.status, tipo: x.getResponseHeader("content-type") || "", b64: emBase64(new Uint8Array(x.response || new ArrayBuffer(0))) },
         );
+      };
       x.onerror = () => falha(new Error("Sem resposta da Centi (rede)."));
       x.timeout = comoTexto ? 280000 : 120000;
       x.ontimeout = () => falha(new Error("A Centi demorou demais para responder."));

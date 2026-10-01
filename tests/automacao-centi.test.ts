@@ -67,7 +67,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.4"), false);
   assert.equal(versaoAtende("1.3.5"), false);
   assert.equal(versaoAtende("1.3.6"), false);
-  assert.equal(versaoAtende("1.3.7"), true);
+  assert.equal(versaoAtende("1.3.7"), false);
+  assert.equal(versaoAtende("1.3.8"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -375,4 +376,12 @@ test("anexo: o rastreio (trace-*) vai NOVO em cada pedido; sessão e entidade fi
   assert.equal(r["X-Ai-Trace"].length, cab["X-Ai-Trace"].length);
   assert.match(r["X-Ai-Trace"], /^[0-9a-f]+$/);
   assert.equal(r["trace-compact"], "1");
+});
+
+test("anexo: o token novo de cada resposta substitui o antigo (token, Bearer e refreshtoken)", async () => {
+  const A = await pecasAnexo();
+  const cab = { Refreshtoken: "r0", token: "t0", Authorization: "Bearer t0", Company: "2" };
+  assert.deepEqual(A.comTokenNovo(cab, "t1", "r1"), { Refreshtoken: "r1", token: "t1", Authorization: "Bearer t1", Company: "2" });
+  assert.deepEqual(A.comTokenNovo({ Refreshtoken: "r0" }, "t1", null), { Refreshtoken: "r0", token: "t1", Authorization: "Bearer t1" });
+  assert.deepEqual(A.comTokenNovo(cab, null, null), cab);
 });

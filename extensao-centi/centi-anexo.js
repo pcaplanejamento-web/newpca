@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p11";
+  const NOME = "__pcaCentiAnexo_p12";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
@@ -213,6 +213,25 @@
     return r;
   }
 
+  /** Os cabeçalhos com o TOKEN que a Centi devolveu na resposta (ela troca a cada resposta e a tela usa o novo):
+   * token, Authorization "Bearer <token>" e refreshtoken — no nome que já existe (sem caixa), senão acrescentados. Sem
+   * token novo, os mesmos cabeçalhos. */
+  function comTokenNovo(cab, token, refresh) {
+    if (!token && !refresh) return cab;
+    const novo = { ...cab };
+    const por = (re, nome, valor) => {
+      const k = Object.keys(novo).find((n) => re.test(n));
+      novo[k ?? nome] = valor;
+    };
+    if (token) {
+      por(/^token$/i, "token", token);
+      por(/^authorization$/i, "Authorization", `Bearer ${token}`);
+    }
+    if (refresh) por(/^refreshtoken$/i, "refreshtoken", refresh);
+    return novo;
+  }
+
   globalThis[NOME] = Object.freeze({
+    comTokenNovo,
     renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
 })();
