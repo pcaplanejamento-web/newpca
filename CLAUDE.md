@@ -3366,6 +3366,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `redirect_uri_mismatch`, `invalid_grant`…) e a tela diz o que fazer (`DETALHE_ERRO_GOOGLE` → `mensagemErroLogin`/
   `mensagemVinculo`; o vínculo usa os MESMOS códigos). O "Testar configuração" confere o Client ID + secret JUNTO AO GOOGLE
   (`conferirCredenciaisGoogle`: troca um código inventado — `invalid_grant` = credenciais aceitas).
+- **AUTOMAÇÃO — baixar DFDs da Centi (sem migração, só ADM):** tela **`/painel/automacao`** (`AutomacaoAdmin`; nav
+  "Automação" `IconRobo`) = Extensão e Centi (estado da conexão + instalação) · Opções da emissão (valor de referência, data;
+  avançado: modelo de assinatura, `ModuleKey`, `Guid` — guardados no APARELHO, `localStorage` `automacao:centi`) · Baixar
+  DFDs (Ids "1154:1155", pasta pelo `showDirectoryPicker` — sem ele, Downloads —, andamento por Id). Quem fala com a Centi é
+  a **extensão do Chrome** `extensao-centi/` (MV3; zipada no deploy em `public/extensao-centi.zip` por `scripts/publish.sh`):
+  `centi-main.js` roda NA página da Centi (mundo MAIN), guarda os cabeçalhos que a própria Centi usa em `/wcf/restauth/`
+  (token, `Company`, `Month` — sem os `x-ts` do anti-robô F5) e repete o "Processar" (`POST …/restauth/operation`) — PDF cru,
+  base64 "JVBER…" ou `getbinlink` na resposta; CAPTCHA/sessão expirada viram falha do Id —; `centi-ponte.js`/
+  `background.js`/`sistema-ponte.js` ligam a aba Automação à aba da Centi aberta (só as origens do sistema). Corpo do pedido
+  pelo núcleo PURO **`automacao-centi-core.ts`** (`pedidoEmitirDfd` = os 44 `Params` capturados; `lerIdsCenti`,
+  `lerConfigCenti`, `nomeArquivoDfd`) com as **TRAVAS** (`TRAVAS_CENTI`: sem anexar ao protocolo, assinar, e-mail, guardar
+  ou segundo plano) — forçadas DE NOVO na extensão. Nenhuma senha no sistema (usa o login já feito na Centi); nada entra na
+  Mesa. Testes: `tests/automacao-centi.test.ts`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

@@ -1512,3 +1512,6 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 > Cada item é entregue de forma incremental e aditiva (sem quebrar o que já existe),
 > com commit + deploy + verificação a cada passo.
+
+## Automação (Centi)
+✅ Tela **Automação** (ADM) + extensão do Chrome: baixa DFDs da Centi por Id do planejamento (Emitir DFD com valor de referência) direto numa pasta, usando o login já feito na Centi; só leitura (não vincula, não assina, não envia e-mail).

@@ -4,6 +4,7 @@ import type { SVGProps } from "react";
 import {
   Activity,
   BadgeCheck,
+  Bot,
   Briefcase,
   IdCard,
   Phone,
@@ -197,6 +198,7 @@ export const IconFixar = Pin;
 export const IconDesafixar = PinOff;
 export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
+export const IconRobo = Bot;
 export const IconPasta = Folder;
 export const IconPastaAberta = FolderOpen;
 export const IconAjuda = CircleHelp;
