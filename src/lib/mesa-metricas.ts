@@ -56,6 +56,10 @@ export type PessoaMetricas = "responsavel" | "distribuicao";
 /** O PAPEL segue o Dado: "Quem protocolou" → a Distribuição; os demais → o Responsável. */
 export const papelDoDado = (dado: DadoMetricas): PessoaMetricas => (dado === "distribuicao" ? "distribuicao" : "responsavel");
 
+/** O PAPEL da pessoa nas métricas com a VISÃO do papel: sem ver o Responsável, vale a Distribuição — agrupar pela pessoa
+ * que o papel não vê poria tudo em "Sem responsável" (o servidor tira o `responsavelId`). */
+export const papelVisivel = (dado: DadoMetricas, verResponsavel: boolean): PessoaMetricas => (verResponsavel ? papelDoDado(dado) : "distribuicao");
+
 export type FiltroMetricas = { periodo: Periodo; dado: DadoMetricas; medida: MedidaMetricas };
 /** A barra como abre: todo o período, protocolos por responsável. */
 export const FILTRO_METRICAS_PADRAO: FiltroMetricas = { periodo: PERIODO_TODO, dado: "responsavel", medida: "protocolos" };

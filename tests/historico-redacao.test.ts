@@ -66,6 +66,25 @@ describe("redação do histórico", () => {
     assert.equal(redigirHistorico([l], r).length, 1);
   });
 
+  it("Distribuição oculta: as linhas da PROTOCOLAÇÃO saem sem o autor (quem protocolou É a Distribuição); as demais ficam", () => {
+    const r = regraHistoricoMesa(visaoMesa(coerceDetalhes({ mesa: { distribuicao: false } }), false));
+    const [prot, imp, cel] = redigirHistorico(
+      [
+        linha({ acao: "protocolar", resumo: "Protocolado", origem: "protocolacao", detalhe: null }),
+        linha({ id: 2, acao: "importar", entidade: "dfd", resumo: "DFD 1209 importado", origem: "protocolacao", detalhe: null }),
+        linha({ id: 3, detalhe: gestao([SIT]) }),
+      ],
+      r,
+    );
+    assert.equal(prot.usuarioId, null);
+    assert.equal(prot.usuarioNome, null);
+    assert.equal(imp.usuarioNome, null);
+    assert.equal(cel.usuarioNome, "Maria");
+    // Com a Distribuição visível, o autor da protocolação fica.
+    const vis = regraHistoricoMesa(visaoMesa(coerceDetalhes({}), false));
+    assert.equal(redigirHistorico([linha({ acao: "protocolar", origem: "protocolacao" })], vis)[0].usuarioNome, "Maria");
+  });
+
   it("sem autores: anonimiza", () => {
     const r = regraHistoricoMesa(visaoMesa(coerceDetalhes({}), false), "anonimo");
     const [l] = redigirHistorico([linha({ detalhe: gestao([SIT]) })], r);

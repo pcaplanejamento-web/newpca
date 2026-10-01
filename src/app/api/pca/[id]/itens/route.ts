@@ -31,10 +31,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const falhas: { id: number; motivo: string }[] = [];
   for (const id of ids) {
     const n = porItem.get(id);
+    // O ESCOPO primeiro (unidade e linhas): fora dele, a MESMA falha genérica — o nº e o estado do item não saem.
     if (!n) falhas.push({ id, motivo: "Item não incorporado a este PCA" });
+    else if (!acessivel(n.reparticaoId) || (n.dfdId != null && !dfdNasLinhas(esc, n.dfdId))) falhas.push({ id, motivo: "Sem acesso a este item" });
     else if (!n.ativo) falhas.push({ id, motivo: `Nº ${n.sequencial} já inativo` });
-    else if (!acessivel(n.reparticaoId)) falhas.push({ id, motivo: "Sem acesso à unidade do item" });
-    else if (n.dfdId != null && !dfdNasLinhas(esc, n.dfdId)) falhas.push({ id, motivo: "Sem acesso a este item" });
     else alvo.push(n);
   }
   if (alvo.length) {

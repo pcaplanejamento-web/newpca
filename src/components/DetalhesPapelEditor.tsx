@@ -115,7 +115,7 @@ export function DetalhesPapelEditor({ valor, original, onChange }: { valor: Deta
             ajuda={
               m.distribuicao
                 ? "Quem protocolou: a coluna Distribuição e o Dado “Quem protocolou” do Dashboard."
-                : "Oculta: some a coluna e o Dado do Dashboard. O histórico ainda mostra quem protocolou (é o autor da protocolação)."
+                : "Oculta: some a coluna, o Dado do Dashboard e o autor da protocolação no histórico."
             }
             alterado={m.distribuicao !== o.mesa.distribuicao}
           >

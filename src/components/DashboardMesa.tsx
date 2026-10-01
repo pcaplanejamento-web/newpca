@@ -22,7 +22,7 @@ import {
   medidaDeEvento,
   naturezaDoProtocolo,
   type OrigemMetricas,
-  papelDoDado,
+  papelVisivel,
   protocolosDaPessoa,
   recorteMetricas,
   resumoMetricas,
@@ -137,7 +137,8 @@ export function DashboardMesa({
   const pMesa = useMemo(() => painelMesa({ protocolos, dfds }, new Date()), [protocolos, dfds]);
   // O RECORTE (período + foco no papel do Dado) — trocar o Dado dentro do mesmo papel ou a Medida só refaz o gráfico.
   const intervalo = useMemo(() => intervaloDoPeriodo(filtro.periodo, hoje), [filtro.periodo, hoje]);
-  const papel = papelDoDado(filtro.dado);
+  // Sem ver o Responsável, a pessoa das métricas é a Distribuição (a que o papel vê) — nunca um "Sem responsável" falso.
+  const papel = papelVisivel(filtro.dado, permitido.responsavel);
   const rec = useMemo(
     () => recorteMetricas(universo.protocolos, universo.dfds, metricas.atividades, { intervalo, papel, hoje, foco: responsavel }),
     [universo, metricas.atividades, intervalo, papel, hoje, responsavel],
@@ -600,7 +601,7 @@ export function DashboardMesa({
         </div>
       </ChartCard>
 
-{permitido.desempenho && (
+{permitido.desempenho && (papel === "distribuicao" ? permitido.distribuicao : permitido.responsavel) && (
       <section aria-labelledby={idDesempenho} className="space-y-2">
         <div>
           <h3 id={idDesempenho} className="text-sm font-semibold text-text">

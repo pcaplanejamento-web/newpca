@@ -54,7 +54,8 @@ export async function POST(req: Request) {
   for (const d of dfds) {
     const sel = porDfd.get(d.id) ?? [];
     if (!acessivel(d.reparticaoId) || !dfdNasLinhas(esc, d.id)) {
-      for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: acessivel(d.reparticaoId) ? "sem acesso a este DFD" : "sem acesso à unidade deste DFD" });
+      // Fora da unidade ou das linhas: UMA falha genérica, sem números (não revela o DFD nem os itens dele).
+      falhas.push({ dfd: "", item: null, motivo: "sem acesso a estes itens" });
       continue;
     }
     // O PAPEL manipula na Mesa em que o DFD está (a do sistema ou a do PCA).

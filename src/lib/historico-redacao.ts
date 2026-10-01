@@ -16,22 +16,42 @@ export type RegraHistorico = {
   camposOcultos: ReadonlySet<string>;
   /** Sem os dados pessoais: chaves/rótulos `SENSIVEL`, as assinaturas e a máscara no texto. */
   semPessoais: boolean;
+  /** A DISTRIBUIÇÃO oculta: sem o autor das linhas da PROTOCOLAÇÃO (quem protocolou É a Distribuição). */
+  semAutorDistribuicao: boolean;
 };
 
-export const REGRA_COMPLETA: RegraHistorico = Object.freeze({ anonimo: false, camposOcultos: new Set<string>(), semPessoais: false });
+export const REGRA_COMPLETA: RegraHistorico = Object.freeze({
+  anonimo: false,
+  camposOcultos: new Set<string>(),
+  semPessoais: false,
+  semAutorDistribuicao: false,
+});
 
 /** A consulta PÚBLICA do PCA: sem autor, sem dados pessoais, sem Responsável nem Situação (gestão interna). */
-export const REGRA_PUBLICA: RegraHistorico = Object.freeze({ anonimo: true, camposOcultos: new Set(["responsavelId", "situacaoId"]), semPessoais: true });
+export const REGRA_PUBLICA: RegraHistorico = Object.freeze({
+  anonimo: true,
+  camposOcultos: new Set(["responsavelId", "situacaoId"]),
+  semPessoais: true,
+  semAutorDistribuicao: true,
+});
 
 /** A régua do histórico da Mesa para a VISÃO do papel (o nível "sem autores" anonimiza). */
 export function regraHistoricoMesa(vis: VisaoMesa, nivel: NivelHistorico = "completo"): RegraHistorico {
   const ocultos = new Set<string>();
   if (!vis.responsavel.ver) ocultos.add("responsavelId");
   if (vis.colunasOcultas.protocolos.includes("situacao")) ocultos.add("situacaoId");
-  return { anonimo: nivel === "anonimo", camposOcultos: ocultos, semPessoais: vis.dadosPessoais === "mascarar" };
+  return {
+    anonimo: nivel === "anonimo",
+    camposOcultos: ocultos,
+    semPessoais: vis.dadosPessoais === "mascarar",
+    semAutorDistribuicao: !vis.distribuicao,
+  };
 }
 
-const semRestricao = (r: RegraHistorico) => !r.anonimo && r.camposOcultos.size === 0 && !r.semPessoais;
+const semRestricao = (r: RegraHistorico) => !r.anonimo && r.camposOcultos.size === 0 && !r.semPessoais && !r.semAutorDistribuicao;
+
+/** A linha da PROTOCOLAÇÃO (a capa protocolada e os DFDs gravados por ela): o autor dela é a Distribuição. */
+const daProtocolacao = (l: LinhaHistorico) => l.acao === "protocolar" || l.origem === "protocolacao";
 const ocultaChave = (r: RegraHistorico, chave: string, rotulo = "") => r.camposOcultos.has(chave) || (r.semPessoais && (SENSIVEL.test(chave) || SENSIVEL.test(rotulo)));
 
 type Redigido = { json: string | null; havia: boolean; ficou: boolean; tirou: boolean };
@@ -83,10 +103,12 @@ function redigirLinha(l: LinhaHistorico, r: RegraHistorico): LinhaHistorico | nu
   const tirou = partes.some((p) => p.tirou);
   // Havia mudanças e todas saíram: a linha não diz mais nada (e dizer que "algo" mudou já revelaria o campo).
   if (tirou && partes.some((p) => p.havia) && !partes.some((p) => p.ficou)) return null;
+  // Sem o autor: o nível "sem autores" — ou a Distribuição oculta, nas linhas da protocolação (o autor é quem protocolou).
+  const semAutor = r.anonimo || (r.semAutorDistribuicao && daProtocolacao(l));
   return {
     ...l,
-    usuarioId: r.anonimo ? null : l.usuarioId,
-    usuarioNome: r.anonimo ? null : l.usuarioNome,
+    usuarioId: semAutor ? null : l.usuarioId,
+    usuarioNome: semAutor ? null : l.usuarioNome,
     // O resumo legível pode citar o que saiu: some (a tela refaz o resumo pelo que ficou no detalhe).
     resumo: tirou && !r.semPessoais ? null : r.semPessoais ? mascararTexto(l.resumo) : l.resumo,
     antes: antes.json,

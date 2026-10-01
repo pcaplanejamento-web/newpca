@@ -528,7 +528,7 @@ export const MODELOS_DETALHES: readonly { id: string; nome: string; descricao: s
   {
     id: "meus",
     nome: "Só os meus",
-    descricao: "Só os protocolos em que é o Responsável ou que protocolou; assume os sem responsável.",
+    descricao: "Só os protocolos em que é o Responsável ou que protocolou; assume os sem responsável que protocolou.",
     detalhes: coerceDetalhes({ mesa: { linhas: "meus", responsavel: { alterar: "si" } } }),
   },
 ];

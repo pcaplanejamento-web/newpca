@@ -57,7 +57,10 @@ Levantamento de tudo o que se acessa e o controle, no PAPEL (vale em qualquer gr
   NO SERVIDOR em todas as rotas da Mesa, nos banners, na importação (anti-sequestro) e nos vínculos de tarefa; **desempenho por
   pessoa** no Dashboard. O que o papel não vê não sai do servidor (redação por requisição). Corrigido o **vazamento** dos nomes de
   Responsável/Situação no histórico da consulta pública do PCA. Perfil mostra as restrições; "Ver acesso" e o banner do usuário
-  também.
+  também. Revisão corrigida antes de publicar: o Responsável oculto não vaza por "sim/não" (qualquer pedido com ele é
+  recusado), troca do Responsável com trava otimista (409 se mudou no meio), Distribuição oculta tira o autor da protocolação
+  do histórico, desempenho segue a pessoa que o papel vê, falhas fora do escopo sem número. **Pendente (baixo):** "só os
+  meus" ainda não filtra Catálogo → Classificações/Unidades (descrições e R$ agregados) nem a prévia do PCA.
 - 🔜 **Entrega 2:** colunas das 4 tabelas por papel (o servidor não envia; exportação e edições sem elas), histórico em 3 níveis
   (não vê · sem autores · completo — protocolo, DFD, item e tarefa) e edições salvas (personalizar · publicar · moderar).
 - 🔜 **Entrega 3:** o Manipular da Mesa dividido (Situação, capa, DFD, itens, assinatura, massa, vincular, enviar/incorporar/

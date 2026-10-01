@@ -14,7 +14,7 @@ import { Modal } from "./Modal";
 import { toast } from "./Toast";
 
 /** Resultado da ação sobre protocolos na Mesa do PCA (`POST /api/pca/[id]/protocolos`). */
-export type ResultadoAcaoPca = { alterados: number; falhas: { numero: string; motivo: string }[] };
+export type ResultadoAcaoPca = { alterados: number; falhas: { id: number; numero: string; motivo: string }[] };
 
 /** Envia a ação ao servidor e devolve o resultado (lança em erro de rede/servidor). */
 export async function acaoProtocolosPca(pcaId: number, corpo: Record<string, unknown>): Promise<ResultadoAcaoPca> {
@@ -76,7 +76,9 @@ export function EnviarAoPca({
     try {
       const r = await acaoProtocolosPca(pca.id, { acao: "enviar", ids: elegiveis.map((p) => p.id) });
       // Aviso GLOBAL (Toaster): a barra de seleção some ao limpar a seleção — o aviso não pode morar nela.
-      if (r.falhas.length) toast.error(`${num(r.alterados)} enviado(s). Não enviados: ${r.falhas.map((f) => `${f.numero} (${f.motivo})`).join(" · ")}`);
+      // Fora do escopo, o servidor não devolve o número: vale o da própria linha.
+      const numero = (f: { id: number; numero: string }) => f.numero || selecionados.find((p) => p.id === f.id)?.numero || "—";
+      if (r.falhas.length) toast.error(`${num(r.alterados)} enviado(s). Não enviados: ${r.falhas.map((f) => `${numero(f)} (${f.motivo})`).join(" · ")}`);
       else toast.success(`${num(r.alterados)} protocolo(s) enviado(s) ao ${pca.nome} — estão agora na Mesa do PCA.`);
       setAberto(false);
       onConcluido();

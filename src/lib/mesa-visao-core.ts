@@ -86,17 +86,23 @@ export const soOsMeus = (vis: VisaoMesa) => vis.linhas === "meus";
 
 export const MSG_RESPONSAVEL_NAO = "Seu papel não permite alterar o Responsável.";
 export const MSG_RESPONSAVEL_SI = "Seu papel só permite assumir um protocolo sem responsável ou soltar o seu.";
+export const MSG_RESPONSAVEL_MUDOU = "O Responsável deste protocolo acabou de mudar — atualize a Mesa e tente de novo.";
+
+/** O papel não pode mexer no Responsável (não o vê, ou "não altera") — QUALQUER pedido que o traga é recusado. */
+export const responsavelVedado = (vis: VisaoMesa) => !vis.responsavel.ver || vis.responsavel.alterar === "nao";
 
 /**
- * Pode trocar o Responsável de `atual` para `novo`? (`null` = pode). Manter o mesmo nunca é recusado. "Só assume para si" =
- * assumir o protocolo SEM responsável ou soltar o seu — tomar o de outra pessoa é redistribuir (exige "qualquer pessoa do
- * grupo"). Quem pode escolher a pessoa (qualquer do grupo) segue a régua do grupo à parte (`pessoaDoGrupo`).
+ * Pode trocar o Responsável de `atual` para `novo`? (`null` = pode). "Só assume para si" = assumir o protocolo SEM
+ * responsável ou soltar o seu — tomar o de outra pessoa é redistribuir (exige "qualquer pessoa do grupo"). Quem pode
+ * escolher a pessoa (qualquer do grupo) segue a régua do grupo à parte (`pessoaDoGrupo`). O papel que NÃO VÊ (ou não
+ * altera) o Responsável é recusado ANTES de comparar: aceitar "o mesmo" e recusar "outro" revelaria quem é (um oráculo
+ * de sim/não); para quem altera, manter o mesmo nunca é recusado.
  */
 export function motivoResponsavel(vis: VisaoMesa, eu: number, atual: number | null | undefined, novo: number | null | undefined): string | null {
+  if (responsavelVedado(vis)) return MSG_RESPONSAVEL_NAO;
   const a = atual ?? null;
   const n = novo ?? null;
   if (a === n) return null;
-  if (!vis.responsavel.ver || vis.responsavel.alterar === "nao") return MSG_RESPONSAVEL_NAO;
   if (vis.responsavel.alterar === "si") {
     if (n === eu && a == null) return null;
     if (n == null && a === eu) return null;

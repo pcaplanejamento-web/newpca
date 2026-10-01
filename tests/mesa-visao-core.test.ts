@@ -54,11 +54,21 @@ describe("Responsável em 3 níveis", () => {
   const nao = visao({ mesa: { responsavel: { alterar: "nao" } } });
   const oculto = visao({ mesa: { responsavel: { ver: false } } });
 
-  it("manter o mesmo nunca é recusado", () => {
-    for (const v of [grupo, si, nao, oculto]) {
+  it("quem altera: manter o mesmo nunca é recusado", () => {
+    for (const v of [grupo, si]) {
       assert.equal(motivoResponsavel(v, EU, 3, 3), null);
       assert.equal(motivoResponsavel(v, EU, null, null), null);
       assert.equal(motivoResponsavel(v, EU, undefined, null), null);
+    }
+  });
+
+  it("quem não vê (ou não altera): QUALQUER pedido com o Responsável é recusado — sem oráculo de sim/não", () => {
+    for (const v of [nao, oculto]) {
+      // "o mesmo" e "outro" recebem a MESMA resposta: a recusa não revela o Responsável atual.
+      assert.equal(motivoResponsavel(v, EU, 3, 3), MSG_RESPONSAVEL_NAO);
+      assert.equal(motivoResponsavel(v, EU, 3, 4), MSG_RESPONSAVEL_NAO);
+      assert.equal(motivoResponsavel(v, EU, null, null), MSG_RESPONSAVEL_NAO);
+      assert.equal(motivoResponsavel(v, EU, 7, null), MSG_RESPONSAVEL_NAO);
     }
   });
 

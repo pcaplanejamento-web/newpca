@@ -6,7 +6,7 @@ import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { redigirDfdDetalhe, redigirProtocoloDetalhe } from "@/lib/mesa-redacao";
-import { motivoResponsavel } from "@/lib/mesa-visao-core";
+import { motivoResponsavel, MSG_RESPONSAVEL_MUDOU } from "@/lib/mesa-visao-core";
 import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtocolo, getProtocoloReparticao, listarSobrescritos } from "@/lib/protocolo";
 import { telaDoRecurso } from "@/lib/papeis-core";
 import { unidadesConferencia } from "@/lib/reparticoes";
@@ -87,7 +87,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
   if (campos.situacaoId != null && !(await getSituacao(campos.situacaoId))) return erro("Situação não encontrada (Configurações → Situações).", 422);
 
-  await atualizarProtocolo(id, campos);
+  // Trocar o Responsável = trava OTIMISTA: só grava se ele ainda é o lido (duas pessoas assumindo ao mesmo tempo: a 2ª
+  // não sobrescreve a 1ª).
+  if (!(await atualizarProtocolo(id, campos, campos.responsavelId !== undefined ? proto.responsavelId : undefined)))
+    return erro(MSG_RESPONSAVEL_MUDOU, 409);
   // Histórico: o que mudou, antes → depois, com rótulos legíveis (sigla da unidade, nomes).
   const detalhe = await detalheSeguro(() => detalheEdicaoProtocolo(proto, campos), {});
   await registrarAuditoria({

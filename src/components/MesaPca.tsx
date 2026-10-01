@@ -134,7 +134,9 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     setGravando(true);
     try {
       const r = await acaoProtocolosPca(pca.id, corpo);
-      if (r.falhas.length) toast.error(`${sucesso(r)} Não aplicados: ${r.falhas.map((f) => `${f.numero} (${f.motivo})`).join(" · ")}`);
+      // Fora do escopo, o servidor não devolve o número: vale o da própria linha.
+      const numero = (f: { id: number; numero: string }) => f.numero || protocolos.find((p) => p.id === f.id)?.numero || "—";
+      if (r.falhas.length) toast.error(`${sucesso(r)} Não aplicados: ${r.falhas.map((f) => `${numero(f)} (${f.motivo})`).join(" · ")}`);
       else toast.success(sucesso(r));
       limpar?.();
       router.refresh();

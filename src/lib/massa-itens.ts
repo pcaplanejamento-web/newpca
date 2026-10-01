@@ -155,7 +155,7 @@ export function fatiarItensPorDfd(ids: number[], dfdDe: Map<number, number>, max
 /** Agrupa recusas/falhas pelo MOTIVO para o relatório curto ("3 itens: fora do catálogo (DFD 12: 4, 7…)"). */
 export function resumirFalhasItens(falhas: { dfd: string; item: number | null; motivo: string }[], max = 6): string[] {
   return resumirFalhas(
-    falhas.map((f) => ({ ref: f.item != null ? `DFD ${f.dfd} item ${f.item}` : `DFD ${f.dfd}`, motivo: f.motivo })),
+    falhas.map((f) => ({ ref: !f.dfd ? "" : f.item != null ? `DFD ${f.dfd} item ${f.item}` : `DFD ${f.dfd}`, motivo: f.motivo })),
     ["item", "itens"],
     max,
   );
@@ -175,7 +175,9 @@ export function resumirFalhas(falhas: { ref: string; motivo: string }[], nomes: 
     else porMotivo.set(motivo, [f.ref]);
   }
   return [...porMotivo.entries()].map(([motivo, refs]) => {
-    const lista = refs.slice(0, max).join(", ") + (refs.length > max ? ` … (+${refs.length - max})` : "");
-    return `${refs.length} ${refs.length === 1 ? nomes[0] : nomes[1]}: ${motivo} (${lista})`;
+    // A falha GENÉRICA (fora do escopo) vem sem referência — conta, mas não lista ("" não vira "(DFD )").
+    const com = refs.filter(Boolean);
+    const lista = com.slice(0, max).join(", ") + (com.length > max ? ` … (+${com.length - max})` : "");
+    return `${refs.length} ${refs.length === 1 ? nomes[0] : nomes[1]}: ${motivo}${lista ? ` (${lista})` : ""}`;
   });
 }

@@ -8,7 +8,7 @@ import { somatorioProcesso } from "@/lib/conferencia-dfd";
 import { massaProtocolosSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { motivoResponsavel } from "@/lib/mesa-visao-core";
+import { MSG_RESPONSAVEL_NAO, motivoResponsavel, responsavelVedado } from "@/lib/mesa-visao-core";
 import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
 import { getSituacao } from "@/lib/situacoes";
@@ -34,6 +34,9 @@ export async function POST(req: Request) {
   const esc = await escopoMesa();
   if (!esc) return erro("Faça login.", 401);
   const { acessivel } = esc;
+  // Quem não vê (ou não altera) o Responsável: o pedido inteiro é recusado ANTES de olhar os protocolos — a resposta
+  // por alvo diria quais têm (ou não) a pessoa pedida (um oráculo da coluna oculta).
+  if (acao.campo === "responsavel" && responsavelVedado(esc.vis)) return erro(MSG_RESPONSAVEL_NAO, 403);
   if (acao.campo === "reparticao") {
     if (!editavelDe(await getRegrasAvaliacao(), "protocolo.reparticao")) return erro("Campo travado nas Configurações → Avaliação.", 403);
     if (!acessivel(acao.reparticaoId)) return erro("Sem acesso à unidade de destino.", 403);
@@ -48,13 +51,10 @@ export async function POST(req: Request) {
   const falhas: { id: number; numero: string; motivo: string }[] = [];
   for (const pr of await listarProtocolosPorIds(ids)) {
     try {
-      if (!acessivel(pr.reparticaoId)) {
-        falhas.push({ id: pr.id, numero: pr.numero, motivo: "Sem acesso à unidade deste protocolo." });
-        continue;
-      }
-      // As LINHAS da pessoa ("só os meus", detalhe do papel).
-      if (!protocoloLegivel(esc, pr)) {
-        falhas.push({ id: pr.id, numero: pr.numero, motivo: MSG_SEM_ACESSO_PROTOCOLO });
+      // Fora da unidade ou das LINHAS da pessoa ("só os meus"): a MESMA falha genérica, sem o número (não revela o
+      // protocolo — a tela usa o número da própria linha).
+      if (!acessivel(pr.reparticaoId) || !protocoloLegivel(esc, pr)) {
+        falhas.push({ id: pr.id, numero: "", motivo: MSG_SEM_ACESSO_PROTOCOLO });
         continue;
       }
       // O PAPEL manipula na Mesa em que o protocolo está (a do sistema ou a do PCA).
@@ -93,7 +93,11 @@ export async function POST(req: Request) {
         campos = valoresBatem(pr.valorCapa, proc.somatorio) ? null : { valorCapa: proc.somatorio };
       }
       if (!campos) continue;
-      await atualizarProtocolo(pr.id, campos);
+      // Responsável = trava OTIMISTA (só grava se ainda é o lido — ninguém sobrescreve quem acabou de assumir).
+      if (!(await atualizarProtocolo(pr.id, campos, acao.campo === "responsavel" ? pr.responsavelId : undefined))) {
+        falhas.push({ id: pr.id, numero: pr.numero, motivo: "O Responsável mudou enquanto isso — atualize a Mesa" });
+        continue;
+      }
       const detalhe = await detalheSeguro(() => detalheEdicaoProtocolo(pr, campos), {});
       await registrarAuditoria({
         usuario: a.u,

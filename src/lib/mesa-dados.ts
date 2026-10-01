@@ -160,8 +160,10 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
   const emOutroPcaPorProtocolo: Record<number, number> = {};
   for (const d of doNaoInc)
     if (d.protocoloId != null && emOutro.has(d.id)) emOutroPcaPorProtocolo[d.protocoloId] = (emOutroPcaPorProtocolo[d.protocoloId] ?? 0) + 1;
+  // A ação de cada incorporado — só dos protocolos que a pessoa vê (com "só os meus", os ids dos outros não saem).
+  const visiveis = new Set(m.protocolos.map((p) => p.id));
   const acaoPorProtocolo: Record<number, AcaoDfdPca> = {};
-  for (const v of vs) if (v.protocoloId != null && !acaoPorProtocolo[v.protocoloId]) acaoPorProtocolo[v.protocoloId] = v.acao;
+  for (const v of vs) if (v.protocoloId != null && visiveis.has(v.protocoloId) && !acaoPorProtocolo[v.protocoloId]) acaoPorProtocolo[v.protocoloId] = v.acao;
   return {
     pca: { id: pca.id, nome: pca.nome, ano: pca.ano },
     emOutroPcaPorProtocolo,

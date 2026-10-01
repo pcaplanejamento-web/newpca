@@ -167,6 +167,8 @@ const chaveConf = (d: DfdNaMesa) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparti
  * QUALQUER DFD dele gravado e o rastro dos sobrescritos. Trocar responsável/situação não reconfere nada. */
 const chaveProto = (p: ProtocoloNaMesa) =>
   `${p.id}|${p.dfdsAtualizadoEm ?? ""}|${p.totalDfds}|${p.valorTotal}|${p.sobrescritos}|${p.valorSobrescritos}|${p.valorCapa ?? ""}|${p.assunto ?? ""}`;
+/** "Protocolo 123/2026" — sem número (a falha genérica fora do escopo), nada. */
+const refNumero = (prefixo: string, numero: string | null | undefined) => (numero ? `${prefixo} ${numero}` : "");
 /** Protocolos por requisição da conferência agregada (e ~DFDs por fatia: `FATIA_CONFERENCIA`). */
 const FATIA_PROTOCOLOS = 50;
 /** Estado do protocolo cuja conferência dos DFDs falhou (neutro — nunca um "Regular" falso). */
@@ -737,7 +739,11 @@ export function DfdsView({
     if (r.alterados > 0) toast.success(`${num(r.alterados)} DFD(s) alterado(s).`);
     const falhas = [
       ...r.erros,
-      ...resumirFalhas((r.falhas as { numero: string; motivo: string }[]).map((f) => ({ ref: `DFD ${f.numero}`, motivo: f.motivo })), ["DFD", "DFDs"]),
+      // Fora do escopo, o servidor não devolve o número: vale o da própria linha.
+      ...resumirFalhas(
+        (r.falhas as { id: number; numero: string; motivo: string }[]).map((f) => ({ ref: refNumero("DFD", f.numero || dfdPorId.get(f.id)?.numero), motivo: f.motivo })),
+        ["DFD", "DFDs"],
+      ),
     ];
     if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
   }
@@ -773,7 +779,13 @@ export function DfdsView({
     else if (r.erros.length === 0 && r.falhas.length === 0) toast.success("Nada a alterar — os selecionados já estavam assim.");
     const falhas = [
       ...r.erros,
-      ...resumirFalhas((r.falhas as { numero: string; motivo: string }[]).map((f) => ({ ref: `Protocolo ${f.numero}`, motivo: f.motivo })), ["protocolo", "protocolos"]),
+      ...resumirFalhas(
+        (r.falhas as { id: number; numero: string; motivo: string }[]).map((f) => ({
+          ref: refNumero("Protocolo", f.numero || protocolos.find((p) => p.id === f.id)?.numero),
+          motivo: f.motivo,
+        })),
+        ["protocolo", "protocolos"],
+      ),
     ];
     if (falhas.length > 0) setErro(`Não alterados: ${falhas.join(" · ")}`);
   }

@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { dfdProtocolos, dfds } from "../db/schema.ts";
@@ -24,4 +24,18 @@ export function comandosMesmoId(db: Db, numero: string, mesmoId: number[], alvoI
       ? [db.update(dfds).set({ protocoloId: fica }).where(inArray(dfds.protocoloId, saem)), db.delete(dfdProtocolos).where(inArray(dfdProtocolos.id, saem))]
       : []),
   ];
+}
+
+/**
+ * A edição do protocolo com a trava OTIMISTA do Responsável: a linha só muda se o Responsável AINDA é o que a rota leu
+ * (`era`). Duas pessoas "assumindo" o mesmo protocolo sem responsável ao mesmo tempo — ou alguém soltando o seu enquanto
+ * outra pessoa o redistribui —: a 2ª não sobrescreve a 1ª (nenhuma linha devolvida → 409). Builder (testado pelo driver
+ * D1 real).
+ */
+export function comandoAtualizarSeResponsavel(db: Db, id: number, set: Record<string, unknown>, era: number | null) {
+  return db
+    .update(dfdProtocolos)
+    .set(set)
+    .where(and(eq(dfdProtocolos.id, id), era == null ? isNull(dfdProtocolos.responsavelId) : eq(dfdProtocolos.responsavelId, era)))
+    .returning({ id: dfdProtocolos.id });
 }

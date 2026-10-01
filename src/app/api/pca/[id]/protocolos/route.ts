@@ -57,13 +57,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const falhas: { id: number; numero: string; motivo: string }[] = [];
   for (const pr of protocolos) {
     const falha = (motivo: string) => falhas.push({ id: pr.id, numero: pr.numero, motivo });
-    if (!acessivel(pr.reparticaoId)) {
-      falha("Sem acesso à unidade deste protocolo.");
-      continue;
-    }
-    // As LINHAS da pessoa ("só os meus", detalhe do papel).
-    if (!protocoloNasLinhas(esc, pr.id)) {
-      falha(MSG_SEM_ACESSO_PROTOCOLO);
+    // Fora da unidade ou das LINHAS da pessoa ("só os meus"): a MESMA falha genérica, sem o número (não revela o
+    // protocolo — a tela usa o número da própria linha).
+    if (!acessivel(pr.reparticaoId) || !protocoloNasLinhas(esc, pr.id)) {
+      falhas.push({ id: pr.id, numero: "", motivo: MSG_SEM_ACESSO_PROTOCOLO });
       continue;
     }
     try {

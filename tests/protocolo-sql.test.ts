@@ -6,7 +6,7 @@ import { before, describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { dfdProtocolos } from "../src/db/schema.ts";
-import { comandosMesmoId } from "../src/lib/protocolo-sql.ts";
+import { comandoAtualizarSeResponsavel, comandosMesmoId } from "../src/lib/protocolo-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
 
 // Protocolo de MESMO Id e nº diferente (o mesmo processo renumerado) — pelos MESMOS builders do servidor, no driver
@@ -73,5 +73,40 @@ describe("protocolo de MESMO Id e nº diferente (builders no db.batch do D1)", (
 
   it("sem protocolo de mesmo Id: nenhum comando (só o upsert)", () => {
     assert.deepEqual(comandosMesmoId(orm, "300/2026", [], null), []);
+  });
+});
+
+describe("Responsável com trava otimista (duas pessoas assumindo ao mesmo tempo)", () => {
+  let db: DatabaseSync;
+  let orm: ReturnType<typeof drizzle<typeof schema>>;
+  before(() => {
+    db = aplicarTudo();
+    db.exec(
+      "INSERT INTO usuarios (id, email, nome, senha_hash, role, status) VALUES (5, 'a@x.br', 'A', 'x', 'membro', 'ativo'), (6, 'b@x.br', 'B', 'x', 'membro', 'ativo')",
+    );
+    db.exec("INSERT INTO dfd_protocolos (id, numero) VALUES (1, '1/2026')");
+    orm = drizzle(d1Sobre(db) as never, { schema });
+  });
+  const resp = () => (db.prepare("SELECT responsavel_id AS r FROM dfd_protocolos WHERE id = 1").get() as { r: number | null }).r;
+
+  it("assumir o SEM responsável: a 1ª pessoa grava, a 2ª (que leu 'sem') não sobrescreve", async () => {
+    const a = await comandoAtualizarSeResponsavel(orm, 1, { responsavelId: 5 }, null);
+    const b = await comandoAtualizarSeResponsavel(orm, 1, { responsavelId: 6 }, null);
+    assert.equal(a.length, 1);
+    assert.equal(b.length, 0);
+    assert.equal(resp(), 5);
+  });
+
+  it("soltar o seu só enquanto ainda é seu; outra pessoa não solta o de quem assumiu", async () => {
+    assert.equal((await comandoAtualizarSeResponsavel(orm, 1, { responsavelId: null }, 6)).length, 0);
+    assert.equal(resp(), 5);
+    assert.equal((await comandoAtualizarSeResponsavel(orm, 1, { responsavelId: null }, 5)).length, 1);
+    assert.equal(resp(), null);
+  });
+
+  it("os demais campos vão junto, na mesma trava", async () => {
+    assert.equal((await comandoAtualizarSeResponsavel(orm, 1, { responsavelId: 6, assunto: "INCLUSÃO" }, null)).length, 1);
+    const p = db.prepare("SELECT responsavel_id AS r, assunto AS a FROM dfd_protocolos WHERE id = 1").get() as { r: number; a: string };
+    assert.deepEqual([p.r, p.a], [6, "INCLUSÃO"]);
   });
 });

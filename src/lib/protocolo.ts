@@ -5,7 +5,7 @@ import { nomesPessoas, nomesSituacoes, rotulosUnidades } from "./auditoria";
 import { classificarAssunto } from "./avaliacao-core";
 import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
-import { comandosMesmoId } from "./protocolo-sql";
+import { comandoAtualizarSeResponsavel, comandosMesmoId } from "./protocolo-sql";
 import { limparRastroDestino } from "./rastro-sql";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import { filtroAnoPcaProtocolo } from "./dfd-sql";
@@ -347,7 +347,9 @@ export async function atualizarProtocolo(
     responsavelId?: number | null;
     situacaoId?: number | null;
   },
-): Promise<void> {
+  /** O Responsável que a rota LEU: a linha só muda se ele ainda é o mesmo (trava otimista — `false` = mudou no meio). */
+  responsavelEra?: number | null,
+): Promise<boolean> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
   if (campos.responsavelId !== undefined) set.responsavelId = campos.responsavelId;
   if (campos.situacaoId !== undefined) set.situacaoId = campos.situacaoId;
@@ -358,7 +360,9 @@ export async function atualizarProtocolo(
   if (campos.observacao !== undefined) set.observacao = campos.observacao;
   if (campos.valorCapa !== undefined) set.valorCapa = campos.valorCapa;
   if (campos.localReparticao !== undefined) set.localReparticao = campos.localReparticao;
+  if (responsavelEra !== undefined) return (await comandoAtualizarSeResponsavel(getDb(), id, set, responsavelEra)).length > 0;
   await getDb().update(dfdProtocolos).set(set).where(eq(dfdProtocolos.id, id));
+  return true;
 }
 
 /** O que muda numa edição do protocolo (`atualizarProtocolo`) — o mesmo corpo do PATCH/massa. */
