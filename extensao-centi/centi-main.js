@@ -53,18 +53,84 @@
   }
   const ehPdf = (b) => b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
 
-  // Procura o PDF numa resposta JSON: base64 ("JVBER…" = "%PDF") ou um link de arquivo da Centi.
+  // Procura o PDF numa resposta JSON: base64 ("JVBER…" = "%PDF"), base64 gzip ("H4sI…"), vetor de bytes ou a CHAVE do
+  // arquivo temporário da Centi ({ "File": { "Key", "FileName" } } — o "Processar" devolve assim e o arquivo é buscado
+  // depois pela chave).
   function acharNoJson(o, prof = 0) {
-    if (o == null || prof > 6) return null;
+    if (o == null || prof > 8) return null;
     if (typeof o === "string") {
-      const s = o.replace(/^data:application\/pdf;base64,/, "");
+      const s = o.replace(/^data:[^;]+;base64,/, "");
       if (s.startsWith("JVBER")) return { b64: s };
-      if (/getbinlink/i.test(s)) return { link: s };
+      if (s.startsWith("H4sI")) return { gzip: s };
       return null;
     }
-    if (typeof o === "object") for (const v of Object.values(o)) {
-      const r = acharNoJson(v, prof + 1);
-      if (r) return r;
+    if (Array.isArray(o)) {
+      if (o.length > 4 && o[0] === 37 && o[1] === 80 && o[2] === 68 && o[3] === 70) return { bytes: new Uint8Array(o) };
+      for (const v of o) {
+        const r = acharNoJson(v, prof + 1);
+        if (r) return r;
+      }
+      return null;
+    }
+    if (typeof o === "object") {
+      for (const v of Object.values(o)) {
+        const r = acharNoJson(v, prof + 1);
+        if (r) return r;
+      }
+      if (typeof o.Key === "string" && /^[0-9a-f-]{20,}$/i.test(o.Key)) return { chave: o.Key, nome: o.FileName || "arquivo.pdf", url: o.URL };
+    }
+    return null;
+  }
+
+  const deBase64 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  async function gunzip(bytes) {
+    const st = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Uint8Array(await new Response(st).arrayBuffer());
+  }
+
+  // O esqueleto da resposta (chaves e tipos; textos cortados) — para diagnosticar um formato novo sem expor dados.
+  function esqueleto(o, prof = 0) {
+    if (o == null || typeof o !== "object") return typeof o === "string" ? `${o.slice(0, 24)}${o.length > 24 ? `…(${o.length})` : ""}` : o;
+    if (prof > 4) return "…";
+    if (Array.isArray(o)) return [`(${o.length})`, ...o.slice(0, 2).map((v) => esqueleto(v, prof + 1))];
+    const r = {};
+    for (const [k, v] of Object.entries(o)) r[k] = /token|authorization/i.test(k) ? "***" : esqueleto(v, prof + 1);
+    return r;
+  }
+
+  // Busca o arquivo temporário pela chave (os caminhos que a Centi usa para baixar binários).
+  async function arquivoPelaChave(achado) {
+    const n = encodeURIComponent(achado.nome);
+    const k = encodeURIComponent(achado.chave);
+    const urls = [
+      achado.url,
+      `${base}/restauth/getbinlink/${k}/${n}`,
+      `${base}/restauth/getbinlink/${k}`,
+      `${base}/rest/getbinlink/${k}/${n}`,
+      `${base}/restauth/getbin/${k}`,
+      `${base}/restauth/getfile/${k}`,
+    ].filter(Boolean);
+    for (const url of urls) {
+      try {
+        const y = await pedir("GET", new URL(url, location.href).href, null, "arraybuffer");
+        if (y.status >= 400) continue;
+        const b = new Uint8Array(y.response || new ArrayBuffer(0));
+        if (ehPdf(b)) return b;
+        // Pode vir um link (texto ou JSON) para o arquivo: segue uma vez.
+        const t = new TextDecoder().decode(b).trim().replace(/^"|"$/g, "");
+        let link = /^https?:|^\//.test(t) ? t : null;
+        if (!link) {
+          try {
+            const j = JSON.parse(t);
+            link = typeof j === "string" ? j : j?.URL || j?.Url || j?.Link || null;
+          } catch {}
+        }
+        if (link) {
+          const z = await pedir("GET", new URL(link, location.href).href, null, "arraybuffer");
+          const c = new Uint8Array(z.response || new ArrayBuffer(0));
+          if (ehPdf(c)) return c;
+        }
+      } catch {}
     }
     return null;
   }
@@ -108,17 +174,16 @@
     if (json && typeof json === "object" && json.Captcha) return { ok: false, erro: "A Centi pediu CAPTCHA — emita este pela tela da Centi.", captcha: true };
     const achado = acharNoJson(json);
     if (achado?.b64) return { ok: true, pdf: achado.b64 };
-    if (achado?.link) {
-      const url = /^https?:/i.test(achado.link) ? achado.link : `${base}/restauth/${achado.link.replace(/^\/?(restauth\/)?/, "")}`;
-      const y = await pedir("GET", url, null, "arraybuffer");
-      const b = new Uint8Array(y.response || new ArrayBuffer(0));
-      if (ehPdf(b)) return { ok: true, pdf: emBase64(b) };
-    }
+    let pdf = null;
+    if (achado?.gzip) pdf = await gunzip(deBase64(achado.gzip));
+    else if (achado?.bytes) pdf = achado.bytes;
+    else if (achado?.chave) pdf = await arquivoPelaChave(achado);
+    if (pdf && ehPdf(pdf)) return { ok: true, pdf: emBase64(pdf) };
     const msg = json?.Message || json?.Mensagem || json?.Msg || json?.Error;
     return {
       ok: false,
-      erro: typeof msg === "string" && msg ? msg : "Resposta da Centi sem PDF.",
-      amostra,
+      erro: typeof msg === "string" && msg ? msg : achado?.chave ? "A Centi gerou o PDF, mas não consegui baixá-lo pela chave." : "Resposta da Centi sem PDF.",
+      amostra: JSON.stringify(esqueleto(json)).slice(0, 1200),
     };
   }
 
