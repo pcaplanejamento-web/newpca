@@ -35,6 +35,29 @@ test("a versão da tela é a do manifest da extensão", async () => {
   const { readFileSync } = await import("node:fs");
   const { VERSAO_EXTENSAO_CENTI } = await import("../src/lib/automacao-centi-core.ts");
   assert.equal(JSON.parse(readFileSync("extensao-centi/manifest.json", "utf8")).version, VERSAO_EXTENSAO_CENTI);
-  // O script da página da Centi só responde à ponte da MESMA versão.
-  assert.match(readFileSync("extensao-centi/centi-main.js", "utf8"), new RegExp(`const VERSAO = "${VERSAO_EXTENSAO_CENTI}"`));
+  // O script da página da Centi e a ponte falam o MESMO protocolo.
+  const p = (f: string) => readFileSync(`extensao-centi/${f}`, "utf8").match(/const (?:PROTOCOLO|P) = (\d+);/)?.[1];
+  assert.equal(p("centi-main.js"), p("centi-ponte.js"));
+});
+
+test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esqueleto sem token", async () => {
+  const { analisarRespostaCenti, caminhosDoArquivo, linkDaResposta, versaoAtende } = await import("../src/lib/automacao-centi-core.ts");
+  const enc = (t: string) => new TextEncoder().encode(t);
+  assert.equal(analisarRespostaCenti(enc("%PDF-1.7"), 200).tipo, "pdf");
+  assert.equal(analisarRespostaCenti(enc(JSON.stringify({ R: { File: "JVBERi0x" } })), 200).tipo, "base64");
+  const c = analisarRespostaCenti(
+    enc(JSON.stringify({ $type: "OperationReturn", File: { Key: "907ef972-a24f-48b9-be6f-a590c2806dac", FileName: "EmitirDFDPlanejamento.pdf", Mode: 0, URL: null } })),
+    200,
+  );
+  assert.equal(c.tipo, "chave");
+  if (c.tipo === "chave") assert.equal(caminhosDoArquivo(c)[0], "restauth/getbinlink/907ef972-a24f-48b9-be6f-a590c2806dac/EmitirDFDPlanejamento.pdf");
+  const s = analisarRespostaCenti(enc("{}"), 401);
+  assert.equal(s.tipo === "nada" && /sessão/i.test(s.erro), true);
+  const n = analisarRespostaCenti(enc(JSON.stringify({ Ok: false, Token: "segredo" })), 200);
+  assert.equal(n.tipo === "nada" && !n.amostra?.includes("segredo"), true);
+  assert.equal(linkDaResposta(enc('"/contabil/wcf/restauth/bin/1"')), "/contabil/wcf/restauth/bin/1");
+  assert.equal(linkDaResposta(enc('{"URL":"https://x/y"}')), "https://x/y");
+  assert.equal(versaoAtende("1.1.0"), true);
+  assert.equal(versaoAtende("1.0.5"), false);
+  assert.equal(versaoAtende("1.2.0"), true);
 });

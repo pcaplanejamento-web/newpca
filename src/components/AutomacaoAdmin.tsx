@@ -2,14 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  analisarRespostaCenti,
+  caminhosDoArquivo,
   type ConfigCenti,
   CONFIG_CENTI_PADRAO,
+  ehPdf,
   lerConfigCenti,
   lerIdsCenti,
+  linkDaResposta,
   MAX_IDS_CENTI,
+  maiorVersao,
   nomeArquivoDfd,
   pedidoEmitirDfd,
   VERSAO_EXTENSAO_CENTI,
+  versaoAtende,
 } from "@/lib/automacao-centi-core";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -27,16 +33,9 @@ import { Switch } from "./Switch";
 
 const CHAVE_CONFIG = "automacao:centi";
 
-type Resposta = { ok: boolean; erro?: string; pdf?: string; logado?: boolean; captcha?: boolean; amostra?: string };
+type Resposta = { ok: boolean; erro?: string; logado?: boolean; status?: number; b64?: string };
 type Linha = { id: string; estado: "fila" | "baixando" | "ok" | "falha"; erro?: string; amostra?: string };
 type Ext = { versao: string } | null;
-
-const maiorVersao = (a: string, b: string) => {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0) ? a : b;
-  return a;
-};
 
 /** Conversa com a extensão pela ponte da página (window.postMessage). */
 function useExtensaoCenti() {
@@ -86,11 +85,10 @@ function useExtensaoCenti() {
 
 type Pasta = { getFileHandle: (n: string, o: { create: boolean }) => Promise<{ createWritable: () => Promise<WritableStreamDefaultWriter & { write: (d: Blob) => Promise<void>; close: () => Promise<void> }> }>; name: string };
 
-function pdfDoBase64(b64: string): Blob {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: "application/pdf" });
+const deBase64 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+async function gunzip(bytes: Uint8Array) {
+  const st = new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(st).arrayBuffer());
 }
 
 async function salvar(pasta: Pasta | null, nome: string, blob: Blob) {
@@ -146,7 +144,7 @@ export function AutomacaoAdmin() {
 
   const verificar = useCallback(async () => setLogado(await pedir("estado", null, 8000)), [pedir]);
   useEffect(() => {
-    if (ext) void verificar();
+    if (ext && versaoAtende(ext.versao)) void verificar();
   }, [ext, verificar]);
 
   const { ids, excedente } = lerIdsCenti(texto);
@@ -158,6 +156,35 @@ export function AutomacaoAdmin() {
     } catch {}
   }
 
+  type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean };
+  // A LÓGICA da emissão (a extensão só leva o pedido à aba da Centi): Processar → o PDF, ou a chave do arquivo → baixa.
+  async function emitirUm(id: string): Promise<Emissao> {
+    const ambiente = (r: Resposta): Emissao => ({ erro: r.erro ?? "Falha na extensão.", ambiente: true });
+    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, cfg, new Date()) }, 150_000);
+    if (!r.ok || r.b64 == null) return ambiente(r);
+    const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
+    if (a.tipo === "pdf") return { pdf: a.bytes };
+    if (a.tipo === "base64") return { pdf: deBase64(a.b64) };
+    if (a.tipo === "gzip") {
+      const b = await gunzip(deBase64(a.b64)).catch(() => null);
+      return b && ehPdf(b) ? { pdf: b } : { erro: "Não consegui abrir o PDF compactado da Centi." };
+    }
+    if (a.tipo === "nada") return { erro: a.erro, amostra: a.amostra, ambiente: /sessão/i.test(a.erro) };
+    for (const caminho of caminhosDoArquivo(a)) {
+      const d = await pedir("pedir", { metodo: "GET", caminho }, 150_000);
+      if (!d.ok || d.b64 == null || (d.status ?? 0) >= 400) continue;
+      const b = deBase64(d.b64);
+      if (ehPdf(b)) return { pdf: b };
+      const link = linkDaResposta(b);
+      if (link) {
+        const z = await pedir("pedir", { metodo: "GET", caminho: link }, 150_000);
+        const c = z.ok && z.b64 ? deBase64(z.b64) : null;
+        if (c && ehPdf(c)) return { pdf: c };
+      }
+    }
+    return { erro: "A Centi gerou o PDF, mas não consegui baixá-lo pela chave." };
+  }
+
   async function baixar() {
     if (!ids.length || rodando) return;
     setRodando(true);
@@ -166,11 +193,11 @@ export function AutomacaoAdmin() {
     const marcar = (id: string, l: Partial<Linha>) => setLinhas((ls) => ls.map((x) => (x.id === id ? { ...x, ...l } : x)));
     for (const id of ids) {
       marcar(id, { estado: "baixando" });
-      const r = await pedir("emitir", pedidoEmitirDfd(id, cfg, new Date()), 150_000);
-      if (!r.ok || !r.pdf) {
+      const r = await emitirUm(id);
+      if (!r.pdf) {
         const erro = r.erro ?? "Falha ao emitir.";
-        // Falha do AMBIENTE (extensão/aba/login), não do Id: os demais falhariam igual — para o lote e revalida.
-        if (/recarregue|sessão|aperte f5|abra a centi|não respondeu/i.test(erro)) {
+        // Falha do AMBIENTE (extensão/aba/sessão), não do Id: os demais falhariam igual — para o lote e revalida.
+        if (r.ambiente) {
           setLinhas((ls) => ls.map((x) => (x.estado === "fila" || x.id === id ? { ...x, estado: "falha", erro } : x)));
           void verificar();
           break;
@@ -179,7 +206,7 @@ export function AutomacaoAdmin() {
         continue;
       }
       try {
-        await salvar(pasta, nomeArquivoDfd(id), pdfDoBase64(r.pdf));
+        await salvar(pasta, nomeArquivoDfd(id), new Blob([r.pdf as Uint8Array<ArrayBuffer>], { type: "application/pdf" }));
         marcar(id, { estado: "ok" });
       } catch {
         marcar(id, { estado: "falha", erro: "Não consegui gravar na pasta — escolha a pasta de novo." });
@@ -190,7 +217,8 @@ export function AutomacaoAdmin() {
 
   const feitos = linhas.filter((l) => l.estado === "ok" || l.estado === "falha").length;
   const falhas = linhas.filter((l) => l.estado === "falha").length;
-  const pronto = !!ext && !!logado?.ok && !!logado.logado;
+  const atualizada = !!ext && versaoAtende(ext.versao);
+  const pronto = atualizada && !!logado?.ok && !!logado.logado;
 
   return (
     <div className="mx-auto max-w-4xl space-y-[var(--gap-block)]">
@@ -209,18 +237,18 @@ export function AutomacaoAdmin() {
       <Secao titulo="1. Extensão e Centi">
         <div className="flex flex-wrap items-center gap-2">
           {ext ? <Badge tone="emerald" dot>Extensão conectada (v{ext.versao})</Badge> : <Badge tone="amber" dot>Extensão não encontrada</Badge>}
-          {ext && (logado?.ok && logado.logado ? <Badge tone="emerald" dot>Centi logada</Badge> : <Badge tone="amber" dot>{logado?.erro ?? "Centi sem login"}</Badge>)}
+          {atualizada && (logado?.ok && logado.logado ? <Badge tone="emerald" dot>Centi logada</Badge> : <Badge tone="amber" dot>{logado?.erro ?? "Centi sem login"}</Badge>)}
           <Button size="sm" variant="secondary" onClick={() => (ext ? void verificar() : window.location.reload())}>
             <IconRefresh className="h-4 w-4" /> Verificar
           </Button>
         </div>
-        {ext && ext.versao !== VERSAO_EXTENSAO_CENTI && (
+        {ext && !atualizada && (
           <Callout kind="warn">
-            Há uma versão nova da extensão ({VERSAO_EXTENSAO_CENTI}): baixe o zip abaixo, substitua os arquivos da pasta e clique em
-            ↻ no cartão dela em chrome://extensions.
+            Instale a extensão {VERSAO_EXTENSAO_CENTI} (a última que pede reinstalação — as melhorias seguintes chegam com o
+            sistema): baixe o zip abaixo, substitua os arquivos da pasta e clique em ↻ no cartão dela em chrome://extensions.
           </Callout>
         )}
-        {(!ext || ext.versao !== VERSAO_EXTENSAO_CENTI) && (
+        {(!ext || !atualizada) && (
           <Callout kind="info">
             <ol className="list-decimal space-y-1 pl-5">
               <li>

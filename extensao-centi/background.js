@@ -49,6 +49,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     const { aba, erro } = await abaCenti();
     if (!aba) return { ok: false, erro };
     if (msg.acao === "estado") return { ok: true, logado: true };
+    if (msg.acao !== "pedir") return { ok: false, erro: "Ação desconhecida." };
     try {
       return await chrome.tabs.sendMessage(aba.id, { alvo: "centi", acao: msg.acao, dados: msg.dados });
     } catch {

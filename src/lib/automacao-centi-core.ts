@@ -22,8 +22,9 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   guid: "2b414e51-4389-1c0a-f194-b11779b834f5",
 };
 
-/** A versão da extensão publicada junto (extensao-centi/manifest.json) — a tela avisa quando a instalada é outra. */
-export const VERSAO_EXTENSAO_CENTI = "1.0.5";
+/** A versão da extensão publicada junto (extensao-centi/manifest.json) = a MÍNIMA que a tela aceita (a extensão é só o
+ * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
+export const VERSAO_EXTENSAO_CENTI = "1.1.0";
 
 export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -122,4 +123,107 @@ export function pedidoEmitirDfd(id: string, cfg: ConfigCenti, agora: Date) {
 /** Nome do arquivo salvo na pasta. */
 export function nomeArquivoDfd(id: string): string {
   return `DFD - Planejamento ${id}.pdf`;
+}
+
+/** A maior de duas versões "a.b.c". */
+export function maiorVersao(a: string, b: string): string {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0) ? a : b;
+  return a;
+}
+
+export const versaoAtende = (instalada: string) => maiorVersao(instalada || "0", VERSAO_EXTENSAO_CENTI) === instalada;
+
+export const ehPdf = (b: Uint8Array) => b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+
+/** O que a resposta da Centi traz: o PDF (bytes, base64 ou base64 gzip) ou a CHAVE do arquivo temporário ({File:{Key,
+ * FileName}} — o "Processar" devolve assim e o arquivo é buscado depois pela chave). */
+export type AchadoCenti =
+  | { tipo: "pdf"; bytes: Uint8Array }
+  | { tipo: "base64"; b64: string }
+  | { tipo: "gzip"; b64: string }
+  | { tipo: "chave"; chave: string; nome: string; url: string | null }
+  | { tipo: "nada"; erro: string; amostra?: string };
+
+function acharNoJson(o: unknown, prof = 0): AchadoCenti | null {
+  if (o == null || prof > 8) return null;
+  if (typeof o === "string") {
+    const t = o.replace(/^data:[^;]+;base64,/, "");
+    if (t.startsWith("JVBER")) return { tipo: "base64", b64: t };
+    if (t.startsWith("H4sI")) return { tipo: "gzip", b64: t };
+    return null;
+  }
+  if (Array.isArray(o)) {
+    if (o.length > 4 && o[0] === 37 && o[1] === 80 && o[2] === 68 && o[3] === 70) return { tipo: "pdf", bytes: Uint8Array.from(o as number[]) };
+    for (const v of o) {
+      const r = acharNoJson(v, prof + 1);
+      if (r) return r;
+    }
+    return null;
+  }
+  if (typeof o === "object") {
+    for (const v of Object.values(o)) {
+      const r = acharNoJson(v, prof + 1);
+      if (r) return r;
+    }
+    const f = o as { Key?: unknown; FileName?: unknown; URL?: unknown };
+    if (typeof f.Key === "string" && /^[0-9a-f-]{20,}$/i.test(f.Key))
+      return { tipo: "chave", chave: f.Key, nome: typeof f.FileName === "string" && f.FileName ? f.FileName : "arquivo.pdf", url: typeof f.URL === "string" && f.URL ? f.URL : null };
+  }
+  return null;
+}
+
+/** O esqueleto da resposta (chaves e tipos; textos cortados; sem tokens) — para diagnosticar um formato novo. */
+export function esqueletoCenti(o: unknown, prof = 0): unknown {
+  if (o == null || typeof o !== "object") return typeof o === "string" ? `${o.slice(0, 24)}${o.length > 24 ? `…(${o.length})` : ""}` : o;
+  if (prof > 4) return "…";
+  if (Array.isArray(o)) return [`(${o.length})`, ...o.slice(0, 2).map((v) => esqueletoCenti(v, prof + 1))];
+  const r: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(o)) r[k] = /token|authorization/i.test(k) ? "***" : esqueletoCenti(v, prof + 1);
+  return r;
+}
+
+/** Lê a resposta do "Processar" (ou de um download). */
+export function analisarRespostaCenti(bytes: Uint8Array, status: number): AchadoCenti {
+  if (status === 401 || status === 403) return { tipo: "nada", erro: "Sessão da Centi expirada — faça o login de novo na aba da Centi." };
+  if (status >= 400) return { tipo: "nada", erro: `A Centi respondeu ${status}.` };
+  if (ehPdf(bytes)) return { tipo: "pdf", bytes };
+  const texto = new TextDecoder().decode(bytes);
+  let json: unknown;
+  try {
+    json = JSON.parse(texto);
+  } catch {
+    return { tipo: "nada", erro: "Resposta da Centi sem PDF.", amostra: texto.slice(0, 300) };
+  }
+  const o = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
+  if (o.Captcha) return { tipo: "nada", erro: "A Centi pediu CAPTCHA — emita este pela tela da Centi." };
+  const achado = acharNoJson(json);
+  if (achado) return achado;
+  const msg = [o.Message, o.Mensagem, o.Msg, o.Error].find((m) => typeof m === "string" && m);
+  return { tipo: "nada", erro: (msg as string) || "Resposta da Centi sem PDF.", amostra: JSON.stringify(esqueletoCenti(json)).slice(0, 1200) };
+}
+
+/** Onde buscar o arquivo temporário pela chave (caminhos relativos à API da Centi — a extensão só aceita a API). */
+export function caminhosDoArquivo(a: { chave: string; nome: string; url: string | null }): string[] {
+  const k = encodeURIComponent(a.chave);
+  const n = encodeURIComponent(a.nome);
+  return [a.url, `restauth/getbinlink/${k}/${n}`, `restauth/getbinlink/${k}`, `rest/getbinlink/${k}/${n}`, `restauth/getbin/${k}`, `restauth/getfile/${k}`].filter(
+    (c): c is string => !!c,
+  );
+}
+
+/** Um download que devolveu um LINK (texto ou JSON) em vez do arquivo. */
+export function linkDaResposta(bytes: Uint8Array): string | null {
+  const t = new TextDecoder().decode(bytes).trim().replace(/^"|"$/g, "");
+  if (/^https?:|^\//.test(t)) return t;
+  try {
+    const j = JSON.parse(t) as unknown;
+    if (typeof j === "string") return j;
+    const o = j as { URL?: unknown; Url?: unknown; Link?: unknown };
+    const l = o?.URL ?? o?.Url ?? o?.Link;
+    return typeof l === "string" && l ? l : null;
+  } catch {
+    return null;
+  }
 }
