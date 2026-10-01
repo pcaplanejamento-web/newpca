@@ -151,7 +151,14 @@ export function AutomacaoAdmin() {
       marcar(id, { estado: "baixando" });
       const r = await pedir("emitir", pedidoEmitirDfd(id, cfg, new Date()), 150_000);
       if (!r.ok || !r.pdf) {
-        marcar(id, { estado: "falha", erro: r.erro ?? "Falha ao emitir.", amostra: r.amostra });
+        const erro = r.erro ?? "Falha ao emitir.";
+        // Falha do AMBIENTE (extensão/aba/login), não do Id: os demais falhariam igual — para o lote e revalida.
+        if (/recarregue|login|abra a centi|não respondeu/i.test(erro)) {
+          setLinhas((ls) => ls.map((x) => (x.estado === "fila" || x.id === id ? { ...x, estado: "falha", erro } : x)));
+          void verificar();
+          break;
+        }
+        marcar(id, { estado: "falha", erro, amostra: r.amostra });
         continue;
       }
       try {
