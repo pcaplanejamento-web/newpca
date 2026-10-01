@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 7;
+  const PROTOCOLO = 8;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -19,11 +19,18 @@
   let doProtocolo = null;
   let nomesSalvar = null;
   let tipoSalvar = null;
+  // O endereço EXATO (caminho + parâmetros) que a tela usou no confirmsave/save e a TRILHA dos pedidos dela antes de
+  // salvar (só "MÉTODO caminho" — a sessão vai nos cabeçalhos, nunca na URL): o anexo usa o mesmo endereço e o erro mostra
+  // a trilha (o passo que a tela faz e a extensão não).
+  let urlsSalvar = {};
+  let trilha = [];
+  let trilhaSalvar = null;
   // A sessão da Centi é POR ABA (sessionStorage): a última capturada vale também depois de um F5 ou de uma atualização.
   try {
     const salvo = JSON.parse(sessionStorage.getItem(SESSAO) || "null");
     if (salvo?.base && salvo?.cabecalhos) ({ base, cabecalhos } = salvo);
     if (salvo?.doSalvar) ({ doSalvar, nomesSalvar, tipoSalvar } = salvo);
+    if (salvo?.urlsSalvar) ({ urlsSalvar, trilhaSalvar } = salvo);
     if (salvo?.doProtocolo) doProtocolo = salvo.doProtocolo;
   } catch {}
   const IGNORAR = /^(content-type|accept|content-length|x-ts)/i;
@@ -40,13 +47,18 @@
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
     const caminho = u.slice(i);
-    if (/^POST$/i.test(metodo || "") && /^\/restauth\/(confirmsave|save)(\?|$)/i.test(caminho)) {
+    const passo = `${String(metodo || "GET").toUpperCase()} ${caminho.slice("/restauth/".length).slice(0, 160)}`;
+    trilha = [...trilha, passo].slice(-12);
+    const salvar = /^POST$/i.test(metodo || "") && caminho.match(/^\/restauth\/(confirmsave|save)(\?|$)/i);
+    if (salvar) {
       doSalvar = limpos;
       nomesSalvar = Object.keys(hs).map((k) => k.toLowerCase()).sort();
       tipoSalvar = Object.entries(hs).find(([k]) => /^content-type$/i.test(k))?.[1] ?? null;
+      urlsSalvar = { ...urlsSalvar, [salvar[1].toLowerCase()]: caminho.slice(1) };
+      if (salvar[1].toLowerCase() === "confirmsave") trilhaSalvar = trilha.slice(0, -1);
     } else if (/[?&]entity=102907(&|$)/.test(caminho)) doProtocolo = limpos;
     try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo }));
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar }));
     } catch {}
   }
 
@@ -163,7 +175,9 @@
     } catch {}
     if (r.status >= 400 || !j) {
       const msg = `A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."}`;
-      throw new Error(salvar ? `${msg} ${A.dicaCabecalhos(nomesSalvar, Object.keys(cab), !!doProtocolo)}` : msg);
+      throw new Error(
+        salvar ? `${msg} ${A.dicaCabecalhos(nomesSalvar, Object.keys(cab), !!doProtocolo)} ${A.dicaTrilha(trilhaSalvar, caminho)}` : msg,
+      );
     }
     return j;
   }
@@ -199,9 +213,9 @@
       .then((t) => A.tipoDoLoad(t, d.tipo))
       .catch(() => null);
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
-    const conf = await api("POST", "restauth/confirmsave", corpo, "confirmsave", true);
+    const conf = await api("POST", urlsSalvar.confirmsave || "restauth/confirmsave", corpo, "confirmsave", true);
     if (conf.Confirm === true) return { ok: false, erro: `A Centi pede confirmação: ${A.mensagens(conf.Message) || "sem mensagem"} — anexe pela tela da Centi.` };
-    const salvo = A.conferirSalvo(await api("POST", "restauth/save", corpo, "save", true), d);
+    const salvo = A.conferirSalvo(await api("POST", urlsSalvar.save || "restauth/save", corpo, "save", true), d);
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
   }
 

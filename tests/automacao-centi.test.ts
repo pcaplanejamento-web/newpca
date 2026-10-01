@@ -63,7 +63,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.0"), false);
   assert.equal(versaoAtende("1.3.1"), false);
   assert.equal(versaoAtende("1.3.2"), false);
-  assert.equal(versaoAtende("1.3.3"), true);
+  assert.equal(versaoAtende("1.3.3"), false);
+  assert.equal(versaoAtende("1.3.4"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -342,4 +343,11 @@ test("anexo: a dica do erro do salvar diz quais cabeçalhos da tela faltaram (s�
   assert.equal(A.dicaCabecalhos(tela, ["Refreshtoken", "Company", "Month"], true), "Cabeçalhos do salvar da Centi que faltaram: modulekey.");
   assert.match(A.dicaCabecalhos(tela, ["Refreshtoken", "Company", "Month", "Modulekey"], true), /anti-robô/);
   assert.match(A.dicaCabecalhos(["refreshtoken"], ["Refreshtoken"], true), /mesmos/);
+});
+
+test("anexo: a dica do erro mostra os passos da tela antes do salvar (sem números longos)", async () => {
+  const A = await pecasAnexo();
+  assert.match(A.dicaTrilha(null, "restauth/confirmsave"), /Anexe UM documento pela tela/);
+  const d = A.dicaTrilha(["GET load?entity=102907&key=2332778", "POST upload?entity=102932"], "restauth/confirmsave");
+  assert.equal(d, "Passos da tela antes de salvar: GET load?entity=102907&key=233… › POST upload?entity=102932. Anexo: restauth/confirmsave.");
 });

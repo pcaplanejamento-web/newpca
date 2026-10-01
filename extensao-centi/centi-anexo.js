@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p7";
+  const NOME = "__pcaCentiAnexo_p8";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
@@ -182,5 +182,13 @@
     return "Os cabeçalhos são os mesmos da tela da Centi.";
   }
 
-  globalThis[NOME] = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, MODULO_PROTOCOLO, MODULO_TIPO });
+  /** A trilha da tela da Centi antes do salvar dela (só "MÉTODO caminho"; números longos encurtados) e o endereço usado
+   * pelo anexo — o passo que a tela faz e o anexo não aparece aqui. Sem trilha: como aprendê-la. */
+  function dicaTrilha(trilha, usado) {
+    if (!Array.isArray(trilha) || !trilha.length) return "Anexe UM documento pela tela da Centi nesta aba (com a extensão já atualizada) e tente de novo — a extensão aprende os passos da tela.";
+    const curto = (t) => String(t).replace(/\d{7,}/g, (n) => `${n.slice(0, 3)}…`).slice(0, 90);
+    return `Passos da tela antes de salvar: ${trilha.slice(-8).map(curto).join(" › ")}. Anexo: ${curto(usado)}.`;
+  }
+
+  globalThis[NOME] = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
 })();
