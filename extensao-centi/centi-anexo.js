@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p10";
+  const NOME = "__pcaCentiAnexo_p11";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
@@ -167,11 +167,7 @@
   /** A dica do erro do salvar, pelos NOMES dos cabeçalhos (nunca os valores): os que a tela da Centi mandou no salvar e o
    * anexo não mandou (os anti-robô "x-ts…" a extensão não reproduz); sem o salvar da tela aprendido, como ensiná-lo. */
   function dicaCabecalhos(nomesTela, nomesEnviados, protocoloAberto) {
-    if (!Array.isArray(nomesTela) || !nomesTela.length) {
-      return protocoloAberto
-        ? "Para a extensão aprender o salvar da Centi: anexe UM documento pela tela da Centi nesta aba e tente de novo."
-        : "Abra o protocolo na tela da Centi nesta aba (ou anexe UM documento por ela) e tente de novo.";
-    }
+    if (!Array.isArray(nomesTela) || !nomesTela.length) return "";
     const enviados = new Set((nomesEnviados ?? []).map((n) => String(n).toLowerCase()));
     const fixos = /^(content-type|content-length|accept)$/i;
     const faltam = nomesTela.map((n) => String(n).toLowerCase()).filter((n) => !fixos.test(n) && !enviados.has(n));
@@ -185,10 +181,38 @@
   /** A trilha da tela da Centi antes do salvar dela (só "MÉTODO caminho"; números longos encurtados) e o endereço usado
    * pelo anexo — o passo que a tela faz e o anexo não aparece aqui. Sem trilha: como aprendê-la. */
   function dicaTrilha(trilha, usado) {
-    if (!Array.isArray(trilha) || !trilha.length) return "Anexe UM documento pela tela da Centi nesta aba (com a extensão já atualizada) e tente de novo — a extensão aprende os passos da tela.";
+    if (!Array.isArray(trilha) || !trilha.length) return "";
     const curto = (t) => String(t).replace(/\d{7,}/g, (n) => `${n.slice(0, 3)}…`).slice(0, 90);
     return `Passos da tela antes de salvar: ${trilha.slice(-8).map(curto).join(" › ")}. Anexo: ${curto(usado)}.`;
   }
 
-  globalThis[NOME] = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
+  /** Os cabeçalhos de RASTREIO (trace-*, x-ai-trace…) vão NOVOS em cada pedido, como a tela os gera: um identificador
+   * repetido de um pedido antigo faz o salvar da Centi falhar ("Erro inesperado"). No valor, cada GUID vira um GUID novo,
+   * cada carimbo de tempo em ms vira o de agora e cada sequência hexadecimal/alfanumérica longa vira outra do mesmo
+   * tamanho. Os demais cabeçalhos (sessão, entidade, mês…) ficam como estão. */
+  const RASTREIO = /^(x-ai-trace|x-trace|trace-|x-request-id|request-id|x-correlation-id|correlation-id)/i;
+  function renovarRastreio(cab, guid, agora, aleatorio) {
+    const novoDe = (amostra) => {
+      const hex = /^[0-9a-f]+$/i.test(amostra);
+      const alfabeto = hex ? "0123456789abcdef" : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      let r = "";
+      for (let i = 0; i < amostra.length; i++) r += alfabeto[Math.floor(aleatorio() * alfabeto.length)];
+      return amostra === amostra.toUpperCase() && hex ? r.toUpperCase() : r;
+    };
+    const r = {};
+    for (const [k, v] of Object.entries(cab ?? {})) {
+      if (!RASTREIO.test(k)) {
+        r[k] = v;
+        continue;
+      }
+      r[k] = String(v ?? "")
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, () => guid())
+        .replace(/(?<![0-9a-z])1\d{12}(?![0-9a-z])/gi, () => String(agora))
+        .replace(/(?<![0-9a-z-])[0-9a-z]{16,}(?![0-9a-z-])/gi, (m) => novoDe(m));
+    }
+    return r;
+  }
+
+  globalThis[NOME] = Object.freeze({
+    renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
 })();

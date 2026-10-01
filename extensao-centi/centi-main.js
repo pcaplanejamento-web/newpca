@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 10;
+  const PROTOCOLO = 11;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -133,7 +133,9 @@
       x.open(metodo, bruto);
       x.responseType = comoTexto ? "text" : "arraybuffer";
       const k = nomeEntidade();
-      for (const [n, v] of Object.entries(cab)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
+      // O rastreio vai NOVO em cada pedido (como a tela gera) — nunca o identificador de um pedido antigo.
+      const hs = A ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab;
+      for (const [n, v] of Object.entries(hs)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
       if (entidade && !k) x.setRequestHeader("Company", entidade);
       if (corpo) x.setRequestHeader("Content-Type", tipo);
       x.setRequestHeader("Accept", "application/json, text/plain, */*");
@@ -152,7 +154,7 @@
 
   // O salvar pelo FETCH da página (o mesmo meio da tela): passa pelos envoltórios que a página pôs no fetch.
   async function executarFetch(metodo, bruto, corpo, cab, tipo) {
-    const hs = { ...cab, Accept: "application/json, text/plain, */*" };
+    const hs = { ...(A ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab), Accept: "application/json, text/plain, */*" };
     if (corpo) hs["Content-Type"] = tipo;
     const r = await window.fetch(bruto, { method: metodo, headers: hs, body: corpo ? JSON.stringify(corpo) : undefined, credentials: "include", __pcaInterno: true });
     return { status: r.status, texto: await r.text(), enviados: Object.keys(hs) };
@@ -196,7 +198,7 @@
       const msg = `A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."}`;
       throw new Error(
         salvar
-          ? `${msg} ${A.dicaCabecalhos(nomesSalvar, r.enviados ?? Object.keys(cab), !!doProtocolo)} ${A.dicaTrilha(trilhaSalvar, `${viaSalvar || "xhr"} ${caminho}`)}`
+          ? [msg, A.dicaCabecalhos(nomesSalvar, r.enviados ?? Object.keys(cab), !!doProtocolo), A.dicaTrilha(trilhaSalvar, `${viaSalvar || "xhr"} ${caminho}`)].filter(Boolean).join(" ")
           : msg,
       );
     }
