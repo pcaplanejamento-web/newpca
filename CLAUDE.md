@@ -3372,7 +3372,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DFDs (Ids "1154:1155", pasta pelo `showDirectoryPicker` — sem ele, Downloads —, andamento por Id). Quem fala com a Centi é
   a **extensão do Chrome** `extensao-centi/` (MV3; zipada no deploy em `public/extensao-centi.zip` por `scripts/publish.sh`):
   `centi-main.js` roda NA página da Centi (mundo MAIN), guarda os cabeçalhos que a própria Centi usa em `/wcf/restauth/`
-  (token, `Company`, `Month` — sem os `x-ts` do anti-robô F5) e repete o "Processar" (`POST …/restauth/operation`) — PDF cru,
+  (`Authorization`/`Token`/`Refreshtoken`, `Company`, `Month` — sem os `x-ts` do anti-robô F5) e repete o "Processar" (`POST …/restauth/operation`) — PDF cru,
   base64 "JVBER…" ou `getbinlink` na resposta; CAPTCHA/sessão expirada viram falha do Id —; `centi-ponte.js`/
   `background.js`/`sistema-ponte.js` ligam a aba Automação à aba da Centi aberta (só as origens do sistema). Corpo do pedido
   pelo núcleo PURO **`automacao-centi-core.ts`** (`pedidoEmitirDfd` = os 44 `Params` capturados; `lerIdsCenti`,

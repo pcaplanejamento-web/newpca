@@ -11,7 +11,8 @@
     if (i < 0) return;
     const limpos = {};
     for (const [k, v] of Object.entries(hs)) if (!IGNORAR.test(k)) limpos[k] = v;
-    if (!Object.keys(limpos).some((k) => k.toLowerCase() === "authorization")) return;
+    // A sessão da Centi vai num destes cabeçalhos (no "operation" capturado: Refreshtoken + Company + Month).
+    if (!Object.keys(limpos).some((k) => /^(authorization|token|refreshtoken|company)$/i.test(k))) return;
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
   }

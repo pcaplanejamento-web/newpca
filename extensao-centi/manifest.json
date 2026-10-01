@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PCA Rio Verde · Automação Centi",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Baixa DFDs da Centi (Emitir DFD) pela aba Automação do sistema PCA, usando a sessão da Centi já aberta. Só leitura.",
   "background": { "service_worker": "background.js" },
   "host_permissions": ["https://rioverde.centi.com.br/*"],
