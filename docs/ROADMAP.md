@@ -1520,3 +1520,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ Tela sem rolar o navegador; "Baixar extensão" sempre à mão (zip montado na hora, com a logo do sistema); nova versão da extensão avisa os ADMs no sino.
 ✅ Ajustes num dropdown (escolher pasta opcional), Baixar no rodapé da tabela, Análise por DFD ao lado, protocolo abre o banner da Mesa, cada PDF conferido (planejamento + DFD no texto, tamanho gravado, páginas do unido); textos só no (?).
 ✅ Nº do protocolo no fim de todo nome ("(1222, 2212) - 2026"), PDF unido por unidade e um download por planejamento (duplicados e já baixados avisados na análise).
+✅ **Destino Pasta | Protocolo da Centi** (extensão 1.3.0): o ADM informa o Id + nº do protocolo da Centi e cada PDF entra nele como documento novo (tipo 1039 por padrão, descrição = nome do arquivo); a extensão abre o protocolo, confere Id + nº, não repete a mesma descrição e para se a Centi pedir confirmação.

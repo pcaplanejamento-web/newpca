@@ -59,7 +59,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(linkDaResposta(enc('{"URL":"https://x/y"}')), "https://x/y");
   assert.equal(versaoAtende("1.1.0"), false);
   assert.equal(versaoAtende("1.0.5"), false);
-  assert.equal(versaoAtende("1.2.0"), true);
+  assert.equal(versaoAtende("1.2.0"), false);
+  assert.equal(versaoAtende("1.3.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -170,4 +171,148 @@ test("conferirConteudoDfd: só o PDF do planejamento e do DFD pedidos", async ()
   assert.match(conferirConteudoDfd(t, { id: "1525", dfd: "120" }) ?? "", /DFD 120/);
   assert.equal(conferirConteudoDfd(t, { id: "1525", dfd: null }), null);
   assert.match(conferirConteudoDfd("   ", { id: "1", dfd: null }) ?? "", /sem texto/);
+});
+
+// ── Anexar ao protocolo da Centi ───────────────────────────────────────────────────────────────────────────────────────
+
+test("lerAlvoCenti / descricaoDoArquivo / opções de destino", async () => {
+  const { lerAlvoCenti, descricaoDoArquivo, lerOpcoesSaida, paraBase64 } = await import("../src/lib/automacao-centi-core.ts");
+  assert.deepEqual(lerAlvoCenti(" 2.332.778 ", "156844/2026"), { alvo: { id: "2332778", numero: "156844", ano: "2026" } });
+  assert.deepEqual(lerAlvoCenti("2332778", "0156844"), { alvo: { id: "2332778", numero: "156844", ano: null } });
+  assert.ok("erro" in lerAlvoCenti("", "156844"));
+  assert.ok("erro" in lerAlvoCenti("2332778", "15/68"));
+  assert.equal(descricaoDoArquivo("DFDs - PCA 2027 - (1, 2) - 2026.PDF"), "DFDs - PCA 2027 - (1, 2) - 2026");
+  const o = lerOpcoesSaida({ destino: "protocolo", tipoDocumento: "x" });
+  assert.equal(o.destino, "protocolo");
+  assert.equal(o.tipoDocumento, "1039");
+  assert.equal(lerOpcoesSaida({ destino: "nuvem" }).destino, "pasta");
+  assert.equal(paraBase64(new TextEncoder().encode("%PDF-1.7")), "JVBERi0xLjc=");
+});
+
+/** Um protocolo no formato do load da Centi (recorte real do 156844). */
+function protocoloCenti(docs: unknown[]) {
+  const T = "ORM.ObjectsJSON.Transports.ObjectDataJSON, ORM";
+  const ref = (Id: number, extra: object[] = []) => ({ $type: T, Type: 0, State: 10, ModuleKey: 0, Guid: null, Fields: [{ Key: "Id", Value: Id }, ...extra], DynamicAttributes: null });
+  return {
+    $type: "ORM.ObjectsJSON.Returns.LoadReturn, ORM",
+    Entity: {
+      $type: T,
+      Type: 0,
+      State: 3,
+      ModuleKey: 102907,
+      Guid: "e78b8f4c-8fdf-47f4-95a5-ce8cbdb42eab",
+      Fields: [
+        { Key: "NrProtocolo", Value: "156844" },
+        { Key: "AnoReferencia", Value: "2026" },
+        { Key: "IdAssunto", Value: ref(1831, [{ Key: "Display", Value: "INCLUSÃO - PCA" }]) },
+        { Key: "Descricao", Value: "DFDS ENVIADOS PARA INCLUSÃO NO PCA. " },
+        { Key: "Documentos", Value: docs },
+        { Key: "AtesteControleInterno", Value: null },
+        { Key: "LinksDownloads", Value: null },
+        { Key: "EtapasFluxo", Value: null },
+        { Key: "DtDocumento", Value: null },
+        { Key: "Id", Value: "2332778" },
+      ],
+      DynamicAttributes: [],
+    },
+    Message: null,
+  };
+}
+const docCenti = (seq: string, desc: string, tipo: unknown) => ({
+  $type: "ORM.ObjectsJSON.Transports.ObjectDataJSON, ORM",
+  Type: 0,
+  State: 3,
+  ModuleKey: 102932,
+  Guid: `g-${seq}`,
+  Fields: [
+    { Key: "IdPessoaDocumentoTipo", Value: tipo },
+    { Key: "Sequencial", Value: seq },
+    { Key: "Descricao", Value: desc },
+    { Key: "Id", Value: `54523${seq}` },
+  ],
+  DynamicAttributes: [],
+});
+
+async function pecasAnexo() {
+  const { readFileSync } = await import("node:fs");
+  const vm = await import("node:vm");
+  const ctx: { __pcaCentiAnexo?: Record<string, (...a: unknown[]) => unknown> } = {};
+  vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
+  const pecas = ctx.__pcaCentiAnexo ?? {};
+  // O resultado volta por JSON (outro "realm" do vm): compara-se como dado puro.
+  return Object.fromEntries(Object.entries(pecas).map(([k, f]) => [k, (...a: unknown[]): J => (typeof f === "function" ? JSON.parse(JSON.stringify(f(...a) ?? null)) : f)]));
+}
+type J = ReturnType<typeof JSON.parse>;
+const PEDIDO = { id: "2332778", numero: "156844", ano: "2026", tipo: "1039", descricao: "DFDs - PCA 2027 - (156844) - 2026", arquivo: "DFDs - PCA 2027 - (156844) - 2026.pdf", pdf: "JVBERi0xLjc=" };
+
+test("anexo: valida o pedido (só PDF, códigos numéricos, sem caminho no nome)", async () => {
+  const A = await pecasAnexo();
+  assert.equal(A.validarPedido(PEDIDO), null);
+  assert.match(A.validarPedido({ ...PEDIDO, pdf: "PGh0bWw+" }), /PDF/);
+  assert.match(A.validarPedido({ ...PEDIDO, id: "23a" }), /Id/);
+  assert.match(A.validarPedido({ ...PEDIDO, arquivo: "../x.pdf" }), /arquivo/);
+  assert.match(A.validarPedido({ ...PEDIDO, tipo: "" }), /Tipo/);
+});
+
+test("anexo: confere Id, número e ano do protocolo antes de qualquer gravação", async () => {
+  const A = await pecasAnexo();
+  const r = protocoloCenti([]);
+  assert.ok(A.conferirProtocolo(r, PEDIDO).entidade);
+  assert.match(A.conferirProtocolo(r, { ...PEDIDO, numero: "156845" }).erro, /é do protocolo 156844\/2026, não do 156845/);
+  assert.match(A.conferirProtocolo(r, { ...PEDIDO, ano: "2025" }).erro, /de 2026, não de 2025/);
+  assert.match(A.conferirProtocolo(r, { ...PEDIDO, id: "1" }).erro, /Id 1/);
+  assert.match(A.conferirProtocolo({ Entity: { ModuleKey: 1, Fields: [] } }, PEDIDO).erro, /não devolveu/);
+  const res = A.resumoProtocolo(r.Entity);
+  assert.equal(res.assunto, "INCLUSÃO - PCA");
+  assert.equal(res.documentos, 0);
+});
+
+test("anexo: monta o Salvar = o protocolo do load SEM mudança + UM documento novo no fim", async () => {
+  const A = await pecasAnexo();
+  const tipoGravado = { $type: "x", State: 10, Fields: [{ Key: "Id", Value: 1039 }, { Key: "Display", Value: "DFD (DOCUMENTO FORMALIZAÇÃO DEMANDA)" }] };
+  const r = protocoloCenti([docCenti("1", "OUTRO", tipoGravado)]);
+  const antes = JSON.stringify(r);
+  const corpo = A.montarSalvar(r.Entity, PEDIDO, new Date(2026, 9, 1, 14, 30, 40), "aefcd5c7-13a9-9bce-2d0a-d6bb4ecbc9a6");
+  assert.equal(JSON.stringify(r), antes, "não altera o load");
+  assert.equal(corpo.Token, "");
+  const campo = (o: J, k: string): J => o.Fields.find((f: J) => f.Key === k)?.Value;
+  // Tudo o mais exatamente como veio (só as listas nulas viram [] — como a tela da Centi).
+  for (const f of r.Entity.Fields) {
+    if (f.Key === "Documentos") continue;
+    const esperado = ["AtesteControleInterno", "LinksDownloads", "EtapasFluxo"].includes(f.Key) ? [] : f.Value;
+    assert.deepEqual(campo(corpo.Object, f.Key), esperado, f.Key);
+  }
+  assert.equal(corpo.Object.Guid, r.Entity.Guid);
+  assert.equal(campo(corpo.Object, "DtDocumento"), null);
+  const docs = campo(corpo.Object, "Documentos");
+  assert.equal(docs.length, 2);
+  assert.deepEqual(docs[0], campo(JSON.parse(JSON.stringify(r.Entity)), "Documentos")[0]);
+  const novo = docs[1];
+  assert.equal(novo.State, 0);
+  assert.equal(novo.ModuleKey, 102932);
+  assert.equal(campo(novo, "Id"), "0");
+  assert.equal(campo(novo, "Descricao"), PEDIDO.descricao);
+  assert.equal(campo(novo, "Data"), "01/10/2026 14:30:40");
+  assert.equal(campo(novo, "DocumentoExterno"), "1");
+  assert.deepEqual(campo(novo, "IdPessoaDocumentoTipo"), tipoGravado, "o tipo é o mesmo objeto que a Centi já devolve");
+  const ged = campo(novo, "IdGed");
+  assert.equal(campo(ged, "FileName"), PEDIDO.arquivo);
+  assert.equal(campo(ged, "Data"), PEDIDO.pdf);
+  // Sem documento desse tipo no protocolo: a referência pelo Id.
+  const sem = A.montarSalvar(protocoloCenti([]).Entity, { ...PEDIDO, tipo: "77" }, new Date(), "g");
+  const ref = campo(campo(sem.Object, "Documentos")[0], "IdPessoaDocumentoTipo");
+  assert.equal(ref.State, 10);
+  assert.equal(campo(ref, "Id"), 77);
+});
+
+test("anexo: não repete a mesma descrição e só confirma com o documento de volta", async () => {
+  const A = await pecasAnexo();
+  const r = protocoloCenti([docCenti("4", "dfds  - pca 2027 - (156844) - 2026", null)]);
+  assert.deepEqual(A.jaAnexado(r.Entity, PEDIDO.descricao), { sequencial: "4", documento: "545234" });
+  assert.equal(A.jaAnexado(protocoloCenti([]).Entity, PEDIDO.descricao), null);
+  assert.deepEqual(A.conferirSalvo({ Success: true, Entity: r.Entity }, PEDIDO), { sequencial: "4", documento: "545234" });
+  assert.match(A.conferirSalvo({ Success: false, Message: [{ Message: "Sem permissão" }] }, PEDIDO).erro, /Sem permissão/);
+  assert.match(A.conferirSalvo({ Success: true, Entity: protocoloCenti([]).Entity }, PEDIDO).erro, /não voltou/);
+  const zero = protocoloCenti([{ ...docCenti("0", PEDIDO.descricao, null), Fields: [{ Key: "Descricao", Value: PEDIDO.descricao }, { Key: "Id", Value: "0" }] }]);
+  assert.match(A.conferirSalvo({ Success: true, Entity: zero.Entity }, PEDIDO).erro, /não voltou/);
 });

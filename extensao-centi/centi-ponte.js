@@ -1,7 +1,7 @@
 // Ponte na aba da Centi: extensão <-> script da página (centi-main.js, que usa a sessão da Centi).
 (() => {
   // Protocolo da conversa com o script da página (centi-main.js): só muda se o formato das mensagens mudar.
-  const P = 3;
+  const P = 4;
   const MARCA = `__pcaCentiPonte_p${P}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -23,7 +23,7 @@
     const t = setTimeout(() => {
       pendentes.delete(id);
       responder({ ok: false, erro: "A aba da Centi não respondeu — aperte F5 nela." });
-    }, msg.acao === "estado" ? 4000 : 140000);
+    }, msg.acao === "estado" ? 4000 : 300000);
     pendentes.set(id, { f: responder, t });
     window.postMessage({ fonte: "pca-centi-pedido", p: P, id, acao: msg.acao, dados: msg.dados }, window.location.origin);
     return true;

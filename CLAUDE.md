@@ -3373,14 +3373,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (MV3; o .zip é montado NA HORA por `GET /api/admin/automacao/extensao` — `zipDaExtensao`, `extensao-zip.ts` — com os arquivos de `extensao-centi-arquivos.ts` [GERADO por `node scripts/gerar-extensao.mjs`; o teste confere que está em dia] e a LOGO do sistema [o favicon PNG da Identidade] como ícone; botão "Baixar extensão" sempre no topo da tela; cada versão nova avisa os ADMs no SINO — `avisoVersaoExtensao`, derivado na leitura com chave por versão) = só o CANAL até a aba da Centi que TEM a
   sessão (login da Centi é POR ABA): `centi-main.js` (mundo MAIN) guarda os cabeçalhos que a própria Centi usa em
   `/wcf/restauth/` (`Refreshtoken`/`Company`/`Month`…, sem os `x-ts` do anti-robô F5; também no `sessionStorage` da aba) e
-  executa o pedido da tela com as TRAVAS — só a API da Centi, GET livre e POST só em `restauth/operation` com
+  executa o pedido da tela com as TRAVAS — só a API da Centi, GET livre, POST em `restauth/operation` (e o anexo, abaixo) com
   `TRAVAS_CENTI` forçadas —; `centi-ponte.js`/`background.js`/`sistema-ponte.js` ligam as abas; injeta-se SOZINHA (`scripting`)
   nas abas já abertas (sem F5 nem novo login). Mensagens com o PROTOCOLO (página da Centi) e a versão (tela — vale a maior;
   cópias antigas se calam). **A LÓGICA mora no sistema** (atualiza com o deploy, sem reinstalar): núcleo PURO
   **`automacao-centi-core.ts`** — `pedidoEmitirDfd` (os 44 `Params` capturados), `analisarRespostaCenti` (o "Processar"
   devolve `{File:{Key, FileName}}` → o PDF é buscado pela chave em `caminhosDoArquivo`/`linkDaResposta`; aceita também PDF
   cru, base64 "JVBER…", gzip "H4sI…" e bytes; falha mostra o `esqueletoCenti`, sem dados/tokens), `lerIdsCenti`,
-  `lerConfigCenti`, `VERSAO_EXTENSAO_CENTI` (a MÍNIMA aceita) + `versaoAtende`. Nada entra na Mesa nem é gravado na Centi;
+  `lerConfigCenti`, `VERSAO_EXTENSAO_CENTI` (a MÍNIMA aceita) + `versaoAtende`. Nada entra na Mesa; na Centi, só o anexo ao protocolo indicado (abaixo);
   nenhuma senha no sistema. **Por protocolo** (padrão; `Segmented` Por protocolo | Por Id): os protocolos do sistema numa
   `DataTable` com seleção (loader `protocolosParaAutomacao`, `automacao.ts` — todos, com a SIGLA da unidade e, por DFD, o
   planejamento, o ano do PCA e o ÓRGÃO — `chaveOrgaoCenti`). **Plano da saída** (puro: `planoDosProtocolos`/`planoDosIds` →
@@ -3404,6 +3404,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `BannersMesa` da Mesa, com `contextoBanners` exportado de `mesa-dados.ts`) | a **Análise** ao lado (cada DFD do plano por
   pasta, com o estado: Na fila · Baixando · Salvo · Falhou · Sem planejamento, órgão · entidade). Testes:
   `tests/automacao-centi.test.ts`.
+  **DESTINO Pasta | Protocolo da Centi (extensão 1.3.0, protocolo 4):** em Ajustes → Destino, "Protocolo da Centi" pede o
+  **Id** (o "Id" do cadastro do protocolo na Centi = o "Id:" da capa) e o **nº** ("156844" ou "156844/2026" — `lerAlvoCenti`)
+  + o **tipo do documento** (`OpcoesSaida.tipoDocumento`, padrão `TIPO_DOCUMENTO_DFD`=1039); "Conferir na Centi" mostra o
+  protocolo (ação `protocolo`, só leitura). Cada ARQUIVO do plano (separado ou unido) vira UM documento novo, com a
+  descrição = o nome sem ".pdf" (`descricaoDoArquivo`). A gravação é a ÚNICA escrita na Centi e mora na EXTENSÃO
+  (`centi-anexo.js`, peças puras testadas por `vm`; ação `anexar` do `centi-main.js`): `load?entity=102907&key=<Id>` →
+  confere Id + nº (+ ano) → a mesma descrição já no protocolo = não anexa de novo → `montarSalvar` = o protocolo do load
+  SEM mudança (só as listas nulas viram [] — como a tela da Centi) + UM documento (State 0, `IdGed {FileName, Data}` = o
+  PDF em base64, o tipo = o mesmo objeto de um documento desse tipo já no protocolo, senão a referência pelo Id) →
+  `confirmsave` (`Confirm: true` = para e mostra a pergunta — nunca confirma sozinha) → `save` → só vale com `Success` e o
+  documento de volta com Id real (`conferirSalvo`). O sistema nunca manda o objeto do protocolo; o protocolo é conferido
+  ANTES de emitir qualquer DFD e o ADM confirma (`useConfirmacao`) antes de começar.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

@@ -30,7 +30,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
 
 /** A versão da extensão publicada junto (extensao-centi/manifest.json) = a MÍNIMA que a tela aceita (a extensão é só o
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
-export const VERSAO_EXTENSAO_CENTI = "1.2.0";
+export const VERSAO_EXTENSAO_CENTI = "1.3.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -186,8 +186,22 @@ export type OpcoesSaida = {
   escolherPasta: boolean;
   /** Conferir o CONTEÚDO de cada PDF (o nº de planejamento e o do DFD no texto) antes de salvar. */
   conferir: boolean;
+  /** ONDE vão os PDFs: numa pasta (Downloads ou a escolhida) ou ANEXADOS a um protocolo da Centi (`AlvoCenti`). */
+  destino: DestinoSaida;
+  /** O código do TIPO do documento anexado na Centi (1039 = DFD — Documento Formalização Demanda). */
+  tipoDocumento: string;
 };
-export const OPCOES_SAIDA_PADRAO: OpcoesSaida = { pastaPca: true, formato: "separados", ordenarPlanejamento: true, escolherPasta: false, conferir: true };
+export type DestinoSaida = "pasta" | "protocolo";
+export const TIPO_DOCUMENTO_DFD = "1039";
+export const OPCOES_SAIDA_PADRAO: OpcoesSaida = {
+  pastaPca: true,
+  formato: "separados",
+  ordenarPlanejamento: true,
+  escolherPasta: false,
+  conferir: true,
+  destino: "pasta",
+  tipoDocumento: TIPO_DOCUMENTO_DFD,
+};
 
 export function lerOpcoesSaida(v: unknown): OpcoesSaida {
   const o = (v && typeof v === "object" ? v : {}) as Partial<Record<keyof OpcoesSaida, unknown>>;
@@ -198,7 +212,33 @@ export function lerOpcoesSaida(v: unknown): OpcoesSaida {
     ordenarPlanejamento: typeof o.ordenarPlanejamento === "boolean" ? o.ordenarPlanejamento : p.ordenarPlanejamento,
     escolherPasta: typeof o.escolherPasta === "boolean" ? o.escolherPasta : p.escolherPasta,
     conferir: typeof o.conferir === "boolean" ? o.conferir : p.conferir,
+    destino: o.destino === "protocolo" ? "protocolo" : "pasta",
+    tipoDocumento: typeof o.tipoDocumento === "string" && /^\d{1,9}$/.test(o.tipoDocumento.trim()) ? o.tipoDocumento.trim() : p.tipoDocumento,
   };
+}
+
+/** O PROTOCOLO DA CENTI que recebe os PDFs (o ADM informa): o Id (o código interno — o "Id" do cadastro do protocolo na
+ * Centi, o mesmo "Id:" da capa) e o número (+ o ano, opcional — "156844/2026"). A extensão abre pelo Id e só anexa se o
+ * número (e o ano) baterem. */
+export type AlvoCenti = { id: string; numero: string; ano: string | null };
+
+/** Lê o que o ADM digitou → o alvo válido ou o motivo. */
+export function lerAlvoCenti(id: string, numero: string): { alvo: AlvoCenti } | { erro: string } {
+  const i = id.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  if (!i || i === "0" || i.length > 12) return { erro: "Informe o Id do protocolo (o “Id” do cadastro do protocolo na Centi)." };
+  const m = numero.trim().match(/^0*(\d{1,12})\s*(?:\/\s*(\d{4}))?$/);
+  if (!m) return { erro: "Informe o nº do protocolo (ex.: 156844 ou 156844/2026)." };
+  return { alvo: { id: i, numero: m[1], ano: m[2] ?? null } };
+}
+
+/** A DESCRIÇÃO do documento na Centi = o nome do PDF, sem o ".pdf". */
+export const descricaoDoArquivo = (nome: string) => nome.replace(/\.pdf$/i, "").trim().slice(0, 250);
+
+/** Base64 de bytes (em blocos — PDFs grandes sem estourar a pilha). */
+export function paraBase64(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
 }
 
 /** Um DFD a baixar: o Id da Centi (= nº de planejamento), o nº do DFD (a conferência), o órgão (a entidade) e o grupo

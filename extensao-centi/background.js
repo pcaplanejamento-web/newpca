@@ -8,7 +8,7 @@ const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br", "ht
 const comPrazo = (p, ms, valor) => Promise.race([p, new Promise((ok) => setTimeout(() => ok(valor), ms))]);
 
 async function injetarCenti(tabId) {
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-main.js"], world: "MAIN" });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-anexo.js", "centi-main.js"], world: "MAIN" });
   await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-ponte.js"] });
 }
 
@@ -49,7 +49,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     const { aba, erro, estado } = await abaCenti();
     if (!aba) return { ok: false, erro };
     if (msg.acao === "estado") return { ok: true, logado: true, entidade: estado?.entidade ?? null };
-    if (msg.acao !== "pedir") return { ok: false, erro: "Ação desconhecida." };
+    if (!["pedir", "protocolo", "anexar"].includes(msg.acao)) return { ok: false, erro: "Ação desconhecida." };
     try {
       return await chrome.tabs.sendMessage(aba.id, { alvo: "centi", acao: msg.acao, dados: msg.dados });
     } catch {
