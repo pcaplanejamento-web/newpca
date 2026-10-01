@@ -3392,8 +3392,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Centi por órgão** (extensão 1.2.0, protocolo 3: o `estado` devolve a entidade aberta — cabeçalho `Company` — e o `pedir`
   aceita `entidade` só naquele pedido): mapa órgão → entidade no aparelho; sem ele, a aberta; falhou e "Descobrir sozinho"
   ligado → tenta as outras (`candidatosEntidade`: as digitadas ou 1–20 no formato da aberta) e lembra a que deu certo.
-  Tela em largura total e SEM rolar o navegador no desktop (`useAlturaTela`: a tabela `scrollInterno` e a coluna da
-  direita rolam por dentro): Baixar DFDs | Andamento · Saída · Opções · Entidade por órgão. Testes:
+  **Segurança dos dados:** cada PDF é CONFERIDO antes de contar como salvo (`conferirConteudoDfd`: o texto das 2 primeiras
+  páginas — pdf.js, dinâmico — traz o planejamento E o DFD pedidos como número inteiro; sem texto = falha), a gravação na
+  pasta confere o TAMANHO gravado e o PDF unido confere o total de páginas. Tela MINIMALISTA (explicações só no (?)), em
+  largura total e SEM rolar o navegador no desktop (`useAlturaTela`): cabeçalho = título · (?) · `Segmented` Por protocolo |
+  Por Id · selo da extensão/Centi · Verificar · "Extensão x.y.z" · **Ajustes** (`Dropdown` dialog: Saída — formato, pasta PCA,
+  ordem, **escolher a pasta** [desligado = Downloads e o botão some], conferir —, Emissão, Entidade por órgão, Avançado);
+  corpo = a tabela `scrollInterno` (Pasta/Baixar no RODAPÉ — `acoesRodape`; tocar na linha abre o protocolo no MESMO
+  `BannersMesa` da Mesa, com `contextoBanners` exportado de `mesa-dados.ts`) | a **Análise** ao lado (cada DFD do plano por
+  pasta, com o estado: Na fila · Baixando · Salvo · Falhou · Sem planejamento, órgão · entidade). Testes:
   `tests/automacao-centi.test.ts`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

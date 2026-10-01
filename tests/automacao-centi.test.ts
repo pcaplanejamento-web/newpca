@@ -87,14 +87,16 @@ test("pastas, nomes e plano por protocolo", async () => {
       ["PCA 2027/10-2026 - SMS - PCA 2027 (2)", "Planejamento 811 - DFD 700 - PCA 2027.pdf"],
     ],
   );
-  assert.deepEqual(sep.semPlanejamento, [{ protocolo: "10/2026", dfd: "532" }]);
+  assert.deepEqual(sep.semPlanejamento, [{ protocolo: "10/2026", dfd: "532", grupo: "10-2026 - SMS - PCA 2027" }]);
+  assert.equal(op.escolherPasta, false);
+  assert.equal(op.conferir, true);
   assert.equal(sep.total, 3);
-  const porProto = planoDosProtocolos(protos, { pastaPca: false, formato: "protocolo", ordenarPlanejamento: false });
+  const porProto = planoDosProtocolos(protos, { ...op, pastaPca: false, formato: "protocolo", ordenarPlanejamento: false });
   assert.deepEqual(porProto.arquivos.map((a) => [a.pastas.length, a.nome, a.partes.map((t) => t.id).join(",")]), [
     [0, "10-2026 - SMS - PCA 2027.pdf", "900,640"],
     [0, "10-2026 - SMS - PCA 2027 (2).pdf", "811"],
   ]);
-  const unico = planoDosProtocolos(protos, { pastaPca: true, formato: "unico", ordenarPlanejamento: true }, "01-10-2026");
+  const unico = planoDosProtocolos(protos, { ...op, pastaPca: true, formato: "unico", ordenarPlanejamento: true }, "01-10-2026");
   assert.deepEqual(unico.arquivos.map((a) => [a.pastas.join("/"), a.nome, a.partes.map((t) => t.id).join(",")]), [
     ["PCA 2027", "DFDs - 2 protocolos - PCA 2027 - 01-10-2026.pdf", "640,811,900"],
   ]);
@@ -139,4 +141,14 @@ test("extensão: arquivos gerados em dia com extensao-centi/ e zip com a logo", 
   assert.ok(zip.includes(Buffer.from('"default_icon"')));
   const semIcone = Buffer.concat(zipDaExtensao(ARQUIVOS_EXTENSAO, null));
   assert.ok(!semIcone.includes(Buffer.from("icone.png")));
+});
+
+test("conferirConteudoDfd: só o PDF do planejamento e do DFD pedidos", async () => {
+  const { conferirConteudoDfd } = await import("../src/lib/automacao-centi-core.ts");
+  const t = "DOCUMENTO DE FORMALIZAÇÃO DE DEMANDA Número DFD: 1209 Planejamento: 1.525 Tipo DFD";
+  assert.equal(conferirConteudoDfd(t, { id: "1525", dfd: "1209" }), null);
+  assert.match(conferirConteudoDfd(t, { id: "152", dfd: "1209" }) ?? "", /planejamento 152/);
+  assert.match(conferirConteudoDfd(t, { id: "1525", dfd: "120" }) ?? "", /DFD 120/);
+  assert.equal(conferirConteudoDfd(t, { id: "1525", dfd: null }), null);
+  assert.match(conferirConteudoDfd("   ", { id: "1", dfd: null }) ?? "", /sem texto/);
 });

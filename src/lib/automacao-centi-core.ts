@@ -170,8 +170,16 @@ export function chaveOrgaoCenti(orgaoId: number | null, orgaoEntidade: string | 
 /** As opções da SAÍDA: a pasta "PCA <ano>" por cima, os PDFs separados / um por protocolo / um único, e a ordem dos DFDs
  * pelo nº de planejamento. */
 export type FormatoSaida = "separados" | "protocolo" | "unico";
-export type OpcoesSaida = { pastaPca: boolean; formato: FormatoSaida; ordenarPlanejamento: boolean };
-export const OPCOES_SAIDA_PADRAO: OpcoesSaida = { pastaPca: true, formato: "separados", ordenarPlanejamento: true };
+export type OpcoesSaida = {
+  pastaPca: boolean;
+  formato: FormatoSaida;
+  ordenarPlanejamento: boolean;
+  /** Escolher a pasta de destino (desligado = Downloads; o botão "Escolher pasta" some). */
+  escolherPasta: boolean;
+  /** Conferir o CONTEÚDO de cada PDF (o nº de planejamento e o do DFD no texto) antes de salvar. */
+  conferir: boolean;
+};
+export const OPCOES_SAIDA_PADRAO: OpcoesSaida = { pastaPca: true, formato: "separados", ordenarPlanejamento: true, escolherPasta: false, conferir: true };
 
 export function lerOpcoesSaida(v: unknown): OpcoesSaida {
   const o = (v && typeof v === "object" ? v : {}) as Partial<Record<keyof OpcoesSaida, unknown>>;
@@ -180,11 +188,14 @@ export function lerOpcoesSaida(v: unknown): OpcoesSaida {
     pastaPca: typeof o.pastaPca === "boolean" ? o.pastaPca : p.pastaPca,
     formato: o.formato === "separados" || o.formato === "protocolo" || o.formato === "unico" ? o.formato : p.formato,
     ordenarPlanejamento: typeof o.ordenarPlanejamento === "boolean" ? o.ordenarPlanejamento : p.ordenarPlanejamento,
+    escolherPasta: typeof o.escolherPasta === "boolean" ? o.escolherPasta : p.escolherPasta,
+    conferir: typeof o.conferir === "boolean" ? o.conferir : p.conferir,
   };
 }
 
-/** Um DFD a baixar: o Id da Centi (= nº de planejamento), o órgão (a entidade) e o rótulo do andamento. */
-export type TarefaCenti = { chave: string; id: string; orgao: string | null; grupo: string };
+/** Um DFD a baixar: o Id da Centi (= nº de planejamento), o nº do DFD (a conferência), o órgão (a entidade) e o grupo
+ * da análise (a pasta do protocolo). */
+export type TarefaCenti = { chave: string; id: string; dfd: string | null; orgao: string | null; orgaoNome: string | null; grupo: string };
 /** Um arquivo da saída: as pastas, o nome e os DFDs que entram nele (1 = o PDF do DFD; vários = unidos na ordem). */
 export type ArquivoSaida = { pastas: string[]; nome: string; partes: TarefaCenti[] };
 
@@ -224,8 +235,8 @@ export function planoDosProtocolos(
   protos: ProtocoloAutomacao[],
   op: OpcoesSaida,
   hoje = "",
-): { arquivos: ArquivoSaida[]; semPlanejamento: { protocolo: string; dfd: string }[]; total: number } {
-  const semPlanejamento: { protocolo: string; dfd: string }[] = [];
+): { arquivos: ArquivoSaida[]; semPlanejamento: { protocolo: string; dfd: string; grupo: string }[]; total: number } {
+  const semPlanejamento: { protocolo: string; dfd: string; grupo: string }[] = [];
   const usados = new Set<string>();
   const grupos: { nome: string; ano: number | null; itens: Item[] }[] = [];
   for (const p of protos) {
@@ -238,12 +249,12 @@ export function planoDosProtocolos(
     for (const d of p.dfds) {
       const id = soDigitos(d.planejamento);
       if (!id || id === "0") {
-        semPlanejamento.push({ protocolo: p.numero, dfd: d.numero });
+        semPlanejamento.push({ protocolo: p.numero, dfd: d.numero, grupo: nome });
         continue;
       }
       if (vistos.has(id)) continue;
       vistos.add(id);
-      itens.push({ t: { chave: `${p.id}:${id}`, id, orgao: d.orgao, grupo: nome }, dfd: { ...d, anoPca: d.anoPca ?? ano }, ano: d.anoPca ?? ano });
+      itens.push({ t: { chave: `${p.id}:${id}`, id, dfd: d.numero, orgao: d.orgao, orgaoNome: d.orgaoNome, grupo: nome }, dfd: { ...d, anoPca: d.anoPca ?? ano }, ano: d.anoPca ?? ano });
     }
     if (op.ordenarPlanejamento) itens.sort((a, b) => Number(a.t.id) - Number(b.t.id));
     if (itens.length) grupos.push({ nome, ano, itens });
@@ -276,7 +287,7 @@ export function planoDosIds(ids: string[], protos: ProtocoloAutomacao[], op: Opc
   }
   let itens = ids.map((id) => {
     const dfd = indice.get(id) ?? null;
-    return { id, dfd, t: { chave: id, id, orgao: dfd?.orgao ?? null, grupo: "" } as TarefaCenti };
+    return { id, dfd, t: { chave: id, id, dfd: dfd?.numero ?? null, orgao: dfd?.orgao ?? null, orgaoNome: dfd?.orgaoNome ?? null, grupo: "" } as TarefaCenti };
   });
   if (op.ordenarPlanejamento) itens = porPlanejamento(itens);
   if (op.formato === "unico") {
@@ -286,6 +297,18 @@ export function planoDosIds(ids: string[], protos: ProtocoloAutomacao[], op: Opc
     return itens.length ? [{ pastas: op.pastaPca && umAno ? [pastaPca(umAno)] : [], nome, partes: itens.map((i) => i.t) }] : [];
   }
   return itens.map((i) => ({ pastas: op.pastaPca ? [pastaPca(i.dfd?.anoPca ?? null)] : [], nome: nomeArquivoDfd(i.id, i.dfd), partes: [i.t] }));
+}
+
+/** CONFERE o PDF baixado: o texto das primeiras páginas tem o nº de planejamento pedido (e o do DFD, quando conhecido)
+ * como NÚMERO INTEIRO (1525 não casa 15250). Sem texto = não dá para conferir (falha: nunca salva às cegas). */
+export function conferirConteudoDfd(texto: string, alvo: { id: string; dfd: string | null }): string | null {
+  // Sem o ponto de milhar ("1.525" = 1525).
+  const t = texto.replace(/\s+/g, " ").replace(/(\d)\.(?=\d{3}(?!\d))/g, "$1");
+  if (!/\d/.test(t)) return "PDF sem texto — não deu para conferir o conteúdo.";
+  const tem = (n: string) => new RegExp(`(^|[^\\d])0*${(n.match(/\d+/)?.[0] ?? "").replace(/^0+(?=\d)/, "")}(?![\\d])`).test(t);
+  if (!tem(alvo.id)) return `O PDF não traz o planejamento ${alvo.id} — não foi salvo.`;
+  if (alvo.dfd && /\d/.test(alvo.dfd) && !tem(alvo.dfd)) return `O PDF não traz o DFD ${alvo.dfd} — não foi salvo.`;
+  return null;
 }
 
 /** As entidades da Centi a TENTAR quando o DFD não está na entidade aberta: as digitadas ("02:03:04") ou, sem elas e com
