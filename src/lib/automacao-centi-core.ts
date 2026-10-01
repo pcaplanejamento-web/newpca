@@ -22,6 +22,9 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   guid: "2b414e51-4389-1c0a-f194-b11779b834f5",
 };
 
+/** A versão da extensão publicada junto (extensao-centi/manifest.json) — a tela avisa quando a instalada é outra. */
+export const VERSAO_EXTENSAO_CENTI = "1.0.1";
+
 export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -9,6 +9,7 @@ import {
   MAX_IDS_CENTI,
   nomeArquivoDfd,
   pedidoEmitirDfd,
+  VERSAO_EXTENSAO_CENTI,
 } from "@/lib/automacao-centi-core";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -189,7 +190,13 @@ export function AutomacaoAdmin() {
             <IconRefresh className="h-4 w-4" /> Verificar
           </Button>
         </div>
-        {!ext && (
+        {ext && ext.versao !== VERSAO_EXTENSAO_CENTI && (
+          <Callout kind="warn">
+            Há uma versão nova da extensão ({VERSAO_EXTENSAO_CENTI}): baixe o zip abaixo, substitua os arquivos da pasta e clique em
+            ↻ no cartão dela em chrome://extensions.
+          </Callout>
+        )}
+        {(!ext || ext.versao !== VERSAO_EXTENSAO_CENTI) && (
           <Callout kind="info">
             <ol className="list-decimal space-y-1 pl-5">
               <li>
@@ -197,9 +204,9 @@ export function AutomacaoAdmin() {
                 <a className="font-semibold text-accent underline" href="/extensao-centi.zip" download>
                   extensao-centi.zip
                 </a>{" "}
-                e descompacte numa pasta.
+                e descompacte numa pasta (na atualização, substitua os arquivos).
               </li>
-              <li>No Chrome, abra chrome://extensions, ligue o Modo do desenvolvedor e clique em Carregar sem compactação → escolha a pasta.</li>
+              <li>No Chrome, abra chrome://extensions, ligue o Modo do desenvolvedor e clique em Carregar sem compactação → escolha a pasta (na atualização, clique em ↻ no cartão da extensão).</li>
               <li>Recarregue esta tela e a aba da Centi (F5). Faça o login na Centi e abra o Planejamento.</li>
             </ol>
           </Callout>
