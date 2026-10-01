@@ -3370,7 +3370,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Automação" `IconRobo`) = Extensão e Centi (estado + instalação) · Opções da emissão (valor de referência, data; avançado:
   modelo de assinatura, `ModuleKey`, `Guid` — no APARELHO, `localStorage` `automacao:centi`) · Baixar DFDs (Ids "1154:1155",
   pasta pelo `showDirectoryPicker` — sem ele, Downloads —, andamento por Id). **Extensão "FINA"** do Chrome `extensao-centi/`
-  (MV3, zipada no deploy em `public/extensao-centi.zip` por `scripts/publish.sh`) = só o CANAL até a aba da Centi que TEM a
+  (MV3; o .zip é montado NA HORA por `GET /api/admin/automacao/extensao` — `zipDaExtensao`, `extensao-zip.ts` — com os arquivos de `extensao-centi-arquivos.ts` [GERADO por `node scripts/gerar-extensao.mjs`; o teste confere que está em dia] e a LOGO do sistema [o favicon PNG da Identidade] como ícone; botão "Baixar extensão" sempre no topo da tela; cada versão nova avisa os ADMs no SINO — `avisoVersaoExtensao`, derivado na leitura com chave por versão) = só o CANAL até a aba da Centi que TEM a
   sessão (login da Centi é POR ABA): `centi-main.js` (mundo MAIN) guarda os cabeçalhos que a própria Centi usa em
   `/wcf/restauth/` (`Refreshtoken`/`Company`/`Month`…, sem os `x-ts` do anti-robô F5; também no `sessionStorage` da aba) e
   executa o pedido da tela com as TRAVAS — só a API da Centi, GET livre e POST só em `restauth/operation` com
@@ -3392,7 +3392,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Centi por órgão** (extensão 1.2.0, protocolo 3: o `estado` devolve a entidade aberta — cabeçalho `Company` — e o `pedir`
   aceita `entidade` só naquele pedido): mapa órgão → entidade no aparelho; sem ele, a aberta; falhou e "Descobrir sozinho"
   ligado → tenta as outras (`candidatosEntidade`: as digitadas ou 1–20 no formato da aberta) e lembra a que deu certo.
-  Tela em largura total: Baixar DFDs + Andamento | Saída · Opções · Entidade por órgão. Testes:
+  Tela em largura total e SEM rolar o navegador no desktop (`useAlturaTela`: a tabela `scrollInterno` e a coluna da
+  direita rolam por dentro): Baixar DFDs | Andamento · Saída · Opções · Entidade por órgão. Testes:
   `tests/automacao-centi.test.ts`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

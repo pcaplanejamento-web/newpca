@@ -8,6 +8,7 @@ import { enviarPendentesDepois } from "./email";
 import { dataIsoBrasilia } from "./format";
 import { podeNaTela } from "./papeis-core";
 import { nomeExibicao, urlFoto } from "./pessoa";
+import { avisoVersaoExtensao } from "./automacao-centi-core";
 import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
 
@@ -237,9 +238,23 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
   }
 }
 
-/** As notificações DERIVADAS (prazos + lembretes) — em paralelo. */
+/** NOVA VERSÃO da extensão da Automação (Centi): um aviso por versão a cada Administrador (a chave dedup). */
+const avisados = new Set<number>(); // por instância do Worker: grava uma vez (o resto é o dedup do banco)
+async function derivarVersaoExtensao(u: UsuarioSessao) {
+  if (!u.admin || avisados.has(u.id)) return;
+  try {
+    const db = getDb();
+    const cmds = comandosNotificacoes(db, [avisoVersaoExtensao(u.id)]);
+    await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+    avisados.add(u.id);
+  } catch (e) {
+    console.error("aviso da extensão falhou", e);
+  }
+}
+
+/** As notificações DERIVADAS (prazos + lembretes + nova versão da extensão) — em paralelo. */
 const derivar = async (u: UsuarioSessao, grupoIds: number[] | null) => {
-  await Promise.all([derivarPrazos(u, grupoIds), derivarLembretes(u, grupoIds)]);
+  await Promise.all([derivarPrazos(u, grupoIds), derivarLembretes(u, grupoIds), derivarVersaoExtensao(u)]);
 };
 
 /**

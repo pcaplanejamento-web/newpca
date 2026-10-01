@@ -121,3 +121,22 @@ test("zip STORE: estrutura e CRC", async () => {
   assert.equal(tudo.readUInt16LE(fim + 10), 2);
   assert.ok(tudo.includes(Buffer.from("PCA 2027/a (2).pdf")));
 });
+
+test("extensão: arquivos gerados em dia com extensao-centi/ e zip com a logo", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { ARQUIVOS_EXTENSAO } = await import("../src/lib/extensao-centi-arquivos.ts");
+  const { pngDoDataUrl, zipDaExtensao } = await import("../src/lib/extensao-zip.ts");
+  const pasta = new URL("../extensao-centi/", import.meta.url);
+  const nomes = readdirSync(pasta).filter((n) => /\.(js|json)$/.test(n)).sort();
+  assert.deepEqual(Object.keys(ARQUIVOS_EXTENSAO).sort(), nomes, "rode: node scripts/gerar-extensao.mjs");
+  for (const n of nomes) assert.equal(ARQUIVOS_EXTENSAO[n], readFileSync(new URL(n, pasta), "utf8"), `${n} desatualizado — rode: node scripts/gerar-extensao.mjs`);
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0]);
+  assert.deepEqual(pngDoDataUrl(`data:image/png;base64,${png.toString("base64")}`), new Uint8Array(png));
+  assert.equal(pngDoDataUrl("data:image/svg+xml;base64,PHN2Zz4="), null);
+  assert.equal(pngDoDataUrl(undefined), null);
+  const zip = Buffer.concat(zipDaExtensao(ARQUIVOS_EXTENSAO, new Uint8Array(png)));
+  assert.ok(zip.includes(Buffer.from("icone.png")));
+  assert.ok(zip.includes(Buffer.from('"default_icon"')));
+  const semIcone = Buffer.concat(zipDaExtensao(ARQUIVOS_EXTENSAO, null));
+  assert.ok(!semIcone.includes(Buffer.from("icone.png")));
+});

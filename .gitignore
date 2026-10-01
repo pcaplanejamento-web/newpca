@@ -43,4 +43,3 @@ worker-configuration.d.ts
 /tests/e2e/.tmp/
 
 # gerado no deploy (scripts/publish.sh)
-/public/extensao-centi.zip

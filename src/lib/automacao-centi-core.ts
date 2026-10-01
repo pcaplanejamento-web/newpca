@@ -32,6 +32,16 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 export const VERSAO_EXTENSAO_CENTI = "1.2.0";
 
+/** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
+export const avisoVersaoExtensao = (usuarioId: number) => ({
+  usuarioId,
+  tipo: "automacao" as const,
+  titulo: `Nova versão da extensão da Automação (${VERSAO_EXTENSAO_CENTI})`,
+  texto: "Baixe e instale a extensão nova na tela Automação (botão “Baixar extensão”).",
+  link: "/painel/automacao",
+  chave: `extensao-centi:${VERSAO_EXTENSAO_CENTI}`,
+});
+
 export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

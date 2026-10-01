@@ -39,8 +39,6 @@ npx wrangler d1 migrations apply "$DB_NAME" --remote
 
 echo "==> 4/5 Gerando tipos do Cloudflare + build (OpenNext) + deploy..."
 npm run cf-typegen
-# A extensão do Chrome da Automação (aba Automação → "Baixar a extensão").
-(cd extensao-centi && zip -qr ../public/extensao-centi.zip .)
 npm run deploy
 
 echo "==> 5/5 Pronto! A URL do site aparece acima (formato: https://newpca.<seu-subdominio>.workers.dev)."

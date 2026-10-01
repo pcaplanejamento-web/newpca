@@ -36,6 +36,7 @@ import { type Column, DataTable } from "./DataTable";
 import { EstadoPonto } from "./EstadoCelula";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
+import { useAlturaTela } from "./AlturaCheia";
 import { IconDownload, IconPasta, IconPastaAberta, IconRefresh, IconRobo } from "./icons";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
@@ -166,6 +167,14 @@ function gravarLocal(chave: string, v: unknown) {
 const lerMapa = (v: unknown): Record<string, string> =>
   Object.fromEntries(Object.entries(v && typeof v === "object" ? v : {}).filter(([, x]) => typeof x === "string" && /^[\w.-]{1,40}$/.test(x))) as Record<string, string>;
 
+/** O que fica abaixo da tabela, dentro do cartão (o respiro + a borda) — a tabela rola por dentro até ali. */
+const RESERVA_SECAO = 18;
+
+const URL_EXTENSAO = "/api/admin/automacao/extensao";
+const baixarExtensao = () => {
+  window.location.href = URL_EXTENSAO;
+};
+
 const hojeBR = () => {
   const d = new Date();
   return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
@@ -231,6 +240,9 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [rodando, setRodando] = useState(false);
   const podePasta = typeof window !== "undefined" && "showDirectoryPicker" in window;
+  // No desktop a tela cabe no display (sem rolar o navegador): a tabela e a coluna da direita rolam por dentro.
+  const corpo = useRef<HTMLDivElement>(null);
+  const altura = useAlturaTela(corpo, 420);
 
   useEffect(() => {
     setCfg(lerLocal(CHAVE_CONFIG, lerConfigCenti, CONFIG_CENTI_PADRAO));
@@ -461,6 +473,9 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
           <Button size="sm" variant="secondary" onClick={() => (ext ? void verificar() : window.location.reload())}>
             <IconRefresh className="h-4 w-4" /> Verificar
           </Button>
+          <Button size="sm" variant={ext && atualizada ? "secondary" : "primary"} onClick={baixarExtensao} title={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI} (com a logo do sistema)`}>
+            <IconDownload className="h-4 w-4" /> Baixar extensão {VERSAO_EXTENSAO_CENTI}
+          </Button>
         </div>
       </div>
 
@@ -475,10 +490,10 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
           <ol className="list-decimal space-y-1 pl-5">
             <li>
               Baixe a extensão:{" "}
-              <a className="font-semibold text-accent underline" href={`/extensao-centi.zip?v=${VERSAO_EXTENSAO_CENTI}`} download>
-                extensao-centi.zip
+              <a className="font-semibold text-accent underline" href={URL_EXTENSAO} download>
+                extensao-centi-{VERSAO_EXTENSAO_CENTI}.zip
               </a>{" "}
-              e descompacte numa pasta (na atualização, substitua os arquivos).
+              (ou “Baixar extensão” no topo) e descompacte numa pasta (na atualização, substitua os arquivos).
             </li>
             <li>No Chrome, abra chrome://extensions, ligue o Modo do desenvolvedor e clique em Carregar sem compactação → escolha a pasta (na atualização, clique em ↻ no cartão da extensão).</li>
             <li>Recarregue esta tela (F5). A aba da Centi NÃO precisa ser recarregada: a extensão entra nela sozinha e usa o login dela.</li>
@@ -486,10 +501,15 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
         </Callout>
       )}
 
-      <div className="grid gap-[var(--gap-block)] xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0 space-y-[var(--gap-block)]">
+      <div
+        ref={corpo}
+        style={{ "--h-automacao": altura ? `${altura}px` : undefined } as React.CSSProperties}
+        className="grid gap-[var(--gap-block)] xl:h-[var(--h-automacao)] xl:grid-cols-[minmax(0,1fr)_22rem]"
+      >
+        <div className="min-w-0 xl:min-h-0">
           <Secao
             titulo="Baixar DFDs"
+            className="xl:h-full"
             acao={
               <Segmented<Modo>
                 ariaLabel="Origem dos DFDs"
@@ -503,42 +523,7 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
               />
             }
           >
-            {modo === "protocolo" ? (
-              <>
-                <DataTable
-                  columns={COLUNAS}
-                  rows={protocolos}
-                  getKey={(p) => p.id}
-                  selectable
-                  selected={sel}
-                  onSelected={setSel}
-                  density="compact"
-                  pageSize={20}
-                  vazio="Nenhum protocolo no sistema."
-                  resumo={(ls) => `${ls.length} protocolo(s) · ${ls.reduce((s, p) => s + p.dfds.length, 0)} DFD(s)`}
-                />
-                {doProtocolo.semPlanejamento.length > 0 && (
-                  <Callout kind="warn">
-                    {doProtocolo.semPlanejamento.length} DFD(s) sem nº de planejamento serão pulados:{" "}
-                    {doProtocolo.semPlanejamento
-                      .slice(0, 12)
-                      .map((x) => `DFD ${x.dfd} (${x.protocolo})`)
-                      .join(", ")}
-                    {doProtocolo.semPlanejamento.length > 12 ? "…" : ""}
-                  </Callout>
-                )}
-              </>
-            ) : (
-              <TextField
-                label="Ids do planejamento"
-                placeholder="1154:1155:1160"
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                hint={`${ids.length} Id(s)${excedente ? ` — só os ${MAX_IDS_CENTI} primeiros (${excedente} a mais)` : ""} · separe por ":" (o formato do "Copiar planejamentos")`}
-              />
-            )}
-
-            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center gap-2">
               {podePasta && (
                 <Button variant="secondary" onClick={escolherPasta} disabled={rodando}>
                   <IconPastaAberta className="h-4 w-4" /> {pasta ? `Pasta: ${pasta.name}` : "Escolher pasta"}
@@ -557,12 +542,50 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
                 {destino} {arquivos.length > 0 && `${arquivos.length} arquivo(s).`}
               </span>
             </div>
-          </Secao>
+            {modo === "protocolo" ? (
+              <>
+                {doProtocolo.semPlanejamento.length > 0 && (
+                  <Callout kind="warn">
+                    {doProtocolo.semPlanejamento.length} DFD(s) sem nº de planejamento serão pulados:{" "}
+                    {doProtocolo.semPlanejamento
+                      .slice(0, 12)
+                      .map((x) => `DFD ${x.dfd} (${x.protocolo})`)
+                      .join(", ")}
+                    {doProtocolo.semPlanejamento.length > 12 ? "…" : ""}
+                  </Callout>
+                )}
+                <DataTable
+                  columns={COLUNAS}
+                  rows={protocolos}
+                  getKey={(p) => p.id}
+                  selectable
+                  selected={sel}
+                  onSelected={setSel}
+                  density="compact"
+                  scrollInterno
+                  reservaInferior={RESERVA_SECAO}
+                  vazio="Nenhum protocolo no sistema."
+                  resumo={(ls) => `${ls.length} protocolo(s) · ${ls.reduce((s, p) => s + p.dfds.length, 0)} DFD(s)`}
+                />
+              </>
+            ) : (
+              <TextField
+                label="Ids do planejamento"
+                placeholder="1154:1155:1160"
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                hint={`${ids.length} Id(s)${excedente ? ` — só os ${MAX_IDS_CENTI} primeiros (${excedente} a mais)` : ""} · separe por ":" (o formato do "Copiar planejamentos")`}
+              />
+            )}
 
+          </Secao>
+        </div>
+
+        <div className="space-y-[var(--gap-block)] xl:min-h-0 xl:overflow-y-auto xl:pr-1">
           {linhas.length > 0 && (
             <Secao titulo="Andamento">
               <Progress value={(feitos / linhas.length) * 100} label={`${feitos} de ${linhas.length}${falhas ? ` · ${falhas} com falha` : ""}`} />
-              <ul className="max-h-[60vh] space-y-3 overflow-y-auto">
+              <ul className="max-h-[50vh] space-y-3 overflow-y-auto xl:max-h-none">
                 {grupos.map(([g, ls]) => {
                   const ok = ls.filter((l) => l.estado === "ok").length;
                   const visiveis = ls.filter((l) => l.estado === "baixando" || l.estado === "falha");
@@ -591,9 +614,6 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
               </ul>
             </Secao>
           )}
-        </div>
-
-        <div className="space-y-[var(--gap-block)]">
           <Secao titulo="Saída">
             <div className="space-y-1">
               <span className="text-sm font-medium text-text-2">PDFs</span>
