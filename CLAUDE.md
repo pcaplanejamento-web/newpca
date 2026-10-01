@@ -1764,6 +1764,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   progresso, tudo ou nada). Abrir um histórico = **`HistoricoCompraModal`** (`GET /api/catalogo/[id]/historico`, sob
   demanda): KPIs + **Produtos** (um por código: contratos, qtd., menor/médio PONDERADO/maior/último preço — a base da
   comparação futura com os itens dos DFDs) · **Itens** · **Contratos**, detalhe ao lado, Exportar .xlsx (papel).
+  **VARIAÇÃO DE PREÇO (a MESMA régua da Consolidada da Mesa):** `produtosDoHistorico` dá o `variacao` (o
+  `coeficienteVariacao` de `itens-consolidados.ts`, agora exportado) e a tabela de Produtos abre com os de MAIOR variação
+  primeiro, coluna **Variação** logo após a Descrição (`CelulaVariacao`, filtro por faixa — `rotuloVariacao`: Alta > 50% ·
+  Atenção 25–50% · Homogênea · Sem comparação); KPI **"Variação alta"** (danger). Nos **Itens**, a coluna **"Δ preço médio"**
+  (`desvioDaMedia`/`desvioTexto`, cor pela mesma faixa, filtro de faixa) mostra qual contrato puxa a variação. As três
+  tabelas são a `DataTable` padrão compacta com TODAS as colunas filtráveis (descrição em `CelulaTexto`).
 - **Leitura do export do sistema de compras** — núcleo PURO **`historico-compra-core.ts`** (testado): `lerCsv` (separador
   pelo cabeçalho, aspas, BOM), `parseHistoricoCompra` (colunas pelo NOME; "$$" = vírgula escapada; "10.0000"/"1.234,56";
   dd/mm/aaaa → AAAA-MM-DD; textos cortados em `LIMITES_HISTORICO` = a régua do Zod; **linhas IDÊNTICAS repetidas pelo export

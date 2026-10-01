@@ -1,3 +1,4 @@
+import { coeficienteVariacao, nivelVariacao } from "./itens-consolidados.ts";
 import { norm } from "./parse-dfd-comum.ts";
 
 /**
@@ -383,6 +384,9 @@ export type ProdutoHistorico = {
   maior: number | null;
   /** Médio PONDERADO pela quantidade (Σ qtd × preço ÷ Σ qtd) dos itens com quantidade e preço > 0; sem eles, a média simples. */
   medio: number | null;
+  /** Coeficiente de variação dos preços unitários (a MESMA régua da visão Consolidada da Mesa — `FAIXAS_VARIACAO`);
+   * `null` = menos de 2 preços. */
+  variacao: number | null;
   /** O preço do contrato assinado por último (empate: o de maior ordem). */
   ultimo: { valor: number; data: string | null; credor: string | null } | null;
 };
@@ -390,12 +394,12 @@ export type ProdutoHistorico = {
 /** Um por CÓDIGO, na ordem do maior valor contratado. Linear. */
 export function produtosDoHistorico(itens: readonly CompraHistorico[], contratos: readonly ContratoHistorico[]): ProdutoHistorico[] {
   const porContrato = new Map(contratos.map((c) => [c.idContrato, c] as const));
-  type Acc = ProdutoHistorico & { _cs: Set<string>; _cr: Set<string>; _pq: number; _q: number; _ps: number; _n: number; _ud: string; _uo: number };
+  type Acc = ProdutoHistorico & { _cs: Set<string>; _cr: Set<string>; _pq: number; _q: number; _ps: number; _n: number; _ud: string; _uo: number; _pr: number[] };
   const m = new Map<string, Acc>();
   for (const it of itens) {
     let a = m.get(it.codigo);
     if (!a) {
-      a = { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, menor: null, maior: null, medio: null, ultimo: null, _cs: new Set(), _cr: new Set(), _pq: 0, _q: 0, _ps: 0, _n: 0, _ud: "", _uo: -1 };
+      a = { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, menor: null, maior: null, medio: null, variacao: null, ultimo: null, _pr: [], _cs: new Set(), _cr: new Set(), _pq: 0, _q: 0, _ps: 0, _n: 0, _ud: "", _uo: -1 };
       m.set(it.codigo, a);
     }
     const c = porContrato.get(it.idContrato);
@@ -411,6 +415,7 @@ export function produtosDoHistorico(itens: readonly CompraHistorico[], contratos
       a.maior = a.maior == null ? p : Math.max(a.maior, p);
       a._ps += p;
       a._n++;
+      a._pr.push(p);
       if (q > 0) {
         a._pq += p * q;
         a._q += q;
@@ -425,10 +430,16 @@ export function produtosDoHistorico(itens: readonly CompraHistorico[], contratos
   }
   const out: ProdutoHistorico[] = [];
   for (const a of m.values()) {
-    const { _cs, _cr, _pq, _q, _ps, _n, _ud, _uo, ...p } = a;
-    out.push({ ...p, contratos: _cs.size, credores: _cr.size, medio: _q > 0 ? _pq / _q : _n > 0 ? _ps / _n : null });
+    const { _cs, _cr, _pq, _q, _ps, _n, _ud, _uo, _pr, ...p } = a;
+    out.push({ ...p, contratos: _cs.size, credores: _cr.size, medio: _q > 0 ? _pq / _q : _n > 0 ? _ps / _n : null, variacao: coeficienteVariacao(_pr) });
   }
   return out.sort((x, y) => y.valorTotal - x.valorTotal || x.codigo.localeCompare(y.codigo));
+}
+
+/** O rótulo da FAIXA de variação (o valor do filtro da coluna Variação — a régua `FAIXAS_VARIACAO`). */
+export function rotuloVariacao(cv: number | null): string {
+  const n = nivelVariacao(cv);
+  return n === "alerta" ? "Alta (acima de 50%)" : n === "atencao" ? "Atenção (25% a 50%)" : n === "ok" ? "Homogênea (até 25%)" : "Sem comparação (1 preço)";
 }
 
 export type ResumoHistorico = {

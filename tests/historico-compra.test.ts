@@ -12,6 +12,7 @@ import {
   parseHistoricoCompra,
   produtosDoHistorico,
   resumoHistorico,
+  rotuloVariacao,
   textoHistorico,
   tipoCatalogo,
 } from "../src/lib/historico-compra-core.ts";
@@ -176,6 +177,14 @@ describe("histórico de compra — análise por produto", () => {
     assert.ok(Math.abs((b.medio ?? 0) - (30.49 * 20 + 34.49 * 30) / 50) < 1e-9);
     assert.deepEqual(b.ultimo, { valor: 34.49, data: "2026-08-10", credor: "MERCADO BOM PRECO LTDA." });
     assert.ok(Math.abs(b.valorTotal - (304.9 * 2 + 1034.7)) < 1e-6);
+  });
+  it("variação dos preços (a régua da Consolidada) e o rótulo do filtro", () => {
+    assert.ok(Math.abs((p[0].variacao ?? 0) - 0.07256) < 1e-3, "30,49 · 30,49 · 34,49");
+    assert.equal(p[1].variacao, null, "1 preço = sem comparação");
+    assert.equal(rotuloVariacao(0.6), "Alta (acima de 50%)");
+    assert.equal(rotuloVariacao(0.3), "Atenção (25% a 50%)");
+    assert.equal(rotuloVariacao(0.1), "Homogênea (até 25%)");
+    assert.equal(rotuloVariacao(null), "Sem comparação (1 preço)");
   });
   it("resumo do topo", () => {
     const s = resumoHistorico(r.itens, r.contratos);

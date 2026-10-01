@@ -122,7 +122,7 @@ export function varianteDescricao(descricoes: readonly Ocorrencia[]): (descricao
 }
 
 /** Coeficiente de variação (amostral) dos preços; `null` com menos de 2. */
-function coeficienteVariacao(precos: number[]): number | null {
+export function coeficienteVariacao(precos: number[]): number | null {
   if (precos.length < 2) return null;
   const media = precos.reduce((s, v) => s + v, 0) / precos.length;
   if (media <= 0) return null;

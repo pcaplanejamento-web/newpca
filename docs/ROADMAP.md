@@ -134,7 +134,8 @@ importação avisa "gravação INCOMPLETA — reenvie para completar"). Mover o 
 agrupados em **pastas** (o mesmo desenho de pasta de Tarefas); tocar na pasta abre a **tela da pasta** (só os catálogos
 dela, Lista de Itens e os números do conjunto). ✅ Dois tipos de cadastro: **Catálogo da Agenda** (o de sempre) e
 **Histórico de compra** — o export do sistema de compras (CSV/XLSX): contratos + itens comprados, com a análise por
-produto (menor/médio ponderado/maior/último preço). ✅ O export repete linhas idênticas (no de 2026: 5.937 → 1.130);
+produto (menor/médio ponderado/maior/último preço). ✅ **Variação de preço** por produto (a régua da Consolidada:
+alta > 50%), ordenada da maior para a menor, KPI "Variação alta" e o "Δ preço médio" de cada item contratado. ✅ O export repete linhas idênticas (no de 2026: 5.937 → 1.130);
 o importador as tira para não inflar o valor. 🔜 **Comparar** os itens dos DFDs com o histórico pelo código (preço
 praticado × valor estimado no DFD).
 

@@ -9,8 +9,13 @@ import {
   type ProdutoHistorico,
   produtosDoHistorico,
   resumoHistorico,
+  rotuloVariacao,
 } from "@/lib/historico-compra-core";
+import { desvioDaMedia, desvioTexto, nivelVariacao } from "@/lib/itens-consolidados";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { CelulaTexto } from "./CelulaLista";
+import { CelulaVariacao } from "./ComposicaoItem";
+import { EstadoPonto } from "./EstadoCelula";
 import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { Modal } from "./Modal";
@@ -26,12 +31,14 @@ type Detalhe = { tipo: "produto"; codigo: string } | { tipo: "contrato"; id: str
 const _qtd = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 });
 const dec = (n: number) => _qtd.format(n);
 
+const COR_NIVEL = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--danger)" } as const;
+
 const dinheiro = (n: number | null) => (n == null ? <span className="text-faint">—</span> : <span className="tabular-nums">{brl(n)}</span>);
 const quantidade = (n: number | null) => (n == null ? <span className="text-faint">—</span> : <span className="tabular-nums">{dec(n)}</span>);
 
 /**
  * O HISTÓRICO DE COMPRA de um catálogo (tipo 'historico') num banner de tela cheia: os números do topo (valor contratado
- * e empenhado, contratos, produtos, credores, período) e três visões — **Produtos** (um por código: contratos,
+ * e empenhado, contratos, produtos, os com VARIAÇÃO ALTA, período) e três visões — **Produtos** (um por código: contratos,
  * quantidade, menor/médio ponderado/maior/último preço — a base da comparação futura com os itens dos DFDs), **Itens**
  * (cada item contratado) e **Contratos**. Tocar num produto ou contrato abre o detalhe ao lado. Carregado só ao abrir.
  */
@@ -64,13 +71,22 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
   }, [id, tentativa]);
 
   const contratoPorId = useMemo(() => new Map((dados?.contratos ?? []).map((c) => [c.idContrato, c] as const)), [dados]);
-  const produtos = useMemo(() => (dados ? produtosDoHistorico(dados.itens, dados.contratos) : []), [dados]);
+  // Os de MAIOR variação primeiro (os que pedem atenção), depois os de um preço só — no empate, o maior valor.
+  const produtos = useMemo(
+    () => (dados ? produtosDoHistorico(dados.itens, dados.contratos).sort((x, y) => (y.variacao ?? -1) - (x.variacao ?? -1) || y.valorTotal - x.valorTotal) : []),
+    [dados],
+  );
   const resumo = useMemo(() => (dados ? resumoHistorico(dados.itens, dados.contratos) : null), [dados]);
   const itensPorContrato = useMemo(() => {
     const m = new Map<string, number>();
     for (const it of dados?.itens ?? []) m.set(it.idContrato, (m.get(it.idContrato) ?? 0) + 1);
     return m;
   }, [dados]);
+
+  // O preço médio de cada produto — o "Δ preço médio" de cada item contratado (o que puxa a variação para cima).
+  const medioPorCodigo = useMemo(() => new Map(produtos.map((p) => [p.codigo, p.medio] as const)), [produtos]);
+  const desvio = (it: CompraHistorico) => desvioDaMedia(it.valorUnitario, medioPorCodigo.get(it.codigo) ?? null);
+  const comVariacaoAlta = useMemo(() => produtos.filter((p) => nivelVariacao(p.variacao) === "alerta").length, [produtos]);
 
   const colProdutos: Column<ProdutoHistorico>[] = [
     {
@@ -84,18 +100,13 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
         </CelulaCopiavel>
       ),
     },
+    { key: "descricao", header: "Descrição", align: "left", minWidth: 280, value: (p) => p.descricao, render: (p) => <CelulaTexto texto={p.descricao} /> },
     {
-      key: "descricao",
-      header: "Descrição",
-      align: "left",
-      minWidth: 320,
-      filter: "none",
-      value: (p) => p.descricao,
-      render: (p) => (
-        <span className="block max-w-[520px] truncate text-text" title={p.descricao}>
-          {p.descricao}
-        </span>
-      ),
+      key: "variacao",
+      header: "Variação",
+      nowrap: true,
+      value: (p) => rotuloVariacao(p.variacao),
+      render: (p) => <CelulaVariacao cv={p.variacao} min={p.menor} max={p.maior} n={p.linhas} />,
     },
     { key: "contratos", header: "Contratos", nowrap: true, filter: "range", numero: (p) => p.contratos, formatarFaixa: num, value: (p) => String(p.contratos), render: (p) => <span className="tabular-nums">{num(p.contratos)}</span> },
     { key: "qtd", header: "Qtd. contratada", nowrap: true, filter: "range", numero: (p) => p.quantidade, formatarFaixa: dec, value: (p) => String(p.quantidade), render: (p) => quantidade(p.quantidade) },
@@ -123,10 +134,6 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
   ];
 
   const colItens: Column<CompraHistorico>[] = [
-    { key: "contrato", header: "Contrato", nowrap: true, value: (it) => contratoPorId.get(it.idContrato)?.numeroContrato ?? it.idContrato },
-    { key: "credor", header: "Credor", align: "left", minWidth: 200, value: (it) => contratoPorId.get(it.idContrato)?.credor ?? "", render: (it) => <span className="block max-w-[260px] truncate" title={contratoPorId.get(it.idContrato)?.credor ?? ""}>{contratoPorId.get(it.idContrato)?.credor ?? "—"}</span> },
-    { key: "data", header: "Assinatura", nowrap: true, filter: "date", value: (it) => contratoPorId.get(it.idContrato)?.dataAssinatura ?? "", render: (it) => dataBR(contratoPorId.get(it.idContrato)?.dataAssinatura) },
-    { key: "modalidade", header: "Modalidade", nowrap: true, value: (it) => contratoPorId.get(it.idContrato)?.modalidade ?? "" },
     {
       key: "codigo",
       header: "Código",
@@ -138,33 +145,44 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
         </CelulaCopiavel>
       ),
     },
-    { key: "seq", header: "Seq.", nowrap: true, filter: "none", value: (it) => String(it.sequencial ?? ""), render: (it) => <span className="tabular-nums text-faint">{it.sequencial ?? "—"}</span> },
+    { key: "descricao", header: "Descrição", align: "left", minWidth: 260, value: (it) => it.descricao, render: (it) => <CelulaTexto texto={it.descricao} /> },
     {
-      key: "descricao",
-      header: "Descrição",
-      align: "left",
-      minWidth: 300,
-      filter: "none",
-      value: (it) => it.descricao,
-      render: (it) => (
-        <span className="block max-w-[460px] truncate text-text" title={it.descricao}>
-          {it.descricao}
-        </span>
-      ),
+      key: "desvio",
+      header: "Δ preço médio",
+      nowrap: true,
+      filter: "range",
+      numero: (it) => desvio(it),
+      formatarFaixa: desvioTexto,
+      value: (it) => String(desvio(it) ?? ""),
+      render: (it) => {
+        const d = desvio(it);
+        const nivel = d == null ? null : nivelVariacao(Math.abs(d));
+        return d == null || nivel == null ? (
+          <span className="text-faint">—</span>
+        ) : (
+          <EstadoPonto cor={COR_NIVEL[nivel]} rotulo={desvioTexto(d)} title={`Diferença do preço médio do produto (${brl(medioPorCodigo.get(it.codigo) ?? 0)}).`} />
+        );
+      },
     },
-    { key: "qtd", header: "Qtd. contratada", nowrap: true, filter: "range", numero: (it) => it.qtdContratada, formatarFaixa: dec, value: (it) => String(it.qtdContratada ?? ""), render: (it) => quantidade(it.qtdContratada) },
     { key: "unit", header: "Valor unitário", align: "right", nowrap: true, filter: "range", numero: (it) => it.valorUnitario, value: (it) => String(it.valorUnitario ?? ""), render: (it) => dinheiro(it.valorUnitario) },
+    { key: "qtd", header: "Qtd. contratada", nowrap: true, filter: "range", numero: (it) => it.qtdContratada, formatarFaixa: dec, value: (it) => String(it.qtdContratada ?? ""), render: (it) => quantidade(it.qtdContratada) },
     { key: "contratado", header: "Valor contratado", align: "right", nowrap: true, filter: "range", numero: (it) => it.valorContratado, value: (it) => String(it.valorContratado ?? ""), render: (it) => dinheiro(it.valorContratado) },
     { key: "empenhado", header: "Valor empenhado", align: "right", nowrap: true, filter: "range", numero: (it) => it.valorEmpenhado, value: (it) => String(it.valorEmpenhado ?? ""), render: (it) => dinheiro(it.valorEmpenhado) },
+
+    { key: "contrato", header: "Contrato", nowrap: true, value: (it) => contratoPorId.get(it.idContrato)?.numeroContrato ?? it.idContrato, render: (it) => contratoPorId.get(it.idContrato)?.numeroContrato || it.idContrato },
+    { key: "credor", header: "Credor", align: "left", minWidth: 200, value: (it) => contratoPorId.get(it.idContrato)?.credor ?? "", render: (it) => <span className="block max-w-[260px] truncate" title={contratoPorId.get(it.idContrato)?.credor ?? ""}>{contratoPorId.get(it.idContrato)?.credor ?? "—"}</span> },
+    { key: "data", header: "Assinatura", nowrap: true, filter: "date", value: (it) => contratoPorId.get(it.idContrato)?.dataAssinatura ?? "", render: (it) => dataBR(contratoPorId.get(it.idContrato)?.dataAssinatura) },
+    { key: "modalidade", header: "Modalidade", nowrap: true, value: (it) => contratoPorId.get(it.idContrato)?.modalidade ?? "", render: (it) => contratoPorId.get(it.idContrato)?.modalidade || "—" },
+    { key: "seq", header: "Seq.", nowrap: true, value: (it) => String(it.sequencial ?? ""), render: (it) => <span className="tabular-nums text-faint">{it.sequencial ?? "—"}</span> },
   ];
 
   const colContratos: Column<ContratoHistorico>[] = [
-    { key: "numero", header: "Contrato", nowrap: true, value: (c) => c.numeroContrato ?? c.idContrato },
+    { key: "numero", header: "Contrato", nowrap: true, value: (c) => c.numeroContrato ?? c.idContrato, render: (c) => c.numeroContrato || c.idContrato },
     { key: "credor", header: "Credor", align: "left", minWidth: 220, value: (c) => c.credor ?? "", render: (c) => <span className="block max-w-[300px] truncate" title={c.credor ?? ""}>{c.credor ?? "—"}</span> },
     { key: "data", header: "Assinatura", nowrap: true, filter: "date", value: (c) => c.dataAssinatura ?? "", render: (c) => dataBR(c.dataAssinatura) },
-    { key: "modalidade", header: "Modalidade", nowrap: true, value: (c) => c.modalidade ?? "" },
-    { key: "licitacao", header: "Licitação", nowrap: true, value: (c) => c.numeroLicitacao ?? "" },
-    { key: "protocolo", header: "Protocolo", nowrap: true, value: (c) => c.protocolo ?? "" },
+    { key: "modalidade", header: "Modalidade", nowrap: true, value: (c) => c.modalidade ?? "", render: (c) => c.modalidade || "—" },
+    { key: "licitacao", header: "Licitação", nowrap: true, value: (c) => c.numeroLicitacao ?? "", render: (c) => c.numeroLicitacao || "—" },
+    { key: "protocolo", header: "Protocolo", nowrap: true, value: (c) => c.protocolo ?? "", render: (c) => c.protocolo || "—" },
     { key: "natureza", header: "Natureza", align: "left", minWidth: 200, value: (c) => c.detalhamento ?? c.natureza ?? "", render: (c) => <span className="block max-w-[260px] truncate" title={c.detalhamento ?? c.natureza ?? ""}>{c.detalhamento ?? c.natureza ?? "—"}</span> },
     { key: "itens", header: "Itens", nowrap: true, filter: "range", numero: (c) => itensPorContrato.get(c.idContrato) ?? 0, formatarFaixa: num, value: (c) => String(itensPorContrato.get(c.idContrato) ?? 0), render: (c) => <span className="tabular-nums">{num(itensPorContrato.get(c.idContrato) ?? 0)}</span> },
     { key: "valor", header: "Valor do contrato", align: "right", nowrap: true, filter: "range", numero: (c) => c.valorContrato, value: (c) => String(c.valorContrato ?? ""), render: (c) => dinheiro(c.valorContrato) },
@@ -196,7 +214,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
               <StatMini label="Valor empenhado" value={brlCompact(resumo.valorEmpenhado)} hint={resumo.valorContratado > 0 ? `${Math.round((resumo.valorEmpenhado / resumo.valorContratado) * 100)}% do contratado` : undefined} />
               <StatMini label="Contratos" value={num(resumo.contratos)} />
               <StatMini label="Produtos" value={num(resumo.produtos)} hint={`${num(resumo.itens)} itens contratados`} />
-              <StatMini label="Credores" value={num(resumo.credores)} />
+              <StatMini label="Variação alta" value={num(comVariacaoAlta)} hint="Produtos com preços > 50% de variação" tone={comVariacaoAlta > 0 ? "danger" : "default"} />
               <StatMini label="Período (assinatura)" value={resumo.de ? dataBR(resumo.de) : "—"} hint={resumo.ate ? `até ${dataBR(resumo.ate)}` : undefined} />
             </div>
             <Segmented<Vista>
