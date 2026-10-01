@@ -353,6 +353,8 @@ function Ajustes({
   onAlvo,
   conferir,
   conferencia,
+  testar,
+  teste,
 }: {
   saida: OpcoesSaida;
   onSaida: (p: Partial<OpcoesSaida>) => void;
@@ -366,6 +368,9 @@ function Ajustes({
   onAlvo: (p: Partial<TextoAlvo>) => void;
   conferir: () => void;
   conferencia: { carregando?: boolean; protocolo?: ProtocoloCenti; erro?: string } | null;
+  /** "Testar anexo": anexa um PDF pequeno de teste ao protocolo, SEM emitir DFD (separa o salvar da emissão). */
+  testar: () => void;
+  teste: { carregando?: boolean; ok?: string; erro?: string } | null;
 }) {
   return (
     <div className="space-y-3 p-1">
@@ -400,6 +405,18 @@ function Ajustes({
               ) : conferencia?.erro ? (
                 <p className="min-w-0 flex-1 text-xs text-[var(--danger)]">{conferencia.erro}</p>
               ) : null}
+            </div>
+            <div className="flex items-start gap-2">
+              <Button size="sm" variant="secondary" onClick={testar} loading={teste?.carregando}>
+                Testar anexo
+              </Button>
+              {teste?.ok ? (
+                <p className="min-w-0 flex-1 text-xs text-[var(--ok)]">{teste.ok}</p>
+              ) : teste?.erro ? (
+                <p className="min-w-0 flex-1 text-xs text-[var(--danger)]">{teste.erro}</p>
+              ) : (
+                <p className="min-w-0 flex-1 text-xs text-muted">Anexa um PDF de teste (sem emitir DFD) — exclua-o depois na Centi.</p>
+              )}
             </div>
           </>
         )}
@@ -693,6 +710,34 @@ export function AutomacaoAdmin({
     },
     [pedir, lidoAlvo],
   );
+  // TESTE do anexo sem emitir DFD: um PDF de 1 página feito aqui, com a descrição "TESTE …" — separa o salvar da emissão.
+  const [teste, setTeste] = useState<{ carregando?: boolean; ok?: string; erro?: string } | null>(null);
+  const testarAnexo = async () => {
+    if (!alvo) {
+      setTeste({ erro: "erro" in lidoAlvo ? lidoAlvo.erro : "Informe o protocolo." });
+      return;
+    }
+    const sim = await confirmar({
+      titulo: `Anexar um PDF de TESTE ao ${rotuloAlvo}?`,
+      texto: "Nenhum DFD é emitido. O documento entra no protocolo da Centi como “TESTE …” — exclua-o depois por lá.",
+      confirmar: "Anexar teste",
+    });
+    if (!sim) return;
+    setTeste({ carregando: true });
+    try {
+      const { PDFDocument, StandardFonts } = await import("pdf-lib");
+      const doc = await PDFDocument.create();
+      const pg = doc.addPage([595, 842]);
+      pg.drawText("Teste de anexo - Plataforma PCA. Pode excluir.", { x: 60, y: 760, size: 14, font: await doc.embedFont(StandardFonts.Helvetica) });
+      const bytes = await doc.save();
+      const hora = new Date().toLocaleTimeString("pt-BR").replace(/:/g, "h").slice(0, 5);
+      const descricao = `TESTE - pode excluir - ${hora}`;
+      const r = await pedir("anexar", { ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 120_000);
+      setTeste(r.ok ? { ok: `Anexado (documento ${r.sequencial ?? "?"}). O salvar funciona — a falha vem da emissão.` } : { erro: r.erro ?? "A Centi não gravou." });
+    } catch (e) {
+      setTeste({ erro: e instanceof Error ? e.message : "Falha no teste." });
+    }
+  };
   const conferirNaCenti = async () => {
     setConferencia({ carregando: true });
     const r = await conferirAlvo(alvo);
@@ -1076,6 +1121,8 @@ export function AutomacaoAdmin({
               onAlvo={mudarAlvo}
               conferir={conferirNaCenti}
               conferencia={conferencia}
+              testar={testarAnexo}
+              teste={teste}
             />
           </Dropdown>
         </div>
