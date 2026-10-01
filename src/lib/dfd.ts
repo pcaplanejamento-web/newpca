@@ -3,8 +3,8 @@ import { cache } from "react";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } from "@/db/schema";
 import type { ConferenciaCompacta } from "./catalogo-conferencia";
 import { getDb } from "./db";
-import { filtroAnoPcaDfd, prioridadeTextoSql } from "./dfd-sql";
-import { type GrupoAssinatura, gruposAssinatura, prioridadeDoDfd } from "./dfd-tratamento";
+import { filtroAnoPcaDfd, gruposAssinaturaSql, prioridadeTextoSql } from "./dfd-sql";
+import { type GrupoAssinatura, gruposAssinatura, gruposDoTexto, prioridadeDoDfd } from "./dfd-tratamento";
 import { normPrioridade, type Prioridade } from "./normalize";
 import { limparRastroDestino, retratoRastro } from "./rastro-sql";
 import { lotesDeIds } from "./reparticoes";
@@ -88,6 +88,13 @@ export type DfdResumo = {
   // Tipos de assinatura presentes (Centi/Dropsigner/Adobe/Foxit) — coluna "Assinatura" das listas.
   assinaturaGrupos: GrupoAssinatura[];
 };
+
+/**
+ * A linha da LISTA da Mesa (`listarDfds`): o resumo SEM o que nenhuma tela da Mesa lê — o objeto, o setor e o responsável
+ * do formulário (o banner busca o DFD completo) — e com os grupos de assinatura calculados no banco
+ * (`gruposAssinaturaSql`). Menos bytes e menos CPU por requisição na tela mais pesada do sistema.
+ */
+export type DfdNaLista = Omit<DfdResumo, "objeto" | "setorRequisitante" | "responsavel">;
 
 export type DfdItemRow = {
   id: number;
@@ -233,23 +240,31 @@ function comGrupos(r: DfdResumoCru & { assinaturas: string | null }): DfdResumo 
   return { ...resto, prioridade: normPrioridade(prioridadeTexto).valor, assinaturaGrupos: gruposAssinatura(parseAssinaturas(assinaturas)) };
 }
 
+/** As colunas da LISTA da Mesa (`DfdNaLista`): as do resumo sem objeto/setor/responsável do formulário + os grupos de
+ * assinatura calculados no banco (sem trazer o JSON das assinaturas). */
+const { objeto: _objeto, setorRequisitante: _setor, responsavel: _responsavel, ...colunasDfdLista } = colunasDfd;
+
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
 /** `anoPca` = o PCA escolhido no CABEÇALHO (Mesa principal; `null` = todos os PCAs). */
-export function listarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdResumo[]> {
+export function listarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdNaLista[]> {
   return memoPorVersao(`dfds:${reparticaoId ?? ""}:${pcaId ?? ""}:${anoPca ?? ""}:${anoMarcados ?? ""}`, () =>
     consultarDfds(reparticaoId, pcaId, anoPca, anoMarcados),
   );
 }
 
-async function consultarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdResumo[]> {
+async function consultarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdNaLista[]> {
   const rows = await getDb()
-    .select({ ...colunasDfd, assinaturas: dfds.assinaturas })
+    .select({ ...colunasDfdLista, gruposTexto: gruposAssinaturaSql })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     .where(and(escopoMesa(pcaId, anoMarcados), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined, filtroAnoPcaDfd(anoPca)))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
-  return rows.map(comGrupos);
+  return rows.map(({ gruposTexto, prioridadeTexto, ...resto }) => ({
+    ...resto,
+    prioridade: normPrioridade(prioridadeTexto).valor,
+    assinaturaGrupos: gruposDoTexto(gruposTexto),
+  }));
 }
 
 /** DFDs vinculados a um protocolo (detalhe do protocolo). Reusa `colunasDfd`. */

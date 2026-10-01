@@ -81,6 +81,8 @@ export async function POST(req: Request) {
     return r.ok ? ok({ detalhe: r.detalhe }) : erro(r.detalhe, 422);
   }
   // Monitoramento: usa os Worker Secrets CF_ANALYTICS_TOKEN/CF_ACCOUNT_ID.
-  const r = await getMetricasWorker();
-  return r.disponivel ? ok({ detalhe: "Conexão OK — métricas recebidas." }) : erro(r.motivo, 422);
+  const r = await getMetricasWorker(7, { fresco: true });
+  return r.disponivel
+    ? ok({ detalhe: `Conexão OK — ${r.metricas.totalRequests.toLocaleString("pt-BR")} requisições do Worker nos últimos 7 dias.` })
+    : erro(r.motivo, 422);
 }

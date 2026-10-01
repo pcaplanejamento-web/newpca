@@ -708,6 +708,15 @@ export const LOGICAS: LogicaRef[] = [
     tecnico: true,
   },
   {
+    id: "tec-falha-tela",
+    dominio: "tecnico",
+    titulo: "Falha ao carregar uma tela",
+    descricao:
+      "Quando uma tela falha, o cartão diz o que aconteceu: a resposta chegou cortada (a tela foi grande demais para o limite do servidor ou a conexão oscilou), o sistema foi atualizado com a página aberta, o servidor não conseguiu montá-la ou houve um erro na própria tela. O sistema tenta sozinho uma vez por tela a cada minuto (pede a tela de novo ou recarrega a página), e cada falha vai aos Logs do Worker com o tipo, a tela e o papel de quem a viu — sem nome nem e-mail. No painel, o menu e o cabeçalho continuam.",
+    fonte: "erro-tela-core / FalhaNaTela / api/erros",
+    tecnico: true,
+  },
+  {
     id: "tec-sessao",
     dominio: "tecnico",
     titulo: "Sessão, senha e criptografia",

@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { type Metricas, parseMetricas, queryMetricas } from "./cloudflare-core.ts";
+import { type Metricas, motivoErroCloudflare, NOME_WORKER, parseMetricas, queryMetricas } from "./cloudflare-core.ts";
 
 // Integração com a API GraphQL de Analytics da Cloudflare — números OFICIAIS de
 // uso do D1 (linhas lidas/escritas por dia + tamanho), para o painel de
@@ -98,10 +98,10 @@ export async function getUsoOficial(dias = 7): Promise<UsoOficial> {
         variables: { accountTag, dbId: DATABASE_ID, start: fmt(inicio), end: hojeStr },
       }),
     });
-    if (!resp.ok) return { disponivel: false, motivo: `Cloudflare respondeu HTTP ${resp.status}.` };
+    if (!resp.ok) return { disponivel: false, motivo: motivoErroCloudflare(undefined, resp.status) };
     const j = (await resp.json()) as GqlResposta;
     if (j.errors && j.errors.length > 0) {
-      return { disponivel: false, motivo: j.errors[0]?.message ?? "Erro na API GraphQL da Cloudflare." };
+      return { disponivel: false, motivo: motivoErroCloudflare(j.errors[0]?.message) };
     }
     const acc = j.data?.viewer?.accounts?.[0];
     const grupos = acc?.d1AnalyticsAdaptiveGroups ?? [];
@@ -120,14 +120,16 @@ export async function getUsoOficial(dias = 7): Promise<UsoOficial> {
   }
 }
 
-// ---- Métricas de INVOCAÇÃO do Worker (requests/errors/CPU) para a tela de Integrações.
-// Reusa os MESMOS Worker Secrets do uso de D1 acima (CF_ANALYTICS_TOKEN/CF_ACCOUNT_ID);
-// query/parse puros em `cloudflare-core`. Cache de 60s (respeita rate limit).
+// ---- Métricas de INVOCAÇÃO do Worker `newpca` (requests/errors/CPU) — exibidas no Armazenamento quando o ADM ligou o
+// monitoramento em Integrações. Reusa os MESMOS Worker Secrets do uso de D1 acima (CF_ANALYTICS_TOKEN/CF_ACCOUNT_ID);
+// query/parse puros em `cloudflare-core`. Cache de 60 s por isolate — só do SUCESSO (falha tenta de novo).
 export type ResultadoMetricas = { disponivel: true; metricas: Metricas } | { disponivel: false; motivo: string };
+/** O monitoramento na tela de Armazenamento: `null` = desligado em Integrações. */
+export type MonitoramentoArmazenamento = ResultadoMetricas | null;
 
-let cacheMetricas: { at: number; dados: Metricas } | null = null;
+let cacheMetricas: { at: number; dias: number; dados: Metricas } | null = null;
 
-export async function getMetricasWorker(dias = 7): Promise<ResultadoMetricas> {
+export async function getMetricasWorker(dias = 7, opcoes: { fresco?: boolean } = {}): Promise<ResultadoMetricas> {
   const { env } = getCloudflareContext();
   const e = env as unknown as { CF_ANALYTICS_TOKEN?: string; CF_ACCOUNT_ID?: string };
   const token = e.CF_ANALYTICS_TOKEN;
@@ -135,7 +137,7 @@ export async function getMetricasWorker(dias = 7): Promise<ResultadoMetricas> {
   if (!token || !accountTag) {
     return { disponivel: false, motivo: "Configure os secrets CF_ANALYTICS_TOKEN e CF_ACCOUNT_ID no Worker." };
   }
-  if (cacheMetricas && Date.now() - cacheMetricas.at < 60_000) {
+  if (!opcoes.fresco && cacheMetricas && cacheMetricas.dias === dias && Date.now() - cacheMetricas.at < 60_000) {
     return { disponivel: true, metricas: cacheMetricas.dados };
   }
   const agora = new Date();
@@ -145,15 +147,18 @@ export async function getMetricasWorker(dias = 7): Promise<ResultadoMetricas> {
     const resp = await fetch(GQL_ENDPOINT, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ query: queryMetricas(), variables: { accountTag, start: fmt(inicio), end: fmt(agora) } }),
+      body: JSON.stringify({
+        query: queryMetricas(),
+        variables: { accountTag, script: NOME_WORKER, start: fmt(inicio), end: fmt(agora) },
+      }),
     });
-    if (!resp.ok) return { disponivel: false, motivo: `Cloudflare respondeu HTTP ${resp.status}.` };
+    if (!resp.ok) return { disponivel: false, motivo: motivoErroCloudflare(undefined, resp.status) };
     const j = (await resp.json()) as { errors?: Array<{ message?: string }> };
     if (j.errors && j.errors.length > 0) {
-      return { disponivel: false, motivo: j.errors[0]?.message ?? "Erro na API GraphQL da Cloudflare." };
+      return { disponivel: false, motivo: motivoErroCloudflare(j.errors[0]?.message) };
     }
     const metricas = parseMetricas(j);
-    cacheMetricas = { at: Date.now(), dados: metricas };
+    cacheMetricas = { at: Date.now(), dias, dados: metricas };
     return { disponivel: true, metricas };
   } catch (err) {
     return { disponivel: false, motivo: err instanceof Error ? err.message : "Falha ao consultar a Cloudflare." };

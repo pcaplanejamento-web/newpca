@@ -1,4 +1,4 @@
-import type { DfdDetalhe, DfdResumo, ItemDfdRow } from "./dfd.ts";
+import type { DfdDetalhe, DfdNaLista, ItemDfdRow } from "./dfd.ts";
 import type { AtividadeTupla } from "./mesa-metricas.ts";
 import type { VisaoMesa } from "./mesa-visao-core.ts";
 import type { ProtocoloDetalhe, ProtocoloResumo } from "./protocolo.ts";
@@ -18,10 +18,11 @@ export type LinhasMeus = { protocolos: ReadonlySet<number>; dfds: ReadonlySet<nu
 type PessoasProtocolo = "responsavelId" | "responsavelNome" | "distribuidorId" | "distribuidorNome";
 /** O protocolo como a Mesa o recebe: Responsável e Distribuição podem não vir (o papel não os vê). */
 export type ProtocoloNaMesa = Omit<ProtocoloResumo, PessoasProtocolo> & Partial<Pick<ProtocoloResumo, PessoasProtocolo>>;
-/** Os campos do DFD que as LISTAS da Mesa nunca usam (o documento aberto no banner os traz). */
+/** Os campos do DFD que as LISTAS da Mesa nunca usam (o documento aberto no banner os traz) — a lista do banco
+ * (`DfdNaLista`) já vem sem eles; a redação os tira também de um resumo completo, por garantia. */
 type SoDoDocumento = "responsavel" | "objeto" | "setorRequisitante";
-/** O DFD como as listas da Mesa o recebem: o Responsável do protocolo pode não vir. */
-export type DfdNaMesa = Omit<DfdResumo, SoDoDocumento | "protocoloResponsavelId"> & Partial<Pick<DfdResumo, "protocoloResponsavelId">>;
+/** O DFD como as listas da Mesa o recebem (`DfdNaLista`): o Responsável do protocolo pode não vir. */
+export type DfdNaMesa = Omit<DfdNaLista, "protocoloResponsavelId"> & Partial<Pick<DfdNaLista, "protocoloResponsavelId">>;
 
 /** Tira as `chaves` de uma cópia (a mesma referência quando nenhuma está presente). */
 function sem<T extends object, K extends string>(o: T, chaves: readonly K[]): T {
@@ -59,7 +60,7 @@ function chavesDfdLista(vis: VisaoMesa): string[] {
 }
 
 /** As LISTAS de DFDs da Mesa: só as linhas da pessoa, sem o que as listas não usam e o que o papel não vê. */
-export function redigirDfds(lista: readonly DfdResumo[], vis: VisaoMesa, meus: LinhasMeus): DfdNaMesa[] {
+export function redigirDfds(lista: readonly DfdNaLista[], vis: VisaoMesa, meus: LinhasMeus): DfdNaMesa[] {
   const chaves = chavesDfdLista(vis);
   const linhas = meus ? lista.filter((d) => meus.dfds.has(d.id)) : lista;
   return linhas.map((d) => sem(d, chaves));

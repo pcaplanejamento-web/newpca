@@ -70,7 +70,6 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/feriados": { GET: ADMIN, POST: ADMIN },
   "admin/grupos/[id]": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/grupos": { GET: ADMIN, POST: ADMIN },
-  "admin/integracoes/metricas": { GET: ADMIN },
   "admin/integracoes": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/integracoes/testar": { POST: ADMIN },
   "admin/integracoes/trello/membros": { GET: ADMIN, PUT: ADMIN },
@@ -198,6 +197,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
 
   // ── Pessoais (qualquer pessoa logada) ───────────────────────────────────────────────────────────────────
   "dados/versao": { GET: pessoal("a versão dos dados (sincronização)") },
+  "erros": { POST: pessoal("registrar a falha de uma tela (diagnóstico — vai aos Logs do Worker)") },
   "grupos/ativo": { POST: pessoal("o grupo ativo do cabeçalho (entre os da pessoa)") },
   "reparticoes/ativo": { POST: pessoal("a unidade ativa do cabeçalho (entre as do grupo)") },
   "pca/filtro": { POST: pessoal("o PCA do cabeçalho") },

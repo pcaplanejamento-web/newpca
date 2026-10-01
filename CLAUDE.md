@@ -59,10 +59,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     cada requisição) e o valor é COMPARTILHADO (quem usa só lê). Hoje: `listarDfds`, `listarItensDfds`, `listarProtocolos`,
     `listarProtocolosDoPca`, `listarPcasCards`, `dashboardDoPca` e `orcamentoDoPca`. **Loader pesado novo = `memoPorVersao`**;
     escrita nova = `registrarAuditoria` (senão a versão não muda e só a validade recarrega).
+- **LIMITES DO WORKER (plano gratuito: ~10 ms de CPU e 50 consultas ao D1 por requisição)** — passar deles CORTA a
+  resposta no meio ("Connection closed." no navegador, sem "ref:") ou derruba a requisição. A Mesa de um PCA grande
+  (milhares de linhas) chegou ao limite quando a "Geral" passou a valer todas as unidades. Regras da tela pesada:
+  - **Listas grandes = UM texto JSON** (`mesa-listas.ts`: `listasParaTexto(listas, carga)`/`listasDoTexto`): protocolos e
+    DFDs da Mesa vão ao cliente como `listas` (o React não serializa milhares de linhas valor a valor — no servidor, de
+    novo para o HTML e no navegador); `carga` = a hora da carga (cada carga = listas novas no cliente, como antes). Lidas
+    por `useListasMesa` (`MesaSistema.tsx` — o invólucro da `DfdsView` na Mesa do sistema; a `MesaPca` lê igual).
+    `montarMesa` (interno) guarda as listas em objeto; `carregarMesa`/`carregarMesaDoPca` montam o texto por ÚLTIMO.
+  - **Projeção enxuta da lista** (`DfdNaLista`, `listarDfds`): sem objeto/setor/responsável do formulário (o banner busca o
+    DFD completo) e com os **grupos de assinatura calculados no banco** (`gruposAssinaturaSql`, `dfd-sql.ts` →
+    `gruposDoTexto`) — sem trazer o JSON das assinaturas; equivalência com `gruposAssinatura(parseAssinaturas())` testada
+    no driver D1 real (`tests/assinatura-grupos-sql.test.ts`).
+  - **Ids em UM parâmetro JSON** em vez de lotes de 90 (`IN (SELECT value FROM json_each(?))`): `consultaDfdsEmOutroPca`
+    (`pca-dfds-sql.ts`) e `consultaEntradasCatalogo`. O acesso da página (`getAcesso`, memorizado) dá o grupo ativo aos
+    banners da Mesa (`contextoBanners` não relê os grupos); `listarReparticoes` é memorizada por requisição (`cache`).
+  - Medido num PCA sintético (500 protocolos, 2.500 DFDs, Gestor com a "Geral"): consultas 48 → 25, serialização ~55 → ~6
+    ms (memória quente), 2,3 → 1,7 MB, leitura no cliente 33 → 21 ms. O plano PAGO do Workers (30 s de CPU, 1.000
+    consultas) resolve a causa de vez.
 - Schema em `src/db/schema.ts`. Teste da cadeia de migrações: `tests/migrations.test.ts`
   (aplica `drizzle/*.sql` em `node:sqlite`).
 - **Armazenamento (ADM):** tela `/painel/armazenamento` (`ArmazenamentoAdmin`, só admin; atalho em Configurações →
-  Mais) — raio-x do banco **em runtime** via `src/lib/armazenamento.ts`: tamanho total pelo **binding cru**
+  Mais) — com o **monitoramento do Worker** (`MonitoramentoWorker`, quando ligado em Integrações — ver Integrações) — raio-x do banco **em runtime** via `src/lib/armazenamento.ts`: tamanho total pelo **binding cru**
   (`getCloudflareContext().env.DB` → `.meta.size_after` — o Drizzle não expõe `.meta`), enumeração por
   `sqlite_master` (inclui as tabelas **legadas órfãs** — as de `0005`, `tarefa_anexos` (`0045`) e `protocolos`/`protocolo_opcoes` do antigo módulo
   Protocolos, sinalizadas "legado" — e as de sistema) e, por tabela, `COUNT(*)` +
@@ -2835,6 +2853,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `GET /api/dfd/[id]/historico` (histórico conectado, escopo por unidade), `GET`/`POST /api/admin/situacoes` +
   `PATCH`/`DELETE /api/admin/situacoes/[id]` + `PATCH /api/admin/situacoes/ordem` (`exigirAdmin`) e `PATCH
   /api/perfil/preferencias` (`{responsavelPadraoId}` — pessoa ATIVA do grupo ou `null`).
+- Falha de tela (diagnóstico): `POST /api/erros` (`falhaTelaSchema`, `exigirUsuario` — mapa `pessoal`) — a fronteira de erro
+  informa o tipo/mensagem/ref/tela; vai aos LOGS do Worker (`[falha-na-tela]`, com o id, o papel e se é admin lidos da
+  sessão; sem nome/e-mail) e NÃO à auditoria (mudaria a versão dos dados).
 - Métricas da Mesa: `GET /api/mesa/execucao?ano=` (`execucaoMesaSchema`, Visualizar a Mesa do sistema) — o histórico de execução
   (reenvios e ações) dos protocolos da Mesa em tuplas `[protocolo, pessoa, dia, tipo, n]` + as pessoas (foto + apelido).
 - Pessoas/sobrescrita (migração `0032`): `GET /api/usuarios/[id]/foto` (a foto do perfil, `exigirUsuario`, cache
@@ -3112,7 +3133,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`turnstile.ts`, **fail-open** em erro de infra — não trava login) nas rotas `/api/auth/login|cadastro` (token
   opcional no schema, exigido só quando ativo). **Monitoramento:** **reusa** os Worker Secrets já existentes
   `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` (mesmos do Armazenamento) — `getMetricasWorker` em `cf-analytics.ts` +
-  query/parse puros em `cloudflare-core.ts`; painel `recharts` (`MetricasChart`) com cache 60s. O **login com Google**
+  query/parse puros em `cloudflare-core.ts` (`queryMetricas` = SÓ o Worker `NOME_WORKER`="newpca" — `scriptName` —, o
+  escalar MINÚSCULO `string!` [o GraphQL da Cloudflare recusa `String!` — era a falha do painel] e o alias `periodo` sem
+  dimensão = CPU p50/p99 EXATOS do período; `motivoErroCloudflare` = o erro em pt-BR com o que fazer); cache 60 s só do
+  sucesso. As métricas são EXIBIDAS no **Armazenamento** (`MonitoramentoWorker`: requisições de hoje × o teto de 100 mil/dia
+  do plano gratuito, 7 dias, erros, CPU e o gráfico `MetricasChart` com a origem) — o `GET /api/admin/armazenamento` as
+  traz quando o monitoramento está ligado (`?fresco=1` no "Recarregar"); o cartão em Integrações só liga/desliga, testa e
+  leva ao Armazenamento (a rota `/api/admin/integracoes/metricas` saiu). O **login com Google**
   e o Resend (e-mail) têm cartões próprios (abaixo). Setup no `docs/INTEGRACOES.md`. Só componentes do DS (catalogado).
 - **TRELLO — sincronização nos DOIS sentidos pela CONTA INSTITUCIONAL (migração `0062`; plano em 5 fases: base ·
   vincular · saída · entrada · robustez).** **FASE 1 (entregue) — base:** tabelas `trello_quadros` (o quadro ligado ao
@@ -3273,7 +3300,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Render correto desde o início** (sem flash/CLS): shim `__name` + `<style>` de tokens antes do
   `ThemeProvider` em `layout.tsx`. Skeleton/shimmer (`Skeleton.tsx`: `Skeleton`, `SkeletonLinhas`, **`SkeletonCartao`** =
   a moldura de cartão com linhas — a espera de uma visão inteira) só onde há espera real.
-- Erros: `src/app/error.tsx` (boundary, export `ErrorBoundary`) e `not-found.tsx`.
+- Erros: **`src/app/painel/error.tsx`** (a falha de uma tela do painel fica DENTRO do painel — menu e cabeçalho seguem),
+  `src/app/error.tsx` (boundary da raiz, export `ErrorBoundary`, página inteira) e `not-found.tsx`. As duas fronteiras usam
+  o **`FalhaNaTela`** (DS, catalogado) + o hook **`useFalhaNaTela`**: o TIPO (núcleo puro `erro-tela-core.ts`, testado —
+  `servidor` [tem a "ref:"] · `versao` [ChunkLoadError: publicaram com a página aberta] · `conexao` [resposta CORTADA —
+  "Connection closed." — ou rede] · `tela`), o texto de cada um, "Tentar novamente"/"Recarregar a página" e os DETALHES
+  TÉCNICOS recolhidos ("Copiar detalhes"). Recupera SOZINHO uma vez por tela a cada minuto (`podeTentarDeNovo`, trava no
+  `sessionStorage` com reserva na memória): `versao` recarrega a página (só com o `sessionStorage` — nunca em laço);
+  `servidor`/`conexao` pedem a tela de novo (`router.refresh()` + `reset()` numa transição). Toda falha vai a `POST
+  /api/erros` (os Logs do Worker).
 - **Verificação (sandbox):** dev server local é lentíssimo → verificar no **site publicado** via
   Browser pane, claro/escuro + mobile (360/390/768); `/design-system` é a superfície de validação.
 

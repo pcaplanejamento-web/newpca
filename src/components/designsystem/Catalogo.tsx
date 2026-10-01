@@ -30,7 +30,6 @@ import { mensagemTravaPca } from "@/lib/pca-core";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { MensalChart } from "@/components/charts/MensalChart";
-import { MetricasChart } from "@/components/charts/MetricasChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
@@ -63,6 +62,8 @@ import { AcoesCadastro } from "@/components/AcoesCadastro";
 import { ClassificacaoDosItens, EditorClassificacao, type RascunhoClassificacao } from "@/components/ClassificacoesView";
 import { ComparacaoUnidades, EditorUnidadeMedida, type RascunhoUnidade } from "@/components/UnidadesMedidaView";
 import { ErroCarga } from "@/components/ErroCarga";
+import { FalhaNaTela } from "@/components/FalhaNaTela";
+import { relatorioDaFalha, textoDetalhes, TIPOS_FALHA, type TipoFalha } from "@/lib/erro-tela-core";
 import {
   type ClassificacaoItem,
   classificarDescricoes,
@@ -205,6 +206,7 @@ import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { duracaoMotionMs, Modal } from "@/components/Modal";
+import { MonitoramentoWorker } from "@/components/MonitoramentoWorker";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
@@ -245,6 +247,42 @@ const DEMO_ITEM_CONFORMIDADE = new Map<string, ConferenciaItem>([
     },
   ],
 ]);
+
+/** As 4 falhas da fronteira de erro + o estado "recarregando" (o comportamento real vem de `useFalhaNaTela`). */
+function FalhaNaTelaDemo() {
+  const [tipo, setTipo] = useState<TipoFalha>("conexao");
+  const [recuperando, setRecuperando] = useState(false);
+  const exemplo: Record<TipoFalha, { name: string; message: string; digest?: string }> = {
+    conexao: { name: "Error", message: "Connection closed." },
+    versao: { name: "ChunkLoadError", message: "Loading chunk 4821 failed." },
+    servidor: { name: "Error", message: "An error occurred in the Server Components render.", digest: "2843960153" },
+    tela: { name: "TypeError", message: "Cannot read properties of undefined (reading 'map')" },
+  };
+  const rel = relatorioDaFalha(exemplo[tipo], { caminho: "/painel/pca/1?aba=mesa", automatica: false, instante: "2026-10-01T12:00:00.000Z" });
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented
+          ariaLabel="Tipo da falha"
+          value={tipo}
+          onChange={setTipo}
+          options={TIPOS_FALHA.map((t) => ({ value: t, label: t }))}
+        />
+        <Switch checked={recuperando} onChange={setRecuperando} label="Recarregando" />
+      </div>
+      <div className="rounded-card border border-border">
+        <FalhaNaTela
+          tipo={tipo}
+          digest={exemplo[tipo].digest}
+          detalhes={textoDetalhes(rel)}
+          recuperando={recuperando}
+          onTentar={() => toast.info("Tentar novamente (exemplo)")}
+          onRecarregar={() => toast.info("Recarregar a página (exemplo)")}
+        />
+      </div>
+    </div>
+  );
+}
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
@@ -3083,6 +3121,10 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="FalhaNaTela (a fronteira de erro: resposta cortada · versão nova · erro no servidor · erro na tela — tenta sozinha uma vez, informa os Logs do Worker)">
+        <FalhaNaTelaDemo />
+      </Secao>
+
       <Secao titulo="Cards de navegação (LinkCard)">
         <div className="grid gap-4 sm:grid-cols-2">
           <LinkCard href="#" titulo="Tabelas dinâmicas" descricao="Listas com colunas personalizáveis." icon={<IconLayers className="h-6 w-6" />} />
@@ -3122,8 +3164,8 @@ export function Catalogo() {
 
       <Secao titulo="Integrações do ADM (Cloudflare)">
         <p className="mb-3 text-sm text-muted">
-          A aba <code>/painel/integracoes</code> conecta serviços externos. Status por card (Badge) e o gráfico de
-          monitoramento (MetricasChart). Segredos são write-only (cifrados no servidor).
+          A aba <code>/painel/integracoes</code> conecta serviços externos. Status por card (Badge); o monitoramento
+          aparece no Armazenamento (MonitoramentoWorker). Segredos são write-only (cifrados no servidor).
         </p>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Badge tone="emerald" dot>
@@ -3140,17 +3182,34 @@ export function Catalogo() {
           </Badge>
           <Badge tone="slate">Em breve</Badge>
         </div>
-        <ChartCard title="Requisições por dia" subtitle="Monitoramento do Worker (exemplo)">
-          <MetricasChart
-            data={[
-              { data: "2026-09-11", requests: 1200, errors: 3 },
-              { data: "2026-09-12", requests: 1580, errors: 0 },
-              { data: "2026-09-13", requests: 990, errors: 12 },
-              { data: "2026-09-14", requests: 1740, errors: 1 },
-              { data: "2026-09-15", requests: 2010, errors: 4 },
-            ]}
-          />
-        </ChartCard>
+        <p className="mb-2 text-[12px] text-muted">
+          MonitoramentoWorker — o monitoramento do Worker exibido na tela de Armazenamento (hoje × teto do plano, 7 dias,
+          erros, CPU e o gráfico por dia com a origem); desligado = aviso com o link para Integrações.
+        </p>
+        <MonitoramentoWorker
+          hojeUtc="2026-09-15"
+          monitoramento={{
+            disponivel: true,
+            metricas: {
+              dias: [
+                { data: "2026-09-11", requests: 1200, errors: 3, subrequests: 400 },
+                { data: "2026-09-12", requests: 1580, errors: 0, subrequests: 520 },
+                { data: "2026-09-13", requests: 990, errors: 12, subrequests: 310 },
+                { data: "2026-09-14", requests: 1740, errors: 1, subrequests: 600 },
+                { data: "2026-09-15", requests: 2010, errors: 4, subrequests: 700 },
+              ],
+              totalRequests: 7520,
+              totalErrors: 20,
+              totalSubrequests: 2530,
+              erroPct: 0.3,
+              cpuP50: 1800,
+              cpuP99: 9400,
+            },
+          }}
+        />
+        <div className="mt-3">
+          <MonitoramentoWorker hojeUtc="2026-09-15" monitoramento={null} />
+        </div>
       </Secao>
 
       <Secao titulo="Referência do sistema (aba read-only)">

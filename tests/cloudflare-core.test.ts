@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { interpretarSiteverify, parseMetricas, queryMetricas } from "../src/lib/cloudflare-core.ts";
+import {
+  formatarCpu,
+  interpretarSiteverify,
+  motivoErroCloudflare,
+  NOME_WORKER,
+  parseMetricas,
+  queryMetricas,
+  requisicoesDoDia,
+} from "../src/lib/cloudflare-core.ts";
 
 describe("interpretarSiteverify (Turnstile)", () => {
   it("token ausente → reprova", () => {
@@ -19,27 +27,35 @@ describe("interpretarSiteverify (Turnstile)", () => {
 });
 
 describe("parseMetricas (Cloudflare GraphQL → série)", () => {
-  it("agrega requests/errors e calcula taxa de erro", () => {
-    const json = {
-      data: {
-        viewer: {
-          accounts: [
-            {
-              workersInvocationsAdaptive: [
-                { sum: { requests: 100, errors: 2 }, quantiles: { cpuTimeP50: 5, cpuTimeP99: 20 }, dimensions: { date: "2026-09-16" } },
-                { sum: { requests: 100, errors: 0 }, quantiles: { cpuTimeP50: 6, cpuTimeP99: 25 }, dimensions: { date: "2026-09-17" } },
-              ],
-            },
-          ],
-        },
+  const json = {
+    data: {
+      viewer: {
+        accounts: [
+          {
+            dias: [
+              { sum: { requests: 100, errors: 2, subrequests: 10 }, dimensions: { date: "2026-09-16" } },
+              { sum: { requests: 100, errors: 0, subrequests: 5 }, dimensions: { date: "2026-09-17" } },
+              { sum: { requests: 50, errors: 0 }, dimensions: { date: "2026-09-17" } },
+            ],
+            periodo: [{ quantiles: { cpuTimeP50: 1500, cpuTimeP99: 9000 } }],
+          },
+        ],
       },
-    };
+    },
+  };
+  it("soma por dia, totais e taxa de erro", () => {
     const m = parseMetricas(json);
     assert.equal(m.dias.length, 2);
-    assert.equal(m.totalRequests, 200);
+    assert.equal(m.dias[1].requests, 150);
+    assert.equal(m.totalRequests, 250);
     assert.equal(m.totalErrors, 2);
-    assert.equal(m.erroPct, 1);
-    assert.equal(m.cpuP99, 25); // do último dia
+    assert.equal(m.totalSubrequests, 15);
+    assert.equal(m.erroPct, 0.8);
+  });
+  it("CPU = quantis do PERÍODO inteiro", () => {
+    const m = parseMetricas(json);
+    assert.equal(m.cpuP50, 1500);
+    assert.equal(m.cpuP99, 9000);
   });
   it("resposta vazia/inesperada → zeros (tolerante)", () => {
     const m = parseMetricas({});
@@ -48,7 +64,37 @@ describe("parseMetricas (Cloudflare GraphQL → série)", () => {
     assert.equal(m.erroPct, 0);
     assert.equal(m.cpuP99, null);
   });
-  it("queryMetricas é uma string GraphQL não-vazia", () => {
-    assert.ok(queryMetricas().includes("workersInvocationsAdaptive"));
+  it("requisicoesDoDia pega o dia UTC pedido", () => {
+    const m = parseMetricas(json);
+    assert.equal(requisicoesDoDia(m, "2026-09-17"), 150);
+    assert.equal(requisicoesDoDia(m, "2026-09-18"), 0);
+  });
+});
+
+describe("queryMetricas", () => {
+  const q = queryMetricas();
+  it("usa o escalar minúsculo string! (String! é recusado pela Cloudflare)", () => {
+    assert.ok(q.includes("$accountTag: string!"));
+    assert.ok(!/String!/.test(q));
+  });
+  it("filtra pelo Worker e traz os quantis do período", () => {
+    assert.ok(q.includes("scriptName: $script"));
+    assert.ok(q.includes("periodo: workersInvocationsAdaptive"));
+    assert.equal(NOME_WORKER, "newpca");
+  });
+});
+
+describe("formatarCpu e motivoErroCloudflare", () => {
+  it("µs e ms", () => {
+    assert.equal(formatarCpu(null), "—");
+    assert.equal(formatarCpu(850), "850 µs");
+    assert.equal(formatarCpu(12_400), "12,4 ms");
+  });
+  it("permissão, conta, limite e HTTP", () => {
+    assert.match(motivoErroCloudflare("not authorized to access this account"), /Account Analytics: Read/);
+    assert.match(motivoErroCloudflare(undefined, 403), /Account Analytics: Read/);
+    assert.match(motivoErroCloudflare(undefined, 429), /limitou/);
+    assert.match(motivoErroCloudflare(undefined, 502), /indisponível/);
+    assert.equal(motivoErroCloudflare("outro erro"), "outro erro");
   });
 });

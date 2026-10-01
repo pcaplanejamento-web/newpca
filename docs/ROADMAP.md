@@ -650,6 +650,11 @@ esquerda com rótulo abre um campo, linha esquerda sem rótulo é continuação 
 capturando o valor INTEIRO. Validado no `Protocolo 4.pdf` real (Interessado `…E GESTÃO DE CUSTOS`, Observação
 `…2027.` completos). Teste de regressão (capa com Interessado quebrado) em `tests/parse-protocolo-pdf.test.ts`.
 
+### Monitoramento do Worker no Armazenamento — entregue
+✅ Corrigida a consulta das métricas (escalar `string!` do GraphQL da Cloudflare; só o Worker `newpca`; CPU do período) e
+as métricas passaram para a tela **Armazenamento** (`MonitoramentoWorker`: requisições de hoje × teto do plano, 7 dias,
+erros, CPU, gráfico com a origem). Integrações só liga/desliga e testa.
+
 ### Integrações externas (tela do ADM) — Cloudflare captcha + monitoramento — entregue
 ✅ Nova tela **Integrações** (`/painel/integracoes`, admin; nav + atalho em Configurações → Mais) para conectar APIs externas. **Captcha Turnstile** (Cloudflare): liga/desliga pelo ADM, protege login e cadastro (widget só carrega quando ativo+configurado; servidor confere com **fail-open** para nunca travar o login por falha de infra). **Monitoramento** (Cloudflare): painel de métricas do Worker (requisições/erros/CPU, `recharts`) reusando os secrets `CF_ANALYTICS_TOKEN`/`CF_ACCOUNT_ID` já existentes (mesmos do Armazenamento). **Segredos write-only cifrados** (AES-GCM, `cripto.ts`) com chave mestra `INTEGRACOES_CHAVE` (Worker Secret); nunca reexibidos. Config no blob `configuracoes` (chave `integracoes`, **sem migração**). **Google login** e **e-mail (Resend)** ficam como **"em breve"** (sem código morto). Tudo começa desligado (login inalterado). Setup em `docs/INTEGRACOES.md`.
 
@@ -1470,6 +1475,9 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 |---|---|
 | ✅ | Responsivo + toque + tema claro/escuro |
 | ✅ | **Testes** (`node:test`) + **lint** (Biome) + **type-check** com **portão de qualidade na CI** (`ci.yml`/`deploy.yml`); error boundaries (`error.tsx`/`not-found.tsx`); observabilidade do Worker. Regras em [CLAUDE.md](../CLAUDE.md). |
+| ✅ | **Falha de tela que se recupera e se explica** (`FalhaNaTela` + `painel/error.tsx`): o tipo (resposta cortada, versão nova, erro no servidor, erro na tela), UMA recuperação automática por tela/minuto, detalhes para copiar e o registro nos Logs do Worker (`POST /api/erros`). |
+| ✅ | **Mesa de PCA grande dentro dos limites do Worker gratuito** (a falha "Algo deu errado" da Mesa do PCA 1): listas em um texto JSON, projeção enxuta, grupos de assinatura no banco, ids num parâmetro JSON — 48 → 25 consultas e ~10× menos serialização num PCA de 2.500 DFDs. |
+| 🔜 | **Workers Paid** (30 s de CPU, 1.000 consultas por requisição) — resolve de vez o limite da tela grande; decisão de faturamento. |
 | 🔜 | Tornar o type-check **bloqueante** (hoje informativo) quando o baseline de tipos estiver limpo |
 | 🔜 | Deploy via **Workers Builds** (evita quebra quando um token é revogado) |
 | 💡 | **PWA** (instalar no celular) · Acessibilidade (WCAG) · Backups do D1 |

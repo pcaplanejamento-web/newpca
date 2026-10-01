@@ -1,35 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import type { Metricas, PontoMetrica } from "@/lib/cloudflare-core";
+import { type ReactNode, useState } from "react";
 import { CATALOGO_INTEGRACOES, type IntegracoesView } from "@/lib/integracoes-core";
-import { num } from "@/lib/format";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
-import { ChartCard } from "./ChartCard";
-import { MetricasChart } from "./charts/MetricasChart";
-import { type Column, DataTable } from "./DataTable";
 import { Checkbox, PasswordField, TextField } from "./Field";
-import { IconActivity, IconAlert, IconGoogle, IconKey, IconMail, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
+import { IconActivity, IconAlert, IconDatabase, IconGoogle, IconKey, IconMail, IconPlug, IconRefresh, IconShield, IconTrello } from "./icons";
 import { IntegracaoGoogle, type ValorGoogle } from "./IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "./IntegracaoResend";
 import { IntegracaoTrello, type ValorTrello } from "./IntegracaoTrello";
-import { KpiStat } from "./KpiStat";
-import { OrigemDados } from "./OrigemDados";
 import { toast } from "./Toast";
-
-const COLS_DIA: Column<PontoMetrica>[] = [
-  { key: "data", header: "Dia", nowrap: true, value: (p) => p.data, render: (p) => <span className="tabular-nums">{p.data.split("-").reverse().join("/")}</span> },
-  { key: "req", header: "Requisições", nowrap: true, filter: "range", numero: (p) => p.requests, render: (p) => num(p.requests) },
-  { key: "err", header: "Erros", nowrap: true, filter: "range", numero: (p) => p.errors, render: (p) => num(p.errors) },
-];
 
 // Tela de Integrações do ADM (admin-only): Cloudflare (Turnstile + monitoramento), o Trello (conta institucional) e o
 // Resend (e-mails).
 // Segredos são write-only: o secret do Turnstile é cifrado no servidor e nunca reexibido; o
-// monitoramento reusa os Worker Secrets CF_ANALYTICS_TOKEN/CF_ACCOUNT_ID (mesmos do Armazenamento).
+// monitoramento reusa os Worker Secrets CF_ANALYTICS_TOKEN/CF_ACCOUNT_ID e é EXIBIDO na tela de Armazenamento.
 // Só componentes do design-system.
 
 function StatusBadge({ tone, children }: { tone: Tone; children: string }) {
@@ -84,8 +72,6 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
     urlSistema: integracoes.resend.urlSistema,
   });
   const [google, setGoogle] = useState<ValorGoogle>({ ativo: integracoes.google.ativo, clientId: integracoes.google.clientId, clientSecret: "" });
-  const [dia, setDia] = useState<PontoMetrica | null>(null);
-  const [diaMostrado, setDiaMostrado] = useState<PontoMetrica | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [testando, setTestando] = useState<"turnstile" | "monitoramento" | "trello" | "resend" | "google" | null>(null);
 
@@ -144,28 +130,6 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
       setTestando(null);
     }
   }
-
-  // Métricas do monitoramento (carrega só quando SALVO como ativo).
-  const [metricas, setMetricas] = useState<Metricas | null>(null);
-  const [erroMetricas, setErroMetricas] = useState<string | null>(null);
-  const [carregandoMetricas, setCarregandoMetricas] = useState(false);
-  const carregarMetricas = useCallback(async () => {
-    setCarregandoMetricas(true);
-    setErroMetricas(null);
-    try {
-      const res = await fetch("/api/admin/integracoes/metricas");
-      const j = (await res.json()) as { ok?: boolean; error?: string; metricas?: Metricas };
-      if (!res.ok || !j.ok || !j.metricas) throw new Error(j.error ?? "Falha ao carregar métricas.");
-      setMetricas(j.metricas);
-    } catch (e) {
-      setErroMetricas(e instanceof Error ? e.message : "Falha ao carregar métricas.");
-    } finally {
-      setCarregandoMetricas(false);
-    }
-  }, []);
-  useEffect(() => {
-    if (integracoes.monitoramento.ativo) carregarMetricas();
-  }, [integracoes.monitoramento.ativo, carregarMetricas]);
 
   const tsStatus: [Tone, string] = !tsAtivo
     ? ["slate", "Desativado"]
@@ -263,76 +227,25 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         status={<StatusBadge tone={monAtivo ? "emerald" : "slate"}>{monAtivo ? "Ativado" : "Desativado"}</StatusBadge>}
       >
         <div className="space-y-[var(--gap-block)]">
-          <Checkbox label="Mostrar métricas do Worker (requisições, erros, CPU)" checked={monAtivo} onChange={(e) => setMonAtivo(e.target.checked)} />
+          <Checkbox label="Mostrar as métricas do Worker (requisições, erros, CPU) na tela de Armazenamento" checked={monAtivo} onChange={(e) => setMonAtivo(e.target.checked)} />
           <p className="text-[12px] text-muted">
             Usa os secrets <span className="font-mono">CF_ANALYTICS_TOKEN</span> e{" "}
             <span className="font-mono">CF_ACCOUNT_ID</span> do Worker (os mesmos do Armazenamento).
           </p>
 
-          {integracoes.monitoramento.ativo && (
-            <div className="space-y-3">
-              {erroMetricas ? (
-                <Callout kind="danger">{erroMetricas}</Callout>
-              ) : metricas ? (
-                <>
-                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <KpiStat label="Requisições (7d)" value={num(metricas.totalRequests)} />
-                    <KpiStat label="Erros (7d)" value={num(metricas.totalErrors)} cor={metricas.totalErrors > 0 ? "var(--warn)" : "var(--ok)"} />
-                    <KpiStat label="Taxa de erro" value={`${metricas.erroPct}%`} cor={metricas.erroPct >= 1 ? "var(--danger)" : "var(--ok)"} />
-                    <KpiStat label="CPU p99" value={metricas.cpuP99 != null ? `${num(metricas.cpuP99)} µs` : "—"} />
-                  </div>
-                  <ChartCard title="Requisições por dia" subtitle="Últimos 7 dias — clique numa barra para ver a origem">
-                    <MetricasChart
-                      data={metricas.dias}
-                      onSelecionar={(p) => {
-                        setDia(p);
-                        setDiaMostrado(p);
-                      }}
-                    />
-                  </ChartCard>
-                  <OrigemDados
-                    aberto={dia != null}
-                    onClose={() => setDia(null)}
-                    titulo="Requisições por dia"
-                    recorte={diaMostrado ? diaMostrado.data.split("-").reverse().join("/") : ""}
-                    resumo={[
-                      { label: "Requisições", value: num(diaMostrado?.requests ?? 0) },
-                      { label: "Erros", value: num(diaMostrado?.errors ?? 0) },
-                    ]}
-                    fonte="Cloudflare Workers Analytics (API GraphQL) da conta configurada nas Integrações — somatório diário do Worker, com cache de 60 s."
-                  >
-                    <DataTable
-                      columns={COLS_DIA}
-                      rows={metricas.dias}
-                      getKey={(p) => p.data}
-                      activeKey={diaMostrado?.data ?? null}
-                      pageSize={20}
-                      minWidth={360}
-                      resumo={(ps) => `${num(ps.length)} dia(s) · ${num(ps.reduce((s, p) => s + p.requests, 0))} requisições · ${num(ps.reduce((s, p) => s + p.errors, 0))} erros`}
-                    />
-                  </OrigemDados>
-                </>
-              ) : (
-                <p className="text-[13px] text-muted">{carregandoMetricas ? "Carregando métricas…" : "Sem métricas."}</p>
-              )}
-              <Button
-                variant="secondary"
-                onClick={carregarMetricas}
-                loading={carregandoMetricas}
-                icon={<IconRefresh className="h-4 w-4" />}
-              >
-                Recarregar métricas
-              </Button>
-            </div>
-          )}
-          {!integracoes.monitoramento.ativo && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="secondary" onClick={() => testar("monitoramento")} loading={testando === "monitoramento"} icon={<IconRefresh className="h-4 w-4" />}>
-                Testar conexão
-              </Button>
-              <span className="text-[12px] text-muted">Ative e salve para ver as métricas.</span>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => testar("monitoramento")} loading={testando === "monitoramento"} icon={<IconRefresh className="h-4 w-4" />}>
+              Testar conexão
+            </Button>
+            {integracoes.monitoramento.ativo ? (
+              <Link href="/painel/armazenamento" className="inline-flex min-h-11 items-center gap-1 text-[13px] font-semibold text-accent underline-offset-2 hover:underline lg:min-h-0">
+                <IconDatabase className="h-4 w-4" />
+                Ver as métricas em Armazenamento
+              </Link>
+            ) : (
+              <span className="text-[12px] text-muted">Ative e salve: as métricas aparecem na tela de Armazenamento.</span>
+            )}
+          </div>
         </div>
       </Cartao>
 
