@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 14;
+  const PROTOCOLO = 15;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -261,8 +261,10 @@
       // Cada módulo e cada exportação lidos com proteção: uma exportação ainda não pronta (lança ao ler) não pode
       // interromper a busca inteira.
       const instancias = new Set();
+      const lojas = new Set();
       const olhar = (v) => {
         if (typeof v === "function" && v.defaults && v.interceptors && typeof v.post === "function" && typeof v.get === "function") instancias.add(v);
+        else if (v && typeof v === "object" && typeof v.getState === "function" && typeof v.dispatch === "function") lojas.add(v);
       };
       for (const chave of Object.keys(req.c)) {
         let ex;
@@ -300,7 +302,16 @@
         motivoSemCliente = `nenhum cliente da API entre ${todas.length} encontrados`;
         return null;
       }
-      clienteCenti = { principal, todas: todas.filter((v) => /\/(restauth|vicenti)\/?$/.test(base(v))) };
+      // O ESTADO da tela (redux): a lista das entidades — o nome da entidade de um módulo, que o LoadObjectReference pede.
+      const loja =
+        [...lojas].find((l) => {
+          try {
+            return Array.isArray(l.getState()?.Entities);
+          } catch {
+            return false;
+          }
+        }) ?? null;
+      clienteCenti = { principal, loja, todas: todas.filter((v) => /\/(restauth|vicenti)\/?$/.test(base(v))) };
     } catch (e) {
       motivoSemCliente = e?.message || "falha ao procurar";
     }
@@ -351,6 +362,27 @@
     return j;
   }
 
+  /** O nome da entidade de um módulo (o que a tela manda no LoadObjectReference), pelo estado da tela; sem ele, null. */
+  function entidadeDoModulo(cli, modulo) {
+    try {
+      const lista = cli?.loja?.getState()?.Entities ?? [];
+      const e = lista.find((x) => String(x?.Key) === String(modulo));
+      return e?.Value?.Name || null;
+    } catch {
+      return null;
+    }
+  }
+  /** O TIPO do documento como a TELA o obtém ao escolhê-lo: o LoadObjectReference (registra a referência no servidor da
+   * Centi — o salvar a procura), logo depois de abrir o protocolo. Sem como fazer igual, null. */
+  async function tipoPorReferencia(d) {
+    const cli = acharClienteCenti();
+    const entidade = entidadeDoModulo(cli, A.MODULO_TIPO);
+    if (!cli || !entidade) return null;
+    const r = await pelaCenti("POST", "restauth/LoadObjectReference", { Items: [{ DisplayOnReference: [], Entity: entidade, Id: Number(d.tipo) }] });
+    const lista = Array.isArray(r?.j) ? r.j : [];
+    return A.tipoDoLoad({ Entity: lista.find((o) => o?.ModuleKey === A.MODULO_TIPO) ?? lista[0] }, d.tipo);
+  }
+
   async function abrirProtocolo(d) {
     const r = await apiCenti("GET", `restauth/load?entity=${A.MODULO_PROTOCOLO}&key=${d.id}`, null, "load do protocolo");
     const c = A.conferirProtocolo(r, d);
@@ -374,17 +406,27 @@
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
     const erro = A.validarPedido(d);
     if (erro) return { ok: false, erro };
-    // O TIPO primeiro e o PROTOCOLO por ÚLTIMO, logo antes de salvar: a Centi guarda no servidor o objeto aberto pelo
-    // load — um load do tipo DEPOIS trocava o protocolo aberto e o salvar dava "Erro inesperado" (500). A tela faz igual:
-    // abre o protocolo e busca o tipo por referência, sem outro load.
-    const tipo = await apiCenti("GET", `restauth/load?entity=${A.MODULO_TIPO}&key=${d.tipo}`, null, "load do tipo")
-      .then((t) => A.tipoDoLoad(t, d.tipo))
-      .catch(() => null);
+    // A MESMA sequência da tela ao anexar: abre o protocolo e, depois, obtém o tipo pelo LoadObjectReference (o que a
+    // tela faz ao escolher o tipo). Sem o estado da tela para isso: o tipo por load ANTES de abrir o protocolo (um load
+    // depois trocaria o protocolo aberto no servidor).
+    const porReferencia = !!entidadeDoModulo(acharClienteCenti(), A.MODULO_TIPO);
+    let tipo = porReferencia
+      ? null
+      : await apiCenti("GET", `restauth/load?entity=${A.MODULO_TIPO}&key=${d.tipo}`, null, "load do tipo")
+          .then((t) => A.tipoDoLoad(t, d.tipo))
+          .catch(() => null);
     const e = await abrirProtocolo(d);
     const ja = A.jaAnexado(e, d.descricao);
     if (ja) return { ok: true, jaAnexado: true, ...ja };
+    if (porReferencia) tipo = await tipoPorReferencia(d).catch(() => null);
+    const origemTipo = tipo ? (porReferencia ? "referência da tela" : "load") : "sem o registro do tipo";
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
-    const conf = await apiCenti("POST", "restauth/confirmsave", corpo, "confirmsave", true, urlsSalvar.confirmsave || "restauth/confirmsave");
+    let conf;
+    try {
+      conf = await apiCenti("POST", "restauth/confirmsave", corpo, "confirmsave", true, urlsSalvar.confirmsave || "restauth/confirmsave");
+    } catch (err) {
+      throw new Error(`${err?.message || "Falha no confirmsave."} [tipo: ${origemTipo}]`);
+    }
     if (conf.Confirm === true) return { ok: false, erro: `A Centi pede confirmação: ${A.mensagens(conf.Message) || "sem mensagem"} — anexe pela tela da Centi.` };
     const salvo = A.conferirSalvo(await apiCenti("POST", "restauth/save", corpo, "save", true, urlsSalvar.save || "restauth/save"), d);
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
