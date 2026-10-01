@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type KeyboardEvent, type ReactNode, type PointerEvent as ReactPointerEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { textoSobre } from "@/lib/color";
 import { num } from "@/lib/format";
@@ -19,13 +20,145 @@ const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] ga
 const LEQUE = [-2.5, 2, 0];
 
 /**
- * Uma PASTA de quadros — o desenho de uma pasta de arquivos, na MESMA célula/altura do `QuadroCard`: a ABA no topo com o
- * ícone, as COSTAS no tom da cor, as FOLHAS saindo (as capas de até 3 quadros dela, em leque; vazia = folhas lisas) e a
- * FRENTE na cor, com "Pasta · N quadros", o nome e as contagens (abertas; atrasadas em vermelho, só quando há). Com o
- * mouse/foco a pasta ENTREABRE (a frente inclina e as folhas sobem); aberta, abre mais com o contorno accent; `alvo` = um
- * quadro arrastado sobre ela (abre de vez + "Soltar na pasta"; `recusa` = o que não pode entrar, em vermelho); `recebeu` = o pulso de quando um quadro entra. Tocar
- * ABRE/FECHA a pasta no lugar. `menu` = as ações (editar/excluir), fora do botão. A PRIVADA leva o cadeado na aba e o selo
- * "Privada" na frente.
+ * O DESENHO de uma PASTA (compartilhado por Tarefas e Catálogo), na MESMA célula/altura do card de espaço: a ABA no topo
+ * com o ícone, as COSTAS no tom da cor, as FOLHAS saindo (as `folhas` — capas de até 3 itens dela, em leque; vazia =
+ * folhas lisas) e a FRENTE na cor, com o `rotulo` ("Pasta · N quadros"), o nome e os `chips`. Com o mouse/foco a pasta
+ * ENTREABRE (a frente inclina e as folhas sobem); aberta, abre mais com o contorno accent; `alvo` = um item arrastado
+ * sobre ela (abre de vez + "Soltar na pasta"; `recusa` = o que não pode entrar, em vermelho); `recebeu` = o pulso de quando
+ * um item entra. `href` = um LINK (o Catálogo entra na tela da pasta); senão, botão de abrir/fechar no lugar
+ * (`onAlternar`, Tarefas). `menu` = as ações, fora do botão. A PRIVADA leva o cadeado na aba e o selo "Privada".
+ */
+export function PastaCartao({
+  nome,
+  cor,
+  privado = false,
+  rotulo,
+  folhas,
+  chips,
+  ariaLabel,
+  href,
+  aberta = false,
+  alvo = false,
+  recusa = false,
+  recebeu = false,
+  onAlternar,
+  menu,
+}: {
+  nome: string;
+  cor: string;
+  privado?: boolean;
+  rotulo: string;
+  /** As capas (até 3 usadas) das folhas em leque — `key` única em cada. */
+  folhas: ReactNode[];
+  chips?: ReactNode;
+  ariaLabel: string;
+  href?: string;
+  aberta?: boolean;
+  alvo?: boolean;
+  /** O item arrastado sobre ela NÃO pode entrar (o aviso vermelho no lugar do "Soltar na pasta"). */
+  recusa?: boolean;
+  recebeu?: boolean;
+  onAlternar?: () => void;
+  menu?: ReactNode;
+}) {
+  const Icone = aberta || alvo ? IconPastaAberta : IconPasta;
+  const tinta = textoSobre(cor);
+  const capas = folhas.slice(0, 3);
+  // Quanto a pasta abre: fechada (entreabre no hover/foco), aberta, alvo de um arrasto.
+  const frente = alvo ? "[transform:rotateX(-26deg)]" : aberta ? "[transform:rotateX(-18deg)]" : "group-hover:[transform:rotateX(-10deg)] group-focus-visible:[transform:rotateX(-10deg)]";
+  const sobe = alvo || aberta ? "-translate-y-3" : "group-hover:-translate-y-2 group-focus-visible:-translate-y-2";
+  const destaque = alvo || aberta;
+  const mov = "transition-transform duration-[var(--motion-duration)] ease-[var(--motion-ease)]";
+  const classe = "group flex h-full min-h-[14rem] w-full flex-col rounded-card text-left [perspective:900px] focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/30";
+  const corpo = (
+    <>
+      {/* A ABA. */}
+      <span
+        aria-hidden
+        className={`flex h-6 w-[42%] min-w-24 items-center gap-1.5 rounded-t-lg px-2.5 text-white ${destaque ? "ring-2 ring-accent ring-offset-0" : ""}`}
+        style={{ background: `color-mix(in srgb, ${cor} 78%, #000)` }}
+      >
+        <Icone className="h-3.5 w-3.5 shrink-0" />
+        {privado && <IconLock className="h-3 w-3 shrink-0" />}
+      </span>
+      {/* O corpo em CAMADAS (sem corte): as COSTAS atrás, as FOLHAS por cima — ultrapassando o contorno de cima das
+          costas, o efeito 3D — e a FRENTE na frente. */}
+      <span className="relative flex-1">
+        <span
+          aria-hidden
+          className={`absolute inset-0 rounded-card rounded-tl-none shadow-ring ${destaque ? "ring-2 ring-accent" : ""}`}
+          style={{ background: `color-mix(in srgb, ${cor} 55%, var(--surface))` }}
+        />
+        <span aria-hidden className={`absolute inset-x-[14%] top-3 z-10 h-[58%] ${mov} ${sobe}`}>
+          {(capas.length ? capas : [null, null]).map((c, i, l) => (
+            <span
+              key={i}
+              className="absolute inset-x-0 top-0 overflow-hidden rounded-md bg-surface p-0.5 shadow-soft"
+              style={{ rotate: `${LEQUE[i + (3 - l.length)]}deg`, top: `${i * 6}px` }}
+            >
+              {c ?? <span className="block aspect-video w-full rounded-[5px] bg-surface-2" />}
+            </span>
+          ))}
+        </span>
+        {(alvo || recusa) && (
+          <span className="absolute top-3 right-12 left-2 z-30 text-center text-[12px] font-semibold" style={{ color: recusa ? "var(--danger)" : "var(--accent)" }}>
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 shadow-soft">
+              {recusa && <IconNenhum className="h-3.5 w-3.5" />}
+              {recusa ? "Não pode entrar" : "Soltar na pasta"}
+            </span>
+          </span>
+        )}
+        {/* A FRENTE (na cor), com a etiqueta. */}
+        <span
+          className={`absolute inset-x-0 bottom-0 z-20 flex h-[58%] origin-bottom flex-col rounded-card px-3 pt-2.5 pb-2 shadow-[0_-6px_14px_-8px_rgba(0,0,0,0.35)] ${mov} ${frente}`}
+          style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${cor} 82%, #fff), ${cor})`, color: tinta }}
+        >
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+            <span className="opacity-80">{rotulo}</span>
+            {privado && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-black/20 px-1.5 py-px normal-case tracking-normal">
+                <IconLock className="h-3 w-3" /> Privada
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug" title={nome}>
+            {nome}
+          </span>
+          {chips && <span className="mt-auto flex flex-wrap items-center gap-1.5 text-[11.5px] font-semibold">{chips}</span>}
+        </span>
+      </span>
+    </>
+  );
+  return (
+    <div className={`relative h-full ${recebeu ? "animate-pasta-recebe" : ""}`}>
+      {href ? (
+        <Link href={href} aria-label={ariaLabel} className={classe}>
+          {corpo}
+        </Link>
+      ) : (
+        <button type="button" onClick={onAlternar} aria-expanded={aberta} aria-label={ariaLabel} className={classe}>
+          {corpo}
+        </button>
+      )}
+      {menu && <div className="absolute top-8 right-2 rounded-control bg-surface/90 shadow-ring backdrop-blur-sm">{menu}</div>}
+    </div>
+  );
+}
+
+/** Um chip da frente da pasta (o fundo escuro translúcido; `alerta` = o claro com o texto vermelho). */
+export function ChipPasta({ children, alerta = false }: { children: ReactNode; alerta?: boolean }) {
+  return alerta ? (
+    <span className="rounded-full bg-surface/90 px-2 py-0.5 tabular-nums" style={{ color: "var(--danger)" }}>
+      {children}
+    </span>
+  ) : (
+    <span className="rounded-full bg-black/15 px-2 py-0.5 tabular-nums">{children}</span>
+  );
+}
+
+/**
+ * Uma PASTA de quadros — o `PastaCartao` com as capas dos quadros dela e as contagens (abertas; atrasadas em vermelho, só
+ * quando há). Tocar ABRE/FECHA a pasta no lugar. `menu` = as ações (editar/excluir), fora do botão.
  */
 export function PastaQuadro({
   pasta,
@@ -49,90 +182,33 @@ export function PastaQuadro({
 }) {
   const abertas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.abertas), 0);
   const atrasadas = quadros.reduce((s, q) => s + (q.arquivado ? 0 : q.atrasadas), 0);
-  const Icone = aberta || alvo ? IconPastaAberta : IconPasta;
-  const tinta = textoSobre(pasta.cor);
-  const folhas = quadros.slice(0, 3);
-  // Quanto a pasta abre: fechada (entreabre no hover/foco), aberta, alvo de um arrasto.
-  const frente = alvo ? "[transform:rotateX(-26deg)]" : aberta ? "[transform:rotateX(-18deg)]" : "group-hover:[transform:rotateX(-10deg)] group-focus-visible:[transform:rotateX(-10deg)]";
-  const sobe = alvo || aberta ? "-translate-y-3" : "group-hover:-translate-y-2 group-focus-visible:-translate-y-2";
-  const destaque = alvo || aberta;
-  const mov = "transition-transform duration-[var(--motion-duration)] ease-[var(--motion-ease)]";
   return (
-    <div className={`relative h-full ${recebeu ? "animate-pasta-recebe" : ""}`}>
-      <button
-        type="button"
-        onClick={onAlternar}
-        aria-expanded={aberta}
-        aria-label={`${aberta ? "Fechar" : "Abrir"} a pasta ${pasta.privado ? "privada " : ""}${pasta.nome} (${quadros.length} ${quadros.length === 1 ? "quadro" : "quadros"})`}
-        className="group flex h-full min-h-[14rem] w-full flex-col rounded-card text-left [perspective:900px] focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/30"
-      >
-        {/* A ABA. */}
-        <span
-          aria-hidden
-          className={`flex h-6 w-[42%] min-w-24 items-center gap-1.5 rounded-t-lg px-2.5 text-white ${destaque ? "ring-2 ring-accent ring-offset-0" : ""}`}
-          style={{ background: `color-mix(in srgb, ${pasta.cor} 78%, #000)` }}
-        >
-          <Icone className="h-3.5 w-3.5 shrink-0" />
-          {pasta.privado && <IconLock className="h-3 w-3 shrink-0" />}
-        </span>
-        {/* O corpo em CAMADAS (sem corte): as COSTAS atrás, as FOLHAS por cima — ultrapassando o contorno de cima das
-            costas, o efeito 3D — e a FRENTE na frente. */}
-        <span className="relative flex-1">
-          <span
-            aria-hidden
-            className={`absolute inset-0 rounded-card rounded-tl-none shadow-ring ${destaque ? "ring-2 ring-accent" : ""}`}
-            style={{ background: `color-mix(in srgb, ${pasta.cor} 55%, var(--surface))` }}
-          />
-          <span aria-hidden className={`absolute inset-x-[14%] top-3 z-10 h-[58%] ${mov} ${sobe}`}>
-            {(folhas.length ? folhas : [null, null]).map((q, i, l) => (
-              <span
-                key={q ? q.id : `v${i}`}
-                className="absolute inset-x-0 top-0 overflow-hidden rounded-md bg-surface p-0.5 shadow-soft"
-                style={{ rotate: `${LEQUE[i + (3 - l.length)]}deg`, top: `${i * 6}px` }}
-              >
-                {q ? <CapaQuadro quadro={q} /> : <span className="block aspect-video w-full rounded-[5px] bg-surface-2" />}
-              </span>
-            ))}
-          </span>
-          {(alvo || recusa) && (
-            <span className="absolute top-3 right-12 left-2 z-30 text-center text-[12px] font-semibold" style={{ color: recusa ? "var(--danger)" : "var(--accent)" }}>
-              <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 shadow-soft">
-                {recusa && <IconNenhum className="h-3.5 w-3.5" />}
-                {recusa ? "Não pode entrar" : "Soltar na pasta"}
-              </span>
-            </span>
+    <PastaCartao
+      nome={pasta.nome}
+      cor={pasta.cor}
+      privado={pasta.privado}
+      rotulo={`Pasta · ${num(quadros.length)} ${quadros.length === 1 ? "quadro" : "quadros"}`}
+      folhas={quadros.slice(0, 3).map((q) => (
+        <CapaQuadro key={q.id} quadro={q} />
+      ))}
+      chips={
+        <>
+          <ChipPasta>{num(abertas)} abertas</ChipPasta>
+          {atrasadas > 0 && (
+            <ChipPasta alerta>
+              {num(atrasadas)} {atrasadas === 1 ? "atrasada" : "atrasadas"}
+            </ChipPasta>
           )}
-          {/* A FRENTE (na cor), com a etiqueta. */}
-          <span
-            className={`absolute inset-x-0 bottom-0 z-20 flex h-[58%] origin-bottom flex-col rounded-card px-3 pt-2.5 pb-2 shadow-[0_-6px_14px_-8px_rgba(0,0,0,0.35)] ${mov} ${frente}`}
-            style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${pasta.cor} 82%, #fff), ${pasta.cor})`, color: tinta }}
-          >
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
-              <span className="opacity-80">
-                Pasta · {num(quadros.length)} {quadros.length === 1 ? "quadro" : "quadros"}
-              </span>
-              {pasta.privado && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/20 px-1.5 py-px normal-case tracking-normal">
-                  <IconLock className="h-3 w-3" /> Privada
-                </span>
-              )}
-            </span>
-            <span className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug" title={pasta.nome}>
-              {pasta.nome}
-            </span>
-            <span className="mt-auto flex flex-wrap items-center gap-1.5 text-[11.5px] font-semibold">
-              <span className="rounded-full bg-black/15 px-2 py-0.5 tabular-nums">{num(abertas)} abertas</span>
-              {atrasadas > 0 && (
-                <span className="rounded-full bg-surface/90 px-2 py-0.5 tabular-nums" style={{ color: "var(--danger)" }}>
-                  {num(atrasadas)} {atrasadas === 1 ? "atrasada" : "atrasadas"}
-                </span>
-              )}
-            </span>
-          </span>
-        </span>
-      </button>
-      {menu && <div className="absolute top-8 right-2 rounded-control bg-surface/90 shadow-ring backdrop-blur-sm">{menu}</div>}
-    </div>
+        </>
+      }
+      ariaLabel={`${aberta ? "Fechar" : "Abrir"} a pasta ${pasta.privado ? "privada " : ""}${pasta.nome} (${quadros.length} ${quadros.length === 1 ? "quadro" : "quadros"})`}
+      aberta={aberta}
+      alvo={alvo}
+      recusa={recusa}
+      recebeu={recebeu}
+      onAlternar={onAlternar}
+      menu={menu}
+    />
   );
 }
 

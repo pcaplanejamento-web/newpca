@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TIPOS_DFD } from "./avaliacao-core.ts";
+import { LIMITES_HISTORICO as L } from "./historico-compra-core.ts";
 
 /**
  * Validação (Zod) do módulo CATÁLOGO — fonte única cliente+servidor. Módulo puro
@@ -41,6 +42,8 @@ const startCatalogoSchema = z.object({
   excluirItens: z.array(z.number().int().positive()).max(20000).default([]),
   // Itens EXISTENTES (idênticos) a COMPARTILHAR neste catálogo — o mesmo item nos dois.
   compartilharItens: z.array(z.number().int().positive()).max(20000).default([]),
+  // Pasta do catálogo NOVO (a tela da pasta cria dentro dela); numa atualização, ignorada.
+  pastaId: z.number().int().positive().nullable().default(null),
 });
 
 // Lotes seguintes de um envio já iniciado.
@@ -56,9 +59,88 @@ const criarCatalogoSchema = z.object({
   mode: z.literal("criar-catalogo"),
   nome: z.string().trim().min(1).max(200),
   tiposPadrao: tiposDfdSchema,
+  pastaId: z.number().int().positive().nullable().default(null),
 });
 
-export const catalogoOpSchema = z.discriminatedUnion("mode", [startCatalogoSchema, appendCatalogoSchema, criarCatalogoSchema]);
+// ---- HISTÓRICO DE COMPRA (migração `0075`): o catálogo tipo 'historico' = contratos + itens comprados ----
+const txt = (max: number) => z.string().trim().max(max).nullable().default(null);
+const numOpc = z.number().finite().nullable().default(null);
+const dataIso = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .nullable()
+  .default(null);
+
+export const contratoHistoricoSchema = z.object({
+  idContrato: z.string().trim().min(1).max(L.idContrato),
+  numeroContrato: txt(L.numeroContrato),
+  idLicitacao: txt(L.idLicitacao),
+  numeroLicitacao: txt(L.numeroLicitacao),
+  orgao: txt(L.orgao),
+  unidadeGestora: txt(L.unidadeGestora),
+  credor: txt(L.credor),
+  valorContrato: numOpc,
+  dataAssinatura: dataIso,
+  dataPublicacao: dataIso,
+  modalidade: txt(L.modalidade),
+  protocolo: txt(L.protocolo),
+  objeto: txt(L.objeto),
+  natureza: txt(L.natureza),
+  detalhamento: txt(L.detalhamento),
+});
+
+export const compraHistoricoSchema = z.object({
+  ordem: z.number().int().min(0),
+  idContrato: z.string().trim().min(1).max(L.idContrato),
+  processo: txt(L.processo),
+  codigo: z.string().trim().regex(/^\d{1,60}$/, "Código do produto inválido."),
+  sequencial: z.number().int().nullable().default(null),
+  descricao: z.string().trim().min(1).max(L.descricao),
+  qtdContratada: numOpc,
+  qtdAditada: numOpc,
+  qtdEmpenhada: numOpc,
+  qtdOfEmpenhar: numOpc,
+  saldoEmpenhar: numOpc,
+  valorUnitario: numOpc,
+  valorContratado: numOpc,
+  valorEmpenhado: numOpc,
+  saldoValorEmpenhar: numOpc,
+  qtdLiquidada: numOpc,
+  qtdLiquidadaAnulada: numOpc,
+  qtdEmpenhadaAnulada: numOpc,
+  saldoLiquidar: numOpc,
+});
+export type ContratoHistoricoImport = z.infer<typeof contratoHistoricoSchema>;
+export type CompraHistoricoImport = z.infer<typeof compraHistoricoSchema>;
+
+/** Por requisição (o limite de consultas por invocação do D1): contratos 6 por INSERT, itens 4 por INSERT. */
+export const MAX_CONTRATOS_LOTE = 100;
+export const MAX_COMPRAS_LOTE = 150;
+
+// Cria o catálogo de HISTÓRICO (vazio) e grava o 1º lote de contratos.
+const startHistoricoSchema = z.object({
+  mode: z.literal("start-historico"),
+  nome: z.string().trim().min(1).max(200),
+  pastaId: z.number().int().positive().nullable().default(null),
+  totalItens: z.number().int().min(1).max(200000),
+  contratos: z.array(contratoHistoricoSchema).max(MAX_CONTRATOS_LOTE),
+});
+
+// Lotes seguintes: contratos e/ou itens (idempotente — repetir um lote não duplica; a rota recusa o lote vazio).
+const appendHistoricoSchema = z.object({
+  mode: z.literal("append-historico"),
+  catalogoId: z.number().int().positive(),
+  contratos: z.array(contratoHistoricoSchema).max(MAX_CONTRATOS_LOTE).default([]),
+  rows: z.array(compraHistoricoSchema).max(MAX_COMPRAS_LOTE).default([]),
+});
+
+export const catalogoOpSchema = z.discriminatedUnion("mode", [
+  startCatalogoSchema,
+  appendCatalogoSchema,
+  criarCatalogoSchema,
+  startHistoricoSchema,
+  appendHistoricoSchema,
+]);
 export type CatalogoOp = z.infer<typeof catalogoOpSchema>;
 export type StartCatalogoPayload = z.infer<typeof startCatalogoSchema>;
 
@@ -98,15 +180,28 @@ export const conferirCatalogoSchema = z.object({
 });
 export type ConferirCatalogoPayload = z.infer<typeof conferirCatalogoSchema>;
 
-// Editar um catálogo já gravado (nome e/ou tipos padrão).
+const corHex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Cor inválida.");
+
+// Editar um catálogo já gravado (nome, tipos padrão, cor da capa e/ou a pasta — `null` tira da pasta).
 export const patchCatalogoSchema = z
   .object({
     nome: z.string().trim().min(1).max(200).optional(),
     tiposPadrao: z.array(z.enum(TIPOS_DFD)).optional(),
+    cor: corHex.nullable().optional(),
+    pastaId: z.number().int().positive().nullable().optional(),
   })
-  .refine((v) => v.nome !== undefined || v.tiposPadrao !== undefined, {
+  .refine((v) => v.nome !== undefined || v.tiposPadrao !== undefined || v.cor !== undefined || v.pastaId !== undefined, {
     message: "Nada para atualizar.",
   });
+
+// PASTA de catálogos: nome + cor + os catálogos dela (a lista inteira — quem sai dela volta à grade).
+export const pastaCatalogoSchema = z.object({
+  nome: z.string().trim().min(1, "Informe o nome da pasta.").max(120),
+  cor: corHex,
+  catalogos: z.array(z.number().int().positive()).max(2000).optional(),
+});
+export const patchPastaCatalogoSchema = pastaCatalogoSchema.partial().refine((v) => Object.keys(v).length > 0, { message: "Nada para atualizar." });
+export type PastaCatalogoPayload = z.infer<typeof pastaCatalogoSchema>;
 export type PatchCatalogoPayload = z.infer<typeof patchCatalogoSchema>;
 
 // Definir (SET) ou MESCLAR (união) os tipos de DFD de um conjunto de itens (por item ou em

@@ -1741,6 +1741,44 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   → 422. Os DFDs do protocolo passam por `/api/dfd` (o `POST /api/protocolo` só cria a capa) → cobertos. Testes:
   `catalogo-conferencia.test.ts` + os pontos de catálogo em `dfd-tratamento.test.ts` (veredito por linha, portão, invariante).
 
+### Cards no padrão de Tarefas, PASTAS e dois TIPOS de catálogo (Agenda × Histórico de compra) — migração `0075`
+- **Modelo (aditivo):** `catalogos.tipo` (`agenda` = o Catálogo da Agenda de sempre — itens com código ÚNICO GLOBAL |
+  `historico` = Histórico de compra), `catalogos.cor` (capa; NULL = a do tipo — `COR_PADRAO_CATALOGO`) e
+  `catalogos.pasta_id` (FK set null); `catalogo_pastas` (nome + cor + ordem, GLOBAIS como o catálogo); o histórico em
+  `catalogo_contratos` (um por "Id Contrato", único por catálogo) + `catalogo_compras` (uma linha por item contratado —
+  o `codigo` = "Id Produto" só dígitos, o MESMO código dos itens dos DFDs, índice próprio; FORA da unicidade global dos
+  itens da agenda). Os atuais viram `agenda`.
+- **Cards = o desenho dos QUADROS de Tarefas:** `QuadroCard` foi generalizado em **`CartaoEspaco`** (capa 16:9 + sobretítulo
+  + selo + nome em 2 linhas + 3 métricas + `canto`; `href` ou `onClick`) e `PastaQuadro` em **`PastaCartao`** (+ `ChipPasta`;
+  `href` = link) — Tarefas usa os mesmos, sem mudança visual. No Catálogo (`CatalogoCards.tsx`): **`CatalogoCard`** (capa
+  no degradê da cor + ícone do tipo + "Atualizado em"; Agenda = Itens · Sem tipo · Unid. medida; Histórico = Itens ·
+  Contratos · Valor (R$); menu "…" com Editar · Atualizar (agenda) · Exportar .xlsx · Excluir conforme o papel), **`PastaCatalogoCard`**
+  (as capas dos catálogos dela nas folhas; chips itens da agenda + R$ comprados; tocar ENTRA na pasta), `CoresPaleta` e
+  `EditorPastaCatalogo` (nome, cor, os catálogos — o de outra pasta avisa que sai de lá). Grade = a de Tarefas
+  (`auto-fill minmax(15rem)`): pastas · catálogos soltos · "Novo catálogo" · "Nova pasta".
+- **Tela da PASTA** `/painel/catalogo/pasta/[id]` = a MESMA `CatalogoView` com `pasta` (só os catálogos dela; a Lista de
+  Itens só com os itens que PERTENCEM a eles; KPIs do conjunto: catálogos/itens da agenda, históricos, contratos, valor
+  comprado; editar/excluir a pasta; "Novo catálogo nesta pasta" já cria dentro; sem a padronização — é global).
+- **Novo catálogo** escolhe o TIPO (`Segmented`): Agenda (criar à mão | importar PDF/XLSX, como antes) ou **Histórico de
+  compra** (só por arquivo, exige Importar) → **`ImportarHistorico`** (prévia com os números + nome + pasta → lotes com
+  progresso, tudo ou nada). Abrir um histórico = **`HistoricoCompraModal`** (`GET /api/catalogo/[id]/historico`, sob
+  demanda): KPIs + **Produtos** (um por código: contratos, qtd., menor/médio PONDERADO/maior/último preço — a base da
+  comparação futura com os itens dos DFDs) · **Itens** · **Contratos**, detalhe ao lado, Exportar .xlsx (papel).
+- **Leitura do export do sistema de compras** — núcleo PURO **`historico-compra-core.ts`** (testado): `lerCsv` (separador
+  pelo cabeçalho, aspas, BOM), `parseHistoricoCompra` (colunas pelo NOME; "$$" = vírgula escapada; "10.0000"/"1.234,56";
+  dd/mm/aaaa → AAAA-MM-DD; textos cortados em `LIMITES_HISTORICO` = a régua do Zod; **linhas IDÊNTICAS repetidas pelo export
+  saem** — no CUBO real de 2026, 5.937 linhas → 1.130 itens, 153 contratos, 868 produtos, R$ 185,6 mi; sem isso o valor
+  ficava inflado), `produtosDoHistorico`, `resumoHistorico`. Navegador: `parse-historico.ts` (CSV UTF-8/1252 ou .xlsx) +
+  `importar-historico.ts` (`start-historico` cria o catálogo + 1º lote de contratos; `append-historico` = contratos ≤ 100 e
+  itens ≤ 150 por pedido, idempotentes — apaga `ordem` ≥ a do lote; falha apaga o catálogo criado).
+- **Builders** em **`catalogo-historico-sql.ts`** (testados no driver D1 real: contrato 6/INSERT, item 4/INSERT ≤ 100
+  parâmetros, pasta — a lista inteira entra/sai —, excluir pasta, indicadores); D1 em `catalogo-historico.ts`. Rotas:
+  `POST /api/catalogo` (+ `start-historico`/`append-historico`; `pastaId` no catálogo novo; agenda × histórico conferidos),
+  `PATCH /api/catalogo/[id]` (+ `cor`/`pastaId`), `GET /api/catalogo/[id]/historico` (Visualizar), `POST /api/catalogo/pastas` e
+  `PATCH`/`DELETE /api/catalogo/pastas/[id]` (Manipular; excluir só tira a pasta) — auditoria `catalogo`/`catalogo_pasta`.
+  Excluir o catálogo apaga o histórico no mesmo lote. As confirmações saíram do `confirm()` do navegador (`useConfirmacao`)
+  e as gravações conferem a resposta (erro à vista).
+
 ### Padronização: UNIDADES DE MEDIDA e CLASSIFICAÇÕES de item — migração `0038`
 - **O que é:** duas visões novas no `Segmented` do Catálogo — **Catálogo · Lista de Itens · Unidades de medida ·
   Classificações** (no celular, rótulos curtos pelo `Segmented.curto`: Itens · Unid. medida · Classif.) —, carregadas SOB

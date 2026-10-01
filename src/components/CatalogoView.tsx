@@ -1,27 +1,36 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/catalogo";
+import type { PastaCatalogo } from "@/lib/catalogo-historico";
 import { itensIguais } from "@/lib/catalogo-conferencia";
 import { membrosDoItem } from "@/lib/catalogo-membros";
 import { exportarCatalogoPdf, exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import type { PodeTela } from "@/lib/papeis-core";
-import { dataBR } from "@/lib/format";
+import { brl, num } from "@/lib/format";
+import { COR_PADRAO_CATALOGO, corDoCatalogo, ROTULO_TIPO_CATALOGO, type TipoCatalogo } from "@/lib/historico-compra-core";
 import { criarCatalogoVazio, enviarCatalogoEmLotes } from "@/lib/importar-catalogo";
 import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
 import { parseCatalogoXlsx } from "@/lib/parse-catalogo-xlsx";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Badge } from "./Badge";
+import { CatalogoCard, CoresPaleta, type DadosPasta, EditorPastaCatalogo, type NumerosAgenda, PastaCatalogoCard } from "./CatalogoCards";
+import { useConfirmacao } from "./Confirmacao";
+import { HistoricoCompraModal } from "./HistoricoCompraView";
+import { ImportarHistorico } from "./ImportarHistorico";
+import { QuadroNovoCard } from "./QuadroCard";
+import { StatMini } from "./StatMini";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CatalogoItemDetalhe } from "./CatalogoItemDetalhe";
 import { type Column, DataTable } from "./DataTable";
 import { Dropzone } from "./Dropzone";
-import { SearchField, TextArea, TextField } from "./Field";
-import { IconAlert, IconDownload, IconInbox, IconLayers, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
+import { SearchField, SelectField, TextArea, TextField } from "./Field";
+import { IconAlert, IconChevronLeft, IconCompra, IconDownload, IconInbox, IconPasta, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
@@ -62,8 +71,8 @@ type Preview = {
   fonte: string; // extensão (pdf/xlsx) — informativo
 };
 
-const selectCls =
-  "h-[46px] w-full rounded-control border border-border-2 bg-surface-2 px-3 text-[15px] text-text outline-none transition focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20";
+/** A grade dos cards — a MESMA de Tarefas (colunas de no mínimo 15rem: o card nunca muda de forma). */
+const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3";
 
 /**
  * Módulo CATÁLOGO. Quatro visões (Segmented, com transição suave): **Catálogo** (cards
@@ -75,15 +84,29 @@ const selectCls =
  * (descrição/unidade/tipos). Só editor gerencia; demais consultam. 100% design-system.
  */
 export function CatalogoView({
-  catalogos,
-  itens,
+  catalogos: todosCatalogos,
+  itens: todosItens,
   pode,
+  pastas,
+  pasta = null,
 }: {
   catalogos: CatalogoResumo[];
   itens: CatalogoItemRow[];
   /** O que o papel permite no Catálogo (o grupo já liberou a tela). */
   pode: PodeTela;
+  /** As PASTAS de catálogos (globais). */
+  pastas: PastaCatalogo[];
+  /** A TELA DA PASTA: só os catálogos dela (e os itens deles); sem a padronização (que é global). */
+  pasta?: PastaCatalogo | null;
 }) {
+  // Na tela da pasta, tudo se limita aos catálogos dela (a análise da pasta); os itens da agenda que PERTENCEM a eles.
+  const catalogos = useMemo(() => (pasta ? todosCatalogos.filter((c) => c.pastaId === pasta.id) : todosCatalogos), [todosCatalogos, pasta]);
+  const agendaIds = useMemo(() => new Set(catalogos.filter((c) => c.tipo === "agenda").map((c) => c.id)), [catalogos]);
+  const itens = useMemo(
+    () => (pasta ? todosItens.filter((it) => membrosDoItem(it.catalogoId, it.catalogosExtra).some((id) => agendaIds.has(id))) : todosItens),
+    [todosItens, pasta, agendaIds],
+  );
+  const { confirmar, confirmacao } = useConfirmacao();
   // Manipular = criar/editar catálogos e itens (tipos, compartilhar); Importar = subir arquivo, atualizar e o modelo;
   // Exportar = XLSX/PDF; Excluir = apagar catálogo/item; Configurar = a padronização (unidades de medida, classificações).
   const podeEditar = pode.manipular;
@@ -102,7 +125,28 @@ export function CatalogoView({
     }
     return m;
   }, [itens]);
-  const nomePorCatalogo = useMemo(() => new Map(catalogos.map((c) => [c.id, c.nome])), [catalogos]);
+  const nomePorCatalogo = useMemo(() => new Map(todosCatalogos.map((c) => [c.id, c.nome])), [todosCatalogos]);
+  // Os números de cada catálogo da agenda (itens, sem tipo de DFD, unidades distintas) — pelo pertencimento.
+  const numerosAgenda = useMemo(() => {
+    const m = new Map<number, NumerosAgenda>();
+    for (const [id, lista] of itensPorCatalogo) {
+      const unidades = new Set<string>();
+      let semTipo = 0;
+      for (const it of lista) {
+        if (it.unidade) unidades.add(it.unidade.trim().toUpperCase());
+        if (it.tipos.length === 0) semTipo++;
+      }
+      m.set(id, { itens: lista.length, semTipo, unidades: unidades.size });
+    }
+    return m;
+  }, [itensPorCatalogo]);
+  const catalogosPorPasta = useMemo(() => {
+    const m = new Map<number, CatalogoResumo[]>();
+    for (const c of todosCatalogos) if (c.pastaId != null) m.set(c.pastaId, [...(m.get(c.pastaId) ?? []), c]);
+    return m;
+  }, [todosCatalogos]);
+  const nAgenda = catalogos.filter((c) => c.tipo === "agenda").length;
+  const nHistorico = catalogos.length - nAgenda;
 
   const [vista, setVista] = useState<Vista>("catalogo");
   // Unidades de medida | Classificações: as visões da PADRONIZAÇÃO (sem os controles de catálogo — exportar modelo, importar).
@@ -133,7 +177,18 @@ export function CatalogoView({
   // Edição dos dados de um divergente (para igualar novo × existente e liberar Compartilhar).
   const [edicoes, setEdicoes] = useState<Map<number, EdicaoConflito>>(new Map());
 
-  // Novo catálogo (card "+"): criar manual OU importar.
+  // Novo catálogo (card "+"): o TIPO (agenda | histórico de compra) e, na agenda, criar manual OU importar.
+  const [novoTipo, setNovoTipo] = useState<TipoCatalogo>("agenda");
+  const [arquivoHistorico, setArquivoHistorico] = useState<File | null>(null);
+  const [historicoAberto, setHistoricoAberto] = useState<CatalogoResumo | null>(null);
+  // Edição do catálogo: cor + pasta (além de nome e tipos padrão).
+  const [editCor, setEditCor] = useState<string | null>(null);
+  const [editPasta, setEditPasta] = useState<number | null>(null);
+  const [erroEdicao, setErroEdicao] = useState<string | null>(null);
+  // Pastas: o editor (nova/editar) + a gravação.
+  const [editorPasta, setEditorPasta] = useState<{ aberto: boolean; pasta: (PastaCatalogo & { catalogos: number[] }) | null }>({ aberto: false, pasta: null });
+  const [salvandoPasta, setSalvandoPasta] = useState(false);
+  const [erroPasta, setErroPasta] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
   const [novoModo, setNovoModo] = useState<"manual" | "importar">("manual");
   const [novoNome, setNovoNome] = useState("");
@@ -324,7 +379,7 @@ export function CatalogoView({
 
       if (payload.length > 0) {
         await enviarCatalogoEmLotes(
-          { catalogoId: preview.catalogoId, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens, compartilharItens },
+          { catalogoId: preview.catalogoId, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens, compartilharItens, pastaId: pasta?.id ?? null },
           payload.map((i) => ({ sequencial: i.sequencial, codigo: i.codigo, codigoRaw: i.codigoRaw, descricao: i.descricao, unidade: i.unidade })),
           (env, tot) => setProgresso(Math.round((env / tot) * 100)),
         );
@@ -332,7 +387,7 @@ export function CatalogoView({
         // Sem itens novos — num catálogo NOVO, a própria importação o cria e compartilha os existentes (Importar); num que
         // já existe, só compartilha.
         if (preview.catalogoId == null)
-          await enviarCatalogoEmLotes({ catalogoId: null, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens: [], compartilharItens }, []);
+          await enviarCatalogoEmLotes({ catalogoId: null, nome: nomeCat.trim() || "Catálogo", tiposPadrao, excluirItens: [], compartilharItens, pastaId: pasta?.id ?? null }, []);
         else
           await passo("/api/catalogo/compartilhar", { method: "POST", headers: jsonH, body: JSON.stringify({ catalogoId: preview.catalogoId, itemIds: compartilharItens }) });
       }
@@ -348,10 +403,34 @@ export function CatalogoView({
     }
   }
 
+  /** Uma chamada que confere a resposta (o erro do servidor vira a mensagem — nada falha em silêncio). */
+  async function chamar(url: string, init: RequestInit): Promise<{ ok: boolean; erro?: string; id?: number }> {
+    try {
+      const r = await fetch(url, { ...init, headers: init.body ? { "Content-Type": "application/json" } : undefined });
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; id?: number } | null;
+      return r.ok && j?.ok ? { ok: true, id: j.id } : { ok: false, erro: j?.error ?? "Não foi possível concluir — tente de novo." };
+    } catch {
+      return { ok: false, erro: "Sem conexão — tente de novo." };
+    }
+  }
+
   async function excluir(c: CatalogoResumo) {
-    const n = itensPorCatalogo.get(c.id)?.length ?? c.totalItens;
-    if (!confirm(`Excluir o catálogo "${c.nome}" e seus ${n} ${n === 1 ? "item" : "itens"}? Itens compartilhados com outros catálogos são preservados. Esta ação não pode ser desfeita.`)) return;
-    await fetch(`/api/catalogo/${c.id}`, { method: "DELETE" });
+    const hist = c.tipo === "historico";
+    const n = hist ? c.totalItens : (itensPorCatalogo.get(c.id)?.length ?? c.totalItens);
+    const ok = await confirmar({
+      titulo: `Excluir o ${hist ? "histórico" : "catálogo"} "${c.nome}"?`,
+      texto: hist
+        ? `Os ${num(n)} itens e ${num(c.contratos)} contratos dele saem. Esta ação não pode ser desfeita.`
+        : `Os ${num(n)} ${n === 1 ? "item" : "itens"} saem — os compartilhados com outros catálogos ficam. Esta ação não pode ser desfeita.`,
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (!ok) return;
+    const r = await chamar(`/api/catalogo/${c.id}`, { method: "DELETE" });
+    if (!r.ok) {
+      setErroImport(r.erro ?? "Falha ao excluir.");
+      return;
+    }
     if (abertoId === c.id) setAbertoId(null);
     router.refresh();
   }
@@ -360,18 +439,58 @@ export function CatalogoView({
     setEditandoCat(c);
     setEditNome(c.nome);
     setEditTipos(c.tiposPadrao);
+    setEditCor(c.cor);
+    setEditPasta(c.pastaId);
+    setErroEdicao(null);
   }
   async function salvarEdicao() {
     if (!editandoCat || !editNome.trim()) return;
     setSalvandoCat(true);
-    await fetch(`/api/catalogo/${editandoCat.id}`, {
+    const r = await chamar(`/api/catalogo/${editandoCat.id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: editNome.trim(), tiposPadrao: editTipos }),
+      body: JSON.stringify({
+        nome: editNome.trim(),
+        ...(editandoCat.tipo === "agenda" ? { tiposPadrao: editTipos } : {}),
+        cor: editCor,
+        pastaId: editPasta,
+      }),
     });
     setSalvandoCat(false);
+    if (!r.ok) {
+      setErroEdicao(r.erro ?? "Falha ao salvar.");
+      return;
+    }
     setEditandoCat(null);
     router.refresh();
+  }
+
+  async function salvarPasta(d: DadosPasta) {
+    setSalvandoPasta(true);
+    setErroPasta(null);
+    const atual = editorPasta.pasta;
+    const r = await chamar(atual ? `/api/catalogo/pastas/${atual.id}` : "/api/catalogo/pastas", { method: atual ? "PATCH" : "POST", body: JSON.stringify(d) });
+    setSalvandoPasta(false);
+    if (!r.ok) {
+      setErroPasta(r.erro ?? "Falha ao salvar a pasta.");
+      return;
+    }
+    setEditorPasta({ aberto: false, pasta: null });
+    router.refresh();
+  }
+
+  async function excluirPasta(p: PastaCatalogo) {
+    const r = await chamar(`/api/catalogo/pastas/${p.id}`, { method: "DELETE" });
+    if (!r.ok) {
+      setErroImport(r.erro ?? "Falha ao excluir a pasta.");
+      return;
+    }
+    if (pasta?.id === p.id) router.push("/painel/catalogo");
+    else router.refresh();
+  }
+
+  function abrirCatalogo(c: CatalogoResumo) {
+    if (c.tipo === "historico") setHistoricoAberto(c);
+    else setAbertoId(c.id);
   }
 
   async function aplicarBulk() {
@@ -404,7 +523,7 @@ export function CatalogoView({
     setCriandoCat(true);
     setErroImport(null);
     try {
-      const id = await criarCatalogoVazio(novoNome.trim(), novoTipos);
+      const id = await criarCatalogoVazio(novoNome.trim(), novoTipos, pasta?.id ?? null);
       setCriandoCat(false);
       setNovoAberto(false);
       setNovoNome("");
@@ -621,6 +740,7 @@ export function CatalogoView({
 
   function abrirNovo() {
     setPendingAlvo(null); // catálogo NOVO (não é atualização)
+    setNovoTipo("agenda");
     setNovoModo(podeEditar ? "manual" : "importar");
     setNovoNome("");
     setNovoTipos([]);
@@ -628,29 +748,104 @@ export function CatalogoView({
     setNovoAberto(true);
   }
 
-  // Card "+" (mesmo tamanho dos cards de catálogo) — cria manual OU importa. Só editor.
-  const addCard = (
-    <button
-      type="button"
-      onClick={abrirNovo}
-      className="group flex min-h-[132px] flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-2 bg-surface p-4 text-muted transition-colors hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
-    >
-      <span className="grid h-11 w-11 place-items-center rounded-xl bg-surface-2 text-accent transition-colors group-hover:bg-accent group-hover:text-white">
-        <IconPlus className="h-6 w-6" />
-      </span>
-      <span className="text-sm font-semibold">Novo catálogo</span>
-    </button>
+  // Os cards "+" (a MESMA altura dos cards na grade): novo catálogo (agenda ou histórico) e nova pasta (fora de uma pasta).
+  const podeCriar = podeEditar || papelImporta;
+  const cardsNovos = (
+    <>
+      {podeCriar && <QuadroNovoCard onClick={abrirNovo} rotulo={pasta ? "Novo catálogo nesta pasta" : "Novo catálogo"} />}
+      {podeEditar && !pasta && (
+        <QuadroNovoCard
+          rotulo="Nova pasta"
+          onClick={() => {
+            setErroPasta(null);
+            setEditorPasta({ aberto: true, pasta: null });
+          }}
+        />
+      )}
+    </>
   );
+  const cardDoCatalogo = (c: CatalogoResumo) => (
+    <CatalogoCard
+      key={c.id}
+      catalogo={c}
+      agenda={c.tipo === "agenda" ? numerosAgenda.get(c.id) : undefined}
+      onAbrir={() => abrirCatalogo(c)}
+      onEditar={podeEditar ? () => abrirEdicao(c) : undefined}
+      onAtualizar={
+        papelImporta && c.tipo === "agenda"
+          ? () => {
+              setPendingAlvo(c.id);
+              setLauncher(true);
+            }
+          : undefined
+      }
+      onExportar={pode.exportar && c.tipo === "agenda" ? () => exportarCatalogoXlsx(c.nome, itensPorCatalogo.get(c.id) ?? []) : undefined}
+      onExcluir={pode.excluir ? () => excluir(c) : undefined}
+    />
+  );
+  // Números da tela da pasta (a análise do conjunto).
+  const valorHistorico = catalogos.reduce((t, c) => t + (c.tipo === "historico" ? c.valor : 0), 0);
+  const contratosHistorico = catalogos.reduce((t, c) => t + (c.tipo === "historico" ? c.contratos : 0), 0);
 
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-text">Catálogo</h1>
-          <p className="text-sm text-muted">
-            {catalogos.length} {catalogos.length === 1 ? "catálogo" : "catálogos"} · {itens.length} {itens.length === 1 ? "item" : "itens"} · para padronização e consulta
-          </p>
-        </div>
+        {pasta ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              href="/painel/catalogo"
+              aria-label="Voltar para o Catálogo"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+            >
+              <IconChevronLeft className="h-4 w-4" />
+            </Link>
+            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-control text-white" style={{ background: pasta.cor }}>
+              <IconPasta className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold text-text" title={pasta.nome}>
+                {pasta.nome}
+              </h1>
+              <p className="text-sm text-muted">
+                Pasta · {num(catalogos.length)} {catalogos.length === 1 ? "catálogo" : "catálogos"}
+              </p>
+            </div>
+            {podeEditar && (
+              <>
+                <Button
+                  size="sm"
+                  variant="icon"
+                  aria-label={`Editar a pasta ${pasta.nome}`}
+                  title="Editar pasta"
+                  icon={<IconPencil className="h-4 w-4" />}
+                  onClick={() => {
+                    setErroPasta(null);
+                    setEditorPasta({ aberto: true, pasta: { ...pasta, catalogos: catalogos.map((c) => c.id) } });
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="icon"
+                  aria-label={`Excluir a pasta ${pasta.nome}`}
+                  title="Excluir pasta (os catálogos ficam)"
+                  icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                  onClick={async () => {
+                    if (await confirmar({ titulo: `Excluir a pasta "${pasta.nome}"?`, texto: "Só a pasta sai — os catálogos dela voltam para a grade, como estão.", confirmar: "Excluir", perigo: true }))
+                      void excluirPasta(pasta);
+                  }}
+                />
+              </>
+            )}
+          </div>
+        ) : (
+          <div>
+            <h1 className="text-xl font-bold text-text">Catálogo</h1>
+            <p className="text-sm text-muted">
+              {num(nAgenda)} {nAgenda === 1 ? "catálogo da agenda" : "catálogos da agenda"} · {num(nHistorico)} {nHistorico === 1 ? "histórico de compra" : "históricos de compra"} ·{" "}
+              {num(pastas.length)} {pastas.length === 1 ? "pasta" : "pastas"}
+            </p>
+          </div>
+        )}
         {/* "Exportar modelo" ANTES do Segmented: sem ele (nas visões da padronização), as visões não saem do lugar. */}
         <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
           {papelImporta && !padronizacao && (
@@ -670,12 +865,27 @@ export function CatalogoView({
             options={[
               { value: "catalogo", label: "Catálogo" },
               { value: "lista", label: "Lista de Itens", curto: "Itens" },
-              { value: "unidades", label: "Unidades de medida", curto: "Unid. medida" },
-              { value: "classificacoes", label: "Classificações", curto: "Classif." },
+              // A padronização é GLOBAL — fica fora da tela da pasta.
+              ...(pasta
+                ? []
+                : [
+                    { value: "unidades" as const, label: "Unidades de medida", curto: "Unid. medida" },
+                    { value: "classificacoes" as const, label: "Classificações", curto: "Classif." },
+                  ]),
             ]}
           />
         </div>
       </div>
+
+      {pasta && (
+        <div className="grid grid-cols-2 gap-[var(--gap-block)] sm:grid-cols-3 xl:grid-cols-5">
+          <StatMini label="Catálogos da agenda" value={num(nAgenda)} />
+          <StatMini label="Itens da agenda" value={num(itens.length)} />
+          <StatMini label="Históricos de compra" value={num(nHistorico)} />
+          <StatMini label="Contratos" value={num(contratosHistorico)} />
+          <StatMini label="Valor comprado" value={brl(valorHistorico)} tone="accent" className="col-span-2 sm:col-span-1" />
+        </div>
+      )}
 
       {erroImport && !preview && !padronizacao && (
         <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
@@ -687,84 +897,40 @@ export function CatalogoView({
         <div key={vista} className="animate-cat-morph">
           {vista === "unidades" ? <UnidadesMedidaView podeEditar={pode.configurar} /> : <ClassificacoesView podeEditar={pode.configurar} />}
         </div>
-      ) : catalogos.length === 0 ? (
-        podeEditar || papelImporta ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{addCard}</div>
-        ) : (
-          <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
-            <IconInbox className="h-10 w-10 text-faint" />
-            <p className="text-sm text-muted">Nenhum catálogo ainda.</p>
-          </div>
-        )
+      ) : catalogos.length === 0 && (pasta || pastas.length === 0) && !podeCriar ? (
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+          <IconInbox className="h-10 w-10 text-faint" />
+          <p className="text-sm text-muted">{pasta ? "Nenhum catálogo nesta pasta." : "Nenhum catálogo ainda."}</p>
+        </div>
       ) : (
         <div key={vista} className="animate-cat-morph">
           {vista === "catalogo" ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {catalogos.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex flex-col rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring transition-colors hover:border-accent/40"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-                      <IconLayers className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-semibold text-text" title={c.nome}>
-                        {c.nome}
-                      </h3>
-                      <p className="mt-0.5 text-xs text-muted">
-                        {(() => {
-                          const n = itensPorCatalogo.get(c.id)?.length ?? c.totalItens;
-                          return n === 1 ? "1 item" : `${n} itens`;
-                        })()}
-                        {c.atualizadoEm ? ` · ${dataBR(c.atualizadoEm)}` : ""}
-                      </p>
-                    </div>
-                  </div>
-                  {c.tiposPadrao.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {c.tiposPadrao.map((t) => (
-                        <Badge key={t} tone="blue">
-                          {t}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
-                    <Button variant="secondary" onClick={() => setAbertoId(c.id)}>
-                      Abrir
-                    </Button>
-                    {podeEditar && (
-                      <Button variant="ghost" icon={<IconPencil className="h-4 w-4" />} onClick={() => abrirEdicao(c)}>
-                        Editar
-                      </Button>
-                    )}
-                    {papelImporta && (
-                      <Button
-                        variant="ghost"
-                        aria-label={`Atualizar ${c.nome}`}
-                        title="Atualizar (re-subir mesclando por código)"
-                        icon={<IconUpload className="h-4 w-4" />}
-                        onClick={() => {
-                          setPendingAlvo(c.id);
-                          setLauncher(true);
-                        }}
-                      />
-                    )}
-                    {pode.excluir && (
-                      <Button
-                        variant="ghost"
-                        aria-label={`Excluir ${c.nome}`}
-                        className="ml-auto"
-                        icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-                        onClick={() => excluir(c)}
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
-              {(podeEditar || papelImporta) && addCard}
+            // A grade no padrão dos QUADROS de Tarefas: as PASTAS primeiro (só fora de uma pasta), os catálogos soltos e os "+".
+            <div className={GRADE}>
+              {!pasta &&
+                pastas.map((p) => {
+                  const dela = catalogosPorPasta.get(p.id) ?? [];
+                  const itensAgenda = dela.reduce((t, c) => t + (c.tipo === "agenda" ? (numerosAgenda.get(c.id)?.itens ?? 0) : 0), 0);
+                  return (
+                    <PastaCatalogoCard
+                      key={`p${p.id}`}
+                      pasta={p}
+                      catalogos={dela}
+                      itensAgenda={itensAgenda}
+                      onEditar={
+                        podeEditar
+                          ? () => {
+                              setErroPasta(null);
+                              setEditorPasta({ aberto: true, pasta: { ...p, catalogos: dela.map((c) => c.id) } });
+                            }
+                          : undefined
+                      }
+                      onExcluir={podeEditar ? () => void excluirPasta(p) : undefined}
+                    />
+                  );
+                })}
+              {(pasta ? catalogos : catalogos.filter((c) => c.pastaId == null)).map(cardDoCatalogo)}
+              {cardsNovos}
             </div>
           ) : (
             <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
@@ -805,7 +971,7 @@ export function CatalogoView({
         titulo="Novo catálogo"
         size="md"
         rodape={
-          novoModo === "manual" ? (
+          novoTipo === "agenda" && novoModo === "manual" ? (
             <div className="flex items-center justify-end gap-2">
               <Button variant="ghost" onClick={() => setNovoAberto(false)} disabled={criandoCat}>
                 Cancelar
@@ -818,34 +984,69 @@ export function CatalogoView({
         }
       >
         <div className="space-y-[var(--gap-block)]">
-          {/* Criar à mão = Manipular; importar = Importar — só as que o papel permite (uma só: sem a escolha). */}
-          {podeEditar && papelImporta && (
-            <Segmented<"manual" | "importar">
-              value={novoModo}
-              onChange={(v) => setNovoModo(v)}
-              options={[
-                { value: "manual", label: "Criar manualmente" },
-                { value: "importar", label: "Importar arquivo" },
-              ]}
-            />
+          {/* O TIPO de catálogo: o da agenda (padronização) ou o histórico de compra (exige Importar — vem de arquivo). */}
+          {papelImporta && (
+            <div className="space-y-1.5">
+              <p className="text-[13.5px] font-bold text-text">Tipo de cadastro</p>
+              <Segmented<TipoCatalogo>
+                value={novoTipo}
+                onChange={setNovoTipo}
+                ariaLabel="Tipo de cadastro"
+                options={[
+                  { value: "agenda", label: ROTULO_TIPO_CATALOGO.agenda },
+                  { value: "historico", label: ROTULO_TIPO_CATALOGO.historico },
+                ]}
+              />
+              <p className="text-[12px] text-muted">
+                {novoTipo === "agenda"
+                  ? "Os itens de referência (código, descrição, unidade e tipos de DFD) — a base da padronização."
+                  : "Os contratos e itens comprados, como exportados do sistema de compras — preços praticados por produto."}
+              </p>
+            </div>
           )}
-          {novoModo === "manual" ? (
-            <>
-              <TextField label="Nome do catálogo" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} disabled={criandoCat} placeholder="Ex.: Material de expediente" />
-              <div>
-                <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD padrão</p>
-                <TipoDfdPicker value={novoTipos} onChange={setNovoTipos} disabled={criandoCat} />
-                <p className="mt-1.5 text-[12px] text-muted">Aplicado aos itens que você adicionar depois. O catálogo começa vazio — adicione itens à mão ou importe.</p>
-              </div>
-            </>
-          ) : (
+          {novoTipo === "historico" ? (
             <Dropzone
-              accept=".pdf,.xlsx,.xls"
-              onFile={handleFile}
-              titulo="Solte o catálogo (PDF ou planilha .xlsx)"
-              icon={<IconUpload className="h-7 w-7" />}
-              dica="Extraímos código, descrição e unidade de cada item; você confere antes de gravar."
+              accept=".csv,.xlsx,.xls"
+              onFile={(f) => {
+                setNovoAberto(false);
+                setArquivoHistorico(f);
+              }}
+              titulo="Solte o histórico de compra (.csv ou .xlsx)"
+              icon={<IconCompra className="h-7 w-7" />}
+              dica="O arquivo exportado do sistema de compras (Id Contrato, Id Produto, Descricao Produto, Valor Unitário…). Você confere antes de gravar."
             />
+          ) : (
+            <>
+            {/* Criar à mão = Manipular; importar = Importar — só as que o papel permite (uma só: sem a escolha). */}
+            {podeEditar && papelImporta && (
+              <Segmented<"manual" | "importar">
+                value={novoModo}
+                onChange={(v) => setNovoModo(v)}
+                options={[
+                  { value: "manual", label: "Criar manualmente" },
+                  { value: "importar", label: "Importar arquivo" },
+                ]}
+              />
+            )}
+            {novoModo === "manual" ? (
+              <>
+                <TextField label="Nome do catálogo" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} disabled={criandoCat} placeholder="Ex.: Material de expediente" />
+                <div>
+                  <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD padrão</p>
+                  <TipoDfdPicker value={novoTipos} onChange={setNovoTipos} disabled={criandoCat} />
+                  <p className="mt-1.5 text-[12px] text-muted">Aplicado aos itens que você adicionar depois. O catálogo começa vazio — adicione itens à mão ou importe.</p>
+                </div>
+              </>
+            ) : (
+              <Dropzone
+                accept=".pdf,.xlsx,.xls"
+                onFile={handleFile}
+                titulo="Solte o catálogo (PDF ou planilha .xlsx)"
+                icon={<IconUpload className="h-7 w-7" />}
+                dica="Extraímos código, descrição e unidade de cada item; você confere antes de gravar."
+              />
+            )}
+            </>
           )}
         </div>
       </Modal>
@@ -886,20 +1087,22 @@ export function CatalogoView({
         {preview && (
           <div className="space-y-[var(--gap-block)]">
             <TextField label="Nome do catálogo" value={nomeCat} onChange={(e) => setNomeCat(e.target.value)} disabled={enviando} hint={`Origem: ${preview.fonte.toUpperCase()}`} />
-            <div>
-              <label className="mb-2 block text-[13.5px] font-bold text-text" htmlFor="cat-alvo">
-                Atualizar catálogo existente?
-              </label>
-              <select id="cat-alvo" className={selectCls} value={preview.catalogoId ?? ""} disabled={enviando} onChange={(e) => mudarAlvo(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">Criar novo catálogo</option>
-                {catalogos.map((c) => (
+            <SelectField
+              label="Atualizar catálogo existente?"
+              value={preview.catalogoId ?? ""}
+              disabled={enviando}
+              onChange={(e) => mudarAlvo(e.target.value ? Number(e.target.value) : null)}
+              hint="Ao atualizar, os itens são mesclados por código (descrição/unidade atualizadas) e os tipos já configurados são preservados."
+            >
+              <option value="">Criar novo catálogo{pasta ? ` (na pasta ${pasta.nome})` : ""}</option>
+              {todosCatalogos
+                .filter((c) => c.tipo === "agenda")
+                .map((c) => (
                   <option key={c.id} value={c.id}>
                     Atualizar: {c.nome}
                   </option>
                 ))}
-              </select>
-              <p className="mt-1.5 text-[12px] text-muted">Ao atualizar, os itens são mesclados por código (descrição/unidade atualizadas) e os tipos já configurados são preservados.</p>
-            </div>
+            </SelectField>
             <div>
               <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD padrão (aplicados aos itens novos)</p>
               <TipoDfdPicker value={tiposPadrao} onChange={setTiposPadrao} disabled={enviando} />
@@ -1037,10 +1240,11 @@ export function CatalogoView({
           if (!salvandoCat) setEditandoCat(null);
         }}
         bloqueado={salvandoCat}
-        titulo="Editar catálogo"
+        titulo={editandoCat?.tipo === "historico" ? "Editar histórico de compra" : "Editar catálogo"}
         size="md"
         rodape={
           <div className="flex items-center justify-end gap-2">
+            {erroEdicao && <span className="mr-auto text-xs font-medium text-[var(--danger)]">{erroEdicao}</span>}
             <Button variant="ghost" onClick={() => setEditandoCat(null)}>
               Cancelar
             </Button>
@@ -1051,12 +1255,30 @@ export function CatalogoView({
         }
       >
         <div className="space-y-[var(--gap-block)]">
-          <TextField label="Nome do catálogo" value={editNome} onChange={(e) => setEditNome(e.target.value)} disabled={salvandoCat} />
-          <div>
-            <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD padrão</p>
-            <TipoDfdPicker value={editTipos} onChange={setEditTipos} disabled={salvandoCat} />
-            <p className="mt-1.5 text-[12px] text-muted">Aplicado a novos itens; não altera os tipos já definidos em cada item.</p>
+          <TextField label="Nome" value={editNome} onChange={(e) => setEditNome(e.target.value)} disabled={salvandoCat} />
+          <SelectField label="Pasta" value={editPasta ?? ""} onChange={(e) => setEditPasta(e.target.value ? Number(e.target.value) : null)} disabled={salvandoCat}>
+            <option value="">Sem pasta</option>
+            {pastas.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </SelectField>
+          <div className="space-y-1.5">
+            <CoresPaleta legenda="Cor da capa" valor={editandoCat ? corDoCatalogo(editCor, editandoCat.tipo) : null} onChange={setEditCor} />
+            {editCor && editandoCat && (
+              <button type="button" className="min-h-11 text-[12.5px] font-medium text-accent hover:underline lg:min-h-0" onClick={() => setEditCor(null)}>
+                Usar a cor padrão do tipo ({COR_PADRAO_CATALOGO[editandoCat.tipo]})
+              </button>
+            )}
           </div>
+          {editandoCat?.tipo === "agenda" && (
+            <div>
+              <p className="mb-2 text-[13.5px] font-bold text-text">Tipos de DFD padrão</p>
+              <TipoDfdPicker value={editTipos} onChange={setEditTipos} disabled={salvandoCat} />
+              <p className="mt-1.5 text-[12px] text-muted">Aplicado a novos itens; não altera os tipos já definidos em cada item.</p>
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -1175,6 +1397,32 @@ export function CatalogoView({
       <Modal open={abertoId == null && painelItem != null} onClose={() => setPainelItem(null)} titulo="Detalhe do item" size="lg">
         {abertoId == null && painelItem ? detalheItem(painelItem) : <div />}
       </Modal>
+      {/* Histórico de compra: a importação (prévia + lotes) e a análise de um histórico aberto. */}
+      <ImportarHistorico
+        arquivo={arquivoHistorico}
+        pastas={pastas}
+        pastaInicial={pasta?.id ?? null}
+        onFechar={() => setArquivoHistorico(null)}
+        onConcluido={(id, nome) => {
+          setArquivoHistorico(null);
+          router.refresh();
+          // Abre o histórico recém-gravado (o card chega com a recarga; o banner só precisa do id e do nome).
+          setHistoricoAberto({ id, nome, descricao: null, tiposPadrao: [], totalItens: 0, atualizadoEm: null, tipo: "historico", cor: null, pastaId: pasta?.id ?? null, contratos: 0, produtos: 0, valor: 0 });
+        }}
+      />
+      <HistoricoCompraModal catalogo={historicoAberto} onFechar={() => setHistoricoAberto(null)} podeExportar={pode.exportar} />
+
+      <EditorPastaCatalogo
+        aberto={editorPasta.aberto}
+        inicial={editorPasta.pasta}
+        catalogos={todosCatalogos}
+        pastas={pastas}
+        salvando={salvandoPasta}
+        erro={erroPasta}
+        onFechar={() => setEditorPasta({ aberto: false, pasta: null })}
+        onSalvar={salvarPasta}
+      />
+      {confirmacao}
     </div>
   );
 }

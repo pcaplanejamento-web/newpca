@@ -1,6 +1,7 @@
 import { CatalogoView } from "@/components/CatalogoView";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { getCatalogoItens, listarCatalogos } from "@/lib/catalogo";
+import { listarPastasCatalogo } from "@/lib/catalogo-historico";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,6 @@ export const dynamic = "force-dynamic";
 export default async function CatalogoPage() {
   const r = await acessoPagina("catalogo");
   if (r.bloqueio) return r.bloqueio;
-  const [catalogos, itens] = await Promise.all([listarCatalogos(), getCatalogoItens()]);
-  return <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} />;
+  const [catalogos, itens, pastas] = await Promise.all([listarCatalogos(), getCatalogoItens(), listarPastasCatalogo()]);
+  return <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} pastas={pastas} />;
 }

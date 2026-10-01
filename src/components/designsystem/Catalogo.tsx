@@ -132,6 +132,7 @@ import { KpiStat } from "@/components/KpiStat";
 import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
+import { CatalogoCard, CoresPaleta, PastaCatalogoCard } from "@/components/CatalogoCards";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
@@ -1707,6 +1708,19 @@ function CelulaCopiavelDemo() {
     </div>
   );
 }
+
+/** Demo das cores em círculos (controlado). */
+function CoresPaletaDemo() {
+  const [cor, setCor] = useState<string | null>(null);
+  return <CoresPaleta valor={cor} onChange={setCor} />;
+}
+
+/** Catálogos de exemplo (os cards do Catálogo: agenda, histórico de compra e a pasta). */
+const CATALOGOS_DEMO = [
+  { id: 901, nome: "MATERIAL EXPEDIENTE - 2026", descricao: null, tiposPadrao: ["DFD-O"], totalItens: 185, atualizadoEm: "2026-09-17 10:00:00", tipo: "agenda" as const, cor: null, pastaId: 1, contratos: 0, produtos: 0, valor: 0 },
+  { id: 902, nome: "Histórico de compra 2026", descricao: null, tiposPadrao: [], totalItens: 1130, atualizadoEm: "2026-10-01 09:00:00", tipo: "historico" as const, cor: null, pastaId: 1, contratos: 153, produtos: 868, valor: 185613601.92 },
+  { id: 903, nome: "GÊNEROS ALIMENTÍCIOS – PERECÍVEIS", descricao: null, tiposPadrao: ["DFD-O"], totalItens: 81, atualizadoEm: "2026-09-17 10:00:00", tipo: "agenda" as const, cor: "#9f8fef", pastaId: 1, contratos: 0, produtos: 0, valor: 0 },
+];
 
 /** Demo do seletor de tipos de DFD (conjunto, controlado). */
 function TipoDfdPickerDemo() {
@@ -3813,6 +3827,17 @@ export function Catalogo() {
       <Secao titulo="TipoDfdPicker (conjunto de tipos de DFD — usado no catálogo: envio, massa e item)">
         <div className="max-w-md">
           <TipoDfdPickerDemo />
+        </div>
+      </Secao>
+
+      <Secao titulo="Catálogo — CatalogoCard (o card de um catálogo no MESMO desenho do quadro de Tarefas — CartaoEspaco: capa no degradê da cor + ícone do tipo; Catálogo da Agenda = itens · sem tipo · unidades; Histórico de compra = itens · contratos · valor; menu “…” com as ações do papel) + PastaCatalogoCard (a PASTA de catálogos — o MESMO PastaCartao das pastas de Tarefas; tocar ENTRA na tela da pasta) + CoresPaleta (a cor em círculos)">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
+          <PastaCatalogoCard pasta={{ id: 1, nome: "Compras 2026", cor: "#579dff", ordem: 1 }} catalogos={CATALOGOS_DEMO} itensAgenda={266} />
+          <CatalogoCard catalogo={CATALOGOS_DEMO[0]} agenda={{ itens: 185, semTipo: 4, unidades: 12 }} onAbrir={() => {}} onEditar={() => {}} onAtualizar={() => {}} onExcluir={() => {}} />
+          <CatalogoCard catalogo={CATALOGOS_DEMO[1]} onAbrir={() => {}} onEditar={() => {}} />
+        </div>
+        <div className="mt-4">
+          <CoresPaletaDemo />
         </div>
       </Secao>
 

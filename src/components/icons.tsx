@@ -100,6 +100,7 @@ import {
   BellRing,
   UserPlus,
   Ellipsis,
+  ShoppingCart,
   Circle,
   CircleCheck,
   Keyboard,
@@ -250,6 +251,8 @@ export const IconModelo = LayoutTemplate;
 export const IconPrazo = BellRing;
 export const IconAtribuir = UserPlus;
 export const IconMais = Ellipsis;
+/** Histórico de compra (o tipo de catálogo do que foi comprado). */
+export const IconCompra = ShoppingCart;
 export const IconCirculo = Circle;
 export const IconCirculoCheck = CircleCheck;
 export const IconTeclado = Keyboard;
