@@ -81,7 +81,6 @@ export function AuthForm({
             Esqueci a senha
           </button>
         </div>
-        {captcha.widget}
       </div>
 
       {erro && <ErroAuth onFechar={() => setErro(null)}>{erro}</ErroAuth>}
@@ -95,6 +94,8 @@ export function AuthForm({
       >
         Entrar
       </Button>
+      {/* O captcha logo abaixo, numa área de altura RESERVADA (a do Turnstile): aparecer não empurra nada. */}
+      <div className="mt-3 flex min-h-[65px] items-start justify-center [&>*]:w-full [&>*]:max-w-[300px]">{captcha.widget}</div>
 
       {google && (
         <>
