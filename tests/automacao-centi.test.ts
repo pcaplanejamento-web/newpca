@@ -61,7 +61,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.0.5"), false);
   assert.equal(versaoAtende("1.2.0"), false);
   assert.equal(versaoAtende("1.3.0"), false);
-  assert.equal(versaoAtende("1.3.1"), true);
+  assert.equal(versaoAtende("1.3.1"), false);
+  assert.equal(versaoAtende("1.3.2"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -237,9 +238,12 @@ const docCenti = (seq: string, desc: string, tipo: unknown) => ({
 async function pecasAnexo() {
   const { readFileSync } = await import("node:fs");
   const vm = await import("node:vm");
-  const ctx: { __pcaCentiAnexo?: Record<string, (...a: unknown[]) => unknown> } = {};
+  const ctx: Record<string, Record<string, (...a: unknown[]) => unknown>> = {};
   vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
-  const pecas = ctx.__pcaCentiAnexo ?? {};
+  // O nome da peça leva o MESMO protocolo do centi-main.js (uma cópia antiga na aba nunca é reaproveitada).
+  const p = readFileSync("extensao-centi/centi-main.js", "utf8").match(/const PROTOCOLO = (\d+);/)?.[1];
+  const pecas = ctx[`__pcaCentiAnexo_p${p}`];
+  assert.ok(pecas, "centi-anexo.js e centi-main.js com o mesmo protocolo");
   // O resultado volta por JSON (outro "realm" do vm): compara-se como dado puro.
   return Object.fromEntries(Object.entries(pecas).map(([k, f]) => [k, (...a: unknown[]): J => (typeof f === "function" ? JSON.parse(JSON.stringify(f(...a) ?? null)) : f)]));
 }

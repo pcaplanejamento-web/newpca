@@ -3404,7 +3404,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `BannersMesa` da Mesa, com `contextoBanners` exportado de `mesa-dados.ts`) | a **Análise** ao lado (cada DFD do plano por
   pasta, com o estado: Na fila · Baixando · Salvo · Falhou · Sem planejamento, órgão · entidade). Testes:
   `tests/automacao-centi.test.ts`.
-  **DESTINO Pasta | Protocolo da Centi (extensão 1.3.1, protocolo 5):** em Ajustes → Destino, "Protocolo da Centi" pede o
+  **DESTINO Pasta | Protocolo da Centi (extensão 1.3.2, protocolo 6 — a peça `__pcaCentiAnexo_p<protocolo>` leva o protocolo no nome: uma cópia antiga na aba nunca é reaproveitada):** em Ajustes → Destino, "Protocolo da Centi" pede o
   **Id** (o "Id" do cadastro do protocolo na Centi = o "Id:" da capa) e o **nº** ("156844" ou "156844/2026" — `lerAlvoCenti`)
   + o **tipo do documento** (`OpcoesSaida.tipoDocumento`, padrão `TIPO_DOCUMENTO_DFD`=1039); "Conferir na Centi" mostra o
   protocolo (ação `protocolo`, só leitura). Cada ARQUIVO do plano (separado ou unido) vira UM documento novo, com a

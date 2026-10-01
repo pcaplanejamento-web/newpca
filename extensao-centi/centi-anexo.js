@@ -1,8 +1,11 @@
 // Peças PURAS do ANEXO de PDFs num protocolo da Centi (testadas: tests/automacao-centi.test.ts). Roda na página da Centi
 // ANTES do centi-main.js, que as usa: a ÚNICA gravação permitida é acrescentar UM documento novo ao protocolo que a própria
 // Centi acabou de devolver (load) — o resto do protocolo vai exatamente como veio (o que a tela da Centi faz no Salvar).
+// O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
+// reaproveitada pela nova.
 (() => {
-  if (globalThis.__pcaCentiAnexo) return;
+  const NOME = "__pcaCentiAnexo_p6";
+  if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
   const MODULO_TIPO = 103868;
@@ -161,5 +164,5 @@
     return { sequencial: texto(valor(doc, "Sequencial")), documento: id };
   }
 
-  globalThis.__pcaCentiAnexo = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, MODULO_PROTOCOLO, MODULO_TIPO });
+  globalThis[NOME] = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, MODULO_PROTOCOLO, MODULO_TIPO });
 })();

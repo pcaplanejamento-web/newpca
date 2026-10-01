@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 5;
+  const PROTOCOLO = 6;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -124,7 +124,7 @@
   }
 
   // JSON da API da Centi (load/confirmsave/save): HTTP de erro ou corpo que não é JSON → o motivo, nunca segue às cegas.
-  const A = globalThis.__pcaCentiAnexo;
+  const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
   // `passo` entra no erro (load/confirmsave/save): diz ONDE a Centi recusou.
   async function api(metodo, caminho, corpo, passo) {
     const url = destino(caminho);
@@ -147,6 +147,7 @@
 
   // Só LEITURA: o resumo do protocolo (o "Conferir" da tela).
   async function protocolo(d) {
+    if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
     const erro = A.validarPedido({ ...d, tipo: "1", descricao: "x", arquivo: "x.pdf", pdf: "JVBER" });
     if (erro) return { ok: false, erro };
@@ -156,6 +157,7 @@
   // A ÚNICA gravação: UM documento novo no protocolo conferido. Já anexado (mesma descrição) → não anexa de novo. A Centi
   // pedindo confirmação (confirmsave) → para e mostra a pergunta (nunca confirma sozinha).
   async function anexar(d) {
+    if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
     const erro = A.validarPedido(d);
     if (erro) return { ok: false, erro };
