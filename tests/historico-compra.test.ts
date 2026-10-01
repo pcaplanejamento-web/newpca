@@ -201,6 +201,8 @@ describe("histórico de compra — análise por produto", () => {
     assert.equal(x.atual?.aditivo, 0.8);
     assert.equal(x.menor, 9.55);
     assert.equal(x.maior, 10);
+    assert.equal(x.contratoMenor?.idContrato, r.contratos[1].idContrato, "o contrato do menor valor (com o aditivo)");
+    assert.equal(x.contratoMaior?.idContrato, r.contratos[0].idContrato, "o contrato do maior valor");
     assert.ok(Math.abs((x.medio ?? 0) - 9.775) < 1e-9);
   });
   it("variação entre contratos (a régua da Consolidada) e o rótulo do filtro", () => {

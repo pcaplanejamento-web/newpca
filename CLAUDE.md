@@ -1770,6 +1770,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   dois ou mais = o MENOR somado ao MAIOR (o menor é o ADITIVO sobre o maior — ex.: 8,75 + 0,80 = 9,55). O valor atual do
   PRODUTO = o do contrato assinado por ÚLTIMO (`atual` = `porContrato[0]`; empate na data: o de maior ordem). Menor, maior,
   **preço médio (média simples)** e variação são calculados SÓ ENTRE CONTRATOS DIFERENTES, sobre o valor atual de cada um.
+  Cada produto aponta o CONTRATO do menor e do maior valor (`contratoMenor`/`contratoMaior`; empate = o assinado por
+  último): colunas "Menor valor" · "Contrato (menor)" · "Maior valor" · "Contrato (maior)" (composição base + aditivo,
+  credor e assinatura na dica) e, no detalhe, os selos "Menor valor"/"Maior valor" no cartão do contrato.
   **VARIAÇÃO DE PREÇO (a MESMA régua da Consolidada da Mesa):** `produtosDoHistorico` dá o `variacao` (o
   `coeficienteVariacao` de `itens-consolidados.ts`, agora exportado) e a tabela de Produtos abre com os de MAIOR variação
   primeiro, coluna **Variação** logo após a Descrição (`CelulaVariacao`, filtro por faixa — `rotuloVariacao`: Alta > 50% ·

@@ -413,6 +413,9 @@ export type ProdutoHistorico = {
   /** Menor/maior/médio e variação = ENTRE CONTRATOS DIFERENTES, sobre o valor atual de cada um (`porContrato`). */
   menor: number | null;
   maior: number | null;
+  /** O CONTRATO do menor e do maior valor atual (empate: o assinado por último). */
+  contratoMenor: PrecoContrato | null;
+  contratoMaior: PrecoContrato | null;
   medio: number | null;
   /** Coeficiente de variação dos valores atuais dos contratos (a MESMA régua da visão Consolidada da Mesa —
    * `FAIXAS_VARIACAO`); `null` = menos de 2 contratos com preço. */
@@ -431,7 +434,7 @@ export function produtosDoHistorico(itens: readonly CompraHistorico[], contratos
     let a = m.get(it.codigo);
     if (!a) {
       a = {
-        p: { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, porContrato: [], menor: null, maior: null, medio: null, variacao: null, atual: null },
+        p: { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, porContrato: [], menor: null, maior: null, contratoMenor: null, contratoMaior: null, medio: null, variacao: null, atual: null },
         grupos: new Map(),
         credores: new Set(),
       };
@@ -461,13 +464,21 @@ export function produtosDoHistorico(itens: readonly CompraHistorico[], contratos
     lista.sort((x, y) => (y.data ?? "").localeCompare(x.data ?? "") || y._o - x._o);
     const porContrato = lista.map(({ _o, ...pc }) => pc);
     const valores = porContrato.map((pc) => pc.valor);
+    let contratoMenor: PrecoContrato | null = null;
+    let contratoMaior: PrecoContrato | null = null;
+    for (const pc of porContrato) {
+      if (!contratoMenor || pc.valor < contratoMenor.valor) contratoMenor = pc;
+      if (!contratoMaior || pc.valor > contratoMaior.valor) contratoMaior = pc;
+    }
     out.push({
       ...p,
       contratos: grupos.size,
       credores: credores.size,
       porContrato,
-      menor: valores.length ? Math.min(...valores) : null,
-      maior: valores.length ? Math.max(...valores) : null,
+      menor: contratoMenor?.valor ?? null,
+      maior: contratoMaior?.valor ?? null,
+      contratoMenor,
+      contratoMaior,
       medio: valores.length ? valores.reduce((s, v) => s + v, 0) / valores.length : null,
       variacao: coeficienteVariacao(valores),
       atual: porContrato[0] ?? null,
