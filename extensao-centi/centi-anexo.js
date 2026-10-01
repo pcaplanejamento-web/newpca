@@ -5,6 +5,7 @@
   if (globalThis.__pcaCentiAnexo) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
+  const MODULO_TIPO = 103868;
   const TIPO = "ORM.ObjectsJSON.Transports.ObjectDataJSON, ORM";
   // Listas que o load devolve nulas e a tela da Centi manda vazias no Salvar.
   const LISTAS = ["AtesteControleInterno", "LinksDownloads", "EtapasFluxo"];
@@ -69,14 +70,24 @@
     return doc ? { sequencial: texto(valor(doc, "Sequencial")), documento: texto(valor(doc, "Id")) } : null;
   }
 
-  /** O corpo do confirmsave/save: o protocolo do load SEM MUDANÇA + UM documento novo no fim (o formato da tela da Centi). */
-  function montarSalvar(e, d, agora, guid) {
+  /** O TIPO do documento como a tela da Centi o manda: o registro do tipo (load do módulo de tipos, State 3) — só quando é
+   * mesmo o tipo pedido. */
+  function tipoDoLoad(retorno, tipo) {
+    const t = retorno?.Entity;
+    return t && t.ModuleKey === MODULO_TIPO && Array.isArray(t.Fields) && texto(valor(t, "Id")) === String(tipo) ? t : null;
+  }
+
+  /** O corpo do confirmsave/save: o protocolo do load SEM MUDANÇA + UM documento novo no fim (o formato da tela da Centi).
+   * O tipo: o registro do tipo (`tipoDoLoad` — o que a tela manda); sem ele, o objeto que a Centi já devolve num documento
+   * desse tipo; senão, a referência pelo Id. */
+  function montarSalvar(e, d, agora, guid, tipoCarregado = null) {
     const docs = valor(e, "Documentos");
-    // O tipo: o MESMO objeto que a Centi já devolve num documento desse tipo; senão, a referência pelo Id.
     const igual = docs.find((x) => String(idDe(valor(x, "IdPessoaDocumentoTipo"))) === String(d.tipo));
-    const tipo = igual
-      ? valor(igual, "IdPessoaDocumentoTipo")
-      : { $type: TIPO, Type: 0, State: 10, ModuleKey: 0, Guid: null, Fields: [{ Key: "Id", Value: Number(d.tipo) }], DynamicAttributes: null };
+    const tipo =
+      tipoCarregado ??
+      (igual
+        ? valor(igual, "IdPessoaDocumentoTipo")
+        : { $type: TIPO, Type: 0, State: 10, ModuleKey: 0, Guid: null, Fields: [{ Key: "Id", Value: Number(d.tipo) }], DynamicAttributes: null });
     const quando = dataCenti(agora);
     const f = (Key, Value) => ({ Key, Value });
     const novo = {
@@ -150,5 +161,5 @@
     return { sequencial: texto(valor(doc, "Sequencial")), documento: id };
   }
 
-  globalThis.__pcaCentiAnexo = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, MODULO_PROTOCOLO });
+  globalThis.__pcaCentiAnexo = Object.freeze({ validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, MODULO_PROTOCOLO, MODULO_TIPO });
 })();

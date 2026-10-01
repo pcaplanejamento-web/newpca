@@ -60,7 +60,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.1.0"), false);
   assert.equal(versaoAtende("1.0.5"), false);
   assert.equal(versaoAtende("1.2.0"), false);
-  assert.equal(versaoAtende("1.3.0"), true);
+  assert.equal(versaoAtende("1.3.0"), false);
+  assert.equal(versaoAtende("1.3.1"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -315,4 +316,15 @@ test("anexo: não repete a mesma descrição e só confirma com o documento de v
   assert.match(A.conferirSalvo({ Success: true, Entity: protocoloCenti([]).Entity }, PEDIDO).erro, /não voltou/);
   const zero = protocoloCenti([{ ...docCenti("0", PEDIDO.descricao, null), Fields: [{ Key: "Descricao", Value: PEDIDO.descricao }, { Key: "Id", Value: "0" }] }]);
   assert.match(A.conferirSalvo({ Success: true, Entity: zero.Entity }, PEDIDO).erro, /não voltou/);
+});
+
+test("anexo: o tipo vai como a tela da Centi manda (o registro do tipo carregado)", async () => {
+  const A = await pecasAnexo();
+  const reg = { $type: "x", Type: 0, State: 3, ModuleKey: 103868, Guid: "g", Fields: [{ Key: "Descricao", Value: "DFD" }, { Key: "Id", Value: "1039" }], DynamicAttributes: [] };
+  assert.deepEqual(A.tipoDoLoad({ Entity: reg }, "1039"), reg);
+  assert.equal(A.tipoDoLoad({ Entity: reg }, "77"), null);
+  assert.equal(A.tipoDoLoad({ Entity: { ...reg, ModuleKey: 1 } }, "1039"), null);
+  const corpo = A.montarSalvar(protocoloCenti([]).Entity, PEDIDO, new Date(), "g", reg);
+  const campo = (o: J, k: string): J => o.Fields.find((f: J) => f.Key === k)?.Value;
+  assert.deepEqual(campo(campo(corpo.Object, "Documentos")[0], "IdPessoaDocumentoTipo"), reg);
 });

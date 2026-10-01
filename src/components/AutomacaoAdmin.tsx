@@ -753,6 +753,12 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
     const semSaida = new Set<string>();
     const atual = logado?.entidade ?? null;
     let parar = false;
+    const pararAnexo = (motivo: string | undefined) => {
+      parar = true;
+      setLinhas((ls) =>
+        (ls ?? []).map((x) => (x.estado === "fila" ? { ...x, estado: "falha", erro: `Não emitido — o anexo anterior foi recusado (${motivo ?? "erro"}).` } : x)),
+      );
+    };
     for (const a of plano) {
       if (parar) break;
       const uniao = a.partes.length > 1 ? await novaUniao() : null;
@@ -783,6 +789,11 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
           }
         } catch (e) {
           marcar(t.chave, { estado: "falha", erro: uniao ? "PDF ilegível — não entrou no arquivo unido." : falhaGravar(e, false) });
+          // A Centi recusou o ANEXO: os próximos seriam recusados igual — para o lote (nada de emitir à toa).
+          if (anexando && !uniao) {
+            pararAnexo(falhaGravar(e, false));
+            break;
+          }
         }
       }
       if (uniao && !uniao.vazio) {
@@ -794,6 +805,7 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
         setLinhas((ls) =>
           (ls ?? []).map((x) => (unidas.includes(x.chave) ? { ...x, estado: res.ok ? "ok" : "falha", erro: res.nota } : x)),
         );
+        if (anexando && !res.ok) pararAnexo(res.nota);
       }
     }
     if (zip && !zip.vazio) {

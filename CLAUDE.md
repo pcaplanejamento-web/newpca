@@ -3404,7 +3404,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `BannersMesa` da Mesa, com `contextoBanners` exportado de `mesa-dados.ts`) | a **Análise** ao lado (cada DFD do plano por
   pasta, com o estado: Na fila · Baixando · Salvo · Falhou · Sem planejamento, órgão · entidade). Testes:
   `tests/automacao-centi.test.ts`.
-  **DESTINO Pasta | Protocolo da Centi (extensão 1.3.0, protocolo 4):** em Ajustes → Destino, "Protocolo da Centi" pede o
+  **DESTINO Pasta | Protocolo da Centi (extensão 1.3.1, protocolo 5):** em Ajustes → Destino, "Protocolo da Centi" pede o
   **Id** (o "Id" do cadastro do protocolo na Centi = o "Id:" da capa) e o **nº** ("156844" ou "156844/2026" — `lerAlvoCenti`)
   + o **tipo do documento** (`OpcoesSaida.tipoDocumento`, padrão `TIPO_DOCUMENTO_DFD`=1039); "Conferir na Centi" mostra o
   protocolo (ação `protocolo`, só leitura). Cada ARQUIVO do plano (separado ou unido) vira UM documento novo, com a
@@ -3412,10 +3412,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`centi-anexo.js`, peças puras testadas por `vm`; ação `anexar` do `centi-main.js`): `load?entity=102907&key=<Id>` →
   confere Id + nº (+ ano) → a mesma descrição já no protocolo = não anexa de novo → `montarSalvar` = o protocolo do load
   SEM mudança (só as listas nulas viram [] — como a tela da Centi) + UM documento (State 0, `IdGed {FileName, Data}` = o
-  PDF em base64, o tipo = o mesmo objeto de um documento desse tipo já no protocolo, senão a referência pelo Id) →
+  PDF em base64, o tipo = o REGISTRO do tipo — `load?entity=103868&key=<tipo>`, `tipoDoLoad`, como a tela da Centi manda; sem ele, o objeto de um documento desse tipo já no protocolo, senão a referência pelo Id) →
   `confirmsave` (`Confirm: true` = para e mostra a pergunta — nunca confirma sozinha) → `save` → só vale com `Success` e o
   documento de volta com Id real (`conferirSalvo`). O sistema nunca manda o objeto do protocolo; o protocolo é conferido
-  ANTES de emitir qualquer DFD e o ADM confirma (`useConfirmacao`) antes de começar.
+  ANTES de emitir qualquer DFD e o ADM confirma (`useConfirmacao`) antes de começar; a 1ª recusa do anexo PARA o lote (o erro diz o passo — load/confirmsave/save).
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
