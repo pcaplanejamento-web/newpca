@@ -1,9 +1,16 @@
 // Serviço da extensão: leva o pedido da aba Automação à aba da Centi aberta (onde está a sessão) e devolve o resultado.
 const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br", "http://localhost:3000"];
 
+// A Centi faz login POR ABA: usa a aba que já tem a sessão (a que fez alguma chamada à API depois do login).
 async function abaCenti() {
   const abas = await chrome.tabs.query({ url: "https://rioverde.centi.com.br/*" });
-  return abas.find((a) => a.active) ?? abas[0] ?? null;
+  for (const a of abas) {
+    try {
+      const r = await chrome.tabs.sendMessage(a.id, { acao: "estado" });
+      if (r?.logado) return a;
+    } catch {}
+  }
+  return abas[0] ?? null;
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {

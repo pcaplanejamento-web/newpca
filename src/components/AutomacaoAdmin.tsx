@@ -27,8 +27,8 @@ import { Switch } from "./Switch";
 
 const CHAVE_CONFIG = "automacao:centi";
 
-type Resposta = { ok: boolean; erro?: string; pdf?: string; logado?: boolean; captcha?: boolean };
-type Linha = { id: string; estado: "fila" | "baixando" | "ok" | "falha"; erro?: string };
+type Resposta = { ok: boolean; erro?: string; pdf?: string; logado?: boolean; captcha?: boolean; amostra?: string };
+type Linha = { id: string; estado: "fila" | "baixando" | "ok" | "falha"; erro?: string; amostra?: string };
 type Ext = { versao: string } | null;
 
 /** Conversa com a extensão pela ponte da página (window.postMessage). */
@@ -151,7 +151,7 @@ export function AutomacaoAdmin() {
       marcar(id, { estado: "baixando" });
       const r = await pedir("emitir", pedidoEmitirDfd(id, cfg, new Date()), 150_000);
       if (!r.ok || !r.pdf) {
-        marcar(id, { estado: "falha", erro: r.erro ?? "Falha ao emitir." });
+        marcar(id, { estado: "falha", erro: r.erro ?? "Falha ao emitir.", amostra: r.amostra });
         continue;
       }
       try {
@@ -257,6 +257,7 @@ export function AutomacaoAdmin() {
                   <span className="min-w-28 font-semibold text-text">Planej. {l.id}</span>
                   <EstadoPonto cor={COR[l.estado]} rotulo={ROTULO[l.estado]} />
                   {l.erro && <span className="text-muted">{l.erro}</span>}
+                  {l.amostra && <code className="w-full break-all rounded bg-surface-2 p-2 text-[12px] text-text-2">{l.amostra}</code>}
                 </li>
               ))}
             </ul>

@@ -96,11 +96,14 @@
     const bytes = new Uint8Array(x.response || new ArrayBuffer(0));
     if (x.status >= 400) return { ok: false, erro: `A Centi respondeu ${x.status}.` };
     if (ehPdf(bytes)) return { ok: true, pdf: emBase64(bytes) };
+    const texto = new TextDecoder().decode(bytes);
+    // Diagnóstico: o começo da resposta (sem tokens) vai junto da falha, para ajustar o formato.
+    const amostra = `${x.getResponseHeader("content-type") || "?"} · ${texto.slice(0, 300).replace(/"(Token|RefreshToken|Authorization)"\s*:\s*"[^"]*"/gi, '"$1":"***"')}`;
     let json;
     try {
-      json = JSON.parse(new TextDecoder().decode(bytes));
+      json = JSON.parse(texto);
     } catch {
-      return { ok: false, erro: "Resposta da Centi sem PDF." };
+      return { ok: false, erro: "Resposta da Centi sem PDF.", amostra };
     }
     if (json && typeof json === "object" && json.Captcha) return { ok: false, erro: "A Centi pediu CAPTCHA — emita este pela tela da Centi.", captcha: true };
     const achado = acharNoJson(json);
@@ -115,7 +118,7 @@
     return {
       ok: false,
       erro: typeof msg === "string" && msg ? msg : "Resposta da Centi sem PDF.",
-      chaves: json && typeof json === "object" ? Object.keys(json).slice(0, 15) : [],
+      amostra,
     };
   }
 
