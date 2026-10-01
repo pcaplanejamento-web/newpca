@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 12;
+  const PROTOCOLO = 13;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -237,8 +237,80 @@
     return j;
   }
 
+  // O CLIENTE HTTP DA PRÓPRIA CENTI (a instância do axios em ".../restauth" que a tela usa no load/confirmsave/save):
+  // achado pelo FORMATO entre os módulos do webpack da página (nunca pelo número do módulo, que muda a cada publicação da
+  // Centi). Por ele o pedido sai EXATAMENTE como o da tela — token, cabeçalhos, proteção anti-robô — e, como a tela faz
+  // (a função "E" do código dela), o token novo de cada resposta passa a valer em todos os clientes dela.
+  let clienteCenti;
+  function acharClienteCenti() {
+    if (clienteCenti !== undefined) return clienteCenti;
+    clienteCenti = null;
+    try {
+      const nome = Object.keys(window).find((k) => k.startsWith("webpackJsonp") && Array.isArray(window[k]));
+      if (!nome) return null;
+      let req = null;
+      const id = `__pcaCenti${Date.now()}`;
+      window[nome].push([[id], { [id]: (_m, _e, r) => (req = r) }, [[id]]]);
+      if (!req?.c) return null;
+      const instancias = new Set();
+      for (const mod of Object.values(req.c)) {
+        const ex = mod?.exports;
+        if (!ex || (typeof ex !== "object" && typeof ex !== "function")) continue;
+        for (const v of [ex, ...Object.values(ex)]) {
+          if (typeof v === "function" && v.defaults && v.interceptors && typeof v.post === "function") instancias.add(v);
+        }
+      }
+      const todas = [...instancias];
+      const daApi = todas.filter((v) => /\/restauth\/?$/.test(String(v.defaults.baseURL || "")));
+      // A da tela (load/confirmsave/save) é a sem tempo-limite próprio; as demais recebem o token junto.
+      const principal = daApi.find((v) => !v.defaults.timeout) ?? daApi[0] ?? null;
+      if (principal) clienteCenti = { principal, todas: todas.filter((v) => /\/(restauth|vicenti)\/?$/.test(String(v.defaults.baseURL || ""))) };
+    } catch {
+      clienteCenti = null;
+    }
+    return clienteCenti;
+  }
+  function tokenNosClientes(cli, h) {
+    const ler = (n) => (h && (typeof h.get === "function" ? h.get(n) : h[n])) || null;
+    const token = ler("token");
+    const refresh = ler("refreshtoken");
+    for (const v of cli.todas) {
+      const c = v.defaults.headers.common;
+      if (token) {
+        c.token = token;
+        c.Authorization = `Bearer ${token}`;
+      }
+      if (refresh) c.refreshtoken = refresh;
+    }
+    trocarToken(ler);
+  }
+  /** Um pedido pelo cliente da Centi: { status, j } (j = o JSON da resposta), ou null sem o cliente. */
+  async function pelaCenti(metodo, caminho, corpo) {
+    const cli = acharClienteCenti();
+    if (!cli) return null;
+    const rel = `/${String(caminho).replace(/^\/?restauth\//, "")}`;
+    try {
+      const r = metodo === "GET" ? await cli.principal.get(rel) : await cli.principal.post(rel, corpo);
+      tokenNosClientes(cli, r.headers);
+      return { status: r.status, j: r.data };
+    } catch (e) {
+      const r = e?.response;
+      if (!r) throw new Error(`Sem resposta da Centi (${e?.message || "rede"}).`);
+      tokenNosClientes(cli, r.headers);
+      return { status: r.status, j: r.data };
+    }
+  }
+  /** A API da Centi: pelo cliente da própria tela; sem ele, pelo envio da extensão. */
+  async function apiCenti(metodo, caminho, corpo, passo, salvar = false, bruto = caminho) {
+    const r = await pelaCenti(metodo, caminho, corpo);
+    if (!r) return api(metodo, caminho, corpo, passo, salvar, bruto);
+    const j = r.j && typeof r.j === "object" ? r.j : null;
+    if (r.status >= 400 || !j) throw new Error(`A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."} (pelo cliente da Centi)`);
+    return j;
+  }
+
   async function abrirProtocolo(d) {
-    const r = await api("GET", `restauth/load?entity=${A.MODULO_PROTOCOLO}&key=${d.id}`, null, "load do protocolo");
+    const r = await apiCenti("GET", `restauth/load?entity=${A.MODULO_PROTOCOLO}&key=${d.id}`, null, "load do protocolo");
     const c = A.conferirProtocolo(r, d);
     if (c.erro) throw new Error(c.erro);
     return c.entidade;
@@ -263,16 +335,16 @@
     // O TIPO primeiro e o PROTOCOLO por ÚLTIMO, logo antes de salvar: a Centi guarda no servidor o objeto aberto pelo
     // load — um load do tipo DEPOIS trocava o protocolo aberto e o salvar dava "Erro inesperado" (500). A tela faz igual:
     // abre o protocolo e busca o tipo por referência, sem outro load.
-    const tipo = await api("GET", `restauth/load?entity=${A.MODULO_TIPO}&key=${d.tipo}`, null, "load do tipo")
+    const tipo = await apiCenti("GET", `restauth/load?entity=${A.MODULO_TIPO}&key=${d.tipo}`, null, "load do tipo")
       .then((t) => A.tipoDoLoad(t, d.tipo))
       .catch(() => null);
     const e = await abrirProtocolo(d);
     const ja = A.jaAnexado(e, d.descricao);
     if (ja) return { ok: true, jaAnexado: true, ...ja };
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
-    const conf = await api("POST", "restauth/confirmsave", corpo, "confirmsave", true, urlsSalvar.confirmsave || "restauth/confirmsave");
+    const conf = await apiCenti("POST", "restauth/confirmsave", corpo, "confirmsave", true, urlsSalvar.confirmsave || "restauth/confirmsave");
     if (conf.Confirm === true) return { ok: false, erro: `A Centi pede confirmação: ${A.mensagens(conf.Message) || "sem mensagem"} — anexe pela tela da Centi.` };
-    const salvo = A.conferirSalvo(await api("POST", "restauth/save", corpo, "save", true, urlsSalvar.save || "restauth/save"), d);
+    const salvo = A.conferirSalvo(await apiCenti("POST", "restauth/save", corpo, "save", true, urlsSalvar.save || "restauth/save"), d);
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
   }
 
