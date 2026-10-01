@@ -61,3 +61,22 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.0.5"), false);
   assert.equal(versaoAtende("1.2.0"), true);
 });
+
+test("pastas e tarefas por protocolo", async () => {
+  const { nomePastaProtocolo, nomeSeguro, tarefasDosProtocolos, tarefasDosIds } = await import("../src/lib/automacao-centi-core.ts");
+  assert.equal(nomePastaProtocolo({ numero: "144756/2026", assunto: "INCLUSÃO: PCA 2027?", interessado: "X" }), "144756-2026 - INCLUSÃO- PCA 2027");
+  assert.equal(nomePastaProtocolo({ numero: "1/2026", assunto: " ", interessado: "SEC. SAÚDE" }), "1-2026 - SEC. SAÚDE");
+  assert.equal(nomePastaProtocolo({ numero: "1/2026", assunto: null, interessado: null }), "1-2026");
+  assert.equal(nomeSeguro("a".repeat(200)).length, 120);
+  const p = (id: number, numero: string, dfds: { numero: string; planejamento: string | null }[]) => ({ id, numero, idExterno: null, assunto: "A", interessado: null, anoPca: 2027, pca: null, dfds });
+  const { tarefas, semPlanejamento } = tarefasDosProtocolos([
+    p(1, "10/2026", [{ numero: "531", planejamento: "640" }, { numero: "532", planejamento: null }, { numero: "533", planejamento: "0640" }]),
+    p(2, "10/2026", [{ numero: "700", planejamento: "811" }]),
+  ]);
+  assert.deepEqual(tarefas.map((t) => [t.id, t.pasta, t.arquivo]), [
+    ["640", "10-2026 - A", "DFD 531 - Planejamento 640.pdf"],
+    ["811", "10-2026 - A (2)", "DFD 700 - Planejamento 811.pdf"],
+  ]);
+  assert.deepEqual(semPlanejamento, [{ protocolo: "10/2026", dfd: "532" }]);
+  assert.deepEqual(tarefasDosIds(["5"]), [{ chave: "5", id: "5", arquivo: "DFD - Planejamento 5.pdf", pasta: null }]);
+});

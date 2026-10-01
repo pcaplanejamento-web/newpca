@@ -125,6 +125,66 @@ export function nomeArquivoDfd(id: string): string {
   return `DFD - Planejamento ${id}.pdf`;
 }
 
+/** Um protocolo do sistema com os DFDs dele (a seleção "Por protocolo"). */
+export type ProtocoloAutomacao = {
+  id: number;
+  numero: string;
+  idExterno: string | null;
+  assunto: string | null;
+  interessado: string | null;
+  anoPca: number | null;
+  pca: string | null;
+  dfds: { numero: string; planejamento: string | null }[];
+};
+
+/** Um arquivo a baixar: o Id da Centi (= nº de planejamento), o nome do arquivo e a PASTA (subpasta do protocolo; null =
+ * a raiz escolhida). */
+export type TarefaCenti = { chave: string; id: string; arquivo: string; pasta: string | null };
+
+export const MAX_NOME_PASTA = 120;
+const PROIBIDOS = /[\\/:*?"<>|]+/g;
+
+/** Nome seguro para arquivo/pasta em qualquer sistema (sem \ / : * ? " < > |, sem ponto/espaço no fim). */
+export function nomeSeguro(texto: string, max = MAX_NOME_PASTA): string {
+  const t = texto.replace(/\p{Cc}/gu, " ").replace(PROIBIDOS, "-").replace(/\s+/g, " ").trim();
+  return t.slice(0, max).replace(/[\s.-]+$/, "").trim();
+}
+
+/** A pasta do protocolo: "Nº do protocolo - nome" (o nome = o assunto, senão o interessado; "/" do número vira "-"). */
+export function nomePastaProtocolo(p: Pick<ProtocoloAutomacao, "numero" | "assunto" | "interessado">): string {
+  const nome = (p.assunto ?? "").trim() || (p.interessado ?? "").trim();
+  return nomeSeguro(nome ? `${p.numero} - ${nome}` : p.numero) || "Protocolo";
+}
+
+/** As tarefas dos protocolos escolhidos: uma por DFD com planejamento (sem planejamento = `semPlanejamento`, a Centi não
+ * acha), na pasta do protocolo; o MESMO planejamento duas vezes no mesmo protocolo vira um arquivo só. */
+export function tarefasDosProtocolos(protos: ProtocoloAutomacao[]): { tarefas: TarefaCenti[]; semPlanejamento: { protocolo: string; dfd: string }[] } {
+  const tarefas: TarefaCenti[] = [];
+  const semPlanejamento: { protocolo: string; dfd: string }[] = [];
+  const pastas = new Set<string>();
+  for (const p of protos) {
+    let pasta = nomePastaProtocolo(p);
+    // Dois protocolos com o mesmo nome de pasta (raro) não se misturam.
+    if (pastas.has(pasta)) pasta = nomeSeguro(`${pasta} (${p.id})`);
+    pastas.add(pasta);
+    const vistos = new Set<string>();
+    for (const d of p.dfds) {
+      const id = (d.planejamento ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+      if (!id || id === "0") {
+        semPlanejamento.push({ protocolo: p.numero, dfd: d.numero });
+        continue;
+      }
+      if (vistos.has(id)) continue;
+      vistos.add(id);
+      tarefas.push({ chave: `${p.id}:${id}`, id, arquivo: `${nomeSeguro(`DFD ${d.numero} - Planejamento ${id}`, 150)}.pdf`, pasta });
+    }
+  }
+  return { tarefas, semPlanejamento };
+}
+
+/** As tarefas dos Ids digitados (na raiz da pasta escolhida). */
+export const tarefasDosIds = (ids: string[]): TarefaCenti[] => ids.map((id) => ({ chave: id, id, arquivo: nomeArquivoDfd(id), pasta: null }));
+
 /** A maior de duas versões "a.b.c". */
 export function maiorVersao(a: string, b: string): string {
   const pa = a.split(".").map(Number);

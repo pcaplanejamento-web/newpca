@@ -3381,7 +3381,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   devolve `{File:{Key, FileName}}` → o PDF é buscado pela chave em `caminhosDoArquivo`/`linkDaResposta`; aceita também PDF
   cru, base64 "JVBER…", gzip "H4sI…" e bytes; falha mostra o `esqueletoCenti`, sem dados/tokens), `lerIdsCenti`,
   `lerConfigCenti`, `VERSAO_EXTENSAO_CENTI` (a MÍNIMA aceita) + `versaoAtende`. Nada entra na Mesa nem é gravado na Centi;
-  nenhuma senha no sistema. Testes: `tests/automacao-centi.test.ts`.
+  nenhuma senha no sistema. **Por protocolo** (padrão; `Segmented` Por protocolo | Por Id): os protocolos do sistema numa
+  `DataTable` com seleção (loader `protocolosParaAutomacao`, `automacao.ts` — todos, com os planejamentos dos DFDs) → para
+  cada um, em sequência, a SUBPASTA "Nº do protocolo - assunto" (senão o interessado; `nomePastaProtocolo`/`nomeSeguro`,
+  `getDirectoryHandle`) com os PDFs "DFD N - Planejamento P.pdf" (`tarefasDosProtocolos`: DFD sem planejamento é pulado e
+  avisado; planejamento repetido no protocolo = um arquivo; pasta repetida ganha "(id)"); sem o seletor de pasta, Downloads
+  com o nome da pasta à frente. Tela em largura total: Baixar DFDs | coluna Opções + Andamento por pasta. Testes:
+  `tests/automacao-centi.test.ts`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
