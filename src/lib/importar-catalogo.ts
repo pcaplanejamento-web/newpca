@@ -12,7 +12,7 @@ const LOTE = 200; // itens por request no cliente (o servidor aceita até 1000)
 const TENTATIVAS = 3;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function postCatalogo(body: unknown): Promise<{ catalogoId?: number }> {
+export async function postCatalogo(body: unknown): Promise<{ catalogoId?: number }> {
   let ultimo: Error | null = null;
   for (let t = 0; t < TENTATIVAS; t++) {
     let res: Response;
@@ -47,7 +47,7 @@ async function postCatalogo(body: unknown): Promise<{ catalogoId?: number }> {
 
 /** Desfaz o catálogo CRIADO por esta importação que falhou no meio (`?origem=desfazer`: basta o Importar — o servidor
  * confere que foi esta pessoa quem o criou agora há pouco). */
-async function apagarCatalogo(id: number): Promise<void> {
+export async function apagarCatalogo(id: number): Promise<void> {
   try {
     await fetch(`/api/catalogo/${id}?origem=desfazer`, { method: "DELETE" });
   } catch {
@@ -61,11 +61,12 @@ export type CatalogoMeta = {
   tiposPadrao: string[];
   excluirItens?: number[]; // ids de itens de OUTROS catálogos a remover (conflitos "substituir")
   compartilharItens?: number[]; // ids de itens EXISTENTES (idênticos) a compartilhar neste catálogo
+  pastaId?: number | null; // a pasta do catálogo NOVO
 };
 
-/** Cria um catálogo VAZIO (manual) — só nome + tipos. Devolve o id. */
-export async function criarCatalogoVazio(nome: string, tiposPadrao: string[]): Promise<number> {
-  const j = await postCatalogo({ mode: "criar-catalogo", nome, tiposPadrao });
+/** Cria um catálogo VAZIO (manual) — só nome + tipos (+ a pasta). Devolve o id. */
+export async function criarCatalogoVazio(nome: string, tiposPadrao: string[], pastaId: number | null = null): Promise<number> {
+  const j = await postCatalogo({ mode: "criar-catalogo", nome, tiposPadrao, pastaId });
   return Number(j.catalogoId);
 }
 
@@ -84,6 +85,7 @@ export async function enviarCatalogoEmLotes(
     rows: itens.slice(0, LOTE),
     excluirItens: meta.excluirItens ?? [], // resolvidos só no 1º lote (libera os códigos)
     compartilharItens: meta.compartilharItens ?? [], // idênticos compartilhados no destino
+    pastaId: meta.pastaId ?? null,
   });
   const catalogoId = Number(j.catalogoId);
   onLote?.(Math.min(LOTE, total), total);

@@ -808,6 +808,25 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual({ ...r }, { t: null, w: 0, v: null, s: 0 });
   });
 
+  it("0074 catálogo: os catálogos atuais viram 'agenda' (sem pasta, cor do tipo); pastas e histórico de compra nascem vazios", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0074")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("INSERT INTO catalogos (id, nome) VALUES (9741, 'Material de expediente')");
+    for (const arq of arquivos.filter((f) => f >= "0074")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    const r = a.prepare("SELECT tipo AS t, cor AS c, pasta_id AS p FROM catalogos WHERE id = 9741").get() as Record<string, unknown>;
+    assert.deepEqual({ ...r }, { t: "agenda", c: null, p: null });
+    a.exec("INSERT INTO catalogo_pastas (id, nome) VALUES (1, 'P')");
+    a.exec("UPDATE catalogos SET pasta_id = 1 WHERE id = 9741");
+    a.exec("INSERT INTO catalogo_contratos (catalogo_id, id_contrato) VALUES (9741, '1')");
+    assert.throws(() => a.exec("INSERT INTO catalogo_contratos (catalogo_id, id_contrato) VALUES (9741, '1')"), "um contrato por id no catálogo");
+    a.exec("INSERT INTO catalogo_compras (catalogo_id, ordem, id_contrato, codigo, descricao) VALUES (9741, 0, '1', '12', 'X')");
+    a.exec("DELETE FROM catalogo_pastas WHERE id = 1");
+    assert.equal((a.prepare("SELECT pasta_id AS p FROM catalogos WHERE id = 9741").get() as { p: null }).p, null, "excluir a pasta tira só a pasta");
+    a.exec("DELETE FROM catalogos WHERE id = 9741");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM catalogo_compras").get() as { n: number }).n, 0, "o histórico cai com o catálogo");
+  });
+
   it("0070 cargos: semeia os cargos já informados (sem repetir, sem caixa) e o nome é único sem caixa", () => {
     const a = new DatabaseSync(":memory:");
     const antes = arquivos.filter((f) => f < "0070");

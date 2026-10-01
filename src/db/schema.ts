@@ -583,15 +583,30 @@ export const pcaItens = sqliteTable(
  * a comparação futura contra os itens dos DFDs. `tipos_padrao` = tipos de DFD default
  * aplicados no envio; cada item guarda os seus em `tipos` (JSON de DFD-S/R/O/E).
  */
+/** PASTAS de catálogos (migração `0074`) — GLOBAIS como o catálogo; excluir a pasta só a tira (set null). */
+export const catalogoPastas = sqliteTable("catalogo_pastas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  nome: text("nome").notNull(),
+  cor: text("cor").notNull().default("#2563EB"),
+  ordem: integer("ordem").notNull().default(0),
+  criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 export const catalogos = sqliteTable("catalogos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),
   descricao: text("descricao"),
   tiposPadrao: text("tipos_padrao").notNull().default("[]"), // JSON string[] de tipos de DFD
   totalItens: integer("total_itens").notNull().default(0),
+  // `0074`: 'agenda' (Catálogo da Agenda) | 'historico' (Histórico de compra); a cor da capa (NULL = a do tipo); a pasta.
+  tipo: text("tipo").notNull().default("agenda"),
+  cor: text("cor"),
+  pastaId: integer("pasta_id").references(() => catalogoPastas.id, { onDelete: "set null" }),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => [index("catalogos_pasta_idx").on(t.pastaId)]);
 
 /**
  * Item de um catálogo. `codigo` é normalizado (só dígitos) e ÚNICO GLOBAL (índice
@@ -622,6 +637,67 @@ export const catalogoItens = sqliteTable(
     index("catalogo_itens_catalogo_idx").on(t.catalogoId),
     uniqueIndex("catalogo_itens_codigo_uq").on(t.codigo),
   ],
+);
+
+/**
+ * HISTÓRICO DE COMPRA (migração `0074`): o CONTRATO (um por "Id Contrato" do arquivo exportado do sistema de compras) e
+ * os ITENS comprados. O mesmo produto aparece em vários contratos (o `codigo` NÃO é único — fica fora da unicidade
+ * global dos itens da agenda). Os itens apontam o contrato pelo id EXTERNO (`id_contrato`) dentro do catálogo.
+ */
+export const catalogoContratos = sqliteTable(
+  "catalogo_contratos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    catalogoId: integer("catalogo_id")
+      .notNull()
+      .references(() => catalogos.id, { onDelete: "cascade" }),
+    idContrato: text("id_contrato").notNull(),
+    numeroContrato: text("numero_contrato"),
+    idLicitacao: text("id_licitacao"),
+    numeroLicitacao: text("numero_licitacao"),
+    orgao: text("orgao"),
+    unidadeGestora: text("unidade_gestora"),
+    credor: text("credor"),
+    valorContrato: real("valor_contrato"),
+    dataAssinatura: text("data_assinatura"), // AAAA-MM-DD
+    dataPublicacao: text("data_publicacao"),
+    modalidade: text("modalidade"),
+    protocolo: text("protocolo"),
+    objeto: text("objeto"),
+    natureza: text("natureza"),
+    detalhamento: text("detalhamento"),
+  },
+  (t) => [uniqueIndex("catalogo_contratos_uq").on(t.catalogoId, t.idContrato)],
+);
+
+export const catalogoCompras = sqliteTable(
+  "catalogo_compras",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    catalogoId: integer("catalogo_id")
+      .notNull()
+      .references(() => catalogos.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull(),
+    idContrato: text("id_contrato").notNull(),
+    processo: text("processo"),
+    codigo: text("codigo").notNull(), // "Id Produto" só dígitos — o código do item (o mesmo dos DFDs)
+    sequencial: integer("sequencial"),
+    descricao: text("descricao").notNull(),
+    qtdContratada: real("qtd_contratada"),
+    qtdAditada: real("qtd_aditada"),
+    qtdEmpenhada: real("qtd_empenhada"),
+    qtdOfEmpenhar: real("qtd_of_empenhar"),
+    saldoEmpenhar: real("saldo_empenhar"),
+    valorUnitario: real("valor_unitario"),
+    valorContratado: real("valor_contratado"),
+    valorEmpenhado: real("valor_empenhado"),
+    saldoValorEmpenhar: real("saldo_valor_empenhar"),
+    qtdLiquidada: real("qtd_liquidada"),
+    qtdLiquidadaAnulada: real("qtd_liquidada_anulada"),
+    qtdEmpenhadaAnulada: real("qtd_empenhada_anulada"),
+    saldoLiquidar: real("saldo_liquidar"),
+  },
+  (t) => [index("catalogo_compras_cat_idx").on(t.catalogoId, t.ordem), index("catalogo_compras_codigo_idx").on(t.codigo)],
 );
 
 /**

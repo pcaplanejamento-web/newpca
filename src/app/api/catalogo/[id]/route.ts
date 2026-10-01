@@ -2,12 +2,13 @@ import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { criadoPorImportacaoRecente, registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { atualizarCatalogo, excluirCatalogo, getCatalogo } from "@/lib/catalogo";
+import { getPastaCatalogo } from "@/lib/catalogo-historico";
 import { patchCatalogoSchema } from "@/lib/catalogo-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-/** Edita (nome/tipos padrão) ou EXCLUI um catálogo — só editor. Excluir apaga os itens. */
+/** Edita (nome/tipos padrão/cor/pasta) ou EXCLUI um catálogo — só editor. Excluir apaga os itens. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const a = await exigirAcesso("catalogo", "manipular");
   if ("erro" in a) return a.erro;
@@ -17,12 +18,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("resp" in p) return p.resp;
   const antes = await getCatalogo(id);
   if (!antes) return erro("Catálogo não encontrado.", 404);
-  await atualizarCatalogo(id, p.data);
+  if (p.data.pastaId != null && !(await getPastaCatalogo(p.data.pastaId))) return erro("Pasta não encontrada.", 404);
+  // Os tipos de DFD padrão só existem na agenda (o histórico registra o que foi comprado).
+  const campos = antes.tipo === "agenda" ? p.data : { ...p.data, tiposPadrao: undefined };
+  await atualizarCatalogo(id, campos);
   const dd = diffCampos(
     antes as Record<string, unknown>,
-    p.data as Record<string, unknown>,
-    (["nome", "tiposPadrao"] as const).filter((c) => p.data[c] !== undefined),
-    { nome: "nome", tiposPadrao: "tipos padrão" },
+    campos as Record<string, unknown>,
+    (["nome", "tiposPadrao", "cor", "pastaId"] as const).filter((c) => campos[c] !== undefined),
+    { nome: "nome", tiposPadrao: "tipos padrão", cor: "cor", pastaId: "pasta" },
   );
   await registrarAuditoria({ usuario: a.u, acao: "editar", entidade: "catalogo", entidadeId: id, resumo: `Catálogo "${antes.nome}": ${dd.resumo || "editado"}`, antes: dd.antes, depois: dd.depois });
   return ok();

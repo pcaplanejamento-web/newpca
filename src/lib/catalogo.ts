@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
 import { catalogoItens, catalogos } from "@/db/schema";
+import { comandosApagarHistorico, consultaIndicadoresHistorico } from "./catalogo-historico-sql";
 import { type CatalogoRef, type ConferenciaCompacta, type ConferenciaItem, conferirItem } from "./catalogo-conferencia";
 import { consultaEntradasCatalogo } from "./catalogo-sql";
 import { comCatalogo, resolverRemocao } from "./catalogo-membros";
@@ -7,6 +8,7 @@ import { type CatalogoItemImport, normalizarTipos } from "./catalogo-validation"
 import { getDb } from "./db";
 import { normalizarCodigo } from "./parse-catalogo-comum";
 import { tipoCurtoDfd } from "./parse-dfd-comum";
+import { type TipoCatalogo, tipoCatalogo } from "./historico-compra-core";
 
 /**
  * Acesso a dados do CATÁLOGO de produtos. Base GLOBAL isolada (sem repartição/grupo,
@@ -49,22 +51,48 @@ export type CatalogoResumo = {
   tiposPadrao: string[];
   totalItens: number;
   atualizadoEm: string | null;
+  /** `0074`: Catálogo da Agenda | Histórico de compra; a cor da capa (null = a do tipo); a pasta. */
+  tipo: TipoCatalogo;
+  cor: string | null;
+  pastaId: number | null;
+  /** Só no histórico: contratos, produtos distintos e o valor contratado (Σ itens). */
+  contratos: number;
+  produtos: number;
+  valor: number;
 };
 
-/** Lista os catálogos (sem itens) — o mais recente primeiro. */
+/** Lista os catálogos (sem itens) — o mais recente primeiro — com os números do histórico (uma consulta agregada). */
 export async function listarCatalogos(): Promise<CatalogoResumo[]> {
-  const linhas = await getDb()
-    .select({
-      id: catalogos.id,
-      nome: catalogos.nome,
-      descricao: catalogos.descricao,
-      tiposPadrao: catalogos.tiposPadrao,
-      totalItens: catalogos.totalItens,
-      atualizadoEm: catalogos.atualizadoEm,
-    })
-    .from(catalogos)
-    .orderBy(desc(catalogos.atualizadoEm), desc(catalogos.id));
-  return linhas.map((l) => ({ ...l, tiposPadrao: parseTipos(l.tiposPadrao) }));
+  const db = getDb();
+  const [linhas, hist] = await Promise.all([
+    db
+      .select({
+        id: catalogos.id,
+        nome: catalogos.nome,
+        descricao: catalogos.descricao,
+        tiposPadrao: catalogos.tiposPadrao,
+        totalItens: catalogos.totalItens,
+        atualizadoEm: catalogos.atualizadoEm,
+        tipo: catalogos.tipo,
+        cor: catalogos.cor,
+        pastaId: catalogos.pastaId,
+      })
+      .from(catalogos)
+      .orderBy(desc(catalogos.atualizadoEm), desc(catalogos.id)),
+    consultaIndicadoresHistorico(db),
+  ]);
+  const porCatalogo = new Map(hist.map((h) => [h.catalogoId, h] as const));
+  return linhas.map((l) => {
+    const h = porCatalogo.get(l.id);
+    return {
+      ...l,
+      tipo: tipoCatalogo(l.tipo),
+      tiposPadrao: parseTipos(l.tiposPadrao),
+      contratos: Number(h?.contratos ?? 0),
+      produtos: Number(h?.produtos ?? 0),
+      valor: Number(h?.valor ?? 0),
+    };
+  });
 }
 
 export type CatalogoItemRow = {
@@ -108,10 +136,14 @@ export async function getCatalogoItens(catalogoId?: number): Promise<CatalogoIte
   return linhas.map((l) => ({ ...l, tipos: parseTipos(l.tipos), catalogosExtra: parseIds(l.catalogosExtra) }));
 }
 
-/** Um catálogo pelo id (`{id,nome}`) — para validar o alvo de uma atualização. `null` se não existe. */
-export async function getCatalogo(id: number): Promise<{ id: number; nome: string } | null> {
-  const [c] = await getDb().select({ id: catalogos.id, nome: catalogos.nome }).from(catalogos).where(eq(catalogos.id, id)).limit(1);
-  return c ?? null;
+/** Um catálogo pelo id — para validar o alvo de uma atualização. `null` se não existe. */
+export async function getCatalogo(id: number): Promise<{ id: number; nome: string; tipo: TipoCatalogo; cor: string | null; pastaId: number | null } | null> {
+  const [c] = await getDb()
+    .select({ id: catalogos.id, nome: catalogos.nome, tipo: catalogos.tipo, cor: catalogos.cor, pastaId: catalogos.pastaId })
+    .from(catalogos)
+    .where(eq(catalogos.id, id))
+    .limit(1);
+  return c ? { ...c, tipo: tipoCatalogo(c.tipo) } : null;
 }
 
 /** Um conflito de código (item já cadastrado em OUTRO catálogo) — com os dados do item
@@ -162,20 +194,25 @@ export async function codigosEmConflito(
   return out;
 }
 
-/** Cria um catálogo novo; devolve o id. */
-export async function criarCatalogo(nome: string, tiposPadrao: string[]): Promise<number> {
+/** Cria um catálogo novo (da agenda, por padrão; `tipo:"historico"` = o histórico de compra); devolve o id. */
+export async function criarCatalogo(nome: string, tiposPadrao: string[], opts?: { tipo?: TipoCatalogo; pastaId?: number | null }): Promise<number> {
   const [c] = await getDb()
     .insert(catalogos)
-    .values({ nome, tiposPadrao: JSON.stringify(normalizarTipos(tiposPadrao)) })
+    .values({ nome, tiposPadrao: JSON.stringify(normalizarTipos(tiposPadrao)), tipo: opts?.tipo ?? "agenda", pastaId: opts?.pastaId ?? null })
     .returning({ id: catalogos.id });
   return c.id;
 }
 
-/** Edita um catálogo gravado (nome e/ou tipos padrão). */
-export async function atualizarCatalogo(id: number, campos: { nome?: string; tiposPadrao?: string[] }): Promise<void> {
+/** Edita um catálogo gravado (nome, tipos padrão, cor da capa e/ou pasta). */
+export async function atualizarCatalogo(
+  id: number,
+  campos: { nome?: string; tiposPadrao?: string[]; cor?: string | null; pastaId?: number | null },
+): Promise<void> {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
   if (campos.nome !== undefined) set.nome = campos.nome;
   if (campos.tiposPadrao !== undefined) set.tiposPadrao = JSON.stringify(normalizarTipos(campos.tiposPadrao));
+  if (campos.cor !== undefined) set.cor = campos.cor;
+  if (campos.pastaId !== undefined) set.pastaId = campos.pastaId;
   await getDb().update(catalogos).set(set).where(eq(catalogos.id, id));
 }
 
@@ -214,8 +251,9 @@ export async function excluirCatalogo(id: number): Promise<void> {
       );
     }
   }
-  // Apaga os itens cuja ORIGEM ainda é este catálogo (só-home; reatribuídos já mudaram acima).
+  // Apaga os itens cuja ORIGEM ainda é este catálogo (só-home; reatribuídos já mudaram acima) e o histórico de compra.
   stmts.push(db.delete(catalogoItens).where(eq(catalogoItens.catalogoId, id)));
+  stmts.push(...comandosApagarHistorico(db, id));
   stmts.push(db.delete(catalogos).where(eq(catalogos.id, id)));
   for (const cid of origensReatribuidas) {
     stmts.push(

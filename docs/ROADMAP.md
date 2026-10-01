@@ -109,6 +109,15 @@ falhou no meio remove a gravação NOVA do próprio usuário que ficou pela meta
 importação avisa "gravação INCOMPLETA — reenvie para completar"). Mover o DFD para outro protocolo segue permitido no enviado
 (caminho de saída do PCA, como "Devolver à Mesa").
 
+### Catálogo: cards no padrão de Tarefas, PASTAS e HISTÓRICO DE COMPRA — entregue
+✅ Os catálogos viraram cards no MESMO desenho dos quadros de Tarefas (capa 16:9 + 3 números + menu "…") e podem ser
+agrupados em **pastas** (o mesmo desenho de pasta de Tarefas); tocar na pasta abre a **tela da pasta** (só os catálogos
+dela, Lista de Itens e os números do conjunto). ✅ Dois tipos de cadastro: **Catálogo da Agenda** (o de sempre) e
+**Histórico de compra** — o export do sistema de compras (CSV/XLSX): contratos + itens comprados, com a análise por
+produto (menor/médio ponderado/maior/último preço). ✅ O export repete linhas idênticas (no de 2026: 5.937 → 1.130);
+o importador as tira para não inflar o valor. 🔜 **Comparar** os itens dos DFDs com o histórico pelo código (preço
+praticado × valor estimado no DFD).
+
 ### Catálogo: cadastro de UNIDADES DE MEDIDA e CLASSIFICAÇÕES + comparação das unidades e classificação automática dos itens — entregue
 ✅ O Catálogo ganhou duas visões (Catálogo · Lista de Itens · **Unidades de medida** · **Classificações**), carregadas só
 quando abertas. **Unidades de medida:** o cadastro (sigla, nome, sinônimos — as outras grafias aceitas — e a classificação
