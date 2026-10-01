@@ -82,6 +82,8 @@ type Resposta = {
   protocolo?: ProtocoloCenti;
   jaAnexado?: boolean;
   sequencial?: string;
+  /** A pergunta do confirmsave da Centi: o save só segue com o "sim" do ADM. */
+  confirmar?: string;
 };
 type TextoAlvo = { id: string; numero: string };
 const lerTextoAlvo = (v: unknown): TextoAlvo => {
@@ -666,6 +668,16 @@ export function AutomacaoAdmin({
   const [alvoTexto, setAlvoTexto] = useState<TextoAlvo>({ id: "", numero: "" });
   const [conferencia, setConferencia] = useState<{ carregando?: boolean; protocolo?: ProtocoloCenti; erro?: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
+  // O anexo como a tela da Centi: confirmsave → a Centi pedindo confirmação, a pergunta vai ao ADM e só o "sim" grava.
+  const anexarNaCenti = useCallback(
+    async (dados: Record<string, unknown>, ms: number): Promise<Resposta> => {
+      const r = await pedir("anexar", dados, ms);
+      if (r.ok || !r.confirmar) return r;
+      const sim = await confirmar({ titulo: "A Centi pede confirmação", texto: r.confirmar, confirmar: "Confirmar e anexar" });
+      return sim ? pedir("anexar", { ...dados, aceitar: true }, ms) : { ok: false, erro: `Não anexado — confirmação recusada: ${r.confirmar}` };
+    },
+    [pedir, confirmar],
+  );
   // No desktop a tela cabe no display (sem rolar o navegador): a tabela e a análise vão até o fim e rolam por dentro.
   const corpo = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(corpo, 420);
@@ -732,8 +744,8 @@ export function AutomacaoAdmin({
       const bytes = await doc.save();
       const hora = new Date().toLocaleTimeString("pt-BR").replace(/:/g, "h").slice(0, 5);
       const descricao = `TESTE - pode excluir - ${hora}`;
-      const r = await pedir("anexar", { ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 120_000);
-      setTeste(r.ok ? { ok: `Anexado (documento ${r.sequencial ?? "?"}). O salvar funciona — a falha vem da emissão.` } : { erro: r.erro ?? "A Centi não gravou." });
+      const r = await anexarNaCenti({ ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 120_000);
+      setTeste(r.ok ? { ok: `Anexado (documento ${r.sequencial ?? "?"}). O anexo na Centi funciona.` } : { erro: r.erro ?? "A Centi não gravou." });
     } catch (e) {
       setTeste({ erro: e instanceof Error ? e.message : "Falha no teste." });
     }
@@ -903,8 +915,7 @@ export function AutomacaoAdmin({
         // O PDF CRU da Centi (o relatório dela) é recusado no salvar do protocolo (500); o regravado pelo pdf-lib — o mesmo
         // do PDF unido, que a Centi aceita — vai no lugar. Não deu para regravar: o cru.
         const pdf = unido ? bytes : await regravarPdf(bytes).catch(() => bytes);
-        const r = await pedir(
-          "anexar",
+        const r = await anexarNaCenti(
           { ...alvo, tipo, descricao: descricaoDoArquivo(a.nome), arquivo: a.nome, pdf: paraBase64(pdf) },
           320_000,
         );
@@ -1038,7 +1049,7 @@ export function AutomacaoAdmin({
             (o “Id” do cadastro do protocolo na Centi, o mesmo da capa) e o nº (“156844” ou “156844/2026”). Cada PDF entra como
             um documento novo do tipo escolhido (padrão 1039 — DFD), com a descrição igual ao nome do arquivo. A extensão abre o
             protocolo, confere Id e nº (diferente = nada é gravado) e não anexa duas vezes a mesma descrição; se a Centi pedir
-            uma confirmação, para e mostra a pergunta. Só isso é gravado na Centi.
+            uma confirmação (como na tela dela), mostra a pergunta e só grava com o seu “sim”. Só isso é gravado na Centi.
           </p>
           <p>
             <strong>Instalar/atualizar a extensão:</strong> “Baixar extensão” → descompacte (na atualização, substitua os

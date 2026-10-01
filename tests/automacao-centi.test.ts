@@ -71,7 +71,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.8"), false);
   assert.equal(versaoAtende("1.3.9"), false);
   assert.equal(versaoAtende("1.3.10"), false);
-  assert.equal(versaoAtende("1.3.11"), true);
+  assert.equal(versaoAtende("1.3.11"), false);
+  assert.equal(versaoAtende("1.3.12"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -387,4 +388,23 @@ test("anexo: o token novo de cada resposta substitui o antigo (token, Bearer e r
   assert.deepEqual(A.comTokenNovo(cab, "t1", "r1"), { Refreshtoken: "r1", token: "t1", Authorization: "Bearer t1", Company: "2" });
   assert.deepEqual(A.comTokenNovo({ Refreshtoken: "r0" }, "t1", null), { Refreshtoken: "r0", token: "t1", Authorization: "Bearer t1" });
   assert.deepEqual(A.comTokenNovo(cab, null, null), cab);
+});
+
+test("confirmsave recebe o OBJETO do protocolo direto (como a tela da Centi); o save, o envelope", async () => {
+  const fs = await import("node:fs");
+  const vm = await import("node:vm");
+  const ctx: Record<string, unknown> = {};
+  vm.runInNewContext(fs.readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
+  const A = Object.values(ctx).find((v) => v && typeof v === "object" && "corpoConfirmar" in (v as object)) as {
+    montarSalvar: (...a: unknown[]) => { Token: string; Object: { ModuleKey: number; Fields: unknown[] } };
+    corpoConfirmar: (s: unknown) => { ModuleKey: number; Fields: unknown[]; Token?: unknown; Object?: unknown };
+  };
+  const e = { $type: "ORM", Type: 0, State: 3, ModuleKey: 102907, Guid: "g", Fields: [{ Key: "Documentos", Value: [] }, { Key: "Id", Value: "1" }] };
+  const salvar = A.montarSalvar(e, { tipo: "1039", descricao: "D", arquivo: "D.pdf", pdf: "JVBER" }, new Date(), "u");
+  const conf = A.corpoConfirmar(salvar);
+  assert.equal(salvar.Token, "");
+  assert.equal(conf.ModuleKey, 102907);
+  assert.equal(conf.Token, undefined);
+  assert.equal(conf.Object, undefined);
+  assert.equal(conf, salvar.Object);
 });

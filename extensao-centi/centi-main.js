@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 15;
+  const PROTOCOLO = 16;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -400,7 +400,7 @@
   }
 
   // A ÚNICA gravação: UM documento novo no protocolo conferido. Já anexado (mesma descrição) → não anexa de novo. A Centi
-  // pedindo confirmação (confirmsave) → para e mostra a pergunta (nunca confirma sozinha).
+  // pedindo confirmação (confirmsave) → devolve a pergunta; o save só com o "sim" do ADM (`aceitar`), nunca sozinha.
   async function anexar(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
@@ -423,11 +423,12 @@
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
     let conf;
     try {
-      conf = await apiCenti("POST", "restauth/confirmsave", corpo, "confirmsave", true, urlsSalvar.confirmsave || "restauth/confirmsave");
+      conf = await apiCenti("POST", "restauth/confirmsave", A.corpoConfirmar(corpo), "confirmsave", true, urlsSalvar.confirmsave || "restauth/confirmsave");
     } catch (err) {
       throw new Error(`${err?.message || "Falha no confirmsave."} [tipo: ${origemTipo}]`);
     }
-    if (conf.Confirm === true) return { ok: false, erro: `A Centi pede confirmação: ${A.mensagens(conf.Message) || "sem mensagem"} — anexe pela tela da Centi.` };
+    // Como a tela: a Centi pedindo confirmação → a pergunta vai ao ADM; só com o "sim" dele (`aceitar`) segue ao save.
+    if (conf.Confirm === true && d.aceitar !== true) return { ok: false, confirmar: A.mensagens(conf.Message) || "A Centi pede confirmação para salvar." };
     const salvo = A.conferirSalvo(await apiCenti("POST", "restauth/save", corpo, "save", true, urlsSalvar.save || "restauth/save"), d);
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
   }

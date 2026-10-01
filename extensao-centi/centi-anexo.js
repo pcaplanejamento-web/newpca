@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p15";
+  const NOME = "__pcaCentiAnexo_p16";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
@@ -145,6 +145,12 @@
     return { Token: "", Object: { ...e, Fields } };
   }
 
+  /** O corpo do CONFIRMSAVE = o OBJETO do protocolo DIRETO (a tela da Centi chama `confirmsave(initialValues)`); só o
+   * `save` leva o envelope `{Token, Object}`. O envelope no confirmsave chegava ao servidor como um objeto vazio (500). */
+  function corpoConfirmar(salvar) {
+    return salvar.Object;
+  }
+
   /** O texto das mensagens da Centi (lista de textos ou de objetos). */
   function mensagens(m) {
     const lista = Array.isArray(m) ? m : m == null ? [] : [m];
@@ -233,5 +239,5 @@
 
   globalThis[NOME] = Object.freeze({
     comTokenNovo,
-    renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
 })();
