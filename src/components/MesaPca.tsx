@@ -22,13 +22,16 @@ import { DfdsView } from "./DfdsView";
 import { acaoProtocolosPca, EnviarAoPca, type ResultadoAcaoPca } from "./EnviarAoPca";
 import { selectCls } from "./formStyles";
 import { IconCheck, IconTrash, IconUndo } from "./icons";
+import { useListasMesa } from "./MesaSistema";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 
 type Escopo = "todos" | "sistema" | "enviados" | "incorporados";
 
-type Props = Omit<ComponentProps<typeof DfdsView>, "modoPca"> & {
+type Props = Omit<ComponentProps<typeof DfdsView>, "modoPca" | "protocolos" | "dfds"> & {
+  /** As listas grandes (protocolos + DFDs) num ÚNICO texto (`carregarMesaDoPca` — `mesa-listas.ts`). */
+  listas: string;
   pca: { id: number; nome: string; ano: number | null };
   /** Por protocolo: quantos DFDs dele já estão em OUTRO PCA (ficam de fora da incorporação). */
   emOutroPcaPorProtocolo: Record<number, number>;
@@ -53,7 +56,8 @@ const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: 
  * Mesa do SISTEMA — só uma visão: seguem na Mesa principal, editáveis, e a seleção os envia ("Enviar a este PCA"). A coluna
  * **Local** diz onde cada um está (`localDoProtocolo`).
  */
-export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcados = false, protocolos, dfds, ...mesa }: Props) {
+export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcados = false, listas, ...mesa }: Props) {
+  const { protocolos, dfds } = useListasMesa(listas);
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
   const [incorporar, setIncorporar] = useState<ProtocoloResumo[] | null>(null);

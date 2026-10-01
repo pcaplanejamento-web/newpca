@@ -1,5 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { grupoReparticoes, grupos, reparticoes, usuarioGrupos } from "@/db/schema";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
@@ -72,13 +73,14 @@ export async function reparticoesDoGrupo(grupoId: number): Promise<ReparticaoRes
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
 }
 
-/** Todas as repartições (ordenadas) — o ADM vê todas no head. */
-export async function listarReparticoes(): Promise<ReparticaoResumo[]> {
+/** Todas as repartições (ordenadas) — o ADM vê todas no head. Memorizada POR REQUISIÇÃO (`cache` do React): o
+ * cabeçalho, o escopo e os banners da Mesa leem a mesma lista uma vez só. Quem usa só lê (não altere a lista). */
+export const listarReparticoes = cache(async (): Promise<ReparticaoResumo[]> => {
   return getDb()
     .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome })
     .from(reparticoes)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
-}
+});
 
 /**
  * Contexto de repartição do cabeçalho. **Admin vê TODAS** (regra firme); os demais

@@ -1458,6 +1458,9 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 |---|---|
 | ✅ | Responsivo + toque + tema claro/escuro |
 | ✅ | **Testes** (`node:test`) + **lint** (Biome) + **type-check** com **portão de qualidade na CI** (`ci.yml`/`deploy.yml`); error boundaries (`error.tsx`/`not-found.tsx`); observabilidade do Worker. Regras em [CLAUDE.md](../CLAUDE.md). |
+| ✅ | **Falha de tela que se recupera e se explica** (`FalhaNaTela` + `painel/error.tsx`): o tipo (resposta cortada, versão nova, erro no servidor, erro na tela), UMA recuperação automática por tela/minuto, detalhes para copiar e o registro nos Logs do Worker (`POST /api/erros`). |
+| ✅ | **Mesa de PCA grande dentro dos limites do Worker gratuito** (a falha "Algo deu errado" da Mesa do PCA 1): listas em um texto JSON, projeção enxuta, grupos de assinatura no banco, ids num parâmetro JSON — 48 → 25 consultas e ~10× menos serialização num PCA de 2.500 DFDs. |
+| 🔜 | **Workers Paid** (30 s de CPU, 1.000 consultas por requisição) — resolve de vez o limite da tela grande; decisão de faturamento. |
 | 🔜 | Tornar o type-check **bloqueante** (hoje informativo) quando o baseline de tipos estiver limpo |
 | 🔜 | Deploy via **Workers Builds** (evita quebra quando um token é revogado) |
 | 💡 | **PWA** (instalar no celular) · Acessibilidade (WCAG) · Backups do D1 |

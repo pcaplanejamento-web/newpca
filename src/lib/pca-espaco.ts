@@ -39,6 +39,7 @@ import {
   type StatusPca,
 } from "./pca-core";
 import { filtroAnoPcaDfd } from "./dfd-sql";
+import { consultaDfdsEmOutroPca } from "./pca-dfds-sql";
 import { gravarSequencialNosItens, numerarItensDoProtocolo } from "./pca-itens-sql";
 import { type DfdConsulta, dfdPublico, historicoPublico, mascararTexto } from "./pca-publico-core";
 import { getProtocolo } from "./protocolo";
@@ -339,13 +340,9 @@ export async function pcaTemDados(id: number): Promise<{ planilhas: number; dfds
 /** DFDs (dos ids dados) já vinculados a OUTRO PCA — `dfdId → pcaId`. */
 export async function dfdsEmOutroPca(dfdIds: number[], pcaId: number): Promise<Map<number, number>> {
   const m = new Map<number, number>();
-  for (const lote of lotesDeIds(dfdIds)) {
-    const rows = await getDb()
-      .select({ dfdId: pcaDfds.dfdId, pcaId: pcaDfds.pcaId })
-      .from(pcaDfds)
-      .where(and(inArray(pcaDfds.dfdId, lote), ne(pcaDfds.pcaId, pcaId)));
-    for (const r of rows) m.set(r.dfdId, r.pcaId);
-  }
+  if (dfdIds.length === 0) return m;
+  // UMA consulta para todos (os ids num parâmetro JSON) — antes, uma a cada 90 ids.
+  for (const r of await consultaDfdsEmOutroPca(getDb(), dfdIds, pcaId)) m.set(r.dfdId, r.pcaId);
   return m;
 }
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
-import type { DfdResumo, ItemDfdRow, PcaResumo } from "@/lib/dfd";
+import type { DfdNaLista, ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import {
   type AcaoMassa,
@@ -153,7 +153,7 @@ const SEM_INFO = {
   catalogoRotulo: "—",
 };
 /** O PCA (ano) de um DFD na Mesa: o do protocolo de origem; sem ele, o do próprio DFD (o item segue o DFD). */
-const anoPcaDoDfd = (d: DfdResumo | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
+const anoPcaDoDfd = (d: DfdNaLista | undefined) => (d ? (d.protocoloAnoPca ?? d.anoPca) : null);
 /** Mantém na seleção só as chaves que ainda existem (após recarregar as listas). */
 const podar = (sel: Sel, validas: Set<number>): Sel => {
   const n = new Set([...sel].filter((k) => validas.has(Number(k))));
@@ -161,7 +161,7 @@ const podar = (sel: Sel, validas: Set<number>): Sel => {
 };
 /** Chave da conferência de um DFD: muda quando o DFD é gravado (atualizadoEm), troca de unidade ou a
  * categoria do protocolo muda — só esses são reconferidos depois de um `router.refresh()`. */
-const chaveConf = (d: DfdResumo) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
+const chaveConf = (d: DfdNaLista) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
 /** Chave da conferência AGREGADA de um protocolo: SÓ o que muda o estado — a capa (valor e assunto),
  * QUALQUER DFD dele gravado e o rastro dos sobrescritos. Trocar responsável/situação não reconfere nada. */
 const chaveProto = (p: ProtocoloResumo) =>
@@ -205,7 +205,7 @@ export function DfdsView({
 }: {
   /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
   pode: PodeMesa;
-  dfds: DfdResumo[];
+  dfds: DfdNaLista[];
   protocolos: ProtocoloResumo[];
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
@@ -487,7 +487,7 @@ export function DfdsView({
     })();
     return () => ac.abort();
   }, [vista, dfds, ctxConf]);
-  const confDe = (d: DfdResumo): ConfLinha | undefined =>
+  const confDe = (d: DfdNaLista): ConfLinha | undefined =>
     confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
   // ESTADO AGREGADO dos PROTOCOLOS (capa + TODOS os problemas dos DFDs/itens de cada um) — calculado no
@@ -648,7 +648,7 @@ export function DfdsView({
     router.refresh();
   }
 
-  function abrirVincular(d: DfdResumo) {
+  function abrirVincular(d: DfdNaLista) {
     setErro(null);
     setVincAlvo({ id: d.id, numero: d.numero, protocoloId: d.protocoloId });
     setVincSel(d.protocoloId);
@@ -914,7 +914,7 @@ export function DfdsView({
     for (const pe of pessoasExec) if (!pessoasDash.has(pe.id)) pessoasDash.set(pe.id, dirPessoas.get(pe.id) ?? pe);
     const foco = typeof filtro.responsavel === "number" && !pessoasDash.has(filtro.responsavel) ? pessoaDe(filtro.responsavel) : null;
     if (foco) pessoasDash.set(foco.id, foco);
-    const paraPainel = (d: DfdResumo): DfdPainel => ({
+    const paraPainel = (d: DfdNaLista): DfdPainel => ({
       unidadeId: d.reparticaoId,
       unidade: d.reparticaoCodigo,
       unidadeNome: d.reparticaoNome,

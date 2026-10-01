@@ -12,6 +12,17 @@ import { dfdProtocolos, dfds } from "../db/schema.ts";
 export const prioridadeTextoSql = sql<string | null>`(SELECT CAST(json_extract(CASE WHEN s.type = 'object' THEN s.value END, '$.texto') AS TEXT) FROM json_each(CASE WHEN json_valid(${dfds.secoes}) THEN ${dfds.secoes} ELSE '[]' END) AS s WHERE json_extract(CASE WHEN s.type = 'object' THEN s.value END, '$.titulo') LIKE '%PRIORIDADE%' LIMIT 1)`;
 
 /**
+ * Os GRUPOS de assinatura de um DFD (Centi/Dropsigner/Adobe/Foxit/Equipe) lidos NO BANCO — a lista da Mesa não traz o
+ * JSON INTEIRO das assinaturas (peso: nome, CPF, código, URL, validação… de cada uma) só para saber os formatos. Devolve
+ * um array JSON (texto) com os grupos distintos; `gruposDoTexto` (dfd-tratamento) os põe na ordem fixa. A MESMA régua de
+ * `gruposAssinatura(parseAssinaturas(json))`: JSON inválido ou que não é array = nenhum; só as entradas objeto/array
+ * contam (o `typeof === "object"` do JS); a `fonte` fora das conhecidas (ou ausente) = Centi. Os `CASE` aninhados garantem
+ * que `json_type`/`json_extract` só rodam sobre JSON válido e sobre elementos objeto/array (o `AND` do SQLite não promete
+ * a ordem). Builder sem getDb (testado pelo driver D1 real). Puro.
+ */
+export const gruposAssinaturaSql = sql<string | null>`(SELECT json_group_array(DISTINCT CASE WHEN a.type IN ('object', 'array') THEN CASE json_extract(a.value, '$.fonte') WHEN 'dropsigner' THEN 'dropsigner' WHEN 'adobe' THEN 'adobe' WHEN 'foxit' THEN 'foxit' WHEN 'manual' THEN 'manual' ELSE 'centi' END END) FROM json_each(CASE WHEN json_valid(${dfds.assinaturas}) THEN CASE WHEN json_type(${dfds.assinaturas}) = 'array' THEN ${dfds.assinaturas} ELSE '[]' END ELSE '[]' END) AS a WHERE a.type IN ('object', 'array'))`;
+
+/**
  * O PCA (ano) de um DFD na Mesa: o do PROTOCOLO de origem — "no protocolo, todos seguem o do protocolo" — e, sem
  * protocolo (ou protocolo antigo sem ano), o do próprio DFD.
  */

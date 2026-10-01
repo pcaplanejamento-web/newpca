@@ -1072,11 +1072,28 @@ export const ASSINATURA_ROTULO: Record<GrupoAssinatura, string> = {
   manual: "Equipe",
 };
 
+/** A ordem fixa dos grupos nas listas (coluna "Assinatura"). */
+const ORDEM_GRUPOS_ASSINATURA: readonly GrupoAssinatura[] = ["centi", "dropsigner", "adobe", "foxit", "manual"];
+
 /** Grupos DISTINTOS de assinatura presentes (ordem fixa centi→dropsigner→adobe). Vazio ⇒ sem
  * assinatura reconhecida. */
 export function gruposAssinatura(assinaturas: { fonte: string }[]): GrupoAssinatura[] {
   const set = new Set(assinaturas.map((a) => grupoAssinatura(a.fonte)));
-  return (["centi", "dropsigner", "adobe", "foxit", "manual"] as GrupoAssinatura[]).filter((g) => set.has(g));
+  return ORDEM_GRUPOS_ASSINATURA.filter((g) => set.has(g));
+}
+
+/** Os grupos que o BANCO calculou (`gruposAssinaturaSql` — um array JSON em texto) na ordem fixa; texto inválido ou
+ * valores estranhos = ignorados. A lista da Mesa usa este (não traz o JSON das assinaturas). Puro. */
+export function gruposDoTexto(texto: string | null | undefined): GrupoAssinatura[] {
+  let arr: unknown;
+  try {
+    arr = JSON.parse(texto ?? "[]");
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+  const set = new Set<unknown>(arr);
+  return ORDEM_GRUPOS_ASSINATURA.filter((g) => set.has(g));
 }
 
 /**

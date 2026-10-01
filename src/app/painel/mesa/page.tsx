@@ -1,5 +1,5 @@
-import { DfdsView } from "@/components/DfdsView";
 import { MesaPca } from "@/components/MesaPca";
+import { MesaSistema } from "@/components/MesaSistema";
 import { SeletorMesa } from "@/components/SeletorMesa";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { PcaResumo } from "@/lib/dfd";
@@ -38,13 +38,12 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   const alvo = lerVinculo(sp.abrir);
   const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
   return (
-    <DfdsView
+    <MesaSistema
       key="sistema"
       // As Mesas dos PCAs só para quem visualiza o PCA (senão a opção levaria a "Acesso restrito").
       seletorMesa={<SeletorMesa pcas={m.pode.pca.visualizar ? opcoesMesa(m.pcas) : []} atual={null} />}
       pode={m.pode}
-      dfds={m.dfds}
-      protocolos={m.protocolos}
+      listas={m.listas}
       reparticoes={m.reparticoes}
       reparticaoAtivaId={m.reparticaoAtivaId}
       pcas={m.pcas}

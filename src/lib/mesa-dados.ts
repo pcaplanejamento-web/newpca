@@ -5,9 +5,10 @@ import { listarDfds, listarPcas } from "./dfd";
 import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { idDoFiltro } from "./escopo-unidades-core";
-import { getGrupoAtivoId, unidadesAcessiveis, unidadesDaSessao } from "./grupos";
+import { unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
+import { listasParaTexto } from "./mesa-listas";
 import type { AtividadeTupla } from "./mesa-metricas";
 import { listarOrgaos } from "./orgaos";
 import { PODE_MESA_NADA } from "./papeis-core";
@@ -35,17 +36,18 @@ import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds } from "./u
  * permite nas duas Mesas (cada protocolo segue a sua).
  */
 async function contextoBanners(u: UsuarioSessao | null) {
+  // O acesso já foi lido pela página (memorizado na requisição): o GRUPO ATIVO dele evita reler os grupos da pessoa.
+  const acesso = await getAcesso();
   // As unidades ACESSÍVEIS (com a "Geral" no grupo ou o ADM, todas — os banners conferem e editam o de qualquer uma).
-  const un = await unidadesDaSessao(u);
+  const un = await unidadesDaSessao(u, acesso ? acesso.grupoAtivo : undefined);
   const lista = await unidadesAcessiveis(un);
   const ids = lista.map((r) => r.id);
-  const [respMap, matchMap, pcas, regras, orgaos, acesso] = await Promise.all([
+  const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([
     responsaveisPorReparticao(ids),
     dadosMatchPorReparticao(ids),
     listarPcas(),
     getRegrasAvaliacao(),
     listarOrgaos(),
-    getAcesso(),
   ]);
   const reparticoes = lista.map((r) => ({
     ...r,
@@ -56,13 +58,13 @@ async function contextoBanners(u: UsuarioSessao | null) {
     orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
     oculto: matchMap[r.id]?.oculto ?? false,
   }));
-  return { un, reparticoes, pcas, regras, orgaos, pode: acesso ? podeMesa(acesso) : PODE_MESA_NADA };
+  return { un, reparticoes, pcas, regras, orgaos, pode: acesso ? podeMesa(acesso) : PODE_MESA_NADA, grupoAtivoId: acesso?.grupoAtivo?.id ?? null };
 }
 
 /** O prefixo das chaves das edições salvas das tabelas da Mesa (a principal e a do PCA têm as suas). */
 const prefixoEdicoesMesa = (pcaId?: number) => (pcaId ? "mesa-pca:" : "mesa:");
 
-export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
+async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
   const [ctx, pref] = await Promise.all([contextoBanners(u), pcaId ? ("todos" as const) : mesaResponsavelGravado(u?.id)]);
   // Mesa principal: a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada). Mesa do PCA: o escopo de acesso.
   const repId = idDoFiltro(ctx.un.filtro);
@@ -81,7 +83,7 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
     // Gestão do protocolo: as PESSOAS DO GRUPO ativo (as únicas designáveis como Responsável) e as
     // situações cadastradas pelo ADM.
     // Sem grupo ativo, todas as pessoas só para o ADM (os demais, ninguém — não veem dado nenhum).
-    getGrupoAtivoId(u).then((g) => (g == null && !u?.admin ? [] : listarPessoasDoGrupo(g))),
+    ctx.grupoAtivoId == null && !u?.admin ? Promise.resolve([]) : listarPessoasDoGrupo(ctx.grupoAtivoId),
     listarSituacoes(),
     // As EDIÇÕES SALVAS das tabelas desta Mesa (as do usuário e as públicas) — a do PCA tem as suas (outras colunas).
     carregarEdicoes(u?.id ?? null, prefixoEdicoesMesa(pcaId)),
@@ -124,13 +126,22 @@ export async function carregarMesa(u: UsuarioSessao | null, pcaId?: number) {
 }
 
 /**
+ * A MESA DO SISTEMA para o cliente (`MesaSistema`): o que `montarMesa` carrega, com as listas grandes (protocolos + DFDs)
+ * num ÚNICO texto (`listas` — `mesa-listas.ts`): o React não serializa milhares de linhas valor a valor (CPU do Worker).
+ */
+export async function carregarMesa(u: UsuarioSessao | null) {
+  const { dfds, protocolos, ...resto } = await montarMesa(u);
+  return { ...resto, listas: listasParaTexto({ protocolos, dfds }, Date.now()) };
+}
+
+/**
  * Dados da MESA DO PCA (`MesaPca`) — o MESMO carregamento da aba Mesa do espaço do PCA e da Mesa principal com o seletor
- * de Mesa num PCA (`/painel/mesa?pca=`): a Mesa do PCA (`carregarMesa(u, pcaId)`, com os marcados conforme a
+ * de Mesa num PCA (`/painel/mesa?pca=`): a Mesa do PCA (`montarMesa(u, pcaId)`, com os marcados conforme a
  * Configuração dele) + a ação de cada protocolo incorporado e, dos enviados ainda não incorporados, quantos DFDs já estão
  * em OUTRO PCA (ficam de fora da incorporação).
  */
 export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: number; nome: string; ano: number | null }) {
-  const [m, vs] = await Promise.all([carregarMesa(u, pca.id), vinculosDoPca(pca.id)]);
+  const [m, vs] = await Promise.all([montarMesa(u, pca.id), vinculosDoPca(pca.id)]);
   const naoInc = new Set(m.protocolos.filter((p) => p.pcaIncorporadoEm == null).map((p) => p.id));
   const doNaoInc = m.dfds.filter((d) => d.protocoloId != null && naoInc.has(d.protocoloId));
   const emOutro = await dfdsEmOutroPca(
@@ -148,8 +159,8 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     acaoPorProtocolo,
     marcados: m.anoMarcados != null,
     pode: m.pode,
-    dfds: m.dfds,
-    protocolos: m.protocolos,
+    // As listas grandes num ÚNICO texto (ver `carregarMesa`).
+    listas: listasParaTexto({ protocolos: m.protocolos, dfds: m.dfds }, Date.now()),
     reparticoes: m.reparticoes,
     reparticaoAtivaId: m.reparticaoAtivaId,
     pcas: m.pcas,

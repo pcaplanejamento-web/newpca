@@ -191,6 +191,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
 
   // ── Pessoais (qualquer pessoa logada) ───────────────────────────────────────────────────────────────────
   "dados/versao": { GET: pessoal("a versão dos dados (sincronização)") },
+  "erros": { POST: pessoal("registrar a falha de uma tela (diagnóstico — vai aos Logs do Worker)") },
   "grupos/ativo": { POST: pessoal("o grupo ativo do cabeçalho (entre os da pessoa)") },
   "reparticoes/ativo": { POST: pessoal("a unidade ativa do cabeçalho (entre as do grupo)") },
   "pca/filtro": { POST: pessoal("o PCA do cabeçalho") },

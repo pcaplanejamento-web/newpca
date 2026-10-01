@@ -62,6 +62,8 @@ import { AcoesCadastro } from "@/components/AcoesCadastro";
 import { ClassificacaoDosItens, EditorClassificacao, type RascunhoClassificacao } from "@/components/ClassificacoesView";
 import { ComparacaoUnidades, EditorUnidadeMedida, type RascunhoUnidade } from "@/components/UnidadesMedidaView";
 import { ErroCarga } from "@/components/ErroCarga";
+import { FalhaNaTela } from "@/components/FalhaNaTela";
+import { relatorioDaFalha, textoDetalhes, TIPOS_FALHA, type TipoFalha } from "@/lib/erro-tela-core";
 import {
   type ClassificacaoItem,
   classificarDescricoes,
@@ -242,6 +244,42 @@ const DEMO_ITEM_CONFORMIDADE = new Map<string, ConferenciaItem>([
     },
   ],
 ]);
+
+/** As 4 falhas da fronteira de erro + o estado "recarregando" (o comportamento real vem de `useFalhaNaTela`). */
+function FalhaNaTelaDemo() {
+  const [tipo, setTipo] = useState<TipoFalha>("conexao");
+  const [recuperando, setRecuperando] = useState(false);
+  const exemplo: Record<TipoFalha, { name: string; message: string; digest?: string }> = {
+    conexao: { name: "Error", message: "Connection closed." },
+    versao: { name: "ChunkLoadError", message: "Loading chunk 4821 failed." },
+    servidor: { name: "Error", message: "An error occurred in the Server Components render.", digest: "2843960153" },
+    tela: { name: "TypeError", message: "Cannot read properties of undefined (reading 'map')" },
+  };
+  const rel = relatorioDaFalha(exemplo[tipo], { caminho: "/painel/pca/1?aba=mesa", automatica: false, instante: "2026-10-01T12:00:00.000Z" });
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented
+          ariaLabel="Tipo da falha"
+          value={tipo}
+          onChange={setTipo}
+          options={TIPOS_FALHA.map((t) => ({ value: t, label: t }))}
+        />
+        <Switch checked={recuperando} onChange={setRecuperando} label="Recarregando" />
+      </div>
+      <div className="rounded-card border border-border">
+        <FalhaNaTela
+          tipo={tipo}
+          digest={exemplo[tipo].digest}
+          detalhes={textoDetalhes(rel)}
+          recuperando={recuperando}
+          onTentar={() => toast.info("Tentar novamente (exemplo)")}
+          onRecarregar={() => toast.info("Recarregar a página (exemplo)")}
+        />
+      </div>
+    </div>
+  );
+}
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
@@ -3058,6 +3096,10 @@ export function Catalogo() {
           </span>
           <Progress value={62} label="Enviando 1.240 itens em lotes... 62%" />
         </div>
+      </Secao>
+
+      <Secao titulo="FalhaNaTela (a fronteira de erro: resposta cortada · versão nova · erro no servidor · erro na tela — tenta sozinha uma vez, informa os Logs do Worker)">
+        <FalhaNaTelaDemo />
       </Secao>
 
       <Secao titulo="Cards de navegação (LinkCard)">
