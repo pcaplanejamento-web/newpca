@@ -12,6 +12,10 @@ export type ConfigCenti = {
   /** Identificam a operação "Emitir DFD" na Centi (capturados no "Processar"). */
   moduleKey: number;
   guid: string;
+  /** Descobrir sozinho a entidade (órgão) da Centi do DFD que não está na entidade aberta. */
+  descobrirEntidade: boolean;
+  /** As entidades a tentar ("02:03:04"); vazio = de 1 a 20 no formato da aberta. */
+  entidades: string;
 };
 
 export const CONFIG_CENTI_PADRAO: ConfigCenti = {
@@ -20,11 +24,13 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   assinaturaDfd: "13",
   moduleKey: 120464,
   guid: "2b414e51-4389-1c0a-f194-b11779b834f5",
+  descobrirEntidade: true,
+  entidades: "",
 };
 
 /** A versão da extensão publicada junto (extensao-centi/manifest.json) = a MÍNIMA que a tela aceita (a extensão é só o
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
-export const VERSAO_EXTENSAO_CENTI = "1.1.0";
+export const VERSAO_EXTENSAO_CENTI = "1.2.0";
 
 export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,6 +47,8 @@ export function lerConfigCenti(v: unknown): ConfigCenti {
     assinaturaDfd: ass || p.assinaturaDfd,
     moduleKey: Number.isInteger(mk) && mk > 0 ? mk : p.moduleKey,
     guid: typeof o.guid === "string" && GUID.test(o.guid.trim()) ? o.guid.trim().toLowerCase() : p.guid,
+    descobrirEntidade: typeof o.descobrirEntidade === "boolean" ? o.descobrirEntidade : p.descobrirEntidade,
+    entidades: typeof o.entidades === "string" ? o.entidades.slice(0, 300) : p.entidades,
   };
 }
 
@@ -120,10 +128,9 @@ export function pedidoEmitirDfd(id: string, cfg: ConfigCenti, agora: Date) {
   return { ModuleKey: cfg.moduleKey, Guid: cfg.guid, Params: valores.map(([Key, Value]) => ({ Key, Value })) };
 }
 
-/** Nome do arquivo salvo na pasta. */
-export function nomeArquivoDfd(id: string): string {
-  return `DFD - Planejamento ${id}.pdf`;
-}
+/** Um DFD de protocolo do sistema: o nº de planejamento (= o Id na Centi), o ano do PCA e o ÓRGÃO (a entidade da Centi
+ * em que ele existe — `orgao` = a chave do mapa órgão → entidade). */
+export type DfdAutomacao = { numero: string; planejamento: string | null; anoPca: number | null; orgao: string | null; orgaoNome: string | null };
 
 /** Um protocolo do sistema com os DFDs dele (a seleção "Por protocolo"). */
 export type ProtocoloAutomacao = {
@@ -132,14 +139,44 @@ export type ProtocoloAutomacao = {
   idExterno: string | null;
   assunto: string | null;
   interessado: string | null;
+  sigla: string | null;
   anoPca: number | null;
   pca: string | null;
-  dfds: { numero: string; planejamento: string | null }[];
+  dfds: DfdAutomacao[];
 };
 
-/** Um arquivo a baixar: o Id da Centi (= nº de planejamento), o nome do arquivo e a PASTA (subpasta do protocolo; null =
- * a raiz escolhida). */
-export type TarefaCenti = { chave: string; id: string; arquivo: string; pasta: string | null };
+/** A chave do órgão do DFD (o órgão cadastrado; sem ele, o texto "Órgão/Entidade" do DFD). */
+export function chaveOrgaoCenti(orgaoId: number | null, orgaoEntidade: string | null): string | null {
+  if (orgaoId != null) return `o:${orgaoId}`;
+  const t = (orgaoEntidade ?? "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+  return t ? `t:${t}` : null;
+}
+
+/** As opções da SAÍDA: a pasta "PCA <ano>" por cima, os PDFs separados / um por protocolo / um único, e a ordem dos DFDs
+ * pelo nº de planejamento. */
+export type FormatoSaida = "separados" | "protocolo" | "unico";
+export type OpcoesSaida = { pastaPca: boolean; formato: FormatoSaida; ordenarPlanejamento: boolean };
+export const OPCOES_SAIDA_PADRAO: OpcoesSaida = { pastaPca: true, formato: "separados", ordenarPlanejamento: true };
+
+export function lerOpcoesSaida(v: unknown): OpcoesSaida {
+  const o = (v && typeof v === "object" ? v : {}) as Partial<Record<keyof OpcoesSaida, unknown>>;
+  const p = OPCOES_SAIDA_PADRAO;
+  return {
+    pastaPca: typeof o.pastaPca === "boolean" ? o.pastaPca : p.pastaPca,
+    formato: o.formato === "separados" || o.formato === "protocolo" || o.formato === "unico" ? o.formato : p.formato,
+    ordenarPlanejamento: typeof o.ordenarPlanejamento === "boolean" ? o.ordenarPlanejamento : p.ordenarPlanejamento,
+  };
+}
+
+/** Um DFD a baixar: o Id da Centi (= nº de planejamento), o órgão (a entidade) e o rótulo do andamento. */
+export type TarefaCenti = { chave: string; id: string; orgao: string | null; grupo: string };
+/** Um arquivo da saída: as pastas, o nome e os DFDs que entram nele (1 = o PDF do DFD; vários = unidos na ordem). */
+export type ArquivoSaida = { pastas: string[]; nome: string; partes: TarefaCenti[] };
 
 export const MAX_NOME_PASTA = 120;
 const PROIBIDOS = /[\\/:*?"<>|]+/g;
@@ -150,40 +187,108 @@ export function nomeSeguro(texto: string, max = MAX_NOME_PASTA): string {
   return t.slice(0, max).replace(/[\s.-]+$/, "").trim();
 }
 
-/** A pasta do protocolo: "Nº do protocolo - nome" (o nome = o assunto, senão o interessado; "/" do número vira "-"). */
-export function nomePastaProtocolo(p: Pick<ProtocoloAutomacao, "numero" | "assunto" | "interessado">): string {
-  const nome = (p.assunto ?? "").trim() || (p.interessado ?? "").trim();
-  return nomeSeguro(nome ? `${p.numero} - ${nome}` : p.numero) || "Protocolo";
+const soDigitos = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+const anoDoProtocolo = (p: ProtocoloAutomacao) => p.anoPca ?? p.dfds.find((d) => d.anoPca)?.anoPca ?? null;
+
+/** A pasta (ou o PDF unido) do protocolo: "Nº do protocolo - SIGLA - PCA <ano>" ("/" do número vira "-"). */
+export function nomePastaProtocolo(p: Pick<ProtocoloAutomacao, "numero" | "sigla" | "anoPca" | "dfds">): string {
+  const ano = p.anoPca ?? p.dfds.find((d) => d.anoPca)?.anoPca ?? null;
+  const partes = [p.numero, p.sigla?.trim(), ano ? `PCA ${ano}` : null].filter(Boolean);
+  return nomeSeguro(partes.join(" - ")) || "Protocolo";
 }
 
-/** As tarefas dos protocolos escolhidos: uma por DFD com planejamento (sem planejamento = `semPlanejamento`, a Centi não
- * acha), na pasta do protocolo; o MESMO planejamento duas vezes no mesmo protocolo vira um arquivo só. */
-export function tarefasDosProtocolos(protos: ProtocoloAutomacao[]): { tarefas: TarefaCenti[]; semPlanejamento: { protocolo: string; dfd: string }[] } {
-  const tarefas: TarefaCenti[] = [];
+/** O PDF de um DFD: "Planejamento P - DFD N - PCA <ano>.pdf" (sem o DFD conhecido, "Planejamento P.pdf"). */
+export function nomeArquivoDfd(id: string, dfd?: { numero: string; anoPca: number | null } | null): string {
+  const partes = [`Planejamento ${id}`, dfd ? `DFD ${dfd.numero}` : null, dfd?.anoPca ? `PCA ${dfd.anoPca}` : null].filter(Boolean);
+  return `${nomeSeguro(partes.join(" - "), 150)}.pdf`;
+}
+
+const pastaPca = (ano: number | null) => (ano ? `PCA ${ano}` : "PCA sem ano");
+const porPlanejamento = <T extends { id: string }>(xs: T[]) => [...xs].sort((a, b) => Number(a.id) - Number(b.id));
+
+type Item = { t: TarefaCenti; dfd: DfdAutomacao | null; ano: number | null };
+
+/** O PLANO da saída a partir dos protocolos escolhidos: DFD sem planejamento é pulado (`semPlanejamento` — a Centi não o
+ * acha); o mesmo planejamento duas vezes no protocolo vira um só; pasta de protocolo repetida ganha "(id)". */
+export function planoDosProtocolos(
+  protos: ProtocoloAutomacao[],
+  op: OpcoesSaida,
+  hoje = "",
+): { arquivos: ArquivoSaida[]; semPlanejamento: { protocolo: string; dfd: string }[]; total: number } {
   const semPlanejamento: { protocolo: string; dfd: string }[] = [];
-  const pastas = new Set<string>();
+  const usados = new Set<string>();
+  const grupos: { nome: string; ano: number | null; itens: Item[] }[] = [];
   for (const p of protos) {
-    let pasta = nomePastaProtocolo(p);
-    // Dois protocolos com o mesmo nome de pasta (raro) não se misturam.
-    if (pastas.has(pasta)) pasta = nomeSeguro(`${pasta} (${p.id})`);
-    pastas.add(pasta);
+    let nome = nomePastaProtocolo(p);
+    if (usados.has(nome)) nome = nomeSeguro(`${nome} (${p.id})`);
+    usados.add(nome);
+    const ano = anoDoProtocolo(p);
     const vistos = new Set<string>();
+    const itens: Item[] = [];
     for (const d of p.dfds) {
-      const id = (d.planejamento ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+      const id = soDigitos(d.planejamento);
       if (!id || id === "0") {
         semPlanejamento.push({ protocolo: p.numero, dfd: d.numero });
         continue;
       }
       if (vistos.has(id)) continue;
       vistos.add(id);
-      tarefas.push({ chave: `${p.id}:${id}`, id, arquivo: `${nomeSeguro(`DFD ${d.numero} - Planejamento ${id}`, 150)}.pdf`, pasta });
+      itens.push({ t: { chave: `${p.id}:${id}`, id, orgao: d.orgao, grupo: nome }, dfd: { ...d, anoPca: d.anoPca ?? ano }, ano: d.anoPca ?? ano });
     }
+    if (op.ordenarPlanejamento) itens.sort((a, b) => Number(a.t.id) - Number(b.t.id));
+    if (itens.length) grupos.push({ nome, ano, itens });
   }
-  return { tarefas, semPlanejamento };
+  const raiz = (ano: number | null) => (op.pastaPca ? [pastaPca(ano)] : []);
+  let arquivos: ArquivoSaida[];
+  if (op.formato === "separados")
+    arquivos = grupos.flatMap((g) => g.itens.map((i) => ({ pastas: [...raiz(g.ano), g.nome], nome: nomeArquivoDfd(i.t.id, i.dfd), partes: [i.t] })));
+  else if (op.formato === "protocolo") arquivos = grupos.map((g) => ({ pastas: raiz(g.ano), nome: `${g.nome}.pdf`, partes: g.itens.map((i) => i.t) }));
+  else {
+    let todos = grupos.flatMap((g) => g.itens.map((i) => i.t));
+    if (op.ordenarPlanejamento) todos = porPlanejamento(todos);
+    const anos = [...new Set(grupos.map((g) => g.ano))];
+    const umAno = anos.length === 1 ? anos[0] : undefined;
+    const nome =
+      grupos.length === 1
+        ? `${grupos[0].nome}.pdf`
+        : `${nomeSeguro(["DFDs", `${grupos.length} protocolos`, umAno ? `PCA ${umAno}` : null, hoje || null].filter(Boolean).join(" - "))}.pdf`;
+    arquivos = todos.length ? [{ pastas: op.pastaPca && umAno !== undefined ? [pastaPca(umAno)] : [], nome, partes: todos }] : [];
+  }
+  return { arquivos, semPlanejamento, total: grupos.reduce((s, g) => s + g.itens.length, 0) };
 }
 
-/** As tarefas dos Ids digitados (na raiz da pasta escolhida). */
-export const tarefasDosIds = (ids: string[]): TarefaCenti[] => ids.map((id) => ({ chave: id, id, arquivo: nomeArquivoDfd(id), pasta: null }));
+/** O PLANO dos Ids digitados: o DFD de cada um é procurado nos protocolos do sistema (nome do arquivo, ano e órgão). */
+export function planoDosIds(ids: string[], protos: ProtocoloAutomacao[], op: OpcoesSaida, hoje = ""): ArquivoSaida[] {
+  const indice = new Map<string, DfdAutomacao>();
+  for (const p of protos) for (const d of p.dfds) {
+    const id = soDigitos(d.planejamento);
+    if (id && !indice.has(id)) indice.set(id, { ...d, anoPca: d.anoPca ?? anoDoProtocolo(p) });
+  }
+  let itens = ids.map((id) => {
+    const dfd = indice.get(id) ?? null;
+    return { id, dfd, t: { chave: id, id, orgao: dfd?.orgao ?? null, grupo: "" } as TarefaCenti };
+  });
+  if (op.ordenarPlanejamento) itens = porPlanejamento(itens);
+  if (op.formato === "unico") {
+    const anos = [...new Set(itens.map((i) => i.dfd?.anoPca ?? null))];
+    const umAno = anos.length === 1 ? anos[0] : null;
+    const nome = `${nomeSeguro(["DFDs", `${itens.length} planejamentos`, umAno ? `PCA ${umAno}` : null, hoje || null].filter(Boolean).join(" - "))}.pdf`;
+    return itens.length ? [{ pastas: op.pastaPca && umAno ? [pastaPca(umAno)] : [], nome, partes: itens.map((i) => i.t) }] : [];
+  }
+  return itens.map((i) => ({ pastas: op.pastaPca ? [pastaPca(i.dfd?.anoPca ?? null)] : [], nome: nomeArquivoDfd(i.id, i.dfd), partes: [i.t] }));
+}
+
+/** As entidades da Centi a TENTAR quando o DFD não está na entidade aberta: as digitadas ("02:03:04") ou, sem elas e com
+ * a entidade aberta numérica, de 1 a 20 no mesmo formato (com o zero à esquerda, se a aberta tem). */
+export function candidatosEntidade(texto: string, atual: string | null): string[] {
+  const digitadas = texto
+    .split(/[\s:;,]+/)
+    .map((x) => x.trim())
+    .filter((x) => /^[\w.-]{1,40}$/.test(x));
+  if (digitadas.length) return [...new Set(digitadas)];
+  if (!atual || !/^\d{1,4}$/.test(atual)) return [];
+  return Array.from({ length: 20 }, (_, i) => String(i + 1).padStart(atual.length, "0"));
+}
 
 /** A maior de duas versões "a.b.c". */
 export function maiorVersao(a: string, b: string): string {

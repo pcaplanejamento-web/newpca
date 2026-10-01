@@ -1516,3 +1516,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ## Automação (Centi)
 ✅ Tela **Automação** (ADM) + extensão do Chrome: baixa DFDs da Centi por Id do planejamento (Emitir DFD com valor de referência) direto numa pasta, usando o login já feito na Centi; só leitura (não vincula, não assina, não envia e-mail).
 ✅ **Por protocolo**: selecionar um ou vários protocolos do sistema e baixar todos os DFDs, cada protocolo numa pasta "Nº do protocolo - assunto" criada sozinha; tela em largura total (Baixar DFDs | Opções + Andamento por pasta).
+✅ Saída configurável: pasta "PCA ano", protocolo "Nº - SIGLA - PCA ano", PDF "Planejamento P - DFD N - PCA ano", separados / um por protocolo / um único (unidos), ordem pelo planejamento, Downloads (.zip com as pastas) por padrão; entidade da Centi por órgão descoberta e lembrada (extensão 1.2.0).

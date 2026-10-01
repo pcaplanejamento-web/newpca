@@ -3382,11 +3382,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cru, base64 "JVBER…", gzip "H4sI…" e bytes; falha mostra o `esqueletoCenti`, sem dados/tokens), `lerIdsCenti`,
   `lerConfigCenti`, `VERSAO_EXTENSAO_CENTI` (a MÍNIMA aceita) + `versaoAtende`. Nada entra na Mesa nem é gravado na Centi;
   nenhuma senha no sistema. **Por protocolo** (padrão; `Segmented` Por protocolo | Por Id): os protocolos do sistema numa
-  `DataTable` com seleção (loader `protocolosParaAutomacao`, `automacao.ts` — todos, com os planejamentos dos DFDs) → para
-  cada um, em sequência, a SUBPASTA "Nº do protocolo - assunto" (senão o interessado; `nomePastaProtocolo`/`nomeSeguro`,
-  `getDirectoryHandle`) com os PDFs "DFD N - Planejamento P.pdf" (`tarefasDosProtocolos`: DFD sem planejamento é pulado e
-  avisado; planejamento repetido no protocolo = um arquivo; pasta repetida ganha "(id)"); sem o seletor de pasta, Downloads
-  com o nome da pasta à frente. Tela em largura total: Baixar DFDs | coluna Opções + Andamento por pasta. Testes:
+  `DataTable` com seleção (loader `protocolosParaAutomacao`, `automacao.ts` — todos, com a SIGLA da unidade e, por DFD, o
+  planejamento, o ano do PCA e o ÓRGÃO — `chaveOrgaoCenti`). **Plano da saída** (puro: `planoDosProtocolos`/`planoDosIds` →
+  `ArquivoSaida {pastas, nome, partes}`): pasta do protocolo "Nº - SIGLA - PCA ano" (`nomePastaProtocolo`), PDF
+  "Planejamento P - DFD N - PCA ano" (`nomeArquivoDfd`), opções no aparelho (`OpcoesSaida`): pasta "PCA ano" por cima,
+  PDFs **separados | um por protocolo | um único** (unidos pelo `pdf-lib`, import dinâmico) e ordem pelo nº de
+  planejamento; DFD sem planejamento é pulado e avisado. Sem pasta escolhida (o seletor abre em Downloads), um arquivo vai
+  direto para Downloads e vários vão num **.zip com as pastas** (`zip-armazenar.ts`, STORE puro e testado). **Entidade da
+  Centi por órgão** (extensão 1.2.0, protocolo 3: o `estado` devolve a entidade aberta — cabeçalho `Company` — e o `pedir`
+  aceita `entidade` só naquele pedido): mapa órgão → entidade no aparelho; sem ele, a aberta; falhou e "Descobrir sozinho"
+  ligado → tenta as outras (`candidatosEntidade`: as digitadas ou 1–20 no formato da aberta) e lembra a que deu certo.
+  Tela em largura total: Baixar DFDs + Andamento | Saída · Opções · Entidade por órgão. Testes:
   `tests/automacao-centi.test.ts`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de

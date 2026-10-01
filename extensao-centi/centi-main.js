@@ -3,7 +3,7 @@
 // achar o PDF) mora no sistema — atualiza sem reinstalar a extensão. Aqui ficam só as TRAVAS: só a Centi, só leitura
 // (GET) da API e, para POST, só a operação "Emitir DFD" com não vincular/não assinar/não enviar forçados.
 (() => {
-  const PROTOCOLO = 2;
+  const PROTOCOLO = 3;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -74,13 +74,22 @@
     return u.href;
   }
 
-  function executar(metodo, url, corpo) {
+  // A ENTIDADE aberta na aba (o cabeçalho Company que a própria Centi manda — muda quando se troca a entidade lá).
+  const nomeEntidade = () => (cabecalhos ? Object.keys(cabecalhos).find((k) => /^company$/i.test(k)) : undefined);
+  const entidadeAtual = () => {
+    const k = nomeEntidade();
+    return k ? String(cabecalhos[k]) : null;
+  };
+
+  function executar(metodo, url, corpo, entidade) {
     return new Promise((ok, falha) => {
       const x = new XMLHttpRequest();
       x.__pcaInterno = true;
       x.open(metodo, url);
       x.responseType = "arraybuffer";
-      for (const [k, v] of Object.entries(cabecalhos)) x.setRequestHeader(k, v);
+      const k = nomeEntidade();
+      for (const [n, v] of Object.entries(cabecalhos)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
+      if (entidade && !k) x.setRequestHeader("Company", entidade);
       if (corpo) x.setRequestHeader("Content-Type", "application/json");
       x.setRequestHeader("Accept", "application/json, text/plain, */*");
       x.onload = () =>
@@ -96,13 +105,16 @@
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
     const url = destino(String(d?.caminho || ""));
     if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
-    if (d.metodo === "GET") return executar("GET", url, null);
+    // A entidade (órgão) do DFD, quando difere da aberta na aba: só um código simples, só neste pedido.
+    const ent = d.entidade == null || d.entidade === "" ? null : String(d.entidade);
+    if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
+    if (d.metodo === "GET") return executar("GET", url, null, ent);
     if (d.metodo !== "POST" || !/\/restauth\/operation$/.test(new URL(url).pathname)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
     const c = d.corpo;
     if (!c || !GUID.test(String(c.Guid)) || !Number.isInteger(c.ModuleKey) || !Array.isArray(c.Params)) return { ok: false, erro: "Pedido inválido." };
     const params = c.Params.map((p) => ({ Key: String(p.Key), Value: p.Key in TRAVAS ? TRAVAS[p.Key] : String(p.Value ?? "") }));
     for (const [Key, Value] of Object.entries(TRAVAS)) if (!params.some((p) => p.Key === Key)) params.push({ Key, Value });
-    return executar("POST", url, { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params });
+    return executar("POST", url, { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params }, ent);
   }
 
   window.addEventListener("message", async (e) => {
@@ -110,7 +122,7 @@
     const { id, acao, dados } = e.data;
     let resposta;
     try {
-      resposta = acao === "estado" ? { ok: true, logado: !!cabecalhos } : acao === "pedir" ? await pedir(dados) : { ok: false, erro: "Ação desconhecida." };
+      resposta = acao === "estado" ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual() } : acao === "pedir" ? await pedir(dados) : { ok: false, erro: "Ação desconhecida." };
     } catch (err) {
       resposta = { ok: false, erro: err?.message || "Falha no pedido à Centi." };
     }

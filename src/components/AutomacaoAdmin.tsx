@@ -2,24 +2,32 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type ArquivoSaida,
   analisarRespostaCenti,
-  caminhosDoArquivo,
-  type ConfigCenti,
   CONFIG_CENTI_PADRAO,
+  type ConfigCenti,
+  caminhosDoArquivo,
+  candidatosEntidade,
   ehPdf,
+  type FormatoSaida,
   lerConfigCenti,
   lerIdsCenti,
+  lerOpcoesSaida,
   linkDaResposta,
   MAX_IDS_CENTI,
   maiorVersao,
-  pedidoEmitirDfd,
+  nomeSeguro,
+  OPCOES_SAIDA_PADRAO,
+  type OpcoesSaida,
   type ProtocoloAutomacao,
+  pedidoEmitirDfd,
+  planoDosIds,
+  planoDosProtocolos,
   type TarefaCenti,
-  tarefasDosIds,
-  tarefasDosProtocolos,
   VERSAO_EXTENSAO_CENTI,
   versaoAtende,
 } from "@/lib/automacao-centi-core";
+import { ZipArmazenar } from "@/lib/zip-armazenar";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -27,19 +35,23 @@ import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { EstadoPonto } from "./EstadoCelula";
 import { TextField } from "./Field";
+import { cellCls } from "./formStyles";
 import { IconDownload, IconPasta, IconPastaAberta, IconRefresh, IconRobo } from "./icons";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
 
-// Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) para uma pasta escolhida. Quem fala
-// com a Centi é a EXTENSÃO do Chrome (extensao-centi/, baixada aqui), usando a sessão da Centi já aberta no navegador —
-// nenhuma senha fica no sistema e nada é gravado na Centi (as travas são forçadas também na extensão).
+// Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) por PROTOCOLO do sistema (uma pasta
+// por protocolo, dentro da pasta "PCA <ano>") ou por Id. Quem fala com a Centi é a EXTENSÃO do Chrome (extensao-centi/),
+// usando a sessão da Centi já aberta — nenhuma senha fica no sistema e nada é gravado na Centi (travas também na extensão).
+// Cada DFD é emitido na ENTIDADE da Centi do órgão dele (mapa órgão → entidade, descoberto sozinho e lembrado no aparelho).
 
 const CHAVE_CONFIG = "automacao:centi";
+const CHAVE_SAIDA = "automacao:centi-saida";
+const CHAVE_ENTIDADES = "automacao:centi-entidades";
 
-type Resposta = { ok: boolean; erro?: string; logado?: boolean; status?: number; b64?: string };
-type Linha = TarefaCenti & { estado: "fila" | "baixando" | "ok" | "falha"; erro?: string; amostra?: string };
+type Resposta = { ok: boolean; erro?: string; logado?: boolean; entidade?: string | null; status?: number; b64?: string };
+type Linha = TarefaCenti & { estado: "fila" | "baixando" | "ok" | "falha"; erro?: string; amostra?: string; entidade?: string };
 type Modo = "protocolo" | "ids";
 type Ext = { versao: string } | null;
 
@@ -100,25 +112,64 @@ async function gunzip(bytes: Uint8Array) {
   const st = new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("gzip"));
   return new Uint8Array(await new Response(st).arrayBuffer());
 }
+const comoBlob = (b: Uint8Array, tipo = "application/pdf") => new Blob([b as Uint8Array<ArrayBuffer>], { type: tipo });
 
-/** Grava na pasta escolhida (na SUBPASTA do protocolo, criada na 1ª vez); sem a escolha de pasta, vai para Downloads com
- * o nome da pasta à frente do arquivo. */
-async function salvar(pasta: Pasta | null, sub: string | null, nome: string, blob: Blob) {
-  if (pasta) {
-    const destino = sub ? await pasta.getDirectoryHandle(sub, { create: true }) : pasta;
-    const arq = await destino.getFileHandle(nome, { create: true });
-    const w = await arq.createWritable();
-    await w.write(blob);
-    await w.close();
-    return;
-  }
+function baixarNoNavegador(nome: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = sub ? `${sub} - ${nome}` : nome;
+  a.download = nome;
   a.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
+
+/** Grava na pasta escolhida, criando as subpastas (PCA <ano> / protocolo) na 1ª vez. */
+async function gravarNaPasta(pasta: Pasta, pastas: string[], nome: string, blob: Blob) {
+  let destino = pasta;
+  for (const p of pastas) destino = await destino.getDirectoryHandle(p, { create: true });
+  const arq = await destino.getFileHandle(nome, { create: true });
+  const w = await arq.createWritable();
+  await w.write(blob);
+  await w.close();
+}
+
+/** Une PDFs na ordem (pdf-lib, carregado só aqui). */
+async function novaUniao() {
+  const { PDFDocument } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  let n = 0;
+  return {
+    async adicionar(b: Uint8Array) {
+      const d = await PDFDocument.load(b, { ignoreEncryption: true });
+      for (const pg of await doc.copyPages(d, d.getPageIndices())) doc.addPage(pg);
+      n++;
+    },
+    get vazio() {
+      return n === 0;
+    },
+    salvar: () => doc.save(),
+  };
+}
+
+function lerLocal<T>(chave: string, ler: (v: unknown) => T, padrao: T): T {
+  try {
+    return ler(JSON.parse(localStorage.getItem(chave) ?? "null"));
+  } catch {
+    return padrao;
+  }
+}
+function gravarLocal(chave: string, v: unknown) {
+  try {
+    localStorage.setItem(chave, JSON.stringify(v));
+  } catch {}
+}
+const lerMapa = (v: unknown): Record<string, string> =>
+  Object.fromEntries(Object.entries(v && typeof v === "object" ? v : {}).filter(([, x]) => typeof x === "string" && /^[\w.-]{1,40}$/.test(x))) as Record<string, string>;
+
+const hojeBR = () => {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+};
 
 const COR: Record<Linha["estado"], string> = { fila: "var(--muted)", baixando: "var(--info)", ok: "var(--ok)", falha: "var(--danger)" };
 const ROTULO: Record<Linha["estado"], string> = { fila: "Na fila", baixando: "Baixando…", ok: "Salvo", falha: "Falhou" };
@@ -135,15 +186,20 @@ function Secao({ titulo, acao, children, className = "" }: { titulo: string; aca
   );
 }
 
-const pcaDe = (p: ProtocoloAutomacao) => (p.anoPca ? String(p.anoPca) : "—");
-const semPlan = (p: ProtocoloAutomacao) => p.dfds.filter((d) => !(d.planejamento ?? "").replace(/\D/g, "")).length;
+const semPlan = (p: ProtocoloAutomacao) => p.dfds.filter((d) => !/[1-9]/.test(d.planejamento ?? "")).length;
+const texto1 = (v: string | null) => (
+  <span className="line-clamp-1" title={v ?? ""}>
+    {v || "—"}
+  </span>
+);
 
 const COLUNAS: Column<ProtocoloAutomacao>[] = [
   { key: "numero", header: "Nº protocolo", nowrap: true, value: (p) => p.numero, render: (p) => <span className="font-semibold text-text">{p.numero}</span> },
   { key: "id", header: "Id", nowrap: true, value: (p) => p.idExterno ?? "—" },
-  { key: "assunto", header: "Assunto", minWidth: 220, align: "left", value: (p) => p.assunto ?? "—", render: (p) => <span className="line-clamp-1" title={p.assunto ?? ""}>{p.assunto ?? "—"}</span> },
-  { key: "interessado", header: "Interessado", minWidth: 220, align: "left", value: (p) => p.interessado ?? "—", render: (p) => <span className="line-clamp-1" title={p.interessado ?? ""}>{p.interessado ?? "—"}</span> },
-  { key: "pca", header: "PCA", nowrap: true, value: pcaDe },
+  { key: "sigla", header: "Sigla", nowrap: true, value: (p) => p.sigla ?? "—" },
+  { key: "assunto", header: "Assunto", minWidth: 180, align: "left", value: (p) => p.assunto ?? "—", render: (p) => texto1(p.assunto) },
+  { key: "interessado", header: "Interessado", minWidth: 220, align: "left", value: (p) => p.interessado ?? "—", render: (p) => texto1(p.interessado) },
+  { key: "pca", header: "PCA", nowrap: true, value: (p) => (p.anoPca ? String(p.anoPca) : "—") },
   { key: "local", header: "Local", nowrap: true, value: (p) => p.pca ?? "Mesa do sistema" },
   { key: "dfds", header: "DFDs", nowrap: true, filter: "range", numero: (p) => p.dfds.length, formatarFaixa: (n) => String(n), value: (p) => String(p.dfds.length) },
   {
@@ -155,9 +211,18 @@ const COLUNAS: Column<ProtocoloAutomacao>[] = [
   },
 ];
 
+const FORMATOS: { value: FormatoSaida; label: string }[] = [
+  { value: "separados", label: "Separados" },
+  { value: "protocolo", label: "Um por protocolo" },
+  { value: "unico", label: "Um único" },
+];
+
 export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[] }) {
   const { ext, pedir } = useExtensaoCenti();
   const [cfg, setCfg] = useState<ConfigCenti>(CONFIG_CENTI_PADRAO);
+  const [saida, setSaida] = useState<OpcoesSaida>(OPCOES_SAIDA_PADRAO);
+  const [mapa, setMapa] = useState<Record<string, string>>({});
+  const mapaRef = useRef(mapa);
   const [logado, setLogado] = useState<Resposta | null>(null);
   const [modo, setModo] = useState<Modo>("protocolo");
   const [texto, setTexto] = useState("");
@@ -168,17 +233,31 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
   const podePasta = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
   useEffect(() => {
-    try {
-      setCfg(lerConfigCenti(JSON.parse(localStorage.getItem(CHAVE_CONFIG) ?? "null")));
-    } catch {}
+    setCfg(lerLocal(CHAVE_CONFIG, lerConfigCenti, CONFIG_CENTI_PADRAO));
+    setSaida(lerLocal(CHAVE_SAIDA, lerOpcoesSaida, OPCOES_SAIDA_PADRAO));
+    const m = lerLocal(CHAVE_ENTIDADES, lerMapa, {});
+    mapaRef.current = m;
+    setMapa(m);
   }, []);
   const mudar = (p: Partial<ConfigCenti>) => {
     const n = lerConfigCenti({ ...cfg, ...p });
     setCfg(n);
-    try {
-      localStorage.setItem(CHAVE_CONFIG, JSON.stringify(n));
-    } catch {}
+    gravarLocal(CHAVE_CONFIG, n);
   };
+  const mudarSaida = (p: Partial<OpcoesSaida>) => {
+    const n = lerOpcoesSaida({ ...saida, ...p });
+    setSaida(n);
+    gravarLocal(CHAVE_SAIDA, n);
+  };
+  const definirEntidade = useCallback((orgao: string, entidade: string) => {
+    const v = entidade.trim();
+    const n = { ...mapaRef.current };
+    if (v && /^[\w.-]{1,40}$/.test(v)) n[orgao] = v;
+    else delete n[orgao];
+    mapaRef.current = n;
+    setMapa(n);
+    gravarLocal(CHAVE_ENTIDADES, n);
+  }, []);
 
   const verificar = useCallback(async () => setLogado(await pedir("estado", null, 8000)), [pedir]);
   useEffect(() => {
@@ -187,21 +266,36 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
 
   const { ids, excedente } = lerIdsCenti(texto);
   const escolhidos = useMemo(() => protocolos.filter((p) => sel.has(p.id)), [protocolos, sel]);
-  const doProtocolo = useMemo(() => tarefasDosProtocolos(escolhidos), [escolhidos]);
-  const tarefas = modo === "protocolo" ? doProtocolo.tarefas : tarefasDosIds(ids);
+  const doProtocolo = useMemo(() => planoDosProtocolos(escolhidos, saida, hojeBR()), [escolhidos, saida]);
+  const arquivos = useMemo(() => (modo === "protocolo" ? doProtocolo.arquivos : planoDosIds(ids, protocolos, saida, hojeBR())), [modo, doProtocolo, ids, protocolos, saida]);
+  const totalDfds = arquivos.reduce((s, a) => s + a.partes.length, 0);
+
+  // Os órgãos dos DFDs (os do que está escolhido; sem escolha, todos) para o mapa órgão → entidade da Centi.
+  const orgaos = useMemo(() => {
+    const base = modo === "protocolo" && escolhidos.length ? escolhidos : protocolos;
+    const m = new Map<string, { nome: string; n: number }>();
+    for (const p of base)
+      for (const d of p.dfds)
+        if (d.orgao) {
+          const o = m.get(d.orgao) ?? { nome: d.orgaoNome ?? d.orgao.slice(2), n: 0 };
+          o.n++;
+          m.set(d.orgao, o);
+        }
+    return [...m.entries()].sort((a, b) => b[1].n - a[1].n);
+  }, [modo, escolhidos, protocolos]);
 
   async function escolherPasta() {
     try {
-      const p = await (window as unknown as { showDirectoryPicker: (o: object) => Promise<Pasta> }).showDirectoryPicker({ mode: "readwrite" });
+      const p = await (window as unknown as { showDirectoryPicker: (o: object) => Promise<Pasta> }).showDirectoryPicker({ mode: "readwrite", startIn: "downloads" });
       setPasta(p);
     } catch {}
   }
 
-  type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean };
+  type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean; entidade?: string };
   // A LÓGICA da emissão (a extensão só leva o pedido à aba da Centi): Processar → o PDF, ou a chave do arquivo → baixa.
-  async function emitirUm(id: string): Promise<Emissao> {
+  async function emitirUm(id: string, entidade?: string): Promise<Emissao> {
     const ambiente = (r: Resposta): Emissao => ({ erro: r.erro ?? "Falha na extensão.", ambiente: true });
-    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, cfg, new Date()) }, 150_000);
+    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, cfg, new Date()), entidade }, 150_000);
     if (!r.ok || r.b64 == null) return ambiente(r);
     const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
     if (a.tipo === "pdf") return { pdf: a.bytes };
@@ -212,13 +306,13 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
     }
     if (a.tipo === "nada") return { erro: a.erro, amostra: a.amostra, ambiente: /sessão/i.test(a.erro) };
     for (const caminho of caminhosDoArquivo(a)) {
-      const d = await pedir("pedir", { metodo: "GET", caminho }, 150_000);
+      const d = await pedir("pedir", { metodo: "GET", caminho, entidade }, 150_000);
       if (!d.ok || d.b64 == null || (d.status ?? 0) >= 400) continue;
       const b = deBase64(d.b64);
       if (ehPdf(b)) return { pdf: b };
       const link = linkDaResposta(b);
       if (link) {
-        const z = await pedir("pedir", { metodo: "GET", caminho: link }, 150_000);
+        const z = await pedir("pedir", { metodo: "GET", caminho: link, entidade }, 150_000);
         const c = z.ok && z.b64 ? deBase64(z.b64) : null;
         if (c && ehPdf(c)) return { pdf: c };
       }
@@ -226,33 +320,89 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
     return { erro: "A Centi gerou o PDF, mas não consegui baixá-lo pela chave." };
   }
 
-  // Um protocolo após o outro, um DFD após o outro (a Centi processa um pedido por vez na aba).
+  // A ENTIDADE do DFD: a do órgão (mapa); sem ela, a aberta na Centi. Falhou e "descobrir" está ligado → tenta as outras
+  // entidades e lembra a que deu certo para o órgão (os próximos DFDs dele vão direto).
+  async function emitirNaEntidade(t: TarefaCenti, semSaida: Set<string>, atual: string | null): Promise<Emissao> {
+    const mapeada = t.orgao ? mapaRef.current[t.orgao] : undefined;
+    const r = await emitirUm(t.id, mapeada);
+    if (r.pdf) {
+      if (t.orgao && !mapeada && atual) definirEntidade(t.orgao, atual);
+      return { ...r, entidade: mapeada ?? atual ?? undefined };
+    }
+    if (r.ambiente || !cfg.descobrirEntidade || (t.orgao && semSaida.has(t.orgao))) return r;
+    const ja = mapeada ?? atual;
+    const conhecidas = Object.values(mapaRef.current);
+    const tentar = [...new Set([...conhecidas, ...candidatosEntidade(cfg.entidades, atual)])].filter((e) => e !== ja);
+    for (const e of tentar) {
+      const x = await emitirUm(t.id, e);
+      if (x.ambiente) return x;
+      if (x.pdf) {
+        if (t.orgao) definirEntidade(t.orgao, e);
+        return { ...x, entidade: e };
+      }
+    }
+    if (t.orgao) semSaida.add(t.orgao);
+    return tentar.length ? { ...r, erro: `${r.erro ?? "Falha"} (não achei em nenhuma das ${tentar.length + 1} entidades tentadas)` } : r;
+  }
+
+  // Um arquivo após o outro, um DFD após o outro (a Centi processa um pedido por vez na aba). Sem pasta escolhida: um
+  // arquivo só vai direto para Downloads; vários vão num ZIP com as pastas montadas.
   async function baixar() {
-    if (!tarefas.length || rodando) return;
+    if (!arquivos.length || rodando) return;
     setRodando(true);
-    const lote = tarefas;
-    setLinhas(lote.map((t) => ({ ...t, estado: "fila" })));
+    const plano = arquivos;
+    const todas = plano.flatMap((a) => a.partes);
+    setLinhas(todas.map((t) => ({ ...t, estado: "fila" })));
     const marcar = (chave: string, l: Partial<Linha>) => setLinhas((ls) => ls.map((x) => (x.chave === chave ? { ...x, ...l } : x)));
-    for (const t of lote) {
-      marcar(t.chave, { estado: "baixando" });
-      const r = await emitirUm(t.id);
-      if (!r.pdf) {
-        const erro = r.erro ?? "Falha ao emitir.";
-        // Falha do AMBIENTE (extensão/aba/sessão), não do Id: os demais falhariam igual — para o lote e revalida.
-        if (r.ambiente) {
-          setLinhas((ls) => ls.map((x) => (x.estado === "fila" || x.chave === t.chave ? { ...x, estado: "falha", erro } : x)));
-          void verificar();
-          break;
+    const zip = !pasta && (plano.length > 1 || plano[0].pastas.length > 0) ? new ZipArmazenar() : null;
+    const pedacos: Blob[] = [];
+    const gravar = async (a: ArquivoSaida, bytes: Uint8Array) => {
+      if (pasta) await gravarNaPasta(pasta, a.pastas, a.nome, comoBlob(bytes));
+      else if (zip) pedacos.push(...zip.adicionar([...a.pastas, a.nome].join("/"), bytes).map((b) => comoBlob(b)));
+      else baixarNoNavegador(a.nome, comoBlob(bytes));
+    };
+    const semSaida = new Set<string>();
+    const atual = logado?.entidade ?? null;
+    let parar = false;
+    for (const a of plano) {
+      if (parar) break;
+      const uniao = a.partes.length > 1 ? await novaUniao() : null;
+      for (const t of a.partes) {
+        marcar(t.chave, { estado: "baixando" });
+        const r = await emitirNaEntidade(t, semSaida, atual);
+        if (!r.pdf) {
+          const erro = r.erro ?? "Falha ao emitir.";
+          // Falha do AMBIENTE (extensão/aba/sessão): os demais falhariam igual — para o lote (o que já veio é salvo).
+          if (r.ambiente) {
+            setLinhas((ls) => ls.map((x) => (x.estado === "fila" || x.chave === t.chave ? { ...x, estado: "falha", erro } : x)));
+            void verificar();
+            parar = true;
+            break;
+          }
+          marcar(t.chave, { estado: "falha", erro, amostra: r.amostra });
+          continue;
         }
-        marcar(t.chave, { estado: "falha", erro, amostra: r.amostra });
-        continue;
+        try {
+          if (uniao) await uniao.adicionar(r.pdf);
+          else await gravar(a, r.pdf);
+          marcar(t.chave, { estado: "ok", entidade: r.entidade });
+        } catch {
+          marcar(t.chave, { estado: "falha", erro: uniao ? "PDF ilegível — não entrou no arquivo unido." : "Não consegui gravar — escolha a pasta de novo." });
+        }
       }
-      try {
-        await salvar(pasta, t.pasta, t.arquivo, new Blob([r.pdf as Uint8Array<ArrayBuffer>], { type: "application/pdf" }));
-        marcar(t.chave, { estado: "ok" });
-      } catch {
-        marcar(t.chave, { estado: "falha", erro: "Não consegui gravar na pasta — escolha a pasta de novo." });
+      if (uniao && !uniao.vazio) {
+        try {
+          await gravar(a, await uniao.salvar());
+        } catch {
+          setLinhas((ls) => ls.map((x) => (a.partes.some((p) => p.chave === x.chave) && x.estado === "ok" ? { ...x, estado: "falha", erro: "Não consegui gravar o PDF unido." } : x)));
+        }
       }
+    }
+    if (zip && !zip.vazio) {
+      pedacos.push(...zip.fechar().map((b) => comoBlob(b)));
+      const raiz = new Set(plano.map((a) => a.pastas[0] ?? ""));
+      const nome = raiz.size === 1 && [...raiz][0] ? [...raiz][0] : `DFDs Centi - ${hojeBR()}`;
+      baixarNoNavegador(`${nomeSeguro(nome)}.zip`, new Blob(pedacos, { type: "application/zip" }));
     }
     setRodando(false);
   }
@@ -263,12 +413,14 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
   const pronto = atualizada && !!logado?.ok && !!logado.logado;
   const grupos = useMemo(() => {
     const m = new Map<string, Linha[]>();
-    for (const l of linhas) {
-      const k = l.pasta ?? "";
-      m.set(k, [...(m.get(k) ?? []), l]);
-    }
+    for (const l of linhas) m.set(l.grupo, [...(m.get(l.grupo) ?? []), l]);
     return [...m.entries()];
   }, [linhas]);
+  const destino = pasta
+    ? `Na pasta “${pasta.name}”.`
+    : arquivos.length > 1 || arquivos[0]?.pastas.length
+      ? "Sem pasta escolhida: vai para Downloads num .zip com as pastas montadas."
+      : "Sem pasta escolhida: vai para Downloads.";
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -282,17 +434,30 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
             ao protocolo, não assina e não envia e-mail.
           </p>
           <p>
-            <strong>Por protocolo:</strong> marque um ou vários protocolos do sistema. Para cada um, a automação cria, dentro da
-            pasta escolhida, a pasta “Nº do protocolo - assunto” e salva nela os DFDs do protocolo (pelo nº de planejamento),
-            um protocolo após o outro. DFD sem nº de planejamento é pulado e avisado.
+            <strong>Por protocolo:</strong> marque um ou vários protocolos. Cada um vira a pasta “Nº do protocolo - SIGLA - PCA
+            ano” (dentro de “PCA ano”, se ligado) com os PDFs “Planejamento P - DFD N - PCA ano”. DFD sem nº de planejamento é
+            pulado e avisado. <strong>Por Id:</strong> digite os nºs de planejamento separados por “:”.
           </p>
           <p>
-            <strong>Por Id:</strong> digite os nºs de planejamento (separados por “:”) — os PDFs vão para a raiz da pasta.
+            <strong>Saída:</strong> PDFs separados, um PDF unido por protocolo ou um PDF único com tudo; a ordem pode seguir o
+            nº de planejamento. Sem escolher pasta, vai para Downloads (vários arquivos num .zip com as pastas).
+          </p>
+          <p>
+            <strong>Entidade (órgão):</strong> cada DFD é emitido na entidade da Centi do órgão dele. Sem a entidade cadastrada,
+            usa a aberta na Centi e, se o DFD não estiver nela, tenta as outras e lembra a que deu certo para o órgão. Também
+            dá para informar à mão: abra a entidade na Centi, clique em Verificar e use “Usar a aberta” no órgão.
           </p>
         </Ajuda>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {ext ? <Badge tone="emerald" dot>Extensão v{ext.versao}</Badge> : <Badge tone="amber" dot>Extensão não encontrada</Badge>}
-          {atualizada && (logado?.ok && logado.logado ? <Badge tone="emerald" dot>Centi logada</Badge> : <Badge tone="amber" dot>{logado?.erro ?? "Centi sem login"}</Badge>)}
+          {atualizada &&
+            (logado?.ok && logado.logado ? (
+              <Badge tone="emerald" dot>
+                Centi logada{logado.entidade ? ` · entidade ${logado.entidade}` : ""}
+              </Badge>
+            ) : (
+              <Badge tone="amber" dot>{logado?.erro ?? "Centi sem login"}</Badge>
+            ))}
           <Button size="sm" variant="secondary" onClick={() => (ext ? void verificar() : window.location.reload())}>
             <IconRefresh className="h-4 w-4" /> Verificar
           </Button>
@@ -301,8 +466,8 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
 
       {ext && !atualizada && (
         <Callout kind="warn">
-          Instale a extensão {VERSAO_EXTENSAO_CENTI} (a última que pede reinstalação — as melhorias seguintes chegam com o
-          sistema): baixe o zip abaixo, substitua os arquivos da pasta e clique em ↻ no cartão dela em chrome://extensions.
+          Atualize a extensão para a {VERSAO_EXTENSAO_CENTI} (traz a escolha da entidade da Centi por órgão): baixe o zip
+          abaixo, substitua os arquivos da pasta e clique em ↻ no cartão dela em chrome://extensions.
         </Callout>
       )}
       {(!ext || !atualizada) && (
@@ -322,92 +487,76 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
       )}
 
       <div className="grid gap-[var(--gap-block)] xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <Secao
-          titulo="Baixar DFDs"
-          className="min-w-0"
-          acao={
-            <Segmented<Modo>
-              ariaLabel="Origem dos DFDs"
-              value={modo}
-              onChange={setModo}
-              disabled={rodando}
-              options={[
-                { value: "protocolo", label: "Por protocolo" },
-                { value: "ids", label: "Por Id" },
-              ]}
-            />
-          }
-        >
-          {modo === "protocolo" ? (
-            <>
-              <DataTable
-                columns={COLUNAS}
-                rows={protocolos}
-                getKey={(p) => p.id}
-                selectable
-                selected={sel}
-                onSelected={setSel}
-                density="compact"
-                pageSize={20}
-                vazio="Nenhum protocolo no sistema."
-                resumo={(ls) => `${ls.length} protocolo(s) · ${ls.reduce((s, p) => s + p.dfds.length, 0)} DFD(s)`}
+        <div className="min-w-0 space-y-[var(--gap-block)]">
+          <Secao
+            titulo="Baixar DFDs"
+            acao={
+              <Segmented<Modo>
+                ariaLabel="Origem dos DFDs"
+                value={modo}
+                onChange={setModo}
+                disabled={rodando}
+                options={[
+                  { value: "protocolo", label: "Por protocolo" },
+                  { value: "ids", label: "Por Id" },
+                ]}
               />
-              {doProtocolo.semPlanejamento.length > 0 && (
-                <Callout kind="warn">
-                  {doProtocolo.semPlanejamento.length} DFD(s) sem nº de planejamento serão pulados:{" "}
-                  {doProtocolo.semPlanejamento
-                    .slice(0, 12)
-                    .map((x) => `DFD ${x.dfd} (${x.protocolo})`)
-                    .join(", ")}
-                  {doProtocolo.semPlanejamento.length > 12 ? "…" : ""}
-                </Callout>
-              )}
-            </>
-          ) : (
-            <TextField
-              label="Ids do planejamento"
-              placeholder="1154:1155:1160"
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              hint={`${ids.length} Id(s)${excedente ? ` — só os ${MAX_IDS_CENTI} primeiros (${excedente} a mais)` : ""} · separe por ":" (o formato do "Copiar planejamentos")`}
-            />
-          )}
-
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            {podePasta && (
-              <Button variant="secondary" onClick={escolherPasta} disabled={rodando}>
-                <IconPastaAberta className="h-4 w-4" /> {pasta ? `Pasta: ${pasta.name}` : "Escolher pasta"}
-              </Button>
+            }
+          >
+            {modo === "protocolo" ? (
+              <>
+                <DataTable
+                  columns={COLUNAS}
+                  rows={protocolos}
+                  getKey={(p) => p.id}
+                  selectable
+                  selected={sel}
+                  onSelected={setSel}
+                  density="compact"
+                  pageSize={20}
+                  vazio="Nenhum protocolo no sistema."
+                  resumo={(ls) => `${ls.length} protocolo(s) · ${ls.reduce((s, p) => s + p.dfds.length, 0)} DFD(s)`}
+                />
+                {doProtocolo.semPlanejamento.length > 0 && (
+                  <Callout kind="warn">
+                    {doProtocolo.semPlanejamento.length} DFD(s) sem nº de planejamento serão pulados:{" "}
+                    {doProtocolo.semPlanejamento
+                      .slice(0, 12)
+                      .map((x) => `DFD ${x.dfd} (${x.protocolo})`)
+                      .join(", ")}
+                    {doProtocolo.semPlanejamento.length > 12 ? "…" : ""}
+                  </Callout>
+                )}
+              </>
+            ) : (
+              <TextField
+                label="Ids do planejamento"
+                placeholder="1154:1155:1160"
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                hint={`${ids.length} Id(s)${excedente ? ` — só os ${MAX_IDS_CENTI} primeiros (${excedente} a mais)` : ""} · separe por ":" (o formato do "Copiar planejamentos")`}
+              />
             )}
-            <Button onClick={baixar} loading={rodando} disabled={!pronto || !tarefas.length || (podePasta && !pasta)}>
-              <IconDownload className="h-4 w-4" />
-              {modo === "protocolo" ? `Baixar ${escolhidos.length} protocolo(s) · ${tarefas.length} DFD(s)` : `Baixar ${ids.length || ""}`}
-            </Button>
-            <span className="text-sm text-muted">
-              {!podePasta
-                ? "Este navegador não escolhe pasta: os PDFs vão para Downloads (com o nome da pasta à frente)."
-                : modo === "protocolo"
-                  ? "Uma pasta por protocolo é criada dentro da escolhida."
-                  : "Os PDFs vão para a raiz da pasta escolhida."}
-            </span>
-          </div>
-        </Secao>
 
-        <div className="space-y-[var(--gap-block)]">
-          <Secao titulo="Opções da emissão">
-            <div className="grid gap-3">
-              <Switch checked={cfg.valorReferencia} onChange={(v) => mudar({ valorReferencia: v })} label="Emitir valor de referência" />
-              <Switch checked={cfg.emitirData} onChange={(v) => mudar({ emitirData: v })} label="Emitir data" />
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              {podePasta && (
+                <Button variant="secondary" onClick={escolherPasta} disabled={rodando}>
+                  <IconPastaAberta className="h-4 w-4" /> {pasta ? `Pasta: ${pasta.name}` : "Escolher pasta"}
+                </Button>
+              )}
+              {pasta && (
+                <Button variant="ghost" size="sm" onClick={() => setPasta(null)} disabled={rodando}>
+                  Usar Downloads
+                </Button>
+              )}
+              <Button onClick={baixar} loading={rodando} disabled={!pronto || !totalDfds}>
+                <IconDownload className="h-4 w-4" />
+                {modo === "protocolo" ? `Baixar ${escolhidos.length} protocolo(s) · ${totalDfds} DFD(s)` : `Baixar ${totalDfds || ""}`}
+              </Button>
+              <span className="text-sm text-muted">
+                {destino} {arquivos.length > 0 && `${arquivos.length} arquivo(s).`}
+              </span>
             </div>
-            <Callout kind="ok">Sempre: saída em PDF, sem vincular ao protocolo, sem assinar, sem enviar e-mail, sem processar em segundo plano.</Callout>
-            <details className="text-sm text-muted">
-              <summary className="cursor-pointer select-none py-2">Avançado (identificação da operação na Centi)</summary>
-              <div className="grid gap-3 pt-2">
-                <TextField label="Modelo de assinatura do DFD" value={cfg.assinaturaDfd} inputMode="numeric" onChange={(e) => mudar({ assinaturaDfd: e.target.value })} />
-                <TextField label="ModuleKey" value={String(cfg.moduleKey)} inputMode="numeric" onChange={(e) => mudar({ moduleKey: Number(e.target.value) })} />
-                <TextField label="Guid da operação" value={cfg.guid} onChange={(e) => mudar({ guid: e.target.value })} />
-              </div>
-            </details>
           </Secao>
 
           {linhas.length > 0 && (
@@ -416,13 +565,13 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
               <ul className="max-h-[60vh] space-y-3 overflow-y-auto">
                 {grupos.map(([g, ls]) => {
                   const ok = ls.filter((l) => l.estado === "ok").length;
-                  const visiveis = ls.filter((l) => l.estado !== "ok" && l.estado !== "fila");
+                  const visiveis = ls.filter((l) => l.estado === "baixando" || l.estado === "falha");
                   return (
                     <li key={g} className="space-y-1">
                       <div className="flex items-center gap-2 text-sm">
                         <IconPasta className="h-4 w-4 shrink-0 text-muted" />
-                        <span className="min-w-0 flex-1 truncate font-semibold text-text" title={g || "Raiz da pasta"}>
-                          {g || "Raiz da pasta"}
+                        <span className="min-w-0 flex-1 truncate font-semibold text-text" title={g || "Planejamentos"}>
+                          {g || "Planejamentos"}
                         </span>
                         <span className="shrink-0 tabular-nums text-muted">
                           {ok}/{ls.length}
@@ -442,6 +591,70 @@ export function AutomacaoAdmin({ protocolos }: { protocolos: ProtocoloAutomacao[
               </ul>
             </Secao>
           )}
+        </div>
+
+        <div className="space-y-[var(--gap-block)]">
+          <Secao titulo="Saída">
+            <div className="space-y-1">
+              <span className="text-sm font-medium text-text-2">PDFs</span>
+              <Segmented<FormatoSaida> ariaLabel="Formato da saída" value={saida.formato} onChange={(v) => mudarSaida({ formato: v })} disabled={rodando} options={FORMATOS} />
+            </div>
+            <div className="grid gap-3">
+              <Switch checked={saida.pastaPca} onChange={(v) => mudarSaida({ pastaPca: v })} label="Criar a pasta “PCA ano” e salvar dentro" />
+              <Switch checked={saida.ordenarPlanejamento} onChange={(v) => mudarSaida({ ordenarPlanejamento: v })} label="Ordenar pelo nº de planejamento" />
+            </div>
+          </Secao>
+
+          <Secao titulo="Opções da emissão">
+            <div className="grid gap-3">
+              <Switch checked={cfg.valorReferencia} onChange={(v) => mudar({ valorReferencia: v })} label="Emitir valor de referência" />
+              <Switch checked={cfg.emitirData} onChange={(v) => mudar({ emitirData: v })} label="Emitir data" />
+            </div>
+            <Callout kind="ok">Sempre: saída em PDF, sem vincular ao protocolo, sem assinar, sem enviar e-mail, sem processar em segundo plano.</Callout>
+            <details className="text-sm text-muted">
+              <summary className="cursor-pointer select-none py-2">Avançado (identificação da operação na Centi)</summary>
+              <div className="grid gap-3 pt-2">
+                <TextField label="Modelo de assinatura do DFD" value={cfg.assinaturaDfd} inputMode="numeric" onChange={(e) => mudar({ assinaturaDfd: e.target.value })} />
+                <TextField label="ModuleKey" value={String(cfg.moduleKey)} inputMode="numeric" onChange={(e) => mudar({ moduleKey: Number(e.target.value) })} />
+                <TextField label="Guid da operação" value={cfg.guid} onChange={(e) => mudar({ guid: e.target.value })} />
+              </div>
+            </details>
+          </Secao>
+
+          <Secao titulo="Entidade da Centi por órgão">
+            <Switch checked={cfg.descobrirEntidade} onChange={(v) => mudar({ descobrirEntidade: v })} label="Descobrir sozinho (tenta as outras entidades)" />
+            <TextField
+              label="Entidades a tentar"
+              placeholder="02:03:04:05:06:07:08"
+              value={cfg.entidades}
+              onChange={(e) => mudar({ entidades: e.target.value })}
+              hint={`Vazio = de 1 a 20 no formato da aberta${logado?.entidade ? ` (aberta agora: ${logado.entidade})` : ""}.`}
+            />
+            {orgaos.length > 0 && (
+              <ul className="max-h-80 divide-y divide-border overflow-y-auto">
+                {orgaos.map(([chave, o]) => (
+                  <li key={chave} className="flex items-center gap-2 py-1.5 text-sm">
+                    <span className="min-w-0 flex-1 truncate text-text" title={`${o.nome} · ${o.n} DFD(s)`}>
+                      {o.nome}
+                    </span>
+                    <input
+                      aria-label={`Entidade da Centi de ${o.nome}`}
+                      className={`${cellCls} w-16 shrink-0 text-center`}
+                      placeholder="auto"
+                      defaultValue={mapa[chave] ?? ""}
+                      key={mapa[chave] ?? ""}
+                      onBlur={(e) => definirEntidade(chave, e.target.value)}
+                    />
+                    {logado?.entidade && mapa[chave] !== logado.entidade && (
+                      <Button size="xs" variant="ghost" onClick={() => definirEntidade(chave, logado.entidade ?? "")} title="Usar a entidade aberta na Centi agora">
+                        Usar {logado.entidade}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Secao>
         </div>
       </div>
     </div>

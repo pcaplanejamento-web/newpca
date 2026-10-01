@@ -32,7 +32,7 @@ async function abaCenti() {
   if (!abas.length) return { erro: "Abra a Centi (rioverde.centi.com.br) numa aba e faça o login." };
   const estados = await Promise.all(abas.map((a) => estadoDaAba(a.id)));
   const i = estados.findIndex((r) => r?.logado);
-  if (i >= 0) return { aba: abas[i] };
+  if (i >= 0) return { aba: abas[i], estado: estados[i] };
   return { erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar (ou abra qualquer tela)." };
 }
 
@@ -46,9 +46,9 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   const origem = sender.url ? new URL(sender.url).origin : "";
   if (!ORIGENS.includes(origem) || !sender.url.includes("/painel/automacao")) return false;
   (async () => {
-    const { aba, erro } = await abaCenti();
+    const { aba, erro, estado } = await abaCenti();
     if (!aba) return { ok: false, erro };
-    if (msg.acao === "estado") return { ok: true, logado: true };
+    if (msg.acao === "estado") return { ok: true, logado: true, entidade: estado?.entidade ?? null };
     if (msg.acao !== "pedir") return { ok: false, erro: "Ação desconhecida." };
     try {
       return await chrome.tabs.sendMessage(aba.id, { alvo: "centi", acao: msg.acao, dados: msg.dados });
