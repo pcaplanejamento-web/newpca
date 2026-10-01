@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { brl, num, numeroSemAno, pct } from "@/lib/format";
 import {
+  COR_VARIACAO,
   type ClasseAbc,
   desvioDaMedia,
   desvioTexto,
@@ -13,6 +14,7 @@ import {
   mediaDeReferencia,
   nivelVariacao,
   participacaoTexto,
+  TOM_VARIACAO,
   textoResumoConsolidado,
   varianteDescricao,
 } from "@/lib/itens-consolidados";
@@ -26,11 +28,9 @@ import { EstadoPonto } from "./EstadoCelula";
 import { IconAlert } from "./icons";
 import { Modal } from "./Modal";
 import { colunaPlanejamento, colunaTipoDfd } from "./PlanilhaDfds";
+import { ComparacaoHistoricoCompra } from "./ProdutoHistorico";
 import { StatMini } from "./StatMini";
 
-/** Cor (token) de cada nível da variação dos preços — verde OK · âmbar atenção · vermelho alerta. */
-export const COR_VARIACAO = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--danger)" } as const;
-export const TOM_VARIACAO = { ok: "ok", atencao: "warn", alerta: "danger" } as const;
 const REGUA_VARIACAO = `Até ${pct(FAIXAS_VARIACAO.atencao, 1)} = preços homogêneos · até ${pct(FAIXAS_VARIACAO.alerta, 1)} = atenção · acima = alerta.`;
 
 /** Célula "Variação" (coeficiente de variação dos valores unitários de um código): o % na cor da faixa. `nota` completa a
@@ -297,6 +297,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
               .
             </Callout>
           )}
+          {l.codigo && <ComparacaoHistoricoCompra codigo={l.codigo} valor={l.valorMedio} />}
           {mistas && (
             <section className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
               <h3 className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">

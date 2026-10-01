@@ -1791,8 +1791,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`referenciasHistorico` — mapa código → referência, fail-safe; só com a visão Itens aberta) e a coluna **Histórico**
   (depois de Vlr. unit., só quando algum código tem compra — `CelulaHistoricoCompra`: o desvio na cor, a referência na
   dica; filtro pelo rótulo) — também na **Consolidada** (o valor unitário MÉDIO da linha × a referência do código, depois de
-  Vlr. unit. médio). **Detalhe do item** (`ItemDetalhe`, em toda Mesa e na análise): o bloco **Histórico de
-  compra** (`ComparacaoHistoricoCompra`, `ProdutoHistorico.tsx` — carregado só com o item aberto por `GET
+  Vlr. unit. médio; o MESMO bloco do detalhe abaixo no banner da linha — `ComposicaoItem`, depois dos avisos). **Detalhe do
+  item** (`ItemDetalhe`, em toda Mesa e na análise): o bloco **Histórico de compra** (`ComparacaoHistoricoCompra`, `ProdutoHistorico.tsx` — carregado só com o item aberto por `GET
   /api/catalogo/historico/produto?codigo=` (Visualizar numa das Mesas ou no Catálogo), guardado 5 min por código; sem
   histórico ou falha = não aparece): o rótulo + o erro, Valor do item × Valor atual, o médio e a faixa entre contratos e
   **"Ver no histórico de compra"** → o banner do produto (**`ProdutoHistoricoDetalhe`** — o MESMO do histórico aberto pelo

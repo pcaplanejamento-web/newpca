@@ -12,11 +12,11 @@ import {
   resumoHistorico,
   rotuloVariacao,
 } from "@/lib/historico-compra-core";
-import { desvioDaMedia, desvioTexto, nivelVariacao } from "@/lib/itens-consolidados";
+import { COR_VARIACAO, desvioDaMedia, desvioTexto, nivelVariacao } from "@/lib/itens-consolidados";
 import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
-import { CelulaVariacao, COR_VARIACAO } from "./ComposicaoItem";
+import { CelulaVariacao } from "./ComposicaoItem";
 import { EstadoPonto } from "./EstadoCelula";
 import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";

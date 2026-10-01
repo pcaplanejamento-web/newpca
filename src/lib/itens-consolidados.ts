@@ -32,6 +32,9 @@ export type ClasseAbc = "A" | "B" | "C";
 export const LIMITES_ABC = { A: 0.8, B: 0.95 } as const;
 
 export type NivelVariacao = "ok" | "atencao" | "alerta";
+/** Cor (token) e tom (`StatMini`) de cada nível — verde OK · âmbar atenção · vermelho alerta. */
+export const COR_VARIACAO = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--danger)" } as const;
+export const TOM_VARIACAO = { ok: "ok", atencao: "warn", alerta: "danger" } as const;
 /** Faixas da variação dos preços (coeficiente de variação): até 25% homogêneo; até 50% atenção; acima, alerta. */
 export const FAIXAS_VARIACAO = { atencao: 0.25, alerta: 0.5 } as const;
 

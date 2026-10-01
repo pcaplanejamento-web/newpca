@@ -15,11 +15,10 @@ import {
   rotuloComparacaoHistorico,
   textoDivergenciaHistorico,
 } from "@/lib/historico-compra-core";
-import { desvioTexto } from "@/lib/itens-consolidados";
+import { COR_VARIACAO, desvioTexto, TOM_VARIACAO } from "@/lib/itens-consolidados";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { COR_VARIACAO, TOM_VARIACAO } from "./ComposicaoItem";
 import { EstadoPonto } from "./EstadoCelula";
 import { IconCompra } from "./icons";
 import { Modal } from "./Modal";

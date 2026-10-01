@@ -139,7 +139,7 @@ valor atual do produto é o do contrato assinado por último; menor/médio/maior
 sobre o valor atual de cada um — com o CONTRATO do menor e do maior valor à vista. ✅ Visão **Por contrato**: cada produto em cada
 contrato com o menor e o maior valor dentro dele, o valor atual e qual é o mais recente. ✅ **Variação de preço** por produto (a régua da Consolidada:
 alta > 50%), ordenada da maior para a menor, KPI "Variação alta" e o "Δ preço médio" de cada item contratado. ✅ O export repete linhas idênticas (no de 2026: 5.937 → 1.130);
-o importador as tira para não inflar o valor. ✅ **Comparação com os itens das Mesas** pelo código: o valor unitário do
+o importador as tira para não inflar o valor. ✅ **Comparação com os itens das Mesas** pelo código (também no banner da linha Consolidada): o valor unitário do
 item × o VALOR ATUAL do histórico (a régua da variação — até 25% dentro, até 50% atenção, acima alerta); coluna
 **Histórico** na Mesa → Itens (o desvio na cor, filtro Acima/Abaixo/Dentro/Sem histórico) e o bloco **Histórico de
 compra** no detalhe do item e a coluna também na Consolidada (o médio da linha; o erro por extenso + o banner do produto no histórico). 🔜 Levar o ponto às importâncias do
