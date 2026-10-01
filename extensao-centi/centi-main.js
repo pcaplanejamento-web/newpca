@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 13;
+  const PROTOCOLO = 14;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -241,32 +241,68 @@
   // achado pelo FORMATO entre os módulos do webpack da página (nunca pelo número do módulo, que muda a cada publicação da
   // Centi). Por ele o pedido sai EXATAMENTE como o da tela — token, cabeçalhos, proteção anti-robô — e, como a tela faz
   // (a função "E" do código dela), o token novo de cada resposta passa a valer em todos os clientes dela.
-  let clienteCenti;
+  let clienteCenti = null;
+  let motivoSemCliente = "";
   function acharClienteCenti() {
-    if (clienteCenti !== undefined) return clienteCenti;
-    clienteCenti = null;
+    if (clienteCenti) return clienteCenti;
     try {
       const nome = Object.keys(window).find((k) => k.startsWith("webpackJsonp") && Array.isArray(window[k]));
-      if (!nome) return null;
+      if (!nome) {
+        motivoSemCliente = "a página não expõe os módulos";
+        return null;
+      }
       let req = null;
-      const id = `__pcaCenti${Date.now()}`;
+      const id = `__pcaCenti${Date.now()}${Math.random().toString(36).slice(2)}`;
       window[nome].push([[id], { [id]: (_m, _e, r) => (req = r) }, [[id]]]);
-      if (!req?.c) return null;
+      if (!req?.c) {
+        motivoSemCliente = "sem acesso aos módulos da página";
+        return null;
+      }
+      // Cada módulo e cada exportação lidos com proteção: uma exportação ainda não pronta (lança ao ler) não pode
+      // interromper a busca inteira.
       const instancias = new Set();
-      for (const mod of Object.values(req.c)) {
-        const ex = mod?.exports;
+      const olhar = (v) => {
+        if (typeof v === "function" && v.defaults && v.interceptors && typeof v.post === "function" && typeof v.get === "function") instancias.add(v);
+      };
+      for (const chave of Object.keys(req.c)) {
+        let ex;
+        try {
+          ex = req.c[chave]?.exports;
+        } catch {
+          continue;
+        }
         if (!ex || (typeof ex !== "object" && typeof ex !== "function")) continue;
-        for (const v of [ex, ...Object.values(ex)]) {
-          if (typeof v === "function" && v.defaults && v.interceptors && typeof v.post === "function") instancias.add(v);
+        try {
+          olhar(ex);
+        } catch {}
+        let nomes = [];
+        try {
+          nomes = Object.keys(ex);
+        } catch {}
+        for (const n of nomes) {
+          try {
+            olhar(ex[n]);
+          } catch {}
         }
       }
+      const base = (v) => {
+        try {
+          return String(v.defaults.baseURL || "");
+        } catch {
+          return "";
+        }
+      };
       const todas = [...instancias];
-      const daApi = todas.filter((v) => /\/restauth\/?$/.test(String(v.defaults.baseURL || "")));
+      const daApi = todas.filter((v) => /\/restauth\/?$/.test(base(v)));
       // A da tela (load/confirmsave/save) é a sem tempo-limite próprio; as demais recebem o token junto.
       const principal = daApi.find((v) => !v.defaults.timeout) ?? daApi[0] ?? null;
-      if (principal) clienteCenti = { principal, todas: todas.filter((v) => /\/(restauth|vicenti)\/?$/.test(String(v.defaults.baseURL || ""))) };
-    } catch {
-      clienteCenti = null;
+      if (!principal) {
+        motivoSemCliente = `nenhum cliente da API entre ${todas.length} encontrados`;
+        return null;
+      }
+      clienteCenti = { principal, todas: todas.filter((v) => /\/(restauth|vicenti)\/?$/.test(base(v))) };
+    } catch (e) {
+      motivoSemCliente = e?.message || "falha ao procurar";
     }
     return clienteCenti;
   }
@@ -303,7 +339,13 @@
   /** A API da Centi: pelo cliente da própria tela; sem ele, pelo envio da extensão. */
   async function apiCenti(metodo, caminho, corpo, passo, salvar = false, bruto = caminho) {
     const r = await pelaCenti(metodo, caminho, corpo);
-    if (!r) return api(metodo, caminho, corpo, passo, salvar, bruto);
+    if (!r) {
+      try {
+        return await api(metodo, caminho, corpo, passo, salvar, bruto);
+      } catch (e) {
+        throw new Error(`${e?.message || "Falha na Centi."} (cliente da Centi não encontrado: ${motivoSemCliente || "?"})`);
+      }
+    }
     const j = r.j && typeof r.j === "object" ? r.j : null;
     if (r.status >= 400 || !j) throw new Error(`A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."} (pelo cliente da Centi)`);
     return j;
