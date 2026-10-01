@@ -166,7 +166,7 @@
 
   /** A dica do erro do salvar, pelos NOMES dos cabeçalhos (nunca os valores): os que a tela da Centi mandou no salvar e o
    * anexo não mandou (os anti-robô "x-ts…" a extensão não reproduz); sem o salvar da tela aprendido, como ensiná-lo. */
-  function dicaCabecalhos(nomesTela, nomesEnviados, protocoloAberto) {
+  function dicaCabecalhos(nomesTela, nomesEnviados, _protocoloAberto) {
     if (!Array.isArray(nomesTela) || !nomesTela.length) return "";
     const enviados = new Set((nomesEnviados ?? []).map((n) => String(n).toLowerCase()));
     const fixos = /^(content-type|content-length|accept)$/i;

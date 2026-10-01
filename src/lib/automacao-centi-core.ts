@@ -162,6 +162,9 @@ export type ProtocoloAutomacao = {
   pca: string | null;
   /** Data/hora da protocolação (criado_em). */
   criadoEm: string | null;
+  /** A gestão do protocolo (a mesma da Mesa): a pessoa responsável e a situação cadastrada pelo ADM. */
+  responsavelId: number | null;
+  situacaoId: number | null;
   /** Σ itens e Σ valor dos DFDs do protocolo (os mesmos totais da Mesa). */
   itens: number;
   valor: number;

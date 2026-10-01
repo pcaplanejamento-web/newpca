@@ -20,6 +20,8 @@ export async function protocolosParaAutomacao(): Promise<ProtocoloAutomacao[]> {
         pcaId: dfdProtocolos.pcaId,
         reparticaoId: dfdProtocolos.reparticaoId,
         criadoEm: dfdProtocolos.criadoEm,
+        responsavelId: dfdProtocolos.responsavelId,
+        situacaoId: dfdProtocolos.situacaoId,
       })
       .from(dfdProtocolos),
     db
@@ -83,6 +85,8 @@ export async function protocolosParaAutomacao(): Promise<ProtocoloAutomacao[]> {
         anoPca: p.anoPca ?? (Number(maisFrequente(g?.anos ?? [])) || null),
         pca: p.pcaId != null ? (nomePca.get(p.pcaId) ?? null) : null,
         criadoEm: p.criadoEm ?? null,
+        responsavelId: p.responsavelId ?? null,
+        situacaoId: p.situacaoId ?? null,
         itens: g?.itens ?? 0,
         valor: Math.round((g?.valor ?? 0) * 100) / 100,
         dfds: (g?.dfds ?? []).sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),

@@ -35,6 +35,7 @@ import {
   versaoAtende,
 } from "@/lib/automacao-centi-core";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
+import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import { ZipArmazenar } from "@/lib/zip-armazenar";
 import { Ajuda } from "./Ajuda";
 import { useAlturaTela } from "./AlturaCheia";
@@ -48,10 +49,13 @@ import { Dropdown } from "./Dropdown";
 import { EstadoPonto } from "./EstadoCelula";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
-import { IconDownload, IconPasta, IconPastaAberta, IconRefresh, IconRobo, IconSettings } from "./icons";
+import { IconDownload, IconPasta, IconPastaAberta, IconRefresh, IconRobo, IconSettings, IconUserX } from "./icons";
 import { Progress } from "./Progress";
+import { type OpcaoCelula, SeletorCelula } from "./SeletorCelula";
+import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
+import { toast } from "./Toast";
 
 // Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) por PROTOCOLO do sistema (uma pasta
 // por protocolo, dentro da pasta "PCA <ano>") ou por Id. Quem fala com a Centi é a EXTENSÃO do Chrome (extensao-centi/),
@@ -513,8 +517,121 @@ function Analise({ linhas, rodando, destino }: { linhas: Linha[]; rodando: boole
   );
 }
 
-export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloAutomacao[]; banners: ContextoBannersAutomacao }) {
+/** A gestão do protocolo na tabela (a MESMA da Mesa): as pessoas do grupo ativo (designáveis), as gravadas de fora dele
+ * (só exibidas), as situações do ADM e quem está usando. */
+export type GestaoAutomacao = { pessoas: Pessoa[]; outras: Pessoa[]; situacoes: OpcaoCelula[]; usuarioId: number };
+type ValoresGestao = { responsavelId?: number | null; situacaoId?: number | null };
+const EXTRAS_CELULA: ExtraPessoa[] = [{ valor: "", rotulo: "Sem responsável", icone: <IconUserX className="h-4 w-4" /> }];
+
+/** As colunas Situação e Responsável da Mesa: na célula, gravam na hora (otimista; falhou, volta e avisa). */
+function useColunasGestao(gestao: GestaoAutomacao): Column<ProtocoloAutomacao>[] {
   const router = useRouter();
+  const [mudado, setMudado] = useState<Map<number, ValoresGestao>>(new Map());
+  const [salvando, setSalvando] = useState<Set<string>>(new Set());
+  // Recarregou do servidor: os valores otimistas saem (vale o gravado).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: zera só quando as listas do servidor mudam.
+  useEffect(() => setMudado(new Map()), [gestao]);
+  const dir = useMemo(() => new Map([...gestao.outras, ...gestao.pessoas].map((p) => [p.id, p])), [gestao]);
+  const situacaoPorId = useMemo(() => new Map(gestao.situacoes.map((x) => [x.id, x])), [gestao]);
+  const valor = (p: ProtocoloAutomacao, campo: keyof ValoresGestao) => {
+    const m = mudado.get(p.id);
+    return m && campo in m ? (m[campo] ?? null) : p[campo];
+  };
+  const pessoa = (id: number | null): Pessoa | null => (id == null ? null : (dir.get(id) ?? { id, nome: `#${id}`, apelido: null, foto: null }));
+
+  async function alterar(p: ProtocoloAutomacao, campo: keyof ValoresGestao, v: number | null) {
+    const k = `${p.id}:${campo}`;
+    setSalvando((s) => new Set(s).add(k));
+    setMudado((m) => new Map(m).set(p.id, { ...m.get(p.id), [campo]: v }));
+    try {
+      const res = await fetch(`/api/protocolo/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [campo]: v, origem: "celula" }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `falha ao salvar (HTTP ${res.status})`);
+      router.refresh();
+    } catch (e) {
+      setMudado((m) => {
+        const n = new Map(m);
+        const g = { ...n.get(p.id) };
+        delete g[campo];
+        n.set(p.id, g);
+        return n;
+      });
+      toast.error(`Protocolo ${p.numero}: ${e instanceof TypeError ? "sem conexão com o servidor" : e instanceof Error ? e.message : "falha ao salvar"}.`);
+    } finally {
+      setSalvando((s) => {
+        const n = new Set(s);
+        n.delete(k);
+        return n;
+      });
+    }
+  }
+
+  return [
+    {
+      key: "situacao",
+      header: "Situação",
+      nowrap: true,
+      value: (r) => {
+        const id = valor(r, "situacaoId");
+        return id == null ? "Sem situação" : (situacaoPorId.get(id)?.nome ?? "Sem situação");
+      },
+      render: (r) => (
+        <SeletorCelula
+          valor={valor(r, "situacaoId")}
+          opcoes={gestao.situacoes}
+          onChange={gestao.situacoes.length > 0 ? (v) => alterar(r, "situacaoId", v) : undefined}
+          vazio="Sem situação"
+          salvando={salvando.has(`${r.id}:situacaoId`)}
+          ariaLabel={`Situação do protocolo ${r.numero}`}
+        />
+      ),
+    },
+    {
+      key: "responsavel",
+      header: "Responsável",
+      nowrap: true,
+      // Filtro/ordem pelo "apelido — nome" (duas pessoas com o mesmo apelido não viram uma só opção).
+      value: (r) => {
+        const p = pessoa(valor(r, "responsavelId"));
+        return p ? rotuloOpcaoPessoa(p) : "Sem responsável";
+      },
+      render: (r) => {
+        const p = pessoa(valor(r, "responsavelId"));
+        return (
+          <SeletorPessoa
+            variante="celula"
+            rotulo="Responsável"
+            ariaLabel={`Responsável pelo protocolo ${r.numero}`}
+            pessoas={gestao.pessoas}
+            usuarioId={gestao.usuarioId}
+            valor={p ? String(p.id) : ""}
+            atual={p}
+            extras={EXTRAS_CELULA}
+            salvando={salvando.has(`${r.id}:responsavelId`)}
+            onChange={(v) => alterar(r, "responsavelId", v ? Number(v) : null)}
+          />
+        );
+      },
+    },
+  ];
+}
+
+export function AutomacaoAdmin({
+  protocolos,
+  gestao,
+  banners,
+}: {
+  protocolos: ProtocoloAutomacao[];
+  gestao: GestaoAutomacao;
+  banners: ContextoBannersAutomacao;
+}) {
+  const router = useRouter();
+  const colunasGestao = useColunasGestao(gestao);
+  const colunas = useMemo(() => [...colunasGestao, ...COLUNAS], [colunasGestao]);
   const { ext, pedir } = useExtensaoCenti();
   const [cfg, setCfg] = useState<ConfigCenti>(CONFIG_CENTI_PADRAO);
   const [saida, setSaida] = useState<OpcoesSaida>(OPCOES_SAIDA_PADRAO);
@@ -972,7 +1089,7 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
         <div className="min-w-0 xl:min-h-0">
           {modo === "protocolo" ? (
             <DataTable
-              columns={COLUNAS}
+              columns={colunas}
               rows={protocolos}
               getKey={(p) => p.id}
               selectable
