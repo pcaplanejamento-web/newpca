@@ -9,8 +9,9 @@ import { norm } from "./parse-dfd-comum.ts";
  * - **Leitura do arquivo do histórico** (CSV `;` do sistema de compras, ou a mesma planilha em .xlsx): colunas achadas pelo
  *   NOME do cabeçalho (qualquer ordem), o "$$" do export volta a ser vírgula, números "10.0000"/"1.234,56", datas
  *   dd/mm/aaaa → AAAA-MM-DD, o código só com dígitos; linhas IDÊNTICAS repetidas pelo export saem (contadas).
- * - **Análise:** `produtosDoHistorico` (um por código: contratos, quantidade, menor/médio ponderado/maior/último preço) e
- *   `resumoHistorico` (os números do topo).
+ * - **Análise:** `produtosDoHistorico` (um por código: o VALOR ATUAL em cada contrato — `valorAtualNoContrato`, base +
+ *   aditivo —, o valor atual do produto = o do contrato assinado por último, e menor/médio/maior/variação ENTRE contratos)
+ *   e `resumoHistorico` (os números do topo).
  */
 
 // ---------------------------------------------------------------- Tipos de catálogo
@@ -371,6 +372,33 @@ export function parseHistoricoCompra(matriz: unknown[][]): HistoricoParseado {
 
 // ---------------------------------------------------------------- Análise
 
+/**
+ * O VALOR ATUAL de um produto DENTRO de um contrato (o contrato tem UMA data de assinatura). Os preços distintos > 0:
+ * um só = ele (linhas repetidas com o mesmo preço são o mesmo item dividido, não aditivo); dois ou mais = o MENOR
+ * somado ao MAIOR — o menor é o ADITIVO lançado sobre o preço do maior (ex.: 8,75 + aditivo 0,80 = 9,55).
+ */
+export function valorAtualNoContrato(precos: readonly (number | null)[]): { valor: number; base: number; aditivo: number | null } | null {
+  let menor: number | null = null;
+  let maior: number | null = null;
+  for (const p of precos) {
+    if (p == null || !(p > 0)) continue;
+    if (menor == null || p < menor) menor = p;
+    if (maior == null || p > maior) maior = p;
+  }
+  if (menor == null || maior == null) return null;
+  return menor === maior ? { valor: maior, base: maior, aditivo: null } : { valor: maior + menor, base: maior, aditivo: menor };
+}
+
+/** O produto num contrato: o valor atual (`valorAtualNoContrato`) e os dados do contrato. */
+export type PrecoContrato = {
+  idContrato: string;
+  valor: number;
+  base: number;
+  aditivo: number | null;
+  data: string | null;
+  credor: string | null;
+};
+
 export type ProdutoHistorico = {
   codigo: string;
   descricao: string;
@@ -380,58 +408,70 @@ export type ProdutoHistorico = {
   credores: number;
   quantidade: number;
   valorTotal: number;
+  /** Os contratos com valor atual, do assinado por ÚLTIMO ao mais antigo (empate na data: o de maior ordem primeiro). */
+  porContrato: PrecoContrato[];
+  /** Menor/maior/médio e variação = ENTRE CONTRATOS DIFERENTES, sobre o valor atual de cada um (`porContrato`). */
   menor: number | null;
   maior: number | null;
-  /** Médio PONDERADO pela quantidade (Σ qtd × preço ÷ Σ qtd) dos itens com quantidade e preço > 0; sem eles, a média simples. */
   medio: number | null;
-  /** Coeficiente de variação dos preços unitários (a MESMA régua da visão Consolidada da Mesa — `FAIXAS_VARIACAO`);
-   * `null` = menos de 2 preços. */
+  /** Coeficiente de variação dos valores atuais dos contratos (a MESMA régua da visão Consolidada da Mesa —
+   * `FAIXAS_VARIACAO`); `null` = menos de 2 contratos com preço. */
   variacao: number | null;
-  /** O preço do contrato assinado por último (empate: o de maior ordem). */
-  ultimo: { valor: number; data: string | null; credor: string | null } | null;
+  /** O VALOR ATUAL do produto = o do contrato assinado por último (`porContrato[0]`). */
+  atual: PrecoContrato | null;
 };
 
-/** Um por CÓDIGO, na ordem do maior valor contratado. Linear. */
+/** Um por CÓDIGO, na ordem do maior valor contratado. Linear (+ a ordenação dos contratos de cada produto). */
 export function produtosDoHistorico(itens: readonly CompraHistorico[], contratos: readonly ContratoHistorico[]): ProdutoHistorico[] {
-  const porContrato = new Map(contratos.map((c) => [c.idContrato, c] as const));
-  type Acc = ProdutoHistorico & { _cs: Set<string>; _cr: Set<string>; _pq: number; _q: number; _ps: number; _n: number; _ud: string; _uo: number; _pr: number[] };
+  const contratoPorId = new Map(contratos.map((c) => [c.idContrato, c] as const));
+  type Grupo = { precos: (number | null)[]; ordem: number };
+  type Acc = { p: ProdutoHistorico; grupos: Map<string, Grupo>; credores: Set<string> };
   const m = new Map<string, Acc>();
   for (const it of itens) {
     let a = m.get(it.codigo);
     if (!a) {
-      a = { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, menor: null, maior: null, medio: null, variacao: null, ultimo: null, _pr: [], _cs: new Set(), _cr: new Set(), _pq: 0, _q: 0, _ps: 0, _n: 0, _ud: "", _uo: -1 };
+      a = {
+        p: { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, porContrato: [], menor: null, maior: null, medio: null, variacao: null, atual: null },
+        grupos: new Map(),
+        credores: new Set(),
+      };
       m.set(it.codigo, a);
     }
-    const c = porContrato.get(it.idContrato);
-    a.linhas++;
-    a._cs.add(it.idContrato);
-    if (c?.credor) a._cr.add(c.credor);
+    const c = contratoPorId.get(it.idContrato);
+    a.p.linhas++;
+    if (c?.credor) a.credores.add(c.credor);
     const q = it.qtdContratada ?? 0;
-    a.quantidade += q;
-    a.valorTotal += it.valorContratado ?? (it.valorUnitario ?? 0) * q;
-    const p = it.valorUnitario;
-    if (p != null && p > 0) {
-      a.menor = a.menor == null ? p : Math.min(a.menor, p);
-      a.maior = a.maior == null ? p : Math.max(a.maior, p);
-      a._ps += p;
-      a._n++;
-      a._pr.push(p);
-      if (q > 0) {
-        a._pq += p * q;
-        a._q += q;
-      }
-      const d = c?.dataAssinatura ?? "";
-      if (d > a._ud || (d === a._ud && it.ordem > a._uo)) {
-        a._ud = d;
-        a._uo = it.ordem;
-        a.ultimo = { valor: p, data: c?.dataAssinatura ?? null, credor: c?.credor ?? null };
-      }
-    }
+    a.p.quantidade += q;
+    a.p.valorTotal += it.valorContratado ?? (it.valorUnitario ?? 0) * q;
+    const g = a.grupos.get(it.idContrato);
+    if (g) {
+      g.precos.push(it.valorUnitario);
+      g.ordem = Math.max(g.ordem, it.ordem);
+    } else a.grupos.set(it.idContrato, { precos: [it.valorUnitario], ordem: it.ordem });
   }
   const out: ProdutoHistorico[] = [];
-  for (const a of m.values()) {
-    const { _cs, _cr, _pq, _q, _ps, _n, _ud, _uo, _pr, ...p } = a;
-    out.push({ ...p, contratos: _cs.size, credores: _cr.size, medio: _q > 0 ? _pq / _q : _n > 0 ? _ps / _n : null, variacao: coeficienteVariacao(_pr) });
+  for (const { p, grupos, credores } of m.values()) {
+    const lista: (PrecoContrato & { _o: number })[] = [];
+    for (const [idContrato, g] of grupos) {
+      const v = valorAtualNoContrato(g.precos);
+      if (!v) continue;
+      const c = contratoPorId.get(idContrato);
+      lista.push({ idContrato, ...v, data: c?.dataAssinatura ?? null, credor: c?.credor ?? null, _o: g.ordem });
+    }
+    lista.sort((x, y) => (y.data ?? "").localeCompare(x.data ?? "") || y._o - x._o);
+    const porContrato = lista.map(({ _o, ...pc }) => pc);
+    const valores = porContrato.map((pc) => pc.valor);
+    out.push({
+      ...p,
+      contratos: grupos.size,
+      credores: credores.size,
+      porContrato,
+      menor: valores.length ? Math.min(...valores) : null,
+      maior: valores.length ? Math.max(...valores) : null,
+      medio: valores.length ? valores.reduce((s, v) => s + v, 0) / valores.length : null,
+      variacao: coeficienteVariacao(valores),
+      atual: porContrato[0] ?? null,
+    });
   }
   return out.sort((x, y) => y.valorTotal - x.valorTotal || x.codigo.localeCompare(y.codigo));
 }

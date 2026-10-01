@@ -6,6 +6,7 @@ import { brl, brlCompact, dataBR, num } from "@/lib/format";
 import {
   type CompraHistorico,
   type ContratoHistorico,
+  type PrecoContrato,
   type ProdutoHistorico,
   produtosDoHistorico,
   resumoHistorico,
@@ -35,11 +36,14 @@ const COR_NIVEL = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--dang
 
 const dinheiro = (n: number | null) => (n == null ? <span className="text-faint">—</span> : <span className="tabular-nums">{brl(n)}</span>);
 const quantidade = (n: number | null) => (n == null ? <span className="text-faint">—</span> : <span className="tabular-nums">{dec(n)}</span>);
+/** A composição do valor atual: "R$ 8,75 + aditivo R$ 0,80" (ou só o preço), o credor e a assinatura. */
+const textoValorAtual = (pc: PrecoContrato) =>
+  [pc.aditivo != null ? `${brl(pc.base)} + aditivo ${brl(pc.aditivo)}` : null, pc.credor, pc.data ? `Assinatura ${dataBR(pc.data)}` : null].filter(Boolean).join(" · ");
 
 /**
  * O HISTÓRICO DE COMPRA de um catálogo (tipo 'historico') num banner de tela cheia: os números do topo (valor contratado
  * e empenhado, contratos, produtos, os com VARIAÇÃO ALTA, período) e três visões — **Produtos** (um por código: contratos,
- * quantidade, menor/médio ponderado/maior/último preço — a base da comparação futura com os itens dos DFDs), **Itens**
+ * quantidade, valor atual e menor/médio/maior ENTRE contratos — a base da comparação futura com os DFDs), **Itens**
  * (cada item contratado) e **Contratos**. Tocar num produto ou contrato abre o detalhe ao lado. Carregado só ao abrir.
  */
 export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { catalogo: CatalogoResumo | null; onFechar: () => void; podeExportar: boolean }) {
@@ -83,9 +87,15 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
     return m;
   }, [dados]);
 
-  // O preço médio de cada produto — o "Δ preço médio" de cada item contratado (o que puxa a variação para cima).
+  // O "Δ preço médio" de cada item: o VALOR ATUAL do produto no contrato do item (base + aditivo) × o médio ENTRE
+  // contratos — mostra qual contrato puxa a variação.
   const medioPorCodigo = useMemo(() => new Map(produtos.map((p) => [p.codigo, p.medio] as const)), [produtos]);
-  const desvio = (it: CompraHistorico) => desvioDaMedia(it.valorUnitario, medioPorCodigo.get(it.codigo) ?? null);
+  const atualNoContrato = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of produtos) for (const pc of p.porContrato) m.set(`${p.codigo}|${pc.idContrato}`, pc.valor);
+    return m;
+  }, [produtos]);
+  const desvio = (it: CompraHistorico) => desvioDaMedia(atualNoContrato.get(`${it.codigo}|${it.idContrato}`) ?? null, medioPorCodigo.get(it.codigo) ?? null);
   const comVariacaoAlta = useMemo(() => produtos.filter((p) => nivelVariacao(p.variacao) === "alerta").length, [produtos]);
 
   const colProdutos: Column<ProdutoHistorico>[] = [
@@ -106,30 +116,30 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
       header: "Variação",
       nowrap: true,
       value: (p) => rotuloVariacao(p.variacao),
-      render: (p) => <CelulaVariacao cv={p.variacao} min={p.menor} max={p.maior} n={p.linhas} />,
+      render: (p) => <CelulaVariacao cv={p.variacao} min={p.menor} max={p.maior} n={p.porContrato.length} nota="Entre contratos diferentes, pelo valor atual de cada um." />,
     },
     { key: "contratos", header: "Contratos", nowrap: true, filter: "range", numero: (p) => p.contratos, formatarFaixa: num, value: (p) => String(p.contratos), render: (p) => <span className="tabular-nums">{num(p.contratos)}</span> },
     { key: "qtd", header: "Qtd. contratada", nowrap: true, filter: "range", numero: (p) => p.quantidade, formatarFaixa: dec, value: (p) => String(p.quantidade), render: (p) => quantidade(p.quantidade) },
-    { key: "menor", header: "Menor preço", align: "right", nowrap: true, filter: "range", numero: (p) => p.menor, value: (p) => String(p.menor ?? ""), render: (p) => dinheiro(p.menor) },
-    { key: "medio", header: "Preço médio", align: "right", nowrap: true, filter: "range", numero: (p) => p.medio, value: (p) => String(p.medio ?? ""), render: (p) => dinheiro(p.medio) },
-    { key: "maior", header: "Maior preço", align: "right", nowrap: true, filter: "range", numero: (p) => p.maior, value: (p) => String(p.maior ?? ""), render: (p) => dinheiro(p.maior) },
     {
-      key: "ultimo",
-      header: "Último preço",
+      key: "atual",
+      header: "Valor atual",
       align: "right",
       nowrap: true,
       filter: "range",
-      numero: (p) => p.ultimo?.valor ?? null,
-      value: (p) => String(p.ultimo?.valor ?? ""),
+      numero: (p) => p.atual?.valor ?? null,
+      value: (p) => String(p.atual?.valor ?? ""),
       render: (p) =>
-        p.ultimo ? (
-          <span className="tabular-nums" title={`${p.ultimo.credor ?? ""}${p.ultimo.data ? ` · ${dataBR(p.ultimo.data)}` : ""}`}>
-            {brl(p.ultimo.valor)}
+        p.atual ? (
+          <span className="tabular-nums" title={textoValorAtual(p.atual)}>
+            {brl(p.atual.valor)}
           </span>
         ) : (
           <span className="text-faint">—</span>
         ),
     },
+    { key: "menor", header: "Menor preço", align: "right", nowrap: true, filter: "range", numero: (p) => p.menor, value: (p) => String(p.menor ?? ""), render: (p) => dinheiro(p.menor) },
+    { key: "medio", header: "Preço médio", align: "right", nowrap: true, filter: "range", numero: (p) => p.medio, value: (p) => String(p.medio ?? ""), render: (p) => dinheiro(p.medio) },
+    { key: "maior", header: "Maior preço", align: "right", nowrap: true, filter: "range", numero: (p) => p.maior, value: (p) => String(p.maior ?? ""), render: (p) => dinheiro(p.maior) },
     { key: "total", header: "Valor contratado", align: "right", nowrap: true, filter: "range", numero: (p) => p.valorTotal, value: (p) => String(p.valorTotal), render: (p) => dinheiro(p.valorTotal) },
   ];
 
@@ -160,7 +170,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
         return d == null || nivel == null ? (
           <span className="text-faint">—</span>
         ) : (
-          <EstadoPonto cor={COR_NIVEL[nivel]} rotulo={desvioTexto(d)} title={`Diferença do preço médio do produto (${brl(medioPorCodigo.get(it.codigo) ?? 0)}).`} />
+          <EstadoPonto cor={COR_NIVEL[nivel]} rotulo={desvioTexto(d)} title={`Valor atual neste contrato (${brl(atualNoContrato.get(`${it.codigo}|${it.idContrato}`) ?? 0)}) × preço médio entre contratos (${brl(medioPorCodigo.get(it.codigo) ?? 0)}).`} />
         );
       },
     },
@@ -304,7 +314,8 @@ function DetalheHistorico({
   if (detalhe.tipo === "produto") {
     const p = produtos.find((x) => x.codigo === detalhe.codigo);
     if (!p) return <p className="text-sm text-muted">Produto não encontrado.</p>;
-    const linhas = dados.itens.filter((it) => it.codigo === p.codigo);
+    const qtdPorContrato = new Map<string, number>();
+    for (const it of dados.itens) if (it.codigo === p.codigo) qtdPorContrato.set(it.idContrato, (qtdPorContrato.get(it.idContrato) ?? 0) + (it.qtdContratada ?? 0));
     return (
       <div className="space-y-[var(--gap-block)]">
         <div>
@@ -312,33 +323,36 @@ function DetalheHistorico({
           <p className="mt-2 text-[14px] leading-snug text-text">{p.descricao}</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
+          <StatMini label="Valor atual" value={p.atual ? brl(p.atual.valor) : "—"} hint={p.atual?.data ? `Assinatura ${dataBR(p.atual.data)}` : undefined} />
+          <StatMini label="Preço médio" value={p.medio != null ? brl(p.medio) : "—"} hint="Entre contratos" />
           <StatMini label="Menor preço" value={p.menor != null ? brl(p.menor) : "—"} />
           <StatMini label="Maior preço" value={p.maior != null ? brl(p.maior) : "—"} />
-          <StatMini label="Preço médio" value={p.medio != null ? brl(p.medio) : "—"} hint="Ponderado pela quantidade" />
-          <StatMini label="Último preço" value={p.ultimo ? brl(p.ultimo.valor) : "—"} hint={p.ultimo?.data ? dataBR(p.ultimo.data) : undefined} />
         </div>
         <section className="space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Comprado em {num(p.contratos)} {p.contratos === 1 ? "contrato" : "contratos"}</p>
-          {linhas.map((it) => {
-            const c = contratoPorId.get(it.idContrato);
+          {p.porContrato.map((pc) => {
+            const c = contratoPorId.get(pc.idContrato);
+            const qtd = qtdPorContrato.get(pc.idContrato);
             return (
               <button
-                key={it.ordem}
+                key={pc.idContrato}
                 type="button"
-                onClick={() => onAbrir({ tipo: "contrato", id: it.idContrato })}
+                onClick={() => onAbrir({ tipo: "contrato", id: pc.idContrato })}
                 className="flex w-full items-start justify-between gap-3 rounded-card border border-border bg-surface p-2.5 text-left hover:border-accent/50"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-semibold text-text">{c?.credor ?? `Contrato ${it.idContrato}`}</span>
+                  <span className="block truncate text-[13px] font-semibold text-text">{c?.credor ?? `Contrato ${pc.idContrato}`}</span>
                   <span className="block text-[12px] text-muted">
-                    Contrato {c?.numeroContrato ?? it.idContrato}
-                    {c?.dataAssinatura ? ` · ${dataBR(c.dataAssinatura)}` : ""}
+                    Contrato {c?.numeroContrato || pc.idContrato}
+                    {pc.data ? ` · ${dataBR(pc.data)}` : ""}
                     {c?.modalidade ? ` · ${c.modalidade}` : ""}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
-                  <span className="block text-[13px] font-bold tabular-nums text-text">{it.valorUnitario != null ? brl(it.valorUnitario) : "—"}</span>
-                  <span className="block text-[11.5px] tabular-nums text-muted">{it.qtdContratada != null ? `qtd. ${dec(it.qtdContratada)}` : ""}</span>
+                  <span className="block text-[13px] font-bold tabular-nums text-text">{brl(pc.valor)}</span>
+                  <span className="block text-[11.5px] tabular-nums text-muted">
+                    {pc.aditivo != null ? `${brl(pc.base)} + aditivo ${brl(pc.aditivo)}` : qtd ? `qtd. ${dec(qtd)}` : ""}
+                  </span>
                 </span>
               </button>
             );

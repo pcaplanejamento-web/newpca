@@ -13,6 +13,7 @@ import {
   produtosDoHistorico,
   resumoHistorico,
   rotuloVariacao,
+  valorAtualNoContrato,
   textoHistorico,
   tipoCatalogo,
 } from "../src/lib/historico-compra-core.ts";
@@ -166,7 +167,13 @@ describe("histórico de compra — análise por produto", () => {
       ["14158863", "114161324"],
     );
   });
-  it("menor, maior, médio PONDERADO pela quantidade e o último preço (pela data do contrato)", () => {
+  it("valor atual no contrato: um preço = ele (linhas iguais não somam); dois = o menor (aditivo) somado ao maior", () => {
+    assert.deepEqual(valorAtualNoContrato([30.49, 30.49]), { valor: 30.49, base: 30.49, aditivo: null });
+    assert.deepEqual(valorAtualNoContrato([8.75, 0.8]), { valor: 9.55, base: 8.75, aditivo: 0.8 });
+    assert.deepEqual(valorAtualNoContrato([0.8, null, 8.75, 0]), { valor: 9.55, base: 8.75, aditivo: 0.8 });
+    assert.equal(valorAtualNoContrato([null, 0]), null);
+  });
+  it("menor, maior e médio ENTRE contratos (valor atual de cada um) e o valor atual = o do contrato assinado por último", () => {
     const b = p[0];
     assert.equal(b.linhas, 3);
     assert.equal(b.contratos, 2);
@@ -174,12 +181,30 @@ describe("histórico de compra — análise por produto", () => {
     assert.equal(b.quantidade, 50);
     assert.equal(b.menor, 30.49);
     assert.equal(b.maior, 34.49);
-    assert.ok(Math.abs((b.medio ?? 0) - (30.49 * 20 + 34.49 * 30) / 50) < 1e-9);
-    assert.deepEqual(b.ultimo, { valor: 34.49, data: "2026-08-10", credor: "MERCADO BOM PRECO LTDA." });
+    assert.ok(Math.abs((b.medio ?? 0) - (30.49 + 34.49) / 2) < 1e-9, "média simples dos contratos, não das linhas");
+    assert.deepEqual(b.atual, { idContrato: b.porContrato[0].idContrato, valor: 34.49, base: 34.49, aditivo: null, data: "2026-08-10", credor: "MERCADO BOM PRECO LTDA." });
+    assert.deepEqual(
+      b.porContrato.map((x) => x.data),
+      ["2026-08-10", "2026-02-23"],
+    );
     assert.ok(Math.abs(b.valorTotal - (304.9 * 2 + 1034.7)) < 1e-6);
   });
-  it("variação dos preços (a régua da Consolidada) e o rótulo do filtro", () => {
-    assert.ok(Math.abs((p[0].variacao ?? 0) - 0.07256) < 1e-3, "30,49 · 30,49 · 34,49");
+  it("aditivo: o contrato mais recente com aditivo é o valor atual (base + aditivo) e entra assim na média", () => {
+    const base = r.itens[0];
+    const itens = [
+      { ...base, ordem: 0, codigo: "9", idContrato: r.contratos[0].idContrato, valorUnitario: 10 },
+      { ...base, ordem: 1, codigo: "9", idContrato: r.contratos[1].idContrato, valorUnitario: 8.75 },
+      { ...base, ordem: 2, codigo: "9", idContrato: r.contratos[1].idContrato, valorUnitario: 0.8 },
+    ];
+    const [x] = produtosDoHistorico(itens, r.contratos);
+    assert.ok(Math.abs((x.atual?.valor ?? 0) - 9.55) < 1e-9);
+    assert.equal(x.atual?.aditivo, 0.8);
+    assert.equal(x.menor, 9.55);
+    assert.equal(x.maior, 10);
+    assert.ok(Math.abs((x.medio ?? 0) - 9.775) < 1e-9);
+  });
+  it("variação entre contratos (a régua da Consolidada) e o rótulo do filtro", () => {
+    assert.ok(Math.abs((p[0].variacao ?? 0) - 0.08705) < 1e-3, "30,49 × 34,49 — um preço por contrato");
     assert.equal(p[1].variacao, null, "1 preço = sem comparação");
     assert.equal(rotuloVariacao(0.6), "Alta (acima de 50%)");
     assert.equal(rotuloVariacao(0.3), "Atenção (25% a 50%)");
