@@ -1773,6 +1773,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Cada produto aponta o CONTRATO do menor e do maior valor (`contratoMenor`/`contratoMaior`; empate = o assinado por
   último): colunas "Menor valor" · "Contrato (menor)" · "Maior valor" · "Contrato (maior)" (composição base + aditivo,
   credor e assinatura na dica) e, no detalhe, os selos "Menor valor"/"Maior valor" no cartão do contrato.
+  **Visão "Por contrato"** (Produtos · **Por contrato** · Itens · Contratos): UMA linha por produto × contrato
+  (`porContrato` de cada produto) com o **Menor valor** e o **Maior valor** DENTRO do contrato (`PrecoContrato.menor` = o
+  aditivo, ou o único preço; `base` = o maior), o **Valor atual** (maior + aditivo), Situação (**Mais recente** = o valor
+  atual do produto | Anterior), Δ preço médio, Qtd. contratada (`PrecoContrato.quantidade` = só as linhas no preço BASE — a
+  linha do aditivo repete a quantidade do item), Linhas, Credor e Assinatura; tudo filtrável, exportável; tocar abre o produto.
   **VARIAÇÃO DE PREÇO (a MESMA régua da Consolidada da Mesa):** `produtosDoHistorico` dá o `variacao` (o
   `coeficienteVariacao` de `itens-consolidados.ts`, agora exportado) e a tabela de Produtos abre com os de MAIOR variação
   primeiro, coluna **Variação** logo após a Descrição (`CelulaVariacao`, filtro por faixa — `rotuloVariacao`: Alta > 50% ·

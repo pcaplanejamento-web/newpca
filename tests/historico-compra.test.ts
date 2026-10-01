@@ -168,9 +168,9 @@ describe("histórico de compra — análise por produto", () => {
     );
   });
   it("valor atual no contrato: um preço = ele (linhas iguais não somam); dois = o menor (aditivo) somado ao maior", () => {
-    assert.deepEqual(valorAtualNoContrato([30.49, 30.49]), { valor: 30.49, base: 30.49, aditivo: null });
-    assert.deepEqual(valorAtualNoContrato([8.75, 0.8]), { valor: 9.55, base: 8.75, aditivo: 0.8 });
-    assert.deepEqual(valorAtualNoContrato([0.8, null, 8.75, 0]), { valor: 9.55, base: 8.75, aditivo: 0.8 });
+    assert.deepEqual(valorAtualNoContrato([30.49, 30.49]), { valor: 30.49, base: 30.49, menor: 30.49, aditivo: null });
+    assert.deepEqual(valorAtualNoContrato([8.75, 0.8]), { valor: 9.55, base: 8.75, menor: 0.8, aditivo: 0.8 });
+    assert.deepEqual(valorAtualNoContrato([0.8, null, 8.75, 0]), { valor: 9.55, base: 8.75, menor: 0.8, aditivo: 0.8 });
     assert.equal(valorAtualNoContrato([null, 0]), null);
   });
   it("menor, maior e médio ENTRE contratos (valor atual de cada um) e o valor atual = o do contrato assinado por último", () => {
@@ -182,7 +182,7 @@ describe("histórico de compra — análise por produto", () => {
     assert.equal(b.menor, 30.49);
     assert.equal(b.maior, 34.49);
     assert.ok(Math.abs((b.medio ?? 0) - (30.49 + 34.49) / 2) < 1e-9, "média simples dos contratos, não das linhas");
-    assert.deepEqual(b.atual, { idContrato: b.porContrato[0].idContrato, valor: 34.49, base: 34.49, aditivo: null, data: "2026-08-10", credor: "MERCADO BOM PRECO LTDA." });
+    assert.deepEqual(b.atual, { idContrato: b.porContrato[0].idContrato, valor: 34.49, base: 34.49, menor: 34.49, aditivo: null, quantidade: 30, linhas: 1, data: "2026-08-10", credor: "MERCADO BOM PRECO LTDA." });
     assert.deepEqual(
       b.porContrato.map((x) => x.data),
       ["2026-08-10", "2026-02-23"],
@@ -199,11 +199,32 @@ describe("histórico de compra — análise por produto", () => {
     const [x] = produtosDoHistorico(itens, r.contratos);
     assert.ok(Math.abs((x.atual?.valor ?? 0) - 9.55) < 1e-9);
     assert.equal(x.atual?.aditivo, 0.8);
+    assert.deepEqual([x.atual?.menor, x.atual?.base, x.atual?.linhas], [0.8, 8.75, 2], "menor e maior DENTRO do contrato");
     assert.equal(x.menor, 9.55);
     assert.equal(x.maior, 10);
     assert.equal(x.contratoMenor?.idContrato, r.contratos[1].idContrato, "o contrato do menor valor (com o aditivo)");
     assert.equal(x.contratoMaior?.idContrato, r.contratos[0].idContrato, "o contrato do maior valor");
     assert.ok(Math.abs((x.medio ?? 0) - 9.775) < 1e-9);
+  });
+  it("quantidade no contrato: só as linhas no preço base (a do aditivo repete a quantidade); linhas iguais somam", () => {
+    const base = r.itens[0];
+    const c = r.contratos[0].idContrato;
+    const [x] = produtosDoHistorico(
+      [
+        { ...base, ordem: 0, codigo: "7", idContrato: c, valorUnitario: 8.75, qtdContratada: 115000 },
+        { ...base, ordem: 1, codigo: "7", idContrato: c, valorUnitario: 0.8, qtdContratada: 102160 },
+      ],
+      r.contratos,
+    );
+    assert.equal(x.atual?.quantidade, 115000);
+    const [y] = produtosDoHistorico(
+      [
+        { ...base, ordem: 0, codigo: "8", idContrato: c, valorUnitario: 30.49, qtdContratada: 10 },
+        { ...base, ordem: 1, codigo: "8", idContrato: c, valorUnitario: 30.49, qtdContratada: 8 },
+      ],
+      r.contratos,
+    );
+    assert.deepEqual([y.atual?.quantidade, y.atual?.valor], [18, 30.49]);
   });
   it("variação entre contratos (a régua da Consolidada) e o rótulo do filtro", () => {
     assert.ok(Math.abs((p[0].variacao ?? 0) - 0.08705) < 1e-3, "30,49 × 34,49 — um preço por contrato");

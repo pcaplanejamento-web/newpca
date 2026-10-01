@@ -136,7 +136,8 @@ dela, Lista de Itens e os números do conjunto). ✅ Dois tipos de cadastro: **C
 **Histórico de compra** — o export do sistema de compras (CSV/XLSX): contratos + itens comprados, com a análise por
 produto. ✅ **Valor atual**: no mesmo contrato, o menor preço é o ADITIVO somado ao maior (preço repetido não soma); o
 valor atual do produto é o do contrato assinado por último; menor/médio/maior e a variação só ENTRE contratos diferentes,
-sobre o valor atual de cada um — com o CONTRATO do menor e do maior valor à vista. ✅ **Variação de preço** por produto (a régua da Consolidada:
+sobre o valor atual de cada um — com o CONTRATO do menor e do maior valor à vista. ✅ Visão **Por contrato**: cada produto em cada
+contrato com o menor e o maior valor dentro dele, o valor atual e qual é o mais recente. ✅ **Variação de preço** por produto (a régua da Consolidada:
 alta > 50%), ordenada da maior para a menor, KPI "Variação alta" e o "Δ preço médio" de cada item contratado. ✅ O export repete linhas idênticas (no de 2026: 5.937 → 1.130);
 o importador as tira para não inflar o valor. 🔜 **Comparar** os itens dos DFDs com o histórico pelo código (preço
 praticado × valor estimado no DFD).
