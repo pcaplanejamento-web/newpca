@@ -208,7 +208,7 @@ export function AutomacaoAdmin() {
             <ol className="list-decimal space-y-1 pl-5">
               <li>
                 Baixe a extensão:{" "}
-                <a className="font-semibold text-accent underline" href="/extensao-centi.zip" download>
+                <a className="font-semibold text-accent underline" href={`/extensao-centi.zip?v=${VERSAO_EXTENSAO_CENTI}`} download>
                   extensao-centi.zip
                 </a>{" "}
                 e descompacte numa pasta (na atualização, substitua os arquivos).
