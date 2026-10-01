@@ -16,11 +16,12 @@ import { desvioDaMedia, desvioTexto, nivelVariacao } from "@/lib/itens-consolida
 import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaTexto } from "./CelulaLista";
-import { CelulaVariacao } from "./ComposicaoItem";
+import { CelulaVariacao, COR_VARIACAO } from "./ComposicaoItem";
 import { EstadoPonto } from "./EstadoCelula";
 import { type Column, DataTable } from "./DataTable";
 import { ErroCarga } from "./ErroCarga";
 import { Modal } from "./Modal";
+import { decimalHistorico, ProdutoHistoricoDetalhe } from "./ProdutoHistorico";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatMini } from "./StatMini";
@@ -31,11 +32,7 @@ type ProdutoNoContrato = { p: ProdutoHistorico; pc: PrecoContrato };
 type Dados = { contratos: ContratoHistorico[]; itens: CompraHistorico[] };
 type Detalhe = { tipo: "produto"; codigo: string } | { tipo: "contrato"; id: string } | null;
 
-/** Quantidade como no sistema de compras (até 4 casas, sem zeros sobrando). */
-const _qtd = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 });
-const dec = (n: number) => _qtd.format(n);
-
-const COR_NIVEL = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--danger)" } as const;
+const dec = decimalHistorico;
 
 const dinheiro = (n: number | null) => (n == null ? <span className="text-faint">—</span> : <span className="tabular-nums">{brl(n)}</span>);
 const quantidade = (n: number | null) => (n == null ? <span className="text-faint">—</span> : <span className="tabular-nums">{dec(n)}</span>);
@@ -217,7 +214,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
         return d == null || nivel == null ? (
           <span className="text-faint">—</span>
         ) : (
-          <EstadoPonto cor={COR_NIVEL[nivel]} rotulo={desvioTexto(d)} title={`Valor atual neste contrato × preço médio entre contratos (${brl(l.p.medio ?? 0)}).`} />
+          <EstadoPonto cor={COR_VARIACAO[nivel]} rotulo={desvioTexto(d)} title={`Valor atual neste contrato × preço médio entre contratos (${brl(l.p.medio ?? 0)}).`} />
         );
       },
     },
@@ -253,7 +250,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
         return d == null || nivel == null ? (
           <span className="text-faint">—</span>
         ) : (
-          <EstadoPonto cor={COR_NIVEL[nivel]} rotulo={desvioTexto(d)} title={`Valor atual neste contrato (${brl(atualNoContrato.get(`${it.codigo}|${it.idContrato}`) ?? 0)}) × preço médio entre contratos (${brl(medioPorCodigo.get(it.codigo) ?? 0)}).`} />
+          <EstadoPonto cor={COR_VARIACAO[nivel]} rotulo={desvioTexto(d)} title={`Valor atual neste contrato (${brl(atualNoContrato.get(`${it.codigo}|${it.idContrato}`) ?? 0)}) × preço médio entre contratos (${brl(medioPorCodigo.get(it.codigo) ?? 0)}).`} />
         );
       },
     },
@@ -410,58 +407,7 @@ function DetalheHistorico({
   if (detalhe.tipo === "produto") {
     const p = produtos.find((x) => x.codigo === detalhe.codigo);
     if (!p) return <p className="text-sm text-muted">Produto não encontrado.</p>;
-    const rotuloContrato = (pc: PrecoContrato | null) => (pc ? `Contrato ${contratoPorId.get(pc.idContrato)?.numeroContrato || pc.idContrato}` : undefined);
-    // Só com 2+ contratos o menor e o maior se distinguem.
-    const extremos = p.porContrato.length > 1;
-    return (
-      <div className="space-y-[var(--gap-block)]">
-        <div>
-          <span className="rounded-chip bg-surface-2 px-2.5 py-1 font-mono text-[13px] font-bold text-text">{p.codigo}</span>
-          <p className="mt-2 text-[14px] leading-snug text-text">{p.descricao}</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <StatMini label="Valor atual" value={p.atual ? brl(p.atual.valor) : "—"} hint={p.atual?.data ? `Assinatura ${dataBR(p.atual.data)}` : undefined} />
-          <StatMini label="Preço médio" value={p.medio != null ? brl(p.medio) : "—"} hint="Entre contratos" />
-          <StatMini label="Menor valor" value={p.menor != null ? brl(p.menor) : "—"} hint={rotuloContrato(p.contratoMenor)} />
-          <StatMini label="Maior valor" value={p.maior != null ? brl(p.maior) : "—"} hint={rotuloContrato(p.contratoMaior)} />
-        </div>
-        <section className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">Comprado em {num(p.contratos)} {p.contratos === 1 ? "contrato" : "contratos"}</p>
-          {p.porContrato.map((pc) => {
-            const c = contratoPorId.get(pc.idContrato);
-            return (
-              <button
-                key={pc.idContrato}
-                type="button"
-                onClick={() => onAbrir({ tipo: "contrato", id: pc.idContrato })}
-                className="flex w-full items-start justify-between gap-3 rounded-card border border-border bg-surface p-2.5 text-left hover:border-accent/50"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-semibold text-text">{c?.credor ?? `Contrato ${pc.idContrato}`}</span>
-                  <span className="block text-[12px] text-muted">
-                    Contrato {c?.numeroContrato || pc.idContrato}
-                    {pc.data ? ` · ${dataBR(pc.data)}` : ""}
-                    {c?.modalidade ? ` · ${c.modalidade}` : ""}
-                  </span>
-                  {extremos && (pc === p.contratoMenor || pc === p.contratoMaior) && (
-                    <span className="mt-1 flex gap-1">
-                      {pc === p.contratoMenor && <Badge tone="emerald">Menor valor</Badge>}
-                      {pc === p.contratoMaior && <Badge tone="red">Maior valor</Badge>}
-                    </span>
-                  )}
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-[13px] font-bold tabular-nums text-text">{brl(pc.valor)}</span>
-                  <span className="block text-[11.5px] tabular-nums text-muted">
-                    {pc.aditivo != null ? `${brl(pc.base)} + aditivo ${brl(pc.aditivo)}` : pc.quantidade ? `qtd. ${dec(pc.quantidade)}` : ""}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </section>
-      </div>
-    );
+    return <ProdutoHistoricoDetalhe produto={p} contratoPorId={contratoPorId} onAbrirContrato={(id) => onAbrir({ tipo: "contrato", id })} />;
   }
   const c = contratoPorId.get(detalhe.id);
   if (!c) return <p className="text-sm text-muted">Contrato não encontrado.</p>;
@@ -509,3 +455,4 @@ function DetalheHistorico({
     </div>
   );
 }
+

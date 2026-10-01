@@ -133,6 +133,8 @@ import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoCard, CoresPaleta, PastaCatalogoCard } from "@/components/CatalogoCards";
+import { CelulaHistoricoCompra, ProdutoHistoricoDetalhe } from "@/components/ProdutoHistorico";
+import { historicoDasLinhas, produtosDoHistorico, referenciaDoProduto } from "@/lib/historico-compra-core";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
@@ -1497,6 +1499,49 @@ function ConsolidadosDemo() {
         diferentes no mesmo código ficam em âmbar (a soma mistura unidades) e o detalhe compara POR UNIDADE (a variação e
         o desvio de cada item usam a média da unidade dele).
       </p>
+    </div>
+  );
+}
+
+// Histórico de compra de um produto: contrato 1 (2025, R$ 10,00) e contrato 2 (2026, R$ 8,75 + aditivo R$ 0,80).
+const HISTORICO_ITEM_DEMO = historicoDasLinhas(
+  [
+    { ordem: 0, idContrato: "26011", sequencial: 1, vu: 10, data: "2025-03-01", credor: "VIVEIRO BOA VISTA LTDA" },
+    { ordem: 1, idContrato: "25964", sequencial: 1, vu: 8.75, data: "2026-02-02", credor: "GRAMA GPP AGRICOLA LTDA" },
+    { ordem: 2, idContrato: "25964", sequencial: 2, vu: 0.8, data: "2026-02-02", credor: "GRAMA GPP AGRICOLA LTDA" },
+  ].map((l) => ({
+    ordem: l.ordem,
+    idContrato: l.idContrato,
+    codigo: "524184753",
+    sequencial: l.sequencial,
+    descricao: "GRAMA ESMERALDA EM PLACAS - M²",
+    qtdContratada: 1000,
+    valorContratado: 1000 * l.vu,
+    valorUnitario: l.vu,
+    dataAssinatura: l.data,
+    credor: l.credor,
+    numeroContrato: l.idContrato,
+    modalidade: "PREGÃO ELETRÔNICO",
+  })),
+);
+
+function HistoricoItemDemo() {
+  const produto = produtosDoHistorico(HISTORICO_ITEM_DEMO.itens, HISTORICO_ITEM_DEMO.contratos)[0];
+  const ref = referenciaDoProduto(produto);
+  const contratoPorId = new Map(HISTORICO_ITEM_DEMO.contratos.map((c) => [c.idContrato, c] as const));
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-4">
+        <CelulaHistoricoCompra valor={9.8} referencia={ref} />
+        <CelulaHistoricoCompra valor={12.5} referencia={ref} />
+        <CelulaHistoricoCompra valor={16} referencia={ref} />
+        <CelulaHistoricoCompra valor={4} referencia={ref} />
+        <CelulaHistoricoCompra valor={null} referencia={ref} />
+        <CelulaHistoricoCompra valor={10} referencia={null} />
+      </div>
+      <div className="max-w-md">
+        <ProdutoHistoricoDetalhe produto={produto} contratoPorId={contratoPorId} />
+      </div>
     </div>
   );
 }
@@ -3839,6 +3884,10 @@ export function Catalogo() {
         <div className="mt-4">
           <CoresPaletaDemo />
         </div>
+      </Secao>
+
+      <Secao titulo="Histórico de compra × item do DFD — CelulaHistoricoCompra (a coluna “Histórico” da Mesa → Itens: o desvio do valor do item em relação ao VALOR ATUAL do histórico, na cor da régua da variação; a referência na dica) + ProdutoHistoricoDetalhe (o banner do produto no histórico — o MESMO do Catálogo e da comparação no detalhe do item, ComparacaoHistoricoCompra, que o abre com o valor do item em cima)">
+        <HistoricoItemDemo />
       </Secao>
 
       <Secao titulo="CatalogoItemDetalhe (painel lateral do item do catálogo — tipos editáveis)">

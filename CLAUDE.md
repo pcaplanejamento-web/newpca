@@ -987,7 +987,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     Com o cadastro da **PADRONIZAÇÃO** (Catálogo → Unidades de medida | Classificações — ver a seção própria; vem na MESMA
     resposta dos itens, `padronizacao`), mais duas colunas, só quando o cadastro correspondente existe: **Classificação**
     (depois de Catálogo — a automática) e **Unid. cadastrada** (depois de Unidade — a unidade cadastrada que a do item
-    representa, ou "Não cadastrada").
+    representa, ou "Não cadastrada"). Com o **HISTÓRICO DE COMPRA** (Catálogo, tipo Histórico — mesma resposta, `historico`),
+    a coluna **Histórico** (depois de Vlr. unit.): o desvio do valor do item em relação ao valor atual do histórico (ver
+    "COMPARAÇÃO COM OS ITENS DAS MESAS").
   - **Itens NORMAL | CONSOLIDADA (sem consulta nova ao banco):** só na visão Itens, um 2º `Segmented` (`modoItens`,
     ariaLabel "Visão dos itens") ao lado do das visões — na Mesa principal E na do PCA — alterna **Normal** (um item por
     linha, a tabela acima) e **Consolidada** (a `key` do morph inclui o modo — troca com a MESMA transição). A Consolidada
@@ -1778,6 +1780,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   aditivo, ou o único preço; `base` = o maior), o **Valor atual** (maior + aditivo), Situação (**Mais recente** = o valor
   atual do produto | Anterior), Δ preço médio, Qtd. contratada (`PrecoContrato.quantidade` = só as linhas no preço BASE — a
   linha do aditivo repete a quantidade do item), Linhas, Credor e Assinatura; tudo filtrável, exportável; tocar abre o produto.
+  **COMPARAÇÃO COM OS ITENS DAS MESAS (sem migração):** a referência de um código = o histórico de TODOS os catálogos
+  'historico' (`consultaComprasPorCodigos`, `catalogo-historico-sql.ts` — UMA consulta, os códigos num parâmetro JSON,
+  testada no driver D1 real; `historicoDasLinhas` junta o MESMO contrato importado em dois históricos — a linha repetida
+  entra uma vez) → `produtosDoHistorico` → **`referenciaDoProduto`** (`ReferenciaHistorico`: valor atual + a data, médio,
+  menor, maior, nº de contratos). **`compararComHistorico`** = o valor unitário do item × o VALOR ATUAL (`desvioDaMedia`;
+  nível pela régua da variação sobre o desvio absoluto — até 25% dentro · até 50% atenção · acima alerta);
+  `rotuloComparacaoHistorico` (Acima/Abaixo (25% a 50%)/(mais de 50%) · Dentro do histórico · Sem histórico · Item sem
+  valor) e `textoDivergenciaHistorico` (o erro por extenso). **Mesa → Itens:** `GET /api/dfd/itens` devolve `historico`
+  (`referenciasHistorico` — mapa código → referência, fail-safe; só com a visão Itens aberta) e a coluna **Histórico**
+  (depois de Vlr. unit., só quando algum código tem compra — `CelulaHistoricoCompra`: o desvio na cor, a referência na
+  dica; filtro pelo rótulo). **Detalhe do item** (`ItemDetalhe`, em toda Mesa e na análise): o bloco **Histórico de
+  compra** (`ComparacaoHistoricoCompra`, `ProdutoHistorico.tsx` — carregado só com o item aberto por `GET
+  /api/catalogo/historico/produto?codigo=` (Visualizar numa das Mesas ou no Catálogo), guardado 5 min por código; sem
+  histórico ou falha = não aparece): o rótulo + o erro, Valor do item × Valor atual, o médio e a faixa entre contratos e
+  **"Ver no histórico de compra"** → o banner do produto (**`ProdutoHistoricoDetalhe`** — o MESMO do histórico aberto pelo
+  Catálogo, sem abrir o contrato) com o valor do item em cima. Informativo: não entra no Estado nem bloqueia.
   **VARIAÇÃO DE PREÇO (a MESMA régua da Consolidada da Mesa):** `produtosDoHistorico` dá o `variacao` (o
   `coeficienteVariacao` de `itens-consolidados.ts`, agora exportado) e a tabela de Produtos abre com os de MAIOR variação
   primeiro, coluna **Variação** logo após a Descrição (`CelulaVariacao`, filtro por faixa — `rotuloVariacao`: Alta > 50% ·

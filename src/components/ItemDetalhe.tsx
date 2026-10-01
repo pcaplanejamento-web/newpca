@@ -22,6 +22,7 @@ import { Callout } from "./Callout";
 import type { DfdVisualItem } from "./DfdView";
 import { HistoricoDoItem } from "./Historico";
 import { IconAlert, IconArrowRight, IconMerge, IconTrash } from "./icons";
+import { ComparacaoHistoricoCompra } from "./ProdutoHistorico";
 import { toast } from "./Toast";
 
 /** Campos do item que têm cadeado próprio. */
@@ -32,7 +33,8 @@ const MAX_REPETIDOS_LISTA = 20;
 /**
  * Painel LATERAL de detalhe de UM item da Seção 4 do DFD — abre à direita ao clicar
  * numa linha da tabela de itens (mestre-detalhe), no MESMO lugar do painel de mensagens.
- * Mostra todas as infos do item + estado + CONFORMIDADE com o catálogo. Quando `editavel`,
+ * Mostra todas as infos do item + estado + CONFORMIDADE com o catálogo + a comparação do valor com o HISTÓRICO DE
+ * COMPRA (`ComparacaoHistoricoCompra`, com o banner do produto). Quando `editavel`,
  * cada campo tem um **cadeado próprio**: destravar para editar; um campo **igual ao catálogo**
  * (Código/Descrição/Unidade não divergentes) fica **bloqueado** (erro ao tentar). No DFD GRAVADO
  * (`historicoDfdId`), a seção recolhível "Histórico do item" mostra o que mudou nele. Item REPETIDO
@@ -298,6 +300,9 @@ export function ItemDetalhe({
           )}
         </section>
       )}
+
+      {/* O valor do item × o HISTÓRICO DE COMPRA do código (valor atual, médio, menor–maior) + o banner do produto. */}
+      <ComparacaoHistoricoCompra codigo={item.codigo} valor={item.valorUnitario} />
 
       {/* Histórico do item (DFD gravado): o que mudou nele, por qual canal e por qual protocolo. */}
       {historicoDfdId != null && <HistoricoDoItem url={`/api/dfd/${historicoDfdId}/historico`} item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />}

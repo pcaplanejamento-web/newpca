@@ -1,9 +1,17 @@
 import { asc, eq, sql } from "drizzle-orm";
 import { catalogoCompras, catalogoContratos, catalogoPastas } from "@/db/schema";
-import { comandosCatalogosDaPasta, comandosCompras, comandosContratos, comandosExcluirPasta } from "./catalogo-historico-sql";
+import { comandosCatalogosDaPasta, comandosCompras, comandosContratos, comandosExcluirPasta, consultaComprasPorCodigos } from "./catalogo-historico-sql";
 import type { CompraHistoricoImport, ContratoHistoricoImport } from "./catalogo-validation";
 import { getDb } from "./db";
-import type { CompraHistorico, ContratoHistorico } from "./historico-compra-core";
+import {
+  type CompraHistorico,
+  type ContratoHistorico,
+  historicoDasLinhas,
+  type LinhaCompraHistorico,
+  produtosDoHistorico,
+  type ReferenciaHistorico,
+  referenciaDoProduto,
+} from "./historico-compra-core";
 
 /**
  * Acesso ao D1 do HISTÓRICO DE COMPRA e das PASTAS do catálogo (migração `0075`). Só escopo de request (`getDb`). Os
@@ -77,6 +85,29 @@ export async function getHistorico(catalogoId: number): Promise<{ contratos: Con
       .orderBy(asc(catalogoCompras.ordem)),
   ]);
   return { contratos, itens };
+}
+
+// ---------------------------------------------------------------- Comparação com os itens dos DFDs
+
+/** As compras de alguns códigos (só dígitos) em TODOS os históricos — UMA consulta. */
+export async function comprasDosCodigos(codigos: readonly string[]): Promise<LinhaCompraHistorico[]> {
+  const lista = [...new Set(codigos.filter(Boolean))];
+  if (lista.length === 0) return [];
+  return consultaComprasPorCodigos(getDb(), lista);
+}
+
+/** A REFERÊNCIA de preço de cada código que tem histórico (o valor atual + médio/menor/maior entre contratos) — a
+ * coluna "Histórico" da Mesa → Itens. O código sem compra não entra. */
+export async function referenciasHistorico(codigos: readonly string[]): Promise<Record<string, ReferenciaHistorico>> {
+  const linhas = await comprasDosCodigos(codigos);
+  const out: Record<string, ReferenciaHistorico> = {};
+  if (linhas.length === 0) return out;
+  const { itens, contratos } = historicoDasLinhas(linhas);
+  for (const p of produtosDoHistorico(itens, contratos)) {
+    const ref = referenciaDoProduto(p);
+    if (ref) out[p.codigo] = ref;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- Pastas

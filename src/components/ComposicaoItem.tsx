@@ -29,8 +29,8 @@ import { colunaPlanejamento, colunaTipoDfd } from "./PlanilhaDfds";
 import { StatMini } from "./StatMini";
 
 /** Cor (token) de cada nível da variação dos preços — verde OK · âmbar atenção · vermelho alerta. */
-const COR_VARIACAO = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--danger)" } as const;
-const TOM_VARIACAO = { ok: "ok", atencao: "warn", alerta: "danger" } as const;
+export const COR_VARIACAO = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--danger)" } as const;
+export const TOM_VARIACAO = { ok: "ok", atencao: "warn", alerta: "danger" } as const;
 const REGUA_VARIACAO = `Até ${pct(FAIXAS_VARIACAO.atencao, 1)} = preços homogêneos · até ${pct(FAIXAS_VARIACAO.alerta, 1)} = atenção · acima = alerta.`;
 
 /** Célula "Variação" (coeficiente de variação dos valores unitários de um código): o % na cor da faixa. `nota` completa a

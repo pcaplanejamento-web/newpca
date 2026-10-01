@@ -11,6 +11,7 @@ import {
   comandosCompras,
   comandosContratos,
   comandosExcluirPasta,
+  consultaComprasPorCodigos,
   consultaIndicadoresHistorico,
 } from "../src/lib/catalogo-historico-sql.ts";
 import type { CompraHistoricoImport, ContratoHistoricoImport } from "../src/lib/catalogo-validation.ts";
@@ -116,6 +117,17 @@ describe("histórico de compra e pastas (builders no db.batch do D1)", () => {
     assert.equal(n(db, "SELECT COUNT(*) AS n FROM catalogo_pastas WHERE id = 7"), 0);
     assert.equal(n(db, "SELECT COUNT(*) AS n FROM catalogos"), 3, "os catálogos ficam");
     assert.equal(n(db, "SELECT COUNT(*) AS n FROM catalogos WHERE pasta_id IS NOT NULL"), 0);
+  });
+
+  it("compras de alguns códigos em todos os históricos, com o contrato — UMA consulta, um parâmetro", async () => {
+    const q = consultaComprasPorCodigos(orm, ["500", "501", "999"]);
+    assert.equal(q.toSQL().params.length, 1);
+    const linhas = await q;
+    assert.equal(linhas.length, n(db, "SELECT COUNT(*) AS n FROM catalogo_compras WHERE codigo IN ('500','501')"));
+    assert.ok(linhas.length > 0);
+    assert.ok(linhas.every((l) => l.codigo === "500" || l.codigo === "501"));
+    assert.ok(linhas.every((l) => l.dataAssinatura === "2026-02-23" && l.credor?.startsWith("CREDOR")));
+    assert.deepEqual(await consultaComprasPorCodigos(orm, ["999"]), []);
   });
 
   it("apagar o histórico tira contratos e itens só daquele catálogo", async () => {

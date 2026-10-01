@@ -41,6 +41,7 @@ import {
   resolverUnidades,
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
+import { type ReferenciaHistorico, rotuloComparacaoHistorico } from "@/lib/historico-compra-core";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
@@ -64,6 +65,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
 import { tokenPx } from "./espacamento";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
+import { CelulaHistoricoCompra } from "./ProdutoHistorico";
 import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
@@ -359,6 +361,9 @@ export function DfdsView({
   // Catálogo → Unidades de medida | Classificações: o cadastro vem JUNTO com os itens (só com a visão Itens aberta) — a
   // unidade CADASTRADA de cada item e a classificação AUTOMÁTICA (as colunas só existem com o cadastro feito).
   const [padronizacao, setPadronizacao] = useState<Padronizacao | null>(null);
+  // Histórico de compra: a REFERÊNCIA de preço de cada código (vem junto com os itens) — a coluna "Histórico" (só com
+  // algum código comprado) aponta o item com valor divergente.
+  const [historico, setHistorico] = useState<Record<string, ReferenciaHistorico> | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao trocar a referência de `dfds`.
   useEffect(() => {
     setItens(null);
@@ -372,11 +377,14 @@ export function DfdsView({
     const ac = new AbortController();
     setCarregandoItens(true);
     fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal })
-      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null }>)
+      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null; historico?: Record<string, ReferenciaHistorico> }>)
       .then((j) => {
         if (ac.signal.aborted) return;
         setItens(j.ok ? (j.itens ?? []) : []);
-        if (j.ok) setPadronizacao(j.padronizacao ?? null);
+        if (j.ok) {
+          setPadronizacao(j.padronizacao ?? null);
+          setHistorico(j.historico && Object.keys(j.historico).length > 0 ? j.historico : null);
+        }
       })
       .catch(() => {
         if (!ac.signal.aborted) setItens([]);
@@ -1244,6 +1252,7 @@ export function DfdsView({
       tipo: { valor: (r) => tipoCurtoDfd(r.dfdTipo) ?? "—" },
       prioridade: { valor: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—" },
       catalogo: { valor: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—" },
+      historico: { valor: (r) => rotuloComparacaoHistorico(r.valorUnitario, historico?.[normalizarCodigo(r.codigo)]) },
       descricao: { valor: (r) => r.descricao ?? "" },
       unidade: { valor: (r) => r.unidade ?? "" },
       // Só com o cadastro (senão as colunas nem existem): a sigla da unidade cadastrada e a classificação automática.
@@ -1253,7 +1262,7 @@ export function DfdsView({
       codigo: { valor: (r) => normalizarCodigo(r.codigo) || "Sem código" },
       pcaSeq: { valor: (r) => (r.pcaSequencial == null ? "" : String(r.pcaSequencial)) },
     } satisfies Record<string, Atributo>;
-  }, [repDoItem, dfdPorId, regras, unidadeDoItem, classeDoItem]);
+  }, [repDoItem, dfdPorId, regras, unidadeDoItem, classeDoItem, historico]);
 
   // Visão CONSOLIDADA (um por CÓDIGO): calculada só com ela aberta, sobre os itens JÁ filtrados pela hierarquia.
   const consolidada = vista === "itens" && modoItens === "consolidada";
@@ -1500,6 +1509,19 @@ export function DfdsView({
       : []),
     { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
     { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
+    // O valor unitário × o HISTÓRICO DE COMPRA do código (o valor atual; médio e faixa na dica) — o desvio na cor da régua da
+    // variação aponta o item divergente; o filtro separa "Acima/Abaixo (mais de 50%)", "(25% a 50%)", "Dentro", "Sem histórico".
+    ...(historico
+      ? [
+          {
+            key: "historico",
+            header: "Histórico",
+            nowrap: true,
+            value: atributoItem.historico.valor,
+            render: (r: ItemDfdRow) => <CelulaHistoricoCompra valor={r.valorUnitario} referencia={historico[normalizarCodigo(r.codigo)]} />,
+          },
+        ]
+      : []),
     { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
   ];
 
