@@ -64,5 +64,5 @@ export function Turnstile({ siteKey, onToken }: { siteKey: string; onToken: (t: 
     };
   }, [siteKey, onToken]);
 
-  return <div ref={ref} className="flex justify-center" />;
+  return <div ref={ref} className="flex justify-center [&_iframe]:block" />;
 }

@@ -94,8 +94,8 @@ export function AuthForm({
       >
         Entrar
       </Button>
-      {/* O captcha logo abaixo, numa área de altura RESERVADA (a do Turnstile): aparecer não empurra nada. */}
-      <div className="mt-3 flex min-h-[65px] items-start justify-center [&>*]:w-full [&>*]:max-w-[300px]">{captcha.widget}</div>
+      {/* O captcha logo abaixo, numa área de altura FIXA (o Turnstile, 65px + a folga da linha do iframe): aparecer ou trocar não move nada. */}
+      <div className="mt-3 flex h-[72px] items-center justify-center overflow-hidden [&>*]:w-full [&>*]:max-w-[300px]">{captcha.widget}</div>
 
       {google && (
         <>
