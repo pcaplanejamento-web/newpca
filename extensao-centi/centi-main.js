@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 8;
+  const PROTOCOLO = 9;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -205,13 +205,15 @@
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
     const erro = A.validarPedido(d);
     if (erro) return { ok: false, erro };
-    const e = await abrirProtocolo(d);
-    const ja = A.jaAnexado(e, d.descricao);
-    if (ja) return { ok: true, jaAnexado: true, ...ja };
-    // O registro do tipo, como a tela o manda (falhou a leitura → o tipo que o protocolo já tem / a referência).
+    // O TIPO primeiro e o PROTOCOLO por ÚLTIMO, logo antes de salvar: a Centi guarda no servidor o objeto aberto pelo
+    // load — um load do tipo DEPOIS trocava o protocolo aberto e o salvar dava "Erro inesperado" (500). A tela faz igual:
+    // abre o protocolo e busca o tipo por referência, sem outro load.
     const tipo = await api("GET", `restauth/load?entity=${A.MODULO_TIPO}&key=${d.tipo}`, null, "load do tipo")
       .then((t) => A.tipoDoLoad(t, d.tipo))
       .catch(() => null);
+    const e = await abrirProtocolo(d);
+    const ja = A.jaAnexado(e, d.descricao);
+    if (ja) return { ok: true, jaAnexado: true, ...ja };
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
     const conf = await api("POST", urlsSalvar.confirmsave || "restauth/confirmsave", corpo, "confirmsave", true);
     if (conf.Confirm === true) return { ok: false, erro: `A Centi pede confirmação: ${A.mensagens(conf.Message) || "sem mensagem"} — anexe pela tela da Centi.` };
