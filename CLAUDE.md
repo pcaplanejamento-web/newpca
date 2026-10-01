@@ -3393,7 +3393,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   direto para Downloads e vários vão num **.zip com as pastas** (`zip-armazenar.ts`, STORE puro e testado). **Entidade da
   Centi por órgão** (extensão 1.2.0, protocolo 3: o `estado` devolve a entidade aberta — cabeçalho `Company` — e o `pedir`
   aceita `entidade` só naquele pedido): mapa órgão → entidade no aparelho; sem ele, a aberta; falhou e "Descobrir sozinho"
-  ligado → tenta as outras (`candidatosEntidade`: as digitadas ou 1–20 no formato da aberta) e lembra a que deu certo.
+  ligado → tenta as outras (`candidatosEntidade`: as digitadas ou 0–28 — as entidades da Centi — no formato da aberta) e lembra a que deu certo.
   **Segurança dos dados:** cada PDF é CONFERIDO antes de contar como salvo (`conferirConteudoDfd`: o texto das 2 primeiras
   páginas — pdf.js, dinâmico — traz o planejamento E o DFD pedidos como número inteiro; sem texto = falha), a gravação na
   pasta confere o TAMANHO gravado e o PDF unido confere o total de páginas. Tela MINIMALISTA (explicações só no (?)), em

@@ -14,7 +14,7 @@ export type ConfigCenti = {
   guid: string;
   /** Descobrir sozinho a entidade (órgão) da Centi do DFD que não está na entidade aberta. */
   descobrirEntidade: boolean;
-  /** As entidades a tentar ("02:03:04"); vazio = de 1 a 20 no formato da aberta. */
+  /** As entidades a tentar ("02:03:04"); vazio = de 0 a 28 (as entidades da Centi) no formato da aberta. */
   entidades: string;
 };
 
@@ -382,7 +382,10 @@ export function conferirConteudoDfd(texto: string, alvo: { id: string; dfd: stri
 }
 
 /** As entidades da Centi a TENTAR quando o DFD não está na entidade aberta: as digitadas ("02:03:04") ou, sem elas e com
- * a entidade aberta numérica, de 1 a 20 no mesmo formato (com o zero à esquerda, se a aberta tem). */
+ * a entidade aberta numérica, de 0 a 28 (as entidades da Centi de Rio Verde) no mesmo formato (com o zero à esquerda, se a aberta tem). */
+/** A maior entidade da Centi (0 a 28). */
+export const ENTIDADE_MAX = 28;
+
 export function candidatosEntidade(texto: string, atual: string | null): string[] {
   const digitadas = texto
     .split(/[\s:;,]+/)
@@ -390,7 +393,7 @@ export function candidatosEntidade(texto: string, atual: string | null): string[
     .filter((x) => /^[\w.-]{1,40}$/.test(x));
   if (digitadas.length) return [...new Set(digitadas)];
   if (!atual || !/^\d{1,4}$/.test(atual)) return [];
-  return Array.from({ length: 20 }, (_, i) => String(i + 1).padStart(atual.length, "0"));
+  return Array.from({ length: ENTIDADE_MAX + 1 }, (_, i) => String(i).padStart(atual.length, "0"));
 }
 
 /** A maior de duas versões "a.b.c". */

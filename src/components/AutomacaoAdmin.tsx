@@ -285,7 +285,7 @@ function Ajustes({
       </Grupo>
       <Grupo titulo="Entidade da Centi por órgão">
         <Switch checked={cfg.descobrirEntidade} onChange={(v) => onCfg({ descobrirEntidade: v })} label="Descobrir sozinho" />
-        <TextField label="Entidades a tentar" placeholder={aberta ? `vazio = 1 a 20 (aberta: ${aberta})` : "02:03:04"} value={cfg.entidades} onChange={(e) => onCfg({ entidades: e.target.value })} />
+        <TextField label="Entidades a tentar" placeholder={aberta ? `vazio = 0 a 28 (aberta: ${aberta})` : "02:03:04"} value={cfg.entidades} onChange={(e) => onCfg({ entidades: e.target.value })} />
         {orgaos.length > 0 && (
           <ul className="max-h-56 divide-y divide-border overflow-y-auto">
             {orgaos.map(([chave, o]) => (

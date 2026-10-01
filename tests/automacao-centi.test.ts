@@ -124,8 +124,9 @@ test("pastas, nomes e plano por protocolo", async () => {
     ["PCA 2027", "Planejamento 811 - DFD 700 - PCA 2027 - (11) - 2026.pdf", "o:3"],
   ]);
   assert.deepEqual(candidatosEntidade("02: 03,x y", null), ["02", "03", "x", "y"]);
-  assert.equal(candidatosEntidade("", "02")[0], "01");
-  assert.equal(candidatosEntidade("", "02").length, 20);
+  assert.equal(candidatosEntidade("", "02")[0], "00");
+  assert.equal(candidatosEntidade("", "02").at(-1), "28");
+  assert.equal(candidatosEntidade("", "02").length, 29);
   assert.deepEqual(candidatosEntidade("", null), []);
 });
 
