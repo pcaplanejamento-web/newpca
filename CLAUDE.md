@@ -3382,7 +3382,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cru, base64 "JVBER…", gzip "H4sI…" e bytes; falha mostra o `esqueletoCenti`, sem dados/tokens), `lerIdsCenti`,
   `lerConfigCenti`, `VERSAO_EXTENSAO_CENTI` (a MÍNIMA aceita) + `versaoAtende`. Nada entra na Mesa; na Centi, só o anexo ao protocolo indicado (abaixo);
   nenhuma senha no sistema. **Por protocolo** (padrão; `Segmented` Por protocolo | Por Id): os protocolos do sistema numa
-  `DataTable` com seleção (loader `protocolosParaAutomacao`, `automacao.ts` — todos, com a SIGLA da unidade e, por DFD, o
+  `DataTable` com seleção (loader `protocolosParaAutomacao`, `automacao.ts` — todos, com a SIGLA da unidade, a data, Σ itens e Σ valor dos DFDs [toda coluna com `render` — a `DataTable` só desenha pelo `render`; o `value` é filtro/ordem], o ano do PCA [sem ano no protocolo, o dos DFDs] e, por DFD, o
   planejamento, o ano do PCA e o ÓRGÃO — `chaveOrgaoCenti`). **Plano da saída** (puro: `planoDosProtocolos`/`planoDosIds` →
   `ArquivoSaida {pastas, nome, partes}`): pasta do protocolo "SIGLA - PCA ano - (nº) - ano" (`nomePastaProtocolo`), PDF
   "Planejamento P - DFD N - PCA ano - (nº) - ano" (`nomeArquivoDfd`) — o PROTOCOLO sempre no fim (`sufixoProtocolos`: "(1222,

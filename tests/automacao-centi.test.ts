@@ -77,7 +77,7 @@ test("pastas, nomes e plano por protocolo", async () => {
   assert.equal(chaveOrgaoCenti(4, "x"), "o:4");
   assert.equal(chaveOrgaoCenti(null, " Fundo Municipal de Saúde "), "t:FUNDO MUNICIPAL DE SAUDE");
   assert.equal(chaveOrgaoCenti(null, null), null);
-  const p = (id: number, numero: string, dfds: ReturnType<typeof d>[]) => ({ id, numero, idExterno: null, assunto: "A", interessado: null, sigla: "SMS", anoPca: 2027, pca: null, dfds });
+  const p = (id: number, numero: string, dfds: ReturnType<typeof d>[]) => ({ id, numero, idExterno: null, assunto: "A", interessado: null, sigla: "SMS", anoPca: 2027, pca: null, criadoEm: null, itens: 0, valor: 0, dfds });
   const protos = [
     p(1, "10/2026", [d("531", "900"), d("532", null), d("533", "0640"), d("534", "640")]),
     p(2, "11/2026", [d("700", "811", "SME"), d("701", "900")]),

@@ -34,11 +34,13 @@ import {
   VERSAO_EXTENSAO_CENTI,
   versaoAtende,
 } from "@/lib/automacao-centi-core";
+import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { ZipArmazenar } from "@/lib/zip-armazenar";
 import { Ajuda } from "./Ajuda";
 import { useAlturaTela } from "./AlturaCheia";
 import { Badge } from "./Badge";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
+import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
@@ -247,20 +249,66 @@ const texto1 = (v: string | null) => (
 );
 
 const COLUNAS: Column<ProtocoloAutomacao>[] = [
-  { key: "numero", header: "Nº protocolo", nowrap: true, value: (p) => p.numero, render: (p) => <span className="font-semibold text-text">{p.numero}</span> },
-  { key: "id", header: "Id", nowrap: true, value: (p) => p.idExterno ?? "—" },
-  { key: "sigla", header: "Sigla", nowrap: true, value: (p) => p.sigla ?? "—" },
+  {
+    key: "numero",
+    header: "Nº protocolo",
+    nowrap: true,
+    value: (p) => p.numero,
+    render: (p) => (
+      <CelulaCopiavel copiar={numeroSemAno(p.numero)} rotulo="nº do protocolo">
+        <span className="font-semibold text-text">{p.numero}</span>
+      </CelulaCopiavel>
+    ),
+  },
+  {
+    key: "id",
+    header: "Id",
+    nowrap: true,
+    value: (p) => p.idExterno ?? "—",
+    render: (p) => <CelulaCopiavel copiar={p.idExterno} rotulo="Id do protocolo">{p.idExterno ?? "—"}</CelulaCopiavel>,
+  },
+  { key: "data", header: "Data", nowrap: true, value: (p) => dataHoraBR(p.criadoEm), render: (p) => dataHoraBR(p.criadoEm) || "—" },
+  { key: "sigla", header: "Sigla", nowrap: true, value: (p) => p.sigla ?? "—", render: (p) => p.sigla ?? "—" },
   { key: "assunto", header: "Assunto", minWidth: 180, align: "left", value: (p) => p.assunto ?? "—", render: (p) => texto1(p.assunto) },
   { key: "interessado", header: "Interessado", minWidth: 220, align: "left", value: (p) => p.interessado ?? "—", render: (p) => texto1(p.interessado) },
-  { key: "pca", header: "PCA", nowrap: true, value: (p) => (p.anoPca ? String(p.anoPca) : "—") },
-  { key: "local", header: "Local", nowrap: true, value: (p) => p.pca ?? "Mesa do sistema" },
-  { key: "dfds", header: "DFDs", nowrap: true, filter: "range", numero: (p) => p.dfds.length, formatarFaixa: (n) => String(n), value: (p) => String(p.dfds.length) },
+  { key: "pca", header: "PCA", nowrap: true, value: (p) => (p.anoPca ? String(p.anoPca) : "—"), render: (p) => (p.anoPca ? String(p.anoPca) : "—") },
+  { key: "local", header: "Local", nowrap: true, value: (p) => p.pca ?? "Mesa do sistema", render: (p) => p.pca ?? "Mesa do sistema" },
+  {
+    key: "dfds",
+    header: "DFDs",
+    nowrap: true,
+    filter: "range",
+    numero: (p) => p.dfds.length,
+    formatarFaixa: (n) => String(n),
+    value: (p) => String(p.dfds.length),
+    render: (p) => <span className="tabular-nums">{p.dfds.length}</span>,
+  },
   {
     key: "semplan",
     header: "Sem planej.",
     nowrap: true,
     value: (p) => (semPlan(p) ? "Com DFD sem planejamento" : "Todos com planejamento"),
     render: (p) => (semPlan(p) ? <span className="font-semibold text-[var(--warn)]">{semPlan(p)}</span> : <span className="text-muted">0</span>),
+  },
+  {
+    key: "itens",
+    header: "Itens",
+    nowrap: true,
+    filter: "range",
+    numero: (p) => p.itens,
+    formatarFaixa: (n) => String(n),
+    value: (p) => String(p.itens),
+    render: (p) => <span className="tabular-nums">{p.itens}</span>,
+  },
+  {
+    key: "valor",
+    header: "Valor",
+    nowrap: true,
+    align: "right",
+    filter: "range",
+    numero: (p) => p.valor,
+    value: (p) => brl(p.valor),
+    render: (p) => <span className="tabular-nums">{brl(p.valor)}</span>,
   },
 ];
 
@@ -914,7 +962,9 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
               scrollInterno
               acoesRodape={acoes}
               vazio="Nenhum protocolo no sistema."
-              resumo={(ls) => `${ls.length} protocolo(s) · ${ls.reduce((s, p) => s + p.dfds.length, 0)} DFD(s)`}
+              resumo={(ls) =>
+                `${ls.length} protocolo(s) · ${ls.reduce((s, p) => s + p.dfds.length, 0)} DFD(s) · ${brl(ls.reduce((s, p) => s + p.valor, 0))}`
+              }
             />
           ) : (
             <section className={`${CARTAO} space-y-3 p-[var(--pad-card)]`}>
