@@ -207,6 +207,13 @@ async function novaUniao() {
   };
 }
 
+/** O PDF regravado pelo pdf-lib (as mesmas páginas, a estrutura do PDF unido). */
+async function regravarPdf(b: Uint8Array): Promise<Uint8Array> {
+  const u = await novaUniao();
+  await u.adicionar(b);
+  return u.salvar();
+}
+
 function lerLocal<T>(chave: string, ler: (v: unknown) => T, padrao: T): T {
   try {
     return ler(JSON.parse(localStorage.getItem(chave) ?? "null"));
@@ -729,11 +736,14 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
     const zip = !anexando && !destino && (plano.length > 1 || plano[0].pastas.length > 0) ? new ZipArmazenar() : null;
     const pedacos: Blob[] = [];
     // Devolve a nota da linha (o anexo: o nº do documento na Centi). Falha → lança com o motivo.
-    const gravar = async (a: ArquivoSaida, bytes: Uint8Array): Promise<string | undefined> => {
+    const gravar = async (a: ArquivoSaida, bytes: Uint8Array, unido = false): Promise<string | undefined> => {
       if (anexando && alvo) {
+        // O PDF CRU da Centi (o relatório dela) é recusado no salvar do protocolo (500); o regravado pelo pdf-lib — o mesmo
+        // do PDF unido, que a Centi aceita — vai no lugar. Não deu para regravar: o cru.
+        const pdf = unido ? bytes : await regravarPdf(bytes).catch(() => bytes);
         const r = await pedir(
           "anexar",
-          { ...alvo, tipo, descricao: descricaoDoArquivo(a.nome), arquivo: a.nome, pdf: paraBase64(bytes) },
+          { ...alvo, tipo, descricao: descricaoDoArquivo(a.nome), arquivo: a.nome, pdf: paraBase64(pdf) },
           320_000,
         );
         if (!r.ok) throw new Error(r.erro ?? "A Centi não gravou.");
@@ -799,7 +809,7 @@ export function AutomacaoAdmin({ protocolos, banners }: { protocolos: ProtocoloA
       if (uniao && !uniao.vazio) {
         const res = await uniao
           .salvar()
-          .then((b) => gravar(a, b))
+          .then((b) => gravar(a, b, true))
           .then((nota) => ({ ok: true as const, nota }))
           .catch((e: unknown) => ({ ok: false as const, nota: falhaGravar(e, true) }));
         setLinhas((ls) =>
