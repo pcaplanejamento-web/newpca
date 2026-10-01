@@ -1,22 +1,26 @@
-// Ponte na aba Automação do sistema PCA: página <-> extensão. Só esta página fala com a extensão.
+// Ponte na aba Automação do sistema PCA: página <-> extensão. Só esta página fala com a extensão. Cada resposta leva a
+// versão: a página ignora a de uma cópia antiga (que fica na aba depois de uma atualização da extensão).
 (() => {
-  const VERSAO = chrome.runtime.getManifest().version;
-  const responder = (id, resposta) => window.postMessage({ fonte: "pca-ext", id, resposta }, window.location.origin);
-  const anunciar = () => window.postMessage({ fonte: "pca-ext", tipo: "pronto", versao: VERSAO }, window.location.origin);
-  const RECARREGAR = "A extensão foi atualizada — recarregue esta página (F5).";
+  const V = chrome.runtime.getManifest().version;
+  const MARCA = `__pcaSistemaPonte_${V}`;
+  if (window[MARCA]) return;
+  window[MARCA] = true;
+  const origem = window.location.origin;
+  const responder = (id, resposta) => window.postMessage({ fonte: "pca-extensao", v: V, id, resposta }, origem);
+  const anunciar = () => window.postMessage({ fonte: "pca-extensao", v: V, tipo: "pronto", versao: V }, origem);
   window.addEventListener("message", (e) => {
-    if (e.source !== window || e.origin !== window.location.origin) return;
+    if (e.source !== window || e.origin !== origem) return;
     const m = e.data;
-    if (m?.fonte !== "pca-pagina") return;
+    if (m?.fonte !== "pca-automacao") return;
     if (m.tipo === "ola") return anunciar();
+    if (m.v && m.v !== V) return;
     try {
       chrome.runtime.sendMessage({ acao: m.acao, dados: m.dados }, (resposta) => {
         const erro = chrome.runtime.lastError;
         responder(m.id, erro ? { ok: false, erro: erro.message } : (resposta ?? { ok: false, erro: "Sem resposta da extensão." }));
       });
     } catch {
-      // A extensão foi recarregada depois que esta página abriu: esta ponte ficou sem a extensão.
-      responder(m.id, { ok: false, erro: RECARREGAR });
+      /* cópia antiga sem a extensão: a página usa a ponte nova */
     }
   });
   anunciar();

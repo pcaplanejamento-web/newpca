@@ -1,8 +1,19 @@
 // Roda DENTRO da página da Centi: guarda os cabeçalhos que a própria Centi usa na API (token, entidade, mês) e repete o
 // "Processar" do Emitir DFD com eles. Só a operação Emitir DFD, sempre com as TRAVAS (não vincula, não assina, não envia).
 (() => {
+  // Versão do protocolo/extensão: só responde à ponte da MESMA versão (uma cópia antiga que ficou na aba se cala).
+  const VERSAO = "1.0.5";
+  const MARCA = `__pcaCentiMain_${VERSAO}`;
+  if (window[MARCA]) return;
+  window[MARCA] = true;
+  const SESSAO = "__pcaCentiSessao";
   let base = "";
   let cabecalhos = null;
+  // A sessão da Centi é POR ABA (sessionStorage): a última capturada vale também depois de um F5 ou de uma atualização.
+  try {
+    const salvo = JSON.parse(sessionStorage.getItem(SESSAO) || "null");
+    if (salvo?.base && salvo?.cabecalhos) ({ base, cabecalhos } = salvo);
+  } catch {}
   const IGNORAR = /^(content-type|accept|content-length|x-ts)/i;
 
   function guardar(url, hs) {
@@ -15,6 +26,9 @@
     if (!Object.keys(limpos).some((k) => /^(authorization|token|refreshtoken|company)$/i.test(k))) return;
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
+    try {
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos }));
+    } catch {}
   }
 
   const abrir = XMLHttpRequest.prototype.open;
@@ -188,7 +202,7 @@
   }
 
   window.addEventListener("message", async (e) => {
-    if (e.source !== window || e.data?.fonte !== "pca-ponte") return;
+    if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.v !== VERSAO) return;
     const { id, acao, dados } = e.data;
     let resposta;
     try {
@@ -196,6 +210,6 @@
     } catch (err) {
       resposta = { ok: false, erro: err?.message || "Falha ao emitir." };
     }
-    window.postMessage({ fonte: "pca-main", id, resposta }, location.origin);
+    window.postMessage({ fonte: "pca-centi-resposta", v: VERSAO, id, resposta }, location.origin);
   });
 })();

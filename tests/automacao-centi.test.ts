@@ -35,4 +35,6 @@ test("a versão da tela é a do manifest da extensão", async () => {
   const { readFileSync } = await import("node:fs");
   const { VERSAO_EXTENSAO_CENTI } = await import("../src/lib/automacao-centi-core.ts");
   assert.equal(JSON.parse(readFileSync("extensao-centi/manifest.json", "utf8")).version, VERSAO_EXTENSAO_CENTI);
+  // O script da página da Centi só responde à ponte da MESMA versão.
+  assert.match(readFileSync("extensao-centi/centi-main.js", "utf8"), new RegExp(`const VERSAO = "${VERSAO_EXTENSAO_CENTI}"`));
 });

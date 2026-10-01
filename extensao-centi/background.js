@@ -1,21 +1,46 @@
 // Serviço da extensão: leva o pedido da aba Automação à aba da Centi que tem a sessão e devolve o resultado.
+// Instala-se SOZINHO nas abas já abertas (ao instalar/atualizar e quando uma aba da Centi não responde) — sem F5 e sem
+// refazer o login: a sessão da Centi continua a da aba.
+const CENTI = "https://rioverde.centi.com.br/*";
+const SISTEMA = ["https://governarv.com.br/painel/automacao*", "https://www.governarv.com.br/painel/automacao*", "http://localhost:3000/painel/automacao*"];
 const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br", "http://localhost:3000"];
 
 const comPrazo = (p, ms, valor) => Promise.race([p, new Promise((ok) => setTimeout(() => ok(valor), ms))]);
 
-// A Centi faz login POR ABA: usa a aba que já tem a sessão (a que fez alguma chamada à API depois do login).
+async function injetarCenti(tabId) {
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-main.js"], world: "MAIN" });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-ponte.js"] });
+}
+
+async function estadoDaAba(tabId) {
+  const perguntar = () => comPrazo(chrome.tabs.sendMessage(tabId, { alvo: "centi", acao: "estado" }), 5000, null);
+  try {
+    const r = await perguntar();
+    if (r) return r;
+  } catch {}
+  try {
+    await injetarCenti(tabId);
+    return await perguntar();
+  } catch {
+    return null;
+  }
+}
+
+// A Centi faz login POR ABA: usa a aba que já tem a sessão.
 async function abaCenti() {
-  const abas = await chrome.tabs.query({ url: "https://rioverde.centi.com.br/*" });
+  const abas = await chrome.tabs.query({ url: CENTI });
   if (!abas.length) return { erro: "Abra a Centi (rioverde.centi.com.br) numa aba e faça o login." };
-  const estados = await Promise.all(
-    abas.map((a) => comPrazo(chrome.tabs.sendMessage(a.id, { acao: "estado" }).catch(() => null), 5000, null)),
-  );
+  const estados = await Promise.all(abas.map((a) => estadoDaAba(a.id)));
   const i = estados.findIndex((r) => r?.logado);
   if (i >= 0) return { aba: abas[i] };
-  if (estados.every((r) => !r?.ok))
-    return { erro: "Recarregue a aba da Centi (F5) — ela abriu antes da extensão (ou da atualização dela)." };
-  return { erro: "Centi sem login: faça o login e clique em Pesquisar em qualquer tela da Centi." };
+  return { erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar (ou abra qualquer tela)." };
 }
+
+chrome.runtime.onInstalled.addListener(async () => {
+  for (const a of await chrome.tabs.query({ url: CENTI })) injetarCenti(a.id).catch(() => {});
+  for (const a of await chrome.tabs.query({ url: SISTEMA }))
+    chrome.scripting.executeScript({ target: { tabId: a.id }, files: ["sistema-ponte.js"] }).catch(() => {});
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   const origem = sender.url ? new URL(sender.url).origin : "";
@@ -25,9 +50,9 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (!aba) return { ok: false, erro };
     if (msg.acao === "estado") return { ok: true, logado: true };
     try {
-      return await chrome.tabs.sendMessage(aba.id, { acao: msg.acao, dados: msg.dados });
+      return await chrome.tabs.sendMessage(aba.id, { alvo: "centi", acao: msg.acao, dados: msg.dados });
     } catch {
-      return { ok: false, erro: "Recarregue a aba da Centi (F5) e faça o login." };
+      return { ok: false, erro: "A aba da Centi não respondeu — aperte F5 nela." };
     }
   })()
     .catch((e) => ({ ok: false, erro: e?.message || "Falha na extensão." }))

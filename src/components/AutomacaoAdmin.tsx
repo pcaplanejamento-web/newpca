@@ -31,15 +31,32 @@ type Resposta = { ok: boolean; erro?: string; pdf?: string; logado?: boolean; ca
 type Linha = { id: string; estado: "fila" | "baixando" | "ok" | "falha"; erro?: string; amostra?: string };
 type Ext = { versao: string } | null;
 
+const maiorVersao = (a: string, b: string) => {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0) ? a : b;
+  return a;
+};
+
 /** Conversa com a extensão pela ponte da página (window.postMessage). */
 function useExtensaoCenti() {
   const [ext, setExt] = useState<Ext>(null);
+  const versao = useRef("");
   const seq = useRef(0);
   const pendentes = useRef(new Map<number, (r: Resposta) => void>());
   useEffect(() => {
     const ouvir = (e: MessageEvent) => {
-      if (e.source !== window || e.data?.fonte !== "pca-ext") return;
-      if (e.data.tipo === "pronto") setExt({ versao: String(e.data.versao ?? "") });
+      if (e.source !== window || e.data?.fonte !== "pca-extensao") return;
+      if (e.data.tipo === "pronto") {
+        // Vale a MAIOR versão anunciada (uma cópia antiga que ficou na aba também se anuncia).
+        const v = String(e.data.versao ?? "");
+        if (versao.current && maiorVersao(versao.current, v) === versao.current) return;
+        versao.current = v;
+        setExt({ versao: versao.current });
+        return;
+      }
+      // Só a resposta da ponte ATUAL (uma cópia antiga da extensão que ficou na aba também ouve).
+      if (e.data.v !== versao.current) return;
       const f = pendentes.current.get(e.data.id);
       if (f) {
         pendentes.current.delete(e.data.id);
@@ -47,7 +64,7 @@ function useExtensaoCenti() {
       }
     };
     window.addEventListener("message", ouvir);
-    window.postMessage({ fonte: "pca-pagina", tipo: "ola" }, window.location.origin);
+    window.postMessage({ fonte: "pca-automacao", tipo: "ola" }, window.location.origin);
     return () => window.removeEventListener("message", ouvir);
   }, []);
   const pedir = useCallback((acao: string, dados: unknown, ms: number) => {
@@ -61,7 +78,7 @@ function useExtensaoCenti() {
         window.clearTimeout(t);
         ok(r);
       });
-      window.postMessage({ fonte: "pca-pagina", id, acao, dados }, window.location.origin);
+      window.postMessage({ fonte: "pca-automacao", v: versao.current, id, acao, dados }, window.location.origin);
     });
   }, []);
   return { ext, pedir };
@@ -153,7 +170,7 @@ export function AutomacaoAdmin() {
       if (!r.ok || !r.pdf) {
         const erro = r.erro ?? "Falha ao emitir.";
         // Falha do AMBIENTE (extensão/aba/login), não do Id: os demais falhariam igual — para o lote e revalida.
-        if (/recarregue|login|abra a centi|não respondeu/i.test(erro)) {
+        if (/recarregue|sessão|aperte f5|abra a centi|não respondeu/i.test(erro)) {
           setLinhas((ls) => ls.map((x) => (x.estado === "fila" || x.id === id ? { ...x, estado: "falha", erro } : x)));
           void verificar();
           break;
@@ -214,7 +231,7 @@ export function AutomacaoAdmin() {
                 e descompacte numa pasta (na atualização, substitua os arquivos).
               </li>
               <li>No Chrome, abra chrome://extensions, ligue o Modo do desenvolvedor e clique em Carregar sem compactação → escolha a pasta (na atualização, clique em ↻ no cartão da extensão).</li>
-              <li>Recarregue esta tela e a aba da Centi (F5). Faça o login na Centi e abra o Planejamento.</li>
+              <li>Recarregue esta tela (F5). A aba da Centi NÃO precisa ser recarregada: a extensão entra nela sozinha e usa o login dela.</li>
             </ol>
           </Callout>
         )}

@@ -3375,7 +3375,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`Authorization`/`Token`/`Refreshtoken`, `Company`, `Month` — sem os `x-ts` do anti-robô F5) e repete o "Processar" (`POST …/restauth/operation`) — o "Processar" devolve `{File:{Key, FileName}}` (arquivo
   temporário) — o PDF é buscado pela chave (`getbinlink`); também aceita PDF cru, base64 "JVBER…"/gzip "H4sI…" ou bytes; a falha
   mostra o ESQUELETO da resposta (chaves/tipos, sem dados) p/ diagnosticar; CAPTCHA/sessão expirada viram falha do Id —; `centi-ponte.js`/
-  `background.js`/`sistema-ponte.js` ligam a aba Automação à aba da Centi aberta (só as origens do sistema). Corpo do pedido
+  `background.js`/`sistema-ponte.js` ligam a aba Automação à aba da Centi que TEM a sessão (login da Centi é POR ABA; só as
+  origens do sistema). A extensão se INJETA sozinha (`scripting`) nas abas já abertas — ao instalar/atualizar e quando a aba
+  não responde — e guarda a sessão capturada no `sessionStorage` da aba (vale após F5/atualização): sem F5 nem novo login.
+  Protocolo com a VERSÃO em cada mensagem (uma cópia antiga que fica na aba se cala; a página fica com a maior anunciada). Corpo do pedido
   pelo núcleo PURO **`automacao-centi-core.ts`** (`pedidoEmitirDfd` = os 44 `Params` capturados; `lerIdsCenti`,
   `lerConfigCenti`, `nomeArquivoDfd`) com as **TRAVAS** (`TRAVAS_CENTI`: sem anexar ao protocolo, assinar, e-mail, guardar
   ou segundo plano) — forçadas DE NOVO na extensão. Nenhuma senha no sistema (usa o login já feito na Centi); nada entra na
