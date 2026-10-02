@@ -45,7 +45,7 @@ import { type ReferenciaHistorico, rotuloComparacaoHistorico } from "@/lib/histo
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
-import { estaTravado, motivoNaoExcluirDfd, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
+import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -646,8 +646,12 @@ export function DfdsView({
 
   const atualizarListas = () => router.refresh();
 
-  async function excluirDfd(id: number, numero: string) {
-    if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos.`)) return;
+  /** O que a exclusão tira do PCA (o protocolo/DFD está INCORPORADO a ele) — a frase da confirmação; vazio fora de PCA. */
+  const saidaPca = (pcaId: number | null | undefined, incorporadoEm: string | null | undefined, itens: number) =>
+    pcaId != null && incorporadoEm ? ` ${impactoSaidaPca(pcas.find((p) => p.id === pcaId)?.nome, itens)}` : "";
+
+  async function excluirDfd(id: number, numero: string, pca = "") {
+    if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos.${pca}`)) return;
     setErro(null);
     const res = await fetch(`/api/dfd/${id}`, { method: "DELETE" });
     const j = (await res.json()) as { ok?: boolean; error?: string };
@@ -658,11 +662,11 @@ export function DfdsView({
     router.refresh();
   }
 
-  async function excluirProtocolo(id: number, numero: string, totalDfds: number) {
+  async function excluirProtocolo(id: number, numero: string, totalDfds: number, pca = "") {
     const aviso =
-      totalDfds > 0
+      (totalDfds > 0
         ? `Excluir o protocolo ${numero}? Os ${totalDfds} DFD(s) vinculados e seus itens também serão excluídos.`
-        : `Excluir o protocolo ${numero}?`;
+        : `Excluir o protocolo ${numero}?`) + pca;
     if (!confirm(aviso)) return;
     setErro(null);
     const res = await fetch(`/api/protocolo/${id}`, { method: "DELETE" });
@@ -858,24 +862,22 @@ export function DfdsView({
   const acoesDfd = (l: LinhaDfd) => {
     const d = dfdPorId.get(l.key);
     const noPca = d ? { pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm } : null;
-    // DFD de protocolo INCORPORADO a um PCA: travado (sem vincular/excluir — o servidor recusa também).
-    if (!d || !noPca || estaTravado(noPca)) return null;
-    // O PAPEL na Mesa em que o DFD está: vincular = Manipular; excluir = Excluir.
+    if (!d || !noPca) return null;
+    // O PAPEL na Mesa em que o DFD está: vincular = Manipular; excluir = Excluir (também em um PCA — sai dele).
     const podeDfd = podeNoRecurso(pode, noPca.pcaId);
-    const podeExcluirDfd = podeDfd.excluir && motivoNaoExcluirDfd(noPca) == null;
+    const podeExcluirDfd = podeDfd.excluir;
     if (!podeDfd.manipular && !podeExcluirDfd) return null;
     return (
       <div className="flex justify-end gap-1">
         {podeDfd.manipular && (
           <Button variant="ghost" size="xs" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
         )}
-        {/* DFD de protocolo em um PCA (enviado) não é excluído — o servidor recusa também. */}
         {podeExcluirDfd && (
           <Button
             variant="ghost"
             size="xs"
             aria-label="Excluir DFD"
-            onClick={() => excluirDfd(d.id, d.numero)}
+            onClick={() => excluirDfd(d.id, d.numero, saidaPca(noPca.pcaId, noPca.pcaIncorporadoEm, d.totalItens ?? 0))}
             icon={<IconTrash className="h-4 w-4" />}
             style={{ color: "var(--danger)" }}
           />
@@ -1153,31 +1155,26 @@ export function DfdsView({
     },
     { key: "itens", header: "Itens", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalItens) },
     { key: "valor", header: "Valor", align: "right", filter: "range", numero: (r) => r.valorTotal, nowrap: true, render: (r) => brl(r.valorTotal) },
-    // Excluir: só na Mesa principal — protocolo em um PCA (enviado ou incorporado) NÃO é excluído (o enviado volta pela
-    // "Devolver à Mesa"); o servidor recusa também.
-    ...(modoPca
-      ? []
-      : [
-          {
-            key: "acoes",
-            header: "",
-            filter: "none" as const,
-            nowrap: true,
-            render: (r: ProtocoloNaMesa) =>
-              pode.sistema.excluir && motivoNaoExcluirProtocolo(r) == null ? (
-                <div className="flex justify-end gap-1">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    aria-label="Excluir protocolo"
-                    onClick={() => excluirProtocolo(r.id, r.numero, r.totalDfds)}
-                    icon={<IconTrash className="h-4 w-4" />}
-                    style={{ color: "var(--danger)" }}
-                  />
-                </div>
-              ) : null,
-          },
-        ]),
+    // Excluir: o papel com Excluir na Mesa em que o protocolo está — também em um PCA (os DFDs saem dele; a confirmação diz).
+    {
+      key: "acoes",
+      header: "",
+      filter: "none" as const,
+      nowrap: true,
+      render: (r: ProtocoloNaMesa) =>
+        podeNoRecurso(pode, r.pcaId).excluir ? (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-label="Excluir protocolo"
+              onClick={() => excluirProtocolo(r.id, r.numero, r.totalDfds, saidaPca(r.pcaId, r.pcaIncorporadoEm, r.totalItens))}
+              icon={<IconTrash className="h-4 w-4" />}
+              style={{ color: "var(--danger)" }}
+            />
+          </div>
+        ) : null,
+    },
   ];
 
   // Itens REPETIDOS no DFD de origem (mesmo código, descrição e unidade) — a MESMA marca "Item duplicado" (atenção) da
@@ -2000,9 +1997,8 @@ export function DfdsView({
           />
         }
       >
-        {/* Na Mesa do PCA a seleção de protocolos só incorpora/devolve (sem edição em massa). */}
-        {!modoPca && (
-          <>
+        {/* A edição em massa vale nas duas Mesas (na do PCA, junto de Incorporar/Devolver). */}
+        <>
             {progressoMassa}
             <BarraEdicaoMassaProtocolos
               reparticoes={reparticoes}
@@ -2015,7 +2011,6 @@ export function DfdsView({
               onAplicar={aplicarMassaProtocolos}
             />
           </>
-        )}
       </BarraSelecao>
     );
   } else if ((podeAqui.manipular || (!!modoPca && podeAqui.excluir)) && vista === "itens" && !consolidada && (selItens.size > 0 || aplicandoMassa)) {
@@ -2031,8 +2026,8 @@ export function DfdsView({
         resumo={<ResumoSelecao qtd={sel.length} singular="item" plural="itens" soma={sel.reduce((t, it) => t + (it.valorTotal ?? 0), 0)} />}
         acoes={modoPca?.acoesItens?.(sel, () => setSelItens(new Set()))}
       >
-        {/* Item INCORPORADO (com nº no PCA) é somente leitura — o editor de massa só vale para os não incorporados. */}
-        {podeAqui.manipular && sel.every((it) => it.pcaSequencial == null) && (
+        {/* Também o item incorporado (com nº no PCA): o nº segue o item; o removido o baixa. */}
+        {podeAqui.manipular && (
           <>
             {progressoMassa}
             <BarraEdicaoMassaItens aplicando={!!aplicandoMassa} onAplicar={aplicarMassaItens} />

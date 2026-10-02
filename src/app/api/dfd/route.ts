@@ -19,7 +19,6 @@ import { casarOrgao, orgaoDivergeDaUnidade } from "@/lib/reparticao-match";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, orgaoIdDaReparticao } from "@/lib/reparticoes";
 
-import { respostaTravado, travaDeProtocolos, travaDoDfd } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
 
 /**
@@ -50,8 +49,6 @@ export async function POST(req: Request) {
     // O PAPEL importa na Mesa em que o DFD ficou (a do protocolo dele).
     const negadoLote = recusa(a.acesso, telaDoRecurso(dfd.pcaId), "importar");
     if (negadoLote) return negadoLote;
-    const travaLote = await travaDoDfd(d.dfdId);
-    if (travaLote) return respostaTravado(travaLote);
     // Os LOTES seguintes seguem a MESMA régua do `start-dfd` e da análise (o nível do ADM): o valor unitário só
     // barra quando o ponto BLOQUEIA — antes era fixo aqui e derrubava, na protocolação, um DFD de 200+ itens que
     // a análise tinha liberado ("Todos os itens precisam de valor unitário").
@@ -70,7 +67,7 @@ export async function POST(req: Request) {
       const catBloq = bloqueantesCatalogo(d.rows, conf, regrasLote, ctxLote);
       if (catBloq.length > 0) return erro(`Itens fora de conformidade com o catálogo: ${catBloq.join(", ")}.`, 422);
     }
-    const r = await appendDfdItens(d.dfdId, d.rows, d.desde);
+    const r = await appendDfdItens(d.dfdId, d.rows, d.desde, a.u.id);
     return ok({ inserted: r.inserted });
   }
 
@@ -158,10 +155,6 @@ export async function POST(req: Request) {
   if (existente && !dfdNasLinhas(esc, existente.id)) {
     return erro("Já existe um DFD com esse número — fale com o Responsável pelo protocolo dele.", 403);
   }
-  // TRAVA do PCA: não sobrescreve um DFD de protocolo INCORPORADO nem grava num protocolo incorporado.
-  const travas = await travaDeProtocolos([existente?.protocoloId, d.protocoloId]);
-  const travaDfd = [...travas.values()][0];
-  if (travaDfd) return respostaTravado(travaDfd);
   // Importação AVULSA desligada pelo ADM: vale para o DFD que ficaria SEM protocolo — a sobrescrita de um DFD
   // que já está num protocolo (banner / avulso de mesmo nº) o mantém lá, então não é "avulsa".
   if (d.protocoloId == null && existente?.protocoloId == null && !importarDfdHabilitado(regras))
@@ -186,7 +179,8 @@ export async function POST(req: Request) {
   // "sobrescrito pelo protocolo X") — gravado no MESMO lote do cabeçalho (`upsertDfdCabecalho`). Sem
   // `protocoloId` (avulso/banner) o DFD FICA no protocolo dele. `movido` só redige o histórico.
   const movido = antigo?.protocoloId != null && d.protocoloId != null && antigo.protocoloId !== d.protocoloId;
-  const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows);
+  // Protocolo INCORPORADO: o PCA acompanha a gravação (os itens mantêm o nº; o DFD entra/sai com o protocolo).
+  const r = await upsertDfdCabecalho({ ...dados, assinaturas }, a.u.id, d.rows, existente?.id ?? null);
   const origem = d.origem ?? (d.protocoloId != null ? "protocolacao" : "avulso");
   // O protocolo por onde a gravação PASSOU (o histórico dele): o de destino, ou o que o DFD já tinha.
   const protocoloHist = d.protocoloId ?? antigo?.protocoloId ?? null;

@@ -11,8 +11,6 @@ import { descreverAcaoItem, type ItemMassa, type PlanoMassaItens, planejarMassaI
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 
 import { telaDoRecurso } from "@/lib/papeis-core";
-import { mensagemTravaPca } from "@/lib/pca-core";
-import { travaDeDfds } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
 
 /**
@@ -43,7 +41,7 @@ export async function POST(req: Request) {
   const { acessivel } = esc;
 
   const dfds = await dfdsParaMassa([...porDfd.keys()]);
-  const [travas, pcaDe] = await Promise.all([travaDeDfds(dfds.map((d) => d.id)), pcaDosProtocolos(dfds.map((d) => d.protocoloId))]);
+  const pcaDe = await pcaDosProtocolos(dfds.map((d) => d.protocoloId));
   // Catálogo só quando a ação depende dele (padronizar / trava da unidade) — só os códigos envolvidos.
   const alvos = new Set(ids);
   const catalogo =
@@ -64,17 +62,12 @@ export async function POST(req: Request) {
       for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: semPapel });
       continue;
     }
-    const trava = travas.get(d.id);
-    if (trava) {
-      for (const it of sel) falhas.push({ dfd: d.numero, item: it.item, motivo: mensagemTravaPca(trava.nome) });
-      continue;
-    }
     const plano = planejarMassaItens(sel, alvos, acao, catalogo, d.totalItens);
     for (const r of plano.recusas) falhas.push({ dfd: d.numero, item: r.item, motivo: r.motivo });
     const n = plano.atualizar.length + plano.remover.length;
     if (n === 0) continue;
     try {
-      await aplicarPlanoItens(d.id, plano);
+      await aplicarPlanoItens(d.id, plano, a.u.id);
       alterados += n;
       const itensAlterados = diffItensMassa(sel, plano);
       await registrarAuditoria({

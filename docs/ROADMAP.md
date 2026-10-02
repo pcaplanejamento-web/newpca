@@ -69,6 +69,14 @@ Levantamento de tudo o que se acessa e o controle, no PAPEL (vale em qualquer gr
 - 💡 Depois: aba Orçamento do PCA (mostra o CUBO do ano inteiro), reconferir o papel nos e-mails de aviso, foto por id,
   autores dos comentários de tarefa, detalhes para Catálogo/Orçamento/Calendário.
 
+### Protocolo incorporado 100% editável (o PCA acompanha) — entregue
+✅ Sem a antiga trava: o protocolo INCORPORADO edita capa, DFDs, itens e assinaturas, massa nas 3 visões, reenvio, sobrescrita,
+mover DFD, remover/unificar itens, excluir DFD e protocolo (também o só enviado) e **Devolver à Mesa** (desincorpora). O PCA
+acompanha na hora (migração `0077`; `pca-sincronia.ts`, `pca-numeracao-core.ts`): o item editado MANTÉM o nº no PCA (retrato do
+item + pareamento por código/descrição/unidade/nº), o novo ganha o próximo nº, o removido fica com o nº BAIXADO (nunca
+reaproveitado); o DFD entra/sai do PCA com o protocolo incorporado e o substituído volta a valer quando quem o substituía sai.
+Supera as regras antigas "protocolo/DFD em um PCA não é excluído" e "a incorporação é permanente".
+
 ### Texto do DFD em parágrafos + Atualizar que revisa + Dados completos na Mesa — entregue
 ✅ **Texto corrido na importação** (`texto-corrido.ts`): o PDF gravava uma quebra por linha VISUAL nas seções; agora a
 importação refaz os parágrafos pela geometria (vão entre linhas, até onde a linha vai) e pelo texto (palavra de ligação no

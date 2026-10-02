@@ -11,8 +11,6 @@ import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtoc
 import { telaDoRecurso } from "@/lib/papeis-core";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
-import { edicaoPermitidaTravado, estaTravado, mensagemTravaPca, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
-import { pcaDeProtocolos } from "@/lib/trava-pca";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -72,8 +70,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const motivo = motivoResponsavel(esc.vis, a.u.id, proto.responsavelId, campos.responsavelId);
     if (motivo) return erro(motivo, 403);
   }
-  // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.
-  if (estaTravado(proto) && !edicaoPermitidaTravado(campos)) return erro(mensagemTravaPca(proto.pcaNome), 423);
   if (campos.reparticaoId != null && !acessivel(campos.reparticaoId)) {
     return erro("Sem acesso à unidade de destino.", 403);
   }
@@ -116,14 +112,11 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (!proto) return erro("Protocolo não encontrado.", 404);
   const esc = await escopoMesa();
   if (!esc || !protocoloLegivel(esc, { id, reparticaoId: proto.reparticaoId })) return erro(MSG_SEM_ACESSO_PROTOCOLO, 403);
-  // Protocolo em um PCA (enviado ou incorporado) NÃO é excluído: o enviado volta pela "Devolver à Mesa" (e então sai
-  // da Mesa principal); o incorporado é permanente (423, a trava).
-  const noPca = (await pcaDeProtocolos([id])).get(id);
-  if (noPca) return erro(motivoNaoExcluirProtocolo(noPca, noPca.nome) ?? "Protocolo em um PCA não é excluído.", noPca.pcaIncorporadoEm ? 423 : 409);
   // O PAPEL exclui na Mesa em que o protocolo está (fora de um PCA, a do sistema).
   const negado = recusa(a.acesso, telaDoRecurso(proto.pcaId), "excluir");
   if (negado) return negado;
-  await excluirProtocolo(id);
+  // Em um PCA (enviado ou incorporado) também: os DFDs saem do PCA e os nºs dos itens são baixados.
+  await excluirProtocolo(id, a.u.id);
   await registrarAuditoria({
     usuario: a.u,
     acao: "excluir",

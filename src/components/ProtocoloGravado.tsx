@@ -29,7 +29,8 @@ import { BarraSelecaoDfds } from "./BarraSelecao";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
 import { Button } from "./Button";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
-import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
+import { localDoProtocolo } from "@/lib/pca-core";
+import { avisoIncorporado } from "@/lib/pca-numeracao-core";
 import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
@@ -38,7 +39,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconLock, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconSpinner, IconUpload } from "./icons";
 import type { ConteudoBanner } from "./DfdGravado";
 import { Modal, type ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -127,13 +128,13 @@ export function useProtocoloGravado({
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [proto, setProto] = useState<ProtocoloDetalhe | null>(null);
-  // TRAVA do PCA: protocolo INCORPORADO ⇒ o banner inteiro (capa, DFDs, itens, reenvio) fica só-leitura.
-  const travaPca = proto && estaTravado(proto) ? mensagemTravaPca(proto.pcaNome) : null;
+  // Protocolo INCORPORADO a um PCA: tudo se edita como num protocolo comum — o PCA acompanha (o aviso diz como).
+  const avisoPca = proto && localDoProtocolo(proto) === "incorporado" ? avisoIncorporado(proto.pcaNome) : null;
   // O PAPEL na Mesa em que o protocolo está: editar = Manipular; reenviar o PDF e sobrescrever um DFD = Importar (o reenvio
   // que exclui os DFDs fora do PDF também pede Excluir).
   const podeProto = podeNoRecurso(pode, proto?.pcaId);
-  const podeEditar = podeProto.manipular && !travaPca;
-  const podeImportar = podeProto.importar && !travaPca;
+  const podeEditar = podeProto.manipular;
+  const podeImportar = podeProto.importar;
   const [orig, setOrig] = useState<Map<number, DfdDetalhe>>(new Map());
   const [ordem, setOrdem] = useState<number[]>([]);
   const [dfds, setDfds] = useState<Map<number, DfdParseado>>(new Map());
@@ -386,7 +387,7 @@ export function useProtocoloGravado({
       const r = await carregar(id, abertoId);
       if (!r || pedidoRef.current !== id) return;
       const { protocolo, lista, rascunhos } = r;
-      const podeTratar = podeNoRecurso(pode, protocolo.pcaId).manipular && !estaTravado(protocolo);
+      const podeTratar = podeNoRecurso(pode, protocolo.pcaId).manipular;
       const cat = classificarAssunto(protocolo.assunto);
       const revCapa = revisarCapa(capaDe(protocolo));
       const porDfd: AjusteRevisao[][] = [];
@@ -647,7 +648,7 @@ export function useProtocoloGravado({
       ) : (
         <ProtocoloView
           key={versao}
-          topo={travaPca ? <Callout kind="warn" icon={<IconLock className="h-5 w-5" />}>{travaPca}</Callout> : undefined}
+          topo={avisoPca ? <Callout kind="info">{avisoPca}</Callout> : undefined}
           capa={capaView}
           modoCapa={podeEditar && !travado ? "cadeado" : "leitura"}
           assuntos={opcoesAssunto(regras, capa.assunto ?? "")}

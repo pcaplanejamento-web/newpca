@@ -6,6 +6,9 @@ import { getDb } from "./db";
 import { filtroAnoPcaDfd, gruposAssinaturaSql, prioridadeTextoSql } from "./dfd-sql";
 import { type GrupoAssinatura, gruposAssinatura, gruposDoTexto, prioridadeDoDfd } from "./dfd-tratamento";
 import { normPrioridade, type Prioridade } from "./normalize";
+import { baixarNumeros, baixarNumerosPendentes, retratarNumeros } from "./pca-itens-sql";
+import { MOTIVO_NUMERO } from "./pca-numeracao-core";
+import { numeracaoDaGravacao, pcasDosDfds, sincronizarAtivosPca, sincronizarDfdNoPca } from "./pca-sincronia";
 import { limparRastroDestino, retratoRastro } from "./rastro-sql";
 import { lotesDeIds } from "./reparticoes";
 import type { ItemMassa, PatchItem, PlanoMassaItens } from "./massa-itens";
@@ -28,13 +31,18 @@ import { memoPorVersao } from "./versao-dados";
 // dfd_itens = 9 colunas vinculadas por linha → 11×9 = 99 (< limite de 100 do D1).
 const ROWS_PER_STMT = 11;
 
+/** O nº do PCA que cada linha regravada leva (`numeracaoDaGravacao`) — ausente = DFD sem nº no PCA. */
+type NumerosDasLinhas = ({ pcaId: number; sequencial: number } | null)[];
+
 // biome-ignore lint/suspicious/noExplicitAny: tipos encadeados do query-builder do Drizzle para db.batch() são inviáveis de anotar aqui.
-function insertsItens(db: ReturnType<typeof getDb>, dfdId: number | SQL, itens: DfdItemPayload[], seqBase = 0): any[] {
+function insertsItens(db: ReturnType<typeof getDb>, dfdId: number | SQL, itens: DfdItemPayload[], seqBase = 0, numeros?: NumerosDasLinhas): any[] {
   const stmts = [];
-  for (let i = 0; i < itens.length; i += ROWS_PER_STMT) {
+  // Com o nº do PCA (protocolo incorporado regravado), 11 parâmetros por linha → 9 linhas (99).
+  const porStmt = numeros ? 9 : ROWS_PER_STMT;
+  for (let i = 0; i < itens.length; i += porStmt) {
     stmts.push(
       db.insert(dfdItens).values(
-        itens.slice(i, i + ROWS_PER_STMT).map((it, j) => ({
+        itens.slice(i, i + porStmt).map((it, j) => ({
           dfdId,
           item: it.item ?? null,
           codigo: it.codigo ?? null,
@@ -44,6 +52,8 @@ function insertsItens(db: ReturnType<typeof getDb>, dfdId: number | SQL, itens: 
           valorUnitario: it.valorUnitario ?? null,
           valorTotal: it.valorTotal ?? null,
           sequencial: seqBase + i + j + 1, // continua a numeração entre lotes
+          // O nº do item no PCA, reencontrado pelo pareamento (`numeracaoDaGravacao`) — o item editado o mantém.
+          ...(numeros ? { pcaId: numeros[i + j]?.pcaId ?? null, pcaSequencial: numeros[i + j]?.sequencial ?? null } : {}),
         })),
       ),
     );
@@ -592,7 +602,7 @@ const COL_ITEM: Record<keyof PatchItem, string> = {
  * itens, no mesmo lote) — nunca de um retrato lido antes: uma edição concorrente no mesmo DFD não deixa o
  * total divergir dos itens. Cada DELETE só roda se, depois de TODAS as remoções, sobrar ≥ 1 item.
  */
-export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens): Promise<void> {
+export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens, ator: number | null = null): Promise<void> {
   const db = getDb();
   const stmts: unknown[] = [];
   const campos = [...new Set(plano.atualizar.flatMap((a) => Object.keys(a.patch)))] as (keyof PatchItem)[];
@@ -615,6 +625,8 @@ export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens): 
       );
     }
   }
+  // Item removido de um DFD numerado no PCA: o nº guarda o retrato e é BAIXADO (nunca reaproveitado).
+  if (plano.remover.length > 0) stmts.push(retratarNumeros(db, { dfdId }));
   for (let i = 0; i < plano.remover.length; i += LOTE_IDS) {
     const restantes = plano.remover.length - i; // a remover deste lote em diante
     stmts.push(
@@ -629,6 +641,7 @@ export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens): 
         ),
     );
   }
+  if (plano.remover.length > 0) stmts.push(baixarNumerosPendentes(db, dfdId, MOTIVO_NUMERO.itemRemovido, ator));
   // Mesma régua do `reescreverDfdItens`: Σ > 0 ⇒ o valor (2 casas); senão NULL.
   const soma = sql`SUM(COALESCE(${dfdItens.valorTotal}, 0))`;
   stmts.push(
@@ -660,8 +673,11 @@ export async function upsertDfdCabecalho(
   dados: DfdMetaPayload,
   criadoPor: number | null,
   primeiroLote: DfdItemPayload[],
+  existenteId?: number | null,
 ): Promise<{ id: number; numero: string }> {
   const db = getDb();
+  // DFD já gravado e numerado no PCA (protocolo incorporado): os itens regravados MANTÊM o nº (`pca-sincronia.ts`).
+  const num = existenteId ? await numeracaoDaGravacao(existenteId, primeiroLote, 0) : null;
   const set = {
     planejamento: dados.planejamento ?? null,
     tipo: dados.tipo ?? null,
@@ -706,10 +722,14 @@ export async function upsertDfdCabecalho(
   const res = await db.batch([
     ...rastro,
     upsert,
+    ...(num?.antes ?? []),
     db.delete(dfdItens).where(eq(dfdItens.dfdId, idDoDfd)),
-    ...insertsItens(db, idDoDfd, primeiroLote, 0),
+    ...insertsItens(db, idDoDfd, primeiroLote, 0, num?.porLinha),
+    ...(num?.depois ?? []),
   ] as [Stmt, ...Stmt[]]);
   const id = (res[rastro.length] as { id: number }[])[0].id;
+  // O PCA acompanha: o DFD entra/sai/fica no PCA do protocolo incorporado; completo, numera os novos e baixa os sem item.
+  await sincronizarDfdNoPca(id, criadoPor, primeiroLote.length);
   return { id, numero: dados.numero };
 }
 
@@ -718,16 +738,21 @@ export async function appendDfdItens(
   dfdId: number,
   itens: DfdItemPayload[],
   seqBase: number,
+  ator: number | null = null,
 ): Promise<{ inserted: number }> {
   if (itens.length === 0) return { inserted: 0 };
   const db = getDb();
-  const stmts = insertsItens(db, dfdId, itens, seqBase);
+  const num = await numeracaoDaGravacao(dfdId, itens, seqBase);
+  const stmts = insertsItens(db, dfdId, itens, seqBase, num?.porLinha);
   // Idempotente: apaga o que já houver ALÉM de `seqBase` antes de gravar o lote —
   // reenviar o mesmo lote (retry) não duplica itens. Atômico no mesmo db.batch.
   await db.batch([
+    ...(num?.antes ?? []),
     db.delete(dfdItens).where(and(eq(dfdItens.dfdId, dfdId), gt(dfdItens.sequencial, seqBase))),
     ...stmts,
+    ...(num?.depois ?? []),
   ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  await sincronizarDfdNoPca(dfdId, ator, seqBase + itens.length);
   return { inserted: itens.length };
 }
 
@@ -784,19 +809,24 @@ export async function atualizarDfdCampos(
  * (Σ dos itens) e `totalItens` do cabeçalho. Só código/descrição/unidade/quantidade/valores
  * do item mudam; a capa e as seções seguem por `atualizarDfdCampos`.
  */
-export async function reescreverDfdItens(dfdId: number, itens: DfdItemPayload[]): Promise<void> {
+export async function reescreverDfdItens(dfdId: number, itens: DfdItemPayload[], ator: number | null = null): Promise<void> {
   const db = getDb();
   const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
   const valorTotal = soma > 0 ? Math.round(soma * 100) / 100 : null;
-  const stmts = insertsItens(db, dfdId, itens, 0);
+  // Protocolo incorporado: o item editado mantém o nº do PCA; o novo ganha o próximo; o removido o baixa.
+  const num = await numeracaoDaGravacao(dfdId, itens, 0);
+  const stmts = insertsItens(db, dfdId, itens, 0, num?.porLinha);
   await db.batch([
+    ...(num?.antes ?? []),
     db.delete(dfdItens).where(eq(dfdItens.dfdId, dfdId)),
     ...stmts,
+    ...(num?.depois ?? []),
   ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
   await db
     .update(dfds)
     .set({ valorTotal, totalItens: itens.length, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(dfds.id, dfdId));
+  await sincronizarDfdNoPca(dfdId, ator, "todos");
 }
 
 /** Repartição de um DFD (para o guard de acesso nas escritas); `null` se não existe. */
@@ -907,19 +937,16 @@ export async function getReparticaoDfdNumero(
 }
 
 /** Exclui um DFD. Bloqueia se ele fizer parte de alguma edição de PCA. */
-export async function excluirDfd(id: number): Promise<{ ok: true } | { ok: false; erro: string }> {
+export async function excluirDfd(id: number, ator: number | null = null): Promise<{ ok: true }> {
   const db = getDb();
-  const [ref] = await db
-    .select({ n: sql<number>`COUNT(*)` })
-    .from(pcaDfds)
-    .where(eq(pcaDfds.dfdId, id));
-  if (Number(ref?.n ?? 0) > 0) {
-    return {
-      ok: false,
-      erro: "Este DFD faz parte de uma ou mais edições de PCA. Remova-o da edição ou exclua a edição antes.",
-    };
-  }
-  await db.delete(dfds).where(eq(dfds.id, id)); // cascade apaga dfd_itens
+  // Sai de todo PCA: os nºs dos itens guardam o retrato e são BAIXADOS; os vínculos caem em cascata.
+  const pcasAfetados = await pcasDosDfds({ dfdId: id });
+  await db.batch([
+    retratarNumeros(db, { dfdId: id }),
+    ...baixarNumeros(db, { dfdId: id }, null, MOTIVO_NUMERO.dfdExcluido, ator),
+    db.delete(dfds).where(eq(dfds.id, id)), // cascade apaga dfd_itens e pca_dfds
+  ]);
+  for (const pca of pcasAfetados) await sincronizarAtivosPca(pca, ator);
   return { ok: true };
 }
 

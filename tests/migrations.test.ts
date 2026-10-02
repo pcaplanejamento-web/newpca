@@ -935,6 +935,38 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(papel(9704), id("membro"));
   });
 
+  it("0077 protocolo incorporado editável: vínculo pelo protocolo, retrato do item no nº e órfãos baixados", () => {
+    const d = new DatabaseSync(":memory:");
+    const i77 = arquivos.findIndex((f) => f.startsWith("0077"));
+    assert.ok(i77 > 0, "migração 0077 ausente");
+    for (const arq of arquivos.slice(0, i77)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO pcas (id, nome, ano, fonte) VALUES (1, 'PCA 2027', 2027, 'protocolo'), (2, 'Edição legada', 2027, 'protocolo');
+      INSERT INTO dfd_protocolos (id, numero, pca_id, pca_incorporado_em) VALUES (10, 'P-10', 1, '2027-01-01'), (20, 'P-20', 1, NULL), (30, 'P-30', NULL, NULL);
+      INSERT INTO dfds (id, numero, protocolo_id) VALUES (100, 'D100', 10), (200, 'D200', 20), (300, 'D300', 30);
+      INSERT INTO dfd_itens (id, dfd_id, item, codigo, descricao, unidade, sequencial) VALUES (1, 100, 1, '111', 'CADEIRA', 'UN', 1);
+      INSERT INTO pca_dfds (pca_id, dfd_id, acao) VALUES (1, 100, 'incorporar'), (1, 200, 'incorporar'), (2, 300, 'incorporar');
+      INSERT INTO pca_itens (id, pca_id, sequencial, dfd_item_id, dfd_id, protocolo_id) VALUES (1, 1, 1, 1, 100, 10), (2, 1, 2, NULL, 100, 10);`);
+    d.exec(readFileSync(join(DIR, arquivos[i77]), "utf8"));
+    for (const arq of arquivos.slice(i77 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const via = (dfd: number) => (d.prepare("SELECT protocolo_id AS p FROM pca_dfds WHERE dfd_id = ?").get(dfd) as { p: number | null }).p;
+    assert.equal(via(100), 10, "incorporado: o vínculo é do protocolo");
+    assert.equal(via(200), null, "enviado (não incorporado): fica como vínculo legado");
+    assert.equal(via(300), null, "edição legada: sem protocolo");
+    assert.deepEqual({ ...(d.prepare("SELECT codigo, descricao, unidade, item, baixado_em AS b FROM pca_itens WHERE id = 1").get() as object) }, {
+      codigo: "111",
+      descricao: "CADEIRA",
+      unidade: "UN",
+      item: 1,
+      b: null,
+    });
+    const orfao = d.prepare("SELECT ativo AS a, baixado_em AS b, motivo AS m FROM pca_itens WHERE id = 2").get() as { a: number; b: string | null; m: string };
+    assert.equal(orfao.a, 0);
+    assert.ok(orfao.b, "o nº sem item é baixado");
+    assert.equal(orfao.m, "Item removido do DFD");
+    const idx = nomes(d, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["pca_dfds_protocolo_idx", "pca_itens_dfd_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));
