@@ -79,7 +79,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.16"), false);
   assert.equal(versaoAtende("1.3.17"), false);
   assert.equal(versaoAtende("1.3.18"), false);
-  assert.equal(versaoAtende("1.3.19"), true);
+  assert.equal(versaoAtende("1.3.19"), false);
+  assert.equal(versaoAtende("1.3.20"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -432,4 +433,12 @@ test("anexo: o protocolo da Tela Protocolo (módulo 102908) é aceito e o docume
   assert.equal(docs.length, 2);
   assert.equal(docs[1].ModuleKey, 102999);
   assert.ok(A.conferirProtocolo({ Entity: { ...e, ModuleKey: 5 } }, { id: "2332778", numero: "156844" }).erro);
+});
+
+test("emissão: o Emitir DFD e o download saem pelo cliente HTTP da própria Centi (o caminho do anexo), com o envio da extensão só de reserva", async () => {
+  const { readFileSync } = await import("node:fs");
+  const main = readFileSync("extensao-centi/centi-main.js", "utf8");
+  assert.match(main, /return \(await binarioPelaCenti\("POST", url, corpo, ent\)\) \?\? executar\("POST"/);
+  assert.match(main, /\(await binarioPelaCenti\("GET", url, null, ent\)\) \?\? executar\("GET"/);
+  assert.match(main, /responseType: "arraybuffer"/);
 });

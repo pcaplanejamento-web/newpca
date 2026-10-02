@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 23;
+  const PROTOCOLO = 24;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -202,13 +202,46 @@
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
     // A EMISSÃO vai com os cabeçalhos da aba EXATAMENTE como a tela os mandou (como na 1.2.0, quando funcionava) — sem
     // renovar o rastreio (que é só do salvar do anexo).
-    if (d.metodo === "GET") return executar("GET", url, null, ent, false, cabecalhos, "application/json", url, false);
+    if (d.metodo === "GET") return (await binarioPelaCenti("GET", url, null, ent)) ?? executar("GET", url, null, ent, false, cabecalhos, "application/json", url, false);
     if (d.metodo !== "POST" || !/\/restauth\/operation$/.test(new URL(url).pathname)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
     const c = d.corpo;
     if (!c || !GUID.test(String(c.Guid)) || !Number.isInteger(c.ModuleKey) || !Array.isArray(c.Params)) return { ok: false, erro: "Pedido inválido." };
     const params = c.Params.map((p) => ({ Key: String(p.Key), Value: p.Key in TRAVAS ? TRAVAS[p.Key] : String(p.Value ?? "") }));
     for (const [Key, Value] of Object.entries(TRAVAS)) if (!params.some((p) => p.Key === Key)) params.push({ Key, Value });
-    return executar("POST", url, { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params }, ent, false, cabecalhos, "application/json", url, false);
+    const corpo = { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params };
+    return (await binarioPelaCenti("POST", url, corpo, ent)) ?? executar("POST", url, corpo, ent, false, cabecalhos, "application/json", url, false);
+  }
+
+  // A EMISSÃO e o download saem pelo CLIENTE HTTP DA PRÓPRIA CENTI — o MESMO caminho do anexo, que funciona: os
+  // cabeçalhos, o token e o contexto são os que a tela usa naquele instante (não os do último pedido capturado na aba).
+  // Só para a API /restauth/ (a base do cliente); sem o cliente ou sem resposta, null → o envio da extensão.
+  async function binarioPelaCenti(metodo, url, corpo, ent) {
+    const cli = acharClienteCenti();
+    if (!cli) return null;
+    const u = new URL(url);
+    const i = u.pathname.indexOf("/restauth/");
+    if (i < 0) return null;
+    const rel = `${u.pathname.slice(i + "/restauth".length)}${u.search}`;
+    const headers = {};
+    if (ent !== null) headers[nomeEntidade() || "Company"] = ent;
+    const resposta = (r) => {
+      tokenNosClientes(cli, r.headers);
+      const dados = r.data;
+      // ArrayBuffer (ou visão dele) por FORMA, não por instanceof — vale também se vier de outro "realm".
+      const binario = dados && typeof dados === "object" && typeof dados.byteLength === "number";
+      const bytes = binario
+        ? ArrayBuffer.isView(dados)
+          ? new Uint8Array(dados.buffer, dados.byteOffset, dados.byteLength)
+          : new Uint8Array(dados)
+        : new TextEncoder().encode(typeof dados === "string" ? dados : JSON.stringify(dados ?? null));
+      const tipo = (typeof r.headers?.get === "function" ? r.headers.get("content-type") : r.headers?.["content-type"]) || "";
+      return { ok: true, status: r.status, tipo: String(tipo), b64: emBase64(bytes) };
+    };
+    try {
+      return resposta(await cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers, responseType: "arraybuffer" }));
+    } catch (e) {
+      return e?.response ? resposta(e.response) : null;
+    }
   }
 
   // JSON da API da Centi (load/confirmsave/save): HTTP de erro ou corpo que não é JSON → o motivo, nunca segue às cegas.
