@@ -525,7 +525,7 @@ export function emissaoDoPedido(corpo: unknown, a: AlvoEmissao): EmissaoProtocol
 /** O modelo guardado (config do servidor) validado; inválido ou do formato antigo (sem `v: 2`) = null. */
 export function coerceEmissaoProtocolo(v: unknown): EmissaoProtocolo | null {
   const o = (v && typeof v === "object" ? v : null) as Record<string, unknown> | null;
-  if (!o || o.v !== 2 || !Number.isInteger(o.moduleKey) || (o.moduleKey as number) <= 0 || !GUID.test(String(o.guid ?? "")) || !Array.isArray(o.params)) return null;
+  if (o?.v !== 2 || !Number.isInteger(o.moduleKey) || (o.moduleKey as number) <= 0 || !GUID.test(String(o.guid ?? "")) || !Array.isArray(o.params)) return null;
   const params = o.params
     .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
     .map((x) => ({ Key: String(x.Key ?? "").slice(0, 80), Value: String(x.Value ?? "").slice(0, 400) }))
