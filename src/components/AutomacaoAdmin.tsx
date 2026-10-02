@@ -64,7 +64,7 @@ import { Dropdown } from "./Dropdown";
 import { EstadoPonto } from "./EstadoCelula";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
-import { IconDownload, IconPasta, IconPastaAberta, IconRefresh, IconRobo, IconSettings, IconUserX } from "./icons";
+import { IconDownload, IconKey, IconPasta, IconPastaAberta, IconRefresh, IconRobo, IconSettings, IconUserX } from "./icons";
 import { Progress } from "./Progress";
 import { type OpcaoCelula, SeletorCelula } from "./SeletorCelula";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
@@ -105,6 +105,10 @@ type Resposta = {
   confirmar?: string;
   /** A operação "Emitir DFD" que a extensão pegou da própria tela da Centi (o Processar). */
   operacao?: unknown;
+  /** A aba da Centi está na TELA DE LOGIN (a sessão caiu). */
+  tela?: "login";
+  /** O login automático da extensão (as credenciais ficam SÓ nela — aqui só a situação). */
+  login?: { credenciais: boolean; auto: boolean; pausado: boolean; motivo: string | null } | null;
 };
 type TextoAlvo = { id: string; numero: string };
 const lerTextoAlvo = (v: unknown): TextoAlvo => {
@@ -923,6 +927,16 @@ export function AutomacaoAdmin({
     setLogado(r);
     if (r.ok && r.operacao) aplicarRef.current(r.operacao);
   }, [pedir]);
+  // LOGIN AUTOMÁTICO: a extensão entra com as credenciais guardadas NELA (o sistema só pede e mostra a situação).
+  const [entrando, setEntrando] = useState(false);
+  const entrarAgora = useCallback(async () => {
+    setEntrando(true);
+    const r = await pedir("entrarAgora", null, 60_000);
+    setEntrando(false);
+    setLogado(r);
+    if (r.ok && r.logado) toast.success("Centi logada.");
+    else toast.error(r.login?.pausado ? (r.login.motivo ?? "Login automático pausado.") : (r.erro ?? "Não consegui entrar na Centi."));
+  }, [pedir]);
   // AO VIVO: a extensão se anuncia sozinha (instalada/atualizada — sem F5); o estado da Centi é conferido ao abrir, ao
   // voltar à janela e a cada 20 s com a tela à vista (fora do meio de um lote — o canal fica com a Centi).
   const rodandoRef = useRef(false);
@@ -1418,6 +1432,13 @@ export function AutomacaoAdmin({
             mostra cada lote, passo a passo.
           </p>
           <p>
+            <strong>Login automático:</strong> quando a aba da Centi cai na tela de login, a extensão entra sozinha com o usuário e
+            a senha guardados <strong>cifrados só nela</strong> (Configurar login → opções da extensão) — nunca no sistema. No
+            máximo uma tentativa a cada 5 minutos; se a Centi recusar a senha ou pedir uma verificação (captcha, código, troca
+            de senha), o login automático pausa até as credenciais serem salvas de novo. Sem aba da Centi, ela abre uma em
+            segundo plano.
+          </p>
+          <p>
             <strong>Instalar/atualizar a extensão:</strong> “Baixar extensão” → descompacte (na atualização, substitua os
             arquivos) → chrome://extensions → Modo do desenvolvedor → Carregar sem compactação (ou ↻ no cartão dela) → F5
             nesta tela. A aba da Centi não precisa ser recarregada. Cada versão nova avisa no sino.
@@ -1473,6 +1494,8 @@ export function AutomacaoAdmin({
             <Badge tone="emerald" dot>
               Centi logada{logado.entidade ? ` · ${logado.entidade}` : ""}
             </Badge>
+          ) : logado?.tela === "login" ? (
+            <LoginCenti login={logado.login ?? null} entrando={entrando} onEntrar={() => void entrarAgora()} onOpcoes={() => void pedir("abrirOpcoes", null, 8000)} />
           ) : (
             <Badge tone="amber" dot>
               {logado?.erro ?? "Centi sem login"}
@@ -1576,5 +1599,42 @@ export function AutomacaoAdmin({
       {gravados && <GravadorReceitas passos={gravados} onFechar={() => setGravados(null)} />}
       {confirmacao}
     </div>
+  );
+}
+
+/** A aba da Centi está na TELA DE LOGIN: a situação do login automático da extensão + Entrar agora / Configurar login. */
+function LoginCenti({
+  login,
+  entrando,
+  onEntrar,
+  onOpcoes,
+}: {
+  login: Resposta["login"];
+  entrando: boolean;
+  onEntrar: () => void;
+  onOpcoes: () => void;
+}) {
+  const pronto = !!login?.credenciais && !login.pausado;
+  const detalhe = !login?.credenciais
+    ? "Sem login salvo na extensão"
+    : login.pausado
+      ? (login.motivo ?? "Login automático pausado")
+      : login.auto
+        ? "entrando sozinha…"
+        : "login automático desligado";
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <Badge tone={login?.pausado ? "red" : "amber"} dot>
+        <span title={detalhe}>{login?.pausado ? "Centi: login pausado" : "Centi na tela de login"}</span>
+      </Badge>
+      {pronto && (
+        <Button size="sm" variant="secondary" onClick={onEntrar} loading={entrando} title="A extensão entra agora com o login guardado nela">
+          Entrar agora
+        </Button>
+      )}
+      <Button size="sm" variant="secondary" onClick={onOpcoes} title={detalhe} aria-label={`Configurar login — ${detalhe}`}>
+        <IconKey className="h-4 w-4" /> Configurar login
+      </Button>
+    </span>
   );
 }

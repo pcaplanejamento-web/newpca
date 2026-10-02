@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PCA Rio Verde · Automação Centi",
-  "version": "1.5.0",
-  "description": "Canal entre a aba Automação do sistema PCA e a Centi já aberta (sessão da aba). Emite DFDs (sem vincular, assinar ou enviar) e só grava um documento novo no protocolo indicado — com a autorização de uso único do sistema e a confirmação na janela da extensão.",
+  "version": "1.6.0",
+  "description": "Canal entre a aba Automação do sistema PCA e a Centi (sessão da aba). Emite DFDs (sem vincular, assinar ou enviar), só grava um documento novo no protocolo indicado — com a autorização de uso único do sistema e a confirmação na janela da extensão — e entra sozinha na Centi com o usuário e a senha guardados cifrados SÓ na extensão.",
   "background": {
     "service_worker": "background.js"
   },
@@ -26,6 +26,7 @@
         "https://rioverde.centi.com.br/*"
       ],
       "js": [
+        "centi-login.js",
         "centi-ponte.js"
       ],
       "run_at": "document_start"
@@ -42,7 +43,12 @@
     }
   ],
   "permissions": [
+    "alarms",
     "scripting",
     "storage"
-  ]
+  ],
+  "options_ui": {
+    "page": "opcoes.html",
+    "open_in_tab": true
+  }
 }

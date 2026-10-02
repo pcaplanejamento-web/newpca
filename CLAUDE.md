@@ -3469,6 +3469,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   TIPO; nunca um valor, token ou dado pessoal). Parar abre o **`GravadorReceitas`** (DS: a tabela + "Copiar a gravação") —
   a base para montar as próximas receitas (protocolos por repartição, relatórios, consultas, tramitar) sem chute. O serviço
   só aceita as ações `pedir`/`protocolo`/`anexar`/`gravador`.
+  **LOGIN AUTOMÁTICO (extensão 1.6.0, protocolo 28):** a senha fica SÓ na extensão. **Opções da extensão**
+  (`opcoes.html`/`opcoes.js`, `options_ui`): usuário + senha + "Entrar sozinho quando a sessão cair", Salvar/Esquecer/
+  Entrar agora e a situação (pronto · pausado com o motivo · última tentativa). **Cofre** `cofre.js` (serviço via
+  `importScripts` + opções): AES-GCM 256 com chave NÃO EXTRAÍVEL no IndexedDB da extensão; o cifrado em
+  `chrome.storage.local` (`credCenti`), a situação em `loginCenti`; régua pura `podeTentarLogin` = no máximo **1 tentativa
+  a cada 5 min** (`chrome.storage.session` `loginUltima`, para todas as abas); senha recusada ou verificação pedida =
+  **PAUSA** até salvar de novo (nunca insiste — não bloqueia a conta); "Entrar agora" ignora só o intervalo. **Tela de
+  login** reconhecida no mundo ISOLADO por `centi-login.js` (peças puras: `telaDeLogin` = 1 senha visível + usuário +
+  ENTRAR; `sinaisDeBloqueio` = captcha/código/2 senhas/"senha expirada"; `erroDeLogin`; `preencherEEntrar` = setter
+  nativo + input/change + clique); a `centi-ponte.js` responde `estado` com `tela:"login"` (vale mais que a sessão
+  guardada) e só aceita `centi-login` do SERVIÇO (`sender.id` da extensão, sem `sender.tab`); espera até 15 s: ok ·
+  recusado (erro NOVO na tela) · bloqueio · sem-resposta. **Serviço:** `abaCenti` devolve o motivo (`semAba`/`login`/
+  `semSessao`); `garantirSessao` tenta entrar por trás no `estado` (a tela não espera) e espera no `entrarAgora`; "sempre
+  que cair" também sem a tela do sistema — `tabs.onUpdated` (aba da Centi carregou no login) e o alarme `login-centi`
+  (5 min; permissão `alarms`); sem aba da Centi e com o login pronto, abre uma em segundo plano (1 vez a cada 5 min). Ações
+  novas da tela: `entrarAgora` e `abrirOpcoes`. **Tela:** `LoginCenti` (selo "Centi na tela de login"/"login pausado" com o
+  motivo + "Entrar agora" + "Configurar login"); a resposta à tela traz só a situação (`login`), nunca o usuário/senha.
+  Testes: `tests/extensao-login.test.ts` (DOM falso, cofre com `crypto.subtle`, serviço com cofre falso; a senha não aparece
+  no mundo da página nem na ponte do sistema).
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
