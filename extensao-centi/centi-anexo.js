@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p18";
+  const NOME = "__pcaCentiAnexo_p19";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;

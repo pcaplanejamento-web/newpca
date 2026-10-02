@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 18;
+  const PROTOCOLO = 19;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -320,11 +320,31 @@
     return A.tipoDoLoad({ Entity: lista.find((o) => o?.ModuleKey === A.MODULO_TIPO) ?? lista[0] }, d.tipo);
   }
 
+  // A entidade (Company) com que um canal fala com a Centi — só o código, para o erro dizer ONDE o protocolo não foi achado.
+  function entidadeDoCliente(cli) {
+    try {
+      const c = cli?.principal?.defaults?.headers?.common ?? {};
+      const k = Object.keys(c).find((n) => /^company$/i.test(n));
+      return k ? String(c[k]) : null;
+    } catch {
+      return null;
+    }
+  }
   async function abrirProtocolo(d) {
-    const r = await apiCenti("GET", `restauth/load?entity=${A.MODULO_PROTOCOLO}&key=${d.id}`, null, "load do protocolo");
+    const caminho = `restauth/load?entity=${A.MODULO_PROTOCOLO}&key=${d.id}`;
+    const r = await apiCenti("GET", caminho, null, "load do protocolo");
     const c = A.conferirProtocolo(r, d);
-    if (c.erro) throw new Error(c.erro);
-    return c.entidade;
+    if (!c.erro) return c.entidade;
+    // O cliente da tela não trouxe o protocolo: tenta pela sessão capturada na aba (o contexto do último pedido da tela —
+    // entidade, mês, ano). Achou → segue; senão o erro diz o que cada canal respondeu e em que entidade.
+    const cli = acharClienteCenti();
+    if (cli && cabecalhos) {
+      const r2 = await api("GET", caminho, null, "load do protocolo").catch((e) => ({ __falha: e?.message }));
+      const c2 = r2?.__falha ? { erro: r2.__falha } : A.conferirProtocolo(r2, d);
+      if (!c2.erro) return c2.entidade;
+      throw new Error(`${c.erro} [cliente da Centi, entidade ${entidadeDoCliente(cli) ?? "?"}] · ${c2.erro} [sessão da aba, entidade ${entidadeAtual() ?? "?"}]`);
+    }
+    throw new Error(c.erro);
   }
 
   // Só LEITURA: o resumo do protocolo (o "Conferir" da tela).
