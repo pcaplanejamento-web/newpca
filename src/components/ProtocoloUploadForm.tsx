@@ -175,6 +175,8 @@ export function ProtocoloUploadForm({
   reenvio = null,
   podeExcluir = true,
   iniciar = 0,
+  arquivo = null,
+  onFechado,
   onConcluido,
 }: {
   reparticoes: Rep[];
@@ -194,6 +196,10 @@ export function ProtocoloUploadForm({
   /** Contador do BOTÃO do host (rodapé da tabela de protocolos da Mesa; no reenvio, o banner do protocolo
    * gravado): cada valor NOVO abre o lançador. */
   iniciar?: number;
+  /** Um PDF que já chegou (a Automação emitiu o protocolo na Centi): cada `n` NOVO abre a MESMA análise, sem o lançador. */
+  arquivo?: { file: File; n: number } | null;
+  /** A análise foi FECHADA (ou a protocolação concluída e fechada) — a Automação segue para o próximo protocolo. */
+  onFechado?: (erro?: string) => void;
   /** (reenvio) sobrescrita concluída — o banner do gravado recarrega. */
   onConcluido?: () => void;
 }) {
@@ -394,6 +400,24 @@ export function ProtocoloUploadForm({
     setRelatorio(null);
     setLauncher(true);
   }, [iniciar]);
+
+  // O PDF que a Automação trouxe da Centi: a MESMA leitura de um arquivo escolhido no lançador.
+  const arquivoVisto = useRef(arquivo?.n ?? 0);
+  const doHost = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só a um arquivo NOVO do host.
+  useEffect(() => {
+    if (!arquivo || arquivo.n === arquivoVisto.current || status === "parsing") return;
+    arquivoVisto.current = arquivo.n;
+    doHost.current = true;
+    void handleFile(arquivo.file);
+  }, [arquivo]);
+  // O PDF do host que NÃO abriu a análise (não é um protocolo): o host fica sabendo (segue para o próximo).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só ao fim da leitura.
+  useEffect(() => {
+    if (!doHost.current || status !== "error") return;
+    doHost.current = false;
+    onFechado?.(erro ?? "Não foi possível ler o PDF.");
+  }, [status]);
 
   /** Normaliza o DFD lido do PDF e, no REENVIO, herda do gravado o que o PDF não traz (tratamentos). A
    * validação da ASSINATURA espera o OCR quando o DFD depende dele (`herdarAssinaturas`, após a leitura). */
@@ -720,6 +744,8 @@ export function ProtocoloUploadForm({
     limparDoc();
     resetCache();
     setIndex(null);
+    doHost.current = false;
+    onFechado?.();
   }
 
   const nomeArq = extra.nomeArquivo ?? "protocolo.pdf";

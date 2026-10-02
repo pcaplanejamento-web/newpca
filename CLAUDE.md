@@ -3515,6 +3515,33 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   recarrega/fecha (`donoSaiu`); a tela, ao voltar, avisa o último passo; enquanto um lote roda há o aviso de saída
   (`beforeunload`). Testes: `tests/extensao-automacao.test.ts` + `tests/fixtures/chrome-falso.ts` (o `chrome` falso
   compartilhado pelos testes da extensão).
+  **TAREFAS + "LER A TELA PROTOCOLO" + ABA SINALIZADA + ID FIXO (extensão 1.8.0, protocolo 30):** o manifesto tem uma
+  **`key`** fixa (id `lhdooglmnecpbocibgfobaefahliicnn` em qualquer pasta) — o `credCenti`/`loginCenti` e a chave AES do
+  IndexedDB sobrevivem a toda atualização (o `zipDaExtensao` preserva a chave). **Aba sinalizada** pela `atividade`: o
+  grupo vira "Automação PCA · 3/15" (azul rodando, verde OK, vermelho interrompido, laranja parado — `grupoDaAtividade`;
+  `abaGuardada` acha o grupo pelo COMEÇO do título) e o `centi-painel.js` põe o prefixo no TÍTULO da aba ("▶ 3/15 · …",
+  reaplicado a cada 2 s; some 10 s após o fim) e a MOLDURA com a faixa "Automação PCA executando — não feche esta aba".
+  **Seletor de TAREFA** (`SelectField compacto`, no aparelho `automacao:tarefa`): DFDs por protocolo · DFDs por Id · **Ler a
+  Tela Protocolo** (receita `protocolos-por-reparticao`, agora disponível) → **`TarefaTelaProtocolo`** (contêiner).
+  **Aprender clicando** (ação `aprender` iniciar/parar/limpar — a aba vem para a frente e o cartão mostra a instrução):
+  enquanto liga, o `centi-main.js` guarda a RESPOSTA de cada pedido da tela (XHR/fetch; nunca os da própria extensão —
+  `internos`) por `registroDoAprendiz` (`centi-anexo.js`, puro, testado): CONSULTA de leitura (`consultaPermitida`: só
+  `restauth/`, verbo de leitura, nunca salvar/excluir/tramitar/arquivo) com o pedido COMPLETO (método, caminho, corpo sem
+  campos com cara de segredo — nunca cabeçalhos) + o resumo da resposta (`acharLista`/`linhaPlana` — o padrão
+  `{Fields:[{Key,Value}]}` achatado, 200 linhas); a OPERAÇÃO só quando gerou um ARQUIVO (a emissão do PDF do protocolo —
+  ao parar, a chave ModuleKey|Guid vai ao `localStorage` da Centi e passa a valer no `pedir`, com as TRAVAS forçadas).
+  Parar → **`AprendizTelaProtocolo`** (DS: as consultas de protocolos com o nome da aba, o mapa das colunas sugerido,
+  prévia, a emissão) → Salvar = `PATCH /api/admin/automacao/config {telaProtocolo}` (`ConfigAutomacao.telaProtocolo`,
+  `coerceModeloTela` — vale para todos os ADMs; auditoria). Núcleo PURO **`automacao-tela-protocolo.ts`** (testado):
+  `modeloDoAprendiz`, `sugerirColunas`, `emissaoAprendida` (o parâmetro da operação cujo valor é um campo de uma linha),
+  `lerLinhas`/`itensDaLista`, `juntarProtocolos` (o mesmo protocolo em várias abas = uma linha), `proximaPagina` (take/skip
+  ou page), `corpoEmissao`, `nomePdfProtocolo`. **Ler protocolos** = ação `ler` (a MESMA trava de leitura no `centi-main`)
+  por consulta e página, execução registrada (passos `consultar`) e o andamento no lote; tabela com Abas · No sistema (pelo
+  "Id:" da capa ou pelo nº) · as colunas mapeadas · Exportar. **Emitir e analisar** (seleção ou tocar na linha): um por
+  vez, a operação aprendida → o PDF (`analisarRespostaCenti` + `caminhosDoArquivo`) → o **`ProtocoloUploadForm`** com
+  `arquivo` (abre a MESMA análise da importação, sem o lançador) e `onFechado(erro?)` (fechar a análise, ou o PDF que não é
+  protocolo, segue para o próximo); nada é protocolado sozinho. `arquivo-navegador.ts` (base64, gunzip, download).
+  Testes: `tests/automacao-tela-protocolo.test.ts` e os de grupo/trava em `extensao-automacao`/`automacao-centi`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

@@ -105,6 +105,7 @@ import * as Icons from "@/components/icons";
 import { IntegracaoGoogle, type ValorGoogle } from "@/components/IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "@/components/IntegracaoResend";
 import { GravadorReceitas } from "@/components/GravadorReceitas";
+import { AprendizTelaProtocolo } from "@/components/AprendizTelaProtocolo";
 import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
 import { IndicadorTrello, seloTrello } from "@/components/SincronizacaoTrello";
 import {
@@ -4038,6 +4039,9 @@ export function Catalogo() {
       <Secao titulo="GravadorReceitas (Automação → Gravador: a ESTRUTURA dos pedidos que a tela da Centi fez — método, caminho, parâmetros e os campos com o tipo, nunca valores; Copiar a gravação)">
         <GravadorReceitasDemo />
       </Secao>
+      <Secao titulo="AprendizTelaProtocolo (Automação → Ler a Tela Protocolo: as consultas aprendidas clicando — a aba de cada uma, o mapa das colunas, a prévia e se a emissão do PDF foi aprendida; Salvar grava o modelo para todos)">
+        <AprendizTelaProtocoloDemo />
+      </Secao>
       <Secao titulo="IntegracaoGoogle (Integrações → Login com Google: Client ID, Client secret write-only e a URI de redirecionamento a cadastrar no Google; e-mail novo vira cadastro pendente)">
         <IntegracaoGoogleDemo />
       </Secao>
@@ -4155,6 +4159,36 @@ function GravadorReceitasDemo() {
           passos={[
             { metodo: "POST", caminho: "restauth/load", entidade: "102908", parametros: ["entity", "key"], corpo: null },
             { metodo: "POST", caminho: "restauth/operation", entidade: null, parametros: [], corpo: { ModuleKey: "número", Guid: "texto", Params: [{ Key: "texto", Value: "texto" }] } },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+function AprendizTelaProtocoloDemo() {
+  const [aberto, setAberto] = useState(false);
+  const linha = (id: number, aba: string) => ({ Id: String(id), Processo: `${156800 + id}/2026`, Data: "01/10/2026", DepartamentoOrigem: "SEPLAN", DepartamentoDestino: aba });
+  const consulta = (situacao: string, n: number) => ({
+    tipo: "consulta" as const,
+    metodo: "POST",
+    caminho: "restauth/list?entity=102908",
+    corpo: { Situacao: situacao, Take: 100, Skip: 0 },
+    resposta: { lista: ["Entities"], total: n, linhas: Array.from({ length: n }, (_, i) => linha(i + 1, "PLANEJAMENTO")) },
+  });
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
+        Ver o que foi aprendido
+      </Button>
+      {aberto && (
+        <AprendizTelaProtocolo
+          onFechar={() => setAberto(false)}
+          onSalvar={() => setAberto(false)}
+          pedidos={[
+            consulta("ARECEBER", 3),
+            consulta("EMANALISE", 2),
+            { tipo: "operacao", metodo: "POST", caminho: "restauth/operation", corpo: { ModuleKey: 9001, Guid: "24e3e9d0-0000-4000-8000-000000000001", Params: [{ Key: "IdProtocolo", Value: "2" }] } },
           ]}
         />
       )}

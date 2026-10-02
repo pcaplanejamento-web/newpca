@@ -233,7 +233,8 @@ test("serviço: páginas de fora não pedem login nem abrem as opções", async 
 });
 
 test("extensão: a senha nunca passa pelo mundo da página nem pela ponte do sistema", () => {
-  const semComentarios = (t: string) => t.replace(/^\s*\/\/.*$/gm, "");
+  // Sem os comentários e sem o FILTRO de segredos do aprendiz (o padrão que TIRA campos como a senha do que é guardado).
+  const semComentarios = (t: string) => t.replace(/^\s*\/\/.*$/gm, "").replace(/^\s*const SEGREDO = .*$/gm, "");
   for (const n of ["centi-main.js", "centi-anexo.js", "sistema-ponte.js", "centi-painel.js"]) assert.ok(!/senha/i.test(semComentarios(fonte(n))), n);
   const ponte = fonte("centi-ponte.js");
   assert.ok(!/postMessage\([^)]*senha/i.test(ponte));

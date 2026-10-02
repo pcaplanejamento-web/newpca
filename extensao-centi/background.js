@@ -11,7 +11,7 @@ const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br"];
 const CONFIRMAR = chrome.runtime.getURL("confirmar.html");
 const POPUP = chrome.runtime.getURL("popup.html");
 const TITULO_GRUPO = "Automação PCA";
-const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador"];
+const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler"];
 // O cofre do login (usuário e senha cifrados SÓ na extensão — cofre.js).
 if (typeof importScripts === "function" && !globalThis.CofreCenti) importScripts("cofre.js");
 
@@ -45,6 +45,7 @@ async function estadoDaAba(tabId) {
 }
 
 // ---------------------------------------------------------------- A ABA PRÓPRIA DA AUTOMAÇÃO
+const grupoDaAutomacao = (titulo) => typeof titulo === "string" && titulo.startsWith(TITULO_GRUPO);
 const daCenti = (t) => !!(t?.url?.startsWith(INICIO_CENTI) || t?.pendingUrl?.startsWith(INICIO_CENTI));
 const noCompras = (t) => !!(t?.url ?? t?.pendingUrl ?? "").startsWith(COMPRAS);
 
@@ -58,7 +59,8 @@ async function abaGuardada() {
     } catch {}
   }
   if (chrome.tabGroups?.query) {
-    const grupos = await chrome.tabGroups.query({ title: TITULO_GRUPO }).catch(() => []);
+    // O título do grupo leva o andamento ("Automação PCA · 3/15") — acha pelo começo.
+    const grupos = (await chrome.tabGroups.query({}).catch(() => [])).filter((g) => grupoDaAutomacao(g.title));
     for (const g of grupos) {
       const abas = await chrome.tabs.query({ groupId: g.id, url: CENTI }).catch(() => []);
       if (abas.length) {
@@ -237,13 +239,23 @@ function textoSelo(a) {
   return "";
 }
 
+// O GRUPO de abas também sinaliza: o título leva o andamento e a cor o estado (azul rodando, verde concluído…).
+const COR_GRUPO = { rodando: "blue", interrompido: "red", concluido: "green", parado: "orange" };
+function grupoDaAtividade(a) {
+  const selo = textoSelo(a);
+  return { title: selo ? `${TITULO_GRUPO} · ${selo}` : TITULO_GRUPO, color: COR_GRUPO[a?.estado] ?? "blue" };
+}
+
 async function mostrarAtividade(a) {
   try {
     await chrome.action?.setBadgeText({ text: textoSelo(a) });
     if (a && COR_SELO[a.estado]) await chrome.action?.setBadgeBackgroundColor({ color: COR_SELO[a.estado] });
   } catch {}
   const aba = await abaGuardada().catch(() => null);
-  if (aba) await avisarPainel(aba.id, a);
+  if (!aba) return;
+  if (typeof aba.groupId === "number" && aba.groupId >= 0)
+    await chrome.tabGroups?.update(aba.groupId, grupoDaAtividade(a)).catch(() => {});
+  await avisarPainel(aba.id, a);
 }
 
 async function avisarPainel(tabId, a) {
@@ -508,7 +520,13 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
       }
     }
     try {
-      return await chrome.tabs.sendMessage(r.aba.id, { alvo: "centi", acao: msg.acao, dados: msg.dados });
+      const resp = await chrome.tabs.sendMessage(r.aba.id, { alvo: "centi", acao: msg.acao, dados: msg.dados });
+      // APRENDER: a aba da automação vem para a frente — é nela que se clica (Pesquisar, as abas, abrir um protocolo).
+      if (msg.acao === "aprender" && msg.dados?.acao === "iniciar" && resp?.ok) {
+        await chrome.tabs.update(r.aba.id, { active: true }).catch(() => {});
+        if (r.aba.windowId != null) await chrome.windows.update(r.aba.windowId, { focused: true }).catch(() => {});
+      }
+      return resp;
     } catch {
       return { ok: false, erro: "A aba da automação não respondeu — aperte F5 nela." };
     }

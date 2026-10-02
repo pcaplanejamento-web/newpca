@@ -18,6 +18,12 @@ export const configAutomacaoSchema = z
         assinatura: z.string().regex(/^\d{0,12}$/),
       })
       .optional(),
+    /** O modelo da Tela Protocolo (normalizado por `coerceModeloTela`); null apaga. */
+    telaProtocolo: z
+      .record(z.string(), z.unknown())
+      .nullable()
+      .optional()
+      .refine((v) => v == null || JSON.stringify(v).length <= 65536, "Modelo grande demais."),
   })
   .strict();
 

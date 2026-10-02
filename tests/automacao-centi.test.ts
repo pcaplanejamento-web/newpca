@@ -98,8 +98,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.4.1"), false);
   assert.equal(versaoAtende("1.5.0"), false);
   assert.equal(versaoAtende("1.6.0"), false);
-  assert.equal(versaoAtende("1.7.0"), false);
-  assert.equal(versaoAtende("1.7.1"), true);
+  assert.equal(versaoAtende("1.7.1"), false);
+  assert.equal(versaoAtende("1.8.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -198,6 +198,9 @@ test("extensão: arquivos gerados em dia com extensao-centi/ e zip com a logo", 
   const zip = Buffer.concat(zipDaExtensao(ARQUIVOS_EXTENSAO, new Uint8Array(png)));
   assert.ok(zip.includes(Buffer.from("icone.png")));
   assert.ok(zip.includes(Buffer.from('"default_icon"')));
+  // A CHAVE fixa do manifesto vai no .zip (o id da extensão não muda — as credenciais salvas sobrevivem a cada atualização).
+  const chave = JSON.parse(ARQUIVOS_EXTENSAO["manifest.json"]).key as string;
+  assert.ok(zip.includes(Buffer.from(`"key": "${chave}"`)));
   const semIcone = Buffer.concat(zipDaExtensao(ARQUIVOS_EXTENSAO, null));
   assert.ok(!semIcone.includes(Buffer.from("icone.png")));
 });
@@ -486,7 +489,8 @@ test("operação Emitir DFD: a extensão pega a da tela e o sistema acompanha a 
 test("travas da extensão: só o Emitir DFD, só o download do PDF e o estado leva a operação até o sistema", async () => {
   const { readFileSync } = await import("node:fs");
   const main = readFileSync("extensao-centi/centi-main.js", "utf8");
-  assert.match(main, /if \(!A\?\.operacaoDoCorpo\(c\)\) return \{ ok: false, erro: "Só a operação Emitir DFD é permitida\." \}/);
+  // POST: só o Emitir DFD ou a emissão APRENDIDA na Tela Protocolo (a que gerou um arquivo) — sempre com as travas.
+  assert.match(main, /if \(!A\?\.operacaoDoCorpo\(c\) && !operacoesAprendidas\(\)\.includes\(A\?\.chaveOperacao\(c\)\)\)\s+return \{ ok: false/);
   assert.match(main, /if \(!ARQUIVO\.test\(new URL\(url\)\.pathname\)\) return \{ ok: false/);
   const bg = readFileSync("extensao-centi/background.js", "utf8");
   assert.match(bg, /operacao: (r\.)?estado\?\.operacao \?\? null/);

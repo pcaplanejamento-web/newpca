@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p29";
+  const NOME = "__pcaCentiAnexo_p30";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -316,7 +316,124 @@
     };
   }
 
+  // APRENDER CLICANDO (a Tela Protocolo e outras LEITURAS): o pedido COMPLETO que a tela fez — método, caminho e corpo —
+  // para o sistema repetir depois. Só LEITURA (verbo de consulta da API) e a operação que GEROU UM ARQUIVO (um relatório);
+  // salvar/excluir/tramitar nunca. Cabeçalhos nunca entram (a sessão vai neles); campos com cara de segredo saem do corpo.
+  const VERBO_ESCRITA = /(save|delete|remove|exclu|insert|update|upload|send|tramit|assin|sign|cancel|import|exec|commit|aprov|approv|confirm|logout|login)/i;
+  const VERBO_LEITURA = /^(load\w*|list\w*|get\w*|search\w*|query\w*|find\w*|filter\w*|grid\w*|pesquis\w*|consult\w*|count\w*|page\w*|select\w*|lookup\w*|combo\w*|tree\w*|view\w*)$/i;
+  const SEGREDO = /token|senha|password|passwd|authorization|refresh|cookie|secret/i;
+  const VERBO_ARQUIVO = /^(getbinlink|getbin|getfile)$/i;
+  /** O caminho da API ("restauth/list?…" | "rest/…") e o verbo (1º trecho); fora da API = null. */
+  function caminhoDaApi(url) {
+    let u;
+    try {
+      u = new URL(String(url), "https://rioverde.centi.com.br/wcf/");
+    } catch {
+      return null;
+    }
+    const m = /\/(restauth|rest)\/([^/?#]+)/i.exec(u.pathname);
+    if (!m) return null;
+    for (const k of [...u.searchParams.keys()]) if (SEGREDO.test(k)) u.searchParams.delete(k);
+    const i = u.pathname.indexOf(`/${m[1]}/`);
+    return { caminho: `${u.pathname.slice(i + 1)}${u.search}`, api: m[1].toLowerCase(), verbo: m[2] };
+  }
+  /** Uma CONSULTA que a extensão pode repetir: só a API restauth, verbo de leitura, nunca de escrita. */
+  function consultaPermitida(caminho, metodo) {
+    if (!/^(GET|POST)$/.test(String(metodo || ""))) return false;
+    const c = caminhoDaApi(caminho);
+    return !!c && c.api === "restauth" && VERBO_LEITURA.test(c.verbo) && !VERBO_ESCRITA.test(c.verbo) && !VERBO_ARQUIVO.test(c.verbo);
+  }
+  /** O corpo sem nada com cara de segredo (as chaves), até 16 KB; outro formato = undefined (o pedido não é aprendido). */
+  function semSegredos(v, prof = 0) {
+    if (prof > 12) return null;
+    if (Array.isArray(v)) return v.slice(0, 500).map((x) => semSegredos(x, prof + 1));
+    if (v && typeof v === "object") {
+      const o = {};
+      for (const [k, x] of Object.entries(v)) if (!SEGREDO.test(k)) o[k] = semSegredos(x, prof + 1);
+      return o;
+    }
+    return v;
+  }
+  function corpoJson(corpo) {
+    if (corpo == null || corpo === "") return null;
+    let c = corpo;
+    if (typeof c === "string") {
+      try {
+        c = JSON.parse(c);
+      } catch {
+        return undefined;
+      }
+    }
+    if (typeof c !== "object" || (!Array.isArray(c) && Object.getPrototypeOf(c) !== Object.prototype)) return undefined;
+    const limpo = semSegredos(c);
+    return JSON.stringify(limpo).length <= 16384 ? limpo : undefined;
+  }
+  /** Uma linha da resposta em "chave → texto" (o padrão {Fields:[{Key,Value}]} da Centi achatado), até 60 campos. */
+  function linhaPlana(o) {
+    const r = {};
+    const ir = (v, pre, prof) => {
+      if (Object.keys(r).length >= 60 || prof > 3 || v == null) return;
+      if (Array.isArray(v)) return;
+      if (typeof v === "object") {
+        if (Array.isArray(v.Fields))
+          for (const f of v.Fields) if (f && typeof f.Key === "string" && !SEGREDO.test(f.Key)) ir(f.Value, pre ? `${pre}.${f.Key}` : f.Key, prof + 1);
+        for (const [k, x] of Object.entries(v)) if (k !== "Fields" && !SEGREDO.test(k)) ir(x, pre ? `${pre}.${k}` : k, prof + 1);
+        return;
+      }
+      if (pre) r[pre] = String(v).slice(0, 200);
+    };
+    ir(o, "", 0);
+    return r;
+  }
+  /** A maior LISTA de objetos da resposta (o caminho até ela — "@Chave" = um campo do padrão Fields). */
+  function acharLista(j) {
+    let melhor = null;
+    const ir = (v, caminho, prof) => {
+      if (v == null || typeof v !== "object" || prof > 5) return;
+      if (Array.isArray(v)) {
+        if (v.length && v.every((x) => x && typeof x === "object" && !Array.isArray(x)) && (!melhor || v.length > melhor.itens.length)) melhor = { caminho, itens: v };
+        return;
+      }
+      if (Array.isArray(v.Fields)) for (const f of v.Fields) if (f && typeof f.Key === "string") ir(f.Value, [...caminho, `@${f.Key}`], prof + 1);
+      for (const [k, x] of Object.entries(v)) if (k !== "Fields") ir(x, [...caminho, k], prof + 1);
+    };
+    ir(j, [], 0);
+    return melhor;
+  }
+  /** O RESUMO da resposta de uma consulta: onde está a lista, quantas linhas e as primeiras 200, achatadas. */
+  function resumoResposta(j) {
+    const l = acharLista(j);
+    if (!l) return null;
+    return { lista: l.caminho, total: l.itens.length, linhas: l.itens.slice(0, 200).map(linhaPlana) };
+  }
+  /** O que o APRENDIZ guarda de um pedido da tela (ou null — não é leitura, ou é grande demais). */
+  function registroDoAprendiz(url, metodo, corpo, status, tipo, texto) {
+    const c = caminhoDaApi(url);
+    if (!c || Number(status) >= 400) return null;
+    const m = String(metodo || "GET").toUpperCase();
+    if (VERBO_ARQUIVO.test(c.verbo)) return m === "GET" ? { tipo: "arquivo", metodo: m, caminho: c.caminho } : null;
+    let j = null;
+    if (typeof texto === "string" && /^\s*[[{]/.test(texto) && texto.length <= 8 * 1024 * 1024) {
+      try {
+        j = JSON.parse(texto);
+      } catch {}
+    }
+    const b = corpoJson(corpo);
+    if (b === undefined) return null;
+    if (/^operation$/i.test(c.verbo)) {
+      const arquivo = /pdf|octet/i.test(String(tipo || "")) || (j && JSON.stringify(j).search(/"Key"\s*:\s*"[0-9a-f-]{20,}"/i) >= 0);
+      if (!arquivo || !b || !Number.isInteger(b.ModuleKey) || !Array.isArray(b.Params)) return null;
+      return { tipo: "operacao", metodo: m, caminho: c.caminho, corpo: b };
+    }
+    if (!consultaPermitida(c.caminho, m) || !j) return null;
+    const resposta = resumoResposta(j);
+    return resposta ? { tipo: "consulta", metodo: m, caminho: c.caminho, corpo: b, resposta } : null;
+  }
+  /** A operação aprendida (o relatório que gerou um arquivo) — a chave que libera repeti-la nesta aba. */
+  const chaveOperacao = (c) => (c && Number.isInteger(c.ModuleKey) ? `${c.ModuleKey}|${String(c.Guid ?? "").toLowerCase()}` : null);
+
   globalThis[NOME] = Object.freeze({
+    caminhoDaApi, consultaPermitida, registroDoAprendiz, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,
     renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });

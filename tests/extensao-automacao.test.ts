@@ -53,6 +53,19 @@ test("andamento: o selo do ícone conta os DFDs e o cartão da aba recebe o pass
   assert.equal(s.selos.at(-1), "OK");
 });
 
+test("aba sinalizada: o GRUPO leva o andamento no título e a cor do estado; reabrir o Chrome ainda acha o grupo", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS, groupId: 3 }], grupos: [{ id: 3, title: "Automação PCA", color: "blue" }] });
+  const ini = (await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Ler a Tela Protocolo", total: 4 } })) as { loteId: string };
+  await s.pedir({ acao: "lote", dados: { fase: "passo", loteId: ini.loteId, texto: "A Receber", feito: 1, total: 4 } });
+  assert.deepEqual(s.grupos[0], { id: 3, title: "Automação PCA · 1/4", color: "blue" });
+  await s.pedir({ tipo: "interromper" }, POPUP);
+  assert.deepEqual(s.grupos[0], { id: 3, title: "Automação PCA · X", color: "red" });
+  // Outra sessão do navegador: o título com o andamento não impede achar a aba pelo grupo.
+  const t = servicoFalso({ abas: [{ id: 8, url: COMPRAS, groupId: 3 }], grupos: [{ id: 3, title: "Automação PCA · 2/9" }] });
+  await t.pedir({ acao: "estado" });
+  assert.equal(t.sessao.abaAutomacao, 8);
+});
+
 test("interromper: pelo popup, os pedidos DO LOTE param (os de fora dele seguem) até um lote novo", async () => {
   const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS }], sessao: { abaAutomacao: 1 } });
   const ini = (await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Anexar", total: 2 } })) as { loteId: string };

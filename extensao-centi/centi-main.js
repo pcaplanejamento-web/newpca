@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 29;
+  const PROTOCOLO = 30;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -145,6 +145,63 @@
     return { ok: true, gravando: atual.ativo, passos: atual.passos };
   }
 
+  // APRENDER CLICANDO: o pedido COMPLETO de LEITURA que a tela faz (método, caminho, corpo — nunca cabeçalhos) + o resumo
+  // da resposta, para o sistema repetir a consulta depois (a Tela Protocolo). Guardado na aba (sessionStorage), até 40.
+  const APRENDIZ = "__pcaAprendiz_v1";
+  // As OPERAÇÕES aprendidas que GERARAM UM ARQUIVO (um relatório da tela): só elas, além do Emitir DFD, podem ser
+  // repetidas — com as travas forçadas. No localStorage da Centi (valem depois de reabrir a aba).
+  const OPERACOES = "__pcaOperacoesArquivo_v1";
+  let internos = 0; // pedidos da PRÓPRIA extensão pelo cliente da Centi — não se aprende deles
+  const lerAprendiz = () => {
+    try {
+      const g = JSON.parse(sessionStorage.getItem(APRENDIZ) || "null");
+      return g && Array.isArray(g.pedidos) ? { ativo: g.ativo === true, pedidos: g.pedidos } : { ativo: false, pedidos: [] };
+    } catch {
+      return { ativo: false, pedidos: [] };
+    }
+  };
+  const operacoesAprendidas = () => {
+    try {
+      const l = JSON.parse(localStorage.getItem(OPERACOES) || "[]");
+      return Array.isArray(l) ? l.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  };
+  function aprenderResposta(url, metodo, corpo, status, tipo, texto) {
+    try {
+      if (internos > 0) return;
+      const g = lerAprendiz();
+      if (!g.ativo) return;
+      const r = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.registroDoAprendiz(url, metodo, corpo, status, tipo, texto);
+      if (!r) return;
+      const igual = (x) => x.tipo === r.tipo && x.metodo === r.metodo && x.caminho === r.caminho && JSON.stringify(x.corpo ?? null) === JSON.stringify(r.corpo ?? null);
+      const pedidos = [...g.pedidos.filter((x) => !igual(x)), { ...r, em: new Date().toISOString() }].slice(-40);
+      sessionStorage.setItem(APRENDIZ, JSON.stringify({ ativo: true, pedidos }));
+    } catch {}
+  }
+  const textoDoXhr = (x) => {
+    try {
+      if (x.responseType === "" || x.responseType === "text") return x.responseText;
+      if (x.responseType === "json") return JSON.stringify(x.response);
+      if (x.responseType === "arraybuffer" && x.response && x.response.byteLength <= 8 * 1024 * 1024) return new TextDecoder().decode(x.response);
+    } catch {}
+    return null;
+  };
+  function aprender(d) {
+    const g = lerAprendiz();
+    if (d?.acao === "iniciar") sessionStorage.setItem(APRENDIZ, JSON.stringify({ ativo: true, pedidos: [] }));
+    else if (d?.acao === "parar") {
+      sessionStorage.setItem(APRENDIZ, JSON.stringify({ ativo: false, pedidos: g.pedidos }));
+      // A operação que gerou um arquivo passa a poder ser repetida (com as travas).
+      const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+      const novas = g.pedidos.filter((x) => x.tipo === "operacao").map((x) => A?.chaveOperacao(x.corpo)).filter(Boolean);
+      if (novas.length) localStorage.setItem(OPERACOES, JSON.stringify([...new Set([...operacoesAprendidas(), ...novas])].slice(-20)));
+    } else if (d?.acao === "limpar") sessionStorage.removeItem(APRENDIZ);
+    const atual = lerAprendiz();
+    return { ok: true, aprendendo: atual.ativo, pedidos: atual.pedidos };
+  }
+
   const abrir = XMLHttpRequest.prototype.open;
   const definir = XMLHttpRequest.prototype.setRequestHeader;
   const enviar = XMLHttpRequest.prototype.send;
@@ -165,6 +222,11 @@
       gravarPasso(this.__pcaUrl, this.__pcaMetodo, r[0]);
     }
     if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/")) this.addEventListener("load", () => trocarToken(tokenDoXhr(this)));
+    if (this.__pcaUrl && !this.__pcaInterno && internos === 0 && lerAprendiz().ativo) {
+      const url = this.__pcaUrl;
+      const metodo = this.__pcaMetodo;
+      this.addEventListener("load", () => aprenderResposta(url, metodo, r[0], this.status, this.getResponseHeader("content-type"), textoDoXhr(this)));
+    }
     return enviar.apply(this, r);
   };
   const buscar = window.fetch;
@@ -184,6 +246,14 @@
       guardar(url, Object.fromEntries(hs.entries()), metodo, "fetch");
       aprenderOperacao(url, metodo, init?.body);
       gravarPasso(url, metodo, init?.body);
+      if (internos === 0 && lerAprendiz().ativo)
+        return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
+          r.clone()
+            .text()
+            .then((t) => aprenderResposta(url, metodo, init?.body, r.status, r.headers.get("content-type"), t))
+            .catch(() => {});
+          return r;
+        });
     } catch {}
     return comToken(buscar.call(this, rec, init, ...resto));
   };
@@ -267,8 +337,10 @@
     if (d.metodo !== "POST" || !/\/restauth\/operation$/.test(new URL(url).pathname)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
     const c = d.corpo;
     if (!c || !GUID.test(String(c.Guid)) || !Number.isInteger(c.ModuleKey) || !Array.isArray(c.Params)) return { ok: false, erro: "Pedido inválido." };
-    // TRAVA: só a operação com a FORMA do Emitir DFD (IdComprasPlanejamento + DFD=1) — nenhuma outra operação da Centi.
-    if (!A?.operacaoDoCorpo(c)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
+    // TRAVA: só a operação com a FORMA do Emitir DFD (IdComprasPlanejamento + DFD=1) ou uma operação APRENDIDA nesta Centi
+    // que gerou um arquivo (o relatório da Tela Protocolo) — nenhuma outra operação da Centi.
+    if (!A?.operacaoDoCorpo(c) && !operacoesAprendidas().includes(A?.chaveOperacao(c)))
+      return { ok: false, erro: "Só a operação Emitir DFD ou uma emissão aprendida na Tela Protocolo é permitida." };
     const params = c.Params.map((p) => ({ Key: String(p.Key), Value: p.Key in TRAVAS ? TRAVAS[p.Key] : String(p.Value ?? "") }));
     for (const [Key, Value] of Object.entries(TRAVAS)) if (!params.some((p) => p.Key === Key)) params.push({ Key, Value });
     const corpo = { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params };
@@ -302,11 +374,13 @@
     };
     const propria = corpo ? `${corpo.ModuleKey}|${String(corpo.Guid).toLowerCase()}` : null;
     if (propria) proprias.add(propria);
+    internos++;
     try {
       return resposta(await cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers, responseType: "arraybuffer" }));
     } catch (e) {
       return e?.response ? resposta(e.response) : null;
     } finally {
+      internos--;
       if (propria) proprias.delete(propria);
     }
   }
@@ -434,6 +508,7 @@
     const cli = acharClienteCenti();
     if (!cli) return null;
     const rel = `/${String(caminho).replace(/^\/?restauth\//, "")}`;
+    internos++;
     try {
       const r = metodo === "GET" ? await cli.principal.get(rel) : await cli.principal.post(rel, corpo);
       tokenNosClientes(cli, r.headers);
@@ -443,6 +518,8 @@
       if (!r) throw new Error(`Sem resposta da Centi (${e?.message || "rede"}).`);
       tokenNosClientes(cli, r.headers);
       return { status: r.status, j: r.data };
+    } finally {
+      internos--;
     }
   }
   /** A API da Centi: pelo cliente da própria tela; sem ele, pelo envio da extensão. */
@@ -538,7 +615,19 @@
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
   }
 
-  const ACOES = { pedir, protocolo, anexar, gravador };
+  // Só LEITURA: repete uma CONSULTA aprendida (a Tela Protocolo) — a trava confere o verbo (nunca salvar/excluir/tramitar).
+  async function ler(d) {
+    if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
+    if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
+    const metodo = String(d?.metodo || "").toUpperCase();
+    const caminho = String(d?.caminho || "");
+    if (!A.consultaPermitida(caminho, metodo)) return { ok: false, erro: "Só consultas (leitura) da Centi podem ser repetidas." };
+    const corpo = metodo === "POST" ? (d.corpo ?? null) : null;
+    if (corpo !== null && (typeof corpo !== "object" || JSON.stringify(corpo).length > 65536)) return { ok: false, erro: "Consulta inválida." };
+    return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
+  }
+
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;

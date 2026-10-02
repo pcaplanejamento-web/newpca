@@ -4,6 +4,8 @@
 // Princípios: negado por padrão · escrita só ACRESCENTA · toda escrita = autorização de uso único + confirmação · ensaio
 // antes · freio · tudo auditado e idempotente · nada fixo.
 
+import { coerceModeloTela, type ModeloTela } from "./automacao-tela-protocolo.ts";
+
 /** As capacidades do MOTOR. As de ESCRITA são uma lista FIXA (cada uma tem o seu validador na extensão). */
 export const CAPACIDADES_LEITURA = ["estado", "ler", "consultar", "baixar"] as const;
 export const CAPACIDADES_OPERAR = ["operar"] as const;
@@ -49,11 +51,12 @@ export const RECEITAS: readonly Receita[] = [
   {
     id: "protocolos-por-reparticao",
     versao: 1,
-    nome: "Protocolos por repartição",
-    descricao: "Conta e lista os protocolos de uma repartição na Tela Protocolo e confere com a Mesa (só leitura).",
-    capacidades: ["estado", "consultar"],
-    disponivel: false,
-    padraoAtiva: false,
+    nome: "Ler a Tela Protocolo",
+    descricao:
+      "Lê os protocolos das suas repartições na Tela Protocolo da Centi (as consultas aprendidas clicando), emite o PDF de cada um e o abre na mesma análise da importação de protocolo (só leitura na Centi).",
+    capacidades: ["estado", "consultar", "operar", "baixar"],
+    disponivel: true,
+    padraoAtiva: true,
   },
   {
     id: "baixar-relatorios",
@@ -96,9 +99,11 @@ export type ConfigAutomacao = {
   /** Receitas ligadas/desligadas pelo ADM (ausente = o padrão da receita). */
   receitas: Record<string, { ativa: boolean }>;
   operacao: OperacaoCentiServidor | null;
+  /** O MODELO da Tela Protocolo (as consultas aprendidas clicando, as colunas e a emissão do PDF) — vale para todos. */
+  telaProtocolo: ModeloTela | null;
 };
 
-export const CONFIG_AUTOMACAO_PADRAO: ConfigAutomacao = { ativa: true, receitas: {}, operacao: null };
+export const CONFIG_AUTOMACAO_PADRAO: ConfigAutomacao = { ativa: true, receitas: {}, operacao: null, telaProtocolo: null };
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -124,7 +129,7 @@ export function coerceConfigAutomacao(v: unknown): ConfigAutomacao {
           em: typeof op.em === "string" ? op.em.slice(0, 40) : null,
         }
       : null;
-  return { ativa: typeof o.ativa === "boolean" ? o.ativa : true, receitas, operacao };
+  return { ativa: typeof o.ativa === "boolean" ? o.ativa : true, receitas, operacao, telaProtocolo: coerceModeloTela(o.telaProtocolo) };
 }
 
 /** A receita roda? (existe, está disponível nesta versão e ligada pelo ADM — ou pelo padrão). */

@@ -37,6 +37,7 @@ import {
   VERSAO_EXTENSAO_CENTI,
   versaoAtende,
 } from "@/lib/automacao-centi-core";
+import { baixarNoNavegador, comoBlob, deBase64, gunzip } from "@/lib/arquivo-navegador";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import {
@@ -62,7 +63,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { Dropdown } from "./Dropdown";
 import { EstadoPonto } from "./EstadoCelula";
-import { TextField } from "./Field";
+import { SelectField, TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { IconDownload, IconKey, IconPasta, IconPastaAberta, IconRefresh, IconRobo, IconSettings, IconUserX } from "./icons";
 import { Progress } from "./Progress";
@@ -73,6 +74,7 @@ import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
 import { HistoricoExecucoes } from "./HistoricoExecucoes";
+import { TarefaTelaProtocolo } from "./TarefaTelaProtocolo";
 
 // Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) por PROTOCOLO do sistema (uma pasta
 // por protocolo, dentro da pasta "PCA <ano>") ou por Id. Quem fala com a Centi é a EXTENSÃO do Chrome (extensao-centi/),
@@ -122,7 +124,14 @@ const lerTextoAlvo = (v: unknown): TextoAlvo => {
 };
 type Estado = "fila" | "baixando" | "ok" | "falha" | "pulado" | "repetido";
 type Linha = TarefaCenti & { estado: Estado; erro?: string; amostra?: string; entidade?: string };
-type Modo = "protocolo" | "ids";
+type Modo = "protocolo" | "ids" | "tela";
+const CHAVE_TAREFA = "automacao:tarefa";
+const TAREFAS: { value: Modo; label: string }[] = [
+  { value: "protocolo", label: "Baixar/anexar DFDs · por protocolo" },
+  { value: "ids", label: "Baixar/anexar DFDs · por Id" },
+  { value: "tela", label: "Ler a Tela Protocolo" },
+];
+const lerTarefa = (v: unknown): Modo => (TAREFAS.some((t) => t.value === v) ? (v as Modo) : "protocolo");
 type Ext = { versao: string; copias: number } | null;
 /** O contexto dos BANNERS da Mesa (o protocolo aberto pela linha): o mesmo da Mesa (`contextoBanners`). */
 export type ContextoBannersAutomacao = Pick<Parameters<typeof BannersMesa>[0], "pode" | "reparticoes" | "regras" | "orgaos" | "pcas">;
@@ -193,21 +202,6 @@ type Pasta = {
   name: string;
 };
 
-const deBase64 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-async function gunzip(bytes: Uint8Array) {
-  const st = new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("gzip"));
-  return new Uint8Array(await new Response(st).arrayBuffer());
-}
-const comoBlob = (b: Uint8Array, tipo = "application/pdf") => new Blob([b as Uint8Array<ArrayBuffer>], { type: tipo });
-
-function baixarNoNavegador(nome: string, blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nome;
-  a.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
 
 /** Grava na pasta escolhida, criando as subpastas (PCA <ano> / protocolo) na 1ª vez, e CONFERE o tamanho gravado. */
 async function gravarNaPasta(pasta: Pasta, pastas: string[], nome: string, blob: Blob) {
@@ -779,6 +773,8 @@ export function AutomacaoAdmin({
   const [pasta, setPasta] = useState<Pasta | null>(null);
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [rodando, setRodando] = useState(false);
+  // A tarefa "Ler a Tela Protocolo" em curso (leitura ou a fila de análise).
+  const [rodandoTela, setRodandoTela] = useState(false);
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
   const [podePasta, setPodePasta] = useState(false);
   const [alvoTexto, setAlvoTexto] = useState<TextoAlvo>({ id: "", numero: "" });
@@ -817,6 +813,7 @@ export function AutomacaoAdmin({
     setCfg(lerLocal(CHAVE_CONFIG, lerConfigCenti, CONFIG_CENTI_PADRAO));
     setSaida(lerLocal(CHAVE_SAIDA, lerOpcoesSaida, OPCOES_SAIDA_PADRAO));
     setAlvoTexto(lerLocal(CHAVE_ALVO, lerTextoAlvo, { id: "", numero: "" }));
+    setModo(lerLocal(CHAVE_TAREFA, lerTarefa, "protocolo"));
     const m = lerLocal(CHAVE_ENTIDADES, lerMapa, {});
     mapaRef.current = m;
     setMapa(m);
@@ -965,16 +962,17 @@ export function AutomacaoAdmin({
   // AO VIVO: a extensão se anuncia sozinha (instalada/atualizada — sem F5); o estado da Centi é conferido ao abrir, ao
   // voltar à janela e a cada 20 s com a tela à vista (fora do meio de um lote — o canal fica com a Centi).
   const rodandoRef = useRef(false);
-  rodandoRef.current = rodando;
+  const ocupado = rodando || rodandoTela;
+  rodandoRef.current = ocupado;
   // Sair desta tela no meio de um lote o PARA (a extensão não segue sozinha): avisa antes.
   useEffect(() => {
-    if (!rodando) return;
+    if (!ocupado) return;
     const avisar = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
     window.addEventListener("beforeunload", avisar);
     return () => window.removeEventListener("beforeunload", avisar);
-  }, [rodando]);
+  }, [ocupado]);
   useEffect(() => {
     if (!ext || !versaoAtende(ext.versao)) return;
     void verificar(true);
@@ -1505,8 +1503,18 @@ export function AutomacaoAdmin({
           </p>
           <p>
             <strong>Instalar/atualizar a extensão:</strong> “Baixar extensão” → descompacte (na atualização, substitua os
-            arquivos) → chrome://extensions → Modo do desenvolvedor → Carregar sem compactação (ou ↻ no cartão dela) → F5
-            nesta tela. A aba da Centi não precisa ser recarregada. Cada versão nova avisa no sino.
+            arquivos na MESMA pasta) → chrome://extensions → Modo do desenvolvedor → Carregar sem compactação (ou ↻ no cartão
+            dela) → F5 nesta tela. A aba da Centi não precisa ser recarregada. Cada versão nova avisa no sino. Desde a 1.8.0 a
+            extensão tem um <strong>id fixo</strong>: o login salvo nela continua depois de cada atualização (salve uma última
+            vez ao instalar a 1.8.0).
+          </p>
+          <p>
+            <strong>Tarefa “Ler a Tela Protocolo”:</strong> toque em <strong>Aprender a Tela Protocolo</strong> — a aba da
+            automação vem para a frente; nela, escolha os departamentos (as suas repartições), clique em Pesquisar, abra as abas
+            (A Receber, Em Análise, Analisado, Em Trânsito) e emita o PDF de UM protocolo; volte e toque em Parar. Confira as
+            abas e as colunas e salve o modelo (vale para todos os administradores). Depois, <strong>Ler protocolos</strong>{" "}
+            repete as consultas (só leitura) e lista os protocolos; <strong>Emitir e analisar</strong> emite o PDF de cada
+            escolhido e o abre, um por vez, na mesma análise do “Importar protocolo” da Mesa — protocolar continua com você.
           </p>
           <p>
             <strong>Por protocolo:</strong> marque um ou vários (tocar na linha abre o protocolo). Cada um vira a pasta “SIGLA - PCA
@@ -1526,16 +1534,23 @@ export function AutomacaoAdmin({
             Verificar e toque no código ao lado do órgão.
           </p>
         </Ajuda>
-        <Segmented<Modo>
-          ariaLabel="Origem dos DFDs"
+        <SelectField
+          compacto
+          label="Tarefa"
           value={modo}
-          onChange={setModo}
-          disabled={rodando}
-          options={[
-            { value: "protocolo", label: "Por protocolo" },
-            { value: "ids", label: "Por Id" },
-          ]}
-        />
+          disabled={ocupado}
+          onChange={(e) => {
+            const v = lerTarefa(e.target.value);
+            setModo(v);
+            gravarLocal(CHAVE_TAREFA, v);
+          }}
+        >
+          {TAREFAS.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </SelectField>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {gravacao === false && (
             <Badge tone="red" dot>
@@ -1611,8 +1626,19 @@ export function AutomacaoAdmin({
       <div
         ref={corpo}
         style={{ "--h-automacao": altura ? `${altura}px` : undefined } as React.CSSProperties}
-        className="grid gap-[var(--gap-block)] xl:h-[var(--h-automacao)] xl:grid-cols-[minmax(0,1fr)_24rem]"
+        className={`grid gap-[var(--gap-block)] xl:h-[var(--h-automacao)] ${modo === "tela" ? "" : "xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
       >
+        {modo === "tela" ? (
+          <TarefaTelaProtocolo
+            pedir={pedir}
+            lote={loteRef}
+            interrompido={interrompidoRef}
+            pronto={pronto}
+            protocolos={protocolos}
+            analise={{ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas }}
+            onRodando={setRodandoTela}
+          />
+        ) : (
         <div className="min-w-0 xl:min-h-0">
           {modo === "protocolo" ? (
             <DataTable
@@ -1645,7 +1671,10 @@ export function AutomacaoAdmin({
             </section>
           )}
         </div>
-        <Analise linhas={vista} rodando={rodando} destino={anexando ? (proprio ? "protocolo de cada DFD" : (rotuloAlvo ?? "protocolo da Centi")) : null} />
+        )}
+        {modo !== "tela" && (
+          <Analise linhas={vista} rodando={rodando} destino={anexando ? (proprio ? "protocolo de cada DFD" : (rotuloAlvo ?? "protocolo da Centi")) : null} />
+        )}
       </div>
 
       <BannersMesa

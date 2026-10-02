@@ -27,7 +27,14 @@
   .parar { width: 100%; min-height: 36px; border-radius: 8px; border: 1px solid #dc2626; background: #dc2626; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   .parar[disabled] { opacity: .6; cursor: default; }
   .min .b { display: none; }
+  .moldura { position: fixed; inset: 0; z-index: 2147483646; pointer-events: none; border: 3px solid transparent; display: none; }
+  .moldura.rodando { display: block; border-color: #2563eb; } .moldura.interrompido { display: block; border-color: #dc2626; }
+  .moldura.parado { display: block; border-color: #d97706; }
+  .faixa { position: absolute; top: 0; left: 50%; transform: translateX(-50%); padding: 3px 12px; border-radius: 0 0 8px 8px;
+    font: 700 12px/1.4 Inter, Roboto, system-ui, sans-serif; color: #fff; background: #2563eb; white-space: nowrap; }
+  .moldura.interrompido .faixa { background: #dc2626; } .moldura.parado .faixa { background: #d97706; }
 </style>
+<div class="moldura" aria-hidden="true"><div class="faixa">Automação PCA executando — não feche esta aba</div></div>
 <div class="c min" role="status" aria-live="polite">
   <div class="t"><span class="p"></span><span class="titulo">Aba da Automação PCA</span><button class="x" type="button" aria-label="Mostrar ou recolher">▾</button></div>
   <div class="b"><p class="s passo"></p><div class="barra"><i></i></div><button class="parar" type="button">Interromper</button></div>
@@ -45,8 +52,44 @@
     chrome.runtime.sendMessage({ tipo: "interromper" }).catch(() => {});
   });
 
+  // O TÍTULO da aba leva o estado ("▶ 3/15 · …") — a Centi pode trocar o título; o prefixo é reaplicado.
+  const PREFIXO = /^(?:▶|■|✓|!) [^·]{0,20}· /;
+  let prefixo = "";
+  let limparEm = 0;
+  const base = () => document.title.replace(PREFIXO, "");
+  const aplicarTitulo = () => {
+    if (limparEm && Date.now() > limparEm) {
+      prefixo = "";
+      limparEm = 0;
+      $(".moldura").className = "moldura";
+    }
+    const alvo = prefixo ? `${prefixo}${base()}` : base();
+    if (document.title !== alvo) document.title = alvo;
+  };
+  setInterval(aplicarTitulo, 2000);
+  function prefixoDe(a) {
+    if (!a) return "";
+    const conta = a.total ? `${Math.min(a.feito, a.total)}/${a.total}` : "…";
+    if (a.estado === "rodando") return `▶ ${conta} · `;
+    if (a.estado === "interrompido") return "■ Parado · ";
+    if (a.estado === "parado") return "! Parou · ";
+    if (a.estado === "concluido") return "✓ Concluído · ";
+    return "";
+  }
+
   function mostrar(a) {
     const rodando = a?.estado === "rodando";
+    prefixo = prefixoDe(a);
+    // Terminado, o sinal some sozinho em 10 s; rodando, fica até o fim.
+    limparEm = prefixo && !rodando ? Date.now() + 10000 : 0;
+    aplicarTitulo();
+    const mold = $(".moldura");
+    mold.className = `moldura ${rodando || a?.estado === "interrompido" || a?.estado === "parado" ? a.estado : ""}`;
+    $(".faixa").textContent = rodando
+      ? `Automação PCA executando — não feche esta aba${a.total ? ` (${Math.min(a.feito, a.total)} de ${a.total})` : ""}`
+      : a?.estado === "interrompido"
+        ? "Automação PCA interrompida"
+        : "Automação PCA parou";
     $(".p").className = `p ${a?.estado ?? ""}`;
     $(".titulo").textContent = a ? `Automação PCA · ${a.titulo}` : "Aba da Automação PCA";
     $(".passo").textContent = a ? `${a.passo}${a.total ? ` (${Math.min(a.feito, a.total)} de ${a.total})` : ""}` : "Aguardando um lote.";

@@ -22,7 +22,7 @@ export type OpcoesFalso = {
   confirmacao?: boolean | null;
   abas?: Aba[];
   sessao?: Record<string, unknown>;
-  grupos?: { id: number; title: string }[];
+  grupos?: { id: number; title: string; color?: string }[];
 };
 
 export function servicoFalso(o: OpcoesFalso = {}) {
@@ -85,10 +85,11 @@ export function servicoFalso(o: OpcoesFalso = {}) {
       },
     },
     tabGroups: {
-      query: async ({ title }: { title: string }) => grupos.filter((g) => g.title === title),
-      update: async (id: number, p: { title: string }) => {
+      query: async ({ title }: { title?: string }) => grupos.filter((g) => title == null || g.title === title),
+      update: async (id: number, p: { title?: string; color?: string }) => {
         const g = grupos.find((x) => x.id === id);
-        if (g) g.title = p.title;
+        if (g && p.title != null) g.title = p.title;
+        if (g && p.color != null) g.color = p.color;
       },
     },
     tabs: {
@@ -108,7 +109,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
         return t;
       },
       group: async ({ tabIds }: { tabIds: number[] }) => {
-        const g = { id: 900 + grupos.length, title: "" };
+        const g: { id: number; title: string; color?: string } = { id: 900 + grupos.length, title: "" };
         grupos.push(g);
         for (const a of abas) if (tabIds.includes(a.id)) a.groupId = g.id;
         return g.id;
