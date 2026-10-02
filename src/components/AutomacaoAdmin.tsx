@@ -62,7 +62,8 @@ import { Dropdown } from "./Dropdown";
 import { EstadoPonto } from "./EstadoCelula";
 import { SelectField, TextField } from "./Field";
 import { cellCls } from "./formStyles";
-import { IconDownload, IconKey, IconPasta, IconPastaAberta, IconRefresh, IconRobo, IconSettings, IconUserX } from "./icons";
+import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
+import { IconDownload, IconKey, IconPasta, IconPastaAberta, IconRobo, IconSettings, IconUserX } from "./icons";
 import { Progress } from "./Progress";
 import { type OpcaoCelula, SeletorCelula } from "./SeletorCelula";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
@@ -968,6 +969,7 @@ export function AutomacaoAdmin({
   // `abrir` = a extensão abre a ABA DA AUTOMAÇÃO na Centi se ela não existir (ao abrir esta tela e no Verificar; a
   // conferência a cada 20 s não reabre a aba que o usuário fechou).
   const avisouParada = useRef(false);
+  const giroVerificar = useGiro();
   const verificar = useCallback(
     async (abrir = false) => {
       const r = await pedir("estado", abrir ? { abrir: true } : null, abrir ? 45_000 : 8000);
@@ -1600,9 +1602,13 @@ export function AutomacaoAdmin({
               {logado?.erro ?? "Centi sem login"}
             </Badge>
           )}
-          <Button size="sm" variant="secondary" onClick={() => (ext ? void verificar(true) : window.location.reload())} title="Verificar a extensão e a Centi" aria-label="Verificar">
-            <IconRefresh className="h-4 w-4" />
-          </Button>
+          <BotaoAtualizar
+            ativo={giroVerificar.girando}
+            rotulo="Verificar"
+            dica="Verificar a extensão e a Centi"
+            detalhe="Verificando a extensão e a Centi…"
+            onClick={() => void giroVerificar.girar(async () => (ext ? void (await verificar(true)) : window.location.reload()))}
+          />
           <Button size="sm" variant={atualizada ? "secondary" : "primary"} onClick={baixarExtensao} title={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}>
             <IconDownload className="h-4 w-4" /> Extensão {VERSAO_EXTENSAO_CENTI}
           </Button>

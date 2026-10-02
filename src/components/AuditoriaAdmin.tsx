@@ -7,7 +7,8 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { selectCls } from "./formStyles";
 import { Historico } from "./Historico";
-import { IconClock, IconRefresh } from "./icons";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { IconClock } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
 
 const ACOES = Object.entries(ROTULO_ACAO);
@@ -64,9 +65,7 @@ export function AuditoriaAdmin() {
           </h1>
           <p className="text-sm text-muted">Histórico de alterações de todo o sistema — quem, o quê e quando.</p>
         </div>
-        <Button variant="secondary" onClick={carregar} loading={carregando}>
-          <IconRefresh className="h-4 w-4" /> Recarregar
-        </Button>
+        <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando o histórico…" onClick={() => void carregar()} />
       </header>
 
       <div className="flex flex-wrap items-end gap-3">

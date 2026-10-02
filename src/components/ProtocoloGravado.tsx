@@ -564,7 +564,7 @@ export function useProtocoloGravado({
       ? estadoDeMensagens(mensagensAberto, { editado: editados.has(abertoId) || itensEditados.has(abertoId) })
       : null;
 
-  const botaoAtualizar = proto && !travado ? <BotaoAtualizar girando={giro.girando} onClick={atualizar} /> : undefined;
+  const botaoAtualizar = proto && !travado ? <BotaoAtualizar ativo={giro.girando} rotulo="Atualizar e revisar" dica="Atualizar: recarrega do banco e revisa os dados (trata o que for possível)" detalhe="Atualizando e revisando os dados…" onClick={atualizar} /> : undefined;
 
   /** Banner do PROTOCOLO (corpo único + seleção/edição em massa + relatório + salvar). */
   const principal: ConteudoBanner = {

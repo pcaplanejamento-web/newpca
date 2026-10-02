@@ -73,7 +73,7 @@ import {
   propostaUnidade,
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
-import { BotaoAtualizar, BotaoReverificar, useGiro } from "@/components/BotaoAtualizar";
+import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
@@ -1446,7 +1446,7 @@ const ITENS_CONSOLIDADOS_DEMO: ItemComposicao[] = [
   { id: 4, codigo: "3300110", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 500, valorUnitario: 1.2, valorTotal: 600, dfdNumero: "1201", dfdPlanejamento: "1525", dfdTipo: "DFD-S", protocoloNumero: "97600/2026", sigla: "SME", item: 4 },
 ];
 
-/** BotaoAtualizar (banners gravados — o ícone GIRA enquanto recarrega e revisa) + os DADOS COMPLETOS da Mesa
+/** BotaoAtualizar (o botão circular PADRÃO de recarregar — o ícone GIRA dentro do anel; com andamento, o anel enche) + os DADOS COMPLETOS da Mesa
  * (BotaoDadosCompletos + o provedor DadosCompletos: CelulaTexto, CelulaLista e EstadoResumo inteiros na célula). */
 function AtualizarEDadosCompletosDemo() {
   const [ligado, setLigado] = useState(false);
@@ -1455,12 +1455,20 @@ function AtualizarEDadosCompletosDemo() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <BotaoAtualizar girando={giro.girando} onClick={() => void giro.girar(() => new Promise((r) => setTimeout(r, 1200)))} />
-        <span className="text-[12px] text-faint">BotaoAtualizar — ao lado do X dos banners de DFD, item e protocolo: recarrega e revisa (gira ao menos uma volta).</span>
+        <BotaoAtualizar
+          ativo={giro.girando}
+          rotulo="Atualizar e revisar"
+          detalhe="Atualizando e revisando os dados…"
+          onClick={() => void giro.girar(() => new Promise((r) => setTimeout(r, 1200)))}
+        />
+        <span className="text-[12px] text-faint">
+          BotaoAtualizar indeterminado (+ useGiro) — banners de DFD, item e protocolo e o "Recarregar" das telas de administração.
+        </span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <BotaoReverificar
+        <BotaoAtualizar
           ativo={rever != null}
+          rotulo="Atualizar e reverificar toda a Mesa"
           progresso={rever}
           detalhe={rever == null ? undefined : `Reconferindo ${Math.round(rever * 100)}%…`}
           onClick={() => {
@@ -1475,7 +1483,7 @@ function AtualizarEDadosCompletosDemo() {
             }, 250);
           }}
         />
-        <span className="text-[12px] text-faint">BotaoReverificar — na barra das Mesas: recarrega e reconfere todos os protocolos, DFDs e itens (o anel enche com o andamento).</span>
+        <span className="text-[12px] text-faint">BotaoAtualizar com andamento — na barra das Mesas: recarrega e reconfere todos os protocolos, DFDs e itens (o anel enche com o andamento).</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />
@@ -2905,7 +2913,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Atualizar e revisar (BotaoAtualizar + useGiro) · Reverificar a Mesa (BotaoReverificar) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
+      <Secao titulo="Atualizar — o botão circular padrão (BotaoAtualizar + useGiro) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
         <AtualizarEDadosCompletosDemo />
       </Secao>
 

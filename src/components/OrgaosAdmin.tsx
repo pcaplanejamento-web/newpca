@@ -9,7 +9,8 @@ import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import { selectCls } from "./formStyles";
-import { IconArrowDown, IconArrowUp, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { IconArrowDown, IconArrowUp, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { Segmented } from "./Segmented";
@@ -320,9 +321,7 @@ export function OrgaosAdmin() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">Clique num órgão para gerenciar suas unidades. O “Órgão/Entidade” identifica de qual órgão é o DFD. Use ↑/↓ para ordenar.</p>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
-            Recarregar
-          </Button>
+          <BotaoAtualizar ativo={recarregando} rotulo="Recarregar" detalhe="Recarregando os órgãos…" onClick={() => void recarregar()} />
           <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
             Novo órgão
           </Button>

@@ -58,7 +58,7 @@ import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { CelulaLista, CelulaTexto } from "./CelulaLista";
-import { BotaoReverificar } from "./BotaoAtualizar";
+import { BotaoAtualizar } from "./BotaoAtualizar";
 import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
@@ -2119,8 +2119,10 @@ export function DfdsView({
         <div className="ml-auto flex items-center gap-2">
           {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
           {/* REVERIFICAR TUDO: recarrega e reconfere protocolos, DFDs e itens (o anel mostra o andamento). */}
-          <BotaoReverificar
+          <BotaoAtualizar
             ativo={rever}
+            rotulo="Atualizar e reverificar toda a Mesa"
+            dica="Atualizar tudo: recarrega a Mesa e reconfere todos os protocolos, DFDs e itens"
             progresso={reverAtivo && andamentoRever ? andamentoRever.feitos / Math.max(1, andamentoRever.total) : null}
             detalhe={
               !rever ? undefined : !reverAtivo || !andamentoRever ? "Recarregando a Mesa…" : `Reconferindo ${num(andamentoRever.feitos)} de ${num(andamentoRever.total)}…`

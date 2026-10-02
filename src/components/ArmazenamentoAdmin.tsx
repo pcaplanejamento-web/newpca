@@ -8,7 +8,8 @@ import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { IconDatabase, IconImage, IconLayers, IconRefresh, IconTrash } from "./icons";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { IconDatabase, IconImage, IconLayers, IconTrash } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { MonitoramentoWorker } from "./MonitoramentoWorker";
 import { SkeletonLinhas } from "./Skeleton";
@@ -99,9 +100,7 @@ export function ArmazenamentoAdmin() {
           Uso do banco de dados (D1) e do Worker: tamanho por tabela, consumo diário, monitoramento e manutenção.
         </p>
       </div>
-      <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
-        Recarregar
-      </Button>
+      <BotaoAtualizar ativo={recarregando} rotulo="Recarregar" detalhe="Recarregando o armazenamento e o monitoramento…" onClick={() => void recarregar()} />
     </div>
   );
 

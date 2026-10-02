@@ -339,7 +339,7 @@ export function useDfdGravado({
       Salvar alterações
     </Button>
   ) : undefined;
-  const botaoAtualizar = orig && !travado ? <BotaoAtualizar girando={giro.girando} onClick={atualizar} /> : undefined;
+  const botaoAtualizar = orig && !travado ? <BotaoAtualizar ativo={giro.girando} rotulo="Atualizar e revisar" dica="Atualizar: recarrega do banco e revisa os dados (trata o que for possível)" detalhe="Atualizando e revisando os dados…" onClick={atualizar} /> : undefined;
   const temProtocolo = orig?.protocoloId != null && !!onVerProtocolo;
   /** "Sobrescrever DFD": sobe o arquivo NOVO deste DFD (mesmo nº) e escolhe, dado a dado, o que sobrescrever.
    * DFD sem protocolo com a importação avulsa desligada pelo ADM não oferece (o servidor recusaria no fim). */

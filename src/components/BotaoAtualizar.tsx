@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button } from "./Button";
 import { IconRefresh } from "./icons";
 
 /** Uma volta completa do `animate-spin` — o giro nunca para no meio (a recarga rápida ainda mostra o movimento). */
@@ -32,49 +31,39 @@ export function useGiro() {
 }
 
 /**
- * ATUALIZAR dos banners gravados (DFD, item e protocolo): recarrega do banco e REVISA os dados — trata o que for
- * possível (os mesmos tratamentos automáticos da importação). O ÍCONE GIRA enquanto trabalha. Alvo de 44px no celular.
+ * ATUALIZAR — o botão PADRÃO de recarregar/reverificar do sistema (circular): o quadrado na altura da barra com o ícone
+ * que GIRA dentro de um ANEL enquanto trabalha. `progresso` 0–1 enche o anel (null/ausente = indeterminado: o arco gira).
+ * Usos: a barra das Mesas (reverifica protocolos, DFDs e itens, com o andamento), os banners gravados de DFD, item e
+ * protocolo (recarrega e revisa — com `useGiro`) e o "Recarregar" das telas de administração. 44px no celular.
  */
-export function BotaoAtualizar({ girando, onClick }: { girando: boolean; onClick: () => void }) {
-  return (
-    <Button
-      variant="icon"
-      aria-label="Atualizar e revisar"
-      aria-busy={girando || undefined}
-      title={girando ? "Atualizando e revisando os dados…" : "Atualizar: recarrega do banco e revisa os dados (trata o que for possível)"}
-      onClick={girando ? undefined : onClick}
-    >
-      <IconRefresh className={`h-5 w-5 ${girando ? "animate-spin" : ""}`} />
-    </Button>
-  );
-}
-
-/**
- * REVERIFICAR TUDO (a barra das Mesas): o quadrado da barra com um ANEL de progresso em volta do ícone que GIRA enquanto
- * a Mesa recarrega e reconfere protocolos, DFDs e itens. `progresso` 0–1 enche o anel (null = indeterminado: o arco gira).
- * Parado, só o ícone. 44px no celular, a altura da barra no desktop.
- */
-export function BotaoReverificar({
+export function BotaoAtualizar({
   ativo,
-  progresso,
+  progresso = null,
+  rotulo,
+  dica,
   detalhe,
   onClick,
 }: {
   ativo: boolean;
-  progresso: number | null;
-  /** O que está sendo feito ("Reconferindo 120 de 500…") — dica e leitor de tela. */
+  progresso?: number | null;
+  /** Nome acessível parado (ex.: "Recarregar"). */
+  rotulo: string;
+  /** A dica parada (padrão = o rótulo). */
+  dica?: string;
+  /** O que está sendo feito ("Reconferindo 120 de 500…") — dica e leitor de tela enquanto gira. */
   detalhe?: string;
   onClick: () => void;
 }) {
   const R = 15;
   const C = 2 * Math.PI * R;
   const p = progresso == null ? 0.25 : Math.max(0.02, Math.min(1, progresso));
+  const fazendo = detalhe ?? "Atualizando…";
   return (
     <button
       type="button"
-      aria-label={ativo ? `Reverificando a Mesa${detalhe ? ` — ${detalhe}` : ""}` : "Atualizar e reverificar toda a Mesa"}
+      aria-label={ativo ? `${rotulo} — ${fazendo}` : rotulo}
       aria-busy={ativo || undefined}
-      title={ativo ? (detalhe ?? "Reverificando protocolos, DFDs e itens…") : "Atualizar tudo: recarrega a Mesa e reconfere todos os protocolos, DFDs e itens"}
+      title={ativo ? fazendo : (dica ?? rotulo)}
       onClick={ativo ? undefined : onClick}
       className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
         ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"

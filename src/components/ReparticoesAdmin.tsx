@@ -13,7 +13,8 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
-import { IconArrowDown, IconArrowUp, IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { ResponsaveisEditor } from "./ResponsaveisEditor";
 import { SkeletonLinhas } from "./Skeleton";
@@ -331,9 +332,7 @@ export function ReparticoesAdmin({
           <p className="text-sm text-muted">Unidades deste órgão. Use ↑/↓ para ordenar (salvo automaticamente).</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
-            Recarregar
-          </Button>
+          <BotaoAtualizar ativo={recarregando} rotulo="Recarregar" detalhe="Recarregando as unidades…" onClick={() => void recarregar()} />
           <Button
             onClick={abrirNovo}
             disabled={ehDual}
