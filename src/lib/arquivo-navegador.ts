@@ -1,7 +1,7 @@
 // Arquivos no NAVEGADOR (sem JSX): base64, gzip, o download de um Blob e o PDF de uma resposta da Centi — usados pela
 // tela Automação.
-import { type AchadoCenti, caminhosDoArquivo, ehPdf, linkDaResposta } from "./automacao-centi-core";
-import { arquivosDoZip, ehZip } from "./zip-ler";
+import { type AchadoCenti, caminhosDoArquivo, ehPdf, linkDaResposta } from "./automacao-centi-core.ts";
+import { arquivosDoZip, ehZip } from "./zip-ler.ts";
 
 export const deBase64 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
@@ -69,10 +69,16 @@ export type BaixarCenti = (caminho: string) => Promise<DownloadCenti>;
 
 /**
  * O PDF a partir do que a Centi respondeu (o "Processar" do Emitir DFD ou o "Emitir documentos" do protocolo): o PDF cru,
- * em base64, compactado ou a CHAVE do arquivo gerado — baixada pelos endereços conhecidos (e o link que um deles devolver).
- * O arquivo baixado pode ser um ZIP de PDFs. Sem PDF, o erro traz cada tentativa (endereço → status e o começo).
+ * em base64, compactado ou a CHAVE do arquivo gerado — baixada pelos endereços conhecidos, com TODAS as chaves e links da
+ * resposta (e o link que um deles devolver). O arquivo pode ser um ZIP de PDFs. `esperarMs`: a Centi pode gerar o arquivo
+ * DEPOIS de responder (em segundo plano) — enquanto só der 404, espera e tenta de novo até o prazo. Sem PDF, o erro traz
+ * cada tentativa (endereço → status · começo) e o esqueleto da resposta.
  */
-export async function pdfDoAchado(a: AchadoCenti, baixar: BaixarCenti): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string }> {
+export async function pdfDoAchado(
+  a: AchadoCenti,
+  baixar: BaixarCenti,
+  opcoes: { esperarMs?: number; passoMs?: number; aoEsperar?: (s: number) => void } = {},
+): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string }> {
   if (a.tipo === "pdf") return { pdf: a.bytes };
   if (a.tipo === "base64") return { pdf: deBase64(a.b64) };
   if (a.tipo === "gzip") {
@@ -81,23 +87,38 @@ export async function pdfDoAchado(a: AchadoCenti, baixar: BaixarCenti): Promise<
     return pdf ? { pdf } : { erro: "Não consegui abrir o PDF compactado da Centi." };
   }
   if (a.tipo === "nada") return { erro: a.erro, amostra: a.amostra };
-  const tentativas: string[] = [];
-  const tentar = async (caminho: string) => {
-    const d = await baixar(caminho);
-    tentativas.push(`${caminho.split("?")[0].slice(0, 90)} → ${d.status || d.erro || "sem resposta"} · ${amostraBytes(d.bytes)}`);
-    return d.status < 400 ? d.bytes : null;
-  };
-  for (const caminho of caminhosDoArquivo(a)) {
-    const b = await tentar(caminho);
-    if (!b) continue;
-    const pdf = await pdfDosBytes(b).catch(() => null);
-    if (pdf) return { pdf };
-    const link = linkDaResposta(b);
-    const c = link ? await tentar(link) : null;
-    const pdf2 = await pdfDosBytes(c).catch(() => null);
-    if (pdf2) return { pdf: pdf2 };
+  const caminhos = caminhosDoArquivo(a);
+  const inicio = Date.now();
+  let ultimas: string[] = [];
+  for (let rodada = 0; ; rodada++) {
+    const tentativas: string[] = [];
+    let soNaoAchou = true;
+    for (const caminho of caminhos) {
+      const d = await baixar(caminho);
+      tentativas.push(`${caminho.split("?")[0].slice(0, 90)} → ${d.status || d.erro || "sem resposta"} · ${amostraBytes(d.bytes)}`);
+      if (d.status !== 404) soNaoAchou = false;
+      if (d.status >= 400 || !d.bytes) continue;
+      const pdf = await pdfDosBytes(d.bytes).catch(() => null);
+      if (pdf) return { pdf };
+      const link = linkDaResposta(d.bytes);
+      const c = link ? await baixar(link) : null;
+      if (c) tentativas.push(`${link?.split("?")[0].slice(0, 90)} → ${c.status || c.erro || "sem resposta"} · ${amostraBytes(c.bytes)}`);
+      const pdf2 = await pdfDosBytes(c?.bytes ?? null).catch(() => null);
+      if (pdf2) return { pdf: pdf2 };
+    }
+    ultimas = tentativas;
+    // Ainda não existe (404 em tudo): a Centi pode estar gerando — espera crescente até o prazo.
+    const passou = Date.now() - inicio;
+    const espera = Math.min(15_000, (opcoes.passoMs ?? 2_000) * (rodada + 1));
+    if (!soNaoAchou || !opcoes.esperarMs || passou + espera > opcoes.esperarMs) break;
+    opcoes.aoEsperar?.(Math.round((passou + espera) / 1000));
+    await new Promise((ok) => setTimeout(ok, espera));
   }
-  return { erro: "A Centi gerou o arquivo, mas não consegui baixá-lo pela chave.", amostra: [`arquivo: ${a.nome}`, ...tentativas].join("\n") };
+  const s = Math.round((Date.now() - inicio) / 1000);
+  return {
+    erro: `A Centi gerou o arquivo, mas não consegui baixá-lo pela chave${s > 2 ? ` (tentei por ${s} s)` : ""}.`,
+    amostra: [`arquivo: ${a.nome}`, ...ultimas, ...(a.amostra ? [`resposta: ${a.amostra}`] : [])].join("\n"),
+  };
 }
 
 type PedirExtensao = (acao: string, dados: unknown, ms: number) => Promise<{ ok: boolean; b64?: string; status?: number; erro?: string }>;

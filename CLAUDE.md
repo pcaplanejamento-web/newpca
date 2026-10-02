@@ -3609,6 +3609,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`zip-ler.ts`** (puro, testado: STORE + DEFLATE) + `pdfDosBytes` (vários PDFs = unidos — `novaUniao` saiu do
   `AutomacaoAdmin` para `arquivo-navegador.ts`); `pdfDoAchado` devolve cada tentativa (endereço → status · começo) no
   diagnóstico (`BaixarCenti` → `DownloadCenti {status, bytes}`).
+  **Só por código (sistema, sem mudar a extensão):** com o "Emitir documentos" já aprendido, a emissão NUNCA cai para a
+  tela da Centi — a tela só é usada UMA vez para ensinar (sistema sem o modelo, ou o navegador ainda não o aprendeu:
+  `emitirPorCodigo` → `{recusada}`); sem o Id na grade = erro claro. **A chave achada sozinha:** `analisarRespostaCenti`
+  devolve, além do `File.Key`, as OUTRAS chaves (GUIDs) e os links de arquivo de TODA a resposta (`outras`/`links`) e o
+  esqueleto (`amostra`); `caminhosDoArquivo` tenta todos (links → a chave → as outras, sem repetir). **O arquivo gerado
+  depois:** `pdfDoAchado(…, {esperarMs})` — enquanto TUDO der 404, espera crescente (2 s, 4 s… até 15 s) e tenta de novo até o
+  prazo (o protocolo usa 2 min; o andamento diz "Aguardando a Centi gerar o documento (N s)"); outro erro não espera. O
+  diagnóstico traz as tentativas, o esqueleto da resposta e os parâmetros da operação enviada.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

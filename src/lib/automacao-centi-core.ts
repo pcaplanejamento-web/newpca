@@ -522,7 +522,16 @@ export type AchadoCenti =
   | { tipo: "pdf"; bytes: Uint8Array }
   | { tipo: "base64"; b64: string }
   | { tipo: "gzip"; b64: string }
-  | { tipo: "chave"; chave: string; nome: string; url: string | null }
+  | {
+      tipo: "chave";
+      chave: string;
+      nome: string;
+      url: string | null;
+      /** As OUTRAS chaves e endereços que a resposta traz (a chave certa pode não ser a do `Key`) e o esqueleto dela. */
+      outras?: string[];
+      links?: string[];
+      amostra?: string;
+    }
   | { tipo: "nada"; erro: string; amostra?: string };
 
 function acharNoJson(o: unknown, prof = 0): AchadoCenti | null {
@@ -578,18 +587,37 @@ export function analisarRespostaCenti(bytes: Uint8Array, status: number): Achado
   const o = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
   if (o.Captcha) return { tipo: "nada", erro: "A Centi pediu CAPTCHA — emita este pela tela da Centi." };
   const achado = acharNoJson(json);
+  if (achado?.tipo === "chave") {
+    // Encontra SOZINHO as demais chaves (GUIDs) e os endereços de arquivo da resposta — tentados depois da principal.
+    const outras = new Set<string>();
+    const links = new Set<string>();
+    const andar = (v: unknown, prof: number) => {
+      if (prof > 8 || v == null) return;
+      if (typeof v === "string") {
+        const t = v.trim();
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) && t !== achado.chave) outras.add(t);
+        else if (t.length <= 600 && (/^https?:\/\//i.test(t) || /^\/?(wcf\/)?(restauth|rest)\//i.test(t)) && /getbin|getfile|download|arquivo|file|report|pdf/i.test(t)) links.add(t);
+        return;
+      }
+      if (typeof v === "object") for (const x of Object.values(v as Record<string, unknown>)) andar(x, prof + 1);
+    };
+    andar(json, 0);
+    return { ...achado, outras: [...outras].slice(0, 6), links: [...links].slice(0, 6), amostra: JSON.stringify(esqueletoCenti(json)).slice(0, 1200) };
+  }
   if (achado) return achado;
   const msg = [o.Message, o.Mensagem, o.Msg, o.Error].find((m) => typeof m === "string" && m);
   return { tipo: "nada", erro: (msg as string) || "Resposta da Centi sem PDF.", amostra: JSON.stringify(esqueletoCenti(json)).slice(0, 1200) };
 }
 
 /** Onde buscar o arquivo temporário pela chave (caminhos relativos à API da Centi — a extensão só aceita a API). */
-export function caminhosDoArquivo(a: { chave: string; nome: string; url: string | null }): string[] {
-  const k = encodeURIComponent(a.chave);
+export function caminhosDoArquivo(a: { chave: string; nome: string; url: string | null; outras?: string[]; links?: string[] }): string[] {
   const n = encodeURIComponent(a.nome);
-  return [a.url, `restauth/getbinlink/${k}/${n}`, `restauth/getbinlink/${k}`, `rest/getbinlink/${k}/${n}`, `restauth/getbin/${k}`, `restauth/getfile/${k}`].filter(
-    (c): c is string => !!c,
-  );
+  const pela = (chave: string) => {
+    const k = encodeURIComponent(chave);
+    return [`restauth/getbinlink/${k}/${n}`, `restauth/getbinlink/${k}`, `rest/getbinlink/${k}/${n}`, `restauth/getbin/${k}`, `restauth/getfile/${k}`];
+  };
+  const todos = [a.url, ...(a.links ?? []), ...pela(a.chave), ...(a.outras ?? []).flatMap(pela)].filter((c): c is string => !!c);
+  return [...new Set(todos)];
 }
 
 /** Um download que devolveu um LINK (texto ou JSON) em vez do arquivo. */
