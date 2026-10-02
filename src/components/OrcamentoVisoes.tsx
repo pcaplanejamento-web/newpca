@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import {
   aplicarVisao,
-  DIMENSOES_ORCAMENTO,
-  type DimensaoOrcamento,
+  DIMENSOES_VISAO,
+  type DimensaoVisao,
   type FiltrosVisao,
   type LinhaOrcamentoVisao,
   opcoesDaDimensao,
@@ -16,18 +16,20 @@ import {
 import { FerramentasAba } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import { IconPlus, IconTrash } from "./icons";
+import { Modal } from "./Modal";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 
 type Linha = LinhaOrcamentoVisao & { valorInicial: number };
 
 /**
  * VISÕES SALVAS do orçamento (globais — o PCA escolhe a sua na Configuração): tabela padrão da Mesa com cada visão, o
- * resumo dos filtros e o Σ que ela pega DESTE orçamento; clicar numa linha abre o editor ao lado (nome + uma linha por
- * dimensão do CUBO, opções CONECTADAS + prévia do Σ). "Criar visão" fica na barra das abas (`FerramentasAba`). As
+ * resumo dos filtros e o Σ que ela pega DESTE orçamento; clicar numa linha abre o editor no BANNER padrão (`Modal`) (nome + uma linha por
+ * dimensão da visão — `DIMENSOES_VISAO`; unidade, ações e órgão são dos Vínculos —, opções CONECTADAS + prévia do Σ). "Criar visão" fica na barra das abas (`FerramentasAba`). As
  * visões vêm do servidor; salvar/excluir recarrega a página.
  */
 export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[]; visoes: VisaoOrcamento[]; podeEditar: boolean }) {
@@ -49,9 +51,9 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
   const naVisao = useMemo(() => aplicarVisao(itens, filtros), [itens, filtros]);
   const somaVisao = naVisao.reduce((s, i) => s + i.valorInicial, 0);
   const opcoes = useMemo(() => {
-    const m = new Map<DimensaoOrcamento, { valor: string; contagem: number }[]>();
+    const m = new Map<DimensaoVisao, { valor: string; contagem: number }[]>();
     if (!editando) return m;
-    for (const d of DIMENSOES_ORCAMENTO) m.set(d.key, opcoesDaDimensao(itens, d.key, filtros).map((o) => ({ valor: o.valor, contagem: o.linhas })));
+    for (const d of DIMENSOES_VISAO) m.set(d.key, opcoesDaDimensao(itens, d.key, filtros).map((o) => ({ valor: o.valor, contagem: o.linhas })));
     return m;
   }, [itens, filtros, editando]);
 
@@ -161,56 +163,61 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
           </Button>
         </FerramentasAba>
       )}
-      <div className={editando ? "grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-[minmax(0,1fr)_minmax(0,400px)]" : ""}>
-        <DataTable
-          columns={colunas}
-          rows={visoes}
-          getKey={(v) => v.id}
-          scrollInterno
-          density="compact"
-          minWidth={720}
-          onRowClick={(v) => abrir(v)}
-          activeKey={editando !== "nova" && editando ? editando.id : null}
-          vazio={podeEditar ? "Nenhuma visão salva ainda. Use “Criar visão”." : "Nenhuma visão salva ainda."}
-          resumo={(ls) => `${num(ls.length)} ${ls.length === 1 ? "visão" : "visões"} · Dotação do orçamento ${brl(total)}`}
-        />
-        {editando && (
-          // No desktop o editor tem a ALTURA da tabela ao lado (até o fim do display — o conteúdo absoluto não estica a
-          // linha do grid): título/nome e ações fixos, as dimensões rolam por dentro. No celular, fluxo normal.
-          <section className="relative rounded-card border border-border bg-surface">
-            <div className="flex flex-col gap-3 p-[var(--pad-card)] lg:absolute lg:inset-0">
-              <h2 className="text-sm font-bold text-text">{editando === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : "Visão"}</h2>
-              <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: PCA" maxLength={80} disabled={!podeEditar} />
-              <div className="space-y-2 lg:-mx-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1">
-                {DIMENSOES_ORCAMENTO.map((d) => (
-                  <SeletorMultiplo
-                    key={d.key}
-                    rotulo={d.rotulo}
-                    opcoes={opcoes.get(d.key) ?? []}
-                    selecionados={filtros[d.key] ?? []}
-                    disabled={!podeEditar}
-                    onChange={(vals) => setFiltros((f) => ({ ...f, [d.key]: vals.length ? vals : undefined }))}
-                  />
-                ))}
-              </div>
-              <p className="rounded-control bg-surface-2 px-3 py-2 text-sm text-text-2">
-                Na visão: <b className="tabular-nums">{brl(somaVisao)}</b> de <span className="tabular-nums">{brl(total)}</span> · {num(naVisao.length)}{" "}
-                {naVisao.length === 1 ? "lançamento" : "lançamentos"}
-              </p>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setEditando(null)} disabled={salvando}>
-                  {podeEditar ? "Cancelar" : "Fechar"}
-                </Button>
-                {podeEditar && (
-                  <Button size="sm" onClick={salvar} loading={salvando} disabled={!nome.trim()}>
-                    {editando === "nova" ? "Criar visão" : "Atualizar visão"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
-      </div>
+      <DataTable
+        columns={colunas}
+        rows={visoes}
+        getKey={(v) => v.id}
+        scrollInterno
+        density="compact"
+        minWidth={720}
+        onRowClick={(v) => abrir(v)}
+        activeKey={editando !== "nova" && editando ? editando.id : null}
+        vazio={podeEditar ? "Nenhuma visão salva ainda. Use “Criar visão”." : "Nenhuma visão salva ainda."}
+        resumo={(ls) => `${num(ls.length)} ${ls.length === 1 ? "visão" : "visões"} · Dotação do orçamento ${brl(total)}`}
+      />
+      {/* O editor é o BANNER padrão do sistema (Modal): nada estoura a página; cada dimensão abre a lista num painel
+          flutuante (`SeletorMultiplo suspenso`). */}
+      <Modal
+        open={editando != null}
+        onClose={() => setEditando(null)}
+        bloqueado={salvando}
+        size="lg"
+        titulo={editando === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : "Visão"}
+        rodape={
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="mr-auto text-sm text-text-2">
+              Na visão: <b className="tabular-nums">{brl(somaVisao)}</b> de <span className="tabular-nums">{brl(total)}</span> ·{" "}
+              {num(naVisao.length)} {naVisao.length === 1 ? "lançamento" : "lançamentos"}
+            </p>
+            <Button size="sm" variant="ghost" onClick={() => setEditando(null)} disabled={salvando}>
+              {podeEditar ? "Cancelar" : "Fechar"}
+            </Button>
+            {podeEditar && (
+              <Button size="sm" onClick={salvar} loading={salvando} disabled={!nome.trim()}>
+                {editando === "nova" ? "Criar visão" : "Atualizar visão"}
+              </Button>
+            )}
+          </div>
+        }
+      >
+        <div className="space-y-[var(--gap-block)]">
+          <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: PCA" maxLength={80} disabled={!podeEditar} />
+          <Callout kind="info">Unidades, ações e órgãos são definidos nos Vínculos — a visão filtra só o restante do orçamento.</Callout>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {DIMENSOES_VISAO.map((d) => (
+              <SeletorMultiplo
+                key={d.key}
+                suspenso
+                rotulo={d.rotulo}
+                opcoes={opcoes.get(d.key) ?? []}
+                selecionados={filtros[d.key] ?? []}
+                disabled={!podeEditar || salvando}
+                onChange={(vals) => setFiltros((f) => ({ ...f, [d.key]: vals.length ? vals : undefined }))}
+              />
+            ))}
+          </div>
+        </div>
+      </Modal>
       {confirmacao}
       {aviso && (
         <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Pronto" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 4000 : undefined}>

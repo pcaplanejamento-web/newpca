@@ -1016,7 +1016,8 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
       .from(orcamentoItens)
       .where(eq(orcamentoItens.orcamentoId, orc.id));
     bruto = itens.reduce((s, i) => s + Number(i.valor ?? 0), 0);
-    // Com a Unidade/Órgão do CADASTRO: a visão pode filtrar por eles (o órgão = a soma das unidades vinculadas).
+    // A visão filtra só o que NÃO é do vínculo (função, programa, elemento, código, ficha, fonte); a unidade de cada
+    // lançamento vem SÓ do vínculo pela ação (`unidadeDoLancamento`) — os dois nunca disputam o mesmo lançamento.
     const f = aplicarVisao(comVinculos(itens, vincs, { orgaos: orgaoLista, unidades: reps }), visao?.filtros);
     filtrado = f.reduce((s, i) => s + Number(i.valor ?? 0), 0);
     const mapa = mapaVinculos(vincs);

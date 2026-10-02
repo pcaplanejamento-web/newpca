@@ -6,9 +6,11 @@ import { norm } from "./parse-dfd-comum.ts";
  * vale QUALQUER valor marcado (OU); entre dimensões, TODAS têm de valer (E). As opções de cada
  * dimensão são CONECTADAS (facetas): vêm das linhas que passam nas DEMAIS dimensões.
  *
- * As dimensões são as colunas de texto que o CUBO importado traz hoje + as duas do CADASTRO (Órgão/Unidade pelos
- * Vínculos — os lançamentos as ganham por `comVinculos` onde são lidos). Uma coluna nova do CUBO entra acrescentando
- * uma entrada em `DIMENSOES_ORCAMENTO` (a UI e o filtro seguem o catálogo).
+ * `DIMENSOES_ORCAMENTO` = TODAS as colunas de texto do CUBO + as duas do CADASTRO (Órgão/Unidade pelos Vínculos — os
+ * lançamentos as ganham por `comVinculos`): o catálogo da tabela cruzada e dos lançamentos. Divisão de papéis (UMA régua,
+ * sem conflito): a UNIDADE e as AÇÕES (e o órgão, que é a soma das unidades) são decididas SÓ pelos VÍNCULOS
+ * (`DIMENSOES_DO_VINCULO`); a visão filtra SÓ o restante (`DIMENSOES_VISAO`: função, programa, elemento, código, ficha,
+ * fonte). Uma visão nunca tira um lançamento de uma unidade nem de uma ação — isso é do vínculo.
  */
 
 export type DimensaoOrcamento =
@@ -39,15 +41,26 @@ export const DIMENSOES_ORCAMENTO: { key: DimensaoOrcamento; rotulo: string; rotu
   { key: "fonte", rotulo: "Fonte de recurso", rotuloCurto: "fonte" },
 ];
 
-/** `{dimensão: valores[]}` — só as dimensões com seleção. */
-export type FiltrosVisao = Partial<Record<DimensaoOrcamento, string[]>>;
+/** O que o VÍNCULO decide (unidade + ações; o órgão é a soma das unidades) — fora das visões. */
+export const DIMENSOES_DO_VINCULO = ["orgaoSistema", "unidadeSistema", "orgao", "unidade", "acao"] as const;
+export type DimensaoVisao = Exclude<DimensaoOrcamento, (typeof DIMENSOES_DO_VINCULO)[number]>;
+const DO_VINCULO = new Set<string>(DIMENSOES_DO_VINCULO);
+/** As dimensões que uma VISÃO filtra (o restante do CUBO). */
+export const DIMENSOES_VISAO = DIMENSOES_ORCAMENTO.filter((d) => !DO_VINCULO.has(d.key)) as {
+  key: DimensaoVisao;
+  rotulo: string;
+  rotuloCurto: string;
+}[];
+
+/** `{dimensão: valores[]}` — só as dimensões com seleção (só as da visão). */
+export type FiltrosVisao = Partial<Record<DimensaoVisao, string[]>>;
 
 export type VisaoOrcamento = { id: number; nome: string; filtros: FiltrosVisao; ordem: number };
 
 /** Linha mínima do orçamento que a visão filtra. */
 export type LinhaOrcamentoVisao = Partial<Record<DimensaoOrcamento, string | null>>;
 
-const CHAVES = new Set<string>(DIMENSOES_ORCAMENTO.map((d) => d.key));
+const CHAVES = new Set<string>(DIMENSOES_VISAO.map((d) => d.key));
 
 /** Valor exibível de uma dimensão (vazio → "—"). */
 export function valorDimensao(l: LinhaOrcamentoVisao, d: DimensaoOrcamento): string {
@@ -55,7 +68,7 @@ export function valorDimensao(l: LinhaOrcamentoVisao, d: DimensaoOrcamento): str
   return v || "—";
 }
 
-/** Normaliza qualquer JSON em `FiltrosVisao` (chaves desconhecidas/valores inválidos fora; sem duplicar). */
+/** Normaliza qualquer JSON em `FiltrosVisao` (chaves desconhecidas, as do VÍNCULO e valores inválidos fora; sem duplicar). */
 export function coerceFiltros(v: unknown): FiltrosVisao {
   let o: unknown = v;
   if (typeof v === "string") {
@@ -70,23 +83,23 @@ export function coerceFiltros(v: unknown): FiltrosVisao {
   for (const [k, lista] of Object.entries(o as Record<string, unknown>)) {
     if (!CHAVES.has(k) || !Array.isArray(lista)) continue;
     const vals = [...new Set(lista.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim()))];
-    if (vals.length) out[k as DimensaoOrcamento] = vals;
+    if (vals.length) out[k as DimensaoVisao] = vals;
   }
   return out;
 }
 
-type Conjuntos = Map<DimensaoOrcamento, Set<string>>;
+type Conjuntos = Map<DimensaoVisao, Set<string>>;
 
 function conjuntos(f: FiltrosVisao): Conjuntos {
   const m: Conjuntos = new Map();
-  for (const d of DIMENSOES_ORCAMENTO) {
+  for (const d of DIMENSOES_VISAO) {
     const vals = f[d.key];
     if (vals?.length) m.set(d.key, new Set(vals.map(norm)));
   }
   return m;
 }
 
-function passa(l: LinhaOrcamentoVisao, c: Conjuntos, ignorar?: DimensaoOrcamento): boolean {
+function passa(l: LinhaOrcamentoVisao, c: Conjuntos, ignorar?: DimensaoVisao): boolean {
   for (const [d, set] of c) {
     if (d === ignorar) continue;
     if (!set.has(norm(valorDimensao(l, d)))) return false;
@@ -104,7 +117,7 @@ export function aplicarVisao<T extends LinhaOrcamentoVisao>(linhas: T[], filtros
 export type OpcaoDimensao = { valor: string; linhas: number };
 
 /** Opções da dimensão CONECTADAS: os valores das linhas que passam nas DEMAIS dimensões (ordem alfabética). */
-export function opcoesDaDimensao(linhas: LinhaOrcamentoVisao[], d: DimensaoOrcamento, filtros: FiltrosVisao): OpcaoDimensao[] {
+export function opcoesDaDimensao(linhas: LinhaOrcamentoVisao[], d: DimensaoVisao, filtros: FiltrosVisao): OpcaoDimensao[] {
   const c = conjuntos(filtros);
   const cont = new Map<string, OpcaoDimensao>();
   for (const l of linhas) {
@@ -120,7 +133,7 @@ export function opcoesDaDimensao(linhas: LinhaOrcamentoVisao[], d: DimensaoOrcam
 
 /** "15 elemento de despesa · 248 unidade" — ou "Todos os lançamentos" sem filtro. */
 export function resumoVisao(filtros: FiltrosVisao | null | undefined): string {
-  const partes = DIMENSOES_ORCAMENTO.flatMap((d) => {
+  const partes = DIMENSOES_VISAO.flatMap((d) => {
     const n = filtros?.[d.key]?.length ?? 0;
     return n > 0 ? [`${n} ${d.rotuloCurto}`] : [];
   });

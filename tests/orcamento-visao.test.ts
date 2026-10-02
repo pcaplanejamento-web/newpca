@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { aplicarVisao, coerceFiltros, opcoesDaDimensao, resumoVisao } from "../src/lib/orcamento-visao.ts";
+import { aplicarVisao, coerceFiltros, DIMENSOES_DO_VINCULO, DIMENSOES_VISAO, opcoesDaDimensao, resumoVisao } from "../src/lib/orcamento-visao.ts";
 import { comparativoPorUnidade, faixaComprometimento, linhaAcima, origemDaLinha, totaisComparativo } from "../src/lib/orcamento-comparativo.ts";
 
 const L = [
@@ -12,7 +12,7 @@ const L = [
 
 describe("orcamento-visao", () => {
   it("coerceFiltros descarta chaves/valores inválidos e duplicados", () => {
-    assert.deepEqual(coerceFiltros('{"orgao":["FME","FME"," "],"xx":["a"],"unidade":"x"}'), { orgao: ["FME"] });
+    assert.deepEqual(coerceFiltros('{"fonte":["100","100"," "],"xx":["a"],"ficha":"x"}'), { fonte: ["100"] });
     assert.deepEqual(coerceFiltros("lixo"), {});
   });
   it("dimensões do NOVO CUBO (Função/Programa/Ação/Ficha/Fonte): aceitas no filtro e filtram; ausentes = \"—\"", () => {
@@ -23,22 +23,29 @@ describe("orcamento-visao", () => {
       { orgao: "FME" }, // CUBO antigo: sem as colunas novas
     ];
     assert.equal(aplicarVisao(novo, { fonte: ["100 - recursos ordinarios"] }).length, 1);
-    assert.equal(aplicarVisao(novo, { acao: ["2191 - MANTER"] }).length, 2);
     assert.equal(aplicarVisao(novo, { fonte: ["—"] }).length, 1);
-    assert.match(resumoVisao({ fonte: ["x", "y"], acao: ["z"] }), /1 ação · 2 fonte/);
+    assert.match(resumoVisao({ fonte: ["x", "y"], ficha: ["z"] }), /1 ficha · 2 fonte/);
   });
   it("OU dentro da dimensão, E entre dimensões; sem filtro = tudo", () => {
     assert.equal(aplicarVisao(L, {}).length, 4);
     assert.equal(aplicarVisao(L, { nomeElemento: ["MATERIAL DE CONSUMO", "OBRAS"] }).length, 3);
-    assert.equal(aplicarVisao(L, { nomeElemento: ["material de consumo"], orgao: ["FMS"] }).length, 1);
-    assert.equal(aplicarVisao(L, { unidade: ["—"] }).length, 1);
+    assert.equal(aplicarVisao(L, { nomeElemento: ["material de consumo"], codigoElemento: ["339030"] }).length, 2);
+    assert.equal(aplicarVisao(L, { nomeElemento: ["obras", "vencimentos"], codigoElemento: ["449051"] }).length, 1);
   });
   it("opções conectadas ignoram a própria dimensão", () => {
-    const op = opcoesDaDimensao(L, "nomeElemento", { orgao: ["FME"], nomeElemento: ["VENCIMENTOS"] });
+    const op = opcoesDaDimensao(L, "nomeElemento", { codigoElemento: ["339030", "319011"], nomeElemento: ["VENCIMENTOS"] });
     assert.deepEqual(op.map((o) => o.valor), ["MATERIAL DE CONSUMO", "VENCIMENTOS"]);
   });
   it("resumo", () => {
-    assert.equal(resumoVisao({ nomeElemento: ["a", "b"], orgao: ["x"] }), "1 órgão · 2 elemento de despesa");
+    assert.equal(resumoVisao({ nomeElemento: ["a", "b"], ficha: ["x"] }), "2 elemento de despesa · 1 ficha");
+  });
+  it("unidade, ações e órgão são do VÍNCULO: a visão nunca os filtra (nem gravados antes)", () => {
+    const antigo = coerceFiltros({ unidade: ["SEMED"], acao: ["2191"], orgao: ["FME"], orgaoSistema: ["X"], unidadeSistema: ["Y"], fonte: ["100"] });
+    assert.deepEqual(antigo, { fonte: ["100"] });
+    const vazio = coerceFiltros({ unidade: ["SEMED"] });
+    assert.equal(aplicarVisao(L, vazio).length, 4, "sem filtro da visão, todos os lançamentos seguem para os vínculos");
+    assert.ok(DIMENSOES_VISAO.every((d) => !(DIMENSOES_DO_VINCULO as readonly string[]).includes(d.key)));
+    assert.deepEqual(DIMENSOES_VISAO.map((d) => d.key), ["funcao", "programa", "nomeElemento", "codigoElemento", "ficha", "fonte"]);
     assert.equal(resumoVisao({}), "Todos os lançamentos");
   });
 });

@@ -1968,8 +1968,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   qualquer que seja a situação).
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da TELA DO ORÇAMENTO `/painel/orcamento/[id]` →
   `OrcamentoVisoes`; as visões são GLOBAIS — a prévia do Σ usa os lançamentos do orçamento aberto): nome + por dimensão
-  (`DIMENSOES_ORCAMENTO`: Órgão, Unidade, Função, Programa, Ação, Elemento, Código, Ficha, Fonte) os valores escolhidos (`SeletorMultiplo`: "Todos" | "N
-  selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts` puro). Uma coluna
+  (**`DIMENSOES_VISAO`**: Função, Programa, Elemento, Código, Ficha, Fonte — **unidade, ações e órgão NUNCA entram na
+  visão: são dos VÍNCULOS** (`DIMENSOES_DO_VINCULO`; `coerceFiltros` e o Zod as descartam; a migração `0082` as tirou das
+  visões gravadas) — visão e vínculo nunca disputam o mesmo lançamento) os valores escolhidos (`SeletorMultiplo suspenso`:
+  "Todos" | "N selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts`
+  puro); `DIMENSOES_ORCAMENTO` (todas) segue como o catálogo da tabela cruzada e dos lançamentos. Uma coluna
   nova do CUBO entra acrescentando a dimensão ao catálogo (e ao parser). Rotas `POST /api/orcamento/visoes` + `PATCH/DELETE
   /api/orcamento/visoes/[id]` (a lista vem do servidor) (auditoria `orcamento_visao`).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
@@ -2218,8 +2221,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Vínculos** (`OrcamentoVinculosAba` → `OrcamentoVinculos scrollInterno`): os textos
   DISTINTOS deste orçamento (o vínculo segue GLOBAL); na barra: busca + "Vincular N sugestões". **Visões**
   (`OrcamentoVisoes`): tabela das visões (filtros + lançamentos e Σ que cada uma pega DESTE orçamento) → clicar abre o
-  editor ao lado (no desktop, da ALTURA da tabela — até o fim do display: nome e ações fixos, as dimensões rolam por dentro;
-  cada dimensão é um `SeletorMultiplo` na altura padrão dos controles); na barra: "Criar visão". As visões vêm do SERVIDOR (`listarVisoesOrcamento`; salvar/excluir →
+  editor no BANNER padrão (`Modal` lg: nome, o aviso dos Vínculos, as dimensões em grade — cada uma um `SeletorMultiplo
+  suspenso` — e, no rodapé, a prévia do Σ + Cancelar/Salvar; nada estoura a página); na barra: "Criar visão". As visões vêm do SERVIDOR (`listarVisoesOrcamento`; salvar/excluir →
   `router.refresh`) — o antigo `GET /api/orcamento/visoes` foi removido. Erros em `AvisoFlutuante` (não empurram a
   tabela). `getOrcamentoItens(id)` é sempre de UM orçamento. Ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) + nav em
   `AppShell`.

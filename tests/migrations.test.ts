@@ -1022,6 +1022,22 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual(resto(), [962], "o vínculo da unidade excluída saiu (não ficou NULL)");
   });
 
+  it("0082 visões sem as dimensões do vínculo: unidade/ação/órgão saem dos filtros, o resto fica", () => {
+    const d = new DatabaseSync(":memory:");
+    const i82 = arquivos.findIndex((f) => f.startsWith("0082"));
+    assert.ok(i82 > 0, "migração 0082 ausente");
+    for (const arq of arquivos.slice(0, i82)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orcamento_visoes (id, nome, filtros) VALUES
+      (1, 'Mista', '{"unidade":["SEMED"],"acao":["2191"],"fonte":["100"],"orgaoSistema":["FME"]}'),
+      (2, 'Só fonte', '{"fonte":["150"]}'),
+      (3, 'Quebrada', 'lixo');`);
+    d.exec(readFileSync(join(DIR, arquivos[i82]), "utf8"));
+    const f = (id: number) => (d.prepare("SELECT filtros FROM orcamento_visoes WHERE id = ?").get(id) as { filtros: string }).filtros;
+    assert.deepEqual(JSON.parse(f(1)), { fonte: ["100"] });
+    assert.deepEqual(JSON.parse(f(2)), { fonte: ["150"] });
+    assert.equal(f(3), "{}");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));
