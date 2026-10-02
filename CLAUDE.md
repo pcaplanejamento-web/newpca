@@ -425,7 +425,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`, ↑/↓); **clicar
   numa linha** (`onRowClick`) navega para `/painel/orgaos/[id]` = as Unidades daquele órgão (`ReparticoesAdmin`
   escopado). Nav = um item **"Órgãos e Unidades"**. Rotas
-  `/api/admin/orgaos*` (CRUD + `/ordem`). Excluir um órgão **não apaga** unidades (FK `set null`). Loader
+  `/api/admin/orgaos*` (CRUD + `/ordem`). **Toda unidade pertence a um órgão** (migração `0078` apagou as sem órgão, menos a "Geral"; `reparticaoSchema.orgaoId` obrigatório e conferido nas rotas — 422) e **excluir um órgão exclui as unidades dele** no mesmo lote (o órgão com DFD/protocolo, direto ou pelas unidades, segue só ocultável — 409). Loader
   `src/lib/orgaos.ts` (`listarOrgaos`). A migração `0022` é **aditiva** (só `ADD COLUMN`/`CREATE`) e **preserva o
   legado**: semeia a "Prefeitura Municipal de Rio Verde" e vincula as unidades atuais a ela (`orgao_id=1`).
 - **Assinatura ÚNICA por órgão (migração `0023`):** o órgão define se a assinatura (responsáveis por DFDs) é

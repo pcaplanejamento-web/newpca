@@ -967,6 +967,22 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     for (const i of ["pca_dfds_protocolo_idx", "pca_itens_dfd_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
   });
 
+  it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
+    const d = new DatabaseSync(":memory:");
+    const i78 = arquivos.findIndex((f) => f.startsWith("0078"));
+    assert.ok(i78 > 0, "migração 0078 ausente");
+    for (const arq of arquivos.slice(0, i78)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (900, 'Órgão X', 'OX');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (901, 'COM', 'Com órgão', 900), (902, 'SEM', 'Sem órgão', NULL);
+      INSERT INTO dfds (id, numero, reparticao_id) VALUES (9001, 'D9001', 902);`);
+    d.exec(readFileSync(join(DIR, arquivos[i78]), "utf8"));
+    const ids = (d.prepare("SELECT id, codigo FROM reparticoes ORDER BY id").all() as { id: number; codigo: string }[]).map((r) => r.codigo);
+    assert.ok(ids.includes("COM"));
+    assert.ok(!ids.includes("SEM"), "a unidade sem órgão sai");
+    assert.ok(ids.some((c) => c.toUpperCase() === "GERAL"), "a Geral fica");
+    assert.equal((d.prepare("SELECT reparticao_id AS r FROM dfds WHERE id = 9001").get() as { r: number | null }).r, null);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { orgaos } from "@/db/schema";
+import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -45,8 +45,17 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   // Ponto 8: não exclui órgão com DFD/protocolo vinculado (direto ou via unidades) — só OCULTA.
   if (await orgaoTemVinculo(id))
     return erro("Este órgão tem DFD/protocolo vinculado — não pode ser excluído. Oculte-o (deixa de aparecer para novos documentos, sem perder o histórico).", 409);
-  // Sem vínculo: as unidades ficam sem órgão (FK ON DELETE SET NULL) — nada é apagado.
-  await getDb().delete(orgaos).where(eq(orgaos.id, id));
-  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "orgao", entidadeId: id, resumo: `Órgão #${id} excluído` });
+  // Toda unidade pertence a um órgão: excluir o órgão exclui as unidades dele (no MESMO lote). Sem vínculo de DFD/protocolo
+  // (conferido acima, também pelas unidades), só cai o acesso grupo ↔ unidade (cascade).
+  const db = getDb();
+  const unidades = await db.select({ id: reparticoes.id, codigo: reparticoes.codigo }).from(reparticoes).where(eq(reparticoes.orgaoId, id));
+  await db.batch([db.delete(reparticoes).where(eq(reparticoes.orgaoId, id)), db.delete(orgaos).where(eq(orgaos.id, id))]);
+  await registrarAuditoria({
+    usuario: guard.u,
+    acao: "excluir",
+    entidade: "orgao",
+    entidadeId: id,
+    resumo: `Órgão #${id} excluído${unidades.length ? ` com ${unidades.length} unidade(s): ${unidades.map((u) => u.codigo).join(", ")}` : ""}`,
+  });
   return ok();
 }

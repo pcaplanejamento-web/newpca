@@ -26,6 +26,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Toda unidade pertence a um órgão — entregue
+✅ A migração `0078` apagou as unidades sem órgão (menos a "Geral"; os DFDs/protocolos delas ficaram sem unidade, por
+escolha do usuário); o órgão é obrigatório no cadastro da unidade e excluir um órgão exclui as unidades dele no mesmo lote.
+
 ### PCA × Orçamento: a unidade é o micro, o órgão é a soma — entregue
 ✅ O comparativo do PCA separa unidades de MESMA sigla (coluna Órgão + selo "Oculta"), ganha "Ver por Unidade | Órgão"
 (o órgão = Σ das unidades, com a origem) e avisa a sigla repartida (DFDs numa unidade, CUBO vinculado a outra), com o

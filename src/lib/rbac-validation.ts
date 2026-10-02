@@ -89,7 +89,8 @@ export const reparticaoSchema = z.object({
   // protocolo), padrão do Setor Requisitante do DFD e o órgão dono da unidade.
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
   setorRequisitante: z.string().trim().max(200).optional().nullable(),
-  orgaoId: z.number().int().positive().optional().nullable(),
+  // Toda unidade pertence a um ÓRGÃO (obrigatório).
+  orgaoId: z.number({ error: "Escolha o órgão da unidade." }).int().positive(),
   oculto: z.boolean().default(false),
   responsaveis: responsaveisSchema,
 });

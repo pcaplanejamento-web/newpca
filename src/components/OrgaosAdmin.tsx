@@ -197,7 +197,7 @@ export function OrgaosAdmin() {
   }
 
   async function excluir(o: Orgao) {
-    if (!confirm(`Excluir o órgão "${o.nome}"? As unidades ficam sem vínculo (nada é apagado).`)) return;
+    if (!confirm(`Excluir o órgão "${o.nome}"? As unidades deste órgão também serão excluídas.`)) return;
     const resp = await fetch(`/api/admin/orgaos/${o.id}`, { method: "DELETE" });
     if (!resp.ok) {
       const j = (await resp.json().catch(() => ({}))) as { error?: string };

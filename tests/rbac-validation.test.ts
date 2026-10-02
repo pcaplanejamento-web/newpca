@@ -94,7 +94,10 @@ describe("sigla GERAL reservada à unidade virtual", () => {
     assert.match(u.error?.issues[0]?.message ?? "", /reservada/);
     const o = orgaoSchema.safeParse({ sigla: "Geral", nome: "Qualquer" });
     assert.equal(o.success, false);
-    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação" }).success, true);
+    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação", orgaoId: 1 }).success, true);
+    // Toda unidade pertence a um órgão.
+    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação" }).success, false);
+    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação", orgaoId: null }).success, false);
     assert.equal(orgaoSchema.safeParse({ sigla: "PMRV", nome: "Prefeitura" }).success, true);
   });
 });
