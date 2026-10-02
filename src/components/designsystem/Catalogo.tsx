@@ -74,6 +74,7 @@ import {
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
 import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
+import { BotaoExportar } from "@/components/ExportarTabelas";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
@@ -1484,6 +1485,12 @@ function AtualizarEDadosCompletosDemo() {
           }}
         />
         <span className="text-[12px] text-faint">BotaoAtualizar com andamento — na barra das Mesas: recarrega e reconfere todos os protocolos, DFDs e itens (o anel enche com o andamento).</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <BotaoExportar nome="a tabela de demonstração" onExportar={() => {}} />
+        <span className="text-[12px] text-faint">
+          BotaoExportar — no rodapé de TODA tabela (DataTable e tabela cruzada): XLSX e PDF das linhas filtradas, com as colunas à vista.
+        </span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />
@@ -2913,7 +2920,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Atualizar — o botão circular padrão (BotaoAtualizar + useGiro) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
+      <Secao titulo="Atualizar — o botão circular padrão (BotaoAtualizar + useGiro) · Exportar (BotaoExportar) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
         <AtualizarEDadosCompletosDemo />
       </Secao>
 
@@ -4015,7 +4022,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="OrcamentoVinculos (Órgão/Unidade do CUBO → órgão/unidade cadastrado; sugestão automática)">
+      <Secao titulo="OrcamentoVinculos (Unidade do CUBO → unidade cadastrada + as AÇÕES que entram; sugestão automática)">
         <OrcamentoVinculos
           podeEditar
           onVincular={() => {}}
@@ -4027,9 +4034,31 @@ export function Catalogo() {
             ],
           }}
           linhas={[
-            { tipo: "orgao", chave: "PREFEITURA", texto: "PREFEITURA MUNICIPAL DE RIO VERDE", contexto: "", lancamentos: 120, valorInicial: 98000000, alvoId: 1, sugestaoId: null },
-            { tipo: "unidade", chave: "2 - SME", texto: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO", contexto: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE", lancamentos: 48, valorInicial: 25000000, alvoId: null, sugestaoId: 15 },
-            { tipo: "unidade", chave: "26 - FMACL", texto: "26 - FMACL", contexto: "FD. MUN. DE ASS. SOCIAL", lancamentos: 9, valorInicial: 1200000, alvoId: null, sugestaoId: null },
+            {
+              chave: "2 - SMS",
+              texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE",
+              contexto: "FUNDO MUNICIPAL DE SAUDE",
+              lancamentos: 60,
+              valorInicial: 40000000,
+              alvoId: 16,
+              sugestaoId: null,
+              acoes: [
+                { chave: "2001 ATENCAO BASICA", texto: "2001 ATENÇÃO BÁSICA", lancamentos: 40, valorInicial: 30000000 },
+                { chave: "2002 VIGILANCIA", texto: "2002 VIGILÂNCIA", lancamentos: 20, valorInicial: 10000000 },
+              ],
+              acoesFora: ["2002 VIGILANCIA"],
+            },
+            {
+              chave: "2 - SME",
+              texto: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO",
+              contexto: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE",
+              lancamentos: 48,
+              valorInicial: 25000000,
+              alvoId: null,
+              sugestaoId: 15,
+              acoes: [{ chave: "2010 ENSINO", texto: "2010 ENSINO", lancamentos: 48, valorInicial: 25000000 }],
+              acoesFora: [],
+            },
           ]}
         />
       </Secao>

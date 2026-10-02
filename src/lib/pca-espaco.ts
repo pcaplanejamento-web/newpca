@@ -21,7 +21,7 @@ import { getDb } from "./db";
 import { getDfd } from "./dfd";
 import { normUnidadeMedida } from "./normalize";
 import { aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento } from "./orcamento-visao";
-import { alvoDoTexto, mapaVinculos } from "./orcamento-vinculo";
+import { comVinculos, mapaVinculos, unidadeDoLancamento } from "./orcamento-vinculo";
 import { listarVinculosOrcamento } from "./orcamento";
 import { tipoCurtoDfd } from "./parse-dfd-comum";
 import {
@@ -1016,7 +1016,8 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
       .from(orcamentoItens)
       .where(eq(orcamentoItens.orcamentoId, orc.id));
     bruto = itens.reduce((s, i) => s + Number(i.valor ?? 0), 0);
-    const f = aplicarVisao(itens, visao?.filtros);
+    // Com a Unidade/Órgão do CADASTRO: a visão pode filtrar por eles (o órgão = a soma das unidades vinculadas).
+    const f = aplicarVisao(comVinculos(itens, vincs, { orgaos: orgaoLista, unidades: reps }), visao?.filtros);
     filtrado = f.reduce((s, i) => s + Number(i.valor ?? 0), 0);
     const mapa = mapaVinculos(vincs);
     linhas = f.map((i) => ({
@@ -1025,7 +1026,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
       unidade: i.unidade,
       nomeElemento: i.nomeElemento,
       codigoElemento: i.codigoElemento,
-      unidadeId: alvoDoTexto(mapa, "unidade", i.unidade),
+      unidadeId: unidadeDoLancamento(mapa, i.unidade, i.acao),
       valor: Number(i.valor ?? 0),
     }));
   }

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { dataBR, num } from "@/lib/format";
-import { exportarTarefasXlsx, linhasPlanilhaTarefas } from "@/lib/exportar-tarefas";
 import { lerAjusteFundo, lerGradiente } from "@/lib/imagem-fundo-core";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { DadosQuadro } from "@/lib/tarefas-dados";
@@ -49,7 +48,7 @@ import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
 import type { EdicoesDaTabela } from "./DataTable";
 import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
-import { IconArquivar, IconCalendar, IconLock, IconChevronLeft, IconDashboard, IconDownload, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
+import { IconArquivar, IconCalendar, IconLock, IconChevronLeft, IconDashboard, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
 import { CopiarMoverLista, ExcluirLista, LimiteLista, ListasDoMes, MenuLista, type ModoLista } from "./MenuLista";
 import { FundoQuadro } from "./FundoQuadro";
@@ -238,9 +237,6 @@ export function QuadroTarefas({
     if (falhas.length) toast.warning(`${num(alterados)} alterada(s); não foi possível: ${falhas.slice(0, 4).join("; ")}${falhas.length > 4 ? "…" : ""}`, 8000);
     else toast.success(`${num(alterados)} tarefa(s) alterada(s).`);
   };
-
-  const exportar = () =>
-    exportarTarefasXlsx(`Tarefas - ${quadro.nome}`, linhasPlanilhaTarefas(naLista, { listas, etiquetas, pessoas, hoje, equipes, campos })).catch(() => toast.error("Não foi possível exportar."));
 
   const mover = async (id: number, listaId: number, indice: number) => {
     const antes = tarefas;
@@ -642,11 +638,6 @@ export function QuadroTarefas({
                   { valor: "arquivadas", rotulo: `Arquivadas (${num(nArquivadas)})` },
                 ]}
               />
-              {pode.exportar && (
-                <Button size="sm" variant="secondary" className="w-11 px-0 lg:w-auto lg:px-3" disabled={!naLista.length} icon={<IconDownload className="h-4 w-4" />} onClick={exportar} aria-label="Exportar as tarefas em .xlsx">
-                  <span className="max-lg:hidden">XLSX</span>
-                </Button>
-              )}
               {mostrar === "ativas" && podeManipular && (
                 <Button size="sm" variant="accent" className="w-11 px-0 lg:w-auto lg:px-3" disabled={semListas} icon={<IconPlus className="h-4 w-4" />} aria-label="Adicionar tarefa" onClick={() => nova()}>
                   <span className="max-lg:hidden">Adicionar tarefa</span>
@@ -733,6 +724,7 @@ export function QuadroTarefas({
             ativa={aberto?.tipo === "editar" ? aberto.id : null}
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
             edicoes={edicoesLista}
+            nomeExportacao={`Tarefas - ${quadro.nome}`}
             selecao={podeManipular ? sel : undefined}
             onSelecao={podeManipular ? setSel : undefined}
             reservaInferior={RESERVA_PILULA + 12 + (alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0)}

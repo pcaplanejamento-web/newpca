@@ -852,6 +852,8 @@ export const orcamentoVinculos = sqliteTable(
     texto: text("texto").notNull(), // texto original do CUBO (exibição)
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }),
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "set null" }),
+    // As chaves das AÇÕES da unidade do CUBO que NÃO entram no vínculo (JSON; NULL = todas) — migração 0079.
+    acoesFora: text("acoes_fora"),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [uniqueIndex("orcamento_vinculos_tipo_chave_uq").on(t.tipo, t.chave)],

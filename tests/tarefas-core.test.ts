@@ -77,7 +77,6 @@ import {
   excluirPasta,
   quadrosDoConjunto,
 } from "../src/lib/tarefas-core.ts";
-import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
 import { blocosSchema, criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
 
 const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> = {}): TarefaResumo => ({
@@ -247,24 +246,6 @@ describe("calendário", () => {
     const m = tarefasPorPrazo([T(2, 1, 1, { prazo: "2026-09-10" }), T(1, 1, 2, { prazo: "2026-09-10" }), T(3, 1, 3)]);
     assert.deepEqual(m.get("2026-09-10")?.map((t) => t.id), [1, 2]);
     assert.equal(m.size, 1);
-  });
-});
-
-describe("exportar", () => {
-  it("linhasPlanilhaTarefas: cabeçalho + uma linha por tarefa, com nomes e rótulos", () => {
-    const l = linhasPlanilhaTarefas([T(5, 1, 1, { prazo: "2026-09-01", pessoas: [7], etiquetas: [3], checklist: { feitos: 1, total: 2 }, vinculos: [{ tipo: "dfd", id: 9, rotulo: "1209" }] })], {
-      listas: [{ id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false }],
-      etiquetas: [{ id: 3, nome: "Licitação", cor: "#000000" }],
-      pessoas: [{ id: 7, nome: "Ana Souza", apelido: "Ana", foto: null }],
-      hoje: "2026-09-25",
-    });
-    assert.equal(l.length, 2);
-    assert.deepEqual(l[1].slice(0, 6), ["#5", "Tarefa 5", "A fazer", "Média", "Atrasada", "01/09/2026"]);
-    assert.equal(l[1][8], "Ana");
-    assert.equal(l[1][10], "Licitação");
-    assert.equal(l[1][11], "1/2");
-    assert.equal(l[1][12], "DFD 1209");
-    assert.equal(l[1][13], "");
   });
 });
 

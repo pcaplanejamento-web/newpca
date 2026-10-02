@@ -44,6 +44,7 @@ export function TabelaTarefas({
   selecao,
   onSelecao,
   reservaInferior = 0,
+  nomeExportacao,
 }: {
   tarefas: TarefaResumo[];
   /** TODAS as listas (inclusive arquivadas — o nome de qualquer cartão). */
@@ -63,6 +64,8 @@ export function TabelaTarefas({
   onSelecao?: (s: Set<number>) => void;
   /** Altura reservada no fim do display (a barra de seleção fixa). */
   reservaInferior?: number;
+  /** O nome do arquivo do Exportar do rodapé (ex.: "Tarefas - Quadro X"). */
+  nomeExportacao?: string;
 }) {
   const colunas = useMemo<Column<TarefaResumo>[]>(() => {
     const lista = new Map(listas.map((l) => [l.id, l]));
@@ -298,6 +301,7 @@ export function TabelaTarefas({
       columns={colunas}
       rows={tarefas}
       getKey={(t) => t.id}
+      exportar={nomeExportacao ? { nome: nomeExportacao } : undefined}
       onRowClick={(t) => onAbrir(t.id)}
       activeKey={ativa}
       scrollInterno

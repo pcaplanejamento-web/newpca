@@ -3,7 +3,8 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { alternarOculta, comLargura, comOrdem, ordemDasColunas } from "@/lib/colunas-layout";
 import { exportarCruzamentoXlsx } from "@/lib/exportar-orcamento";
-import { brl, num } from "@/lib/format";
+import { nomeArquivoPdf } from "@/lib/exportar-pdf-core";
+import { brl, dataIsoBrasilia, num } from "@/lib/format";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 import {
@@ -32,7 +33,7 @@ import {
   permissoesLinhas,
   semVazios,
 } from "@/lib/orcamento-cruzamento";
-import { type AlvoVinculo, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { type AlvosVinculo, type DimensoesCadastro, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
@@ -40,14 +41,15 @@ import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
 import { useEditorEdicoes } from "./EdicoesTabela";
+import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { Checkbox, SearchField, SelectField } from "./Field";
 import { IconDownload, IconPencil, IconSave, IconTrocar } from "./icons";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { TabelaCruzada } from "./TabelaCruzada";
+import { toast } from "./Toast";
 
 const rotuloDim = (d: DimensaoOrcamento) => DIMENSOES_ORCAMENTO.find((x) => x.key === d)?.rotulo ?? d;
-const TIPO_VINCULO: Partial<Record<DimensaoOrcamento, "orgao" | "unidade">> = { orgao: "orgao", unidade: "unidade" };
 
 const MODOS: { value: ModoCruzamento; label: string }[] = [
   { value: "valor", label: "R$" },
@@ -80,10 +82,11 @@ export function OrcamentoComparativo({
   podePublicar = false,
 }: {
   titulo: string;
-  itens: OrcamentoItemRow[];
+  /** Os lançamentos com a Unidade/Órgão do CADASTRO (`comVinculos`). */
+  itens: (OrcamentoItemRow & DimensoesCadastro)[];
   visoes: VisaoOrcamento[];
   vinculos: VinculoOrcamento[];
-  alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
+  alvos: AlvosVinculo;
   /** As edições salvas que o usuário vê (as dele e as públicas) de todos os pares de colunas. */
   edicoes: EdicaoTabela[];
   /** As preferências de edição PADRÃO do usuário (`padrao:<chave>`). */
@@ -142,14 +145,13 @@ export function OrcamentoComparativo({
     return layout.zerados ? semVazios(c) : c;
   }, [base, linha, coluna, medida, layout.zerados]);
 
-  // A sigla do CADASTRO (Vínculos) ao lado de Órgão/Unidade — a chave do vínculo é a MESMA do agrupamento.
-  const tipo = TIPO_VINCULO[linha];
+  // A sigla do CADASTRO (Vínculos) ao lado da Unidade do CUBO — a chave do vínculo é a MESMA do agrupamento.
   const siglaDe = useMemo(() => {
-    if (!tipo) return null;
+    if (linha !== "unidade") return null;
     const mapa = mapaVinculos(vinculos);
-    const porId = new Map((tipo === "orgao" ? alvos.orgaos : alvos.unidades).map((a) => [a.id, a.sigla]));
-    return (k: string) => porId.get(mapa.get(`${tipo}|${k}`) ?? -1) ?? "";
-  }, [tipo, vinculos, alvos]);
+    const porId = new Map(alvos.unidades.map((a) => [a.id, a.sigla]));
+    return (k: string) => porId.get(mapa.get(k)?.alvoId ?? -1) ?? "";
+  }, [linha, vinculos, alvos]);
 
   const casa = useMemo(() => predicadoBusca(busca), [busca]);
   const linhasDe = (c: Cruzamento) => {
@@ -216,10 +218,36 @@ export function OrcamentoComparativo({
 
   const m = medidaOrcamento(medida);
   const comSigla = siglaDe != null && !layout.ocultas.includes(COL_EXTRA);
-  const exportar = () => {
-    if (!cruz || !coluna) return;
+  // EXPORTAR (rodapé): a matriz À VISTA (linhas da busca, na ordem; colunas visíveis) em .xlsx ou .pdf — no PDF as
+  // colunas de valores vão em faixas com o nome da linha, a sigla e o total repetidos.
+  const exportarNaTela = usePodeExportar();
+  const podeBaixar = podeExportar && exportarNaTela;
+  const [exportando, setExportando] = useState<FormatoExportacao | null>(null);
+  const exportar = async (formato: FormatoExportacao) => {
+    if (!cruz || !coluna || exportando) return;
     const extra = comSigla && siglaDe ? { rotulo: "Sigla", de: siglaDe } : undefined;
-    exportarCruzamentoXlsx(`${titulo} - ${rotuloDim(linha)} x ${rotuloDim(coluna)}`, matrizCruzamento(cruz, linhasDe(cruz), rotuloDim(linha), extra), extra != null);
+    const nome = `${titulo} - ${rotuloDim(linha)} x ${rotuloDim(coluna)}`;
+    const matriz = matrizCruzamento(cruz, linhasDe(cruz), rotuloDim(linha), extra);
+    setExportando(formato);
+    try {
+      if (formato === "xlsx") exportarCruzamentoXlsx(nome, matriz, extra != null);
+      else {
+        const { baixarTabelaPdf } = await import("@/lib/exportar-pdf");
+        const [cab, ...corpo] = matriz;
+        const numeros = extra ? 2 : 1;
+        await baixarTabelaPdf(nomeArquivoPdf(nome, dataIsoBrasilia(new Date().toISOString())), {
+          titulo: nome,
+          subtitulo: `${m.rotulo} (R$) · ${num(linhas.length)} ${linhas.length === 1 ? "linha" : "linhas"} × ${num(nVisiveis)} ${nVisiveis === 1 ? "coluna" : "colunas"}`,
+          cabecalho: cab.map(String),
+          linhas: corpo.map((l) => l.map((v) => (typeof v === "number" ? brl(v) : v))),
+          alinhar: cab.map((_, j) => (j < numeros ? "left" : "right")),
+        }, { fixas: numeros + 1 });
+      }
+    } catch {
+      toast.error("Não foi possível exportar — tente de novo.");
+    } finally {
+      setExportando(null);
+    }
   };
 
   // ORIGEM do número clicado: os lançamentos do recorte (a MESMA chave do cruzamento — a soma bate).
@@ -237,9 +265,9 @@ export function OrcamentoComparativo({
         .filter(Boolean)
         .join(" × ") || "Total geral"
     : "";
-  const colunasRecorte: Column<OrcamentoItemRow>[] = [
-    ...DIMENSOES_ORCAMENTO.filter((d) => ["orgao", "unidade", "nomeElemento", "codigoElemento", "ficha", "fonte"].includes(d.key)).map(
-      (d): Column<OrcamentoItemRow> => ({
+  const colunasRecorte: Column<OrcamentoItemRow & DimensoesCadastro>[] = [
+    ...DIMENSOES_ORCAMENTO.filter((d) => ["unidadeSistema", "orgao", "unidade", "acao", "nomeElemento", "codigoElemento", "ficha", "fonte"].includes(d.key)).map(
+      (d): Column<OrcamentoItemRow & DimensoesCadastro> => ({
         key: d.key,
         header: d.rotulo,
         minWidth: d.key === "codigoElemento" || d.key === "ficha" ? undefined : 180,
@@ -283,11 +311,6 @@ export function OrcamentoComparativo({
             aria-label="Buscar nas linhas"
           />
         </div>
-        {podeExportar && (
-          <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={!cruz || nVisiveis === 0}>
-            XLSX
-          </Button>
-        )}
       </FerramentasAba>
 
       <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2">
@@ -393,7 +416,12 @@ export function OrcamentoComparativo({
                 ? "Nenhuma linha para esta busca."
                 : "Nenhum lançamento para comparar."
         }
-        acoesRodape={editor.rodape({
+        acoesRodape={
+          <>
+            {podeBaixar && !editando && (
+              <BotaoExportar nome="a tabela comparativa" disabled={!cruz || nVisiveis === 0} carregando={exportando} onExportar={(f) => void exportar(f)} />
+            )}
+            {editor.rodape({
           onEditar: editar,
           disabled: !cruzBase,
           extras: (
@@ -408,6 +436,8 @@ export function OrcamentoComparativo({
           onMostrarTodas: () => mudar((l) => ({ ...l, ocultas: [] })),
           semOcultas: layout.ocultas.length === 0,
         })}
+          </>
+        }
         resumo={
           cruz && coluna
             ? `${num(linhas.length)} ${linhas.length === 1 ? "linha" : "linhas"} × ${num(nVisiveis)} ${nVisiveis === 1 ? "coluna" : "colunas"} · ${m.rotulo} ${brl(cruz.total)}`

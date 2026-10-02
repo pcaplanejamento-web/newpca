@@ -983,6 +983,17 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((d.prepare("SELECT reparticao_id AS r FROM dfds WHERE id = 9001").get() as { r: number | null }).r, null);
   });
 
+  it("0079 vínculos do orçamento: só por unidade (o de órgão sai) + as ações de fora", () => {
+    const d = new DatabaseSync(":memory:");
+    const i79 = arquivos.findIndex((f) => f.startsWith("0079"));
+    assert.ok(i79 > 0, "migração 0079 ausente");
+    for (const arq of arquivos.slice(0, i79)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orcamento_vinculos (tipo, chave, texto) VALUES ('orgao', 'A', 'A'), ('unidade', 'B', 'B');`);
+    d.exec(readFileSync(join(DIR, arquivos[i79]), "utf8"));
+    const linhas = d.prepare("SELECT tipo, chave, acoes_fora AS f FROM orcamento_vinculos").all() as { tipo: string; chave: string; f: string | null }[];
+    assert.deepEqual(linhas.map((l) => [l.tipo, l.chave, l.f]), [["unidade", "B", null]]);
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

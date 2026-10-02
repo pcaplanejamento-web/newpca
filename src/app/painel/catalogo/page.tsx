@@ -1,3 +1,4 @@
+import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { CatalogoView } from "@/components/CatalogoView";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { getCatalogoItens, listarCatalogos } from "@/lib/catalogo";
@@ -11,5 +12,9 @@ export default async function CatalogoPage() {
   const r = await acessoPagina("catalogo");
   if (r.bloqueio) return r.bloqueio;
   const [catalogos, itens, pastas] = await Promise.all([listarCatalogos(), getCatalogoItens(), listarPastasCatalogo()]);
-  return <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} pastas={pastas} />;
+  return (
+    <PermissaoExportar permitido={r.pode.exportar}>
+      <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} pastas={pastas} />
+    </PermissaoExportar>
+  );
 }

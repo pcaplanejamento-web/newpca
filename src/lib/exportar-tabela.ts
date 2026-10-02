@@ -10,6 +10,8 @@
 
 export type ColunaPlanilha<R> = {
   cabecalho: string;
+  /** O NÚMERO como TEXTO no PDF (padrão: pt-BR com até 2 casas). */
+  formatar?: (n: number) => string;
   /** Coluna de data (o valor é ISO — sai em dd/mm/aaaa). */
   data?: boolean;
   valor?: (r: R) => string;
@@ -48,6 +50,28 @@ export const colunasExportaveis = <R>(colunas: readonly ColunaPlanilha<R>[]) =>
 export function linhasPlanilhaTabela<R>(colunas: readonly ColunaPlanilha<R>[], linhas: readonly R[]): (string | number)[][] {
   const cols = colunasExportaveis(colunas);
   return [cols.map((c) => c.cabecalho), ...linhas.map((r) => cols.map((c) => celula(c, r)))];
+}
+
+const numeroBR = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+
+/**
+ * A MESMA tabela para o PDF: tudo como TEXTO (o número formatado — R$, %, quantidade — como a tela mostra) e o
+ * alinhamento de cada coluna (números à direita). Linhas e colunas = as da planilha.
+ */
+export function tabelaParaPdf<R>(
+  colunas: readonly ColunaPlanilha<R>[],
+  linhas: readonly R[],
+): { cabecalho: string[]; linhas: string[][]; alinhar: ("left" | "right")[] } {
+  const cols = colunasExportaveis(colunas);
+  const texto = (c: ColunaPlanilha<R>, r: R): string => {
+    const v = celula(c, r);
+    return typeof v === "number" ? (c.formatar ?? numeroBR)(v) : v;
+  };
+  return {
+    cabecalho: cols.map((c) => c.cabecalho),
+    linhas: linhas.map((r) => cols.map((c) => texto(c, r))),
+    alinhar: cols.map((c) => (c.numero ? "right" : "left")),
+  };
 }
 
 /** O nome do arquivo: "<nome> - AAAA-MM-DD.xlsx", sem caracteres que o sistema de arquivos recusa. */

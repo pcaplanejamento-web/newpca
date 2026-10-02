@@ -4,7 +4,7 @@ import { getDb } from "./db";
 import { comandosSubstituirLancamentos } from "./orcamento-sql";
 import { lotesDeIds } from "./reparticoes";
 import type { OrcamentoItemImport, VinculosOrcamentoPayload } from "./orcamento-validation";
-import { type AlvoVinculo, chaveVinculo, type VinculoOrcamento } from "./orcamento-vinculo";
+import { type AlvosVinculo, chaveVinculo, lerAcoesFora, SEM_ACAO, type VinculoOrcamento } from "./orcamento-vinculo";
 
 /**
  * Acesso a dados do ORÇAMENTO municipal. Base isolada (sem repartição/grupo, sem FK p/
@@ -230,27 +230,27 @@ export async function inserirOrcamentoItens(
   return { inserted: itens.length };
 }
 
-// ── VÍNCULOS com o cadastro (Órgão/Unidade do CUBO → órgão/unidade do sistema) ─────────────
+// ── VÍNCULOS com o cadastro (Unidade do CUBO → unidade do sistema, com as AÇÕES escolhidas) ─────────────
 
-// orcamento_vinculos = 5 colunas vinculadas por linha (+1 do SET) → 16 linhas por statement.
+// orcamento_vinculos = 6 colunas vinculadas por linha → 16 linhas por statement (96 parâmetros).
 const VINCULOS_POR_STMT = 16;
 
-/** Todos os vínculos gravados (o alvo = `orgao_id` ou `reparticao_id`, conforme o tipo). */
+/** Todos os vínculos gravados de UNIDADE (o alvo = `reparticao_id`; as ações de fora em JSON). */
 export async function listarVinculosOrcamento(): Promise<VinculoOrcamento[]> {
   const rows = await getDb()
     .select({
-      tipo: orcamentoVinculos.tipo,
       chave: orcamentoVinculos.chave,
       texto: orcamentoVinculos.texto,
-      orgaoId: orcamentoVinculos.orgaoId,
       reparticaoId: orcamentoVinculos.reparticaoId,
+      acoesFora: orcamentoVinculos.acoesFora,
     })
-    .from(orcamentoVinculos);
-  return rows.map((r) => ({ tipo: r.tipo, chave: r.chave, texto: r.texto, alvoId: r.tipo === "orgao" ? r.orgaoId : r.reparticaoId }));
+    .from(orcamentoVinculos)
+    .where(eq(orcamentoVinculos.tipo, "unidade"));
+  return rows.map((r) => ({ chave: r.chave, texto: r.texto, alvoId: r.reparticaoId, acoesFora: lerAcoesFora(r.acoesFora) }));
 }
 
-/** Órgãos e unidades que podem ser alvo (unidade "Geral" virtual fora), na ordem das telas. */
-export async function alvosVinculoOrcamento(): Promise<{ orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] }> {
+/** As unidades que podem ser alvo (a "Geral" virtual fora) e os órgãos donos delas (ver por órgão), na ordem das telas. */
+export async function alvosVinculoOrcamento(): Promise<AlvosVinculo> {
   const db = getDb();
   const [os, us] = await Promise.all([
     db
@@ -267,45 +267,39 @@ export async function alvosVinculoOrcamento(): Promise<{ orgaos: AlvoVinculo[]; 
 }
 
 /**
- * Grava vínculos (UPSERT por `tipo`+`chave`; `alvoId` null = desvincular). Confere antes que
- * cada alvo existe no tipo certo (órgão → `orgaos`; unidade → `reparticoes`, nunca a "Geral").
- * Devolve a mensagem de erro (alvo inválido) ou `null` quando gravou.
+ * Grava vínculos de UNIDADE (UPSERT por `chave`; `alvoId` null = desvincular) com as AÇÕES de fora. Confere antes que
+ * cada alvo existe (nunca a "Geral"). Devolve a mensagem de erro (alvo inválido) ou `null` quando gravou.
  */
 export async function definirVinculosOrcamento(lista: VinculosOrcamentoPayload["vinculos"]): Promise<string | null> {
   const db = getDb();
-  const ids = (tipo: "orgao" | "unidade") => [...new Set(lista.filter((v) => v.tipo === tipo && v.alvoId != null).map((v) => v.alvoId as number))];
-  const existentes = async (tipo: "orgao" | "unidade") => {
-    const achados = await Promise.all(
-      lotesDeIds(ids(tipo)).map((lote) =>
-        tipo === "orgao"
-          ? db.select({ id: orgaos.id }).from(orgaos).where(inArray(orgaos.id, lote))
-          : db
-              .select({ id: reparticoes.id })
-              .from(reparticoes)
-              .where(and(inArray(reparticoes.id, lote), ne(sql`UPPER(${reparticoes.codigo})`, "GERAL"))),
-      ),
-    );
-    return new Set(achados.flat().map((r) => r.id));
-  };
-  const [okOrgaos, okUnidades] = await Promise.all([existentes("orgao"), existentes("unidade")]);
-  for (const v of lista) {
-    if (v.alvoId == null) continue;
-    if (!(v.tipo === "orgao" ? okOrgaos : okUnidades).has(v.alvoId))
-      return `${v.tipo === "orgao" ? "Órgão" : "Unidade"} de destino não encontrado para "${v.texto}".`;
-  }
+  const ids = [...new Set(lista.filter((v) => v.alvoId != null).map((v) => v.alvoId as number))];
+  const achados = await Promise.all(
+    lotesDeIds(ids).map((lote) =>
+      db
+        .select({ id: reparticoes.id })
+        .from(reparticoes)
+        .where(and(inArray(reparticoes.id, lote), ne(sql`UPPER(${reparticoes.codigo})`, "GERAL"))),
+    ),
+  );
+  const ok = new Set(achados.flat().map((r) => r.id));
+  for (const v of lista) if (v.alvoId != null && !ok.has(v.alvoId)) return `Unidade de destino não encontrada para "${v.texto}".`;
   // Último valor vence quando o mesmo texto vem repetido no lote.
   const porChave = new Map<string, (typeof lista)[number] & { chave: string }>();
   for (const v of lista) {
     const chave = chaveVinculo(v.texto);
-    if (chave) porChave.set(`${v.tipo}|${chave}`, { ...v, chave });
+    if (chave) porChave.set(chave, { ...v, chave });
   }
-  const linhas = [...porChave.values()].map((v) => ({
-    tipo: v.tipo,
-    chave: v.chave,
-    texto: v.texto,
-    orgaoId: v.tipo === "orgao" ? v.alvoId : null,
-    reparticaoId: v.tipo === "unidade" ? v.alvoId : null,
-  }));
+  const linhas = [...porChave.values()].map((v) => {
+    const fora = [...new Set(v.acoesFora.map((a) => (a === SEM_ACAO ? a : chaveVinculo(a))).filter(Boolean))];
+    return {
+      tipo: "unidade" as const,
+      chave: v.chave,
+      texto: v.texto,
+      orgaoId: null,
+      reparticaoId: v.alvoId,
+      acoesFora: fora.length ? JSON.stringify(fora) : null,
+    };
+  });
   const stmts = [];
   for (let i = 0; i < linhas.length; i += VINCULOS_POR_STMT)
     stmts.push(
@@ -316,8 +310,8 @@ export async function definirVinculosOrcamento(lista: VinculosOrcamentoPayload["
           target: [orcamentoVinculos.tipo, orcamentoVinculos.chave],
           set: {
             texto: sql`excluded.texto`,
-            orgaoId: sql`excluded.orgao_id`,
             reparticaoId: sql`excluded.reparticao_id`,
+            acoesFora: sql`excluded.acoes_fora`,
             atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
           },
         }),

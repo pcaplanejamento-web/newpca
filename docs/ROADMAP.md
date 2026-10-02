@@ -26,6 +26,14 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Orçamento: vínculos por unidade + ações, Lançamentos com visões e edição, XLSX/PDF em toda tabela — entregue
+✅ **Vínculos:** só por UNIDADE (o de órgão saiu — migração `0079`); em cada unidade do CUBO o usuário escolhe as AÇÕES que
+entram; ver por órgão = a soma das unidades vinculadas (dimensões "Órgão (cadastro)"/"Unidade (cadastro)" nas visões, no
+comparativo e nos lançamentos; o PCA × Orçamento segue as ações). **Lançamentos:** uma coluna por visão salva, a edição da
+tabela e as edições salvas como na Mesa. **Toda tabela** do sistema baixa em **XLSX** ou **PDF** pelo rodapé (o PDF em A4
+deitado, com o cabeçalho repetido, texto quebrado sem cortes e tabela larga em faixas de colunas), inclusive a tabela
+comparativa do orçamento; a permissão Exportar do papel segue valendo nas telas de módulo.
+
 ### Mesas: "Atualizar tudo" reverifica protocolos, DFDs e itens — entregue
 ✅ Botão circular na barra da Mesa (sistema e PCA): recarrega a lista e reconfere tudo, com o anel de andamento e o aviso
 final (falhas parciais avisadas). O mesmo botão circular (`BotaoAtualizar`) virou o PADRÃO de recarregar do sistema:

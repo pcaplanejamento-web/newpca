@@ -1,3 +1,4 @@
+import { PermissaoExportar } from "@/components/ExportarTabelas";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
@@ -23,7 +24,9 @@ export default async function PcaEdicaoPage({ params }: { params: Promise<{ id: 
       >
         <IconChevronLeft className="h-4 w-4" /> Voltar ao PCA
       </Link>
-      <PcaCompilacaoView pca={pca} />
+      <PermissaoExportar permitido={r.pode.exportar}>
+        <PcaCompilacaoView pca={pca} />
+      </PermissaoExportar>
     </div>
   );
 }

@@ -6,11 +6,14 @@ import { norm } from "./parse-dfd-comum.ts";
  * vale QUALQUER valor marcado (OU); entre dimensões, TODAS têm de valer (E). As opções de cada
  * dimensão são CONECTADAS (facetas): vêm das linhas que passam nas DEMAIS dimensões.
  *
- * As dimensões são as colunas de texto que o CUBO importado traz hoje. Uma coluna nova do CUBO
- * entra acrescentando uma entrada em `DIMENSOES_ORCAMENTO` (a UI e o filtro seguem o catálogo).
+ * As dimensões são as colunas de texto que o CUBO importado traz hoje + as duas do CADASTRO (Órgão/Unidade pelos
+ * Vínculos — os lançamentos as ganham por `comVinculos` onde são lidos). Uma coluna nova do CUBO entra acrescentando
+ * uma entrada em `DIMENSOES_ORCAMENTO` (a UI e o filtro seguem o catálogo).
  */
 
 export type DimensaoOrcamento =
+  | "orgaoSistema"
+  | "unidadeSistema"
   | "orgao"
   | "unidade"
   | "funcao"
@@ -22,6 +25,9 @@ export type DimensaoOrcamento =
   | "fonte";
 
 export const DIMENSOES_ORCAMENTO: { key: DimensaoOrcamento; rotulo: string; rotuloCurto: string }[] = [
+  // Do CADASTRO (pelos Vínculos — `comVinculos`): a unidade vinculada e o órgão dela; o órgão = a soma das unidades.
+  { key: "orgaoSistema", rotulo: "Órgão (cadastro)", rotuloCurto: "órgão do cadastro" },
+  { key: "unidadeSistema", rotulo: "Unidade (cadastro)", rotuloCurto: "unidade do cadastro" },
   { key: "orgao", rotulo: "Órgão", rotuloCurto: "órgão" },
   { key: "unidade", rotulo: "Unidade", rotuloCurto: "unidade" },
   { key: "funcao", rotulo: "Função", rotuloCurto: "função" },

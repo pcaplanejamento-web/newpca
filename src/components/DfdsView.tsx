@@ -60,6 +60,7 @@ import { Button } from "./Button";
 import { CelulaLista, CelulaTexto } from "./CelulaLista";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
+import { PermissaoExportar } from "./ExportarTabelas";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
@@ -1858,7 +1859,7 @@ export function DfdsView({
   // sistema no servidor — o que o papel não permite volta como falha).
   const podeAqui = modoPca ? pode.pca : pode.sistema;
   // Exportar as tabelas (.xlsx — as linhas filtradas e as colunas à vista): só com a ação Exportar do papel nesta Mesa.
-  const exportarComo = (nome: string) => (podeAqui.exportar ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : undefined);
+  const exportarComo = (nome: string) => (podeAqui.exportar ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : (false as const));
   // Importar protocolo/DFD: só na Mesa do sistema (o protocolo novo entra nela).
   const podeImportar = pode.sistema.importar && !modoPca;
   const importa = podeImportar && (vista === "protocolos" || vista === "dfds");
@@ -2078,6 +2079,7 @@ export function DfdsView({
   }
 
   return (
+    <PermissaoExportar permitido={podeAqui.exportar}>
     <div className="space-y-[var(--gap-block)]">
       {/* Falha de uma ação da Mesa (excluir, edição em massa…) — AVISO FLUTUANTE: não empurra as tabelas. */}
       {erro && (
@@ -2277,5 +2279,6 @@ export function DfdsView({
         </div>
       </Modal>
     </div>
+    </PermissaoExportar>
   );
 }

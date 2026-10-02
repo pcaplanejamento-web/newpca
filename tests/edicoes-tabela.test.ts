@@ -45,6 +45,7 @@ describe("edicoes-tabela", () => {
     assert.deepEqual(telasDaChave("mesa-pca:itens"), { telas: ["pca"], quadroId: null });
     assert.deepEqual(telasDaChave(K), { telas: ["orcamento", "pca"], quadroId: null }, "o Comparativo está no Orçamento e no PCA");
     assert.deepEqual(telasDaChave("tarefas:12:lista"), { telas: ["tarefas"], quadroId: 12 }, "a Lista segue o grupo do quadro");
+    assert.deepEqual(telasDaChave("orcamento-lancamentos:tabela"), { telas: ["orcamento"], quadroId: null }, "os Lançamentos do orçamento");
     for (const k of ["tarefas:0:lista", "tarefas:abc:lista", "tarefas:12", "calendario:ocultos", "padrao:mesa:dfds", "x", "", "design-system:demo"])
       assert.equal(telasDaChave(k), null, k);
   });

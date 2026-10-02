@@ -20,14 +20,12 @@ import {
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
-import { FerramentasAba } from "./AbasEspaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
 import { Badge } from "./Badge";
-import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { IconDownload, IconInfo } from "./icons";
+import { IconInfo } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
@@ -245,33 +243,6 @@ export function OrcamentoPca({
   const acima = linhas.filter(linhaAcima);
   const vis = filtro === "todas" ? linhas : filtro === "acima" ? acima : linhas.filter((l) => !linhaAcima(l));
 
-  async function exportar() {
-    const XLSX = await import("xlsx");
-    const aoa: (string | number)[][] =
-      nivel === "orgao"
-        ? [
-            ["Órgão", "Nome", "Unidades", "Contratações", "Contratações do PCA", "Orçamento para o PCA", "Diferença", "Porcentagem"],
-            ...vis.map((l) => [
-              l.sigla,
-              l.nome,
-              l.nivel === "orgao" ? l.unidades : 1,
-              l.contratacoes,
-              l.planejado,
-              l.orcamento,
-              l.diferenca,
-              l.percentual == null ? "" : l.percentual,
-            ]),
-          ]
-        : [
-            ["Unidade", "Nome", "Órgão", "Contratações", "Contratações do PCA", "Orçamento para o PCA", "Diferença", "Porcentagem"],
-            ...vis.map((l) => [l.sigla, l.nome, l.orgaoSigla ?? "", l.contratacoes, l.planejado, l.orcamento, l.diferenca, l.percentual == null ? "" : l.percentual]),
-          ];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, nivel === "orgao" ? "Por órgão" : "Por unidade");
-    XLSX.writeFile(wb, `comparativo-orcamento-pca-${dados.ano ?? ""}-${nivel === "orgao" ? "orgao" : "unidade"}.xlsx`);
-  }
-
   const colNome: Column<LinhaTabela> =
     nivel === "orgao"
       ? {
@@ -279,7 +250,7 @@ export function OrcamentoPca({
           header: "Órgão",
           align: "left",
           minWidth: 220,
-          value: (l) => l.sigla,
+          value: (l) => (l.nome && l.nome !== l.sigla ? `${l.sigla} — ${l.nome}` : l.sigla),
           render: (l) => (
             <span className="flex min-w-0 flex-col items-start leading-tight" title={l.nome}>
               <span className="font-semibold text-text">{l.sigla}</span>
@@ -323,7 +294,15 @@ export function OrcamentoPca({
       numero: (l) => l.diferenca,
       render: (l) => <span className="font-semibold" style={{ color: l.diferenca < 0 ? "var(--danger)" : "var(--ok)" }}>{brl(l.diferenca)}</span>,
     },
-    { key: "pct", header: "Porcentagem", nowrap: true, filter: "range", numero: (l) => l.percentual, render: (l) => <BarraPct l={l} /> },
+    {
+      key: "pct",
+      header: "Porcentagem",
+      nowrap: true,
+      filter: "range",
+      numero: (l) => l.percentual,
+      formatarFaixa: (n) => `${(n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+      render: (l) => <BarraPct l={l} />,
+    },
   ];
 
   if (dados.ano == null) return <Callout kind="warn">Defina o ano do PCA (aba Configuração) para cruzar com o orçamento.</Callout>;
@@ -405,13 +384,6 @@ export function OrcamentoPca({
         />
       ) : (
         <>
-          {podeExportar && (
-            <FerramentasAba>
-              <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={vis.length === 0}>
-                XLSX
-              </Button>
-            </FerramentasAba>
-          )}
           <div className="flex flex-wrap items-center gap-2">
             {trocaVista}
             <Segmented<Nivel>
@@ -444,6 +416,7 @@ export function OrcamentoPca({
             scrollInterno
             density="compact"
             minWidth={900}
+            exportar={{ nome: `PCA × Orçamento ${dados.ano ?? ""} - por ${nivel === "orgao" ? "órgão" : "unidade"}` }}
             onRowClick={setAberta}
             activeKey={aberta?.chave ?? null}
             vazio="Nada a comparar nesta visão."

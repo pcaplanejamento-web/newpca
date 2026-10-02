@@ -1,3 +1,4 @@
+import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { MesaPca } from "@/components/MesaPca";
@@ -73,7 +74,7 @@ export default async function PcaEspacoPage({
       pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status }}
       aba={aba}
     >
-      {conteudo}
+      <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
     </PcaEspacoView>
   );
 }

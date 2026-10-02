@@ -7,9 +7,9 @@ import { vinculosOrcamentoSchema } from "@/lib/orcamento-validation";
 export const dynamic = "force-dynamic";
 
 /**
- * VÍNCULOS do Órgão/Unidade do orçamento (texto do CUBO) com o cadastro do sistema (só editor).
- * UPSERT por texto normalizado; `alvoId` null desvincula. O alvo é conferido no servidor (órgão
- * existente / unidade existente, nunca a "Geral"). Global: vale para todos os orçamentos.
+ * VÍNCULOS da UNIDADE do orçamento (texto do CUBO) com a unidade do cadastro + as AÇÕES que entram (Configurar no
+ * Orçamento). UPSERT por texto normalizado; `alvoId` null desvincula; `acoesFora` = as ações que ficam sem vínculo. O
+ * alvo é conferido no servidor (unidade existente, nunca a "Geral"). Global: vale para todos os orçamentos.
  */
 export async function PUT(req: Request) {
   const a = await exigirAcesso("orcamento", "configurar");
@@ -25,7 +25,7 @@ export async function PUT(req: Request) {
     acao: "editar",
     entidade: "orcamento",
     entidadeId: null,
-    resumo: `Vínculos do orçamento com órgãos/unidades atualizados — ${n} ${n === 1 ? "texto" : "textos"}`,
+    resumo: `Vínculos do orçamento com as unidades atualizados — ${n} ${n === 1 ? "unidade" : "unidades"}`,
     depois: { vinculos: p.data.vinculos },
   });
   return ok();

@@ -67,10 +67,11 @@ export type PatchOrcamentoPayload = z.infer<typeof patchOrcamentoSchema>;
 export const vinculosOrcamentoSchema = z.object({
   vinculos: z
     .array(
+      // Vínculo de UNIDADE do CUBO (o órgão não se vincula — é a soma das unidades) + as AÇÕES que ficam de FORA.
       z.object({
-        tipo: z.enum(["orgao", "unidade"]),
         texto: z.string().trim().min(1).max(300),
         alvoId: z.number().int().positive().nullable(),
+        acoesFora: z.array(z.string().trim().min(1).max(300)).max(1000).default([]),
       }),
     )
     .min(1)

@@ -211,10 +211,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   grupos (**`GruposDaPessoa`**, DS; avisa sem grupo; auditoria `aprovar` + o e-mail de acesso liberado), **Recusar** o
   cadastro pendente (exclui; o histórico diz "recusado") e **"Ver acesso"** (**`AcessoDaPessoa`**, DS — por grupo, a
   `MatrizCapacidades` só-leitura das telas que ABREM, `capacidadesEfetivas`, e as fechadas pelo papel —
-  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar da Mesa:**
-  as 4 tabelas (Protocolos, DFDs, Itens, Consolidada) ganham o **Exportar .xlsx** no rodapé (`DataTable.exportar` — as linhas
-  filtradas e as colunas à vista da edição em uso; núcleo puro `exportar-tabela.ts`, SheetJS só no clique) para quem tem a
-  ação Exportar na Mesa em que está. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
+  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar:**
+  TODA tabela tem **XLSX** e **PDF** no rodapé (ver `DataTable.exportar`); nas telas de módulo só para quem tem a ação
+  Exportar ali — a página envolve o conteúdo em **`PermissaoExportar`** (`ExportarTabelas.tsx`; a Mesa, pela Mesa em que
+  está), o contexto vale também nos banners por portal. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
   orçamento e o catálogo que a PRÓPRIA pessoa CRIOU por importação na última hora (`?origem=desfazer` →
   `criadoPorImportacaoRecente`: o 1º registro do histórico é o "importar" dela — o reenvio/atualização de um cadastro que já
   existia nunca; builder `auditoria-sql.ts`, testado no driver D1 real) e o DFD pela metade (`gravacaoParcial`); fora disso,
@@ -1675,7 +1675,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `activeKey`) via `PATCH /api/catalogo/itens` `{ids,tipos,modo}` — `modo` **`definir`** (SET, padrão) ou **`mesclar`**
   (UNIÃO, p/ o item existente ganhar um tipo novo sem perder os que tinha). Seletor **`TipoDfdPicker`** (chips de alternância).
 - **UI (`CatalogoView`):** um **`Segmented`** alterna **Catálogo** (cards por catálogo; abrir → `Modal` full com a tabela
-  de itens — busca + filtro por tipo, seleção/edição em massa, exportar XLSX/PDF, editar, detalhe no `lateral`) e **Lista
+  de itens — busca + filtro por tipo, seleção/edição em massa, XLSX/PDF no rodapé da tabela, editar, detalhe no `lateral`) e **Lista
   de Itens** (todos os itens numa tabela única, com coluna Catálogo; clique abre o detalhe num banner). A troca de visão
   anima por **`animate-cat-morph`** (fade+escala — "as linhas viram cards"). `Dropzone` aceita `.pdf,.xlsx`; novo
   `TextArea` no DS (descrição multi-linha). Rotas: `POST /api/catalogo` (+ `/verificar`, `/item`), `PATCH`/`DELETE /api/catalogo/[id]`,
@@ -1940,7 +1940,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`cqw`) — cabe no card e na miniatura do cabeçalho.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
-  > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
+  > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro; XLSX/PDF no rodapé) — o CUBO do MESMO ano chega à
   unidade pelos **Vínculos** (`orcamento_vinculos`). **A UNIDADE é o micro** (recebe os DFDs e o orçamento; a linha é
   pelo ID — `reparticoes.id` —, nunca pela sigla) e **o ÓRGÃO é a soma** das unidades dele: "Ver por" **Unidade | Órgão**
   (`comparativoPorOrgao`/`origemDoOrgao`, a origem soma igual à linha); na visão Unidade, a coluna Órgão + o selo "Oculta"
@@ -2146,9 +2146,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   manda só os campos que ela usa) — as **ferramentas de cada aba ficam NA MESMA LINHA das abas, à direita**
   (`FerramentasAba`: portal para o slot da barra; o estado segue na aba). Tabelas no **padrão da Mesa** (`DataTable
   scrollInterno` + `density="compact"`: corpo rola por dentro e as **linhas por página seguem Configurações → Tabelas**).
-  **Lançamentos** (`OrcamentoLancamentos`): TODAS as colunas do CUBO (Órgão · Unidade · No sistema · Função · Programa ·
-  Ação · Elemento · Código · Ficha · Fonte + valores com filtro por faixa), vínculo de cada linha resolvido UMA vez
-  (`vinculoPorId`); na barra: busca (`SearchField compacto`, `predicadoBusca`) + **XLSX/PDF** (o que está filtrado); detalhe
+  **Lançamentos** (`OrcamentoLancamentos`): **Órgão (cadastro) · Unidade (cadastro)** (pelos Vínculos com as ações —
+  `comVinculos`, no servidor) + TODAS as colunas do CUBO (Órgão · Unidade · Função · Programa · Ação · Elemento · Código ·
+  Ficha · Fonte + valores com filtro por faixa) + **UMA COLUNA POR VISÃO salva** (Sim/Não — o lançamento entra na visão;
+  `aplicarVisao` uma vez por visão); a EDIÇÃO da tabela e as edições salvas como na Mesa (chave **`CHAVE_LANCAMENTOS`** =
+  `orcamento-lancamentos:tabela` → tela Orçamento em `telasDaChave`); XLSX/PDF no rodapé; na barra: busca
+  (`SearchField compacto`, `predicadoBusca`); detalhe
   SÓ-leitura `OrcamentoItemDetalhe`; no RODAPÉ da tabela (`acoesRodape`, como o "Importar" da Mesa; editor) o botão
   **"Reenviar planilha"** → `ImportarOrcamento alvo`: a prévia compara atual × nova (nome/ano travados), confirma e
   `substituirOrcamentoEmLotes` grava a planilha nova num orçamento TEMPORÁRIO (os mesmos lotes all-or-nothing) e só então
@@ -2220,22 +2223,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `router.refresh`) — o antigo `GET /api/orcamento/visoes` foi removido. Erros em `AvisoFlutuante` (não empurram a
   tabela). `getOrcamentoItens(id)` é sempre de UM orçamento. Ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) + nav em
   `AppShell`.
-- **Vínculos Órgão/Unidade do CUBO → cadastro do sistema (migração `0030`):** o CUBO traz Órgão/Unidade como TEXTO
-  próprio ("FUNDO MUNICIPAL DE EDUCACAO DE RIO V…", "2 - SECRETARIA MUNICIPAL DE EDUCAÇ…", "26 - FMACL"). Tabela
-  **`orcamento_vinculos`** (`tipo` `orgao`|`unidade` + `chave` = texto normalizado, **único** por tipo+chave; `orgao_id`/
-  `reparticao_id` FK **set null**) — **GLOBAL** (não por orçamento): o vínculo vale para todos os orçamentos, inclusive os
-  próximos anos; alvo NULL = sem vínculo. Núcleo PURO **`orcamento-vinculo.ts`** (`chaveVinculo`, `nomeSemCodigo` tira o
-  "N - " do CUBO, **`sugerirAlvo`** = nome/sigla iguais ⇒ certeza, senão Jaccard ≥ `LIMIAR_SUGESTAO` 0,6 — empate ⇒ nada,
-  ignora ocultos; `linhasVinculo` agrupa os textos distintos com nº de lançamentos + Σ dotação + contexto do órgão;
-  `mapaVinculos`/`alvoDoTexto`). Acesso em `orcamento.ts` (`listarVinculosOrcamento`, `alvosVinculoOrcamento` — órgãos +
-  unidades sem a "Geral", `definirVinculosOrcamento` = UPSERT `ON CONFLICT(tipo,chave)` em lotes de 16 linhas (80 params),
-  conferindo o alvo no tipo certo). Rota **`PUT /api/orcamento/vinculos`** (Configurar no Orçamento, `vinculosOrcamentoSchema` ≤ 200,
-  auditoria). UI: aba **"Vínculos"** da tela do orçamento → componente **`OrcamentoVinculos`** (DS,
-  catalogado): tabela filtrável Estado (Vinculado/Sugestão/Sem vínculo) · Tipo · No orçamento · **No sistema** (`select`,
-  unidades por `optgroup` de órgão, ocultos só se já vinculados; alvo ≥44px no mobile) · Lançamentos · Dotação, com
-  **"Aceitar SIGLA"** por linha e **"Vincular N sugestões"** em massa; gravação otimista (pendentes valem só sobre a base de
-  vínculos em que foram feitas). O vínculo aparece na coluna **"No sistema"** dos lançamentos e no bloco "No sistema" do
-  `OrcamentoItemDetalhe` (prop `vinculo`). Ícone `IconLink`. `lotesDeIds` agora é exportado por `reparticoes.ts`.
+- **Vínculos da UNIDADE do CUBO → unidade do cadastro + as AÇÕES (migrações `0030` + `0079`):** a UNIDADE é o micro. O CUBO
+  traz a Unidade como TEXTO próprio ("2 - SECRETARIA MUNICIPAL DE EDUCAÇ…", "26 - FMACL"); cada texto distinto é ligado a
+  UMA unidade cadastrada e o usuário escolhe quais **AÇÕES** dela entram (as desmarcadas ficam "Sem vínculo"). O vínculo por
+  ÓRGÃO saiu (a `0079` apagou os de tipo `orgao`): **ver por órgão = a SOMA das unidades vinculadas** — as dimensões
+  **"Órgão (cadastro)"/"Unidade (cadastro)"** (`orgaoSistema`/`unidadeSistema` em `DIMENSOES_ORCAMENTO`) que **`comVinculos`**
+  põe em cada lançamento (o órgão = o dono da unidade vinculada) no servidor (página do orçamento, `dadosComparativo`, o
+  orçamento do PCA) — valem nas visões, no comparativo (linhas/colunas) e nos lançamentos. Tabela **`orcamento_vinculos`**
+  (`tipo`='unidade' + `chave` = texto normalizado, **único**; `reparticao_id` FK set null; **`acoes_fora`** JSON das chaves
+  das ações de fora, NULL = todas) — **GLOBAL** (vale para todos os orçamentos, inclusive os próximos anos). Núcleo PURO
+  **`orcamento-vinculo.ts`** (`chaveVinculo`, `nomeSemCodigo`, **`sugerirAlvo`** = nome/sigla iguais ⇒ certeza, senão Jaccard ≥
+  `LIMIAR_SUGESTAO` 0,6 — empate ⇒ nada, ignora ocultos; `linhasVinculo` = as unidades distintas com lançamentos, Σ dotação,
+  contexto do órgão e as AÇÕES; `mapaVinculos` + **`unidadeDoLancamento`** (a unidade só se a ação entra — o comparativo PCA ×
+  Orçamento usa a mesma régua), `alvoDaUnidade`, `comVinculos`, `lerAcoesFora`). Acesso em `orcamento.ts`
+  (`listarVinculosOrcamento`, `alvosVinculoOrcamento` — unidades sem a "Geral" + órgãos, `definirVinculosOrcamento` = UPSERT em
+  lotes de 16 linhas (96 params), conferindo a unidade). Rota **`PUT /api/orcamento/vinculos`** (Configurar no Orçamento,
+  `vinculosOrcamentoSchema` ≤ 200 `{texto, alvoId, acoesFora}`, auditoria). UI: aba **"Vínculos"** → **`OrcamentoVinculos`**
+  (DS, catalogado): Estado · Unidade no orçamento · **No sistema** (`select` por órgão; sigla repetida mostra o órgão) ·
+  **Ações vinculadas** (`SeletorMultiplo suspenso` — "Todas as ações (N)" | "k de N") · Lançamentos · Dotação · **Dotação
+  vinculada**, "Aceitar SIGLA" e "Vincular N sugestões"; gravação otimista numa FILA (um PUT por vez —
+  `OrcamentoVinculosAba`). O detalhe do lançamento mostra o órgão/unidade do cadastro (`OrcamentoItemDetalhe.vinculo`).
 
 ## Tarefas (quadro estilo Trello) — migração `0042`
 - **O que é:** o módulo **`tarefas`** (`ABA_KEYS`/`NAV_MODULOS`, ícone `IconKanban`; a `0042` concede a aba a quem tem a
@@ -2311,8 +2318,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Aba Calendário** (**`CalendarioTarefas`** — ver FASE 5).
   - **Aba Lista**: colunas novas Checklist/Estimativa (faixa)/Vínculo; **seleção** + `BarraSelecao` fixa +
     **`BarraEdicaoMassaTarefas`** (`BarraEdicaoMassa.tsx`, a MESMA `Moldura`) → `POST /api/tarefas/massa` (≤ 50/chamada,
-    `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); botão **XLSX** (`exportar-tarefas.ts`:
-    `linhasPlanilhaTarefas` puro/testado + SheetJS por import dinâmico).
+    `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); XLSX/PDF no rodapé da tabela
+    (`TabelaTarefas.nomeExportacao`).
   - **Mesa ⇄ Tarefas:** `/painel/mesa?abrir=protocolo:<id>|dfd:<id>` abre o banner (`DfdsView.abrirInicial`; a URL é
     limpa); o botão **`TarefasDoVinculo`** ("Tarefas (abertas/total)") no rodapé do DFD gravado e do protocolo gravado lista
     as tarefas ligadas (`GET /api/tarefas/do-vinculo`) e **"Criar tarefa"** num quadro → `/painel/tarefas/<q>?nova=tipo:id`
@@ -3036,9 +3043,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   — nunca `innerWidth < 1024`, que diverge do CSS com a fonte do navegador ampliada);
   **`edicoes`** (`EdicoesDaTabela`, opt-in) = EDIÇÃO da tabela no cabeçalho + EDIÇÕES SALVAS (colunas + ordenação + filtros;
   pessoais ou públicas; a padrão abre a tabela) — as tabelas da Mesa;
-  **`exportar`** (`{nome}`, opt-in) = o botão **Exportar** (.xlsx) no rodapé: as linhas À VISTA (filtros das colunas, na ordem,
-  todas as páginas) e as colunas visíveis da edição em uso — o número como número, os vários valores unidos, as datas em
-  dd/mm/aaaa (`linhasPlanilhaTabela`, `exportar-tabela.ts`);
+  **`exportar`** (`{nome}` | `false`; padrão LIGADO, nome "Tabela") = os botões **XLSX** e **PDF** no rodapé
+  (**`BotaoExportar`**, `ExportarTabelas.tsx`): as linhas À VISTA (filtros das colunas, na ordem, todas as páginas) e as
+  colunas visíveis da edição em uso — no .xlsx o número como número, os vários valores unidos, as datas em dd/mm/aaaa
+  (`linhasPlanilhaTabela`); no **PDF** (`tabelaParaPdf` → `baixarTabelaPdf`, `exportar-pdf.ts` com o pdf-lib só no clique;
+  layout PURO e testado em **`exportar-pdf-core.ts`**): A4 deitado, título + "N linhas · filtros: …" no topo de cada página,
+  o cabeçalho das colunas repetido, larguras pelo conteúdo (a fonte desce de 8 a 5,5 antes de quebrar), texto QUEBRADO por
+  palavra na célula (nada truncado — a linha alta continua na página seguinte), números formatados como na tela
+  (`Column.formatarFaixa`, senão R$ nas faixas e número nas demais) e à direita, zebra, "Gerado em … · Página N de M";
+  tabela larga demais sai em FAIXAS de colunas com as congeladas repetidas (`faixasDeColunas`); caracteres fora das
+  fontes do PDF viram o equivalente (`textoParaPdf`). Some com `false` ou fora da permissão (`PermissaoExportar`). A
+  tabela cruzada do Comparativo usa o MESMO `BotaoExportar` no rodapé (a matriz à vista; no PDF, o nome da linha, a sigla e
+  o total repetidos em cada faixa);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
   **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;

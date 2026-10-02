@@ -170,7 +170,7 @@ export function PlanilhaDfds({
   /** EDIÇÕES SALVAS da tabela principal (ex.: a Mesa) — repassadas ao `DataTable`. */
   edicoes?: EdicoesDaTabela;
   /** Exportar a planilha em .xlsx (a tabela principal — só com a ação Exportar do papel). */
-  exportar?: { nome: string };
+  exportar?: { nome: string } | false;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);

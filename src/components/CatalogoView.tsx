@@ -8,7 +8,7 @@ import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/ca
 import type { PastaCatalogo } from "@/lib/catalogo-historico";
 import { itensIguais } from "@/lib/catalogo-conferencia";
 import { membrosDoItem } from "@/lib/catalogo-membros";
-import { exportarCatalogoPdf, exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
+import { exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import type { PodeTela } from "@/lib/papeis-core";
 import { brl, num } from "@/lib/format";
 import { COR_PADRAO_CATALOGO, corDoCatalogo, ROTULO_TIPO_CATALOGO, type TipoCatalogo } from "@/lib/historico-compra-core";
@@ -1351,26 +1351,6 @@ export function CatalogoView({
                 Editar catálogo
               </Button>
             )}
-            {pode.exportar && (
-              <>
-                <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => catalogoAberto && exportarCatalogoXlsx(catalogoAberto.nome, itensAberto)}>
-                  XLSX
-                </Button>
-                <Button
-                  variant="secondary"
-                  icon={<IconDownload className="h-4 w-4" />}
-                  onClick={() => {
-                    try {
-                      if (catalogoAberto) exportarCatalogoPdf(catalogoAberto.nome, itensAberto);
-                    } catch (e) {
-                      setErroImport(e instanceof Error ? e.message : "Falha ao exportar PDF.");
-                    }
-                  }}
-                >
-                  PDF
-                </Button>
-              </>
-            )}
           </div>
           {barraTipoBusca}
           <DataTable
@@ -1379,6 +1359,7 @@ export function CatalogoView({
             getKey={(r) => r.id}
             pageSize={20}
             minWidth={900}
+            exportar={catalogoAberto ? { nome: `Catálogo - ${catalogoAberto.nome}` } : undefined}
             selectable={podeEditar}
             selected={sel}
             onSelected={setSel}

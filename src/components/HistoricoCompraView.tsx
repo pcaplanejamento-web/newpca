@@ -279,7 +279,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
   ];
 
   const nomeArquivo = (s: string) => `${catalogo?.nome ?? "Histórico de compra"} — ${s}`;
-  const exportar = (s: string) => (podeExportar ? { nome: nomeArquivo(s) } : undefined);
+  const exportar = (s: string) => (podeExportar ? { nome: nomeArquivo(s) } : (false as const));
 
   return (
     <Modal
