@@ -2223,7 +2223,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `router.refresh`) — o antigo `GET /api/orcamento/visoes` foi removido. Erros em `AvisoFlutuante` (não empurram a
   tabela). `getOrcamentoItens(id)` é sempre de UM orçamento. Ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) + nav em
   `AppShell`.
-- **VÍNCULOS do orçamento CRIADOS pelo usuário (migrações `0030` + `0079` + `0080`):** a UNIDADE é o micro. Cada vínculo
+- **VÍNCULOS do orçamento CRIADOS pelo usuário (migrações `0030` + `0079` + `0080` + `0081`):** a UNIDADE é o micro. Cada vínculo
   liga um texto de Unidade do CUBO ("2 - SECRETARIA MUNICIPAL DE EDUCAÇ…") a UMA unidade cadastrada, com as AÇÕES dele — a
   MESMA unidade do CUBO pode ter VÁRIOS vínculos (as ações divididas entre unidades cadastradas). As ações de um vínculo
   são uma lista EXPLÍCITA ou **"as DEMAIS"** (as que nenhum outro vínculo da unidade pegou — também as que vierem nos
@@ -2242,7 +2242,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   REGRA, a mesma na tela e no servidor: uma unidade cadastrada por vez, um só "as demais", lista não vazia e sem ação de
   outro vínculo), `comVinculos`, `lerListaAcoes`. Acesso em `orcamento.ts` (`listarVinculosOrcamento`,
   `alvosVinculoOrcamento`, `criarVinculosOrcamento`/`editarVinculoOrcamento`/`excluirVinculoOrcamento` — conferem a unidade
-  e a regra contra os gravados e o próprio pedido). Rotas **`POST /api/orcamento/vinculos`** (`{vinculos ≤ 200}` — o "Vincular
+  e a regra contra os gravados e o próprio pedido; a exclusão APAGA do banco e confirma pelo `RETURNING` — 409 se não saiu).
+  **Sempre limpo:** a `0081` apagou os vínculos sem unidade e o gatilho `orcamento_vinculos_unidade_excluida` (BEFORE DELETE
+  em `reparticoes`) apaga os vínculos da unidade cadastrada excluída por QUALQUER caminho — nada fica com NULL. As rotas
+  devolvem a lista GRAVADA (`{vinculos}`), aplicada na hora pela tela. Rotas **`POST /api/orcamento/vinculos`** (`{vinculos ≤ 200}` — o "Vincular
   N sugestões" manda vários) e **`PATCH`/`DELETE /api/orcamento/vinculos/[id]`** (Configurar no Orçamento, auditoria). UI:
   aba **"Vínculos"** → **`OrcamentoVinculos`** (DS): `Segmented` **Vínculos (N)** (unidade do orçamento · unidade e órgão do
   cadastro · ações — "Todas as demais"/"As demais, menos N"/"k ações" · lançamentos · dotação vinculada; tocar ou o lápis
@@ -2250,7 +2253,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   unidade e as ações que faltam); "Novo vínculo" e "Vincular N sugestões" na barra das abas; o editor
   **`EditorVinculoOrcamento`** (DS, num `Modal`): unidade do orçamento, unidade cadastrada (por órgão; sigla repetida mostra o
   órgão — `useRotuloUnidade`), "Incluir as demais ações" e as ações livres (`SeletorMultiplo`), a regra na hora (trava o
-  Salvar) e a prévia do que leva; Excluir. `OrcamentoVinculosAba` = o contêiner (uma gravação por vez + `router.refresh`).
+  Salvar, com "Abrir o vínculo com …" — o que a regra acusa) e a prévia do que leva; Excluir. `OrcamentoVinculosAba` = o contêiner (uma gravação por vez + `router.refresh`).
 
 ## Tarefas (quadro estilo Trello) — migração `0042`
 - **O que é:** o módulo **`tarefas`** (`ABA_KEYS`/`NAV_MODULOS`, ícone `IconKanban`; a `0042` concede a aba a quem tem a

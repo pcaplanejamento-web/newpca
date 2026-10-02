@@ -355,7 +355,11 @@ export async function editarVinculoOrcamento(atual: VinculoOrcamento, mudanca: P
   return null;
 }
 
-/** Exclui um vínculo (as ações dele ficam sem vínculo — ou vão ao vínculo das DEMAIS da unidade, se houver). */
-export async function excluirVinculoOrcamento(id: number): Promise<void> {
-  await getDb().delete(orcamentoVinculos).where(eq(orcamentoVinculos.id, id));
+/**
+ * EXCLUI um vínculo DO BANCO (as ações dele ficam sem vínculo — ou vão ao vínculo das DEMAIS da unidade, se houver).
+ * Devolve se a linha foi apagada (`RETURNING` — nunca "excluído" sem ter saído do banco).
+ */
+export async function excluirVinculoOrcamento(id: number): Promise<boolean> {
+  const apagados = await getDb().delete(orcamentoVinculos).where(eq(orcamentoVinculos.id, id)).returning({ id: orcamentoVinculos.id });
+  return apagados.length > 0;
 }

@@ -327,6 +327,7 @@ export function OrcamentoVinculos({
             onSalvar={(d) => void salvar(d)}
             onExcluir={aberto.id != null ? () => void onExcluir(aberto.id as number).then((ok) => ok && fechar()) : undefined}
             onFechar={fechar}
+            onAbrirVinculo={(v) => setAberto(abertura(v))}
           />
         )}
       </Modal>

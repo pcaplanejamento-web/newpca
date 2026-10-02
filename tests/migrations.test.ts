@@ -1006,6 +1006,22 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.throws(() => d.exec(`INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id) VALUES ('unidade', 'B', 'B', 952)`), "a mesma unidade cadastrada duas vezes");
   });
 
+  it("0081 vínculos limpos: sem unidade saem; excluir a unidade cadastrada apaga os vínculos dela", () => {
+    const d = new DatabaseSync(":memory:");
+    const i81 = arquivos.findIndex((f) => f.startsWith("0081"));
+    assert.ok(i81 > 0, "migração 0081 ausente");
+    for (const arq of arquivos.slice(0, i81)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec("PRAGMA foreign_keys = ON");
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (960, 'Órgão', 'OR');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (961, 'U1', 'Um', 960), (962, 'U2', 'Dois', 960);
+      INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id) VALUES ('unidade', 'A', 'A', 961), ('unidade', 'A', 'A', 962), ('unidade', 'B', 'B', NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i81]), "utf8"));
+    const resto = () => (d.prepare("SELECT reparticao_id AS r FROM orcamento_vinculos ORDER BY id").all() as { r: number | null }[]).map((x) => x.r);
+    assert.deepEqual(resto(), [961, 962], "o sem unidade saiu");
+    d.exec("DELETE FROM reparticoes WHERE id = 961");
+    assert.deepEqual(resto(), [962], "o vínculo da unidade excluída saiu (não ficou NULL)");
+  });
+
   it("índice único de e-mail existe", () => {
     const idx = nomes(db, "SELECT name FROM sqlite_master WHERE type='index'");
     assert.ok(idx.includes("usuarios_email_uq"));

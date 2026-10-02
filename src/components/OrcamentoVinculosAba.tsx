@@ -13,7 +13,8 @@ import { toast } from "./Toast";
  * Aba VÍNCULOS da tela do orçamento: as UNIDADES dos lançamentos DESTE orçamento e os VÍNCULOS criados para elas
  * (`OrcamentoVinculos`) — criar (`POST /api/orcamento/vinculos`, vários de uma vez nas sugestões), editar e excluir
  * (`PATCH`/`DELETE …/[id]`). O vínculo é GLOBAL (pelo texto normalizado) — vale para todos os orçamentos. Uma gravação
- * por vez; depois, a página recarrega os vínculos; o erro fica no editor aberto (ou num aviso flutuante).
+ * por vez; cada resposta traz a lista GRAVADA no banco, aplicada na hora (a tela nunca mostra um vínculo que já saiu —
+ * vale até a página trazer os vínculos de novo); o erro fica no editor aberto (ou num aviso flutuante).
  */
 export function OrcamentoVinculosAba({
   itens,
@@ -28,6 +29,9 @@ export function OrcamentoVinculosAba({
 }) {
   const router = useRouter();
   const unidades = useMemo(() => unidadesDoOrcamento(itens), [itens]);
+  // A lista que o servidor devolveu na última gravação (sobre a base `vinculos` em que foi feita).
+  const [gravados, setGravados] = useState<{ base: VinculoOrcamento[]; lista: VinculoOrcamento[] } | null>(null);
+  const atuais = gravados && gravados.base === vinculos ? gravados.lista : vinculos;
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -41,8 +45,9 @@ export function OrcamentoVinculosAba({
         headers: corpo ? { "Content-Type": "application/json" } : undefined,
         body: corpo ? JSON.stringify(corpo) : undefined,
       });
-      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string; vinculos?: VinculoOrcamento[] };
       if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível gravar o vínculo.");
+      if (j.vinculos) setGravados({ base: vinculos, lista: j.vinculos });
       toast.success(sucesso);
       router.refresh();
       return true;
@@ -58,7 +63,7 @@ export function OrcamentoVinculosAba({
     <>
       <OrcamentoVinculos
         unidades={unidades}
-        vinculos={vinculos}
+        vinculos={atuais}
         alvos={alvos}
         podeEditar={podeEditar}
         salvando={salvando}

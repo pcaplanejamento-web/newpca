@@ -57,6 +57,7 @@ export function EditorVinculoOrcamento({
   onSalvar,
   onExcluir,
   onFechar,
+  onAbrirVinculo,
 }: {
   unidades: UnidadeOrcamento[];
   vinculos: VinculoOrcamento[];
@@ -67,6 +68,8 @@ export function EditorVinculoOrcamento({
   onSalvar: (dados: DadosVinculo) => void;
   onExcluir?: () => void;
   onFechar: () => void;
+  /** Abrir OUTRO vínculo da mesma unidade (o que a regra acusa) no lugar deste. */
+  onAbrirVinculo?: (v: VinculoOrcamento) => void;
 }) {
   const rotulo = useRotuloUnidade(alvos);
   const [chave, setChave] = useState(inicial.chave ?? "");
@@ -92,6 +95,8 @@ export function EditorVinculoOrcamento({
   const motivo =
     !unidade ? "Escolha a unidade do orçamento." : alvoId == null ? "Escolha a unidade cadastrada." : conflitoVinculo(outros, { alvoId, acoes }, textoAcao);
   const leva = disponiveis.filter((a) => marcadas.has(a.chave));
+  // O vínculo que a regra acusa (a mesma unidade cadastrada, ou o "com as demais") — para abri-lo em vez de duplicar.
+  const conflitante = motivo ? (outros.find((o) => o.alvoId === alvoId) ?? (demais ? outros.find((o) => o.acoes == null) : undefined)) : undefined;
   const textoPorChave = new Map(disponiveis.map((a) => [a.texto, a.chave]));
 
   return (
@@ -162,7 +167,16 @@ export function EditorVinculoOrcamento({
           </p>
         </>
       )}
-      {(motivo || erro) && <Callout kind={erro ? "danger" : "warn"}>{erro ?? motivo}</Callout>}
+      {(motivo || erro) && (
+        <Callout kind={erro ? "danger" : "warn"}>
+          <span className="block">{erro ?? motivo}</span>
+          {!erro && onAbrirVinculo && conflitante && (
+            <Button size="sm" variant="secondary" className="mt-2" onClick={() => onAbrirVinculo(conflitante)}>
+              Abrir o vínculo com {rotulo.deId(conflitante.alvoId)}
+            </Button>
+          )}
+        </Callout>
+      )}
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         {onExcluir && (
           <Button variant="danger" className="mr-auto" disabled={salvando} icon={<IconTrash className="h-4 w-4" />} onClick={onExcluir}>

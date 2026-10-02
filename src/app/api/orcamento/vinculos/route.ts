@@ -1,7 +1,7 @@
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { criarVinculosOrcamento } from "@/lib/orcamento";
+import { criarVinculosOrcamento, listarVinculosOrcamento } from "@/lib/orcamento";
 import { criarVinculosOrcamentoSchema } from "@/lib/orcamento-validation";
 
 export const dynamic = "force-dynamic";
@@ -27,5 +27,6 @@ export async function POST(req: Request) {
     resumo: `${n} ${n === 1 ? "vínculo criado" : "vínculos criados"} entre unidades do orçamento e do cadastro`,
     depois: { vinculos: p.data.vinculos },
   });
-  return ok();
+  // A lista GRAVADA volta na resposta — a tela fica igual ao banco sem esperar a recarga.
+  return ok({ vinculos: await listarVinculosOrcamento() });
 }
