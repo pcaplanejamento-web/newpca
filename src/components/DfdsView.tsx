@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
 import type { ItemDfdRow, PcaResumo } from "@/lib/dfd";
@@ -58,6 +58,7 @@ import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { CelulaLista, CelulaTexto } from "./CelulaLista";
+import { BotaoReverificar } from "./BotaoAtualizar";
 import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
@@ -358,6 +359,12 @@ export function DfdsView({
   // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
   const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
   const [carregandoItens, setCarregandoItens] = useState(false);
+  // REVERIFICAR TUDO (botão da barra): recarrega a lista do banco e, terminada a recarga (`listaPendente`), reconfere
+  // TODOS os protocolos, DFDs e itens — em QUALQUER visão (as conferências, normalmente lazy pela visão aberta, rodam
+  // todas). Termina quando cada protocolo e DFD tem resultado (ou falhou) e os itens chegaram.
+  const [rever, setRever] = useState(false);
+  const [listaPendente, recarregarLista] = useTransition();
+  const reverAtivo = rever && !listaPendente;
   // Catálogo → Unidades de medida | Classificações: o cadastro vem JUNTO com os itens (só com a visão Itens aberta) — a
   // unidade CADASTRADA de cada item e a classificação AUTOMÁTICA (as colunas só existem com o cadastro feito).
   const [padronizacao, setPadronizacao] = useState<Padronizacao | null>(null);
@@ -373,7 +380,7 @@ export function DfdsView({
   // Mesa principal: o MESMO PCA do cabeçalho com que a página veio (explícito — o cookie pode ter mudado noutra aba).
   const anoFiltro = pcaFiltro?.ano;
   useEffect(() => {
-    if (vista !== "itens" || itens !== null) return;
+    if ((vista !== "itens" && !reverAtivo) || itens !== null) return;
     const ac = new AbortController();
     setCarregandoItens(true);
     fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal })
@@ -393,7 +400,7 @@ export function DfdsView({
         if (!ac.signal.aborted) setCarregandoItens(false);
       });
     return () => ac.abort();
-  }, [vista, itens, pcaDaMesa, anoFiltro]);
+  }, [vista, itens, pcaDaMesa, anoFiltro, reverAtivo]);
 
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).
@@ -462,7 +469,7 @@ export function DfdsView({
   // Falha de rede/servidor na conferência: as linhas pendentes param de girar (ficam "Pendente").
   const [confFalhou, setConfFalhou] = useState(false);
   useEffect(() => {
-    if (vista !== "dfds") return;
+    if (vista !== "dfds" && !reverAtivo) return;
     setConfFalhou(false);
     if (confRef.current.ctx !== ctxConf) confRef.current = { ctx: ctxConf, m: new Map() };
     const alvo = confRef.current;
@@ -497,7 +504,7 @@ export function DfdsView({
       }
     })();
     return () => ac.abort();
-  }, [vista, dfds, ctxConf]);
+  }, [vista, dfds, ctxConf, reverAtivo]);
   const confDe = (d: DfdNaMesa): ConfLinha | undefined =>
     confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
@@ -511,7 +518,7 @@ export function DfdsView({
   const confProtoRef = useRef<{ ctx: string; m: Map<string, ConfProto>; falhos: Set<string> }>({ ctx: "", m: new Map(), falhos: new Set() });
   const [confProtoVersao, setConfProtoVersao] = useState(0);
   // Alternar entre Protocolos e Dashboard NÃO reinicia as requisições em curso (o mesmo cache serve aos dois).
-  const precisaConfProto = vista === "protocolos" || vista === "dashboard";
+  const precisaConfProto = vista === "protocolos" || vista === "dashboard" || reverAtivo;
   useEffect(() => {
     if (!precisaConfProto) return;
     if (confProtoRef.current.ctx !== ctxConf) confProtoRef.current = { ctx: ctxConf, m: new Map(), falhos: new Set() };
@@ -567,6 +574,39 @@ export function DfdsView({
   }, [precisaConfProto, protocolos, ctxConf]);
   /** Estado do protocolo: o agregado do servidor. Até chegar, "Conferindo…"; se a conferência falhou, só o
    * que a CAPA já prova (problema real) — sem problema na capa é "Não conferido", nunca "Regular". */
+  // REVERIFICAR TUDO: zera os caches das conferências (protocolos, DFDs), os itens e o histórico do Dashboard e recarrega
+  // a lista; as conferências refazem TUDO na volta. O andamento = o que já tem resultado.
+  const reverificarTudo = () => {
+    if (rever) return;
+    confRef.current = { ctx: "", m: new Map() };
+    confProtoRef.current = { ctx: "", m: new Map(), falhos: new Set() };
+    cacheExec.current = null;
+    setConfFalhou(false);
+    setItens(null);
+    setRever(true);
+    recarregarLista(() => router.refresh());
+  };
+  const andamentoRever = (() => {
+    if (!rever) return null;
+    const pm = confProtoRef.current.ctx === ctxConf ? confProtoRef.current : null;
+    const dm = confRef.current.ctx === ctxConf ? confRef.current.m : null;
+    const protoFeitos = pm ? protocolos.filter((p) => pm.m.has(chaveProto(p)) || pm.falhos.has(chaveProto(p))).length : 0;
+    const protoFalhos = pm ? protocolos.filter((p) => pm.falhos.has(chaveProto(p))).length : 0;
+    const dfdFeitos = confFalhou ? dfds.length : dm ? dfds.filter((d) => dm.has(chaveConf(d))).length : 0;
+    const itensFeitos = itens !== null && !carregandoItens ? 1 : 0;
+    const total = protocolos.length + dfds.length + 1;
+    return { feitos: protoFeitos + dfdFeitos + itensFeitos, total, protoFalhos };
+  })();
+  const reverConcluido = reverAtivo && andamentoRever != null && andamentoRever.feitos >= andamentoRever.total;
+  useEffect(() => {
+    if (!reverConcluido || !andamentoRever) return;
+    setRever(false);
+    const falhas = andamentoRever.protoFalhos + (confFalhou ? 1 : 0);
+    const texto = `Mesa reverificada: ${num(protocolos.length)} protocolo(s), ${num(dfds.length)} DFD(s) e ${num(itens?.length ?? 0)} item(ns).`;
+    if (falhas > 0) toast.warning(`${texto} Parte da conferência não respondeu — tente de novo.`);
+    else toast.success(texto);
+  }, [reverConcluido, andamentoRever, confFalhou, protocolos.length, dfds.length, itens?.length]);
+
   const estadoDoProtocolo = (p: ProtocoloNaMesa): { conf: ConfProto; pendente: boolean; naoConferido: boolean } => {
     const atual = confProtoRef.current.ctx === ctxConf ? confProtoRef.current : null;
     const k = chaveProto(p);
@@ -2078,6 +2118,15 @@ export function DfdsView({
         )}
         <div className="ml-auto flex items-center gap-2">
           {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
+          {/* REVERIFICAR TUDO: recarrega e reconfere protocolos, DFDs e itens (o anel mostra o andamento). */}
+          <BotaoReverificar
+            ativo={rever}
+            progresso={reverAtivo && andamentoRever ? andamentoRever.feitos / Math.max(1, andamentoRever.total) : null}
+            detalhe={
+              !rever ? undefined : !reverAtivo || !andamentoRever ? "Recarregando a Mesa…" : `Reconferindo ${num(andamentoRever.feitos)} de ${num(andamentoRever.total)}…`
+            }
+            onClick={reverificarTudo}
+          />
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
           {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
           {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}

@@ -26,6 +26,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Mesas: "Atualizar tudo" reverifica protocolos, DFDs e itens — entregue
+✅ Botão circular na barra da Mesa (sistema e PCA): recarrega a lista e reconfere tudo, com o anel de andamento e o aviso
+final (falhas parciais avisadas).
+
 ### Toda unidade pertence a um órgão — entregue
 ✅ A migração `0078` apagou as unidades sem órgão (menos a "Geral"; os DFDs/protocolos delas ficaram sem unidade, por
 escolha do usuário); o órgão é obrigatório no cadastro da unidade e excluir um órgão exclui as unidades dele no mesmo lote.

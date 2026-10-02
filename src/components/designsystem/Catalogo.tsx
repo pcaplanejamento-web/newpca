@@ -73,7 +73,7 @@ import {
   propostaUnidade,
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
-import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
+import { BotaoAtualizar, BotaoReverificar, useGiro } from "@/components/BotaoAtualizar";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
@@ -1440,12 +1440,32 @@ const ITENS_CONSOLIDADOS_DEMO: ItemComposicao[] = [
  * (BotaoDadosCompletos + o provedor DadosCompletos: CelulaTexto, CelulaLista e EstadoResumo inteiros na célula). */
 function AtualizarEDadosCompletosDemo() {
   const [ligado, setLigado] = useState(false);
+  const [rever, setRever] = useState<number | null>(null);
   const giro = useGiro();
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         <BotaoAtualizar girando={giro.girando} onClick={() => void giro.girar(() => new Promise((r) => setTimeout(r, 1200)))} />
         <span className="text-[12px] text-faint">BotaoAtualizar — ao lado do X dos banners de DFD, item e protocolo: recarrega e revisa (gira ao menos uma volta).</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <BotaoReverificar
+          ativo={rever != null}
+          progresso={rever}
+          detalhe={rever == null ? undefined : `Reconferindo ${Math.round(rever * 100)}%…`}
+          onClick={() => {
+            let p = 0;
+            setRever(0);
+            const t = setInterval(() => {
+              p += 0.1;
+              if (p >= 1) {
+                clearInterval(t);
+                setRever(null);
+              } else setRever(p);
+            }, 250);
+          }}
+        />
+        <span className="text-[12px] text-faint">BotaoReverificar — na barra das Mesas: recarrega e reconfere todos os protocolos, DFDs e itens (o anel enche com o andamento).</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />
@@ -2875,7 +2895,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Atualizar e revisar (BotaoAtualizar + useGiro) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
+      <Secao titulo="Atualizar e revisar (BotaoAtualizar + useGiro) · Reverificar a Mesa (BotaoReverificar) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
         <AtualizarEDadosCompletosDemo />
       </Secao>
 
