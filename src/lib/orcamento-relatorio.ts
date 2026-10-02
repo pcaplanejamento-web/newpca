@@ -94,7 +94,24 @@ export type RelatorioOrcamento = {
   semOrcamento: { sigla: string; nome: string; orgao: string | null; planejado: number }[];
   /** Contratações do PCA sem unidade (não entram em nenhuma linha). */
   planejadoSemUnidade: number;
+  /** O que foi e o que NÃO foi DEFINIDO — o painel do início do relatório. */
+  definicoes: DefinicoesRelatorio;
 };
+
+/** As DEFINIÇÕES do cálculo: as escolhas da visão (por dimensão) e a cobertura dos vínculos (por unidade do CUBO). */
+export type DefinicoesRelatorio = {
+  /** Cada dimensão da visão: definida (com os valores escolhidos) ou não (entram todos). */
+  visao: { rotulo: string; definida: boolean; valores: string[] }[];
+  /** Cada unidade do CUBO: quantas ações, quantas têm vínculo, para quais unidades cadastradas e quais ações ficaram sem. */
+  unidadesCubo: { unidadeCubo: string; acoes: number; vinculadas: number; destinos: string[]; semVinculo: string[]; valorSemVinculo: number }[];
+  /** As unidades cadastradas com contratações no PCA: com ou sem vínculo. */
+  unidadesComContratacao: { sigla: string; nome: string; comVinculo: boolean; planejado: number }[];
+};
+
+/** A situação de uma unidade do CUBO nos vínculos. */
+export function situacaoVinculo(u: { acoes: number; vinculadas: number }): "Vinculada" | "Parcial" | "Sem vínculo" {
+  return u.vinculadas === 0 ? "Sem vínculo" : u.vinculadas < u.acoes ? "Parcial" : "Vinculada";
+}
 
 const colator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 const textoUnidade = (u: string | null) => String(u ?? "").trim() || "(sem unidade no CUBO)";
@@ -119,6 +136,8 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
   type Acum = Map<string, AcaoRelatorio>;
   const porUnidade = new Map<number, Map<string, { texto: string; acoes: Acum }>>();
   const semVinc = new Map<string, { texto: string; acoes: Acum }>();
+  // Cobertura dos vínculos por unidade do CUBO: cada ação → a unidade cadastrada (ou nenhuma) + a dotação no CUBO.
+  const cobertura = new Map<string, { texto: string; acoes: Map<string, { texto: string; alvo: number | null; valor: number }> }>();
   const acumular = (m: Acum, ka: string, texto: string, v: number, entra: boolean) => {
     const a = m.get(ka) ?? { texto, lancamentos: 0, noCubo: 0, naVisao: 0 };
     a.lancamentos++;
@@ -136,6 +155,12 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
     if (!textoAcao.has(`${ku}|${ka}`)) textoAcao.set(`${ku}|${ka}`, ta);
     somar(totais.cubo, v);
     const alvo = unidadeDoLancamento(mapa, l.unidade, l.acao);
+    const alvoValido = alvo != null && porId.has(alvo) ? alvo : null;
+    const cob = cobertura.get(ku) ?? { texto: textoUnidade(l.unidade), acoes: new Map() };
+    const ca = cob.acoes.get(ka) ?? { texto: ta, alvo: alvoValido, valor: 0 };
+    ca.valor += v;
+    cob.acoes.set(ka, ca);
+    cobertura.set(ku, cob);
     if (!entra) {
       somar(totais.foraDaVisao, v);
       const r = retirado.get(ku) ?? { unidadeCubo: textoUnidade(l.unidade), lancamentos: 0, valor: 0 };
@@ -230,6 +255,28 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
     semVinculo,
     semOrcamento,
     planejadoSemUnidade: planejadoPor.get(null) ?? 0,
+    definicoes: {
+      visao: DIMENSOES_VISAO.map((d) => ({ rotulo: d.rotulo, definida: (filtros[d.key]?.length ?? 0) > 0, valores: filtros[d.key] ?? [] })),
+      unidadesCubo: [...cobertura.values()]
+        .map((c) => {
+          const acoes = [...c.acoes.values()];
+          const sem = acoes.filter((a) => a.alvo == null).sort((a, b) => colator.compare(a.texto, b.texto));
+          const destinos = [...new Set(acoes.flatMap((a) => (a.alvo == null ? [] : [porId.get(a.alvo)?.sigla ?? "?"])))].sort(colator.compare);
+          return {
+            unidadeCubo: c.texto,
+            acoes: acoes.length,
+            vinculadas: acoes.length - sem.length,
+            destinos,
+            semVinculo: sem.map((a) => a.texto),
+            valorSemVinculo: sem.reduce((s, a) => s + a.valor, 0),
+          };
+        })
+        .sort((a, b) => colator.compare(a.unidadeCubo, b.unidadeCubo)),
+      unidadesComContratacao: e.unidades
+        .filter((u) => (planejadoPor.get(u.id) ?? 0) > 0)
+        .map((u) => ({ sigla: u.sigla, nome: u.nome, comVinculo: comVinculo.has(u.id), planejado: planejadoPor.get(u.id) ?? 0 }))
+        .sort((a, b) => Number(a.comVinculo) - Number(b.comVinculo) || colator.compare(a.sigla, b.sigla)),
+    },
   };
 }
 
@@ -292,6 +339,7 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
   });
 
   // ---------------------------------------------------------------- Como ler
+  blocosDefinicoes(b, r);
   b.push({ tipo: "secao", texto: "Como o valor de cada unidade é calculado" });
   b.push({
     tipo: "paragrafo",
@@ -506,3 +554,104 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
     b.push({ tipo: "nota", cor: "var(--warn)", texto: `Há ${brl(r.planejadoSemUnidade)} em contratações do PCA sem unidade definida — não entram em nenhuma linha.` });
   return b;
 }
+
+const ATENCAO = "var(--warn)";
+const CINZA = "var(--muted)";
+const lista = (xs: string[], max = 12) => (xs.length > max ? `${xs.slice(0, max).join("; ")}; +${num(xs.length - max)}` : xs.join("; "));
+
+/**
+ * O PAINEL DAS DEFINIÇÕES (o 1º do relatório, separado e visível): o que foi DEFINIDO e o que NÃO foi — na visão (por
+ * dimensão: os valores escolhidos, ou "não definida = entram todos") e nos vínculos (por unidade do CUBO: vinculada,
+ * parcial ou sem vínculo, com as ações que faltam; e as unidades com contratações sem orçamento vinculado).
+ */
+function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
+  const d = r.definicoes;
+  const dimDef = d.visao.filter((x) => x.definida).length;
+  const cubo = d.unidadesCubo;
+  const vinc = cubo.filter((u) => situacaoVinculo(u) === "Vinculada").length;
+  const parc = cubo.filter((u) => situacaoVinculo(u) === "Parcial").length;
+  const sem = cubo.filter((u) => situacaoVinculo(u) === "Sem vínculo").length;
+  const contrSem = d.unidadesComContratacao.filter((u) => !u.comVinculo).length;
+  b.push({ tipo: "secao", texto: "Definições: o que foi e o que NÃO foi definido" });
+  b.push({
+    tipo: "destaques",
+    itens: [
+      { rotulo: "Visão: dimensões definidas", valor: r.visaoNome ? `${num(dimDef)} de ${num(d.visao.length)}` : "Sem visão", detalhe: r.visaoNome ? `as demais: entram todos` : "todo o orçamento entra", cor: AZUL },
+      { rotulo: "Unidades do CUBO vinculadas", valor: `${num(vinc)} de ${num(cubo.length)}`, detalhe: "todas as ações com vínculo", cor: OK },
+      { rotulo: "Vínculo parcial · sem vínculo", valor: `${num(parc)} · ${num(sem)}`, detalhe: "unidades do CUBO", cor: parc + sem ? ATENCAO : OK },
+      { rotulo: "Contratações sem orçamento", valor: num(contrSem), detalhe: `de ${num(d.unidadesComContratacao.length)} unidades com contratações`, cor: contrSem ? FORA : OK },
+    ],
+  });
+
+  b.push({ tipo: "subsecao", texto: "Na VISÃO (vale para todas as unidades)", detalhe: r.visaoNome ? `Visão “${r.visaoNome}”` : "Nenhuma visão" });
+  b.push({
+    tipo: "tabela",
+    colunas: [
+      { titulo: "Dimensão", peso: 2 },
+      { titulo: "Situação", peso: 1.8 },
+      { titulo: "O que foi escolhido", peso: 7 },
+    ],
+    linhas: d.visao.map((x) =>
+      x.definida
+        ? { celulas: [x.rotulo, "Definida", lista(x.valores)], cores: [null, OK, null] }
+        : { celulas: [x.rotulo, "Não definida", "Nada escolhido — entram todos os valores"], cores: [null, CINZA, CINZA] },
+    ),
+  });
+
+  b.push({
+    tipo: "subsecao",
+    texto: "Nos VÍNCULOS (unidade do CUBO e ações → unidade cadastrada)",
+    detalhe: `${qtd(vinc, "vinculada", "vinculadas")} · ${qtd(parc, "parcial", "parciais")} · ${num(sem)} sem vínculo`,
+  });
+  b.push({
+    tipo: "tabela",
+    colunas: [
+      { titulo: "Unidade do CUBO", peso: 3.6 },
+      { titulo: "Situação", peso: 1.5 },
+      { titulo: "Ações com vínculo", peso: 1.4, alinhar: "right" },
+      { titulo: "Vai para", peso: 1.8 },
+      { titulo: "Ações SEM vínculo (não definidas)", peso: 4.2 },
+    ],
+    linhas: cubo.map((u) => {
+      const sit = situacaoVinculo(u);
+      const cor = sit === "Vinculada" ? OK : sit === "Parcial" ? ATENCAO : FORA;
+      return {
+        celulas: [
+          u.unidadeCubo,
+          sit,
+          `${num(u.vinculadas)} de ${num(u.acoes)}`,
+          u.destinos.join(", ") || "—",
+          u.semVinculo.length === 0
+            ? "—"
+            : u.vinculadas === 0
+              ? `Todas as ${num(u.acoes)} ações (${brl(u.valorSemVinculo)} no CUBO)`
+              : `${lista(u.semVinculo, 6)} (${brl(u.valorSemVinculo)} no CUBO)`,
+        ],
+        cores: [null, cor, cor, null, u.semVinculo.length ? FORA : CINZA],
+      };
+    }),
+    vazio: "Nenhum lançamento no orçamento.",
+  });
+
+  b.push({ tipo: "subsecao", texto: "Unidades cadastradas com contratações no PCA", detalhe: `${num(contrSem)} sem orçamento vinculado`, corDetalhe: contrSem ? FORA : OK });
+  b.push({
+    tipo: "tabela",
+    colunas: [
+      { titulo: "Unidade", peso: 6 },
+      { titulo: "Situação", peso: 2.6 },
+      { titulo: "Contratações do PCA", peso: 2.2, alinhar: "right" },
+    ],
+    linhas: d.unidadesComContratacao.map((u) => ({
+      celulas: [`${u.sigla} — ${u.nome}`, u.comVinculo ? "Com vínculo" : "SEM vínculo (sem orçamento)", brl(u.planejado)],
+      cores: [null, u.comVinculo ? OK : FORA, null],
+    })),
+    vazio: "Nenhuma unidade com contratações no PCA.",
+  });
+  b.push({
+    tipo: "nota",
+    cor: ATENCAO,
+    texto:
+      "Legenda: verde = definido; âmbar = definido em parte; vermelho = não definido (o valor não entra em nenhuma unidade); cinza = não definido na visão, por isso entram todos. Ajuste a visão na Configuração do PCA e os vínculos em Orçamento → Vínculos.",
+  });
+}
+

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { montarDocumento, PAGINA_A4 } from "../src/lib/documento-pdf-core.ts";
-import { blocosRelatorioOrcamento, regraDoVinculo, relatorioOrcamentoPca } from "../src/lib/orcamento-relatorio.ts";
+import { blocosRelatorioOrcamento, regraDoVinculo, relatorioOrcamentoPca, situacaoVinculo } from "../src/lib/orcamento-relatorio.ts";
 import { aplicarVisao } from "../src/lib/orcamento-visao.ts";
 import { chaveVinculo, mapaVinculos, unidadeDoLancamento, type VinculoOrcamento } from "../src/lib/orcamento-vinculo.ts";
 
@@ -114,6 +114,31 @@ describe("relatório da composição do orçamento", () => {
     assert.deepEqual(r.retiradoPorUnidadeCubo, [{ unidadeCubo: "2 - SEMED", lancamentos: 1, valor: 500 }]);
   });
 
+  it("definições: o que foi e o que NÃO foi definido na visão e nos vínculos", () => {
+    const d = relatorioOrcamentoPca(entrada()).definicoes;
+    assert.deepEqual(
+      d.visao.filter((x) => x.definida).map((x) => [x.rotulo, x.valores]),
+      [["Fonte de recurso", ["100"]]],
+    );
+    assert.equal(d.visao.filter((x) => !x.definida).length, 5);
+    assert.deepEqual(
+      d.unidadesCubo.map((u) => [u.unidadeCubo, situacaoVinculo(u), u.destinos, u.semVinculo, u.valorSemVinculo]),
+      [
+        ["2 - SEMED", "Parcial", ["SEMED", "TRANSP"], ["2003 - MERENDA"], 200],
+        ["5 - SEMUS", "Vinculada", ["SEMUS"], [], 0],
+        ["9 - SEMAD", "Sem vínculo", [], ["4001 - ADM"], 50],
+      ],
+    );
+    assert.deepEqual(
+      d.unidadesComContratacao.map((u) => [u.sigla, u.comVinculo]),
+      [
+        ["SEMAD", false],
+        ["SEMED", true],
+      ],
+      "as sem vínculo primeiro",
+    );
+  });
+
   it("sem visão: nada é retirado", () => {
     const r = relatorioOrcamentoPca({ ...entrada(), visao: null });
     assert.equal(r.totais.foraDaVisao.valor, 0);
@@ -124,10 +149,11 @@ describe("relatório da composição do orçamento", () => {
     const r = relatorioOrcamentoPca(entrada());
     const blocos = blocosRelatorioOrcamento(r);
     const secoes = blocos.filter((b) => b.tipo === "secao").map((b) => (b as { texto: string }).texto);
-    assert.equal(secoes.length, 5);
-    assert.match(secoes[2], /Parte 1/);
-    assert.match(secoes[3], /Parte 2/);
-    assert.match(secoes[4], /Parte 3/);
+    assert.equal(secoes.length, 6);
+    assert.match(secoes[0], /Definições/, "o painel das definições vem PRIMEIRO");
+    assert.match(secoes[3], /Parte 1/);
+    assert.match(secoes[4], /Parte 2/);
+    assert.match(secoes[5], /Parte 3/);
     // Uma tabela longa força várias páginas.
     const longa = { tipo: "tabela" as const, colunas: [{ titulo: "Ação", peso: 3 }, { titulo: "Valor", peso: 1, alinhar: "right" as const }], linhas: Array.from({ length: 200 }, (_, i) => ({ celulas: [`Ação ${i}`, `${i}`] })) };
     const medir = (t: string, tam: number) => t.length * tam * 0.5;
