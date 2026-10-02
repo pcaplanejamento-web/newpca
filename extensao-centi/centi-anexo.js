@@ -322,7 +322,7 @@
   const VERBO_ESCRITA = /(save|delete|remove|exclu|insert|update|upload|send|tramit|assin|sign|cancel|import|exec|commit|aprov|approv|confirm|logout|login)/i;
   const VERBO_LEITURA = /^(load\w*|list\w*|get\w*|search\w*|query\w*|find\w*|filter\w*|grid\w*|pesquis\w*|consult\w*|count\w*|page\w*|select\w*|lookup\w*|combo\w*|tree\w*|view\w*)$/i;
   const SEGREDO = /token|senha|password|passwd|authorization|refresh|cookie|secret/i;
-  const VERBO_ARQUIVO = /^(getbinlink|getbin|getfile)$/i;
+  const VERBO_ARQUIVO = /^(getbinlink|getbincache|getbin|getfile)$/i;
   /** O caminho da API ("restauth/list?…" | "rest/…") e o verbo (1º trecho); fora da API = null. */
   function caminhoDaApi(url) {
     let u;

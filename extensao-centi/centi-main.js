@@ -223,7 +223,7 @@
   // O ARQUIVO que a própria tela baixa na emissão (getbinlink…): os bytes ficam guardados — a chave pode valer UMA vez.
   const ehArquivoUrl = (u) => {
     try {
-      return /\/(restauth|rest)\/(getbinlink|getbin|getfile)\//i.test(new URL(String(u), location.href).pathname);
+      return /\/(restauth|rest)\/(getbinlink|getbincache|getbin|getfile)\//i.test(new URL(String(u), location.href).pathname);
     } catch {
       return false;
     }
@@ -415,7 +415,7 @@
   const TRAVAS = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.TRAVAS ?? {};
   const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   // Os endereços do ARQUIVO gerado pelo Emitir DFD (os únicos que a leitura alcança).
-  const ARQUIVO = /\/(restauth|rest)\/(getbinlink|getbin|getfile)\//i;
+  const ARQUIVO = /\/(restauth|rest)\/(getbinlink|getbincache|getbin|getfile)\//i;
 
   function emBase64(bytes) {
     let s = "";
@@ -483,7 +483,7 @@
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
     // A EMISSÃO vai com os cabeçalhos da aba EXATAMENTE como a tela os mandou (como na 1.2.0, quando funcionava) — sem
     // renovar o rastreio (que é só do salvar do anexo).
-    // TRAVA: a leitura (GET) só baixa o ARQUIVO gerado (getbinlink/getbin/getfile) — nenhum outro endereço da API.
+    // TRAVA: a leitura (GET) só baixa o ARQUIVO gerado (getbinlink/GetBinCache/getbin/getfile) — nenhum outro endereço da API.
     if (d.metodo === "GET") {
       if (!ARQUIVO.test(new URL(url).pathname)) return { ok: false, erro: "Só o download do PDF gerado é permitido." };
       return (await binarioPelaCenti("GET", url, null, ent)) ?? executar("GET", url, null, ent, false, cabecalhos, "application/json", url, false);

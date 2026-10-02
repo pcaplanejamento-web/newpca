@@ -39,7 +39,7 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** O mesmo filtro da extensão (consultaPermitida): só a API restauth, verbo de leitura, nunca de escrita/arquivo. */
 const VERBO_ESCRITA = /(save|delete|remove|exclu|insert|update|upload|send|tramit|assin|sign|cancel|import|exec|commit|aprov|approv|confirm|logout|login)/i;
 const VERBO_LEITURA = /^(load\w*|list\w*|get\w*|search\w*|query\w*|find\w*|filter\w*|grid\w*|pesquis\w*|consult\w*|count\w*|page\w*|select\w*|lookup\w*|combo\w*|tree\w*|view\w*)$/i;
-const VERBO_ARQUIVO = /^(getbinlink|getbin|getfile)$/i;
+const VERBO_ARQUIVO = /^(getbinlink|getbincache|getbin|getfile)$/i;
 
 export function consultaPermitida(caminho: string, metodo: string): boolean {
   if (!/^(GET|POST)$/.test(metodo)) return false;

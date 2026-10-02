@@ -103,7 +103,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.9.1"), false);
   assert.equal(versaoAtende("1.10.0"), false);
   assert.equal(versaoAtende("1.10.1"), false);
-  assert.equal(versaoAtende("1.11.0"), true);
+  assert.equal(versaoAtende("1.11.0"), false);
+  assert.equal(versaoAtende("1.11.1"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -496,6 +497,12 @@ test("travas da extensão: só o Emitir DFD, só o download do PDF e o estado le
   // POST: só o Emitir DFD ou a emissão APRENDIDA na Tela Protocolo (a que gerou um arquivo) — sempre com as travas.
   assert.match(main, /if \(!A\?\.operacaoDoCorpo\(c\) && !operacoesAprendidas\(\)\.includes\(A\?\.chaveOperacao\(c\)\)\)\s+return \{ ok: false/);
   assert.match(main, /if \(!ARQUIVO\.test\(new URL\(url\)\.pathname\)\) return \{ ok: false/);
+  // O GET alcança só os endereços do arquivo gerado — inclusive o do CACHE (o documento do protocolo).
+  const ARQ = new RegExp(/const ARQUIVO = \/(.+)\/i;/.exec(main)?.[1] ?? "x", "i");
+  assert.ok(ARQ.test("/contabil/wcf/rest/GetBinCache/be87bf8a-6855-49ba-bbe3-c30ef2fc0f21"));
+  assert.ok(ARQ.test("/contabil/wcf/restauth/getbinlink/k/a.pdf"));
+  assert.ok(!ARQ.test("/contabil/wcf/restauth/load?entity=1"));
+  assert.ok(!ARQ.test("/contabil/wcf/restauth/save"));
   const bg = readFileSync("extensao-centi/background.js", "utf8");
   assert.match(bg, /operacao: (r\.)?estado\?\.operacao \?\? null/);
 });
@@ -566,6 +573,19 @@ test("emissão acompanhada: o operation da própria tela vai com as TRAVAS (sem 
   assert.equal(p.respostaComArquivo("application/json", '{"File":{"Key":"4f1c2d3e-aaaa-bbbb-cccc-1234567890ab","FileName":"p.pdf"}}'), true);
   assert.equal(p.respostaComArquivo("application/pdf", ""), true);
   assert.equal(p.respostaComArquivo("application/json", '{"Message":"erro"}'), false);
+});
+
+test("arquivo da Centi em CACHE (Emitir documentos do protocolo): rest/GetBinCache/{chave}, como a tela da Centi", async () => {
+  const { analisarRespostaCenti, caminhoDoArquivo } = await import("../src/lib/automacao-centi-core.ts");
+  const enc = (t: string) => new TextEncoder().encode(t);
+  const resp = {
+    File: { $type: "TempBinaryResult", Key: "be87bf8a-6855-49ba-bbe3-c30ef2fc0f21", FileName: "EmissaoProtocoloDocto20261002_134621.pdf", Mode: 0, URL: null, Cache: true },
+    Success: true,
+  };
+  const a = analisarRespostaCenti(enc(JSON.stringify(resp)), 200);
+  assert.equal(a.tipo === "chave" && caminhoDoArquivo(a), "rest/GetBinCache/be87bf8a-6855-49ba-bbe3-c30ef2fc0f21");
+  // A URL devolvida pela Centi sempre vence.
+  assert.equal(caminhoDoArquivo({ chave: "k", nome: "n", url: "rest/x/1", cache: true }), "rest/x/1");
 });
 
 test("arquivo da Centi: baixado DIRETO pela chave, num pedido só (sem insistir)", async () => {

@@ -3614,7 +3614,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `emitirPorCodigo` → `{recusada}`); sem o Id na grade = erro claro. **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
   o parâmetro do modo assíncrono (`ehParamAssincrono`: Assincrono/Assync/Async) como "não" no formato capturado
   (`valorSincrono`) — no assíncrono a Centi gera em segundo plano e a chave dá 404; o diagnóstico mostra os parâmetros ENVIADOS. **Download DIRETO, num pedido só:** a chave do `File.Key` é baixada por
-  `caminhoDoArquivo` (o `URL` da resposta ou `restauth/getbinlink/{chave}/{nome}` — o MESMO do Emitir DFD) UMA vez (e o
+  `caminhoDoArquivo` — o MESMO endereço que a tela da Centi usa: o `URL` da resposta; o arquivo em CACHE (`File.Cache:true`
+  — o "Emitir documentos" do protocolo) = **`rest/GetBinCache/{chave}`** (no `getbinlink` ele dava 404 vazio; extensão
+  1.11.1 libera esse endereço na trava de leitura); senão `restauth/getbinlink/{chave}/{nome}` (o Emitir DFD) — UMA vez (e o
   link, se a resposta for um); sem PDF, o erro traz o pedido (endereço → status), o esqueleto da resposta (`amostra`) e os
   parâmetros enviados — nenhuma repetição nem endereço adivinhado.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na

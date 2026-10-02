@@ -35,7 +35,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.11.0";
+export const VERSAO_EXTENSAO_CENTI = "1.11.1";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -527,6 +527,8 @@ export type AchadoCenti =
       chave: string;
       nome: string;
       url: string | null;
+      /** O arquivo ficou no CACHE da Centi (File.Cache — o "Emitir documentos" do protocolo): sai por rest/GetBinCache. */
+      cache: boolean;
       /** O esqueleto da resposta (para o diagnóstico). */
       amostra?: string;
     }
@@ -553,9 +555,9 @@ function acharNoJson(o: unknown, prof = 0): AchadoCenti | null {
       const r = acharNoJson(v, prof + 1);
       if (r) return r;
     }
-    const f = o as { Key?: unknown; FileName?: unknown; URL?: unknown };
+    const f = o as { Key?: unknown; FileName?: unknown; URL?: unknown; Cache?: unknown };
     if (typeof f.Key === "string" && /^[0-9a-f-]{20,}$/i.test(f.Key))
-      return { tipo: "chave", chave: f.Key, nome: typeof f.FileName === "string" && f.FileName ? f.FileName : "arquivo.pdf", url: typeof f.URL === "string" && f.URL ? f.URL : null };
+      return { tipo: "chave", chave: f.Key, nome: typeof f.FileName === "string" && f.FileName ? f.FileName : "arquivo.pdf", url: typeof f.URL === "string" && f.URL ? f.URL : null, cache: f.Cache === true };
   }
   return null;
 }
@@ -591,9 +593,12 @@ export function analisarRespostaCenti(bytes: Uint8Array, status: number): Achado
   return { tipo: "nada", erro: (msg as string) || "Resposta da Centi sem PDF.", amostra: JSON.stringify(esqueletoCenti(json)).slice(0, 1200) };
 }
 
-/** Onde buscar o arquivo gerado: o endereço que a Centi devolveu ou o da chave — UM pedido, o mesmo do Emitir DFD. */
-export function caminhoDoArquivo(a: { chave: string; nome: string; url: string | null }): string {
-  return a.url ?? `restauth/getbinlink/${encodeURIComponent(a.chave)}/${encodeURIComponent(a.nome)}`;
+/** Onde buscar o arquivo gerado — UM pedido, o MESMO endereço que a própria tela da Centi usa: o que ela devolveu; o do
+ * CACHE (File.Cache — o "Emitir documentos" do protocolo) = rest/GetBinCache/{chave}; senão o do Emitir DFD (getbinlink). */
+export function caminhoDoArquivo(a: { chave: string; nome: string; url: string | null; cache?: boolean }): string {
+  if (a.url) return a.url;
+  if (a.cache) return `rest/GetBinCache/${encodeURIComponent(a.chave)}`;
+  return `restauth/getbinlink/${encodeURIComponent(a.chave)}/${encodeURIComponent(a.nome)}`;
 }
 
 /** Um download que devolveu um LINK (texto ou JSON) em vez do arquivo. */
