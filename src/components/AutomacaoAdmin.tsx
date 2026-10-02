@@ -726,7 +726,9 @@ export function AutomacaoAdmin({
   const [teste, setTeste] = useState<{ carregando?: boolean; ok?: string; erro?: string } | null>(null);
   const testarAnexo = async () => {
     if (!alvo) {
-      setTeste({ erro: "erro" in lidoAlvo ? lidoAlvo.erro : "Informe o protocolo." });
+      const erro = "erro" in lidoAlvo ? lidoAlvo.erro : "Informe o protocolo.";
+      setTeste({ erro });
+      toast.error(`Testar anexo: ${erro}`);
       return;
     }
     const sim = await confirmar({
@@ -736,6 +738,9 @@ export function AutomacaoAdmin({
     });
     if (!sim) return;
     setTeste({ carregando: true });
+    // A confirmação fecha o painel de Ajustes (o toque nela é fora dele): o andamento e o resultado vão também num aviso
+    // flutuante — senão o teste corria sem nada à vista.
+    toast.info("Testando o anexo na Centi…", 6000);
     try {
       const { PDFDocument, StandardFonts } = await import("pdf-lib");
       const doc = await PDFDocument.create();
@@ -745,9 +750,14 @@ export function AutomacaoAdmin({
       const hora = new Date().toLocaleTimeString("pt-BR").replace(/:/g, "h").slice(0, 5);
       const descricao = `TESTE - pode excluir - ${hora}`;
       const r = await anexarNaCenti({ ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 120_000);
-      setTeste(r.ok ? { ok: `Anexado (documento ${r.sequencial ?? "?"}). O anexo na Centi funciona.` } : { erro: r.erro ?? "A Centi não gravou." });
+      const res = r.ok ? { ok: `Anexado (documento ${r.sequencial ?? "?"}). O anexo na Centi funciona.` } : { erro: r.erro ?? "A Centi não gravou." };
+      setTeste(res);
+      if ("ok" in res) toast.success(`Testar anexo: ${res.ok}`, 15_000);
+      else toast.error(`Testar anexo: ${res.erro}`, 30_000);
     } catch (e) {
-      setTeste({ erro: e instanceof Error ? e.message : "Falha no teste." });
+      const erro = e instanceof Error ? e.message : "Falha no teste.";
+      setTeste({ erro });
+      toast.error(`Testar anexo: ${erro}`, 30_000);
     }
   };
   const conferirNaCenti = async () => {
