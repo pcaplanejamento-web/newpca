@@ -38,6 +38,28 @@ export async function iniciarExecucao(
   return r.ok ? { id } : { erro: r.erro };
 }
 
+/** Cria a execução de uma receita SÓ DE LEITURA (ex.: emitir e baixar) — o histórico de cada DFD; nada é gravado na Centi. */
+export async function iniciarExecucaoLeitura(
+  receita: string,
+  capacidade: "baixar" | "ler" | "consultar",
+  passos: readonly { chave: string; alvo: string }[],
+  entrada: Record<string, string | number | boolean | null>,
+): Promise<{ id: number } | { erro: string }> {
+  const c = await chamar(BASE, "POST", { receita, ensaio: false, entrada, passos: passos.map((p) => ({ chave: p.chave.slice(0, 120), capacidade, alvo: p.alvo.slice(0, 300) })) });
+  if (!c.ok) return { erro: c.erro };
+  const id = Number(c.id);
+  const r = await chamar(`${BASE}/${id}`, "PATCH", { estado: "rodando" });
+  return r.ok ? { id } : { erro: r.erro };
+}
+
+/** O resultado de VÁRIOS passos (em lotes de 50 — o teto da rota). */
+export async function concluirPassos(execucaoId: number, lista: readonly { chave: string; estado: "ok" | "falhou" | "pulado"; texto: string }[]) {
+  for (let i = 0; i < lista.length; i += 50)
+    await chamar(`${BASE}/${execucaoId}/passos`, "POST", {
+      passos: lista.slice(i, i + 50).map((p) => (p.estado === "ok" ? { chave: p.chave.slice(0, 120), estado: p.estado, resultado: p.texto.slice(0, 500) } : { chave: p.chave.slice(0, 120), estado: p.estado, erro: p.texto.slice(0, 500) })),
+    });
+}
+
 /** A autorização de UMA escrita (o token vai à extensão, que o consome no servidor) — ou: já estava gravado. */
 export async function autorizarEscrita(
   execucaoId: number,

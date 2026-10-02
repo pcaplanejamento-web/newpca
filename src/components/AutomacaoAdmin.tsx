@@ -39,7 +39,17 @@ import {
 } from "@/lib/automacao-centi-core";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
-import { autorizarEscrita, cancelarExecucao, concluirPasso, iniciarExecucao, jaAnexados, type PassoAnexo, registrarAnexo } from "@/lib/automacao-cliente";
+import {
+  autorizarEscrita,
+  cancelarExecucao,
+  concluirPasso,
+  concluirPassos,
+  iniciarExecucao,
+  iniciarExecucaoLeitura,
+  jaAnexados,
+  type PassoAnexo,
+  registrarAnexo,
+} from "@/lib/automacao-cliente";
 import { descricaoCanonica } from "@/lib/automacao-core";
 import { ZipArmazenar } from "@/lib/zip-armazenar";
 import { Ajuda } from "./Ajuda";
@@ -267,6 +277,11 @@ const DESTINOS: { value: DestinoSaida; label: string }[] = [
   { value: "protocolo", label: "Protocolo indicado" },
   { value: "proprio", label: "Protocolo de cada DFD" },
 ];
+/** A operação Emitir DFD como chave comparável ("ModuleKey|Guid|assinatura"); inválida = null. */
+function chaveOp(op: unknown): string | null {
+  const a = ajusteDaOperacao({ ...CONFIG_CENTI_PADRAO, moduleKey: 0, guid: "", assinaturaDfd: "" }, op);
+  return a ? `${a.moduleKey}|${a.guid}|${a.assinaturaDfd ?? ""}` : null;
+}
 const mesmasChaves = (a: Linha[], b: Linha[]) => a.length === b.length && a.every((l, i) => l.chave === b[i].chave);
 const CARTAO = "rounded-card border border-border bg-surface shadow-ring";
 
@@ -785,11 +800,27 @@ export function AutomacaoAdmin({
     gravarLocal(CHAVE_CONFIG, n);
   };
   // A operação "Emitir DFD" que a extensão pegou da tela da Centi: se a Centi a mudou, o sistema acompanha sozinho.
-  const aplicarOperacao = (op: unknown): boolean => {
+  // A operação guardada no SERVIDOR (vale para todos os ADMs): a da tela da Centi que for diferente vai para lá.
+  const opServidor = useRef<string | null>(null);
+  const compartilharOperacao = (op: unknown) => {
+    const k = chaveOp(op);
+    if (!k || k === opServidor.current) return;
+    const [moduleKey, guid, assinatura] = k.split("|");
+    opServidor.current = k;
+    void fetch("/api/admin/automacao/config", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operacao: { moduleKey: Number(moduleKey), guid, assinatura } }),
+    }).catch(() => {
+      opServidor.current = null;
+    });
+  };
+  const aplicarOperacao = (op: unknown, doServidor = false): boolean => {
+    if (!doServidor) compartilharOperacao(op);
     const a = ajusteDaOperacao(cfgRef.current, op);
     if (!a) return false;
     mudar(a);
-    toast.success(`A Centi mudou a operação Emitir DFD — o sistema já se ajustou (ModuleKey ${cfgRef.current.moduleKey}).`, 10_000);
+    if (!doServidor) toast.success(`A Centi mudou a operação Emitir DFD — o sistema já se ajustou (ModuleKey ${cfgRef.current.moduleKey}).`, 10_000);
     return true;
   };
   const aplicarRef = useRef(aplicarOperacao);
@@ -903,8 +934,13 @@ export function AutomacaoAdmin({
     fetch("/api/admin/automacao/config")
       .then((r) => r.json())
       .then((j: unknown) => {
-        const x = j as { ok?: boolean; config?: { ativa?: boolean } } | null;
+        const x = j as { ok?: boolean; config?: { ativa?: boolean; operacao?: unknown } } | null;
         setGravacao(x?.ok ? x.config?.ativa !== false : null);
+        // A operação que outro ADM (ou outra aba) já aprendeu da Centi vale aqui também.
+        if (x?.ok && x.config?.operacao) {
+          opServidor.current = chaveOp(x.config.operacao);
+          aplicarRef.current(x.config.operacao, true);
+        }
       })
       .catch(() => setGravacao(null));
   }, []);
@@ -1076,7 +1112,13 @@ export function AutomacaoAdmin({
     if (proprio && modo !== "protocolo") return;
     setRodando(true);
     setLinhas(previa);
-    const marcar = (chave: string, l: Partial<Linha>) => setLinhas((ls) => (ls ?? []).map((x) => (x.chave === chave ? { ...x, ...l } : x)));
+    // O resultado FINAL de cada DFD (o histórico da execução de leitura — "Emitir DFDs").
+    const resultados = new Map<string, { estado: "ok" | "falhou"; texto: string }>();
+    const marcar = (chave: string, l: Partial<Linha>) => {
+      if (l.estado === "ok" || l.estado === "falha")
+        resultados.set(chave, { estado: l.estado === "ok" ? "ok" : "falhou", texto: l.erro ?? (l.estado === "ok" ? "Salvo." : "Falhou.") });
+      setLinhas((ls) => (ls ?? []).map((x) => (x.chave === chave ? { ...x, ...l } : x)));
+    };
     const marcarArquivo = (a: ArquivoSaida, l: Partial<Linha>) => {
       for (const t of a.partes) marcar(t.chave, l);
     };
@@ -1132,6 +1174,24 @@ export function AutomacaoAdmin({
       if ("erro" in ex) {
         for (const a of fila) marcarArquivo(a, { estado: "falha", erro: ex.erro });
         toast.error(`Anexar: ${ex.erro}`, 15_000);
+        setRodando(false);
+        return;
+      }
+      execucaoId = ex.id;
+    } else {
+      // BAIXAR também é uma EXECUÇÃO registrada (receita "Emitir DFDs", só leitura): quem, quando e cada DFD.
+      const vistos = new Set<string>();
+      const ps: { chave: string; alvo: string }[] = [];
+      for (const a of plano)
+        for (const t of a.partes)
+          if (!vistos.has(t.chave)) {
+            vistos.add(t.chave);
+            ps.push({ chave: t.chave, alvo: `Planejamento ${t.id}${t.dfd ? ` · DFD ${t.dfd}` : ""} → ${a.nome}` });
+          }
+      const ex = await iniciarExecucaoLeitura("emitir-dfd", "baixar", ps, { destino: "pasta", arquivos: plano.length, formato: saida.formato });
+      if ("erro" in ex) {
+        for (const a of plano) marcarArquivo(a, { estado: "falha", erro: ex.erro });
+        toast.error(`Baixar: ${ex.erro}`, 15_000);
         setRodando(false);
         return;
       }
@@ -1227,6 +1287,7 @@ export function AutomacaoAdmin({
           .then((b) => gravar(a, b, true))
           .then((nota) => ({ ok: true as const, nota }))
           .catch((e: unknown) => ({ ok: false as const, nota: falhaGravar(e, true) }));
+        for (const c of unidas) resultados.set(c, { estado: res.ok ? "ok" : "falhou", texto: res.nota ?? (res.ok ? "Salvo no PDF unido." : "Falhou.") });
         setLinhas((ls) =>
           (ls ?? []).map((x) => (unidas.includes(x.chave) ? { ...x, estado: res.ok ? "ok" : "falha", erro: res.nota } : x)),
         );
@@ -1234,7 +1295,17 @@ export function AutomacaoAdmin({
       }
     }
     // Interrompida (falha do ambiente, anexo recusado): a execução é encerrada — os passos que sobraram não rodam.
-    if (execucaoId != null) {
+    if (execucaoId != null && !anexando) {
+      const vistos = new Set<string>();
+      const lista: { chave: string; estado: "ok" | "falhou"; texto: string }[] = [];
+      for (const a of plano)
+        for (const t of a.partes)
+          if (!vistos.has(t.chave)) {
+            vistos.add(t.chave);
+            lista.push({ chave: t.chave, ...(resultados.get(t.chave) ?? { estado: "falhou" as const, texto: "Não emitido (o lote parou antes)." }) });
+          }
+      await concluirPassos(execucaoId, lista);
+    } else if (execucaoId != null) {
       if (parar) await cancelarExecucao(execucaoId);
       else
         for (const x of destinos.values())

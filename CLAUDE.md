@@ -3457,6 +3457,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (Id + nº) e o que já está em `automacao_registros` (`GET …/registros?alvos=`, `jaAnexados`, `descricaoCanonica`) NÃO é
   emitido de novo. **Servidor:** a autorização e o registro só saem para o MESMO alvo gravado no passo da execução
   (`passo.alvo === textoAlvoAnexo(alvo)` — a execução declara os alvos; um pedido depois não troca de protocolo).
+  **ENTREGA 4 — as duas receitas no motor + a operação no SERVIDOR:** BAIXAR (destino pasta) também é uma execução
+  registrada — receita `emitir-dfd`, um passo `baixar` por DFD (`iniciarExecucaoLeitura`; o resultado final de cada um vai em
+  lotes de 50 por `concluirPassos`; o que o lote não chegou a emitir = "falhou"); ANEXAR já era (`anexar-dfds`). A
+  OPERAÇÃO Emitir DFD aprendida da tela da Centi vai à configuração do servidor (`PATCH …/config {operacao}`, só quando
+  muda — `chaveOp`) e a tela aplica a do servidor ao abrir (sem aviso): o que um ADM aprendeu vale para todos.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
