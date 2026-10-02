@@ -92,7 +92,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.18"), false);
   assert.equal(versaoAtende("1.3.19"), false);
   assert.equal(versaoAtende("1.3.20"), false);
-  assert.equal(versaoAtende("1.3.21"), true);
+  assert.equal(versaoAtende("1.3.21"), false);
+  assert.equal(versaoAtende("1.3.22"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -474,4 +475,13 @@ test("operação Emitir DFD: a extensão pega a da tela e o sistema acompanha a 
   assert.equal(ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: "x", guid: "y" }), null);
   assert.equal(operacaoRecusada('{"Success":false,"Message":["(1)","Usuário sem permissão!"]}'), true);
   assert.equal(operacaoRecusada("Sessão expirada"), false);
+});
+
+test("travas da extensão: só o Emitir DFD, só o download do PDF e o estado leva a operação até o sistema", async () => {
+  const { readFileSync } = await import("node:fs");
+  const main = readFileSync("extensao-centi/centi-main.js", "utf8");
+  assert.match(main, /if \(!A\?\.operacaoDoCorpo\(c\)\) return \{ ok: false, erro: "Só a operação Emitir DFD é permitida\." \}/);
+  assert.match(main, /if \(!ARQUIVO\.test\(new URL\(url\)\.pathname\)\) return \{ ok: false/);
+  const bg = readFileSync("extensao-centi/background.js", "utf8");
+  assert.match(bg, /operacao: estado\?\.operacao \?\? null/);
 });

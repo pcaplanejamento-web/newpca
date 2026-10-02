@@ -48,7 +48,8 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   (async () => {
     const { aba, erro, estado } = await abaCenti();
     if (!aba) return { ok: false, erro };
-    if (msg.acao === "estado") return { ok: true, logado: true, entidade: estado?.entidade ?? null };
+    // O estado vai inteiro: a entidade aberta e a OPERAÇÃO Emitir DFD que a extensão pegou da tela da Centi.
+    if (msg.acao === "estado") return { ok: true, logado: true, entidade: estado?.entidade ?? null, operacao: estado?.operacao ?? null };
     if (!["pedir", "protocolo", "anexar"].includes(msg.acao)) return { ok: false, erro: "Ação desconhecida." };
     try {
       return await chrome.tabs.sendMessage(aba.id, { alvo: "centi", acao: msg.acao, dados: msg.dados });

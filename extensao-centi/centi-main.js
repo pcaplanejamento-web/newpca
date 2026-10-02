@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 25;
+  const PROTOCOLO = 26;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -158,6 +158,8 @@
 
   const TRAVAS = { AnexarAoProtocolo: "0", AssinarDocumento: "0", Sign: "0", SendMail: "0", StorageReport: "0", Background: "0" };
   const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // Os endereços do ARQUIVO gerado pelo Emitir DFD (os únicos que a leitura alcança).
+  const ARQUIVO = /\/(restauth|rest)\/(getbinlink|getbin|getfile)\//i;
 
   function emBase64(bytes) {
     let s = "";
@@ -225,10 +227,16 @@
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
     // A EMISSÃO vai com os cabeçalhos da aba EXATAMENTE como a tela os mandou (como na 1.2.0, quando funcionava) — sem
     // renovar o rastreio (que é só do salvar do anexo).
-    if (d.metodo === "GET") return (await binarioPelaCenti("GET", url, null, ent)) ?? executar("GET", url, null, ent, false, cabecalhos, "application/json", url, false);
+    // TRAVA: a leitura (GET) só baixa o ARQUIVO gerado (getbinlink/getbin/getfile) — nenhum outro endereço da API.
+    if (d.metodo === "GET") {
+      if (!ARQUIVO.test(new URL(url).pathname)) return { ok: false, erro: "Só o download do PDF gerado é permitido." };
+      return (await binarioPelaCenti("GET", url, null, ent)) ?? executar("GET", url, null, ent, false, cabecalhos, "application/json", url, false);
+    }
     if (d.metodo !== "POST" || !/\/restauth\/operation$/.test(new URL(url).pathname)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
     const c = d.corpo;
     if (!c || !GUID.test(String(c.Guid)) || !Number.isInteger(c.ModuleKey) || !Array.isArray(c.Params)) return { ok: false, erro: "Pedido inválido." };
+    // TRAVA: só a operação com a FORMA do Emitir DFD (IdComprasPlanejamento + DFD=1) — nenhuma outra operação da Centi.
+    if (!A?.operacaoDoCorpo(c)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
     const params = c.Params.map((p) => ({ Key: String(p.Key), Value: p.Key in TRAVAS ? TRAVAS[p.Key] : String(p.Value ?? "") }));
     for (const [Key, Value] of Object.entries(TRAVAS)) if (!params.some((p) => p.Key === Key)) params.push({ Key, Value });
     const corpo = { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params };
