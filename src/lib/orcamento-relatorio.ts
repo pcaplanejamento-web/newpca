@@ -106,9 +106,9 @@ export type DefinicoesRelatorio = {
     acoes: number;
     vinculadas: number;
     /** Para QUAL unidade cadastrada vai cada ação (uma unidade do CUBO pode ter as ações distribuídas em várias). */
-    porDestino: { sigla: string; nome: string; acoes: string[]; valor: number }[];
+    porDestino: { sigla: string; nome: string; acoes: { texto: string; valor: number }[]; valor: number }[];
     /** As ações SEM vínculo — `excluida` = deixada FORA de propósito num vínculo "com as demais" (configurado). */
-    semVinculo: { texto: string; excluidaDe: string | null }[];
+    semVinculo: { texto: string; excluidaDe: string | null; valor: number }[];
     valorSemVinculo: number;
   }[];
   /** As unidades cadastradas com contratações no PCA: com ou sem vínculo. */
@@ -281,24 +281,24 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
             .filter(([, a]) => a.alvo == null)
             .map(([ka, a]) => ({ texto: a.texto, excluidaDe: foraDe.has(ka) ? siglaDemais : null, valor: a.valor }))
             .sort((a, b) => colator.compare(a.texto, b.texto));
-          const destinos = new Map<number, { sigla: string; nome: string; acoes: string[]; valor: number }>();
+          const destinos = new Map<number, { sigla: string; nome: string; acoes: { texto: string; valor: number }[]; valor: number }>();
           for (const a of acoes) {
             if (a.alvo == null) continue;
             const u = porId.get(a.alvo);
             const x = destinos.get(a.alvo) ?? { sigla: u?.sigla ?? "?", nome: u?.nome ?? "", acoes: [], valor: 0 };
-            x.acoes.push(a.texto);
+            x.acoes.push({ texto: a.texto, valor: a.valor });
             x.valor += a.valor;
             destinos.set(a.alvo, x);
           }
           const porDestino = [...destinos.values()]
-            .map((x) => ({ ...x, acoes: x.acoes.sort(colator.compare) }))
+            .map((x) => ({ ...x, acoes: x.acoes.sort((a, b) => colator.compare(a.texto, b.texto)) }))
             .sort((a, b) => colator.compare(a.sigla, b.sigla));
           return {
             unidadeCubo: c.texto,
             acoes: acoes.length,
             vinculadas: acoes.length - sem.length,
             porDestino,
-            semVinculo: sem.map(({ texto, excluidaDe }) => ({ texto, excluidaDe })),
+            semVinculo: sem,
             valorSemVinculo: sem.reduce((s, a) => s + a.valor, 0),
           };
         })
@@ -572,33 +572,49 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
 const ATENCAO = "var(--warn)";
 
 /**
- * Para onde vão as ações de uma unidade do CUBO, como CONFIGURADO nos vínculos: com UM destino, "SIGLA — todas as N
- * ações"; DISTRIBUÍDAS em várias unidades, cada unidade com as SUAS ações, uma abaixo da outra, e o valor no CUBO.
+ * As SUB-LINHAS de uma unidade do CUBO na tabela dos vínculos — cada grupo de ações na SUA linha, para a distinção ficar
+ * clara: uma por unidade cadastrada que recebe ações (como configurado), uma por vínculo que EXCLUIU ações de propósito e
+ * uma das NÃO definidas. A 1ª linha leva a unidade do CUBO, a situação e a contagem; as seguintes são sub-linhas.
  */
-/**
- * As ações FORA dos vínculos, uma abaixo da outra, separando o CONFIGURADO (excluída de propósito no vínculo "com as
- * demais" de uma unidade) do NÃO DEFINIDO (nenhum vínculo a pega) — e o total no CUBO.
- */
-function foraDosVinculos(u: DefinicoesRelatorio["unidadesCubo"][number]): string {
-  if (!u.semVinculo.length) return "—";
-  const partes: string[] = [];
-  const porOrigem = new Map<string, string[]>();
-  for (const a of u.semVinculo) if (a.excluidaDe != null) porOrigem.set(a.excluidaDe, [...(porOrigem.get(a.excluidaDe) ?? []), a.texto]);
-  for (const [sigla, acoes] of porOrigem) partes.push(`Excluídas no vínculo de ${sigla} (configurado):\n${acoes.map((a) => `  • ${a}`).join("\n")}`);
+function linhasDoCubo(u: DefinicoesRelatorio["unidadesCubo"][number]): LinhaDoc[] {
+  const sit = situacaoVinculo(u);
+  const corSit = sit.startsWith("Vinculada") ? OK : sit === "Parcial" ? ATENCAO : FORA;
+  type Grupo = { rotulo: string; acoes: { texto: string; valor: number }[]; cor: string; todas?: number };
+  const grupos: Grupo[] = [];
+  for (const d of u.porDestino)
+    grupos.push(
+      // UM destino com todas as ações: "todas" é mais claro que repetir a lista (ela está na Parte 2).
+      u.porDestino.length === 1 && !u.semVinculo.length
+        ? { rotulo: `${d.sigla} — ${d.nome}`, acoes: [{ texto: `Todas as ${qtd(d.acoes.length, "ação", "ações")}`, valor: d.valor }], cor: AZUL }
+        : { rotulo: `${d.sigla} — ${d.nome}`, acoes: d.acoes, cor: AZUL },
+    );
+  const excluidas = new Map<string, { texto: string; valor: number }[]>();
+  for (const a of u.semVinculo) if (a.excluidaDe != null) excluidas.set(a.excluidaDe, [...(excluidas.get(a.excluidaDe) ?? []), a]);
+  for (const [sigla, acoes] of excluidas) grupos.push({ rotulo: `Excluídas no vínculo de ${sigla} (configurado) — não entram`, acoes, cor: ATENCAO });
   const nao = u.semVinculo.filter((a) => a.excluidaDe == null);
-  if (nao.length) partes.push(`Não definidas (sem vínculo):\n${nao.map((a) => `  • ${a.texto}`).join("\n")}`);
-  partes.push(`(${brl(u.valorSemVinculo)} no CUBO — não entra em nenhuma unidade)`);
-  return partes.join("\n");
+  if (nao.length) grupos.push({ rotulo: "NÃO definidas (sem vínculo) — não entram", acoes: nao, cor: FORA });
+  // UMA linha por AÇÃO: a 1ª da unidade do CUBO leva a unidade, a situação e a contagem; a 1ª de cada grupo, o destino.
+  const out: LinhaDoc[] = [];
+  for (const g of grupos)
+    g.acoes.forEach((a, k) => {
+      const primeira = out.length === 0;
+      out.push({
+        celulas: [
+          primeira ? u.unidadeCubo : "",
+          primeira ? sit : "",
+          primeira ? `${num(u.vinculadas)} de ${num(u.acoes)}` : "",
+          k === 0 ? g.rotulo : "",
+          a.texto,
+          brl(a.valor),
+        ],
+        cores: [null, corSit, corSit, g.cor, g.cor === AZUL ? null : g.cor, g.cor],
+        negritos: [primeira, false, false, true, false, false],
+        continua: primeira ? undefined : k === 0 ? 3 : 4,
+      });
+    });
+  return out;
 }
 
-function paraOnde(u: DefinicoesRelatorio["unidadesCubo"][number]): string {
-  if (!u.porDestino.length) return "—";
-  if (u.porDestino.length === 1 && u.semVinculo.length === 0) {
-    const d = u.porDestino[0];
-    return `${d.sigla} — todas as ${qtd(d.acoes.length, "ação", "ações")} (${brl(d.valor)})`;
-  }
-  return u.porDestino.map((d) => `${d.sigla} — ${qtd(d.acoes.length, "ação", "ações")} (${brl(d.valor)}):\n${d.acoes.map((a) => `  • ${a}`).join("\n")}`).join("\n");
-}
 const CINZA = "var(--muted)";
 
 /**
@@ -684,27 +700,14 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
   b.push({
     tipo: "tabela",
     colunas: [
-      { titulo: "Unidade do CUBO", peso: 3 },
+      { titulo: "Unidade do CUBO", peso: 2.6 },
       { titulo: "Situação", peso: 1.4 },
-      { titulo: "Ações com vínculo", peso: 1.3, alinhar: "right" },
-      { titulo: "Para qual unidade vai cada ação (definidas)", peso: 4.6 },
-      { titulo: "Ações fora dos vínculos", peso: 3.6 },
+      { titulo: "Ações c/ vínculo", peso: 1.2, alinhar: "right" },
+      { titulo: "Vai para (unidade cadastrada)", peso: 2.4 },
+      { titulo: "Ações", peso: 4.2 },
+      { titulo: "Valor no CUBO", peso: 1.7, alinhar: "right" },
     ],
-    linhas: cubo.map((u) => {
-      const sit = situacaoVinculo(u);
-      const cor = sit.startsWith("Vinculada") ? OK : sit === "Parcial" ? ATENCAO : FORA;
-      const naoDefinidas = u.semVinculo.filter((a) => a.excluidaDe == null);
-      return {
-        celulas: [
-          u.unidadeCubo,
-          sit,
-          `${num(u.vinculadas)} de ${num(u.acoes)}`,
-          paraOnde(u),
-          foraDosVinculos(u),
-        ],
-        cores: [null, cor, cor, u.porDestino.length ? AZUL : CINZA, naoDefinidas.length ? FORA : u.semVinculo.length ? ATENCAO : CINZA],
-      };
-    }),
+    linhas: cubo.flatMap(linhasDoCubo),
     vazio: "Nenhum lançamento no orçamento.",
   });
 

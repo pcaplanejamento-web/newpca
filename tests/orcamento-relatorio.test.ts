@@ -129,14 +129,14 @@ describe("relatório da composição do orçamento", () => {
           "2 - SEMED",
           "Vinculada com exclusões",
           [
-            ["SEMED", ["2001 - MANTER ESCOLAS"]],
-            ["TRANSP", ["2002 - TRANSPORTE"]],
+            ["SEMED", [{ texto: "2001 - MANTER ESCOLAS", valor: 1500 }]],
+            ["TRANSP", [{ texto: "2002 - TRANSPORTE", valor: 300 }]],
           ],
-          [{ texto: "2003 - MERENDA", excluidaDe: "SEMED" }],
+          [{ texto: "2003 - MERENDA", excluidaDe: "SEMED", valor: 200 }],
           200,
         ],
-        ["5 - SEMUS", "Vinculada", [["SEMUS", ["3001 - HOSPITAL"]]], [], 0],
-        ["9 - SEMAD", "Sem vínculo", [], [{ texto: "4001 - ADM", excluidaDe: null }], 50],
+        ["5 - SEMUS", "Vinculada", [["SEMUS", [{ texto: "3001 - HOSPITAL", valor: 700 }]]], [], 0],
+        ["9 - SEMAD", "Sem vínculo", [], [{ texto: "4001 - ADM", excluidaDe: null, valor: 50 }], 50],
       ],
     );
     assert.deepEqual(
@@ -154,11 +154,19 @@ describe("relatório da composição do orçamento", () => {
     assert.equal(situacaoVinculo(so), "Parcial", "SEMED só com TRANSPORTE: as outras ações ficaram por definir");
     assert.ok(so.semVinculo.every((a) => a.excluidaDe == null));
     const blocos = blocosRelatorioOrcamento(relatorioOrcamentoPca(entrada()));
-    const tab = blocos.find((b) => b.tipo === "tabela" && b.colunas.some((c) => c.titulo === "Ações fora dos vínculos"));
+    const tab = blocos.find((b) => b.tipo === "tabela" && b.colunas.some((c) => c.titulo === "Vai para (unidade cadastrada)"));
     assert.ok(tab && tab.tipo === "tabela");
-    const semed = tab.linhas.find((l) => l.celulas[0] === "2 - SEMED");
-    assert.match(semed?.celulas[3] ?? "", /SEMED — 1 ação .*\n {2}• 2001 - MANTER ESCOLAS\nTRANSP — 1 ação/);
-    assert.match(semed?.celulas[4] ?? "", /Excluídas no vínculo de SEMED \(configurado\):\n {2}• 2003 - MERENDA/);
+    // SEMED do CUBO: UMA linha por destino + a das excluídas — cada grupo na sua linha (sub-linhas).
+    const i0 = tab.linhas.findIndex((l) => l.celulas[0] === "2 - SEMED");
+    const grupo = tab.linhas.slice(i0, i0 + 3);
+    assert.deepEqual(
+      grupo.map((l) => [l.celulas[0], l.celulas[3], l.celulas[4], l.continua]),
+      [
+        ["2 - SEMED", "SEMED — Educação", "2001 - MANTER ESCOLAS", undefined],
+        ["", "TRANSP — Transporte escolar", "2002 - TRANSPORTE", 3],
+        ["", "Excluídas no vínculo de SEMED (configurado) — não entram", "2003 - MERENDA", 3],
+      ],
+    );
   });
 
   it("sem visão: nada é retirado", () => {
@@ -190,6 +198,20 @@ describe("relatório da composição do orçamento", () => {
       }
       assert.ok(p.some((o) => o.t === "texto" && o.texto === `Página ${i + 1} de ${paginas.length}`));
     }
+    // Sub-linhas que atravessam a página repetem as colunas mescladas do grupo.
+    const grupoLongo = {
+      tipo: "tabela" as const,
+      colunas: [
+        { titulo: "Unidade", peso: 2 },
+        { titulo: "Destino", peso: 2 },
+        { titulo: "Ação", peso: 4 },
+      ],
+      linhas: Array.from({ length: 120 }, (_, i) => ({ celulas: [i === 0 ? "UNID" : "", i % 40 === 0 ? `DEST ${i / 40}` : "", `Ação ${i}`], continua: i === 0 ? undefined : i % 40 === 0 ? 1 : 2 })),
+    };
+    const pgs = montarDocumento([grupoLongo], medir, { titulo: "T", rodape: "R" });
+    const textos = pgs.slice(1).map((p) => p.filter((o) => o.t === "texto").map((o) => (o as { texto: string }).texto));
+    assert.ok(textos.every((t) => t.includes("UNID (continuação)")), "a unidade se repete no topo de cada página");
+    assert.ok(textos.some((t) => t.includes("DEST 1") || t.includes("DEST 2")), "o destino da sub-linha também");
     const comCabecalho = paginas.filter((p) => p.some((o) => o.t === "texto" && o.texto === "Ação" && o.cor === "@cabecalhoTexto"));
     assert.ok(comCabecalho.length >= 2, "o cabeçalho da tabela se repete na página seguinte");
   });

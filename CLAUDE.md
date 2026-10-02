@@ -1953,7 +1953,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   1º o PAINEL DAS DEFINIÇÕES, separado (na VISÃO o resumo por dimensão e, de cada dimensão definida, TODOS os valores
   um por linha — os definidos [entram] e os NÃO definidos [ficam fora] com lançamentos e dotação; dimensão não definida = entram todos; `definicoes`: nos VÍNCULOS cada unidade do CUBO Vinculada / Vinculada com exclusões (o que ficou fora foi EXCLUÍDO de
   propósito no vínculo "com as demais") / Parcial (há ação por definir) / Sem vínculo — `situacaoVinculo` —, para QUAL unidade
-  vai CADA ação (`porDestino`: ações distribuídas em várias unidades aparecem por unidade, uma abaixo da outra) e as fora
+  vai CADA ação (`porDestino`; tabela em SUB-LINHAS — `linhasDoCubo`: UMA linha por ação, agrupada por unidade de destino, as
+  excluídas e as não definidas, cada uma com o valor no CUBO) e as fora
   dos vínculos separadas em excluídas (configurado) × não definidas; e as unidades com contratações com ou SEM orçamento vinculado), depois
   como se calcula + a conta que FECHA (inteiro = retirado pela visão + atribuído às unidades + sem vínculo), o resumo por
   unidade (o MESMO "Orçamento considerado" da tabela), PARTE 1 a visão (igual para todas as unidades — por dimensão o que
@@ -1961,7 +1962,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   retirado pela visão, considerado; ações fora e o destino delas) e PARTE 3 o que NÃO foi considerado (retirado pela visão
   por unidade do CUBO, na visão sem vínculo por ação, unidades com contratações e sem orçamento). O PDF é o gerador de
   DOCUMENTO genérico **`documento-pdf-core.ts`** (layout PURO por blocos — título, seção, subseção, parágrafo, lista,
-  destaques, nota, tabela; A4 em pé, nada cortado, cabeçalho de tabela repetido, título nunca órfão, topo + "Gerado por …
+  destaques, nota, tabela com SUB-LINHAS — `LinhaDoc.continua` mescla as primeiras colunas com a linha de cima, fundo por
+  grupo, repetidas com "(continuação)" na quebra de página; A4 em pé, nada cortado, cabeçalho de tabela repetido, título nunca órfão, topo + "Gerado por …
   · Página N de M") + `documento-pdf.ts` (desenha com o pdf-lib, carregado no clique). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
   vistas (`Segmented` no início da linha de controles — `OrcamentoComparativo.inicio`; **PCA × Orçamento** primeiro e aberto, depois
   o Comparativo): **Comparativo** = o MESMO

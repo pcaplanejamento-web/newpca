@@ -11,7 +11,19 @@ import { type Alinhamento, type Medir, quebrarTexto } from "./exportar-pdf-core.
  */
 
 export type ColunaDoc = { titulo: string; peso: number; alinhar?: Alinhamento };
-export type LinhaDoc = { celulas: string[]; cores?: (string | null | undefined)[]; destaque?: boolean };
+export type LinhaDoc = {
+  celulas: string[];
+  cores?: (string | null | undefined)[];
+  /** Negrito por célula (ex.: o rótulo de uma sub-linha). */
+  negritos?: boolean[];
+  destaque?: boolean;
+  /**
+   * SUB-LINHA da linha de cima: as `continua` primeiras colunas são as MESMAS do grupo (ficam vazias, sem a divisória entre
+   * elas — como uma célula mesclada) e as demais ganham uma linha interna própria. O grupo inteiro tem o MESMO fundo; numa
+   * quebra de página, a sub-linha repete as colunas do grupo com "(continuação)".
+   */
+  continua?: number;
+};
 export type DestaqueDoc = { rotulo: string; valor: string; detalhe?: string; cor?: string };
 
 export type BlocoDoc =
@@ -198,47 +210,74 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
     );
     const altura = (cs: string[][]) => Math.max(1, ...cs.map((c) => c.length)) * lh + 2 * PAD;
     const hCab = altura(cab);
-    const desenhar = (cs: string[][], cores: (string | null | undefined)[], negrito: boolean, fundo: string | null, cabecalho: boolean) => {
+    // `negrito` por célula; `borda` = de qual coluna parte a divisória de baixo (a sub-linha seguinte mescla as primeiras)
+    // e se é o fim do GRUPO (mais forte).
+    const desenhar = (
+      cs: string[][],
+      cores: (string | null | undefined)[],
+      negrito: (j: number) => boolean,
+      fundo: string | null,
+      cabecalho: boolean,
+      borda: { de: number; fimGrupo: boolean } = { de: 0, fimGrupo: true },
+    ) => {
       const h = altura(cs);
       if (fundo) ops.push({ t: "retangulo", x: M, y, w: util, h, cor: fundo });
       let x = M;
       cs.forEach((c, j) => {
         const al = b.colunas[j]?.alinhar ?? "left"; // o título segue o alinhamento da coluna (números à direita)
         c.forEach((l, k) => {
-          const tw = medir(l, tam, negrito);
+          const tw = medir(l, tam, negrito(j));
           const tx = al === "right" ? x + larg[j] - PAD - tw : al === "center" ? x + (larg[j] - tw) / 2 : x + PAD;
-          texto(l, tx, y + PAD + k * lh + tam, tam, negrito, cabecalho ? "@cabecalhoTexto" : (cores[j] ?? "@texto"));
+          texto(l, tx, y + PAD + k * lh + tam, tam, negrito(j), cabecalho ? "@cabecalhoTexto" : (cores[j] ?? "@texto"));
         });
         x += larg[j];
       });
-      ops.push({ t: "linha", x1: M, y1: y + h, x2: M + util, y2: y + h, cor: "@borda", espessura: 0.4 });
+      const x1 = M + larg.slice(0, borda.de).reduce((s, w) => s + w, 0);
+      ops.push({ t: "linha", x1, y1: y + h, x2: M + util, y2: y + h, cor: "@borda", espessura: borda.fimGrupo ? 0.6 : 0.35 });
       y += h;
     };
     const cabecalho = () => {
       ops.push({ t: "linha", x1: M, y1: y, x2: M + util, y2: y, cor: "@borda", espessura: 0.4 });
-      desenhar(cab, [], true, "@cabecalhoFundo", true);
+      desenhar(cab, [], () => true, "@cabecalhoFundo", true);
     };
-    const linhasT = b.linhas.length ? b.linhas : [{ celulas: [b.vazio ?? "Nenhum registro.", ...b.colunas.slice(1).map(() => "")], cores: ["@muted"] }];
-    const primeira = celulas(linhasT[0].celulas, !!linhasT[0].destaque);
+    const linhasT: LinhaDoc[] = b.linhas.length ? b.linhas : [{ celulas: [b.vazio ?? "Nenhum registro.", ...b.colunas.slice(1).map(() => "")], cores: ["@muted"] }];
+    const negritoDe = (l: LinhaDoc) => (j: number) => !!l.destaque || !!l.negritos?.[j];
+    // O último valor de cada coluna no grupo (as sub-linhas mesclam as primeiras colunas com ele).
+    let ultimos: string[] = [];
+    const celulasDe = (l: LinhaDoc, repetir: boolean) => {
+      // Sub-linha no TOPO de uma página: repete as colunas mescladas (quem lê a folha avulsa sabe de quem é).
+      const vals = l.continua && repetir ? l.celulas.map((v, j) => (j < (l.continua ?? 0) ? (j === 0 ? `${ultimos[0]} (continuação)` : (ultimos[j] ?? "")) : v)) : l.celulas;
+      return vals.map((v, j) => quebrarTexto(v ?? "", larg[j] - 2 * PAD, tam, medir, negritoDe(l)(j)));
+    };
+    const primeira = celulasDe(linhasT[0], false);
     // O cabeçalho nunca fica sozinho: vai junto com a 1ª linha.
     garantir(hCab + Math.min(altura(primeira), fim - inicio - hCab));
     cabecalho();
+    let grupo = -1;
     linhasT.forEach((l, i) => {
-      let cs = i === 0 ? primeira : celulas(l.celulas, !!l.destaque);
-      const fundo = l.destaque ? "@destaque" : i % 2 === 1 ? "@zebra" : null;
+      if (!l.continua) {
+        grupo++;
+        ultimos = [];
+      }
+      const proxima = linhasT[i + 1];
+      const borda = { de: proxima?.continua ?? 0, fimGrupo: !proxima?.continua };
+      let cs = i === 0 ? primeira : celulasDe(l, false);
+      // O GRUPO inteiro (linha + sub-linhas) tem o mesmo fundo — a zebra é por grupo.
+      const fundo = l.destaque ? "@destaque" : grupo % 2 === 1 ? "@zebra" : null;
       // Não cabe no resto da página: vai à seguinte (com o cabeçalho de novo). Mais alta que uma página INTEIRA: parte-se
       // em pedaços de linhas — nada é cortado.
       while (altura(cs) > fim - y) {
         if (y > inicio + hCab) {
           nova();
           cabecalho();
+          cs = celulasDe(l, true);
           continue;
         }
         const cabem = Math.max(1, Math.floor((fim - y - 2 * PAD) / lh));
         desenhar(
           cs.map((c) => c.slice(0, cabem)),
           l.cores ?? [],
-          !!l.destaque,
+          negritoDe(l),
           fundo,
           false,
         );
@@ -246,7 +285,10 @@ export function montarDocumento(blocos: BlocoDoc[], medir: Medir, opcoes: { titu
         nova();
         cabecalho();
       }
-      desenhar(cs, l.cores ?? [], !!l.destaque, fundo, false);
+      desenhar(cs, l.cores ?? [], negritoDe(l), fundo, false, borda);
+      l.celulas.forEach((v, j) => {
+        if (v) ultimos[j] = v;
+      });
     });
   }
 
