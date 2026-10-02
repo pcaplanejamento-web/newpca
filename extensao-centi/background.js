@@ -11,7 +11,7 @@ const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br"];
 const CONFIRMAR = chrome.runtime.getURL("confirmar.html");
 const POPUP = chrome.runtime.getURL("popup.html");
 const TITULO_GRUPO = "Automação PCA";
-const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler"];
+const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise"];
 // O cofre do login (usuário e senha cifrados SÓ na extensão — cofre.js).
 if (typeof importScripts === "function" && !globalThis.CofreCenti) importScripts("cofre.js");
 
@@ -27,7 +27,7 @@ const numero = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.floor
 
 async function injetarCenti(tabId) {
   await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-anexo.js", "centi-main.js"], world: "MAIN" });
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-login.js", "centi-ponte.js"] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-login.js", "centi-tela.js", "centi-ponte.js"] });
 }
 
 async function estadoDaAba(tabId) {

@@ -357,3 +357,55 @@ export function nomePdfProtocolo(p: Pick<ProtocoloTela, "numero" | "ano" | "id" 
   const nome = `${sigla && sigla.length <= 20 ? `${sigla} - ` : ""}${base}`.replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 150);
   return `${nome}.pdf`;
 }
+
+// ---------------------------------------------------------------- A TELA OPERADA PELA EXTENSÃO (repartições → Em Análise)
+
+/** Um protocolo da aba "Em Análise", como a extensão o leu da grade da Centi. */
+export type ProtocoloEmAnalise = {
+  chave: string;
+  protocolo: string;
+  ano: string;
+  departamento: string;
+  interessado: string;
+  solicitante: string;
+  natureza: string;
+};
+
+const soDigitos = (s: unknown) => String(s ?? "").replace(/\D/g, "");
+
+/** As linhas que a extensão devolveu → protocolos limpos (nº sem zeros à esquerda, ano de 4 dígitos), sem repetir. */
+export function normalizarProtocolosTela(v: unknown): ProtocoloEmAnalise[] {
+  const r = new Map<string, ProtocoloEmAnalise>();
+  for (const x of Array.isArray(v) ? v.slice(0, 5000) : []) {
+    const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+    const protocolo = soDigitos(o.protocolo).replace(/^0+(?=\d)/, "").slice(0, 12);
+    if (!protocolo) continue;
+    const ano = /^\d{4}$/.test(soDigitos(o.ano)) ? soDigitos(o.ano) : "";
+    const t = (k: string) => String(o[k] ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+    const chave = `${protocolo}/${ano}`;
+    if (!r.has(chave)) r.set(chave, { chave, protocolo, ano, departamento: t("departamento"), interessado: t("interessado"), solicitante: t("solicitante"), natureza: t("natureza") });
+  }
+  return [...r.values()];
+}
+
+/** O protocolo do SISTEMA com o mesmo nº (e o mesmo ano, quando os dois têm) — "156844/2026" ou "156844". */
+export function noSistemaTela<T extends { numero: string }>(sistema: readonly T[]): (p: Pick<ProtocoloEmAnalise, "protocolo" | "ano">) => T | null {
+  const comAno = new Map<string, T>();
+  const semAno = new Map<string, T>();
+  const qualquer = new Map<string, T>();
+  for (const s of sistema) {
+    const { numero, ano } = numeroDoProcesso(s.numero);
+    if (!numero) continue;
+    if (ano) comAno.set(`${numero}/${ano}`, s);
+    else semAno.set(numero, s);
+    if (!qualquer.has(numero)) qualquer.set(numero, s);
+  }
+  // Os dois com ano = o ano tem de bater (o 156844/2025 não é o 156844/2026); sem ano de um lado, vale o nº.
+  return (p) => (p.ano ? (comAno.get(`${p.protocolo}/${p.ano}`) ?? semAno.get(p.protocolo)) : qualquer.get(p.protocolo)) ?? null;
+}
+
+/** A escolha lembrada no aparelho, só com as repartições que a Centi ainda lista. */
+export function departamentosEscolhidosValidos(escolhidos: unknown, disponiveis: readonly string[]): string[] {
+  const set = new Set(disponiveis);
+  return Array.isArray(escolhidos) ? [...new Set(escolhidos.filter((x): x is string => typeof x === "string" && set.has(x)))] : [];
+}

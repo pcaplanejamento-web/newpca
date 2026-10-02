@@ -159,5 +159,25 @@ test("extensão: o `ler` passa pela trava de leitura, o `pedir` só repete a ope
   assert.doesNotMatch(main.slice(main.indexOf("function aprenderResposta"), main.indexOf("const textoDoXhr")), /cabecalhos|__pcaHs/);
   const m = JSON.parse(readFileSync("extensao-centi/manifest.json", "utf8"));
   assert.match(m.key, /^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA[A-Za-z0-9+/=]{300,}$/);
-  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler"]);
+  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise"]);
+});
+
+test("em análise: protocolos limpos e sem repetir; o casamento com o sistema respeita o ano; a escolha lembrada só com o que existe", async () => {
+  const { normalizarProtocolosTela, noSistemaTela, departamentosEscolhidosValidos } = await import("../src/lib/automacao-tela-protocolo.ts");
+  const ps = normalizarProtocolosTela([
+    { protocolo: "0156844", ano: "2026", departamento: " PCA  - X ", natureza: "INCLUSÃO - PCA" },
+    { protocolo: "156844", ano: "2026" },
+    { protocolo: "", ano: "2026" },
+    "lixo",
+  ]);
+  assert.deepEqual(
+    ps.map((p) => [p.chave, p.departamento]),
+    [["156844/2026", "PCA - X"]],
+  );
+  const casar = noSistemaTela([{ numero: "156844/2025" }, { numero: "157001" }, { numero: "160000/2026" }]);
+  assert.equal(casar({ protocolo: "156844", ano: "2026" }), null);
+  assert.deepEqual(casar({ protocolo: "157001", ano: "2026" }), { numero: "157001" });
+  assert.deepEqual(casar({ protocolo: "160000", ano: "2026" }), { numero: "160000/2026" });
+  assert.deepEqual(departamentosEscolhidosValidos(["A", "Z", 3, "A"], ["A", "B"]), ["A"]);
+  assert.deepEqual(departamentosEscolhidosValidos(null, ["A"]), []);
 });

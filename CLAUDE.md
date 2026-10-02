@@ -3542,6 +3542,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `arquivo` (abre a MESMA análise da importação, sem o lançador) e `onFechado(erro?)` (fechar a análise, ou o PDF que não é
   protocolo, segue para o próximo); nada é protocolado sozinho. `arquivo-navegador.ts` (base64, gunzip, download).
   Testes: `tests/automacao-tela-protocolo.test.ts` e os de grupo/trava em `extensao-automacao`/`automacao-centi`.
+  **TELA PROTOCOLO PELA INTERFACE (extensão 1.9.0, protocolo 31) — o fluxo padrão da tarefa:** o "Aprender" saiu da tela
+  (fica para depois — o código do aprendiz e o `AprendizTelaProtocolo` seguem). **`centi-tela.js`** (mundo ISOLADO, carregado
+  antes da `centi-ponte`, que encaminha `telaDepartamentos`/`telaEmAnalise` a ele; `ACOES_CENTI` no serviço) opera a
+  PRÓPRIA tela da PO011 como uma pessoa: acha o painel pelo título "Tela Protocolo" (senão clica na aba "PO011…" do topo ou
+  digita "PO011" na busca do menu), abre o seletor "Departamentos" (react-select: mousedown/ArrowDown, opções por
+  `role="option"`/`-option-N`), lê as repartições; para ler, tira as escolhidas (Backspace), escolhe as pedidas pelo texto
+  (sem acento/caixa — confere os chips), clica na LUPA (o 1º botão só-ícone depois do campo), abre "Em Análise (N)" e lê a
+  GRADE pelo cabeçalho "PROTOCOLO" (linhas de mesma forma; espera 2 leituras iguais; percorre as páginas pela "Próxima",
+  teto 50; total pelo rodapé "Exibindo N registro(s)"). Só LEITURA: lista negra `PROIBIDO` (Protocolar, Operações, Salvar,
+  Excluir, Novo, Tramitar…) conferida antes de CADA clique em botão/link. Tela: **`TarefaTelaProtocolo`** = 1 · Repartições
+  ("Buscar repartições" → caixas de marcar + Todas/Nenhuma; escolha no aparelho `automacao:tela-departamentos`,
+  `departamentosEscolhidosValidos`) · 2 · Ler "Em Análise" (execução `protocolos-por-reparticao`, passo `consultar`; lote →
+  cartão/moldura da aba) → `DataTable` com seleção (Protocolo copiável · Ano · Departamento · Interessado · Solicitante ·
+  Natureza · No sistema — `noSistemaTela`, o ano tem de bater; `normalizarProtocolosTela`) + Exportar; "Tratar selecionados"
+  desabilitado (próxima entrega). Testes: `tests/automacao-tela-centi.test.ts` (DOM falso como nos prints: seletor com chips,
+  lupa, PROTOCOLAR nunca tocado, abas, grade paginada).
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

@@ -1509,12 +1509,11 @@ export function AutomacaoAdmin({
             vez ao instalar a 1.8.0).
           </p>
           <p>
-            <strong>Tarefa “Ler a Tela Protocolo”:</strong> toque em <strong>Aprender a Tela Protocolo</strong> — a aba da
-            automação vem para a frente; nela, escolha os departamentos (as suas repartições), clique em Pesquisar, abra as abas
-            (A Receber, Em Análise, Analisado, Em Trânsito) e emita o PDF de UM protocolo; volte e toque em Parar. Confira as
-            abas e as colunas e salve o modelo (vale para todos os administradores). Depois, <strong>Ler protocolos</strong>{" "}
-            repete as consultas (só leitura) e lista os protocolos; <strong>Emitir e analisar</strong> emite o PDF de cada
-            escolhido e o abre, um por vez, na mesma análise do “Importar protocolo” da Mesa — protocolar continua com você.
+            <strong>Tarefa “Ler a Tela Protocolo”:</strong> a extensão entra na PO011 – Tela Protocolo da aba “Automação PCA” e
+            opera a própria tela da Centi, só para LER. <strong>1 · Buscar repartições</strong> lista o seletor Departamentos;
+            marque as suas (a escolha fica lembrada neste computador). <strong>2 · Ler “Em Análise”</strong>: a extensão escolhe
+            essas repartições, clica na lupa, abre a aba Em Análise e traz os protocolos (todas as páginas). Marque os que quer
+            tratar — o tratamento chega na próxima entrega. Protocolar, Operações, Salvar e Excluir nunca são tocados.
           </p>
           <p>
             <strong>Por protocolo:</strong> marque um ou vários (tocar na linha abre o protocolo). Cada um vira a pasta “SIGLA - PCA
@@ -1632,10 +1631,8 @@ export function AutomacaoAdmin({
           <TarefaTelaProtocolo
             pedir={pedir}
             lote={loteRef}
-            interrompido={interrompidoRef}
             pronto={pronto}
             protocolos={protocolos}
-            analise={{ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas }}
             onRodando={setRodandoTela}
           />
         ) : (
