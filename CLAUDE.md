@@ -1951,8 +1951,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/pca/[id]/orcamento/relatorio` (`relatorioOrcamentoDoPca`, a MESMA base do comparativo — `baseOrcamentoPca` em
   `pca-espaco.ts`) → núcleo PURO **`orcamento-relatorio.ts`** (`relatorioOrcamentoPca` + `blocosRelatorioOrcamento`, testado):
   1º o PAINEL DAS DEFINIÇÕES, separado (na VISÃO o resumo por dimensão e, de cada dimensão definida, TODOS os valores
-  um por linha — os definidos [entram] e os NÃO definidos [ficam fora] com lançamentos e dotação; dimensão não definida = entram todos; `definicoes`: nos VÍNCULOS cada unidade do CUBO Vinculada/Parcial/Sem vínculo — `situacaoVinculo` — com as
-  ações com vínculo, para onde vão e as SEM vínculo; e as unidades com contratações com ou SEM orçamento vinculado), depois
+  um por linha — os definidos [entram] e os NÃO definidos [ficam fora] com lançamentos e dotação; dimensão não definida = entram todos; `definicoes`: nos VÍNCULOS cada unidade do CUBO Vinculada / Vinculada com exclusões (o que ficou fora foi EXCLUÍDO de
+  propósito no vínculo "com as demais") / Parcial (há ação por definir) / Sem vínculo — `situacaoVinculo` —, para QUAL unidade
+  vai CADA ação (`porDestino`: ações distribuídas em várias unidades aparecem por unidade, uma abaixo da outra) e as fora
+  dos vínculos separadas em excluídas (configurado) × não definidas; e as unidades com contratações com ou SEM orçamento vinculado), depois
   como se calcula + a conta que FECHA (inteiro = retirado pela visão + atribuído às unidades + sem vínculo), o resumo por
   unidade (o MESMO "Orçamento considerado" da tabela), PARTE 1 a visão (igual para todas as unidades — por dimensão o que
   entra e o que fica fora), PARTE 2 cada unidade cadastrada com os vínculos (unidade do CUBO + regra + cada ação: no CUBO,

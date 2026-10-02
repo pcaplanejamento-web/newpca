@@ -101,14 +101,30 @@ export type RelatorioOrcamento = {
 /** As DEFINIÇÕES dos vínculos (a cobertura por unidade do CUBO) — as da visão estão em `dimensoes`. */
 export type DefinicoesRelatorio = {
   /** Cada unidade do CUBO: quantas ações, quantas têm vínculo, para quais unidades cadastradas e quais ações ficaram sem. */
-  unidadesCubo: { unidadeCubo: string; acoes: number; vinculadas: number; destinos: string[]; semVinculo: string[]; valorSemVinculo: number }[];
+  unidadesCubo: {
+    unidadeCubo: string;
+    acoes: number;
+    vinculadas: number;
+    /** Para QUAL unidade cadastrada vai cada ação (uma unidade do CUBO pode ter as ações distribuídas em várias). */
+    porDestino: { sigla: string; nome: string; acoes: string[]; valor: number }[];
+    /** As ações SEM vínculo — `excluida` = deixada FORA de propósito num vínculo "com as demais" (configurado). */
+    semVinculo: { texto: string; excluidaDe: string | null }[];
+    valorSemVinculo: number;
+  }[];
   /** As unidades cadastradas com contratações no PCA: com ou sem vínculo. */
   unidadesComContratacao: { sigla: string; nome: string; comVinculo: boolean; planejado: number }[];
 };
 
 /** A situação de uma unidade do CUBO nos vínculos. */
-export function situacaoVinculo(u: { acoes: number; vinculadas: number }): "Vinculada" | "Parcial" | "Sem vínculo" {
-  return u.vinculadas === 0 ? "Sem vínculo" : u.vinculadas < u.acoes ? "Parcial" : "Vinculada";
+export function situacaoVinculo(u: {
+  acoes: number;
+  vinculadas: number;
+  semVinculo: { excluidaDe: string | null }[];
+}): "Vinculada" | "Vinculada com exclusões" | "Parcial" | "Sem vínculo" {
+  if (u.vinculadas === 0) return "Sem vínculo";
+  if (u.vinculadas === u.acoes) return "Vinculada";
+  // Tudo o que ficou sem vínculo foi EXCLUÍDO de propósito (configurado) — nada ficou por definir.
+  return u.semVinculo.every((a) => a.excluidaDe != null) ? "Vinculada com exclusões" : "Parcial";
 }
 
 const colator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
@@ -202,7 +218,7 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
         const fora = (v.acoes == null ? v.acoesFora : []).map((ka) => {
           const texto = textoAcao.get(`${v.chave}|${ka}`) ?? ka;
           const outro = e.vinculos.find((x) => x.chave === v.chave && x.alvoId !== uid && x.acoes?.includes(ka));
-          const destino = outro ? (porId.get(outro.alvoId)?.sigla ?? "outra unidade") : "sem vínculo (não entra em nenhuma unidade)";
+          const destino = outro ? `vai para ${porId.get(outro.alvoId)?.sigla ?? "outra unidade"}` : "excluída — não entra em nenhuma unidade";
           let noCubo = 0;
           for (const l of e.lancamentos) if (chaveVinculo(l.unidade) === v.chave && chaveAcao(l.acao) === ka) noCubo += Number(l.valor) || 0;
           return { texto, destino, noCubo };
@@ -254,17 +270,35 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
     semOrcamento,
     planejadoSemUnidade: planejadoPor.get(null) ?? 0,
     definicoes: {
-      unidadesCubo: [...cobertura.values()]
-        .map((c) => {
+      unidadesCubo: [...cobertura.entries()]
+        .map(([ku, c]) => {
           const acoes = [...c.acoes.values()];
-          const sem = acoes.filter((a) => a.alvo == null).sort((a, b) => colator.compare(a.texto, b.texto));
-          const destinos = [...new Set(acoes.flatMap((a) => (a.alvo == null ? [] : [porId.get(a.alvo)?.sigla ?? "?"])))].sort(colator.compare);
+          // O vínculo "com as demais" desta unidade do CUBO e as ações que ele deixa FORA de propósito.
+          const demais = e.vinculos.find((v) => v.chave === ku && v.acoes == null);
+          const foraDe = new Set(demais?.acoesFora ?? []);
+          const siglaDemais = demais ? (porId.get(demais.alvoId)?.sigla ?? "?") : null;
+          const sem = [...c.acoes.entries()]
+            .filter(([, a]) => a.alvo == null)
+            .map(([ka, a]) => ({ texto: a.texto, excluidaDe: foraDe.has(ka) ? siglaDemais : null, valor: a.valor }))
+            .sort((a, b) => colator.compare(a.texto, b.texto));
+          const destinos = new Map<number, { sigla: string; nome: string; acoes: string[]; valor: number }>();
+          for (const a of acoes) {
+            if (a.alvo == null) continue;
+            const u = porId.get(a.alvo);
+            const x = destinos.get(a.alvo) ?? { sigla: u?.sigla ?? "?", nome: u?.nome ?? "", acoes: [], valor: 0 };
+            x.acoes.push(a.texto);
+            x.valor += a.valor;
+            destinos.set(a.alvo, x);
+          }
+          const porDestino = [...destinos.values()]
+            .map((x) => ({ ...x, acoes: x.acoes.sort(colator.compare) }))
+            .sort((a, b) => colator.compare(a.sigla, b.sigla));
           return {
             unidadeCubo: c.texto,
             acoes: acoes.length,
             vinculadas: acoes.length - sem.length,
-            destinos,
-            semVinculo: sem.map((a) => a.texto),
+            porDestino,
+            semVinculo: sem.map(({ texto, excluidaDe }) => ({ texto, excluidaDe })),
             valorSemVinculo: sem.reduce((s, a) => s + a.valor, 0),
           };
         })
@@ -478,7 +512,7 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
         b.push({
           tipo: "nota",
           cor: "var(--warn)",
-          texto: `Ficam FORA deste vínculo: ${v.fora.map((f) => `${f.texto} (${brl(f.noCubo)} → ${f.destino})`).join("; ")}.`,
+          texto: `Ficam FORA deste vínculo (configurado):\n${v.fora.map((f) => `• ${f.texto} — ${brl(f.noCubo)} no CUBO — ${f.destino}`).join("\n")}`,
         });
     }
   }
@@ -536,6 +570,35 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
 }
 
 const ATENCAO = "var(--warn)";
+
+/**
+ * Para onde vão as ações de uma unidade do CUBO, como CONFIGURADO nos vínculos: com UM destino, "SIGLA — todas as N
+ * ações"; DISTRIBUÍDAS em várias unidades, cada unidade com as SUAS ações, uma abaixo da outra, e o valor no CUBO.
+ */
+/**
+ * As ações FORA dos vínculos, uma abaixo da outra, separando o CONFIGURADO (excluída de propósito no vínculo "com as
+ * demais" de uma unidade) do NÃO DEFINIDO (nenhum vínculo a pega) — e o total no CUBO.
+ */
+function foraDosVinculos(u: DefinicoesRelatorio["unidadesCubo"][number]): string {
+  if (!u.semVinculo.length) return "—";
+  const partes: string[] = [];
+  const porOrigem = new Map<string, string[]>();
+  for (const a of u.semVinculo) if (a.excluidaDe != null) porOrigem.set(a.excluidaDe, [...(porOrigem.get(a.excluidaDe) ?? []), a.texto]);
+  for (const [sigla, acoes] of porOrigem) partes.push(`Excluídas no vínculo de ${sigla} (configurado):\n${acoes.map((a) => `  • ${a}`).join("\n")}`);
+  const nao = u.semVinculo.filter((a) => a.excluidaDe == null);
+  if (nao.length) partes.push(`Não definidas (sem vínculo):\n${nao.map((a) => `  • ${a.texto}`).join("\n")}`);
+  partes.push(`(${brl(u.valorSemVinculo)} no CUBO — não entra em nenhuma unidade)`);
+  return partes.join("\n");
+}
+
+function paraOnde(u: DefinicoesRelatorio["unidadesCubo"][number]): string {
+  if (!u.porDestino.length) return "—";
+  if (u.porDestino.length === 1 && u.semVinculo.length === 0) {
+    const d = u.porDestino[0];
+    return `${d.sigla} — todas as ${qtd(d.acoes.length, "ação", "ações")} (${brl(d.valor)})`;
+  }
+  return u.porDestino.map((d) => `${d.sigla} — ${qtd(d.acoes.length, "ação", "ações")} (${brl(d.valor)}):\n${d.acoes.map((a) => `  • ${a}`).join("\n")}`).join("\n");
+}
 const CINZA = "var(--muted)";
 
 /**
@@ -547,7 +610,8 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
   const d = r.definicoes;
   const dimDef = r.dimensoes.filter((x) => x.filtrada).length;
   const cubo = d.unidadesCubo;
-  const vinc = cubo.filter((u) => situacaoVinculo(u) === "Vinculada").length;
+  // "Vinculada com exclusões" está DEFINIDA (o que ficou fora foi excluído de propósito no vínculo).
+  const vinc = cubo.filter((u) => situacaoVinculo(u).startsWith("Vinculada")).length;
   const parc = cubo.filter((u) => situacaoVinculo(u) === "Parcial").length;
   const sem = cubo.filter((u) => situacaoVinculo(u) === "Sem vínculo").length;
   const contrSem = d.unidadesComContratacao.filter((u) => !u.comVinculo).length;
@@ -620,25 +684,25 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
   b.push({
     tipo: "tabela",
     colunas: [
-      { titulo: "Unidade do CUBO", peso: 3.6 },
-      { titulo: "Situação", peso: 1.5 },
-      { titulo: "Ações com vínculo", peso: 1.4, alinhar: "right" },
-      { titulo: "Vai para", peso: 1.8 },
-      { titulo: "Ações SEM vínculo (não definidas)", peso: 4.2 },
+      { titulo: "Unidade do CUBO", peso: 3 },
+      { titulo: "Situação", peso: 1.4 },
+      { titulo: "Ações com vínculo", peso: 1.3, alinhar: "right" },
+      { titulo: "Para qual unidade vai cada ação (definidas)", peso: 4.6 },
+      { titulo: "Ações fora dos vínculos", peso: 3.6 },
     ],
     linhas: cubo.map((u) => {
       const sit = situacaoVinculo(u);
-      const cor = sit === "Vinculada" ? OK : sit === "Parcial" ? ATENCAO : FORA;
+      const cor = sit.startsWith("Vinculada") ? OK : sit === "Parcial" ? ATENCAO : FORA;
+      const naoDefinidas = u.semVinculo.filter((a) => a.excluidaDe == null);
       return {
         celulas: [
           u.unidadeCubo,
           sit,
           `${num(u.vinculadas)} de ${num(u.acoes)}`,
-          u.destinos.join(", ") || "—",
-          // Todas as ações sem vínculo, uma abaixo da outra, e o total delas no CUBO.
-          u.semVinculo.length === 0 ? "—" : `${u.semVinculo.join("\n")}\n(${brl(u.valorSemVinculo)} no CUBO)`,
+          paraOnde(u),
+          foraDosVinculos(u),
         ],
-        cores: [null, cor, cor, null, u.semVinculo.length ? FORA : CINZA],
+        cores: [null, cor, cor, u.porDestino.length ? AZUL : CINZA, naoDefinidas.length ? FORA : u.semVinculo.length ? ATENCAO : CINZA],
       };
     }),
     vazio: "Nenhum lançamento no orçamento.",
@@ -662,7 +726,7 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
     tipo: "nota",
     cor: ATENCAO,
     texto:
-      "Legenda: verde = definido; âmbar = definido em parte; vermelho = não definido (o valor não entra em nenhuma unidade); cinza = não definido na visão, por isso entram todos. Ajuste a visão na Configuração do PCA e os vínculos em Orçamento → Vínculos.",
+      "Legenda: verde = definido (“Vinculada com exclusões” = as ações de fora foram EXCLUÍDAS de propósito no vínculo); âmbar = definido em parte ou excluído no vínculo; vermelho = não definido (o valor não entra em nenhuma unidade); cinza = não definido na visão, por isso entram todos. Ajuste a visão na Configuração do PCA e os vínculos em Orçamento → Vínculos.",
   });
 }
 

@@ -78,7 +78,7 @@ describe("relatório da composição do orçamento", () => {
       v.acoes.map((a) => [a.texto, a.noCubo, a.naVisao]),
       [["2001 - MANTER ESCOLAS", 1500, 1000]],
     );
-    assert.deepEqual(v.fora, [{ texto: "2003 - MERENDA", destino: "sem vínculo (não entra em nenhuma unidade)", noCubo: 200 }]);
+    assert.deepEqual(v.fora, [{ texto: "2003 - MERENDA", destino: "excluída — não entra em nenhuma unidade", noCubo: 200 }]);
     const transp = r.unidades.find((u) => u.sigla === "TRANSP");
     assert.equal(transp?.vinculos[0].acoes.length, 2, "a ação escolhida sem lançamento aparece zerada");
     assert.equal(regraDoVinculo({ acoes: ["a", "b"], acoesFora: [] }), "Só as ações escolhidas (2)");
@@ -123,11 +123,20 @@ describe("relatório da composição do orçamento", () => {
     );
     assert.equal(dims.filter((x) => !x.filtrada).length, 5);
     assert.deepEqual(
-      d.unidadesCubo.map((u) => [u.unidadeCubo, situacaoVinculo(u), u.destinos, u.semVinculo, u.valorSemVinculo]),
+      d.unidadesCubo.map((u) => [u.unidadeCubo, situacaoVinculo(u), u.porDestino.map((x) => [x.sigla, x.acoes]), u.semVinculo, u.valorSemVinculo]),
       [
-        ["2 - SEMED", "Parcial", ["SEMED", "TRANSP"], ["2003 - MERENDA"], 200],
-        ["5 - SEMUS", "Vinculada", ["SEMUS"], [], 0],
-        ["9 - SEMAD", "Sem vínculo", [], ["4001 - ADM"], 50],
+        [
+          "2 - SEMED",
+          "Vinculada com exclusões",
+          [
+            ["SEMED", ["2001 - MANTER ESCOLAS"]],
+            ["TRANSP", ["2002 - TRANSPORTE"]],
+          ],
+          [{ texto: "2003 - MERENDA", excluidaDe: "SEMED" }],
+          200,
+        ],
+        ["5 - SEMUS", "Vinculada", [["SEMUS", ["3001 - HOSPITAL"]]], [], 0],
+        ["9 - SEMAD", "Sem vínculo", [], [{ texto: "4001 - ADM", excluidaDe: null }], 50],
       ],
     );
     assert.deepEqual(
@@ -138,6 +147,18 @@ describe("relatório da composição do orçamento", () => {
       ],
       "as sem vínculo primeiro",
     );
+  });
+
+  it("ações distribuídas: excluída de propósito (configurado) × nunca definida (Parcial)", () => {
+    const so = relatorioOrcamentoPca({ ...entrada(), vinculos: [V[1], V[2]] }).definicoes.unidadesCubo[0];
+    assert.equal(situacaoVinculo(so), "Parcial", "SEMED só com TRANSPORTE: as outras ações ficaram por definir");
+    assert.ok(so.semVinculo.every((a) => a.excluidaDe == null));
+    const blocos = blocosRelatorioOrcamento(relatorioOrcamentoPca(entrada()));
+    const tab = blocos.find((b) => b.tipo === "tabela" && b.colunas.some((c) => c.titulo === "Ações fora dos vínculos"));
+    assert.ok(tab && tab.tipo === "tabela");
+    const semed = tab.linhas.find((l) => l.celulas[0] === "2 - SEMED");
+    assert.match(semed?.celulas[3] ?? "", /SEMED — 1 ação .*\n {2}• 2001 - MANTER ESCOLAS\nTRANSP — 1 ação/);
+    assert.match(semed?.celulas[4] ?? "", /Excluídas no vínculo de SEMED \(configurado\):\n {2}• 2003 - MERENDA/);
   });
 
   it("sem visão: nada é retirado", () => {
