@@ -1940,7 +1940,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`cqw`) — cabe no card e na miniatura do cabeçalho.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
-  > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro; XLSX/PDF no rodapé) — o CUBO do MESMO ano chega à
+  > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro; XLSX/PDF no rodapé; CORES na tela e no PDF: o Orçamento em azul (`--accent`), o Órgão como está e TODAS as demais no tom da Diferença — `corDaDiferenca`: negativa vermelho, senão verde) — o CUBO do MESMO ano chega à
   unidade pelos **Vínculos** (`orcamento_vinculos`). **A UNIDADE é o micro** (recebe os DFDs e o orçamento; a linha é
   pelo ID — `reparticoes.id` —, nunca pela sigla) e **o ÓRGÃO é a soma** das unidades dele: "Ver por" **Unidade | Órgão**
   (`comparativoPorOrgao`/`origemDoOrgao`, a origem soma igual à linha); na visão Unidade, a coluna Órgão + o selo "Oculta"

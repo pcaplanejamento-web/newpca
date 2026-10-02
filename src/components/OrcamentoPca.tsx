@@ -191,15 +191,18 @@ function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; abe
 }
 
 /** Barra de porcentagem do comparativo (verde < 90% · âmbar 90–100% · vermelho > 100%). */
-function BarraPct({ l }: { l: Pick<LinhaComparativo, "percentual" | "planejado" | "faixa"> }) {
-  if (l.percentual == null) return <span className="text-xs text-muted">{l.planejado > 0 ? "sem orçamento" : "—"}</span>;
+/** A cor do TEXTO da linha no comparativo = a da Diferença (negativa = vermelho, senão verde) — a tela e o PDF. */
+const corDaDiferenca = (l: Pick<LinhaComparativo, "diferenca">) => (l.diferenca < 0 ? "var(--danger)" : "var(--ok)");
+
+function BarraPct({ l }: { l: Pick<LinhaComparativo, "percentual" | "planejado" | "faixa" | "diferenca"> }) {
+  if (l.percentual == null) return <span className="text-xs" style={{ color: corDaDiferenca(l) }}>{l.planejado > 0 ? "sem orçamento" : "—"}</span>;
   const w = Math.min(100, l.percentual * 100);
   return (
     <span className="inline-flex items-center gap-2">
       <span className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
         <span className="block h-full rounded-full" style={{ width: `${w}%`, background: COR_FAIXA[l.faixa] }} />
       </span>
-      <span className="tabular-nums">{(l.percentual * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+      <span className="tabular-nums" style={{ color: corDaDiferenca(l) }}>{(l.percentual * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
     </span>
   );
 }
@@ -264,27 +267,69 @@ export function OrcamentoPca({
           align: "left",
           minWidth: 240,
           value: (l) => (l.nivel === "unidade" ? rotuloUnidadeComparativo(l) : l.sigla),
+          corPdf: corDaDiferenca,
           render: (l) => (
-            <span className="flex min-w-0 flex-col items-start leading-tight" title={l.nivel === "unidade" ? rotuloUnidadeComparativo(l) : l.nome}>
+            <span
+              className="flex min-w-0 flex-col items-start leading-tight"
+              style={{ color: corDaDiferenca(l) }}
+              title={l.nivel === "unidade" ? rotuloUnidadeComparativo(l) : l.nome}
+            >
               <span className="flex items-center gap-1.5">
-                <span className="font-semibold text-text">{l.sigla}</span>
+                <span className="font-semibold">{l.sigla}</span>
                 {l.nivel === "unidade" && l.oculta && <Badge tone="slate">Oculta</Badge>}
               </span>
-              {l.chave !== "sem" && <span className="line-clamp-1 text-[12px] text-muted">{l.nome}</span>}
+              {l.chave !== "sem" && <span className="line-clamp-1 text-[12px]">{l.nome}</span>}
             </span>
           ),
         };
   const colLado: Column<LinhaTabela> =
     nivel === "orgao"
-      ? { key: "unidades", header: "Unidades", nowrap: true, filter: "range", formatarFaixa: num, numero: (l) => (l.nivel === "orgao" ? l.unidades : 1), render: (l) => num(l.nivel === "orgao" ? l.unidades : 1) }
+      ? {
+          key: "unidades",
+          header: "Unidades",
+          nowrap: true,
+          filter: "range",
+          formatarFaixa: num,
+          numero: (l) => (l.nivel === "orgao" ? l.unidades : 1),
+          corPdf: corDaDiferenca,
+          render: (l) => <span style={{ color: corDaDiferenca(l) }}>{num(l.nivel === "orgao" ? l.unidades : 1)}</span>,
+        }
       : { key: "orgaoSigla", header: "Órgão", nowrap: true, value: (l) => l.orgaoSigla ?? "—", render: (l) => <span className="text-text-2">{l.orgaoSigla ?? "—"}</span> };
 
   const cols: Column<LinhaTabela>[] = [
     colNome,
     colLado,
-    { key: "contratacoes", header: "Contratações", nowrap: true, filter: "range", numero: (l) => l.contratacoes, formatarFaixa: num, render: (l) => num(l.contratacoes) },
-    { key: "planejado", header: "Contratações do PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.planejado, corPdf: () => "var(--accent)", render: (l) => <span className="text-accent">{brl(l.planejado)}</span> },
-    { key: "orcamento", header: "Orçamento para o PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.orcamento, render: (l) => brl(l.orcamento) },
+    // Cores (tela e PDF): o ORÇAMENTO em azul; as demais no tom da Diferença; o Órgão como está.
+    {
+      key: "contratacoes",
+      header: "Contratações",
+      nowrap: true,
+      filter: "range",
+      numero: (l) => l.contratacoes,
+      formatarFaixa: num,
+      corPdf: corDaDiferenca,
+      render: (l) => <span style={{ color: corDaDiferenca(l) }}>{num(l.contratacoes)}</span>,
+    },
+    {
+      key: "planejado",
+      header: "Contratações do PCA",
+      align: "right",
+      nowrap: true,
+      filter: "range",
+      numero: (l) => l.planejado,
+      corPdf: corDaDiferenca,
+      render: (l) => <span style={{ color: corDaDiferenca(l) }}>{brl(l.planejado)}</span>,
+    },
+    {
+      key: "orcamento",
+      header: "Orçamento para o PCA",
+      align: "right",
+      nowrap: true,
+      filter: "range",
+      numero: (l) => l.orcamento,
+      corPdf: () => "var(--accent)",
+      render: (l) => <span className="text-accent">{brl(l.orcamento)}</span>,
+    },
     {
       key: "diferenca",
       header: "Diferença",
@@ -292,8 +337,8 @@ export function OrcamentoPca({
       nowrap: true,
       filter: "range",
       numero: (l) => l.diferenca,
-      corPdf: (l) => (l.diferenca < 0 ? "var(--danger)" : "var(--ok)"),
-      render: (l) => <span className="font-semibold" style={{ color: l.diferenca < 0 ? "var(--danger)" : "var(--ok)" }}>{brl(l.diferenca)}</span>,
+      corPdf: corDaDiferenca,
+      render: (l) => <span className="font-semibold" style={{ color: corDaDiferenca(l) }}>{brl(l.diferenca)}</span>,
     },
     {
       key: "pct",
@@ -302,7 +347,7 @@ export function OrcamentoPca({
       filter: "range",
       numero: (l) => l.percentual,
       formatarFaixa: (n) => `${(n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
-      corPdf: (l) => COR_FAIXA[l.faixa],
+      corPdf: corDaDiferenca,
       render: (l) => <BarraPct l={l} />,
     },
   ];

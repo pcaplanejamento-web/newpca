@@ -1580,3 +1580,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Orçamento: planilha conferida** — a nova planilha (ou o reenvio) só é importada com as 15 colunas do CUBO e todos os dados corretos; a prévia lista as colunas que faltam e cada problema por linha/coluna.
 ✅ **PDFs coloridos** — os PDFs das tabelas saem com as cores da própria tabela (cabeçalho, estados, faixas, negativos, linha de total).
 ✅ **Visões × Vínculos sem conflito** — unidade, ações e órgão são definidos só nos Vínculos; as visões filtram o restante (função, programa, elemento, código, ficha, fonte) e as visões antigas foram limpas (migração 0082). O editor da visão abre num banner padrão, sem estourar a página.
+✅ **PCA × Orçamento colorido pela Diferença** — na tabela e no PDF: o Orçamento em azul, o Órgão como está e as demais colunas na cor da Diferença (vermelho quando falta orçamento, verde quando sobra).
