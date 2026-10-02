@@ -819,7 +819,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **BARRA DA MESA (uma linha) + visão ÚNICA com `Segmented` + morph:** à esquerda, UM `Segmented` (`vista`) com o
     **Dashboard** primeiro — item SÓ-ÍCONE (`soIcone`, `IconDashboard`; nome acessível "Dashboard de governança") — e
     **Protocolos · DFDs · Itens** (na Mesa do PCA, sem o Dashboard e com a `ferramenta` Todos | Enviados | Incorporados
-    logo depois); à DIREITA, o **REVERIFICAR TUDO** (`BotaoReverificar`, `BotaoAtualizar.tsx` — o ícone gira dentro de um ANEL que enche com o andamento: zera os caches das conferências, os itens e o histórico do Dashboard, recarrega a lista e reconfere TODOS os protocolos, DFDs e itens em qualquer visão; termina com o aviso do total; não grava nada), o botão **DADOS COMPLETOS** (`BotaoDadosCompletos`, só o ícone `IconTextoCompleto`, accent quando
+    logo depois); à DIREITA, o **REVERIFICAR TUDO** (o `BotaoAtualizar` com andamento — o ícone gira dentro de um ANEL que enche com o andamento: zera os caches das conferências, os itens e o histórico do Dashboard, recarrega a lista e reconfere TODOS os protocolos, DFDs e itens em qualquer visão; termina com o aviso do total; não grava nada), o botão **DADOS COMPLETOS** (`BotaoDadosCompletos`, só o ícone `IconTextoCompleto`, accent quando
     ligado; fora do Dashboard) e os **filtros de hierarquia** (abaixo). **Dados completos:** o provedor `DadosCompletos` (em volta
     das visões — os banners e o Dashboard ficam de fora) faz as células mostrarem TUDO dentro da própria tabela: `CelulaTexto`
     (descrição e assunto sem o corte de uma linha; na Consolidada as descrições diferentes numeradas D1, D2…), `CelulaLista`
@@ -1551,7 +1551,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     lote, auditoria por protocolo/DFD (itens: **antes/depois** por item). No celular a barra pode ser **recolhida** (fica
     o resumo). Enquanto um banner da pilha GRAVA, nada troca/fecha/empilha, e a recarga pós-gravação só vale se o banner
     ainda mostra o mesmo DFD/protocolo (no modo item, reencontra o item EXIBIDO).
-  - **Botão ATUALIZAR = recarregar + REVISAR** (`BotaoAtualizar`, ao lado do X dos banners de DFD, ITEM e protocolo): o
+  - **Botão ATUALIZAR = recarregar + REVISAR** (`BotaoAtualizar` — o botão CIRCULAR PADRÃO do sistema: o ícone gira dentro
+    de um anel; o mesmo da barra das Mesas e do "Recarregar"/"Verificar" de Auditoria, Armazenamento, Órgãos, Unidades e
+    Automação —, ao lado do X dos banners de DFD, ITEM e protocolo): o
     ícone GIRA (`useGiro` — ao menos uma volta; um 2º toque enquanto gira é ignorado) enquanto recarrega do banco (confirma se
     há rascunho) e REVISA o que chegou com os MESMOS tratamentos automáticos da importação — núcleo puro **`revisao-dfd.ts`**:
     `revisarDfd` (seções em TEXTO CORRIDO + a linha do órgão emissor que o cabeçalho de página deixava fora; campos do
