@@ -3589,6 +3589,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   mostra a situação e "Remover do sistema" (`DELETE`). `host_permissions` ganhou o sistema. Testes:
   `automacao-tela-centi` (cadastro + emissão no DOM falso), `automacao-centi` (travas), `extensao-login` (restaurar/
   guardar), `automacao-tela-protocolo`.
+  **1.10.1 — a grade da Centi é WIJMO FlexGrid** (`wj-row`/`wj-cell`): ela descobre a célula pelas COORDENADAS do evento
+  — todo clique da `centi-tela.js` é o MOUSE de verdade (`mouse`: pointerdown/mousedown/pointerup/mouseup/click NO
+  CENTRO do elemento, `getBoundingClientRect`; `duplo` = o par + `dblclick`); o protocolo é trazido à vista
+  (`scrollIntoView`) antes do duplo clique. A grade desenha só as linhas VISÍVEIS: `percorrerGrade` volta ao topo e ROLA
+  o corpo (`rolador` = o ancestral da 1ª linha com rolagem vertical) lendo a cada passo, até o fim — lê todas e acha a
+  linha pedida em listas longas. A falha ao abrir diz a célula (classe, posição) e os cadastros abertos.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

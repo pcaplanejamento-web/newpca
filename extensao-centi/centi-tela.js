@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 3;
+  const VERSAO = 4;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -35,11 +35,31 @@
     return !PROIBIDO.test(`${texto(el).slice(0, 80)} ${norm(attr(el, "aria-label"))} ${norm(attr(el, "title"))} ${norm(el.value)}`);
   }
 
+  /**
+   * O MOUSE de verdade sobre o elemento: ponteiro + mouse, NO CENTRO dele (a grade da Centi — Wijmo FlexGrid — descobre a
+   * célula pelas COORDENADAS do evento; em (0,0) o clique não acerta linha nenhuma). `duplo` = o duplo clique completo.
+   */
+  function mouse(win, el, duplo = false) {
+    const b = typeof el.getBoundingClientRect === "function" ? el.getBoundingClientRect() : null;
+    const x = b ? b.left + b.width / 2 : 0;
+    const y = b ? b.top + b.height / 2 : 0;
+    const M = win.MouseEvent ?? win.Event;
+    const P = win.PointerEvent ?? M;
+    const base = { bubbles: true, cancelable: true, composed: true, button: 0, clientX: x, clientY: y, screenX: x, screenY: y };
+    const ponteiro = { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true };
+    for (const detail of duplo ? [1, 2] : [1]) {
+      el.dispatchEvent(new P("pointerdown", { ...ponteiro, buttons: 1, detail }));
+      el.dispatchEvent(new M("mousedown", { ...base, buttons: 1, detail }));
+      el.dispatchEvent(new P("pointerup", { ...ponteiro, buttons: 0, detail }));
+      el.dispatchEvent(new M("mouseup", { ...base, buttons: 0, detail }));
+      el.dispatchEvent(new M("click", { ...base, buttons: 0, detail }));
+    }
+    if (duplo) el.dispatchEvent(new M("dblclick", { ...base, buttons: 0, detail: 2 }));
+  }
   function clicar(win, el) {
     if (!el) return false;
     if (!seguro(el)) throw new Error(`Bloqueado: a automação não aciona “${String(el.textContent ?? "").trim().slice(0, 40)}”.`);
-    const M = win.MouseEvent ?? win.Event;
-    for (const tipo of ["mousedown", "mouseup", "click"]) el.dispatchEvent(new M(tipo, { bubbles: true, cancelable: true, button: 0 }));
+    mouse(win, el);
     return true;
   }
   function tecla(win, el, key) {
@@ -414,11 +434,22 @@
     return contagemAba(doc, "EM ANALISE");
   }
 
+  /** O elemento que ROLA as linhas da grade (o ancestral da 1ª linha com rolagem vertical), ou null. */
+  function rolador(grade, win) {
+    let n = grade.registros.find((r) => r.el)?.el ?? null;
+    for (let i = 0; n && i < 10; i++, n = n.parentElement) {
+      if (!(n.scrollHeight > n.clientHeight + 4)) continue;
+      const oy = win.getComputedStyle?.(n)?.overflowY ?? "";
+      if (/auto|scroll/.test(oy)) return n;
+    }
+    return null;
+  }
+
   /** Percorre as páginas da grade: `cada(grade)` recebe cada página lida; devolver true PARA. */
   async function percorrerGrade(ctx, esperado, cada) {
     const { doc, win } = ctx;
     ctx.etapa = "ler a grade";
-    let lidos = 0;
+    const unicos = new Set();
     for (let pagina = 0; pagina < 50; pagina++) {
       let anterior = -1;
       let estavel = 0;
@@ -446,10 +477,32 @@
         if (esperado === 0) return { cab: null, cabecalhos: [], registros: [] };
         throw e;
       });
-      lidos += grade.registros.length;
-      if (cada(grade) === true || !grade.cab) return;
+      if (!grade.cab) return void cada(grade);
+      const ver = (g) => {
+        for (const r of g.registros) unicos.add(`${r.protocolo}|${r.ano}`);
+        return cada(g) === true;
+      };
+      if (ver(grade)) return;
+      // A grade desenha só as linhas VISÍVEIS (Wijmo): rola por dentro até o fim, lendo a cada passo.
+      const sc = rolador(grade, win);
+      if (sc && sc.scrollTop > 0) {
+        sc.scrollTop = 0;
+        sc.dispatchEvent(new win.Event("scroll", { bubbles: true }));
+        await pausa(win, (ctx.passo ?? 250) * 2);
+        const g = lerGrade(doc);
+        if (g && ver(g)) return;
+      }
+      for (let k = 0; sc && k < 400; k++) {
+        const antes = sc.scrollTop;
+        sc.scrollTop = antes + Math.max(40, Math.floor(sc.clientHeight * 0.8));
+        sc.dispatchEvent(new win.Event("scroll", { bubbles: true }));
+        if (sc.scrollTop <= antes) break;
+        await pausa(win, (ctx.passo ?? 250) * 2);
+        const g = lerGrade(doc);
+        if (g && ver(g)) return;
+      }
       const total = totalDoRodape(grade.cab) ?? esperado;
-      if (total == null || lidos >= total) return;
+      if (total == null || unicos.size >= total) return;
       const prox = botaoProxima(blocoDaGrade(grade.cab, doc));
       if (!prox) return;
       clicar(win, prox);
@@ -594,9 +647,13 @@
     const linha = await acharLinha(ctx, protocolo, ano, nomes);
     // Abre o cadastro do protocolo (clique e duplo clique na linha, como a pessoa faz).
     ctx.etapa = "abrir o protocolo";
-    clicar(win, linha.el);
-    const M = win.MouseEvent ?? win.Event;
-    linha.el.dispatchEvent(new M("dblclick", { bubbles: true, cancelable: true, button: 0, detail: 2 }));
+    // A linha à vista na grade (ela desenha só as linhas visíveis) e o DUPLO CLIQUE no centro da célula do nº.
+    linha.el.scrollIntoView?.({ block: "center" });
+    await pausa(win, ctx.passo ?? 250);
+    const alvo = lerGrade(doc)?.registros.find((r) => casaLinha(r, protocolo, ano))?.el ?? linha.el;
+    if (!seguro(alvo)) throw new Error("Bloqueado: a célula do protocolo não é um botão.");
+    mouse(win, alvo, true);
+    ctx.notas = [];
     const modal = await esperarAte(
       ctx,
       () => {
@@ -604,7 +661,14 @@
         return m && soDigitos(valorDe(lerCadastro(m), "PROTOCOLO")) === soDigitos(protocolo) ? m : null;
       },
       "O cadastro do protocolo não abriu na Tela Protocolo.",
-    );
+    ).catch((e) => {
+      const b = typeof alvo.getBoundingClientRect === "function" ? alvo.getBoundingClientRect() : null;
+      ctx.notas = [
+        `célula: ${String(alvo.tagName ?? "").toLowerCase()}.${String(alvo.className ?? "").split(/\s+/).slice(0, 3).join(".")} em ${b ? `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)}` : "?"}`,
+        `cadastros abertos: ${porTexto(doc, (t) => RE_TITULO.test(t)).map((el) => texto(el)).slice(0, 3).join(" | ") || "nenhum"}`,
+      ];
+      throw e;
+    });
     ctx.etapa = "ler o cadastro";
     const campos = lerCadastro(modal);
     const dados = { campos, id: soDigitos(valorDe(campos, "ID")) || null };

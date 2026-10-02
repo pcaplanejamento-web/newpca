@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-type Ev = { type: string; key?: string };
+type Ev = { type: string; key?: string; clientX?: number; clientY?: number };
 class El {
   tagName: string;
   children: El[] = [];
@@ -20,7 +20,7 @@ class El {
   hidden = false;
   offsetWidth = 10;
   /** A caixa na tela (para a leitura pela posição). */
-  _rect: { left: number; right: number; top: number; bottom: number; width: number } | null = null;
+  _rect: { left: number; right: number; top: number; bottom: number; width: number; height?: number } | null = null;
   proprio: string;
   ouvintes: Record<string, ((e: Ev) => void)[]> = {};
   constructor(tag: string, o: { texto?: string; attrs?: Record<string, string>; className?: string; id?: string } = {}) {
@@ -83,7 +83,7 @@ type Protocolo = [string, string, string, string];
 
 /** A página da Centi como nos prints. `telaAberta` = a PO011 já está na tela; senão, só a aba "PO011" no topo. */
 function centi(
-  o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]>; porPagina?: number; escolhidos?: string[]; semEspaco?: boolean; semClasses?: boolean; semGrade?: boolean } = {},
+  o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]>; porPagina?: number; escolhidos?: string[]; semEspaco?: boolean; semClasses?: boolean; semGrade?: boolean; wijmo?: boolean; visiveis?: number } = {},
 ) {
   const body = new El("body");
   const cliques: string[] = [];
@@ -177,12 +177,44 @@ function centi(
       for (const h of ["", "PROTOCOLO", "ANO", "DEPARTAMENTO", "INTERESSADO", "SOLICITANTE", "NATUREZA"]) cab.add(new El("th").add(new El("span", { texto: h }), new El("i"), new El("i")));
       tabela.add(new El("thead").add(cab));
       const todos = doAnalise();
+      const daPagina = todos.slice(pagina * porPagina, (pagina + 1) * porPagina);
+      // Como a grade da Centi (Wijmo): a linha só abre no duplo clique que CAI sobre ela (pelas coordenadas) e, com
+      // `visiveis`, só as linhas à vista existem — o corpo rola por dentro.
+      const ALT = 30;
       const corpo = new El("tbody");
-      for (const p of todos.slice(pagina * porPagina, (pagina + 1) * porPagina)) {
-        const tr = new El("tr").on("dblclick", () => abrirCadastro(p[0]));
-        for (const v of ["", p[0], p[1], p[2], p[3], "", "INCLUSÃO - PCA"]) tr.add(new El("td", { texto: v }));
-        corpo.add(tr);
+      let topo = 0;
+      const desenharLinhas = () => {
+        corpo.children = [];
+        const de = o.visiveis ? Math.floor(topo / ALT) : 0;
+        const ate = o.visiveis ? de + o.visiveis : daPagina.length;
+        for (const [i, p] of daPagina.slice(de, ate).entries()) {
+          const y = 100 + i * ALT;
+          const tr = new El("tr").on("dblclick", (e) => {
+            if (!o.wijmo || ((e.clientY ?? -1) >= y && (e.clientY ?? -1) < y + ALT)) abrirCadastro(p[0]);
+          });
+          tr._rect = { left: 0, right: 700, top: y, bottom: y + ALT, width: 700, height: ALT };
+          for (const [k, v] of ["", p[0], p[1], p[2], p[3], "", "INCLUSÃO - PCA"].entries()) {
+            const td = new El("td", { texto: v });
+            td._rect = { left: k * 100, right: k * 100 + 100, top: y, bottom: y + ALT, width: 100, height: ALT };
+            tr.add(td);
+          }
+          corpo.add(tr);
+        }
+      };
+      if (o.visiveis) {
+        const alto = daPagina.length * ALT;
+        const janela = o.visiveis * ALT;
+        Object.defineProperty(corpo, "clientHeight", { value: janela });
+        Object.defineProperty(corpo, "scrollHeight", { value: alto });
+        Object.defineProperty(corpo, "scrollTop", {
+          get: () => topo,
+          set: (v: number) => {
+            topo = Math.max(0, Math.min(v, alto - janela));
+          },
+        });
+        corpo.on("scroll", desenharLinhas);
       }
+      desenharLinhas();
       tabela.add(corpo);
       grade.add(tabela);
       const rodape = new El("div", { texto: todos.length ? `Exibindo ${todos.length} registro(s)` : "Nenhum resultado encontrado." });
@@ -285,12 +317,16 @@ function peca() {
 const evento = class {
   type: string;
   key?: string;
-  constructor(type: string, o?: { key?: string }) {
+  clientX?: number;
+  clientY?: number;
+  constructor(type: string, o?: { key?: string; clientX?: number; clientY?: number }) {
     this.type = type;
     this.key = o?.key;
+    this.clientX = o?.clientX;
+    this.clientY = o?.clientY;
   }
 };
-const win = { setTimeout, Event: evento, MouseEvent: evento, KeyboardEvent: evento };
+const win = { setTimeout, Event: evento, MouseEvent: evento, KeyboardEvent: evento, getComputedStyle: () => ({ overflowY: "auto" }) };
 const ctx = (doc: unknown) => ({ doc, win, passo: 5, prazo: 800 });
 
 test("tela protocolo: abre a PO011 pela aba do topo e lista as repartições do seletor", async () => {
@@ -444,4 +480,33 @@ test("tela protocolo: emissão sem PDF = erro com o diagnóstico da janela; a ca
   assert.match(String(r.diagnostico), /capturado: \{"operacoes":1\}/);
   assert.equal(capturas.at(-1), "parar");
   assert.ok(!c.cliques.includes("Anexar") && !c.cliques.includes("Salvar"));
+});
+
+test("tela protocolo: grade Wijmo — o duplo clique vai no CENTRO da célula (pelas coordenadas) e abre o protocolo certo", async () => {
+  const c = centi({
+    telaAberta: true,
+    wijmo: true,
+    emAnalise: {
+      "PCA - CRISTIANE": [
+        ["156497", "2026", "PCA - CRISTIANE", "SMAUSP"],
+        ["136836", "2026", "PCA - CRISTIANE", "SMPG"],
+      ],
+    },
+  });
+  const pagina = async (_a: string, d: { acao: string }) => (d.acao === "ler" ? (c.estado.emitido ? { ok: true, pronto: true, pdf: "JVBERi0=" } : { ok: true, pronto: false }) : { ok: true });
+  const r = await peca().executar("telaEmitir", { protocolo: "136836", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
+  assert.equal(r.ok, true, `${r.erro}\n${r.diagnostico}`);
+  assert.equal((r.dados as { campos: { rotulo: string; valor: string }[] }).campos.find((x) => x.rotulo === "Protocolo")?.valor, "136836");
+  assert.deepEqual(r.arquivo, { pdf: "JVBERi0=" });
+});
+
+test("tela protocolo: grade que desenha só as linhas VISÍVEIS — rola por dentro e lê todas (e acha a do fim)", async () => {
+  const lista = Array.from({ length: 25 }, (_, i): Protocolo => [String(150000 + i), "2026", "PCA - CRISTIANE", "X"]);
+  const c = centi({ telaAberta: true, visiveis: 6, emAnalise: { "PCA - CRISTIANE": lista } });
+  const r = await peca().executar("telaEmAnalise", { departamentos: ["PCA - CRISTIANE"] }, ctx(c.doc));
+  assert.equal(r.ok, true, `${r.erro}\n${r.diagnostico}`);
+  assert.equal((r.protocolos as unknown[]).length, 25);
+  const pagina = async (_a: string, d: { acao: string }) => (d.acao === "ler" ? (c.estado.emitido ? { ok: true, pronto: true, pdf: "JVBERi0=" } : { ok: true, pronto: false }) : { ok: true });
+  const e = await peca().executar("telaEmitir", { protocolo: "150024", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
+  assert.equal(e.ok, true, `${e.erro}\n${e.diagnostico}`);
 });
