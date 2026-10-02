@@ -21,6 +21,8 @@ export const LIMITES_ACESSO = {
   senhaIp: { max: 20, janelaS: 15 * 60 },
   /** Desafios da verificação anti-robô pedidos pelo mesmo IP. */
   desafioIp: { max: 60, janelaS: 10 * 60 },
+  /** Escritas da AUTOMAÇÃO na Centi autorizadas para a MESMA pessoa (um anexo por DFD — um lote grande cabe com folga). */
+  automacaoEscrita: { max: 60, janelaS: 60 },
 } as const satisfies Record<string, RegraLimite>;
 
 export type TipoLimite = keyof typeof LIMITES_ACESSO;

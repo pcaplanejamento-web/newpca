@@ -823,6 +823,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT detalhes AS d FROM papeis WHERE nome = 'Novo'").get() as { d: string }).d, "{}");
   });
 
+  it("0076 automação: execuções, passos, autorização de uso único e registros sem repetir", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9761, 'A B', 'a9761@x', 'h')");
+    a.exec("INSERT INTO automacao_execucoes (id, receita, usuario_id) VALUES (1, 'anexar-dfds', 9761)");
+    const e = a.prepare("SELECT estado, ensaio, entrada, total FROM automacao_execucoes WHERE id = 1").get() as Record<string, unknown>;
+    assert.deepEqual({ ...e }, { estado: "preparada", ensaio: 0, entrada: "{}", total: 0 });
+    a.exec("INSERT INTO automacao_passos (execucao_id, chave, capacidade) VALUES (1, 'p1', 'anexar')");
+    assert.throws(() => a.exec("INSERT INTO automacao_passos (execucao_id, chave, capacidade) VALUES (1, 'p1', 'anexar')"), "um passo por chave");
+    a.exec("INSERT INTO automacao_autorizacoes (id, execucao_id, passo_chave, capacidade, alvo_hash, usuario_id, expira_em) VALUES ('h', 1, 'p1', 'anexar', 'x', 9761, 10)");
+    assert.equal(a.prepare("DELETE FROM automacao_autorizacoes WHERE id = 'h' AND expira_em > 5 RETURNING id").all().length, 1);
+    assert.equal(a.prepare("DELETE FROM automacao_autorizacoes WHERE id = 'h' AND expira_em > 5 RETURNING id").all().length, 0, "uso único");
+    a.exec("INSERT INTO automacao_registros (capacidade, centi_alvo, descricao, execucao_id) VALUES ('anexar', '2332778', 'PGM - PCA', 1)");
+    assert.throws(() => a.exec("INSERT INTO automacao_registros (capacidade, centi_alvo, descricao) VALUES ('anexar', '2332778', 'PGM - PCA')"), "nunca grava duas vezes");
+    a.exec("DELETE FROM automacao_execucoes WHERE id = 1");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM automacao_passos").get() as { n: number }).n, 0, "os passos caem com a execução");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM automacao_registros").get() as { n: number }).n, 1, "o registro da escrita fica");
+  });
+
   it("0075 catálogo: os catálogos atuais viram 'agenda' (sem pasta, cor do tipo); pastas e histórico de compra nascem vazios", () => {
     const a = new DatabaseSync(":memory:");
     for (const arq of arquivos.filter((f) => f < "0075")) a.exec(readFileSync(join(DIR, arq), "utf8"));

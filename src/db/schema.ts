@@ -1485,3 +1485,90 @@ export const trelloFila = sqliteTable(
   },
   (t) => [uniqueIndex("trello_fila_alvo_uq").on(t.direcao, t.tipo, t.alvo), index("trello_fila_proxima_idx").on(t.proximaEm)],
 );
+
+/* ── Automação Centi — fundação (migração 0076) ─────────────────────────────────────────────────────────────────── */
+
+/** Uma execução de uma RECEITA da Automação (emitir DFDs, anexar ao protocolo…): o histórico da tela. */
+export const automacaoExecucoes = sqliteTable(
+  "automacao_execucoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    receita: text("receita").notNull(),
+    receitaVersao: integer("receita_versao").notNull().default(1),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNome: text("usuario_nome"),
+    /** preparada | rodando | pausada | concluida | falhou | cancelada */
+    estado: text("estado").notNull().default("preparada"),
+    ensaio: integer("ensaio", { mode: "boolean" }).notNull().default(false),
+    entrada: text("entrada").notNull().default("{}"),
+    total: integer("total").notNull().default(0),
+    feitos: integer("feitos").notNull().default(0),
+    falhas: integer("falhas").notNull().default(0),
+    erro: text("erro"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("automacao_execucoes_criado_idx").on(t.criadoEm)],
+);
+
+/** Os passos de uma execução (um por alvo) com o resultado — a retomada parte do primeiro não concluído. */
+export const automacaoPassos = sqliteTable(
+  "automacao_passos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    execucaoId: integer("execucao_id")
+      .notNull()
+      .references(() => automacaoExecucoes.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull().default(0),
+    chave: text("chave").notNull(),
+    capacidade: text("capacidade").notNull(),
+    alvo: text("alvo"),
+    /** fila | executando | ok | falhou | pulado */
+    estado: text("estado").notNull().default("fila"),
+    resultado: text("resultado"),
+    erro: text("erro"),
+    inicio: text("inicio"),
+    fim: text("fim"),
+  },
+  (t) => [uniqueIndex("automacao_passos_chave_uq").on(t.execucaoId, t.chave)],
+);
+
+/** A permissão de USO ÚNICO para UMA escrita na Centi (só o HASH do token). */
+export const automacaoAutorizacoes = sqliteTable(
+  "automacao_autorizacoes",
+  {
+    id: text("id").primaryKey(),
+    execucaoId: integer("execucao_id")
+      .notNull()
+      .references(() => automacaoExecucoes.id, { onDelete: "cascade" }),
+    passoChave: text("passo_chave").notNull(),
+    capacidade: text("capacidade").notNull(),
+    alvoHash: text("alvo_hash").notNull(),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    expiraEm: integer("expira_em").notNull(),
+  },
+  (t) => [index("automacao_autorizacoes_expira_idx").on(t.expiraEm)],
+);
+
+/** O que foi ESCRITO na Centi — o mesmo alvo + descrição nunca é gravado duas vezes. */
+export const automacaoRegistros = sqliteTable(
+  "automacao_registros",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    capacidade: text("capacidade").notNull(),
+    centiAlvo: text("centi_alvo").notNull(),
+    descricao: text("descricao").notNull(),
+    centiDocumento: text("centi_documento"),
+    protocoloId: integer("protocolo_id").references(() => dfdProtocolos.id, { onDelete: "set null" }),
+    execucaoId: integer("execucao_id").references(() => automacaoExecucoes.id, { onDelete: "set null" }),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNome: text("usuario_nome"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("automacao_registros_alvo_uq").on(t.capacidade, t.centiAlvo, t.descricao),
+    index("automacao_registros_protocolo_idx").on(t.protocoloId),
+  ],
+);

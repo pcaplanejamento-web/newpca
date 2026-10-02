@@ -3416,6 +3416,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `confirmsave` com o objeto direto (`Confirm: true` = a pergunta vai ao ADM; só o "sim" dele grava — nunca confirma sozinha) → `save` → só vale com `Success` e o
   documento de volta com Id real (`conferirSalvo`). O sistema nunca manda o objeto do protocolo; o protocolo é conferido
   ANTES de emitir qualquer DFD e o ADM confirma (`useConfirmacao`) antes de começar; a 1ª recusa do anexo PARA o lote (o erro diz o passo — load/confirmsave/save).
+- **PLATAFORMA DE AUTOMAÇÕES CENTI — FUNDAÇÃO (migração `0076`, aditiva; plano em `docs` da conversa: fundação → extensão segura →
+  ao vivo → receitas → login/descoberta → gravador de receitas).** Princípios: negado por padrão · escrita só ACRESCENTA ·
+  toda escrita = AUTORIZAÇÃO DE USO ÚNICO do servidor (+ confirmação na janela da extensão, entrega 2) · ensaio antes ·
+  FREIO de emergência · tudo auditado e idempotente · nada fixo. Tabelas `automacao_execucoes` (receita + versão, quem,
+  estado preparada|rodando|pausada|concluida|falhou|cancelada, ensaio, totais recontados NO BANCO), `automacao_passos` (um
+  por alvo, único execução+chave), `automacao_autorizacoes` (só o HASH do token; consumida por DELETE … RETURNING, da
+  própria pessoa e dentro de `VALIDADE_AUTORIZACAO_S`) e `automacao_registros` (o que foi ESCRITO na Centi; único
+  capacidade + alvo + descrição → nunca repete, nem de outro computador). Núcleo PURO **`automacao-core.ts`** (capacidades
+  do motor — leitura `estado/ler/consultar/baixar`, `operar`, ESCRITA = lista FIXA `anexar`; `RECEITAS` com as previstas
+  `disponivel:false` — protocolos por repartição, relatórios, consultar, tramitar; `coerceConfigAutomacao`,
+  `receitaAtiva`, `motivoNaoEscrever`, `podeTransitar`, `estadoFinal`, `textoAlvoAnexo`), builders **`automacao-sql.ts`**
+  (testados no D1 real), D1 **`automacao-plataforma.ts`** (config no blob `configuracoes.automacao` lida SEM cache — o
+  freio vale na hora; falha ao ler = escrita pausada), Zod **`automacao-validation.ts`**. Rotas (todas `exigirAdmin`,
+  origem `centi` na auditoria, entidade `automacao`): `GET/PATCH /api/admin/automacao/config`, `GET/POST …/execucoes`,
+  `GET/PATCH …/execucoes/[id]`, `POST …/execucoes/[id]/passos` (≤ 50), `POST …/execucoes/[id]/autorizar` (freio, receita,
+  dono, não ensaio, rodando, passo pendente, não feito, limite `automacaoEscrita` 60/min), `POST
+  …/autorizacoes/consumir` (pela EXTENSÃO: Origin `chrome-extension://` ou o próprio site; mesma capacidade e mesmo alvo
+  em tempo constante; freio de novo) e `GET/POST …/registros`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
