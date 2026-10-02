@@ -78,7 +78,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.15"), false);
   assert.equal(versaoAtende("1.3.16"), false);
   assert.equal(versaoAtende("1.3.17"), false);
-  assert.equal(versaoAtende("1.3.18"), true);
+  assert.equal(versaoAtende("1.3.18"), false);
+  assert.equal(versaoAtende("1.3.19"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {

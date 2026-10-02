@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 22;
+  const PROTOCOLO = 23;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -156,7 +156,7 @@
     return k ? String(cabecalhos[k]) : null;
   };
 
-  function executar(metodo, url, corpo, entidade, comoTexto = false, cab = cabecalhos, tipo = "application/json", bruto = url) {
+  function executar(metodo, url, corpo, entidade, comoTexto = false, cab = cabecalhos, tipo = "application/json", bruto = url, rastreioNovo = true) {
     return new Promise((ok, falha) => {
       const x = new XMLHttpRequest();
       x.__pcaInterno = true;
@@ -164,7 +164,7 @@
       x.responseType = comoTexto ? "text" : "arraybuffer";
       const k = nomeEntidade();
       // O rastreio vai NOVO em cada pedido (como a tela gera) — nunca o identificador de um pedido antigo.
-      const hs = A ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab;
+      const hs = A && rastreioNovo ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab;
       for (const [n, v] of Object.entries(hs)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
       if (entidade && !k) x.setRequestHeader("Company", entidade);
       if (corpo) x.setRequestHeader("Content-Type", tipo);
@@ -200,13 +200,15 @@
     // A entidade (órgão) do DFD, quando difere da aberta na aba: só um código simples, só neste pedido.
     const ent = d.entidade == null || d.entidade === "" ? null : String(d.entidade);
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
-    if (d.metodo === "GET") return executar("GET", url, null, ent);
+    // A EMISSÃO vai com os cabeçalhos da aba EXATAMENTE como a tela os mandou (como na 1.2.0, quando funcionava) — sem
+    // renovar o rastreio (que é só do salvar do anexo).
+    if (d.metodo === "GET") return executar("GET", url, null, ent, false, cabecalhos, "application/json", url, false);
     if (d.metodo !== "POST" || !/\/restauth\/operation$/.test(new URL(url).pathname)) return { ok: false, erro: "Só a operação Emitir DFD é permitida." };
     const c = d.corpo;
     if (!c || !GUID.test(String(c.Guid)) || !Number.isInteger(c.ModuleKey) || !Array.isArray(c.Params)) return { ok: false, erro: "Pedido inválido." };
     const params = c.Params.map((p) => ({ Key: String(p.Key), Value: p.Key in TRAVAS ? TRAVAS[p.Key] : String(p.Value ?? "") }));
     for (const [Key, Value] of Object.entries(TRAVAS)) if (!params.some((p) => p.Key === Key)) params.push({ Key, Value });
-    return executar("POST", url, { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params }, ent);
+    return executar("POST", url, { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params }, ent, false, cabecalhos, "application/json", url, false);
   }
 
   // JSON da API da Centi (load/confirmsave/save): HTTP de erro ou corpo que não é JSON → o motivo, nunca segue às cegas.
