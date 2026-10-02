@@ -28,8 +28,8 @@ import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { Checkbox } from "./Field";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
+import { SeletorMultiplo } from "./SeletorMultiplo";
 import { toast } from "./Toast";
 
 /** A resposta da extensão (o pedido à aba da Centi). */
@@ -190,14 +190,6 @@ export function TarefaTelaProtocolo({
   function definirEscolha(n: string[]) {
     setEscolha(n);
     gravarEscolha(n);
-  }
-
-  function alternar(d: string) {
-    setEscolha((e) => {
-      const n = e.includes(d) ? e.filter((x) => x !== d) : [...e, d];
-      gravarEscolha(n);
-      return n;
-    });
   }
 
   async function lerEmAnalise() {
@@ -560,35 +552,30 @@ export function TarefaTelaProtocolo({
     [casar, docs, idDe],
   );
 
-  const todas = !!deps?.length && escolha.length === deps.length;
+  const opcoesDeps = useMemo(() => (deps ?? []).map((valor) => ({ valor })), [deps]);
   return (
-    <div className="flex min-h-0 flex-col gap-[var(--gap-block)] xl:h-full">
-      <section className={`${CARTAO} space-y-3`}>
+    <div className="flex min-h-0 flex-col gap-[var(--gap-block)] lg:h-full">
+      <section className={`${CARTAO} shrink-0 space-y-3`}>
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-bold text-text">1 · Repartições</h2>
-          <span className="text-xs text-muted">{deps ? `${escolha.length} de ${deps.length} escolhida(s)` : "da Tela Protocolo (PO011) da Centi"}</span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {deps && deps.length > 1 && (
-              <Button size="sm" variant="ghost" onClick={() => definirEscolha(todas ? [] : deps)}>
-                {todas ? "Nenhuma" : "Todas"}
-              </Button>
-            )}
-            <Button size="sm" variant={deps ? "secondary" : "primary"} onClick={() => void buscarReparticoes()} loading={ocupado === "deps"} disabled={!pronto || !!ocupado}>
-              {deps ? "Buscar de novo" : "Buscar repartições"}
-            </Button>
+          <h2 className="shrink-0 text-sm font-bold text-text">1 · Repartições</h2>
+          <div className="min-w-0 flex-1 basis-56 lg:max-w-96">
+            <SeletorMultiplo
+              suspenso
+              rotulo={deps ? "Repartições" : "Busque as repartições"}
+              textoVazio="Nenhuma"
+              opcoes={opcoesDeps}
+              selecionados={escolha}
+              onChange={definirEscolha}
+              disabled={!deps || !!ocupado}
+            />
           </div>
-        </div>
-        {deps && (
-          <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2 xl:grid-cols-4">
-            {deps.map((d) => (
-              <Checkbox key={d} label={d} checked={escolha.includes(d)} onChange={() => alternar(d)} disabled={!!ocupado} />
-            ))}
-          </div>
-        )}
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-          <h2 className="text-sm font-bold text-text">2 · Em Análise</h2>
-          <span className="text-xs text-muted">
-            {lidos ? `${lidos.protocolos.length} protocolo(s) · ${lidos.reparticoes.length} repartição(ões)` : "a extensão escolhe as repartições, pesquisa e lê a aba"}
+          <Button size="sm" variant={deps ? "secondary" : "primary"} onClick={() => void buscarReparticoes()} loading={ocupado === "deps"} disabled={!pronto || !!ocupado}>
+            {deps ? "Buscar de novo" : "Buscar repartições"}
+          </Button>
+          <span className="mx-1 hidden h-6 w-px bg-border lg:block" />
+          <h2 className="shrink-0 text-sm font-bold text-text">2 · Em Análise</h2>
+          <span className="min-w-0 truncate text-xs text-muted">
+            {lidos ? `${lidos.protocolos.length} protocolo(s) · ${lidos.reparticoes.length} repartição(ões)` : deps ? `${escolha.length} de ${deps.length} repartição(ões)` : "da Tela Protocolo (PO011) da Centi"}
           </span>
           <Button size="sm" className="ml-auto" onClick={() => void lerEmAnalise()} loading={ocupado === "ler"} disabled={!pronto || !!ocupado || !escolha.length}>
             Ler “Em Análise”

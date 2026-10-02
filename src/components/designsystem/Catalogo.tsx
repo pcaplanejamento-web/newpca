@@ -497,6 +497,16 @@ function PcaEspacoDemo() {
           onChange={setSel}
         />
       </div>
+      <div className="max-w-sm">
+        <SeletorMultiplo
+          suspenso
+          rotulo="Repartições"
+          textoVazio="Nenhuma"
+          opcoes={[{ valor: "SEC. DE SAÚDE" }, { valor: "SEC. DE EDUCAÇÃO" }, { valor: "SEC. DE OBRAS" }]}
+          selecionados={sel}
+          onChange={setSel}
+        />
+      </div>
       <OrcamentoPca
         dados={{
           pcaId: 1,

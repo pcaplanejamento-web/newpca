@@ -602,7 +602,7 @@ function Analise({ linhas, rodando, destino }: { linhas: Linha[]; rodando: boole
   const ok = validas.filter((l) => l.estado === "ok").length;
   const falhas = validas.length - ok - validas.filter((l) => l.estado === "fila" || l.estado === "baixando").length;
   return (
-    <section className={`${CARTAO} flex min-h-0 flex-col gap-2 p-[var(--pad-card)] max-xl:max-h-[70vh]`}>
+    <section className={`${CARTAO} flex min-h-0 flex-col gap-2 p-[var(--pad-card)] lg:h-full max-lg:max-h-[70vh]`}>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="min-w-0 truncate font-bold text-text" title={destino ?? undefined}>
           Análise{destino ? ` · ${destino}` : ""}
@@ -839,7 +839,7 @@ export function AutomacaoAdmin({
   );
   // No desktop a tela cabe no display (sem rolar o navegador): a tabela e a análise vão até o fim e rolam por dentro.
   const corpo = useRef<HTMLDivElement>(null);
-  const altura = useAlturaTela(corpo, 420);
+  const altura = useAlturaTela(corpo, 240);
 
   useEffect(() => {
     setPodePasta("showDirectoryPicker" in window);
@@ -1646,7 +1646,7 @@ export function AutomacaoAdmin({
       <div
         ref={corpo}
         style={{ "--h-automacao": altura ? `${altura}px` : undefined } as React.CSSProperties}
-        className={`grid gap-[var(--gap-block)] xl:h-[var(--h-automacao)] ${modo === "tela" ? "" : "xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
+        className={`grid gap-[var(--gap-block)] lg:h-[var(--h-automacao)] lg:grid-rows-[minmax(0,1fr)] ${modo === "tela" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
       >
         {modo === "tela" ? (
           <TarefaTelaProtocolo
@@ -1659,7 +1659,7 @@ export function AutomacaoAdmin({
             onRodando={setRodandoTela}
           />
         ) : (
-        <div className="min-w-0 xl:min-h-0">
+        <div className="min-w-0 lg:min-h-0">
           {modo === "protocolo" ? (
             <DataTable
               columns={colunas}

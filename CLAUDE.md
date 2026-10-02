@@ -3022,7 +3022,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   filtros múltiplos com ":"** — `opcoesDaBusca` (opções: "168:170:174" marca EXATAMENTE esses — o termo igual vence o
   "contém"; o mesmo formato do "Copiar planejamentos") e `predicadoBusca` (buscas de LINHAS: catálogo, orçamento, membros
   do grupo, itens do painel — QUALQUER termo; sem acento/caixa, com cache); no `MultiSelectHeader` a busca segue o
-  EXCEL: os resultados começam marcados e "Aplicar"/Enter aplica SÓ os resultados marcados; no `SeletorMultiplo`, Enter
+  EXCEL: os resultados começam marcados e "Aplicar"/Enter aplica SÓ os resultados marcados; no `SeletorMultiplo` (`suspenso` = a lista num painel flutuante `Dropdown`; `textoVazio` = o rótulo sem nada marcado), Enter
   marca os encontrados); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
   Estado); **`filter:"range"` + `Column.numero`** = colunas R$ com o **`RangeFilterHeader`**; coluna filtrada fica
   **MARCADA** (gatilho `GatilhoFiltro` em chip accent + sublinhado; `aria-sort`) e o rodapé mostra **"Limpar filtros (N)"**;
@@ -3398,7 +3398,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Segurança dos dados:** cada PDF é CONFERIDO antes de contar como salvo (`conferirConteudoDfd`: o texto das 2 primeiras
   páginas — pdf.js, dinâmico — traz o planejamento E o DFD pedidos como número inteiro; sem texto = falha), a gravação na
   pasta confere o TAMANHO gravado e o PDF unido confere o total de páginas. Tela MINIMALISTA (explicações só no (?)), em
-  largura total e SEM rolar o navegador no desktop (`useAlturaTela`): cabeçalho = título · (?) · `Segmented` Por protocolo |
+  largura total e SEM rolar o navegador de `lg` (1024px) para cima (`useAlturaTela`, piso 240; a Análise ao lado — 20rem, 24rem no `xl`): cabeçalho = título · (?) · `Segmented` Por protocolo |
   Por Id · selo da extensão/Centi · Verificar · "Extensão x.y.z" · **Ajustes** (`Dropdown` dialog: Saída — formato, pasta PCA,
   ordem, **escolher a pasta** [desligado = Downloads e o botão some], conferir —, Emissão, Entidade por órgão, Avançado);
   corpo = a tabela `scrollInterno` (Pasta/Baixar no RODAPÉ — `acoesRodape`; tocar na linha abre o protocolo no MESMO
@@ -3553,7 +3553,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   GRADE pelo cabeçalho "PROTOCOLO" (linhas de mesma forma; espera 2 leituras iguais; percorre as páginas pela "Próxima",
   teto 50; total pelo rodapé "Exibindo N registro(s)"). Só LEITURA: lista negra `PROIBIDO` (Protocolar, Operações, Salvar,
   Excluir, Novo, Tramitar…) conferida antes de CADA clique em botão/link. Tela: **`TarefaTelaProtocolo`** = 1 · Repartições
-  ("Buscar repartições" → caixas de marcar + Todas/Nenhuma; escolha no aparelho `automacao:tela-departamentos`,
+  ("Buscar repartições" → o DROPDOWN **`SeletorMultiplo suspenso`** — busca, marcar todos, limpar; nada empurra o layout; escolha no aparelho `automacao:tela-departamentos`,
   `departamentosEscolhidosValidos`) · 2 · Ler "Em Análise" (execução `protocolos-por-reparticao`, passo `consultar`; lote →
   cartão/moldura da aba) → `DataTable` com seleção (Protocolo copiável · Ano · Departamento · Interessado · Solicitante ·
   Natureza · No sistema — `noSistemaTela`, o ano tem de bater; `normalizarProtocolosTela`) + Exportar; "Tratar selecionados"
