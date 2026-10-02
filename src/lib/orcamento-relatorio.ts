@@ -98,10 +98,8 @@ export type RelatorioOrcamento = {
   definicoes: DefinicoesRelatorio;
 };
 
-/** As DEFINIÇÕES do cálculo: as escolhas da visão (por dimensão) e a cobertura dos vínculos (por unidade do CUBO). */
+/** As DEFINIÇÕES dos vínculos (a cobertura por unidade do CUBO) — as da visão estão em `dimensoes`. */
 export type DefinicoesRelatorio = {
-  /** Cada dimensão da visão: definida (com os valores escolhidos) ou não (entram todos). */
-  visao: { rotulo: string; definida: boolean; valores: string[] }[];
   /** Cada unidade do CUBO: quantas ações, quantas têm vínculo, para quais unidades cadastradas e quais ações ficaram sem. */
   unidadesCubo: { unidadeCubo: string; acoes: number; vinculadas: number; destinos: string[]; semVinculo: string[]; valorSemVinculo: number }[];
   /** As unidades cadastradas com contratações no PCA: com ou sem vínculo. */
@@ -256,7 +254,6 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
     semOrcamento,
     planejadoSemUnidade: planejadoPor.get(null) ?? 0,
     definicoes: {
-      visao: DIMENSOES_VISAO.map((d) => ({ rotulo: d.rotulo, definida: (filtros[d.key]?.length ?? 0) > 0, valores: filtros[d.key] ?? [] })),
       unidadesCubo: [...cobertura.values()]
         .map((c) => {
           const acoes = [...c.acoes.values()];
@@ -434,27 +431,10 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
         { rotulo: "Retirados pela visão", valor: brl(t.foraDaVisao.valor), detalhe: `${qtd(t.foraDaVisao.lancamentos, "lançamento", "lançamentos")} · ${pct(t.foraDaVisao.valor, t.cubo.valor)}`, cor: FORA },
       ],
     });
-    for (const d of r.dimensoes.filter((x) => x.filtrada)) {
-      b.push({ tipo: "subsecao", texto: d.rotulo, detalhe: `${num(d.considerados.length)} entram · ${num(d.naoConsiderados.length)} fora` });
-      b.push({
-        tipo: "tabela",
-        colunas: [
-          { titulo: d.rotulo, peso: 6 },
-          { titulo: "Situação", peso: 1.7 },
-          { titulo: "Lançamentos no CUBO", peso: 1.6, alinhar: "right" },
-          { titulo: "Dotação no CUBO", peso: 2, alinhar: "right" },
-        ],
-        linhas: [
-          ...d.considerados.map((x) => ({ celulas: [x.texto, "Entra", num(x.lancamentos), brl(x.valor)], cores: [null, OK, null, OK] })),
-          ...d.naoConsiderados.map((x) => ({ celulas: [x.texto, "Fora", num(x.lancamentos), brl(x.valor)], cores: ["var(--muted)", FORA, "var(--muted)", FORA] })),
-        ],
-      });
-    }
     b.push({
       tipo: "paragrafo",
       cor: "muted",
-      texto:
-        "Os totais de cada dimensão são do CUBO inteiro, sem as outras dimensões: um lançamento pode estar fora por mais de uma dimensão — por isso esses totais não se somam entre si. O valor exato que entra está nos destaques acima.",
+      texto: "Cada valor definido e não definido, um por linha, está em “Definições”, no início deste relatório.",
     });
   }
 
@@ -557,7 +537,6 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
 
 const ATENCAO = "var(--warn)";
 const CINZA = "var(--muted)";
-const lista = (xs: string[], max = 12) => (xs.length > max ? `${xs.slice(0, max).join("; ")}; +${num(xs.length - max)}` : xs.join("; "));
 
 /**
  * O PAINEL DAS DEFINIÇÕES (o 1º do relatório, separado e visível): o que foi DEFINIDO e o que NÃO foi — na visão (por
@@ -566,7 +545,7 @@ const lista = (xs: string[], max = 12) => (xs.length > max ? `${xs.slice(0, max)
  */
 function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
   const d = r.definicoes;
-  const dimDef = d.visao.filter((x) => x.definida).length;
+  const dimDef = r.dimensoes.filter((x) => x.filtrada).length;
   const cubo = d.unidadesCubo;
   const vinc = cubo.filter((u) => situacaoVinculo(u) === "Vinculada").length;
   const parc = cubo.filter((u) => situacaoVinculo(u) === "Parcial").length;
@@ -576,7 +555,7 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
   b.push({
     tipo: "destaques",
     itens: [
-      { rotulo: "Visão: dimensões definidas", valor: r.visaoNome ? `${num(dimDef)} de ${num(d.visao.length)}` : "Sem visão", detalhe: r.visaoNome ? `as demais: entram todos` : "todo o orçamento entra", cor: AZUL },
+      { rotulo: "Visão: dimensões definidas", valor: r.visaoNome ? `${num(dimDef)} de ${num(r.dimensoes.length)}` : "Sem visão", detalhe: r.visaoNome ? `as demais: entram todos` : "todo o orçamento entra", cor: AZUL },
       { rotulo: "Unidades do CUBO vinculadas", valor: `${num(vinc)} de ${num(cubo.length)}`, detalhe: "todas as ações com vínculo", cor: OK },
       { rotulo: "Vínculo parcial · sem vínculo", valor: `${num(parc)} · ${num(sem)}`, detalhe: "unidades do CUBO", cor: parc + sem ? ATENCAO : OK },
       { rotulo: "Contratações sem orçamento", valor: num(contrSem), detalhe: `de ${num(d.unidadesComContratacao.length)} unidades com contratações`, cor: contrSem ? FORA : OK },
@@ -587,16 +566,51 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
   b.push({
     tipo: "tabela",
     colunas: [
-      { titulo: "Dimensão", peso: 2 },
-      { titulo: "Situação", peso: 1.8 },
-      { titulo: "O que foi escolhido", peso: 7 },
+      { titulo: "Dimensão", peso: 3 },
+      { titulo: "Situação", peso: 2.4 },
+      { titulo: "Valores definidos (entram)", peso: 2.4, alinhar: "right" },
+      { titulo: "Valores não definidos (ficam fora)", peso: 2.6, alinhar: "right" },
     ],
-    linhas: d.visao.map((x) =>
-      x.definida
-        ? { celulas: [x.rotulo, "Definida", lista(x.valores)], cores: [null, OK, null] }
-        : { celulas: [x.rotulo, "Não definida", "Nada escolhido — entram todos os valores"], cores: [null, CINZA, CINZA] },
+    linhas: r.dimensoes.map((x) =>
+      x.filtrada
+        ? {
+            celulas: [x.rotulo, "Definida", num(x.considerados.length), num(x.naoConsiderados.length)],
+            cores: [null, OK, OK, x.naoConsiderados.length ? FORA : CINZA],
+          }
+        : { celulas: [x.rotulo, "Não definida — entram todos", "Todos", "—"], cores: [null, CINZA, CINZA, CINZA] },
     ),
   });
+  // Cada dimensão definida: TODOS os valores, um por linha — primeiro os definidos (entram), depois os não definidos (fora).
+  for (const x of r.dimensoes.filter((y) => y.filtrada)) {
+    b.push({
+      tipo: "subsecao",
+      texto: `Visão · ${x.rotulo}`,
+      detalhe: `${qtd(x.considerados.length, "definido", "definidos")} · ${qtd(x.naoConsiderados.length, "não definido", "não definidos")}`,
+    });
+    b.push({
+      tipo: "tabela",
+      colunas: [
+        { titulo: x.rotulo, peso: 6.4 },
+        { titulo: "Situação", peso: 2.4 },
+        { titulo: "Lançamentos", peso: 1.6, alinhar: "right" },
+        { titulo: "Dotação no CUBO", peso: 2.2, alinhar: "right" },
+      ],
+      linhas: [
+        ...x.considerados.map((v) => ({ celulas: [v.texto, "Definido — entra", num(v.lancamentos), brl(v.valor)], cores: [null, OK, null, OK] })),
+        ...x.naoConsiderados.map((v) => ({
+          celulas: [v.texto, "Não definido — fora", num(v.lancamentos), brl(v.valor)],
+          cores: [CINZA, FORA, CINZA, FORA],
+        })),
+      ],
+    });
+  }
+  if (r.dimensoes.some((y) => y.filtrada))
+    b.push({
+      tipo: "paragrafo",
+      cor: "muted",
+      texto:
+        "Os totais de cada valor são do CUBO inteiro, sem as outras dimensões: um lançamento pode ficar fora por mais de uma dimensão — por isso esses totais não se somam entre si. O valor exato que entra está na Parte 1.",
+    });
 
   b.push({
     tipo: "subsecao",
@@ -621,11 +635,8 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
           sit,
           `${num(u.vinculadas)} de ${num(u.acoes)}`,
           u.destinos.join(", ") || "—",
-          u.semVinculo.length === 0
-            ? "—"
-            : u.vinculadas === 0
-              ? `Todas as ${num(u.acoes)} ações (${brl(u.valorSemVinculo)} no CUBO)`
-              : `${lista(u.semVinculo, 6)} (${brl(u.valorSemVinculo)} no CUBO)`,
+          // Todas as ações sem vínculo, uma abaixo da outra, e o total delas no CUBO.
+          u.semVinculo.length === 0 ? "—" : `${u.semVinculo.join("\n")}\n(${brl(u.valorSemVinculo)} no CUBO)`,
         ],
         cores: [null, cor, cor, null, u.semVinculo.length ? FORA : CINZA],
       };

@@ -116,11 +116,12 @@ describe("relatório da composição do orçamento", () => {
 
   it("definições: o que foi e o que NÃO foi definido na visão e nos vínculos", () => {
     const d = relatorioOrcamentoPca(entrada()).definicoes;
+    const dims = relatorioOrcamentoPca(entrada()).dimensoes;
     assert.deepEqual(
-      d.visao.filter((x) => x.definida).map((x) => [x.rotulo, x.valores]),
-      [["Fonte de recurso", ["100"]]],
+      dims.filter((x) => x.filtrada).map((x) => [x.rotulo, x.considerados.map((v) => v.texto), x.naoConsiderados.map((v) => v.texto)]),
+      [["Fonte de recurso", ["100"], ["150"]]],
     );
-    assert.equal(d.visao.filter((x) => !x.definida).length, 5);
+    assert.equal(dims.filter((x) => !x.filtrada).length, 5);
     assert.deepEqual(
       d.unidadesCubo.map((u) => [u.unidadeCubo, situacaoVinculo(u), u.destinos, u.semVinculo, u.valorSemVinculo]),
       [

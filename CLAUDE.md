@@ -1950,8 +1950,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Relatório da composição (PDF)" na linha de controles do PCA × Orçamento (quem Exporta no PCA) → `GET
   /api/pca/[id]/orcamento/relatorio` (`relatorioOrcamentoDoPca`, a MESMA base do comparativo — `baseOrcamentoPca` em
   `pca-espaco.ts`) → núcleo PURO **`orcamento-relatorio.ts`** (`relatorioOrcamentoPca` + `blocosRelatorioOrcamento`, testado):
-  1º o PAINEL DAS DEFINIÇÕES, separado (`definicoes`: na VISÃO cada dimensão Definida com os valores escolhidos ou Não
-  definida = entram todos; nos VÍNCULOS cada unidade do CUBO Vinculada/Parcial/Sem vínculo — `situacaoVinculo` — com as
+  1º o PAINEL DAS DEFINIÇÕES, separado (na VISÃO o resumo por dimensão e, de cada dimensão definida, TODOS os valores
+  um por linha — os definidos [entram] e os NÃO definidos [ficam fora] com lançamentos e dotação; dimensão não definida = entram todos; `definicoes`: nos VÍNCULOS cada unidade do CUBO Vinculada/Parcial/Sem vínculo — `situacaoVinculo` — com as
   ações com vínculo, para onde vão e as SEM vínculo; e as unidades com contratações com ou SEM orçamento vinculado), depois
   como se calcula + a conta que FECHA (inteiro = retirado pela visão + atribuído às unidades + sem vínculo), o resumo por
   unidade (o MESMO "Orçamento considerado" da tabela), PARTE 1 a visão (igual para todas as unidades — por dimensão o que

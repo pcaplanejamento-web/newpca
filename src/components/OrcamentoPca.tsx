@@ -212,7 +212,7 @@ function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
       if (!r.ok || !j.ok || !j.relatorio) throw new Error(j.error ?? "Não foi possível montar o relatório.");
       const rel = j.relatorio;
       const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
-      const titulo = `Composição do orçamento por unidade · PCA ${rel.pca.nome}`;
+      const titulo = `Composição do orçamento por unidade · ${rel.pca.nome}`;
       await baixarDocumentoPdf(nomeArquivoPdf(`Composição do orçamento - ${rel.pca.nome}`, dataIsoBrasilia(new Date().toISOString())), {
         titulo,
         blocos: blocosRelatorioOrcamento(rel),
