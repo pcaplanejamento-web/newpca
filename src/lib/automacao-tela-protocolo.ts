@@ -462,35 +462,82 @@ export function departamentosEscolhidosValidos(escolhidos: unknown, disponiveis:
 // ---------------------------------------------------------------- A EMISSÃO DOS DOCUMENTOS DO PROTOCOLO "POR CÓDIGO"
 /**
  * O "Emitir documentos" APRENDIDO da própria tela da Centi (o operation que ela mandou na 1ª emissão acompanhada): o
- * ModuleKey, o Guid, os parâmetros e QUAL deles leva o Id do protocolo — dali em diante a extensão emite direto, como o
- * Emitir DFD (as travas são forçadas na extensão).
+ * ModuleKey, o Guid, os parâmetros, QUAL deles leva o Id do protocolo e os demais que são DO PROTOCOLO (o nº, o ano,
+ * "nº/ano" e a data de hoje) — dali em diante a extensão emite direto, como o Emitir DFD (as travas são forçadas na
+ * extensão), preenchendo esses campos com os do protocolo pedido. `v: 2` = o modelo com os campos (o antigo, só com o
+ * Id, levava o nº/ano/data do protocolo de onde foi aprendido — é descartado e aprendido de novo).
  */
-export type EmissaoProtocolo = { moduleKey: number; guid: string; params: { Key: string; Value: string }[]; param: string };
+export type CampoEmissao = "protocolo" | "ano" | "protocoloAno" | "hoje-dmy" | "hoje-iso";
+export type EmissaoProtocolo = {
+  v: 2;
+  moduleKey: number;
+  guid: string;
+  params: { Key: string; Value: string }[];
+  param: string;
+  campos: Record<string, CampoEmissao>;
+};
+/** O protocolo da emissão: o Id na Centi, o nº e o ano (+ hoje, "AAAA-MM-DD" em Brasília). */
+export type AlvoEmissao = { id: string | null | undefined; protocolo?: string | null; ano?: string | null; hoje: string };
 
-/** O operation da tela + o Id do protocolo emitido → o modelo (o parâmetro cujo valor é o Id); sem ele, null. */
-export function emissaoDoPedido(corpo: unknown, id: string | null | undefined): EmissaoProtocolo | null {
-  const alvo = soDigitos(id).replace(/^0+/, "");
+const CAMPOS_EMISSAO: readonly CampoEmissao[] = ["protocolo", "ano", "protocoloAno", "hoje-dmy", "hoje-iso"];
+const semZeros = (s: unknown) => soDigitos(s).replace(/^0+(?=\d)/, "");
+const dmyDe = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+const ehIsoDia = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+/** O campo do protocolo que um parâmetro carrega (igualdade EXATA com os dados do protocolo ensinado); nenhum = null. */
+function campoDoParametro(p: { Key: string; Value: string }, a: AlvoEmissao): CampoEmissao | null {
+  const v = p.Value.trim();
+  const prot = semZeros(a.protocolo);
+  const ano = /^\d{4}$/.test(String(a.ano ?? "")) ? String(a.ano) : "";
+  if (prot && /^\d+$/.test(v) && semZeros(v) === prot) return "protocolo";
+  const pa = /^0*(\d+)\s*\/\s*(\d{4})$/.exec(v);
+  if (prot && ano && pa && pa[1] === prot && pa[2] === ano) return "protocoloAno";
+  // O ANO do protocolo só num parâmetro que se chama "ano…" — o exercício é da sessão, não do protocolo.
+  const chave = p.Key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (ano && v === ano && chave.includes("ano") && !chave.includes("exerc")) return "ano";
+  if (ehIsoDia(a.hoje)) {
+    if (v.includes(dmyDe(a.hoje))) return "hoje-dmy";
+    if (v.startsWith(a.hoje)) return "hoje-iso";
+  }
+  return null;
+}
+
+/** O operation da tela + o protocolo emitido → o modelo (o parâmetro cujo valor é o Id + os campos do protocolo). */
+export function emissaoDoPedido(corpo: unknown, a: AlvoEmissao): EmissaoProtocolo | null {
+  const alvo = semZeros(a.id);
   const c = (corpo && typeof corpo === "object" ? corpo : null) as { ModuleKey?: unknown; Guid?: unknown; Params?: unknown } | null;
   if (!alvo || !c || !Number.isInteger(c.ModuleKey) || !GUID.test(String(c.Guid ?? "")) || !Array.isArray(c.Params)) return null;
   const params = c.Params.filter((x): x is { Key: unknown; Value: unknown } => !!x && typeof x === "object")
     .map((x) => ({ Key: String(x.Key ?? "").slice(0, 80), Value: String(x.Value ?? "").slice(0, 400) }))
     .filter((x) => x.Key)
     .slice(0, 60);
-  const p = params.find((x) => soDigitos(x.Value).replace(/^0+/, "") === alvo && /^\d+$/.test(x.Value.trim()));
-  return p ? { moduleKey: c.ModuleKey as number, guid: String(c.Guid).toLowerCase(), params, param: p.Key } : null;
+  const p = params.find((x) => semZeros(x.Value) === alvo && /^\d+$/.test(x.Value.trim()));
+  if (!p) return null;
+  const campos: Record<string, CampoEmissao> = {};
+  for (const x of params) {
+    if (x.Key === p.Key || ehParamAssincrono(x.Key)) continue;
+    const campo = campoDoParametro(x, a);
+    if (campo) campos[x.Key] = campo;
+  }
+  return { v: 2, moduleKey: c.ModuleKey as number, guid: String(c.Guid).toLowerCase(), params, param: p.Key, campos };
 }
 
-/** O modelo guardado (config do servidor) validado; inválido = null. */
+/** O modelo guardado (config do servidor) validado; inválido ou do formato antigo (sem `v: 2`) = null. */
 export function coerceEmissaoProtocolo(v: unknown): EmissaoProtocolo | null {
   const o = (v && typeof v === "object" ? v : null) as Record<string, unknown> | null;
-  if (!o || !Number.isInteger(o.moduleKey) || (o.moduleKey as number) <= 0 || !GUID.test(String(o.guid ?? "")) || !Array.isArray(o.params)) return null;
+  if (!o || o.v !== 2 || !Number.isInteger(o.moduleKey) || (o.moduleKey as number) <= 0 || !GUID.test(String(o.guid ?? "")) || !Array.isArray(o.params)) return null;
   const params = o.params
     .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
     .map((x) => ({ Key: String(x.Key ?? "").slice(0, 80), Value: String(x.Value ?? "").slice(0, 400) }))
     .filter((x) => x.Key)
     .slice(0, 60);
   const param = String(o.param ?? "");
-  return params.some((x) => x.Key === param) ? { moduleKey: o.moduleKey as number, guid: String(o.guid).toLowerCase(), params, param } : null;
+  if (!params.some((x) => x.Key === param)) return null;
+  const brutos = o.campos && typeof o.campos === "object" ? (o.campos as Record<string, unknown>) : {};
+  const campos: Record<string, CampoEmissao> = {};
+  for (const [k, c] of Object.entries(brutos))
+    if (k !== param && params.some((x) => x.Key === k) && CAMPOS_EMISSAO.includes(c as CampoEmissao)) campos[k] = c as CampoEmissao;
+  return { v: 2, moduleKey: o.moduleKey as number, guid: String(o.guid).toLowerCase(), params, param, campos };
 }
 
 /** O parâmetro do modo ASSÍNCRONO do "Emitir documentos" (sem acento/caixa: Assincrono, Assync…, Async…). */
@@ -513,17 +560,42 @@ export function valorSincrono(v: string): string {
   return "0";
 }
 
-/** O corpo do operation para emitir os documentos do protocolo `id` — sempre SÍNCRONO: no modo assíncrono a Centi gera
- * o documento em segundo plano e a chave devolvida não aponta para um arquivo pronto (getbinlink 404). */
-export function corpoEmissaoProtocolo(e: EmissaoProtocolo, id: string): { ModuleKey: number; Guid: string; Params: { Key: string; Value: string }[] } | null {
-  const v = soDigitos(id).replace(/^0+(?=\d)/, "");
+/** O corpo do operation para emitir os documentos do protocolo pedido: o Id, o nº/ano e a data de hoje nos campos do
+ * protocolo; sempre SÍNCRONO — no modo assíncrono a Centi gera o documento em segundo plano e a chave devolvida não aponta
+ * para um arquivo pronto. Sem o Id = null; um campo do protocolo sem o dado (nº/ano desconhecidos) fica como aprendido. */
+export function corpoEmissaoProtocolo(e: EmissaoProtocolo, a: AlvoEmissao): { ModuleKey: number; Guid: string; Params: { Key: string; Value: string }[] } | null {
+  const v = semZeros(a.id);
   if (!v) return null;
-  const Params = e.params.map((x) =>
-    x.Key === e.param ? { Key: x.Key, Value: v } : ehParamAssincrono(x.Key) ? { Key: x.Key, Value: valorSincrono(x.Value) } : x,
-  );
-  return { ModuleKey: e.moduleKey, Guid: e.guid, Params };
+  const prot = semZeros(a.protocolo);
+  const ano = /^\d{4}$/.test(String(a.ano ?? "")) ? String(a.ano) : "";
+  const hoje = ehIsoDia(a.hoje) ? a.hoje : "";
+  const valor = (x: { Key: string; Value: string }): string => {
+    if (x.Key === e.param) return v;
+    if (ehParamAssincrono(x.Key)) return valorSincrono(x.Value);
+    switch (e.campos[x.Key]) {
+      case "protocolo":
+        return prot || x.Value;
+      case "ano":
+        return ano || x.Value;
+      case "protocoloAno":
+        return prot && ano ? `${prot}/${ano}` : x.Value;
+      case "hoje-dmy":
+        return hoje ? x.Value.replace(/\d{2}\/\d{2}\/\d{4}/, dmyDe(hoje)) : x.Value;
+      case "hoje-iso":
+        return hoje ? x.Value.replace(/^\d{4}-\d{2}-\d{2}/, hoje) : x.Value;
+      default:
+        return x.Value;
+    }
+  };
+  return { ModuleKey: e.moduleKey, Guid: e.guid, Params: e.params.map((x) => ({ Key: x.Key, Value: valor(x) })) };
 }
 
 /** O mesmo modelo (para só gravar no servidor quando mudou). */
 export const mesmaEmissao = (a: EmissaoProtocolo | null, b: EmissaoProtocolo | null) =>
-  !!a && !!b && a.moduleKey === b.moduleKey && a.guid === b.guid && a.param === b.param && JSON.stringify(a.params.map((x) => x.Key)) === JSON.stringify(b.params.map((x) => x.Key));
+  !!a &&
+  !!b &&
+  a.moduleKey === b.moduleKey &&
+  a.guid === b.guid &&
+  a.param === b.param &&
+  JSON.stringify(a.params.map((x) => x.Key)) === JSON.stringify(b.params.map((x) => x.Key)) &&
+  JSON.stringify(Object.entries(a.campos).sort()) === JSON.stringify(Object.entries(b.campos).sort());

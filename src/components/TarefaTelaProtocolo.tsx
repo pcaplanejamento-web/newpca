@@ -1,7 +1,7 @@
 "use client";
 
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { analisarRespostaCenti, linkDaResposta, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { analisarRespostaCenti, linkDaResposta, operacaoRecusada, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { cancelarExecucao, concluirPassos, iniciarExecucaoLeitura } from "@/lib/automacao-cliente";
 import {
   coerceEmissaoProtocolo,
@@ -16,6 +16,7 @@ import {
   noSistemaTela,
   type ProtocoloEmAnalise,
 } from "@/lib/automacao-tela-protocolo";
+import { dataIsoBrasilia } from "@/lib/format";
 import { amostraBytes, baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado, pdfDosBytes } from "@/lib/arquivo-navegador";
 import { Badge, type Tone } from "./Badge";
 import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
@@ -60,6 +61,8 @@ const DOC: Record<EstadoDoc, { rotulo: string; tone: Tone }> = {
 };
 
 const CHAVE_ESCOLHA = "automacao:tela-departamentos";
+/** Hoje em Brasília ("AAAA-MM-DD") — a data dos campos "hoje" da emissão aprendida. */
+const hojeBrasilia = () => dataIsoBrasilia(new Date().toISOString());
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
 function lerEscolha(): unknown {
@@ -104,14 +107,27 @@ export function TarefaTelaProtocolo({
 }) {
   const [deps, setDeps] = useState<string[] | null>(null);
   const [escolha, setEscolha] = useState<string[]>([]);
-  const [lidos, setLidos] = useState<{ protocolos: ProtocoloEmAnalise[]; total: number; reparticoes: string[] } | null>(null);
+  const [lidos, setLidosEstado] = useState<{ protocolos: ProtocoloEmAnalise[]; total: number; reparticoes: string[] } | null>(null);
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [ocupado, setOcupado] = useState<"deps" | "ler" | null>(null);
   // O andamento do documento de cada protocolo.
   // O Id da Centi de cada protocolo lido do CADASTRO (quando a grade não o trouxe).
-  const [ids, setIds] = useState<Map<string, string>>(new Map());
+  const [ids, setIdsEstado] = useState<Map<string, string>>(new Map());
+  // A fila roda por várias chamadas assíncronas: o que ela lê (a emissão aprendida, os Ids, as repartições lidas) fica em
+  // REFS — o aprendido no meio do lote vale já para os próximos protocolos (o estado seria o do render em que a fila começou).
   // A emissão "por código" do Emitir documentos (aprendida da tela da Centi; vale para todos — config do servidor).
-  const [emissao, setEmissao] = useState<EmissaoProtocolo | null>(null);
+  const emissaoRef = useRef<EmissaoProtocolo | null>(null);
+  const idsRef = useRef(new Map<string, string>());
+  const reparticoesRef = useRef<string[]>([]);
+  const configRef = useRef<Promise<boolean> | null>(null);
+  const setId = (chave: string, id: string) => {
+    idsRef.current = new Map(idsRef.current).set(chave, id);
+    setIdsEstado(idsRef.current);
+  };
+  const setLidos = (l: { protocolos: ProtocoloEmAnalise[]; total: number; reparticoes: string[] }) => {
+    reparticoesRef.current = l.reparticoes;
+    setLidosEstado(l);
+  };
   const [docs, setDocs] = useState<Map<string, { estado: EstadoDoc; erro?: string }>>(new Map());
   const [arquivo, setArquivo] = useState<{ file: File; n: number } | null>(null);
   const [atual, setAtual] = useState<string | null>(null);
@@ -202,18 +218,27 @@ export function TarefaTelaProtocolo({
     }
   }
 
-  useEffect(() => {
-    fetch("/api/admin/automacao/config")
+  /** A emissão aprendida (config do servidor); a mesma leitura vale para todos (true = leu). */
+  const carregarConfig = useCallback(() => {
+    configRef.current = fetch("/api/admin/automacao/config", { cache: "no-store" })
       .then((r) => r.json() as Promise<{ ok?: boolean; config?: { emissaoProtocolo?: unknown } }>)
-      .then((x) => setEmissao(x?.ok ? coerceEmissaoProtocolo(x.config?.emissaoProtocolo) : null))
-      .catch(() => {});
+      .then((x) => {
+        if (!x?.ok) return false;
+        emissaoRef.current = coerceEmissaoProtocolo(x.config?.emissaoProtocolo);
+        return true;
+      })
+      .catch(() => false);
+    return configRef.current;
   }, []);
+  useEffect(() => {
+    void carregarConfig();
+  }, [carregarConfig]);
 
-  /** O operation da tela + o Id → a emissão "por código" (grava no servidor só quando mudou). */
-  async function aprenderEmissao(operacao: unknown, id: string | null | undefined) {
-    const nova = emissaoDoPedido(operacao, id);
-    if (!nova || mesmaEmissao(nova, emissao)) return;
-    setEmissao(nova);
+  /** O operation da tela + o protocolo → a emissão "por código" (grava no servidor só quando mudou). */
+  async function aprenderEmissao(operacao: unknown, alvo: { id: string; protocolo: string; ano: string }) {
+    const nova = emissaoDoPedido(operacao, { ...alvo, hoje: hojeBrasilia() });
+    if (!nova || mesmaEmissao(nova, emissaoRef.current)) return;
+    emissaoRef.current = nova;
     await fetch("/api/admin/automacao/config", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -262,12 +287,18 @@ export function TarefaTelaProtocolo({
    * A emissão POR CÓDIGO (o operation aprendido com o Id do protocolo), como o Emitir DFD — sem tocar na tela da Centi.
    * `recusada` = a extensão deste navegador ainda não conhece a operação (precisa aprender UMA vez pela tela).
    */
-  async function emitirPorCodigo(e: EmissaoProtocolo, id: string): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string }> {
-    const corpo = corpoEmissaoProtocolo(e, id);
+  async function emitirPorCodigo(
+    e: EmissaoProtocolo,
+    alvo: { id: string; protocolo: string; ano: string },
+  ): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string }> {
+    const corpo = corpoEmissaoProtocolo(e, { ...alvo, hoje: hojeBrasilia() });
     if (!corpo) return { erro: "Sem o Id do protocolo na Centi." };
-    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo }, 150_000);
+    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo }, 300_000);
     if (r.interrompido) interrompido.current = true;
     if (!r.ok || r.b64 == null) return /só a operação/i.test(r.erro ?? "") ? { recusada: r.erro ?? "" } : { erro: r.erro ?? "A extensão não respondeu." };
+    // A Centi recusou a operação guardada (permissão, ou ela mudou a operação): a tela ensina de novo.
+    const bytes = deBase64(r.b64);
+    if (bytes.length < 64 * 1024 && operacaoRecusada(new TextDecoder().decode(bytes))) return { recusada: "A Centi recusou a operação guardada." };
     return pdfDaResposta(r.b64, r.status ?? 0);
   }
 
@@ -303,23 +334,27 @@ export function TarefaTelaProtocolo({
     }
     marcar(p.chave, "emitindo");
     if (lote.current) await pedir("lote", { fase: "passo", loteId: lote.current, feito: 0, total: 1, texto: `Emitindo os documentos do protocolo ${p.protocolo}/${p.ano}` }, 8000);
-    // POR CÓDIGO (o Emitir documentos aprendido + o Id): direto, como os DFDs — a tela da Centi não é tocada. Só quando o
-    // sistema ainda não conhece a operação (ou este navegador não a aprendeu), UMA emissão pela tela a ensina.
-    const id = p.id || ids.get(p.chave) || "";
-    if (emissao && !id) return falhar("A grade da Centi não trouxe o Id deste protocolo — leia “Em Análise” de novo.");
-    let x: { pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string } | null = emissao ? await emitirPorCodigo(emissao, id) : null;
+    // POR CÓDIGO (o Emitir documentos aprendido + o protocolo): direto, como os DFDs — a tela da Centi não é tocada. A tela
+    // emite UMA vez só quando o código não dá: a operação ainda não foi aprendida (no sistema ou neste navegador), a Centi
+    // a recusou (mudou ou sem permissão) ou a grade não trouxe o Id — e ensina de novo para os próximos.
+    const id = p.id || idsRef.current.get(p.chave) || "";
+    const e = emissaoRef.current;
+    let x: { pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string } | null =
+      e && id ? await emitirPorCodigo(e, { id, protocolo: p.protocolo, ano: p.ano }) : null;
+    if (interrompido.current) return falhar("Interrompido na extensão.");
     if (!x || "recusada" in x) {
-      const r = await pedir("telaEmitir", { protocolo: p.protocolo, ano: p.ano, departamentos: lidos?.reparticoes ?? [] }, 300_000);
+      const r = await pedir("telaEmitir", { protocolo: p.protocolo, ano: p.ano, departamentos: reparticoesRef.current }, 300_000);
       if (r.interrompido) interrompido.current = true;
       const d = r.ok ? dadosCentiValidos(r.dados) : null;
-      if (d?.id) setIds((m) => new Map(m).set(p.chave, d.id as string));
+      if (d?.id) setId(p.chave, d.id);
       if (!r.ok) return falhar(r.erro ?? "A extensão não respondeu.", r.diagnostico);
-      if (r.operacao) await aprenderEmissao(r.operacao, d?.id || id);
+      if (r.operacao) await aprenderEmissao(r.operacao, { id: d?.id || id, protocolo: p.protocolo, ano: p.ano });
       x = await pdfDaEmissao(r.arquivo);
     }
     if ("erro" in x) {
-      const enviado = emissao ? corpoEmissaoProtocolo(emissao, id || "0") : null;
-      const op = emissao && enviado ? `operação enviada: ModuleKey ${emissao.moduleKey} · ${enviado.Params.map((q) => `${q.Key}=${q.Key === emissao.param ? "<Id>" : q.Value}`).join("; ")}` : "";
+      const em = emissaoRef.current;
+      const enviado = em ? corpoEmissaoProtocolo(em, { id: id || "0", protocolo: p.protocolo, ano: p.ano, hoje: hojeBrasilia() }) : null;
+      const op = em && enviado ? `operação enviada: ModuleKey ${em.moduleKey} · ${enviado.Params.map((q) => `${q.Key}=${q.Key === em.param ? "<Id>" : q.Value}`).join("; ")}` : "";
       return falhar(x.erro, [x.amostra, op].filter(Boolean).join("\n"));
     }
     const file = new File([comoBlob(x.pdf)], nomePdfEmAnalise(p), { type: "application/pdf" });
@@ -339,6 +374,8 @@ export function TarefaTelaProtocolo({
 
   async function emitir(lista: ProtocoloEmAnalise[]) {
     if (!lista.length || ocupado || emitindo) return;
+    // A emissão aprendida tem de estar carregada antes do 1º protocolo (sem ela, tudo iria pela tela); falhou = lê de novo.
+    if (!(await (configRef.current ?? carregarConfig()))) await carregarConfig();
     interrompido.current = false;
     setFalha(null);
     fila.current = [...lista];

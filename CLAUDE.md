@@ -3611,7 +3611,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   diagnóstico (`BaixarCenti` → `DownloadCenti {status, bytes}`).
   **Só por código (sistema, sem mudar a extensão):** com o "Emitir documentos" já aprendido, a emissão NUNCA cai para a
   tela da Centi — a tela só é usada UMA vez para ensinar (sistema sem o modelo, ou o navegador ainda não o aprendeu:
-  `emitirPorCodigo` → `{recusada}`); sem o Id na grade = erro claro. **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
+  `emitirPorCodigo` → `{recusada}`), a Centi RECUSOU a operação guardada (`operacaoRecusada` — mudou ou sem permissão) ou a
+  grade não trouxe o Id (o cadastro o lê) — e ensina de novo. **Modelo v2 com os CAMPOS DO PROTOCOLO** (`EmissaoProtocolo`
+  `v:2` + `campos`, `emissaoDoPedido(corpo, {id, protocolo, ano, hoje})`): além do Id, os parâmetros iguais ao nº
+  (`protocolo`), ao "nº/ano" (`protocoloAno`), ao ano (`ano` — só numa chave "ano…", nunca o exercício) e à data de hoje
+  (`hoje-dmy`/`hoje-iso`) são preenchidos com os do protocolo PEDIDO (`corpoEmissaoProtocolo(e, alvo)`) — antes iam com os
+  do protocolo que ensinou; o modelo antigo (sem `v:2`) é descartado e aprendido de novo UMA vez. A fila lê a emissão, os Ids
+  e as repartições de REFS (o aprendido no meio do lote vale já) e espera a configuração carregar antes do 1º protocolo;
+  emissão até 300 s (extensão 1.11.2: o binário também). **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
   o parâmetro do modo assíncrono (`ehParamAssincrono`: Assincrono/Assync/Async) como "não" no formato capturado
   (`valorSincrono`) — no assíncrono a Centi gera em segundo plano e a chave dá 404; o diagnóstico mostra os parâmetros ENVIADOS. **Download DIRETO, num pedido só:** a chave do `File.Key` é baixada por
   `caminhoDoArquivo` — o MESMO endereço que a tela da Centi usa: o `URL` da resposta; o arquivo em CACHE (`File.Cache:true`

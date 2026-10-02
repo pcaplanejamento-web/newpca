@@ -219,13 +219,16 @@ test("tela protocolo: o Emitir documentos aprendido da tela vira a emissão POR 
       { Key: "AnexarAoProtocolo", Value: "0" },
     ],
   };
-  const e = emissaoDoPedido(pedido, "2328622");
-  assert.deepEqual(e, { moduleKey: 102999, guid, params: pedido.Params, param: "IdProtocolo" });
-  assert.equal(emissaoDoPedido(pedido, "999"), null);
-  assert.equal(emissaoDoPedido({ ...pedido, Guid: "x" }, "2328622"), null);
+  const hoje = "2026-10-02";
+  const e = emissaoDoPedido(pedido, { id: "2328622", protocolo: "152688", ano: "2026", hoje });
+  assert.deepEqual(e, { v: 2, moduleKey: 102999, guid, params: pedido.Params, param: "IdProtocolo", campos: {} });
+  assert.equal(emissaoDoPedido(pedido, { id: "999", hoje }), null);
+  assert.equal(emissaoDoPedido({ ...pedido, Guid: "x" }, { id: "2328622", hoje }), null);
   assert.deepEqual(coerceEmissaoProtocolo(e), e);
   assert.equal(coerceEmissaoProtocolo({ ...e, param: "Outro" }), null);
-  const corpo = corpoEmissaoProtocolo(e as NonNullable<typeof e>, "002273524");
+  // O modelo ANTIGO (sem v: 2 — sem os campos do protocolo) é descartado: a tela ensina de novo.
+  assert.equal(coerceEmissaoProtocolo({ moduleKey: 102999, guid, params: pedido.Params, param: "IdProtocolo" }), null);
+  const corpo = corpoEmissaoProtocolo(e as NonNullable<typeof e>, { id: "002273524", protocolo: "97608", ano: "2025", hoje });
   assert.equal(corpo?.Params.find((x) => x.Key === "IdProtocolo")?.Value, "2273524");
   assert.equal(corpo?.Params.find((x) => x.Key === "Modelo")?.Value, "3");
   assert.equal(mesmaEmissao(e, coerceEmissaoProtocolo(JSON.parse(JSON.stringify(e)))), true);
@@ -250,6 +253,8 @@ test("tela protocolo: a emissão por código sai SÍNCRONA (Assíncrono = não, 
   for (const k of ["Background", "IdProtocolo", "Documentos", "SendMail"]) assert.equal(ehParamAssincrono(k), false, k);
   assert.deepEqual(["true", "True", "TRUE", "1", "S", "s", "Sim", "SIM", "Y", "x"].map(valorSincrono), ["false", "False", "FALSE", "0", "N", "n", "Não", "NÃO", "N", "0"]);
   const e = {
+    v: 2 as const,
+    campos: {},
     moduleKey: 122310,
     guid: "fe4d8f41-c3e6-77e5-8e58-94654fefe22e",
     param: "IdProtocolo",
@@ -260,11 +265,58 @@ test("tela protocolo: a emissão por código sai SÍNCRONA (Assíncrono = não, 
       { Key: "Background", Value: "0" },
     ],
   };
-  const corpo = corpoEmissaoProtocolo(e, "2273524");
+  const corpo = corpoEmissaoProtocolo(e, { id: "2273524", hoje: "2026-10-02" });
   assert.deepEqual(corpo?.Params, [
     { Key: "IdProtocolo", Value: "2273524" },
     { Key: "Assincrono", Value: "false" },
     { Key: "Documentos", Value: "1;2" },
     { Key: "Background", Value: "0" },
   ]);
+});
+
+test("tela protocolo: os campos DO PROTOCOLO (nº, ano, nº/ano, data de hoje) seguem o protocolo pedido — não o que ensinou", async () => {
+  const { emissaoDoPedido, coerceEmissaoProtocolo, corpoEmissaoProtocolo, mesmaEmissao } = await import("../src/lib/automacao-tela-protocolo.ts");
+  const pedido = {
+    ModuleKey: 122310,
+    Guid: "fe4d8f41-c3e6-77e5-8e58-94654fefe22e",
+    Params: [
+      { Key: "IdProtocolo", Value: "2328622" },
+      { Key: "NumeroProtocolo", Value: "152688" },
+      { Key: "AnoProtocolo", Value: "2026" },
+      { Key: "Exercicio", Value: "2026" },
+      { Key: "Processo", Value: "152688/2026" },
+      { Key: "DataEmissao", Value: "02/10/2026" },
+      { Key: "DataBase", Value: "2026-10-02T00:00:00" },
+      { Key: "Modelo", Value: "3" },
+      { Key: "Assincrono", Value: "true" },
+    ],
+  };
+  const e = emissaoDoPedido(pedido, { id: "2328622", protocolo: "152688", ano: "2026", hoje: "2026-10-02" });
+  assert.deepEqual(e?.campos, {
+    NumeroProtocolo: "protocolo",
+    AnoProtocolo: "ano",
+    Processo: "protocoloAno",
+    DataEmissao: "hoje-dmy",
+    DataBase: "hoje-iso",
+  });
+  assert.deepEqual(coerceEmissaoProtocolo(JSON.parse(JSON.stringify(e))), e);
+  assert.equal(mesmaEmissao(e, { ...(e as NonNullable<typeof e>), campos: {} }), false);
+  // Outro protocolo, de OUTRO ano, num OUTRO dia: cada campo com o dado dele; o exercício (da sessão) fica.
+  const corpo = corpoEmissaoProtocolo(e as NonNullable<typeof e>, { id: "2273524", protocolo: "97608", ano: "2025", hoje: "2026-11-05" });
+  assert.deepEqual(Object.fromEntries((corpo?.Params ?? []).map((x) => [x.Key, x.Value])), {
+    IdProtocolo: "2273524",
+    NumeroProtocolo: "97608",
+    AnoProtocolo: "2025",
+    Exercicio: "2026",
+    Processo: "97608/2025",
+    DataEmissao: "05/11/2026",
+    DataBase: "2026-11-05T00:00:00",
+    Modelo: "3",
+    Assincrono: "false",
+  });
+  // Sem o nº/ano do protocolo pedido, o campo fica como aprendido (nunca vazio).
+  const sem = corpoEmissaoProtocolo(e as NonNullable<typeof e>, { id: "2273524", hoje: "2026-11-05" });
+  assert.equal(sem?.Params.find((x) => x.Key === "NumeroProtocolo")?.Value, "152688");
+  // Campo inventado no modelo guardado (fora dos parâmetros ou de tipo desconhecido) é descartado.
+  assert.deepEqual(coerceEmissaoProtocolo({ ...e, campos: { Inexistente: "protocolo", Modelo: "x", IdProtocolo: "ano" } })?.campos, {});
 });

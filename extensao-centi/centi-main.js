@@ -460,7 +460,7 @@
         );
       };
       x.onerror = () => falha(new Error("Sem resposta da Centi (rede)."));
-      x.timeout = comoTexto ? 280000 : 120000;
+      x.timeout = 280000;
       x.ontimeout = () => falha(new Error("A Centi demorou demais para responder."));
       x.send(corpo ? JSON.stringify(corpo) : null);
     });
