@@ -153,7 +153,7 @@ test("emissão: o parâmetro do protocolo leva o campo da linha; o nome do PDF s
 test("extensão: o `ler` passa pela trava de leitura, o `pedir` só repete a operação aprendida e o id é FIXO (chave no manifesto)", () => {
   const main = readFileSync("extensao-centi/centi-main.js", "utf8");
   assert.match(main, /async function ler\(d\) \{[\s\S]*?A\.consultaPermitida\(caminho, metodo\)/);
-  assert.match(main, /const ACOES = \{ pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao \};/);
+  assert.match(main, /const ACOES = \{ pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela \};/);
   assert.match(main, /operacoesAprendidas\(\)\.includes\(A\?\.chaveOperacao\(c\)\)/);
   // O aprendiz nunca guarda cabeçalhos (a sessão vai neles).
   assert.doesNotMatch(main.slice(main.indexOf("function aprenderResposta"), main.indexOf("const textoDoXhr")), /cabecalhos|__pcaHs/);
@@ -183,7 +183,7 @@ test("em análise: protocolos limpos e sem repetir; o casamento com o sistema re
 });
 
 test("tela protocolo: os dados do cadastro da Centi limpos, o casamento pelo Id e o nome do PDF", async () => {
-  const { dadosCentiValidos, noSistemaTela, rotulosDosDados, nomePdfEmAnalise } = await import("../src/lib/automacao-tela-protocolo.ts");
+  const { dadosCentiValidos, noSistemaTela, nomePdfEmAnalise } = await import("../src/lib/automacao-tela-protocolo.ts");
   assert.equal(dadosCentiValidos(null), null);
   const d = dadosCentiValidos({
     id: "002273524",
@@ -197,7 +197,6 @@ test("tela protocolo: os dados do cadastro da Centi limpos, o casamento pelo Id 
       { rotulo: "Valor", valor: "" },
     ],
   });
-  assert.deepEqual(rotulosDosDados([d as NonNullable<typeof d>]), ["Id", "Valor"]);
   // O Id da Centi decide (mesmo com o nº renumerado); sem Id, o nº + ano.
   const casar = noSistemaTela([
     { numero: "155000/2026", idExterno: "2273524" },
@@ -206,4 +205,41 @@ test("tela protocolo: os dados do cadastro da Centi limpos, o casamento pelo Id 
   assert.equal(casar({ protocolo: "97608", ano: "2026", id: "2273524" })?.numero, "155000/2026");
   assert.equal(casar({ protocolo: "97608", ano: "2026" })?.numero, "97608/2026");
   assert.equal(nomePdfEmAnalise({ protocolo: "97608", ano: "2026" }), "Protocolo 97608 - 2026.pdf");
+});
+
+test("tela protocolo: o Emitir documentos aprendido da tela vira a emissão POR CÓDIGO (o parâmetro com o Id)", async () => {
+  const { emissaoDoPedido, coerceEmissaoProtocolo, corpoEmissaoProtocolo, mesmaEmissao, normalizarProtocolosTela } = await import("../src/lib/automacao-tela-protocolo.ts");
+  const guid = "24e3e9d0-1111-2222-3333-444455556666";
+  const pedido = {
+    ModuleKey: 102999,
+    Guid: guid.toUpperCase(),
+    Params: [
+      { Key: "Modelo", Value: "3" },
+      { Key: "IdProtocolo", Value: "2328622" },
+      { Key: "AnexarAoProtocolo", Value: "0" },
+    ],
+  };
+  const e = emissaoDoPedido(pedido, "2328622");
+  assert.deepEqual(e, { moduleKey: 102999, guid, params: pedido.Params, param: "IdProtocolo" });
+  assert.equal(emissaoDoPedido(pedido, "999"), null);
+  assert.equal(emissaoDoPedido({ ...pedido, Guid: "x" }, "2328622"), null);
+  assert.deepEqual(coerceEmissaoProtocolo(e), e);
+  assert.equal(coerceEmissaoProtocolo({ ...e, param: "Outro" }), null);
+  const corpo = corpoEmissaoProtocolo(e as NonNullable<typeof e>, "002273524");
+  assert.equal(corpo?.Params.find((x) => x.Key === "IdProtocolo")?.Value, "2273524");
+  assert.equal(corpo?.Params.find((x) => x.Key === "Modelo")?.Value, "3");
+  assert.equal(mesmaEmissao(e, coerceEmissaoProtocolo(JSON.parse(JSON.stringify(e)))), true);
+  assert.equal(mesmaEmissao(e, null), false);
+  // A grade traz o Id e a data de entrada de cada protocolo.
+  assert.deepEqual(normalizarProtocolosTela([{ protocolo: "152688", ano: "2026", id: "02328622", entrada: "24/09/2026" }])[0], {
+    chave: "152688/2026",
+    protocolo: "152688",
+    ano: "2026",
+    id: "2328622",
+    entrada: "24/09/2026",
+    departamento: "",
+    interessado: "",
+    solicitante: "",
+    natureza: "",
+  });
 });

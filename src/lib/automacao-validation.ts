@@ -24,6 +24,12 @@ export const configAutomacaoSchema = z
       .nullable()
       .optional()
       .refine((v) => v == null || JSON.stringify(v).length <= 65536, "Modelo grande demais."),
+    /** O "Emitir documentos" do protocolo aprendido (normalizado por `coerceEmissaoProtocolo`); null apaga. */
+    emissaoProtocolo: z
+      .record(z.string(), z.unknown())
+      .nullable()
+      .optional()
+      .refine((v) => v == null || JSON.stringify(v).length <= 16384, "Modelo grande demais."),
   })
   .strict();
 

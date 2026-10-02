@@ -442,9 +442,11 @@ test("tela protocolo: abre o protocolo, lê TODO o cadastro e emite pelo Operaç
   const c = centi({ telaAberta: true, emAnalise: { "PCA - CRISTIANE": [["97608", "2026", "PCA - CRISTIANE", "FUNDO MUNICIPAL DE SAÚDE"]] } });
   const capturas: string[] = [];
   const pagina = async (acao: string, d: { acao: string }) => {
+    if (acao === "grade") return { ok: false };
     assert.equal(acao, "captura");
     capturas.push(d.acao);
-    if (d.acao === "ler") return c.estado.emitido ? { ok: true, pronto: true, resposta: { status: 200, b64: "e30=" } } : { ok: true, pronto: false };
+    if (d.acao === "ler")
+      return c.estado.emitido ? { ok: true, pronto: true, resposta: { status: 200, b64: "e30=" }, operacao: { ModuleKey: 7, Guid: "g", Params: [] } } : { ok: true, pronto: false };
     return { ok: true };
   };
   const r = await peca().executar("telaEmitir", { protocolo: "97608", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
@@ -460,6 +462,7 @@ test("tela protocolo: abre o protocolo, lê TODO o cadastro e emite pelo Operaç
     { rotulo: "Repartição", valor: "PCA - NATYELLE" },
   ]);
   assert.deepEqual(r.arquivo, { resposta: { status: 200, b64: "e30=" } });
+  assert.deepEqual(r.operacao, { ModuleKey: 7, Guid: "g", Params: [] });
   // Só lupa, Operações, Emitir documentos e fechar — nunca Novo, Excluir, Salvar, Anexar nem PROTOCOLAR.
   assert.deepEqual(c.cliques, ["lupa", "Operações", "Emitir documentos", "fechar"]);
   assert.equal(capturas[0], "iniciar");
@@ -509,4 +512,28 @@ test("tela protocolo: grade que desenha só as linhas VISÍVEIS — rola por den
   const pagina = async (_a: string, d: { acao: string }) => (d.acao === "ler" ? (c.estado.emitido ? { ok: true, pronto: true, pdf: "JVBERi0=" } : { ok: true, pronto: false }) : { ok: true });
   const e = await peca().executar("telaEmitir", { protocolo: "150024", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
   assert.equal(e.ok, true, `${e.erro}\n${e.diagnostico}`);
+});
+
+test("tela protocolo: os DADOS do controle da grade (Wijmo) — todas as linhas, com o Id e a data de entrada", async () => {
+  // A tela mostra 3 linhas; o controle tem as 25 (e o Id de cada uma). Pedido "mostrar" = a linha à vista.
+  const lista = Array.from({ length: 25 }, (_, i): Protocolo => [String(150000 + i), "2026", "PCA - CRISTIANE", "X"]);
+  const c = centi({ telaAberta: true, visiveis: 3, emAnalise: { "PCA - CRISTIANE": lista } });
+  const mostrados: string[] = [];
+  const pagina = async (acao: string, d: { mostrar?: string; acao?: string } | null) => {
+    if (acao === "grade") {
+      if (d?.mostrar) mostrados.push(d.mostrar);
+      return {
+        ok: true,
+        colunas: ["", "PROTOCOLO", "ANO", "DEPARTAMENTO", "INTERESSADO", "SOLICITANTE", "NATUREZA", "DATA DE ENTRADA"],
+        linhas: lista.map((p, i) => ({ valores: ["", p[0], p[1], p[2], p[3], "", "INCLUSÃO - PCA", "24/09/2026"], id: String(2300000 + i) })),
+        chaves: ["Id", "Protocolo"],
+      };
+    }
+    return { ok: true };
+  };
+  const r = await peca().executar("telaEmAnalise", { departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
+  assert.equal(r.ok, true, `${r.erro}\n${r.diagnostico}`);
+  const ps = r.protocolos as { protocolo: string; id: string; entrada: string }[];
+  assert.equal(ps.length, 25);
+  assert.deepEqual(ps[24], { ...ps[24], protocolo: "150024", id: "2300024", entrada: "24/09/2026" });
 });

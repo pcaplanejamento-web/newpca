@@ -3595,6 +3595,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`scrollIntoView`) antes do duplo clique. A grade desenha só as linhas VISÍVEIS: `percorrerGrade` volta ao topo e ROLA
   o corpo (`rolador` = o ancestral da 1ª linha com rolagem vertical) lendo a cada passo, até o fim — lê todas e acha a
   linha pedida em listas longas. A falha ao abrir diz a célula (classe, posição) e os cadastros abertos.
+  **1.11.0 — EMISSÃO "POR CÓDIGO" + os DADOS da grade (protocolo 33):** a grade é lida pelos DADOS do controle Wijmo
+  (ação `grade` no `centi-main.js`: `host["wj-Control"]` → `getCellData` de TODAS as linhas da página — a tela desenha só
+  as visíveis — + o **Id** de cada protocolo dos dados da linha, `linhaPlana`; `mostrar` = `scrollIntoView` da linha
+  pedida antes do duplo clique); sem o controle, o DOM como antes. A tabela tem colunas FIXAS (Protocolo · Ano · **Id** ·
+  **Entrada** · Departamento · Interessado · Solicitante · Natureza · Documento · No sistema — nada é acrescentado ao
+  carregar). A captura da emissão guarda também o PEDIDO do operation da tela, os arquivos que a tela BAIXA
+  (getbinlink — a chave pode valer uma vez), o `<a download>` clicado e aceita ZIP; o operation que gerou o arquivo vira
+  "aprendido" naquela Centi (`OPERACOES`) e vai ao sistema → **`emissaoDoPedido`** (o parâmetro cujo valor é o Id) →
+  `PATCH /api/admin/automacao/config {emissaoProtocolo}` (`ConfigAutomacao.emissaoProtocolo`, `coerceEmissaoProtocolo`).
+  Dali em diante, cada protocolo é emitido **por código** (`corpoEmissaoProtocolo` + `pedir` operation com as TRAVAS,
+  como o Emitir DFD); recusado/sem modelo/sem Id → pela tela (que ensina de novo). O arquivo pode ser ZIP:
+  **`zip-ler.ts`** (puro, testado: STORE + DEFLATE) + `pdfDosBytes` (vários PDFs = unidos — `novaUniao` saiu do
+  `AutomacaoAdmin` para `arquivo-navegador.ts`); `pdfDoAchado` devolve cada tentativa (endereço → status · começo) no
+  diagnóstico (`BaixarCenti` → `DownloadCenti {status, bytes}`).
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

@@ -34,7 +34,7 @@ import {
   VERSAO_EXTENSAO_CENTI,
   versaoAtende,
 } from "@/lib/automacao-centi-core";
-import { baixarNoNavegador, baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado } from "@/lib/arquivo-navegador";
+import { baixarNoNavegador, baixarPelaExtensao, comoBlob, deBase64, novaUniao, pdfDoAchado } from "@/lib/arquivo-navegador";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import {
@@ -222,29 +222,6 @@ async function textoDoPdf(bytes: Uint8Array): Promise<string> {
   } finally {
     await doc.destroy();
   }
-}
-
-/** Une PDFs na ordem (pdf-lib, carregado só aqui) e confere as páginas no fim. */
-async function novaUniao() {
-  const { PDFDocument } = await import("pdf-lib");
-  const doc = await PDFDocument.create();
-  let n = 0;
-  let paginas = 0;
-  return {
-    async adicionar(b: Uint8Array) {
-      const d = await PDFDocument.load(b, { ignoreEncryption: true });
-      for (const pg of await doc.copyPages(d, d.getPageIndices())) doc.addPage(pg);
-      paginas += d.getPageCount();
-      n++;
-    },
-    get vazio() {
-      return n === 0;
-    },
-    async salvar() {
-      if (doc.getPageCount() !== paginas) throw new Error("páginas");
-      return doc.save();
-    },
-  };
 }
 
 /** O PDF regravado pelo pdf-lib (as mesmas páginas, a estrutura do PDF unido). */

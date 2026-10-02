@@ -365,6 +365,10 @@ export type ProtocoloEmAnalise = {
   chave: string;
   protocolo: string;
   ano: string;
+  /** O Id do protocolo na Centi (o "Id:" da capa) — dos dados da grade; vazio quando a grade não o traz. */
+  id: string;
+  /** A data de entrada na repartição, como a grade mostra. */
+  entrada: string;
   departamento: string;
   interessado: string;
   solicitante: string;
@@ -383,7 +387,19 @@ export function normalizarProtocolosTela(v: unknown): ProtocoloEmAnalise[] {
     const ano = /^\d{4}$/.test(soDigitos(o.ano)) ? soDigitos(o.ano) : "";
     const t = (k: string) => String(o[k] ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
     const chave = `${protocolo}/${ano}`;
-    if (!r.has(chave)) r.set(chave, { chave, protocolo, ano, departamento: t("departamento"), interessado: t("interessado"), solicitante: t("solicitante"), natureza: t("natureza") });
+    const id = soDigitos(o.id).replace(/^0+(?=\d)/, "");
+    if (!r.has(chave))
+      r.set(chave, {
+        chave,
+        protocolo,
+        ano,
+        id: id.length <= 12 ? id : "",
+        entrada: t("entrada").slice(0, 40),
+        departamento: t("departamento"),
+        interessado: t("interessado"),
+        solicitante: t("solicitante"),
+        natureza: t("natureza"),
+      });
   }
   return [...r.values()];
 }
@@ -434,14 +450,6 @@ export function dadosCentiValidos(v: unknown): DadosCentiProtocolo | null {
   return { id: id && id.length <= 12 ? id : null, campos };
 }
 
-/** Os rótulos dos dados da Centi (na ordem em que aparecem), sem os que a grade já mostra. */
-export function rotulosDosDados(dados: Iterable<DadosCentiProtocolo>, jaNaGrade: readonly string[] = ["Protocolo", "Ano protocolo"]): string[] {
-  const fora = new Set(jaNaGrade.map((r) => r.toLowerCase()));
-  const r: string[] = [];
-  for (const d of dados) for (const c of d.campos) if (!fora.has(c.rotulo.toLowerCase()) && !r.includes(c.rotulo)) r.push(c.rotulo);
-  return r;
-}
-
 /** O nome do PDF emitido de um protocolo da Tela Protocolo ("Protocolo 97608 - 2026.pdf"). */
 export const nomePdfEmAnalise = (p: Pick<ProtocoloEmAnalise, "protocolo" | "ano">) => `Protocolo ${p.protocolo}${p.ano ? ` - ${p.ano}` : ""}.pdf`;
 
@@ -450,3 +458,48 @@ export function departamentosEscolhidosValidos(escolhidos: unknown, disponiveis:
   const set = new Set(disponiveis);
   return Array.isArray(escolhidos) ? [...new Set(escolhidos.filter((x): x is string => typeof x === "string" && set.has(x)))] : [];
 }
+
+// ---------------------------------------------------------------- A EMISSÃO DOS DOCUMENTOS DO PROTOCOLO "POR CÓDIGO"
+/**
+ * O "Emitir documentos" APRENDIDO da própria tela da Centi (o operation que ela mandou na 1ª emissão acompanhada): o
+ * ModuleKey, o Guid, os parâmetros e QUAL deles leva o Id do protocolo — dali em diante a extensão emite direto, como o
+ * Emitir DFD (as travas são forçadas na extensão).
+ */
+export type EmissaoProtocolo = { moduleKey: number; guid: string; params: { Key: string; Value: string }[]; param: string };
+
+/** O operation da tela + o Id do protocolo emitido → o modelo (o parâmetro cujo valor é o Id); sem ele, null. */
+export function emissaoDoPedido(corpo: unknown, id: string | null | undefined): EmissaoProtocolo | null {
+  const alvo = soDigitos(id).replace(/^0+/, "");
+  const c = (corpo && typeof corpo === "object" ? corpo : null) as { ModuleKey?: unknown; Guid?: unknown; Params?: unknown } | null;
+  if (!alvo || !c || !Number.isInteger(c.ModuleKey) || !GUID.test(String(c.Guid ?? "")) || !Array.isArray(c.Params)) return null;
+  const params = c.Params.filter((x): x is { Key: unknown; Value: unknown } => !!x && typeof x === "object")
+    .map((x) => ({ Key: String(x.Key ?? "").slice(0, 80), Value: String(x.Value ?? "").slice(0, 400) }))
+    .filter((x) => x.Key)
+    .slice(0, 60);
+  const p = params.find((x) => soDigitos(x.Value).replace(/^0+/, "") === alvo && /^\d+$/.test(x.Value.trim()));
+  return p ? { moduleKey: c.ModuleKey as number, guid: String(c.Guid).toLowerCase(), params, param: p.Key } : null;
+}
+
+/** O modelo guardado (config do servidor) validado; inválido = null. */
+export function coerceEmissaoProtocolo(v: unknown): EmissaoProtocolo | null {
+  const o = (v && typeof v === "object" ? v : null) as Record<string, unknown> | null;
+  if (!o || !Number.isInteger(o.moduleKey) || (o.moduleKey as number) <= 0 || !GUID.test(String(o.guid ?? "")) || !Array.isArray(o.params)) return null;
+  const params = o.params
+    .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+    .map((x) => ({ Key: String(x.Key ?? "").slice(0, 80), Value: String(x.Value ?? "").slice(0, 400) }))
+    .filter((x) => x.Key)
+    .slice(0, 60);
+  const param = String(o.param ?? "");
+  return params.some((x) => x.Key === param) ? { moduleKey: o.moduleKey as number, guid: String(o.guid).toLowerCase(), params, param } : null;
+}
+
+/** O corpo do operation para emitir os documentos do protocolo `id`. */
+export function corpoEmissaoProtocolo(e: EmissaoProtocolo, id: string): { ModuleKey: number; Guid: string; Params: { Key: string; Value: string }[] } | null {
+  const v = soDigitos(id).replace(/^0+(?=\d)/, "");
+  if (!v) return null;
+  return { ModuleKey: e.moduleKey, Guid: e.guid, Params: e.params.map((x) => (x.Key === e.param ? { Key: x.Key, Value: v } : x)) };
+}
+
+/** O mesmo modelo (para só gravar no servidor quando mudou). */
+export const mesmaEmissao = (a: EmissaoProtocolo | null, b: EmissaoProtocolo | null) =>
+  !!a && !!b && a.moduleKey === b.moduleKey && a.guid === b.guid && a.param === b.param && JSON.stringify(a.params.map((x) => x.Key)) === JSON.stringify(b.params.map((x) => x.Key));

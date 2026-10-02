@@ -4,7 +4,7 @@
 // Princípios: negado por padrão · escrita só ACRESCENTA · toda escrita = autorização de uso único + confirmação · ensaio
 // antes · freio · tudo auditado e idempotente · nada fixo.
 
-import { coerceModeloTela, type ModeloTela } from "./automacao-tela-protocolo.ts";
+import { coerceEmissaoProtocolo, coerceModeloTela, type EmissaoProtocolo, type ModeloTela } from "./automacao-tela-protocolo.ts";
 
 /** As capacidades do MOTOR. As de ESCRITA são uma lista FIXA (cada uma tem o seu validador na extensão). */
 export const CAPACIDADES_LEITURA = ["estado", "ler", "consultar", "baixar"] as const;
@@ -101,9 +101,11 @@ export type ConfigAutomacao = {
   operacao: OperacaoCentiServidor | null;
   /** O MODELO da Tela Protocolo (as consultas aprendidas clicando, as colunas e a emissão do PDF) — vale para todos. */
   telaProtocolo: ModeloTela | null;
+  /** O "Emitir documentos" do protocolo aprendido da tela da Centi (a emissão POR CÓDIGO) — vale para todos. */
+  emissaoProtocolo: EmissaoProtocolo | null;
 };
 
-export const CONFIG_AUTOMACAO_PADRAO: ConfigAutomacao = { ativa: true, receitas: {}, operacao: null, telaProtocolo: null };
+export const CONFIG_AUTOMACAO_PADRAO: ConfigAutomacao = { ativa: true, receitas: {}, operacao: null, telaProtocolo: null, emissaoProtocolo: null };
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -129,7 +131,11 @@ export function coerceConfigAutomacao(v: unknown): ConfigAutomacao {
           em: typeof op.em === "string" ? op.em.slice(0, 40) : null,
         }
       : null;
-  return { ativa: typeof o.ativa === "boolean" ? o.ativa : true, receitas, operacao, telaProtocolo: coerceModeloTela(o.telaProtocolo) };
+  return { ativa: typeof o.ativa === "boolean" ? o.ativa : true, receitas,
+    operacao,
+    telaProtocolo: coerceModeloTela(o.telaProtocolo),
+    emissaoProtocolo: coerceEmissaoProtocolo(o.emissaoProtocolo),
+  };
 }
 
 /** A receita roda? (existe, está disponível nesta versão e ligada pelo ADM — ou pelo padrão). */

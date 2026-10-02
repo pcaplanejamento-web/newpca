@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PCA Rio Verde · Automação Centi",
-  "version": "1.10.1",
+  "version": "1.11.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyTZHSPX6BfFOT9QCgbPTSC/S7HOyPo76wKOJkS5Y1BS1DutiJJPkoFzkS269WGLdk4WHKqnDaJLk/icHxsTInDGcrpiATU31cmpab/ABZ7VXyiF0tGXk7x4ZhpJ1UEO5b573GDuj//0y9R4lI8bHEHHRgOF1VpfV5SyLOJrSz5VZeLkERWmY0MA88hzEKv2a0TLHtVrNnFWuNN6Dv/T4DxNmOyRl3oFQkthyntXeEX33mqtV4ii8CFRTZQBxjawJBBOWHJnxuiwISV9gdM0isagX5YAllDvhB1pN4gPJvnu//COxrKY1zitLsKd03f/+fmOZoaGo52vZCHa4kzg+vQIDAQAB",
   "description": "Canal entre a aba Automação do sistema PCA e uma aba PRÓPRIA da Centi (grupo \"Automação PCA\"). Emite DFDs, só grava um documento novo no protocolo indicado — com a autorização de uso único do sistema e a confirmação na janela da extensão —, entra sozinha com o usuário e a senha cifrados na extensão (e, se a pessoa quiser, guardados cifrados no sistema), mostra o andamento e pode ser interrompida pelo ícone.",
   "background": {

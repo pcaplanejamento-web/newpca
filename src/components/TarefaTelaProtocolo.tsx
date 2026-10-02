@@ -1,19 +1,22 @@
 "use client";
 
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { analisarRespostaCenti, ehPdf, linkDaResposta, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { analisarRespostaCenti, linkDaResposta, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { cancelarExecucao, concluirPassos, iniciarExecucaoLeitura } from "@/lib/automacao-cliente";
 import {
-  type DadosCentiProtocolo,
+  coerceEmissaoProtocolo,
+  corpoEmissaoProtocolo,
   dadosCentiValidos,
   departamentosEscolhidosValidos,
+  type EmissaoProtocolo,
+  emissaoDoPedido,
+  mesmaEmissao,
   nomePdfEmAnalise,
   normalizarProtocolosTela,
   noSistemaTela,
   type ProtocoloEmAnalise,
-  rotulosDosDados,
 } from "@/lib/automacao-tela-protocolo";
-import { baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado } from "@/lib/arquivo-navegador";
+import { amostraBytes, baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado, pdfDosBytes } from "@/lib/arquivo-navegador";
 import { Badge, type Tone } from "./Badge";
 import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
@@ -35,6 +38,8 @@ export type RespostaTela = {
   /** telaEmitir: o cadastro do protocolo e o documento emitido (o PDF, a resposta do operation ou o endereço). */
   dados?: unknown;
   arquivo?: { pdf?: string; resposta?: { status: number; b64: string }; link?: string };
+  /** telaEmitir: o operation que a própria tela usou (a emissão "por código" é aprendida dele). */
+  operacao?: unknown;
   /** pedir (GET do arquivo). */
   b64?: string;
   status?: number;
@@ -102,8 +107,11 @@ export function TarefaTelaProtocolo({
   const [lidos, setLidos] = useState<{ protocolos: ProtocoloEmAnalise[]; total: number; reparticoes: string[] } | null>(null);
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [ocupado, setOcupado] = useState<"deps" | "ler" | null>(null);
-  // Os dados do cadastro (por protocolo) e o andamento do documento de cada um.
-  const [dados, setDados] = useState<Map<string, DadosCentiProtocolo>>(new Map());
+  // O andamento do documento de cada protocolo.
+  // O Id da Centi de cada protocolo lido do CADASTRO (quando a grade não o trouxe).
+  const [ids, setIds] = useState<Map<string, string>>(new Map());
+  // A emissão "por código" do Emitir documentos (aprendida da tela da Centi; vale para todos — config do servidor).
+  const [emissao, setEmissao] = useState<EmissaoProtocolo | null>(null);
   const [docs, setDocs] = useState<Map<string, { estado: EstadoDoc; erro?: string }>>(new Map());
   const [arquivo, setArquivo] = useState<{ file: File; n: number } | null>(null);
   const [atual, setAtual] = useState<string | null>(null);
@@ -194,6 +202,25 @@ export function TarefaTelaProtocolo({
     }
   }
 
+  useEffect(() => {
+    fetch("/api/admin/automacao/config")
+      .then((r) => r.json() as Promise<{ ok?: boolean; config?: { emissaoProtocolo?: unknown } }>)
+      .then((x) => setEmissao(x?.ok ? coerceEmissaoProtocolo(x.config?.emissaoProtocolo) : null))
+      .catch(() => {});
+  }, []);
+
+  /** O operation da tela + o Id → a emissão "por código" (grava no servidor só quando mudou). */
+  async function aprenderEmissao(operacao: unknown, id: string | null | undefined) {
+    const nova = emissaoDoPedido(operacao, id);
+    if (!nova || mesmaEmissao(nova, emissao)) return;
+    setEmissao(nova);
+    await fetch("/api/admin/automacao/config", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ emissaoProtocolo: nova }),
+    }).catch(() => {});
+  }
+
   // ---------------------------------------------------------------- EMITIR + ANALISAR (um por vez)
   const marcar = (chave: string, estado: EstadoDoc, erro?: string) =>
     setDocs((m) => {
@@ -202,19 +229,42 @@ export function TarefaTelaProtocolo({
       return n;
     });
 
-  /** O PDF do que a extensão capturou da emissão (o PDF, a resposta do operation com a chave, ou o endereço). */
+  /** O PDF de uma resposta da Centi ao operation: o arquivo cru (PDF ou ZIP) ou a chave do arquivo — baixado por ela. */
+  async function pdfDaResposta(b64: string, status: number): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string }> {
+    const bytes = deBase64(b64);
+    const direto = await pdfDosBytes(bytes).catch(() => null);
+    if (direto) return { pdf: direto };
+    return pdfDoAchado(analisarRespostaCenti(bytes, status), baixarPelaExtensao(pedir));
+  }
+
+  /** O PDF do que a extensão capturou na emissão pela tela (o arquivo, a resposta do operation ou o endereço). */
   async function pdfDaEmissao(a: RespostaTela["arquivo"]): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string }> {
-    const baixar = baixarPelaExtensao(pedir);
-    if (a?.pdf) return { pdf: deBase64(a.pdf) };
-    if (a?.resposta) return pdfDoAchado(analisarRespostaCenti(deBase64(a.resposta.b64), a.resposta.status), baixar);
+    if (a?.pdf) {
+      const pdf = await pdfDosBytes(deBase64(a.pdf)).catch(() => null);
+      return pdf ? { pdf } : { erro: "O arquivo emitido pela Centi não tem PDF.", amostra: amostraBytes(deBase64(a.pdf)) };
+    }
+    if (a?.resposta) return pdfDaResposta(a.resposta.b64, a.resposta.status);
     if (a?.link) {
-      const b = await baixar(a.link);
-      if (b && ehPdf(b)) return { pdf: b };
-      const link = b ? linkDaResposta(b) : null;
+      const baixar = baixarPelaExtensao(pedir);
+      const d = await baixar(a.link);
+      const pdf = await pdfDosBytes(d.bytes).catch(() => null);
+      if (pdf) return { pdf };
+      const link = d.bytes ? linkDaResposta(d.bytes) : null;
       const c = link ? await baixar(link) : null;
-      if (c && ehPdf(c)) return { pdf: c };
+      const pdf2 = await pdfDosBytes(c?.bytes ?? null).catch(() => null);
+      if (pdf2) return { pdf: pdf2 };
+      return { erro: "Não consegui baixar o arquivo do “Emitir documentos”.", amostra: `${a.link.split("?")[0]} → ${d.status || d.erro || "sem resposta"} · ${amostraBytes(d.bytes)}` };
     }
     return { erro: "A Centi não entregou o PDF do “Emitir documentos”." };
+  }
+
+  /** A emissão POR CÓDIGO (o operation aprendido com o Id do protocolo), como o Emitir DFD. Sem modelo/Id ou recusada = null. */
+  async function emitirPorCodigo(id: string): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string } | null> {
+    const corpo = emissao ? corpoEmissaoProtocolo(emissao, id) : null;
+    if (!corpo) return null;
+    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo }, 150_000);
+    if (!r.ok || r.b64 == null) return null;
+    return pdfDaResposta(r.b64, r.status ?? 0);
   }
 
   /** Emite o próximo da fila e abre a análise (falhou → marca e segue). */
@@ -249,12 +299,19 @@ export function TarefaTelaProtocolo({
     }
     marcar(p.chave, "emitindo");
     if (lote.current) await pedir("lote", { fase: "passo", loteId: lote.current, feito: 0, total: 1, texto: `Emitindo os documentos do protocolo ${p.protocolo}/${p.ano}` }, 8000);
-    const r = await pedir("telaEmitir", { protocolo: p.protocolo, ano: p.ano, departamentos: lidos?.reparticoes ?? [] }, 300_000);
-    if (r.interrompido) interrompido.current = true;
-    const d = r.ok ? dadosCentiValidos(r.dados) : null;
-    if (d) setDados((m) => new Map(m).set(p.chave, d));
-    if (!r.ok) return falhar(r.erro ?? "A extensão não respondeu.", r.diagnostico);
-    const x = await pdfDaEmissao(r.arquivo);
+    // 1) POR CÓDIGO (o Emitir documentos aprendido + o Id): direto, como os DFDs. 2) Sem ele (ou recusado): pela TELA
+    // da Centi — abre o cadastro, Operações → Emitir documentos —, que também ensina a emissão por código.
+    const id = p.id || ids.get(p.chave) || "";
+    let x = id ? await emitirPorCodigo(id) : null;
+    if (!x || "erro" in x) {
+      const r = await pedir("telaEmitir", { protocolo: p.protocolo, ano: p.ano, departamentos: lidos?.reparticoes ?? [] }, 300_000);
+      if (r.interrompido) interrompido.current = true;
+      const d = r.ok ? dadosCentiValidos(r.dados) : null;
+      if (d?.id) setIds((m) => new Map(m).set(p.chave, d.id as string));
+      if (!r.ok) return falhar(r.erro ?? "A extensão não respondeu.", r.diagnostico);
+      x = await pdfDaEmissao(r.arquivo);
+      if (r.operacao) await aprenderEmissao(r.operacao, d?.id || id);
+    }
     if ("erro" in x) return falhar(x.erro, x.amostra);
     const file = new File([comoBlob(x.pdf)], nomePdfEmAnalise(p), { type: "application/pdf" });
     pdfs.current.set(p.chave, file);
@@ -294,8 +351,8 @@ export function TarefaTelaProtocolo({
   }
 
   const casarSistema = useMemo(() => noSistemaTela(protocolos), [protocolos]);
-  const casar = useCallback((p: ProtocoloEmAnalise) => casarSistema({ ...p, id: dados.get(p.chave)?.id }), [casarSistema, dados]);
-  const rotulos = useMemo(() => rotulosDosDados(dados.values()), [dados]);
+  const idDe = useCallback((p: ProtocoloEmAnalise) => p.id || ids.get(p.chave) || "", [ids]);
+  const casar = useCallback((p: ProtocoloEmAnalise) => casarSistema({ ...p, id: idDe(p) }), [casarSistema, idDe]);
   const colunas = useMemo<Column<ProtocoloEmAnalise>[]>(
     () => [
       {
@@ -310,6 +367,21 @@ export function TarefaTelaProtocolo({
         ),
       },
       { key: "ano", header: "Ano", nowrap: true, value: (p) => p.ano, render: (p) => p.ano || "—" },
+      {
+        key: "id",
+        header: "Id",
+        nowrap: true,
+        value: (p) => idDe(p),
+        render: (p) =>
+          idDe(p) ? (
+            <CelulaCopiavel copiar={idDe(p)} rotulo="Id do protocolo">
+              {idDe(p)}
+            </CelulaCopiavel>
+          ) : (
+            <span className="text-faint">—</span>
+          ),
+      },
+      { key: "entrada", header: "Entrada", nowrap: true, value: (p) => p.entrada, render: (p) => p.entrada || "—" },
       { key: "departamento", header: "Departamento", value: (p) => p.departamento, render: (p) => p.departamento || "—" },
       { key: "interessado", header: "Interessado", value: (p) => p.interessado, render: (p) => p.interessado || "—" },
       { key: "solicitante", header: "Solicitante", value: (p) => p.solicitante, render: (p) => p.solicitante || "—" },
@@ -332,25 +404,6 @@ export function TarefaTelaProtocolo({
           );
         },
       },
-      // TODOS os dados do cadastro na Centi (lidos ao emitir) — uma coluna por campo.
-      ...rotulos.map(
-        (rotulo): Column<ProtocoloEmAnalise> => ({
-          key: `centi:${rotulo}`,
-          header: rotulo,
-          minWidth: 140,
-          value: (p) => dados.get(p.chave)?.campos.find((c) => c.rotulo === rotulo)?.valor ?? "",
-          render: (p) => {
-            const v = dados.get(p.chave)?.campos.find((c) => c.rotulo === rotulo)?.valor;
-            return v ? (
-              <span className="line-clamp-1" title={v}>
-                {v}
-              </span>
-            ) : (
-              <span className="text-faint">—</span>
-            );
-          },
-        }),
-      ),
       {
         key: "sistema",
         header: "No sistema",
@@ -366,7 +419,7 @@ export function TarefaTelaProtocolo({
           ),
       },
     ],
-    [casar, docs, dados, rotulos],
+    [casar, docs, idDe],
   );
 
   const todas = !!deps?.length && escolha.length === deps.length;

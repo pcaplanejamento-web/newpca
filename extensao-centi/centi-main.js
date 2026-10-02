@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 32;
+  const PROTOCOLO = 33;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -217,9 +217,21 @@
     } catch {}
     return null;
   }
-  function guardarEmissao(cap, status, tipo, bytes) {
-    if (cap && bytes) cap.respostas = [...cap.respostas, { status, tipo: String(tipo || ""), bytes }].slice(-6);
+  function guardarEmissao(cap, status, tipo, bytes, corpo) {
+    if (cap && bytes) cap.respostas = [...cap.respostas, { status, tipo: String(tipo || ""), bytes, corpo }].slice(-6);
   }
+  // O ARQUIVO que a própria tela baixa na emissão (getbinlink…): os bytes ficam guardados — a chave pode valer UMA vez.
+  const ehArquivoUrl = (u) => {
+    try {
+      return /\/(restauth|rest)\/(getbinlink|getbin|getfile)\//i.test(new URL(String(u), location.href).pathname);
+    } catch {
+      return false;
+    }
+  };
+  function guardarArquivo(cap, status, bytes) {
+    if (cap && bytes && status < 400) cap.arquivos = [...cap.arquivos, bytes].slice(-4);
+  }
+  const ehZipBytes = (b) => b && b.length > 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 3 && b[3] === 4;
   const criarUrl = URL.createObjectURL;
   URL.createObjectURL = function (o, ...r) {
     const u = criarUrl.call(this, o, ...r);
@@ -227,6 +239,15 @@
       if (captura && o instanceof Blob) captura.blobs = [...captura.blobs, o].slice(-6);
     } catch {}
     return u;
+  };
+  // O link de download que a tela clicaria (um <a download> com o arquivo): anotado, sem baixar nada no navegador.
+  const clicarLink = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function (...r) {
+    if (captura && this.href && (this.href.startsWith("blob:") || ehArquivoUrl(this.href))) {
+      captura.urls.push(this.href);
+      return;
+    }
+    return clicarLink.apply(this, r);
   };
   const abrirJanela = window.open;
   window.open = function (url, ...r) {
@@ -240,7 +261,7 @@
   };
   async function capturaEmissao(d) {
     if (d?.acao === "iniciar") {
-      captura = { respostas: [], blobs: [], urls: [] };
+      captura = { respostas: [], blobs: [], urls: [], arquivos: [] };
       return { ok: true };
     }
     if (d?.acao === "parar") {
@@ -250,23 +271,33 @@
     const cap = captura;
     if (!cap) return { ok: false, erro: "A emissão não está sendo acompanhada." };
     const urls = [...cap.urls, ...(Array.isArray(d?.urls) ? d.urls.map(String) : [])].slice(-12);
-    const pdf = (bytes) => ({ ok: true, pronto: true, pdf: emBase64(bytes) });
-    // 1) O PDF que a tela preparou (Blob) ou mostraria (endereço blob: na janela ou no visualizador).
+    // O operation da tela que gerou o arquivo: vai junto (o sistema aprende a emissão "por código") e passa a poder ser
+    // repetido por esta extensão (com as travas) — como uma operação aprendida.
+    const P = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+    const texto = (b) => (b.length <= 8 * 1024 * 1024 ? new TextDecoder().decode(b) : "");
+    const comArquivo = [...cap.respostas].reverse().find((x) => x.status < 400 && (ehPdfBytes(x.bytes) || ehZipBytes(x.bytes) || P?.respostaComArquivo(x.tipo, texto(x.bytes))));
+    let operacao = null;
+    try {
+      operacao = comArquivo?.corpo ? JSON.parse(comArquivo.corpo) : null;
+      const chave = operacao && P?.chaveOperacao(operacao);
+      if (chave) localStorage.setItem(OPERACOES, JSON.stringify([...new Set([...operacoesAprendidas(), chave])].slice(-20)));
+    } catch {}
+    const doc = (bytes) => ({ ok: true, pronto: true, pdf: emBase64(bytes), operacao });
+    // 1) O arquivo que a tela preparou (Blob), baixou (getbinlink) ou mostraria (endereço blob:) — PDF ou ZIP.
     for (const b of [...cap.blobs].reverse()) {
       const bytes = new Uint8Array(await b.arrayBuffer());
-      if (ehPdfBytes(bytes)) return pdf(bytes);
+      if (ehPdfBytes(bytes) || ehZipBytes(bytes)) return doc(bytes);
     }
+    for (const bytes of [...cap.arquivos].reverse()) if (ehPdfBytes(bytes) || ehZipBytes(bytes)) return doc(bytes);
     for (const u of urls.filter((x) => x.startsWith("blob:"))) {
       try {
         const bytes = new Uint8Array(await (await buscar(u)).arrayBuffer());
-        if (ehPdfBytes(bytes)) return pdf(bytes);
+        if (ehPdfBytes(bytes) || ehZipBytes(bytes)) return doc(bytes);
       } catch {}
     }
-    // 2) A resposta do operation (o PDF cru ou a chave do arquivo gerado).
-    const P = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
-    const texto = (b) => (b.length <= 8 * 1024 * 1024 ? new TextDecoder().decode(b) : "");
-    const r = [...cap.respostas].reverse().find((x) => x.status < 400 && (ehPdfBytes(x.bytes) || P?.respostaComArquivo(x.tipo, texto(x.bytes))));
-    if (r) return { ok: true, pronto: true, resposta: { status: r.status, b64: emBase64(r.bytes) } };
+    // 2) A resposta do operation (o arquivo cru ou a CHAVE do arquivo gerado — o sistema o baixa pela chave).
+    const r = comArquivo;
+    if (r) return { ok: true, pronto: true, resposta: { status: r.status, b64: emBase64(r.bytes) }, operacao };
     // 3) O endereço do arquivo (getbinlink…) que a tela abriria.
     const link = urls.find((u) => {
       try {
@@ -275,7 +306,7 @@
         return false;
       }
     });
-    if (link) return { ok: true, pronto: true, link };
+    if (link) return { ok: true, pronto: true, link, operacao };
     const erro = [...cap.respostas].reverse().find((x) => x.status >= 400 || !P?.respostaComArquivo(x.tipo, texto(x.bytes)));
     return {
       ok: true,
@@ -302,7 +333,15 @@
     if (captura && this.__pcaUrl && !this.__pcaInterno && ehOperacao(this.__pcaUrl, this.__pcaMetodo)) {
       r[0] = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.travarCorpoOperacao(r[0]) ?? r[0];
       const cap = captura;
-      this.addEventListener("load", () => guardarEmissao(cap, this.status, this.getResponseHeader("content-type"), bytesDoXhr(this)));
+      const corpo = typeof r[0] === "string" ? r[0] : null;
+      this.addEventListener("load", () => guardarEmissao(cap, this.status, this.getResponseHeader("content-type"), bytesDoXhr(this), corpo));
+    }
+    if (captura && this.__pcaUrl && !this.__pcaInterno && ehArquivoUrl(this.__pcaUrl)) {
+      const cap = captura;
+      this.addEventListener("load", () => {
+        if (this.responseType === "blob" && this.response instanceof Blob) cap.blobs = [...cap.blobs, this.response].slice(-6);
+        else guardarArquivo(cap, this.status, bytesDoXhr(this));
+      });
     }
     if (this.__pcaUrl && !this.__pcaInterno) {
       guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo, "xhr");
@@ -337,7 +376,18 @@
           resp
             .clone()
             .arrayBuffer()
-            .then((b) => guardarEmissao(cap, resp.status, resp.headers.get("content-type"), new Uint8Array(b)))
+            .then((b) => guardarEmissao(cap, resp.status, resp.headers.get("content-type"), new Uint8Array(b), typeof travado.body === "string" ? travado.body : null))
+            .catch(() => {});
+          return resp;
+        });
+      }
+      if (captura && ehArquivoUrl(url0)) {
+        const cap = captura;
+        return comToken(buscar.call(this, rec, init, ...resto)).then((resp) => {
+          resp
+            .clone()
+            .arrayBuffer()
+            .then((b) => guardarArquivo(cap, resp.status, new Uint8Array(b)))
             .catch(() => {});
           return resp;
         });
@@ -731,7 +781,76 @@
     return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
   }
 
-  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao };
+  // Os DADOS da grade da Tela Protocolo (Wijmo FlexGrid — o controle mora no elemento, "wj-Control"): TODAS as linhas da
+  // página (a tela desenha só as visíveis), com o texto de cada coluna como a tela mostra e o Id do protocolo (dos dados
+  // da linha). Só LEITURA, chamada pela ponte (centi-tela.js).
+  const RE_ID = /^(id|idprotocolo|protocolo\.id|idprocesso)$/i;
+  function gradeDaTela(d) {
+    const A0 = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+    const norm = (t) =>
+      String(t ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
+    for (const host of document.querySelectorAll(".wj-flexgrid")) {
+      if (!host.offsetWidth && !host.offsetHeight) continue;
+      let g = null;
+      try {
+        g = host["wj-Control"];
+      } catch {}
+      if (!g?.columns || !g.rows || typeof g.getCellData !== "function") continue;
+      const colunas = [];
+      for (let c = 0; c < g.columns.length; c++) {
+        const col = g.columns[c];
+        colunas.push(col?.visible === false ? "" : norm(col?.header ?? col?.binding));
+      }
+      if (!colunas.includes("PROTOCOLO")) continue;
+      const linhas = [];
+      let chaves = null;
+      for (let r = 0; r < g.rows.length && linhas.length < 5000; r++) {
+        const row = g.rows[r];
+        if (!row || row.dataItem == null || row.visible === false) continue;
+        const valores = colunas.map((h, c) => {
+          if (!h) return "";
+          try {
+            return String(g.getCellData(r, c, true) ?? "");
+          } catch {
+            return "";
+          }
+        });
+        const plano = A0?.linhaPlana(row.dataItem) ?? {};
+        chaves ??= Object.keys(plano).slice(0, 40);
+        const k = Object.keys(plano).find((x) => RE_ID.test(x));
+        linhas.push({ valores, id: k ? String(plano[k]).replace(/\D/g, "").slice(0, 12) : "" });
+      }
+      // A linha do protocolo pedido à vista (a tela só desenha as visíveis) — para o duplo clique nela.
+      const mostrar = String(d?.mostrar ?? "").replace(/\D/g, "").replace(/^0+/, "");
+      const cp = colunas.indexOf("PROTOCOLO");
+      if (mostrar && typeof g.scrollIntoView === "function") {
+        let i = -1;
+        for (let r = 0; r < g.rows.length; r++) {
+          let v = "";
+          try {
+            v = String(g.getCellData(r, cp, false) ?? "");
+          } catch {}
+          if (v.replace(/\D/g, "").replace(/^0+/, "") === mostrar) {
+            i = r;
+            break;
+          }
+        }
+        if (i >= 0)
+          try {
+            g.scrollIntoView(i, cp);
+          } catch {}
+      }
+      return { ok: true, colunas, linhas, chaves: chaves ?? [] };
+    }
+    return { ok: false };
+  }
+
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;

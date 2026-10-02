@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 4;
+  const VERSAO = 5;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -85,7 +85,7 @@
   async function esperarAte(ctx, fn, erro, ms = ctx.prazo ?? 15000) {
     const fim = Date.now() + ms;
     for (;;) {
-      const r = fn();
+      const r = await fn();
       if (r) return r;
       if (Date.now() > fim) throw new Error(erro);
       await pausa(ctx.win, ctx.passo ?? 250);
@@ -229,7 +229,15 @@
     return m ? Number(m[1]) : 0;
   }
 
-  const CAMPOS = { PROTOCOLO: "protocolo", ANO: "ano", DEPARTAMENTO: "departamento", INTERESSADO: "interessado", SOLICITANTE: "solicitante", NATUREZA: "natureza" };
+  const CAMPOS = {
+    PROTOCOLO: "protocolo",
+    ANO: "ano",
+    DEPARTAMENTO: "departamento",
+    INTERESSADO: "interessado",
+    SOLICITANTE: "solicitante",
+    NATUREZA: "natureza",
+    "DATA DE ENTRADA": "entrada",
+  };
   const RE_PROTOCOLO = /^\d[\d./-]*$/;
   const celula = (el) => String(el?.textContent ?? "").replace(/\s+/g, " ").trim();
 
@@ -269,6 +277,7 @@
     });
     const r = { campos };
     for (const [h, chave] of Object.entries(CAMPOS)) r[chave] = campos[h] ?? "";
+    r.id = "";
     if (!RE_PROTOCOLO.test(r.protocolo)) return null;
     Object.defineProperty(r, "el", { value: els[cabecalhos.indexOf("PROTOCOLO")] ?? null, enumerable: false });
     return r;
@@ -395,7 +404,7 @@
     } catch (e) {
       l.push(`falha no diagnóstico: ${e?.message}`);
     }
-    return l.join("\n").slice(0, 1500);
+    return l.join("\n").slice(0, 1800);
   }
 
   /** Escolhe as repartições, pesquisa (lupa) e abre a aba "Em Análise": devolve a contagem da aba. */
@@ -445,30 +454,52 @@
     return null;
   }
 
+  /**
+   * Os protocolos pelos DADOS do controle da grade (a página inteira — a tela desenha só as linhas visíveis — e o Id de
+   * cada um), lidos no script da página. `mostrar` = um nº de protocolo que a grade traz à vista. Sem o controle, null.
+   */
+  async function dadosDaGrade(ctx, mostrar) {
+    if (typeof ctx.pagina !== "function") return null;
+    const r = await ctx.pagina("grade", mostrar ? { mostrar: String(mostrar) } : null, 8000).catch(() => null);
+    if (!r?.ok || !Array.isArray(r.colunas) || !Array.isArray(r.linhas)) return null;
+    const cabecalhos = r.colunas.map((c) => norm(c));
+    const registros = [];
+    for (const l of r.linhas) {
+      const reg = registro(cabecalhos, (Array.isArray(l?.valores) ? l.valores : []).map((v) => String(v ?? "").replace(/\s+/g, " ").trim()));
+      if (!reg) continue;
+      reg.id = String(l.id ?? "").replace(/\D/g, "").slice(0, 12);
+      registros.push(reg);
+    }
+    ctx.chavesGrade = Array.isArray(r.chaves) ? r.chaves.slice(0, 40) : [];
+    return { cab: acharCabecalho(ctx.doc), cabecalhos: cabecalhos.filter(Boolean), registros, completa: true };
+  }
+
   /** Percorre as páginas da grade: `cada(grade)` recebe cada página lida; devolver true PARA. */
   async function percorrerGrade(ctx, esperado, cada) {
     const { doc, win } = ctx;
     ctx.etapa = "ler a grade";
     const unicos = new Set();
+    let primeiroAntes = null;
     for (let pagina = 0; pagina < 50; pagina++) {
-      let anterior = -1;
+      let anterior = null;
       let estavel = 0;
-      // A grade carrega depois do clique: espera os protocolos ficarem iguais em 3 leituras. Aba sem protocolos =
-      // espera curta (a contagem pode chegar atrasada) e termina vazia.
+      // A grade carrega depois do clique: espera a página ficar igual em 3 leituras (e, depois de "Próxima", ser OUTRA
+      // página). Aba sem protocolos = espera curta (a contagem pode chegar atrasada) e termina vazia.
       const prazo = esperado === 0 ? Math.min(ctx.prazo ?? 15000, 3000) : undefined;
       const grade = await esperarAte(
         ctx,
-        () => {
-          const gr = lerGrade(doc);
+        async () => {
+          const gr = (await dadosDaGrade(ctx)) ?? lerGrade(doc);
           const n = gr ? gr.registros.length : -1;
-          if (n === anterior) estavel++;
+          const marca = gr ? `${n}|${gr.registros[0]?.protocolo ?? ""}` : "-";
+          if (marca === anterior) estavel++;
           else {
             estavel = 0;
-            anterior = n;
+            anterior = marca;
           }
-          if (estavel < 2) return null;
-          if (gr && n > 0) return gr;
-          if (gr && totalDoRodape(gr.cab) === 0) return gr;
+          if (estavel < 2 || !gr) return null;
+          if (n > 0 && gr.registros[0].protocolo !== primeiroAntes) return gr;
+          if (n === 0 && gr.cab && totalDoRodape(gr.cab) === 0) return gr;
           return null;
         },
         "Não consegui ler os protocolos da aba Em Análise.",
@@ -477,14 +508,15 @@
         if (esperado === 0) return { cab: null, cabecalhos: [], registros: [] };
         throw e;
       });
-      if (!grade.cab) return void cada(grade);
       const ver = (g) => {
         for (const r of g.registros) unicos.add(`${r.protocolo}|${r.ano}`);
         return cada(g) === true;
       };
       if (ver(grade)) return;
-      // A grade desenha só as linhas VISÍVEIS (Wijmo): rola por dentro até o fim, lendo a cada passo.
-      const sc = rolador(grade, win);
+      if (!grade.cab) return;
+      primeiroAntes = grade.registros[0]?.protocolo ?? null;
+      // Sem os dados do controle, a tela desenha só as linhas VISÍVEIS: rola por dentro até o fim, lendo a cada passo.
+      const sc = grade.completa ? null : rolador(grade, win);
       if (sc && sc.scrollTop > 0) {
         sc.scrollTop = 0;
         sc.dispatchEvent(new win.Event("scroll", { bubbles: true }));
@@ -528,20 +560,45 @@
   const soDigitos = (v) => String(v ?? "").replace(/\D/g, "").replace(/^0+/, "");
   const casaLinha = (r, protocolo, ano) => soDigitos(r.protocolo) === soDigitos(protocolo) && (!ano || !r.ano || soDigitos(r.ano) === soDigitos(ano));
 
-  /** A linha do protocolo na grade (a que está à vista; senão pesquisa de novo e percorre as páginas). */
+  /** A célula do nº do protocolo NA TELA: a grade a traz à vista (pelo controle) e, sem ele, rola o corpo até achá-la. */
+  async function celulaNaTela(ctx, protocolo, ano) {
+    const { doc, win } = ctx;
+    const naTela = () => lerGrade(doc)?.registros.find((r) => casaLinha(r, protocolo, ano) && r.el)?.el ?? null;
+    await dadosDaGrade(ctx, soDigitos(protocolo));
+    await pausa(win, ctx.passo ?? 250);
+    let el = naTela();
+    if (el) return el;
+    const g0 = lerGrade(doc);
+    const sc = g0 && rolador(g0, win);
+    if (!sc) return null;
+    sc.scrollTop = 0;
+    for (let k = 0; k < 400 && !el; k++) {
+      sc.dispatchEvent(new win.Event("scroll", { bubbles: true }));
+      await pausa(win, (ctx.passo ?? 250) * 2);
+      el = naTela();
+      const antes = sc.scrollTop;
+      if (!el) sc.scrollTop = antes + Math.max(40, Math.floor(sc.clientHeight * 0.8));
+      if (!el && sc.scrollTop <= antes) break;
+    }
+    return el;
+  }
+
+  /** O protocolo na grade (a página à vista; senão pesquisa de novo e percorre as páginas) e a célula dele NA TELA. */
   async function acharLinha(ctx, protocolo, ano, nomes) {
     ctx.etapa = "achar o protocolo na grade";
-    const visto = lerGrade(ctx.doc)?.registros.find((r) => casaLinha(r, protocolo, ano));
-    if (visto?.el) return visto;
-    if (!Array.isArray(nomes) || !nomes.length) throw new Error(`O protocolo ${protocolo} não está na grade da Tela Protocolo — leia “Em Análise” de novo.`);
-    const esperado = await irParaEmAnalise(ctx, nomes);
-    let achado = null;
-    await percorrerGrade(ctx, esperado, (grade) => {
-      achado = grade.registros.find((r) => casaLinha(r, protocolo, ano) && r.el) ?? null;
-      return !!achado;
-    });
-    if (!achado) throw new Error(`O protocolo ${protocolo}${ano ? `/${ano}` : ""} não está mais em “Em Análise” nas repartições escolhidas.`);
-    return achado;
+    let reg = ((await dadosDaGrade(ctx)) ?? lerGrade(ctx.doc))?.registros.find((r) => casaLinha(r, protocolo, ano)) ?? null;
+    if (!reg) {
+      if (!Array.isArray(nomes) || !nomes.length) throw new Error(`O protocolo ${protocolo} não está na grade da Tela Protocolo — leia “Em Análise” de novo.`);
+      const esperado = await irParaEmAnalise(ctx, nomes);
+      await percorrerGrade(ctx, esperado, (grade) => {
+        reg = grade.registros.find((r) => casaLinha(r, protocolo, ano)) ?? null;
+        return !!reg;
+      });
+      if (!reg) throw new Error(`O protocolo ${protocolo}${ano ? `/${ano}` : ""} não está mais em “Em Análise” nas repartições escolhidas.`);
+    }
+    const el = reg.el ?? (await celulaNaTela(ctx, protocolo, ano));
+    if (!el) throw new Error(`Achei o protocolo ${protocolo} na grade, mas a linha dele não apareceu na tela.`);
+    return { reg, el };
   }
 
   /** O cadastro aberto do protocolo (o título "Protocolo - <Id>" com o botão Operações e os campos). */
@@ -645,12 +702,11 @@
     const velho = acharModal(doc);
     if (velho) fecharModal(ctx, velho);
     const linha = await acharLinha(ctx, protocolo, ano, nomes);
-    // Abre o cadastro do protocolo (clique e duplo clique na linha, como a pessoa faz).
+    // Abre o cadastro do protocolo: a linha à vista e o DUPLO CLIQUE no centro da célula do nº (como a pessoa faz).
     ctx.etapa = "abrir o protocolo";
-    // A linha à vista na grade (ela desenha só as linhas visíveis) e o DUPLO CLIQUE no centro da célula do nº.
     linha.el.scrollIntoView?.({ block: "center" });
     await pausa(win, ctx.passo ?? 250);
-    const alvo = lerGrade(doc)?.registros.find((r) => casaLinha(r, protocolo, ano))?.el ?? linha.el;
+    const alvo = lerGrade(doc)?.registros.find((r) => casaLinha(r, protocolo, ano) && r.el)?.el ?? linha.el;
     if (!seguro(alvo)) throw new Error("Bloqueado: a célula do protocolo não é um botão.");
     mouse(win, alvo, true);
     ctx.notas = [];
@@ -671,7 +727,7 @@
     });
     ctx.etapa = "ler o cadastro";
     const campos = lerCadastro(modal);
-    const dados = { campos, id: soDigitos(valorDe(campos, "ID")) || null };
+    const dados = { campos, id: soDigitos(valorDe(campos, "ID")) || linha.reg.id || null };
     // EMITIR DOCUMENTOS: Operações (do cadastro) → Emitir documentos; o PDF que a Centi gerar é capturado na página.
     ctx.etapa = "emitir documentos";
     const antes = new Set(todos(doc).filter((el) => ehBotao(el) && visivel(el)));
@@ -695,7 +751,8 @@
         if (!r?.ok) throw new Error(r?.erro || "A página da Centi não respondeu — aperte F5 na aba.");
         if (r.pronto) {
           const arquivo = r.pdf ? { pdf: r.pdf } : r.resposta ? { resposta: r.resposta } : { link: r.link };
-          return { dados, arquivo };
+          // O operation que a tela usou: o sistema aprende a emissão "por código" (o parâmetro com o Id).
+          return { dados, arquivo, operacao: r.operacao && typeof r.operacao === "object" ? r.operacao : null };
         }
         // A emissão abriu uma janela: o botão de confirmar (só os da lista; cada um uma vez).
         const novos = todos(doc).filter((el) => ehBotao(el) && visivel(el) && !antes.has(el));
@@ -728,7 +785,7 @@
       if (acao === "telaEmitir") return { ok: true, ...(await emitirDocumento(ctx, dados?.protocolo, dados?.ano, dados?.departamentos)) };
       return { ok: false, erro: "Ação desconhecida." };
     } catch (e) {
-      return { ok: false, erro: e?.message || "Falha na Tela Protocolo.", diagnostico: diagnostico(ctx.doc, ctx.etapa ?? acao, ctx.notas) };
+      return { ok: false, erro: e?.message || "Falha na Tela Protocolo.", diagnostico: diagnostico(ctx.doc, ctx.etapa ?? acao, [...(ctx.notas ?? []), ...(ctx.chavesGrade ? [`dados da grade: ${ctx.chavesGrade.join(", ").slice(0, 300) || "—"}`] : [])]) };
     }
   }
 
