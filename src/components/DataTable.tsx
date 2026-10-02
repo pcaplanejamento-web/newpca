@@ -30,7 +30,7 @@ import {
 import { DateFilterHeader } from "./DateFilterHeader";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
 import { useEditorEdicoes } from "./EdicoesTabela";
-import { useLinhasTabela } from "./ConfigTabelas";
+import { useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
 import { ehDesktop } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
@@ -380,6 +380,7 @@ export function DataTable<R>({
   // EXPORTAR: as colunas VISÍVEIS (fora as ocultas, na ordem da edição em uso) e as linhas à vista (todas as páginas).
   const [exportando, setExportando] = useState<FormatoExportacao | null>(null);
   const podeExportar = usePodeExportar();
+  const quemExporta = useQuemExporta();
   const nomeExportar = exportar === false || !podeExportar ? null : (exportar?.nome ?? "Tabela");
   async function exportarTabela(formato: FormatoExportacao) {
     if (!nomeExportar || exportando) return;
@@ -408,7 +409,7 @@ export function DataTable<R>({
           subtitulo: `${num(ordenadas.length)} ${ordenadas.length === 1 ? "linha" : "linhas"}${filtros ? ` · filtros: ${filtros}` : ""}`,
           ...tabelaParaPdf(cols, ordenadas),
         // Tabela larga: as colunas CONGELADAS (ou a 1ª) se repetem em cada faixa de colunas do PDF.
-        }, { fixas: Math.max(1, o.fixadas.filter((k) => !fora.has(k)).length) });
+        }, { fixas: Math.max(1, o.fixadas.filter((k) => !fora.has(k)).length), usuario: quemExporta });
       }
     } catch {
       toast.error("Não foi possível exportar — tente de novo.");

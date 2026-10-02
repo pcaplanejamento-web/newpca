@@ -31,7 +31,8 @@ ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` +
 entram; ver por órgão = a soma das unidades vinculadas (dimensões "Órgão (cadastro)"/"Unidade (cadastro)" nas visões, no
 comparativo e nos lançamentos; o PCA × Orçamento segue as ações). **Lançamentos:** uma coluna por visão salva, a edição da
 tabela e as edições salvas como na Mesa. **Toda tabela** do sistema baixa em **XLSX** ou **PDF** pelo rodapé (o PDF em A4
-deitado, com o cabeçalho repetido, texto quebrado sem cortes e tabela larga em faixas de colunas), inclusive a tabela
+deitado, com o cabeçalho repetido, texto quebrado sem cortes, tabela larga em faixas de colunas e, no rodapé, quem baixou,
+o dia e o horário), inclusive a tabela
 comparativa do orçamento; a permissão Exportar do papel segue valendo nas telas de módulo.
 
 ### Mesas: "Atualizar tudo" reverifica protocolos, DFDs e itens — entregue

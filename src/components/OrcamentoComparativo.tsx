@@ -40,6 +40,7 @@ import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
+import { useQuemExporta } from "./ConfigTabelas";
 import { useEditorEdicoes } from "./EdicoesTabela";
 import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { Checkbox, SearchField, SelectField } from "./Field";
@@ -221,6 +222,7 @@ export function OrcamentoComparativo({
   // EXPORTAR (rodapé): a matriz À VISTA (linhas da busca, na ordem; colunas visíveis) em .xlsx ou .pdf — no PDF as
   // colunas de valores vão em faixas com o nome da linha, a sigla e o total repetidos.
   const exportarNaTela = usePodeExportar();
+  const quemExporta = useQuemExporta();
   const podeBaixar = podeExportar && exportarNaTela;
   const [exportando, setExportando] = useState<FormatoExportacao | null>(null);
   const exportar = async (formato: FormatoExportacao) => {
@@ -241,7 +243,7 @@ export function OrcamentoComparativo({
           cabecalho: cab.map(String),
           linhas: corpo.map((l) => l.map((v) => (typeof v === "number" ? brl(v) : v))),
           alinhar: cab.map((_, j) => (j < numeros ? "left" : "right")),
-        }, { fixas: numeros + 1 });
+        }, { fixas: numeros + 1, usuario: quemExporta });
       }
     } catch {
       toast.error("Não foi possível exportar — tente de novo.");

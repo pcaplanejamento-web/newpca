@@ -51,7 +51,9 @@ export default async function PainelLayout({
       versaoDados={versao}
     >
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
-      <ConfigTabelas linhas={linhasTabela(aparencia)}>{children}</ConfigTabelas>
+      <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
+        {children}
+      </ConfigTabelas>
     </AppShell>
   );
 }

@@ -17,11 +17,16 @@ import {
 /**
  * Gera e BAIXA o PDF de uma tabela (navegador; o pdf-lib é carregado só aqui). O layout vem do núcleo puro
  * (`faixasDeColunas` + `montarLayoutPdf`); aqui só se desenha: título no topo de cada página, o cabeçalho das colunas
- * repetido, as linhas com zebra e bordas finas, números à direita, e o rodapé "Gerado em … · Página N de M". Tabela
+ * repetido, as linhas com zebra e bordas finas, números à direita, e o rodapé "Baixado por <quem> em dd/mm/aaaa às hh:mm
+ * (horário de Brasília) · Página N de M". Tabela
  * larga demais sai em FAIXAS de colunas (as `fixas` primeiras repetidas em cada uma). Cores fixas em cinza: o PDF é um
  * documento de saída (papel), não segue o tema.
  */
-export async function baixarTabelaPdf(arquivo: string, tabela: TabelaPdf, opcoes: { fixas?: number; sistema?: string } = {}): Promise<void> {
+export async function baixarTabelaPdf(
+  arquivo: string,
+  tabela: TabelaPdf,
+  opcoes: { fixas?: number; sistema?: string; usuario?: string | null } = {},
+): Promise<void> {
   const sistema = opcoes.sistema ?? "Plataforma PCA";
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
@@ -45,7 +50,10 @@ export async function baixarTabelaPdf(arquivo: string, tabela: TabelaPdf, opcoes
   });
   const { largura: W, altura: H, margem: M } = PAGINA_PDF;
   const cinza = (v: number) => rgb(v, v, v);
-  const agora = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+  const agora = new Date();
+  const fuso = { timeZone: "America/Sao_Paulo" } as const;
+  const quando = `${agora.toLocaleDateString("pt-BR", fuso)} às ${agora.toLocaleTimeString("pt-BR", { ...fuso, hour: "2-digit", minute: "2-digit" })}`;
+  const rodape = limpo(`Baixado ${opcoes.usuario ? `por ${opcoes.usuario} ` : ""}em ${quando} (horário de Brasília) · ${sistema}`);
   const total = layouts.reduce((s, l) => s + l.layout.paginas.length, 0);
   let numero = 0;
 
@@ -91,7 +99,7 @@ export async function baixarTabelaPdf(arquivo: string, tabela: TabelaPdf, opcoes
         pag.drawLine({ start: { x, y: topo }, end: { x, y }, thickness: 0.4, color: cinza(0.78) });
         x += layout.larguras[j] ?? 0;
       }
-      pag.drawText(limpo(`Gerado em ${agora} · ${sistema}`), { x: M, y: M - 4, size: 7, font: fonte, color: cinza(0.45) });
+      pag.drawText(rodape, { x: M, y: M - 4, size: 7, font: fonte, color: cinza(0.45), maxWidth: W - 2 * M - 80 });
       const pg = `Página ${numero} de ${total}`;
       pag.drawText(pg, { x: W - M - fonte.widthOfTextAtSize(pg, 7), y: M - 4, size: 7, font: fonte, color: cinza(0.45) });
     }

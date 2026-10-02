@@ -3050,7 +3050,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   layout PURO e testado em **`exportar-pdf-core.ts`**): A4 deitado, título + "N linhas · filtros: …" no topo de cada página,
   o cabeçalho das colunas repetido, larguras pelo conteúdo (a fonte desce de 8 a 5,5 antes de quebrar), texto QUEBRADO por
   palavra na célula (nada truncado — a linha alta continua na página seguinte), números formatados como na tela
-  (`Column.formatarFaixa`, senão R$ nas faixas e número nas demais) e à direita, zebra, "Gerado em … · Página N de M";
+  (`Column.formatarFaixa`, senão R$ nas faixas e número nas demais) e à direita, zebra, e o rodapé **"Baixado por <nome>
+  (matrícula N) em dd/mm/aaaa às hh:mm (horário de Brasília) · Página N de M"** (quem = `useQuemExporta`, o contexto
+  `ConfigTabelas` do layout do painel; na tela pública, sem o nome);
   tabela larga demais sai em FAIXAS de colunas com as congeladas repetidas (`faixasDeColunas`); caracteres fora das
   fontes do PDF viram o equivalente (`textoParaPdf`). Some com `false` ou fora da permissão (`PermissaoExportar`). A
   tabela cruzada do Comparativo usa o MESMO `BotaoExportar` no rodapé (a matriz à vista; no PDF, o nome da linha, a sigla e
