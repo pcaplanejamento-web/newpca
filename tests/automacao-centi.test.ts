@@ -76,7 +76,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.13"), false);
   assert.equal(versaoAtende("1.3.14"), false);
   assert.equal(versaoAtende("1.3.15"), false);
-  assert.equal(versaoAtende("1.3.16"), true);
+  assert.equal(versaoAtende("1.3.16"), false);
+  assert.equal(versaoAtende("1.3.17"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -411,4 +412,20 @@ test("confirmsave recebe o OBJETO do protocolo direto (como a tela da Centi); o 
   assert.equal(conf.Token, undefined);
   assert.equal(conf.Object, undefined);
   assert.equal(conf, salvar.Object);
+});
+
+test("anexo: o protocolo da Tela Protocolo (módulo 102908) é aceito e o documento segue o módulo dos que ele já tem", async () => {
+  const A = await pecasAnexo();
+  const doc = { $type: "ORM", Type: 0, State: 3, ModuleKey: 102999, Guid: "d", Fields: [{ Key: "Descricao", Value: "PGM" }], DynamicAttributes: [] };
+  const e = {
+    $type: "ORM", Type: 0, State: 3, ModuleKey: 102908, Guid: "g",
+    Fields: [{ Key: "Id", Value: "2332778" }, { Key: "NrProtocolo", Value: "156844" }, { Key: "AnoReferencia", Value: "2026" }, { Key: "Documentos", Value: [doc] }],
+  };
+  const c = A.conferirProtocolo({ Entity: e }, { id: "2332778", numero: "156844", ano: 2026 });
+  assert.equal(c.erro, undefined);
+  const s = A.montarSalvar(e, { tipo: "1039", descricao: "D", arquivo: "D.pdf", pdf: "JVBER" }, new Date(), "u");
+  const docs = s.Object.Fields.find((f: { Key: string }) => f.Key === "Documentos").Value;
+  assert.equal(docs.length, 2);
+  assert.equal(docs[1].ModuleKey, 102999);
+  assert.ok(A.conferirProtocolo({ Entity: { ...e, ModuleKey: 5 } }, { id: "2332778", numero: "156844" }).erro);
 });

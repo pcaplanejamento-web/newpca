@@ -4,9 +4,12 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p20";
+  const NOME = "__pcaCentiAnexo_p21";
   if (globalThis[NOME]) return;
+  // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
+  // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
   const MODULO_PROTOCOLO = 102907;
+  const MODULOS_PROTOCOLO = [102907, 102908];
   const MODULO_DOCUMENTO = 102932;
   const MODULO_TIPO = 103868;
   const TIPO = "ORM.ObjectsJSON.Transports.ObjectDataJSON, ORM";
@@ -42,7 +45,7 @@
   /** O protocolo que a Centi devolveu no load: confere o Id e o NÚMERO (e o ano, quando informado) — nunca anexa noutro. */
   function conferirProtocolo(retorno, d) {
     const e = retorno?.Entity;
-    if (!e || e.ModuleKey !== MODULO_PROTOCOLO || !Array.isArray(e.Fields)) {
+    if (!e || !MODULOS_PROTOCOLO.includes(e.ModuleKey) || !Array.isArray(e.Fields)) {
       // O que a Centi respondeu (a mensagem dela e a FORMA da resposta — nunca os dados), para o erro dizer o motivo.
       const msg = mensagens(retorno?.Message);
       const forma = retorno && typeof retorno === "object" ? Object.keys(retorno).slice(0, 8).join(", ") : typeof retorno;
@@ -102,7 +105,8 @@
     const novo = {
       Type: 0,
       State: 0,
-      ModuleKey: MODULO_DOCUMENTO,
+      // O módulo do documento = o de um documento que o protocolo já tem (o mesmo módulo de onde veio); sem nenhum, o padrão.
+      ModuleKey: docs.find((x) => Number.isInteger(x?.ModuleKey) && x.ModuleKey > 0)?.ModuleKey ?? MODULO_DOCUMENTO,
       Guid: guid,
       Fields: [
         f("IdProtocolo", "0"),
@@ -245,5 +249,5 @@
 
   globalThis[NOME] = Object.freeze({
     comTokenNovo,
-    renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

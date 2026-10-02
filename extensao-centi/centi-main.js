@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 20;
+  const PROTOCOLO = 21;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -383,11 +383,18 @@
     return A.tipoDoLoad({ Entity: lista.find((o) => o?.ModuleKey === A.MODULO_TIPO) ?? lista[0] }, d.tipo);
   }
 
+  // Abre o protocolo pelo módulo que a Centi aceitar (102907, senão 102908 — o da Tela Protocolo): só segue ao próximo
+  // quando a Centi não devolveu o protocolo; Id/número que não conferem param na hora.
   async function abrirProtocolo(d) {
-    const r = await apiCenti("GET", `restauth/load?entity=${A.MODULO_PROTOCOLO}&key=${d.id}`, null, "load do protocolo");
-    const c = A.conferirProtocolo(r, d);
-    if (c.erro) throw new Error(c.erro);
-    return c.entidade;
+    let ultimo = null;
+    for (const modulo of A.MODULOS_PROTOCOLO) {
+      const r = await apiCenti("GET", `restauth/load?entity=${modulo}&key=${d.id}`, null, "load do protocolo");
+      const c = A.conferirProtocolo(r, d);
+      if (!c.erro) return c.entidade;
+      ultimo = c.erro;
+      if (r?.Entity) break;
+    }
+    throw new Error(ultimo);
   }
 
   // Só LEITURA: o resumo do protocolo (o "Conferir" da tela).
