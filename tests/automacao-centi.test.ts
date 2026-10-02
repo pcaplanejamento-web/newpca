@@ -17,12 +17,23 @@ test("lerConfigCenti: inválido volta ao padrão", () => {
   assert.equal(c.guid, CONFIG_CENTI_PADRAO.guid);
   assert.equal(c.moduleKey, CONFIG_CENTI_PADRAO.moduleKey);
   assert.equal(c.assinaturaDfd, "7");
+  // A operação ANTIGA guardada no aparelho (antes da mudança da Centi) vira a nova; uma escolhida à mão fica.
+  const velha = lerConfigCenti({ moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5", assinaturaDfd: "13", valorReferencia: false });
+  assert.equal(velha.moduleKey, 120465);
+  assert.equal(velha.guid, "24e3e9d0-cb29-2473-1d0a-318c7d8507ef");
+  assert.equal(velha.assinaturaDfd, "163");
+  assert.equal(velha.valorReferencia, false);
+  const mao = lerConfigCenti({ moduleKey: 999, guid: "2b414e51-4389-1c0a-f194-b11779b834f5", assinaturaDfd: "13" });
+  assert.equal(mao.moduleKey, 999);
+  assert.equal(mao.assinaturaDfd, "13");
 });
 
 test("pedidoEmitirDfd: o Id, as opções e as TRAVAS", () => {
   const p = pedidoEmitirDfd("1154", CONFIG_CENTI_PADRAO, new Date(2026, 9, 1, 11, 57, 45));
   const v = Object.fromEntries(p.Params.map((x) => [x.Key, x.Value]));
-  assert.equal(p.ModuleKey, 120464);
+  assert.equal(p.ModuleKey, 120465);
+  assert.equal(p.Guid, "24e3e9d0-cb29-2473-1d0a-318c7d8507ef");
+  assert.equal(v.IdPlanejamentoAssinaturaDFD, "163");
   assert.equal(v.IdComprasPlanejamento, "1154");
   assert.equal(v.EmitirValorReferencia, "1");
   assert.equal(v.Data, "01/10/2026");

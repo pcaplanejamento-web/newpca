@@ -7,7 +7,8 @@ export type ConfigCenti = {
   valorReferencia: boolean;
   /** "Emitir data" do diálogo. */
   emitirData: boolean;
-  /** IdPlanejamentoAssinaturaDFD — o modelo de assinatura do DFD que a Centi envia (13 na captura de 01/10/2026). */
+  /** IdPlanejamentoAssinaturaDFD — o modelo de assinatura do DFD que a Centi envia (163 no "Processar" da tela de 01/10/2026
+   * 22:48; 13 na captura anterior). */
   assinaturaDfd: string;
   /** Identificam a operação "Emitir DFD" na Centi (capturados no "Processar"). */
   moduleKey: number;
@@ -18,12 +19,14 @@ export type ConfigCenti = {
   entidades: string;
 };
 
+// A CENTI MUDOU a operação "Emitir DFD" (01/10/2026, noite): o "Processar" da própria tela passou a mandar ModuleKey
+// 120465 + outro Guid + assinatura 163; o pedido antigo (120464) passou a voltar "Usuário sem permissão!".
 export const CONFIG_CENTI_PADRAO: ConfigCenti = {
   valorReferencia: true,
   emitirData: false,
-  assinaturaDfd: "13",
-  moduleKey: 120464,
-  guid: "2b414e51-4389-1c0a-f194-b11779b834f5",
+  assinaturaDfd: "163",
+  moduleKey: 120465,
+  guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef",
   descobrirEntidade: true,
   entidades: "",
 };
@@ -45,18 +48,25 @@ export const avisoVersaoExtensao = (usuarioId: number) => ({
 export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A operação "Emitir DFD" de ANTES da mudança da Centi (01/10/2026) — a guardada no aparelho é trocada pela nova. */
+export const OPERACAO_ANTIGA = { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5", assinaturaDfd: "13" };
+
 /** Normaliza a configuração guardada (qualquer JSON → válida). */
 export function lerConfigCenti(v: unknown): ConfigCenti {
   const o = (v && typeof v === "object" ? v : {}) as Partial<Record<keyof ConfigCenti, unknown>>;
   const p = CONFIG_CENTI_PADRAO;
-  const ass = typeof o.assinaturaDfd === "string" ? o.assinaturaDfd.replace(/\D/g, "") : "";
-  const mk = Number(o.moduleKey);
+  // A operação ANTIGA guardada no aparelho (ModuleKey 120464 + o Guid dela, assinatura 13 — os padrões de antes da mudança
+  // da Centi) vira a NOVA: senão a configuração salva seguia mandando o pedido que a Centi passou a recusar.
+  const antiga = Number(o.moduleKey) === OPERACAO_ANTIGA.moduleKey && String(o.guid ?? "").toLowerCase() === OPERACAO_ANTIGA.guid;
+  const assGuardada = typeof o.assinaturaDfd === "string" ? o.assinaturaDfd.replace(/\D/g, "") : "";
+  const ass = antiga && assGuardada === OPERACAO_ANTIGA.assinaturaDfd ? "" : assGuardada;
+  const mk = antiga ? Number.NaN : Number(o.moduleKey);
   return {
     valorReferencia: typeof o.valorReferencia === "boolean" ? o.valorReferencia : p.valorReferencia,
     emitirData: typeof o.emitirData === "boolean" ? o.emitirData : p.emitirData,
     assinaturaDfd: ass || p.assinaturaDfd,
     moduleKey: Number.isInteger(mk) && mk > 0 ? mk : p.moduleKey,
-    guid: typeof o.guid === "string" && GUID.test(o.guid.trim()) ? o.guid.trim().toLowerCase() : p.guid,
+    guid: !antiga && typeof o.guid === "string" && GUID.test(o.guid.trim()) ? o.guid.trim().toLowerCase() : p.guid,
     descobrirEntidade: typeof o.descobrirEntidade === "boolean" ? o.descobrirEntidade : p.descobrirEntidade,
     entidades: typeof o.entidades === "string" ? o.entidades.slice(0, 300) : p.entidades,
   };

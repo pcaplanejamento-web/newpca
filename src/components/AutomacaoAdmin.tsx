@@ -839,7 +839,13 @@ export function AutomacaoAdmin({
       const b = await gunzip(deBase64(a.b64)).catch(() => null);
       return b && ehPdf(b) ? { pdf: b } : { erro: "Não consegui abrir o PDF compactado da Centi." };
     }
-    if (a.tipo === "nada") return { erro: a.erro, amostra: a.amostra, ambiente: /sessão/i.test(a.erro) };
+    if (a.tipo === "nada") {
+      // "Sem permissão" = a operação mudou na Centi: a correção é o ModuleKey/Guid do "Processar" da própria tela.
+      const dica = /sem permiss/i.test(a.amostra ?? a.erro)
+        ? " A Centi recusou a operação: confira em Ajustes → Avançado o ModuleKey, o Guid e o modelo de assinatura com o Payload do “Processar” da própria tela."
+        : "";
+      return { erro: `${a.erro}${dica}`, amostra: a.amostra, ambiente: /sessão/i.test(a.erro) };
+    }
     for (const caminho of caminhosDoArquivo(a)) {
       const d = await pedir("pedir", { metodo: "GET", caminho, entidade }, 150_000);
       if (!d.ok || d.b64 == null || (d.status ?? 0) >= 400) continue;
