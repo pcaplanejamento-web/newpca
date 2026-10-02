@@ -60,7 +60,6 @@ import { buscarExistentes, enviarDfdEmLotes, type ExistenteImport } from "@/lib/
 import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
 import { mensagemSemPermissao, telaDoRecurso } from "@/lib/papeis-core";
-import { motivoNaoExcluirDfd } from "@/lib/pca-core";
 import { type Assinatura, type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import {
   indexarProtocoloPdf,
@@ -1088,11 +1087,9 @@ export function ProtocoloUploadForm({
   ]
     .map((n) => existenteDe(n))
     .filter((x): x is DfdExistente => !!x);
-  // Protocolo em um PCA (enviado): DFD não é excluído — os gravados fora do envio ficam MANTIDOS (o servidor recusaria).
-  const semExcluirGravados = reenvio
-    ? (motivoNaoExcluirDfd({ pcaId: reenvio.protocolo.pcaId, pcaIncorporadoEm: reenvio.protocolo.pcaIncorporadoEm }, reenvio.protocolo.pcaNome) ??
-      (podeExcluir ? null : mensagemSemPermissao(telaDoRecurso(reenvio.protocolo.pcaId), "excluir")))
-    : null;
+  // Sem a ação Excluir na Mesa do protocolo, os gravados fora do envio ficam MANTIDOS (o servidor recusaria). Em um PCA
+  // também se excluem: o DFD sai do PCA e os nºs dos itens são baixados.
+  const semExcluirGravados = reenvio && !podeExcluir ? mensagemSemPermissao(telaDoRecurso(reenvio.protocolo.pcaId), "excluir") : null;
   const removidos = (reenvio?.dfds ?? [])
     .filter((g) => !numerosPdf.has(chaveDfd(g.numero)))
     .map((g) => ({

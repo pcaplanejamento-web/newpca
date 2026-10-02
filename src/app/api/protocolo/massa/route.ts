@@ -13,7 +13,6 @@ import { valoresBatem } from "@/lib/normalize";
 import { atualizarProtocolo, type CamposProtocolo, detalheEdicaoProtocolo, listarProtocolosPorIds } from "@/lib/protocolo";
 import { getSituacao } from "@/lib/situacoes";
 import { telaDoRecurso } from "@/lib/papeis-core";
-import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -61,11 +60,6 @@ export async function POST(req: Request) {
       const semPapel = motivoRecusa(a.acesso, telaDoRecurso(pr.pcaId), "manipular");
       if (semPapel) {
         falhas.push({ id: pr.id, numero: pr.numero, motivo: semPapel });
-        continue;
-      }
-      // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.
-      if (estaTravado(pr) && acao.campo !== "responsavel" && acao.campo !== "situacao") {
-        falhas.push({ id: pr.id, numero: pr.numero, motivo: mensagemTravaPca(pr.pcaNome) });
         continue;
       }
       // O que muda neste protocolo (nada ⇒ pulado).

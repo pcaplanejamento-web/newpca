@@ -1284,8 +1284,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DFD ativo grava — seja qual for o botão que tirou o do PDF do envio ou a ordem dos cliques; calculado a cada render, vale
   também quando a consulta dos já cadastrados chega depois). **No REENVIO**, excluir tira o DFD do processo: o
   GRAVADO de mesmo nº entra na lista "fora do envio" do topo (Excluir — padrão — ou Manter, como o que não veio no PDF; a
-  confirmação avisa quantos gravados serão EXCLUÍDOS) — em protocolo que está em um PCA, só "Mantido" (DFD em PCA não é
-  excluído; `ComparacaoProtocolo.excluirBloqueado`). Um DFD já fora do envio por outro motivo não muda; quando outra ação o tira
+  confirmação avisa quantos gravados serão EXCLUÍDOS) — sem a ação Excluir, só "Mantido" (`ComparacaoProtocolo.excluirBloqueado`; em um PCA o
+  excluído sai do PCA, com os nºs dos itens baixados). Um DFD já fora do envio por outro motivo não muda; quando outra ação o tira
   do envio depois (Manter o existente, a escolha do duplicado, o rastro do reenvio), ele deixa de ser "Excluído" e vira
   "Descartado" — o "Restaurar excluídos" não o traz. O DFD fora do envio não entra na fila do OCR nem segura a protocolação
   (`ocrPendenteNoEnvio`); ao voltar ("Restaurar"/"Manter este"), a assinatura achatada é lida (`lerOcrAoVoltar` →
@@ -1560,7 +1560,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     os itens: `podeRevisarItens`) e `revisarCapa` (conteúdo da capa em uma linha limpa). NUNCA mexe em identificadores,
     valores, quantidades, assinaturas nem na unidade; idempotente. O tratado entra no RASCUNHO (Salvar alterações grava só o
     que mudou, com o histórico) e o aviso flutuante diz o que foi tratado (`resumoRevisao`; no protocolo, por DFD —
-    `resumoRevisaoLote`). Só-leitura (sem permissão, unidade sem acesso, incorporado a um PCA): só recarrega e avisa o que
+    `resumoRevisaoLote`). Só-leitura (sem permissão, unidade sem acesso): só recarrega e avisa o que
     haveria a tratar. Testes: `tests/revisao-dfd.test.ts`.
   - **REENVIAR PROTOCOLO (sobrescrever com comparação)** — botão **"Reenviar protocolo"** no rodapé do protocolo gravado (`useProtocoloGravado`)
     (desabilitado com rascunho pendente) → o **MESMO `ProtocoloUploadForm`** em modo `reenvio` (`BaseReenvio` = protocolo +
@@ -1925,8 +1925,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   viraram um PCA "lista pronta" **publicado** (a tela inicial não muda) e as edições que já uniam DFDs viraram fonte `protocolo`.
 - **Núcleo PURO `pca-core.ts`** (testado): `motivosNaoEnviar` (travas: fonte protocolo · situação que permite · `ano_pca` do
   protocolo = ano do PCA · ter DFD · não estar já em um PCA), `motivosNaoIncorporar` (na Mesa deste PCA · não incorporado · DFD
-  livre — um DFD em UM PCA), `motivoNaoDevolver`, a TRAVA (`estaTravado`/`edicaoPermitidaTravado`/`CAMPOS_LIVRES_TRAVADO`/
-  `mensagemTravaPca`, ver "Mesa do PCA" abaixo), `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
+  livre — um DFD em UM PCA), `motivoNaoDevolver` (enviado ou incorporado — o incorporado segue editável, ver "Mesa do PCA" abaixo),
+  `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
   incorporar), **`consolidarPca(linhas)`** (cronológico; 1 DFD vigente por nº de planejamento; substituir/excluir sem par
   ⇒ aviso), `previsaoDoDfd` (seção PREVISÃO → mês/ano; ANUAL espalha nos 12 meses) e **`agregarDashboard`** (as MESMAS formas de
   `queries.ts`). **Dashboard ÚNICO:** o painel e a tela inicial mostram o MESMO (tudo o que foi incorporado — os itens ATIVOS
@@ -2008,9 +2008,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (Visualizar o PCA), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita pelo papel no PCA (criar/Configuração =
   Configurar; excluir o PCA, a planilha e retirar itens = Excluir; importar planilhas = Importar) + auditoria `pca`.
 
-### Mesa do PCA INDEPENDENTE + incorporação com TRAVA — migração `0034`
+### Mesa do PCA INDEPENDENTE + incorporação (editável — `0077`) — migração `0034`
 - **Modelo (aditivo):** `dfd_protocolos` ganhou `pca_id` (FK `pcas` **set null** — o protocolo está na Mesa desse PCA),
-  `pca_enviado_em`/`pca_enviado_por` e **`pca_incorporado_em`** (≠ null ⇒ INCORPORADO = travado). Excluir o PCA devolve os
+  `pca_enviado_em`/`pca_enviado_por` e **`pca_incorporado_em`** (≠ null ⇒ INCORPORADO — editável, o PCA acompanha). Excluir o PCA devolve os
   protocolos à Mesa principal (`excluirPca` zera os campos no mesmo lote; `pca_dfds` cascade).
 - **Fluxo:** Mesa principal → seleção de protocolos → **"Enviar ao PCA"** (`EnviarAoPca`, na `BarraSelecao`: escolhe um PCA de
   fonte protocolo — sugerido pelo ano —, mostra Vai/Não vai por protocolo com `motivosNaoEnviar`). O enviado **SOME da Mesa
@@ -2018,36 +2018,32 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`carregarMesa(u, pcaId)` — escopo pelas unidades ACESSÍVEIS, não pela ativa do head; itens por `GET /api/dfd/itens?pca=`).
   Na Mesa do PCA (`MesaPca`): `Segmented` **Todos | Enviados | Incorporados**, coluna "PCA" (Enviado [motivos no `title`] /
   Incorporado · ação) e as ações da seleção **Incorporar** (modal com a ação por protocolo: incorporar/substituir/excluir,
-  sugerida pelo assunto; grava `pca_dfds` + a NUMERAÇÃO dos itens + `pca_incorporado_em` num lote atômico — **PERMANENTE**: não
-  há desincorporar) e **Devolver à Mesa** (só o NÃO incorporado) — a barra de seleção de protocolos do PCA tem SÓ essas duas
-  ações (sem o editor de massa). Só o incorporado conta no
+  sugerida pelo assunto; grava `pca_dfds` + a NUMERAÇÃO dos itens + `pca_incorporado_em` num lote atômico) e **Devolver à
+  Mesa** (o enviado e o incorporado — desincorpora) — junto do editor de massa. Só o incorporado conta no
   Dashboard/Orçamento do PCA. Rota única `POST /api/pca/[id]/protocolos` (`acaoProtocolosPcaSchema`, ≤ 50, Manipular no PCA — enviar também na Mesa,
   escopo por unidade, `{alterados, falhas}`, auditoria por protocolo com a ação REAL).
-- **TRAVA (profissional, servidor + tela):** protocolo INCORPORADO ⇒ protocolo, DFDs e itens **somente leitura**; só a GESTÃO
-  (`responsavelId`/`situacaoId`) passa. Servidor: `src/lib/trava-pca.ts`
-  (`travaDeProtocolos`/`travaDeDfds`, lotes ≤ 90) → **423** com `mensagemTravaPca` em `POST /api/protocolo` (start/reenvio),
-  `PATCH`/`DELETE /api/protocolo/[id]`, `POST /api/protocolo/massa` (exceto responsável/situação), `POST /api/dfd` (start-dfd:
-  DFD existente + protocolo destino; append), `PATCH`/`DELETE /api/dfd/[id]` (inclui vincular de/para travado), `POST
-  /api/dfd/massa` e `POST /api/dfd/itens/massa` (por alvo → `falhas`); `POST /api/dfd/existentes` devolve o travado como
-  `{acessivel:false}` (a importação o mostra como "Não sobrescrevível"). Tela: `useProtocoloGravado`/`useDfdGravado` dobram a
-  trava em `podeEditar`/`editavel` + `Callout` âmbar com cadeado; a `DfdsView` esconde vincular/excluir do travado.
-- **Protocolo em um PCA NÃO é excluído (regra do usuário) — ENVIADO ou INCORPORADO:** a Mesa do PCA não tem a lixeira (nem a
-  coluna de ações); o enviado sai pela **"Devolver à Mesa"** e só então pode ser excluído na Mesa principal. Regra pura
-  **`motivoNaoExcluirProtocolo`** (`pca-core`, testada) + consulta **`pcaDeProtocolos`** (`trava-pca`, lotes ≤ 90):
-  `DELETE /api/protocolo/[id]` recusa — **409** o enviado ("Na Mesa do PCA X — devolva-o à Mesa principal para excluir"),
-  **423** o incorporado (a mensagem da trava) — e o `POST /api/protocolo` recusa (409) a re-importação que SUBSTITUIRIA
-  (apagaria) um protocolo de MESMO Id e nº diferente que está em um PCA.
-- **DFD de protocolo em um PCA também NÃO é excluído (regra do usuário):** na Mesa do PCA a lixeira do DFD some (o "Vincular a
-  protocolo" segue para o enviado); `DELETE /api/dfd/[id]` recusa (409 enviado / 423 incorporado — **`motivoNaoExcluirDfd`**,
-  `pca-core`, testada); o reenvio de um protocolo em PCA mantém os gravados fora do envio. Única exceção: o DESFAZER da
-  importação que falhou no meio (`apagarDfd` → `?origem=desfazer`, a garantia tudo-ou-nada por DFD) — só a gravação NOVA
-  deste usuário que ficou PELA METADE (**`gravacaoParcial`**: criada por ele HÁ POUCO — `JANELA_DESFAZER_MIN`=60, pela criação
-  do DFD, que a sobrescrita mantém — e com menos itens gravados que o total declarado no `start-dfd`; um DFD completo ou
-  antigo nunca — um `start-dfd` forjado sobre um DFD antigo da pessoa não vira "desfazer") sai de um protocolo ENVIADO; do
-  incorporado, nunca (o
-  histórico só diz "gravação desfeita após falha" quando é esse caso). Mover o DFD para outro protocolo ("Vincular a
-  protocolo") segue permitido no ENVIADO — como o "Devolver à Mesa", é um caminho de SAÍDA do PCA; fora dele, o DFD volta a
-  poder ser excluído.
+- **PROTOCOLO INCORPORADO 100% EDITÁVEL (migração `0077`, aditiva — sem a antiga TRAVA):** o incorporado faz TUDO o que o
+  protocolo comum faz — editar capa/DFDs/itens/assinaturas, massa nas 3 visões (na Mesa do PCA também), reenviar, sobrescrever
+  DFD, "Atualizar" tratando, mover DFD, unificar/remover itens, EXCLUIR DFD e protocolo (também o só ENVIADO) e **Devolver à
+  Mesa** (desincorpora). O papel decide como sempre (Manipular/Importar/Excluir na Mesa do PCA). O PCA ACOMPANHA na hora
+  (Dashboard, Orçamento, cards, consulta pública) — **`pca-sincronia.ts`** (núcleo puro **`pca-numeracao-core.ts`**, builders em
+  `pca-itens-sql.ts`, testados no driver D1 real):
+  - **O nº do item segue o ITEM:** toda regravação (`start-dfd`/`append`, "Salvar" — `reescreverDfdItens`) guarda o RETRATO
+    do item no nº (`pca_itens.codigo/descricao/unidade/item`, `retratarNumeros`) antes de apagar; `numeracaoDaGravacao`
+    pareia as linhas novas com os nºs livres (`parearNumeros`: código+descrição+unidade+nº do item → código+descrição+unidade →
+    código+descrição → nº+código → nº+descrição; cada nº uma vez) e as linhas levam o nº (`religarNumeros`). Com a gravação
+    COMPLETA, o item novo ganha o próximo nº do PCA (`numerarItensDoDfd`) e o nº que ficou sem item é **BAIXADO**
+    (`pca_itens.baixado_em` — inativo para sempre, nunca reaproveitado; o retirado segue retirado). A massa de itens baixa o
+    nº do removido no mesmo lote.
+  - **O DFD está no PCA do protocolo INCORPORADO em que está** (`pca_dfds.protocolo_id` = por onde entrou; NULL = vínculo de
+    edição legada, nunca tocado): `sincronizarDfdNoPca` (depois de toda gravação/vínculo — estado, idempotente) põe o DFD que
+    entra (a ação dos outros DFDs do protocolo, senão a sugerida), tira o que sai (nºs baixados, o item sem nº) e troca o
+    protocolo do vínculo no mesmo PCA. Excluir DFD/protocolo e Devolver baixam os nºs no mesmo lote; `sincronizarAtivosPca`
+    inativa os não vigentes e REATIVA o substituído quando quem o substituía sai.
+  - **Tela:** no lugar do cadeado, o aviso informativo `avisoIncorporado` nos banners do protocolo e do DFD; as confirmações de
+    excluir/devolver dizem o impacto (`impactoSaidaPca`). Única recusa que fica: a re-importação por Id que FUNDIRIA (excluiria)
+    um protocolo em um PCA em outro já existente no nº novo (409 — devolva-o antes; `pcaDeProtocolos`, `trava-pca.ts`).
+  - **Desfazer** da importação que falhou no meio: segue a régua `gravacaoParcial` (a permissão: Importar em vez de Excluir).
 - **VISÃO DOS MARCADOS (migração `0063`, aditiva — `pcas.mesa_marcados`, default desligado):** em **PCA → Configuração**
   (`PcaConfiguracao`, `Switch` "Mostrar os marcados da Mesa do sistema"; `PATCH /api/pca/[id]` `{mesaMarcados}` +
   auditoria), a Mesa do PCA lista também os protocolos MARCADOS com o ano dele (`ano_pca`, a MESMA régua do filtro de PCA do

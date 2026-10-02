@@ -8,7 +8,7 @@ import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
 import { editarItemDfd, indiceAposRemover, removerItemDfd, STATUS_MENSAGEM_COR, unificarItensDfd } from "@/lib/dfd-tratamento";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
-import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
+import { avisoIncorporado } from "@/lib/pca-numeracao-core";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { podeRevisarItens, resumoRevisao, revisarDfd } from "@/lib/revisao-dfd";
@@ -20,7 +20,7 @@ import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd, useRepetidosDoItem
 import { DfdRodape } from "./DfdRodape";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho, ItemCabecalho } from "./DfdView";
-import { IconAlert, IconClock, IconLayers, IconLock, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconLayers, IconSpinner, IconUpload } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -209,15 +209,15 @@ export function useDfdGravado({
 
   // Unidade: a da lista do usuário (editável) ou a REAL do DFD (conferência correta, só-leitura).
   const acessivel = orig?.reparticaoId == null || reparticoes.some((r) => r.id === orig?.reparticaoId);
-  // TRAVA do PCA: DFD de protocolo INCORPORADO ⇒ só-leitura (cabeçalho, seções, itens, sobrescrita).
-  const travaPca =
-    orig && estaTravado({ pcaId: orig.protocoloPcaId, pcaIncorporadoEm: orig.protocoloPcaIncorporadoEm })
-      ? mensagemTravaPca(pcas.find((p) => p.id === orig.protocoloPcaId)?.nome)
+  // DFD de protocolo INCORPORADO a um PCA: tudo se edita — o PCA acompanha (o aviso diz como).
+  const avisoPca =
+    orig && orig.protocoloPcaId != null && orig.protocoloPcaIncorporadoEm
+      ? avisoIncorporado(pcas.find((p) => p.id === orig.protocoloPcaId)?.nome)
       : null;
   // O PAPEL na Mesa em que o DFD está (a do protocolo dele): editar = Manipular; sobrescrever com o arquivo novo = Importar.
   const podeDfd = podeNoRecurso(pode, orig?.protocoloPcaId);
-  const editavel = podeDfd.manipular && acessivel && !travaPca;
-  const podeSobrescrever = podeDfd.importar && acessivel && !travaPca;
+  const editavel = podeDfd.manipular && acessivel;
+  const podeSobrescrever = podeDfd.importar && acessivel;
   const reps: Rep[] = editavel || !unidade || reparticoes.some((r) => r.id === unidade.id) ? reparticoes : [...reparticoes, unidade];
   const rep = repId != null ? (reps.find((r) => r.id === repId) ?? null) : null;
   const categoria = classificarAssunto(orig?.protocoloAssunto ?? null);
@@ -267,9 +267,8 @@ export function useDfdGravado({
       const cat = classificarAssunto(detalhe.protocoloAssunto ?? null);
       const rev = revisarDfd(d, { regras, anoPca: d.anoPca ?? detalhe.protocoloAnoPca ?? null, itens: podeRevisarItens(d, regras, cat) });
       const ok = detalhe.reparticaoId == null || reparticoes.some((x) => x.id === detalhe.reparticaoId);
-      const trava = estaTravado({ pcaId: detalhe.protocoloPcaId, pcaIncorporadoEm: detalhe.protocoloPcaIncorporadoEm });
       if (rev.ajustes.length === 0) return void toast.success(`DFD ${detalhe.numero} atualizado — nada a tratar.`);
-      if (!podeNoRecurso(pode, detalhe.protocoloPcaId).manipular || !ok || trava)
+      if (!podeNoRecurso(pode, detalhe.protocoloPcaId).manipular || !ok)
         return void toast.warning(`DFD ${detalhe.numero} atualizado. Há dados a tratar (${resumoRevisao(rev.ajustes)}), mas ele está só-leitura.`, 8000);
       setDfd(rev.dfd);
       setEditado(true);
@@ -314,9 +313,9 @@ export function useDfdGravado({
   const numero = dfd?.numero ?? orig?.numero ?? "";
   const erroCallout = (
     <>
-      {travaPca && (
-        <Callout kind="warn" icon={<IconLock className="h-4 w-4" />} className="mb-3">
-          {travaPca}
+      {avisoPca && (
+        <Callout kind="info" className="mb-3">
+          {avisoPca}
         </Callout>
       )}
       {erro && (

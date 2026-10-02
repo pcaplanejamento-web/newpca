@@ -10,7 +10,7 @@ import { padraoAoProtocolar } from "@/lib/mesa-visao-core";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
 import { telaDoRecurso } from "@/lib/papeis-core";
 import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
-import { pcaDeProtocolos, respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
+import { pcaDeProtocolos } from "@/lib/trava-pca";
 import { responsavelPadraoDe } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -82,14 +82,11 @@ export async function POST(req: Request) {
   if (mesmoId && mesmoId.numero !== protocolo.numero && !protocoloNasLinhas(esc, mesmoId.id)) {
     return erro("Já existe um protocolo com esse Id — fale com o Responsável por ele.", 403);
   }
-  // TRAVA do PCA: um protocolo INCORPORADO (o reenviado, o de mesmo nº ou o de mesmo Id) não é sobrescrito.
-  const travas = await travaDeProtocolos([gravado?.id, mesmoNumero?.id, mesmoId?.id]);
-  const trava = [...travas.values()][0];
-  if (trava) return respostaTravado(trava);
-  // O de MESMO Id e nº DIFERENTE é o mesmo processo RENUMERADO (ou, com outro protocolo já no nº novo, sai para ele) — um
-  // protocolo em um PCA não muda assim (enviado: devolva à Mesa principal antes; incorporado: a trava acima).
+  // O de MESMO Id e nº DIFERENTE é o mesmo processo RENUMERADO: o MESMO registro (segue no PCA em que está). Só quando JÁ
+  // existe outro protocolo no nº novo ele SAI para esse (os DFDs passam e ele é excluído) — o protocolo em um PCA não é
+  // fundido assim: devolva-o à Mesa principal antes (o que o PCA perde fica claro na devolução).
   const renumerado = mesmoId && mesmoId.numero !== protocolo.numero ? mesmoId : null;
-  if (renumerado) {
+  if (renumerado && mesmoNumero && mesmoNumero.id !== renumerado.id) {
     const noPca = (await pcaDeProtocolos([renumerado.id])).get(renumerado.id);
     if (noPca) return erro(`O protocolo ${renumerado.numero} tem o mesmo Id e está no ${noPca.nome} — devolva-o à Mesa principal antes de importar de novo.`, 409);
   }

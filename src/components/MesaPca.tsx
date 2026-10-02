@@ -15,6 +15,7 @@ import {
 } from "@/lib/pca-core";
 import type { ItemDfdRow } from "@/lib/dfd";
 import type { ProtocoloNaMesa } from "@/lib/mesa-redacao";
+import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import type { Column } from "./DataTable";
@@ -49,9 +50,9 @@ const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: 
  * Aba MESA do PCA (fonte protocolo) — INDEPENDENTE da Mesa principal: só os protocolos ENVIADOS a este PCA
  * (Mesa principal → barra de seleção → "Enviar ao PCA"), com a MESMA Mesa (Protocolos · DFDs · Itens, Estado,
  * Situação na célula, banners). Escopo **Todos | Enviados | Incorporados**; a seleção de protocolos só tem
- * **Incorporar** (PERMANENTE: os DFDs e os itens passam a compor o PCA com a ação por protocolo, cada item ganha
- * o SEQUENCIAL único do PCA e protocolo/DFDs/itens ficam TRAVADOS) e **Devolver à Mesa** (só o não
- * incorporado). Na visão Itens, a coluna **Seq. PCA** e a ação **Retirar do PCA** (o nº fica inativo).
+ * **Incorporar** (os DFDs e os itens passam a compor o PCA com a ação por protocolo e cada item ganha o SEQUENCIAL
+ * único do PCA — o incorporado segue EDITÁVEL: o PCA acompanha) e **Devolver à Mesa** (o enviado e também o incorporado:
+ * desincorpora, os nºs dos itens ficam baixados). Na visão Itens, a coluna **Seq. PCA** e a ação **Retirar do PCA**.
  * Com a visão dos **MARCADOS** (Configuração do PCA), a lista traz também os protocolos marcados com o ano do PCA ainda na
  * Mesa do SISTEMA — só uma visão: seguem na Mesa principal, editáveis, e a seleção os envia ("Enviar a este PCA"). A coluna
  * **Local** diz onde cada um está (`localDoProtocolo`).
@@ -110,7 +111,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
       if (local === "incorporado") {
         const a = acaoPorProtocolo[r.id];
         return (
-          <span title="Protocolo, DFDs e itens travados enquanto incorporado">
+          <span title="Incorporado — as alterações no protocolo, nos DFDs e nos itens entram no PCA na hora">
             <Badge tone="blue" dot>
               Incorporado{a ? ` · ${ROTULO_ACAO[a]}` : ""}
             </Badge>
@@ -218,7 +219,12 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
 
   function devolver(sel: ProtocoloNaMesa[], limpar: () => void) {
     const alvo = sel.filter((p) => motivoNaoDevolver(p, pca.id) == null);
-    if (!alvo.length || !confirm(`Devolver ${alvo.length} protocolo(s) à Mesa principal?`)) return;
+    const inc = alvo.filter(incorporado);
+    // O incorporado DESINCORPORA: os DFDs saem do PCA e os itens perdem o nº (a confirmação diz quantos).
+    const aviso = inc.length
+      ? ` ${inc.length} incorporado(s): ${impactoSaidaPca(pca.nome, inc.reduce((t, p) => t + p.totalItens, 0))}`
+      : "";
+    if (!alvo.length || !confirm(`Devolver ${alvo.length} protocolo(s) à Mesa principal?${aviso}`)) return;
     void executar({ acao: "devolver", ids: alvo.map((p) => p.id) }, (r) => `${num(r.alterados)} protocolo(s) devolvido(s) à Mesa principal.`, limpar);
   }
 
@@ -253,21 +259,21 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
             ? (sel, limpar) => {
                 const noSistema = mesa.pode.sistema.manipular ? sel.filter((p) => localDoProtocolo(p) === "sistema") : [];
                 const n = sel.filter((p) => localDoProtocolo(p) === "enviado").length;
+                const devolviveis = sel.filter((p) => localDoProtocolo(p) !== "sistema").length;
                 const pcaFixo = mesa.pcas?.find((x) => x.id === pca.id);
-                if (n === 0 && noSistema.length === 0)
-                  return <span className="text-xs text-muted">Incorporados não voltam — a incorporação é permanente.</span>;
+                if (devolviveis === 0 && noSistema.length === 0) return null;
                 return (
                   <div className="flex flex-wrap gap-2">
                     {noSistema.length > 0 && pcaFixo && <EnviarAoPca selecionados={noSistema} pcas={[pcaFixo]} pcaFixo={pcaFixo} onConcluido={limpar} />}
                     {n > 0 && (
-                      <>
-                        <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
-                          Incorporar ({n})
-                        </Button>
-                        <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} loading={gravando}>
-                          Devolver à Mesa ({n})
-                        </Button>
-                      </>
+                      <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
+                        Incorporar ({n})
+                      </Button>
+                    )}
+                    {devolviveis > 0 && (
+                      <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} loading={gravando}>
+                        Devolver à Mesa ({devolviveis})
+                      </Button>
                     )}
                   </div>
                 );

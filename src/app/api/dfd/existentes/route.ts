@@ -5,7 +5,6 @@ import { dfdsPorNumeros } from "@/lib/dfd";
 import { existentesDfdSchema } from "@/lib/dfd-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { telaDoRecurso } from "@/lib/papeis-core";
-import { travaDeDfds } from "@/lib/trava-pca";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +25,9 @@ export async function POST(req: Request) {
   if (!esc) return erro("Faça login.", 401);
   const { acessivel } = esc;
   const achados = await dfdsPorNumeros(p.data.numeros);
-  const travas = await travaDeDfds(achados.map((d) => d.id));
   // Fora das LINHAS da pessoa ("só os meus") o DFD também volta só como `acessivel: false` (a gravação o recusaria).
   const existentes = achados.map(({ pcaId, ...d }) =>
-    !travas.has(d.id) && acessivel(d.reparticaoId) && dfdNasLinhas(esc, d.id) && podeTela(a.acesso, telaDoRecurso(pcaId)).importar
+    acessivel(d.reparticaoId) && dfdNasLinhas(esc, d.id) && podeTela(a.acesso, telaDoRecurso(pcaId)).importar
       ? { ...d, acessivel: true }
       : { numero: d.numero, acessivel: false },
   );

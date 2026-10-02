@@ -552,14 +552,19 @@ export const pcaDfds = sqliteTable(
     substituiDfdId: integer("substitui_dfd_id"),
     vinculadoPor: integer("vinculado_por").references(() => usuarios.id, { onDelete: "set null" }),
     vinculadoEm: text("vinculado_em"),
+    // Migração `0077`: o protocolo INCORPORADO por onde o DFD entrou no PCA (NULL = vínculo de edição legada — a sincronia
+    // do PCA nunca o toca). O DFD que sai desse protocolo sai do PCA; o que entra num protocolo incorporado, entra. Sem FK:
+    // o DFD que muda de protocolo (mesmo com o de origem excluído no lote) é ressincronizado por este id.
+    protocoloId: integer("protocolo_id"),
   },
-  (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] }), index("pca_dfds_dfd_idx").on(t.dfdId)],
+  (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] }), index("pca_dfds_dfd_idx").on(t.dfdId), index("pca_dfds_protocolo_idx").on(t.protocoloId)],
 );
 
 /**
- * SEQUENCIAL do ITEM no PCA (migração `0035`): ao INCORPORAR um protocolo (permanente), cada item ganha um número
- * ÚNICO dentro do PCA (`pca_id` + `sequencial`). Retirar o item do PCA — ou o DFD deixar de ser vigente
- * (substituído/excluído) — só INATIVA o número (`ativo=0`); ele nunca é reaproveitado.
+ * SEQUENCIAL do ITEM no PCA (migração `0035`): ao INCORPORAR um protocolo, cada item ganha um número ÚNICO dentro do PCA
+ * (`pca_id` + `sequencial`). Retirar o item do PCA — ou o DFD deixar de ser vigente (substituído/excluído) — só INATIVA o
+ * número (`ativo=0`); o item editado no protocolo incorporado MANTÉM o número, o removido o BAIXA (`0077`). Nunca é
+ * reaproveitado.
  */
 export const pcaItens = sqliteTable(
   "pca_itens",
@@ -577,8 +582,19 @@ export const pcaItens = sqliteTable(
     inativadoPor: integer("inativado_por").references(() => usuarios.id, { onDelete: "set null" }),
     motivo: text("motivo"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    // Migração `0077`: o RETRATO do item (reencontra o nº depois que a regravação apagou o item — `pca-numeracao-core`) e
+    // a BAIXA (o nº perdeu o item de vez: item removido, DFD/protocolo saiu do PCA — inativo para sempre).
+    codigo: text("codigo"),
+    descricao: text("descricao"),
+    unidade: text("unidade"),
+    item: integer("item"),
+    baixadoEm: text("baixado_em"),
   },
-  (t) => [uniqueIndex("pca_itens_pca_seq_uq").on(t.pcaId, t.sequencial), index("pca_itens_item_idx").on(t.dfdItemId)],
+  (t) => [
+    uniqueIndex("pca_itens_pca_seq_uq").on(t.pcaId, t.sequencial),
+    index("pca_itens_item_idx").on(t.dfdItemId),
+    index("pca_itens_dfd_idx").on(t.dfdId),
+  ],
 );
 
 /**

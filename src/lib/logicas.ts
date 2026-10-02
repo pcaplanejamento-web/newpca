@@ -454,7 +454,7 @@ export const LOGICAS: LogicaRef[] = [
       "Textos limpos no cabeçalho do DFD, na descrição/unidade dos itens e na capa do protocolo.",
       "A padronização automática do ADM (prioridade, previsão, sinônimos) e as referências da renovação lidas do texto (DFD-R sem nenhuma).",
       "Nunca mexe em identificadores (nº, planejamento, ano do PCA), valores, quantidades, assinaturas nem na unidade; revisar de novo não muda nada.",
-      "Só-leitura (sem permissão, unidade sem acesso, incorporado a um PCA): só recarrega e avisa o que haveria a tratar.",
+      "Só-leitura (sem permissão, unidade sem acesso): só recarrega e avisa o que haveria a tratar.",
     ],
     fonte: "revisarDfd / revisarCapa (revisao-dfd) + BotaoAtualizar (useDfdGravado / useProtocoloGravado)",
   },
@@ -568,17 +568,18 @@ export const LOGICAS: LogicaRef[] = [
     configuravelEm: { rotulo: "Avaliação (dfd.anoPca / protocolo.anoPca)" },
   },
   {
-    id: "pca-protocolo-nao-exclui",
+    id: "pca-incorporado-editavel",
     dominio: "pca",
-    titulo: "Protocolo em um PCA não é excluído",
+    titulo: "Protocolo incorporado editável (o PCA acompanha)",
     descricao:
-      "Um protocolo ENVIADO à Mesa de um PCA ou INCORPORADO a ele não pode ser excluído: a Mesa do PCA não tem a lixeira e o servidor recusa. O enviado sai do PCA por 'Devolver à Mesa' (e então pode ser excluído na Mesa principal); o incorporado é permanente.",
+      "O protocolo INCORPORADO a um PCA se edita como qualquer outro — capa, DFDs, itens, assinaturas, massa, reenvio, sobrescrita, mover DFD, excluir DFD e protocolo e Devolver à Mesa (desincorpora) — e o PCA acompanha na hora (Dashboard, Orçamento, consulta pública).",
     detalhes: [
-      "A re-importação de um protocolo de mesmo Id (número diferente) que está em um PCA também é recusada.",
-      "Os DFDs de um protocolo em um PCA também não são excluídos (no reenvio, os gravados fora do envio ficam mantidos) — só o desfazer automático da importação que falhou no meio remove a gravação NOVA do próprio usuário que ficou pela metade (menos itens que o declarado).",
-      "Mover o DFD para outro protocolo ('Vincular a protocolo') segue permitido no protocolo enviado — como 'Devolver à Mesa', é um caminho de saída do PCA.",
+      "O item editado MANTÉM o nº no PCA: antes de regravar, o nº guarda o retrato do item e a linha nova o reencontra (código + descrição + unidade + nº do item, depois chaves mais fracas).",
+      "O item novo ganha o próximo nº do PCA; o removido fica com o nº baixado — inativo para sempre, nunca reaproveitado; o retirado do PCA segue retirado.",
+      "O DFD está no PCA do protocolo incorporado em que está: entra (com a ação do protocolo) quando chega a ele, sai (nºs baixados) quando o deixa ou é excluído; o substituído volta a valer quando quem o substituía sai.",
+      "Única recusa: a re-importação por Id que fundiria um protocolo em um PCA em outro já existente no nº novo — devolva-o antes.",
     ],
-    fonte: "motivoNaoExcluirProtocolo / motivoNaoExcluirDfd / gravacaoParcial (pca-core) · pcaDeProtocolos (trava-pca)",
+    fonte: "pca-sincronia (numeracaoDaGravacao / sincronizarDfdNoPca / sincronizarAtivosPca) · pca-numeracao-core · pca-itens-sql",
   },
 
   // ---- Acesso & RBAC ----

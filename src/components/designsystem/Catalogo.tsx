@@ -26,7 +26,7 @@ import { Avatar } from "@/components/Avatar";
 import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Callout } from "@/components/Callout";
-import { mensagemTravaPca } from "@/lib/pca-core";
+import { avisoIncorporado } from "@/lib/pca-numeracao-core";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { MensalChart } from "@/components/charts/MensalChart";
@@ -461,9 +461,7 @@ function PcaEspacoDemo() {
           Incorporado · Substituir
         </Badge>
       </div>
-      <Callout kind="warn" icon={<IconLock className="h-5 w-5" />}>
-        {mensagemTravaPca("PCA 2027")}
-      </Callout>
+      <Callout kind="info">{avisoIncorporado("PCA 2027")}</Callout>
       <RecorteImagem
         arquivo={arquivo}
         onCancelar={() => setArquivo(null)}

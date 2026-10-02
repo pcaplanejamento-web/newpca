@@ -85,7 +85,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           falha(m);
           continue;
         }
-        await devolverProtocolo(pca.id, pr.id);
+        await devolverProtocolo(pca.id, pr.id, a.u.id);
       } else {
         const doProto = dfds.filter((d) => d.protocoloId === pr.id);
         const m = motivosNaoIncorporar({

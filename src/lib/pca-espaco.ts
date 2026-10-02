@@ -40,7 +40,15 @@ import {
 } from "./pca-core";
 import { filtroAnoPcaDfd } from "./dfd-sql";
 import { consultaDfdsEmOutroPca } from "./pca-dfds-sql";
-import { gravarSequencialNosItens, numerarItensDoProtocolo } from "./pca-itens-sql";
+import {
+  baixarNumeros,
+  desvincularProtocoloDoPca,
+  gravarSequencialNosItens,
+  numerarItensDoProtocolo,
+  retratarNumeros,
+} from "./pca-itens-sql";
+import { MOTIVO_NUMERO } from "./pca-numeracao-core";
+import { sincronizarAtivosPca } from "./pca-sincronia";
 import { type DfdConsulta, dfdPublico, historicoPublico, mascararTexto } from "./pca-publico-core";
 import { getProtocolo } from "./protocolo";
 import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "./queries";
@@ -358,18 +366,30 @@ export async function enviarProtocolo(pcaId: number, protocoloId: number, usuari
     .where(and(eq(dfdProtocolos.id, protocoloId), isNull(dfdProtocolos.pcaId)));
 }
 
-/** DEVOLVE o protocolo à Mesa principal. Só o enviado a ESTE PCA e NÃO incorporado. */
-export async function devolverProtocolo(pcaId: number, protocoloId: number): Promise<void> {
-  await getDb()
+/**
+ * DEVOLVE o protocolo à Mesa principal — o ENVIADO e também o INCORPORADO (desincorpora): os DFDs dele saem do PCA (os
+ * vínculos e os nºs dos itens — BAIXADOS, nunca reaproveitados; incorporar de novo dá nºs novos), num lote atômico.
+ */
+export async function devolverProtocolo(pcaId: number, protocoloId: number, usuarioId: number | null): Promise<void> {
+  const db = getDb();
+  const volta = db
     .update(dfdProtocolos)
-    .set({ pcaId: null, pcaEnviadoEm: null, pcaEnviadoPor: null })
-    .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId), isNull(dfdProtocolos.pcaIncorporadoEm)));
+    .set({ pcaId: null, pcaEnviadoEm: null, pcaEnviadoPor: null, pcaIncorporadoEm: null })
+    .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId)));
+  await db.batch([
+    retratarNumeros(db, { protocoloId }),
+    ...baixarNumeros(db, { protocoloId }, pcaId, MOTIVO_NUMERO.protocoloDevolvido, usuarioId),
+    desvincularProtocoloDoPca(db, protocoloId, pcaId),
+    volta,
+  ]);
+  await sincronizarAtivosPca(pcaId, usuarioId);
 }
 
 /**
  * INCORPORA o protocolo ao PCA (PERMANENTE) num lote ATÔMICO: vincula os DFDs dele (`pca_dfds`, com a ação de cada
- * um), NUMERA os itens com o sequencial único do PCA (`pca_itens` + o próprio item — `pca-itens-sql.ts`) e marca a
- * incorporação (protocolo/DFDs/itens TRAVADOS). Depois, inativa os números dos DFDs que deixaram de ser vigentes.
+ * um, pelo protocolo — `pca_dfds.protocolo_id`), NUMERA os itens com o sequencial único do PCA (`pca_itens` + o próprio
+ * item — `pca-itens-sql.ts`) e marca a incorporação. O incorporado segue EDITÁVEL: o PCA acompanha (`pca-sincronia.ts`).
+ * Depois, inativa os números dos DFDs que deixaram de ser vigentes.
  */
 export async function incorporarProtocolo(
   pcaId: number,
@@ -378,14 +398,18 @@ export async function incorporarProtocolo(
   usuarioId: number | null,
 ): Promise<void> {
   const db = getDb();
-  // 5 parâmetros por linha → 18 linhas por statement (90 < 100 do D1).
+  // 5 parâmetros por linha (+ o protocolo, um só) → 18 linhas por statement (91 < 100 do D1).
   const stmts = [];
   for (let i = 0; i < entradas.length; i += 18) {
     stmts.push(
       db
         .insert(pcaDfds)
-        .values(entradas.slice(i, i + 18).map((e) => ({ pcaId, dfdId: e.dfdId, acao: e.acao, vinculadoPor: usuarioId, vinculadoEm: sql`(CURRENT_TIMESTAMP)` })))
-        .onConflictDoUpdate({ target: [pcaDfds.pcaId, pcaDfds.dfdId], set: { acao: sql`excluded.acao` } }),
+        .values(
+          entradas
+            .slice(i, i + 18)
+            .map((e) => ({ pcaId, dfdId: e.dfdId, acao: e.acao, vinculadoPor: usuarioId, vinculadoEm: sql`(CURRENT_TIMESTAMP)`, protocoloId })),
+        )
+        .onConflictDoUpdate({ target: [pcaDfds.pcaId, pcaDfds.dfdId], set: { acao: sql`excluded.acao`, protocoloId } }),
     );
   }
   const marca = db
@@ -399,25 +423,6 @@ export async function incorporarProtocolo(
     marca,
   ] as unknown as [typeof marca, ...(typeof marca)[]]);
   await sincronizarAtivosPca(pcaId, usuarioId);
-}
-
-/** Inativa os números dos itens cujo DFD deixou de ser VIGENTE no PCA (substituído/excluído por outro protocolo). */
-async function sincronizarAtivosPca(pcaId: number, usuarioId: number | null): Promise<void> {
-  const db = getDb();
-  const [vs, numerados] = await Promise.all([
-    vinculosDoPca(pcaId),
-    db
-      .selectDistinct({ dfdId: pcaItens.dfdId })
-      .from(pcaItens)
-      .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.ativo, true))),
-  ]);
-  const vig = new Set(consolidarPca(vs).vigentes);
-  const fora = numerados.map((r) => r.dfdId).filter((id): id is number => id != null && !vig.has(id));
-  for (const lote of lotesDeIds(fora))
-    await db
-      .update(pcaItens)
-      .set({ ativo: false, inativadoEm: sql`(CURRENT_TIMESTAMP)`, inativadoPor: usuarioId, motivo: "DFD substituído/excluído no PCA" })
-      .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.ativo, true), inArray(pcaItens.dfdId, lote)));
 }
 
 /** Itens numerados do PCA entre os `dfd_itens.id` dados — com a unidade do DFD (escopo) e o estado do número. */
@@ -442,7 +447,7 @@ export async function retirarItensDoPca(pcaId: number, dfdItemIds: number[], usu
   for (const lote of lotesDeIds(dfdItemIds))
     await getDb()
       .update(pcaItens)
-      .set({ ativo: false, inativadoEm: sql`(CURRENT_TIMESTAMP)`, inativadoPor: usuarioId, motivo: "Retirado do PCA" })
+      .set({ ativo: false, inativadoEm: sql`(CURRENT_TIMESTAMP)`, inativadoPor: usuarioId, motivo: MOTIVO_NUMERO.retirado })
       .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.ativo, true), inArray(pcaItens.dfdItemId, lote)));
 }
 
