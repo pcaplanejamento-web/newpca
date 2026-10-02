@@ -24,7 +24,9 @@ export function zipDaExtensao(arquivos: Record<string, string>, icone: Uint8Arra
       const m = JSON.parse(texto) as Record<string, unknown>;
       const icones = { 16: "icone.png", 32: "icone.png", 48: "icone.png", 128: "icone.png" };
       m.icons = icones;
-      m.action = { default_icon: icones, default_title: String(m.name ?? "") };
+      // O popup (andamento + Interromper) do manifesto fica; só o ícone entra.
+      const acao = m.action && typeof m.action === "object" ? (m.action as Record<string, unknown>) : {};
+      m.action = { ...acao, default_icon: icones, default_title: String(acao.default_title ?? m.name ?? "") };
       conteudo = `${JSON.stringify(m, null, 2)}\n`;
     }
     partes.push(...z.adicionar(nome, enc.encode(conteudo)));

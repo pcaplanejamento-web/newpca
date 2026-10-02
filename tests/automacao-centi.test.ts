@@ -97,7 +97,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.4.0"), false);
   assert.equal(versaoAtende("1.4.1"), false);
   assert.equal(versaoAtende("1.5.0"), false);
-  assert.equal(versaoAtende("1.6.0"), true);
+  assert.equal(versaoAtende("1.6.0"), false);
+  assert.equal(versaoAtende("1.7.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -487,7 +488,7 @@ test("travas da extensão: só o Emitir DFD, só o download do PDF e o estado le
   assert.match(main, /if \(!A\?\.operacaoDoCorpo\(c\)\) return \{ ok: false, erro: "Só a operação Emitir DFD é permitida\." \}/);
   assert.match(main, /if \(!ARQUIVO\.test\(new URL\(url\)\.pathname\)\) return \{ ok: false/);
   const bg = readFileSync("extensao-centi/background.js", "utf8");
-  assert.match(bg, /operacao: estado\?\.operacao \?\? null/);
+  assert.match(bg, /operacao: (r\.)?estado\?\.operacao \?\? null/);
 });
 
 test("destino “protocolo de cada DFD”: o Id da capa + o nº; nunca junta protocolos nem chuta", async () => {

@@ -109,6 +109,11 @@ type Resposta = {
   tela?: "login";
   /** O login automático da extensão (as credenciais ficam SÓ nela — aqui só a situação). */
   login?: { credenciais: boolean; auto: boolean; pausado: boolean; motivo: string | null } | null;
+  /** O lote foi INTERROMPIDO pela extensão (popup ou cartão na aba da automação). */
+  interrompido?: boolean;
+  /** O andamento do último lote, como a extensão o guardou (sobrevive ao F5 desta tela). */
+  atividade?: { estado: string; titulo: string; passo: string; atualizado: number } | null;
+  loteId?: string;
 };
 type TextoAlvo = { id: string; numero: string };
 const lerTextoAlvo = (v: unknown): TextoAlvo => {
@@ -129,9 +134,17 @@ function useExtensaoCenti() {
   const copias = useRef(new Map<string, string>());
   const seq = useRef(0);
   const pendentes = useRef(new Map<number, (r: Resposta) => void>());
+  // O LOTE em curso (o andamento vai à extensão — selo no ícone, cartão na aba da automação e popup) e a INTERRUPÇÃO
+  // pedida pela extensão: os pedidos do lote levam o id e a extensão recusa os que vêm depois de interromper.
+  const lote = useRef<string | null>(null);
+  const interrompido = useRef(false);
   useEffect(() => {
     const ouvir = (e: MessageEvent) => {
       if (e.source !== window || e.data?.fonte !== "pca-extensao") return;
+      if (e.data.tipo === "interrompido") {
+        if (lote.current && e.data.loteId === lote.current) interrompido.current = true;
+        return;
+      }
       if (e.data.tipo === "pronto") {
         // Vale a MAIOR versão anunciada (uma cópia antiga que ficou na aba também se anuncia).
         const v = String(e.data.versao ?? "");
@@ -167,10 +180,10 @@ function useExtensaoCenti() {
         window.clearTimeout(t);
         ok(r);
       });
-      window.postMessage({ fonte: "pca-automacao", v: versao.current, id, acao, dados }, window.location.origin);
+      window.postMessage({ fonte: "pca-automacao", v: versao.current, id, acao, dados, lote: lote.current ?? undefined }, window.location.origin);
     });
   }, []);
-  return { ext, pedir };
+  return { ext, pedir, lote, interrompido };
 }
 
 type Arquivo = { getFile: () => Promise<Blob>; createWritable: () => Promise<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> }> };
@@ -754,7 +767,7 @@ export function AutomacaoAdmin({
     ],
     [colunasGestao, naCentiCol],
   );
-  const { ext, pedir } = useExtensaoCenti();
+  const { ext, pedir, lote: loteRef, interrompido: interrompidoRef } = useExtensaoCenti();
   const [cfg, setCfg] = useState<ConfigCenti>(CONFIG_CENTI_PADRAO);
   const [saida, setSaida] = useState<OpcoesSaida>(OPCOES_SAIDA_PADRAO);
   const [mapa, setMapa] = useState<Record<string, string>>({});
@@ -922,11 +935,23 @@ export function AutomacaoAdmin({
     gravarLocal(CHAVE_ENTIDADES, n);
   }, []);
 
-  const verificar = useCallback(async () => {
-    const r = await pedir("estado", null, 8000);
-    setLogado(r);
-    if (r.ok && r.operacao) aplicarRef.current(r.operacao);
-  }, [pedir]);
+  // `abrir` = a extensão abre a ABA DA AUTOMAÇÃO na Centi se ela não existir (ao abrir esta tela e no Verificar; a
+  // conferência a cada 20 s não reabre a aba que o usuário fechou).
+  const avisouParada = useRef(false);
+  const verificar = useCallback(
+    async (abrir = false) => {
+      const r = await pedir("estado", abrir ? { abrir: true } : null, abrir ? 45_000 : 8000);
+      setLogado(r);
+      if (r.ok && r.operacao) aplicarRef.current(r.operacao);
+      // O lote parou porque esta tela foi recarregada (F5) no meio: avisa uma vez o último passo.
+      const a = r.atividade;
+      if (!avisouParada.current && a && a.estado === "parado" && Date.now() - a.atualizado < 30 * 60_000) {
+        avisouParada.current = true;
+        toast.info(`O último lote (${a.titulo}) parou: ${a.passo}`, 12_000);
+      }
+    },
+    [pedir],
+  );
   // LOGIN AUTOMÁTICO: a extensão entra com as credenciais guardadas NELA (o sistema só pede e mostra a situação).
   const [entrando, setEntrando] = useState(false);
   const entrarAgora = useCallback(async () => {
@@ -941,9 +966,18 @@ export function AutomacaoAdmin({
   // voltar à janela e a cada 20 s com a tela à vista (fora do meio de um lote — o canal fica com a Centi).
   const rodandoRef = useRef(false);
   rodandoRef.current = rodando;
+  // Sair desta tela no meio de um lote o PARA (a extensão não segue sozinha): avisa antes.
+  useEffect(() => {
+    if (!rodando) return;
+    const avisar = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [rodando]);
   useEffect(() => {
     if (!ext || !versaoAtende(ext.versao)) return;
-    void verificar();
+    void verificar(true);
     const ver = () => {
       if (document.visibilityState === "visible" && !rodandoRef.current) void verificar();
     };
@@ -1284,11 +1318,24 @@ export function AutomacaoAdmin({
         (ls ?? []).map((x) => (x.estado === "fila" ? { ...x, estado: "falha", erro: `Não emitido — o anexo anterior foi recusado (${motivo ?? "erro"}).` } : x)),
       );
     };
+    // O andamento vai à EXTENSÃO (selo no ícone, cartão na aba da automação e popup) — e de lá pode vir o INTERROMPER.
+    const totalDfds = fila.reduce((n, a) => n + a.partes.length, 0);
+    interrompidoRef.current = false;
+    const lt = await pedir("lote", { fase: "inicio", titulo: anexando ? "Anexar DFDs na Centi" : "Baixar DFDs da Centi", total: totalDfds }, 8000);
+    loteRef.current = lt.ok && typeof lt.loteId === "string" ? lt.loteId : null;
+    let feitos = 0;
+    const andamento = (texto: string) => {
+      const id = loteRef.current;
+      if (id) void pedir("lote", { fase: "passo", loteId: id, texto, feito: feitos, total: totalDfds }, 8000);
+    };
     for (const a of fila) {
-      if (parar) break;
+      if (parar || interrompidoRef.current) break;
       const uniao = a.partes.length > 1 ? await novaUniao() : null;
       const unidas: string[] = [];
       for (const t of a.partes) {
+        if (interrompidoRef.current) break;
+        feitos++;
+        andamento(`${anexando ? "Emitindo e anexando" : "Emitindo"} planejamento ${t.id}${t.dfd ? ` · DFD ${t.dfd}` : ""}`);
         marcar(t.chave, { estado: "baixando" });
         const r = await emitirNaEntidade(t, semSaida, atual);
         if (!r.pdf) {
@@ -1322,7 +1369,7 @@ export function AutomacaoAdmin({
           }
         }
       }
-      if (uniao && !uniao.vazio) {
+      if (uniao && !uniao.vazio && !interrompidoRef.current) {
         const res = await uniao
           .salvar()
           .then((b) => gravar(a, b, true))
@@ -1334,6 +1381,20 @@ export function AutomacaoAdmin({
         );
         if (anexando && !res.ok) pararAnexo(res.nota);
       }
+    }
+    // INTERROMPIDO pela extensão: o que estava na fila não roda (o que já foi salvo/anexado fica) e o lote é encerrado.
+    const foiInterrompido = interrompidoRef.current;
+    if (foiInterrompido) {
+      parar = true;
+      setLinhas((ls) =>
+        (ls ?? []).map((x) => (x.estado === "fila" || x.estado === "baixando" ? { ...x, estado: "falha", erro: "Interrompido na extensão." } : x)),
+      );
+      toast.info("Lote interrompido pela extensão — o que já tinha sido salvo ou anexado continua.", 10_000);
+    }
+    if (loteRef.current) {
+      const id = loteRef.current;
+      loteRef.current = null;
+      void pedir("lote", { fase: "fim", loteId: id, resumo: foiInterrompido ? "Interrompido na extensão." : parar ? "O lote parou." : "Lote terminado." }, 8000);
     }
     // Interrompida (falha do ambiente, anexo recusado): a execução é encerrada — os passos que sobraram não rodam.
     if (execucaoId != null && !anexando) {
@@ -1432,11 +1493,15 @@ export function AutomacaoAdmin({
             mostra cada lote, passo a passo.
           </p>
           <p>
-            <strong>Login automático:</strong> quando a aba da Centi cai na tela de login, a extensão entra sozinha com o usuário e
-            a senha guardados <strong>cifrados só nela</strong> (Configurar login → opções da extensão) — nunca no sistema. No
-            máximo uma tentativa a cada 5 minutos; se a Centi recusar a senha ou pedir uma verificação (captcha, código, troca
-            de senha), o login automático pausa até as credenciais serem salvas de novo. Sem aba da Centi, ela abre uma em
-            segundo plano.
+            <strong>Aba da automação:</strong> a extensão abre uma aba PRÓPRIA da Centi (no grupo azul “Automação PCA”) e trabalha
+            só nela — suas outras abas da Centi não são usadas. Atualizar (F5) esta tela ou a aba da automação não perde a
+            sessão: se a Centi pedir login, a extensão entra sozinha. <strong>Login:</strong> o usuário e a senha são salvos UMA
+            vez no banner da extensão (Configurar login), <strong>cifrados só nela</strong> — nunca no sistema. Depois de uma
+            falha, no máximo uma tentativa a cada 5 minutos; senha recusada ou verificação pedida (captcha, código, troca de
+            senha) pausa o login automático até salvar de novo. <strong>Andamento:</strong> o ícone da extensão conta os DFDs
+            (ex.: 3/15) e a aba da automação mostra um cartão com o passo atual; tocar no ícone ou no cartão permite{" "}
+            <strong>Interromper</strong> — o que já foi salvo ou anexado fica e nada novo começa. Sair desta tela no meio de um
+            lote o para.
           </p>
           <p>
             <strong>Instalar/atualizar a extensão:</strong> “Baixar extensão” → descompacte (na atualização, substitua os
@@ -1501,7 +1566,7 @@ export function AutomacaoAdmin({
               {logado?.erro ?? "Centi sem login"}
             </Badge>
           )}
-          <Button size="sm" variant="secondary" onClick={() => (ext ? void verificar() : window.location.reload())} title="Verificar a extensão e a Centi" aria-label="Verificar">
+          <Button size="sm" variant="secondary" onClick={() => (ext ? void verificar(true) : window.location.reload())} title="Verificar a extensão e a Centi" aria-label="Verificar">
             <IconRefresh className="h-4 w-4" />
           </Button>
           <Button size="sm" variant={atualizada ? "secondary" : "primary"} onClick={baixarExtensao} title={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}>

@@ -51,7 +51,7 @@
     levar(m.acao, m.dados).then((x) => {
       if (x.resposta) return responder(m.id, x.resposta);
       try {
-        chrome.runtime.sendMessage({ acao: x.acao, dados: x.dados, autorizado: x.autorizado }, (resposta) => {
+        chrome.runtime.sendMessage({ acao: x.acao, dados: x.dados, autorizado: x.autorizado, lote: typeof m.lote === "string" ? m.lote.slice(0, 64) : undefined }, (resposta) => {
           const erro = chrome.runtime.lastError;
           responder(m.id, erro ? { ok: false, erro: erro.message } : (resposta ?? { ok: false, erro: "Sem resposta da extensão." }));
         });
@@ -60,5 +60,13 @@
       }
     });
   });
+  // INTERROMPIDO pela extensão (popup ou cartão na aba da automação): a tela para o lote na hora.
+  try {
+    chrome.runtime.onMessage.addListener((msg, sender) => {
+      if (sender.id !== chrome.runtime.id || msg?.alvo !== "sistema" || msg.tipo !== "interrompido") return false;
+      window.postMessage({ fonte: "pca-extensao", v: V, tipo: "interrompido", loteId: msg.loteId ?? null }, origem);
+      return false;
+    });
+  } catch {}
   anunciar();
 })();

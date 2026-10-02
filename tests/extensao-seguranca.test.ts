@@ -4,60 +4,24 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { INICIO_CENTI, servicoFalso } from "./fixtures/chrome-falso.ts";
 
 const fonte = (n: string) => readFileSync(new URL(`../extensao-centi/${n}`, import.meta.url), "utf8");
-type Ouvinte = (m: unknown, sender: { url?: string }, responder?: (r: unknown) => void) => unknown;
-
+// O serviço com a ABA DA AUTOMAÇÃO já aberta (id 1) e a janela de confirmação respondendo `respostaJanela`.
 function serviço(respostaJanela: boolean | null) {
-  const ouvintes: Ouvinte[] = [];
-  const fechados: ((id: number) => void)[] = [];
-  const enviados: unknown[] = [];
-  let janelas = 0;
-  const sessao: Record<string, unknown> = {};
-  const chrome = {
-    runtime: {
-      getURL: (p: string) => `chrome-extension://abc/${p}`,
-      onInstalled: { addListener() {} },
-      onMessage: {
-        addListener: (f: Ouvinte) => ouvintes.push(f),
-        removeListener: (f: Ouvinte) => ouvintes.splice(ouvintes.indexOf(f), 1),
-      },
+  const s = servicoFalso({
+    confirmacao: respostaJanela,
+    abas: [{ id: 1, url: INICIO_CENTI }],
+    sessao: { abaAutomacao: 1 },
+  });
+  const anexos = () => s.enviados.filter((e) => e.m.alvo === "centi" && e.m.acao === "anexar");
+  return {
+    pedir: (msg: unknown) => s.pedir(msg),
+    get enviados() {
+      return anexos();
     },
-    windows: {
-      onRemoved: { addListener: (f: (id: number) => void) => fechados.push(f), removeListener() {} },
-      create: async ({ url }: { url: string }) => {
-        janelas++;
-        const pedido = new URL(url).searchParams.get("pedido");
-        setTimeout(() => {
-          if (respostaJanela === null) for (const f of [...fechados]) f(7);
-          else for (const f of [...ouvintes]) f({ tipo: "confirmacao", pedido, sim: respostaJanela }, { url });
-        }, 0);
-        return { id: 7 };
-      },
-      remove: async () => {},
-    },
-    storage: {
-      session: {
-        get: async (k: string) => ({ [k]: sessao[k] }),
-        set: async (o: Record<string, unknown>) => Object.assign(sessao, o),
-      },
-    },
-    tabs: {
-      query: async () => [{ id: 1 }],
-      sendMessage: async (_id: number, m: { acao: string }) => {
-        if (m.acao === "estado") return { ok: true, logado: true };
-        enviados.push(m);
-        return { ok: true, sequencial: "9" };
-      },
-    },
-    scripting: { executeScript: async () => [] },
+    janelas: () => s.janelas.filter((u) => u.includes("confirmar.html")).length,
   };
-  vm.runInNewContext(fonte("background.js"), { chrome, URL, URLSearchParams, crypto, setTimeout, clearTimeout, Promise });
-  const pedir = (msg: unknown) =>
-    new Promise((ok) => {
-      ouvintes[0](msg, { url: "https://governarv.com.br/painel/automacao" }, ok);
-    });
-  return { pedir, enviados, janelas: () => janelas };
 }
 
 const DADOS = { id: "2332778", numero: "156844", ano: "2026", descricao: "Planejamento 1 - DFD 2", pdf: "JVBER" };

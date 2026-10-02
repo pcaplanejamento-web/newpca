@@ -1527,4 +1527,5 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Receitas no motor**: baixar também vira execução registrada; a operação Emitir DFD aprendida fica no servidor (vale para todos os ADMs).
 ✅ **Gravador de receitas (1.5.0)**: grava só a estrutura dos pedidos da tela da Centi (sem valores) para montar as próximas receitas.
 ✅ **Login automático na Centi (1.6.0)**: usuário e senha cifrados só na extensão; entra sozinha quando a sessão cai (1 tentativa a cada 5 min, pausa se a senha for recusada ou a Centi pedir verificação); a tela mostra "Centi na tela de login" com "Entrar agora".
+✅ **Aba própria da automação (1.7.0)**: a extensão abre e usa só a aba "Automação PCA"; credenciais salvas uma vez num banner; andamento no ícone, num cartão na aba e no popup; Interromper pela extensão; F5 não perde a sessão.
 ⏳ **Próximas**: login automático (precisa do print da tela de login da Centi), receitas novas a partir de gravações (protocolos por repartição, relatórios, consultas, tramitar — esta por último, com validador próprio) e CSP de scripts (exige revisar pdf.js/OCR/Turnstile antes).

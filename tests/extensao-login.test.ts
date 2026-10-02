@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { INICIO_CENTI, pausa, servicoFalso, TELA } from "./fixtures/chrome-falso.ts";
 
 const fonte = (n: string) => readFileSync(new URL(`../extensao-centi/${n}`, import.meta.url), "utf8");
 
@@ -136,57 +137,35 @@ test("cofre: a senha cifrada não aparece em claro e só abre com a chave", asyn
   await assert.rejects(C.decifrarCom(await C.novaChave(), c));
 });
 
-// O serviço com um cofre falso: quando entra, quantas vezes e quando pausa.
+// O serviço com um cofre falso e a ABA DA AUTOMAÇÃO (id 1) na tela de login: quando entra, quantas vezes e quando pausa.
 function servico(o: { credenciais?: boolean; auto?: boolean; resultado?: string }) {
-  const ouvintes: ((m: unknown, s: { url?: string; id?: string }, r?: (x: unknown) => void) => unknown)[] = [];
-  const sessao: Record<string, unknown> = {};
-  const logins: unknown[] = [];
+  const C = cofre();
   const estadoCfg = { tem: o.credenciais !== false, auto: o.auto !== false, pausadoEm: null as number | null, motivo: null as string | null, ultima: null };
-  const ctx: Record<string, unknown> = { URL, URLSearchParams, crypto, setTimeout, clearTimeout, Promise };
-  vm.runInNewContext(fonte("cofre.js"), { ...ctx, btoa, atob, TextEncoder, TextDecoder, Uint8Array, globalThis: ctx });
-  const real = ctx.CofreCenti as { podeTentarLogin: unknown; INTERVALO_MS: number };
-  ctx.CofreCenti = {
-    podeTentarLogin: real.podeTentarLogin,
-    lerConfig: async () => ({ ...estadoCfg }),
-    credenciais: async () => (estadoCfg.tem ? { usuario: "maria", senha: "s3gredo" } : null),
-    pausar: async (m: string) => {
-      estadoCfg.pausadoEm = Date.now();
-      estadoCfg.motivo = m;
-    },
-    registrar: async () => {},
-  };
-  ctx.chrome = {
-    runtime: {
-      id: "ext",
-      getURL: (p: string) => `chrome-extension://ext/${p}`,
-      onInstalled: { addListener() {} },
-      onMessage: { addListener: (f: (typeof ouvintes)[0]) => ouvintes.push(f), removeListener() {} },
-      openOptionsPage: async () => {},
-    },
-    windows: { onRemoved: { addListener() {}, removeListener() {} }, create: async () => ({ id: 1 }), remove: async () => {} },
-    storage: { session: { get: async (k: string) => ({ [k]: sessao[k] }), set: async (x: Record<string, unknown>) => Object.assign(sessao, x) } },
-    tabs: {
-      query: async () => [{ id: 1 }],
-      create: async () => ({ id: 2 }),
-      sendMessage: async (_id: number, m: { alvo: string; acao?: string; usuario?: string }) => {
-        if (m.alvo === "centi-login") {
-          logins.push(m);
-          return { resultado: o.resultado ?? "recusado", erro: "Usuário ou senha inválidos" };
-        }
-        if (m.acao === "estado") return { ok: true, logado: false, tela: "login" };
-        return { ok: true };
+  const logins: unknown[] = [];
+  const s = servicoFalso({
+    abas: [{ id: 1, url: INICIO_CENTI }],
+    sessao: { abaAutomacao: 1 },
+    cofre: {
+      podeTentarLogin: C.podeTentarLogin,
+      lerConfig: async () => ({ ...estadoCfg }),
+      credenciais: async () => (estadoCfg.tem ? { usuario: "maria", senha: "s3gredo" } : null),
+      pausar: async (m: string) => {
+        estadoCfg.pausadoEm = Date.now();
+        estadoCfg.motivo = m;
       },
+      registrar: async () => {},
     },
-    scripting: { executeScript: async () => [] },
-  };
-  vm.runInNewContext(fonte("background.js"), ctx);
-  const pedir = (msg: unknown, url = "https://governarv.com.br/painel/automacao") =>
-    new Promise((ok) => {
-      ouvintes[0](msg, { url, id: "ext" }, ok);
-    });
-  return { pedir, logins, cfg: estadoCfg, ctx };
+    naAba: (_id, m) => {
+      if (m.alvo === "centi-login") {
+        logins.push(m);
+        return { resultado: o.resultado ?? "recusado", erro: "Usuário ou senha inválidos" };
+      }
+      if (m.acao === "estado") return { ok: true, logado: false, tela: "login" };
+      return undefined;
+    },
+  });
+  return { pedir: (msg: unknown, url = TELA) => s.pedir(msg, { url, tab: { id: 50 } }), logins, cfg: estadoCfg, s };
 }
-const pausa = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 test("serviço: aba na tela de login → avisa a tela e entra sozinho UMA vez; recusada = pausa", async () => {
   const s = servico({});
@@ -213,6 +192,29 @@ test("serviço: no máximo 1 tentativa a cada 5 min (sem resposta não pausa, ma
   assert.equal(s.cfg.pausadoEm, null);
 });
 
+test("serviço: sem credenciais, abre o BANNER das credenciais UMA vez (não em laço)", async () => {
+  const s = servico({ credenciais: false });
+  await s.pedir({ acao: "estado" });
+  await pausa(20);
+  await s.pedir({ acao: "estado" });
+  await pausa(20);
+  assert.equal(s.s.janelas.filter((u) => u.includes("credenciais.html")).length, 1);
+  // Pedido pelo usuário ("Configurar login") traz a janela à frente — aberta, não abre outra.
+  const r = (await s.pedir({ acao: "abrirOpcoes" })) as { ok: boolean };
+  assert.equal(r.ok, true);
+  assert.equal(s.s.janelas.filter((u) => u.includes("credenciais.html")).length, 1);
+});
+
+test("serviço: login com sucesso zera a espera (uma queda logo depois entra de novo)", async () => {
+  const s = servico({ resultado: "ok" });
+  await s.pedir({ acao: "estado" });
+  await pausa(20);
+  assert.equal(s.s.sessao.loginUltima, undefined);
+  await s.pedir({ acao: "estado" });
+  await pausa(20);
+  assert.equal(s.logins.length, 2);
+});
+
 test("serviço: sem credenciais ou com o automático desligado, não tenta", async () => {
   for (const o of [{ credenciais: false }, { auto: false }]) {
     const s = servico(o);
@@ -232,7 +234,7 @@ test("serviço: páginas de fora não pedem login nem abrem as opções", async 
 
 test("extensão: a senha nunca passa pelo mundo da página nem pela ponte do sistema", () => {
   const semComentarios = (t: string) => t.replace(/^\s*\/\/.*$/gm, "");
-  for (const n of ["centi-main.js", "centi-anexo.js", "sistema-ponte.js"]) assert.ok(!/senha/i.test(semComentarios(fonte(n))), n);
+  for (const n of ["centi-main.js", "centi-anexo.js", "sistema-ponte.js", "popup.js", "centi-painel.js"]) assert.ok(!/senha/i.test(semComentarios(fonte(n))), n);
   const ponte = fonte("centi-ponte.js");
   assert.ok(!/postMessage\([^)]*senha/i.test(ponte));
   assert.ok(!/sessionStorage/.test(ponte));

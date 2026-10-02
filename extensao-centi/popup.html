@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Automação PCA</title>
+<style>
+  :root { color-scheme: light dark; --fundo: #ffffff; --texto: #18181b; --suave: #52525b; --borda: #e4e4e7; --info: #2563eb; --ok: #16a34a; --alerta: #d97706; --erro: #dc2626; }
+  @media (prefers-color-scheme: dark) { :root { --fundo: #18181b; --texto: #fafafa; --suave: #a1a1aa; --borda: #3f3f46; } }
+  body { margin: 0; width: 340px; padding: 14px; background: var(--fundo); color: var(--texto); font: 13px/1.45 Inter, Roboto, system-ui, sans-serif; }
+  h1 { font-size: 15px; margin: 0 0 8px; }
+  .linha { display: flex; align-items: center; gap: 8px; }
+  .p { width: 8px; height: 8px; border-radius: 50%; background: var(--suave); flex: none; }
+  .p.ok { background: var(--ok); } .p.alerta { background: var(--alerta); } .p.erro { background: var(--erro); } .p.info { background: var(--info); }
+  .caixa { border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+  .titulo { font-weight: 700; }
+  .s { color: var(--suave); overflow-wrap: anywhere; }
+  .barra { height: 6px; border-radius: 3px; background: rgba(127,127,127,.2); overflow: hidden; margin: 8px 0; }
+  .barra > i { display: block; height: 100%; background: var(--info); width: 0; transition: width .3s; }
+  ol { margin: 6px 0 0; padding: 0 0 0 16px; max-height: 160px; overflow: auto; color: var(--suave); }
+  li { margin: 2px 0; }
+  .acoes { display: grid; gap: 8px; margin-top: 12px; }
+  button { min-height: 40px; padding: 0 12px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--borda); background: transparent; color: var(--texto); }
+  button.parar { background: var(--erro); border-color: var(--erro); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  [hidden] { display: none; }
+</style>
+</head>
+<body>
+  <h1>Automação PCA</h1>
+  <div class="linha"><span id="ponto" class="p"></span><span id="centi">Conferindo a Centi…</span></div>
+  <div id="atividade" class="caixa" hidden>
+    <div class="titulo" id="titulo"></div>
+    <div class="s" id="passo"></div>
+    <div class="barra"><i id="barra"></i></div>
+    <ol id="passos"></ol>
+  </div>
+  <div class="acoes">
+    <button id="parar" class="parar" type="button" hidden>Interromper</button>
+    <button id="aba" type="button">Ir para a aba da automação</button>
+    <button id="login" type="button">Login da Centi</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

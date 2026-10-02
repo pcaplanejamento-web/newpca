@@ -1,4 +1,5 @@
-// Página de opções da extensão: o usuário e a senha da Centi (cifrados no cofre — cofre.js) e o login automático.
+// O BANNER flutuante das credenciais da Centi (janela da própria extensão): salvar UMA vez (cifrado no cofre — cofre.js)
+// e entrar na hora pela aba da automação. Depois de entrar, fecha sozinho.
 (() => {
   const C = globalThis.CofreCenti;
   const $ = (id) => document.getElementById(id);
@@ -15,17 +16,17 @@
     const c = await C.lerConfig();
     $("auto").checked = c.auto;
     $("esquecer").disabled = !c.tem;
-    $("testar").disabled = !c.tem || !!c.pausadoEm;
     if (c.tem) {
       const cred = await C.credenciais().catch(() => null);
       if (cred && !$("usuario").value) $("usuario").value = cred.usuario;
       $("senha").placeholder = "•••••••• (salva — digite só para trocar)";
-    } else $("senha").placeholder = "Digite a senha da Centi";
+    } else $("senha").placeholder = "Senha da Centi";
     const ultima = c.ultima ? ` Última tentativa: ${quando(c.ultima.quando)} (${RESULTADO[c.ultima.resultado] ?? c.ultima.resultado}).` : "";
-    if (!c.tem) situacao("Sem credenciais: o login automático não roda.", "alerta");
+    if (!c.tem) situacao("Informe o usuário e a senha da Centi.", "alerta");
     else if (c.pausadoEm) situacao(`Pausado em ${quando(c.pausadoEm)}: ${c.motivo ?? ""}`, "erro");
     else if (!c.auto) situacao(`Credenciais salvas; login automático desligado.${ultima}`, "alerta");
     else situacao(`Pronto: entra sozinho quando a sessão cair.${ultima}`, "ok");
+    return c;
   }
 
   $("form").addEventListener("submit", async (e) => {
@@ -34,13 +35,28 @@
     let senha = $("senha").value;
     if (!senha) senha = (await C.credenciais().catch(() => null))?.senha ?? "";
     if (!usuario || !senha) return situacao("Informe o usuário e a senha.", "erro");
+    $("salvar").disabled = true;
     try {
       await C.salvar(usuario, senha, $("auto").checked);
       $("senha").value = "";
-      await mostrar();
     } catch {
-      situacao("Não consegui guardar as credenciais neste navegador.", "erro");
+      $("salvar").disabled = false;
+      return situacao("Não consegui guardar as credenciais neste navegador.", "erro");
     }
+    situacao("Salvo. Entrando na Centi pela aba da automação…");
+    try {
+      const r = await chrome.runtime.sendMessage({ tipo: "entrarAgora" });
+      if (r?.ok) {
+        situacao("Centi logada. Esta janela fecha sozinha.", "ok");
+        setTimeout(() => window.close(), 1500);
+        return;
+      }
+      situacao(r?.erro ?? "Não consegui entrar.", "erro");
+    } catch {
+      situacao("A extensão não respondeu.", "erro");
+    }
+    $("salvar").disabled = false;
+    setTimeout(() => mostrar(), 2500);
   });
   $("auto").addEventListener("change", async () => {
     if ((await C.lerConfig()).tem) {
@@ -55,17 +71,5 @@
     $("senha").value = "";
     await mostrar();
   });
-  $("testar").addEventListener("click", async () => {
-    $("testar").disabled = true;
-    situacao("Entrando na Centi…");
-    try {
-      const r = await chrome.runtime.sendMessage({ tipo: "entrarAgora" });
-      if (r?.ok) situacao("Centi logada.", "ok");
-      else situacao(r?.erro ?? "Não consegui entrar.", "erro");
-    } catch {
-      situacao("A extensão não respondeu.", "erro");
-    }
-    setTimeout(() => mostrar(), 2500);
-  });
-  mostrar();
+  mostrar().then((c) => (c.tem ? $("senha") : $("usuario")).focus());
 })();
