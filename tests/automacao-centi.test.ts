@@ -95,7 +95,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.21"), false);
   assert.equal(versaoAtende("1.3.22"), false);
   assert.equal(versaoAtende("1.4.0"), false);
-  assert.equal(versaoAtende("1.4.1"), true);
+  assert.equal(versaoAtende("1.4.1"), false);
+  assert.equal(versaoAtende("1.5.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -507,4 +508,33 @@ test("descrição canônica: a mesma do alvo autorizado (pré-verificação × r
   const { descricaoCanonica, textoAlvoAnexo } = await import("../src/lib/automacao-core.ts");
   const d = "  Planejamento 1 -  DFD 2 ";
   assert.equal(textoAlvoAnexo({ id: "1", numero: "2", ano: null, descricao: d }).split("|")[4], descricaoCanonica(d));
+});
+
+test("gravador de receitas: só a ESTRUTURA do pedido da Centi — nunca um valor", async () => {
+  const { readFileSync } = await import("node:fs");
+  const vm = await import("node:vm");
+  const ctx: Record<string, unknown> = { URL };
+  vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
+  const p = readFileSync("extensao-centi/centi-main.js", "utf8").match(/const PROTOCOLO = (\d+);/)?.[1];
+  const pecas = ctx[`__pcaCentiAnexo_p${p}`] as { estruturaDoPedido: (u: string, m: string, c: unknown) => unknown };
+  const e = JSON.parse(
+    JSON.stringify(
+      pecas.estruturaDoPedido(
+        "https://rioverde.centi.com.br/wcf/restauth/load?entity=102908&key=2332778",
+        "post",
+        JSON.stringify({ Token: "SEGREDO-123", Object: { Nome: "Fulano de Tal", Valor: 1500.5, Ativo: true, Itens: [{ Cpf: "12345678900" }], Nada: null } }),
+      ),
+    ),
+  );
+  assert.deepEqual(e, {
+    metodo: "POST",
+    caminho: "restauth/load",
+    entidade: "102908",
+    parametros: ["entity", "key"],
+    corpo: { Token: "texto", Object: { Nome: "texto", Valor: "número", Ativo: "sim/não", Itens: [{ Cpf: "texto" }], Nada: "nulo" } },
+  });
+  const texto = JSON.stringify(e);
+  for (const segredo of ["SEGREDO", "Fulano", "1500", "12345678900", "2332778"]) assert.ok(!texto.includes(segredo), segredo);
+  assert.equal(pecas.estruturaDoPedido("https://outro.site/api/x", "GET", null), null);
+  assert.equal(JSON.parse(JSON.stringify(pecas.estruturaDoPedido("https://rioverde.centi.com.br/wcf/rest/getbin/998877", "GET", undefined))).caminho, "rest/getbin/{n}");
 });

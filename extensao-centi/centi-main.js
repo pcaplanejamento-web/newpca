@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 26;
+  const PROTOCOLO = 27;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -115,6 +115,36 @@
     } catch {}
   }
 
+  // GRAVADOR de receitas (o ADM liga, faz a ação na tela da Centi, para): só a ESTRUTURA de cada pedido (nunca valores),
+  // guardada na aba (sessionStorage) — até 300 passos.
+  const GRAVADOR = "__pcaGravador_v1";
+  const lerGravador = () => {
+    try {
+      const g = JSON.parse(sessionStorage.getItem(GRAVADOR) || "null");
+      return g && Array.isArray(g.passos) ? { ativo: g.ativo === true, passos: g.passos } : { ativo: false, passos: [] };
+    } catch {
+      return { ativo: false, passos: [] };
+    }
+  };
+  function gravarPasso(url, metodo, corpo) {
+    try {
+      const g = lerGravador();
+      if (!g.ativo || g.passos.length >= 300) return;
+      const e = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.estruturaDoPedido(url, metodo, corpo);
+      if (!e) return;
+      g.passos.push({ ...e, em: new Date().toISOString() });
+      sessionStorage.setItem(GRAVADOR, JSON.stringify(g));
+    } catch {}
+  }
+  function gravador(d) {
+    const g = lerGravador();
+    if (d?.acao === "iniciar") sessionStorage.setItem(GRAVADOR, JSON.stringify({ ativo: true, passos: [] }));
+    else if (d?.acao === "parar") sessionStorage.setItem(GRAVADOR, JSON.stringify({ ativo: false, passos: g.passos }));
+    else if (d?.acao === "limpar") sessionStorage.removeItem(GRAVADOR);
+    const atual = lerGravador();
+    return { ok: true, gravando: atual.ativo, passos: atual.passos };
+  }
+
   const abrir = XMLHttpRequest.prototype.open;
   const definir = XMLHttpRequest.prototype.setRequestHeader;
   const enviar = XMLHttpRequest.prototype.send;
@@ -132,6 +162,7 @@
     if (this.__pcaUrl && !this.__pcaInterno) {
       guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo, "xhr");
       aprenderOperacao(this.__pcaUrl, this.__pcaMetodo, r[0]);
+      gravarPasso(this.__pcaUrl, this.__pcaMetodo, r[0]);
     }
     if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/")) this.addEventListener("load", () => trocarToken(tokenDoXhr(this)));
     return enviar.apply(this, r);
@@ -152,6 +183,7 @@
       const metodo = init?.method || (typeof rec === "object" ? rec.method : "GET");
       guardar(url, Object.fromEntries(hs.entries()), metodo, "fetch");
       aprenderOperacao(url, metodo, init?.body);
+      gravarPasso(url, metodo, init?.body);
     } catch {}
     return comToken(buscar.call(this, rec, init, ...resto));
   };
@@ -506,7 +538,7 @@
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
   }
 
-  const ACOES = { pedir, protocolo, anexar };
+  const ACOES = { pedir, protocolo, anexar, gravador };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;

@@ -104,6 +104,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
 import { IntegracaoGoogle, type ValorGoogle } from "@/components/IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "@/components/IntegracaoResend";
+import { GravadorReceitas } from "@/components/GravadorReceitas";
 import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
 import { IndicadorTrello, seloTrello } from "@/components/SincronizacaoTrello";
 import {
@@ -4034,6 +4035,9 @@ export function Catalogo() {
       <Secao titulo="IntegracaoResend (Integrações → E-mail/Resend: chave write-only, remetente do domínio verificado, endereço do sistema; testar confere o domínio e envia um e-mail de teste)">
         <IntegracaoResendDemo />
       </Secao>
+      <Secao titulo="GravadorReceitas (Automação → Gravador: a ESTRUTURA dos pedidos que a tela da Centi fez — método, caminho, parâmetros e os campos com o tipo, nunca valores; Copiar a gravação)">
+        <GravadorReceitasDemo />
+      </Secao>
       <Secao titulo="IntegracaoGoogle (Integrações → Login com Google: Client ID, Client secret write-only e a URI de redirecionamento a cadastrar no Google; e-mail novo vira cadastro pendente)">
         <IntegracaoGoogleDemo />
       </Secao>
@@ -4138,6 +4142,26 @@ function IntegracaoGoogleDemo() {
 }
 
 /** Demonstração do cartão do Resend (domínio já verificado). */
+function GravadorReceitasDemo() {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
+        Ver uma gravação
+      </Button>
+      {aberto && (
+        <GravadorReceitas
+          onFechar={() => setAberto(false)}
+          passos={[
+            { metodo: "POST", caminho: "restauth/load", entidade: "102908", parametros: ["entity", "key"], corpo: null },
+            { metodo: "POST", caminho: "restauth/operation", entidade: null, parametros: [], corpo: { ModuleKey: "número", Guid: "texto", Params: [{ Key: "texto", Value: "texto" }] } },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
 function IntegracaoResendDemo() {
   const [v, setV] = useState<ValorResend>({ ativo: true, apiKey: "", remetente: "Plataforma PCA <avisos@governarv.com.br>", urlSistema: "https://governarv.com.br" });
   return (

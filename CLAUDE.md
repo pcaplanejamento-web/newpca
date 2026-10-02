@@ -3462,6 +3462,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   lotes de 50 por `concluirPassos`; o que o lote não chegou a emitir = "falhou"); ANEXAR já era (`anexar-dfds`). A
   OPERAÇÃO Emitir DFD aprendida da tela da Centi vai à configuração do servidor (`PATCH …/config {operacao}`, só quando
   muda — `chaveOp`) e a tela aplica a do servidor ao abrir (sem aviso): o que um ADM aprendeu vale para todos.
+  **GRAVADOR DE RECEITAS (extensão 1.5.0, protocolo 27):** Ajustes → "Gravar uma ação na Centi" liga o gravador NA ABA da
+  Centi (`gravador` {iniciar|parar|limpar} no `centi-main.js`, sessionStorage `__pcaGravador_v1`, até 300 passos); cada
+  pedido que a TELA da Centi faz em `/wcf/` vira só a ESTRUTURA — `estruturaDoPedido` (peça pura do `centi-anexo.js`,
+  testada: método, caminho com números trocados por `{n}`, a `entity`, os NOMES dos parâmetros e os campos do corpo com o
+  TIPO; nunca um valor, token ou dado pessoal). Parar abre o **`GravadorReceitas`** (DS: a tabela + "Copiar a gravação") —
+  a base para montar as próximas receitas (protocolos por repartição, relatórios, consultas, tramitar) sem chute. O serviço
+  só aceita as ações `pedir`/`protocolo`/`anexar`/`gravador`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

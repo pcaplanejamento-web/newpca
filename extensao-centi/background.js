@@ -95,7 +95,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     if (!aba) return { ok: false, erro };
     // O estado vai inteiro: a entidade aberta e a OPERAÇÃO Emitir DFD que a extensão pegou da tela da Centi.
     if (msg.acao === "estado") return { ok: true, logado: true, entidade: estado?.entidade ?? null, operacao: estado?.operacao ?? null };
-    if (!["pedir", "protocolo", "anexar"].includes(msg.acao)) return { ok: false, erro: "Ação desconhecida." };
+    if (!["pedir", "protocolo", "anexar", "gravador"].includes(msg.acao)) return { ok: false, erro: "Ação desconhecida." };
     if (msg.acao === "anexar") {
       // Só com a autorização já consumida no sistema pela ponte, para ESTE alvo (Id + nº + descrição do pedido).
       const a = msg.autorizado;

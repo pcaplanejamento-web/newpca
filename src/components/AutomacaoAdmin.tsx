@@ -71,6 +71,7 @@ import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
+import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
 import { HistoricoExecucoes } from "./HistoricoExecucoes";
 
 // Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) por PROTOCOLO do sistema (uma pasta
@@ -391,7 +392,12 @@ function Ajustes({
   gravacao,
   onGravacao,
   onHistorico,
+  gravando,
+  onGravador,
 }: {
+  /** O gravador de receitas na aba da Centi (null = desconhecido). */
+  gravando: boolean | null;
+  onGravador: (acao: "iniciar" | "parar") => void;
   /** O freio de emergência da plataforma (null = não lido). */
   gravacao: boolean | null;
   onGravacao: (ativa: boolean) => void;
@@ -423,6 +429,14 @@ function Ajustes({
         />
         <Button size="sm" variant="secondary" onClick={onHistorico}>
           Histórico das execuções
+        </Button>
+      </Grupo>
+      <Grupo titulo="Gravador de receitas">
+        <p className="text-xs text-muted">
+          Grava a FORMA dos pedidos que a tela da Centi faz (sem valores) — ligue, faça a ação lá e pare para ver e copiar.
+        </p>
+        <Button size="sm" variant={gravando ? "danger" : "secondary"} onClick={() => onGravador(gravando ? "parar" : "iniciar")} disabled={gravando === null}>
+          {gravando ? "Parar e ver a gravação" : "Gravar uma ação na Centi"}
         </Button>
       </Grupo>
       <Grupo titulo="Destino">
@@ -930,6 +944,19 @@ export function AutomacaoAdmin({
   // O FREIO de emergência (Configuração da plataforma, no servidor): desligado, nenhuma gravação na Centi passa.
   const [gravacao, setGravacao] = useState<boolean | null>(null);
   const [historico, setHistorico] = useState(false);
+  // O GRAVADOR de receitas (na aba da Centi): ligar → o ADM faz a ação lá → parar mostra a estrutura gravada.
+  const [gravando, setGravando] = useState(false);
+  const [gravados, setGravados] = useState<PassoGravado[] | null>(null);
+  const usarGravador = async (acao: "iniciar" | "parar") => {
+    const r = (await pedir("gravador", { acao }, 8000)) as Resposta & { gravando?: boolean; passos?: PassoGravado[] };
+    if (!r.ok) {
+      toast.error(`Gravador: ${r.erro ?? "a extensão não respondeu."}`);
+      return;
+    }
+    setGravando(r.gravando === true);
+    if (acao === "iniciar") toast.info("Gravando: faça a ação na tela da Centi e volte para parar.", 10_000);
+    else setGravados(r.passos ?? []);
+  };
   useEffect(() => {
     fetch("/api/admin/automacao/config")
       .then((r) => r.json())
@@ -1486,6 +1513,8 @@ export function AutomacaoAdmin({
               gravacao={gravacao}
               onGravacao={(v) => void mudarGravacao(v)}
               onHistorico={() => setHistorico(true)}
+              gravando={pronto ? gravando : null}
+              onGravador={(a) => void usarGravador(a)}
             />
           </Dropdown>
         </div>
@@ -1544,6 +1573,7 @@ export function AutomacaoAdmin({
         onAlterado={() => router.refresh()}
       />
       {historico && <HistoricoExecucoes onFechar={() => setHistorico(false)} />}
+      {gravados && <GravadorReceitas passos={gravados} onFechar={() => setGravados(null)} />}
       {confirmacao}
     </div>
   );

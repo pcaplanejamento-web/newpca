@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p26";
+  const NOME = "__pcaCentiAnexo_p27";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -275,8 +275,49 @@
     return { moduleKey: c.ModuleKey, guid, assinatura };
   }
 
+  // GRAVADOR de receitas: a ESTRUTURA de um pedido que a tela da Centi fez — método, caminho, os NOMES dos parâmetros e dos
+  // campos do corpo com o TIPO de cada um. Nunca um valor (nem token, senha, nome ou número): só a forma.
+  const TIPOS = (v) => (v === null ? "nulo" : Array.isArray(v) ? "lista" : typeof v === "number" ? "número" : typeof v === "boolean" ? "sim/não" : typeof v === "string" ? "texto" : "objeto");
+  function forma(v, prof) {
+    if (prof > 4) return "…";
+    if (Array.isArray(v)) return v.length ? [forma(v[0], prof + 1)] : [];
+    if (v && typeof v === "object") {
+      const o = {};
+      for (const k of Object.keys(v).slice(0, 60)) o[k] = forma(v[k], prof + 1);
+      return o;
+    }
+    return TIPOS(v);
+  }
+  function estruturaDoPedido(url, metodo, corpo) {
+    let u;
+    try {
+      u = new URL(String(url), "https://rioverde.centi.com.br");
+    } catch {
+      return null;
+    }
+    const i = u.pathname.indexOf("/wcf/");
+    if (i < 0) return null;
+    const caminho = u.pathname.slice(i + 5).replace(/\/\d+(?=\/|$)/g, "/{n}");
+    const entidade = u.searchParams.get("entity");
+    let c = corpo;
+    if (typeof c === "string") {
+      try {
+        c = JSON.parse(c);
+      } catch {
+        c = c ? "texto (não JSON)" : undefined;
+      }
+    } else if (c != null && typeof c === "object" && !Array.isArray(c) && Object.getPrototypeOf(c) !== Object.prototype) c = "binário/formulário";
+    return {
+      metodo: String(metodo || "GET").toUpperCase(),
+      caminho,
+      entidade: entidade && /^\d{1,9}$/.test(entidade) ? entidade : null,
+      parametros: [...new Set([...u.searchParams.keys()])].slice(0, 30),
+      corpo: c === undefined ? null : typeof c === "string" ? c : forma(c, 0),
+    };
+  }
+
   globalThis[NOME] = Object.freeze({
     comTokenNovo,
     operacaoDoCorpo,
-    renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();
