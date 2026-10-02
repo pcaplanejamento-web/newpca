@@ -3611,7 +3611,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   diagnóstico (`BaixarCenti` → `DownloadCenti {status, bytes}`).
   **Só por código (sistema, sem mudar a extensão):** com o "Emitir documentos" já aprendido, a emissão NUNCA cai para a
   tela da Centi — a tela só é usada UMA vez para ensinar (sistema sem o modelo, ou o navegador ainda não o aprendeu:
-  `emitirPorCodigo` → `{recusada}`); sem o Id na grade = erro claro. **A chave achada sozinha:** `analisarRespostaCenti`
+  `emitirPorCodigo` → `{recusada}`); sem o Id na grade = erro claro. **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
+  o parâmetro do modo assíncrono (`ehParamAssincrono`: Assincrono/Assync/Async) como "não" no formato capturado
+  (`valorSincrono`) — no assíncrono a Centi gera em segundo plano e a chave dá 404; o diagnóstico mostra os parâmetros ENVIADOS. **A chave achada sozinha:** `analisarRespostaCenti`
   devolve, além do `File.Key`, as OUTRAS chaves (GUIDs) e os links de arquivo de TODA a resposta (`outras`/`links`) e o
   esqueleto (`amostra`); `caminhosDoArquivo` tenta todos (links → a chave → as outras, sem repetir). **O arquivo gerado
   depois:** `pdfDoAchado(…, {esperarMs})` — enquanto TUDO der 404, espera crescente (2 s, 4 s… até 15 s) e tenta de novo até o

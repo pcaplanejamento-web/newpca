@@ -243,3 +243,28 @@ test("tela protocolo: o Emitir documentos aprendido da tela vira a emissão POR 
     natureza: "",
   });
 });
+
+test("tela protocolo: a emissão por código sai SÍNCRONA (Assíncrono = não, no formato capturado)", async () => {
+  const { corpoEmissaoProtocolo, ehParamAssincrono, valorSincrono } = await import("../src/lib/automacao-tela-protocolo.ts");
+  for (const k of ["Assincrono", "ASSÍNCRONO", "AssincronoEmissao", "Async", "Assync"]) assert.equal(ehParamAssincrono(k), true, k);
+  for (const k of ["Background", "IdProtocolo", "Documentos", "SendMail"]) assert.equal(ehParamAssincrono(k), false, k);
+  assert.deepEqual(["true", "True", "TRUE", "1", "S", "s", "Sim", "SIM", "Y", "x"].map(valorSincrono), ["false", "False", "FALSE", "0", "N", "n", "Não", "NÃO", "N", "0"]);
+  const e = {
+    moduleKey: 122310,
+    guid: "fe4d8f41-c3e6-77e5-8e58-94654fefe22e",
+    param: "IdProtocolo",
+    params: [
+      { Key: "IdProtocolo", Value: "2328622" },
+      { Key: "Assincrono", Value: "true" },
+      { Key: "Documentos", Value: "1;2" },
+      { Key: "Background", Value: "0" },
+    ],
+  };
+  const corpo = corpoEmissaoProtocolo(e, "2273524");
+  assert.deepEqual(corpo?.Params, [
+    { Key: "IdProtocolo", Value: "2273524" },
+    { Key: "Assincrono", Value: "false" },
+    { Key: "Documentos", Value: "1;2" },
+    { Key: "Background", Value: "0" },
+  ]);
+});

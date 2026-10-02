@@ -493,11 +493,35 @@ export function coerceEmissaoProtocolo(v: unknown): EmissaoProtocolo | null {
   return params.some((x) => x.Key === param) ? { moduleKey: o.moduleKey as number, guid: String(o.guid).toLowerCase(), params, param } : null;
 }
 
-/** O corpo do operation para emitir os documentos do protocolo `id`. */
+/** O parâmetro do modo ASSÍNCRONO do "Emitir documentos" (sem acento/caixa: Assincrono, Assync…, Async…). */
+export const ehParamAssincrono = (key: string) =>
+  /^(assincron|assync|async)/.test(
+    key
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase(),
+  );
+
+/** O "não" no MESMO formato do valor capturado (true→false, 1→0, S→N, Sim→Não, Y→N); desconhecido = "0". */
+export function valorSincrono(v: string): string {
+  const t = v.trim();
+  const n = t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (n === "true" || n === "false") return t[0] === "T" ? (t === "TRUE" ? "FALSE" : "False") : "false";
+  if (n === "sim" || n === "nao") return t === t.toUpperCase() ? "NÃO" : "Não";
+  if (n === "s" || n === "n") return t === t.toLowerCase() ? "n" : "N";
+  if (n === "y") return t === "y" ? "n" : "N";
+  return "0";
+}
+
+/** O corpo do operation para emitir os documentos do protocolo `id` — sempre SÍNCRONO: no modo assíncrono a Centi gera
+ * o documento em segundo plano e a chave devolvida não aponta para um arquivo pronto (getbinlink 404). */
 export function corpoEmissaoProtocolo(e: EmissaoProtocolo, id: string): { ModuleKey: number; Guid: string; Params: { Key: string; Value: string }[] } | null {
   const v = soDigitos(id).replace(/^0+(?=\d)/, "");
   if (!v) return null;
-  return { ModuleKey: e.moduleKey, Guid: e.guid, Params: e.params.map((x) => (x.Key === e.param ? { Key: x.Key, Value: v } : x)) };
+  const Params = e.params.map((x) =>
+    x.Key === e.param ? { Key: x.Key, Value: v } : ehParamAssincrono(x.Key) ? { Key: x.Key, Value: valorSincrono(x.Value) } : x,
+  );
+  return { ModuleKey: e.moduleKey, Guid: e.guid, Params };
 }
 
 /** O mesmo modelo (para só gravar no servidor quando mudou). */

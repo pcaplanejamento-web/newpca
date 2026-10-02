@@ -326,7 +326,8 @@ export function TarefaTelaProtocolo({
       x = await pdfDaEmissao(r.arquivo);
     }
     if ("erro" in x) {
-      const op = emissao ? `operação: ModuleKey ${emissao.moduleKey} · ${emissao.params.map((q) => `${q.Key}=${q.Key === emissao.param ? "<Id>" : q.Value}`).join("; ")}` : "";
+      const enviado = emissao ? corpoEmissaoProtocolo(emissao, id || "0") : null;
+      const op = emissao && enviado ? `operação enviada: ModuleKey ${emissao.moduleKey} · ${enviado.Params.map((q) => `${q.Key}=${q.Key === emissao.param ? "<Id>" : q.Value}`).join("; ")}` : "";
       return falhar(x.erro, [x.amostra, op].filter(Boolean).join("\n"));
     }
     const file = new File([comoBlob(x.pdf)], nomePdfEmAnalise(p), { type: "application/pdf" });
