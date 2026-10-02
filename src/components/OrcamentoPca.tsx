@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
-import { brl, brlCompact, num } from "@/lib/format";
+import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
+import { blocosRelatorioOrcamento, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
 import {
   comparativoPorOrgao,
   comparativoPorUnidade,
@@ -23,14 +24,17 @@ import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-es
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
 import { Badge } from "./Badge";
+import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useQuemExporta } from "./ConfigTabelas";
 import { type Column, DataTable } from "./DataTable";
-import { IconInfo } from "./icons";
+import { IconFile, IconInfo } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
+import { toast } from "./Toast";
 
 type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
@@ -191,6 +195,41 @@ function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; abe
 }
 
 /** Barra de porcentagem do comparativo (verde < 90% · âmbar 90–100% · vermelho > 100%). */
+/**
+ * "Relatório da composição" (PDF, A4): busca no servidor o que a VISÃO considera (igual para todas as unidades), o que
+ * cada VÍNCULO atribui a cada unidade (unidade do CUBO + ações) e o que fica de fora, e gera o documento didático
+ * (`blocosRelatorioOrcamento` → `baixarDocumentoPdf`). O código do PDF só é carregado no clique.
+ */
+function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
+  const [gerando, setGerando] = useState(false);
+  const quem = useQuemExporta();
+  async function gerar() {
+    if (gerando) return;
+    setGerando(true);
+    try {
+      const r = await fetch(`/api/pca/${pcaId}/orcamento/relatorio`);
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; relatorio?: RelatorioOrcamento };
+      if (!r.ok || !j.ok || !j.relatorio) throw new Error(j.error ?? "Não foi possível montar o relatório.");
+      const rel = j.relatorio;
+      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
+      const titulo = `Composição do orçamento por unidade · PCA ${rel.pca.nome}`;
+      await baixarDocumentoPdf(nomeArquivoPdf(`Composição do orçamento - ${rel.pca.nome}`, dataIsoBrasilia(new Date().toISOString())), {
+        titulo,
+        blocos: blocosRelatorioOrcamento(rel),
+      }, { usuario: quem });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o relatório.");
+    } finally {
+      setGerando(false);
+    }
+  }
+  return (
+    <Button size="sm" variant="secondary" className="ml-auto" icon={<IconFile className="h-4 w-4" />} loading={gerando} onClick={gerar}>
+      Relatório da composição (PDF)
+    </Button>
+  );
+}
+
 /** A cor do TEXTO da linha no comparativo = a da Diferença (negativa = vermelho, senão verde) — a tela e o PDF. */
 const corDaDiferenca = (l: Pick<LinhaComparativo, "diferenca">) => (l.diferenca < 0 ? "var(--danger)" : "var(--ok)");
 
@@ -455,6 +494,7 @@ export function OrcamentoPca({
                 { value: "dentro", label: `Dentro (${linhas.length - acima.length})` },
               ]}
             />
+            {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
           </div>
           <DataTable
             columns={cols}

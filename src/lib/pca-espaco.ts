@@ -20,6 +20,7 @@ import { TIPO_DFD_ROTULO, TIPOS_DFD } from "./avaliacao-core";
 import { getDb } from "./db";
 import { getDfd } from "./dfd";
 import { normUnidadeMedida } from "./normalize";
+import { type RelatorioOrcamento, relatorioOrcamentoPca } from "./orcamento-relatorio";
 import { aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento } from "./orcamento-visao";
 import { comVinculos, mapaVinculos, unidadeDoLancamento } from "./orcamento-vinculo";
 import { listarVinculosOrcamento } from "./orcamento";
@@ -976,7 +977,9 @@ export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnTy
   return memoPorVersao(`orc:${chavePca(pca)}:${orc?.id ?? ""}`, () => calcularOrcamentoDoPca(pca, orc));
 }
 
-async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
+/** O que o orçamento do PCA lê do banco: a visão, as unidades (com o órgão), os órgãos, os vínculos e os lançamentos do CUBO
+ * (todas as dimensões — senão o filtro da visão não casa). A MESMA base do comparativo e do relatório da composição. */
+async function baseOrcamentoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>) {
   const db = getDb();
   const [visao, repsBrutas, orgs, vincs] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
@@ -994,27 +997,33 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     orgaoSigla: r.orgaoId != null ? (siglaOrgao.get(r.orgaoId) ?? null) : null,
     oculta: r.oculta === true,
   }));
+  const itens = orc
+    ? await db
+        .select({
+          id: orcamentoItens.id,
+          orgao: orcamentoItens.orgao,
+          unidade: orcamentoItens.unidade,
+          funcao: orcamentoItens.funcao,
+          programa: orcamentoItens.programa,
+          acao: orcamentoItens.acao,
+          nomeElemento: orcamentoItens.nomeElemento,
+          codigoElemento: orcamentoItens.codigoElemento,
+          ficha: orcamentoItens.ficha,
+          fonte: orcamentoItens.fonte,
+          valor: orcamentoItens.valorInicial,
+        })
+        .from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, orc.id))
+    : [];
+  return { visao, reps, orgaoLista, vincs, itens };
+}
+
+async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
+  const { visao, reps, orgaoLista, vincs, itens } = await baseOrcamentoPca(pca, orc);
   let bruto = 0;
   let filtrado = 0;
   let linhas: OrcamentoDoPca["linhas"] = [];
   if (orc) {
-    const itens = await db
-      // Todas as DIMENSÕES da visão (inclui Função/Programa/Ação/Ficha/Fonte do CUBO novo) — senão o filtro não casa.
-      .select({
-        id: orcamentoItens.id,
-        orgao: orcamentoItens.orgao,
-        unidade: orcamentoItens.unidade,
-        funcao: orcamentoItens.funcao,
-        programa: orcamentoItens.programa,
-        acao: orcamentoItens.acao,
-        nomeElemento: orcamentoItens.nomeElemento,
-        codigoElemento: orcamentoItens.codigoElemento,
-        ficha: orcamentoItens.ficha,
-        fonte: orcamentoItens.fonte,
-        valor: orcamentoItens.valorInicial,
-      })
-      .from(orcamentoItens)
-      .where(eq(orcamentoItens.orcamentoId, orc.id));
     bruto = itens.reduce((s, i) => s + Number(i.valor ?? 0), 0);
     // A visão filtra só o que NÃO é do vínculo (função, programa, elemento, código, ficha, fonte); a unidade de cada
     // lançamento vem SÓ do vínculo pela ação (`unidadeDoLancamento`) — os dois nunca disputam o mesmo lançamento.
@@ -1049,6 +1058,25 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     previa = c.previa;
   }
   return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa };
+}
+
+/**
+ * O RELATÓRIO DA COMPOSIÇÃO do orçamento do PCA (PCA × Orçamento → "Relatório"): a mesma base do comparativo + as
+ * contratações por unidade, calculado pelo núcleo puro `relatorioOrcamentoPca`. Sem ano/orçamento ⇒ `null`.
+ */
+export async function relatorioOrcamentoDoPca(pca: PcaEspaco): Promise<RelatorioOrcamento | null> {
+  const orc = await orcamentoDoAno(pca.ano);
+  if (!orc) return null;
+  const [base, resumo] = await Promise.all([baseOrcamentoPca(pca, orc), orcamentoDoPca(pca, orc)]);
+  return relatorioOrcamentoPca({
+    pca: { nome: pca.nome, ano: pca.ano },
+    orcamento: { nome: orc.nome, ano: orc.ano },
+    visao: base.visao ? { nome: base.visao.nome, filtros: base.visao.filtros } : null,
+    lancamentos: base.itens.map((i) => ({ ...i, valor: Number(i.valor ?? 0) })),
+    vinculos: base.vincs,
+    unidades: base.reps.map((r) => ({ id: r.id, sigla: r.sigla, nome: r.nome, orgaoSigla: r.orgaoSigla })),
+    planejado: resumo.planejado.map((p) => ({ unidadeId: p.unidadeId, valor: p.valor })),
+  });
 }
 
 /** DFDs (id + protocolo) dos protocolos dados. */

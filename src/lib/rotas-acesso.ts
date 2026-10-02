@@ -201,6 +201,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     DELETE: tela("pca", "excluir", "devolve os protocolos à Mesa e desfaz as incorporações"),
   },
   "pca/[id]/capa": { GET: tela("pca", "visualizar") },
+  "pca/[id]/orcamento/relatorio": { GET: tela("pca", "exportar") },
   "pca/[id]/itens": { POST: naMesa(tela("pca", "excluir", "retirar itens do PCA")) },
   "pca/[id]/planilhas/[unidadeId]": { DELETE: tela("pca", "excluir") },
   "pca/[id]/protocolos": { POST: naMesa(tela("pca", "manipular", "enviar também exige Manipular na Mesa (recusa)")) },

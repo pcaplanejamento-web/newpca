@@ -1946,7 +1946,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`comparativoPorOrgao`/`origemDoOrgao`, a origem soma igual à linha); na visão Unidade, a coluna Órgão + o selo "Oculta"
   (duas unidades de MESMA sigla — ex.: a própria de um órgão dual — aparecem distintas). **`siglasDivididas`** acusa a
   sigla com os DFDs numa unidade e o CUBO noutra (vínculo errado) num `Callout` com o link para Orçamento → Vínculos (cujo
-  seletor mostra o órgão quando a sigla se repete). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
+  seletor mostra o órgão quando a sigla se repete). **RELATÓRIO DA COMPOSIÇÃO (PDF A4, didático):** o botão
+  "Relatório da composição (PDF)" na linha de controles do PCA × Orçamento (quem Exporta no PCA) → `GET
+  /api/pca/[id]/orcamento/relatorio` (`relatorioOrcamentoDoPca`, a MESMA base do comparativo — `baseOrcamentoPca` em
+  `pca-espaco.ts`) → núcleo PURO **`orcamento-relatorio.ts`** (`relatorioOrcamentoPca` + `blocosRelatorioOrcamento`, testado):
+  como se calcula + a conta que FECHA (inteiro = retirado pela visão + atribuído às unidades + sem vínculo), o resumo por
+  unidade (o MESMO "Orçamento considerado" da tabela), PARTE 1 a visão (igual para todas as unidades — por dimensão o que
+  entra e o que fica fora), PARTE 2 cada unidade cadastrada com os vínculos (unidade do CUBO + regra + cada ação: no CUBO,
+  retirado pela visão, considerado; ações fora e o destino delas) e PARTE 3 o que NÃO foi considerado (retirado pela visão
+  por unidade do CUBO, na visão sem vínculo por ação, unidades com contratações e sem orçamento). O PDF é o gerador de
+  DOCUMENTO genérico **`documento-pdf-core.ts`** (layout PURO por blocos — título, seção, subseção, parágrafo, lista,
+  destaques, nota, tabela; A4 em pé, nada cortado, cabeçalho de tabela repetido, título nunca órfão, topo + "Gerado por …
+  · Página N de M") + `documento-pdf.ts` (desenha com o pdf-lib, carregado no clique). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
   vistas (`Segmented` no início da linha de controles — `OrcamentoComparativo.inicio`; **PCA × Orçamento** primeiro e aberto, depois
   o Comparativo): **Comparativo** = o MESMO
   `OrcamentoComparativo` da tela do orçamento, sobre o orçamento do ANO do PCA (`orcamentoDoAno` — o importado por último,
