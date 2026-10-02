@@ -229,20 +229,12 @@ export function TarefaTelaProtocolo({
       return n;
     });
 
-  /**
-   * O PDF de uma resposta da Centi ao operation: o arquivo cru (PDF ou ZIP) ou a chave do arquivo — baixado por ela. O
-   * "Emitir documentos" pode gerar o arquivo DEPOIS de responder: espera (até 2 min) enquanto a Centi diz que não existe.
-   */
-  async function pdfDaResposta(b64: string, status: number, onde?: string): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string }> {
+  /** O PDF de uma resposta da Centi ao operation: o arquivo cru (PDF ou ZIP) ou a chave do arquivo — baixado direto. */
+  async function pdfDaResposta(b64: string, status: number): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string }> {
     const bytes = deBase64(b64);
     const direto = await pdfDosBytes(bytes).catch(() => null);
     if (direto) return { pdf: direto };
-    return pdfDoAchado(analisarRespostaCenti(bytes, status), baixarPelaExtensao(pedir), {
-      esperarMs: 120_000,
-      aoEsperar: (seg) => {
-        if (lote.current) void pedir("lote", { fase: "passo", loteId: lote.current, feito: 0, total: 1, texto: `Aguardando a Centi gerar o documento${onde ? ` do ${onde}` : ""} (${seg} s)` }, 8000);
-      },
-    });
+    return pdfDoAchado(analisarRespostaCenti(bytes, status), baixarPelaExtensao(pedir));
   }
 
   /** O PDF do que a extensão capturou na emissão pela tela (o arquivo, a resposta do operation ou o endereço). */
@@ -270,13 +262,13 @@ export function TarefaTelaProtocolo({
    * A emissão POR CÓDIGO (o operation aprendido com o Id do protocolo), como o Emitir DFD — sem tocar na tela da Centi.
    * `recusada` = a extensão deste navegador ainda não conhece a operação (precisa aprender UMA vez pela tela).
    */
-  async function emitirPorCodigo(e: EmissaoProtocolo, id: string, onde: string): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string }> {
+  async function emitirPorCodigo(e: EmissaoProtocolo, id: string): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string }> {
     const corpo = corpoEmissaoProtocolo(e, id);
     if (!corpo) return { erro: "Sem o Id do protocolo na Centi." };
     const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo }, 150_000);
     if (r.interrompido) interrompido.current = true;
     if (!r.ok || r.b64 == null) return /só a operação/i.test(r.erro ?? "") ? { recusada: r.erro ?? "" } : { erro: r.erro ?? "A extensão não respondeu." };
-    return pdfDaResposta(r.b64, r.status ?? 0, onde);
+    return pdfDaResposta(r.b64, r.status ?? 0);
   }
 
   /** Emite o próximo da fila e abre a análise (falhou → marca e segue). */
@@ -315,7 +307,7 @@ export function TarefaTelaProtocolo({
     // sistema ainda não conhece a operação (ou este navegador não a aprendeu), UMA emissão pela tela a ensina.
     const id = p.id || ids.get(p.chave) || "";
     if (emissao && !id) return falhar("A grade da Centi não trouxe o Id deste protocolo — leia “Em Análise” de novo.");
-    let x: { pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string } | null = emissao ? await emitirPorCodigo(emissao, id, `protocolo ${p.protocolo}`) : null;
+    let x: { pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string } | null = emissao ? await emitirPorCodigo(emissao, id) : null;
     if (!x || "recusada" in x) {
       const r = await pedir("telaEmitir", { protocolo: p.protocolo, ano: p.ano, departamentos: lidos?.reparticoes ?? [] }, 300_000);
       if (r.interrompido) interrompido.current = true;

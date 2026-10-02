@@ -3613,14 +3613,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   tela da Centi — a tela só é usada UMA vez para ensinar (sistema sem o modelo, ou o navegador ainda não o aprendeu:
   `emitirPorCodigo` → `{recusada}`); sem o Id na grade = erro claro. **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
   o parâmetro do modo assíncrono (`ehParamAssincrono`: Assincrono/Assync/Async) como "não" no formato capturado
-  (`valorSincrono`) — no assíncrono a Centi gera em segundo plano e a chave dá 404; o diagnóstico mostra os parâmetros ENVIADOS. **A chave achada sozinha:** `analisarRespostaCenti`
-  devolve, além do `File.Key`, as OUTRAS chaves (GUIDs) e os links de arquivo de TODA a resposta (`outras`/`links`) e o
-  esqueleto (`amostra`); `caminhosDoArquivo` tenta todos (links → a chave → as outras, sem repetir). **O arquivo gerado
-  depois:** `pdfDoAchado(…, {esperarMs})` — enquanto TUDO der 404, espera crescente (2 s, 4 s… até 15 s) e tenta de novo até o
-  prazo (o protocolo usa 2 min; o andamento diz "Aguardando a Centi gerar o documento (N s)") — o 500 "Chave eletrônica
-  inválida" do endereço público `rest/` NÃO impede a espera (é a resposta dele para a mesma chave); uma resposta de sucesso
-  sem PDF, sim. O
-  diagnóstico traz as tentativas, o esqueleto da resposta e os parâmetros da operação enviada.
+  (`valorSincrono`) — no assíncrono a Centi gera em segundo plano e a chave dá 404; o diagnóstico mostra os parâmetros ENVIADOS. **Download DIRETO, num pedido só:** a chave do `File.Key` é baixada por
+  `caminhoDoArquivo` (o `URL` da resposta ou `restauth/getbinlink/{chave}/{nome}` — o MESMO do Emitir DFD) UMA vez (e o
+  link, se a resposta for um); sem PDF, o erro traz o pedido (endereço → status), o esqueleto da resposta (`amostra`) e os
+  parâmetros enviados — nenhuma repetição nem endereço adivinhado.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

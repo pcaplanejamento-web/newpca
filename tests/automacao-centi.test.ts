@@ -52,7 +52,7 @@ test("a versão da tela é a do manifest da extensão", async () => {
 });
 
 test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esqueleto sem token", async () => {
-  const { analisarRespostaCenti, caminhosDoArquivo, linkDaResposta, versaoAtende } = await import("../src/lib/automacao-centi-core.ts");
+  const { analisarRespostaCenti, caminhoDoArquivo, linkDaResposta, versaoAtende } = await import("../src/lib/automacao-centi-core.ts");
   const enc = (t: string) => new TextEncoder().encode(t);
   assert.equal(analisarRespostaCenti(enc("%PDF-1.7"), 200).tipo, "pdf");
   assert.equal(analisarRespostaCenti(enc(JSON.stringify({ R: { File: "JVBERi0x" } })), 200).tipo, "base64");
@@ -61,7 +61,7 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
     200,
   );
   assert.equal(c.tipo, "chave");
-  if (c.tipo === "chave") assert.equal(caminhosDoArquivo(c)[0], "restauth/getbinlink/907ef972-a24f-48b9-be6f-a590c2806dac/EmitirDFDPlanejamento.pdf");
+  if (c.tipo === "chave") assert.equal(caminhoDoArquivo(c), "restauth/getbinlink/907ef972-a24f-48b9-be6f-a590c2806dac/EmitirDFDPlanejamento.pdf");
   const s = analisarRespostaCenti(enc("{}"), 401);
   assert.equal(s.tipo === "nada" && /sessão/i.test(s.erro), true);
   const n = analisarRespostaCenti(enc(JSON.stringify({ Ok: false, Token: "segredo" })), 200);
@@ -568,43 +568,32 @@ test("emissão acompanhada: o operation da própria tela vai com as TRAVAS (sem 
   assert.equal(p.respostaComArquivo("application/json", '{"Message":"erro"}'), false);
 });
 
-test("arquivo da Centi: acha SOZINHO as outras chaves/links da resposta e espera enquanto o arquivo ainda não existe (404)", async () => {
-  const { analisarRespostaCenti, caminhosDoArquivo } = await import("../src/lib/automacao-centi-core.ts");
+test("arquivo da Centi: baixado DIRETO pela chave, num pedido só (sem insistir)", async () => {
+  const { analisarRespostaCenti, caminhoDoArquivo } = await import("../src/lib/automacao-centi-core.ts");
   const { pdfDoAchado } = await import("../src/lib/arquivo-navegador.ts");
   const enc = (t: string) => new TextEncoder().encode(t);
-  const resp = {
-    File: { Key: "3d222336-f9c0-4ba0-848b-ffdb8c558f46", FileName: "EmissaoProtocoloDocto.pdf", Mode: 1, URL: null },
-    Report: { Storage: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", Link: "restauth/getbinlink/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/x.pdf" },
-  };
+  const resp = { File: { Key: "3d222336-f9c0-4ba0-848b-ffdb8c558f46", FileName: "EmissaoProtocoloDocto.pdf", Mode: 0, URL: null }, Success: true };
   const a = analisarRespostaCenti(enc(JSON.stringify(resp)), 200);
   assert.equal(a.tipo, "chave");
   if (a.tipo !== "chave") return;
-  assert.deepEqual(a.outras, ["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"]);
-  const cs = caminhosDoArquivo(a);
-  assert.equal(cs[0], "restauth/getbinlink/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/x.pdf");
-  assert.ok(cs.includes("restauth/getbinlink/3d222336-f9c0-4ba0-848b-ffdb8c558f46/EmissaoProtocoloDocto.pdf"));
-  assert.ok(cs.includes("restauth/getbinlink/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/EmissaoProtocoloDocto.pdf"));
-  assert.equal(new Set(cs).size, cs.length);
-  // 404 nas duas primeiras rodadas (a Centi ainda gerando; o endereço público rest/ dá 500 "Chave eletrônica inválida",
-  // como na Centi real) → na 3ª, o PDF.
-  let rodadas = 0;
-  const esperas: number[] = [];
-  const r = await pdfDoAchado(
-    a,
-    async (c) => {
-      if (c === cs[0]) rodadas++;
-      if (c.startsWith("rest/")) return { status: 500, bytes: enc('{"Message":["Chave eletrônica inválida"]}') };
-      return rodadas >= 3 && c === cs[1] ? { status: 200, bytes: enc("%PDF-1.7 ok") } : { status: 404, bytes: null };
-    },
-    { esperarMs: 5000, passoMs: 10, aoEsperar: (seg) => esperas.push(seg) },
-  );
-  assert.equal("pdf" in r && new TextDecoder().decode(r.pdf), "%PDF-1.7 ok");
-  assert.equal(esperas.length, 2);
-  // Um erro que não é 404 (a chave errada) não espera; o diagnóstico traz cada tentativa e o esqueleto da resposta.
-  const e = await pdfDoAchado(a, async () => ({ status: 500, bytes: enc('{"Message":["Chave eletrônica inválida"]}') }), { esperarMs: 5000, passoMs: 10 });
+  assert.equal(caminhoDoArquivo(a), "restauth/getbinlink/3d222336-f9c0-4ba0-848b-ffdb8c558f46/EmissaoProtocoloDocto.pdf");
+  const pedidos: string[] = [];
+  const ok = await pdfDoAchado(a, async (c) => {
+    pedidos.push(c);
+    return { status: 200, bytes: enc("%PDF-1.7 ok") };
+  });
+  assert.equal("pdf" in ok && new TextDecoder().decode(ok.pdf), "%PDF-1.7 ok");
+  assert.equal(pedidos.length, 1);
+  // 404: UM pedido e o erro com o diagnóstico — nenhuma repetição.
+  pedidos.length = 0;
+  const e = await pdfDoAchado(a, async (c) => {
+    pedidos.push(c);
+    return { status: 404, bytes: null };
+  });
+  assert.equal(pedidos.length, 1);
   assert.ok("erro" in e);
   if ("erro" in e) {
-    assert.match(e.amostra ?? "", /→ 500 · /);
+    assert.match(e.amostra ?? "", /→ 404 · /);
     assert.match(e.amostra ?? "", /resposta: \{"File"/);
   }
 });
