@@ -10,8 +10,9 @@ import {
   type ProtocoloEmAnalise,
 } from "@/lib/automacao-tela-protocolo";
 import { Badge } from "./Badge";
-import { CelulaCopiavel } from "./BotaoCopiar";
+import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
+import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
 import { Checkbox } from "./Field";
 import { toast } from "./Toast";
@@ -20,6 +21,8 @@ import { toast } from "./Toast";
 export type RespostaTela = {
   ok: boolean;
   erro?: string;
+  /** A forma da tela da Centi quando a leitura falha (para ajustar a extensão). */
+  diagnostico?: string;
   departamentos?: string[];
   protocolos?: unknown[];
   total?: number;
@@ -69,6 +72,12 @@ export function TarefaTelaProtocolo({
   const [lidos, setLidos] = useState<{ protocolos: ProtocoloEmAnalise[]; total: number; reparticoes: string[] } | null>(null);
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [ocupado, setOcupado] = useState<"deps" | "ler" | null>(null);
+  const [falha, setFalha] = useState<{ erro: string; diagnostico?: string } | null>(null);
+  function falhou(r: RespostaTela) {
+    const erro = r.erro ?? "A extensão não respondeu.";
+    setFalha({ erro, diagnostico: typeof r.diagnostico === "string" ? r.diagnostico.slice(0, 2000) : undefined });
+    toast.error(erro, 12000);
+  }
   useEffect(() => onRodando(ocupado !== null), [ocupado, onRodando]);
 
   /** Um lote curto na extensão (o cartão, a moldura e o título da aba da automação mostram o passo). */
@@ -88,11 +97,12 @@ export function TarefaTelaProtocolo({
   async function buscarReparticoes() {
     if (ocupado) return;
     setOcupado("deps");
+    setFalha(null);
     try {
       const r = await comLote("Tela Protocolo", "Lendo as repartições (Departamentos)", () => pedir("telaDepartamentos", null, 90_000), (x) =>
         x.ok ? `${x.departamentos?.length ?? 0} repartição(ões)` : (x.erro ?? "Falhou"),
       );
-      if (!r.ok) return void toast.error(r.erro ?? "A extensão não respondeu.", 12000);
+      if (!r.ok) return falhou(r);
       const lista = (r.departamentos ?? []).filter((d): d is string => typeof d === "string" && !!d.trim()).slice(0, 200);
       setDeps(lista);
       setEscolha(departamentosEscolhidosValidos(lerEscolha(), lista));
@@ -119,6 +129,7 @@ export function TarefaTelaProtocolo({
     if (ocupado || !escolha.length) return;
     setOcupado("ler");
     setSel(new Set());
+    setFalha(null);
     try {
       const reparticoes = [...escolha];
       const ex = await iniciarExecucaoLeitura("protocolos-por-reparticao", "consultar", [{ chave: "em-analise", alvo: reparticoes.join("; ") }], {
@@ -134,7 +145,7 @@ export function TarefaTelaProtocolo({
         await concluirPassos(ex.id, [
           { chave: "em-analise", estado: r.ok ? "ok" : "falhou", texto: r.ok ? `${r.protocolos?.length ?? 0} protocolo(s)` : (r.erro ?? "Falhou") },
         ]);
-      if (!r.ok) return void toast.error(r.erro ?? "A extensão não respondeu.", 12000);
+      if (!r.ok) return falhou(r);
       const ps = normalizarProtocolosTela(r.protocolos);
       setLidos({ protocolos: ps, total: typeof r.total === "number" ? r.total : ps.length, reparticoes });
       if (typeof r.total === "number" && r.total > ps.length) toast.warning(`A Centi indica ${r.total} protocolo(s), mas só ${ps.length} foram lidos.`, 10000);
@@ -215,6 +226,14 @@ export function TarefaTelaProtocolo({
             Ler “Em Análise”
           </Button>
         </div>
+        {falha && (
+          <Callout kind="danger">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1">{falha.erro}</span>
+              {falha.diagnostico && <BotaoCopiar texto={`${falha.erro}\n${falha.diagnostico}`} rotulo="Copiar diagnóstico" titulo="A forma da tela da Centi — cole na conversa para ajustar a leitura" />}
+            </div>
+          </Callout>
+        )}
       </section>
       <div className="min-h-0 min-w-0 flex-1">
         <DataTable
