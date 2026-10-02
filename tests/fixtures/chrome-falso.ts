@@ -6,6 +6,8 @@ import vm from "node:vm";
 
 export const fonteExtensao = (n: string) => readFileSync(new URL(`../../extensao-centi/${n}`, import.meta.url), "utf8");
 export const INICIO_CENTI = "https://rioverde.centi.com.br/";
+/** O sistema Compras da Centi — onde a aba da automação trabalha (a raiz é só o portal). */
+export const COMPRAS = "https://rioverde.centi.com.br/compras/";
 export const TELA = "https://governarv.com.br/painel/automacao";
 
 type Ouvinte = (m: unknown, sender: Record<string, unknown>, responder?: (r: unknown) => void) => unknown;
@@ -53,6 +55,9 @@ export function servicoFalso(o: OpcoesFalso = {}) {
         selos.push(text);
       },
       setBadgeBackgroundColor: async () => {},
+      openPopup: async () => {
+        janelas.push("dropdown");
+      },
     },
     windows: {
       onRemoved: { addListener: (f: (id: number) => void) => janelasFechadas.push(f), removeListener() {} },
@@ -108,7 +113,16 @@ export function servicoFalso(o: OpcoesFalso = {}) {
         for (const a of abas) if (tabIds.includes(a.id)) a.groupId = g.id;
         return g.id;
       },
-      update: async () => {},
+      update: async (id: number, p: { url?: string }) => {
+        const t = abas.find((a) => a.id === id);
+        if (t && p.url) {
+          t.url = p.url;
+          setTimeout(() => {
+            for (const f of [...atualizadas]) f(t.id, { status: "complete" }, t);
+          }, 20);
+        }
+        return t;
+      },
       sendMessage: async (tabId: number, m: Record<string, unknown>) => {
         enviados.push({ tabId, m });
         const r = o.naAba?.(tabId, m as { alvo: string; acao?: string });

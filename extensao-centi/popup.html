@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <title>Automação PCA</title>
 <style>
-  :root { color-scheme: light dark; --fundo: #ffffff; --texto: #18181b; --suave: #52525b; --borda: #e4e4e7; --info: #2563eb; --ok: #16a34a; --alerta: #d97706; --erro: #dc2626; }
-  @media (prefers-color-scheme: dark) { :root { --fundo: #18181b; --texto: #fafafa; --suave: #a1a1aa; --borda: #3f3f46; } }
+  :root { color-scheme: light dark; --fundo: #ffffff; --texto: #18181b; --suave: #52525b; --borda: #e4e4e7; --info: #2563eb; --ok: #16a34a; --alerta: #d97706; --erro: #dc2626; --botao: #18181b; --botao-texto: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --fundo: #18181b; --texto: #fafafa; --suave: #a1a1aa; --borda: #3f3f46; --botao: #fafafa; --botao-texto: #18181b; } }
   body { margin: 0; width: 340px; padding: 14px; background: var(--fundo); color: var(--texto); font: 13px/1.45 Inter, Roboto, system-ui, sans-serif; }
+  body.janela { width: auto; }
   h1 { font-size: 15px; margin: 0 0 8px; }
+  h2 { font-size: 13px; margin: 0 0 6px; }
   .linha { display: flex; align-items: center; gap: 8px; }
   .p { width: 8px; height: 8px; border-radius: 50%; background: var(--suave); flex: none; }
   .p.ok { background: var(--ok); } .p.alerta { background: var(--alerta); } .p.erro { background: var(--erro); } .p.info { background: var(--info); }
@@ -16,13 +18,20 @@
   .s { color: var(--suave); overflow-wrap: anywhere; }
   .barra { height: 6px; border-radius: 3px; background: rgba(127,127,127,.2); overflow: hidden; margin: 8px 0; }
   .barra > i { display: block; height: 100%; background: var(--info); width: 0; transition: width .3s; }
-  ol { margin: 6px 0 0; padding: 0 0 0 16px; max-height: 160px; overflow: auto; color: var(--suave); }
+  ol { margin: 6px 0 0; padding: 0 0 0 16px; max-height: 140px; overflow: auto; color: var(--suave); }
   li { margin: 2px 0; }
+  label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 3px; }
+  input[type=text], input[type=password] { box-sizing: border-box; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--borda); background: transparent; color: var(--texto); font: inherit; }
+  .chave { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-weight: 400; cursor: pointer; }
+  .msg { margin-top: 8px; font-size: 12px; }
+  .msg.ok { color: var(--ok); } .msg.alerta { color: var(--alerta); } .msg.erro { color: var(--erro); }
   .acoes { display: grid; gap: 8px; margin-top: 12px; }
-  button { min-height: 40px; padding: 0 12px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--borda); background: transparent; color: var(--texto); }
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  button { min-height: 36px; padding: 0 12px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--borda); background: transparent; color: var(--texto); }
+  button.principal { background: var(--botao); color: var(--botao-texto); border-color: var(--botao); }
   button.parar { background: var(--erro); border-color: var(--erro); color: #fff; }
   button:disabled { opacity: .5; cursor: default; }
-  [hidden] { display: none; }
+  .nota { margin: 8px 0 0; font-size: 11px; color: var(--suave); }
 </style>
 </head>
 <body>
@@ -34,11 +43,26 @@
     <div class="barra"><i id="barra"></i></div>
     <ol id="passos"></ol>
   </div>
+  <form id="login" class="caixa" autocomplete="off" hidden>
+    <h2>Login da Centi</h2>
+    <label for="usuario">Usuário</label>
+    <input id="usuario" type="text" autocomplete="off" spellcheck="false" maxlength="120">
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" autocomplete="new-password" maxlength="200">
+    <label class="chave"><input id="auto" type="checkbox" checked> Entrar sozinho quando a sessão cair</label>
+    <div id="situacao" class="msg" role="status" aria-live="polite"></div>
+    <div class="dupla">
+      <button id="esquecer" type="button">Esquecer</button>
+      <button id="salvar" class="principal" type="submit">Salvar e entrar</button>
+    </div>
+    <p class="nota">Cifrada só neste navegador, na extensão — nunca vai ao sistema PCA.</p>
+  </form>
   <div class="acoes">
     <button id="parar" class="parar" type="button" hidden>Interromper</button>
     <button id="aba" type="button">Ir para a aba da automação</button>
-    <button id="login" type="button">Login da Centi</button>
+    <button id="abrirLogin" type="button">Login da Centi</button>
   </div>
+  <script src="cofre.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

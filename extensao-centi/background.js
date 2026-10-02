@@ -4,10 +4,11 @@
 // automação e o popup) e o INTERROMPER pela extensão.
 const CENTI = "https://rioverde.centi.com.br/*";
 const INICIO_CENTI = "https://rioverde.centi.com.br/";
+// O sistema COMPRAS da Centi (a raiz é só o portal "Acesso aos sistemas", sem login): a aba da automação trabalha nele.
+const COMPRAS = "https://rioverde.centi.com.br/compras/";
 const SISTEMA = ["https://governarv.com.br/painel/automacao*", "https://www.governarv.com.br/painel/automacao*"];
 const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br"];
 const CONFIRMAR = chrome.runtime.getURL("confirmar.html");
-const CREDENCIAIS = chrome.runtime.getURL("credenciais.html");
 const POPUP = chrome.runtime.getURL("popup.html");
 const TITULO_GRUPO = "Automação PCA";
 const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador"];
@@ -45,6 +46,7 @@ async function estadoDaAba(tabId) {
 
 // ---------------------------------------------------------------- A ABA PRÓPRIA DA AUTOMAÇÃO
 const daCenti = (t) => !!(t?.url?.startsWith(INICIO_CENTI) || t?.pendingUrl?.startsWith(INICIO_CENTI));
+const noCompras = (t) => !!(t?.url ?? t?.pendingUrl ?? "").startsWith(COMPRAS);
 
 /** A aba da automação: a guardada nesta sessão do navegador; depois de reabrir o Chrome, a do grupo "Automação PCA". */
 async function abaGuardada() {
@@ -89,7 +91,7 @@ let criando = null;
 function criarAba() {
   if (!criando)
     criando = (async () => {
-      const aba = await chrome.tabs.create({ url: INICIO_CENTI, active: false });
+      const aba = await chrome.tabs.create({ url: COMPRAS, active: false });
       await sessao.gravar("abaAutomacao", aba.id);
       await sessao.tirar("abaFechada");
       try {
@@ -116,10 +118,32 @@ async function infoLogin() {
   return { credenciais: c.tem, auto: c.auto, pausado: !!c.pausadoEm, motivo: c.pausadoEm ? c.motivo : null, ultima: c.ultima };
 }
 
-/** O BANNER flutuante das credenciais (janela da extensão). Sozinho, abre UMA vez por sessão do navegador. */
+let indoCompras = null;
+/** A aba no portal (raiz) ou em outro sistema da Centi vai ao COMPRAS — onde aparece o login e a sessão da automação. */
+function irParaCompras(aba) {
+  if (!indoCompras)
+    indoCompras = (async () => {
+      await chrome.tabs.update(aba.id, { url: COMPRAS });
+      await esperarCarregar(aba.id, 30000);
+      await esperar(1500);
+      return { ...aba, url: COMPRAS };
+    })().finally(() => {
+      indoCompras = null;
+    });
+  return indoCompras;
+}
+
+/**
+ * O login da Centi no DROPDOWN do ícone da extensão (o popup). Sozinho, abre UMA vez por sessão do navegador; sem como
+ * abrir o dropdown (nenhuma janela em foco), uma janelinha com o mesmo popup.
+ */
 async function abrirCredenciais(pedidoDoUsuario) {
   if (!pedidoDoUsuario && (await sessao.ler("credenciaisPedidas"))) return false;
   await sessao.gravar("credenciaisPedidas", true);
+  try {
+    await chrome.action.openPopup();
+    return true;
+  } catch {}
   const janela = await sessao.ler("janelaCredenciais");
   if (typeof janela === "number") {
     try {
@@ -128,7 +152,7 @@ async function abrirCredenciais(pedidoDoUsuario) {
     } catch {}
   }
   try {
-    const w = await chrome.windows.create({ url: CREDENCIAIS, type: "popup", width: 440, height: 560, focused: true });
+    const w = await chrome.windows.create({ url: `${POPUP}?janela=1`, type: "popup", width: 380, height: 600, focused: true });
     await sessao.gravar("janelaCredenciais", w.id);
     return true;
   } catch {
@@ -186,6 +210,7 @@ async function garantirSessao({ criar = true, esperarLogin = false, forcar = fal
       return { motivo: "semAba", erro: "A aba da automação foi fechada — toque em Verificar para abrir de novo." };
     aba = await criarAba();
   }
+  if (!noCompras(aba)) aba = await irParaCompras(aba);
   const e = await estadoDaAba(aba.id);
   if (e?.logado && e.tela !== "login") return { aba, estado: e };
   if (e?.tela !== "login")
@@ -403,7 +428,7 @@ const respostaLogada = async (r) => ({
   atividade: await lerAtividade(),
 });
 
-/** O popup e o banner das credenciais (páginas da própria extensão). */
+/** O popup (dropdown do ícone da extensão, ou a janelinha dele). */
 async function daExtensao(msg) {
   if (msg.tipo === "interromper") return interromper();
   if (msg.tipo === "credenciais") return { ok: await abrirCredenciais(true) };
@@ -428,8 +453,8 @@ async function daExtensao(msg) {
 
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   const url = sender.url ?? "";
-  // Páginas da extensão: o popup e o banner das credenciais (a confirmação tem o ouvinte próprio).
-  if (sender.id === chrome.runtime.id && (url.startsWith(POPUP) || url.startsWith(CREDENCIAIS))) {
+  // Páginas da extensão: o popup (dropdown do ícone — andamento, Interromper e o login; a confirmação tem o ouvinte próprio).
+  if (sender.id === chrome.runtime.id && url.startsWith(POPUP)) {
     if (typeof msg?.tipo !== "string") return false;
     daExtensao(msg)
       .catch((e) => ({ ok: false, erro: e?.message || "Falha na extensão." }))

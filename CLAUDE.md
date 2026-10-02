@@ -3492,18 +3492,22 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   SÓ numa aba que a extensão abre (`criarAba`: `tabs.create` em segundo plano no grupo azul **"Automação PCA"** — permissão
   `tabGroups`; `abaGuardada` = o id no `storage.session` ou, depois de reabrir o Chrome, a aba do grupo pelo título); as abas
   da Centi do usuário não são usadas. A tela abre a aba ao entrar e no Verificar (`estado {abrir:true}`); fechada pelo
-  usuário (`abaFechada`), a conferência de 20 s não reabre — Verificar ou um pedido reabrem. **Credenciais = um BANNER
-  flutuante** (`credenciais.html`/`credenciais.js`, janela `popup` da extensão; também o `options_ui`; saíram as
-  `opcoes.*`): "Salvar e entrar" grava no cofre e entra na hora pela aba da automação; abre SOZINHO uma vez por sessão do
-  navegador (`credenciaisPedidas`) quando falta login ou a senha foi recusada; "Configurar login" traz à frente. Régua do
+  usuário (`abaFechada`), a conferência de 20 s não reabre — Verificar ou um pedido reabrem. A aba trabalha no sistema
+  **COMPRAS** (`COMPRAS` = `/compras/`; a raiz da Centi é só o portal "Acesso aos sistemas", sem login): criada já nele e,
+  se estiver no portal ou em outro sistema, vai a ele antes de conferir a sessão (`irParaCompras`, 1.7.1). **Login = o
+  DROPDOWN do ícone** (o próprio `popup.html` ganhou o formulário — usuário, senha, "Entrar sozinho", Esquecer, "Salvar e
+  entrar"; aparece sozinho sem login salvo ou com a pausa; saíram `credenciais.*`, `opcoes.*` e o `options_ui`):
+  `abrirCredenciais` abre o dropdown por `chrome.action.openPopup()` (sem janela em foco, uma janelinha
+  `popup.html?janela=1`) SOZINHO uma vez por sessão do navegador (`credenciaisPedidas`) quando falta login ou a senha foi
+  recusada; "Configurar login" da tela abre de novo. Régua do
   login: entrar com sucesso zera o `loginUltima` (o intervalo de 5 min vale só depois de uma falha) — F5 na aba que cai no
   login entra de novo na hora (`conferirAba` no `tabs.onUpdated`). **Andamento:** a tela manda a ação `lote`
   (`inicio` → `loteId`, `passo` por DFD, `fim`); o serviço guarda a `atividade` no `storage.session` (título, passo,
   feito/total, últimos 20 passos, estado, a aba dona) e mostra no **selo do ícone** ("3/15"; OK/X/!), no **cartão
   flutuante da aba da automação** (`centi-painel.js`, mundo isolado + Shadow DOM, injetado pelo serviço) e no **popup**
   (`popup.html`/`popup.js`, `action.default_popup` — o `zipDaExtensao` preserva o popup ao pôr o ícone: situação da Centi,
-  andamento ao vivo por `storage.session.onChanged`, Interromper, ir para a aba, Login da Centi). **Interromper** (popup,
-  banner ou o cartão — só da aba da automação; outra aba/página = recusado): o lote vira `interrompido`, a confirmação de
+  andamento ao vivo por `storage.session.onChanged`, Interromper, ir para a aba e o login). **Interromper** (o
+  dropdown ou o cartão — só da aba da automação; outra aba/página = recusado): o lote vira `interrompido`, a confirmação de
   anexo aberta vale "não", a `sistema-ponte` avisa a tela (`tipo:"interrompido"`) e os pedidos que levam o `lote`
   (`sistema-ponte` repassa `m.lote`) são recusados com `{interrompido:true}` — os de fora do lote seguem; o pedido em curso
   termina. Na tela (`useExtensaoCenti` → `lote`/`interrompido`), o laço para, a fila vira "Interrompido na extensão", o PDF

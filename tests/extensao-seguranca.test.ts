@@ -4,14 +4,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-import { INICIO_CENTI, servicoFalso } from "./fixtures/chrome-falso.ts";
+import { COMPRAS, servicoFalso } from "./fixtures/chrome-falso.ts";
 
 const fonte = (n: string) => readFileSync(new URL(`../extensao-centi/${n}`, import.meta.url), "utf8");
 // O serviço com a ABA DA AUTOMAÇÃO já aberta (id 1) e a janela de confirmação respondendo `respostaJanela`.
 function serviço(respostaJanela: boolean | null) {
   const s = servicoFalso({
     confirmacao: respostaJanela,
-    abas: [{ id: 1, url: INICIO_CENTI }],
+    abas: [{ id: 1, url: COMPRAS }],
     sessao: { abaAutomacao: 1 },
   });
   const anexos = () => s.enviados.filter((e) => e.m.alvo === "centi" && e.m.acao === "anexar");

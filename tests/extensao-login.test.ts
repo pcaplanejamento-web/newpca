@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-import { INICIO_CENTI, pausa, servicoFalso, TELA } from "./fixtures/chrome-falso.ts";
+import { COMPRAS, pausa, servicoFalso, TELA } from "./fixtures/chrome-falso.ts";
 
 const fonte = (n: string) => readFileSync(new URL(`../extensao-centi/${n}`, import.meta.url), "utf8");
 
@@ -143,7 +143,7 @@ function servico(o: { credenciais?: boolean; auto?: boolean; resultado?: string 
   const estadoCfg = { tem: o.credenciais !== false, auto: o.auto !== false, pausadoEm: null as number | null, motivo: null as string | null, ultima: null };
   const logins: unknown[] = [];
   const s = servicoFalso({
-    abas: [{ id: 1, url: INICIO_CENTI }],
+    abas: [{ id: 1, url: COMPRAS }],
     sessao: { abaAutomacao: 1 },
     cofre: {
       podeTentarLogin: C.podeTentarLogin,
@@ -192,17 +192,17 @@ test("serviço: no máximo 1 tentativa a cada 5 min (sem resposta não pausa, ma
   assert.equal(s.cfg.pausadoEm, null);
 });
 
-test("serviço: sem credenciais, abre o BANNER das credenciais UMA vez (não em laço)", async () => {
+test("serviço: sem credenciais, abre o login no DROPDOWN do ícone UMA vez (não em laço)", async () => {
   const s = servico({ credenciais: false });
   await s.pedir({ acao: "estado" });
   await pausa(20);
   await s.pedir({ acao: "estado" });
   await pausa(20);
-  assert.equal(s.s.janelas.filter((u) => u.includes("credenciais.html")).length, 1);
-  // Pedido pelo usuário ("Configurar login") traz a janela à frente — aberta, não abre outra.
+  assert.equal(s.s.janelas.filter((u) => u === "dropdown").length, 1);
+  // Pedido pelo usuário ("Configurar login") abre o dropdown de novo.
   const r = (await s.pedir({ acao: "abrirOpcoes" })) as { ok: boolean };
   assert.equal(r.ok, true);
-  assert.equal(s.s.janelas.filter((u) => u.includes("credenciais.html")).length, 1);
+  assert.equal(s.s.janelas.filter((u) => u === "dropdown").length, 2);
 });
 
 test("serviço: login com sucesso zera a espera (uma queda logo depois entra de novo)", async () => {
@@ -234,7 +234,7 @@ test("serviço: páginas de fora não pedem login nem abrem as opções", async 
 
 test("extensão: a senha nunca passa pelo mundo da página nem pela ponte do sistema", () => {
   const semComentarios = (t: string) => t.replace(/^\s*\/\/.*$/gm, "");
-  for (const n of ["centi-main.js", "centi-anexo.js", "sistema-ponte.js", "popup.js", "centi-painel.js"]) assert.ok(!/senha/i.test(semComentarios(fonte(n))), n);
+  for (const n of ["centi-main.js", "centi-anexo.js", "sistema-ponte.js", "centi-painel.js"]) assert.ok(!/senha/i.test(semComentarios(fonte(n))), n);
   const ponte = fonte("centi-ponte.js");
   assert.ok(!/postMessage\([^)]*senha/i.test(ponte));
   assert.ok(!/sessionStorage/.test(ponte));
