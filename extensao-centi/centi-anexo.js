@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p17";
+  const NOME = "__pcaCentiAnexo_p18";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
@@ -42,7 +42,13 @@
   /** O protocolo que a Centi devolveu no load: confere o Id e o NÚMERO (e o ano, quando informado) — nunca anexa noutro. */
   function conferirProtocolo(retorno, d) {
     const e = retorno?.Entity;
-    if (!e || e.ModuleKey !== MODULO_PROTOCOLO || !Array.isArray(e.Fields)) return { erro: "A Centi não devolveu o protocolo — confira o Id." };
+    if (!e || e.ModuleKey !== MODULO_PROTOCOLO || !Array.isArray(e.Fields)) {
+      // O que a Centi respondeu (a mensagem dela e a FORMA da resposta — nunca os dados), para o erro dizer o motivo.
+      const msg = mensagens(retorno?.Message);
+      const forma = retorno && typeof retorno === "object" ? Object.keys(retorno).slice(0, 8).join(", ") : typeof retorno;
+      const mod = e && typeof e === "object" ? ` · módulo ${e.ModuleKey ?? "?"}` : "";
+      return { erro: `A Centi não devolveu o protocolo${msg ? `: ${msg}` : " — confira o Id"} (resposta: ${forma || "vazia"}${mod}).` };
+    }
     if (texto(valor(e, "Id")) !== String(d.id)) return { erro: `A Centi não achou o protocolo de Id ${d.id}.` };
     const numero = texto(valor(e, "NrProtocolo"));
     const ano = texto(valor(e, "AnoReferencia"));

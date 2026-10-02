@@ -1,7 +1,7 @@
 // Ponte na aba da Centi: extensão <-> script da página (centi-main.js, que usa a sessão da Centi).
 (() => {
   // Protocolo da conversa com o script da página (centi-main.js): só muda se o formato das mensagens mudar.
-  const P = 17;
+  const P = 18;
   const MARCA = `__pcaCentiPonte_p${P}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
