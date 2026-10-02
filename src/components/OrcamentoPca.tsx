@@ -1,14 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, num } from "@/lib/format";
 import {
+  comparativoPorOrgao,
   comparativoPorUnidade,
   type FaixaComprometimento,
   type LinhaComparativo,
+  type LinhaOrgao,
   linhaAcima,
+  type OrgaoRef,
   origemDaLinha,
+  origemDoOrgao,
+  rotuloUnidadeComparativo,
   SEM_VINCULO,
+  siglasDivididas,
   type UnidadeRef,
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
@@ -16,6 +23,7 @@ import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-es
 import { FerramentasAba } from "./AbasEspaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
@@ -28,6 +36,10 @@ import { StatMini } from "./StatMini";
 
 type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
+type Nivel = "unidade" | "orgao";
+
+/** A linha da tabela "PCA × Orçamento": uma UNIDADE (o micro) ou um ÓRGÃO (a soma das unidades dele). */
+type LinhaTabela = (LinhaComparativo & { nivel: "unidade"; chave: string }) | (LinhaOrgao & { nivel: "orgao" });
 
 /** Os dados do Comparativo (tabela cruzada) do orçamento do ano — os MESMOS da tela do orçamento. */
 export type ComparativoPca = Omit<ComponentProps<typeof OrcamentoComparativo>, "inicio" | "onMudarEdicoes">;
@@ -50,6 +62,8 @@ export type DadosOrcamentoPca = {
   linhas: LancamentoOrcamentoPca[];
   planejado: PlanejadoOrcamentoPca[];
   unidades: UnidadeRef[];
+  /** Os órgãos (a visão "por órgão" = a soma das unidades de cada um). */
+  orgaos: OrgaoRef[];
   /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados no planejado. */
   previa?: { dfds: number; protocolos: number } | null;
 };
@@ -74,30 +88,42 @@ const COLS_PLANILHA: Column<Planilha>[] = [
 type AbaOrigem = "orcamento" | "pca";
 
 /** ORIGEM de uma linha do comparativo: os lançamentos do CUBO e as contratações do PCA que formam os números. */
-function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; aberta: LinhaComparativo | null; onClose: () => void }) {
+function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; aberta: LinhaTabela | null; onClose: () => void }) {
   const [aba, setAba] = useState<AbaOrigem>("orcamento");
   const [item, setItem] = useState<AberturaMesa | null>(null);
   // Mantém a última linha enquanto o banner fecha (animação) e volta à aba Orçamento a cada linha nova.
-  const [linha, setLinha] = useState<LinhaComparativo | null>(aberta);
+  const [linha, setLinha] = useState<LinhaTabela | null>(aberta);
   useEffect(() => {
     if (!aberta) return;
     setLinha(aberta);
     setAba("orcamento");
   }, [aberta]);
   const origem = useMemo(
-    () => (linha ? origemDaLinha(linha.unidadeId, dados.planejado, dados.linhas, dados.unidades) : { planejado: [], orcamento: [] }),
+    () =>
+      !linha
+        ? { planejado: [], orcamento: [] }
+        : linha.nivel === "orgao"
+          ? origemDoOrgao(linha.chave, dados.planejado, dados.linhas, dados.unidades)
+          : origemDaLinha(linha.unidadeId, dados.planejado, dados.linhas, dados.unidades),
     [linha, dados],
   );
   const itens = origem.planejado.flatMap((p) => (p.item ? [p.item] : []));
   const planilhas: Planilha[] = origem.planejado.flatMap((p) => (p.planilha ? [{ ...p.planilha, itens: p.itens, valor: p.valor }] : []));
-  const sem = linha?.unidadeId == null;
+  const sem = linha?.chave === "sem";
+  const recorte = !linha
+    ? ""
+    : linha.nivel === "unidade"
+      ? rotuloUnidadeComparativo(linha)
+      : sem
+        ? linha.sigla
+        : `${linha.sigla}${linha.nome && linha.nome !== linha.sigla ? ` — ${linha.nome}` : ""} (soma de ${num(linha.unidades)} unidade(s))`;
   return (
     <>
       <OrigemDados
         aberto={aberta != null}
         onClose={onClose}
         titulo="Comparativo Orçamento × Contratações"
-        recorte={linha ? `${linha.sigla} — ${linha.nome}` : ""}
+        recorte={recorte}
         resumo={[
           { label: "Orçamento para o PCA", value: brl(linha?.orcamento ?? 0), hint: `${num(origem.orcamento.length)} lançamento(s)` },
           { label: "Contratações do PCA", value: brl(linha?.planejado ?? 0), hint: `${num(linha?.contratacoes ?? 0)} item(ns)` },
@@ -153,7 +179,7 @@ function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; abe
           ) : (
             <ItemTable
               rows={itens}
-              showUnidade={sem}
+              showUnidade={sem || linha?.nivel === "orgao"}
               origem
               onRowClick={(r) => r.dfdId != null && setItem({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } })}
               ativo={item?.tipo === "item" ? item.itemId : null}
@@ -167,7 +193,7 @@ function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; abe
 }
 
 /** Barra de porcentagem do comparativo (verde < 90% · âmbar 90–100% · vermelho > 100%). */
-function BarraPct({ l }: { l: LinhaComparativo }) {
+function BarraPct({ l }: { l: Pick<LinhaComparativo, "percentual" | "planejado" | "faixa"> }) {
   if (l.percentual == null) return <span className="text-xs text-muted">{l.planejado > 0 ? "sem orçamento" : "—"}</span>;
   const w = Math.min(100, l.percentual * 100);
   return (
@@ -203,26 +229,88 @@ export function OrcamentoPca({
   // As edições salvas do Comparativo ficam AQUI (trocar de vista remonta a tabela — ela volta com as edições novas).
   const [edicoesComp, setEdicoesComp] = useState(() => (comparativo ? { lista: comparativo.edicoes, padroes: comparativo.padroes } : null));
   const [filtro, setFiltro] = useState<Filtro>("todas");
-  const [aberta, setAberta] = useState<LinhaComparativo | null>(null);
-  const linhas = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
-  const t = totaisComparativo(linhas);
+  // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
+  const [nivel, setNivel] = useState<Nivel>("unidade");
+  const [aberta, setAberta] = useState<LinhaTabela | null>(null);
+  const porUnidade = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
+  const divididas = useMemo(() => siglasDivididas(porUnidade), [porUnidade]);
+  const linhas = useMemo<LinhaTabela[]>(
+    () =>
+      nivel === "orgao"
+        ? comparativoPorOrgao(porUnidade, dados.orgaos ?? []).map((l) => ({ ...l, nivel: "orgao" as const }))
+        : porUnidade.map((l) => ({ ...l, nivel: "unidade" as const, chave: l.unidadeId == null ? "sem" : `u${l.unidadeId}` })),
+    [nivel, porUnidade, dados.orgaos],
+  );
+  const t = totaisComparativo(porUnidade);
   const acima = linhas.filter(linhaAcima);
   const vis = filtro === "todas" ? linhas : filtro === "acima" ? acima : linhas.filter((l) => !linhaAcima(l));
 
   async function exportar() {
     const XLSX = await import("xlsx");
-    const aoa: (string | number)[][] = [
-      ["Unidade", "Nome", "Contratações", "Contratações do PCA", "Orçamento para o PCA", "Diferença", "Porcentagem"],
-      ...vis.map((l) => [l.sigla, l.nome, l.contratacoes, l.planejado, l.orcamento, l.diferenca, l.percentual == null ? "" : l.percentual]),
-    ];
+    const aoa: (string | number)[][] =
+      nivel === "orgao"
+        ? [
+            ["Órgão", "Nome", "Unidades", "Contratações", "Contratações do PCA", "Orçamento para o PCA", "Diferença", "Porcentagem"],
+            ...vis.map((l) => [
+              l.sigla,
+              l.nome,
+              l.nivel === "orgao" ? l.unidades : 1,
+              l.contratacoes,
+              l.planejado,
+              l.orcamento,
+              l.diferenca,
+              l.percentual == null ? "" : l.percentual,
+            ]),
+          ]
+        : [
+            ["Unidade", "Nome", "Órgão", "Contratações", "Contratações do PCA", "Orçamento para o PCA", "Diferença", "Porcentagem"],
+            ...vis.map((l) => [l.sigla, l.nome, l.orgaoSigla ?? "", l.contratacoes, l.planejado, l.orcamento, l.diferenca, l.percentual == null ? "" : l.percentual]),
+          ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Comparativo");
-    XLSX.writeFile(wb, `comparativo-orcamento-pca-${dados.ano ?? ""}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, nivel === "orgao" ? "Por órgão" : "Por unidade");
+    XLSX.writeFile(wb, `comparativo-orcamento-pca-${dados.ano ?? ""}-${nivel === "orgao" ? "orgao" : "unidade"}.xlsx`);
   }
 
-  const cols: Column<LinhaComparativo>[] = [
-    { key: "unidade", header: "Unidade", align: "left", nowrap: true, value: (l) => l.sigla, render: (l) => <span className="font-semibold text-text" title={l.nome}>{l.sigla}</span> },
+  const colNome: Column<LinhaTabela> =
+    nivel === "orgao"
+      ? {
+          key: "orgao",
+          header: "Órgão",
+          align: "left",
+          minWidth: 220,
+          value: (l) => l.sigla,
+          render: (l) => (
+            <span className="flex min-w-0 flex-col items-start leading-tight" title={l.nome}>
+              <span className="font-semibold text-text">{l.sigla}</span>
+              {l.nome && l.nome !== l.sigla && <span className="line-clamp-1 text-[12px] text-muted">{l.nome}</span>}
+            </span>
+          ),
+        }
+      : {
+          key: "unidade",
+          header: "Unidade",
+          align: "left",
+          minWidth: 240,
+          value: (l) => (l.nivel === "unidade" ? rotuloUnidadeComparativo(l) : l.sigla),
+          render: (l) => (
+            <span className="flex min-w-0 flex-col items-start leading-tight" title={l.nivel === "unidade" ? rotuloUnidadeComparativo(l) : l.nome}>
+              <span className="flex items-center gap-1.5">
+                <span className="font-semibold text-text">{l.sigla}</span>
+                {l.nivel === "unidade" && l.oculta && <Badge tone="slate">Oculta</Badge>}
+              </span>
+              {l.chave !== "sem" && <span className="line-clamp-1 text-[12px] text-muted">{l.nome}</span>}
+            </span>
+          ),
+        };
+  const colLado: Column<LinhaTabela> =
+    nivel === "orgao"
+      ? { key: "unidades", header: "Unidades", nowrap: true, filter: "range", formatarFaixa: num, numero: (l) => (l.nivel === "orgao" ? l.unidades : 1), render: (l) => num(l.nivel === "orgao" ? l.unidades : 1) }
+      : { key: "orgaoSigla", header: "Órgão", nowrap: true, value: (l) => l.orgaoSigla ?? "—", render: (l) => <span className="text-text-2">{l.orgaoSigla ?? "—"}</span> };
+
+  const cols: Column<LinhaTabela>[] = [
+    colNome,
+    colLado,
     { key: "contratacoes", header: "Contratações", nowrap: true, filter: "range", numero: (l) => l.contratacoes, formatarFaixa: num, render: (l) => num(l.contratacoes) },
     { key: "planejado", header: "Contratações do PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.planejado, render: (l) => <span className="text-accent">{brl(l.planejado)}</span> },
     { key: "orcamento", header: "Orçamento para o PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.orcamento, render: (l) => brl(l.orcamento) },
@@ -267,6 +355,28 @@ export function OrcamentoPca({
           incorporados (enviados à Mesa do PCA e marcados na Mesa do sistema). Só no painel, com o PCA em Preview.
         </Callout>
       )}
+      {divididas.length > 0 && (
+        <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
+          <div className="space-y-1">
+            {divididas.map((d) => (
+              <p key={d.sigla}>
+                <b>{d.sigla}</b> está em {num(d.comPlanejado.length + d.comOrcamento.length)} unidades: as contratações estão em{" "}
+                <b>{d.comPlanejado.map(rotuloUnidadeComparativo).join("; ")}</b> e o orçamento está vinculado a{" "}
+                <b>{d.comOrcamento.map(rotuloUnidadeComparativo).join("; ")}</b>. A unidade recebe os DFDs e o orçamento — vincule o
+                CUBO à unidade que recebe os DFDs.
+              </p>
+            ))}
+            {dados.orcamento && (
+              <Link
+                href={`/painel/orcamento/${dados.orcamento.id}?aba=vinculos`}
+                className="inline-flex min-h-11 items-center font-semibold text-accent underline-offset-2 hover:underline lg:min-h-0"
+              >
+                Corrigir em Orçamento → Vínculos
+              </Link>
+            )}
+          </div>
+        </Callout>
+      )}
       <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
         <StatMini
           label={`Dotação ${dados.ano}${dados.visaoNome ? ` · ${dados.visaoNome}` : ""}`}
@@ -304,10 +414,22 @@ export function OrcamentoPca({
           )}
           <div className="flex flex-wrap items-center gap-2">
             {trocaVista}
+            <Segmented<Nivel>
+              value={nivel}
+              onChange={(n) => {
+                setNivel(n);
+                setAberta(null);
+              }}
+              ariaLabel="Ver por"
+              options={[
+                { value: "unidade", label: "Por unidade", curto: "Unidade" },
+                { value: "orgao", label: "Por órgão", curto: "Órgão" },
+              ]}
+            />
             <Segmented<Filtro>
               value={filtro}
               onChange={setFiltro}
-              ariaLabel="Unidades"
+              ariaLabel="Faixa"
               options={[
                 { value: "todas", label: `Todas (${linhas.length})` },
                 { value: "acima", label: `Acima (${acima.length})` },
@@ -318,15 +440,15 @@ export function OrcamentoPca({
           <DataTable
             columns={cols}
             rows={vis}
-            getKey={(l) => (l.unidadeId == null ? "sem" : l.unidadeId)}
+            getKey={(l) => l.chave}
             scrollInterno
             density="compact"
             minWidth={900}
             onRowClick={setAberta}
-            activeKey={aberta ? (aberta.unidadeId == null ? "sem" : aberta.unidadeId) : null}
+            activeKey={aberta?.chave ?? null}
             vazio="Nada a comparar nesta visão."
             resumo={(ls) =>
-              `${ls.length} unidade(s) · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`
+              `${ls.length} ${nivel === "orgao" ? "órgão(s)" : "unidade(s)"} · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`
             }
           />
         </>

@@ -6,6 +6,7 @@ import {
   orcamentoItens,
   orcamentos,
   orcamentoVisoes,
+  orgaos,
   pcaDfds,
   pcaItens,
   pcas,
@@ -949,7 +950,9 @@ export type OrcamentoDoPca = {
   linhas: LancamentoOrcamentoPca[];
   /** Planejado do PCA POR ORIGEM: um por item (fonte protocolo) ou por planilha (fonte lista). */
   planejado: PlanejadoOrcamentoPca[];
-  unidades: { id: number; sigla: string; nome: string }[];
+  /** As UNIDADES (o micro) com o órgão de cada uma — a linha do comparativo é a unidade; o órgão, a soma delas. */
+  unidades: { id: number; sigla: string; nome: string; orgaoId: number | null; orgaoSigla: string | null; oculta: boolean }[];
+  orgaos: { id: number; sigla: string; nome: string }[];
   /** PRÉVIA ligada: os DFDs/protocolos ainda NÃO incorporados que entraram no planejado; `null` = só o incorporado. */
   previa: { dfds: number; protocolos: number } | null;
 };
@@ -975,11 +978,22 @@ export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnTy
 
 async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
   const db = getDb();
-  const [visao, reps, vincs] = await Promise.all([
+  const [visao, repsBrutas, orgs, vincs] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
-    db.select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(ne(sql`UPPER(${reparticoes.codigo})`, "GERAL")),
+    db
+      .select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculta: reparticoes.oculto })
+      .from(reparticoes)
+      .where(ne(sql`UPPER(${reparticoes.codigo})`, "GERAL")),
+    db.select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome }).from(orgaos),
     listarVinculosOrcamento(),
   ]);
+  const orgaoLista = orgs.map((o) => ({ id: o.id, sigla: (o.sigla ?? "").trim() || o.nome, nome: o.nome }));
+  const siglaOrgao = new Map(orgaoLista.map((o) => [o.id, o.sigla]));
+  const reps = repsBrutas.map((r) => ({
+    ...r,
+    orgaoSigla: r.orgaoId != null ? (siglaOrgao.get(r.orgaoId) ?? null) : null,
+    oculta: r.oculta === true,
+  }));
   let bruto = 0;
   let filtrado = 0;
   let linhas: OrcamentoDoPca["linhas"] = [];
@@ -1032,7 +1046,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta) }));
     previa = c.previa;
   }
-  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, previa };
+  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa };
 }
 
 /** DFDs (id + protocolo) dos protocolos dados. */

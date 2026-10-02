@@ -1939,7 +1939,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
   > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
-  unidade pelos **Vínculos** (`orcamento_vinculos`). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
+  unidade pelos **Vínculos** (`orcamento_vinculos`). **A UNIDADE é o micro** (recebe os DFDs e o orçamento; a linha é
+  pelo ID — `reparticoes.id` —, nunca pela sigla) e **o ÓRGÃO é a soma** das unidades dele: "Ver por" **Unidade | Órgão**
+  (`comparativoPorOrgao`/`origemDoOrgao`, a origem soma igual à linha); na visão Unidade, a coluna Órgão + o selo "Oculta"
+  (duas unidades de MESMA sigla — ex.: a própria de um órgão dual — aparecem distintas). **`siglasDivididas`** acusa a
+  sigla com os DFDs numa unidade e o CUBO noutra (vínculo errado) num `Callout` com o link para Orçamento → Vínculos (cujo
+  seletor mostra o órgão quando a sigla se repete). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
   vistas (`Segmented` no início da linha de controles — `OrcamentoComparativo.inicio`; **PCA × Orçamento** primeiro e aberto, depois
   o Comparativo): **Comparativo** = o MESMO
   `OrcamentoComparativo` da tela do orçamento, sobre o orçamento do ANO do PCA (`orcamentoDoAno` — o importado por último,

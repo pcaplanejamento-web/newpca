@@ -26,6 +26,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### PCA × Orçamento: a unidade é o micro, o órgão é a soma — entregue
+✅ O comparativo do PCA separa unidades de MESMA sigla (coluna Órgão + selo "Oculta"), ganha "Ver por Unidade | Órgão"
+(o órgão = Σ das unidades, com a origem) e avisa a sigla repartida (DFDs numa unidade, CUBO vinculado a outra), com o
+link para corrigir em Orçamento → Vínculos — que passou a mostrar o órgão quando a sigla se repete. Testes em
+`tests/orcamento-comparativo.test.ts`.
+
 ### Papéis configuráveis por tela + auditoria de Grupos, Permissões e Papel — entregue
 - **Entrega 1 ✅:** correções da administração (PATCH de grupo/permissão não apaga mais pessoas, unidades e telas;
   gravação do grupo num lote; impacto e confirmação ao excluir grupo; sigla GERAL reservada; confirmações do sistema e

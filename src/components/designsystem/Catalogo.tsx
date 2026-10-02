@@ -506,21 +506,30 @@ function PcaEspacoDemo() {
           bruto: 1_610_000_000,
           filtrado: 1_160_000_000,
           unidades: [
-            { id: 1, sigla: "AMAE", nome: "Agência de Água" },
-            { id: 2, sigla: "FMAS", nome: "Fundo de Assistência" },
-            { id: 3, sigla: "FEMBOM", nome: "Fundo dos Bombeiros" },
+            { id: 1, sigla: "AMAE", nome: "Agência de Água", orgaoId: 1, orgaoSigla: "PMRV" },
+            { id: 2, sigla: "FMAS", nome: "Fundo de Assistência", orgaoId: 1, orgaoSigla: "PMRV" },
+            { id: 3, sigla: "FEMBOM", nome: "Fundo dos Bombeiros", orgaoId: 1, orgaoSigla: "PMRV" },
+            // A MESMA sigla em duas unidades: as contratações numa, o orçamento na outra → o alerta aponta o vínculo.
+            { id: 4, sigla: "FMMA", nome: "Fundo do Meio Ambiente", orgaoId: 2, orgaoSigla: "FMMA" },
+            { id: 5, sigla: "FMMA", nome: "Fundo Mun. do Meio Ambiente", orgaoId: 1, orgaoSigla: "PMRV", oculta: true },
+          ],
+          orgaos: [
+            { id: 1, sigla: "PMRV", nome: "Prefeitura Municipal de Rio Verde" },
+            { id: 2, sigla: "FMMA", nome: "Fundo Municipal do Meio Ambiente" },
           ],
           // Fonte LISTA: o planejado vem das planilhas (clique numa linha → Origem dos dados).
           planejado: [
             { unidadeId: 1, itens: 390, valor: 906_738.7, planilha: { id: 1, codigo: "AMAE", nome: "Planilha AMAE" } },
             { unidadeId: 2, itens: 2354, valor: 18_978_323.74, planilha: { id: 2, codigo: "FMAS", nome: "Planilha FMAS" } },
             { unidadeId: 3, itens: 569, valor: 3_701_579.8, planilha: { id: 3, codigo: "FEMBOM", nome: "Planilha FEMBOM" } },
+            { unidadeId: 4, itens: 2, valor: 87_200, planilha: { id: 4, codigo: "FMMA", nome: "Planilha FMMA" } },
           ],
           linhas: [
             { id: 1, orgao: "AGÊNCIA DE ÁGUA", unidade: "1 - AMAE", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: 1, valor: 1_390_566.98 },
             { id: 2, orgao: "FUNDO DE ASSISTÊNCIA", unidade: "2 - FMAS", nomeElemento: "SERVIÇOS DE TERCEIROS - PJ", codigoElemento: "339039", unidadeId: 2, valor: 14_441_470.23 },
             { id: 3, orgao: "FUNDO DOS BOMBEIROS", unidade: "3 - FEMBOM", nomeElemento: "EQUIPAMENTOS", codigoElemento: "449052", unidadeId: 3, valor: 4_021_478.05 },
             { id: 4, orgao: "GABINETE", unidade: "9 - GAB", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: null, valor: 120_000 },
+            { id: 5, orgao: "FUNDO DO MEIO AMBIENTE", unidade: "26 - FMMA", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: 5, valor: 2_812_500 },
           ],
         }}
       />

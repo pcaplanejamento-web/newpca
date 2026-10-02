@@ -54,9 +54,25 @@ export function OrcamentoVinculos({
     return grupos.filter((g) => g.itens.length > 0);
   }, [alvos, porId]);
 
+  // Sigla REPETIDA entre unidades (ex.: a unidade própria de um órgão dual): o órgão entra no rótulo — nunca duas iguais.
+  const siglasRepetidas = useMemo(() => {
+    const conta = new Map<string, number>();
+    for (const u of alvos.unidades) {
+      const k = u.sigla.trim().toUpperCase();
+      conta.set(k, (conta.get(k) ?? 0) + 1);
+    }
+    return new Set([...conta].filter(([, n]) => n > 1).map(([k]) => k));
+  }, [alvos]);
+  const textoAlvo = (tipo: TipoVinculo, a: AlvoVinculo) => {
+    const orgao =
+      tipo === "unidade" && siglasRepetidas.has(a.sigla.trim().toUpperCase()) && a.orgaoId != null
+        ? porId.orgao.get(a.orgaoId)?.sigla || porId.orgao.get(a.orgaoId)?.nome
+        : null;
+    return `${a.sigla} — ${a.nome}${orgao ? ` (${orgao})` : ""}`;
+  };
   const rotulo = (tipo: TipoVinculo, id: number | null) => {
     const a = id != null ? porId[tipo].get(id) : undefined;
-    return a ? `${a.sigla} — ${a.nome}` : "";
+    return a ? textoAlvo(tipo, a) : "";
   };
   const estado = (l: LinhaVinculo) => (l.alvoId != null ? "Vinculado" : l.sugestaoId != null ? "Sugestão" : "Sem vínculo");
   const sugeridas = linhas.filter((l) => l.alvoId == null && l.sugestaoId != null);
@@ -66,7 +82,7 @@ export function OrcamentoVinculos({
     const vis = (a: AlvoVinculo) => !a.oculto || a.id === l.alvoId;
     const opt = (a: AlvoVinculo) => (
       <option key={a.id} value={a.id}>
-        {a.sigla} — {a.nome}
+        {textoAlvo(l.tipo, a)}
         {a.oculto ? " (oculto)" : ""}
       </option>
     );
