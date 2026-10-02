@@ -75,7 +75,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.12"), false);
   assert.equal(versaoAtende("1.3.13"), false);
   assert.equal(versaoAtende("1.3.14"), false);
-  assert.equal(versaoAtende("1.3.15"), true);
+  assert.equal(versaoAtende("1.3.15"), false);
+  assert.equal(versaoAtende("1.3.16"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -346,12 +347,43 @@ test("anexo: o tipo vai como a tela da Centi manda (o registro do tipo carregado
   assert.deepEqual(campo(campo(corpo.Object, "Documentos")[0], "IdPessoaDocumentoTipo"), reg);
 });
 
-test("anexo: a extensão enxuta não carrega mais os contornos antigos do salvar", async () => {
+test("anexo: a dica do erro do salvar diz quais cabeçalhos da tela faltaram (só os nomes)", async () => {
   const A = await pecasAnexo();
-  for (const k of ["renovarRastreio", "dicaCabecalhos", "dicaTrilha"]) assert.equal(k in A, false, k);
-  const { readFileSync } = await import("node:fs");
-  const main = readFileSync("extensao-centi/centi-main.js", "utf8");
-  for (const k of ["doSalvar", "urlsSalvar", "viaSalvar", "trilhaSalvar", "executarFetch"]) assert.equal(main.includes(k), false, k);
+  assert.equal(A.dicaCabecalhos(null, ["Refreshtoken"], false), "");
+  assert.equal(A.dicaCabecalhos([], ["Refreshtoken"], true), "");
+  const tela = ["content-type", "accept", "refreshtoken", "company", "month", "modulekey", "x-ts-a"];
+  assert.equal(A.dicaCabecalhos(tela, ["Refreshtoken", "Company", "Month"], true), "Cabeçalhos do salvar da Centi que faltaram: modulekey.");
+  assert.match(A.dicaCabecalhos(tela, ["Refreshtoken", "Company", "Month", "Modulekey"], true), /anti-robô/);
+  assert.match(A.dicaCabecalhos(["refreshtoken"], ["Refreshtoken"], true), /mesmos/);
+});
+
+test("anexo: a dica do erro mostra os passos da tela antes do salvar (sem números longos)", async () => {
+  const A = await pecasAnexo();
+  assert.equal(A.dicaTrilha(null, "restauth/confirmsave"), "");
+  const d = A.dicaTrilha(["GET load?entity=102907&key=2332778", "POST upload?entity=102932"], "restauth/confirmsave");
+  assert.equal(d, "Passos da tela antes de salvar: GET load?entity=102907&key=233… › POST upload?entity=102932. Anexo: restauth/confirmsave.");
+});
+
+test("anexo: o rastreio (trace-*) vai NOVO em cada pedido; sessão e entidade ficam", async () => {
+  const A = await pecasAnexo();
+  const cab = {
+    Refreshtoken: "abc123def456ghi789jkl",
+    Company: "2",
+    "Trace-Guid": "11111111-2222-4333-8444-555555555555",
+    "Trace-Ticket": "1759340000000",
+    "X-Ai-Trace": "a1b2c3d4e5f6a7b8c9d0",
+    "trace-compact": "1",
+  };
+  let n = 0;
+  const r = A.renovarRastreio(cab, () => `aaaaaaaa-bbbb-4ccc-8ddd-${String(++n).padStart(12, "0")}`, 1760000000000, () => 0.5);
+  assert.equal(r.Refreshtoken, cab.Refreshtoken);
+  assert.equal(r.Company, "2");
+  assert.equal(r["Trace-Guid"], "aaaaaaaa-bbbb-4ccc-8ddd-000000000001");
+  assert.equal(r["Trace-Ticket"], "1760000000000");
+  assert.notEqual(r["X-Ai-Trace"], cab["X-Ai-Trace"]);
+  assert.equal(r["X-Ai-Trace"].length, cab["X-Ai-Trace"].length);
+  assert.match(r["X-Ai-Trace"], /^[0-9a-f]+$/);
+  assert.equal(r["trace-compact"], "1");
 });
 
 test("anexo: o token novo de cada resposta substitui o antigo (token, Bearer e refreshtoken)", async () => {
