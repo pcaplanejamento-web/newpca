@@ -5,11 +5,12 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 21;
+  const PROTOCOLO = 22;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
-  const SESSAO = "__pcaCentiSessao";
+  // Versão nova da chave: a sessão guardada pelas 1.3.8–1.3.17 trazia cabeçalhos acrescentados (token/Authorization).
+  const SESSAO = "__pcaCentiSessao_v2";
   let base = "";
   let cabecalhos = null;
   // Os cabeçalhos que a PRÓPRIA tela da Centi usou no salvar (confirmsave/save) e ao abrir um protocolo (load do módulo
@@ -321,14 +322,9 @@
     const ler = (n) => (h && (typeof h.get === "function" ? h.get(n) : h[n])) || null;
     const token = ler("token");
     const refresh = ler("refreshtoken");
-    for (const v of cli.todas) {
-      const c = v.defaults.headers.common;
-      if (token) {
-        c.token = token;
-        c.Authorization = `Bearer ${token}`;
-      }
-      if (refresh) c.refreshtoken = refresh;
-    }
+    // NUNCA escreve nos clientes da própria Centi (antes punha token/Authorization nos padrões deles e mudava a sessão da
+    // página); a tela cuida do token dela. Só a cópia da extensão acompanha.
+    if (!token && !refresh) return;
     trocarToken(ler);
   }
   /** Um pedido pelo cliente da Centi: { status, j } (j = o JSON da resposta), ou null sem o cliente. */

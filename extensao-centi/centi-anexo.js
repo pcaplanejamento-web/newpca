@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p21";
+  const NOME = "__pcaCentiAnexo_p22";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -234,17 +234,24 @@
    * token novo, os mesmos cabeçalhos. */
   function comTokenNovo(cab, token, refresh) {
     if (!token && !refresh) return cab;
+    // Só ATUALIZA o cabeçalho que a tela da Centi já manda (pelo nome, sem caixa) — NUNCA acrescenta um: a tela não manda
+    // "token"/"Authorization" no operation (só Refreshtoken + Company + Month), e acrescentá-los fazia a Centi responder
+    // "Usuário sem permissão!" na emissão do DFD (1.3.8 a 1.3.17).
     const novo = { ...cab };
-    const por = (re, nome, valor) => {
+    let mudou = false;
+    const por = (re, valor) => {
       const k = Object.keys(novo).find((n) => re.test(n));
-      novo[k ?? nome] = valor;
+      if (k && novo[k] !== valor) {
+        novo[k] = valor;
+        mudou = true;
+      }
     };
     if (token) {
-      por(/^token$/i, "token", token);
-      por(/^authorization$/i, "Authorization", `Bearer ${token}`);
+      por(/^token$/i, token);
+      por(/^authorization$/i, `Bearer ${token}`);
     }
-    if (refresh) por(/^refreshtoken$/i, "refreshtoken", refresh);
-    return novo;
+    if (refresh) por(/^refreshtoken$/i, refresh);
+    return mudou ? novo : cab;
   }
 
   globalThis[NOME] = Object.freeze({

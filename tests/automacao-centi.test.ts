@@ -77,7 +77,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.14"), false);
   assert.equal(versaoAtende("1.3.15"), false);
   assert.equal(versaoAtende("1.3.16"), false);
-  assert.equal(versaoAtende("1.3.17"), true);
+  assert.equal(versaoAtende("1.3.17"), false);
+  assert.equal(versaoAtende("1.3.18"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -391,7 +392,9 @@ test("anexo: o token novo de cada resposta substitui o antigo (token, Bearer e r
   const A = await pecasAnexo();
   const cab = { Refreshtoken: "r0", token: "t0", Authorization: "Bearer t0", Company: "2" };
   assert.deepEqual(A.comTokenNovo(cab, "t1", "r1"), { Refreshtoken: "r1", token: "t1", Authorization: "Bearer t1", Company: "2" });
-  assert.deepEqual(A.comTokenNovo({ Refreshtoken: "r0" }, "t1", null), { Refreshtoken: "r0", token: "t1", Authorization: "Bearer t1" });
+  // Nunca acrescenta cabeçalho que a tela não manda (o operation só leva Refreshtoken + Company + Month).
+  assert.deepEqual(A.comTokenNovo({ Refreshtoken: "r0", Company: "2" }, "t1", null), { Refreshtoken: "r0", Company: "2" });
+  assert.deepEqual(A.comTokenNovo({ Refreshtoken: "r0", Company: "2" }, "t1", "r1"), { Refreshtoken: "r1", Company: "2" });
   assert.deepEqual(A.comTokenNovo(cab, null, null), cab);
 });
 
