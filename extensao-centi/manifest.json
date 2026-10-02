@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PCA Rio Verde · Automação Centi",
-  "version": "1.3.22",
-  "description": "Canal entre a aba Automação do sistema PCA e a Centi já aberta (sessão da aba). Emite DFDs (sem vincular, assinar ou enviar) e só grava um documento novo no protocolo indicado.",
+  "version": "1.4.0",
+  "description": "Canal entre a aba Automação do sistema PCA e a Centi já aberta (sessão da aba). Emite DFDs (sem vincular, assinar ou enviar) e só grava um documento novo no protocolo indicado — com a autorização de uso único do sistema e a confirmação na janela da extensão.",
   "background": {
     "service_worker": "background.js"
   },
@@ -33,8 +33,7 @@
     {
       "matches": [
         "https://governarv.com.br/painel/automacao*",
-        "https://www.governarv.com.br/painel/automacao*",
-        "http://localhost:3000/painel/automacao*"
+        "https://www.governarv.com.br/painel/automacao*"
       ],
       "js": [
         "sistema-ponte.js"
@@ -43,6 +42,7 @@
     }
   ],
   "permissions": [
-    "scripting"
+    "scripting",
+    "storage"
   ]
 }

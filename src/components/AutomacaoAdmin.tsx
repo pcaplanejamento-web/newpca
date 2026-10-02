@@ -38,6 +38,7 @@ import {
 } from "@/lib/automacao-centi-core";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
+import { autorizarEscrita, cancelarExecucao, concluirPasso, iniciarExecucao, type PassoAnexo, registrarAnexo } from "@/lib/automacao-cliente";
 import { ZipArmazenar } from "@/lib/zip-armazenar";
 import { Ajuda } from "./Ajuda";
 import { useAlturaTela } from "./AlturaCheia";
@@ -84,6 +85,8 @@ type Resposta = {
   protocolo?: ProtocoloCenti;
   jaAnexado?: boolean;
   sequencial?: string;
+  /** O Id do documento gravado na Centi. */
+  documento?: string;
   /** A pergunta do confirmsave da Centi: o save só segue com o "sim" do ADM. */
   confirmar?: string;
   /** A operação "Emitir DFD" que a extensão pegou da própria tela da Centi (o Processar). */
@@ -672,13 +675,27 @@ export function AutomacaoAdmin({
   const [alvoTexto, setAlvoTexto] = useState<TextoAlvo>({ id: "", numero: "" });
   const [conferencia, setConferencia] = useState<{ carregando?: boolean; protocolo?: ProtocoloCenti; erro?: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
-  // O anexo como a tela da Centi: confirmsave → a Centi pedindo confirmação, a pergunta vai ao ADM e só o "sim" grava.
+  // O anexo pela PLATAFORMA: cada escrita leva a autorização de USO ÚNICO do sistema (a extensão a consome no servidor e
+  // pede a confirmação na janela dela). Como a tela da Centi: confirmsave → a pergunta da Centi vai ao ADM e só o "sim"
+  // grava (com uma autorização nova). Já registrado no sistema = não grava de novo. Gravado = registro + passo feito.
   const anexarNaCenti = useCallback(
-    async (dados: Record<string, unknown>, ms: number): Promise<Resposta> => {
-      const r = await pedir("anexar", dados, ms);
-      if (r.ok || !r.confirmar) return r;
-      const sim = await confirmar({ titulo: "A Centi pede confirmação", texto: r.confirmar, confirmar: "Confirmar e anexar" });
-      return sim ? pedir("anexar", { ...dados, aceitar: true }, ms) : { ok: false, erro: `Não anexado — confirmação recusada: ${r.confirmar}` };
+    async (execucaoId: number, passo: PassoAnexo, dados: Record<string, unknown>, ms: number): Promise<Resposta> => {
+      const uma = async (extra: Record<string, unknown>): Promise<Resposta> => {
+        const a = await autorizarEscrita(execucaoId, passo);
+        if ("erro" in a) return { ok: false, erro: a.erro };
+        if ("jaFeito" in a) return { ok: true, jaAnexado: true, documento: a.centiDocumento ?? undefined };
+        return pedir("anexar", { ...dados, ...extra, autorizacao: { token: a.token } }, ms);
+      };
+      let r = await uma({});
+      if (!r.ok && r.confirmar) {
+        const sim = await confirmar({ titulo: "A Centi pede confirmação", texto: r.confirmar, confirmar: "Confirmar e anexar" });
+        r = sim ? await uma({ aceitar: true }) : { ok: false, erro: `Não anexado — confirmação recusada: ${r.confirmar}` };
+      }
+      if (r.ok) {
+        const nota = r.jaAnexado ? "Já estava no protocolo." : `Documento ${r.sequencial ?? "?"} do protocolo.`;
+        await registrarAnexo(execucaoId, passo, r.documento ?? null, null, nota);
+      } else await concluirPasso(execucaoId, passo.chave, "falhou", r.erro ?? "A Centi não gravou.");
+      return r;
     },
     [pedir, confirmar],
   );
@@ -749,12 +766,6 @@ export function AutomacaoAdmin({
       toast.error(`Testar anexo: ${erro}`);
       return;
     }
-    const sim = await confirmar({
-      titulo: `Anexar um PDF de TESTE ao ${rotuloAlvo}?`,
-      texto: "Nenhum DFD é emitido. O documento entra no protocolo da Centi como “TESTE …” — exclua-o depois por lá.",
-      confirmar: "Anexar teste",
-    });
-    if (!sim) return;
     setTeste({ carregando: true });
     // A confirmação fecha o painel de Ajustes (o toque nela é fora dele): o andamento e o resultado vão também num aviso
     // flutuante — senão o teste corria sem nada à vista.
@@ -767,7 +778,11 @@ export function AutomacaoAdmin({
       const bytes = await doc.save();
       const hora = new Date().toLocaleTimeString("pt-BR").replace(/:/g, "h").slice(0, 5);
       const descricao = `TESTE - pode excluir - ${hora}`;
-      const r = await anexarNaCenti({ ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 120_000);
+      // A confirmação é a janela DA EXTENSÃO (mostra o protocolo e o documento) — a autorização vem do sistema.
+      const passo: PassoAnexo = { chave: "teste", alvo: { ...alvo, descricao } };
+      const ex = await iniciarExecucao("anexar-dfds", [passo], { teste: true, protocolo: alvo.numero, id: alvo.id });
+      if ("erro" in ex) throw new Error(ex.erro);
+      const r = await anexarNaCenti(ex.id, passo, { ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 300_000);
       const res = r.ok ? { ok: `Anexado (documento ${r.sequencial ?? "?"}). O anexo na Centi funciona.` } : { erro: r.erro ?? "A Centi não gravou." };
       setTeste(res);
       if ("ok" in res) toast.success(`Testar anexo: ${res.ok}`, 15_000);
@@ -930,16 +945,7 @@ export function AutomacaoAdmin({
     if (!arquivos.length || rodando) return;
     const plano = arquivos;
     const tipo = saida.tipoDocumento;
-    if (anexando) {
-      if (!alvo) return;
-      const n = plano.length;
-      const ok = await confirmar({
-        titulo: `Anexar ${n} PDF(s) ao ${rotuloAlvo} da Centi?`,
-        texto: `Cada PDF entra como um documento novo (tipo ${tipo}), com a descrição igual ao nome do arquivo. O que já estiver lá com a mesma descrição não é anexado de novo.`,
-        confirmar: "Anexar",
-      });
-      if (!ok) return;
-    }
+    if (anexando && !alvo) return;
     setRodando(true);
     setLinhas(previa);
     const marcar = (chave: string, l: Partial<Linha>) => setLinhas((ls) => (ls ?? []).map((x) => (x.chave === chave ? { ...x, ...l } : x)));
@@ -953,21 +959,44 @@ export function AutomacaoAdmin({
         return;
       }
     }
+    // A EXECUÇÃO no sistema (um passo por arquivo): sem ela, nada é gravado na Centi — a autorização sai dela. A
+    // confirmação é a janela da extensão (uma vez por execução e protocolo).
+    const passos = new Map<ArquivoSaida, PassoAnexo>(
+      anexando && alvo ? plano.map((a, i) => [a, { chave: `arquivo-${i + 1}`, alvo: { ...alvo, descricao: descricaoDoArquivo(a.nome) } }]) : [],
+    );
+    let execucaoId: number | null = null;
+    const reportados = new Set<string>();
+    if (anexando && alvo) {
+      const ex = await iniciarExecucao("anexar-dfds", [...passos.values()], { protocolo: alvo.numero, ano: alvo.ano, id: alvo.id, tipo });
+      if ("erro" in ex) {
+        setLinhas(previa.map((x) => (x.estado === "fila" ? { ...x, estado: "falha", erro: ex.erro } : x)));
+        toast.error(`Anexar: ${ex.erro}`, 15_000);
+        setRodando(false);
+        return;
+      }
+      execucaoId = ex.id;
+    }
     const destino = !anexando && saida.escolherPasta ? pasta : null;
     const zip = !anexando && !destino && (plano.length > 1 || plano[0].pastas.length > 0) ? new ZipArmazenar() : null;
     const pedacos: Blob[] = [];
     // Devolve a nota da linha (o anexo: o nº do documento na Centi). Falha → lança com o motivo.
     const gravar = async (a: ArquivoSaida, bytes: Uint8Array, unido = false): Promise<string | undefined> => {
-      if (anexando && alvo) {
+      const passo = passos.get(a);
+      if (anexando && alvo && execucaoId != null && passo) {
         // O PDF CRU da Centi (o relatório dela) é recusado no salvar do protocolo (500); o regravado pelo pdf-lib — o mesmo
         // do PDF unido, que a Centi aceita — vai no lugar. Não deu para regravar: o cru.
         const pdf = unido ? bytes : await regravarPdf(bytes).catch(() => bytes);
         const r = await anexarNaCenti(
+          execucaoId,
+          passo,
           { ...alvo, tipo, descricao: descricaoDoArquivo(a.nome), arquivo: a.nome, pdf: paraBase64(pdf) },
           320_000,
         );
+        reportados.add(passo.chave);
         if (!r.ok) throw new Error(r.erro ?? "A Centi não gravou.");
-        return r.jaAnexado ? `Já estava no protocolo (documento ${r.sequencial}) — não anexado de novo.` : `Documento ${r.sequencial} do protocolo.`;
+        return r.jaAnexado
+          ? `Já estava no protocolo${r.sequencial ? ` (documento ${r.sequencial})` : ""} — não anexado de novo.`
+          : `Documento ${r.sequencial} do protocolo.`;
       }
       if (destino) await gravarNaPasta(destino, a.pastas, a.nome, comoBlob(bytes));
       else if (zip) pedacos.push(...zip.adicionar([...a.pastas, a.nome].join("/"), bytes).map((b) => comoBlob(b)));
@@ -1038,6 +1067,13 @@ export function AutomacaoAdmin({
         );
         if (anexando && !res.ok) pararAnexo(res.nota);
       }
+    }
+    // Interrompida (falha do ambiente, anexo recusado): a execução é encerrada — os passos que sobraram não rodam.
+    if (execucaoId != null) {
+      if (parar) await cancelarExecucao(execucaoId);
+      else
+        for (const x of passos.values())
+          if (!reportados.has(x.chave)) await concluirPasso(execucaoId, x.chave, "falhou", "Nenhum DFD deste arquivo foi emitido.");
     }
     if (zip && !zip.vazio) {
       pedacos.push(...zip.fechar().map((b) => comoBlob(b)));

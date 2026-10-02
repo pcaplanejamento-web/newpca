@@ -93,7 +93,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.19"), false);
   assert.equal(versaoAtende("1.3.20"), false);
   assert.equal(versaoAtende("1.3.21"), false);
-  assert.equal(versaoAtende("1.3.22"), true);
+  assert.equal(versaoAtende("1.3.22"), false);
+  assert.equal(versaoAtende("1.4.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -182,7 +183,7 @@ test("extensão: arquivos gerados em dia com extensao-centi/ e zip com a logo", 
   const { ARQUIVOS_EXTENSAO } = await import("../src/lib/extensao-centi-arquivos.ts");
   const { pngDoDataUrl, zipDaExtensao } = await import("../src/lib/extensao-zip.ts");
   const pasta = new URL("../extensao-centi/", import.meta.url);
-  const nomes = readdirSync(pasta).filter((n) => /\.(js|json)$/.test(n)).sort();
+  const nomes = readdirSync(pasta).filter((n) => /\.(js|json|html)$/.test(n)).sort();
   assert.deepEqual(Object.keys(ARQUIVOS_EXTENSAO).sort(), nomes, "rode: node scripts/gerar-extensao.mjs");
   for (const n of nomes) assert.equal(ARQUIVOS_EXTENSAO[n], readFileSync(new URL(n, pasta), "utf8"), `${n} desatualizado — rode: node scripts/gerar-extensao.mjs`);
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0]);

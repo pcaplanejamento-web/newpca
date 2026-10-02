@@ -3434,6 +3434,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   dono, não ensaio, rodando, passo pendente, não feito, limite `automacaoEscrita` 60/min), `POST
   …/autorizacoes/consumir` (pela EXTENSÃO: Origin `chrome-extension://` ou o próprio site; mesma capacidade e mesmo alvo
   em tempo constante; freio de novo) e `GET/POST …/registros`.
+  **ENTREGA 2 (extensão 1.4.0) — o ANEXO só pela plataforma:** a tela cria a execução `anexar-dfds` (um passo por
+  arquivo — `automacao-cliente.ts`: `iniciarExecucao`/`autorizarEscrita`/`registrarAnexo`/`concluirPasso`/
+  `cancelarExecucao`), pede a autorização de CADA escrita (já registrado = não grava de novo) e manda o token com o pedido;
+  a **`sistema-ponte.js`** (mundo isolado — scripts da página não a alcançam) CONSOME a autorização no servidor para o alvo
+  tirado do PRÓPRIO pedido (Id + nº + ano + descrição) e leva o pedido SEM o token; o **`background.js`** recusa o
+  "anexar" sem a autorização ou com outro alvo e abre a **janela de confirmação DA EXTENSÃO** (`confirmar.html`/
+  `confirmar.js`, `chrome.windows.create`; uma vez por execução + protocolo, guardado em `chrome.storage.session`;
+  recusar, fechar ou 2 min sem resposta = não grava) — XSS na página do sistema não aprova nada. A pergunta do
+  `confirmsave` da Centi segue para o ADM (o "sim" pede uma autorização nova). Gravado = `automacao_registros` + passo
+  feito; interrompido = execução cancelada; arquivo sem DFD emitido = passo falhou. Sem `localhost` no manifesto nem no
+  serviço; permissão `storage`; o gerador inclui `.html`. Testes (vm, `chrome` falso): `tests/extensao-seguranca.test.ts`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

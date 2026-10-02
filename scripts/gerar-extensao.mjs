@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 const pasta = new URL("../extensao-centi/", import.meta.url);
 const arquivos = Object.fromEntries(
   readdirSync(pasta)
-    .filter((n) => /\.(js|json)$/.test(n))
+    .filter((n) => /\.(js|json|html)$/.test(n))
     .sort()
     .map((n) => [n, readFileSync(new URL(n, pasta), "utf8")]),
 );
