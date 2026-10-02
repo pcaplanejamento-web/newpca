@@ -4,7 +4,9 @@
 // conferida antes de CADA clique). As peças recebem o documento/janela — testadas com um DOM falso.
 (() => {
   const g = globalThis;
-  if (g.__pcaCentiTela) return;
+  // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
+  const VERSAO = 2;
+  if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
     String(s ?? "")
@@ -84,7 +86,7 @@
     const inputs = todos(raiz).filter((el) => el.tagName === "INPUT" && visivel(el));
     const porNome = inputs.find((i) => norm(attr(i, "placeholder")) === "DEPARTAMENTOS");
     if (porNome) return porNome;
-    const temRotulo = porTexto(raiz, (s) => s === "DEPARTAMENTOS").length > 0;
+    const temRotulo = porTexto(raiz, (s) => s === "DEPARTAMENTOS").length > 0 || todos(raiz).some((el) => /^remove\s/i.test(String(attr(el, "aria-label") ?? "")));
     const combo = inputs.find((i) => attr(i, "role") === "combobox" || attr(i, "aria-autocomplete") === "list");
     if (combo && (temRotulo || todos(raiz).some((el) => /multiValue|multi-value/i.test(String(el.className ?? ""))))) return combo;
     return null;
@@ -133,7 +135,14 @@
   /** Os nomes que estão ESCOLHIDOS no seletor agora (os "chips"). */
   function escolhidos(painel) {
     const chips = todos(painel).filter((el) => /multiValue|multi-value/i.test(String(el.className ?? "")) && !/label|remove/i.test(String(el.className ?? "")));
-    return chips.map((c) => String(c.textContent ?? "").replace(/×/g, "").trim()).filter(Boolean);
+    const nomes = chips.map((c) => String(c.textContent ?? "").replace(/×/g, "").trim()).filter(Boolean);
+    // Sem nomes de classe (build da Centi): o botão de tirar do react-select diz "Remove <nome>".
+    if (!nomes.length)
+      for (const el of todos(painel)) {
+        const m = /^remove\s+(.+)$/i.exec(String(attr(el, "aria-label") ?? "").trim());
+        if (m) nomes.push(m[1].trim());
+      }
+    return [...new Set(nomes)];
   }
 
   async function departamentos(ctx) {
@@ -150,14 +159,18 @@
     const { win } = ctx;
     const campo = campoDepartamentos(painel);
     if (!campo) throw new Error("Não achei o campo Departamentos na Tela Protocolo.");
+    const quer = nomes.map(norm);
+    // Já escolhidas exatamente as pedidas: nada a mexer.
+    const antes = escolhidos(painel).map(norm);
+    if (antes.length === quer.length && quer.every((q) => antes.includes(q))) return;
     // Tira o que estava escolhido (Backspace com o campo vazio remove o último chip).
     for (let i = 0; i < 40 && escolhidos(painel).length; i++) {
       campo.focus?.();
       tecla(win, campo, "Backspace");
       await pausa(win, 60);
     }
-    const quer = nomes.map(norm);
     for (const alvo of quer) {
+      if (escolhidos(painel).some((n) => norm(n) === alvo)) continue;
       const opcoes = await abrirSeletor(ctx, campo);
       const op = opcoes.find((o) => texto(o) === alvo);
       if (!op) {
@@ -182,120 +195,271 @@
   }
 
   // ---------------------------------------------------------------- A GRADE
-  const RE_ABA = (rotulo) => new RegExp(`^${rotulo}( \\(\\d+\\))?$`);
+  const RE_ABA = (rotulo) => new RegExp(`^${rotulo}(\\s*\\(\\d+\\))?$`);
   function abrirAba(ctx, rotulo) {
     const aba = porTexto(ctx.doc, (s) => RE_ABA(rotulo).test(s))[0];
     if (!aba) throw new Error(`Não achei a aba “${rotulo}”.`);
     clicar(ctx.win, aba);
   }
-  /** O número da aba ("Em Análise (3)" → 3), ou null. */
+  /** O número da aba ("Em Análise (3)" → 3; a aba sem número = 0), ou null sem a aba. */
   function contagemAba(doc, rotulo) {
     const aba = porTexto(doc, (s) => RE_ABA(rotulo).test(s))[0];
-    const m = aba ? /\((\d+)\)$/.exec(texto(aba)) : null;
-    return m ? Number(m[1]) : null;
+    if (!aba) return null;
+    const m = /\((\d+)\)$/.exec(texto(aba));
+    return m ? Number(m[1]) : 0;
   }
 
   const CAMPOS = { PROTOCOLO: "protocolo", ANO: "ano", DEPARTAMENTO: "departamento", INTERESSADO: "interessado", SOLICITANTE: "solicitante", NATUREZA: "natureza" };
-  /** A grade visível: a linha do cabeçalho (com PROTOCOLO) e as linhas de dados com a MESMA forma. */
-  function lerGrade(painel) {
-    const rotulo = porTexto(painel, (s) => s === "PROTOCOLO")[0];
-    if (!rotulo) return null;
-    let cab = rotulo.parentElement;
-    while (cab && cab.children.length < 3) cab = cab.parentElement;
-    if (!cab) return null;
-    const cabecalhos = Array.from(cab.children).map(texto);
-    const linhas = todos(painel).filter(
-      (el) => el !== cab && el.tagName === cab.tagName && el.children.length === cab.children.length && visivel(el) && !Array.from(el.children).some((c) => texto(c) === "PROTOCOLO"),
-    );
-    const registros = [];
-    for (const l of linhas) {
-      const celulas = Array.from(l.children).map((c) => String(c.textContent ?? "").replace(/\s+/g, " ").trim());
-      const campos = {};
-      cabecalhos.forEach((h, i) => {
-        if (h) campos[h] = celulas[i] ?? "";
-      });
-      const r = { campos };
-      for (const [h, chave] of Object.entries(CAMPOS)) r[chave] = campos[h] ?? "";
-      if (/\d/.test(r.protocolo)) registros.push(r);
+  const RE_PROTOCOLO = /^\d[\d./-]*$/;
+  const celula = (el) => String(el?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+  /**
+   * O CABEÇALHO da grade: o MENOR ancestral comum dos rótulos visíveis PROTOCOLO, ANO e INTERESSADO (procurados no
+   * documento inteiro — a grade fica fora do bloco dos filtros; o "Protocolo" do menu lateral não tem ANO/INTERESSADO).
+   */
+  function acharCabecalho(doc) {
+    const anos = porTexto(doc, (s) => s === "ANO");
+    const ints = porTexto(doc, (s) => s === "INTERESSADO");
+    let melhor = null;
+    for (const p of porTexto(doc, (s) => s === "PROTOCOLO")) {
+      let n = p.parentElement;
+      for (let i = 0; n && i < 10; i++, n = n.parentElement) {
+        if (anos.some((x) => n.contains(x)) && ints.some((x) => n.contains(x))) {
+          // Uma LINHA de cabeçalho: cada filho com um rótulo curto e os três rótulos em colunas diferentes.
+          const filhos = Array.from(n.children);
+          const col = (rot) => filhos.findIndex((f) => f === rot || f.contains?.(rot));
+          const cols = [col(p), col(anos.find((x) => n.contains(x))), col(ints.find((x) => n.contains(x)))];
+          const linha = new Set(cols).size === 3 && !cols.includes(-1) && filhos.every((f) => texto(f).length <= 40);
+          const tam = todos(n).length;
+          if (linha && (!melhor || tam < melhor.tam)) melhor = { cab: n, tam };
+          break;
+        }
+      }
     }
-    return { cabecalhos: cabecalhos.filter(Boolean), registros };
+    return melhor?.cab ?? null;
   }
-  /** "Exibindo 12 registro(s)" / "Exibindo 1 a 100 de 230" → o total; "Nenhum resultado" → 0. */
-  function totalDoRodape(painel) {
-    const t = texto(painel);
-    if (/NENHUM RESULTADO/.test(t)) return 0;
-    const de = /EXIBINDO\s+\d+\s*(?:A|-)\s*\d+\s+DE\s+(\d+)/.exec(t);
-    if (de) return Number(de[1]);
-    const m = /EXIBINDO\s+(\d+)\s+REGISTRO/.exec(t);
-    return m ? Number(m[1]) : null;
+  /** O rótulo de cada coluna = o texto do FILHO do cabeçalho (os ícones de ordenar/filtrar não têm texto). */
+  const rotulosDe = (cab) => Array.from(cab.children).map(texto);
+
+  function registro(cabecalhos, celulas) {
+    const campos = {};
+    cabecalhos.forEach((h, i) => {
+      if (h) campos[h] = celulas[i] ?? "";
+    });
+    const r = { campos };
+    for (const [h, chave] of Object.entries(CAMPOS)) r[chave] = campos[h] ?? "";
+    return RE_PROTOCOLO.test(r.protocolo) ? r : null;
   }
-  function botaoProxima(painel) {
+
+  /** Pela ESTRUTURA: as linhas com a mesma tag e o mesmo nº de filhos do cabeçalho, perto dele. */
+  function porEstrutura(cab, cabecalhos) {
+    let raiz = cab.parentElement;
+    for (let i = 0; raiz && i < 8; i++, raiz = raiz.parentElement) {
+      const linhas = todos(raiz).filter((el) => el !== cab && !cab.contains(el) && !el.contains?.(cab) && el.tagName === cab.tagName && el.children.length === cab.children.length && visivel(el));
+      const regs = linhas.map((l) => registro(cabecalhos, Array.from(l.children).map(celula))).filter(Boolean);
+      if (regs.length) return regs;
+    }
+    return [];
+  }
+
+  /** Pela POSIÇÃO na tela: cada texto abaixo do cabeçalho vai à coluna sob a qual está; as linhas pela altura. */
+  function porPosicao(doc, cab, cabecalhos) {
+    const caixa = (el) => (typeof el?.getBoundingClientRect === "function" ? el.getBoundingClientRect() : null);
+    const cols = Array.from(cab.children).map((c) => caixa(c));
+    if (!cols.some((c) => c && c.width > 0)) return [];
+    const base = Math.max(...cols.filter(Boolean).map((c) => c.bottom));
+    const folhas = [];
+    for (const el of todos(doc.body ?? doc)) {
+      if (el.children.length || cab.contains(el) || !visivel(el)) continue;
+      const t = celula(el);
+      if (!t) continue;
+      const b = caixa(el);
+      if (!b || b.top < base - 1) continue;
+      const cx = (b.left + b.right) / 2;
+      const i = cols.findIndex((c) => c && c.width > 0 && cx >= c.left && cx <= c.right);
+      if (i >= 0) folhas.push({ i, t, cy: (b.top + b.bottom) / 2 });
+    }
+    folhas.sort((a, b) => a.cy - b.cy);
+    const grupos = [];
+    for (const f of folhas) {
+      const g = grupos[grupos.length - 1];
+      if (g && f.cy - g.cy <= 6) g.itens.push(f);
+      else grupos.push({ cy: f.cy, itens: [f] });
+    }
+    return grupos
+      .map((g) => {
+        const cel = cabecalhos.map(() => "");
+        for (const f of g.itens) cel[f.i] = cel[f.i] ? `${cel[f.i]} ${f.t}` : f.t;
+        return registro(cabecalhos, cel);
+      })
+      .filter(Boolean);
+  }
+
+  /** A grade visível: os rótulos das colunas e os protocolos (pela estrutura; sem linhas, pela posição). */
+  function lerGrade(doc) {
+    const cab = acharCabecalho(doc);
+    if (!cab) return null;
+    const cabecalhos = rotulosDe(cab);
+    let registros = porEstrutura(cab, cabecalhos);
+    if (!registros.length) registros = porPosicao(doc, cab, cabecalhos);
+    return { cab, cabecalhos: cabecalhos.filter(Boolean), registros };
+  }
+  /** "Exibindo 12 registro(s)" / "Exibindo 1 a 100 de 230" → o total; "Nenhum resultado" → 0 (no bloco da grade). */
+  function totalDoRodape(raiz) {
+    if (!raiz) return null;
+    let n = raiz;
+    for (let i = 0; n && i < 10; i++, n = n.parentElement) {
+      const t = texto(n);
+      if (/EXIBINDO|NENHUM RESULTADO/.test(t)) {
+        const de = /EXIBINDO\s+\d+\s*(?:A|-)\s*\d+\s+DE\s+(\d+)/.exec(t);
+        if (de) return Number(de[1]);
+        const m = /EXIBINDO\s+(\d+)\s+REGISTRO/.exec(t);
+        if (m) return Number(m[1]);
+        if (/NENHUM RESULTADO/.test(t)) return 0;
+      }
+    }
+    return null;
+  }
+  function botaoProxima(raiz) {
     return (
-      todos(painel).find((el) => {
+      todos(raiz).find((el) => {
         if (!visivel(el) || el.disabled || attr(el, "aria-disabled") === "true") return false;
         const r = `${norm(attr(el, "aria-label"))} ${norm(attr(el, "title"))}`;
         return /PROXIMA|NEXT/.test(r) || ["›", ">", "»"].includes(String(el.textContent ?? "").trim());
       }) ?? null
     );
   }
+  /** O bloco da grade (para o rodapé e a paginação): o ancestral do cabeçalho que tem o "Exibindo…". */
+  function blocoDaGrade(cab, doc) {
+    let n = cab;
+    for (let i = 0; n && i < 10; i++, n = n.parentElement) if (/EXIBINDO|NENHUM RESULTADO/.test(texto(n))) return n;
+    return doc.body ?? null;
+  }
+
+  /** A FORMA da tela (sem dados de sessão), para ajustar a leitura quando a Centi muda. */
+  function diagnostico(doc, etapa) {
+    const forma = (el) => (el ? `${String(el.tagName ?? "").toLowerCase()}${el.className ? `.${String(el.className).trim().split(/\s+/).slice(0, 2).join(".")}` : ""}[${el.children?.length ?? 0}]` : "—");
+    const l = [`etapa: ${etapa}`];
+    try {
+      l.push(
+        `rótulos: PROTOCOLO=${porTexto(doc, (s) => s === "PROTOCOLO").length} ANO=${porTexto(doc, (s) => s === "ANO").length} INTERESSADO=${porTexto(doc, (s) => s === "INTERESSADO").length}`,
+      );
+      l.push(`aba Em Análise: ${contagemAba(doc, "EM ANALISE")}`);
+      const cab = acharCabecalho(doc);
+      if (cab) {
+        l.push(`cabeçalho: ${forma(cab)} colunas=${rotulosDe(cab).join("|")}`);
+        let c = cab.parentElement;
+        const sobe = [];
+        for (let i = 0; c && i < 5; i++, c = c.parentElement) sobe.push(forma(c));
+        l.push(`acima: ${sobe.join(" < ")}`);
+        l.push(`rodapé: ${totalDoRodape(cab)}`);
+        const g = lerGrade(doc);
+        l.push(`lidos: ${g?.registros.length ?? 0}`);
+      } else l.push("cabeçalho: não achado");
+      const nums = todos(doc.body ?? doc)
+        .filter((el) => visivel(el) && !el.children.length && /^\d{4,7}$/.test(celula(el)))
+        .slice(0, 3);
+      for (const n of nums) {
+        const sobe = [];
+        let c = n;
+        for (let i = 0; c && i < 6; i++, c = c.parentElement) sobe.push(forma(c));
+        l.push(`número ${celula(n)}: ${sobe.join(" < ")}`);
+      }
+    } catch (e) {
+      l.push(`falha no diagnóstico: ${e?.message}`);
+    }
+    return l.join("\n").slice(0, 1500);
+  }
 
   async function emAnalise(ctx, nomes) {
     const { doc, win } = ctx;
     if (!Array.isArray(nomes) || !nomes.length || nomes.length > 50 || nomes.some((n) => typeof n !== "string" || !n.trim() || n.length > 120))
       throw new Error("Escolha de 1 a 50 repartições.");
+    ctx.etapa = "abrir a Tela Protocolo";
     const painel = await abrirTela(ctx);
+    ctx.etapa = "escolher as repartições";
     await escolherDepartamentos(ctx, painel, nomes);
+    ctx.etapa = "pesquisar (lupa)";
     const lupa = botaoPesquisar(painel);
     if (!lupa) throw new Error("Não achei o botão de pesquisar (lupa) da Tela Protocolo.");
     clicar(win, lupa);
     await pausa(win, ctx.passo ?? 250);
-    await esperarAte(ctx, () => contagemAba(doc, "EM ANALISE") !== null || porTexto(doc, (s) => RE_ABA("EM ANALISE").test(s)).length > 0, "A pesquisa não terminou.");
+    // A pesquisa termina quando a contagem da aba para de mudar (3 leituras iguais).
+    let ultima;
+    let iguais = 0;
+    await esperarAte(
+      ctx,
+      () => {
+        const c = contagemAba(doc, "EM ANALISE");
+        if (c === null) return null;
+        if (c === ultima) iguais++;
+        else {
+          iguais = 0;
+          ultima = c;
+        }
+        return iguais >= 3 || null;
+      },
+      "A pesquisa não terminou (não achei a aba Em Análise).",
+    );
+    ctx.etapa = "abrir a aba Em Análise";
     abrirAba(ctx, "EM ANALISE");
     const esperado = contagemAba(doc, "EM ANALISE");
+    ctx.etapa = "ler a grade";
     const registros = new Map();
     let cabecalhos = [];
     for (let pagina = 0; pagina < 50; pagina++) {
       let anterior = -1;
       let estavel = 0;
-      // A grade carrega depois do clique: espera o cabeçalho e as linhas ficarem iguais em 2 leituras.
+      // A grade carrega depois do clique: espera os protocolos ficarem iguais em 3 leituras. Aba sem protocolos =
+      // espera curta (a contagem pode chegar atrasada) e termina vazia.
+      const prazo = esperado === 0 ? Math.min(ctx.prazo ?? 15000, 3000) : undefined;
       const grade = await esperarAte(
         ctx,
         () => {
-          const gr = lerGrade(painel);
-          if (esperado === 0 && totalDoRodape(painel) === 0) return { cabecalhos: [], registros: [] };
-          if (!gr) return null;
-          if (gr.registros.length === anterior) estavel++;
+          const gr = lerGrade(doc);
+          const n = gr ? gr.registros.length : -1;
+          if (n === anterior) estavel++;
           else {
             estavel = 0;
-            anterior = gr.registros.length;
+            anterior = n;
           }
-          return estavel >= 2 && (gr.registros.length || totalDoRodape(painel) === 0) ? gr : null;
+          if (estavel < 2) return null;
+          if (gr && n > 0) return gr;
+          if (gr && totalDoRodape(gr.cab) === 0) return gr;
+          return null;
         },
-        "A grade de “Em Análise” não carregou (não achei a coluna PROTOCOLO).",
-      );
+        esperado === 0 ? "__vazio__" : "Não consegui ler os protocolos da aba Em Análise.",
+        prazo,
+      ).catch((e) => {
+        if (esperado === 0) return { cab: null, cabecalhos: [], registros: [] };
+        throw e;
+      });
       if (grade.cabecalhos.length) cabecalhos = grade.cabecalhos;
       for (const r of grade.registros) registros.set(`${r.protocolo}|${r.ano}`, r);
-      const total = totalDoRodape(painel) ?? esperado;
+      if (!grade.cab) break;
+      const total = totalDoRodape(grade.cab) ?? esperado;
       if (total == null || registros.size >= total) break;
-      const prox = botaoProxima(painel);
+      const prox = botaoProxima(blocoDaGrade(grade.cab, doc));
       if (!prox) break;
       clicar(win, prox);
       await pausa(win, (ctx.passo ?? 250) * 2);
     }
     const lista = [...registros.values()];
-    return { protocolos: lista, total: esperado ?? totalDoRodape(painel) ?? lista.length, cabecalhos };
+    if (esperado && lista.length === 0) throw new Error(`A aba Em Análise indica ${esperado} protocolo(s), mas não consegui ler a grade.`);
+    return { protocolos: lista, total: esperado || lista.length, cabecalhos };
   }
 
   /** O ponto de entrada da ponte: "telaDepartamentos" | "telaEmAnalise". */
-  async function executar(acao, dados, ctx) {
+  async function executar(acao, dados, ctx0) {
+    const ctx = { ...ctx0 };
     try {
       if (acao === "telaDepartamentos") return { ok: true, departamentos: await departamentos(ctx) };
       if (acao === "telaEmAnalise") return { ok: true, ...(await emAnalise(ctx, dados?.departamentos)) };
       return { ok: false, erro: "Ação desconhecida." };
     } catch (e) {
-      return { ok: false, erro: e?.message || "Falha na Tela Protocolo." };
+      return { ok: false, erro: e?.message || "Falha na Tela Protocolo.", diagnostico: diagnostico(ctx.doc, ctx.etapa ?? acao) };
     }
   }
 
-  g.__pcaCentiTela = Object.freeze({ norm, seguro, acharTela, campoDepartamentos, botaoPesquisar, lerGrade, totalDoRodape, contagemAba, escolhidos, executar });
+  g.__pcaCentiTela = Object.freeze({ versao: VERSAO, norm, diagnostico, acharCabecalho, seguro, acharTela, campoDepartamentos, botaoPesquisar, lerGrade, totalDoRodape, contagemAba, escolhidos, executar });
 })();

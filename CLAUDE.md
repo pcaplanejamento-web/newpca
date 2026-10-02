@@ -3558,6 +3558,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Natureza · No sistema — `noSistemaTela`, o ano tem de bater; `normalizarProtocolosTela`) + Exportar; "Tratar selecionados"
   desabilitado (próxima entrega). Testes: `tests/automacao-tela-centi.test.ts` (DOM falso como nos prints: seletor com chips,
   lupa, PROTOCOLAR nunca tocado, abas, grade paginada).
+  **1.9.1 — a grade lida de verdade:** o cabeçalho da grade é procurado no DOCUMENTO (a grade fica FORA do bloco dos
+  filtros): `acharCabecalho` = o menor ancestral comum dos rótulos PROTOCOLO · ANO · INTERESSADO com os três em FILHOS
+  diferentes e rótulos curtos (o "Protocolo" do menu lateral não conta; a célula com ícones de ordenar/filtrar também não);
+  linhas pela ESTRUTURA (mesma tag e nº de filhos do cabeçalho) e, sem elas, pela POSIÇÃO (`getBoundingClientRect`: o texto
+  vai à coluna sob a qual está, as linhas pela altura — grade virtualizada); o rodapé/paginação pelo bloco da grade; a aba
+  aceita "Em Análise(1)"; a aba sem número = 0; a pesquisa termina quando a contagem para de mudar; chips também pelo
+  `aria-label` "Remove …" (já escolhidas = nada a mexer). Falha → `{erro, diagnostico}` (a FORMA do DOM, ≤ 1,5 KB, sem
+  dados de sessão) → `Callout` fixo + "Copiar diagnóstico" na tarefa. A peça guarda a `versao` (a mais nova substitui a
+  que ficou na aba).
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

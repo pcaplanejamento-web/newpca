@@ -19,6 +19,8 @@ class El {
   disabled = false;
   hidden = false;
   offsetWidth = 10;
+  /** A caixa na tela (para a leitura pela posição). */
+  _rect: { left: number; right: number; top: number; bottom: number; width: number } | null = null;
   proprio: string;
   ouvintes: Record<string, ((e: Ev) => void)[]> = {};
   constructor(tag: string, o: { texto?: string; attrs?: Record<string, string>; className?: string; id?: string } = {}) {
@@ -66,6 +68,9 @@ class El {
     return this;
   }
   focus() {}
+  getBoundingClientRect() {
+    return this._rect ?? { left: 0, right: 0, top: 0, bottom: 0, width: 0 };
+  }
   /** Os eventos SOBEM (como no navegador): o clique no rótulo chega à aba que o contém. */
   dispatchEvent(e: Ev) {
     for (let n: El | null = this; n; n = n.parentElement) for (const f of n.ouvintes[e.type] ?? []) f(e);
@@ -77,7 +82,9 @@ const DEPARTAMENTOS = ["DEP. PLANEJAMENTO - PCA", "PCA – MARIA FERNANDA", "PCA
 type Protocolo = [string, string, string, string];
 
 /** A página da Centi como nos prints. `telaAberta` = a PO011 já está na tela; senão, só a aba "PO011" no topo. */
-function centi(o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]>; porPagina?: number; escolhidos?: string[] } = {}) {
+function centi(
+  o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]>; porPagina?: number; escolhidos?: string[]; semEspaco?: boolean; semClasses?: boolean; semGrade?: boolean } = {},
+) {
   const body = new El("body");
   const cliques: string[] = [];
   const escolhidos: string[] = [...(o.escolhidos ?? [])];
@@ -93,7 +100,12 @@ function centi(o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]
   const placeholder = new El("div", { texto: "Departamentos", className: "css-placeholder" });
   function desenharChips() {
     valores.children = [];
-    for (const n of escolhidos) valores.add(new El("div", { className: "css-1p3m7a8-multiValue" }).add(new El("div", { texto: n, className: "css-9jq23d-MultiValueLabel" }), new El("div", { texto: "×", className: "css-v7duua-MultiValueRemove" })));
+    for (const n of escolhidos)
+      valores.add(
+        o.semClasses
+          ? new El("div", { className: "css-1p3m7a8" }).add(new El("div", { texto: n, className: "css-9jq23d" }), new El("div", { className: "css-v7duua", attrs: { role: "button", "aria-label": `Remove ${n}` } }))
+          : new El("div", { className: "css-1p3m7a8-multiValue" }).add(new El("div", { texto: n, className: "css-9jq23d-MultiValueLabel" }), new El("div", { texto: "×", className: "css-v7duua-MultiValueRemove" })),
+      );
     if (!escolhidos.length) valores.add(placeholder);
     valores.add(campo);
   }
@@ -142,7 +154,7 @@ function centi(o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]
     const n = doAnalise().length;
     for (const [rot, k] of [
       ["A Receber", "A RECEBER"],
-      [`Em Análise${pesquisados.length && n ? ` (${n})` : ""}`, "EM ANALISE"],
+      [`Em Análise${pesquisados.length && n ? `${o.semEspaco ? "" : " "}(${n})` : ""}`, "EM ANALISE"],
       ["Analisado", "ANALISADO"],
       ["Em Transito", "EM TRANSITO"],
     ])
@@ -157,9 +169,12 @@ function centi(o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]
   function desenharGrade() {
     grade.children = [];
     const tabela = new El("table");
-    if (aba === "EM ANALISE") {
+    if (aba === "EM ANALISE" && o.semGrade) {
+      grade.add(new El("div", { texto: "carregando…" }));
+    } else if (aba === "EM ANALISE") {
       const cab = new El("tr");
-      for (const h of ["", "PROTOCOLO", "ANO", "DEPARTAMENTO", "INTERESSADO", "SOLICITANTE", "NATUREZA"]) cab.add(new El("th").add(new El("span", { texto: h })));
+      // Cada célula do cabeçalho: o rótulo + os ícones de ordenar e filtrar (3 filhos — como na Centi).
+      for (const h of ["", "PROTOCOLO", "ANO", "DEPARTAMENTO", "INTERESSADO", "SOLICITANTE", "NATUREZA"]) cab.add(new El("th").add(new El("span", { texto: h }), new El("i"), new El("i")));
       tabela.add(new El("thead").add(cab));
       const todos = doAnalise();
       const corpo = new El("tbody");
@@ -188,20 +203,22 @@ function centi(o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]
   }
   desenharAbas();
   desenharGrade();
-  const painel = new El("div").add(new El("div", { texto: "Tela Protocolo" }), new El("div").add(controle, lupa, protocolar), abas, grade);
+  // O bloco dos filtros (título + seletor + lupa) e, AO LADO dele (fora), as abas e a grade — como na Centi.
+  const painel = new El("div").add(new El("div", { texto: "Tela Protocolo" }), new El("div").add(controle, lupa, protocolar));
+  const corpoTela = new El("div").add(abas, grade);
 
   const busca = new El("input", { attrs: { placeholder: "Pesquisar..." } });
-  const sidebar = new El("aside").add(busca);
+  const sidebar = new El("aside").add(busca, new El("span", { texto: "Protocolo" }));
   const topo = new El("div");
   const conteudo = new El("main");
   const abrirTelaNaPagina = () => {
-    if (!conteudo.children.length) conteudo.add(painel);
+    if (!conteudo.children.length) conteudo.add(painel, corpoTela);
   };
   topo.add(new El("span", { texto: "PO011 - Tela Protocolo" }).on("click", abrirTelaNaPagina));
   busca.on("input", () => {
     if (busca.value === "PO011") sidebar.add(new El("a", { texto: "PO011 - Tela Protocolo" }).on("click", abrirTelaNaPagina));
   });
-  if (o.telaAberta) conteudo.add(painel);
+  if (o.telaAberta) conteudo.add(painel, corpoTela);
   body.add(sidebar, topo, conteudo);
   const doc = { body, querySelectorAll: (s: string) => body.querySelectorAll(s) };
   return { doc, cliques, escolhidos };
@@ -210,9 +227,13 @@ function centi(o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]
 function peca() {
   const ctx: Record<string, unknown> = {};
   vm.runInNewContext(readFileSync("extensao-centi/centi-tela.js", "utf8"), ctx);
-  const t = ctx.__pcaCentiTela as { executar: (a: string, d: unknown, c: unknown) => Promise<unknown>; seguro: (e: unknown) => boolean };
+  const t = ctx.__pcaCentiTela as {
+    executar: (a: string, d: unknown, c: unknown) => Promise<unknown>;
+    seguro: (e: unknown) => boolean;
+    lerGrade: (doc: unknown) => { registros: Record<string, string>[] } | null;
+  };
   // O resultado volta por JSON (outro "realm" do vm): compara-se como dado puro.
-  return { seguro: t.seguro, executar: async (a: string, d: unknown, c: unknown) => JSON.parse(JSON.stringify(await t.executar(a, d, c))) as Record<string, unknown> };
+  return { seguro: t.seguro, lerGrade: (d: unknown) => JSON.parse(JSON.stringify(t.lerGrade(d)?.registros ?? null)), executar: async (a: string, d: unknown, c: unknown) => JSON.parse(JSON.stringify(await t.executar(a, d, c))) as Record<string, unknown> };
 }
 const evento = class {
   type: string;
@@ -276,5 +297,60 @@ test("tela protocolo: repartição que não existe = erro claro; nada vazio; o P
   assert.equal(peca().seguro(new El("button", { texto: "PROTOCOLAR" })), false);
   assert.equal(peca().seguro(new El("button", { attrs: { title: "Operações" } })), false);
   assert.equal(peca().seguro(new El("div", { texto: "Em Análise (1)" })), true);
+  assert.ok(!c.cliques.includes("PROTOCOLAR"));
+});
+
+test("tela protocolo: aba “Em Análise(1)” sem espaço e chips só com o aria-label “Remove …” (build sem classes)", async () => {
+  const c = centi({
+    telaAberta: true,
+    semEspaco: true,
+    semClasses: true,
+    escolhidos: ["PCA - COORDENADOR (JHONE)"], // já escolhida: nada a mexer
+    emAnalise: { "PCA - COORDENADOR (JHONE)": [["156844", "2026", "PCA - COORDENADOR (JHO…", "SECRETARIA DE PLANEJAMENTO E …"]] },
+  });
+  const r = await peca().executar("telaEmAnalise", { departamentos: ["PCA - COORDENADOR (JHONE)"] }, ctx(c.doc));
+  assert.equal(r.ok, true, String(r.erro));
+  assert.deepEqual(
+    (r.protocolos as { protocolo: string }[]).map((p) => p.protocolo),
+    ["156844"],
+  );
+  assert.deepEqual(c.escolhidos, ["PCA - COORDENADOR (JHONE)"]);
+  assert.deepEqual(c.cliques, ["lupa"]);
+});
+
+test("tela protocolo: grade de DIVs sem a forma do cabeçalho = leitura pela POSIÇÃO na tela", () => {
+  const caixa = (el: El, left: number, top: number, w = 100, h = 30) => {
+    el._rect = { left, right: left + w, top, bottom: top + h, width: w };
+    return el;
+  };
+  const rot = ["", "PROTOCOLO", "ANO", "DEPARTAMENTO", "INTERESSADO", "SOLICITANTE", "NATUREZA"];
+  const cab = new El("div");
+  for (const [i, h] of rot.entries()) cab.add(caixa(new El("div").add(new El("span", { texto: h }), new El("i")), i * 100, 0));
+  // As células numa lista única (grade virtualizada), cada uma posicionada; + o rodapé.
+  const corpo = new El("div");
+  const linhas = [
+    ["156844", "2026", "PCA - JHONE", "SEC. PLANEJAMENTO", "", "INCLUSÃO - PCA"],
+    ["157001", "2026", "PCA - CRISTIANE", "SEC. SAÚDE", "", "INCLUSÃO - PCA"],
+  ];
+  for (const [j, l] of linhas.entries())
+    for (const [i, v] of l.entries()) if (v) corpo.add(caixa(new El("span", { texto: v }), (i + 1) * 100 + 5, 40 + j * 35, 90, 20));
+  corpo.add(caixa(new El("span", { texto: "Exibindo 2 registro(s)" }), 150, 200, 200, 20));
+  const body = new El("body").add(new El("aside").add(new El("span", { texto: "Protocolo" })), cab, corpo);
+  const doc = { body, querySelectorAll: (s: string) => body.querySelectorAll(s) };
+  const regs = peca().lerGrade(doc) as { protocolo: string; ano: string; interessado: string }[];
+  assert.deepEqual(
+    regs.map((r) => `${r.protocolo}/${r.ano} ${r.interessado}`),
+    ["156844/2026 SEC. PLANEJAMENTO", "157001/2026 SEC. SAÚDE"],
+  );
+});
+
+test("tela protocolo: sem a grade, o erro traz o DIAGNÓSTICO da forma da tela", async () => {
+  // A aba diz 1 protocolo, mas a grade não tem o cabeçalho (a Centi mudou).
+  const c = centi({ telaAberta: true, semGrade: true, emAnalise: { "PCA - CRISTIANE": [["157001", "2026", "PCA - CRISTIANE", "X"]] } });
+  const r = await peca().executar("telaEmAnalise", { departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), prazo: 300 });
+  assert.equal(r.ok, false);
+  assert.match(String(r.diagnostico), /etapa: ler a grade/);
+  assert.match(String(r.diagnostico), /aba Em Análise: 1/);
+  assert.match(String(r.diagnostico), /cabeçalho: não achado/);
   assert.ok(!c.cliques.includes("PROTOCOLAR"));
 });
