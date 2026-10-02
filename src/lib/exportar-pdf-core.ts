@@ -14,7 +14,64 @@ export type TabelaPdf = {
   cabecalho: string[];
   linhas: string[][];
   alinhar?: Alinhamento[];
+  /** A COR do texto de cada célula (CSS: "#rrggbb", "rgb()", "var(--danger)"…; null = a do texto) — a mesma da tela. */
+  cores?: (string | null | undefined)[][];
+  /** Linhas em DESTAQUE (índices — ex.: a linha TOTAL): negrito sobre o fundo de destaque. */
+  destaques?: number[];
 };
+
+/** As CORES do PDF — as do design system no tema CLARO (papel): título, cabeçalho, zebra, bordas e as semânticas. */
+export type PaletaPdf = {
+  texto: string;
+  muted: string;
+  titulo: string;
+  cabecalhoFundo: string;
+  cabecalhoTexto: string;
+  zebra: string;
+  borda: string;
+  destaque: string;
+  /** Os tokens que uma célula pode pedir por `var(--nome)`. */
+  tokens: Record<string, string>;
+};
+
+/** O tema claro do sistema (`globals.css`) — vale quando o documento está escuro ou sem tokens. */
+export const PALETA_PADRAO: PaletaPdf = {
+  texto: "#0f1626",
+  muted: "#586173",
+  titulo: "#4f46e5",
+  cabecalhoFundo: "#eef1ff",
+  cabecalhoTexto: "#4f46e5",
+  zebra: "#f4f6f8",
+  borda: "#dee2e8",
+  destaque: "#eef1ff",
+  tokens: {
+    text: "#0f1626",
+    "text-2": "#2d3644",
+    muted: "#586173",
+    faint: "#8b93a3",
+    accent: "#4f46e5",
+    ok: "#16a34a",
+    warn: "#ca8a04",
+    danger: "#dc2626",
+    info: "#2563eb",
+  },
+};
+
+/**
+ * Uma cor CSS em RGB 0–1 (hex de 3/6 dígitos, `rgb()`/`rgba()`, ou `var(--token)` pela paleta); o que não se entende
+ * (oklch, nome…) = `null` (o texto fica na cor padrão).
+ */
+export function corRgb(css: string | null | undefined, paleta: PaletaPdf = PALETA_PADRAO): [number, number, number] | null {
+  let c = String(css ?? "").trim();
+  const v = /^var\(\s*--([\w-]+)\s*(?:,[^)]*)?\)$/.exec(c);
+  if (v) c = paleta.tokens[v[1]] ?? "";
+  let m = /^#([0-9a-f]{3})$/i.exec(c);
+  if (m) c = `#${[...m[1]].map((x) => x + x).join("")}`;
+  m = /^#([0-9a-f]{6})$/i.exec(c);
+  if (m) return [0, 2, 4].map((i) => Number.parseInt(m?.[1].slice(i, i + 2) ?? "0", 16) / 255) as [number, number, number];
+  const r = /^rgba?\(\s*(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)/i.exec(c);
+  return r ? ([r[1], r[2], r[3]].map((x) => Math.min(255, Number(x)) / 255) as [number, number, number]) : null;
+}
 
 /** Largura (pt) do texto no tamanho dado; `negrito` = a fonte do cabeçalho. */
 export type Medir = (texto: string, tamanho: number, negrito?: boolean) => number;
@@ -177,10 +234,11 @@ export function colunasDaTabela(t: TabelaPdf, cols: number[]): TabelaPdf {
     cabecalho: cols.map((j) => t.cabecalho[j] ?? ""),
     linhas: t.linhas.map((l) => cols.map((j) => l[j] ?? "")),
     alinhar: t.alinhar ? cols.map((j) => t.alinhar?.[j] ?? "left") : undefined,
+    cores: t.cores ? t.cores.map((l) => cols.map((j) => l?.[j] ?? null)) : undefined,
   };
 }
 
-export type LinhaLayout = { celulas: string[][]; altura: number; cabecalho?: boolean };
+export type LinhaLayout = { celulas: string[][]; altura: number; cabecalho?: boolean; /** O índice da linha da tabela. */ origem?: number };
 export type PaginaLayout = { linhas: LinhaLayout[] };
 export type LayoutPdf = { tamanho: number; larguras: number[]; cabecalho: LinhaLayout; paginas: PaginaLayout[] };
 
@@ -216,12 +274,12 @@ export function montarLayoutPdf(t: TabelaPdf, medir: Medir): LayoutPdf {
     paginas.push({ linhas: [] });
     livre = corpo;
   };
-  for (const valores of t.linhas) {
+  for (const [origem, valores] of t.linhas.entries()) {
     let cel = celulasDe(valores, false);
     for (;;) {
       const altura = alturaDe(cel);
       if (altura <= livre) {
-        paginas[paginas.length - 1].linhas.push({ celulas: cel, altura });
+        paginas[paginas.length - 1].linhas.push({ celulas: cel, altura, origem });
         livre -= altura;
         break;
       }
@@ -236,7 +294,7 @@ export function montarLayoutPdf(t: TabelaPdf, medir: Medir): LayoutPdf {
         continue;
       }
       const parte = cel.map((c) => c.slice(0, cabe));
-      paginas[paginas.length - 1].linhas.push({ celulas: parte, altura: alturaDe(parte) });
+      paginas[paginas.length - 1].linhas.push({ celulas: parte, altura: alturaDe(parte), origem });
       cel = cel.map((c) => c.slice(cabe));
       novaPagina();
     }

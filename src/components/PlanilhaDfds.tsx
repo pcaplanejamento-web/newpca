@@ -200,6 +200,8 @@ export function PlanilhaDfds({
             : r.resumo?.rotulos?.length
               ? r.resumo.rotulos
               : [r.resumo?.rotulo || estadoRotulo(r.estado, regras)],
+      // A MESMA cor da célula no PDF exportado.
+      corPdf: (r) => (r.processando ? null : r.estadoMotivo ? "var(--danger)" : r.resumo?.rotulo ? r.resumo.cor : estadoCor(r.estado, regras)),
       render: (r) => {
         // Em processamento: spinner + O QUE está acontecendo (feedback real da análise/conferência).
         if (r.processando) return <EstadoProcessando rotulo={PROCESSANDO_ROTULO[r.processando]} fila={r.processando === "fila"} />;

@@ -2118,7 +2118,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `atualizarOrcamento`/`excluirOrcamento`/`inserirOrcamentoItens`); schemas Zod em `orcamento-validation.ts` (puro).
 - **Parser DEDICADO (`.xlsx`):** `parse-orcamento-xlsx(-core/-comum).ts` — detecção de colunas **pelo CABEÇALHO, por
   posição** (Órgão/Unidade/Função/Programa/Ação/Nome Elemento/Código/Ficha/Fonte + valores, em qualquer ordem; colunas
-  MESCLADAS vazias no meio são ignoradas; o CUBO ANTIGO, sem as 5 colunas novas, segue lido; `rotuloColunaOrcamento`), com a leitura
+  MESCLADAS vazias no meio são ignoradas; `rotuloColunaOrcamento`). **Planilha CONFERIDA antes de importar (nova ou reenvio):** as 15 colunas de `COLUNAS_ORCAMENTO` são OBRIGATÓRIAS (`faltam` — o CUBO antigo, sem Função/Programa/Ação/Ficha/Fonte, é recusado) e cada linha é conferida (`erros` {linha, coluna, motivo}: texto vazio, valor que não é número, Ficha só dígitos, Código com número; até `MAX_ERROS_PLANILHA`=500); o `ImportarOrcamento` mostra as colunas que faltam e a tabela dos problemas e trava o Importar ("Planilha com problemas"); o servidor recusa pelo MESMO critério (`orcamentoItemImportSchema` estrito), com a leitura
   SheetJS no navegador (`raw:false`, fora do bundle do Worker). Pula o título e o **rodapé** ("Qtd. total N"), convertendo
   os valores com **`parseValorPlanilha`** (tolerante a en-US `"5,000,000.00"` E pt-BR `"5.000.000,00"`, inteiros com
   milhar e negativos). Validado contra o CUBO real: **1.345 lançamentos, 18 órgãos, 39 unidades** (bate com o "Qtd. total"
@@ -3061,7 +3061,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   layout PURO e testado em **`exportar-pdf-core.ts`**): A4 deitado, título + "N linhas · filtros: …" no topo de cada página,
   o cabeçalho das colunas repetido, larguras pelo conteúdo (a fonte desce de 8 a 5,5 antes de quebrar), texto QUEBRADO por
   palavra na célula (nada truncado — a linha alta continua na página seguinte), números formatados como na tela
-  (`Column.formatarFaixa`, senão R$ nas faixas e número nas demais) e à direita, zebra, e o rodapé **"Baixado por <nome>
+  (`Column.formatarFaixa`, senão R$ nas faixas e número nas demais) e à direita, zebra, **COLORIDO como a tabela** (`PaletaPdf` lida dos tokens do tema claro — no escuro, `PALETA_PADRAO`; cabeçalho no `--accent-soft` com o título em accent, a cor de cada célula pela **`Column.corPdf`** — Estado das tabelas da Mesa/DFDs, faixas do PCA × Orçamento — e os negativos em `--danger`; `corRgb` aceita hex/rgb()/var(--token); `destaques` = linhas em negrito, ex.: o TOTAL do Comparativo), e o rodapé **"Baixado por <nome>
   (matrícula N) em dd/mm/aaaa às hh:mm (horário de Brasília) · Página N de M"** (quem = `useQuemExporta`, o contexto
   `ConfigTabelas` do layout do painel; na tela pública, sem o nome);
   tabela larga demais sai em FAIXAS de colunas com as congeladas repetidas (`faixasDeColunas`); caracteres fora das

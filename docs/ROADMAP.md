@@ -1577,3 +1577,5 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Emissão síncrona**: o protocolo é emitido com "Assíncrono = Não" (no assíncrono a Centi gerava em segundo plano e a chave devolvida dava 404).
 ✅ **Automação sem rolar o navegador**: de 1024px para cima os três modos ocupam até o fim do display (tabela e Análise rolam por dentro, Análise ao lado já no `lg`); as repartições da Tela Protocolo num dropdown (`SeletorMultiplo suspenso`) — carregar não desloca mais a tela.
 ⏳ **Próximas**: tratar os protocolos escolhidos (emitir/baixar e analisar), o "Aprender" guiado, receitas novas a partir de gravações (relatórios, consultas, tramitar — esta por último, com validador próprio) e CSP de scripts (exige revisar pdf.js/OCR/Turnstile antes).
+✅ **Orçamento: planilha conferida** — a nova planilha (ou o reenvio) só é importada com as 15 colunas do CUBO e todos os dados corretos; a prévia lista as colunas que faltam e cada problema por linha/coluna.
+✅ **PDFs coloridos** — os PDFs das tabelas saem com as cores da própria tabela (cabeçalho, estados, faixas, negativos, linha de total).

@@ -1033,6 +1033,13 @@ export function DfdsView({
         if (pendente || naoConferido) return [pendente ? "Conferindo…" : NAO_CONFERIDO];
         return conf.resumo?.rotulos.length ? conf.resumo.rotulos : [ESTADO_PROTOCOLO_ROTULO[conf.estado]];
       },
+      // A MESMA cor da célula no PDF exportado.
+      corPdf: (r) => {
+        const { conf, pendente, naoConferido } = estadoDoProtocolo(r);
+        if (pendente) return null;
+        if (naoConferido) return "var(--muted)";
+        return conf.resumo?.rotulo ? conf.resumo.cor : estadoProtocoloCor(conf.estado, regras);
+      },
       render: (r) => {
         const { conf, pendente, naoConferido } = estadoDoProtocolo(r);
         if (pendente) return <EstadoProcessando rotulo="Conferindo…" />;
@@ -1426,6 +1433,10 @@ export function DfdsView({
       nowrap: true,
       value: atributoItem.estado.valor,
       valores: atributoItem.estado.valores,
+      corPdf: (r) => {
+        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
+        return res.rotulo ? res.cor : estadoItemCor(estadoItem(r));
+      },
       render: (r) => {
         const res = resumoEstado(mensagensItem(r, repDoItem(r)));
         if (res.rotulo) return <EstadoResumo res={res} />;
@@ -1591,6 +1602,7 @@ export function DfdsView({
       nowrap: true,
       value: (l) => infoDe(l).estado.rotulo || ESTADO_ITEM_ROTULO.regular,
       filtroExterno: filtroExterno("estado"),
+      corPdf: (l) => (infoDe(l).estado.rotulo ? infoDe(l).estado.cor : estadoItemCor("regular")),
       render: (l) => {
         const e = infoDe(l).estado;
         return e.rotulo ? <EstadoResumo res={e} /> : <EstadoPonto cor={estadoItemCor("regular")} rotulo={ESTADO_ITEM_ROTULO.regular} />;

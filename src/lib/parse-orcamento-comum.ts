@@ -24,10 +24,17 @@ export type OrcamentoItemParseado = {
   sequencial: number;
 };
 
+/** Um problema numa LINHA da planilha (a linha como o Excel numera — 1 = a primeira). */
+export type ErroPlanilhaOrcamento = { linha: number; coluna: string; motivo: string };
+
 export type OrcamentoParseado = {
   nome: string | null; // título sugerido (editável no envio)
   itens: OrcamentoItemParseado[];
   total: number; // Σ Valor Inicial (dotação)
+  /** As colunas OBRIGATÓRIAS que a planilha não tem (rótulos) — com qualquer uma, não se importa. */
+  faltam: string[];
+  /** Os dados incorretos linha a linha (texto obrigatório vazio, valor que não é número, ficha fora do padrão). */
+  erros: ErroPlanilhaOrcamento[];
 };
 
 // Colunas do relatório de orçamento — detectadas pelo CABEÇALHO, em qualquer ordem.
@@ -47,6 +54,28 @@ export type ColKeyOrcamento =
   | "empenho"
   | "saldo"
   | "anulacao";
+
+/**
+ * As colunas OBRIGATÓRIAS do relatório (o padrão ATUAL do CUBO), na ordem do relatório — a planilha só é aceita com
+ * TODAS (os vínculos dependem da Ação; as visões e o comparativo, das demais). `texto` = o dado não pode faltar na linha.
+ */
+export const COLUNAS_ORCAMENTO: { key: ColKeyOrcamento; rotulo: string; texto: boolean }[] = [
+  { key: "orgao", rotulo: "Órgão", texto: true },
+  { key: "unidade", rotulo: "Unidade", texto: true },
+  { key: "funcao", rotulo: "Função", texto: true },
+  { key: "programa", rotulo: "Programa", texto: true },
+  { key: "acao", rotulo: "Ação", texto: true },
+  { key: "nomeElemento", rotulo: "Nome Elemento", texto: true },
+  { key: "codigoElemento", rotulo: "Código Elemento", texto: true },
+  { key: "ficha", rotulo: "Ficha", texto: true },
+  { key: "fonte", rotulo: "Fonte", texto: true },
+  { key: "emenda", rotulo: "Valor Emenda Impositiva", texto: false },
+  { key: "inicial", rotulo: "Valor Inicial", texto: false },
+  { key: "suplementacao", rotulo: "Valor Suplementação", texto: false },
+  { key: "empenho", rotulo: "Valor Empenho", texto: false },
+  { key: "saldo", rotulo: "Saldo", texto: false },
+  { key: "anulacao", rotulo: "Valor Anulação", texto: false },
+];
 
 /** Classifica um rótulo/token de cabeçalho numa coluna do orçamento (ou null). A palavra
  * DISTINTIVA decide o valor ("VALOR" sozinho não decide). */

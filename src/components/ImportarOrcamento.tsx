@@ -5,10 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { enviarOrcamentoEmLotes, substituirOrcamentoEmLotes } from "@/lib/importar-orcamento";
 import type { OrcamentoResumo } from "@/lib/orcamento";
-import type { OrcamentoItemParseado } from "@/lib/parse-orcamento-comum";
+import type { ErroPlanilhaOrcamento, OrcamentoItemParseado } from "@/lib/parse-orcamento-comum";
 import { parseOrcamentoXlsx } from "@/lib/parse-orcamento-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
+import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { Dropzone } from "./Dropzone";
@@ -17,7 +18,14 @@ import { IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 
-type Preview = { itens: OrcamentoItemParseado[]; total: number };
+type Preview = { itens: OrcamentoItemParseado[]; total: number; faltam: string[]; erros: ErroPlanilhaOrcamento[] };
+
+/** Os PROBLEMAS da planilha (linha · coluna · o quê) — a prévia os lista e a importação fica travada. */
+const COLUNAS_ERROS: Column<ErroPlanilhaOrcamento>[] = [
+  { key: "linha", header: "Linha", nowrap: true, value: (e) => (e.linha ? String(e.linha) : ""), render: (e) => (e.linha ? e.linha : "—") },
+  { key: "coluna", header: "Coluna", nowrap: true, value: (e) => e.coluna, render: (e) => e.coluna || "—" },
+  { key: "motivo", header: "Problema", align: "left", minWidth: 260, value: (e) => e.motivo, render: (e) => <span className="text-text">{e.motivo}</span> },
+];
 
 const ANO_ATUAL = new Date().getFullYear();
 
@@ -94,7 +102,7 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
       }
       setNome(alvo ? alvo.nome : (parsed.nome ?? file.name.replace(/\.(xlsx|xls)$/i, "")).slice(0, 200));
       setAno(String(alvo ? alvo.ano : ANO_ATUAL));
-      setPreview({ itens: parsed.itens, total: parsed.total });
+      setPreview({ itens: parsed.itens, total: parsed.total, faltam: parsed.faltam, erros: parsed.erros });
     } catch (e) {
       setAviso({ kind: "danger", texto: e instanceof Error ? e.message : "Falha ao ler o arquivo." });
     }
@@ -102,7 +110,9 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
 
   const anoNum = ano.trim() ? Number(ano) : null;
   const anoValido = anoNum != null && Number.isInteger(anoNum) && anoNum >= 2000 && anoNum <= 2100;
-  const podeImportar = preview != null && nome.trim().length > 0 && anoValido;
+  // Só com TODAS as colunas obrigatórias e TODOS os dados corretos (a planilha é conferida ao ler).
+  const planilhaOk = preview != null && preview.faltam.length === 0 && preview.erros.length === 0;
+  const podeImportar = preview != null && planilhaOk && nome.trim().length > 0 && anoValido;
 
   async function importar() {
     if (!preview || !anoValido || !anoNum) return;
@@ -170,8 +180,8 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
                 <Button variant="ghost" onClick={() => setPreview(null)}>
                   Cancelar
                 </Button>
-                <Button onClick={importar} disabled={!podeImportar}>
-                  {verbo} {num(preview.itens.length)} {preview.itens.length === 1 ? "lançamento" : "lançamentos"}
+                <Button onClick={importar} disabled={!podeImportar} title={planilhaOk ? undefined : "Corrija a planilha e envie de novo"}>
+                  {planilhaOk ? `${verbo} ${num(preview.itens.length)} ${preview.itens.length === 1 ? "lançamento" : "lançamentos"}` : "Planilha com problemas"}
                 </Button>
               </div>
             )
@@ -220,6 +230,30 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
                 </div>
               )}
             </dl>
+            {preview.faltam.length > 0 && (
+              <Callout kind="danger">
+                Faltam {preview.faltam.length === 1 ? "a coluna obrigatória" : `${num(preview.faltam.length)} colunas obrigatórias`}:{" "}
+                <strong>{preview.faltam.join(", ")}</strong>. Exporte o relatório CUBO completo (Órgão, Unidade, Função, Programa, Ação,
+                Nome Elemento, Código Elemento, Ficha, Fonte e os valores) e envie de novo.
+              </Callout>
+            )}
+            {preview.erros.length > 0 && (
+              <>
+                <Callout kind="danger">
+                  A planilha tem dados incorretos — corrija as linhas abaixo e envie de novo. Nada foi gravado.
+                </Callout>
+                <DataTable
+                  columns={COLUNAS_ERROS}
+                  rows={preview.erros}
+                  getKey={(e) => `${e.linha}:${e.coluna}:${e.motivo}`}
+                  pageSize={10}
+                  density="compact"
+                  minWidth={520}
+                  exportar={{ nome: "Problemas da planilha do orçamento" }}
+                  resumo={(l) => `${num(l.length)} ${l.length === 1 ? "problema" : "problemas"}`}
+                />
+              </>
+            )}
             <DataTable
               columns={COLUNAS_PREVIA}
               rows={preview.itens}

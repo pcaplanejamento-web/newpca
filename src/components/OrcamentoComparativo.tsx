@@ -248,6 +248,9 @@ export function OrcamentoComparativo({
           cabecalho: cab.map(String),
           linhas: corpo.map((l) => l.map((v) => (typeof v === "number" ? brl(v) : v))),
           alinhar: cab.map((_, j) => (j < numeros ? "left" : "right")),
+          // A linha TOTAL em destaque (como na tabela); negativos em vermelho.
+          destaques: [corpo.length - 1],
+          cores: corpo.map((l) => l.map((v) => (typeof v === "number" && v < 0 ? "var(--danger)" : null))),
         }, { fixas: numeros + 1, usuario: quemExporta });
       }
     } catch {

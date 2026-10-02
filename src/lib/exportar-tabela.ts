@@ -12,6 +12,8 @@ export type ColunaPlanilha<R> = {
   cabecalho: string;
   /** O NÚMERO como TEXTO no PDF (padrão: pt-BR com até 2 casas). */
   formatar?: (n: number) => string;
+  /** A COR do texto da célula no PDF (CSS — a mesma da tela, ex.: "var(--danger)"); sem ela, número negativo = vermelho. */
+  cor?: (r: R) => string | null | undefined;
   /** Coluna de data (o valor é ISO — sai em dd/mm/aaaa). */
   data?: boolean;
   valor?: (r: R) => string;
@@ -55,13 +57,14 @@ export function linhasPlanilhaTabela<R>(colunas: readonly ColunaPlanilha<R>[], l
 const numeroBR = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 
 /**
- * A MESMA tabela para o PDF: tudo como TEXTO (o número formatado — R$, %, quantidade — como a tela mostra) e o
- * alinhamento de cada coluna (números à direita). Linhas e colunas = as da planilha.
+ * A MESMA tabela para o PDF: tudo como TEXTO (o número formatado — R$, %, quantidade — como a tela mostra), o
+ * alinhamento de cada coluna (números à direita) e a COR de cada célula (a da coluna; senão, número negativo em
+ * vermelho). Linhas e colunas = as da planilha.
  */
 export function tabelaParaPdf<R>(
   colunas: readonly ColunaPlanilha<R>[],
   linhas: readonly R[],
-): { cabecalho: string[]; linhas: string[][]; alinhar: ("left" | "right")[] } {
+): { cabecalho: string[]; linhas: string[][]; alinhar: ("left" | "right")[]; cores: (string | null)[][] } {
   const cols = colunasExportaveis(colunas);
   const texto = (c: ColunaPlanilha<R>, r: R): string => {
     const v = celula(c, r);
@@ -71,6 +74,14 @@ export function tabelaParaPdf<R>(
     cabecalho: cols.map((c) => c.cabecalho),
     linhas: linhas.map((r) => cols.map((c) => texto(c, r))),
     alinhar: cols.map((c) => (c.numero ? "right" : "left")),
+    cores: linhas.map((r) =>
+      cols.map((c) => {
+        const propria = c.cor?.(r);
+        if (propria) return propria;
+        const n = c.numero?.(r);
+        return typeof n === "number" && n < 0 ? "var(--danger)" : null;
+      }),
+    ),
   };
 }
 

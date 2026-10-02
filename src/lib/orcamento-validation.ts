@@ -6,23 +6,26 @@ import { z } from "zod";
  * LEITURA (importar/visualizar): não há schema de edição de item.
  */
 
-// Uma linha (lançamento) vinda do parser da planilha.
+// Uma linha (lançamento) vinda do parser da planilha — a MESMA conferência da tela (`COLUNAS_ORCAMENTO`): todos os textos
+// do CUBO preenchidos, Ficha só com dígitos, Código com número e valores numéricos finitos.
+const obrigatorio = (rotulo: string, max: number) => z.string().trim().min(1, `${rotulo} vazio.`).max(max);
+const valor = z.number().finite().default(0);
 export const orcamentoItemImportSchema = z.object({
-  orgao: z.string().trim().max(300).default(""),
-  unidade: z.string().trim().max(300).default(""),
-  nomeElemento: z.string().trim().max(500).default(""),
-  codigoElemento: z.string().trim().max(60).default(""),
-  funcao: z.string().trim().max(300).default(""),
-  programa: z.string().trim().max(300).default(""),
-  acao: z.string().trim().max(300).default(""),
-  ficha: z.string().trim().max(60).default(""),
-  fonte: z.string().trim().max(500).default(""),
-  valorEmendaImpositiva: z.number().default(0),
-  valorInicial: z.number().default(0),
-  valorSuplementacao: z.number().default(0),
-  valorEmpenho: z.number().default(0),
-  saldo: z.number().default(0),
-  valorAnulacao: z.number().default(0),
+  orgao: obrigatorio("Órgão", 300),
+  unidade: obrigatorio("Unidade", 300),
+  nomeElemento: obrigatorio("Nome Elemento", 500),
+  codigoElemento: obrigatorio("Código Elemento", 60).regex(/\d/, "Código Elemento sem número."),
+  funcao: obrigatorio("Função", 300),
+  programa: obrigatorio("Programa", 300),
+  acao: obrigatorio("Ação", 300),
+  ficha: obrigatorio("Ficha", 60).regex(/^\d+$/, "Ficha fora do padrão."),
+  fonte: obrigatorio("Fonte", 500),
+  valorEmendaImpositiva: valor,
+  valorInicial: valor,
+  valorSuplementacao: valor,
+  valorEmpenho: valor,
+  saldo: valor,
+  valorAnulacao: valor,
   sequencial: z.number().int().nullable().default(null),
 });
 export type OrcamentoItemImport = z.infer<typeof orcamentoItemImportSchema>;

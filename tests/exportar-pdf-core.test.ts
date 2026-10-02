@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   colunasDaTabela,
+  corRgb,
+  PALETA_PADRAO,
   entrelinha,
   faixasDeColunas,
   largurasColunas,
@@ -98,6 +100,30 @@ describe("exportar-pdf-core — texto e nome", () => {
       ],
       [{ n: "A", v: 10 }],
     );
-    assert.deepEqual(r, { cabecalho: ["Nome", "Valor"], linhas: [["A", "R$ 10"]], alinhar: ["left", "right"] });
+    assert.deepEqual(r, { cabecalho: ["Nome", "Valor"], linhas: [["A", "R$ 10"]], alinhar: ["left", "right"], cores: [[null, null]] });
+  });
+  it("tabelaParaPdf: a cor da coluna (como na tela); sem ela, número negativo em vermelho", () => {
+    const r = tabelaParaPdf(
+      [
+        { cabecalho: "Estado", valor: (x: { e: string; v: number }) => x.e, cor: (x: { e: string; v: number }) => (x.e === "Erro" ? "var(--danger)" : null) },
+        { cabecalho: "Valor", numero: (x: { e: string; v: number }) => x.v },
+      ],
+      [
+        { e: "Erro", v: 5 },
+        { e: "Ok", v: -3 },
+      ],
+    );
+    assert.deepEqual(r.cores, [
+      ["var(--danger)", null],
+      [null, "var(--danger)"],
+    ]);
+  });
+  it("corRgb: hex, rgb() e var(--token) pela paleta; o resto, null", () => {
+    assert.deepEqual(corRgb("#ffffff"), [1, 1, 1]);
+    assert.deepEqual(corRgb("#000"), [0, 0, 0]);
+    assert.deepEqual(corRgb("rgb(255, 0, 0)"), [1, 0, 0]);
+    assert.deepEqual(corRgb("var(--danger)"), corRgb(PALETA_PADRAO.tokens.danger));
+    assert.equal(corRgb("oklch(0.5 0.1 200)"), null);
+    assert.equal(corRgb(null), null);
   });
 });

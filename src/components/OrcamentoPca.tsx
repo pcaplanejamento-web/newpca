@@ -283,7 +283,7 @@ export function OrcamentoPca({
     colNome,
     colLado,
     { key: "contratacoes", header: "Contratações", nowrap: true, filter: "range", numero: (l) => l.contratacoes, formatarFaixa: num, render: (l) => num(l.contratacoes) },
-    { key: "planejado", header: "Contratações do PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.planejado, render: (l) => <span className="text-accent">{brl(l.planejado)}</span> },
+    { key: "planejado", header: "Contratações do PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.planejado, corPdf: () => "var(--accent)", render: (l) => <span className="text-accent">{brl(l.planejado)}</span> },
     { key: "orcamento", header: "Orçamento para o PCA", align: "right", nowrap: true, filter: "range", numero: (l) => l.orcamento, render: (l) => brl(l.orcamento) },
     {
       key: "diferenca",
@@ -292,6 +292,7 @@ export function OrcamentoPca({
       nowrap: true,
       filter: "range",
       numero: (l) => l.diferenca,
+      corPdf: (l) => (l.diferenca < 0 ? "var(--danger)" : "var(--ok)"),
       render: (l) => <span className="font-semibold" style={{ color: l.diferenca < 0 ? "var(--danger)" : "var(--ok)" }}>{brl(l.diferenca)}</span>,
     },
     {
@@ -301,6 +302,7 @@ export function OrcamentoPca({
       filter: "range",
       numero: (l) => l.percentual,
       formatarFaixa: (n) => `${(n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+      corPdf: (l) => COR_FAIXA[l.faixa],
       render: (l) => <BarraPct l={l} />,
     },
   ];
