@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 5;
+  const VERSAO = 6;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -603,13 +603,24 @@
 
   /** O cadastro aberto do protocolo (o título "Protocolo - <Id>" com o botão Operações e os campos). */
   const RE_TITULO = /^PROTOCOLO - \d+$/;
-  function acharModal(doc) {
+  /** TODOS os cadastros de protocolo abertos (a Centi pode deixar mais de um). */
+  function cadastrosAbertos(doc) {
+    const out = [];
     for (const t of porTexto(doc, (s) => RE_TITULO.test(s))) {
       let n = t.parentElement;
       for (let i = 0; n && i < 10; i++, n = n.parentElement)
-        if (porTexto(n, (s) => s === "OPERACOES").length && todos(n).some((el) => el.tagName === "INPUT" && visivel(el))) return n;
+        if (porTexto(n, (s) => s === "OPERACOES").length && todos(n).some((el) => el.tagName === "INPUT" && visivel(el))) {
+          if (!out.includes(n)) out.push(n);
+          break;
+        }
     }
-    return null;
+    return out;
+  }
+  /** O cadastro aberto; com `protocolo`, SÓ o desse protocolo (o campo Protocolo confere) — nunca o de outro que ficou aberto. */
+  function acharModal(doc, protocolo) {
+    const abertos = cadastrosAbertos(doc);
+    if (protocolo == null) return abertos[0] ?? null;
+    return abertos.find((m) => soDigitos(valorDe(lerCadastro(m), "PROTOCOLO")) === soDigitos(protocolo)) ?? null;
   }
 
   const CAMPO = new Set(["INPUT", "TEXTAREA", "SELECT"]);
@@ -673,18 +684,44 @@
     const M = win.MouseEvent ?? win.Event;
     for (const tipo of ["mousedown", "mouseup", "click"]) el.dispatchEvent(new M(tipo, { bubbles: true, cancelable: true, button: 0 }));
   }
+  // O "fechar" de uma janela: o × (texto), o aria-label/title Fechar/Close ou a classe close/fechar/times — nunca o "×" de
+  // um chip do seletor Departamentos (react-select) nem nada dentro da grade (Wijmo).
+  const CLASSE_FECHAR = /(^|[\s_-])(close|fechar|times|btn-close)([\s_-]|$)/i;
+  function ehFechar(el) {
+    if (!visivel(el)) return false;
+    const cls = String(attr(el, "class") ?? "");
+    if (/indicator|multi-?value|multivalue|wj-/i.test(cls)) return false;
+    const t = String(el.textContent ?? "").trim();
+    return (
+      (!el.children.length && /^[×✕✖X]$/.test(t)) ||
+      /^(FECHAR|CLOSE)$/.test(norm(attr(el, "aria-label"))) ||
+      /^(FECHAR|CLOSE)$/.test(norm(attr(el, "title"))) ||
+      CLASSE_FECHAR.test(cls)
+    );
+  }
+  /** Fecha UM cadastro: Escape e o "fechar" mais perto dele (subindo até a janela, sem chegar ao filtro nem à grade). */
   function fecharModal(ctx, modal) {
     try {
       tecla(ctx.win, ctx.doc.activeElement ?? ctx.doc.body ?? modal, "Escape");
       let n = modal;
-      for (let i = 0; n && i < 4; i++, n = n.parentElement) {
-        const x = todos(n).find((el) => visivel(el) && ((!el.children.length && /^[×✕X]$/.test(String(el.textContent ?? "").trim())) || /^(FECHAR|CLOSE)$/.test(norm(attr(el, "aria-label")))));
+      for (let i = 0; n && n !== ctx.doc.body && i < 12; i++, n = n.parentElement) {
+        if (i > 0 && (campoDepartamentos(n) || todos(n).some((el) => /\bwj-control\b/.test(String(attr(el, "class") ?? ""))))) break;
+        const x = todos(n).find((el) => ehFechar(el) && !el.closest?.(".wj-control"));
         if (x) {
-          clicar(ctx.win, x);
+          clicar(ctx.win, botaoDe(x) ?? x);
           return;
         }
       }
     } catch {}
+  }
+  /** Fecha TODOS os cadastros abertos (o novo só abre — e só é achado — sem o de outro protocolo na frente). */
+  async function fecharCadastros(ctx) {
+    for (let k = 0; k < 6; k++) {
+      const abertos = cadastrosAbertos(ctx.doc);
+      if (!abertos.length) return;
+      for (const m of abertos) fecharModal(ctx, m);
+      await pausa(ctx.win, ctx.passo ?? 400);
+    }
   }
 
   // Os botões que podem CONFIRMAR a janela que a emissão abrir (nunca Sim, Salvar, Anexar, Assinar…).
@@ -699,8 +736,8 @@
     const { doc, win } = ctx;
     if (!/^\d{1,12}$/.test(soDigitos(protocolo) || "x")) throw new Error("Protocolo inválido.");
     if (typeof ctx.pagina !== "function") throw new Error("Ponte com a página ausente — atualize a extensão.");
-    const velho = acharModal(doc);
-    if (velho) fecharModal(ctx, velho);
+    ctx.etapa = "fechar os cadastros abertos";
+    await fecharCadastros(ctx);
     const linha = await acharLinha(ctx, protocolo, ano, nomes);
     // Abre o cadastro do protocolo: a linha à vista e o DUPLO CLIQUE no centro da célula do nº (como a pessoa faz).
     ctx.etapa = "abrir o protocolo";
@@ -710,14 +747,7 @@
     if (!seguro(alvo)) throw new Error("Bloqueado: a célula do protocolo não é um botão.");
     mouse(win, alvo, true);
     ctx.notas = [];
-    const modal = await esperarAte(
-      ctx,
-      () => {
-        const m = acharModal(doc);
-        return m && soDigitos(valorDe(lerCadastro(m), "PROTOCOLO")) === soDigitos(protocolo) ? m : null;
-      },
-      "O cadastro do protocolo não abriu na Tela Protocolo.",
-    ).catch((e) => {
+    const modal = await esperarAte(ctx, () => acharModal(doc, protocolo), "O cadastro do protocolo não abriu na Tela Protocolo.").catch((e) => {
       const b = typeof alvo.getBoundingClientRect === "function" ? alvo.getBoundingClientRect() : null;
       ctx.notas = [
         `célula: ${String(alvo.tagName ?? "").toLowerCase()}.${String(alvo.className ?? "").split(/\s+/).slice(0, 3).join(".")} em ${b ? `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)}` : "?"}`,
@@ -773,6 +803,7 @@
     } finally {
       await ctx.pagina("captura", { acao: "parar" }, 5000).catch(() => null);
       fecharModal(ctx, modal);
+      await fecharCadastros(ctx).catch(() => undefined);
     }
   }
 

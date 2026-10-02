@@ -5,11 +5,14 @@ import { analisarRespostaCenti, linkDaResposta, operacaoRecusada, type Protocolo
 import { cancelarExecucao, concluirPassos, iniciarExecucaoLeitura } from "@/lib/automacao-cliente";
 import {
   coerceEmissaoProtocolo,
+  conferirLeituraProtocolo,
   corpoEmissaoProtocolo,
   dadosCentiValidos,
   departamentosEscolhidosValidos,
   type EmissaoProtocolo,
   emissaoDoPedido,
+  falhaTransitoria,
+  type LeituraProtocolo,
   mesmaEmissao,
   nomePdfEmAnalise,
   normalizarProtocolosTela,
@@ -17,6 +20,8 @@ import {
   type ProtocoloEmAnalise,
 } from "@/lib/automacao-tela-protocolo";
 import { dataIsoBrasilia } from "@/lib/format";
+import { buscarExistentes } from "@/lib/importar-dfd";
+import { indexarProtocoloPdf } from "@/lib/parse-protocolo-pdf";
 import { amostraBytes, baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado, pdfDosBytes } from "@/lib/arquivo-navegador";
 import { Badge, type Tone } from "./Badge";
 import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
@@ -51,14 +56,19 @@ type Pedir = (acao: string, dados: unknown, ms: number) => Promise<RespostaTela>
 /** O contexto da análise da importação de protocolo (a mesma da Mesa). */
 type Analise = Pick<Parameters<typeof ProtocoloUploadForm>[0], "reparticoes" | "regras" | "orgaos" | "pcas">;
 
-type EstadoDoc = "fila" | "emitindo" | "analise" | "feito" | "falha";
+type EstadoDoc = "fila" | "emitindo" | "lendo" | "ok" | "atencao" | "falha";
 const DOC: Record<EstadoDoc, { rotulo: string; tone: Tone }> = {
   fila: { rotulo: "Na fila", tone: "slate" },
   emitindo: { rotulo: "Emitindo…", tone: "blue" },
-  analise: { rotulo: "Em análise", tone: "violet" },
-  feito: { rotulo: "Analisado", tone: "emerald" },
+  lendo: { rotulo: "Lendo…", tone: "violet" },
+  ok: { rotulo: "Lido", tone: "emerald" },
+  atencao: { rotulo: "Atenção", tone: "amber" },
   falha: { rotulo: "Falhou", tone: "red" },
 };
+/** O documento de um protocolo no lote: o estado, o texto curto e o que a leitura achou. */
+type Doc = { estado: EstadoDoc; texto?: string; leitura?: LeituraProtocolo; jaCadastrados?: number };
+/** Quantos PDFs ficam na memória (para abrir a análise sem emitir de novo) — o resto é emitido de novo ao abrir. */
+const PDFS_NA_MEMORIA = 8;
 
 const CHAVE_ESCOLHA = "automacao:tela-departamentos";
 /** Hoje em Brasília ("AAAA-MM-DD") — a data dos campos "hoje" da emissão aprendida. */
@@ -81,9 +91,10 @@ function gravarEscolha(v: string[]) {
 /**
  * Tarefa "LER A TELA PROTOCOLO" (só leitura na Centi): a extensão entra na PO011 da aba "Automação PCA" pela própria
  * interface, devolve as REPARTIÇÕES do seletor Departamentos; o ADM escolhe; a extensão as seleciona, pesquisa, abre a aba
- * "Em Análise" e devolve os protocolos. Tocar num protocolo (ou "Emitir e analisar" nos marcados): a extensão abre o
- * cadastro dele na Centi, lê TODOS os dados, emite pelo Operações → Emitir documentos e o PDF abre na MESMA análise da
- * importação de protocolo da Mesa (capa, DFDs e itens) — nada é protocolado sozinho; um por vez.
+ * "Em Análise" e devolve os protocolos. "Emitir e ler" (os marcados ou TODOS): cada protocolo é emitido POR CÓDIGO e o PDF
+ * é LIDO no navegador (capa + DFDs, conferido contra o protocolo pedido) — em LOTE, um por vez, sem abrir janelas, em
+ * qualquer quantidade (só os últimos PDFs ficam na memória). Tocar num protocolo abre a ANÁLISE COMPLETA da importação de
+ * protocolo da Mesa (capa, DFDs e itens) — nada é protocolado sozinho.
  */
 export function TarefaTelaProtocolo({
   pedir,
@@ -128,13 +139,14 @@ export function TarefaTelaProtocolo({
     reparticoesRef.current = l.reparticoes;
     setLidosEstado(l);
   };
-  const [docs, setDocs] = useState<Map<string, { estado: EstadoDoc; erro?: string }>>(new Map());
+  const [docs, setDocs] = useState<Map<string, Doc>>(new Map());
   const [arquivo, setArquivo] = useState<{ file: File; n: number } | null>(null);
+  // O protocolo aberto na análise completa (um por vez, à parte do lote).
   const [atual, setAtual] = useState<string | null>(null);
-  const fila = useRef<ProtocoloEmAnalise[]>([]);
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+  const [lote_, setLoteAndamento] = useState<{ feito: number; total: number } | null>(null);
   const pdfs = useRef(new Map<string, File>());
-  const execucao = useRef<{ id: number; feitos: { chave: string; estado: "ok" | "falhou"; texto: string }[] } | null>(null);
-  const emitindo = [...docs.values()].some((d) => d.estado === "fila" || d.estado === "emitindo" || d.estado === "analise");
+  const emitindo = lote_ !== null || abrindo !== null;
   const [falha, setFalha] = useState<{ erro: string; diagnostico?: string } | null>(null);
   function falhou(r: RespostaTela) {
     const erro = r.erro ?? "A extensão não respondeu.";
@@ -246,11 +258,11 @@ export function TarefaTelaProtocolo({
     }).catch(() => {});
   }
 
-  // ---------------------------------------------------------------- EMITIR + ANALISAR (um por vez)
-  const marcar = (chave: string, estado: EstadoDoc, erro?: string) =>
+  // ---------------------------------------------------------------- EMITIR + LER (o lote) · ABRIR A ANÁLISE (um)
+  const marcar = (chave: string, d: Doc) =>
     setDocs((m) => {
       const n = new Map(m);
-      n.set(chave, { estado, erro });
+      n.set(chave, d);
       return n;
     });
 
@@ -284,8 +296,8 @@ export function TarefaTelaProtocolo({
   }
 
   /**
-   * A emissão POR CÓDIGO (o operation aprendido com o Id do protocolo), como o Emitir DFD — sem tocar na tela da Centi.
-   * `recusada` = a extensão deste navegador ainda não conhece a operação (precisa aprender UMA vez pela tela).
+   * A emissão POR CÓDIGO (o operation aprendido com o protocolo), como o Emitir DFD — sem tocar na tela da Centi.
+   * `recusada` = a extensão deste navegador ainda não conhece a operação, ou a Centi a recusou (a tela ensina de novo).
    */
   async function emitirPorCodigo(
     e: EmissaoProtocolo,
@@ -302,89 +314,81 @@ export function TarefaTelaProtocolo({
     return pdfDaResposta(r.b64, r.status ?? 0);
   }
 
-  /** Emite o próximo da fila e abre a análise (falhou → marca e segue). */
-  async function proximo() {
-    const p = fila.current.shift();
-    setAtual(p?.chave ?? null);
-    if (!p) {
-      if (execucao.current) {
-        await concluirPassos(execucao.current.id, execucao.current.feitos);
-        if (interrompido.current) await cancelarExecucao(execucao.current.id);
-      }
-      execucao.current = null;
-      if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: interrompido.current ? "Interrompido." : "Protocolos analisados." }, 8000);
-      lote.current = null;
-      if (interrompido.current) {
-        setDocs((m) => new Map([...m].map(([k, v]) => [k, v.estado === "fila" ? { estado: "falha" as const, erro: "Interrompido na extensão." } : v])));
-        toast.warning("Interrompido na extensão.");
-      }
-      return;
-    }
-    const falhar = (erro: string, diagnostico?: string) => {
-      marcar(p.chave, "falha", erro);
-      setFalha({ erro: `Protocolo ${p.protocolo}/${p.ano}: ${erro}`, diagnostico });
-      execucao.current?.feitos.push({ chave: p.chave, estado: "falhou", texto: erro });
-      if (interrompido.current) fila.current = [];
-      void proximo();
-    };
-    const ja = pdfs.current.get(p.chave);
-    if (ja) {
-      marcar(p.chave, "analise");
-      return setArquivo((a) => ({ file: ja, n: (a?.n ?? 0) + 1 }));
-    }
-    marcar(p.chave, "emitindo");
-    if (lote.current) await pedir("lote", { fase: "passo", loteId: lote.current, feito: 0, total: 1, texto: `Emitindo os documentos do protocolo ${p.protocolo}/${p.ano}` }, 8000);
-    // POR CÓDIGO (o Emitir documentos aprendido + o protocolo): direto, como os DFDs — a tela da Centi não é tocada. A tela
-    // emite UMA vez só quando o código não dá: a operação ainda não foi aprendida (no sistema ou neste navegador), a Centi
-    // a recusou (mudou ou sem permissão) ou a grade não trouxe o Id — e ensina de novo para os próximos.
+  /**
+   * O PDF dos documentos de UM protocolo. POR CÓDIGO (o Emitir documentos aprendido + o protocolo): direto, como os DFDs
+   * — a tela da Centi não é tocada. A tela emite só quando o código não dá: a operação ainda não foi aprendida (no sistema
+   * ou neste navegador), a Centi a recusou (mudou ou sem permissão) ou a grade não trouxe o Id — e ensina de novo para os
+   * próximos. Uma falha TRANSITÓRIA (rede, Centi fora do ar) tenta UMA vez de novo.
+   */
+  async function obterPdf(p: ProtocoloEmAnalise, tentativa = 0): Promise<{ pdf: Uint8Array } | { erro: string; diagnostico?: string }> {
     const id = p.id || idsRef.current.get(p.chave) || "";
     const e = emissaoRef.current;
     let x: { pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string } | null =
       e && id ? await emitirPorCodigo(e, { id, protocolo: p.protocolo, ano: p.ano }) : null;
-    if (interrompido.current) return falhar("Interrompido na extensão.");
+    if (interrompido.current) return { erro: "Interrompido na extensão." };
     if (!x || "recusada" in x) {
       const r = await pedir("telaEmitir", { protocolo: p.protocolo, ano: p.ano, departamentos: reparticoesRef.current }, 300_000);
       if (r.interrompido) interrompido.current = true;
       const d = r.ok ? dadosCentiValidos(r.dados) : null;
       if (d?.id) setId(p.chave, d.id);
-      if (!r.ok) return falhar(r.erro ?? "A extensão não respondeu.", r.diagnostico);
-      if (r.operacao) await aprenderEmissao(r.operacao, { id: d?.id || id, protocolo: p.protocolo, ano: p.ano });
-      x = await pdfDaEmissao(r.arquivo);
+      if (!r.ok) x = { erro: r.erro ?? "A extensão não respondeu.", amostra: r.diagnostico };
+      else {
+        if (r.operacao) await aprenderEmissao(r.operacao, { id: d?.id || id, protocolo: p.protocolo, ano: p.ano });
+        x = await pdfDaEmissao(r.arquivo);
+      }
     }
-    if ("erro" in x) {
-      const em = emissaoRef.current;
-      const enviado = em ? corpoEmissaoProtocolo(em, { id: id || "0", protocolo: p.protocolo, ano: p.ano, hoje: hojeBrasilia() }) : null;
-      const op = em && enviado ? `operação enviada: ModuleKey ${em.moduleKey} · ${enviado.Params.map((q) => `${q.Key}=${q.Key === em.param ? "<Id>" : q.Value}`).join("; ")}` : "";
-      return falhar(x.erro, [x.amostra, op].filter(Boolean).join("\n"));
+    if ("pdf" in x) return { pdf: x.pdf };
+    if (tentativa === 0 && !interrompido.current && falhaTransitoria(x.erro)) {
+      await new Promise((ok) => setTimeout(ok, 3000));
+      return obterPdf(p, 1);
     }
-    const file = new File([comoBlob(x.pdf)], nomePdfEmAnalise(p), { type: "application/pdf" });
-    pdfs.current.set(p.chave, file);
-    marcar(p.chave, "analise");
-    setArquivo((a) => ({ file, n: (a?.n ?? 0) + 1 }));
+    const em = emissaoRef.current;
+    const enviado = em ? corpoEmissaoProtocolo(em, { id: id || "0", protocolo: p.protocolo, ano: p.ano, hoje: hojeBrasilia() }) : null;
+    const op = em && enviado ? `operação enviada: ModuleKey ${em.moduleKey} · ${enviado.Params.map((q) => `${q.Key}=${q.Key === em.param ? "<Id>" : q.Value}`).join("; ")}` : "";
+    return { erro: x.erro, diagnostico: [x.amostra, op].filter(Boolean).join("\n") || undefined };
   }
 
-  /** A análise foi fechada (ou o PDF não abriu): o atual termina e segue o próximo. */
-  function aoFechar(erro?: string) {
-    if (!atual) return;
-    marcar(atual, erro ? "falha" : "feito", erro);
-    if (erro) setFalha({ erro });
-    execucao.current?.feitos.push({ chave: atual, estado: erro ? "falhou" : "ok", texto: erro ?? "Aberto na análise da importação." });
-    void proximo();
+  /** Guarda o PDF na memória (os últimos PDFS_NA_MEMORIA — um lote enorme não acumula PDFs). */
+  function guardarPdf(chave: string, file: File) {
+    pdfs.current.delete(chave);
+    pdfs.current.set(chave, file);
+    while (pdfs.current.size > PDFS_NA_MEMORIA) pdfs.current.delete(pdfs.current.keys().next().value as string);
   }
 
-  async function emitir(lista: ProtocoloEmAnalise[]) {
+  /** LÊ o PDF emitido (capa + DFDs, no navegador) e CONFERE que é do protocolo pedido; os DFDs já cadastrados contam. */
+  async function lerPdf(p: ProtocoloEmAnalise, file: File): Promise<Doc> {
+    try {
+      const { index, doc } = await indexarProtocoloPdf(file);
+      await doc.destroy().catch(() => undefined);
+      const numeros = index.dfds.map((d) => d.numero);
+      const leitura = conferirLeituraProtocolo({ ...p, id: p.id || idsRef.current.get(p.chave) || "" }, index.protocolo, numeros);
+      if (leitura.estado === "falha") return { estado: "falha", texto: leitura.texto, leitura };
+      const existentes = numeros.length ? await buscarExistentes(numeros).catch(() => null) : new Map();
+      const ja = existentes ? numeros.filter((n) => existentes.has(n.trim())).length : undefined;
+      const texto = `${leitura.texto}${ja != null ? ` · ${ja} já cadastrado(s)` : ""}`;
+      return { estado: leitura.estado, texto, leitura, jaCadastrados: ja };
+    } catch (e) {
+      return { estado: "falha", texto: e instanceof Error ? e.message : "Não consegui ler o PDF." };
+    }
+  }
+
+  /**
+   * O LOTE: emite e lê cada protocolo, um por vez, sem abrir janelas — qualquer quantidade (o PDF não fica acumulado na
+   * memória; o resultado de cada um fica na coluna Documento). A análise completa de um protocolo abre ao tocar na linha.
+   */
+  async function analisarLote(lista: ProtocoloEmAnalise[]) {
     if (!lista.length || ocupado || emitindo) return;
     // A emissão aprendida tem de estar carregada antes do 1º protocolo (sem ela, tudo iria pela tela); falhou = lê de novo.
     if (!(await (configRef.current ?? carregarConfig()))) await carregarConfig();
     interrompido.current = false;
     setFalha(null);
-    fila.current = [...lista];
     setDocs((m) => {
       const n = new Map(m);
       for (const p of lista) n.set(p.chave, { estado: "fila" });
       return n;
     });
-    const l = await pedir("lote", { fase: "inicio", titulo: "Tela Protocolo · Emitir e analisar", total: lista.length }, 8000);
+    setLoteAndamento({ feito: 0, total: lista.length });
+    const l = await pedir("lote", { fase: "inicio", titulo: "Tela Protocolo · Emitir e ler", total: lista.length }, 8000);
     lote.current = l.loteId ?? null;
     const ex = await iniciarExecucaoLeitura(
       "protocolos-por-reparticao",
@@ -392,8 +396,92 @@ export function TarefaTelaProtocolo({
       lista.map((p) => ({ chave: p.chave, alvo: `Protocolo ${p.protocolo}/${p.ano}` })),
       { protocolos: lista.length },
     );
-    execucao.current = "id" in ex ? { id: ex.id, feitos: [] } : null;
-    void proximo();
+    const exId = "id" in ex ? ex.id : null;
+    let feitos: { chave: string; estado: "ok" | "falhou"; texto: string }[] = [];
+    const descarregar = async () => {
+      if (exId != null && feitos.length) await concluirPassos(exId, feitos).catch(() => undefined);
+      feitos = [];
+    };
+    const conta = { ok: 0, atencao: 0, falha: 0 };
+    try {
+      for (let i = 0; i < lista.length; i++) {
+        if (interrompido.current) break;
+        const p = lista[i];
+        setLoteAndamento({ feito: i, total: lista.length });
+        if (lote.current)
+          await pedir("lote", { fase: "passo", loteId: lote.current, feito: i, total: lista.length, texto: `Protocolo ${p.protocolo}/${p.ano}` }, 8000);
+        marcar(p.chave, { estado: "emitindo" });
+        const r = await obterPdf(p);
+        let doc: Doc;
+        if ("erro" in r) {
+          doc = { estado: "falha", texto: r.erro };
+          if (r.diagnostico) setFalha({ erro: `Protocolo ${p.protocolo}/${p.ano}: ${r.erro}`, diagnostico: r.diagnostico });
+        } else {
+          marcar(p.chave, { estado: "lendo" });
+          const file = new File([comoBlob(r.pdf)], nomePdfEmAnalise(p), { type: "application/pdf" });
+          doc = await lerPdf(p, file);
+          if (doc.estado !== "falha") guardarPdf(p.chave, file);
+        }
+        marcar(p.chave, doc);
+        conta[doc.estado === "ok" ? "ok" : doc.estado === "atencao" ? "atencao" : "falha"]++;
+        feitos.push({ chave: p.chave, estado: doc.estado === "falha" ? "falhou" : "ok", texto: doc.texto ?? "" });
+        if (feitos.length >= 50) await descarregar();
+        // Cede o navegador entre um protocolo e outro (a tela segue respondendo num lote enorme).
+        await new Promise((ok) => setTimeout(ok, 0));
+      }
+    } finally {
+      await descarregar();
+      if (interrompido.current) {
+        setDocs((m) => new Map([...m].map(([k, v]) => [k, v.estado === "fila" ? { estado: "falha" as const, texto: "Interrompido na extensão." } : v])));
+        if (exId != null) await cancelarExecucao(exId).catch(() => undefined);
+      }
+      const resumo = `${conta.ok} lido(s) · ${conta.atencao} em atenção · ${conta.falha} com falha`;
+      if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: interrompido.current ? `Interrompido — ${resumo}` : resumo }, 8000);
+      lote.current = null;
+      setLoteAndamento(null);
+      if (interrompido.current) toast.warning(`Interrompido na extensão — ${resumo}.`, 10000);
+      else if (conta.falha) toast.warning(resumo, 10000);
+      else toast.success(resumo);
+    }
+  }
+
+  /** Abre a ANÁLISE COMPLETA de um protocolo (a mesma da importação): o PDF da memória ou emitido agora. */
+  async function abrirAnalise(p: ProtocoloEmAnalise) {
+    if (ocupado || emitindo) return;
+    const ja = pdfs.current.get(p.chave);
+    if (ja) {
+      setAtual(p.chave);
+      return setArquivo((a) => ({ file: ja, n: (a?.n ?? 0) + 1 }));
+    }
+    if (!(await (configRef.current ?? carregarConfig()))) await carregarConfig();
+    interrompido.current = false;
+    setFalha(null);
+    setAbrindo(p.chave);
+    marcar(p.chave, { ...(docs.get(p.chave) ?? {}), estado: "emitindo" });
+    try {
+      const r = await obterPdf(p);
+      if ("erro" in r) {
+        marcar(p.chave, { estado: "falha", texto: r.erro });
+        setFalha({ erro: `Protocolo ${p.protocolo}/${p.ano}: ${r.erro}`, diagnostico: r.diagnostico });
+        return;
+      }
+      const file = new File([comoBlob(r.pdf)], nomePdfEmAnalise(p), { type: "application/pdf" });
+      marcar(p.chave, { estado: "lendo" });
+      const doc = await lerPdf(p, file);
+      marcar(p.chave, doc);
+      if (doc.estado === "falha") return setFalha({ erro: `Protocolo ${p.protocolo}/${p.ano}: ${doc.texto}` });
+      guardarPdf(p.chave, file);
+      setAtual(p.chave);
+      setArquivo((a) => ({ file, n: (a?.n ?? 0) + 1 }));
+    } finally {
+      setAbrindo(null);
+    }
+  }
+
+  /** A análise foi fechada (ou o PDF não abriu na análise). */
+  function aoFechar(erro?: string) {
+    setAtual(null);
+    if (erro) setFalha({ erro });
   }
 
   const casarSistema = useMemo(() => noSistemaTela(protocolos), [protocolos]);
@@ -436,14 +524,18 @@ export function TarefaTelaProtocolo({
         key: "documento",
         header: "Documento",
         nowrap: true,
-        value: (p) => DOC[docs.get(p.chave)?.estado ?? "fila"].rotulo,
+        value: (p) => {
+          const d = docs.get(p.chave);
+          return d ? DOC[d.estado].rotulo : "—";
+        },
         render: (p) => {
           const d = docs.get(p.chave);
           return d ? (
-            <span title={d.erro}>
+            <span className="inline-flex items-center gap-1.5" title={d.texto}>
               <Badge tone={DOC[d.estado].tone} dot>
                 {DOC[d.estado].rotulo}
               </Badge>
+              {d.texto && <span className="max-w-[18rem] truncate text-xs text-muted">{d.texto}</span>}
             </span>
           ) : (
             <span className="text-faint">—</span>
@@ -519,7 +611,7 @@ export function TarefaTelaProtocolo({
           selectable
           selected={sel}
           onSelected={setSel}
-          onRowClick={pronto && !ocupado && !emitindo ? (p) => void emitir([p]) : undefined}
+          onRowClick={pronto && !ocupado && !emitindo ? (p) => void abrirAnalise(p) : undefined}
           activeKey={atual}
           density="compact"
           scrollInterno
@@ -527,12 +619,12 @@ export function TarefaTelaProtocolo({
           acoesRodape={
             <Button
               size="sm"
-              onClick={() => void emitir((lidos?.protocolos ?? []).filter((p) => sel.has(p.chave)))}
-              disabled={!pronto || !!ocupado || emitindo || !sel.size}
-              loading={emitindo}
-              title="Emite os documentos de cada marcado na Centi e abre a análise, um por vez"
+              onClick={() => void analisarLote(sel.size ? (lidos?.protocolos ?? []).filter((p) => sel.has(p.chave)) : (lidos?.protocolos ?? []))}
+              disabled={!pronto || !!ocupado || emitindo || !lidos?.protocolos.length}
+              loading={lote_ !== null}
+              title="Emite os documentos de cada protocolo na Centi e lê o PDF (capa e DFDs), um por vez, sem abrir janelas — toque numa linha para a análise completa"
             >
-              Emitir e analisar ({sel.size})
+              {lote_ ? `Lendo ${lote_.feito + 1} de ${lote_.total}` : sel.size ? `Emitir e ler (${sel.size})` : `Emitir e ler todos (${lidos?.protocolos.length ?? 0})`}
             </Button>
           }
           vazio={lidos ? "Nenhum protocolo em análise nas repartições escolhidas." : "Escolha as repartições e toque em “Ler Em Análise”."}

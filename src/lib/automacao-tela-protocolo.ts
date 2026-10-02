@@ -599,3 +599,43 @@ export const mesmaEmissao = (a: EmissaoProtocolo | null, b: EmissaoProtocolo | n
   a.param === b.param &&
   JSON.stringify(a.params.map((x) => x.Key)) === JSON.stringify(b.params.map((x) => x.Key)) &&
   JSON.stringify(Object.entries(a.campos).sort()) === JSON.stringify(Object.entries(b.campos).sort());
+
+// ---------------------------------------------------------------- A LEITURA EM LOTE (emitir + ler cada protocolo)
+/** O resultado da leitura AUTOMÁTICA de um protocolo emitido (o PDF lido no navegador; a análise completa abre à parte). */
+export type LeituraProtocolo = {
+  estado: "ok" | "atencao" | "falha";
+  /** O que aparece na célula (curto). */
+  texto: string;
+  dfds: number;
+  numerosDfd: string[];
+  valorCapa: number | null;
+  assunto: string | null;
+  anoPca: number | null;
+};
+
+/**
+ * CONFERE o PDF emitido contra o protocolo pedido (a segurança do lote: nunca analisar o documento de OUTRO protocolo) e
+ * resume a leitura: a capa tem de existir com o MESMO nº (e ano) e, quando os dois lados têm, o MESMO Id; sem DFDs =
+ * atenção.
+ */
+export function conferirLeituraProtocolo(
+  p: { protocolo: string; ano: string; id?: string | null },
+  capa: { numero: string | null; idExterno: string | null; valorCapa: number | null; assunto: string | null; anoPca: number | null },
+  dfds: string[],
+): LeituraProtocolo {
+  const base = { dfds: dfds.length, numerosDfd: dfds, valorCapa: capa.valorCapa, assunto: capa.assunto, anoPca: capa.anoPca };
+  const m = /^0*(\d+)\s*(?:\/\s*(\d{4}))?/.exec(String(capa.numero ?? "").trim());
+  if (!m) return { ...base, estado: "falha", texto: "O PDF não tem a capa do processo." };
+  const prot = semZeros(p.protocolo);
+  if (m[1] !== prot || (m[2] && /^\d{4}$/.test(p.ano) && m[2] !== p.ano))
+    return { ...base, estado: "falha", texto: `O PDF é do protocolo ${capa.numero}, não do ${p.protocolo}/${p.ano}.` };
+  const idCapa = semZeros(capa.idExterno);
+  const idPedido = semZeros(p.id);
+  if (idCapa && idPedido && idCapa !== idPedido) return { ...base, estado: "falha", texto: `O PDF tem o Id ${idCapa}, não o ${idPedido}.` };
+  if (!dfds.length) return { ...base, estado: "atencao", texto: "Sem DFDs no PDF" };
+  return { ...base, estado: "ok", texto: `${dfds.length} DFD(s)` };
+}
+
+/** Falha que vale UMA nova tentativa (rede, Centi fora do ar, sem resposta) — nunca uma recusa ou um PDF errado. */
+export const falhaTransitoria = (erro: string) =>
+  /n[aã]o respondeu|sem resposta|rede|demorou|tempo|timeout|\b5\d\d\b|indispon|inesperado/i.test(erro) && !/recus|permiss|bloquead|inv[aá]lid/i.test(erro);

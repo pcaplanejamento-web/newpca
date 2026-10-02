@@ -320,3 +320,29 @@ test("tela protocolo: os campos DO PROTOCOLO (nº, ano, nº/ano, data de hoje) s
   // Campo inventado no modelo guardado (fora dos parâmetros ou de tipo desconhecido) é descartado.
   assert.deepEqual(coerceEmissaoProtocolo({ ...e, campos: { Inexistente: "protocolo", Modelo: "x", IdProtocolo: "ano" } })?.campos, {});
 });
+
+test("tela protocolo: a leitura em lote CONFERE o PDF contra o protocolo pedido (nunca analisa o de outro)", async () => {
+  const { conferirLeituraProtocolo, falhaTransitoria } = await import("../src/lib/automacao-tela-protocolo.ts");
+  const capa = { numero: "152688/2026", idExterno: "2328622", valorCapa: 0, assunto: "INCLUSÃO - PCA", anoPca: 2027 };
+  const p = { protocolo: "152688", ano: "2026", id: "2328622" };
+  assert.deepEqual(conferirLeituraProtocolo(p, capa, ["1243", "1244"]), {
+    estado: "ok",
+    texto: "2 DFD(s)",
+    dfds: 2,
+    numerosDfd: ["1243", "1244"],
+    valorCapa: 0,
+    assunto: "INCLUSÃO - PCA",
+    anoPca: 2027,
+  });
+  assert.equal(conferirLeituraProtocolo(p, capa, []).estado, "atencao");
+  assert.equal(conferirLeituraProtocolo({ ...p, protocolo: "97608" }, capa, ["1"]).estado, "falha");
+  assert.equal(conferirLeituraProtocolo({ ...p, ano: "2025" }, capa, ["1"]).estado, "falha");
+  assert.equal(conferirLeituraProtocolo({ ...p, id: "999" }, capa, ["1"]).estado, "falha");
+  assert.equal(conferirLeituraProtocolo({ ...p, id: "" }, capa, ["1"]).estado, "ok");
+  assert.equal(conferirLeituraProtocolo(p, { ...capa, numero: null }, ["1"]).estado, "falha");
+  assert.equal(conferirLeituraProtocolo({ ...p, protocolo: "0152688" }, { ...capa, numero: "152688" }, ["1"]).estado, "ok");
+  for (const e of ["A extensão não respondeu.", "Sem resposta da Centi (rede).", "A Centi respondeu 502.", "A Centi demorou demais para responder."])
+    assert.equal(falhaTransitoria(e), true, e);
+  for (const e of ["A Centi recusou a operação guardada.", "Bloqueado: a automação não aciona", "O PDF é do protocolo 1, não do 2."])
+    assert.equal(falhaTransitoria(e), false, e);
+});

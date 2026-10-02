@@ -83,7 +83,7 @@ type Protocolo = [string, string, string, string];
 
 /** A página da Centi como nos prints. `telaAberta` = a PO011 já está na tela; senão, só a aba "PO011" no topo. */
 function centi(
-  o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]>; porPagina?: number; escolhidos?: string[]; semEspaco?: boolean; semClasses?: boolean; semGrade?: boolean; wijmo?: boolean; visiveis?: number } = {},
+  o: { telaAberta?: boolean; emAnalise?: Record<string, Protocolo[]>; porPagina?: number; escolhidos?: string[]; semEspaco?: boolean; semClasses?: boolean; semGrade?: boolean; wijmo?: boolean; visiveis?: number; varios?: boolean; xQuebrado?: boolean } = {},
 ) {
   const body = new El("body");
   const cliques: string[] = [];
@@ -244,7 +244,7 @@ function centi(
   };
   const linhaCad = (rot: string, ...cs: El[]) => new El("div").add(new El("div", { texto: rot }).add(new El("span", { texto: "*" })), ...cs.map((c) => new El("div").add(c)));
   function abrirCadastro(n: string) {
-    if (estado.modal) return;
+    if (estado.modal && !o.varios) return;
     const m = new El("div", { className: "modal" });
     const menu = new El("div");
     const obs = new El("textarea");
@@ -264,6 +264,7 @@ function centi(
     m.add(
       new El("div").add(new El("span", { texto: "Protocolo" }), new El("button", { texto: "×" }).on("click", () => {
         cliques.push("fechar");
+        if (o.xQuebrado) return;
         body.remover(m);
         estado.modal = null;
       })),
@@ -300,7 +301,7 @@ function centi(
   if (o.telaAberta) conteudo.add(painel, corpoTela);
   body.add(sidebar, topo, conteudo);
   const doc = { body, querySelectorAll: (s: string) => body.querySelectorAll(s) };
-  return { doc, cliques, escolhidos, estado };
+  return { doc, cliques, escolhidos, estado, abrir: abrirCadastro };
 }
 
 function peca() {
@@ -536,4 +537,34 @@ test("tela protocolo: os DADOS do controle da grade (Wijmo) — todas as linhas,
   const ps = r.protocolos as { protocolo: string; id: string; entrada: string }[];
   assert.equal(ps.length, 25);
   assert.deepEqual(ps[24], { ...ps[24], protocolo: "150024", id: "2300024", entrada: "24/09/2026" });
+});
+
+test("tela protocolo: um cadastro de OUTRO protocolo deixado aberto é fechado antes — o lote não para depois de alguns", async () => {
+  const c = centi({ telaAberta: true, emAnalise: { "PCA - CRISTIANE": [["97608", "2026", "PCA - CRISTIANE", "FUNDO MUNICIPAL DE SAÚDE"]] } });
+  // O cadastro de um protocolo anterior ficou aberto (a Centi não abre outro com ele na frente).
+  c.abrir("152688");
+  const pagina = async (acao: string, d: { acao: string }) => {
+    if (acao === "grade") return { ok: false };
+    if (d.acao === "ler") return c.estado.emitido ? { ok: true, pronto: true, resposta: { status: 200, b64: "e30=" }, operacao: null } : { ok: true, pronto: false };
+    return { ok: true };
+  };
+  const r = await peca().executar("telaEmitir", { protocolo: "97608", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
+  assert.equal(r.ok, true, `${r.erro}\n${r.diagnostico}`);
+  assert.equal((r.dados as { campos: { rotulo: string; valor: string }[] }).campos.find((x) => x.rotulo === "Protocolo")?.valor, "97608");
+  assert.equal(c.cliques[0], "fechar");
+  assert.equal(c.cliques.at(-1), "fechar");
+  assert.equal(c.estado.modal, null);
+});
+
+test("tela protocolo: com VÁRIOS cadastros abertos (um que não fecha), acha o do protocolo pedido pelo campo Protocolo", async () => {
+  const c = centi({ telaAberta: true, varios: true, xQuebrado: true, emAnalise: { "PCA - CRISTIANE": [["97608", "2026", "PCA - CRISTIANE", "FUNDO MUNICIPAL DE SAÚDE"]] } });
+  c.abrir("152688");
+  const pagina = async (acao: string, d: { acao: string }) => {
+    if (acao === "grade") return { ok: false };
+    if (d.acao === "ler") return c.estado.emitido ? { ok: true, pronto: true, resposta: { status: 200, b64: "e30=" }, operacao: null } : { ok: true, pronto: false };
+    return { ok: true };
+  };
+  const r = await peca().executar("telaEmitir", { protocolo: "97608", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
+  assert.equal(r.ok, true, `${r.erro}\n${r.diagnostico}`);
+  assert.equal((r.dados as { campos: { rotulo: string; valor: string }[] }).campos.find((x) => x.rotulo === "Protocolo")?.valor, "97608");
 });

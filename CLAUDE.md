@@ -3618,7 +3618,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`hoje-dmy`/`hoje-iso`) são preenchidos com os do protocolo PEDIDO (`corpoEmissaoProtocolo(e, alvo)`) — antes iam com os
   do protocolo que ensinou; o modelo antigo (sem `v:2`) é descartado e aprendido de novo UMA vez. A fila lê a emissão, os Ids
   e as repartições de REFS (o aprendido no meio do lote vale já) e espera a configuração carregar antes do 1º protocolo;
-  emissão até 300 s (extensão 1.11.2: o binário também). **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
+  emissão até 300 s (extensão 1.11.2: o binário também). **LOTE AUTOMÁTICO para QUALQUER quantidade:** "Emitir e ler" (os
+  marcados ou TODOS) emite cada protocolo e LÊ o PDF no navegador (`indexarProtocoloPdf` → capa + DFDs), um por vez, SEM abrir
+  janelas: `conferirLeituraProtocolo` (puro, testado) recusa o PDF de OUTRO protocolo (nº/ano/Id da capa ≠ o pedido) e marca
+  "Sem DFDs" em atenção; os DFDs já cadastrados contam (`buscarExistentes`); a coluna Documento mostra Lido/Atenção/Falhou
+  com o resumo. Falha TRANSITÓRIA (rede, 5xx, sem resposta — `falhaTransitoria`) tenta UMA vez de novo; os passos da execução
+  vão ao servidor de 50 em 50; só os últimos 8 PDFs ficam na memória (`PDFS_NA_MEMORIA`); Interromper vale. Tocar numa
+  linha abre a ANÁLISE COMPLETA (o PDF da memória ou emitido de novo). **Cadastros na Tela Protocolo (extensão 1.11.3,
+  `centi-tela.js` v6):** antes de abrir um protocolo, TODOS os cadastros abertos são fechados (`fecharCadastros` — Escape +
+  o "fechar" da janela: ×, aria-label/title Fechar/Close ou a classe close/fechar/times; nunca o × de um chip do seletor nem
+  nada da grade) e o cadastro é achado pelo campo Protocolo entre os abertos (`acharModal(doc, protocolo)`) — antes, um
+  cadastro de outro protocolo deixado aberto parava o lote ("O cadastro do protocolo não abriu"). **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
   o parâmetro do modo assíncrono (`ehParamAssincrono`: Assincrono/Assync/Async) como "não" no formato capturado
   (`valorSincrono`) — no assíncrono a Centi gera em segundo plano e a chave dá 404; o diagnóstico mostra os parâmetros ENVIADOS. **Download DIRETO, num pedido só:** a chave do `File.Key` é baixada por
   `caminhoDoArquivo` — o MESMO endereço que a tela da Centi usa: o `URL` da resposta; o arquivo em CACHE (`File.Cache:true`
