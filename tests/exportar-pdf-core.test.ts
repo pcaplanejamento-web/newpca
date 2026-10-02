@@ -100,7 +100,19 @@ describe("exportar-pdf-core — texto e nome", () => {
       ],
       [{ n: "A", v: 10 }],
     );
-    assert.deepEqual(r, { cabecalho: ["Nome", "Valor"], linhas: [["A", "R$ 10"]], alinhar: ["left", "right"], cores: [[null, null]] });
+    assert.deepEqual(r, {
+      cabecalho: ["Nome", "Valor"],
+      linhas: [
+        ["A", "R$ 10"],
+        ["TOTAL", "R$ 10"],
+      ],
+      alinhar: ["left", "right"],
+      cores: [
+        [null, null],
+        [null, null],
+      ],
+      destaques: [1],
+    });
   });
   it("tabelaParaPdf: a cor da coluna (como na tela); sem ela, número negativo em vermelho", () => {
     const r = tabelaParaPdf(
@@ -116,7 +128,27 @@ describe("exportar-pdf-core — texto e nome", () => {
     assert.deepEqual(r.cores, [
       ["var(--danger)", null],
       [null, "var(--danger)"],
+      [null, null],
     ]);
+    assert.deepEqual(r.linhas[2], ["TOTAL", "2"]);
+  });
+  it("tabelaParaPdf: a linha TOTAL em destaque, negativa em vermelho; sem coluna somável, sem linha", () => {
+    type X = { n: string; v: number; u: number };
+    const cols = [
+      { cabecalho: "Nome", valor: (x: X) => x.n },
+      { cabecalho: "Unit.", numero: (x: X) => x.u, total: false as const },
+      { cabecalho: "Dif.", numero: (x: X) => x.v },
+    ];
+    const r = tabelaParaPdf(cols, [
+      { n: "A", v: -10, u: 2 },
+      { n: "B", v: 4, u: 3 },
+    ]);
+    assert.deepEqual(r.linhas[2], ["TOTAL", "", "-6"]);
+    assert.deepEqual(r.cores[2], [null, null, "var(--danger)"]);
+    assert.deepEqual(r.destaques, [2]);
+    const sem = tabelaParaPdf([cols[0], cols[1]], [{ n: "A", v: 1, u: 1 }]);
+    assert.equal(sem.linhas.length, 1);
+    assert.deepEqual(sem.destaques, []);
   });
   it("corRgb: hex, rgb() e var(--token) pela paleta; o resto, null", () => {
     assert.deepEqual(corRgb("#ffffff"), [1, 1, 1]);

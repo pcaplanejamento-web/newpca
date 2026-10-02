@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { colunasExportaveis, dataDaPlanilha, linhasPlanilhaTabela, nomeArquivoPlanilha } from "../src/lib/exportar-tabela.ts";
+import { colunasExportaveis, dataDaPlanilha, linhasPlanilhaTabela, linhaTotal, nomeArquivoPlanilha } from "../src/lib/exportar-tabela.ts";
 
 // Exportar a tabela em .xlsx: as linhas à vista (filtradas, na ordem) e as colunas visíveis — números como números, os
 // vários valores unidos, as datas em dd/mm/aaaa, as colunas de ação fora.
@@ -28,6 +28,27 @@ describe("exportar tabela (.xlsx)", () => {
     // Sem os vários valores, vale o texto; número vazio com texto "—" = vazio; zero é número.
     assert.deepEqual(out[2], ["144757/2026", "Regular", "", "02/01/2026", 0]);
     assert.equal(colunasExportaveis(colunas).length, 5);
+    // A linha TOTAL: soma as colunas numéricas (vazio fora), "TOTAL" na 1ª não somada.
+    assert.deepEqual(out[3], ["TOTAL", "", 1234.5, "", 3]);
+    assert.equal(out.length, 4);
+  });
+
+  it("linha TOTAL: só as somáveis, arredondada ao centavo; total:false fica em branco", () => {
+    type X = { q: number | null; u: number; seq: number };
+    const cols = [
+      { cabecalho: "Seq.", numero: (x: X) => x.seq, total: false as const },
+      { cabecalho: "Qtd.", numero: (x: X) => x.q },
+      { cabecalho: "Unit.", numero: (x: X) => x.u, total: false as const },
+    ];
+    const xs = [
+      { q: 0.1, u: 5, seq: 1 },
+      { q: 0.2, u: 7, seq: 2 },
+      { q: null, u: 1, seq: 3 },
+    ];
+    assert.deepEqual(linhaTotal(cols, xs), ["TOTAL", 0.3, ""]);
+    assert.equal(linhaTotal(cols, []), null);
+    assert.equal(linhaTotal([cols[0], cols[2]], xs), null, "sem coluna somável, sem linha");
+    assert.deepEqual(linhaTotal([cols[1]], xs), [0.3], "todas somadas: sem rótulo");
   });
 
   it("sem linhas = só o cabeçalho", () => {
@@ -37,6 +58,7 @@ describe("exportar tabela (.xlsx)", () => {
   it("número inválido (NaN/infinito) sai vazio, nunca \"NaN\"", () => {
     const out = linhasPlanilhaTabela([{ cabecalho: "N", numero: () => Number.NaN }, { cabecalho: "M", numero: () => Number.POSITIVE_INFINITY }], [1]);
     assert.deepEqual(out[1], ["", ""]);
+    assert.deepEqual(out[2], [0, 0], "o total ignora o que não é número");
   });
 
   it("datas ISO viram dd/mm/aaaa (com a hora quando há); outro texto fica como está", () => {

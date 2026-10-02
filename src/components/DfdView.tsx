@@ -153,7 +153,7 @@ const COLS: Column<ItemK>[] = [
     align: "right",
     nowrap: true,
     filter: "range",
-    numero: (r) => r.valorUnitario,
+    total: false, numero: (r) => r.valorUnitario,
     render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
   },
   {

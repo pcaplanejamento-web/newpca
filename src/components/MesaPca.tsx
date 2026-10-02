@@ -203,7 +203,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     key: "pcaSeq",
     header: "Seq. PCA",
     nowrap: true,
-    numero: (it) => it.pcaSequencial,
+    total: false, numero: (it) => it.pcaSequencial,
     value: (it) => (it.pcaSequencial == null ? "" : String(it.pcaSequencial)),
     render: (it) =>
       it.pcaSequencial == null ? (

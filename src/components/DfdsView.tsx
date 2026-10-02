@@ -1557,7 +1557,7 @@ export function DfdsView({
         ]
       : []),
     { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
-    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
+    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, total: false, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
     // O valor unitário × o HISTÓRICO DE COMPRA do código (o valor atual; médio e faixa na dica) — o desvio na cor da régua da
     // variação aponta o item divergente; o filtro separa "Acima/Abaixo (mais de 50%)", "(25% a 50%)", "Dentro", "Sem histórico".
     ...(historico
@@ -1713,7 +1713,7 @@ export function DfdsView({
       align: "right",
       filter: "range",
       nowrap: true,
-      numero: (l) => l.valorMedio,
+      total: false, numero: (l) => l.valorMedio,
       render: (l) =>
         l.valorMedio == null ? (
           "—"
@@ -1745,7 +1745,7 @@ export function DfdsView({
       filter: "range",
       formatarFaixa: (n) => pct(n, 100),
       nowrap: true,
-      numero: (l) => (l.variacao == null ? null : Math.round(l.variacao * 1000) / 10),
+      total: false, numero: (l) => (l.variacao == null ? null : Math.round(l.variacao * 1000) / 10),
       render: (l) =>
         l.unidadesMistas ? (
           <CelulaVariacao cv={l.variacao} nota="Unidades diferentes: a maior variação dentro de uma mesma unidade." />

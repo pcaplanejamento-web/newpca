@@ -79,6 +79,8 @@ export type Column<R> = {
   formatarFaixa?: (n: number) => string;
   /** A COR do texto da célula no PDF exportado (CSS — a mesma da tela, ex.: a do Estado); sem ela, negativo = vermelho. */
   corPdf?: (row: R) => string | null | undefined;
+  /** `false` = esta coluna numérica NÃO é somada na linha TOTAL da exportação (valor unitário, média, %, identificador). */
+  total?: false;
 };
 
 type Key = string | number;
@@ -399,6 +401,7 @@ export function DataTable<R>({
         numero: c.numero,
         formatar: c.formatarFaixa ?? (c.filter === "range" ? brl : num),
         cor: c.corPdf,
+        total: c.total,
       }));
     const hoje = dataIsoBrasilia(new Date().toISOString());
     setExportando(formato);

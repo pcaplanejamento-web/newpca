@@ -3078,7 +3078,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`exportar`** (`{nome}` | `false`; padrão LIGADO, nome "Tabela") = os botões **XLSX** e **PDF** no rodapé
   (**`BotaoExportar`**, `ExportarTabelas.tsx`): as linhas À VISTA (filtros das colunas, na ordem, todas as páginas) e as
   colunas visíveis da edição em uso — no .xlsx o número como número, os vários valores unidos, as datas em dd/mm/aaaa
-  (`linhasPlanilhaTabela`); no **PDF** (`tabelaParaPdf` → `baixarTabelaPdf`, `exportar-pdf.ts` com o pdf-lib só no clique;
+  (`linhasPlanilhaTabela`) e, no fim, a **linha TOTAL** (`linhaTotal`: a soma de cada coluna numérica — valores e quantidades —, "TOTAL" na 1ª coluna não somada; **`Column.total: false`** deixa em branco o que não se soma — valor unitário, médias, %, identificadores como Seq./Ticket); no **PDF** a MESMA linha TOTAL vai em DESTAQUE (`destaques`) e (`tabelaParaPdf` → `baixarTabelaPdf`, `exportar-pdf.ts` com o pdf-lib só no clique;
   layout PURO e testado em **`exportar-pdf-core.ts`**): A4 deitado, título + "N linhas · filtros: …" no topo de cada página,
   o cabeçalho das colunas repetido, larguras pelo conteúdo (a fonte desce de 8 a 5,5 antes de quebrar), texto QUEBRADO por
   palavra na célula (nada truncado — a linha alta continua na página seguinte), números formatados como na tela

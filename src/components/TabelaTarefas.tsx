@@ -84,7 +84,7 @@ export function TabelaTarefas({
         nowrap: true,
         filter: "none",
         value: (t) => String(t.ticket).padStart(9, "0"),
-        numero: (t) => t.ticket,
+        total: false, numero: (t) => t.ticket,
         render: (t) => (
           <span className="font-mono tabular-nums text-text-2">
             <CelulaCopiavel copiar={String(t.ticket)} rotulo="nº do ticket">
@@ -211,7 +211,7 @@ export function TabelaTarefas({
         nowrap: true,
         filter: "range",
         formatarFaixa: (n) => `${Math.round(n)}%`,
-        numero: (t) => (t.checklist.total ? (t.checklist.feitos / t.checklist.total) * 100 : null),
+        total: false, numero: (t) => (t.checklist.total ? (t.checklist.feitos / t.checklist.total) * 100 : null),
         value: (t) => (t.checklist.total ? `${t.checklist.feitos}/${t.checklist.total}` : ""),
         render: (t) =>
           t.checklist.total ? (

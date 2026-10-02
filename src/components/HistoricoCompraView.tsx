@@ -144,7 +144,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
       align: "right",
       nowrap: true,
       filter: "range",
-      numero: (p) => p.atual?.valor ?? null,
+      total: false, numero: (p) => p.atual?.valor ?? null,
       value: (p) => String(p.atual?.valor ?? ""),
       render: (p) =>
         p.atual ? (
@@ -155,10 +155,10 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
           <span className="text-faint">—</span>
         ),
     },
-    { key: "menor", header: "Menor valor", align: "right", nowrap: true, filter: "range", numero: (p) => p.menor, value: (p) => String(p.menor ?? ""), render: (p) => valorDoContrato(p.contratoMenor) },
+    { key: "menor", header: "Menor valor", align: "right", nowrap: true, filter: "range", total: false, numero: (p) => p.menor, value: (p) => String(p.menor ?? ""), render: (p) => valorDoContrato(p.contratoMenor) },
     { key: "contratoMenor", header: "Contrato (menor)", nowrap: true, value: (p) => numeroDoContrato(p.contratoMenor), render: (p) => celulaContrato(p.contratoMenor) },
-    { key: "medio", header: "Preço médio", align: "right", nowrap: true, filter: "range", numero: (p) => p.medio, value: (p) => String(p.medio ?? ""), render: (p) => dinheiro(p.medio) },
-    { key: "maior", header: "Maior valor", align: "right", nowrap: true, filter: "range", numero: (p) => p.maior, value: (p) => String(p.maior ?? ""), render: (p) => valorDoContrato(p.contratoMaior) },
+    { key: "medio", header: "Preço médio", align: "right", nowrap: true, filter: "range", total: false, numero: (p) => p.medio, value: (p) => String(p.medio ?? ""), render: (p) => dinheiro(p.medio) },
+    { key: "maior", header: "Maior valor", align: "right", nowrap: true, filter: "range", total: false, numero: (p) => p.maior, value: (p) => String(p.maior ?? ""), render: (p) => valorDoContrato(p.contratoMaior) },
     { key: "contratoMaior", header: "Contrato (maior)", nowrap: true, value: (p) => numeroDoContrato(p.contratoMaior), render: (p) => celulaContrato(p.contratoMaior) },
     { key: "total", header: "Valor contratado", align: "right", nowrap: true, filter: "range", numero: (p) => p.valorTotal, value: (p) => String(p.valorTotal), render: (p) => dinheiro(p.valorTotal) },
   ];
@@ -184,15 +184,15 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
     { key: "contrato", header: "Contrato", nowrap: true, value: (l) => numeroDoContrato(l.pc), render: (l) => numeroDoContrato(l.pc) },
     { key: "data", header: "Assinatura", nowrap: true, filter: "date", value: (l) => l.pc.data ?? "", render: (l) => dataBR(l.pc.data) },
     { key: "situacao", header: "Situação", nowrap: true, value: situacaoNoContrato, render: (l) => (l.pc === l.p.atual ? <Badge tone="blue">Mais recente</Badge> : <span className="text-muted">Anterior</span>) },
-    { key: "menor", header: "Menor valor", align: "right", nowrap: true, filter: "range", numero: (l) => l.pc.menor, value: (l) => String(l.pc.menor), render: (l) => dinheiro(l.pc.menor) },
-    { key: "maior", header: "Maior valor", align: "right", nowrap: true, filter: "range", numero: (l) => l.pc.base, value: (l) => String(l.pc.base), render: (l) => dinheiro(l.pc.base) },
+    { key: "menor", header: "Menor valor", align: "right", nowrap: true, filter: "range", total: false, numero: (l) => l.pc.menor, value: (l) => String(l.pc.menor), render: (l) => dinheiro(l.pc.menor) },
+    { key: "maior", header: "Maior valor", align: "right", nowrap: true, filter: "range", total: false, numero: (l) => l.pc.base, value: (l) => String(l.pc.base), render: (l) => dinheiro(l.pc.base) },
     {
       key: "atual",
       header: "Valor atual",
       align: "right",
       nowrap: true,
       filter: "range",
-      numero: (l) => l.pc.valor,
+      total: false, numero: (l) => l.pc.valor,
       value: (l) => String(l.pc.valor),
       render: (l) => (
         <span className="tabular-nums font-semibold" title={textoValorAtual(l.pc)}>
@@ -205,7 +205,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
       header: "Δ preço médio",
       nowrap: true,
       filter: "range",
-      numero: desvioNoContrato,
+      total: false, numero: desvioNoContrato,
       formatarFaixa: desvioTexto,
       value: (l) => String(desvioNoContrato(l) ?? ""),
       render: (l) => {
@@ -241,7 +241,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
       header: "Δ preço médio",
       nowrap: true,
       filter: "range",
-      numero: (it) => desvio(it),
+      total: false, numero: (it) => desvio(it),
       formatarFaixa: desvioTexto,
       value: (it) => String(desvio(it) ?? ""),
       render: (it) => {
@@ -254,7 +254,7 @@ export function HistoricoCompraModal({ catalogo, onFechar, podeExportar }: { cat
         );
       },
     },
-    { key: "unit", header: "Valor unitário", align: "right", nowrap: true, filter: "range", numero: (it) => it.valorUnitario, value: (it) => String(it.valorUnitario ?? ""), render: (it) => dinheiro(it.valorUnitario) },
+    { key: "unit", header: "Valor unitário", align: "right", nowrap: true, filter: "range", total: false, numero: (it) => it.valorUnitario, value: (it) => String(it.valorUnitario ?? ""), render: (it) => dinheiro(it.valorUnitario) },
     { key: "qtd", header: "Qtd. contratada", nowrap: true, filter: "range", numero: (it) => it.qtdContratada, formatarFaixa: dec, value: (it) => String(it.qtdContratada ?? ""), render: (it) => quantidade(it.qtdContratada) },
     { key: "contratado", header: "Valor contratado", align: "right", nowrap: true, filter: "range", numero: (it) => it.valorContratado, value: (it) => String(it.valorContratado ?? ""), render: (it) => dinheiro(it.valorContratado) },
     { key: "empenhado", header: "Valor empenhado", align: "right", nowrap: true, filter: "range", numero: (it) => it.valorEmpenhado, value: (it) => String(it.valorEmpenhado ?? ""), render: (it) => dinheiro(it.valorEmpenhado) },

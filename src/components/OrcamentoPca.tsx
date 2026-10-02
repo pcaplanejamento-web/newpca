@@ -384,7 +384,7 @@ export function OrcamentoPca({
       header: "Porcentagem",
       nowrap: true,
       filter: "range",
-      numero: (l) => l.percentual,
+      total: false, numero: (l) => l.percentual,
       formatarFaixa: (n) => `${(n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
       corPdf: corDaDiferenca,
       render: (l) => <BarraPct l={l} />,

@@ -45,7 +45,7 @@ export function ItemTable({
         nowrap: true,
         filter: "range",
         formatarFaixa: num,
-        numero: (r) => r.sequencial,
+        total: false, numero: (r) => r.sequencial,
         render: (r) => <span className="tabular-nums text-faint">{r.sequencial ?? "—"}</span>,
       },
     ];
@@ -142,7 +142,7 @@ export function ItemTable({
         align: "right",
         nowrap: true,
         filter: "range",
-        numero: (r) => r.valorReferencia,
+        total: false, numero: (r) => r.valorReferencia,
         render: (r) => <span className="tabular-nums text-text-2">{r.valorReferencia != null ? brl(r.valorReferencia) : "—"}</span>,
       },
       {

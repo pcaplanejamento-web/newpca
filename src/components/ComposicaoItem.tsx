@@ -172,7 +172,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
       align: "right",
       filter: "range",
       nowrap: true,
-      numero: (it) => it.valorUnitario,
+      total: false, numero: (it) => it.valorUnitario,
       render: (it) => {
         if (it.valorUnitario == null) return "—";
         const d = l ? desvioDaMedia(it.valorUnitario, mediaDeReferencia(l, it.unidade)) : null;

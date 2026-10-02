@@ -19,6 +19,8 @@ export type ColunaPlanilha<R> = {
   valor?: (r: R) => string;
   valores?: (r: R) => string[];
   numero?: (r: R) => number | null | undefined;
+  /** `false` = a coluna numérica NÃO entra na linha TOTAL (valor unitário, média, %, identificador). */
+  total?: false;
 };
 
 /** "2026-09-30" → "30/09/2026"; "2026-09-30T14:05…"/"2026-09-30 14:05" → "30/09/2026 14:05"; outro texto fica como está. */
@@ -48,10 +50,32 @@ function celula<R>(c: ColunaPlanilha<R>, r: R): string | number {
 export const colunasExportaveis = <R>(colunas: readonly ColunaPlanilha<R>[]) =>
   colunas.filter((c) => c.cabecalho.trim() !== "" && (c.valor || c.valores || c.numero));
 
-/** As LINHAS da planilha: o cabeçalho + uma por registro, na ordem recebida. */
+const somavel = <R>(c: ColunaPlanilha<R>) => !!c.numero && c.total !== false;
+
+/**
+ * A LINHA TOTAL (no fim da planilha e do PDF): a soma de cada coluna numérica somável (valores e quantidades — vazios e
+ * não números fora; arredondada ao centavo), "TOTAL" na 1ª coluna NÃO somada e as demais vazias. `null` sem linhas ou
+ * sem coluna somável.
+ */
+export function linhaTotal<R>(cols: readonly ColunaPlanilha<R>[], linhas: readonly R[]): (string | number)[] | null {
+  if (!linhas.length || !cols.some(somavel)) return null;
+  const rotulo = cols.findIndex((c) => !somavel(c));
+  return cols.map((c, j) => {
+    if (!somavel(c)) return j === rotulo ? "TOTAL" : "";
+    let soma = 0;
+    for (const r of linhas) {
+      const n = c.numero?.(r);
+      if (typeof n === "number" && Number.isFinite(n)) soma += n;
+    }
+    return Math.round(soma * 100) / 100 || 0;
+  });
+}
+
+/** As LINHAS da planilha: o cabeçalho + uma por registro, na ordem recebida, + a linha TOTAL. */
 export function linhasPlanilhaTabela<R>(colunas: readonly ColunaPlanilha<R>[], linhas: readonly R[]): (string | number)[][] {
   const cols = colunasExportaveis(colunas);
-  return [cols.map((c) => c.cabecalho), ...linhas.map((r) => cols.map((c) => celula(c, r)))];
+  const total = linhaTotal(cols, linhas);
+  return [cols.map((c) => c.cabecalho), ...linhas.map((r) => cols.map((c) => celula(c, r))), ...(total ? [total] : [])];
 }
 
 const numeroBR = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
@@ -59,29 +83,34 @@ const numeroBR = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigit
 /**
  * A MESMA tabela para o PDF: tudo como TEXTO (o número formatado — R$, %, quantidade — como a tela mostra), o
  * alinhamento de cada coluna (números à direita) e a COR de cada célula (a da coluna; senão, número negativo em
- * vermelho). Linhas e colunas = as da planilha.
+ * vermelho). Linhas e colunas = as da planilha, com a linha TOTAL no fim em DESTAQUE (`destaques`).
  */
 export function tabelaParaPdf<R>(
   colunas: readonly ColunaPlanilha<R>[],
   linhas: readonly R[],
-): { cabecalho: string[]; linhas: string[][]; alinhar: ("left" | "right")[]; cores: (string | null)[][] } {
+): { cabecalho: string[]; linhas: string[][]; alinhar: ("left" | "right")[]; cores: (string | null)[][]; destaques: number[] } {
   const cols = colunasExportaveis(colunas);
-  const texto = (c: ColunaPlanilha<R>, r: R): string => {
-    const v = celula(c, r);
-    return typeof v === "number" ? (c.formatar ?? numeroBR)(v) : v;
-  };
+  const formatado = (c: ColunaPlanilha<R>, v: string | number): string => (typeof v === "number" ? (c.formatar ?? numeroBR)(v) : v);
+  const total = linhaTotal(cols, linhas);
   return {
     cabecalho: cols.map((c) => c.cabecalho),
-    linhas: linhas.map((r) => cols.map((c) => texto(c, r))),
+    linhas: [
+      ...linhas.map((r) => cols.map((c) => formatado(c, celula(c, r)))),
+      ...(total ? [cols.map((c, j) => formatado(c, total[j]))] : []),
+    ],
     alinhar: cols.map((c) => (c.numero ? "right" : "left")),
-    cores: linhas.map((r) =>
-      cols.map((c) => {
-        const propria = c.cor?.(r);
-        if (propria) return propria;
-        const n = c.numero?.(r);
-        return typeof n === "number" && n < 0 ? "var(--danger)" : null;
-      }),
-    ),
+    cores: [
+      ...linhas.map((r) =>
+        cols.map((c) => {
+          const propria = c.cor?.(r);
+          if (propria) return propria;
+          const n = c.numero?.(r);
+          return typeof n === "number" && n < 0 ? "var(--danger)" : null;
+        }),
+      ),
+      ...(total ? [total.map((v) => (typeof v === "number" && v < 0 ? "var(--danger)" : null))] : []),
+    ],
+    destaques: total ? [linhas.length] : [],
   };
 }
 

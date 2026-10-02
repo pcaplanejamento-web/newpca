@@ -20,6 +20,11 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Exportação XLSX/PDF com linha TOTAL — entregue
+✅ Toda tabela exportada (XLSX e PDF) termina com a **linha TOTAL**: a soma de cada coluna de valores e quantidades
+(Valor total, Dotação, Planejado, Diferença, Qtd., Itens, DFDs, contagens); valor unitário, médias, percentuais e
+identificadores ficam em branco (`Column.total: false`). No PDF, a linha sai em destaque (negrito sobre o fundo).
+
 ### Assinatura Dropsigner "eletronicamente" (± CPF) — entregue
 ✅ Reconhecimento da variante Dropsigner cujo bloco usa **"Assinado eletronicamente por:"** (além de
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
