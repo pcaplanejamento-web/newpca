@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 24;
+  const PROTOCOLO = 25;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -29,6 +29,11 @@
   let viaSalvar = null;
   let trilha = [];
   let trilhaSalvar = null;
+  // A OPERAÇÃO "Emitir DFD" que a tela da Centi usou por último nesta aba (ModuleKey, Guid, modelo de assinatura): a
+  // extensão a pega SOZINHA quando alguém clica em Processar — o sistema se ajusta quando a Centi a muda.
+  let operacaoTela = null;
+  // As operações que a PRÓPRIA extensão está enviando pelo cliente da Centi — não são da tela, não se aprende delas.
+  const proprias = new Set();
   // A sessão da Centi é POR ABA (sessionStorage): a última capturada vale também depois de um F5 ou de uma atualização.
   try {
     const salvo = JSON.parse(sessionStorage.getItem(SESSAO) || "null");
@@ -36,6 +41,7 @@
     if (salvo?.doSalvar) ({ doSalvar, nomesSalvar, tipoSalvar } = salvo);
     if (salvo?.urlsSalvar) ({ urlsSalvar, trilhaSalvar, viaSalvar } = salvo);
     if (salvo?.doProtocolo) doProtocolo = salvo.doProtocolo;
+    if (salvo?.operacaoTela) operacaoTela = salvo.operacaoTela;
   } catch {}
   const IGNORAR = /^(content-type|accept|content-length|x-ts)/i;
   const SESSAO_CAB = /^(authorization|token|refreshtoken|company)$/i;
@@ -63,7 +69,7 @@
       if (salvar[1].toLowerCase() === "confirmsave") trilhaSalvar = trilha.slice(0, -1);
     } else if (/[?&]entity=102907(&|$)/.test(caminho)) doProtocolo = limpos;
     try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar }));
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
     } catch {}
   }
 
@@ -86,7 +92,7 @@
     if (novo === cabecalhos) return;
     cabecalhos = novo;
     try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar }));
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
     } catch {}
   }
   const tokenDoXhr = (x) => (n) => {
@@ -96,6 +102,18 @@
       return null;
     }
   };
+
+  // A tela da Centi mandou um "Emitir DFD" (o operation do Processar): guarda a operação dela.
+  function aprenderOperacao(url, metodo, corpo) {
+    try {
+      if (!/^POST$/i.test(metodo || "") || !/\/restauth\/operation(\?|$)/.test(String(url))) return;
+      const pecas = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+      const op = pecas?.operacaoDoCorpo(corpo);
+      if (!op || proprias.has(`${op.moduleKey}|${op.guid}`)) return;
+      operacaoTela = { ...op, em: new Date().toISOString() };
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar, operacaoTela }));
+    } catch {}
+  }
 
   const abrir = XMLHttpRequest.prototype.open;
   const definir = XMLHttpRequest.prototype.setRequestHeader;
@@ -111,7 +129,10 @@
     return definir.call(this, k, v);
   };
   XMLHttpRequest.prototype.send = function (...r) {
-    if (this.__pcaUrl && !this.__pcaInterno) guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo, "xhr");
+    if (this.__pcaUrl && !this.__pcaInterno) {
+      guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo, "xhr");
+      aprenderOperacao(this.__pcaUrl, this.__pcaMetodo, r[0]);
+    }
     if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/")) this.addEventListener("load", () => trocarToken(tokenDoXhr(this)));
     return enviar.apply(this, r);
   };
@@ -128,7 +149,9 @@
     try {
       const url = typeof rec === "string" ? rec : rec?.url;
       const hs = new Headers(init?.headers || (typeof rec === "object" ? rec.headers : undefined));
-      guardar(url, Object.fromEntries(hs.entries()), init?.method || (typeof rec === "object" ? rec.method : "GET"), "fetch");
+      const metodo = init?.method || (typeof rec === "object" ? rec.method : "GET");
+      guardar(url, Object.fromEntries(hs.entries()), metodo, "fetch");
+      aprenderOperacao(url, metodo, init?.body);
     } catch {}
     return comToken(buscar.call(this, rec, init, ...resto));
   };
@@ -237,10 +260,14 @@
       const tipo = (typeof r.headers?.get === "function" ? r.headers.get("content-type") : r.headers?.["content-type"]) || "";
       return { ok: true, status: r.status, tipo: String(tipo), b64: emBase64(bytes) };
     };
+    const propria = corpo ? `${corpo.ModuleKey}|${String(corpo.Guid).toLowerCase()}` : null;
+    if (propria) proprias.add(propria);
     try {
       return resposta(await cli.principal.request({ method: metodo, url: rel, data: corpo ?? undefined, headers, responseType: "arraybuffer" }));
     } catch (e) {
       return e?.response ? resposta(e.response) : null;
+    } finally {
+      if (propria) proprias.delete(propria);
     }
   }
 
@@ -353,7 +380,7 @@
     }
     return clienteCenti;
   }
-  function tokenNosClientes(cli, h) {
+  function tokenNosClientes(_cli, h) {
     const ler = (n) => (h && (typeof h.get === "function" ? h.get(n) : h[n])) || null;
     const token = ler("token");
     const refresh = ler("refreshtoken");
@@ -479,7 +506,7 @@
     try {
       resposta =
         acao === "estado"
-          ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual() }
+          ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual(), operacao: operacaoTela }
           : Object.hasOwn(ACOES, acao)
             ? await ACOES[acao](dados)
             : { ok: false, erro: "Ação desconhecida." };

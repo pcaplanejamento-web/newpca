@@ -91,7 +91,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.17"), false);
   assert.equal(versaoAtende("1.3.18"), false);
   assert.equal(versaoAtende("1.3.19"), false);
-  assert.equal(versaoAtende("1.3.20"), true);
+  assert.equal(versaoAtende("1.3.20"), false);
+  assert.equal(versaoAtende("1.3.21"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -452,4 +453,25 @@ test("emissão: o Emitir DFD e o download saem pelo cliente HTTP da própria Cen
   assert.match(main, /return \(await binarioPelaCenti\("POST", url, corpo, ent\)\) \?\? executar\("POST"/);
   assert.match(main, /\(await binarioPelaCenti\("GET", url, null, ent\)\) \?\? executar\("GET"/);
   assert.match(main, /responseType: "arraybuffer"/);
+});
+
+test("operação Emitir DFD: a extensão pega a da tela e o sistema acompanha a mudança da Centi", async () => {
+  const { ajusteDaOperacao, operacaoRecusada, CONFIG_CENTI_PADRAO } = await import("../src/lib/automacao-centi-core.ts");
+  const A = await pecasAnexo();
+  const corpoTela = JSON.stringify({
+    ModuleKey: 120466,
+    Guid: "AAAAAAAA-cb29-2473-1d0a-318c7d8507ef",
+    Params: [{ Key: "IdComprasPlanejamento", Value: "1254" }, { Key: "IdPlanejamentoAssinaturaDFD", Value: "170" }, { Key: "DFD", Value: "1" }],
+  });
+  const op = A.operacaoDoCorpo(corpoTela);
+  assert.deepEqual(op, { moduleKey: 120466, guid: "aaaaaaaa-cb29-2473-1d0a-318c7d8507ef", assinatura: "170" });
+  // Outro operation (sem planejamento ou não-DFD) ou corpo inválido não é a operação.
+  assert.equal(A.operacaoDoCorpo(JSON.stringify({ ModuleKey: 1, Guid: "aaaaaaaa-cb29-2473-1d0a-318c7d8507ef", Params: [] })), null);
+  assert.equal(A.operacaoDoCorpo("não é json"), null);
+  // O sistema ajusta só o que mudou; igual → nada.
+  assert.deepEqual(ajusteDaOperacao(CONFIG_CENTI_PADRAO, op), { moduleKey: 120466, guid: "aaaaaaaa-cb29-2473-1d0a-318c7d8507ef", assinaturaDfd: "170" });
+  assert.equal(ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: 120465, guid: "24e3e9d0-cb29-2473-1d0a-318c7d8507ef", assinatura: "163" }), null);
+  assert.equal(ajusteDaOperacao(CONFIG_CENTI_PADRAO, { moduleKey: "x", guid: "y" }), null);
+  assert.equal(operacaoRecusada('{"Success":false,"Message":["(1)","Usuário sem permissão!"]}'), true);
+  assert.equal(operacaoRecusada("Sessão expirada"), false);
 });

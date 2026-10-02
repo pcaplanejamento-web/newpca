@@ -28,6 +28,8 @@ import {
   type ProtocoloAutomacao,
   paraBase64,
   pedidoEmitirDfd,
+  ajusteDaOperacao,
+  operacaoRecusada,
   planoDosIds,
   planoDosProtocolos,
   type TarefaCenti,
@@ -84,6 +86,8 @@ type Resposta = {
   sequencial?: string;
   /** A pergunta do confirmsave da Centi: o save só segue com o "sim" do ADM. */
   confirmar?: string;
+  /** A operação "Emitir DFD" que a extensão pegou da própria tela da Centi (o Processar). */
+  operacao?: unknown;
 };
 type TextoAlvo = { id: string; numero: string };
 const lerTextoAlvo = (v: unknown): TextoAlvo => {
@@ -691,11 +695,25 @@ export function AutomacaoAdmin({
     mapaRef.current = m;
     setMapa(m);
   }, []);
+  // A configuração mais recente (a emissão roda em laço assíncrono e pode ser ajustada no meio dele).
+  const cfgRef = useRef(cfg);
+  cfgRef.current = cfg;
   const mudar = (p: Partial<ConfigCenti>) => {
-    const n = lerConfigCenti({ ...cfg, ...p });
+    const n = lerConfigCenti({ ...cfgRef.current, ...p });
+    cfgRef.current = n;
     setCfg(n);
     gravarLocal(CHAVE_CONFIG, n);
   };
+  // A operação "Emitir DFD" que a extensão pegou da tela da Centi: se a Centi a mudou, o sistema acompanha sozinho.
+  const aplicarOperacao = (op: unknown): boolean => {
+    const a = ajusteDaOperacao(cfgRef.current, op);
+    if (!a) return false;
+    mudar(a);
+    toast.success(`A Centi mudou a operação Emitir DFD — o sistema já se ajustou (ModuleKey ${cfgRef.current.moduleKey}).`, 10_000);
+    return true;
+  };
+  const aplicarRef = useRef(aplicarOperacao);
+  aplicarRef.current = aplicarOperacao;
   const mudarSaida = (p: Partial<OpcoesSaida>) => {
     const n = lerOpcoesSaida({ ...saida, ...p });
     setSaida(n);
@@ -776,7 +794,11 @@ export function AutomacaoAdmin({
     gravarLocal(CHAVE_ENTIDADES, n);
   }, []);
 
-  const verificar = useCallback(async () => setLogado(await pedir("estado", null, 8000)), [pedir]);
+  const verificar = useCallback(async () => {
+    const r = await pedir("estado", null, 8000);
+    setLogado(r);
+    if (r.ok && r.operacao) aplicarRef.current(r.operacao);
+  }, [pedir]);
   useEffect(() => {
     if (ext && versaoAtende(ext.versao)) void verificar();
   }, [ext, verificar]);
@@ -826,11 +848,11 @@ export function AutomacaoAdmin({
     } catch {}
   }
 
-  type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean; entidade?: string };
+  type Emissao = { pdf?: Uint8Array; erro?: string; amostra?: string; ambiente?: boolean; entidade?: string; recusada?: boolean };
   // A LÓGICA da emissão (a extensão só leva o pedido à aba da Centi): Processar → o PDF, ou a chave do arquivo → baixa.
-  async function emitirUm(id: string, entidade?: string): Promise<Emissao> {
+  async function emitirUm(id: string, entidade?: string, deNovo = false): Promise<Emissao> {
     const ambiente = (r: Resposta): Emissao => ({ erro: r.erro ?? "Falha na extensão.", ambiente: true });
-    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, cfg, new Date()), entidade }, 150_000);
+    const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, cfgRef.current, new Date()), entidade }, 150_000);
     if (!r.ok || r.b64 == null) return ambiente(r);
     const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
     if (a.tipo === "pdf") return { pdf: a.bytes };
@@ -840,11 +862,20 @@ export function AutomacaoAdmin({
       return b && ehPdf(b) ? { pdf: b } : { erro: "Não consegui abrir o PDF compactado da Centi." };
     }
     if (a.tipo === "nada") {
-      // "Sem permissão" = a operação mudou na Centi: a correção é o ModuleKey/Guid do "Processar" da própria tela.
-      const dica = /sem permiss/i.test(a.amostra ?? a.erro)
-        ? " A Centi recusou a operação: confira em Ajustes → Avançado o ModuleKey, o Guid e o modelo de assinatura com o Payload do “Processar” da própria tela."
-        : "";
-      return { erro: `${a.erro}${dica}`, amostra: a.amostra, ambiente: /sessão/i.test(a.erro) };
+      // A Centi recusou a OPERAÇÃO (ela muda o ModuleKey/Guid do Emitir DFD de tempos em tempos): pega a da tela, que a
+      // extensão guardou sozinha, e tenta UMA vez de novo. Sem ela, o erro diz o que fazer — e não adianta outra entidade.
+      if (operacaoRecusada(a.amostra ?? a.erro)) {
+        if (!deNovo) {
+          const e = await pedir("estado", null, 8000);
+          if (e.ok && aplicarOperacao(e.operacao)) return emitirUm(id, entidade, true);
+        }
+        return {
+          erro: "A Centi recusou a operação Emitir DFD (“Usuário sem permissão!”) — ela deve ter mudado a operação. Emita UM DFD pela própria tela da Centi nesta aba (Planejamento → Operações → Emitir DFD → Processar): a extensão pega a operação nova sozinha. Depois, tente de novo.",
+          amostra: a.amostra,
+          recusada: true,
+        };
+      }
+      return { erro: a.erro, amostra: a.amostra, ambiente: /sessão/i.test(a.erro) };
     }
     for (const caminho of caminhosDoArquivo(a)) {
       const d = await pedir("pedir", { metodo: "GET", caminho, entidade }, 150_000);
@@ -878,12 +909,12 @@ export function AutomacaoAdmin({
       if (t.orgao && !mapeada && atual) definirEntidade(t.orgao, atual);
       return { ...r, entidade: mapeada ?? atual ?? undefined };
     }
-    if (r.ambiente || !cfg.descobrirEntidade || (t.orgao && semSaida.has(t.orgao))) return r;
+    if (r.ambiente || r.recusada || !cfg.descobrirEntidade || (t.orgao && semSaida.has(t.orgao))) return r;
     const ja = mapeada ?? atual;
     const tentar = [...new Set([...Object.values(mapaRef.current), ...candidatosEntidade(cfg.entidades, atual)])].filter((e) => e !== ja);
     for (const e of tentar) {
       const x = await emitirConferido(t, e);
-      if (x.ambiente) return x;
+      if (x.ambiente || x.recusada) return x;
       if (x.pdf) {
         if (t.orgao) definirEntidade(t.orgao, e);
         return { ...x, entidade: e };
@@ -967,8 +998,9 @@ export function AutomacaoAdmin({
         const r = await emitirNaEntidade(t, semSaida, atual);
         if (!r.pdf) {
           const erro = r.erro ?? "Falha ao emitir.";
-          // Falha do AMBIENTE (extensão/aba/sessão): os demais falhariam igual — para o lote (o que já veio é salvo).
-          if (r.ambiente) {
+          // Falha do AMBIENTE (extensão/aba/sessão) ou a OPERAÇÃO recusada pela Centi: os demais falhariam igual — para o
+          // lote (o que já veio é salvo).
+          if (r.ambiente || r.recusada) {
             setLinhas((ls) => (ls ?? []).map((x) => (x.estado === "fila" || x.chave === t.chave ? { ...x, estado: "falha", erro } : x)));
             void verificar();
             parar = true;

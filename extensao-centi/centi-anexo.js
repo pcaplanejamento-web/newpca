@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p24";
+  const NOME = "__pcaCentiAnexo_p25";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -254,7 +254,29 @@
     return mudou ? novo : cab;
   }
 
+  /** A OPERAÇÃO "Emitir DFD" que a própria tela da Centi mandou (o corpo do operation, como texto ou objeto): só o que a
+   * identifica — ModuleKey, Guid e o modelo de assinatura (IdPlanejamentoAssinaturaDFD). Outro operation → null. Nunca
+   * guarda o planejamento nem os demais valores. */
+  function operacaoDoCorpo(corpo) {
+    let c = corpo;
+    if (typeof c === "string") {
+      try {
+        c = JSON.parse(c);
+      } catch {
+        return null;
+      }
+    }
+    if (!c || typeof c !== "object" || !Number.isInteger(c.ModuleKey) || c.ModuleKey <= 0 || !Array.isArray(c.Params)) return null;
+    const guid = String(c.Guid ?? "").toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(guid)) return null;
+    const p = (k) => c.Params.find((x) => x && x.Key === k);
+    if (!p("IdComprasPlanejamento") || String(p("DFD")?.Value ?? "") !== "1") return null;
+    const assinatura = String(p("IdPlanejamentoAssinaturaDFD")?.Value ?? "").replace(/\D/g, "");
+    return { moduleKey: c.ModuleKey, guid, assinatura };
+  }
+
   globalThis[NOME] = Object.freeze({
     comTokenNovo,
+    operacaoDoCorpo,
     renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

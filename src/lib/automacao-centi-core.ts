@@ -33,7 +33,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
 
 /** A versão da extensão publicada junto (extensao-centi/manifest.json) = a MÍNIMA que a tela aceita (a extensão é só o
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
-export const VERSAO_EXTENSAO_CENTI = "1.3.20";
+export const VERSAO_EXTENSAO_CENTI = "1.3.21";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -47,6 +47,27 @@ export const avisoVersaoExtensao = (usuarioId: number) => ({
 
 export const MAX_IDS_CENTI = 200;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A operação "Emitir DFD" que a extensão PEGOU da própria tela da Centi (o Processar). */
+export type OperacaoCenti = { moduleKey: number; guid: string; assinatura: string; em?: string };
+
+/** O ajuste da configuração pela operação da tela: só o que MUDOU (ModuleKey, Guid, modelo de assinatura); nada a mudar
+ * ou operação inválida → null. A tela da Centi é a referência — quando ela muda a operação, o sistema acompanha. */
+export function ajusteDaOperacao(cfg: ConfigCenti, op: unknown): Partial<ConfigCenti> | null {
+  const o = (op && typeof op === "object" ? op : {}) as Partial<Record<keyof OperacaoCenti, unknown>>;
+  const mk = Number(o.moduleKey);
+  const guid = typeof o.guid === "string" ? o.guid.trim().toLowerCase() : "";
+  const ass = typeof o.assinatura === "string" ? o.assinatura.replace(/\D/g, "") : "";
+  if (!Number.isInteger(mk) || mk <= 0 || !GUID.test(guid)) return null;
+  const p: Partial<ConfigCenti> = {};
+  if (mk !== cfg.moduleKey) p.moduleKey = mk;
+  if (guid !== cfg.guid) p.guid = guid;
+  if (ass && ass !== cfg.assinaturaDfd) p.assinaturaDfd = ass;
+  return Object.keys(p).length ? p : null;
+}
+
+/** A resposta da Centi recusou a OPERAÇÃO ("Usuário sem permissão!") — não é a entidade nem a sessão. */
+export const operacaoRecusada = (texto: string | undefined) => /sem permiss/i.test(texto ?? "");
 
 /** A operação "Emitir DFD" de ANTES da mudança da Centi (01/10/2026) — a guardada no aparelho é trocada pela nova. */
 export const OPERACAO_ANTIGA = { moduleKey: 120464, guid: "2b414e51-4389-1c0a-f194-b11779b834f5", assinaturaDfd: "13" };
