@@ -182,5 +182,8 @@ export function textoAlvoAnexo(a: AlvoAnexo): string {
   return ["anexar", a.id.replace(/\D/g, ""), a.numero.replace(/\D/g, ""), (a.ano ?? "").replace(/\D/g, ""), limpa(a.descricao)].join("|");
 }
 
+/** A descrição como o sistema a REGISTRA (a mesma do alvo canônico) — para conferir "já anexado" antes de emitir. */
+export const descricaoCanonica = (d: string) => limpa(d);
+
 /** A validade da autorização (segundos) — o tempo de emitir, conferir e anexar UM PDF. */
 export const VALIDADE_AUTORIZACAO_S = 300;

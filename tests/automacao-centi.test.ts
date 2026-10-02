@@ -94,7 +94,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.3.20"), false);
   assert.equal(versaoAtende("1.3.21"), false);
   assert.equal(versaoAtende("1.3.22"), false);
-  assert.equal(versaoAtende("1.4.0"), true);
+  assert.equal(versaoAtende("1.4.0"), false);
+  assert.equal(versaoAtende("1.4.1"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -485,4 +486,25 @@ test("travas da extensão: só o Emitir DFD, só o download do PDF e o estado le
   assert.match(main, /if \(!ARQUIVO\.test\(new URL\(url\)\.pathname\)\) return \{ ok: false/);
   const bg = readFileSync("extensao-centi/background.js", "utf8");
   assert.match(bg, /operacao: estado\?\.operacao \?\? null/);
+});
+
+test("destino “protocolo de cada DFD”: o Id da capa + o nº; nunca junta protocolos nem chuta", async () => {
+  const { alvoDoArquivo, protocolosDoArquivo } = await import("../src/lib/automacao-centi-core.ts");
+  const p = (id: number, idExterno: string | null, numero: string) =>
+    ({ id, numero, idExterno, assunto: null, interessado: null, sigla: null, anoPca: 2027, pca: null, criadoEm: null, responsavelId: null, situacaoId: null, itens: 0, valor: 0, dfds: [] }) as never;
+  const protos = [p(7, "2332778", "156844/2026"), p(8, null, "200/2026"), p(9, "123", "abc")];
+  const arq = (...chaves: string[]) => ({ pastas: [], nome: "x.pdf", partes: chaves.map((chave) => ({ chave, id: "1", dfd: null, orgao: null, orgaoNome: null, grupo: "" })) });
+  assert.deepEqual(protocolosDoArquivo(arq("7:1154", "7:1155")), [7]);
+  assert.deepEqual(alvoDoArquivo(arq("7:1154"), protos), { alvo: { id: "2332778", numero: "156844", ano: "2026" }, protocoloId: 7 });
+  assert.match((alvoDoArquivo(arq("7:1", "8:2"), protos) as { erro: string }).erro, /protocolos diferentes/);
+  assert.match((alvoDoArquivo(arq("8:1"), protos) as { erro: string }).erro, /não tem o Id da Centi/);
+  assert.ok("erro" in alvoDoArquivo(arq("9:1"), protos));
+  assert.ok("erro" in alvoDoArquivo(arq("1154"), protos));
+  assert.ok("erro" in alvoDoArquivo(arq("99:1"), protos));
+});
+
+test("descrição canônica: a mesma do alvo autorizado (pré-verificação × registro)", async () => {
+  const { descricaoCanonica, textoAlvoAnexo } = await import("../src/lib/automacao-core.ts");
+  const d = "  Planejamento 1 -  DFD 2 ";
+  assert.equal(textoAlvoAnexo({ id: "1", numero: "2", ano: null, descricao: d }).split("|")[4], descricaoCanonica(d));
 });

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AlvoCenti,
   type ArquivoSaida,
+  alvoDoArquivo,
   analisarRespostaCenti,
   CONFIG_CENTI_PADRAO,
   type ConfigCenti,
@@ -38,7 +39,8 @@ import {
 } from "@/lib/automacao-centi-core";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
-import { autorizarEscrita, cancelarExecucao, concluirPasso, iniciarExecucao, type PassoAnexo, registrarAnexo } from "@/lib/automacao-cliente";
+import { autorizarEscrita, cancelarExecucao, concluirPasso, iniciarExecucao, jaAnexados, type PassoAnexo, registrarAnexo } from "@/lib/automacao-cliente";
+import { descricaoCanonica } from "@/lib/automacao-core";
 import { ZipArmazenar } from "@/lib/zip-armazenar";
 import { Ajuda } from "./Ajuda";
 import { useAlturaTela } from "./AlturaCheia";
@@ -59,6 +61,7 @@ import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
+import { HistoricoExecucoes } from "./HistoricoExecucoes";
 
 // Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) por PROTOCOLO do sistema (uma pasta
 // por protocolo, dentro da pasta "PCA <ano>") ou por Id. Quem fala com a Centi é a EXTENSÃO do Chrome (extensao-centi/),
@@ -100,7 +103,7 @@ const lerTextoAlvo = (v: unknown): TextoAlvo => {
 type Estado = "fila" | "baixando" | "ok" | "falha" | "pulado" | "repetido";
 type Linha = TarefaCenti & { estado: Estado; erro?: string; amostra?: string; entidade?: string };
 type Modo = "protocolo" | "ids";
-type Ext = { versao: string } | null;
+type Ext = { versao: string; copias: number } | null;
 /** O contexto dos BANNERS da Mesa (o protocolo aberto pela linha): o mesmo da Mesa (`contextoBanners`). */
 export type ContextoBannersAutomacao = Pick<Parameters<typeof BannersMesa>[0], "pode" | "reparticoes" | "regras" | "orgaos" | "pcas">;
 
@@ -108,6 +111,7 @@ export type ContextoBannersAutomacao = Pick<Parameters<typeof BannersMesa>[0], "
 function useExtensaoCenti() {
   const [ext, setExt] = useState<Ext>(null);
   const versao = useRef("");
+  const copias = useRef(new Map<string, string>());
   const seq = useRef(0);
   const pendentes = useRef(new Map<number, (r: Resposta) => void>());
   useEffect(() => {
@@ -116,9 +120,13 @@ function useExtensaoCenti() {
       if (e.data.tipo === "pronto") {
         // Vale a MAIOR versão anunciada (uma cópia antiga que ficou na aba também se anuncia).
         const v = String(e.data.versao ?? "");
-        if (versao.current && maiorVersao(versao.current, v) === versao.current) return;
-        versao.current = v;
-        setExt({ versao: versao.current });
+        // Cada CÓPIA instalada se anuncia com o id dela (desde a 1.4.1): duas cópias = aviso (as duas ouviriam os pedidos).
+        // Conta só as cópias da MESMA versão (a antiga que sobrou de uma atualização não ouve os pedidos — `v`).
+        if (typeof e.data.idExtensao === "string") copias.current.set(e.data.idExtensao, v);
+        if (versao.current && maiorVersao(versao.current, v) === versao.current && v !== versao.current) return;
+        versao.current = maiorVersao(versao.current || "0", v);
+        const atual = versao.current;
+        setExt({ versao: atual, copias: [...copias.current.values()].filter((x) => x === atual).length });
         return;
       }
       // Só a resposta da ponte ATUAL (uma cópia antiga da extensão que ficou na aba também ouve).
@@ -256,7 +264,8 @@ const COR: Record<Estado, string> = { fila: "var(--muted)", baixando: "var(--inf
 const ROTULO: Record<Estado, string> = { fila: "Na fila", baixando: "Baixando…", ok: "Salvo", falha: "Falhou", pulado: "Sem planejamento", repetido: "Não baixado" };
 const DESTINOS: { value: DestinoSaida; label: string }[] = [
   { value: "pasta", label: "Pasta" },
-  { value: "protocolo", label: "Protocolo da Centi" },
+  { value: "protocolo", label: "Protocolo indicado" },
+  { value: "proprio", label: "Protocolo de cada DFD" },
 ];
 const mesmasChaves = (a: Linha[], b: Linha[]) => a.length === b.length && a.every((l, i) => l.chave === b[i].chave);
 const CARTAO = "rounded-card border border-border bg-surface shadow-ring";
@@ -364,7 +373,14 @@ function Ajustes({
   conferencia,
   testar,
   teste,
+  gravacao,
+  onGravacao,
+  onHistorico,
 }: {
+  /** O freio de emergência da plataforma (null = não lido). */
+  gravacao: boolean | null;
+  onGravacao: (ativa: boolean) => void;
+  onHistorico: () => void;
   saida: OpcoesSaida;
   onSaida: (p: Partial<OpcoesSaida>) => void;
   cfg: ConfigCenti;
@@ -383,12 +399,36 @@ function Ajustes({
 }) {
   return (
     <div className="space-y-3 p-1">
+      <Grupo titulo="Gravação na Centi">
+        <Switch
+          checked={gravacao !== false}
+          disabled={gravacao === null}
+          onChange={onGravacao}
+          label={gravacao === false ? "Pausada (freio de emergência)" : "Ligada"}
+        />
+        <Button size="sm" variant="secondary" onClick={onHistorico}>
+          Histórico das execuções
+        </Button>
+      </Grupo>
       <Grupo titulo="Destino">
         <Segmented<DestinoSaida> ariaLabel="Destino dos PDFs" value={saida.destino} onChange={(v) => onSaida({ destino: v })} options={DESTINOS} className="w-full" />
         {saida.destino === "pasta" ? (
           <>
             <Switch checked={saida.pastaPca} onChange={(v) => onSaida({ pastaPca: v })} label="Pasta “PCA ano”" />
             <Switch checked={saida.escolherPasta} onChange={(v) => onSaida({ escolherPasta: v })} label="Escolher a pasta de destino" />
+          </>
+        ) : saida.destino === "proprio" ? (
+          <>
+            <p className="text-xs text-muted">
+              Cada arquivo vai ao protocolo da Centi de onde vieram os DFDs (o “Id:” da capa + o nº). Só no modo Por protocolo, com
+              PDFs separados ou um por protocolo.
+            </p>
+            <TextField
+              label="Tipo do documento"
+              inputMode="numeric"
+              value={saida.tipoDocumento}
+              onChange={(e) => onSaida({ tipoDocumento: e.target.value.replace(/\D/g, "") || saida.tipoDocumento })}
+            />
           </>
         ) : (
           <>
@@ -657,7 +697,30 @@ export function AutomacaoAdmin({
 }) {
   const router = useRouter();
   const colunasGestao = useColunasGestao(gestao);
-  const colunas = useMemo(() => [...colunasGestao, ...COLUNAS], [colunasGestao]);
+  const [naCentiCol, setNaCentiCol] = useState<Map<number, number>>(new Map());
+  const colunas = useMemo<Column<ProtocoloAutomacao>[]>(
+    () => [
+      ...colunasGestao,
+      ...COLUNAS,
+      {
+        key: "naCenti",
+        header: "Na Centi",
+        nowrap: true,
+        value: (p) => (naCentiCol.get(p.id) ? `${naCentiCol.get(p.id)} anexado(s)` : "—"),
+        render: (p) => {
+          const n = naCentiCol.get(p.id) ?? 0;
+          return n ? (
+            <Badge tone="emerald" dot>
+              {n} anexado(s)
+            </Badge>
+          ) : (
+            <span className="text-faint">—</span>
+          );
+        },
+      },
+    ],
+    [colunasGestao, naCentiCol],
+  );
   const { ext, pedir } = useExtensaoCenti();
   const [cfg, setCfg] = useState<ConfigCenti>(CONFIG_CENTI_PADRAO);
   const [saida, setSaida] = useState<OpcoesSaida>(OPCOES_SAIDA_PADRAO);
@@ -679,7 +742,7 @@ export function AutomacaoAdmin({
   // pede a confirmação na janela dela). Como a tela da Centi: confirmsave → a pergunta da Centi vai ao ADM e só o "sim"
   // grava (com uma autorização nova). Já registrado no sistema = não grava de novo. Gravado = registro + passo feito.
   const anexarNaCenti = useCallback(
-    async (execucaoId: number, passo: PassoAnexo, dados: Record<string, unknown>, ms: number): Promise<Resposta> => {
+    async (execucaoId: number, passo: PassoAnexo, protocoloId: number | null, dados: Record<string, unknown>, ms: number): Promise<Resposta> => {
       const uma = async (extra: Record<string, unknown>): Promise<Resposta> => {
         const a = await autorizarEscrita(execucaoId, passo);
         if ("erro" in a) return { ok: false, erro: a.erro };
@@ -693,7 +756,7 @@ export function AutomacaoAdmin({
       }
       if (r.ok) {
         const nota = r.jaAnexado ? "Já estava no protocolo." : `Documento ${r.sequencial ?? "?"} do protocolo.`;
-        await registrarAnexo(execucaoId, passo, r.documento ?? null, null, nota);
+        await registrarAnexo(execucaoId, passo, r.documento ?? null, protocoloId, nota);
       } else await concluirPasso(execucaoId, passo.chave, "falhou", r.erro ?? "A Centi não gravou.");
       return r;
     },
@@ -743,7 +806,8 @@ export function AutomacaoAdmin({
     setConferencia(null);
     gravarLocal(CHAVE_ALVO, n);
   };
-  const anexando = saida.destino === "protocolo";
+  const anexando = saida.destino !== "pasta";
+  const proprio = saida.destino === "proprio";
   const lidoAlvo = lerAlvoCenti(alvoTexto.id, alvoTexto.numero);
   const alvo: AlvoCenti | null = "alvo" in lidoAlvo ? lidoAlvo.alvo : null;
   const rotuloAlvo = alvo ? `Protocolo ${alvo.numero}${alvo.ano ? `/${alvo.ano}` : ""}` : null;
@@ -782,7 +846,7 @@ export function AutomacaoAdmin({
       const passo: PassoAnexo = { chave: "teste", alvo: { ...alvo, descricao } };
       const ex = await iniciarExecucao("anexar-dfds", [passo], { teste: true, protocolo: alvo.numero, id: alvo.id });
       if ("erro" in ex) throw new Error(ex.erro);
-      const r = await anexarNaCenti(ex.id, passo, { ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 300_000);
+      const r = await anexarNaCenti(ex.id, passo, null, { ...alvo, tipo: saida.tipoDocumento, descricao, arquivo: `${descricao}.pdf`, pdf: paraBase64(bytes) }, 300_000);
       const res = r.ok ? { ok: `Anexado (documento ${r.sequencial ?? "?"}). O anexo na Centi funciona.` } : { erro: r.erro ?? "A Centi não gravou." };
       setTeste(res);
       if ("ok" in res) toast.success(`Testar anexo: ${res.ok}`, 15_000);
@@ -814,9 +878,72 @@ export function AutomacaoAdmin({
     setLogado(r);
     if (r.ok && r.operacao) aplicarRef.current(r.operacao);
   }, [pedir]);
+  // AO VIVO: a extensão se anuncia sozinha (instalada/atualizada — sem F5); o estado da Centi é conferido ao abrir, ao
+  // voltar à janela e a cada 20 s com a tela à vista (fora do meio de um lote — o canal fica com a Centi).
+  const rodandoRef = useRef(false);
+  rodandoRef.current = rodando;
   useEffect(() => {
-    if (ext && versaoAtende(ext.versao)) void verificar();
+    if (!ext || !versaoAtende(ext.versao)) return;
+    void verificar();
+    const ver = () => {
+      if (document.visibilityState === "visible" && !rodandoRef.current) void verificar();
+    };
+    const t = window.setInterval(ver, 20_000);
+    window.addEventListener("focus", ver);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", ver);
+    };
   }, [ext, verificar]);
+
+  // O FREIO de emergência (Configuração da plataforma, no servidor): desligado, nenhuma gravação na Centi passa.
+  const [gravacao, setGravacao] = useState<boolean | null>(null);
+  const [historico, setHistorico] = useState(false);
+  useEffect(() => {
+    fetch("/api/admin/automacao/config")
+      .then((r) => r.json())
+      .then((j: unknown) => {
+        const x = j as { ok?: boolean; config?: { ativa?: boolean } } | null;
+        setGravacao(x?.ok ? x.config?.ativa !== false : null);
+      })
+      .catch(() => setGravacao(null));
+  }, []);
+  const mudarGravacao = async (ativa: boolean) => {
+    if (!ativa) {
+      const sim = await confirmar({
+        titulo: "Pausar a gravação na Centi?",
+        texto: "Nenhum anexo será gravado (por ninguém) até ligar de novo. Uma gravação em andamento para no próximo documento.",
+        confirmar: "Pausar",
+      });
+      if (!sim) return;
+    }
+    try {
+      const r = await fetch("/api/admin/automacao/config", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ ativa }) });
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; config?: { ativa?: boolean } } | null;
+      if (!r.ok || !j?.ok) throw new Error(j?.error ?? "Falha ao gravar.");
+      setGravacao(j.config?.ativa !== false);
+      toast.success(ativa ? "Gravação na Centi ligada." : "Gravação na Centi PAUSADA.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao gravar.");
+    }
+  };
+
+  // "Na Centi": quantos documentos o sistema registrou como anexados em cada protocolo (destino "Protocolo de cada DFD").
+  const carregarNaCenti = useCallback(async () => {
+    const ids = protocolos.map((p) => p.id).slice(0, 2000);
+    if (!ids.length) return;
+    try {
+      const r = await fetch(`/api/admin/automacao/registros?protocolos=${ids.join(",")}`);
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; registros?: { protocoloId: number | null }[] } | null;
+      if (!r.ok || !j?.ok) return;
+      const m = new Map<number, number>();
+      for (const x of j.registros ?? []) if (x.protocoloId != null) m.set(x.protocoloId, (m.get(x.protocoloId) ?? 0) + 1);
+      setNaCentiCol(m);
+    } catch {}
+  }, [protocolos]);
+  useEffect(() => {
+    void carregarNaCenti();
+  }, [carregarNaCenti]);
 
   const { ids, excedente } = lerIdsCenti(texto);
   const escolhidos = useMemo(() => protocolos.filter((p) => sel.has(p.id)), [protocolos, sel]);
@@ -945,59 +1072,97 @@ export function AutomacaoAdmin({
     if (!arquivos.length || rodando) return;
     const plano = arquivos;
     const tipo = saida.tipoDocumento;
-    if (anexando && !alvo) return;
+    if (saida.destino === "protocolo" && !alvo) return;
+    if (proprio && modo !== "protocolo") return;
     setRodando(true);
     setLinhas(previa);
     const marcar = (chave: string, l: Partial<Linha>) => setLinhas((ls) => (ls ?? []).map((x) => (x.chave === chave ? { ...x, ...l } : x)));
-    // Anexar: o protocolo é conferido ANTES de emitir qualquer DFD (Id + nº) — errado, nada é feito.
+    const marcarArquivo = (a: ArquivoSaida, l: Partial<Linha>) => {
+      for (const t of a.partes) marcar(t.chave, l);
+    };
+    // ANEXAR: cada arquivo tem o SEU protocolo da Centi (o indicado, ou o do protocolo de onde vieram os DFDs). Antes de
+    // emitir qualquer DFD: cada protocolo é conferido na Centi (Id + nº) e o que o sistema já registrou como anexado não é
+    // emitido de novo (pré-verificação). Depois, a EXECUÇÃO no sistema — sem ela nada é gravado (a autorização sai dela).
+    const destinos = new Map<ArquivoSaida, { passo: PassoAnexo; protocoloId: number | null }>();
+    let fila = plano;
+    let execucaoId: number | null = null;
     if (anexando) {
-      const p = await conferirAlvo(alvo);
-      setConferencia(typeof p === "string" ? { erro: p } : { protocolo: p });
-      if (typeof p === "string") {
-        setLinhas(previa.map((x) => (x.estado === "fila" ? { ...x, estado: "falha", erro: p } : x)));
+      const alvos = new Map<ArquivoSaida, { alvo: AlvoCenti; protocoloId: number | null }>();
+      for (const a of plano) {
+        const d = proprio ? alvoDoArquivo(a, protocolos) : alvo ? { alvo, protocoloId: null } : { erro: "Informe o protocolo da Centi." };
+        if ("erro" in d) marcarArquivo(a, { estado: "falha", erro: d.erro });
+        else alvos.set(a, d);
+      }
+      const porId = new Map<string, AlvoCenti>();
+      for (const d of alvos.values()) porId.set(d.alvo.id, d.alvo);
+      const recusados = new Map<string, string>();
+      for (const [id, al] of porId) {
+        const p = await conferirAlvo(al);
+        if (typeof p === "string") recusados.set(id, p);
+        if (!proprio) setConferencia(typeof p === "string" ? { erro: p } : { protocolo: p });
+      }
+      const ja = await jaAnexados([...porId.keys()]);
+      if (!ja) toast.info("Não consegui ler o que já foi anexado — o sistema confere de novo antes de cada gravação.", 8000);
+      let i = 0;
+      for (const [a, d] of alvos) {
+        const motivo = recusados.get(d.alvo.id);
+        if (motivo) {
+          marcarArquivo(a, { estado: "falha", erro: motivo });
+          continue;
+        }
+        const descricao = descricaoDoArquivo(a.nome);
+        const feito = ja?.get(`${d.alvo.id}|${descricaoCanonica(descricao)}`);
+        if (feito) {
+          marcarArquivo(a, { estado: "ok", erro: `Já anexado antes${feito.documento ? ` (documento ${feito.documento})` : ""}${feito.quem ? ` por ${feito.quem}` : ""} — não emitido de novo.` });
+          continue;
+        }
+        destinos.set(a, { passo: { chave: `arquivo-${++i}`, alvo: { ...d.alvo, descricao } }, protocoloId: d.protocoloId });
+      }
+      fila = plano.filter((a) => destinos.has(a));
+      if (!fila.length) {
         setRodando(false);
         return;
       }
-    }
-    // A EXECUÇÃO no sistema (um passo por arquivo): sem ela, nada é gravado na Centi — a autorização sai dela. A
-    // confirmação é a janela da extensão (uma vez por execução e protocolo).
-    const passos = new Map<ArquivoSaida, PassoAnexo>(
-      anexando && alvo ? plano.map((a, i) => [a, { chave: `arquivo-${i + 1}`, alvo: { ...alvo, descricao: descricaoDoArquivo(a.nome) } }]) : [],
-    );
-    let execucaoId: number | null = null;
-    const reportados = new Set<string>();
-    if (anexando && alvo) {
-      const ex = await iniciarExecucao("anexar-dfds", [...passos.values()], { protocolo: alvo.numero, ano: alvo.ano, id: alvo.id, tipo });
+      const ex = await iniciarExecucao("anexar-dfds", [...destinos.values()].map((x) => x.passo), {
+        destino: saida.destino,
+        protocolos: porId.size,
+        arquivos: fila.length,
+        tipo,
+      });
       if ("erro" in ex) {
-        setLinhas(previa.map((x) => (x.estado === "fila" ? { ...x, estado: "falha", erro: ex.erro } : x)));
+        for (const a of fila) marcarArquivo(a, { estado: "falha", erro: ex.erro });
         toast.error(`Anexar: ${ex.erro}`, 15_000);
         setRodando(false);
         return;
       }
       execucaoId = ex.id;
     }
+    const reportados = new Set<string>();
     const destino = !anexando && saida.escolherPasta ? pasta : null;
     const zip = !anexando && !destino && (plano.length > 1 || plano[0].pastas.length > 0) ? new ZipArmazenar() : null;
     const pedacos: Blob[] = [];
     // Devolve a nota da linha (o anexo: o nº do documento na Centi). Falha → lança com o motivo.
     const gravar = async (a: ArquivoSaida, bytes: Uint8Array, unido = false): Promise<string | undefined> => {
-      const passo = passos.get(a);
-      if (anexando && alvo && execucaoId != null && passo) {
+      const dest = destinos.get(a);
+      if (anexando && execucaoId != null && dest) {
         // O PDF CRU da Centi (o relatório dela) é recusado no salvar do protocolo (500); o regravado pelo pdf-lib — o mesmo
         // do PDF unido, que a Centi aceita — vai no lugar. Não deu para regravar: o cru.
         const pdf = unido ? bytes : await regravarPdf(bytes).catch(() => bytes);
         const r = await anexarNaCenti(
           execucaoId,
-          passo,
-          { ...alvo, tipo, descricao: descricaoDoArquivo(a.nome), arquivo: a.nome, pdf: paraBase64(pdf) },
+          dest.passo,
+          dest.protocoloId,
+          { ...dest.passo.alvo, tipo, arquivo: a.nome, pdf: paraBase64(pdf) },
           320_000,
         );
-        reportados.add(passo.chave);
+        reportados.add(dest.passo.chave);
         if (!r.ok) throw new Error(r.erro ?? "A Centi não gravou.");
         return r.jaAnexado
           ? `Já estava no protocolo${r.sequencial ? ` (documento ${r.sequencial})` : ""} — não anexado de novo.`
           : `Documento ${r.sequencial} do protocolo.`;
       }
+      // Anexando, um arquivo sem destino na Centi NUNCA cai na pasta/Downloads por engano.
+      if (anexando) throw new Error("Sem o protocolo da Centi para este arquivo.");
       if (destino) await gravarNaPasta(destino, a.pastas, a.nome, comoBlob(bytes));
       else if (zip) pedacos.push(...zip.adicionar([...a.pastas, a.nome].join("/"), bytes).map((b) => comoBlob(b)));
       else baixarNoNavegador(a.nome, comoBlob(bytes));
@@ -1018,7 +1183,7 @@ export function AutomacaoAdmin({
         (ls ?? []).map((x) => (x.estado === "fila" ? { ...x, estado: "falha", erro: `Não emitido — o anexo anterior foi recusado (${motivo ?? "erro"}).` } : x)),
       );
     };
-    for (const a of plano) {
+    for (const a of fila) {
       if (parar) break;
       const uniao = a.partes.length > 1 ? await novaUniao() : null;
       const unidas: string[] = [];
@@ -1072,8 +1237,9 @@ export function AutomacaoAdmin({
     if (execucaoId != null) {
       if (parar) await cancelarExecucao(execucaoId);
       else
-        for (const x of passos.values())
-          if (!reportados.has(x.chave)) await concluirPasso(execucaoId, x.chave, "falhou", "Nenhum DFD deste arquivo foi emitido.");
+        for (const x of destinos.values())
+          if (!reportados.has(x.passo.chave)) await concluirPasso(execucaoId, x.passo.chave, "falhou", "Nenhum DFD deste arquivo foi emitido.");
+      void carregarNaCenti();
     }
     if (zip && !zip.vazio) {
       pedacos.push(...zip.fechar().map((b) => comoBlob(b)));
@@ -1087,13 +1253,19 @@ export function AutomacaoAdmin({
   const atualizada = !!ext && versaoAtende(ext.versao);
   const pronto = atualizada && !!logado?.ok && !!logado.logado;
   const precisaPasta = !anexando && saida.escolherPasta && podePasta;
-  const semAlvo = anexando && !alvo;
-  const desabilitado = !pronto || !totalDfds || (precisaPasta && !pasta) || semAlvo;
+  const semAlvo = saida.destino === "protocolo" && !alvo;
+  const proprioSemProtocolo = proprio && modo !== "protocolo";
+  const pausada = anexando && gravacao === false;
+  const desabilitado = !pronto || !totalDfds || (precisaPasta && !pasta) || semAlvo || proprioSemProtocolo || pausada;
   const motivo = !atualizada
     ? "Instale a extensão (botão no topo)."
     : !pronto
       ? "Abra a Centi logada e clique em Verificar."
-      : semAlvo
+      : pausada
+        ? "A gravação na Centi está pausada (Ajustes → Gravação na Centi)."
+        : proprioSemProtocolo
+          ? "O destino “Protocolo de cada DFD” vale só no modo Por protocolo."
+          : semAlvo
         ? "Informe o protocolo da Centi em Ajustes → Destino."
         : precisaPasta && !pasta
           ? "Escolha a pasta."
@@ -1136,6 +1308,18 @@ export function AutomacaoAdmin({
             uma confirmação (como na tela dela), mostra a pergunta e só grava com o seu “sim”. Só isso é gravado na Centi.
           </p>
           <p>
+            <strong>Protocolo de cada DFD:</strong> cada arquivo vai ao protocolo da Centi de onde vieram os DFDs (o “Id:” da
+            capa + o nº) — no modo Por protocolo, com PDFs separados ou um por protocolo. A coluna <strong>Na Centi</strong>{" "}
+            conta o que já foi anexado em cada um.
+          </p>
+          <p>
+            <strong>Segurança:</strong> cada documento só é gravado com a autorização de uso único do sistema (vale uma vez, para
+            aquele protocolo e aquela descrição) e com a sua confirmação na <strong>janela da própria extensão</strong> (uma vez
+            por execução e protocolo). O que o sistema já registrou como anexado não é emitido de novo. Em Ajustes → Gravação na
+            Centi, o <strong>freio</strong> pausa toda gravação na hora (para todos); o <strong>Histórico das execuções</strong>{" "}
+            mostra cada lote, passo a passo.
+          </p>
+          <p>
             <strong>Instalar/atualizar a extensão:</strong> “Baixar extensão” → descompacte (na atualização, substitua os
             arquivos) → chrome://extensions → Modo do desenvolvedor → Carregar sem compactação (ou ↻ no cartão dela) → F5
             nesta tela. A aba da Centi não precisa ser recarregada. Cada versão nova avisa no sino.
@@ -1169,6 +1353,16 @@ export function AutomacaoAdmin({
           ]}
         />
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {gravacao === false && (
+            <Badge tone="red" dot>
+              Gravação pausada
+            </Badge>
+          )}
+          {ext && ext.copias > 1 && (
+            <Badge tone="amber" dot>
+              {ext.copias} cópias da extensão — remova a antiga
+            </Badge>
+          )}
           {!ext ? (
             <Badge tone="amber" dot>
               Sem extensão
@@ -1218,6 +1412,9 @@ export function AutomacaoAdmin({
               conferencia={conferencia}
               testar={testarAnexo}
               teste={teste}
+              gravacao={gravacao}
+              onGravacao={(v) => void mudarGravacao(v)}
+              onHistorico={() => setHistorico(true)}
             />
           </Dropdown>
         </div>
@@ -1260,7 +1457,7 @@ export function AutomacaoAdmin({
             </section>
           )}
         </div>
-        <Analise linhas={vista} rodando={rodando} destino={anexando ? (rotuloAlvo ?? "protocolo da Centi") : null} />
+        <Analise linhas={vista} rodando={rodando} destino={anexando ? (proprio ? "protocolo de cada DFD" : (rotuloAlvo ?? "protocolo da Centi")) : null} />
       </div>
 
       <BannersMesa
@@ -1275,6 +1472,7 @@ export function AutomacaoAdmin({
         pcas={banners.pcas}
         onAlterado={() => router.refresh()}
       />
+      {historico && <HistoricoExecucoes onFechar={() => setHistorico(false)} />}
       {confirmacao}
     </div>
   );

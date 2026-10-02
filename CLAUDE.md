@@ -3445,6 +3445,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `confirmsave` da Centi segue para o ADM (o "sim" pede uma autorização nova). Gravado = `automacao_registros` + passo
   feito; interrompido = execução cancelada; arquivo sem DFD emitido = passo falhou. Sem `localhost` no manifesto nem no
   serviço; permissão `storage`; o gerador inclui `.html`. Testes (vm, `chrome` falso): `tests/extensao-seguranca.test.ts`.
+  **ENTREGA 3 (extensão 1.4.1) — tela AO VIVO + destino automático + pré-verificação:** o estado da Centi é conferido ao
+  abrir, ao voltar à janela e a cada 20 s com a tela à vista (fora de um lote); a extensão se anuncia sozinha ao ser
+  instalada/atualizada (sem F5) e com o id da cópia (duas cópias da MESMA versão = selo de aviso). **Freio na tela:**
+  Ajustes → Gravação na Centi (`PATCH /api/admin/automacao/config {ativa}`, pausar confirma; selo "Gravação pausada"; o
+  Anexar trava). **Histórico das execuções** (`HistoricoExecucoes`, contêiner: as últimas execuções → os passos ao lado,
+  "Cancelar execução" na que ficou rodando/pausada). **Destino "Protocolo de cada DFD"** (`DestinoSaida` `proprio`): cada
+  arquivo vai ao protocolo da Centi de onde vieram os DFDs — `alvoDoArquivo` (puro: o "Id:" da capa + o nº; arquivo que junta
+  protocolos ou protocolo sem Id = erro, nunca chuta; só no modo Por protocolo); o registro guarda o `protocoloId` e a coluna
+  **"Na Centi"** conta os anexados por protocolo. **Pré-verificação** antes de emitir: cada protocolo da Centi conferido
+  (Id + nº) e o que já está em `automacao_registros` (`GET …/registros?alvos=`, `jaAnexados`, `descricaoCanonica`) NÃO é
+  emitido de novo. **Servidor:** a autorização e o registro só saem para o MESMO alvo gravado no passo da execução
+  (`passo.alvo === textoAlvoAnexo(alvo)` — a execução declara os alvos; um pedido depois não troca de protocolo).
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

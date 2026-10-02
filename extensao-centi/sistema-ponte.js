@@ -10,7 +10,8 @@
   window[MARCA] = true;
   const origem = window.location.origin;
   const responder = (id, resposta) => window.postMessage({ fonte: "pca-extensao", v: V, id, resposta }, origem);
-  const anunciar = () => window.postMessage({ fonte: "pca-extensao", v: V, tipo: "pronto", versao: V }, origem);
+  // O id desta cópia vai junto: duas cópias instaladas = a tela avisa.
+  const anunciar = () => window.postMessage({ fonte: "pca-extensao", v: V, tipo: "pronto", versao: V, idExtensao: chrome.runtime.id }, origem);
   const texto = (v) => (v == null ? "" : String(v));
 
   // Consome a autorização no servidor (a sessão do sistema vai pelo cookie da própria página).

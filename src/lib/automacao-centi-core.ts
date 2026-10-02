@@ -33,7 +33,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
 
 /** A versão da extensão publicada junto (extensao-centi/manifest.json) = a MÍNIMA que a tela aceita (a extensão é só o
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
-export const VERSAO_EXTENSAO_CENTI = "1.4.0";
+export const VERSAO_EXTENSAO_CENTI = "1.4.1";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -225,12 +225,13 @@ export type OpcoesSaida = {
   escolherPasta: boolean;
   /** Conferir o CONTEÚDO de cada PDF (o nº de planejamento e o do DFD no texto) antes de salvar. */
   conferir: boolean;
-  /** ONDE vão os PDFs: numa pasta (Downloads ou a escolhida) ou ANEXADOS a um protocolo da Centi (`AlvoCenti`). */
+  /** ONDE vão os PDFs: numa pasta (Downloads ou a escolhida), ANEXADOS a um protocolo da Centi indicado (`AlvoCenti`) ou
+   * ao PRÓPRIO protocolo de cada DFD na Centi ("proprio": o Id da capa + o nº do protocolo do sistema). */
   destino: DestinoSaida;
   /** O código do TIPO do documento anexado na Centi (1039 = DFD — Documento Formalização Demanda). */
   tipoDocumento: string;
 };
-export type DestinoSaida = "pasta" | "protocolo";
+export type DestinoSaida = "pasta" | "protocolo" | "proprio";
 export const TIPO_DOCUMENTO_DFD = "1039";
 export const OPCOES_SAIDA_PADRAO: OpcoesSaida = {
   pastaPca: true,
@@ -251,7 +252,7 @@ export function lerOpcoesSaida(v: unknown): OpcoesSaida {
     ordenarPlanejamento: typeof o.ordenarPlanejamento === "boolean" ? o.ordenarPlanejamento : p.ordenarPlanejamento,
     escolherPasta: typeof o.escolherPasta === "boolean" ? o.escolherPasta : p.escolherPasta,
     conferir: typeof o.conferir === "boolean" ? o.conferir : p.conferir,
-    destino: o.destino === "protocolo" ? "protocolo" : "pasta",
+    destino: o.destino === "protocolo" || o.destino === "proprio" ? o.destino : "pasta",
     tipoDocumento: typeof o.tipoDocumento === "string" && /^\d{1,9}$/.test(o.tipoDocumento.trim()) ? o.tipoDocumento.trim() : p.tipoDocumento,
   };
 }
@@ -260,6 +261,32 @@ export function lerOpcoesSaida(v: unknown): OpcoesSaida {
  * Centi, o mesmo "Id:" da capa) e o número (+ o ano, opcional — "156844/2026"). A extensão abre pelo Id e só anexa se o
  * número (e o ano) baterem. */
 export type AlvoCenti = { id: string; numero: string; ano: string | null };
+
+/** O protocolo do sistema de onde veio cada DFD do arquivo (a chave do DFD no plano "Por protocolo" é "<protocolo>:<id>"). */
+export function protocolosDoArquivo(a: ArquivoSaida): number[] {
+  const ids = new Set<number>();
+  for (const t of a.partes) {
+    const m = /^(\d+):/.exec(t.chave);
+    if (m) ids.add(Number(m[1]));
+  }
+  return [...ids];
+}
+
+/** Destino "proprio": o protocolo da CENTI de um arquivo = o do protocolo do sistema de onde vieram os DFDs (o "Id:" da capa
+ * + o nº). Um arquivo que junta protocolos diferentes, ou de protocolo sem o Id da Centi, não tem destino — nunca chuta. */
+export function alvoDoArquivo(
+  a: ArquivoSaida,
+  protos: readonly ProtocoloAutomacao[],
+): { alvo: AlvoCenti; protocoloId: number } | { erro: string } {
+  const ids = protocolosDoArquivo(a);
+  if (ids.length !== 1)
+    return { erro: ids.length ? "Este arquivo junta DFDs de protocolos diferentes — use PDFs separados ou um por protocolo." : "Sem o protocolo do sistema (use o modo Por protocolo)." };
+  const p = protos.find((x) => x.id === ids[0]);
+  if (!p) return { erro: "Protocolo não encontrado no sistema." };
+  if (!p.idExterno?.replace(/\D/g, "")) return { erro: `O protocolo ${p.numero} não tem o Id da Centi (o “Id:” da capa).` };
+  const lido = lerAlvoCenti(p.idExterno, p.numero);
+  return "alvo" in lido ? { alvo: lido.alvo, protocoloId: p.id } : { erro: `Protocolo ${p.numero}: ${lido.erro}` };
+}
 
 /** Lê o que o ADM digitou → o alvo válido ou o motivo. */
 export function lerAlvoCenti(id: string, numero: string): { alvo: AlvoCenti } | { erro: string } {

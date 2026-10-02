@@ -32,6 +32,8 @@ export async function POST(req: Request, ctx: Ctx) {
   if (motivo) return erro(motivo, 423);
   const passo = await passoDaExecucao(id, p.data.chave);
   if (!passo || passo.capacidade !== p.data.capacidade) return erro("Passo desconhecido nesta execução.", 422);
+  // O alvo é o que a EXECUÇÃO declarou para o passo — nunca outro protocolo/descrição pedido depois.
+  if (passo.alvo !== textoAlvoAnexo(p.data.alvo)) return erro("O alvo não é o deste passo da execução.", 422);
   if (passo.estado === "ok") return erro("Este passo já foi feito.", 409);
   const descricao = textoAlvoAnexo(p.data.alvo).split("|")[4];
   const feito = await escritaRegistrada(p.data.capacidade, p.data.alvo.id, descricao);

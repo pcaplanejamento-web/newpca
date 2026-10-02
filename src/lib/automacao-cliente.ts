@@ -1,6 +1,6 @@
 // AUTOMAÇÃO — o lado da TELA na plataforma (navegador): cria a execução, pede a autorização de uso único de cada escrita,
 // registra o resultado dos passos e o que foi gravado na Centi. Sem JSX; nunca lança (devolve o motivo).
-import type { AlvoAnexo } from "./automacao-core.ts";
+import { type AlvoAnexo, textoAlvoAnexo } from "./automacao-core.ts";
 
 type Resp = { ok: true; [k: string]: unknown } | { ok: false; erro: string };
 
@@ -30,7 +30,7 @@ export async function iniciarExecucao(
     receita,
     ensaio: false,
     entrada,
-    passos: passos.map((p) => ({ chave: p.chave, capacidade: "anexar", alvo: `${p.alvo.id}|${p.alvo.numero}|${p.alvo.descricao}`.slice(0, 300) })),
+    passos: passos.map((p) => ({ chave: p.chave, capacidade: "anexar", alvo: textoAlvoAnexo(p.alvo) })),
   });
   if (!c.ok) return { erro: c.erro };
   const id = Number(c.id);
@@ -66,4 +66,21 @@ export async function concluirPasso(execucaoId: number, chave: string, estado: "
 /** Encerra a execução interrompida (os passos que sobraram não rodam mais). */
 export async function cancelarExecucao(execucaoId: number) {
   await chamar(`${BASE}/${execucaoId}`, "PATCH", { estado: "cancelada" });
+}
+
+/** O que JÁ foi anexado nos protocolos da Centi indicados (chave Id + descrição canônica) — o que está aqui não é emitido de novo. */
+export async function jaAnexados(alvos: readonly string[]): Promise<Map<string, { documento: string | null; quando: string | null; quem: string | null }> | null> {
+  const m = new Map<string, { documento: string | null; quando: string | null; quem: string | null }>();
+  const lista = [...new Set(alvos)];
+  for (let i = 0; i < lista.length; i += 200) {
+    try {
+      const r = await fetch(`/api/admin/automacao/registros?alvos=${lista.slice(i, i + 200).join(",")}`);
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; registros?: { centiAlvo: string; descricao: string; centiDocumento: string | null; criadoEm: string | null; usuarioNome: string | null }[] } | null;
+      if (!r.ok || !j?.ok) return null;
+      for (const x of j.registros ?? []) m.set(`${x.centiAlvo}|${x.descricao}`, { documento: x.centiDocumento, quando: x.criadoEm, quem: x.usuarioNome });
+    } catch {
+      return null;
+    }
+  }
+  return m;
 }

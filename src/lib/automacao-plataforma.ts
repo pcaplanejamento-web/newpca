@@ -124,7 +124,7 @@ export async function registrarPassos(
 /** O passo de uma execução (para conferir a autorização). */
 export async function passoDaExecucao(id: number, chave: string) {
   const [p] = await getDb()
-    .select({ capacidade: automacaoPassos.capacidade, estado: automacaoPassos.estado })
+    .select({ capacidade: automacaoPassos.capacidade, estado: automacaoPassos.estado, alvo: automacaoPassos.alvo })
     .from(automacaoPassos)
     .where(and(eq(automacaoPassos.execucaoId, id), eq(automacaoPassos.chave, chave)))
     .limit(1);
@@ -155,23 +155,37 @@ export async function registrarEscrita(r: Parameters<typeof comandoRegistrarEscr
   return (await comandoRegistrarEscrita(getDb(), r)).length > 0;
 }
 
+export type RegistroCenti = {
+  protocoloId: number | null;
+  descricao: string;
+  centiAlvo: string;
+  centiDocumento: string | null;
+  criadoEm: string | null;
+  usuarioNome: string | null;
+};
+const COLS_REGISTRO = {
+  protocoloId: automacaoRegistros.protocoloId,
+  descricao: automacaoRegistros.descricao,
+  centiAlvo: automacaoRegistros.centiAlvo,
+  centiDocumento: automacaoRegistros.centiDocumento,
+  criadoEm: automacaoRegistros.criadoEm,
+  usuarioNome: automacaoRegistros.usuarioNome,
+};
+
 /** As escritas feitas nos protocolos do sistema (a coluna "Na Centi"). */
-export async function registrosDosProtocolos(ids: readonly number[]) {
+export async function registrosDosProtocolos(ids: readonly number[]): Promise<RegistroCenti[]> {
   const db = getDb();
-  const out: { protocoloId: number | null; descricao: string; centiAlvo: string; centiDocumento: string | null; criadoEm: string | null; usuarioNome: string | null }[] = [];
+  const out: RegistroCenti[] = [];
   for (const lote of lotesDeIds([...ids]))
-    out.push(
-      ...(await db
-        .select({
-          protocoloId: automacaoRegistros.protocoloId,
-          descricao: automacaoRegistros.descricao,
-          centiAlvo: automacaoRegistros.centiAlvo,
-          centiDocumento: automacaoRegistros.centiDocumento,
-          criadoEm: automacaoRegistros.criadoEm,
-          usuarioNome: automacaoRegistros.usuarioNome,
-        })
-        .from(automacaoRegistros)
-        .where(inArray(automacaoRegistros.protocoloId, lote))),
-    );
+    out.push(...(await db.select(COLS_REGISTRO).from(automacaoRegistros).where(inArray(automacaoRegistros.protocoloId, lote))));
+  return out;
+}
+
+/** As escritas feitas nos protocolos DA CENTI indicados (o Id de cada um — a pré-verificação antes de emitir). */
+export async function registrosDosAlvos(alvos: readonly string[]): Promise<RegistroCenti[]> {
+  const db = getDb();
+  const out: RegistroCenti[] = [];
+  for (let i = 0; i < alvos.length; i += 90)
+    out.push(...(await db.select(COLS_REGISTRO).from(automacaoRegistros).where(and(eq(automacaoRegistros.capacidade, "anexar"), inArray(automacaoRegistros.centiAlvo, alvos.slice(i, i + 90))))));
   return out;
 }

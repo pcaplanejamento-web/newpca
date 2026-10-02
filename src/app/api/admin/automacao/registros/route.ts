@@ -1,17 +1,23 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { textoAlvoAnexo } from "@/lib/automacao-core";
-import { getExecucao, registrarEscrita, registrosDosProtocolos } from "@/lib/automacao-plataforma";
+import { getExecucao, registrarEscrita, registrosDosAlvos, registrosDosProtocolos } from "@/lib/automacao-plataforma";
 import { registrarSchema } from "@/lib/automacao-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { nomeExibicao } from "@/lib/pessoa";
 
 export const dynamic = "force-dynamic";
 
-/** As escritas feitas na Centi pelos protocolos do sistema (`?protocolos=1,2,3`, até 2000). */
+/** As escritas feitas na Centi: pelos protocolos do sistema (`?protocolos=1,2,3`, até 2000) ou pelos protocolos DA CENTI
+ * (`?alvos=2332778,…`, até 200 — a pré-verificação antes de emitir: o que já foi anexado não é emitido de novo). */
 export async function GET(req: Request) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
+  const busca = new URL(req.url).searchParams;
+  if (busca.has("alvos")) {
+    const alvos = [...new Set((busca.get("alvos") ?? "").split(",").filter((a) => /^\d{1,12}$/.test(a)))].slice(0, 200);
+    return ok({ registros: alvos.length ? await registrosDosAlvos(alvos) : [] });
+  }
   const ids = [
     ...new Set(
       (new URL(req.url).searchParams.get("protocolos") ?? "")
@@ -31,7 +37,8 @@ export async function POST(req: Request) {
   if ("resp" in p) return p.resp;
   const x = await getExecucao(p.data.execucaoId);
   if (!x || x.execucao.usuarioId !== g.u.id) return erro("Execução não encontrada.", 404);
-  if (!x.passos.some((s) => s.chave === p.data.chave && s.capacidade === p.data.capacidade)) return erro("Passo desconhecido nesta execução.", 422);
+  if (!x.passos.some((s) => s.chave === p.data.chave && s.capacidade === p.data.capacidade && s.alvo === textoAlvoAnexo(p.data.alvo)))
+    return erro("Passo desconhecido nesta execução.", 422);
   const descricao = textoAlvoAnexo(p.data.alvo).split("|")[4];
   const novo = await registrarEscrita({
     capacidade: p.data.capacidade,
