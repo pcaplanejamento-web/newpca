@@ -5,41 +5,29 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 16;
+  const PROTOCOLO = 17;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
   const SESSAO = "__pcaCentiSessao";
   let base = "";
   let cabecalhos = null;
-  // Os cabeçalhos que a PRÓPRIA tela da Centi usou no salvar (confirmsave/save) e ao abrir um protocolo (load do módulo
-  // 102907): o salvar do anexo vai com eles — o último pedido da aba costuma ser de OUTRA tela (a pesquisa do DFD), com o
-  // contexto dela. `nomesSalvar` = os NOMES (só os nomes) que a tela mandou no salvar, para o erro dizer o que faltou.
-  let doSalvar = null;
-  let doProtocolo = null;
-  let nomesSalvar = null;
-  let tipoSalvar = null;
-  // O endereço EXATO (caminho + parâmetros) que a tela usou no confirmsave/save e a TRILHA dos pedidos dela antes de
-  // salvar (só "MÉTODO caminho" — a sessão vai nos cabeçalhos, nunca na URL): o anexo usa o mesmo endereço e o erro mostra
-  // a trilha (o passo que a tela faz e a extensão não).
-  let urlsSalvar = {};
-  // COMO a tela enviou o salvar: "xhr" | "fetch" — o anexo usa o mesmo meio (a proteção anti-robô da página assina os
-  // pedidos dela pelo meio e pelo endereço COMO a tela os escreve; por isso o endereço guardado é o BRUTO).
-  let viaSalvar = null;
-  let trilha = [];
-  let trilhaSalvar = null;
   // A sessão da Centi é POR ABA (sessionStorage): a última capturada vale também depois de um F5 ou de uma atualização.
   try {
     const salvo = JSON.parse(sessionStorage.getItem(SESSAO) || "null");
     if (salvo?.base && salvo?.cabecalhos) ({ base, cabecalhos } = salvo);
-    if (salvo?.doSalvar) ({ doSalvar, nomesSalvar, tipoSalvar } = salvo);
-    if (salvo?.urlsSalvar) ({ urlsSalvar, trilhaSalvar, viaSalvar } = salvo);
-    if (salvo?.doProtocolo) doProtocolo = salvo.doProtocolo;
   } catch {}
-  const IGNORAR = /^(content-type|accept|content-length|x-ts)/i;
+  // Fora da sessão guardada: os do navegador/tamanho, os anti-robô (x-ts…) e os de RASTREIO (trace-*, x-ai-trace — só
+  // existem com o rastreio ligado e valem para UM pedido).
+  const IGNORAR = /^(content-type|accept|content-length|x-ts|trace-|x-ai-trace)/i;
   const SESSAO_CAB = /^(authorization|token|refreshtoken|company)$/i;
+  const gravarSessao = () => {
+    try {
+      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos }));
+    } catch {}
+  };
 
-  function guardar(url, hs, metodo, via) {
+  function guardar(url, hs) {
     const u = String(url);
     const i = u.indexOf("/restauth/");
     if (i < 0) return;
@@ -49,30 +37,7 @@
     if (!Object.keys(limpos).some((k) => SESSAO_CAB.test(k))) return;
     base = new URL(u.slice(0, i), location.href).href;
     cabecalhos = limpos;
-    const caminho = u.slice(i);
-    const passo = `${String(metodo || "GET").toUpperCase()} ${caminho.slice("/restauth/".length).slice(0, 160)}`;
-    trilha = [...trilha, passo].slice(-12);
-    const salvar = /^POST$/i.test(metodo || "") && caminho.match(/^\/restauth\/(confirmsave|save)(\?|$)/i);
-    if (salvar) {
-      doSalvar = limpos;
-      nomesSalvar = Object.keys(hs).map((k) => k.toLowerCase()).sort();
-      tipoSalvar = Object.entries(hs).find(([k]) => /^content-type$/i.test(k))?.[1] ?? null;
-      urlsSalvar = { ...urlsSalvar, [salvar[1].toLowerCase()]: u };
-      viaSalvar = via;
-      if (salvar[1].toLowerCase() === "confirmsave") trilhaSalvar = trilha.slice(0, -1);
-    } else if (/[?&]entity=102907(&|$)/.test(caminho)) doProtocolo = limpos;
-    try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar }));
-    } catch {}
-  }
-
-  // Os cabeçalhos do salvar: os da tela (salvar › protocolo › último pedido) com a SESSÃO sempre a mais recente.
-  function cabecalhosDoSalvar() {
-    const contexto = doSalvar ?? doProtocolo ?? cabecalhos;
-    const sessao = Object.fromEntries(Object.entries(cabecalhos).filter(([k]) => SESSAO_CAB.test(k) || /^month$/i.test(k)));
-    const r = {};
-    for (const [k, v] of Object.entries(contexto)) if (!Object.keys(sessao).some((s) => s.toLowerCase() === k.toLowerCase())) r[k] = v;
-    return { ...r, ...sessao };
+    gravarSessao();
   }
 
   // O TOKEN da Centi TROCA a cada resposta: o servidor devolve "token" e "refreshtoken" novos e a tela passa a usá-los
@@ -84,9 +49,7 @@
     const novo = A.comTokenNovo(cabecalhos, ler("token"), ler("refreshtoken"));
     if (novo === cabecalhos) return;
     cabecalhos = novo;
-    try {
-      sessionStorage.setItem(SESSAO, JSON.stringify({ base, cabecalhos, doSalvar, nomesSalvar, tipoSalvar, doProtocolo, urlsSalvar, trilhaSalvar, viaSalvar }));
-    } catch {}
+    gravarSessao();
   }
   const tokenDoXhr = (x) => (n) => {
     try {
@@ -101,7 +64,6 @@
   const enviar = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (m, url, ...r) {
     this.__pcaUrl = url;
-    this.__pcaMetodo = m;
     this.__pcaHs = {};
     return abrir.call(this, m, url, ...r);
   };
@@ -110,7 +72,7 @@
     return definir.call(this, k, v);
   };
   XMLHttpRequest.prototype.send = function (...r) {
-    if (this.__pcaUrl && !this.__pcaInterno) guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo, "xhr");
+    if (this.__pcaUrl && !this.__pcaInterno) guardar(this.__pcaUrl, this.__pcaHs || {});
     if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/")) this.addEventListener("load", () => trocarToken(tokenDoXhr(this)));
     return enviar.apply(this, r);
   };
@@ -127,7 +89,7 @@
     try {
       const url = typeof rec === "string" ? rec : rec?.url;
       const hs = new Headers(init?.headers || (typeof rec === "object" ? rec.headers : undefined));
-      guardar(url, Object.fromEntries(hs.entries()), init?.method || (typeof rec === "object" ? rec.method : "GET"), "fetch");
+      guardar(url, Object.fromEntries(hs.entries()));
     } catch {}
     return comToken(buscar.call(this, rec, init, ...resto));
   };
@@ -155,25 +117,23 @@
     return k ? String(cabecalhos[k]) : null;
   };
 
-  function executar(metodo, url, corpo, entidade, comoTexto = false, cab = cabecalhos, tipo = "application/json", bruto = url) {
+  function executar(metodo, url, corpo, entidade, comoTexto = false) {
     return new Promise((ok, falha) => {
       const x = new XMLHttpRequest();
       x.__pcaInterno = true;
-      x.open(metodo, bruto);
+      x.open(metodo, url);
       x.responseType = comoTexto ? "text" : "arraybuffer";
       const k = nomeEntidade();
-      // O rastreio vai NOVO em cada pedido (como a tela gera) — nunca o identificador de um pedido antigo.
-      const hs = A ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab;
-      for (const [n, v] of Object.entries(hs)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
+      for (const [n, v] of Object.entries(cabecalhos)) x.setRequestHeader(n, entidade && n === k ? entidade : v);
       if (entidade && !k) x.setRequestHeader("Company", entidade);
-      if (corpo) x.setRequestHeader("Content-Type", tipo);
+      if (corpo) x.setRequestHeader("Content-Type", "application/json");
       x.setRequestHeader("Accept", "application/json, text/plain, */*");
       x.onload = () => {
         // O token novo desta resposta vale JÁ para o próximo pedido (antes de a sequência continuar).
         trocarToken(tokenDoXhr(x));
         return ok(
           comoTexto
-            ? { status: x.status, texto: String(x.response ?? ""), enviados: Object.keys(x.__pcaHs || {}) }
+            ? { status: x.status, texto: String(x.response ?? "") }
             : { ok: true, status: x.status, tipo: x.getResponseHeader("content-type") || "", b64: emBase64(new Uint8Array(x.response || new ArrayBuffer(0))) },
         );
       };
@@ -182,14 +142,6 @@
       x.ontimeout = () => falha(new Error("A Centi demorou demais para responder."));
       x.send(corpo ? JSON.stringify(corpo) : null);
     });
-  }
-
-  // O salvar pelo FETCH da página (o mesmo meio da tela): passa pelos envoltórios que a página pôs no fetch.
-  async function executarFetch(metodo, bruto, corpo, cab, tipo) {
-    const hs = { ...(A ? A.renovarRastreio(cab, () => crypto.randomUUID(), Date.now(), Math.random) : cab), Accept: "application/json, text/plain, */*" };
-    if (corpo) hs["Content-Type"] = tipo;
-    const r = await window.fetch(bruto, { method: metodo, headers: hs, body: corpo ? JSON.stringify(corpo) : undefined, credentials: "include", __pcaInterno: true });
-    return { status: r.status, texto: await r.text(), enviados: Object.keys(hs) };
   }
 
   async function pedir(d) {
@@ -208,32 +160,17 @@
     return executar("POST", url, { ModuleKey: c.ModuleKey, Guid: c.Guid, Params: params }, ent);
   }
 
-  // JSON da API da Centi (load/confirmsave/save): HTTP de erro ou corpo que não é JSON → o motivo, nunca segue às cegas.
   const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
-  // `passo` entra no erro (load/confirmsave/save): diz ONDE a Centi recusou.
-  async function api(metodo, caminho, corpo, passo, salvar = false, bruto = caminho) {
-    // O endereço bruto da tela é relativo à PÁGINA (como o navegador o resolve no open/fetch).
-    const url = destino(bruto === caminho ? caminho : new URL(bruto, location.href).href);
+  // JSON da API da Centi pelo envio da extensão (sem o cliente da tela): HTTP de erro ou corpo que não é JSON → o motivo.
+  async function api(metodo, caminho, corpo, passo) {
+    const url = destino(caminho);
     if (!url) throw new Error("Destino fora da API da Centi.");
-    const cab = salvar ? cabecalhosDoSalvar() : cabecalhos;
-    const tipo = (salvar && tipoSalvar) || "application/json";
-    // O endereço vai ao open/fetch ESCRITO como a tela o escreveu (relativo ou completo).
-    const r =
-      salvar && viaSalvar === "fetch"
-        ? await executarFetch(metodo, bruto, corpo, cab, tipo)
-        : await executar(metodo, url, corpo, null, true, cab, tipo, salvar ? bruto : url);
+    const r = await executar(metodo, url, corpo, null, true);
     let j = null;
     try {
       j = JSON.parse(r.texto);
     } catch {}
-    if (r.status >= 400 || !j) {
-      const msg = `A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."}`;
-      throw new Error(
-        salvar
-          ? [msg, A.dicaCabecalhos(nomesSalvar, r.enviados ?? Object.keys(cab), !!doProtocolo), A.dicaTrilha(trilhaSalvar, `${viaSalvar || "xhr"} ${caminho}`)].filter(Boolean).join(" ")
-          : msg,
-      );
-    }
+    if (r.status >= 400 || !j) throw new Error(`A Centi recusou o ${passo} (${r.status})${j ? `: ${A.mensagens(j.Message) || "sem mensagem"}` : "."}`);
     return j;
   }
 
@@ -348,11 +285,11 @@
     }
   }
   /** A API da Centi: pelo cliente da própria tela; sem ele, pelo envio da extensão. */
-  async function apiCenti(metodo, caminho, corpo, passo, salvar = false, bruto = caminho) {
+  async function apiCenti(metodo, caminho, corpo, passo) {
     const r = await pelaCenti(metodo, caminho, corpo);
     if (!r) {
       try {
-        return await api(metodo, caminho, corpo, passo, salvar, bruto);
+        return await api(metodo, caminho, corpo, passo);
       } catch (e) {
         throw new Error(`${e?.message || "Falha na Centi."} (cliente da Centi não encontrado: ${motivoSemCliente || "?"})`);
       }
@@ -423,13 +360,13 @@
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
     let conf;
     try {
-      conf = await apiCenti("POST", "restauth/confirmsave", A.corpoConfirmar(corpo), "confirmsave", true, urlsSalvar.confirmsave || "restauth/confirmsave");
+      conf = await apiCenti("POST", "restauth/confirmsave", A.corpoConfirmar(corpo), "confirmsave");
     } catch (err) {
       throw new Error(`${err?.message || "Falha no confirmsave."} [tipo: ${origemTipo}]`);
     }
     // Como a tela: a Centi pedindo confirmação → a pergunta vai ao ADM; só com o "sim" dele (`aceitar`) segue ao save.
     if (conf.Confirm === true && d.aceitar !== true) return { ok: false, confirmar: A.mensagens(conf.Message) || "A Centi pede confirmação para salvar." };
-    const salvo = A.conferirSalvo(await apiCenti("POST", "restauth/save", corpo, "save", true, urlsSalvar.save || "restauth/save"), d);
+    const salvo = A.conferirSalvo(await apiCenti("POST", "restauth/save", corpo, "save"), d);
     return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
   }
 

@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p16";
+  const NOME = "__pcaCentiAnexo_p17";
   if (globalThis[NOME]) return;
   const MODULO_PROTOCOLO = 102907;
   const MODULO_DOCUMENTO = 102932;
@@ -170,55 +170,6 @@
     return { sequencial: texto(valor(doc, "Sequencial")), documento: id };
   }
 
-  /** A dica do erro do salvar, pelos NOMES dos cabeçalhos (nunca os valores): os que a tela da Centi mandou no salvar e o
-   * anexo não mandou (os anti-robô "x-ts…" a extensão não reproduz); sem o salvar da tela aprendido, como ensiná-lo. */
-  function dicaCabecalhos(nomesTela, nomesEnviados, _protocoloAberto) {
-    if (!Array.isArray(nomesTela) || !nomesTela.length) return "";
-    const enviados = new Set((nomesEnviados ?? []).map((n) => String(n).toLowerCase()));
-    const fixos = /^(content-type|content-length|accept)$/i;
-    const faltam = nomesTela.map((n) => String(n).toLowerCase()).filter((n) => !fixos.test(n) && !enviados.has(n));
-    const robo = faltam.filter((n) => n.startsWith("x-ts"));
-    const outros = faltam.filter((n) => !n.startsWith("x-ts"));
-    if (outros.length) return `Cabeçalhos do salvar da Centi que faltaram: ${outros.join(", ")}.`;
-    if (robo.length) return "O salvar da Centi exige a verificação anti-robô da própria tela — anexe por ela.";
-    return "Os cabeçalhos são os mesmos da tela da Centi.";
-  }
-
-  /** A trilha da tela da Centi antes do salvar dela (só "MÉTODO caminho"; números longos encurtados) e o endereço usado
-   * pelo anexo — o passo que a tela faz e o anexo não aparece aqui. Sem trilha: como aprendê-la. */
-  function dicaTrilha(trilha, usado) {
-    if (!Array.isArray(trilha) || !trilha.length) return "";
-    const curto = (t) => String(t).replace(/\d{7,}/g, (n) => `${n.slice(0, 3)}…`).slice(0, 90);
-    return `Passos da tela antes de salvar: ${trilha.slice(-8).map(curto).join(" › ")}. Anexo: ${curto(usado)}.`;
-  }
-
-  /** Os cabeçalhos de RASTREIO (trace-*, x-ai-trace…) vão NOVOS em cada pedido, como a tela os gera: um identificador
-   * repetido de um pedido antigo faz o salvar da Centi falhar ("Erro inesperado"). No valor, cada GUID vira um GUID novo,
-   * cada carimbo de tempo em ms vira o de agora e cada sequência hexadecimal/alfanumérica longa vira outra do mesmo
-   * tamanho. Os demais cabeçalhos (sessão, entidade, mês…) ficam como estão. */
-  const RASTREIO = /^(x-ai-trace|x-trace|trace-|x-request-id|request-id|x-correlation-id|correlation-id)/i;
-  function renovarRastreio(cab, guid, agora, aleatorio) {
-    const novoDe = (amostra) => {
-      const hex = /^[0-9a-f]+$/i.test(amostra);
-      const alfabeto = hex ? "0123456789abcdef" : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-      let r = "";
-      for (let i = 0; i < amostra.length; i++) r += alfabeto[Math.floor(aleatorio() * alfabeto.length)];
-      return amostra === amostra.toUpperCase() && hex ? r.toUpperCase() : r;
-    };
-    const r = {};
-    for (const [k, v] of Object.entries(cab ?? {})) {
-      if (!RASTREIO.test(k)) {
-        r[k] = v;
-        continue;
-      }
-      r[k] = String(v ?? "")
-        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, () => guid())
-        .replace(/(?<![0-9a-z])1\d{12}(?![0-9a-z])/gi, () => String(agora))
-        .replace(/(?<![0-9a-z-])[0-9a-z]{16,}(?![0-9a-z-])/gi, (m) => novoDe(m));
-    }
-    return r;
-  }
-
   /** Os cabeçalhos com o TOKEN que a Centi devolveu na resposta (ela troca a cada resposta e a tela usa o novo):
    * token, Authorization "Bearer <token>" e refreshtoken — no nome que já existe (sem caixa), senão acrescentados. Sem
    * token novo, os mesmos cabeçalhos. */
@@ -238,6 +189,5 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comTokenNovo,
-    renovarRastreio, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULO_TIPO });
+    comTokenNovo, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, MODULO_PROTOCOLO, MODULO_TIPO });
 })();
