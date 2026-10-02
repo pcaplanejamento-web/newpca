@@ -33,7 +33,7 @@ import {
   permissoesLinhas,
   semVazios,
 } from "@/lib/orcamento-cruzamento";
-import { type AlvosVinculo, type DimensoesCadastro, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { type AlvosVinculo, alvosDaUnidade, type DimensoesCadastro, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
@@ -151,7 +151,12 @@ export function OrcamentoComparativo({
     if (linha !== "unidade") return null;
     const mapa = mapaVinculos(vinculos);
     const porId = new Map(alvos.unidades.map((a) => [a.id, a.sigla]));
-    return (k: string) => porId.get(mapa.get(k)?.alvoId ?? -1) ?? "";
+    // Uma unidade do CUBO pode ter VÁRIOS vínculos: as siglas de todos.
+    return (k: string) =>
+      alvosDaUnidade(mapa, k)
+        .map((id) => porId.get(id) ?? "")
+        .filter(Boolean)
+        .join(" / ");
   }, [linha, vinculos, alvos]);
 
   const casa = useMemo(() => predicadoBusca(busca), [busca]);

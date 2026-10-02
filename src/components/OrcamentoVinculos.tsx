@@ -2,219 +2,243 @@
 
 import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
-import type { AlvoVinculo, AlvosVinculo, LinhaVinculo } from "@/lib/orcamento-vinculo";
+import {
+  type AlvosVinculo,
+  type LinhaVinculo,
+  linhasVinculos,
+  type PendenciaVinculo,
+  rotuloCadastro,
+  semVinculo,
+  type UnidadeOrcamento,
+  type VinculoOrcamento,
+} from "@/lib/orcamento-vinculo";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
+import { type AberturaVinculo, type DadosVinculo, EditorVinculoOrcamento, useRotuloUnidade } from "./EditorVinculoOrcamento";
 import { SearchField } from "./Field";
-import { selectCls } from "./formStyles";
-import { IconLink } from "./icons";
-import { SeletorMultiplo } from "./SeletorMultiplo";
+import { IconLink, IconPencil, IconPlus } from "./icons";
+import { Modal } from "./Modal";
+import { Segmented } from "./Segmented";
 
-/** Um vínculo a gravar: a unidade do CUBO (texto), a unidade do cadastro e as chaves das AÇÕES que ficam de fora. */
-export type VinculoAlterado = { texto: string; alvoId: number | null; acoesFora: string[] };
+type Vista = "vinculos" | "sem";
+
+/** Resumo das ações de um vínculo: "Todas as demais", "As demais, menos N" ou "k ações". */
+const textoAcoes = (l: LinhaVinculo) =>
+  l.vinculo.acoes == null
+    ? l.vinculo.acoesFora.length > 0
+      ? `As demais, menos ${num(l.vinculo.acoesFora.length)}`
+      : "Todas as demais"
+    : `${num(l.acoes.length)} ${l.acoes.length === 1 ? "ação" : "ações"}`;
+
+const abertura = (v: VinculoOrcamento): AberturaVinculo => ({ id: v.id, chave: v.chave, alvoId: v.alvoId, acoes: v.acoes, acoesFora: v.acoesFora });
 
 /**
- * VÍNCULOS do orçamento: cada UNIDADE DISTINTA do CUBO (texto próprio do relatório) ligada a uma unidade CADASTRADA e,
- * dentro dela, as AÇÕES que entram no vínculo (as desmarcadas ficam "Sem vínculo"). O ÓRGÃO não se vincula — ver por
- * órgão é a soma das unidades vinculadas. Tabela filtrável (estado · no orçamento · no sistema · ações · lançamentos ·
- * dotação · dotação vinculada); o editor escolhe a unidade num `select` (agrupadas por órgão; ocultas só se já
- * vinculadas) ou aceita a SUGESTÃO (nome/sigla), uma a uma ou todas de uma vez. O vínculo vale para TODOS os orçamentos
- * (é pelo texto). Busca e "Vincular N sugestões" nas `FerramentasAba`. Apresentacional: grava via `onVincular`.
- * `scrollInterno` = tabela padrão da Mesa (corpo rola por dentro; linhas por página de Configurações).
+ * VÍNCULOS do orçamento CRIADOS pelo usuário: cada um liga uma UNIDADE do CUBO a UMA unidade cadastrada, com as AÇÕES
+ * dele — a mesma unidade do orçamento pode ter vários (as ações divididas). Duas vistas (`Segmented`): **Vínculos** (os
+ * criados que aparecem neste orçamento: unidade do orçamento · unidade e órgão do cadastro · ações · lançamentos ·
+ * dotação vinculada; tocar edita) e **Sem vínculo** (as unidades com ações sem vínculo — "Vincular" abre o editor com
+ * ela; a SUGESTÃO por nome/sigla para as que não têm nenhum, uma a uma ou todas). "Novo vínculo" na barra das abas. O
+ * vínculo vale para TODOS os orçamentos (é pelo texto). Apresentacional: grava via `onCriar`/`onEditar`/`onExcluir`.
  */
 export function OrcamentoVinculos({
-  linhas,
+  unidades,
+  vinculos,
   alvos,
   podeEditar,
   salvando = false,
+  erro = null,
   scrollInterno = false,
-  onVincular,
+  onCriar,
+  onEditar,
+  onExcluir,
 }: {
-  linhas: LinhaVinculo[];
+  unidades: UnidadeOrcamento[];
+  vinculos: VinculoOrcamento[];
   alvos: AlvosVinculo;
   podeEditar: boolean;
   salvando?: boolean;
+  /** O erro da última gravação (aparece no editor aberto). */
+  erro?: string | null;
   scrollInterno?: boolean;
-  onVincular: (lista: VinculoAlterado[]) => void;
+  /** Grava vínculos novos; devolve se gravou (o editor fecha). */
+  onCriar: (lista: DadosVinculo[]) => Promise<boolean>;
+  onEditar: (id: number, dados: DadosVinculo) => Promise<boolean>;
+  onExcluir: (id: number) => Promise<boolean>;
 }) {
+  const [vista, setVista] = useState<Vista>("vinculos");
   const [busca, setBusca] = useState("");
-  const unidadePorId = useMemo(() => new Map(alvos.unidades.map((u) => [u.id, u])), [alvos]);
-  const orgaoPorId = useMemo(() => new Map(alvos.orgaos.map((o) => [o.id, o])), [alvos]);
-  // Unidades agrupadas pelo órgão (ordem da tela de órgãos — toda unidade pertence a um órgão).
-  const gruposUnidades = useMemo(
-    () => alvos.orgaos.map((o) => ({ rotulo: o.nome, itens: alvos.unidades.filter((u) => u.orgaoId === o.id) })).filter((g) => g.itens.length > 0),
-    [alvos],
+  const [aberto, setAberto] = useState<AberturaVinculo | null>(null);
+  const rotulo = useRotuloUnidade(alvos);
+  const orgaoDe = useMemo(() => {
+    const o = new Map(alvos.orgaos.map((x) => [x.id, x]));
+    const u = new Map(alvos.unidades.map((x) => [x.id, x]));
+    return (id: number) => {
+      const org = o.get(u.get(id)?.orgaoId ?? -1);
+      return org ? rotuloCadastro(org) : "—";
+    };
+  }, [alvos]);
+
+  const linhas = useMemo(() => linhasVinculos(unidades, vinculos), [unidades, vinculos]);
+  const pendencias = useMemo(() => semVinculo(unidades, vinculos, alvos.unidades), [unidades, vinculos, alvos]);
+  const sugeridas = pendencias.filter((p) => p.sugestaoId != null);
+  const casa = predicadoBusca(busca);
+  const linhasVis = casa ? linhas.filter((l) => casa([l.unidade.texto, l.unidade.contexto, rotulo.deId(l.vinculo.alvoId)])) : linhas;
+  const pendVis = casa ? pendencias.filter((p) => casa([p.unidade.texto, p.unidade.contexto])) : pendencias;
+
+  const fechar = () => setAberto(null);
+  const salvar = async (d: DadosVinculo) => {
+    const ok = aberto?.id != null ? await onEditar(aberto.id, d) : await onCriar([d]);
+    if (ok) fechar();
+  };
+  const unidadeTexto = (u: UnidadeOrcamento) => (
+    <span className="block max-w-[340px]">
+      <span className="block truncate font-medium text-text" title={u.texto}>
+        {u.texto}
+      </span>
+      {u.contexto && (
+        <span className="block truncate text-xs text-muted" title={u.contexto}>
+          {u.contexto}
+        </span>
+      )}
+    </span>
   );
 
-  // Sigla REPETIDA entre unidades (ex.: a unidade própria de um órgão dual): o órgão entra no rótulo — nunca duas iguais.
-  const siglasRepetidas = useMemo(() => {
-    const conta = new Map<string, number>();
-    for (const u of alvos.unidades) {
-      const k = u.sigla.trim().toUpperCase();
-      conta.set(k, (conta.get(k) ?? 0) + 1);
-    }
-    return new Set([...conta].filter(([, n]) => n > 1).map(([k]) => k));
-  }, [alvos]);
-  const textoAlvo = (a: AlvoVinculo) => {
-    const o = siglasRepetidas.has(a.sigla.trim().toUpperCase()) && a.orgaoId != null ? orgaoPorId.get(a.orgaoId) : undefined;
-    return `${a.sigla} — ${a.nome}${o ? ` (${o.sigla || o.nome})` : ""}`;
-  };
-  const rotulo = (id: number | null) => {
-    const a = id != null ? unidadePorId.get(id) : undefined;
-    return a ? textoAlvo(a) : "";
-  };
-  const estado = (l: LinhaVinculo) => (l.alvoId != null ? "Vinculado" : l.sugestaoId != null ? "Sugestão" : "Sem vínculo");
-  const sugeridas = linhas.filter((l) => l.alvoId == null && l.sugestaoId != null);
-  // Trocar a unidade mantém as ações escolhidas; escolher as ações mantém a unidade.
-  const mudar = (l: LinhaVinculo, alvoId: number | null) => onVincular([{ texto: l.texto, alvoId, acoesFora: l.acoesFora }]);
-  const mudarAcoes = (l: LinhaVinculo, dentro: string[]) => {
-    const marcadas = new Set(dentro);
-    onVincular([{ texto: l.texto, alvoId: l.alvoId, acoesFora: l.acoes.filter((a) => !marcadas.has(a.texto)).map((a) => a.chave) }]);
-  };
-  /** A dotação que o vínculo leva (só as ações que entram). */
-  const dotacaoVinculada = (l: LinhaVinculo) => {
-    if (l.alvoId == null) return 0;
-    const fora = new Set(l.acoesFora);
-    return l.acoes.reduce((s, a) => (fora.has(a.chave) ? s : s + a.valorInicial), 0);
-  };
-  const acoesDentro = (l: LinhaVinculo) => {
-    const fora = new Set(l.acoesFora);
-    return l.acoes.filter((a) => !fora.has(a.chave));
-  };
-
-  const opcoes = (l: LinhaVinculo) => {
-    const vis = (a: AlvoVinculo) => !a.oculto || a.id === l.alvoId;
-    return gruposUnidades.map((g) => {
-      const itens = g.itens.filter(vis);
-      return itens.length ? (
-        <optgroup key={g.rotulo} label={g.rotulo}>
-          {itens.map((a) => (
-            <option key={a.id} value={a.id}>
-              {textoAlvo(a)}
-              {a.oculto ? " (oculto)" : ""}
-            </option>
-          ))}
-        </optgroup>
-      ) : null;
-    });
-  };
-
-  const colunas: Column<LinhaVinculo>[] = [
+  const colVinculos: Column<LinhaVinculo>[] = [
+    { key: "unidade", header: "Unidade no orçamento", align: "left", minWidth: 260, value: (l) => l.unidade.texto, render: (l) => unidadeTexto(l.unidade) },
     {
-      key: "estado",
-      header: "Estado",
-      nowrap: true,
-      value: estado,
-      render: (l) => (
-        <Badge tone={l.alvoId != null ? "emerald" : l.sugestaoId != null ? "amber" : "slate"}>{estado(l)}</Badge>
-      ),
+      key: "cadastro",
+      header: "Unidade cadastrada",
+      align: "left",
+      minWidth: 240,
+      value: (l) => rotulo.deId(l.vinculo.alvoId),
+      render: (l) => <span className="block max-w-[300px] truncate text-text">{rotulo.deId(l.vinculo.alvoId)}</span>,
     },
     {
-      key: "texto",
-      header: "Unidade no orçamento",
+      key: "orgao",
+      header: "Órgão (cadastro)",
       align: "left",
-      minWidth: 260,
-      value: (l) => l.texto,
-      render: (l) => (
-        <span className="block max-w-[340px]">
-          <span className="block truncate font-medium text-text" title={l.texto}>
-            {l.texto}
-          </span>
-          {l.contexto && (
-            <span className="block truncate text-xs text-muted" title={l.contexto}>
-              {l.contexto}
-            </span>
-          )}
-        </span>
-      ),
-    },
-    {
-      key: "vinculo",
-      header: "No sistema",
-      align: "left",
-      minWidth: 280,
-      value: (l) => rotulo(l.alvoId),
-      render: (l) =>
-        podeEditar ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <select
-              aria-label={`Vínculo de ${l.texto}`}
-              className={`${selectCls} min-h-[44px] w-full max-w-[300px] lg:min-h-0`}
-              value={l.alvoId ?? ""}
-              disabled={salvando}
-              onChange={(e) => mudar(l, e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">Sem vínculo</option>
-              {opcoes(l)}
-            </select>
-            {l.alvoId == null && l.sugestaoId != null && (
-              <Button size="xs" variant="ghost" disabled={salvando} onClick={() => mudar(l, l.sugestaoId)} title={rotulo(l.sugestaoId)}>
-                Aceitar {unidadePorId.get(l.sugestaoId)?.sigla}
-              </Button>
-            )}
-          </div>
-        ) : (
-          <span className="block max-w-[320px] truncate text-text-2">{rotulo(l.alvoId) || "—"}</span>
-        ),
+      minWidth: 180,
+      value: (l) => orgaoDe(l.vinculo.alvoId),
+      render: (l) => <span className="block max-w-[240px] truncate text-text-2">{orgaoDe(l.vinculo.alvoId)}</span>,
     },
     {
       key: "acoes",
-      header: "Ações vinculadas",
-      align: "left",
-      minWidth: 240,
-      value: (l) => (l.alvoId == null ? "Sem vínculo" : l.acoesFora.length === 0 ? "Todas" : `${acoesDentro(l).length} de ${l.acoes.length}`),
-      render: (l) =>
-        l.alvoId == null ? (
-          <span className="text-faint">Vincule a unidade primeiro</span>
-        ) : podeEditar ? (
-          <div className="w-full max-w-[280px]">
-            <SeletorMultiplo
-              suspenso
-              rotulo={l.acoesFora.length === 0 ? `Todas as ações (${l.acoes.length})` : `${acoesDentro(l).length} de ${l.acoes.length} ações`}
-              opcoes={l.acoes.map((a) => ({ valor: a.texto, contagem: a.lancamentos }))}
-              selecionados={acoesDentro(l).map((a) => a.texto)}
-              textoVazio="Nenhuma"
-              onChange={(v) => mudarAcoes(l, v)}
-            />
-          </div>
-        ) : (
-          <span className="text-text-2">{l.acoesFora.length === 0 ? `Todas (${l.acoes.length})` : `${acoesDentro(l).length} de ${l.acoes.length}`}</span>
-        ),
-    },
-    {
-      key: "lancamentos",
-      header: "Lançamentos",
+      header: "Ações",
       nowrap: true,
-      filter: "range",
-      formatarFaixa: num,
-      numero: (l) => l.lancamentos,
-      render: (l) => <span className="tabular-nums text-text-2">{l.lancamentos}</span>,
+      value: textoAcoes,
+      render: (l) => (
+        <span title={l.acoes.map((a) => a.texto).join("\n")}>
+          <Badge tone={l.vinculo.acoes == null ? "blue" : "violet"}>{textoAcoes(l)}</Badge>
+        </span>
+      ),
     },
+    { key: "lancamentos", header: "Lançamentos", nowrap: true, filter: "range", formatarFaixa: num, numero: (l) => l.lancamentos, render: (l) => num(l.lancamentos) },
     {
-      key: "dotacao",
-      header: "Dotação inicial",
-      align: "right",
-      nowrap: true,
-      filter: "range",
-      numero: (l) => l.valorInicial,
-      render: (l) => <span className="tabular-nums text-text-2">{brl(l.valorInicial)}</span>,
-    },
-    {
-      key: "vinculada",
+      key: "valor",
       header: "Dotação vinculada",
       align: "right",
       nowrap: true,
       filter: "range",
-      numero: dotacaoVinculada,
-      render: (l) => <span className="tabular-nums font-semibold text-text">{brl(dotacaoVinculada(l))}</span>,
+      numero: (l) => l.valorInicial,
+      render: (l) => <span className="tabular-nums font-semibold text-text">{brl(l.valorInicial)}</span>,
     },
   ];
+  if (podeEditar)
+    colVinculos.push({
+      key: "editar",
+      header: "",
+      filter: "none",
+      nowrap: true,
+      render: (l) => (
+        <Button
+          size="xs"
+          variant="ghost"
+          icon={<IconPencil className="h-4 w-4" />}
+          aria-label={`Editar o vínculo de ${l.unidade.texto}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setAberto(abertura(l.vinculo));
+          }}
+        />
+      ),
+    });
 
-  const casa = predicadoBusca(busca);
-  const visiveis = casa ? linhas.filter((l) => casa([l.texto, l.contexto, rotulo(l.alvoId)])) : linhas;
+  const colSem: Column<PendenciaVinculo>[] = [
+    { key: "unidade", header: "Unidade no orçamento", align: "left", minWidth: 260, value: (p) => p.unidade.texto, render: (p) => unidadeTexto(p.unidade) },
+    {
+      key: "situacao",
+      header: "Situação",
+      nowrap: true,
+      value: (p) => (p.vinculada ? "Ações sem vínculo" : "Sem vínculo"),
+      render: (p) => (
+        <span title={p.acoes.map((a) => a.texto).join("\n")}>
+          <Badge tone={p.vinculada ? "amber" : "slate"}>
+            {p.vinculada ? `${num(p.acoes.length)} de ${num(p.unidade.acoes.length)} ações sem vínculo` : "Sem vínculo"}
+          </Badge>
+        </span>
+      ),
+    },
+    {
+      key: "sugestao",
+      header: "Sugestão",
+      align: "left",
+      minWidth: 200,
+      value: (p) => rotulo.deId(p.sugestaoId),
+      render: (p) =>
+        p.sugestaoId == null ? (
+          <span className="text-faint">—</span>
+        ) : podeEditar ? (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={salvando}
+            title={rotulo.deId(p.sugestaoId)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void onCriar([{ texto: p.unidade.texto, alvoId: p.sugestaoId as number, acoes: null, acoesFora: [] }]);
+            }}
+          >
+            Aceitar {alvos.unidades.find((u) => u.id === p.sugestaoId)?.sigla}
+          </Button>
+        ) : (
+          <span className="text-text-2">{rotulo.deId(p.sugestaoId)}</span>
+        ),
+    },
+    { key: "lancamentos", header: "Lançamentos", nowrap: true, filter: "range", formatarFaixa: num, numero: (p) => p.lancamentos, render: (p) => num(p.lancamentos) },
+    {
+      key: "valor",
+      header: "Dotação sem vínculo",
+      align: "right",
+      nowrap: true,
+      filter: "range",
+      numero: (p) => p.valorInicial,
+      render: (p) => <span className="tabular-nums font-semibold text-text">{brl(p.valorInicial)}</span>,
+    },
+  ];
+  if (podeEditar)
+    colSem.push({
+      key: "vincular",
+      header: "",
+      filter: "none",
+      nowrap: true,
+      render: (p) => (
+        <Button
+          size="xs"
+          variant="secondary"
+          icon={<IconLink className="h-4 w-4" />}
+          onClick={(e) => {
+            e.stopPropagation();
+            // A unidade sem vínculo nenhum: com as demais ações; a que já tem algum: as ações que faltam.
+            setAberto({ chave: p.unidade.chave, acoes: p.vinculada ? p.acoes.map((a) => a.chave) : null });
+          }}
+        >
+          Vincular
+        </Button>
+      ),
+    });
 
   return (
     <>
@@ -235,29 +259,77 @@ export function OrcamentoVinculos({
             variant="secondary"
             icon={<IconLink className="h-4 w-4" />}
             loading={salvando}
-            title="O vínculo vale para todos os orçamentos"
-            onClick={() => onVincular(sugeridas.map((l) => ({ texto: l.texto, alvoId: l.sugestaoId, acoesFora: l.acoesFora })))}
+            title="Cria um vínculo com as ações de cada unidade sugerida (vale para todos os orçamentos)"
+            onClick={() => void onCriar(sugeridas.map((p) => ({ texto: p.unidade.texto, alvoId: p.sugestaoId as number, acoes: null, acoesFora: [] })))}
           >
             Vincular {sugeridas.length} {sugeridas.length === 1 ? "sugestão" : "sugestões"}
           </Button>
         )}
+        {podeEditar && (
+          <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => setAberto({})}>
+            <span className="max-sm:hidden">Novo vínculo</span>
+            <span className="sm:hidden">Novo</span>
+          </Button>
+        )}
       </FerramentasAba>
-      <DataTable
-        columns={colunas}
-        rows={visiveis}
-        getKey={(l) => l.chave}
-        scrollInterno={scrollInterno}
-        pageSize={scrollInterno ? undefined : 20}
-        density="compact"
-        minWidth={1240}
-        exportar={{ nome: "Vínculos do orçamento" }}
-        vazio={busca ? "Nenhuma unidade para esta busca." : "Nenhuma unidade neste orçamento."}
-        resumo={(ls) =>
-          `${num(ls.length)} ${ls.length === 1 ? "unidade" : "unidades"} · ${num(ls.filter((l) => l.alvoId != null).length)} vinculadas · Dotação ${brl(
-            ls.reduce((s, l) => s + l.valorInicial, 0),
-          )} · vinculada ${brl(ls.reduce((s, l) => s + dotacaoVinculada(l), 0))}`
-        }
-      />
+      <div className="mb-[var(--gap-block)]">
+        <Segmented<Vista>
+          value={vista}
+          onChange={setVista}
+          ariaLabel="Vista dos vínculos"
+          options={[
+            { value: "vinculos", label: `Vínculos (${linhas.length})` },
+            { value: "sem", label: `Sem vínculo (${pendencias.length})` },
+          ]}
+        />
+      </div>
+      {vista === "vinculos" ? (
+        <DataTable
+          key="vinculos"
+          columns={colVinculos}
+          rows={linhasVis}
+          getKey={(l) => l.vinculo.id}
+          scrollInterno={scrollInterno}
+          pageSize={scrollInterno ? undefined : 20}
+          density="compact"
+          minWidth={1100}
+          onRowClick={podeEditar ? (l) => setAberto(abertura(l.vinculo)) : undefined}
+          activeKey={aberto?.id ?? null}
+          exportar={{ nome: "Vínculos do orçamento" }}
+          vazio={busca ? "Nenhum vínculo para esta busca." : "Nenhum vínculo neste orçamento — use “Novo vínculo” ou a vista “Sem vínculo”."}
+          resumo={(ls) => `${num(ls.length)} ${ls.length === 1 ? "vínculo" : "vínculos"} · Dotação vinculada ${brl(ls.reduce((s, l) => s + l.valorInicial, 0))}`}
+        />
+      ) : (
+        <DataTable
+          key="sem"
+          columns={colSem}
+          rows={pendVis}
+          getKey={(p) => p.unidade.chave}
+          scrollInterno={scrollInterno}
+          pageSize={scrollInterno ? undefined : 20}
+          density="compact"
+          minWidth={1000}
+          exportar={{ nome: "Unidades sem vínculo" }}
+          vazio={busca ? "Nenhuma unidade para esta busca." : "Todas as ações deste orçamento estão vinculadas."}
+          resumo={(ps) => `${num(ps.length)} ${ps.length === 1 ? "unidade" : "unidades"} · Dotação sem vínculo ${brl(ps.reduce((s, p) => s + p.valorInicial, 0))}`}
+        />
+      )}
+      <Modal open={aberto != null} onClose={fechar} titulo={aberto?.id != null ? "Editar vínculo" : "Novo vínculo"} size="lg" bloqueado={salvando}>
+        {aberto && (
+          <EditorVinculoOrcamento
+            key={`${aberto.id ?? "novo"}:${aberto.chave ?? ""}`}
+            unidades={unidades}
+            vinculos={vinculos}
+            alvos={alvos}
+            inicial={aberto}
+            salvando={salvando}
+            erro={erro}
+            onSalvar={(d) => void salvar(d)}
+            onExcluir={aberto.id != null ? () => void onExcluir(aberto.id as number).then((ok) => ok && fechar()) : undefined}
+            onFechar={fechar}
+          />
+        )}
+      </Modal>
     </>
   );
 }

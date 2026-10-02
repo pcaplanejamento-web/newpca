@@ -2223,26 +2223,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `router.refresh`) — o antigo `GET /api/orcamento/visoes` foi removido. Erros em `AvisoFlutuante` (não empurram a
   tabela). `getOrcamentoItens(id)` é sempre de UM orçamento. Ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) + nav em
   `AppShell`.
-- **Vínculos da UNIDADE do CUBO → unidade do cadastro + as AÇÕES (migrações `0030` + `0079`):** a UNIDADE é o micro. O CUBO
-  traz a Unidade como TEXTO próprio ("2 - SECRETARIA MUNICIPAL DE EDUCAÇ…", "26 - FMACL"); cada texto distinto é ligado a
-  UMA unidade cadastrada e o usuário escolhe quais **AÇÕES** dela entram (as desmarcadas ficam "Sem vínculo"). O vínculo por
-  ÓRGÃO saiu (a `0079` apagou os de tipo `orgao`): **ver por órgão = a SOMA das unidades vinculadas** — as dimensões
-  **"Órgão (cadastro)"/"Unidade (cadastro)"** (`orgaoSistema`/`unidadeSistema` em `DIMENSOES_ORCAMENTO`) que **`comVinculos`**
-  põe em cada lançamento (o órgão = o dono da unidade vinculada) no servidor (página do orçamento, `dadosComparativo`, o
-  orçamento do PCA) — valem nas visões, no comparativo (linhas/colunas) e nos lançamentos. Tabela **`orcamento_vinculos`**
-  (`tipo`='unidade' + `chave` = texto normalizado, **único**; `reparticao_id` FK set null; **`acoes_fora`** JSON das chaves
-  das ações de fora, NULL = todas) — **GLOBAL** (vale para todos os orçamentos, inclusive os próximos anos). Núcleo PURO
-  **`orcamento-vinculo.ts`** (`chaveVinculo`, `nomeSemCodigo`, **`sugerirAlvo`** = nome/sigla iguais ⇒ certeza, senão Jaccard ≥
-  `LIMIAR_SUGESTAO` 0,6 — empate ⇒ nada, ignora ocultos; `linhasVinculo` = as unidades distintas com lançamentos, Σ dotação,
-  contexto do órgão e as AÇÕES; `mapaVinculos` + **`unidadeDoLancamento`** (a unidade só se a ação entra — o comparativo PCA ×
-  Orçamento usa a mesma régua), `alvoDaUnidade`, `comVinculos`, `lerAcoesFora`). Acesso em `orcamento.ts`
-  (`listarVinculosOrcamento`, `alvosVinculoOrcamento` — unidades sem a "Geral" + órgãos, `definirVinculosOrcamento` = UPSERT em
-  lotes de 16 linhas (96 params), conferindo a unidade). Rota **`PUT /api/orcamento/vinculos`** (Configurar no Orçamento,
-  `vinculosOrcamentoSchema` ≤ 200 `{texto, alvoId, acoesFora}`, auditoria). UI: aba **"Vínculos"** → **`OrcamentoVinculos`**
-  (DS, catalogado): Estado · Unidade no orçamento · **No sistema** (`select` por órgão; sigla repetida mostra o órgão) ·
-  **Ações vinculadas** (`SeletorMultiplo suspenso` — "Todas as ações (N)" | "k de N") · Lançamentos · Dotação · **Dotação
-  vinculada**, "Aceitar SIGLA" e "Vincular N sugestões"; gravação otimista numa FILA (um PUT por vez —
-  `OrcamentoVinculosAba`). O detalhe do lançamento mostra o órgão/unidade do cadastro (`OrcamentoItemDetalhe.vinculo`).
+- **VÍNCULOS do orçamento CRIADOS pelo usuário (migrações `0030` + `0079` + `0080`):** a UNIDADE é o micro. Cada vínculo
+  liga um texto de Unidade do CUBO ("2 - SECRETARIA MUNICIPAL DE EDUCAÇ…") a UMA unidade cadastrada, com as AÇÕES dele — a
+  MESMA unidade do CUBO pode ter VÁRIOS vínculos (as ações divididas entre unidades cadastradas). As ações de um vínculo
+  são uma lista EXPLÍCITA ou **"as DEMAIS"** (as que nenhum outro vínculo da unidade pegou — também as que vierem nos
+  próximos orçamentos —, menos as de fora; um só por unidade do CUBO); uma ação vai a UMA unidade (nunca conta duas vezes;
+  a explícita vence as demais). A `0080` CONVERTEU os vínculos de antes sem perder nada: cada um virou "as demais" com as
+  mesmas ações de fora (os textos desvinculados saíram — não são vínculo). O ÓRGÃO não se vincula: **ver por órgão = a
+  SOMA das unidades vinculadas** — as dimensões **"Órgão (cadastro)"/"Unidade (cadastro)"** (`orgaoSistema`/`unidadeSistema`
+  em `DIMENSOES_ORCAMENTO`) que **`comVinculos`** põe em cada lançamento no servidor (página do orçamento,
+  `dadosComparativo`, o orçamento do PCA) valem nas visões, no comparativo e nos lançamentos. Tabela **`orcamento_vinculos`**
+  (`chave` = texto normalizado; `reparticao_id` FK set null; **`acoes`** JSON das explícitas, NULL = as demais;
+  **`acoes_fora`**; **único por chave + unidade cadastrada**) — **GLOBAL** (vale para todos os orçamentos). Núcleo PURO
+  **`orcamento-vinculo.ts`**: `unidadesDoOrcamento` (as unidades do CUBO com as ações), `mapaVinculos` +
+  **`unidadeDoLancamento`** (pela AÇÃO — o comparativo PCA × Orçamento usa a mesma régua), `alvosDaUnidade` (a Sigla da tabela
+  cruzada — várias unidas por "/"), `linhasVinculos` (cada vínculo com as ações e a dotação que leva neste orçamento),
+  `semVinculo` (as unidades com ações sem vínculo + a SUGESTÃO `sugerirAlvo` para as sem nenhum), **`conflitoVinculo`** (a
+  REGRA, a mesma na tela e no servidor: uma unidade cadastrada por vez, um só "as demais", lista não vazia e sem ação de
+  outro vínculo), `comVinculos`, `lerListaAcoes`. Acesso em `orcamento.ts` (`listarVinculosOrcamento`,
+  `alvosVinculoOrcamento`, `criarVinculosOrcamento`/`editarVinculoOrcamento`/`excluirVinculoOrcamento` — conferem a unidade
+  e a regra contra os gravados e o próprio pedido). Rotas **`POST /api/orcamento/vinculos`** (`{vinculos ≤ 200}` — o "Vincular
+  N sugestões" manda vários) e **`PATCH`/`DELETE /api/orcamento/vinculos/[id]`** (Configurar no Orçamento, auditoria). UI:
+  aba **"Vínculos"** → **`OrcamentoVinculos`** (DS): `Segmented` **Vínculos (N)** (unidade do orçamento · unidade e órgão do
+  cadastro · ações — "Todas as demais"/"As demais, menos N"/"k ações" · lançamentos · dotação vinculada; tocar ou o lápis
+  edita) | **Sem vínculo (M)** (as unidades com ações sem vínculo, "Aceitar SIGLA" e "Vincular" — já abre o editor com a
+  unidade e as ações que faltam); "Novo vínculo" e "Vincular N sugestões" na barra das abas; o editor
+  **`EditorVinculoOrcamento`** (DS, num `Modal`): unidade do orçamento, unidade cadastrada (por órgão; sigla repetida mostra o
+  órgão — `useRotuloUnidade`), "Incluir as demais ações" e as ações livres (`SeletorMultiplo`), a regra na hora (trava o
+  Salvar) e a prévia do que leva; Excluir. `OrcamentoVinculosAba` = o contêiner (uma gravação por vez + `router.refresh`).
 
 ## Tarefas (quadro estilo Trello) — migração `0042`
 - **O que é:** o módulo **`tarefas`** (`ABA_KEYS`/`NAV_MODULOS`, ícone `IconKanban`; a `0042` concede a aba a quem tem a

@@ -852,11 +852,14 @@ export const orcamentoVinculos = sqliteTable(
     texto: text("texto").notNull(), // texto original do CUBO (exibição)
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }),
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "set null" }),
-    // As chaves das AÇÕES da unidade do CUBO que NÃO entram no vínculo (JSON; NULL = todas) — migração 0079.
+    // As AÇÕES do vínculo (JSON das chaves; NULL = as DEMAIS — as que nenhum outro vínculo da unidade pegou) — 0080.
+    acoes: text("acoes"),
+    // As ações que ficam de FORA de um vínculo "com as demais" (JSON; NULL = nenhuma) — migração 0079.
     acoesFora: text("acoes_fora"),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [uniqueIndex("orcamento_vinculos_tipo_chave_uq").on(t.tipo, t.chave)],
+  // Uma unidade do CUBO pode ter VÁRIOS vínculos (um por unidade cadastrada) — migração 0080.
+  (t) => [uniqueIndex("orcamento_vinculos_chave_rep_uq").on(t.chave, t.reparticaoId), index("orcamento_vinculos_chave_idx").on(t.chave)],
 );
 
 export type Unidade = typeof unidades.$inferSelect;

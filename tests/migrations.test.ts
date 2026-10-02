@@ -264,7 +264,7 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(restantes.n, 0, "excluir o orçamento deveria apagar os lançamentos (cascade)");
   });
 
-  it("0030 cria orcamento_vinculos (único por tipo+chave; excluir o alvo zera o vínculo)", () => {
+  it("0030 cria orcamento_vinculos (excluir o alvo zera o vínculo; a unicidade é a da 0080)", () => {
     const cols = nomes(db, "SELECT name FROM pragma_table_info('orcamento_vinculos')");
     for (const c of ["tipo", "chave", "texto", "orgao_id", "reparticao_id"]) {
       assert.ok(cols.includes(c), `coluna ausente em orcamento_vinculos: ${c}`);
@@ -272,10 +272,6 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     db.exec("PRAGMA foreign_keys = ON");
     db.exec("INSERT INTO orgaos (id, nome, sigla) VALUES (981, 'Fundo X', 'FX')");
     db.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, orgao_id) VALUES ('orgao', 'FUNDO X', 'Fundo X', 981)");
-    assert.throws(
-      () => db.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto) VALUES ('orgao', 'FUNDO X', 'outro')"),
-      "o mesmo texto (tipo+chave) deveria ser único",
-    );
     db.exec("DELETE FROM orgaos WHERE id = 981");
     const v = db.prepare("SELECT orgao_id FROM orcamento_vinculos WHERE chave = 'FUNDO X'").get() as { orgao_id: number | null };
     assert.equal(v.orgao_id, null, "excluir o órgão deveria zerar o vínculo (set null)");
@@ -992,6 +988,22 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     d.exec(readFileSync(join(DIR, arquivos[i79]), "utf8"));
     const linhas = d.prepare("SELECT tipo, chave, acoes_fora AS f FROM orcamento_vinculos").all() as { tipo: string; chave: string; f: string | null }[];
     assert.deepEqual(linhas.map((l) => [l.tipo, l.chave, l.f]), [["unidade", "B", null]]);
+  });
+
+  it("0080 vínculos criados: uma unidade do CUBO em várias cadastradas, os de hoje viram 'as demais' sem perder as de fora", () => {
+    const d = new DatabaseSync(":memory:");
+    const i80 = arquivos.findIndex((f) => f.startsWith("0080"));
+    assert.ok(i80 > 0, "migração 0080 ausente");
+    for (const arq of arquivos.slice(0, i80)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (950, 'Órgão', 'OR');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (951, 'U1', 'Um', 950), (952, 'U2', 'Dois', 950);
+      INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, acoes_fora) VALUES
+        ('unidade', 'B', 'B', 951, '["Z"]'), ('unidade', 'C', 'C', NULL, NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i80]), "utf8"));
+    const linhas = d.prepare("SELECT chave, reparticao_id AS r, acoes AS a, acoes_fora AS f FROM orcamento_vinculos").all() as { chave: string; r: number; a: string | null; f: string | null }[];
+    assert.deepEqual(linhas.map((l) => [l.chave, l.r, l.a, l.f]), [["B", 951, null, '["Z"]']], "o vínculo segue igual; o texto sem unidade sai");
+    d.exec(`INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, acoes) VALUES ('unidade', 'B', 'B', 952, '["Z"]')`);
+    assert.throws(() => d.exec(`INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id) VALUES ('unidade', 'B', 'B', 952)`), "a mesma unidade cadastrada duas vezes");
   });
 
   it("índice único de e-mail existe", () => {

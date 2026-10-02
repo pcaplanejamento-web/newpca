@@ -4022,31 +4022,31 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="OrcamentoVinculos (Unidade do CUBO → unidade cadastrada + as AÇÕES que entram; sugestão automática)">
+      <Secao titulo="OrcamentoVinculos + EditorVinculoOrcamento (vínculos CRIADOS: a unidade do CUBO → uma ou mais unidades cadastradas, cada uma com as suas ações)">
         <OrcamentoVinculos
           podeEditar
-          onVincular={() => {}}
+          onCriar={async () => true}
+          onEditar={async () => true}
+          onExcluir={async () => true}
           alvos={{
             orgaos: [{ id: 1, sigla: "PMRV", nome: "Prefeitura Municipal de Rio Verde" }],
             unidades: [
               { id: 15, sigla: "SME", nome: "Secretaria Municipal de Educação", orgaoId: 1 },
               { id: 16, sigla: "SMS", nome: "Secretaria Municipal de Saúde", orgaoId: 1 },
+              { id: 17, sigla: "VISA", nome: "Vigilância Sanitária", orgaoId: 1 },
             ],
           }}
-          linhas={[
+          unidades={[
             {
               chave: "2 - SMS",
               texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE",
               contexto: "FUNDO MUNICIPAL DE SAUDE",
               lancamentos: 60,
               valorInicial: 40000000,
-              alvoId: 16,
-              sugestaoId: null,
               acoes: [
                 { chave: "2001 ATENCAO BASICA", texto: "2001 ATENÇÃO BÁSICA", lancamentos: 40, valorInicial: 30000000 },
                 { chave: "2002 VIGILANCIA", texto: "2002 VIGILÂNCIA", lancamentos: 20, valorInicial: 10000000 },
               ],
-              acoesFora: ["2002 VIGILANCIA"],
             },
             {
               chave: "2 - SME",
@@ -4054,11 +4054,12 @@ export function Catalogo() {
               contexto: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE",
               lancamentos: 48,
               valorInicial: 25000000,
-              alvoId: null,
-              sugestaoId: 15,
               acoes: [{ chave: "2010 ENSINO", texto: "2010 ENSINO", lancamentos: 48, valorInicial: 25000000 }],
-              acoesFora: [],
             },
+          ]}
+          vinculos={[
+            { id: 1, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 16, acoes: null, acoesFora: [] },
+            { id: 2, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 17, acoes: ["2002 VIGILANCIA"], acoesFora: [] },
           ]}
         />
       </Secao>

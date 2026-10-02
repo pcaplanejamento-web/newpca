@@ -1,17 +1,22 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { vinculosOrcamentoSchema } from "../src/lib/orcamento-validation.ts";
+import { criarVinculosOrcamentoSchema, editarVinculoOrcamentoSchema } from "../src/lib/orcamento-validation.ts";
 import {
+  alvosDaUnidade,
   chaveVinculo,
   comVinculos,
-  lerAcoesFora,
-  linhasVinculo,
+  conflitoVinculo,
+  lerListaAcoes,
+  linhasVinculos,
   mapaVinculos,
   nomeSemCodigo,
   SEM_ACAO,
   SEM_VINCULO_ORC,
+  semVinculo,
   sugerirAlvo,
   unidadeDoLancamento,
+  unidadesDoOrcamento,
+  type VinculoOrcamento,
 } from "../src/lib/orcamento-vinculo.ts";
 
 const ORGAOS = [
@@ -61,79 +66,93 @@ describe("orcamento-vinculo — sugestão", () => {
   });
 });
 
-describe("orcamento-vinculo — linhas da tela (só UNIDADES + as ações)", () => {
+describe("orcamento-vinculo — vínculos CRIADOS (uma unidade do CUBO → várias cadastradas)", () => {
+  const SAUDE = "2 - SECRETARIA MUNICIPAL DE SAÚDE";
   const lanc = [
-    { orgao: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE", unidade: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO", acao: "2010 ENSINO", valorInicial: 100 },
-    { orgao: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE", unidade: "2 - Secretaria Municipal de Educação", acao: "2011 Transporte", valorInicial: 50 },
+    { orgao: "FUNDO MUNICIPAL DE SAUDE", unidade: SAUDE, acao: "2001 Atenção Básica", valorInicial: 100 },
+    { orgao: "FUNDO MUNICIPAL DE SAUDE", unidade: SAUDE, acao: "2002 Vigilância", valorInicial: 50 },
+    { orgao: "FUNDO MUNICIPAL DE SAUDE", unidade: SAUDE, acao: "2003 Hospital", valorInicial: 30 },
     { orgao: "PREFEITURA", unidade: "26 - FMACL", acao: null, valorInicial: 10 },
     { orgao: null, unidade: "  ", acao: "X", valorInicial: 5 },
   ];
-  const vinc = [{ chave: chaveVinculo("2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO"), texto: "x", alvoId: 16, acoesFora: [chaveVinculo("2011 TRANSPORTE"), "ACAO QUE SUMIU"] }];
-  const linhas = linhasVinculo(lanc, vinc, UNIDADES);
+  const k = chaveVinculo(SAUDE);
+  const v = (id: number, alvoId: number, acoes: string[] | null, acoesFora: string[] = []): VinculoOrcamento => ({ id, chave: k, texto: SAUDE, alvoId, acoes, acoesFora });
+  // As DEMAIS → SMS (menos o hospital); a vigilância → outra unidade (explícita vence as demais).
+  const vinc = [v(1, 16, null, [chaveVinculo("2003 Hospital")]), v(2, 15, [chaveVinculo("2002 Vigilância")])];
+  const unidades = unidadesDoOrcamento(lanc);
 
-  it("só unidades (o órgão não se vincula), soma lançamentos e dotação, ignora vazio", () => {
+  it("as unidades do orçamento com as ações (vazia ignorada; ação vazia = '—')", () => {
+    assert.deepEqual(unidades.map((u) => [u.texto, u.lancamentos, u.valorInicial, u.acoes.length]), [
+      [SAUDE, 3, 180, 3],
+      ["26 - FMACL", 1, 10, 1],
+    ]);
+    assert.equal(unidades[1].acoes[0].chave, SEM_ACAO);
+  });
+  it("cada AÇÃO vai a UMA unidade: a explícita vence as demais; a de fora fica sem vínculo", () => {
+    const m = mapaVinculos(vinc);
+    assert.equal(unidadeDoLancamento(m, SAUDE, "2001 ATENÇÃO BÁSICA"), 16);
+    assert.equal(unidadeDoLancamento(m, SAUDE, "2002 vigilância"), 15);
+    assert.equal(unidadeDoLancamento(m, SAUDE, "2003 Hospital"), null);
+    assert.equal(unidadeDoLancamento(m, "26 - FMACL", null), null);
+    assert.deepEqual(alvosDaUnidade(m, SAUDE).sort(), [15, 16]);
+  });
+  it("linhasVinculos: as ações e a dotação que cada vínculo leva neste orçamento", () => {
+    const l = linhasVinculos(unidades, vinc);
     assert.deepEqual(
-      linhas.map((l) => [l.texto, l.lancamentos, l.valorInicial]),
+      l.map((x) => [x.vinculo.id, x.acoes.map((a) => a.texto), x.valorInicial]),
       [
-        ["2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO", 2, 150],
-        ["26 - FMACL", 1, 10],
+        [1, ["2001 Atenção Básica"], 100],
+        [2, ["2002 Vigilância"], 50],
       ],
     );
   });
-  it("as AÇÕES de cada unidade, com as de fora só as que existem; ação vazia vira '—'", () => {
-    const sme = linhas[0];
+  it("semVinculo: as ações que faltam (sem sugestão quando a unidade já tem vínculo) e a sugestão das sem nenhum", () => {
+    const p = semVinculo(unidades, vinc, UNIDADES);
     assert.deepEqual(
-      sme.acoes.map((a) => [a.texto, a.lancamentos, a.valorInicial]),
+      p.map((x) => [x.unidade.texto, x.acoes.map((a) => a.texto), x.valorInicial, x.vinculada, x.sugestaoId]),
       [
-        ["2010 ENSINO", 1, 100],
-        ["2011 Transporte", 1, 50],
+        [SAUDE, ["2003 Hospital"], 30, true, null],
+        ["26 - FMACL", [SEM_ACAO], 10, false, 26],
       ],
     );
-    assert.deepEqual(sme.acoesFora, [chaveVinculo("2011 Transporte")]);
-    assert.deepEqual(linhas[1].acoes.map((a) => a.chave), [SEM_ACAO]);
   });
-  it("aplica o vínculo gravado (sem sugestão) e sugere para os não vinculados", () => {
-    assert.equal(linhas[0].alvoId, 16); // a escolha do usuário prevalece sobre a sugestão
-    assert.equal(linhas[0].sugestaoId, null);
-    assert.equal(linhas[0].contexto, "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE");
-    assert.equal(linhas[1].sugestaoId, 26);
+  it("conflitoVinculo: uma cadastrada por vez, um só 'com as demais', lista não vazia e sem ação repetida", () => {
+    const outros = [{ alvoId: 16, acoes: null }, { alvoId: 15, acoes: ["A"] }];
+    assert.match(conflitoVinculo(outros, { alvoId: 16, acoes: ["B"] }) ?? "", /já tem um vínculo/);
+    assert.match(conflitoVinculo(outros, { alvoId: 26, acoes: null }) ?? "", /DEMAIS/);
+    assert.match(conflitoVinculo(outros, { alvoId: 26, acoes: [] }) ?? "", /ao menos uma/);
+    assert.match(conflitoVinculo(outros, { alvoId: 26, acoes: ["A"] }, () => "Ação A") ?? "", /"Ação A" já está/);
+    assert.equal(conflitoVinculo(outros, { alvoId: 26, acoes: ["B"] }), null);
+    assert.equal(conflitoVinculo([], { alvoId: 26, acoes: null }), null);
   });
-  it("o lançamento só vai à unidade se a AÇÃO dele entra; alvo null não entra", () => {
-    const m = mapaVinculos([...vinc, { chave: "X", texto: "X", alvoId: null, acoesFora: [] }]);
-    assert.equal(unidadeDoLancamento(m, "2 - secretaria municipal de educacao", "2010 ensino"), 16);
-    assert.equal(unidadeDoLancamento(m, "2 - secretaria municipal de educacao", "2011 TRANSPORTE"), null, "ação de fora");
-    assert.equal(unidadeDoLancamento(m, "X", "Y"), null);
-    assert.equal(unidadeDoLancamento(m, null, null), null);
-  });
-  it("comVinculos: Unidade e Órgão do CADASTRO (o órgão = o dono da unidade vinculada)", () => {
+  it("comVinculos: Unidade e Órgão do CADASTRO por ação", () => {
     const r = comVinculos(lanc, vinc, { orgaos: ORGAOS, unidades: UNIDADES });
     assert.deepEqual(
-      r.map((x) => [x.unidadeSistema, x.orgaoSistema]),
-      [
-        ["SMS — Secretaria Municipal de Saúde", "PMRV — Prefeitura Municipal de Rio Verde"],
-        [SEM_VINCULO_ORC, SEM_VINCULO_ORC],
-        [SEM_VINCULO_ORC, SEM_VINCULO_ORC],
-        [SEM_VINCULO_ORC, SEM_VINCULO_ORC],
-      ],
+      r.map((x) => x.unidadeSistema),
+      ["SMS — Secretaria Municipal de Saúde", "SME — Secretaria Municipal de Educação", SEM_VINCULO_ORC, SEM_VINCULO_ORC, SEM_VINCULO_ORC],
     );
+    assert.equal(r[0].orgaoSistema, "PMRV — Prefeitura Municipal de Rio Verde");
   });
-  it("lerAcoesFora tolera qualquer coisa", () => {
-    assert.deepEqual(lerAcoesFora('["A","A","",1]'), ["A"]);
-    assert.deepEqual(lerAcoesFora("x"), []);
-    assert.deepEqual(lerAcoesFora(null), []);
+  it("lerListaAcoes: null = as demais; tolera lixo", () => {
+    assert.equal(lerListaAcoes(null), null);
+    assert.deepEqual(lerListaAcoes('["A","A","",1]'), ["A"]);
+    assert.equal(lerListaAcoes("x"), null);
   });
 });
 
-describe("vinculosOrcamentoSchema", () => {
-  it("aceita vincular e desvincular, com as ações de fora (padrão: nenhuma)", () => {
-    const r = vinculosOrcamentoSchema.safeParse({ vinculos: [{ texto: "FUNDO", alvoId: 1, acoesFora: ["2011"] }, { texto: "2 - SME", alvoId: null }] });
+describe("schemas dos vínculos", () => {
+  it("criar: vários, com ações explícitas ou as demais (padrão sem fora); recusa vazio e acima de 200", () => {
+    const r = criarVinculosOrcamentoSchema.safeParse({ vinculos: [{ texto: "A", alvoId: 1, acoes: ["2001"] }, { texto: "B", alvoId: 2, acoes: null }] });
     assert.equal(r.success, true);
     assert.deepEqual(r.success && r.data.vinculos[1].acoesFora, []);
+    assert.equal(criarVinculosOrcamentoSchema.safeParse({ vinculos: [{ texto: " ", alvoId: 1, acoes: null }] }).success, false);
+    assert.equal(criarVinculosOrcamentoSchema.safeParse({ vinculos: [{ texto: "A", alvoId: null, acoes: null }] }).success, false, "o vínculo tem unidade");
+    assert.equal(criarVinculosOrcamentoSchema.safeParse({ vinculos: [] }).success, false);
+    const muitos = Array.from({ length: 201 }, (_, i) => ({ texto: `T${i}`, alvoId: 1, acoes: null }));
+    assert.equal(criarVinculosOrcamentoSchema.safeParse({ vinculos: muitos }).success, false);
   });
-  it("recusa texto vazio, lista vazia e acima de 200", () => {
-    assert.equal(vinculosOrcamentoSchema.safeParse({ vinculos: [{ texto: "  ", alvoId: 1 }] }).success, false);
-    assert.equal(vinculosOrcamentoSchema.safeParse({ vinculos: [] }).success, false);
-    const muitos = Array.from({ length: 201 }, (_, i) => ({ texto: `T${i}`, alvoId: 1 }));
-    assert.equal(vinculosOrcamentoSchema.safeParse({ vinculos: muitos }).success, false);
+  it("editar: a unidade e as ações", () => {
+    assert.equal(editarVinculoOrcamentoSchema.safeParse({ alvoId: 3, acoes: null, acoesFora: ["X"] }).success, true);
+    assert.equal(editarVinculoOrcamentoSchema.safeParse({ acoes: null }).success, false);
   });
 });

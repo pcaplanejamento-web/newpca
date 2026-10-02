@@ -64,20 +64,21 @@ export type PatchOrcamentoPayload = z.infer<typeof patchOrcamentoSchema>;
 
 // VÍNCULOS do texto de Órgão/Unidade do CUBO com o cadastro (`alvoId` null = desvincular).
 // Até 200 por requisição (o upsert vai em lotes de 16 linhas × 6 params = 96 < 100 do D1).
-export const vinculosOrcamentoSchema = z.object({
+// VÍNCULOS do orçamento: a unidade do CUBO (texto) → uma unidade cadastrada, com as AÇÕES (lista explícita) ou
+// `acoes: null` = as DEMAIS (menos as `acoesFora`). O órgão não se vincula (é a soma das unidades).
+const acoesLista = z.array(z.string().trim().min(1).max(300)).max(1000);
+const vinculoCampos = {
+  alvoId: z.number().int().positive(),
+  acoes: acoesLista.nullable(),
+  acoesFora: acoesLista.default([]),
+};
+export const criarVinculosOrcamentoSchema = z.object({
   vinculos: z
-    .array(
-      // Vínculo de UNIDADE do CUBO (o órgão não se vincula — é a soma das unidades) + as AÇÕES que ficam de FORA.
-      z.object({
-        texto: z.string().trim().min(1).max(300),
-        alvoId: z.number().int().positive().nullable(),
-        acoesFora: z.array(z.string().trim().min(1).max(300)).max(1000).default([]),
-      }),
-    )
+    .array(z.object({ texto: z.string().trim().min(1).max(300), ...vinculoCampos }))
     .min(1)
     .max(200),
 });
-export type VinculosOrcamentoPayload = z.infer<typeof vinculosOrcamentoSchema>;
+export const editarVinculoOrcamentoSchema = z.object(vinculoCampos);
 
 // SUBSTITUIR os lançamentos de um orçamento pelos de outro (o CUBO reenviado, gravado num orçamento temporário).
 export const substituirOrcamentoSchema = z.object({ origemId: z.number().int().positive() });

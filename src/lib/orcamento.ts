@@ -1,10 +1,10 @@
-import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { orcamentoItens, orcamentos, orcamentoVinculos, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { comandosSubstituirLancamentos } from "./orcamento-sql";
 import { lotesDeIds } from "./reparticoes";
-import type { OrcamentoItemImport, VinculosOrcamentoPayload } from "./orcamento-validation";
-import { type AlvosVinculo, chaveVinculo, lerAcoesFora, SEM_ACAO, type VinculoOrcamento } from "./orcamento-vinculo";
+import type { OrcamentoItemImport } from "./orcamento-validation";
+import { type AlvosVinculo, chaveVinculo, conflitoVinculo, lerListaAcoes, SEM_ACAO, type VinculoOrcamento } from "./orcamento-vinculo";
 
 /**
  * Acesso a dados do ORÇAMENTO municipal. Base isolada (sem repartição/grupo, sem FK p/
@@ -230,23 +230,30 @@ export async function inserirOrcamentoItens(
   return { inserted: itens.length };
 }
 
-// ── VÍNCULOS com o cadastro (Unidade do CUBO → unidade do sistema, com as AÇÕES escolhidas) ─────────────
+// ── VÍNCULOS com o cadastro (Unidade do CUBO → unidades do sistema, cada vínculo com as suas AÇÕES) ─────────────
 
-// orcamento_vinculos = 6 colunas vinculadas por linha → 16 linhas por statement (96 parâmetros).
-const VINCULOS_POR_STMT = 16;
-
-/** Todos os vínculos gravados de UNIDADE (o alvo = `reparticao_id`; as ações de fora em JSON). */
+/** Todos os vínculos (só os com unidade cadastrada — a FK set null de uma unidade excluída os desliga). */
 export async function listarVinculosOrcamento(): Promise<VinculoOrcamento[]> {
   const rows = await getDb()
     .select({
+      id: orcamentoVinculos.id,
       chave: orcamentoVinculos.chave,
       texto: orcamentoVinculos.texto,
       reparticaoId: orcamentoVinculos.reparticaoId,
+      acoes: orcamentoVinculos.acoes,
       acoesFora: orcamentoVinculos.acoesFora,
     })
     .from(orcamentoVinculos)
-    .where(eq(orcamentoVinculos.tipo, "unidade"));
-  return rows.map((r) => ({ chave: r.chave, texto: r.texto, alvoId: r.reparticaoId, acoesFora: lerAcoesFora(r.acoesFora) }));
+    .where(and(eq(orcamentoVinculos.tipo, "unidade"), isNotNull(orcamentoVinculos.reparticaoId)))
+    .orderBy(asc(orcamentoVinculos.id));
+  return rows.map((r) => ({
+    id: r.id,
+    chave: r.chave,
+    texto: r.texto,
+    alvoId: r.reparticaoId as number,
+    acoes: lerListaAcoes(r.acoes),
+    acoesFora: lerListaAcoes(r.acoesFora) ?? [],
+  }));
 }
 
 /** As unidades que podem ser alvo (a "Geral" virtual fora) e os órgãos donos delas (ver por órgão), na ordem das telas. */
@@ -266,13 +273,19 @@ export async function alvosVinculoOrcamento(): Promise<AlvosVinculo> {
   return { orgaos: os, unidades: us };
 }
 
+/** As chaves das ações como gravar (a ação vazia segue "—"; sem repetir). */
+const chavesAcoes = (lista: string[]) => [...new Set(lista.map((a) => (a === SEM_ACAO ? a : chaveVinculo(a))).filter(Boolean))];
+
+type NovoVinculo = { texto: string; alvoId: number; acoes: string[] | null; acoesFora: string[] };
+
 /**
- * Grava vínculos de UNIDADE (UPSERT por `chave`; `alvoId` null = desvincular) com as AÇÕES de fora. Confere antes que
- * cada alvo existe (nunca a "Geral"). Devolve a mensagem de erro (alvo inválido) ou `null` quando gravou.
+ * Confere uma lista de vínculos a gravar (novos ou alterados — `id` = o que muda): a unidade cadastrada existe (nunca a
+ * "Geral") e a REGRA de cada unidade do CUBO (`conflitoVinculo`) contra os gravados E os do próprio pedido. Devolve o
+ * motivo ou `null`.
  */
-export async function definirVinculosOrcamento(lista: VinculosOrcamentoPayload["vinculos"]): Promise<string | null> {
+async function conferirVinculos(lista: (NovoVinculo & { id?: number })[]): Promise<string | null> {
   const db = getDb();
-  const ids = [...new Set(lista.filter((v) => v.alvoId != null).map((v) => v.alvoId as number))];
+  const ids = [...new Set(lista.map((v) => v.alvoId))];
   const achados = await Promise.all(
     lotesDeIds(ids).map((lote) =>
       db
@@ -281,41 +294,68 @@ export async function definirVinculosOrcamento(lista: VinculosOrcamentoPayload["
         .where(and(inArray(reparticoes.id, lote), ne(sql`UPPER(${reparticoes.codigo})`, "GERAL"))),
     ),
   );
-  const ok = new Set(achados.flat().map((r) => r.id));
-  for (const v of lista) if (v.alvoId != null && !ok.has(v.alvoId)) return `Unidade de destino não encontrada para "${v.texto}".`;
-  // Último valor vence quando o mesmo texto vem repetido no lote.
-  const porChave = new Map<string, (typeof lista)[number] & { chave: string }>();
+  const existe = new Set(achados.flat().map((r) => r.id));
+  for (const v of lista) if (!existe.has(v.alvoId)) return `Unidade cadastrada não encontrada para "${v.texto}".`;
+  const gravados = await listarVinculosOrcamento();
+  const mudam = new Set(lista.flatMap((v) => (v.id != null ? [v.id] : [])));
+  const vistos: { chave: string; alvoId: number; acoes: string[] | null }[] = gravados.filter((g) => !mudam.has(g.id));
   for (const v of lista) {
     const chave = chaveVinculo(v.texto);
-    if (chave) porChave.set(chave, { ...v, chave });
+    if (!chave) return "Informe a unidade do orçamento.";
+    const novo = { alvoId: v.alvoId, acoes: v.acoes == null ? null : chavesAcoes(v.acoes) };
+    const motivo = conflitoVinculo(vistos.filter((o) => o.chave === chave), novo);
+    if (motivo) return `${v.texto}: ${motivo}`;
+    vistos.push({ chave, ...novo });
   }
-  const linhas = [...porChave.values()].map((v) => {
-    const fora = [...new Set(v.acoesFora.map((a) => (a === SEM_ACAO ? a : chaveVinculo(a))).filter(Boolean))];
+  return null;
+}
+
+/** Cria vínculos (o "Vincular N sugestões" manda vários). Devolve o motivo da recusa ou `null`. */
+export async function criarVinculosOrcamento(lista: NovoVinculo[]): Promise<string | null> {
+  const motivo = await conferirVinculos(lista);
+  if (motivo) return motivo;
+  const db = getDb();
+  const linhas = lista.map((v) => {
+    const fora = v.acoes == null ? chavesAcoes(v.acoesFora) : [];
     return {
       tipo: "unidade" as const,
-      chave: v.chave,
+      chave: chaveVinculo(v.texto),
       texto: v.texto,
-      orgaoId: null,
       reparticaoId: v.alvoId,
+      acoes: v.acoes == null ? null : JSON.stringify(chavesAcoes(v.acoes)),
       acoesFora: fora.length ? JSON.stringify(fora) : null,
     };
   });
+  // 6 parâmetros por linha → 16 por INSERT (96).
   const stmts = [];
-  for (let i = 0; i < linhas.length; i += VINCULOS_POR_STMT)
-    stmts.push(
-      db
-        .insert(orcamentoVinculos)
-        .values(linhas.slice(i, i + VINCULOS_POR_STMT))
-        .onConflictDoUpdate({
-          target: [orcamentoVinculos.tipo, orcamentoVinculos.chave],
-          set: {
-            texto: sql`excluded.texto`,
-            reparticaoId: sql`excluded.reparticao_id`,
-            acoesFora: sql`excluded.acoes_fora`,
-            atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-          },
-        }),
-    );
+  for (let i = 0; i < linhas.length; i += 16) stmts.push(db.insert(orcamentoVinculos).values(linhas.slice(i, i + 16)));
   if (stmts.length > 0) await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
   return null;
+}
+
+/** O vínculo gravado (ou `null`). */
+export async function getVinculoOrcamento(id: number): Promise<VinculoOrcamento | null> {
+  return (await listarVinculosOrcamento()).find((v) => v.id === id) ?? null;
+}
+
+/** Altera a unidade cadastrada e/ou as ações de um vínculo. Devolve o motivo da recusa ou `null`. */
+export async function editarVinculoOrcamento(atual: VinculoOrcamento, mudanca: Pick<NovoVinculo, "alvoId" | "acoes" | "acoesFora">): Promise<string | null> {
+  const motivo = await conferirVinculos([{ id: atual.id, texto: atual.texto, ...mudanca }]);
+  if (motivo) return motivo;
+  const fora = mudanca.acoes == null ? chavesAcoes(mudanca.acoesFora) : [];
+  await getDb()
+    .update(orcamentoVinculos)
+    .set({
+      reparticaoId: mudanca.alvoId,
+      acoes: mudanca.acoes == null ? null : JSON.stringify(chavesAcoes(mudanca.acoes)),
+      acoesFora: fora.length ? JSON.stringify(fora) : null,
+      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+    })
+    .where(eq(orcamentoVinculos.id, atual.id));
+  return null;
+}
+
+/** Exclui um vínculo (as ações dele ficam sem vínculo — ou vão ao vínculo das DEMAIS da unidade, se houver). */
+export async function excluirVinculoOrcamento(id: number): Promise<void> {
+  await getDb().delete(orcamentoVinculos).where(eq(orcamentoVinculos.id, id));
 }

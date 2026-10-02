@@ -26,6 +26,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
 
+### Orçamento: vínculos CRIADOS — uma unidade do orçamento em várias unidades cadastradas — entregue
+✅ Em vez da lista com todas as unidades, o usuário CRIA os vínculos ("Novo vínculo", "Vincular" na vista "Sem vínculo" ou
+as sugestões): cada um liga a unidade do orçamento a UMA unidade cadastrada com as suas ações (lista ou "as demais"); a
+mesma unidade do orçamento pode ter vários, e cada ação vai a uma unidade só. Os vínculos de antes foram convertidos sem
+perder nada (migração `0080`).
+
 ### Orçamento: vínculos por unidade + ações, Lançamentos com visões e edição, XLSX/PDF em toda tabela — entregue
 ✅ **Vínculos:** só por UNIDADE (o de órgão saiu — migração `0079`); em cada unidade do CUBO o usuário escolhe as AÇÕES que
 entram; ver por órgão = a soma das unidades vinculadas (dimensões "Órgão (cadastro)"/"Unidade (cadastro)" nas visões, no

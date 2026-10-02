@@ -3,14 +3,19 @@ import { norm } from "./parse-dfd-comum.ts";
 
 /**
  * VÍNCULOS do ORÇAMENTO (CUBO) com o cadastro do sistema — núcleo PURO (sem `getDb`/JSX → testável). A UNIDADE é o
- * micro: cada texto distinto de Unidade do CUBO ("2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO", "26 - FMACL") é vinculado a UMA
- * unidade cadastrada e o usuário escolhe quais AÇÕES dessa unidade entram no vínculo (as de fora ficam "Sem vínculo").
- * O ÓRGÃO não se vincula: ver por órgão = a SOMA das unidades vinculadas a ele (`comVinculos`). A chave é o texto
+ * micro: o usuário CRIA os vínculos — cada um liga um texto de Unidade do CUBO ("2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO",
+ * "26 - FMACL") a UMA unidade cadastrada, com as AÇÕES dele; a mesma unidade do CUBO pode ter VÁRIOS vínculos (as ações
+ * divididas entre unidades cadastradas). As ações de um vínculo são uma lista EXPLÍCITA ou "as DEMAIS" (as que nenhum
+ * outro vínculo da unidade pegou, menos as de fora — um por unidade do CUBO). Uma ação vai a UMA unidade (nunca conta
+ * duas vezes). O ÓRGÃO não se vincula: ver por órgão = a SOMA das unidades vinculadas (`comVinculos`). A chave é o texto
  * normalizado → o vínculo vale para todos os orçamentos (inclusive os próximos anos).
  */
 
-/** Vínculo gravado (`orcamento_vinculos`), como chega ao cliente. `acoesFora` = as chaves das AÇÕES que NÃO entram. */
-export type VinculoOrcamento = { chave: string; texto: string; alvoId: number | null; acoesFora: string[] };
+/**
+ * Vínculo gravado (`orcamento_vinculos`), como chega ao cliente: `acoes` = as chaves das ações EXPLÍCITAS (null = as
+ * DEMAIS); `acoesFora` = as que ficam de fora de um vínculo "com as demais".
+ */
+export type VinculoOrcamento = { id: number; chave: string; texto: string; alvoId: number; acoes: string[] | null; acoesFora: string[] };
 
 /** Alvo possível do vínculo (unidade: `codigo` → aqui `sigla`; órgão: o dono da unidade). */
 export type AlvoVinculo = { id: number; sigla: string; nome: string; oculto?: boolean; orgaoId?: number | null };
@@ -63,20 +68,15 @@ export function sugerirAlvo(texto: string | null | undefined, candidatos: AlvoVi
 /** Uma AÇÃO de uma unidade do CUBO: o texto, quantos lançamentos e a dotação. */
 export type AcaoVinculo = { chave: string; texto: string; lancamentos: number; valorInicial: number };
 
-/** Uma linha da tela de vínculos: uma UNIDADE distinta do CUBO + agregados + vínculo atual + as ações dela. */
-export type LinhaVinculo = {
+/** Uma UNIDADE distinta do CUBO neste orçamento: os agregados e as AÇÕES dela. */
+export type UnidadeOrcamento = {
   chave: string;
   texto: string;
   /** O(s) órgão(s) do CUBO em que a unidade aparece (contexto p/ quem vincula). */
   contexto: string;
   lancamentos: number;
   valorInicial: number;
-  alvoId: number | null;
-  sugestaoId: number | null;
-  /** As AÇÕES da unidade (ordem alfabética natural). */
   acoes: AcaoVinculo[];
-  /** As chaves das ações que NÃO entram no vínculo (só as que existem neste orçamento). */
-  acoesFora: string[];
 };
 
 type LancamentoVinculo = { orgao: string | null; unidade: string | null; acao: string | null; valorInicial: number };
@@ -84,65 +84,121 @@ type LancamentoVinculo = { orgao: string | null; unidade: string | null; acao: s
 const colator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 /** A ação vazia do CUBO vira esta chave (escolhível como as demais). */
 export const SEM_ACAO = "—";
+/** A chave da ação de um lançamento. */
+export const chaveAcao = (acao: string | null | undefined) => chaveVinculo(acao) || SEM_ACAO;
 
-/**
- * Agrupa os lançamentos nas UNIDADES distintas do CUBO (com nº de lançamentos, Σ dotação e as AÇÕES de cada uma), já com
- * o vínculo gravado e a sugestão (quando sem vínculo). Ordem alfabética; unidade vazia é ignorada.
- */
-export function linhasVinculo(lancamentos: LancamentoVinculo[], vinculos: VinculoOrcamento[], unidades: AlvoVinculo[]): LinhaVinculo[] {
-  const gravado = new Map(vinculos.map((v) => [v.chave, v]));
-  const acc = new Map<string, Omit<LinhaVinculo, "acoes" | "acoesFora"> & { ctx: Set<string>; acoes: Map<string, AcaoVinculo> }>();
+/** As UNIDADES distintas do CUBO (com nº de lançamentos, Σ dotação e as AÇÕES), em ordem alfabética; vazia é ignorada. */
+export function unidadesDoOrcamento(lancamentos: LancamentoVinculo[]): UnidadeOrcamento[] {
+  const acc = new Map<string, Omit<UnidadeOrcamento, "acoes" | "contexto"> & { ctx: Set<string>; acoes: Map<string, AcaoVinculo> }>();
   for (const r of lancamentos) {
     const chave = chaveVinculo(r.unidade);
     if (!chave) continue;
-    let l = acc.get(chave);
-    if (!l) {
-      l = { chave, texto: String(r.unidade).trim(), contexto: "", lancamentos: 0, valorInicial: 0, alvoId: gravado.get(chave)?.alvoId ?? null, sugestaoId: null, ctx: new Set(), acoes: new Map() };
-      acc.set(chave, l);
+    let u = acc.get(chave);
+    if (!u) {
+      u = { chave, texto: String(r.unidade).trim(), lancamentos: 0, valorInicial: 0, ctx: new Set(), acoes: new Map() };
+      acc.set(chave, u);
     }
-    l.lancamentos++;
-    l.valorInicial += r.valorInicial || 0;
-    if (r.orgao?.trim()) l.ctx.add(r.orgao.trim());
-    const ka = chaveVinculo(r.acao) || SEM_ACAO;
-    const a = l.acoes.get(ka) ?? { chave: ka, texto: r.acao?.trim() || SEM_ACAO, lancamentos: 0, valorInicial: 0 };
+    u.lancamentos++;
+    u.valorInicial += r.valorInicial || 0;
+    if (r.orgao?.trim()) u.ctx.add(r.orgao.trim());
+    const ka = chaveAcao(r.acao);
+    const a = u.acoes.get(ka) ?? { chave: ka, texto: r.acao?.trim() || SEM_ACAO, lancamentos: 0, valorInicial: 0 };
     a.lancamentos++;
     a.valorInicial += r.valorInicial || 0;
-    l.acoes.set(ka, a);
+    u.acoes.set(ka, a);
   }
   return [...acc.values()]
-    .map(({ ctx, acoes, ...l }) => {
-      const lista = [...acoes.values()].sort((a, b) => colator.compare(a.texto, b.texto));
-      const fora = new Set(gravado.get(l.chave)?.acoesFora ?? []);
-      return {
-        ...l,
-        contexto: [...ctx].join(" · "),
-        sugestaoId: l.alvoId == null ? sugerirAlvo(l.texto, unidades) : null,
-        acoes: lista,
-        acoesFora: lista.filter((a) => fora.has(a.chave)).map((a) => a.chave),
-      };
-    })
+    .map(({ ctx, acoes, ...u }) => ({ ...u, contexto: [...ctx].join(" · "), acoes: [...acoes.values()].sort((a, b) => colator.compare(a.texto, b.texto)) }))
     .sort((a, b) => colator.compare(a.texto, b.texto));
 }
 
-/** O vínculo pronto para resolver os lançamentos: a unidade-alvo + as ações de fora. */
-export type MapaVinculos = Map<string, { alvoId: number; fora: Set<string> }>;
+/** Os vínculos prontos para resolver os lançamentos: por unidade do CUBO, as ações EXPLÍCITAS → alvo e o vínculo das DEMAIS. */
+export type MapaVinculos = Map<string, { explicitas: Map<string, number>; demais: { alvoId: number; fora: Set<string> } | null }>;
 
-/** `chave da unidade do CUBO` → alvo gravado + as ações de fora (só os vinculados). */
 export function mapaVinculos(vinculos: VinculoOrcamento[]): MapaVinculos {
   const m: MapaVinculos = new Map();
-  for (const v of vinculos) if (v.alvoId != null) m.set(v.chave, { alvoId: v.alvoId, fora: new Set(v.acoesFora) });
+  for (const v of vinculos) {
+    const e = m.get(v.chave) ?? { explicitas: new Map(), demais: null };
+    if (v.acoes == null) e.demais = { alvoId: v.alvoId, fora: new Set(v.acoesFora) };
+    else for (const a of v.acoes) if (!e.explicitas.has(a)) e.explicitas.set(a, v.alvoId);
+    m.set(v.chave, e);
+  }
   return m;
 }
 
-/** A unidade CADASTRADA de um lançamento: a do vínculo da unidade do CUBO, se a AÇÃO dele entra (senão `null`). */
+/** A unidade CADASTRADA de um lançamento: a do vínculo que tem a AÇÃO dele (explícita), senão o das DEMAIS (se não está fora). */
 export function unidadeDoLancamento(mapa: MapaVinculos, unidade: string | null | undefined, acao: string | null | undefined): number | null {
   const v = mapa.get(chaveVinculo(unidade));
   if (!v) return null;
-  return v.fora.has(chaveVinculo(acao) || SEM_ACAO) ? null : v.alvoId;
+  const ka = chaveAcao(acao);
+  const explicita = v.explicitas.get(ka);
+  if (explicita != null) return explicita;
+  return v.demais && !v.demais.fora.has(ka) ? v.demais.alvoId : null;
 }
 
-/** O vínculo da unidade do CUBO (ignorando as ações) — a Sigla da linha na tabela cruzada. */
-export const alvoDaUnidade = (mapa: MapaVinculos, unidade: string | null | undefined): number | null => mapa.get(chaveVinculo(unidade))?.alvoId ?? null;
+/** As unidades cadastradas de uma unidade do CUBO (a Sigla da linha na tabela cruzada). */
+export function alvosDaUnidade(mapa: MapaVinculos, unidade: string | null | undefined): number[] {
+  const v = mapa.get(chaveVinculo(unidade));
+  if (!v) return [];
+  return [...new Set([...v.explicitas.values(), ...(v.demais ? [v.demais.alvoId] : [])])];
+}
+
+/** Uma linha da lista de VÍNCULOS: o vínculo, a unidade do CUBO e as ações que ele leva NESTE orçamento. */
+export type LinhaVinculo = { vinculo: VinculoOrcamento; unidade: UnidadeOrcamento; acoes: AcaoVinculo[]; lancamentos: number; valorInicial: number };
+
+/** Os vínculos das unidades presentes neste orçamento, cada um com as ações (e a dotação) que leva. */
+export function linhasVinculos(unidades: UnidadeOrcamento[], vinculos: VinculoOrcamento[]): LinhaVinculo[] {
+  const mapa = mapaVinculos(vinculos);
+  const porChave = new Map(unidades.map((u) => [u.chave, u]));
+  const out: LinhaVinculo[] = [];
+  for (const v of vinculos) {
+    const u = porChave.get(v.chave);
+    if (!u) continue;
+    const acoes = u.acoes.filter((a) => unidadeDoLancamento(mapa, u.texto, a.chave === SEM_ACAO ? null : a.texto) === v.alvoId);
+    out.push({ vinculo: v, unidade: u, acoes, lancamentos: acoes.reduce((s, a) => s + a.lancamentos, 0), valorInicial: acoes.reduce((s, a) => s + a.valorInicial, 0) });
+  }
+  return out.sort((a, b) => colator.compare(a.unidade.texto, b.unidade.texto));
+}
+
+/** Uma unidade do CUBO com AÇÕES SEM VÍNCULO neste orçamento (a sugestão só quando ela não tem vínculo nenhum). */
+export type PendenciaVinculo = { unidade: UnidadeOrcamento; acoes: AcaoVinculo[]; lancamentos: number; valorInicial: number; vinculada: boolean; sugestaoId: number | null };
+
+export function semVinculo(unidades: UnidadeOrcamento[], vinculos: VinculoOrcamento[], alvos: AlvoVinculo[]): PendenciaVinculo[] {
+  const mapa = mapaVinculos(vinculos);
+  const out: PendenciaVinculo[] = [];
+  for (const u of unidades) {
+    const acoes = u.acoes.filter((a) => unidadeDoLancamento(mapa, u.texto, a.chave === SEM_ACAO ? null : a.texto) == null);
+    if (acoes.length === 0) continue;
+    const vinculada = mapa.has(u.chave);
+    out.push({
+      unidade: u,
+      acoes,
+      lancamentos: acoes.reduce((s, a) => s + a.lancamentos, 0),
+      valorInicial: acoes.reduce((s, a) => s + a.valorInicial, 0),
+      vinculada,
+      sugestaoId: vinculada ? null : sugerirAlvo(u.texto, alvos),
+    });
+  }
+  return out;
+}
+
+/**
+ * A REGRA de um vínculo novo/alterado entre os OUTROS da mesma unidade do CUBO (mesma régua na tela e no servidor):
+ * uma unidade cadastrada por vez; um só "com as demais"; a lista explícita não vazia e sem ação de outro vínculo.
+ * Devolve o motivo ou `null`.
+ */
+export function conflitoVinculo(
+  outros: Pick<VinculoOrcamento, "alvoId" | "acoes">[],
+  novo: Pick<VinculoOrcamento, "alvoId" | "acoes">,
+  rotuloAcao: (chave: string) => string = (c) => c,
+): string | null {
+  if (outros.some((o) => o.alvoId === novo.alvoId)) return "Esta unidade do orçamento já tem um vínculo com esta unidade cadastrada — edite-o.";
+  if (novo.acoes == null) return outros.some((o) => o.acoes == null) ? "Já existe um vínculo com as DEMAIS ações desta unidade — escolha as ações." : null;
+  if (novo.acoes.length === 0) return "Escolha ao menos uma ação.";
+  const usadas = new Set(outros.flatMap((o) => o.acoes ?? []));
+  const repetida = novo.acoes.find((a) => usadas.has(a));
+  return repetida ? `A ação "${rotuloAcao(repetida)}" já está em outro vínculo desta unidade.` : null;
+}
 
 /** "SIGLA — Nome" de um cadastro (sem repetir quando a sigla é o próprio nome). */
 export const rotuloCadastro = (a: Pick<AlvoVinculo, "sigla" | "nome">) => (a.nome && a.nome !== a.sigla ? `${a.sigla} — ${a.nome}` : a.sigla);
@@ -152,8 +208,8 @@ export type DimensoesCadastro = { unidadeSistema: string; orgaoSistema: string }
 
 /**
  * Os lançamentos com a UNIDADE e o ÓRGÃO DO CADASTRO (as dimensões "Unidade (cadastro)" e "Órgão (cadastro)" das visões,
- * do comparativo e dos lançamentos): a unidade pelo vínculo (respeitando as ações) e o órgão = o dono dessa unidade —
- * ver por órgão é a SOMA das unidades vinculadas. Sem vínculo (ou ação de fora) = "Sem vínculo".
+ * do comparativo e dos lançamentos): a unidade pelo vínculo da AÇÃO (`unidadeDoLancamento`) e o órgão = o dono dessa
+ * unidade — ver por órgão é a SOMA das unidades vinculadas. Sem vínculo = "Sem vínculo".
  */
 export function comVinculos<T extends { unidade: string | null; acao: string | null }>(itens: T[], vinculos: VinculoOrcamento[], alvos: AlvosVinculo): (T & DimensoesCadastro)[] {
   const mapa = mapaVinculos(vinculos);
@@ -166,15 +222,16 @@ export function comVinculos<T extends { unidade: string | null; acao: string | n
   });
 }
 
-/** Lê o JSON das ações de fora gravado (tolerante: qualquer coisa inválida = nenhuma). */
-export function lerAcoesFora(v: unknown): string[] {
+/** Lê uma lista de ações gravada em JSON (tolerante: qualquer coisa inválida = `null` quando `nulo`, senão vazia). */
+export function lerListaAcoes(v: unknown): string[] | null {
+  if (v == null) return null;
   let o: unknown = v;
   if (typeof v === "string") {
     try {
       o = JSON.parse(v);
     } catch {
-      return [];
+      return null;
     }
   }
-  return Array.isArray(o) ? [...new Set(o.filter((x): x is string => typeof x === "string" && x.trim() !== ""))] : [];
+  return Array.isArray(o) ? [...new Set(o.filter((x): x is string => typeof x === "string" && x.trim() !== ""))] : null;
 }

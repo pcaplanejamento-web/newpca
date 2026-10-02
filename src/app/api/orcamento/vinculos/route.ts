@@ -1,31 +1,30 @@
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { definirVinculosOrcamento } from "@/lib/orcamento";
-import { vinculosOrcamentoSchema } from "@/lib/orcamento-validation";
+import { criarVinculosOrcamento } from "@/lib/orcamento";
+import { criarVinculosOrcamentoSchema } from "@/lib/orcamento-validation";
 
 export const dynamic = "force-dynamic";
 
 /**
- * VÍNCULOS da UNIDADE do orçamento (texto do CUBO) com a unidade do cadastro + as AÇÕES que entram (Configurar no
- * Orçamento). UPSERT por texto normalizado; `alvoId` null desvincula; `acoesFora` = as ações que ficam sem vínculo. O
- * alvo é conferido no servidor (unidade existente, nunca a "Geral"). Global: vale para todos os orçamentos.
+ * CRIA vínculos da UNIDADE do orçamento (texto do CUBO) com unidades do cadastro (Configurar no Orçamento) — cada um
+ * com as suas AÇÕES (lista explícita ou as DEMAIS). Uma unidade do CUBO pode ter vários; a regra (`conflitoVinculo`) e a
+ * unidade cadastrada são conferidas no servidor. Global: vale para todos os orçamentos.
  */
-export async function PUT(req: Request) {
+export async function POST(req: Request) {
   const a = await exigirAcesso("orcamento", "configurar");
   if ("erro" in a) return a.erro;
-  const p = await parseCorpo(vinculosOrcamentoSchema, req);
+  const p = await parseCorpo(criarVinculosOrcamentoSchema, req);
   if ("resp" in p) return p.resp;
-
-  const falha = await definirVinculosOrcamento(p.data.vinculos);
+  const falha = await criarVinculosOrcamento(p.data.vinculos);
   if (falha) return erro(falha, 422);
   const n = p.data.vinculos.length;
   await registrarAuditoria({
     usuario: a.u,
-    acao: "editar",
+    acao: "criar",
     entidade: "orcamento",
     entidadeId: null,
-    resumo: `Vínculos do orçamento com as unidades atualizados — ${n} ${n === 1 ? "unidade" : "unidades"}`,
+    resumo: `${n} ${n === 1 ? "vínculo criado" : "vínculos criados"} entre unidades do orçamento e do cadastro`,
     depois: { vinculos: p.data.vinculos },
   });
   return ok();
