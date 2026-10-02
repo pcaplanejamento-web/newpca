@@ -153,13 +153,13 @@ test("emissão: o parâmetro do protocolo leva o campo da linha; o nome do PDF s
 test("extensão: o `ler` passa pela trava de leitura, o `pedir` só repete a operação aprendida e o id é FIXO (chave no manifesto)", () => {
   const main = readFileSync("extensao-centi/centi-main.js", "utf8");
   assert.match(main, /async function ler\(d\) \{[\s\S]*?A\.consultaPermitida\(caminho, metodo\)/);
-  assert.match(main, /const ACOES = \{ pedir, protocolo, anexar, gravador, aprender, ler \};/);
+  assert.match(main, /const ACOES = \{ pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao \};/);
   assert.match(main, /operacoesAprendidas\(\)\.includes\(A\?\.chaveOperacao\(c\)\)/);
   // O aprendiz nunca guarda cabeçalhos (a sessão vai neles).
   assert.doesNotMatch(main.slice(main.indexOf("function aprenderResposta"), main.indexOf("const textoDoXhr")), /cabecalhos|__pcaHs/);
   const m = JSON.parse(readFileSync("extensao-centi/manifest.json", "utf8"));
   assert.match(m.key, /^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA[A-Za-z0-9+/=]{300,}$/);
-  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise"]);
+  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise", "telaEmitir"]);
 });
 
 test("em análise: protocolos limpos e sem repetir; o casamento com o sistema respeita o ano; a escolha lembrada só com o que existe", async () => {
@@ -180,4 +180,30 @@ test("em análise: protocolos limpos e sem repetir; o casamento com o sistema re
   assert.deepEqual(casar({ protocolo: "160000", ano: "2026" }), { numero: "160000/2026" });
   assert.deepEqual(departamentosEscolhidosValidos(["A", "Z", 3, "A"], ["A", "B"]), ["A"]);
   assert.deepEqual(departamentosEscolhidosValidos(null, ["A"]), []);
+});
+
+test("tela protocolo: os dados do cadastro da Centi limpos, o casamento pelo Id e o nome do PDF", async () => {
+  const { dadosCentiValidos, noSistemaTela, rotulosDosDados, nomePdfEmAnalise } = await import("../src/lib/automacao-tela-protocolo.ts");
+  assert.equal(dadosCentiValidos(null), null);
+  const d = dadosCentiValidos({
+    id: "002273524",
+    campos: [{ rotulo: " Id ", valor: "2273524" }, { rotulo: "Id", valor: "x" }, { rotulo: "Protocolo", valor: "97608" }, { rotulo: "", valor: "y" }, { rotulo: "Valor", valor: 3 }, "lixo"],
+  });
+  assert.deepEqual(d, {
+    id: "2273524",
+    campos: [
+      { rotulo: "Id", valor: "2273524" },
+      { rotulo: "Protocolo", valor: "97608" },
+      { rotulo: "Valor", valor: "" },
+    ],
+  });
+  assert.deepEqual(rotulosDosDados([d as NonNullable<typeof d>]), ["Id", "Valor"]);
+  // O Id da Centi decide (mesmo com o nº renumerado); sem Id, o nº + ano.
+  const casar = noSistemaTela([
+    { numero: "155000/2026", idExterno: "2273524" },
+    { numero: "97608/2026", idExterno: null },
+  ]);
+  assert.equal(casar({ protocolo: "97608", ano: "2026", id: "2273524" })?.numero, "155000/2026");
+  assert.equal(casar({ protocolo: "97608", ano: "2026" })?.numero, "97608/2026");
+  assert.equal(nomePdfEmAnalise({ protocolo: "97608", ano: "2026" }), "Protocolo 97608 - 2026.pdf");
 });

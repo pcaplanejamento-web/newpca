@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 2;
+  const VERSAO = 3;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -241,14 +241,17 @@
   /** O rótulo de cada coluna = o texto do FILHO do cabeçalho (os ícones de ordenar/filtrar não têm texto). */
   const rotulosDe = (cab) => Array.from(cab.children).map(texto);
 
-  function registro(cabecalhos, celulas) {
+  /** Um protocolo da grade; `el` (não vai na resposta) = a célula do nº, para abrir o protocolo. */
+  function registro(cabecalhos, celulas, els = []) {
     const campos = {};
     cabecalhos.forEach((h, i) => {
       if (h) campos[h] = celulas[i] ?? "";
     });
     const r = { campos };
     for (const [h, chave] of Object.entries(CAMPOS)) r[chave] = campos[h] ?? "";
-    return RE_PROTOCOLO.test(r.protocolo) ? r : null;
+    if (!RE_PROTOCOLO.test(r.protocolo)) return null;
+    Object.defineProperty(r, "el", { value: els[cabecalhos.indexOf("PROTOCOLO")] ?? null, enumerable: false });
+    return r;
   }
 
   /** Pela ESTRUTURA: as linhas com a mesma tag e o mesmo nº de filhos do cabeçalho, perto dele. */
@@ -256,7 +259,7 @@
     let raiz = cab.parentElement;
     for (let i = 0; raiz && i < 8; i++, raiz = raiz.parentElement) {
       const linhas = todos(raiz).filter((el) => el !== cab && !cab.contains(el) && !el.contains?.(cab) && el.tagName === cab.tagName && el.children.length === cab.children.length && visivel(el));
-      const regs = linhas.map((l) => registro(cabecalhos, Array.from(l.children).map(celula))).filter(Boolean);
+      const regs = linhas.map((l) => registro(cabecalhos, Array.from(l.children).map(celula), Array.from(l.children))).filter(Boolean);
       if (regs.length) return regs;
     }
     return [];
@@ -277,7 +280,7 @@
       if (!b || b.top < base - 1) continue;
       const cx = (b.left + b.right) / 2;
       const i = cols.findIndex((c) => c && c.width > 0 && cx >= c.left && cx <= c.right);
-      if (i >= 0) folhas.push({ i, t, cy: (b.top + b.bottom) / 2 });
+      if (i >= 0) folhas.push({ i, t, el, cy: (b.top + b.bottom) / 2 });
     }
     folhas.sort((a, b) => a.cy - b.cy);
     const grupos = [];
@@ -289,8 +292,12 @@
     return grupos
       .map((g) => {
         const cel = cabecalhos.map(() => "");
-        for (const f of g.itens) cel[f.i] = cel[f.i] ? `${cel[f.i]} ${f.t}` : f.t;
-        return registro(cabecalhos, cel);
+        const els = cabecalhos.map(() => null);
+        for (const f of g.itens) {
+          cel[f.i] = cel[f.i] ? `${cel[f.i]} ${f.t}` : f.t;
+          els[f.i] ??= f.el;
+        }
+        return registro(cabecalhos, cel, els);
       })
       .filter(Boolean);
   }
@@ -337,9 +344,9 @@
   }
 
   /** A FORMA da tela (sem dados de sessão), para ajustar a leitura quando a Centi muda. */
-  function diagnostico(doc, etapa) {
+  function diagnostico(doc, etapa, notas = []) {
     const forma = (el) => (el ? `${String(el.tagName ?? "").toLowerCase()}${el.className ? `.${String(el.className).trim().split(/\s+/).slice(0, 2).join(".")}` : ""}[${el.children?.length ?? 0}]` : "—");
-    const l = [`etapa: ${etapa}`];
+    const l = [`etapa: ${etapa}`, ...notas];
     try {
       l.push(
         `rótulos: PROTOCOLO=${porTexto(doc, (s) => s === "PROTOCOLO").length} ANO=${porTexto(doc, (s) => s === "ANO").length} INTERESSADO=${porTexto(doc, (s) => s === "INTERESSADO").length}`,
@@ -371,7 +378,8 @@
     return l.join("\n").slice(0, 1500);
   }
 
-  async function emAnalise(ctx, nomes) {
+  /** Escolhe as repartições, pesquisa (lupa) e abre a aba "Em Análise": devolve a contagem da aba. */
+  async function irParaEmAnalise(ctx, nomes) {
     const { doc, win } = ctx;
     if (!Array.isArray(nomes) || !nomes.length || nomes.length > 50 || nomes.some((n) => typeof n !== "string" || !n.trim() || n.length > 120))
       throw new Error("Escolha de 1 a 50 repartições.");
@@ -403,10 +411,14 @@
     );
     ctx.etapa = "abrir a aba Em Análise";
     abrirAba(ctx, "EM ANALISE");
-    const esperado = contagemAba(doc, "EM ANALISE");
+    return contagemAba(doc, "EM ANALISE");
+  }
+
+  /** Percorre as páginas da grade: `cada(grade)` recebe cada página lida; devolver true PARA. */
+  async function percorrerGrade(ctx, esperado, cada) {
+    const { doc, win } = ctx;
     ctx.etapa = "ler a grade";
-    const registros = new Map();
-    let cabecalhos = [];
+    let lidos = 0;
     for (let pagina = 0; pagina < 50; pagina++) {
       let anterior = -1;
       let estavel = 0;
@@ -428,38 +440,233 @@
           if (gr && totalDoRodape(gr.cab) === 0) return gr;
           return null;
         },
-        esperado === 0 ? "__vazio__" : "Não consegui ler os protocolos da aba Em Análise.",
+        "Não consegui ler os protocolos da aba Em Análise.",
         prazo,
       ).catch((e) => {
         if (esperado === 0) return { cab: null, cabecalhos: [], registros: [] };
         throw e;
       });
-      if (grade.cabecalhos.length) cabecalhos = grade.cabecalhos;
-      for (const r of grade.registros) registros.set(`${r.protocolo}|${r.ano}`, r);
-      if (!grade.cab) break;
+      lidos += grade.registros.length;
+      if (cada(grade) === true || !grade.cab) return;
       const total = totalDoRodape(grade.cab) ?? esperado;
-      if (total == null || registros.size >= total) break;
+      if (total == null || lidos >= total) return;
       const prox = botaoProxima(blocoDaGrade(grade.cab, doc));
-      if (!prox) break;
+      if (!prox) return;
       clicar(win, prox);
       await pausa(win, (ctx.passo ?? 250) * 2);
     }
+  }
+
+  async function emAnalise(ctx, nomes) {
+    const esperado = await irParaEmAnalise(ctx, nomes);
+    const registros = new Map();
+    let cabecalhos = [];
+    await percorrerGrade(ctx, esperado, (grade) => {
+      if (grade.cabecalhos.length) cabecalhos = grade.cabecalhos;
+      // Só os dados (a célula da tela não vai na resposta).
+      for (const r of grade.registros) registros.set(`${r.protocolo}|${r.ano}`, { ...r });
+    });
     const lista = [...registros.values()];
     if (esperado && lista.length === 0) throw new Error(`A aba Em Análise indica ${esperado} protocolo(s), mas não consegui ler a grade.`);
     return { protocolos: lista, total: esperado || lista.length, cabecalhos };
   }
 
-  /** O ponto de entrada da ponte: "telaDepartamentos" | "telaEmAnalise". */
+  // ---------------------------------------------------------------- UM PROTOCOLO: OS DADOS E O DOCUMENTO
+  const soDigitos = (v) => String(v ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  const casaLinha = (r, protocolo, ano) => soDigitos(r.protocolo) === soDigitos(protocolo) && (!ano || !r.ano || soDigitos(r.ano) === soDigitos(ano));
+
+  /** A linha do protocolo na grade (a que está à vista; senão pesquisa de novo e percorre as páginas). */
+  async function acharLinha(ctx, protocolo, ano, nomes) {
+    ctx.etapa = "achar o protocolo na grade";
+    const visto = lerGrade(ctx.doc)?.registros.find((r) => casaLinha(r, protocolo, ano));
+    if (visto?.el) return visto;
+    if (!Array.isArray(nomes) || !nomes.length) throw new Error(`O protocolo ${protocolo} não está na grade da Tela Protocolo — leia “Em Análise” de novo.`);
+    const esperado = await irParaEmAnalise(ctx, nomes);
+    let achado = null;
+    await percorrerGrade(ctx, esperado, (grade) => {
+      achado = grade.registros.find((r) => casaLinha(r, protocolo, ano) && r.el) ?? null;
+      return !!achado;
+    });
+    if (!achado) throw new Error(`O protocolo ${protocolo}${ano ? `/${ano}` : ""} não está mais em “Em Análise” nas repartições escolhidas.`);
+    return achado;
+  }
+
+  /** O cadastro aberto do protocolo (o título "Protocolo - <Id>" com o botão Operações e os campos). */
+  const RE_TITULO = /^PROTOCOLO - \d+$/;
+  function acharModal(doc) {
+    for (const t of porTexto(doc, (s) => RE_TITULO.test(s))) {
+      let n = t.parentElement;
+      for (let i = 0; n && i < 10; i++, n = n.parentElement)
+        if (porTexto(n, (s) => s === "OPERACOES").length && todos(n).some((el) => el.tagName === "INPUT" && visivel(el))) return n;
+    }
+    return null;
+  }
+
+  const CAMPO = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+  /** Os elementos que SÃO ou CONTÊM um campo/botão (calculado uma vez por leitura — subindo de cada um até a raiz). */
+  function comCampos(raiz, lista) {
+    const set = new Set();
+    for (const el of lista)
+      if (CAMPO.has(el.tagName) || ehBotao(el)) for (let n = el; n && n !== raiz && !set.has(n); n = n.parentElement) set.add(n);
+    return set;
+  }
+  /** O rótulo de um campo: o texto mais próximo ANTES dele que não é campo nem botão (o "*" de obrigatório sai). */
+  function rotuloAntes(lista, i, ocupados) {
+    for (let j = i - 1, k = 0; j >= 0 && k < 30; j--, k++) {
+      const o = lista[j];
+      if (ocupados.has(o)) continue;
+      const t = celula(o).replace(/\*/g, "").replace(/\s+/g, " ").trim();
+      if (t && t.length <= 60) return t;
+    }
+    return null;
+  }
+  /** TODOS os campos do cadastro como a Centi mostra: [{ rotulo, valor }] (os campos de um mesmo rótulo — código + nome
+   * do interessado — juntos; o seletor, pelo texto escolhido). */
+  function lerCadastro(modal) {
+    const lista = todos(modal);
+    const ocupados = comCampos(modal, lista);
+    const posicao = new Map(lista.map((el, i) => [el, i]));
+    const porRotulo = new Map();
+    const usados = new Set();
+    for (const el of lista) {
+      if (!CAMPO.has(el.tagName) || !visivel(el) || /^(checkbox|radio|hidden|button|submit|file|image|password)$/i.test(String(el.type ?? ""))) continue;
+      const combo = attr(el, "role") === "combobox" || attr(el, "aria-autocomplete") === "list";
+      let caixa = el;
+      if (combo)
+        for (let n = el.parentElement, i = 0; n && n !== modal && i < 4; n = n.parentElement, i++)
+          if (celula(n)) {
+            caixa = n;
+            break;
+          }
+      if (usados.has(caixa)) continue;
+      usados.add(caixa);
+      const valor = (String(el.value ?? "").trim() || (caixa !== el ? celula(caixa) : "")).slice(0, 2000);
+      const rotulo = rotuloAntes(lista, posicao.get(caixa) ?? -1, ocupados);
+      if (!rotulo) continue;
+      const atual = porRotulo.get(rotulo);
+      if (atual === undefined) porRotulo.set(rotulo, valor);
+      else if (valor) porRotulo.set(rotulo, atual ? `${atual} ${valor}` : valor);
+    }
+    return [...porRotulo].slice(0, 80).map(([rotulo, valor]) => ({ rotulo, valor }));
+  }
+  const valorDe = (campos, rot) => campos.find((c) => norm(c.rotulo) === rot)?.valor ?? "";
+
+  function botaoDe(el) {
+    for (let n = el; n; n = n.parentElement) if (ehBotao(n)) return n;
+    return null;
+  }
+  /** Clica só se o botão for EXATAMENTE o permitido (a exceção à lista negra: Operações → Emitir documentos). */
+  function clicarSo(win, el, permitido) {
+    const b = botaoDe(el) ?? el;
+    const rot = texto(b) || norm(attr(b, "aria-label")) || norm(attr(b, "title"));
+    if (!permitido.test(rot)) throw new Error(`Bloqueado: a automação não aciona “${String(b.textContent ?? "").trim().slice(0, 40)}”.`);
+    const M = win.MouseEvent ?? win.Event;
+    for (const tipo of ["mousedown", "mouseup", "click"]) el.dispatchEvent(new M(tipo, { bubbles: true, cancelable: true, button: 0 }));
+  }
+  function fecharModal(ctx, modal) {
+    try {
+      tecla(ctx.win, ctx.doc.activeElement ?? ctx.doc.body ?? modal, "Escape");
+      let n = modal;
+      for (let i = 0; n && i < 4; i++, n = n.parentElement) {
+        const x = todos(n).find((el) => visivel(el) && ((!el.children.length && /^[×✕X]$/.test(String(el.textContent ?? "").trim())) || /^(FECHAR|CLOSE)$/.test(norm(attr(el, "aria-label")))));
+        if (x) {
+          clicar(ctx.win, x);
+          return;
+        }
+      }
+    } catch {}
+  }
+
+  // Os botões que podem CONFIRMAR a janela que a emissão abrir (nunca Sim, Salvar, Anexar, Assinar…).
+  const CONFIRMA = /^(EMITIR|EMITIR DOCUMENTOS|PROCESSAR|GERAR|GERAR PDF|IMPRIMIR|VISUALIZAR|OK|CONFIRMAR)$/;
+  const fontesVisiveis = (doc) =>
+    todos(doc)
+      .filter((el) => /^(IFRAME|EMBED|OBJECT)$/.test(el.tagName))
+      .map((el) => attr(el, "src") || attr(el, "data") || "")
+      .filter(Boolean);
+
+  async function emitirDocumento(ctx, protocolo, ano, nomes) {
+    const { doc, win } = ctx;
+    if (!/^\d{1,12}$/.test(soDigitos(protocolo) || "x")) throw new Error("Protocolo inválido.");
+    if (typeof ctx.pagina !== "function") throw new Error("Ponte com a página ausente — atualize a extensão.");
+    const velho = acharModal(doc);
+    if (velho) fecharModal(ctx, velho);
+    const linha = await acharLinha(ctx, protocolo, ano, nomes);
+    // Abre o cadastro do protocolo (clique e duplo clique na linha, como a pessoa faz).
+    ctx.etapa = "abrir o protocolo";
+    clicar(win, linha.el);
+    const M = win.MouseEvent ?? win.Event;
+    linha.el.dispatchEvent(new M("dblclick", { bubbles: true, cancelable: true, button: 0, detail: 2 }));
+    const modal = await esperarAte(
+      ctx,
+      () => {
+        const m = acharModal(doc);
+        return m && soDigitos(valorDe(lerCadastro(m), "PROTOCOLO")) === soDigitos(protocolo) ? m : null;
+      },
+      "O cadastro do protocolo não abriu na Tela Protocolo.",
+    );
+    ctx.etapa = "ler o cadastro";
+    const campos = lerCadastro(modal);
+    const dados = { campos, id: soDigitos(valorDe(campos, "ID")) || null };
+    // EMITIR DOCUMENTOS: Operações (do cadastro) → Emitir documentos; o PDF que a Centi gerar é capturado na página.
+    ctx.etapa = "emitir documentos";
+    const antes = new Set(todos(doc).filter((el) => ehBotao(el) && visivel(el)));
+    const fontesAntes = new Set(fontesVisiveis(doc));
+    const r0 = await ctx.pagina("captura", { acao: "iniciar" }, 5000);
+    if (!r0?.ok) throw new Error(r0?.erro || "A página da Centi não respondeu — aperte F5 na aba.");
+    try {
+      if (!porTexto(doc, (s) => s === "EMITIR DOCUMENTOS").length) {
+        const op = porTexto(modal, (s) => s === "OPERACOES")[0];
+        if (!op) throw new Error("Não achei o botão Operações do protocolo.");
+        clicarSo(win, op, /^OPERACOES$/);
+      }
+      const item = await esperarAte(ctx, () => porTexto(doc, (s) => s === "EMITIR DOCUMENTOS")[0], "O menu Operações não mostrou “Emitir documentos”.");
+      clicarSo(win, item, /^EMITIR DOCUMENTOS$/);
+      const clicados = new Set();
+      const fim = Date.now() + (ctx.prazoEmissao ?? 120000);
+      for (;;) {
+        await pausa(win, ctx.passo ?? 400);
+        const urls = fontesVisiveis(doc).filter((u) => !fontesAntes.has(u));
+        const r = await ctx.pagina("captura", { acao: "ler", urls }, 30000);
+        if (!r?.ok) throw new Error(r?.erro || "A página da Centi não respondeu — aperte F5 na aba.");
+        if (r.pronto) {
+          const arquivo = r.pdf ? { pdf: r.pdf } : r.resposta ? { resposta: r.resposta } : { link: r.link };
+          return { dados, arquivo };
+        }
+        // A emissão abriu uma janela: o botão de confirmar (só os da lista; cada um uma vez).
+        const novos = todos(doc).filter((el) => ehBotao(el) && visivel(el) && !antes.has(el));
+        const confirmar = novos.find((el) => !clicados.has(el) && CONFIRMA.test(texto(el) || norm(attr(el, "aria-label"))) && seguro(el));
+        if (confirmar && clicados.size < 3) {
+          clicados.add(confirmar);
+          clicar(win, confirmar);
+        }
+        if (Date.now() > fim) {
+          ctx.notas = [
+            `janela: ${novos.map((el) => texto(el) || norm(attr(el, "aria-label")) || "(ícone)").slice(0, 15).join(" | ") || "nenhum botão novo"}`,
+            `capturado: ${JSON.stringify(r.vistos ?? {}).slice(0, 400)}`,
+            ...(r.ultima ? [`última resposta: ${r.ultima.status} ${String(r.ultima.b64 ?? "").slice(0, 300)}`] : []),
+          ];
+          throw new Error("A Centi não entregou o PDF do “Emitir documentos”.");
+        }
+      }
+    } finally {
+      await ctx.pagina("captura", { acao: "parar" }, 5000).catch(() => null);
+      fecharModal(ctx, modal);
+    }
+  }
+
+  /** O ponto de entrada da ponte: "telaDepartamentos" | "telaEmAnalise" | "telaEmitir" (os dados e o documento de UM). */
   async function executar(acao, dados, ctx0) {
     const ctx = { ...ctx0 };
     try {
       if (acao === "telaDepartamentos") return { ok: true, departamentos: await departamentos(ctx) };
       if (acao === "telaEmAnalise") return { ok: true, ...(await emAnalise(ctx, dados?.departamentos)) };
+      if (acao === "telaEmitir") return { ok: true, ...(await emitirDocumento(ctx, dados?.protocolo, dados?.ano, dados?.departamentos)) };
       return { ok: false, erro: "Ação desconhecida." };
     } catch (e) {
-      return { ok: false, erro: e?.message || "Falha na Tela Protocolo.", diagnostico: diagnostico(ctx.doc, ctx.etapa ?? acao) };
+      return { ok: false, erro: e?.message || "Falha na Tela Protocolo.", diagnostico: diagnostico(ctx.doc, ctx.etapa ?? acao, ctx.notas) };
     }
   }
 
-  g.__pcaCentiTela = Object.freeze({ versao: VERSAO, norm, diagnostico, acharCabecalho, seguro, acharTela, campoDepartamentos, botaoPesquisar, lerGrade, totalDoRodape, contagemAba, escolhidos, executar });
+  g.__pcaCentiTela = Object.freeze({ versao: VERSAO, norm, diagnostico, acharCabecalho, seguro, acharTela, campoDepartamentos, botaoPesquisar, lerGrade, lerCadastro, totalDoRodape, contagemAba, escolhidos, executar });
 })();

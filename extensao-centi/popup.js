@@ -1,5 +1,6 @@
 // O POPUP da extensão (o DROPDOWN do ícone): a situação da Centi, o que a automação está fazendo agora, INTERROMPER e o
-// LOGIN da Centi (usuário e senha salvos uma vez, cifrados no cofre — cofre.js; nunca vão ao sistema PCA).
+// LOGIN da Centi (usuário e senha salvos uma vez, cifrados no cofre — cofre.js; e, se a pessoa marcar, guardados cifrados
+// também no sistema PCA, para voltarem sozinhos depois de reinstalar a extensão).
 (() => {
   const C = globalThis.CofreCenti;
   const $ = (id) => document.getElementById(id);
@@ -39,7 +40,11 @@
 
   // O formulário aparece sozinho sem login salvo ou com o login pausado; "Login da Centi" mostra/esconde.
   async function mostrarLogin(abrir) {
-    const c = await C.lerConfig();
+    let c = await C.lerConfig();
+    // Sem login aqui (extensão reinstalada): o guardado no sistema volta sozinho.
+    if (!c.tem && (await chrome.runtime.sendMessage({ tipo: "restaurarLogin" }).catch(() => null))?.ok) c = await C.lerConfig();
+    const { credNoSistema } = await chrome.storage.local.get("credNoSistema");
+    if (c.tem) $("noSistema").checked = credNoSistema === true;
     $("auto").checked = c.auto;
     $("esquecer").disabled = !c.tem;
     if (c.tem) {
@@ -50,7 +55,7 @@
     if (!c.tem) situacao("Informe o usuário e a senha da Centi.", "alerta");
     else if (c.pausadoEm) situacao(`Pausado em ${quando(c.pausadoEm)}: ${c.motivo ?? ""}`, "erro");
     else if (!c.auto) situacao("Salvo; login automático desligado.", "alerta");
-    else situacao("Salvo: entra sozinho quando a sessão cair.", "ok");
+    else situacao(`Salvo: entra sozinho quando a sessão cair${credNoSistema ? " · guardado também no sistema" : ""}.`, "ok");
     const ver = abrir ?? (janela || !c.tem || !!c.pausadoEm);
     $("login").hidden = !ver;
     if (ver) (c.tem ? $("senha") : $("usuario")).focus();
@@ -84,7 +89,9 @@
       $("salvar").disabled = false;
       return situacao("Não consegui guardar neste navegador.", "erro");
     }
-    situacao("Salvo. Entrando na Centi pela aba da automação…");
+    const guardar = await chrome.runtime.sendMessage({ tipo: "loginNoSistema", guardar: $("noSistema").checked }).catch(() => null);
+    if ($("noSistema").checked && !guardar?.ok) situacao(`Salvo na extensão; não guardou no sistema: ${guardar?.erro ?? "sem resposta"}. Entrando na Centi…`, "alerta");
+    else situacao("Salvo. Entrando na Centi pela aba da automação…");
     const r = await chrome.runtime.sendMessage({ tipo: "entrarAgora" }).catch(() => null);
     $("salvar").disabled = false;
     if (r?.ok) {
@@ -99,11 +106,27 @@
   $("auto").addEventListener("change", async () => {
     if ((await C.lerConfig()).tem) {
       await C.mudarAuto($("auto").checked);
+      if ((await chrome.storage.local.get("credNoSistema")).credNoSistema) await chrome.runtime.sendMessage({ tipo: "loginNoSistema", guardar: true }).catch(() => null);
       await mostrarLogin(true);
     }
   });
+  // Guardar/tirar do sistema na hora (com o login já salvo).
+  $("noSistema").addEventListener("change", async () => {
+    if (!(await C.lerConfig()).tem) return;
+    const r = await chrome.runtime.sendMessage({ tipo: "loginNoSistema", guardar: $("noSistema").checked }).catch(() => null);
+    if (!r?.ok) {
+      $("noSistema").checked = !$("noSistema").checked;
+      return situacao(`Sistema PCA: ${r?.erro ?? "sem resposta"}`, "erro");
+    }
+    await mostrarLogin(true);
+  });
   $("esquecer").addEventListener("click", async () => {
-    if (!confirm("Esquecer o usuário e a senha da Centi neste navegador?")) return;
+    const { credNoSistema } = await chrome.storage.local.get("credNoSistema");
+    if (!confirm(`Esquecer o usuário e a senha da Centi neste navegador${credNoSistema ? " e no sistema PCA" : ""}?`)) return;
+    if (credNoSistema) {
+      const r = await chrome.runtime.sendMessage({ tipo: "loginNoSistema", guardar: false }).catch(() => null);
+      if (!r?.ok) return situacao(`Não consegui tirar do sistema PCA: ${r?.erro ?? "sem resposta"}`, "erro");
+    }
     await C.esquecer();
     $("usuario").value = "";
     $("senha").value = "";

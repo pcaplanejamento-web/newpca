@@ -9,18 +9,15 @@ import {
   analisarRespostaCenti,
   CONFIG_CENTI_PADRAO,
   type ConfigCenti,
-  caminhosDoArquivo,
   candidatosEntidade,
   conferirConteudoDfd,
   type DestinoSaida,
   descricaoDoArquivo,
-  ehPdf,
   type FormatoSaida,
   lerAlvoCenti,
   lerConfigCenti,
   lerIdsCenti,
   lerOpcoesSaida,
-  linkDaResposta,
   MAX_IDS_CENTI,
   maiorVersao,
   nomeSeguro,
@@ -37,7 +34,7 @@ import {
   VERSAO_EXTENSAO_CENTI,
   versaoAtende,
 } from "@/lib/automacao-centi-core";
-import { baixarNoNavegador, comoBlob, deBase64, gunzip } from "@/lib/arquivo-navegador";
+import { baixarNoNavegador, baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado } from "@/lib/arquivo-navegador";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import {
@@ -384,6 +381,61 @@ function Grupo({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
+/**
+ * O LOGIN DA CENTI GUARDADO NO SISTEMA (opcional, cifrado): a situação + remover. Guardar é só na extensão ("Guardar
+ * também no sistema PCA" no login dela) — a senha nunca passa por esta tela.
+ */
+function LoginNoSistema({ onConfigurar }: { onConfigurar: () => void }) {
+  const [s, setS] = useState<{ tem: boolean; atualizadoEm: string | null; disponivel: boolean } | null>(null);
+  const [remover, setRemover] = useState<"pergunta" | "removendo" | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const carregar = useCallback(async () => {
+    const r = await fetch("/api/admin/automacao/credencial-centi", { cache: "no-store" }).catch(() => null);
+    const j = (await r?.json().catch(() => null)) as { ok?: boolean; tem?: boolean; atualizadoEm?: string | null; disponivel?: boolean } | null;
+    setS(j?.ok ? { tem: j.tem === true, atualizadoEm: j.atualizadoEm ?? null, disponivel: j.disponivel !== false } : null);
+  }, []);
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+  async function tirar() {
+    setRemover("removendo");
+    const r = await fetch("/api/admin/automacao/credencial-centi", { method: "DELETE" }).catch(() => null);
+    setRemover(null);
+    if (!r?.ok) return setErro("Não consegui remover — tente de novo.");
+    setErro(null);
+    await carregar();
+  }
+  return (
+    <Grupo titulo="Login da Centi">
+      <p className="text-xs text-muted">
+        {s === null
+          ? "Conferindo…"
+          : s.tem
+            ? `Guardado no sistema (cifrado)${s.atualizadoEm ? ` em ${dataHoraBR(s.atualizadoEm)}` : ""} — volta sozinho se a extensão for reinstalada.`
+            : s.disponivel
+              ? "Só na extensão. Para guardar também no sistema (cifrado), marque a opção no login da extensão."
+              : "O sistema está sem a chave mestra para cifrar o login — fica só na extensão."}
+      </p>
+      {erro && <p className="text-xs text-[var(--danger)]">{erro}</p>}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={onConfigurar}>
+          <IconKey className="h-4 w-4" /> Configurar login
+        </Button>
+        {s?.tem &&
+          (remover === null ? (
+            <Button size="sm" variant="secondary" onClick={() => setRemover("pergunta")}>
+              Remover do sistema
+            </Button>
+          ) : (
+            <Button size="sm" variant="danger" onClick={() => void tirar()} loading={remover === "removendo"}>
+              Confirmar remoção
+            </Button>
+          ))}
+      </div>
+    </Grupo>
+  );
+}
+
 /** Os AJUSTES (o dropdown do botão "Ajustes"): saída, emissão e entidade da Centi por órgão. */
 function Ajustes({
   saida,
@@ -405,7 +457,10 @@ function Ajustes({
   onHistorico,
   gravando,
   onGravador,
+  onConfigurarLogin,
 }: {
+  /** Abre o login da extensão (o dropdown do ícone). */
+  onConfigurarLogin: () => void;
   /** O gravador de receitas na aba da Centi (null = desconhecido). */
   gravando: boolean | null;
   onGravador: (acao: "iniciar" | "parar") => void;
@@ -431,6 +486,7 @@ function Ajustes({
 }) {
   return (
     <div className="space-y-3 p-1">
+      <LoginNoSistema onConfigurar={onConfigurarLogin} />
       <Grupo titulo="Gravação na Centi">
         <Switch
           checked={gravacao !== false}
@@ -1106,41 +1162,22 @@ export function AutomacaoAdmin({
     const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, cfgRef.current, new Date()), entidade }, 150_000);
     if (!r.ok || r.b64 == null) return ambiente(r);
     const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
-    if (a.tipo === "pdf") return { pdf: a.bytes };
-    if (a.tipo === "base64") return { pdf: deBase64(a.b64) };
-    if (a.tipo === "gzip") {
-      const b = await gunzip(deBase64(a.b64)).catch(() => null);
-      return b && ehPdf(b) ? { pdf: b } : { erro: "Não consegui abrir o PDF compactado da Centi." };
-    }
-    if (a.tipo === "nada") {
-      // A Centi recusou a OPERAÇÃO (ela muda o ModuleKey/Guid do Emitir DFD de tempos em tempos): pega a da tela, que a
-      // extensão guardou sozinha, e tenta UMA vez de novo. Sem ela, o erro diz o que fazer — e não adianta outra entidade.
-      if (operacaoRecusada(a.amostra ?? a.erro)) {
-        if (!deNovo) {
-          const e = await pedir("estado", null, 8000);
-          if (e.ok && aplicarOperacao(e.operacao)) return emitirUm(id, entidade, true);
-        }
-        return {
-          erro: "A Centi recusou a operação Emitir DFD (“Usuário sem permissão!”) — ela deve ter mudado a operação. Emita UM DFD pela própria tela da Centi nesta aba (Planejamento → Operações → Emitir DFD → Processar): a extensão pega a operação nova sozinha. Depois, tente de novo.",
-          amostra: a.amostra,
-          recusada: true,
-        };
+    // A Centi recusou a OPERAÇÃO (ela muda o ModuleKey/Guid do Emitir DFD de tempos em tempos): pega a da tela, que a
+    // extensão guardou sozinha, e tenta UMA vez de novo. Sem ela, o erro diz o que fazer — e não adianta outra entidade.
+    if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro)) {
+      if (!deNovo) {
+        const e = await pedir("estado", null, 8000);
+        if (e.ok && aplicarOperacao(e.operacao)) return emitirUm(id, entidade, true);
       }
-      return { erro: a.erro, amostra: a.amostra, ambiente: /sessão/i.test(a.erro) };
+      return {
+        erro: "A Centi recusou a operação Emitir DFD (“Usuário sem permissão!”) — ela deve ter mudado a operação. Emita UM DFD pela própria tela da Centi nesta aba (Planejamento → Operações → Emitir DFD → Processar): a extensão pega a operação nova sozinha. Depois, tente de novo.",
+        amostra: a.amostra,
+        recusada: true,
+      };
     }
-    for (const caminho of caminhosDoArquivo(a)) {
-      const d = await pedir("pedir", { metodo: "GET", caminho, entidade }, 150_000);
-      if (!d.ok || d.b64 == null || (d.status ?? 0) >= 400) continue;
-      const b = deBase64(d.b64);
-      if (ehPdf(b)) return { pdf: b };
-      const link = linkDaResposta(b);
-      if (link) {
-        const z = await pedir("pedir", { metodo: "GET", caminho: link, entidade }, 150_000);
-        const c = z.ok && z.b64 ? deBase64(z.b64) : null;
-        if (c && ehPdf(c)) return { pdf: c };
-      }
-    }
-    return { erro: "A Centi gerou o PDF, mas não consegui baixá-lo pela chave." };
+    const r2 = await pdfDoAchado(a, baixarPelaExtensao(pedir, entidade));
+    if ("pdf" in r2) return { pdf: r2.pdf };
+    return { erro: r2.erro, amostra: r2.amostra, ambiente: a.tipo === "nada" && /sessão/i.test(a.erro) };
   }
 
   // Emite e CONFERE: o PDF tem de trazer o planejamento (e o DFD) pedidos — um PDF de outro DFD nunca é salvo.
@@ -1506,14 +1543,20 @@ export function AutomacaoAdmin({
             arquivos na MESMA pasta) → chrome://extensions → Modo do desenvolvedor → Carregar sem compactação (ou ↻ no cartão
             dela) → F5 nesta tela. A aba da Centi não precisa ser recarregada. Cada versão nova avisa no sino. Desde a 1.8.0 a
             extensão tem um <strong>id fixo</strong>: o login salvo nela continua depois de cada atualização (salve uma última
-            vez ao instalar a 1.8.0).
+            vez ao instalar a 1.8.0). No login da extensão, <strong>“Guardar também no sistema PCA”</strong> (opcional) guarda o
+            usuário e a senha cifrados na sua conta do sistema: se a extensão for removida e instalada de novo, o login volta
+            sozinho. Só a extensão lê a senha de volta; em Ajustes → Login da Centi dá para ver e remover.
           </p>
           <p>
             <strong>Tarefa “Ler a Tela Protocolo”:</strong> a extensão entra na PO011 – Tela Protocolo da aba “Automação PCA” e
             opera a própria tela da Centi, só para LER. <strong>1 · Buscar repartições</strong> lista o seletor Departamentos;
             marque as suas (a escolha fica lembrada neste computador). <strong>2 · Ler “Em Análise”</strong>: a extensão escolhe
-            essas repartições, clica na lupa, abre a aba Em Análise e traz os protocolos (todas as páginas). Marque os que quer
-            tratar — o tratamento chega na próxima entrega. Protocolar, Operações, Salvar e Excluir nunca são tocados.
+            essas repartições, clica na lupa, abre a aba Em Análise e traz os protocolos (todas as páginas).
+            <strong> 3 · Tocar num protocolo</strong> (ou marcar vários e “Emitir e analisar”): a extensão abre o cadastro dele
+            na Centi, traz TODOS os dados (viram colunas da tabela), emite pelo Operações → Emitir documentos — sem anexar,
+            assinar nem enviar — e o PDF abre na MESMA análise da importação de protocolo (capa, DFDs e itens), um por vez.
+            Nada é protocolado sozinho. Protocolar, Salvar, Excluir e Novo nunca são tocados; do menu Operações, só o “Emitir
+            documentos”.
           </p>
           <p>
             <strong>Por protocolo:</strong> marque um ou vários (tocar na linha abre o protocolo). Cada um vira a pasta “SIGLA - PCA
@@ -1617,6 +1660,7 @@ export function AutomacaoAdmin({
               onHistorico={() => setHistorico(true)}
               gravando={pronto ? gravando : null}
               onGravador={(a) => void usarGravador(a)}
+              onConfigurarLogin={() => void pedir("abrirOpcoes", null, 8000)}
             />
           </Dropdown>
         </div>
@@ -1631,8 +1675,10 @@ export function AutomacaoAdmin({
           <TarefaTelaProtocolo
             pedir={pedir}
             lote={loteRef}
+            interrompido={interrompidoRef}
             pronto={pronto}
             protocolos={protocolos}
+            analise={{ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas }}
             onRodando={setRodandoTela}
           />
         ) : (

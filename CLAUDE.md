@@ -3567,6 +3567,32 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `aria-label` "Remove …" (já escolhidas = nada a mexer). Falha → `{erro, diagnostico}` (a FORMA do DOM, ≤ 1,5 KB, sem
   dados de sessão) → `Callout` fixo + "Copiar diagnóstico" na tarefa. A peça guarda a `versao` (a mais nova substitui a
   que ficou na aba).
+  **EMITIR E ANALISAR + LOGIN GUARDADO NO SISTEMA (extensão 1.10.0, protocolo 32):** tocar num protocolo da tabela (ou
+  marcar vários e "Emitir e analisar") → ação **`telaEmitir`** (`centi-tela.js`, `{protocolo, ano, departamentos}`): acha a
+  linha na grade (senão pesquisa de novo e percorre as páginas), CLIQUE + DUPLO CLIQUE abrem o cadastro ("Protocolo -
+  <Id>" com Operações) — conferido pelo campo Protocolo —, **`lerCadastro`** lê TODOS os campos como a Centi mostra
+  (`{rotulo, valor}`: o rótulo = o texto mais próximo ANTES do campo que não é campo/botão, sem o "*"; código + nome do
+  interessado juntos; seletor pelo texto escolhido) e emite pelo **Operações → Emitir documentos** (a ÚNICA exceção à
+  lista negra — `clicarSo` confere o rótulo EXATO; a janela que abrir só é confirmada por Emitir/Processar/Gerar/
+  Imprimir/Visualizar/OK/Confirmar, cada botão uma vez; fecha o cadastro no fim). A **captura** mora no `centi-main.js`
+  (ação `captura` iniciar|ler|parar, chamada SÓ pela ponte — `ctx.pagina`): enquanto ligada, o operation que a PRÓPRIA tela
+  manda vai com as TRAVAS forçadas nos parâmetros que traz (`travarCorpoOperacao`, `centi-anexo.js` — `TRAVAS` agora
+  mora lá) e a resposta é guardada, assim como o PDF que ela prepara (`URL.createObjectURL` de um Blob) e o endereço que
+  abriria (`window.open` vira uma janela falsa — nada abre); `respostaComArquivo`. No sistema, **`pdfDoAchado`** +
+  **`baixarPelaExtensao`** (`arquivo-navegador.ts` — o MESMO caminho do Emitir DFD, agora compartilhado com
+  `AutomacaoAdmin.emitirUm`) dão o PDF, que abre no **`ProtocoloUploadForm arquivo`** (a análise da importação: capa, DFDs,
+  itens; `onFechado` segue a fila); `TarefaTelaProtocolo` ganhou a coluna **Documento** (Na fila · Emitindo · Em análise ·
+  Analisado · Falhou), as colunas dos dados da Centi (`dadosCentiValidos`/`rotulosDosDados`), o "No sistema" pelo **Id**
+  da Centi (`noSistemaTela` — o Id decide, senão nº + ano) e a execução `protocolos-por-reparticao` (passos `baixar`).
+  **Login guardado no sistema (opcional):** no login da extensão, "Guardar também no sistema PCA" → o serviço manda
+  usuário + senha a **`PUT /api/admin/automacao/credencial-centi`** (só com o Origin `chrome-extension://<id fixo>` —
+  `ORIGEM_EXTENSAO_CENTI`; nenhuma página imita), cifrados com a chave mestra (`INTEGRACOES_CHAVE`) nas preferências da
+  pessoa (`centi-login-cofre.ts`, chave `cofre:centi-login`); sem login no cofre (extensão reinstalada), o serviço o
+  traz de volta pelo `GET` (só a extensão recebe a senha; a tela vê só a situação) — no `onInstalled`/`onStartup`, ao abrir
+  o popup e antes de tentar entrar (1 vez a cada 10 min). "Esquecer" tira dos dois lugares; Ajustes → **Login da Centi**
+  mostra a situação e "Remover do sistema" (`DELETE`). `host_permissions` ganhou o sistema. Testes:
+  `automacao-tela-centi` (cadastro + emissão no DOM falso), `automacao-centi` (travas), `extensao-login` (restaurar/
+  guardar), `automacao-tela-protocolo`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

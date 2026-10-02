@@ -100,7 +100,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.6.0"), false);
   assert.equal(versaoAtende("1.8.0"), false);
   assert.equal(versaoAtende("1.9.0"), false);
-  assert.equal(versaoAtende("1.9.1"), true);
+  assert.equal(versaoAtende("1.9.1"), false);
+  assert.equal(versaoAtende("1.10.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -545,4 +546,22 @@ test("gravador de receitas: só a ESTRUTURA do pedido da Centi — nunca um valo
   for (const segredo of ["SEGREDO", "Fulano", "1500", "12345678900", "2332778"]) assert.ok(!texto.includes(segredo), segredo);
   assert.equal(pecas.estruturaDoPedido("https://outro.site/api/x", "GET", null), null);
   assert.equal(JSON.parse(JSON.stringify(pecas.estruturaDoPedido("https://rioverde.centi.com.br/wcf/rest/getbin/998877", "GET", undefined))).caminho, "rest/getbin/{n}");
+});
+
+test("emissão acompanhada: o operation da própria tela vai com as TRAVAS (sem acrescentar parâmetros); o arquivo é reconhecido", async () => {
+  const p = await pecasAnexo();
+  const corpo = JSON.stringify({ ModuleKey: 9, Guid: "x", Params: [{ Key: "IdProtocolo", Value: "2273524" }, { Key: "AnexarAoProtocolo", Value: "1" }, { Key: "SendMail", Value: "1" }] });
+  assert.deepEqual(JSON.parse(p.travarCorpoOperacao(corpo) as string), {
+    ModuleKey: 9,
+    Guid: "x",
+    Params: [
+      { Key: "IdProtocolo", Value: "2273524" },
+      { Key: "AnexarAoProtocolo", Value: "0" },
+      { Key: "SendMail", Value: "0" },
+    ],
+  });
+  assert.equal(p.travarCorpoOperacao("não é json"), "não é json");
+  assert.equal(p.respostaComArquivo("application/json", '{"File":{"Key":"4f1c2d3e-aaaa-bbbb-cccc-1234567890ab","FileName":"p.pdf"}}'), true);
+  assert.equal(p.respostaComArquivo("application/pdf", ""), true);
+  assert.equal(p.respostaComArquivo("application/json", '{"Message":"erro"}'), false);
 });

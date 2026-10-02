@@ -179,7 +179,7 @@ function centi(
       const todos = doAnalise();
       const corpo = new El("tbody");
       for (const p of todos.slice(pagina * porPagina, (pagina + 1) * porPagina)) {
-        const tr = new El("tr");
+        const tr = new El("tr").on("dblclick", () => abrirCadastro(p[0]));
         for (const v of ["", p[0], p[1], p[2], p[3], "", "INCLUSÃO - PCA"]) tr.add(new El("td", { texto: v }));
         corpo.add(tr);
       }
@@ -201,6 +201,53 @@ function centi(
       grade.add(tabela, new El("div", { texto: "Nenhum resultado encontrado." }));
     }
   }
+  // O CADASTRO do protocolo (o duplo clique na linha): Novo/Excluir/Salvar (nunca tocados), Operações → Emitir documentos
+  // → uma janela com "Emitir" → o PDF (`emitido`).
+  const estado = { emitido: false, modal: null as El | null };
+  const botao = (t: string) => new El("button", { texto: t }).on("click", () => cliques.push(t));
+  const entrada = (v: string, a: Record<string, string> = {}) => {
+    const i = new El("input", { attrs: a });
+    i.value = v;
+    return i;
+  };
+  const linhaCad = (rot: string, ...cs: El[]) => new El("div").add(new El("div", { texto: rot }).add(new El("span", { texto: "*" })), ...cs.map((c) => new El("div").add(c)));
+  function abrirCadastro(n: string) {
+    if (estado.modal) return;
+    const m = new El("div", { className: "modal" });
+    const menu = new El("div");
+    const obs = new El("textarea");
+    obs.value = "REFERE-SE AOS DFD PARA O PCA DE 2027.";
+    const rep = new El("div").add(new El("div").add(new El("div", { texto: "PCA - NATYELLE" }), new El("div").add(entrada("", { role: "combobox" }))));
+    const operacoes = new El("button", { texto: "Operações" }).on("click", () => {
+      cliques.push("Operações");
+      if (menu.children.length) return;
+      menu.add(
+        botao("Alterar dados financeiros"),
+        new El("div", { texto: "Emitir documentos" }).on("click", () => {
+          cliques.push("Emitir documentos");
+          body.add(new El("div", { className: "dialogo" }).add(new El("button", { texto: "Emitir" }).on("click", () => (estado.emitido = true)), botao("Anexar")));
+        }),
+      );
+    });
+    m.add(
+      new El("div").add(new El("span", { texto: "Protocolo" }), new El("button", { texto: "×" }).on("click", () => {
+        cliques.push("fechar");
+        body.remover(m);
+        estado.modal = null;
+      })),
+      new El("div").add(new El("i"), new El("span", { texto: "Protocolo - 2273524" })),
+      new El("div").add(botao("Novo"), botao("Excluir"), botao("Salvar"), operacoes),
+      linhaCad("Id", entrada("2273524")),
+      linhaCad("Protocolo", entrada(n)),
+      linhaCad("Ano protocolo", entrada("2026")),
+      linhaCad("Interessado/Beneficiário", entrada("9488"), entrada("FUNDO MUNICIPAL DE SAÚDE")),
+      linhaCad("Observação", obs),
+      linhaCad("Repartição", rep),
+      menu,
+    );
+    estado.modal = m;
+    body.add(m);
+  }
   desenharAbas();
   desenharGrade();
   // O bloco dos filtros (título + seletor + lupa) e, AO LADO dele (fora), as abas e a grade — como na Centi.
@@ -221,7 +268,7 @@ function centi(
   if (o.telaAberta) conteudo.add(painel, corpoTela);
   body.add(sidebar, topo, conteudo);
   const doc = { body, querySelectorAll: (s: string) => body.querySelectorAll(s) };
-  return { doc, cliques, escolhidos };
+  return { doc, cliques, escolhidos, estado };
 }
 
 function peca() {
@@ -353,4 +400,48 @@ test("tela protocolo: sem a grade, o erro traz o DIAGNÓSTICO da forma da tela",
   assert.match(String(r.diagnostico), /aba Em Análise: 1/);
   assert.match(String(r.diagnostico), /cabeçalho: não achado/);
   assert.ok(!c.cliques.includes("PROTOCOLAR"));
+});
+
+test("tela protocolo: abre o protocolo, lê TODO o cadastro e emite pelo Operações → Emitir documentos (só esses cliques)", async () => {
+  const c = centi({ telaAberta: true, emAnalise: { "PCA - CRISTIANE": [["97608", "2026", "PCA - CRISTIANE", "FUNDO MUNICIPAL DE SAÚDE"]] } });
+  const capturas: string[] = [];
+  const pagina = async (acao: string, d: { acao: string }) => {
+    assert.equal(acao, "captura");
+    capturas.push(d.acao);
+    if (d.acao === "ler") return c.estado.emitido ? { ok: true, pronto: true, resposta: { status: 200, b64: "e30=" } } : { ok: true, pronto: false };
+    return { ok: true };
+  };
+  const r = await peca().executar("telaEmitir", { protocolo: "97608", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina });
+  assert.equal(r.ok, true, `${r.erro}\n${r.diagnostico}`);
+  const dados = r.dados as { id: string; campos: { rotulo: string; valor: string }[] };
+  assert.equal(dados.id, "2273524");
+  assert.deepEqual(dados.campos, [
+    { rotulo: "Id", valor: "2273524" },
+    { rotulo: "Protocolo", valor: "97608" },
+    { rotulo: "Ano protocolo", valor: "2026" },
+    { rotulo: "Interessado/Beneficiário", valor: "9488 FUNDO MUNICIPAL DE SAÚDE" },
+    { rotulo: "Observação", valor: "REFERE-SE AOS DFD PARA O PCA DE 2027." },
+    { rotulo: "Repartição", valor: "PCA - NATYELLE" },
+  ]);
+  assert.deepEqual(r.arquivo, { resposta: { status: 200, b64: "e30=" } });
+  // Só lupa, Operações, Emitir documentos e fechar — nunca Novo, Excluir, Salvar, Anexar nem PROTOCOLAR.
+  assert.deepEqual(c.cliques, ["lupa", "Operações", "Emitir documentos", "fechar"]);
+  assert.equal(capturas[0], "iniciar");
+  assert.equal(capturas.at(-1), "parar");
+});
+
+test("tela protocolo: emissão sem PDF = erro com o diagnóstico da janela; a captura é sempre desligada", async () => {
+  const c = centi({ telaAberta: true, emAnalise: { "PCA - CRISTIANE": [["97608", "2026", "PCA - CRISTIANE", "X"]] } });
+  const capturas: string[] = [];
+  const pagina = async (_a: string, d: { acao: string }) => {
+    capturas.push(d.acao);
+    return d.acao === "ler" ? { ok: true, pronto: false, vistos: { operacoes: 1 } } : { ok: true };
+  };
+  const r = await peca().executar("telaEmitir", { protocolo: "97608", ano: "2026", departamentos: ["PCA - CRISTIANE"] }, { ...ctx(c.doc), pagina, prazoEmissao: 200 });
+  assert.equal(r.ok, false);
+  assert.match(String(r.erro), /Emitir documentos/);
+  assert.match(String(r.diagnostico), /etapa: emitir documentos/);
+  assert.match(String(r.diagnostico), /capturado: \{"operacoes":1\}/);
+  assert.equal(capturas.at(-1), "parar");
+  assert.ok(!c.cliques.includes("Anexar") && !c.cliques.includes("Salvar"));
 });

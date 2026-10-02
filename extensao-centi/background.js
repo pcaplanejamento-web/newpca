@@ -11,7 +11,7 @@ const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br"];
 const CONFIRMAR = chrome.runtime.getURL("confirmar.html");
 const POPUP = chrome.runtime.getURL("popup.html");
 const TITULO_GRUPO = "Automação PCA";
-const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise"];
+const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise", "telaEmitir"];
 // O cofre do login (usuário e senha cifrados SÓ na extensão — cofre.js).
 if (typeof importScripts === "function" && !globalThis.CofreCenti) importScripts("cofre.js");
 
@@ -162,12 +162,63 @@ async function abrirCredenciais(pedidoDoUsuario) {
   }
 }
 
+// ---------------------------------------------------------------- O LOGIN GUARDADO NO SISTEMA (opcional)
+// A pessoa pode guardar o login TAMBÉM no sistema PCA (cifrado lá com a chave mestra do servidor): reinstalada a extensão
+// (o cofre local some junto), ela o traz de volta sozinha. Só o serviço da extensão fala com essa rota — o navegador manda
+// o Origin da extensão, que nenhuma página consegue imitar; a sessão do sistema vai pelo cookie.
+const API_LOGIN = `${ORIGENS[0]}/api/admin/automacao/credencial-centi`;
+async function apiLogin(metodo, corpo) {
+  try {
+    const r = await fetch(API_LOGIN, {
+      method: metodo,
+      credentials: "include",
+      cache: "no-store",
+      headers: corpo ? { "content-type": "application/json" } : undefined,
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j?.ok) return j;
+    if (r.status === 401) return { ok: false, erro: "Entre no sistema PCA neste navegador (como administrador)." };
+    return { ok: false, erro: j?.error ?? `O sistema respondeu ${r.status}.` };
+  } catch {
+    return { ok: false, erro: "Sem conexão com o sistema PCA." };
+  }
+}
+/** Guarda (ou tira) o login do cofre no sistema. */
+async function loginNoSistema(guardar) {
+  const C = globalThis.CofreCenti;
+  if (!guardar) {
+    const r = await apiLogin("DELETE");
+    if (r.ok) await chrome.storage.local.remove("credNoSistema");
+    return r.ok ? { ok: true } : r;
+  }
+  const cred = await C?.credenciais().catch(() => null);
+  if (!cred) return { ok: false, erro: "Salve o login primeiro." };
+  const r = await apiLogin("PUT", { usuario: cred.usuario, senha: cred.senha, auto: (await C.lerConfig()).auto });
+  if (r.ok) await chrome.storage.local.set({ credNoSistema: true });
+  return r.ok ? { ok: true } : r;
+}
+/** Sem login no cofre (a extensão foi reinstalada): traz o guardado no sistema — por conta própria, 1 vez a cada 10 min. */
+async function restaurarDoSistema(pedido = false) {
+  const C = globalThis.CofreCenti;
+  if (!C || (await C.lerConfig()).tem) return false;
+  const ultima = await sessao.ler("restauroEm");
+  if (!pedido && typeof ultima === "number" && Date.now() - ultima < 10 * 60 * 1000) return false;
+  await sessao.gravar("restauroEm", Date.now());
+  const r = await apiLogin("GET");
+  if (!r.ok || r.tem !== true || typeof r.usuario !== "string" || typeof r.senha !== "string" || !r.usuario || !r.senha) return false;
+  await C.salvar(r.usuario, r.senha, r.auto !== false);
+  await chrome.storage.local.set({ credNoSistema: true });
+  return true;
+}
+
 function tentarLogin(aba, forcar) {
   if (!tentando)
     tentando = (async () => {
       const C = globalThis.CofreCenti;
       if (!C) return { resultado: "semCofre" };
-      const cfg = await C.lerConfig();
+      let cfg = await C.lerConfig();
+      if (!cfg.tem && (await restaurarDoSistema().catch(() => false))) cfg = await C.lerConfig();
       if (!cfg.tem) {
         await abrirCredenciais(false);
         return { resultado: "semCredenciais" };
@@ -392,7 +443,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   for (const a of await chrome.tabs.query({ url: SISTEMA }))
     chrome.scripting.executeScript({ target: { tabId: a.id }, files: ["sistema-ponte.js"] }).catch(() => {});
   chrome.alarms?.create("login-centi", { periodInMinutes: 5 });
+  restaurarDoSistema().catch(() => {});
 });
+chrome.runtime.onStartup?.addListener(() => restaurarDoSistema().catch(() => {}));
 
 // "Sempre que cair": a aba da automação que carregou (F5) na tela de login entra sozinha; o cartão volta à aba.
 async function conferirAba(tabId) {
@@ -444,6 +497,8 @@ const respostaLogada = async (r) => ({
 async function daExtensao(msg) {
   if (msg.tipo === "interromper") return interromper();
   if (msg.tipo === "credenciais") return { ok: await abrirCredenciais(true) };
+  if (msg.tipo === "loginNoSistema") return loginNoSistema(msg.guardar === true);
+  if (msg.tipo === "restaurarLogin") return { ok: await restaurarDoSistema(true).catch(() => false) };
   if (msg.tipo === "entrarAgora") {
     const r = await garantirSessao({ criar: true, esperarLogin: true, forcar: true });
     return r.motivo ? { ok: false, erro: r.tentativa?.erro || r.erro } : { ok: true };

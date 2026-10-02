@@ -50,12 +50,13 @@
     <label for="senha">Senha</label>
     <input id="senha" type="password" autocomplete="new-password" maxlength="200">
     <label class="chave"><input id="auto" type="checkbox" checked> Entrar sozinho quando a sessão cair</label>
+    <label class="chave"><input id="noSistema" type="checkbox" checked> Guardar também no sistema PCA (cifrado) — volta sozinho se a extensão for reinstalada</label>
     <div id="situacao" class="msg" role="status" aria-live="polite"></div>
     <div class="dupla">
       <button id="esquecer" type="button">Esquecer</button>
       <button id="salvar" class="principal" type="submit">Salvar e entrar</button>
     </div>
-    <p class="nota">Cifrada só neste navegador, na extensão — nunca vai ao sistema PCA.</p>
+    <p class="nota">Cifrada na extensão deste navegador. Com “Guardar também no sistema”, vai cifrada à sua conta no sistema PCA e só a extensão a lê de volta.</p>
   </form>
   <div class="acoes">
     <button id="parar" class="parar" type="button" hidden>Interromper</button>

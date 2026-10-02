@@ -241,3 +241,58 @@ test("extensão: a senha nunca passa pelo mundo da página nem pela ponte do sis
   assert.ok(!/sessionStorage/.test(ponte));
   assert.match(ponte, /sender\.id !== chrome\.runtime\.id \|\| sender\.tab/);
 });
+
+test("serviço: login guardado NO SISTEMA — reinstalada a extensão, volta sozinho e entra; guardar manda só ao sistema", async () => {
+  const C = cofre();
+  const cfg = { tem: false, auto: true, pausadoEm: null, motivo: null, ultima: null };
+  let guardado: { usuario: string; senha: string } | null = null;
+  const pedidos: { url: string; init: Record<string, unknown> }[] = [];
+  const logins: unknown[] = [];
+  const s = servicoFalso({
+    abas: [{ id: 1, url: COMPRAS }],
+    sessao: { abaAutomacao: 1 },
+    cofre: {
+      podeTentarLogin: C.podeTentarLogin,
+      lerConfig: async () => ({ ...cfg }),
+      credenciais: async () => guardado,
+      salvar: async (usuario: string, senha: string) => {
+        guardado = { usuario, senha };
+        cfg.tem = true;
+      },
+      pausar: async () => {},
+      registrar: async () => {},
+    },
+    fetch: async (url, init) => {
+      pedidos.push({ url, init });
+      const corpo = init.method === "GET" ? { ok: true, tem: true, usuario: "maria", senha: "s3gredo", auto: true } : { ok: true };
+      return { ok: true, status: 200, json: async () => corpo };
+    },
+    naAba: (_id, m) => {
+      if (m.alvo === "centi-login") {
+        logins.push(m);
+        return { resultado: "ok" };
+      }
+      if (m.acao === "estado") return { ok: true, logado: false, tela: "login" };
+      return undefined;
+    },
+  });
+  await s.pedir({ acao: "estado" }, { url: TELA, tab: { id: 50 } });
+  await pausa(30);
+  assert.equal(pedidos[0].url, "https://governarv.com.br/api/admin/automacao/credencial-centi");
+  assert.equal(pedidos[0].init.method, "GET");
+  assert.equal(pedidos[0].init.credentials, "include");
+  assert.deepEqual(guardado, { usuario: "maria", senha: "s3gredo" });
+  assert.equal((logins[0] as { usuario: string }).usuario, "maria");
+  assert.equal(s.local.credNoSistema, true);
+  // Do popup: guardar (PUT com o login do cofre) e tirar (DELETE).
+  const popup = { url: "chrome-extension://ext/popup.html", id: "ext" };
+  assert.deepEqual(JSON.parse(JSON.stringify(await s.pedir({ tipo: "loginNoSistema", guardar: true }, popup))), { ok: true });
+  assert.equal(pedidos.at(-1)?.init.method, "PUT");
+  assert.deepEqual(JSON.parse(String(pedidos.at(-1)?.init.body)), { usuario: "maria", senha: "s3gredo", auto: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(await s.pedir({ tipo: "loginNoSistema", guardar: false }, popup))), { ok: true });
+  assert.equal(pedidos.at(-1)?.init.method, "DELETE");
+  assert.equal(s.local.credNoSistema, undefined);
+  // A TELA do sistema não pede o login guardado (não há essa ação para ela).
+  const r = (await s.pedir({ acao: "loginNoSistema", guardar: true })) as { ok: boolean };
+  assert.equal(r.ok, false);
+});

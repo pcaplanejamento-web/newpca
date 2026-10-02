@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 31;
+  const PROTOCOLO = 32;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -202,6 +202,89 @@
     return { ok: true, aprendendo: atual.ativo, pedidos: atual.pedidos };
   }
 
+  // EMISSÃO ACOMPANHADA (Tela Protocolo → Operações → Emitir documentos, clicado pela centi-tela.js): enquanto ligada, o
+  // operation que a PRÓPRIA tela da Centi manda vai com as TRAVAS forçadas (não anexa, não assina, não envia) e a resposta
+  // dele é guardada, assim como o PDF que a tela prepara (Blob) e o endereço que ela tentaria abrir (window.open) — sem
+  // abrir janela nenhuma. Desligada, a página segue exatamente como antes.
+  let captura = null;
+  const ehOperacao = (url, metodo) => /^POST$/i.test(metodo || "") && /\/restauth\/operation(\?|$)/.test(String(url));
+  const ehPdfBytes = (b) => b && b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+  function bytesDoXhr(x) {
+    try {
+      if (x.responseType === "" || x.responseType === "text") return new TextEncoder().encode(String(x.responseText ?? ""));
+      if (x.responseType === "json") return new TextEncoder().encode(JSON.stringify(x.response ?? null));
+      if (x.responseType === "arraybuffer" && x.response) return new Uint8Array(x.response);
+    } catch {}
+    return null;
+  }
+  function guardarEmissao(cap, status, tipo, bytes) {
+    if (cap && bytes) cap.respostas = [...cap.respostas, { status, tipo: String(tipo || ""), bytes }].slice(-6);
+  }
+  const criarUrl = URL.createObjectURL;
+  URL.createObjectURL = function (o, ...r) {
+    const u = criarUrl.call(this, o, ...r);
+    try {
+      if (captura && o instanceof Blob) captura.blobs = [...captura.blobs, o].slice(-6);
+    } catch {}
+    return u;
+  };
+  const abrirJanela = window.open;
+  window.open = function (url, ...r) {
+    if (!captura) return abrirJanela.call(this, url, ...r);
+    const cap = captura;
+    if (url) cap.urls.push(String(url));
+    // Uma "janela" que só anota o endereço que a tela quis mostrar.
+    const loc = {};
+    Object.defineProperty(loc, "href", { set: (v) => cap.urls.push(String(v)), get: () => "" });
+    return { closed: false, close() {}, focus() {}, location: loc, document: { open() {}, write() {}, close() {} } };
+  };
+  async function capturaEmissao(d) {
+    if (d?.acao === "iniciar") {
+      captura = { respostas: [], blobs: [], urls: [] };
+      return { ok: true };
+    }
+    if (d?.acao === "parar") {
+      captura = null;
+      return { ok: true };
+    }
+    const cap = captura;
+    if (!cap) return { ok: false, erro: "A emissão não está sendo acompanhada." };
+    const urls = [...cap.urls, ...(Array.isArray(d?.urls) ? d.urls.map(String) : [])].slice(-12);
+    const pdf = (bytes) => ({ ok: true, pronto: true, pdf: emBase64(bytes) });
+    // 1) O PDF que a tela preparou (Blob) ou mostraria (endereço blob: na janela ou no visualizador).
+    for (const b of [...cap.blobs].reverse()) {
+      const bytes = new Uint8Array(await b.arrayBuffer());
+      if (ehPdfBytes(bytes)) return pdf(bytes);
+    }
+    for (const u of urls.filter((x) => x.startsWith("blob:"))) {
+      try {
+        const bytes = new Uint8Array(await (await buscar(u)).arrayBuffer());
+        if (ehPdfBytes(bytes)) return pdf(bytes);
+      } catch {}
+    }
+    // 2) A resposta do operation (o PDF cru ou a chave do arquivo gerado).
+    const P = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+    const texto = (b) => (b.length <= 8 * 1024 * 1024 ? new TextDecoder().decode(b) : "");
+    const r = [...cap.respostas].reverse().find((x) => x.status < 400 && (ehPdfBytes(x.bytes) || P?.respostaComArquivo(x.tipo, texto(x.bytes))));
+    if (r) return { ok: true, pronto: true, resposta: { status: r.status, b64: emBase64(r.bytes) } };
+    // 3) O endereço do arquivo (getbinlink…) que a tela abriria.
+    const link = urls.find((u) => {
+      try {
+        return ARQUIVO.test(new URL(u, location.href).pathname);
+      } catch {
+        return false;
+      }
+    });
+    if (link) return { ok: true, pronto: true, link };
+    const erro = [...cap.respostas].reverse().find((x) => x.status >= 400 || !P?.respostaComArquivo(x.tipo, texto(x.bytes)));
+    return {
+      ok: true,
+      pronto: false,
+      vistos: { operacoes: cap.respostas.length, blobs: cap.blobs.length, enderecos: urls.map((u) => u.slice(0, 80)) },
+      ...(erro ? { ultima: { status: erro.status, b64: emBase64(erro.bytes.subarray(0, 4000)) } } : {}),
+    };
+  }
+
   const abrir = XMLHttpRequest.prototype.open;
   const definir = XMLHttpRequest.prototype.setRequestHeader;
   const enviar = XMLHttpRequest.prototype.send;
@@ -216,6 +299,11 @@
     return definir.call(this, k, v);
   };
   XMLHttpRequest.prototype.send = function (...r) {
+    if (captura && this.__pcaUrl && !this.__pcaInterno && ehOperacao(this.__pcaUrl, this.__pcaMetodo)) {
+      r[0] = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.travarCorpoOperacao(r[0]) ?? r[0];
+      const cap = captura;
+      this.addEventListener("load", () => guardarEmissao(cap, this.status, this.getResponseHeader("content-type"), bytesDoXhr(this)));
+    }
     if (this.__pcaUrl && !this.__pcaInterno) {
       guardar(this.__pcaUrl, this.__pcaHs || {}, this.__pcaMetodo, "xhr");
       aprenderOperacao(this.__pcaUrl, this.__pcaMetodo, r[0]);
@@ -240,6 +328,22 @@
       });
     if (init?.__pcaInterno) return comToken(buscar.call(this, rec, init, ...resto));
     try {
+      const url0 = typeof rec === "string" ? rec : rec?.url;
+      const metodo0 = init?.method || (typeof rec === "object" ? rec.method : "GET");
+      if (captura && ehOperacao(url0, metodo0) && init) {
+        const cap = captura;
+        const travado = { ...init, body: globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.travarCorpoOperacao(init.body) ?? init.body };
+        return comToken(buscar.call(this, rec, travado, ...resto)).then((resp) => {
+          resp
+            .clone()
+            .arrayBuffer()
+            .then((b) => guardarEmissao(cap, resp.status, resp.headers.get("content-type"), new Uint8Array(b)))
+            .catch(() => {});
+          return resp;
+        });
+      }
+    } catch {}
+    try {
       const url = typeof rec === "string" ? rec : rec?.url;
       const hs = new Headers(init?.headers || (typeof rec === "object" ? rec.headers : undefined));
       const metodo = init?.method || (typeof rec === "object" ? rec.method : "GET");
@@ -258,7 +362,7 @@
     return comToken(buscar.call(this, rec, init, ...resto));
   };
 
-  const TRAVAS = { AnexarAoProtocolo: "0", AssinarDocumento: "0", Sign: "0", SendMail: "0", StorageReport: "0", Background: "0" };
+  const TRAVAS = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`]?.TRAVAS ?? {};
   const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   // Os endereços do ARQUIVO gerado pelo Emitir DFD (os únicos que a leitura alcança).
   const ARQUIVO = /\/(restauth|rest)\/(getbinlink|getbin|getfile)\//i;
@@ -627,7 +731,7 @@
     return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
   }
 
-  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler };
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;

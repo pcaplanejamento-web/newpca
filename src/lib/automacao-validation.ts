@@ -68,3 +68,12 @@ export const registrarSchema = z.object({
   centiDocumento: z.string().regex(/^\d{1,15}$/).nullable(),
   protocoloId: z.number().int().positive().nullable(),
 });
+
+/** O login da Centi que a EXTENSÃO guarda (cifrado) no sistema — opcional, para voltar sozinho depois de reinstalar. */
+export const credencialCentiSchema = z
+  .object({
+    usuario: z.string().trim().min(1).max(120),
+    senha: z.string().min(1).max(200),
+    auto: z.boolean(),
+  })
+  .strict();

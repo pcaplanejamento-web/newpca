@@ -389,20 +389,61 @@ export function normalizarProtocolosTela(v: unknown): ProtocoloEmAnalise[] {
 }
 
 /** O protocolo do SISTEMA com o mesmo nº (e o mesmo ano, quando os dois têm) — "156844/2026" ou "156844". */
-export function noSistemaTela<T extends { numero: string }>(sistema: readonly T[]): (p: Pick<ProtocoloEmAnalise, "protocolo" | "ano">) => T | null {
+export function noSistemaTela<T extends { numero: string; idExterno?: string | null }>(
+  sistema: readonly T[],
+): (p: Pick<ProtocoloEmAnalise, "protocolo" | "ano"> & { id?: string | null }) => T | null {
   const comAno = new Map<string, T>();
   const semAno = new Map<string, T>();
   const qualquer = new Map<string, T>();
+  const porId = new Map<string, T>();
   for (const s of sistema) {
+    const id = soDigitos(s.idExterno).replace(/^0+/, "");
+    if (id) porId.set(id, s);
     const { numero, ano } = numeroDoProcesso(s.numero);
     if (!numero) continue;
     if (ano) comAno.set(`${numero}/${ano}`, s);
     else semAno.set(numero, s);
     if (!qualquer.has(numero)) qualquer.set(numero, s);
   }
-  // Os dois com ano = o ano tem de bater (o 156844/2025 não é o 156844/2026); sem ano de um lado, vale o nº.
-  return (p) => (p.ano ? (comAno.get(`${p.protocolo}/${p.ano}`) ?? semAno.get(p.protocolo)) : qualquer.get(p.protocolo)) ?? null;
+  // O Id da Centi (lido do cadastro) decide; sem ele, o nº — os dois com ano = o ano tem de bater (o 156844/2025 não é o
+  // 156844/2026); sem ano de um lado, vale o nº.
+  return (p) => {
+    const id = soDigitos(p.id).replace(/^0+/, "");
+    if (id && porId.has(id)) return porId.get(id) ?? null;
+    return (p.ano ? (comAno.get(`${p.protocolo}/${p.ano}`) ?? semAno.get(p.protocolo)) : qualquer.get(p.protocolo)) ?? null;
+  };
 }
+
+/** Os dados do cadastro do protocolo na Centi (lidos pela extensão na Tela Protocolo). */
+export type DadosCentiProtocolo = { id: string | null; campos: { rotulo: string; valor: string }[] };
+
+/** O que a extensão devolveu → dados limpos (até 80 campos; rótulo ≤ 60 e valor ≤ 2000, sem repetir o rótulo). */
+export function dadosCentiValidos(v: unknown): DadosCentiProtocolo | null {
+  const o = v && typeof v === "object" ? (v as { id?: unknown; campos?: unknown }) : null;
+  if (!o || !Array.isArray(o.campos)) return null;
+  const vistos = new Set<string>();
+  const campos: DadosCentiProtocolo["campos"] = [];
+  for (const c of o.campos.slice(0, 80)) {
+    const x = c && typeof c === "object" ? (c as { rotulo?: unknown; valor?: unknown }) : {};
+    const rotulo = typeof x.rotulo === "string" ? x.rotulo.replace(/\s+/g, " ").trim().slice(0, 60) : "";
+    if (!rotulo || vistos.has(rotulo)) continue;
+    vistos.add(rotulo);
+    campos.push({ rotulo, valor: typeof x.valor === "string" ? x.valor.trim().slice(0, 2000) : "" });
+  }
+  const id = soDigitos(o.id).replace(/^0+/, "");
+  return { id: id && id.length <= 12 ? id : null, campos };
+}
+
+/** Os rótulos dos dados da Centi (na ordem em que aparecem), sem os que a grade já mostra. */
+export function rotulosDosDados(dados: Iterable<DadosCentiProtocolo>, jaNaGrade: readonly string[] = ["Protocolo", "Ano protocolo"]): string[] {
+  const fora = new Set(jaNaGrade.map((r) => r.toLowerCase()));
+  const r: string[] = [];
+  for (const d of dados) for (const c of d.campos) if (!fora.has(c.rotulo.toLowerCase()) && !r.includes(c.rotulo)) r.push(c.rotulo);
+  return r;
+}
+
+/** O nome do PDF emitido de um protocolo da Tela Protocolo ("Protocolo 97608 - 2026.pdf"). */
+export const nomePdfEmAnalise = (p: Pick<ProtocoloEmAnalise, "protocolo" | "ano">) => `Protocolo ${p.protocolo}${p.ano ? ` - ${p.ano}` : ""}.pdf`;
 
 /** A escolha lembrada no aparelho, só com as repartições que a Centi ainda lista. */
 export function departamentosEscolhidosValidos(escolhidos: unknown, disponiveis: readonly string[]): string[] {

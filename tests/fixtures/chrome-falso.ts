@@ -23,6 +23,8 @@ export type OpcoesFalso = {
   abas?: Aba[];
   sessao?: Record<string, unknown>;
   grupos?: { id: number; title: string; color?: string }[];
+  /** O fetch do serviço (o login guardado no sistema). */
+  fetch?: (url: string, init: Record<string, unknown>) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 };
 
 export function servicoFalso(o: OpcoesFalso = {}) {
@@ -31,6 +33,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   const removidas: ((id: number) => void)[] = [];
   const janelasFechadas: ((id: number) => void)[] = [];
   const sessao: Record<string, unknown> = { ...(o.sessao ?? {}) };
+  const local: Record<string, unknown> = {};
   const abas: Aba[] = [...(o.abas ?? [])];
   const grupos = [...(o.grupos ?? [])];
   const enviados: { tabId: number; m: Record<string, unknown> }[] = [];
@@ -76,6 +79,13 @@ export function servicoFalso(o: OpcoesFalso = {}) {
       remove: async () => {},
     },
     storage: {
+      local: {
+        get: async (k: string) => ({ [k]: local[k] }),
+        set: async (x: Record<string, unknown>) => Object.assign(local, x),
+        remove: async (k: string) => {
+          delete local[k];
+        },
+      },
       session: {
         get: async (k: string) => ({ [k]: sessao[k] }),
         set: async (x: Record<string, unknown>) => Object.assign(sessao, x),
@@ -144,6 +154,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   };
   const ctx: Record<string, unknown> = { chrome, URL, URLSearchParams, crypto, setTimeout, clearTimeout, Promise, Date, Math, Number, String, JSON };
   if (o.cofre) ctx.CofreCenti = o.cofre;
+  if (o.fetch) ctx.fetch = o.fetch;
   vm.runInNewContext(fonteExtensao("background.js"), ctx);
   /** Uma mensagem ao serviço, como se viesse de `url` (a tela do sistema, por padrão). */
   const pedir = (msg: unknown, sender: Record<string, unknown> = { url: TELA, tab: { id: 50 } }) =>
@@ -154,6 +165,7 @@ export function servicoFalso(o: OpcoesFalso = {}) {
   return {
     pedir,
     sessao,
+    local,
     abas,
     grupos,
     enviados,
