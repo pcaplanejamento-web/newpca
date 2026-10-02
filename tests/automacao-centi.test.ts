@@ -585,13 +585,15 @@ test("arquivo da Centi: acha SOZINHO as outras chaves/links da resposta e espera
   assert.ok(cs.includes("restauth/getbinlink/3d222336-f9c0-4ba0-848b-ffdb8c558f46/EmissaoProtocoloDocto.pdf"));
   assert.ok(cs.includes("restauth/getbinlink/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/EmissaoProtocoloDocto.pdf"));
   assert.equal(new Set(cs).size, cs.length);
-  // 404 nas duas primeiras rodadas (a Centi ainda gerando) → na 3ª, o PDF.
+  // 404 nas duas primeiras rodadas (a Centi ainda gerando; o endereço público rest/ dá 500 "Chave eletrônica inválida",
+  // como na Centi real) → na 3ª, o PDF.
   let rodadas = 0;
   const esperas: number[] = [];
   const r = await pdfDoAchado(
     a,
     async (c) => {
       if (c === cs[0]) rodadas++;
+      if (c.startsWith("rest/")) return { status: 500, bytes: enc('{"Message":["Chave eletrônica inválida"]}') };
       return rodadas >= 3 && c === cs[1] ? { status: 200, bytes: enc("%PDF-1.7 ok") } : { status: 404, bytes: null };
     },
     { esperarMs: 5000, passoMs: 10, aoEsperar: (seg) => esperas.push(seg) },

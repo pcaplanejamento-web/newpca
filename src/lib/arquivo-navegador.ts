@@ -92,11 +92,15 @@ export async function pdfDoAchado(
   let ultimas: string[] = [];
   for (let rodada = 0; ; rodada++) {
     const tentativas: string[] = [];
-    let soNaoAchou = true;
+    // "Ainda não existe": a Centi responde 404 (o endereço público rest/ responde 500 "Chave eletrônica inválida" para a
+    // mesma chave — não conta como resposta). Qualquer resposta de sucesso que não seja PDF = não adianta esperar.
+    let naoAchou = false;
+    let respondeu = false;
     for (const caminho of caminhos) {
       const d = await baixar(caminho);
       tentativas.push(`${caminho.split("?")[0].slice(0, 90)} → ${d.status || d.erro || "sem resposta"} · ${amostraBytes(d.bytes)}`);
-      if (d.status !== 404) soNaoAchou = false;
+      if (d.status === 404) naoAchou = true;
+      else if (d.status > 0 && d.status < 400) respondeu = true;
       if (d.status >= 400 || !d.bytes) continue;
       const pdf = await pdfDosBytes(d.bytes).catch(() => null);
       if (pdf) return { pdf };
@@ -107,16 +111,16 @@ export async function pdfDoAchado(
       if (pdf2) return { pdf: pdf2 };
     }
     ultimas = tentativas;
-    // Ainda não existe (404 em tudo): a Centi pode estar gerando — espera crescente até o prazo.
+    // Ainda não existe: a Centi pode estar gerando — espera crescente até o prazo.
     const passou = Date.now() - inicio;
     const espera = Math.min(15_000, (opcoes.passoMs ?? 2_000) * (rodada + 1));
-    if (!soNaoAchou || !opcoes.esperarMs || passou + espera > opcoes.esperarMs) break;
+    if (respondeu || !naoAchou || !opcoes.esperarMs || passou + espera > opcoes.esperarMs) break;
     opcoes.aoEsperar?.(Math.round((passou + espera) / 1000));
     await new Promise((ok) => setTimeout(ok, espera));
   }
   const s = Math.round((Date.now() - inicio) / 1000);
   return {
-    erro: `A Centi gerou o arquivo, mas não consegui baixá-lo pela chave${s > 2 ? ` (tentei por ${s} s)` : ""}.`,
+    erro: `A Centi gerou o arquivo, mas não consegui baixá-lo pela chave${s > 2 ? ` (tentei por ${s} s, ${ultimas.length ? "o arquivo não apareceu" : "sem resposta"})` : ""}.`,
     amostra: [`arquivo: ${a.nome}`, ...ultimas, ...(a.amostra ? [`resposta: ${a.amostra}`] : [])].join("\n"),
   };
 }
