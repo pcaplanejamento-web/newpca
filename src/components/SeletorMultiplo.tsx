@@ -144,7 +144,8 @@ function CorpoSelecao({
           </button>
         )}
       </div>
-      <ul className="max-h-60 overflow-y-auto px-1">
+      {/* `relative`: as caixas de marcar (`input.sr-only`) ficam DENTRO da lista que rola — marcar não rola outra coisa. */}
+      <ul className="relative max-h-60 overflow-y-auto overscroll-contain px-1">
         {orfaos.map((v) => (
           <li key={`o:${v}`} className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
             <Checkbox checked onChange={() => alternar(v)} label={<span className="text-muted">{v}</span>} disabled={disabled} />

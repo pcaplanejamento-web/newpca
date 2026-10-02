@@ -1581,3 +1581,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **PDFs coloridos** — os PDFs das tabelas saem com as cores da própria tabela (cabeçalho, estados, faixas, negativos, linha de total).
 ✅ **Visões × Vínculos sem conflito** — unidade, ações e órgão são definidos só nos Vínculos; as visões filtram o restante (função, programa, elemento, código, ficha, fonte) e as visões antigas foram limpas (migração 0082). O editor da visão abre num banner padrão, sem estourar a página.
 ✅ **PCA × Orçamento colorido pela Diferença** — na tabela e no PDF: o Orçamento em azul, o Órgão como está e as demais colunas na cor da Diferença (vermelho quando falta orçamento, verde quando sobra).
+✅ **Seletores flutuantes estáveis** — o painel de seleção (visões, filtros, pessoas, período) fica preso ao campo: marcar itens não o faz mudar de lugar; o rodapé do editor da visão tem altura fixa.

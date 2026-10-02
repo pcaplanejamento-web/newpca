@@ -184,8 +184,10 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
         size="lg"
         titulo={editando === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : "Visão"}
         rodape={
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="mr-auto text-sm text-text-2">
+          // Altura FIXA: a prévia numa linha própria (truncada) e os botões abaixo — marcar um item não muda o tamanho do
+          // banner (nada recentraliza nem "pula").
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <p className="w-full truncate text-sm text-text-2">
               Na visão: <b className="tabular-nums">{brl(somaVisao)}</b> de <span className="tabular-nums">{brl(total)}</span> ·{" "}
               {num(naVisao.length)} {naVisao.length === 1 ? "lançamento" : "lançamentos"}
             </p>

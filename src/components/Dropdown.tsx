@@ -46,6 +46,9 @@ export function Dropdown({
   const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // O lado (acima/abaixo) é decidido UMA vez ao abrir: o conteúdo que muda depois (marcar um item, a busca) nunca faz o
+  // painel trocar de lado nem "pular" — ele segue PRESO ao gatilho.
+  const acimaRef = useRef<boolean | null>(null);
 
   // Posiciona o painel (fixed) e decide abrir para BAIXO ou para CIMA conforme o
   // espaço disponível; sempre limita a altura à viewport (rola por dentro). Assim
@@ -63,25 +66,41 @@ export function Dropdown({
     const espacoAbaixo = vh - r.bottom - 8;
     const espacoAcima = r.top - 8;
     const desejada = panelRef.current?.scrollHeight ?? 0;
-    const abrirAcima = espacoAbaixo < Math.min(desejada || 320, 360) && espacoAcima > espacoAbaixo;
+    if (acimaRef.current == null) acimaRef.current = espacoAbaixo < Math.min(desejada || 320, 360) && espacoAcima > espacoAbaixo;
     let top: number;
     let maxH: number;
-    if (abrirAcima) {
+    if (acimaRef.current) {
+      // Acima: a BASE do painel encosta no gatilho (a altura real dele — mudou o conteúdo, a base continua no lugar).
       maxH = espacoAcima;
       top = Math.max(8, r.top - gap - Math.min(desejada || maxH, maxH));
     } else {
       top = r.bottom + gap;
       maxH = espacoAbaixo;
     }
-    setPos({ top: Math.round(top), left: Math.round(left), w, maxH: Math.max(140, Math.round(maxH)) });
+    const novo = { top: Math.round(top), left: Math.round(left), w, maxH: Math.max(140, Math.round(maxH)) };
+    // Sem re-render quando nada mudou (roda a cada quadro enquanto aberto).
+    setPos((p) => (p.top === novo.top && p.left === novo.left && p.w === novo.w && p.maxH === novo.maxH ? p : novo));
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reposiciona só ao abrir.
   useLayoutEffect(() => {
-    if (open) reposicionar();
+    if (!open) {
+      acimaRef.current = null;
+      return;
+    }
+    reposicionar();
+    // Enquanto aberto, o painel ACOMPANHA o gatilho e o próprio tamanho: um banner que cresce/recentraliza (ex.: o
+    // rodapé de um Modal muda de altura ao marcar um item), uma rolagem ou a lista que encolhe nunca o deixam solto.
+    let quadro = 0;
+    const seguir = () => {
+      reposicionar();
+      quadro = requestAnimationFrame(seguir);
+    };
+    quadro = requestAnimationFrame(seguir);
+    return () => cancelAnimationFrame(quadro);
   }, [open]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: assina só ao abrir; reposicionar lê props/refs estáveis.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: assina só ao abrir.
   useEffect(() => {
     if (!open) return;
     // `pointerdown` (não `mousedown`): no toque (iOS) tocar numa área vazia não gera evento de mouse — o painel não fechava.
@@ -97,16 +116,11 @@ export function Dropdown({
       e.preventDefault();
       fechar();
     };
-    const onMove = () => reposicionar();
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey, true);
-    window.addEventListener("resize", onMove);
-    window.addEventListener("scroll", onMove, true);
     return () => {
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("resize", onMove);
-      window.removeEventListener("scroll", onMove, true);
     };
   }, [open]);
 
