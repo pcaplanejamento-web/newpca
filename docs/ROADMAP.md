@@ -30,8 +30,9 @@ PCA sem avulsos · ✅ Fusão por Id: todos os de mesmo Id conferidos, recusa co
 protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 
 ### Vínculos editáveis por linha no orçamento do PCA — entregue
-✅ Lápis em cada linha do PCA × Orçamento (por unidade): os vínculos daquela unidade, editar/excluir/criar no mesmo editor
-da aba Vínculos; a linha "Sem vínculo" lista o que falta vincular · ✅ Editor da visão mais limpo: as explicações foram para a Ajuda (?).
+✅ Coluna Vínculos em cada linha do PCA × Orçamento (por unidade) → UM banner com as unidades do orçamento da linha, a unidade
+cadastrada fixa e TODAS as ações (marcadas e desmarcadas, com o destino de cada uma); linhas com ações sem vínculo em
+destaque; a linha "Sem vínculo" lista o que falta vincular · ✅ Editor da visão mais limpo: as explicações foram para a Ajuda (?).
 
 ### Reimportar o QDD substitui tudo e as visões se adaptam; aba Orçamento do PCA sem avisos — entregue
 ✅ Importar um ano que já tem orçamento SUBSTITUI o daquele ano (lançamentos antigos e duplicatas apagados num lote) ·
@@ -1633,3 +1634,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Notificações profissionais** — controle central em Configurações → Notificações (por aviso: sino, e-mail e se a pessoa pode desligar; o e-mail começa só no fundamental); sino em TEMPO REAL (Durable Object por pessoa, WebSocket com hibernação); painel com Todas | Não lidas, filtro por tipo, agrupado por dia, repetidos juntos, hora relativa, marcar lida/não lida, excluir e limpar (do banco, com Desfazer — o aviso de prazo limpo não volta); prévia flutuante, sino que balança e "(N)" no título; e-mail sem perda (reserva com validade), retenção com teto por pessoa, cron dentro do limite de consultas e avisos novos (protocolo designado, PCA, cadastro no sino, vence hoje, evento alterado/cancelado).
 ✅ **Notificações — pacote 2**: o ADM controla quanto tempo os avisos ficam e liga a limpeza automática (ou limpa na hora); cada pessoa escolhe no Perfil e-mail imediato, resumo diário ou desligado, horário de silêncio, os tipos do sino, som e alerta do sistema, e silencia tarefas/quadros; adiar aviso (1 h · 3 h · amanhã, volta ao vivo); descadastro em um clique em todo e-mail; avisos de tarefa concluída, situação/reenvio de protocolo, lote da Automação Centi e comunicados do ADM; relatório de alcance por tipo; telas compactas com mais ícones que texto.
 ✅ **Notificações verificadas no navegador**: cada botão e dado do sino, do Perfil e da tela do ADM conferidos (54 verificações); corrigidos o "Desfazer" que apagava ao fechar o painel, o "+N" coberto pelas ações, o título que quebrava cedo e a prévia do aviso novo sem o tempo real; toda ação mostra a dica ao passar o mouse.
+✅ **Configurações revisadas**: abas num cartão próprio à esquerda, sempre da mesma altura (a do display), separado do conteúdo, com ícone e dica (no celular, a faixa de cima), o fundo que desliza até a aba aberta e o conteúdo que entra pelo lado da troca; tudo cabe no display sem rolar a página — a altura segue o conteúdo e o que é longo rola por dentro; a aba fica na URL; só a aba aberta é carregada; explicações no "(?)"; excluir PCA pela confirmação do sistema. Todas as abas conferidas no navegador (salvar Identidade/Tabelas, cadastrar/ativar/excluir PCA, listas carregadas).

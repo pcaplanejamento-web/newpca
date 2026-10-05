@@ -19,7 +19,7 @@ import {
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
-import { unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { semVinculo, unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -298,6 +298,19 @@ export function OrcamentoPca({
   const gravacao = useGravacaoVinculos(comparativo?.vinculos ?? SEM_VINCULOS);
   const [vinculosDe, setVinculosDe] = useState<UnidadeDaLinha | null>(null);
   const editaVinculos = podeConfigurarOrcamento && comparativo != null;
+  // Ações do orçamento SEM vínculo (como na aba Vínculos): por unidade cadastrada — as das unidades do orçamento ligadas a
+  // ela — e no total (a linha "Sem vínculo"). Recalculadas na hora a cada gravação (a lista de vínculos já gravada).
+  const semVinculoPorLinha = useMemo(() => {
+    const porAlvo = new Map<number, number>();
+    let total = 0;
+    if (!comparativo) return { porAlvo, total };
+    for (const p of semVinculo(unidadesCubo, gravacao.atuais, comparativo.alvos.unidades)) {
+      total += p.acoes.length;
+      for (const alvo of new Set(gravacao.atuais.filter((v) => v.chave === p.unidade.chave).map((v) => v.alvoId)))
+        porAlvo.set(alvo, (porAlvo.get(alvo) ?? 0) + p.acoes.length);
+    }
+    return { porAlvo, total };
+  }, [comparativo, unidadesCubo, gravacao.atuais]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivel, setNivel] = useState<Nivel>("unidade");
@@ -419,27 +432,33 @@ export function OrcamentoPca({
       render: (l) => <BarraPct l={l} />,
     },
   ];
-  // O lápis da LINHA (por unidade): os vínculos que trazem orçamento a ela — editar no mesmo editor da aba Vínculos.
+  // A coluna VÍNCULOS (por unidade): abre o banner com os vínculos da linha; as ações sem vínculo ficam em destaque.
   if (editaVinculos && nivel === "unidade")
     cols.push({
       key: "vinculos",
-      header: "",
+      header: "Vínculos",
       filter: "none",
       nowrap: true,
-      render: (l) =>
-        l.nivel === "unidade" ? (
+      render: (l) => {
+        if (l.nivel !== "unidade") return null;
+        const pend = l.unidadeId == null ? semVinculoPorLinha.total : (semVinculoPorLinha.porAlvo.get(l.unidadeId) ?? 0);
+        const rotulo = l.unidadeId == null ? "Vincular as ações sem vínculo" : `Vínculos de ${l.sigla}`;
+        return (
           <Button
             size="xs"
-            variant="ghost"
+            variant={pend > 0 ? "secondary" : "ghost"}
             icon={<IconLink className="h-4 w-4" />}
-            aria-label={l.unidadeId == null ? "Vincular as unidades do orçamento sem vínculo" : `Vínculos de ${l.sigla}`}
-            title={l.unidadeId == null ? "Vincular as unidades do orçamento sem vínculo" : `Vínculos de ${l.sigla}`}
+            aria-label={pend > 0 ? `${rotulo} — ${pend} ação(ões) sem vínculo` : rotulo}
+            title={pend > 0 ? `${rotulo} — ${pend} ação(ões) sem vínculo` : rotulo}
             onClick={(e) => {
               e.stopPropagation();
               setVinculosDe({ id: l.unidadeId, sigla: l.sigla, nome: l.nome });
             }}
-          />
-        ) : null,
+          >
+            {pend > 0 ? <span style={{ color: "var(--warn)" }}>{num(pend)} sem vínculo</span> : undefined}
+          </Button>
+        );
+      },
     });
 
   if (dados.ano == null) return <Callout kind="warn">Defina o ano do PCA (aba Configuração) para cruzar com o orçamento.</Callout>;
