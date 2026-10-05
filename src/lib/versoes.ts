@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.4.2",
+    data: "2026-10-05",
+    titulo: "Vínculos da unidade sem repetição",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "No banner dos vínculos da unidade, cada unidade do orçamento aparece uma vez só; as ações sem vínculo ficam no selo dela.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.4.1",
     data: "2026-10-05",
     titulo: "Valores dos DFDs com a precisão da Centi",
