@@ -1,0 +1,37 @@
+name: Verificar totais (somente leitura)
+
+# TEMPORÁRIO — consultas SELECT no D1 de produção para conferir a auditoria dos totais. Nada é gravado.
+on:
+  push:
+    branches: [claude/brave-turing-4ul80k]
+    paths: [".github/workflows/verificar-totais.yml"]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Consultas somente leitura
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          q() {
+            echo "=== $1"
+            npx wrangler d1 execute newpca-db --remote --json --yes --command "$2" \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{for(const r of JSON.parse(s))console.log(JSON.stringify(r.results))}catch(e){console.log(s)}})'
+          }
+          q "migracoes" "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 3"
+          q "dfd_x_itens" "SELECT COUNT(*) AS dfds, SUM(CASE WHEN COALESCE(i.n,0) < COALESCE(d.total_itens,0) THEN 1 ELSE 0 END) AS parciais, SUM(CASE WHEN COALESCE(i.n,0) >= COALESCE(d.total_itens,0) AND (d.total_itens IS NOT COALESCE(i.n,0) OR ABS(COALESCE(d.valor_total,0) - CASE WHEN COALESCE(i.s,0) > 0 THEN i.s ELSE 0 END) >= 0.01) THEN 1 ELSE 0 END) AS divergentes, ROUND(SUM(COALESCE(d.valor_total,0)),2) AS soma_dfds, ROUND(SUM(COALESCE(i.s,0)),2) AS soma_itens, SUM(COALESCE(d.total_itens,0)) AS itens_dfds, SUM(COALESCE(i.n,0)) AS itens_reais FROM dfds d LEFT JOIN (SELECT dfd_id, COUNT(*) n, ROUND(SUM(COALESCE(valor_total,0)),2) s FROM dfd_itens GROUP BY dfd_id) i ON i.dfd_id = d.id"
+          q "dfd_x_itens_lista" "SELECT d.numero, d.total_itens, COALESCE(i.n,0) AS n, d.valor_total, COALESCE(i.s,0) AS s FROM dfds d LEFT JOIN (SELECT dfd_id, COUNT(*) n, ROUND(SUM(COALESCE(valor_total,0)),2) s FROM dfd_itens GROUP BY dfd_id) i ON i.dfd_id = d.id WHERE COALESCE(i.n,0) < COALESCE(d.total_itens,0) OR d.total_itens IS NOT COALESCE(i.n,0) OR ABS(COALESCE(d.valor_total,0) - CASE WHEN COALESCE(i.s,0) > 0 THEN i.s ELSE 0 END) >= 0.01 LIMIT 30"
+          q "itens" "SELECT COUNT(*) AS itens, SUM(CASE WHEN valor_total IS NULL AND quantidade IS NOT NULL AND valor_unitario IS NOT NULL THEN 1 ELSE 0 END) AS sem_total_com_q_vu, SUM(CASE WHEN valor_total IS NOT NULL AND quantidade IS NOT NULL AND valor_unitario IS NOT NULL AND ABS(valor_total - ROUND(quantidade*valor_unitario,2)) >= 0.01 THEN 1 ELSE 0 END) AS total_dif_q_vu, SUM(CASE WHEN valor_unitario IS NULL OR valor_unitario <= 0 THEN 1 ELSE 0 END) AS sem_valor_unit FROM dfd_itens"
+          q "rastro_em_dobro" "SELECT COUNT(*) AS rastro_com_dfd_vivo_no_mesmo_protocolo FROM dfd_passagens p JOIN dfds d ON d.numero = p.dfd_numero AND d.protocolo_id = p.protocolo_id"
+          q "protocolos" "SELECT COUNT(*) AS protocolos, SUM(CASE WHEN x.n IS NULL AND r.n IS NULL THEN 1 ELSE 0 END) AS sem_dfds, SUM(CASE WHEN COALESCE(p.valor_capa,0) <= 0 THEN 1 ELSE 0 END) AS capa_vazia, SUM(CASE WHEN p.valor_capa > 0 AND ABS(ROUND(p.valor_capa,2) - ROUND(COALESCE(x.s,0) + COALESCE(r.s,0),2)) >= 0.01 THEN 1 ELSE 0 END) AS capa_diferente, SUM(CASE WHEN p.pca_incorporado_em IS NOT NULL THEN 1 ELSE 0 END) AS incorporados FROM dfd_protocolos p LEFT JOIN (SELECT protocolo_id, COUNT(*) n, SUM(COALESCE(valor_total,0)) s FROM dfds WHERE protocolo_id IS NOT NULL GROUP BY protocolo_id) x ON x.protocolo_id = p.id LEFT JOIN (SELECT protocolo_id, COUNT(*) n, SUM(COALESCE(valor_total,0)) s FROM dfd_passagens GROUP BY protocolo_id) r ON r.protocolo_id = p.id"
+          q "mesmo_id" "SELECT COUNT(*) AS ids_repetidos FROM (SELECT id_externo FROM dfd_protocolos WHERE id_externo IS NOT NULL AND TRIM(id_externo) <> '' GROUP BY id_externo HAVING COUNT(*) > 1)"
+          q "pca_vinculos" "SELECT (SELECT COUNT(*) FROM pca_dfds l JOIN dfds d ON d.id = l.dfd_id LEFT JOIN dfd_protocolos p ON p.id = l.protocolo_id WHERE l.protocolo_id IS NOT NULL AND (d.protocolo_id IS NOT l.protocolo_id OR p.pca_id IS NOT l.pca_id OR p.pca_incorporado_em IS NULL)) AS vinculo_fora_do_protocolo, (SELECT COUNT(*) FROM dfds d JOIN dfd_protocolos p ON p.id = d.protocolo_id WHERE p.pca_id IS NOT NULL AND p.pca_incorporado_em IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pca_dfds l WHERE l.dfd_id = d.id AND l.pca_id = p.pca_id)) AS dfd_incorporado_sem_vinculo, (SELECT COUNT(*) FROM dfds d JOIN dfd_protocolos p ON p.id = d.protocolo_id WHERE p.pca_id IS NOT NULL AND p.pca_incorporado_em IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pca_dfds l WHERE l.dfd_id = d.id AND l.pca_id = p.pca_id) AND EXISTS (SELECT 1 FROM pca_dfds l WHERE l.dfd_id = d.id AND l.protocolo_id IS NULL)) AS sem_vinculo_por_legado, (SELECT COUNT(*) FROM pca_dfds) AS vinculos"
+          q "pca_numeros" "SELECT (SELECT COUNT(*) FROM pca_itens WHERE baixado_em IS NULL) AS numeros_vivos, (SELECT COUNT(*) FROM pca_itens WHERE baixado_em IS NULL AND ativo = 1) AS ativos, (SELECT COUNT(*) FROM pca_itens x JOIN dfds d ON d.id = x.dfd_id WHERE x.baixado_em IS NULL AND x.dfd_item_id IS NULL AND (SELECT COUNT(*) FROM dfd_itens i WHERE i.dfd_id = d.id) >= COALESCE(d.total_itens,0)) AS livres_em_dfd_completo, (SELECT COUNT(*) FROM pca_itens x WHERE x.baixado_em IS NULL AND x.ativo = 1 AND NOT EXISTS (SELECT 1 FROM pca_dfds l WHERE l.pca_id = x.pca_id AND l.dfd_id = x.dfd_id AND l.acao <> 'excluir')) AS ativo_sem_vinculo_valido, (SELECT COUNT(*) FROM dfd_itens i JOIN pca_dfds l ON l.dfd_id = i.dfd_id AND l.protocolo_id IS NOT NULL AND l.acao <> 'excluir' WHERE NOT EXISTS (SELECT 1 FROM pca_itens x WHERE x.dfd_item_id = i.id AND x.pca_id = l.pca_id AND x.baixado_em IS NULL)) AS item_incorporado_sem_numero, (SELECT COUNT(*) FROM dfd_itens i LEFT JOIN pca_itens x ON x.dfd_item_id = i.id AND x.baixado_em IS NULL WHERE i.pca_id IS NOT x.pca_id OR i.pca_sequencial IS NOT x.sequencial) AS item_com_nr_divergente, (SELECT COUNT(*) FROM (SELECT dfd_item_id FROM pca_itens WHERE baixado_em IS NULL AND dfd_item_id IS NOT NULL GROUP BY dfd_item_id HAVING COUNT(*) > 1)) AS item_com_2_numeros"
