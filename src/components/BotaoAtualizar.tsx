@@ -43,6 +43,7 @@ export function BotaoAtualizar({
   dica,
   detalhe,
   onClick,
+  disabled = false,
 }: {
   ativo: boolean;
   progresso?: number | null;
@@ -53,6 +54,8 @@ export function BotaoAtualizar({
   /** O que está sendo feito ("Reconferindo 120 de 500…") — dica e leitor de tela enquanto gira. */
   detalhe?: string;
   onClick: () => void;
+  /** Travado (ex.: gravando, sobrescrita em andamento): fica À VISTA, sem agir — a dica diz o motivo. */
+  disabled?: boolean;
 }) {
   const R = 15;
   const C = 2 * Math.PI * R;
@@ -65,7 +68,8 @@ export function BotaoAtualizar({
       aria-busy={ativo || undefined}
       title={ativo ? fazendo : (dica ?? rotulo)}
       onClick={ativo ? undefined : onClick}
-      className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
+      disabled={disabled && !ativo}
+      className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${
         ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-muted hover:bg-surface-2 hover:text-text-2"
       }`}
     >

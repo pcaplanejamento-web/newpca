@@ -23,7 +23,8 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Rodapés dos banners em uma linha — entregue
 ✅ Protocolo, DFD e item (Mesa, análise e consulta pública): rodapé em UMA linha com botões só de ícone (`BotaoAcao`), o
 indicador ÚNICO de erros/atenção (`IndicadorPendencias`), Reenviar protocolo e Sobrescrever DFD em preto, Histórico e
-Tarefas no cabeçalho e sem o Fechar redundante (o X fecha).
+Tarefas no cabeçalho e sem o Fechar redundante (o X fecha). Correção: durante a sobrescrita de um DFD (e ao salvar) os botões
+do protocolo e do DFD não somem mais — ficam desabilitados com o motivo na dica; Tarefas também no DFD ao lado do protocolo.
 
 ### Exportação XLSX/PDF com linha TOTAL — entregue
 ✅ Toda tabela exportada (XLSX e PDF) termina com a **linha TOTAL**: a soma de cada coluna de valores e quantidades

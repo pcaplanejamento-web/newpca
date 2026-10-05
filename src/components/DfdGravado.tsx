@@ -126,6 +126,8 @@ export function useDfdGravado({
   // SOBRESCRITA em andamento (lançador/leitura/escolha/gravação): o banner fica só-leitura até terminar.
   const [sobrescrevendo, setSobrescrevendo] = useState(false);
   const travado = salvando || sobrescrevendo;
+  /** Por que as ações estão travadas (a dica dos botões que ficam À VISTA, desabilitados — nunca somem). */
+  const motivoTrava = salvando ? "Salvando as alterações…" : sobrescrevendo ? "Sobrescrita do DFD em andamento — conclua ou cancele" : undefined;
   // Versão dos dados carregados: remonta o corpo após recarregar (os cadeados voltam a travar).
   const [versao, setVersao] = useState(0);
 
@@ -337,19 +339,28 @@ export function useDfdGravado({
   const botaoSalvar = editavel ? (
     <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendo} />
   ) : undefined;
-  const botaoAtualizar = orig && !travado ? <BotaoAtualizar ativo={giro.girando} rotulo="Atualizar e revisar" dica="Atualizar: recarrega do banco e revisa os dados (trata o que for possível)" detalhe="Atualizando e revisando os dados…" onClick={atualizar} /> : undefined;
+  const botaoAtualizar = orig ? (
+    <BotaoAtualizar
+      ativo={giro.girando}
+      rotulo="Atualizar e revisar"
+      dica={motivoTrava ?? "Atualizar: recarrega do banco e revisa os dados (trata o que for possível)"}
+      detalhe="Atualizando e revisando os dados…"
+      onClick={atualizar}
+      disabled={travado}
+    />
+  ) : undefined;
   const temProtocolo = orig?.protocoloId != null && !!onVerProtocolo;
   /** "Sobrescrever DFD": sobe o arquivo NOVO deste DFD (mesmo nº) e escolhe, dado a dado, o que sobrescrever.
    * DFD sem protocolo com a importação avulsa desligada pelo ADM não oferece (o servidor recusaria no fim). */
   const botaoSobrescrever =
-    podeSobrescrever && orig && !salvando && (orig.protocoloId != null || importarDfdHabilitado(regras)) ? (
+    podeSobrescrever && orig && (orig.protocoloId != null || importarDfdHabilitado(regras)) ? (
       <BotaoAcao
         variant="primary"
         rotulo="Sobrescrever DFD"
         icon={<IconUpload className="h-4 w-4" />}
         onClick={() => setSobrescrever((n) => n + 1)}
-        disabled={sujo || sobrescrevendo}
-        dica={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever"}
+        disabled={sujo || travado}
+        dica={motivoTrava ?? (sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever")}
       />
     ) : null;
   /** Cabeçalho do DFD: Histórico (painel da direita) + Tarefas ligadas + Atualizar — o rodapé fica só com as ações. */
@@ -361,7 +372,7 @@ export function useDfdGravado({
           pressionado={painel?.tipo === "historico"}
           onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
         />
-        {dfdId != null && <TarefasDoVinculo tipo="dfd" id={dfdId} />}
+        {dfdId != null && <TarefasDoVinculo tipo="dfd" id={dfdId} disabled={travado} dica={motivoTrava} />}
         {botaoAtualizar}
       </>
     ) : (
@@ -559,7 +570,10 @@ export function useDfdGravado({
   return {
     aberto: dfdId != null,
     carregado: !!dfd,
+    /** A pilha não troca/fecha (gravando OU sobrescrevendo). */
     bloqueado: travado,
+    /** Gravando de fato — só então o X/Esc do banner somem (na sobrescrita o modal dela fica por cima). */
+    salvando,
     sujo,
     orig,
     numero,

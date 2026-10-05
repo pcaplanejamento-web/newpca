@@ -154,6 +154,8 @@ export function useProtocoloGravado({
   // SOBRESCRITA do DFD ao lado em andamento (lançador/leitura/escolha/gravação): o banner fica só-leitura.
   const [sobrescrevendoDfd, setSobrescrevendoDfd] = useState(false);
   const travado = salvando || sobrescrevendoDfd;
+  /** Por que as ações estão travadas (a dica dos botões que ficam À VISTA, desabilitados — nunca somem). */
+  const motivoTrava = salvando ? "Salvando as alterações…" : sobrescrevendoDfd ? "Sobrescrita do DFD em andamento — conclua ou cancele" : undefined;
   const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
   const [relatorioAberto, setRelatorioAberto] = useState(false);
   const [incluirAtencao, setIncluirAtencao] = useState(true);
@@ -356,12 +358,15 @@ export function useProtocoloGravado({
     if (itens) setItensEditados((s) => new Set(s).add(id));
   };
 
+  // Sobrescrita em andamento: o DFD aberto é a BASE dela — trocar/fechar o DFD desmontaria a sobrescrita no meio.
   function abrirDfd(id: number) {
+    if (sobrescrevendoDfd) return;
     setAbertoId(id);
     setPainel(null);
     setAncoraAlvo(null);
   }
   function fecharDfd() {
+    if (sobrescrevendoDfd) return;
     setAbertoId(null);
     setPainel(null);
     setAncoraAlvo(null);
@@ -565,7 +570,16 @@ export function useProtocoloGravado({
       ? estadoDeMensagens(mensagensAberto, { editado: editados.has(abertoId) || itensEditados.has(abertoId) })
       : null;
 
-  const botaoAtualizar = proto && !travado ? <BotaoAtualizar ativo={giro.girando} rotulo="Atualizar e revisar" dica="Atualizar: recarrega do banco e revisa os dados (trata o que for possível)" detalhe="Atualizando e revisando os dados…" onClick={atualizar} /> : undefined;
+  const botaoAtualizar = proto ? (
+    <BotaoAtualizar
+      ativo={giro.girando}
+      rotulo="Atualizar e revisar"
+      dica={motivoTrava ?? "Atualizar: recarrega do banco e revisa os dados (trata o que for possível)"}
+      detalhe="Atualizando e revisando os dados…"
+      onClick={atualizar}
+      disabled={travado}
+    />
+  ) : undefined;
 
   /** Banner do PROTOCOLO (corpo único + seleção/edição em massa + relatório + salvar). */
   const principal: ConteudoBanner = {
@@ -573,10 +587,8 @@ export function useProtocoloGravado({
     cabecalho: proto ? <ProtocoloCabecalho numero={proto.numero} idExterno={proto.idExterno} assunto={capa?.assunto ?? proto.assunto} /> : undefined,
     acoesCabecalho: (
       <>
-        {proto && !travado && (
-          <BotaoAcao rotulo="Histórico do protocolo" icon={<IconClock className="h-4 w-4" />} onClick={() => setHistoricoAberto(true)} />
-        )}
-        {proto && !travado && <TarefasDoVinculo tipo="protocolo" id={proto.id} />}
+        {proto && <BotaoAcao rotulo="Histórico do protocolo" icon={<IconClock className="h-4 w-4" />} onClick={() => setHistoricoAberto(true)} />}
+        {proto && <TarefasDoVinculo tipo="protocolo" id={proto.id} disabled={travado} dica={motivoTrava} />}
         {botaoAtualizar}
       </>
     ),
@@ -607,20 +619,20 @@ export function useProtocoloGravado({
                 erros={linhasErro.length + (conc.divergente ? 1 : 0)}
                 atencoes={linhasAtencao.length}
                 alvo={temErro ? "ver o relatório de erro" : "ver o relatório de atenção"}
-                onClick={!travado && temRelatorio ? () => setRelatorioAberto(true) : undefined}
+                onClick={temRelatorio ? () => setRelatorioAberto(true) : undefined}
               />
               {sujo && <span className="hidden min-w-0 truncate text-[12px] text-accent md:inline">Alterações não salvas</span>}
             </>
           )}
           <div className="ml-auto flex flex-nowrap items-center gap-1.5">
-            {podeImportar && proto && !travado && (
+            {podeImportar && proto && (
               <BotaoAcao
                 variant="primary"
                 rotulo="Reenviar protocolo"
                 icon={<IconUpload className="h-4 w-4" />}
                 onClick={() => setReenviar((n) => n + 1)}
-                disabled={sujo}
-                dica={sujo ? "Salve ou descarte as alterações antes de reenviar" : "Reenviar protocolo: suba o PDF corrigido, compare com o gravado e sobrescreva"}
+                disabled={sujo || travado}
+                dica={motivoTrava ?? (sujo ? "Salve ou descarte as alterações antes de reenviar" : "Reenviar protocolo: suba o PDF corrigido, compare com o gravado e sobrescreva")}
               />
             )}
             {podeEditar && (
@@ -684,12 +696,15 @@ export function useProtocoloGravado({
     titulo: `DFD ${numeroAberto}`,
     cabecalho: dfdAberto ? <DfdCabecalho numero={dfdAberto.numero} tipo={dfdAberto.tipo} planejamento={dfdAberto.planejamento} /> : undefined,
     acoesCabecalho: dfdAberto ? (
-      <BotaoAcao
-        rotulo="Histórico"
-        icon={<IconClock className="h-4 w-4" />}
-        pressionado={painel?.tipo === "historico"}
-        onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
-      />
+      <>
+        <BotaoAcao
+          rotulo="Histórico"
+          icon={<IconClock className="h-4 w-4" />}
+          pressionado={painel?.tipo === "historico"}
+          onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
+        />
+        {abertoId != null && <TarefasDoVinculo tipo="dfd" id={abertoId} disabled={travado} dica={motivoTrava} />}
+      </>
     ) : undefined,
     onClose: fecharDfd,
     rodape: dfdAberto ? (
@@ -700,15 +715,15 @@ export function useProtocoloGravado({
         mensagensAbertas={painel?.tipo === "mensagens"}
         onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
         acoes={
-          sobrescreveAberto && !salvando ? (
+          sobrescreveAberto ? (
             /* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */
             <BotaoAcao
               variant="primary"
               rotulo="Sobrescrever DFD"
               icon={<IconUpload className="h-4 w-4" />}
               onClick={() => setSobrescreverDfd((n) => n + 1)}
-              disabled={sujo || sobrescrevendoDfd}
-              dica={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever"}
+              disabled={sujo || travado}
+              dica={motivoTrava ?? (sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever")}
             />
           ) : undefined
         }
@@ -858,7 +873,10 @@ export function useProtocoloGravado({
 
   return {
     aberto: protocoloId != null,
+    /** A pilha não troca/fecha (gravando OU sobrescrevendo um DFD). */
     bloqueado: travado,
+    /** Gravando de fato — só então o X/Esc do banner somem (na sobrescrita o modal dela fica por cima). */
+    salvando,
     sujo,
     proto,
     principal,

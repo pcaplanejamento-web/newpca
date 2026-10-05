@@ -1507,8 +1507,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (só o ícone; Duplicados/Diferenças/Tarefas com a contagem) e a ação PRINCIPAL (Salvar alterações, Protocolar, Importar/
     Sobrescrever DFD — ícone + texto de 640px para cima). **Reenviar protocolo** e **Sobrescrever DFD** = botões PRETOS
     (`variant="primary"`). Nada repete o cabeçalho: sem Fechar/Cancelar (o X fecha) e sem a contagem de DFDs (está nos mini
-    banners); **Histórico e Tarefas ficam no CABEÇALHO** (ao lado do Atualizar) do protocolo e do DFD; o item mantém Ver
-    DFD/Ver protocolo.
+    banners); **Histórico e Tarefas ficam no CABEÇALHO** (ao lado do Atualizar) do protocolo e do DFD (também do DFD ao
+    lado do protocolo); o item mantém Ver DFD/Ver protocolo. **TRAVAR = DESABILITAR, NUNCA SUMIR:** gravando (`salvando`) ou
+    com a sobrescrita de um DFD em andamento (`onOcupado` do `DfdUploadForm`), as ações dos banners (Reenviar, Sobrescrever,
+    Atualizar, Tarefas) ficam À VISTA desabilitadas com o motivo na dica (`motivoTrava`; `BotaoAtualizar`/`TarefasDoVinculo`
+    `disabled`); Histórico e o relatório de pendências (só leitura) seguem ativos. Os hooks devolvem `bloqueado` (a pilha não
+    troca/fecha — gravando OU sobrescrevendo; trocar/fechar o DFD-base da sobrescrita é recusado) e `salvando` (só ele some
+    com o X/Esc do `Modal` — na sobrescrita o modal dela fica por cima).
   - **`useProtocoloGravado`** (`ProtocoloGravado.tsx` — hook que devolve os PAINÉIS do banner do protocolo já protocolado,
     composto pelo `BannersMesa`): carrega o protocolo COMPLETO (`GET /api/protocolo/[id]
     ?completo=1` → capa + DFDs com seções/assinaturas/itens + as UNIDADES deles com os responsáveis, via

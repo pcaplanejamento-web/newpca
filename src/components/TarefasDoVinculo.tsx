@@ -32,7 +32,18 @@ type QuadroOpcao = { id: number; nome: string; cor: string; grupoNome: string };
  * quadros que o usuário vê — tocar leva ao cartão no quadro) e "Criar tarefa" num quadro escolhido (abre a tarefa NOVA
  * já vinculada). Sem tarefas nem quadros, o botão não aparece.
  */
-export function TarefasDoVinculo({ tipo, id }: { tipo: TipoVinculo; id: number }) {
+export function TarefasDoVinculo({
+  tipo,
+  id,
+  disabled = false,
+  dica,
+}: {
+  tipo: TipoVinculo;
+  id: number;
+  /** Travado (o banner grava ou sobrescreve): o botão fica À VISTA, sem abrir (criar tarefa navega). */
+  disabled?: boolean;
+  dica?: string;
+}) {
   const router = useRouter();
   const [dados, setDados] = useState<{ tarefas: TarefaLigada[]; quadros: QuadroOpcao[] } | null>(null);
   const [aberto, setAberto] = useState(false);
@@ -63,8 +74,10 @@ export function TarefasDoVinculo({ tipo, id }: { tipo: TipoVinculo; id: number }
         icon={<IconKanban className="h-4 w-4" />}
         contagem={dados.tarefas.length ? `${abertas}/${dados.tarefas.length}` : null}
         onClick={() => setAberto(true)}
+        disabled={disabled}
+        dica={disabled ? dica : undefined}
       />
-      <Modal open={aberto} onClose={() => setAberto(false)} titulo={`Tarefas do ${ROTULO_VINCULO[tipo]}`} size="md">
+      <Modal open={aberto && !disabled} onClose={() => setAberto(false)} titulo={`Tarefas do ${ROTULO_VINCULO[tipo]}`} size="md">
         <div className="space-y-4">
           {dados.tarefas.length === 0 ? (
             <p className="text-[13px] text-muted">Nenhuma tarefa ligada a este {ROTULO_VINCULO[tipo]} ainda.</p>

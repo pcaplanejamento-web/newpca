@@ -1489,6 +1489,12 @@ function AtualizarEDadosCompletosDemo() {
         <span className="text-[12px] text-faint">BotaoAtualizar com andamento — na barra das Mesas: recarrega e reconfere todos os protocolos, DFDs e itens (o anel enche com o andamento).</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
+        <BotaoAtualizar ativo={false} rotulo="Atualizar e revisar" dica="Sobrescrita do DFD em andamento — conclua ou cancele" onClick={() => {}} disabled />
+        <span className="text-[12px] text-faint">
+          BotaoAtualizar desabilitado — TRAVAR = DESABILITAR, nunca sumir: gravando ou sobrescrevendo, as ações dos banners ficam à vista com o motivo na dica.
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
         <BotaoExportar nome="a tabela de demonstração" onExportar={() => {}} />
         <span className="text-[12px] text-faint">
           BotaoExportar — no rodapé de TODA tabela (DataTable e tabela cruzada): XLSX e PDF das linhas filtradas, com as colunas à vista.
