@@ -22,15 +22,19 @@ export async function GET(req: Request) {
   return ok(await listarNotificacoes(a.u, p.data));
 }
 
-/** ADIA (`{ids, adiarAte}`), marca como LIDAS ou NÃO lidas (`{ids, lida}`) ou todas como lidas (`{todas:true}`) — só as da própria pessoa. */
+/** ADIA (`{ids, adiarAte}`), marca como VISTAS (`{ids, visto}` — as não travadas), LIDAS ou NÃO lidas (`{ids, lida}` — a não lida fica TRAVADA) ou todas como lidas (`{todas:true}` — as travadas ficam) — só as da própria pessoa. */
 export async function PATCH(req: Request) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(notificacoesPatchSchema, req);
   if ("resp" in p) return p.resp;
-  if ("adiarAte" in p.data) await adiarNotificacoes(a.u, p.data.ids, p.data.adiarAte);
-  else await marcarLidas(a.u, p.data);
-  return ok();
+  const d = p.data;
+  if ("adiarAte" in d) {
+    await adiarNotificacoes(a.u, d.ids, d.adiarAte);
+    return ok();
+  }
+  const alvo = "todas" in d ? d : { ids: d.ids, modo: "visto" in d ? ("visto" as const) : d.lida ? ("lida" as const) : ("nao-lida" as const) };
+  return ok({ marcadas: await marcarLidas(a.u, alvo) });
 }
 
 /** EXCLUI do banco (`{ids}`) ou LIMPA (`{limpar: "lidas" | "todas"}`) — só as da própria pessoa; os avisos de prazo/lembrete limpos não voltam. */

@@ -32,7 +32,7 @@ protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 ### Verificação em produção dos totais + valor com 4 casas — entregue
 ✅ Conferido no banco de produção (só leitura): 1.291 DFDs com valor = soma dos itens e nº de itens = itens gravados (0
 divergências); 0 rastro em dobro; numeração do PCA íntegra (11.618 nºs, 0 inconsistências) · ✅ Valor do DFD com **4 casas**
-(a precisão da Centi; migração `0086`): arredondar cada DFD ao centavo dava R$ 0,01 de diferença entre as abas e contra a
+(a precisão da Centi; migração `0087`): arredondar cada DFD ao centavo dava R$ 0,01 de diferença entre as abas e contra a
 capa · ✅ Capa conferida com a somatória EXATA, decidida em inteiros (fração de centavo bate; 1 centavo inteiro diverge
 sempre) · ✅ `brl` mostra o MESMO centavo para o mesmo valor somado em ordens diferentes.
 
@@ -1645,3 +1645,5 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Configurações revisadas**: abas num cartão próprio à esquerda, sempre da mesma altura (a do display), separado do conteúdo, com ícone e dica (no celular, a faixa de cima), o fundo que desliza até a aba aberta e o conteúdo que entra pelo lado da troca; tudo cabe no display sem rolar a página — a altura segue o conteúdo e o que é longo rola por dentro; a aba fica na URL; só a aba aberta é carregada; explicações no "(?)"; excluir PCA pela confirmação do sistema. Todas as abas conferidas no navegador (salvar Identidade/Tabelas, cadastrar/ativar/excluir PCA, listas carregadas).
 ✅ **Versões e Novidades (v1.3.0)**: o sistema é versionado (registro único de mudanças); o número aparece no fim do menu lateral e leva à página de Novidades, com o que mudou em cada versão e o botão "Ver onde mudou"; cada ADM recebe no sino a versão nova com a lista do que mudou.
 ✅ **Vínculos da linha do PCA mais legíveis** — o "N sem vínculo" mostra, com o mouse, a lista organizada por unidade do orçamento (dica flutuante); o editor separa as unidades da seleção das ações (cartão próprio, marcadas destacadas, as de outros vínculos travadas à parte); o PDF tem KPI de total e só duas tabelas (vinculadas e sem vínculo) com a linha TOTAL.
+✅ **Editor do vínculo minimalista** — sem repetir as unidades que o banner já mostra, ações com a caixa e o total, "Incluir ações futuras" numa linha e as de outros vínculos resumidas por destino.
+✅ **v1.4.0 — Sino: ver é ler, fixar não lidas e Novidades flutuantes**: o aviso visto no sino vira visualizado sozinho; o marcador fica colorido (✓) ao visualizar; marcar como não visualizada fixa o aviso; as Novidades abrem num banner ao lado do sino (ou pela versão do menu) sem fechar nada. Toda atualização, de qualquer sessão, passa a ser versionada e publicada.

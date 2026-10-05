@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import {
   type AlvosVinculo,
@@ -59,6 +59,7 @@ export function EditorVinculoOrcamento({
   onFechar,
   onAbrirVinculo,
   fixo,
+  fixosNoContexto = false,
 }: {
   unidades: UnidadeOrcamento[];
   vinculos: VinculoOrcamento[];
@@ -74,6 +75,8 @@ export function EditorVinculoOrcamento({
   /** O lado que NÃO muda (a tela em que se configura): "cubo" = a unidade do orçamento (tela do Orçamento) · "alvo" = a
    * unidade cadastrada (o PCA — a linha da unidade). Editar um vínculo gravado fixa a unidade do orçamento. */
   fixo?: "cubo" | "alvo";
+  /** O lado fixo JÁ aparece em volta (o acordeão do banner da linha): não repete. */
+  fixosNoContexto?: boolean;
 }) {
   const rotulo = useRotuloUnidade(alvos);
   const [chave, setChave] = useState(inicial.chave ?? "");
@@ -107,12 +110,19 @@ export function EditorVinculoOrcamento({
   const destinoOutro = new Map(outros.flatMap((o) => (o.acoes ?? []).map((a) => [a, o.alvoId] as const)));
   const outroDemais = outros.find((o) => o.acoes == null);
   const destinoDesmarcada = (k: string) =>
-    !demais && outroDemais && !outroDemais.acoesFora.includes(k) ? `vai para ${siglaDe(outroDemais.alvoId)} (as demais)` : null;
+    !demais && outroDemais && !outroDemais.acoesFora.includes(k) ? `vai para ${siglaDe(outroDemais.alvoId)}` : null;
   const siglaDe = (id: number) => alvos.unidades.find((u) => u.id === id)?.sigla ?? "outra unidade";
   // Quantas ações de cada unidade do orçamento estão SEM vínculo (a escolha da unidade aponta o que falta).
   const pendentes = useMemo(() => new Map(semVinculo(unidades, vinculos, alvos.unidades).map((p) => [p.unidade.chave, p.acoes.length])), [unidades, vinculos, alvos]);
 
   const deOutros = (unidade?.acoes ?? []).filter((x) => destinoOutro.has(x.chave));
+  // As de outros vínculos numa linha só, agrupadas pelo destino ("2 em GGIM").
+  const porSigla = new Map<string, number>();
+  for (const a of deOutros) {
+    const s = siglaDe(destinoOutro.get(a.chave) ?? 0);
+    porSigla.set(s, (porSigla.get(s) ?? 0) + 1);
+  }
+  const outrosPorDestino = [...porSigla].map(([sigla, n]) => `${num(n)} em ${sigla}`);
   const marcar = (k: string, sim: boolean) =>
     setMarcadas((m) => {
       const n = new Set(m);
@@ -120,117 +130,119 @@ export function EditorVinculoOrcamento({
       else n.delete(k);
       return n;
     });
+  const mostraCubo = !(cuboFixo && fixosNoContexto);
+  const mostraAlvo = !(fixo === "alvo" && fixosNoContexto);
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <section aria-label="Unidades do vínculo" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {cuboFixo ? (
-          <CampoFixo rotulo="Unidade do orçamento" valor={unidade?.texto ?? chave} />
-        ) : (
-          <SelectField
-            label="Unidade do orçamento"
-            value={chave}
-            disabled={salvando}
-            onChange={(e) => {
-              const k = e.target.value;
-              setChave(k);
-              const u = unidades.find((x) => x.chave === k);
-              const o = vinculos.filter((v) => v.chave === k);
-              const ocupadas = new Set(o.flatMap((x) => x.acoes ?? []));
-              setDemais(!o.some((x) => x.acoes == null));
-              setMarcadas(new Set((u?.acoes ?? []).filter((a) => !ocupadas.has(a.chave)).map((a) => a.chave)));
-            }}
-          >
-            <option value="">Escolha…</option>
-            {unidades.map((u) => (
-              <option key={u.chave} value={u.chave}>
-                {u.texto}
-                {pendentes.get(u.chave) ? ` — ${num(pendentes.get(u.chave) ?? 0)} ação(ões) sem vínculo` : ""}
-              </option>
-            ))}
-          </SelectField>
-        )}
-        {fixo === "alvo" ? (
-          <CampoFixo rotulo="Unidade cadastrada" valor={rotulo.deId(alvoId) || "—"} />
-        ) : (
-          <SelectField label="Unidade cadastrada" value={alvoId ?? ""} disabled={salvando} onChange={(e) => setAlvoId(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Escolha…</option>
-            {grupos.map((g) => (
-              <optgroup key={g.rotulo} label={g.rotulo}>
-                {g.itens.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {rotulo.texto(a)}
-                    {a.oculto ? " (oculta)" : ""}
+      {(mostraCubo || mostraAlvo) && (
+        <div className={`grid grid-cols-1 gap-3 ${mostraCubo && mostraAlvo ? "sm:grid-cols-2" : ""}`}>
+          {mostraCubo &&
+            (cuboFixo ? (
+              <CampoFixo rotulo="Unidade do orçamento" valor={unidade?.texto ?? chave} />
+            ) : (
+              <SelectField
+                label="Unidade do orçamento"
+                value={chave}
+                disabled={salvando}
+                onChange={(e) => {
+                  const k = e.target.value;
+                  setChave(k);
+                  const u = unidades.find((x) => x.chave === k);
+                  const o = vinculos.filter((v) => v.chave === k);
+                  const ocupadas = new Set(o.flatMap((x) => x.acoes ?? []));
+                  setDemais(!o.some((x) => x.acoes == null));
+                  setMarcadas(new Set((u?.acoes ?? []).filter((a) => !ocupadas.has(a.chave)).map((a) => a.chave)));
+                }}
+              >
+                <option value="">Escolha…</option>
+                {unidades.map((u) => (
+                  <option key={u.chave} value={u.chave}>
+                    {u.texto}
+                    {pendentes.get(u.chave) ? ` — ${num(pendentes.get(u.chave) ?? 0)} sem vínculo` : ""}
                   </option>
                 ))}
-              </optgroup>
+              </SelectField>
             ))}
-          </SelectField>
-        )}
-      </section>
+          {mostraAlvo &&
+            (fixo === "alvo" ? (
+              <CampoFixo rotulo="Unidade cadastrada" valor={rotulo.deId(alvoId) || "—"} />
+            ) : (
+              <SelectField label="Unidade cadastrada" value={alvoId ?? ""} disabled={salvando} onChange={(e) => setAlvoId(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">Escolha…</option>
+                {grupos.map((g) => (
+                  <optgroup key={g.rotulo} label={g.rotulo}>
+                    {g.itens.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {rotulo.texto(a)}
+                        {a.oculto ? " (oculta)" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </SelectField>
+            ))}
+        </div>
+      )}
       {unidade && (
-        <section aria-label="Ações deste vínculo" className="overflow-hidden rounded-card border border-border bg-surface">
-          <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-surface-2 px-3 py-2">
+        <section aria-label="Ações deste vínculo">
+          <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border lg:min-h-[var(--h-control-sm)]">
             <Checkbox
               checked={disponiveis.length > 0 && leva.length === disponiveis.length}
               indeterminado={leva.length > 0}
               disabled={salvando || disponiveis.length === 0}
               onChange={(e) => setMarcadas(new Set(e.target.checked ? disponiveis.map((x) => x.chave) : []))}
-              label={<span className="text-[13px] font-semibold text-text">Ações deste vínculo</span>}
+              label={
+                <span className="text-[13px] font-semibold text-text">
+                  Ações <span className="font-normal tabular-nums text-muted">{num(leva.length)}/{num(disponiveis.length)}</span>
+                </span>
+              }
             />
-            <span className="text-[12px] tabular-nums text-text-2">
-              <b>{num(leva.length)}</b> de {num(disponiveis.length)} · <b>{brl(leva.reduce((s, a) => s + a.valorInicial, 0))}</b>
-            </span>
-            <div className="w-full">
-              {demaisOcupado && !demais ? (
-                <p className="text-[12px] text-muted">As demais ações desta unidade já vão para {outroDemais ? siglaDe(outroDemais.alvoId) : "outro vínculo"}.</p>
-              ) : (
-                <Checkbox
-                  checked={demais}
-                  disabled={salvando}
-                  onChange={(e) => setDemais(e.target.checked)}
-                  label={<span className="text-[12.5px] text-text-2">Incluir as demais ações (também as dos próximos orçamentos)</span>}
-                />
-              )}
-            </div>
-          </header>
+            <span className="text-[13px] font-semibold tabular-nums text-text">{brl(leva.reduce((s, a) => s + a.valorInicial, 0))}</span>
+          </div>
           {disponiveis.length === 0 ? (
-            <p className="px-3 py-3 text-[12.5px] text-muted">Todas as ações desta unidade já estão em outros vínculos.</p>
+            <p className="py-3 text-[12.5px] text-muted">Todas as ações desta unidade já estão em outros vínculos.</p>
           ) : (
             <ul className="divide-y divide-border">
               {disponiveis.map((a) => {
                 const marcada = marcadas.has(a.chave);
-                const nota = marcada ? null : (destinoDesmarcada(a.chave) ?? "sem vínculo");
                 return (
-                  <LinhaAcao key={a.chave} valor={a.valorInicial} nota={nota} alerta={nota === "sem vínculo"} marcada={marcada}>
-                    <Checkbox
-                      checked={marcada}
-                      disabled={salvando}
-                      onChange={(e) => marcar(a.chave, e.target.checked)}
-                      label={<span className="text-[13px] text-text">{a.texto}</span>}
-                    />
-                  </LinhaAcao>
+                  <li key={a.chave} className="flex min-h-11 items-center gap-3 py-1">
+                    <span className="min-w-0 flex-1">
+                      <Checkbox
+                        checked={marcada}
+                        disabled={salvando}
+                        onChange={(e) => marcar(a.chave, e.target.checked)}
+                        label={<span className={`text-[13px] ${marcada ? "text-text" : "text-muted"}`}>{a.texto}</span>}
+                      />
+                    </span>
+                    <span className="shrink-0 text-right text-[12.5px] tabular-nums">
+                      <span className={`block ${marcada ? "text-text-2" : "text-muted"}`}>{brl(a.valorInicial)}</span>
+                      {!marcada && destinoDesmarcada(a.chave) && <span className="block text-[11.5px] text-muted">{destinoDesmarcada(a.chave)}</span>}
+                    </span>
+                  </li>
                 );
               })}
             </ul>
           )}
-          {deOutros.length > 0 && (
-            <>
-              <p className="border-y border-border bg-surface-2 px-3 py-1.5 text-[12px] font-semibold text-muted">
-                Em outros vínculos desta unidade ({num(deOutros.length)})
+          <div className="space-y-1 border-t border-border pt-2 text-[12.5px] text-muted">
+            {demaisOcupado && !demais ? (
+              <p>Ações futuras desta unidade vão para {outroDemais ? siglaDe(outroDemais.alvoId) : "outro vínculo"}.</p>
+            ) : (
+              <Checkbox
+                checked={demais}
+                disabled={salvando}
+                onChange={(e) => setDemais(e.target.checked)}
+                label={<span className="text-[12.5px] text-text-2">Incluir ações futuras desta unidade</span>}
+              />
+            )}
+            {outrosPorDestino.length > 0 && (
+              <p className="flex items-center gap-1.5" title={deOutros.map((a) => `${a.texto} → ${siglaDe(destinoOutro.get(a.chave) ?? 0)}`).join("\n")}>
+                <IconLock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Em outros vínculos: {outrosPorDestino.join(" · ")}
               </p>
-              <ul className="divide-y divide-border opacity-80">
-                {deOutros.map((a) => (
-                  <LinhaAcao key={a.chave} valor={a.valorInicial} nota={`vai para ${siglaDe(destinoOutro.get(a.chave) ?? 0)}`}>
-                    <span className="flex items-center gap-2.5 text-[13px] text-text-2">
-                      <IconLock className="h-4 w-4 shrink-0 text-muted" aria-label="Travada" />
-                      {a.texto}
-                    </span>
-                  </LinhaAcao>
-                ))}
-              </ul>
-            </>
-          )}
+            )}
+          </div>
         </section>
       )}
       {(motivo || erro) && (
@@ -281,34 +293,5 @@ function CampoFixo({ rotulo, valor }: { rotulo: string; valor: string }) {
         <span className="line-clamp-2">{valor}</span>
       </p>
     </div>
-  );
-}
-
-/** Uma ação na lista do editor: a caixa (ou o cadeado) com o texto, o valor e o destino quando não é deste vínculo. */
-function LinhaAcao({
-  valor,
-  nota,
-  alerta = false,
-  marcada = false,
-  children,
-}: {
-  valor: number;
-  nota: string | null;
-  alerta?: boolean;
-  marcada?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <li className="flex min-h-11 items-center gap-3 px-3 py-1.5" style={marcada ? { background: "var(--accent-soft)" } : undefined}>
-      <span className="min-w-0 flex-1">{children}</span>
-      <span className="shrink-0 text-right text-[12px] tabular-nums">
-        <span className="block font-medium text-text-2">{brl(valor)}</span>
-        {nota && (
-          <span className="block" style={{ color: alerta ? "var(--warn)" : "var(--muted)" }}>
-            {nota}
-          </span>
-        )}
-      </span>
-    </li>
   );
 }

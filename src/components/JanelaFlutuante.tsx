@@ -128,6 +128,7 @@ export function JanelaFlutuante({
       ref={ref}
       role="dialog"
       aria-modal="false"
+      data-sobre-dropdown=""
       aria-label={titulo}
       className="fixed z-[150] flex max-h-[calc(100dvh-16px)] flex-col rounded-card border border-border bg-surface shadow-soft animate-fade-in-up"
       style={{ left: pos?.x ?? -9999, top: pos?.y ?? 0, width: Math.min(largura, typeof window === "undefined" ? largura : window.innerWidth - 16) }}

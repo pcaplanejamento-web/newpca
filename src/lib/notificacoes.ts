@@ -16,7 +16,7 @@ import { agendarAoVivo, avisarAoVivo } from "./notificacoes-ao-vivo";
 import { getConfigNotificacoes } from "./notificacoes-config";
 import { CHAVE_PREF_PESSOA, emailAposPara, sqlUtc, lerPrefsEmail, lerPrefsPessoa, noSino, type PrefsEmail, type PrefsPessoa, querEmail, silenciado } from "./notificacoes-config-core";
 import { CHAVE_PREF_EMAIL } from "./email-core";
-import { type AlvoLimpeza, comandosExcluirNotificacoes, consultaDispensadas } from "./notificacoes-sql";
+import { type AlvoLeitura, type AlvoLimpeza, comandoMarcarLidas, comandosExcluirNotificacoes, consultaDispensadas } from "./notificacoes-sql";
 
 /**
  * NOTIFICAÇÕES do sino (migrações `0044`/`0083`) — acesso ao D1 (só escopo de request). As de EVENTO (atribuída, menção,
@@ -37,6 +37,8 @@ export type Notificacao = {
   texto: string | null;
   link: string | null;
   lida: boolean;
+  /** Marcada como NÃO lida pela pessoa: ver não a marca como lida. */
+  travada: boolean;
   criadoEm: string | null;
   ator: { id: number; nome: string; foto: string | null } | null;
 };
@@ -391,6 +393,7 @@ export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; 
         texto: notificacoes.texto,
         link: notificacoes.link,
         lida: notificacoes.lida,
+        travada: notificacoes.travada,
         criadoEm: notificacoes.criadoEm,
         tarefaId: notificacoes.tarefaId,
         quadroId: notificacoes.quadroId,
@@ -424,6 +427,7 @@ export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; 
       texto: l.texto,
       link: l.link,
       lida: l.lida,
+      travada: l.travada,
       criadoEm: l.criadoEm,
       tarefaId: l.tarefaId,
       quadroId: l.quadroId,
@@ -433,13 +437,11 @@ export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; 
 }
 
 /** Marca como LIDAS (ou NÃO lidas) as pedidas (só as da pessoa), ou todas como lidas. As outras abas acompanham ao vivo. */
-export async function marcarLidas(u: UsuarioSessao, alvo: { ids: number[]; lida?: boolean } | { todas: true }) {
-  const lida = "ids" in alvo ? alvo.lida !== false : true;
-  await getDb()
-    .update(notificacoes)
-    .set({ lida, lidaEm: lida ? sql`COALESCE(${notificacoes.lidaEm}, CURRENT_TIMESTAMP)` : null })
-    .where(and(eq(notificacoes.usuarioId, u.id), "ids" in alvo ? inArray(notificacoes.id, alvo.ids.slice(0, 90)) : eq(notificacoes.lida, false)));
-  avisarAoVivo([u.id]);
+export async function marcarLidas(u: UsuarioSessao, alvo: AlvoLeitura): Promise<number> {
+  const db = getDb();
+  const feitas = await comandoMarcarLidas(db, u.id, alvo);
+  if (feitas.length) avisarAoVivo([u.id]);
+  return feitas.length;
 }
 
 /** EXCLUI do banco (as pedidas, as lidas ou todas) — os derivados ficam dispensados. Devolve quantas saíram. */

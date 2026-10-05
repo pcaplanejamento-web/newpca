@@ -8,14 +8,17 @@ import type { Notificacao, PaginaNotificacoes } from "@/lib/notificacoes";
 import { MAX_AVISOS_NA_TELA, dataHoraCompleta, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, tituloComContagem } from "@/lib/notificacoes-tela-core";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { TipoNotificacao } from "@/lib/tarefas-core";
+import { versaoDoAviso } from "@/lib/versoes";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { ChipsIcone } from "./ChipsIcone";
+import { CirculoConcluir } from "./CirculoConcluir";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
-import { IconAdiar, IconBell, IconChevronDown, IconLidas, IconLimpar, IconNaoLida, IconSemAvisos, IconSettings, IconSpinner, IconTrash } from "./icons";
+import { IconAdiar, IconBell, IconChevronDown, IconFixar, IconLidas, IconLimpar, IconSemAvisos, IconSettings, IconSpinner, IconTrash } from "./icons";
 import { Modal, duracaoMotionMs } from "./Modal";
+import { NovidadesFlutuantes } from "./Novidades";
 import { VISUAL_AVISO, visualAviso } from "./notificacoesVisual";
 import { alertaSistema, tocarSom, usePreferenciasNotificacoes } from "./PreferenciasNotificacoes";
 import { Segmented } from "./Segmented";
@@ -25,6 +28,17 @@ const VISUAL = VISUAL_AVISO;
 
 /** Quantos avisos por página (rolagem infinita). */
 const POR_PAGINA = 20;
+/** O aviso VISTO (≥ 60% à vista no sino por este tempo) vira lido — o travado (marcado como não lido) não. */
+const TEMPO_VISTO_MS = 800;
+
+/** O aviso abre algo ao toque: o link — ou as Novidades (a versão nova abre o banner flutuante). */
+const abrivel = (n: Notificacao) => !!n.link || n.tipo === "versao";
+
+type Ancora = { x: number; y: number; w: number; h: number };
+const ancoraDe = (el: Element | null | undefined): Ancora | null => {
+  const r = el?.getBoundingClientRect();
+  return r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
+};
 /** O "Desfazer" de limpar vale tanto (só então o banco é limpo). */
 const DESFAZER_MS = 6000;
 
@@ -134,8 +148,9 @@ export function ItemNotificacao({
         <button
           type="button"
           data-aviso={n.id}
+          data-pendente={!n.lida && !n.travada ? "" : undefined}
           onClick={() => onAbrir(n)}
-          title={`${n.titulo}${n.texto ? ` — ${n.texto}` : ""}\n${dataHoraCompleta(n.criadoEm)}${n.link ? "\nClique para abrir" : ""}`}
+          title={`${n.titulo}${n.texto ? ` — ${n.texto}` : ""}\n${dataHoraCompleta(n.criadoEm)}${abrivel(n) ? "\nClique para abrir" : ""}`}
           className="absolute inset-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span className="sr-only">
@@ -153,8 +168,24 @@ export function ItemNotificacao({
           )}
           <span className="mt-0.5 block text-[11px] text-faint">{tempoRelativo(n.criadoEm, agora)}</span>
         </span>
-        <span className="relative z-10 flex flex-col items-end gap-1 pt-1.5">
-          {!n.lida && <span className="h-2 w-2 rounded-full bg-accent" title="Não lida" aria-hidden="true" />}
+        {/* O MARCADOR de visualizada: vazio = não vista; colorido (✓) = vista. Tocar alterna — a não vista fica FIXADA. */}
+        <span className="relative z-10 flex flex-col items-center gap-1 pt-2">
+          {onLida ? (
+            <CirculoConcluir
+              concluida={n.lida}
+              rotulo={n.titulo}
+              rotulos={{ marcar: "Marcar como visualizada", desmarcar: "Marcar como não visualizada (fica fixada)" }}
+              onAlternar={() => onLida(n, !n.lida)}
+            />
+          ) : (
+            !n.lida && <span className="h-2 w-2 rounded-full bg-accent" title="Não visualizada" aria-hidden="true" />
+          )}
+          {!n.lida && n.travada && (
+            <span title="Fixada como não visualizada — ver não a marca" className="text-accent">
+              <IconFixar className="h-3 w-3" />
+              <span className="sr-only">Fixada como não visualizada</span>
+            </span>
+          )}
         </span>
         {outros.length > 0 && onExpandir && (
           <button
@@ -171,13 +202,8 @@ export function ItemNotificacao({
         )}
         {/* As AÇÕES flutuam por cima (não roubam a largura do texto); no toque, ficam numa linha embaixo. */}
         <span
-          className={`absolute top-1 right-1 z-20 flex items-center rounded-control bg-surface-2 shadow-soft ring-1 ring-border transition-opacity group-focus-within/aviso:opacity-100 group-hover/aviso:opacity-100 pointer-coarse:static pointer-coarse:col-start-2 pointer-coarse:col-end-4 pointer-coarse:mt-1 pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none pointer-coarse:ring-0 ${menu ? "opacity-100" : "pointer-events-none opacity-0 group-focus-within/aviso:pointer-events-auto group-hover/aviso:pointer-events-auto pointer-coarse:pointer-events-auto"}`}
+          className={`absolute top-1 right-9 z-20 flex items-center rounded-control bg-surface-2 shadow-soft ring-1 ring-border transition-opacity group-focus-within/aviso:opacity-100 group-hover/aviso:opacity-100 pointer-coarse:static pointer-coarse:col-start-2 pointer-coarse:col-end-4 pointer-coarse:mt-1 pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none pointer-coarse:ring-0 ${menu ? "opacity-100" : "pointer-events-none opacity-0 group-focus-within/aviso:pointer-events-auto group-hover/aviso:pointer-events-auto pointer-coarse:pointer-events-auto"}`}
         >
-          {onLida && (
-            <Acao rotulo={n.lida ? "Marcar como não lida" : "Marcar como lida"} onClick={() => onLida(n, !n.lida)}>
-              {n.lida ? <IconNaoLida className="h-4 w-4" /> : <IconLidas className="h-4 w-4" />}
-            </Acao>
-          )}
           {onAdiar && (
             <Acao rotulo="Adiar (lembrar depois)" ativo={menu === "adiar"} onClick={() => setMenu((m) => (m === "adiar" ? null : "adiar"))}>
               <IconAdiar className="h-4 w-4" />
@@ -252,7 +278,20 @@ type Caixa = {
  * infinita (até `MAX_AVISOS_NA_TELA` na memória), ações por aviso e, no rodapé, marcar todas como lidas, LIMPAR (as lidas
  * ou tudo — com "Desfazer"; só então o banco é limpo) e configurar.
  */
-function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }: { caixa: Caixa; fechar: () => void; configurarHref: string; semTitulo?: boolean }) {
+function PainelNotificacoes({
+  caixa,
+  fechar,
+  configurarHref,
+  semTitulo = false,
+  onNovidades,
+}: {
+  caixa: Caixa;
+  fechar: () => void;
+  configurarHref: string;
+  semTitulo?: boolean;
+  /** Abrir as Novidades de uma versão no banner flutuante (ao lado do painel — o sino fica aberto). */
+  onNovidades: (versao: string, ancora: Ancora | null) => void;
+}) {
   const router = useRouter();
   const { confirmar, confirmacao } = useConfirmacao();
   const [filtro, setFiltro] = useState<"todas" | "nao-lidas">("todas");
@@ -265,6 +304,7 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
   const [expandidos, setExpandidos] = useState<Set<number>>(new Set());
   const [agora, setAgora] = useState(() => Date.now());
   const fim = useRef<HTMLDivElement>(null);
+  const lista = useRef<HTMLDivElement>(null);
   const carga = useRef(0);
   const { setNaoLidas } = caixa;
 
@@ -302,7 +342,7 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
         if (minha === carga.current) setCarregando(false);
       }
     },
-    [filtro, setNaoLidas],
+    [filtro, setNaoLidas, ocultos],
   );
 
   // A 1ª página ao abrir e ao trocar de aba; cada aviso AO VIVO MESCLA a 1ª página (as já carregadas ficam).
@@ -338,6 +378,12 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
   }, []);
 
   const abrir = async (n: Notificacao) => {
+    // A versão nova: as Novidades num banner flutuante AO LADO — o sino fica aberto.
+    if (n.tipo === "versao") {
+      if (!n.lida) void alternarLida(n, true, false);
+      onNovidades(versaoDoAviso(n.titulo), ancoraDe(lista.current?.closest("[role='dialog']") ?? lista.current));
+      return;
+    }
     if (!n.lida) {
       setNaoLidas((c) => Math.max(0, c - 1));
       // Espera gravar antes de navegar (a reconta da tela nova não traz o número velho).
@@ -347,19 +393,81 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
     if (n.link) router.push(n.link);
   };
 
-  const alternarLida = async (n: Notificacao, lida: boolean) => {
-    const ids = [n.id];
-    setItens((xs) => xs?.map((x) => (x.id === n.id ? { ...x, lida } : x)) ?? xs);
-    setNaoLidas((c) => Math.max(0, c + (lida ? -1 : 1)));
-    if (lida && filtro === "nao-lidas") sair([n.id]);
+  /** O toque no MARCADOR: visualizada (destrava) ou NÃO visualizada (fica FIXADA — ver não a marca). */
+  const alternarLida = async (n: Notificacao, lida: boolean, tirarDaAba = true) => {
+    const antes = { lida: n.lida, travada: n.travada };
+    setItens((xs) => xs?.map((x) => (x.id === n.id ? { ...x, lida, travada: !lida } : x)) ?? xs);
+    if (lida !== n.lida) setNaoLidas((c) => Math.max(0, c + (lida ? -1 : 1)));
+    if (lida && tirarDaAba && filtro === "nao-lidas") sair([n.id]);
     try {
-      await chamar("/api/notificacoes", "PATCH", { ids, lida });
+      await chamar("/api/notificacoes", "PATCH", { ids: [n.id], lida });
     } catch (e) {
-      setItens((xs) => xs?.map((x) => (x.id === n.id ? { ...x, lida: !lida } : x)) ?? xs);
-      setNaoLidas((c) => Math.max(0, c + (lida ? 1 : -1)));
+      setItens((xs) => xs?.map((x) => (x.id === n.id ? { ...x, ...antes } : x)) ?? xs);
+      if (lida !== n.lida) setNaoLidas((c) => Math.max(0, c + (lida ? 1 : -1)));
       toast.error((e as Error).message);
     }
   };
+
+  // VER = LER: o aviso não lido (e não fixado) ≥ 60% à vista por um instante vira visualizado — em lote, sem tirá-lo da
+  // lista (fica colorido no lugar). Só com a aba do navegador à vista; o que estava na fila sai ao fechar o sino.
+  const filaVistos = useRef<Set<number>>(new Set());
+  const envioVistos = useRef<number | null>(null);
+  const enviarVistos = useCallback(() => {
+    if (envioVistos.current) window.clearTimeout(envioVistos.current);
+    envioVistos.current = null;
+    const ids = [...filaVistos.current];
+    filaVistos.current.clear();
+    if (!ids.length) return;
+    chamar<{ marcadas: number }>("/api/notificacoes", "PATCH", { ids, visto: true }).catch(() => {
+      // Não gravou: voltam a não visualizadas (aparecem de novo na próxima vez).
+      setItens((xs) => xs?.map((x) => (ids.includes(x.id) ? { ...x, lida: false } : x)) ?? xs);
+      setNaoLidas((c) => c + ids.length);
+    });
+  }, [setNaoLidas]);
+  const verVisto = useCallback(
+    (id: number) => {
+      if (document.visibilityState !== "visible" || filaVistos.current.has(id)) return;
+      filaVistos.current.add(id);
+      setItens((xs) => xs?.map((x) => (x.id === id && !x.lida && !x.travada ? { ...x, lida: true } : x)) ?? xs);
+      setNaoLidas((c) => Math.max(0, c - 1));
+      if (envioVistos.current) window.clearTimeout(envioVistos.current);
+      envioVistos.current = window.setTimeout(enviarVistos, 500);
+    },
+    [enviarVistos, setNaoLidas],
+  );
+  useEffect(() => enviarVistos, [enviarVistos]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: expandir e filtrar trocam os avisos À VISTA (observa de novo).
+  useEffect(() => {
+    const raiz = lista.current;
+    if (!raiz || !itens?.length || typeof IntersectionObserver === "undefined") return;
+    const esperas = new Map<number, number>();
+    const obs = new IntersectionObserver(
+      (entradas) => {
+        for (const e of entradas) {
+          const id = Number((e.target as HTMLElement).dataset.aviso);
+          if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+            if (!esperas.has(id))
+              esperas.set(
+                id,
+                window.setTimeout(() => {
+                  esperas.delete(id);
+                  verVisto(id);
+                }, TEMPO_VISTO_MS),
+              );
+          } else {
+            window.clearTimeout(esperas.get(id));
+            esperas.delete(id);
+          }
+        }
+      },
+      { root: raiz, threshold: [0, 0.6] },
+    );
+    for (const el of raiz.querySelectorAll("button[data-aviso][data-pendente]")) obs.observe(el);
+    return () => {
+      obs.disconnect();
+      for (const t of esperas.values()) window.clearTimeout(t);
+    };
+  }, [itens, expandidos, tipo, verVisto]);
 
   const excluir = async (alvos: Notificacao[]) => {
     const ids = alvos.map((x) => x.id);
@@ -384,11 +492,13 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
     caixa.limpar(alvo, saem, caixa.naoLidas, () => setItens(antes));
   };
 
+  // Marcar todas: as FIXADAS como não visualizadas ficam como estão.
   const marcarTodas = async () => {
     const antes = itens;
-    setItens((xs) => xs?.map((x) => ({ ...x, lida: true })) ?? xs);
-    setNaoLidas(0);
-    if (filtro === "nao-lidas" && itens) sair(itens.map((x) => x.id));
+    const fixadas = (itens ?? []).filter((x) => !x.lida && x.travada);
+    setItens((xs) => xs?.map((x) => (x.travada && !x.lida ? x : { ...x, lida: true })) ?? xs);
+    setNaoLidas(fixadas.length);
+    if (filtro === "nao-lidas" && itens) sair(itens.filter((x) => !(x.travada && !x.lida)).map((x) => x.id));
     try {
       await chamar("/api/notificacoes", "PATCH", { todas: true });
     } catch (e) {
@@ -476,7 +586,7 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
           </div>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1" onKeyDown={teclado} role="presentation">
+      <div ref={lista} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1" onKeyDown={teclado} role="presentation">
         {itens === null && !falha && (
           <p className="flex items-center justify-center gap-2 py-8 text-xs text-muted">
             <IconSpinner className="h-4 w-4" /> Carregando…
@@ -543,7 +653,7 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
         {naMemoria >= MAX_AVISOS_NA_TELA && mais && <p className="px-2 py-3 text-center text-[11px] text-faint">Mostrando as {MAX_AVISOS_NA_TELA} mais recentes — limpe as antigas para ver o resto.</p>}
       </div>
       <div className="flex shrink-0 items-center gap-0.5 border-t border-border px-1 pt-1.5">
-        <Acao rotulo="Marcar todas como lidas" onClick={() => void marcarTodas()}>
+        <Acao rotulo="Marcar todas como visualizadas (as fixadas ficam)" onClick={() => void marcarTodas()}>
           <IconLidas className="h-4 w-4" />
         </Acao>
         <Acao rotulo="Limpar as lidas (apaga do sistema)" onClick={() => void limpar("lidas")}>
@@ -755,6 +865,13 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
   const router = useRouter();
   const { caixa, novo, fecharNovo, toque, aoVivo } = useCaixa(inicial);
   const [folha, setFolha] = useState(false);
+  // As NOVIDADES de uma versão no banner flutuante (aberto pelo aviso — o sino segue aberto; ir até uma mudança fecha os dois).
+  const [novidades, setNovidades] = useState<{ versao: string; ancora: Ancora | null } | null>(null);
+  const fecharSino = useRef<() => void>(() => {});
+  const abrirNovidades = (fechar: () => void) => (versao: string, ancora: Ancora | null) => {
+    fecharSino.current = fechar;
+    setNovidades({ versao, ancora });
+  };
   const n = caixa.naoLidas;
   const rotulo = n ? `Notificações — ${n} não lida${n === 1 ? "" : "s"}` : "Notificações";
   const icone = (
@@ -781,7 +898,7 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
         <Dropdown align="end" papel="dialog" ariaLabel={rotulo} title={aoVivo ? "Notificações (ao vivo)" : "Notificações"} triggerClassName={`${classeGatilho} inline-flex`} trigger={icone} width={400}>
           {(fechar) => (
             <div className="flex max-h-[min(78vh,640px)] flex-col">
-              <PainelNotificacoes caixa={caixa} fechar={fechar} configurarHref={configurarHref} />
+              <PainelNotificacoes caixa={caixa} fechar={fechar} configurarHref={configurarHref} onNovidades={abrirNovidades(fechar)} />
             </div>
           )}
         </Dropdown>
@@ -791,9 +908,15 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
       </button>
       <Modal open={folha} onClose={() => setFolha(false)} titulo="Notificações" size="md">
         <div className="flex h-[min(72dvh,640px)] flex-col">
-          {folha && <PainelNotificacoes caixa={caixa} fechar={() => setFolha(false)} configurarHref={configurarHref} semTitulo />}
+          {folha && <PainelNotificacoes caixa={caixa} fechar={() => setFolha(false)} configurarHref={configurarHref} semTitulo onNovidades={abrirNovidades(() => setFolha(false))} />}
         </div>
       </Modal>
+      <NovidadesFlutuantes
+        versao={novidades?.versao ?? null}
+        ancora={novidades?.ancora ?? null}
+        onFechar={() => setNovidades(null)}
+        onIr={() => fecharSino.current()}
+      />
       <span className="sr-only" aria-live="polite">
         {novo ? `Nova notificação: ${novo.titulo}` : ""}
       </span>
@@ -804,16 +927,20 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
           duracao={6000}
           onClose={fecharNovo}
           acoes={
-            novo.link ? (
+            abrivel(novo) ? (
               <Button
                 size="sm"
-                onClick={() => {
+                onClick={(e) => {
                   const alvo = novo;
+                  const ancora = ancoraDe(e.currentTarget);
                   fecharNovo();
                   void chamar("/api/notificacoes", "PATCH", { ids: [alvo.id], lida: true })
                     .then(() => caixa.setNaoLidas((c) => Math.max(0, c - 1)))
                     .catch(() => {});
-                  if (alvo.link) router.push(alvo.link);
+                  if (alvo.tipo === "versao") {
+                    fecharSino.current = () => {};
+                    setNovidades({ versao: versaoDoAviso(alvo.titulo), ancora });
+                  } else if (alvo.link) router.push(alvo.link);
                 }}
               >
                 Abrir

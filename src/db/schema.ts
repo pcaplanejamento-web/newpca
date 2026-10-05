@@ -1326,6 +1326,8 @@ export const notificacoes = sqliteTable(
     emailReservadoEm: text("email_reservado_em"),
     /** Quando foi LIDA (migração `0084` — o relatório de alcance). */
     lidaEm: text("lida_em"),
+    /** TRAVADA como não lida pela pessoa (migração `0086`): ver não a marca como lida. */
+    travada: integer("travada", { mode: "boolean" }).notNull().default(false),
     /** O e-mail SAIU de fato (o pulado — a pessoa não quer — fica 0). */
     emailOk: integer("email_ok", { mode: "boolean" }).notNull().default(false),
     /** ADIADA pela pessoa: some do sino até este instante (UTC "AAAA-MM-DD HH:MM:SS"). */

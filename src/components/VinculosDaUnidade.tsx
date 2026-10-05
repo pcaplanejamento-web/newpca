@@ -168,6 +168,7 @@ export function VinculosDaUnidade({
       alvos={alvos}
       inicial={inicial}
       fixo={alvoId != null ? "alvo" : "cubo"}
+      fixosNoContexto
       salvando={salvando}
       erro={erro}
       onSalvar={(d) => void salvar(inicial, d)}

@@ -963,7 +963,7 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     for (const i of ["pca_dfds_protocolo_idx", "pca_itens_dfd_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
   });
 
-  it("0085/0086 totais do DFD = os itens: completo recalculado (4 casas), parcial intocado, item sem total ganha q × vu", () => {
+  it("0085/0087 totais do DFD = os itens: completo recalculado (4 casas), parcial intocado, item sem total ganha q × vu", () => {
     const d = new DatabaseSync(":memory:");
     const i85 = arquivos.findIndex((f) => f.startsWith("0085"));
     assert.ok(i85 > 0, "migração 0085 ausente");
@@ -978,11 +978,11 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     const t = (id: number) => ({ ...(d.prepare("SELECT total_itens AS n, valor_total AS v FROM dfds WHERE id = ?").get(id) as object) });
     assert.equal((d.prepare("SELECT valor_total AS v FROM dfd_itens WHERE dfd_id = 1 AND sequencial = 2").get() as { v: number }).v, 100);
     assert.deepEqual(t(1), { n: 3, v: 350 }, "0085: 200 + 100 (q × vu) + 50,0049 → 350,00 (o TOTAL GERAL 1.000 sai)");
-    const i86 = arquivos.findIndex((f) => f.startsWith("0086"));
-    assert.ok(i86 > i85, "migração 0086 ausente");
+    const i87 = arquivos.findIndex((f) => f.startsWith("0087"));
+    assert.ok(i87 > i85, "migração 0087 ausente");
     for (const arq of arquivos.slice(i85 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
-    d.exec(readFileSync(join(DIR, arquivos[i86]), "utf8")); // idempotente
-    assert.deepEqual(t(1), { n: 3, v: 350.0049 }, "0086: a soma com 4 casas (a fração do centavo não se perde)");
+    d.exec(readFileSync(join(DIR, arquivos[i87]), "utf8")); // idempotente
+    assert.deepEqual(t(1), { n: 3, v: 350.0049 }, "0087: a soma com 4 casas (a fração do centavo não se perde)");
     assert.deepEqual(t(2), { n: 5, v: 900 }, "2 de 5 itens: o parcial fica (a conferência acusa)");
     assert.deepEqual(t(3), { n: 1, v: null }, "sem valor: NULL, nunca estimado");
   });

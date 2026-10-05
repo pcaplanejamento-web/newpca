@@ -552,7 +552,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ZERADO** (`valorTotal ?? 0`) — o sistema não estima nada. O total do **PCA** (`pcas.valorEstimado`, coluna mantida)
     passou a somar os `valorTotal` dos DFDs. A coluna `dfds.valor_estimado` fica **dormante** (sem código; sem migração
     de DROP).
-  - **REGRA ÚNICA, de ponta a ponta (auditoria dos totais, migrações `0085`/`0086`):** valor do DFD = Σ dos totais dos itens
+  - **REGRA ÚNICA, de ponta a ponta (auditoria dos totais, migrações `0085`/`0087`):** valor do DFD = Σ dos totais dos itens
     com **4 casas** — a precisão da Centi, cujo preço unitário tem até 4 casas (36 × 80.204,5466 = 2.887.363,6776);
     `arredondarValor`, `ROUND(…, 4)` no banco — (NULL quando ≤ 0) e nº de itens = quantos existem; a tela mostra ao centavo
     (`brl` fixa as 4 casas antes: duas somas do mesmo valor em ordens diferentes mostram o MESMO centavo) — na LEITURA (`fecharValoresItens`, `parse-dfd-comum.ts`: o
@@ -561,7 +561,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     da massa; total digitado à mão vale; `valorDosItens`), na SOBRESCRITA (`comTotal` = a soma) e no BANCO
     (**`comandoTotaisDfd`**, `dfd-sql.ts`, no MESMO `db.batch` de toda escrita de itens — `start-dfd`/`append` com
     `soCompleto`: a importação pela metade mantém o total DECLARADO, que o `gravacaoParcial` usa; "Salvar" e a massa sempre).
-    A `0085` acertou os gravados (item sem total → q × vu; DFDs completos → os itens) e a `0086` os passou a 4 casas (somar
+    A `0085` acertou os gravados (item sem total → q × vu; DFDs completos → os itens) e a `0087` os passou a 4 casas (somar
     DFDs já arredondados ao centavo dava R$ 0,01 de diferença entre as abas DFDs e Itens e contra a capa — 3 de 68 protocolos,
     medido em produção). Assim protocolo (Σ DFDs) = DFDs = itens em TODA tela — lista e capa do protocolo, cards/Dashboard/
     Orçamento do PCA, calendário, consulta pública.
@@ -2013,10 +2013,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de todo o orçamento (`fixo="cubo"`, sugestão pré-escolhida); **PDF** no cabeçalho (`BotaoAcao`, com Exportar): KPIs Total ·
   Vinculado · Sem vínculo e só DUAS tabelas — **Ações vinculadas** e **Ações sem vínculo** (Unidade do orçamento · Ação ·
   Dotação), cada uma com a linha **TOTAL** em destaque. Núcleo puro **`vinculos-unidade.ts`** (`vinculosDaLinha`,
-  `semVinculoPorAlvo`, `listaSemVinculo`, `blocosVinculosDaLinha` — testado). O editor separa a SELEÇÃO: a seção
-  **Unidades** (o lado fixo pela tela como valor estático — `CampoFixo` —, o outro num `SelectField`) e o cartão **Ações
-  deste vínculo** (cabeçalho com a caixa "todas", "n de m · R$" e "Incluir as demais ações" — ou a nota de quem já as leva;
-  as marcadas em `--accent-soft`; abaixo, "Em outros vínculos desta unidade" com cadeado), cada ação com o destino; botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`) (este vínculo · "vai para SIGLA" · "as demais" de outra unidade · "sem vínculo" em âmbar). A gravação
+  `semVinculoPorAlvo`, `listaSemVinculo`, `blocosVinculosDaLinha` — testado). O editor é MINIMALISTA: o lado fixo pela
+  tela vira um valor estático (`CampoFixo`) e, no banner da linha (`fixosNoContexto` — o acordeão e o título já dizem as
+  duas unidades), some; a lista **Ações n/m · R$** (caixa "todas"; desmarcada = esmaecida, o destino só quando vai a outro
+  vínculo), embaixo "Incluir ações futuras desta unidade" (= "as demais"; ou a nota de quem já as leva) e as de outros
+  vínculos numa linha só com cadeado ("Em outros vínculos: 2 em GGIM", a lista na dica); botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`). A gravação
   é a da aba Vínculos (`useGravacaoVinculos`, `OrcamentoVinculosAba.tsx`) → `router.refresh` (o orçamento do PCA recalcula)
   abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
@@ -3548,7 +3549,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     MESCLA a 1ª página (`mesclarPrimeiraPagina` — as páginas carregadas ficam, o que está sendo limpo não volta). **Aviso
     novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), a **prévia flutuante** com
     "Abrir" (6 s), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
-    altura recolhe); tudo respeita "reduzir movimento". Ícones novos `IconLidas`/`IconNaoLida`/`IconSemAvisos`/
+    altura recolhe); tudo respeita "reduzir movimento". Ícones novos `IconLidas`/`IconSemAvisos`/
     `IconEventoAlterado`/`IconCadastro`.
   - **Avisos novos (tipos `vence_hoje`, `evento`, `protocolo`, `pca`, `cadastro`):** **Mesa** — o responsável designado a um
     protocolo (célula/banner e massa — na massa UM aviso por pessoa com a contagem; `avisos-mesa.ts`
@@ -3604,6 +3605,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`recontar` = `conferirNovo` com 15 s de intervalo). **Toda ação tem a DICA ao passar o mouse:** `Segmented.dica`,
     `Switch.dica`, `title` no `GatilhoFiltro` ("Filtrar e ordenar: …"), na `Ajuda` e no `SeletorMultiplo` suspenso; no sino,
     o aviso inteiro (título, texto, data e "Clique para abrir"), as ações, as pílulas de adiar/silenciar e o rodapé.
+  - **VER = LER + FIXAR (migração `0086`, aditiva — `notificacoes.travada`):** o aviso não lido ≥ 60% à vista no sino por
+    800 ms (aba à vista) vira VISUALIZADO sozinho, em lote (`PATCH {ids, visto:true}`, IntersectionObserver no painel; fica no
+    lugar, colorido). O **MARCADOR** de visualizada à direita de cada aviso é o `CirculoConcluir` (`rotulos` próprios): vazio =
+    não vista, verde com ✓ = vista; tocar alterna — marcar como NÃO visualizada **FIXA** o aviso (`travada`, ícone de alfinete):
+    ver de novo não o marca; o toque no marcador ou abrir o aviso destravam; "Marcar todas" deixa as fixadas. Regra única no
+    builder **`comandoMarcarLidas`** (`notificacoes-sql.ts`, modos `lida`/`nao-lida`/`visto`/`todas`, testado no D1 real).
   - Testes: `tests/notificacoes.test.ts` (catálogo/config, prefs, validação, dia/hora relativa/repetidos/título, canal ao
     vivo, gravação com `returning`, exclusão + dispensa e retenção no driver D1 real, mescla, resumo/silêncio/silenciar,
     retenção do ADM, descadastro assinado, e-mail resumo, a fila com `email_apos`) + `tests/resend-email.test.ts` (reserva
@@ -3948,22 +3955,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   uma: `versao` semver, `data` AAAA-MM-DD, `titulo` e `mudancas` {tipo novo|melhoria|correcao, `area`, `texto`, `link` =
   ONDE mudou — caminho interno, com a aba}), `VERSAO_ATUAL`, `problemasDasVersoes` (ordem, números, datas, links internos —
   o teste exige nenhum) e o `version` do `package.json` = a atual (testado).
-- **Publicar uma versão:** acrescentar a entrada NO TOPO de `VERSOES` (MAIOR = muda o jeito de trabalhar · MENOR = recurso
-  novo · CORREÇÃO = ajuste), com o `link` de cada mudança, e o MESMO número no `package.json` — em TODA entrega que o usuário
-  percebe.
-- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.3.2", leva às Novidades; o ponto
-  accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`, conveniência).
-- **Novidades:** `/painel/novidades` (qualquer pessoa logada) = `Novidades` → um **`CartaoVersao`** (DS) por versão: número,
-  título, data, selo "Atual" e cada mudança com o tipo (`Badge`), a área e **"Ver onde mudou"** (o `link`); `?versao=` destaca e
-  rola até a versão.
+- **REGRA FIRME — TODA atualização publicada, de QUALQUER sessão/chat, segue o versionamento:** antes do push na `main`,
+  acrescentar a entrada NO TOPO de `VERSOES` (MAIOR = muda o jeito de trabalhar · MENOR = recurso novo · CORREÇÃO = ajuste)
+  com o que mudou e o `link` de cada mudança, e o MESMO número no `package.json`; depois publicar (push + "Deploy Cloudflare"
+  verde). Antes de começar, `git fetch` da `main`: se outra sessão publicou SEM versão, as mudanças dela entram na próxima
+  versão (nada fica fora do registro).
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.4.1"; tocar abre as Novidades no
+  BANNER FLUTUANTE; o ponto accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`).
+- **Novidades = BANNER FLUTUANTE, sem página:** **`NovidadesFlutuantes`** (DS) sobre a `JanelaFlutuante` (ao lado da âncora no
+  desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**
+  (DS; `onAlternar` = recolhível pelo cabeçalho) por versão: número, título, data, selo "Atual" e cada mudança com o tipo
+  (`Badge`), a área e o botão "Ver onde mudou" (o `link`; ir fecha o banner e o sino — `onIr`).
 - **Aviso aos ADMs:** tipo **`versao`** no catálogo (`CATALOGO_AVISOS`, grupo Administração — no sino, sem e-mail por padrão;
   o ADM liga em Configurações → Notificações) — `avisoNovaVersao` DERIVADO na leitura para cada Administrador (como a versão
   da extensão), UM por versão (`chave` `versao-sistema:<n>`; limpo, não volta): título "Nova versão N — título", o TEXTO = o
-  que mudou (uma linha por mudança, até 4 + "e mais N"; o sino mostra até 4 linhas) e o link às Novidades daquela versão.
+  que mudou (uma linha por mudança, até 4 + "e mais N"; o sino mostra até 4 linhas) e SEM link — tocar no aviso (ou no "Abrir"
+  da prévia) abre as Novidades DAQUELA versão (`versaoDoAviso`) no banner flutuante AO LADO do sino, que CONTINUA ABERTO
+  (`Dropdown` ignora o toque e o Esc com uma janela `[data-sobre-dropdown]` por cima — o Esc fecha primeiro o banner).
 
 ## Ao finalizar qualquer mudança
 1. `npm run lint`, `npm test` e `npm run typecheck` verdes (os três bloqueiam o deploy).
 2. **Commit + deploy** (push na main) e **verifique o site no ar** sem regressão.
-3. Mudança que o usuário percebe = **versão nova** em `src/lib/versoes.ts` + `package.json` (ver "VERSÕES").
+3. **TODA atualização = versão nova** em `src/lib/versoes.ts` + `package.json` e PUBLICADA (ver "VERSÕES" — vale para
+   qualquer sessão/chat; o que outra sessão publicou sem versão entra na próxima).
 4. **Atualize os `.md`** relevantes (este arquivo, `docs/ROADMAP.md`, README) e a documentação
    do que mudou. Mudanças limpas, cirúrgicas, sem código morto.
