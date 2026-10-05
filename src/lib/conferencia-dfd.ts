@@ -44,7 +44,27 @@ export type DfdConferivel = {
   assinaturas: Assinatura[];
   nomeArquivo: string | null;
   orgaoEntidade: string | null;
+  /** DFD GRAVADO pela metade (uma gravação em lotes que falhou no meio — `gravacaoIncompleta`): ERRO até reenviar. Só o
+   * DFD gravado o tem (calculado do gravado, nunca do rascunho); a análise de um arquivo nunca. */
+  gravacaoIncompleta?: { gravados: number; total: number } | null;
 };
+
+/** O DFD GRAVADO ficou pela metade? Menos itens do que o total declarado na gravação (a sobrescrita que falhou num lote
+ * posterior mantém o que gravou — a importação completa fecha o total pelos itens). `null` = completo. Puro. */
+export function gravacaoIncompleta(d: { itens: readonly unknown[]; totalItens: number | null | undefined }): { gravados: number; total: number } | null {
+  return d.totalItens != null && d.itens.length < d.totalItens ? { gravados: d.itens.length, total: d.totalItens } : null;
+}
+
+/** A mensagem (ERRO, fixa — integridade da gravação, não é ponto configurável) do DFD gravado pela metade. */
+export function mensagemGravacaoIncompleta(g: { gravados: number; total: number }): MensagemDfd {
+  return {
+    status: "erro",
+    chave: "dfd.gravacaoIncompleta",
+    texto: `Gravação incompleta: ${g.gravados} de ${g.total} itens gravados — reenvie o DFD (ou o protocolo) para completar.`,
+    ancora: "itens",
+    rotulo: "Gravação incompleta",
+  };
+}
 
 /** Confere a assinatura do DFD contra os responsáveis da unidade (PDF exige assinatura; .xlsx não). */
 export function conferirAssinaturaDfd(d: Pick<DfdConferivel, "assinaturas" | "nomeArquivo">, rep: RepConferencia | null): ResultadoAssinatura {
@@ -69,7 +89,7 @@ function mensagensComAssinatura(
     orgaos.length > 0 && rep?.orgaoId != null && orgaoDivergeDaUnidade(d.orgaoEntidade, rep.orgaoId, orgaos);
   // Órgão não identificado (Órgão/Entidade não casa nenhum órgão cadastrado).
   const orgaoNaoIdentificado = orgaos.length > 0 && casarOrgao(d.orgaoEntidade, orgaos) == null;
-  return mensagensDfd(
+  const msgs = mensagensDfd(
     {
       planejamento: d.planejamento,
       itens: d.itens,
@@ -90,6 +110,7 @@ function mensagensComAssinatura(
     regras,
     { categoria, orgaoNaoIdentificado, orgaoUnidadeDivergente, conformidade },
   );
+  return d.gravacaoIncompleta ? [mensagemGravacaoIncompleta(d.gravacaoIncompleta), ...msgs] : msgs;
 }
 
 /**

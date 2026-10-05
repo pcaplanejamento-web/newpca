@@ -55,10 +55,11 @@ const DESC_21 =
   "TOTAL INCLUI A INSTALAÇÃO E 50 M; COMPATIBILIDADE COM VÍDEOS, IMAGENS, TEXTOS E CONTEÚDOS AUDIOVISUAIS; " +
   "ESTRUTURA PARA MONTAGEM EM EVENTOS DIVERSOS.";
 
-const viaGrade = (items: PdfItem[], tracos: PdfTraco[]) => {
+const tabelaLida = (items: PdfItem[], tracos: PdfTraco[]) => {
   const linhas = agruparLinhas(limparAssinaturasDoTexto(normalizar(items)));
-  return lerTabelaItens(linhas, linhas.findIndex(ehCabecalhoItens), tracos).viaGrade;
+  return lerTabelaItens(linhas, linhas.findIndex(ehCabecalhoItens), tracos);
 };
+const viaGrade = (items: PdfItem[], tracos: PdfTraco[]) => tabelaLida(items, tracos).viaGrade;
 
 /** Lê o mesmo DFD pela grade E pela geometria do texto (e confere que a grade foi mesmo usada). */
 function lerNasDuasVias(itens: ItemCenti[], op: OpcoesCenti = {}) {
@@ -89,7 +90,8 @@ describe("captura dos itens do DFD (leiaute Centi: grade desenhada e geometria d
       assert.equal(d.itens.find((i) => i.item === 20)?.descricao, "ITEM CURTO NÚMERO 20");
       assert.equal(d.itens.find((i) => i.item === 22)?.descricao, "ITEM CURTO NÚMERO 22");
       for (const it of d.itens.filter((i) => i.item !== 21)) assert.equal(it.codigo, String(5241900000 + (it.item ?? 0)));
-      assert.equal(d.valorTotal, 185330);
+      // O valor do DFD = a SOMA dos itens (32 × 10 + 185.000) — o "185.330" do TOTAL GERAL só fecha a tabela.
+      assert.equal(d.valorTotal, 185320);
     }
   });
 
@@ -319,7 +321,10 @@ describe("célula que atravessa a página (grade) e código que vira a página (
       assert.equal(i2?.valorUnitario, 14814814.6944, semGrade ? "texto" : "grade");
       assert.equal(i2?.valorTotal, 14814814.6944);
       assert.equal(i2?.codigo, "5241947270");
-      assert.equal(r.valorTotal, 14814834.6944);
+      // O TOTAL GERAL quebrado em 2 linhas é lido INTEIRO (fecha a tabela sem vazar para o corpo) …
+      assert.equal(tabelaLida(d.items, semGrade ? [] : d.tracos).valorTotal, 14814834.6944);
+      // … e o valor do DFD é a soma dos itens, ao centavo.
+      assert.equal(r.valorTotal, 14814834.69);
     }
   });
 

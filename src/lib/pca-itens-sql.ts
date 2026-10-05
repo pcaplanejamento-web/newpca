@@ -187,6 +187,11 @@ export function baixarNumeros(db: Db, alvo: AlvoNumeros, pcaId: number | null, m
   ] as const;
 }
 
+/** A ação de um DFD que entra no PCA pelo protocolo: a dos OUTROS DFDs desse protocolo no PCA (a escolhida na
+ * incorporação), senão a `sugerida` pelo assunto — a MESMA régua da entrada e da troca de protocolo. */
+const acaoDoProtocolo = (dfdId: number, pcaId: number, protocoloId: number, sugerida: AcaoDfdPca) =>
+  sql`COALESCE((SELECT x.acao FROM pca_dfds x WHERE x.pca_id = ${pcaId} AND x.protocolo_id = ${protocoloId} AND x.dfd_id <> ${dfdId} ORDER BY x.dfd_id LIMIT 1), ${sugerida})`;
+
 /**
  * Põe o DFD no PCA pelo protocolo INCORPORADO em que ele está: a AÇÃO é a dos outros DFDs do protocolo no PCA (a escolhida
  * na incorporação), senão a `sugerida` pelo assunto. O vínculo legado de mesmo PCA vira vínculo do protocolo (a ação fica).
@@ -198,18 +203,19 @@ export function vincularDfdAoPca(db: Db, dfdId: number, pcaId: number, protocolo
       pcaId,
       dfdId,
       protocoloId,
-      acao: sql`COALESCE((SELECT x.acao FROM pca_dfds x WHERE x.pca_id = ${pcaId} AND x.protocolo_id = ${protocoloId} AND x.dfd_id <> ${dfdId} ORDER BY x.dfd_id LIMIT 1), ${sugerida})`,
+      acao: acaoDoProtocolo(dfdId, pcaId, protocoloId, sugerida),
       vinculadoPor: ator,
       vinculadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .onConflictDoUpdate({ target: [pcaDfds.pcaId, pcaDfds.dfdId], set: { protocoloId } });
 }
 
-/** O vínculo do DFD com o PCA passa a OUTRO protocolo incorporado ao MESMO PCA (os nºs ficam). */
-export function trocarProtocoloDoVinculo(db: Db, dfdId: number, pcaId: number, protocoloId: number) {
+/** O vínculo do DFD com o PCA passa a OUTRO protocolo incorporado ao MESMO PCA: os nºs ficam e a AÇÃO passa a ser a do
+ * protocolo novo (um DFD que sai de um protocolo "excluir" para um "incorporar" passa a valer — e a ser numerado). */
+export function trocarProtocoloDoVinculo(db: Db, dfdId: number, pcaId: number, protocoloId: number, sugerida: AcaoDfdPca) {
   return db
     .update(pcaDfds)
-    .set({ protocoloId })
+    .set({ protocoloId, acao: acaoDoProtocolo(dfdId, pcaId, protocoloId, sugerida) })
     .where(and(eq(pcaDfds.pcaId, pcaId), eq(pcaDfds.dfdId, dfdId)));
 }
 

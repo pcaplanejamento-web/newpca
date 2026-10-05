@@ -27,6 +27,8 @@ import {
   norm,
   refDfd,
   tipoCurtoDfd,
+  totalDoItem,
+  valorDosItens,
 } from "./parse-dfd-comum.ts";
 
 /**
@@ -348,16 +350,21 @@ export function estadoItemCor(e: EstadoItem, regras?: RegrasAvaliacao): string {
 }
 
 /**
- * Edita UM item (índice `idx`) de um DFD e recomputa o `valorTotal` do DFD (Σ dos itens).
+ * Edita UM item (índice `idx`) de um DFD e recomputa o `valorTotal` do DFD (Σ dos itens). Trocar a QUANTIDADE ou o VALOR
+ * UNITÁRIO recalcula o total do item (q × vu — `totalDoItem`, a régua da edição em massa); o total digitado à mão vale.
  * Puro/genérico — reusado na edição do item na importação (avulso/protocolo) e no gravado.
  */
 export function editarItemDfd<
-  I extends { valorTotal: number | null },
+  I extends { valorTotal: number | null; quantidade?: number | null; valorUnitario?: number | null },
   T extends { itens: I[]; valorTotal: number | null },
 >(d: T, idx: number, patch: Partial<I>): T {
-  const itens = d.itens.map((it, i) => (i === idx ? { ...it, ...patch } : it));
-  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
+  const recalcula = ("quantidade" in patch || "valorUnitario" in patch) && !("valorTotal" in patch);
+  const itens = d.itens.map((it, i) => {
+    if (i !== idx) return it;
+    const novo = { ...it, ...patch };
+    return recalcula ? { ...novo, valorTotal: totalDoItem(novo.quantidade, novo.valorUnitario, novo.valorTotal) } : novo;
+  });
+  return { ...d, itens, valorTotal: valorDosItens(itens) };
 }
 
 // ---- Detecção de DUPLICATAS (DFDs num protocolo / itens num DFD) ----
@@ -421,8 +428,7 @@ export function removerItemDfd<
   T extends { itens: I[]; valorTotal: number | null },
 >(d: T, idx: number): T {
   const itens = d.itens.filter((_, i) => i !== idx);
-  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
+  return { ...d, itens, valorTotal: valorDosItens(itens) };
 }
 
 /**
@@ -521,8 +527,7 @@ export function unificarItensDfd<
   const soma = totais ? grupo.reduce((s, it) => s + (it.valorTotal as number), 0) : quantidade * (alvo.valorUnitario as number);
   const valorTotal = Math.round(soma * 100) / 100;
   const itens = d.itens.flatMap((it, i) => (tira.has(i) ? [] : i === manter ? [{ ...it, quantidade, valorTotal }] : [it]));
-  const total = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  return { ...d, itens, valorTotal: total > 0 ? Math.round(total * 100) / 100 : null };
+  return { ...d, itens, valorTotal: valorDosItens(itens) };
 }
 
 /** Índice de um item depois de REMOVER outros da lista (os removidos antes dele o deslocam). Puro. */

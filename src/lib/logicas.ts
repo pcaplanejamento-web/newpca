@@ -463,8 +463,8 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "normalizacao",
     titulo: "Valor do DFD = somatória dos itens",
     descricao:
-      "O valor de cada item é quantidade × valor unitário (arredondado a 2 casas); o valor do DFD é a soma dos itens. Números em pt-BR e datas são normalizados na importação da planilha PCA.",
-    fonte: "parse-dfd-core / normalize",
+      "O valor de cada item é quantidade × valor unitário (arredondado a 2 casas — o item sem total lido recebe essa conta; trocar a quantidade ou o valor unitário recalcula); o valor do DFD é a soma dos itens ao centavo em TODA parte: na leitura (o TOTAL GERAL do documento só fecha a tabela), na edição, na sobrescrita e no banco, que fecha os totais pelos itens gravados no mesmo lote. O DFD gravado pela metade aparece como erro \"Gravação incompleta\". Números em pt-BR e datas são normalizados na importação da planilha PCA.",
+    fonte: "parse-dfd-comum (fecharValoresItens/totalDoItem/valorDosItens) / dfd-sql (comandoTotaisDfd) / conferencia-dfd",
   },
   {
     id: "norm-unidades-medida",

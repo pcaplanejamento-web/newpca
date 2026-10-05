@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, opcoesAssunto, type RegrasAvaliacao } from "@/lib/avaliacao-core";
-import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, gravacaoIncompleta, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { type CapaEditavel, detalheParaParseado, diffCapaGravada, diffDfdGravado } from "@/lib/dfd-edicao";
 import {
@@ -278,6 +278,11 @@ export function useProtocoloGravado({
   const repConf = (id: number | null): Rep | UnidadeConferencia | null =>
     id == null ? null : (reparticoes.find((r) => r.id === id) ?? unidadesExtra.find((u) => u.id === id) ?? null);
   const editavelDfd = (id: number) => podeEditar && acessivel(orig.get(id)?.reparticaoId ?? null);
+  /** O DFD GRAVADO ficou pela metade (lido do gravado, nunca do rascunho) — erro na linha e no painel até reenviar. */
+  const incompletoDe = (id: number | null) => {
+    const o = id != null ? orig.get(id) : undefined;
+    return o ? gravacaoIncompleta(o) : null;
+  };
 
   // Conferência por LINHA — a MESMA da análise (`avaliarLinhaDfd`), com cache por objeto de DFD.
   // biome-ignore lint/correctness/useExhaustiveDependencies: as dependências INVALIDAM o cache (regras/cadastros novos ⇒ reconferir tudo).
@@ -286,10 +291,11 @@ export function useProtocoloGravado({
     const rid = repIds.get(id) ?? null;
     const editado = editados.has(id) || itensEditados.has(id);
     const anoPca = d.anoPca ?? proto?.anoPca ?? null;
-    const k = `${rid}|${anoPca}|${categoria}|${editado}`;
+    const inc = incompletoDe(id);
+    const k = `${rid}|${anoPca}|${categoria}|${editado}|${inc ? `${inc.gravados}/${inc.total}` : ""}`;
     const c = cache.get(d);
     if (c && c.k === k) return c.r;
-    const r = avaliarLinhaDfd(d, repConf(rid), { anoPca, regras, categoria, orgaos, editado });
+    const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: inc }, repConf(rid), { anoPca, regras, categoria, orgaos, editado });
     cache.set(d, { k, r });
     return r;
   };
@@ -340,7 +346,9 @@ export function useProtocoloGravado({
   const anoAberto = dfdAberto ? (dfdAberto.anoPca ?? proto?.anoPca ?? null) : null;
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
   const mensagensAberto = dfdAberto
-    ? mensagensDoDfd(dfdAberto, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade).filter((m) => m.chave !== "dfd.anoPca")
+    ? mensagensDoDfd({ ...dfdAberto, gravacaoIncompleta: incompletoDe(abertoId) }, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade).filter(
+        (m) => m.chave !== "dfd.anoPca",
+      )
     : [];
   // DFD de unidade sem acesso: só-leitura, mas exibido/conferido com a unidade REAL (vinda do servidor).
   const reparticoesAberto: Rep[] = editavelAberto

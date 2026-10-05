@@ -11,6 +11,7 @@ import {
   extrairAssinaturas,
   extrairCabecalho,
   extrairRefsDfd,
+  fecharValoresItens,
   juntarContinuacoesCabecalho,
   limparDescricaoItem,
   norm,
@@ -1165,13 +1166,12 @@ export function parseDfdFromPdfItems(
   const hi = linhas.findIndex(ehCabecalhoItens);
   const tabela = hi >= 0 ? lerTabelaItens(linhas, hi, tracos) : null;
   const itens: DfdItemParseado[] = tabela?.itens ?? [];
-  const valorTotalGrand = tabela?.valorTotal ?? null;
   const apoioSecao4 = tabela?.apoio ?? "";
   // Índice da linha onde a tabela ENCERRA (próxima seção) — o `coletarSecoes` recebe só as linhas FORA da tabela.
   const tableEndIdx = tabela?.fim ?? linhas.length;
 
-  const somaItens = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  const valorTotal = valorTotalGrand ?? (somaItens > 0 ? Math.round(somaItens * 100) / 100 : null);
+  // O valor do DFD = a soma dos itens (o TOTAL GERAL lido só fecha a tabela — `fecharValoresItens`).
+  const valores = fecharValoresItens(itens);
 
   if (!cab.numero) {
     throw new Error(
@@ -1202,10 +1202,10 @@ export function parseDfdFromPdfItems(
     ...cab,
     ...extrairRefsDfd(secoes, cab.objeto),
     numero: cab.numero,
-    valorTotal,
+    valorTotal: valores.valorTotal,
     nomeArquivo,
     secoes,
-    itens,
+    itens: valores.itens,
     // Formatos A/B (páginas de assinatura, texto normal) + C Dropsigner + D Adobe/ICP-Brasil (ambos
     // do texto RENDERIZADO por página, que inclui a aparência das anotações de assinatura).
     assinaturas: [

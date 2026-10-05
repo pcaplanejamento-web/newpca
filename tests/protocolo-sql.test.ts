@@ -71,6 +71,19 @@ describe("protocolo de MESMO Id e nº diferente (builders no db.batch do D1)", (
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM dfds WHERE protocolo_id IS NULL").get() as { n: number }).n, 0);
   });
 
+  it("fusão: o DFD que entra no que fica sai do RASTRO dele (não conta duas vezes na somatória)", async () => {
+    db.exec(`INSERT INTO dfd_protocolos (id, numero, id_externo) VALUES (40, '400/2026', '999'), (41, '401/2026', NULL);
+      INSERT INTO dfds (numero, protocolo_id) VALUES ('70', 40);
+      INSERT INTO dfd_passagens (protocolo_id, dfd_numero, total_itens, valor_total) VALUES (41, '70', 1, 1000), (41, '71', 1, 50);`);
+    const id = await protocolar("401/2026", "999", "INCLUSÃO");
+    assert.equal(id, 41);
+    assert.deepEqual(dfdsDe(41), ["70"]);
+    const rastro = (db.prepare("SELECT dfd_numero AS n FROM dfd_passagens WHERE protocolo_id = 41 ORDER BY dfd_numero").all() as { n: string }[]).map(
+      (r) => r.n,
+    );
+    assert.deepEqual(rastro, ["71"], "o 70 está vivo no 401 — só o 71 segue no rastro");
+  });
+
   it("sem protocolo de mesmo Id: nenhum comando (só o upsert)", () => {
     assert.deepEqual(comandosMesmoId(orm, "300/2026", [], null), []);
   });

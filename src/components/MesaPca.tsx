@@ -314,9 +314,9 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
         <div className="space-y-3">
           <p className="text-sm text-muted">
             Os DFDs (e os itens) de cada protocolo passam a compor o PCA com a ação escolhida: <b>Incorporar</b> (DFD novo),{" "}
-            <b>Substituir</b> (troca o DFD de mesmo nº de planejamento) ou <b>Excluir</b> (retira o DFD de mesmo planejamento). A incorporação é{" "}
-            <b>permanente</b>: cada item ganha um <b>nº sequencial único no PCA</b> e o protocolo, os DFDs e os itens ficam{" "}
-            <b>somente leitura</b> (a situação e o responsável seguem editáveis).
+            <b>Substituir</b> (troca o DFD de mesmo nº de planejamento) ou <b>Excluir</b> (retira o DFD de mesmo planejamento). Cada item
+            ganha um <b>nº sequencial único no PCA</b>; o protocolo segue <b>editável</b> e o PCA acompanha (o item editado mantém o nº, o
+            novo ganha o próximo e o removido fica com o nº inativo). "Devolver à Mesa" desincorpora.
           </p>
           <ul className="divide-y divide-border rounded-card border border-border">
             {(incorporar ?? []).map((p) => (
@@ -324,7 +324,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                 <div className="min-w-0">
                   <div className="font-semibold text-text">Protocolo {p.numero}</div>
                   <div className="truncate text-xs text-muted">
-                    {p.assunto ?? "Sem assunto"} · {num(totalDfds(p))} DFD(s) · {brl(p.valorTotal)}
+                    {p.assunto ?? "Sem assunto"} · {num(p.totalDfds)} DFD(s) · {brl(p.valorTotal)}
                     {(emOutroPcaPorProtocolo[p.id] ?? 0) > 0 ? ` · ${emOutroPcaPorProtocolo[p.id]} já em outro PCA (ficam de fora)` : ""}
                   </div>
                 </div>

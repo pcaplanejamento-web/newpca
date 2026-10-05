@@ -10,6 +10,34 @@ import { type LinhaCorrida, type OpcoesCorrido, textoCorrido } from "./texto-cor
 
 export type DfdSecao = { numero: number; titulo: string; texto: string };
 
+/** Ao centavo (a mesma régua do `ROUND(…, 2)` do banco). */
+const centavos = (n: number) => Math.round(n * 100) / 100;
+
+/** O TOTAL de um item depois de trocar quantidade/valor unitário: q × vu ao centavo quando os dois existem; senão o atual
+ * (o total digitado à mão segue valendo). Fonte única da edição do item (banner e em massa) e da leitura. Puro. */
+export function totalDoItem(quantidade: number | null | undefined, valorUnitario: number | null | undefined, atual: number | null): number | null {
+  return quantidade != null && valorUnitario != null && Number.isFinite(quantidade) && Number.isFinite(valorUnitario)
+    ? centavos(quantidade * valorUnitario)
+    : atual;
+}
+
+/** O VALOR do DFD = a soma dos totais dos ITENS ao centavo (NULL quando ≤ 0 — nunca estimado): a regra ÚNICA do sistema
+ * (leitura, edição, sobrescrita e o banco — `comandoTotaisDfd`). Puro. */
+export function valorDosItens(itens: readonly { valorTotal: number | null }[]): number | null {
+  const soma = itens.reduce((s, it) => s + (it.valorTotal != null && Number.isFinite(it.valorTotal) ? it.valorTotal : 0), 0);
+  return soma > 0 ? centavos(soma) : null;
+}
+
+/** Os VALORES do DFD lido (planilha ou PDF): o item SEM total, mas com quantidade e valor unitário, recebe q × vu; o DFD
+ * recebe a soma dos itens. O "TOTAL GERAL" do documento só fecha a tabela — não define o valor (o gravado, as edições e o
+ * PCA somam os itens; um total diferente apareceria como divergência da capa). Puro. */
+export function fecharValoresItens<I extends { quantidade: number | null; valorUnitario: number | null; valorTotal: number | null }>(
+  itens: I[],
+): { itens: I[]; valorTotal: number | null } {
+  const fechados = itens.map((it) => (it.valorTotal == null ? { ...it, valorTotal: totalDoItem(it.quantidade, it.valorUnitario, null) } : it));
+  return { itens: fechados, valorTotal: valorDosItens(fechados) };
+}
+
 export type DfdItemParseado = {
   item: number | null;
   codigo: string | null;

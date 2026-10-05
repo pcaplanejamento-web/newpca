@@ -1,4 +1,5 @@
 import type { DfdItemPayload, DfdMetaPayload } from "./dfd-validation";
+import type { DfdSobrescrito } from "./protocolo";
 
 /**
  * Envio de um DFD ao servidor em LOTES de itens — roda NO NAVEGADOR. Escala a
@@ -117,4 +118,23 @@ export async function buscarExistentes(numeros: string[]): Promise<Map<string, E
     for (const e of j.existentes ?? []) out.set(e.numero.trim(), e);
   }
   return out;
+}
+
+/** O PROCESSO já cadastrado do PDF (o protocolo de mesmo nº e os de mesmo Id): os DFDs vivos dele e o rastro — o que
+ * CONTINUA no processo depois de protocolar (a importação nunca apaga). `null` = nada cadastrado (ou sem acesso). */
+export type ProcessoGravado = {
+  dfds: { numero: string; valorTotal: number | null; totalItens: number | null }[];
+  sobrescritos: DfdSobrescrito[];
+};
+
+/** `POST /api/dfd/existentes` com o `processo`. Falha ⇒ lança (a conciliação da capa não fecha às cegas). */
+export async function buscarProcesso(numero: string, idExterno: string | null): Promise<ProcessoGravado | null> {
+  const res = await fetch("/api/dfd/existentes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ numeros: [], processo: { numero, idExterno } }),
+  });
+  const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; processo?: ProcessoGravado | null } | null;
+  if (!res.ok || !j?.ok) throw new Error(j?.error ?? "Não foi possível conferir o protocolo já cadastrado.");
+  return j.processo ?? null;
 }

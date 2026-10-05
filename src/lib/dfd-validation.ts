@@ -274,9 +274,14 @@ export const conferenciaProtocolosSchema = z.object({
 });
 
 /** DFDs JÁ cadastrados pelos NÚMEROS (`POST /api/dfd/existentes`) — o conflito de uma importação. */
-export const existentesDfdSchema = z.object({
-  numeros: z.array(z.string().trim().min(1).max(50)).min(1).max(2000),
-});
+export const existentesDfdSchema = z
+  .object({
+    numeros: z.array(z.string().trim().min(1).max(50)).max(2000).default([]),
+    /** O PROCESSO do PDF (nº + Id da capa): devolve os DFDs vivos e o rastro do protocolo JÁ cadastrado (mesmo nº ou
+     * mesmo Id) — a análise soma o que continua nele (a mesma somatória que o gravado vai conferir). */
+    processo: z.object({ numero: z.string().trim().min(1).max(60), idExterno: z.string().trim().max(255).nullable() }).optional(),
+  })
+  .refine((d) => d.numeros.length > 0 || d.processo != null, { message: "Informe os números ou o processo." });
 
 /** Conferência da LISTA de DFDs da Mesa (`POST /api/dfd/conferencia`) — em fatias de ids. */
 export const conferenciaDfdsSchema = z.object({

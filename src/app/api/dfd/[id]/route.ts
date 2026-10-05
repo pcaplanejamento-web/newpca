@@ -63,6 +63,17 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
       criadoEm: dfd.criadoEm,
       agora: Date.now(),
     });
+  // O desfazer NUNCA vira um "Excluir" comum: fora da gravação nova e pela metade da própria pessoa (ex.: outra pessoa
+  // criou o DFD entre a consulta e a gravação; o último lote gravou mas a resposta se perdeu), nada é apagado.
+  if (origem === "desfazer" && !desfeita)
+    return erro("A gravação não foi desfeita: este DFD não é uma gravação sua, recente e pela metade — reenvie para completar.", 409);
+  // O REENVIO só exclui o DFD que AINDA está no protocolo reenviado (a lista da tela pode ter ficado velha: outra pessoa o
+  // moveu para outro protocolo durante a análise).
+  if (origem === "reenvio") {
+    const pid = Number(new URL(req.url).searchParams.get("protocolo"));
+    if (!Number.isInteger(pid) || pid <= 0 || dfd.protocoloId !== pid)
+      return erro(`O DFD ${dfd.numero} não está mais neste protocolo — não foi excluído.`, 409);
+  }
   // O PAPEL, na Mesa em que o DFD está: o desfazer é da IMPORTAÇÃO; o reenvio importa E exclui; o resto, Excluir.
   const tela = telaDoRecurso(dfd.pcaId);
   const negado = desfeita

@@ -1,9 +1,9 @@
-import { and, asc, desc, eq, gt, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
 import { cache } from "react";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } from "@/db/schema";
 import type { ConferenciaCompacta } from "./catalogo-conferencia";
 import { getDb } from "./db";
-import { filtroAnoPcaDfd, gruposAssinaturaSql, prioridadeTextoSql } from "./dfd-sql";
+import { comandoApagarFaixaItens, comandoTotaisDfd, filtroAnoPcaDfd, gruposAssinaturaSql, prioridadeTextoSql } from "./dfd-sql";
 import { type GrupoAssinatura, gruposAssinatura, gruposDoTexto, prioridadeDoDfd } from "./dfd-tratamento";
 import { normPrioridade, type Prioridade } from "./normalize";
 import { baixarNumeros, baixarNumerosPendentes, retratarNumeros } from "./pca-itens-sql";
@@ -237,7 +237,8 @@ const escopoMesa = (pcaId?: number, anoMarcados?: number | null) =>
   !pcaId
     ? isNull(dfdProtocolos.pcaId)
     : anoMarcados != null
-      ? or(eq(dfdProtocolos.pcaId, pcaId), and(isNull(dfdProtocolos.pcaId), filtroAnoPcaDfd(anoMarcados)))
+      ? // Os MARCADOS são PROTOCOLOS da Mesa do sistema — o DFD avulso (sem protocolo) nunca entra na Mesa do PCA.
+        or(eq(dfdProtocolos.pcaId, pcaId), and(isNotNull(dfds.protocoloId), isNull(dfdProtocolos.pcaId), filtroAnoPcaDfd(anoMarcados)))
       : eq(dfdProtocolos.pcaId, pcaId);
 
 /** Linha crua de `colunasDfd` (a prioridade ainda como TEXTO da seção, os grupos de assinatura ainda por derivar). */
@@ -642,18 +643,8 @@ export async function aplicarPlanoItens(dfdId: number, plano: PlanoMassaItens, a
     );
   }
   if (plano.remover.length > 0) stmts.push(baixarNumerosPendentes(db, dfdId, MOTIVO_NUMERO.itemRemovido, ator));
-  // Mesma régua do `reescreverDfdItens`: Σ > 0 ⇒ o valor (2 casas); senão NULL.
-  const soma = sql`SUM(COALESCE(${dfdItens.valorTotal}, 0))`;
-  stmts.push(
-    db
-      .update(dfds)
-      .set({
-        totalItens: sql`(SELECT COUNT(*) FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfdId})`,
-        valorTotal: sql`(SELECT CASE WHEN ${soma} > 0 THEN ROUND(${soma}, 2) END FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfdId})`,
-        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-      })
-      .where(eq(dfds.id, dfdId)),
-  );
+  // Os totais do DFD = os itens que ficaram (a regra única — `comandoTotaisDfd`), no MESMO lote.
+  stmts.push(comandoTotaisDfd(db, dfdId));
   type Stmt = Parameters<typeof db.batch>[0][number];
   await db.batch(stmts as [Stmt, ...Stmt[]]);
 }
@@ -719,14 +710,17 @@ export async function upsertDfdCabecalho(
     .returning({ id: dfds.id });
   // O id do DFD DENTRO do lote (a linha é criada/atualizada nele mesmo): pelo `numero` (único).
   const idDoDfd = sql`(SELECT id FROM dfds WHERE numero = ${dados.numero})`;
-  const res = await db.batch([
+  const lote: Stmt[] = [
     ...rastro,
     upsert,
     ...(num?.antes ?? []),
     db.delete(dfdItens).where(eq(dfdItens.dfdId, idDoDfd)),
     ...insertsItens(db, idDoDfd, primeiroLote, 0, num?.porLinha),
     ...(num?.depois ?? []),
-  ] as [Stmt, ...Stmt[]]);
+    // Completo no 1º lote ⇒ os totais passam a ser os dos itens gravados (o declarado vale só enquanto falta lote).
+    comandoTotaisDfd(db, idDoDfd, { soCompleto: true }),
+  ];
+  const res = await db.batch(lote as [Stmt, ...Stmt[]]);
   const id = (res[rastro.length] as { id: number }[])[0].id;
   // O PCA acompanha: o DFD entra/sai/fica no PCA do protocolo incorporado; completo, numera os novos e baixa os sem item.
   await sincronizarDfdNoPca(id, criadoPor, primeiroLote.length);
@@ -742,16 +736,21 @@ export async function appendDfdItens(
 ): Promise<{ inserted: number }> {
   if (itens.length === 0) return { inserted: 0 };
   const db = getDb();
-  const num = await numeracaoDaGravacao(dfdId, itens, seqBase);
+  const ate = seqBase + itens.length;
+  const num = await numeracaoDaGravacao(dfdId, itens, seqBase, ate);
   const stmts = insertsItens(db, dfdId, itens, seqBase, num?.porLinha);
-  // Idempotente: apaga o que já houver ALÉM de `seqBase` antes de gravar o lote —
-  // reenviar o mesmo lote (retry) não duplica itens. Atômico no mesmo db.batch.
-  await db.batch([
+  // Idempotente: apaga só a FAIXA deste lote (`seqBase < sequencial ≤ seqBase + n`) antes de gravá-lo — o retry do mesmo
+  // lote não duplica itens, e um retry ATRASADO nunca apaga um lote posterior. Atômico no mesmo db.batch; o último lote
+  // (a contagem alcança o total declarado) fecha os totais do DFD com os itens gravados.
+  type Stmt = Parameters<typeof db.batch>[0][number];
+  const lote: Stmt[] = [
     ...(num?.antes ?? []),
-    db.delete(dfdItens).where(and(eq(dfdItens.dfdId, dfdId), gt(dfdItens.sequencial, seqBase))),
+    comandoApagarFaixaItens(db, dfdId, seqBase, ate),
     ...stmts,
     ...(num?.depois ?? []),
-  ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+    comandoTotaisDfd(db, dfdId, { soCompleto: true }),
+  ];
+  await db.batch(lote as [Stmt, ...Stmt[]]);
   await sincronizarDfdNoPca(dfdId, ator, seqBase + itens.length);
   return { inserted: itens.length };
 }
@@ -811,21 +810,13 @@ export async function atualizarDfdCampos(
  */
 export async function reescreverDfdItens(dfdId: number, itens: DfdItemPayload[], ator: number | null = null): Promise<void> {
   const db = getDb();
-  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  const valorTotal = soma > 0 ? Math.round(soma * 100) / 100 : null;
   // Protocolo incorporado: o item editado mantém o nº do PCA; o novo ganha o próximo; o removido o baixa.
   const num = await numeracaoDaGravacao(dfdId, itens, 0);
   const stmts = insertsItens(db, dfdId, itens, 0, num?.porLinha);
-  await db.batch([
-    ...(num?.antes ?? []),
-    db.delete(dfdItens).where(eq(dfdItens.dfdId, dfdId)),
-    ...stmts,
-    ...(num?.depois ?? []),
-  ] as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
-  await db
-    .update(dfds)
-    .set({ valorTotal, totalItens: itens.length, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
-    .where(eq(dfds.id, dfdId));
+  // Itens + totais do cabeçalho no MESMO lote (atômico — dois "Salvar" simultâneos nunca deixam o total de um com os itens do outro).
+  type Stmt = Parameters<typeof db.batch>[0][number];
+  const lote: Stmt[] = [...(num?.antes ?? []), db.delete(dfdItens).where(eq(dfdItens.dfdId, dfdId)), ...stmts, ...(num?.depois ?? []), comandoTotaisDfd(db, dfdId)];
+  await db.batch(lote as [Stmt, ...Stmt[]]);
   await sincronizarDfdNoPca(dfdId, ator, "todos");
 }
 

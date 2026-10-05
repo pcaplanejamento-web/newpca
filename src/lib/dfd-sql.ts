@@ -1,5 +1,7 @@
-import { type SQL, sql } from "drizzle-orm";
-import { dfdProtocolos, dfds } from "../db/schema.ts";
+import { and, eq, gt, lte, type SQL, sql } from "drizzle-orm";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import type * as schema from "../db/schema.ts";
+import { dfdItens, dfdProtocolos, dfds } from "../db/schema.ts";
 
 /**
  * Texto da seção PRIORIDADE do DFD lido NO BANCO — só essa seção sai do JSON `secoes` (a lista da Mesa não traz as
@@ -42,4 +44,30 @@ export function filtroAnoPcaProtocolo(ano: number | null | undefined): SQL | und
   return ano == null
     ? undefined
     : sql`(${dfdProtocolos.anoPca} = ${ano} OR (${dfdProtocolos.anoPca} IS NULL AND EXISTS (SELECT 1 FROM "dfds" AS d WHERE d."protocolo_id" = ${dfdProtocolos.id} AND d."ano_pca" = ${ano})))`;
+}
+
+/**
+ * TOTAIS do DFD = os ITENS gravados (a regra única do sistema): `total_itens` = quantos itens existem e `valor_total` = a soma
+ * dos totais dos itens arredondada ao centavo (NULL quando ≤ 0 — nunca estimado). O UPDATE vai no MESMO `db.batch` da escrita
+ * dos itens (atômico). `soCompleto` (importação em lotes): só recalcula quando a contagem já alcançou o total DECLARADO no
+ * `start-dfd` — a importação pela metade mantém o declarado (o desfazer e a sincronia do PCA o usam; a conferência o acusa).
+ * Builder sem getDb (testado pelo driver D1 real).
+ */
+export function comandoTotaisDfd(db: DrizzleD1Database<typeof schema>, alvo: number | SQL, { soCompleto = false }: { soCompleto?: boolean } = {}) {
+  const contagem = sql`(SELECT COUNT(*) FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfds.id})`;
+  const soma = sql`SUM(COALESCE(${dfdItens.valorTotal}, 0))`;
+  return db
+    .update(dfds)
+    .set({
+      totalItens: contagem,
+      valorTotal: sql`(SELECT CASE WHEN ${soma} > 0 THEN ROUND(${soma}, 2) END FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfds.id})`,
+      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+    })
+    .where(and(eq(dfds.id, alvo), soCompleto ? sql`${contagem} >= COALESCE(${dfds.totalItens}, 0)` : undefined));
+}
+
+/** Apaga os itens do DFD na FAIXA de um lote (`de < sequencial ≤ ate`) — o append regrava só o próprio lote: o retry do mesmo
+ * lote não duplica e um retry ATRASADO nunca apaga um lote posterior. Builder (testado pelo driver D1 real). */
+export function comandoApagarFaixaItens(db: DrizzleD1Database<typeof schema>, dfdId: number, de: number, ate: number) {
+  return db.delete(dfdItens).where(and(eq(dfdItens.dfdId, dfdId), gt(dfdItens.sequencial, de), lte(dfdItens.sequencial, ate)));
 }

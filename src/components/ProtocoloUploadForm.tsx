@@ -54,7 +54,7 @@ import {
   unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
-import { buscarExistentes, enviarDfdEmLotes, type ExistenteImport } from "@/lib/importar-dfd";
+import { buscarExistentes, buscarProcesso, enviarDfdEmLotes, type ExistenteImport, type ProcessoGravado } from "@/lib/importar-dfd";
 import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
 import { mensagemSemPermissao, telaDoRecurso } from "@/lib/papeis-core";
@@ -161,7 +161,7 @@ const MSG_SEM_ACESSO: MensagemDfd = {
   status: "erro",
   ancora: "reparticao",
   rotulo: "Não sobrescrevível",
-  texto: "Já existe um DFD com este número que não pode ser sobrescrito daqui — numa unidade sem acesso para você, num protocolo incorporado a um PCA (travado) ou numa Mesa em que o seu papel não permite importar. Mantenha o já cadastrado (botão \"Manter…\" no rodapé do DFD).",
+  texto: "Já existe um DFD com este número que não pode ser sobrescrito daqui — numa unidade sem acesso para você, fora das suas linhas ou numa Mesa em que o seu papel não permite importar. Mantenha o já cadastrado (botão \"Manter…\" no rodapé do DFD).",
 };
 /** A avaliação da linha + o erro de unidade sem acesso (a MESMA régua da célula, do painel e do rodapé). */
 function comSemAcesso(r: LinhaAvaliada): LinhaAvaliada {
@@ -313,6 +313,27 @@ export function ProtocoloUploadForm({
   // filtrada pela unidade do cabeçalho). `null` = consultando; falha ⇒ não protocola às cegas.
   const [existentesSrv, setExistentesSrv] = useState<Map<string, ExistenteImport> | null>(null);
   const [erroExistentes, setErroExistentes] = useState<string | null>(null);
+  // RE-IMPORTAÇÃO (o "Importar protocolo" de um processo JÁ cadastrado, sem o "Reenviar"): os DFDs vivos e o rastro do
+  // protocolo de mesmo nº/Id — o que CONTINUA no processo depois de protocolar entra na conciliação da capa (análise =
+  // gravado). Pela chave nº|Id da capa (o nº pode ser digitado quando a capa veio sem ele).
+  const [processoSrv, setProcessoSrv] = useState<{ chave: string; dados?: ProcessoGravado | null; erro?: string } | null>(null);
+  const chaveProcesso = !reenvio && index && numero.trim() ? JSON.stringify([numero.trim(), extra.idExterno ?? null]) : "";
+  useEffect(() => {
+    if (!chaveProcesso) return;
+    let vivo = true;
+    const [n, id] = JSON.parse(chaveProcesso) as [string, string | null];
+    const t = setTimeout(() => {
+      buscarProcesso(n, id)
+        .then((dados) => vivo && setProcessoSrv({ chave: chaveProcesso, dados }))
+        .catch((e) => vivo && setProcessoSrv({ chave: chaveProcesso, erro: e instanceof Error ? e.message : "Não foi possível conferir o protocolo já cadastrado." }));
+    }, 400);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [chaveProcesso]);
+  const processoAtual = chaveProcesso && processoSrv?.chave === chaveProcesso ? processoSrv : null;
+  const processoPendente = !!chaveProcesso && (processoAtual == null || processoAtual.erro != null);
   // SOBRESCRITA com ESCOLHA POR DADO: o DFD GRAVADO de mesmo nº (carregado ao abrir o DFD) e o NOVO como veio
   // do arquivo (a base estável das escolhas — o `parsed` é o DFD de TRABALHO, com as escolhas/edições).
   const [gravadosSrv, setGravadosSrv] = useState<Map<string, DfdDetalhe>>(new Map());
@@ -1107,21 +1128,27 @@ export function ProtocoloUploadForm({
   const removidosMantidos = removidos.filter((r) => !r.excluir);
   // REENVIO: o RASTRO dos DFDs deste processo sobrescritos por outro protocolo segue na conciliação (a capa foi
   // emitida com eles, pelo valor da época) — menos os que o PDF traz de volta para cá (esses entram como ativos).
-  const rastroMantido = (reenvio?.sobrescritos ?? []).filter((s) => !numerosAtivos.has(chaveDfd(s.numero)));
+  // RE-IMPORTAÇÃO: os DFDs do processo já cadastrado que NÃO vieram no PDF continuam nele (a importação nunca apaga) — entram
+  // na somatória/contagem da capa como o gravado vai conferir; o rastro do processo idem (no reenvio, o do protocolo).
+  const numerosIndex = new Set((index?.dfds ?? []).map((d) => chaveDfd(d.numero)));
+  const processoGravado = reenvio ? null : (processoAtual?.dados ?? null);
+  const vivosForaDoPdf = (processoGravado?.dfds ?? []).filter((d) => !numerosIndex.has(chaveDfd(d.numero)));
+  const rastroMantido = (reenvio ? (reenvio.sobrescritos ?? []) : (processoGravado?.sobrescritos ?? [])).filter((s) => !numerosAtivos.has(chaveDfd(s.numero)));
   const valorRastro = rastroMantido.reduce((s, x) => s + (x.valorTotal ?? 0), 0);
   const somatorioDfds =
     ativos.reduce((s, i) => s + (parsed.get(i)?.valorTotal ?? 0), 0) +
-    [...existentesMantidos, ...removidosMantidos].reduce((s, x) => s + (x.valorTotal ?? 0), 0) +
+    [...existentesMantidos, ...removidosMantidos, ...vivosForaDoPdf].reduce((s, x) => s + (x.valorTotal ?? 0), 0) +
     valorRastro;
   // Itens = só os DFDs VIVOS do processo (o rastro é o retrato da época — fica no "+N sobrescrito(s)").
   const itensDfds =
     ativos.reduce((s, i) => s + (parsed.get(i)?.itens.length ?? 0), 0) +
-    [...existentesMantidos, ...removidosMantidos].reduce((s, x) => s + (x.totalItens ?? 0), 0);
-  const totalVivos = ativos.length + existentesMantidos.length + removidosMantidos.length;
+    [...existentesMantidos, ...removidosMantidos, ...vivosForaDoPdf].reduce((s, x) => s + (x.totalItens ?? 0), 0);
+  const totalVivos = ativos.length + existentesMantidos.length + removidosMantidos.length + vivosForaDoPdf.length;
   const totalConsiderados = totalVivos + rastroMantido.length;
   // Somatória COMPLETA = todos os DFDs do processo LIDOS (um DFD ilegível somaria 0 → falsa divergência).
   const lidos = ativos.filter((i) => parsed.has(i)).length;
-  const completo = !analisando && lidos === ativos.length;
+  // … e com o processo já cadastrado conferido (a re-importação soma o que continua nele).
+  const completo = !analisando && lidos === ativos.length && !processoPendente;
   const conc = conciliacaoCapa({ valorCapa: extra.valorCapa, somatorio: somatorioDfds, totalDfds: totalConsiderados, completo }, regras, { categoria });
 
   // REENVIO: contagem por situação (os descartados — "Manter o gravado" — não contam), diferenças da capa.
@@ -1185,7 +1212,7 @@ export function ProtocoloUploadForm({
   const protocolarDesligado = !protocolarHabilitado(regras);
   const bloqueadoPorRegra = repBloqueia || anoPcaBloqueia || semErroBloqueia || conc.bloqueia || !gateTrava.ok || protocolarDesligado;
   // Sem saber quem SOBRESCREVE quem (consulta dos já cadastrados), não protocola às cegas.
-  const existentesPendentes = temDfds && (existentesSrv == null || erroExistentes != null || gravadosEmCarga > 0);
+  const existentesPendentes = (temDfds && (existentesSrv == null || erroExistentes != null || gravadosEmCarga > 0)) || processoPendente;
   // DFDs cujos itens ainda estão sendo conferidos no catálogo (ponto bloqueante) — a protocolação espera…
   const catPendentes = ativos.filter((i) => {
     const d = parsed.get(i);
@@ -1800,7 +1827,8 @@ export function ProtocoloUploadForm({
         const r = aExcluir[k];
         setProgresso({ feito: k, total: aExcluir.length, label: `excluindo DFD ${r.numero} (${k + 1}/${aExcluir.length})` });
         try {
-          const del = await fetch(`/api/dfd/${r.id}?origem=reenvio`, { method: "DELETE" });
+          // Só exclui se o DFD AINDA está neste protocolo (o servidor confere — a lista pode ter ficado velha).
+          const del = await fetch(`/api/dfd/${r.id}?origem=reenvio&protocolo=${reenvio?.protocolo.id ?? 0}`, { method: "DELETE" });
           const dj = (await del.json().catch(() => ({}))) as { ok?: boolean; error?: string };
           if (!del.ok || !dj.ok) throw new Error(dj.error ?? `HTTP ${del.status}`);
           excluidos++;
@@ -1918,6 +1946,7 @@ export function ProtocoloUploadForm({
   // Texto de estado do rodapé (o PROGRESSO real da análise tem precedência, com barra).
   const statusTexto = (() => {
     if (erroExistentes) return `${erroExistentes} Feche e abra o PDF de novo.`;
+    if (processoAtual?.erro) return `${processoAtual.erro} Feche e abra o PDF de novo.`;
     if (existentesPendentes) return "Conferindo os DFDs já cadastrados…";
     if (catPendentes > 0) return `Conferindo os itens no catálogo — ${catPendentes} DFD(s)…`;
     if (protocolarDesligado) return "Protocolação desabilitada nas Configurações";
@@ -2431,6 +2460,13 @@ export function ProtocoloUploadForm({
                 onTodosRemovidos={(excluir) => setRemovidosManter(excluir ? new Set() : new Set(removidos.map((r) => r.id)))}
                 onRelatorio={() => setRelDiffAberto(true)}
               />
+            ) : vivosForaDoPdf.length > 0 ? (
+              <Callout kind="info">
+                {vivosForaDoPdf.length === 1 ? "1 DFD" : `${num(vivosForaDoPdf.length)} DFDs`} deste processo já cadastrado
+                {vivosForaDoPdf.length === 1 ? " não veio" : "s não vieram"} no PDF ({listaCurta(vivosForaDoPdf.map((d) => d.numero), 10)}) e
+                {vivosForaDoPdf.length === 1 ? " continua" : " continuam"} nele — {vivosForaDoPdf.length === 1 ? "entra" : "entram"} na conciliação da capa.
+                Para tirá-los, abra o protocolo na Mesa e use “Reenviar protocolo”.
+              </Callout>
             ) : undefined
           }
         />

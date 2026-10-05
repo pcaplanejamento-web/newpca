@@ -7,6 +7,7 @@ import {
   somatorioProcesso,
   type DfdConferivel,
   estadoDeMensagens,
+  gravacaoIncompleta,
   mensagensDoDfd,
   type RepConferencia,
 } from "../src/lib/conferencia-dfd.ts";
@@ -58,6 +59,18 @@ const rep: RepConferencia = {
 };
 
 describe("avaliarLinhaDfd — conferência ÚNICA por linha (análise = gravado)", () => {
+  it("DFD GRAVADO pela metade (N de M itens) → ERRO 'Gravação incompleta' na linha e no painel; completo → nada", () => {
+    const d = dfd();
+    const inc = gravacaoIncompleta({ itens: d.itens, totalItens: d.itens.length + 2 });
+    assert.deepEqual(inc, { gravados: d.itens.length, total: d.itens.length + 2 });
+    assert.equal(gravacaoIncompleta({ itens: d.itens, totalItens: d.itens.length }), null);
+    assert.equal(gravacaoIncompleta({ itens: d.itens, totalItens: null }), null);
+    const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: inc }, rep);
+    assert.equal(r.estado, "erro");
+    assert.equal(r.resumo?.rotulo, "Gravação incompleta");
+    assert.match(mensagensDoDfd({ ...d, gravacaoIncompleta: inc }, rep, null)[0].texto, /^Gravação incompleta: \d+ de \d+ itens/);
+  });
+
   it("DFD completo e assinado pelo responsável → regular, validação auto, sem resumo", () => {
     const r = avaliarLinhaDfd(dfd(), rep);
     assert.equal(r.estado, "regular");

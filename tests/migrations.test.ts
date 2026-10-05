@@ -963,6 +963,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     for (const i of ["pca_dfds_protocolo_idx", "pca_itens_dfd_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
   });
 
+  it("0085 totais do DFD = os itens: completo recalculado, parcial intocado, item sem total ganha q × vu", () => {
+    const d = new DatabaseSync(":memory:");
+    const i85 = arquivos.findIndex((f) => f.startsWith("0085"));
+    assert.ok(i85 > 0, "migração 0085 ausente");
+    for (const arq of arquivos.slice(0, i85)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO dfds (id, numero, total_itens, valor_total) VALUES (1, 'D1', 3, 1000), (2, 'D2', 5, 900), (3, 'D3', 1, 10);
+      INSERT INTO dfd_itens (dfd_id, sequencial, quantidade, valor_unitario, valor_total) VALUES
+        (1, 1, 2, 100, 200), (1, 2, 3, 33.333, NULL), (1, 3, 1, 50.0049, 50.0049),
+        (2, 1, 1, 100, 100), (2, 2, 1, 200, 200),
+        (3, 1, NULL, NULL, NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i85]), "utf8"));
+    d.exec(readFileSync(join(DIR, arquivos[i85]), "utf8")); // idempotente
+    for (const arq of arquivos.slice(i85 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const t = (id: number) => ({ ...(d.prepare("SELECT total_itens AS n, valor_total AS v FROM dfds WHERE id = ?").get(id) as object) });
+    assert.equal((d.prepare("SELECT valor_total AS v FROM dfd_itens WHERE dfd_id = 1 AND sequencial = 2").get() as { v: number }).v, 100);
+    assert.deepEqual(t(1), { n: 3, v: 350 }, "200 + 100 (q × vu) + 50,0049 → 350,00 (o TOTAL GERAL 1.000 sai)");
+    assert.deepEqual(t(2), { n: 5, v: 900 }, "2 de 5 itens: o parcial fica (a conferência acusa)");
+    assert.deepEqual(t(3), { n: 1, v: null }, "sem valor: NULL, nunca estimado");
+  });
+
   it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
     const d = new DatabaseSync(":memory:");
     const i78 = arquivos.findIndex((f) => f.startsWith("0078"));

@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { classificarAssunto, importarDfdHabilitado, type RegrasAvaliacao } from "@/lib/avaliacao-core";
-import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import { estadoDeMensagens, gravacaoIncompleta, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
 import { editarItemDfd, indiceAposRemover, removerItemDfd, unificarItensDfd } from "@/lib/dfd-tratamento";
@@ -233,7 +233,10 @@ export function useDfdGravado({
   const repetidosItem = useRepetidosDoItem(dfd, modoItem ? itemIdx : null, regras, categoria);
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
   const mensagens = dfd
-    ? mensagensDoDfd(dfd, rep, anoPca, regras, categoria, orgaos, conformidade).filter((m) => m.chave !== "dfd.anoPca")
+    ? // O DFD GRAVADO pela metade (lido do gravado, nunca do rascunho) é erro até reenviar.
+      mensagensDoDfd({ ...dfd, gravacaoIncompleta: orig ? gravacaoIncompleta(orig) : null }, rep, anoPca, regras, categoria, orgaos, conformidade).filter(
+        (m) => m.chave !== "dfd.anoPca",
+      )
     : [];
   // Rodapé = a MESMA régua do painel de mensagens ao lado (e da célula Estado da lista).
   const estado = dfd ? estadoDeMensagens(mensagens, { editado: sujo }) : null;

@@ -19,6 +19,7 @@ import {
   reativarVigentes,
   religarNumeros,
   retratarNumeros,
+  trocarProtocoloDoVinculo,
   vincularDfdAoPca,
 } from "../src/lib/pca-itens-sql.ts";
 import { MOTIVO_NUMERO, type NumeroLivre, parearNumeros } from "../src/lib/pca-numeracao-core.ts";
@@ -306,5 +307,21 @@ describe("protocolo incorporado editável: o nº do item segue o item", () => {
     assert.equal(n.find((x) => x.s === 4)?.a, 1);
     assert.equal(n.find((x) => x.s === 3)?.a, 0, "o retirado segue retirado");
     assert.equal(n.find((x) => x.s === 2)?.a, 0, "o baixado segue baixado");
+  });
+});
+
+describe("troca de protocolo no MESMO PCA: a ação passa a ser a do protocolo novo", () => {
+  it("a dos outros DFDs do protocolo no PCA; sem eles, a sugerida pelo assunto", async () => {
+    const db = aplicarTudo();
+    const orm = drizzle(d1Sobre(db) as never, { schema });
+    db.exec(`INSERT INTO pcas (id, nome, ano, fonte) VALUES (1, 'PCA 2027', 2027, 'protocolo');
+      INSERT INTO dfd_protocolos (id, numero, pca_id, pca_incorporado_em) VALUES (10, 'A', 1, '2027-01-01'), (20, 'B', 1, '2027-01-01'), (30, 'C', 1, '2027-01-01');
+      INSERT INTO dfds (id, numero, protocolo_id) VALUES (1, 'D1', 20), (2, 'D2', 20), (3, 'D3', 30);
+      INSERT INTO pca_dfds (pca_id, dfd_id, acao, protocolo_id) VALUES (1, 1, 'excluir', 10), (1, 2, 'incorporar', 20), (1, 3, 'incorporar', 10);`);
+    const v = (dfd: number) => ({ ...(db.prepare("SELECT acao, protocolo_id AS p FROM pca_dfds WHERE pca_id = 1 AND dfd_id = ?").get(dfd) as object) });
+    await orm.batch([trocarProtocoloDoVinculo(orm, 1, 1, 20, "excluir")]);
+    assert.deepEqual(v(1), { acao: "incorporar", p: 20 }, "saiu de um 'excluir' para o protocolo B: vale a ação de B");
+    await orm.batch([trocarProtocoloDoVinculo(orm, 3, 1, 30, "substituir")]);
+    assert.deepEqual(v(3), { acao: "substituir", p: 30 }, "sem outro DFD de C no PCA: a sugerida");
   });
 });

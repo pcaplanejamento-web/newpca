@@ -7,6 +7,7 @@ import {
   ehRuido,
   extrairCabecalho,
   extrairRefsDfd,
+  fecharValoresItens,
   limparDescricaoItem,
   norm,
   numeroDfd,
@@ -121,7 +122,6 @@ export function parseDfdFromMatriz(
   }
 
   const itens: DfdItemParseado[] = [];
-  let valorTotalGrand: number | null = null;
   let apoioSecao4 = ""; // texto de apoio abaixo da tabela (Seção 4)
   if (headerRow >= 0) {
     const col = (row: unknown[], i?: number) => (i == null ? null : row[i]);
@@ -167,10 +167,7 @@ export function parseDfdFromMatriz(
         else itens.push({ item: null, codigo, descricao, ...campos });
         continue;
       }
-      // linha "VALOR TOTAL" (grand total) → captura o total geral.
-      if (colMap.valorTotal != null && /VALOR TOTAL/.test(norm(row.map(txt).join(" ")))) {
-        valorTotalGrand = num(r, row, colMap.valorTotal);
-      }
+      // linha "VALOR TOTAL" (o total geral) ou outra sem nº: a tabela acabou — o valor do DFD é a soma dos itens.
       fim = r;
       break;
     }
@@ -186,8 +183,7 @@ export function parseDfdFromMatriz(
     apoioSecao4 = apoio.join(" ").replace(/\s+/g, " ").trim();
   }
 
-  const somaItens = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  const valorTotal = valorTotalGrand ?? (somaItens > 0 ? Math.round(somaItens * 100) / 100 : null);
+  const fechados = fecharValoresItens(itens);
 
   if (!cab.numero) {
     throw new Error(
@@ -207,10 +203,10 @@ export function parseDfdFromMatriz(
     ...cab,
     ...extrairRefsDfd(secoes, cab.objeto),
     numero: cab.numero,
-    valorTotal,
+    valorTotal: fechados.valorTotal,
     nomeArquivo,
     secoes,
-    itens,
+    itens: fechados.itens,
     assinaturas: [], // .xlsx não tem página de assinatura digital
   };
 }

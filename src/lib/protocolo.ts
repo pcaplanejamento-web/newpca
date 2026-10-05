@@ -291,6 +291,7 @@ export async function iniciarProtocolo(
         .select({ id: dfdProtocolos.id })
         .from(dfdProtocolos)
         .where(and(eq(dfdProtocolos.idExterno, p.idExterno), ne(dfdProtocolos.numero, p.numero)))
+        .orderBy(asc(dfdProtocolos.id)) // a MESMA ordem da rota (`protocolosDeMesmoId`): o 1º é o que fica sem o nº novo
     : [];
   if (mesmoId.length === 0) {
     const [row] = await upsert;
@@ -319,16 +320,26 @@ export async function getProtocoloPorNumero(numero: string): Promise<{ id: numbe
   return r ?? null;
 }
 
-/** Protocolo de mesmo `idExterno` (Id da capa) — para o anti-sequestro na protocolação. */
-export async function getProtocoloPorIdExterno(
+/** Os DFDs VIVOS dos protocolos dados (nº + totais) — a análise de uma re-importação soma os que continuam no processo. */
+export async function dfdsVivosDosProtocolos(ids: number[]): Promise<{ numero: string; valorTotal: number | null; totalItens: number | null }[]> {
+  if (ids.length === 0) return [];
+  return getDb()
+    .select({ numero: dfds.numero, valorTotal: dfds.valorTotal, totalItens: dfds.totalItens })
+    .from(dfds)
+    .where(inArray(dfds.protocoloId, ids));
+}
+
+/** TODOS os protocolos de mesmo `idExterno` (Id da capa) e nº DIFERENTE — o mesmo processo renumerado (o legado pode ter
+ * mais de um): o anti-sequestro e a recusa da fusão com PCA conferem cada um (a MESMA lista do `iniciarProtocolo`). */
+export async function protocolosDeMesmoId(
   idExterno: string,
-): Promise<{ id: number; numero: string; reparticaoId: number | null } | null> {
-  const [r] = await getDb()
+  numero: string,
+): Promise<{ id: number; numero: string; reparticaoId: number | null }[]> {
+  return getDb()
     .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, reparticaoId: dfdProtocolos.reparticaoId })
     .from(dfdProtocolos)
-    .where(eq(dfdProtocolos.idExterno, idExterno))
-    .limit(1);
-  return r ?? null;
+    .where(and(eq(dfdProtocolos.idExterno, idExterno), ne(dfdProtocolos.numero, numero)))
+    .orderBy(asc(dfdProtocolos.id));
 }
 
 /**

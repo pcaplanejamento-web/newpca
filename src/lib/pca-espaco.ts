@@ -781,7 +781,7 @@ async function pcaConsultavel(pcaId: number, logado: boolean): Promise<PcaEspaco
  * O que a consulta do PCA pode abrir: os protocolos INCORPORADOS e — com a PRÉVIA ligada (só em Preview, logo só para quem
  * está logado) — também os protocolos/DFDs da prévia (os mesmos que entram nos números do Dashboard/Orçamento).
  */
-async function escopoConsulta(pca: PcaEspaco): Promise<{ protocolos: Set<number>; previaDfds: Set<number> }> {
+async function escopoConsulta(pca: PcaEspaco): Promise<{ protocolos: Set<number>; previaDfds: Set<number>; previa: VinculoDfd[] }> {
   const [rows, previa] = await Promise.all([
     getDb()
       .select({ id: dfdProtocolos.id })
@@ -791,7 +791,7 @@ async function escopoConsulta(pca: PcaEspaco): Promise<{ protocolos: Set<number>
   ]);
   const protocolos = new Set(rows.map((r) => r.id));
   for (const v of previa) if (v.protocoloId != null) protocolos.add(v.protocoloId);
-  return { protocolos, previaDfds: new Set(previa.map((v) => v.dfdId)) };
+  return { protocolos, previaDfds: new Set(previa.map((v) => v.dfdId)), previa };
 }
 
 /** O DFD está no PCA (vínculo) por um protocolo INCORPORADO? */
@@ -831,13 +831,11 @@ export async function consultaProtocolo(pcaId: number, protocoloId: number, loga
   if (!pca) return null;
   const esc = await escopoConsulta(pca);
   if (!esc.protocolos.has(protocoloId)) return null;
-  const [p, vinc, inativos] = await Promise.all([
-    getProtocolo(protocoloId),
-    getDb().select({ dfdId: pcaDfds.dfdId }).from(pcaDfds).where(eq(pcaDfds.pcaId, pcaId)),
-    inativosPorDfd(),
-  ]);
+  const [p, vs, inativos] = await Promise.all([getProtocolo(protocoloId), vinculosDoPca(pcaId), inativosPorDfd()]);
   if (!p) return null;
-  const noPca = new Set([...vinc.map((v) => v.dfdId), ...esc.previaDfds]);
+  // Só os DFDs que CONTAM no PCA — os VIGENTES (a MESMA consolidação do Dashboard e dos cards: um "excluir" ou um DFD
+  // substituído não soma) com itens ativos; o valor = os itens ativos (o gravado − os inativos).
+  const vigentes = new Set(consolidarPca([...vs, ...esc.previa]).vigentes);
   return {
     id: p.id,
     numero: p.numero,
@@ -851,7 +849,7 @@ export async function consultaProtocolo(pcaId: number, protocoloId: number, loga
     anoPca: p.anoPca,
     unidade: p.reparticaoCodigo ? `${p.reparticaoCodigo}${p.reparticaoNome ? ` · ${p.reparticaoNome}` : ""}` : null,
     dfds: p.dfds
-      .filter((d) => noPca.has(d.id))
+      .filter((d) => vigentes.has(d.id))
       .map((d) => {
         const fora = inativos.get(`${pcaId}:${d.id}`) ?? { n: 0, valor: 0 };
         return {
@@ -865,7 +863,8 @@ export async function consultaProtocolo(pcaId: number, protocoloId: number, loga
           itens: (d.totalItens ?? 0) - fora.n,
           valor: (d.valorTotal ?? 0) - fora.valor,
         };
-      }),
+      })
+      .filter((d) => d.itens > 0),
   };
 }
 
@@ -1118,7 +1117,7 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
       (p): p is typeof p & { ano: number } => coerceFonte(p.fonte) === "protocolo" && p.ano != null && p.ano >= a0 && p.ano <= a1,
     );
     if (!lista.length) return { pcas: [], dfds: [] };
-    const vs = await vinculos(lista.map((p) => p.id));
+    const [vs, inativos] = await Promise.all([vinculos(lista.map((p) => p.id)), inativosPorDfd()]);
     const out: DfdPrevisao[] = [];
     for (const p of lista) {
       const vig = consolidarPca(vs.filter((v) => v.pcaId === p.id)).vigentes;
@@ -1145,7 +1144,8 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
             planejamento: d.planejamento,
             objeto: d.objeto,
             sigla: d.sigla,
-            valor: Number(d.valor ?? 0),
+            // O valor que CONTA no PCA: sem os itens retirados (o mesmo do card e do Dashboard).
+            valor: Number(d.valor ?? 0) - (inativos.get(`${p.id}:${d.id}`)?.valor ?? 0),
             ano: pv.ano,
             mes: "mes" in pv ? pv.mes : null,
             anual: "anual" in pv,

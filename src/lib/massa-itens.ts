@@ -1,6 +1,7 @@
 import { type CatalogoRef, conferirItem } from "./catalogo-conferencia.ts";
 import { brl, num } from "./format.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
+import { totalDoItem } from "./parse-dfd-comum.ts";
 
 /**
  * EDIÇÃO EM MASSA de ITENS de DFDs gravados (lista "Itens" da Mesa) — núcleo PURO/testável. Planeja,
@@ -40,12 +41,6 @@ export type PlanoMassaItens = {
   recusas: { id: number; item: number | null; motivo: string }[];
 };
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
-/** Valor total do item após trocar quantidade/unitário: recalcula quando os dois existem; senão mantém. */
-function totalRecalculado(qtd: number | null, vu: number | null, atual: number | null): number | null {
-  return qtd != null && vu != null ? round2(qtd * vu) : atual;
-}
 
 /**
  * Plano de UM DFD: `itensDfd` = os itens dele (ao menos os selecionados); `alvos` = ids selecionados;
@@ -98,14 +93,14 @@ export function planejarMassaItens(
       if (it.quantidade === acao.valor) continue;
       plano.atualizar.push({
         id: it.id,
-        patch: { quantidade: acao.valor, valorTotal: totalRecalculado(acao.valor, it.valorUnitario, it.valorTotal) },
+        patch: { quantidade: acao.valor, valorTotal: totalDoItem(acao.valor, it.valorUnitario, it.valorTotal) },
       });
       continue;
     }
     if (it.valorUnitario === acao.valor) continue;
     plano.atualizar.push({
       id: it.id,
-      patch: { valorUnitario: acao.valor, valorTotal: totalRecalculado(it.quantidade, acao.valor, it.valorTotal) },
+      patch: { valorUnitario: acao.valor, valorTotal: totalDoItem(it.quantidade, acao.valor, it.valorTotal) },
     });
   }
   return plano;

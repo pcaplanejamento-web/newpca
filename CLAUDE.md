@@ -552,6 +552,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ZERADO** (`valorTotal ?? 0`) — o sistema não estima nada. O total do **PCA** (`pcas.valorEstimado`, coluna mantida)
     passou a somar os `valorTotal` dos DFDs. A coluna `dfds.valor_estimado` fica **dormante** (sem código; sem migração
     de DROP).
+  - **REGRA ÚNICA, de ponta a ponta (auditoria dos totais, migração `0085`):** valor do DFD = Σ dos totais dos itens ao
+    centavo (NULL quando ≤ 0) e nº de itens = quantos existem — na LEITURA (`fecharValoresItens`, `parse-dfd-comum.ts`: o
+    item sem total com quantidade e valor unitário recebe q × vu; o "TOTAL GERAL" do documento só FECHA a tabela, não define
+    o valor), na EDIÇÃO (`editarItemDfd`: trocar quantidade/valor unitário recalcula o total do item — `totalDoItem`, a régua
+    da massa; total digitado à mão vale; `valorDosItens`), na SOBRESCRITA (`comTotal` = a soma) e no BANCO
+    (**`comandoTotaisDfd`**, `dfd-sql.ts`, no MESMO `db.batch` de toda escrita de itens — `start-dfd`/`append` com
+    `soCompleto`: a importação pela metade mantém o total DECLARADO, que o `gravacaoParcial` usa; "Salvar" e a massa sempre).
+    A `0085` acertou os gravados (item sem total → q × vu; DFDs completos → os itens). Assim protocolo (Σ DFDs) = DFDs = itens
+    em TODA tela — lista e capa do protocolo, cards/Dashboard/Orçamento do PCA, calendário, consulta pública.
 - **Assinatura digital (captura + conferência, migração `0018`):** o PDF traz, DEPOIS de cada DFD, uma página
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
@@ -1219,7 +1228,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   JÁ EXISTIA** (sobrescrita/reenvio, `opcoes.existia`) **não é apagado** (perderia também a versão anterior) — a falha diz
   "gravação INCOMPLETA (n de N itens): reenvie para completar"; o mesmo aviso quando o desfazer não passa (sem rede, ou
   recusado — `apagarDfd` confere a resposta). `appendDfdItens`
-  é **idempotente** (apaga `sequencial > desde` antes de gravar → retry não duplica). O banner de importação fica
+  é **idempotente** e regrava só a FAIXA do próprio lote (`comandoApagarFaixaItens`: `desde < sequencial ≤ desde + n` — o
+  retry não duplica e um retry ATRASADO nunca apaga um lote posterior). O **desfazer** (`?origem=desfazer`) NUNCA vira um
+  "Excluir" comum: fora do `gravacaoParcial` → 409 (nada é apagado — ex.: outra pessoa criou o DFD entre a consulta e a
+  gravação). O DFD GRAVADO pela metade (a sobrescrita que falhou num lote) é **ERRO "Gravação incompleta: N de M itens"**
+  (`gravacaoIncompleta`/`DfdConferivel.gravacaoIncompleta`, `conferencia-dfd.ts` — lido do GRAVADO, nunca do rascunho) na
+  célula, no painel e no protocolo agregado até reenviar. O banner de importação fica
   **`bloqueado`** (Modal sem X/Esc/backdrop, sem Cancelar) + `beforeunload` enquanto grava — não dá pra interromper.
 - **Segurança (escopo por repartição em TODA escrita):** `POST /api/dfd` (`start-dfd`/`append`), `PATCH`/`DELETE
   /api/dfd/[id]`, `PATCH`/`DELETE /api/protocolo/[id]` e os `GET/[id]` checam `reparticaoId == null || lista.some(...)`
@@ -1245,8 +1259,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nenhum DFD fica órfão (antes a FK `set null` orfanava os que não vinham no PDF e os mantidos). Na análise, o DFD
   cadastrado num protocolo de MESMO Id é "deste processo" (`/api/dfd/existentes` devolve `protocoloIdExterno`: Substitui,
   não Move; "Manter o existente" o mantém na capa). O `POST /api/protocolo` faz o **anti-sequestro por Id E por Nº** — 403
-  se o Id ou o número já existe em unidade inacessível: `getProtocoloPorIdExterno`/`getProtocoloPorNumero`; o de mesmo Id
-  em um PCA é recusado (409). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
+  se o Id ou o número já existe em unidade inacessível — TODOS os de mesmo Id (`protocolosDeMesmoId`, a MESMA lista que o
+  `iniciarProtocolo` funde) e o de mesmo nº (`getProtocoloPorNumero`); a FUSÃO (nº novo já em outro protocolo) é recusada
+  (409) se QUALQUER um dos envolvidos — inclusive o que fica — está em um PCA, e o rastro do que fica sai para os DFDs que
+  entram nele (`comandosMesmoId` — não contam duas vezes). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
   `dfds.numero`; `planejamento` é DADO, atualizado no overwrite).
   **Excluir em CASCATA (regra do usuário):** `excluirProtocolo` (`protocolo.ts`) apaga os **DFDs vinculados**
   (`delete dfds where protocoloId`) ANTES do protocolo, no MESMO `db.batch` — os **itens** caem por `dfd_itens.dfdId`
@@ -1329,8 +1345,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   aplica os itens numa passada só e o estado de cada escolha usa um índice por marca (linear, mesmo com milhares); a SEÇÃO
   é identificada pela seção PADRÃO do título (`chaveSecao` → `SECOES_PADRAO`: "PRIORIDADE" e "PRIORIDADE DA COMPRA OU DA
   CONTRATAÇÃO" são UMA escolha — manter a gravada tira a do arquivo) e as de mesmo tipo voltam num bloco só; com os itens
-  de UM lado inteiro vale o valor total DESSE lado (o "TOTAL GERAL" pode diferir da soma por arredondamento — "Manter
-  todos os gravados" volta a ser IGUAL); na mistura, a soma; o banner do DFD fica **só-leitura** enquanto a sobrescrita está em andamento
+  dos dois lados o valor do DFD é a SOMA dos itens (a regra única — "Manter todos os gravados" volta a ser IGUAL ao
+  gravado); o banner do DFD fica **só-leitura** enquanto a sobrescrita está em andamento
   (`sobrescrever.onOcupado`: lançador → leitura → escolha → gravação — sem rascunho concorrente nem base velha); só a
   leitura mais recente de arquivo vale; fechar a conferência com escolhas/edições feitas pede confirmação; na
   protocolação, a escolha só destrava depois da leitura da assinatura por OCR daquele DFD e o DFD que substitui/move um
@@ -1522,7 +1538,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   catálogo NÃO pode ser alterado** (`toast.error`): Código (chave do match), Descrição (`!conf.divergDescricao`), Unidade
   (`!conf.divergUnidade`); Quantidade/Valores não têm equivalente → sempre livres; item não catalogado → tudo livre.
   Vale na **importação E no gravado** (os hosts passam `editavel`+`conformidade`). A edição recomputa o **valorTotal do
-  DFD** (Σ) via `editarItemDfd`. No **gravado**, a edição do item entra no RASCUNHO do DFD e vai ao banco no "Salvar
+  DFD** (Σ) via `editarItemDfd` — e trocar a QUANTIDADE ou o VALOR UNITÁRIO recalcula o total do ITEM (q × vu, `totalDoItem`). No **gravado**, a edição do item entra no RASCUNHO do DFD e vai ao banco no "Salvar
   alterações" do banner (`PATCH /api/dfd/[id]` `{itens}` → `reescreverDfdItens`, apaga+reinsere + recomputa total). Só
   **editor**; escopo por unidade e `valorUnitario>0` no servidor.
 - **GRAVADO = ANÁLISE (mesmos componentes, conferência, seleção e ajustes — a ÚNICA diferença é a tabela única):**
@@ -1620,7 +1636,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (descarta o novo). O usuário **edita antes** (mesma conferência/edição em massa da análise). **Sobrescrever** confirma
     com o resumo, envia `start-protocolo` com `reenvio {protocoloId, resumo}` (o servidor confere escopo + identidade e
     audita "REENVIADO (sobrescrito)"), **regrava só os DFDs que mudaram** (os "igual" ficam como estão), exclui os fora do
-    PDF marcados "Excluir" (padrão) e recarrega o gravado. Garantias: o servidor grava no MESMO registro (**nº exatamente
+    PDF marcados "Excluir" (padrão — `DELETE ?origem=reenvio&protocolo=P`: só o DFD que AINDA está no protocolo; o movido
+    por outra pessoa durante a análise não é tocado, 409) e recarrega o gravado. Garantias: o servidor grava no MESMO registro (**nº exatamente
     como gravado** e **Id gravado** quando o PDF não traz — nunca apaga o Id); a comparação de assinaturas inclui formato,
     código e a **validação da equipe** (validar/desfazer é diferença); DFD **editado** na análise nunca é pulado como
     "igual"; a validação da assinatura é herdada **depois do OCR** (`herdarTratamentos(…, {assinaturas})` em partes — a
@@ -2064,7 +2081,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `mascararTexto` (CPF/CNPJ/e-mail/telefone/matrícula em TEXTO LIVRE — seções, capa, diff). Rotas GET **públicas**
   `/api/pca/[id]/consulta/dfd/[dfdId]`, `/consulta/protocolo/[protocoloId]` (capa sem CPF/CNPJ) e `/consulta/historico?dfd=|protocolo=`
   → `consultaDfd`/`consultaProtocolo`/`consultaHistorico` (`pca-espaco.ts`): só PCA de fonte protocolo **publicado** (ou
-  usuário logado — o painel vê o Preview) e só DFD/protocolo **incorporado** a ESTE PCA (senão 404).
+  usuário logado — o painel vê o Preview) e só DFD/protocolo **incorporado** a ESTE PCA (senão 404). O banner do protocolo
+  lista só os DFDs que CONTAM (os vigentes — `consolidarPca` com a prévia — com itens ativos; valor = gravado − inativos):
+  a MESMA conta da tabela da consulta e do Dashboard (um "excluir" ou um substituído não soma). O calendário também
+  desconta os itens retirados (`cronogramaPcas`).
   Os gráficos + a consulta são UM cliente, **`DashboardPcaCliente`** (os `itens` trafegam uma vez; `PainelPca` segue server
   com os KPIs e recebe `consulta` como DADOS `{pcaId, protocolos, dfds}`); a `ConsultaPca` é CONTROLADA (`aberto`/`onAbrir`) e
   há UM `BannersConsulta`, compartilhado com a origem dos gráficos.
@@ -2122,8 +2142,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **O DFD está no PCA do protocolo INCORPORADO em que está** (`pca_dfds.protocolo_id` = por onde entrou; NULL = vínculo de
     edição legada, nunca tocado): `sincronizarDfdNoPca` (depois de toda gravação/vínculo — estado, idempotente) põe o DFD que
     entra (a ação dos outros DFDs do protocolo, senão a sugerida), tira o que sai (nºs baixados, o item sem nº) e troca o
-    protocolo do vínculo no mesmo PCA. Excluir DFD/protocolo e Devolver baixam os nºs no mesmo lote; `sincronizarAtivosPca`
-    inativa os não vigentes e REATIVA o substituído quando quem o substituía sai.
+    protocolo do vínculo no mesmo PCA — a AÇÃO passa a ser a do protocolo novo (`trocarProtocoloDoVinculo`, a régua do
+    `vincularDfdAoPca`). O DFD com vínculo LEGADO em OUTRO PCA não entra por incorporação (um DFD em UM PCA). Excluir
+    DFD/protocolo e Devolver baixam os nºs no mesmo lote; `sincronizarAtivosPca` (também a cada gravação COMPLETA e troca — o
+    planejamento/ação podem ter mudado) inativa os não vigentes e REATIVA o substituído quando quem o substituía sai.
   - **Tela:** no lugar do cadeado, o aviso informativo `avisoIncorporado` nos banners do protocolo e do DFD; as confirmações de
     excluir/devolver dizem o impacto (`impactoSaidaPca`). Única recusa que fica: a re-importação por Id que FUNDIRIA (excluiria)
     um protocolo em um PCA em outro já existente no nº novo (409 — devolva-o antes; `pcaDeProtocolos`, `trava-pca.ts`).
@@ -2132,7 +2154,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`PcaConfiguracao`, `Switch` "Mostrar os marcados da Mesa do sistema"; `PATCH /api/pca/[id]` `{mesaMarcados}` +
   auditoria), a Mesa do PCA lista também os protocolos MARCADOS com o ano dele (`ano_pca`, a MESMA régua do filtro de PCA do
   cabeçalho — `filtroAnoPcaProtocolo`/`filtroAnoPcaDfd`) que ainda estão na Mesa do SISTEMA (`pca_id IS NULL`; os de OUTRO
-  PCA não entram). O SERVIDOR decide pela configuração (`anoMarcadosDoPca`, `pca-espaco.ts`): `carregarMesa(u, pcaId)` →
+  PCA não entram; o DFD AVULSO, sem protocolo, nunca — `isNotNull(dfds.protocoloId)`). O SERVIDOR decide pela configuração (`anoMarcadosDoPca`, `pca-espaco.ts`): `carregarMesa(u, pcaId)` →
   `listarProtocolosDoPca(pcaId, anoMarcados)` e `listarDfds`/`listarItensDfds(…, anoMarcados)` (`escopoMesa(pcaId, ano)` =
   `pca_id = P OR (pca_id IS NULL AND ano)`), e o `GET /api/dfd/itens?pca=` lê a mesma configuração. Na `MesaPca`
   (`marcados`): a coluna **Local** (`localDoProtocolo`, `pca-core.ts` puro — `sistema`/`enviado`/`incorporado`, a fonte única
@@ -3033,8 +3055,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - Métricas da Mesa: `GET /api/mesa/execucao?ano=` (`execucaoMesaSchema`, Visualizar a Mesa do sistema) — o histórico de execução
   (reenvios e ações) dos protocolos da Mesa em tuplas `[protocolo, pessoa, dia, tipo, n]` + as pessoas (foto + apelido).
 - Pessoas/sobrescrita (migração `0032`): `GET /api/usuarios/[id]/foto` (a foto do perfil, `exigirUsuario`, cache
-  `immutable` pela versão `?v=`), `POST /api/dfd/existentes` (`existentesDfdSchema {numeros ≤ 2000}` → os DFDs já
-  cadastrados em QUALQUER unidade; o de unidade sem acesso só `{numero, acessivel:false}`), `POST /api/dfd` `start-dfd` com
+  `immutable` pela versão `?v=`), `POST /api/dfd/existentes` (`existentesDfdSchema {numeros ≤ 2000, processo?}` → os DFDs já
+  cadastrados em QUALQUER unidade; o de unidade sem acesso só `{numero, acessivel:false}`; com `processo {numero, idExterno}`,
+  também o PROTOCOLO já cadastrado do PDF — os DFDs vivos e o rastro do de mesmo nº/Id: a RE-IMPORTAÇÃO pelo "Importar
+  protocolo" soma na conciliação os DFDs que não vieram no PDF e continuam nele, com o aviso "use Reenviar protocolo para
+  tirá-los" — análise = gravado), `POST /api/dfd` `start-dfd` com
   `origem:"sobrescrita"` + `escolhas {mantidos, editados}` (histórico) e SEM `protocoloId` = mantém o protocolo do DFD, e
   `GET /api/protocolo/[id]?completo=1` também com **`sobrescritos`** (o rastro, com o protocolo atual de cada um).
 - Padronização (migração `0038`): `/api/catalogo/unidades-medida*` e `/api/catalogo/classificacoes*` — ver "Padronização:
