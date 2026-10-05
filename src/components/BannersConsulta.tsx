@@ -5,13 +5,13 @@ import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
 import type { DfdConsulta } from "@/lib/pca-publico-core";
 import type { ProtocoloConsulta } from "@/lib/pca-espaco";
 import { type AberturaMesa, LARGURA } from "./BannersMesa";
-import { Button } from "./Button";
+import { BotaoAcao } from "./BotaoAcao";
 import { CampoCongelado } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { RodapePainelItem } from "./DfdPainelDireito";
 import { DfdCabecalho, DfdView, ItemCabecalho } from "./DfdView";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconLayers } from "./icons";
+import { IconAlert, IconClock } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import { duracaoMotionMs, Modal, type ModalPainel } from "./Modal";
 import { ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
@@ -59,33 +59,12 @@ function Carregando({ erro }: { erro: string | null }) {
   );
 }
 
-/** Rodapé enxuto da consulta: Histórico · Ver protocolo · Fechar. */
-function RodapeConsulta({ onHistorico, onVerProtocolo, onFechar }: { onHistorico?: () => void; onVerProtocolo?: () => void; onFechar: () => void }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {onHistorico && (
-        <Button variant="secondary" onClick={onHistorico}>
-          <IconClock className="h-4 w-4" /> Histórico
-        </Button>
-      )}
-      {onVerProtocolo && (
-        <Button variant="secondary" onClick={onVerProtocolo}>
-          <IconLayers className="h-4 w-4" /> Ver protocolo
-        </Button>
-      )}
-      <Button variant="secondary" onClick={onFechar} className="ml-auto">
-        Fechar
-      </Button>
-    </div>
-  );
-}
-
 /**
  * PILHA DE BANNERS da CONSULTA do PCA (Dashboard — tela inicial e painel): a MESMA ordem fixa da Mesa **Protocolo |
  * DFD | Item** (`Modal` com `esquerda`/`paineis`, mesmas larguras), só LEITURA e DISCRETA — os dados vêm da rota
  * PÚBLICA já higienizada (sem CPF, matrícula, e-mail, telefone e assinaturas) e os componentes em modo `consulta`
- * (campos congelados, sem estado/erros/avisos). Rodapés: Histórico (só protocolos incorporados, sem autor) · Ver
- * DFD/protocolo · Fechar.
+ * (campos congelados, sem estado/erros/avisos). Histórico (só protocolos incorporados, sem autor) no CABEÇALHO; no
+ * rodapé, só os ícones Ver DFD/protocolo (o X fecha).
  */
 export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abrir: AberturaMesa | null; onFechar: () => void }) {
   const cache = useRef(new Map<string, unknown>()).current;
@@ -144,12 +123,14 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
     return {
       titulo: p ? `Protocolo ${p.numero}` : "Protocolo",
       cabecalho: p ? <ProtocoloCabecalho numero={p.numero} idExterno={p.idExterno} assunto={p.assunto} /> : undefined,
-      rodape: (
-        <RodapeConsulta
-          onHistorico={p ? () => setHist({ tipo: "protocolo", id: p.id }) : undefined}
-          onFechar={raiz === "protocolo" ? onFechar : () => setProtoId(null)}
+      acoesCabecalho: p ? (
+        <BotaoAcao
+          rotulo="Histórico do protocolo"
+          icon={<IconClock className="h-4 w-4" />}
+          pressionado={hist?.tipo === "protocolo" && hist.id === p.id}
+          onClick={() => setHist((h) => (h?.tipo === "protocolo" && h.id === p.id ? null : { tipo: "protocolo", id: p.id }))}
         />
-      ),
+      ) : undefined,
       children: !p ? (
         <Carregando erro={proto.erro} />
       ) : (
@@ -194,26 +175,16 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
     return {
       titulo: d ? `DFD ${d.numero}` : "DFD",
       cabecalho: d ? <DfdCabecalho numero={d.numero} tipo={d.tipo} planejamento={d.planejamento} /> : undefined,
-      rodape: (
-        <RodapeConsulta
-          onHistorico={d ? () => setHist({ tipo: "dfd", id: d.id }) : undefined}
-          onVerProtocolo={d?.protocoloId != null && protoId == null ? () => verProtocolo(d.protocoloId as number) : undefined}
-          onFechar={
-            raiz === "dfd"
-              ? onFechar
-              : raiz === "item"
-                ? () => {
-                    limparTimer();
-                    setVerDfd(false);
-                    setProtoId(null);
-                  }
-                : () => {
-                    setDfdId(null);
-                    setItemId(null);
-                  }
-          }
+      acoesCabecalho: d ? (
+        <BotaoAcao
+          rotulo="Histórico do DFD"
+          icon={<IconClock className="h-4 w-4" />}
+          pressionado={hist?.tipo === "dfd" && hist.id === d.id}
+          onClick={() => setHist((h) => (h?.tipo === "dfd" && h.id === d.id ? null : { tipo: "dfd", id: d.id }))}
         />
-      ),
+      ) : undefined,
+      rodape:
+        d?.protocoloId != null && protoId == null ? <RodapePainelItem onVerProtocolo={() => verProtocolo(d.protocoloId as number)} /> : undefined,
       children: !d ? (
         <Carregando erro={dfd.erro} />
       ) : (
@@ -240,7 +211,6 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
         <RodapePainelItem
           onVerDfd={raiz === "item" && !verDfd ? () => setVerDfd(true) : undefined}
           onVerProtocolo={d?.protocoloId != null && protoId == null ? () => verProtocolo(d.protocoloId as number) : undefined}
-          onFechar={raiz === "item" ? onFechar : () => setItemId(null)}
         />
       ),
       children: !d ? (
@@ -259,13 +229,6 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
     largura: LARGURA.item,
     titulo: hist?.tipo === "protocolo" ? "Histórico do protocolo" : "Histórico do DFD",
     onClose: () => setHist(null),
-    rodape: (
-      <div className="flex justify-end">
-        <Button variant="secondary" onClick={() => setHist(null)}>
-          Fechar
-        </Button>
-      </div>
-    ),
     children: hist ? (
       <Historico
         entradas={historico.linhas ?? []}
@@ -338,6 +301,7 @@ export function BannersConsulta({ pcaId, abrir, onFechar }: { pcaId: number; abr
       paineis={paineis}
       titulo={principal.titulo}
       cabecalho={principal.cabecalho}
+      acoesCabecalho={principal.acoesCabecalho}
       rodape={principal.rodape}
     >
       {principal.children}

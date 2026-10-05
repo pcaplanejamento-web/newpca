@@ -207,7 +207,9 @@ import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
-import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
+import { MensagensDfd } from "@/components/MensagensDfd";
+import { BotaoAcao } from "@/components/BotaoAcao";
+import { IndicadorPendencias } from "@/components/IndicadorPendencias";
 import { Dropzone } from "@/components/Dropzone";
 import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -3782,7 +3784,27 @@ export function Catalogo() {
         </p>
       </Secao>
 
-      <Secao titulo="DfdRodape (rodapé fixo do banner do DFD — estado + mensagens + ações)">
+      <Secao titulo="BotaoAcao (ação dos rodapés/cabeçalhos dos banners — só o ícone, nome na dica; contagem; principal com texto)">
+        <div className="flex flex-wrap items-center gap-3">
+          <BotaoAcao rotulo="Histórico" icon={<Icons.IconClock className="h-4 w-4" />} onClick={() => toast("Histórico")} />
+          <BotaoAcao rotulo="Comparar os duplicados" icon={<Icons.IconCompare className="h-4 w-4" />} contagem={2} onClick={() => toast("Duplicados")} />
+          <BotaoAcao rotulo="Tarefas" icon={<Icons.IconKanban className="h-4 w-4" />} contagem="1/3" onClick={() => toast("Tarefas")} />
+          <BotaoAcao rotulo="Mensagens" icon={<Icons.IconLayers className="h-4 w-4" />} pressionado onClick={() => toast("Painel aberto")} />
+          <BotaoAcao variant="primary" rotulo="Reenviar protocolo" icon={<Icons.IconUpload className="h-4 w-4" />} onClick={() => toast("Reenviar")} />
+          <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => toast("Salvar")} />
+        </div>
+      </Secao>
+
+      <Secao titulo="IndicadorPendencias (o botão ÚNICO de erros/atenção — relatório do protocolo, mensagens do DFD)">
+        <div className="flex flex-wrap items-center gap-3">
+          <IndicadorPendencias erros={2} atencoes={1} alvo="ver o relatório de erro" onClick={() => toast("Relatório")} />
+          <IndicadorPendencias erros={0} atencoes={3} alvo="ver o relatório de atenção" onClick={() => toast("Relatório")} />
+          <IndicadorPendencias erros={0} atencoes={0} rotulo="Editado" cor="var(--info)" alvo="ver as mensagens" aberto onClick={() => toast("Mensagens")} />
+          <IndicadorPendencias erros={0} atencoes={0} alvo="nada a ver" />
+        </div>
+      </Secao>
+
+      <Secao titulo="DfdRodape (rodapé do banner do DFD — UMA linha: indicador + ações só ícone + principal)">
         <DfdRodape
           estado="atencao"
           mensagens={[
@@ -3791,13 +3813,13 @@ export function Catalogo() {
           ]}
           mensagensAbertas={false}
           onToggleMensagens={() => toast("Abrir/ocultar mensagens")}
-          onFechar={() => toast("Fechar")}
           acoes={
-            <Button variant="secondary" onClick={() => toast("Histórico")}>
-              <Icons.IconClock className="h-4 w-4" /> Histórico
-            </Button>
+            <>
+              <BotaoAcao rotulo="Ver protocolo" icon={<Icons.IconLayers className="h-4 w-4" />} onClick={() => toast("Ver protocolo")} />
+              <BotaoAcao variant="primary" rotulo="Sobrescrever DFD" icon={<Icons.IconUpload className="h-4 w-4" />} onClick={() => toast("Sobrescrever")} />
+            </>
           }
-          principal={<Button onClick={() => toast("Salvar alterações")}>Salvar alterações</Button>}
+          principal={<BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => toast("Salvar alterações")} />}
         />
       </Secao>
 
@@ -3817,13 +3839,12 @@ export function Catalogo() {
           <div className="mt-4 border-t border-border pt-3">
             <RodapePainelItem onVerDfd={() => toast("Voltar ao DFD")} onVerProtocolo={() => toast("Ver protocolo")} />
           </div>
-          {/* Banner SÓ do item (visão Itens da Mesa): + Fechar e Salvar alterações. */}
+          {/* Banner SÓ do item (visão Itens da Mesa): + Salvar alterações (o X do cabeçalho fecha). */}
           <div className="mt-3 border-t border-border pt-3">
             <RodapePainelItem
               onVerDfd={() => toast("O DFD entra pela direita")}
               onVerProtocolo={() => toast("O DFD e depois o protocolo entram pela direita")}
-              onFechar={() => toast("Fechar")}
-              principal={<Button onClick={() => toast("Salvar alterações")}>Salvar alterações</Button>}
+              principal={<BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => toast("Salvar alterações")} />}
             />
           </div>
         </div>
@@ -3854,19 +3875,6 @@ export function Catalogo() {
       </Secao>
 
       <Secao titulo="MensagensDfd (painel lateral de erro/atenção/acerto — clique navega no DFD)">
-        {/* BotaoVerMensagens — vai no rodapé fixo do banner do DFD, à esquerda do Fechar. */}
-        <div className="mb-4 flex justify-end border-b border-border pb-4">
-          <BotaoVerMensagens
-            mensagens={[
-              { chave: "a", status: "erro", texto: "", ancora: "" },
-              { chave: "b", status: "erro", texto: "", ancora: "" },
-              { chave: "c", status: "atencao", texto: "", ancora: "" },
-              { chave: "d", status: "acerto", texto: "", ancora: "" },
-              { chave: "e", status: "acerto", texto: "", ancora: "" },
-            ]}
-            onToggle={() => toast("Abrir/ocultar o painel de mensagens")}
-          />
-        </div>
         <div className="max-w-md">
           <MensagensDfd
             numero="1586"

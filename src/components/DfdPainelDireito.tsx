@@ -6,7 +6,7 @@ import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import type { ComparacaoDfd } from "@/lib/comparar-protocolo";
 import { indiceAposRemover, mapaItensDuplicados, type MensagemDfd, outrosDoGrupo } from "@/lib/dfd-tratamento";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { Button } from "./Button";
+import { BotaoAcao } from "./BotaoAcao";
 import { ComparacaoDfdView, type EscolhaSobrescritaProps } from "./ComparacaoReenvio";
 import type { PainelDfd } from "./DfdConferir";
 import { Historico, useHistorico } from "./Historico";
@@ -24,46 +24,30 @@ export function tituloPainelDfd(painel: PainelDfd | null, dfd: DfdParseado | nul
 }
 
 /**
- * Rodapé de um banner de ITEM — o do painel da direita do DFD e o do banner SÓ do item (lista "Itens" da
- * Mesa): "Ver DFD" (no painel da direita fecha o item e volta ao DFD — no celular só um painel aparece
- * por vez; no banner do item, o DFD surge à ESQUERDA dele), "Ver protocolo" (sobe ao processo de origem,
- * à esquerda do DFD — Protocolo | DFD | Item) e, no banner do item, Fechar + a ação principal.
+ * Rodapé de um banner de ITEM — o do painel da direita do DFD e o do banner SÓ do item (lista "Itens" da Mesa), em UMA
+ * linha e só com ícones: "Ver DFD" (no painel da direita fecha o item e volta ao DFD — no celular só um painel aparece
+ * por vez; no banner do item, o DFD surge à ESQUERDA dele), "Ver protocolo" (sobe ao processo de origem, à esquerda do
+ * DFD — Protocolo | DFD | Item) e a ação principal. Fechar = o X do cabeçalho.
  */
 export function RodapePainelItem({
   onVerDfd,
   onVerProtocolo,
-  onFechar,
   principal,
   bloqueado = false,
 }: {
   onVerDfd?: () => void;
   onVerProtocolo?: () => void;
-  onFechar?: () => void;
   principal?: ReactNode;
   bloqueado?: boolean;
 }) {
+  if (!onVerDfd && !onVerProtocolo && !principal) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {onVerDfd && (
-        <Button variant="secondary" onClick={onVerDfd} disabled={bloqueado}>
-          <IconFile className="h-4 w-4" /> Ver DFD
-        </Button>
-      )}
+    <div className="flex flex-nowrap items-center gap-1.5">
+      {onVerDfd && <BotaoAcao rotulo="Ver DFD" icon={<IconFile className="h-4 w-4" />} onClick={onVerDfd} disabled={bloqueado} />}
       {onVerProtocolo && (
-        <Button variant="secondary" onClick={onVerProtocolo} disabled={bloqueado}>
-          <IconLayers className="h-4 w-4" /> Ver protocolo
-        </Button>
+        <BotaoAcao rotulo="Ver protocolo" icon={<IconLayers className="h-4 w-4" />} onClick={onVerProtocolo} disabled={bloqueado} />
       )}
-      {(onFechar || principal) && (
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {onFechar && (
-            <Button variant="secondary" onClick={onFechar} disabled={bloqueado}>
-              Fechar
-            </Button>
-          )}
-          {principal}
-        </div>
-      )}
+      {principal && <div className="ml-auto flex items-center">{principal}</div>}
     </div>
   );
 }

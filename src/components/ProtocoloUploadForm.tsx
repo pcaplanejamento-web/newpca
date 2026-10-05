@@ -86,6 +86,7 @@ import {
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { BarraSelecaoDfds } from "./BarraSelecao";
+import { BotaoAcao } from "./BotaoAcao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ComparacaoDuplicados } from "./ComparacaoDuplicados";
@@ -93,9 +94,10 @@ import { ComparacaoProtocolo } from "./ComparacaoReenvio";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
+import { IndicadorPendencias } from "./IndicadorPendencias";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconAlert, IconCheck, IconClipboard, IconCompare, IconFile, IconRefresh, IconSpinner, IconTrash, IconUndo, IconUpload } from "./icons";
+import { IconAlert, IconArquivar, IconCheck, IconClipboard, IconCompare, IconFile, IconMerge, IconRefresh, IconSpinner, IconTrash, IconUndo, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import type { LinhaDfd, ProcessandoDfd } from "./PlanilhaDfds";
@@ -1863,13 +1865,13 @@ export function ProtocoloUploadForm({
     if (anoPcaBloqueia) return "Defina o PCA do processo para protocolar";
     if (repBloqueia) return "Defina a unidade do processo para protocolar";
     if (!temDfds) return "Sem DFDs — cria só o protocolo.";
-    if (dupBloqueia) return 'DFD duplicado — abra o DFD e use "Duplicados" para comparar e escolher qual fica';
+    if (dupBloqueia) return 'DFD duplicado — abra o DFD e use "Comparar os duplicados" para escolher qual fica';
     if (semErroBloqueia) return `${dfdsComErro} DFD(s) com erro — corrija ou exclua do protocolo para protocolar (nenhum fica para trás)`;
     if (catFalhas > 0) return `Itens de ${catFalhas} DFD(s) não conferidos no catálogo (rede) — confira de novo para protocolar`;
     if (conc.bloqueia) return "Valor da capa diverge da somatória — substitua para liberar";
-    const situacao = temAtencao ? `${linhasAtencao.length} em atenção` : "tudo certo";
+    // Erros e atenções ficam no indicador ao lado — aqui só o que ele não diz.
     const fora = excluidosDoProtocolo.size > 0 ? ` · ${num(excluidosDoProtocolo.size)} excluído(s)` : "";
-    return `${totalDfds} DFD(s)${fora} · ${semRep} sem unidade · ${situacao}`;
+    return `${totalDfds} DFD(s)${fora}${semRep > 0 ? ` · ${semRep} sem unidade` : ""}`;
   })();
   const pctAnalise = analise && analise.total > 0 ? Math.round((analise.feito / analise.total) * 100) : 0;
   const numeroAtual = analise?.atual != null ? (index?.dfds[analise.atual]?.numero ?? "") : "";
@@ -2090,57 +2092,53 @@ export function ProtocoloUploadForm({
                       mensagens={mensagensAberto}
                       mensagensAbertas={painel?.tipo === "mensagens"}
                       onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-                      onFechar={fecharDfdLateral}
-                      bloqueado={importando}
                       acoes={
                         <>
                           {/* Excluir ESTE DFD do protocolo (fora do envio: não é gravado nem soma; "Restaurar" desfaz). */}
                           {!descartados.has(abertoIdx) && (
-                            <Button
-                              variant="secondary"
+                            <BotaoAcao
+                              rotulo="Excluir do protocolo"
                               icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
                               onClick={() => excluirDfds([abertoIdx])}
                               disabled={importando}
-                            >
-                              Excluir do protocolo
-                            </Button>
+                            />
                           )}
                           {/* DFD duplicado: COMPARAR com os duplicados (painel da direita) e manter ESTE (descarta os que
                               conflitam com ele) — ou restaurar o descartado/excluído. */}
                           {descartados.has(abertoIdx) && (
-                            <Button variant="secondary" onClick={() => restaurarDfd(abertoIdx)} disabled={importando}>
-                              Restaurar
-                            </Button>
+                            <BotaoAcao rotulo="Restaurar ao envio" icon={<IconUndo className="h-4 w-4" />} onClick={() => restaurarDfd(abertoIdx)} disabled={importando} />
                           )}
                           {dupsAberto.length > 0 && (
-                            <Button
-                              variant="secondary"
+                            <BotaoAcao
+                              rotulo="Comparar os duplicados"
                               icon={<IconCompare className="h-4 w-4" />}
+                              contagem={dupsAberto.length}
+                              pressionado={painel?.tipo === "duplicados"}
                               onClick={() => setPainel((p) => (p?.tipo === "duplicados" ? null : { tipo: "duplicados" }))}
-                            >
-                              Duplicados ({num(dupsAberto.length)})
-                            </Button>
+                            />
                           )}
                           {dupPendente(abertoIdx) && (
-                            <Button onClick={() => manterDfd(abertoIdx)} disabled={importando}>
-                              Manter este DFD
-                            </Button>
+                            <BotaoAcao variant="primary" rotulo="Manter este DFD" icon={<IconCheck className="h-4 w-4" />} onClick={() => manterDfd(abertoIdx)} disabled={importando} />
                           )}
                           {/* Conflito com um DFD já cadastrado: manter o EXISTENTE = descartar este do envio. */}
                           {!descartados.has(abertoIdx) && !dupPendente(abertoIdx) && conflitaComExistente(abertoIdx) && (
-                            <Button variant="secondary" onClick={() => descartarDfd(abertoIdx)} disabled={importando}>
-                              {gravadoDe(index?.dfds[abertoIdx]?.numero) ? "Manter o gravado" : "Manter o existente"}
-                            </Button>
+                            <BotaoAcao
+                              rotulo={gravadoDe(index?.dfds[abertoIdx]?.numero) ? "Manter o gravado" : "Manter o existente"}
+                              icon={<IconArquivar className="h-4 w-4" />}
+                              onClick={() => descartarDfd(abertoIdx)}
+                              disabled={importando}
+                            />
                           )}
                           {/* SOBRESCRITA (reenvio ou DFD já cadastrado): as diferenças em relação ao gravado, com a
                               ESCOLHA por dado (manter o gravado × usar o novo) no painel da direita. */}
                           {difAberto != null && (
-                            <Button
-                              variant="secondary"
+                            <BotaoAcao
+                              rotulo="Diferenças do gravado"
+                              icon={<IconMerge className="h-4 w-4" />}
+                              contagem={difAberto}
+                              pressionado={painel?.tipo === "diferencas"}
                               onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}
-                            >
-                              Diferenças ({num(difAberto)})
-                            </Button>
+                            />
                           )}
                         </>
                       }
@@ -2255,48 +2253,40 @@ export function ProtocoloUploadForm({
                 />
               </BarraSelecaoDfds>
             )}
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-nowrap items-center gap-2">
               {importando && progresso ? (
-                <div className="min-w-[200px] flex-1">
+                <div className="min-w-0 flex-1">
                   <Progress value={pct} label={`Protocolando ${progresso.label}... ${pct}% — não feche esta janela`} />
                 </div>
               ) : analise ? (
-                <div className="min-w-[200px] flex-1">
+                <div className="min-w-0 flex-1">
                   <Progress value={pctAnalise} label={rotuloAnalise} />
                 </div>
               ) : (
-                <span className="text-[12px]" style={{ color: bloqueadoPorRegra || catFalhas > 0 || !numero.trim() || erroExistentes ? "var(--danger)" : "var(--muted)" }}>
-                  {statusTexto}
-                </span>
-              )}
-              {!importando && !analise && catFalhas > 0 && (
-                <Button variant="secondary" size="sm" onClick={reconferirCatalogo} icon={<IconRefresh className="h-4 w-4" />}>
-                  Conferir de novo
-                </Button>
-              )}
-              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                {!importando && temRelatorio && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => setRelatorioAberto(true)}
-                    icon={<IconAlert className="h-4 w-4" style={{ color: temErroProto ? "var(--danger)" : "var(--warn)" }} />}
+                <>
+                  <IndicadorPendencias
+                    erros={dfdsComErro + (conc.divergente ? 1 : 0)}
+                    atencoes={linhasAtencao.length}
+                    alvo={temErroProto ? "ver o relatório de erro" : "ver o relatório de atenção"}
+                    onClick={temRelatorio ? () => setRelatorioAberto(true) : undefined}
+                  />
+                  <span
+                    className="min-w-0 flex-1 truncate text-[12px]"
+                    style={{ color: bloqueadoPorRegra || catFalhas > 0 || !numero.trim() || erroExistentes ? "var(--danger)" : "var(--muted)" }}
+                    title={statusTexto}
                   >
-                    {temErroProto ? "Relatório de erro" : "Relatório de atenção"}
-                  </Button>
-                )}
-                {!importando && (
-                  <Button variant="secondary" onClick={fechar}>
-                    Cancelar
-                  </Button>
+                    {statusTexto}
+                  </span>
+                </>
+              )}
+              <div className="ml-auto flex flex-nowrap items-center gap-1.5">
+                {!importando && !analise && catFalhas > 0 && (
+                  <BotaoAcao rotulo="Conferir no catálogo de novo" icon={<IconRefresh className="h-4 w-4" />} onClick={reconferirCatalogo} />
                 )}
                 {reenvio ? (
-                  <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconRefresh className="h-[18px] w-[18px]" />}>
-                    Sobrescrever protocolo
-                  </Button>
+                  <BotaoAcao texto variant="primary" rotulo="Sobrescrever protocolo" icon={<IconRefresh className="h-4 w-4" />} onClick={protocolar} loading={importando} disabled={!podeProtocolar} />
                 ) : (
-                  <Button onClick={protocolar} loading={importando} disabled={!podeProtocolar} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-                    Protocolar
-                  </Button>
+                  <BotaoAcao texto variant="primary" rotulo="Protocolar" icon={<IconUpload className="h-4 w-4" />} onClick={protocolar} loading={importando} disabled={!podeProtocolar} />
                 )}
               </div>
             </div>

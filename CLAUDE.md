@@ -111,7 +111,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `historicoProtocolo` (capa/gestão + TODAS as linhas com `protocolo_id` = P + as legadas dos DFDs que estão nele) — ambas
     SEM o e-mail do ator (`COLS_HIST`); rotas `GET /api/dfd/[id]/historico` e `GET /api/protocolo/[id]/historico` (escopo por
     unidade).
-  - **UI — componente único `Historico`** com escopos: **`protocolo`** (botão "Histórico" no rodapé do protocolo gravado →
+  - **UI — componente único `Historico`** com escopos: **`protocolo`** (botão "Histórico" (ícone) no CABEÇALHO do protocolo gravado →
     modal; eventos agrupados + filtro `Segmented` Tudo/Capa/DFDs/Itens com contagens), **`dfd`** (painel da direita do DFD),
     **`item`** (seção recolhível **"Histórico do item"** no `ItemDetalhe` de DFD gravado — `HistoricoDoItem`, carrega só ao
     abrir) e **`global`** (tela ADM **`/painel/auditoria`** — `AuditoriaAdmin` + `GET /api/admin/auditoria`, filtros
@@ -1473,11 +1473,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   componente: `reparticao`/`anoPca`/`justificativa`/`previsao`/`prioridade`/`fundamentacao`/`referenciaRenovacao`/
   `itens`/`valor`/`assinatura`, marcadas com `data-ancora` no `DfdConferir`/`DfdView`). `mensagensDoDfd` (`src/lib/
   conferencia-dfd.ts`) já confere a assinatura e é a **fonte única** (contador do botão + painel + célula Estado via
-  `avaliarLinhaDfd`). O rodapé do banner do DFD é o componente **`DfdRodape`** (estado + ações + mensagens + Fechar +
-  ação principal) e o painel da direita é **`DfdPainelDireito`** (mensagens / item / histórico) — os MESMOS na análise
-  (avulso e protocolo) e no gravado (DFD solto e DFD ao lado do protocolo gravado). O botão **`BotaoVerMensagens`**
-  (Ver/Ocultar mensagens + a numeração por status) fica no **RODAPÉ FIXO do banner do DFD, à esquerda do Fechar** (não
-  no corpo). Ao abrir, um **novo banner** de mensagens surge **AO LADO DIREITO** do DFD (mesma animação de lateral),
+  `avaliarLinhaDfd`). O rodapé do banner do DFD é o componente **`DfdRodape`** (UMA linha: `IndicadorPendencias` + ações só ícone + ação
+  principal; Fechar = o X do cabeçalho) e o painel da direita é **`DfdPainelDireito`** (mensagens / item / histórico) — os MESMOS na análise
+  (avulso e protocolo) e no gravado (DFD solto e DFD ao lado do protocolo gravado). O **`IndicadorPendencias`** (o estado na cor do ADM + os chips de erro/atenção) fica no **RODAPÉ FIXO do banner do DFD**, à esquerda (não
+  no corpo) — o toque alterna o painel. Ao abrir, um **novo banner** de mensagens surge **AO LADO DIREITO** do DFD (mesma animação de lateral),
   ficando **ambos manipuláveis** (o DFD NÃO é substituído): **DFD avulso / gravado solto** → o DFD é o principal e as
   mensagens são o `Modal.lateral` (2 painéis); **dentro de um protocolo** → o `Modal` ganhou um **`lateral2`** (3º painel)
   e ficam **três banners proporcionais**: protocolo | DFD | mensagens (as colunas do grid animam por fração; no mobile,
@@ -1502,6 +1501,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   alterações" do banner (`PATCH /api/dfd/[id]` `{itens}` → `reescreverDfdItens`, apaga+reinsere + recomputa total). Só
   **editor**; escopo por unidade e `valorUnitario>0` no servidor.
 - **GRAVADO = ANÁLISE (mesmos componentes, conferência, seleção e ajustes — a ÚNICA diferença é a tabela única):**
+  - **RODAPÉS EM UMA LINHA, SÓ ÍCONES (Protocolo · DFD · Item — Mesa, análise e consulta pública):** à esquerda o
+    **`IndicadorPendencias`** (o MESMO nos banners: protocolo = DFDs com erro + capa divergente / em atenção → o
+    `RelatorioErros`; DFD = o estado + as mensagens → o painel) ou a barra de progresso; à direita as ações em **`BotaoAcao`**
+    (só o ícone; Duplicados/Diferenças/Tarefas com a contagem) e a ação PRINCIPAL (Salvar alterações, Protocolar, Importar/
+    Sobrescrever DFD — ícone + texto de 640px para cima). **Reenviar protocolo** e **Sobrescrever DFD** = botões PRETOS
+    (`variant="primary"`). Nada repete o cabeçalho: sem Fechar/Cancelar (o X fecha) e sem a contagem de DFDs (está nos mini
+    banners); **Histórico e Tarefas ficam no CABEÇALHO** (ao lado do Atualizar) do protocolo e do DFD; o item mantém Ver
+    DFD/Ver protocolo.
   - **`useProtocoloGravado`** (`ProtocoloGravado.tsx` — hook que devolve os PAINÉIS do banner do protocolo já protocolado,
     composto pelo `BannersMesa`): carrega o protocolo COMPLETO (`GET /api/protocolo/[id]
     ?completo=1` → capa + DFDs com seções/assinaturas/itens + as UNIDADES deles com os responsáveis, via
@@ -2354,7 +2361,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); XLSX/PDF no rodapé da tabela
     (`TabelaTarefas.nomeExportacao`).
   - **Mesa ⇄ Tarefas:** `/painel/mesa?abrir=protocolo:<id>|dfd:<id>` abre o banner (`DfdsView.abrirInicial`; a URL é
-    limpa); o botão **`TarefasDoVinculo`** ("Tarefas (abertas/total)") no rodapé do DFD gravado e do protocolo gravado lista
+    limpa); o botão **`TarefasDoVinculo`** (ícone + "abertas/total") no CABEÇALHO do DFD gravado e do protocolo gravado lista
     as tarefas ligadas (`GET /api/tarefas/do-vinculo`) e **"Criar tarefa"** num quadro → `/painel/tarefas/<q>?nova=tipo:id`
     (a tarefa NOVA abre já vinculada); `?tarefa=<id>` abre aquela tarefa no quadro. Sem tarefas nem quadros, o botão some.
   - **Rotas novas:** `POST /api/tarefas/[id]/checklist` + `PATCH`/`DELETE …/checklist/[itemId]`, `POST …/comentarios` +
@@ -3202,8 +3209,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros),
   `PcaPicker` (define o **PCA do processo** — `select` dos PCAs cadastrados; adivinha o ano pela descrição e avisa;
   obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
-  clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + `BotaoVerMensagens` (botão +
-  numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
+  clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + **`IndicadorPendencias`** (o botão ÚNICO de erros/atenção
+  dos banners — chips vermelho/âmbar; abre o relatório do protocolo ou alterna as mensagens do DFD) + **`BotaoAcao`** (a
+  ação dos rodapés/cabeçalhos dos banners: SÓ o ícone, o nome na dica, `contagem` no canto; `texto` = a principal com o
+  rótulo a partir de 640px), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
   linha; mesmo lugar do painel de mensagens; item REPETIDO: os iguais lado a lado + "Ver item" + "Unificar neste item"), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
   **`CalendarioTarefas`**/**`BarraCalendario`**/**`MiniMes`**/**`EventoBanner`**/**`EventosTarefa`**/**`EditorEvento`** (o
@@ -3224,7 +3233,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa; `versao` = o campo "Gravado × novo" da
   sobrescrita, na análise do protocolo), **`DfdRodape`** (rodapé fixo do banner do
-  DFD: estado + ações + mensagens + Fechar + principal), **`DfdPainelDireito`** (painel da direita do DFD: mensagens /
+  DFD em UMA linha: indicador + ações só ícone + principal), **`DfdPainelDireito`** (painel da direita do DFD: mensagens /
   item / histórico), **`ProtocoloView`** (CORPO ÚNICO do banner do protocolo — análise e gravado), `CampoCadeado`
   (+ **`CadeadoBotao`**, o cadeado reusado por campos, itens e SEÇÕES do DFD). Hook `useConformidade` (conformidade do
   DFD aberto com o catálogo, lazy). Contêineres com dados (fora do catálogo, como o `DfdsView`): `ProtocoloUploadForm`,

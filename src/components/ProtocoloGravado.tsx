@@ -26,8 +26,8 @@ import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { type AjusteRevisao, podeRevisarItens, resumoRevisao, resumoRevisaoLote, revisarCapa, revisarDfd } from "@/lib/revisao-dfd";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { BarraSelecaoDfds } from "./BarraSelecao";
+import { BotaoAcao } from "./BotaoAcao";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { Button } from "./Button";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
 import { localDoProtocolo } from "@/lib/pca-core";
 import { avisoIncorporado } from "@/lib/pca-numeracao-core";
@@ -39,7 +39,8 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconSave, IconSpinner, IconUpload } from "./icons";
+import { IndicadorPendencias } from "./IndicadorPendencias";
 import type { ConteudoBanner } from "./DfdGravado";
 import { Modal, type ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -570,7 +571,15 @@ export function useProtocoloGravado({
   const principal: ConteudoBanner = {
     titulo: proto ? `Protocolo ${proto.numero}` : "Protocolo",
     cabecalho: proto ? <ProtocoloCabecalho numero={proto.numero} idExterno={proto.idExterno} assunto={capa?.assunto ?? proto.assunto} /> : undefined,
-    acoesCabecalho: botaoAtualizar,
+    acoesCabecalho: (
+      <>
+        {proto && !travado && (
+          <BotaoAcao rotulo="Histórico do protocolo" icon={<IconClock className="h-4 w-4" />} onClick={() => setHistoricoAberto(true)} />
+        )}
+        {proto && !travado && <TarefasDoVinculo tipo="protocolo" id={proto.id} />}
+        {botaoAtualizar}
+      </>
+    ),
     rodape: (
       <div>
         {erro && (
@@ -587,52 +596,35 @@ export function useProtocoloGravado({
             <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={proto?.anoPca ?? null} regras={regras} onAplicar={aplicarMassa} />
           </BarraSelecaoDfds>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-nowrap items-center gap-2">
           {salvando && progresso ? (
-            <div className="min-w-[200px] flex-1">
+            <div className="min-w-0 flex-1">
               <Progress value={pct} label={`Salvando ${progresso.label}... ${pct}% — não feche esta janela`} />
             </div>
           ) : (
-            <span className="text-[12px]" style={{ color: sujo ? "var(--accent)" : "var(--muted)" }}>
-              {sujo
-                ? "Alterações não salvas"
-                : `${linhas.length} DFD(s) · ${linhasErro.length > 0 ? `${linhasErro.length} com erro` : linhasAtencao.length > 0 ? `${linhasAtencao.length} em atenção` : "tudo certo"}`}
-            </span>
+            <>
+              <IndicadorPendencias
+                erros={linhasErro.length + (conc.divergente ? 1 : 0)}
+                atencoes={linhasAtencao.length}
+                alvo={temErro ? "ver o relatório de erro" : "ver o relatório de atenção"}
+                onClick={!travado && temRelatorio ? () => setRelatorioAberto(true) : undefined}
+              />
+              {sujo && <span className="hidden min-w-0 truncate text-[12px] text-accent md:inline">Alterações não salvas</span>}
+            </>
           )}
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {proto && !travado && (
-              <Button variant="secondary" onClick={() => setHistoricoAberto(true)} icon={<IconClock className="h-4 w-4" />}>
-                Histórico
-              </Button>
-            )}
-            {proto && !travado && <TarefasDoVinculo tipo="protocolo" id={proto.id} />}
-            {!travado && temRelatorio && (
-              <Button
-                variant="secondary"
-                onClick={() => setRelatorioAberto(true)}
-                icon={<IconAlert className="h-4 w-4" style={{ color: temErro ? "var(--danger)" : "var(--warn)" }} />}
-              >
-                {temErro ? "Relatório de erro" : "Relatório de atenção"}
-              </Button>
-            )}
+          <div className="ml-auto flex flex-nowrap items-center gap-1.5">
             {podeImportar && proto && !travado && (
-              <Button
-                variant="secondary"
+              <BotaoAcao
+                variant="primary"
+                rotulo="Reenviar protocolo"
+                icon={<IconUpload className="h-4 w-4" />}
                 onClick={() => setReenviar((n) => n + 1)}
                 disabled={sujo}
-                title={sujo ? "Salve ou descarte as alterações antes de reenviar" : "Reenviar o PDF corrigido deste protocolo: compara com o gravado e sobrescreve"}
-                icon={<IconUpload className="h-4 w-4" />}
-              >
-                Reenviar protocolo
-              </Button>
+                dica={sujo ? "Salve ou descarte as alterações antes de reenviar" : "Reenviar protocolo: suba o PDF corrigido, compare com o gravado e sobrescreva"}
+              />
             )}
-            <Button variant="secondary" onClick={fechar} disabled={travado}>
-              Fechar
-            </Button>
             {podeEditar && (
-              <Button onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendoDfd}>
-                Salvar alterações
-              </Button>
+              <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendoDfd} />
             )}
           </div>
         </div>
@@ -691,6 +683,14 @@ export function useProtocoloGravado({
     aberto: !empilhado && abertoId != null && !!dfdAberto,
     titulo: `DFD ${numeroAberto}`,
     cabecalho: dfdAberto ? <DfdCabecalho numero={dfdAberto.numero} tipo={dfdAberto.tipo} planejamento={dfdAberto.planejamento} /> : undefined,
+    acoesCabecalho: dfdAberto ? (
+      <BotaoAcao
+        rotulo="Histórico"
+        icon={<IconClock className="h-4 w-4" />}
+        pressionado={painel?.tipo === "historico"}
+        onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
+      />
+    ) : undefined,
     onClose: fecharDfd,
     rodape: dfdAberto ? (
       <DfdRodape
@@ -699,25 +699,18 @@ export function useProtocoloGravado({
         mensagens={mensagensAberto}
         mensagensAbertas={painel?.tipo === "mensagens"}
         onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-        onFechar={fecharDfd}
-        bloqueado={travado}
         acoes={
-          <>
-            <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}>
-              <IconClock className="h-4 w-4" /> Histórico
-            </Button>
-            {/* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */}
-            {sobrescreveAberto && !salvando && (
-              <Button
-                variant="secondary"
-                onClick={() => setSobrescreverDfd((n) => n + 1)}
-                disabled={sujo || sobrescrevendoDfd}
-                title={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Subir o arquivo novo deste DFD: compara com o gravado e você escolhe o que sobrescrever"}
-              >
-                <IconUpload className="h-4 w-4" /> Sobrescrever DFD
-              </Button>
-            )}
-          </>
+          sobrescreveAberto && !salvando ? (
+            /* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */
+            <BotaoAcao
+              variant="primary"
+              rotulo="Sobrescrever DFD"
+              icon={<IconUpload className="h-4 w-4" />}
+              onClick={() => setSobrescreverDfd((n) => n + 1)}
+              disabled={sujo || sobrescrevendoDfd}
+              dica={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever"}
+            />
+          ) : undefined
         }
       />
     ) : undefined,
@@ -839,13 +832,6 @@ export function useProtocoloGravado({
         onClose={() => setHistoricoAberto(false)}
         titulo={`Histórico — Protocolo ${proto?.numero ?? ""}`.trim()}
         size="lg"
-        rodape={
-          <div className="flex justify-end">
-            <Button variant="secondary" onClick={() => setHistoricoAberto(false)}>
-              Fechar
-            </Button>
-          </div>
-        }
       >
         <Historico
           entradas={historico.linhas ?? []}

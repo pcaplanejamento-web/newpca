@@ -590,7 +590,7 @@ export function DfdConferir({
           <p className="mb-3 text-xs text-muted">
             Todo DFD-R deve mencionar ao menos um nº de contrato, ARP ou licitação — pode haver VÁRIOS de cada.
             Preenchidos automaticamente pela descrição; acrescente (Enter) ou remova (×) se necessário. As pendências
-            ficam em "Ver mensagens".
+            ficam no indicador do rodapé (mensagens).
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <CampoLista
@@ -626,7 +626,7 @@ export function DfdConferir({
         </Callout>
       )}
 
-      {/* Documento completo (read-only, reflete as edições). O botão "Ver mensagens" e a
+      {/* Documento completo (read-only, reflete as edições). O indicador de pendências e a
           numeração ficam no RODAPÉ FIXO do banner (renderizados pelo pai). */}
       <div className="border-t border-border pt-4">
         <DfdView

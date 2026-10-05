@@ -13,14 +13,14 @@ import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { podeRevisarItens, resumoRevisao, revisarDfd } from "@/lib/revisao-dfd";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { Button } from "./Button";
+import { BotaoAcao } from "./BotaoAcao";
 import { Callout } from "./Callout";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd, useRepetidosDoItem } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho, ItemCabecalho } from "./DfdView";
-import { IconAlert, IconClock, IconLayers, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconLayers, IconSave, IconSpinner, IconUpload } from "./icons";
 import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -335,9 +335,7 @@ export function useDfdGravado({
     </Callout>
   );
   const botaoSalvar = editavel ? (
-    <Button onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendo}>
-      Salvar alterações
-    </Button>
+    <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendo} />
   ) : undefined;
   const botaoAtualizar = orig && !travado ? <BotaoAtualizar ativo={giro.girando} rotulo="Atualizar e revisar" dica="Atualizar: recarrega do banco e revisa os dados (trata o que for possível)" detalhe="Atualizando e revisando os dados…" onClick={atualizar} /> : undefined;
   const temProtocolo = orig?.protocoloId != null && !!onVerProtocolo;
@@ -345,21 +343,36 @@ export function useDfdGravado({
    * DFD sem protocolo com a importação avulsa desligada pelo ADM não oferece (o servidor recusaria no fim). */
   const botaoSobrescrever =
     podeSobrescrever && orig && !salvando && (orig.protocoloId != null || importarDfdHabilitado(regras)) ? (
-      <Button
-        variant="secondary"
+      <BotaoAcao
+        variant="primary"
+        rotulo="Sobrescrever DFD"
+        icon={<IconUpload className="h-4 w-4" />}
         onClick={() => setSobrescrever((n) => n + 1)}
         disabled={sujo || sobrescrevendo}
-        title={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Subir o arquivo novo deste DFD: compara com o gravado e você escolhe o que sobrescrever"}
-      >
-        <IconUpload className="h-4 w-4" /> Sobrescrever DFD
-      </Button>
+        dica={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever"}
+      />
     ) : null;
+  /** Cabeçalho do DFD: Histórico (painel da direita) + Tarefas ligadas + Atualizar — o rodapé fica só com as ações. */
+  const acoesDfd = orig ? (
+      <>
+        <BotaoAcao
+          rotulo="Histórico"
+          icon={<IconClock className="h-4 w-4" />}
+          pressionado={painel?.tipo === "historico"}
+          onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
+        />
+        {dfdId != null && <TarefasDoVinculo tipo="dfd" id={dfdId} />}
+        {botaoAtualizar}
+      </>
+    ) : (
+      botaoAtualizar
+    );
 
   /** Banner do DFD (corpo da análise + rodapé com estado/mensagens/histórico/ver protocolo/salvar). */
   const dfdPainel: ConteudoBanner = {
     titulo: `DFD ${numero}`,
     cabecalho: dfd ? <DfdCabecalho numero={dfd.numero} tipo={dfd.tipo} planejamento={dfd.planejamento} /> : undefined,
-    acoesCabecalho: botaoAtualizar,
+    acoesCabecalho: acoesDfd,
     rodape: dfd ? (
       <div>
         {erroCallout}
@@ -369,19 +382,9 @@ export function useDfdGravado({
           mensagens={mensagens}
           mensagensAbertas={painel?.tipo === "mensagens"}
           onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-          onFechar={fechar}
-          bloqueado={travado}
           acoes={
             <>
-              <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}>
-                <IconClock className="h-4 w-4" /> Histórico
-              </Button>
-              {temProtocolo && (
-                <Button variant="secondary" onClick={verProtocolo}>
-                  <IconLayers className="h-4 w-4" /> Ver protocolo
-                </Button>
-              )}
-              {dfdId != null && <TarefasDoVinculo tipo="dfd" id={dfdId} />}
+              {temProtocolo && <BotaoAcao rotulo="Ver protocolo" icon={<IconLayers className="h-4 w-4" />} onClick={verProtocolo} />}
               {botaoSobrescrever}
             </>
           }
@@ -486,7 +489,6 @@ export function useDfdGravado({
           <RodapePainelItem
             onVerDfd={acoes.onVerDfd}
             onVerProtocolo={temProtocolo ? acoes.onVerProtocolo : undefined}
-            onFechar={acoes.onFechar}
             principal={botaoSalvar}
             bloqueado={travado}
           />

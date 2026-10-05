@@ -20,6 +20,11 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Rodapés dos banners em uma linha — entregue
+✅ Protocolo, DFD e item (Mesa, análise e consulta pública): rodapé em UMA linha com botões só de ícone (`BotaoAcao`), o
+indicador ÚNICO de erros/atenção (`IndicadorPendencias`), Reenviar protocolo e Sobrescrever DFD em preto, Histórico e
+Tarefas no cabeçalho e sem o Fechar redundante (o X fecha).
+
 ### Exportação XLSX/PDF com linha TOTAL — entregue
 ✅ Toda tabela exportada (XLSX e PDF) termina com a **linha TOTAL**: a soma de cada coluna de valores e quantidades
 (Valor total, Dotação, Planejado, Diferença, Qtd., Itens, DFDs, contagens); valor unitário, médias, percentuais e

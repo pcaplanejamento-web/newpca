@@ -149,7 +149,7 @@ export function ComparacaoDuplicados({
       ) : atual.descartado ? (
         <Callout kind="info" icon={<IconCompare className="h-5 w-5" />}>
           {atual.excluido
-            ? 'Este DFD foi excluído do protocolo (fora da protocolação e da somatória). Para trazê-lo de volta, use "Restaurar" no rodapé ou "Manter este" aqui em cima.'
+            ? 'Este DFD foi excluído do protocolo (fora da protocolação e da somatória). Para trazê-lo de volta, use "Restaurar ao envio" no rodapé ou "Manter este" aqui em cima.'
             : outros.some((o) => !o.descartado)
               ? 'Este DFD foi descartado — segue o duplicado escolhido. Para trocar, use "Manter este" aqui em cima.'
               : 'Este DFD está descartado (fora da protocolação e da somatória). Para trazê-lo de volta, use "Manter este" aqui em cima.'}
