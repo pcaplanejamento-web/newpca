@@ -478,10 +478,11 @@ export function ConfiguracoesAdmin({
       {confirmacao}
       <h1 className="text-xl font-bold text-text">Configurações</h1>
 
-      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+      <div>
         <Tabs
           inicial={abaInicial}
           layout="lateral"
+          separado
           alturaTela
           url="aba"
           tabs={[

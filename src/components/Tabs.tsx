@@ -14,7 +14,9 @@ import { useAlturaTela } from "./AlturaCheia";
  * - o painel ENTRA pelo lado da troca (respeita "reduzir movimento");
  * - teclado: ←/→ (↑/↓ na lateral), Home/End — o foco vai junto; arrastar o dedo troca de aba (não dentro de tabelas,
  *   campos ou faixas que rolam de lado);
- * - `url` = o nome do parâmetro da URL que guarda a aba (recarregar volta nela).
+ * - `url` = o nome do parâmetro da URL que guarda a aba (recarregar volta nela);
+ * - `separado` (lateral) = no desktop, a lista de abas é um cartão PRÓPRIO, fixo, da altura do display (não acompanha o
+ *   conteúdo), e o conteúdo é outro cartão ao lado, com a altura que precisa (até o fim do display).
  */
 export type Tab = { key: string; label: string; icon?: ReactNode; content: ReactNode; /** A dica ao passar o mouse. */ dica?: string };
 
@@ -25,6 +27,7 @@ export function Tabs({
   layout = "horizontal",
   alturaTela = false,
   url,
+  separado = false,
 }: {
   tabs: Tab[];
   className?: string;
@@ -35,17 +38,20 @@ export function Tabs({
   alturaTela?: boolean;
   /** O parâmetro da URL que guarda a aba aberta (ex.: "aba"). */
   url?: string;
+  /** Lateral: a lista e o conteúdo em cartões separados; a lista com a altura fixa do display. */
+  separado?: boolean;
 }) {
   const base = useId();
   const [idx, setIdx] = useState(() => Math.max(0, inicial ? tabs.findIndex((t) => t.key === inicial) : 0));
   const [visitadas, setVisitadas] = useState<Set<string>>(() => new Set([tabs[Math.max(0, inicial ? tabs.findIndex((t) => t.key === inicial) : 0)]?.key ?? ""]));
   const [dir, setDir] = useState<1 | -1>(1);
-  const [ind, setInd] = useState({ a: 0, b: 0, vertical: false });
+  const [ind, setInd] = useState({ a: 0, b: 0, x: 0, w: 0, vertical: false });
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const lista = useRef<HTMLDivElement>(null);
   const caixa = useRef<HTMLDivElement>(null);
   const toque = useRef<{ x: number; y: number } | null>(null);
   const lateral = layout === "lateral";
+  const cartoes = lateral && separado;
   // O respiro de baixo dos contornos em volta (o cartão) também conta — senão a página rola esses pixels.
   const [reserva, setReserva] = useState(0);
   useLayoutEffect(() => {
@@ -63,7 +69,11 @@ export function Tabs({
     const el = btnRefs.current[idx];
     if (!el) return;
     const vertical = lateral && window.matchMedia("(min-width: 64rem)").matches;
-    setInd(vertical ? { a: el.offsetTop, b: el.offsetHeight, vertical } : { a: el.offsetLeft, b: el.offsetWidth, vertical });
+    setInd(
+      vertical
+        ? { a: el.offsetTop, b: el.offsetHeight, x: el.offsetLeft, w: el.offsetWidth, vertical }
+        : { a: el.offsetLeft, b: el.offsetWidth, x: 0, w: 0, vertical },
+    );
   }, [idx, lateral]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tabs.length` muda a posição das abas.
   useLayoutEffect(() => {
@@ -125,8 +135,12 @@ export function Tabs({
         aria-orientation={lateral ? "vertical" : "horizontal"}
         onKeyDown={teclado}
         className={`relative flex shrink-0 gap-1 overflow-x-auto border-b border-border [mask-image:linear-gradient(to_right,transparent,#000_12px,#000_calc(100%-12px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
-          lateral ? "lg:w-56 lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:overflow-y-auto lg:border-r lg:border-b-0 lg:pr-2 lg:[mask-image:none]" : ""
-        } ${alturaTela && lateral ? "lg:max-h-[var(--h-abas)]" : ""}`}
+          cartoes
+            ? "lg:w-60 lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-x-visible lg:overflow-y-auto lg:rounded-card lg:border lg:bg-surface lg:p-2 lg:shadow-ring lg:[mask-image:none]"
+            : lateral
+              ? "lg:w-56 lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:overflow-y-auto lg:border-r lg:border-b-0 lg:pr-2 lg:[mask-image:none]"
+              : ""
+        } ${alturaTela && cartoes ? "lg:h-[var(--h-abas)]" : alturaTela && lateral ? "lg:max-h-[var(--h-abas)]" : ""}`}
       >
         {tabs.map((t, i) => (
           <button
@@ -142,7 +156,7 @@ export function Tabs({
             tabIndex={i === idx ? 0 : -1}
             title={t.dica ?? t.label}
             onClick={() => ir(i)}
-            className={`relative z-10 inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3 text-[14px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-[var(--h-control-sm)] ${
+            className={`relative z-10 inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3 text-[14px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 lg:min-h-[var(--h-control-sm)] ${
               lateral ? "lg:w-full lg:justify-start lg:text-[13.5px]" : ""
             } ${i === idx ? "text-accent" : "text-muted hover:bg-surface-2 hover:text-text-2"}`}
           >
@@ -154,14 +168,20 @@ export function Tabs({
         <span
           aria-hidden
           className={`pointer-events-none absolute transition-[left,width,top,height] duration-[var(--motion-duration)] ease-[var(--motion-ease)] ${
-            ind.vertical ? "left-0 z-0 w-[calc(100%-0.5rem)] rounded-control bg-accent-soft" : "bottom-0 h-[2px] rounded-full bg-accent"
+            ind.vertical ? "z-0 rounded-control bg-accent-soft" : "bottom-0 h-[2px] rounded-full bg-accent"
           }`}
-          style={ind.vertical ? { top: ind.a, height: ind.b } : { left: ind.a, width: ind.b }}
+          style={ind.vertical ? { top: ind.a, height: ind.b, left: ind.x, width: ind.w } : { left: ind.a, width: ind.b }}
         />
       </div>
 
       <div
-        className={`relative min-h-0 min-w-0 flex-1 ${alturaTela ? "lg:max-h-[var(--h-abas)] lg:overflow-y-auto lg:overscroll-contain" : ""} ${lateral ? "lg:pr-1" : ""}`}
+        className={`relative min-h-0 min-w-0 flex-1 ${alturaTela ? "lg:max-h-[var(--h-abas)] lg:overflow-y-auto lg:overscroll-contain" : ""} ${
+          cartoes
+            ? "mt-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring lg:mt-0 lg:self-start"
+            : lateral
+              ? "lg:pr-1"
+              : ""
+        }`}
         onTouchStart={(e) => {
           toque.current = podeArrastar(e.target) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
         }}
@@ -182,7 +202,7 @@ export function Tabs({
               role="tabpanel"
               aria-labelledby={`${base}-t-${t.key}`}
               hidden={t.key !== ativa.key}
-              className={`pt-4 ${lateral ? "lg:pt-0" : ""} ${t.key === ativa.key ? (dir > 0 ? "animate-aba-direita" : "animate-aba-esquerda") : ""}`}
+              className={`${cartoes ? "" : lateral ? "pt-4 lg:pt-0" : "pt-4"} ${t.key === ativa.key ? (dir > 0 ? "animate-aba-direita" : "animate-aba-esquerda") : ""}`}
             >
               {t.content}
             </div>
