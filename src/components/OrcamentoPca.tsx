@@ -20,7 +20,7 @@ import {
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
 import { unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
-import { semVinculoPorAlvo, textoSemVinculo, vinculosDaLinha } from "@/lib/vinculos-unidade";
+import { semVinculoPorAlvo, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -37,7 +37,8 @@ import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
-import { type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
+import { DicaFlutuante } from "./DicaFlutuante";
+import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
 import { VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 
 type Filtro = "todas" | "acima" | "dentro";
@@ -439,15 +440,13 @@ export function OrcamentoPca({
         const lista = l.unidadeId == null ? semVinculoPorLinha.todas : (semVinculoPorLinha.porAlvo.get(l.unidadeId) ?? []);
         const pend = lista.reduce((s, p) => s + p.acoes.length, 0);
         const rotulo = l.unidadeId == null ? "Vincular as ações sem vínculo" : `Vínculos de ${l.sigla}`;
-        // A dica diz QUEM está sem vínculo (a unidade do orçamento e as ações).
-        const dica = pend > 0 ? `${rotulo} — ${num(pend)} ação(ões) sem vínculo:\n${textoSemVinculo(lista)}` : rotulo;
-        return (
+        const botao = (
           <Button
             size="xs"
             variant={pend > 0 ? "secondary" : "ghost"}
             icon={<IconLink className="h-4 w-4" />}
             aria-label={pend > 0 ? `${rotulo} — ${num(pend)} ação(ões) sem vínculo` : rotulo}
-            title={dica}
+            title={pend > 0 ? undefined : rotulo}
             onClick={(e) => {
               e.stopPropagation();
               setVinculosDe({ id: l.unidadeId, sigla: l.sigla, nome: l.nome });
@@ -456,6 +455,8 @@ export function OrcamentoPca({
             {pend > 0 ? <span style={{ color: "var(--warn)" }}>{num(pend)} sem vínculo</span> : undefined}
           </Button>
         );
+        // Com o mouse, a dica LISTA quem está sem vínculo (a unidade do orçamento e as ações, com o valor).
+        return pend > 0 ? <DicaFlutuante conteudo={<ResumoSemVinculo titulo={rotulo} lista={lista} />}>{botao}</DicaFlutuante> : botao;
       },
     });
 

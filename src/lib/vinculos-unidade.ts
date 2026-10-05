@@ -67,20 +67,18 @@ export function vinculosDaLinha(
   };
 }
 
-/** O texto da dica "quem está sem vínculo": uma linha por unidade do orçamento com as ações (até `max` ações no total). */
-export function textoSemVinculo(sem: SemVinculoUnidade[], max = 25): string {
-  const linhas: string[] = [];
+/** A dica "quem está sem vínculo", ORGANIZADA: por unidade do orçamento, as ações (até `max` no total) + quantas ficaram de fora. */
+export function listaSemVinculo(sem: SemVinculoUnidade[], max = 12): { grupos: { unidade: string; acoes: AcaoVinculo[] }[]; resto: number } {
+  const grupos: { unidade: string; acoes: AcaoVinculo[] }[] = [];
   let usadas = 0;
   let resto = 0;
   for (const p of sem) {
-    const cabe = Math.max(0, max - usadas);
-    const vis = p.acoes.slice(0, cabe);
+    const vis = p.acoes.slice(0, Math.max(0, max - usadas));
     usadas += vis.length;
     resto += p.acoes.length - vis.length;
-    if (vis.length) linhas.push(`${p.unidade.texto}: ${vis.map((a) => a.texto).join("; ")}`);
+    if (vis.length) grupos.push({ unidade: p.unidade.texto, acoes: vis });
   }
-  if (resto > 0) linhas.push(`… e mais ${num(resto)} ação(ões)`);
-  return linhas.join("\n");
+  return { grupos, resto };
 }
 
 /** As ações sem vínculo por unidade CADASTRADA (as das unidades do orçamento ligadas a ela) — a dica da coluna Vínculos. */
@@ -95,54 +93,56 @@ export function semVinculoPorAlvo(unidades: UnidadeOrcamento[], vinculos: Vincul
   return out;
 }
 
-/** Os blocos do PDF "Vínculos da unidade" (o gerador `documento-pdf`, A4). `rotuloAlvo` = "SIGLA" de uma unidade cadastrada. */
-export function blocosVinculosDaLinha(
-  linha: { titulo: string; nome: string; anoOrcamento: string },
-  v: VinculosDaLinha,
-  rotuloAlvo: (id: number) => string,
-): BlocoDoc[] {
+/**
+ * Os blocos do PDF "Vínculos da unidade" (o gerador `documento-pdf`, A4) — DUAS tabelas, cada uma com a linha TOTAL: as
+ * ações VINCULADAS à unidade (unidade do orçamento · ação · dotação) e as SEM VÍNCULO das mesmas unidades do orçamento; no
+ * topo os KPIs (total = vinculado + sem vínculo). As ações que vão a OUTRA unidade não entram (são dela). Na linha "Sem
+ * vínculo" do comparativo (sem unidade), só a tabela sem vínculo.
+ */
+export function blocosVinculosDaLinha(linha: { titulo: string; nome: string; anoOrcamento: string }, v: VinculosDaLinha, comUnidade: boolean): BlocoDoc[] {
   const AMBAR = "#b45309";
+  const colunas = [
+    { titulo: "Unidade do orçamento", peso: 4 },
+    { titulo: "Ação", peso: 5 },
+    { titulo: "Dotação", peso: 2, alinhar: "right" as const },
+  ];
+  const total = (n: number, valor: number) => ({ celulas: [`TOTAL (${num(n)} ${n === 1 ? "ação" : "ações"})`, "", brl(valor)], destaque: true });
+  const vinculadas = comUnidade
+    ? v.ligadas.flatMap((l) => l.acoes.filter((a) => a.alvoId === l.vinculo.alvoId).map((a) => ({ unidade: l.unidade.texto, acao: a.acao })))
+    : [];
+  const sem = v.semVinculo.flatMap((p) => p.acoes.map((a) => ({ unidade: p.unidade.texto, acao: a })));
   const blocos: BlocoDoc[] = [
     { tipo: "titulo", texto: linha.titulo },
     { tipo: "paragrafo", texto: `${linha.nome ? `${linha.nome} · ` : ""}orçamento ${linha.anoOrcamento} (sem o filtro da visão)`, cor: "muted" },
     {
       tipo: "destaques",
       itens: [
-        { rotulo: "Unidades do orçamento", valor: num(v.ligadas.length) },
-        { rotulo: "Dotação vinculada", valor: brl(v.valorVinculado) },
-        { rotulo: "Ações sem vínculo", valor: num(v.acoesSemVinculo), cor: v.acoesSemVinculo ? AMBAR : undefined },
-        { rotulo: "Dotação sem vínculo", valor: brl(v.valorSemVinculo), cor: v.valorSemVinculo ? AMBAR : undefined },
+        { rotulo: "Total", valor: brl(v.valorVinculado + v.valorSemVinculo), detalhe: `${num(vinculadas.length + sem.length)} ação(ões)` },
+        ...(comUnidade ? [{ rotulo: "Vinculado", valor: brl(v.valorVinculado), detalhe: `${num(vinculadas.length)} ação(ões) · ${num(v.ligadas.length)} unidade(s) do orçamento` }] : []),
+        { rotulo: "Sem vínculo", valor: brl(v.valorSemVinculo), detalhe: `${num(sem.length)} ação(ões)`, cor: sem.length ? AMBAR : undefined },
       ],
     },
   ];
-  if (v.ligadas.length) {
-    blocos.push({ tipo: "secao", texto: "Unidades do orçamento vinculadas" });
-    for (const l of v.ligadas) {
-      blocos.push({ tipo: "subsecao", texto: l.unidade.texto, detalhe: brl(l.valor) });
-      blocos.push({
+  if (comUnidade)
+    blocos.push(
+      { tipo: "secao", texto: "Ações vinculadas" },
+      {
         tipo: "tabela",
-        colunas: [
-          { titulo: "Ação", peso: 5 },
-          { titulo: "Destino", peso: 2 },
-          { titulo: "Dotação", peso: 2, alinhar: "right" },
-        ],
-        linhas: l.acoes.map((a) => {
-          const destino = a.alvoId == null ? "Sem vínculo" : rotuloAlvo(a.alvoId);
-          return { celulas: [a.acao.texto, destino, brl(a.acao.valorInicial)], cores: [null, a.alvoId == null ? AMBAR : null, null] };
-        }),
-      });
-    }
-  }
-  blocos.push({ tipo: "secao", texto: "Ações sem vínculo" });
-  blocos.push({
-    tipo: "tabela",
-    colunas: [
-      { titulo: "Unidade do orçamento", peso: 4 },
-      { titulo: "Ação", peso: 4 },
-      { titulo: "Dotação", peso: 2, alinhar: "right" },
-    ],
-    linhas: v.semVinculo.flatMap((p) => p.acoes.map((a) => ({ celulas: [p.unidade.texto, a.texto, brl(a.valorInicial)], cores: [null, AMBAR, null] }))),
-    vazio: "Nenhuma — todas as ações estão vinculadas.",
-  });
+        colunas,
+        linhas: vinculadas.length ? [...vinculadas.map((x) => ({ celulas: [x.unidade, x.acao.texto, brl(x.acao.valorInicial)] })), total(vinculadas.length, v.valorVinculado)] : [],
+        vazio: "Nenhuma ação vinculada a esta unidade.",
+      },
+    );
+  blocos.push(
+    { tipo: "secao", texto: "Ações sem vínculo" },
+    {
+      tipo: "tabela",
+      colunas,
+      linhas: sem.length
+        ? [...sem.map((x) => ({ celulas: [x.unidade, x.acao.texto, brl(x.acao.valorInicial)], cores: [null, AMBAR, null] })), total(sem.length, v.valorSemVinculo)]
+        : [],
+      vazio: "Nenhuma — todas as ações estão vinculadas.",
+    },
+  );
   return blocos;
 }

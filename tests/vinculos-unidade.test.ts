@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { brl } from "../src/lib/format.ts";
 import { unidadesDoOrcamento, type VinculoOrcamento } from "../src/lib/orcamento-vinculo.ts";
-import { blocosVinculosDaLinha, semVinculoPorAlvo, textoSemVinculo, vinculosDaLinha } from "../src/lib/vinculos-unidade.ts";
+import { blocosVinculosDaLinha, semVinculoPorAlvo, listaSemVinculo, vinculosDaLinha } from "../src/lib/vinculos-unidade.ts";
 
 const itens = [
   { orgao: "FA", unidade: "2 - FMAS", acao: "2101 - CRAS", valorInicial: 100 },
@@ -39,20 +40,36 @@ describe("vínculos de uma unidade cadastrada (a linha do PCA)", () => {
     assert.equal(v.ligadas.length, 0);
     assert.equal(v.acoesSemVinculo, 2);
     assert.equal(v.valorSemVinculo, 27);
-    assert.equal(textoSemVinculo(v.semVinculo), "2 - FMAS: 2103 - CONSELHO\n9 - GAB: 2001 - GABINETE");
-    assert.match(textoSemVinculo(v.semVinculo, 1), /e mais 1 ação/);
+    assert.deepEqual(
+      listaSemVinculo(v.semVinculo).grupos.map((g) => [g.unidade, g.acoes.map((a) => a.texto)]),
+      [
+        ["2 - FMAS", ["2103 - CONSELHO"]],
+        ["9 - GAB", ["2001 - GABINETE"]],
+      ],
+    );
+    const curta = listaSemVinculo(v.semVinculo, 1);
+    assert.equal(curta.grupos.length, 1);
+    assert.equal(curta.resto, 1);
   });
   it("por unidade cadastrada: as sem vínculo das unidades do orçamento ligadas a ela", () => {
     const m = semVinculoPorAlvo(unidades, vinculos);
     assert.deepEqual([...m.keys()].sort(), [1, 2]);
     assert.equal(m.get(1)?.[0].acoes[0].texto, "2103 - CONSELHO");
   });
-  it("PDF: destaques, a tabela por unidade com o destino e as sem vínculo", () => {
-    const b = blocosVinculosDaLinha({ titulo: "Vínculos · FMAS", nome: "Fundo", anoOrcamento: "2027" }, vinculosDaLinha(unidades, vinculos, 1), (id) => `U${id}`);
+  it("PDF: KPI de total, duas tabelas (vinculadas e sem vínculo) com a linha TOTAL", () => {
+    const b = blocosVinculosDaLinha({ titulo: "Vínculos · U1", nome: "Fundo", anoOrcamento: "2027" }, vinculosDaLinha(unidades, vinculos, 1), true);
+    const kpi = b.find((x) => x.tipo === "destaques");
+    assert.ok(kpi?.tipo === "destaques");
+    assert.equal(kpi.itens[0].rotulo, "Total");
+    assert.equal(kpi.itens[0].valor, brl(120));
     const tabelas = b.filter((x) => x.tipo === "tabela");
     assert.equal(tabelas.length, 2);
-    const t1 = tabelas[0];
-    assert.ok(t1.tipo === "tabela");
-    assert.deepEqual(t1.linhas.map((l) => l.celulas[1]), ["U1", "U2", "Sem vínculo"]);
+    const [vinc, sem] = tabelas;
+    assert.ok(vinc.tipo === "tabela" && sem.tipo === "tabela");
+    assert.deepEqual(vinc.linhas.map((l) => l.celulas[1]), ["2101 - CRAS", ""], "só as que vão a esta unidade + TOTAL");
+    assert.equal(vinc.linhas.at(-1)?.destaque, true);
+    assert.deepEqual(sem.linhas.map((l) => l.celulas[2]), [brl(20), brl(20)]);
+    const linhaSem = blocosVinculosDaLinha({ titulo: "Ações sem vínculo", nome: "", anoOrcamento: "2027" }, vinculosDaLinha(unidades, vinculos, null), false);
+    assert.equal(linhaSem.filter((x) => x.tipo === "tabela").length, 1);
   });
 });

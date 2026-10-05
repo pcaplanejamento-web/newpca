@@ -18,7 +18,9 @@ import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
-import { type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
+import { DicaFlutuante } from "@/components/DicaFlutuante";
+import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
+import { vinculosDaLinha } from "@/lib/vinculos-unidade";
 import { unidadesDoOrcamento } from "@/lib/orcamento-vinculo";
 import type { VisaoOrcamento } from "@/lib/orcamento-visao";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
@@ -1103,6 +1105,12 @@ function VinculosDaUnidadeDemo() {
       <Button size="sm" variant="secondary" onClick={() => setUnidade({ id: null, sigla: "Sem vínculo", nome: "" })}>
         Linha “Sem vínculo”
       </Button>
+      {/* DicaFlutuante + ResumoSemVinculo: o "N sem vínculo" da linha — com o mouse, a lista organizada por unidade. */}
+      <DicaFlutuante conteudo={<ResumoSemVinculo titulo="Sem vínculo" lista={vinculosDaLinha(unidades, [], null).semVinculo} />}>
+        <Button size="sm" variant="ghost">
+          3 sem vínculo (passe o mouse)
+        </Button>
+      </DicaFlutuante>
       <VinculosDaUnidade
         unidade={unidade}
         unidades={unidades}

@@ -3,7 +3,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { brl, dataIsoBrasilia, num } from "@/lib/format";
 import type { AlvosVinculo, UnidadeOrcamento, VinculoOrcamento } from "@/lib/orcamento-vinculo";
-import { blocosVinculosDaLinha, vinculosDaLinha } from "@/lib/vinculos-unidade";
+import { blocosVinculosDaLinha, listaSemVinculo, type SemVinculoUnidade, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import { Badge } from "./Badge";
 import { BotaoAcao } from "./BotaoAcao";
 import { Button } from "./Button";
@@ -17,6 +17,41 @@ import { toast } from "./Toast";
 
 /** A unidade da LINHA do comparativo: a cadastrada (`id`) ou a linha "Sem vínculo" (`id` null). */
 export type UnidadeDaLinha = { id: number | null; sigla: string; nome: string };
+
+/**
+ * QUEM está sem vínculo, organizado: o total, e por unidade do orçamento as ações (marcador âmbar + valor à direita); acima
+ * de 12 ações, "e mais N" (o banner traz todas). A dica da coluna Vínculos do orçamento do PCA.
+ */
+export function ResumoSemVinculo({ titulo, lista }: { titulo: string; lista: SemVinculoUnidade[] }) {
+  const { grupos, resto } = listaSemVinculo(lista);
+  const total = lista.reduce((s, p) => s + p.acoes.length, 0);
+  const valor = lista.reduce((s, p) => s + p.valor, 0);
+  return (
+    <div className="space-y-2">
+      <p className="flex items-baseline justify-between gap-2 border-b border-border pb-1.5">
+        <span className="font-semibold text-text">{titulo}</span>
+        <span className="shrink-0 text-[12px] font-semibold tabular-nums" style={{ color: "var(--warn)" }}>
+          {num(total)} sem vínculo · {brl(valor)}
+        </span>
+      </p>
+      {grupos.map((g) => (
+        <div key={g.unidade}>
+          <p className="mb-0.5 text-[11.5px] font-semibold text-muted">{g.unidade}</p>
+          <ul className="space-y-0.5">
+            {g.acoes.map((a) => (
+              <li key={a.chave} className="flex items-start gap-2">
+                <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: "var(--warn)" }} />
+                <span className="min-w-0 flex-1 leading-snug">{a.texto}</span>
+                <span className="shrink-0 tabular-nums text-text-2">{brl(a.valorInicial)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {resto > 0 && <p className="text-[12px] text-muted">e mais {num(resto)} ação(ões) — abra para ver todas.</p>}
+    </div>
+  );
+}
 
 /** Um item que abre o editor ali mesmo (acordeão). */
 function ItemAcordeao({
@@ -114,7 +149,6 @@ export function VinculosDaUnidade({
   const quem = useQuemExporta();
   const alvoId = unidade?.id ?? null;
   const v = useMemo(() => vinculosDaLinha(unidades, vinculos, alvoId, alvos.unidades), [unidades, vinculos, alvoId, alvos]);
-  const siglaDe = (id: number) => alvos.unidades.find((u) => u.id === id)?.sigla ?? `#${id}`;
   const titulo = !unidade ? "Vínculos" : unidade.id == null ? "Ações sem vínculo" : `Vínculos · ${unidade.sigla}`;
 
   const fechar = () => {
@@ -150,7 +184,7 @@ export function VinculosDaUnidade({
       const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
       await baixarDocumentoPdf(
         nomeArquivoPdf(titulo.replace(" · ", " - "), dataIsoBrasilia(new Date().toISOString())),
-        { titulo, blocos: blocosVinculosDaLinha({ titulo, nome: unidade.id != null ? unidade.nome : "", anoOrcamento: orcamento }, v, siglaDe) },
+        { titulo, blocos: blocosVinculosDaLinha({ titulo, nome: unidade.id != null ? unidade.nome : "", anoOrcamento: orcamento }, v, unidade.id != null) },
         { usuario: quem },
       );
     } catch (e) {
@@ -174,19 +208,16 @@ export function VinculosDaUnidade({
       {unidade && (
         <div className="space-y-[var(--gap-block)]">
           {unidade.id != null && unidade.nome && <p className="text-sm text-muted">{unidade.nome}</p>}
-          <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-3">
+          <div className={`grid grid-cols-1 gap-[var(--gap-block)] ${unidade.id != null ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+            <StatMini label="Total" value={brl(v.valorVinculado + v.valorSemVinculo)} hint={orcamento} />
             {unidade.id != null && (
-              <>
-                <StatMini label="Unidades do orçamento" value={num(v.ligadas.length)} hint={orcamento} />
-                <StatMini label="Dotação vinculada" value={brl(v.valorVinculado)} tone="accent" hint="sem o filtro da visão" />
-              </>
+              <StatMini label="Vinculado" value={brl(v.valorVinculado)} tone="accent" hint={`${num(v.ligadas.length)} unidade(s) do orçamento`} />
             )}
             <StatMini
               label="Sem vínculo"
               value={brl(v.valorSemVinculo)}
               tone={v.acoesSemVinculo > 0 ? "warn" : "ok"}
               hint={`${num(v.acoesSemVinculo)} ação(ões)`}
-              className={unidade.id == null ? "sm:col-span-3" : ""}
             />
           </div>
 
