@@ -19,7 +19,7 @@ import { COR_VARIACAO, desvioTexto, TOM_VARIACAO } from "@/lib/itens-consolidado
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { EstadoPonto } from "./EstadoCelula";
+import { EstadoPonto, EstadoProcessando } from "./EstadoCelula";
 import { IconCompra } from "./icons";
 import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
@@ -58,7 +58,8 @@ export function CelulaHistoricoCompra({ valor, referencia }: { valor: number | n
 
 type DadosProduto = { itens: Pick<CompraHistorico, "ordem" | "idContrato" | "codigo" | "descricao" | "qtdContratada" | "valorContratado" | "valorUnitario">[]; contratos: ContratoDoProduto[] };
 
-/** O histórico de UM código, guardado por 5 min (abrir o mesmo item de novo não refaz a consulta); falha não fica. */
+/** O histórico de UM código, guardado por 5 min (abrir o mesmo item de novo não refaz a consulta). Sem compra = listas
+ * vazias (fica guardado); FALHA = `null` (não fica — a próxima abertura consulta de novo). */
 const VALIDADE_MS = 5 * 60 * 1000;
 const cache = new Map<string, { em: number; p: Promise<DadosProduto | null> }>();
 function carregarProduto(codigo: string): Promise<DadosProduto | null> {
@@ -66,7 +67,7 @@ function carregarProduto(codigo: string): Promise<DadosProduto | null> {
   if (c && Date.now() - c.em < VALIDADE_MS) return c.p;
   const p = fetch(`/api/catalogo/historico/produto?codigo=${encodeURIComponent(codigo)}`)
     .then((r) => r.json() as Promise<{ ok?: boolean } & Partial<DadosProduto>>)
-    .then((j) => (j.ok && j.itens && j.contratos ? { itens: j.itens, contratos: j.contratos } : null))
+    .then((j) => (j.ok ? { itens: j.itens ?? [], contratos: j.contratos ?? [] } : null))
     .catch(() => null)
     .then((d) => {
       if (!d) cache.delete(codigo);
@@ -80,13 +81,16 @@ function carregarProduto(codigo: string): Promise<DadosProduto | null> {
  * O bloco "Histórico de compra" do detalhe do ITEM (`ItemDetalhe`): o valor do item COMPARADO com o histórico — o valor
  * atual (o do contrato assinado por último, com o aditivo), o médio e a faixa menor–maior entre contratos —, o ERRO
  * apontado por extenso quando diverge e o botão que abre o BANNER do produto no histórico (`ProdutoHistoricoDetalhe`) com
- * o valor do item em cima. Carregado só com o item aberto; sem código, sem histórico ou falha = o bloco não aparece
- * (a conferência é auxiliar).
+ * o valor do item em cima. Carregado só com o item aberto; com código, o bloco SEMPRE aparece e diz o estado —
+ * conferindo · sem histórico (nenhuma compra do código nos históricos importados) · falha (com "Tentar de novo"). Sem
+ * código, não aparece. Informativo: não entra no Estado nem bloqueia.
  */
 export function ComparacaoHistoricoCompra({ codigo, valor }: { codigo: string | null | undefined; valor: number | null | undefined }) {
   const cod = normalizarCodigo(codigo);
   const [dados, setDados] = useState<{ cod: string; d: DadosProduto | null } | null>(null);
   const [aberto, setAberto] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tentativa` só refaz a consulta ("Tentar de novo").
   useEffect(() => {
     if (!cod) return;
     let vivo = true;
@@ -94,12 +98,42 @@ export function ComparacaoHistoricoCompra({ codigo, valor }: { codigo: string | 
     return () => {
       vivo = false;
     };
-  }, [cod]);
+  }, [cod, tentativa]);
   const atual = dados?.cod === cod ? dados.d : null;
   const produto = useMemo(() => (atual ? (produtosDoHistorico(atual.itens, atual.contratos)[0] ?? null) : null), [atual]);
   const contratoPorId = useMemo(() => new Map((atual?.contratos ?? []).map((c) => [c.idContrato, c] as const)), [atual]);
   const ref = produto ? referenciaDoProduto(produto) : null;
-  if (!produto || !ref) return null;
+  if (!cod) return null;
+  if (!produto || !ref) {
+    const pronto = dados?.cod === cod;
+    return (
+      <section className="space-y-2 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring" data-ancora="historico">
+        <h4 className="text-[13px] font-bold text-text">Histórico de compra</h4>
+        {!pronto ? (
+          <EstadoProcessando rotulo="Conferindo o histórico de compra…" />
+        ) : atual === null ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <EstadoPonto cor="var(--warn)" rotulo="Não foi possível conferir o histórico" />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setDados(null);
+                setTentativa((n) => n + 1);
+              }}
+            >
+              Tentar de novo
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <EstadoPonto cor="var(--muted)" rotulo="Sem histórico de compra" />
+            <p className="text-xs text-muted">Nenhuma compra deste código nos históricos importados (Catálogo → Histórico de compra).</p>
+          </div>
+        )}
+      </section>
+    );
+  }
 
   const c = compararComHistorico(valor, ref);
   const cor = c ? COR_VARIACAO[c.nivel] : "var(--muted)";
