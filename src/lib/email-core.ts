@@ -98,6 +98,7 @@ export const ROTULO_TIPO_EMAIL: Record<TipoNotificacao, string> = {
   concluida: "Tarefa concluída",
   centi: "Automação Centi",
   comunicado: "Comunicado",
+  versao: "Nova versão do sistema",
 };
 
 /** O e-mail de UMA notificação do sino (o mesmo título/texto/link que a pessoa vê no sistema). */

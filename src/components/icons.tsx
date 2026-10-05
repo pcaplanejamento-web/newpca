@@ -11,6 +11,7 @@ import {
   BellOff,
   Eraser,
   Megaphone,
+  Sparkles,
   Volume2,
   MonitorSmartphone,
   CalendarClock,
@@ -325,6 +326,8 @@ export const IconSemAvisos = BellOff;
 export const IconEventoAlterado = CalendarClock;
 export const IconCadastro = UserPlus;
 export const IconMegafone = Megaphone;
+/** Novidades / versão do sistema. */
+export const IconNovidades = Sparkles;
 export const IconAdiar = AlarmClock;
 export const IconLimpar = Eraser;
 export const IconSom = Volume2;

@@ -211,6 +211,8 @@ import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
+import { CartaoVersao, VersaoSistema } from "@/components/Novidades";
+import { VERSOES } from "@/lib/versoes";
 import { PainelPendencias } from "@/components/PainelPendencias";
 import { PreviaDocumento } from "@/components/PreviaDocumento";
 import { BotaoAcao } from "@/components/BotaoAcao";
@@ -2976,6 +2978,15 @@ export function Catalogo() {
               <span className="w-full truncate text-center text-[9px] text-faint">{nome.replace("Icon", "")}</span>
             </div>
           ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="Versão do sistema (VersaoSistema — fim do menu) · Novidades (CartaoVersao)">
+        <div className="space-y-3">
+          <div className="w-64 rounded-card border border-border bg-surface p-2">
+            <VersaoSistema />
+          </div>
+          <CartaoVersao v={VERSOES[0]} atual destaque />
         </div>
       </Secao>
 

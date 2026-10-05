@@ -865,6 +865,7 @@ export const TIPOS_NOTIFICACAO = [
   "concluida",
   "centi",
   "comunicado",
+  "versao",
 ] as const;
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
 

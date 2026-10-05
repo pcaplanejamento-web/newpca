@@ -3933,8 +3933,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   endereçar num passe de acessibilidade; `noNonNullAssertion`/`useExhaustiveDependencies` são
   avisos (não alterar deps de hooks automaticamente).
 
+## VERSÕES do sistema e NOVIDADES (sem migração)
+- **Fonte única:** `src/lib/versoes.ts` (puro, testado em `tests/versoes.test.ts`) — `VERSOES` (a mais recente PRIMEIRO; cada
+  uma: `versao` semver, `data` AAAA-MM-DD, `titulo` e `mudancas` {tipo novo|melhoria|correcao, `area`, `texto`, `link` =
+  ONDE mudou — caminho interno, com a aba}), `VERSAO_ATUAL`, `problemasDasVersoes` (ordem, números, datas, links internos —
+  o teste exige nenhum) e o `version` do `package.json` = a atual (testado).
+- **Publicar uma versão:** acrescentar a entrada NO TOPO de `VERSOES` (MAIOR = muda o jeito de trabalhar · MENOR = recurso
+  novo · CORREÇÃO = ajuste), com o `link` de cada mudança, e o MESMO número no `package.json` — em TODA entrega que o usuário
+  percebe.
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.3.0", leva às Novidades; o ponto
+  accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`, conveniência).
+- **Novidades:** `/painel/novidades` (qualquer pessoa logada) = `Novidades` → um **`CartaoVersao`** (DS) por versão: número,
+  título, data, selo "Atual" e cada mudança com o tipo (`Badge`), a área e **"Ver onde mudou"** (o `link`); `?versao=` destaca e
+  rola até a versão.
+- **Aviso aos ADMs:** tipo **`versao`** no catálogo (`CATALOGO_AVISOS`, grupo Administração — no sino, sem e-mail por padrão;
+  o ADM liga em Configurações → Notificações) — `avisoNovaVersao` DERIVADO na leitura para cada Administrador (como a versão
+  da extensão), UM por versão (`chave` `versao-sistema:<n>`; limpo, não volta): título "Nova versão N — título", o TEXTO = o
+  que mudou (uma linha por mudança, até 4 + "e mais N"; o sino mostra até 4 linhas) e o link às Novidades daquela versão.
+
 ## Ao finalizar qualquer mudança
 1. `npm run lint`, `npm test` e `npm run typecheck` verdes (os três bloqueiam o deploy).
 2. **Commit + deploy** (push na main) e **verifique o site no ar** sem regressão.
-3. **Atualize os `.md`** relevantes (este arquivo, `docs/ROADMAP.md`, README) e a documentação
+3. Mudança que o usuário percebe = **versão nova** em `src/lib/versoes.ts` + `package.json` (ver "VERSÕES").
+4. **Atualize os `.md`** relevantes (este arquivo, `docs/ROADMAP.md`, README) e a documentação
    do que mudou. Mudanças limpas, cirúrgicas, sem código morto.
