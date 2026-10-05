@@ -1979,7 +1979,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca` — SEM avisos no topo (a prévia vira o hint do KPI "Planejado no PCA"; sem orçamento do ano,
   a tabela diz no vazio): a **ENGRENAGEM** (só ícone, quem Configura o PCA, no FIM da linha de controles, à direita — no
   PCA × Orçamento depois do Relatório; no Comparativo pelo slot `OrcamentoComparativo.fim`; ponto âmbar = a visão tem
-  valores fora deste orçamento)
+  valores fora deste orçamento) + o **LÁPIS DE VÍNCULOS POR LINHA** (com Configurar no Orçamento, na visão Por unidade —
+  `VinculosDaUnidade`, DS: os vínculos que trazem orçamento à unidade [unidade do CUBO · ações · dotação no ano] com "Novo
+  vínculo para SIGLA"; na linha "Sem vínculo", as unidades do CUBO com ações sem vínculo + "Vincular" com a sugestão — o
+  MESMO `EditorVinculoOrcamento` e a mesma gravação da aba Vínculos, `useGravacaoVinculos` de `OrcamentoVinculosAba.tsx`)
   abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
   os lançamentos do orçamento do ano (os do Comparativo — sem consulta nova); o Comparativo acompanha a visão do PCA quando
@@ -2039,8 +2042,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`orcamento-visao.ts`, puro/testado; + `contarAusentes`/`semAusentes`) aponta o que o orçamento ATUAL não traz (QDD reenviado
   ou texto mudado — esses valores não contam nada): na aba Visões (coluna Filtros "· N ausente(s)" + coluna **PCAs** que a
   usam — `listarVisoesOrcamento` traz `pcas`), no editor (**`EditorVisaoOrcamento`**, DS — o MESMO na aba Visões e na
-  engrenagem do PCA: os PCAs que a usam, os ausentes com "Remover ausentes" — a dimensão que esvaziaria confirma —, prévia
-  do Σ), e no orçamento do PCA (`orcamentoDoPca.ausentes` → o ponto da engrenagem). **REIMPORTAR = SUBSTITUIR + VISÕES QUE SE
+  engrenagem do PCA: as explicações — o que a visão filtra e os PCAs que a usam — na Ajuda (?) do cabeçalho; no corpo só os
+  ausentes com "Remover ausentes" — a dimensão que esvaziaria confirma —, prévia do Σ), e no orçamento do PCA (`orcamentoDoPca.ausentes` → o ponto da engrenagem). **REIMPORTAR = SUBSTITUIR + VISÕES QUE SE
   ADAPTAM:** a substituição (`POST /api/orcamento/[id]/substituir`) roda **`adaptarVisao(filtros, lançamentos novos)`**
   (puro, testado) em todas as visões: o valor que o QDD novo não traz ganha o EQUIVALENTE único na mesma dimensão — o mesmo
   CÓDIGO (antes do " - ") ou o mesmo NOME (código novo) — ACRESCENTADO (nunca tira: a visão é global e o valor ausente não

@@ -18,6 +18,8 @@ import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
+import { type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
+import { unidadesDoOrcamento } from "@/lib/orcamento-vinculo";
 import type { VisaoOrcamento } from "@/lib/orcamento-visao";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
 import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/orcamento-cruzamento";
@@ -1075,6 +1077,40 @@ function EditorVisaoDemo() {
         Nova visão
       </Button>
       <EditorVisaoOrcamento aberta={aberta} itens={LINHAS_VISAO_DEMO} podeEditar onFechar={() => setAberta(null)} onSalva={() => setAberta(null)} />
+    </div>
+  );
+}
+
+/** Os vínculos de UMA linha do orçamento do PCA (o lápis da linha): a lista + o editor da aba Vínculos (aqui sem gravar). */
+function VinculosDaUnidadeDemo() {
+  const [unidade, setUnidade] = useState<UnidadeDaLinha | null>(null);
+  const itens = [
+    { orgao: "FUNDO DE ASSISTÊNCIA", unidade: "2 - FMAS", acao: "2101 - MANTER O CRAS", valorInicial: 1_200_000 },
+    { orgao: "FUNDO DE ASSISTÊNCIA", unidade: "2 - FMAS", acao: "2102 - MANTER O CREAS", valorInicial: 800_000 },
+    { orgao: "GABINETE", unidade: "9 - GAB", acao: "2001 - MANTER O GABINETE", valorInicial: 120_000 },
+  ];
+  const unidades = unidadesDoOrcamento(itens);
+  const alvos = { orgaos: [{ id: 1, sigla: "PMRV", nome: "Prefeitura" }], unidades: [{ id: 2, sigla: "FMAS", nome: "Fundo de Assistência", orgaoId: 1 }] };
+  const vinculos = [{ id: 1, chave: unidades[0]?.chave ?? "", texto: "2 - FMAS", alvoId: 2, acoes: null, acoesFora: [] }];
+  const ok = async () => true;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" variant="secondary" onClick={() => setUnidade({ id: 2, sigla: "FMAS", nome: "Fundo de Assistência" })}>
+        Vínculos de FMAS
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setUnidade({ id: null, sigla: "Sem vínculo", nome: "" })}>
+        Linha “Sem vínculo”
+      </Button>
+      <VinculosDaUnidade
+        unidade={unidade}
+        unidades={unidades}
+        vinculos={vinculos}
+        alvos={alvos}
+        onCriar={ok}
+        onEditar={ok}
+        onExcluir={ok}
+        onFechar={() => setUnidade(null)}
+      />
     </div>
   );
 }
@@ -3111,6 +3147,9 @@ export function Catalogo() {
       </Secao>
       <Secao titulo="EditorVisaoOrcamento (uma visão do orçamento: nome + dimensões em listas suspensas + prévia do Σ; avisa os PCAs que a usam e os valores que o orçamento atual não traz, com “Remover ausentes”) + VisaoOrcamentoPca (a engrenagem da aba Orçamento do PCA — no OrcamentoPca acima)">
         <EditorVisaoDemo />
+      </Secao>
+      <Secao titulo="VinculosDaUnidade (o lápis da linha do PCA × Orçamento: os vínculos que trazem orçamento à unidade — ou, na linha Sem vínculo, as unidades do orçamento a vincular — editados no mesmo editor da aba Vínculos)">
+        <VinculosDaUnidadeDemo />
       </Secao>
       <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir; quem configura a tela também exclui a pública de outra pessoa) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />

@@ -19,6 +19,7 @@ import {
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
+import { unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -27,13 +28,15 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useQuemExporta } from "./ConfigTabelas";
 import { type Column, DataTable } from "./DataTable";
-import { IconFile, IconSettings } from "./icons";
+import { IconFile, IconLink, IconSettings } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
+import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
+import { type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
 import { VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 
 type Filtro = "todas" | "acima" | "dentro";
@@ -45,6 +48,8 @@ type LinhaTabela = (LinhaComparativo & { nivel: "unidade"; chave: string }) | (L
 
 /** Os dados do Comparativo (tabela cruzada) do orçamento do ano — os MESMOS da tela do orçamento. */
 export type ComparativoPca = Omit<ComponentProps<typeof OrcamentoComparativo>, "inicio" | "onMudarEdicoes">;
+
+const SEM_VINCULOS: VinculoOrcamento[] = [];
 
 const COR_FAIXA: Record<FaixaComprometimento, string> = {
   ok: "var(--ok)",
@@ -262,14 +267,15 @@ export function OrcamentoPca({
   podeExportar = true,
   podePublicar = false,
   visoes = [],
-  podeEditarVisao = false,
+  podeConfigurarOrcamento = false,
 }: {
   dados: DadosOrcamentoPca;
   comparativo?: ComparativoPca | null;
   /** As visões salvas (globais) — a engrenagem escolhe/edita a do PCA. */
   visoes?: VisaoOrcamento[];
-  /** Configura o ORÇAMENTO: edita/cria a visão pela engrenagem (escolher a do PCA = `podePublicar`, Configurar no PCA). */
-  podeEditarVisao?: boolean;
+  /** Configura o ORÇAMENTO: edita/cria a visão pela engrenagem e os VÍNCULOS pelo lápis da linha (escolher a visão do PCA =
+   * `podePublicar`, Configurar no PCA). */
+  podeConfigurarOrcamento?: boolean;
   /** O papel exporta no PCA (o XLSX do comparativo). */
   podeExportar?: boolean;
   /** O papel CONFIGURA o PCA: publica edições do layout do comparativo para todos. */
@@ -287,6 +293,11 @@ export function OrcamentoPca({
   const [engrenagem, setEngrenagem] = useState(false);
   const linhasVisao = useMemo(() => comparativo?.itens ?? null, [comparativo]);
   const ausentes = contarAusentes(dados.ausentes ?? []);
+  // VÍNCULOS por linha (o lápis): as unidades do CUBO do orçamento do ano + a gravação da aba Vínculos.
+  const unidadesCubo = useMemo(() => (comparativo ? unidadesDoOrcamento(comparativo.itens) : []), [comparativo]);
+  const gravacao = useGravacaoVinculos(comparativo?.vinculos ?? SEM_VINCULOS);
+  const [vinculosDe, setVinculosDe] = useState<UnidadeDaLinha | null>(null);
+  const editaVinculos = podeConfigurarOrcamento && comparativo != null;
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivel, setNivel] = useState<Nivel>("unidade");
@@ -408,6 +419,28 @@ export function OrcamentoPca({
       render: (l) => <BarraPct l={l} />,
     },
   ];
+  // O lápis da LINHA (por unidade): os vínculos que trazem orçamento a ela — editar no mesmo editor da aba Vínculos.
+  if (editaVinculos && nivel === "unidade")
+    cols.push({
+      key: "vinculos",
+      header: "",
+      filter: "none",
+      nowrap: true,
+      render: (l) =>
+        l.nivel === "unidade" ? (
+          <Button
+            size="xs"
+            variant="ghost"
+            icon={<IconLink className="h-4 w-4" />}
+            aria-label={l.unidadeId == null ? "Vincular as unidades do orçamento sem vínculo" : `Vínculos de ${l.sigla}`}
+            title={l.unidadeId == null ? "Vincular as unidades do orçamento sem vínculo" : `Vínculos de ${l.sigla}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setVinculosDe({ id: l.unidadeId, sigla: l.sigla, nome: l.nome });
+            }}
+          />
+        ) : null,
+    });
 
   if (dados.ano == null) return <Callout kind="warn">Defina o ano do PCA (aba Configuração) para cruzar com o orçamento.</Callout>;
 
@@ -511,6 +544,23 @@ export function OrcamentoPca({
         </>
       )}
       <OrigemLinha dados={dados} aberta={aberta} onClose={() => setAberta(null)} />
+      {editaVinculos && comparativo && (
+        <VinculosDaUnidade
+          unidade={vinculosDe}
+          unidades={unidadesCubo}
+          vinculos={gravacao.atuais}
+          alvos={comparativo.alvos}
+          salvando={gravacao.salvando}
+          erro={gravacao.erro}
+          onCriar={gravacao.criar}
+          onEditar={gravacao.editar}
+          onExcluir={gravacao.excluir}
+          onFechar={() => {
+            setVinculosDe(null);
+            gravacao.limparErro();
+          }}
+        />
+      )}
       {podePublicar && (
         <VisaoOrcamentoPca
           pcaId={dados.pcaId}
@@ -519,7 +569,7 @@ export function OrcamentoPca({
           visaoId={dados.visaoId ?? null}
           visoes={visoes}
           itens={linhasVisao}
-          podeEditarVisao={podeEditarVisao}
+          podeEditarVisao={podeConfigurarOrcamento}
         />
       )}
     </div>

@@ -114,7 +114,7 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
  * Aba ORÇAMENTO: os KPIs (dotação do CUBO do ANO do PCA × planejado) e, abaixo, o COMPARATIVO — a MESMA tabela cruzada da
  * tela do orçamento (na visão da Configuração do PCA, trocável) e o PCA × Orçamento por unidade. Um só orçamento do ano.
  */
-async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela, podeEditarVisao: boolean) {
+async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela, podeConfigurarOrcamento: boolean) {
   const ref = await orcamentoDoAno(pca.ano);
   // As visões vêm com o comparativo; sem orçamento do ano, só a lista (a engrenagem ainda escolhe a visão).
   const [orc, comp, visoesSemOrc] = await Promise.all([
@@ -143,7 +143,7 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: Pode
       podeExportar={pode.exportar}
       podePublicar={pode.configurar}
       visoes={comp?.visoes ?? visoesSemOrc ?? []}
-      podeEditarVisao={podeEditarVisao}
+      podeConfigurarOrcamento={podeConfigurarOrcamento}
     />
   );
 }

@@ -20,6 +20,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Vínculos editáveis por linha no orçamento do PCA — entregue
+✅ Lápis em cada linha do PCA × Orçamento (por unidade): os vínculos daquela unidade, editar/excluir/criar no mesmo editor
+da aba Vínculos; a linha "Sem vínculo" lista o que falta vincular · ✅ Editor da visão mais limpo: as explicações foram para a Ajuda (?).
+
 ### Reimportar o QDD substitui tudo e as visões se adaptam; aba Orçamento do PCA sem avisos — entregue
 ✅ Importar um ano que já tem orçamento SUBSTITUI o daquele ano (lançamentos antigos e duplicatas apagados num lote) ·
 ✅ As visões ganham sozinhas o equivalente dos valores renomeados/recodificados (mesmo código ou mesmo nome; nunca tiram) ·

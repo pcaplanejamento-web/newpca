@@ -14,10 +14,12 @@ import {
   type VisaoOrcamento,
   valoresAusentes,
 } from "@/lib/orcamento-visao";
+import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
+import { IconLink, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 
@@ -27,8 +29,9 @@ export type LinhaVisaoOrcamento = LinhaOrcamentoVisao & { valorInicial: number }
 /**
  * EDITOR de uma VISÃO do orçamento — o BANNER padrão (`Modal`): nome + uma lista suspensa por dimensão da visão
  * (`DIMENSOES_VISAO`; unidade, ações e órgão são dos Vínculos), opções CONECTADAS e a prévia do Σ no rodapé. O MESMO na
- * aba Visões do orçamento e na engrenagem do orçamento do PCA. Avisa os PCAs que usam a visão (ela é global) e os
- * valores escolhidos que o orçamento atual NÃO traz (sobra de um QDD anterior) — com "Remover ausentes". Grava pela rota
+ * aba Visões do orçamento e na engrenagem do orçamento do PCA. As explicações (o que a visão filtra, os PCAs que a usam —
+ * ela é global) ficam na Ajuda (?) do cabeçalho; no corpo só o que pede ação: os valores que o orçamento atual NÃO traz,
+ * com "Remover ausentes". Grava pela rota
  * das visões e devolve o id ao host (`onSalva`), que recarrega a tela.
  */
 export function EditorVisaoOrcamento({
@@ -113,6 +116,19 @@ export function EditorVisaoOrcamento({
         bloqueado={salvando}
         size="lg"
         titulo={aberta === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : "Visão"}
+        acoesCabecalho={
+          <Ajuda titulo="Visão do orçamento">
+            <TopicoAjuda icone={<IconLink className="h-4 w-4" />} titulo="O que a visão filtra">
+              Unidades, ações e órgãos são definidos nos Vínculos — a visão filtra só o restante do orçamento (função, programa, elemento,
+              código, ficha e fonte). Dentro de uma dimensão vale qualquer valor marcado; entre dimensões, todas.
+            </TopicoAjuda>
+            <TopicoAjuda icone={<IconUsers className="h-4 w-4" />} titulo="Quem usa">
+              {usos.length > 0
+                ? `Usada por ${usos.length === 1 ? "1 PCA" : `${num(usos.length)} PCAs`}: ${usos.join("; ")} — alterar a visão muda o orçamento de todos eles.`
+                : "Nenhum PCA usa esta visão ainda."}
+            </TopicoAjuda>
+          </Ajuda>
+        }
         rodape={
           // Altura FIXA: a prévia numa linha própria (truncada) e os botões abaixo — marcar um item não muda o banner.
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -134,12 +150,6 @@ export function EditorVisaoOrcamento({
         <div className="space-y-[var(--gap-block)]">
           {erro && <Callout kind="danger">{erro}</Callout>}
           <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: PCA" maxLength={80} disabled={!podeEditar} />
-          {usos.length > 0 && (
-            <Callout kind="info">
-              Usada por {usos.length === 1 ? "1 PCA" : `${num(usos.length)} PCAs`}: <b>{usos.join("; ")}</b> — alterar a visão muda o orçamento
-              de todos eles.
-            </Callout>
-          )}
           {contarAusentes(ausentes) > 0 && (
             <Callout kind="warn">
               <div className="space-y-1.5">
@@ -162,7 +172,6 @@ export function EditorVisaoOrcamento({
               </div>
             </Callout>
           )}
-          <Callout kind="info">Unidades, ações e órgãos são definidos nos Vínculos — a visão filtra só o restante do orçamento.</Callout>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {DIMENSOES_VISAO.map((d) => (
               <SeletorMultiplo

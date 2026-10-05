@@ -10,25 +10,11 @@ import { OrcamentoVinculos } from "./OrcamentoVinculos";
 import { toast } from "./Toast";
 
 /**
- * Aba VÍNCULOS da tela do orçamento: as UNIDADES dos lançamentos DESTE orçamento e os VÍNCULOS criados para elas
- * (`OrcamentoVinculos`) — criar (`POST /api/orcamento/vinculos`, vários de uma vez nas sugestões), editar e excluir
- * (`PATCH`/`DELETE …/[id]`). O vínculo é GLOBAL (pelo texto normalizado) — vale para todos os orçamentos. Uma gravação
- * por vez; cada resposta traz a lista GRAVADA no banco, aplicada na hora (a tela nunca mostra um vínculo que já saiu —
- * vale até a página trazer os vínculos de novo); o erro fica no editor aberto (ou num aviso flutuante).
+ * A GRAVAÇÃO dos vínculos (a aba Vínculos e o lápis da linha do orçamento do PCA): uma por vez; cada resposta traz a lista
+ * GRAVADA no banco, aplicada na hora (`atuais` — vale até a página trazer os vínculos de novo); o erro fica para o editor.
  */
-export function OrcamentoVinculosAba({
-  itens,
-  vinculos,
-  alvos,
-  podeEditar,
-}: {
-  itens: Pick<OrcamentoItemRow, "orgao" | "unidade" | "acao" | "valorInicial">[];
-  vinculos: VinculoOrcamento[];
-  alvos: AlvosVinculo;
-  podeEditar: boolean;
-}) {
+export function useGravacaoVinculos(vinculos: VinculoOrcamento[]) {
   const router = useRouter();
-  const unidades = useMemo(() => unidadesDoOrcamento(itens), [itens]);
   // A lista que o servidor devolveu na última gravação (sobre a base `vinculos` em que foi feita).
   const [gravados, setGravados] = useState<{ base: VinculoOrcamento[]; lista: VinculoOrcamento[] } | null>(null);
   const atuais = gravados && gravados.base === vinculos ? gravados.lista : vinculos;
@@ -59,25 +45,55 @@ export function OrcamentoVinculosAba({
     }
   }
 
+  return {
+    atuais,
+    salvando,
+    erro,
+    limparErro: () => setErro(null),
+    criar: (lista: DadosVinculo[]) =>
+      gravar("/api/orcamento/vinculos", "POST", { vinculos: lista }, lista.length === 1 ? "Vínculo criado." : `${lista.length} vínculos criados.`),
+    editar: (id: number, d: DadosVinculo) =>
+      gravar(`/api/orcamento/vinculos/${id}`, "PATCH", { alvoId: d.alvoId, acoes: d.acoes, acoesFora: d.acoesFora }, "Vínculo salvo."),
+    excluir: (id: number) => gravar(`/api/orcamento/vinculos/${id}`, "DELETE", null, "Vínculo excluído."),
+  };
+}
+
+/**
+ * Aba VÍNCULOS da tela do orçamento: as UNIDADES dos lançamentos DESTE orçamento e os VÍNCULOS criados para elas
+ * (`OrcamentoVinculos`) — criar (`POST /api/orcamento/vinculos`, vários de uma vez nas sugestões), editar e excluir
+ * (`PATCH`/`DELETE …/[id]`) — pelo `useGravacaoVinculos`. O vínculo é GLOBAL (pelo texto normalizado) — vale para todos
+ * os orçamentos; o erro fica no editor aberto (ou num aviso flutuante).
+ */
+export function OrcamentoVinculosAba({
+  itens,
+  vinculos,
+  alvos,
+  podeEditar,
+}: {
+  itens: Pick<OrcamentoItemRow, "orgao" | "unidade" | "acao" | "valorInicial">[];
+  vinculos: VinculoOrcamento[];
+  alvos: AlvosVinculo;
+  podeEditar: boolean;
+}) {
+  const unidades = useMemo(() => unidadesDoOrcamento(itens), [itens]);
+  const g = useGravacaoVinculos(vinculos);
   return (
     <>
       <OrcamentoVinculos
         unidades={unidades}
-        vinculos={atuais}
+        vinculos={g.atuais}
         alvos={alvos}
         podeEditar={podeEditar}
-        salvando={salvando}
-        erro={erro}
+        salvando={g.salvando}
+        erro={g.erro}
         scrollInterno
-        onCriar={(lista: DadosVinculo[]) =>
-          gravar("/api/orcamento/vinculos", "POST", { vinculos: lista }, lista.length === 1 ? "Vínculo criado." : `${lista.length} vínculos criados.`)
-        }
-        onEditar={(id, d) => gravar(`/api/orcamento/vinculos/${id}`, "PATCH", { alvoId: d.alvoId, acoes: d.acoes, acoesFora: d.acoesFora }, "Vínculo salvo.")}
-        onExcluir={(id) => gravar(`/api/orcamento/vinculos/${id}`, "DELETE", null, "Vínculo excluído.")}
+        onCriar={g.criar}
+        onEditar={g.editar}
+        onExcluir={g.excluir}
       />
-      {erro && (
-        <AvisoFlutuante kind="danger" titulo="Não foi possível gravar o vínculo" onClose={() => setErro(null)}>
-          {erro}
+      {g.erro && (
+        <AvisoFlutuante kind="danger" titulo="Não foi possível gravar o vínculo" onClose={g.limparErro}>
+          {g.erro}
         </AvisoFlutuante>
       )}
     </>
