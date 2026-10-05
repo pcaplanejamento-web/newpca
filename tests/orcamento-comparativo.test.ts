@@ -6,7 +6,6 @@ import {
   origemDaLinha,
   origemDoOrgao,
   rotuloUnidadeComparativo,
-  siglasDivididas,
   type UnidadeRef,
 } from "../src/lib/orcamento-comparativo.ts";
 
@@ -66,17 +65,10 @@ test("o ÓRGÃO é a soma das unidades dele; sem vínculo à parte", () => {
   assert.equal(total(os), total(ls));
 });
 
-test("siglasDivididas acusa o FMMA repartido", () => {
-  const ls = comparativoPorUnidade(planejado, orc, unidades);
-  const d = siglasDivididas(ls);
-  assert.equal(d.length, 1);
-  assert.equal(d[0].sigla, "FMMA");
-  assert.deepEqual(d[0].comPlanejado.map((l) => l.unidadeId), [4]);
-  assert.deepEqual(d[0].comOrcamento.map((l) => l.unidadeId), [5]);
-  // Vínculo corrigido (CUBO na unidade 4): uma linha só, nada a acusar.
+test("FMMA repartido: duas linhas; com o vínculo corrigido, uma só", () => {
+  assert.equal(comparativoPorUnidade(planejado, orc, unidades).filter((l) => l.sigla === "FMMA").length, 2);
   const corrigido = comparativoPorUnidade(planejado, orc.map((o) => (o.unidadeId === 5 ? { ...o, unidadeId: 4 } : o)), unidades);
   assert.equal(corrigido.filter((l) => l.sigla === "FMMA").length, 1);
-  assert.equal(siglasDivididas(corrigido).length, 0);
 });
 
 test("a origem (unidade e órgão) soma igual à linha", () => {

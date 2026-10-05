@@ -6,7 +6,7 @@
  *
  * A UNIDADE é o MICRO: recebe os DFDs e o orçamento. O ÓRGÃO é a SOMA das unidades dele (`comparativoPorOrgao`). A linha da
  * unidade é pelo ID — duas unidades com a MESMA sigla (outro órgão, a unidade própria de um órgão) são linhas distintas,
- * identificadas pelo órgão; `siglasDivididas` aponta quando o planejado de uma e o orçamento da outra se separaram.
+ * identificadas pelo órgão.
  */
 
 export type FaixaComprometimento = "ok" | "atencao" | "acima" | "sem-orcamento";
@@ -194,29 +194,6 @@ export function origemDoOrgao<P extends { unidadeId: number | null }, O extends 
     return chaveOrgaoDaLinha({ unidadeId: id, orgaoId: id == null ? null : (orgaoDe.get(id) ?? null) }) === chave;
   };
   return { planejado: planejado.filter(casa), orcamento: orc.filter(casa) };
-}
-
-/**
- * SIGLAS DIVIDIDAS: a mesma sigla em 2+ unidades em que o PLANEJADO está numa e o ORÇAMENTO noutra — quase sempre o vínculo
- * do CUBO apontado para a unidade errada. Devolve, por sigla, as unidades só com planejado e as só com orçamento.
- */
-export function siglasDivididas(
-  linhas: LinhaComparativo[],
-): { sigla: string; comPlanejado: LinhaComparativo[]; comOrcamento: LinhaComparativo[] }[] {
-  const porSigla = new Map<string, LinhaComparativo[]>();
-  for (const l of linhas) {
-    if (l.unidadeId == null) continue;
-    const k = l.sigla.trim().toUpperCase();
-    porSigla.set(k, [...(porSigla.get(k) ?? []), l]);
-  }
-  const out: { sigla: string; comPlanejado: LinhaComparativo[]; comOrcamento: LinhaComparativo[] }[] = [];
-  for (const ls of porSigla.values()) {
-    if (ls.length < 2) continue;
-    const comPlanejado = ls.filter((l) => l.planejado !== 0 && l.orcamento === 0);
-    const comOrcamento = ls.filter((l) => l.orcamento !== 0 && l.planejado === 0);
-    if (comPlanejado.length > 0 && comOrcamento.length > 0) out.push({ sigla: ls[0].sigla, comPlanejado, comOrcamento });
-  }
-  return out;
 }
 
 /** "FMMA — Fundo… (órgão X)" — a unidade identificada sem ambiguidade. */

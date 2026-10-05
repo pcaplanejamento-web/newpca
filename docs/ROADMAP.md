@@ -20,6 +20,11 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Reimportar o QDD substitui tudo e as visões se adaptam; aba Orçamento do PCA sem avisos — entregue
+✅ Importar um ano que já tem orçamento SUBSTITUI o daquele ano (lançamentos antigos e duplicatas apagados num lote) ·
+✅ As visões ganham sozinhas o equivalente dos valores renomeados/recodificados (mesmo código ou mesmo nome; nunca tiram) ·
+✅ A engrenagem fica à direita, com um ponto âmbar quando a visão tem valores fora do orçamento · ✅ Sem os avisos no topo da aba.
+
 ### Orçamento do PCA sincronizado com o QDD e as visões + engrenagem da visão — entregue
 ✅ Engrenagem na aba Orçamento do PCA: escolher a visão (grava na hora), editar a visão escolhida ou criar uma nova (já vira
 a do PCA) no mesmo editor da aba Visões · ✅ Sincronia: os valores da visão que o QDD atual não traz são apontados (aba

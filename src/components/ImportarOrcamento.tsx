@@ -1,11 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { enviarOrcamentoEmLotes, substituirOrcamentoEmLotes } from "@/lib/importar-orcamento";
 import type { OrcamentoResumo } from "@/lib/orcamento";
-import { contarAusentes, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
 import type { ErroPlanilhaOrcamento, OrcamentoItemParseado } from "@/lib/parse-orcamento-comum";
 import { parseOrcamentoXlsx } from "@/lib/parse-orcamento-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
@@ -65,33 +64,24 @@ const COLUNAS_PREVIA: Column<OrcamentoItemParseado>[] = [
  * IMPORTAÇÃO do CUBO (`.xlsx`, lido no navegador) — o fluxo ÚNICO do módulo: lançador (`Dropzone`) → prévia → gravação
  * em lotes com progresso. Dois modos: **novo** (sem `alvo`: informa nome + ANO; ao concluir abre a tela do orçamento
  * novo) e **reenvio** (com `alvo`: a planilha nova SUBSTITUI os lançamentos do orçamento — nome/ano mantidos; a prévia
- * compara atual × novo; o anterior fica intacto se algo falhar). Cada valor NOVO de `iniciar` abre o lançador (o mesmo
+ * compara atual × novo; o anterior fica intacto se algo falhar). Um ano só tem UM orçamento: no modo novo, um ano que já
+ * existe (`existentes`) vira a SUBSTITUIÇÃO daquele orçamento; a substituição também apaga as duplicatas do ano e as
+ * visões se adaptam aos textos novos (no servidor). Cada valor NOVO de `iniciar` abre o lançador (o mesmo
  * mecanismo da Mesa). Não renderiza nada no fluxo: só modais e avisos flutuantes.
  */
 export function ImportarOrcamento({
   iniciar,
   alvo,
-  visoes = [],
+  existentes = [],
 }: {
   iniciar: number;
   alvo?: OrcamentoResumo;
-  /** No REENVIO: as visões salvas — a prévia avisa as que perdem valores com a planilha nova (o PCA delas mudaria). */
-  visoes?: VisaoOrcamento[];
+  /** No modo NOVO: os orçamentos já importados (todos os anos) — o ano que já existe é substituído, nunca duplicado. */
+  existentes?: OrcamentoResumo[];
 }) {
   const router = useRouter();
   const [launcher, setLauncher] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
-  // Sincronia no REENVIO: as visões com valores que a planilha nova NÃO traz deixariam de contar esses lançamentos.
-  const visoesAfetadas = useMemo(
-    () =>
-      alvo && preview
-        ? visoes.flatMap((v) => {
-            const n = contarAusentes(valoresAusentes(preview.itens, v.filtros));
-            return n > 0 ? [{ v, n }] : [];
-          })
-        : [],
-    [alvo, preview, visoes],
-  );
   const [nome, setNome] = useState("");
   const [ano, setAno] = useState(String(ANO_ATUAL));
   const [enviando, setEnviando] = useState(false);
@@ -133,15 +123,17 @@ export function ImportarOrcamento({
   const anoValido = anoNum != null && Number.isInteger(anoNum) && anoNum >= 2000 && anoNum <= 2100;
   // Só com TODAS as colunas obrigatórias e TODOS os dados corretos (a planilha é conferida ao ler).
   const planilhaOk = preview != null && preview.faltam.length === 0 && preview.erros.length === 0;
-  const podeImportar = preview != null && planilhaOk && nome.trim().length > 0 && anoValido;
+  // O orçamento que a planilha substitui: o do reenvio ou, no modo novo, o que já existe no ano informado.
+  const destino = alvo ?? (anoValido ? existentes.find((o) => o.ano === anoNum) : undefined);
+  const podeImportar = preview != null && planilhaOk && (destino != null || nome.trim().length > 0) && anoValido;
 
   async function importar() {
     if (!preview || !anoValido || !anoNum) return;
     if (
-      alvo &&
+      destino &&
       !(await confirmar({
         titulo: "Substituir a planilha?",
-        texto: `Os ${num(alvo.totalItens)} lançamentos de "${alvo.nome}" dão lugar aos ${num(preview.itens.length)} da planilha nova.`,
+        texto: `Os ${num(destino.totalItens)} lançamentos de "${destino.nome}" (${destino.ano}) dão lugar aos ${num(preview.itens.length)} da planilha nova. Os dados antigos são apagados; as visões se adaptam aos textos novos.`,
         confirmar: "Substituir",
       }))
     )
@@ -151,10 +143,15 @@ export function ImportarOrcamento({
     setAviso(null);
     const onLote = (env: number, tot: number) => setProgresso(Math.round((env / tot) * 100));
     try {
-      if (alvo) {
-        await substituirOrcamentoEmLotes(alvo, preview.itens, onLote);
-        setAviso({ kind: "ok", texto: `Planilha substituída — ${num(preview.itens.length)} lançamentos.` });
-        router.refresh();
+      if (destino) {
+        const r = await substituirOrcamentoEmLotes(destino, preview.itens, onLote);
+        const extras = [
+          r.visoesAdaptadas ? `${num(r.visoesAdaptadas)} visão(ões) adaptada(s)` : "",
+          r.excluidos ? `${num(r.excluidos)} orçamento(s) repetido(s) de ${destino.ano} excluído(s)` : "",
+        ].filter(Boolean);
+        setAviso({ kind: "ok", texto: `Planilha substituída — ${num(preview.itens.length)} lançamentos${extras.length ? ` · ${extras.join(" · ")}` : ""}.` });
+        if (alvo) router.refresh();
+        else router.push(`/painel/orcamento/${destino.id}`);
       } else {
         const { orcamentoId } = await enviarOrcamentoEmLotes({ nome: nome.trim() || "Orçamento", ano: anoNum }, preview.itens, onLote);
         router.push(`/painel/orcamento/${orcamentoId}`);
@@ -167,7 +164,7 @@ export function ImportarOrcamento({
     }
   }
 
-  const verbo = alvo ? "Substituir por" : "Importar";
+  const verbo = destino ? "Substituir por" : "Importar";
   return (
     <>
       <Modal open={launcher} onClose={() => setLauncher(false)} titulo={alvo ? `Reenviar planilha · ${alvo.nome}` : "Importar orçamento"} size="lg">
@@ -195,7 +192,7 @@ export function ImportarOrcamento({
         rodape={
           preview ? (
             enviando ? (
-              <Progress value={progresso} label={`${alvo ? "Enviando a planilha nova" : "Importando"}… ${progresso}%`} />
+              <Progress value={progresso} label={`${destino ? "Enviando a planilha nova" : "Importando"}… ${progresso}%`} />
             ) : (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button variant="ghost" onClick={() => setPreview(null)}>
@@ -214,9 +211,9 @@ export function ImportarOrcamento({
             <div className="grid gap-4 sm:grid-cols-[1fr_150px]">
               <TextField
                 label="Nome do orçamento"
-                value={nome}
+                value={destino ? destino.nome : nome}
                 onChange={(e) => setNome(e.target.value)}
-                disabled={enviando || alvo != null}
+                disabled={enviando || destino != null}
                 placeholder="Ex.: Orçamento anual"
               />
               <TextField
@@ -230,40 +227,30 @@ export function ImportarOrcamento({
               />
             </div>
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-card border border-border-2 bg-surface-2 px-4 py-3 text-sm">
-              {alvo && (
+              {destino && (
                 <div className="flex items-baseline gap-1.5">
                   <dt className="text-muted">Atual</dt>
                   <dd className="tabular-nums text-text-2">
-                    {num(alvo.totalItens)} lanç. · {brl(alvo.valorInicial)}
+                    {num(destino.totalItens)} lanç. · {brl(destino.valorInicial)}
                   </dd>
                 </div>
               )}
               <div className="flex items-baseline gap-1.5">
-                <dt className="text-muted">{alvo ? "Nova planilha" : "Lançamentos"}</dt>
+                <dt className="text-muted">{destino ? "Nova planilha" : "Lançamentos"}</dt>
                 <dd className="font-semibold tabular-nums text-text">
-                  {alvo ? `${num(preview.itens.length)} lanç. · ${brl(preview.total)}` : num(preview.itens.length)}
+                  {destino ? `${num(preview.itens.length)} lanç. · ${brl(preview.total)}` : num(preview.itens.length)}
                 </dd>
               </div>
-              {!alvo && (
+              {!destino && (
                 <div className="flex items-baseline gap-1.5">
                   <dt className="text-muted">Dotação inicial</dt>
                   <dd className="font-semibold tabular-nums text-text">{brl(preview.total)}</dd>
                 </div>
               )}
             </dl>
-            {visoesAfetadas.length > 0 && (
-              <Callout kind="warn">
-                <p>
-                  Com a planilha nova, {visoesAfetadas.length === 1 ? "esta visão fica" : "estas visões ficam"} com valores que não existem mais
-                  (deixam de contar esses lançamentos — ajuste em Visões depois de substituir):
-                </p>
-                <ul className="mt-1 list-disc pl-5 text-[13px]">
-                  {visoesAfetadas.map(({ v, n }) => (
-                    <li key={v.id}>
-                      <b>{v.nome}</b> — {num(n)} valor(es){v.pcas?.length ? ` · usada por ${v.pcas.join("; ")}` : ""}
-                    </li>
-                  ))}
-                </ul>
+            {destino && !alvo && (
+              <Callout kind="info">
+                Já existe o orçamento de {destino.ano} ("{destino.nome}") — a planilha nova SUBSTITUI os lançamentos dele (um ano tem um só orçamento).
               </Callout>
             )}
             {preview.faltam.length > 0 && (

@@ -89,7 +89,7 @@ export async function substituirOrcamentoEmLotes(
   alvo: { id: number; nome: string; ano: number },
   itens: OrcamentoItemImport[],
   onLote?: (enviados: number, total: number) => void,
-): Promise<void> {
+): Promise<{ excluidos: number; visoesAdaptadas: number }> {
   const { orcamentoId: origemId } = await enviarOrcamentoEmLotes({ nome: `${alvo.nome} (reenvio)`.slice(0, 200), ano: alvo.ano }, itens, onLote);
   let res: Response | null = null;
   try {
@@ -101,9 +101,12 @@ export async function substituirOrcamentoEmLotes(
   } catch {
     res = null;
   }
-  const j = res ? ((await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null) : null;
+  const j = res
+    ? ((await res.json().catch(() => null)) as { ok?: boolean; error?: string; excluidos?: number; visoesAdaptadas?: number } | null)
+    : null;
   if (!res?.ok || !j?.ok) {
     await apagarOrcamento(origemId);
     throw new Error(j?.error ?? "Não foi possível substituir a planilha — o orçamento anterior foi mantido.");
   }
+  return { excluidos: Number(j.excluidos ?? 0), visoesAdaptadas: Number(j.visoesAdaptadas ?? 0) };
 }

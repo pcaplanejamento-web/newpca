@@ -1976,7 +1976,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Schemas em `pca-espaco-validation.ts`. **A capa NÃO trafega nas listas:** `PcaEspaco.capa` é a URL **`GET /api/pca/[id]/capa?v=`**
   (versão = `atualizado_em` + tamanho; cache `immutable`, como a foto do usuário); `PcaCapa` dimensiona o ano por container query
   (`cqw`) — cabe no card e na miniatura do cabeçalho.
-- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: a **ENGRENAGEM** (só ícone, quem Configura o PCA, na linha de controles das duas vistas)
+- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca` — SEM avisos no topo (a prévia vira o hint do KPI "Planejado no PCA"; sem orçamento do ano,
+  a tabela diz no vazio): a **ENGRENAGEM** (só ícone, quem Configura o PCA, no FIM da linha de controles, à direita — no
+  PCA × Orçamento depois do Relatório; no Comparativo pelo slot `OrcamentoComparativo.fim`; ponto âmbar = a visão tem
+  valores fora deste orçamento)
   abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
   os lançamentos do orçamento do ano (os do Comparativo — sem consulta nova); o Comparativo acompanha a visão do PCA quando
@@ -1986,9 +1989,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   unidade pelos **Vínculos** (`orcamento_vinculos`). **A UNIDADE é o micro** (recebe os DFDs e o orçamento; a linha é
   pelo ID — `reparticoes.id` —, nunca pela sigla) e **o ÓRGÃO é a soma** das unidades dele: "Ver por" **Unidade | Órgão**
   (`comparativoPorOrgao`/`origemDoOrgao`, a origem soma igual à linha); na visão Unidade, a coluna Órgão + o selo "Oculta"
-  (duas unidades de MESMA sigla — ex.: a própria de um órgão dual — aparecem distintas). **`siglasDivididas`** acusa a
-  sigla com os DFDs numa unidade e o CUBO noutra (vínculo errado) num `Callout` com o link para Orçamento → Vínculos (cujo
-  seletor mostra o órgão quando a sigla se repete). **RELATÓRIO DA COMPOSIÇÃO (PDF A4, didático):** o botão
+  (duas unidades de MESMA sigla — ex.: a própria de um órgão dual — aparecem distintas). **RELATÓRIO DA COMPOSIÇÃO (PDF A4, didático):** o botão
   "Relatório da composição (PDF)" na linha de controles do PCA × Orçamento (quem Exporta no PCA) → `GET
   /api/pca/[id]/orcamento/relatorio` (`relatorioOrcamentoDoPca`, a MESMA base do comparativo — `baseOrcamentoPca` em
   `pca-espaco.ts`) → núcleo PURO **`orcamento-relatorio.ts`** (`relatorioOrcamentoPca` + `blocosRelatorioOrcamento`, testado):
@@ -2039,8 +2040,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ou texto mudado — esses valores não contam nada): na aba Visões (coluna Filtros "· N ausente(s)" + coluna **PCAs** que a
   usam — `listarVisoesOrcamento` traz `pcas`), no editor (**`EditorVisaoOrcamento`**, DS — o MESMO na aba Visões e na
   engrenagem do PCA: os PCAs que a usam, os ausentes com "Remover ausentes" — a dimensão que esvaziaria confirma —, prévia
-  do Σ), na prévia do REENVIO da planilha (`ImportarOrcamento visoes` — as visões que perdem valores, aviso) e no orçamento
-  do PCA (`orcamentoDoPca.ausentes` → Callout "Ajustar a visão"). Excluir uma visão diz quais PCAs voltam ao orçamento
+  do Σ), e no orçamento do PCA (`orcamentoDoPca.ausentes` → o ponto da engrenagem). **REIMPORTAR = SUBSTITUIR + VISÕES QUE SE
+  ADAPTAM:** a substituição (`POST /api/orcamento/[id]/substituir`) roda **`adaptarVisao(filtros, lançamentos novos)`**
+  (puro, testado) em todas as visões: o valor que o QDD novo não traz ganha o EQUIVALENTE único na mesma dimensão — o mesmo
+  CÓDIGO (antes do " - ") ou o mesmo NOME (código novo) — ACRESCENTADO (nunca tira: a visão é global e o valor ausente não
+  soma nada); ambíguo/sem equivalente = não mexe; auditoria "adaptada ao QDD novo". Excluir uma visão diz quais PCAs voltam ao orçamento
   inteiro (confirmação e auditoria).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
@@ -2204,7 +2208,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   SÓ os **cards 4:5** (`OrcamentoCard` — SÓ INFORMAÇÃO, sem imagem: ano + nome; **dotação ATUALIZADA** (inicial +
   suplementação − anulação) com a barra do **% empenhado**; empenhado e saldo; rodapé órgãos · unidades · lançamentos ·
   data) numa grade compacta (2 colunas no celular → 6 no 2xl) + o card **"+"** (`OrcamentoNovoCard`, editor) que importa
-  o `.xlsx` (`Dropzone` → prévia com **Nome + Ano** obrigatório → grava → **abre a tela do orçamento novo**). O fluxo de
+  o `.xlsx` (`Dropzone` → prévia com **Nome + Ano** obrigatório → grava → **abre a tela do orçamento novo**). **UM ano = UM
+  orçamento:** no "+", um ano que já existe (`ImportarOrcamento existentes` — todos, sem o filtro do cabeçalho) vira a
+  SUBSTITUIÇÃO daquele orçamento (o fluxo do Reenviar); e `comandosSubstituirLancamentos` apaga, no MESMO lote, os demais
+  orçamentos do ano (duplicatas antigas + lançamentos) — nada residual; a resposta diz quantos e quantas visões adaptou. O fluxo de
   importação é UM contêiner, **`ImportarOrcamento`** (lançador + prévia + lotes com progresso + avisos flutuantes; cada
   valor novo de `iniciar` abre o lançador — o mecanismo da Mesa), nos dois modos: **novo** e **reenvio** (`alvo`). Os
   indicadores vêm de UMA agregação no banco (`selecionarResumos` em `orcamento.ts`: `listarOrcamentos`/`getOrcamento`, sem

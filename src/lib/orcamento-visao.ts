@@ -187,3 +187,47 @@ export function semAusentes(filtros: FiltrosVisao, ausentes: AusentesVisao): { f
   }
   return { filtros: out, esvaziadas };
 }
+
+/** "215 - TRANSFERÊNCIA …" → código "215" e nome "TRANSFERENCIA …" (sem acento/caixa); sem " - ", o texto é o nome. */
+function partesValor(v: string): { codigo: string | null; nome: string } {
+  const m = /^\s*([0-9][0-9.\-/]*)\s+-\s+(.+)$/.exec(v);
+  return m ? { codigo: m[1].replace(/\D/g, ""), nome: norm(m[2]) } : { codigo: null, nome: norm(v) };
+}
+
+/** Um valor da visão que ganhou o EQUIVALENTE nos dados novos. */
+export type TrocaVisao = { dimensao: DimensaoVisao; rotulo: string; de: string; para: string };
+
+/**
+ * ADAPTA a visão aos DADOS NOVOS (QDD reenviado) com segurança: para cada valor escolhido que os lançamentos novos não
+ * trazem, procura UM equivalente na mesma dimensão — o mesmo CÓDIGO (antes do " - ") ou, sem ele, o mesmo NOME — e o
+ * ACRESCENTA (OU dentro da dimensão). Nunca tira valor: a visão é global (o valor antigo pode valer para o orçamento de
+ * outro ano) e um valor ausente não soma nada. Ambíguo (2+ candidatos) ou sem equivalente = não mexe.
+ */
+export function adaptarVisao(filtros: FiltrosVisao, linhas: LinhaOrcamentoVisao[]): { filtros: FiltrosVisao; trocas: TrocaVisao[] } {
+  const out: FiltrosVisao = { ...filtros };
+  const trocas: TrocaVisao[] = [];
+  for (const d of DIMENSOES_VISAO) {
+    const vals = filtros[d.key];
+    if (!vals?.length) continue;
+    const distintos = new Map<string, string>();
+    for (const l of linhas) {
+      const v = valorDimensao(l, d.key);
+      if (v !== "—") distintos.set(norm(v), v);
+    }
+    const candidatos = [...distintos.values()].map((v) => ({ v, ...partesValor(v) }));
+    const lista = [...vals];
+    const tem = new Set(lista.map(norm));
+    for (const v of vals) {
+      if (distintos.has(norm(v))) continue;
+      const p = partesValor(v);
+      const porCodigo = p.codigo ? candidatos.filter((c) => c.codigo === p.codigo) : [];
+      const achados = porCodigo.length ? porCodigo : candidatos.filter((c) => c.nome === p.nome);
+      if (achados.length !== 1 || tem.has(norm(achados[0].v))) continue;
+      lista.push(achados[0].v);
+      tem.add(norm(achados[0].v));
+      trocas.push({ dimensao: d.key, rotulo: d.rotulo, de: v, para: achados[0].v });
+    }
+    out[d.key] = lista;
+  }
+  return { filtros: out, trocas };
+}

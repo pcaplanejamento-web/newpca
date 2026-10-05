@@ -201,7 +201,7 @@ export function OrcamentoLancamentos({
           <div />
         )}
       </Modal>
-      {pode.importar && <ImportarOrcamento iniciar={reenviar} alvo={orcamento} visoes={visoes} />}
+      {pode.importar && <ImportarOrcamento iniciar={reenviar} alvo={orcamento} />}
     </>
   );
 }

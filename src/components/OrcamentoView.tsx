@@ -17,12 +17,15 @@ export function OrcamentoView({
   orcamentos,
   podeImportar,
   filtro = null,
+  existentes = orcamentos,
 }: {
   orcamentos: OrcamentoResumo[];
   /** O papel importa no Orçamento (o card "+" e a importação). */
   podeImportar: boolean;
   /** PCA escolhido no CABEÇALHO (filtro global) — só os orçamentos do ano dele vieram. */
   filtro?: string | null;
+  /** TODOS os orçamentos (sem o filtro do cabeçalho) — importar um ano que já existe o substitui. */
+  existentes?: OrcamentoResumo[];
 }) {
   const [importar, setImportar] = useState(0); // cada valor novo abre o lançador (ImportarOrcamento)
   const totalLancamentos = orcamentos.reduce((s, o) => s + o.totalItens, 0);
@@ -52,7 +55,7 @@ export function OrcamentoView({
         </div>
       )}
 
-      {podeImportar && <ImportarOrcamento iniciar={importar} />}
+      {podeImportar && <ImportarOrcamento iniciar={importar} existentes={existentes} />}
     </div>
   );
 }

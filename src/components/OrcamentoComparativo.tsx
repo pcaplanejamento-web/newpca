@@ -78,6 +78,7 @@ export function OrcamentoComparativo({
   padroes,
   visaoInicial = null,
   inicio,
+  fim,
   onMudarEdicoes,
   podeExportar = true,
   podePublicar = false,
@@ -96,6 +97,8 @@ export function OrcamentoComparativo({
   visaoInicial?: number | null;
   /** Controles do HOST no início da linha dos seletores (ex.: a troca de visão da aba Orçamento do PCA). */
   inicio?: ReactNode;
+  /** Controles do HOST no FIM da linha, à direita (ex.: a engrenagem da visão do orçamento do PCA). */
+  fim?: ReactNode;
   /** Quem guarda as edições FORA (a tabela remonta ao trocar de vista e volta com as edições novas). */
   onMudarEdicoes?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
   /** O papel exporta nesta tela (o XLSX da tabela cruzada). */
@@ -402,6 +405,7 @@ export function OrcamentoComparativo({
               abre nela) e exclui as suas. Cada par de colunas tem as suas edições.
             </TopicoAjuda>
           </Ajuda>
+          {fim}
         </div>
       </div>
 

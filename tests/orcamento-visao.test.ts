@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { aplicarVisao, coerceFiltros, contarAusentes, DIMENSOES_DO_VINCULO, DIMENSOES_VISAO, opcoesDaDimensao, resumoVisao, semAusentes, valoresAusentes } from "../src/lib/orcamento-visao.ts";
+import { adaptarVisao, aplicarVisao, coerceFiltros, contarAusentes, DIMENSOES_DO_VINCULO, DIMENSOES_VISAO, opcoesDaDimensao, resumoVisao, semAusentes, valoresAusentes } from "../src/lib/orcamento-visao.ts";
 import { comparativoPorUnidade, faixaComprometimento, linhaAcima, origemDaLinha, totaisComparativo } from "../src/lib/orcamento-comparativo.ts";
 
 const L = [
@@ -137,5 +137,37 @@ describe("sincronia visão × orçamento (reenvio do QDD)", () => {
     assert.deepEqual(r.filtros, { nomeElemento: ["MATERIAL DE CONSUMO"] });
     assert.deepEqual(r.esvaziadas, ["Fonte de recurso"]);
     assert.deepEqual(f.fonte, ["999 - EXTINTA"], "não muda a entrada");
+  });
+});
+
+describe("adaptarVisao — o QDD reenviado com textos novos", () => {
+  const novas = [
+    { fonte: "215 - TRANSF. FNDE", nomeElemento: "3.3.90.30 - MATERIAL DE CONSUMO" },
+    { fonte: "1500 - RECURSOS NÃO VINCULADOS DE IMPOSTOS", nomeElemento: "OBRAS E INSTALAÇÕES" },
+    { fonte: "300 - A", nomeElemento: "X" },
+    { fonte: "300 - B", nomeElemento: "Y" },
+  ];
+  it("acrescenta o equivalente pelo código ou pelo nome, sem tirar o antigo", () => {
+    const f = {
+      fonte: ["215 - TRANSFERÊNCIA DE RECURSOS DO FNDE", "200 - Recursos não vinculados de impostos"],
+      nomeElemento: ["4.4.90.51 - OBRAS E INSTALACOES"],
+    };
+    const r = adaptarVisao(f, novas);
+    // 215 = o mesmo código (nome novo); 200 → 1500 = o mesmo nome (código novo, como a troca das fontes); elemento pelo nome.
+    assert.deepEqual(r.filtros.fonte, [
+      "215 - TRANSFERÊNCIA DE RECURSOS DO FNDE",
+      "200 - Recursos não vinculados de impostos",
+      "215 - TRANSF. FNDE",
+      "1500 - RECURSOS NÃO VINCULADOS DE IMPOSTOS",
+    ]);
+    assert.deepEqual(r.filtros.nomeElemento, ["4.4.90.51 - OBRAS E INSTALACOES", "OBRAS E INSTALAÇÕES"]);
+    assert.equal(r.trocas.length, 3);
+    assert.equal(aplicarVisao(novas, r.filtros).length, 1, "a visão adaptada pega o lançamento novo equivalente");
+  });
+  it("ambíguo, sem equivalente ou já presente: não mexe", () => {
+    const f = { fonte: ["300 - C", "999 - EXTINTA", "215 - TRANSF. FNDE"] };
+    const r = adaptarVisao(f, novas);
+    assert.deepEqual(r.filtros, f);
+    assert.deepEqual(r.trocas, []);
   });
 });

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
 import { blocosRelatorioOrcamento, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
@@ -16,7 +15,6 @@ import {
   origemDoOrgao,
   rotuloUnidadeComparativo,
   SEM_VINCULO,
-  siglasDivididas,
   type UnidadeRef,
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
@@ -29,7 +27,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useQuemExporta } from "./ConfigTabelas";
 import { type Column, DataTable } from "./DataTable";
-import { IconFile, IconInfo, IconSettings } from "./icons";
+import { IconFile, IconSettings } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
@@ -230,7 +228,7 @@ function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
     }
   }
   return (
-    <Button size="sm" variant="secondary" className="ml-auto" icon={<IconFile className="h-4 w-4" />} loading={gerando} onClick={gerar}>
+    <Button size="sm" variant="secondary" icon={<IconFile className="h-4 w-4" />} loading={gerando} onClick={gerar}>
       Relatório da composição (PDF)
     </Button>
   );
@@ -294,7 +292,6 @@ export function OrcamentoPca({
   const [nivel, setNivel] = useState<Nivel>("unidade");
   const [aberta, setAberta] = useState<LinhaTabela | null>(null);
   const porUnidade = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
-  const divididas = useMemo(() => siglasDivididas(porUnidade), [porUnidade]);
   const linhas = useMemo<LinhaTabela[]>(
     () =>
       nivel === "orgao"
@@ -427,74 +424,24 @@ export function OrcamentoPca({
     />
   );
   const comprometido = t.comprometido;
+  // A engrenagem fica no FIM da linha de controles (à direita); o ponto âmbar = a visão tem valores que este orçamento não traz.
+  const tituloVisao = ausentes > 0 ? `Visão do orçamento do PCA — ${num(ausentes)} valor(es) da visão fora deste orçamento` : "Visão do orçamento do PCA";
   const botaoVisao = podePublicar && (
-    <Button
-      size="sm"
-      variant="icon"
-      aria-label="Visão do orçamento do PCA"
-      title="Visão do orçamento do PCA"
-      icon={<IconSettings className="h-4 w-4" />}
-      onClick={() => setEngrenagem(true)}
-    />
+    <span className="relative inline-flex">
+      <Button size="sm" variant="icon" aria-label={tituloVisao} title={tituloVisao} icon={<IconSettings className="h-4 w-4" />} onClick={() => setEngrenagem(true)} />
+      {ausentes > 0 && <span aria-hidden className="pointer-events-none absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />}
+    </span>
   );
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      {!dados.orcamento && (
-        <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
-          Nenhum orçamento de {dados.ano} importado — importe o CUBO em Orçamento para comparar.
-        </Callout>
-      )}
-      {dados.previa && (
-        <Callout kind="info" icon={<IconInfo className="h-4 w-4" />}>
-          <b>Prévia do PCA</b> — o planejado inclui {num(dados.previa.dfds)} DFD(s) de {num(dados.previa.protocolos)} protocolo(s) ainda NÃO
-          incorporados (enviados à Mesa do PCA e marcados na Mesa do sistema). Só no painel, com o PCA em Preview.
-        </Callout>
-      )}
-      {ausentes > 0 && (
-        <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
-          A visão <b>{dados.visaoNome}</b> tem {num(ausentes)} valor(es) que o orçamento atual não traz (o QDD foi reenviado ou o texto
-          mudou) — eles não contam nada:{" "}
-          {(dados.ausentes ?? []).map((a) => `${a.rotulo}: ${a.valores.join("; ")}`).join(" · ")}.
-          {podePublicar && (
-            <>
-              {" "}
-              <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => setEngrenagem(true)}>
-                Ajustar a visão
-              </button>
-            </>
-          )}
-        </Callout>
-      )}
-      {divididas.length > 0 && (
-        <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
-          <div className="space-y-1">
-            {divididas.map((d) => (
-              <p key={d.sigla}>
-                <b>{d.sigla}</b> está em {num(d.comPlanejado.length + d.comOrcamento.length)} unidades: as contratações estão em{" "}
-                <b>{d.comPlanejado.map(rotuloUnidadeComparativo).join("; ")}</b> e o orçamento está vinculado a{" "}
-                <b>{d.comOrcamento.map(rotuloUnidadeComparativo).join("; ")}</b>. A unidade recebe os DFDs e o orçamento — vincule o
-                CUBO à unidade que recebe os DFDs.
-              </p>
-            ))}
-            {dados.orcamento && (
-              <Link
-                href={`/painel/orcamento/${dados.orcamento.id}?aba=vinculos`}
-                className="inline-flex min-h-11 items-center font-semibold text-accent underline-offset-2 hover:underline lg:min-h-0"
-              >
-                Corrigir em Orçamento → Vínculos
-              </Link>
-            )}
-          </div>
-        </Callout>
-      )}
       <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
         <StatMini
           label={`Dotação ${dados.ano}${dados.visaoNome ? ` · ${dados.visaoNome}` : ""}`}
           value={brlCompact(dados.filtrado)}
           hint={`${dados.orcamento ? `${dados.orcamento.nome} · ` : ""}${dados.visaoNome ? `bruta ${brlCompact(dados.bruto)}` : "orçamento inteiro"}`}
         />
-        <StatMini label="Planejado no PCA" value={brlCompact(t.planejado)} tone="accent" hint="itens ativos" />
+        <StatMini label="Planejado no PCA" value={brlCompact(t.planejado)} tone="accent" hint={dados.previa ? `itens ativos · prévia: ${num(dados.previa.dfds)} DFD(s) não incorporados` : "itens ativos"} />
         <StatMini label="Saldo" value={brlCompact(t.saldo)} tone={t.saldo < 0 ? "danger" : "ok"} hint="dotação − planejado" />
         <StatMini
           label="Comprometido"
@@ -510,12 +457,8 @@ export function OrcamentoPca({
           edicoes={edicoesComp?.lista ?? comparativo.edicoes}
           padroes={edicoesComp?.padroes ?? comparativo.padroes}
           onMudarEdicoes={(lista, padroes) => setEdicoesComp({ lista, padroes })}
-          inicio={
-            <>
-              {trocaVista}
-              {botaoVisao}
-            </>
-          }
+          inicio={trocaVista}
+          fim={botaoVisao}
           podeExportar={podeExportar}
           podePublicar={podePublicar}
         />
@@ -523,7 +466,6 @@ export function OrcamentoPca({
         <>
           <div className="flex flex-wrap items-center gap-2">
             {trocaVista}
-            {botaoVisao}
             <Segmented<Nivel>
               value={nivel}
               onChange={(n) => {
@@ -546,7 +488,10 @@ export function OrcamentoPca({
                 { value: "dentro", label: `Dentro (${linhas.length - acima.length})` },
               ]}
             />
-            {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
+            <div className="flex items-center gap-2 lg:ml-auto">
+              {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
+              {botaoVisao}
+            </div>
           </div>
           <DataTable
             columns={cols}
@@ -558,7 +503,7 @@ export function OrcamentoPca({
             exportar={{ nome: `PCA × Orçamento ${dados.ano ?? ""} - por ${nivel === "orgao" ? "órgão" : "unidade"}` }}
             onRowClick={setAberta}
             activeKey={aberta?.chave ?? null}
-            vazio="Nada a comparar nesta visão."
+            vazio={dados.orcamento ? "Nada a comparar nesta visão." : `Nenhum orçamento de ${dados.ano} importado — importe o CUBO em Orçamento para comparar.`}
             resumo={(ls) =>
               `${ls.length} ${nivel === "orgao" ? "órgão(s)" : "unidade(s)"} · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`
             }
