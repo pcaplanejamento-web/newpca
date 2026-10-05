@@ -166,27 +166,26 @@ export function EditorVinculoOrcamento({
                 : "Incluir as demais ações (também as que vierem nos próximos orçamentos)"
             }
           />
-          <div className="rounded-card border border-border">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-              <span className="text-[12.5px] font-semibold text-text-2">
-                Ações da unidade ({num(leva.length)} de {num(unidade.acoes.length)} marcadas)
-              </span>
-              <span className="flex gap-1">
-                <Button size="xs" variant="ghost" disabled={salvando} onClick={() => setMarcadas(new Set(disponiveis.map((a) => a.chave)))}>
-                  Marcar todas
-                </Button>
-                <Button size="xs" variant="ghost" disabled={salvando} onClick={() => setMarcadas(new Set())}>
-                  Desmarcar todas
-                </Button>
+          <div className="overflow-hidden rounded-card border border-border">
+            <div className="flex min-h-11 items-center justify-between gap-2 border-b border-border bg-surface-2 px-3 lg:min-h-[var(--h-control-sm)]">
+              <Checkbox
+                checked={disponiveis.length > 0 && leva.length === disponiveis.length}
+                indeterminado={leva.length > 0}
+                disabled={salvando || disponiveis.length === 0}
+                onChange={(e) => setMarcadas(new Set(e.target.checked ? disponiveis.map((x) => x.chave) : []))}
+                label={<span className="text-[12.5px] font-semibold text-text-2">Ações deste vínculo</span>}
+              />
+              <span className="text-[12px] tabular-nums text-muted">
+                {num(leva.length)} de {num(disponiveis.length)}
               </span>
             </div>
             <ul className="max-h-72 divide-y divide-border overflow-y-auto">
-              {unidade.acoes.map((a) => {
+              {[...disponiveis, ...unidade.acoes.filter((x) => destinoOutro.has(x.chave))].map((a, i) => {
                 const outro = destinoOutro.get(a.chave);
                 const marcada = outro == null && marcadas.has(a.chave);
                 const nota = outro != null ? `vai para ${siglaDe(outro)}` : marcada ? null : (destinoDesmarcada(a.chave) ?? "sem vínculo");
                 return (
-                  <li key={a.chave} className="flex items-center gap-3 px-3 py-1.5">
+                  <li key={a.chave} className={`flex items-center gap-3 px-3 py-1.5 ${outro != null && i === disponiveis.length ? "border-t-2 border-border" : ""}`}>
                     <span className="min-w-0 flex-1">
                       <Checkbox
                         checked={marcada || outro != null}
@@ -234,14 +233,22 @@ export function EditorVinculoOrcamento({
       )}
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         {onExcluir && (
-          <Button variant="danger" className="mr-auto" disabled={salvando} icon={<IconTrash className="h-4 w-4" />} onClick={onExcluir}>
-            Excluir vínculo
-          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="mr-auto"
+            disabled={salvando}
+            aria-label="Excluir vínculo"
+            title="Excluir vínculo"
+            icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+            onClick={onExcluir}
+          />
         )}
-        <Button variant="secondary" disabled={salvando} onClick={onFechar}>
+        <Button size="sm" variant="ghost" disabled={salvando} onClick={onFechar}>
           Cancelar
         </Button>
         <Button
+          size="sm"
           loading={salvando}
           disabled={motivo != null}
           onClick={() => unidade && alvoId != null && onSalvar({ texto: unidade.texto, alvoId, acoes, acoesFora })}

@@ -19,7 +19,8 @@ import {
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
-import { semVinculo, unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { semVinculoPorAlvo, textoSemVinculo, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -299,18 +300,12 @@ export function OrcamentoPca({
   const [vinculosDe, setVinculosDe] = useState<UnidadeDaLinha | null>(null);
   const editaVinculos = podeConfigurarOrcamento && comparativo != null;
   // Ações do orçamento SEM vínculo (como na aba Vínculos): por unidade cadastrada — as das unidades do orçamento ligadas a
-  // ela — e no total (a linha "Sem vínculo"). Recalculadas na hora a cada gravação (a lista de vínculos já gravada).
+  // ela — e de todo o orçamento (a linha "Sem vínculo"). Recalculadas na hora a cada gravação (a lista já gravada).
   const semVinculoPorLinha = useMemo(() => {
-    const porAlvo = new Map<number, number>();
-    let total = 0;
-    if (!comparativo) return { porAlvo, total };
-    for (const p of semVinculo(unidadesCubo, gravacao.atuais, comparativo.alvos.unidades)) {
-      total += p.acoes.length;
-      for (const alvo of new Set(gravacao.atuais.filter((v) => v.chave === p.unidade.chave).map((v) => v.alvoId)))
-        porAlvo.set(alvo, (porAlvo.get(alvo) ?? 0) + p.acoes.length);
-    }
-    return { porAlvo, total };
-  }, [comparativo, unidadesCubo, gravacao.atuais]);
+    const porAlvo = semVinculoPorAlvo(unidadesCubo, gravacao.atuais);
+    const todas = vinculosDaLinha(unidadesCubo, gravacao.atuais, null).semVinculo;
+    return { porAlvo, todas };
+  }, [unidadesCubo, gravacao.atuais]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivel, setNivel] = useState<Nivel>("unidade");
@@ -441,15 +436,18 @@ export function OrcamentoPca({
       nowrap: true,
       render: (l) => {
         if (l.nivel !== "unidade") return null;
-        const pend = l.unidadeId == null ? semVinculoPorLinha.total : (semVinculoPorLinha.porAlvo.get(l.unidadeId) ?? 0);
+        const lista = l.unidadeId == null ? semVinculoPorLinha.todas : (semVinculoPorLinha.porAlvo.get(l.unidadeId) ?? []);
+        const pend = lista.reduce((s, p) => s + p.acoes.length, 0);
         const rotulo = l.unidadeId == null ? "Vincular as ações sem vínculo" : `Vínculos de ${l.sigla}`;
+        // A dica diz QUEM está sem vínculo (a unidade do orçamento e as ações).
+        const dica = pend > 0 ? `${rotulo} — ${num(pend)} ação(ões) sem vínculo:\n${textoSemVinculo(lista)}` : rotulo;
         return (
           <Button
             size="xs"
             variant={pend > 0 ? "secondary" : "ghost"}
             icon={<IconLink className="h-4 w-4" />}
-            aria-label={pend > 0 ? `${rotulo} — ${pend} ação(ões) sem vínculo` : rotulo}
-            title={pend > 0 ? `${rotulo} — ${pend} ação(ões) sem vínculo` : rotulo}
+            aria-label={pend > 0 ? `${rotulo} — ${num(pend)} ação(ões) sem vínculo` : rotulo}
+            title={dica}
             onClick={(e) => {
               e.stopPropagation();
               setVinculosDe({ id: l.unidadeId, sigla: l.sigla, nome: l.nome });
@@ -569,6 +567,7 @@ export function OrcamentoPca({
           unidades={unidadesCubo}
           vinculos={gravacao.atuais}
           alvos={comparativo.alvos}
+          orcamento={dados.orcamento ? `${dados.orcamento.nome} (${dados.orcamento.ano})` : String(dados.ano ?? "")}
           salvando={gravacao.salvando}
           erro={gravacao.erro}
           onCriar={gravacao.criar}

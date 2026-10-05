@@ -32,7 +32,8 @@ protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 ### Vínculos editáveis por linha no orçamento do PCA — entregue
 ✅ Coluna Vínculos em cada linha do PCA × Orçamento (por unidade) → UM banner com as unidades do orçamento da linha, a unidade
 cadastrada fixa e TODAS as ações (marcadas e desmarcadas, com o destino de cada uma); linhas com ações sem vínculo em
-destaque; a linha "Sem vínculo" lista o que falta vincular · ✅ Editor da visão mais limpo: as explicações foram para a Ajuda (?).
+destaque (a dica diz quais ações); no banner, as ações sem vínculo numa seção separada e o PDF dos vínculos da unidade; a
+linha "Sem vínculo" lista o que falta vincular · ✅ Editor da visão mais limpo: as explicações foram para a Ajuda (?).
 
 ### Reimportar o QDD substitui tudo e as visões se adaptam; aba Orçamento do PCA sem avisos — entregue
 ✅ Importar um ano que já tem orçamento SUBSTITUI o daquele ano (lançamentos antigos e duplicatas apagados num lote) ·

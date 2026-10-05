@@ -1106,6 +1106,7 @@ function VinculosDaUnidadeDemo() {
         unidades={unidades}
         vinculos={vinculos}
         alvos={alvos}
+        orcamento="CUBO 2027 (2027)"
         onCriar={ok}
         onEditar={ok}
         onExcluir={ok}

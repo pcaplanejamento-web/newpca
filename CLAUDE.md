@@ -1997,12 +1997,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   a tabela diz no vazio): a **ENGRENAGEM** (só ícone, quem Configura o PCA, no FIM da linha de controles, à direita — no
   PCA × Orçamento depois do Relatório; no Comparativo pelo slot `OrcamentoComparativo.fim`; ponto âmbar = a visão tem
   valores fora deste orçamento) + a coluna **VÍNCULOS por linha** (com Configurar no Orçamento, na visão Por unidade; a linha com ações do orçamento SEM
-  vínculo mostra "N sem vínculo" em âmbar — calculado na hora sobre os vínculos gravados): abre UM banner,
-  **`VinculosDaUnidade`** (DS) — as unidades do orçamento ligadas à unidade da linha num acordeão, cada uma abrindo ali o
-  editor com a unidade CADASTRADA FIXA (`EditorVinculoOrcamento fixo="alvo"` — a lógica invertida da aba Vínculos, que fixa
-  a unidade do orçamento) + "Adicionar unidade do orçamento"; na linha "Sem vínculo", as unidades do orçamento com ações
-  sem vínculo (`fixo="cubo"`, sugestão pré-escolhida). O editor mostra SEMPRE TODAS as ações, marcadas e desmarcadas, com o
-  destino de cada uma (este vínculo · "vai para SIGLA" · "as demais" de outra unidade · "sem vínculo" em âmbar). A gravação
+  vínculo mostra "N sem vínculo" em âmbar — calculado na hora sobre os vínculos gravados): a DICA do botão diz QUEM está sem
+  vínculo — unidade do orçamento + ações, `textoSemVinculo`) e abre UM banner, **`VinculosDaUnidade`** (DS): o resumo em
+  `StatMini` (unidades do orçamento · dotação vinculada · sem vínculo), a seção **Unidades do orçamento** (as ligadas à
+  unidade da linha num acordeão — cada uma abre ali o editor com a unidade CADASTRADA FIXA, `EditorVinculoOrcamento
+  fixo="alvo"`, a lógica invertida da aba Vínculos — + "Adicionar") e a seção **Sem vínculo** SEPARADA (as ações que nenhum
+  vínculo leva, por unidade do orçamento, em âmbar; tocar abre o editor para vinculá-las); na linha "Sem vínculo", só ela,
+  de todo o orçamento (`fixo="cubo"`, sugestão pré-escolhida); **PDF** no cabeçalho (`BotaoAcao`, com Exportar — os mesmos
+  dados: destaques, cada unidade do orçamento com a tabela Ação · Destino · Dotação e as sem vínculo). Núcleo puro
+  **`vinculos-unidade.ts`** (`vinculosDaLinha`, `semVinculoPorAlvo`, `textoSemVinculo`, `blocosVinculosDaLinha` — testado). O editor mostra SEMPRE TODAS as ações (as deste vínculo com a caixa "todas" no topo; as de outros
+  vínculos travadas, separadas abaixo), com o destino de cada uma; botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`) (este vínculo · "vai para SIGLA" · "as demais" de outra unidade · "sem vínculo" em âmbar). A gravação
   é a da aba Vínculos (`useGravacaoVinculos`, `OrcamentoVinculosAba.tsx`) → `router.refresh` (o orçamento do PCA recalcula)
   abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
