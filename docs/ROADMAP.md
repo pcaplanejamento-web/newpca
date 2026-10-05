@@ -20,6 +20,11 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Pendências padronizadas (Protocolo · DFD · Item) — entregue
+✅ Um banner único de pendências (`PainelPendencias`) nos três níveis: o protocolo soma a capa e os DFDs, o DFD soma os
+itens; tocar numa pendência leva ao lugar (abre o DFD/item e destaca o campo); copiar em Despacho, WhatsApp ou Lista; PDF
+com o conteúdo atual de cada componente (seções, capa e a tabela dos itens com a célula que falta destacada).
+
 ### Rodapés dos banners em uma linha — entregue
 ✅ Protocolo, DFD e item (Mesa, análise e consulta pública): rodapé em UMA linha com botões só de ícone (`BotaoAcao`), o
 indicador ÚNICO de erros/atenção (`IndicadorPendencias`), Reenviar protocolo e Sobrescrever DFD em preto, Histórico e

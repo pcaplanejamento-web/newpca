@@ -7,7 +7,7 @@ import { toast } from "./Toast";
 
 /** Copia um texto para a área de transferência: API do navegador e, sem permissão, o fallback clássico
  * (textarea + `execCommand`). `true` = copiado. */
-async function copiarTexto(texto: string): Promise<boolean> {
+export async function copiarTexto(texto: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(texto);
     return true;

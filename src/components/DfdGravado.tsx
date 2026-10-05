@@ -5,7 +5,7 @@ import { classificarAssunto, importarDfdHabilitado, type RegrasAvaliacao } from 
 import { estadoDeMensagens, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { detalheParaParseado, diffDfdGravado } from "@/lib/dfd-edicao";
-import { editarItemDfd, indiceAposRemover, removerItemDfd, STATUS_MENSAGEM_COR, unificarItensDfd } from "@/lib/dfd-tratamento";
+import { editarItemDfd, indiceAposRemover, removerItemDfd, unificarItensDfd } from "@/lib/dfd-tratamento";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
 import { avisoIncorporado } from "@/lib/pca-numeracao-core";
@@ -15,6 +15,7 @@ import { podeRevisarItens, resumoRevisao, revisarDfd } from "@/lib/revisao-dfd";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
 import { BotaoAcao } from "./BotaoAcao";
 import { Callout } from "./Callout";
+import type { AncoraAlvo } from "./DestaqueAncora";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd, useRepetidosDoItem } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
@@ -121,6 +122,8 @@ export function useDfdGravado({
   const [itensEditados, setItensEditados] = useState(false);
   const [painel, setPainel] = useState<PainelDfd | null>(null);
   const [itemIdx, setItemIdx] = useState<number | null>(null);
+  // O campo com pendência a destacar no banner do item (levado pelo painel de pendências do DFD).
+  const [destaqueItem, setDestaqueItem] = useState<AncoraAlvo | null>(null);
   const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
   const [salvando, setSalvando] = useState(false);
   // SOBRESCRITA em andamento (lançador/leitura/escolha/gravação): o banner fica só-leitura até terminar.
@@ -455,7 +458,7 @@ export function useDfdGravado({
         dfd={dfd}
         numero={numero}
         mensagens={mensagens}
-        onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
+        onIrPara={(a) => setAncoraAlvo({ ...a, nonce: Date.now() })}
         conformidade={conformidade}
         regras={regras}
         editavel={editavel && !travado}
@@ -465,7 +468,13 @@ export function useDfdGravado({
           editar((d) => removerItemDfd(d, i), true);
         }}
         onUnificarItens={(k, outros) => editar((d) => unificarItensDfd(d, k, outros), true)}
-        onPainel={setPainel}
+        onPainel={(p) => {
+          // No banner SÓ do item a coluna da direita é o item: uma pendência de item troca o ITEM exibido (com o campo).
+          if (!modoItem || p.tipo !== "item") return setPainel(p);
+          setItemIdx(p.idx);
+          setDestaqueItem(p.destaque ?? null);
+          setPainel(null);
+        }}
         categoria={categoria}
         dfdId={orig?.id ?? null}
       />
@@ -511,6 +520,9 @@ export function useDfdGravado({
         <ItemDetalhe
           key={`${versao}:${itemIdx}`}
           item={it}
+          idx={itemIdx}
+          dfdRef={{ numero: dfd.numero, planejamento: dfd.planejamento }}
+          destaque={destaqueItem}
           conformidade={conformidade}
           regras={regras}
           tipo={dfd.tipo}

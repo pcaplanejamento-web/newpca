@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConciliacaoCapa } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
@@ -9,6 +9,7 @@ import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { CampoCongelado, CampoNumero, CampoSelecao, CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
+import { type AncoraAlvo, useDestaqueAncora } from "./DestaqueAncora";
 import { TextField } from "./Field";
 import { inputCls, labelCls, selectCls } from "./formStyles";
 import { IconAlert } from "./icons";
@@ -236,6 +237,7 @@ export function ProtocoloView({
   sobrescritos = [],
   onVerProtocolo,
   acaoDescartados,
+  destaque = null,
 }: {
   capa: CapaValores;
   modoCapa?: ModoCapa;
@@ -283,14 +285,18 @@ export function ProtocoloView({
   onVerProtocolo?: (protocoloId: number) => void;
   /** (análise) Ação da tabela dos DFDs FORA do envio — ex.: "Restaurar excluídos". */
   acaoDescartados?: ReactNode;
+  /** Leva à capa e a destaca (o painel de pendências do protocolo — a conciliação do valor). */
+  destaque?: AncoraAlvo | null;
 }) {
+  const raizRef = useRef<HTMLDivElement>(null);
+  useDestaqueAncora(raizRef, destaque);
   const repSel = unidade.opcoes.find((r) => r.id === unidade.id) ?? null;
   // CONSULTA (público): sem conciliação/estado/rastro — só os dados, congelados.
   const consulta = modoCapa === "consulta";
   const c = conciliacao;
   const sob = totais.sobrescritos && totais.sobrescritos.qtd > 0 ? totais.sobrescritos : null;
   return (
-    <div className="space-y-[var(--gap-block)]">
+    <div ref={raizRef} className="space-y-[var(--gap-block)]">
       {topo}
       {/* Head — mini banners (um por informação): DFDs · itens · somatória. 2-up no mobile. */}
       {(totais.dfds > 0 || sob) && (
@@ -309,6 +315,7 @@ export function ProtocoloView({
 
       {/* Conciliação do VALOR DA CAPA × somatória (mesma régua da análise e do gravado). */}
       {c.divergente && !consulta && (
+        <div data-ancora="capa">
         <Callout kind={c.bloqueia ? "danger" : "warn"} icon={<IconAlert className="h-5 w-5" />}>
           <p className="font-semibold">
             {c.zerada ? "O valor da capa está ausente/zerado" : "O valor da capa diverge da somatória dos DFDs"}
@@ -326,6 +333,7 @@ export function ProtocoloView({
             </div>
           )}
         </Callout>
+        </div>
       )}
 
       {/* Dados da capa — MESMA grade (`CapaCampos`); identificadores sempre travados; conteúdo com

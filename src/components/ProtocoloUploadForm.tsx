@@ -45,14 +45,12 @@ import {
   editarItemDfd,
   faltasCirurgicasDfd,
   gruposAssinatura,
-  linhasRelatorioProtocolo,
   type MensagemDfd,
   motivoDuplicidade,
   normalizarSecoesDfd,
   prioridadeDoDfd,
   removerItemDfd,
   resumoEstado,
-  STATUS_MENSAGEM_COR,
   unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
@@ -61,6 +59,7 @@ import { encerrarOcr } from "@/lib/ocr-assinatura";
 import { mesclarAssinaturasOcr, precisaOcr } from "@/lib/ocr-assinatura-core";
 import { mensagemSemPermissao, telaDoRecurso } from "@/lib/papeis-core";
 import { type Assinatura, type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type AlvoPendencia, type DfdPendente, pendenciaDaCapa, pendenciasDoDfd, type ProtocoloPendente } from "@/lib/pendencias-core";
 import {
   indexarProtocoloPdf,
   ocrAssinaturasEmPaginas,
@@ -98,7 +97,8 @@ import { IndicadorPendencias } from "./IndicadorPendencias";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
 import { IconAlert, IconArquivar, IconCheck, IconClipboard, IconCompare, IconFile, IconMerge, IconRefresh, IconSpinner, IconTrash, IconUndo, IconUpload } from "./icons";
-import { Modal } from "./Modal";
+import { Modal, type ModalPainel } from "./Modal";
+import { PainelPendencias } from "./PainelPendencias";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import type { LinhaDfd, ProcessandoDfd } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
@@ -106,6 +106,8 @@ import { ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { RelatorioErros } from "./RelatorioErros";
 import { toast } from "./Toast";
 import { useConformidade } from "./useConformidade";
+import type { AncoraAlvo } from "./DestaqueAncora";
+import { ehDesktop } from "./espacamento";
 import { useSobrescrita } from "./useSobrescrita";
 
 type Rep = {
@@ -218,8 +220,9 @@ export function ProtocoloUploadForm({
   const [launcher, setLauncher] = useState(false); // banner lançador (soltar/escolher | criar manual)
   // Origem PDF → a CAPA mostra cadeado por campo nos de conteúdo; no "criar manual" os campos são inputs.
   const [origemPdf, setOrigemPdf] = useState(false);
-  const [relatorioAberto, setRelatorioAberto] = useState(false); // banner de relatório de erros
-  const [incluirAtencao, setIncluirAtencao] = useState(true); // incluir DFDs em atenção no relatório
+  // PENDÊNCIAS do protocolo (o banner único — capa + DFDs + itens) e o destaque da capa ao tocar nela.
+  const [pendAbertas, setPendAbertas] = useState(false);
+  const [destaqueCapa, setDestaqueCapa] = useState<AncoraAlvo | null>(null);
 
   // Metadados do protocolo.
   const [numero, setNumero] = useState("");
@@ -1061,7 +1064,6 @@ export function ProtocoloUploadForm({
   // Registro da seleção (chips + somatório) — as linhas marcadas, na ordem da planilha.
   const linhasSel = linhasDfd.filter((l) => sel.has(l.key));
   const linhasErro = linhasDfd.filter((l) => l.estado === "erro");
-  const linhasAtencao = linhasDfd.filter((l) => l.estado === "atencao"); // não bloqueiam (avisos)
   const dfdsComErro = linhasErro.length;
   const totalDfds = index?.dfds.length ?? 0;
   const temDfds = totalDfds > 0;
@@ -1543,10 +1545,10 @@ export function ProtocoloUploadForm({
     setAncoraAlvo(null);
   }
   /** Clique numa mensagem: rola/destaca a âncora no DFD (que segue ao lado) na cor do status. */
-  function irParaMensagem(m: { ancora: string; status: "erro" | "atencao" | "acerto" }) {
+  function irParaMensagem(a: { ancora: string; cor: string }) {
     // O DFD duplicado não tem lugar no DFD: a mensagem abre a comparação dos duplicados.
-    if (m.ancora === "duplicados") return setPainel({ tipo: "duplicados" });
-    setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() });
+    if (a.ancora === "duplicados") return setPainel({ tipo: "duplicados" });
+    setAncoraAlvo({ ...a, nonce: Date.now() });
   }
 
   /** Aplica um patch ao DFD aberto no lateral (seções/refs/cabeçalho/tipo/assinaturas) e o marca editado. */
@@ -1835,24 +1837,83 @@ export function ProtocoloUploadForm({
     const extras = (avaliacoes.get(idx)?.mensagens ?? []).filter((m) => m.status === "erro" && ERRO_EXTRA.has(m.chave)).map((m) => m.texto);
     return [...extras, ...cirurgicas];
   };
-  const temErroProto = dfdsComErro > 0 || conc.divergente;
-  const temAtencao = linhasAtencao.length > 0;
-  const temRelatorio = temErroProto || temAtencao;
-  const atencoesDe = (idx: number) => (avaliacoes.get(idx)?.mensagens ?? []).filter((m) => m.status === "atencao").map((m) => m.texto);
-  const dfdsRelatorio = [
-    ...linhasErro.map((l) => ({ numero: l.numero, planejamento: l.planejamento, tipo: parsed.get(l.key)?.tipo ?? null, faltas: faltasDoDfd(l.key) })),
-    ...(incluirAtencao
-      ? linhasAtencao.map((l) => ({ numero: l.numero, planejamento: l.planejamento, tipo: parsed.get(l.key)?.tipo ?? null, faltas: atencoesDe(l.key) }))
-      : []),
-  ];
-  const relatorioLinhas = linhasRelatorioProtocolo({
-    numero,
-    idExterno: extra.idExterno,
-    interessado: interessado || null,
-    assunto: assunto || null,
-    capaMotivo: conc.motivo,
-    dfds: dfdsRelatorio,
-  });
+  // As mensagens de cada DFD = as MESMAS da célula Estado (o aberto com o duplicado/sem acesso e o catálogo conferido).
+  const mensagensDe = (idx: number) => (idx === abertoIdx ? mensagensAberto : (avaliacoes.get(idx)?.mensagens ?? []));
+  const linhasPend = linhasDfd.filter((l) => l.estado === "erro" || l.estado === "atencao");
+  // A CONTAGEM do protocolo = a capa + a SOMA das pendências dos DFDs (o DFD ilegível conta 1 erro).
+  const contagem = { erros: conc.divergente && conc.bloqueia ? 1 : 0, atencoes: conc.divergente && !conc.bloqueia ? 1 : 0 };
+  for (const l of linhasPend) {
+    if (errosParse.has(l.key)) {
+      contagem.erros++;
+      continue;
+    }
+    for (const m of mensagensDe(l.key)) {
+      if (m.status === "erro") contagem.erros++;
+      else if (m.status === "atencao") contagem.atencoes++;
+    }
+  }
+  const temRelatorio = contagem.erros + contagem.atencoes > 0;
+  // A árvore de PENDÊNCIAS (capa + a soma dos DFDs, cada DFD a soma dos itens) — montada só com o painel aberto.
+  const pendProto: ProtocoloPendente | null = pendAbertas
+    ? {
+        numero,
+        idExterno: extra.idExterno,
+        interessado: interessado || null,
+        assunto: assunto || null,
+        capa: pendenciaDaCapa(conc, extra.valorCapa),
+        dfds: linhasPend.map((l): DfdPendente => {
+          const d = parsed.get(l.key);
+          const despacho = l.estado === "erro" ? faltasDoDfd(l.key) : undefined;
+          const motivo = errosParse.get(l.key);
+          if (!d || motivo)
+            return {
+              chave: l.key,
+              numero: l.numero,
+              planejamento: l.planejamento,
+              tipo: null,
+              status: "erro",
+              pendencias: [
+                { chave: "leitura", status: "erro", texto: `Leitura incompleta do DFD${motivo ? ` (${motivo})` : ""}.`, onde: "Leitura do PDF", alvo: { dfd: l.key, ancora: "itens" } },
+              ],
+              resumoItens: [],
+              itens: [],
+              despacho,
+            };
+          return pendenciasDoDfd(
+            { chave: l.key, numero: l.numero, planejamento: d.planejamento, tipo: d.tipo, secoes: d.secoes, itens: d.itens },
+            mensagensDe(l.key),
+            l.key === abertoIdx ? conformidade : confDe(l.key, d).conf,
+            despacho,
+          );
+        }),
+      }
+    : null;
+  /** Tocar numa pendência: a capa pulsa; a de um DFD abre o DFD ao lado no lugar (o item com o campo destacado). */
+  async function irParaPendencia(alvo: AlvoPendencia, cor: string) {
+    const nonce = Date.now();
+    if (alvo.dfd == null) {
+      if (!ehDesktop()) setPendAbertas(false); // no celular só um banner aparece: o destino vem à frente
+      return setDestaqueCapa({ ancora: alvo.ancora, cor, nonce });
+    }
+    const idx = Number(alvo.dfd);
+    setPendAbertas(false);
+    if (idx !== abertoIdx) await abrir(idx);
+    if (alvo.ancora === "duplicados") return setPainel({ tipo: "duplicados" });
+    if (alvo.item != null) {
+      setAncoraAlvo(null);
+      setPainel({ tipo: "item", idx: alvo.item, destaque: { ancora: alvo.ancora, cor, nonce } });
+    } else {
+      setPainel({ tipo: "mensagens" });
+      setAncoraAlvo({ ancora: alvo.ancora, cor, nonce });
+    }
+  }
+  const painelPendencias: ModalPainel = {
+    id: "proto-pendencias",
+    aberto: pendAbertas && !!pendProto,
+    titulo: `Pendências — Protocolo ${numero || "novo"}`,
+    onClose: () => setPendAbertas(false),
+    children: pendProto ? <PainelPendencias pendencias={pendProto} escopo="protocolo" onIrPara={(a, c) => void irParaPendencia(a, c)} /> : null,
+  };
 
   // Texto de estado do rodapé (o PROGRESSO real da análise tem precedência, com barra).
   const statusTexto = (() => {
@@ -2069,10 +2130,10 @@ export function ProtocoloUploadForm({
         size="lg"
         fecharNoBackdrop={false}
         bloqueado={importando}
-        lateral={
-          temDfds
-            ? {
-                aberto: abertoIdx >= 0,
+        paineis={[
+          ...(temDfds
+            ? [
+{ id: "lateral", aberto: abertoIdx >= 0,
                 titulo: abertoIdx >= 0 ? `DFD ${index?.dfds[abertoIdx]?.numero ?? ""}` : "DFD",
                 cabecalho:
                   abertoIdx >= 0 ? (
@@ -2177,13 +2238,8 @@ export function ProtocoloUploadForm({
                     )}
                   </div>
                 ),
-              }
-            : undefined
-        }
-        lateral2={
-          temDfds
-            ? {
-                aberto: abertoIdx >= 0 && painel != null,
+              },
+{ id: "lateral2", aberto: abertoIdx >= 0 && painel != null,
                 titulo: tituloPainelDfd(painel, dfdAberto, index?.dfds[abertoIdx]?.numero ?? ""),
                 onClose: () => setPainel(null),
                 rodape: painel?.tipo === "item" ? <RodapePainelItem onVerDfd={() => setPainel(null)} /> : undefined,
@@ -2211,9 +2267,11 @@ export function ProtocoloUploadForm({
                     duplicados={painelDuplicados}
                   />
                 ),
-              }
-            : undefined
-        }
+              },
+              ]
+            : []),
+          painelPendencias,
+        ]}
         rodape={
           <div>
             {/* Falha ao abrir um DFD / ao protocolar — aparece DENTRO do banner (antes ficava invisível). */}
@@ -2265,10 +2323,11 @@ export function ProtocoloUploadForm({
               ) : (
                 <>
                   <IndicadorPendencias
-                    erros={dfdsComErro + (conc.divergente ? 1 : 0)}
-                    atencoes={linhasAtencao.length}
-                    alvo={temErroProto ? "ver o relatório de erro" : "ver o relatório de atenção"}
-                    onClick={temRelatorio ? () => setRelatorioAberto(true) : undefined}
+                    erros={contagem.erros}
+                    atencoes={contagem.atencoes}
+                    alvo="ver as pendências do protocolo"
+                    aberto={pendAbertas}
+                    onClick={temRelatorio ? () => setPendAbertas((v) => !v) : undefined}
                   />
                   <span
                     className="min-w-0 flex-1 truncate text-[12px]"
@@ -2296,6 +2355,7 @@ export function ProtocoloUploadForm({
         {/* CORPO ÚNICO do protocolo (o MESMO do protocolo gravado): mini banners + conciliação da capa
             + dados do processo (capa com cadeado por campo) + planilha de DFDs (erro/atenção separados). */}
         <ProtocoloView
+          destaque={destaqueCapa}
           capa={{
             numero,
             idExterno: extra.idExterno,
@@ -2386,21 +2446,6 @@ export function ProtocoloUploadForm({
         />
       )}
 
-      <RelatorioErros
-        open={relatorioAberto}
-        onClose={() => setRelatorioAberto(false)}
-        titulo={`Relatório do protocolo ${numero || ""}`.trim()}
-        linhas={relatorioLinhas}
-        toggle={
-          temAtencao
-            ? {
-                label: `Incluir ${linhasAtencao.length} DFD(s) em atenção no relatório`,
-                checked: incluirAtencao,
-                onChange: setIncluirAtencao,
-              }
-            : undefined
-        }
-      />
     </>
   );
 }

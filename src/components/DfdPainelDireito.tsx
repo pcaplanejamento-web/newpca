@@ -6,12 +6,13 @@ import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import type { ComparacaoDfd } from "@/lib/comparar-protocolo";
 import { indiceAposRemover, mapaItensDuplicados, type MensagemDfd, outrosDoGrupo } from "@/lib/dfd-tratamento";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { pendenciasDoDfd } from "@/lib/pendencias-core";
 import { BotaoAcao } from "./BotaoAcao";
 import { ComparacaoDfdView, type EscolhaSobrescritaProps } from "./ComparacaoReenvio";
 import type { PainelDfd } from "./DfdConferir";
 import { Historico, useHistorico } from "./Historico";
 import { ItemDetalhe } from "./ItemDetalhe";
-import { MensagensDfd } from "./MensagensDfd";
+import { PainelPendencias } from "./PainelPendencias";
 import { IconFile, IconLayers } from "./icons";
 
 /** Título do painel da direita do DFD (mensagens / item / histórico / diferenças / duplicados). */
@@ -99,7 +100,8 @@ export function DfdPainelDireito({
   dfd: DfdParseado | null;
   numero: string;
   mensagens: MensagemDfd[];
-  onIrPara: (m: MensagemDfd) => void;
+  /** Leva à âncora do DFD (rola e destaca na cor da pendência). As de ITEM abrem o item com o campo destacado. */
+  onIrPara: (a: { ancora: string; cor: string }) => void;
   conformidade?: Map<string, ConferenciaItem>;
   regras?: RegrasAvaliacao;
   editavel?: boolean;
@@ -125,6 +127,19 @@ export function DfdPainelDireito({
   const verHistorico = painel?.tipo === "historico" && dfdId != null;
   const historico = useHistorico(verHistorico ? `/api/dfd/${dfdId}/historico` : null);
   const repetidos = useRepetidosDoItem(dfd, painel?.tipo === "item" ? painel.idx : null, regras, categoria);
+  // As PENDÊNCIAS do DFD (a soma dos itens) — montadas só com o painel de pendências aberto.
+  const verPendencias = painel == null || painel.tipo === "mensagens";
+  const pendencias = useMemo(
+    () =>
+      verPendencias && dfd
+        ? {
+            numero,
+            capa: null,
+            dfds: [pendenciasDoDfd({ chave: numero, numero, planejamento: dfd.planejamento, tipo: dfd.tipo, secoes: dfd.secoes, itens: dfd.itens }, mensagens, conformidade)],
+          }
+        : null,
+    [verPendencias, dfd, numero, mensagens, conformidade],
+  );
 
   if (painel?.tipo === "diferencas") return <ComparacaoDfdView comparacao={comparacao} herdados={herdados} escolha={escolha} />;
   if (painel?.tipo === "duplicados") return <>{duplicados}</>;
@@ -165,8 +180,23 @@ export function DfdPainelDireito({
             : undefined
         }
         historicoDfdId={dfdId}
+        destaque={painel.destaque}
+        dfdRef={{ numero, planejamento: dfd?.planejamento ?? null }}
+        idx={idx}
       />
     );
   }
-  return <MensagensDfd mensagens={mensagens} numero={numero} tipo={dfd?.tipo} onIrPara={onIrPara} />;
+  if (!pendencias) return null;
+  return (
+    <PainelPendencias
+      pendencias={pendencias}
+      escopo="dfd"
+      acertos={mensagens.filter((m) => m.status === "acerto")}
+      onIrPara={(alvo, cor) =>
+        alvo.item != null && onPainel
+          ? onPainel({ tipo: "item", idx: alvo.item, destaque: { ancora: alvo.ancora, cor, nonce: Date.now() } })
+          : onIrPara({ ancora: alvo.ancora, cor })
+      }
+    />
+  );
 }

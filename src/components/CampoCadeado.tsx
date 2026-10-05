@@ -110,6 +110,7 @@ export function LinhaCampo({
   bloqueado,
   onLock,
   children,
+  ancora,
 }: {
   label: string;
   span?: boolean;
@@ -118,9 +119,11 @@ export function LinhaCampo({
   bloqueado: boolean;
   onLock: () => void;
   children: ReactNode;
+  /** `data-ancora` do campo (o painel de pendências leva até ele e o destaca). */
+  ancora?: string;
 }) {
   return (
-    <div className={span ? "sm:col-span-2" : ""}>
+    <div className={span ? "sm:col-span-2" : ""} data-ancora={ancora}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted">{label}</span>
         {editavel && <CadeadoBotao rotulo={label} aberto={aberto} bloqueado={bloqueado} onClick={onLock} />}
@@ -231,6 +234,7 @@ export function CampoNumero({
   span,
   moeda,
   forte,
+  ancora,
 }: {
   label: string;
   valor: number | null | undefined;
@@ -242,11 +246,12 @@ export function CampoNumero({
   span?: boolean;
   moeda?: boolean;
   forte?: boolean;
+  ancora?: string;
 }) {
   const editando = editavel && aberto && !bloqueado;
   const texto = valor == null ? "—" : moeda ? brl(valor) : num(valor);
   return (
-    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
+    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock} ancora={ancora}>
       {editando ? (
         <NumInput valor={valor} onChange={onChange} />
       ) : (

@@ -1150,7 +1150,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **categoria de Protocolo** (`INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA`, **fixas** em `CATEGORIAS`;
   `classificarAssunto(assunto)` casa a palavra da capa). **Cores/estados que SEGUEM a importância:** `mensagensDfd`/
   `mensagensItem` marcam cada mensagem com a `cor` da importância do ponto (`corImportancia`) → `resumoEstado` usa
-  `message.cor` → a célula "Estado" e o painel `MensagensDfd` mostram a cor EXATA da importância; `estadoCor`/
+  `message.cor` → a célula "Estado" e o painel `PainelPendencias` mostram a cor EXATA da importância; `estadoCor`/
   `estadoItemCor`/`estadoProtocoloCor`/`estadoRotulo` recebem `regras` (opcional; sem elas = tokens de hoje) e puxam a
   cor da importância base do comportamento (severidade) ou dos **estados de ciclo** editáveis (`estadosCiclo`:
   Editado/Regularizado/Regular/Pendente — só rótulo/cor, quantidade fixa). Além da importância, o ADM controla, **por
@@ -1445,8 +1445,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `comGrupos`) **sem** trazer o JSON pesado das assinaturas para as listas. **Capa em `CapaCampos`** (exportado de `ProtocoloView`) — a MESMA grade de
   campos da capa na importação e no gravado; **identificadores** (número/Id/data) sempre só-leitura, **conteúdo** com
   cadeado por campo (`modo` `leitura`/`criar`/`cadeado`).
-  O **head** mostra **Id + Assunto** ao lado do nº. Quando há erro, um botão **"Relatório de erro"** no rodapé abre o
-  `RelatorioErros`. A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
+  O **head** mostra **Id + Assunto** ao lado do nº. O `IndicadorPendencias` do rodapé abre o painel **`PainelPendencias`** (ver "PENDÊNCIAS
+  PADRONIZADAS"). A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
   campo + Aplicar + Limpar embaixo) — é o componente **`BarraEdicaoMassa`** (emite uma `AcaoMassa`; conteúdo aplicado por
   `aplicarMassaDfd`, puro; só oferece os campos que o ADM deixou editáveis). **Corpo do banner do protocolo = UM
   componente (`ProtocoloView`)** na análise E no gravado: mini banners + conciliação da capa (+ "Substituir pela
@@ -1462,12 +1462,30 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   aponta EXATAMENTE o erro (quais itens, qual seção) e O QUE fazer; o relatório do protocolo sai em **formato de
   DESPACHO de devolução** (`linhasRelatorioProtocolo`) pronto p/ devolver o processo — os **DFDs com a MESMA pendência
   são agrupados numa única mensagem** e cada DFD é referenciado por **número + nº de planejamento** (ex.: "DFDs 531
-  (Planej. 640), 702 (Planej. 811):"). Quando há erro, o botão
-  **"Relatório de erro"** (rodapé, alinhado à direita) abre o `RelatorioErros`. Helpers puros em `dfd-tratamento.ts`
+  (Planej. 640), 702 (Planej. 811):"). O despacho sai pelo "Copiar → Despacho" do
+  **`PainelPendencias`**. Helpers puros em `dfd-tratamento.ts`
   (`itemComErro`/`estadoItem`/`faltasCirurgicasDfd`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo`/`SECOES_OBRIGATORIAS`
   [fonte única, reusada por `faltasObrigatorias`] + `ESTADO_PROTOCOLO_ROTULO`/`estadoProtocoloCor`; o estado agregado do
   protocolo vem de `avaliarProtocolo`).
-- **Painel LATERAL de MENSAGENS do DFD (`MensagensDfd`) — todas as conferências, navegáveis:** as mensagens NÃO
+- **PENDÊNCIAS PADRONIZADAS — Protocolo · DFD · Item, UM banner (`PainelPendencias`, núcleo puro `pendencias-core.ts`):**
+  a árvore ÚNICA sai das MESMAS mensagens da célula Estado (`mensagensDfd`/`mensagensItem` + `conciliacaoCapa`, níveis e cores
+  do ADM): **o DFD soma os itens** (`pendenciasDoDfd`: as mensagens agregadas de item — "Falta valor unitário em 3 de 10" —
+  viram a lista de CADA item com o problema, no status/cor da mensagem; as seções levam o TEXTO ATUAL como contexto) e **o
+  protocolo soma a capa + os DFDs** (`pendenciaDaCapa`, `contarProtocolo` = Σ `contarDfd` + a capa — testado); o item sozinho
+  = `pendenciasDoItemSolo`. **Tocar LEVA ao lugar** (`AlvoPendencia` {dfd, item, ancora} + o hook **`useDestaqueAncora`**,
+  `DestaqueAncora.ts` — rola e pulsa na cor; o MESMO no `DfdConferir`, no `ItemDetalhe` [`data-ancora` em valor unitário,
+  quantidade, `repetidos`, `catalogo`] e na capa do `ProtocoloView` [`capa`]): no protocolo abre o DFD ao lado com a âncora
+  (ou o item com o campo — `PainelDfd.item.destaque`); no DFD rola até a seção ou abre o item; no item, o campo. **Copiar**
+  (`Dropdown`): **Despacho** (o de sempre — `linhasRelatorioProtocolo`/`linhasRelatorioDfd` + "Respeitosamente"), **WhatsApp**
+  (`*negrito*` + marcadores) e **Lista simples** (hierárquica, com o lugar) — `textoPendencias`; **PDF** (`blocosPendenciasPdf`
+  → o gerador `documento-pdf`, A4: resumo, capa valor × somatória, por DFD a tabela "Onde · Pendência · Conteúdo atual" e a
+  tabela dos ITENS como estão no DFD com a célula que falta na cor; só com a ação Exportar — `usePodeExportar`); "Incluir as
+  atenções" (`soErros`). Onde: o painel da direita do DFD (`DfdPainelDireito {tipo:"mensagens"}` — análise avulso/protocolo,
+  gravado, DFD ao lado do protocolo), o painel À DIREITA do protocolo (`ModalPainel` `proto-pendencias` no gravado e na
+  análise — o `IndicadorPendencias` alterna; empilhado, um `Modal`) e o TOPO do `ItemDetalhe` (o indicador no cabeçalho do
+  item alterna). A contagem do indicador do protocolo = a soma das pendências (não mais a de DFDs). O `RelatorioErros` ficou
+  só para as diferenças do reenvio; o `MensagensDfd` saiu. Testes: `tests/pendencias-core.test.ts`.
+- **Painel LATERAL de MENSAGENS do DFD (hoje o `PainelPendencias`) — todas as conferências, navegáveis:** as mensagens NÃO
   aparecem mais soltas no corpo do banner do DFD. `mensagensDfd` (puro, `dfd-tratamento`) monta a lista COMPLETA
   (erro/atenção/**acerto**, sem exceção — só omite pontos "ignorar" do ADM), cada uma com uma **âncora** (id do
   componente: `reparticao`/`anoPca`/`justificativa`/`previsao`/`prioridade`/`fundamentacao`/`referenciaRenovacao`/
@@ -1502,8 +1520,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **editor**; escopo por unidade e `valorUnitario>0` no servidor.
 - **GRAVADO = ANÁLISE (mesmos componentes, conferência, seleção e ajustes — a ÚNICA diferença é a tabela única):**
   - **RODAPÉS EM UMA LINHA, SÓ ÍCONES (Protocolo · DFD · Item — Mesa, análise e consulta pública):** à esquerda o
-    **`IndicadorPendencias`** (o MESMO nos banners: protocolo = DFDs com erro + capa divergente / em atenção → o
-    `RelatorioErros`; DFD = o estado + as mensagens → o painel) ou a barra de progresso; à direita as ações em **`BotaoAcao`**
+    **`IndicadorPendencias`** (o MESMO nos banners: protocolo = a soma das pendências da capa e dos DFDs → o painel de
+    pendências à direita; DFD = o estado + as mensagens → o painel; item = no cabeçalho do `ItemDetalhe`) ou a barra de progresso; à direita as ações em **`BotaoAcao`**
     (só o ícone; Duplicados/Diferenças/Tarefas com a contagem) e a ação PRINCIPAL (Salvar alterações, Protocolar, Importar/
     Sobrescrever DFD — ícone + texto de 640px para cima). **Reenviar protocolo** e **Sobrescrever DFD** = botões PRETOS
     (`variant="primary"`). Nada repete o cabeçalho: sem Fechar/Cancelar (o X fecha) e sem a contagem de DFDs (está nos mini
@@ -1750,7 +1768,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **todos os dados** do item do catálogo — código, unidade, **descrição (mesmo tamanho de fonte do item importado**, p/
   comparar lado a lado) e os **tipos de DFD** (chips `Badge`) — **display-only** (os itens do DFD são só-leitura; NÃO altera o
   DFD oficial). `sugestao` passou a ser construída sempre que há entrada casada (score 1); só é `null` sem código/sem semelhante. As mensagens de catálogo entram
-  no painel `MensagensDfd` + `faltasCirurgicasDfd` (despacho). O import avulso (`DfdUploadForm`) e o DFD gravado (`DfdsView`)
+  no painel `PainelPendencias` + `faltasCirurgicasDfd` (despacho). O import avulso (`DfdUploadForm`) e o DFD gravado (`DfdsView`)
   conferem TODO o DFD (useEffect por `itens`); o protocolo confere **por DFD ao abrir** (lazy — a LISTA fica leve/escalável).
   **Portão do servidor (defesa em profundidade, só bloqueia se o ADM elevou a `fundamental`):** `POST /api/dfd` (`start-dfd` **e**
   `append-dfd-itens`, por causa dos lotes) roda `algumCatalogoFundamental` → se sim, `conferirItensNoCatalogo` + `bloqueantesCatalogo`
@@ -3210,12 +3228,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
   DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),
-  `RelatorioErros` (banner/`Modal` com todos os erros de um DFD/Protocolo listados p/ **copiar** — `navigator.clipboard`
-  + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros),
+  `RelatorioErros` (banner/`Modal` de texto copiável — hoje o relatório de DIFERENÇAS do reenvio),
   `PcaPicker` (define o **PCA do processo** — `select` dos PCAs cadastrados; adivinha o ano pela descrição e avisa;
-  obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
-  clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + **`IndicadorPendencias`** (o botão ÚNICO de erros/atenção
-  dos banners — chips vermelho/âmbar; abre o relatório do protocolo ou alterna as mensagens do DFD) + **`BotaoAcao`** (a
+  obrigatório), **`PainelPendencias`** (o banner ÚNICO de pendências de Protocolo/DFD/Item — a árvore capa › DFDs › itens,
+  tocar leva ao lugar, Copiar Despacho/WhatsApp/Lista e PDF; os acertos recolhidos no DFD) + **`IndicadorPendencias`** (o botão ÚNICO de erros/atenção
+  dos banners — chips vermelho/âmbar; alterna o painel de pendências) + **`BotaoAcao`** (a
   ação dos rodapés/cabeçalhos dos banners: SÓ o ícone, o nome na dica, `contagem` no canto; `texto` = a principal com o
   rótulo a partir de 640px), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
   linha; mesmo lugar do painel de mensagens; item REPETIDO: os iguais lado a lado + "Ver item" + "Unificar neste item"), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no

@@ -207,7 +207,7 @@ import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
-import { MensagensDfd } from "@/components/MensagensDfd";
+import { PainelPendencias } from "@/components/PainelPendencias";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { IndicadorPendencias } from "@/components/IndicadorPendencias";
 import { Dropzone } from "@/components/Dropzone";
@@ -3880,19 +3880,52 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="MensagensDfd (painel lateral de erro/atenção/acerto — clique navega no DFD)">
+      <Secao titulo="PainelPendencias (o banner ÚNICO de pendências — Protocolo, DFD e Item: tocar leva ao lugar; copiar em Despacho/WhatsApp/Lista; PDF)">
         <div className="max-w-md">
-          <MensagensDfd
-            numero="1586"
-            tipo="DFD-R — Renovação"
-            mensagens={[
-              { chave: "dfd.reparticao", status: "erro", texto: "Repartição/Setor requisitante não vinculado.", ancora: "reparticao" },
-              { chave: "item.valorUnitario", status: "erro", texto: "Falta valor unitário em 3 de 12 itens (Seção 4).", ancora: "itens" },
-              { chave: "dfd.referenciaRenovacao", status: "atencao", texto: "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação.", ancora: "referenciaRenovacao" },
-              { chave: "dfd.previsao", status: "acerto", texto: "Previsão de entrega/execução (Seção 5) preenchida.", ancora: "previsao" },
-              { chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" },
-            ]}
-            onIrPara={(m) => toast(`Rolar até: ${m.ancora}`)}
+          <PainelPendencias
+            escopo="protocolo"
+            pendencias={{
+              numero: "144756/2026",
+              idExterno: "40123",
+              interessado: "SEMED",
+              assunto: "INCLUSÃO",
+              capa: {
+                chave: "protocolo.valorCapa",
+                status: "erro",
+                texto: "Valor da capa (R$ 10,00) diferente da somatória dos DFDs (R$ 60,00) — corrigir a capa.",
+                onde: "Capa do processo",
+                contexto: "Valor da capa: R$ 10,00 · Somatória dos DFDs: R$ 60,00",
+                alvo: { ancora: "capa" },
+              },
+              dfds: [
+                {
+                  chave: 1,
+                  numero: "1586",
+                  planejamento: "1702",
+                  tipo: "DFD-R — Renovação",
+                  status: "erro",
+                  pendencias: [
+                    { chave: "dfd.prioridade", status: "erro", texto: "Prioridade da compra/contratação (Seção 6) fora do padrão — trate no bloco Tratamento ou destrave a seção.", onde: "Prioridade da compra/contratação (Seção 6)", contexto: "URGENTÍSSIMA", alvo: { dfd: 1, ancora: "prioridade" } },
+                    { chave: "dfd.referenciaRenovacao", status: "atencao", texto: "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação.", onde: "Referências da renovação", alvo: { dfd: 1, ancora: "referenciaRenovacao" } },
+                  ],
+                  resumoItens: [{ chave: "item.valorUnitario", status: "erro", texto: "Falta valor unitário em 1 de 12 itens (Seção 4).", onde: "Itens (Seção 4)", alvo: { dfd: 1, ancora: "itens" } }],
+                  itens: [
+                    {
+                      idx: 2,
+                      item: 3,
+                      codigo: "5241937264",
+                      descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO",
+                      unidade: "DIAS",
+                      quantidade: 20,
+                      valorUnitario: null,
+                      status: "erro",
+                      problemas: [{ chave: "item.valorUnitario", status: "erro", texto: "Sem valor unitário", onde: "Valor unitário", alvo: { dfd: 1, item: 2, ancora: "valorUnitario" } }],
+                    },
+                  ],
+                },
+              ],
+            }}
+            onIrPara={(a) => toast(`Ir para: ${a.ancora}${a.item != null ? ` (item ${a.item + 1})` : ""}`)}
           />
         </div>
       </Secao>

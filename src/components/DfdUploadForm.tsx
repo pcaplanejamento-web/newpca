@@ -12,7 +12,6 @@ import {
   editarItemDfd,
   normalizarSecoesDfd,
   removerItemDfd,
-  STATUS_MENSAGEM_COR,
   unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
@@ -432,7 +431,7 @@ export function DfdUploadForm({
                     dfd={preview}
                     numero={preview.numero}
                     mensagens={mensagens}
-                    onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
+                    onIrPara={(a) => setAncoraAlvo({ ...a, nonce: Date.now() })}
                     conformidade={conformidade}
                     regras={regras}
                     editavel={status !== "sending"}

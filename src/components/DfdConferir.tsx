@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { type AncoraAlvo, useDestaqueAncora } from "./DestaqueAncora";
 import { type ChaveAvaliacao, comportamentoDaFalta, editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirAssinaturaDfd } from "@/lib/conferencia-dfd";
@@ -60,7 +61,10 @@ const naoOp = () => {};
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens, o detalhe de um item, o histórico, as diferenças
  * (reenvio/sobrescrita) ou os DFDs duplicados do processo (protocolação). */
-export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" } | { tipo: "diferencas" } | { tipo: "duplicados" };
+export type PainelDfd =
+  | { tipo: "mensagens" }
+  /** `destaque` = o campo com pendência a destacar no item (levado pelo painel de pendências). */
+  | { tipo: "item"; idx: number; destaque?: AncoraAlvo } | { tipo: "historico" } | { tipo: "diferencas" } | { tipo: "duplicados" };
 
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
  * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição
@@ -146,7 +150,7 @@ export function DfdConferir({
   /** Regras de avaliação do ADM (edição de campos por nível). */
   regras?: RegrasAvaliacao;
   /** Pedido de rolagem/destaque de uma âncora (id + cor + nonce para repetir o clique). */
-  ancoraAlvo?: { ancora: string; cor: string; nonce: number } | null;
+  ancoraAlvo?: AncoraAlvo | null;
   /** Índice do item ATIVO (detalhe aberto ao lado) — destacado na tabela de itens. */
   itemAtivo?: number | null;
   /** Tabela ÚNICA de itens (DFD já protocolado) — sem separar os itens com pendência. */
@@ -196,30 +200,9 @@ export function DfdConferir({
   };
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
 
-  // Rolagem + DESTAQUE de uma âncora (ao clicar numa mensagem do painel lateral). O
-  // elemento com `data-ancora` correspondente entra em vista e pulsa na cor do status.
+  // Rolagem + DESTAQUE de uma âncora (ao tocar numa pendência do painel lateral) — o hook compartilhado.
   const bodyRef = useRef<HTMLDivElement>(null);
-  const destaqueRef = useRef<{ el: HTMLElement; timer: number } | null>(null);
-  useEffect(() => {
-    if (!ancoraAlvo || !bodyRef.current) return;
-    const el = bodyRef.current.querySelector<HTMLElement>(`[data-ancora="${ancoraAlvo.ancora}"]`);
-    if (!el) return;
-    if (destaqueRef.current) {
-      window.clearTimeout(destaqueRef.current.timer);
-      destaqueRef.current.el.style.boxShadow = "";
-    }
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.style.transition = "box-shadow 0.35s ease";
-    el.style.borderRadius = el.style.borderRadius || "14px";
-    el.style.boxShadow = `0 0 0 3px ${ancoraAlvo.cor}, 0 0 0 7px color-mix(in srgb, ${ancoraAlvo.cor} 22%, transparent)`;
-    const timer = window.setTimeout(() => {
-      el.style.boxShadow = "";
-    }, 2000);
-    destaqueRef.current = { el, timer };
-  }, [ancoraAlvo]);
-  useEffect(() => () => {
-    if (destaqueRef.current) window.clearTimeout(destaqueRef.current.timer);
-  }, []);
+  useDestaqueAncora(bodyRef, ancoraAlvo);
 
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
     onSecoesChange(setTextoSecao(dfd.secoes, cfg, texto));
