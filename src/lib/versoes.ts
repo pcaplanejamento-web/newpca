@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.3.2",
+    data: "2026-10-05",
+    titulo: "Valores dos DFDs com a precisão da Centi",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "O valor do DFD guarda as 4 casas dos preços da Centi: as abas Protocolos, DFDs e Itens mostram sempre o mesmo centavo.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Mesa", texto: "A capa do protocolo é conferida com a somatória exata: diferença menor que 1 centavo (arredondamento da Centi) não aponta mais divergência.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.3.1",
     data: "2026-10-05",
     titulo: "Vínculos do orçamento do PCA mais legíveis",

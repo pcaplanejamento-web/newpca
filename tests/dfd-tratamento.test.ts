@@ -101,7 +101,7 @@ describe("editarItemDfd (edição de item + recomputo do total)", () => {
     assert.equal(dfd.itens[0].valorTotal, 100);
     assert.equal(dfd.valorTotal, 150);
   });
-  it("trocar QUANTIDADE ou VALOR UNITÁRIO recalcula o total do item (q × vu, ao centavo); o total digitado à mão vale", () => {
+  it("trocar QUANTIDADE ou VALOR UNITÁRIO recalcula o total do item (q × vu, 4 casas); o total digitado à mão vale", () => {
     type It = { item: number; quantidade: number | null; valorUnitario: number | null; valorTotal: number | null };
     const d: { itens: It[]; valorTotal: number | null } = {
       itens: [
@@ -114,6 +114,9 @@ describe("editarItemDfd (edição de item + recomputo do total)", () => {
     assert.equal(q.itens[0].valorTotal, 100);
     assert.equal(q.valorTotal, 107);
     assert.equal(editarItemDfd(d, 0, { valorUnitario: 1.333 }).itens[0].valorTotal, 13.33);
+    const centi = editarItemDfd(d, 0, { quantidade: 36, valorUnitario: 80204.5466 });
+    assert.equal(centi.itens[0].valorTotal, 2887363.6776, "preço com 4 casas (Centi): o total guarda a fração do centavo");
+    assert.equal(centi.valorTotal, 2887370.6776);
     const aMao: Partial<It> = { quantidade: 20, valorTotal: 90 };
     assert.equal(editarItemDfd(d, 0, aMao).itens[0].valorTotal, 90, "total à mão");
     assert.equal(editarItemDfd(d, 0, { quantidade: null }).itens[0].valorTotal, 50, "sem quantidade: mantém o atual");
@@ -121,8 +124,9 @@ describe("editarItemDfd (edição de item + recomputo do total)", () => {
 });
 
 describe("valor do DFD = a soma dos itens (leitura)", () => {
-  it("valorDosItens: soma ao centavo, NULL quando ≤ 0", () => {
-    assert.equal(valorDosItens([{ valorTotal: 10.0049 }, { valorTotal: 20.0011 }]), 30.01);
+  it("valorDosItens: soma com 4 casas (sem ruído de ponto flutuante), NULL quando ≤ 0", () => {
+    assert.equal(valorDosItens([{ valorTotal: 10.0049 }, { valorTotal: 20.0011 }]), 30.006);
+    assert.equal(valorDosItens([{ valorTotal: 0.1 }, { valorTotal: 0.2 }]), 0.3);
     assert.equal(valorDosItens([{ valorTotal: null }, { valorTotal: 0 }]), null);
     assert.equal(valorDosItens([]), null);
   });
@@ -134,9 +138,9 @@ describe("valor do DFD = a soma dos itens (leitura)", () => {
     ]);
     assert.deepEqual(
       r.itens.map((i) => i.valorTotal),
-      [100, 10, null],
+      [99.999, 10, null],
     );
-    assert.equal(r.valorTotal, 110);
+    assert.equal(r.valorTotal, 109.999);
   });
 });
 

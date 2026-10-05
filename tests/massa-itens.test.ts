@@ -42,7 +42,7 @@ describe("planejarMassaItens — mesmas travas da edição item a item", () => {
     ]);
     const v = planejarMassaItens(itens, new Set([2, 3]), { campo: "valorUnitario", valor: 1.115 }, catalogo);
     assert.deepEqual(v.atualizar, [
-      { id: 2, patch: { valorUnitario: 1.115, valorTotal: 5.58 } },
+      { id: 2, patch: { valorUnitario: 1.115, valorTotal: 5.575 } }, // 5 × 1,115 com 4 casas (a precisão da Centi)
       { id: 3, patch: { valorUnitario: 1.115, valorTotal: 7 } }, // sem quantidade: mantém o total
     ]);
   });

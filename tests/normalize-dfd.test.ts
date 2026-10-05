@@ -82,6 +82,13 @@ describe("valoresBatem (capa × somatória dos DFDs)", () => {
     assert.equal(valoresBatem(0, 512342.72), false); // capa 0,00 × somatória real
     assert.equal(valoresBatem(1000, 1000.5), false);
   });
+  it("decidido em inteiros: fração de centavo bate, 1 centavo inteiro nunca bate (sem depender do ponto flutuante)", () => {
+    assert.equal(valoresBatem(196129771.54, 196129771.5452), true); // a Centi trunca a fração
+    assert.equal(valoresBatem(38158725.295, 38158725.29), true);
+    assert.equal(valoresBatem(196129771.54, 196129771.55), false);
+    assert.equal(valoresBatem(161611662.5, 161611662.49), false); // em float a diferença é 0,0099999…
+    assert.equal(valoresBatem(0.54, 0.55), false);
+  });
   it("null de qualquer lado nunca bate", () => {
     assert.equal(valoresBatem(null, 1000), false);
     assert.equal(valoresBatem(1000, null), false);

@@ -323,8 +323,8 @@ describe("célula que atravessa a página (grade) e código que vira a página (
       assert.equal(i2?.codigo, "5241947270");
       // O TOTAL GERAL quebrado em 2 linhas é lido INTEIRO (fecha a tabela sem vazar para o corpo) …
       assert.equal(tabelaLida(d.items, semGrade ? [] : d.tracos).valorTotal, 14814834.6944);
-      // … e o valor do DFD é a soma dos itens, ao centavo.
-      assert.equal(r.valorTotal, 14814834.69);
+      // … e o valor do DFD é a soma dos itens com 4 casas — igual ao TOTAL GERAL do documento.
+      assert.equal(r.valorTotal, 14814834.6944);
     }
   });
 

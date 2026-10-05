@@ -10,7 +10,9 @@ const _dec = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 2,
 });
 
-export const brl = (n?: number | null) => _brl.format(Number(n ?? 0));
+/** R$ ao centavo. O valor é fixado em 4 casas antes (a precisão dos valores — `arredondarValor`): duas somas do MESMO
+ * valor feitas em ordens diferentes (os DFDs × os itens) mostram sempre o MESMO centavo. */
+export const brl = (n?: number | null) => _brl.format(Math.round(Number(n ?? 0) * 1e4) / 1e4 + 0);
 export const num = (n?: number | null) => _num.format(Number(n ?? 0));
 export const dec = (n?: number | null) => _dec.format(Number(n ?? 0));
 

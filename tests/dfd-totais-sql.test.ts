@@ -33,12 +33,12 @@ describe("totais do DFD pelos itens (comandoTotaisDfd no db.batch do D1)", () =>
     orm = drizzle(d1Sobre(db) as never, { schema });
   });
 
-  it("recalcula com os itens: soma ao centavo (o TOTAL GERAL declarado não vale), contagem real", async () => {
+  it("recalcula com os itens: soma com 4 casas (o TOTAL GERAL declarado não vale), contagem real", async () => {
     db.exec("INSERT INTO dfds (id, numero, total_itens, valor_total) VALUES (1, 'D1', 2, 999.99)");
     item(1, 1, 10.0049);
     item(1, 2, 20.0011);
     await orm.batch([comandoTotaisDfd(orm, 1)]);
-    assert.deepEqual(totais(1), { n: 2, v: 30.01 });
+    assert.deepEqual(totais(1), { n: 2, v: 30.006 });
   });
 
   it("sem valor (Σ ≤ 0) ⇒ NULL; sem itens ⇒ 0 itens e NULL — nunca estimado", async () => {

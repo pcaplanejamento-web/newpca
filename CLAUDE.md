@@ -552,15 +552,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ZERADO** (`valorTotal ?? 0`) — o sistema não estima nada. O total do **PCA** (`pcas.valorEstimado`, coluna mantida)
     passou a somar os `valorTotal` dos DFDs. A coluna `dfds.valor_estimado` fica **dormante** (sem código; sem migração
     de DROP).
-  - **REGRA ÚNICA, de ponta a ponta (auditoria dos totais, migração `0085`):** valor do DFD = Σ dos totais dos itens ao
-    centavo (NULL quando ≤ 0) e nº de itens = quantos existem — na LEITURA (`fecharValoresItens`, `parse-dfd-comum.ts`: o
+  - **REGRA ÚNICA, de ponta a ponta (auditoria dos totais, migrações `0085`/`0086`):** valor do DFD = Σ dos totais dos itens
+    com **4 casas** — a precisão da Centi, cujo preço unitário tem até 4 casas (36 × 80.204,5466 = 2.887.363,6776);
+    `arredondarValor`, `ROUND(…, 4)` no banco — (NULL quando ≤ 0) e nº de itens = quantos existem; a tela mostra ao centavo
+    (`brl` fixa as 4 casas antes: duas somas do mesmo valor em ordens diferentes mostram o MESMO centavo) — na LEITURA (`fecharValoresItens`, `parse-dfd-comum.ts`: o
     item sem total com quantidade e valor unitário recebe q × vu; o "TOTAL GERAL" do documento só FECHA a tabela, não define
     o valor), na EDIÇÃO (`editarItemDfd`: trocar quantidade/valor unitário recalcula o total do item — `totalDoItem`, a régua
     da massa; total digitado à mão vale; `valorDosItens`), na SOBRESCRITA (`comTotal` = a soma) e no BANCO
     (**`comandoTotaisDfd`**, `dfd-sql.ts`, no MESMO `db.batch` de toda escrita de itens — `start-dfd`/`append` com
     `soCompleto`: a importação pela metade mantém o total DECLARADO, que o `gravacaoParcial` usa; "Salvar" e a massa sempre).
-    A `0085` acertou os gravados (item sem total → q × vu; DFDs completos → os itens). Assim protocolo (Σ DFDs) = DFDs = itens
-    em TODA tela — lista e capa do protocolo, cards/Dashboard/Orçamento do PCA, calendário, consulta pública.
+    A `0085` acertou os gravados (item sem total → q × vu; DFDs completos → os itens) e a `0086` os passou a 4 casas (somar
+    DFDs já arredondados ao centavo dava R$ 0,01 de diferença entre as abas DFDs e Itens e contra a capa — 3 de 68 protocolos,
+    medido em produção). Assim protocolo (Σ DFDs) = DFDs = itens em TODA tela — lista e capa do protocolo, cards/Dashboard/
+    Orçamento do PCA, calendário, consulta pública.
 - **Assinatura digital (captura + conferência, migração `0018`):** o PDF traz, DEPOIS de cada DFD, uma página
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
@@ -1412,7 +1416,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **gravado destravado**; a criação manual usa inputs simples (`modo="criar"`). A **repartição** (roteamento) segue
   editável (seletor obrigatório na análise e no gravado). O **Valor da capa** é editável e **conciliado** — na análise E
   no gravado — pela fonte única **`conciliacaoCapa`** (`dfd-tratamento`, pura): capa **nula/zerada** OU **diferente** da
-  somatória (arredondada ao centavo; `valoresBatem`) ⇒ divergente; só confere com a somatória COMPLETA (análise
+  somatória EXATA (`valoresBatem`: bate quando a diferença é MENOR que 1 centavo, decidida em décimos de milésimo INTEIROS — a
+  Centi trunca a fração do centavo, e 1 centavo inteiro diverge sempre, sem depender do ponto flutuante; a somatória mostrada
+  e a que substitui a capa vão ao centavo — `somatorioProcesso` dá `exato` e `somatorio`) ⇒ divergente; só confere com a somatória COMPLETA (análise
   terminada e TODOS os DFDs lidos — um DFD ilegível somaria 0; descartados fora, mas o DFD EXISTENTE mantido por
   "Manter o existente" deste MESMO protocolo continua no processo e entra na somatória/contagem) e **NÃO depende de os
   DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse
@@ -3945,7 +3951,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Publicar uma versão:** acrescentar a entrada NO TOPO de `VERSOES` (MAIOR = muda o jeito de trabalhar · MENOR = recurso
   novo · CORREÇÃO = ajuste), com o `link` de cada mudança, e o MESMO número no `package.json` — em TODA entrega que o usuário
   percebe.
-- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.3.1", leva às Novidades; o ponto
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.3.2", leva às Novidades; o ponto
   accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`, conveniência).
 - **Novidades:** `/painel/novidades` (qualquer pessoa logada) = `Novidades` → um **`CartaoVersao`** (DS) por versão: número,
   título, data, selo "Atual" e cada mudança com o tipo (`Badge`), a área e **"Ver onde mudou"** (o `link`); `?versao=` destaca e

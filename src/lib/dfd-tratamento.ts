@@ -23,6 +23,7 @@ import {
   type DfdItemParseado,
   type DfdParseado,
   type DfdSecao,
+  arredondarValor,
   listaRefs,
   norm,
   refDfd,
@@ -279,20 +280,22 @@ const reais = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDi
  * Concilia o VALOR DA CAPA com a SOMATÓRIA dos DFDs (valor do DFD = Σ itens). Só confere quando há DFDs
  * e a somatória está COMPLETA (`completo` — na análise, todos os DFDs lidos; padrão `true` no gravado);
  * **não depende de os DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse DFD com
- * erro). A somatória é arredondada ao centavo. Respeita `protocolo.valorCapa` do ADM (+ categoria). Puro.
+ * erro). A capa é comparada com a somatória EXATA (diferença menor que 1 centavo bate — `valoresBatem`); a somatória
+ * mostrada e a que substitui a capa vão ao centavo. Respeita `protocolo.valorCapa` do ADM (+ categoria). Puro.
  */
 export function conciliacaoCapa(
   p: { valorCapa: number | null | undefined; somatorio: number; totalDfds: number; completo?: boolean },
   regras: RegrasAvaliacao = regrasPadrao(),
   ctx?: { categoria?: string | null },
 ): ConciliacaoCapa {
-  const somatorio = Math.round((p.somatorio || 0) * 100) / 100;
+  const exato = p.somatorio || 0;
+  const somatorio = Math.round(exato * 100) / 100;
   const inativa: ConciliacaoCapa = { ativa: false, divergente: false, zerada: false, bloqueia: false, somatorio, motivo: null };
   if (p.totalDfds <= 0 || p.completo === false) return inativa;
   const comp = comportamentoNo(regras, "protocolo.valorCapa", { categoria: ctx?.categoria ?? null });
   if (comp === "ignora") return inativa;
   const zerada = p.valorCapa == null || p.valorCapa <= 0;
-  const divergente = zerada || !valoresBatem(p.valorCapa, somatorio);
+  const divergente = zerada || !valoresBatem(p.valorCapa, exato);
   const motivo = !divergente
     ? null
     : zerada
@@ -525,7 +528,7 @@ export function unificarItensDfd<
   const quantidade = Math.round(grupo.reduce((s, it) => s + (it.quantidade as number), 0) * 1e6) / 1e6;
   const totais = grupo.every((it) => it.valorTotal != null && Number.isFinite(it.valorTotal));
   const soma = totais ? grupo.reduce((s, it) => s + (it.valorTotal as number), 0) : quantidade * (alvo.valorUnitario as number);
-  const valorTotal = Math.round(soma * 100) / 100;
+  const valorTotal = arredondarValor(soma);
   const itens = d.itens.flatMap((it, i) => (tira.has(i) ? [] : i === manter ? [{ ...it, quantidade, valorTotal }] : [it]));
   return { ...d, itens, valorTotal: valorDosItens(itens) };
 }

@@ -102,13 +102,14 @@ export function parseIntBR(v: unknown): number | null {
 }
 
 /**
- * Dois valores monetários "batem" (tolerância de 1 centavo p/ ruído de ponto
- * flutuante). `null` de qualquer lado nunca bate — usado para conferir o Valor da
- * capa do protocolo contra a somatória dos valores dos DFDs.
+ * Dois valores monetários "batem" quando a diferença é MENOR que 1 centavo — decidida em décimos de milésimo
+ * INTEIROS (sem o ruído do ponto flutuante: 0,54 × 0,55 nunca bate; 0,54 × 0,5452 — a Centi trunca a fração do
+ * centavo — bate). `null` de qualquer lado nunca bate — usado para conferir o Valor da capa do protocolo contra a
+ * somatória EXATA dos DFDs.
  */
 export function valoresBatem(a: number | null | undefined, b: number | null | undefined): boolean {
   if (a == null || b == null) return false;
-  return Math.abs(a - b) < 0.01;
+  return Math.abs(Math.round(a * 1e4) - Math.round(b * 1e4)) < 100;
 }
 
 export type DataParts = { iso: string; mes: number; ano: number } | null;

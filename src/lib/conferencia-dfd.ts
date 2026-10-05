@@ -11,7 +11,7 @@ import {
   type ResumoEstado,
   resumoEstado,
 } from "./dfd-tratamento.ts";
-import { type Assinatura, type DfdItemParseado, refDfd } from "./parse-dfd-comum.ts";
+import { type Assinatura, arredondarValor, type DfdItemParseado, refDfd } from "./parse-dfd-comum.ts";
 import { casarOrgao, type OrgaoMatch, orgaoDivergeDaUnidade } from "./reparticao-match.ts";
 import {
   pdfExigeAssinatura,
@@ -216,14 +216,16 @@ type ProblemaDfd = { status: "erro" | "atencao" | "acerto"; chave: string; texto
 
 /**
  * A SOMATÓRIA do processo para a conciliação da capa: os DFDs VIVOS + o RASTRO dos sobrescritos por outro
- * protocolo (o valor DA ÉPOCA — a capa foi emitida com eles), arredondada ao centavo, e quantos DFDs o
- * processo teve. Fonte única: o estado agregado, a massa "valor da capa = somatória" e os banners. Puro.
+ * protocolo (o valor DA ÉPOCA — a capa foi emitida com eles) — `exato` (4 casas: o que se COMPARA com a capa) e `somatorio`
+ * (ao centavo: o que se mostra e o que substitui a capa) — e quantos DFDs o processo teve. Fonte única: o estado agregado, a massa "valor da capa = somatória" e os banners. Puro.
  */
 export function somatorioProcesso(p: { valorTotal: number; totalDfds: number; sobrescritos?: number; valorSobrescritos?: number }): {
   somatorio: number;
+  exato: number;
   dfds: number;
 } {
-  return { somatorio: Math.round((p.valorTotal + (p.valorSobrescritos ?? 0)) * 100) / 100, dfds: p.totalDfds + (p.sobrescritos ?? 0) };
+  const exato = arredondarValor(p.valorTotal + (p.valorSobrescritos ?? 0));
+  return { somatorio: Math.round(exato * 100) / 100, exato, dfds: p.totalDfds + (p.sobrescritos ?? 0) };
 }
 
 /**
@@ -252,7 +254,7 @@ export function avaliarProtocolo(
   type Msg = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string; cor?: string; n: number; capa?: boolean };
   const msgs: Msg[] = [];
   const proc = somatorioProcesso(capa);
-  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio: proc.somatorio, totalDfds: proc.dfds }, regras, { categoria: capa.categoria ?? null });
+  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio: proc.exato, totalDfds: proc.dfds }, regras, { categoria: capa.categoria ?? null });
   if (conc.divergente && conc.motivo)
     msgs.push({ status: conc.bloqueia ? "erro" : "atencao", chave: "protocolo.valorCapa", texto: conc.motivo, rotulo: conc.zerada ? "Capa sem valor" : "Capa ≠ somatória", n: 0, capa: true });
   if (proc.dfds === 0)

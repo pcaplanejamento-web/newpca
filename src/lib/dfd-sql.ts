@@ -48,9 +48,10 @@ export function filtroAnoPcaProtocolo(ano: number | null | undefined): SQL | und
 
 /**
  * TOTAIS do DFD = os ITENS gravados (a regra única do sistema): `total_itens` = quantos itens existem e `valor_total` = a soma
- * dos totais dos itens arredondada ao centavo (NULL quando ≤ 0 — nunca estimado). O UPDATE vai no MESMO `db.batch` da escrita
- * dos itens (atômico). `soCompleto` (importação em lotes): só recalcula quando a contagem já alcançou o total DECLARADO no
- * `start-dfd` — a importação pela metade mantém o declarado (o desfazer e a sincronia do PCA o usam; a conferência o acusa).
+ * dos totais dos itens com 4 casas — a precisão da Centi, `arredondarValor` (NULL quando ≤ 0 — nunca estimado). O UPDATE vai
+ * no MESMO `db.batch` da escrita dos itens (atômico). `soCompleto` (importação em lotes): só recalcula quando a contagem já
+ * alcançou o total DECLARADO no `start-dfd` — a importação pela metade mantém o declarado (o desfazer e a sincronia do PCA o
+ * usam; a conferência o acusa).
  * Builder sem getDb (testado pelo driver D1 real).
  */
 export function comandoTotaisDfd(db: DrizzleD1Database<typeof schema>, alvo: number | SQL, { soCompleto = false }: { soCompleto?: boolean } = {}) {
@@ -60,7 +61,7 @@ export function comandoTotaisDfd(db: DrizzleD1Database<typeof schema>, alvo: num
     .update(dfds)
     .set({
       totalItens: contagem,
-      valorTotal: sql`(SELECT CASE WHEN ${soma} > 0 THEN ROUND(${soma}, 2) END FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfds.id})`,
+      valorTotal: sql`(SELECT CASE WHEN ${soma} > 0 THEN ROUND(${soma}, 4) END FROM ${dfdItens} WHERE ${dfdItens.dfdId} = ${dfds.id})`,
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(and(eq(dfds.id, alvo), soCompleto ? sql`${contagem} >= COALESCE(${dfds.totalItens}, 0)` : undefined));

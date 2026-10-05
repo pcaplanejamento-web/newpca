@@ -88,7 +88,7 @@ export async function POST(req: Request) {
           falhas.push({ id: pr.id, numero: pr.numero, motivo: "Protocolo sem DFDs — não há somatória." });
           continue;
         }
-        campos = valoresBatem(pr.valorCapa, proc.somatorio) ? null : { valorCapa: proc.somatorio };
+        campos = valoresBatem(pr.valorCapa, proc.exato) ? null : { valorCapa: proc.somatorio };
       }
       if (!campos) continue;
       // Responsável = trava OTIMISTA (só grava se ainda é o lido — ninguém sobrescreve quem acabou de assumir).

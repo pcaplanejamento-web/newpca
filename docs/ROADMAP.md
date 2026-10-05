@@ -29,6 +29,13 @@ a cada gravação completa, vínculo legado respeitado; consulta pública e cale
 PCA sem avulsos · ✅ Fusão por Id: todos os de mesmo Id conferidos, recusa com PCA, sem rastro em dobro · ✅ Re-importar um
 protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 
+### Verificação em produção dos totais + valor com 4 casas — entregue
+✅ Conferido no banco de produção (só leitura): 1.291 DFDs com valor = soma dos itens e nº de itens = itens gravados (0
+divergências); 0 rastro em dobro; numeração do PCA íntegra (11.618 nºs, 0 inconsistências) · ✅ Valor do DFD com **4 casas**
+(a precisão da Centi; migração `0086`): arredondar cada DFD ao centavo dava R$ 0,01 de diferença entre as abas e contra a
+capa · ✅ Capa conferida com a somatória EXATA, decidida em inteiros (fração de centavo bate; 1 centavo inteiro diverge
+sempre) · ✅ `brl` mostra o MESMO centavo para o mesmo valor somado em ordens diferentes.
+
 ### Vínculos editáveis por linha no orçamento do PCA — entregue
 ✅ Coluna Vínculos em cada linha do PCA × Orçamento (por unidade) → UM banner com as unidades do orçamento da linha, a unidade
 cadastrada fixa e TODAS as ações (marcadas e desmarcadas, com o destino de cada uma); linhas com ações sem vínculo em

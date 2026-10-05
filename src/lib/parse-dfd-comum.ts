@@ -10,22 +10,25 @@ import { type LinhaCorrida, type OpcoesCorrido, textoCorrido } from "./texto-cor
 
 export type DfdSecao = { numero: number; titulo: string; texto: string };
 
-/** Ao centavo (a mesma régua do `ROUND(…, 2)` do banco). */
-const centavos = (n: number) => Math.round(n * 100) / 100;
+/** A PRECISÃO dos valores = a da Centi (o preço unitário tem até 4 casas: 36 × 80.204,5466 = 2.887.363,6776): os totais do
+ * item e do DFD guardam 4 casas — sem o ruído do ponto flutuante — e a tela mostra ao centavo (somar DFDs já arredondados ao
+ * centavo criava diferença de R$ 0,01 com a capa e com as telas que somam os itens). A MESMA régua do `ROUND(…, 4)` do banco
+ * (`comandoTotaisDfd`). Puro. */
+export const arredondarValor = (n: number) => Math.round(n * 1e4) / 1e4;
 
-/** O TOTAL de um item depois de trocar quantidade/valor unitário: q × vu ao centavo quando os dois existem; senão o atual
+/** O TOTAL de um item depois de trocar quantidade/valor unitário: q × vu (4 casas) quando os dois existem; senão o atual
  * (o total digitado à mão segue valendo). Fonte única da edição do item (banner e em massa) e da leitura. Puro. */
 export function totalDoItem(quantidade: number | null | undefined, valorUnitario: number | null | undefined, atual: number | null): number | null {
   return quantidade != null && valorUnitario != null && Number.isFinite(quantidade) && Number.isFinite(valorUnitario)
-    ? centavos(quantidade * valorUnitario)
+    ? arredondarValor(quantidade * valorUnitario)
     : atual;
 }
 
-/** O VALOR do DFD = a soma dos totais dos ITENS ao centavo (NULL quando ≤ 0 — nunca estimado): a regra ÚNICA do sistema
+/** O VALOR do DFD = a soma dos totais dos ITENS, com 4 casas (NULL quando ≤ 0 — nunca estimado): a regra ÚNICA do sistema
  * (leitura, edição, sobrescrita e o banco — `comandoTotaisDfd`). Puro. */
 export function valorDosItens(itens: readonly { valorTotal: number | null }[]): number | null {
   const soma = itens.reduce((s, it) => s + (it.valorTotal != null && Number.isFinite(it.valorTotal) ? it.valorTotal : 0), 0);
-  return soma > 0 ? centavos(soma) : null;
+  return soma > 0 ? arredondarValor(soma) : null;
 }
 
 /** Os VALORES do DFD lido (planilha ou PDF): o item SEM total, mas com quantidade e valor unitário, recebe q × vu; o DFD
