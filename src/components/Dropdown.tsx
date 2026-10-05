@@ -106,8 +106,9 @@ export function Dropdown({
     // `pointerdown` (não `mousedown`): no toque (iOS) tocar numa área vazia não gera evento de mouse — o painel não fechava.
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
-      // Os AVISOS FLUTUANTES (a confirmação, o "Desfazer") nascem de dentro do painel: tocá-los não o fecha.
-      if ((t as Element).closest?.(".avisos-flutuantes")) return;
+      // Os AVISOS FLUTUANTES (a confirmação, o "Desfazer") e as JANELAS FLUTUANTES abertas a partir do painel (ex.: as
+      // Novidades ao lado do sino) nascem de dentro dele: tocá-los não o fecha.
+      if ((t as Element).closest?.(".avisos-flutuantes, [data-sobre-dropdown]")) return;
       if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
     // Esc fecha SÓ o painel: tratado na CAPTURA (antes do Modal em volta) e marcado como consumido — o Modal ignora. O
@@ -115,6 +116,8 @@ export function Dropdown({
     // atualização do React é aplicada logo depois deste ouvinte).
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // Uma janela flutuante aberta POR CIMA fecha antes (ela trata o Esc).
+      if (document.querySelector("[data-sobre-dropdown]")) return;
       e.preventDefault();
       fechar();
     };

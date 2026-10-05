@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { esperaReconexao, lerCookie, origemDoProprioSite } from "../src/lib/ao-vivo-core.ts";
 import { CATALOGO_AVISOS, compactarNotificacoes, emailsDaPessoa, lerPrefsEmail, noSino, querEmail, resolverNotificacoes } from "../src/lib/notificacoes-config-core.ts";
-import { comandosExcluirNotificacoes, comandosRetencaoNotificacoes, consultaDispensadas } from "../src/lib/notificacoes-sql.ts";
+import { comandoMarcarLidas, comandosExcluirNotificacoes, comandosRetencaoNotificacoes, consultaDispensadas } from "../src/lib/notificacoes-sql.ts";
 const TETO_NOTIFICACOES = 200;
 import { dataHoraCompleta, grupoDoDia, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, tituloComContagem } from "../src/lib/notificacoes-tela-core.ts";
 import { TIPOS_NOTIFICACAO } from "../src/lib/tarefas-core.ts";
@@ -54,6 +54,9 @@ describe("notificações — configuração do ADM (o e-mail no mínimo)", () =>
   it("validação das rotas", () => {
     assert.deepEqual(notificacoesPatchSchema.parse({ ids: [1] }), { ids: [1], lida: true });
     assert.equal(notificacoesPatchSchema.safeParse({ ids: [] }).success, false);
+    // VISTA no sino: variante própria (não vira um "lida" solto).
+    assert.deepEqual(notificacoesPatchSchema.parse({ ids: [1], visto: true }), { ids: [1], visto: true });
+    assert.equal(notificacoesPatchSchema.safeParse({ ids: [1], visto: false }).success, false);
     assert.equal(notificacoesDeleteSchema.safeParse({ limpar: "lidas" }).success, true);
     assert.equal(notificacoesDeleteSchema.safeParse({ limpar: "outras" }).success, false);
     assert.deepEqual(notificacoesListaSchema.parse({ antes: "30" }), { antes: 30, filtro: "todas", limite: 20 });
@@ -156,6 +159,26 @@ describe("notificações — limpeza no banco (builders no driver D1 real)", () 
     assert.equal(conta(db, 902), 1);
     await orm.batch(comandosExcluirNotificacoes(orm, 901, { limpar: "todas" }) as never);
     assert.equal(conta(db, 901), 0);
+  });
+
+  it("VER marca só as não lidas NÃO fixadas; marcar como não lida FIXA; o toque destrava; marcar todas respeita a trava", async () => {
+    const { db, orm } = banco();
+    db.exec("INSERT INTO notificacoes (id, usuario_id, tipo, titulo, lida) VALUES (1, 901, 'x', 'A', 0), (2, 901, 'x', 'B', 0), (3, 902, 'x', 'C', 0)");
+    const estado = (id: number) => ({ ...(db.prepare("SELECT lida, travada, lida_em IS NOT NULL AS em FROM notificacoes WHERE id = ?").get(id) as { lida: number; travada: number; em: number }) });
+    // Fixar a 2 (não lida).
+    await comandoMarcarLidas(orm, 901, { ids: [2], modo: "nao-lida" });
+    assert.deepEqual(estado(2), { lida: 0, travada: 1, em: 0 });
+    // Ver as duas (e a de outra pessoa): só a 1 vira lida.
+    const vistas = await comandoMarcarLidas(orm, 901, { ids: [1, 2, 3], modo: "visto" });
+    assert.deepEqual(vistas.map((x) => x.id), [1]);
+    assert.deepEqual(estado(1), { lida: 1, travada: 0, em: 1 });
+    assert.deepEqual(estado(3), { lida: 0, travada: 0, em: 0 });
+    // Marcar todas: a fixada fica.
+    await comandoMarcarLidas(orm, 901, { todas: true });
+    assert.equal(estado(2).lida, 0);
+    // O toque no marcador destrava e lê.
+    await comandoMarcarLidas(orm, 901, { ids: [2], modo: "lida" });
+    assert.deepEqual(estado(2), { lida: 1, travada: 0, em: 1 });
   });
 
   it("a retenção: lidas > 30 dias, não lidas > 90, o teto por pessoa (as lidas mais antigas saem antes) e as dispensas vencidas", async () => {

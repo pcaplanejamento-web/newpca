@@ -8,8 +8,16 @@ const adiarAte = z
   .number()
   .int()
   .refine((v) => v > Date.now() && v <= Date.now() + 30 * 86_400_000, "Escolha um horário entre agora e 30 dias.");
-/** ADIAR (`{ids, adiarAte}`), marcar como LIDAS (ou NÃO lidas — `lida:false`) as pedidas, ou todas como lidas. */
-export const notificacoesPatchSchema = z.union([z.strictObject({ ids, adiarAte }), z.strictObject({ ids, lida: z.boolean().default(true) }), z.strictObject({ todas: z.literal(true) })]);
+/**
+ * ADIAR (`{ids, adiarAte}`), VISTAS no sino (`{ids, visto:true}` — só as não travadas), marcar como LIDAS (ou NÃO lidas —
+ * `lida:false` TRAVA) as pedidas, ou todas como lidas (as travadas ficam).
+ */
+export const notificacoesPatchSchema = z.union([
+  z.strictObject({ ids, adiarAte }),
+  z.strictObject({ ids, visto: z.literal(true) }),
+  z.strictObject({ ids, lida: z.boolean().default(true) }),
+  z.strictObject({ todas: z.literal(true) }),
+]);
 
 /** As PREFERÊNCIAS da pessoa (e-mail e sino) — normalizadas por `lerPrefsEmail`/`lerPrefsPessoa` antes de gravar. */
 export const preferenciasNotificacoesSchema = z.object({

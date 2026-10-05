@@ -14,6 +14,34 @@ type Db = DrizzleD1Database<typeof schema>;
 /** Quanto vale a DISPENSA de um aviso derivado (maior que a janela da derivação — 30 dias atrás). */
 export const DIAS_DISPENSA = 40;
 
+/**
+ * LEITURA dos avisos da pessoa: `lida` (o toque no marcador ou abrir o aviso — destrava), `nao-lida` (TRAVA: ver de novo
+ * não a marca como lida), `visto` (o aviso apareceu no sino — só as não lidas NÃO travadas) e `todas` (marcar todas — as
+ * travadas ficam como estão).
+ */
+export type AlvoLeitura = { ids: number[]; modo: "lida" | "nao-lida" | "visto" } | { todas: true };
+
+export function comandoMarcarLidas(db: Db, usuarioId: number, alvo: AlvoLeitura) {
+  const lida = !("modo" in alvo) || alvo.modo !== "nao-lida";
+  const respeitaTrava = !("modo" in alvo) || alvo.modo === "visto";
+  return db
+    .update(notificacoes)
+    .set({
+      lida,
+      lidaEm: lida ? sql`COALESCE(${notificacoes.lidaEm}, CURRENT_TIMESTAMP)` : null,
+      // O toque explícito decide a trava; o "visto" e o "todas" não mexem nela.
+      ...("modo" in alvo && alvo.modo !== "visto" ? { travada: !lida } : {}),
+    })
+    .where(
+      and(
+        eq(notificacoes.usuarioId, usuarioId),
+        "ids" in alvo ? inArray(notificacoes.id, alvo.ids.slice(0, 90)) : undefined,
+        respeitaTrava ? and(eq(notificacoes.lida, false), eq(notificacoes.travada, false)) : undefined,
+      ),
+    )
+    .returning({ id: notificacoes.id });
+}
+
 export type AlvoLimpeza = { ids: number[] } | { limpar: "lidas" | "todas" };
 
 const daPessoa = (usuarioId: number, alvo: AlvoLimpeza) =>

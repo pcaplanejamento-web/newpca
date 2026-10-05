@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, MouseEventHandler, ReactNode } from "react";
 import { IconSpinner } from "./icons";
 
 // Botão do design system (spec §6.8), 100% por token. Substitui a recipe
@@ -64,7 +64,14 @@ export function Button({
   );
   if (href) {
     return (
-      <Link href={href} className={cls}>
+      // Como link: a dica, o nome acessível e o clique (ex.: fechar um banner ao ir) também valem.
+      <Link
+        href={href}
+        className={cls}
+        title={rest.title}
+        aria-label={rest["aria-label"]}
+        onClick={rest.onClick as unknown as MouseEventHandler<HTMLAnchorElement> | undefined}
+      >
         {inner}
       </Link>
     );

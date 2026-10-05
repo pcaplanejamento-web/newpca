@@ -6,9 +6,9 @@ import {
   avisoNovaVersao,
   compararVersoes,
   linkInterno,
-  linkNovidades,
   problemasDasVersoes,
   textoMudancas,
+  versaoDoAviso,
   VERSAO_ATUAL,
   VERSOES,
   type Versao,
@@ -44,11 +44,14 @@ describe("versões do sistema", () => {
     assert.equal(linkInterno("/painel/configuracoes?aba=pcas"), true);
   });
 
-  it("o aviso do ADM traz o que mudou, leva às Novidades da versão e é UM por versão", () => {
+  it("o aviso do ADM traz o que mudou, abre as Novidades da versão e é UM por versão", () => {
     const a = avisoNovaVersao(7);
     assert.equal(a.tipo, "versao");
     assert.equal(a.chave, `versao-sistema:${VERSAO_ATUAL}`);
-    assert.equal(a.link, linkNovidades(VERSAO_ATUAL));
+    assert.equal(a.link, null); // o sino abre as Novidades num banner — não há página
+    assert.equal(versaoDoAviso(a.titulo), VERSAO_ATUAL);
+    assert.equal(versaoDoAviso("Nova versão 1.2.0 — Configurações reorganizadas"), "1.2.0");
+    assert.equal(versaoDoAviso("Nova versão 9.9.9 — inexistente"), VERSAO_ATUAL);
     for (const m of VERSOES[0].mudancas.slice(0, 4)) assert.ok(a.texto.includes(m.texto));
     const muitas: Versao = { versao: "9.0.0", data: "2026-10-05", titulo: "T", mudancas: Array.from({ length: 6 }, (_, i) => ({ tipo: "novo" as const, area: "A", texto: `m${i}` })) };
     assert.match(textoMudancas(muitas), /e mais 2 mudanças$/);

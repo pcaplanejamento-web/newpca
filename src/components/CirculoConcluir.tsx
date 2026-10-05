@@ -5,7 +5,8 @@ import { IconCheck } from "./icons";
 /**
  * O CÍRCULO de concluir (como o Trello): vazio = aberta; verde com ✓ = concluída. Conclui/reabre NO LUGAR — a tarefa não
  * sai da lista. `discreto` = só aparece com o mouse sobre o `group/cartao` (ou no foco/toque) enquanto aberta. A área de
- * toque passa de 44px no celular sem aumentar o desenho.
+ * toque passa de 44px no celular sem aumentar o desenho. `rotulos` = o que o toque faz em cada estado (padrão
+ * Concluir/Reabrir — ex.: o marcador de LIDA do sino).
  */
 export function CirculoConcluir({
   concluida,
@@ -14,6 +15,7 @@ export function CirculoConcluir({
   tamanho = "sm",
   discreto = false,
   disabled = false,
+  rotulos = { marcar: "Concluir", desmarcar: "Reabrir" },
 }: {
   concluida: boolean;
   onAlternar: () => void;
@@ -22,14 +24,15 @@ export function CirculoConcluir({
   tamanho?: "sm" | "md";
   discreto?: boolean;
   disabled?: boolean;
+  rotulos?: { marcar: string; desmarcar: string };
 }) {
   const dim = tamanho === "md" ? "h-5 w-5" : "h-4 w-4";
   return (
     <button
       type="button"
       aria-pressed={concluida}
-      aria-label={`${concluida ? "Reabrir" : "Concluir"}: ${rotulo}`}
-      title={concluida ? "Reabrir" : "Concluir"}
+      aria-label={`${concluida ? rotulos.desmarcar : rotulos.marcar}: ${rotulo}`}
+      title={concluida ? rotulos.desmarcar : rotulos.marcar}
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();

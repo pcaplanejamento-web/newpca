@@ -5,7 +5,7 @@
  * Como publicar uma versão nova: acrescente uma entrada NO TOPO de `VERSOES` (a versão maior que a anterior — semver:
  * MAIOR quando muda o jeito de trabalhar, MENOR para recurso novo, CORREÇÃO para ajuste), cada mudança com o `link` de
  * ONDE ela está, e ponha o mesmo número no `package.json`. O deploy faz o resto: o menu mostra o número e cada ADM
- * recebe UM aviso no sino com o que mudou.
+ * recebe UM aviso no sino com o que mudou (tocar abre as Novidades num banner flutuante — sem sair da tela).
  */
 
 export type TipoMudanca = "novo" | "melhoria" | "correcao";
@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.4.0",
+    data: "2026-10-05",
+    titulo: "Sino: ver é ler, fixar não lidas e Novidades flutuantes",
+    mudancas: [
+      { tipo: "melhoria", area: "Sino", texto: "Ver o aviso no sino já o marca como visualizado — sem precisar abrir." },
+      { tipo: "melhoria", area: "Sino", texto: "Novo marcador de visualizada: vazio enquanto não vista, colorido com ✓ depois." },
+      { tipo: "novo", area: "Sino", texto: "Marcar como não visualizada FIXA o aviso: ver de novo não o marca; o toque no marcador solta." },
+      { tipo: "melhoria", area: "Novidades", texto: "Abrem num banner flutuante ao lado do sino (ou pela versão no menu), sem sair da tela." },
+      { tipo: "correcao", area: "Mesa", texto: "Totais auditados: valor do protocolo = soma dos DFDs = soma dos itens; gravação incompleta aponta erro.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.3.2",
     data: "2026-10-05",
     titulo: "Vínculo do orçamento mais simples",
@@ -54,8 +66,8 @@ export const VERSOES: readonly Versao[] = [
     data: "2026-10-05",
     titulo: "Versão do sistema e Novidades",
     mudancas: [
-      { tipo: "novo", area: "Menu", texto: "O número da versão do sistema aparece no fim do menu lateral; tocar abre as Novidades.", link: "/painel/novidades" },
-      { tipo: "novo", area: "Novidades", texto: "Página com o histórico de versões: o que mudou em cada uma e o botão para ir até onde mudou.", link: "/painel/novidades" },
+      { tipo: "novo", area: "Menu", texto: "O número da versão do sistema aparece no fim do menu lateral; tocar abre as Novidades." },
+      { tipo: "novo", area: "Novidades", texto: "O histórico de versões: o que mudou em cada uma e o botão para ir até onde mudou." },
       { tipo: "novo", area: "Notificações", texto: "Os administradores recebem no sino cada versão nova, com o que mudou.", link: "/painel/configuracoes?aba=notificacoes" },
     ],
   },
@@ -105,9 +117,6 @@ export const linkInterno = (l: string) => l.startsWith("/") && !l.startsWith("//
 
 export const versaoPorNumero = (v: string | null | undefined): Versao | undefined => VERSOES.find((x) => x.versao === v);
 
-/** A página de Novidades aberta numa versão. */
-export const linkNovidades = (v?: string) => (v ? `/painel/novidades?versao=${encodeURIComponent(v)}` : "/painel/novidades");
-
 /** "05/10/2026". */
 export const dataVersao = (d: string) => {
   const [a, m, dia] = d.split("-");
@@ -124,16 +133,22 @@ export function textoMudancas(v: Versao): string {
   return linhas.join("\n");
 }
 
-/** O aviso no sino de cada Administrador: UM por versão (a `chave`), com o que mudou e o link às Novidades daquela versão
- * (de lá, cada mudança leva ao lugar dela). */
+/** O aviso no sino de cada Administrador: UM por versão (a `chave`), com o que mudou. Sem link: o sino abre as Novidades
+ * daquela versão num banner flutuante (de lá, cada mudança leva ao lugar dela). */
 export const avisoNovaVersao = (usuarioId: number, v: Versao = VERSOES[0]) => ({
   usuarioId,
   tipo: "versao" as const,
   titulo: `Nova versão ${v.versao} — ${v.titulo}`,
   texto: textoMudancas(v),
-  link: linkNovidades(v.versao),
+  link: null,
   chave: `versao-sistema:${v.versao}`,
 });
+
+/** A versão de um aviso "versao" (pelo título que `avisoNovaVersao` escreve); desconhecida = a atual. */
+export function versaoDoAviso(titulo: string): string {
+  const v = /vers[aã]o (\d+\.\d+\.\d+)/i.exec(titulo)?.[1];
+  return v && versaoPorNumero(v) ? v : VERSAO_ATUAL;
+}
 
 /** Os problemas do registro (o teste exige nenhum): ordem, números, datas, links e mudanças. */
 export function problemasDasVersoes(lista: readonly Versao[] = VERSOES): string[] {
