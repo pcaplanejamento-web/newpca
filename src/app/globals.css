@@ -471,6 +471,38 @@
   animation: none;
 }
 
+/* ABAS: o painel novo ENTRA pelo lado da troca (para a direita = vem da direita). */
+@keyframes aba-direita {
+  from {
+    opacity: 0;
+    translate: 14px 0;
+  }
+}
+@keyframes aba-esquerda {
+  from {
+    opacity: 0;
+    translate: -14px 0;
+  }
+}
+.animate-aba-direita {
+  animation: aba-direita var(--motion-duration) var(--motion-ease) both;
+}
+.animate-aba-esquerda {
+  animation: aba-esquerda var(--motion-duration) var(--motion-ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-aba-direita,
+  .animate-aba-esquerda {
+    animation: none;
+  }
+}
+[data-motion="off"] .animate-aba-direita,
+[data-motion="off"] .animate-aba-esquerda,
+[data-motion="reduced"] .animate-aba-direita,
+[data-motion="reduced"] .animate-aba-esquerda {
+  animation: none;
+}
+
 /* Barra de FAIXA (filtro R$ do cabeçalho): dois <input type=range> sobrepostos num trilho — só as
    ALÇAS recebem clique/toque (o trilho é desenhado por baixo). Alça grande o bastante p/ o dedo. */
 .faixa-dupla {

@@ -3,6 +3,10 @@
 import type { SVGProps } from "react";
 import {
   Activity,
+  BookOpen,
+  LogIn,
+  Rows3,
+  Tags,
   AlarmClock,
   BellOff,
   Eraser,
@@ -325,3 +329,9 @@ export const IconAdiar = AlarmClock;
 export const IconLimpar = Eraser;
 export const IconSom = Volume2;
 export const IconAlertaSistema = MonitorSmartphone;
+// As abas de CONFIGURAÇÕES.
+export const IconTelaAcesso = LogIn;
+export const IconLinhas = Rows3;
+export const IconSituacoes = Tags;
+export const IconAvaliacao = ListChecks;
+export const IconReferencia = BookOpen;

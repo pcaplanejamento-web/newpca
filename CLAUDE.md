@@ -3098,7 +3098,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DE/ATÉ); alvos de 44px no toque; aberto pelo teclado, o foco vai à opção marcada
   e volta ao gatilho ao escolher/Esc; a conversão em datas é pura — `intervaloDoPeriodo`, `src/lib/periodo.ts`),
   `MultiSelectHeader`,
-  `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
+  **`Tabs`** (`horizontal` = sublinhado que desliza, faixa com esmaecimento nas bordas | `lateral` = no desktop a lista à esquerda com o fundo que desliza até a ativa; monta SÓ a aba aberta — as visitadas ficam escondidas, guardam o rascunho; o painel ENTRA pelo lado da troca — `animate-aba-direita/esquerda`; `alturaTela` = no desktop no máximo até o fim do display, descontando o respiro dos contornos em volta — a página não rola, o painel rola por dentro e a altura segue o conteúdo; `url` = a aba no parâmetro da URL; teclado ←/→/↑/↓/Home/End com o foco junto; `Tab.dica` = a dica; arrastar o dedo troca, menos em campos/tabelas/faixas que rolam de lado), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única
   `#avisos-flutuantes` — `.avisos-flutuantes` em `globals.css`, acima da navegação inferior do celular, da `BarraSelecao`
   fixa via `--reserva-rodape` e do rodapé da tabela da Mesa via `--rodape-tabela`; cor/ícone pelo token de feedback, `carregando` = spinner, `onClose` + `duracao` = fecha
@@ -3295,7 +3295,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `theme.ts` `aparenciaToCss` **anti-XSS por allowlist**). Migração `0008`. O **"Restaurar padrão"** (`DELETE
   /api/admin/aparencia`) zera SÓ as chaves VISUAIS (`CHAVES_VISUAIS`/`semChavesVisuais`) — a identidade, as tabelas e os
   blocos irmãos do MESMO registro (`avaliacao`, `integracoes`) ficam (antes o registro inteiro virava "{}").
-- **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin) reúne o **novo**
+- **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin — `Tabs layout="lateral" alturaTela url="aba"`: abas com ícone e dica à esquerda, cabe no display sem rolar a página, `?aba=` reabre na aba; as explicações no "(?)" — `Ajuda`; excluir PCA pela confirmação do sistema) reúne o **novo**
   + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
   `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **Papéis** (`PapeisAdmin` — ver "PAPÉIS"),
   **Tabelas** (as LINHAS POR PÁGINA com que as
