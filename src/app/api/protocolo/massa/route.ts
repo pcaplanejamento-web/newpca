@@ -2,6 +2,7 @@ import { motivoRecusa } from "@/lib/acesso";
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloLegivel } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
+import { avisarResponsavelProtocolo } from "@/lib/avisos-mesa";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
 import { somatorioProcesso } from "@/lib/conferencia-dfd";
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
 
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
+  const designados: Parameters<typeof avisarResponsavelProtocolo>[1] = [];
   for (const pr of await listarProtocolosPorIds(ids)) {
     try {
       // Fora da unidade ou das LINHAS da pessoa ("só os meus"): a MESMA falha genérica, sem o número (não revela o
@@ -104,9 +106,12 @@ export async function POST(req: Request) {
         detalhe,
       });
       alterados++;
+      if (acao.campo === "responsavel" && acao.responsavelId != null) designados.push({ responsavelId: acao.responsavelId, protocolo: pr });
     } catch (e) {
       falhas.push({ id: pr.id, numero: pr.numero, motivo: e instanceof Error ? e.message : "falha ao gravar" });
     }
   }
+  // O novo responsável recebe UM aviso com os protocolos que passaram a ser dele.
+  await avisarResponsavelProtocolo(a.u, designados);
   return ok({ alterados, falhas });
 }

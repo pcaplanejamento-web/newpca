@@ -2420,13 +2420,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     aberta, mesmos responsáveis/observadores/etiquetas/vínculo/estimativa, checklist desmarcado). BEST-EFFORT; as rotas
     devolvem `atualizar` (o quadro recarrega). `avisarSobreTarefa`/`avisarAtribuicao` (responsável NOVO na criação, edição e
     massa; menção NOVA no comentário/edição; "comentou" aos que acompanham).
-  - **Notificações (`notificacoes.ts`):** `notificar` BEST-EFFORT (nunca o próprio ator); **as de prazo são DERIVADAS NA
-    LEITURA** (`contarNaoLidas` no layout e `listarNotificacoes`: tarefas abertas em que a pessoa é responsável, nos quadros
-    dos grupos dela, prazo de 30 dias atrás até amanhã → gravadas pela `chave`, então o "lida" persiste); as lidas saem após
-    60 dias. `GET /api/notificacoes` (`?contar=1` = só o número) e `PATCH` (`{ids ≤ 90}` | `{todas:true}`).
-    **`SinoNotificacoes`** (cabeçalho do `AppShell`): contador do layout, reconta ao trocar de tela e ao voltar à janela
-    (sem polling); ao abrir carrega a lista (`ItemNotificacao`: foto do autor ou ícone do tipo, cor do semáforo nas de
-    prazo); tocar marca lida e abre a tarefa (`linkTarefa` → `?tarefa=`); "Marcar todas como lidas".
+  - **Notificações (`notificacoes.ts`):** ver a seção própria **"NOTIFICAÇÕES"** (em Integrações) — o sino, o tempo real,
+    a limpeza e o e-mail.
   - **Aba Dashboard** (1ª aba; `DashboardTarefas` por `next/dynamic`, esqueleto = `DashboardMesaEsqueleto`): KPIs (abertas
     + spark, atrasadas, vencem em até 2 dias, concluídas no mês + % no prazo, tempo médio até concluir) + Saúde dos prazos,
     **Carga por pessoa** (tocar filtra o Responsável do quadro), Tarefas por lista (âmbar acima do WIP), Abertas por
@@ -3422,19 +3417,84 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`resend-config.ts`** (`resendDaConfig`, leitura FRESCA). `POST …/testar {alvo:"resend"}`: confere o domínio do remetente
   (`verified`; a chave "só envio" dá 401 na lista → segue) e manda um e-mail de TESTE a quem testou; enviado = verificado.
   Núcleo PURO **`email-core.ts`** (modelos com o texto ESCAPADO e link ABSOLUTO — `urlAbsoluta` só aceita caminho interno;
-  `emailDaNotificacao`/`emailCadastroPendente`/`emailAcessoLiberado`/`emailTeste`; preferências `email:notificacoes` em
-  `preferencias_tabela` — `lerPrefsEmail`/`querEmail`, padrão LIGADO só p/ atribuída, menção, convite, vence amanhã,
-  atrasada e lembrete). Envio em **`email.ts`** (BEST-EFFORT, nunca lança): `enviarEmailsPendentes` = as notificações do
-  sino com `email_enviado_em` NULL, < 3 tentativas e das últimas 48 h (`email-sql.ts`, testado no D1 real) → RESERVA
-  (compare-and-set: duas passadas nunca repetem) → envia em LOTE às pessoas ATIVAS que querem o tipo (as demais ficam
-  tratadas sem envio) → falha devolve a pendente com +1 tentativa. Gatilhos: `notificar` (depois da resposta —
-  `depoisDaResposta` agora em **`segundo-plano.ts`**), o **cron** `POST /api/integracoes/email/cron` (o `worker.ts` chama as
-  duas rotas de cron; autenticação comum **`cronAutorizado`**, `cron.ts`) que DERIVA os avisos de prazo/lembrete de 40
-  pessoas ativas por passada em rodízio (`derivarDaPessoa`) e envia os pendentes, o cadastro pendente (e-mail aos ADMs
-  ativos) e a aprovação pendente → ativo (`PATCH /api/admin/usuarios/[id]`, e-mail à pessoa). A `0065` marca o histórico
-  como tratado (nada de enviar o passado). Perfil → **"E-mail"** (só com o Resend ativo): `Switch` + os tipos, gravado pelo
-  `PUT /api/preferencias/tabela`. Setup/DNS em `docs/INTEGRACOES.md` (recebimento DESLIGADO — o MX da raiz é o e-mail do
-  domínio). Testes: `tests/resend-email.test.ts`.
+  `emailDaNotificacao`/`emailAcessoLiberado`/`emailCodigo`/`emailTeste`; as preferências moram em
+  `notificacoes-config-core.ts` — ver "NOTIFICAÇÕES"). Envio em **`email.ts`** (BEST-EFFORT, nunca lança):
+  `enviarEmailsPendentes` = as notificações do sino com `email_enviado_em` NULL, < 3 tentativas, das últimas 48 h e com a
+  reserva LIVRE (`email-sql.ts`, testado no D1 real) → RESERVA com validade (`email_reservado_em`, compare-and-set: duas
+  passadas nunca repetem) → envia em LOTE o que o ADM manda por e-mail às pessoas ATIVAS que não desligaram (as demais ficam
+  tratadas sem envio) → **só o envio CONFIRMADO marca `email_enviado_em`** (`comandoConfirmarEmails`); falha devolve a
+  pendente com +1 tentativa; a reserva não confirmada (o Worker caiu) VENCE em 10 min e volta à fila — nada se perde. O
+  aviso de quadro PRIVADO de outra pessoa não sai. Gatilhos: `notificar` (depois da resposta — `depoisDaResposta` em
+  **`segundo-plano.ts`**; só quando algum aviso tem e-mail) e o **cron** `POST /api/integracoes/email/cron` (gatilho PRÓPRIO
+  `2-59/5` — ver NOTIFICAÇÕES). O acesso liberado (`PATCH /api/admin/usuarios/[id]`) só sai com o aviso `acesso` ligado pelo
+  ADM. A `0065` marca o histórico como tratado (nada de enviar o passado). Setup/DNS em `docs/INTEGRACOES.md` (recebimento
+  DESLIGADO — o MX da raiz é o e-mail do domínio). Testes: `tests/resend-email.test.ts`.
+- **NOTIFICAÇÕES — controle central, e-mail mínimo, limpeza no banco e TEMPO REAL (migração `0083`, aditiva:
+  `notificacoes.email_reservado_em`, índices por tarefa/quadro/(pessoa, id) e o parcial dos pendentes, tabela
+  `notificacoes_dispensadas`; a migração encerra os e-mails pendentes velhos/desistidos):**
+  - **Catálogo + Configurações → Notificações (ADM):** núcleo PURO **`notificacoes-config-core.ts`** — `CATALOGO_AVISOS`
+    (cada aviso: rótulo, descrição, grupo Tarefas · Calendário · Mesa e PCA · Administração e o padrão), por aviso os canais
+    **Sino** (o aviso existe), **E-mail** e **Pode desligar** (a pessoa desliga o e-mail no Perfil). Padrão = **e-mail
+    MÍNIMO**: só atribuída, atrasada, convite, protocolo designado, cadastro pendente (não desligável) e acesso liberado (só
+    e-mail, não desligável); o resto só no sino. `resolverNotificacoes` (qualquer JSON → a config resolvida),
+    `compactarNotificacoes` (só o que difere do padrão — blob `configuracoes`, chave `notificacoes`, sem migração), `noSino`,
+    `querEmail(cfg, prefs, chave)`, `emailsDaPessoa`, `lerPrefsEmail` (`{ligado, desligados, destino}` — o formato antigo
+    `tipos` vira desligados). D1 em `notificacoes-config.ts` (cache 60 s, fail-safe = padrões); rota `GET/PATCH/DELETE
+    /api/admin/notificacoes` (`exigirAdmin`, `configNotificacoesSchema`, auditoria com o diff). Tela **`NotificacoesAdmin`**
+    (aba "Notificações": por grupo, as três chaves por aviso — desligar o sino trava o resto —, Salvar/Padrão, Ajuda).
+    **Perfil → Avisos por e-mail** lista só o que o ADM manda por e-mail (os obrigatórios travados) e grava os desligados.
+  - **Gravação (`notificacoes.ts`):** `notificar` → `gravarAvisos`: o tipo desligado no sino não é gravado, o sem e-mail
+    já nasce tratado (`NovaNotificacao.semEmail` → `email_enviado_em`), o INSERT devolve quem recebeu de fato (`returning`;
+    a chave repetida não volta) e só essas pessoas recebem o aviso AO VIVO. A massa de tarefas e as automações juntam os
+    avisos de TODAS as tarefas num `notificar` só (`avisosSobreTarefa`, `seguidoresDasTarefas` — 2 consultas para todas,
+    no lugar de um `getTarefa` por tarefa) e a massa só avisa quem PASSOU a ser responsável/da equipe (`jaResponsavelEm`/
+    `jaComEquipe`). Os DERIVADOS (prazo — agora também **"vence hoje"** —, lembrete, versão da extensão) saem de UMA
+    derivação por pessoa a cada 5 min (`INTERVALO_DERIVAR`, por isolate; o cron força), sem os DISPENSADOS, com `ORDER BY`
+    nos tetos de 200; o lembrete de evento de tarefa CONCLUÍDA não dispara. A contagem é 1 `COUNT` (falha = `null`: a tela
+    mantém o último número).
+  - **Acesso:** a lista e a contagem só trazem o aviso de quadro VISÍVEL (privado = só o dono) dos grupos em que a pessoa
+    abre Tarefas/Calendário (`acessivel`); mover a tarefa de quadro leva os avisos junto (`comandosMoverQuadro` atualiza o
+    `quadro_id`). **Link canônico** `/painel/tarefas/abrir/<id>` (`linkTarefa(id)`): acha o quadro ATUAL da tarefa (a
+    movida continua abrindo; a excluída diz que não existe) — também no "Copiar link"; o `QuadroTarefas` abre o `?tarefa=`
+    a cada chegada NOVA (o aviso de outra tarefa do MESMO quadro abre).
+  - **Limpar de verdade:** `DELETE /api/notificacoes` (`{ids}` | `{limpar:"lidas"|"todas"}`, só as da pessoa) →
+    `comandosExcluirNotificacoes` (`notificacoes-sql.ts`, testado no D1 real): apaga do banco e DISPENSA no mesmo lote os
+    derivados (a chave não volta por `DIAS_DISPENSA`=40). **Retenção** no cron (`comandosRetencaoNotificacoes`): lidas > 30
+    dias, não lidas > 90, o **teto de 200 por pessoa** (as lidas mais antigas saem antes) e as dispensas vencidas; a fila do
+    e-mail sem o que desistiu ou ficou velho (`comandoEncerrarEmailsVelhos`). A lista é PAGINADA (`?antes=<id>&filtro=
+    nao-lidas|todas&limite=20` → `{itens, naoLidas, mais}`) e a tela guarda até `MAX_AVISOS_NA_TELA`=100.
+  - **TEMPO REAL:** Durable Object **`CaixaNotificacoes`** (`src/lib/caixa-notificacoes-do.ts`, um por pessoa —
+    `idFromName("u<id>")`, WebSocket com HIBERNAÇÃO + auto-resposta do "ping"; até 10 abas; binding `CAIXA_NOTIFICACOES` +
+    `migrations new_sqlite_classes` no `wrangler.jsonc`, exportado pelo `worker.ts`). O `worker.ts` atende
+    `/api/notificacoes/ao-vivo` ANTES do Next: só do próprio site (`origemDoProprioSite`), com a sessão de uma pessoa ATIVA
+    (cookie `pca_session` → SHA-256 → `sessoes`, no binding D1 cru) → a caixa dela. `avisarAoVivo(ids)`
+    (`notificacoes-ao-vivo.ts`, depois da resposta, até `MAX_AO_VIVO`=25 por requisição) pinga as caixas a cada aviso
+    gravado, lido ou limpo — as outras abas e aparelhos acompanham. Núcleo puro `ao-vivo-core.ts` (`lerCookie`,
+    `esperaReconexao` 2 s → 60 s). Sem o canal (dev, falha), a tela confere a cada 60 s com a aba à vista.
+  - **Crons separados:** `triggers.crons` = `*/5` (Trello) e `2-59/5` (e-mails/avisos), cada um uma invocação com o próprio
+    limite de consultas (`worker.ts` → `ROTAS_CRON` por `evento.cron`). O dos e-mails roda a retenção sempre e, com o
+    Resend ativo, deriva os avisos de 4 pessoas por passada (`PESSOAS_POR_PASSADA`, ~7 consultas cada — abaixo das 50).
+  - **SINO moderno (`SinoNotificacoes`):** desktop = painel preso ao sino (`Dropdown papel="dialog"`, 400px); celular =
+    folha (`Modal`). Abas **Todas | Não lidas (N)**, filtro por tipo (`ChipsEscolha`), avisos **agrupados por dia** (Hoje ·
+    Ontem · Esta semana · Antes — o dia de Brasília) com os **repetidos juntos** ("+N", expande), **hora relativa** ("há 5
+    min", a completa na dica — núcleo puro `notificacoes-tela-core.ts`), ações no hover/foco (sempre à vista no toque):
+    **marcar lida/não lida** e **excluir**; rodapé **Marcar todas como lidas · Limpar lidas · Limpar tudo** (confirma; a tela
+    tira na hora e o banco só é limpo depois do **Desfazer** de 6 s — ou ao sair da página, `keepalive`) e **Configurar**
+    (Perfil; o ADM, Configurações → Notificações). Rolagem infinita; ↑/↓ entre os avisos, Delete exclui; o aviso ao vivo
+    MESCLA a 1ª página (`mesclarPrimeiraPagina` — as páginas carregadas ficam, o que está sendo limpo não volta). **Aviso
+    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), a **prévia flutuante** com
+    "Abrir" (6 s), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
+    altura recolhe); tudo respeita "reduzir movimento". Ícones novos `IconLidas`/`IconNaoLida`/`IconSemAvisos`/
+    `IconEventoAlterado`/`IconCadastro`.
+  - **Avisos novos (tipos `vence_hoje`, `evento`, `protocolo`, `pca`, `cadastro`):** **Mesa** — o responsável designado a um
+    protocolo (célula/banner e massa — na massa UM aviso por pessoa com a contagem; `avisos-mesa.ts`
+    `avisarResponsavelProtocolo`, link `linkProtocolo` = a Mesa em que o protocolo está); **PCA** — enviado, incorporado ou
+    devolvido, ao responsável (`avisarPcaProtocolos`); **Administração** — o cadastro pendente vai ao SINO dos ADMs (e ao
+    e-mail pela fila — `idsDosAdmins`); **Calendário** — evento com data/hora/local/link alterado ou CANCELADO, aos
+    convidados que não recusaram (`avisarEventoAlterado`); **Tarefas** — "vence hoje".
+  - Testes: `tests/notificacoes.test.ts` (catálogo/config, prefs, validação, dia/hora relativa/repetidos/título, canal ao
+    vivo, gravação com `returning`, exclusão + dispensa e retenção no driver D1 real, mescla) + `tests/resend-email.test.ts`
+    (reserva com validade e confirmação).
 - **LOGIN COM GOOGLE (OAuth, sem migração):** cartão **"Login com Google"** em Integrações (`IntegracaoGoogle`,
   catalogado): `integracoes.google` = `{ativo, clientId, clientSecret CIFRADO write-only}` (`GoogleConfig`,
   `googleConfigurado`); o cartão mostra a URI de redirecionamento (`/api/auth/google/callback`, com Copiar) e "Testar"

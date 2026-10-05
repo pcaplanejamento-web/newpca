@@ -1322,12 +1322,30 @@ export const notificacoes = sqliteTable(
     /** Quando o E-MAIL desta notificação foi tratado (enviado ou pulado — migração `0065`); NULL = pendente. */
     emailEnviadoEm: text("email_enviado_em"),
     emailTentativas: integer("email_tentativas").notNull().default(0),
+    /** A RESERVA do envio (migração `0083`): vale 10 min — o envio não confirmado volta à fila. */
+    emailReservadoEm: text("email_reservado_em"),
   },
   (t) => [
     index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id),
     uniqueIndex("notificacoes_chave_uq").on(t.usuarioId, t.chave),
     index("notificacoes_email_idx").on(t.emailEnviadoEm, t.id),
+    index("notificacoes_tarefa_idx").on(t.tarefaId),
+    index("notificacoes_quadro_idx").on(t.quadroId),
+    index("notificacoes_usuario_id_idx").on(t.usuarioId, t.id),
   ],
+);
+
+/** Os avisos DERIVADOS (prazo, lembrete) que a pessoa LIMPOU (migração `0083`): não voltam até `ate`. */
+export const notificacoesDispensadas = sqliteTable(
+  "notificacoes_dispensadas",
+  {
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    chave: text("chave").notNull(),
+    ate: text("ate").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.chave] }), index("notificacoes_dispensadas_ate_idx").on(t.ate)],
 );
 
 /** Os CONVIDADOS de um evento e a RESPOSTA de cada um (migração `0048`). */

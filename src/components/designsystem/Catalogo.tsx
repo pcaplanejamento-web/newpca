@@ -2773,11 +2773,19 @@ function TarefasDemo() {
         <RecorrenciaTarefa valor={rec} onChange={setRec} prazo="2026-06-03" inicio={null} hoje="2026-06-01" />
         <div className="max-w-sm space-y-1 rounded-card border border-border p-2">
           <ItemNotificacao
-            n={{ id: 1, tipo: "mencionada", titulo: "Bruno mencionou você", texto: "#128 Conferir DFDs do protocolo · Planejamento", link: null, lida: false, criadoEm: "2026-06-01 12:00:00", ator: { id: 2, nome: "Bruno Lima", foto: null } }}
+            n={{ id: 1, tarefaId: 128, tipo: "mencionada", titulo: "Bruno mencionou você", texto: "#128 Conferir DFDs do protocolo · Planejamento", link: null, lida: false, criadoEm: "2026-06-01 12:00:00", ator: { id: 2, nome: "Bruno Lima", foto: null } }}
+            agora={Date.parse("2026-06-01T12:05:00Z")}
+            outros={[{ id: 3, tarefaId: 128, tipo: "mencionada", titulo: "Bruno mencionou você", texto: null, link: null, lida: false, criadoEm: "2026-06-01 11:00:00", ator: null }]}
+            onExpandir={() => {}}
+            onLida={() => {}}
+            onExcluir={() => {}}
             onAbrir={() => {}}
           />
           <ItemNotificacao
-            n={{ id: 2, tipo: "atrasada", titulo: "Tarefa atrasada (prazo 30/05)", texto: "#129 Atualizar o catálogo · Planejamento", link: null, lida: true, criadoEm: "2026-06-01 09:00:00", ator: null }}
+            n={{ id: 2, tarefaId: 129, tipo: "atrasada", titulo: "Tarefa atrasada (prazo 30/05)", texto: "#129 Atualizar o catálogo · Planejamento", link: null, lida: true, criadoEm: "2026-06-01 09:00:00", ator: null }}
+            agora={Date.parse("2026-06-01T12:05:00Z")}
+            onLida={() => {}}
+            onExcluir={() => {}}
             onAbrir={() => {}}
           />
         </div>

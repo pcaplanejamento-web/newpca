@@ -1,6 +1,7 @@
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloLegivel, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
+import { avisarResponsavelProtocolo } from "@/lib/avisos-mesa";
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId } from "@/lib/grupos";
@@ -87,6 +88,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // não sobrescreve a 1ª).
   if (!(await atualizarProtocolo(id, campos, campos.responsavelId !== undefined ? proto.responsavelId : undefined)))
     return erro(MSG_RESPONSAVEL_MUDOU, 409);
+  // O novo RESPONSÁVEL recebe o aviso (o sino; o e-mail como o ADM configurou).
+  if (campos.responsavelId != null && campos.responsavelId !== proto.responsavelId)
+    await avisarResponsavelProtocolo(a.u, [{ responsavelId: campos.responsavelId, protocolo: { id, numero: proto.numero, assunto: campos.assunto ?? proto.assunto, pcaId: proto.pcaId } }]);
   // Histórico: o que mudou, antes → depois, com rótulos legíveis (sigla da unidade, nomes).
   const detalhe = await detalheSeguro(() => detalheEdicaoProtocolo(proto, campos), {});
   await registrarAuditoria({

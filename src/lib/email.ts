@@ -4,7 +4,9 @@ import { getAparencia } from "./aparencia";
 import { papelDoUsuarioSql } from "./auth";
 import { getDb } from "./db";
 import { type ContextoEmail, type ConteudoEmail, emailDaNotificacao, enderecoDosAvisos, lerPrefsEmail, NOME_SISTEMA_PADRAO, querEmail } from "./email-core";
-import { comandoDevolverEmails, comandoReservarEmails, consultaPendentesEmail } from "./email-sql";
+import { comandoConfirmarEmails, comandoDevolverEmails, comandoReservarEmails, consultaPendentesEmail } from "./email-sql";
+import { getConfigNotificacoes } from "./notificacoes-config";
+import type { ChaveAviso } from "./notificacoes-config-core";
 import type { EmailResend } from "./resend-api";
 import { MAX_LOTE_RESEND } from "./resend-api";
 import { resendDaConfig } from "./resend-config";
@@ -33,9 +35,10 @@ export async function contextoEmail(urlSistema: string): Promise<ContextoEmail> 
 const emParticoes = <T>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
 /**
- * Envia os e-mails PENDENTES das notificações do sino: as que a pessoa (ativa) quer recebem o e-mail; as demais são
- * marcadas como tratadas sem enviar. Reserva antes de enviar (duas passadas nunca repetem um e-mail); falha = volta a
- * pendente com uma tentativa a mais (desiste após 3). Nunca lança.
+ * Envia os e-mails PENDENTES das notificações do sino: os que o ADM manda por e-mail E a pessoa (ativa) não desligou;
+ * os demais são marcados como tratados sem enviar. Reserva antes de enviar (duas passadas nunca repetem um e-mail) e só
+ * marca como ENVIADO com o envio confirmado; falha = volta a pendente com uma tentativa a mais (desiste após 3); a
+ * reserva que não terminou (o Worker caiu) vence em 10 min e volta à fila. Nunca lança.
  */
 export async function enviarEmailsPendentes(limite = 50): Promise<{ enviados: number; pulados: number; falhas: number }> {
   const res = { enviados: 0, pulados: 0, falhas: 0 };
@@ -52,8 +55,9 @@ export async function enviarEmailsPendentes(limite = 50): Promise<{ enviados: nu
     ))
       for (const r of await comandoReservarEmails(db, ids)) reservados.add(r.id);
     const meus = pendentes.filter((p) => reservados.has(p.id));
-    const ctx = await contextoEmail(cfg.urlSistema);
+    const [ctx, avisos] = await Promise.all([contextoEmail(cfg.urlSistema), getConfigNotificacoes()]);
     const envio: { id: number; email: EmailResend }[] = [];
+    const pulados: number[] = [];
     for (const p of meus) {
       let prefs = lerPrefsEmail(null);
       try {
@@ -61,18 +65,25 @@ export async function enviarEmailsPendentes(limite = 50): Promise<{ enviados: nu
       } catch {
         /* preferência corrompida = padrão */
       }
-      if (p.status !== "ativo" || !p.email || !querEmail(prefs, p.tipo)) {
+      if (p.status !== "ativo" || !p.email || !querEmail(avisos, prefs, p.tipo as ChaveAviso)) {
         res.pulados++;
+        pulados.push(p.id);
         continue;
       }
       const tipo = (TIPOS_NOTIFICACAO as readonly string[]).includes(p.tipo) ? (p.tipo as TipoNotificacao) : "automacao";
       const c = emailDaNotificacao({ tipo, titulo: p.titulo, texto: p.texto, link: p.link, atorNome: p.atorNome }, ctx);
       envio.push({ id: p.id, email: paraResend(cfg.remetente, [enderecoDosAvisos(prefs, p.email, p.googleEmail)], c) });
     }
+    for (const ids of emParticoes(pulados, 90)) await comandoConfirmarEmails(db, ids);
     for (const lote of emParticoes(envio, MAX_LOTE_RESEND)) {
       try {
         await cfg.cliente.enviarLote(lote.map((l) => l.email));
         res.enviados += lote.length;
+        for (const ids of emParticoes(
+          lote.map((l) => l.id),
+          90,
+        ))
+          await comandoConfirmarEmails(db, ids);
       } catch (e) {
         console.error("[email] lote falhou:", (e as Error).message);
         res.falhas += lote.length;
@@ -115,12 +126,12 @@ export async function enviarEmailDireto(para: string[], montar: (ctx: ContextoEm
   }
 }
 
-/** Os e-mails dos ADMs ativos (avisos de cadastro) — pelo PAPEL Administrador. */
-export async function emailsDosAdmins(): Promise<string[]> {
+/** Os ADMs ativos (o aviso de cadastro pendente) — pelo PAPEL Administrador. */
+export async function idsDosAdmins(): Promise<number[]> {
   const linhas = await getDb()
-    .select({ email: usuarios.email })
+    .select({ id: usuarios.id })
     .from(usuarios)
     .innerJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
     .where(and(eq(papeis.chave, "admin"), eq(usuarios.status, "ativo")));
-  return linhas.map((l) => l.email);
+  return linhas.map((l) => l.id);
 }

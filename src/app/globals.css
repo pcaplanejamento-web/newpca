@@ -341,6 +341,70 @@
   animation: none;
 }
 
+/* O SINO: o selo dá um "pop" quando o número muda; o sino balança uma vez quando chega um aviso novo. */
+@keyframes selo-pop {
+  0% {
+    scale: 0.6;
+  }
+  60% {
+    scale: 1.18;
+  }
+  100% {
+    scale: 1;
+  }
+}
+.animate-selo-pop {
+  animation: selo-pop var(--motion-duration) var(--motion-ease);
+}
+@keyframes sino-tocar {
+  15% {
+    rotate: 14deg;
+  }
+  35% {
+    rotate: -12deg;
+  }
+  55% {
+    rotate: 8deg;
+  }
+  75% {
+    rotate: -4deg;
+  }
+}
+.animate-sino-tocar {
+  animation: sino-tocar 0.7s ease-in-out;
+  transform-origin: 50% 10%;
+}
+/* Um aviso que SAI da lista (lido no filtro "Não lidas", excluído, limpo): a altura recolhe e ele some. */
+.aviso-linha {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows var(--motion-duration) var(--motion-ease),
+    opacity var(--motion-duration) var(--motion-ease);
+}
+.aviso-linha[data-saindo] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-selo-pop,
+  .animate-sino-tocar {
+    animation: none;
+  }
+  .aviso-linha {
+    transition: none;
+  }
+}
+[data-motion="off"] .animate-selo-pop,
+[data-motion="off"] .animate-sino-tocar,
+[data-motion="reduced"] .animate-sino-tocar {
+  animation: none;
+}
+[data-motion="off"] .aviso-linha {
+  transition: none;
+}
+
 /* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
    Fica ACIMA da navegação inferior do celular, da barra de seleção fixa da Mesa (a BarraSelecao publica a
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o

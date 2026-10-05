@@ -815,7 +815,7 @@ export function TarefaDetalhe({
             {!somenteLeitura && onCopiarMover && item("Mover para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "mover"), off)}
             {!somenteLeitura && onCopiarMover && !t.template && item("Criar template…", <IconModelo className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "template"), off)}
             {item("Copiar link", <IconLink className="h-4 w-4 text-muted" />, () => {
-              const url = `${window.location.origin}${linkTarefa(quadroId, t.id)}`;
+              const url = `${window.location.origin}${linkTarefa(t.id)}`;
               navigator.clipboard?.writeText(url).then(
                 () => toast.success("Link copiado."),
                 () => toast.error("Não foi possível copiar o link."),

@@ -47,7 +47,7 @@ export default async function PainelLayout({
       pcas={pcas}
       pcaFiltroId={pcaFiltro?.id ?? null}
       identidade={aparencia.identidade}
-      notificacoes={notificacoes}
+      notificacoes={notificacoes ?? 0}
       versaoDados={versao}
     >
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}

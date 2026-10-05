@@ -8,8 +8,14 @@
   // Workers Logs: logs/traces do Worker no painel da Cloudflare (ajuda a
   // diagnosticar produção). Baixo custo e sem impacto no código.
   "observability": { "enabled": true },
-  // A rede de segurança da sincronização com o Trello: reconcilia os quadros ligados e processa a fila.
-  "triggers": { "crons": ["*/5 * * * *"] },
+  // Os CRONS (cada um uma invocação, com o próprio limite de consultas — `worker.ts` → `ROTAS_CRON`): a sincronização com o
+  // Trello (a cada 5 min) e os e-mails/avisos de prazo (a cada 5 min, 2 min depois).
+  "triggers": { "crons": ["*/5 * * * *", "2-59/5 * * * *"] },
+  // O canal AO VIVO das notificações: uma CAIXA por pessoa (WebSocket com hibernação — `src/lib/caixa-notificacoes-do.ts`).
+  "durable_objects": {
+    "bindings": [{ "name": "CAIXA_NOTIFICACOES", "class_name": "CaixaNotificacoes" }]
+  },
+  "migrations": [{ "tag": "v1-caixa-notificacoes", "new_sqlite_classes": ["CaixaNotificacoes"] }],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

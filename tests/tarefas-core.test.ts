@@ -287,13 +287,13 @@ describe("tarefas — fase 3: recorrência", () => {
 
 describe("tarefas — fase 3: notificação de prazo", () => {
   const t = { id: 5, ticket: 12, titulo: "Relatório", prazo: "2026-09-26", quadroId: 3, quadroNome: "Compras" };
-  it("vence amanhã, atrasada (até 30 dias) e nada fora disso", () => {
+  it("vence hoje, vence amanhã, atrasada (até 30 dias) e nada fora disso", () => {
     const n = notificacaoDePrazo(t, "2026-09-25");
     assert.equal(n?.tipo, "vence_amanha");
     assert.equal(n?.chave, "vence:5:2026-09-26");
-    assert.equal(n?.link, "/painel/tarefas/3?tarefa=5");
+    assert.equal(n?.link, "/painel/tarefas/abrir/5");
     assert.equal(notificacaoDePrazo(t, "2026-09-27")?.tipo, "atrasada");
-    assert.equal(notificacaoDePrazo(t, "2026-09-26"), null);
+    assert.equal(notificacaoDePrazo(t, "2026-09-26")?.tipo, "vence_hoje");
     assert.equal(notificacaoDePrazo(t, "2026-11-30"), null);
     assert.equal(notificacaoDePrazo({ ...t, prazo: null }, "2026-09-25"), null);
   });

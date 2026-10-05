@@ -202,15 +202,20 @@ export function QuadroTarefas({
   /** Abre o banner de uma tarefa NOVA (a lista de onde se pediu; o prazo do dia do calendário). */
   const nova = (listaId = ativas[0]?.id, prazo?: string) => listaId && setAberto({ tipo: "nova", listaId, prazo });
 
-  // Chegada pela Mesa: `?nova=` abre a tarefa NOVA já vinculada; `?tarefa=` abre aquela tarefa — uma vez, e limpa a URL.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: só na chegada.
+  // Chegada pela Mesa/aviso: `?nova=` abre a tarefa NOVA já vinculada; `?tarefa=` abre aquela tarefa — a cada chegada NOVA
+  // (um aviso de outra tarefa do MESMO quadro chega sem remontar a tela), e limpa a URL.
+  const chegada = `${tarefaInicial ?? ""}|${novaInicial ? `${novaInicial.tipo}:${novaInicial.id}` : ""}|${prazoInicial ?? ""}`;
+  const chegadaVista = useRef("||");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dispara pela chegada (o resto é lido na hora).
   useEffect(() => {
+    if (chegada === chegadaVista.current) return;
+    chegadaVista.current = chegada;
     if (tarefaInicial) setAberto({ tipo: "editar", id: tarefaInicial });
     else if (novaInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, vinculo: novaInicial });
     else if (prazoInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, prazo: prazoInicial });
     else return;
     router.replace(`${pathname}?aba=${aba}`, { scroll: false });
-  }, []);
+  }, [chegada]);
 
   const aplicarMassa = async (acao: AcaoMassaTarefas) => {
     await executarMassa([...sel], acao);

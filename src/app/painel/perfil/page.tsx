@@ -5,6 +5,7 @@ import { type IdentidadePerfil, PerfilView } from "@/components/PerfilView";
 import { getAcesso, podeTela, visaoDoAcesso } from "@/lib/acesso";
 import type { UsuarioSessao } from "@/lib/auth";
 import { CHAVE_PREF_EMAIL, lerPrefsEmail } from "@/lib/email-core";
+import { getConfigNotificacoes } from "@/lib/notificacoes-config";
 import { getIntegracoes } from "@/lib/integracoes";
 import { googleConfigurado, resendConfigurado, turnstileConfigurado } from "@/lib/integracoes-core";
 import { getDb } from "@/lib/db";
@@ -34,7 +35,8 @@ async function protocolacaoDe(u: UsuarioSessao, grupoId: number | null, vis: Vis
 async function avisosEmailDe(usuarioId: number) {
   try {
     if (!resendConfigurado(await getIntegracoes())) return null;
-    return lerPrefsEmail((await listarPreferenciasTabela(usuarioId, CHAVE_PREF_EMAIL))[CHAVE_PREF_EMAIL]);
+    const [prefs, config] = await Promise.all([listarPreferenciasTabela(usuarioId, CHAVE_PREF_EMAIL), getConfigNotificacoes()]);
+    return { prefs: lerPrefsEmail(prefs[CHAVE_PREF_EMAIL]), config };
   } catch {
     return null;
   }

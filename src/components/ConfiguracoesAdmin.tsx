@@ -34,6 +34,7 @@ import { ReferenciaSistema } from "./ReferenciaSistema";
 import { Segmented } from "./Segmented";
 import { SituacoesAdmin } from "./SituacoesAdmin";
 import { FeriadosAdmin } from "./FeriadosAdmin";
+import { NotificacoesAdmin } from "./NotificacoesAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -467,6 +468,7 @@ export function ConfiguracoesAdmin({
             { key: "pcas", label: "PCAs", content: abaPcas },
             { key: "situacoes", label: "Situações", content: <SituacoesAdmin /> },
             { key: "feriados", label: "Feriados", content: <FeriadosAdmin /> },
+            { key: "notificacoes", label: "Notificações", content: <NotificacoesAdmin /> },
             { key: "avaliacao", label: "Avaliação", content: <AvaliacaoAdmin regras={regras} /> },
             {
               key: "referencia",

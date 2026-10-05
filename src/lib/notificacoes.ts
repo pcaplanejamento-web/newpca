@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { notificacoes, tarefaChecklist, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
 import { type GrupoAcesso, gruposComAbas } from "./acesso";
 import type { UsuarioSessao } from "./auth";
@@ -11,19 +11,25 @@ import { nomeExibicao, urlFoto } from "./pessoa";
 import { avisoVersaoExtensao } from "./automacao-centi-core";
 import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
+import { avisarAoVivo } from "./notificacoes-ao-vivo";
+import { getConfigNotificacoes } from "./notificacoes-config";
+import { noSino } from "./notificacoes-config-core";
+import { type AlvoLimpeza, comandosExcluirNotificacoes, consultaDispensadas } from "./notificacoes-sql";
 
 /**
- * NOTIFICAÇÕES do sino (migração `0044`) — acesso ao D1 (só escopo de request). As de EVENTO (atribuída, menção,
- * comentário, automação) são gravadas por `notificar` (BEST-EFFORT: nunca derruba a ação que as gerou; nunca avisa o
- * próprio autor). As de PRAZO (vence amanhã, atrasada) são DERIVADAS NA LEITURA — sem cron: a cada contagem/lista, as
- * tarefas abertas da pessoa viram linhas com uma CHAVE única (tarefa + prazo), então o "lida" persiste e nada repete.
- * Os LEMBRETES dos eventos do Calendário (migração `0047`) seguem a mesma ideia: devidos (do momento do aviso até o fim
- * do dia do evento) viram linhas com a chave evento + início + antecedência.
+ * NOTIFICAÇÕES do sino (migrações `0044`/`0083`) — acesso ao D1 (só escopo de request). As de EVENTO (atribuída, menção,
+ * comentário, automação, protocolo…) são gravadas por `notificar` (BEST-EFFORT: nunca derruba a ação que as gerou; nunca
+ * avisa o próprio autor; o ADM decide em Configurações → Notificações se o aviso existe no sino e se vai por e-mail) e
+ * chegam AO VIVO às abas abertas da pessoa. As de PRAZO (vence hoje/amanhã, atrasada) e os LEMBRETES são DERIVADOS: a
+ * leitura do sino (no máximo a cada `INTERVALO_DERIVAR`) e o cron criam as linhas com uma CHAVE única (tarefa + prazo;
+ * evento + início + antecedência) — o "lida" persiste, nada repete e o que a pessoa LIMPOU fica dispensado (não volta).
  */
 
 export type Notificacao = {
   id: number;
   tipo: TipoNotificacao;
+  /** A tarefa do aviso (para AGRUPAR os repetidos na tela). */
+  tarefaId: number | null;
   titulo: string;
   texto: string | null;
   link: string | null;
@@ -32,8 +38,30 @@ export type Notificacao = {
   ator: { id: number; nome: string; foto: string | null } | null;
 };
 
-/** As lidas somem depois de 60 dias (limpeza barata, por pessoa, na leitura). */
-const DIAS_GUARDAR_LIDAS = 60;
+/**
+ * GRAVA os avisos (a config do ADM: o desligado no sino não existe; o sem e-mail já nasce tratado) num lote só e avisa
+ * AO VIVO quem recebeu; o e-mail sai DEPOIS da resposta. Devolve as pessoas que receberam algo novo. Nunca lança.
+ */
+async function gravarAvisos(linhas: NovaNotificacao[]): Promise<number[]> {
+  if (!linhas.length) return [];
+  try {
+    const cfg = await getConfigNotificacoes();
+    const validas = linhas.filter((n) => noSino(cfg, n.tipo)).map((n) => ({ ...n, semEmail: !cfg[n.tipo].email }));
+    if (!validas.length) return [];
+    const db = getDb();
+    const cmds = comandosNotificacoes(db, validas);
+    const res = (await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]])) as { usuarioId: number }[][];
+    const quem = [...new Set(res.flat().map((r) => r.usuarioId))];
+    if (quem.length) {
+      avisarAoVivo(quem);
+      if (validas.some((n) => !n.semEmail)) enviarPendentesDepois();
+    }
+    return quem;
+  } catch (e) {
+    console.error("gravar avisos falhou", e);
+    return [];
+  }
+}
 
 /** Grava as notificações de um evento (sem o próprio ator, sem repetir a pessoa). Nunca lança. */
 export async function notificar(linhas: NovaNotificacao[], atorId?: number | null): Promise<void> {
@@ -44,16 +72,7 @@ export async function notificar(linhas: NovaNotificacao[], atorId?: number | nul
     vistos.add(k);
     return true;
   });
-  if (!validas.length) return;
-  try {
-    const db = getDb();
-    const cmds = comandosNotificacoes(db, validas);
-    await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
-    // O e-mail dos avisos novos sai DEPOIS da resposta (só com o Resend ativo; a preferência de cada pessoa decide).
-    enviarPendentesDepois();
-  } catch (e) {
-    console.error("notificar falhou", e);
-  }
+  await gravarAvisos(validas);
 }
 
 /** O autor (snapshot) de uma notificação de evento. */
@@ -66,8 +85,8 @@ const listaAtiva = sql`EXISTS (SELECT 1 FROM tarefa_listas l WHERE l.id = ${tare
  * DERIVA as notificações de PRAZO da pessoa (tarefas abertas em que é responsável, nos quadros dos grupos dela — o ADM,
  * todos; prazo entre 30 dias atrás e amanhã) e grava as que faltam (a chave repetida é ignorada). Nunca lança.
  */
-async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promise<void> {
-  if (grupoIds && !grupoIds.length) return;
+async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promise<NovaNotificacao[]> {
+  if (grupoIds && !grupoIds.length) return [];
   try {
     const db = getDb();
     const hoje = dataIsoBrasilia(new Date().toISOString());
@@ -89,6 +108,7 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
           quadroVisivel(u.id),
         ),
       )
+      .orderBy(desc(tarefas.prazo))
       .limit(200);
     const novas: NovaNotificacao[] = [];
     for (const t of linhas) {
@@ -124,16 +144,16 @@ async function derivarPrazos(u: UsuarioSessao, grupoIds: number[] | null): Promi
           quadroVisivel(u.id),
         ),
       )
+      .orderBy(desc(tarefaChecklist.prazo))
       .limit(200);
     for (const i of itens) {
       const n = notificacaoDePrazoItem(i, hoje);
       if (n) novas.push({ usuarioId: u.id, ...n, tarefaId: i.tarefaId, quadroId: i.quadroId });
     }
-    if (!novas.length) return;
-    const cmds = comandosNotificacoes(db, novas);
-    await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+    return novas;
   } catch (e) {
     console.error("derivar prazos falhou", e);
+    return [];
   }
 }
 
@@ -152,8 +172,8 @@ function agoraBrasilia(): string {
  * evento), nos quadros dos grupos dela (o ADM, todos) — eventos de hoje até 1 semana à frente (o maior lembrete). Nunca
  * lança.
  */
-async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Promise<void> {
-  if (grupoIds && !grupoIds.length) return;
+async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Promise<NovaNotificacao[]> {
+  if (grupoIds && !grupoIds.length) return [];
   try {
     const db = getDb();
     const agora = agoraBrasilia();
@@ -185,6 +205,8 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
           lte(tarefaEventos.data, ate),
           // O evento de hoje em diante — ou a SÉRIE (repetição) que ainda não terminou.
           sql`(${tarefaEventos.data} >= ${hoje} OR (${tarefaEventos.recorrencia} IS NOT NULL AND COALESCE(json_extract(${tarefaEventos.recorrencia}, '$.ate'), '9999-12-31') >= ${hoje}))`,
+          // O evento de tarefa CONCLUÍDA não lembra mais.
+          isNull(tarefas.concluidaEm),
           eq(tarefas.arquivada, false),
           eq(tarefas.template, false),
           eq(tarefaQuadros.arquivado, false),
@@ -225,45 +247,51 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
           pessoaNaTarefa(u.id, true),
         ),
       )
+      .orderBy(asc(tarefas.prazo))
       .limit(200);
     for (const t of prazos) {
       const n = lembreteDaTarefa(t, agora, hoje);
       if (n) novas.push({ usuarioId: u.id, ...n, tarefaId: t.id, quadroId: t.quadroId });
     }
-    if (!novas.length) return;
-    const cmds = comandosNotificacoes(db, novas);
-    await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+    return novas;
   } catch (e) {
     console.error("derivar lembretes falhou", e);
+    return [];
   }
 }
 
 /** NOVA VERSÃO da extensão da Automação (Centi): um aviso por versão a cada Administrador (a chave dedup). */
-const avisados = new Set<number>(); // por instância do Worker: grava uma vez (o resto é o dedup do banco)
-async function derivarVersaoExtensao(u: UsuarioSessao) {
-  if (!u.admin || avisados.has(u.id)) return;
+const versaoDerivar = (u: UsuarioSessao): NovaNotificacao[] => (u.admin ? [avisoVersaoExtensao(u.id)] : []);
+
+/** No máximo uma derivação por pessoa a cada tanto (por isolate do Worker) — a contagem do sino não refaz o trabalho. */
+const INTERVALO_DERIVAR = 5 * 60_000;
+const derivadoEm = new Map<number, number>();
+
+/**
+ * As notificações DERIVADAS (prazos + lembretes + nova versão da extensão) — em paralelo, sem as que a pessoa LIMPOU
+ * (dispensadas), gravadas num lote só. `forcar` = ignora o intervalo (o cron). Nunca lança.
+ */
+async function derivar(u: UsuarioSessao, grupoIds: number[] | null, forcar = false): Promise<void> {
+  const agora = Date.now();
+  if (!forcar && agora - (derivadoEm.get(u.id) ?? 0) < INTERVALO_DERIVAR) return;
+  derivadoEm.set(u.id, agora);
+  if (derivadoEm.size > 2000) derivadoEm.clear();
   try {
-    const db = getDb();
-    const cmds = comandosNotificacoes(db, [avisoVersaoExtensao(u.id)]);
-    await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
-    avisados.add(u.id);
+    const [prazos, lembretes, dispensadas] = await Promise.all([derivarPrazos(u, grupoIds), derivarLembretes(u, grupoIds), consultaDispensadas(getDb(), u.id)]);
+    const fora = new Set(dispensadas.map((d) => d.chave));
+    await gravarAvisos([...prazos, ...lembretes, ...versaoDerivar(u)].filter((n) => !n.chave || !fora.has(n.chave)));
   } catch (e) {
-    console.error("aviso da extensão falhou", e);
+    console.error("derivar falhou", e);
   }
 }
 
-/** As notificações DERIVADAS (prazos + lembretes + nova versão da extensão) — em paralelo. */
-const derivar = async (u: UsuarioSessao, grupoIds: number[] | null) => {
-  await Promise.all([derivarPrazos(u, grupoIds), derivarLembretes(u, grupoIds), derivarVersaoExtensao(u)]);
-};
-
 /**
- * DERIVA os avisos de prazo e lembrete de uma pessoa FORA da leitura do sino (o cron dos e-mails: o aviso nasce mesmo que
- * ninguém abra o sistema). Nunca lança.
+ * DERIVA os avisos de prazo e lembrete de uma pessoa FORA da leitura do sino (o cron: o aviso nasce mesmo que ninguém
+ * abra o sistema). Nunca lança.
  */
 export async function derivarDaPessoa(u: UsuarioSessao): Promise<void> {
   try {
-    await derivar(u, await gruposDe(u));
+    await derivar(u, await gruposDe(u), true);
   } catch (e) {
     console.error("derivar da pessoa falhou", e);
   }
@@ -280,27 +308,36 @@ export function gruposDosAvisos(u: UsuarioSessao, lista: readonly GrupoAcesso[])
 
 const gruposDe = async (u: UsuarioSessao, lista?: readonly GrupoAcesso[]) => gruposDosAvisos(u, lista ?? (await gruposComAbas(u.id)));
 
-/** Quantas NÃO LIDAS (o número do sino — o layout passa os grupos que já carregou). Falha = 0. */
-export async function contarNaoLidas(u: UsuarioSessao, grupos?: readonly GrupoAcesso[]): Promise<number> {
+/**
+ * O aviso ainda é ACESSÍVEL à pessoa: sem quadro (Mesa, Administração…) sempre; de tarefa, só o quadro visível (o privado,
+ * só o dono) dos grupos em que ela abre Tarefas/Calendário — quem saiu do grupo deixa de ver os avisos de lá.
+ */
+const acessivel = (u: UsuarioSessao, grupoIds: number[] | null) =>
+  sql`(${notificacoes.quadroId} IS NULL OR EXISTS (SELECT 1 FROM tarefa_quadros q WHERE q.id = ${notificacoes.quadroId} AND (q.privado = 0 OR q.criado_por = ${u.id})${
+    grupoIds ? sql` AND q.grupo_id IN (SELECT value FROM json_each(${JSON.stringify(grupoIds)}))` : sql``
+  }))`;
+
+const condNaoLidas = (u: UsuarioSessao, grupoIds: number[] | null) => and(eq(notificacoes.usuarioId, u.id), eq(notificacoes.lida, false), acessivel(u, grupoIds));
+
+/** Quantas NÃO LIDAS (o número do sino — o layout passa os grupos que já carregou). Falha = `null` (a tela mantém o último). */
+export async function contarNaoLidas(u: UsuarioSessao, grupos?: readonly GrupoAcesso[]): Promise<number | null> {
   try {
-    await derivar(u, await gruposDe(u, grupos));
-    const [r] = await getDb()
-      .select({ n: sql<number>`COUNT(*)` })
-      .from(notificacoes)
-      .where(and(eq(notificacoes.usuarioId, u.id), eq(notificacoes.lida, false)));
+    const g = await gruposDe(u, grupos);
+    await derivar(u, g);
+    const [r] = await getDb().select({ n: sql<number>`COUNT(*)` }).from(notificacoes).where(condNaoLidas(u, g));
     return Number(r?.n ?? 0);
   } catch {
-    return 0;
+    return null;
   }
 }
 
-/** As últimas notificações (não lidas primeiro) + a contagem de não lidas. */
-export async function listarNotificacoes(u: UsuarioSessao, limite = 50): Promise<{ itens: Notificacao[]; naoLidas: number }> {
+export type PaginaNotificacoes = { itens: Notificacao[]; naoLidas: number; mais: boolean };
+
+/** Uma PÁGINA da lista (as mais recentes antes do cursor `antes`; só as não lidas ou todas) + a contagem de não lidas. */
+export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; filtro: "nao-lidas" | "todas"; limite: number }): Promise<PaginaNotificacoes> {
   const db = getDb();
-  await derivar(u, await gruposDe(u));
-  await db
-    .delete(notificacoes)
-    .where(and(eq(notificacoes.usuarioId, u.id), eq(notificacoes.lida, true), sql`${notificacoes.criadoEm} < datetime('now', ${`-${DIAS_GUARDAR_LIDAS} days`})`));
+  const g = await gruposDe(u);
+  await derivar(u, g);
   const [linhas, [cont]] = await Promise.all([
     db
       .select({
@@ -311,6 +348,7 @@ export async function listarNotificacoes(u: UsuarioSessao, limite = 50): Promise
         link: notificacoes.link,
         lida: notificacoes.lida,
         criadoEm: notificacoes.criadoEm,
+        tarefaId: notificacoes.tarefaId,
         atorId: notificacoes.atorId,
         atorNome: notificacoes.atorNome,
         temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
@@ -318,17 +356,22 @@ export async function listarNotificacoes(u: UsuarioSessao, limite = 50): Promise
       })
       .from(notificacoes)
       .leftJoin(usuarios, eq(usuarios.id, notificacoes.atorId))
-      .where(eq(notificacoes.usuarioId, u.id))
-      .orderBy(notificacoes.lida, desc(notificacoes.id))
-      .limit(limite),
-    db
-      .select({ n: sql<number>`COUNT(*)` })
-      .from(notificacoes)
-      .where(and(eq(notificacoes.usuarioId, u.id), eq(notificacoes.lida, false))),
+      .where(
+        and(
+          eq(notificacoes.usuarioId, u.id),
+          acessivel(u, g),
+          p.antes ? lt(notificacoes.id, p.antes) : undefined,
+          p.filtro === "nao-lidas" ? eq(notificacoes.lida, false) : undefined,
+        ),
+      )
+      .orderBy(desc(notificacoes.id))
+      .limit(p.limite + 1),
+    db.select({ n: sql<number>`COUNT(*)` }).from(notificacoes).where(condNaoLidas(u, g)),
   ]);
   return {
     naoLidas: Number(cont?.n ?? 0),
-    itens: linhas.map((l) => ({
+    mais: linhas.length > p.limite,
+    itens: linhas.slice(0, p.limite).map((l) => ({
       id: l.id,
       tipo: (TIPOS_NOTIFICACAO as readonly string[]).includes(l.tipo) ? (l.tipo as TipoNotificacao) : "automacao",
       titulo: l.titulo,
@@ -336,15 +379,25 @@ export async function listarNotificacoes(u: UsuarioSessao, limite = 50): Promise
       link: l.link,
       lida: l.lida,
       criadoEm: l.criadoEm,
+      tarefaId: l.tarefaId,
       ator: l.atorId != null ? { id: l.atorId, nome: l.atorNome ?? "", foto: urlFoto(l.atorId, !!l.temFoto, l.versao) } : null,
     })),
   };
 }
 
-/** Marca como LIDAS as notificações pedidas (só as da pessoa) ou todas. */
-export async function marcarLidas(u: UsuarioSessao, alvo: { ids: number[] } | { todas: true }) {
+/** Marca como LIDAS (ou NÃO lidas) as pedidas (só as da pessoa), ou todas como lidas. As outras abas acompanham ao vivo. */
+export async function marcarLidas(u: UsuarioSessao, alvo: { ids: number[]; lida?: boolean } | { todas: true }) {
   await getDb()
     .update(notificacoes)
-    .set({ lida: true })
+    .set({ lida: "ids" in alvo ? alvo.lida !== false : true })
     .where(and(eq(notificacoes.usuarioId, u.id), "ids" in alvo ? inArray(notificacoes.id, alvo.ids.slice(0, 90)) : eq(notificacoes.lida, false)));
+  avisarAoVivo([u.id]);
+}
+
+/** EXCLUI do banco (as pedidas, as lidas ou todas) — os derivados ficam dispensados. Devolve quantas saíram. */
+export async function excluirNotificacoes(u: UsuarioSessao, alvo: AlvoLimpeza): Promise<number> {
+  const db = getDb();
+  const [, apagadas] = await db.batch(comandosExcluirNotificacoes(db, u.id, alvo));
+  avisarAoVivo([u.id]);
+  return apagadas.length;
 }

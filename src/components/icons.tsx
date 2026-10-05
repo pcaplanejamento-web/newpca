@@ -3,6 +3,10 @@
 import type { SVGProps } from "react";
 import {
   Activity,
+  BellOff,
+  CalendarClock,
+  CheckCheck,
+  CircleDot,
   BadgeCheck,
   Bot,
   Briefcase,
@@ -304,3 +308,10 @@ export function IconTrello(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+// O SINO de notificações: marcar todas como lidas, marcar como não lida, sem avisos, evento alterado e cadastro.
+export const IconLidas = CheckCheck;
+export const IconNaoLida = CircleDot;
+export const IconSemAvisos = BellOff;
+export const IconEventoAlterado = CalendarClock;
+export const IconCadastro = UserPlus;

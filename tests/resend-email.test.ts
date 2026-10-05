@@ -8,15 +8,14 @@ import * as schema from "../src/db/schema.ts";
 import {
   CHAVE_PREF_EMAIL,
   emailAcessoLiberado,
-  emailCadastroPendente,
   emailDaNotificacao,
   escaparHtml,
   lerPrefsEmail,
   querEmail,
-  TIPOS_EMAIL_PADRAO,
   urlAbsoluta,
 } from "../src/lib/email-core.ts";
-import { comandoDevolverEmails, comandoReservarEmails, consultaPendentesEmail } from "../src/lib/email-sql.ts";
+import { comandoConfirmarEmails, comandoDevolverEmails, comandoEncerrarEmailsVelhos, comandoReservarEmails, consultaPendentesEmail } from "../src/lib/email-sql.ts";
+import { resolverNotificacoes } from "../src/lib/notificacoes-config-core.ts";
 import { coerceIntegracoes, dominioDoRemetente, emailDoRemetente, resendConfigurado, toView } from "../src/lib/integracoes-core.ts";
 import { integracoesSchema } from "../src/lib/integracoes-validation.ts";
 import { clienteResend, ErroResend, HOST_RESEND } from "../src/lib/resend-api.ts";
@@ -121,21 +120,30 @@ describe("e-mails — modelos e preferências", () => {
     assert.equal(urlAbsoluta("https://g.com", null), "https://g.com/painel");
   });
 
-  it("cadastro e liberação levam aos lugares certos", () => {
-    assert.ok(emailCadastroPendente({ nome: "Bia", email: "bia@x.com" }, ctx).html.includes("/painel/usuarios"));
+  it("a liberação leva ao login", () => {
     assert.ok(emailAcessoLiberado({ nome: "Bia" }, ctx).texto.includes("https://governarv.com.br/login"));
   });
 
-  it("preferências: padrão ligado com os tipos que pedem ação; JSON solto é tolerado", () => {
+  it("preferências: o ADM decide o que sai por e-mail; a pessoa só desliga o desligável; JSON solto é tolerado", () => {
+    const cfg = resolverNotificacoes(undefined);
     const p = lerPrefsEmail(null);
     assert.equal(p.ligado, true);
-    assert.deepEqual(p.tipos, [...TIPOS_EMAIL_PADRAO]);
-    assert.equal(querEmail(p, "atribuida"), true);
-    assert.equal(querEmail(p, "comentario"), false);
-    const q = lerPrefsEmail({ ligado: false, tipos: ["comentario", "invalido"] });
-    assert.deepEqual(q.tipos, ["comentario"]);
-    assert.equal(querEmail(q, "comentario"), false);
+    assert.deepEqual(p.desligados, []);
+    // O padrão: e-mail MÍNIMO — atribuída sim, comentário/menção não.
+    assert.equal(querEmail(cfg, p, "atribuida"), true);
+    assert.equal(querEmail(cfg, p, "comentario"), false);
+    assert.equal(querEmail(cfg, p, "mencionada"), false);
+    // A pessoa desligou a atribuída: não vai; o cadastro (não desligável) vai sempre.
+    const q = lerPrefsEmail({ ligado: true, desligados: ["atribuida", "invalido"] });
+    assert.deepEqual(q.desligados, ["atribuida"]);
+    assert.equal(querEmail(cfg, q, "atribuida"), false);
+    assert.equal(querEmail(cfg, { ...q, ligado: false }, "cadastro"), true);
+    // O formato ANTERIOR (a lista dos que a pessoa queria) vira desligados.
+    assert.equal(lerPrefsEmail({ tipos: ["convite"] }).desligados.includes("atribuida"), true);
     assert.equal(lerPrefsEmail("x").ligado, true);
+    // O ADM ligou o comentário: vai, e a pessoa pode desligar.
+    const cfg2 = resolverNotificacoes({ comentario: { email: true } });
+    assert.equal(querEmail(cfg2, p, "comentario"), true);
   });
 });
 
@@ -172,5 +180,24 @@ describe("e-mails — pendentes no D1 (builders no driver real)", () => {
     }
     assert.equal((await consultaPendentesEmail(orm, 10)).length, 0);
     assert.equal((db.prepare("SELECT email_tentativas AS n FROM notificacoes WHERE id = 1").get() as { n: number }).n, 3);
+    // A higiene encerra o que desistiu (a fila só tem o que vale).
+    await comandoEncerrarEmailsVelhos(orm);
+    assert.notEqual((db.prepare("SELECT email_enviado_em AS e FROM notificacoes WHERE id = 1").get() as { e: string | null }).e, null);
+  });
+
+  it("nada se perde: só o envio CONFIRMADO conta; a reserva que não terminou VENCE e volta à fila", async () => {
+    const { db, orm } = banco();
+    db.exec("INSERT INTO notificacoes (id, usuario_id, tipo, titulo) VALUES (1, 901, 'atribuida', 'A'), (2, 901, 'atribuida', 'B')");
+    await comandoReservarEmails(orm, [1, 2]);
+    // O Worker caiu depois de reservar: enquanto a reserva vale, ninguém repete…
+    assert.equal((await consultaPendentesEmail(orm, 10)).length, 0);
+    // …e, vencida (10 min), os dois voltam à fila — com o envio de um deles confirmado, só o outro.
+    db.exec("UPDATE notificacoes SET email_reservado_em = datetime('now', '-11 minutes')");
+    await comandoConfirmarEmails(orm, [1]);
+    assert.deepEqual(
+      (await consultaPendentesEmail(orm, 10)).map((p) => p.titulo),
+      ["B"],
+    );
+    assert.equal((await comandoReservarEmails(orm, [1, 2])).length, 1);
   });
 });

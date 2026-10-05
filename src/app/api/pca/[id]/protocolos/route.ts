@@ -1,5 +1,6 @@
 import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { avisarPcaProtocolos } from "@/lib/avisos-mesa";
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { acaoSugerida, motivoNaoDevolver, motivosNaoEnviar, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
@@ -55,6 +56,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
+  const feitos: (typeof protocolos)[number][] = [];
   for (const pr of protocolos) {
     const falha = (motivo: string) => falhas.push({ id: pr.id, numero: pr.numero, motivo });
     // Fora da unidade ou das LINHAS da pessoa ("só os meus"): a MESMA falha genérica, sem o número (não revela o
@@ -106,6 +108,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         depois = { acao, dfds: entradas.map((e) => e.dfdId) };
       }
       alterados++;
+      feitos.push(pr);
       await registrarAuditoria({
         usuario: a.u,
         acao: "editar",
@@ -119,5 +122,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       falha(e instanceof Error ? e.message : "falha ao gravar");
     }
   }
+  // O responsável de cada protocolo recebe UM aviso (o sino; o e-mail como o ADM configurou).
+  await avisarPcaProtocolos(a.u, corpo.acao, pca, feitos);
   return ok({ alterados, falhas });
 }

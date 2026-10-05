@@ -7,8 +7,8 @@ import { cargoCadastrado, listarCargos } from "@/lib/cargos";
 import { consumirCodigo } from "@/lib/codigo-email";
 import { MENSAGEM_CODIGO } from "@/lib/codigo-email-core";
 import { getDb } from "@/lib/db";
-import { emailsDosAdmins, enviarEmailDireto } from "@/lib/email";
-import { emailCadastroPendente } from "@/lib/email-core";
+import { idsDosAdmins } from "@/lib/email";
+import { notificar } from "@/lib/notificacoes";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { comandoCadastroPendente, comandoCadastroPrimeiro } from "@/lib/papeis-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
@@ -72,10 +72,12 @@ export async function POST(req: Request) {
       await definirCookieSessao(await criarSessao(u.id));
       return ok({ autenticado: true });
     }
-    // Pendente de aprovação — os ADMs recebem o aviso por e-mail (com o Resend ativo; depois da resposta).
+    // Pendente de aprovação — os ADMs recebem o aviso no SINO (e por e-mail, como o ADM configurou; depois da resposta).
     depoisDaResposta(
-      emailsDosAdmins().then((admins) => enviarEmailDireto(admins, (ctx) => emailCadastroPendente({ nome, email }, ctx))),
-      "email",
+      idsDosAdmins().then((admins) =>
+        notificar(admins.map((usuarioId) => ({ usuarioId, tipo: "cadastro" as const, titulo: "Novo cadastro aguardando aprovação", texto: `${nome} (${email}) pediu acesso à plataforma.`, link: "/painel/usuarios" }))),
+      ),
+      "notificacao",
     );
     return ok({ autenticado: false, pendente: true });
   } catch (err) {
