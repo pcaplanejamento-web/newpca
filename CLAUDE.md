@@ -3945,7 +3945,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Publicar uma versão:** acrescentar a entrada NO TOPO de `VERSOES` (MAIOR = muda o jeito de trabalhar · MENOR = recurso
   novo · CORREÇÃO = ajuste), com o `link` de cada mudança, e o MESMO número no `package.json` — em TODA entrega que o usuário
   percebe.
-- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.3.0", leva às Novidades; o ponto
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.3.1", leva às Novidades; o ponto
   accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`, conveniência).
 - **Novidades:** `/painel/novidades` (qualquer pessoa logada) = `Novidades` → um **`CartaoVersao`** (DS) por versão: número,
   título, data, selo "Atual" e cada mudança com o tipo (`Badge`), a área e **"Ver onde mudou"** (o `link`); `?versao=` destaca e
