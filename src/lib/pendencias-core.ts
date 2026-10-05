@@ -6,6 +6,7 @@ import {
   mapaItensDuplicados,
   type MensagemDfd,
   SECOES_OBRIGATORIAS,
+  ROTULO_CURTO,
   semValorUnitario,
   STATUS_MENSAGEM_COR,
   textoSecao,
@@ -289,17 +290,87 @@ export function contarProtocolo(p: ProtocoloPendente): Contagem {
   return c;
 }
 
-/** Só os ERROS (o "Incluir atenções" desligado): tira as atenções e os DFDs/itens que ficam sem nada. */
-export function soErros(p: ProtocoloPendente): ProtocoloPendente {
+// ---- ESCOLHA do que vai à CÓPIA e ao PDF (tipos de problema · situação · DFDs) ----
+
+/** Um TIPO de problema (o ponto conferido) com quantas ocorrências há — a lista de escolha do "Montar documento". */
+export type TipoPendencia = { chave: string; rotulo: string; erros: number; atencoes: number };
+
+/** O que entra: as situações (erro/atenção), os tipos de problema (`chave`) e os DFDs (`String(chave)`). */
+export type FiltroPendencias = { status: Set<StatusPendencia>; chaves: Set<string>; dfds: Set<string> };
+
+/** Rótulos curtos dos tipos que o `ROTULO_CURTO` diz pela FALTA ("Sem prioridade") — aqui vale o ponto (falta OU fora do padrão). */
+const ROTULO_TIPO: Record<string, string> = {
+  "protocolo.valorCapa": "Valor da capa",
+  leitura: "Leitura do PDF",
+  "dfd.justificativa": "Justificativa",
+  "dfd.previsao": "Previsão de entrega",
+  "dfd.prioridade": "Prioridade",
+  "dfd.fundamentacao": "Fundamentação legal",
+};
+
+export function rotuloTipoPendencia(chave: string, texto = ""): string {
+  if (chave.startsWith("item.catalogo:")) return chave.slice("item.catalogo:".length);
+  return ROTULO_TIPO[chave] ?? ROTULO_CURTO[chave] ?? cortar(texto, 60);
+}
+
+/** As ocorrências (as folhas que o leitor vê): a capa, as pendências do DFD e os problemas de cada item. */
+function ocorrencias(p: ProtocoloPendente): Pendencia[] {
+  const out: Pendencia[] = p.capa ? [p.capa] : [];
+  for (const d of p.dfds) {
+    out.push(...d.pendencias);
+    out.push(...d.resumoItens.filter((r) => !d.itens.some((it) => it.problemas.some((x) => x.chave === r.chave))));
+    for (const it of d.itens) out.push(...it.problemas);
+  }
+  return out;
+}
+
+/** Os tipos de problema presentes (na ordem em que aparecem), com as contagens. */
+export function tiposDePendencia(p: ProtocoloPendente): TipoPendencia[] {
+  const m = new Map<string, TipoPendencia>();
+  for (const x of ocorrencias(p)) {
+    let t = m.get(x.chave);
+    if (!t) {
+      t = { chave: x.chave, rotulo: rotuloTipoPendencia(x.chave, x.texto), erros: 0, atencoes: 0 };
+      m.set(x.chave, t);
+    }
+    if (x.status === "erro") t.erros++;
+    else t.atencoes++;
+  }
+  return [...m.values()];
+}
+
+/** O filtro com TUDO marcado (o padrão ao abrir). */
+export function filtroCompleto(p: ProtocoloPendente): FiltroPendencias {
+  return { status: new Set(["erro", "atencao"]), chaves: new Set(tiposDePendencia(p).map((t) => t.chave)), dfds: new Set(p.dfds.map((d) => String(d.chave))) };
+}
+
+/**
+ * Só o que foi ESCOLHIDO (situação × tipo × DFD) — o DFD/item que fica sem nada sai. O DFD de que algo foi tirado perde o
+ * despacho cirúrgico pronto (que não separa por tipo) e o despacho dele passa a ser os textos das pendências escolhidas.
+ */
+export function filtrarPendencias(p: ProtocoloPendente, f: FiltroPendencias): ProtocoloPendente {
+  const ok = (x: Pendencia) => f.status.has(x.status) && f.chaves.has(x.chave);
   const dfds = p.dfds
+    .filter((d) => f.dfds.has(String(d.chave)))
     .map((d) => {
+      const pendencias = d.pendencias.filter(ok);
+      const resumoItens = d.resumoItens.filter(ok);
       const itens = d.itens
-        .map((it) => ({ ...it, problemas: it.problemas.filter((x) => x.status === "erro") }))
+        .map((it) => {
+          const problemas = it.problemas.filter(ok);
+          return { ...it, problemas, status: problemas.some((x) => x.status === "erro") ? ("erro" as const) : ("atencao" as const) };
+        })
         .filter((it) => it.problemas.length > 0);
-      return { ...d, pendencias: d.pendencias.filter((x) => x.status === "erro"), resumoItens: d.resumoItens.filter((x) => x.status === "erro"), itens };
+      const inteiro =
+        pendencias.length === d.pendencias.length &&
+        resumoItens.length === d.resumoItens.length &&
+        itens.length === d.itens.length &&
+        itens.every((it, i) => it.problemas.length === d.itens[i].problemas.length);
+      const { despacho, ...resto } = d;
+      return { ...resto, pendencias, resumoItens, itens, ...(inteiro && despacho ? { despacho } : {}) };
     })
     .filter(temPendencia);
-  return { ...p, capa: p.capa?.status === "erro" ? p.capa : null, dfds };
+  return { ...p, capa: p.capa && ok(p.capa) ? p.capa : null, dfds };
 }
 
 // ---- TEXTO COPIÁVEL (despacho · WhatsApp · lista) ----

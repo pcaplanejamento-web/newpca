@@ -1479,8 +1479,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`Dropdown`): **Despacho** (o de sempre — `linhasRelatorioProtocolo`/`linhasRelatorioDfd` + "Respeitosamente"), **WhatsApp**
   (`*negrito*` + marcadores) e **Lista simples** (hierárquica, com o lugar) — `textoPendencias`; **PDF** (`blocosPendenciasPdf`
   → o gerador `documento-pdf`, A4: resumo, capa valor × somatória, por DFD a tabela "Onde · Pendência · Conteúdo atual" e a
-  tabela dos ITENS como estão no DFD com a célula que falta na cor; só com a ação Exportar — `usePodeExportar`); "Incluir as
-  atenções" (`soErros`). Onde: o painel da direita do DFD (`DfdPainelDireito {tipo:"mensagens"}` — análise avulso/protocolo,
+  tabela dos ITENS como estão no DFD com a célula que falta na cor; só com a ação Exportar — `usePodeExportar`). **MONTAR O
+  DOCUMENTO** (o botão "Copiar / PDF" do painel → `MontarPendencias`, `Modal` xl): ESCOLHER o que entra — Situação (erros/
+  atenções), **Problemas** (os TIPOS, `tiposDePendencia` — um por ponto, com as ocorrências: cada item conta; rótulo
+  `rotuloTipoPendencia`) e DFDs (no protocolo) — com "Todos | Nenhum" (`ListaEscolha`), e a **PRÉVIA AO VIVO** no formato
+  escolhido (`Segmented` Despacho · WhatsApp · Lista · PDF — o texto exato que vai ser copiado, ou o PDF pelo
+  **`PreviaDocumento`**, DS: os MESMOS blocos do gerador em HTML, sem gerar o PDF); `filtrarPendencias` (puro, testado: o
+  completo não muda nada; o DFD/item sem nada escolhido sai; o DFD de que algo foi tirado usa os textos escolhidos no
+  despacho, não o cirúrgico pronto). Rodapé: o que vai no documento + "Copiar texto" | "Baixar PDF" (desabilitado sem nada
+  escolhido). No celular, "Escolher | Prévia" alternam; no desktop, lado a lado. Onde: o painel da direita do DFD (`DfdPainelDireito {tipo:"mensagens"}` — análise avulso/protocolo,
   gravado, DFD ao lado do protocolo), o painel À DIREITA do protocolo (`ModalPainel` `proto-pendencias` no gravado e na
   análise — o `IndicadorPendencias` alterna; empilhado, um `Modal`) e o TOPO do `ItemDetalhe` (o indicador no cabeçalho do
   item alterna). A contagem do indicador do protocolo = a soma das pendências (não mais a de DFDs). O `RelatorioErros` ficou
@@ -3231,7 +3238,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `RelatorioErros` (banner/`Modal` de texto copiável — hoje o relatório de DIFERENÇAS do reenvio),
   `PcaPicker` (define o **PCA do processo** — `select` dos PCAs cadastrados; adivinha o ano pela descrição e avisa;
   obrigatório), **`PainelPendencias`** (o banner ÚNICO de pendências de Protocolo/DFD/Item — a árvore capa › DFDs › itens,
-  tocar leva ao lugar, Copiar Despacho/WhatsApp/Lista e PDF; os acertos recolhidos no DFD) + **`IndicadorPendencias`** (o botão ÚNICO de erros/atenção
+  tocar leva ao lugar, "Copiar / PDF" com a escolha dos problemas e a prévia; os acertos recolhidos no DFD) +
+  **`PreviaDocumento`** (a prévia em HTML dos blocos de um PDF de documento) + **`IndicadorPendencias`** (o botão ÚNICO de erros/atenção
   dos banners — chips vermelho/âmbar; alterna o painel de pendências) + **`BotaoAcao`** (a
   ação dos rodapés/cabeçalhos dos banners: SÓ o ícone, o nome na dica, `contagem` no canto; `texto` = a principal com o
   rótulo a partir de 640px), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na

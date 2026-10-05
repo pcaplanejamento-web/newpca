@@ -10,23 +10,29 @@ import {
   contarDfd,
   contarProtocolo,
   type DfdPendente,
+  type FiltroPendencias,
+  filtrarPendencias,
+  filtroCompleto,
   FORMATOS_TEXTO,
   type FormatoTexto,
   type ItemPendente,
   type Pendencia,
   type ProtocoloPendente,
-  soErros,
   type StatusPendencia,
   textoPendencias,
+  tiposDePendencia,
 } from "@/lib/pendencias-core";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { BotaoAcao } from "./BotaoAcao";
 import { copiarTexto } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { useQuemExporta } from "./ConfigTabelas";
-import { Dropdown } from "./Dropdown";
 import { usePodeExportar } from "./ExportarTabelas";
 import { Checkbox } from "./Field";
-import { IconChevronDown, IconClipboard, IconFile, IconWhatsapp, IconList } from "./icons";
+import { IconChevronDown, IconClipboard, IconDownload, IconFile, IconList, IconWhatsapp } from "./icons";
+import { Modal } from "./Modal";
+import { PreviaDocumento } from "./PreviaDocumento";
+import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 
 export type EscopoPendencias = "protocolo" | "dfd" | "item";
@@ -156,6 +162,192 @@ function CorpoDfd({ d, escopo, onIrPara }: { d: DfdPendente; escopo: EscopoPende
   );
 }
 
+type Formato = FormatoTexto | "pdf";
+
+/** Uma lista de caixas com "Todos | Nenhum" — situação, tipos de problema, DFDs. */
+function ListaEscolha({
+  titulo,
+  itens,
+  marcados,
+  onMudar,
+}: {
+  titulo: string;
+  itens: { valor: string; rotulo: string; detalhe?: string; cor?: string }[];
+  marcados: Set<string>;
+  onMudar: (s: Set<string>) => void;
+}) {
+  return (
+    <fieldset className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <legend className="text-[12px] font-bold uppercase tracking-wide text-muted">{titulo}</legend>
+        <span className="flex gap-1">
+          <Button size="xs" variant="ghost" onClick={() => onMudar(new Set(itens.map((i) => i.valor)))} disabled={marcados.size === itens.length}>
+            Todos
+          </Button>
+          <Button size="xs" variant="ghost" onClick={() => onMudar(new Set())} disabled={marcados.size === 0}>
+            Nenhum
+          </Button>
+        </span>
+      </div>
+      {itens.map((i) => (
+        <div key={i.valor} className="flex min-h-11 items-center gap-2 lg:min-h-9">
+          {i.cor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: i.cor }} />}
+          <Checkbox
+            label={`${i.rotulo}${i.detalhe ? ` — ${i.detalhe}` : ""}`}
+            checked={marcados.has(i.valor)}
+            onChange={(e) => {
+              const n = new Set(marcados);
+              if (e.target.checked) n.add(i.valor);
+              else n.delete(i.valor);
+              onMudar(n);
+            }}
+          />
+        </div>
+      ))}
+    </fieldset>
+  );
+}
+
+const qtd = (t: { erros: number; atencoes: number }) =>
+  [t.erros ? `${t.erros} ${t.erros === 1 ? "erro" : "erros"}` : "", t.atencoes ? `${t.atencoes} ${t.atencoes === 1 ? "atenção" : "atenções"}` : ""].filter(Boolean).join(" · ");
+
+/**
+ * MONTAR O DOCUMENTO das pendências: escolher O QUE entra (situação · tipos de problema · DFDs) e conferir na PRÉVIA ao vivo
+ * o texto (Despacho · WhatsApp · Lista) ou o PDF, antes de copiar/baixar. No celular, "Escolher | Prévia" alternam; no
+ * desktop ficam lado a lado. O PDF segue a ação Exportar do papel; o código do PDF só carrega no "Baixar".
+ */
+function MontarPendencias({ pendencias, escopo, onFechar }: { pendencias: ProtocoloPendente; escopo: EscopoPendencias; onFechar: () => void }) {
+  const podeExportar = usePodeExportar();
+  const quem = useQuemExporta();
+  const [filtro, setFiltro] = useState<FiltroPendencias>(() => filtroCompleto(pendencias));
+  const [formato, setFormato] = useState<Formato>("despacho");
+  const [aba, setAba] = useState<"escolher" | "previa">("escolher");
+  const [gerando, setGerando] = useState(false);
+  const tipos = useMemo(() => tiposDePendencia(pendencias), [pendencias]);
+  const total = contarProtocolo(pendencias);
+  const escolhido = useMemo(() => filtrarPendencias(pendencias, filtro), [pendencias, filtro]);
+  const cont = contarProtocolo(escolhido);
+  const vazio = cont.erros + cont.atencoes === 0;
+  const texto = useMemo(() => (formato === "pdf" ? "" : textoPendencias(escolhido, formato, escopo)), [escolhido, formato, escopo]);
+  const doc = useMemo(() => (formato === "pdf" ? blocosPendenciasPdf(escolhido, escopo) : null), [escolhido, formato, escopo]);
+  const nomeBase =
+    escopo === "protocolo"
+      ? `Pendências - Protocolo ${pendencias.numero}`
+      : `Pendências - DFD ${pendencias.dfds[0]?.numero ?? ""}${escopo === "item" ? ` - Item ${pendencias.dfds[0]?.itens[0]?.item ?? ""}` : ""}`;
+
+  async function copiar() {
+    const ok = await copiarTexto(texto);
+    if (ok) {
+      toast.success(`Copiado (${FORMATOS_TEXTO.find((f) => f.valor === formato)?.rotulo}).`);
+      onFechar();
+    } else toast.error("Não foi possível copiar — o navegador bloqueou a área de transferência.");
+  }
+  async function baixar() {
+    if (gerando || !doc) return;
+    setGerando(true);
+    try {
+      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
+      await baixarDocumentoPdf(nomeArquivoPdf(nomeBase, dataIsoBrasilia(new Date().toISOString())), doc, { usuario: quem });
+      onFechar();
+    } catch {
+      toast.error("Não foi possível gerar o PDF.");
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  const formatos = [
+    ...FORMATOS_TEXTO.map((f) => ({ value: f.valor as Formato, label: f.rotulo, icone: ICONE[f.valor], curto: f.valor === "lista" ? "Lista" : undefined })),
+    ...(podeExportar ? [{ value: "pdf" as Formato, label: "PDF", icone: <IconFile className="h-4 w-4" /> }] : []),
+  ];
+  const escolha = (
+    <div className="space-y-4">
+      {total.erros > 0 && total.atencoes > 0 && (
+        <ListaEscolha
+          titulo="Situação"
+          itens={[
+            { valor: "erro", rotulo: "Erros", detalhe: String(total.erros), cor: STATUS_MENSAGEM_COR.erro },
+            { valor: "atencao", rotulo: "Atenções", detalhe: String(total.atencoes), cor: STATUS_MENSAGEM_COR.atencao },
+          ]}
+          marcados={filtro.status}
+          onMudar={(s) => setFiltro((f) => ({ ...f, status: s as Set<StatusPendencia> }))}
+        />
+      )}
+      <ListaEscolha
+        titulo="Problemas"
+        itens={tipos.map((t) => ({ valor: t.chave, rotulo: t.rotulo, detalhe: qtd(t), cor: t.erros ? STATUS_MENSAGEM_COR.erro : STATUS_MENSAGEM_COR.atencao }))}
+        marcados={filtro.chaves}
+        onMudar={(s) => setFiltro((f) => ({ ...f, chaves: s }))}
+      />
+      {escopo === "protocolo" && pendencias.dfds.length > 1 && (
+        <ListaEscolha
+          titulo="DFDs"
+          itens={pendencias.dfds.map((d) => ({
+            valor: String(d.chave),
+            rotulo: `DFD ${d.numero}${d.planejamento ? ` · Planej. ${d.planejamento}` : ""}`,
+            detalhe: qtd(contarDfd(d)),
+            cor: corDe(d),
+          }))}
+          marcados={filtro.dfds}
+          onMudar={(s) => setFiltro((f) => ({ ...f, dfds: s }))}
+        />
+      )}
+    </div>
+  );
+  const previa = (
+    <div className="min-w-0 space-y-2">
+      <Segmented<Formato> ariaLabel="Formato" value={formato} onChange={setFormato} options={formatos} />
+      {vazio ? (
+        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">Nada escolhido — marque ao menos um problema.</p>
+      ) : doc ? (
+        <PreviaDocumento blocos={doc.blocos} />
+      ) : (
+        <pre className="whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-4 font-mono text-[12.5px] leading-relaxed text-text-2">{texto}</pre>
+      )}
+    </div>
+  );
+  return (
+    <Modal
+      open
+      onClose={onFechar}
+      titulo={escopo === "protocolo" ? `Copiar / PDF — Protocolo ${pendencias.numero}` : "Copiar / PDF — pendências"}
+      size="xl"
+      rodape={
+        <div className="flex flex-nowrap items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{vazio ? "Nada escolhido" : `No documento: ${qtd(cont)}`}</span>
+          {formato === "pdf" ? (
+            <BotaoAcao texto variant="primary" rotulo="Baixar PDF" icon={<IconDownload className="h-4 w-4" />} onClick={baixar} loading={gerando} disabled={vazio} />
+          ) : (
+            <BotaoAcao texto variant="primary" rotulo="Copiar texto" icon={<IconClipboard className="h-4 w-4" />} onClick={() => void copiar()} disabled={vazio} />
+          )}
+        </div>
+      }
+    >
+      <div className="lg:hidden mb-3">
+        <Segmented<"escolher" | "previa">
+          ariaLabel="Montar o documento"
+          value={aba}
+          onChange={setAba}
+          options={[
+            { value: "escolher", label: `Escolher (${qtd(cont) || "nada"})` },
+            { value: "previa", label: "Prévia" },
+          ]}
+        />
+      </div>
+      <div className="grid gap-[var(--gap-block)] lg:grid-cols-[minmax(15rem,20rem)_minmax(0,1fr)]">
+        <div className={aba === "escolher" ? "" : "max-lg:hidden"}>{escolha}</div>
+        <div className={aba === "previa" ? "" : "max-lg:hidden"}>{previa}</div>
+      </div>
+    </Modal>
+  );
+}
+
+const ICONE: Record<FormatoTexto, ReactNode> = {
+  despacho: <IconFile className="h-4 w-4" />,
+  whatsapp: <IconWhatsapp className="h-4 w-4" />,
+  lista: <IconList className="h-4 w-4" />,
+};
+
 /**
  * O BANNER ÚNICO de PENDÊNCIAS — Protocolo, DFD e Item (o mesmo componente nos três): os erros/atenções na cor da
  * importância do ADM, organizados como o documento (capa · DFDs · itens — o protocolo soma os DFDs e o DFD soma os itens).
@@ -175,96 +367,21 @@ export function PainelPendencias({
   /** As conferências que PASSARAM (só no DFD) — recolhidas no fim. */
   acertos?: Pick<MensagemDfd, "chave" | "texto" | "ancora">[];
 }) {
-  const podeExportar = usePodeExportar();
-  const quem = useQuemExporta();
-  const [incluirAtencoes, setIncluirAtencoes] = useState(true);
-  const [gerando, setGerando] = useState(false);
+  const [montar, setMontar] = useState(false);
   const c = contarProtocolo(pendencias);
   const total = c.erros + c.atencoes;
-  const exportado = useMemo(() => (incluirAtencoes ? pendencias : soErros(pendencias)), [incluirAtencoes, pendencias]);
-  const nomeBase =
-    escopo === "protocolo"
-      ? `Pendências - Protocolo ${pendencias.numero}`
-      : `Pendências - DFD ${pendencias.dfds[0]?.numero ?? ""}${escopo === "item" ? ` - Item ${pendencias.dfds[0]?.itens[0]?.item ?? ""}` : ""}`;
-
-  async function copiar(formato: FormatoTexto) {
-    const ok = await copiarTexto(textoPendencias(exportado, formato, escopo));
-    if (ok) toast.success(`Copiado (${FORMATOS_TEXTO.find((f) => f.valor === formato)?.rotulo}).`);
-    else toast.error("Não foi possível copiar — o navegador bloqueou a área de transferência.");
-  }
-
-  async function pdf() {
-    if (gerando) return;
-    setGerando(true);
-    try {
-      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
-      await baixarDocumentoPdf(nomeArquivoPdf(nomeBase, dataIsoBrasilia(new Date().toISOString())), blocosPendenciasPdf(exportado, escopo), { usuario: quem });
-    } catch {
-      toast.error("Não foi possível gerar o PDF.");
-    } finally {
-      setGerando(false);
-    }
-  }
-
-  const ICONE: Record<FormatoTexto, ReactNode> = {
-    despacho: <IconFile className="h-4 w-4" />,
-    whatsapp: <IconWhatsapp className="h-4 w-4" />,
-    lista: <IconList className="h-4 w-4" />,
-  };
 
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Chips erros={c.erros} atencoes={c.atencoes} />
         {total > 0 && (
-          <div className="flex items-center gap-1.5">
-            <Dropdown
-              align="end"
-              width={280}
-              ariaLabel="Copiar as pendências"
-              title="Copiar as pendências (despacho, WhatsApp ou lista)"
-              triggerClassName="h-11 gap-1.5 rounded-control border border-border-2 bg-surface px-3 text-[13px] font-semibold text-text hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
-              trigger={
-                <>
-                  <IconClipboard className="h-4 w-4" />
-                  <span>Copiar</span>
-                  <IconChevronDown className="h-3.5 w-3.5 text-muted" />
-                </>
-              }
-            >
-              {(fechar) => (
-                <div className="space-y-0.5">
-                  {FORMATOS_TEXTO.map((f) => (
-                    <button
-                      key={f.valor}
-                      type="button"
-                      onClick={() => {
-                        fechar();
-                        void copiar(f.valor);
-                      }}
-                      className="flex min-h-11 w-full items-start gap-2 rounded-control px-2 py-1.5 text-left hover:bg-surface-2 lg:min-h-9"
-                    >
-                      <span className="mt-0.5 text-muted">{ICONE[f.valor]}</span>
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-semibold text-text">{f.rotulo}</span>
-                        <span className="block text-[11.5px] leading-snug text-muted">{f.dica}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Dropdown>
-            {podeExportar && (
-              <Button size="sm" variant="secondary" icon={<IconFile className="h-4 w-4" />} loading={gerando} onClick={pdf} title="Baixar o PDF das pendências">
-                PDF
-              </Button>
-            )}
-          </div>
+          <Button size="sm" variant="secondary" icon={<IconClipboard className="h-4 w-4" />} onClick={() => setMontar(true)} title="Escolher o que entra e copiar o texto ou baixar o PDF (com a prévia)">
+            Copiar / PDF
+          </Button>
         )}
       </div>
-      {c.erros > 0 && c.atencoes > 0 && (
-        <Checkbox label="Incluir as atenções na cópia e no PDF" checked={incluirAtencoes} onChange={(e) => setIncluirAtencoes(e.target.checked)} />
-      )}
+      {montar && <MontarPendencias pendencias={pendencias} escopo={escopo} onFechar={() => setMontar(false)} />}
 
       {total === 0 ? (
         <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">Nenhuma pendência — tudo confere.</p>

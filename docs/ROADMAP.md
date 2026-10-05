@@ -23,7 +23,8 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Pendências padronizadas (Protocolo · DFD · Item) — entregue
 ✅ Um banner único de pendências (`PainelPendencias`) nos três níveis: o protocolo soma a capa e os DFDs, o DFD soma os
 itens; tocar numa pendência leva ao lugar (abre o DFD/item e destaca o campo); copiar em Despacho, WhatsApp ou Lista; PDF
-com o conteúdo atual de cada componente (seções, capa e a tabela dos itens com a célula que falta destacada).
+com o conteúdo atual de cada componente (seções, capa e a tabela dos itens com a célula que falta destacada). Antes de copiar ou baixar, escolhe-se o que entra (erros/atenções, tipos de
+problema e DFDs) e confere-se a prévia ao vivo do texto ou do PDF.
 
 ### Rodapés dos banners em uma linha — entregue
 ✅ Protocolo, DFD e item (Mesa, análise e consulta pública): rodapé em UMA linha com botões só de ícone (`BotaoAcao`), o

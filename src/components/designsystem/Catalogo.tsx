@@ -208,6 +208,7 @@ import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { PainelPendencias } from "@/components/PainelPendencias";
+import { PreviaDocumento } from "@/components/PreviaDocumento";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { IndicadorPendencias } from "@/components/IndicadorPendencias";
 import { Dropzone } from "@/components/Dropzone";
@@ -3926,6 +3927,23 @@ export function Catalogo() {
               ],
             }}
             onIrPara={(a) => toast(`Ir para: ${a.ancora}${a.item != null ? ` (item ${a.item + 1})` : ""}`)}
+          />
+        </div>
+      </Secao>
+
+      <Secao titulo="PreviaDocumento (a prévia em HTML dos blocos de um PDF — o MESMO conteúdo do gerador A4, antes de baixar)">
+        <div className="max-w-2xl">
+          <PreviaDocumento
+            blocos={[
+              { tipo: "titulo", texto: "Pendências do protocolo 144756/2026" },
+              { tipo: "destaques", itens: [{ rotulo: "Erros", valor: "3", cor: "var(--danger)" }, { rotulo: "Atenções", valor: "1", cor: "var(--warn)" }] },
+              { tipo: "secao", texto: "DFD 1586 (Planej. 1702) — DFD-R" },
+              {
+                tipo: "tabela",
+                colunas: [{ titulo: "Onde", peso: 2 }, { titulo: "Pendência", peso: 4 }, { titulo: "Conteúdo atual", peso: 3 }],
+                linhas: [{ celulas: ["Prioridade (Seção 6)", "Fora do padrão", "URGENTÍSSIMA"], cores: [null, "var(--danger)", "@muted"] }],
+              },
+            ]}
           />
         </div>
       </Secao>

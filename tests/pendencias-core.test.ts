@@ -11,7 +11,9 @@ import {
   pendenciaDaCapa,
   pendenciasDoDfd,
   pendenciasDoItemSolo,
-  soErros,
+  filtrarPendencias,
+  filtroCompleto,
+  tiposDePendencia,
   textoPendencias,
 } from "../src/lib/pendencias-core.ts";
 
@@ -115,10 +117,34 @@ describe("protocolo = capa + SOMA dos DFDs; texto e PDF", () => {
     const l = textoPendencias(proto, "lista");
     assert.match(l, /\[Prioridade da compra\/contratação \(Seção 6\)\]/);
   });
-  it("só erros tira as atenções", () => {
-    const e = soErros(proto);
+  it("tipos de problema: um por ponto, com as ocorrências (cada item conta)", () => {
+    const t = tiposDePendencia(proto);
+    const vu = t.find((x) => x.chave === "item.valorUnitario");
+    assert.deepEqual([vu?.rotulo, vu?.erros], ["Item sem valor", 2]);
+    assert.equal(t[0].chave, "protocolo.valorCapa");
+    assert.equal(t.find((x) => x.chave === "dfd.prioridade")?.rotulo, "Prioridade");
+  });
+  it("filtro: o completo não muda nada; só erros tira as atenções", () => {
+    assert.deepEqual(filtrarPendencias(proto, filtroCompleto(proto)), proto);
+    const f = filtroCompleto(proto);
+    f.status.delete("atencao");
+    const e = filtrarPendencias(proto, f);
     assert.equal(contarProtocolo(e).atencoes, 0);
     assert.ok(!e.dfds[0].itens.some((x) => x.item === 4));
+    assert.equal(e.dfds[0].despacho, undefined, "tirou algo: o despacho vira os textos escolhidos");
+  });
+  it("filtro por tipo e por DFD: só o escolhido vai ao texto", () => {
+    const f = filtroCompleto(proto);
+    f.chaves = new Set(["item.quantidade"]);
+    const e = filtrarPendencias(proto, f);
+    assert.equal(e.capa, null);
+    assert.deepEqual(e.dfds[0].itens.map((x) => x.item), [3]);
+    assert.deepEqual(e.dfds[0].pendencias, []);
+    const t = textoPendencias(e, "lista");
+    assert.match(t, /Item 3 \(cód\. 1003\): Sem quantidade/);
+    assert.doesNotMatch(t, /valor unitário/i);
+    f.dfds = new Set();
+    assert.equal(filtrarPendencias(proto, f).dfds.length, 0);
   });
   it("PDF: tabela dos itens com a célula que falta colorida, sem cortar", () => {
     const { blocos } = blocosPendenciasPdf(proto);
