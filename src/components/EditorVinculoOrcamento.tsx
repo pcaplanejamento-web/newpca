@@ -5,8 +5,8 @@ import { brl, num } from "@/lib/format";
 import {
   type AlvosVinculo,
   type AlvoVinculo,
-  chaveVinculo,
   conflitoVinculo,
+  semVinculo,
   type UnidadeOrcamento,
   type VinculoOrcamento,
 } from "@/lib/orcamento-vinculo";
@@ -14,7 +14,6 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { Checkbox, SelectField } from "./Field";
 import { IconTrash } from "./icons";
-import { SeletorMultiplo } from "./SeletorMultiplo";
 
 /** O que o editor grava: a unidade do CUBO (texto), a cadastrada e as ações (lista ou as DEMAIS menos as de fora). */
 export type DadosVinculo = { texto: string; alvoId: number; acoes: string[] | null; acoesFora: string[] };
@@ -41,11 +40,12 @@ export function useRotuloUnidade(alvos: AlvosVinculo) {
 }
 
 /**
- * EDITOR de UM vínculo do orçamento (corpo de um `Modal`): a unidade do orçamento (fixa ao editar), a unidade
- * cadastrada (agrupadas por órgão; ocultas só se já escolhidas) e as AÇÕES — as que nenhum OUTRO vínculo da unidade
- * pegou —, com "Incluir as demais ações" (as que vierem depois também entram; um por unidade do orçamento). A REGRA
- * (`conflitoVinculo`) aparece na hora e trava o Salvar; a prévia diz quanto o vínculo leva neste orçamento.
- * Apresentacional: grava via `onSalvar`/`onExcluir`.
+ * EDITOR de UM vínculo do orçamento (o MESMO na aba Vínculos do orçamento e no banner da linha do PCA): a unidade do
+ * orçamento e a unidade cadastrada — o lado da TELA em que se está fica fixo (`fixo`: no Orçamento a do orçamento; no PCA a
+ * cadastrada) — e TODAS as ações da unidade do orçamento, marcadas e desmarcadas, cada uma com o destino: marcada = este
+ * vínculo; de outro vínculo = "vai para SIGLA" (travada); desmarcada = vai ao vínculo "as demais" de outra unidade, senão
+ * fica SEM VÍNCULO (âmbar). "Incluir as demais ações" (as que vierem depois também entram; um por unidade do orçamento). A
+ * REGRA (`conflitoVinculo`) aparece na hora e trava o Salvar. Apresentacional: grava via `onSalvar`/`onExcluir`.
  */
 export function EditorVinculoOrcamento({
   unidades,
@@ -58,6 +58,7 @@ export function EditorVinculoOrcamento({
   onExcluir,
   onFechar,
   onAbrirVinculo,
+  fixo,
 }: {
   unidades: UnidadeOrcamento[];
   vinculos: VinculoOrcamento[];
@@ -70,6 +71,9 @@ export function EditorVinculoOrcamento({
   onFechar: () => void;
   /** Abrir OUTRO vínculo da mesma unidade (o que a regra acusa) no lugar deste. */
   onAbrirVinculo?: (v: VinculoOrcamento) => void;
+  /** O lado que NÃO muda (a tela em que se configura): "cubo" = a unidade do orçamento (tela do Orçamento) · "alvo" = a
+   * unidade cadastrada (o PCA — a linha da unidade). Editar um vínculo gravado fixa a unidade do orçamento. */
+  fixo?: "cubo" | "alvo";
 }) {
   const rotulo = useRotuloUnidade(alvos);
   const [chave, setChave] = useState(inicial.chave ?? "");
@@ -97,14 +101,23 @@ export function EditorVinculoOrcamento({
   const leva = disponiveis.filter((a) => marcadas.has(a.chave));
   // O vínculo que a regra acusa (a mesma unidade cadastrada, ou o "com as demais") — para abri-lo em vez de duplicar.
   const conflitante = motivo ? (outros.find((o) => o.alvoId === alvoId) ?? (demais ? outros.find((o) => o.acoes == null) : undefined)) : undefined;
-  const textoPorChave = new Map(disponiveis.map((a) => [a.texto, a.chave]));
+  const cuboFixo = inicial.id != null || fixo === "cubo";
+  // O destino de cada ação que NÃO é deste vínculo (para mostrar TODAS — marcadas e desmarcadas — com o que acontece):
+  // a de outro vínculo explícito vai à unidade dele; a livre desmarcada vai ao "demais" de outro vínculo, senão fica sem vínculo.
+  const destinoOutro = new Map(outros.flatMap((o) => (o.acoes ?? []).map((a) => [a, o.alvoId] as const)));
+  const outroDemais = outros.find((o) => o.acoes == null);
+  const destinoDesmarcada = (k: string) =>
+    !demais && outroDemais && !outroDemais.acoesFora.includes(k) ? `vai para ${siglaDe(outroDemais.alvoId)} (as demais)` : null;
+  const siglaDe = (id: number) => alvos.unidades.find((u) => u.id === id)?.sigla ?? "outra unidade";
+  // Quantas ações de cada unidade do orçamento estão SEM vínculo (a escolha da unidade aponta o que falta).
+  const pendentes = useMemo(() => new Map(semVinculo(unidades, vinculos, alvos.unidades).map((p) => [p.unidade.chave, p.acoes.length])), [unidades, vinculos, alvos]);
 
   return (
     <div className="space-y-[var(--gap-block)]">
       <SelectField
         label="Unidade do orçamento"
         value={chave}
-        disabled={inicial.id != null || salvando}
+        disabled={cuboFixo || salvando}
         onChange={(e) => {
           const k = e.target.value;
           setChave(k);
@@ -119,13 +132,14 @@ export function EditorVinculoOrcamento({
         {unidades.map((u) => (
           <option key={u.chave} value={u.chave}>
             {u.texto}
+            {pendentes.get(u.chave) ? ` — ${num(pendentes.get(u.chave) ?? 0)} ação(ões) sem vínculo` : ""}
           </option>
         ))}
       </SelectField>
       <SelectField
         label="Unidade cadastrada"
         value={alvoId ?? ""}
-        disabled={salvando}
+        disabled={fixo === "alvo" || salvando}
         onChange={(e) => setAlvoId(e.target.value ? Number(e.target.value) : null)}
       >
         <option value="">Escolha…</option>
@@ -152,14 +166,55 @@ export function EditorVinculoOrcamento({
                 : "Incluir as demais ações (também as que vierem nos próximos orçamentos)"
             }
           />
-          <SeletorMultiplo
-            rotulo={demais ? "Ações (desmarque as que ficam de fora)" : "Ações deste vínculo"}
-            opcoes={disponiveis.map((a) => ({ valor: a.texto, contagem: a.lancamentos }))}
-            selecionados={leva.map((a) => a.texto)}
-            textoVazio="Nenhuma"
-            disabled={salvando}
-            onChange={(v) => setMarcadas(new Set(v.map((t) => textoPorChave.get(t) ?? chaveVinculo(t))))}
-          />
+          <div className="rounded-card border border-border">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+              <span className="text-[12.5px] font-semibold text-text-2">
+                Ações da unidade ({num(leva.length)} de {num(unidade.acoes.length)} marcadas)
+              </span>
+              <span className="flex gap-1">
+                <Button size="xs" variant="ghost" disabled={salvando} onClick={() => setMarcadas(new Set(disponiveis.map((a) => a.chave)))}>
+                  Marcar todas
+                </Button>
+                <Button size="xs" variant="ghost" disabled={salvando} onClick={() => setMarcadas(new Set())}>
+                  Desmarcar todas
+                </Button>
+              </span>
+            </div>
+            <ul className="max-h-72 divide-y divide-border overflow-y-auto">
+              {unidade.acoes.map((a) => {
+                const outro = destinoOutro.get(a.chave);
+                const marcada = outro == null && marcadas.has(a.chave);
+                const nota = outro != null ? `vai para ${siglaDe(outro)}` : marcada ? null : (destinoDesmarcada(a.chave) ?? "sem vínculo");
+                return (
+                  <li key={a.chave} className="flex items-center gap-3 px-3 py-1.5">
+                    <span className="min-w-0 flex-1">
+                      <Checkbox
+                        checked={marcada || outro != null}
+                        disabled={salvando || outro != null}
+                        onChange={(e) =>
+                          setMarcadas((m) => {
+                            const n = new Set(m);
+                            if (e.target.checked) n.add(a.chave);
+                            else n.delete(a.chave);
+                            return n;
+                          })
+                        }
+                        label={<span className="text-[13px] text-text">{a.texto}</span>}
+                      />
+                    </span>
+                    <span className="shrink-0 text-right text-[12px] tabular-nums">
+                      <span className="block text-text-2">{brl(a.valorInicial)}</span>
+                      {nota && (
+                        <span className="block" style={{ color: nota === "sem vínculo" ? "var(--warn)" : "var(--muted)" }}>
+                          {nota}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
           <p className="text-[12.5px] text-muted">
             Neste orçamento, o vínculo leva {num(leva.length)} de {num(disponiveis.length)} ações livres ·{" "}
             {num(leva.reduce((s, a) => s + a.lancamentos, 0))} lançamentos · {brl(leva.reduce((s, a) => s + a.valorInicial, 0))}

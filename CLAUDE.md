@@ -1979,10 +1979,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca` — SEM avisos no topo (a prévia vira o hint do KPI "Planejado no PCA"; sem orçamento do ano,
   a tabela diz no vazio): a **ENGRENAGEM** (só ícone, quem Configura o PCA, no FIM da linha de controles, à direita — no
   PCA × Orçamento depois do Relatório; no Comparativo pelo slot `OrcamentoComparativo.fim`; ponto âmbar = a visão tem
-  valores fora deste orçamento) + o **LÁPIS DE VÍNCULOS POR LINHA** (com Configurar no Orçamento, na visão Por unidade —
-  `VinculosDaUnidade`, DS: os vínculos que trazem orçamento à unidade [unidade do CUBO · ações · dotação no ano] com "Novo
-  vínculo para SIGLA"; na linha "Sem vínculo", as unidades do CUBO com ações sem vínculo + "Vincular" com a sugestão — o
-  MESMO `EditorVinculoOrcamento` e a mesma gravação da aba Vínculos, `useGravacaoVinculos` de `OrcamentoVinculosAba.tsx`)
+  valores fora deste orçamento) + a coluna **VÍNCULOS por linha** (com Configurar no Orçamento, na visão Por unidade; a linha com ações do orçamento SEM
+  vínculo mostra "N sem vínculo" em âmbar — calculado na hora sobre os vínculos gravados): abre UM banner,
+  **`VinculosDaUnidade`** (DS) — as unidades do orçamento ligadas à unidade da linha num acordeão, cada uma abrindo ali o
+  editor com a unidade CADASTRADA FIXA (`EditorVinculoOrcamento fixo="alvo"` — a lógica invertida da aba Vínculos, que fixa
+  a unidade do orçamento) + "Adicionar unidade do orçamento"; na linha "Sem vínculo", as unidades do orçamento com ações
+  sem vínculo (`fixo="cubo"`, sugestão pré-escolhida). O editor mostra SEMPRE TODAS as ações, marcadas e desmarcadas, com o
+  destino de cada uma (este vínculo · "vai para SIGLA" · "as demais" de outra unidade · "sem vínculo" em âmbar). A gravação
+  é a da aba Vínculos (`useGravacaoVinculos`, `OrcamentoVinculosAba.tsx`) → `router.refresh` (o orçamento do PCA recalcula)
   abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
   os lançamentos do orçamento do ano (os do Comparativo — sem consulta nova); o Comparativo acompanha a visão do PCA quando
