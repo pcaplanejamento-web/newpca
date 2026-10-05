@@ -3503,9 +3503,50 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     devolvido, ao responsável (`avisarPcaProtocolos`); **Administração** — o cadastro pendente vai ao SINO dos ADMs (e ao
     e-mail pela fila — `idsDosAdmins`); **Calendário** — evento com data/hora/local/link alterado ou CANCELADO, aos
     convidados que não recusaram (`avisarEventoAlterado`); **Tarefas** — "vence hoje".
+  - **PACOTE 2 (migração `0084`, aditiva — `notificacoes.lida_em`, `email_ok`, `adiada_ate`, `email_apos` + índice
+    `criado_em`):**
+    - **Limpeza CONFIGURÁVEL (ADM):** `Retencao {auto, lidasDias, naoLidasDias, teto}` (`lerRetencao`, limites
+      `LIMITES_RETENCAO`; blob `notificacoesRetencao` — `getRetencao`/`gravarRetencao`); o cron só limpa com `auto` ligado;
+      "Limpar agora" (`POST /api/admin/notificacoes/limpar`, roda mesmo com o automático desligado; devolve quantos saíram).
+    - **Preferências da PESSOA** (`notificacoes-config-core.ts`): e-mail `{ligado, desligados, destino, modo
+      imediato|resumo, horaResumo, silencio}` (`lerPrefsEmail`) — **`emailAposPara`** dá o instante em que o e-mail pode sair
+      (resumo = o próximo horário de Brasília, `proximoHorario`; silêncio que vira a noite = o fim, `noSilencio`; o
+      obrigatório não espera) e `gravarAvisos` o grava em `email_apos` (a fila o respeita); o sino `PrefsPessoa`
+      `{sinoDesligados, tarefas, quadros, som, sistema}` (chave `notificacoes:pessoa`, `lerPrefsPessoa`) — **`silenciado`**:
+      o tipo desligado, a TAREFA e o QUADRO silenciados não chegam; os **`AVISOS_DIRETOS`** (atribuída, menção, convite,
+      protocolo, cadastro, comunicado) sempre chegam. `preferenciasDe(ids)` (`notificacoes.ts`, UMA consulta para todos os
+      destinatários). Rota `GET/PUT /api/notificacoes/preferencias` (pessoal; o GET traz os nomes do que está silenciado).
+    - **ADIAR** ("lembrar em 1 h · 3 h · amanhã 8 h"): `PATCH /api/notificacoes {ids, adiarAte}` (até 30 dias; as variantes do
+      PATCH são `strictObject`) → `adiada_ate` (some do sino e da contagem até lá; volta não lida) + o **alarme** da caixa
+      (`agendarAoVivo` → `POST /alarme` do `CaixaNotificacoes`, `storage.setAlarm` — o aviso volta AO VIVO na hora).
+    - **E-mail:** **RESUMO** — por pessoa, no modo resumo (ou com 3+ avisos juntos, o silêncio que acabou) UM e-mail com a
+      lista (`emailResumo`); **descadastro** em todo e-mail — link assinado (`descadastro-core.ts`: HMAC-SHA256 com a chave
+      mestra, `assinarDescadastro`/`descadastroValido` em tempo constante) + `List-Unsubscribe`/`List-Unsubscribe-Post`
+      (RFC 8058); rota PÚBLICA `GET/POST /api/notificacoes/descadastro` (o GET mostra a página com "Confirmar" — leitor de
+      links não descadastra; o POST desliga o tipo, ou todos os desligáveis com `t=todos`; o obrigatório recusa).
+      `email_ok` = saiu de fato (o pulado não conta) — o relatório de alcance.
+    - **Avisos novos:** `concluida` (tarefa concluída → quem acompanha, em `aposMovimento`), `situacao` (situação alterada
+      — banner/célula e massa — e protocolo REENVIADO → o responsável; `avisarProtocoloAtualizado`), `centi` (o lote da
+      Automação terminou/falhou/cancelado → quem iniciou, no `PATCH` da execução), `comunicado` (o ADM: `POST
+      /api/admin/notificacoes/comunicado` — todas as pessoas ativas ou as dos grupos; link só interno).
+    - **Alcance (ADM):** `GET /api/admin/notificacoes/alcance?dias=` — por tipo: avisos, pessoas, % lidos, tempo médio até ler
+      (`lida_em`), e-mails que saíram, na fila + se o tempo real está ativo.
+    - **Telas (compactas, mais ícones que texto):** **`NotificacoesAdmin`** = `Segmented` **Avisos** (cabeçalho só com
+      ícones sino · e-mail · pode desligar) · **Limpeza** · **Comunicado** · **Alcance** (`DataTable` compacta, exportável).
+      **Perfil → Notificações** = **`PreferenciasNotificacoes`** (grava sozinho em 600 ms — `usePreferenciasNotificacoes`):
+      Sino (os tipos em **`ChipsIcone`** — DS: chips de alternar com ícone, `compacto` = só o ícone —, Som, Alerta do sistema
+      — pede a permissão do navegador —, Silenciados com "voltar a avisar") e E-mail (Imediato · Resumo diário · Desligado,
+      horário, silêncio De/Até, destino, os tipos). **Sino:** ações só com ícone (`Acao`: lida/não lida, **adiar**,
+      **silenciar** — as opções abrem EM LINHA, `Pilula`, sem menu sobre menu —, excluir); filtro por tipo em `ChipsIcone`;
+      rodapé só com ícones (marcar todas, limpar lidas, limpar tudo, configurar) + "N não lidas". **Som** (`tocarSom`, Web
+      Audio, sem arquivo) e **alerta do sistema** (`alertaSistema`, a aba em segundo plano; tocar abre o aviso) conforme as
+      escolhas (lidas só quando chega um aviso, cache de 10 min). Ao vivo, uma conferência a cada 5 min cobre o aviso a
+      muitas pessoas (o comunicado — o ao vivo pinga até 25 por requisição). O visual dos tipos (ícone/cor/rótulo) é UM
+      mapa — **`VISUAL_AVISO`** (`notificacoesVisual.ts`).
   - Testes: `tests/notificacoes.test.ts` (catálogo/config, prefs, validação, dia/hora relativa/repetidos/título, canal ao
-    vivo, gravação com `returning`, exclusão + dispensa e retenção no driver D1 real, mescla) + `tests/resend-email.test.ts`
-    (reserva com validade e confirmação).
+    vivo, gravação com `returning`, exclusão + dispensa e retenção no driver D1 real, mescla, resumo/silêncio/silenciar,
+    retenção do ADM, descadastro assinado, e-mail resumo, a fila com `email_apos`) + `tests/resend-email.test.ts` (reserva
+    com validade e confirmação).
 - **LOGIN COM GOOGLE (OAuth, sem migração):** cartão **"Login com Google"** em Integrações (`IntegracaoGoogle`,
   catalogado): `integracoes.google` = `{ativo, clientId, clientSecret CIFRADO write-only}` (`GoogleConfig`,
   `googleConfigurado`); o cartão mostra a URI de redirecionamento (`/api/auth/google/callback`, com Copiar) e "Testar"

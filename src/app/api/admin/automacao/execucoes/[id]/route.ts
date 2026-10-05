@@ -1,6 +1,7 @@
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { type EstadoExecucao, podeTransitar } from "@/lib/automacao-core";
+import { type EstadoExecucao, podeTransitar, RECEITAS } from "@/lib/automacao-core";
+import { notificar } from "@/lib/notificacoes";
 import { getExecucao, mudarEstadoExecucao } from "@/lib/automacao-plataforma";
 import { estadoExecucaoSchema } from "@/lib/automacao-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -34,5 +35,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
   await mudarEstadoExecucao(id, p.data.estado);
   if (p.data.estado !== "rodando" || de !== "preparada")
     await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "automacao", entidadeId: id, origem: "centi", resumo: `Execução: ${de} → ${p.data.estado}` });
+  // O LOTE terminou: quem iniciou recebe o aviso no sino (útil quando saiu da tela da Automação no meio do lote).
+  const fim = { concluida: "concluído", falhou: "falhou", cancelada: "cancelado" } as Partial<Record<EstadoExecucao, string>>;
+  if (fim[p.data.estado] && x.execucao.usuarioId && !x.execucao.ensaio) {
+    const r = RECEITAS.find((r) => r.id === x.execucao.receita);
+    const atual = await getExecucao(id);
+    const feitos = atual?.execucao.feitos ?? x.execucao.feitos;
+    const falhas = atual?.execucao.falhas ?? x.execucao.falhas;
+    await notificar([
+      {
+        usuarioId: x.execucao.usuarioId,
+        tipo: "centi",
+        titulo: `Automação: ${r?.nome ?? x.execucao.receita} — ${fim[p.data.estado]}`,
+        texto: `${feitos} feito${feitos === 1 ? "" : "s"}${falhas ? ` · ${falhas} com falha` : ""}`,
+        link: "/painel/automacao",
+      },
+    ]);
+  }
   return ok({ estado: p.data.estado });
 }

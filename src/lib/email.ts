@@ -3,7 +3,9 @@ import { papeis, usuarios } from "@/db/schema";
 import { getAparencia } from "./aparencia";
 import { papelDoUsuarioSql } from "./auth";
 import { getDb } from "./db";
-import { type ContextoEmail, type ConteudoEmail, emailDaNotificacao, enderecoDosAvisos, lerPrefsEmail, NOME_SISTEMA_PADRAO, querEmail } from "./email-core";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { assinarDescadastro, caminhoDescadastro } from "./descadastro-core";
+import { type ContextoEmail, type ConteudoEmail, emailDaNotificacao, emailResumo, enderecoDosAvisos, lerPrefsEmail, NOME_SISTEMA_PADRAO, querEmail, urlAbsoluta } from "./email-core";
 import { comandoConfirmarEmails, comandoDevolverEmails, comandoReservarEmails, consultaPendentesEmail } from "./email-sql";
 import { getConfigNotificacoes } from "./notificacoes-config";
 import type { ChaveAviso } from "./notificacoes-config-core";
@@ -17,6 +19,15 @@ import { TIPOS_NOTIFICACAO, type TipoNotificacao } from "./tarefas-core";
  * O ENVIO dos e-mails do sistema pelo Resend (server-only) — BEST-EFFORT: nada aqui lança nem atrasa a ação que o
  * disparou (roda depois da resposta). Sem a integração ativa, não faz nada.
  */
+
+/** A chave mestra do Worker (assina o descadastro); sem ela, os e-mails saem sem o link de descadastro. */
+export function chaveMestra(): string | null {
+  try {
+    return (getCloudflareContext().env as unknown as { INTEGRACOES_CHAVE?: string }).INTEGRACOES_CHAVE || null;
+  } catch {
+    return null;
+  }
+}
 
 /** O nome do sistema (identidade do ADM) para o cabeçalho dos e-mails. */
 async function nomeSistema(): Promise<string> {
@@ -56,8 +67,11 @@ export async function enviarEmailsPendentes(limite = 50): Promise<{ enviados: nu
       for (const r of await comandoReservarEmails(db, ids)) reservados.add(r.id);
     const meus = pendentes.filter((p) => reservados.has(p.id));
     const [ctx, avisos] = await Promise.all([contextoEmail(cfg.urlSistema), getConfigNotificacoes()]);
-    const envio: { id: number; email: EmailResend }[] = [];
+    const chave = chaveMestra();
+    const envio: { ids: number[]; email: EmailResend }[] = [];
     const pulados: number[] = [];
+    // Por PESSOA: no RESUMO (ou com 3+ avisos juntos — o silêncio que acabou), UM e-mail com a lista; senão, um por aviso.
+    const porPessoa = new Map<number, { prefs: ReturnType<typeof lerPrefsEmail>; para: string; itens: typeof meus }>();
     for (const p of meus) {
       let prefs = lerPrefsEmail(null);
       try {
@@ -70,28 +84,41 @@ export async function enviarEmailsPendentes(limite = 50): Promise<{ enviados: nu
         pulados.push(p.id);
         continue;
       }
-      const tipo = (TIPOS_NOTIFICACAO as readonly string[]).includes(p.tipo) ? (p.tipo as TipoNotificacao) : "automacao";
-      const c = emailDaNotificacao({ tipo, titulo: p.titulo, texto: p.texto, link: p.link, atorNome: p.atorNome }, ctx);
-      envio.push({ id: p.id, email: paraResend(cfg.remetente, [enderecoDosAvisos(prefs, p.email, p.googleEmail)], c) });
+      const g = porPessoa.get(p.usuarioId) ?? { prefs, para: enderecoDosAvisos(prefs, p.email, p.googleEmail), itens: [] };
+      g.itens.push(p);
+      porPessoa.set(p.usuarioId, g);
     }
-    for (const ids of emParticoes(pulados, 90)) await comandoConfirmarEmails(db, ids);
+    const tipoDe = (t: string) => ((TIPOS_NOTIFICACAO as readonly string[]).includes(t) ? (t as TipoNotificacao) : "automacao");
+    for (const [usuarioId, g] of porPessoa) {
+      const resumo = g.prefs.modo === "resumo" || g.itens.length >= 3;
+      if (resumo) {
+        const sair = chave ? caminhoDescadastro(usuarioId, "todos", await assinarDescadastro(chave, usuarioId, "todos")) : null;
+        const c = emailResumo(
+          [...g.itens].reverse().map((p) => ({ tipo: tipoDe(p.tipo), titulo: p.titulo, texto: p.texto, link: p.link })),
+          ctx,
+          sair,
+        );
+        envio.push({ ids: g.itens.map((p) => p.id), email: paraResend(cfg.remetente, [g.para], c, sair ? urlAbsoluta(ctx.urlSistema, sair) : null) });
+        continue;
+      }
+      for (const p of g.itens) {
+        const desligavel = avisos[p.tipo as ChaveAviso]?.desligavel ?? true;
+        const sair = chave && desligavel ? caminhoDescadastro(usuarioId, p.tipo, await assinarDescadastro(chave, usuarioId, p.tipo)) : null;
+        const c = emailDaNotificacao({ tipo: tipoDe(p.tipo), titulo: p.titulo, texto: p.texto, link: p.link, atorNome: p.atorNome }, ctx, sair);
+        envio.push({ ids: [p.id], email: paraResend(cfg.remetente, [g.para], c, sair ? urlAbsoluta(ctx.urlSistema, sair) : null) });
+      }
+    }
+    for (const ids of emParticoes(pulados, 90)) await comandoConfirmarEmails(db, ids, false);
     for (const lote of emParticoes(envio, MAX_LOTE_RESEND)) {
+      const ids = lote.flatMap((l) => l.ids);
       try {
         await cfg.cliente.enviarLote(lote.map((l) => l.email));
         res.enviados += lote.length;
-        for (const ids of emParticoes(
-          lote.map((l) => l.id),
-          90,
-        ))
-          await comandoConfirmarEmails(db, ids);
+        for (const parte of emParticoes(ids, 90)) await comandoConfirmarEmails(db, parte);
       } catch (e) {
         console.error("[email] lote falhou:", (e as Error).message);
         res.falhas += lote.length;
-        for (const ids of emParticoes(
-          lote.map((l) => l.id),
-          90,
-        ))
-          await comandoDevolverEmails(db, ids);
+        for (const parte of emParticoes(ids, 90)) await comandoDevolverEmails(db, parte);
       }
     }
   } catch (e) {
@@ -105,9 +132,16 @@ export function enviarPendentesDepois() {
   depoisDaResposta(enviarEmailsPendentes(50), "email");
 }
 
-/** O e-mail no formato do Resend. */
-function paraResend(remetente: string, para: string[], c: ConteudoEmail): EmailResend {
-  return { from: remetente, to: para, subject: c.assunto, html: c.html, text: c.texto };
+/** O e-mail no formato do Resend — com o DESCADASTRO em um clique (`List-Unsubscribe`, RFC 8058) quando há link. */
+function paraResend(remetente: string, para: string[], c: ConteudoEmail, descadastro: string | null = null): EmailResend {
+  return {
+    from: remetente,
+    to: para,
+    subject: c.assunto,
+    html: c.html,
+    text: c.texto,
+    ...(descadastro ? { headers: { "List-Unsubscribe": `<${descadastro}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
+  };
 }
 
 /** Envia UM e-mail já montado (a cada destinatário, separado — ninguém vê o endereço do outro). Nunca lança. */

@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { notificacoes, notificacoesDispensadas } from "../db/schema.ts";
+import type { Retencao } from "./notificacoes-config-core.ts";
 
 /**
  * BUILDERS das notificações (migração `0083`) — a LIMPEZA de verdade (apaga do banco) e a retenção, prontos para o
@@ -10,11 +11,6 @@ import { notificacoes, notificacoesDispensadas } from "../db/schema.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
 
-/** No máximo tantos avisos por pessoa (o excedente sai — as lidas mais antigas primeiro). */
-export const TETO_NOTIFICACOES = 200;
-/** Retenção: as lidas saem depois de 30 dias; as não lidas, depois de 90. */
-export const DIAS_LIDAS = 30;
-export const DIAS_NAO_LIDAS = 90;
 /** Quanto vale a DISPENSA de um aviso derivado (maior que a janela da derivação — 30 dias atrás). */
 export const DIAS_DISPENSA = 40;
 
@@ -45,16 +41,25 @@ export function comandosExcluirNotificacoes(db: Db, usuarioId: number, alvo: Alv
   ] as const;
 }
 
-/** A RETENÇÃO (o cron): lidas > 30 dias, não lidas > 90, o excedente do teto por pessoa e as dispensas vencidas. */
-export function comandosRetencaoNotificacoes(db: Db) {
+/**
+ * A RETENÇÃO (o cron, com a limpeza automática ligada, e o "Limpar agora" do ADM): as lidas depois de `lidasDias`, as não
+ * lidas depois de `naoLidasDias`, o excedente do `teto` por pessoa (as lidas mais antigas saem antes) e as dispensas
+ * vencidas. Devolve quantas saíram em cada passo.
+ */
+export function comandosRetencaoNotificacoes(db: Db, r: Retencao) {
   return [
-    db.delete(notificacoes).where(and(eq(notificacoes.lida, true), sql`${notificacoes.criadoEm} < datetime('now', ${`-${DIAS_LIDAS} days`})`)),
-    db.delete(notificacoes).where(sql`${notificacoes.criadoEm} < datetime('now', ${`-${DIAS_NAO_LIDAS} days`})`),
     db
       .delete(notificacoes)
-      .where(
-        sql`${notificacoes.id} IN (SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY usuario_id ORDER BY lida, id DESC) AS rn FROM notificacoes) WHERE rn > ${TETO_NOTIFICACOES})`,
-      ),
+      .where(and(eq(notificacoes.lida, true), sql`${notificacoes.criadoEm} < datetime('now', ${`-${r.lidasDias} days`})`))
+      .returning({ id: notificacoes.id }),
+    db
+      .delete(notificacoes)
+      .where(sql`${notificacoes.criadoEm} < datetime('now', ${`-${r.naoLidasDias} days`})`)
+      .returning({ id: notificacoes.id }),
+    db
+      .delete(notificacoes)
+      .where(sql`${notificacoes.id} IN (SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY usuario_id ORDER BY lida, id DESC) AS rn FROM notificacoes) WHERE rn > ${r.teto})`)
+      .returning({ id: notificacoes.id }),
     db.delete(notificacoesDispensadas).where(lt(notificacoesDispensadas.ate, sql`date('now')`)),
   ] as const;
 }

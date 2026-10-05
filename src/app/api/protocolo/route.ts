@@ -1,6 +1,7 @@
 import { escopoMesa, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { exigirAcesso, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
+import { avisarProtocoloAtualizado } from "@/lib/avisos-mesa";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { assuntoCadastrado, classificarAssunto, comportamentoNo, protocolarHabilitado } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
@@ -111,5 +112,7 @@ export async function POST(req: Request) {
     origem: reenvio ? "reenvio" : "protocolacao",
     detalhe,
   });
+  // REENVIADO: o responsável do protocolo sabe (o próprio autor do reenvio, não).
+  if (reenvio && gravado) await avisarProtocoloAtualizado(a.u, [{ responsavelId: gravado.responsavelId, protocolo: { id: r.id, numero: r.numero, assunto: protocolo.assunto, pcaId: gravado.pcaId }, oQue: "reenviado" }]);
   return ok({ protocoloId: r.id, numero: r.numero });
 }

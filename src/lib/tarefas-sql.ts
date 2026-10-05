@@ -627,11 +627,13 @@ export type NovaNotificacao = {
   atorNome?: string | null;
   /** Dedup (as DERIVADAS de prazo): repetida = ignorada. */
   chave?: string | null;
-  /** O ADM não manda este aviso por e-mail: já nasce TRATADO (não entra na fila de envio). */
+  /** O ADM não manda este aviso por e-mail (ou a pessoa desligou): já nasce TRATADO (não entra na fila de envio). */
   semEmail?: boolean;
+  /** O e-mail só sai depois deste instante (o resumo diário, o silêncio da pessoa). */
+  emailApos?: string | null;
 };
-/** Linhas por INSERT (11 colunas × 9 = 99 parâmetros — abaixo do limite de 100 do D1). */
-const NOTIF_POR_INSERT = 9;
+/** Linhas por INSERT (12 colunas × 8 = 96 parâmetros — abaixo do limite de 100 do D1). */
+const NOTIF_POR_INSERT = 8;
 
 /** GRAVA notificações (em lotes de 9 linhas por comando); a de `chave` repetida para a mesma pessoa é ignorada. */
 export function comandosNotificacoes(db: Db, linhas: NovaNotificacao[]) {
@@ -653,6 +655,7 @@ export function comandosNotificacoes(db: Db, linhas: NovaNotificacao[]) {
             atorNome: n.atorNome ?? null,
             chave: n.chave ?? null,
             emailEnviadoEm: n.semEmail ? new Date().toISOString().slice(0, 19).replace("T", " ") : null,
+            emailApos: n.semEmail ? null : (n.emailApos ?? null),
           })),
         )
         .onConflictDoNothing()

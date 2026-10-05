@@ -1,6 +1,6 @@
 import { exigirUsuario } from "@/lib/api-auth";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { contarNaoLidas, excluirNotificacoes, listarNotificacoes, marcarLidas } from "@/lib/notificacoes";
+import { adiarNotificacoes, contarNaoLidas, excluirNotificacoes, listarNotificacoes, marcarLidas } from "@/lib/notificacoes";
 import { notificacoesDeleteSchema, notificacoesListaSchema, notificacoesPatchSchema } from "@/lib/notificacoes-validation";
 
 export const dynamic = "force-dynamic";
@@ -22,13 +22,14 @@ export async function GET(req: Request) {
   return ok(await listarNotificacoes(a.u, p.data));
 }
 
-/** Marca como LIDAS ou NÃO lidas (`{ids, lida}`) ou todas como lidas (`{todas:true}`) — só as da própria pessoa. */
+/** ADIA (`{ids, adiarAte}`), marca como LIDAS ou NÃO lidas (`{ids, lida}`) ou todas como lidas (`{todas:true}`) — só as da própria pessoa. */
 export async function PATCH(req: Request) {
   const a = await exigirUsuario();
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(notificacoesPatchSchema, req);
   if ("resp" in p) return p.resp;
-  await marcarLidas(a.u, p.data);
+  if ("adiarAte" in p.data) await adiarNotificacoes(a.u, p.data.ids, p.data.adiarAte);
+  else await marcarLidas(a.u, p.data);
   return ok();
 }
 

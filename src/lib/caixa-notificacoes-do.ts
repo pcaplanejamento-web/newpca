@@ -31,17 +31,34 @@ export class CaixaNotificacoes {
       return new Response(null, { status: 101, webSocket: cliente });
     }
     if (pathname === "/ping" && req.method === "POST") {
-      const msg = JSON.stringify({ t: "mudou", em: Date.now() });
-      for (const ws of this.state.getWebSockets()) {
-        try {
-          ws.send(msg);
-        } catch {
-          /* aba que caiu: o fechamento a tira */
-        }
-      }
+      this.avisar();
+      return new Response("ok");
+    }
+    // O aviso ADIADO volta na hora: o alarme mais cedo pedido (um por caixa) avisa as abas.
+    if (pathname === "/alarme" && req.method === "POST") {
+      const em = Number(new URL(req.url).searchParams.get("em"));
+      if (!Number.isFinite(em) || em <= Date.now()) return new Response("Instante inválido.", { status: 422 });
+      const atual = await this.state.storage.getAlarm();
+      if (atual == null || em < atual) await this.state.storage.setAlarm(em);
       return new Response("ok");
     }
     return new Response("Não encontrado.", { status: 404 });
+  }
+
+  /** Avisa todas as abas abertas: algo mudou na caixa (a tela busca o que é). */
+  private avisar() {
+    const msg = JSON.stringify({ t: "mudou", em: Date.now() });
+    for (const ws of this.state.getWebSockets()) {
+      try {
+        ws.send(msg);
+      } catch {
+        /* aba que caiu: o fechamento a tira */
+      }
+    }
+  }
+
+  async alarm() {
+    this.avisar();
   }
 
   webSocketMessage() {

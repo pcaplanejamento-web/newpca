@@ -22,6 +22,7 @@ export function consultaPendentesEmail(db: Db, limite: number) {
   return db
     .select({
       id: notificacoes.id,
+      usuarioId: notificacoes.usuarioId,
       tipo: notificacoes.tipo,
       titulo: notificacoes.titulo,
       texto: notificacoes.texto,
@@ -41,6 +42,8 @@ export function consultaPendentesEmail(db: Db, limite: number) {
         lt(notificacoes.emailTentativas, MAX_TENTATIVAS_EMAIL),
         sql`${notificacoes.criadoEm} >= datetime('now', ${JANELA_EMAIL})`,
         livre,
+        // O do resumo diário / do silêncio da pessoa só sai no horário dela.
+        sql`(${notificacoes.emailApos} IS NULL OR ${notificacoes.emailApos} <= datetime('now'))`,
         // O aviso de quadro PRIVADO de outra pessoa (a tarefa foi para lá) não sai por e-mail.
         sql`(${notificacoes.quadroId} IS NULL OR EXISTS (SELECT 1 FROM tarefa_quadros q WHERE q.id = ${notificacoes.quadroId} AND (q.privado = 0 OR q.criado_por = ${notificacoes.usuarioId})))`,
       ),
@@ -62,9 +65,9 @@ export function comandoReservarEmails(db: Db, ids: number[]) {
     .returning({ id: notificacoes.id });
 }
 
-/** O envio foi CONFIRMADO (ou o e-mail foi pulado — a pessoa não quer): TRATADO de vez. ≤ 90 ids por chamada. */
-export function comandoConfirmarEmails(db: Db, ids: number[]) {
-  return db.update(notificacoes).set({ emailEnviadoEm: sql`CURRENT_TIMESTAMP`, emailReservadoEm: null }).where(inArray(notificacoes.id, ids));
+/** O envio foi CONFIRMADO (`enviado`) ou o e-mail foi pulado (a pessoa não quer): TRATADO de vez. ≤ 90 ids por chamada. */
+export function comandoConfirmarEmails(db: Db, ids: number[], enviado = true) {
+  return db.update(notificacoes).set({ emailEnviadoEm: sql`CURRENT_TIMESTAMP`, emailReservadoEm: null, emailOk: enviado }).where(inArray(notificacoes.id, ids));
 }
 
 /** O envio FALHOU: volta a pendente com uma tentativa a mais. ≤ 90 ids por chamada. */

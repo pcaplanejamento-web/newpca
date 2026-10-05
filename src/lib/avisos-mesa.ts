@@ -52,3 +52,20 @@ export async function avisarPcaProtocolos(u: UsuarioSessao, acao: keyof typeof A
     u.id,
   );
 }
+
+/** A SITUAÇÃO do protocolo mudou, ou o protocolo foi REENVIADO: o responsável sabe (um aviso por pessoa). */
+export async function avisarProtocoloAtualizado(u: UsuarioSessao, mudancas: { responsavelId: number | null; protocolo: ProtocoloAviso; oQue: string }[]) {
+  const porPessoa = new Map<number, typeof mudancas>();
+  for (const m of mudancas) if (m.responsavelId) porPessoa.set(m.responsavelId, [...(porPessoa.get(m.responsavelId) ?? []), m]);
+  await notificar(
+    [...porPessoa].map(([usuarioId, ms]) => ({
+      usuarioId,
+      tipo: "situacao" as const,
+      titulo: ms.length === 1 ? `Protocolo ${ms[0].protocolo.numero}: ${ms[0].oQue}` : `${ms.length} protocolos seus atualizados`,
+      texto: ms.length === 1 ? (ms[0].protocolo.assunto ?? null) : ms.slice(0, 5).map((m) => `${m.protocolo.numero} (${m.oQue})`).join(", "),
+      link: linkProtocolo(ms[0].protocolo),
+      ...atorDe(u),
+    })),
+    u.id,
+  );
+}

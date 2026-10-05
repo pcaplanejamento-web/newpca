@@ -1,7 +1,7 @@
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloLegivel, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
-import { avisarResponsavelProtocolo } from "@/lib/avisos-mesa";
+import { avisarProtocoloAtualizado, avisarResponsavelProtocolo } from "@/lib/avisos-mesa";
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId } from "@/lib/grupos";
@@ -82,7 +82,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(campos.responsavelId, grupoAtivo)))
   )
     return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
-  if (campos.situacaoId != null && !(await getSituacao(campos.situacaoId))) return erro("Situação não encontrada (Configurações → Situações).", 422);
+  const situacao = campos.situacaoId != null ? await getSituacao(campos.situacaoId) : null;
+  if (campos.situacaoId != null && !situacao) return erro("Situação não encontrada (Configurações → Situações).", 422);
 
   // Trocar o Responsável = trava OTIMISTA: só grava se ele ainda é o lido (duas pessoas assumindo ao mesmo tempo: a 2ª
   // não sobrescreve a 1ª).
@@ -91,6 +92,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // O novo RESPONSÁVEL recebe o aviso (o sino; o e-mail como o ADM configurou).
   if (campos.responsavelId != null && campos.responsavelId !== proto.responsavelId)
     await avisarResponsavelProtocolo(a.u, [{ responsavelId: campos.responsavelId, protocolo: { id, numero: proto.numero, assunto: campos.assunto ?? proto.assunto, pcaId: proto.pcaId } }]);
+  // A SITUAÇÃO mudou: o responsável (que segue o mesmo) sabe.
+  if (campos.situacaoId !== undefined && campos.situacaoId !== proto.situacaoId)
+    await avisarProtocoloAtualizado(a.u, [
+      { responsavelId: campos.responsavelId !== undefined ? campos.responsavelId : proto.responsavelId, protocolo: { id, numero: proto.numero, assunto: proto.assunto, pcaId: proto.pcaId }, oQue: `situação "${situacao?.nome ?? "sem situação"}"` },
+    ]);
   // Histórico: o que mudou, antes → depois, com rótulos legíveis (sigla da unidade, nomes).
   const detalhe = await detalheSeguro(() => detalheEdicaoProtocolo(proto, campos), {});
   await registrarAuditoria({

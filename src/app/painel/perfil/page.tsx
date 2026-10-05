@@ -4,15 +4,12 @@ import { reparticoes, usuarios } from "@/db/schema";
 import { type IdentidadePerfil, PerfilView } from "@/components/PerfilView";
 import { getAcesso, podeTela, visaoDoAcesso } from "@/lib/acesso";
 import type { UsuarioSessao } from "@/lib/auth";
-import { CHAVE_PREF_EMAIL, lerPrefsEmail } from "@/lib/email-core";
-import { getConfigNotificacoes } from "@/lib/notificacoes-config";
 import { getIntegracoes } from "@/lib/integracoes";
-import { googleConfigurado, resendConfigurado, turnstileConfigurado } from "@/lib/integracoes-core";
+import { googleConfigurado, turnstileConfigurado } from "@/lib/integracoes-core";
 import { getDb } from "@/lib/db";
 import { mensagemVinculo, SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
 import { pessoasDesignaveis, type VisaoMesa } from "@/lib/mesa-visao-core";
 import { ACOES_PAPEL, type Capacidades, motivoSemModulos } from "@/lib/papeis-core";
-import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds, responsavelPadraoGravado } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -29,17 +26,6 @@ async function protocolacaoDe(u: UsuarioSessao, grupoId: number | null, vis: Vis
   const pessoas = pessoasDesignaveis(vis, u.id, doGrupo);
   const fora = responsavelPadraoId != null && !pessoas.some((p) => p.id === responsavelPadraoId) ? (await pessoasPorIds([responsavelPadraoId]))[0] : null;
   return { pessoas, responsavelPadraoId, foraDoGrupo: fora ?? null, soVoce: vis.responsavel.alterar === "si" };
-}
-
-/** Os avisos que chegam por e-mail — só com o Resend ativo (sem ele, o card nem aparece). */
-async function avisosEmailDe(usuarioId: number) {
-  try {
-    if (!resendConfigurado(await getIntegracoes())) return null;
-    const [prefs, config] = await Promise.all([listarPreferenciasTabela(usuarioId, CHAVE_PREF_EMAIL), getConfigNotificacoes()]);
-    return { prefs: lerPrefsEmail(prefs[CHAVE_PREF_EMAIL]), config };
-  } catch {
-    return null;
-  }
 }
 
 /** A identificação institucional (só leitura) + o que a conta tem: unidade, cargo, e-mail confirmado, senha e a conta Google. */
@@ -62,10 +48,9 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
   const protocola = podeTela(acesso, "dfd").importar && vis.responsavel.ver && vis.responsavel.alterar !== "nao";
   const sp = await searchParams;
   const retornoGoogle = mensagemVinculo(sp.google, sp.motivo);
-  const [protocolacao, mesaResponsavel, avisosEmail, identidade, integ] = await Promise.all([
+  const [protocolacao, mesaResponsavel, identidade, integ] = await Promise.all([
     protocola ? protocolacaoDe(u, grupo?.id ?? null, vis) : null,
     mesaResponsavelGravado(u.id),
-    avisosEmailDe(u.id),
     identidadeDe(u.id),
     getIntegracoes(),
   ]);
@@ -87,7 +72,6 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
       mesaSoOsMeus={vis.linhas === "meus"}
       semModulos={semModulos}
       seuAcesso={{ grupo: grupo?.nome ?? null, capacidades: efetivo, detalhes: u.admin ? null : u.papel.detalhes }}
-      avisosEmail={avisosEmail}
       contaGoogle={contaGoogle}
       retornoGoogle={retornoGoogle}
     />

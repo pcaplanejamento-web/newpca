@@ -1324,6 +1324,14 @@ export const notificacoes = sqliteTable(
     emailTentativas: integer("email_tentativas").notNull().default(0),
     /** A RESERVA do envio (migração `0083`): vale 10 min — o envio não confirmado volta à fila. */
     emailReservadoEm: text("email_reservado_em"),
+    /** Quando foi LIDA (migração `0084` — o relatório de alcance). */
+    lidaEm: text("lida_em"),
+    /** O e-mail SAIU de fato (o pulado — a pessoa não quer — fica 0). */
+    emailOk: integer("email_ok", { mode: "boolean" }).notNull().default(false),
+    /** ADIADA pela pessoa: some do sino até este instante (UTC "AAAA-MM-DD HH:MM:SS"). */
+    adiadaAte: text("adiada_ate"),
+    /** O e-mail só sai DEPOIS deste instante (o resumo diário, o horário de silêncio). */
+    emailApos: text("email_apos"),
   },
   (t) => [
     index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id),
@@ -1332,6 +1340,7 @@ export const notificacoes = sqliteTable(
     index("notificacoes_tarefa_idx").on(t.tarefaId),
     index("notificacoes_quadro_idx").on(t.quadroId),
     index("notificacoes_usuario_id_idx").on(t.usuarioId, t.id),
+    index("notificacoes_criado_idx").on(t.criadoEm),
   ],
 );
 

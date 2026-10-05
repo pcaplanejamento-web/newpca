@@ -1937,6 +1937,16 @@ export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, todos: num
   } catch (e) {
     console.error("pós-movimento das tarefas falhou", e);
   }
+  // CONCLUÍDA: quem acompanha as tarefas (responsáveis, observadores, equipes) sabe.
+  if (concluida) {
+    try {
+      const alvo = await tarefasPorIds(ids);
+      const seg = await seguidoresDasTarefas(ids);
+      avisos.push(...alvo.flatMap((t) => avisosSobreTarefa(u, "concluida", seg.get(t.id) ?? [], t, quadro, `${nomeExibicao(u)} concluiu uma tarefa`)));
+    } catch (e) {
+      console.error("aviso de tarefa concluída falhou", e);
+    }
+  }
   // Os avisos de TODAS as tarefas numa gravação só (o limite de consultas por requisição).
   await notificar(avisos, u.id);
   return mudou;

@@ -2,7 +2,7 @@ import { motivoRecusa } from "@/lib/acesso";
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloLegivel } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
-import { avisarResponsavelProtocolo } from "@/lib/avisos-mesa";
+import { avisarProtocoloAtualizado, avisarResponsavelProtocolo } from "@/lib/avisos-mesa";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { editavelDe } from "@/lib/avaliacao-core";
 import { somatorioProcesso } from "@/lib/conferencia-dfd";
@@ -44,12 +44,14 @@ export async function POST(req: Request) {
   const grupoAtivo = await getGrupoAtivoId(a.u);
   if (acao.campo === "responsavel" && acao.responsavelId != null && ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(acao.responsavelId, grupoAtivo))))
     return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
-  if (acao.campo === "situacao" && acao.situacaoId != null && !(await getSituacao(acao.situacaoId)))
+  const situacao = acao.campo === "situacao" && acao.situacaoId != null ? await getSituacao(acao.situacaoId) : null;
+  if (acao.campo === "situacao" && acao.situacaoId != null && !situacao)
     return erro("Situação não encontrada (Configurações → Situações).", 422);
 
   let alterados = 0;
   const falhas: { id: number; numero: string; motivo: string }[] = [];
   const designados: Parameters<typeof avisarResponsavelProtocolo>[1] = [];
+  const atualizados: Parameters<typeof avisarProtocoloAtualizado>[1] = [];
   for (const pr of await listarProtocolosPorIds(ids)) {
     try {
       // Fora da unidade ou das LINHAS da pessoa ("só os meus"): a MESMA falha genérica, sem o número (não revela o
@@ -107,11 +109,13 @@ export async function POST(req: Request) {
       });
       alterados++;
       if (acao.campo === "responsavel" && acao.responsavelId != null) designados.push({ responsavelId: acao.responsavelId, protocolo: pr });
+      if (acao.campo === "situacao") atualizados.push({ responsavelId: pr.responsavelId, protocolo: pr, oQue: `situação "${situacao?.nome ?? "sem situação"}"` });
     } catch (e) {
       falhas.push({ id: pr.id, numero: pr.numero, motivo: e instanceof Error ? e.message : "falha ao gravar" });
     }
   }
   // O novo responsável recebe UM aviso com os protocolos que passaram a ser dele.
   await avisarResponsavelProtocolo(a.u, designados);
+  await avisarProtocoloAtualizado(a.u, atualizados);
   return ok({ alterados, falhas });
 }

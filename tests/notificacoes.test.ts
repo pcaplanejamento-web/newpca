@@ -7,7 +7,8 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { esperaReconexao, lerCookie, origemDoProprioSite } from "../src/lib/ao-vivo-core.ts";
 import { CATALOGO_AVISOS, compactarNotificacoes, emailsDaPessoa, lerPrefsEmail, noSino, querEmail, resolverNotificacoes } from "../src/lib/notificacoes-config-core.ts";
-import { comandosExcluirNotificacoes, comandosRetencaoNotificacoes, consultaDispensadas, TETO_NOTIFICACOES } from "../src/lib/notificacoes-sql.ts";
+import { comandosExcluirNotificacoes, comandosRetencaoNotificacoes, consultaDispensadas } from "../src/lib/notificacoes-sql.ts";
+const TETO_NOTIFICACOES = 200;
 import { dataHoraCompleta, grupoDoDia, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, tituloComContagem } from "../src/lib/notificacoes-tela-core.ts";
 import { TIPOS_NOTIFICACAO } from "../src/lib/tarefas-core.ts";
 import { comandosNotificacoes } from "../src/lib/tarefas-sql.ts";
@@ -163,7 +164,7 @@ describe("notificações — limpeza no banco (builders no driver D1 real)", () 
     const ins = db.prepare("INSERT INTO notificacoes (usuario_id, tipo, titulo, lida) VALUES (901, 'x', ?, ?)");
     for (let i = 0; i < TETO_NOTIFICACOES + 30; i++) ins.run(`n${i}`, i < 30 ? 1 : 0);
     db.exec("INSERT INTO notificacoes_dispensadas (usuario_id, chave, ate) VALUES (901, 'velha', date('now', '-1 day')), (901, 'vale', date('now', '+5 days'))");
-    await orm.batch(comandosRetencaoNotificacoes(orm) as never);
+    await orm.batch(comandosRetencaoNotificacoes(orm, { auto: true, lidasDias: 30, naoLidasDias: 90, teto: TETO_NOTIFICACOES }) as never);
     assert.equal(conta(db, 901), TETO_NOTIFICACOES);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM notificacoes WHERE usuario_id = 901 AND lida = 1").get() as { n: number }).n, 0);
     assert.deepEqual(
@@ -188,5 +189,108 @@ describe("notificações — o aviso ao vivo mescla a 1ª página", () => {
     assert.deepEqual(mesclarPrimeiraPagina(atuais, [], false), []);
     // O que a tela está limpando (Desfazer valendo) não volta.
     assert.deepEqual(mesclarPrimeiraPagina(atuais, [n(11), n(10)], false, new Set([10])), [n(11)]);
+  });
+});
+
+describe("notificações — preferências da pessoa (resumo, silêncio, silenciar) e a retenção do ADM", async () => {
+  const cfgCore = await import("../src/lib/notificacoes-config-core.ts");
+  const { emailAposPara, lerPrefsPessoa, lerRetencao, noSilencio, proximoHorario, silenciado } = cfgCore;
+  // 05/10/2026 15:00 de Brasília = 18:00 UTC.
+  const agora = Date.parse("2026-10-05T18:00:00Z");
+
+  it("o próximo horário de Brasília e o silêncio que vira a noite", () => {
+    assert.equal(new Date(proximoHorario(agora, "07:30")).toISOString(), "2026-10-06T10:30:00.000Z");
+    assert.equal(new Date(proximoHorario(agora, "16:00")).toISOString(), "2026-10-05T19:00:00.000Z");
+    assert.equal(noSilencio(agora, { inicio: "20:00", fim: "07:00" }), false);
+    assert.equal(noSilencio(Date.parse("2026-10-06T02:00:00Z"), { inicio: "20:00", fim: "07:00" }), true); // 23:00
+    assert.equal(noSilencio(agora, { inicio: "12:00", fim: "16:00" }), true);
+  });
+
+  it("quando o e-mail sai: resumo = no horário dele; silêncio = no fim; obrigatório = já", () => {
+    const base = lerPrefsEmail(null);
+    assert.equal(emailAposPara(base, agora), null);
+    assert.equal(emailAposPara({ ...base, modo: "resumo" }, agora), "2026-10-06 10:30:00");
+    assert.equal(emailAposPara({ ...base, silencio: { inicio: "12:00", fim: "16:00" } }, agora), "2026-10-05 19:00:00");
+    assert.equal(emailAposPara({ ...base, modo: "resumo" }, agora, true), null);
+    // JSON solto: horário inválido volta ao padrão; silêncio igual início/fim não vale.
+    const p = lerPrefsEmail({ modo: "resumo", horaResumo: "25:00", silencio: { inicio: "08:00", fim: "08:00" } });
+    assert.deepEqual([p.modo, p.horaResumo, p.silencio], ["resumo", "07:30", null]);
+  });
+
+  it("silenciar: tipo, tarefa e quadro saem do sino; os DIRETOS (atribuída, menção…) sempre chegam", () => {
+    const p = lerPrefsPessoa({ sinoDesligados: ["comentario", "atribuida"], tarefas: [5, 5, -1], quadros: [9], som: true });
+    assert.deepEqual(p.sinoDesligados, ["comentario"]);
+    assert.deepEqual(p.tarefas, [5]);
+    assert.equal(p.som, true);
+    assert.equal(silenciado(p, { tipo: "comentario", tarefaId: 1 }), true);
+    assert.equal(silenciado(p, { tipo: "lembrete", tarefaId: 5 }), true);
+    assert.equal(silenciado(p, { tipo: "lembrete", tarefaId: 6, quadroId: 9 }), true);
+    assert.equal(silenciado(p, { tipo: "atribuida", tarefaId: 5, quadroId: 9 }), false);
+    assert.equal(silenciado(p, { tipo: "lembrete", tarefaId: 6, quadroId: 2 }), false);
+  });
+
+  it("a retenção do ADM: limites, padrão e as não lidas nunca antes das lidas", () => {
+    assert.deepEqual(lerRetencao(undefined), { auto: true, lidasDias: 30, naoLidasDias: 90, teto: 200 });
+    assert.deepEqual(lerRetencao({ auto: false, lidasDias: 60, naoLidasDias: 10, teto: 5 }), { auto: false, lidasDias: 60, naoLidasDias: 60, teto: 20 });
+    assert.equal(lerRetencao({ lidasDias: 9999 }).lidasDias, 365);
+  });
+});
+
+describe("notificações — descadastro, resumo e a fila do e-mail", async () => {
+  const { assinarDescadastro, caminhoDescadastro, descadastroValido } = await import("../src/lib/descadastro-core.ts");
+  const { emailResumo } = await import("../src/lib/email-core.ts");
+  const { comandoConfirmarEmails, consultaPendentesEmail } = await import("../src/lib/email-sql.ts");
+
+  it("o link de descadastro é assinado: outra pessoa, outro tipo ou outra chave não valem", async () => {
+    const s = await assinarDescadastro("chave", 7, "comentario");
+    assert.equal(s.length, 32);
+    assert.equal(await descadastroValido("chave", 7, "comentario", s), true);
+    assert.equal(await descadastroValido("chave", 8, "comentario", s), false);
+    assert.equal(await descadastroValido("chave", 7, "todos", s), false);
+    assert.equal(await descadastroValido("outra", 7, "comentario", s), false);
+    assert.ok(caminhoDescadastro(7, "comentario", s).startsWith("/api/notificacoes/descadastro?u=7&t=comentario&s="));
+  });
+
+  it("o resumo junta os avisos num e-mail, escapado, com o descadastro", () => {
+    const ctx = { urlSistema: "https://g.com", nomeSistema: "PCA" };
+    const c = emailResumo([{ tipo: "comentario", titulo: "A <b>", texto: "x", link: "/painel/tarefas/abrir/1" }, { tipo: "atrasada", titulo: "B", link: null }], ctx, "/api/notificacoes/descadastro?u=1&t=todos&s=x");
+    assert.equal(c.assunto, "2 avisos na plataforma");
+    assert.ok(c.html.includes("A &lt;b&gt;"));
+    assert.ok(c.html.includes("https://g.com/painel/tarefas/abrir/1"));
+    assert.ok(c.html.includes("Parar de receber"));
+    assert.ok(c.texto.includes("https://g.com/api/notificacoes/descadastro?u=1&t=todos&s=x"));
+  });
+
+  it("a fila espera o horário da pessoa (resumo/silêncio) e o envio confirmado marca que saiu", async () => {
+    const db = new DatabaseSync(":memory:");
+    for (const arq of readdirSync(join(process.cwd(), "drizzle")).filter((f) => f.endsWith(".sql")).sort()) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
+    db.exec("INSERT INTO usuarios (id, email, nome, senha_hash, role, status) VALUES (901, 'ana@x.com', 'Ana', 'h', 'membro', 'ativo')");
+    db.exec("INSERT INTO notificacoes (id, usuario_id, tipo, titulo, email_apos) VALUES (1, 901, 'atribuida', 'Já', NULL), (2, 901, 'atribuida', 'Depois', datetime('now', '+1 hour')), (3, 901, 'atribuida', 'Venceu', datetime('now', '-1 minute'))");
+    const orm = drizzle(d1Sobre(db) as never, { schema });
+    assert.deepEqual(
+      (await consultaPendentesEmail(orm, 10)).map((p) => p.titulo),
+      ["Já", "Venceu"],
+    );
+    await comandoConfirmarEmails(orm, [1]);
+    await comandoConfirmarEmails(orm, [3], false);
+    assert.deepEqual(
+      db.prepare("SELECT id, email_ok AS ok FROM notificacoes WHERE id IN (1, 3) ORDER BY id").all().map((r) => ({ ...(r as object) })),
+      [
+        { id: 1, ok: 1 },
+        { id: 3, ok: 0 },
+      ],
+    );
+  });
+});
+
+describe("notificações — validação dos pedidos novos", () => {
+  it("adiar até 30 dias; comunicado com link interno; retenção nos limites", async () => {
+    const v = await import("../src/lib/notificacoes-validation.ts");
+    assert.equal(v.notificacoesPatchSchema.safeParse({ ids: [1], adiarAte: Date.now() + 3_600_000 }).success, true);
+    assert.equal(v.notificacoesPatchSchema.safeParse({ ids: [1], adiarAte: Date.now() - 1 }).success, false);
+    assert.equal(v.notificacoesPatchSchema.safeParse({ ids: [1], adiarAte: Date.now() + 40 * 86_400_000 }).success, false);
+    assert.equal(v.comunicadoSchema.safeParse({ titulo: "Manutenção", link: "/painel" }).success, true);
+    assert.equal(v.comunicadoSchema.safeParse({ titulo: "Manutenção", link: "https://mal.com" }).success, false);
+    assert.equal(v.retencaoSchema.safeParse({ auto: true, lidasDias: 0, naoLidasDias: 10, teto: 50 }).success, false);
   });
 });

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
-import { notificacoes, tarefaChecklist, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
+import { notificacoes, preferenciasTabela, tarefaChecklist, tarefaEventos, tarefaQuadros, tarefas, usuarios } from "@/db/schema";
 import { type GrupoAcesso, gruposComAbas } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { LEMBRETE_MAX_MIN, lembreteDaTarefa, lembreteDevido, notificacaoDeLembrete } from "./calendario-core";
@@ -11,9 +11,10 @@ import { nomeExibicao, urlFoto } from "./pessoa";
 import { avisoVersaoExtensao } from "./automacao-centi-core";
 import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
-import { avisarAoVivo } from "./notificacoes-ao-vivo";
+import { agendarAoVivo, avisarAoVivo } from "./notificacoes-ao-vivo";
 import { getConfigNotificacoes } from "./notificacoes-config";
-import { noSino } from "./notificacoes-config-core";
+import { CHAVE_PREF_PESSOA, emailAposPara, sqlUtc, lerPrefsEmail, lerPrefsPessoa, noSino, type PrefsEmail, type PrefsPessoa, querEmail, silenciado } from "./notificacoes-config-core";
+import { CHAVE_PREF_EMAIL } from "./email-core";
 import { type AlvoLimpeza, comandosExcluirNotificacoes, consultaDispensadas } from "./notificacoes-sql";
 
 /**
@@ -28,8 +29,9 @@ import { type AlvoLimpeza, comandosExcluirNotificacoes, consultaDispensadas } fr
 export type Notificacao = {
   id: number;
   tipo: TipoNotificacao;
-  /** A tarefa do aviso (para AGRUPAR os repetidos na tela). */
+  /** A tarefa e o quadro do aviso (AGRUPAR os repetidos; silenciar a tarefa/o quadro). */
   tarefaId: number | null;
+  quadroId: number | null;
   titulo: string;
   texto: string | null;
   link: string | null;
@@ -46,7 +48,20 @@ async function gravarAvisos(linhas: NovaNotificacao[]): Promise<number[]> {
   if (!linhas.length) return [];
   try {
     const cfg = await getConfigNotificacoes();
-    const validas = linhas.filter((n) => noSino(cfg, n.tipo)).map((n) => ({ ...n, semEmail: !cfg[n.tipo].email }));
+    const doSino = linhas.filter((n) => noSino(cfg, n.tipo));
+    if (!doSino.length) return [];
+    // As escolhas de CADA destinatário (uma consulta): o silenciado não entra; o e-mail que ele não quer já nasce tratado;
+    // o do resumo/silêncio espera o horário dele.
+    const prefs = await preferenciasDe([...new Set(doSino.map((n) => n.usuarioId))]);
+    const agora = Date.now();
+    const validas = doSino.flatMap((n) => {
+      const p = prefs.get(n.usuarioId);
+      if (p && silenciado(p.pessoa, n)) return [];
+      const canal = cfg[n.tipo];
+      const email = p?.email ?? lerPrefsEmail(null);
+      const querMail = querEmail(cfg, email, n.tipo);
+      return [{ ...n, semEmail: !querMail, emailApos: querMail ? emailAposPara(email, agora, !canal.desligavel) : null }];
+    });
     if (!validas.length) return [];
     const db = getDb();
     const cmds = comandosNotificacoes(db, validas);
@@ -61,6 +76,30 @@ async function gravarAvisos(linhas: NovaNotificacao[]): Promise<number[]> {
     console.error("gravar avisos falhou", e);
     return [];
   }
+}
+
+/** As preferências de notificação (e-mail + sino) de várias pessoas — uma consulta; a sem preferência = o padrão. */
+export async function preferenciasDe(ids: number[]): Promise<Map<number, { email: PrefsEmail; pessoa: PrefsPessoa }>> {
+  const m = new Map<number, { email: PrefsEmail; pessoa: PrefsPessoa }>();
+  if (!ids.length) return m;
+  const linhas = await getDb()
+    .select({ u: preferenciasTabela.usuarioId, chave: preferenciasTabela.chave, valor: preferenciasTabela.valor })
+    .from(preferenciasTabela)
+    .where(and(sql`${preferenciasTabela.usuarioId} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`, inArray(preferenciasTabela.chave, [CHAVE_PREF_EMAIL, CHAVE_PREF_PESSOA])));
+  for (const id of ids) m.set(id, { email: lerPrefsEmail(null), pessoa: lerPrefsPessoa(null) });
+  for (const l of linhas) {
+    let v: unknown = null;
+    try {
+      v = JSON.parse(l.valor);
+    } catch {
+      /* corrompida = padrão */
+    }
+    const atual = m.get(l.u);
+    if (!atual) continue;
+    if (l.chave === CHAVE_PREF_EMAIL) atual.email = lerPrefsEmail(v);
+    else atual.pessoa = lerPrefsPessoa(v);
+  }
+  return m;
 }
 
 /** Grava as notificações de um evento (sem o próprio ator, sem repetir a pessoa). Nunca lança. */
@@ -317,7 +356,10 @@ const acessivel = (u: UsuarioSessao, grupoIds: number[] | null) =>
     grupoIds ? sql` AND q.grupo_id IN (SELECT value FROM json_each(${JSON.stringify(grupoIds)}))` : sql``
   }))`;
 
-const condNaoLidas = (u: UsuarioSessao, grupoIds: number[] | null) => and(eq(notificacoes.usuarioId, u.id), eq(notificacoes.lida, false), acessivel(u, grupoIds));
+/** O aviso ADIADO pela pessoa some do sino até a hora escolhida. */
+const visivelAgora = sql`(${notificacoes.adiadaAte} IS NULL OR ${notificacoes.adiadaAte} <= datetime('now'))`;
+
+const condNaoLidas = (u: UsuarioSessao, grupoIds: number[] | null) => and(eq(notificacoes.usuarioId, u.id), eq(notificacoes.lida, false), acessivel(u, grupoIds), visivelAgora);
 
 /** Quantas NÃO LIDAS (o número do sino — o layout passa os grupos que já carregou). Falha = `null` (a tela mantém o último). */
 export async function contarNaoLidas(u: UsuarioSessao, grupos?: readonly GrupoAcesso[]): Promise<number | null> {
@@ -349,6 +391,7 @@ export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; 
         lida: notificacoes.lida,
         criadoEm: notificacoes.criadoEm,
         tarefaId: notificacoes.tarefaId,
+        quadroId: notificacoes.quadroId,
         atorId: notificacoes.atorId,
         atorNome: notificacoes.atorNome,
         temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
@@ -360,6 +403,7 @@ export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; 
         and(
           eq(notificacoes.usuarioId, u.id),
           acessivel(u, g),
+          visivelAgora,
           p.antes ? lt(notificacoes.id, p.antes) : undefined,
           p.filtro === "nao-lidas" ? eq(notificacoes.lida, false) : undefined,
         ),
@@ -380,6 +424,7 @@ export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; 
       lida: l.lida,
       criadoEm: l.criadoEm,
       tarefaId: l.tarefaId,
+      quadroId: l.quadroId,
       ator: l.atorId != null ? { id: l.atorId, nome: l.atorNome ?? "", foto: urlFoto(l.atorId, !!l.temFoto, l.versao) } : null,
     })),
   };
@@ -387,9 +432,10 @@ export async function listarNotificacoes(u: UsuarioSessao, p: { antes?: number; 
 
 /** Marca como LIDAS (ou NÃO lidas) as pedidas (só as da pessoa), ou todas como lidas. As outras abas acompanham ao vivo. */
 export async function marcarLidas(u: UsuarioSessao, alvo: { ids: number[]; lida?: boolean } | { todas: true }) {
+  const lida = "ids" in alvo ? alvo.lida !== false : true;
   await getDb()
     .update(notificacoes)
-    .set({ lida: "ids" in alvo ? alvo.lida !== false : true })
+    .set({ lida, lidaEm: lida ? sql`COALESCE(${notificacoes.lidaEm}, CURRENT_TIMESTAMP)` : null })
     .where(and(eq(notificacoes.usuarioId, u.id), "ids" in alvo ? inArray(notificacoes.id, alvo.ids.slice(0, 90)) : eq(notificacoes.lida, false)));
   avisarAoVivo([u.id]);
 }
@@ -400,4 +446,14 @@ export async function excluirNotificacoes(u: UsuarioSessao, alvo: AlvoLimpeza): 
   const [, apagadas] = await db.batch(comandosExcluirNotificacoes(db, u.id, alvo));
   avisarAoVivo([u.id]);
   return apagadas.length;
+}
+
+/** ADIA avisos (só os da pessoa): somem do sino até `ate` e voltam como NÃO lidos — ao vivo, no horário. */
+export async function adiarNotificacoes(u: UsuarioSessao, ids: number[], ate: number) {
+  await getDb()
+    .update(notificacoes)
+    .set({ adiadaAte: sqlUtc(ate), lida: false, lidaEm: null })
+    .where(and(eq(notificacoes.usuarioId, u.id), inArray(notificacoes.id, ids.slice(0, 90))));
+  avisarAoVivo([u.id]);
+  agendarAoVivo(u.id, ate);
 }

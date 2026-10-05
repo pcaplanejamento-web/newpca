@@ -3,7 +3,12 @@
 import type { SVGProps } from "react";
 import {
   Activity,
+  AlarmClock,
   BellOff,
+  Eraser,
+  Megaphone,
+  Volume2,
+  MonitorSmartphone,
   CalendarClock,
   CheckCheck,
   CircleDot,
@@ -315,3 +320,8 @@ export const IconNaoLida = CircleDot;
 export const IconSemAvisos = BellOff;
 export const IconEventoAlterado = CalendarClock;
 export const IconCadastro = UserPlus;
+export const IconMegafone = Megaphone;
+export const IconAdiar = AlarmClock;
+export const IconLimpar = Eraser;
+export const IconSom = Volume2;
+export const IconAlertaSistema = MonitorSmartphone;

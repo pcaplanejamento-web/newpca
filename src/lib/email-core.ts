@@ -36,7 +36,7 @@ const RODAPE_PADRAO = "Você recebeu este e-mail porque participa da plataforma.
  */
 export function layoutEmail(
   ctx: ContextoEmail,
-  m: { assunto: string; titulo: string; paragrafos: string[]; destaque?: string; botao?: { rotulo: string; url: string }; rodape?: string },
+  m: { assunto: string; titulo: string; paragrafos: string[]; destaque?: string; botao?: { rotulo: string; url: string }; rodape?: string; lista?: { titulo: string; texto?: string | null; url: string }[]; descadastro?: string },
 ): ConteudoEmail {
   const nome = escaparHtml(ctx.nomeSistema || NOME_SISTEMA_PADRAO);
   const paras = m.paragrafos
@@ -50,19 +50,30 @@ export function layoutEmail(
   const botao = m.botao
     ? `<p style="margin:20px 0 4px"><a href="${escaparHtml(m.botao.url)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 18px;border-radius:8px">${escaparHtml(m.botao.rotulo)}</a></p>`
     : "";
-  const rodape = escaparHtml(m.rodape ?? RODAPE_PADRAO);
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaparHtml(m.assunto)}</title></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Inter,Roboto,Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px"><tr><td style="padding:18px 24px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#6b7280">${nome}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:19px;line-height:1.35;color:#111827">${escaparHtml(m.titulo)}</h1>${paras}${destaque}${botao}</td></tr><tr><td style="padding:14px 24px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.5;color:#9ca3af">${rodape}</td></tr></table></td></tr></table></body></html>`;
+  const rodape = escaparHtml(m.rodape ?? RODAPE_PADRAO) + (m.descadastro ? ` <a href="${escaparHtml(m.descadastro)}" style="color:#6b7280">Parar de receber este aviso</a>` : "");
+  // A LISTA do resumo: um item por aviso (título com o link + o texto).
+  const lista = m.lista?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 8px">${m.lista
+        .map(
+          (i) =>
+            `<tr><td style="padding:8px 0;border-top:1px solid #f3f4f6"><a href="${escaparHtml(i.url)}" style="font-size:14px;font-weight:600;color:#111827;text-decoration:none">${escaparHtml(i.titulo)}</a>${i.texto ? `<div style="font-size:13px;color:#6b7280;margin-top:2px">${escaparHtml(i.texto)}</div>` : ""}</td></tr>`,
+        )
+        .join("")}</table>`
+    : "";
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaparHtml(m.assunto)}</title></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Inter,Roboto,Arial,Helvetica,sans-serif"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px"><tr><td style="padding:18px 24px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#6b7280">${nome}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:19px;line-height:1.35;color:#111827">${escaparHtml(m.titulo)}</h1>${paras}${lista}${destaque}${botao}</td></tr><tr><td style="padding:14px 24px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.5;color:#9ca3af">${rodape}</td></tr></table></td></tr></table></body></html>`;
   const texto = [
     ctx.nomeSistema || NOME_SISTEMA_PADRAO,
     "",
     m.titulo,
     "",
     ...m.paragrafos.filter((p) => p.trim()),
+    ...(m.lista?.length ? ["", ...m.lista.map((i) => `• ${i.titulo}${i.texto ? ` — ${i.texto}` : ""}\n  ${i.url}`)] : []),
     ...(m.destaque ? ["", m.destaque] : []),
     ...(m.botao ? ["", `${m.botao.rotulo}: ${m.botao.url}`] : []),
     "",
     "—",
     m.rodape ?? RODAPE_PADRAO,
+    ...(m.descadastro ? [`Parar de receber este aviso: ${m.descadastro}`] : []),
   ].join("\n");
   return { assunto: umaLinha(m.assunto), html, texto };
 }
@@ -83,12 +94,17 @@ export const ROTULO_TIPO_EMAIL: Record<TipoNotificacao, string> = {
   protocolo: "Protocolo designado a você",
   pca: "Protocolo no PCA",
   cadastro: "Cadastro aguardando aprovação",
+  situacao: "Protocolo atualizado",
+  concluida: "Tarefa concluída",
+  centi: "Automação Centi",
+  comunicado: "Comunicado",
 };
 
 /** O e-mail de UMA notificação do sino (o mesmo título/texto/link que a pessoa vê no sistema). */
 export function emailDaNotificacao(
   n: { tipo: TipoNotificacao; titulo: string; texto?: string | null; link?: string | null; atorNome?: string | null },
   ctx: ContextoEmail,
+  descadastro?: string | null,
 ): ConteudoEmail {
   const url = urlAbsoluta(ctx.urlSistema, n.link);
   return layoutEmail(ctx, {
@@ -96,6 +112,25 @@ export function emailDaNotificacao(
     titulo: n.titulo || ROTULO_TIPO_EMAIL[n.tipo],
     paragrafos: [n.texto ?? "", n.atorNome ? `Por ${n.atorNome}.` : ""],
     botao: { rotulo: "Abrir no sistema", url },
+    descadastro: descadastro ? urlAbsoluta(ctx.urlSistema, descadastro) : undefined,
+  });
+}
+
+/** O RESUMO: vários avisos num e-mail só (o resumo diário ou os que juntaram no silêncio), o mais novo primeiro. */
+export function emailResumo(
+  itens: { tipo: TipoNotificacao; titulo: string; texto?: string | null; link?: string | null }[],
+  ctx: ContextoEmail,
+  descadastro?: string | null,
+): ConteudoEmail {
+  const n = itens.length;
+  return layoutEmail(ctx, {
+    assunto: `${n} aviso${n === 1 ? "" : "s"} na plataforma`,
+    titulo: `Você tem ${n} aviso${n === 1 ? "" : "s"}`,
+    paragrafos: [],
+    lista: itens.slice(0, 50).map((i) => ({ titulo: i.titulo || ROTULO_TIPO_EMAIL[i.tipo], texto: i.texto, url: urlAbsoluta(ctx.urlSistema, i.link) })),
+    botao: { rotulo: "Abrir as notificações", url: urlAbsoluta(ctx.urlSistema, "/painel") },
+    rodape: "Resumo dos seus avisos. Ajuste o horário ou volte ao e-mail imediato no seu Perfil (Perfil → Notificações).",
+    descadastro: descadastro ? urlAbsoluta(ctx.urlSistema, descadastro) : undefined,
   });
 }
 

@@ -14,8 +14,7 @@ import { Badge } from "./Badge";
 import { Callout } from "./Callout";
 import { CampoCongelado } from "./CampoCadeado";
 import { type ConfigCaptcha, EtapaCodigo, useCaptcha, useCodigoEmail } from "./CodigoEmail";
-import { Checkbox, PasswordField, TextField } from "./Field";
-import { labelCls } from "./formStyles";
+import { PasswordField, TextField } from "./Field";
 import {
   IconAlert,
   IconBadgeCheck,
@@ -36,14 +35,12 @@ import {
   IconUser,
   IconUserX,
 } from "./icons";
-import { Switch } from "./Switch";
 import { ResumoDetalhesPapel } from "./ResumoDetalhesPapel";
 import { ResumoPapel } from "./ResumoPapel";
 import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
-import { CHAVE_PREF_EMAIL, type DestinoEmail, type PrefsEmail } from "@/lib/email-core";
-import { type ConfigResolvida, emailsDaPessoa } from "@/lib/notificacoes-config-core";
+import { PreferenciasNotificacoes } from "./PreferenciasNotificacoes";
 
 type Msg = { tipo: "ok" | "erro"; texto: string } | null;
 
@@ -123,7 +120,6 @@ export function PerfilView({
   mesaSoOsMeus = false,
   semModulos = null,
   seuAcesso = null,
-  avisosEmail = null,
   contaGoogle = null,
   retornoGoogle = null,
 }: {
@@ -146,8 +142,6 @@ export function PerfilView({
    * o card. */
   seuAcesso?: { grupo: string | null; capacidades: Capacidades; detalhes?: unknown } | null;
   /** Os avisos do sino que chegam por E-MAIL (só com o Resend ativo; `null` = sem o card). */
-  /** Os avisos por e-mail (só com o Resend ativo): a preferência da pessoa + o que o ADM manda por e-mail. */
-  avisosEmail?: { prefs: PrefsEmail; config: ConfigResolvida } | null;
   /** A conta Google VINCULADA (só com o login com Google ativo; `null` = sem o card). `soGoogle` = sem senha. */
   contaGoogle?: { email: string | null; soGoogle: boolean } | null;
   /** O retorno do vínculo (`?google=` na volta do Google). */
@@ -201,34 +195,6 @@ export function PerfilView({
       setMsgGoogle({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao desvincular." });
     } finally {
       setDesvinculando(false);
-    }
-  }
-
-  // E-mail: quais avisos do sino chegam também por e-mail
-  const [emailPrefs, setEmailPrefs] = useState<PrefsEmail | null>(avisosEmail?.prefs ?? null);
-  const [salvandoEmail, setSalvandoEmail] = useState(false);
-  const [msgEmail, setMsgEmail] = useState<Msg>(null);
-
-  const destinoAtual = emailPrefs?.destino === "google" && identidade.googleEmail ? identidade.googleEmail : usuario.email;
-
-  async function salvarEmail(e: FormEvent) {
-    e.preventDefault();
-    if (!emailPrefs) return;
-    setSalvandoEmail(true);
-    setMsgEmail(null);
-    try {
-      const res = await fetch("/api/preferencias/tabela", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chave: CHAVE_PREF_EMAIL, valor: emailPrefs }),
-      });
-      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
-      setMsgEmail({ tipo: "ok", texto: "Preferência salva — vale para os próximos avisos." });
-    } catch (err) {
-      setMsgEmail({ tipo: "erro", texto: err instanceof Error ? err.message : "Erro ao salvar." });
-    } finally {
-      setSalvandoEmail(false);
     }
   }
 
@@ -589,64 +555,10 @@ export function PerfilView({
               )}
             </SecaoPerfil>
           )}
-          {emailPrefs && (
-            <SecaoPerfil
-              icone={<IconBell className="h-4 w-4" />}
-              titulo="Avisos por e-mail"
-              descricao="Os avisos continuam no sino. O administrador define quais saem por e-mail; aqui você desliga os que não quer — e escolhe onde recebe."
-              onSubmit={salvarEmail}
-              msg={msgEmail}
-              acao={
-                <Button type="submit" size="sm" loading={salvandoEmail} icon={<IconSave className="h-4 w-4" />}>
-                  Salvar
-                </Button>
-              }
-            >
-              <div className="space-y-4">
-                <Switch checked={emailPrefs.ligado} onChange={(ligado) => setEmailPrefs({ ...emailPrefs, ligado })} label={`Receber em ${destinoAtual}`} />
-                {/* ONDE chegam: no institucional ou na conta Google vinculada (só com ela vinculada). */}
-                {identidade.googleEmail && (
-                  <div className={emailPrefs.ligado ? "" : "opacity-60"}>
-                    <p className={labelCls}>Receber no</p>
-                    <Segmented<DestinoEmail>
-                      value={emailPrefs.destino}
-                      onChange={(destino) => setEmailPrefs({ ...emailPrefs, destino })}
-                      disabled={!emailPrefs.ligado}
-                      ariaLabel="Onde receber os avisos por e-mail"
-                      options={[
-                        { value: "institucional", label: "E-mail institucional", curto: "Institucional" },
-                        { value: "google", label: "Conta Google", curto: "Google" },
-                      ]}
-                    />
-                  </div>
-                )}
-                <fieldset disabled={!emailPrefs.ligado} className={emailPrefs.ligado ? "" : "opacity-60"}>
-                  <legend className={labelCls}>Quais avisos</legend>
-                  {avisosEmail && emailsDaPessoa(avisosEmail.config, { ...emailPrefs, ligado: true }).length === 0 ? (
-                    <p className="text-sm text-muted">O administrador não envia nenhum aviso por e-mail no momento.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-                      {avisosEmail &&
-                        emailsDaPessoa(avisosEmail.config, { ...emailPrefs, ligado: true }).map(({ item, ligado, fixo }) => (
-                          <Checkbox
-                            key={item.chave}
-                            label={fixo ? `${item.rotulo} (obrigatório)` : item.rotulo}
-                            checked={ligado}
-                            disabled={fixo}
-                            onChange={(e) =>
-                              setEmailPrefs({
-                                ...emailPrefs,
-                                desligados: e.target.checked ? emailPrefs.desligados.filter((x) => x !== item.chave) : [...emailPrefs.desligados, item.chave],
-                              })
-                            }
-                          />
-                        ))}
-                    </div>
-                  )}
-                </fieldset>
-              </div>
-            </SecaoPerfil>
-          )}
+          {/* NOTIFICAÇÕES: o sino (tipos, som, alerta do sistema, silenciados) e o e-mail (imediato · resumo · desligado). */}
+          <SecaoPerfil icone={<IconBell className="h-4 w-4" />} titulo="Notificações" descricao="Grava sozinho a cada mudança.">
+            <PreferenciasNotificacoes googleEmail={identidade.googleEmail} />
+          </SecaoPerfil>
 
           {/* Mesa: com que RESPONSÁVEL ela abre — só os do usuário (o padrão), geral ou os sem responsável. */}
           {mesaResponsavel != null && (

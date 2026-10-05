@@ -5,6 +5,7 @@ import { cronAutorizado } from "@/lib/cron";
 import { getDb } from "@/lib/db";
 import { enviarEmailsPendentes } from "@/lib/email";
 import { comandoEncerrarEmailsVelhos } from "@/lib/email-sql";
+import { getRetencao } from "@/lib/notificacoes-config";
 import { comandosRetencaoNotificacoes } from "@/lib/notificacoes-sql";
 import { erro, ok } from "@/lib/http";
 import { derivarDaPessoa } from "@/lib/notificacoes";
@@ -29,7 +30,11 @@ export async function POST(req: Request) {
   if (!(await cronAutorizado(req))) return erro("Não autorizado.", 401);
   await limparSegurancaVencida().catch((e) => console.error("[cron] higiene do acesso:", (e as Error).message));
   const db = getDb();
-  await db.batch([...comandosRetencaoNotificacoes(db), comandoEncerrarEmailsVelhos(db)]).catch((e) => console.error("[cron] retenção das notificações:", (e as Error).message));
+  // A LIMPEZA AUTOMÁTICA (o ADM liga/desliga e define os prazos em Configurações → Notificações) e a fila do e-mail.
+  const retencao = await getRetencao();
+  await db
+    .batch(retencao.auto ? [...comandosRetencaoNotificacoes(db, retencao), comandoEncerrarEmailsVelhos(db)] : [comandoEncerrarEmailsVelhos(db)])
+    .catch((e) => console.error("[cron] retenção das notificações:", (e as Error).message));
   if ("erro" in (await resendDaConfig())) return ok({ ativo: false });
   const [{ n }] = await db.select({ n: count() }).from(usuarios).where(eq(usuarios.status, "ativo"));
   const total = Number(n) || 0;

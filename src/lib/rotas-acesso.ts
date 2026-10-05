@@ -81,6 +81,10 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/grupos": { GET: ADMIN, POST: ADMIN },
   "admin/integracoes": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/notificacoes": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
+  "admin/notificacoes/comunicado": { POST: ADMIN },
+  "admin/notificacoes/alcance": { GET: ADMIN },
+  "admin/notificacoes/retencao": { GET: ADMIN, PUT: ADMIN },
+  "admin/notificacoes/limpar": { POST: ADMIN },
   "admin/integracoes/testar": { POST: ADMIN },
   "admin/integracoes/trello/membros": { GET: ADMIN, PUT: ADMIN },
   "admin/orgaos/[id]/rebaixar": { POST: ADMIN },
@@ -224,6 +228,8 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "preferencias/tabela": { PUT: pessoal(), DELETE: pessoal() },
   "usuarios/[id]/foto": { GET: pessoal("a foto (avatar) de uma pessoa") },
   "notificacoes": { GET: pessoal("o sino (derivados só dos grupos com Tarefas/Calendário)"), PATCH: pessoal(), DELETE: pessoal("limpar as próprias") },
+  "notificacoes/preferencias": { GET: pessoal(), PUT: pessoal("as próprias escolhas") },
+  "notificacoes/descadastro": { GET: publica("a página do descadastro (link assinado do e-mail)"), POST: publica("parar de receber (link assinado; um clique do cliente de e-mail)") },
 
   // ── Edições salvas de tabela (a tela da tabela da chave: salvar a sua = Visualizar; publicar/moderar = Configurar) ──
   "tabela/edicoes": { POST: recurso(TABELAS, "visualizar", "recusaNaChave(", "pública = Configurar; chave de outra tabela = 422") },

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ComponentType, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { esperaReconexao } from "@/lib/ao-vivo-core";
 import type { Notificacao, PaginaNotificacoes } from "@/lib/notificacoes";
 import { MAX_AVISOS_NA_TELA, dataHoraCompleta, mesclarPrimeiraPagina, secoesDeAvisos, tempoRelativo, tituloComContagem } from "@/lib/notificacoes-tela-core";
@@ -11,50 +11,17 @@ import type { TipoNotificacao } from "@/lib/tarefas-core";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
-import { ChipsEscolha } from "./ChipsEscolha";
+import { ChipsIcone } from "./ChipsIcone";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
-import {
-  IconAtribuir,
-  IconAutomacao,
-  IconBell,
-  IconCadastro,
-  IconCalendar,
-  IconChevronDown,
-  IconClipboard,
-  IconComentario,
-  IconEventoAlterado,
-  IconLayers,
-  IconLidas,
-  IconMencao,
-  IconNaoLida,
-  IconPrazo,
-  IconSemAvisos,
-  IconSettings,
-  IconSpinner,
-  IconTrash,
-} from "./icons";
+import { IconAdiar, IconBell, IconChevronDown, IconLidas, IconLimpar, IconNaoLida, IconSemAvisos, IconSettings, IconSpinner, IconTrash } from "./icons";
 import { Modal, duracaoMotionMs } from "./Modal";
+import { VISUAL_AVISO, visualAviso } from "./notificacoesVisual";
+import { alertaSistema, tocarSom, usePreferenciasNotificacoes } from "./PreferenciasNotificacoes";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 
-/** Ícone e cor (token) de cada tipo — a cor do semáforo nas de prazo. */
-const VISUAL: Record<TipoNotificacao, { Icone: ComponentType<{ className?: string }>; cor: string; rotulo: string }> = {
-  atribuida: { Icone: IconAtribuir, cor: "var(--accent)", rotulo: "Atribuídas" },
-  mencionada: { Icone: IconMencao, cor: "var(--info)", rotulo: "Menções" },
-  comentario: { Icone: IconComentario, cor: "var(--info)", rotulo: "Comentários" },
-  vence_hoje: { Icone: IconPrazo, cor: "var(--warn)", rotulo: "Vencem hoje" },
-  vence_amanha: { Icone: IconPrazo, cor: "var(--warn)", rotulo: "Vencem amanhã" },
-  atrasada: { Icone: IconPrazo, cor: "var(--danger)", rotulo: "Atrasadas" },
-  automacao: { Icone: IconAutomacao, cor: "var(--accent)", rotulo: "Automações" },
-  lembrete: { Icone: IconCalendar, cor: "var(--info)", rotulo: "Lembretes" },
-  convite: { Icone: IconCalendar, cor: "var(--accent)", rotulo: "Convites" },
-  resposta: { Icone: IconCalendar, cor: "var(--ok)", rotulo: "Respostas" },
-  evento: { Icone: IconEventoAlterado, cor: "var(--warn)", rotulo: "Eventos alterados" },
-  protocolo: { Icone: IconClipboard, cor: "var(--accent)", rotulo: "Protocolos" },
-  pca: { Icone: IconLayers, cor: "var(--info)", rotulo: "PCA" },
-  cadastro: { Icone: IconCadastro, cor: "var(--accent)", rotulo: "Cadastros" },
-};
+const VISUAL = VISUAL_AVISO;
 
 /** Quantos avisos por página (rolagem infinita). */
 const POR_PAGINA = 20;
@@ -63,7 +30,7 @@ const DESFAZER_MS = 6000;
 
 /** O ícone do tipo (ou a foto do autor com o ícone do tipo no canto). */
 function MarcaAviso({ n }: { n: Notificacao }) {
-  const { Icone, cor } = VISUAL[n.tipo] ?? VISUAL.automacao;
+  const { Icone, cor } = visualAviso(n.tipo);
   return (
     <span className="relative mt-0.5 shrink-0">
       {n.ator ? (
@@ -82,10 +49,55 @@ function MarcaAviso({ n }: { n: Notificacao }) {
   );
 }
 
+/** O ADIAR: o instante de cada opção (1 h, 3 h, amanhã às 8 h de Brasília). */
+export function opcoesAdiar(agora = Date.now()): { rotulo: string; em: number }[] {
+  const amanha8 = (() => {
+    const local = agora - 3 * 3_600_000;
+    const dia = Math.floor(local / 86_400_000) * 86_400_000;
+    return dia + 86_400_000 + 8 * 3_600_000 + 3 * 3_600_000;
+  })();
+  return [
+    { rotulo: "1 h", em: agora + 3_600_000 },
+    { rotulo: "3 h", em: agora + 3 * 3_600_000 },
+    { rotulo: "Amanhã 8h", em: amanha8 },
+  ];
+}
+
+/** Um botão de AÇÃO do aviso: só o ícone (o nome na dica e no nome acessível), 32px no desktop e 44px no toque. */
+function Acao({ rotulo, onClick, children, perigo = false, ativo = false }: { rotulo: string; onClick: () => void; children: ReactNode; perigo?: boolean; ativo?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={rotulo}
+      aria-label={rotulo}
+      aria-pressed={ativo || undefined}
+      className={`grid h-8 w-8 place-items-center rounded-control transition-colors pointer-coarse:h-11 pointer-coarse:w-11 ${
+        ativo ? "bg-accent-soft text-accent" : `text-muted hover:bg-surface ${perigo ? "hover:text-[var(--danger)]" : "hover:text-text"}`
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Uma opção curta (pílula) da linha de ADIAR/SILENCIAR que abre embaixo do aviso. */
+function Pilula({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-8 rounded-control border border-border-2 bg-surface px-2.5 text-[12px] font-semibold text-text-2 transition-colors hover:border-accent hover:text-accent pointer-coarse:min-h-11"
+    >
+      {children}
+    </button>
+  );
+}
+
 /**
  * UM aviso da lista: a foto do autor (ou o ícone do tipo), título, texto, hora RELATIVA (a completa na dica) e, no hover/
- * foco (sempre à vista no toque), as AÇÕES — marcar como lida/não lida e excluir. Tocar abre o que o aviso aponta. Os
- * REPETIDOS (`outros`) aparecem como "+N" e se abrem embaixo.
+ * foco (sempre à vista no toque), as AÇÕES só com ícone — lida/não lida, ADIAR (1 h · 3 h · amanhã), SILENCIAR (a
+ * tarefa · o quadro) e excluir. Tocar abre o que o aviso aponta. Os REPETIDOS (`outros`) aparecem como "+N".
  */
 export function ItemNotificacao({
   n,
@@ -96,6 +108,8 @@ export function ItemNotificacao({
   onExpandir,
   onLida,
   onExcluir,
+  onAdiar,
+  onSilenciar,
   ordem = 0,
 }: {
   n: Notificacao;
@@ -106,72 +120,112 @@ export function ItemNotificacao({
   onExpandir?: () => void;
   onLida?: (n: Notificacao, lida: boolean) => void;
   onExcluir?: (n: Notificacao) => void;
+  onAdiar?: (n: Notificacao, em: number) => void;
+  onSilenciar?: (n: Notificacao, alvo: "tarefa" | "quadro") => void;
   /** A posição na entrada (a animação de chegada escalonada). */
   ordem?: number;
 }) {
+  const [menu, setMenu] = useState<"adiar" | "silenciar" | null>(null);
+  const podeSilenciar = onSilenciar && (n.tarefaId != null || n.quadroId != null);
   return (
-    <div
-      className="group/aviso relative flex animate-fade-in-up items-start gap-2.5 rounded-control px-2 py-2 transition-colors focus-within:bg-surface-2 hover:bg-surface-2"
-      style={{ animationDelay: `${Math.min(ordem, 10) * 25}ms` }}
-    >
-      <button
-        type="button"
-        data-aviso={n.id}
-        onClick={() => onAbrir(n)}
-        className="absolute inset-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <span className="sr-only">
-          {n.lida ? "" : "Não lida: "}
-          {n.titulo}
-          {n.texto ? ` — ${n.texto}` : ""} ({tempoRelativo(n.criadoEm, agora)})
+    <div className="animate-fade-in-up" style={{ animationDelay: `${Math.min(ordem, 10) * 25}ms` }}>
+      <div className="group/aviso relative flex items-start gap-2.5 rounded-control px-2 py-1.5 transition-colors focus-within:bg-surface-2 hover:bg-surface-2">
+        <button
+          type="button"
+          data-aviso={n.id}
+          onClick={() => onAbrir(n)}
+          className="absolute inset-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <span className="sr-only">
+            {n.lida ? "" : "Não lida: "}
+            {n.titulo}
+            {n.texto ? ` — ${n.texto}` : ""} ({tempoRelativo(n.criadoEm, agora)})
+          </span>
+        </button>
+        <MarcaAviso n={n} />
+        <span className="pointer-events-none min-w-0 flex-1" aria-hidden="true">
+          <span className={`line-clamp-2 block text-[13px] leading-snug ${n.lida ? "text-text-2" : "font-semibold text-text"}`}>{n.titulo}</span>
+          {n.texto && <span className="mt-0.5 line-clamp-1 block text-[12px] text-muted">{n.texto}</span>}
+          <span className="mt-0.5 block text-[11px] text-faint" title={dataHoraCompleta(n.criadoEm)}>
+            {tempoRelativo(n.criadoEm, agora)}
+          </span>
         </span>
-      </button>
-      <MarcaAviso n={n} />
-      <span className="pointer-events-none min-w-0 flex-1" aria-hidden="true">
-        <span className={`block text-[13px] leading-snug ${n.lida ? "text-text-2" : "font-semibold text-text"}`}>{n.titulo}</span>
-        {n.texto && <span className="mt-0.5 line-clamp-2 block text-[12px] text-muted">{n.texto}</span>}
-        <span className="mt-0.5 block text-[11px] text-faint" title={dataHoraCompleta(n.criadoEm)}>
-          {tempoRelativo(n.criadoEm, agora)}
-        </span>
-      </span>
-      <span className="relative z-10 flex shrink-0 flex-col items-end gap-1">
-        <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/aviso:opacity-100 group-hover/aviso:opacity-100 pointer-coarse:opacity-100">
-          {onLida && (
-            <button
-              type="button"
-              onClick={() => onLida(n, !n.lida)}
-              title={n.lida ? "Marcar como não lida" : "Marcar como lida"}
-              aria-label={n.lida ? `Marcar como não lida: ${n.titulo}` : `Marcar como lida: ${n.titulo}`}
-              className="grid h-8 w-8 place-items-center rounded-control text-muted hover:bg-surface hover:text-text pointer-coarse:h-11 pointer-coarse:w-11"
-            >
-              {n.lida ? <IconNaoLida className="h-4 w-4" /> : <IconLidas className="h-4 w-4" />}
-            </button>
-          )}
-          {onExcluir && (
-            <button
-              type="button"
-              onClick={() => onExcluir(n)}
-              title="Excluir"
-              aria-label={`Excluir: ${n.titulo}`}
-              className="grid h-8 w-8 place-items-center rounded-control text-muted hover:bg-surface hover:text-[var(--danger)] pointer-coarse:h-11 pointer-coarse:w-11"
-            >
-              <IconTrash className="h-4 w-4" />
-            </button>
-          )}
-        </span>
-        {!n.lida && <span className="mr-3 h-2 w-2 rounded-full bg-accent" aria-hidden="true" />}
-        {outros.length > 0 && onExpandir && (
-          <button
-            type="button"
-            onClick={onExpandir}
-            aria-expanded={expandido}
-            className="inline-flex min-h-8 items-center gap-0.5 rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-text-2 hover:bg-accent-soft hover:text-accent pointer-coarse:min-h-11"
+        <span className="relative z-10 flex shrink-0 flex-col items-end gap-1">
+          <span
+            className={`flex items-center transition-opacity group-focus-within/aviso:opacity-100 group-hover/aviso:opacity-100 pointer-coarse:opacity-100 ${menu ? "opacity-100" : "opacity-0"}`}
           >
-            +{outros.length}
-            <IconChevronDown className={`h-3 w-3 transition-transform ${expandido ? "rotate-180" : ""}`} />
-          </button>
-        )}
-      </span>
+            {onLida && (
+              <Acao rotulo={n.lida ? "Marcar como não lida" : "Marcar como lida"} onClick={() => onLida(n, !n.lida)}>
+                {n.lida ? <IconNaoLida className="h-4 w-4" /> : <IconLidas className="h-4 w-4" />}
+              </Acao>
+            )}
+            {onAdiar && (
+              <Acao rotulo="Adiar" ativo={menu === "adiar"} onClick={() => setMenu((m) => (m === "adiar" ? null : "adiar"))}>
+                <IconAdiar className="h-4 w-4" />
+              </Acao>
+            )}
+            {podeSilenciar && (
+              <Acao rotulo="Silenciar" ativo={menu === "silenciar"} onClick={() => setMenu((m) => (m === "silenciar" ? null : "silenciar"))}>
+                <IconSemAvisos className="h-4 w-4" />
+              </Acao>
+            )}
+            {onExcluir && (
+              <Acao rotulo="Excluir" perigo onClick={() => onExcluir(n)}>
+                <IconTrash className="h-4 w-4" />
+              </Acao>
+            )}
+          </span>
+          <span className="flex items-center gap-1">
+            {outros.length > 0 && onExpandir && (
+              <button
+                type="button"
+                onClick={onExpandir}
+                aria-expanded={expandido}
+                aria-label={`${outros.length} parecidos — ${expandido ? "recolher" : "ver"}`}
+                className="inline-flex min-h-7 items-center gap-0.5 rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-text-2 hover:bg-accent-soft hover:text-accent pointer-coarse:min-h-11"
+              >
+                +{outros.length}
+                <IconChevronDown className={`h-3 w-3 transition-transform ${expandido ? "rotate-180" : ""}`} />
+              </button>
+            )}
+            {!n.lida && <span className="mr-3 h-2 w-2 rounded-full bg-accent" aria-hidden="true" />}
+          </span>
+        </span>
+      </div>
+      {menu && (
+        <fieldset className="flex animate-fade-in-up flex-wrap items-center gap-1 pb-1.5 pl-12" aria-label={menu === "adiar" ? "Adiar para" : "Silenciar"}>
+          {menu === "adiar" && onAdiar
+            ? opcoesAdiar(agora).map((o) => (
+                <Pilula
+                  key={o.rotulo}
+                  onClick={() => {
+                    setMenu(null);
+                    onAdiar(n, o.em);
+                  }}
+                >
+                  {o.rotulo}
+                </Pilula>
+              ))
+            : (
+                [
+                  ["tarefa", "Esta tarefa", n.tarefaId],
+                  ["quadro", "Este quadro", n.quadroId],
+                ] as const
+              )
+                .filter(([, , id]) => id != null)
+                .map(([alvo, rotulo]) => (
+                  <Pilula
+                    key={alvo}
+                    onClick={() => {
+                      setMenu(null);
+                      onSilenciar?.(n, alvo);
+                    }}
+                  >
+                    {rotulo}
+                  </Pilula>
+                ))}
+        </fieldset>
+      )}
     </div>
   );
 }
@@ -378,6 +432,33 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
     }
   };
 
+  const adiar = async (n: Notificacao, em: number) => {
+    for (const id of [n.id]) ocultos.current.add(id);
+    sair([n.id]);
+    if (!n.lida) setNaoLidas((c) => Math.max(0, c - 1));
+    try {
+      await chamar("/api/notificacoes", "PATCH", { ids: [n.id], adiarAte: em });
+      toast.success(`Adiado — volta ${new Date(em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short", hour: "2-digit", minute: "2-digit" })}.`);
+    } catch (e) {
+      ocultos.current.delete(n.id);
+      toast.error((e as Error).message);
+      void pagina();
+    }
+  };
+
+  const prefs = usePreferenciasNotificacoes();
+  const silenciar = (n: Notificacao, alvo: "tarefa" | "quadro") => {
+    const p = prefs.dados?.pessoa;
+    const id = alvo === "tarefa" ? n.tarefaId : n.quadroId;
+    if (!p || id == null) return;
+    const lista = alvo === "tarefa" ? "tarefas" : "quadros";
+    prefs.mudar({ pessoa: { ...p, [lista]: [...new Set([...p[lista], id])] } }, true);
+    // Os avisos dele saem da lista agora (os diretos — atribuição, menção — continuam chegando).
+    const saem = (itens ?? []).filter((x) => (alvo === "tarefa" ? x.tarefaId === id : x.quadroId === id) && x.lida).map((x) => x.id);
+    if (saem.length) sair(saem);
+    toast.desfazer(alvo === "tarefa" ? "Tarefa silenciada." : "Quadro silenciado.", () => prefs.mudar({ pessoa: p }, true));
+  };
+
   // ↑/↓ entre os avisos; Delete exclui o aviso em foco.
   const teclado = (e: KeyboardEvent<HTMLDivElement>) => {
     const botoes = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-aviso]")];
@@ -396,7 +477,6 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
   const tipos = useMemo(() => [...new Set((itens ?? []).map((x) => x.tipo))], [itens]);
   const visiveis = useMemo(() => (itens ?? []).filter((x) => !tipo || x.tipo === tipo), [itens, tipo]);
   const secoes = useMemo(() => secoesDeAvisos(visiveis, agora), [visiveis, agora]);
-  const temLidas = (itens ?? []).some((x) => x.lida);
   let ordem = 0;
 
   return (
@@ -420,11 +500,12 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
         </div>
         {tipos.length > 1 && (
           <div className="w-full">
-            <ChipsEscolha<string>
-              ariaLabel="Tipo de notificação"
-              valor={tipo}
-              onEscolher={(v) => setTipo(v as TipoNotificacao | "")}
-              opcoes={[{ value: "", label: "Todos" }, ...tipos.map((t) => ({ value: t, label: VISUAL[t]?.rotulo ?? t }))]}
+            <ChipsIcone<string>
+              ariaLabel="Filtrar por tipo"
+              compacto
+              itens={tipos.map((t) => ({ value: t, label: VISUAL[t]?.rotulo ?? t, ...visualAviso(t) }))}
+              ligados={tipo ? [tipo] : []}
+              onAlternar={(v, ligado) => setTipo(ligado ? (v as TipoNotificacao) : "")}
             />
           </div>
         )}
@@ -469,13 +550,15 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
                       onExpandir={() => setExpandidos((s) => (s.has(principal.id) ? new Set([...s].filter((x) => x !== principal.id)) : new Set([...s, principal.id])))}
                       onAbrir={abrir}
                       onLida={alternarLida}
+                      onAdiar={adiar}
+                      onSilenciar={silenciar}
                       onExcluir={(n) => excluir(aberto ? [n] : [n, ...outros])}
                     />
                     {aberto &&
                       outros.map((o) => (
                         <div key={o.id} className="aviso-linha ml-6 border-l border-border pl-1" data-saindo={saindo.has(o.id) || undefined}>
                           <div className="min-h-0 overflow-hidden">
-                            <ItemNotificacao n={o} agora={agora} onAbrir={abrir} onLida={alternarLida} onExcluir={(n) => excluir([n])} />
+                            <ItemNotificacao n={o} agora={agora} onAbrir={abrir} onLida={alternarLida} onAdiar={adiar} onExcluir={(n) => excluir([n])} />
                           </div>
                         </div>
                       ))}
@@ -493,22 +576,23 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
         )}
         {naMemoria >= MAX_AVISOS_NA_TELA && mais && <p className="px-2 py-3 text-center text-[11px] text-faint">Mostrando as {MAX_AVISOS_NA_TELA} mais recentes — limpe as antigas para ver o resto.</p>}
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-t border-border px-1 pt-2">
-        <Button size="sm" variant="ghost" icon={<IconLidas className="h-4 w-4" />} onClick={marcarTodas} disabled={!caixa.naoLidas}>
-          Marcar todas como lidas
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => limpar("lidas")} disabled={!temLidas}>
-          Limpar lidas
-        </Button>
-        <Button size="sm" variant="ghost" icon={<IconTrash className="h-4 w-4" />} onClick={() => limpar("todas")} disabled={!itens?.length}>
-          Limpar tudo
-        </Button>
+      <div className="flex shrink-0 items-center gap-0.5 border-t border-border px-1 pt-1.5">
+        <Acao rotulo="Marcar todas como lidas" onClick={() => void marcarTodas()}>
+          <IconLidas className="h-4 w-4" />
+        </Acao>
+        <Acao rotulo="Limpar as lidas" onClick={() => void limpar("lidas")}>
+          <IconLimpar className="h-4 w-4" />
+        </Acao>
+        <Acao rotulo="Limpar tudo" perigo onClick={() => void limpar("todas")}>
+          <IconTrash className="h-4 w-4" />
+        </Acao>
+        <span className="ml-auto pr-1 text-[11px] text-faint">{caixa.naoLidas ? `${caixa.naoLidas > 99 ? "99+" : caixa.naoLidas} não lida${caixa.naoLidas === 1 ? "" : "s"}` : ""}</span>
         <Link
           href={configurarHref}
           onClick={fechar}
           aria-label="Configurar notificações"
           title="Configurar notificações"
-          className="ml-auto grid h-11 w-11 place-items-center rounded-control text-muted hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+          className="grid h-8 w-8 place-items-center rounded-control text-muted hover:bg-surface-2 hover:text-text pointer-coarse:h-11 pointer-coarse:w-11"
         >
           <IconSettings className="h-4 w-4" />
         </Link>
@@ -532,6 +616,25 @@ function useCaixa(inicial: number) {
   const ultimoId = useRef<number | null>(null);
   const contadaEm = useRef(0);
 
+  /** As escolhas da pessoa para o APARELHO (som, alerta do sistema) — lidas só quando chega um aviso (10 min de cache). */
+  const aparelho = useRef<{ em: number; som: boolean; sistema: boolean } | null>(null);
+  const router = useRouter();
+  const alertasDoAparelho = useCallback(
+    async (n: Notificacao) => {
+      try {
+        if (!aparelho.current || Date.now() - aparelho.current.em > 600_000) {
+          const j = await chamar<{ pessoa: { som: boolean; sistema: boolean } }>("/api/notificacoes/preferencias");
+          aparelho.current = { em: Date.now(), som: j.pessoa.som, sistema: j.pessoa.sistema };
+        }
+        if (aparelho.current.som) tocarSom();
+        if (aparelho.current.sistema && document.visibilityState !== "visible") alertaSistema(n, () => n.link && router.push(n.link));
+      } catch {
+        /* sem preferências: sem som */
+      }
+    },
+    [router],
+  );
+
   /** Confere o aviso mais recente: o de id maior que o último visto vira a PRÉVIA (o 1º só marca a base). */
   const conferirNovo = useCallback(async () => {
     try {
@@ -543,12 +646,13 @@ function useCaixa(inicial: number) {
       if (ultimoId.current != null && n.id > ultimoId.current) {
         setNovo(n);
         setToque((x) => x + 1);
+        void alertasDoAparelho(n);
       }
       ultimoId.current = Math.max(ultimoId.current ?? 0, n.id);
     } catch {
       /* fica o último número */
     }
-  }, []);
+  }, [alertasDoAparelho]);
 
   const recontar = useCallback(async (forcar = false) => {
     if (!forcar && Date.now() - contadaEm.current < 15_000) return;
@@ -614,7 +718,8 @@ function useCaixa(inicial: number) {
   useEffect(() => {
     const aoVoltar = () => document.visibilityState === "visible" && void (aoVivo ? conferirNovo() : recontar());
     document.addEventListener("visibilitychange", aoVoltar);
-    const t = aoVivo ? 0 : window.setInterval(() => document.visibilityState === "visible" && void conferirNovo(), 60_000);
+    // Ao vivo, uma conferência a cada 5 min cobre o aviso enviado a muitas pessoas de uma vez (o comunicado).
+    const t = window.setInterval(() => document.visibilityState === "visible" && void conferirNovo(), aoVivo ? 300_000 : 60_000);
     return () => {
       document.removeEventListener("visibilitychange", aoVoltar);
       window.clearInterval(t);
