@@ -107,6 +107,12 @@ export function OrcamentoComparativo({
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
   const [medida, setMedida] = useState<MedidaOrcamento>("inicial");
   const [visaoId, setVisaoId] = useState<number | null>(visaoInicial);
+  // A visão do HOST mudou (ex.: a engrenagem do PCA trocou a visão) — a tabela acompanha.
+  const [visaoHost, setVisaoHost] = useState(visaoInicial);
+  if (visaoHost !== visaoInicial) {
+    setVisaoHost(visaoInicial);
+    setVisaoId(visaoInicial);
+  }
   const [modo, setModo] = useState<ModoCruzamento>("valor");
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<{ linha: string | null; coluna: string | null } | null>(null);

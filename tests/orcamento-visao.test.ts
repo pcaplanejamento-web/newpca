@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { aplicarVisao, coerceFiltros, DIMENSOES_DO_VINCULO, DIMENSOES_VISAO, opcoesDaDimensao, resumoVisao } from "../src/lib/orcamento-visao.ts";
+import { aplicarVisao, coerceFiltros, contarAusentes, DIMENSOES_DO_VINCULO, DIMENSOES_VISAO, opcoesDaDimensao, resumoVisao, semAusentes, valoresAusentes } from "../src/lib/orcamento-visao.ts";
 import { comparativoPorUnidade, faixaComprometimento, linhaAcima, origemDaLinha, totaisComparativo } from "../src/lib/orcamento-comparativo.ts";
 
 const L = [
@@ -110,5 +110,32 @@ describe("orcamento-comparativo", () => {
     const sem = origemDaLinha(null, planejado, orc, unidades);
     assert.deepEqual(sem.planejado.map((p) => p.unidadeId), [99, null]);
     assert.deepEqual(sem.orcamento.map((x) => x.unidadeId), [null, 77]);
+  });
+});
+
+describe("sincronia visão × orçamento (reenvio do QDD)", () => {
+  const linhas = [
+    { nomeElemento: "MATERIAL DE CONSUMO", fonte: "100 - RECURSOS ORDINÁRIOS" },
+    { nomeElemento: "OBRAS", fonte: "150 - FUNDEB" },
+  ];
+  it("valoresAusentes acha o que o orçamento não traz (sem caixa/acento) e ignora o que existe", () => {
+    const a = valoresAusentes(linhas, { nomeElemento: ["material de consumo", "DIARIAS"], fonte: ["999 - EXTINTA"] });
+    assert.deepEqual(
+      a.map((x) => [x.dimensao, x.valores]),
+      [
+        ["nomeElemento", ["DIARIAS"]],
+        ["fonte", ["999 - EXTINTA"]],
+      ],
+    );
+    assert.equal(contarAusentes(a), 2);
+    assert.deepEqual(valoresAusentes(linhas, {}), []);
+    assert.deepEqual(valoresAusentes(linhas, null), []);
+  });
+  it("semAusentes tira os ausentes e aponta a dimensão que ficaria vazia", () => {
+    const f = { nomeElemento: ["MATERIAL DE CONSUMO", "DIARIAS"], fonte: ["999 - EXTINTA"] };
+    const r = semAusentes(f, valoresAusentes(linhas, f));
+    assert.deepEqual(r.filtros, { nomeElemento: ["MATERIAL DE CONSUMO"] });
+    assert.deepEqual(r.esvaziadas, ["Fonte de recurso"]);
+    assert.deepEqual(f.fonte, ["999 - EXTINTA"], "não muda a entrada");
   });
 });

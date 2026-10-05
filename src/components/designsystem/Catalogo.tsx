@@ -17,6 +17,8 @@ import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
 import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
+import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
+import type { VisaoOrcamento } from "@/lib/orcamento-visao";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
 import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/orcamento-cruzamento";
 import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
@@ -545,7 +547,12 @@ function PcaEspacoDemo() {
             { id: 4, orgao: "GABINETE", unidade: "9 - GAB", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: null, valor: 120_000 },
             { id: 5, orgao: "FUNDO DO MEIO AMBIENTE", unidade: "26 - FMMA", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: 5, valor: 2_812_500 },
           ],
+          // A visão tem um valor que o QDD reenviado não traz → o aviso + "Ajustar a visão" (a engrenagem).
+          visaoId: 1,
+          ausentes: [{ dimensao: "fonte", rotulo: "Fonte de recurso", valores: ["999 - FONTE EXTINTA"] }],
         }}
+        podePublicar
+        visoes={VISOES_DEMO}
       />
     </div>
   );
@@ -1044,6 +1051,31 @@ function MetricasMesaDemo() {
       anos={[2026, 2025]}
       resumo={<span>Este mês (01/09 a 30/09/2026) · 60 protocolos · 412 DFDs · 3.210 itens · R$ 12,3 mi · 1 correção · 45 ações</span>}
     />
+  );
+}
+
+const VISOES_DEMO: VisaoOrcamento[] = [
+  { id: 1, nome: "PCA", ordem: 0, filtros: { nomeElemento: ["MATERIAL DE CONSUMO", "EQUIPAMENTOS"], fonte: ["999 - FONTE EXTINTA"] }, pcas: ["PCA 2027 (2027)"] },
+];
+const LINHAS_VISAO_DEMO: LinhaVisaoOrcamento[] = [
+  { nomeElemento: "MATERIAL DE CONSUMO", fonte: "100 - RECURSOS ORDINÁRIOS", valorInicial: 1_390_566.98 },
+  { nomeElemento: "SERVIÇOS DE TERCEIROS - PJ", fonte: "150 - FUNDEB", valorInicial: 14_441_470.23 },
+  { nomeElemento: "EQUIPAMENTOS", fonte: "100 - RECURSOS ORDINÁRIOS", valorInicial: 4_021_478.05 },
+];
+
+/** O editor de UMA visão do orçamento (aba Visões e engrenagem do PCA): usos, valores ausentes, prévia do Σ. */
+function EditorVisaoDemo() {
+  const [aberta, setAberta] = useState<VisaoOrcamento | "nova" | null>(null);
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" variant="secondary" onClick={() => setAberta(VISOES_DEMO[0])}>
+        Editar a visão “PCA”
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setAberta("nova")}>
+        Nova visão
+      </Button>
+      <EditorVisaoOrcamento aberta={aberta} itens={LINHAS_VISAO_DEMO} podeEditar onFechar={() => setAberta(null)} onSalva={() => setAberta(null)} />
+    </div>
   );
 }
 
@@ -3074,6 +3106,9 @@ export function Catalogo() {
 
       <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
+      </Secao>
+      <Secao titulo="EditorVisaoOrcamento (uma visão do orçamento: nome + dimensões em listas suspensas + prévia do Σ; avisa os PCAs que a usam e os valores que o orçamento atual não traz, com “Remover ausentes”) + VisaoOrcamentoPca (a engrenagem da aba Orçamento do PCA — no OrcamentoPca acima)">
+        <EditorVisaoDemo />
       </Secao>
       <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir; quem configura a tela também exclui a pública de outra pessoa) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />

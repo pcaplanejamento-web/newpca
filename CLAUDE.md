@@ -1976,7 +1976,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Schemas em `pca-espaco-validation.ts`. **A capa NÃO trafega nas listas:** `PcaEspaco.capa` é a URL **`GET /api/pca/[id]/capa?v=`**
   (versão = `atualizado_em` + tamanho; cache `immutable`, como a foto do usuário); `PcaCapa` dimensiona o ano por container query
   (`cqw`) — cabe no card e na miniatura do cabeçalho.
-- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
+- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: a **ENGRENAGEM** (só ícone, quem Configura o PCA, na linha de controles das duas vistas)
+  abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
+  com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
+  os lançamentos do orçamento do ano (os do Comparativo — sem consulta nova); o Comparativo acompanha a visão do PCA quando
+  ela muda (`visaoInicial` re-sincroniza) e o KPI Dotação diz QUAL orçamento do ano é usado (o importado por último); KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
   > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro; XLSX/PDF no rodapé; CORES na tela e no PDF: o Orçamento em azul (`--accent`), o Órgão como está e TODAS as demais no tom da Diferença — `corDaDiferenca`: negativa vermelho, senão verde) — o CUBO do MESMO ano chega à
   unidade pelos **Vínculos** (`orcamento_vinculos`). **A UNIDADE é o micro** (recebe os DFDs e o orçamento; a linha é
@@ -2030,7 +2034,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Todos" | "N selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts`
   puro); `DIMENSOES_ORCAMENTO` (todas) segue como o catálogo da tabela cruzada e dos lançamentos. Uma coluna
   nova do CUBO entra acrescentando a dimensão ao catálogo (e ao parser). Rotas `POST /api/orcamento/visoes` + `PATCH/DELETE
-  /api/orcamento/visoes/[id]` (a lista vem do servidor) (auditoria `orcamento_visao`).
+  /api/orcamento/visoes/[id]` (a lista vem do servidor) (auditoria `orcamento_visao`). **SINCRONIA com o QDD e os PCAs:** a visão guarda o TEXTO dos valores, então `valoresAusentes(linhas, filtros)`
+  (`orcamento-visao.ts`, puro/testado; + `contarAusentes`/`semAusentes`) aponta o que o orçamento ATUAL não traz (QDD reenviado
+  ou texto mudado — esses valores não contam nada): na aba Visões (coluna Filtros "· N ausente(s)" + coluna **PCAs** que a
+  usam — `listarVisoesOrcamento` traz `pcas`), no editor (**`EditorVisaoOrcamento`**, DS — o MESMO na aba Visões e na
+  engrenagem do PCA: os PCAs que a usam, os ausentes com "Remover ausentes" — a dimensão que esvaziaria confirma —, prévia
+  do Σ), na prévia do REENVIO da planilha (`ImportarOrcamento visoes` — as visões que perdem valores, aviso) e no orçamento
+  do PCA (`orcamentoDoPca.ausentes` → Callout "Ajustar a visão"). Excluir uma visão diz quais PCAs voltam ao orçamento
+  inteiro (confirmação e auditoria).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·

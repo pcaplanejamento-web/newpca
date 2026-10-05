@@ -20,6 +20,7 @@ import {
   type UnidadeRef,
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
+import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -28,13 +29,14 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useQuemExporta } from "./ConfigTabelas";
 import { type Column, DataTable } from "./DataTable";
-import { IconFile, IconInfo } from "./icons";
+import { IconFile, IconInfo, IconSettings } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
+import { VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 
 type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
@@ -68,6 +70,10 @@ export type DadosOrcamentoPca = {
   orgaos: OrgaoRef[];
   /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados no planejado. */
   previa?: { dfds: number; protocolos: number } | null;
+  /** A visão gravada no PCA (`null` = orçamento inteiro). */
+  visaoId?: number | null;
+  /** Os valores da visão que o orçamento atual não traz (QDD reenviado). */
+  ausentes?: AusentesVisao;
 };
 
 type Planilha = NonNullable<PlanejadoOrcamentoPca["planilha"]> & { itens: number; valor: number };
@@ -257,9 +263,15 @@ export function OrcamentoPca({
   comparativo = null,
   podeExportar = true,
   podePublicar = false,
+  visoes = [],
+  podeEditarVisao = false,
 }: {
   dados: DadosOrcamentoPca;
   comparativo?: ComparativoPca | null;
+  /** As visões salvas (globais) — a engrenagem escolhe/edita a do PCA. */
+  visoes?: VisaoOrcamento[];
+  /** Configura o ORÇAMENTO: edita/cria a visão pela engrenagem (escolher a do PCA = `podePublicar`, Configurar no PCA). */
+  podeEditarVisao?: boolean;
   /** O papel exporta no PCA (o XLSX do comparativo). */
   podeExportar?: boolean;
   /** O papel CONFIGURA o PCA: publica edições do layout do comparativo para todos. */
@@ -268,6 +280,15 @@ export function OrcamentoPca({
   const [vista, setVista] = useState<Vista>("unidade");
   // As edições salvas do Comparativo ficam AQUI (trocar de vista remonta a tabela — ela volta com as edições novas).
   const [edicoesComp, setEdicoesComp] = useState(() => (comparativo ? { lista: comparativo.edicoes, padroes: comparativo.padroes } : null));
+  // A tela recarregou (router.refresh) com edições novas do servidor — elas valem.
+  const [edicoesServidor, setEdicoesServidor] = useState(comparativo?.edicoes);
+  if (comparativo && edicoesServidor !== comparativo.edicoes) {
+    setEdicoesServidor(comparativo.edicoes);
+    setEdicoesComp({ lista: comparativo.edicoes, padroes: comparativo.padroes });
+  }
+  const [engrenagem, setEngrenagem] = useState(false);
+  const linhasVisao = useMemo(() => comparativo?.itens ?? null, [comparativo]);
+  const ausentes = contarAusentes(dados.ausentes ?? []);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivel, setNivel] = useState<Nivel>("unidade");
@@ -406,6 +427,16 @@ export function OrcamentoPca({
     />
   );
   const comprometido = t.comprometido;
+  const botaoVisao = podePublicar && (
+    <Button
+      size="sm"
+      variant="icon"
+      aria-label="Visão do orçamento do PCA"
+      title="Visão do orçamento do PCA"
+      icon={<IconSettings className="h-4 w-4" />}
+      onClick={() => setEngrenagem(true)}
+    />
+  );
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -418,6 +449,21 @@ export function OrcamentoPca({
         <Callout kind="info" icon={<IconInfo className="h-4 w-4" />}>
           <b>Prévia do PCA</b> — o planejado inclui {num(dados.previa.dfds)} DFD(s) de {num(dados.previa.protocolos)} protocolo(s) ainda NÃO
           incorporados (enviados à Mesa do PCA e marcados na Mesa do sistema). Só no painel, com o PCA em Preview.
+        </Callout>
+      )}
+      {ausentes > 0 && (
+        <Callout kind="warn" icon={<IconInfo className="h-4 w-4" />}>
+          A visão <b>{dados.visaoNome}</b> tem {num(ausentes)} valor(es) que o orçamento atual não traz (o QDD foi reenviado ou o texto
+          mudou) — eles não contam nada:{" "}
+          {(dados.ausentes ?? []).map((a) => `${a.rotulo}: ${a.valores.join("; ")}`).join(" · ")}.
+          {podePublicar && (
+            <>
+              {" "}
+              <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => setEngrenagem(true)}>
+                Ajustar a visão
+              </button>
+            </>
+          )}
         </Callout>
       )}
       {divididas.length > 0 && (
@@ -446,7 +492,7 @@ export function OrcamentoPca({
         <StatMini
           label={`Dotação ${dados.ano}${dados.visaoNome ? ` · ${dados.visaoNome}` : ""}`}
           value={brlCompact(dados.filtrado)}
-          hint={dados.visaoNome ? `bruta ${brlCompact(dados.bruto)}` : "orçamento inteiro"}
+          hint={`${dados.orcamento ? `${dados.orcamento.nome} · ` : ""}${dados.visaoNome ? `bruta ${brlCompact(dados.bruto)}` : "orçamento inteiro"}`}
         />
         <StatMini label="Planejado no PCA" value={brlCompact(t.planejado)} tone="accent" hint="itens ativos" />
         <StatMini label="Saldo" value={brlCompact(t.saldo)} tone={t.saldo < 0 ? "danger" : "ok"} hint="dotação − planejado" />
@@ -464,7 +510,12 @@ export function OrcamentoPca({
           edicoes={edicoesComp?.lista ?? comparativo.edicoes}
           padroes={edicoesComp?.padroes ?? comparativo.padroes}
           onMudarEdicoes={(lista, padroes) => setEdicoesComp({ lista, padroes })}
-          inicio={trocaVista}
+          inicio={
+            <>
+              {trocaVista}
+              {botaoVisao}
+            </>
+          }
           podeExportar={podeExportar}
           podePublicar={podePublicar}
         />
@@ -472,6 +523,7 @@ export function OrcamentoPca({
         <>
           <div className="flex flex-wrap items-center gap-2">
             {trocaVista}
+            {botaoVisao}
             <Segmented<Nivel>
               value={nivel}
               onChange={(n) => {
@@ -514,6 +566,17 @@ export function OrcamentoPca({
         </>
       )}
       <OrigemLinha dados={dados} aberta={aberta} onClose={() => setAberta(null)} />
+      {podePublicar && (
+        <VisaoOrcamentoPca
+          pcaId={dados.pcaId}
+          aberto={engrenagem}
+          onFechar={() => setEngrenagem(false)}
+          visaoId={dados.visaoId ?? null}
+          visoes={visoes}
+          itens={linhasVisao}
+          podeEditarVisao={podeEditarVisao}
+        />
+      )}
     </div>
   );
 }

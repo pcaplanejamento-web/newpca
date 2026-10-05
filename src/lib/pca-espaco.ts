@@ -21,7 +21,7 @@ import { getDb } from "./db";
 import { getDfd } from "./dfd";
 import { normUnidadeMedida } from "./normalize";
 import { type RelatorioOrcamento, relatorioOrcamentoPca } from "./orcamento-relatorio";
-import { aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento } from "./orcamento-visao";
+import { type AusentesVisao, aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento, valoresAusentes } from "./orcamento-visao";
 import { comVinculos, mapaVinculos, unidadeDoLancamento } from "./orcamento-vinculo";
 import { listarVinculosOrcamento } from "./orcamento";
 import { tipoCurtoDfd } from "./parse-dfd-comum";
@@ -894,9 +894,20 @@ function paraVisao(r: { id: number; nome: string; filtros: string; ordem: number
   return { id: r.id, nome: r.nome, ordem: r.ordem, filtros: coerceFiltros(r.filtros) };
 }
 
+/** As visões salvas + os PCAs que usam cada uma (a visão é GLOBAL — alterar uma muda o orçamento de todos eles). */
 export async function listarVisoesOrcamento(): Promise<VisaoOrcamento[]> {
-  const rows = await getDb().select().from(orcamentoVisoes).orderBy(asc(orcamentoVisoes.ordem), asc(orcamentoVisoes.id));
-  return rows.map(paraVisao);
+  const db = getDb();
+  const [rows, usos] = await Promise.all([
+    db.select().from(orcamentoVisoes).orderBy(asc(orcamentoVisoes.ordem), asc(orcamentoVisoes.id)),
+    db
+      .select({ visao: pcas.orcamentoVisaoId, nome: pcas.nome, ano: pcas.ano })
+      .from(pcas)
+      .where(isNotNull(pcas.orcamentoVisaoId))
+      .orderBy(asc(pcas.nome)),
+  ]);
+  const porVisao = new Map<number, string[]>();
+  for (const u of usos) if (u.visao != null) porVisao.set(u.visao, [...(porVisao.get(u.visao) ?? []), u.ano ? `${u.nome} (${u.ano})` : u.nome]);
+  return rows.map((r) => ({ ...paraVisao(r), pcas: porVisao.get(r.id) ?? [] }));
 }
 
 export async function getVisaoOrcamento(id: number): Promise<VisaoOrcamento | null> {
@@ -956,6 +967,8 @@ export type OrcamentoDoPca = {
   orgaos: { id: number; sigla: string; nome: string }[];
   /** PRÉVIA ligada: os DFDs/protocolos ainda NÃO incorporados que entraram no planejado; `null` = só o incorporado. */
   previa: { dfds: number; protocolos: number } | null;
+  /** Os valores da visão que o orçamento ATUAL não traz (ex.: depois de reenviar o QDD) — vazio = visão em dia. */
+  ausentes: AusentesVisao;
 };
 
 /** Orçamento (CUBO do MESMO ano) filtrado pela visão do PCA + o planejado por unidade. */
@@ -1023,8 +1036,10 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
   let bruto = 0;
   let filtrado = 0;
   let linhas: OrcamentoDoPca["linhas"] = [];
+  let ausentes: AusentesVisao = [];
   if (orc) {
     bruto = itens.reduce((s, i) => s + Number(i.valor ?? 0), 0);
+    ausentes = valoresAusentes(itens, visao?.filtros);
     // A visão filtra só o que NÃO é do vínculo (função, programa, elemento, código, ficha, fonte); a unidade de cada
     // lançamento vem SÓ do vínculo pela ação (`unidadeDoLancamento`) — os dois nunca disputam o mesmo lançamento.
     const f = aplicarVisao(comVinculos(itens, vincs, { orgaos: orgaoLista, unidades: reps }), visao?.filtros);
@@ -1057,7 +1072,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta) }));
     previa = c.previa;
   }
-  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa };
+  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa, ausentes };
 }
 
 /**

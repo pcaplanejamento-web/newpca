@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { enviarOrcamentoEmLotes, substituirOrcamentoEmLotes } from "@/lib/importar-orcamento";
 import type { OrcamentoResumo } from "@/lib/orcamento";
+import { contarAusentes, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
 import type { ErroPlanilhaOrcamento, OrcamentoItemParseado } from "@/lib/parse-orcamento-comum";
 import { parseOrcamentoXlsx } from "@/lib/parse-orcamento-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
@@ -67,10 +68,30 @@ const COLUNAS_PREVIA: Column<OrcamentoItemParseado>[] = [
  * compara atual × novo; o anterior fica intacto se algo falhar). Cada valor NOVO de `iniciar` abre o lançador (o mesmo
  * mecanismo da Mesa). Não renderiza nada no fluxo: só modais e avisos flutuantes.
  */
-export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: OrcamentoResumo }) {
+export function ImportarOrcamento({
+  iniciar,
+  alvo,
+  visoes = [],
+}: {
+  iniciar: number;
+  alvo?: OrcamentoResumo;
+  /** No REENVIO: as visões salvas — a prévia avisa as que perdem valores com a planilha nova (o PCA delas mudaria). */
+  visoes?: VisaoOrcamento[];
+}) {
   const router = useRouter();
   const [launcher, setLauncher] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Sincronia no REENVIO: as visões com valores que a planilha nova NÃO traz deixariam de contar esses lançamentos.
+  const visoesAfetadas = useMemo(
+    () =>
+      alvo && preview
+        ? visoes.flatMap((v) => {
+            const n = contarAusentes(valoresAusentes(preview.itens, v.filtros));
+            return n > 0 ? [{ v, n }] : [];
+          })
+        : [],
+    [alvo, preview, visoes],
+  );
   const [nome, setNome] = useState("");
   const [ano, setAno] = useState(String(ANO_ATUAL));
   const [enviando, setEnviando] = useState(false);
@@ -230,6 +251,21 @@ export function ImportarOrcamento({ iniciar, alvo }: { iniciar: number; alvo?: O
                 </div>
               )}
             </dl>
+            {visoesAfetadas.length > 0 && (
+              <Callout kind="warn">
+                <p>
+                  Com a planilha nova, {visoesAfetadas.length === 1 ? "esta visão fica" : "estas visões ficam"} com valores que não existem mais
+                  (deixam de contar esses lançamentos — ajuste em Visões depois de substituir):
+                </p>
+                <ul className="mt-1 list-disc pl-5 text-[13px]">
+                  {visoesAfetadas.map(({ v, n }) => (
+                    <li key={v.id}>
+                      <b>{v.nome}</b> — {num(n)} valor(es){v.pcas?.length ? ` · usada por ${v.pcas.join("; ")}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </Callout>
+            )}
             {preview.faltam.length > 0 && (
               <Callout kind="danger">
                 Faltam {preview.faltam.length === 1 ? "a coluna obrigatória" : `${num(preview.faltam.length)} colunas obrigatórias`}:{" "}

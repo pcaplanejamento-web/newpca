@@ -20,6 +20,13 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Orçamento do PCA sincronizado com o QDD e as visões + engrenagem da visão — entregue
+✅ Engrenagem na aba Orçamento do PCA: escolher a visão (grava na hora), editar a visão escolhida ou criar uma nova (já vira
+a do PCA) no mesmo editor da aba Visões · ✅ Sincronia: os valores da visão que o QDD atual não traz são apontados (aba
+Visões, editor com "Remover ausentes", prévia do reenvio da planilha e aviso no orçamento do PCA) · ✅ A aba Visões mostra os
+PCAs que usam cada visão; excluir diz quais voltam ao orçamento inteiro · ✅ O Comparativo do PCA acompanha a troca de visão;
+o KPI Dotação diz qual orçamento do ano é usado.
+
 ### Pendências padronizadas (Protocolo · DFD · Item) — entregue
 ✅ Um banner único de pendências (`PainelPendencias`) nos três níveis: o protocolo soma a capa e os DFDs, o DFD soma os
 itens; tocar numa pendência leva ao lugar (abre o DFD/item e destaca o campo); copiar em Despacho, WhatsApp ou Lista; PDF

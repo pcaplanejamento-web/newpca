@@ -3,28 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
-import {
-  aplicarVisao,
-  DIMENSOES_VISAO,
-  type DimensaoVisao,
-  type FiltrosVisao,
-  type LinhaOrcamentoVisao,
-  opcoesDaDimensao,
-  resumoVisao,
-  type VisaoOrcamento,
-} from "@/lib/orcamento-visao";
+import { aplicarVisao, contarAusentes, resumoVisao, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
 import { FerramentasAba } from "./AbasEspaco";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { TextField } from "./Field";
+import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "./EditorVisaoOrcamento";
 import { IconPlus, IconTrash } from "./icons";
-import { Modal } from "./Modal";
-import { SeletorMultiplo } from "./SeletorMultiplo";
 
-type Linha = LinhaOrcamentoVisao & { valorInicial: number };
 
 /**
  * VISÕES SALVAS do orçamento (globais — o PCA escolhe a sua na Configuração): tabela padrão da Mesa com cada visão, o
@@ -32,73 +19,36 @@ type Linha = LinhaOrcamentoVisao & { valorInicial: number };
  * dimensão da visão — `DIMENSOES_VISAO`; unidade, ações e órgão são dos Vínculos —, opções CONECTADAS + prévia do Σ). "Criar visão" fica na barra das abas (`FerramentasAba`). As
  * visões vêm do servidor; salvar/excluir recarrega a página.
  */
-export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[]; visoes: VisaoOrcamento[]; podeEditar: boolean }) {
+export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: LinhaVisaoOrcamento[]; visoes: VisaoOrcamento[]; podeEditar: boolean }) {
   const router = useRouter();
   const [editando, setEditando] = useState<VisaoOrcamento | "nova" | null>(null);
-  const [nome, setNome] = useState("");
-  const [filtros, setFiltros] = useState<FiltrosVisao>({});
-  const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
-
-  const abrir = (v: VisaoOrcamento | "nova") => {
-    setEditando(v);
-    setNome(v === "nova" ? "" : v.nome);
-    setFiltros(v === "nova" ? {} : v.filtros);
-  };
-
   const total = useMemo(() => itens.reduce((s, i) => s + i.valorInicial, 0), [itens]);
-  const naVisao = useMemo(() => aplicarVisao(itens, filtros), [itens, filtros]);
-  const somaVisao = naVisao.reduce((s, i) => s + i.valorInicial, 0);
-  const opcoes = useMemo(() => {
-    const m = new Map<DimensaoVisao, { valor: string; contagem: number }[]>();
-    if (!editando) return m;
-    for (const d of DIMENSOES_VISAO) m.set(d.key, opcoesDaDimensao(itens, d.key, filtros).map((o) => ({ valor: o.valor, contagem: o.linhas })));
-    return m;
-  }, [itens, filtros, editando]);
-
-  async function salvar() {
-    if (!editando || !nome.trim()) return;
-    setSalvando(true);
-    try {
-      const nova = editando === "nova";
-      const r = await fetch(nova ? "/api/orcamento/visoes" : `/api/orcamento/visoes/${editando.id}`, {
-        method: nova ? "POST" : "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nome.trim(), filtros }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar a visão.");
-      setAviso({ kind: "ok", texto: nova ? "Visão criada." : "Visão atualizada." });
-      setEditando(null);
-      router.refresh();
-    } catch (e) {
-      setAviso({ kind: "danger", texto: e instanceof Error ? e.message : "Não foi possível salvar a visão." });
-    } finally {
-      setSalvando(false);
-    }
-  }
+  const abrir = (v: VisaoOrcamento | "nova") => setEditando(v);
 
   async function excluir(v: VisaoOrcamento) {
     const ok = await confirmar({
       titulo: `Excluir a visão "${v.nome}"?`,
-      texto: "Os PCAs que a usam passam a considerar o orçamento inteiro.",
+      texto: v.pcas?.length
+        ? `${v.pcas.length === 1 ? "O PCA" : "Os PCAs"} ${v.pcas.join("; ")} ${v.pcas.length === 1 ? "passa" : "passam"} a considerar o orçamento inteiro.`
+        : "Nenhum PCA usa esta visão.",
       confirmar: "Excluir",
       perigo: true,
     });
     if (!ok) return;
     const r = await fetch(`/api/orcamento/visoes/${v.id}`, { method: "DELETE" });
-    if (!r.ok) setAviso({ kind: "danger", texto: "Não foi possível excluir a visão." });
+    setAviso(r.ok ? { kind: "ok", texto: "Visão excluída." } : { kind: "danger", texto: "Não foi possível excluir a visão." });
     if (editando !== "nova" && editando?.id === v.id) setEditando(null);
     router.refresh();
   }
 
   // Σ e lançamentos que cada visão pega DESTE orçamento (informação útil na lista).
   const naVisaoPorId = useMemo(() => {
-    const m = new Map<number, { soma: number; linhas: number }>();
+    const m = new Map<number, { soma: number; linhas: number; ausentes: number }>();
     for (const v of visoes) {
       const f = aplicarVisao(itens, v.filtros);
-      m.set(v.id, { soma: f.reduce((s, i) => s + i.valorInicial, 0), linhas: f.length });
+      m.set(v.id, { soma: f.reduce((s, i) => s + i.valorInicial, 0), linhas: f.length, ausentes: contarAusentes(valoresAusentes(itens, v.filtros)) });
     }
     return m;
   }, [itens, visoes]);
@@ -110,7 +60,27 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
       align: "left",
       minWidth: 220,
       value: (v) => resumoVisao(v.filtros),
-      render: (v) => <span className="text-text-2">{resumoVisao(v.filtros)}</span>,
+      render: (v) => {
+        const n = naVisaoPorId.get(v.id)?.ausentes ?? 0;
+        return (
+          <span className="text-text-2">
+            {resumoVisao(v.filtros)}
+            {n > 0 && (
+              <span className="ml-1.5 font-semibold" style={{ color: "var(--warn)" }} title="Valores escolhidos que este orçamento não traz">
+                · {num(n)} ausente(s)
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      key: "pcas",
+      header: "PCAs",
+      align: "left",
+      minWidth: 160,
+      valores: (v) => (v.pcas?.length ? v.pcas : ["—"]),
+      render: (v) => <span className="line-clamp-1 text-text-2">{v.pcas?.length ? v.pcas.join("; ") : "—"}</span>,
     },
     {
       key: "lancamentos",
@@ -158,7 +128,7 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
     <>
       {podeEditar && (
         <FerramentasAba>
-          <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => abrir("nova")} disabled={salvando}>
+          <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => abrir("nova")}>
             Criar visão
           </Button>
         </FerramentasAba>
@@ -175,51 +145,17 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: Linha[];
         vazio={podeEditar ? "Nenhuma visão salva ainda. Use “Criar visão”." : "Nenhuma visão salva ainda."}
         resumo={(ls) => `${num(ls.length)} ${ls.length === 1 ? "visão" : "visões"} · Dotação do orçamento ${brl(total)}`}
       />
-      {/* O editor é o BANNER padrão do sistema (Modal): nada estoura a página; cada dimensão abre a lista num painel
-          flutuante (`SeletorMultiplo suspenso`). */}
-      <Modal
-        open={editando != null}
-        onClose={() => setEditando(null)}
-        bloqueado={salvando}
-        size="lg"
-        titulo={editando === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : "Visão"}
-        rodape={
-          // Altura FIXA: a prévia numa linha própria (truncada) e os botões abaixo — marcar um item não muda o tamanho do
-          // banner (nada recentraliza nem "pula").
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <p className="w-full truncate text-sm text-text-2">
-              Na visão: <b className="tabular-nums">{brl(somaVisao)}</b> de <span className="tabular-nums">{brl(total)}</span> ·{" "}
-              {num(naVisao.length)} {naVisao.length === 1 ? "lançamento" : "lançamentos"}
-            </p>
-            <Button size="sm" variant="ghost" onClick={() => setEditando(null)} disabled={salvando}>
-              {podeEditar ? "Cancelar" : "Fechar"}
-            </Button>
-            {podeEditar && (
-              <Button size="sm" onClick={salvar} loading={salvando} disabled={!nome.trim()}>
-                {editando === "nova" ? "Criar visão" : "Atualizar visão"}
-              </Button>
-            )}
-          </div>
-        }
-      >
-        <div className="space-y-[var(--gap-block)]">
-          <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: PCA" maxLength={80} disabled={!podeEditar} />
-          <Callout kind="info">Unidades, ações e órgãos são definidos nos Vínculos — a visão filtra só o restante do orçamento.</Callout>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {DIMENSOES_VISAO.map((d) => (
-              <SeletorMultiplo
-                key={d.key}
-                suspenso
-                rotulo={d.rotulo}
-                opcoes={opcoes.get(d.key) ?? []}
-                selecionados={filtros[d.key] ?? []}
-                disabled={!podeEditar || salvando}
-                onChange={(vals) => setFiltros((f) => ({ ...f, [d.key]: vals.length ? vals : undefined }))}
-              />
-            ))}
-          </div>
-        </div>
-      </Modal>
+      <EditorVisaoOrcamento
+        aberta={editando}
+        itens={itens}
+        podeEditar={podeEditar}
+        onFechar={() => setEditando(null)}
+        onSalva={(r) => {
+          setAviso({ kind: "ok", texto: r.nova ? "Visão criada." : "Visão atualizada." });
+          setEditando(null);
+          router.refresh();
+        }}
+      />
       {confirmacao}
       {aviso && (
         <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Pronto" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 4000 : undefined}>

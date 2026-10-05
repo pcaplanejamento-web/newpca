@@ -2,7 +2,7 @@ import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { coerceFiltros, resumoVisao } from "@/lib/orcamento-visao";
-import { atualizarVisaoOrcamento, excluirVisaoOrcamento, getVisaoOrcamento } from "@/lib/pca-espaco";
+import { atualizarVisaoOrcamento, excluirVisaoOrcamento, getVisaoOrcamento, listarVisoesOrcamento } from "@/lib/pca-espaco";
 import { visaoOrcamentoSchema } from "@/lib/pca-espaco-validation";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,14 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (!id) return erro("ID inválido.");
   const antes = await getVisaoOrcamento(id);
   if (!antes) return erro("Visão não encontrada.", 404);
+  const usos = (await listarVisoesOrcamento()).find((v) => v.id === id)?.pcas ?? [];
   await excluirVisaoOrcamento(id);
-  await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "orcamento_visao", entidadeId: id, resumo: `Visão "${antes.nome}" excluída` });
+  await registrarAuditoria({
+    usuario: g.u,
+    acao: "excluir",
+    entidade: "orcamento_visao",
+    entidadeId: id,
+    resumo: `Visão "${antes.nome}" excluída${usos.length ? ` — ${usos.join("; ")} ${usos.length === 1 ? "passou" : "passaram"} ao orçamento inteiro` : ""}`,
+  });
   return ok();
 }

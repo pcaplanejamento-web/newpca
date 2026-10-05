@@ -55,7 +55,14 @@ export const DIMENSOES_VISAO = DIMENSOES_ORCAMENTO.filter((d) => !DO_VINCULO.has
 /** `{dimensão: valores[]}` — só as dimensões com seleção (só as da visão). */
 export type FiltrosVisao = Partial<Record<DimensaoVisao, string[]>>;
 
-export type VisaoOrcamento = { id: number; nome: string; filtros: FiltrosVisao; ordem: number };
+export type VisaoOrcamento = {
+  id: number;
+  nome: string;
+  filtros: FiltrosVisao;
+  ordem: number;
+  /** Os PCAs que usam a visão (nome · ano) — editar/excluir a visão muda o orçamento deles. */
+  pcas?: string[];
+};
 
 /** Linha mínima do orçamento que a visão filtra. */
 export type LinhaOrcamentoVisao = Partial<Record<DimensaoOrcamento, string | null>>;
@@ -138,4 +145,45 @@ export function resumoVisao(filtros: FiltrosVisao | null | undefined): string {
     return n > 0 ? [`${n} ${d.rotuloCurto}`] : [];
   });
   return partes.length ? partes.join(" · ") : "Todos os lançamentos";
+}
+
+/** Um valor da visão que o orçamento NÃO traz (por dimensão) — sobra de um QDD anterior, renomeado ou retirado. */
+export type AusentesVisao = { dimensao: DimensaoVisao; rotulo: string; valores: string[] }[];
+
+/**
+ * SINCRONIA visão × orçamento: os valores escolhidos na visão que NÃO existem nos lançamentos (comparados como o filtro
+ * compara — `norm`). Eles não casam nada: depois de reenviar o QDD, a dotação cairia em silêncio. Vazio = em dia.
+ */
+export function valoresAusentes(linhas: LinhaOrcamentoVisao[], filtros: FiltrosVisao | null | undefined): AusentesVisao {
+  const out: AusentesVisao = [];
+  for (const d of DIMENSOES_VISAO) {
+    const vals = filtros?.[d.key];
+    if (!vals?.length) continue;
+    const tem = new Set(linhas.map((l) => norm(valorDimensao(l, d.key))));
+    const fora = vals.filter((v) => !tem.has(norm(v)));
+    if (fora.length) out.push({ dimensao: d.key, rotulo: d.rotulo, valores: fora });
+  }
+  return out;
+}
+
+/** Total de valores ausentes. */
+export const contarAusentes = (a: AusentesVisao) => a.reduce((s, x) => s + x.valores.length, 0);
+
+/**
+ * Os filtros SEM os valores ausentes + as dimensões que ficariam VAZIAS (o que nelas era escolhido sumiu inteiro do
+ * orçamento — sem a dimensão, a visão passaria a pegar TODOS os valores dela; a tela avisa antes de gravar).
+ */
+export function semAusentes(filtros: FiltrosVisao, ausentes: AusentesVisao): { filtros: FiltrosVisao; esvaziadas: string[] } {
+  const out: FiltrosVisao = { ...filtros };
+  const esvaziadas: string[] = [];
+  for (const a of ausentes) {
+    const fora = new Set(a.valores.map(norm));
+    const ficam = (filtros[a.dimensao] ?? []).filter((v) => !fora.has(norm(v)));
+    if (ficam.length) out[a.dimensao] = ficam;
+    else {
+      delete out[a.dimensao];
+      esvaziadas.push(a.rotulo);
+    }
+  }
+  return { filtros: out, esvaziadas };
 }
