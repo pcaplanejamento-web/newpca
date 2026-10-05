@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.3.2",
+    data: "2026-10-05",
+    titulo: "Vínculo do orçamento mais simples",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "O editor do vínculo mostra só o que importa: as ações com a caixa, o total e as ações futuras numa linha; as de outros vínculos resumidas.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.3.1",
     data: "2026-10-05",
     titulo: "Vínculos do orçamento do PCA mais legíveis",

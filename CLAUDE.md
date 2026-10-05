@@ -2007,10 +2007,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de todo o orçamento (`fixo="cubo"`, sugestão pré-escolhida); **PDF** no cabeçalho (`BotaoAcao`, com Exportar): KPIs Total ·
   Vinculado · Sem vínculo e só DUAS tabelas — **Ações vinculadas** e **Ações sem vínculo** (Unidade do orçamento · Ação ·
   Dotação), cada uma com a linha **TOTAL** em destaque. Núcleo puro **`vinculos-unidade.ts`** (`vinculosDaLinha`,
-  `semVinculoPorAlvo`, `listaSemVinculo`, `blocosVinculosDaLinha` — testado). O editor separa a SELEÇÃO: a seção
-  **Unidades** (o lado fixo pela tela como valor estático — `CampoFixo` —, o outro num `SelectField`) e o cartão **Ações
-  deste vínculo** (cabeçalho com a caixa "todas", "n de m · R$" e "Incluir as demais ações" — ou a nota de quem já as leva;
-  as marcadas em `--accent-soft`; abaixo, "Em outros vínculos desta unidade" com cadeado), cada ação com o destino; botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`) (este vínculo · "vai para SIGLA" · "as demais" de outra unidade · "sem vínculo" em âmbar). A gravação
+  `semVinculoPorAlvo`, `listaSemVinculo`, `blocosVinculosDaLinha` — testado). O editor é MINIMALISTA: o lado fixo pela
+  tela vira um valor estático (`CampoFixo`) e, no banner da linha (`fixosNoContexto` — o acordeão e o título já dizem as
+  duas unidades), some; a lista **Ações n/m · R$** (caixa "todas"; desmarcada = esmaecida, o destino só quando vai a outro
+  vínculo), embaixo "Incluir ações futuras desta unidade" (= "as demais"; ou a nota de quem já as leva) e as de outros
+  vínculos numa linha só com cadeado ("Em outros vínculos: 2 em GGIM", a lista na dica); botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`) (este vínculo · "vai para SIGLA" · "as demais" de outra unidade · "sem vínculo" em âmbar). A gravação
   é a da aba Vínculos (`useGravacaoVinculos`, `OrcamentoVinculosAba.tsx`) → `router.refresh` (o orçamento do PCA recalcula)
   abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
