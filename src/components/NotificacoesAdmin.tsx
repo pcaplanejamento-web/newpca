@@ -43,16 +43,17 @@ function LinhaAviso({ item, canais, onChange }: { item: ItemCatalogoAviso; canai
         {item.soEmail ? (
           <span className="text-[12px] text-faint">—</span>
         ) : (
-          <Switch checked={canais.sino} onChange={(sino) => onChange({ ...canais, sino })} label={<span className="sr-only">{`Sino: ${item.rotulo}`}</span>} />
+          <Switch dica="Liga/desliga este aviso no sino (desligado, o aviso não existe)" checked={canais.sino} onChange={(sino) => onChange({ ...canais, sino })} label={<span className="sr-only">{`Sino: ${item.rotulo}`}</span>} />
         )}
       </div>
       <div className="flex items-center gap-2 sm:justify-center">
         <span className="w-28 text-[12px] text-muted sm:hidden">E-mail</span>
-        <Switch checked={canais.email && !semAviso} disabled={semAviso} onChange={(email) => onChange({ ...canais, email })} label={<span className="sr-only">{`E-mail: ${item.rotulo}`}</span>} />
+        <Switch dica="Também enviar este aviso por e-mail" checked={canais.email && !semAviso} disabled={semAviso} onChange={(email) => onChange({ ...canais, email })} label={<span className="sr-only">{`E-mail: ${item.rotulo}`}</span>} />
       </div>
       <div className="flex items-center gap-2 sm:justify-center">
         <span className="w-28 text-[12px] text-muted sm:hidden">Pode desligar</span>
         <Switch
+          dica="A pessoa pode desligar este e-mail no Perfil (desligado = obrigatório)"
           checked={canais.desligavel}
           disabled={semAviso || !canais.email}
           onChange={(desligavel) => onChange({ ...canais, desligavel })}
@@ -134,7 +135,7 @@ function AvisosAdmin() {
         </Ajuda>
         <div className="ml-auto flex gap-2">
           <Button variant="icon" size="sm" icon={<IconUndo className="h-4 w-4" />} onClick={restaurar} disabled={salvando} aria-label="Voltar ao padrão" title="Voltar ao padrão" />
-          <Button size="sm" icon={<IconSave className="h-4 w-4" />} loading={salvando} disabled={!alterado} onClick={() => gravar("PATCH")}>
+          <Button size="sm" icon={<IconSave className="h-4 w-4" />} loading={salvando} disabled={!alterado} onClick={() => gravar("PATCH")} title="Salvar as mudanças dos avisos">
             Salvar
           </Button>
         </div>
@@ -222,17 +223,17 @@ function LimpezaAdmin() {
   return (
     <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       {confirmacao}
-      <Switch checked={r.auto} onChange={(auto) => setR({ ...r, auto })} label="Limpar automaticamente" />
+      <Switch dica="O sistema apaga sozinho, a cada 5 minutos, o que passou dos prazos abaixo" checked={r.auto} onChange={(auto) => setR({ ...r, auto })} label="Limpar automaticamente" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <TextField label="Lidas ficam (dias)" type="number" inputMode="numeric" min={dmin} max={dmax} value={r.lidasDias} onChange={(e) => num("lidasDias", e.target.value)} />
         <TextField label="Não lidas ficam (dias)" type="number" inputMode="numeric" min={dmin} max={dmax} value={r.naoLidasDias} onChange={(e) => num("naoLidasDias", e.target.value)} />
         <TextField label="Máximo por pessoa" type="number" inputMode="numeric" min={tmin} max={tmax} value={r.teto} onChange={(e) => num("teto", e.target.value)} />
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="secondary" size="sm" icon={<IconLimpar className="h-4 w-4" />} loading={ocupado === "limpar"} disabled={!!ocupado} onClick={limparAgora}>
+        <Button variant="secondary" size="sm" icon={<IconLimpar className="h-4 w-4" />} loading={ocupado === "limpar"} disabled={!!ocupado} onClick={limparAgora} title="Apagar agora o que passou dos prazos (mesmo com a limpeza automática desligada)">
           Limpar agora
         </Button>
-        <Button className="ml-auto" size="sm" icon={<IconSave className="h-4 w-4" />} loading={ocupado === "salvar"} disabled={!!ocupado || !valido || JSON.stringify(r) === JSON.stringify(salvo)} onClick={salvar}>
+        <Button className="ml-auto" size="sm" icon={<IconSave className="h-4 w-4" />} loading={ocupado === "salvar"} disabled={!!ocupado || !valido || JSON.stringify(r) === JSON.stringify(salvo)} onClick={salvar} title="Salvar os prazos e a limpeza automática">
           Salvar
         </Button>
       </div>
@@ -285,7 +286,7 @@ function ComunicadoAdmin() {
         </div>
       </div>
       <div className="flex justify-end">
-        <Button size="sm" icon={<IconMegafone className="h-4 w-4" />} loading={enviando} disabled={titulo.trim().length < 3 || !linkOk} onClick={enviar}>
+        <Button size="sm" icon={<IconMegafone className="h-4 w-4" />} loading={enviando} disabled={titulo.trim().length < 3 || !linkOk} onClick={enviar} title="Enviar o comunicado ao sino das pessoas">
           Enviar
         </Button>
       </div>
@@ -359,9 +360,9 @@ function AlcanceAdmin() {
           onChange={setDias}
           ariaLabel="Período"
           options={[
-            { value: "7", label: "7 dias" },
-            { value: "30", label: "30 dias" },
-            { value: "90", label: "90 dias" },
+            { value: "7", label: "7 dias", dica: "Últimos 7 dias" },
+            { value: "30", label: "30 dias", dica: "Últimos 30 dias" },
+            { value: "90", label: "90 dias", dica: "Últimos 90 dias" },
           ]}
         />
         {dados && (
@@ -392,10 +393,10 @@ export function NotificacoesAdmin() {
         onChange={setAba}
         ariaLabel="Notificações"
         options={[
-          { value: "avisos", label: "Avisos" },
-          { value: "limpeza", label: "Limpeza" },
-          { value: "comunicado", label: "Comunicado", curto: "Comunic." },
-          { value: "alcance", label: "Alcance" },
+          { value: "avisos", label: "Avisos", dica: "Sino, e-mail e o que a pessoa pode desligar, por aviso" },
+          { value: "limpeza", label: "Limpeza", dica: "Quanto tempo os avisos ficam e a limpeza automática" },
+          { value: "comunicado", label: "Comunicado", curto: "Comunic.", dica: "Enviar um aviso a todos ou a grupos" },
+          { value: "alcance", label: "Alcance", dica: "Quantos avisos foram lidos e quanto tempo levou" },
         ]}
       />
       <div key={aba} className="animate-cat-morph">

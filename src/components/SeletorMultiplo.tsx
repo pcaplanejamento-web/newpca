@@ -53,6 +53,7 @@ export function SeletorMultiplo({
       <Dropdown
         papel="dialog"
         ariaLabel={rotulo}
+        title={`${rotulo}: escolher (busca, marcar todos, limpar)`}
         bloqueado={disabled}
         width={420}
         className="block w-full min-w-0"

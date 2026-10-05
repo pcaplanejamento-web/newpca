@@ -3550,6 +3550,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       escolhas (lidas só quando chega um aviso, cache de 10 min). Ao vivo, uma conferência a cada 5 min cobre o aviso a
       muitas pessoas (o comunicado — o ao vivo pinga até 25 por requisição). O visual dos tipos (ícone/cor/rótulo) é UM
       mapa — **`VISUAL_AVISO`** (`notificacoesVisual.ts`).
+  - **Verificação no navegador (Chromium, servidor simulado) — corrigido:** as ações do aviso FLUTUAM por cima (não roubam a
+    largura do título; no toque, numa linha embaixo) e o "+N parecidos" fica embaixo do texto (a barra de ações o cobria);
+    o "Desfazer" do limpar mora no SINO (`Caixa.limpar` + `Caixa.ocultos` — sobrevive ao painel fechar; antes, fechar o
+    painel apagava na hora); o **`Dropdown`** não fecha ao tocar num AVISO FLUTUANTE (`.avisos-flutuantes` — a confirmação
+    e o "Desfazer" nascem de dentro do painel); voltar à janela/trocar de tela busca o aviso NOVO (prévia), não só o número
+    (`recontar` = `conferirNovo` com 15 s de intervalo). **Toda ação tem a DICA ao passar o mouse:** `Segmented.dica`,
+    `Switch.dica`, `title` no `GatilhoFiltro` ("Filtrar e ordenar: …"), na `Ajuda` e no `SeletorMultiplo` suspenso; no sino,
+    o aviso inteiro (título, texto, data e "Clique para abrir"), as ações, as pílulas de adiar/silenciar e o rodapé.
   - Testes: `tests/notificacoes.test.ts` (catálogo/config, prefs, validação, dia/hora relativa/repetidos/título, canal ao
     vivo, gravação com `returning`, exclusão + dispensa e retenção no driver D1 real, mescla, resumo/silêncio/silenciar,
     retenção do ADM, descadastro assinado, e-mail resumo, a fila com `email_apos`) + `tests/resend-email.test.ts` (reserva

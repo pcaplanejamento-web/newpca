@@ -24,6 +24,7 @@ export function Ajuda({
   return (
     <Dropdown
       ariaLabel={`${rotulo}: ${titulo}`}
+      title={`${rotulo}: ${titulo}`}
       align={compacta ? "start" : "end"}
       width={compacta ? 300 : 360}
       triggerClassName={

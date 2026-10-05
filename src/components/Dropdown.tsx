@@ -106,6 +106,8 @@ export function Dropdown({
     // `pointerdown` (não `mousedown`): no toque (iOS) tocar numa área vazia não gera evento de mouse — o painel não fechava.
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
+      // Os AVISOS FLUTUANTES (a confirmação, o "Desfazer") nascem de dentro do painel: tocá-los não o fecha.
+      if ((t as Element).closest?.(".avisos-flutuantes")) return;
       if (!triggerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
     // Esc fecha SÓ o painel: tratado na CAPTURA (antes do Modal em volta) e marcado como consumido — o Modal ignora. O

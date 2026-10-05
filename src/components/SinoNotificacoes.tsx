@@ -82,11 +82,12 @@ function Acao({ rotulo, onClick, children, perigo = false, ativo = false }: { ro
 }
 
 /** Uma opção curta (pílula) da linha de ADIAR/SILENCIAR que abre embaixo do aviso. */
-function Pilula({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+function Pilula({ children, onClick, dica }: { children: ReactNode; onClick: () => void; dica: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={dica}
       className="min-h-8 rounded-control border border-border-2 bg-surface px-2.5 text-[12px] font-semibold text-text-2 transition-colors hover:border-accent hover:text-accent pointer-coarse:min-h-11"
     >
       {children}
@@ -129,11 +130,12 @@ export function ItemNotificacao({
   const podeSilenciar = onSilenciar && (n.tarefaId != null || n.quadroId != null);
   return (
     <div className="animate-fade-in-up" style={{ animationDelay: `${Math.min(ordem, 10) * 25}ms` }}>
-      <div className="group/aviso relative flex items-start gap-2.5 rounded-control px-2 py-1.5 transition-colors focus-within:bg-surface-2 hover:bg-surface-2">
+      <div className="group/aviso relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2.5 rounded-control px-2 py-1.5 transition-colors focus-within:bg-surface-2 hover:bg-surface-2">
         <button
           type="button"
           data-aviso={n.id}
           onClick={() => onAbrir(n)}
+          title={`${n.titulo}${n.texto ? ` — ${n.texto}` : ""}\n${dataHoraCompleta(n.criadoEm)}${n.link ? "\nClique para abrir" : ""}`}
           className="absolute inset-0 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span className="sr-only">
@@ -143,53 +145,51 @@ export function ItemNotificacao({
           </span>
         </button>
         <MarcaAviso n={n} />
-        <span className="pointer-events-none min-w-0 flex-1" aria-hidden="true">
+        <span className="pointer-events-none min-w-0" aria-hidden="true">
           <span className={`line-clamp-2 block text-[13px] leading-snug ${n.lida ? "text-text-2" : "font-semibold text-text"}`}>{n.titulo}</span>
           {n.texto && <span className="mt-0.5 line-clamp-1 block text-[12px] text-muted">{n.texto}</span>}
-          <span className="mt-0.5 block text-[11px] text-faint" title={dataHoraCompleta(n.criadoEm)}>
-            {tempoRelativo(n.criadoEm, agora)}
-          </span>
+          <span className="mt-0.5 block text-[11px] text-faint">{tempoRelativo(n.criadoEm, agora)}</span>
         </span>
-        <span className="relative z-10 flex shrink-0 flex-col items-end gap-1">
-          <span
-            className={`flex items-center transition-opacity group-focus-within/aviso:opacity-100 group-hover/aviso:opacity-100 pointer-coarse:opacity-100 ${menu ? "opacity-100" : "opacity-0"}`}
+        <span className="relative z-10 flex flex-col items-end gap-1 pt-1.5">
+          {!n.lida && <span className="h-2 w-2 rounded-full bg-accent" title="Não lida" aria-hidden="true" />}
+        </span>
+        {outros.length > 0 && onExpandir && (
+          <button
+            type="button"
+            onClick={onExpandir}
+            aria-expanded={expandido}
+            title={expandido ? "Recolher os parecidos" : `Ver mais ${outros.length} aviso${outros.length === 1 ? "" : "s"} parecido${outros.length === 1 ? "" : "s"}`}
+            aria-label={`${outros.length} parecidos — ${expandido ? "recolher" : "ver"}`}
+            className="relative z-10 col-start-2 mt-1 inline-flex min-h-7 items-center gap-0.5 justify-self-start rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-text-2 ring-1 ring-border hover:bg-accent-soft hover:text-accent pointer-coarse:min-h-11"
           >
-            {onLida && (
-              <Acao rotulo={n.lida ? "Marcar como não lida" : "Marcar como lida"} onClick={() => onLida(n, !n.lida)}>
-                {n.lida ? <IconNaoLida className="h-4 w-4" /> : <IconLidas className="h-4 w-4" />}
-              </Acao>
-            )}
-            {onAdiar && (
-              <Acao rotulo="Adiar" ativo={menu === "adiar"} onClick={() => setMenu((m) => (m === "adiar" ? null : "adiar"))}>
-                <IconAdiar className="h-4 w-4" />
-              </Acao>
-            )}
-            {podeSilenciar && (
-              <Acao rotulo="Silenciar" ativo={menu === "silenciar"} onClick={() => setMenu((m) => (m === "silenciar" ? null : "silenciar"))}>
-                <IconSemAvisos className="h-4 w-4" />
-              </Acao>
-            )}
-            {onExcluir && (
-              <Acao rotulo="Excluir" perigo onClick={() => onExcluir(n)}>
-                <IconTrash className="h-4 w-4" />
-              </Acao>
-            )}
-          </span>
-          <span className="flex items-center gap-1">
-            {outros.length > 0 && onExpandir && (
-              <button
-                type="button"
-                onClick={onExpandir}
-                aria-expanded={expandido}
-                aria-label={`${outros.length} parecidos — ${expandido ? "recolher" : "ver"}`}
-                className="inline-flex min-h-7 items-center gap-0.5 rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-text-2 hover:bg-accent-soft hover:text-accent pointer-coarse:min-h-11"
-              >
-                +{outros.length}
-                <IconChevronDown className={`h-3 w-3 transition-transform ${expandido ? "rotate-180" : ""}`} />
-              </button>
-            )}
-            {!n.lida && <span className="mr-3 h-2 w-2 rounded-full bg-accent" aria-hidden="true" />}
-          </span>
+            +{outros.length} parecido{outros.length === 1 ? "" : "s"}
+            <IconChevronDown className={`h-3 w-3 transition-transform ${expandido ? "rotate-180" : ""}`} />
+          </button>
+        )}
+        {/* As AÇÕES flutuam por cima (não roubam a largura do texto); no toque, ficam numa linha embaixo. */}
+        <span
+          className={`absolute top-1 right-1 z-20 flex items-center rounded-control bg-surface-2 shadow-soft ring-1 ring-border transition-opacity group-focus-within/aviso:opacity-100 group-hover/aviso:opacity-100 pointer-coarse:static pointer-coarse:col-start-2 pointer-coarse:col-end-4 pointer-coarse:mt-1 pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none pointer-coarse:ring-0 ${menu ? "opacity-100" : "pointer-events-none opacity-0 group-focus-within/aviso:pointer-events-auto group-hover/aviso:pointer-events-auto pointer-coarse:pointer-events-auto"}`}
+        >
+          {onLida && (
+            <Acao rotulo={n.lida ? "Marcar como não lida" : "Marcar como lida"} onClick={() => onLida(n, !n.lida)}>
+              {n.lida ? <IconNaoLida className="h-4 w-4" /> : <IconLidas className="h-4 w-4" />}
+            </Acao>
+          )}
+          {onAdiar && (
+            <Acao rotulo="Adiar (lembrar depois)" ativo={menu === "adiar"} onClick={() => setMenu((m) => (m === "adiar" ? null : "adiar"))}>
+              <IconAdiar className="h-4 w-4" />
+            </Acao>
+          )}
+          {podeSilenciar && (
+            <Acao rotulo="Silenciar a tarefa ou o quadro" ativo={menu === "silenciar"} onClick={() => setMenu((m) => (m === "silenciar" ? null : "silenciar"))}>
+              <IconSemAvisos className="h-4 w-4" />
+            </Acao>
+          )}
+          {onExcluir && (
+            <Acao rotulo="Excluir" perigo onClick={() => onExcluir(n)}>
+              <IconTrash className="h-4 w-4" />
+            </Acao>
+          )}
         </span>
       </div>
       {menu && (
@@ -198,6 +198,7 @@ export function ItemNotificacao({
             ? opcoesAdiar(agora).map((o) => (
                 <Pilula
                   key={o.rotulo}
+                  dica={`Lembrar ${o.rotulo === "Amanhã 8h" ? "amanhã às 8h" : `daqui a ${o.rotulo}`} — some do sino até lá`}
                   onClick={() => {
                     setMenu(null);
                     onAdiar(n, o.em);
@@ -216,6 +217,7 @@ export function ItemNotificacao({
                 .map(([alvo, rotulo]) => (
                   <Pilula
                     key={alvo}
+                    dica={alvo === "tarefa" ? "Parar os avisos desta tarefa (atribuição e menção continuam)" : "Parar os avisos deste quadro (atribuição e menção continuam)"}
                     onClick={() => {
                       setMenu(null);
                       onSilenciar?.(n, alvo);
@@ -236,6 +238,10 @@ type Caixa = {
   setNaoLidas: (n: number | ((n: number) => number)) => void;
   /** Muda a cada aviso AO VIVO — o painel aberto recarrega. */
   versao: number;
+  /** Os avisos que estão SAINDO (limpos com o "Desfazer" valendo, excluídos, adiados) — sobrevivem ao painel fechar. */
+  ocultos: { current: Set<number> };
+  /** LIMPAR com Desfazer: a tela tira na hora; o banco só é limpo ao fim do prazo (ou ao sair da página). */
+  limpar: (alvo: "lidas" | "todas", ids: number[], contagemAntes: number, aoDesfazer: () => void) => void;
 };
 
 /**
@@ -265,8 +271,8 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
     return () => window.clearInterval(t);
   }, []);
 
-  /** Os avisos que a tela está LIMPANDO (o "Desfazer" ainda vale) — uma recarga não os traz de volta. */
-  const ocultos = useRef<Set<number>>(new Set());
+  /** Os avisos que a tela está tirando (o "Desfazer" ainda vale) — uma recarga não os traz de volta. */
+  const { ocultos } = caixa;
   /** `antes` = a próxima página (rolagem); `mesclar` = a 1ª página por cima da lista (o aviso ao vivo). */
   const pagina = useCallback(
     async (antes?: number, mesclar = false) => {
@@ -366,56 +372,13 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
     }
   };
 
-  // LIMPAR com Desfazer: tira da tela na hora e só limpa o banco ao fim do prazo (ou ao sair da página — `keepalive`).
-  const pendente = useRef<{ alvo: "lidas" | "todas"; timer: number } | null>(null);
-  const enviarLimpeza = useCallback((alvo: "lidas" | "todas", keepalive = false) => {
-    void fetch("/api/notificacoes", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limpar: alvo }), keepalive }).catch(() => {});
-  }, []);
-  useEffect(() => {
-    const aoSair = () => {
-      if (pendente.current) {
-        window.clearTimeout(pendente.current.timer);
-        enviarLimpeza(pendente.current.alvo, true);
-        pendente.current = null;
-      }
-    };
-    window.addEventListener("pagehide", aoSair);
-    return () => {
-      window.removeEventListener("pagehide", aoSair);
-      aoSair();
-    };
-  }, [enviarLimpeza]);
-
   const limpar = async (alvo: "lidas" | "todas") => {
     if (!itens) return;
     if (alvo === "todas" && !(await confirmar({ titulo: "Limpar todas as notificações?", texto: "Elas saem do sino e do banco de dados.", confirmar: "Limpar tudo", perigo: true }))) return;
-    if (pendente.current) {
-      window.clearTimeout(pendente.current.timer);
-      enviarLimpeza(pendente.current.alvo);
-    }
     const antes = itens;
-    const contagemAntes = caixa.naoLidas;
     const saem = itens.filter((x) => alvo === "todas" || x.lida).map((x) => x.id);
-    for (const id of saem) ocultos.current.add(id);
     sair(saem);
-    if (alvo === "todas") setNaoLidas(0);
-    const timer = window.setTimeout(() => {
-      enviarLimpeza(alvo);
-      pendente.current = null;
-    }, DESFAZER_MS);
-    pendente.current = { alvo, timer };
-    toast.desfazer(
-      alvo === "todas" ? "Notificações limpas." : "Notificações lidas limpas.",
-      () => {
-        if (!pendente.current) return;
-        window.clearTimeout(pendente.current.timer);
-        pendente.current = null;
-        for (const id of saem) ocultos.current.delete(id);
-        setItens(antes);
-        setNaoLidas(contagemAntes);
-      },
-      DESFAZER_MS,
-    );
+    caixa.limpar(alvo, saem, caixa.naoLidas, () => setItens(antes));
   };
 
   const marcarTodas = async () => {
@@ -493,8 +456,8 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
             }}
             ariaLabel="Quais notificações"
             options={[
-              { value: "todas", label: "Todas" },
-              { value: "nao-lidas", label: caixa.naoLidas ? `Não lidas (${caixa.naoLidas > 99 ? "99+" : caixa.naoLidas})` : "Não lidas" },
+              { value: "todas", label: "Todas", dica: "Todas as notificações" },
+              { value: "nao-lidas", label: caixa.naoLidas ? `Não lidas (${caixa.naoLidas > 99 ? "99+" : caixa.naoLidas})` : "Não lidas", dica: "Só as que você ainda não leu" },
             ]}
           />
         </div>
@@ -580,10 +543,10 @@ function PainelNotificacoes({ caixa, fechar, configurarHref, semTitulo = false }
         <Acao rotulo="Marcar todas como lidas" onClick={() => void marcarTodas()}>
           <IconLidas className="h-4 w-4" />
         </Acao>
-        <Acao rotulo="Limpar as lidas" onClick={() => void limpar("lidas")}>
+        <Acao rotulo="Limpar as lidas (apaga do sistema)" onClick={() => void limpar("lidas")}>
           <IconLimpar className="h-4 w-4" />
         </Acao>
-        <Acao rotulo="Limpar tudo" perigo onClick={() => void limpar("todas")}>
+        <Acao rotulo="Limpar tudo (apaga do sistema — dá para desfazer)" perigo onClick={() => void limpar("todas")}>
           <IconTrash className="h-4 w-4" />
         </Acao>
         <span className="ml-auto pr-1 text-[11px] text-faint">{caixa.naoLidas ? `${caixa.naoLidas > 99 ? "99+" : caixa.naoLidas} não lida${caixa.naoLidas === 1 ? "" : "s"}` : ""}</span>
@@ -654,16 +617,11 @@ function useCaixa(inicial: number) {
     }
   }, [alertasDoAparelho]);
 
-  const recontar = useCallback(async (forcar = false) => {
-    if (!forcar && Date.now() - contadaEm.current < 15_000) return;
-    contadaEm.current = Date.now();
-    try {
-      const j = await chamar<{ naoLidas: number }>("/api/notificacoes?contar=1");
-      setNaoLidas(j.naoLidas);
-    } catch {
-      /* fica o último número */
-    }
-  }, []);
+  /** Confere de novo (o número + o aviso mais recente) — no máximo a cada 15 s (trocar de tela e voltar à janela). */
+  const recontar = useCallback(() => {
+    if (Date.now() - contadaEm.current < 15_000) return;
+    void conferirNovo();
+  }, [conferirNovo]);
 
   // O canal AO VIVO (reconecta com espera crescente; a caixa responde ao "ping" sem acordar).
   useEffect(() => {
@@ -713,10 +671,10 @@ function useCaixa(inicial: number) {
   // Sem o canal: reconta ao trocar de tela, ao voltar à janela e a cada 60 s com a aba à vista.
   // biome-ignore lint/correctness/useExhaustiveDependencies: dispara pela troca de tela.
   useEffect(() => {
-    if (!aoVivo) void recontar();
+    if (!aoVivo) recontar();
   }, [pathname]);
   useEffect(() => {
-    const aoVoltar = () => document.visibilityState === "visible" && void (aoVivo ? conferirNovo() : recontar());
+    const aoVoltar = () => document.visibilityState === "visible" && recontar();
     document.addEventListener("visibilitychange", aoVoltar);
     // Ao vivo, uma conferência a cada 5 min cobre o aviso enviado a muitas pessoas de uma vez (o comunicado).
     const t = window.setInterval(() => document.visibilityState === "visible" && void conferirNovo(), aoVivo ? 300_000 : 60_000);
@@ -735,7 +693,55 @@ function useCaixa(inicial: number) {
     return () => window.clearTimeout(t);
   }, [naoLidas, pathname]);
 
-  return { caixa: { naoLidas, setNaoLidas, versao } as Caixa, aoVivo, novo, fecharNovo: () => setNovo(null), toque };
+  const ocultos = useRef<Set<number>>(new Set());
+  const pendente = useRef<{ alvo: "lidas" | "todas"; ids: number[]; timer: number } | null>(null);
+  const enviarLimpeza = useCallback((alvo: "lidas" | "todas", keepalive = false) => {
+    void fetch("/api/notificacoes", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limpar: alvo }), keepalive }).catch(() => {});
+  }, []);
+  // A limpeza pendente vai ao banco se a pessoa sai da página antes do fim do prazo.
+  useEffect(() => {
+    const aoSair = () => {
+      if (!pendente.current) return;
+      window.clearTimeout(pendente.current.timer);
+      enviarLimpeza(pendente.current.alvo, true);
+      pendente.current = null;
+    };
+    window.addEventListener("pagehide", aoSair);
+    return () => window.removeEventListener("pagehide", aoSair);
+  }, [enviarLimpeza]);
+  const limpar = useCallback(
+    (alvo: "lidas" | "todas", ids: number[], contagemAntes: number, aoDesfazer: () => void) => {
+      // Uma limpeza ainda pendente vai já (a nova a substitui).
+      if (pendente.current) {
+        window.clearTimeout(pendente.current.timer);
+        enviarLimpeza(pendente.current.alvo);
+      }
+      for (const id of ids) ocultos.current.add(id);
+      if (alvo === "todas") setNaoLidas(0);
+      const timer = window.setTimeout(() => {
+        enviarLimpeza(alvo);
+        pendente.current = null;
+      }, DESFAZER_MS);
+      pendente.current = { alvo, ids, timer };
+      toast.desfazer(
+        alvo === "todas" ? "Notificações limpas." : "Notificações lidas limpas.",
+        () => {
+          if (!pendente.current || pendente.current.timer !== timer) return;
+          window.clearTimeout(timer);
+          pendente.current = null;
+          for (const id of ids) ocultos.current.delete(id);
+          setNaoLidas(contagemAntes);
+          aoDesfazer();
+          // O painel aberto (ou o próximo) volta a mostrar o que foi devolvido.
+          setVersao((v) => v + 1);
+        },
+        DESFAZER_MS,
+      );
+    },
+    [enviarLimpeza],
+  );
+
+  return { caixa: { naoLidas, setNaoLidas, versao, ocultos, limpar } as Caixa, aoVivo, novo, fecharNovo: () => setNovo(null), toque };
 }
 
 /**

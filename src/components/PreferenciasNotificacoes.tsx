@@ -162,10 +162,11 @@ export function PreferenciasNotificacoes({ googleEmail }: { googleEmail?: string
           />
         </Linha>
         <Linha icone={<IconSom className="h-4 w-4" />} rotulo="Som">
-          <Switch checked={pessoa.som} onChange={(som) => mudar({ pessoa: { ...pessoa, som } }, true)} label={<span className="sr-only">Tocar um som no aviso novo</span>} />
+          <Switch dica="Tocar um som curto quando chega um aviso novo" checked={pessoa.som} onChange={(som) => mudar({ pessoa: { ...pessoa, som } }, true)} label={<span className="sr-only">Tocar um som no aviso novo</span>} />
         </Linha>
         <Linha icone={<IconAlertaSistema className="h-4 w-4" />} rotulo="Alerta do sistema">
           <Switch
+            dica="Mostrar o alerta do Windows/celular quando chega um aviso e a aba está em segundo plano"
             checked={pessoa.sistema && permissao === "granted"}
             disabled={permissao === "indisponivel"}
             onChange={ligarSistema}
@@ -200,9 +201,9 @@ export function PreferenciasNotificacoes({ googleEmail }: { googleEmail?: string
               ariaLabel="Como receber por e-mail"
               onChange={(m) => mudar({ email: m === "desligado" ? { ...email, ligado: false } : { ...email, ligado: true, modo: m } }, true)}
               options={[
-                { value: "imediato", label: "Imediato" },
-                { value: "resumo", label: "Resumo diário", curto: "Resumo" },
-                { value: "desligado", label: "Desligado", curto: "Não" },
+                { value: "imediato", label: "Imediato", dica: "Cada aviso chega no seu e-mail na hora" },
+                { value: "resumo", label: "Resumo diário", curto: "Resumo", dica: "Um e-mail por dia, no horário escolhido, com todos os avisos juntos" },
+                { value: "desligado", label: "Desligado", curto: "Não", dica: "Nenhum e-mail (os obrigatórios continuam)" },
               ]}
             />
             {modo === "resumo" && (
@@ -220,6 +221,7 @@ export function PreferenciasNotificacoes({ googleEmail }: { googleEmail?: string
           {modo === "imediato" && (
             <Linha icone={<IconSemAvisos className="h-4 w-4" />} rotulo="Silêncio">
               <Switch
+                dica="Segurar os e-mails num horário (ex.: à noite) — saem quando o silêncio acaba"
                 checked={!!email.silencio}
                 onChange={(on) => mudar({ email: { ...email, silencio: on ? { inicio: "20:00", fim: "07:00" } : null } }, true)}
                 label={<span className="sr-only">Horário de silêncio do e-mail</span>}
@@ -239,8 +241,8 @@ export function PreferenciasNotificacoes({ googleEmail }: { googleEmail?: string
                 ariaLabel="Onde receber os e-mails"
                 onChange={(destino) => mudar({ email: { ...email, destino } }, true)}
                 options={[
-                  { value: "institucional", label: "Institucional" },
-                  { value: "google", label: "Google" },
+                  { value: "institucional", label: "Institucional", dica: "No seu e-mail institucional" },
+                  { value: "google", label: "Google", dica: "Na conta Google vinculada" },
                 ]}
               />
             </Linha>

@@ -19,7 +19,7 @@ export function Segmented<T extends string>({
   ariaLabel,
 }: {
   value: T;
-  options: { value: T; label: string; icone?: ReactNode; soIcone?: boolean; curto?: string }[];
+  options: { value: T; label: string; icone?: ReactNode; soIcone?: boolean; curto?: string; /** A dica ao passar o mouse (o que a opção faz). */ dica?: string }[];
   onChange: (v: T) => void;
   className?: string;
   /** Desabilita a interação (ex.: banner de edição travado). */
@@ -43,7 +43,7 @@ export function Segmented<T extends string>({
             role="tab"
             aria-selected={active}
             aria-label={o.soIcone ? o.label : undefined}
-            title={o.soIcone ? o.label : undefined}
+            title={o.dica ?? (o.soIcone ? o.label : undefined)}
             disabled={disabled}
             onClick={() => onChange(o.value)}
             className={`relative inline-flex h-[38px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-chip text-[13px] font-medium transition-colors duration-[var(--motion-duration)] after:absolute after:inset-x-0 after:-inset-y-[3px] after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-default disabled:opacity-60 lg:h-[calc(var(--h-control-sm)-6px)] ${
