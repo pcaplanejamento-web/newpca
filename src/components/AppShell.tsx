@@ -8,6 +8,7 @@ import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
+import { VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
@@ -449,6 +450,7 @@ export function AppShell({
         </div>
         <div className="p-2 pt-0">
           <UserMenu usuario={usuario} />
+          <VersaoSistema />
         </div>
       </aside>
 
@@ -479,6 +481,7 @@ export function AppShell({
             </div>
             <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
               <UserMenu usuario={usuario} onNavigate={fecharMenu} />
+              <VersaoSistema onNavigate={fecharMenu} />
             </div>
           </aside>
         </div>

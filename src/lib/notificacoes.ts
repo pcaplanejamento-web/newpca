@@ -9,6 +9,7 @@ import { dataIsoBrasilia } from "./format";
 import { podeNaTela } from "./papeis-core";
 import { nomeExibicao, urlFoto } from "./pessoa";
 import { avisoVersaoExtensao } from "./automacao-centi-core";
+import { avisoNovaVersao } from "./versoes";
 import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
 import { agendarAoVivo, avisarAoVivo } from "./notificacoes-ao-vivo";
@@ -299,8 +300,9 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
   }
 }
 
-/** NOVA VERSÃO da extensão da Automação (Centi): um aviso por versão a cada Administrador (a chave dedup). */
-const versaoDerivar = (u: UsuarioSessao): NovaNotificacao[] => (u.admin ? [avisoVersaoExtensao(u.id)] : []);
+/** NOVA VERSÃO do sistema (com o que mudou) e da extensão da Automação (Centi): um aviso por versão a cada
+ * Administrador (a chave dedup — limpo, não volta). */
+const versaoDerivar = (u: UsuarioSessao): NovaNotificacao[] => (u.admin ? [avisoNovaVersao(u.id), avisoVersaoExtensao(u.id)] : []);
 
 /** No máximo uma derivação por pessoa a cada tanto (por isolate do Worker) — a contagem do sino não refaz o trabalho. */
 const INTERVALO_DERIVAR = 5 * 60_000;

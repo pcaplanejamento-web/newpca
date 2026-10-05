@@ -11,6 +11,7 @@ import {
   IconEventoAlterado,
   IconLayers,
   IconMegafone,
+  IconNovidades,
   IconMencao,
   IconPrazo,
   IconRobo,
@@ -35,6 +36,7 @@ export const VISUAL_AVISO: Record<TipoNotificacao | "acesso", { Icone: Component
   pca: { Icone: IconLayers, cor: "var(--info)", rotulo: "PCA" },
   centi: { Icone: IconRobo, cor: "var(--accent)", rotulo: "Centi" },
   comunicado: { Icone: IconMegafone, cor: "var(--accent)", rotulo: "Comunicados" },
+  versao: { Icone: IconNovidades, cor: "var(--accent)", rotulo: "Versões" },
   cadastro: { Icone: IconCadastro, cor: "var(--accent)", rotulo: "Cadastros" },
   acesso: { Icone: IconCadastro, cor: "var(--ok)", rotulo: "Acesso liberado" },
 };

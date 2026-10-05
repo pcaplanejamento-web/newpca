@@ -18,7 +18,9 @@ import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
-import { type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
+import { DicaFlutuante } from "@/components/DicaFlutuante";
+import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
+import { vinculosDaLinha } from "@/lib/vinculos-unidade";
 import { unidadesDoOrcamento } from "@/lib/orcamento-vinculo";
 import type { VisaoOrcamento } from "@/lib/orcamento-visao";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
@@ -211,6 +213,8 @@ import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
+import { CartaoVersao, VersaoSistema } from "@/components/Novidades";
+import { VERSOES } from "@/lib/versoes";
 import { PainelPendencias } from "@/components/PainelPendencias";
 import { PreviaDocumento } from "@/components/PreviaDocumento";
 import { BotaoAcao } from "@/components/BotaoAcao";
@@ -1101,11 +1105,18 @@ function VinculosDaUnidadeDemo() {
       <Button size="sm" variant="secondary" onClick={() => setUnidade({ id: null, sigla: "Sem vínculo", nome: "" })}>
         Linha “Sem vínculo”
       </Button>
+      {/* DicaFlutuante + ResumoSemVinculo: o "N sem vínculo" da linha — com o mouse, a lista organizada por unidade. */}
+      <DicaFlutuante conteudo={<ResumoSemVinculo titulo="Sem vínculo" lista={vinculosDaLinha(unidades, [], null).semVinculo} />}>
+        <Button size="sm" variant="ghost">
+          3 sem vínculo (passe o mouse)
+        </Button>
+      </DicaFlutuante>
       <VinculosDaUnidade
         unidade={unidade}
         unidades={unidades}
         vinculos={vinculos}
         alvos={alvos}
+        orcamento="CUBO 2027 (2027)"
         onCriar={ok}
         onEditar={ok}
         onExcluir={ok}
@@ -2975,6 +2986,15 @@ export function Catalogo() {
               <span className="w-full truncate text-center text-[9px] text-faint">{nome.replace("Icon", "")}</span>
             </div>
           ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="Versão do sistema (VersaoSistema — fim do menu) · Novidades (CartaoVersao)">
+        <div className="space-y-3">
+          <div className="w-64 rounded-card border border-border bg-surface p-2">
+            <VersaoSistema />
+          </div>
+          <CartaoVersao v={VERSOES[0]} atual destaque />
         </div>
       </Secao>
 

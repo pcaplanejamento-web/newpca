@@ -147,7 +147,10 @@ export function ItemNotificacao({
         <MarcaAviso n={n} />
         <span className="pointer-events-none min-w-0" aria-hidden="true">
           <span className={`line-clamp-2 block text-[13px] leading-snug ${n.lida ? "text-text-2" : "font-semibold text-text"}`}>{n.titulo}</span>
-          {n.texto && <span className="mt-0.5 line-clamp-1 block text-[12px] text-muted">{n.texto}</span>}
+          {n.texto && (
+            // A versão nova traz a LISTA do que mudou (uma linha por mudança).
+            <span className={`mt-0.5 block text-[12px] text-muted ${n.tipo === "versao" ? "line-clamp-4 whitespace-pre-line" : "line-clamp-1"}`}>{n.texto}</span>
+          )}
           <span className="mt-0.5 block text-[11px] text-faint">{tempoRelativo(n.criadoEm, agora)}</span>
         </span>
         <span className="relative z-10 flex flex-col items-end gap-1 pt-1.5">
