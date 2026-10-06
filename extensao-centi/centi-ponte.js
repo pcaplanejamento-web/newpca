@@ -73,7 +73,7 @@
     }
     if (msg?.alvo !== "centi") return false;
     // A TELA PROTOCOLO é operada AQUI (mundo isolado, centi-tela.js) pela própria interface — só leitura.
-    if (msg.acao === "telaDepartamentos" || msg.acao === "telaEmAnalise" || msg.acao === "telaEmitir") {
+    if (msg.acao === "telaDepartamentos" || msg.acao === "telaEmAnalise" || msg.acao === "telaEmitir" || msg.acao === "telaPlanejamentos") {
       const t = globalThis.__pcaCentiTela;
       // `pagina` = a captura da emissão no script da página (o PDF que a própria Centi gera).
       if (!t) responder({ ok: false, erro: "Peça da Tela Protocolo ausente — atualize a extensão e aperte F5 na aba." });

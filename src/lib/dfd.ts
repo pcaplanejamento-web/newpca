@@ -85,6 +85,8 @@ export type DfdResumo = {
   anoPca: number | null;
   /** Prioridade da seção PRIORIDADE, normalizada (ALTA/MÉDIA/BAIXA; `null` = ausente ou fora do padrão) — coluna da Mesa. */
   prioridade: Prioridade | null;
+  /** Situação do planejamento na Centi (CM002 — "Executado", "Cancelado"…), lida pela Automação; null = não verificado. */
+  execucaoCenti: string | null;
   /** Responsável do protocolo de origem — o filtro de responsável da Mesa vale também para DFDs/itens. */
   protocoloResponsavelId: number | null;
   /** Mesa do PCA (migração `0034`): o PCA para onde o protocolo de origem foi enviado e quando foi
@@ -220,6 +222,7 @@ const colunasDfd = {
   protocoloAnoPca: dfdProtocolos.anoPca,
   anoPca: dfds.anoPca,
   prioridadeTexto: prioridadeTextoSql,
+  execucaoCenti: dfds.execucaoCenti,
   protocoloResponsavelId: dfdProtocolos.responsavelId,
   numeroContrato: dfds.numeroContrato,
   numeroAta: dfds.numeroAta,

@@ -438,6 +438,9 @@ export const dfds = sqliteTable(
     assinaturas: text("assinaturas"), // JSON: Assinatura[] (assinaturas digitais do DFD)
     nomeArquivo: text("nome_arquivo"),
     totalItens: integer("total_itens").default(0),
+    // Situação do planejamento na Centi (CM002), lida pela Automação "Verificar execução" (migração `0089`).
+    execucaoCenti: text("execucao_centi"),
+    execucaoCentiEm: text("execucao_centi_em"),
     criadoPor: integer("criado_por").references(() => usuarios.id, {
       onDelete: "set null",
     }),

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { CelulaExecucao } from "./CelulaExecucao";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import {
   ASSINATURA_ROTULO,
@@ -65,6 +66,8 @@ export type LinhaDfd = {
   pca?: PcaDaLinha | null;
   /** Prioridade da seção do DFD (ALTA/MÉDIA/BAIXA; `null` = ausente/fora do padrão; ausente = sem a coluna). */
   prioridade?: string | null;
+  /** Situação do planejamento na Centi (CM002); undefined = a tela não traz a coluna. */
+  execucao?: string | null;
 };
 
 /** O PCA de uma linha (protocolo, DFD ou item): o ano + o nome do PCA cadastrado (a dica). */
@@ -178,6 +181,7 @@ export function PlanilhaDfds({
   // PCA e Prioridade: a coluna aparece quando a tela as informa (mesmo que vazias em alguma linha).
   const temPca = linhas.some((l) => l.pca !== undefined);
   const temPrioridade = linhas.some((l) => l.prioridade !== undefined);
+  const temExecucao = linhas.some((l) => l.execucao != null);
 
   const colEstado: Column<LinhaDfd>[] = semEstado
     ? []
@@ -271,6 +275,18 @@ export function PlanilhaDfds({
             nowrap: true,
             value: (r: LinhaDfd) => r.prioridade ?? "—",
             render: (r: LinhaDfd) => <CelulaPrioridade prioridade={r.prioridade} />,
+          },
+        ]
+      : []),
+    ...(temExecucao
+      ? [
+          {
+            key: "execucao",
+            header: "Execução",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: LinhaDfd) => r.execucao ?? "Não verificado",
+            render: (r: LinhaDfd) => <CelulaExecucao situacao={r.execucao} />,
           },
         ]
       : []),

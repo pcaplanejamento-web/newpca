@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.19.0",
+    data: "2026-10-06",
+    titulo: "Execução dos DFDs pela Centi (CM002)",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Tarefa “Verificar execução dos DFDs (CM002)”: a extensão lê a Situação de cada planejamento na tela CM002 da Centi (ID = nº de planejamento) e grava em cada DFD — Executado, Cancelado ou outra situação. Só leitura na Centi. Extensão 1.12.0 (reinstale).", link: "/painel/automacao" },
+      { tipo: "novo", area: "Mesa", texto: "Coluna “Execução” na lista de DFDs, com filtro: verde = executado, vermelho = cancelado, âmbar = outra situação.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.18.0",
     data: "2026-10-06",
     titulo: "Ano do PCA na previsão e periodicidade no Dashboard",

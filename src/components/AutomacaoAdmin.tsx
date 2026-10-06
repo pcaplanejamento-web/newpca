@@ -72,6 +72,7 @@ import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
 import { HistoricoExecucoes } from "./HistoricoExecucoes";
+import { TarefaExecucaoDfds } from "./TarefaExecucaoDfds";
 import { TarefaTelaProtocolo } from "./TarefaTelaProtocolo";
 
 // Tela AUTOMAÇÃO (só ADM): baixa DFDs da Centi ("Emitir DFD" do CM002 Planejamento) por PROTOCOLO do sistema (uma pasta
@@ -122,12 +123,13 @@ const lerTextoAlvo = (v: unknown): TextoAlvo => {
 };
 type Estado = "fila" | "baixando" | "ok" | "falha" | "pulado" | "repetido";
 type Linha = TarefaCenti & { estado: Estado; erro?: string; amostra?: string; entidade?: string };
-type Modo = "protocolo" | "ids" | "tela";
+type Modo = "protocolo" | "ids" | "tela" | "execucao";
 const CHAVE_TAREFA = "automacao:tarefa";
 const TAREFAS: { value: Modo; label: string }[] = [
   { value: "protocolo", label: "Baixar/anexar DFDs · por protocolo" },
   { value: "ids", label: "Baixar/anexar DFDs · por Id" },
   { value: "tela", label: "Ler a Tela Protocolo" },
+  { value: "execucao", label: "Verificar execução dos DFDs (CM002)" },
 ];
 const lerTarefa = (v: unknown): Modo => (TAREFAS.some((t) => t.value === v) ? (v as Modo) : "protocolo");
 type Ext = { versao: string; copias: number } | null;
@@ -1652,9 +1654,11 @@ export function AutomacaoAdmin({
       <div
         ref={corpo}
         style={{ "--h-automacao": altura ? `${altura}px` : undefined } as React.CSSProperties}
-        className={`grid gap-[var(--gap-block)] lg:h-[var(--h-automacao)] lg:grid-rows-[minmax(0,1fr)] ${modo === "tela" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
+        className={`grid gap-[var(--gap-block)] lg:h-[var(--h-automacao)] lg:grid-rows-[minmax(0,1fr)] ${modo === "tela" || modo === "execucao" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
       >
-        {modo === "tela" ? (
+        {modo === "execucao" ? (
+          <TarefaExecucaoDfds pedir={pedir} lote={loteRef} pronto={pronto} onRodando={setRodandoTela} />
+        ) : modo === "tela" ? (
           <TarefaTelaProtocolo
             pedir={pedir}
             lote={loteRef}
@@ -1698,7 +1702,7 @@ export function AutomacaoAdmin({
           )}
         </div>
         )}
-        {modo !== "tela" && (
+        {modo !== "tela" && modo !== "execucao" && (
           <Analise linhas={vista} rodando={rodando} destino={anexando ? (proprio ? "protocolo de cada DFD" : (rotuloAlvo ?? "protocolo da Centi")) : null} />
         )}
       </div>

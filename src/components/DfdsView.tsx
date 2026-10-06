@@ -898,6 +898,7 @@ export function DfdsView({
       assinaturas: d.assinaturaGrupos,
       protocolo: d.protocoloNumero,
       prioridade: d.prioridade,
+      execucao: d.execucaoCenti,
       ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
     };
   });

@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 7;
+  const VERSAO = 8;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -871,12 +871,125 @@
     }
   }
 
+  // ---------------------------------------------------------------- CM002 - PLANEJAMENTO (a situação de cada planejamento)
+  /** A CM002 aberta: a aba "CM002 - Planejamento" do topo, senão pela busca do menu. */
+  async function abrirCm002(ctx) {
+    const { doc, win } = ctx;
+    const visivelGrade = async () => {
+      const r = await ctx.pagina?.("grade", { exige: "SITUACAO" }, 5000).catch(() => null);
+      return r?.ok ? r : null;
+    };
+    const temPesquisar = () => porTexto(doc, (s) => s === "PESQUISAR").length > 0;
+    if ((await visivelGrade()) || (porTexto(doc, (s) => /^RESULTADOS\b/.test(s)).length && temPesquisar())) return;
+    const aba = porTexto(doc, (s) => /^CM002\b/.test(s) && s.length < 60)[0];
+    if (aba) clicar(win, aba);
+    else {
+      const busca = todos(doc).find((el) => el.tagName === "INPUT" && visivel(el) && norm(attr(el, "placeholder")).startsWith("PESQUISAR"));
+      if (!busca) throw new Error("Não achei a CM002 nem a busca do menu da Centi.");
+      digitar(win, busca, "CM002");
+      const item = await esperarAte(
+        ctx,
+        () => porTexto(doc, (s) => /CM002|PLANEJAMENTO/.test(s) && s.length < 60).find((el) => el !== busca && el.tagName !== "INPUT" && /CM002/.test(texto(el))),
+        "A busca do menu não mostrou a CM002 - Planejamento.",
+      );
+      clicar(win, item);
+    }
+    await esperarAte(ctx, () => temPesquisar() || null, "Abri a CM002, mas a tela de pesquisa não apareceu.");
+  }
+
+  /** O botão Pesquisar da CM002 (o texto exato; nunca "Salvar Filtros"). */
+  function botaoPesquisarCm002(doc) {
+    for (const t of porTexto(doc, (s) => s === "PESQUISAR")) {
+      let n = t;
+      for (let i = 0; n && i < 4; i++, n = n.parentElement) if (ehBotao(n) && seguro(n)) return n;
+    }
+    return null;
+  }
+
+  /**
+   * A SITUAÇÃO de cada planejamento na CM002 (só leitura): abre a tela, pesquisa sem filtro (todos), lê os DADOS da grade
+   * (Wijmo) e percorre as páginas pela "Próxima". `ids` (opcional) = para quando todos aparecem.
+   */
+  async function planejamentos(ctx, ids) {
+    const { doc, win } = ctx;
+    if (typeof ctx.pagina !== "function") throw new Error("Atualize a extensão e aperte F5 na aba da Centi.");
+    ctx.etapa = "abrir a CM002 - Planejamento";
+    await abrirCm002(ctx);
+    ctx.etapa = "pesquisar";
+    const ler = async () => {
+      const r = await ctx.pagina("grade", { exige: "SITUACAO" }, 8000).catch(() => null);
+      return r?.ok && Array.isArray(r.colunas) && Array.isArray(r.linhas) ? r : null;
+    };
+    // "Mostrar": o maior nº de linhas por página que a tela oferece (um <select> nativo; menos páginas a percorrer).
+    const mostrar = todos(doc).find(
+      (el) => el.tagName === "SELECT" && visivel(el) && Array.from(el.options ?? []).length > 1 && Array.from(el.options).every((o) => /^\d+$/.test(String(o.value ?? "").trim())),
+    );
+    if (mostrar) {
+      const maior = Array.from(mostrar.options).reduce((m, o) => (Number(o.value) > Number(m.value) ? o : m));
+      if (String(mostrar.value) !== String(maior.value)) {
+        digitar(win, mostrar, maior.value);
+        mostrar.dispatchEvent(new win.Event("change", { bubbles: true }));
+        await pausa(win, 600);
+      }
+    }
+    if (!(await ler())?.linhas.length) {
+      const b = botaoPesquisarCm002(doc);
+      if (!b) throw new Error("Não achei o botão Pesquisar da CM002.");
+      clicar(win, b);
+    }
+    const assinatura = (g) => `${g.linhas.length}|${(g.linhas[0]?.valores ?? []).join("~")}|${(g.linhas.at(-1)?.valores ?? []).join("~")}`;
+    // A página terminou de carregar: 2 leituras iguais.
+    const estavel = async (antes) => {
+      let ultima = null;
+      return esperarAte(
+        ctx,
+        async () => {
+          const g = await ler();
+          if (!g?.linhas.length) return null;
+          const a = assinatura(g);
+          if (a === antes) return null;
+          if (a === ultima) return g;
+          ultima = a;
+          return null;
+        },
+        "A grade da CM002 não carregou.",
+        30000,
+      );
+    };
+    const quer = new Set((Array.isArray(ids) ? ids : []).map((x) => String(x).replace(/\D/g, "").replace(/^0+/, "")).filter(Boolean));
+    const ci = (g) => g.colunas.indexOf("ID");
+    let g = await estavel(null);
+    const colunas = g.colunas;
+    const linhas = [];
+    const vistos = new Set();
+    for (let pag = 0; pag < 400; pag++) {
+      ctx.etapa = `ler a página ${pag + 1}`;
+      for (const l of g.linhas) {
+        linhas.push({ valores: l.valores });
+        const id = String(l.valores[ci(g)] ?? "").replace(/\D/g, "").replace(/^0+/, "");
+        if (id) vistos.add(id);
+      }
+      if (quer.size && [...quer].every((i) => vistos.has(i))) break;
+      const prox = botaoProxima(doc.body ?? doc);
+      if (!prox || !seguro(prox)) break;
+      const antes = assinatura(g);
+      clicar(win, prox);
+      g = await estavel(antes).catch(() => null);
+      if (!g) break;
+    }
+    if (!colunas.includes("ID") || !colunas.includes("SITUACAO")) throw new Error("A grade da CM002 não tem as colunas ID e Situação.");
+    // "Exibindo 50 de 312" — o total que a Centi diz ter (para avisar quando nem todas as páginas foram lidas).
+    const m = /EXIBINDO\s+\d+\s+DE\s+(\d+)/.exec(texto(doc.body ?? doc));
+    return { colunas, linhas, total: m ? Number(m[1]) : null };
+  }
+
   /** O ponto de entrada da ponte: "telaDepartamentos" | "telaEmAnalise" | "telaEmitir" (os dados e o documento de UM). */
   async function executar(acao, dados, ctx0) {
     const ctx = { ...ctx0 };
     try {
       if (acao === "telaDepartamentos") return { ok: true, departamentos: await departamentos(ctx) };
       if (acao === "telaEmAnalise") return { ok: true, ...(await emAnalise(ctx, dados?.departamentos)) };
+      if (acao === "telaPlanejamentos") return { ok: true, ...(await planejamentos(ctx, dados?.ids)) };
       if (acao === "telaEmitir") return { ok: true, ...(await emitirDocumento(ctx, dados?.protocolo, dados?.ano, dados?.departamentos)) };
       return { ok: false, erro: "Ação desconhecida." };
     } catch (e) {

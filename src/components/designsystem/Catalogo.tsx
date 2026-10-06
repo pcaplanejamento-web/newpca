@@ -89,6 +89,7 @@ import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
 import { BotaoExportar } from "@/components/ExportarTabelas";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
+import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
 import { consolidarItens } from "@/lib/itens-consolidados";
 import { regrasPadrao } from "@/lib/avaliacao-core";
@@ -1805,6 +1806,12 @@ function ConsolidadosDemo() {
         <SeloAbc classe="B" participacao={0.1} />
         <SeloAbc classe="C" participacao={0.01} />
         <SeloAbc classe={null} />
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <CelulaExecucao situacao="Executado" />
+        <CelulaExecucao situacao="Cancelado" />
+        <CelulaExecucao situacao="Em andamento" />
+        <CelulaExecucao situacao={null} />
       </div>
       <div className="flex flex-wrap gap-2">
         {linhas.map((l) => (

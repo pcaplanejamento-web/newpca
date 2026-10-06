@@ -159,7 +159,7 @@ test("extensão: o `ler` passa pela trava de leitura, o `pedir` só repete a ope
   assert.doesNotMatch(main.slice(main.indexOf("function aprenderResposta"), main.indexOf("const textoDoXhr")), /cabecalhos|__pcaHs/);
   const m = JSON.parse(readFileSync("extensao-centi/manifest.json", "utf8"));
   assert.match(m.key, /^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA[A-Za-z0-9+/=]{300,}$/);
-  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise", "telaEmitir"]);
+  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise", "telaEmitir", "telaPlanejamentos"]);
 });
 
 test("em análise: protocolos limpos e sem repetir; o casamento com o sistema respeita o ano; a escolha lembrada só com o que existe", async () => {

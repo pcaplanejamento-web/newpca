@@ -806,7 +806,9 @@
         const col = g.columns[c];
         colunas.push(col?.visible === false ? "" : norm(col?.header ?? col?.binding));
       }
-      if (!colunas.includes("PROTOCOLO")) continue;
+      // A grade pedida: a da Tela Protocolo (padrão) ou outra pela coluna que ela TEM (ex.: "SITUACAO" na CM002).
+      const exige = norm(d?.exige || "PROTOCOLO");
+      if (!colunas.includes(exige)) continue;
       const linhas = [];
       let chaves = null;
       for (let r = 0; r < g.rows.length && linhas.length < 5000; r++) {
@@ -828,7 +830,7 @@
       // A linha do protocolo pedido à vista (a tela só desenha as visíveis) — para o duplo clique nela.
       const mostrar = String(d?.mostrar ?? "").replace(/\D/g, "").replace(/^0+/, "");
       const cp = colunas.indexOf("PROTOCOLO");
-      if (mostrar && typeof g.scrollIntoView === "function") {
+      if (mostrar && cp >= 0 && typeof g.scrollIntoView === "function") {
         let i = -1;
         for (let r = 0; r < g.rows.length; r++) {
           let v = "";
