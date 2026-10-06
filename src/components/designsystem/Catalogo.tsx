@@ -172,6 +172,7 @@ import { AutomacoesQuadro, ModelosQuadro } from "@/components/AutomacoesQuadro";
 import { DashboardTarefas } from "@/components/DashboardTarefas";
 import { RecorrenciaTarefa } from "@/components/RecorrenciaTarefa";
 import { ItemNotificacao } from "@/components/SinoNotificacoes";
+import { PresencaGrupo } from "@/components/PresencaGrupo";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { CamposPeriodo, QuadroNovoCard } from "@/components/QuadroCard";
 import { EstrelaFavorito } from "@/components/FavoritosQuadros";
@@ -3234,14 +3235,27 @@ export function Catalogo() {
         <DashboardMesaEsqueleto metricas />
       </Secao>
 
-      <Secao titulo="Avatares">
+      <Secao titulo="Avatares (com `presenca`: o ponto verde = online, âmbar = ausente)">
         <div className="flex flex-wrap items-center gap-3">
           {["Jhone Prado", "Maria Silva", "Naty Costa", "Cris Souza", "Thamires Lima"].map((n) => (
             <div key={n} className="flex items-center gap-2">
-              <Avatar nome={n} size="lg" />
+              <Avatar nome={n} size="lg" presenca={n === "Maria Silva" ? "online" : n === "Naty Costa" ? "ausente" : undefined} />
               <span className="text-[13px] text-text-2">{n}</span>
             </div>
           ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="PresencaGrupo (quem do grupo está online, AO VIVO no cabeçalho — as fotos com o ponto + “+N”; no celular, o ícone com o número; tocar abre a lista, você primeiro. Só existe com Configurações → Presença ligada)">
+        <div className="flex flex-wrap items-center gap-6">
+          <PresencaGrupo
+            pessoas={PESSOAS_DEMO}
+            usuarioId={PESSOAS_DEMO[0].id}
+            estados={new Map(PESSOAS_DEMO.map((p, i) => [p.id, i % 3 === 2 ? ("ausente" as const) : ("online" as const)]))}
+            aoVivo
+            grupoNome="Planejamento"
+          />
+          <PresencaGrupo pessoas={PESSOAS_DEMO} usuarioId={PESSOAS_DEMO[0].id} estados={new Map()} aoVivo={false} invisivel grupoNome="Planejamento" />
         </div>
       </Secao>
 

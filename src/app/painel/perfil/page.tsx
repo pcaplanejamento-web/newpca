@@ -7,6 +7,7 @@ import type { UsuarioSessao } from "@/lib/auth";
 import { getIntegracoes } from "@/lib/integracoes";
 import { googleConfigurado, turnstileConfigurado } from "@/lib/integracoes-core";
 import { getDb } from "@/lib/db";
+import { getConfigPresenca, prefsPresencaDe } from "@/lib/presenca";
 import { mensagemVinculo, SENHA_INUTILIZAVEL } from "@/lib/google-oauth-core";
 import { pessoasDesignaveis, type VisaoMesa } from "@/lib/mesa-visao-core";
 import { ACOES_PAPEL, type Capacidades, motivoSemModulos } from "@/lib/papeis-core";
@@ -48,11 +49,13 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
   const protocola = podeTela(acesso, "dfd").importar && vis.responsavel.ver && vis.responsavel.alterar !== "nao";
   const sp = await searchParams;
   const retornoGoogle = mensagemVinculo(sp.google, sp.motivo);
-  const [protocolacao, mesaResponsavel, identidade, integ] = await Promise.all([
+  const [protocolacao, mesaResponsavel, identidade, integ, cfgPresenca, prefsPresenca] = await Promise.all([
     protocola ? protocolacaoDe(u, grupo?.id ?? null, vis) : null,
     mesaResponsavelGravado(u.id),
     identidadeDe(u.id),
     getIntegracoes(),
+    getConfigPresenca(),
+    prefsPresencaDe(u.id),
   ]);
   // A conta Google só com o login com Google ativo (sem ele, o card nem aparece).
   const contaGoogle = googleConfigurado(integ) ? { email: identidade.googleEmail, soGoogle: identidade.semSenha } : null;
@@ -74,6 +77,7 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
       seuAcesso={{ grupo: grupo?.nome ?? null, capacidades: efetivo, detalhes: u.admin ? null : u.papel.detalhes }}
       contaGoogle={contaGoogle}
       retornoGoogle={retornoGoogle}
+      presenca={cfgPresenca.ativo && cfgPresenca.invisivel ? { invisivel: prefsPresenca.invisivel } : null}
     />
   );
 }

@@ -45,6 +45,7 @@ import { Segmented } from "./Segmented";
 import { SituacoesAdmin } from "./SituacoesAdmin";
 import { FeriadosAdmin } from "./FeriadosAdmin";
 import { NotificacoesAdmin } from "./NotificacoesAdmin";
+import { PresencaAdmin } from "./PresencaAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -493,6 +494,7 @@ export function ConfiguracoesAdmin({
             { key: "pcas", label: "PCAs", icon: <IconLayers />, dica: "Os PCAs cadastrados e o vigente", content: abaPcas },
             { key: "situacoes", label: "Situações", icon: <IconSituacoes />, dica: "As situações do protocolo (nome, cor, ordem)", content: <SituacoesAdmin /> },
             { key: "feriados", label: "Feriados", icon: <IconCalendar />, dica: "Feriados e pontos facultativos do Calendário", content: <FeriadosAdmin /> },
+            { key: "presenca", label: "Presença", icon: <IconUsers />, dica: "Quem do grupo está online, ao vivo", content: <PresencaAdmin /> },
             { key: "notificacoes", label: "Notificações", icon: <IconBell />, dica: "Avisos, e-mail, limpeza, comunicado e alcance", content: <NotificacoesAdmin /> },
             { key: "avaliacao", label: "Avaliação", icon: <IconAvaliacao />, dica: "O rigor de cada conferência de Protocolo, DFD e Item", content: <AvaliacaoAdmin regras={regras} /> },
             {

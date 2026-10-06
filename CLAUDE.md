@@ -389,6 +389,33 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     Google" (`PrefsEmail.destino`, só com o Google vinculado; `enderecoDosAvisos` no envio dos pendentes). O código de
     confirmação vai SEMPRE ao institucional.
 
+## Presença ao vivo
+- **PRESENÇA AO VIVO — quem do grupo está online (v1.6.0, sem migração D1; Durable Object novo):** Configurações → aba
+  **"Presença"** (`PresencaAdmin`: `Switch` mostrar quem está online [DESLIGADO por padrão — nada é carregado nem conectado],
+  mostrar ausentes, permitir aparecer invisível; blob `configuracoes.presenca` — `getConfigPresenca` (cache 60 s, fail-safe =
+  desligada)/`gravarConfigPresenca` em `presenca.ts`; `GET/PATCH /api/admin/presenca`, `exigirAdmin`, auditoria). Núcleo PURO
+  **`presenca-core.ts`** (sem zod — o `worker.ts` também o usa; testado em `tests/presenca.test.ts`): `lerConfigPresenca`,
+  `lerPrefsPresenca` (chave `presenca:pessoa` em `preferencias_tabela`), `ficaInvisivel` (a pessoa escolheu E o ADM permite),
+  `listaPresenca` (UM item por pessoa, o melhor estado entre as abas — online > ausente —, sem invisíveis), as mensagens
+  (`lerEstadoMensagem`/`lerListaMensagem`) e `ordenarPresenca` (você primeiro, depois online e ausente pelo nome).
+  **Durable Object `PresencaGrupo`** (`presenca-grupo-do.ts`, UM por grupo — `idFromName("g<id>")`; binding `PRESENCA_GRUPO` +
+  migração `v2-presenca` no `wrangler.jsonc`, exportado pelo `worker.ts`): WebSocket com HIBERNAÇÃO + auto-resposta do "ping"
+  (não acorda), tag `u<id>` e o anexo `{id, estado, invisivel, ausente}`; a aba manda `{"estado":"online"|"ausente"}` só quando
+  muda (1/s por aba no máximo); entrar, sair e trocar de estado retransmitem `{t:"presenca", p:[[id,"o"|"a"]…]}` — só quando a
+  lista MUDOU (a aba nova sempre recebe); até 10 abas por pessoa e 500 conexões por grupo. O `worker.ts` atende
+  **`/api/presenca/ao-vivo?grupo=`** antes do Next (mapa `CANAIS`): só do próprio site, UMA consulta D1 (sessão de pessoa
+  ATIVA + MEMBRO do grupo + a preferência + `json_extract` da config) — presença desligada ou fora do grupo = 403. **Tela:**
+  o layout do painel passa ao `AppShell` `presenca = {pessoas, invisivel}` SÓ com a presença ligada e um grupo ativo
+  (`listarPessoasDoGrupo` — o diretório vai uma vez; o canal manda só ids). **`PresencaGrupo`** (DS, catalogado) +
+  `usePresencaGrupo(grupoId, invisivel)` (ping 45 s, reconexão `esperaReconexao`, aba oculta = "ausente", trocar de grupo ou
+  passar a invisível reconecta; o código 4000 — abas demais — não reconecta) + `PresencaDoCabecalho`: no desktop as fotos
+  (até 3, a primeira por cima) com o ponto + "+N" → painel `Dropdown dialog` "Online agora · grupo" (Ao vivo/Reconectando…);
+  no celular o ícone com o número de online (44px) → `Modal`; `aria-live` anuncia quem entrou/saiu. Com a presença, a marca
+  compacta do cabeçalho sai abaixo de 400px (o seletor de PCA segue legível). **`Avatar.presenca`** = o ponto verde/âmbar.
+  **Perfil → "Presença"** (`PresencaPerfil`, só com a presença ligada e o invisível permitido): "Aparecer como invisível" →
+  `PUT /api/perfil/presenca` (409 se o ADM não permite). Custo (plano gratuito: 100 mil requisições de DO/dia, mensagens que
+  chegam em 20:1, as que saem e a auto-resposta não contam): ~4–5 mil/dia para 50 pessoas × 2 abas × 8 h.
+
 ## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um

@@ -10,6 +10,7 @@ import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
 import { VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
+import { PresencaDoCabecalho, type PresencaShell } from "./PresencaGrupo";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
@@ -413,6 +414,7 @@ export function AppShell({
   identidade,
   notificacoes = 0,
   versaoDados,
+  presenca = null,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
@@ -429,6 +431,8 @@ export function AppShell({
   notificacoes?: number;
   /** A VERSÃO DOS DADOS do servidor (`versaoDados`) — o `SincronizarDados` só recarrega quando ela muda. */
   versaoDados?: string;
+  /** A PRESENÇA do grupo ativo (quem está online) — só quando o ADM a ligou; `null` = nada é montado. */
+  presenca?: PresencaShell | null;
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
@@ -507,7 +511,8 @@ export function AppShell({
           >
             <IconMenu className="h-5 w-5" />
           </button>
-          <div className="shrink-0 lg:hidden">
+          {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
+          <div className={`shrink-0 lg:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
             <Brand compact identidade={identidade} />
           </div>
           {/* PCA do cabeçalho (filtro de todo o sistema) — à ESQUERDA; só para quem vê o que ele filtra (Mesa, PCA,
@@ -523,6 +528,9 @@ export function AppShell({
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
+            {presenca && (
+              <PresencaDoCabecalho presenca={presenca} usuarioId={usuario.id} grupoId={grupoAtivoId} grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null} />
+            )}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">

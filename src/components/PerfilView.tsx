@@ -24,6 +24,7 @@ import {
   IconCamera,
   IconCheck,
   IconClipboard,
+  IconEyeOff,
   IconGoogle,
   IconInfo,
   IconKey,
@@ -41,6 +42,8 @@ import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
 import { PreferenciasNotificacoes } from "./PreferenciasNotificacoes";
+import { Switch } from "./Switch";
+import { toast } from "./Toast";
 
 type Msg = { tipo: "ok" | "erro"; texto: string } | null;
 
@@ -122,6 +125,7 @@ export function PerfilView({
   seuAcesso = null,
   contaGoogle = null,
   retornoGoogle = null,
+  presenca = null,
 }: {
   usuario: UsuarioSessao;
   identidade: IdentidadePerfil;
@@ -146,6 +150,8 @@ export function PerfilView({
   contaGoogle?: { email: string | null; soGoogle: boolean } | null;
   /** O retorno do vínculo (`?google=` na volta do Google). */
   retornoGoogle?: { ok: boolean; texto: string } | null;
+  /** A PRESENÇA ligada pelo ADM com a opção de aparecer invisível (`null` = sem o card). */
+  presenca?: { invisivel: boolean } | null;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -555,6 +561,8 @@ export function PerfilView({
               )}
             </SecaoPerfil>
           )}
+          {presenca && <PresencaPerfil inicial={presenca.invisivel} />}
+
           {/* NOTIFICAÇÕES: o sino (tipos, som, alerta do sistema, silenciados) e o e-mail (imediato · resumo · desligado). */}
           <SecaoPerfil icone={<IconBell className="h-4 w-4" />} titulo="Notificações" descricao="Grava sozinho a cada mudança.">
             <PreferenciasNotificacoes googleEmail={identidade.googleEmail} />
@@ -637,5 +645,33 @@ export function PerfilView({
         </div>
       </div>
     </div>
+  );
+}
+
+/** PRESENÇA: aparecer INVISÍVEL para o grupo (você continua vendo quem está online) — grava na hora. */
+function PresencaPerfil({ inicial }: { inicial: boolean }) {
+  const router = useRouter();
+  const [invisivel, setInvisivel] = useState(inicial);
+  const [gravando, setGravando] = useState(false);
+  const mudar = async (v: boolean) => {
+    setInvisivel(v);
+    setGravando(true);
+    try {
+      const r = await fetch("/api/perfil/presenca", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invisivel: v }) });
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!r.ok || !j?.ok) throw new Error(j?.error ?? "Não foi possível salvar.");
+      toast.success(v ? "Você está invisível para o grupo." : "Você aparece online para o grupo.");
+      router.refresh();
+    } catch (e) {
+      setInvisivel(!v);
+      toast.error((e as Error).message);
+    } finally {
+      setGravando(false);
+    }
+  };
+  return (
+    <SecaoPerfil icone={<IconEyeOff className="h-4 w-4" />} titulo="Presença" descricao="Quem do seu grupo está online aparece no cabeçalho. Invisível, você continua vendo os outros.">
+      <Switch checked={invisivel} disabled={gravando} onChange={mudar} label="Aparecer como invisível" dica="Os outros não veem que você está online" />
+    </SecaoPerfil>
   );
 }

@@ -1,14 +1,17 @@
 // O Worker do sistema = o do OpenNext (gerado no build em `.open-next/worker.js`) + o CRON (`scheduled`): a sincronização
 // com o Trello e os e-mails (Resend), cada um no SEU gatilho (invocações separadas — cada uma com o próprio limite de
-// consultas) + o canal AO VIVO das notificações (WebSocket → o Durable Object `CaixaNotificacoes` da pessoa). O cron chama
+// consultas) + o canal AO VIVO das notificações (WebSocket → o Durable Object `CaixaNotificacoes` da pessoa) + a PRESENÇA
+// (quem do grupo está online — WebSocket → o Durable Object `PresencaGrupo` do grupo). O cron chama
 // as rotas internas DIRETO no handler (sem sair para a internet), autenticadas pelo SHA-256 de `INTEGRACOES_CHAVE:cron`.
 // @ts-expect-error — gerado no build (fora do typecheck: ver tsconfig "exclude")
 import handler from "./.open-next/worker.js";
 import { lerCookie, origemDoProprioSite } from "./src/lib/ao-vivo-core";
+import { CHAVE_PREF_PRESENCA, ficaInvisivel, lerConfigPresenca, lerPrefsPresenca } from "./src/lib/presenca-core";
 
 export { CaixaNotificacoes } from "./src/lib/caixa-notificacoes-do";
+export { PresencaGrupo } from "./src/lib/presenca-grupo-do";
 
-type Env = { INTEGRACOES_CHAVE?: string; DB: D1Database; CAIXA_NOTIFICACOES: DurableObjectNamespace };
+type Env = { INTEGRACOES_CHAVE?: string; DB: D1Database; CAIXA_NOTIFICACOES: DurableObjectNamespace; PRESENCA_GRUPO: DurableObjectNamespace };
 type Contexto = { waitUntil(p: Promise<unknown>): void };
 
 async function sha256(texto: string): Promise<string> {
@@ -38,13 +41,59 @@ async function aoVivo(req: Request, env: Env): Promise<Response> {
   return caixa.fetch(new Request("https://caixa/ws", { headers: req.headers }));
 }
 
+/**
+ * A PRESENÇA do grupo: só do próprio site, com a presença LIGADA pelo ADM e a sessão válida de uma pessoa ATIVA que é
+ * MEMBRO do grupo pedido — UMA consulta (sessão + grupo + a preferência de invisível + a config). Vai ao objeto DO GRUPO.
+ */
+async function presenca(req: Request, env: Env): Promise<Response> {
+  if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Esperado WebSocket.", { status: 426 });
+  if (!origemDoProprioSite(req.headers.get("Origin"), req.url)) return new Response("Origem recusada.", { status: 403 });
+  const grupo = Number(new URL(req.url).searchParams.get("grupo"));
+  if (!Number.isInteger(grupo) || grupo <= 0) return new Response("Grupo inválido.", { status: 400 });
+  const token = lerCookie(req.headers.get("Cookie"), "pca_session");
+  if (!token) return new Response("Sem sessão.", { status: 401 });
+  const linha = await env.DB.prepare(
+    `SELECT s.usuario_id AS id,
+       EXISTS (SELECT 1 FROM usuario_grupos g WHERE g.usuario_id = s.usuario_id AND g.grupo_id = ?) AS membro,
+       (SELECT p.valor FROM preferencias_tabela p WHERE p.usuario_id = s.usuario_id AND p.chave = ?) AS prefs,
+       (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.presenca') END FROM configuracoes c WHERE c.id = 1) AS config
+     FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
+     WHERE s.token_hash = ? AND s.expira_em > ? AND u.status = 'ativo' LIMIT 1`,
+  )
+    .bind(grupo, CHAVE_PREF_PRESENCA, await sha256(token), new Date().toISOString())
+    .first<{ id: number; membro: number; prefs: string | null; config: string | null }>();
+  if (!linha) return new Response("Sessão inválida.", { status: 401 });
+  if (!linha.membro) return new Response("Fora do grupo.", { status: 403 });
+  let bruto: unknown = null;
+  try {
+    bruto = linha.config ? JSON.parse(linha.config) : null;
+  } catch {
+    /* config inválida = desligada */
+  }
+  const cfg = lerConfigPresenca(bruto);
+  if (!cfg.ativo) return new Response("Presença desligada.", { status: 403 });
+  const headers = new Headers(req.headers);
+  headers.set("x-presenca-usuario", String(linha.id));
+  headers.set("x-presenca-invisivel", ficaInvisivel(cfg, lerPrefsPresenca(linha.prefs)) ? "1" : "0");
+  headers.set("x-presenca-ausente", cfg.ausente ? "1" : "0");
+  const objeto = env.PRESENCA_GRUPO.get(env.PRESENCA_GRUPO.idFromName(`g${grupo}`));
+  return objeto.fetch(new Request("https://presenca/ws", { headers }));
+}
+
+/** Os canais AO VIVO (WebSocket) atendidos ANTES do Next. */
+const CANAIS: Record<string, [string, (req: Request, env: Env) => Promise<Response>]> = {
+  "/api/notificacoes/ao-vivo": ["ao-vivo", aoVivo],
+  "/api/presenca/ao-vivo": ["presenca", presenca],
+};
+
 export default {
   async fetch(req: Request, env: Env, ctx: Contexto) {
-    if (new URL(req.url).pathname === "/api/notificacoes/ao-vivo") {
+    const canal = CANAIS[new URL(req.url).pathname];
+    if (canal) {
       try {
-        return await aoVivo(req, env);
+        return await canal[1](req, env);
       } catch (e) {
-        console.error("[ao-vivo] falhou:", e);
+        console.error(`[${canal[0]}] falhou:`, e);
         return new Response("Indisponível.", { status: 503 });
       }
     }

@@ -22,17 +22,36 @@ const DIM = {
   xl: "h-20 w-20 text-xl",
 } as const;
 
+/** O ponto de PRESENÇA no canto da foto (online = verde, ausente = âmbar), com o anel da superfície. */
+const PONTO = { online: "bg-[var(--ok)]", ausente: "bg-[var(--warn)]" } as const;
+const PONTO_DIM: Record<keyof typeof DIM, string> = { xs: "h-2 w-2", sm: "h-2.5 w-2.5", md: "h-2.5 w-2.5", lg: "h-3 w-3", xl: "h-5 w-5" };
+
 export function Avatar({
   nome,
   foto,
   size = "md",
   className = "",
+  presenca,
 }: {
   nome: string;
   foto?: string | null;
   size?: keyof typeof DIM;
   className?: string;
+  /** Mostra o ponto de presença (quem está online). */
+  presenca?: keyof typeof PONTO;
 }) {
+  if (presenca) {
+    return (
+      <span className={`relative inline-flex shrink-0 ${className}`}>
+        <Avatar nome={nome} foto={foto} size={size} />
+        <span aria-hidden="true" className={`absolute right-0 bottom-0 rounded-full ring-2 ring-surface ${PONTO_DIM[size]} ${PONTO[presenca]}`} />
+      </span>
+    );
+  }
+  return <AvatarBase nome={nome} foto={foto} size={size} className={className} />;
+}
+
+function AvatarBase({ nome, foto, size, className }: { nome: string; foto?: string | null; size: keyof typeof DIM; className: string }) {
   // A foto que FALHOU ao carregar (cai nas iniciais); outra foto (nova URL) volta a ser tentada.
   const [falhou, setFalhou] = useState<string | null>(null);
 
