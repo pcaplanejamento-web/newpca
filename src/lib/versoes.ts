@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.19.2",
+    data: "2026-10-06",
+    titulo: "Execução dos DFDs por entidade da Centi",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A CM002 mostra só os planejamentos da ENTIDADE aberta na Centi: a verificação agora vale só para os DFDs do órgão ligado a essa entidade (o mapa órgão → entidade do Baixar DFDs, com o atalho “ligar à entidade aberta”) — o mesmo ID em outra entidade nunca é confundido. A tabela da CM002 é lida inteira (ela desenha só as linhas à vista: a extensão rola a lista só para ler). Extensão 1.12.2 (reinstale).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.19.1",
     data: "2026-10-06",
     titulo: "Execução dos DFDs: leitura direta da CM002",

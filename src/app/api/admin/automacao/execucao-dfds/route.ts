@@ -1,6 +1,6 @@
 import { eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
-import { dfds } from "@/db/schema";
+import { dfds, orgaos } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -13,8 +13,18 @@ const LOTE = 50;
 
 const lerDfds = () =>
   getDb()
-    .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, execucaoCenti: dfds.execucaoCenti, execucaoCentiEm: dfds.execucaoCentiEm })
+    .select({
+      id: dfds.id,
+      numero: dfds.numero,
+      planejamento: dfds.planejamento,
+      execucaoCenti: dfds.execucaoCenti,
+      execucaoCentiEm: dfds.execucaoCentiEm,
+      orgaoId: dfds.orgaoId,
+      orgaoEntidade: dfds.orgaoEntidade,
+      orgaoNome: orgaos.nome,
+    })
     .from(dfds)
+    .leftJoin(orgaos, eq(orgaos.id, dfds.orgaoId))
     .where(isNotNull(dfds.planejamento));
 
 /** Os DFDs com nº de planejamento e a situação da Centi já gravada (a tela da Automação). */
@@ -27,6 +37,8 @@ export async function GET() {
 const corpoSchema = z.strictObject({
   colunas: z.array(z.string().max(80)).max(60),
   linhas: z.array(z.strictObject({ valores: z.array(z.string().max(400)).max(60), id: z.string().max(20).optional() })).max(20000),
+  /** Só os DFDs da ENTIDADE lida (o ID do planejamento só vale dentro da entidade da Centi). */
+  dfdIds: z.array(z.number().int().positive()).min(1).max(20000),
 });
 
 /** A grade lida da CM002 → a situação de cada DFD do mesmo planejamento (grava só o que mudou). */
@@ -36,7 +48,8 @@ export async function POST(req: Request) {
   const p = await parseCorpo(corpoSchema, req);
   if ("resp" in p) return p.resp;
   const situacoes = situacoesDaGrade(p.data.colunas, p.data.linhas);
-  const plano = planoExecucao(await lerDfds(), situacoes);
+  const escopo = new Set(p.data.dfdIds);
+  const plano = planoExecucao((await lerDfds()).filter((d) => escopo.has(d.id)), situacoes);
   const em = new Date().toISOString();
   const db = getDb();
   for (let i = 0; i < plano.atualizar.length; i += LOTE) {

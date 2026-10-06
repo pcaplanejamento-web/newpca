@@ -1657,7 +1657,7 @@ export function AutomacaoAdmin({
         className={`grid gap-[var(--gap-block)] lg:h-[var(--h-automacao)] lg:grid-rows-[minmax(0,1fr)] ${modo === "tela" || modo === "execucao" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
       >
         {modo === "execucao" ? (
-          <TarefaExecucaoDfds pedir={pedir} lote={loteRef} pronto={pronto} onRodando={setRodandoTela} />
+          <TarefaExecucaoDfds pedir={pedir} lote={loteRef} pronto={pronto} entidade={logado?.entidade ?? null} mapa={mapa} onEntidade={definirEntidade} onRodando={setRodandoTela} />
         ) : modo === "tela" ? (
           <TarefaTelaProtocolo
             pedir={pedir}

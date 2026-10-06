@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 9;
+  const VERSAO = 10;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -912,6 +912,34 @@
     return { colunas, linhas: [], cab };
   }
 
+  /**
+   * A tabela INTEIRA da página: a Centi só desenha as linhas à vista — rola o corpo da tabela (só a vista; nada é alterado)
+   * juntando as linhas pelo ID e devolve a rolagem ao lugar.
+   */
+  async function lerPaginaCm002(ctx) {
+    const { doc, win } = ctx;
+    const t = lerTabelaCm002(doc);
+    if (!t?.linhas.length) return t;
+    const ci = t.colunas.indexOf("ID");
+    const porId = new Map(t.linhas.map((l) => [l.valores[ci], l]));
+    // O que rola: o ancestral do cabeçalho com rolagem vertical (o corpo da tabela), senão a página.
+    let rol = t.cab.parentElement;
+    for (let i = 0; rol && i < 10; i++, rol = rol.parentElement) if (rol.scrollHeight > rol.clientHeight + 4) break;
+    if (!rol || !(rol.scrollHeight > rol.clientHeight + 4)) return t;
+    const inicio = rol.scrollTop;
+    const passo = Math.max(60, Math.floor(rol.clientHeight * 0.8));
+    for (let y = 0, n = 0; n < 400; n++, y += passo) {
+      rol.scrollTop = y;
+      rol.dispatchEvent?.(new win.Event("scroll", { bubbles: true }));
+      await pausa(win, 120);
+      const x = lerTabelaCm002(doc);
+      for (const l of x?.linhas ?? []) if (!porId.has(l.valores[ci])) porId.set(l.valores[ci], l);
+      if (y + rol.clientHeight >= rol.scrollHeight) break;
+    }
+    rol.scrollTop = inicio;
+    return { ...t, linhas: [...porId.values()] };
+  }
+
   /** "Exibindo 50 de 312" (o total, quando a Centi informa). */
   function totalCm002(doc) {
     const m = /EXIBINDO\s+\d+\s+DE\s+(\d+)/.exec(texto(doc.body ?? doc));
@@ -945,6 +973,7 @@
         return x?.linhas.length ? x : null;
       }, "A pesquisa da CM002 não trouxe resultados.", 30000);
     }
+    t = (await lerPaginaCm002(ctx)) ?? t;
     const colunas = t.colunas;
     const ci = colunas.indexOf("ID");
     const linhas = [];
@@ -971,7 +1000,7 @@
         return x?.linhas.length && x.linhas.map((l) => l.valores[ci]).join(",") !== antes ? x : null;
       }, "", 15000).catch(() => null);
       if (!novo) break;
-      t = novo;
+      t = (await lerPaginaCm002(ctx)) ?? novo;
       juntar(t);
     }
     return { colunas, linhas, total: totalCm002(doc) };

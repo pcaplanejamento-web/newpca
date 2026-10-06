@@ -4190,7 +4190,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   1.11.1 libera esse endereço na trava de leitura); senão `restauth/getbinlink/{chave}/{nome}` (o Emitir DFD) — UMA vez (e o
   link, se a resposta for um); sem PDF, o erro traz o pedido (endereço → status), o esqueleto da resposta (`amostra`) e os
   parâmetros enviados — nenhuma repetição nem endereço adivinhado.
-- **EXECUÇÃO DOS DFDs pela CM002 (extensão 1.12.1, migração `0089` — `dfds.execucao_centi`/`execucao_centi_em`):** tarefa
+- **EXECUÇÃO DOS DFDs pela CM002 (extensão 1.12.2, migração `0089` — `dfds.execucao_centi`/`execucao_centi_em`):** tarefa
   **"Verificar execução dos DFDs (CM002)"** da Automação (`TarefaExecucaoDfds`): a ação **`telaPlanejamentos`**
   (`centi-tela.js` v9, só leitura e o MÍNIMO de cliques) lê a tabela "Resultados" da CM002 COMO ESTÁ NA TELA (o HTML —
   `lerTabelaCm002`: a linha de cabeçalho com ID e SITUAÇÃO e as linhas de mesma forma); só clica na aba da CM002 se a
@@ -4199,7 +4199,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/admin/automacao/execucao-dfds` (`exigirAdmin`) → núcleo puro **`execucao-centi.ts`** (`situacoesDaGrade`,
   `planoExecucao` — grava só o que mudou, `classeExecucao` executado/cancelado/outro) + auditoria; `GET` = os DFDs com
   planejamento e a situação gravada. Mesa → DFDs: coluna **Execução** (`CelulaExecucao`, só quando algum DFD já foi
-  verificado). Testes: `tests/execucao-centi.test.ts` + o da tabela em `automacao-tela-centi`.
+  verificado). **Por ENTIDADE:** a CM002 mostra só a entidade aberta na Centi — só os DFDs do órgão ligado a ela (o mapa
+  órgão → entidade `automacao:centi-entidades`, `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
+  as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
+  + o da tabela em `automacao-tela-centi`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
