@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.19.1",
+    data: "2026-10-06",
+    titulo: "Execução dos DFDs: leitura direta da CM002",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A verificação da execução lê a coluna Situação direto da tabela Resultados da CM002, como está na tela — sem abrir nenhum planejamento e sem clicar em nada quando a pesquisa já está feita (só pesquisa sem filtro se a tabela estiver vazia e passa de página só enquanto faltar algum planejamento). Extensão 1.12.1 (reinstale).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.19.0",
     data: "2026-10-06",
     titulo: "Execução dos DFDs pela Centi (CM002)",

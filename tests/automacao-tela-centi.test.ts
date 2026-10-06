@@ -568,3 +568,29 @@ test("tela protocolo: com VÁRIOS cadastros abertos (um que não fecha), acha o 
   assert.equal(r.ok, true, `${r.erro}\n${r.diagnostico}`);
   assert.equal((r.dados as { campos: { rotulo: string; valor: string }[] }).campos.find((x) => x.rotulo === "Protocolo")?.valor, "97608");
 });
+
+test("CM002: lê ID e SITUAÇÃO direto da tabela à vista — sem nenhum clique", async () => {
+  const body = new El("body");
+  const cab = new El("tr").add(...["ID", "DATA INICIAL", "CÓDIGO", "SITUAÇÃO", "FINALIDADE"].map((t) => new El("th", { texto: t })));
+  const linha = (v: string[]) => new El("tr").add(...v.map((t) => new El("td", { texto: t })));
+  const pesquisar = new El("button", { texto: "Pesquisar" });
+  let cliques = 0;
+  pesquisar.on("click", () => cliques++);
+  body.add(
+    new El("div", { texto: "Resultados Exibindo 50 de" }),
+    pesquisar,
+    new El("table").add(new El("thead").add(cab), new El("tbody").add(linha(["17", "01/04/2026", "03.40.000", "Cancelado", "TESTE PCA"]), linha(["18", "05/05/2026", "03.51.132", "Executado", "PCA - 2026"]))),
+  );
+  const doc = { body, querySelectorAll: (s: string) => body.querySelectorAll(s) };
+  const r = await peca().executar("telaPlanejamentos", { ids: ["17", "18"] }, ctx(doc));
+  assert.equal(r.ok, true, String(r.erro));
+  assert.deepEqual(r.colunas, ["ID", "DATA INICIAL", "CODIGO", "SITUACAO", "FINALIDADE"]);
+  assert.deepEqual(
+    (r.linhas as { valores: string[] }[]).map((l) => [l.valores[0], l.valores[3]]),
+    [
+      ["17", "Cancelado"],
+      ["18", "Executado"],
+    ],
+  );
+  assert.equal(cliques, 0);
+});
