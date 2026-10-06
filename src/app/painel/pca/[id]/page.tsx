@@ -101,6 +101,7 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
         </FerramentasAba>
       )}
       <PainelPca
+          nome={pca.nome}
         dados={dash}
         unidadeFiltrada={dash.unidadeId != null}
         hintItens={

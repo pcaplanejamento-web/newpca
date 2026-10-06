@@ -25,12 +25,15 @@ export function PainelPca({
   unidadeFiltrada = false,
   hintItens,
   consulta,
+  nome,
 }: {
   dados: DadosPainelPca;
   unidadeFiltrada?: boolean;
   hintItens?: string;
   /** PCA de fonte protocolo: a consulta Protocolos · DFDs · Itens + banners discretos (`ConsultaPca`). */
   consulta?: ConsultaDashboard;
+  /** O nome do PCA (o título do relatório em PDF). */
+  nome?: string;
 }) {
   const { resumo, previa } = dados;
   return (
@@ -44,6 +47,7 @@ export function PainelPca({
       )}
       <DashboardPcaCliente
         resumo={resumo}
+        nome={nome}
         hintItens={hintItens}
         unidadeFiltrada={unidadeFiltrada}
         porClassificacao={dados.porClassificacao}

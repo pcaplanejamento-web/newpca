@@ -105,6 +105,7 @@ export default async function HomePage({
           </div>
         </div>
         <PainelPca
+          nome={pca.nome}
           dados={dados}
           unidadeFiltrada={dados.unidadeId != null}
           hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}

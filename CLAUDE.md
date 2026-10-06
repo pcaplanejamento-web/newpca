@@ -2176,7 +2176,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     Dashboard", a Tabela (posição · itens · valor · %, XLSX/PDF) e o **PNG** (`exportar-grafico.ts`: layout puro + canvas,
     só com Exportar). Paleta = tokens **`--serie-1…8`** (claro/escuro; `corSerie(i)` p/ HTML, `useChartTokens().serie` p/ o
     Recharts) e a cor de cada classificação fixa pela ordem SEM filtro (`corDe`). Visual único: Cronograma em `Colunas`, Top
-    e Unidades em `BarrasH` (Unidades: 10 + "Outras N", Itens | Valor); só a rosca segue no Recharts. Antes (até a 1.6): a
+    e Unidades em `BarrasH` (Unidades: 10 + "Outras N", Itens | Valor); só a rosca segue no Recharts. **v1.8.0:** mais dois gráficos
+    (só com dado) — **Prioridade dos DFDs** (`PrioridadeChart`: cores pela CATEGORIA — `--danger/--warn/--ok/--faint`,
+    `PRIORIDADES_DASH`; `ItemRow.prioridade` = `prioridadeDoDfd` lida UMA vez por DFD em `itensConsolidados`) e **Valor por
+    unidade** requisitante/planilha (`UnidadeRequisitanteChart`, pelo `ItemRow.codigo`) —, as dimensões `prioridade`/`unidade`
+    no `RecorteDash` (`fatiasDash`), o **cronograma em 3 leituras** (`MensalChart` `modo`/`onModo`: Por mês · Acumulado ·
+    Anuais à parte — `cronogramaDash`; recortes `mes: 0` = os anuais do ano e `semAnuais`) e o **Relatório (PDF)** na barra
+    dos filtros (`blocosRelatorioDashboard`, `dashboard-relatorio.ts`: KPIs, filtros e uma tabela por gráfico com % e TOTAL;
+    com Exportar). O explorador aceita a cor CSS da categoria (`corDe` → número ou cor). Antes (até a 1.6): a
     prop `onSelecionar(recorte, rótulo)` abria a origem; a legenda da pizza vira botões ≥44px; `itensDoRecorte`
     (`origem-dash.ts`, puro: classificação/unidade de medida com "—" p/ vazio e a fatia "Outros" com todos os rótulos; mês
     com os ANUAIS do ano — 1/12 no gráfico; item pelo `id`, que `TopItem`/`TopDash` passaram a trazer). `ItemRow` ganhou

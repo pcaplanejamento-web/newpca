@@ -19,6 +19,7 @@ import type { LinhaHistorico } from "./auditoria-core";
 import { TIPO_DFD_ROTULO, TIPOS_DFD } from "./avaliacao-core";
 import { getDb } from "./db";
 import { getDfd } from "./dfd";
+import { prioridadeDoDfd } from "./dfd-tratamento";
 import { normUnidadeMedida } from "./normalize";
 import { type RelatorioOrcamento, relatorioOrcamentoPca } from "./orcamento-relatorio";
 import { type AusentesVisao, aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento, valoresAusentes } from "./orcamento-visao";
@@ -582,6 +583,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
   // Os lotes em PARALELO (cada um: os DFDs + os itens com SÓ as colunas usadas); a PREVISÃO sai UMA vez por DFD (o JSON
   // das seções pode ser grande — lido por item, milhares de itens estouravam a CPU do Worker).
   const previsaoPorDfd = new Map<number, ReturnType<typeof previsaoDoDfd>>();
+  const prioridadePorDfd = new Map<number, string | null>();
   const lotes = await Promise.all(
     lotesDeIds(cons.vigentes).map((lote) =>
       Promise.all([
@@ -633,6 +635,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
         secoes = [];
       }
       previsaoPorDfd.set(d.id, previsaoDoDfd(secoes, d.anoPca ?? pca.ano));
+      prioridadePorDfd.set(d.id, prioridadeDoDfd(secoes.map((x) => ({ numero: 0, titulo: x.titulo ?? "", texto: x.texto ?? "" }))));
     }
   for (const [, its] of lotes)
     for (const it of its) {
@@ -668,6 +671,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
     vinculos: vs,
     consolidacao: cons,
     previaIds: new Set(previa.map((v) => v.dfdId)),
+    prioridadePorDfd,
     protocolos: protocolos.size,
     previa: previa.length ? { dfds: previaVig.length, protocolos: new Set(previaVig.map((v) => v.protocoloId)).size } : null,
   };
@@ -676,7 +680,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
 type Consolidados = Awaited<ReturnType<typeof itensConsolidados>>;
 
 /** Item consolidado → a linha da tabela de itens (Dashboard e origem do Orçamento), com a ORIGEM (protocolo/DFD/mês). */
-function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados["meta"]): ItemRow {
+function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados["meta"], prioridades?: Map<number, string | null>): ItemRow {
   const p = i.previsao;
   const anual = !!p && "anual" in p;
   return {
@@ -699,6 +703,7 @@ function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados
     ano: p?.ano ?? null,
     mes: p && !("anual" in p) ? p.mes : null,
     anual,
+    prioridade: prioridades?.get(i.dfdId) ?? null,
   };
 }
 
@@ -734,7 +739,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
   const itens: ItemRow[] = lista
     .slice()
     .sort((a, b) => b.valorTotal - a.valorTotal)
-    .map((i) => itemRowConsolidado(i, c.meta));
+    .map((i) => itemRowConsolidado(i, c.meta, c.prioridadePorDfd));
   // DFDs vigentes (dos itens ATIVOS, no filtro de unidade) — a visão "DFDs" da consulta.
   const porDfd = new Map<number, DfdDoPca>();
   for (const i of lista) {
@@ -1131,7 +1136,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     }));
   } else {
     const c = await itensConsolidados(pca);
-    planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta) }));
+    planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta, c.prioridadePorDfd) }));
     previa = c.previa;
   }
   return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa, ausentes };

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { layoutPng, MAX_LINHAS_PNG } from "../src/lib/exportar-grafico.ts";
-import { agregarItensDash, alternarFiltro, type ItemAgregavel, type FiltrosDash, filtrarItensDash, mesmoRecorte, temFiltro } from "../src/lib/origem-dash.ts";
+import { blocosRelatorioDashboard } from "../src/lib/dashboard-relatorio.ts";
+import {
+  agregarItensDash,
+  alternarFiltro,
+  cronogramaDash,
+  fatiasDash,
+  itensDoRecorte,
+  type ItemAgregavel, type FiltrosDash, filtrarItensDash, mesmoRecorte, temFiltro } from "../src/lib/origem-dash.ts";
 import { agregarDashboard } from "../src/lib/pca-core.ts";
 import { fatiasPequenas, rankingSerie, textoParticipacao } from "../src/lib/ranking-grafico.ts";
 
@@ -108,5 +115,68 @@ describe("PNG do gráfico (layout)", () => {
     assert.ok(l.barras[1].largura < maior);
     assert.ok(l.altura > (l.barras.at(-1)?.y ?? 0));
     assert.equal(layoutPng({ titulo: "T", linhas: [{ rotulo: "z", valor: 0, texto: "", participacao: "", cor: "#000" }] }).barras[0].largura, 0);
+  });
+});
+
+describe("novos gráficos (prioridade, unidade, cronograma)", () => {
+  const J: (ItemAgregavel & { ano: number })[] = [
+    { ...base, id: 1, nomeProduto: "A", classificacao: "S", unidadeMedida: "UN", ano: 2026, mes: 3, valorTotal: 100, codigo: "SMS", prioridade: "ALTA" },
+    { ...base, id: 2, nomeProduto: "B", classificacao: "S", unidadeMedida: "UN", ano: 2026, mes: 4, valorTotal: 50, codigo: "SME", prioridade: null },
+    { ...base, id: 3, nomeProduto: "C", classificacao: "S", unidadeMedida: "UN", ano: 2026, mes: null, anual: true, valorTotal: 1200, codigo: "SMS", prioridade: "BAIXA" },
+  ];
+  it("fatias por prioridade/unidade (vazio = —) e o recorte", () => {
+    assert.deepEqual(
+      fatiasDash(J, "prioridade").map((f) => [f.label, f.total]),
+      [
+        ["BAIXA", 1200],
+        ["ALTA", 100],
+        ["—", 50],
+      ],
+    );
+    assert.deepEqual(
+      fatiasDash(J, "unidade").map((f) => [f.label, f.count]),
+      [
+        ["SMS", 2],
+        ["SME", 1],
+      ],
+    );
+    assert.deepEqual(itensDoRecorte(J, { dim: "prioridade", labels: ["—"] }).itens.map((i) => i.id), [2]);
+    assert.deepEqual(itensDoRecorte(J, { dim: "unidade", labels: ["SMS"] }).itens.map((i) => i.id), [1, 3]);
+  });
+  it("cronograma: por mês (1/12), acumulado e os anuais à parte; os recortes de cada leitura", () => {
+    const mensal = cronogramaDash(J, "mensal");
+    assert.equal(mensal.length, 12);
+    assert.equal(mensal.find((p) => p.mes === 3)?.total, 200);
+    const acum = cronogramaDash(J, "acumulado");
+    assert.equal(acum.at(-1)?.total, 1350);
+    const sep = cronogramaDash(J, "separado");
+    assert.deepEqual(
+      sep.map((p) => [p.mes, p.total]),
+      [
+        [3, 100],
+        [4, 50],
+        [0, 1200],
+      ],
+    );
+    assert.deepEqual(itensDoRecorte(J, { dim: "mes", ano: 2026, mes: 0 }).itens.map((i) => i.id), [3]);
+    assert.deepEqual(itensDoRecorte(J, { dim: "mes", ano: 2026, mes: 3, semAnuais: true }).itens.map((i) => i.id), [1]);
+    assert.deepEqual(itensDoRecorte(J, { dim: "mes", ano: 2026, mes: 3 }).itens.map((i) => i.id), [1, 3]);
+  });
+  it("relatório do Dashboard: KPIs, filtros e uma tabela por gráfico com % e TOTAL", () => {
+    const b = blocosRelatorioDashboard({
+      titulo: "Dashboard — PCA 2027",
+      filtros: "Prioridade: Alta",
+      resumo: { total: 150, count: 2, ticket: 75, maiorNome: "A", maiorValor: 100 },
+      graficos: [
+        { titulo: "Classificação", rotulo: "Classe", fatias: [{ label: "S", total: 150, count: 2 }] },
+        { titulo: "Vazio", rotulo: "X", fatias: [] },
+      ],
+    });
+    assert.equal(b.filter((x) => x.tipo === "tabela").length, 1);
+    const t = b.find((x) => x.tipo === "tabela");
+    assert.ok(t && t.tipo === "tabela");
+    assert.deepEqual(t.linhas.at(-1)?.celulas[0], "TOTAL");
+    assert.ok(t.linhas[0].celulas[3].startsWith("100"));
+    assert.ok(b.some((x) => x.tipo === "paragrafo" && x.texto.includes("Prioridade: Alta")));
   });
 });

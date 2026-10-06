@@ -225,6 +225,8 @@ export type ItemRow = {
   mes?: number | null;
   /** Previsão ANUAL (fonte protocolo): entra com 1/12 em cada mês do cronograma. */
   anual?: boolean;
+  /** Prioridade do DFD de origem (ALTA/MÉDIA/BAIXA; fonte protocolo — o gráfico de prioridade). */
+  prioridade?: string | null;
 };
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena

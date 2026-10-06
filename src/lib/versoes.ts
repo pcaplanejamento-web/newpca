@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.8.0",
+    data: "2026-10-06",
+    titulo: "Novos gráficos e relatório do Dashboard do PCA",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Gráfico de Prioridade dos DFDs (Alta, Média, Baixa nas cores de semáforo) e Valor por unidade requisitante (as 10 maiores + as demais) — também filtram o Dashboard.", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA", texto: "Cronograma em três leituras: por mês, acumulado e com os anuais à parte (uma coluna \"Anual\").", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA", texto: "Relatório do Dashboard em PDF: os indicadores e uma tabela por gráfico com o % do total, respeitando os filtros.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.7.0",
     data: "2026-10-06",
     titulo: "Gráficos do PCA que se filtram e se expandem",

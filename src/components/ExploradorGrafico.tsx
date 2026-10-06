@@ -17,6 +17,13 @@ import { toast } from "./Toast";
 
 type Linha = ReturnType<typeof rankingSerie>[number];
 
+/** "var(--danger)" → a cor do tema agora (o canvas do PNG não lê var()). */
+function corResolvida(css: string, reserva: string): string {
+  const m = /^var\((--[\w-]+)\)$/.exec(css.trim());
+  if (!m) return css;
+  return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || reserva;
+}
+
 /**
  * EXPLORADOR de um gráfico (expandir — o "Chart Explorer"): o RANKING de todas as categorias por valor (as pequenas
  * também), tocar numa abre o CARTÃO do detalhe (valor, participação, posição "3º de 12" e a barra do quanto pesa) com
@@ -43,8 +50,9 @@ export function ExploradorGrafico({
   /** O que o valor mede (o cabeçalho da coluna e o nome da medida). */
   medida: "valor" | "itens";
   formatar: (v: number) => string;
-  /** O índice da cor da série de cada categoria (o MESMO do gráfico; -1 = neutra). Sem ele, o accent. */
-  corDe?: (chave: string) => number;
+  /** A cor de cada categoria (a MESMA do gráfico): o índice da série (-1 = neutra) ou a cor CSS (ex.: `var(--danger)`).
+   * Sem ele, o accent. */
+  corDe?: (chave: string) => number | string;
   ativa?: string | null;
   /** Filtrar o Dashboard pela categoria (alternar). */
   onFiltrar?: (chave: string) => void;
@@ -63,10 +71,11 @@ export function ExploradorGrafico({
   const indice = (chave: string) => corDe?.(chave);
   const cor = (chave: string) => {
     const i = indice(chave);
-    return i == null ? "var(--accent)" : i < 0 ? "var(--faint)" : corSerie(i);
+    return i == null ? "var(--accent)" : typeof i === "string" ? i : i < 0 ? "var(--faint)" : corSerie(i);
   };
   const corPng = (chave: string) => {
     const i = indice(chave);
+    if (typeof i === "string") return corResolvida(i, tk.accent);
     return i == null ? tk.accent : i < 0 ? tk.axis : tk.serie[i % tk.serie.length];
   };
   const temItens = ranking.some((p) => p.count != null);

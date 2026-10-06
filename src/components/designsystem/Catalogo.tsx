@@ -37,6 +37,9 @@ import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { ExploradorGrafico } from "@/components/ExploradorGrafico";
 import { MensalChart } from "@/components/charts/MensalChart";
+import { PrioridadeChart } from "@/components/charts/PrioridadeChart";
+import type { ModoCronograma } from "@/lib/origem-dash";
+import { UnidadeRequisitanteChart } from "@/components/charts/UnidadeRequisitanteChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
@@ -1367,6 +1370,14 @@ function EdicoesTabelaDemo() {
   );
 }
 
+function CronogramaModosDemo() {
+  const [modo, setModo] = useState<ModoCronograma>("mensal");
+  const base = [...G_MES.map((p) => ({ ...p, semAnuais: modo === "separado" || undefined })), ...(modo === "separado" ? [{ ano: 2027, mes: 0, total: 24_000_000, count: 12 }] : [])];
+  const dados =
+    modo === "acumulado" ? base.map((p, i) => ({ ...p, total: base.slice(0, i + 1).reduce((s, x) => s + x.total, 0) })) : base;
+  return <MensalChart data={dados} modo={modo} onModo={setModo} temAnuais />;
+}
+
 function GraficosDashboardDemo() {
   const [classe, setClasse] = useState<string[] | undefined>();
   const [mes, setMes] = useState<string | null>(null);
@@ -1395,6 +1406,30 @@ function GraficosDashboardDemo() {
         </ChartCard>
         <ChartCard title="Unidades de Medida" subtitle="As 10 maiores + Outras; Itens ou Valor">
           <UnidadeChart data={G_UNID} ativos={unid} onSelecionar={(r) => r.dim === "unidadeMedida" && alterna(unid, r.labels, setUnid)} />
+        </ChartCard>
+        <ChartCard title="Prioridade dos DFDs" subtitle="Cores pela CATEGORIA (semáforo), nunca pela posição">
+          <PrioridadeChart
+            data={[
+              { label: "BAIXA", total: 9_400_000, count: 80 },
+              { label: "ALTA", total: 31_000_000, count: 210 },
+              { label: "MÉDIA", total: 18_200_000, count: 150 },
+              { label: "—", total: 1_100_000, count: 12 },
+            ]}
+            onSelecionar={() => undefined}
+          />
+        </ChartCard>
+        <ChartCard title="Valor por Unidade requisitante" subtitle="As 10 maiores + Outras N">
+          <UnidadeRequisitanteChart
+            data={["SME", "SMS", "SEINFRA", "SMA", "SEMAS", "SECULT", "SEMMA", "PGM", "SMF", "SEDUC", "GABINETE", "SMT"].map((l, i) => ({
+              label: l,
+              total: 20_000_000 / (i + 1),
+              count: 40 - i * 3,
+            }))}
+            onSelecionar={() => undefined}
+          />
+        </ChartCard>
+        <ChartCard title="Cronograma — leituras" subtitle="Por mês · Acumulado · Anuais à parte">
+          <CronogramaModosDemo />
         </ChartCard>
       </div>
       <ExploradorGrafico
