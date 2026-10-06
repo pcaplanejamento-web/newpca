@@ -123,6 +123,7 @@ export function TarefaExecucaoDfds({
     setAviso(null);
     const soCenti: SoNaCenti[] = [];
     const lidosPorEntidade: string[] = [];
+    const erros: string[] = [];
     let atualizados = 0;
     try {
       const l = await pedir("lote", { fase: "inicio", titulo: "CM002 · Execução dos DFDs", total: entidades.length }, 8000);
@@ -133,7 +134,7 @@ export function TarefaExecucaoDfds({
         const r = (await pedir("cm002", { entidade: ent }, 300_000)) as RespostaTela & { linhas?: PlanCenti[]; semConsulta?: boolean };
         if (r.interrompido) break;
         if (!r.ok || !Array.isArray(r.linhas)) {
-          setFalha({ erro: `Entidade ${ent}: ${r.erro ?? "a extensão não respondeu."}` });
+          erros.push(`Entidade ${ent}: ${r.erro ?? "a extensão não respondeu."}`);
           if (r.semConsulta) break;
           continue;
         }
@@ -143,12 +144,12 @@ export function TarefaExecucaoDfds({
         const g = (await fetch("/api/admin/automacao/execucao-dfds", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ colunas: ["ID", "SITUACAO"], linhas: r.linhas.map((p) => [p.id, p.situacao]), dfdIds: dfds.map((d) => d.id) }),
+          body: JSON.stringify({ colunas: ["ID", "SITUACAO"], linhas: r.linhas.map((p) => ({ valores: [p.id, p.situacao] })), dfdIds: dfds.map((d) => d.id) }),
         })
           .then((x) => x.json())
           .catch(() => null)) as { ok?: boolean; error?: string; atualizados?: number; em?: string; linhas?: { id: number; situacao: string | null }[] } | null;
         if (!g?.ok || !g.linhas) {
-          setFalha({ erro: `Entidade ${ent}: ${g?.error ?? "não consegui gravar a situação."}` });
+          erros.push(`Entidade ${ent}: ${g?.error ?? "não consegui gravar a situação."}`);
           continue;
         }
         atualizados += g.atualizados ?? 0;
@@ -157,6 +158,7 @@ export function TarefaExecucaoDfds({
       }
       if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: `${lidosPorEntidade.length} entidade(s) lidas` }, 8000);
       setSoNaCenti(soCenti);
+      if (erros.length) setFalha({ erro: erros.join(" · ") });
       if (lidosPorEntidade.length) {
         setAviso(`Lido pela API — planejamentos por entidade: ${lidosPorEntidade.join(" · ")}.`);
         toast.success(`${atualizados} DFD(s) atualizado(s).`);

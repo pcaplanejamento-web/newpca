@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.21.1",
+    data: "2026-10-06",
+    titulo: "Execução dos DFDs gravada em todas as entidades",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A situação lida pela API da CM002 não era gravada (“esperava um objeto, recebeu um vetor”); agora grava em todas as entidades e mostra a falha de cada uma.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.21.0",
     data: "2026-10-06",
     titulo: "Execução dos DFDs lida pela API da Centi",
