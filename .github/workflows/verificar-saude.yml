@@ -1,0 +1,35 @@
+name: Verificar saúde (somente leitura)
+
+# TEMPORÁRIO — smoke test do site publicado + as consultas do painel "Saúde dos dados" no D1 de produção (só SELECT).
+# Nunca vai para a main.
+on:
+  push:
+    branches: [claude/brave-turing-4ul80k]
+    paths: [".github/workflows/verificar-saude.yml"]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Páginas publicadas
+        run: |
+          for u in / /login /design-system /api/dados/versao; do
+            curl -s -o /dev/null -m 30 -w "$u %{http_code} %{time_total}s\n" "https://governarv.com.br$u"
+          done
+      - name: Consultas do painel (somente leitura)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --experimental-strip-types -e 'import("./src/lib/saude-dados-sql.ts").then((m) => { const fs = require("fs"); for (const k of ["SQL_DFDS", "SQL_PROTOCOLOS", "SQL_SEM_VALOR", "SQL_SEM_PLANEJAMENTO", "SQL_CONTAGENS"]) fs.writeFileSync(k + ".sql", m[k]); })'
+          for k in SQL_DFDS SQL_PROTOCOLOS SQL_SEM_VALOR SQL_SEM_PLANEJAMENTO SQL_CONTAGENS; do
+            echo "=== $k"
+            npx wrangler d1 execute newpca-db --remote --json --yes --command "$(cat $k.sql)" \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{for(const r of JSON.parse(s)){const l=r.results||[];console.log("linhas:",l.length);for(const x of l.slice(0,6))console.log(JSON.stringify(x))}}catch(e){console.log(s.slice(0,2000))}})'
+          done
