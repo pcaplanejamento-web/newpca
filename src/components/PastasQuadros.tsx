@@ -641,6 +641,7 @@ export function GradePastas({
   const envolver = (chave: string, area: string | null, lista: string[], conteudo: ReactNode, extraAttrs: { pastaId?: string; indice?: number } = {}) => (
     <div
       key={chave}
+      role="none"
       data-grade-item={chave}
       data-pasta-id={extraAttrs.pastaId}
       className={`${arrasto?.chave === chave ? "hidden" : ""} ${onMover ? "touch-manipulation select-none [-webkit-touch-callout:none]" : ""} ${negado === chave ? "animate-negar-arrasto" : extraAttrs.indice != null ? "animate-fade-in-up" : ""}`}

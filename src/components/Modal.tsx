@@ -272,6 +272,7 @@ export function Modal({
 
   const scrim = (
     <div
+      aria-hidden="true"
       className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm"
       onClick={fecharNoBackdrop && !bloqueado ? onClose : undefined}
     />

@@ -71,7 +71,7 @@ export function BotaoWhatsapp({ telefone, size = "xs", comNumero = true }: { tel
   const href = linkWhatsapp(telefone);
   if (!href) return null;
   return (
-    <span className="inline-flex" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+    <span role="none" className="inline-flex" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <LinkExterno href={href} size={size} titulo={`Conversar no WhatsApp — ${formatarTelefone(telefone)}`} icon={<IconWhatsapp className="h-4 w-4 text-[var(--ok)]" />}>
         {comNumero ? <span className="tabular-nums">{formatarTelefone(telefone)}</span> : <span className="hidden sm:inline">WhatsApp</span>}
       </LinkExterno>

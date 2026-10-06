@@ -890,6 +890,7 @@ export function CalendarioTarefas({
           {dias.map((d, i) => (
             <div
               key={`t${d}`}
+              aria-hidden="true"
               data-dia={d}
               onClick={(ev) => ev.target === ev.currentTarget && onCriar?.({ data: d, hora: null, horaFim: null, ancora: retangulo(ev.currentTarget) })}
               style={{ gridColumn: i + 2, gridRow: "1 / -1" }}
@@ -1078,6 +1079,7 @@ export function CalendarioTarefas({
                 {sem.map((d, i) => (
                   <div
                     key={`f${d}`}
+                    aria-hidden="true"
                     data-dia={d}
                     onClick={(ev) => ev.target === ev.currentTarget && onCriar?.({ data: d, hora: null, horaFim: null, ancora: retangulo(ev.currentTarget) })}
                     style={{ gridColumn: i + off, gridRow: "1 / -1" }}

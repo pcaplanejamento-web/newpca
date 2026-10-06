@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
@@ -432,6 +432,15 @@ export function AppShell({
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
+  // Esc fecha a gaveta (o caminho do teclado; o fundo escurecido é só do ponteiro) — menos com um diálogo por cima.
+  useEffect(() => {
+    if (!menuAberto) return;
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[role='dialog']")) setMenuAberto(false);
+    };
+    document.addEventListener("keydown", tecla);
+    return () => document.removeEventListener("keydown", tecla);
+  }, [menuAberto]);
   const abasSet = new Set(abas);
   // O PCA do cabeçalho filtra a Mesa, o módulo PCA e o Orçamento — sem nenhuma dessas abas, o seletor não aparece.
   const filtraPca = abasSet.has("dfd") || abasSet.has("pca") || abasSet.has("orcamento");
@@ -457,7 +466,7 @@ export function AppShell({
       {/* Drawer mobile (menu hambúrguer) — reusa a mesma navegação da sidebar */}
       {menuAberto && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
+          <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
           <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface shadow-soft">
             <div className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-border pl-4 pr-1">
               <Brand identidade={identidade} />

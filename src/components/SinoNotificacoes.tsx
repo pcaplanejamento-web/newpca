@@ -586,7 +586,7 @@ function PainelNotificacoes({
           </div>
         )}
       </div>
-      <div ref={lista} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1" onKeyDown={teclado} role="presentation">
+      <div ref={lista} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1" onKeyDown={teclado} role="none">
         {itens === null && !falha && (
           <p className="flex items-center justify-center gap-2 py-8 text-xs text-muted">
             <IconSpinner className="h-4 w-4" /> Carregando…

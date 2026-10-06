@@ -48,6 +48,7 @@ export function DicaFlutuante({ conteudo, children, largura = 340 }: { conteudo:
   return (
     <span
       ref={ancora}
+      role="none"
       className="inline-flex"
       aria-describedby={pos ? id : undefined}
       onPointerEnter={(e) => e.pointerType === "mouse" && mostrar()}

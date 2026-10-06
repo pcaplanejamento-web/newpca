@@ -134,7 +134,7 @@ export function SeletorPessoa({
         return (
           // O painel PARA o clique (numa célula, o toque atravessaria o portal e abriria a linha) — e cobre o respiro do
           // Dropdown; o Esc (fechar + foco de volta ao gatilho) é do Dropdown.
-          <div className="-m-2 p-2" onClick={(e) => e.stopPropagation()}>
+          <div role="none" className="-m-2 p-2" onClick={(e) => e.stopPropagation()}>
             <SeletorBusca
               opcoes={opcoes}
               valor={valor}

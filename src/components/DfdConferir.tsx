@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { type AncoraAlvo, useDestaqueAncora } from "./DestaqueAncora";
 import { type ChaveAvaliacao, comportamentoDaFalta, editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
@@ -486,8 +486,7 @@ export function DfdConferir({
               )}
               {/* Validada pela equipe: a DATA da assinatura pode ser informada/corrigida aqui. */}
               {resAss.origem === "equipe" && validadaEquipe && (
-                <label className="flex w-full flex-wrap items-center gap-2 text-[12.5px] text-text-2">
-                  <span className="font-medium">Data da assinatura</span>
+                <div className="flex w-full flex-wrap items-center gap-2 text-[12.5px] text-text-2">
                   {podeValidar ? (
                     <CampoDataAssinatura
                       data={validadaEquipe.data}
@@ -495,9 +494,12 @@ export function DfdConferir({
                       onData={(br) => onAssinaturasChange?.(definirDataAssinaturaEquipe(dfd.assinaturas, br))}
                     />
                   ) : (
-                    <span className="tabular-nums">{validadaEquipe.data.trim() || "—"}</span>
+                    <>
+                      <span className="font-medium">Data da assinatura</span>
+                      <span className="tabular-nums">{validadaEquipe.data.trim() || "—"}</span>
+                    </>
                   )}
-                </label>
+                </div>
               )}
             </div>
           ) : (
@@ -639,11 +641,15 @@ function CampoDataAssinatura({ data, hojeIso, onData }: { data: string; hojeIso:
   const [rascunho, setRascunho] = useState(gravada);
   useEffect(() => setRascunho(gravada), [gravada]);
   const invalida = !!rascunho && rascunho !== gravada && !dataAssinaturaDeIso(rascunho, hojeIso);
+  const id = useId();
   return (
     <>
+      <label htmlFor={id} className="font-medium">
+        Data da assinatura
+      </label>
       <input
+        id={id}
         type="date"
-        aria-label="Data da assinatura"
         className={inputCls}
         style={{ width: "auto" }}
         max={hojeIso}
