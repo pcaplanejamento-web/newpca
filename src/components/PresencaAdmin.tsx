@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
+import type { ConfigChat } from "@/lib/chat-core";
 import { type ConfigPresenca, LIMITES_INATIVO } from "@/lib/presenca-core";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { ErroCarga } from "./ErroCarga";
 import { TextField } from "./Field";
-import { IconEyeOff, IconSave, IconUsers } from "./icons";
+import { IconChat, IconEyeOff, IconSave, IconUsers } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
@@ -16,7 +17,7 @@ import { toast } from "./Toast";
  * Configurações → PRESENÇA (ADM): mostrar, ao vivo no cabeçalho, quem do grupo ativo está online. Desligada, nada é
  * carregado nem conectado (custo zero); ligada, cada aba abre UM canal com o objeto do grupo (Durable Object).
  */
-export function PresencaAdmin() {
+function PresencaCartao() {
   const [c, setC] = useState<ConfigPresenca | null>(null);
   const [salvo, setSalvo] = useState<ConfigPresenca | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -86,6 +87,75 @@ export function PresencaAdmin() {
       </div>
       <div className="flex justify-end">
         <Button size="sm" icon={<IconSave className="h-4 w-4" />} loading={salvando} disabled={salvando || JSON.stringify(c) === JSON.stringify(salvo)} onClick={salvar} title="Salvar a presença">
+          Salvar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Configurações → PRESENÇA E CHAT (ADM): quem está online e o chat ao vivo (que usa o mesmo canal). */
+export function PresencaAdmin() {
+  return (
+    <div className="space-y-[var(--gap-block)]">
+      <PresencaCartao />
+      <ChatCartao />
+    </div>
+  );
+}
+
+/** O CHAT AO VIVO: o do grupo ativo e o privado (entre pessoas de um mesmo grupo). Nada é gravado. */
+function ChatCartao() {
+  const [c, setC] = useState<ConfigChat | null>(null);
+  const [salvo, setSalvo] = useState<ConfigChat | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const carregar = useCallback(() => {
+    chamar<{ chat: ConfigChat }>("/api/admin/chat")
+      .then((j) => {
+        setC(j.chat);
+        setSalvo(j.chat);
+        setErro(null);
+      })
+      .catch((e) => setErro((e as Error).message));
+  }, []);
+  useEffect(carregar, [carregar]);
+  if (erro && !c) return <ErroCarga msg={erro} onTentar={carregar} />;
+  if (!c) return <SkeletonLinhas linhas={2} />;
+  const salvar = async () => {
+    setSalvando(true);
+    try {
+      const j = await chamar<{ chat: ConfigChat }>("/api/admin/chat", "PATCH", c);
+      setC(j.chat);
+      setSalvo(j.chat);
+      toast.success("Chat salvo — vale ao abrir ou recarregar as telas.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSalvando(false);
+    }
+  };
+  return (
+    <div className="space-y-[var(--gap-block)] rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+      <div className="flex items-center gap-2">
+        <p className="flex-1 text-[15px] font-semibold text-text">Chat ao vivo</p>
+        <Ajuda titulo="Chat ao vivo">
+          <TopicoAjuda icone={<IconChat className="h-4 w-4" />} titulo="Só ao vivo — nada é salvo">
+            As mensagens chegam só a quem está com o sistema aberto naquela hora e somem ao fechar ou recarregar a página. Não ficam
+            no banco, nem no histórico.
+          </TopicoAjuda>
+          <TopicoAjuda titulo="Chat do grupo">Uma conversa com todos do grupo ativo que estão online.</TopicoAjuda>
+          <TopicoAjuda titulo="Chat privado">
+            Conversa entre duas pessoas que estão em pelo menos um grupo em comum. Se a outra pessoa não estiver com o sistema aberto, a
+            mensagem não é entregue.
+          </TopicoAjuda>
+          <TopicoAjuda titulo="Depende da presença">O chat usa o mesmo canal ao vivo: só aparece com “Mostrar quem do grupo está online” ligado.</TopicoAjuda>
+        </Ajuda>
+      </div>
+      <Switch dica="Uma conversa com todos do grupo ativo que estão online" checked={c.grupo} onChange={(grupo) => setC({ ...c, grupo })} label="Chat do grupo" />
+      <Switch dica="Conversas entre duas pessoas de um mesmo grupo" checked={c.privado} onChange={(privado) => setC({ ...c, privado })} label="Chat privado" />
+      <div className="flex justify-end">
+        <Button size="sm" icon={<IconSave className="h-4 w-4" />} loading={salvando} disabled={salvando || JSON.stringify(c) === JSON.stringify(salvo)} onClick={salvar} title="Salvar o chat">
           Salvar
         </Button>
       </div>

@@ -20,7 +20,7 @@ import { IconAdiar, IconBell, IconChevronDown, IconFixar, IconLidas, IconLimpar,
 import { Modal, duracaoMotionMs } from "./Modal";
 import { NovidadesFlutuantes } from "./Novidades";
 import { VISUAL_AVISO, visualAviso } from "./notificacoesVisual";
-import { useNaoPerturbe } from "./CanalGrupo";
+import { EVENTO_CHAT_PRIVADO, useNaoPerturbe } from "./CanalGrupo";
 import { alertaSistema, tocarSom, usePreferenciasNotificacoes } from "./PreferenciasNotificacoes";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
@@ -768,6 +768,11 @@ function useCaixa(inicial: number) {
       };
       ws.onmessage = (e) => {
         if (e.data === "pong") return;
+        // A mensagem PRIVADA do chat ao vivo vem pelo mesmo canal: vai ao chat (não é aviso do sino).
+        if (typeof e.data === "string" && e.data.startsWith('{"t":"chat"')) {
+          window.dispatchEvent(new CustomEvent(EVENTO_CHAT_PRIVADO, { detail: e.data }));
+          return;
+        }
         setVersao((v) => v + 1);
         void conferirNovo();
       };

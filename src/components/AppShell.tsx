@@ -12,6 +12,8 @@ import { VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
 import { CanalGrupo, type PresencaShell } from "./CanalGrupo";
 import { PresencaGrupo } from "./PresencaGrupo";
+import { ChatAoVivo } from "./ChatAoVivo";
+import type { ConfigChat } from "@/lib/chat-core";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
@@ -416,6 +418,7 @@ export function AppShell({
   notificacoes = 0,
   versaoDados,
   presenca = null,
+  chat = null,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
@@ -434,6 +437,8 @@ export function AppShell({
   versaoDados?: string;
   /** A PRESENÇA do grupo ativo (quem está online) — só quando o ADM a ligou; `null` = nada é montado. */
   presenca?: PresencaShell | null;
+  /** O CHAT AO VIVO (o do grupo e/ou o privado ligados pelo ADM; só com a presença) — `null` = sem o chat. */
+  chat?: ConfigChat | null;
 }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
@@ -531,6 +536,7 @@ export function AppShell({
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
             {presenca && <PresencaGrupo verMesa={abasSet.has("dfd")} />}
+            {presenca && chat && <ChatAoVivo config={chat} />}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">

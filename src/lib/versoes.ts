@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.11.0",
+    data: "2026-10-06",
+    titulo: "Chat ao vivo",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "Chat ao vivo com o grupo ativo e conversas privadas entre pessoas de um mesmo grupo — as mensagens não são salvas." },
+      { tipo: "novo", area: "Cabeçalho", texto: "Digitando…, ✓ enviada e ✓✓ lida (lida por N no grupo), responder citando, @menção e links do sistema que viram cartões." },
+      { tipo: "novo", area: "Configurações", texto: "O ADM liga o chat do grupo e o privado (aba Presença e chat).", link: "/painel/configuracoes?aba=presenca" },
+    ],
+  },
+  {
     versao: "1.10.0",
     data: "2026-10-06",
     titulo: "Presença ao vivo 2.0",

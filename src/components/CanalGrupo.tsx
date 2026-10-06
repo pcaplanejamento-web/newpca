@@ -5,6 +5,9 @@ import { esperaReconexao } from "@/lib/ao-vivo-core";
 import type { Pessoa } from "@/lib/pessoa";
 import { type EstadoPresenca, type InfoPresenca, lerListaMensagem, type StatusPresenca, statusVigente } from "@/lib/presenca-core";
 
+/** O evento da janela com a mensagem PRIVADA do chat (chega pela caixa pessoal — o canal do sino). */
+export const EVENTO_CHAT_PRIVADO = "pca:chat-privado";
+
 /** O que o layout passa quando o ADM ligou a presença (desligada = `null`: nada é montado nem conectado). */
 export type PresencaShell = {
   pessoas: Pessoa[];

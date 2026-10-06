@@ -436,6 +436,41 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     gratuito: 100 mil requisições de DO/dia; mensagens que chegam em 20:1; as que saem e a auto-resposta não contam): ~4–5
     mil/dia para 50 pessoas × 2 abas × 8 h.
 
+## Chat ao vivo (v1.11.0 — NADA É SALVO)
+- **Regra do usuário: as conversas são SÓ AO VIVO** — nenhuma tabela, nenhum storage do Durable Object, nenhuma auditoria;
+  a mensagem existe só nas abas abertas enquanto estão abertas (na memória do `AppShell` — sobrevive à navegação, some no F5
+  ou ao fechar; o `beforeunload` pergunta com conversa em andamento). Configurações → **"Presença e chat"** (`PresencaAdmin`
+  → cartão "Chat ao vivo": **Chat do grupo** e **Chat privado**, DESLIGADOS por padrão; blob `configuracoes.chat` —
+  `getConfigChat`/`gravarConfigChat` em `presenca.ts`, cache 60 s; `GET/PATCH /api/admin/chat`, `exigirAdmin`, auditoria do
+  fato). O chat vive no canal da PRESENÇA: sem ela ligada, não aparece (`AppShell.chat` só com `presenca`).
+- **Núcleo PURO `chat-core.ts`** (`tests/chat.test.ts`): `lerConfigChat`, conversas `"grupo" | p<id>` (`idDaConversa`,
+  `conversaPrivada`), `limparTextoChat` (sem controles/invisíveis, ≤ 2 quebras seguidas, ≤ 2000), `lerResposta` (a citada),
+  `lerMensagemChatAba` (`{t:"msg"|"digitando"|"lida"}`), `contarNaJanela` (30/min), `lerMensagemRecebida` (o `autor` do
+  privado só com foto interna), `juntarMensagem` (a mesma pelo id atualiza no lugar — confirmação/eco; teto 300),
+  `quantosLeram` ("lida por N"), `cartoesDoTexto` (links do sistema — protocolo/DFD/tarefa/PCA — viram cartões, sem
+  consulta; nunca o caminho dentro de link de outro site), `mencaoEmCurso`, `novoIdMensagem`, `rotuloDiaChat`/`horaChat`
+  (Brasília).
+- **Caminho:** **grupo** pelo socket do grupo — o `PresencaGrupo` valida (texto, 30/min por aba, o autor = o anexo — nunca o
+  que a aba diz, `x-chat-grupo`) e retransmite `{t:"msg", conversa:"grupo", id, de, em, texto, resp}` a TODAS as abas (a
+  própria = a confirmação; recusa = `{t:"msg-recusada", id, motivo}`); **"digitando"** (1 a cada 3 s por aba) e **"lida"** ao
+  grupo (menos a própria pessoa) ou, no privado, às abas da outra pessoa NESTE grupo. **Privado** pela rota **`POST
+  /api/chat/privado`** (`chatPrivadoSchema`; `exigirUsuario`; chat privado ligado; `compartilhamGrupo` — destinatário ATIVO
+  num grupo em comum; limite `chatPrivado` 30/min por pessoa em `LIMITES_ACESSO`) → a **`CaixaNotificacoes`** do destinatário
+  (`POST /chat` — repassa às abas e devolve quantas receberam) e a de quem mandou (as outras abas dele); 0 abas =
+  `entregue:false` ("não está com o sistema aberto — não foi entregue"). Nada é gravado. No cliente o `useCaixa` do sino
+  repassa `{"t":"chat"…}` ao evento `EVENTO_CHAT_PRIVADO` (não é aviso do sino).
+- **Tela — `ChatAoVivo`** (DS; no cabeçalho, ao lado da presença): o ícone `IconChat` com as não lidas (pop); o PAINEL por
+  **portal no body** (o cabeçalho com desfoque prenderia o fixo) — desktop ancorado à direita (380px, abaixo do cabeçalho),
+  celular em tela cheia; Esc fecha. **Lista:** "Grupo · <grupo>" + as privadas desta sessão (prévia, hora, não lidas,
+  "digitando…") + **Nova conversa** (as pessoas do grupo com o ponto de presença, online primeiro; busca acima de 8) + o aviso
+  "As conversas não são salvas". **Conversa:** balões (**`Balao`** — meus à direita na cor do sistema; dos outros com foto e
+  nome no grupo, agrupados por autor em 5 min), separador de dia, responder (citação), **@menção** com sugestão (Enter insere),
+  `TextoFormatado` (negrito, código, links), cartões dos links do sistema, ✓ enviada / ✓✓ lida ("lida por N" no grupo),
+  "enviando…", "Tentar de novo" (falha ou sem confirmação em 8 s) e "não entregue" (privado), **`Digitando`** (três pontos —
+  `ponto-digitando`), "↓ Novas mensagens" rolado para cima; Enter envia, Shift+Enter quebra. Mensagem com o painel fechado =
+  som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
+  zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
+
 ## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um

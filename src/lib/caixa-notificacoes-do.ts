@@ -3,7 +3,7 @@ import { MAX_ABAS_AO_VIVO } from "./ao-vivo-core";
 /**
  * A CAIXA de notificações de UMA pessoa (Durable Object, um por usuário — `idFromName("u<id>")`): guarda os WebSockets
  * das abas abertas (HIBERNAÇÃO — parado, não custa) e, a cada `POST /ping` (gravou-se um aviso, leu-se, limpou-se), avisa
- * todas: a tela busca o que mudou. O "ping" das abas é respondido sem acordar o objeto (auto-resposta).
+ * todas: a tela busca o que mudou. `POST /chat` repassa a mensagem PRIVADA do chat ao vivo (nada é gravado). O "ping" das abas é respondido sem acordar o objeto (auto-resposta).
  */
 export class CaixaNotificacoes {
   private state: DurableObjectState;
@@ -29,6 +29,22 @@ export class CaixaNotificacoes {
       const [cliente, servidor] = [par[0], par[1]];
       this.state.acceptWebSocket(servidor);
       return new Response(null, { status: 101, webSocket: cliente });
+    }
+    // O CHAT PRIVADO (só ao vivo — nada é gravado): repassa a mensagem às abas abertas e diz quantas receberam (0 = a pessoa
+    // não está com o sistema aberto: a rota responde "não entregue").
+    if (pathname === "/chat" && req.method === "POST") {
+      const texto = await req.text();
+      if (texto.length > 16_000) return new Response("Grande demais.", { status: 413 });
+      let n = 0;
+      for (const ws of this.state.getWebSockets()) {
+        try {
+          ws.send(texto);
+          n++;
+        } catch {
+          /* aba que caiu */
+        }
+      }
+      return Response.json({ n });
     }
     if (pathname === "/ping" && req.method === "POST") {
       this.avisar();

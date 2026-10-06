@@ -6,6 +6,7 @@
 // @ts-expect-error — gerado no build (fora do typecheck: ver tsconfig "exclude")
 import handler from "./.open-next/worker.js";
 import { lerCookie, origemDoProprioSite } from "./src/lib/ao-vivo-core";
+import { lerConfigChat } from "./src/lib/chat-core";
 import { CHAVE_PREF_PRESENCA, ficaInvisivel, lerConfigPresenca, lerPrefsPresenca } from "./src/lib/presenca-core";
 
 export { CaixaNotificacoes } from "./src/lib/caixa-notificacoes-do";
@@ -56,12 +57,13 @@ async function presenca(req: Request, env: Env): Promise<Response> {
     `SELECT s.usuario_id AS id,
        EXISTS (SELECT 1 FROM usuario_grupos g WHERE g.usuario_id = s.usuario_id AND g.grupo_id = ?) AS membro,
        (SELECT p.valor FROM preferencias_tabela p WHERE p.usuario_id = s.usuario_id AND p.chave = ?) AS prefs,
-       (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.presenca') END FROM configuracoes c WHERE c.id = 1) AS config
+       (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.presenca') END FROM configuracoes c WHERE c.id = 1) AS config,
+       (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.chat') END FROM configuracoes c WHERE c.id = 1) AS chat
      FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
      WHERE s.token_hash = ? AND s.expira_em > ? AND u.status = 'ativo' LIMIT 1`,
   )
     .bind(grupo, CHAVE_PREF_PRESENCA, await sha256(token), new Date().toISOString())
-    .first<{ id: number; membro: number; prefs: string | null; config: string | null }>();
+    .first<{ id: number; membro: number; prefs: string | null; config: string | null; chat: string | null }>();
   if (!linha) return new Response("Sessão inválida.", { status: 401 });
   if (!linha.membro) return new Response("Fora do grupo.", { status: 403 });
   let bruto: unknown = null;
@@ -76,6 +78,16 @@ async function presenca(req: Request, env: Env): Promise<Response> {
   headers.set("x-presenca-usuario", String(linha.id));
   headers.set("x-presenca-invisivel", ficaInvisivel(cfg, lerPrefsPresenca(linha.prefs)) ? "1" : "0");
   headers.set("x-presenca-ausente", cfg.ausente ? "1" : "0");
+  // O CHAT ao vivo (o ADM liga o do grupo e o privado — Configurações → Chat).
+  let chat: unknown = null;
+  try {
+    chat = linha.chat ? JSON.parse(linha.chat) : null;
+  } catch {
+    /* config inválida = desligado */
+  }
+  const cfgChat = lerConfigChat(chat);
+  headers.set("x-chat-grupo", cfgChat.grupo ? "1" : "0");
+  headers.set("x-chat-privado", cfgChat.privado ? "1" : "0");
   // O status gravado (Ocupado, Em reunião…) — a aba o atualiza depois pelo próprio socket.
   const prefs = lerPrefsPresenca(linha.prefs);
   headers.set("x-presenca-status", encodeURIComponent(JSON.stringify({ status: prefs.status, recado: prefs.recado, ate: prefs.ate })));

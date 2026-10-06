@@ -3,6 +3,8 @@
 import type { SVGProps } from "react";
 import {
   Activity,
+  MessagesSquare,
+  Reply,
   BookOpen,
   LogIn,
   Rows3,
@@ -339,3 +341,6 @@ export const IconLinhas = Rows3;
 export const IconSituacoes = Tags;
 export const IconAvaliacao = ListChecks;
 export const IconReferencia = BookOpen;
+// O CHAT AO VIVO: o ícone do cabeçalho, enviar e responder.
+export const IconChat = MessagesSquare;
+export const IconResponder = Reply;

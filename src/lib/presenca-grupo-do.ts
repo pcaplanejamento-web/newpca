@@ -1,3 +1,4 @@
+import { contarNaJanela, idDaConversa, INTERVALO_DIGITANDO_MS, lerMensagemChatAba } from "./chat-core";
 import {
   type ConexaoPresenca,
   INTERVALO_MSG_MS,
@@ -9,8 +10,16 @@ import {
   vistosRecentes,
 } from "./presenca-core";
 
-/** O anexo de cada aba: quem é, o estado, o status e se o ADM mostra ausentes (vale o da conexão mais nova). */
-type Anexo = ConexaoPresenca & { ausente: boolean; ultima: number };
+/** O anexo de cada aba: quem é, o estado, o status, se o ADM mostra ausentes (vale o da conexão mais nova), o chat ligado
+ * (grupo/privado) e os contadores do chat (mensagens por minuto, último "digitando"). */
+type Anexo = ConexaoPresenca & {
+  ausente: boolean;
+  ultima: number;
+  chatGrupo?: boolean;
+  chatPrivado?: boolean;
+  janela?: { inicio: number; n: number };
+  dig?: number;
+};
 
 /**
  * A PRESENÇA de UM grupo (Durable Object, um por grupo — `idFromName("g<id>")`): guarda os WebSockets das abas das
@@ -18,6 +27,10 @@ type Anexo = ConexaoPresenca & { ausente: boolean; ultima: number };
  * todas a lista de quem está online + o "visto por último" (na MEMÓRIA do objeto — nada é gravado; depois de hibernar,
  * recomeça). O "ping" das abas é respondido sem acordar o objeto (auto-resposta). O `worker.ts` já conferiu a sessão, o
  * grupo e a config — chegam aqui só o id, o status gravado, se a pessoa fica invisível e se o ausente aparece.
+ *
+ * O CHAT DO GRUPO passa por aqui SÓ AO VIVO (nada é gravado): a mensagem é validada (texto, 30/min por aba, o autor = o
+ * anexo — nunca o que a aba diz) e retransmitida a todas as abas do grupo; o "digitando" e a "lida" vão ao grupo ou, no
+ * privado, só às abas da outra pessoa que estiverem neste grupo.
  */
 export class PresencaGrupo {
   private state: DurableObjectState;
@@ -61,6 +74,8 @@ export class PresencaGrupo {
       recado: st.recado,
       ate: st.ate,
       ultima: 0,
+      chatGrupo: req.headers.get("x-chat-grupo") === "1",
+      chatPrivado: req.headers.get("x-chat-privado") === "1",
     };
     servidor.serializeAttachment(anexo);
     this.vistos.delete(id);
@@ -98,9 +113,13 @@ export class PresencaGrupo {
   }
 
   webSocketMessage(ws: WebSocket, texto: string | ArrayBuffer) {
-    const m = lerMensagemAba(texto);
     const anexo = ws.deserializeAttachment() as Anexo | null;
-    if (!m || !anexo) return;
+    if (!anexo) return;
+    const m = lerMensagemAba(texto);
+    if (!m) {
+      this.chat(ws, anexo, texto);
+      return;
+    }
     // Uma mudança por segundo por aba (o resto é ignorado — a tela só manda quando muda).
     const agora = Date.now();
     if (agora - anexo.ultima < INTERVALO_MSG_MS) return;
@@ -115,6 +134,31 @@ export class PresencaGrupo {
       }
     }
     this.enviar(null);
+  }
+
+  /** O CHAT (só ao vivo): mensagem do grupo, "digitando" e "lida". */
+  private chat(ws: WebSocket, anexo: Anexo, texto: string | ArrayBuffer) {
+    const m = lerMensagemChatAba(texto);
+    if (!m) return;
+    const agora = Date.now();
+    if (m.t === "msg") {
+      if (!anexo.chatGrupo) return enviarA([ws], { t: "msg-recusada", id: m.id, motivo: "O chat do grupo está desligado." });
+      const conta = contarNaJanela(anexo.janela, agora);
+      ws.serializeAttachment({ ...anexo, janela: conta.janela });
+      if (!conta.ok) return enviarA([ws], { t: "msg-recusada", id: m.id, motivo: "Muitas mensagens seguidas — aguarde um instante." });
+      enviarA(this.state.getWebSockets(), { t: "msg", conversa: "grupo", id: m.id, de: anexo.id, em: agora, texto: m.texto, resp: m.resp });
+      return;
+    }
+    // "digitando" (1 a cada 3 s por aba) e "lida": ao grupo (menos a própria pessoa) ou às abas da outra pessoa.
+    if (m.t === "digitando") {
+      if (agora - (anexo.dig ?? 0) < INTERVALO_DIGITANDO_MS) return;
+      ws.serializeAttachment({ ...anexo, dig: agora });
+    }
+    const outro = idDaConversa(m.conversa);
+    if (outro == null ? !anexo.chatGrupo : !anexo.chatPrivado || outro === anexo.id) return;
+    const alvo = outro == null ? this.state.getWebSockets().filter((o) => !this.state.getTags(o).includes(`u${anexo.id}`)) : this.state.getWebSockets(`u${outro}`);
+    const conversa = outro == null ? "grupo" : `p${anexo.id}`;
+    enviarA(alvo, m.t === "lida" ? { t: "lida", de: anexo.id, conversa, ate: m.ate } : { t: "digitando", de: anexo.id, conversa });
   }
 
   webSocketClose(ws: WebSocket, code: number, motivo: string) {
@@ -139,5 +183,16 @@ function fechar(ws: WebSocket, code: number, motivo: string) {
     ws.close(code === 1005 || code === 1006 ? 1000 : code, motivo);
   } catch {
     /* já fechada */
+  }
+}
+
+function enviarA(abas: WebSocket[], msg: Record<string, unknown>) {
+  const texto = JSON.stringify(msg);
+  for (const ws of abas) {
+    try {
+      ws.send(texto);
+    } catch {
+      /* aba que caiu */
+    }
   }
 }

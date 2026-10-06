@@ -6,7 +6,8 @@ import { getAparencia } from "@/lib/aparencia";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { contarNaoLidas } from "@/lib/notificacoes";
-import { getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
+import { getConfigChat, getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
+import { chatLigado } from "@/lib/chat-core";
 import { ficaInvisivel } from "@/lib/presenca-core";
 import { linhasTabela } from "@/lib/theme";
 import { listarPessoasDoGrupo } from "@/lib/usuarios";
@@ -33,11 +34,12 @@ export default async function PainelLayout({
     // A versão dos dados: o `SincronizarDados` só recarrega a tela quando ela muda (falhou = sem sincronização).
     versaoDados().catch(() => undefined),
   ]);
-  const [contexto, pcaFiltro, notificacoes, presenca] = await Promise.all([
+  const [contexto, pcaFiltro, notificacoes, presenca, configChat] = await Promise.all([
     getReparticaoContexto(usuario, ativo),
     getPcaFiltro(pcas),
     contarNaoLidas(usuario, grupos),
     presencaDoGrupo(usuario.id, ativo?.id ?? null),
+    getConfigChat(),
   ]);
 
   return (
@@ -54,6 +56,8 @@ export default async function PainelLayout({
       notificacoes={notificacoes ?? 0}
       versaoDados={versao}
       presenca={presenca}
+      // O chat ao vivo vive no canal da presença: sem ela, sem o chat.
+      chat={presenca && chatLigado(configChat) ? configChat : null}
     >
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>

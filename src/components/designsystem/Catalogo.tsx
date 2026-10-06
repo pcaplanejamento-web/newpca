@@ -179,6 +179,7 @@ import { RecorrenciaTarefa } from "@/components/RecorrenciaTarefa";
 import { ItemNotificacao } from "@/components/SinoNotificacoes";
 import { PresencaGrupo, SeloAoVivo } from "@/components/PresencaGrupo";
 import { CanalGrupoDemo } from "@/components/CanalGrupo";
+import { Balao, ChatAoVivo, Digitando } from "@/components/ChatAoVivo";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { CamposPeriodo, QuadroNovoCard } from "@/components/QuadroCard";
 import { EstrelaFavorito } from "@/components/FavoritosQuadros";
@@ -3366,11 +3367,51 @@ export function Catalogo() {
         >
           <div className="flex flex-wrap items-center gap-6">
             <PresencaGrupo verMesa />
+            <ChatAoVivo config={{ grupo: true, privado: true }} />
             <SeloAoVivo aoVivo />
             <SeloAoVivo aoVivo={false} />
             <PessoaTag pessoa={PESSOAS_DEMO[1]} />
           </div>
         </CanalGrupoDemo>
+      </Secao>
+
+      <Secao titulo="ChatAoVivo — Balao + Digitando (o CHAT AO VIVO do grupo e privado: nada é salvo — os balões, meus à direita na cor do sistema, com a resposta citada, os cartões dos links do sistema, ✓ enviada / ✓✓ lida e “Tentar de novo”; os três pontos do “digitando…”)">
+        <div className="max-w-sm space-y-1 rounded-card border border-border bg-surface p-3">
+          <Balao
+            m={{ id: "demo000001", conversa: "grupo", de: 4, em: Date.now(), texto: "Bom dia! Conferi o **protocolo** /painel/mesa?abrir=protocolo:12", resp: null, minha: false }}
+            autor={PESSOAS_DEMO[1]}
+            grupo
+            seguida={false}
+            leram={0}
+            privado={false}
+            nomeDe={() => "Carlão"}
+            onResponder={() => {}}
+            onTentar={() => {}}
+          />
+          <Balao
+            m={{ id: "demo000002", conversa: "grupo", de: 1, em: Date.now(), texto: "Valeu @Carlão, vou ajustar.", resp: { id: "demo000001", de: 4, trecho: "Bom dia! Conferi o protocolo" }, minha: true, envio: "enviada" }}
+            autor={PESSOAS_DEMO[0]}
+            grupo
+            seguida={false}
+            leram={2}
+            privado={false}
+            nomeDe={() => "Carlão"}
+            onResponder={() => {}}
+            onTentar={() => {}}
+          />
+          <Balao
+            m={{ id: "demo000003", conversa: "p7", de: 1, em: Date.now(), texto: "Está aí?", resp: null, minha: true, envio: "nao-entregue", motivo: "Thamires não está com o sistema aberto — a mensagem não foi entregue (nada é guardado)." }}
+            autor={PESSOAS_DEMO[0]}
+            grupo={false}
+            seguida={false}
+            leram={0}
+            privado
+            nomeDe={() => "Thamires"}
+            onResponder={() => {}}
+            onTentar={() => {}}
+          />
+          <Digitando />
+        </div>
       </Secao>
 
       <Secao titulo="PessoaTag (FOTO + APELIDO — colunas Responsável e Distribuição da Mesa; nome completo no title)">
