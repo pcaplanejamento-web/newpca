@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.22.0",
+    data: "2026-10-06",
+    titulo: "Execução no banner do DFD e verificação ao vivo",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "O cabeçalho do banner do DFD mostra a execução na Centi: Executado, Não executado (com a situação) ou Não verificado.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Automação", texto: "Verificar execução mostra a barra de andamento por entidade e um cartão por entidade (órgãos, DFDs, lidos, não executados, só na Centi).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Em Ajustes, os órgãos com o ID da entidade cadastrado ficam fixos; descobrir/tentar vale só para os sem ID.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.21.1",
     data: "2026-10-06",
     titulo: "Execução dos DFDs gravada em todas as entidades",

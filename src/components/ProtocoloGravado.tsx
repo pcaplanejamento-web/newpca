@@ -742,7 +742,7 @@ export function useProtocoloGravado({
     id: "proto-dfd",
     aberto: !empilhado && abertoId != null && !!dfdAberto,
     titulo: `DFD ${numeroAberto}`,
-    cabecalho: dfdAberto ? <DfdCabecalho numero={dfdAberto.numero} tipo={dfdAberto.tipo} planejamento={dfdAberto.planejamento} /> : undefined,
+    cabecalho: dfdAberto ? <DfdCabecalho numero={dfdAberto.numero} tipo={dfdAberto.tipo} planejamento={dfdAberto.planejamento} execucao={abertoId != null ? (orig.get(abertoId)?.execucaoCenti ?? null) : undefined} /> : undefined,
     acoesCabecalho: dfdAberto ? (
       <>
         <BotaoAcao

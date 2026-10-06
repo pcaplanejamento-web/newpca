@@ -390,7 +390,7 @@ export function useDfdGravado({
   /** Banner do DFD (corpo da análise + rodapé com estado/mensagens/histórico/ver protocolo/salvar). */
   const dfdPainel: ConteudoBanner = {
     titulo: `DFD ${numero}`,
-    cabecalho: dfd ? <DfdCabecalho numero={dfd.numero} tipo={dfd.tipo} planejamento={dfd.planejamento} /> : undefined,
+    cabecalho: dfd ? <DfdCabecalho numero={dfd.numero} tipo={dfd.tipo} planejamento={dfd.planejamento} execucao={orig?.execucaoCenti ?? null} /> : undefined,
     acoesCabecalho: acoesDfd,
     rodape: dfd ? (
       <div>

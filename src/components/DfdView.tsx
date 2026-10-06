@@ -1,5 +1,6 @@
 "use client";
 
+import { classeExecucao } from "@/lib/execucao-centi";
 import { useMemo, useState } from "react";
 import { comportamentoDaFalta, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
@@ -184,17 +185,37 @@ export function ItemCabecalho({ item, ...dfd }: { item: number | null | undefine
   );
 }
 
+/** O selo da execução na Centi no cabeçalho do DFD: Executado (verde) · Não executado (a situação, vermelho) · Não verificado. */
+function SeloExecucao({ situacao }: { situacao: string | null }) {
+  const c = classeExecucao(situacao);
+  const dica = c ? `Situação na Centi (CM002): ${situacao}` : "Execução na Centi ainda não verificada (Automação → CM002)";
+  return (
+    <span className="shrink-0" title={dica}>
+      {!c ? (
+        <Badge>Não verificado</Badge>
+      ) : c === "executado" ? (
+        <Badge tone="emerald" dot>Executado</Badge>
+      ) : (
+        <Badge tone="red" dot>Não executado · {situacao}</Badge>
+      )}
+    </span>
+  );
+}
+
 export function DfdCabecalho({
   numero,
   tipo,
   planejamento,
   sobrescrita = false,
+  execucao,
 }: {
   numero: string;
   tipo: string | null;
   planejamento: string | null;
   /** Banner da SOBRESCRITA (arquivo novo × DFD gravado) — selo "Sobrescrita" ao lado do nº. */
   sobrescrita?: boolean;
+  /** Situação do planejamento na Centi (CM002) — o selo Executado / Não executado. */
+  execucao?: string | null;
 }) {
   const cod = tipoCurtoDfd(tipo);
   return (
@@ -210,6 +231,7 @@ export function DfdCabecalho({
           {cod}
         </span>
       )}
+      {execucao !== undefined && <SeloExecucao situacao={execucao} />}
       {planejamento && (
         <span className="truncate text-[12.5px] text-muted">
           Planejamento <span className="font-semibold text-text-2">{planejamento}</span>

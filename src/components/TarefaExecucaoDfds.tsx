@@ -9,6 +9,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CelulaExecucao } from "./CelulaExecucao";
 import { type Column, DataTable } from "./DataTable";
+import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
@@ -29,6 +30,7 @@ type Linha = {
 };
 type PlanCenti = { id: string; situacao: string; finalidade: string; centroCusto: string };
 type SoNaCenti = PlanCenti & { entidade: string };
+type ResumoEntidade = { entidade: string; orgaos: string; dfds: number; lidos: number; diferentes: number; soCenti: number; erro?: string };
 type Visao = "todos" | "diferentes" | "naoEncontrados" | "soCenti";
 type DfdApi = {
   id: number;
@@ -64,9 +66,10 @@ export function TarefaExecucaoDfds({
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [rodando, setRodando] = useState(false);
   const [falha, setFalha] = useState<{ erro: string; diagnostico?: string } | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
   const [soNaCenti, setSoNaCenti] = useState<SoNaCenti[]>([]);
   const [visao, setVisao] = useState<Visao>("todos");
+  const [progresso, setProgresso] = useState<{ feito: number; total: number; texto: string } | null>(null);
+  const [porEntidade, setPorEntidade] = useState<ResumoEntidade[]>([]);
   useEffect(() => onRodando(rodando), [rodando, onRodando]);
 
   const carregar = useCallback(async () => {
@@ -120,27 +123,38 @@ export function TarefaExecucaoDfds({
     if (rodando || !entidades.length) return;
     setRodando(true);
     setFalha(null);
-    setAviso(null);
     const soCenti: SoNaCenti[] = [];
     const lidosPorEntidade: string[] = [];
     const erros: string[] = [];
+    const resumo: ResumoEntidade[] = [];
+    setPorEntidade([]);
     let atualizados = 0;
     try {
       const l = await pedir("lote", { fase: "inicio", titulo: "CM002 · Execução dos DFDs", total: entidades.length }, 8000);
       lote.current = l.loteId ?? null;
       for (const [i, [ent, dfds]] of entidades.entries()) {
-        if (lote.current)
-          await pedir("lote", { fase: "passo", loteId: lote.current, feito: i, total: entidades.length, texto: `Entidade ${ent}: lendo a CM002 (${dfds.length} DFD(s))` }, 8000);
+        const texto = `Entidade ${ent} (${i + 1} de ${entidades.length}) · lendo a CM002 · ${dfds.length} DFD(s)`;
+        setProgresso({ feito: i, total: entidades.length, texto });
+        const item: ResumoEntidade = { entidade: ent, orgaos: [...new Set(dfds.map((d) => d.orgaoNome))].join(", "), dfds: dfds.length, lidos: 0, diferentes: 0, soCenti: 0 };
+        resumo.push(item);
+        if (lote.current) await pedir("lote", { fase: "passo", loteId: lote.current, feito: i, total: entidades.length, texto }, 8000);
         const r = (await pedir("cm002", { entidade: ent }, 300_000)) as RespostaTela & { linhas?: PlanCenti[]; semConsulta?: boolean };
         if (r.interrompido) break;
         if (!r.ok || !Array.isArray(r.linhas)) {
-          erros.push(`Entidade ${ent}: ${r.erro ?? "a extensão não respondeu."}`);
+          item.erro = r.erro ?? "a extensão não respondeu.";
+          erros.push(`Entidade ${ent}: ${item.erro}`);
+          setPorEntidade([...resumo]);
           if (r.semConsulta) break;
           continue;
         }
         lidosPorEntidade.push(`${ent}: ${r.linhas.length}`);
         const doSistema = new Set(dfds.map((d) => chavePlanejamento(d.planejamento)));
-        for (const p of r.linhas) if (!doSistema.has(chavePlanejamento(p.id))) soCenti.push({ ...p, entidade: ent });
+        item.lidos = r.linhas.length;
+        for (const p of r.linhas) if (!doSistema.has(chavePlanejamento(p.id))) {
+          soCenti.push({ ...p, entidade: ent });
+          item.soCenti++;
+        }
+        setProgresso({ feito: i + 0.5, total: entidades.length, texto: `Entidade ${ent} (${i + 1} de ${entidades.length}) · gravando ${dfds.length} DFD(s)` });
         const g = (await fetch("/api/admin/automacao/execucao-dfds", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -149,22 +163,25 @@ export function TarefaExecucaoDfds({
           .then((x) => x.json())
           .catch(() => null)) as { ok?: boolean; error?: string; atualizados?: number; em?: string; linhas?: { id: number; situacao: string | null }[] } | null;
         if (!g?.ok || !g.linhas) {
-          erros.push(`Entidade ${ent}: ${g?.error ?? "não consegui gravar a situação."}`);
+          item.erro = g?.error ?? "não consegui gravar a situação.";
+          erros.push(`Entidade ${ent}: ${item.erro}`);
+          setPorEntidade([...resumo]);
           continue;
         }
         atualizados += g.atualizados ?? 0;
+        item.diferentes = g.linhas.filter((x) => x.situacao && classeExecucao(x.situacao) !== "executado").length;
+        setPorEntidade([...resumo]);
+        setSoNaCenti([...soCenti]);
         const novo = new Map(g.linhas.map((x) => [x.id, x.situacao]));
         setLinhas((ls) => ls.map((x) => (novo.has(x.id) ? { ...x, situacao: novo.get(x.id) ?? null, em: g.em ?? x.em, encontrado: !!novo.get(x.id) } : x)));
       }
       if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: `${lidosPorEntidade.length} entidade(s) lidas` }, 8000);
       setSoNaCenti(soCenti);
       if (erros.length) setFalha({ erro: erros.join(" · ") });
-      if (lidosPorEntidade.length) {
-        setAviso(`Lido pela API — planejamentos por entidade: ${lidosPorEntidade.join(" · ")}.`);
-        toast.success(`${atualizados} DFD(s) atualizado(s).`);
-      }
+      if (lidosPorEntidade.length) toast.success(`${lidosPorEntidade.length} entidade(s) lidas pela API · ${atualizados} DFD(s) atualizado(s).`);
     } finally {
       lote.current = null;
+      setProgresso(null);
       setRodando(false);
     }
   }
@@ -242,8 +259,9 @@ export function TarefaExecucaoDfds({
     <div className="flex min-h-0 flex-col gap-[var(--gap-block)]">
       <div className="flex flex-wrap items-center gap-2">
         <StatMini label="Executados" value={String(conta.executado)} tone="ok" />
-        <StatMini label="Situação diferente" value={String(diferentes.length)} tone={diferentes.length ? "danger" : undefined} />
+        <StatMini label="Não executados" value={String(diferentes.length)} tone={diferentes.length ? "danger" : undefined} />
         <StatMini label="Não encontrados" value={String(naoEncontrados.length)} tone={naoEncontrados.length ? "warn" : undefined} />
+        <StatMini label="Só na Centi" value={String(soNaCenti.length)} />
         <StatMini label="Não verificados" value={String(linhas.length - verificados.length)} />
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-muted">
@@ -260,7 +278,25 @@ export function TarefaExecucaoDfds({
           {semLigacao.length > 8 ? ` e mais ${semLigacao.length - 8}` : ""}. Cadastre em Órgãos e Unidades.
         </Callout>
       )}
-      {aviso && <Callout kind="info">{aviso}</Callout>}
+      {progresso && <Progress value={(progresso.feito / Math.max(1, progresso.total)) * 100} label={progresso.texto} />}
+      {porEntidade.length > 0 && (
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))]">
+          {porEntidade.map((e) => (
+            <div key={e.entidade} className={`rounded-card border px-3 py-2 text-[12px] ${e.erro ? "border-danger" : "border-border"} bg-surface`} title={e.erro ?? e.orgaos}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono font-bold text-text">Entidade {e.entidade}</span>
+                {e.erro ? <span className="text-danger">Falhou</span> : <span className="text-muted">{e.lidos} na Centi</span>}
+              </div>
+              <div className="truncate text-muted">{e.orgaos}</div>
+              <div className="mt-1 flex gap-3">
+                <span>{e.dfds} DFD(s)</span>
+                <span className={e.diferentes ? "font-semibold text-danger" : "text-muted"}>{e.diferentes} ≠ executado</span>
+                <span className="text-muted">{e.soCenti} só na Centi</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {falha && (
         <Callout kind="danger">
           {falha.erro}
@@ -273,7 +309,7 @@ export function TarefaExecucaoDfds({
         onChange={(v) => setVisao(v as Visao)}
         options={[
           { value: "todos", label: `DFDs do sistema (${linhas.length})` },
-          { value: "diferentes", label: `Situação diferente (${diferentes.length})` },
+          { value: "diferentes", label: `Não executados (${diferentes.length})` },
           { value: "naoEncontrados", label: `Não encontrados na Centi (${naoEncontrados.length})` },
           { value: "soCenti", label: `Só na Centi (${soNaCenti.length})` },
         ]}

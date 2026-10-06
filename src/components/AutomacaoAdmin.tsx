@@ -425,6 +425,7 @@ function Ajustes({
   onCfg,
   orgaos,
   mapa,
+  fixas,
   onEntidade,
   aberta,
   alvo,
@@ -455,6 +456,8 @@ function Ajustes({
   onCfg: (p: Partial<ConfigCenti>) => void;
   orgaos: [string, { nome: string; n: number }][];
   mapa: Record<string, string>;
+  /** As entidades CADASTRADAS no órgão (Órgãos e Unidades) — valem sempre; não se tenta nem se edita aqui. */
+  fixas: Record<string, string>;
   onEntidade: (orgao: string, entidade: string) => void;
   aberta: string | null;
   alvo: TextoAlvo;
@@ -557,7 +560,8 @@ function Ajustes({
         <Switch checked={cfg.emitirData} onChange={(v) => onCfg({ emitirData: v })} label="Emitir data" />
       </Grupo>
       <Grupo titulo="Entidade da Centi por órgão">
-        <Switch checked={cfg.descobrirEntidade} onChange={(v) => onCfg({ descobrirEntidade: v })} label="Descobrir sozinho" />
+        <p className="text-[12px] text-muted">O ID cadastrado no órgão (Órgãos e Unidades) vale sempre; descobrir/tentar só para os órgãos sem ele.</p>
+        <Switch checked={cfg.descobrirEntidade} onChange={(v) => onCfg({ descobrirEntidade: v })} label="Descobrir sozinho (órgãos sem ID)" />
         <TextField label="Entidades a tentar" placeholder={aberta ? `vazio = 0 a 28 (aberta: ${aberta})` : "02:03:04"} value={cfg.entidades} onChange={(e) => onCfg({ entidades: e.target.value })} />
         {orgaos.length > 0 && (
           <ul className="max-h-56 divide-y divide-border overflow-y-auto">
@@ -566,6 +570,11 @@ function Ajustes({
                 <span className="min-w-0 flex-1 truncate text-text" title={`${o.nome} · ${o.n} DFD(s)`}>
                   {o.nome}
                 </span>
+                {fixas[chave] ? (
+                  <span className="w-16 shrink-0 text-center font-mono text-[12px] text-muted" title="Cadastrado no órgão">
+                    {fixas[chave]}
+                  </span>
+                ) : (
                 <input
                   aria-label={`Entidade da Centi de ${o.nome}`}
                   className={`${cellCls} w-16 shrink-0 text-center`}
@@ -574,7 +583,8 @@ function Ajustes({
                   key={mapa[chave] ?? ""}
                   onBlur={(e) => onEntidade(chave, e.target.value)}
                 />
-                {aberta && mapa[chave] !== aberta && (
+                )}
+                {!fixas[chave] && aberta && mapa[chave] !== aberta && (
                   <Button size="xs" variant="ghost" onClick={() => onEntidade(chave, aberta)} title="Usar a entidade aberta na Centi agora">
                     {aberta}
                   </Button>
@@ -1646,6 +1656,7 @@ export function AutomacaoAdmin({
               onCfg={mudar}
               orgaos={orgaos}
               mapa={mapa}
+              fixas={cadastradas}
               onEntidade={definirEntidade}
               aberta={logado?.entidade ?? null}
               alvo={alvoTexto}
