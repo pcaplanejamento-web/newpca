@@ -6,6 +6,7 @@ import { type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/li
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { IconChevronLeft } from "./icons";
+import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
 
@@ -25,6 +26,7 @@ export function PcaEspacoView({
   aba: AbaPca;
   children: ReactNode;
 }) {
+  useOndeDetalhe(pca.nome);
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

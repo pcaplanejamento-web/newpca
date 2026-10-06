@@ -19,6 +19,7 @@ import {
   type CampoTarefa,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
+import { PresencaNoItem } from "./PresencaNoItem";
 import { ChipsCamposCartao } from "./CamposTarefa";
 import { CirculoConcluir } from "./CirculoConcluir";
 import { IconBandeira, IconCalendar, IconChecklist, IconClock, IconComentario, IconCopy, IconDescricao, IconGrip, IconLink, IconModelo, IconNota, IconPencil, IconRepetir, IconWeb } from "./icons";
@@ -290,6 +291,7 @@ export function CartaoTarefa({
             )}
           </span>
         )}
+        <PresencaNoItem alvo={`tarefa:${t.id}`} className={`pointer-events-none ${resp.length ? "ml-1.5" : "ml-auto"}`} />
       </div>
       {(onPegar || acoes) && (
         <div className="absolute top-0 right-0 z-10 hidden items-center any-pointer-coarse:flex">

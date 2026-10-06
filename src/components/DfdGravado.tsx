@@ -379,7 +379,7 @@ export function useDfdGravado({
           pressionado={painel?.tipo === "historico"}
           onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
         />
-        {dfdId != null && <VendoAgora tipo="dfd" id={dfdId} editando={sujo} />}
+        {dfdId != null && <VendoAgora tipo="dfd" id={dfdId} editando={sujo} rotulo={`DFD ${numero}${dfd?.planejamento ? ` (Planej. ${dfd.planejamento})` : ""}`} />}
         {dfdId != null && <TarefasDoVinculo tipo="dfd" id={dfdId} disabled={travado} dica={motivoTrava} />}
         {botaoAtualizar}
       </>

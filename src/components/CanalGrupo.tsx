@@ -1,9 +1,22 @@
 "use client";
 
+import { usePathname, useSearchParams } from "next/navigation";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { esperaReconexao } from "@/lib/ao-vivo-core";
 import type { Pessoa } from "@/lib/pessoa";
-import { type EstadoPresenca, type InfoPresenca, lerListaMensagem, lerVendoMensagem, MAX_VENDO, type StatusPresenca, statusVigente } from "@/lib/presenca-core";
+import {
+  type Atividade,
+  type EstadoPresenca,
+  type InfoPresenca,
+  lerAtividade,
+  lerListaMensagem,
+  lerVendoMensagem,
+  MAX_VENDO,
+  ondeDaRota,
+  type StatusPresenca,
+  statusVigente,
+  type TelaOnde,
+} from "@/lib/presenca-core";
 
 /** Abrir o CHAT de qualquer lugar (ex.: "Conversar sobre este protocolo"): `{conversa, texto}`. */
 export const EVENTO_ABRIR_CHAT = "pca:abrir-chat";
@@ -42,6 +55,42 @@ function criarArmazem() {
 }
 type Armazem = ReturnType<typeof criarArmazem>;
 
+export type PessoaVendo = { id: number; editando: boolean };
+
+/** O "VENDO AGORA" e a ATIVIDADE num armazém com assinatura: cada `useVendoDe(alvo)` (a linha de UM protocolo, DFD ou
+ * tarefa) e cada `useAtividadeDe(id)` só re-renderiza quando O DELE muda — o valor que não mudou mantém a MESMA referência. */
+function criarArmazemVendo() {
+  let vendo = new Map<string, PessoaVendo[]>();
+  let chaves = new Map<string, string>();
+  let atividade = new Map<number, Atividade>();
+  let chavesAt = new Map<number, string>();
+  const ouvintes = new Set<() => void>();
+  function estavel<K, V>(novo: Map<K, V>, velho: Map<K, V>, chavesVelhas: Map<K, string>): [Map<K, V>, Map<K, string>] {
+    const out = new Map<K, V>();
+    const ch = new Map<K, string>();
+    for (const [k, v] of novo) {
+      const c = JSON.stringify(v);
+      ch.set(k, c);
+      out.set(k, chavesVelhas.get(k) === c ? (velho.get(k) as V) : v);
+    }
+    return [out, ch];
+  }
+  return {
+    definir(v: Map<string, PessoaVendo[]>, a: Map<number, Atividade> | null) {
+      [vendo, chaves] = estavel(v, vendo, chaves);
+      [atividade, chavesAt] = estavel(a ?? new Map(), atividade, chavesAt);
+      for (const f of ouvintes) f();
+    },
+    vendoDe: (alvo: string) => vendo.get(alvo),
+    atividadeDe: (id: number) => atividade.get(id),
+    assinar(f: () => void) {
+      ouvintes.add(f);
+      return () => ouvintes.delete(f);
+    },
+  };
+}
+type ArmazemVendo = ReturnType<typeof criarArmazemVendo>;
+
 type Ouvinte = (msg: Record<string, unknown>) => void;
 
 export type CanalGrupoValor = {
@@ -64,12 +113,25 @@ export type CanalGrupoValor = {
   chatGrupo: boolean;
   /** Quem está VENDO cada alvo ("protocolo:12"…) e quem está editando. */
   vendo: Map<string, { id: number; editando: boolean }[]>;
-  /** Registra o que ESTA tela está vendo (o banner aberto) — devolve a função que tira. */
-  registrarVendo: (alvo: string, editando: boolean) => () => void;
+  /** Registra o que ESTA tela está vendo (o banner aberto; `rotulo` = "Protocolo 144756/2026") — devolve a função que tira. */
+  registrarVendo: (alvo: string, editando: boolean, rotulo?: string) => () => void;
+  /** ONDE cada pessoa está e o que está fazendo (`null` = o ADM não mostra a atividade). */
+  atividade: Map<number, Atividade> | null;
+  /** A tela em que ESTA aba está. */
+  meuOnde: { tela: TelaOnde; rotulo: string };
+  /** O nome que a página dá ao "onde" (o quadro, o PCA) — devolve a função que tira. */
+  definirDetalheOnde: (texto: string) => () => void;
   armazem: Armazem;
+  armazemVendo: ArmazemVendo;
 };
 
 const Ctx = createContext<CanalGrupoValor | null>(null);
+
+/** A parte ESTÁVEL do canal (quem é você, as pessoas, o armazém do "vendo") — as linhas das tabelas leem só dela, então
+ * não re-renderizam a cada entrada/saída do grupo. */
+type CanalEstavel = { usuarioId: number; pessoas: Map<number, Pessoa>; armazemVendo: ArmazemVendo };
+const CtxEstavel = createContext<CanalEstavel | null>(null);
+export const useCanalEstavel = () => useContext(CtxEstavel);
 
 /** O canal do GRUPO (presença; depois o chat e o "vendo agora") — `null` fora do painel ou com a presença desligada. */
 export const useCanalGrupo = () => useContext(Ctx);
@@ -86,6 +148,26 @@ export function usePresencaDe(id: number | null | undefined): EstadoPresenca | u
     a && id != null ? () => a.estadoDe(id) : indefinido,
     indefinido,
   );
+}
+
+/** Quem (fora você) está com o item aberto — só a linha dele re-renderiza quando muda. */
+export function useVendoDe(alvo: string): PessoaVendo[] | undefined {
+  const c = useContext(CtxEstavel);
+  const a = c?.armazemVendo;
+  return useSyncExternalStore(a ? a.assinar : nada, a ? () => a.vendoDe(alvo) : indefinido, indefinido);
+}
+
+/** Onde UMA pessoa está e o que está fazendo (`undefined` = sem atividade, desligada ou invisível). */
+export function useAtividadeDe(id: number | null | undefined): Atividade | undefined {
+  const c = useContext(CtxEstavel);
+  const a = c?.armazemVendo;
+  return useSyncExternalStore(a ? a.assinar : nada, a && id != null ? () => a.atividadeDe(id) : indefinido, indefinido);
+}
+
+/** A página dá o nome do "onde" (o quadro, o PCA, o orçamento) — ex.: `useOndeDetalhe(quadro.nome)`. */
+export function useOndeDetalhe(texto: string | null | undefined) {
+  const definir = useContext(Ctx)?.definirDetalheOnde;
+  useEffect(() => (definir && texto ? definir(texto) : undefined), [definir, texto]);
 }
 
 /** "Não perturbe" vigente (o sino não toca som nem alerta do sistema). */
@@ -150,16 +232,20 @@ function CanalAtivo({
   const { invisivel, inativoMin } = presenca;
   const [vendo, setVendo] = useState<Map<string, { id: number; editando: boolean }[]>>(() => new Map());
   // O que as telas desta aba estão vendo (um registro por banner aberto) — vai junto ao servidor, com uma espera curta.
-  const registros = useRef(new Map<number, { alvo: string; editando: boolean }>());
+  const registros = useRef(new Map<number, { alvo: string; editando: boolean; rotulo: string }>());
+  const armazemVendo = useMemo(criarArmazemVendo, []);
+  const [atividade, setAtividade] = useState<Map<number, Atividade> | null>(null);
   const proximoRegistro = useRef(0);
   const ultimoVendo = useRef("");
   const timerVendo = useRef(0);
   const mandarVendo = useCallback((forcar = false) => {
     window.clearTimeout(timerVendo.current);
     timerVendo.current = window.setTimeout(() => {
-      const alvos = [...new Set([...registros.current.values()].map((r) => r.alvo))].slice(0, MAX_VENDO);
-      const editando = [...new Set([...registros.current.values()].filter((r) => r.editando).map((r) => r.alvo))].filter((a) => alvos.includes(a));
-      const msg = JSON.stringify({ t: "vendo", alvos, editando });
+      const regs = [...registros.current.values()];
+      const alvos = [...new Set(regs.map((r) => r.alvo))].slice(0, MAX_VENDO);
+      const editando = [...new Set(regs.filter((r) => r.editando).map((r) => r.alvo))].filter((a) => alvos.includes(a));
+      const rotulos = alvos.map((a) => regs.find((r) => r.alvo === a && r.rotulo)?.rotulo ?? "");
+      const msg = JSON.stringify({ t: "vendo", alvos, editando, rotulos });
       if (!forcar && msg === ultimoVendo.current) return;
       const s = ws.current;
       if (s?.readyState === WebSocket.OPEN) {
@@ -169,9 +255,9 @@ function CanalAtivo({
     }, 250);
   }, []);
   const registrarVendo = useCallback(
-    (alvo: string, editando: boolean) => {
+    (alvo: string, editando: boolean, rotulo = "") => {
       const id = ++proximoRegistro.current;
-      registros.current.set(id, { alvo, editando });
+      registros.current.set(id, { alvo, editando, rotulo });
       mandarVendo();
       return () => {
         registros.current.delete(id);
@@ -180,6 +266,37 @@ function CanalAtivo({
     },
     [mandarVendo],
   );
+
+  // ONDE esta aba está: a rota (+ o nome que a página dá) — vai ao servidor só quando muda (e de novo na reconexão).
+  const pathname = usePathname();
+  const busca = useSearchParams().toString();
+  const detalhes = useRef(new Map<number, string>());
+  const [detalhe, setDetalhe] = useState("");
+  const definirDetalheOnde = useCallback((texto: string) => {
+    const id = ++proximoRegistro.current;
+    detalhes.current.set(id, texto);
+    setDetalhe(texto);
+    return () => {
+      detalhes.current.delete(id);
+      setDetalhe([...detalhes.current.values()].at(-1) ?? "");
+    };
+  }, []);
+  const meuOnde = useMemo(() => ondeDaRota(pathname ?? "", busca, detalhe), [pathname, busca, detalhe]);
+  const meuOndeRef = useRef(meuOnde);
+  meuOndeRef.current = meuOnde;
+  const ultimoOnde = useRef("");
+  const mandarOnde = useCallback(() => {
+    const msg = JSON.stringify({ t: "onde", ...meuOndeRef.current });
+    const s = ws.current;
+    if (msg === ultimoOnde.current || s?.readyState !== WebSocket.OPEN) return;
+    s.send(msg);
+    ultimoOnde.current = msg;
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: manda quando a tela muda.
+  useEffect(() => {
+    const t = window.setTimeout(mandarOnde, 300);
+    return () => window.clearTimeout(t);
+  }, [meuOnde, mandarOnde]);
 
   // O status do servidor muda (outra aba gravou, a página recarregou) → vale o dele.
   const statusServidor = JSON.stringify(presenca.status);
@@ -248,6 +365,8 @@ function CanalAtivo({
         // O que esta aba está vendo vale de novo na conexão nova.
         ultimoVendo.current = "";
         if (registros.current.size) mandarVendo(true);
+        ultimoOnde.current = "";
+        mandarOnde();
         batida = window.setInterval(() => s.readyState === WebSocket.OPEN && s.send("ping"), 45_000);
       };
       s.onmessage = (e) => {
@@ -263,7 +382,10 @@ function CanalAtivo({
           const m = JSON.parse(e.data) as Record<string, unknown>;
           const v = lerVendoMensagem(m);
           if (v) {
+            const a = lerAtividade(m);
             setVendo(v);
+            setAtividade(a);
+            armazemVendo.definir(v, a);
             return;
           }
           if (typeof m.t === "string") for (const f of ouvintes.current.get(m.t) ?? []) f(m);
@@ -294,7 +416,7 @@ function CanalAtivo({
       ws.current?.close();
       ws.current = null;
     };
-  }, [grupoId, invisivel, inativoMin, armazem, mandarVendo]);
+  }, [grupoId, invisivel, inativoMin, armazem, armazemVendo, mandarVendo, mandarOnde]);
 
   const definirStatus = useCallback(
     async (s: MeuStatus) => {
@@ -332,21 +454,82 @@ function CanalAtivo({
       chatGrupo,
       vendo,
       registrarVendo,
+      atividade,
+      meuOnde,
+      definirDetalheOnde,
       armazem,
+      armazemVendo,
     }),
-    [chatGrupo, usuarioId, grupoId, grupoNome, presenca.pessoas, presenca.whatsapp, invisivel, estados, vistos, aoVivo, meuStatus, definirStatus, enviar, ouvir, vendo, registrarVendo, armazem],
+    [
+      chatGrupo,
+      usuarioId,
+      grupoId,
+      grupoNome,
+      presenca.pessoas,
+      presenca.whatsapp,
+      invisivel,
+      estados,
+      vistos,
+      aoVivo,
+      meuStatus,
+      definirStatus,
+      enviar,
+      ouvir,
+      vendo,
+      registrarVendo,
+      atividade,
+      meuOnde,
+      definirDetalheOnde,
+      armazem,
+      armazemVendo,
+    ],
   );
-  return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
+  const estavel = useMemo<CanalEstavel>(() => ({ usuarioId, pessoas: new Map(presenca.pessoas.map((p) => [p.id, p])), armazemVendo }), [usuarioId, presenca.pessoas, armazemVendo]);
+  return (
+    <CtxEstavel.Provider value={estavel}>
+      <Ctx.Provider value={valor}>{children}</Ctx.Provider>
+    </CtxEstavel.Provider>
+  );
 }
 
 /** Para o CATÁLOGO do design system: um canal sem servidor, com os estados dados. */
-export function CanalGrupoDemo({ valor, children }: { valor: Omit<CanalGrupoValor, "armazem" | "ouvir" | "enviar" | "definirStatus" | "registrarVendo" | "vendo"> & { vendo?: CanalGrupoValor["vendo"] }; children: ReactNode }) {
+export function CanalGrupoDemo({
+  valor,
+  children,
+}: {
+  valor: Omit<CanalGrupoValor, "armazem" | "armazemVendo" | "ouvir" | "enviar" | "definirStatus" | "registrarVendo" | "vendo" | "atividade" | "meuOnde" | "definirDetalheOnde"> & {
+    vendo?: CanalGrupoValor["vendo"];
+    atividade?: CanalGrupoValor["atividade"];
+    meuOnde?: CanalGrupoValor["meuOnde"];
+  };
+  children: ReactNode;
+}) {
   const armazem = useMemo(criarArmazem, []);
+  const armazemVendo = useMemo(criarArmazemVendo, []);
   useEffect(() => armazem.definir(valor.estados), [armazem, valor.estados]);
+  useEffect(() => armazemVendo.definir(valor.vendo ?? new Map(), valor.atividade ?? null), [armazemVendo, valor.vendo, valor.atividade]);
   const [meuStatus, setMeuStatus] = useState(valor.meuStatus);
   const v = useMemo<CanalGrupoValor>(
-    () => ({ ...valor, vendo: valor.vendo ?? new Map(), meuStatus, armazem, ouvir: () => () => {}, enviar: () => false, registrarVendo: () => () => {}, definirStatus: async (s) => setMeuStatus(s) }),
-    [valor, meuStatus, armazem],
+    () => ({
+      ...valor,
+      vendo: valor.vendo ?? new Map(),
+      atividade: valor.atividade ?? null,
+      meuOnde: valor.meuOnde ?? { tela: "dfd", rotulo: "Mesa" },
+      definirDetalheOnde: () => () => {},
+      meuStatus,
+      armazem,
+      armazemVendo,
+      ouvir: () => () => {},
+      enviar: () => false,
+      registrarVendo: () => () => {},
+      definirStatus: async (s) => setMeuStatus(s),
+    }),
+    [valor, meuStatus, armazem, armazemVendo],
   );
-  return <Ctx.Provider value={v}>{children}</Ctx.Provider>;
+  const estavel = useMemo<CanalEstavel>(() => ({ usuarioId: valor.usuarioId, pessoas: new Map(valor.pessoas.map((p) => [p.id, p])), armazemVendo }), [valor.usuarioId, valor.pessoas, armazemVendo]);
+  return (
+    <CtxEstavel.Provider value={estavel}>
+      <Ctx.Provider value={v}>{children}</Ctx.Provider>
+    </CtxEstavel.Provider>
+  );
 }

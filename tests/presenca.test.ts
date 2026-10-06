@@ -19,13 +19,13 @@ import {
 } from "../src/lib/presenca-core.ts";
 import { configPresencaSchema, prefsPresencaSchema } from "../src/lib/presenca-validation.ts";
 
-const CFG = { ativo: true, ausente: true, invisivel: true, inativoMin: 5 };
+const CFG = { ativo: true, ausente: true, invisivel: true, inativoMin: 5, atividade: true };
 
 describe("presença: configuração e preferência", () => {
   it("padrão desligado; qualquer JSON vira válido; inativo dentro dos limites", () => {
     assert.deepEqual(lerConfigPresenca(undefined), CONFIG_PRESENCA_PADRAO);
     assert.equal(CONFIG_PRESENCA_PADRAO.ativo, false);
-    assert.deepEqual(lerConfigPresenca({ ativo: true, ausente: "x", lixo: 1 }), { ativo: true, ausente: true, invisivel: true, inativoMin: 5 });
+    assert.deepEqual(lerConfigPresenca({ ativo: true, ausente: "x", lixo: 1 }), { ativo: true, ausente: true, invisivel: true, inativoMin: 5, atividade: true });
     assert.equal(lerConfigPresenca({ inativoMin: 0 }).inativoMin, 0);
     assert.equal(lerConfigPresenca({ inativoMin: 999 }).inativoMin, 5);
     assert.deepEqual(lerConfigPresenca("texto"), CONFIG_PRESENCA_PADRAO);
@@ -159,8 +159,8 @@ describe("presença: a lista do grupo", () => {
 describe("presença: vendo agora", () => {
   it("mensagem da aba: só alvos válidos, até 5, editando ⊆ alvos", () => {
     const m = lerMensagemAba(JSON.stringify({ t: "vendo", alvos: ["protocolo:12", "dfd:5", "x:1", "dfd:5", "tarefa:9", "protocolo:1", "protocolo:2", "protocolo:3"], editando: ["dfd:5", "tarefa:99"] }));
-    assert.deepEqual(m, { t: "vendo", alvos: ["protocolo:12", "dfd:5", "tarefa:9", "protocolo:1", "protocolo:2"], editando: ["dfd:5"] });
-    assert.deepEqual(lerMensagemAba('{"t":"vendo"}'), { t: "vendo", alvos: [], editando: [] });
+    assert.deepEqual(m, { t: "vendo", alvos: ["protocolo:12", "dfd:5", "tarefa:9", "protocolo:1", "protocolo:2"], editando: ["dfd:5"], rotulos: ["Protocolo #12", "DFD #5", "Tarefa #9", "Protocolo #1", "Protocolo #2"] });
+    assert.deepEqual(lerMensagemAba('{"t":"vendo"}'), { t: "vendo", alvos: [], editando: [], rotulos: [] });
   });
   it("lista: por alvo, uma vez por pessoa (editando vence), sem invisíveis, estável", () => {
     const l = listaVendo([
@@ -185,5 +185,47 @@ describe("presença: vendo agora", () => {
       { id: 2, editando: true },
     ]);
     assert.equal(lerVendoMensagem({ t: "presenca" }), null);
+  });
+});
+
+describe("presença — onde e atividade", () => {
+  it("onde: a tela pela rota + o nome que a página dá", async () => {
+    const { ondeDaRota } = await import("../src/lib/presenca-core.ts");
+    assert.deepEqual(ondeDaRota("/painel/mesa"), { tela: "dfd", rotulo: "Mesa" });
+    assert.deepEqual(ondeDaRota("/painel/mesa", "pca=3", "PCA 2027"), { tela: "dfd", rotulo: "Mesa · PCA 2027" });
+    assert.deepEqual(ondeDaRota("/painel/pca/4", "aba=orcamento", "PCA 2027"), { tela: "pca", rotulo: "PCA · PCA 2027 · Orçamento" });
+    assert.deepEqual(ondeDaRota("/painel/tarefas/9", "aba=quadro", "Compras"), { tela: "tarefas", rotulo: "Tarefas · Compras · Quadro" });
+    assert.deepEqual(ondeDaRota("/painel/tarefas/9"), { tela: "tarefas", rotulo: "Tarefas · Quadro" });
+    assert.deepEqual(ondeDaRota("/painel/calendario/"), { tela: "calendario", rotulo: "Calendário" });
+    assert.deepEqual(ondeDaRota("/painel/configuracoes", "aba=presenca"), { tela: "admin", rotulo: "Configurações" });
+    assert.deepEqual(ondeDaRota("/painel/perfil"), { tela: "perfil", rotulo: "Perfil" });
+    assert.equal(ondeDaRota("/", "").tela, "outra");
+    assert.equal(ondeDaRota("/painel/tarefas/1", "", "x".repeat(200)).rotulo.length, 80);
+  });
+
+  it("onde e vendo com rótulos: mensagens da aba", async () => {
+    const { lerMensagemAba } = await import("../src/lib/presenca-core.ts");
+    assert.deepEqual(lerMensagemAba(JSON.stringify({ t: "onde", tela: "tarefas", rotulo: " Tarefas\u0000 · Compras " })), { t: "onde", tela: "tarefas", rotulo: "Tarefas · Compras" });
+    assert.deepEqual(lerMensagemAba(JSON.stringify({ t: "onde", tela: "dfd" })), { t: "onde", tela: "dfd", rotulo: "Mesa" });
+    assert.equal(lerMensagemAba(JSON.stringify({ t: "onde", tela: "hack", rotulo: "x" })), null);
+    const v = lerMensagemAba(JSON.stringify({ t: "vendo", alvos: ["protocolo:1", "x", "dfd:2"], editando: ["dfd:2"], rotulos: ["Protocolo 144/2026", "?", ""] }));
+    assert.deepEqual(v, { t: "vendo", alvos: ["protocolo:1", "dfd:2"], editando: ["dfd:2"], rotulos: ["Protocolo 144/2026", "DFD #2"] });
+  });
+
+  it("atividade: a aba mais recente de cada pessoa, sem invisíveis, e a leitura na tela", async () => {
+    const { listaAtividade, lerAtividade, textoAtividade, lerConfigPresenca } = await import("../src/lib/presenca-core.ts");
+    const a = listaAtividade([
+      { id: 2, invisivel: false, onde: { tela: "dfd", rotulo: "Mesa" }, vendo: ["protocolo:5"], rotulos: ["Protocolo 144/2026"], editando: ["protocolo:5"], mexeu: 10 },
+      { id: 2, invisivel: false, onde: { tela: "tarefas", rotulo: "Tarefas · Compras" }, mexeu: 5 },
+      { id: 3, invisivel: true, onde: { tela: "dfd", rotulo: "Mesa" }, mexeu: 20 },
+      { id: 1, invisivel: false, mexeu: 30 },
+    ]);
+    assert.deepEqual(a, [[2, "dfd", "Mesa", ["Protocolo 144/2026"], 1]]);
+    const m = lerAtividade({ a: [...a, [9, "hack", "x", [], 0], "lixo"] });
+    assert.equal(m?.size, 1);
+    assert.equal(textoAtividade(m?.get(2) as never), "Mesa › Protocolo 144/2026 · editando");
+    assert.equal(lerAtividade({ m: [] }), null);
+    assert.equal(lerConfigPresenca({}).atividade, true);
+    assert.equal(lerConfigPresenca({ atividade: false }).atividade, false);
   });
 });

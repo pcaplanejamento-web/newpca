@@ -18,14 +18,14 @@ const NOME: Record<Tipo, string> = { protocolo: "este protocolo", dfd: "este DFD
  * em âmbar ("Ana editando" — combine antes de salvar: o último "Salvar" vale); e "Conversar sobre…" (abre o chat do grupo
  * com o link do item). Sem a presença ligada, não faz nada.
  */
-export function VendoAgora({ tipo, id, editando = false }: { tipo: Tipo; id: number | null | undefined; editando?: boolean }) {
+export function VendoAgora({ tipo, id, editando = false, rotulo = "" }: { tipo: Tipo; id: number | null | undefined; editando?: boolean; rotulo?: string }) {
   const canal = useCanalGrupo();
   const alvo = id != null ? `${tipo}:${id}` : null;
   const registrar = canal?.registrarVendo;
   useEffect(() => {
     if (!registrar || !alvo) return;
-    return registrar(alvo, editando);
-  }, [registrar, alvo, editando]);
+    return registrar(alvo, editando, rotulo);
+  }, [registrar, alvo, editando, rotulo]);
   if (!canal || !alvo || id == null) return null;
   const outros = (canal.vendo.get(alvo) ?? []).filter((v) => v.id !== canal.usuarioId);
   if (!outros.length) return null;

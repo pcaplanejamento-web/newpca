@@ -27,6 +27,7 @@ import { useListasMesa } from "./MesaSistema";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
+import { useOndeDetalhe } from "./CanalGrupo";
 
 type Escopo = "todos" | "sistema" | "enviados" | "incorporados";
 
@@ -61,6 +62,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
   const { protocolos, dfds } = useListasMesa(listas);
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
+  useOndeDetalhe(pca.nome);
   const [incorporar, setIncorporar] = useState<ProtocoloNaMesa[] | null>(null);
   const [acoes, setAcoes] = useState<Record<number, AcaoDfdPca>>({});
   const [gravando, setGravando] = useState(false);

@@ -880,7 +880,7 @@ export function TarefaDetalhe({
         acoesCabecalho={
           existente && (
             <>
-              <VendoAgora tipo="tarefa" id={existente.id} editando={sujo} />
+              <VendoAgora tipo="tarefa" id={existente.id} editando={sujo} rotulo={`Tarefa ${rotuloTicket(existente.ticket)} ${existente.titulo}`} />
               {menuTarefa(existente)}
             </>
           )

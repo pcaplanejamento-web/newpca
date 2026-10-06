@@ -19,6 +19,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
+import { PresencaNoItem } from "./PresencaNoItem";
 
 /** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
 const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber", manual: "blue" };
@@ -236,9 +237,13 @@ export function PlanilhaDfds({
       nowrap: true,
       value: (r) => r.numero,
       render: (r) => (
-        <CelulaCopiavel copiar={r.numero} rotulo="nº do DFD">
-          <span className="font-mono text-[12px]">{r.numero}</span>
-        </CelulaCopiavel>
+        <span className="inline-flex items-center gap-1.5">
+          <CelulaCopiavel copiar={r.numero} rotulo="nº do DFD">
+            <span className="font-mono text-[12px]">{r.numero}</span>
+          </CelulaCopiavel>
+          {/* Gravado (a chave é o id do DFD): quem do grupo está com ele aberto agora. */}
+          {unica && !semEstado && <PresencaNoItem alvo={`dfd:${r.key}`} />}
+        </span>
       ),
     },
     {

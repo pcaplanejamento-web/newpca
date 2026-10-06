@@ -4,8 +4,10 @@ import {
   INTERVALO_MSG_MS,
   lerMensagemAba,
   lerPrefsPresenca,
+  listaAtividade,
   listaPresenca,
   listaVendo,
+  type TelaOnde,
   MAX_ABAS_PRESENCA,
   MAX_CONEXOES_GRUPO,
   vistosRecentes,
@@ -23,7 +25,14 @@ type Anexo = ConexaoPresenca & {
   /** O que a aba está vendo (os banners abertos) e onde tem alteração não salva. */
   vendo?: string[];
   editando?: string[];
+  /** O rótulo de cada alvo do `vendo` (mesma ordem). */
+  rotulos?: string[];
   janelaVendo?: { inicio: number; n: number };
+  /** A TELA em que a aba está e quando mexeu por último (a atividade mostra a aba mais recente da pessoa). */
+  onde?: { tela: TelaOnde; rotulo: string };
+  mexeu?: number;
+  /** O ADM mostra a atividade (vale o da conexão mais nova, como o "ausente"). */
+  atividade?: boolean;
 };
 
 /**
@@ -54,7 +63,11 @@ export class PresencaGrupo {
   async fetch(req: Request): Promise<Response> {
     const { pathname } = new URL(req.url);
     // O ADM "Online agora": quem está no grupo (só leitura; não acorda nenhuma aba).
-    if (pathname === "/estado") return Response.json({ p: listaPresenca(this.anexos(), true) });
+    if (pathname === "/estado") {
+      const anexos = this.anexos();
+      const atividade = anexos.length ? anexos[anexos.length - 1].atividade === true : false;
+      return Response.json(atividade ? { p: listaPresenca(anexos, true), a: listaAtividade(anexos) } : { p: listaPresenca(anexos, true) });
+    }
     if (pathname !== "/ws") return new Response("Não encontrado.", { status: 404 });
     if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Esperado WebSocket.", { status: 426 });
     const id = Number(req.headers.get("x-presenca-usuario"));
@@ -83,6 +96,7 @@ export class PresencaGrupo {
       ultima: 0,
       chatGrupo: req.headers.get("x-chat-grupo") === "1",
       chatPrivado: req.headers.get("x-chat-privado") === "1",
+      atividade: req.headers.get("x-presenca-atividade") === "1",
     };
     servidor.serializeAttachment(anexo);
     this.vistos.delete(id);
@@ -129,11 +143,15 @@ export class PresencaGrupo {
       return;
     }
     const agora = Date.now();
-    if (m.t === "vendo") {
-      // Abrir/fechar banners é rápido: até 60 por minuto por aba.
+    if (m.t === "vendo" || m.t === "onde") {
+      // Abrir/fechar banners e trocar de tela é rápido: até 60 por minuto por aba (vendo + onde).
       const conta = contarNaJanela(anexo.janelaVendo, agora, 60);
       if (!conta.ok) return;
-      ws.serializeAttachment({ ...anexo, vendo: m.alvos, editando: m.editando, janelaVendo: conta.janela });
+      const novo: Anexo =
+        m.t === "vendo"
+          ? { ...anexo, vendo: m.alvos, editando: m.editando, rotulos: anexo.atividade ? m.rotulos : undefined, janelaVendo: conta.janela, mexeu: agora }
+          : { ...anexo, onde: anexo.atividade ? { tela: m.tela, rotulo: m.rotulo } : undefined, janelaVendo: conta.janela, mexeu: agora };
+      ws.serializeAttachment(novo);
       this.enviarVendo(null);
       return;
     }
@@ -194,9 +212,12 @@ export class PresencaGrupo {
     this.enviarVendo(ws);
   }
 
-  /** O "VENDO AGORA": quem está com cada protocolo/DFD/tarefa aberto (e editando) — a todas as abas, só quando muda. */
+  /** O "VENDO AGORA": quem está com cada protocolo/DFD/tarefa aberto (e editando) e, com o ADM permitindo, ONDE cada
+   * pessoa está (`a`) — a todas as abas, só quando muda. */
   private enviarVendo(saindo: WebSocket | null, nova?: WebSocket) {
-    const msg = JSON.stringify({ t: "vendo", m: listaVendo(this.anexos(saindo)) });
+    const anexos = this.anexos(saindo);
+    const atividade = anexos.length ? anexos[anexos.length - 1].atividade === true : false;
+    const msg = JSON.stringify(atividade ? { t: "vendo", m: listaVendo(anexos), a: listaAtividade(anexos) } : { t: "vendo", m: listaVendo(anexos) });
     const mudou = msg !== this.ultimoVendo;
     this.ultimoVendo = msg;
     if (mudou) enviarA(this.state.getWebSockets().filter((o) => o !== saindo), JSON.parse(msg));

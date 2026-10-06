@@ -5,7 +5,7 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { getDb } from "@/lib/db";
 import { erro, ok } from "@/lib/http";
 import { getConfigPresenca } from "@/lib/presenca";
-import { lerListaMensagem } from "@/lib/presenca-core";
+import { lerAtividade, lerListaMensagem, textoAtividade } from "@/lib/presenca-core";
 import { pessoasPorIds } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -35,8 +35,15 @@ export async function GET() {
     lista.map(async (gr) => {
       try {
         const r = await objetos.get(objetos.idFromName(`g${gr.id}`)).fetch("https://presenca/estado");
-        const j = (await r.json()) as { p?: unknown };
-        return lerListaMensagem(JSON.stringify({ t: "presenca", p: j.p ?? [] }))?.estados ?? new Map();
+        const j = (await r.json()) as { p?: unknown; a?: unknown };
+        const est = lerListaMensagem(JSON.stringify({ t: "presenca", p: j.p ?? [] }))?.estados ?? new Map();
+        const at = lerAtividade({ a: j.a });
+        return new Map(
+          [...est].map(([id, info]) => {
+            const a = at?.get(id);
+            return [id, { ...info, atividade: a ? textoAtividade(a) : null }];
+          }),
+        );
       } catch {
         return null;
       }

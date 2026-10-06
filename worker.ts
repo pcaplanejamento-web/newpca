@@ -78,6 +78,7 @@ async function presenca(req: Request, env: Env): Promise<Response> {
   headers.set("x-presenca-usuario", String(linha.id));
   headers.set("x-presenca-invisivel", ficaInvisivel(cfg, lerPrefsPresenca(linha.prefs)) ? "1" : "0");
   headers.set("x-presenca-ausente", cfg.ausente ? "1" : "0");
+  headers.set("x-presenca-atividade", cfg.atividade ? "1" : "0");
   // O CHAT ao vivo (o ADM liga o do grupo e o privado — Configurações → Chat).
   let chat: unknown = null;
   try {

@@ -12,6 +12,7 @@ import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { IconChevronLeft, IconTrash } from "./icons";
+import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes";
 
@@ -34,6 +35,7 @@ export function OrcamentoEspacoView({
   children: ReactNode;
 }) {
   const router = useRouter();
+  useOndeDetalhe(o.nome);
   const [excluindo, setExcluindo] = useState(false);
   const [falha, setFalha] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();

@@ -485,6 +485,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   a aba nova recebe). Núcleo puro em `presenca-core.ts`: `alvoVendoValido` (`protocolo|dfd|tarefa:<id>`), `MAX_VENDO`,
   `lerMensagemAba` (`t:"vendo"`), `listaVendo`, `lerVendoMensagem` (testados em `tests/presenca.test.ts`).
 
+## Onde cada pessoa está (v1.13.0 — nada é salvo)
+- **ONDE:** o `CanalGrupo` manda `{t:"onde", tela, rotulo}` quando a tela muda (300 ms; de novo na reconexão) — núcleo puro
+  **`ondeDaRota(pathname, busca, detalhe)`** (`presenca-core.ts`: `TELAS_ONDE` = as abas + perfil/admin/outra, `ROTULO_TELA`,
+  "Tarefas · <quadro> · Quadro", "PCA · <pca> · Orçamento", ≤ 80); o NOME vem da página por **`useOndeDetalhe(texto)`**
+  (`QuadroTarefas`, `PcaEspacoView`, `OrcamentoEspacoView`, `MesaPca`). O `VendoAgora` ganhou **`rotulo`** ("Protocolo
+  144756/2026", "DFD 1234 (Planej. 1509)", "Tarefa #12 …") → `rotulos` na mensagem `vendo` (`lerMensagemAba`; faltando,
+  `rotuloDoAlvo`).
+- **Servidor (`PresencaGrupo`, só memória):** o anexo guarda `onde`/`rotulos`/`mexeu` (vendo + onde ≤ 60/min por aba) e, com
+  **`ConfigPresenca.atividade`** (ADM, padrão ligado — `x-presenca-atividade`; desligada não guarda nem manda), a mensagem
+  `vendo` leva **`a`** = **`listaAtividade`** ([id, tela, rótulo, [o que vê], editando] — a aba que mexeu por último, sem
+  invisíveis); o `/estado` também (ADM "Online agora" — `textoAtividade`). Cliente: `lerAtividade`.
+- **Tela:** armazém com assinatura **`criarArmazemVendo`** (valor que não mudou = mesma referência) + o contexto ESTÁVEL
+  **`useCanalEstavel`** → **`useVendoDe(alvo)`**/**`useAtividadeDe(id)`** (só a linha do item re-renderiza). **`PresencaNoItem`**
+  (DS, `PresencaNoItem.tsx`): as fotos de quem está com o item aberto (lápis âmbar = editando) no nº do protocolo da Mesa
+  (`DfdsView`), no nº do DFD da `PlanilhaDfds` (só `unica` — a chave é o id) e no rodapé do `CartaoTarefa`.
+  **`AtividadePessoa`** (o ícone da tela + "Mesa › Protocolo … · editando") na linha de cada pessoa do "Online agora", que
+  ganhou a seção **"Nesta tela"** (mesma tela + rótulo que você); a dica de cada foto do cabeçalho diz onde a pessoa está.
+
 ## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um

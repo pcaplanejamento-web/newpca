@@ -62,6 +62,7 @@ import { SeletorFiltro } from "./SeletorFiltro";
 import { TabelaTarefas } from "./TabelaTarefas";
 import { type AberturaTarefa, TarefaDetalhe } from "./TarefaDetalhe";
 import { toast } from "./Toast";
+import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaQuadro = "dashboard" | "quadro" | "lista" | "calendario" | "configuracao";
 
@@ -120,6 +121,7 @@ export function QuadroTarefas({
   tarefaInicial?: number | null;
 }) {
   const router = useRouter();
+  useOndeDetalhe(quadro.nome);
   const pathname = usePathname();
   // O PAPEL neste quadro (a tela Tarefas no grupo dele): Manipular = as tarefas (criar, editar, mover, concluir, comentar);
   // Configurar = o quadro (nome, listas, etiquetas, fundo…); Excluir = apagar; Importar/Exportar = Trello e .xlsx. O quadro

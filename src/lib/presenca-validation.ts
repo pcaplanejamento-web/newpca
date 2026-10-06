@@ -8,6 +8,7 @@ export const configPresencaSchema = z.strictObject({
   ausente: z.boolean(),
   invisivel: z.boolean(),
   inativoMin: z.number().int().min(LIMITES_INATIVO[0]).max(LIMITES_INATIVO[1]),
+  atividade: z.boolean().optional().default(true),
 });
 
 /** As escolhas da pessoa: aparecer invisível e o STATUS (com recado e "até") — o que não vier fica como está. */

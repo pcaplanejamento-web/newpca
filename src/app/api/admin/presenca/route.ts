@@ -15,7 +15,7 @@ export async function GET() {
   return ok({ presenca: await getConfigPresenca({ fresco: true }) });
 }
 
-const ROTULO = { ativo: "mostrar quem está online", ausente: "mostrar ausentes", invisivel: "permitir aparecer invisível" } as const;
+const ROTULO = { ativo: "mostrar quem está online", ausente: "mostrar ausentes", invisivel: "permitir aparecer invisível", atividade: "mostrar onde cada pessoa está" } as const;
 
 export async function PATCH(req: Request) {
   const g = await exigirAdmin();

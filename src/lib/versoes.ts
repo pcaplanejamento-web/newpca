@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.13.0",
+    data: "2026-10-06",
+    titulo: "Onde cada pessoa está",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "No painel Online agora, a tela em que cada pessoa está e o que ela tem aberto (ex.: Mesa › Protocolo 144756/2026 · editando), e a seção Nesta tela." },
+      { tipo: "novo", area: "Mesa", texto: "Nas tabelas de protocolos e DFDs, a foto de quem está com o item aberto agora (lápis âmbar quando está editando).", link: "/painel/mesa" },
+      { tipo: "novo", area: "Tarefas", texto: "O mesmo nos cartões das tarefas.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Configurações", texto: "O ADM liga ou desliga \"Mostrar onde cada pessoa está\" (Presença e chat); nada é gravado.", link: "/painel/configuracoes?aba=presenca" },
+    ],
+  },
+  {
     versao: "1.12.0",
     data: "2026-10-06",
     titulo: "Quem está vendo e editando agora",

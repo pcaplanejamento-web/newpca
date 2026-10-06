@@ -2,12 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
-import { type EstadoPresenca, type InfoPresenca, MAX_RECADO, opcoesAte, ordenarPresenca, ROTULO_STATUS, STATUS_PRESENCA, type StatusPresenca, statusVigente, vistoHa } from "@/lib/presenca-core";
+import {
+  type EstadoPresenca,
+  type InfoPresenca,
+  MAX_RECADO,
+  opcoesAte,
+  ordenarPresenca,
+  ROTULO_STATUS,
+  STATUS_PRESENCA,
+  type StatusPresenca,
+  statusVigente,
+  textoAtividade,
+  vistoHa,
+} from "@/lib/presenca-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { type MeuStatus, useCanalGrupo } from "./CanalGrupo";
 import { ChipsEscolha } from "./ChipsEscolha";
+import { AtividadePessoa } from "./PresencaNoItem";
 import { Dropdown } from "./Dropdown";
 import { SearchField, SelectField, TextField } from "./Field";
 import { IconClipboard, IconUsers } from "./icons";
@@ -132,6 +145,10 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
                         i ? "-ml-2 group-hover/pilha:ml-0.5 group-focus-visible/pilha:ml-0.5" : ""
                       } ${novos.has(pessoa.id) ? "animate-brilho-novo" : ""}`}
                       style={{ zIndex: fotos.length - i }}
+                      title={(() => {
+                        const a = c.atividade?.get(pessoa.id);
+                        return `${nomeExibicao(pessoa)}${a ? ` — ${textoAtividade(a)}` : ""}`;
+                      })()}
                     >
                       <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" presenca={info?.estado} pulsar={info?.estado === "online"} />
                     </span>
@@ -175,9 +192,15 @@ function PainelOnline({ linhas, verMesa, semTitulo = false, onNavegar }: { linha
   if (!c) return null;
   const passa = predicadoBusca(busca);
   const filtradas = passa ? linhas.filter((l) => l.voce || passa([l.pessoa.nome, l.pessoa.apelido])) : linhas;
+  // "Nesta tela": quem está na MESMA tela que você (o mesmo quadro, a mesma Mesa…) — primeiro, fora das outras seções.
+  const aqui = (l: Linha) => {
+    const a = !l.voce && l.info ? c.atividade?.get(l.pessoa.id) : undefined;
+    return !!a && a.tela === c.meuOnde.tela && a.rotulo === c.meuOnde.rotulo;
+  };
   const secoes: { titulo: string; itens: Linha[] }[] = [
-    { titulo: "Online", itens: filtradas.filter((l) => l.info?.estado === "online") },
-    { titulo: "Ausente", itens: filtradas.filter((l) => l.info?.estado === "ausente") },
+    { titulo: "Nesta tela", itens: filtradas.filter(aqui) },
+    { titulo: "Online", itens: filtradas.filter((l) => l.info?.estado === "online" && !aqui(l)) },
+    { titulo: "Ausente", itens: filtradas.filter((l) => l.info?.estado === "ausente" && !aqui(l)) },
     { titulo: "Visto recentemente", itens: filtradas.filter((l) => !l.info && l.visto != null) },
   ];
   const outros = linhas.filter((l) => !l.voce && l.info).length;
@@ -237,7 +260,8 @@ function LinhaPessoa({ l, aberta, onAlternar, verMesa, onNavegar }: { l: Linha; 
   const inv = voce && !!c?.invisivel;
   const tel = c?.whatsapp[pessoa.id] ?? null;
   const temAcoes = !voce && (!!tel || verMesa);
-  const sub = st || info?.recado ? null : visto != null ? `Visto ${vistoHa(visto)}` : pessoa.apelido && pessoa.apelido !== pessoa.nome ? pessoa.nome : "";
+  const atividade = !voce && info ? c?.atividade?.get(pessoa.id) : undefined;
+  const sub = st || info?.recado ? null : visto != null ? `Visto ${vistoHa(visto)}` : atividade ? "" : pessoa.apelido && pessoa.apelido !== pessoa.nome ? pessoa.nome : "";
   const conteudo = (
     <>
       <Avatar nome={pessoa.nome} foto={pessoa.foto} size="md" presenca={inv ? undefined : info?.estado} pulsar={!inv && info?.estado === "online"} className={info ? "" : "opacity-60"} />
@@ -246,12 +270,15 @@ function LinhaPessoa({ l, aberta, onAlternar, verMesa, onNavegar }: { l: Linha; 
           {nomeExibicao(pessoa)}
           {voce && <span className="font-normal text-muted"> (você)</span>}
         </span>
-        <span className="block truncate text-[12px] text-muted">
-          {st && <span className={`font-medium ${COR_STATUS[st]}`}>{ROTULO_STATUS[st]}</span>}
-          {st && info?.recado ? " · " : ""}
-          {info?.recado}
-          {sub}
-        </span>
+        {(st || info?.recado || sub) && (
+          <span className="block truncate text-[12px] text-muted">
+            {st && <span className={`font-medium ${COR_STATUS[st]}`}>{ROTULO_STATUS[st]}</span>}
+            {st && info?.recado ? " · " : ""}
+            {info?.recado}
+            {sub}
+          </span>
+        )}
+        {atividade && <AtividadePessoa atividade={atividade} />}
       </span>
       <span className={`shrink-0 text-[12px] ${inv ? "text-muted" : info?.estado === "online" ? "text-[var(--ok)]" : info ? "text-[var(--warn)]" : "text-faint"}`}>
         {inv ? "Invisível" : info ? (info.estado === "online" ? "Online" : "Ausente") : ""}

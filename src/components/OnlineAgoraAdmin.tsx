@@ -15,7 +15,7 @@ type GrupoOnline = {
   id: number;
   nome: string;
   falhou: boolean;
-  pessoas: { pessoa: Pessoa; estado: EstadoPresenca; status: StatusPresenca; recado: string }[];
+  pessoas: { pessoa: Pessoa; estado: EstadoPresenca; status: StatusPresenca; recado: string; atividade?: string | null }[];
 };
 
 /**
@@ -61,12 +61,17 @@ export function OnlineAgoraAdmin() {
                 <span className="text-[12px] text-faint">ninguém</span>
               ) : (
                 <span className="flex flex-wrap items-center gap-1.5">
-                  {g.pessoas.map(({ pessoa, estado, status, recado }) => (
+                  {g.pessoas.map(({ pessoa, estado, status, recado, atividade }) => (
                     <span
                       key={pessoa.id}
-                      title={`${nomeExibicao(pessoa)} — ${estado === "online" ? "online" : "ausente"}${status !== "disponivel" ? ` · ${ROTULO_STATUS[status]}` : ""}${recado ? ` · ${recado}` : ""}`}
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-surface-2 py-0.5 pr-2.5 pl-0.5"
+                      title={`${nomeExibicao(pessoa)} — ${estado === "online" ? "online" : "ausente"}${status !== "disponivel" ? ` · ${ROTULO_STATUS[status]}` : ""}${recado ? ` · ${recado}` : ""}${atividade ? ` · ${atividade}` : ""}`}
                     >
                       <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" presenca={estado} pulsar={estado === "online"} />
+                      <span className="min-w-0 truncate text-[12px] text-text-2">
+                        {nomeExibicao(pessoa)}
+                        {atividade && <span className="text-muted"> · {atividade}</span>}
+                      </span>
                     </span>
                   ))}
                   <span className="ml-1 text-[12px] tabular-nums text-muted">{g.pessoas.length}</span>

@@ -14,18 +14,20 @@ export type ConfigPresenca = {
   invisivel: boolean;
   /** Minutos sem mexer no mouse/teclado até virar "ausente" (0 = só a aba em segundo plano). */
   inativoMin: number;
+  /** Mostra ONDE cada pessoa está (a tela) e o que está fazendo (o item aberto, editando). */
+  atividade: boolean;
 };
 
 export const LIMITES_INATIVO = [0, 120] as const;
-export const CONFIG_PRESENCA_PADRAO: ConfigPresenca = { ativo: false, ausente: true, invisivel: true, inativoMin: 5 };
+export const CONFIG_PRESENCA_PADRAO: ConfigPresenca = { ativo: false, ausente: true, invisivel: true, inativoMin: 5, atividade: true };
 
 /** Qualquer JSON → uma config válida (o que faltar = o padrão). */
 export function lerConfigPresenca(v: unknown): ConfigPresenca {
   const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-  const b = (k: "ativo" | "ausente" | "invisivel") => (typeof o[k] === "boolean" ? (o[k] as boolean) : CONFIG_PRESENCA_PADRAO[k]);
+  const b = (k: "ativo" | "ausente" | "invisivel" | "atividade") => (typeof o[k] === "boolean" ? (o[k] as boolean) : CONFIG_PRESENCA_PADRAO[k]);
   const n = Number(o.inativoMin);
   const inativoMin = Number.isInteger(n) && n >= LIMITES_INATIVO[0] && n <= LIMITES_INATIVO[1] ? n : CONFIG_PRESENCA_PADRAO.inativoMin;
-  return { ativo: b("ativo"), ausente: b("ausente"), invisivel: b("invisivel"), inativoMin };
+  return { ativo: b("ativo"), ausente: b("ausente"), invisivel: b("invisivel"), inativoMin, atividade: b("atividade") };
 }
 
 /** O STATUS que a pessoa escolhe (o "Não perturbe" também silencia o som e o alerta do sino). */
@@ -118,7 +120,8 @@ export function vistosRecentes(vistos: ReadonlyMap<number, number>, presentes: R
 export type MensagemAba =
   | { t: "estado"; estado: EstadoPresenca }
   | { t: "status"; status: StatusPresenca; recado: string; ate: string | null }
-  | { t: "vendo"; alvos: string[]; editando: string[] };
+  | { t: "vendo"; alvos: string[]; editando: string[]; rotulos: string[] }
+  | { t: "onde"; tela: TelaOnde; rotulo: string };
 
 /** O que a pessoa está VENDO (o banner aberto): "protocolo:12" · "dfd:5" · "tarefa:9" — até 5 ao mesmo tempo (a pilha). */
 export const MAX_VENDO = 5;
@@ -139,8 +142,12 @@ export function lerMensagemAba(msg: unknown): MensagemAba | null {
   if (o.t === "vendo") {
     const alvos = [...new Set(Array.isArray(o.alvos) ? o.alvos.filter(alvoVendoValido) : [])].slice(0, MAX_VENDO);
     const editando = Array.isArray(o.editando) ? o.editando.filter((a): a is string => alvoVendoValido(a) && alvos.includes(a)) : [];
-    return { t: "vendo", alvos, editando };
+    // O rótulo de cada alvo (na MESMA ordem — "Protocolo 144756/2026"); faltando, o próprio alvo.
+    const rs = Array.isArray(o.rotulos) ? o.rotulos : [];
+    const rotulos = alvos.map((a) => limparRotulo(rs[(o.alvos as unknown[]).indexOf(a)]) || rotuloDoAlvo(a));
+    return { t: "vendo", alvos, editando, rotulos };
   }
+  if (o.t === "onde" && telaValida(o.tela)) return { t: "onde", tela: o.tela, rotulo: limparRotulo(o.rotulo) || ROTULO_TELA[o.tela] };
   return null;
 }
 
@@ -232,4 +239,137 @@ export function lerVendoMensagem(o: Record<string, unknown>): Map<string, { id: 
     );
   }
   return out;
+}
+
+/** ONDE a pessoa está: a TELA (módulo) — o ícone e o "Nesta tela" saem dela; o rótulo detalha ("Tarefas · Compras"). */
+export const TELAS_ONDE = ["dfd", "pca", "catalogo", "orcamento", "tarefas", "calendario", "perfil", "admin", "outra"] as const;
+export type TelaOnde = (typeof TELAS_ONDE)[number];
+export const ROTULO_TELA: Record<TelaOnde, string> = {
+  dfd: "Mesa",
+  pca: "PCA",
+  catalogo: "Catálogo",
+  orcamento: "Orçamento",
+  tarefas: "Tarefas",
+  calendario: "Calendário",
+  perfil: "Perfil",
+  admin: "Administração",
+  outra: "Sistema",
+};
+export const telaValida = (v: unknown): v is TelaOnde => typeof v === "string" && (TELAS_ONDE as readonly string[]).includes(v);
+export const MAX_ROTULO_ONDE = 80;
+/** O rótulo numa linha, sem controles/invisíveis, até 80. */
+export const limparRotulo = (v: unknown) =>
+  typeof v === "string"
+    ? v
+        .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, MAX_ROTULO_ONDE)
+    : "";
+
+/** "protocolo:12" → "Protocolo #12" (quando a tela não deu o rótulo). */
+export function rotuloDoAlvo(alvo: string): string {
+  const [tipo, id] = alvo.split(":");
+  return `${tipo === "dfd" ? "DFD" : tipo === "tarefa" ? "Tarefa" : "Protocolo"} #${id}`;
+}
+
+const ABAS_ESPACO: Record<string, string> = {
+  dashboard: "Dashboard",
+  orcamento: "Orçamento",
+  mesa: "Mesa",
+  importacao: "Importação",
+  configuracao: "Configuração",
+  lancamentos: "Lançamentos",
+  comparativo: "Comparativo",
+  vinculos: "Vínculos",
+  visoes: "Visões",
+  quadro: "Quadro",
+  lista: "Lista",
+  calendario: "Calendário",
+};
+const ADMIN: Record<string, string> = {
+  configuracoes: "Configurações",
+  usuarios: "Usuários",
+  grupos: "Grupos",
+  permissoes: "Permissões",
+  orgaos: "Órgãos e Unidades",
+  armazenamento: "Armazenamento",
+  auditoria: "Auditoria",
+  automacao: "Automação",
+  integracoes: "Integrações",
+  aparencia: "Aparência",
+};
+
+/** A TELA atual pela rota (`pathname` + `?aba=`/`?pca=`) — puro. `detalhe` = o nome que a página dá (o quadro, o PCA). */
+export function ondeDaRota(pathname: string, busca = "", detalhe = ""): { tela: TelaOnde; rotulo: string } {
+  const p = new URLSearchParams(busca);
+  const partes = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  const [raiz, modulo, sub] = partes;
+  const juntar = (tela: TelaOnde, ...extra: (string | undefined | null)[]) => ({
+    tela,
+    rotulo: limparRotulo([ROTULO_TELA[tela], ...extra.filter(Boolean)].join(" · ")),
+  });
+  if (raiz !== "painel" || !modulo) return juntar(raiz === "painel" ? "dfd" : "outra");
+  const aba = ABAS_ESPACO[p.get("aba") ?? ""];
+  const det = limparRotulo(detalhe);
+  switch (modulo) {
+    case "mesa":
+    case "dfds":
+      return juntar("dfd", p.get("pca") ? det || "Mesa do PCA" : null);
+    case "pca":
+      return juntar("pca", sub ? det || (sub === "dfd" ? "DFD" : null) : null, sub && sub !== "dfd" && sub !== "edicao" ? aba : null);
+    case "catalogo":
+      return juntar("catalogo", sub === "pasta" ? det || "Pasta" : null);
+    case "orcamento":
+      return juntar("orcamento", sub ? det || null : null, sub ? aba : null);
+    case "tarefas":
+      return juntar("tarefas", sub ? det || "Quadro" : null, sub ? aba : null);
+    case "calendario":
+      return juntar("calendario");
+    case "perfil":
+      return juntar("perfil");
+    default:
+      return ADMIN[modulo] ? { tela: "admin", rotulo: ADMIN[modulo] } : juntar("outra");
+  }
+}
+
+/** A ATIVIDADE de cada pessoa (sem os invisíveis): a aba que mexeu por ÚLTIMO dela — [id, tela, rótulo, [o que vê], 1 =
+ * editando algo]. Ordenada pelo id (estável — dá para comparar). */
+export type ItemAtividade = [number, TelaOnde, string, string[], 0 | 1];
+export function listaAtividade(
+  conexoes: readonly { id: number; invisivel: boolean; onde?: { tela: TelaOnde; rotulo: string }; vendo?: string[]; rotulos?: string[]; editando?: string[]; mexeu?: number }[],
+): ItemAtividade[] {
+  const por = new Map<number, (typeof conexoes)[number]>();
+  for (const c of conexoes) {
+    if (c.invisivel || !c.onde) continue;
+    const a = por.get(c.id);
+    if (!a || (c.mexeu ?? 0) >= (a.mexeu ?? 0)) por.set(c.id, c);
+  }
+  return [...por.values()]
+    .sort((a, b) => a.id - b.id)
+    .map((c) => {
+      const onde = c.onde as { tela: TelaOnde; rotulo: string };
+      const vendo = (c.vendo ?? []).map((a, i) => c.rotulos?.[i] || rotuloDoAlvo(a));
+      return [c.id, onde.tela, onde.rotulo, vendo, c.editando?.length ? 1 : 0] as ItemAtividade;
+    });
+}
+
+/** O que a tela sabe da atividade de uma pessoa. */
+export type Atividade = { tela: TelaOnde; rotulo: string; vendo: string[]; editando: boolean };
+/** A atividade que chega (na mensagem "vendo", `a`) → pessoa → atividade. Sem `a` = `null` (desligada pelo ADM). */
+export function lerAtividade(o: Record<string, unknown>): Map<number, Atividade> | null {
+  if (!Array.isArray(o.a)) return null;
+  const out = new Map<number, Atividade>();
+  for (const it of o.a) {
+    if (!Array.isArray(it) || !Number.isInteger(it[0]) || !telaValida(it[1])) continue;
+    const vendo = Array.isArray(it[3]) ? (it[3] as unknown[]).map(limparRotulo).filter(Boolean).slice(0, MAX_VENDO) : [];
+    out.set(it[0], { tela: it[1], rotulo: limparRotulo(it[2]) || ROTULO_TELA[it[1]], vendo, editando: it[4] === 1 });
+  }
+  return out;
+}
+
+/** "Mesa › Protocolo 144756/2026 · editando" — a linha da atividade. */
+export function textoAtividade(a: Atividade): string {
+  const item = a.vendo[0];
+  return `${a.rotulo}${item ? ` › ${item}${a.vendo.length > 1 ? ` +${a.vendo.length - 1}` : ""}` : ""}${a.editando ? " · editando" : ""}`;
 }

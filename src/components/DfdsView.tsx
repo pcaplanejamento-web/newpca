@@ -82,6 +82,7 @@ import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
+import { PresencaNoItem } from "./PresencaNoItem";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
  * esqueleto da MESMA grade. */
@@ -1135,9 +1136,12 @@ export function DfdsView({
       value: (r) => r.numero,
       // Copia o nº SEM o ano ("144756/2026" → "144756").
       render: (r) => (
-        <CelulaCopiavel copiar={numeroSemAno(r.numero)} rotulo="nº do protocolo">
-          <span className="font-mono text-[12px]">{r.numero}</span>
-        </CelulaCopiavel>
+        <span className="inline-flex items-center gap-1.5">
+          <CelulaCopiavel copiar={numeroSemAno(r.numero)} rotulo="nº do protocolo">
+            <span className="font-mono text-[12px]">{r.numero}</span>
+          </CelulaCopiavel>
+          <PresencaNoItem alvo={`protocolo:${r.id}`} />
+        </span>
       ),
     },
     {
