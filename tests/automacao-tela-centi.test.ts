@@ -356,7 +356,7 @@ test("tela protocolo: escolhe as repartições pelo nome (sem acento/caixa), pes
   );
   assert.equal(ps[0].natureza, "INCLUSÃO - PCA");
   assert.equal(r.total, 2);
-  assert.deepEqual(c.cliques, ["lupa"]);
+  assert.deepEqual(c.cliques, ["lupa", "lupa"]);
 });
 
 test("tela protocolo: pela busca do menu quando a PO011 não está aberta; percorre as páginas da grade", async () => {
@@ -399,7 +399,7 @@ test("tela protocolo: aba “Em Análise(1)” sem espaço e chips só com o ari
     ["156844"],
   );
   assert.deepEqual(c.escolhidos, ["PCA - COORDENADOR (JHONE)"]);
-  assert.deepEqual(c.cliques, ["lupa"]);
+  assert.deepEqual(c.cliques, ["lupa", "lupa"]);
 });
 
 test("tela protocolo: grade de DIVs sem a forma do cabeçalho = leitura pela POSIÇÃO na tela", () => {
@@ -465,7 +465,7 @@ test("tela protocolo: abre o protocolo, lê TODO o cadastro e emite pelo Operaç
   assert.deepEqual(r.arquivo, { resposta: { status: 200, b64: "e30=" } });
   assert.deepEqual(r.operacao, { ModuleKey: 7, Guid: "g", Params: [] });
   // Só lupa, Operações, Emitir documentos e fechar — nunca Novo, Excluir, Salvar, Anexar nem PROTOCOLAR.
-  assert.deepEqual(c.cliques, ["lupa", "Operações", "Emitir documentos", "fechar"]);
+  assert.deepEqual(c.cliques, ["lupa", "lupa", "Operações", "Emitir documentos", "fechar"]);
   assert.equal(capturas[0], "iniciar");
   assert.equal(capturas.at(-1), "parar");
 });

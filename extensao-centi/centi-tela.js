@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 6;
+  const VERSAO = 7;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -47,6 +47,10 @@
     const P = win.PointerEvent ?? M;
     const base = { bubbles: true, cancelable: true, composed: true, button: 0, clientX: x, clientY: y, screenX: x, screenY: y };
     const ponteiro = { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true };
+    // Passar o mouse antes (o react-select marca a opção pelo mousemove/mouseover).
+    el.dispatchEvent(new P("pointerover", { ...ponteiro, buttons: 0 }));
+    el.dispatchEvent(new M("mouseover", { ...base, buttons: 0 }));
+    el.dispatchEvent(new M("mousemove", { ...base, buttons: 0 }));
     for (const detail of duplo ? [1, 2] : [1]) {
       el.dispatchEvent(new P("pointerdown", { ...ponteiro, buttons: 1, detail }));
       el.dispatchEvent(new M("mousedown", { ...base, buttons: 1, detail }));
@@ -175,35 +179,70 @@
     return nomes;
   }
 
+  const temChip = (painel, alvo) => escolhidos(painel).some((n) => norm(n) === alvo);
+  const opcaoExata = (doc, alvo) => opcoesVisiveis(doc).find((o) => texto(o) === alvo) ?? null;
+
+  /**
+   * Escolhe UMA repartição, conferindo o chip a cada tentativa: (1) o clique do mouse na opção da lista; (2) a busca do
+   * próprio seletor — digita o nome, leva o foco até a opção exata (setas) e confirma com Enter. Sem chip, o erro claro.
+   */
+  async function escolherUma(ctx, painel, campo, alvo, nome) {
+    const { doc, win } = ctx;
+    const confirmou = (ms) => esperarAte(ctx, () => temChip(painel, alvo) || null, "", ms).then(() => true, () => false);
+    // 1) O mouse.
+    await abrirSeletor(ctx, campo);
+    const op = opcaoExata(doc, alvo);
+    if (!op) {
+      fecharSeletor(ctx, campo);
+      throw new Error(`A repartição “${nome}” não está mais na lista da Centi.`);
+    }
+    op.scrollIntoView?.({ block: "nearest" });
+    clicar(win, op);
+    if (await confirmou(1500)) return;
+    // 2) A busca do seletor + teclado.
+    digitar(win, campo, nome);
+    const filtradas = await esperarAte(ctx, () => (opcaoExata(doc, alvo) ? opcoesVisiveis(doc) : null), "", 3000).catch(() => null);
+    if (filtradas) {
+      const idx = filtradas.findIndex((o) => texto(o) === alvo);
+      for (let i = 0; i < idx; i++) {
+        tecla(win, campo, "ArrowDown");
+        await pausa(win, 40);
+      }
+      tecla(win, campo, "Enter");
+      if (await confirmou(2500)) return;
+    }
+    if (campo.value) digitar(win, campo, "");
+    fecharSeletor(ctx, campo);
+    throw new Error(`Não consegui escolher “${nome}” no seletor Departamentos.`);
+  }
+
+  /** Deixa ESCOLHIDAS exatamente as repartições pedidas (tira as demais), conferindo o resultado no fim. */
   async function escolherDepartamentos(ctx, painel, nomes) {
     const { win } = ctx;
     const campo = campoDepartamentos(painel);
     if (!campo) throw new Error("Não achei o campo Departamentos na Tela Protocolo.");
     const quer = nomes.map(norm);
+    // Um menu aberto ou um texto digitado de antes (estado deixado na tela) sai primeiro.
+    if (campo.value) digitar(win, campo, "");
+    if (opcoesVisiveis(ctx.doc).length) fecharSeletor(ctx, campo);
     // Já escolhidas exatamente as pedidas: nada a mexer.
     const antes = escolhidos(painel).map(norm);
     if (antes.length === quer.length && quer.every((q) => antes.includes(q))) return;
-    // Tira o que estava escolhido (Backspace com o campo vazio remove o último chip).
-    for (let i = 0; i < 40 && escolhidos(painel).length; i++) {
-      campo.focus?.();
-      tecla(win, campo, "Backspace");
-      await pausa(win, 60);
-    }
-    for (const alvo of quer) {
-      if (escolhidos(painel).some((n) => norm(n) === alvo)) continue;
-      const opcoes = await abrirSeletor(ctx, campo);
-      const op = opcoes.find((o) => texto(o) === alvo);
-      if (!op) {
-        fecharSeletor(ctx, campo);
-        throw new Error(`A repartição “${nomes[quer.indexOf(alvo)]}” não está mais na lista da Centi.`);
+    // Tira o que não foi pedido (Backspace com o campo vazio remove o último chip).
+    if (antes.some((a) => !quer.includes(a)))
+      for (let i = 0; i < 60 && escolhidos(painel).length; i++) {
+        campo.focus?.();
+        tecla(win, campo, "Backspace");
+        await pausa(win, 60);
       }
-      clicar(win, op);
-      await esperarAte(ctx, () => escolhidos(painel).some((n) => norm(n) === alvo) || !campoDepartamentos(painel) || null, `Não consegui escolher “${nomes[quer.indexOf(alvo)]}”.`, 4000).catch(() => null);
+    for (const [i, alvo] of quer.entries()) {
+      if (temChip(painel, alvo)) continue;
+      await escolherUma(ctx, painel, campo, alvo, nomes[i]);
     }
     fecharSeletor(ctx, campo);
     const agora = escolhidos(painel).map(norm);
     const faltam = quer.filter((q) => !agora.includes(q));
-    if (agora.length && faltam.length) throw new Error(`Não consegui escolher: ${faltam.join(", ")}.`);
+    if (faltam.length) throw new Error(`Não consegui escolher: ${faltam.join(", ")}.`);
   }
 
   /** A LUPA ao lado do seletor: o 1º botão SÓ COM ÍCONE (sem texto) depois do campo, nunca um da lista negra. */
@@ -440,6 +479,31 @@
     );
     ctx.etapa = "abrir a aba Em Análise";
     abrirAba(ctx, "EM ANALISE");
+    await pausa(win, ctx.passo ?? 250);
+    // Dentro da aba, a lupa de novo: é ela que carrega a grade "Em Análise" das repartições escolhidas.
+    ctx.etapa = "pesquisar na aba Em Análise";
+    const lupa2 = botaoPesquisar(painel);
+    if (!lupa2) throw new Error("Não achei o botão de pesquisar (lupa) da Tela Protocolo.");
+    clicar(win, lupa2);
+    await pausa(win, ctx.passo ?? 250);
+    // A grade terminou de carregar quando a contagem da aba e as linhas lidas param de mudar (3 leituras iguais).
+    let assinatura;
+    let estaveis = 0;
+    await esperarAte(
+      ctx,
+      () => {
+        const c = contagemAba(doc, "EM ANALISE");
+        const g = acharCabecalho(doc) ? lerGrade(doc) : null;
+        const a = `${c}|${g ? g.registros.length : "-"}|${g ? totalDoRodape(g.cab) : "-"}`;
+        if (a === assinatura) estaveis++;
+        else {
+          estaveis = 0;
+          assinatura = a;
+        }
+        return estaveis >= 3 || null;
+      },
+      "A grade da aba Em Análise não terminou de carregar.",
+    );
     return contagemAba(doc, "EM ANALISE");
   }
 
