@@ -632,7 +632,7 @@
   }
 }
 .animate-janela-sai {
-  animation: janela-sai calc(var(--motion-duration) * 0.55) cubic-bezier(0.4, 0, 1, 1) both;
+  animation: janela-sai 60ms cubic-bezier(0.4, 0, 1, 1) both;
   pointer-events: none;
 }
 /* A LIXEIRA sobe do rodapé quando o arrasto começa e desce ao terminar. */

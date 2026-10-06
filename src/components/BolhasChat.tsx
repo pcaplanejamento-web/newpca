@@ -2,7 +2,16 @@
 
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Conversa, encostarBolhas, type PosicaoBolhas, topoDasBolhas } from "@/lib/chat-core";
+import {
+  type AmostraArrasto,
+  type Conversa,
+  encostarBolhas,
+  moverBolha,
+  type PosicaoBolhas,
+  projetarArremesso,
+  topoDasBolhas,
+  velocidadeArrasto,
+} from "@/lib/chat-core";
 import { Avatar } from "./Avatar";
 import { IconTrash, IconUsers } from "./icons";
 import { duracaoMotionMs } from "./Modal";
@@ -38,7 +47,13 @@ function tela() {
   return { largura, altura, desktop, topo: 64, base: desktop ? 16 : 84, tam: desktop ? TAM.desktop : TAM.celular };
 }
 
-type Arrasto = { conversa: Conversa; x: number; y: number; naLixeira: boolean };
+/** O arrasto em curso: onde a bolha está, se o dedo está na lixeira, o MODO (`ordem` = dentro da coluna: as outras abrem
+ * espaço e soltar REORDENA · `mover` = saiu da coluna: a pilha inteira segue em cadeia e soltar ARREMESSA), o lugar na
+ * ordem e a inclinação pela velocidade. */
+type Arrasto = { conversa: Conversa; x: number; y: number; naLixeira: boolean; modo: "ordem" | "mover"; alvo: number; rot: number };
+/** O pouso (FLIP): `ini` = cada bolha parada onde estava · `voo` = voando até o lugar novo (o fator da duração cresce com a
+ * distância — um arremesso longo voa mais). */
+type Pouso = { fase: "ini" | "voo"; mapa: Map<string, { dx: number; dy: number; fator: number }> };
 
 const escPermitido = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[role='dialog'][aria-modal='true']");
 
@@ -56,6 +71,7 @@ export function BolhasChat({
   fixada,
   posicao,
   onPosicao,
+  onReordenar,
   onTocar,
   onMinimizar,
   onExcluir,
@@ -71,6 +87,8 @@ export function BolhasChat({
   fixada: boolean;
   posicao: PosicaoBolhas;
   onPosicao: (p: PosicaoBolhas) => void;
+  /** A ORDEM nova das bolhas visíveis (arrastar dentro da coluna, ou Alt + ↑/↓). */
+  onReordenar: (ordem: Conversa[]) => void;
   onTocar: (c: Conversa) => void;
   onMinimizar: () => void;
   onExcluir: (c: Conversa) => void;
@@ -91,7 +109,7 @@ export function BolhasChat({
   const engolirClique = useRef(false);
   /** O POUSO (FLIP): ao soltar, cada bolha sai de onde estava (a arrastada, do ponto em que foi solta) e voa até o lugar novo
    * — sem o "pulo" de volta. `null` = sem pouso em curso. */
-  const [pouso, setPouso] = useState<Map<string, { dx: number; dy: number }> | null>(null);
+  const [pouso, setPouso] = useState<Pouso | null>(null);
   const ativaRef = useRef(ativa);
   ativaRef.current = ativa;
   const pilhaRef = useRef<HTMLUListElement>(null);
@@ -107,11 +125,11 @@ export function BolhasChat({
       return;
     }
     setFechando(true);
-    // O fechamento é BEM RÁPIDO (~0,1 s — `animate-janela-sai`); sai da tela logo ao terminar.
+    // O fechamento é BEM RÁPIDO (0,06 s — `animate-janela-sai`); sai da tela logo ao terminar.
     const x = window.setTimeout(() => {
       setExibida(null);
       setFechando(false);
-    }, duracaoMotionMs() * 0.55 + 10);
+    }, 70);
     return () => window.clearTimeout(x);
   }, [ativa]);
 
@@ -143,6 +161,14 @@ export function BolhasChat({
   const topo = t ? topoDasBolhas(posicao, t, alturaPilha) : 0;
   const lixeira = t ? { x: t.largura / 2, y: t.altura - t.base - LIXEIRA.base - LIXEIRA.tam / 2 } : { x: 0, y: 0 };
 
+  /** Pousa: cada bolha parte de onde está (`de`) e voa até o lugar novo; limpa depois do voo. */
+  const pousar = useCallback((mapa: Pouso["mapa"]) => {
+    setPouso({ fase: "ini", mapa });
+    requestAnimationFrame(() => requestAnimationFrame(() => setPouso({ fase: "voo", mapa })));
+    const maior = Math.max(1, ...[...mapa.values()].map((v) => v.fator));
+    window.setTimeout(() => setPouso((p) => (p?.mapa === mapa ? null : p)), duracaoMotionMs() * maior + 400);
+  }, []);
+
   const pegar = useCallback(
     (e: React.PointerEvent, conversa: Conversa, indice: number) => {
       if (!t || e.button > 0) return;
@@ -154,9 +180,13 @@ export function BolhasChat({
       // Onde o dedo pegou a bolha (ela segue presa nesse ponto).
       const dx0 = x0 - esquerda;
       const dy0 = y0 - yBolha;
+      const total = bolhas.length;
       let ativo = false;
+      let assentar = 0;
       let soltar: (() => void) | null = null;
-      let ultimo: Arrasto = { conversa, x: esquerda, y: yBolha, naLixeira: false };
+      const amostras: AmostraArrasto[] = [{ x: x0, y: y0, t: performance.now() }];
+      // Com UMA bolha não há o que reordenar: já sai movendo.
+      let ultimo: Arrasto = { conversa, x: esquerda, y: yBolha, naLixeira: false, modo: total > 1 ? "ordem" : "mover", alvo: indice, rot: 0 };
       const mover = (ev: PointerEvent) => {
         if (!ativo) {
           if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < LIMIAR) return;
@@ -166,15 +196,36 @@ export function BolhasChat({
           if (ativaRef.current) onMinimizar();
         }
         ev.preventDefault();
+        const agora = performance.now();
+        amostras.push({ x: ev.clientX, y: ev.clientY, t: agora });
+        while (amostras.length > 2 && agora - amostras[0].t > 120) amostras.shift();
+        const x = ev.clientX - dx0;
+        const y = ev.clientY - dy0;
+        // Saiu da COLUNA (de lado, ou bem acima/abaixo da pilha) = passa a MOVER a pilha (até soltar).
+        let modo = ultimo.modo;
+        if (modo === "ordem" && (Math.abs(x - esquerda) > t.tam * 0.9 || y < topo - passo || y > topo + alturaPilha)) modo = "mover";
+        const alvo = modo === "ordem" ? Math.min(total - 1, Math.max(0, Math.round((y - topo) / passo))) : indice;
+        // A inclinação acompanha a velocidade de lado (o "peso" da bolha).
+        const { vx } = velocidadeArrasto(amostras.slice(-4));
+        const rot = Math.max(-14, Math.min(14, vx * 9));
         const naLixeira = Math.hypot(ev.clientX - lixeira.x, ev.clientY - lixeira.y) < LIXEIRA.ima;
         if (naLixeira && !ultimo.naLixeira) navigator.vibrate?.(10);
+        if (modo === "ordem" && alvo !== ultimo.alvo) navigator.vibrate?.(5);
         // Perto da lixeira, a bolha é ATRAÍDA para o centro dela (ímã).
         ultimo = naLixeira
-          ? { conversa, x: lixeira.x - t.tam / 2, y: lixeira.y - t.tam / 2, naLixeira }
-          : { conversa, x: ev.clientX - dx0, y: ev.clientY - dy0, naLixeira };
+          ? { conversa, x: lixeira.x - t.tam / 2, y: lixeira.y - t.tam / 2, naLixeira, modo, alvo, rot: 0 }
+          : { conversa, x, y, naLixeira, modo, alvo, rot };
         setArrasto(ultimo);
+        // Parou de mexer = a bolha "assenta" (a inclinação volta a zero).
+        window.clearTimeout(assentar);
+        assentar = window.setTimeout(() => {
+          if (!ultimo.rot) return;
+          ultimo = { ...ultimo, rot: 0 };
+          setArrasto(ultimo);
+        }, 90);
       };
       const fim = () => {
+        window.clearTimeout(assentar);
         window.removeEventListener("pointermove", mover);
         window.removeEventListener("pointerup", fim);
         window.removeEventListener("pointercancel", fim);
@@ -191,30 +242,70 @@ export function BolhasChat({
             setSumindo(null);
             setArrasto(null);
             onExcluir(conversa);
-          }, duracaoMotionMs() * 0.8 + 20);
+          }, duracaoMotionMs() * 0.6 + 20);
           return;
         }
-        // A PILHA vai para onde a bolha foi solta: o lado mais perto, a altura em que ela ficou. Cada bolha parte de onde
-        // está agora (FLIP) e voa até o lugar novo, em cadeia.
-        const nova = encostarBolhas(ultimo.x + t.tam / 2, ultimo.y - indice * passo, t, alturaPilha);
+        const mapa: Pouso["mapa"] = new Map();
+        if (ultimo.modo === "ordem") {
+          // REORDENAR: a bolha vai ao lugar escolhido; cada uma sai de onde está agora (as que abriram espaço, deslocadas).
+          const ordem = moverBolha(
+            bolhas.map((b) => b.conversa),
+            indice,
+            ultimo.alvo,
+          );
+          ordem.forEach((c, jn) => {
+            const jv = bolhas.findIndex((b) => b.conversa === c);
+            const y = c === conversa ? ultimo.y : topo + (jv + desvioNaOrdem(jv, indice, ultimo.alvo)) * passo;
+            const x = c === conversa ? ultimo.x : esquerda;
+            mapa.set(c, { dx: x - esquerda, dy: y - (topo + jn * passo), fator: 1.8 });
+          });
+          setArrasto(null);
+          if (ultimo.alvo !== indice) onReordenar(ordem);
+          pousar(mapa);
+          return;
+        }
+        // ARREMESSO: a pilha vai para onde a bolha CAIRIA com a inércia — um peteleco leva ao outro lado da tela. Cada bolha
+        // parte de onde está (as outras vinham em cadeia atrás) e voa com mola; quanto mais longe, mais longo o voo.
+        // Parado antes de soltar = sem arremesso (a velocidade conta até o instante de soltar).
+        const ult = amostras[amostras.length - 1];
+        amostras.push({ x: ult.x, y: ult.y, t: performance.now() });
+        const p = projetarArremesso(ultimo.x, ultimo.y, velocidadeArrasto(amostras));
+        const nova = encostarBolhas(p.x + t.tam / 2, p.y - indice * passo, t, alturaPilha);
         const esqNova = nova.lado === "esq" ? MARGEM : t.largura - MARGEM - t.tam;
         const topoNovo = topoDasBolhas(nova, t, alturaPilha);
-        const voo = new Map<string, { dx: number; dy: number }>();
         chaves.forEach((k, j) => {
-          const yNovo = topoNovo + j * passo;
-          voo.set(k, k === conversa ? { dx: ultimo.x - esqNova, dy: ultimo.y - yNovo } : { dx: esquerda - esqNova, dy: topo + j * passo - yNovo });
+          const dx = ultimo.x - esqNova;
+          const dy = ultimo.y + (j - indice) * passo - (topoNovo + j * passo);
+          mapa.set(k, { dx, dy, fator: 1.8 + Math.min(2.6, Math.hypot(dx, dy) / 380) });
         });
-        setPouso(voo);
         setArrasto(null);
         onPosicao(nova);
-        requestAnimationFrame(() => requestAnimationFrame(() => setPouso(null)));
+        pousar(mapa);
       };
       window.addEventListener("pointermove", mover, { passive: false });
       window.addEventListener("pointerup", fim);
       window.addEventListener("pointercancel", fim);
     },
-    [t, passo, esquerda, topo, alturaPilha, lixeira.x, lixeira.y, onPosicao, onExcluir, onMinimizar, chaves],
+    [t, passo, esquerda, topo, alturaPilha, lixeira.x, lixeira.y, onPosicao, onReordenar, onExcluir, onMinimizar, chaves, bolhas, pousar],
   );
+
+  /** Teclado: Alt + ↑/↓ reordena, Alt + ←/→ leva a pilha para o outro lado. */
+  const tecla = (e: React.KeyboardEvent, i: number) => {
+    if (!e.altKey) return;
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const para = i + (e.key === "ArrowUp" ? -1 : 1);
+      if (para < 0 || para >= bolhas.length) return;
+      onReordenar(moverBolha(
+        bolhas.map((b) => b.conversa),
+        i,
+        para,
+      ));
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      onPosicao({ ...posicao, lado: e.key === "ArrowLeft" ? "esq" : "dir" });
+    }
+  };
 
   if (!t || (!bolhas.length && !extras && !exibida)) return null;
   const indiceAtiva = Math.max(
@@ -229,6 +320,14 @@ export function BolhasChat({
   const jLado = posicao.lado === "dir" ? { right: MARGEM + t.tam + 14 } : { left: MARGEM + t.tam + 14 };
   const telaCheia = t.largura < 640;
   const arrastando = arrasto != null && sumindo == null;
+  const iPresa = arrasto ? bolhas.findIndex((b) => b.conversa === arrasto.conversa) : -1;
+  /** Para onde vai a bolha `j` que NÃO está presa: na ORDEM, abre espaço; ao MOVER, segue a presa em cadeia (atrás dela). */
+  const segue = (j: number): Segue | null => {
+    if (!arrasto || iPresa < 0 || sumindo) return null;
+    if (arrasto.modo === "ordem") return { dx: 0, dy: desvioNaOrdem(j, iPresa, arrasto.alvo) * passo, atraso: 0 };
+    if (arrasto.naLixeira) return null;
+    return { dx: arrasto.x - esquerda, dy: arrasto.y - (topo + iPresa * passo), atraso: Math.abs(j - iPresa) };
+  };
 
   return createPortal(
     <>
@@ -270,16 +369,17 @@ export function BolhasChat({
             <li
               key={b.conversa}
               className={`relative ${b.nova && !presa ? "animate-cabeca-entra" : ""}`}
-              style={estiloDaBolha(presa ? { dx: presa.x - esquerda, dy: presa.y - (topo + i * passo), ima: presa.naLixeira } : null, pouso?.get(b.conversa), i)}
+              style={estiloDaBolha(presa ? { dx: presa.x - esquerda, dy: presa.y - (topo + i * passo), ima: presa.naLixeira, rot: presa.rot } : null, segue(i), pouso, b.conversa, i)}
             >
               <button
                 type="button"
                 draggable={false}
                 onPointerDown={(e) => pegar(e, b.conversa, i)}
                 onClick={() => !engolirClique.current && onTocar(b.conversa)}
+                onKeyDown={(e) => tecla(e, i)}
                 aria-label={`${b.rotulo}${b.naoLidas ? ` — ${b.naoLidas} não lida${b.naoLidas === 1 ? "" : "s"}` : ""}`}
                 aria-expanded={ativa === b.conversa}
-                title={`${b.rotulo} — tocar abre ou minimiza; arraste para mover, ou até a lixeira para excluir`}
+                title={`${b.rotulo} — tocar abre ou minimiza; arraste na coluna para reordenar, para fora para mover (ou arremesse), ou até a lixeira para fechar`}
                 className={`relative flex h-12 w-12 cursor-grab items-center justify-center rounded-full transition-[transform,box-shadow,opacity] duration-[var(--motion-duration)] ease-[cubic-bezier(0.34,1.56,0.64,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:cursor-grabbing lg:h-14 lg:w-14 ${
                   sai ? "!scale-0 opacity-0 !duration-[calc(var(--motion-duration)*0.6)] !ease-in" : presa ? (presa.naLixeira ? "!scale-[0.82] shadow-erguida" : "!scale-[1.08] shadow-erguida") : "shadow-flutuante hover:scale-105"
                 } ${ativa === b.conversa ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`}
@@ -295,7 +395,7 @@ export function BolhasChat({
           );
         })}
         {extras > 0 && (
-          <li style={estiloDaBolha(null, pouso?.get("+"), bolhas.length)}>
+          <li style={estiloDaBolha(null, segue(bolhas.length), pouso, "+", bolhas.length)}>
             <button
               type="button"
               onClick={onExtras}
@@ -334,17 +434,40 @@ export function BolhasChat({
   );
 }
 
-/** O MOVIMENTO de uma bolha: presa ao dedo (sem atraso; na lixeira, o ímã com mola), no início do POUSO (no ponto de onde
- * sai, sem transição) ou voltando ao lugar com mola, em cadeia (cada bolha um pouco depois da de cima). */
-function estiloDaBolha(presa: { dx: number; dy: number; ima: boolean } | null, voo: { dx: number; dy: number } | undefined, i: number): CSSProperties {
+type Segue = { dx: number; dy: number; atraso: number };
+
+/** Quanto (em lugares) a bolha `j` desce/sobe para abrir espaço quando a da posição `de` está sobre a posição `alvo`. */
+function desvioNaOrdem(j: number, de: number, alvo: number): number {
+  if (j === de) return 0;
+  if (de < alvo && j > de && j <= alvo) return -1;
+  if (alvo < de && j >= alvo && j < de) return 1;
+  return 0;
+}
+
+/** O MOVIMENTO de uma bolha: PRESA ao dedo (sem atraso, inclinada pela velocidade; na lixeira, o ímã com mola), SEGUINDO a
+ * presa (abrindo espaço na ordem, ou em cadeia atrás dela — cada uma um pouco depois), no início do POUSO (parada onde
+ * estava) ou VOANDO até o lugar com mola, em cadeia. */
+function estiloDaBolha(presa: { dx: number; dy: number; ima: boolean; rot: number } | null, segue: Segue | null, pouso: Pouso | null, chave: string, i: number): CSSProperties {
   if (presa)
     return {
-      transform: `translate3d(${presa.dx}px, ${presa.dy}px, 0)`,
-      transition: presa.ima ? "transform calc(var(--motion-duration) * 1.2) cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
-      zIndex: 2,
+      transform: `translate3d(${presa.dx}px, ${presa.dy}px, 0) rotate(${presa.rot}deg)`,
+      transition: presa.ima ? "transform calc(var(--motion-duration) * 1.2) cubic-bezier(0.34, 1.56, 0.64, 1)" : "transform 70ms linear",
+      zIndex: 3,
     };
-  if (voo) return { transform: `translate3d(${voo.dx}px, ${voo.dy}px, 0)`, transition: "none" };
-  return { transform: "translate3d(0, 0, 0)", transition: `transform calc(var(--motion-duration) * 2.4) cubic-bezier(0.34, 1.3, 0.64, 1) ${i * 35}ms` };
+  if (segue)
+    return {
+      transform: `translate3d(${segue.dx}px, ${segue.dy}px, 0)`,
+      // Sem atraso (ele recomeçaria a cada movimento do dedo): a cadeia vem da DURAÇÃO — quanto mais longe da presa, mais
+      // devagar ela alcança.
+      transition: `transform calc(var(--motion-duration) * ${segue.atraso ? 0.7 + segue.atraso * 0.45 : 1.2}) cubic-bezier(0.22, 1, 0.36, 1)`,
+      zIndex: 2 - Math.min(1, segue.atraso),
+    };
+  const voo = pouso?.mapa.get(chave);
+  if (voo && pouso?.fase === "ini") return { transform: `translate3d(${voo.dx}px, ${voo.dy}px, 0)`, transition: "none" };
+  return {
+    transform: "translate3d(0, 0, 0)",
+    transition: `transform calc(var(--motion-duration) * ${voo?.fator ?? 2.4}) cubic-bezier(0.34, 1.3, 0.64, 1) ${i * 35}ms`,
+  };
 }
 
 /** A foto da bolha: a pessoa (com o ponto de presença), o mosaico da conversa em grupo ou o ícone do grupo ativo — sempre

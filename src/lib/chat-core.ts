@@ -241,6 +241,35 @@ export function bolhasVisiveis<T>(lista: readonly T[], max = MAX_BOLHAS): { visi
   return { visiveis: lista.slice(0, max), extras: lista.slice(max) };
 }
 
+/** REORDENAR: tira a bolha `de` e a põe na posição `para` (os índices fora da lista ficam presos às pontas). */
+export function moverBolha<T>(lista: readonly T[], de: number, para: number): T[] {
+  if (de < 0 || de >= lista.length) return [...lista];
+  const r = [...lista];
+  const [x] = r.splice(de, 1);
+  r.splice(Math.min(Math.max(0, para), r.length), 0, x);
+  return r;
+}
+
+/** Um ponto do arrasto (px e ms) — os últimos dão a VELOCIDADE do arremesso. */
+export type AmostraArrasto = { x: number; y: number; t: number };
+/** Janela (ms) das amostras que contam para a velocidade e o "empurrão" do arremesso (ms de inércia). */
+export const ARREMESSO = { janela: 90, inercia: 260, maxPx: 1600 };
+/** A VELOCIDADE (px/ms) no fim do arrasto: das amostras dos últimos `ARREMESSO.janela` ms (parado = 0). */
+export function velocidadeArrasto(amostras: readonly AmostraArrasto[]): { vx: number; vy: number } {
+  if (amostras.length < 2) return { vx: 0, vy: 0 };
+  const fim = amostras[amostras.length - 1];
+  const ini = amostras.find((a) => fim.t - a.t <= ARREMESSO.janela) ?? amostras[0];
+  const dt = fim.t - ini.t;
+  if (dt <= 0 || ini === fim) return { vx: 0, vy: 0 };
+  return { vx: (fim.x - ini.x) / dt, vy: (fim.y - ini.y) / dt };
+}
+/** ARREMESSO: onde a bolha "cairia" com a inércia (o ponto solto + a velocidade × a inércia, até `maxPx`) — um peteleco
+ * para o outro lado leva a pilha até lá. */
+export function projetarArremesso(x: number, y: number, v: { vx: number; vy: number }): { x: number; y: number } {
+  const lim = (n: number) => Math.max(-ARREMESSO.maxPx, Math.min(ARREMESSO.maxPx, n));
+  return { x: x + lim(v.vx * ARREMESSO.inercia), y: y + lim(v.vy * ARREMESSO.inercia) };
+}
+
 /** A posição da pilha de bolhas: encostada num LADO, numa altura (fração da área livre, 0 = topo · 1 = embaixo) — resiste
  * a trocar o tamanho da janela. */
 export type PosicaoBolhas = { lado: "esq" | "dir"; y: number };

@@ -491,8 +491,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Bolhas:** arrastar MINIMIZA a conversa aberta; ao soltar, o POUSO é FLIP (`estiloDaBolha`): cada bolha parte de onde está
   (a arrastada, do ponto em que foi solta) e voa com mola até o lugar novo, em cadeia (35 ms entre elas) — sem o "pulo" de
   volta; erguer/ímã/sumir na lixeira na própria bolha (escala com mola).
-- **Fechamento RÁPIDO (v1.15.1):** a janela sai em `--motion-duration` × 0,55 (`animate-janela-sai`: escala 0,85, sem
-  desfoque, `ease-in` — ~0,1 s) e desmonta logo depois; a bolha na lixeira some em 0,6× e a lixeira sai em 0,55×.
+- **Fechamento RÁPIDO (v1.15.1 → 1.16.0):** a janela sai em 60 ms FIXOS (`animate-janela-sai`: escala 0,85, sem desfoque,
+  `ease-in`) e desmonta em 70 ms; a bolha na lixeira some em 0,6× e a lixeira sai em 0,55×.
+- **Bolhas LIVRES (v1.16.0):** o arrasto tem dois MODOS — `ordem` (dentro da coluna: as outras abrem espaço —
+  `desvioNaOrdem` — e soltar REORDENA, `onReordenar` → `moverBolha`, guardado em `chat:bolhas`) e `mover` (saiu da coluna:
+  a pilha inteira segue EM CADEIA — a duração da transição cresce com a distância da presa, sem atraso, que recomeçaria a
+  cada movimento — e soltar ARREMESSA: `velocidadeArrasto` das amostras dos últimos 90 ms até o instante de soltar [parado =
+  sem arremesso] → `projetarArremesso` [inércia 260 ms, teto 1600 px] → `encostarBolhas`; o voo dura mais quanto mais
+  longe — `Pouso.fator`). A bolha presa INCLINA pela velocidade (±14°) e assenta ao parar. Teclado: Alt + ↑/↓ reordena,
+  Alt + ←/→ troca de lado. Núcleo puro em `chat-core.ts` (testado).
 
 ## Chat estável + "Ao vivo" único + lixeira (v1.14.2)
 - **Nunca desmonta:** o layout devolve `undefined` quando a leitura da presença/config do chat FALHA (`presencaDoGrupo`,

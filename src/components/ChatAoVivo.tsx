@@ -555,6 +555,8 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
         fixada={fixada}
         posicao={posicao}
         onPosicao={mudarPosicao}
+        // Reordenar mexe só nas visíveis; as de fora da pilha ("+N") seguem atrás.
+        onReordenar={(ordem) => setBolhas((b) => [...ordem.filter((c) => b.includes(c)), ...b.filter((c) => !ordem.includes(c))])}
         onTocar={alternar}
         onMinimizar={minimizar}
         // A LIXEIRA fecha a bolha — a conversa segue guardada na lista (7 dias).

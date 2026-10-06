@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.16.0",
+    data: "2026-10-06",
+    titulo: "Bolhas do chat livres",
+    mudancas: [
+      { tipo: "novo", area: "Chat", texto: "Reordene as bolhas arrastando dentro da coluna: as outras abrem espaço e a ordem fica guardada. No teclado, Alt + ↑/↓." },
+      { tipo: "novo", area: "Chat", texto: "Arremesse a pilha: um peteleco leva as bolhas para o outro lado da tela, com inércia e mola. No teclado, Alt + ←/→." },
+      { tipo: "melhoria", area: "Chat", texto: "Ao arrastar, as outras bolhas seguem em cadeia e a bolha inclina com a velocidade; parada, ela assenta." },
+      { tipo: "melhoria", area: "Chat", texto: "A janela da conversa fecha em 0,06 s." },
+    ],
+  },
+  {
     versao: "1.15.1",
     data: "2026-10-06",
     titulo: "Fechamento rápido do chat",

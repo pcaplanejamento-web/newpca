@@ -201,3 +201,29 @@ describe("chat ao vivo: sinal (lida/digitando) pelas caixas", () => {
   });
 });
 
+
+describe("bolhas livres — reordenar e arremessar", () => {
+  it("moverBolha tira e põe no lugar (pontas presas)", async () => {
+    const { moverBolha } = await import("../src/lib/chat-core.ts");
+    assert.deepEqual(moverBolha(["a", "b", "c", "d"], 0, 2), ["b", "c", "a", "d"]);
+    assert.deepEqual(moverBolha(["a", "b", "c", "d"], 3, 0), ["d", "a", "b", "c"]);
+    assert.deepEqual(moverBolha(["a", "b"], 1, 99), ["a", "b"]);
+    assert.deepEqual(moverBolha(["a", "b"], 5, 0), ["a", "b"]);
+  });
+  it("velocidade dos últimos 90 ms e a projeção do arremesso (com teto)", async () => {
+    const { velocidadeArrasto, projetarArremesso, ARREMESSO } = await import("../src/lib/chat-core.ts");
+    assert.deepEqual(velocidadeArrasto([{ x: 0, y: 0, t: 0 }]), { vx: 0, vy: 0 });
+    const v = velocidadeArrasto([
+      { x: 0, y: 0, t: 0 },
+      { x: 100, y: 0, t: 200 },
+      { x: 150, y: 10, t: 250 },
+      { x: 250, y: 30, t: 300 },
+    ]);
+    assert.equal(v.vx, 2);
+    assert.equal(v.vy, 0.4);
+    const p = projetarArremesso(900, 300, { vx: -3, vy: 0 });
+    assert.equal(p.x, 900 - 3 * ARREMESSO.inercia);
+    assert.equal(projetarArremesso(0, 0, { vx: 100, vy: -100 }).x, ARREMESSO.maxPx);
+    assert.equal(projetarArremesso(0, 0, { vx: 100, vy: -100 }).y, -ARREMESSO.maxPx);
+  });
+});
