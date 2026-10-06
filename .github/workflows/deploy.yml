@@ -6,9 +6,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Em FILA: um push novo espera o deploy em andamento (cancelar no meio pode deixar as migrações aplicadas sem o código novo e
+# marcava como "cancelled" um deploy que publicou). Só o push mais recente espera — os intermediários saem da fila.
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:

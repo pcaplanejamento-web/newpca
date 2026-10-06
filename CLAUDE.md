@@ -31,12 +31,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **bloqueiam** (baseline de tipos 100% limpo — um erro de tipos novo não chega ao ar). O `cf-typegen`
   roda antes (o typecheck depende do `cloudflare-env.d.ts`); o build segue com `ignoreBuildErrors`
   porque o type-check já foi feito no portão.
+- **Deploy em FILA** (`concurrency.cancel-in-progress: false`): um push novo ESPERA o deploy em andamento — nunca o
+  interrompe entre as migrações e a publicação do Worker.
+- **Dependências:** `npm audit` sem alerta crítico/alto (os 4 moderados restantes são do `drizzle-kit`, só de
+  desenvolvimento, sem correção sem quebra). No sandbox o `xlsx` vem do CDN da SheetJS, que a política de rede bloqueia:
+  atualize só o lock (`npm install <pacote>@<versão> --package-lock-only` + `npm audit fix --package-lock-only`) — o CI
+  instala tudo. O `next` fica com a versão EXATA.
 
 ## Banco de dados (D1 + Drizzle)
 - **`getDb()` (`src/lib/db.ts`) só em escopo de request** (Server Components
   `force-dynamic`, Route Handlers, Server Actions) — usa `getCloudflareContext()`.
 - **Migrações = SQL curado** em `drizzle/` (é o `out` do drizzle **e** o `migrations_dir`
   do `wrangler.jsonc`). Ao gerar com `db:generate`, confira o SQL.
+  - **Número ÚNICO por migração** (`tests/migrations.test.ts` barra a repetição — sessões em paralelo): antes do push,
+    `git fetch` + merge da `main` e use o próximo número livre. As repetições antigas `0028`/`0064` ficam (o D1 registra
+    pelo NOME inteiro — renomear aplicaria de novo).
   - **≤ 100 parâmetros vinculados por statement** (limite do D1). Ver `src/app/api/upload`
     (lotes de 7×14=98).
   - **Evite `UNION ALL` longo** em migração (o D1 rejeita "compound SELECT"); use
@@ -3960,7 +3969,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com o que mudou e o `link` de cada mudança, e o MESMO número no `package.json`; depois publicar (push + "Deploy Cloudflare"
   verde). Antes de começar, `git fetch` da `main`: se outra sessão publicou SEM versão, as mudanças dela entram na próxima
   versão (nada fica fora do registro).
-- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.4.1"; tocar abre as Novidades no
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.4.3"; tocar abre as Novidades no
   BANNER FLUTUANTE; o ponto accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`).
 - **Novidades = BANNER FLUTUANTE, sem página:** **`NovidadesFlutuantes`** (DS) sobre a `JanelaFlutuante` (ao lado da âncora no
   desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**

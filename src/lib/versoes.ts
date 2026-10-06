@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.4.3",
+    data: "2026-10-06",
+    titulo: "Atualização de segurança e publicação em fila",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "Next.js 16.3.8 (corrige um alerta crítico de segurança) e ferramentas de publicação atualizadas: nenhum alerta crítico ou alto nas dependências." },
+      { tipo: "melhoria", area: "Sistema", texto: "Publicação em fila: uma atualização nova espera a anterior terminar, em vez de interrompê-la no meio." },
+    ],
+  },
+  {
     versao: "1.4.2",
     data: "2026-10-05",
     titulo: "Vínculos da unidade sem repetição",

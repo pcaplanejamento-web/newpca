@@ -35,6 +35,20 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(arquivos.length >= 8);
   });
 
+  it("cada número de migração é usado UMA vez (sessões em paralelo não colidem)", () => {
+    // O D1 registra a migração pelo NOME inteiro: as duas repetições antigas já aplicadas ficam (renomear as aplicaria de
+    // novo). Uma repetição nova falha aqui, antes do deploy — renumere a sua para o próximo número livre.
+    const JA_REPETIDOS = new Set(["0028", "0064"]);
+    const porNumero = new Map<string, string[]>();
+    for (const arq of arquivos) {
+      const numero = arq.slice(0, 4);
+      assert.match(numero, /^\d{4}$/, `${arq}: o nome deve começar com 4 dígitos`);
+      porNumero.set(numero, [...(porNumero.get(numero) ?? []), arq]);
+    }
+    const repetidos = [...porNumero].filter(([n, lista]) => lista.length > 1 && !JA_REPETIDOS.has(n));
+    assert.deepEqual(repetidos, [], `número de migração repetido: ${repetidos.map(([, l]) => l.join(" × ")).join("; ")}`);
+  });
+
   it("cria todas as tabelas do domínio", () => {
     const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
     for (const t of [
