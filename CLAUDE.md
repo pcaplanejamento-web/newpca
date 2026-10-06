@@ -471,6 +471,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
   zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
 
+## Vendo e editando agora (v1.12.0 — nada é salvo)
+- **`VendoAgora`** (DS; no cabeçalho dos banners — `useProtocoloGravado` [protocolo; o DFD ao lado], `useDfdGravado` e
+  `TarefaDetalhe`): registra no `CanalGrupo` o que ESTA tela está com aberto (`registrarVendo(alvo, editando)` — um registro
+  por banner; a aba manda `{t:"vendo", alvos ≤ 5, editando ⊆ alvos}` com 250 ms de espera e de novo a cada reconexão) e mostra
+  quem MAIS do grupo está com o MESMO item aberto (as fotos com o pulso, "também aqui"/"+N aqui") e, em âmbar, quem tem
+  **alteração não salva** ("Ana editando" — combine antes de salvar: o último "Salvar" vale) — `editando` = o rascunho do banner
+  (`capaSuja`/`editados`/`itensEditados`/`sujo`). Com o chat do grupo ligado (`CanalGrupo.chatGrupo`), **"Conversar sobre
+  este …"** dispara `EVENTO_ABRIR_CHAT` → o `ChatAoVivo` abre a conversa do grupo com o link do item no campo (vira o cartão).
+  O painel do chat fica ACIMA dos banners (`z-[60]`).
+- **Servidor (só na memória):** o `PresencaGrupo` guarda `vendo`/`editando` no anexo da aba (60 mudanças/min por aba) e
+  retransmite `{t:"vendo", m: [[alvo, [[id, 1 = editando | 0]]]]}` (`listaVendo` — sem invisíveis, estável; só quando muda;
+  a aba nova recebe). Núcleo puro em `presenca-core.ts`: `alvoVendoValido` (`protocolo|dfd|tarefa:<id>`), `MAX_VENDO`,
+  `lerMensagemAba` (`t:"vendo"`), `listaVendo`, `lerVendoMensagem` (testados em `tests/presenca.test.ts`).
+
 ## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um

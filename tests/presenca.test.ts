@@ -9,6 +9,8 @@ import {
   lerMensagemAba,
   lerPrefsPresenca,
   listaPresenca,
+  listaVendo,
+  lerVendoMensagem,
   opcoesAte,
   ordenarPresenca,
   statusVigente,
@@ -151,5 +153,37 @@ describe("presença: a lista do grupo", () => {
         [1, "online", false],
       ],
     );
+  });
+});
+
+describe("presença: vendo agora", () => {
+  it("mensagem da aba: só alvos válidos, até 5, editando ⊆ alvos", () => {
+    const m = lerMensagemAba(JSON.stringify({ t: "vendo", alvos: ["protocolo:12", "dfd:5", "x:1", "dfd:5", "tarefa:9", "protocolo:1", "protocolo:2", "protocolo:3"], editando: ["dfd:5", "tarefa:99"] }));
+    assert.deepEqual(m, { t: "vendo", alvos: ["protocolo:12", "dfd:5", "tarefa:9", "protocolo:1", "protocolo:2"], editando: ["dfd:5"] });
+    assert.deepEqual(lerMensagemAba('{"t":"vendo"}'), { t: "vendo", alvos: [], editando: [] });
+  });
+  it("lista: por alvo, uma vez por pessoa (editando vence), sem invisíveis, estável", () => {
+    const l = listaVendo([
+      { id: 2, invisivel: false, vendo: ["dfd:5", "protocolo:12"], editando: [] },
+      { id: 1, invisivel: false, vendo: ["protocolo:12"], editando: ["protocolo:12"] },
+      { id: 2, invisivel: false, vendo: ["protocolo:12"], editando: ["protocolo:12"] },
+      { id: 9, invisivel: true, vendo: ["protocolo:12"], editando: [] },
+    ]);
+    assert.deepEqual(l, [
+      ["dfd:5", [[2, 0]]],
+      [
+        "protocolo:12",
+        [
+          [1, 1],
+          [2, 1],
+        ],
+      ],
+    ]);
+    const v = lerVendoMensagem({ t: "vendo", m: l });
+    assert.deepEqual(v?.get("protocolo:12"), [
+      { id: 1, editando: true },
+      { id: 2, editando: true },
+    ]);
+    assert.equal(lerVendoMensagem({ t: "presenca" }), null);
   });
 });

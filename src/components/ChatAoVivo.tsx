@@ -28,7 +28,7 @@ import {
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
-import { EVENTO_CHAT_PRIVADO, useCanalGrupo, useNaoPerturbe } from "./CanalGrupo";
+import { EVENTO_ABRIR_CHAT, EVENTO_CHAT_PRIVADO, useCanalGrupo, useNaoPerturbe } from "./CanalGrupo";
 import { IconArrowDown, IconChat, IconChevronLeft, IconClose, IconEnviar, IconLidas, IconCheck, IconResponder, IconUsers } from "./icons";
 import { tocarSom } from "./PreferenciasNotificacoes";
 import { SeloAoVivo } from "./PresencaGrupo";
@@ -289,6 +289,20 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
     setPainel(false);
     botao.current?.focus();
   }, []);
+  // "Conversar sobre…" (o "vendo agora" de um banner): abre a conversa com o texto já no campo.
+  const [rascunho, setRascunho] = useState<{ texto: string; n: number } | null>(null);
+  useEffect(() => {
+    const abrir = (e: Event) => {
+      const d = (e as CustomEvent<{ conversa?: string; texto?: string }>).detail;
+      const c: Conversa = d?.conversa === "grupo" || idDaConversa(String(d?.conversa)) != null ? (d.conversa as Conversa) : "grupo";
+      if (c === "grupo" ? !config.grupo : !config.privado) return;
+      chat.garantir(c);
+      abrirConversa(c);
+      setRascunho((r) => ({ texto: String(d?.texto ?? ""), n: (r?.n ?? 0) + 1 }));
+    };
+    window.addEventListener(EVENTO_ABRIR_CHAT, abrir);
+    return () => window.removeEventListener(EVENTO_ABRIR_CHAT, abrir);
+  }, [config.grupo, config.privado, chat.garantir, abrirConversa]);
   // Esc fecha o painel (menos com um diálogo por cima).
   useEffect(() => {
     if (!painel) return;
@@ -324,10 +338,10 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
         createPortal(
         <section
           aria-label="Chat ao vivo"
-          className="fixed inset-0 z-50 flex animate-fade-in-up flex-col bg-surface lg:inset-auto lg:top-[calc(var(--h-header)+8px)] lg:right-[var(--pad-canvas)] lg:bottom-[var(--pad-canvas)] lg:z-40 lg:w-[380px] lg:rounded-card lg:border lg:border-border lg:shadow-soft"
+          className="fixed inset-0 z-[60] flex animate-fade-in-up flex-col bg-surface lg:inset-auto lg:top-[calc(var(--h-header)+8px)] lg:right-[var(--pad-canvas)] lg:bottom-[var(--pad-canvas)] lg:w-[380px] lg:rounded-card lg:border lg:border-border lg:shadow-soft"
         >
           {conversa ? (
-            <ConversaChat config={config} conversa={conversa} chat={chat} onVoltar={() => setConversa(null)} onFechar={fechar} />
+            <ConversaChat config={config} conversa={conversa} chat={chat} rascunho={rascunho} onVoltar={() => setConversa(null)} onFechar={fechar} />
           ) : (
             <ListaConversas config={config} chat={chat} onAbrir={abrirConversa} onFechar={fechar} />
           )}
@@ -480,7 +494,22 @@ function LinhaConversa({
 }
 
 /** A CONVERSA: os balões (meus à direita), dia, responder, cartões dos links do sistema, digitando, lida e o campo. */
-function ConversaChat({ config, conversa, chat, onVoltar, onFechar }: { config: ConfigChat; conversa: Conversa; chat: Chat; onVoltar: () => void; onFechar: () => void }) {
+function ConversaChat({
+  config,
+  conversa,
+  chat,
+  rascunho,
+  onVoltar,
+  onFechar,
+}: {
+  config: ConfigChat;
+  conversa: Conversa;
+  chat: Chat;
+  /** Texto pronto para o campo (o "Conversar sobre…"); `n` muda a cada pedido. */
+  rascunho: { texto: string; n: number } | null;
+  onVoltar: () => void;
+  onFechar: () => void;
+}) {
   const canal = useCanalGrupo();
   const c = chat.conversas.get(conversa);
   const msgs = c?.msgs ?? [];
@@ -513,6 +542,17 @@ function ConversaChat({ config, conversa, chat, onVoltar, onFechar }: { config: 
     setResp(null);
   }, [conversa]);
 
+  // O texto pronto ("Sobre este protocolo: <link>") entra no campo, com o cursor no fim.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a cada pedido novo (`n`).
+  useEffect(() => {
+    if (!rascunho?.texto) return;
+    setTexto(rascunho.texto);
+    setCursor(rascunho.texto.length);
+    requestAnimationFrame(() => {
+      campo.current?.focus();
+      campo.current?.setSelectionRange(rascunho.texto.length, rascunho.texto.length);
+    });
+  }, [rascunho?.n]);
   const ids = useMemo(() => msgs.map((m) => m.id), [msgs]);
   const mencao = mencaoEmCurso(texto.slice(0, cursor));
   const sugestoes = useMemo(() => {

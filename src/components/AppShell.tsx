@@ -456,7 +456,13 @@ export function AppShell({
   const filtraPca = abasSet.has("dfd") || abasSet.has("pca") || abasSet.has("orcamento");
 
   return (
-    <CanalGrupo presenca={presenca} usuarioId={usuario.id} grupoId={grupoAtivoId} grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null}>
+    <CanalGrupo
+      presenca={presenca}
+      usuarioId={usuario.id}
+      grupoId={grupoAtivoId}
+      grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null}
+      chatGrupo={!!chat?.grupo}
+    >
     <div className="min-h-dvh bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versao={versaoDados} />}
       {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}

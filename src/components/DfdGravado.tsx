@@ -26,6 +26,7 @@ import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
 import { TarefasDoVinculo } from "./TarefasDoVinculo";
+import { VendoAgora } from "./VendoAgora";
 import { toast } from "./Toast";
 import { useConformidade } from "./useConformidade";
 
@@ -378,6 +379,7 @@ export function useDfdGravado({
           pressionado={painel?.tipo === "historico"}
           onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
         />
+        {dfdId != null && <VendoAgora tipo="dfd" id={dfdId} editando={sujo} />}
         {dfdId != null && <TarefasDoVinculo tipo="dfd" id={dfdId} disabled={travado} dica={motivoTrava} />}
         {botaoAtualizar}
       </>

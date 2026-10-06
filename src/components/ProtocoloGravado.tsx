@@ -50,6 +50,7 @@ import { type BaseReenvio, ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
 import { PainelPendencias } from "./PainelPendencias";
 import { TarefasDoVinculo } from "./TarefasDoVinculo";
+import { VendoAgora } from "./VendoAgora";
 import { toast } from "./Toast";
 import { useConformidade } from "./useConformidade";
 import { ehDesktop } from "./espacamento";
@@ -631,6 +632,7 @@ export function useProtocoloGravado({
     cabecalho: proto ? <ProtocoloCabecalho numero={proto.numero} idExterno={proto.idExterno} assunto={capa?.assunto ?? proto.assunto} /> : undefined,
     acoesCabecalho: (
       <>
+        {proto && <VendoAgora tipo="protocolo" id={proto.id} editando={capaSuja} />}
         {proto && <BotaoAcao rotulo="Histórico do protocolo" icon={<IconClock className="h-4 w-4" />} onClick={() => setHistoricoAberto(true)} />}
         {proto && <TarefasDoVinculo tipo="protocolo" id={proto.id} disabled={travado} dica={motivoTrava} />}
         {botaoAtualizar}
@@ -749,6 +751,7 @@ export function useProtocoloGravado({
           pressionado={painel?.tipo === "historico"}
           onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
         />
+        {abertoId != null && <VendoAgora tipo="dfd" id={abertoId} editando={editados.has(abertoId) || itensEditados.has(abertoId)} />}
         {abertoId != null && <TarefasDoVinculo tipo="dfd" id={abertoId} disabled={travado} dica={motivoTrava} />}
       </>
     ) : undefined,

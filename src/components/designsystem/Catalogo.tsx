@@ -3356,6 +3356,8 @@ export function Catalogo() {
             pessoas: PESSOAS_DEMO,
             whatsapp: { 4: "64999990000" },
             invisivel: false,
+            chatGrupo: true,
+            vendo: new Map([["protocolo:12", [{ id: 4, editando: true }]]]),
             aoVivo: true,
             meuStatus: { status: "disponivel", recado: "", ate: null },
             vistos: new Map(),

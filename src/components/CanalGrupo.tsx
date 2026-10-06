@@ -3,7 +3,10 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { esperaReconexao } from "@/lib/ao-vivo-core";
 import type { Pessoa } from "@/lib/pessoa";
-import { type EstadoPresenca, type InfoPresenca, lerListaMensagem, type StatusPresenca, statusVigente } from "@/lib/presenca-core";
+import { type EstadoPresenca, type InfoPresenca, lerListaMensagem, lerVendoMensagem, MAX_VENDO, type StatusPresenca, statusVigente } from "@/lib/presenca-core";
+
+/** Abrir o CHAT de qualquer lugar (ex.: "Conversar sobre este protocolo"): `{conversa, texto}`. */
+export const EVENTO_ABRIR_CHAT = "pca:abrir-chat";
 
 /** O evento da janela com a mensagem PRIVADA do chat (chega pela caixa pessoal — o canal do sino). */
 export const EVENTO_CHAT_PRIVADO = "pca:chat-privado";
@@ -57,6 +60,12 @@ export type CanalGrupoValor = {
   enviar: (msg: Record<string, unknown>) => boolean;
   /** Ouve um tipo de mensagem do canal (`t`) — o chat e o "vendo agora" usam o MESMO socket. */
   ouvir: (tipo: string, fn: Ouvinte) => () => void;
+  /** O chat do grupo está ligado (o "Conversar sobre…" do "vendo agora"). */
+  chatGrupo: boolean;
+  /** Quem está VENDO cada alvo ("protocolo:12"…) e quem está editando. */
+  vendo: Map<string, { id: number; editando: boolean }[]>;
+  /** Registra o que ESTA tela está vendo (o banner aberto) — devolve a função que tira. */
+  registrarVendo: (alvo: string, editando: boolean) => () => void;
   armazem: Armazem;
 };
 
@@ -98,23 +107,39 @@ export function CanalGrupo({
   usuarioId,
   grupoId,
   grupoNome,
+  chatGrupo = false,
   children,
 }: {
   presenca: PresencaShell | null;
   usuarioId: number;
   grupoId: number | null;
   grupoNome: string | null;
+  chatGrupo?: boolean;
   children: ReactNode;
 }) {
   if (!presenca || grupoId == null) return <>{children}</>;
   return (
-    <CanalAtivo presenca={presenca} usuarioId={usuarioId} grupoId={grupoId} grupoNome={grupoNome}>
+    <CanalAtivo presenca={presenca} usuarioId={usuarioId} grupoId={grupoId} grupoNome={grupoNome} chatGrupo={chatGrupo}>
       {children}
     </CanalAtivo>
   );
 }
 
-function CanalAtivo({ presenca, usuarioId, grupoId, grupoNome, children }: { presenca: PresencaShell; usuarioId: number; grupoId: number; grupoNome: string | null; children: ReactNode }) {
+function CanalAtivo({
+  presenca,
+  usuarioId,
+  grupoId,
+  grupoNome,
+  chatGrupo,
+  children,
+}: {
+  presenca: PresencaShell;
+  usuarioId: number;
+  grupoId: number;
+  grupoNome: string | null;
+  chatGrupo: boolean;
+  children: ReactNode;
+}) {
   const [estados, setEstados] = useState<Map<number, InfoPresenca>>(() => new Map());
   const [vistos, setVistos] = useState<Map<number, number>>(() => new Map());
   const [aoVivo, setAoVivo] = useState(false);
@@ -123,6 +148,38 @@ function CanalAtivo({ presenca, usuarioId, grupoId, grupoNome, children }: { pre
   const ws = useRef<WebSocket | null>(null);
   const ouvintes = useRef(new Map<string, Set<Ouvinte>>());
   const { invisivel, inativoMin } = presenca;
+  const [vendo, setVendo] = useState<Map<string, { id: number; editando: boolean }[]>>(() => new Map());
+  // O que as telas desta aba estão vendo (um registro por banner aberto) — vai junto ao servidor, com uma espera curta.
+  const registros = useRef(new Map<number, { alvo: string; editando: boolean }>());
+  const proximoRegistro = useRef(0);
+  const ultimoVendo = useRef("");
+  const timerVendo = useRef(0);
+  const mandarVendo = useCallback((forcar = false) => {
+    window.clearTimeout(timerVendo.current);
+    timerVendo.current = window.setTimeout(() => {
+      const alvos = [...new Set([...registros.current.values()].map((r) => r.alvo))].slice(0, MAX_VENDO);
+      const editando = [...new Set([...registros.current.values()].filter((r) => r.editando).map((r) => r.alvo))].filter((a) => alvos.includes(a));
+      const msg = JSON.stringify({ t: "vendo", alvos, editando });
+      if (!forcar && msg === ultimoVendo.current) return;
+      const s = ws.current;
+      if (s?.readyState === WebSocket.OPEN) {
+        s.send(msg);
+        ultimoVendo.current = msg;
+      }
+    }, 250);
+  }, []);
+  const registrarVendo = useCallback(
+    (alvo: string, editando: boolean) => {
+      const id = ++proximoRegistro.current;
+      registros.current.set(id, { alvo, editando });
+      mandarVendo();
+      return () => {
+        registros.current.delete(id);
+        mandarVendo();
+      };
+    },
+    [mandarVendo],
+  );
 
   // O status do servidor muda (outra aba gravou, a página recarregou) → vale o dele.
   const statusServidor = JSON.stringify(presenca.status);
@@ -188,6 +245,9 @@ function CanalAtivo({ presenca, usuarioId, grupoId, grupoNome, children }: { pre
         // O servidor começa "online": a aba aberta em segundo plano (ou parada) avisa logo.
         enviado = "online";
         conferir();
+        // O que esta aba está vendo vale de novo na conexão nova.
+        ultimoVendo.current = "";
+        if (registros.current.size) mandarVendo(true);
         batida = window.setInterval(() => s.readyState === WebSocket.OPEN && s.send("ping"), 45_000);
       };
       s.onmessage = (e) => {
@@ -201,6 +261,11 @@ function CanalAtivo({ presenca, usuarioId, grupoId, grupoNome, children }: { pre
         }
         try {
           const m = JSON.parse(e.data) as Record<string, unknown>;
+          const v = lerVendoMensagem(m);
+          if (v) {
+            setVendo(v);
+            return;
+          }
           if (typeof m.t === "string") for (const f of ouvintes.current.get(m.t) ?? []) f(m);
         } catch {
           /* mensagem desconhecida */
@@ -229,7 +294,7 @@ function CanalAtivo({ presenca, usuarioId, grupoId, grupoNome, children }: { pre
       ws.current?.close();
       ws.current = null;
     };
-  }, [grupoId, invisivel, inativoMin, armazem]);
+  }, [grupoId, invisivel, inativoMin, armazem, mandarVendo]);
 
   const definirStatus = useCallback(
     async (s: MeuStatus) => {
@@ -264,20 +329,23 @@ function CanalAtivo({ presenca, usuarioId, grupoId, grupoNome, children }: { pre
       definirStatus,
       enviar,
       ouvir,
+      chatGrupo,
+      vendo,
+      registrarVendo,
       armazem,
     }),
-    [usuarioId, grupoId, grupoNome, presenca.pessoas, presenca.whatsapp, invisivel, estados, vistos, aoVivo, meuStatus, definirStatus, enviar, ouvir, armazem],
+    [chatGrupo, usuarioId, grupoId, grupoNome, presenca.pessoas, presenca.whatsapp, invisivel, estados, vistos, aoVivo, meuStatus, definirStatus, enviar, ouvir, vendo, registrarVendo, armazem],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
 
 /** Para o CATÁLOGO do design system: um canal sem servidor, com os estados dados. */
-export function CanalGrupoDemo({ valor, children }: { valor: Omit<CanalGrupoValor, "armazem" | "ouvir" | "enviar" | "definirStatus">; children: ReactNode }) {
+export function CanalGrupoDemo({ valor, children }: { valor: Omit<CanalGrupoValor, "armazem" | "ouvir" | "enviar" | "definirStatus" | "registrarVendo" | "vendo"> & { vendo?: CanalGrupoValor["vendo"] }; children: ReactNode }) {
   const armazem = useMemo(criarArmazem, []);
   useEffect(() => armazem.definir(valor.estados), [armazem, valor.estados]);
   const [meuStatus, setMeuStatus] = useState(valor.meuStatus);
   const v = useMemo<CanalGrupoValor>(
-    () => ({ ...valor, meuStatus, armazem, ouvir: () => () => {}, enviar: () => false, definirStatus: async (s) => setMeuStatus(s) }),
+    () => ({ ...valor, vendo: valor.vendo ?? new Map(), meuStatus, armazem, ouvir: () => () => {}, enviar: () => false, registrarVendo: () => () => {}, definirStatus: async (s) => setMeuStatus(s) }),
     [valor, meuStatus, armazem],
   );
   return <Ctx.Provider value={v}>{children}</Ctx.Provider>;

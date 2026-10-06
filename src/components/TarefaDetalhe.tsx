@@ -73,6 +73,7 @@ import { SeletorEtiquetas } from "./SeletorEtiquetas";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { toast } from "./Toast";
 import { VinculosTarefa } from "./VinculosTarefa";
+import { VendoAgora } from "./VendoAgora";
 
 /**
  * Qual detalhe está aberto: uma tarefa NOVA (na lista dada; `vinculo` = já ligada — "Criar tarefa" da Mesa; `prazo` = o
@@ -876,7 +877,14 @@ export function TarefaDetalhe({
         esquerda={esquerda}
         principalNoTopo={!!esquerda?.length}
         bloqueado={salvando != null}
-        acoesCabecalho={existente && menuTarefa(existente)}
+        acoesCabecalho={
+          existente && (
+            <>
+              <VendoAgora tipo="tarefa" id={existente.id} editando={sujo} />
+              {menuTarefa(existente)}
+            </>
+          )
+        }
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {existente ? <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge> : <Badge>Nova</Badge>}

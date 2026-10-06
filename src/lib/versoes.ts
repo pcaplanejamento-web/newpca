@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.12.0",
+    data: "2026-10-06",
+    titulo: "Quem está vendo e editando agora",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "No banner do protocolo e do DFD, as fotos de quem mais está com ele aberto, ao vivo.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Mesa", texto: "Aviso em âmbar quando outra pessoa tem alterações não salvas no mesmo protocolo ou DFD — combine antes de salvar.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Tarefas", texto: "O mesmo na tarefa aberta, e \"Conversar sobre\" abre o chat do grupo com o link do item.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.11.0",
     data: "2026-10-06",
     titulo: "Chat ao vivo",

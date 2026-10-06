@@ -117,7 +117,12 @@ export function vistosRecentes(vistos: ReadonlyMap<number, number>, presentes: R
 /** As mensagens que a ABA manda ao objeto do grupo (o "ping" é auto-resposta). O formato antigo `{estado}` vale. */
 export type MensagemAba =
   | { t: "estado"; estado: EstadoPresenca }
-  | { t: "status"; status: StatusPresenca; recado: string; ate: string | null };
+  | { t: "status"; status: StatusPresenca; recado: string; ate: string | null }
+  | { t: "vendo"; alvos: string[]; editando: string[] };
+
+/** O que a pessoa está VENDO (o banner aberto): "protocolo:12" · "dfd:5" · "tarefa:9" — até 5 ao mesmo tempo (a pilha). */
+export const MAX_VENDO = 5;
+export const alvoVendoValido = (v: unknown): v is string => typeof v === "string" && /^(protocolo|dfd|tarefa):\d{1,9}$/.test(v);
 
 export function lerMensagemAba(msg: unknown): MensagemAba | null {
   if (typeof msg !== "string" || msg.length > 4000) return null;
@@ -131,6 +136,11 @@ export function lerMensagemAba(msg: unknown): MensagemAba | null {
   }
   if ((o.t === "estado" || o.t === undefined) && (o.estado === "online" || o.estado === "ausente")) return { t: "estado", estado: o.estado };
   if (o.t === "status") return { t: "status", status: lerStatus(o.status), recado: limparRecado(o.recado), ate: lerAte(o.ate) };
+  if (o.t === "vendo") {
+    const alvos = [...new Set(Array.isArray(o.alvos) ? o.alvos.filter(alvoVendoValido) : [])].slice(0, MAX_VENDO);
+    const editando = Array.isArray(o.editando) ? o.editando.filter((a): a is string => alvoVendoValido(a) && alvos.includes(a)) : [];
+    return { t: "vendo", alvos, editando };
+  }
   return null;
 }
 
@@ -191,4 +201,35 @@ export function opcoesAte(agora = Date.now()): { rotulo: string; ate: string | n
   ];
   if (fim > agora + 30 * 60_000) ops.push({ rotulo: "Até as 18h", ate: new Date(fim).toISOString() });
   return ops;
+}
+
+/** Quem está VENDO cada alvo (sem os invisíveis): [alvo, [[id, 1 = editando | 0]]] — ordenado (estável — dá para comparar). */
+export type ListaVendo = [string, [number, 0 | 1][]][];
+export function listaVendo(conexoes: readonly { id: number; invisivel: boolean; vendo?: string[]; editando?: string[] }[]): ListaVendo {
+  const m = new Map<string, Map<number, 0 | 1>>();
+  for (const c of conexoes) {
+    if (c.invisivel) continue;
+    for (const a of c.vendo ?? []) {
+      const pessoas = m.get(a) ?? new Map<number, 0 | 1>();
+      m.set(a, pessoas);
+      if (pessoas.get(c.id) !== 1) pessoas.set(c.id, c.editando?.includes(a) ? 1 : 0);
+    }
+  }
+  return [...m]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([a, p]) => [a, [...p].sort((x, y) => x[0] - y[0])] as [string, [number, 0 | 1][]]);
+}
+
+/** A mensagem "vendo" que chega às abas → alvo → pessoas (com quem está editando). Inválida = `null`. */
+export function lerVendoMensagem(o: Record<string, unknown>): Map<string, { id: number; editando: boolean }[]> | null {
+  if (o.t !== "vendo" || !Array.isArray(o.m)) return null;
+  const out = new Map<string, { id: number; editando: boolean }[]>();
+  for (const it of o.m) {
+    if (!Array.isArray(it) || !alvoVendoValido(it[0]) || !Array.isArray(it[1])) continue;
+    out.set(
+      it[0],
+      (it[1] as unknown[]).filter((p): p is [number, number] => Array.isArray(p) && Number.isInteger(p[0])).map((p) => ({ id: p[0], editando: p[1] === 1 })),
+    );
+  }
+  return out;
 }

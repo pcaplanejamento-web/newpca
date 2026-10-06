@@ -5,6 +5,7 @@ import {
   lerMensagemAba,
   lerPrefsPresenca,
   listaPresenca,
+  listaVendo,
   MAX_ABAS_PRESENCA,
   MAX_CONEXOES_GRUPO,
   vistosRecentes,
@@ -19,6 +20,10 @@ type Anexo = ConexaoPresenca & {
   chatPrivado?: boolean;
   janela?: { inicio: number; n: number };
   dig?: number;
+  /** O que a aba está vendo (os banners abertos) e onde tem alteração não salva. */
+  vendo?: string[];
+  editando?: string[];
+  janelaVendo?: { inicio: number; n: number };
 };
 
 /**
@@ -38,6 +43,8 @@ export class PresencaGrupo {
   private ultima = "";
   /** Quando cada pessoa saiu (a última aba fechou) — o "visto por último", só na memória. */
   private vistos = new Map<number, number>();
+  /** O último "vendo agora" enviado (só manda quando muda). */
+  private ultimoVendo = "";
 
   constructor(state: DurableObjectState, _env: unknown) {
     this.state = state;
@@ -81,6 +88,7 @@ export class PresencaGrupo {
     this.vistos.delete(id);
     // A nova aba recebe a lista mesmo que ela não tenha mudado (a pessoa invisível não muda a dos outros).
     this.enviar(null, servidor);
+    this.enviarVendo(null, servidor);
     return new Response(null, { status: 101, webSocket: cliente });
   }
 
@@ -120,8 +128,16 @@ export class PresencaGrupo {
       this.chat(ws, anexo, texto);
       return;
     }
-    // Uma mudança por segundo por aba (o resto é ignorado — a tela só manda quando muda).
     const agora = Date.now();
+    if (m.t === "vendo") {
+      // Abrir/fechar banners é rápido: até 60 por minuto por aba.
+      const conta = contarNaJanela(anexo.janelaVendo, agora, 60);
+      if (!conta.ok) return;
+      ws.serializeAttachment({ ...anexo, vendo: m.alvos, editando: m.editando, janelaVendo: conta.janela });
+      this.enviarVendo(null);
+      return;
+    }
+    // Uma mudança por segundo por aba (o resto é ignorado — a tela só manda quando muda).
     if (agora - anexo.ultima < INTERVALO_MSG_MS) return;
     if (m.t === "estado") {
       if (m.estado === anexo.estado) return;
@@ -175,6 +191,16 @@ export class PresencaGrupo {
     const a = ws.deserializeAttachment() as Anexo | null;
     if (a && !a.invisivel && !this.state.getWebSockets(`u${a.id}`).some((o) => o !== ws)) this.vistos.set(a.id, Date.now());
     this.enviar(ws);
+    this.enviarVendo(ws);
+  }
+
+  /** O "VENDO AGORA": quem está com cada protocolo/DFD/tarefa aberto (e editando) — a todas as abas, só quando muda. */
+  private enviarVendo(saindo: WebSocket | null, nova?: WebSocket) {
+    const msg = JSON.stringify({ t: "vendo", m: listaVendo(this.anexos(saindo)) });
+    const mudou = msg !== this.ultimoVendo;
+    this.ultimoVendo = msg;
+    if (mudou) enviarA(this.state.getWebSockets().filter((o) => o !== saindo), JSON.parse(msg));
+    else if (nova) enviarA([nova], JSON.parse(msg));
   }
 }
 
