@@ -22,6 +22,7 @@ export async function GET() {
       ordem: orgaos.ordem,
       assinaturaUnica: orgaos.assinaturaUnica,
       numeroInteressado: orgaos.numeroInteressado,
+      entidadeCenti: orgaos.entidadeCenti,
       oculto: orgaos.oculto,
       responsavelDfd: orgaos.responsavelDfd,
     })
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
       nome: corpo.data.nome,
       orgaoEntidade: corpo.data.orgaoEntidade ?? null,
       numeroInteressado,
+      entidadeCenti: corpo.data.entidadeCenti?.trim() || null,
       assinaturaUnica: corpo.data.assinaturaUnica,
       oculto: corpo.data.oculto,
       responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),

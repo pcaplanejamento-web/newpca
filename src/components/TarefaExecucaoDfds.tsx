@@ -226,7 +226,7 @@ export function TarefaExecucaoDfds({
       {entidade && !daEntidade.length && (
         <Callout kind="warn">
           Nenhum órgão está ligado à entidade aberta na Centi ({entidade}). A CM002 mostra só os planejamentos dessa entidade:
-          ligue abaixo o órgão correspondente (ou abra na Centi a entidade do órgão que quer verificar).
+          cadastre o “ID da entidade na Centi” no órgão (Órgãos e Unidades) ou ligue abaixo o órgão correspondente.
         </Callout>
       )}
       {entidade && semLigacao.length > 0 && (

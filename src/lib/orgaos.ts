@@ -18,6 +18,8 @@ export type OrgaoResumo = {
   assinaturaUnica: boolean;
   /** Nº do interessado do órgão (o protocolo pode vir em nome do órgão). */
   numeroInteressado: string | null;
+  /** O ID da entidade do órgão na Centi (ex.: "02"). */
+  entidadeCenti: string | null;
   /** Ocultado (tem DFD/protocolo): não aparece para uso em documentos novos. */
   oculto: boolean;
 };
@@ -32,6 +34,7 @@ export async function listarOrgaos(): Promise<OrgaoResumo[]> {
       ordem: orgaos.ordem,
       assinaturaUnica: orgaos.assinaturaUnica,
       numeroInteressado: orgaos.numeroInteressado,
+      entidadeCenti: orgaos.entidadeCenti,
       oculto: orgaos.oculto,
     })
     .from(orgaos)

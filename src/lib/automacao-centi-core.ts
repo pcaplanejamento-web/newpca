@@ -615,3 +615,11 @@ export function linkDaResposta(bytes: Uint8Array): string | null {
     return null;
   }
 }
+
+/** A entidade cadastrada no órgão ("2", "02") no FORMATO da aberta na Centi (com o zero à esquerda quando a aberta tem). */
+export function formatoEntidade(valor: string, aberta: string | null): string {
+  const v = valor.trim();
+  if (!/^\d{1,4}$/.test(v)) return v;
+  const n = v.replace(/^0+/, "") || "0";
+  return aberta && /^\d{1,4}$/.test(aberta) ? n.padStart(aberta.length, "0") : v;
+}

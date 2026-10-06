@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.20.0",
+    data: "2026-10-06",
+    titulo: "ID da entidade da Centi no órgão",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "Campo “ID da entidade na Centi” no cadastro do órgão (o nº do seletor do topo da Centi — ex.: 02 - Prefeitura, 03 - Fundo Municipal de Saúde) e a coluna “Centi” na lista.", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Automação", texto: "Com o ID cadastrado, o Baixar DFDs emite direto na entidade do órgão (sem tentar entidade por entidade) e a Verificar execução já sabe quais DFDs são da entidade aberta na Centi.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.19.2",
     data: "2026-10-06",
     titulo: "Execução dos DFDs por entidade da Centi",

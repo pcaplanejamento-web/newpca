@@ -281,6 +281,7 @@ export const orgaos = sqliteTable(
     assinaturaUnica: integer("assinatura_unica", { mode: "boolean" }).notNull().default(false),
     responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs do órgão (JSON), quando assinatura única
     numeroInteressado: text("numero_interessado"), // Interessado do protocolo → órgão (único GLOBAL com unidades)
+    entidadeCenti: text("entidade_centi"), // ID da entidade na Centi ("02", "03"…) — a Automação usa direto (migração 0090)
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultado (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),

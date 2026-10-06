@@ -27,13 +27,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       nome: corpo.data.nome,
       orgaoEntidade: corpo.data.orgaoEntidade ?? null,
       numeroInteressado,
+      ...(corpo.data.entidadeCenti === undefined ? {} : { entidadeCenti: corpo.data.entidadeCenti?.trim() || null }),
       assinaturaUnica: corpo.data.assinaturaUnica,
       oculto: corpo.data.oculto,
       responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(orgaos.id, id));
-  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", entidadeId: id, resumo: `Órgão "${corpo.data.nome}" editado`, depois: { nome: corpo.data.nome, sigla: corpo.data.sigla, assinaturaUnica: corpo.data.assinaturaUnica, oculto: corpo.data.oculto } });
+  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", entidadeId: id, resumo: `Órgão "${corpo.data.nome}" editado`, depois: { nome: corpo.data.nome, sigla: corpo.data.sigla, entidadeCenti: corpo.data.entidadeCenti ?? undefined, assinaturaUnica: corpo.data.assinaturaUnica, oculto: corpo.data.oculto } });
   return ok();
 }
 

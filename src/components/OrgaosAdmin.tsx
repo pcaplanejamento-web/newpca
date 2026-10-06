@@ -24,6 +24,8 @@ type Orgao = {
   ordem: number;
   assinaturaUnica: boolean;
   numeroInteressado: string | null;
+  /** O ID da entidade do órgão na Centi (ex.: "02"). */
+  entidadeCenti: string | null;
   oculto: boolean;
   /** Funciona TAMBÉM como unidade (tem a unidade própria). */
   tambemUnidade: boolean;
@@ -41,6 +43,7 @@ export function OrgaosAdmin() {
   const [nome, setNome] = useState("");
   const [orgaoEntidade, setOrgaoEntidade] = useState("");
   const [numeroInteressado, setNumeroInteressado] = useState("");
+  const [entidadeCenti, setEntidadeCenti] = useState("");
   const [assinaturaUnica, setAssinaturaUnica] = useState(false);
   const [formOculto, setFormOculto] = useState(false); // preservado no PATCH (togglado pela ação da linha)
   const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
@@ -78,6 +81,7 @@ export function OrgaosAdmin() {
     setNome("");
     setOrgaoEntidade("");
     setNumeroInteressado("");
+    setEntidadeCenti("");
     setAssinaturaUnica(false);
     setFormOculto(false);
     setResponsaveis(RESPONSAVEIS_VAZIO);
@@ -88,6 +92,7 @@ export function OrgaosAdmin() {
     setNome(o.nome);
     setOrgaoEntidade(o.orgaoEntidade ?? "");
     setNumeroInteressado(o.numeroInteressado ?? "");
+    setEntidadeCenti(o.entidadeCenti ?? "");
     setAssinaturaUnica(o.assinaturaUnica);
     setFormOculto(o.oculto);
     setResponsaveis(o.responsaveis);
@@ -184,7 +189,7 @@ export function OrgaosAdmin() {
       const r = await fetch(novo ? "/api/admin/orgaos" : `/api/admin/orgaos/${(editando as Orgao).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sigla, nome, orgaoEntidade: orgaoEntidade.trim() || null, numeroInteressado: numeroInteressado.trim() || null, assinaturaUnica, oculto: formOculto, responsaveis }),
+        body: JSON.stringify({ sigla, nome, orgaoEntidade: orgaoEntidade.trim() || null, numeroInteressado: numeroInteressado.trim() || null, entidadeCenti: entidadeCenti.trim() || null, assinaturaUnica, oculto: formOculto, responsaveis }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -289,6 +294,14 @@ export function OrgaosAdmin() {
         ),
     },
     {
+      key: "entidadeCenti",
+      header: "Centi",
+      filter: "none",
+      minWidth: 70,
+      render: (o) =>
+        o.entidadeCenti ? <span className="font-mono text-[12px] text-text-2">{o.entidadeCenti}</span> : <span className="text-faint">—</span>,
+    },
+    {
       key: "assinatura",
       header: "Assinatura",
       filter: "none",
@@ -347,6 +360,13 @@ export function OrgaosAdmin() {
             value={numeroInteressado}
             onChange={(e) => setNumeroInteressado(e.target.value)}
             placeholder="Ex.: 1008171"
+          />
+          <TextField
+            label="ID da entidade na Centi (o seletor do topo da Centi — ex.: 02 - PREFEITURA)"
+            value={entidadeCenti}
+            onChange={(e) => setEntidadeCenti(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="Ex.: 02"
+            inputMode="numeric"
           />
           <div>
             <span className="mb-2 block text-[13px] font-semibold text-text">Assinatura (responsáveis por DFDs)</span>

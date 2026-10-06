@@ -113,6 +113,13 @@ export const orgaoSchema = z.object({
   nome: z.string().trim().min(1, "Informe o nome do órgão.").max(160),
   orgaoEntidade: z.string().trim().max(200).optional().nullable(),
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
+  /** O ID da entidade do órgão na Centi (só dígitos, ex.: "02"); vazio = não informado. Ausente = não muda. */
+  entidadeCenti: z
+    .string()
+    .trim()
+    .regex(/^\d{0,4}$/, "O ID da entidade na Centi é só o número (ex.: 02).")
+    .optional()
+    .nullable(),
   assinaturaUnica: z.boolean().default(false),
   oculto: z.boolean().default(false),
   responsaveis: responsaveisSchema,

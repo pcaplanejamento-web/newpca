@@ -32,8 +32,7 @@ import {
   planoDosProtocolos,
   type TarefaCenti,
   VERSAO_EXTENSAO_CENTI,
-  versaoAtende,
-} from "@/lib/automacao-centi-core";
+  versaoAtende, formatoEntidade } from "@/lib/automacao-centi-core";
 import { baixarNoNavegador, baixarPelaExtensao, comoBlob, deBase64, novaUniao, pdfDoAchado } from "@/lib/arquivo-navegador";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
@@ -135,6 +134,8 @@ const lerTarefa = (v: unknown): Modo => (TAREFAS.some((t) => t.value === v) ? (v
 type Ext = { versao: string; copias: number } | null;
 /** O contexto dos BANNERS da Mesa (o protocolo aberto pela linha): o mesmo da Mesa (`contextoBanners`). */
 export type ContextoBannersAutomacao = Pick<Parameters<typeof BannersMesa>[0], "pode" | "reparticoes" | "regras" | "orgaos" | "pcas">;
+/** O ID da entidade na Centi cadastrado em cada órgão (Órgãos e Unidades). */
+type OrgaoCenti = { id: number; entidadeCenti?: string | null };
 
 /** Conversa com a extensão pela ponte da página (window.postMessage). */
 function useExtensaoCenti() {
@@ -802,6 +803,13 @@ export function AutomacaoAdmin({
   const [saida, setSaida] = useState<OpcoesSaida>(OPCOES_SAIDA_PADRAO);
   const [mapa, setMapa] = useState<Record<string, string>>({});
   const mapaRef = useRef(mapa);
+  // Órgão → ID da entidade na Centi CADASTRADO em Órgãos e Unidades (vale mais que o mapa do aparelho).
+  const cadastradas = useMemo(
+    () => Object.fromEntries((banners.orgaos as OrgaoCenti[]).filter((o) => o.entidadeCenti).map((o) => [`o:${o.id}`, o.entidadeCenti as string])),
+    [banners.orgaos],
+  );
+  const cadastradasRef = useRef(cadastradas);
+  cadastradasRef.current = cadastradas;
   const [logado, setLogado] = useState<Resposta | null>(null);
   const [modo, setModo] = useState<Modo>("protocolo");
   const [texto, setTexto] = useState("");
@@ -1172,6 +1180,12 @@ export function AutomacaoAdmin({
   // A ENTIDADE do DFD: a do órgão (mapa); sem ela, a aberta na Centi. Falhou e "descobrir" está ligado → tenta as outras
   // entidades e lembra a que deu certo para o órgão (os próximos DFDs dele vão direto).
   async function emitirNaEntidade(t: TarefaCenti, semSaida: Set<string>, atual: string | null): Promise<Emissao> {
+    // O ID da entidade CADASTRADO no órgão (Órgãos e Unidades) vale direto — sem tentar outras.
+    const fixa = t.orgao ? cadastradasRef.current[t.orgao] : undefined;
+    if (fixa) {
+      const e = formatoEntidade(fixa, atual);
+      return { ...(await emitirConferido(t, e)), entidade: e };
+    }
     const mapeada = t.orgao ? mapaRef.current[t.orgao] : undefined;
     const r = await emitirConferido(t, mapeada);
     if (r.pdf) {
@@ -1657,7 +1671,7 @@ export function AutomacaoAdmin({
         className={`grid gap-[var(--gap-block)] lg:h-[var(--h-automacao)] lg:grid-rows-[minmax(0,1fr)] ${modo === "tela" || modo === "execucao" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
       >
         {modo === "execucao" ? (
-          <TarefaExecucaoDfds pedir={pedir} lote={loteRef} pronto={pronto} entidade={logado?.entidade ?? null} mapa={mapa} onEntidade={definirEntidade} onRodando={setRodandoTela} />
+          <TarefaExecucaoDfds pedir={pedir} lote={loteRef} pronto={pronto} entidade={logado?.entidade ?? null} mapa={{ ...mapa, ...cadastradas }} onEntidade={definirEntidade} onRodando={setRodandoTela} />
         ) : modo === "tela" ? (
           <TarefaTelaProtocolo
             pedir={pedir}

@@ -44,3 +44,10 @@ test("mesma entidade da Centi", async () => {
   assert.equal(mesmaEntidade("02", "03"), false);
   assert.equal(mesmaEntidade(null, "2"), false);
 });
+
+test("entidade cadastrada no formato da aberta", async () => {
+  const { formatoEntidade } = await import("../src/lib/automacao-centi-core.ts");
+  assert.equal(formatoEntidade("2", "02"), "02");
+  assert.equal(formatoEntidade("03", "2"), "3");
+  assert.equal(formatoEntidade("3", null), "3");
+});

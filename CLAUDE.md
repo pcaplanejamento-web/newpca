@@ -4200,7 +4200,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `planoExecucao` — grava só o que mudou, `classeExecucao` executado/cancelado/outro) + auditoria; `GET` = os DFDs com
   planejamento e a situação gravada. Mesa → DFDs: coluna **Execução** (`CelulaExecucao`, só quando algum DFD já foi
   verificado). **Por ENTIDADE:** a CM002 mostra só a entidade aberta na Centi — só os DFDs do órgão ligado a ela (o mapa
-  órgão → entidade `automacao:centi-entidades`, `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
+  órgão → entidade: o **ID da entidade na Centi CADASTRADO no órgão** — `orgaos.entidade_centi`, migração `0090`, campo no
+  `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
   as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
   + o da tabela em `automacao-tela-centi`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
