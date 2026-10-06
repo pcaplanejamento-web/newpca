@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.14.1",
+    data: "2026-10-06",
+    titulo: "Presença no nível profissional",
+    mudancas: [
+      { tipo: "correcao", area: "Cabeçalho", texto: "O ponto verde/âmbar voltou ao canto da foto (saía para o lado) e o halo ao vivo ficou mais discreto." },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Até 5 fotos de quem está online e, depois, o círculo \"+N\" (com os nomes na dica)." },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Ausente mostra há quanto tempo (\"Ausente há 12 min\")." },
+      { tipo: "melhoria", area: "Presença", texto: "Recarregar a página (F5) não faz a pessoa sumir e voltar: há uma carência de 12 s antes de mostrar a saída." },
+      { tipo: "melhoria", area: "Presença", texto: "Quem perdeu a internet sem fechar o sistema sai da lista em até 3 min; sem rede, a tela mostra \"Reconectando…\" e volta sozinha." },
+    ],
+  },
+  {
     versao: "1.14.0",
     data: "2026-10-06",
     titulo: "Chat no estilo Messenger e conversas em grupo",

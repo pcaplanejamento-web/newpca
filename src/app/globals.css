@@ -424,9 +424,8 @@
 
 /* AO VIVO (presença e chat): o ponto online PULSA (um anel que expande e some — radar), a pessoa que entra cresce com
    mola e brilha por 3 s, o número desliza ao mudar, os três pontos do "digitando" saltam e o balão novo entra. */
-.ponto-vivo {
-  position: relative;
-}
+/* O ponto "ao vivo": o halo que pulsa. O ponto precisa ser POSICIONADO (absolute/relative pela classe de quem usa) — aqui não
+   se fixa `position`, senão a regra (fora das camadas do Tailwind) venceria o `absolute` e o ponto sairia do canto da foto. */
 .ponto-vivo::after {
   content: "";
   position: absolute;
@@ -437,13 +436,13 @@
 }
 @keyframes pulso-vivo {
   0% {
-    opacity: 0.7;
+    opacity: 0.55;
     scale: 1;
   }
   80%,
   100% {
     opacity: 0;
-    scale: 2.6;
+    scale: 1.9;
   }
 }
 @keyframes entrar-pessoa {

@@ -471,6 +471,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
   zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
 
+## Presença no nível profissional (v1.14.1)
+- **Cabeçalho:** até `MAX_FOTOS`=5 fotos (a primeira por cima — o ponto no canto não é coberto) e o círculo **"+N"** do mesmo
+  tamanho (os nomes na dica). O ponto da foto é `absolute` no `Avatar`: a regra `.ponto-vivo` do `globals.css` NÃO fixa
+  `position` (fora das camadas do Tailwind ela venceria o `absolute` e o ponto saía do canto); o mesmo cuidado com
+  `.animate-contador` (`display: inline-block` — vai no texto, não na caixa centrada).
+- **Ausente há X min:** a aba diz há quanto tempo está parada ao virar ausente (`{t:"estado", estado:"ausente", ha}` ≤ 24 h);
+  o objeto guarda `ausenteDesde` e a lista leva `d` = **`ausentesDesde`** (todas as abas ausentes → a mais recente);
+  `InfoPresenca.desde` → **`rotuloAusente`** no painel (relógio de 30 s) e na dica da foto.
+- **Carência de saída (`CARENCIA_SAIDA_MS`=12 s):** fechada a última aba, a pessoa fica na lista (memória `saindo` do
+  `PresencaGrupo`) até o ALARME do objeto; voltando antes (F5), nada muda para os outros. Depois, "visto por último".
+- **Conexão morta:** o alarme (a cada `VARREDURA_MS`=90 s só com abas conectadas) fecha a aba sem sinal há `SEM_SINAL_MS`=3
+  min (o último ping pela `getWebSocketAutoResponseTimestamp`, a conexão, a última mensagem) — marcada `morto`, fora da
+  lista. Na tela, o `CanalGrupo` fecha e reconecta quando o "pong" não chega em 10 s, fecha no `offline` ("Reconectando…") e
+  reconecta na hora no `online`.
+
 ## Chat estilo Messenger + conversas em grupo (v1.14.0 — nada é salvo)
 - **Bolhas:** o ícone do cabeçalho abre a LISTA (grupo ativo, privadas, conversas em grupo, "Nova conversa", **"Nova conversa
   em grupo"** — `NovaConversaGrupo`: 2 a 19 pessoas do grupo + nome opcional); cada conversa aberta vira uma bolha do

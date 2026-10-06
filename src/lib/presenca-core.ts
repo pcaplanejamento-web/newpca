@@ -78,7 +78,16 @@ export const ficaInvisivel = (cfg: ConfigPresenca, prefs: { invisivel: boolean }
 export type EstadoPresenca = "online" | "ausente";
 
 /** Uma conexão (uma aba) no objeto do grupo. */
-export type ConexaoPresenca = { id: number; estado: EstadoPresenca; invisivel: boolean; status?: StatusPresenca; recado?: string; ate?: string | null };
+export type ConexaoPresenca = {
+  id: number;
+  estado: EstadoPresenca;
+  invisivel: boolean;
+  status?: StatusPresenca;
+  recado?: string;
+  ate?: string | null;
+  /** Desde quando esta aba está ausente (ms) — o "ausente há 12 min". */
+  ausenteDesde?: number;
+};
 
 /** O que vai às abas por pessoa: [id, "o" | "a", status?, recado?] — compacto (Disponível sem recado = só os dois). */
 export type ItemPresenca = [number, "o" | "a"] | [number, "o" | "a", StatusPresenca, string];
@@ -91,6 +100,15 @@ export const MAX_CONEXOES_GRUPO = 500;
 export const INTERVALO_MSG_MS = 1_000;
 /** Por quanto tempo o "visto por último" aparece. */
 export const JANELA_VISTO_MS = 24 * 3600_000;
+/** CARÊNCIA DE SAÍDA: fechada a última aba, a pessoa continua na lista por estes segundos — um F5, uma troca de rede ou uma
+ * queda rápida não fazem a foto piscar para os outros (como no Slack/Discord). */
+export const CARENCIA_SAIDA_MS = 12_000;
+/** CONEXÃO MORTA: a aba manda "ping" a cada 45 s; sem nenhum há 3 min (a internet caiu sem fechar a conexão), o servidor a
+ * fecha e a pessoa sai. A varredura roda a cada 90 s só enquanto há abas conectadas. */
+export const SEM_SINAL_MS = 180_000;
+export const VARREDURA_MS = 90_000;
+/** A aba diz há quanto tempo está parada ao virar "ausente" (até 24 h). */
+export const MAX_PARADO_MS = 24 * 3600_000;
 
 /** Quem está no grupo: UM item por pessoa, valendo o melhor estado entre as abas dela (online > ausente) e o status da aba
  * mais recente; sem os invisíveis; sem "ausente" quando o ADM não o mostra. Ordenado pelo id (estável — dá para comparar). */
@@ -111,6 +129,21 @@ export function listaPresenca(conexoes: readonly ConexaoPresenca[], mostrarAusen
   return lista;
 }
 
+/** Desde quando cada pessoa AUSENTE está ausente: com todas as abas ausentes, a que ficou ausente por último (sem os
+ * invisíveis). Ordenado pelo id (estável — dá para comparar). */
+export function ausentesDesde(conexoes: readonly ConexaoPresenca[]): [number, number][] {
+  const por = new Map<number, number | null>();
+  for (const c of conexoes) {
+    if (c.invisivel) continue;
+    const ant = por.get(c.id);
+    if (c.estado === "online" || ant === null) por.set(c.id, null);
+    else por.set(c.id, Math.max(ant ?? 0, c.ausenteDesde ?? 0));
+  }
+  return [...por]
+    .filter((x): x is [number, number] => x[1] != null && x[1] > 0)
+    .sort((a, b) => a[0] - b[0]);
+}
+
 /** O "visto por último": quem SAIU há menos de 24 h e não está mais conectado (ordenado pelo id). */
 export function vistosRecentes(vistos: ReadonlyMap<number, number>, presentes: ReadonlySet<number>, agora = Date.now()): [number, number][] {
   return [...vistos].filter(([id, ts]) => !presentes.has(id) && agora - ts < JANELA_VISTO_MS).sort((a, b) => a[0] - b[0]);
@@ -118,7 +151,7 @@ export function vistosRecentes(vistos: ReadonlyMap<number, number>, presentes: R
 
 /** As mensagens que a ABA manda ao objeto do grupo (o "ping" é auto-resposta). O formato antigo `{estado}` vale. */
 export type MensagemAba =
-  | { t: "estado"; estado: EstadoPresenca }
+  | { t: "estado"; estado: EstadoPresenca; /** Há quanto tempo a aba está parada (ms) — só no "ausente". */ ha?: number }
   | { t: "status"; status: StatusPresenca; recado: string; ate: string | null }
   | { t: "vendo"; alvos: string[]; editando: string[]; rotulos: string[] }
   | { t: "onde"; tela: TelaOnde; rotulo: string };
@@ -137,7 +170,10 @@ export function lerMensagemAba(msg: unknown): MensagemAba | null {
   } catch {
     return null;
   }
-  if ((o.t === "estado" || o.t === undefined) && (o.estado === "online" || o.estado === "ausente")) return { t: "estado", estado: o.estado };
+  if ((o.t === "estado" || o.t === undefined) && (o.estado === "online" || o.estado === "ausente")) {
+    const ha = Number(o.ha);
+    return o.estado === "ausente" && Number.isFinite(ha) && ha > 0 ? { t: "estado", estado: "ausente", ha: Math.min(ha, MAX_PARADO_MS) } : { t: "estado", estado: o.estado };
+  }
   if (o.t === "status") return { t: "status", status: lerStatus(o.status), recado: limparRecado(o.recado), ate: lerAte(o.ate) };
   if (o.t === "vendo") {
     const alvos = [...new Set(Array.isArray(o.alvos) ? o.alvos.filter(alvoVendoValido) : [])].slice(0, MAX_VENDO);
@@ -152,18 +188,23 @@ export function lerMensagemAba(msg: unknown): MensagemAba | null {
 }
 
 /** O que a tela sabe de cada pessoa presente. */
-export type InfoPresenca = { estado: EstadoPresenca; status: StatusPresenca; recado: string };
+export type InfoPresenca = { estado: EstadoPresenca; status: StatusPresenca; recado: string; /** Ausente desde (ms). */ desde?: number };
 
 /** A mensagem de presença que vai às abas → quem está (id → info) e quem saiu há pouco (id → quando). Inválida = `null`. */
 export function lerListaMensagem(msg: unknown): { estados: Map<number, InfoPresenca>; vistos: Map<number, number> } | null {
   if (typeof msg !== "string") return null;
   try {
-    const o = JSON.parse(msg) as { t?: unknown; p?: unknown; v?: unknown };
+    const o = JSON.parse(msg) as { t?: unknown; p?: unknown; v?: unknown; d?: unknown };
     if (o.t !== "presenca" || !Array.isArray(o.p)) return null;
     const estados = new Map<number, InfoPresenca>();
     for (const it of o.p)
       if (Array.isArray(it) && Number.isInteger(it[0]) && (it[1] === "o" || it[1] === "a"))
         estados.set(it[0], { estado: it[1] === "o" ? "online" : "ausente", status: lerStatus(it[2]), recado: limparRecado(it[3]) });
+    if (Array.isArray(o.d))
+      for (const it of o.d) {
+        const info = Array.isArray(it) && Number.isInteger(it[0]) && Number.isFinite(it[1]) ? estados.get(it[0]) : undefined;
+        if (info?.estado === "ausente") info.desde = it[1];
+      }
     const vistos = new Map<number, number>();
     if (Array.isArray(o.v)) for (const it of o.v) if (Array.isArray(it) && Number.isInteger(it[0]) && Number.isFinite(it[1])) vistos.set(it[0], it[1]);
     return { estados, vistos };
@@ -192,6 +233,15 @@ export function vistoHa(ts: number, agora = Date.now()): string {
   if (min < 1) return "agora há pouco";
   if (min < 60) return `há ${min} min`;
   return `há ${Math.floor(min / 60)} h`;
+}
+
+/** "ausente há 12 min" (sem a hora: só "ausente"). */
+export function rotuloAusente(info: { desde?: number }, agora = Date.now()): string {
+  if (!info.desde) return "ausente";
+  const min = Math.floor((agora - info.desde) / 60_000);
+  if (min < 1) return "ausente agora há pouco";
+  if (min < 60) return `ausente há ${min} min`;
+  return `ausente há ${Math.floor(min / 60)} h`;
 }
 
 /** Os horários do "até" do status: 30 min, 1 h, 2 h, o fim do dia (18h de Brasília) — em ISO. */

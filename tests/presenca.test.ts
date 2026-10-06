@@ -229,3 +229,32 @@ describe("presença — onde e atividade", () => {
     assert.equal(lerConfigPresenca({ atividade: false }).atividade, false);
   });
 });
+
+describe("presença — nível profissional (ausente desde, carência, sinal)", () => {
+  it("ausente há X: a aba diz há quanto tempo está parada; a lista leva o 'desde'", async () => {
+    const { lerMensagemAba, ausentesDesde, lerListaMensagem, rotuloAusente, MAX_PARADO_MS } = await import("../src/lib/presenca-core.ts");
+    assert.deepEqual(lerMensagemAba('{"t":"estado","estado":"ausente","ha":300000}'), { t: "estado", estado: "ausente", ha: 300000 });
+    assert.deepEqual(lerMensagemAba('{"t":"estado","estado":"ausente","ha":1e12}'), { t: "estado", estado: "ausente", ha: MAX_PARADO_MS });
+    assert.deepEqual(lerMensagemAba('{"t":"estado","estado":"online","ha":5}'), { t: "estado", estado: "online" });
+    const d = ausentesDesde([
+      { id: 1, estado: "ausente", invisivel: false, ausenteDesde: 100 },
+      { id: 1, estado: "ausente", invisivel: false, ausenteDesde: 300 },
+      { id: 2, estado: "ausente", invisivel: false, ausenteDesde: 50 },
+      { id: 2, estado: "online", invisivel: false },
+      { id: 3, estado: "ausente", invisivel: true, ausenteDesde: 10 },
+    ]);
+    assert.deepEqual(d, [[1, 300]]);
+    const l = lerListaMensagem(JSON.stringify({ t: "presenca", p: [[1, "a"], [2, "o"]], v: [], d: [[1, 300], [2, 9]] }));
+    assert.equal(l?.estados.get(1)?.desde, 300);
+    assert.equal(l?.estados.get(2)?.desde, undefined);
+    assert.equal(rotuloAusente({ desde: 1_000_000 }, 1_000_000 + 12 * 60_000), "ausente há 12 min");
+    assert.equal(rotuloAusente({ desde: 1_000_000 }, 1_000_000 + 3 * 3600_000), "ausente há 3 h");
+    assert.equal(rotuloAusente({}), "ausente");
+  });
+  it("constantes: carência curta, sinal com folga sobre o ping de 45 s", async () => {
+    const { CARENCIA_SAIDA_MS, SEM_SINAL_MS, VARREDURA_MS } = await import("../src/lib/presenca-core.ts");
+    assert.ok(CARENCIA_SAIDA_MS >= 5_000 && CARENCIA_SAIDA_MS <= 30_000);
+    assert.ok(SEM_SINAL_MS >= 3 * 45_000);
+    assert.ok(VARREDURA_MS < SEM_SINAL_MS);
+  });
+});

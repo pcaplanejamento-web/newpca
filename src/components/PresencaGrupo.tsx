@@ -13,6 +13,7 @@ import {
   type StatusPresenca,
   statusVigente,
   textoAtividade,
+  rotuloAusente,
   vistoHa,
 } from "@/lib/presenca-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
@@ -28,8 +29,8 @@ import { Modal } from "./Modal";
 import { BotaoWhatsapp } from "./Telefone";
 import { toast } from "./Toast";
 
-/** Fotos à vista no cabeçalho (as demais viram "+N"). */
-const MAX_FOTOS = 3;
+/** Fotos à vista no cabeçalho (as demais viram o círculo "+N"). */
+const MAX_FOTOS = 5;
 /** Com mais pessoas que isto, o painel ganha a busca. */
 const BUSCA_A_PARTIR = 8;
 
@@ -45,7 +46,7 @@ const COR_STATUS: Record<StatusPresenca, string> = {
 export function SeloAoVivo({ aoVivo, className = "" }: { aoVivo: boolean; className?: string }) {
   return (
     <span className={`inline-flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium ${aoVivo ? "text-[var(--ok)]" : "text-muted"} ${className}`}>
-      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${aoVivo ? "ponto-vivo bg-[var(--ok)]" : "animate-pulse bg-[var(--muted)]"}`} />
+      <span aria-hidden="true" className={`relative h-2 w-2 rounded-full ${aoVivo ? "ponto-vivo bg-[var(--ok)]" : "animate-pulse bg-[var(--muted)]"}`} />
       {aoVivo ? "Ao vivo" : "Reconectando…"}
     </span>
   );
@@ -135,31 +136,38 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
           triggerClassName={`${gatilho} group/pilha inline-flex h-[var(--h-control-sm)] min-w-[var(--h-control-sm)] gap-1.5 px-1.5`}
           trigger={
             fotos.length ? (
-              <>
                 <span className="flex items-center">
-                  {/* A primeira por cima (o ponto, no canto direito, não fica coberto); ao passar o mouse, abrem em leque. */}
+                  {/* A primeira por cima (o ponto, no canto direito, não fica coberto pela vizinha); ao passar o mouse, abrem em
+                      leque. Depois de 5, o círculo "+N" no MESMO tamanho, fechando a pilha. */}
                   {fotos.map(({ pessoa, info }, i) => (
                     <span
                       key={pessoa.id}
-                      className={`animate-entrar-pessoa relative rounded-full ring-2 ring-surface transition-[margin] duration-[var(--motion-duration)] ${
-                        i ? "-ml-2 group-hover/pilha:ml-0.5 group-focus-visible/pilha:ml-0.5" : ""
+                      className={`animate-entrar-pessoa relative inline-flex rounded-full ring-2 ring-surface transition-[margin] duration-[var(--motion-duration)] ${
+                        i ? "-ml-1.5 group-hover/pilha:ml-0.5 group-focus-visible/pilha:ml-0.5" : ""
                       } ${novos.has(pessoa.id) ? "animate-brilho-novo" : ""}`}
-                      style={{ zIndex: fotos.length - i }}
+                      style={{ zIndex: fotos.length + 1 - i }}
                       title={(() => {
                         const a = c.atividade?.get(pessoa.id);
-                        return `${nomeExibicao(pessoa)}${a ? ` — ${textoAtividade(a)}` : ""}`;
+                        return `${nomeExibicao(pessoa)}${info?.estado === "ausente" ? ` — ${rotuloAusente(info)}` : ""}${a ? ` — ${textoAtividade(a)}` : ""}`;
                       })()}
                     >
                       <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" presenca={info?.estado} pulsar={info?.estado === "online"} />
                     </span>
                   ))}
+                  {resto > 0 && (
+                    <span
+                      key={resto}
+                      className="relative -ml-1.5 inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full bg-surface-2 px-1 text-[10.5px] font-semibold leading-none tabular-nums text-text-2 shadow-[inset_0_0_0_1px_var(--border)] ring-2 ring-surface transition-[margin] duration-[var(--motion-duration)] group-hover/pilha:ml-0.5 group-focus-visible/pilha:ml-0.5"
+                      style={{ zIndex: 0 }}
+                      title={`Mais ${resto}: ${outros
+                        .slice(MAX_FOTOS)
+                        .map((l) => nomeExibicao(l.pessoa))
+                        .join(", ")}`}
+                    >
+                      <span className="animate-contador">+{resto > 99 ? 99 : resto}</span>
+                    </span>
+                  )}
                 </span>
-                {resto > 0 && (
-                  <span key={resto} className="animate-contador text-[12px] font-semibold tabular-nums text-text-2">
-                    +{resto}
-                  </span>
-                )}
-              </>
             ) : (
               <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} />
             )
@@ -189,6 +197,12 @@ function PainelOnline({ linhas, verMesa, semTitulo = false, onNavegar }: { linha
   const c = useCanalGrupo();
   const [busca, setBusca] = useState("");
   const [aberta, setAberta] = useState<number | null>(null);
+  // O "ausente há X min" e o "visto há X min" andam sozinhos com o painel aberto.
+  const [, setRelogio] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setRelogio((x) => x + 1), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
   if (!c) return null;
   const passa = predicadoBusca(busca);
   const filtradas = passa ? linhas.filter((l) => l.voce || passa([l.pessoa.nome, l.pessoa.apelido])) : linhas;
@@ -282,7 +296,7 @@ function LinhaPessoa({ l, aberta, onAlternar, verMesa, onNavegar }: { l: Linha; 
         {atividade && <AtividadePessoa atividade={atividade} />}
       </span>
       <span className={`shrink-0 text-[12px] ${inv ? "text-muted" : info?.estado === "online" ? "text-[var(--ok)]" : info ? "text-[var(--warn)]" : "text-faint"}`}>
-        {inv ? "Invisível" : info ? (info.estado === "online" ? "Online" : "Ausente") : ""}
+        {inv ? "Invisível" : info ? (info.estado === "online" ? "Online" : rotuloAusente(info).replace(/^a/, "A")) : ""}
       </span>
     </>
   );

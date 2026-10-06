@@ -333,6 +333,7 @@ function CanalAtivo({
     let tentativa = 0;
     let timer = 0;
     let batida = 0;
+    let semPong = 0;
     let vivo = true;
     let ultimaAtividade = Date.now();
     let enviado: EstadoPresenca = "online";
@@ -341,7 +342,9 @@ function CanalAtivo({
     const conferir = () => {
       const e = estadoDaAba();
       if (e !== enviado && ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({ t: "estado", estado: e }));
+        // Ao virar "ausente", diz há quanto tempo está parada (o "ausente há 12 min" dos outros conta desde então).
+        const ha = e === "ausente" && document.visibilityState === "visible" ? Date.now() - ultimaAtividade : 0;
+        ws.current.send(JSON.stringify(ha > 0 ? { t: "estado", estado: e, ha } : { t: "estado", estado: e }));
         enviado = e;
       }
     };
@@ -373,10 +376,19 @@ function CanalAtivo({
         if (registros.current.size) mandarVendo(true);
         ultimoOnde.current = "";
         mandarOnde();
-        batida = window.setInterval(() => s.readyState === WebSocket.OPEN && s.send("ping"), 45_000);
+        // A BATIDA: "ping" a cada 45 s; sem o "pong" em 10 s, a conexão morreu sem avisar (rede caiu) — fecha e reconecta.
+        batida = window.setInterval(() => {
+          if (s.readyState !== WebSocket.OPEN) return;
+          s.send("ping");
+          window.clearTimeout(semPong);
+          semPong = window.setTimeout(() => s.close(), 10_000);
+        }, 45_000);
       };
       s.onmessage = (e) => {
-        if (e.data === "pong") return;
+        if (e.data === "pong") {
+          window.clearTimeout(semPong);
+          return;
+        }
         const lista = lerListaMensagem(e.data);
         if (lista) {
           setEstados(lista.estados);
@@ -403,17 +415,31 @@ function CanalAtivo({
         if (ws.current === s) ws.current = null;
         setAoVivo(false);
         window.clearInterval(batida);
+        window.clearTimeout(semPong);
         // 4000 = abas demais desta pessoa no grupo: esta aba fica fora (não disputa com as outras).
         if (e.code !== 4000) agendar();
       };
     }
     conectar();
+    // Sem rede: fecha na hora ("Reconectando…"); a rede voltou: reconecta já, sem esperar a espera crescente.
+    const semRede = () => ws.current?.close();
+    const comRede = () => {
+      if (ws.current) return;
+      window.clearTimeout(timer);
+      tentativa = 0;
+      conectar();
+    };
+    window.addEventListener("offline", semRede);
+    window.addEventListener("online", comRede);
     document.addEventListener("visibilitychange", conferir);
     for (const ev of ATIVIDADE) window.addEventListener(ev, mexeu, { passive: true });
     // Um temporizador só: a inatividade vira "ausente" sem depender de evento.
     const relogio = inativoMin > 0 ? window.setInterval(conferir, 30_000) : 0;
     return () => {
       vivo = false;
+      window.removeEventListener("offline", semRede);
+      window.removeEventListener("online", comRede);
+      window.clearTimeout(semPong);
       document.removeEventListener("visibilitychange", conferir);
       for (const ev of ATIVIDADE) window.removeEventListener(ev, mexeu);
       window.clearInterval(relogio);
