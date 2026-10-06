@@ -2,9 +2,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { brlCompact, num } from "@/lib/format";
 import { type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
-import { Badge } from "./Badge";
 import { CarregandoLink } from "./CarregandoLink";
-import { IconPlus } from "./icons";
+import { IconDatabase, IconFile, IconPlus } from "./icons";
 
 /**
  * CAPA do PCA na proporção 4:5 — a imagem escolhida (recorte WebP 800×1000) ou a CAPA PADRÃO
@@ -62,29 +61,71 @@ export type PcaCardDados = {
   previa?: boolean;
 };
 
-/** Card 4:5 do PCA (tela `/painel/pca`): status + fonte no topo; nome, Σ e contagens na base. */
+/** Pílula de VIDRO sobre a capa (status e fonte): a mesma altura e o mesmo vidro, legível em qualquer imagem. */
+function PilulaCapa({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="inline-flex h-[clamp(1.6rem,6.5cqw,2rem)] items-center gap-1.5 rounded-full bg-black/40 px-[clamp(0.6rem,3cqw,0.85rem)] font-semibold text-white ring-1 ring-white/20 backdrop-blur-md"
+      style={{ fontSize: "clamp(0.7rem, 3.2cqw, 0.85rem)" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Chip de contagem no rodapé da capa. */
+function ChipCapa({ children, destaque = false }: { children: ReactNode; destaque?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ring-1 backdrop-blur-sm ${destaque ? "bg-[var(--warn)]/25 text-white ring-[var(--warn)]/50" : "bg-white/12 text-white/90 ring-white/15"}`}
+      style={{ fontSize: "clamp(0.68rem, 3.1cqw, 0.85rem)" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Card 4:5 do PCA (tela `/painel/pca`): status + fonte em pílulas de vidro no topo; ano, nome, Σ e contagens na base. */
 export function PcaCard({ pca, onClick, href }: { pca: PcaCardDados; onClick?: () => void; href?: string }) {
   const parte = pca.fonte === "lista" ? `${num(pca.partes)} planilha(s)` : `${num(pca.partes)} protocolo(s)`;
+  const IconeFonte = pca.fonte === "lista" ? IconDatabase : IconFile;
   const conteudo = (
     <PcaCapa capa={pca.capa} ano={pca.ano} className="shadow-soft transition-transform duration-[var(--motion-duration)] group-hover:-translate-y-0.5">
       <div className="absolute inset-x-[4cqw] top-[4cqw] flex items-start justify-between gap-2">
-        <Badge tone={pca.status === "publicado" ? "emerald" : "amber"} dot>
+        <PilulaCapa>
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-full"
+            style={{ background: pca.status === "publicado" ? "var(--ok)" : "var(--warn)", boxShadow: "0 0 0 3px rgb(255 255 255 / 0.15)" }}
+          />
           {ROTULO_STATUS[pca.status]}
-        </Badge>
-        <span className="rounded-full bg-surface/90 px-2.5 py-0.5 text-[11px] font-semibold text-text shadow-ring">{ROTULO_FONTE[pca.fonte]}</span>
+        </PilulaCapa>
+        <PilulaCapa>
+          <IconeFonte aria-hidden className="h-[1.1em] w-[1.1em] opacity-85" />
+          {ROTULO_FONTE[pca.fonte]}
+        </PilulaCapa>
       </div>
-      {/* Texto proporcional à LARGURA do card (container query); com capa, uma faixa desfocada separa o texto da arte. */}
+      {/* Rodapé: um degradê de leitura (sem caixa chapada) + o texto proporcional à LARGURA do card (container query). */}
       <div
-        className={`absolute inset-x-[4cqw] bottom-[4cqw] text-white ${pca.capa ? "rounded-[calc(var(--radius-card)*0.8)] bg-black/35 p-[3.5cqw] backdrop-blur-md" : "px-[1cqw]"}`}
-      >
-        <div className="truncate font-bold leading-tight" style={{ fontSize: "clamp(1rem, 5.5cqw, 1.5rem)" }} title={pca.nome}>
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-black/80 via-black/45 to-transparent"
+      />
+      <div className="absolute inset-x-[5cqw] bottom-[5cqw] text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.35)]">
+        {pca.ano ? (
+          <div className="font-semibold uppercase tracking-[0.14em] text-white/70" style={{ fontSize: "clamp(0.65rem, 2.9cqw, 0.8rem)" }}>
+            Plano de contratações · {pca.ano}
+          </div>
+        ) : null}
+        <div className="mt-0.5 truncate font-bold leading-tight" style={{ fontSize: "clamp(1rem, 5.5cqw, 1.5rem)" }} title={pca.nome}>
           {pca.nome}
         </div>
-        <div className="mt-1 font-black leading-none tracking-tight tabular-nums" style={{ fontSize: "clamp(1.6rem, 11cqw, 3rem)" }}>
+        <div className="mt-1 font-black leading-none tracking-tight tabular-nums" style={{ fontSize: "clamp(1.8rem, 12cqw, 3.25rem)" }}>
           {brlCompact(pca.total)}
         </div>
-        <div className="mt-1.5 text-white/85" style={{ fontSize: "clamp(0.75rem, 3.6cqw, 0.95rem)" }}>
-          {pca.fonte === "lista" ? `${num(pca.itens)} itens · ${parte}` : `${parte} · ${num(pca.itens)} itens${pca.previa ? " · prévia" : ""}`}
+        <div className="mt-[3cqw] flex flex-wrap gap-1.5 [text-shadow:none]">
+          <ChipCapa>{parte}</ChipCapa>
+          <ChipCapa>{num(pca.itens)} itens</ChipCapa>
+          {pca.previa ? <ChipCapa destaque>prévia</ChipCapa> : null}
         </div>
       </div>
     </PcaCapa>

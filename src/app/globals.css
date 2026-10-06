@@ -317,6 +317,54 @@
   animation: fade-in-up 0.35s ease-out both;
 }
 
+/* CARREGANDO no card (CarregandoLink): um brilho que varre o card + a barra indeterminada na borda de baixo. */
+@keyframes varrer-card {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.animate-varrer-card {
+  animation: varrer-card 1.4s ease-in-out infinite;
+}
+@keyframes barra-indeterminada {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  50% {
+    transform: translateX(0%) scaleX(0.6);
+  }
+  100% {
+    transform: translateX(100%) scaleX(0.4);
+  }
+}
+.animate-barra-indeterminada {
+  animation: barra-indeterminada 1.2s ease-in-out infinite;
+  transform-origin: left;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-varrer-card {
+    animation: none;
+    opacity: 0;
+  }
+  .animate-barra-indeterminada {
+    animation: none;
+    transform: none;
+  }
+}
+[data-motion="off"] .animate-varrer-card,
+[data-motion="reduced"] .animate-varrer-card {
+  animation: none;
+  opacity: 0;
+}
+[data-motion="off"] .animate-barra-indeterminada,
+[data-motion="reduced"] .animate-barra-indeterminada {
+  animation: none;
+  transform: none;
+}
+
 /* A coluna da TabelaCruzada LEVANTA ao ser pega (cresce do tamanho real e ganha a sombra). */
 @keyframes levantar {
   from {

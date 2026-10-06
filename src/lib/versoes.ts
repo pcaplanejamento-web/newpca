@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.14.5",
+    data: "2026-10-06",
+    titulo: "Card do PCA: carregamento e capa renovados",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Ao abrir um PCA, o card continua à vista: um brilho varre o card e uma barra de progresso corre na borda de baixo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Status e fonte em pílulas de vidro iguais; na base, o ano, o nome, o valor e as contagens em chips sobre um degradê de leitura.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.14.4",
     data: "2026-10-06",
     titulo: "Cards do PCA maiores e Dashboard mais leve",
