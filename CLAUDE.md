@@ -96,6 +96,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `SUM(LENGTH(CAST(col AS BLOB)))` (**sem migração**; `dbstat` não é confiável no D1). Rota `GET/POST
   /api/admin/armazenamento` (`exigirAdmin`): GET = snapshot; POST `{acao:"expurgar_sessoes"}` = higiene (apaga
   sessões vencidas por `expira_em < agora`). `formatBytes` em `format.ts`; ícone `IconDatabase`.
+  - **SAÚDE DOS DADOS** (seção da mesma tela — `SaudeDados`, DS; `GET /api/admin/saude-dados`, `exigirAdmin`; carregada à
+    parte, "Verificar" = `?fresco=1`): as 5 consultas SÓ DE LEITURA de **`saude-dados-sql.ts`** (binding cru, sem
+    parâmetros; listas até 200, contagens exatas — as da verificação em produção de 05/10) + a classificação PURA
+    **`saude-dados-core.ts`** (`avaliarSaude`) — **Integridade** (deve ser zero, vermelho: DFD × itens, protocolo × DFDs ×
+    itens [o centavo das abas], numeração/vínculos do PCA, rastro em dobro + Id repetido) e **Dados a tratar** (âmbar:
+    gravação incompleta, capa × somatória pela MESMA régua da Mesa — `somatorioProcesso` + `conciliacaoCapa` com as regras
+    do ADM —, itens sem valor unitário, DFD sem planejamento); cada linha leva o link da Mesa em que o protocolo está
+    (`linkProtocolo`) ou o do DFD avulso. `saudeDosDados` (`saude-dados.ts`) em `memoPorVersao`. Testes:
+    `tests/saude-dados.test.ts` (cenário a cenário no D1 sobre `node:sqlite`).
 - **Auditoria / histórico de alterações (de ponta a ponta, migrações `0026` + `0031`):** tabela **`auditoria`** APPEND-ONLY —
   **quem** (`usuario_id` + snapshot `usuario_nome`/`usuario_email`, sobrevive à exclusão via FK `set null`), **o quê**
   (`acao` criar/editar/excluir/importar/protocolar/login/…; `entidade` + `entidade_id`; diff `antes`/`depois` JSON +
@@ -3958,10 +3967,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - Não importe nos testes módulos que puxam `getDb`/`@opennextjs/cloudflare` nem arquivos
     `.tsx` (JSX não passa pelo stripping). Para testar lógica presa a esses módulos, **extraia**
     a parte pura para um `.ts` próprio (padrão de `password.ts`).
-- **Biome** (`biome.json`): regras recomendadas. CSS fica fora (Tailwind v4). Algumas regras
-  de a11y (`noLabelWithoutControl`, interações em `div`) estão **off** como dívida técnica a
-  endereçar num passe de acessibilidade; `noNonNullAssertion`/`useExhaustiveDependencies` são
-  avisos (não alterar deps de hooks automaticamente).
+- **Biome** (`biome.json`): regras recomendadas — inclusive as de a11y (`noLabelWithoutControl`,
+  `noStaticElementInteractions`, `useKeyWithClickEvents`, religadas na v1.5.0). Padrão: ação = `<button>`; rótulo =
+  `htmlFor`; fundo DECORATIVO com clique (scrim, célula vazia) = `aria-hidden="true"` com o caminho do teclado ao lado
+  (Esc, botão); invólucro que só repassa/para eventos dos filhos = `role="none"` (o Biome não aceita "presentation");
+  exceção só com `biome-ignore` + o motivo. CSS fica fora (Tailwind v4); `noArrayIndexKey` off (listas estáticas);
+  `noNonNullAssertion`/`useExhaustiveDependencies` são avisos (não alterar deps de hooks automaticamente).
 
 ## VERSÕES do sistema e NOVIDADES (sem migração)
 - **Fonte única:** `src/lib/versoes.ts` (puro, testado em `tests/versoes.test.ts`) — `VERSOES` (a mais recente PRIMEIRO; cada
@@ -3973,7 +3984,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com o que mudou e o `link` de cada mudança, e o MESMO número no `package.json`; depois publicar (push + "Deploy Cloudflare"
   verde). Antes de começar, `git fetch` da `main`: se outra sessão publicou SEM versão, as mudanças dela entram na próxima
   versão (nada fica fora do registro).
-- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.4.4"; tocar abre as Novidades no
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.5.0"; tocar abre as Novidades no
   BANNER FLUTUANTE; o ponto accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`).
 - **Novidades = BANNER FLUTUANTE, sem página:** **`NovidadesFlutuantes`** (DS) sobre a `JanelaFlutuante` (ao lado da âncora no
   desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**

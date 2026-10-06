@@ -32,6 +32,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.5.0",
+    data: "2026-10-06",
+    titulo: "Saúde dos dados e acessibilidade",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Armazenamento",
+        texto: "Saúde dos dados: a integridade dos totais (DFD × itens, abas da Mesa, numeração do PCA, rastro) e os dados a tratar (capa × somatória, itens sem valor unitário, gravação incompleta, DFD sem planejamento), com o protocolo de cada um — tocar abre na Mesa.",
+        link: "/painel/armazenamento",
+      },
+      { tipo: "melhoria", area: "Sistema", texto: "Acessibilidade: Esc fecha o menu no celular, a data da assinatura validada pela equipe tem rótulo próprio e os leitores de tela ignoram os fundos decorativos." },
+    ],
+  },
+  {
     versao: "1.4.4",
     data: "2026-10-06",
     titulo: "Atualização de segurança e publicação em fila",

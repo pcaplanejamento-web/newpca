@@ -29,12 +29,13 @@ a cada gravação completa, vínculo legado respeitado; consulta pública e cale
 PCA sem avulsos · ✅ Fusão por Id: todos os de mesmo Id conferidos, recusa com PCA, sem rastro em dobro · ✅ Re-importar um
 protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 
-### Melhorias do sistema (segurança, deploy, saúde dos dados, acessibilidade) — em andamento
+### Melhorias do sistema (segurança, deploy, saúde dos dados, acessibilidade) — entregue
 ✅ **Segurança (v1.4.4):** Next.js 16.3.4 → 16.3.8 (alerta crítico de RCE no `next/og`, que o sistema não usa), wrangler
 4.147, OpenNext 1.20.8: nenhum alerta crítico/alto (restam 4 moderados do `drizzle-kit`, só de desenvolvimento) · ✅ Deploy
-em FILA (um push novo espera, não interrompe) · ✅ Teste que barra número de migração repetido (sessões em paralelo).
-Próximos (diagnóstico de 06/10): painel "Saúde dos dados" (ADM), acessibilidade (3 regras do lint religadas), CLAUDE.md
-enxuto (481 KB por sessão), homologação, PNCP, CATMAT/CATSER e execução do PCA.
+em FILA (um push novo espera, não interrompe) · ✅ Teste que barra número de migração repetido (sessões em paralelo) · ✅
+**Saúde dos dados (v1.5.0)** no Armazenamento (ADM): integridade dos totais (deve ser zero) e dados a tratar, com o protocolo
+de cada um · ✅ **Acessibilidade (v1.5.0):** as 3 regras do lint religadas, os 20 pontos corrigidos, Esc fecha o menu.
+Próximos (diagnóstico de 06/10): CLAUDE.md enxuto (481 KB por sessão), homologação, PNCP, CATMAT/CATSER e execução do PCA.
 
 ### Verificação em produção dos totais + valor com 4 casas — entregue
 ✅ Conferido no banco de produção (só leitura): 1.291 DFDs com valor = soma dos itens e nº de itens = itens gravados (0
