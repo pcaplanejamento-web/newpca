@@ -229,9 +229,9 @@ export type ItemRow = {
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena
  * e pagina no CLIENTE (DataTable). Ordenado por valor desc por padrão. */
-export async function getItensTodos(unidadeId?: number, limite = 5000, pcaId?: number): Promise<ItemRow[]> {
+export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?: number): Promise<ItemRow[]> {
   const db = getDb();
-  return db
+  const q = db
     .select({
       id: itens.id,
       idProduto: itens.idProduto,
@@ -251,6 +251,6 @@ export async function getItensTodos(unidadeId?: number, limite = 5000, pcaId?: n
     .from(itens)
     .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
     .where(filtroUnidade(unidadeId, pcaId))
-    .orderBy(desc(itens.valorTotal))
-    .limit(limite);
+    .orderBy(desc(itens.valorTotal));
+  return limite == null ? q : q.limit(limite);
 }

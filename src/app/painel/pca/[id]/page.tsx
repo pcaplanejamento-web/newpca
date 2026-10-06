@@ -103,8 +103,12 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
       <PainelPca
         dados={dash}
         unidadeFiltrada={dash.unidadeId != null}
-        hintItens={pca.fonte === "protocolo" ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs` : undefined}
-        consulta={pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dash.protocolosLista, dfds: dash.dfdsLista } : undefined}
+        hintItens={
+          pca.fonte === "protocolo"
+            ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs${dash.foraDaSoma.length ? ` · ${num(dash.foraDaSoma.length)} fora da soma` : ""}`
+            : undefined
+        }
+        consulta={pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dash.protocolosLista, dfds: dash.dfdsLista, foraDaSoma: dash.foraDaSoma } : undefined}
       />
     </div>
   );

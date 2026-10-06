@@ -207,6 +207,30 @@ export function consolidarPca(linhas: LinhaVinculo[]): Consolidacao {
   return { vigentes: [...atual.values()], retirados, avisos };
 }
 
+/** Por que um DFD vinculado NÃO entra na soma do PCA (a consolidação): `substituido` = outro DFD de mesmo planejamento
+ * (repetido ou ALTERAÇÃO) ficou no lugar; `excluido` = um DFD de EXCLUSÃO o retirou; `exclusao` = é o próprio DFD de
+ * EXCLUSÃO (nunca soma) — `outro` = o DFD que ele retirou (`null` = sem DFD correspondente). */
+export type ForaDaSoma = { dfdId: number; motivo: "substituido" | "excluido" | "exclusao"; outro: number | null };
+
+/** Os DFDs dos vínculos que ficaram FORA da soma (vínculos − vigentes), cada um com o motivo — na ordem dos vínculos. */
+export function foraDaSoma(linhas: LinhaVinculo[], c: Consolidacao): ForaDaSoma[] {
+  const vig = new Set(c.vigentes);
+  const acao = new Map(linhas.map((l) => [l.dfdId, l.acao]));
+  const retirouQuem = new Map<number, number>();
+  for (const [sai, por] of c.retirados) retirouQuem.set(por, sai);
+  const out: ForaDaSoma[] = [];
+  for (const l of linhas) {
+    if (vig.has(l.dfdId)) continue;
+    if (l.acao === "excluir") {
+      out.push({ dfdId: l.dfdId, motivo: "exclusao", outro: retirouQuem.get(l.dfdId) ?? null });
+      continue;
+    }
+    const por = c.retirados.get(l.dfdId) ?? null;
+    out.push({ dfdId: l.dfdId, motivo: por != null && acao.get(por) === "excluir" ? "excluido" : "substituido", outro: por });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Previsão → mês do cronograma
 // ---------------------------------------------------------------------------

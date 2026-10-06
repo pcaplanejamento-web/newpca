@@ -32,6 +32,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.4.3",
+    data: "2026-10-06",
+    titulo: "Dashboard do PCA com todos os itens",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "A Consulta de Itens do Dashboard mostra todos os itens do PCA, sem o limite de 5.000 linhas.", link: "/painel/pca" },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Nova visão \"Fora da soma\": os DFDs que ficaram fora pela regra do nº de planejamento (repetido, alteração ou exclusão), com o motivo e o DFD que prevaleceu.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.4.2",
     data: "2026-10-05",
     titulo: "Vínculos da unidade sem repetição",
