@@ -100,3 +100,9 @@ export async function quemCompartilhaGrupo(eu: number, ids: readonly number[]): 
   );
   return new Set(linhas.map((l) => Number(l.id)));
 }
+
+/** A pessoa é MEMBRO do grupo (o chat do grupo só entre os membros — como a presença). */
+export async function ehMembroDoGrupo(usuarioId: number, grupoId: number): Promise<boolean> {
+  const [r] = await getDb().all<{ ok: number }>(sql`SELECT 1 AS ok FROM usuario_grupos WHERE usuario_id = ${usuarioId} AND grupo_id = ${grupoId} LIMIT 1`);
+  return !!r;
+}

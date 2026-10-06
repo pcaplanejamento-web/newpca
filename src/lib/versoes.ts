@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.15.0",
+    data: "2026-10-06",
+    titulo: "Conversas guardadas por 7 dias",
+    mudancas: [
+      { tipo: "novo", area: "Chat", texto: "As conversas (do grupo, privadas e em grupo) ficam guardadas por 7 dias: depois de recarregar, a lista, as não lidas e o histórico voltam. Quem estava fora vê a mensagem ao entrar." },
+      { tipo: "melhoria", area: "Chat", texto: "O ✓✓ (lida) também fica guardado; as bolhas abertas voltam ao recarregar." },
+      { tipo: "melhoria", area: "Chat", texto: "Arrastar a bolha já minimiza a conversa; ao soltar, as bolhas voam até o lugar novo com mola, em cadeia — sem pulo." },
+      { tipo: "melhoria", area: "Chat", texto: "A lixeira fecha a bolha — a conversa continua na lista até completar 7 dias." },
+    ],
+  },
+  {
     versao: "1.14.5",
     data: "2026-10-06",
     titulo: "Card do PCA: carregamento e capa renovados",

@@ -40,7 +40,7 @@ import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { EVENTO_ABRIR_CHAT, EVENTO_CHAT_PRIVADO, useCanalGrupo, useNaoPerturbe } from "./CanalGrupo";
-import { IconArrowDown, IconChat, IconCheck, IconChevronLeft, IconClose, IconEnviar, IconFixar, IconLidas, IconMenos, IconPlus, IconLogout, IconResponder, IconUsers } from "./icons";
+import { IconArrowDown, IconChat, IconCheck, IconChevronLeft, IconClose, IconEnviar, IconFixar, IconLidas, IconMenos, IconPlus, IconResponder, IconUsers } from "./icons";
 import { tocarSom } from "./PreferenciasNotificacoes";
 import { type Bolha, BolhasChat } from "./BolhasChat";
 import { TextoFormatado } from "./TextoFormatado";
@@ -55,16 +55,24 @@ type ConversaTela = {
   /** Conversa em grupo escolhida: todos os membros (com você) e o nome. */
   membros?: number[];
   nome?: string;
+  /** A última mensagem GUARDADA (a lista mostra antes de abrir a conversa). */
+  previa?: { de: number; texto: string; em: number } | null;
+  /** O histórico guardado já veio (abrir a conversa o busca uma vez). */
+  carregada?: boolean;
 };
 
 const nova = (): ConversaTela => ({ msgs: [], naoLidas: 0, lidaAte: new Map(), digitando: new Map() });
-/** Sem a confirmação do servidor em 8 s, a mensagem do grupo fica "não enviada" (com "Tentar de novo"). */
-const ESPERA_CONFIRMACAO_MS = 8000;
+
+/** A última mensagem da conversa (a da tela ou a guardada). */
+const ultimaDaConversa = (c: ConversaTela | undefined, meuId: number) => {
+  const m = c?.msgs.at(-1);
+  return m ? { de: m.de, texto: m.texto, em: m.em, minha: m.minha } : c?.previa ? { ...c.previa, minha: c.previa.de === meuId } : null;
+};
 
 /**
- * O estado do CHAT AO VIVO (na memória da aba — nada é gravado; some no F5): as conversas (a do grupo e as privadas desta
- * sessão), o envio (grupo pelo socket do grupo; privado pela rota → a caixa pessoal), a confirmação, "digitando", "lida",
- * as não lidas e o aviso da mensagem que chega.
+ * O estado do CHAT (as conversas GUARDADAS por 7 dias voltam ao abrir o sistema — `GET /api/chat/conversas` — e o histórico
+ * ao abrir cada conversa — `GET /api/chat/historico`): o envio (tudo pela rota, que guarda e entrega: o grupo pelo objeto do
+ * grupo, a privada/em grupo pelas caixas pessoais), "digitando", "lida" (guardada), as não lidas e a mensagem que chega.
  */
 function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conversa | null }, aoChegar: (c: Conversa) => void) {
   const canal = useCanalGrupo();
@@ -73,15 +81,22 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
   const [conversas, setConversas] = useState<Map<Conversa, ConversaTela>>(() => new Map());
   const conversasRef = useRef(conversas);
   conversasRef.current = conversas;
-  /** O sinal (lida/digitando) da privada/conversa em grupo — pelas caixas pessoais (rota), sem bloquear a tela. */
+  const grupoAtual = canal?.grupoId ?? null;
+  /** O sinal (lida — guardada — e digitando) pela rota: a privada/em grupo pelas caixas; a "lida" do grupo pelo objeto do
+   * grupo. Sem bloquear a tela. */
   const enviarSinal = useCallback(
     (c: Conversa, t: "lida" | "digitando", ate?: string) => {
       const privada = idDaConversa(c);
-      const para = privada != null ? [privada] : (conversasRef.current.get(c)?.membros ?? []).filter((x) => x !== meuId);
-      if (!para.length) return;
-      void fetch("/api/chat/sinal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversa: c, para, t, ...(ate ? { ate } : {}) }) }).catch(() => {});
+      const para = c === "grupo" ? [] : privada != null ? [privada] : (conversasRef.current.get(c)?.membros ?? []).filter((x) => x !== meuId);
+      if (c !== "grupo" && !para.length) return;
+      if (c === "grupo" && grupoAtual == null) return;
+      void fetch("/api/chat/sinal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversa: c, para, t, ...(c === "grupo" ? { grupo: grupoAtual } : {}), ...(ate ? { ate } : {}) }),
+      }).catch(() => {});
     },
-    [meuId],
+    [meuId, grupoAtual],
   );
   /** Quem escreveu no privado sem estar no grupo ativo (foto + nome vêm na mensagem). */
   const [autores, setAutores] = useState<Map<number, Pessoa>>(() => new Map());
@@ -102,16 +117,85 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
     });
   }, []);
 
-  // Trocar de grupo: a conversa do grupo é outra (a anterior some — nada é guardado).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dispara pela troca de grupo.
+  // As CONVERSAS GUARDADAS (7 dias) voltam ao abrir o sistema e ao trocar de grupo (a do grupo é outra): a lista com a
+  // última mensagem e as não lidas — o histórico vem ao abrir cada conversa.
   useEffect(() => {
+    let vivo = true;
     setConversas((m) => {
       if (!m.has("grupo")) return m;
       const n = new Map(m);
       n.delete("grupo");
       return n;
     });
-  }, [grupoId]);
+    if (!meuId) return;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/chat/conversas${grupoId != null ? `?grupo=${grupoId}` : ""}`);
+        const j = (await r.json()) as {
+          ok?: boolean;
+          conversas?: { conversa: Conversa; nome: string; membros: number[]; naoLidas: number; ultima: { de: number; texto: string; em: number } | null }[];
+          grupo?: { naoLidas: number; ultima: { de: number; texto: string; em: number } } | null;
+          autores?: Pessoa[];
+        };
+        if (!vivo || !j.ok) return;
+        setAutores((x) => {
+          const n = new Map(x);
+          for (const p of j.autores ?? []) n.set(p.id, p);
+          return n;
+        });
+        setConversas((m) => {
+          const n = new Map(m);
+          for (const c of j.conversas ?? []) {
+            const atual = n.get(c.conversa) ?? nova();
+            n.set(c.conversa, { ...atual, naoLidas: atual.carregada ? atual.naoLidas : c.naoLidas, membros: c.membros.length ? c.membros : atual.membros, nome: c.nome || atual.nome, previa: c.ultima });
+          }
+          if (j.grupo) {
+            const atual = n.get("grupo") ?? nova();
+            n.set("grupo", { ...atual, naoLidas: atual.carregada ? atual.naoLidas : j.grupo.naoLidas, previa: j.grupo.ultima });
+          }
+          return n;
+        });
+      } catch {
+        /* sem a lista guardada: o chat segue ao vivo */
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [grupoId, meuId]);
+
+  /** Abrir uma conversa: o HISTÓRICO guardado (uma vez), juntando com o que já chegou ao vivo. */
+  const carregar = useCallback(
+    async (c: Conversa) => {
+      const atual = conversasRef.current.get(c);
+      if (atual?.carregada || !meuId) return;
+      mudar(c, (x) => ({ ...x, carregada: true }));
+      try {
+        const r = await fetch(`/api/chat/historico?conversa=${encodeURIComponent(c)}${c === "grupo" && grupoId != null ? `&grupo=${grupoId}` : ""}`);
+        const j = (await r.json()) as { ok?: boolean; mensagens?: Record<string, unknown>[]; lidas?: [number, string][]; autores?: Pessoa[] };
+        if (!j.ok) throw new Error();
+        setAutores((x) => {
+          const n = new Map(x);
+          for (const p of j.autores ?? []) n.set(p.id, p);
+          return n;
+        });
+        const antigas = (j.mensagens ?? []).map((o) => lerMensagemRecebida({ ...o, conversa: c })).filter((m): m is MensagemChat => !!m);
+        mudar(c, (x) => {
+          let msgs: MsgTela[] = [];
+          for (const m of antigas) msgs = juntarMensagem(msgs, { ...m, minha: m.de === meuId, envio: m.de === meuId ? "enviada" : undefined });
+          for (const m of x.msgs) msgs = juntarMensagem(msgs, m);
+          msgs.sort((p, q) => p.em - q.em);
+          const lidaAte = new Map(x.lidaAte);
+          for (const [quem, ate] of j.lidas ?? []) if (!lidaAte.has(quem)) lidaAte.set(quem, ate);
+          return { ...x, msgs, lidaAte, carregada: true };
+        });
+      } catch {
+        // Falhou: tenta de novo na próxima vez que abrir.
+        mudar(c, (x) => ({ ...x, carregada: false }));
+      }
+    },
+    [meuId, grupoId, mudar],
+  );
 
   const nomeDe = useCallback(
     (id: number) => {
@@ -246,26 +330,14 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
       mudar(c, (x) => (x.naoLidas ? { ...x, naoLidas: 0 } : x));
       if (ultimaDosOutros && lidaEnviada.current.get(c) !== ultimaDosOutros) {
         lidaEnviada.current.set(c, ultimaDosOutros);
-        // No grupo ativo, pelo canal do grupo; na privada/conversa em grupo, pelas caixas pessoais (valem em qualquer grupo).
-        if (c === "grupo") canal.enviar({ t: "lida", conversa: c, ate: ultimaDosOutros });
-        else enviarSinal(c, "lida", ultimaDosOutros);
+        // Pela rota (fica GUARDADA — o ✓✓ e as não lidas valem depois de recarregar).
+        enviarSinal(c, "lida", ultimaDosOutros);
       }
     };
     marcar();
     document.addEventListener("visibilitychange", marcar);
     return () => document.removeEventListener("visibilitychange", marcar);
   }, [aberto.painel, aberto.conversa, ultimaDosOutros, canal, mudar, enviarSinal]);
-
-  // Fechar/recarregar a aba com conversa em andamento: o navegador pergunta (nada é guardado).
-  const temConversa = [...conversas.values()].some((c) => c.msgs.length > 0);
-  useEffect(() => {
-    if (!temConversa) return;
-    const aviso = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-    };
-    window.addEventListener("beforeunload", aviso);
-    return () => window.removeEventListener("beforeunload", aviso);
-  }, [temConversa]);
 
   /** ENVIAR: grupo pelo socket do grupo (o servidor confirma pelo id); privado pela rota (não entregue = sem aba aberta). */
   const enviar = useCallback(
@@ -274,29 +346,25 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
       if (!texto || !canal) return;
       const id = idExistente ?? novoIdMensagem();
       mudar(c, (x) => ({ ...x, msgs: juntarMensagem(x.msgs, { id, conversa: c, de: meuId, em: Date.now(), texto, resp, minha: true, envio: "enviando", motivo: undefined }) }));
-      const falhar = (motivo: string, envio: Envio = "falhou") => mudar(c, (x) => ({ ...x, msgs: x.msgs.map((m) => (m.id === id && m.envio === "enviando" ? { ...m, envio, motivo } : m)) }));
-      if (c === "grupo") {
-        if (!canal.enviar({ t: "msg", id, texto, resp })) return falhar("Sem conexão — tente de novo.");
-        window.setTimeout(() => falhar("Sem confirmação — tente de novo."), ESPERA_CONFIRMACAO_MS);
-        return;
-      }
-      // Privada (`p<id>`) ou conversa em grupo escolhida (`c<id>` — os membros vão junto): pela rota → as caixas pessoais.
+      const falhar = (motivo: string) => mudar(c, (x) => ({ ...x, msgs: x.msgs.map((m) => (m.id === id && m.envio === "enviando" ? { ...m, envio: "falhou", motivo } : m)) }));
+      // Tudo pela ROTA (guarda por 7 dias e entrega): o grupo pelo objeto do grupo; a privada/em grupo pelas caixas.
       const meta = conversasRef.current.get(c);
       const privada = idDaConversa(c);
-      const para = privada != null ? [privada] : (meta?.membros ?? []).filter((x) => x !== meuId);
-      if (!para.length) return falhar("Ninguém nesta conversa.");
+      const para = c === "grupo" ? [] : privada != null ? [privada] : (meta?.membros ?? []).filter((x) => x !== meuId);
+      if (c !== "grupo" && !para.length) return falhar("Ninguém nesta conversa.");
       try {
         const r = await fetch("/api/chat/enviar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ conversa: c, para, id, texto, resp, ...(meta?.nome ? { nome: meta.nome } : {}) }),
+          body: JSON.stringify({ conversa: c, para, id, texto, resp, ...(c === "grupo" ? { grupo: canal.grupoId } : {}), ...(meta?.nome ? { nome: meta.nome } : {}) }),
         });
         const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; entregues?: number; naoEntregues?: number[] } | null;
-        if (!r.ok || !j?.ok) return falhar(j?.error ?? "Não enviada.");
-        const fora = j.naoEntregues ?? [];
-        if (!j.entregues)
-          return falhar(`${privada != null ? nomeRef.current(privada) : "Ninguém da conversa"} ${privada != null ? "não está" : "está"} com o sistema aberto — a mensagem não foi entregue (nada é guardado).`, "nao-entregue");
-        const motivo = fora.length ? `Não entregue a ${fora.map((x) => nomeRef.current(x)).join(", ")} (sem o sistema aberto).` : undefined;
+        if (!r.ok || !j?.ok) return falhar(j?.error ?? "Não enviada — tente de novo.");
+        // Guardada: quem não está com o sistema aberto vê ao entrar (até 7 dias).
+        const fora = c === "grupo" ? [] : (j.naoEntregues ?? []);
+        const motivo = fora.length
+          ? `${fora.map((x) => nomeRef.current(x)).join(", ")} ${fora.length === 1 ? "não está" : "não estão"} online agora — ${fora.length === 1 ? "vai" : "vão"} ver ao entrar.`
+          : undefined;
         mudar(c, (x) => ({ ...x, msgs: x.msgs.map((m) => (m.id === id ? { ...m, envio: "enviada", motivo } : m)) }));
       } catch {
         falhar("Sem conexão — tente de novo.");
@@ -327,23 +395,16 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
     },
     [meuId],
   );
-  /** Sair da conversa: some da lista desta aba (nada é guardado). */
-  const sair = useCallback((c: Conversa) => {
-    setConversas((m) => {
-      if (!m.has(c)) return m;
-      const n = new Map(m);
-      n.delete(c);
-      return n;
-    });
-  }, []);
   const naoLidas = [...conversas.values()].reduce((s, c) => s + c.naoLidas, 0);
-  return { conversas, autores, nomeDe, enviar, digitando, garantir, criarEmGrupo, sair, naoLidas, meuId };
+  return { conversas, autores, nomeDe, enviar, digitando, garantir, criarEmGrupo, naoLidas, meuId, carregar };
 }
 
 /** A posição da pilha de bolhas fica no aparelho (conveniência — some ao limpar o navegador). */
 const CHAVE_POSICAO = "chat:posicao";
 /** O alfinete "manter a conversa aberta" (no aparelho): sem ele, qualquer toque fora minimiza. */
 const CHAVE_FIXADA = "chat:fixada";
+/** As bolhas abertas (no aparelho) — voltam depois de recarregar, como as conversas guardadas. */
+const CHAVE_BOLHAS = "chat:bolhas";
 
 /** O que o painel "Ao vivo" do cabeçalho usa do chat: a lista das conversas, as não lidas e o pedido de abrir a lista (o
  * "+N" das bolhas). */
@@ -383,6 +444,8 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
       const v = localStorage.getItem(CHAVE_POSICAO);
       if (v) setPosicao(lerPosicaoBolhas(JSON.parse(v)));
       setFixada(localStorage.getItem(CHAVE_FIXADA) === "1");
+      const b = JSON.parse(localStorage.getItem(CHAVE_BOLHAS) ?? "[]") as unknown;
+      if (Array.isArray(b)) setBolhas(b.filter(conversaValida).slice(0, 12));
     } catch {
       /* sem armazenamento: a posição padrão, sem o alfinete */
     }
@@ -425,6 +488,24 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
     );
   }, []);
   const chat = useChat(config, { painel: ativa != null, conversa: ativa }, aoChegar);
+  // Abrir a conversa traz o histórico guardado (uma vez).
+  const carregar = chat.carregar;
+  useEffect(() => {
+    if (ativa) void carregar(ativa);
+  }, [ativa, carregar]);
+  // As bolhas abertas ficam lembradas no aparelho.
+  const lembrar = useRef(false);
+  useEffect(() => {
+    if (!lembrar.current) {
+      lembrar.current = true;
+      return;
+    }
+    try {
+      localStorage.setItem(CHAVE_BOLHAS, JSON.stringify(bolhas));
+    } catch {
+      /* sem armazenamento */
+    }
+  }, [bolhas]);
   const fecharBolha = useCallback((c: Conversa) => {
     setBolhas((b) => b.filter((x) => x !== c));
     setAtiva((a) => (a === c ? null : a));
@@ -476,11 +557,8 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
         onPosicao={mudarPosicao}
         onTocar={alternar}
         onMinimizar={minimizar}
-        onExcluir={(c) => {
-          // EXCLUIR (arrastar até a lixeira): a bolha sai e a conversa some desta aba (nada é guardado).
-          fecharBolha(c);
-          chat.sair(c);
-        }}
+        // A LIXEIRA fecha a bolha — a conversa segue guardada na lista (7 dias).
+        onExcluir={fecharBolha}
         onExtras={() => setPedidoLista((n) => n + 1)}
         janela={(c) => (
           <ConversaChat
@@ -491,14 +569,6 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
             fixada={fixada}
             onFixar={alternarFixada}
             onMinimizar={minimizar}
-            onSair={
-              ehConversaEmGrupo(c)
-                ? () => {
-                    fecharBolha(c);
-                    chat.sair(c);
-                  }
-                : undefined
-            }
           />
         )}
       />
@@ -564,8 +634,9 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
       />
     );
   const grupo = chat.conversas.get("grupo");
-  const privadas = [...chat.conversas.entries()].filter(([k, c]) => k !== "grupo" && (c.msgs.length > 0 || c.naoLidas > 0 || ehConversaEmGrupo(k)));
-  privadas.sort((a, b) => (b[1].msgs.at(-1)?.em ?? 0) - (a[1].msgs.at(-1)?.em ?? 0));
+  const privadas = [...chat.conversas.entries()].filter(([k, c]) => k !== "grupo" && (c.msgs.length > 0 || c.naoLidas > 0 || !!c.previa || ehConversaEmGrupo(k)));
+  privadas.sort((a, b) => (ultimaDaConversa(b[1], chat.meuId)?.em ?? 0) - (ultimaDaConversa(a[1], chat.meuId)?.em ?? 0));
+  const ultGrupo = ultimaDaConversa(grupo, chat.meuId);
   const passa = predicadoBusca(busca);
   const pessoas = canal.pessoas
     .filter((p) => p.id !== canal.usuarioId && (!passa || passa([p.nome, p.apelido])))
@@ -574,7 +645,7 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
   const pessoaDe = (id: number) => canal.pessoas.find((x) => x.id === id) ?? chat.autores.get(id) ?? null;
   return (
     <>
-      <p className="shrink-0 rounded-control bg-surface-2 px-3 py-1.5 text-[11.5px] text-muted">As conversas não são salvas — somem ao fechar ou recarregar a página.</p>
+      <p className="shrink-0 rounded-control bg-surface-2 px-3 py-1.5 text-[11.5px] text-muted">As conversas ficam guardadas por 7 dias.</p>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {config.grupo && (
           <LinhaConversa
@@ -585,14 +656,14 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
               </span>
             }
             titulo={`Grupo · ${canal.grupoNome ?? "grupo ativo"}`}
-            previa={grupo?.msgs.at(-1) ? `${grupo.msgs.at(-1)?.minha ? "Você" : chat.nomeDe(grupo.msgs.at(-1)?.de ?? 0)}: ${grupo.msgs.at(-1)?.texto}` : "Todos do grupo que estão online"}
-            hora={grupo?.msgs.at(-1)?.em}
+            previa={ultGrupo ? `${ultGrupo.minha ? "Você" : chat.nomeDe(ultGrupo.de)}: ${ultGrupo.texto}` : "Todos do grupo"}
+            hora={ultGrupo?.em}
             naoLidas={grupo?.naoLidas ?? 0}
             digitando={(grupo?.digitando.size ?? 0) > 0}
           />
         )}
         {privadas.map(([k, c]) => {
-          const ultima = c.msgs.at(-1);
+          const ultima = ultimaDaConversa(c, chat.meuId);
           if (ehConversaEmGrupo(k)) {
             const outros = (c.membros ?? []).filter((x) => x !== chat.meuId);
             return (
@@ -821,7 +892,6 @@ function ConversaChat({
   fixada,
   onFixar,
   onMinimizar,
-  onSair,
 }: {
   config: ConfigChat;
   conversa: Conversa;
@@ -833,8 +903,6 @@ function ConversaChat({
   onFixar: () => void;
   /** Fecha a janela (a bolha fica — excluir é arrastá-la até a lixeira). */
   onMinimizar: () => void;
-  /** Conversa em grupo escolhida: sair dela (some desta aba). */
-  onSair?: () => void;
 }) {
   const canal = useCanalGrupo();
   const c = chat.conversas.get(conversa);
@@ -957,11 +1025,6 @@ function ConversaChat({
             {sub}
           </span>
         </span>
-        {onSair && (
-          <button type="button" onClick={onSair} aria-label="Sair da conversa" title="Sair da conversa" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
-            <IconLogout className="h-4 w-4" />
-          </button>
-        )}
         <button
           type="button"
           onClick={onFixar}
@@ -987,7 +1050,7 @@ function ConversaChat({
       >
         {msgs.length === 0 && (
           <p className="mx-auto mt-8 max-w-[16rem] text-center text-[12.5px] text-muted">
-            {conversa === "grupo" ? "Mande uma mensagem para quem do grupo está online agora." : emGrupo ? "Mande a 1ª mensagem — a conversa chega a quem está com o sistema aberto." : "Comece a conversa."} Nada é guardado: a conversa some ao fechar ou recarregar.
+            {c?.carregada === false || !c ? "Carregando a conversa…" : conversa === "grupo" ? "Mande uma mensagem para o grupo." : emGrupo ? "Mande a 1ª mensagem da conversa." : "Comece a conversa."} As mensagens ficam guardadas por 7 dias.
           </p>
         )}
         {msgs.map((m, i) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Conversa, encostarBolhas, type PosicaoBolhas, topoDasBolhas } from "@/lib/chat-core";
 import { Avatar } from "./Avatar";
@@ -89,6 +89,11 @@ export function BolhasChat({
   /** A bolha que está SUMINDO na lixeira (a animação antes de excluir). */
   const [sumindo, setSumindo] = useState<Conversa | null>(null);
   const engolirClique = useRef(false);
+  /** O POUSO (FLIP): ao soltar, cada bolha sai de onde estava (a arrastada, do ponto em que foi solta) e voa até o lugar novo
+   * — sem o "pulo" de volta. `null` = sem pouso em curso. */
+  const [pouso, setPouso] = useState<Map<string, { dx: number; dy: number }> | null>(null);
+  const ativaRef = useRef(ativa);
+  ativaRef.current = ativa;
   const pilhaRef = useRef<HTMLUListElement>(null);
   const janelaRef = useRef<HTMLElement>(null);
 
@@ -129,6 +134,8 @@ export function BolhasChat({
   }, [ativa, fixada, onMinimizar]);
 
   const n = bolhas.length + (extras > 0 ? 1 : 0);
+  // As chaves na ordem da pilha (as bolhas e o "+N") — o pouso anima cada uma.
+  const chaves = useMemo(() => [...bolhas.map((b) => b.conversa as string), ...(extras > 0 ? ["+"] : [])], [bolhas, extras]);
   const passo = t ? t.tam + VAO : 0;
   const alturaPilha = t ? n * t.tam + Math.max(0, n - 1) * VAO : 0;
   const esquerda = t ? (posicao.lado === "esq" ? MARGEM : t.largura - MARGEM - t.tam) : 0;
@@ -154,6 +161,8 @@ export function BolhasChat({
           if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < LIMIAR) return;
           ativo = true;
           soltar = segurar("grabbing");
+          // Arrastar a bolha MINIMIZA a conversa aberta (a janela não fica solta enquanto a pilha muda de lugar).
+          if (ativaRef.current) onMinimizar();
         }
         ev.preventDefault();
         const naLixeira = Math.hypot(ev.clientX - lixeira.x, ev.clientY - lixeira.y) < LIXEIRA.ima;
@@ -184,15 +193,26 @@ export function BolhasChat({
           }, duracaoMotionMs() + 120);
           return;
         }
+        // A PILHA vai para onde a bolha foi solta: o lado mais perto, a altura em que ela ficou. Cada bolha parte de onde
+        // está agora (FLIP) e voa até o lugar novo, em cadeia.
+        const nova = encostarBolhas(ultimo.x + t.tam / 2, ultimo.y - indice * passo, t, alturaPilha);
+        const esqNova = nova.lado === "esq" ? MARGEM : t.largura - MARGEM - t.tam;
+        const topoNovo = topoDasBolhas(nova, t, alturaPilha);
+        const voo = new Map<string, { dx: number; dy: number }>();
+        chaves.forEach((k, j) => {
+          const yNovo = topoNovo + j * passo;
+          voo.set(k, k === conversa ? { dx: ultimo.x - esqNova, dy: ultimo.y - yNovo } : { dx: esquerda - esqNova, dy: topo + j * passo - yNovo });
+        });
+        setPouso(voo);
         setArrasto(null);
-        // A PILHA vai para onde a bolha foi solta: o lado mais perto, a altura em que ela ficou.
-        onPosicao(encostarBolhas(ultimo.x + t.tam / 2, ultimo.y - indice * passo, t, alturaPilha));
+        onPosicao(nova);
+        requestAnimationFrame(() => requestAnimationFrame(() => setPouso(null)));
       };
       window.addEventListener("pointermove", mover, { passive: false });
       window.addEventListener("pointerup", fim);
       window.addEventListener("pointercancel", fim);
     },
-    [t, passo, esquerda, topo, alturaPilha, lixeira.x, lixeira.y, onPosicao, onExcluir],
+    [t, passo, esquerda, topo, alturaPilha, lixeira.x, lixeira.y, onPosicao, onExcluir, onMinimizar, chaves],
   );
 
   if (!t || (!bolhas.length && !extras && !exibida)) return null;
@@ -239,26 +259,17 @@ export function BolhasChat({
         // Nada de arrasto/seleção NATIVOS (a imagem da foto "saía" com o mouse) nem o menu de salvar imagem no toque longo:
         // o arrasto é o da bolha.
         onDragStart={(e) => e.preventDefault()}
-        className={`fixed z-[60] m-0 flex list-none flex-col p-0 select-none [-webkit-touch-callout:none] [&_img]:pointer-events-none [&_img]:[-webkit-user-drag:none] ${arrasto ? "" : "bolha-encosta"} ${telaCheia && ativa ? "hidden" : ""}`}
+        className={`fixed z-[60] m-0 flex list-none flex-col p-0 select-none [-webkit-touch-callout:none] [&_img]:pointer-events-none [&_img]:[-webkit-user-drag:none] ${telaCheia && ativa ? "hidden" : ""}`}
         style={{ left: esquerda, top: topo, gap: VAO, touchAction: "none" }}
       >
         {bolhas.map((b, i) => {
           const presa = arrasto?.conversa === b.conversa ? arrasto : null;
+          const sai = sumindo === b.conversa;
           return (
             <li
               key={b.conversa}
               className={`relative ${b.nova && !presa ? "animate-cabeca-entra" : ""}`}
-              style={
-                presa
-                  ? {
-                      // Presa ao dedo (a partir do lugar dela na pilha); na lixeira, encolhe e some dentro.
-                      transform: `translate3d(${presa.x - esquerda}px, ${presa.y - (topo + i * passo)}px, 0) scale(${sumindo === b.conversa ? 0.1 : presa.naLixeira ? 0.82 : 1.08})`,
-                      opacity: sumindo === b.conversa ? 0 : 1,
-                      transition: presa.naLixeira ? "transform calc(var(--motion-duration) * 1.2) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--motion-duration) ease-in" : "none",
-                      zIndex: 2,
-                    }
-                  : undefined
-              }
+              style={estiloDaBolha(presa ? { dx: presa.x - esquerda, dy: presa.y - (topo + i * passo), ima: presa.naLixeira } : null, pouso?.get(b.conversa), i)}
             >
               <button
                 type="button"
@@ -268,8 +279,8 @@ export function BolhasChat({
                 aria-label={`${b.rotulo}${b.naoLidas ? ` — ${b.naoLidas} não lida${b.naoLidas === 1 ? "" : "s"}` : ""}`}
                 aria-expanded={ativa === b.conversa}
                 title={`${b.rotulo} — tocar abre ou minimiza; arraste para mover, ou até a lixeira para excluir`}
-                className={`relative flex h-12 w-12 cursor-grab items-center justify-center rounded-full transition-[transform,box-shadow] duration-[var(--motion-duration)] hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:cursor-grabbing lg:h-14 lg:w-14 ${
-                  presa ? "shadow-erguida" : "shadow-flutuante"
+                className={`relative flex h-12 w-12 cursor-grab items-center justify-center rounded-full transition-[transform,box-shadow,opacity] duration-[var(--motion-duration)] ease-[cubic-bezier(0.34,1.56,0.64,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:cursor-grabbing lg:h-14 lg:w-14 ${
+                  sai ? "!scale-0 opacity-0" : presa ? (presa.naLixeira ? "!scale-[0.82] shadow-erguida" : "!scale-[1.08] shadow-erguida") : "shadow-flutuante hover:scale-105"
                 } ${ativa === b.conversa ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`}
               >
                 <FotoBolha b={b} />
@@ -283,7 +294,7 @@ export function BolhasChat({
           );
         })}
         {extras > 0 && (
-          <li>
+          <li style={estiloDaBolha(null, pouso?.get("+"), bolhas.length)}>
             <button
               type="button"
               onClick={onExtras}
@@ -320,6 +331,19 @@ export function BolhasChat({
     </>,
     document.body,
   );
+}
+
+/** O MOVIMENTO de uma bolha: presa ao dedo (sem atraso; na lixeira, o ímã com mola), no início do POUSO (no ponto de onde
+ * sai, sem transição) ou voltando ao lugar com mola, em cadeia (cada bolha um pouco depois da de cima). */
+function estiloDaBolha(presa: { dx: number; dy: number; ima: boolean } | null, voo: { dx: number; dy: number } | undefined, i: number): CSSProperties {
+  if (presa)
+    return {
+      transform: `translate3d(${presa.dx}px, ${presa.dy}px, 0)`,
+      transition: presa.ima ? "transform calc(var(--motion-duration) * 1.2) cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
+      zIndex: 2,
+    };
+  if (voo) return { transform: `translate3d(${voo.dx}px, ${voo.dy}px, 0)`, transition: "none" };
+  return { transform: "translate3d(0, 0, 0)", transition: `transform calc(var(--motion-duration) * 2.4) cubic-bezier(0.34, 1.3, 0.64, 1) ${i * 35}ms` };
 }
 
 /** A foto da bolha: a pessoa (com o ponto de presença), o mosaico da conversa em grupo ou o ícone do grupo ativo — sempre

@@ -436,10 +436,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     gratuito: 100 mil requisições de DO/dia; mensagens que chegam em 20:1; as que saem e a auto-resposta não contam): ~4–5
     mil/dia para 50 pessoas × 2 abas × 8 h.
 
-## Chat ao vivo (v1.11.0 — NADA É SALVO)
-- **Regra do usuário: as conversas são SÓ AO VIVO** — nenhuma tabela, nenhum storage do Durable Object, nenhuma auditoria;
-  a mensagem existe só nas abas abertas enquanto estão abertas (na memória do `AppShell` — sobrevive à navegação, some no F5
-  ou ao fechar; o `beforeunload` pergunta com conversa em andamento). Configurações → **"Presença e chat"** (`PresencaAdmin`
+## Chat ao vivo (v1.11.0; GUARDADO POR 7 DIAS desde a v1.15.0 — ver a seção própria)
+- **Regra do usuário (v1.15.0): as conversas ficam GUARDADAS por 7 DIAS** (antes eram só ao vivo) — sem auditoria do conteúdo;
+  a limpeza do cron apaga o que passou disso. Configurações → **"Presença e chat"** (`PresencaAdmin`
   → cartão "Chat ao vivo": **Chat do grupo** e **Chat privado**, DESLIGADOS por padrão; blob `configuracoes.chat` —
   `getConfigChat`/`gravarConfigChat` em `presenca.ts`, cache 60 s; `GET/PATCH /api/admin/chat`, `exigirAdmin`, auditoria do
   fato). O chat vive no canal da PRESENÇA: sem ela ligada, não aparece (`AppShell.chat` só com `presenca`).
@@ -470,6 +469,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ponto-digitando`), "↓ Novas mensagens" rolado para cima; Enter envia, Shift+Enter quebra. Mensagem com o painel fechado =
   som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
   zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
+
+## Chat guardado por 7 dias + arrastar minimiza (v1.15.0)
+- **Banco (migração `0088`, aditiva):** `chat_mensagens` (id da aba = idempotente; `conversa` = a CHAVE do servidor —
+  **`chaveConversa`**: `g<grupo>` | `p<menor>-<maior>` | `c<id>`; `conversaDaChave` volta à conversa da tela de cada um) e
+  `chat_conversas` (por pessoa: a última mensagem, nome/membros da conversa em grupo e até onde LEU). Builders em
+  **`chat-sql.ts`** (testados no driver D1 real — `tests/chat-sql.test.ts`): `comandosGuardarMensagem` (a conversa na
+  lista de cada participante em INSERTs de 10 — ≤ 100 parâmetros; quem manda já leu), `comandoMarcarLidaChat` (nunca
+  volta), `consultaConversasChat`/`consultaResumoGrupo` (a última e as NÃO LIDAS), `consultaHistoricoChat` (as 200 mais
+  recentes — `MAX_HISTORICO`), `consultaLidasChat`, `consultaParticipa` e **`comandosLimparChat`** (no cron dos e-mails, a
+  cada 5 min: o que passou de `VALIDADE_CHAT_MS` = 7 dias — `DIAS_CHAT`).
+- **Tudo pela ROTA (guarda e entrega):** `POST /api/chat/enviar` agora também o chat do GRUPO (`{conversa:"grupo", grupo}` —
+  membro do grupo, `ehMembroDoGrupo`) → guarda e repassa ao objeto do grupo (`repassarNoGrupo` → `POST /repasse` do
+  `PresencaGrupo`, só alcançável pelo binding); a privada/em grupo pelas caixas (`entregarNaCaixa`, **`chat-servidor.ts`**).
+  Quem não está online vê ao entrar ("Fulano não está online agora — vai ver ao entrar"). `POST /api/chat/sinal`: a "lida"
+  é GUARDADA (o ✓✓ e as não lidas valem depois de recarregar); a do grupo pelo `/repasse` (a todos menos quem leu); o
+  "digitando" do grupo segue pelo socket. **`GET /api/chat/conversas?grupo=`** (a lista com a última e as não lidas, ao abrir
+  o sistema e ao trocar de grupo) e **`GET /api/chat/historico?conversa=&grupo=`** (ao abrir cada conversa, uma vez —
+  `carregar`; só de quem participa). As bolhas abertas ficam no aparelho (`chat:bolhas`); a lixeira só FECHA a bolha (a
+  conversa segue na lista); saiu o "Sair" e o aviso de saída da página.
+- **Bolhas:** arrastar MINIMIZA a conversa aberta; ao soltar, o POUSO é FLIP (`estiloDaBolha`): cada bolha parte de onde está
+  (a arrastada, do ponto em que foi solta) e voa com mola até o lugar novo, em cadeia (35 ms entre elas) — sem o "pulo" de
+  volta; erguer/ímã/sumir na lixeira na própria bolha (escala com mola).
 
 ## Chat estável + "Ao vivo" único + lixeira (v1.14.2)
 - **Nunca desmonta:** o layout devolve `undefined` quando a leitura da presença/config do chat FALHA (`presencaDoGrupo`,

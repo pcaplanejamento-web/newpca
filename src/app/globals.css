@@ -579,8 +579,8 @@
 .animate-balao {
   animation: balao-entrar 0.25s var(--motion-ease) both;
 }
-/* CHAT estilo Messenger: a bolha que chega QUICA; a janela CRESCE a partir da bolha; o alvo "×" pulsa com a bolha em cima;
-   a pilha ENCOSTA na borda com mola (transição de top/left — some com o motion desligado). */
+/* CHAT estilo Messenger: a bolha que chega QUICA; a janela CRESCE a partir da bolha; a LIXEIRA surge e atrai a bolha;
+   ao soltar, cada bolha VOA até o lugar novo com mola, em cadeia (`estiloDaBolha`, BolhasChat — some com o motion desligado). */
 @keyframes cabeca-entra {
   0% {
     opacity: 0;
@@ -664,11 +664,6 @@
 }
 .animate-lixeira-sai {
   animation: lixeira-sai var(--motion-duration) ease-in both;
-}
-.bolha-encosta {
-  transition:
-    top calc(var(--motion-duration) * 2) cubic-bezier(0.34, 1.56, 0.64, 1),
-    left calc(var(--motion-duration) * 2) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-cabeca-entra,

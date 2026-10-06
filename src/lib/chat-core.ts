@@ -261,3 +261,31 @@ export function topoDasBolhas(p: PosicaoBolhas, tela: { altura: number; topo: nu
   const livre = Math.max(0, tela.altura - tela.topo - tela.base - alturaPilha);
   return Math.round(tela.topo + livre * p.y);
 }
+
+/** As conversas ficam GUARDADAS por 7 dias (v1.15.0); a limpeza do cron apaga o que passou disso. */
+export const DIAS_CHAT = 7;
+export const VALIDADE_CHAT_MS = DIAS_CHAT * 86_400_000;
+/** Quantas mensagens o histórico de uma conversa traz por vez. */
+export const MAX_HISTORICO = 200;
+
+/** A CHAVE da conversa no banco (a mesma para todos): o chat do grupo `g<grupo>`, a privada `p<menor>-<maior>`, a em grupo
+ * `c<id>`. `null` = conversa inválida (ou o grupo do chat sem grupo). */
+export function chaveConversa(c: Conversa, eu: number, grupoId: number | null): string | null {
+  if (c === "grupo") return grupoId != null && grupoId > 0 ? `g${grupoId}` : null;
+  if (ehConversaEmGrupo(c)) return c;
+  const outro = idDaConversa(c);
+  if (outro == null || outro === eu) return null;
+  return `p${Math.min(eu, outro)}-${Math.max(eu, outro)}`;
+}
+
+/** A conversa como a TELA de `eu` a vê, a partir da chave do banco (`null` = não é dela, ou o grupo não é o ativo). */
+export function conversaDaChave(chave: string, eu: number, grupoAtivo: number | null): Conversa | null {
+  if (chave === `g${grupoAtivo}`) return "grupo";
+  if (ehConversaEmGrupo(chave)) return chave;
+  const m = /^p(\d{1,9})-(\d{1,9})$/.exec(chave);
+  if (!m) return null;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  if (a === eu) return conversaPrivada(b);
+  if (b === eu) return conversaPrivada(a);
+  return null;
+}

@@ -58,8 +58,9 @@ describe("chat ao vivo: configuração e conversas", () => {
     const base = { conversa: "p2", para: [2], id: "abcdefgh12", texto: "oi" };
     assert.equal(chatEnviarSchema.safeParse(base).success, true);
     assert.equal(chatEnviarSchema.safeParse({ ...base, conversa: "cabc123xyz", para: [2, 3], nome: "Compras" }).success, true);
-    assert.equal(chatEnviarSchema.safeParse({ ...base, conversa: "grupo" }).success, false);
-    assert.equal(chatEnviarSchema.safeParse({ ...base, para: [] }).success, false);
+    // O chat do GRUPO também vai pela rota (guardado 7 dias): `grupo` + o id do grupo; a lista vazia vale (a rota confere).
+    assert.equal(chatEnviarSchema.safeParse({ ...base, conversa: "grupo", para: [], grupo: 7 }).success, true);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, conversa: "outra" }).success, false);
     assert.equal(chatEnviarSchema.safeParse({ ...base, para: Array.from({ length: 20 }, (_, i) => i + 2) }).success, false);
     assert.equal(chatEnviarSchema.safeParse({ ...base, id: "curto" }).success, false);
     assert.equal(chatEnviarSchema.safeParse({ ...base, texto: "" }).success, false);
@@ -192,9 +193,11 @@ describe("chat ao vivo: sinal (lida/digitando) pelas caixas", () => {
   it("schema do sinal: conversa privada/em grupo, para, tipo e a mensagem lida", () => {
     assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [2], t: "lida", ate: "abcdefgh12" }).success, true);
     assert.equal(chatSinalSchema.safeParse({ conversa: "cabc123xyz", para: [2, 3], t: "digitando" }).success, true);
-    assert.equal(chatSinalSchema.safeParse({ conversa: "grupo", para: [2], t: "digitando" }).success, false);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "grupo", grupo: 7, t: "lida", ate: "abcdefgh12" }).success, true);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "outra", para: [2], t: "digitando" }).success, false);
     assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [2], t: "outro" }).success, false);
-    assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [], t: "digitando" }).success, false);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [2], t: "digitando", extra: 1 }).success, false);
     assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [2], t: "lida", ate: "x" }).success, false);
   });
 });
+

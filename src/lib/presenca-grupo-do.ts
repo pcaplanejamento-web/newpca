@@ -80,6 +80,20 @@ export class PresencaGrupo {
       const atividade = anexos.length ? anexos[anexos.length - 1].atividade === true : false;
       return Response.json(atividade ? { p: listaPresenca(anexos, true), a: listaAtividade(anexos) } : { p: listaPresenca(anexos, true) });
     }
+    // O REPASSE do chat do grupo (só pela rota `/api/chat/*`, que já conferiu quem manda e GUARDOU a mensagem — o binding do
+    // objeto não é alcançável de fora): a mensagem a todas as abas; a "lida" a todas menos as de quem leu.
+    if (pathname === "/repasse" && req.method === "POST") {
+      let m: Record<string, unknown>;
+      try {
+        m = (await req.json()) as Record<string, unknown>;
+      } catch {
+        return new Response("Corpo inválido.", { status: 400 });
+      }
+      const de = Number(m.de);
+      const abas = m.t === "lida" ? this.state.getWebSockets().filter((o) => !this.state.getTags(o).includes(`u${de}`)) : this.state.getWebSockets();
+      enviarA(abas, m);
+      return Response.json({ n: abas.length });
+    }
     if (pathname !== "/ws") return new Response("Não encontrado.", { status: 404 });
     if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Esperado WebSocket.", { status: 426 });
     const id = Number(req.headers.get("x-presenca-usuario"));

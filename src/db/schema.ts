@@ -1346,6 +1346,48 @@ export const notificacoes = sqliteTable(
   ],
 );
 
+/** As MENSAGENS do chat ao vivo, GUARDADAS POR 7 DIAS (migração `0088`). `conversa` = a chave do servidor: `g<grupo>`
+ * (o chat do grupo) | `p<menor>-<maior>` (privada) | `c<id>` (conversa em grupo escolhida). `id` = o da aba (idempotente). */
+export const chatMensagens = sqliteTable(
+  "chat_mensagens",
+  {
+    id: text("id").primaryKey(),
+    conversa: text("conversa").notNull(),
+    de: integer("de")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    texto: text("texto").notNull(),
+    /** A resposta citada (JSON `{id, de, trecho}`). */
+    resp: text("resp"),
+    /** Quando (ms). */
+    em: integer("em").notNull(),
+  },
+  (t) => [index("chat_mensagens_conversa_idx").on(t.conversa, t.em), index("chat_mensagens_em_idx").on(t.em)],
+);
+
+/** Por PESSOA, as conversas do chat dela (migração `0088`): a última mensagem, o nome/membros da conversa em grupo e até onde
+ * LEU (o ✓✓ dos outros e as não lidas). */
+export const chatConversas = sqliteTable(
+  "chat_conversas",
+  {
+    conversa: text("conversa").notNull(),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    nome: text("nome"),
+    /** Os membros da conversa em grupo (JSON `number[]`). */
+    membros: text("membros"),
+    ultimaEm: integer("ultima_em").notNull(),
+    lidaAte: text("lida_ate"),
+    lidaEm: integer("lida_em"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conversa, t.usuarioId] }),
+    index("chat_conversas_usuario_idx").on(t.usuarioId, t.ultimaEm),
+    index("chat_conversas_ultima_idx").on(t.ultimaEm),
+  ],
+);
+
 /** Os avisos DERIVADOS (prazo, lembrete) que a pessoa LIMPOU (migração `0083`): não voltam até `ate`. */
 export const notificacoesDispensadas = sqliteTable(
   "notificacoes_dispensadas",

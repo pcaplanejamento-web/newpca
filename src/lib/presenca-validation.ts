@@ -26,10 +26,12 @@ export const configChatSchema = z.strictObject({ grupo: z.boolean(), privado: z.
 
 /** Uma mensagem PRIVADA do chat ao vivo (nada é gravado). */
 export const chatEnviarSchema = z.strictObject({
-  /** `p<id>` (privada) ou `c<id>` (conversa em grupo escolhida). */
-  conversa: z.string().regex(/^(p\d{1,9}|c[a-z0-9]{6,20})$/),
-  /** Os destinatários (sem você): 1 na privada, 1 a 19 na conversa em grupo. */
-  para: z.array(z.number().int().positive()).min(1).max(MAX_MEMBROS_CONVERSA - 1),
+  /** `grupo` (o chat do grupo `grupo`), `p<id>` (privada) ou `c<id>` (conversa em grupo escolhida). */
+  conversa: z.string().regex(/^(grupo|p\d{1,9}|c[a-z0-9]{6,20})$/),
+  /** O grupo do chat do grupo (a pessoa tem de ser membro). */
+  grupo: z.number().int().positive().optional(),
+  /** Os destinatários (sem você): 1 na privada, 1 a 19 na conversa em grupo; vazio no chat do grupo. */
+  para: z.array(z.number().int().positive()).max(MAX_MEMBROS_CONVERSA - 1).default([]),
   nome: z.string().max(MAX_NOME_CONVERSA * 2).optional(),
   id: z.string().regex(/^[A-Za-z0-9_-]{8,40}$/),
   texto: z.string().min(1).max(MAX_TEXTO_CHAT * 2),
@@ -39,8 +41,9 @@ export const chatEnviarSchema = z.strictObject({
 /** O SINAL do chat ("lida" até a mensagem X, "digitando") na privada/conversa em grupo — pelas caixas pessoais, que valem
  * em qualquer grupo ativo. */
 export const chatSinalSchema = z.strictObject({
-  conversa: z.string().regex(/^(p\d{1,9}|c[a-z0-9]{6,20})$/),
-  para: z.array(z.number().int().positive()).min(1).max(MAX_MEMBROS_CONVERSA - 1),
+  conversa: z.string().regex(/^(grupo|p\d{1,9}|c[a-z0-9]{6,20})$/),
+  grupo: z.number().int().positive().optional(),
+  para: z.array(z.number().int().positive()).max(MAX_MEMBROS_CONVERSA - 1).default([]),
   t: z.enum(["lida", "digitando"]),
   ate: z
     .string()
