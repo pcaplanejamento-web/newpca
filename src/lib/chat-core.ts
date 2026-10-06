@@ -354,6 +354,77 @@ export function pousarBolha(cx: number, topoPx: number, tela: TelaBolhas, agora:
   return { lado: cx < tela.largura / 2 ? "esq" : "dir", y, t: agora };
 }
 
+/** A fração (0..1) da faixa livre para um topo (px) — o inverso de `topoDaPosicao`. */
+function fracaoDoTopo(top: number, tela: TelaBolhas): number {
+  const f = faixa(tela);
+  return f.max <= f.min ? 1 : Math.min(1, Math.max(0, (top - f.min) / (f.max - f.min)));
+}
+
+/** O ÍMÃ: até quantos px do ponto "colado" (logo acima ou abaixo de outra bolha do mesmo lado) a bolha é puxada para ele. */
+export const RAIO_IMA = (tela: Pick<TelaBolhas, "tam">) => Math.round((tela.tam + VAO_BOLHAS) * 0.6);
+
+/** ÍMÃ: perto de outra bolha do MESMO lado, o topo vai ao ponto COLADO a ela (acima ou abaixo — o mais perto); longe, fica
+ * como veio. Preso à área livre. */
+export function imaBolha(top: number, lado: "esq" | "dir", chave: string, lugares: Record<string, LugarBolha>, tela: TelaBolhas): number {
+  const passo = tela.tam + VAO_BOLHAS;
+  const f = faixa(tela);
+  const raio = RAIO_IMA(tela);
+  let melhor: number | null = null;
+  for (const [k, l] of Object.entries(lugares)) {
+    if (k === chave || l.lado !== lado) continue;
+    for (const c of [l.top - passo, l.top + passo]) {
+      if (c < f.min - 0.5 || c > f.max + 0.5) continue;
+      if (Math.abs(c - top) <= raio && (melhor == null || Math.abs(c - top) < Math.abs(melhor - top))) melhor = c;
+    }
+  }
+  return melhor ?? Math.min(f.max, Math.max(f.min, top));
+}
+
+/** A PRÉVIA de um arrasto (e o resultado de soltar — a MESMA conta): a bolha `chave` com o CENTRO em `cx` e o TOPO em `topo`
+ * encosta no lado mais perto, o ímã a cola numa vizinha perto, e as outras abrem espaço (`lugares`). `alvo` = onde ela pousa;
+ * `ima` = o ímã agiu. */
+export function previaArrasto(
+  posicoes: PosicoesBolhas,
+  chaves: readonly string[],
+  chave: string,
+  cx: number,
+  topo: number,
+  tela: TelaBolhas,
+): { posicao: PosicaoBolha; lugares: Record<string, LugarBolha>; alvo: LugarBolha; ima: boolean } {
+  const outras = chaves.filter((k) => k !== chave);
+  const semEla: PosicoesBolhas = { ...posicoes };
+  delete semEla[chave];
+  const lugaresOutras = arrumarBolhas(semEla, outras, tela);
+  const solta = pousarBolha(cx, topo, tela, Number.MAX_SAFE_INTEGER);
+  const topoSolto = topoDaPosicao(solta, tela);
+  const topoIma = imaBolha(topoSolto, solta.lado, chave, lugaresOutras, tela);
+  const posicao: PosicaoBolha = { ...solta, y: fracaoDoTopo(topoIma, tela) };
+  const lugares = arrumarBolhas({ ...posicoes, [chave]: posicao }, chaves, tela);
+  return { posicao, lugares, alvo: lugares[chave] ?? { lado: posicao.lado, top: topoIma }, ima: topoIma !== topoSolto };
+}
+
+/** Depois de soltar: a posição NOVA da bolha (`t` = agora) e a das que ABRIRAM ESPAÇO (no lugar novo, com o `t` de antes —
+ * gravadas para que nada volte pulando depois). */
+export function posicoesAposSoltar(
+  posicoes: PosicoesBolhas,
+  chaves: readonly string[],
+  chave: string,
+  previa: { posicao: PosicaoBolha; lugares: Record<string, LugarBolha> },
+  tela: TelaBolhas,
+  agora: number,
+): PosicoesBolhas {
+  const antes = arrumarBolhas(posicoes, chaves, tela);
+  const r: PosicoesBolhas = { [chave]: { ...previa.posicao, t: agora } };
+  for (const k of chaves) {
+    if (k === chave) continue;
+    const l = previa.lugares[k];
+    const a = antes[k];
+    if (!l || (a && a.lado === l.lado && a.top === l.top)) continue;
+    r[k] = { lado: l.lado, y: fracaoDoTopo(l.top, tela), t: posicoes[k]?.t ?? 0 };
+  }
+  return r;
+}
+
 /** As conversas ficam GUARDADAS por 7 dias (v1.15.0); a limpeza do cron apaga o que passou disso. */
 export const DIAS_CHAT = 7;
 export const VALIDADE_CHAT_MS = DIAS_CHAT * 86_400_000;

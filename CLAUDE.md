@@ -502,6 +502,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   direita, embaixo, e é fixada no lugar em que apareceu. Pouso FLIP só da solta e das que abriram espaço. A janela abre ao
   lado da bolha ativa. Teclado: Alt + ↑/↓ sobe/desce a bolha, Alt + ←/→ troca de lado. A bolha "+N" também se arrasta (não
   vai à lixeira).
+  **Abrir espaço AO VIVO + ÍMÃ (v1.17.1):** durante o arrasto, **`previaArrasto`** (puro, testado — a MESMA conta da prévia,
+  do soltar e do Alt + setas) dá o lugar da presa e o das outras, que DESLIZAM para abrir espaço (`translate` com mola); uma
+  SOMBRA tracejada mostra onde ela pousa. **`imaBolha`**: a até `RAIO_IMA` (0,6 × passo) do ponto colado acima/abaixo de
+  outra bolha do mesmo lado, encaixa juntinho (vão de 10px); longe, fica onde foi solta. Ao soltar, **`posicoesAposSoltar`**
+  grava a presa e as que abriram espaço (com o `t` de antes — nada volta pulando). O `pointermove` é desenhado UMA vez por
+  quadro (rAF; a prévia só refaz quando muda o lado ou o topo); pegar uma bolha ainda pousando cancela o pouso; mudar o
+  tamanho da janela encerra o arrasto; "reduzir movimento" = sem inclinação nem voo.
 
 ## Chat estável + "Ao vivo" único + lixeira (v1.14.2)
 - **Nunca desmonta:** o layout devolve `undefined` quando a leitura da presença/config do chat FALHA (`presencaDoGrupo`,

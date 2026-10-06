@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.17.1",
+    data: "2026-10-06",
+    titulo: "Bolhas abrem espaço e se encaixam",
+    mudancas: [
+      { tipo: "melhoria", area: "Chat", texto: "Ao arrastar uma bolha por cima das outras, elas abrem espaço na hora; uma sombra mostra onde ela vai pousar." },
+      { tipo: "novo", area: "Chat", texto: "Ímã: soltar perto de outra bolha a encaixa colada a ela; soltar longe a deixa onde foi solta." },
+      { tipo: "correcao", area: "Chat", texto: "Arrasto mais leve (um desenho por quadro), sem pulo quando se pega uma bolha ainda pousando, e sem inclinação ou voo com \"reduzir movimento\"." },
+    ],
+  },
+  {
     versao: "1.17.0",
     data: "2026-10-06",
     titulo: "Bolhas do chat independentes",

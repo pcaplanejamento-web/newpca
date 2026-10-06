@@ -8,9 +8,10 @@ import {
   type Conversa,
   esquerdaDoLado,
   type LugarBolha,
-  type PosicaoBolha,
   type PosicoesBolhas,
+  posicoesAposSoltar,
   pousarBolha,
+  previaArrasto,
   projetarArremesso,
   VAO_BOLHAS,
   velocidadeArrasto,
@@ -49,9 +50,18 @@ function tela() {
   return { largura, altura, desktop, topo: 64, base: desktop ? 16 : 84, tam: desktop ? TAM.desktop : TAM.celular };
 }
 
-/** O arrasto em curso: a bolha (a chave — "+" = a das demais), onde ela está, se o dedo está na lixeira e a inclinação pela
- * velocidade. SÓ ela se mexe: as outras ficam onde estão. */
-type Arrasto = { chave: string; x: number; y: number; naLixeira: boolean; rot: number };
+/** A prévia de onde a bolha vai pousar: os lugares de TODAS (as outras já abrindo espaço), o alvo dela e se o ímã agiu. */
+type Previa = ReturnType<typeof previaArrasto>;
+/** O arrasto em curso: a bolha (a chave — "+" = a das demais), onde ela está, se o dedo está na lixeira, a inclinação pela
+ * velocidade e a PRÉVIA (as outras abrem espaço AO VIVO; a sombra mostra onde ela pousa). */
+type Arrasto = { chave: string; x: number; y: number; naLixeira: boolean; rot: number; previa: Previa | null };
+
+/** "Reduzir movimento" (sistema ou o ADM): sem inclinação nem voo. */
+function semMovimento(): boolean {
+  if (typeof window === "undefined") return false;
+  const m = document.documentElement.dataset.motion;
+  return m === "off" || m === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 /** O pouso (FLIP): `ini` = cada bolha parada onde estava · `voo` = voando até o lugar novo (o fator da duração cresce com a
  * distância — um arremesso longo voa mais). */
 type Pouso = { fase: "ini" | "voo"; mapa: Map<string, { dx: number; dy: number; fator: number }> };
@@ -99,8 +109,13 @@ export function BolhasChat({
   janela: (c: Conversa) => ReactNode;
 }) {
   const [t, setT] = useState<ReturnType<typeof tela> | null>(null);
+  /** Encerra o arrasto em curso (a janela mudou de tamanho no meio dele — as medidas mudaram). */
+  const cancelarRef = useRef<(() => void) | null>(null);
   useEffect(() => {
-    const medir = () => setT(tela());
+    const medir = () => {
+      cancelarRef.current?.();
+      setT(tela());
+    };
     medir();
     window.addEventListener("resize", medir);
     return () => window.removeEventListener("resize", medir);
@@ -174,31 +189,45 @@ export function BolhasChat({
 
   /** Pousa: cada bolha do mapa parte de onde estava e voa até o lugar novo; limpa depois do voo. */
   const pousar = useCallback((mapa: Pouso["mapa"]) => {
-    if (!mapa.size) return;
+    if (!mapa.size || semMovimento()) {
+      setPouso(null);
+      return;
+    }
     setPouso({ fase: "ini", mapa });
-    requestAnimationFrame(() => requestAnimationFrame(() => setPouso({ fase: "voo", mapa })));
+    requestAnimationFrame(() => requestAnimationFrame(() => setPouso((p) => (p?.mapa === mapa ? { fase: "voo", mapa } : p))));
     const maior = Math.max(1, ...[...mapa.values()].map((v) => v.fator));
     window.setTimeout(() => setPouso((p) => (p?.mapa === mapa ? null : p)), duracaoMotionMs() * maior + 400);
   }, []);
 
-  /** Grava a posição NOVA de uma bolha e anima o pouso: ela parte de `de` (px) e as que abriram espaço, de onde estavam. */
-  const mudar = useCallback(
-    (chave: string, nova: PosicaoBolha, de: { x: number; y: number }) => {
+  /** Grava o resultado de uma PRÉVIA (a bolha no lugar novo + as que abriram espaço) e anima o pouso: cada uma parte de onde
+   * estava na tela (`de` = os pontos atuais) e voa até o lugar novo. */
+  const aplicar = useCallback(
+    (chave: string, previa: Previa, de: Map<string, { x: number; y: number }>) => {
       if (!t) return;
-      const depois = arrumarBolhas({ ...posicoes, [chave]: nova }, chaves, t);
       const mapa: Pouso["mapa"] = new Map();
       for (const k of chaves) {
-        const antes = k === chave ? de : lugares[k] ? { x: esquerdaDoLado(lugares[k].lado, t, MARGEM), y: lugares[k].top } : null;
-        const l = depois[k];
+        const antes = de.get(k);
+        const l = previa.lugares[k];
         if (!antes || !l) continue;
         const dx = antes.x - esquerdaDoLado(l.lado, t, MARGEM);
         const dy = antes.y - l.top;
         if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) mapa.set(k, { dx, dy, fator: 1.8 + Math.min(2.6, Math.hypot(dx, dy) / 380) });
       }
-      onPosicoes({ [chave]: nova });
+      onPosicoes(posicoesAposSoltar(posicoes, chaves, chave, previa, t, Date.now()));
       pousar(mapa);
     },
-    [t, posicoes, chaves, lugares, onPosicoes, pousar],
+    [t, posicoes, chaves, onPosicoes, pousar],
+  );
+
+  /** Onde cada bolha ESTÁ na tela agora (o lugar de repouso, ou o da prévia em curso). */
+  const pontosDe = useCallback(
+    (fonte: Record<string, LugarBolha>): Map<string, { x: number; y: number }> => {
+      const m = new Map<string, { x: number; y: number }>();
+      if (!t) return m;
+      for (const [k, l] of Object.entries(fonte)) m.set(k, { x: esquerdaDoLado(l.lado, t, MARGEM), y: l.top });
+      return m;
+    },
+    [t],
   );
 
   const pegar = useCallback(
@@ -215,16 +244,50 @@ export function BolhasChat({
       const dy0 = y0 - l.top;
       // A bolha "+N" não vai para a lixeira (não é uma conversa).
       const excluivel = chave !== "+";
+      const calmo = semMovimento();
       let ativo = false;
       let assentar = 0;
+      let quadro = 0;
       let soltar: (() => void) | null = null;
+      let ultimoEv: { x: number; y: number } | null = null;
+      // A prévia só é refeita quando o lado ou o topo (de 2 em 2 px) mudam.
+      let chavePrevia = "";
       const amostras: AmostraArrasto[] = [{ x: x0, y: y0, t: performance.now() }];
-      let ultimo: Arrasto = { chave, x: xBolha, y: l.top, naLixeira: false, rot: 0 };
+      let ultimo: Arrasto = { chave, x: xBolha, y: l.top, naLixeira: false, rot: 0, previa: null };
+      const desenhar = () => {
+        quadro = 0;
+        if (!ultimoEv) return;
+        const { x: cx, y: cy } = ultimoEv;
+        // A inclinação acompanha a velocidade de lado (o "peso" da bolha).
+        const { vx } = velocidadeArrasto(amostras.slice(-4));
+        const rot = calmo ? 0 : Math.max(-14, Math.min(14, vx * 9));
+        const naLixeira = excluivel && Math.hypot(cx - lixeira.x, cy - lixeira.y) < LIXEIRA.ima;
+        if (naLixeira && !ultimo.naLixeira) navigator.vibrate?.(10);
+        const x = cx - dx0;
+        const y = cy - dy0;
+        let previa = ultimo.previa;
+        if (naLixeira) previa = null;
+        else {
+          const k = `${x + t.tam / 2 < t.largura / 2 ? "e" : "d"}:${Math.round(y / 2)}`;
+          if (k !== chavePrevia || !previa) {
+            chavePrevia = k;
+            previa = previaArrasto(posicoes, chaves, chave, x + t.tam / 2, y, t);
+            if (ultimo.previa && previa.ima && !ultimo.previa.ima) navigator.vibrate?.(5);
+          }
+        }
+        // Perto da lixeira, a bolha é ATRAÍDA para o centro dela (ímã).
+        ultimo = naLixeira
+          ? { chave, x: lixeira.x - t.tam / 2, y: lixeira.y - t.tam / 2, naLixeira, rot: 0, previa: null }
+          : { chave, x, y, naLixeira, rot, previa };
+        setArrasto(ultimo);
+      };
       const mover = (ev: PointerEvent) => {
         if (!ativo) {
           if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < LIMIAR) return;
           ativo = true;
           soltar = segurar("grabbing");
+          // Um pouso ainda voando para: a bolha sai de onde está, sem "teletransporte".
+          setPouso(null);
           // Arrastar uma bolha MINIMIZA a conversa aberta (a janela não fica solta enquanto a bolha muda de lugar).
           if (ativaRef.current) onMinimizar();
         }
@@ -232,16 +295,9 @@ export function BolhasChat({
         const agora = performance.now();
         amostras.push({ x: ev.clientX, y: ev.clientY, t: agora });
         while (amostras.length > 2 && agora - amostras[0].t > 120) amostras.shift();
-        // A inclinação acompanha a velocidade de lado (o "peso" da bolha).
-        const { vx } = velocidadeArrasto(amostras.slice(-4));
-        const rot = Math.max(-14, Math.min(14, vx * 9));
-        const naLixeira = excluivel && Math.hypot(ev.clientX - lixeira.x, ev.clientY - lixeira.y) < LIXEIRA.ima;
-        if (naLixeira && !ultimo.naLixeira) navigator.vibrate?.(10);
-        // Perto da lixeira, a bolha é ATRAÍDA para o centro dela (ímã).
-        ultimo = naLixeira
-          ? { chave, x: lixeira.x - t.tam / 2, y: lixeira.y - t.tam / 2, naLixeira, rot: 0 }
-          : { chave, x: ev.clientX - dx0, y: ev.clientY - dy0, naLixeira, rot };
-        setArrasto(ultimo);
+        ultimoEv = { x: ev.clientX, y: ev.clientY };
+        // UM desenho por quadro, por mais eventos que cheguem.
+        if (!quadro) quadro = requestAnimationFrame(desenhar);
         // Parou de mexer = a bolha "assenta" (a inclinação volta a zero).
         window.clearTimeout(assentar);
         assentar = window.setTimeout(() => {
@@ -250,12 +306,24 @@ export function BolhasChat({
           setArrasto(ultimo);
         }, 90);
       };
-      const fim = () => {
+      const encerrar = () => {
         window.clearTimeout(assentar);
+        if (quadro) cancelAnimationFrame(quadro);
+        quadro = 0;
         window.removeEventListener("pointermove", mover);
         window.removeEventListener("pointerup", fim);
         window.removeEventListener("pointercancel", fim);
+        if (cancelarRef.current === cancelar) cancelarRef.current = null;
         soltar?.();
+      };
+      const cancelar = () => {
+        encerrar();
+        setArrasto(null);
+      };
+      const fim = () => {
+        // O último movimento ainda não desenhado conta.
+        if (quadro) desenhar();
+        encerrar();
         if (!ativo) return;
         engolirClique.current = true;
         window.setTimeout(() => {
@@ -272,34 +340,39 @@ export function BolhasChat({
           return;
         }
         // ARREMESSO: a bolha vai para onde CAIRIA com a inércia — um peteleco a leva ao outro lado da tela. Parado antes de
-        // soltar = sem arremesso (a velocidade conta até o instante de soltar).
+        // soltar = sem arremesso (a velocidade conta até o instante de soltar). O ímã e a abertura de espaço são os MESMOS
+        // da prévia.
         const ult = amostras[amostras.length - 1];
         amostras.push({ x: ult.x, y: ult.y, t: performance.now() });
         const p = projetarArremesso(ultimo.x, ultimo.y, velocidadeArrasto(amostras));
+        const previa = previaArrasto(posicoes, chaves, chave, p.x + t.tam / 2, p.y, t);
+        // Cada bolha parte de onde está na tela: a solta, do ponto em que foi largada; as outras, da prévia em curso.
+        const de = pontosDe(ultimo.previa?.lugares ?? lugares);
+        de.set(chave, { x: ultimo.x, y: ultimo.y });
         setArrasto(null);
-        mudar(chave, pousarBolha(p.x + t.tam / 2, p.y, t, Date.now()), { x: ultimo.x, y: ultimo.y });
+        aplicar(chave, previa, de);
       };
+      cancelarRef.current = cancelar;
       window.addEventListener("pointermove", mover, { passive: false });
       window.addEventListener("pointerup", fim);
       window.addEventListener("pointercancel", fim);
     },
-    [t, lugares, lixeira.x, lixeira.y, onExcluir, onMinimizar, mudar],
+    [t, lugares, posicoes, chaves, lixeira.x, lixeira.y, onExcluir, onMinimizar, aplicar, pontosDe],
   );
 
-  /** Teclado: Alt + ↑/↓ sobe/desce a bolha um lugar, Alt + ←/→ a leva ao outro lado. */
+  /** Teclado: Alt + ↑/↓ sobe/desce a bolha um lugar (as outras abrem espaço), Alt + ←/→ a leva ao outro lado. */
   const tecla = (e: React.KeyboardEvent, chave: string) => {
     const l = lugares[chave];
     if (!e.altKey || !t || !l) return;
-    const x = esquerdaDoLado(l.lado, t, MARGEM);
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      e.preventDefault();
-      const top = l.top + (e.key === "ArrowUp" ? -1 : 1) * (t.tam + VAO_BOLHAS);
-      mudar(chave, { ...pousarBolha(x + t.tam / 2, top, t, Date.now()), lado: l.lado }, { x, y: l.top });
-    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      e.preventDefault();
-      const lado = e.key === "ArrowLeft" ? "esq" : "dir";
-      mudar(chave, { ...pousarBolha(x + t.tam / 2, l.top, t, Date.now()), lado }, { x, y: l.top });
-    }
+    const passo = t.tam + VAO_BOLHAS;
+    let lado = l.lado;
+    let top = l.top;
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") top += (e.key === "ArrowUp" ? -1 : 1) * passo;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowRight") lado = e.key === "ArrowLeft" ? "esq" : "dir";
+    else return;
+    e.preventDefault();
+    const cx = lado === "esq" ? 0 : t.largura;
+    aplicar(chave, previaArrasto(posicoes, chaves, chave, cx, top, t), pontosDe(lugares));
   };
 
   if (!t || (!bolhas.length && !extras && !exibida)) return null;
@@ -312,17 +385,26 @@ export function BolhasChat({
   const jLado = lAtiva.lado === "dir" ? { right: MARGEM + t.tam + 14 } : { left: MARGEM + t.tam + 14 };
   const telaCheia = t.largura < 640;
   const arrastando = arrasto != null && sumindo == null;
-  /** O estilo de uma bolha: no lugar dela, presa ao dedo quando arrastada, ou no pouso. */
+  const lugaresVistos = arrasto?.previa?.lugares;
+  /** O estilo de uma bolha: no lugar de repouso; presa ao dedo quando arrastada; deslizando para a PRÉVIA quando outra
+   * bolha passa por cima (abre espaço ao vivo); ou no pouso. */
   const estilo = (chave: string): CSSProperties => {
     const l = lugares[chave] ?? { lado: "dir" as const, top: t.altura - t.base - t.tam };
     const left = esquerdaDoLado(l.lado, t, MARGEM);
     const presa = arrasto?.chave === chave ? arrasto : null;
-    return {
-      left,
-      top: l.top,
-      ...estiloDaBolha(presa ? { dx: presa.x - left, dy: presa.y - l.top, ima: presa.naLixeira, rot: presa.rot } : null, pouso, chave),
-    };
+    if (presa) return { left, top: l.top, ...estiloDaBolha({ dx: presa.x - left, dy: presa.y - l.top, ima: presa.naLixeira, rot: presa.rot }, null, chave) };
+    const prev = lugaresVistos?.[chave];
+    if (prev && (prev.lado !== l.lado || prev.top !== l.top))
+      return {
+        left,
+        top: l.top,
+        transform: `translate3d(${esquerdaDoLado(prev.lado, t, MARGEM) - left}px, ${prev.top - l.top}px, 0)`,
+        transition: "transform var(--motion-duration) cubic-bezier(0.34, 1.4, 0.64, 1)",
+      };
+    return { left, top: l.top, ...estiloDaBolha(null, pouso, chave) };
   };
+  /** A SOMBRA de onde a bolha vai pousar (encaixa quando o ímã age). */
+  const alvo = arrastando && arrasto.previa ? arrasto.previa.alvo : null;
 
   return createPortal(
     <>
@@ -347,6 +429,15 @@ export function BolhasChat({
         >
           {janela(exibida)}
         </section>
+      )}
+      {alvo && (
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none fixed z-[59] rounded-full border-2 border-dashed border-accent/70 bg-accent/10 transition-[left,top,transform] duration-[calc(var(--motion-duration)*0.6)] ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+            arrasto?.previa?.ima ? "scale-100 border-solid" : "scale-90"
+          }`}
+          style={{ width: t.tam, height: t.tam, left: esquerdaDoLado(alvo.lado, t, MARGEM), top: alvo.top }}
+        />
       )}
       <ul
         ref={pilhaRef}

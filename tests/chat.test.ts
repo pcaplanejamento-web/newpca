@@ -280,3 +280,53 @@ describe("bolhas INDEPENDENTES — cada uma no seu lugar (v1.17.0)", () => {
     assert.equal(l.p2.top, tela.topo + passo);
   });
 });
+
+describe("bolhas — abrir espaço ao vivo e ímã (v1.17.1)", () => {
+  const tela = { largura: 1000, altura: 800, topo: 64, base: 16, tam: 56 };
+  const passo = 66;
+  const pos = (lado: "esq" | "dir", top: number, t: number) => ({ lado, y: (top - 64) / (800 - 16 - 56 - 64), t });
+  it("ímã: perto cola acima/abaixo; longe fica; outro lado não atrai; a mais perto vence", async () => {
+    const { imaBolha } = await import("../src/lib/chat-core.ts");
+    const lugares = { a: { lado: "dir" as const, top: 400 }, b: { lado: "dir" as const, top: 200 }, c: { lado: "esq" as const, top: 300 } };
+    assert.equal(imaBolha(480, "dir", "x", lugares, tela), 466);
+    assert.equal(imaBolha(320, "dir", "x", lugares, tela), 334);
+    assert.equal(imaBolha(560, "dir", "x", lugares, tela), 560);
+    assert.equal(imaBolha(370, "esq", "x", lugares, tela), 366);
+    assert.equal(imaBolha(150, "esq", "x", lugares, tela), 150);
+    assert.equal(imaBolha(9999, "dir", "x", {}, tela), 728);
+    // A própria bolha não se atrai.
+    assert.equal(imaBolha(470, "dir", "a", lugares, tela), 470);
+  });
+  it("prévia: sobre outra, ela abre espaço; sem sobrepor; a presa no lugar", async () => {
+    const { previaArrasto } = await import("../src/lib/chat-core.ts");
+    const posicoes = { a: pos("dir", 400, 1), b: pos("dir", 466, 2), c: pos("esq", 300, 3) };
+    const p = previaArrasto(posicoes, ["a", "b", "c"], "c", 900, 405, tela);
+    assert.equal(p.alvo.lado, "dir");
+    // Solta sobre "a": o ímã a cola acima de "b" — no lugar de "a", que abre espaço.
+    assert.equal(p.alvo.top, 400);
+    const dir = Object.entries(p.lugares).filter(([, l]) => l.lado === "dir").map(([, l]) => l.top);
+    for (let i = 0; i < dir.length; i++) for (let j = i + 1; j < dir.length; j++) assert.ok(Math.abs(dir[i] - dir[j]) >= passo);
+    assert.notEqual(p.lugares.a.top, 400);
+  });
+  it("prévia: perto de uma, encaixa colada (juntinho); longe, fica longe", async () => {
+    const { previaArrasto } = await import("../src/lib/chat-core.ts");
+    const posicoes = { a: pos("dir", 400, 1), c: pos("esq", 100, 3) };
+    const perto = previaArrasto(posicoes, ["a", "c"], "c", 900, 480, tela);
+    assert.equal(perto.ima, true);
+    assert.equal(perto.alvo.top, 466);
+    assert.equal(perto.lugares.a.top, 400);
+    const longe = previaArrasto(posicoes, ["a", "c"], "c", 900, 650, tela);
+    assert.equal(longe.ima, false);
+    assert.equal(longe.alvo.top, 650);
+  });
+  it("soltar = a prévia; as que abriram espaço são gravadas com o t de antes", async () => {
+    const { previaArrasto, posicoesAposSoltar, arrumarBolhas } = await import("../src/lib/chat-core.ts");
+    const posicoes = { a: pos("dir", 400, 1), b: pos("dir", 466, 2), c: pos("esq", 300, 3) };
+    const p = previaArrasto(posicoes, ["a", "b", "c"], "c", 900, 430, tela);
+    const novas = posicoesAposSoltar(posicoes, ["a", "b", "c"], "c", p, tela, 99);
+    assert.equal(novas.c.t, 99);
+    const depois = arrumarBolhas({ ...posicoes, ...novas }, ["a", "b", "c"], tela);
+    assert.deepEqual(depois, p.lugares);
+    for (const k of Object.keys(novas)) if (k !== "c") assert.equal(novas[k].t, posicoes[k as "a" | "b"].t);
+  });
+});
