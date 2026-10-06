@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.16.1",
+    data: "2026-10-06",
+    titulo: "Card do PCA mais discreto e carregamento fluido",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "Ao abrir um PCA, o indicador de carregamento gira sem travar, mesmo enquanto a tela é montada.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Informações sobre a capa mais discretas: pílulas menores, valor e contagens contidos e um degradê só na base.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.16.0",
     data: "2026-10-06",
     titulo: "Bolhas do chat livres",

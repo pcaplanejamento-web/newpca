@@ -2450,8 +2450,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   outro PCA): escopo, ações, trava, edições `mesa-pca:` e a visão dos marcados conforme a Configuração do PCA (ligada ou
   desligada). As mesas seguem INDEPENDENTES — é só a troca de visão; PCA inexistente/de lista = a Mesa do sistema.
 - **Entrada no espaço do PCA:** o card (`PcaCard` com `href`) mostra o **`CarregandoLink`**
-  (`useLinkStatus`: o card segue à vista — brilho que varre + barra indeterminada accent na base + pílula de vidro; sem
-  movimento com "reduzir movimento"; status e fonte da capa em pílulas de vidro, a base com ano · nome · Σ · chips) enquanto o servidor monta a aba — sem `loading.tsx` (dispararia também na troca de aba). Em
+  (`useLinkStatus`: o card segue à vista — brilho que varre + barra indeterminada accent na base + um ANEL em CSS que gira [`.animate-girar` —
+  o SVG travava com a página ocupada]; só `transform`; parado com "reduzir movimento"; status e fonte em pílulas discretas,
+  a base com nome · Σ · contagens numa linha sobre um degradê curto) enquanto o servidor monta a aba — sem `loading.tsx` (dispararia também na troca de aba). Em
   `itensConsolidados` a PREVISÃO sai UMA vez por DFD (o JSON das seções lido por item estourava a CPU do Worker com
   milhares de itens), os lotes correm em paralelo e os itens trazem só as colunas usadas.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
