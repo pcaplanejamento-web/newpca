@@ -2098,7 +2098,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
   Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
-  erro/aviso. A linha abre o **`BannersConsulta`** (contêiner leve, NÃO os hooks de edição da Mesa): a MESMA pilha/ordem/larguras
+  erro/aviso. Os itens são TODOS (sem teto — `PainelPca` os manda ao `DashboardPcaCliente` como UM texto JSON, `itensTexto`).
+  No PAINEL, **"Fora da soma (N)"** (só com N > 0; `ConsultaDashboard.foraDaSoma`): os DFDs vinculados/da prévia que a
+  consolidação tirou — núcleo puro `foraDaSoma(linhas, consolidacao)` (`pca-core.ts`, testado: vínculos − vigentes; motivo
+  `substituido`/`excluido`/`exclusao` + o outro DFD) → `DashboardPca.foraDaSoma` (`DfdForaDaSoma`, motivo por extenso; o hint
+  do KPI de itens diz "N fora da soma"); só leitura, exportável. A linha abre o **`BannersConsulta`** (contêiner leve, NÃO os hooks de edição da Mesa): a MESMA pilha/ordem/larguras
   do `BannersMesa` (`LARGURA` exportado) com `ProtocoloView modoCapa="consulta"`, `DfdView consulta` e `ItemDetalhe consulta`
   (campos **`CampoCongelado`** — a caixa do campo, SEM cadeado; seções idem; sem estado, pendências, catálogo,
   conciliação, sobrescritos, aviso de incorporado; das assinaturas só o bloco **"Responsável pela solicitação"**); o cabeçalho do
@@ -2129,7 +2133,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `onSelecionar(recorte, rótulo)` — sem ela, iguais a antes; a legenda da pizza vira botões ≥44px): `itensDoRecorte`
     (`origem-dash.ts`, puro: classificação/unidade de medida com "—" p/ vazio e a fatia "Outros" com todos os rótulos; mês
     com os ANUAIS do ano — 1/12 no gráfico; item pelo `id`, que `TopItem`/`TopDash` passaram a trazer). `ItemRow` ganhou
-    `ano`/`mes`/`anual`. Aviso quando a lista (teto 5.000) não traz todos os itens do KPI.
+    `ano`/`mes`/`anual`. A lista traz TODOS os itens do KPI (sem teto).
   - **Dashboard de governança da Mesa** (`DashboardMesa`, prop `onAbrir` → a pilha `BannersMesa`): o gráfico único (`BarrasH`
     com `acao` + `LinhaBarra.clicavel` p/ "Sem …"/"Outras N"; `Colunas.onEscolher` no Dado Data) e as linhas do desempenho →
     `graficoMetricas(…).origem(chaves)`/`protocolosDaPessoa` (`mesa-metricas.ts`, a MESMA lista de lançamentos das barras); a
@@ -3969,7 +3973,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   com o que mudou e o `link` de cada mudança, e o MESMO número no `package.json`; depois publicar (push + "Deploy Cloudflare"
   verde). Antes de começar, `git fetch` da `main`: se outra sessão publicou SEM versão, as mudanças dela entram na próxima
   versão (nada fica fora do registro).
-- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.4.3"; tocar abre as Novidades no
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.4.4"; tocar abre as Novidades no
   BANNER FLUTUANTE; o ponto accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`).
 - **Novidades = BANNER FLUTUANTE, sem página:** **`NovidadesFlutuantes`** (DS) sobre a `JanelaFlutuante` (ao lado da âncora no
   desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**

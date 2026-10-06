@@ -32,12 +32,26 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.4.3",
+    versao: "1.4.4",
     data: "2026-10-06",
     titulo: "Atualização de segurança e publicação em fila",
     mudancas: [
       { tipo: "correcao", area: "Sistema", texto: "Next.js 16.3.8 (corrige um alerta crítico de segurança) e ferramentas de publicação atualizadas: nenhum alerta crítico ou alto nas dependências." },
       { tipo: "melhoria", area: "Sistema", texto: "Publicação em fila: uma atualização nova espera a anterior terminar, em vez de interrompê-la no meio." },
+    ],
+  },
+  {
+    versao: "1.4.3",
+    data: "2026-10-06",
+    titulo: "Dashboard do PCA com todos os itens",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "A Consulta de Itens do Dashboard mostra todos os itens do PCA, sem o limite de 5.000 linhas.", link: "/painel/pca" },
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Nova visão \"Fora da soma\": os DFDs que ficaram fora pela regra do nº de planejamento (repetido, alteração ou exclusão), com o motivo e o DFD que prevaleceu.",
+        link: "/painel/pca",
+      },
     ],
   },
   {

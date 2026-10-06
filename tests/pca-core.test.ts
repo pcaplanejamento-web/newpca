@@ -4,6 +4,7 @@ import {
   acaoSugerida,
   agregarDashboard,
   consolidarPca,
+  foraDaSoma,
   type ItemDashboard,
   type LinhaVinculo,
   gravacaoParcial,
@@ -92,6 +93,28 @@ describe("pca-core — consolidação", () => {
   });
   it("sem planejamento: cada DFD se representa", () => {
     assert.equal(consolidarPca([L(1, null, "incorporar", "a"), L(2, "", "incorporar", "a")]).vigentes.length, 2);
+  });
+  it("fora da soma = vínculos − vigentes, cada um com o motivo", () => {
+    const ls = [
+      L(1, "640", "incorporar", "a"),
+      L(2, "811", "incorporar", "a"),
+      L(3, "640", "substituir", "b"),
+      L(4, "811", "excluir", "c"),
+      L(5, "999", "excluir", "c"),
+      L(6, "777", "incorporar", "a"),
+      L(7, "777", "incorporar", "b"),
+    ];
+    const c = consolidarPca(ls);
+    const f = foraDaSoma(ls, c);
+    assert.equal(f.length, ls.length - c.vigentes.length);
+    assert.deepEqual(f, [
+      { dfdId: 1, motivo: "substituido", outro: 3 },
+      { dfdId: 2, motivo: "excluido", outro: 4 },
+      { dfdId: 4, motivo: "exclusao", outro: 2 },
+      { dfdId: 5, motivo: "exclusao", outro: null },
+      { dfdId: 6, motivo: "substituido", outro: 7 },
+    ]);
+    assert.deepEqual(foraDaSoma([L(1, "1", "incorporar", "a")], consolidarPca([L(1, "1", "incorporar", "a")])), []);
   });
 });
 

@@ -30,7 +30,7 @@ PCA sem avulsos · ✅ Fusão por Id: todos os de mesmo Id conferidos, recusa co
 protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 
 ### Melhorias do sistema (segurança, deploy, saúde dos dados, acessibilidade) — em andamento
-✅ **Segurança (v1.4.3):** Next.js 16.3.4 → 16.3.8 (alerta crítico de RCE no `next/og`, que o sistema não usa), wrangler
+✅ **Segurança (v1.4.4):** Next.js 16.3.4 → 16.3.8 (alerta crítico de RCE no `next/og`, que o sistema não usa), wrangler
 4.147, OpenNext 1.20.8: nenhum alerta crítico/alto (restam 4 moderados do `drizzle-kit`, só de desenvolvimento) · ✅ Deploy
 em FILA (um push novo espera, não interrompe) · ✅ Teste que barra número de migração repetido (sessões em paralelo).
 Próximos (diagnóstico de 06/10): painel "Saúde dos dados" (ADM), acessibilidade (3 regras do lint religadas), CLAUDE.md
@@ -1655,3 +1655,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Editor do vínculo minimalista** — sem repetir as unidades que o banner já mostra, ações com a caixa e o total, "Incluir ações futuras" numa linha e as de outros vínculos resumidas por destino.
 ✅ **v1.4.0 — Sino: ver é ler, fixar não lidas e Novidades flutuantes**: o aviso visto no sino vira visualizado sozinho; o marcador fica colorido (✓) ao visualizar; marcar como não visualizada fixa o aviso; as Novidades abrem num banner ao lado do sino (ou pela versão do menu) sem fechar nada. Toda atualização, de qualquer sessão, passa a ser versionada e publicada.
 ✅ **Vínculos da unidade sem repetição** — no banner da linha, a unidade do orçamento aparece uma vez (o selo "N sem vínculo" com a lista na dica); a seção "Sem vínculo" fica só na linha "Sem vínculo".
+✅ **Dashboard do PCA completo (1.4.3)** — a tabela de itens mostra TODOS os itens (sem o teto de 5.000; os itens vão ao navegador num texto JSON único) e a consulta ganha "Fora da soma (N)": os DFDs vinculados ou da prévia que a consolidação por nº de planejamento tirou (repetido, ALTERAÇÃO, EXCLUSÃO), com o motivo e o DFD que prevaleceu (`foraDaSoma`, `pca-core.ts`).

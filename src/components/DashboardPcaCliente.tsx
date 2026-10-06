@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { itensDoRecorte, type RecorteDash } from "@/lib/origem-dash";
-import type { DfdDoPca, ProtocoloDoPca } from "@/lib/pca-espaco";
+import type { DfdDoPca, DfdForaDaSoma, ProtocoloDoPca } from "@/lib/pca-espaco";
 import type { Fatia, ItemRow, PontoMensal, TopItem } from "@/lib/queries";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -16,8 +16,9 @@ import { ConsultaPca } from "./ConsultaPca";
 import { ItemTable } from "./ItemTable";
 import { OrigemDados } from "./OrigemDados";
 
-/** Consulta do PCA de fonte protocolo (Protocolos · DFDs · Itens + banners discretos). */
-export type ConsultaDashboard = { pcaId: number; protocolos: ProtocoloDoPca[]; dfds: DfdDoPca[] };
+/** Consulta do PCA de fonte protocolo (Protocolos · DFDs · Itens + banners discretos); `foraDaSoma` = os DFDs que a
+ * consolidação deixou fora (só no painel; ausente na tela pública). */
+export type ConsultaDashboard = { pcaId: number; protocolos: ProtocoloDoPca[]; dfds: DfdDoPca[]; foraDaSoma?: DfdForaDaSoma[] };
 
 type Selecao = { grafico: string; rotulo: string; recorte: RecorteDash };
 
@@ -31,8 +32,7 @@ export function DashboardPcaCliente({
   porMes,
   porUnidadeMedida,
   top,
-  itens,
-  totalItens,
+  itensTexto,
   showUnidade,
   consulta,
   previa = false,
@@ -41,14 +41,14 @@ export function DashboardPcaCliente({
   porMes: PontoMensal[];
   porUnidadeMedida: Fatia[];
   top: TopItem[];
-  itens: ItemRow[];
-  /** Nº de itens do PCA (o KPI) — p/ avisar quando a lista (teto de 5.000) não traz todos. */
-  totalItens: number;
+  /** TODOS os itens do PCA num texto JSON (`ItemRow[]`) — lido UMA vez aqui (milhares de linhas sem serializar valor a valor). */
+  itensTexto: string;
   showUnidade: boolean;
   consulta?: ConsultaDashboard;
   /** PRÉVIA ligada: a lista inclui os DFDs ainda não incorporados (a fonte da origem diz). */
   previa?: boolean;
 }) {
+  const itens = useMemo(() => JSON.parse(itensTexto) as ItemRow[], [itensTexto]);
   const [sel, setSel] = useState<Selecao | null>(null);
   const [mostrada, setMostrada] = useState<Selecao | null>(null);
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
@@ -64,7 +64,6 @@ export function DashboardPcaCliente({
     (s, i) => s + (mostrada?.recorte.dim === "mes" && i.anual ? (i.valorTotal ?? 0) / 12 : (i.valorTotal ?? 0)),
     0,
   );
-  const incompleta = itens.length < totalItens;
   const abrirItem = consulta
     ? (r: ItemRow) => r.dfdId != null && setAberto({ tipo: "item", dfdId: r.dfdId, itemId: r.id, item: { item: r.itemNumero ?? null, codigo: r.idProduto } })
     : undefined;
@@ -88,7 +87,11 @@ export function DashboardPcaCliente({
 
       <ChartCard title="Consulta de Itens" subtitle={consulta ? "Itens e DFDs do PCA — clique numa linha para ver o detalhe" : "Busque, filtre e ordene os itens do PCA"}>
         {consulta ? (
-          <ConsultaPca protocolos={consulta.protocolos} dfds={consulta.dfds} itens={itens} showUnidade={showUnidade} aberto={aberto} onAbrir={setAberto} />
+          <ConsultaPca
+            protocolos={consulta.protocolos}
+            dfds={consulta.dfds}
+            foraDaSoma={consulta.foraDaSoma}
+            itens={itens} showUnidade={showUnidade} aberto={aberto} onAbrir={setAberto} />
         ) : (
           <ItemTable rows={itens} showUnidade={showUnidade} />
         )}
@@ -112,7 +115,6 @@ export function DashboardPcaCliente({
           origem?.anuais
             ? `${num(origem.anuais)} item(ns) com previsão ANUAL entram com 1/12 do valor em cada mês do cronograma (a tabela mostra o valor cheio).`
             : null,
-          incompleta ? `A lista traz os ${num(itens.length)} itens de maior valor de ${num(totalItens)} — o gráfico considera todos.` : null,
         ]}
       >
         <ItemTable rows={origem?.itens ?? []} showUnidade={showUnidade} origem={!!consulta} onRowClick={abrirItem} ativo={aberto?.tipo === "item" ? aberto.itemId : null} />

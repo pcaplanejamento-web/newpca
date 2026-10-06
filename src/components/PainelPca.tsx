@@ -60,8 +60,7 @@ export function PainelPca({
         porMes={dados.porMes}
         porUnidadeMedida={dados.porUnidadeMedida}
         top={dados.top}
-        itens={dados.itens}
-        totalItens={resumo.count}
+        itensTexto={JSON.stringify(dados.itens)}
         showUnidade={!unidadeFiltrada}
         consulta={consulta}
         previa={!!previa}

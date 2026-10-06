@@ -33,6 +33,7 @@ import {
   coerceFonte,
   coerceStatus,
   consolidarPca,
+  foraDaSoma,
   type FontePca,
   type ItemDashboard,
   type LinhaVinculo,
@@ -152,6 +153,9 @@ export type VinculoDfd = LinhaVinculo & {
   valorTotal: number;
   totalItens: number;
   reparticaoId: number | null;
+  /** Nº do DFD e do protocolo de origem (o "fora da soma" do Dashboard). */
+  numero: string;
+  protocoloNumero: string | null;
 };
 
 async function vinculos(pcaIds?: number[]): Promise<VinculoDfd[]> {
@@ -167,6 +171,8 @@ async function vinculos(pcaIds?: number[]): Promise<VinculoDfd[]> {
       reparticaoId: dfds.reparticaoId,
       protocoloId: dfds.protocoloId,
       protocoladoEm: dfdProtocolos.criadoEm,
+      numero: dfds.numero,
+      protocoloNumero: dfdProtocolos.numero,
     })
     .from(pcaDfds)
     .innerJoin(dfds, eq(pcaDfds.dfdId, dfds.id))
@@ -182,6 +188,8 @@ async function vinculos(pcaIds?: number[]): Promise<VinculoDfd[]> {
     valorTotal: Number(r.valorTotal ?? 0),
     totalItens: Number(r.totalItens ?? 0),
     reparticaoId: r.reparticaoId,
+    numero: r.numero,
+    protocoloNumero: r.protocoloNumero,
   }));
 }
 
@@ -207,6 +215,8 @@ async function vinculosPrevia(pca: PcaEspaco): Promise<VinculoDfd[]> {
       protocoloId: dfds.protocoloId,
       assunto: dfdProtocolos.assunto,
       protocoladoEm: dfdProtocolos.criadoEm,
+      numero: dfds.numero,
+      protocoloNumero: dfdProtocolos.numero,
     })
     .from(dfds)
     .innerJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
@@ -230,6 +240,8 @@ async function vinculosPrevia(pca: PcaEspaco): Promise<VinculoDfd[]> {
     valorTotal: Number(r.valorTotal ?? 0),
     totalItens: Number(r.totalItens ?? 0),
     reparticaoId: r.reparticaoId,
+    numero: r.numero,
+    protocoloNumero: r.protocoloNumero,
   }));
 }
 
@@ -500,6 +512,23 @@ export type DashboardPca = {
   protocolosLista: ProtocoloDoPca[];
   /** PRÉVIA ligada (`previaAtiva`): os DFDs/protocolos ainda NÃO incorporados que entraram nos números; `null` = só o incorporado. */
   previa: { dfds: number; protocolos: number } | null;
+  /** DFDs vinculados (e da prévia) que a consolidação deixou FORA da soma, com o motivo (só fonte protocolo). */
+  foraDaSoma: DfdForaDaSoma[];
+};
+
+/** Um DFD fora da soma do PCA — a consolidação por nº de planejamento (`foraDaSoma`, `pca-core.ts`). */
+export type DfdForaDaSoma = {
+  id: number;
+  protocoloId: number | null;
+  numero: string;
+  planejamento: string | null;
+  protocoloNumero: string | null;
+  itens: number;
+  valor: number;
+  /** O motivo por extenso, com o DFD que ficou/retirou. */
+  motivo: string;
+  /** Ainda não incorporado (entrou pela prévia). */
+  previa: boolean;
 };
 
 const vazioDash = (): DashboardPca => ({
@@ -515,6 +544,7 @@ const vazioDash = (): DashboardPca => ({
   dfdsLista: [],
   protocolosLista: [],
   previa: null,
+  foraDaSoma: [],
 });
 
 /**
@@ -637,6 +667,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
     meta,
     vinculos: vs,
     consolidacao: cons,
+    previaIds: new Set(previa.map((v) => v.dfdId)),
     protocolos: protocolos.size,
     previa: previa.length ? { dfds: previaVig.length, protocolos: new Set(previaVig.map((v) => v.protocoloId)).size } : null,
   };
@@ -690,9 +721,9 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
       getPorMes(unidadeId, pca.id),
       getPorUnidadeMedida(unidadeId, pca.id),
       getTopItens(unidadeId, 10, pca.id),
-      getItensTodos(unidadeId, 5000, pca.id),
+      getItensTodos(unidadeId, undefined, pca.id),
     ]);
-    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [], protocolosLista: [], previa: null };
+    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [], protocolosLista: [], previa: null, foraDaSoma: [] };
   }
   const c = await itensConsolidados(pca);
   const reps = new Map<number, string>();
@@ -703,7 +734,6 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
   const itens: ItemRow[] = lista
     .slice()
     .sort((a, b) => b.valorTotal - a.valorTotal)
-    .slice(0, 5000)
     .map((i) => itemRowConsolidado(i, c.meta));
   // DFDs vigentes (dos itens ATIVOS, no filtro de unidade) — a visão "DFDs" da consulta.
   const porDfd = new Map<number, DfdDoPca>();
@@ -748,7 +778,40 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
     protocolos: c.protocolos,
     dfds: new Set(lista.map((i) => i.dfdId)).size,
     previa: c.previa,
+    foraDaSoma: dfdsForaDaSoma(c, unidadeId),
   };
+}
+
+/** Os DFDs fora da soma (no filtro de unidade), com o motivo por extenso — os mais recentes primeiro. */
+function dfdsForaDaSoma(c: Consolidados, unidadeId: number | undefined): DfdForaDaSoma[] {
+  const porId = new Map(c.vinculos.map((v) => [v.dfdId, v]));
+  const ref = (id: number | null) => {
+    const v = id == null ? null : porId.get(id);
+    return v ? `DFD ${v.numero}${v.protocoloNumero ? ` (protocolo ${v.protocoloNumero})` : ""}` : "outro DFD";
+  };
+  const texto = (f: ReturnType<typeof foraDaSoma>[number]) =>
+    f.motivo === "substituido"
+      ? `Mesmo nº de planejamento — prevaleceu o ${ref(f.outro)}`
+      : f.motivo === "excluido"
+        ? `Retirado pela exclusão do ${ref(f.outro)}`
+        : f.outro != null
+          ? `Exclusão — retirou o ${ref(f.outro)}`
+          : "Exclusão sem DFD correspondente no PCA";
+  return foraDaSoma(c.vinculos, c.consolidacao)
+    .map((f) => ({ f, v: porId.get(f.dfdId) }))
+    .filter((x): x is { f: ReturnType<typeof foraDaSoma>[number]; v: VinculoDfd } => !!x.v && (unidadeId == null || x.v.reparticaoId === unidadeId))
+    .map(({ f, v }) => ({
+      id: v.dfdId,
+      protocoloId: v.protocoloId,
+      numero: v.numero,
+      planejamento: v.planejamento,
+      protocoloNumero: v.protocoloNumero,
+      itens: v.totalItens,
+      valor: v.valorTotal,
+      motivo: texto(f),
+      previa: c.previaIds.has(v.dfdId),
+    }))
+    .reverse();
 }
 
 // ---------------------------------------------------------------------------
