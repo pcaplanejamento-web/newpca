@@ -491,6 +491,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Bolhas:** arrastar MINIMIZA a conversa aberta; ao soltar, o POUSO é FLIP (`estiloDaBolha`): cada bolha parte de onde está
   (a arrastada, do ponto em que foi solta) e voa com mola até o lugar novo, em cadeia (35 ms entre elas) — sem o "pulo" de
   volta; erguer/ímã/sumir na lixeira na própria bolha (escala com mola).
+- **Fechamento RÁPIDO (v1.15.1):** a janela sai em `--motion-duration` × 0,55 (`animate-janela-sai`: escala 0,85, sem
+  desfoque, `ease-in` — ~0,1 s) e desmonta logo depois; a bolha na lixeira some em 0,6× e a lixeira sai em 0,55×.
 
 ## Chat estável + "Ao vivo" único + lixeira (v1.14.2)
 - **Nunca desmonta:** o layout devolve `undefined` quando a leitura da presença/config do chat FALHA (`presencaDoGrupo`,

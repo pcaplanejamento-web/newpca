@@ -107,10 +107,11 @@ export function BolhasChat({
       return;
     }
     setFechando(true);
+    // O fechamento é BEM RÁPIDO (~0,1 s — `animate-janela-sai`); sai da tela logo ao terminar.
     const x = window.setTimeout(() => {
       setExibida(null);
       setFechando(false);
-    }, duracaoMotionMs() + 40);
+    }, duracaoMotionMs() * 0.55 + 10);
     return () => window.clearTimeout(x);
   }, [ativa]);
 
@@ -190,7 +191,7 @@ export function BolhasChat({
             setSumindo(null);
             setArrasto(null);
             onExcluir(conversa);
-          }, duracaoMotionMs() + 120);
+          }, duracaoMotionMs() * 0.8 + 20);
           return;
         }
         // A PILHA vai para onde a bolha foi solta: o lado mais perto, a altura em que ela ficou. Cada bolha parte de onde
@@ -280,7 +281,7 @@ export function BolhasChat({
                 aria-expanded={ativa === b.conversa}
                 title={`${b.rotulo} — tocar abre ou minimiza; arraste para mover, ou até a lixeira para excluir`}
                 className={`relative flex h-12 w-12 cursor-grab items-center justify-center rounded-full transition-[transform,box-shadow,opacity] duration-[var(--motion-duration)] ease-[cubic-bezier(0.34,1.56,0.64,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:cursor-grabbing lg:h-14 lg:w-14 ${
-                  sai ? "!scale-0 opacity-0" : presa ? (presa.naLixeira ? "!scale-[0.82] shadow-erguida" : "!scale-[1.08] shadow-erguida") : "shadow-flutuante hover:scale-105"
+                  sai ? "!scale-0 opacity-0 !duration-[calc(var(--motion-duration)*0.6)] !ease-in" : presa ? (presa.naLixeira ? "!scale-[0.82] shadow-erguida" : "!scale-[1.08] shadow-erguida") : "shadow-flutuante hover:scale-105"
                 } ${ativa === b.conversa ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`}
               >
                 <FotoBolha b={b} />

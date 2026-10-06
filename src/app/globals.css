@@ -620,6 +620,7 @@
 .animate-janela-cresce {
   animation: janela-cresce calc(var(--motion-duration) * 1.6) cubic-bezier(0.2, 0.9, 0.25, 1) both;
 }
+/* O FECHAMENTO é BEM RÁPIDO (~0,1 s): encolhe de volta à bolha e some. */
 @keyframes janela-sai {
   0% {
     opacity: 1;
@@ -627,12 +628,11 @@
   }
   100% {
     opacity: 0;
-    scale: 0.6;
-    filter: blur(3px);
+    scale: 0.85;
   }
 }
 .animate-janela-sai {
-  animation: janela-sai var(--motion-duration) cubic-bezier(0.4, 0, 1, 1) both;
+  animation: janela-sai calc(var(--motion-duration) * 0.55) cubic-bezier(0.4, 0, 1, 1) both;
   pointer-events: none;
 }
 /* A LIXEIRA sobe do rodapé quando o arrasto começa e desce ao terminar. */
@@ -663,7 +663,7 @@
   }
 }
 .animate-lixeira-sai {
-  animation: lixeira-sai var(--motion-duration) ease-in both;
+  animation: lixeira-sai calc(var(--motion-duration) * 0.55) ease-in both;
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-cabeca-entra,

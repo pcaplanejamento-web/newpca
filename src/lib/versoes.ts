@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.15.1",
+    data: "2026-10-06",
+    titulo: "Fechamento rápido do chat",
+    mudancas: [
+      { tipo: "melhoria", area: "Chat", texto: "A janela da conversa fecha em cerca de 0,1 s (antes ~0,4 s) — some na hora ao minimizar, tocar fora ou arrastar a bolha." },
+      { tipo: "melhoria", area: "Chat", texto: "A bolha solta na lixeira some mais rápido, e a lixeira sai junto." },
+    ],
+  },
+  {
     versao: "1.15.0",
     data: "2026-10-06",
     titulo: "Conversas guardadas por 7 dias",
