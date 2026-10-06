@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_TEXTO_CHAT, MAX_TRECHO_RESPOSTA } from "./chat-core.ts";
+import { MAX_MEMBROS_CONVERSA, MAX_NOME_CONVERSA, MAX_TEXTO_CHAT, MAX_TRECHO_RESPOSTA } from "./chat-core.ts";
 import { LIMITES_INATIVO, MAX_RECADO, STATUS_PRESENCA } from "./presenca-core.ts";
 
 /** Configurações → Presença (ADM). */
@@ -25,8 +25,12 @@ export const prefsPresencaSchema = z
 export const configChatSchema = z.strictObject({ grupo: z.boolean(), privado: z.boolean() });
 
 /** Uma mensagem PRIVADA do chat ao vivo (nada é gravado). */
-export const chatPrivadoSchema = z.strictObject({
-  para: z.number().int().positive(),
+export const chatEnviarSchema = z.strictObject({
+  /** `p<id>` (privada) ou `c<id>` (conversa em grupo escolhida). */
+  conversa: z.string().regex(/^(p\d{1,9}|c[a-z0-9]{6,20})$/),
+  /** Os destinatários (sem você): 1 na privada, 1 a 19 na conversa em grupo. */
+  para: z.array(z.number().int().positive()).min(1).max(MAX_MEMBROS_CONVERSA - 1),
+  nome: z.string().max(MAX_NOME_CONVERSA * 2).optional(),
   id: z.string().regex(/^[A-Za-z0-9_-]{8,40}$/),
   texto: z.string().min(1).max(MAX_TEXTO_CHAT * 2),
   resp: z.strictObject({ id: z.string().regex(/^[A-Za-z0-9_-]{8,40}$/), de: z.number().int().positive(), trecho: z.string().max(MAX_TRECHO_RESPOSTA * 2) }).nullable().optional(),

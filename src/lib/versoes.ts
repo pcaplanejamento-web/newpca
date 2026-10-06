@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.14.0",
+    data: "2026-10-06",
+    titulo: "Chat no estilo Messenger e conversas em grupo",
+    mudancas: [
+      { tipo: "novo", area: "Chat", texto: "Cada conversa aberta vira uma bolha flutuante com a foto da pessoa; tocar abre a conversa ao lado. Arraste a bolha para qualquer lugar da tela — ela encosta na borda — ou até o × para fechar." },
+      { tipo: "novo", area: "Chat", texto: "Conversas em grupo: no ícone do chat, \"Nova conversa em grupo\" com 2 ou mais pessoas do grupo e um nome. Só ao vivo — nada é salvo." },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "\"Conversar\" em cada pessoa do painel Online agora; mensagem nova faz a bolha quicar e avisa a quem não foi entregue." },
+    ],
+  },
+  {
     versao: "1.13.0",
     data: "2026-10-06",
     titulo: "Onde cada pessoa está",

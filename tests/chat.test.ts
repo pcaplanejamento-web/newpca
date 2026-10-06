@@ -18,8 +18,17 @@ import {
   novoIdMensagem,
   quantosLeram,
   rotuloDiaChat,
+  abrirBolha,
+  bolhasVisiveis,
+  ehConversaEmGrupo,
+  encostarBolhas,
+  lerIds,
+  lerPosicaoBolhas,
+  novaConversaEmGrupo,
+  rotuloConversa,
+  topoDasBolhas,
 } from "../src/lib/chat-core.ts";
-import { chatPrivadoSchema, configChatSchema } from "../src/lib/presenca-validation.ts";
+import { chatEnviarSchema, configChatSchema } from "../src/lib/presenca-validation.ts";
 
 describe("chat ao vivo: configuração e conversas", () => {
   it("desligado por padrão; só true liga", () => {
@@ -35,14 +44,26 @@ describe("chat ao vivo: configuração e conversas", () => {
     assert.equal(conversaValida("grupo"), true);
     assert.equal(conversaValida("p3"), true);
     assert.equal(conversaValida("x3"), false);
+    assert.equal(conversaValida("cabc123"), true);
+    assert.equal(conversaValida("cABC123"), false);
+    assert.equal(conversaValida("c12"), false);
+    assert.equal(ehConversaEmGrupo("cabc123"), true);
+    assert.equal(ehConversaEmGrupo("p3"), false);
+    const c = novaConversaEmGrupo();
+    assert.equal(ehConversaEmGrupo(c), true);
   });
   it("schemas: estritos e com tetos", () => {
     assert.equal(configChatSchema.safeParse({ grupo: true, privado: false }).success, true);
     assert.equal(configChatSchema.safeParse({ grupo: true }).success, false);
-    assert.equal(chatPrivadoSchema.safeParse({ para: 2, id: "abcdefgh12", texto: "oi" }).success, true);
-    assert.equal(chatPrivadoSchema.safeParse({ para: 2, id: "curto", texto: "oi" }).success, false);
-    assert.equal(chatPrivadoSchema.safeParse({ para: 2, id: "abcdefgh12", texto: "" }).success, false);
-    assert.equal(chatPrivadoSchema.safeParse({ para: 2, id: "abcdefgh12", texto: "oi", extra: 1 }).success, false);
+    const base = { conversa: "p2", para: [2], id: "abcdefgh12", texto: "oi" };
+    assert.equal(chatEnviarSchema.safeParse(base).success, true);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, conversa: "cabc123xyz", para: [2, 3], nome: "Compras" }).success, true);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, conversa: "grupo" }).success, false);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, para: [] }).success, false);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, para: Array.from({ length: 20 }, (_, i) => i + 2) }).success, false);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, id: "curto" }).success, false);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, texto: "" }).success, false);
+    assert.equal(chatEnviarSchema.safeParse({ ...base, extra: 1 }).success, false);
   });
 });
 
@@ -127,5 +148,42 @@ describe("chat ao vivo: texto e mensagens", () => {
     assert.equal(rotuloDiaChat(agora - 86_400_000, agora), "Ontem");
     assert.equal(rotuloDiaChat(Date.parse("2026-10-01T15:00:00Z"), agora), "01/10");
     assert.equal(horaChat(Date.parse("2026-10-06T17:32:00Z")), "14:32");
+  });
+});
+
+describe("chat ao vivo: conversas em grupo e bolhas", () => {
+  it("digitando/lida da conversa em grupo levam os membros (para)", () => {
+    assert.deepEqual(lerMensagemChatAba(JSON.stringify({ t: "digitando", conversa: "cabc123", para: [2, 2, 3, "x", -1] })), { t: "digitando", conversa: "cabc123", para: [2, 3] });
+    assert.equal(lerMensagemChatAba(JSON.stringify({ t: "digitando", conversa: "cabc123" })), null);
+    assert.equal(lerMensagemChatAba(JSON.stringify({ t: "lida", conversa: "cabc123", ate: "abcdefgh12", para: [] })), null);
+    assert.deepEqual(lerMensagemChatAba(JSON.stringify({ t: "digitando", conversa: "p3", para: [9] })), { t: "digitando", conversa: "p3" });
+    assert.deepEqual(lerIds(Array.from({ length: 30 }, (_, i) => i + 1))?.length, 20);
+  });
+  it("mensagem recebida da conversa em grupo: membros e nome", () => {
+    const m = lerMensagemRecebida({ id: "abcdefgh12", conversa: "cabc123", de: 2, em: 1, texto: "oi", membros: [1, 2, 3], nome: " Compras\n " });
+    assert.deepEqual([m?.membros, m?.nome], [[1, 2, 3], "Compras"]);
+    assert.equal(lerMensagemRecebida({ id: "abcdefgh12", conversa: "p2", de: 2, em: 1, texto: "oi", membros: [1] })?.membros, undefined);
+  });
+  it("nome da conversa: o dado ou os primeiros nomes", () => {
+    const nome = (id: number) => ["", "Ana", "Bruno", "Carla", "Diego", "Elisa"][id];
+    assert.equal(rotuloConversa("Compras", [1, 2], 1, nome), "Compras");
+    assert.equal(rotuloConversa("", [1, 2, 3], 1, nome), "Bruno e Carla");
+    assert.equal(rotuloConversa(undefined, [1, 2, 3, 4], 1, nome), "Bruno, Carla e Diego");
+    assert.equal(rotuloConversa(undefined, [1, 2, 3, 4, 5], 1, nome), "Bruno, Carla e mais 2");
+  });
+  it("bolhas: a aberta vai ao topo, até 4 à vista", () => {
+    assert.deepEqual(abrirBolha(["a", "b", "c"], "c"), ["c", "a", "b"]);
+    assert.deepEqual(abrirBolha(["a"], "z"), ["z", "a"]);
+    assert.deepEqual(bolhasVisiveis(["a", "b", "c", "d", "e", "f"]), { visiveis: ["a", "b", "c", "d"], extras: ["e", "f"] });
+  });
+  it("posição: encosta no lado mais perto, a altura dentro da área", () => {
+    const tela = { largura: 1000, altura: 800, topo: 60, base: 20 };
+    assert.deepEqual(encostarBolhas(200, 60, tela, 120), { lado: "esq", y: 0 });
+    assert.deepEqual(encostarBolhas(900, 9999, tela, 120), { lado: "dir", y: 1 });
+    assert.deepEqual(encostarBolhas(900, 360, tela, 120), { lado: "dir", y: 0.5 });
+    assert.equal(topoDasBolhas({ lado: "dir", y: 0.5 }, tela, 120), 360);
+    assert.equal(topoDasBolhas({ lado: "dir", y: 1 }, { ...tela, altura: 100 }, 120), 60);
+    assert.deepEqual(lerPosicaoBolhas({ lado: "x", y: 7 }), { lado: "dir", y: 1 });
+    assert.deepEqual(lerPosicaoBolhas(null), { lado: "dir", y: 1 });
   });
 });

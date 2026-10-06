@@ -188,6 +188,13 @@ export class PresencaGrupo {
       if (agora - (anexo.dig ?? 0) < INTERVALO_DIGITANDO_MS) return;
       ws.serializeAttachment({ ...anexo, dig: agora });
     }
+    // Conversa em grupo escolhida: só às abas dos membros (`para`) que estão neste grupo; a conversa tem o mesmo id para todos.
+    if (m.para) {
+      if (!anexo.chatPrivado) return;
+      const alvo = m.para.filter((id) => id !== anexo.id).flatMap((id) => this.state.getWebSockets(`u${id}`));
+      enviarA(alvo, m.t === "lida" ? { t: "lida", de: anexo.id, conversa: m.conversa, ate: m.ate } : { t: "digitando", de: anexo.id, conversa: m.conversa });
+      return;
+    }
     const outro = idDaConversa(m.conversa);
     if (outro == null ? !anexo.chatGrupo : !anexo.chatPrivado || outro === anexo.id) return;
     const alvo = outro == null ? this.state.getWebSockets().filter((o) => !this.state.getTags(o).includes(`u${anexo.id}`)) : this.state.getWebSockets(`u${outro}`);

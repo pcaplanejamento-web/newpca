@@ -91,10 +91,11 @@ export async function gravarConfigChat(cfg: ConfigChat, usuarioId: number): Prom
   return valor;
 }
 
-/** As duas pessoas compartilham ALGUM grupo e o destinatário está ATIVO (o chat privado só entre elas). */
-export async function compartilhamGrupo(a: number, b: number): Promise<boolean> {
-  const [r] = await getDb().all<{ ok: number }>(
-    sql`SELECT 1 AS ok FROM usuario_grupos x JOIN usuario_grupos y ON y.grupo_id = x.grupo_id JOIN usuarios u ON u.id = y.usuario_id AND u.status = 'ativo' WHERE x.usuario_id = ${a} AND y.usuario_id = ${b} LIMIT 1`,
+/** Dos `ids`, quem está ATIVO e compartilha algum grupo com `eu` (o chat privado e a conversa em grupo) — UMA consulta. */
+export async function quemCompartilhaGrupo(eu: number, ids: readonly number[]): Promise<Set<number>> {
+  if (!ids.length) return new Set();
+  const linhas = await getDb().all<{ id: number }>(
+    sql`SELECT DISTINCT y.usuario_id AS id FROM usuario_grupos x JOIN usuario_grupos y ON y.grupo_id = x.grupo_id JOIN usuarios u ON u.id = y.usuario_id AND u.status = 'ativo' WHERE x.usuario_id = ${eu} AND y.usuario_id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`,
   );
-  return !!r;
+  return new Set(linhas.map((l) => Number(l.id)));
 }

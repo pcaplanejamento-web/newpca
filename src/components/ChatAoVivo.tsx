@@ -9,6 +9,18 @@ import {
   type Conversa,
   cartoesDoTexto,
   conversaPrivada,
+  conversaValida,
+  ehConversaEmGrupo,
+  limparNomeConversa,
+  MAX_MEMBROS_CONVERSA,
+  MAX_NOME_CONVERSA,
+  novaConversaEmGrupo,
+  abrirBolha,
+  bolhasVisiveis,
+  lerPosicaoBolhas,
+  POSICAO_BOLHAS_PADRAO,
+  type PosicaoBolhas,
+  rotuloConversa,
   DIGITANDO_DURA_MS,
   horaChat,
   idDaConversa,
@@ -29,15 +41,23 @@ import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { EVENTO_ABRIR_CHAT, EVENTO_CHAT_PRIVADO, useCanalGrupo, useNaoPerturbe } from "./CanalGrupo";
-import { IconArrowDown, IconChat, IconChevronLeft, IconClose, IconEnviar, IconLidas, IconCheck, IconResponder, IconUsers } from "./icons";
+import { IconArrowDown, IconChat, IconCheck, IconChevronLeft, IconClose, IconEnviar, IconLidas, IconMenos, IconPlus, IconLogout, IconResponder, IconUsers } from "./icons";
 import { tocarSom } from "./PreferenciasNotificacoes";
 import { SeloAoVivo } from "./PresencaGrupo";
+import { type Bolha, BolhasChat } from "./BolhasChat";
 import { TextoFormatado } from "./TextoFormatado";
-import { toast } from "./Toast";
 
 type Envio = "enviando" | "enviada" | "falhou" | "nao-entregue";
 type MsgTela = MensagemChat & { minha: boolean; envio?: Envio; motivo?: string };
-type ConversaTela = { msgs: MsgTela[]; naoLidas: number; lidaAte: Map<number, string>; digitando: Map<number, number> };
+type ConversaTela = {
+  msgs: MsgTela[];
+  naoLidas: number;
+  lidaAte: Map<number, string>;
+  digitando: Map<number, number>;
+  /** Conversa em grupo escolhida: todos os membros (com você) e o nome. */
+  membros?: number[];
+  nome?: string;
+};
 
 const nova = (): ConversaTela => ({ msgs: [], naoLidas: 0, lidaAte: new Map(), digitando: new Map() });
 /** Sem a confirmação do servidor em 8 s, a mensagem do grupo fica "não enviada" (com "Tentar de novo"). */
@@ -48,10 +68,12 @@ const ESPERA_CONFIRMACAO_MS = 8000;
  * sessão), o envio (grupo pelo socket do grupo; privado pela rota → a caixa pessoal), a confirmação, "digitando", "lida",
  * as não lidas e o aviso da mensagem que chega.
  */
-function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conversa | null }, abrir: (c: Conversa) => void) {
+function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conversa | null }, aoChegar: (c: Conversa) => void) {
   const canal = useCanalGrupo();
   const naoPerturbe = useNaoPerturbe();
   const [conversas, setConversas] = useState<Map<Conversa, ConversaTela>>(() => new Map());
+  const conversasRef = useRef(conversas);
+  conversasRef.current = conversas;
   /** Quem escreveu no privado sem estar no grupo ativo (foto + nome vêm na mensagem). */
   const [autores, setAutores] = useState<Map<number, Pessoa>>(() => new Map());
   const [, setRelogio] = useState(0);
@@ -59,8 +81,8 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
   abertoRef.current = aberto;
   const dndRef = useRef(naoPerturbe);
   dndRef.current = naoPerturbe;
-  const abrirRef = useRef(abrir);
-  abrirRef.current = abrir;
+  const chegarRef = useRef(aoChegar);
+  chegarRef.current = aoChegar;
   const meuId = canal?.usuarioId ?? 0;
   const grupoId = canal?.grupoId ?? null;
 
@@ -112,18 +134,16 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
         return {
           ...c,
           digitando,
+          ...(m.membros?.length ? { membros: m.membros } : {}),
+          ...(m.nome ? { nome: m.nome } : {}),
           msgs: juntarMensagem(c.msgs, msg),
           naoLidas: minha || vendo || ja ? c.naoLidas : c.naoLidas + 1,
         };
       });
       if (minha || vendo) return;
       if (!dndRef.current) tocarSom();
-      // Com o painel aberto, a lista já mostra a não lida (o aviso flutuante cobriria o campo).
-      if (abertoRef.current.painel) return;
-      const quem = nomeRef.current(m.de);
-      const onde = m.conversa === "grupo" ? " no grupo" : "";
-      const trecho = m.texto.replace(/\s+/g, " ").slice(0, 80);
-      toast.acao(`${quem}${onde}: ${trecho}`, "Responder", () => abrirRef.current(m.conversa));
+      // A conversa vira (ou sobe na pilha como) uma BOLHA que quica — o aviso é a própria bolha.
+      chegarRef.current(m.conversa);
     },
     [meuId, mudar],
   );
@@ -143,14 +163,14 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
       canal.ouvir("digitando", (o) => {
         const de = Number(o.de);
         const c = String(o.conversa);
-        if (!Number.isInteger(de) || (c !== "grupo" && idDaConversa(c) == null)) return;
-        mudar(c as Conversa, (x) => ({ ...x, digitando: new Map(x.digitando).set(de, Date.now() + DIGITANDO_DURA_MS) }));
+        if (!Number.isInteger(de) || !conversaValida(c)) return;
+        mudar(c, (x) => ({ ...x, digitando: new Map(x.digitando).set(de, Date.now() + DIGITANDO_DURA_MS) }));
       }),
       canal.ouvir("lida", (o) => {
         const de = Number(o.de);
         const c = String(o.conversa);
-        if (!Number.isInteger(de) || typeof o.ate !== "string" || (c !== "grupo" && idDaConversa(c) == null)) return;
-        mudar(c as Conversa, (x) => ({ ...x, lidaAte: new Map(x.lidaAte).set(de, o.ate as string) }));
+        if (!Number.isInteger(de) || typeof o.ate !== "string" || !conversaValida(c)) return;
+        mudar(c, (x) => ({ ...x, lidaAte: new Map(x.lidaAte).set(de, o.ate as string) }));
       }),
     ];
     return () => {
@@ -208,13 +228,15 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
       mudar(c, (x) => (x.naoLidas ? { ...x, naoLidas: 0 } : x));
       if (ultimaDosOutros && lidaEnviada.current.get(c) !== ultimaDosOutros) {
         lidaEnviada.current.set(c, ultimaDosOutros);
-        canal.enviar({ t: "lida", conversa: c, ate: ultimaDosOutros });
+        // Na conversa em grupo escolhida, a "lida" vai só aos membros (o servidor entrega às abas deles).
+        const para = ehConversaEmGrupo(c) ? (conversasRef.current.get(c)?.membros ?? []).filter((x) => x !== meuId) : undefined;
+        canal.enviar({ t: "lida", conversa: c, ate: ultimaDosOutros, ...(para ? { para } : {}) });
       }
     };
     marcar();
     document.addEventListener("visibilitychange", marcar);
     return () => document.removeEventListener("visibilitychange", marcar);
-  }, [aberto.painel, aberto.conversa, ultimaDosOutros, canal, mudar]);
+  }, [aberto.painel, aberto.conversa, ultimaDosOutros, canal, mudar, meuId]);
 
   // Fechar/recarregar a aba com conversa em andamento: o navegador pergunta (nada é guardado).
   const temConversa = [...conversas.values()].some((c) => c.msgs.length > 0);
@@ -240,13 +262,24 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
         window.setTimeout(() => falhar("Sem confirmação — tente de novo."), ESPERA_CONFIRMACAO_MS);
         return;
       }
-      const para = idDaConversa(c);
+      // Privada (`p<id>`) ou conversa em grupo escolhida (`c<id>` — os membros vão junto): pela rota → as caixas pessoais.
+      const meta = conversasRef.current.get(c);
+      const privada = idDaConversa(c);
+      const para = privada != null ? [privada] : (meta?.membros ?? []).filter((x) => x !== meuId);
+      if (!para.length) return falhar("Ninguém nesta conversa.");
       try {
-        const r = await fetch("/api/chat/privado", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ para, id, texto, resp }) });
-        const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; entregue?: boolean } | null;
+        const r = await fetch("/api/chat/enviar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversa: c, para, id, texto, resp, ...(meta?.nome ? { nome: meta.nome } : {}) }),
+        });
+        const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; entregues?: number; naoEntregues?: number[] } | null;
         if (!r.ok || !j?.ok) return falhar(j?.error ?? "Não enviada.");
-        if (!j.entregue) return falhar(`${nomeRef.current(para ?? 0)} não está com o sistema aberto — a mensagem não foi entregue (nada é guardado).`, "nao-entregue");
-        mudar(c, (x) => ({ ...x, msgs: x.msgs.map((m) => (m.id === id ? { ...m, envio: "enviada", motivo: undefined } : m)) }));
+        const fora = j.naoEntregues ?? [];
+        if (!j.entregues)
+          return falhar(`${privada != null ? nomeRef.current(privada) : "Ninguém da conversa"} ${privada != null ? "não está" : "está"} com o sistema aberto — a mensagem não foi entregue (nada é guardado).`, "nao-entregue");
+        const motivo = fora.length ? `Não entregue a ${fora.map((x) => nomeRef.current(x)).join(", ")} (sem o sistema aberto).` : undefined;
+        mudar(c, (x) => ({ ...x, msgs: x.msgs.map((m) => (m.id === id ? { ...m, envio: "enviada", motivo } : m)) }));
       } catch {
         falhar("Sem conexão — tente de novo.");
       }
@@ -260,61 +293,143 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
       const agora = Date.now();
       if (!canal || agora - ultimoDigitando.current < INTERVALO_DIGITANDO_MS) return;
       ultimoDigitando.current = agora;
-      canal.enviar({ t: "digitando", conversa: c });
+      const para = ehConversaEmGrupo(c) ? (conversasRef.current.get(c)?.membros ?? []).filter((x) => x !== meuId) : undefined;
+      if (para && !para.length) return;
+      canal.enviar({ t: "digitando", conversa: c, ...(para ? { para } : {}) });
     },
-    [canal],
+    [canal, meuId],
   );
 
   const garantir = useCallback((c: Conversa) => setConversas((m) => (m.has(c) ? m : new Map(m).set(c, nova()))), []);
+  /** Uma CONVERSA EM GRUPO nova (só nesta aba até a 1ª mensagem chegar aos outros). */
+  const criarEmGrupo = useCallback(
+    (membros: number[], nome: string) => {
+      const c = novaConversaEmGrupo();
+      setConversas((m) => new Map(m).set(c, { ...nova(), membros: [meuId, ...membros.filter((x) => x !== meuId)], nome: limparNomeConversa(nome) || undefined }));
+      return c;
+    },
+    [meuId],
+  );
+  /** Sair da conversa: some da lista desta aba (nada é guardado). */
+  const sair = useCallback((c: Conversa) => {
+    setConversas((m) => {
+      if (!m.has(c)) return m;
+      const n = new Map(m);
+      n.delete(c);
+      return n;
+    });
+  }, []);
   const naoLidas = [...conversas.values()].reduce((s, c) => s + c.naoLidas, 0);
-  return { conversas, autores, nomeDe, enviar, digitando, garantir, naoLidas };
+  return { conversas, autores, nomeDe, enviar, digitando, garantir, criarEmGrupo, sair, naoLidas, meuId };
 }
 
+/** A posição da pilha de bolhas fica no aparelho (conveniência — some ao limpar o navegador). */
+const CHAVE_POSICAO = "chat:posicao";
+
 /**
- * O CHAT AO VIVO no cabeçalho (com o canal do grupo): o ícone com as não lidas (pop) e o PAINEL — no desktop ancorado à
- * direita (fica aberto ao navegar), no celular em tela cheia. Conversa do GRUPO ativo e PRIVADAS com as pessoas do grupo.
- * As mensagens NÃO SÃO SALVAS: chegam só a quem está com o sistema aberto e somem ao recarregar/fechar.
+ * O CHAT AO VIVO no estilo Messenger (com o canal do grupo): no cabeçalho, o ícone com as não lidas abre a LISTA das
+ * conversas (o grupo ativo, as privadas, as conversas em grupo e "Nova conversa"); cada conversa aberta vira uma BOLHA
+ * flutuante com a foto (`BolhasChat` — arrastável, encosta na borda) e tocar nela abre a JANELA da conversa ao lado.
+ * Mensagem nova = a bolha aparece quicando. As mensagens NÃO SÃO SALVAS: chegam só a quem está com o sistema aberto e somem
+ * ao recarregar/fechar.
  */
 export function ChatAoVivo({ config }: { config: ConfigChat }) {
   const canal = useCanalGrupo();
-  const [painel, setPainel] = useState(false);
-  const [conversa, setConversa] = useState<Conversa | null>(null);
-  const abrirConversa = useCallback((c: Conversa) => {
-    setPainel(true);
-    setConversa(c);
+  const [lista, setLista] = useState(false);
+  const [bolhas, setBolhas] = useState<Conversa[]>([]);
+  const [ativa, setAtiva] = useState<Conversa | null>(null);
+  const [novas, setNovas] = useState<Set<Conversa>>(() => new Set());
+  const [posicao, setPosicao] = useState<PosicaoBolhas>(POSICAO_BOLHAS_PADRAO);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(CHAVE_POSICAO);
+      if (v) setPosicao(lerPosicaoBolhas(JSON.parse(v)));
+    } catch {
+      /* sem armazenamento: a posição padrão */
+    }
   }, []);
-  const chat = useChat(config, { painel, conversa }, abrirConversa);
+  const mudarPosicao = useCallback((p: PosicaoBolhas) => {
+    setPosicao(p);
+    try {
+      localStorage.setItem(CHAVE_POSICAO, JSON.stringify(p));
+    } catch {
+      /* sem armazenamento: vale só nesta página */
+    }
+  }, []);
+  const abrirConversa = useCallback((c: Conversa) => {
+    setBolhas((b) => abrirBolha(b, c));
+    setAtiva(c);
+    setLista(false);
+  }, []);
+  /** Chegou mensagem: a conversa vira bolha (no topo, se ainda não estava) e QUICA. */
+  const aoChegar = useCallback((c: Conversa) => {
+    setBolhas((b) => (b.includes(c) ? b : abrirBolha(b, c)));
+    setNovas((n) => new Set(n).add(c));
+    window.setTimeout(
+      () =>
+        setNovas((n) => {
+          const x = new Set(n);
+          x.delete(c);
+          return x;
+        }),
+      700,
+    );
+  }, []);
+  const chat = useChat(config, { painel: ativa != null, conversa: ativa }, aoChegar);
   const botao = useRef<HTMLButtonElement>(null);
-  const fechar = useCallback(() => {
-    setPainel(false);
+  const fecharLista = useCallback(() => {
+    setLista(false);
     botao.current?.focus();
   }, []);
-  // "Conversar sobre…" (o "vendo agora" de um banner): abre a conversa com o texto já no campo.
+  const fecharBolha = useCallback((c: Conversa) => {
+    setBolhas((b) => b.filter((x) => x !== c));
+    setAtiva((a) => (a === c ? null : a));
+  }, []);
+  const alternar = useCallback((c: Conversa) => setAtiva((a) => (a === c ? null : c)), []);
+  // "Conversar" de qualquer lugar (Online agora, o "vendo agora" de um banner): `{pessoa}` | `{conversa}` + o texto pronto.
   const [rascunho, setRascunho] = useState<{ texto: string; n: number } | null>(null);
   useEffect(() => {
     const abrir = (e: Event) => {
-      const d = (e as CustomEvent<{ conversa?: string; texto?: string }>).detail;
-      const c: Conversa = d?.conversa === "grupo" || idDaConversa(String(d?.conversa)) != null ? (d.conversa as Conversa) : "grupo";
+      const d = (e as CustomEvent<{ conversa?: string; pessoa?: number; texto?: string }>).detail ?? {};
+      const c: Conversa = Number.isInteger(d.pessoa) ? conversaPrivada(d.pessoa as number) : conversaValida(d.conversa) ? d.conversa : "grupo";
       if (c === "grupo" ? !config.grupo : !config.privado) return;
       chat.garantir(c);
       abrirConversa(c);
-      setRascunho((r) => ({ texto: String(d?.texto ?? ""), n: (r?.n ?? 0) + 1 }));
+      setRascunho((r) => ({ texto: String(d.texto ?? ""), n: (r?.n ?? 0) + 1 }));
     };
     window.addEventListener(EVENTO_ABRIR_CHAT, abrir);
     return () => window.removeEventListener(EVENTO_ABRIR_CHAT, abrir);
   }, [config.grupo, config.privado, chat.garantir, abrirConversa]);
-  // Esc fecha o painel (menos com um diálogo por cima).
+  // Esc fecha a lista (menos com um diálogo por cima).
   useEffect(() => {
-    if (!painel) return;
+    if (!lista) return;
     const tecla = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[role='dialog'][aria-modal='true']")) fechar();
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[role='dialog'][aria-modal='true']")) fecharLista();
     };
     document.addEventListener("keydown", tecla);
     return () => document.removeEventListener("keydown", tecla);
-  }, [painel, fechar]);
+  }, [lista, fecharLista]);
   if (!canal) return null;
   const n = chat.naoLidas;
   const rotulo = n ? `Chat ao vivo — ${n} mensage${n === 1 ? "m" : "ns"} não lida${n === 1 ? "" : "s"}` : "Chat ao vivo";
+  const { visiveis, extras } = bolhasVisiveis(bolhas);
+  const pessoaDe = (id: number) => canal.pessoas.find((x) => x.id === id) ?? chat.autores.get(id) ?? null;
+  const dados: Bolha[] = visiveis.map((c) => {
+    const conv = chat.conversas.get(c);
+    const base = { conversa: c, naoLidas: conv?.naoLidas ?? 0, nova: novas.has(c) };
+    if (c === "grupo") return { ...base, rotulo: `Grupo · ${canal.grupoNome ?? "grupo ativo"}`, fotos: [], grupoAtivo: true };
+    const outro = idDaConversa(c);
+    if (outro != null) {
+      const p = pessoaDe(outro);
+      return { ...base, rotulo: p ? nomeExibicao(p) : chat.nomeDe(outro), fotos: [{ nome: p?.nome ?? "?", foto: p?.foto }], presenca: canal.estados.get(outro)?.estado };
+    }
+    const outros = (conv?.membros ?? []).filter((x) => x !== chat.meuId);
+    return {
+      ...base,
+      rotulo: rotuloConversa(conv?.nome, conv?.membros ?? [], chat.meuId, chat.nomeDe),
+      fotos: outros.map((x) => ({ nome: pessoaDe(x)?.nome ?? "?", foto: pessoaDe(x)?.foto })),
+    };
+  });
   return (
     <>
       <button
@@ -322,9 +437,9 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
         type="button"
         aria-label={rotulo}
         title={rotulo}
-        aria-expanded={painel}
-        onClick={() => (painel ? fechar() : setPainel(true))}
-        className={`relative inline-flex h-11 w-11 items-center justify-center rounded-control transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${painel ? "bg-accent-soft text-accent" : "text-muted"}`}
+        aria-expanded={lista}
+        onClick={() => (lista ? fecharLista() : setLista(true))}
+        className={`relative inline-flex h-11 w-11 items-center justify-center rounded-control transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${lista ? "bg-accent-soft text-accent" : "text-muted"}`}
       >
         <IconChat className="h-5 w-5" />
         {n > 0 && (
@@ -334,31 +449,61 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
         )}
       </button>
       {/* Por PORTAL no body: o cabeçalho (com desfoque) prenderia o painel fixo dentro dele. */}
-      {painel &&
+      {lista &&
         createPortal(
-        <section
-          aria-label="Chat ao vivo"
-          className="fixed inset-0 z-[60] flex animate-fade-in-up flex-col bg-surface lg:inset-auto lg:top-[calc(var(--h-header)+8px)] lg:right-[var(--pad-canvas)] lg:bottom-[var(--pad-canvas)] lg:w-[380px] lg:rounded-card lg:border lg:border-border lg:shadow-soft"
-        >
-          {conversa ? (
-            <ConversaChat config={config} conversa={conversa} chat={chat} rascunho={rascunho} onVoltar={() => setConversa(null)} onFechar={fechar} />
-          ) : (
-            <ListaConversas config={config} chat={chat} onAbrir={abrirConversa} onFechar={fechar} />
-          )}
-        </section>,
+          <section
+            aria-label="Conversas do chat"
+            className="fixed inset-0 z-[62] flex animate-fade-in-up flex-col bg-surface lg:inset-auto lg:top-[calc(var(--h-header)+8px)] lg:right-[var(--pad-canvas)] lg:max-h-[min(72vh,600px)] lg:w-[360px] lg:rounded-card lg:border lg:border-border lg:shadow-soft"
+          >
+            <ListaConversas config={config} chat={chat} onAbrir={abrirConversa} onFechar={fecharLista} />
+          </section>,
           document.body,
         )}
+      <BolhasChat
+        bolhas={dados}
+        extras={extras.length}
+        ativa={ativa}
+        posicao={posicao}
+        onPosicao={mudarPosicao}
+        onTocar={alternar}
+        onFechar={fecharBolha}
+        onFecharTodas={() => {
+          setBolhas([]);
+          setAtiva(null);
+        }}
+        onExtras={() => setLista(true)}
+        janela={
+          ativa && (
+            <ConversaChat
+              config={config}
+              conversa={ativa}
+              chat={chat}
+              rascunho={rascunho}
+              onMinimizar={() => setAtiva(null)}
+              onFechar={() => fecharBolha(ativa)}
+              onSair={
+                ehConversaEmGrupo(ativa)
+                  ? () => {
+                      fecharBolha(ativa);
+                      chat.sair(ativa);
+                    }
+                  : undefined
+              }
+            />
+          )
+        }
+      />
     </>
   );
 }
 
 type Chat = ReturnType<typeof useChat>;
 
-function CabecalhoPainel({ children, onFechar }: { children: React.ReactNode; onFechar: () => void }) {
+function CabecalhoPainel({ children, onFechar, rotuloFechar = "Fechar o chat (Esc)" }: { children: React.ReactNode; onFechar: () => void; rotuloFechar?: string }) {
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2 lg:h-12">
+    <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2 lg:h-12">
       {children}
-      <button type="button" onClick={onFechar} aria-label="Fechar o chat" title="Fechar o chat (Esc)" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
+      <button type="button" onClick={onFechar} aria-label={rotuloFechar} title={rotuloFechar} className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
         <IconClose className="h-4 w-4" />
       </button>
     </div>
@@ -369,9 +514,21 @@ function CabecalhoPainel({ children, onFechar }: { children: React.ReactNode; on
 function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigChat; chat: Chat; onAbrir: (c: Conversa) => void; onFechar: () => void }) {
   const canal = useCanalGrupo();
   const [busca, setBusca] = useState("");
+  const [criando, setCriando] = useState(false);
   if (!canal) return null;
+  if (criando)
+    return (
+      <NovaConversaGrupo
+        onVoltar={() => setCriando(false)}
+        onFechar={onFechar}
+        onCriar={(membros, nome) => {
+          setCriando(false);
+          onAbrir(chat.criarEmGrupo(membros, nome));
+        }}
+      />
+    );
   const grupo = chat.conversas.get("grupo");
-  const privadas = [...chat.conversas.entries()].filter(([k, c]) => k !== "grupo" && (c.msgs.length > 0 || c.naoLidas > 0));
+  const privadas = [...chat.conversas.entries()].filter(([k, c]) => k !== "grupo" && (c.msgs.length > 0 || c.naoLidas > 0 || ehConversaEmGrupo(k)));
   privadas.sort((a, b) => (b[1].msgs.at(-1)?.em ?? 0) - (a[1].msgs.at(-1)?.em ?? 0));
   const passa = predicadoBusca(busca);
   const pessoas = canal.pessoas
@@ -404,9 +561,24 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
           />
         )}
         {privadas.map(([k, c]) => {
+          const ultima = c.msgs.at(-1);
+          if (ehConversaEmGrupo(k)) {
+            const outros = (c.membros ?? []).filter((x) => x !== chat.meuId);
+            return (
+              <LinhaConversa
+                key={k}
+                onClick={() => onAbrir(k)}
+                icone={<FotoBolhaPequena fotos={outros.slice(0, 3).map((x) => ({ nome: pessoaDe(x)?.nome ?? "?", foto: pessoaDe(x)?.foto }))} />}
+                titulo={rotuloConversa(c.nome, c.membros ?? [], chat.meuId, chat.nomeDe)}
+                previa={ultima ? `${ultima.minha ? "Você" : chat.nomeDe(ultima.de)}: ${ultima.texto}` : `${c.membros?.length ?? 0} pessoas · conversa em grupo`}
+                hora={ultima?.em}
+                naoLidas={c.naoLidas}
+                digitando={c.digitando.size > 0}
+              />
+            );
+          }
           const id = idDaConversa(k) ?? 0;
           const p = pessoaDe(id);
-          const ultima = c.msgs.at(-1);
           return (
             <LinhaConversa
               key={k}
@@ -423,6 +595,18 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
         {config.privado && (
           <section aria-label="Nova conversa" className="pt-1">
             <p className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-faint uppercase">Nova conversa</p>
+            {canal.pessoas.length > 2 && (
+              <LinhaConversa
+                onClick={() => setCriando(true)}
+                icone={
+                  <span className="grid h-9 w-9 place-items-center rounded-full border border-dashed border-accent text-accent">
+                    <IconPlus className="h-4 w-4" />
+                  </span>
+                }
+                titulo="Nova conversa em grupo"
+                previa="Escolha 2 ou mais pessoas do grupo"
+              />
+            )}
             {pessoas.length > 8 || busca ? (
               <div className="px-3 pb-1">
                 <input
@@ -450,6 +634,110 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
             {pessoas.length === 0 && <p className="px-3 py-2 text-[12.5px] text-muted">Ninguém encontrado.</p>}
           </section>
         )}
+      </div>
+    </>
+  );
+}
+
+/** O mosaico pequeno (até 3 fotos) de uma conversa em grupo, na lista e no cabeçalho da janela. */
+function FotoBolhaPequena({ fotos }: { fotos: { nome: string; foto?: string | null }[] }) {
+  if (!fotos.length)
+    return (
+      <span className="grid h-9 w-9 place-items-center rounded-full bg-accent-soft text-accent">
+        <IconUsers className="h-4 w-4" />
+      </span>
+    );
+  return (
+    <span className="relative block h-9 w-9 shrink-0">
+      {fotos.slice(0, 2).map((f, i) => (
+        <span key={`${f.nome}-${i}`} className={`absolute rounded-full ring-2 ring-surface ${i ? "right-0 bottom-0" : "top-0 left-0"}`}>
+          <Avatar nome={f.nome} foto={f.foto} size="sm" />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** NOVA CONVERSA EM GRUPO: as pessoas do grupo ativo (2 a 19 além de você) e um nome opcional. Só ao vivo: existe enquanto
+ * alguém dela está com o sistema aberto. */
+function NovaConversaGrupo({ onCriar, onVoltar, onFechar }: { onCriar: (membros: number[], nome: string) => void; onVoltar: () => void; onFechar: () => void }) {
+  const canal = useCanalGrupo();
+  const [nome, setNome] = useState("");
+  const [marcados, setMarcados] = useState<Set<number>>(() => new Set());
+  const [busca, setBusca] = useState("");
+  if (!canal) return null;
+  const passa = predicadoBusca(busca);
+  const pessoas = canal.pessoas
+    .filter((p) => p.id !== canal.usuarioId && (!passa || passa([p.nome, p.apelido])))
+    .map((p) => ({ p, e: canal.estados.get(p.id)?.estado }))
+    .sort((a, b) => Number(!a.e) - Number(!b.e) || nomeExibicao(a.p).localeCompare(nomeExibicao(b.p), "pt-BR"));
+  const max = MAX_MEMBROS_CONVERSA - 1;
+  const alternar = (id: number) =>
+    setMarcados((m) => {
+      const n = new Set(m);
+      if (n.has(id)) n.delete(id);
+      else if (n.size < max) n.add(id);
+      return n;
+    });
+  const pode = marcados.size >= 2;
+  return (
+    <>
+      <CabecalhoPainel onFechar={onFechar}>
+        <button type="button" onClick={onVoltar} aria-label="Voltar às conversas" title="Voltar às conversas" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
+          <IconChevronLeft className="h-4 w-4" />
+        </button>
+        <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">Nova conversa em grupo</p>
+      </CabecalhoPainel>
+      <div className="shrink-0 space-y-2 border-b border-border p-3">
+        <input
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          maxLength={MAX_NOME_CONVERSA}
+          placeholder="Nome da conversa (opcional)"
+          aria-label="Nome da conversa"
+          className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13.5px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-9"
+        />
+        {canal.pessoas.length > 9 && (
+          <input
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar pessoa…"
+            aria-label="Buscar pessoa"
+            className="h-11 w-full rounded-control border border-border bg-surface px-3 text-[13px] text-text placeholder:text-faint focus:border-accent focus:outline-none lg:h-9"
+          />
+        )}
+      </div>
+      <ul className="min-h-0 flex-1 overflow-y-auto py-1" aria-label="Pessoas do grupo">
+        {pessoas.map(({ p, e }) => {
+          const marcado = marcados.has(p.id);
+          return (
+            <li key={p.id}>
+              <label className="relative flex min-h-12 w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left hover:bg-surface-2 has-[:focus-visible]:bg-surface-2">
+                <input type="checkbox" className="peer sr-only" checked={marcado} onChange={() => alternar(p.id)} aria-label={nomeExibicao(p)} />
+                <Avatar nome={p.nome} foto={p.foto} size="lg" presenca={e} pulsar={e === "online"} className={e ? "" : "opacity-60"} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] font-medium text-text">{nomeExibicao(p)}</span>
+                  <span className="block truncate text-[11.5px] text-muted">{e === "online" ? "Online agora" : e === "ausente" ? "Ausente" : "Não está online"}</span>
+                </span>
+                <span className={`grid h-5 w-5 place-items-center rounded-md border ${marcado ? "border-accent bg-accent text-white" : "border-border"}`}>
+                  {marcado && <IconCheck className="h-3.5 w-3.5" />}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex shrink-0 items-center gap-2 border-t border-border p-2 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))] lg:pb-2">
+        <span className="min-w-0 flex-1 truncate px-1 text-[12px] text-muted">{marcados.size ? `${marcados.size} escolhida${marcados.size === 1 ? "" : "s"}` : "Escolha 2 ou mais pessoas"}</span>
+        <button
+          type="button"
+          disabled={!pode}
+          onClick={() => onCriar([...marcados], nome)}
+          className="inline-flex h-11 items-center gap-1.5 rounded-control bg-accent px-4 text-[13px] font-semibold text-white disabled:opacity-40 lg:h-9"
+        >
+          <IconChat className="h-4 w-4" /> Criar conversa
+        </button>
       </div>
     </>
   );
@@ -499,16 +787,21 @@ function ConversaChat({
   conversa,
   chat,
   rascunho,
-  onVoltar,
+  onMinimizar,
   onFechar,
+  onSair,
 }: {
   config: ConfigChat;
   conversa: Conversa;
   chat: Chat;
   /** Texto pronto para o campo (o "Conversar sobre…"); `n` muda a cada pedido. */
   rascunho: { texto: string; n: number } | null;
-  onVoltar: () => void;
+  /** Fecha a janela (a bolha fica). */
+  onMinimizar: () => void;
+  /** Fecha a bolha. */
   onFechar: () => void;
+  /** Conversa em grupo escolhida: sair dela (some desta aba). */
+  onSair?: () => void;
 }) {
   const canal = useCanalGrupo();
   const c = chat.conversas.get(conversa);
@@ -516,6 +809,8 @@ function ConversaChat({
   const outro = idDaConversa(conversa);
   const pessoaOutro = outro != null ? (canal?.pessoas.find((p) => p.id === outro) ?? chat.autores.get(outro) ?? null) : null;
   const estadoOutro = outro != null ? canal?.estados.get(outro)?.estado : undefined;
+  const emGrupo = ehConversaEmGrupo(conversa);
+  const membros = c?.membros ?? [];
   const [texto, setTexto] = useState("");
   const [resp, setResp] = useState<RespostaChat | null>(null);
   const [cursor, setCursor] = useState(0);
@@ -524,6 +819,7 @@ function ConversaChat({
   const [embaixo, setEmbaixo] = useState(true);
   const [novas, setNovas] = useState(false);
   const permitido = conversa === "grupo" ? config.grupo : config.privado;
+  const pessoaDe = (id: number) => canal?.pessoas.find((p) => p.id === id) ?? chat.autores.get(id) ?? null;
 
   // Rola até o fim quando chega mensagem (se já estava no fim); senão, "↓ Novas mensagens".
   const qtd = msgs.length;
@@ -558,8 +854,9 @@ function ConversaChat({
   const sugestoes = useMemo(() => {
     if (mencao == null || !canal) return [];
     const q = mencao.toLowerCase();
-    return canal.pessoas.filter((p) => p.id !== canal.usuarioId && `${p.apelido ?? ""} ${p.nome}`.toLowerCase().includes(q)).slice(0, 5);
-  }, [mencao, canal]);
+    const base = emGrupo ? membros.map((id) => canal.pessoas.find((p) => p.id === id) ?? chat.autores.get(id)).filter((p): p is Pessoa => !!p) : canal.pessoas;
+    return base.filter((p) => p.id !== canal.usuarioId && `${p.apelido ?? ""} ${p.nome}`.toLowerCase().includes(q)).slice(0, 5);
+  }, [mencao, canal, emGrupo, membros, chat.autores]);
 
   const enviar = () => {
     if (!limparTextoChat(texto) || !permitido) return;
@@ -588,10 +885,20 @@ function ConversaChat({
   };
 
   const digitandoNomes = [...(c?.digitando.keys() ?? [])].map((id) => chat.nomeDe(id));
-  const titulo = conversa === "grupo" ? `Grupo · ${canal?.grupoNome ?? ""}` : pessoaOutro ? nomeExibicao(pessoaOutro) : chat.nomeDe(outro ?? 0);
+  const titulo =
+    conversa === "grupo"
+      ? `Grupo · ${canal?.grupoNome ?? ""}`
+      : emGrupo
+        ? rotuloConversa(c?.nome, membros, chat.meuId, chat.nomeDe)
+        : pessoaOutro
+          ? nomeExibicao(pessoaOutro)
+          : chat.nomeDe(outro ?? 0);
+  const onlineNaConversa = membros.filter((id) => id !== chat.meuId && canal?.estados.get(id)?.estado === "online").length;
   const sub = digitandoNomes.length
     ? `${digitandoNomes.join(", ")} ${digitandoNomes.length === 1 ? "está" : "estão"} digitando…`
-    : conversa === "grupo"
+    : emGrupo
+      ? `${membros.length} pessoas · ${onlineNaConversa} online`
+      : conversa === "grupo"
       ? `${[...(canal?.estados.values() ?? [])].length} online no grupo`
       : estadoOutro === "online"
         ? "Online agora"
@@ -601,11 +908,10 @@ function ConversaChat({
 
   return (
     <>
-      <CabecalhoPainel onFechar={onFechar}>
-        <button type="button" onClick={onVoltar} aria-label="Voltar às conversas" title="Voltar às conversas" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
-          <IconChevronLeft className="h-4 w-4" />
-        </button>
-        {conversa === "grupo" ? (
+      <CabecalhoPainel onFechar={onFechar} rotuloFechar="Fechar a conversa">
+        {emGrupo ? (
+          <FotoBolhaPequena fotos={membros.filter((x) => x !== chat.meuId).slice(0, 3).map((x) => ({ nome: pessoaDe(x)?.nome ?? "?", foto: pessoaDe(x)?.foto }))} />
+        ) : conversa === "grupo" ? (
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
             <IconUsers className="h-4 w-4" />
           </span>
@@ -614,8 +920,18 @@ function ConversaChat({
         )}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px] font-semibold text-text">{titulo}</span>
-          <span className={`block truncate text-[11.5px] ${digitandoNomes.length ? "text-accent" : "text-muted"}`}>{sub}</span>
+          <span className={`block truncate text-[11.5px] ${digitandoNomes.length ? "text-accent" : "text-muted"}`} title={emGrupo ? membros.map((x) => chat.nomeDe(x)).join(", ") : undefined}>
+            {sub}
+          </span>
         </span>
+        {onSair && (
+          <button type="button" onClick={onSair} aria-label="Sair da conversa" title="Sair da conversa" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
+            <IconLogout className="h-4 w-4" />
+          </button>
+        )}
+        <button type="button" onClick={onMinimizar} aria-label="Minimizar (Esc)" title="Minimizar (Esc)" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
+          <IconMenos className="h-4 w-4" />
+        </button>
       </CabecalhoPainel>
       <div
         ref={lista}
@@ -631,7 +947,7 @@ function ConversaChat({
       >
         {msgs.length === 0 && (
           <p className="mx-auto mt-8 max-w-[16rem] text-center text-[12.5px] text-muted">
-            {conversa === "grupo" ? "Mande uma mensagem para quem do grupo está online agora." : "Comece a conversa."} Nada é guardado: a conversa some ao fechar ou recarregar.
+            {conversa === "grupo" ? "Mande uma mensagem para quem do grupo está online agora." : emGrupo ? "Mande a 1ª mensagem — a conversa chega a quem está com o sistema aberto." : "Comece a conversa."} Nada é guardado: a conversa some ao fechar ou recarregar.
           </p>
         )}
         {msgs.map((m, i) => {
@@ -814,6 +1130,7 @@ export function Balao({
           {m.minha && m.envio === "enviada" && (leram > 0 ? <IconLidas className="h-3.5 w-3.5 text-accent" aria-label={privado ? "Lida" : `Lida por ${leram}`} /> : <IconCheck className="h-3 w-3" aria-label="Enviada" />)}
           {m.minha && m.envio === "enviada" && grupo && leram > 0 && <span>lida por {leram}</span>}
         </span>
+        {m.minha && m.envio === "enviada" && m.motivo && <span className="mt-0.5 max-w-full px-1 text-right text-[11px] text-[var(--warn)]">{m.motivo}</span>}
         {m.minha && (m.envio === "falhou" || m.envio === "nao-entregue") && (
           <span className="mt-0.5 max-w-full px-1 text-right text-[11px] text-[var(--danger)]">
             {m.motivo}{" "}

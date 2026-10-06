@@ -461,7 +461,7 @@ export function AppShell({
       usuarioId={usuario.id}
       grupoId={grupoAtivoId}
       grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null}
-      chatGrupo={!!chat?.grupo}
+      chatGrupo={!!chat?.grupo} chatPrivado={!!chat?.privado}
     >
     <div className="min-h-dvh bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versao={versaoDados} />}

@@ -228,7 +228,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "perfil/google": { DELETE: pessoal() },
   "perfil/preferencias": { PATCH: pessoal() },
   "perfil/presenca": { PUT: pessoal("aparecer invisível e o status na presença do grupo") },
-  "chat/privado": { POST: pessoal("mensagem do chat privado ao vivo — só entre pessoas de um mesmo grupo; nada é gravado") },
+  "chat/enviar": { POST: pessoal("mensagem do chat ao vivo (privada ou conversa em grupo) — só entre pessoas de um mesmo grupo; nada é gravado") },
   "perfil": { PATCH: pessoal() },
   "perfil/senha": { POST: pessoal() },
   "preferencias/tabela": { PUT: pessoal(), DELETE: pessoal() },

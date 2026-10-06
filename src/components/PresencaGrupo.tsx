@@ -18,12 +18,12 @@ import {
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
-import { type MeuStatus, useCanalGrupo } from "./CanalGrupo";
+import { EVENTO_ABRIR_CHAT, type MeuStatus, useCanalGrupo } from "./CanalGrupo";
 import { ChipsEscolha } from "./ChipsEscolha";
 import { AtividadePessoa } from "./PresencaNoItem";
 import { Dropdown } from "./Dropdown";
 import { SearchField, SelectField, TextField } from "./Field";
-import { IconClipboard, IconUsers } from "./icons";
+import { IconChat, IconClipboard, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { BotaoWhatsapp } from "./Telefone";
 import { toast } from "./Toast";
@@ -259,7 +259,8 @@ function LinhaPessoa({ l, aberta, onAlternar, verMesa, onNavegar }: { l: Linha; 
   const st = info && info.status !== "disponivel" ? info.status : null;
   const inv = voce && !!c?.invisivel;
   const tel = c?.whatsapp[pessoa.id] ?? null;
-  const temAcoes = !voce && (!!tel || verMesa);
+  const conversar = !voce && !!c?.chatPrivado;
+  const temAcoes = !voce && (!!tel || verMesa || conversar);
   const atividade = !voce && info ? c?.atividade?.get(pessoa.id) : undefined;
   const sub = st || info?.recado ? null : visto != null ? `Visto ${vistoHa(visto)}` : atividade ? "" : pessoa.apelido && pessoa.apelido !== pessoa.nome ? pessoa.nome : "";
   const conteudo = (
@@ -301,6 +302,19 @@ function LinhaPessoa({ l, aberta, onAlternar, verMesa, onNavegar }: { l: Linha; 
       )}
       {aberta && temAcoes && (
         <div className="flex animate-fade-in-up flex-wrap items-center gap-2 px-3 pb-2 pl-[3.25rem]">
+          {conversar && (
+            <Button
+              size="xs"
+              icon={<IconChat className="h-4 w-4" />}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_CHAT, { detail: { pessoa: pessoa.id } }));
+                onNavegar?.();
+              }}
+              title={`Conversar com ${nomeExibicao(pessoa)} pelo sistema`}
+            >
+              Conversar
+            </Button>
+          )}
           {tel && <BotaoWhatsapp telefone={tel} comNumero={false} />}
           {verMesa && (
             <Button

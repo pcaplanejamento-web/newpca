@@ -454,14 +454,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   que a aba diz, `x-chat-grupo`) e retransmite `{t:"msg", conversa:"grupo", id, de, em, texto, resp}` a TODAS as abas (a
   própria = a confirmação; recusa = `{t:"msg-recusada", id, motivo}`); **"digitando"** (1 a cada 3 s por aba) e **"lida"** ao
   grupo (menos a própria pessoa) ou, no privado, às abas da outra pessoa NESTE grupo. **Privado** pela rota **`POST
-  /api/chat/privado`** (`chatPrivadoSchema`; `exigirUsuario`; chat privado ligado; `compartilhamGrupo` — destinatário ATIVO
+  /api/chat/enviar`** (v1.14.0 — ver "Chat estilo Messenger"; `exigirUsuario`; chat privado ligado; destinatário ATIVO
   num grupo em comum; limite `chatPrivado` 30/min por pessoa em `LIMITES_ACESSO`) → a **`CaixaNotificacoes`** do destinatário
   (`POST /chat` — repassa às abas e devolve quantas receberam) e a de quem mandou (as outras abas dele); 0 abas =
   `entregue:false` ("não está com o sistema aberto — não foi entregue"). Nada é gravado. No cliente o `useCaixa` do sino
   repassa `{"t":"chat"…}` ao evento `EVENTO_CHAT_PRIVADO` (não é aviso do sino).
-- **Tela — `ChatAoVivo`** (DS; no cabeçalho, ao lado da presença): o ícone `IconChat` com as não lidas (pop); o PAINEL por
-  **portal no body** (o cabeçalho com desfoque prenderia o fixo) — desktop ancorado à direita (380px, abaixo do cabeçalho),
-  celular em tela cheia; Esc fecha. **Lista:** "Grupo · <grupo>" + as privadas desta sessão (prévia, hora, não lidas,
+- **Tela — `ChatAoVivo`** (DS; no cabeçalho, ao lado da presença): o ícone `IconChat` com as não lidas (pop) abre a LISTA
+  por **portal no body** (o cabeçalho com desfoque prenderia o fixo) — desktop ancorada à direita (360px), celular em tela
+  cheia; Esc fecha; a conversa abre numa BOLHA + janela (v1.14.0). **Lista:** "Grupo · <grupo>" + as privadas desta sessão (prévia, hora, não lidas,
   "digitando…") + **Nova conversa** (as pessoas do grupo com o ponto de presença, online primeiro; busca acima de 8) + o aviso
   "As conversas não são salvas". **Conversa:** balões (**`Balao`** — meus à direita na cor do sistema; dos outros com foto e
   nome no grupo, agrupados por autor em 5 min), separador de dia, responder (citação), **@menção** com sugestão (Enter insere),
@@ -470,6 +470,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `ponto-digitando`), "↓ Novas mensagens" rolado para cima; Enter envia, Shift+Enter quebra. Mensagem com o painel fechado =
   som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
   zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
+
+## Chat estilo Messenger + conversas em grupo (v1.14.0 — nada é salvo)
+- **Bolhas:** o ícone do cabeçalho abre a LISTA (grupo ativo, privadas, conversas em grupo, "Nova conversa", **"Nova conversa
+  em grupo"** — `NovaConversaGrupo`: 2 a 19 pessoas do grupo + nome opcional); cada conversa aberta vira uma bolha do
+  **`BolhasChat`** (DS, portal no body: foto + ponto ao vivo / mosaico da conversa em grupo — `FotoBolha` — / o ícone do
+  grupo; não lidas; até `MAX_BOLHAS`=4 + "+N"; a que chega QUICA — `animate-cabeca-entra` — no lugar do aviso flutuante).
+  ARRASTA a pilha inteira (mouse e toque, limiar 6px, ouvintes na janela, `segurar`) e ao soltar ENCOSTA na borda mais perto
+  (`encostarBolhas`/`topoDasBolhas`, mola `bolha-encosta`; posição `chat:posicao` no aparelho — `lerPosicaoBolhas`); soltar no
+  "×" (aparece embaixo, `animate-alvo-fechar`) fecha todas; o × de cada uma (mouse) fecha só ela. Tocar abre a JANELA
+  (340×480 ao lado da pilha, `animate-janela-cresce`; tela cheia abaixo de 640px; Esc minimiza) com a `ConversaChat`
+  (Minimizar · Sair da conversa em grupo · Fechar). `EVENTO_ABRIR_CHAT` aceita `{pessoa}` | `{conversa}` (+ `texto`); o
+  "Conversar" de cada pessoa do Online agora (`CanalGrupo.chatPrivado`).
+- **Conversas em grupo escolhidas (`c<id>`, `ehConversaEmGrupo`/`novaConversaEmGrupo`, `chat-core.ts`):** criadas na aba;
+  existem enquanto alguém dela está com o sistema aberto. Envio pela rota ÚNICA **`POST /api/chat/enviar`**
+  (`chatEnviarSchema` `{conversa p<id>|c<id>, para 1..19, nome?, id, texto, resp}` — substitui o `/api/chat/privado`;
+  `exigirUsuario`, chat privado ligado, limite `chatPrivado`, cada destinatário ATIVO num grupo em comum —
+  **`quemCompartilhaGrupo`** numa consulta `json_each`) → as caixas pessoais (a mensagem leva `membros` + `nome`) e as outras
+  abas de quem mandou; `{entregues, naoEntregues}` → "Não entregue a Ana". "Digitando"/"lida" pelo socket do grupo com
+  `para` (o `PresencaGrupo` entrega só às abas desses membros). `rotuloConversa` (o nome ou "Ana, Bruno e mais 2").
 
 ## Vendo e editando agora (v1.12.0 — nada é salvo)
 - **`VendoAgora`** (DS; no cabeçalho dos banners — `useProtocoloGravado` [protocolo; o DFD ao lado], `useDfdGravado` e

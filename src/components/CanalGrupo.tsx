@@ -111,6 +111,8 @@ export type CanalGrupoValor = {
   ouvir: (tipo: string, fn: Ouvinte) => () => void;
   /** O chat do grupo está ligado (o "Conversar sobre…" do "vendo agora"). */
   chatGrupo: boolean;
+  /** O chat privado (e as conversas em grupo) está ligado — o "Conversar" de cada pessoa. */
+  chatPrivado: boolean;
   /** Quem está VENDO cada alvo ("protocolo:12"…) e quem está editando. */
   vendo: Map<string, { id: number; editando: boolean }[]>;
   /** Registra o que ESTA tela está vendo (o banner aberto; `rotulo` = "Protocolo 144756/2026") — devolve a função que tira. */
@@ -190,6 +192,7 @@ export function CanalGrupo({
   grupoId,
   grupoNome,
   chatGrupo = false,
+  chatPrivado = false,
   children,
 }: {
   presenca: PresencaShell | null;
@@ -197,11 +200,12 @@ export function CanalGrupo({
   grupoId: number | null;
   grupoNome: string | null;
   chatGrupo?: boolean;
+  chatPrivado?: boolean;
   children: ReactNode;
 }) {
   if (!presenca || grupoId == null) return <>{children}</>;
   return (
-    <CanalAtivo presenca={presenca} usuarioId={usuarioId} grupoId={grupoId} grupoNome={grupoNome} chatGrupo={chatGrupo}>
+    <CanalAtivo presenca={presenca} usuarioId={usuarioId} grupoId={grupoId} grupoNome={grupoNome} chatGrupo={chatGrupo} chatPrivado={chatPrivado}>
       {children}
     </CanalAtivo>
   );
@@ -213,6 +217,7 @@ function CanalAtivo({
   grupoId,
   grupoNome,
   chatGrupo,
+  chatPrivado,
   children,
 }: {
   presenca: PresencaShell;
@@ -220,6 +225,7 @@ function CanalAtivo({
   grupoId: number;
   grupoNome: string | null;
   chatGrupo: boolean;
+  chatPrivado: boolean;
   children: ReactNode;
 }) {
   const [estados, setEstados] = useState<Map<number, InfoPresenca>>(() => new Map());
@@ -452,6 +458,7 @@ function CanalAtivo({
       enviar,
       ouvir,
       chatGrupo,
+      chatPrivado,
       vendo,
       registrarVendo,
       atividade,
@@ -462,6 +469,7 @@ function CanalAtivo({
     }),
     [
       chatGrupo,
+      chatPrivado,
       usuarioId,
       grupoId,
       grupoNome,

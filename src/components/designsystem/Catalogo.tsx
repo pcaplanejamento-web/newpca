@@ -179,6 +179,8 @@ import { RecorrenciaTarefa } from "@/components/RecorrenciaTarefa";
 import { ItemNotificacao } from "@/components/SinoNotificacoes";
 import { PresencaGrupo, SeloAoVivo } from "@/components/PresencaGrupo";
 import { CanalGrupoDemo } from "@/components/CanalGrupo";
+import { FotoBolha } from "@/components/BolhasChat";
+import { AtividadePessoa, PresencaNoItem } from "@/components/PresencaNoItem";
 import { Balao, ChatAoVivo, Digitando } from "@/components/ChatAoVivo";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { CamposPeriodo, QuadroNovoCard } from "@/components/QuadroCard";
@@ -3357,7 +3359,9 @@ export function Catalogo() {
             whatsapp: { 4: "64999990000" },
             invisivel: false,
             chatGrupo: true,
+            chatPrivado: true,
             vendo: new Map([["protocolo:12", [{ id: 4, editando: true }]]]),
+            atividade: new Map([[4, { tela: "dfd", rotulo: "Mesa", vendo: ["Protocolo 144756/2026"], editando: true }]]),
             aoVivo: true,
             meuStatus: { status: "disponivel", recado: "", ate: null },
             vistos: new Map(),
@@ -3375,6 +3379,42 @@ export function Catalogo() {
             <PessoaTag pessoa={PESSOAS_DEMO[1]} />
           </div>
         </CanalGrupoDemo>
+      </Secao>
+
+      <Secao titulo="PresencaNoItem + AtividadePessoa (ONDE cada pessoa está: na linha do protocolo/DFD/cartão, as fotos de quem está com o item aberto — lápis âmbar = editando; e a linha “Mesa › Protocolo … · editando” do painel Online agora)">
+        <CanalGrupoDemo
+          valor={{
+            usuarioId: PESSOAS_DEMO[0].id,
+            grupoId: 1,
+            grupoNome: "Planejamento",
+            pessoas: PESSOAS_DEMO,
+            whatsapp: {},
+            invisivel: false,
+            chatGrupo: false,
+            chatPrivado: false,
+            vendo: new Map([["protocolo:12", [{ id: 4, editando: true }, { id: 7, editando: false }]]]),
+            aoVivo: true,
+            meuStatus: { status: "disponivel", recado: "", ate: null },
+            vistos: new Map(),
+            estados: new Map(),
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-6">
+            <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
+              144756/2026 <PresencaNoItem alvo="protocolo:12" />
+            </span>
+            <AtividadePessoa atividade={{ tela: "dfd", rotulo: "Mesa", vendo: ["Protocolo 144756/2026"], editando: true }} />
+            <AtividadePessoa atividade={{ tela: "tarefas", rotulo: "Tarefas · Compras · Quadro", vendo: [], editando: false }} />
+          </div>
+        </CanalGrupoDemo>
+      </Secao>
+
+      <Secao titulo="BolhasChat — FotoBolha (o CHAT estilo Messenger: cada conversa aberta vira uma BOLHA flutuante arrastável — encosta na borda, arrastar ao “×” fecha —; tocar abre a janela da conversa ao lado. A foto da pessoa com o ponto ao vivo, o mosaico da conversa em grupo ou o ícone do grupo ativo)">
+        <div className="flex flex-wrap items-center gap-4">
+          <FotoBolha b={{ rotulo: "Carlão", fotos: [{ nome: PESSOAS_DEMO[1].nome, foto: PESSOAS_DEMO[1].foto }], presenca: "online" }} />
+          <FotoBolha b={{ rotulo: "Compras", fotos: PESSOAS_DEMO.slice(1, 4).map((p) => ({ nome: p.nome, foto: p.foto })) }} />
+          <FotoBolha b={{ rotulo: "Grupo · Planejamento", fotos: [], grupoAtivo: true }} />
+        </div>
       </Secao>
 
       <Secao titulo="ChatAoVivo — Balao + Digitando (o CHAT AO VIVO do grupo e privado: nada é salvo — os balões, meus à direita na cor do sistema, com a resposta citada, os cartões dos links do sistema, ✓ enviada / ✓✓ lida e “Tentar de novo”; os três pontos do “digitando…”)">

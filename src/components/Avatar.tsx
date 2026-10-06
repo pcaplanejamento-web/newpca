@@ -20,11 +20,13 @@ const DIM = {
   md: "h-8 w-8 text-xs",
   lg: "h-[34px] w-[34px] text-[13px]",
   xl: "h-20 w-20 text-xl",
+  /** A bolha do chat (estilo Messenger). */
+  bolha: "h-12 w-12 text-[15px] lg:h-14 lg:w-14 lg:text-base",
 } as const;
 
 /** O ponto de PRESENÇA no canto da foto (online = verde, ausente = âmbar), com o anel da superfície. */
 const PONTO = { online: "bg-[var(--ok)]", ausente: "bg-[var(--warn)]" } as const;
-const PONTO_DIM: Record<keyof typeof DIM, string> = { xs: "h-2 w-2", sm: "h-2.5 w-2.5", md: "h-2.5 w-2.5", lg: "h-3 w-3", xl: "h-5 w-5" };
+const PONTO_DIM: Record<keyof typeof DIM, string> = { xs: "h-2 w-2", sm: "h-2.5 w-2.5", md: "h-2.5 w-2.5", lg: "h-3 w-3", xl: "h-5 w-5", bolha: "h-3.5 w-3.5" };
 
 export function Avatar({
   nome,
