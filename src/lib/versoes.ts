@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.21.0",
+    data: "2026-10-06",
+    titulo: "Execução dos DFDs lida pela API da Centi",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Verificar execução lê a CM002 pela API (sem mexer na tela): TODAS as linhas, de cada entidade cadastrada nos órgãos, numa passada só. Na 1ª vez, clique em Pesquisar na CM002 para o sistema aprender a consulta.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Visões separadas: Situação diferente de Executado, Não encontrados na Centi e Só na Centi (planejamentos sem DFD no sistema).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Extensão 1.13.0 (atualize-a pelo botão Baixar extensão).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.20.1",
     data: "2026-10-06",
     titulo: "Salvar no rodapé do órgão",

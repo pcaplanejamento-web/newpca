@@ -153,13 +153,13 @@ test("emissão: o parâmetro do protocolo leva o campo da linha; o nome do PDF s
 test("extensão: o `ler` passa pela trava de leitura, o `pedir` só repete a operação aprendida e o id é FIXO (chave no manifesto)", () => {
   const main = readFileSync("extensao-centi/centi-main.js", "utf8");
   assert.match(main, /async function ler\(d\) \{[\s\S]*?A\.consultaPermitida\(caminho, metodo\)/);
-  assert.match(main, /const ACOES = \{ pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela \};/);
+  assert.match(main, /const ACOES = \{ pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela, cm002 \};/);
   assert.match(main, /operacoesAprendidas\(\)\.includes\(A\?\.chaveOperacao\(c\)\)/);
   // O aprendiz nunca guarda cabeçalhos (a sessão vai neles).
   assert.doesNotMatch(main.slice(main.indexOf("function aprenderResposta"), main.indexOf("const textoDoXhr")), /cabecalhos|__pcaHs/);
   const m = JSON.parse(readFileSync("extensao-centi/manifest.json", "utf8"));
   assert.match(m.key, /^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA[A-Za-z0-9+/=]{300,}$/);
-  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise", "telaEmitir", "telaPlanejamentos"]);
+  assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "telaDepartamentos", "telaEmAnalise", "telaEmitir", "telaPlanejamentos", "cm002"]);
 });
 
 test("em análise: protocolos limpos e sem repetir; o casamento com o sistema respeita o ano; a escolha lembrada só com o que existe", async () => {

@@ -2,13 +2,14 @@
 
 import { type MutableRefObject, useCallback, useEffect, useMemo, useState } from "react";
 import { chaveOrgaoCenti } from "@/lib/automacao-centi-core";
-import { classeExecucao, mesmaEntidade } from "@/lib/execucao-centi";
+import { chavePlanejamento, classeExecucao } from "@/lib/execucao-centi";
 import { dataHoraBR } from "@/lib/format";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CelulaExecucao } from "./CelulaExecucao";
 import { type Column, DataTable } from "./DataTable";
+import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 import type { RespostaTela } from "./TarefaTelaProtocolo";
@@ -23,7 +24,12 @@ type Linha = {
   /** A chave do órgão do DFD (o mapa órgão → entidade da Centi). */
   orgao: string | null;
   orgaoNome: string;
+  /** Depois de verificar: o planejamento apareceu na CM002 da entidade (undefined = ainda não verificado nesta sessão). */
+  encontrado?: boolean;
 };
+type PlanCenti = { id: string; situacao: string; finalidade: string; centroCusto: string };
+type SoNaCenti = PlanCenti & { entidade: string };
+type Visao = "todos" | "diferentes" | "naoEncontrados" | "soCenti";
 type DfdApi = {
   id: number;
   numero: string;
@@ -36,34 +42,31 @@ type DfdApi = {
 };
 
 /**
- * Tarefa "Verificar execução dos DFDs": lê a SITUAÇÃO de cada planejamento na tela CM002 da Centi (ID = nº de planejamento)
- * e grava em cada DFD do sistema. A CM002 mostra só os planejamentos da ENTIDADE aberta na Centi — por isso só os DFDs do
- * órgão ligado a essa entidade (o mapa órgão → entidade do "Baixar DFDs") recebem a situação lida. Só leitura na Centi.
+ * Tarefa "Verificar execução dos DFDs": pela API da Centi (sem mexer na tela), lê a lista INTEIRA da CM002 de cada ENTIDADE
+ * cadastrada nos órgãos (ID = nº de planejamento) e grava a SITUAÇÃO em cada DFD daquele órgão. Separa os de situação
+ * diferente de Executado, os não encontrados e os planejamentos que só existem na Centi. Só leitura na Centi.
  */
 export function TarefaExecucaoDfds({
   pedir,
   lote,
   pronto,
-  entidade,
   mapa,
-  onEntidade,
   onRodando,
 }: {
   pedir: Pedir;
   lote: MutableRefObject<string | null>;
   /** A extensão e a sessão da Centi prontas. */
   pronto: boolean;
-  /** A entidade aberta na Centi agora (null = não informada). */
-  entidade: string | null;
   /** Órgão (chave) → entidade da Centi. */
   mapa: Record<string, string>;
-  onEntidade: (orgao: string, entidade: string) => void;
   onRodando: (r: boolean) => void;
 }) {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [rodando, setRodando] = useState(false);
   const [falha, setFalha] = useState<{ erro: string; diagnostico?: string } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [soNaCenti, setSoNaCenti] = useState<SoNaCenti[]>([]);
+  const [visao, setVisao] = useState<Visao>("todos");
   useEffect(() => onRodando(rodando), [rodando, onRodando]);
 
   const carregar = useCallback(async () => {
@@ -100,51 +103,64 @@ export function TarefaExecucaoDfds({
     }
     return [...m.values()].sort((a, b) => b.dfds - a.dfds);
   }, [linhas]);
-  const daEntidade = useMemo(
-    () => (entidade ? linhas.filter((l) => l.orgao && mesmaEntidade(mapa[l.orgao], entidade)) : []),
-    [linhas, mapa, entidade],
-  );
+  // As entidades a ler: as dos órgãos dos DFDs (o ID cadastrado no órgão, ou o ligado no aparelho).
+  const entidades = useMemo(() => {
+    const m = new Map<string, Linha[]>();
+    for (const l of linhas) {
+      const e = l.orgao ? mapa[l.orgao] : undefined;
+      if (!e) continue;
+      const k = e.replace(/^0+(?=\d)/, "");
+      m.set(k, [...(m.get(k) ?? []), l]);
+    }
+    return [...m.entries()].sort((a, b) => Number(a[0]) - Number(b[0]) || a[0].localeCompare(b[0]));
+  }, [linhas, mapa]);
 
+  // Tudo pela API (sem mexer na tela): para cada entidade, a lista INTEIRA da CM002 — a mesma consulta da tela, sem paginação.
   async function verificar() {
-    if (rodando || !daEntidade.length) return;
+    if (rodando || !entidades.length) return;
     setRodando(true);
     setFalha(null);
     setAviso(null);
+    const soCenti: SoNaCenti[] = [];
+    const lidosPorEntidade: string[] = [];
+    let atualizados = 0;
     try {
-      const ids = [...new Set(daEntidade.map((l) => l.planejamento.replace(/\D/g, "").replace(/^0+/, "")).filter(Boolean))];
-      const l = await pedir("lote", { fase: "inicio", titulo: "CM002 · Execução dos DFDs", total: 1 }, 8000);
+      const l = await pedir("lote", { fase: "inicio", titulo: "CM002 · Execução dos DFDs", total: entidades.length }, 8000);
       lote.current = l.loteId ?? null;
-      await pedir("lote", { fase: "passo", loteId: lote.current, feito: 0, total: 1, texto: `Lendo a situação de ${ids.length} planejamento(s) (CM002)` }, 8000);
-      const r = await pedir("telaPlanejamentos", { ids }, 600_000);
-      if (lote.current)
-        await pedir("lote", { fase: "fim", loteId: lote.current, resumo: r.ok ? `${Array.isArray(r.linhas) ? r.linhas.length : 0} planejamento(s) lidos` : (r.erro ?? "Falhou") }, 8000);
-      if (!r.ok) {
-        setFalha({ erro: r.erro ?? "A extensão não respondeu.", diagnostico: typeof r.diagnostico === "string" ? r.diagnostico : undefined });
-        toast.error(r.erro ?? "A extensão não respondeu.", 12000);
-        return;
+      for (const [i, [ent, dfds]] of entidades.entries()) {
+        if (lote.current)
+          await pedir("lote", { fase: "passo", loteId: lote.current, feito: i, total: entidades.length, texto: `Entidade ${ent}: lendo a CM002 (${dfds.length} DFD(s))` }, 8000);
+        const r = (await pedir("cm002", { entidade: ent }, 300_000)) as RespostaTela & { linhas?: PlanCenti[]; semConsulta?: boolean };
+        if (r.interrompido) break;
+        if (!r.ok || !Array.isArray(r.linhas)) {
+          setFalha({ erro: `Entidade ${ent}: ${r.erro ?? "a extensão não respondeu."}` });
+          if (r.semConsulta) break;
+          continue;
+        }
+        lidosPorEntidade.push(`${ent}: ${r.linhas.length}`);
+        const doSistema = new Set(dfds.map((d) => chavePlanejamento(d.planejamento)));
+        for (const p of r.linhas) if (!doSistema.has(chavePlanejamento(p.id))) soCenti.push({ ...p, entidade: ent });
+        const g = (await fetch("/api/admin/automacao/execucao-dfds", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ colunas: ["ID", "SITUACAO"], linhas: r.linhas.map((p) => [p.id, p.situacao]), dfdIds: dfds.map((d) => d.id) }),
+        })
+          .then((x) => x.json())
+          .catch(() => null)) as { ok?: boolean; error?: string; atualizados?: number; em?: string; linhas?: { id: number; situacao: string | null }[] } | null;
+        if (!g?.ok || !g.linhas) {
+          setFalha({ erro: `Entidade ${ent}: ${g?.error ?? "não consegui gravar a situação."}` });
+          continue;
+        }
+        atualizados += g.atualizados ?? 0;
+        const novo = new Map(g.linhas.map((x) => [x.id, x.situacao]));
+        setLinhas((ls) => ls.map((x) => (novo.has(x.id) ? { ...x, situacao: novo.get(x.id) ?? null, em: g.em ?? x.em, encontrado: !!novo.get(x.id) } : x)));
       }
-      const g = (await fetch("/api/admin/automacao/execucao-dfds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ colunas: r.colunas, linhas: r.linhas, dfdIds: daEntidade.map((x) => x.id) }),
-      })
-        .then((x) => x.json())
-        .catch(() => null)) as { ok?: boolean; error?: string; lidos?: number; atualizados?: number; em?: string; linhas?: { id: number; situacao: string | null }[] } | null;
-      if (!g?.ok || !g.linhas) {
-        toast.error(g?.error ?? "Não consegui gravar a situação dos DFDs.");
-        return;
+      if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: `${lidosPorEntidade.length} entidade(s) lidas` }, 8000);
+      setSoNaCenti(soCenti);
+      if (lidosPorEntidade.length) {
+        setAviso(`Lido pela API — planejamentos por entidade: ${lidosPorEntidade.join(" · ")}.`);
+        toast.success(`${atualizados} DFD(s) atualizado(s).`);
       }
-      const novo = new Map(g.linhas.map((x) => [x.id, x.situacao]));
-      setLinhas((ls) => ls.map((x) => (novo.get(x.id) ? { ...x, situacao: novo.get(x.id) ?? x.situacao, em: g.em ?? x.em } : x)));
-      const nao = g.linhas.filter((x) => !x.situacao).length;
-      const lidas = Array.isArray(r.linhas) ? r.linhas.length : 0;
-      const total = typeof r.total === "number" ? r.total : null;
-      if (nao)
-        setAviso(
-          `${nao} de ${g.linhas.length} DFD(s) da entidade ${entidade} não aparecem na CM002 (${lidas} planejamento(s) lidos${total ? ` de ${total}` : ""}).` +
-            (total && lidas < total ? " Ponha o “Mostrar” no maior valor na CM002 e verifique de novo." : ""),
-        );
-      toast.success(`${g.lidos} planejamento(s) lidos · ${g.atualizados} DFD(s) atualizado(s).`);
     } finally {
       lote.current = null;
       setRodando(false);
@@ -207,57 +223,83 @@ export function TarefaExecucaoDfds({
 
   const semLigacao = orgaos.filter((o) => !mapa[o.chave]);
 
+  const verificados = linhas.filter((l) => l.situacao);
+  const diferentes = linhas.filter((l) => l.situacao && classeExecucao(l.situacao) !== "executado");
+  const naoEncontrados = linhas.filter((l) => l.encontrado === false);
+  const semEntidade = linhas.filter((l) => !(l.orgao && mapa[l.orgao]));
+  const linhasVisao = visao === "diferentes" ? diferentes : visao === "naoEncontrados" ? naoEncontrados : linhas;
+  const colunasCenti: Column<SoNaCenti>[] = [
+    { key: "id", header: "ID (Plan.)", nowrap: true, value: (p) => p.id, render: (p) => <CelulaCopiavel copiar={p.id} rotulo="nº de planejamento">{p.id}</CelulaCopiavel> },
+    { key: "ent", header: "Entidade", nowrap: true, value: (p) => p.entidade, render: (p) => <span className="font-mono text-[12px]">{p.entidade}</span> },
+    { key: "sit", header: "Situação (Centi)", nowrap: true, value: (p) => p.situacao || "—", render: (p) => <CelulaExecucao situacao={p.situacao || null} /> },
+    { key: "cc", header: "Centro de custo", value: (p) => p.centroCusto, render: (p) => <span className="text-[12px]">{p.centroCusto || "—"}</span> },
+    { key: "fin", header: "Finalidade", value: (p) => p.finalidade, render: (p) => <span className="text-[12px]">{p.finalidade || "—"}</span> },
+  ];
+
   return (
     <div className="flex min-h-0 flex-col gap-[var(--gap-block)]">
       <div className="flex flex-wrap items-center gap-2">
         <StatMini label="Executados" value={String(conta.executado)} tone="ok" />
-        <StatMini label="Cancelados" value={String(conta.cancelado)} tone="danger" />
-        <StatMini label="Outra situação" value={String(conta.outro)} tone="warn" />
-        <StatMini label="Não verificados" value={String(conta.sem)} />
+        <StatMini label="Situação diferente" value={String(diferentes.length)} tone={diferentes.length ? "danger" : undefined} />
+        <StatMini label="Não encontrados" value={String(naoEncontrados.length)} tone={naoEncontrados.length ? "warn" : undefined} />
+        <StatMini label="Não verificados" value={String(linhas.length - verificados.length)} />
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-muted">
-            Entidade aberta: <strong className="font-mono text-text">{entidade ?? "—"}</strong> · {daEntidade.length} DFD(s) dela
+            {entidades.length} entidade(s) · {linhas.length - semEntidade.length} DFD(s) com entidade
           </span>
-          <Button size="sm" onClick={verificar} loading={rodando} disabled={!pronto || !daEntidade.length}>
-            Verificar na Centi (CM002)
+          <Button size="sm" onClick={verificar} loading={rodando} disabled={!pronto || !entidades.length}>
+            Verificar tudo na Centi (CM002)
           </Button>
         </div>
       </div>
-      {entidade && !daEntidade.length && (
+      {semEntidade.length > 0 && (
         <Callout kind="warn">
-          Nenhum órgão está ligado à entidade aberta na Centi ({entidade}). A CM002 mostra só os planejamentos dessa entidade:
-          cadastre o “ID da entidade na Centi” no órgão (Órgãos e Unidades) ou ligue abaixo o órgão correspondente.
+          {semEntidade.length} DFD(s) de órgão sem o “ID da entidade na Centi” ficam fora: {orgaos.filter((o) => !mapa[o.chave]).map((o) => `${o.nome} (${o.dfds})`).slice(0, 8).join(", ")}
+          {semLigacao.length > 8 ? ` e mais ${semLigacao.length - 8}` : ""}. Cadastre em Órgãos e Unidades.
         </Callout>
       )}
-      {entidade && semLigacao.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="text-muted">Órgãos sem entidade da Centi:</span>
-          {semLigacao.slice(0, 12).map((o) => (
-            <Button key={o.chave} size="xs" variant="secondary" onClick={() => onEntidade(o.chave, entidade)} title={`Ligar à entidade aberta (${entidade})`}>
-              {o.nome} ({o.dfds}) → {entidade}
-            </Button>
-          ))}
-          {semLigacao.length > 12 && <span className="text-muted">e mais {semLigacao.length - 12} — veja em Ajustes → Entidade por órgão</span>}
-        </div>
-      )}
-      {aviso && <Callout kind="warn">{aviso}</Callout>}
+      {aviso && <Callout kind="info">{aviso}</Callout>}
       {falha && (
         <Callout kind="danger">
           {falha.erro}
           {falha.diagnostico && <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">{falha.diagnostico}</pre>}
         </Callout>
       )}
-      <div className="min-h-0 flex-1">
-        <DataTable
-          columns={colunas}
-          rows={linhas}
-          getKey={(l) => l.id}
-          density="compact"
-          scrollInterno
-          exportar={{ nome: "Execução dos DFDs (Centi)" }}
-          vazio="Nenhum DFD com nº de planejamento no sistema."
-          resumo={(ls) => `${ls.length} DFD(s)`}
-        />
+      <Segmented
+        ariaLabel="Visão da execução"
+        value={visao}
+        onChange={(v) => setVisao(v as Visao)}
+        options={[
+          { value: "todos", label: `DFDs do sistema (${linhas.length})` },
+          { value: "diferentes", label: `Situação diferente (${diferentes.length})` },
+          { value: "naoEncontrados", label: `Não encontrados na Centi (${naoEncontrados.length})` },
+          { value: "soCenti", label: `Só na Centi (${soNaCenti.length})` },
+        ]}
+      />
+      <div key={visao} className="min-h-0 flex-1 animate-cat-morph">
+        {visao === "soCenti" ? (
+          <DataTable
+            columns={colunasCenti}
+            rows={soNaCenti}
+            getKey={(p) => `${p.entidade}:${p.id}`}
+            density="compact"
+            scrollInterno
+            exportar={{ nome: "Planejamentos só na Centi" }}
+            vazio="Nenhum planejamento da Centi sem DFD no sistema (verifique primeiro)."
+            resumo={(ls) => `${ls.length} planejamento(s)`}
+          />
+        ) : (
+          <DataTable
+            columns={colunas}
+            rows={linhasVisao}
+            getKey={(l) => l.id}
+            density="compact"
+            scrollInterno
+            exportar={{ nome: "Execução dos DFDs (Centi)" }}
+            vazio={visao === "todos" ? "Nenhum DFD com nº de planejamento no sistema." : "Nada aqui."}
+            resumo={(ls) => `${ls.length} DFD(s)`}
+          />
+        )}
       </div>
     </div>
   );

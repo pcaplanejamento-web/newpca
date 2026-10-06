@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p33";
+  const NOME = "__pcaCentiAnexo_p34";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -456,7 +456,65 @@
   /** A operação aprendida (o relatório que gerou um arquivo) — a chave que libera repeti-la nesta aba. */
   const chaveOperacao = (c) => (c && Number.isInteger(c.ModuleKey) ? `${c.ModuleKey}|${String(c.Guid ?? "").toLowerCase()}` : null);
 
+  // CM002 - PLANEJAMENTO pela API (só leitura): a lista que a própria tela pede ao Pesquisar. Reconhecida pela FORMA — os
+  // itens trazem um Id, a Situação e a Finalidade/Centro de custo —; o sistema a repete SEM paginação (todas as linhas).
+  const ULTIMO = (k) => String(k).split(".").pop();
+  function campoTexto(linhas, re) {
+    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => re.test(ULTIMO(k)) || re.test(k));
+    // A de TEXTO (a Situação por extenso) vence o código numérico.
+    const texto = (k) => linhas.filter((l) => l[k] != null && l[k] !== "" && !/^-?\d+$/.test(String(l[k]))).length;
+    return chaves.sort((a, b) => texto(b) - texto(a) || a.length - b.length)[0] ?? null;
+  }
+  /** Os planejamentos da resposta da CM002 ([{id, situacao, finalidade, centroCusto}]) — ou null (não é a lista da CM002). */
+  function planejamentosCm002(j) {
+    const l = acharLista(j);
+    if (!l) return null;
+    const linhas = l.itens.map(linhaPlana);
+    const amostra = linhas.slice(0, 50);
+    const kId = [...new Set(amostra.flatMap((x) => Object.keys(x)))].filter((k) => /^id$/i.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0];
+    const kSit = campoTexto(amostra, /situa/i);
+    const kFin = campoTexto(amostra, /finalidade/i);
+    const kCc = campoTexto(amostra, /centro.?custo/i);
+    if (!kId || !kSit || (!kFin && !kCc)) return null;
+    return linhas
+      .map((x) => ({
+        id: String(x[kId] ?? "").replace(/\D/g, "").replace(/^0+/, ""),
+        situacao: String(x[kSit] ?? "").trim().slice(0, 40),
+        finalidade: kFin ? String(x[kFin] ?? "").trim().slice(0, 200) : "",
+        centroCusto: kCc && kCc !== kFin ? String(x[kCc] ?? "").trim().slice(0, 200) : "",
+      }))
+      .filter((x) => x.id);
+  }
+  const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|registros|quantidade|qtd|maxresults|count)$/i;
+  const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|currentpage)$/i;
+  /** O pedido da lista SEM paginação: tamanho da página → 100000, início → 0 (no corpo e na URL). */
+  function semPaginacao(caminho, corpo) {
+    const ir = (v, prof) => {
+      if (prof > 6 || v == null || typeof v !== "object") return v;
+      if (Array.isArray(v)) return v.map((x) => ir(x, prof + 1));
+      const o = {};
+      for (const [k, x] of Object.entries(v)) {
+        if (typeof x === "number" && RE_TAMANHO.test(k)) o[k] = 100000;
+        else if (typeof x === "number" && RE_INICIO.test(k)) o[k] = /page|pagina/i.test(k) && x >= 1 && !/index/i.test(k) ? 1 : 0;
+        else o[k] = ir(x, prof + 1);
+      }
+      return o;
+    };
+    let c = String(caminho);
+    try {
+      const u = new URL(c, "https://x/");
+      for (const k of [...u.searchParams.keys()]) {
+        const v = u.searchParams.get(k);
+        if (/^\d+$/.test(v ?? "") && RE_TAMANHO.test(k)) u.searchParams.set(k, "100000");
+        else if (/^\d+$/.test(v ?? "") && RE_INICIO.test(k)) u.searchParams.set(k, /page|pagina/i.test(k) && Number(v) >= 1 && !/index/i.test(k) ? "1" : "0");
+      }
+      c = `${u.pathname.replace(/^\//, "")}${u.search}`;
+    } catch {}
+    return { caminho: c, corpo: ir(corpo, 0) };
+  }
+
   globalThis[NOME] = Object.freeze({
+    planejamentosCm002, semPaginacao,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, travarCorpoOperacao, respostaComArquivo, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

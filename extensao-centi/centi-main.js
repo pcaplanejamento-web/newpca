@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 33;
+  const PROTOCOLO = 34;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -180,6 +180,23 @@
       sessionStorage.setItem(APRENDIZ, JSON.stringify({ ativo: true, pedidos }));
     } catch {}
   }
+  // CM002 pela API: a lista que a PRÓPRIA tela pede ao Pesquisar fica guardada (só a forma do pedido — método, caminho e
+  // corpo, sem segredos) para o sistema repeti-la sem paginação, sem mexer na tela. No localStorage da Centi.
+  const CM002 = "__pcaCm002_v1";
+  function lembrarCm002(url, metodo, corpo, status, texto) {
+    try {
+      if (internos > 0 || Number(status) >= 400 || typeof texto !== "string" || !/^\s*[[{]/.test(texto)) return;
+      const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
+      const c = A?.caminhoDaApi(url);
+      const m = String(metodo || "GET").toUpperCase();
+      if (!c || !A.consultaPermitida(c.caminho, m)) return;
+      if (!A.planejamentosCm002(JSON.parse(texto))) return;
+      let b = null;
+      if (typeof corpo === "string" && corpo) b = JSON.parse(corpo);
+      else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
+      localStorage.setItem(CM002, JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b }));
+    } catch {}
+  }
   const textoDoXhr = (x) => {
     try {
       if (x.responseType === "" || x.responseType === "text") return x.responseText;
@@ -349,6 +366,11 @@
       gravarPasso(this.__pcaUrl, this.__pcaMetodo, r[0]);
     }
     if (this.__pcaUrl && String(this.__pcaUrl).includes("/restauth/")) this.addEventListener("load", () => trocarToken(tokenDoXhr(this)));
+    if (this.__pcaUrl && !this.__pcaInterno && String(this.__pcaUrl).includes("/restauth/")) {
+      const url = this.__pcaUrl;
+      const metodo = this.__pcaMetodo;
+      this.addEventListener("load", () => lembrarCm002(url, metodo, r[0], this.status, textoDoXhr(this)));
+    }
     if (this.__pcaUrl && !this.__pcaInterno && internos === 0 && lerAprendiz().ativo) {
       const url = this.__pcaUrl;
       const metodo = this.__pcaMetodo;
@@ -400,6 +422,17 @@
       guardar(url, Object.fromEntries(hs.entries()), metodo, "fetch");
       aprenderOperacao(url, metodo, init?.body);
       gravarPasso(url, metodo, init?.body);
+      if (internos === 0 && String(url || "").includes("/restauth/"))
+        return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
+          r.clone()
+            .text()
+            .then((t) => {
+              lembrarCm002(url, metodo, init?.body, r.status, t);
+              if (lerAprendiz().ativo) aprenderResposta(url, metodo, init?.body, r.status, r.headers.get("content-type"), t);
+            })
+            .catch(() => {});
+          return r;
+        });
       if (internos === 0 && lerAprendiz().ativo)
         return comToken(buscar.call(this, rec, init, ...resto)).then((r) => {
           r.clone()
@@ -781,6 +814,35 @@
     return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
   }
 
+  // CM002 pela API (só LEITURA): repete a lista guardada SEM paginação, na entidade pedida (só neste pedido) — todas as
+  // linhas, sem tocar na tela. Sem a lista guardada, a pessoa clica em Pesquisar UMA vez na CM002.
+  async function cm002(d) {
+    if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
+    if (!cabecalhos) return { ok: false, erro: "Centi sem sessão." };
+    let g = null;
+    try {
+      g = JSON.parse(localStorage.getItem(CM002) || "null");
+    } catch {}
+    if (!g?.caminho) return { ok: false, semConsulta: true, erro: "Abra a CM002 - Planejamento na Centi e clique em Pesquisar UMA vez — o sistema aprende a consulta e passa a ler tudo pela API." };
+    if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, erro: "Consulta guardada inválida." };
+    const ent = d?.entidade == null || d.entidade === "" ? null : String(d.entidade);
+    if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
+    const p = A.semPaginacao(g.caminho, g.corpo);
+    const url = destino(p.caminho);
+    if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
+    const r = await executar(g.metodo, url, g.metodo === "POST" ? p.corpo : null, ent, true);
+    if (r.status >= 400) return { ok: false, erro: `A Centi recusou a consulta da CM002 (${r.status}).` };
+    let j;
+    try {
+      j = JSON.parse(r.texto);
+    } catch {
+      return { ok: false, erro: "A Centi não devolveu a lista da CM002." };
+    }
+    const linhas = A.planejamentosCm002(j);
+    if (!linhas) return { ok: false, erro: "A resposta não tem a forma da lista da CM002 (Id + Situação)." };
+    return { ok: true, entidade: ent ?? entidadeAtual(), linhas };
+  }
+
   // Os DADOS da grade da Tela Protocolo (Wijmo FlexGrid — o controle mora no elemento, "wj-Control"): TODAS as linhas da
   // página (a tela desenha só as visíveis), com o texto de cada coluna como a tela mostra e o Id do protocolo (dos dados
   // da linha). Só LEITURA, chamada pela ponte (centi-tela.js).
@@ -852,7 +914,7 @@
     return { ok: false };
   }
 
-  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela };
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela, cm002 };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;

@@ -4190,6 +4190,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   1.11.1 libera esse endereço na trava de leitura); senão `restauth/getbinlink/{chave}/{nome}` (o Emitir DFD) — UMA vez (e o
   link, se a resposta for um); sem PDF, o erro traz o pedido (endereço → status), o esqueleto da resposta (`amostra`) e os
   parâmetros enviados — nenhuma repetição nem endereço adivinhado.
+- **EXECUÇÃO DOS DFDs pela API da CM002 (extensão 1.13.0, protocolo 34 — desde a v1.21.0 SEM a tela):** o `centi-main.js`
+  GUARDA a consulta que a própria tela da CM002 faz ao Pesquisar (`lembrarCm002` → `localStorage __pcaCm002_v1`, só método,
+  caminho e corpo; reconhecida pela FORMA — `planejamentosCm002`: Id + Situação + Finalidade/Centro de custo) e a ação **`cm002`**
+  `{entidade}` a REPETE sem paginação (`semPaginacao`: tamanho → 100000, início → 0) na entidade pedida — todas as linhas, só
+  leitura (`consultaPermitida`). A `TarefaExecucaoDfds` lê CADA entidade dos órgãos (o `entidade_centi` cadastrado, senão o mapa
+  do aparelho), grava por entidade (`POST …/execucao-dfds` com `dfdIds`) e separa as visões DFDs do sistema · Situação diferente
+  (≠ Executado) · Não encontrados na Centi · Só na Centi (planejamentos sem DFD). A leitura pela tela (`telaPlanejamentos`) abaixo
+  segue na extensão, sem uso na tela.
 - **EXECUÇÃO DOS DFDs pela CM002 (extensão 1.12.2, migração `0089` — `dfds.execucao_centi`/`execucao_centi_em`):** tarefa
   **"Verificar execução dos DFDs (CM002)"** da Automação (`TarefaExecucaoDfds`): a ação **`telaPlanejamentos`**
   (`centi-tela.js` v9, só leitura e o MÍNIMO de cliques) lê a tabela "Resultados" da CM002 COMO ESTÁ NA TELA (o HTML —

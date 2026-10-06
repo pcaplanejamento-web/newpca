@@ -51,3 +51,37 @@ test("entidade cadastrada no formato da aberta", async () => {
   assert.equal(formatoEntidade("03", "2"), "3");
   assert.equal(formatoEntidade("3", null), "3");
 });
+
+// CM002 pela API: as peças puras da extensão (centi-anexo.js).
+import { readFileSync as lerArq } from "node:fs";
+import vmCm from "node:vm";
+function pecasCm002() {
+  const ctx: Record<string, unknown> = { URL };
+  vmCm.runInNewContext(lerArq("extensao-centi/centi-anexo.js", "utf8"), ctx);
+  const p = Number(/const PROTOCOLO = (\d+)/.exec(lerArq("extensao-centi/centi-main.js", "utf8"))?.[1]);
+  return ctx[`__pcaCentiAnexo_p${p}`] as {
+    planejamentosCm002: (j: unknown) => { id: string; situacao: string; finalidade: string; centroCusto: string }[] | null;
+    semPaginacao: (c: string, b: unknown) => { caminho: string; corpo: unknown };
+  };
+}
+
+test("CM002 pela API: a lista reconhecida pela forma, todas as linhas, a Situação por extenso", () => {
+  const { planejamentosCm002 } = pecasCm002();
+  const itens = Array.from({ length: 700 }, (_, i) => ({
+    Id: i + 1,
+    Situacao: { Id: 2, Descricao: i === 0 ? "Cancelado" : "Executado" },
+    Finalidade: `PCA - 2026 - ${i}`,
+    CentroCusto: { Descricao: "PM RV" },
+  }));
+  const r = planejamentosCm002({ Data: { Items: itens, Total: 700 } });
+  assert.equal(r?.length, 700);
+  assert.deepEqual(JSON.parse(JSON.stringify(r?.[0])), { id: "1", situacao: "Cancelado", finalidade: "PCA - 2026 - 0", centroCusto: "PM RV" });
+  assert.equal(planejamentosCm002({ Items: [{ Id: 1, Nome: "x" }] }), null);
+});
+
+test("CM002 pela API: a consulta repetida sem paginação (corpo e URL)", () => {
+  const { semPaginacao } = pecasCm002();
+  const r = semPaginacao("restauth/list?entity=9&take=50&skip=100", { Take: 50, Skip: 50, Filtros: [{ Campo: "x" }], Page: 3 });
+  assert.equal(r.caminho, "restauth/list?entity=9&take=100000&skip=0");
+  assert.deepEqual(JSON.parse(JSON.stringify(r.corpo)), { Take: 100000, Skip: 0, Filtros: [{ Campo: "x" }], Page: 1 });
+});
