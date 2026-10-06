@@ -2164,7 +2164,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
-  contagens sobre o véu `--veu-capa`) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
+  contagens sobre o véu `--veu-capa`; grade fluida `auto-fill minmax(22rem)` com o card até 30rem, o texto proporcional ao card por container query e, com capa, uma faixa desfocada sob o texto) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
   **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO como a tela do orçamento: UMA linha de cabeçalho — voltar · nome · ano ·
   status · fonte; a capa fica no card e na Configuração — e as abas `AbasEspaco` com as ferramentas da aba à direita; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
@@ -2278,7 +2278,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
   Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
-  erro/aviso. Os itens são TODOS (sem teto — `PainelPca` os manda ao `DashboardPcaCliente` como UM texto JSON, `itensTexto`).
+  erro/aviso. Os itens são TODOS (sem teto — vão ao `DashboardPcaCliente` como UM texto COMPACTO `{c: campos, l: tuplas}` — `itensParaTexto`/`itensDoTexto`, `itens-dash-texto.ts`, testado —, montado UMA vez por versão dentro do memo do `dashboardDoPca`, `DashboardPca.itensTexto`).
   No PAINEL, **"Fora da soma (N)"** (só com N > 0; `ConsultaDashboard.foraDaSoma`): os DFDs vinculados/da prévia que a
   consolidação tirou — núcleo puro `foraDaSoma(linhas, consolidacao)` (`pca-core.ts`, testado: vínculos − vigentes; motivo
   `substituido`/`excluido`/`exclusao` + o outro DFD) → `DashboardPca.foraDaSoma` (`DfdForaDaSoma`, motivo por extenso; o hint

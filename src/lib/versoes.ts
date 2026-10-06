@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.14.4",
+    data: "2026-10-06",
+    titulo: "Cards do PCA maiores e Dashboard mais leve",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Cards dos PCAs maiores, com o nome e o valor proporcionais ao card e uma faixa de leitura sobre a capa.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Entrar no PCA ficou mais leve: os itens do Dashboard vão ao navegador num formato compacto, preparado uma vez por atualização dos dados.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.14.3",
     data: "2026-10-06",
     titulo: "Arrastar a bolha do chat",

@@ -1,5 +1,5 @@
 import { num } from "@/lib/format";
-import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "@/lib/queries";
+import type { Fatia, PontoMensal, Resumo, TopItem } from "@/lib/queries";
 import { Callout } from "./Callout";
 import { type ConsultaDashboard, DashboardPcaCliente } from "./DashboardPcaCliente";
 import { IconEye } from "./icons";
@@ -10,7 +10,8 @@ export type DadosPainelPca = {
   porMes: PontoMensal[];
   porUnidadeMedida: Fatia[];
   top: TopItem[];
-  itens: ItemRow[];
+  /** Os itens no texto compacto (`itensParaTexto`, montado no memo do Dashboard). */
+  itensTexto: string;
   /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados que entraram. */
   previa?: { dfds: number; protocolos: number } | null;
 };
@@ -53,7 +54,7 @@ export function PainelPca({
         porClassificacao={dados.porClassificacao}
         porMes={dados.porMes}
         porUnidadeMedida={dados.porUnidadeMedida}
-        itensTexto={JSON.stringify(dados.itens)}
+        itensTexto={dados.itensTexto}
         showUnidade={!unidadeFiltrada}
         consulta={consulta}
         previa={!!previa}

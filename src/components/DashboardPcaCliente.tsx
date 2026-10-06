@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useMemo, useState } from "react";
 import { blocosRelatorioDashboard } from "@/lib/dashboard-relatorio";
+import { itensDoTexto } from "@/lib/itens-dash-texto";
 import { brl, brlCompact, dataIsoBrasilia, mesLabel, num } from "@/lib/format";
 import {
   agregarItensDash,
@@ -124,7 +125,7 @@ export function DashboardPcaCliente({
   porClassificacao: Fatia[];
   porMes: PontoMensal[];
   porUnidadeMedida: Fatia[];
-  /** TODOS os itens do PCA num texto JSON (`ItemRow[]`) — lido UMA vez aqui (milhares de linhas sem serializar valor a valor). */
+  /** TODOS os itens do PCA no texto compacto (`itensParaTexto`) — lido UMA vez aqui (milhares de linhas sem serializar valor a valor). */
   itensTexto: string;
   showUnidade: boolean;
   hintItens?: string;
@@ -135,7 +136,7 @@ export function DashboardPcaCliente({
   /** O nome do PCA (o título do relatório em PDF). */
   nome?: string;
 }) {
-  const itens = useMemo(() => JSON.parse(itensTexto) as ItemRow[], [itensTexto]);
+  const itens = useMemo(() => itensDoTexto(itensTexto), [itensTexto]);
   const [filtros, setFiltros] = useState<FiltrosDash>({});
   const [origemAberta, setOrigemAberta] = useState(false);
   const [explorar, setExplorar] = useState<Grafico | null>(null);

@@ -75,7 +75,7 @@ export function PcaModuleView({
           <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] gap-[var(--gap-block)]">
           {pcas.map((p) => (
             <PcaCard key={p.id} pca={p} href={`/painel/pca/${p.id}`} />
           ))}

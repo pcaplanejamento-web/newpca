@@ -67,25 +67,30 @@ export function PcaCard({ pca, onClick, href }: { pca: PcaCardDados; onClick?: (
   const parte = pca.fonte === "lista" ? `${num(pca.partes)} planilha(s)` : `${num(pca.partes)} protocolo(s)`;
   const conteudo = (
     <PcaCapa capa={pca.capa} ano={pca.ano} className="shadow-soft transition-transform duration-[var(--motion-duration)] group-hover:-translate-y-0.5">
-      <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+      <div className="absolute inset-x-[4cqw] top-[4cqw] flex items-start justify-between gap-2">
         <Badge tone={pca.status === "publicado" ? "emerald" : "amber"} dot>
           {ROTULO_STATUS[pca.status]}
         </Badge>
         <span className="rounded-full bg-surface/90 px-2.5 py-0.5 text-[11px] font-semibold text-text shadow-ring">{ROTULO_FONTE[pca.fonte]}</span>
       </div>
-      <div className="absolute inset-x-4 bottom-4 text-white">
-        <div className="truncate text-base font-bold" title={pca.nome}>
+      {/* Texto proporcional à LARGURA do card (container query); com capa, uma faixa desfocada separa o texto da arte. */}
+      <div
+        className={`absolute inset-x-[4cqw] bottom-[4cqw] text-white ${pca.capa ? "rounded-[calc(var(--radius-card)*0.8)] bg-black/35 p-[3.5cqw] backdrop-blur-md" : "px-[1cqw]"}`}
+      >
+        <div className="truncate font-bold leading-tight" style={{ fontSize: "clamp(1rem, 5.5cqw, 1.5rem)" }} title={pca.nome}>
           {pca.nome}
         </div>
-        <div className="mt-0.5 text-2xl font-black tracking-tight">{brlCompact(pca.total)}</div>
-        <div className="mt-0.5 text-xs text-white/80">
+        <div className="mt-1 font-black leading-none tracking-tight tabular-nums" style={{ fontSize: "clamp(1.6rem, 11cqw, 3rem)" }}>
+          {brlCompact(pca.total)}
+        </div>
+        <div className="mt-1.5 text-white/85" style={{ fontSize: "clamp(0.75rem, 3.6cqw, 0.95rem)" }}>
           {pca.fonte === "lista" ? `${num(pca.itens)} itens · ${parte}` : `${parte} · ${num(pca.itens)} itens${pca.previa ? " · prévia" : ""}`}
         </div>
       </div>
     </PcaCapa>
   );
   const cls =
-    "group block w-full rounded-card text-left focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25";
+    "group block w-full max-w-[30rem] rounded-card text-left focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25";
   if (href)
     return (
       <Link href={href} className={`relative ${cls}`} aria-label={`Abrir ${pca.nome}`}>
@@ -106,7 +111,7 @@ export function PcaNovoCard({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex aspect-[4/5] w-full flex-col items-center justify-center gap-3 rounded-card border-2 border-dashed border-border-2 bg-surface text-muted transition-colors hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
+      className="group flex aspect-[4/5] w-full max-w-[30rem] flex-col items-center justify-center gap-3 rounded-card border-2 border-dashed border-border-2 bg-surface text-muted transition-colors hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/20"
     >
       <span className="grid h-12 w-12 place-items-center rounded-xl bg-surface-2 text-accent transition-colors group-hover:bg-accent group-hover:text-white">
         <IconPlus className="h-6 w-6" />

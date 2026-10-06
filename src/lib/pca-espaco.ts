@@ -1,3 +1,4 @@
+import { itensParaTexto } from "./itens-dash-texto";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
   dfdItens,
@@ -500,7 +501,8 @@ export type DashboardPca = {
   porMes: PontoMensal[];
   porUnidadeMedida: Fatia[];
   top: TopItem[];
-  itens: ItemRow[];
+  /** TODOS os itens num texto COMPACTO (`itensParaTexto`) — montado UMA vez por versão dos dados, dentro do memo. */
+  itensTexto: string;
   /** Filtro por unidade (planilha na lista; unidade requisitante no protocolo). */
   unidades: { id: number; codigo: string; municipio: string }[];
   unidadeId?: number;
@@ -538,7 +540,7 @@ const vazioDash = (): DashboardPca => ({
   porMes: [],
   porUnidadeMedida: [],
   top: [],
-  itens: [],
+  itensTexto: itensParaTexto([]),
   unidades: [],
   protocolos: 0,
   dfds: 0,
@@ -728,7 +730,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
       getTopItens(unidadeId, 10, pca.id),
       getItensTodos(unidadeId, undefined, pca.id),
     ]);
-    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [], protocolosLista: [], previa: null, foraDaSoma: [] };
+    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itensTexto: itensParaTexto(itens), unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [], protocolosLista: [], previa: null, foraDaSoma: [] };
   }
   const c = await itensConsolidados(pca);
   const reps = new Map<number, string>();
@@ -775,7 +777,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
   }
   return {
     ...ag,
-    itens,
+    itensTexto: itensParaTexto(itens),
     dfdsLista,
     protocolosLista: [...porProto.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
     unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
