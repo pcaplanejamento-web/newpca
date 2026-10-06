@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.23.0",
+    data: "2026-10-06",
+    titulo: "Tela Protocolo lida pela API",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Ler “Em Análise” da Tela Protocolo vai pela API da Centi (todas as linhas, sem mexer na tela); a tela é usada só uma vez para ensinar a consulta. Extensão 1.14.0.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.22.1",
     data: "2026-10-06",
     titulo: "Andamento flutuante e status único da execução",

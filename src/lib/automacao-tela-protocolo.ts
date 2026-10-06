@@ -404,6 +404,34 @@ export function normalizarProtocolosTela(v: unknown): ProtocoloEmAnalise[] {
   return [...r.values()];
 }
 
+const normDep = (t: string) =>
+  t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .trim()
+    .toUpperCase();
+const mesmoDep = (a: string, b: string) => {
+  const x = normDep(a);
+  const y = normDep(b);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+};
+
+/** A leitura pela API vale para as repartições ESCOLHIDAS? A consulta guardada é a que a tela fez com as repartições da
+ * última leitura pela tela (`aprendidas`): sem o departamento nas linhas, só as MESMAS; com ele, qualquer parte delas
+ * (o sistema filtra). Fora disso, a tela é lida de novo (e ensina a consulta nova). */
+export function apiCobreReparticoes(escolhidas: readonly string[], aprendidas: readonly string[] | null, comDepartamento: boolean): boolean {
+  if (!aprendidas?.length || !escolhidas.length) return false;
+  const cobre = escolhidas.every((e) => aprendidas.some((a) => mesmoDep(a, e)));
+  return comDepartamento ? cobre : cobre && aprendidas.every((a) => escolhidas.some((e) => mesmoDep(a, e)));
+}
+
+/** As linhas lidas pela API só das repartições escolhidas (sem o departamento na linha, ficam todas). */
+export function soDasReparticoes<T extends { departamento: string }>(linhas: readonly T[], escolhidas: readonly string[]): T[] {
+  if (!linhas.some((l) => l.departamento)) return [...linhas];
+  return linhas.filter((l) => escolhidas.some((e) => mesmoDep(l.departamento, e)));
+}
+
 /** O protocolo do SISTEMA com o mesmo nº (e o mesmo ano, quando os dois têm) — "156844/2026" ou "156844". */
 export function noSistemaTela<T extends { numero: string; idExterno?: string | null }>(
   sistema: readonly T[],

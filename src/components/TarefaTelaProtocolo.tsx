@@ -15,7 +15,9 @@ import {
   type LeituraProtocolo,
   mesmaEmissao,
   nomePdfEmAnalise,
+  apiCobreReparticoes,
   normalizarProtocolosTela,
+  soDasReparticoes,
   noSistemaTela,
   type ProtocoloEmAnalise,
 } from "@/lib/automacao-tela-protocolo";
@@ -74,6 +76,23 @@ const CHAVE_ESCOLHA = "automacao:tela-departamentos";
 /** Hoje em Brasília ("AAAA-MM-DD") — a data dos campos "hoje" da emissão aprendida. */
 const hojeBrasilia = () => dataIsoBrasilia(new Date().toISOString());
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
+
+/** As repartições da última leitura PELA TELA — a consulta que a extensão guardou foi feita com elas (no aparelho). */
+const CHAVE_APRENDIDAS = "automacao:tela-api-reparticoes";
+type Aprendidas = { reparticoes: string[]; comDepartamento: boolean };
+function lerAprendidas(): Aprendidas | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHAVE_APRENDIDAS) ?? "null") as Partial<Aprendidas> | null;
+    return v && Array.isArray(v.reparticoes) ? { reparticoes: v.reparticoes.filter((x) => typeof x === "string"), comDepartamento: !!v.comDepartamento } : null;
+  } catch {
+    return null;
+  }
+}
+function gravarAprendidas(a: Aprendidas) {
+  try {
+    localStorage.setItem(CHAVE_APRENDIDAS, JSON.stringify(a));
+  } catch {}
+}
 
 function lerEscolha(): unknown {
   try {
@@ -202,10 +221,23 @@ export function TarefaTelaProtocolo({
       const ex = await iniciarExecucaoLeitura("protocolos-por-reparticao", "consultar", [{ chave: "em-analise", alvo: reparticoes.join("; ") }], {
         reparticoes: reparticoes.length,
       });
+      const aprendidas = lerAprendidas();
+      const leitura = async (): Promise<RespostaTela & { viaApi?: boolean }> => {
+        // Pela API (a consulta que a própria tela fez): todas as linhas, sem mexer na tela.
+        if (apiCobreReparticoes(reparticoes, aprendidas?.reparticoes ?? null, aprendidas?.comDepartamento ?? false)) {
+          const a = await pedir("telaApi", null, 180_000);
+          if (a.ok) return { ...a, protocolos: soDasReparticoes(normalizarProtocolosTela(a.protocolos), reparticoes), viaApi: true };
+          if (a.interrompido) return a;
+        }
+        // Pela tela — só para ensinar a consulta (a próxima leitura já vai pela API).
+        const t = await pedir("telaEmAnalise", { departamentos: reparticoes }, 180_000);
+        if (t.ok) gravarAprendidas({ reparticoes, comDepartamento: normalizarProtocolosTela(t.protocolos).some((x) => x.departamento) });
+        return t;
+      };
       const r = await comLote(
         "Tela Protocolo · Em Análise",
         `Lendo “Em Análise” de ${reparticoes.length} repartição(ões)`,
-        () => pedir("telaEmAnalise", { departamentos: reparticoes }, 180_000),
+        leitura,
         (x) => (x.ok ? `${x.protocolos?.length ?? 0} protocolo(s) em análise` : (x.erro ?? "Falhou")),
       );
       if ("id" in ex)
@@ -216,7 +248,7 @@ export function TarefaTelaProtocolo({
       const ps = normalizarProtocolosTela(r.protocolos);
       setLidos({ protocolos: ps, total: typeof r.total === "number" ? r.total : ps.length, reparticoes });
       if (typeof r.total === "number" && r.total > ps.length) toast.warning(`A Centi indica ${r.total} protocolo(s), mas só ${ps.length} foram lidos.`, 10000);
-      else toast.success(`${ps.length} protocolo(s) em análise.`);
+      else toast.success(`${ps.length} protocolo(s) em análise${r.viaApi ? " · pela API" : ""}.`);
     } finally {
       setOcupado(null);
     }

@@ -4190,6 +4190,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   1.11.1 libera esse endereço na trava de leitura); senão `restauth/getbinlink/{chave}/{nome}` (o Emitir DFD) — UMA vez (e o
   link, se a resposta for um); sem PDF, o erro traz o pedido (endereço → status), o esqueleto da resposta (`amostra`) e os
   parâmetros enviados — nenhuma repetição nem endereço adivinhado.
+- **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
+  faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
+  ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só
+  leitura; com situação, filtra `emAnalise`). A `TarefaTelaProtocolo` vai pela API quando a consulta guardada cobre as
+  repartições escolhidas (`apiCobreReparticoes` — as da última leitura pela tela, no aparelho `automacao:tela-api-reparticoes`;
+  com o departamento nas linhas, `soDasReparticoes` filtra) e, senão ou se falhar, lê pela tela UMA vez (que ensina a consulta).
+  Testes: `tests/tela-protocolo-api.test.ts`.
 - **EXECUÇÃO DOS DFDs pela API da CM002 (extensão 1.13.0, protocolo 34 — desde a v1.21.0 SEM a tela):** o `centi-main.js`
   GUARDA a consulta que a própria tela da CM002 faz ao Pesquisar (`lembrarCm002` → `localStorage __pcaCm002_v1`, só método,
   caminho e corpo; reconhecida pela FORMA — `planejamentosCm002`: Id + Situação + Finalidade/Centro de custo) e a ação **`cm002`**

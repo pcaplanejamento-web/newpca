@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p34";
+  const NOME = "__pcaCentiAnexo_p35";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -485,6 +485,49 @@
       }))
       .filter((x) => x.id);
   }
+  /** Os protocolos da resposta da TELA PROTOCOLO (PO011) — {linhas, situacao} — ou null (não é a lista da tela). Cada
+   * linha no formato da leitura pela tela: protocolo, ano, id, entrada, departamento, interessado, solicitante, natureza
+   * e a situação (vazia quando a lista não traz — a consulta já é a da aba). */
+  function protocolosTela(j) {
+    const l = acharLista(j);
+    if (!l) return null;
+    const linhas = l.itens.map(linhaPlana);
+    const amostra = linhas.slice(0, 50);
+    const chaves = [...new Set(amostra.flatMap((x) => Object.keys(x)))];
+    const curta = (re) => chaves.filter((k) => re.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0] ?? null;
+    const kId = curta(/^id$/i);
+    const kProt = chaves
+      .filter((k) => /^(protocolo|numero|numeroprotocolo|nrprotocolo|numprotocolo|codigo)$/i.test(ULTIMO(k)))
+      .filter((k) => amostra.some((x) => /^\d{1,12}$/.test(String(x[k] ?? "").trim())))
+      .sort((a, b) => a.length - b.length)[0];
+    const kAno = curta(/^(ano|exercicio)$/i);
+    const kInt = campoTexto(amostra, /interessad/i);
+    if (!kProt || !kAno || !kInt) return null;
+    const kSit = campoTexto(amostra, /situa|status|fase/i);
+    const kSol = campoTexto(amostra, /solicitant/i);
+    const kNat = campoTexto(amostra, /natureza|assunto/i);
+    const kDep = campoTexto(amostra, /departamento|setor/i);
+    const kEnt = chaves.filter((k) => /entrada|dt|data/i.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0] ?? null;
+    const t = (x, k) => (k ? String(x[k] ?? "").replace(/\s+/g, " ").trim().slice(0, 200) : "");
+    return {
+      situacao: !!kSit,
+      linhas: linhas
+        .map((x) => ({
+          protocolo: t(x, kProt).replace(/\D/g, "").replace(/^0+(?=\d)/, ""),
+          ano: t(x, kAno).replace(/\D/g, ""),
+          id: kId ? t(x, kId).replace(/\D/g, "") : "",
+          entrada: t(x, kEnt).slice(0, 40),
+          departamento: t(x, kDep),
+          interessado: t(x, kInt),
+          solicitante: t(x, kSol),
+          natureza: t(x, kNat),
+          situacao: t(x, kSit).slice(0, 60),
+        }))
+        .filter((x) => x.protocolo),
+    };
+  }
+  /** "Em análise" (sem acento/caixa). */
+  const emAnalise = (s) => /ANALISE/.test(String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase());
   const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|registros|quantidade|qtd|maxresults|count)$/i;
   const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|currentpage)$/i;
   /** O pedido da lista SEM paginação: tamanho da página → 100000, início → 0 (no corpo e na URL). */
@@ -514,7 +557,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    planejamentosCm002, semPaginacao,
+    planejamentosCm002, semPaginacao, protocolosTela, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, travarCorpoOperacao, respostaComArquivo, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

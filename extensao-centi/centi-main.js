@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 34;
+  const PROTOCOLO = 35;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -183,6 +183,7 @@
   // CM002 pela API: a lista que a PRÓPRIA tela pede ao Pesquisar fica guardada (só a forma do pedido — método, caminho e
   // corpo, sem segredos) para o sistema repeti-la sem paginação, sem mexer na tela. No localStorage da Centi.
   const CM002 = "__pcaCm002_v1";
+  const TELA = "__pcaTelaProtocolo_v1";
   function lembrarCm002(url, metodo, corpo, status, texto) {
     try {
       if (internos > 0 || Number(status) >= 400 || typeof texto !== "string" || !/^\s*[[{]/.test(texto)) return;
@@ -190,11 +191,15 @@
       const c = A?.caminhoDaApi(url);
       const m = String(metodo || "GET").toUpperCase();
       if (!c || !A.consultaPermitida(c.caminho, m)) return;
-      if (!A.planejamentosCm002(JSON.parse(texto))) return;
+      const j = JSON.parse(texto);
       let b = null;
       if (typeof corpo === "string" && corpo) b = JSON.parse(corpo);
       else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
-      localStorage.setItem(CM002, JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b }));
+      const forma = JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b });
+      if (A.planejamentosCm002(j)) return localStorage.setItem(CM002, forma);
+      // Tela Protocolo: a lista da aba "Em Análise" (com situação, só a que traz algum "em análise"; sem ela, a última pedida).
+      const p = A.protocolosTela(j);
+      if (p && (!p.situacao || p.linhas.some((x) => A.emAnalise(x.situacao)))) localStorage.setItem(TELA, forma);
     } catch {}
   }
   const textoDoXhr = (x) => {
@@ -843,6 +848,33 @@
     return { ok: true, entidade: ent ?? entidadeAtual(), linhas };
   }
 
+  // TELA PROTOCOLO pela API (só LEITURA): repete a lista "Em Análise" guardada SEM paginação — todas as linhas, sem tocar
+  // na tela. Com situação na lista, só as "em análise". Sem a lista guardada, a leitura pela tela a ensina UMA vez.
+  async function telaApi() {
+    if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
+    if (!cabecalhos) return { ok: false, erro: "Centi sem sessão." };
+    let g = null;
+    try {
+      g = JSON.parse(localStorage.getItem(TELA) || "null");
+    } catch {}
+    if (!g?.caminho) return { ok: false, semConsulta: true, erro: "A consulta da Tela Protocolo ainda não foi aprendida." };
+    if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, semConsulta: true, erro: "Consulta guardada inválida." };
+    const p = A.semPaginacao(g.caminho, g.corpo);
+    const url = destino(p.caminho);
+    if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
+    const r = await executar(g.metodo, url, g.metodo === "POST" ? p.corpo : null, null, true);
+    if (r.status >= 400) return { ok: false, semConsulta: true, erro: `A Centi recusou a consulta da Tela Protocolo (${r.status}).` };
+    let j;
+    try {
+      j = JSON.parse(r.texto);
+    } catch {
+      return { ok: false, semConsulta: true, erro: "A Centi não devolveu a lista da Tela Protocolo." };
+    }
+    const l = A.protocolosTela(j);
+    if (!l) return { ok: false, semConsulta: true, erro: "A resposta não tem a forma da lista da Tela Protocolo." };
+    return { ok: true, protocolos: l.situacao ? l.linhas.filter((x) => A.emAnalise(x.situacao)) : l.linhas };
+  }
+
   // Os DADOS da grade da Tela Protocolo (Wijmo FlexGrid — o controle mora no elemento, "wj-Control"): TODAS as linhas da
   // página (a tela desenha só as visíveis), com o texto de cada coluna como a tela mostra e o Id do protocolo (dos dados
   // da linha). Só LEITURA, chamada pela ponte (centi-tela.js).
@@ -914,7 +946,7 @@
     return { ok: false };
   }
 
-  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela, cm002 };
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela, cm002, telaApi };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;
