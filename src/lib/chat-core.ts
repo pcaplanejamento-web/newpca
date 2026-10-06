@@ -241,15 +241,6 @@ export function bolhasVisiveis<T>(lista: readonly T[], max = MAX_BOLHAS): { visi
   return { visiveis: lista.slice(0, max), extras: lista.slice(max) };
 }
 
-/** REORDENAR: tira a bolha `de` e a põe na posição `para` (os índices fora da lista ficam presos às pontas). */
-export function moverBolha<T>(lista: readonly T[], de: number, para: number): T[] {
-  if (de < 0 || de >= lista.length) return [...lista];
-  const r = [...lista];
-  const [x] = r.splice(de, 1);
-  r.splice(Math.min(Math.max(0, para), r.length), 0, x);
-  return r;
-}
-
 /** Um ponto do arrasto (px e ms) — os últimos dão a VELOCIDADE do arremesso. */
 export type AmostraArrasto = { x: number; y: number; t: number };
 /** Janela (ms) das amostras que contam para a velocidade e o "empurrão" do arremesso (ms de inércia). */
@@ -264,31 +255,103 @@ export function velocidadeArrasto(amostras: readonly AmostraArrasto[]): { vx: nu
   return { vx: (fim.x - ini.x) / dt, vy: (fim.y - ini.y) / dt };
 }
 /** ARREMESSO: onde a bolha "cairia" com a inércia (o ponto solto + a velocidade × a inércia, até `maxPx`) — um peteleco
- * para o outro lado leva a pilha até lá. */
+ * para o outro lado leva a bolha até lá. */
 export function projetarArremesso(x: number, y: number, v: { vx: number; vy: number }): { x: number; y: number } {
   const lim = (n: number) => Math.max(-ARREMESSO.maxPx, Math.min(ARREMESSO.maxPx, n));
   return { x: x + lim(v.vx * ARREMESSO.inercia), y: y + lim(v.vy * ARREMESSO.inercia) };
 }
 
-/** A posição da pilha de bolhas: encostada num LADO, numa altura (fração da área livre, 0 = topo · 1 = embaixo) — resiste
- * a trocar o tamanho da janela. */
+/** O formato ANTIGO (até a v1.16.0, `chat:posicao`): a PILHA inteira numa posição — lido só para a migração. */
 export type PosicaoBolhas = { lado: "esq" | "dir"; y: number };
-export const POSICAO_BOLHAS_PADRAO: PosicaoBolhas = { lado: "dir", y: 1 };
 export function lerPosicaoBolhas(v: unknown): PosicaoBolhas {
   const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
   const y = Number(o.y);
   return { lado: o.lado === "esq" ? "esq" : "dir", y: Number.isFinite(y) ? Math.min(1, Math.max(0, y)) : 1 };
 }
-/** Soltou a pilha com o CENTRO em `cx` e o TOPO em `topoPx`: encosta no lado mais perto, mantendo a altura dentro da área
- * livre (`topo`..`altura - base`, descontando a altura da pilha). */
-export function encostarBolhas(cx: number, topoPx: number, tela: { largura: number; altura: number; topo: number; base: number }, alturaPilha: number): PosicaoBolhas {
-  const livre = tela.altura - tela.topo - tela.base - alturaPilha;
-  return { lado: cx < tela.largura / 2 ? "esq" : "dir", y: livre <= 0 ? 1 : Math.min(1, Math.max(0, (topoPx - tela.topo) / livre)) };
+/** CADA BOLHA NO SEU LUGAR (v1.17.0): a posição de UMA bolha — o LADO em que encosta, a altura (fração da faixa livre,
+ * 0 = topo · 1 = embaixo — resiste a trocar o tamanho da janela) e QUANDO foi mexida por último (a mais recente fica onde
+ * está; as outras abrem espaço). A chave é a conversa (e "+" para a bolha das demais). */
+export type PosicaoBolha = { lado: "esq" | "dir"; y: number; t: number };
+export type PosicoesBolhas = Record<string, PosicaoBolha>;
+/** As medidas da tela que importam às bolhas (px): a área livre vai de `topo` a `altura - base`. */
+export type TelaBolhas = { largura: number; altura: number; topo: number; base: number; tam: number };
+/** O vão entre duas bolhas (px). */
+export const VAO_BOLHAS = 10;
+
+function lerUma(v: unknown): PosicaoBolha | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const y = Number(o.y);
+  const t = Number(o.t);
+  if ((o.lado !== "esq" && o.lado !== "dir") || !Number.isFinite(y)) return null;
+  return { lado: o.lado, y: Math.min(1, Math.max(0, y)), t: Number.isFinite(t) ? t : 0 };
 }
-/** O topo (px) da pilha para a posição gravada. */
-export function topoDasBolhas(p: PosicaoBolhas, tela: { altura: number; topo: number; base: number }, alturaPilha: number): number {
-  const livre = Math.max(0, tela.altura - tela.topo - tela.base - alturaPilha);
-  return Math.round(tela.topo + livre * p.y);
+/** Lê as posições guardadas no aparelho (qualquer coisa inválida some; até 40 bolhas). */
+export function lerPosicoesBolhas(v: unknown): PosicoesBolhas {
+  const r: PosicoesBolhas = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return r;
+  for (const [k, x] of Object.entries(v as Record<string, unknown>).slice(0, 40)) {
+    const p = lerUma(x);
+    if (p && (k === "+" || conversaValida(k))) r[k] = p;
+  }
+  return r;
+}
+/** Do formato ANTIGO (a pilha inteira numa posição): cada bolha aberta ganha o mesmo lado e altura — a arrumação as
+ * espalha como uma pilha, na ordem (a 1ª fica no lugar). */
+export function migrarPosicoes(antiga: PosicaoBolhas, ordem: readonly string[]): PosicoesBolhas {
+  const r: PosicoesBolhas = {};
+  ordem.forEach((k, i) => {
+    r[k] = { lado: antiga.lado, y: antiga.y, t: ordem.length - i };
+  });
+  return r;
+}
+
+/** O lugar (px) de cada bolha: o lado e o topo. */
+export type LugarBolha = { lado: "esq" | "dir"; top: number };
+const faixa = (tela: TelaBolhas) => ({ min: tela.topo, max: Math.max(tela.topo, tela.altura - tela.base - tela.tam) });
+/** O topo (px) de uma posição. */
+export function topoDaPosicao(p: Pick<PosicaoBolha, "y">, tela: TelaBolhas): number {
+  const f = faixa(tela);
+  return Math.round(f.min + (f.max - f.min) * p.y);
+}
+/** A esquerda (px) de uma bolha encostada no lado. */
+export const esquerdaDoLado = (lado: "esq" | "dir", tela: TelaBolhas, margem = 12) => (lado === "esq" ? margem : tela.largura - margem - tela.tam);
+
+/** ARRUMA as bolhas: cada uma no lugar dela; quando duas se cobrem NO MESMO LADO, a mexida por ÚLTIMO fica e as outras vão
+ * ao lugar livre mais perto do desejado (nunca uma sobre a outra, dentro da área livre). A bolha sem posição guardada fica
+ * à direita, embaixo (a 1ª da ordem mais embaixo — empilham para cima). Determinística: mesma entrada, mesmo resultado. */
+export function arrumarBolhas(posicoes: PosicoesBolhas, ordem: readonly string[], tela: TelaBolhas): Record<string, LugarBolha> {
+  const passo = tela.tam + VAO_BOLHAS;
+  const f = faixa(tela);
+  const itens = ordem.map((k, i) => {
+    const p = posicoes[k] ?? { lado: "dir" as const, y: 1, t: -1 - i };
+    return { k, i, lado: p.lado, t: p.t, quer: topoDaPosicao(p, tela) };
+  });
+  // A mais recente primeiro (empate: a que vem antes na ordem).
+  itens.sort((a, b) => b.t - a.t || a.i - b.i);
+  const r: Record<string, LugarBolha> = {};
+  const postos: Record<"esq" | "dir", number[]> = { esq: [], dir: [] };
+  for (const it of itens) {
+    const ocupados = postos[it.lado];
+    const livre = (y: number) => y >= f.min - 0.5 && y <= f.max + 0.5 && ocupados.every((o) => Math.abs(o - y) >= passo - 0.5);
+    const quer = Math.min(f.max, Math.max(f.min, it.quer));
+    let top = quer;
+    if (!livre(quer)) {
+      const candidatos = [f.min, f.max, ...ocupados.flatMap((o) => [o - passo, o + passo])].filter(livre);
+      // Sem lugar livre (tela baixa demais): fica onde queria.
+      if (candidatos.length) top = candidatos.reduce((m, c) => (Math.abs(c - quer) < Math.abs(m - quer) || (Math.abs(c - quer) === Math.abs(m - quer) && c > m) ? c : m));
+    }
+    ocupados.push(top);
+    r[it.k] = { lado: it.lado, top: Math.round(top) };
+  }
+  return r;
+}
+
+/** Soltou a bolha com o CENTRO em `cx` e o TOPO em `topoPx`: encosta no lado mais perto, naquela altura (`agora` = quando). */
+export function pousarBolha(cx: number, topoPx: number, tela: TelaBolhas, agora: number): PosicaoBolha {
+  const f = faixa(tela);
+  const y = f.max <= f.min ? 1 : Math.min(1, Math.max(0, (topoPx - f.min) / (f.max - f.min)));
+  return { lado: cx < tela.largura / 2 ? "esq" : "dir", y, t: agora };
 }
 
 /** As conversas ficam GUARDADAS por 7 dias (v1.15.0); a limpeza do cron apaga o que passou disso. */

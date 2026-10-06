@@ -21,12 +21,10 @@ import {
   abrirBolha,
   bolhasVisiveis,
   ehConversaEmGrupo,
-  encostarBolhas,
   lerIds,
   lerPosicaoBolhas,
   novaConversaEmGrupo,
   rotuloConversa,
-  topoDasBolhas,
 } from "../src/lib/chat-core.ts";
 import { chatEnviarSchema, chatSinalSchema, configChatSchema } from "../src/lib/presenca-validation.ts";
 
@@ -177,13 +175,7 @@ describe("chat ao vivo: conversas em grupo e bolhas", () => {
     assert.deepEqual(abrirBolha(["a"], "z"), ["z", "a"]);
     assert.deepEqual(bolhasVisiveis(["a", "b", "c", "d", "e", "f"]), { visiveis: ["a", "b", "c", "d"], extras: ["e", "f"] });
   });
-  it("posição: encosta no lado mais perto, a altura dentro da área", () => {
-    const tela = { largura: 1000, altura: 800, topo: 60, base: 20 };
-    assert.deepEqual(encostarBolhas(200, 60, tela, 120), { lado: "esq", y: 0 });
-    assert.deepEqual(encostarBolhas(900, 9999, tela, 120), { lado: "dir", y: 1 });
-    assert.deepEqual(encostarBolhas(900, 360, tela, 120), { lado: "dir", y: 0.5 });
-    assert.equal(topoDasBolhas({ lado: "dir", y: 0.5 }, tela, 120), 360);
-    assert.equal(topoDasBolhas({ lado: "dir", y: 1 }, { ...tela, altura: 100 }, 120), 60);
+  it("formato antigo da pilha: lido só para a migração", () => {
     assert.deepEqual(lerPosicaoBolhas({ lado: "x", y: 7 }), { lado: "dir", y: 1 });
     assert.deepEqual(lerPosicaoBolhas(null), { lado: "dir", y: 1 });
   });
@@ -202,14 +194,7 @@ describe("chat ao vivo: sinal (lida/digitando) pelas caixas", () => {
 });
 
 
-describe("bolhas livres — reordenar e arremessar", () => {
-  it("moverBolha tira e põe no lugar (pontas presas)", async () => {
-    const { moverBolha } = await import("../src/lib/chat-core.ts");
-    assert.deepEqual(moverBolha(["a", "b", "c", "d"], 0, 2), ["b", "c", "a", "d"]);
-    assert.deepEqual(moverBolha(["a", "b", "c", "d"], 3, 0), ["d", "a", "b", "c"]);
-    assert.deepEqual(moverBolha(["a", "b"], 1, 99), ["a", "b"]);
-    assert.deepEqual(moverBolha(["a", "b"], 5, 0), ["a", "b"]);
-  });
+describe("bolhas livres — arremessar", () => {
   it("velocidade dos últimos 90 ms e a projeção do arremesso (com teto)", async () => {
     const { velocidadeArrasto, projetarArremesso, ARREMESSO } = await import("../src/lib/chat-core.ts");
     assert.deepEqual(velocidadeArrasto([{ x: 0, y: 0, t: 0 }]), { vx: 0, vy: 0 });
@@ -225,5 +210,73 @@ describe("bolhas livres — reordenar e arremessar", () => {
     assert.equal(p.x, 900 - 3 * ARREMESSO.inercia);
     assert.equal(projetarArremesso(0, 0, { vx: 100, vy: -100 }).x, ARREMESSO.maxPx);
     assert.equal(projetarArremesso(0, 0, { vx: 100, vy: -100 }).y, -ARREMESSO.maxPx);
+  });
+});
+
+describe("bolhas INDEPENDENTES — cada uma no seu lugar (v1.17.0)", () => {
+  const tela = { largura: 1000, altura: 800, topo: 64, base: 16, tam: 56 };
+  const passo = 56 + 10;
+  const semSobrepor = (l: Record<string, { lado: string; top: number }>) => {
+    const v = Object.values(l);
+    for (let i = 0; i < v.length; i++)
+      for (let j = i + 1; j < v.length; j++) if (v[i].lado === v[j].lado) assert.ok(Math.abs(v[i].top - v[j].top) >= passo, `${v[i].top} × ${v[j].top}`);
+  };
+  it("cada bolha fica onde foi deixada; mexer uma não mexe as outras", async () => {
+    const { arrumarBolhas } = await import("../src/lib/chat-core.ts");
+    const pos = { p1: { lado: "dir" as const, y: 1, t: 1 }, p2: { lado: "esq" as const, y: 0.2, t: 2 }, p3: { lado: "dir" as const, y: 0, t: 3 } };
+    const antes = arrumarBolhas(pos, ["p1", "p2", "p3"], tela);
+    const depois = arrumarBolhas({ ...pos, p2: { lado: "esq", y: 0.7, t: 9 } }, ["p1", "p2", "p3"], tela);
+    assert.deepEqual(depois.p1, antes.p1);
+    assert.deepEqual(depois.p3, antes.p3);
+    assert.equal(depois.p2.lado, "esq");
+    assert.ok(depois.p2.top > antes.p2.top);
+  });
+  it("a mexida por último fica; a que estava ali abre espaço (sem sobrepor, dentro da tela)", async () => {
+    const { arrumarBolhas, topoDaPosicao } = await import("../src/lib/chat-core.ts");
+    const pos = { p1: { lado: "dir" as const, y: 0.5, t: 1 }, p2: { lado: "dir" as const, y: 0.52, t: 5 } };
+    const l = arrumarBolhas(pos, ["p1", "p2"], tela);
+    assert.equal(l.p2.top, topoDaPosicao({ y: 0.52 }, tela));
+    semSobrepor(l);
+    // Lados diferentes nunca se empurram.
+    const outro = arrumarBolhas({ ...pos, p1: { lado: "esq", y: 0.52, t: 1 } }, ["p1", "p2"], tela);
+    assert.equal(outro.p1.top, outro.p2.top);
+  });
+  it("quatro na mesma altura se espalham, dentro da área livre; resultado estável", async () => {
+    const { arrumarBolhas } = await import("../src/lib/chat-core.ts");
+    const pos = Object.fromEntries(["p1", "p2", "p3", "p4"].map((k, i) => [k, { lado: "dir" as const, y: 1, t: i }]));
+    const l = arrumarBolhas(pos, ["p1", "p2", "p3", "p4"], tela);
+    semSobrepor(l);
+    for (const x of Object.values(l)) assert.ok(x.top >= tela.topo && x.top <= tela.altura - tela.base - tela.tam);
+    assert.deepEqual(arrumarBolhas(pos, ["p1", "p2", "p3", "p4"], tela), l);
+    assert.equal(l.p4.top, tela.altura - tela.base - tela.tam);
+  });
+  it("sem posição: à direita, embaixo, empilhando para cima", async () => {
+    const { arrumarBolhas } = await import("../src/lib/chat-core.ts");
+    const l = arrumarBolhas({}, ["p1", "p2", "+"], tela);
+    assert.equal(l.p1.top, tela.altura - tela.base - tela.tam);
+    assert.equal(l.p2.top, l.p1.top - passo);
+    assert.equal(l["+"].top, l.p2.top - passo);
+    assert.ok(Object.values(l).every((x) => x.lado === "dir"));
+  });
+  it("pousar: o lado pela metade da tela; o arremesso leva ao outro lado", async () => {
+    const { pousarBolha, projetarArremesso } = await import("../src/lib/chat-core.ts");
+    assert.deepEqual(pousarBolha(200, 64, tela, 7), { lado: "esq", y: 0, t: 7 });
+    assert.deepEqual(pousarBolha(900, 9999, tela, 7), { lado: "dir", y: 1, t: 7 });
+    const p = projetarArremesso(900, 300, { vx: -3, vy: 0 });
+    assert.equal(pousarBolha(p.x + 28, p.y, tela, 1).lado, "esq");
+  });
+  it("leitura tolerante e migração do formato antigo", async () => {
+    const { lerPosicoesBolhas, migrarPosicoes, arrumarBolhas } = await import("../src/lib/chat-core.ts");
+    assert.deepEqual(lerPosicoesBolhas(null), {});
+    assert.deepEqual(lerPosicoesBolhas([1]), {});
+    assert.deepEqual(lerPosicoesBolhas({ p2: { lado: "esq", y: 3, t: 4 }, xx: { lado: "dir", y: 0 }, p3: { lado: "?", y: 0 }, "+": { lado: "dir", y: 0.5 } }), {
+      p2: { lado: "esq", y: 1, t: 4 },
+      "+": { lado: "dir", y: 0.5, t: 0 },
+    });
+    const m = migrarPosicoes({ lado: "esq", y: 0 }, ["p1", "p2"]);
+    assert.equal(m.p1.lado, "esq");
+    const l = arrumarBolhas(m, ["p1", "p2"], tela);
+    assert.equal(l.p1.top, tela.topo);
+    assert.equal(l.p2.top, tela.topo + passo);
   });
 });

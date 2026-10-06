@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.17.0",
+    data: "2026-10-06",
+    titulo: "Bolhas do chat independentes",
+    mudancas: [
+      { tipo: "melhoria", area: "Chat", texto: "Cada bolha é independente: arrastar uma leva só ela — as outras ficam onde estão e só abrem espaço se ela pousar em cima." },
+      { tipo: "novo", area: "Chat", texto: "Cada bolha encosta na borda mais perto, na altura em que foi solta (um peteleco a arremessa ao outro lado), e o lugar de cada uma fica guardado." },
+      { tipo: "melhoria", area: "Chat", texto: "A janela da conversa abre ao lado da própria bolha. No teclado, Alt + ↑/↓ sobe ou desce a bolha e Alt + ←/→ troca de lado." },
+    ],
+  },
+  {
     versao: "1.16.1",
     data: "2026-10-06",
     titulo: "Card do PCA mais discreto e carregamento fluido",

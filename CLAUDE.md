@@ -493,13 +493,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   volta; erguer/ímã/sumir na lixeira na própria bolha (escala com mola).
 - **Fechamento RÁPIDO (v1.15.1 → 1.16.0):** a janela sai em 60 ms FIXOS (`animate-janela-sai`: escala 0,85, sem desfoque,
   `ease-in`) e desmonta em 70 ms; a bolha na lixeira some em 0,6× e a lixeira sai em 0,55×.
-- **Bolhas LIVRES (v1.16.0):** o arrasto tem dois MODOS — `ordem` (dentro da coluna: as outras abrem espaço —
-  `desvioNaOrdem` — e soltar REORDENA, `onReordenar` → `moverBolha`, guardado em `chat:bolhas`) e `mover` (saiu da coluna:
-  a pilha inteira segue EM CADEIA — a duração da transição cresce com a distância da presa, sem atraso, que recomeçaria a
-  cada movimento — e soltar ARREMESSA: `velocidadeArrasto` das amostras dos últimos 90 ms até o instante de soltar [parado =
-  sem arremesso] → `projetarArremesso` [inércia 260 ms, teto 1600 px] → `encostarBolhas`; o voo dura mais quanto mais
-  longe — `Pouso.fator`). A bolha presa INCLINA pela velocidade (±14°) e assenta ao parar. Teclado: Alt + ↑/↓ reordena,
-  Alt + ←/→ troca de lado. Núcleo puro em `chat-core.ts` (testado).
+- **Bolhas INDEPENDENTES (v1.17.0; substitui a pilha/cadeia da v1.16.0):** cada bolha tem a PRÓPRIA posição
+  (`PosicoesBolhas` = conversa | "+" → `{lado, y fração, t}`; `chat:posicoes` no aparelho, migrada do antigo `chat:posicao`
+  por `migrarPosicoes`; as das conversas fechadas são podadas ao gravar). Arrastar leva SÓ a bolha presa (inclinada pela
+  velocidade, ±14°); soltar ARREMESSA (`velocidadeArrasto` → `projetarArremesso`) e encosta na borda mais perto naquela
+  altura (`pousarBolha`); **`arrumarBolhas`** (puro, testado) dá o lugar de cada uma — a mexida por ÚLTIMO fica e as outras
+  do MESMO lado vão ao lugar livre mais perto (nunca uma sobre a outra, dentro da área livre); a sem posição nasce à
+  direita, embaixo, e é fixada no lugar em que apareceu. Pouso FLIP só da solta e das que abriram espaço. A janela abre ao
+  lado da bolha ativa. Teclado: Alt + ↑/↓ sobe/desce a bolha, Alt + ←/→ troca de lado. A bolha "+N" também se arrasta (não
+  vai à lixeira).
 
 ## Chat estável + "Ao vivo" único + lixeira (v1.14.2)
 - **Nunca desmonta:** o layout devolve `undefined` quando a leitura da presença/config do chat FALHA (`presencaDoGrupo`,

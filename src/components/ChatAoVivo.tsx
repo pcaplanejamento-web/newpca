@@ -17,8 +17,9 @@ import {
   abrirBolha,
   bolhasVisiveis,
   lerPosicaoBolhas,
-  POSICAO_BOLHAS_PADRAO,
-  type PosicaoBolhas,
+  lerPosicoesBolhas,
+  migrarPosicoes,
+  type PosicoesBolhas,
   rotuloConversa,
   DIGITANDO_DURA_MS,
   horaChat,
@@ -399,8 +400,10 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
   return { conversas, autores, nomeDe, enviar, digitando, garantir, criarEmGrupo, naoLidas, meuId, carregar };
 }
 
-/** A posição da pilha de bolhas fica no aparelho (conveniência — some ao limpar o navegador). */
-const CHAVE_POSICAO = "chat:posicao";
+/** A posição de CADA bolha fica no aparelho (conveniência — some ao limpar o navegador). */
+const CHAVE_POSICOES = "chat:posicoes";
+/** O formato antigo (a pilha inteira numa posição, até a v1.16.0) — lido uma vez para a migração. */
+const CHAVE_POSICAO_ANTIGA = "chat:posicao";
 /** O alfinete "manter a conversa aberta" (no aparelho): sem ele, qualquer toque fora minimiza. */
 const CHAVE_FIXADA = "chat:fixada";
 /** As bolhas abertas (no aparelho) — voltam depois de recarregar, como as conversas guardadas. */
@@ -423,7 +426,7 @@ export const useChatAoVivo = () => useContext(ChatCtx);
 /**
  * O CHAT AO VIVO no estilo Messenger (com o canal do grupo) — o PROVEDOR em volta do painel "Ao vivo" do cabeçalho (que
  * mostra a lista das conversas numa aba): cada conversa aberta vira uma BOLHA flutuante com a foto (`BolhasChat` —
- * arrastável, encosta na borda) e tocar nela abre a JANELA da conversa ao lado. Mensagem nova = a bolha aparece quicando.
+ * cada uma arrastável SOZINHA, encosta na borda) e tocar nela abre a JANELA da conversa ao lado. Mensagem nova = a bolha aparece quicando.
  * As mensagens NÃO SÃO SALVAS: chegam só a quem está com o sistema aberto e somem ao recarregar/fechar.
  */
 export function ChatAoVivo({ config, children }: { config: ConfigChat | null; children: ReactNode }) {
@@ -437,15 +440,18 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
   const [bolhas, setBolhas] = useState<Conversa[]>([]);
   const [ativa, setAtiva] = useState<Conversa | null>(null);
   const [novas, setNovas] = useState<Set<Conversa>>(() => new Set());
-  const [posicao, setPosicao] = useState<PosicaoBolhas>(POSICAO_BOLHAS_PADRAO);
+  const [posicoes, setPosicoes] = useState<PosicoesBolhas>({});
   const [fixada, setFixada] = useState(false);
   useEffect(() => {
     try {
-      const v = localStorage.getItem(CHAVE_POSICAO);
-      if (v) setPosicao(lerPosicaoBolhas(JSON.parse(v)));
       setFixada(localStorage.getItem(CHAVE_FIXADA) === "1");
       const b = JSON.parse(localStorage.getItem(CHAVE_BOLHAS) ?? "[]") as unknown;
-      if (Array.isArray(b)) setBolhas(b.filter(conversaValida).slice(0, 12));
+      const abertas = Array.isArray(b) ? b.filter(conversaValida).slice(0, 12) : [];
+      setBolhas(abertas);
+      const v = localStorage.getItem(CHAVE_POSICOES);
+      const antiga = localStorage.getItem(CHAVE_POSICAO_ANTIGA);
+      if (v) setPosicoes(lerPosicoesBolhas(JSON.parse(v)));
+      else if (antiga) setPosicoes(migrarPosicoes(lerPosicaoBolhas(JSON.parse(antiga)), abertas));
     } catch {
       /* sem armazenamento: a posição padrão, sem o alfinete */
     }
@@ -461,13 +467,22 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
     });
   }, []);
   const minimizar = useCallback(() => setAtiva(null), []);
-  const mudarPosicao = useCallback((p: PosicaoBolhas) => {
-    setPosicao(p);
-    try {
-      localStorage.setItem(CHAVE_POSICAO, JSON.stringify(p));
-    } catch {
-      /* sem armazenamento: vale só nesta página */
-    }
+  const bolhasRef = useRef(bolhas);
+  bolhasRef.current = bolhas;
+  /** Grava a posição de uma ou mais bolhas (as demais ficam); as das conversas fechadas saem. */
+  const mudarPosicoes = useCallback((novas: PosicoesBolhas) => {
+    setPosicoes((atual) => {
+      const abertas = new Set<string>([...bolhasRef.current, "+"]);
+      const r: PosicoesBolhas = {};
+      for (const [k, p] of Object.entries({ ...atual, ...novas })) if (abertas.has(k)) r[k] = p;
+      try {
+        localStorage.setItem(CHAVE_POSICOES, JSON.stringify(r));
+        localStorage.removeItem(CHAVE_POSICAO_ANTIGA);
+      } catch {
+        /* sem armazenamento: vale só nesta página */
+      }
+      return r;
+    });
   }, []);
   const abrirConversa = useCallback((c: Conversa) => {
     setBolhas((b) => abrirBolha(b, c));
@@ -553,10 +568,8 @@ function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNo
         extras={extras.length}
         ativa={ativa}
         fixada={fixada}
-        posicao={posicao}
-        onPosicao={mudarPosicao}
-        // Reordenar mexe só nas visíveis; as de fora da pilha ("+N") seguem atrás.
-        onReordenar={(ordem) => setBolhas((b) => [...ordem.filter((c) => b.includes(c)), ...b.filter((c) => !ordem.includes(c))])}
+        posicoes={posicoes}
+        onPosicoes={mudarPosicoes}
         onTocar={alternar}
         onMinimizar={minimizar}
         // A LIXEIRA fecha a bolha — a conversa segue guardada na lista (7 dias).
