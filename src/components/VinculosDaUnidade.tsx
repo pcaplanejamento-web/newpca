@@ -252,7 +252,13 @@ export function VinculosDaUnidade({
                         disabled={salvando}
                         titulo={l.unidade.texto}
                         resumo={`${num(deste)} de ${num(l.acoes.length)} ações · ${brl(l.valor)}`}
-                        extra={sem > 0 ? <Badge tone="amber">{num(sem)} sem vínculo</Badge> : undefined}
+                        extra={
+                          sem > 0 ? (
+                            <span title={l.acoes.filter((a) => a.alvoId == null).map((a) => a.acao.texto).join("\n")}>
+                              <Badge tone="amber">{num(sem)} sem vínculo</Badge>
+                            </span>
+                          ) : undefined
+                        }
                       >
                         {editor(abertura(l.vinculo), k)}
                       </ItemAcordeao>
@@ -263,21 +269,20 @@ export function VinculosDaUnidade({
             </section>
           )}
 
+          {/* Na unidade cadastrada, as ações sem vínculo são das unidades do orçamento JÁ listadas acima (o selo âmbar
+              de cada uma) — abrir a unidade é onde se vinculam; uma 2ª lista repetiria as mesmas. */}
+          {unidade.id == null && (
           <section className="space-y-2">
             <TituloSecao titulo="Sem vínculo" contagem={`${num(v.acoesSemVinculo)} ${v.acoesSemVinculo === 1 ? "ação" : "ações"}`} />
             {v.semVinculo.length === 0 ? (
               <p className="rounded-card border border-dashed border-border-2 px-3 py-4 text-center text-sm text-muted">
-                {unidade.id == null ? "Todas as ações do orçamento estão vinculadas." : "Todas as ações destas unidades do orçamento estão vinculadas."}
+                Todas as ações do orçamento estão vinculadas.
               </p>
             ) : (
               <ul className="divide-y divide-border overflow-hidden rounded-card border border-border">
                 {v.semVinculo.map((p) => {
                   const k = `s:${p.unidade.chave}`;
-                  // Na unidade cadastrada, vincular = marcar no vínculo dela com esta unidade do orçamento.
-                  const ligada = unidade.id != null ? v.ligadas.find((l) => l.unidade.chave === p.unidade.chave) : undefined;
-                  const inicial: AberturaVinculo = ligada
-                    ? abertura(ligada.vinculo)
-                    : { chave: p.unidade.chave, alvoId: p.sugestaoId, acoes: p.vinculada ? p.acoes.map((a) => a.chave) : null };
+                  const inicial: AberturaVinculo = { chave: p.unidade.chave, alvoId: p.sugestaoId, acoes: p.vinculada ? p.acoes.map((a) => a.chave) : null };
                   return (
                     <ItemAcordeao
                       key={k}
@@ -299,6 +304,7 @@ export function VinculosDaUnidade({
               </ul>
             )}
           </section>
+          )}
         </div>
       )}
     </Modal>

@@ -2008,9 +2008,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   POR unidade do orçamento, cada ação com a dotação; até 12 — `listaSemVinculo` — e "e mais N") e o toque abre UM banner,
   **`VinculosDaUnidade`** (DS): o resumo em `StatMini` (Total · Vinculado · Sem vínculo), a seção **Unidades do orçamento** (as ligadas à
   unidade da linha num acordeão — cada uma abre ali o editor com a unidade CADASTRADA FIXA, `EditorVinculoOrcamento
-  fixo="alvo"`, a lógica invertida da aba Vínculos — + "Adicionar") e a seção **Sem vínculo** SEPARADA (as ações que nenhum
-  vínculo leva, por unidade do orçamento, em âmbar; tocar abre o editor para vinculá-las); na linha "Sem vínculo", só ela,
-  de todo o orçamento (`fixo="cubo"`, sugestão pré-escolhida); **PDF** no cabeçalho (`BotaoAcao`, com Exportar): KPIs Total ·
+  fixo="alvo"`, a lógica invertida da aba Vínculos — + "Adicionar"; a que tem ações sem vínculo leva o selo âmbar "N sem vínculo", com a lista na dica — abrir é vinculá-las:
+  UMA lista só, nunca a mesma unidade duas vezes); na linha "Sem vínculo", a seção **Sem vínculo** (as ações que nenhum
+  vínculo leva, por unidade do orçamento, em âmbar; tocar abre o editor) de todo o orçamento (`fixo="cubo"`, sugestão pré-escolhida); **PDF** no cabeçalho (`BotaoAcao`, com Exportar): KPIs Total ·
   Vinculado · Sem vínculo e só DUAS tabelas — **Ações vinculadas** e **Ações sem vínculo** (Unidade do orçamento · Ação ·
   Dotação), cada uma com a linha **TOTAL** em destaque. Núcleo puro **`vinculos-unidade.ts`** (`vinculosDaLinha`,
   `semVinculoPorAlvo`, `listaSemVinculo`, `blocosVinculosDaLinha` — testado). O editor é MINIMALISTA: o lado fixo pela
