@@ -4197,7 +4197,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   leitura (`consultaPermitida`). A `TarefaExecucaoDfds` lê CADA entidade dos órgãos (o `entidade_centi` cadastrado, senão o mapa
   do aparelho), grava por entidade (`POST …/execucao-dfds` com `dfdIds`) e separa as visões DFDs do sistema · Situação diferente
   (≠ Executado) · Não encontrados na Centi · Só na Centi (planejamentos sem DFD). A leitura pela tela (`telaPlanejamentos`) abaixo
-  segue na extensão, sem uso na tela.
+  segue na extensão, sem uso na tela. Desde a v1.22.0: barra de andamento por entidade + um cartão por entidade (órgãos, DFDs, lidos,
+  ≠ executado, só na Centi) e o selo da execução no `DfdCabecalho` (`execucao`: Executado · Não executado · situação · Não
+  verificado — DFD gravado e DFD ao lado do protocolo); em Ajustes, o órgão com `entidade_centi` cadastrado fica fixo (`fixas`).
 - **EXECUÇÃO DOS DFDs pela CM002 (extensão 1.12.2, migração `0089` — `dfds.execucao_centi`/`execucao_centi_em`):** tarefa
   **"Verificar execução dos DFDs (CM002)"** da Automação (`TarefaExecucaoDfds`): a ação **`telaPlanejamentos`**
   (`centi-tela.js` v9, só leitura e o MÍNIMO de cliques) lê a tabela "Resultados" da CM002 COMO ESTÁ NA TELA (o HTML —
