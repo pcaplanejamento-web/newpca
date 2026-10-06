@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.14.3",
+    data: "2026-10-06",
+    titulo: "Arrastar a bolha do chat",
+    mudancas: [
+      { tipo: "correcao", area: "Chat", texto: "A bolha com foto agora se arrasta de verdade — antes o navegador arrastava/selecionava a imagem." },
+    ],
+  },
+  {
     versao: "1.14.2",
     data: "2026-10-06",
     titulo: "Chat estável, Ao vivo num só lugar e lixeira",

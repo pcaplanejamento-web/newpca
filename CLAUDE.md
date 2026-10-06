@@ -490,6 +490,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`animate-janela-cresce` com origem no centro dela) e sai encolhendo (`animate-janela-sai`, o mesmo elemento). Sombra
   `shadow-flutuante`/`shadow-erguida` (tokens `--sombra-flutuante`/`--sombra-erguida`, claro e escuro). Fotos sempre
   redondas: todo invólucro com anel em volta de um `Avatar` é `flex`/`inline-flex` (num bloco, a altura da linha esticava o anel).
+- **Arrasto sem o nativo (v1.14.3):** a foto do `Avatar` é `draggable={false}`; a pilha bloqueia `dragstart`, a seleção, o
+  `-webkit-user-drag` e o menu do toque longo nas imagens, e o `pointerdown` do mouse já faz `preventDefault` (antes do
+  limiar de 6px o navegador começava a arrastar a imagem).
 
 ## Presença no nível profissional (v1.14.1)
 - **Cabeçalho:** até `MAX_FOTOS`=5 fotos (a primeira por cima — o ponto no canto não é coberto) e o círculo **"+N"** do mesmo

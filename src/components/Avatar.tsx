@@ -69,6 +69,7 @@ function AvatarBase({ nome, foto, size, className }: { nome: string; foto?: stri
         title={nome}
         loading="lazy"
         decoding="async"
+        draggable={false}
         onError={() => setFalhou(foto)}
         className={`${DIM[size]} shrink-0 rounded-full object-cover ${className}`}
       />

@@ -138,6 +138,8 @@ export function BolhasChat({
   const pegar = useCallback(
     (e: React.PointerEvent, conversa: Conversa, indice: number) => {
       if (!t || e.button > 0) return;
+      // Segura JÁ na pressão (antes do limiar): o navegador não começa a selecionar texto nem a arrastar a foto.
+      if (e.pointerType === "mouse") e.preventDefault();
       const x0 = e.clientX;
       const y0 = e.clientY;
       const yBolha = topo + indice * passo;
@@ -234,7 +236,10 @@ export function BolhasChat({
       <ul
         ref={pilhaRef}
         aria-label="Conversas abertas"
-        className={`fixed z-[60] m-0 flex list-none flex-col p-0 ${arrasto ? "" : "bolha-encosta"} ${telaCheia && ativa ? "hidden" : ""}`}
+        // Nada de arrasto/seleção NATIVOS (a imagem da foto "saía" com o mouse) nem o menu de salvar imagem no toque longo:
+        // o arrasto é o da bolha.
+        onDragStart={(e) => e.preventDefault()}
+        className={`fixed z-[60] m-0 flex list-none flex-col p-0 select-none [-webkit-touch-callout:none] [&_img]:pointer-events-none [&_img]:[-webkit-user-drag:none] ${arrasto ? "" : "bolha-encosta"} ${telaCheia && ativa ? "hidden" : ""}`}
         style={{ left: esquerda, top: topo, gap: VAO, touchAction: "none" }}
       >
         {bolhas.map((b, i) => {
@@ -257,6 +262,7 @@ export function BolhasChat({
             >
               <button
                 type="button"
+                draggable={false}
                 onPointerDown={(e) => pegar(e, b.conversa, i)}
                 onClick={() => !engolirClique.current && onTocar(b.conversa)}
                 aria-label={`${b.rotulo}${b.naoLidas ? ` — ${b.naoLidas} não lida${b.naoLidas === 1 ? "" : "s"}` : ""}`}
