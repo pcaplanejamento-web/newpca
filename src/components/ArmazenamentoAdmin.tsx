@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { Armazenamento, TabelaArmazenamento } from "@/lib/armazenamento";
 import type { MonitoramentoArmazenamento, UsoOficial } from "@/lib/cf-analytics";
+import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
 import { formatBytes, num, pct } from "@/lib/format";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -12,6 +14,7 @@ import { BotaoAtualizar } from "./BotaoAtualizar";
 import { IconDatabase, IconImage, IconLayers, IconTrash } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { MonitoramentoWorker } from "./MonitoramentoWorker";
+import { SaudeDados } from "./SaudeDados";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
@@ -57,6 +60,43 @@ export function ArmazenamentoAdmin() {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Saúde dos dados: carregada à parte (a tela não espera por ela); "Verificar" refaz a leitura no banco.
+  const router = useRouter();
+  const [saude, setSaude] = useState<DadosSaude | null>(null);
+  const [erroSaude, setErroSaude] = useState<string | null>(null);
+  const [verificando, setVerificando] = useState(false);
+  const verificarSaude = useCallback(async (fresco: boolean) => {
+    setVerificando(true);
+    setErroSaude(null);
+    let msg = "Não foi possível verificar os dados agora. Tente de novo.";
+    try {
+      const r = await fetch(`/api/admin/saude-dados${fresco ? "?fresco=1" : ""}`);
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; saude?: DadosSaude };
+      if (r.ok && j.ok && j.saude) {
+        setSaude(j.saude);
+        return;
+      }
+      if (j.error) msg = j.error;
+    } catch {
+      // sem rede: a mensagem padrão
+    } finally {
+      setVerificando(false);
+    }
+    setErroSaude(msg);
+  }, []);
+  useEffect(() => {
+    void verificarSaude(false);
+  }, [verificarSaude]);
+  const secaoSaude = (
+    <SaudeDados
+      saude={saude}
+      erro={erroSaude}
+      verificando={verificando}
+      onVerificar={() => void verificarSaude(true)}
+      onAbrir={(href) => router.push(href)}
+    />
+  );
 
   async function recarregar() {
     setRecarregando(true);
@@ -115,6 +155,7 @@ export function ArmazenamentoAdmin() {
             <SkeletonLinhas linhas={6} />
           </div>
         )}
+        {secaoSaude}
       </div>
     );
   }
@@ -243,6 +284,9 @@ export function ArmazenamentoAdmin() {
         </h2>
         <MonitoramentoWorker monitoramento={dados.monitoramento} hojeUtc={new Date().toISOString().slice(0, 10)} />
       </section>
+
+      {/* Saúde dos dados — integridade dos totais e dados a tratar */}
+      {secaoSaude}
 
       {/* Tabelas */}
       <section className="space-y-2">

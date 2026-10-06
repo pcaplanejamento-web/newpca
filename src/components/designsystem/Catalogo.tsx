@@ -224,6 +224,8 @@ import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { duracaoMotionMs, Modal } from "@/components/Modal";
 import { MonitoramentoWorker } from "@/components/MonitoramentoWorker";
+import { SaudeDados } from "@/components/SaudeDados";
+import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
@@ -245,6 +247,48 @@ import { TokenEditor } from "./TokenEditor";
 
 // Conferência de catálogo de exemplo p/ o ItemDetalhe (divergente: descrição + unidade
 // diferentes; referência com tipos). Chave = código normalizado do item.
+/** Exemplo da SAÚDE DOS DADOS: a integridade toda certa e dois dados a tratar. */
+const SAUDE_DEMO: DadosSaude = {
+  verificadoEm: "2026-10-06T14:30:00.000Z",
+  contagens: { protocolos: 68, dfds: 1289, itens: 19466, numerosPca: 15683 },
+  verificacoes: [
+    { chave: "dfd-itens", titulo: "DFD × itens", descricao: "O valor e o nº de itens de cada DFD completo são os dos itens gravados.", grupo: "integridade", nivel: "ok", total: 0, unidade: "DFDs", linhas: [], parcial: false },
+    { chave: "abas", titulo: "Protocolo × DFDs × itens", descricao: "A soma dos DFDs de cada protocolo é a soma dos itens.", grupo: "integridade", nivel: "ok", total: 0, unidade: "protocolos", linhas: [], parcial: false },
+    { chave: "pca", titulo: "Numeração e vínculos do PCA", descricao: "Cada item incorporado tem um nº vivo.", grupo: "integridade", nivel: "ok", total: 0, unidade: "ocorrências", linhas: [], parcial: false },
+    { chave: "rastro", titulo: "Rastro e Id do protocolo", descricao: "Nenhum DFD contado em dobro e nenhum Id repetido.", grupo: "integridade", nivel: "ok", total: 0, unidade: "ocorrências", linhas: [], parcial: false },
+    { chave: "incompleta", titulo: "Gravação incompleta", descricao: "DFDs com menos itens gravados que os do documento.", grupo: "dados", nivel: "ok", total: 0, unidade: "DFDs", linhas: [], parcial: false },
+    {
+      chave: "capa",
+      titulo: "Capa × somatória",
+      descricao: "O valor da capa ausente ou diferente da soma dos DFDs — a mesma régua da Mesa.",
+      grupo: "dados",
+      nivel: "atencao",
+      total: 2,
+      unidade: "protocolos",
+      linhas: [
+        { chave: "capa:1", protocolo: "122516/2026", dfd: null, planejamento: null, problema: "Capa sem valor · somatória R$ 48.900,00", href: "/painel/mesa?abrir=protocolo:1" },
+        { chave: "capa:2", protocolo: "125900/2026", dfd: null, planejamento: null, problema: "Capa R$ 1.000,00 × somatória R$ 1.250,00", href: "/painel/mesa?abrir=protocolo:2" },
+      ],
+      parcial: false,
+    },
+    {
+      chave: "sem-valor",
+      titulo: "Itens sem valor unitário",
+      descricao: "Itens sem valor unitário (vazio, zero ou negativo) em 2 DFDs: o valor do DFD fica incompleto.",
+      grupo: "dados",
+      nivel: "atencao",
+      total: 3,
+      unidade: "itens",
+      linhas: [
+        { chave: "sem-valor:10", protocolo: "125900/2026", dfd: "1497", planejamento: "1510", problema: "2 itens sem valor unitário (de 12)", href: "/painel/mesa?abrir=protocolo:2" },
+        { chave: "sem-valor:11", protocolo: null, dfd: "1097", planejamento: "1120", problema: "1 item sem valor unitário (de 4)", href: "/painel/mesa?abrir=dfd:11" },
+      ],
+      parcial: false,
+    },
+    { chave: "sem-planejamento", titulo: "DFD sem nº de planejamento", descricao: "O nº de planejamento identifica o DFD no Centi.", grupo: "dados", nivel: "ok", total: 0, unidade: "DFDs", linhas: [], parcial: false },
+  ],
+};
+
 const DEMO_ITEM_CONFORMIDADE = new Map<string, ConferenciaItem>([
   [
     "5241937264",
@@ -3435,6 +3479,13 @@ export function Catalogo() {
         />
         <div className="mt-3">
           <MonitoramentoWorker hojeUtc="2026-09-15" monitoramento={null} />
+        </div>
+      </Secao>
+
+      <Secao titulo="SaudeDados — a saúde dos dados no Armazenamento (integridade dos totais e dados a tratar; tocar na linha abre a Mesa)">
+        <SaudeDados saude={SAUDE_DEMO} verificando={false} onVerificar={() => toast.info("Verificar")} onAbrir={(href) => toast.info(`Abrir ${href}`)} />
+        <div className="mt-3">
+          <SaudeDados saude={null} erro="Não foi possível verificar os dados agora. Tente de novo." verificando={false} onVerificar={() => toast.info("Tentar de novo")} />
         </div>
       </Secao>
 

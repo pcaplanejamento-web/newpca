@@ -61,6 +61,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   // ── Administração (só o papel Administrador) ────────────────────────────────────────────────────────────
   "admin/aparencia": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },
   "admin/armazenamento": { GET: ADMIN, POST: ADMIN },
+  "admin/saude-dados": { GET: ADMIN },
   "admin/auditoria": { GET: ADMIN },
   "admin/automacao/extensao": { GET: ADMIN },
   "admin/automacao/config": { GET: ADMIN, PATCH: ADMIN },
