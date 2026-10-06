@@ -4190,6 +4190,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   1.11.1 libera esse endereço na trava de leitura); senão `restauth/getbinlink/{chave}/{nome}` (o Emitir DFD) — UMA vez (e o
   link, se a resposta for um); sem PDF, o erro traz o pedido (endereço → status), o esqueleto da resposta (`amostra`) e os
   parâmetros enviados — nenhuma repetição nem endereço adivinhado.
+- **FLUXOS DE AUTOMAÇÃO — estilo N8N (v1.24.0, migração `0091`, extensão 1.15.0):** Automação → tarefa **"Fluxos
+  (automações personalizadas)"** (`FluxosAutomacao`, `src/components/fluxos/`). Tabela `automacao_fluxos` (nome, `grafo`
+  JSON, `frequencia` JSON, `ativo`, `proxima_em`, `ultima_em`, `ultima_execucao`); D1 `fluxos.ts`, Zod `fluxos-validation.ts`,
+  rotas `GET/POST /api/admin/automacao/fluxos` e `GET/PATCH/POST(fim da execução)/DELETE …/fluxos/[id]` (`exigirAdmin`,
+  auditoria `automacao`). **Núcleo PURO `fluxo-core.ts`** (testado — `tests/fluxo-core.test.ts`): `lerGrafo`,
+  `validarGrafo` (Início único, campos obrigatórios, portas, ciclo só pela porta "volta" do Laço — `temCicloSemLaco`),
+  `resolverCaminho`/`interpolar` (`{{campo}}`), `comparar` (operadores sem acento/caixa, números pt-BR), `chaveJuncao`,
+  `lerFrequencia`/`proximaExecucao` (Brasília; intervalo ≥ 5 min, diário/dias úteis, semanal, mensal) e o MOTOR
+  `executarFluxo` (por EVENTOS: o nó roda quando todas as conexões de cada porta entregaram; toda saída é sempre entregue —
+  vazia também; nó com todas as entradas vazias é PULADO, menos `rodaSemItens`; o Laço `entregaParcial` entrega "lote" OU
+  "fim"; saída implícita "erro" — ligada, o erro segue por ela; sem ela, o fluxo para e aponta o nó; tetos `MAX_PASSOS`,
+  `MAX_ITENS`, `MAX_ITERACOES_LACO`). **REGISTRO `fluxo-nos.ts`** (novo nó = uma entrada: tipo, categoria, portas, campos
+  DECLARATIVOS, `executar`): Início · Centi (Repartições, Protocolos por situação — `telaApi {situacao}`, CM002 por
+  entidade) · Sistema (DFDs, Protocolos) · Leitura (Ler protocolo — `fluxo-navegador.ts`: emissão POR CÓDIGO + leitura do
+  PDF) · Lógica (SE, Comparar A × B → iguais/diferentes/só em A/só em B, Laço até o fim, Juntar) · Dados (Filtrar, Definir
+  campos, Ordenar, Remover duplicados, Agrupar e somar) · Erros (Apontar erros → relatório) · Saída (Gravar execução nos
+  DFDs, Avisar). Modelos prontos em `fluxo-modelos.ts`. **Editor:** paleta (tocar = acrescenta ligado ao nó marcado;
+  arrastar = solta no quadro), `CanvasFluxo` (DS — grade, pan, zoom, portas, curvas, Delete), `PainelNo` (o formulário
+  do tipo + o seletor de "dado buscado" pelos campos da última execução + a saída numa tabela), relatório da execução.
+  **Agendador:** com a tela aberta e a extensão pronta, a cada minuto roda o fluxo ligado cuja hora chegou
+  (`navigator.locks` — uma aba por fluxo); o servidor agenda a próxima no fim. Futuro (o registro comporta): gatilho por
+  evento/webhook, HTTP genérico, e-mail, IA (Claude) no servidor, escrita na Centi com autorização.
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
   ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só

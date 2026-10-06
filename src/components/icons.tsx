@@ -141,6 +141,14 @@ import {
   WrapText,
   Ban,
   Maximize2,
+  Play as LPlay,
+  GitBranch as LGitBranch,
+  Workflow as LWorkflow,
+  ScanText as LScanText,
+  Sigma as LSigma,
+  Square as LSquare,
+  Maximize as LMaximize,
+  Minus as LMinus,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -344,3 +352,13 @@ export const IconReferencia = BookOpen;
 // O CHAT AO VIVO: o ícone do cabeçalho, enviar e responder.
 export const IconChat = MessagesSquare;
 export const IconResponder = Reply;
+
+// Fluxos de automação (nós)
+export const IconPlay = LPlay;
+export const IconRamo = LGitBranch;
+export const IconFluxo = LWorkflow;
+export const IconLerPdf = LScanText;
+export const IconSoma = LSigma;
+export const IconParar = LSquare;
+export const IconEnquadrar = LMaximize;
+export const IconMinus = LMinus;

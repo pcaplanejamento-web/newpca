@@ -850,7 +850,7 @@
 
   // TELA PROTOCOLO pela API (só LEITURA): repete a lista "Em Análise" guardada SEM paginação — todas as linhas, sem tocar
   // na tela. Com situação na lista, só as "em análise". Sem a lista guardada, a leitura pela tela a ensina UMA vez.
-  async function telaApi() {
+  async function telaApi(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão." };
     let g = null;
@@ -872,7 +872,11 @@
     }
     const l = A.protocolosTela(j);
     if (!l) return { ok: false, semConsulta: true, erro: "A resposta não tem a forma da lista da Tela Protocolo." };
-    return { ok: true, protocolos: l.situacao ? l.linhas.filter((x) => A.emAnalise(x.situacao)) : l.linhas };
+    // Sem filtro = "Em Análise" (a tarefa da tela); `situacao` = o texto da situação pedida (ex.: "ANALISADO"); "*" = todas.
+    const alvo = typeof d?.situacao === "string" ? d.situacao : "";
+    const norm = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const passa = (x) => (!alvo ? A.emAnalise(x.situacao) : alvo === "*" || norm(x.situacao).includes(norm(alvo)));
+    return { ok: true, filtro: alvo || null, comSituacao: !!l.situacao, protocolos: l.situacao ? l.linhas.filter(passa) : l.linhas };
   }
 
   // Os DADOS da grade da Tela Protocolo (Wijmo FlexGrid — o controle mora no elemento, "wj-Control"): TODAS as linhas da

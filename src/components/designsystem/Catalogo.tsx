@@ -90,6 +90,10 @@ import { BotaoExportar } from "@/components/ExportarTabelas";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { CelulaExecucao } from "@/components/CelulaExecucao";
+import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
+import type { Grafo } from "@/lib/fluxo-core";
+import { MODELOS_FLUXO } from "@/lib/fluxo-modelos";
+import { REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
 import { consolidarItens } from "@/lib/itens-consolidados";
 import { regrasPadrao } from "@/lib/avaliacao-core";
@@ -354,6 +358,26 @@ function FalhaNaTelaDemo() {
         />
       </div>
     </div>
+  );
+}
+
+/** O canvas dos FLUXOS de automação (estilo N8N) com um modelo pronto — arraste nós, ligue saídas a entradas. */
+function CanvasFluxoDemo() {
+  const [g, setG] = useState<Grafo>(MODELOS_FLUXO[0].grafo);
+  const [sel, setSel] = useState<string | null>(null);
+  const [v, setV] = useState<Vista>({ x: 20, y: 120, z: 0.55 });
+  return (
+    <CanvasFluxo
+      grafo={g}
+      registro={REGISTRO_NOS}
+      selecionado={sel}
+      onSelecionar={setSel}
+      onMudar={setG}
+      vista={v}
+      onVista={setV}
+      altura={420}
+      passos={{ inicio1: { no: "inicio1", estado: "ok", itens: 1, vezes: 1, ms: 1 }, cm1: { no: "cm1", estado: "rodando", itens: 0, vezes: 1, ms: 0, aviso: "Entidade 2 (1 de 3)…" } }}
+    />
   );
 }
 
@@ -3135,6 +3159,9 @@ export function Catalogo() {
 
   const vitrine = (
     <>
+      <Secao titulo="Fluxos de automação (CanvasFluxo)">
+        <CanvasFluxoDemo />
+      </Secao>
       <Secao titulo="Cores — neutros">
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 lg:grid-cols-11">
           {NEUTROS.map(([n, t]) => (

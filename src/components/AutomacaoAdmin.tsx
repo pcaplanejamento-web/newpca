@@ -71,6 +71,7 @@ import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
 import { HistoricoExecucoes } from "./HistoricoExecucoes";
+import { FluxosAutomacao } from "./fluxos/FluxosAutomacao";
 import { TarefaExecucaoDfds } from "./TarefaExecucaoDfds";
 import { TarefaTelaProtocolo } from "./TarefaTelaProtocolo";
 
@@ -122,13 +123,14 @@ const lerTextoAlvo = (v: unknown): TextoAlvo => {
 };
 type Estado = "fila" | "baixando" | "ok" | "falha" | "pulado" | "repetido";
 type Linha = TarefaCenti & { estado: Estado; erro?: string; amostra?: string; entidade?: string };
-type Modo = "protocolo" | "ids" | "tela" | "execucao";
+type Modo = "protocolo" | "ids" | "tela" | "execucao" | "fluxos";
 const CHAVE_TAREFA = "automacao:tarefa";
 const TAREFAS: { value: Modo; label: string }[] = [
   { value: "protocolo", label: "Baixar/anexar DFDs · por protocolo" },
   { value: "ids", label: "Baixar/anexar DFDs · por Id" },
   { value: "tela", label: "Ler a Tela Protocolo" },
   { value: "execucao", label: "Verificar execução dos DFDs (CM002)" },
+  { value: "fluxos", label: "Fluxos (automações personalizadas)" },
 ];
 const lerTarefa = (v: unknown): Modo => (TAREFAS.some((t) => t.value === v) ? (v as Modo) : "protocolo");
 type Ext = { versao: string; copias: number } | null;
@@ -1679,9 +1681,19 @@ export function AutomacaoAdmin({
       <div
         ref={corpo}
         style={{ "--h-automacao": altura ? `${altura}px` : undefined } as React.CSSProperties}
-        className={`grid gap-[var(--gap-block)] lg:h-[var(--h-automacao)] lg:grid-rows-[minmax(0,1fr)] ${modo === "tela" || modo === "execucao" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
+        className={`grid gap-[var(--gap-block)] ${modo === "fluxos" ? "" : "lg:h-[var(--h-automacao)] lg:grid-rows-[minmax(0,1fr)]"} ${modo === "tela" || modo === "execucao" || modo === "fluxos" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
       >
-        {modo === "execucao" ? (
+        {modo === "fluxos" ? (
+          <FluxosAutomacao
+            pedir={pedir}
+            lote={loteRef}
+            interrompido={interrompidoRef}
+            pronto={pronto}
+            mapaEntidades={{ ...mapa, ...cadastradas }}
+            protocolos={protocolos}
+            onRodando={setRodandoTela}
+          />
+        ) : modo === "execucao" ? (
           <TarefaExecucaoDfds pedir={pedir} lote={loteRef} pronto={pronto} mapa={{ ...mapa, ...cadastradas }} onRodando={setRodandoTela} />
         ) : modo === "tela" ? (
           <TarefaTelaProtocolo

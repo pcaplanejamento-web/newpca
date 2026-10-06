@@ -99,7 +99,7 @@ export async function pdfDoAchado(a: AchadoCenti, baixar: BaixarCenti): Promise<
   };
 }
 
-type PedirExtensao = (acao: string, dados: unknown, ms: number) => Promise<{ ok: boolean; b64?: string; status?: number; erro?: string }>;
+export type PedirExtensao = (acao: string, dados: unknown, ms: number) => Promise<{ ok: boolean; b64?: string; status?: number; erro?: string }>;
 /** O GET do arquivo pela extensão (só os endereços do arquivo gerado — a trava da extensão), na entidade pedida. */
 export const baixarPelaExtensao =
   (pedir: PedirExtensao, entidade?: string): BaixarCenti =>

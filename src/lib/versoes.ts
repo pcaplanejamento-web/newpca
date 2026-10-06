@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.24.0",
+    data: "2026-10-06",
+    titulo: "Fluxos de automação (estilo N8N)",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Fluxos personalizados: monte automações ligando blocos num editor visual — buscar na Centi (CM002, repartições, protocolos por situação), dados do sistema, ler protocolos, SE, Comparar A × B, Laço até o fim, Filtrar, Agrupar e Apontar erros.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Frequência por fluxo (a cada N minutos, diário, dias úteis, semanal, mensal) e modelos prontos: execução dos DFDs na CM002 e leitura dos protocolos analisados. Extensão 1.15.0.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.23.0",
     data: "2026-10-06",
     titulo: "Tela Protocolo lida pela API",

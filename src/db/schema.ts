@@ -1668,3 +1668,27 @@ export const automacaoRegistros = sqliteTable(
     index("automacao_registros_protocolo_idx").on(t.protocoloId),
   ],
 );
+
+/**
+ * FLUXOS DE AUTOMAÇÃO (estilo N8N, migração `0091`): nós ligados entre si (`grafo` JSON — `fluxo-core.ts`), a FREQUÊNCIA
+ * (`frequencia` JSON) e o resumo da última execução. O motor roda no navegador (a Centi só responde pela extensão).
+ */
+export const automacaoFluxos = sqliteTable(
+  "automacao_fluxos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    descricao: text("descricao"),
+    grafo: text("grafo").notNull().default('{"nos":[],"conexoes":[]}'),
+    frequencia: text("frequencia").notNull().default('{"tipo":"manual"}'),
+    ativo: integer("ativo", { mode: "boolean" }).notNull().default(false),
+    proximaEm: text("proxima_em"),
+    ultimaEm: text("ultima_em"),
+    /** O resumo da última execução (estado, nós, itens, erros) — JSON. */
+    ultimaExecucao: text("ultima_execucao"),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("automacao_fluxos_proxima_idx").on(t.proximaEm)],
+);

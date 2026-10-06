@@ -29,6 +29,12 @@ a cada gravação completa, vínculo legado respeitado; consulta pública e cale
 PCA sem avulsos · ✅ Fusão por Id: todos os de mesmo Id conferidos, recusa com PCA, sem rastro em dobro · ✅ Re-importar um
 protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 
+### Fluxos de automação estilo N8N (v1.24.0) — entregue
+Editor visual de fluxos na Automação: blocos de busca (Centi/sistema), leitura de protocolos, lógica (SE, Comparar, Laço até
+o fim), transformação, apontar erros e saída; frequência por fluxo e modelos prontos. Próximas fases (o registro de nós já
+comporta): gatilho por evento do sistema e webhook, HTTP genérico com credenciais cifradas, e-mail/Trello, nó de IA (Claude,
+no servidor, com dados mascarados), consultas aprendidas pelo gravador como nós, escrita na Centi com autorização.
+
 ### Melhorias do sistema (segurança, deploy, saúde dos dados, acessibilidade) — entregue
 ✅ **Segurança (v1.4.4):** Next.js 16.3.4 → 16.3.8 (alerta crítico de RCE no `next/og`, que o sistema não usa), wrangler
 4.147, OpenNext 1.20.8: nenhum alerta crítico/alto (restam 4 moderados do `drizzle-kit`, só de desenvolvimento) · ✅ Deploy
