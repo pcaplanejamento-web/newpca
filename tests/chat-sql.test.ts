@@ -42,16 +42,22 @@ describe("chat guardado por 7 dias — chaves e banco (driver D1 real)", () => {
     assert.equal(ana[0].texto, "oi aaaaaaaa02");
     const bia = await sqlChat.consultaConversasChat(orm, 2, 0);
     assert.equal(bia[0].naoLidas, 0, "quem respondeu já leu a anterior");
-    await sqlChat.comandoMarcarLidaChat(orm, "p1-2", 1, "aaaaaaaa02", 2500);
+    // Uma nova chega (3000) ANTES do sinal da lida (até a 02) chegar ao servidor (4000): ela continua não lida.
+    await (orm as { batch: (c: unknown[]) => Promise<unknown> }).batch(sqlChat.comandosGuardarMensagem(orm, m("aaaaaaaa03", 2, 3000)) as never);
+    await sqlChat.comandoMarcarLidaChat(orm, "p1-2", 1, "aaaaaaaa02", 4000);
+    assert.equal((await sqlChat.consultaConversasChat(orm, 1, 0))[0].naoLidas, 1, "a hora lida é a da mensagem lida, não a do sinal");
+    await sqlChat.comandoMarcarLidaChat(orm, "p1-2", 1, "aaaaaaaa03", 4100);
     assert.equal((await sqlChat.consultaConversasChat(orm, 1, 0))[0].naoLidas, 0);
+    await sqlChat.comandoMarcarLidaChat(orm, "p1-2", 1, "aaaaaaaa01", 4200);
+    assert.equal((await sqlChat.consultaConversasChat(orm, 1, 0))[0].naoLidas, 0, "nunca volta para trás");
     const lidas = await sqlChat.consultaLidasChat(orm, "p1-2");
-    assert.deepEqual(lidas.find((l: { usuarioId: number }) => l.usuarioId === 1)?.lidaAte, "aaaaaaaa02");
+    assert.deepEqual(lidas.find((l: { usuarioId: number }) => l.usuarioId === 1)?.lidaAte, "aaaaaaaa03", "o ✓✓ também não volta");
     const hist = await sqlChat.consultaHistoricoChat(orm, "p1-2", 0, 200);
-    assert.deepEqual(hist.map((h: { id: string }) => h.id), ["aaaaaaaa02", "aaaaaaaa01"]);
+    assert.deepEqual(hist.map((h: { id: string }) => h.id), ["aaaaaaaa03", "aaaaaaaa02", "aaaaaaaa01"]);
     assert.equal((await sqlChat.consultaParticipa(orm, "p1-2", 3)).length, 0);
     // limpeza: o que é anterior a 1500 sai; a conversa (última em 2000) fica
     await (orm as { batch: (c: unknown[]) => Promise<unknown> }).batch(sqlChat.comandosLimparChat(orm, 1500) as never);
-    assert.equal((db.prepare("SELECT count(*) AS n FROM chat_mensagens").get() as { n: number }).n, 1);
+    assert.equal((db.prepare("SELECT count(*) AS n FROM chat_mensagens").get() as { n: number }).n, 2);
     await (orm as { batch: (c: unknown[]) => Promise<unknown> }).batch(sqlChat.comandosLimparChat(orm, 9999) as never);
     assert.equal((db.prepare("SELECT count(*) AS n FROM chat_conversas").get() as { n: number }).n, 0);
   });

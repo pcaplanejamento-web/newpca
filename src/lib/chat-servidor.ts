@@ -28,7 +28,7 @@ export async function entregarNaCaixa(dono: number, corpo: string): Promise<numb
   }
 }
 
-/** Repassa ao objeto do GRUPO (a mensagem a todas as abas; a "lida" a todas menos as de quem leu) — quantas receberam. */
+/** Repassa ao objeto do GRUPO (a mensagem e a "lida" a todas as abas — também às de quem leu) — quantas receberam. */
 export async function repassarNoGrupo(grupoId: number, msg: Record<string, unknown>): Promise<number> {
   const b = bindings();
   if (!b) return 0;

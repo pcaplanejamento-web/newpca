@@ -81,7 +81,7 @@ export class PresencaGrupo {
       return Response.json(atividade ? { p: listaPresenca(anexos, true), a: listaAtividade(anexos) } : { p: listaPresenca(anexos, true) });
     }
     // O REPASSE do chat do grupo (só pela rota `/api/chat/*`, que já conferiu quem manda e GUARDOU a mensagem — o binding do
-    // objeto não é alcançável de fora): a mensagem a todas as abas; a "lida" a todas menos as de quem leu.
+    // objeto não é alcançável de fora): a mensagem e a "lida" a todas as abas.
     if (pathname === "/repasse" && req.method === "POST") {
       let m: Record<string, unknown>;
       try {
@@ -89,8 +89,8 @@ export class PresencaGrupo {
       } catch {
         return new Response("Corpo inválido.", { status: 400 });
       }
-      const de = Number(m.de);
-      const abas = m.t === "lida" ? this.state.getWebSockets().filter((o) => !this.state.getTags(o).includes(`u${de}`)) : this.state.getWebSockets();
+      // A "lida" também às abas de quem leu: as outras abas/aparelhos dele zeram as não lidas.
+      const abas = this.state.getWebSockets();
       enviarA(abas, m);
       return Response.json({ n: abas.length });
     }

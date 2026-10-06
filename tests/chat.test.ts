@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  naoLidasAoCarregar,
+  naoLidasDe,
   cartoesDoTexto,
   chatLigado,
   contarNaJanela,
@@ -328,5 +330,27 @@ describe("bolhas — abrir espaço ao vivo e ímã (v1.17.1)", () => {
     const depois = arrumarBolhas({ ...posicoes, ...novas }, ["a", "b", "c"], tela);
     assert.deepEqual(depois, p.lugares);
     for (const k of Object.keys(novas)) if (k !== "c") assert.equal(novas[k].t, posicoes[k as "a" | "b"].t);
+  });
+});
+
+describe("não lidas REAIS (v1.17.3)", () => {
+  const msgs = [
+    { de: 2, em: 100 },
+    { de: 1, em: 150 },
+    { de: 2, em: 200 },
+    { de: 3, em: 300 },
+  ];
+  it("conta só as dos outros depois da hora lida", () => {
+    assert.equal(naoLidasDe(msgs, 1, 0), 3);
+    assert.equal(naoLidasDe(msgs, 1, 200), 1, "a lida (200) e as anteriores não contam");
+    assert.equal(naoLidasDe(msgs, 1, 300), 0);
+    assert.equal(naoLidasDe([], 1, 0), 0);
+  });
+  it("lista guardada: o retrato do servidor + só as que chegaram ao vivo DEPOIS dele", () => {
+    assert.equal(naoLidasAoCarregar(2, msgs, 1, 250), 3, "a de 300 chegou depois do retrato");
+    assert.equal(naoLidasAoCarregar(2, msgs, 1, 1000), 2, "as ao vivo antes do retrato já estão nele (sem duplicar)");
+    assert.equal(naoLidasAoCarregar(0, [{ de: 1, em: 900 }], 1, 500), 0, "as minhas nunca contam");
+    assert.equal(naoLidasAoCarregar(-3, [], 1, 0), 0, "nunca negativa");
+    assert.equal(naoLidasAoCarregar(Number.NaN, [], 1, Number.POSITIVE_INFINITY), 0);
   });
 });

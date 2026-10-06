@@ -32,6 +32,8 @@ import {
   MAX_TRECHO_RESPOSTA,
   type MensagemChat,
   mencaoEmCurso,
+  naoLidasAoCarregar,
+  naoLidasDe,
   novoIdMensagem,
   quantosLeram,
   type RespostaChat,
@@ -118,6 +120,24 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
     });
   }, []);
 
+  /** Até onde esta aba já avisou que leu (por conversa) — não repete o sinal. */
+  const lidaEnviada = useRef(new Map<Conversa, string>());
+  /** EU li em OUTRA aba/aparelho (a "lida" volta a todas as minhas abas): aqui as não lidas passam a ser só as que chegaram
+   * depois da mensagem lida (sem ela na tela, zero). Na conversa à vista, já está zerada. */
+  const lidaPorMim = useCallback(
+    (c: Conversa, ate: string) => {
+      lidaEnviada.current.set(c, ate);
+      const a = abertoRef.current;
+      if (a.painel && a.conversa === c && document.visibilityState === "visible") return;
+      mudar(c, (x) => {
+        const alvo = x.msgs.find((m) => m.id === ate);
+        const n = alvo ? naoLidasDe(x.msgs, meuId, alvo.em) : 0;
+        return n === x.naoLidas ? x : { ...x, naoLidas: n };
+      });
+    },
+    [meuId, mudar],
+  );
+
   // As CONVERSAS GUARDADAS (7 dias) voltam ao abrir o sistema e ao trocar de grupo (a do grupo é outra): a lista com a
   // última mensagem e as não lidas — o histórico vem ao abrir cada conversa.
   useEffect(() => {
@@ -134,6 +154,7 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
         const r = await fetch(`/api/chat/conversas${grupoId != null ? `?grupo=${grupoId}` : ""}`);
         const j = (await r.json()) as {
           ok?: boolean;
+          agora?: number;
           conversas?: { conversa: Conversa; nome: string; membros: number[]; naoLidas: number; ultima: { de: number; texto: string; em: number } | null }[];
           grupo?: { naoLidas: number; ultima: { de: number; texto: string; em: number } } | null;
           autores?: Pessoa[];
@@ -144,15 +165,18 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
           for (const p of j.autores ?? []) n.set(p.id, p);
           return n;
         });
+        // O retrato do servidor + as que chegaram ao vivo DEPOIS dele (nunca conta duas vezes nem perde uma).
+        const agora = typeof j.agora === "number" ? j.agora : Number.POSITIVE_INFINITY;
+        const contar = (atual: ConversaTela, doServidor: number) => (atual.carregada ? atual.naoLidas : naoLidasAoCarregar(doServidor, atual.msgs, meuId, agora));
         setConversas((m) => {
           const n = new Map(m);
           for (const c of j.conversas ?? []) {
             const atual = n.get(c.conversa) ?? nova();
-            n.set(c.conversa, { ...atual, naoLidas: atual.carregada ? atual.naoLidas : c.naoLidas, membros: c.membros.length ? c.membros : atual.membros, nome: c.nome || atual.nome, previa: c.ultima });
+            n.set(c.conversa, { ...atual, naoLidas: contar(atual, c.naoLidas), membros: c.membros.length ? c.membros : atual.membros, nome: c.nome || atual.nome, previa: c.ultima });
           }
           if (j.grupo) {
             const atual = n.get("grupo") ?? nova();
-            n.set("grupo", { ...atual, naoLidas: atual.carregada ? atual.naoLidas : j.grupo.naoLidas, previa: j.grupo.ultima });
+            n.set("grupo", { ...atual, naoLidas: contar(atual, (j.grupo as { naoLidas: number }).naoLidas), previa: j.grupo.ultima });
           }
           return n;
         });
@@ -263,13 +287,14 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
         const de = Number(o.de);
         const c = String(o.conversa);
         if (!Number.isInteger(de) || typeof o.ate !== "string" || !conversaValida(c)) return;
+        if (de === meuId) return lidaPorMim(c, o.ate);
         mudar(c, (x) => ({ ...x, lidaAte: new Map(x.lidaAte).set(de, o.ate as string) }));
       }),
     ];
     return () => {
       for (const f of fora) f();
     };
-  }, [canal, config.grupo, receber, mudar]);
+  }, [canal, config.grupo, receber, mudar, meuId, lidaPorMim]);
 
   // O PRIVADO chega pela caixa pessoal (o canal do sino → evento da janela).
   useEffect(() => {
@@ -283,6 +308,7 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
           const c = o.conversa;
           if (!Number.isInteger(de) || !conversaValida(c) || c === "grupo") return;
           if (o.tipo === "digitando") mudar(c, (x) => ({ ...x, digitando: new Map(x.digitando).set(de, Date.now() + DIGITANDO_DURA_MS) }));
+          else if (o.tipo === "lida" && typeof o.ate === "string" && de === meuId) lidaPorMim(c, o.ate);
           else if (o.tipo === "lida" && typeof o.ate === "string") mudar(c, (x) => ({ ...x, lidaAte: new Map(x.lidaAte).set(de, o.ate as string) }));
           return;
         }
@@ -294,7 +320,7 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
     };
     window.addEventListener(EVENTO_CHAT_PRIVADO, ouvir);
     return () => window.removeEventListener(EVENTO_CHAT_PRIVADO, ouvir);
-  }, [config.privado, receber, mudar]);
+  }, [config.privado, receber, mudar, meuId, lidaPorMim]);
 
   // O "digitando" some sozinho (um relógio só enquanto há alguém digitando).
   const algumDigitando = [...conversas.values()].some((c) => c.digitando.size > 0);
@@ -320,7 +346,6 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
   }, [algumDigitando]);
 
   // LER: a conversa aberta à vista zera as não lidas e avisa até onde leu (só quando muda).
-  const lidaEnviada = useRef(new Map<Conversa, string>());
   const atual = aberto.conversa ? conversas.get(aberto.conversa) : undefined;
   const ultimaDosOutros = atual ? [...atual.msgs].reverse().find((x) => !x.minha)?.id : undefined;
   useEffect(() => {

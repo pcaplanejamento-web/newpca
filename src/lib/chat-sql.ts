@@ -57,14 +57,19 @@ export function comandosGuardarMensagem(db: Db, m: NovaMensagemChat) {
   return [db.insert(chatMensagens).values({ id: m.id, conversa: m.chave, de: m.de, texto: m.texto, resp: m.resp, em: m.em }).onConflictDoNothing(), ...conversas];
 }
 
-/** LEU até a mensagem `ate` (o ✓✓ dos outros e as não lidas). Nunca volta para trás. */
+/** LEU até a mensagem `ate` (o ✓✓ dos outros e as não lidas). A hora lida = a da PRÓPRIA mensagem `ate` (a que chegou
+ * depois dela segue não lida); sem achá-la, `em`. Nunca volta para trás. */
 export function comandoMarcarLidaChat(db: Db, chave: string, usuarioId: number, ate: string, em: number) {
+  const lidaEm = sql<number>`coalesce((SELECT m.em FROM ${chatMensagens} m WHERE m.id = ${ate} AND m.conversa = ${chave}), ${em})`;
   return db
     .insert(chatConversas)
-    .values({ conversa: chave, usuarioId, ultimaEm: em, lidaAte: ate, lidaEm: em })
+    .values({ conversa: chave, usuarioId, ultimaEm: em, lidaAte: ate, lidaEm })
     .onConflictDoUpdate({
       target: [chatConversas.conversa, chatConversas.usuarioId],
-      set: { lidaAte: ate, lidaEm: sql`max(coalesce(${chatConversas.lidaEm}, 0), excluded.lida_em)` },
+      set: {
+        lidaAte: sql`CASE WHEN excluded.lida_em >= coalesce(${chatConversas.lidaEm}, 0) THEN excluded.lida_ate ELSE ${chatConversas.lidaAte} END`,
+        lidaEm: sql`max(coalesce(${chatConversas.lidaEm}, 0), excluded.lida_em)`,
+      },
     });
 }
 

@@ -483,7 +483,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   membro do grupo, `ehMembroDoGrupo`) → guarda e repassa ao objeto do grupo (`repassarNoGrupo` → `POST /repasse` do
   `PresencaGrupo`, só alcançável pelo binding); a privada/em grupo pelas caixas (`entregarNaCaixa`, **`chat-servidor.ts`**).
   Quem não está online vê ao entrar ("Fulano não está online agora — vai ver ao entrar"). `POST /api/chat/sinal`: a "lida"
-  é GUARDADA (o ✓✓ e as não lidas valem depois de recarregar); a do grupo pelo `/repasse` (a todos menos quem leu); o
+  é GUARDADA (o ✓✓ e as não lidas valem depois de recarregar — a hora lida = o `em` da PRÓPRIA mensagem lida, nunca volta;
+  v1.17.3) e chega TAMBÉM às outras abas/aparelhos de quem leu (a caixa dele; no grupo, o `/repasse` a todas as abas) — lá
+  as não lidas viram só as posteriores (`naoLidasDe`); a lista guardada traz `agora` e soma só as ao vivo depois dele
+  (`naoLidasAoCarregar`); a do grupo pelo `/repasse` (a todos menos quem leu); o
   "digitando" do grupo segue pelo socket. **`GET /api/chat/conversas?grupo=`** (a lista com a última e as não lidas, ao abrir
   o sistema e ao trocar de grupo) e **`GET /api/chat/historico?conversa=&grupo=`** (ao abrir cada conversa, uma vez —
   `carregar`; só de quem participa). As bolhas abertas ficam no aparelho (`chat:bolhas`); a lixeira só FECHA a bolha (a

@@ -151,6 +151,20 @@ export function lerMensagemRecebida(o: Record<string, unknown>): MensagemChat | 
   return { id: o.id, conversa: o.conversa, de: o.de as number, em: o.em as number, texto, resp: lerResposta(o.resp), autor, ...extra };
 }
 
+/** As NÃO LIDAS de uma conversa na tela: as mensagens dos OUTROS depois da hora lida (`lidaEm`). */
+export function naoLidasDe(msgs: readonly { de: number; em: number }[], meuId: number, lidaEm: number): number {
+  let n = 0;
+  for (const m of msgs) if (m.de !== meuId && m.em > lidaEm) n++;
+  return n;
+}
+
+/** As não lidas quando a LISTA GUARDADA chega: a do servidor (o retrato em `agora`) + as dos outros que chegaram AO VIVO
+ * depois dele — a que chegou antes já está no retrato (nunca conta duas vezes). */
+export function naoLidasAoCarregar(doServidor: number, msgsLocais: readonly { de: number; em: number }[], meuId: number, agora: number): number {
+  const base = Number.isFinite(doServidor) && doServidor > 0 ? Math.floor(doServidor) : 0;
+  return base + (Number.isFinite(agora) ? naoLidasDe(msgsLocais, meuId, agora) : 0);
+}
+
 /** Os LINKS do sistema no texto viram CARTÕES (sem consulta): protocolo/DFD da Mesa, tarefa, PCA. Só caminho interno. */
 export type CartaoLink = { tipo: "protocolo" | "dfd" | "tarefa" | "pca"; id: number; href: string; rotulo: string };
 const ROTULO_CARTAO: Record<CartaoLink["tipo"], string> = { protocolo: "Protocolo", dfd: "DFD", tarefa: "Tarefa", pca: "PCA" };

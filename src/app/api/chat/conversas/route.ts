@@ -18,7 +18,8 @@ export async function GET(req: Request) {
   const cfg = await getConfigChat();
   if (!cfg || (!cfg.grupo && !cfg.privado)) return erro("O chat está desligado pelo administrador.", 409);
   const grupo = Number(new URL(req.url).searchParams.get("grupo"));
-  const desde = Date.now() - VALIDADE_CHAT_MS;
+  const agora = Date.now();
+  const desde = agora - VALIDADE_CHAT_MS;
   const db = getDb();
   const [linhas, resumo] = await Promise.all([
     cfg.privado ? consultaConversasChat(db, a.u.id, desde) : Promise.resolve([]),
@@ -54,5 +55,5 @@ export async function GET(req: Request) {
   }
   if (g) ids.add(g.de);
   ids.delete(a.u.id);
-  return ok({ conversas, grupo: grupoResumo, autores: await pessoasPorIds([...ids]) });
+  return ok({ agora, conversas, grupo: grupoResumo, autores: await pessoasPorIds([...ids]) });
 }

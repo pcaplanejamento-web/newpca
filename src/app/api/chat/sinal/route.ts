@@ -46,5 +46,7 @@ export async function POST(req: Request) {
   const podem = await quemCompartilhaGrupo(a.u.id, para);
   const corpo = () => JSON.stringify({ t: "chat-sinal", tipo: t, conversa: privada != null ? `p${a.u.id}` : conversa, de: a.u.id, ...(ate ? { ate } : {}) });
   await Promise.all(para.filter((x) => podem.has(x)).map((x) => entregarNaCaixa(x, corpo())));
+  // A "lida" também às MINHAS outras abas/aparelhos (a conversa como eu a vejo): lá as não lidas zeram.
+  if (t === "lida") await entregarNaCaixa(a.u.id, JSON.stringify({ t: "chat-sinal", tipo: "lida", conversa, de: a.u.id, ate }));
   return ok({});
 }

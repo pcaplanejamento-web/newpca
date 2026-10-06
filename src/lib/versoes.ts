@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.17.3",
+    data: "2026-10-06",
+    titulo: "Não lidas reais nas bolhas",
+    mudancas: [
+      { tipo: "correcao", area: "Chat", texto: "O número em cima da bolha é o das mensagens realmente não lidas: ler em outra aba ou aparelho zera também aqui." },
+      { tipo: "correcao", area: "Chat", texto: "A mensagem que chega no instante em que você lê continua contando como não lida, e nenhuma é contada duas vezes ao abrir o sistema." },
+    ],
+  },
+  {
     versao: "1.17.2",
     data: "2026-10-06",
     titulo: "Fotos dos membros iguais às do cabeçalho",

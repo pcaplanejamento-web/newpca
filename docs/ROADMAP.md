@@ -1676,3 +1676,5 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **v1.17.0 — Bolhas independentes**: cada bolha do chat no seu lugar — arrastar uma não mexe as outras; encosta na borda mais perto (arremesso ao outro lado), lugar guardado por bolha, as outras só abrem espaço.
 ✅ **v1.17.1 — Bolhas abrem espaço e se encaixam**: as outras bolhas abrem espaço ao vivo durante o arrasto, sombra do pouso, ímã que cola na vizinha (longe fica longe), arrasto por quadro e sem pulo.
 ✅ **v1.17.2 — Pilha de fotos única**: os membros do quadro de Tarefas usam a mesma pilha de fotos do cabeçalho (ponto ao vivo sem ser coberto, leque, "+N").
+
+✅ **v1.17.3 — Não lidas reais**: a "lida" chega às outras abas/aparelhos de quem leu (o selo zera em todos), a hora lida guardada é a da mensagem lida e a lista guardada soma só as que chegaram ao vivo depois do retrato.
