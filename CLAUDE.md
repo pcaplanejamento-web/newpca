@@ -534,7 +534,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   limiar de 6px o navegador começava a arrastar a imagem).
 
 ## Presença no nível profissional (v1.14.1)
-- **Cabeçalho:** até `MAX_FOTOS`=5 fotos (a primeira por cima — o ponto no canto não é coberto) e o círculo **"+N"** do mesmo
+- **Cabeçalho:** a pilha é a **`PilhaFotos`** (a mesma dos membros do quadro de Tarefas) — até `MAX_FOTOS`=5 fotos (a primeira por cima — o ponto no canto não é coberto) e o círculo **"+N"** do mesmo
   tamanho (os nomes na dica). O ponto da foto é `absolute` no `Avatar`: a regra `.ponto-vivo` do `globals.css` NÃO fixa
   `position` (fora das camadas do Tailwind ela venceria o `absolute` e o ponto saía do canto); o mesmo cuidado com
   `.animate-contador` (`display: inline-block` — vai no texto, não na caixa centrada).
@@ -3189,7 +3189,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `useImagemCarrega` de `FundoQuadro.tsx`; sem imagem, degradê da cor do quadro) e, por cima, só **ilhas opacas**:
     - **`FaixaQuadro`** (topo translúcido com desfoque): voltar · título `TextoNoLugar ajustar` (inteiro; a dica traz grupo
       e Abertas/Atrasadas/Concluídas — os contadores e o selo do grupo saíram da tela) · favorito; à direita só ícones —
-      **`MembrosQuadro`** (fotos; tocar filtra pela pessoa), `FiltrosTarefas buscaNoPainel` (a busca dentro do painel, gatilho
+      **`MembrosQuadro`** (a MESMA **`PilhaFotos`** do cabeçalho — `PilhaFotos.tsx`, DS: fotos `sm` com a primeira por cima, o ponto ao vivo, leque e "+N"; tocar filtra pela pessoa), `FiltrosTarefas buscaNoPainel` (a busca dentro do painel, gatilho
       só ícone), as `FerramentasAba` da vista e o **`MenuQuadro`** "…" (Itens arquivados · Imagem de fundo · Automações ·
       Configurações — rola até `#secao-fundo`/`#secao-automacoes` — · Copiar link); os chips de filtro ativos numa linha
       fina abaixo, só quando há.

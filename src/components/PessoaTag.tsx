@@ -8,9 +8,20 @@ const ROTULO = { online: "online agora", ausente: "ausente" } as const;
 
 /** A FOTO de uma pessoa com o ponto de PRESENÇA (online/ausente) quando o ADM ligou a presença e ela está no grupo ativo —
  * fora do painel (ou desligada), a foto de sempre. Só re-renderiza quando o estado DESSA pessoa muda. */
-export function AvatarPessoa({ pessoa, size = "xs", className = "" }: { pessoa: Pick<Pessoa, "id" | "nome" | "foto">; size?: "xs" | "sm" | "md" | "lg"; className?: string }) {
+export function AvatarPessoa({
+  pessoa,
+  size = "xs",
+  className = "",
+  pulsar = false,
+}: {
+  pessoa: Pick<Pessoa, "id" | "nome" | "foto">;
+  size?: "xs" | "sm" | "md" | "lg";
+  className?: string;
+  /** O ponto de quem está ONLINE pulsa (o "ao vivo" das pilhas de fotos). */
+  pulsar?: boolean;
+}) {
   const presenca = usePresencaDe(pessoa.id);
-  return <Avatar nome={pessoa.nome} foto={pessoa.foto} size={size} presenca={presenca} className={className} />;
+  return <Avatar nome={pessoa.nome} foto={pessoa.foto} size={size} presenca={presenca} pulsar={pulsar && presenca === "online"} className={className} />;
 }
 
 /**

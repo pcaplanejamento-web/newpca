@@ -3349,7 +3349,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="PresencaGrupo + CanalGrupo + SeloAoVivo (quem do grupo está online, AO VIVO no cabeçalho: as fotos com o ponto que PULSA, em leque ao passar o mouse, “+N” que desliza e o brilho em quem acabou de entrar; tocar abre “Online agora” — o seu status, Online · Ausente · Visto recentemente e as ações de cada pessoa. O ponto de presença aparece também nas fotos do sistema — PessoaTag, seletores, membros do quadro. Só existe com Configurações → Presença ligada)">
+      <Secao titulo="PresencaGrupo + CanalGrupo + SeloAoVivo + PilhaFotos (a pilha de fotos ÚNICA — a do cabeçalho e a dos membros do quadro de Tarefas; quem do grupo está online, AO VIVO no cabeçalho: as fotos com o ponto que PULSA, em leque ao passar o mouse, “+N” que desliza e o brilho em quem acabou de entrar; tocar abre “Online agora” — o seu status, Online · Ausente · Visto recentemente e as ações de cada pessoa. O ponto de presença aparece também nas fotos do sistema — PessoaTag, seletores, membros do quadro. Só existe com Configurações → Presença ligada)">
         <CanalGrupoDemo
           valor={{
             usuarioId: PESSOAS_DEMO[0].id,

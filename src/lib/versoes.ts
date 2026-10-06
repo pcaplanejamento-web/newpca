@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.17.2",
+    data: "2026-10-06",
+    titulo: "Fotos dos membros iguais às do cabeçalho",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "Os membros na faixa do quadro usam a MESMA pilha de fotos do cabeçalho: mesmo tamanho, o ponto ao vivo, leque ao passar o mouse e o \"+N\" do mesmo tamanho.", link: "/painel/tarefas" },
+      { tipo: "correcao", area: "Tarefas", texto: "O ponto de presença de cada membro não fica mais coberto pela foto vizinha (a primeira foto fica por cima).", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.17.1",
     data: "2026-10-06",
     titulo: "Bolhas abrem espaço e se encaixam",

@@ -28,11 +28,12 @@ import { Dropdown } from "./Dropdown";
 import { SearchField, SelectField, TextField } from "./Field";
 import { IconChat, IconClipboard, IconUsers } from "./icons";
 import { Modal } from "./Modal";
+import { MAX_FOTOS_PILHA, PilhaFotos } from "./PilhaFotos";
 import { BotaoWhatsapp } from "./Telefone";
 import { toast } from "./Toast";
 
 /** Fotos à vista no cabeçalho (as demais viram o círculo "+N"). */
-const MAX_FOTOS = 5;
+const MAX_FOTOS = MAX_FOTOS_PILHA;
 /** Com mais pessoas que isto, o painel ganha a busca. */
 const BUSCA_A_PARTIR = 8;
 
@@ -132,7 +133,6 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
   const naoLidas = chatV?.naoLidas ?? 0;
   const rotuloGatilho = `${rotulo}${chatV ? ` — conversas${naoLidas ? `: ${naoLidas} mensage${naoLidas === 1 ? "m" : "ns"} não lida${naoLidas === 1 ? "" : "s"}` : ""}` : ""}`;
   const fotos = outros.slice(0, MAX_FOTOS);
-  const resto = outros.length - fotos.length;
   const gatilho =
     "relative items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
@@ -155,38 +155,18 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
           trigger={
             <>
               {fotos.length ? (
-                <span className="flex items-center">
-                  {/* A primeira por cima (o ponto, no canto direito, não fica coberto pela vizinha); ao passar o mouse, abrem em
-                      leque. Depois de 5, o círculo "+N" no MESMO tamanho, fechando a pilha. */}
-                  {fotos.map(({ pessoa, info }, i) => (
-                    <span
-                      key={pessoa.id}
-                      className={`animate-entrar-pessoa relative inline-flex rounded-full ring-2 ring-surface transition-[margin] duration-[var(--motion-duration)] ${
-                        i ? "-ml-1.5 group-hover/pilha:ml-0.5 group-focus-visible/pilha:ml-0.5" : ""
-                      } ${novos.has(pessoa.id) ? "animate-brilho-novo" : ""}`}
-                      style={{ zIndex: fotos.length + 1 - i }}
-                      title={(() => {
-                        const a = c.atividade?.get(pessoa.id);
-                        return `${nomeExibicao(pessoa)}${info?.estado === "ausente" ? ` — ${rotuloAusente(info)}` : ""}${a ? ` — ${textoAtividade(a)}` : ""}`;
-                      })()}
-                    >
-                      <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" presenca={info?.estado} pulsar={info?.estado === "online"} />
-                    </span>
-                  ))}
-                  {resto > 0 && (
-                    <span
-                      key={resto}
-                      className="relative -ml-1.5 inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full bg-surface-2 px-1 text-[10.5px] font-semibold leading-none tabular-nums text-text-2 shadow-[inset_0_0_0_1px_var(--border)] ring-2 ring-surface transition-[margin] duration-[var(--motion-duration)] group-hover/pilha:ml-0.5 group-focus-visible/pilha:ml-0.5"
-                      style={{ zIndex: 0 }}
-                      title={`Mais ${resto}: ${outros
-                        .slice(MAX_FOTOS)
-                        .map((l) => nomeExibicao(l.pessoa))
-                        .join(", ")}`}
-                    >
-                      <span className="animate-contador">+{resto > 99 ? 99 : resto}</span>
-                    </span>
-                  )}
-                </span>
+                <PilhaFotos
+                  max={MAX_FOTOS}
+                  itens={outros.map(({ pessoa, info }) => {
+                    const a = c.atividade?.get(pessoa.id);
+                    return {
+                      id: pessoa.id,
+                      foto: <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" presenca={info?.estado} pulsar={info?.estado === "online"} />,
+                      titulo: `${nomeExibicao(pessoa)}${info?.estado === "ausente" ? ` — ${rotuloAusente(info)}` : ""}${a ? ` — ${textoAtividade(a)}` : ""}`,
+                      novo: novos.has(pessoa.id),
+                    };
+                  })}
+                />
             ) : (
               <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} />
             )}
