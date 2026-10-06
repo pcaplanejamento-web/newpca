@@ -1,6 +1,5 @@
 "use client";
 
-import { classeExecucao } from "@/lib/execucao-centi";
 import { useMemo, useState } from "react";
 import { comportamentoDaFalta, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
@@ -26,6 +25,7 @@ import { type Assinatura, buracosSequencia, listaRefs, tipoCurtoDfd } from "@/li
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { CelulaExecucao } from "./CelulaExecucao";
 import { AutoTextarea, CadeadoBotao, CampoCongelado } from "./CampoCadeado";
 import { type Column, DataTable } from "./DataTable";
 import { CelulaCatalogo, EstadoPonto, EstadoResumo } from "./EstadoCelula";
@@ -187,17 +187,10 @@ export function ItemCabecalho({ item, ...dfd }: { item: number | null | undefine
 
 /** O selo da execução na Centi no cabeçalho do DFD: Executado (verde) · Não executado (a situação, vermelho) · Não verificado. */
 function SeloExecucao({ situacao }: { situacao: string | null }) {
-  const c = classeExecucao(situacao);
-  const dica = c ? `Situação na Centi (CM002): ${situacao}` : "Execução na Centi ainda não verificada (Automação → CM002)";
+  const dica = situacao ? `Situação na Centi (CM002): ${situacao}` : "Execução na Centi ainda não verificada (Automação → CM002)";
   return (
     <span className="shrink-0" title={dica}>
-      {!c ? (
-        <Badge>Não verificado</Badge>
-      ) : c === "executado" ? (
-        <Badge tone="emerald" dot>Executado</Badge>
-      ) : (
-        <Badge tone="red" dot>Não executado · {situacao}</Badge>
-      )}
+      {situacao ? <CelulaExecucao situacao={situacao} /> : <Badge>Não verificado</Badge>}
     </span>
   );
 }

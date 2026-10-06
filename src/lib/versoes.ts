@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.22.1",
+    data: "2026-10-06",
+    titulo: "Andamento flutuante e status único da execução",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "O andamento da verificação da CM002 (barra e entidades) flutua no rodapé da tela, recolhível, sem empurrar os números nem a tabela.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Mesa", texto: "O selo de execução do DFD mostra um status só (a situação da Centi), sem repetir “Não executado · Não Executado”.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.22.0",
     data: "2026-10-06",
     titulo: "Execução no banner do DFD e verificação ao vivo",

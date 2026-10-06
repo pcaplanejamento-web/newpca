@@ -1,6 +1,7 @@
 "use client";
 
 import { type MutableRefObject, useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { chaveOrgaoCenti } from "@/lib/automacao-centi-core";
 import { chavePlanejamento, classeExecucao } from "@/lib/execucao-centi";
 import { dataHoraBR } from "@/lib/format";
@@ -9,6 +10,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { CelulaExecucao } from "./CelulaExecucao";
 import { type Column, DataTable } from "./DataTable";
+import { IconChevronDown, IconClose } from "./icons";
 import { Progress } from "./Progress";
 import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
@@ -65,11 +67,12 @@ export function TarefaExecucaoDfds({
 }) {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [rodando, setRodando] = useState(false);
-  const [falha, setFalha] = useState<{ erro: string; diagnostico?: string } | null>(null);
+  const [falha, setFalha] = useState<{ erro: string } | null>(null);
   const [soNaCenti, setSoNaCenti] = useState<SoNaCenti[]>([]);
   const [visao, setVisao] = useState<Visao>("todos");
   const [progresso, setProgresso] = useState<{ feito: number; total: number; texto: string } | null>(null);
   const [porEntidade, setPorEntidade] = useState<ResumoEntidade[]>([]);
+  const [painel, setPainel] = useState<"aberto" | "recolhido" | "fechado">("fechado");
   useEffect(() => onRodando(rodando), [rodando, onRodando]);
 
   const carregar = useCallback(async () => {
@@ -128,6 +131,7 @@ export function TarefaExecucaoDfds({
     const erros: string[] = [];
     const resumo: ResumoEntidade[] = [];
     setPorEntidade([]);
+    setPainel("aberto");
     let atualizados = 0;
     try {
       const l = await pedir("lote", { fase: "inicio", titulo: "CM002 · Execução dos DFDs", total: entidades.length }, 8000);
@@ -278,31 +282,20 @@ export function TarefaExecucaoDfds({
           {semLigacao.length > 8 ? ` e mais ${semLigacao.length - 8}` : ""}. Cadastre em Órgãos e Unidades.
         </Callout>
       )}
-      {progresso && <Progress value={(progresso.feito / Math.max(1, progresso.total)) * 100} label={progresso.texto} />}
-      {porEntidade.length > 0 && (
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))]">
-          {porEntidade.map((e) => (
-            <div key={e.entidade} className={`rounded-card border px-3 py-2 text-[12px] ${e.erro ? "border-danger" : "border-border"} bg-surface`} title={e.erro ?? e.orgaos}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono font-bold text-text">Entidade {e.entidade}</span>
-                {e.erro ? <span className="text-danger">Falhou</span> : <span className="text-muted">{e.lidos} na Centi</span>}
-              </div>
-              <div className="truncate text-muted">{e.orgaos}</div>
-              <div className="mt-1 flex gap-3">
-                <span>{e.dfds} DFD(s)</span>
-                <span className={e.diferentes ? "font-semibold text-danger" : "text-muted"}>{e.diferentes} ≠ executado</span>
-                <span className="text-muted">{e.soCenti} só na Centi</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {falha && (
-        <Callout kind="danger">
-          {falha.erro}
-          {falha.diagnostico && <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">{falha.diagnostico}</pre>}
-        </Callout>
-      )}
+      {painel !== "fechado" &&
+        (progresso || porEntidade.length > 0 || falha) &&
+        createPortal(
+          <PainelAndamento
+            progresso={progresso}
+            porEntidade={porEntidade}
+            falha={falha}
+            recolhido={painel === "recolhido"}
+            rodando={rodando}
+            onAlternar={() => setPainel((p) => (p === "recolhido" ? "aberto" : "recolhido"))}
+            onFechar={() => setPainel("fechado")}
+          />,
+          document.body,
+        )}
       <Segmented
         ariaLabel="Visão da execução"
         value={visao}
@@ -340,5 +333,75 @@ export function TarefaExecucaoDfds({
         )}
       </div>
     </div>
+  );
+}
+
+/** O andamento da verificação FLUTUANDO no rodapé do display — não empurra nada da tela. */
+function PainelAndamento({
+  progresso,
+  porEntidade,
+  falha,
+  recolhido,
+  rodando,
+  onAlternar,
+  onFechar,
+}: {
+  progresso: { feito: number; total: number; texto: string } | null;
+  porEntidade: ResumoEntidade[];
+  falha: { erro: string } | null;
+  recolhido: boolean;
+  rodando: boolean;
+  onAlternar: () => void;
+  onFechar: () => void;
+}) {
+  const diferentes = porEntidade.reduce((s, e) => s + e.diferentes, 0);
+  const falhas = porEntidade.filter((e) => e.erro).length;
+  const resumo = progresso?.texto ?? `${porEntidade.length} entidade(s) · ${diferentes} ≠ executado${falhas ? ` · ${falhas} falha(s)` : ""}`;
+  return (
+    <section
+      aria-label="Andamento da verificação"
+      aria-live="polite"
+      className="fixed inset-x-[var(--pad-canvas)] bottom-[calc(var(--pad-canvas)+env(safe-area-inset-bottom))] z-50 mx-auto max-w-5xl rounded-card border border-border bg-surface shadow-flutuante animate-fade-in-up max-lg:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:left-[calc(16rem+var(--pad-canvas))]"
+    >
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-text" title={resumo}>
+          {resumo}
+        </span>
+        <Button variant="icon" size="sm" aria-label={recolhido ? "Mostrar detalhes" : "Recolher"} title={recolhido ? "Mostrar detalhes" : "Recolher"} onClick={onAlternar}>
+          <IconChevronDown className={`size-4 transition-transform ${recolhido ? "rotate-180" : ""}`} />
+        </Button>
+        {!rodando && (
+          <Button variant="icon" size="sm" aria-label="Fechar" title="Fechar" onClick={onFechar}>
+            <IconClose className="size-4" />
+          </Button>
+        )}
+      </div>
+      {progresso && (
+        <div className="px-3 pb-2">
+          <Progress value={(progresso.feito / Math.max(1, progresso.total)) * 100} />
+        </div>
+      )}
+      {!recolhido && (porEntidade.length > 0 || falha) && (
+        <div className="max-h-[40vh] space-y-2 overflow-auto border-t border-border px-3 py-2">
+          {falha && <Callout kind="danger">{falha.erro}</Callout>}
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(12rem,1fr))]">
+            {porEntidade.map((e) => (
+              <div key={e.entidade} className={`rounded-card border px-2.5 py-1.5 text-[12px] ${e.erro ? "border-danger" : "border-border"}`} title={e.erro ?? e.orgaos}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono font-bold text-text">Entidade {e.entidade}</span>
+                  {e.erro ? <span className="text-danger">Falhou</span> : <span className="text-muted">{e.lidos} na Centi</span>}
+                </div>
+                <div className="truncate text-muted">{e.orgaos}</div>
+                <div className="flex gap-3">
+                  <span>{e.dfds} DFD(s)</span>
+                  <span className={e.diferentes ? "font-semibold text-danger" : "text-muted"}>{e.diferentes} ≠</span>
+                  <span className="text-muted">{e.soCenti} só Centi</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
