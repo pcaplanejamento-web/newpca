@@ -13,6 +13,8 @@ export function KpiStat({
   delta,
   spark,
   hint,
+  onClick,
+  acao,
 }: {
   label: string;
   value: ReactNode;
@@ -20,10 +22,17 @@ export function KpiStat({
   delta?: { dir: "up" | "down"; value: string };
   spark?: number[];
   hint?: string;
+  /** O cartão vira BOTÃO (ex.: "Maior item" abre o item); `acao` = o que o toque faz (nome acessível). */
+  onClick?: () => void;
+  acao?: string;
 }) {
+  const Raiz = onClick ? "button" : "div";
   return (
-    <div
-      className="kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring [container-type:inline-size]"
+    <Raiz
+      {...(onClick ? { type: "button" as const, onClick, "aria-label": `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}` } : {})}
+      className={`kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
+        onClick ? "transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" : ""
+      }`}
       style={{ "--kpi-accent": cor } as CSSProperties}
     >
       <span
@@ -68,6 +77,6 @@ export function KpiStat({
         </div>
       )}
       {hint && <div className="mt-2 truncate pl-2 text-[11.5px] text-faint">{hint}</div>}
-    </div>
+    </Raiz>
   );
 }

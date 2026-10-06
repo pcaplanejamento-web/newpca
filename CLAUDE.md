@@ -2165,8 +2165,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`LancamentoOrcamentoPca`) e `planejado` POR ORIGEM (`PlanejadoOrcamentoPca`: um por item — `itemRowConsolidado`, o MESMO
     mapeamento do Dashboard — ou por planilha); `origemDaLinha`/`chaveUnidadeComparativo` (`orcamento-comparativo.ts`) = a
     regra do "Sem vínculo" da agregação.
-  - **Gráficos do Dashboard do PCA** (`ClassificacaoChart`/`MensalChart`/`TopItensChart`/`UnidadeChart`, prop OPCIONAL
-    `onSelecionar(recorte, rótulo)` — sem ela, iguais a antes; a legenda da pizza vira botões ≥44px): `itensDoRecorte`
+  - **Gráficos do Dashboard do PCA — FILTRO CRUZADO + EXPLORADOR (v1.7.0):** tocar numa fatia/barra/legenda FILTRA (alternar)
+    os demais gráficos, os KPIs (agora no `DashboardPcaCliente`; o "Maior item" abre o item) e a Consulta (itens filtrados +
+    os DFDs/protocolos com itens no filtro) — UM filtro por gráfico, E entre eles, cada gráfico desenhado SEM o filtro da
+    própria dimensão (todas as categorias, a escolhida em destaque). Núcleo puro em `origem-dash.ts` (`FiltrosDash`,
+    `alternarFiltro`, `filtrarItensDash`, `agregarItensDash` = a MESMA `agregarDashboard` no navegador — sem filtro valem os
+    números do servidor; testado em `tests/dashboard-graficos.test.ts`). Os filtros em chips removíveis + "Ver origem" (a
+    `OrigemDados` dos itens filtrados) + "Limpar". `ChartCard.onExpandir` → **`ExploradorGrafico`** (DS): ranking de TODAS as
+    categorias (`ranking-grafico.ts`: participação, posição com empate, "abaixo de 2%"), o cartão do detalhe com "Filtrar o
+    Dashboard", a Tabela (posição · itens · valor · %, XLSX/PDF) e o **PNG** (`exportar-grafico.ts`: layout puro + canvas,
+    só com Exportar). Paleta = tokens **`--serie-1…8`** (claro/escuro; `corSerie(i)` p/ HTML, `useChartTokens().serie` p/ o
+    Recharts) e a cor de cada classificação fixa pela ordem SEM filtro (`corDe`). Visual único: Cronograma em `Colunas`, Top
+    e Unidades em `BarrasH` (Unidades: 10 + "Outras N", Itens | Valor); só a rosca segue no Recharts. Antes (até a 1.6): a
+    prop `onSelecionar(recorte, rótulo)` abria a origem; a legenda da pizza vira botões ≥44px; `itensDoRecorte`
     (`origem-dash.ts`, puro: classificação/unidade de medida com "—" p/ vazio e a fatia "Outros" com todos os rótulos; mês
     com os ANUAIS do ano — 1/12 no gráfico; item pelo `id`, que `TopItem`/`TopDash` passaram a trazer). `ItemRow` ganhou
     `ano`/`mes`/`anual`. A lista traz TODOS os itens do KPI (sem teto).

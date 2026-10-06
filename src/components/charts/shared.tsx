@@ -3,27 +3,21 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { IconInbox } from "../icons";
 
-// Paleta categórica (dados, não neutros) — funciona em tema claro e escuro.
-export const CHART_COLORS = [
-  "#3b82f6", // blue
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#a855f7", // purple
-  "#ef4444", // red
-  "#06b6d4", // cyan
-  "#ec4899", // pink
-  "#84cc16", // lime
-  "#f97316", // orange
-  "#6366f1", // indigo
-  "#14b8a6", // teal
-  "#eab308", // yellow
-];
+// Paleta categórica = os tokens --serie-1…8 (globals.css, com a variante do tema escuro). As peças em HTML usam o
+// `var()` direto (`corSerie`); o Recharts precisa da cor RESOLVIDA (`useChartTokens().serie`).
+export const N_SERIES = 8;
+export const corSerie = (i: number): string => `var(--serie-${(((i % N_SERIES) + N_SERIES) % N_SERIES) + 1})`;
+const SERIE_PADRAO = ["#3b82f6", "#10b981", "#f59e0b", "#a855f7", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
 
 const DEFAULTS = {
   axis: "#b5b5aa",
   grid: "#e9e9e2",
   accent: "#4f46e5",
   cursor: "rgba(148,163,184,0.14)",
+  serie: SERIE_PADRAO,
+  texto: "#14161b",
+  muted: "#6b7280",
+  fundo: "#ffffff",
 };
 
 // Eixos/grade/accent dos gráficos LIDOS DOS TOKENS (Recharts precisa de cor
@@ -40,6 +34,10 @@ export function useChartTokens() {
         grid: rd("--border-2", DEFAULTS.grid),
         accent: rd("--accent", DEFAULTS.accent),
         cursor: rd("--track", DEFAULTS.cursor),
+        serie: SERIE_PADRAO.map((c, i) => rd(`--serie-${i + 1}`, c)),
+        texto: rd("--text", DEFAULTS.texto),
+        muted: rd("--muted", DEFAULTS.muted),
+        fundo: rd("--surface", DEFAULTS.fundo),
       });
     };
     compute();

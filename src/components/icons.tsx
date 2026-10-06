@@ -138,6 +138,7 @@ import {
   UnfoldHorizontal,
   WrapText,
   Ban,
+  Maximize2,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -244,6 +245,8 @@ export const IconZoom = ZoomIn;
 /** Recolher / expandir uma lista do quadro (como no Trello). */
 export const IconRecolher = FoldHorizontal;
 export const IconExpandir = UnfoldHorizontal;
+/** Abrir o gráfico em tela cheia (o explorador do Dashboard). */
+export const IconAmpliar = Maximize2;
 /** Dados COMPLETOS nas células (texto inteiro, todas as linhas) — o alternador da Mesa. */
 export const IconTextoCompleto = WrapText;
 /** "Nenhum" (sem fundo — o padrão do sistema). */

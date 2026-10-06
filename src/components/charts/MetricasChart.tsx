@@ -3,7 +3,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { PontoMetrica } from "@/lib/cloudflare-core";
 import { num } from "@/lib/format";
-import { CHART_COLORS, ChartEmpty, TooltipBox, useChartTokens } from "./shared";
+import { ChartEmpty, TooltipBox, useChartTokens } from "./shared";
 
 // Requisições por dia do Worker (monitoramento Cloudflare). Mesmo padrão do MensalChart; `onSelecionar` (opcional)
 // = clicar numa barra abre a ORIGEM dos dados daquele dia.
@@ -48,7 +48,7 @@ export function MetricasChart({ data, onSelecionar }: { data: PontoMetrica[]; on
           />
           <Bar
             dataKey="requests"
-            fill={CHART_COLORS[0]}
+            fill={tk.serie[0]}
             radius={[6, 6, 0, 0]}
             maxBarSize={40}
             onClick={onSelecionar ? (_, i) => onSelecionar(data[i]) : undefined}

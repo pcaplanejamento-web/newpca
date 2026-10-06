@@ -35,6 +35,7 @@ import { Callout } from "@/components/Callout";
 import { avisoIncorporado } from "@/lib/pca-numeracao-core";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
+import { ExploradorGrafico } from "@/components/ExploradorGrafico";
 import { MensalChart } from "@/components/charts/MensalChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
@@ -1363,6 +1364,51 @@ function EdicoesTabelaDemo() {
       )}
       {confirmacao}
     </div>
+  );
+}
+
+function GraficosDashboardDemo() {
+  const [classe, setClasse] = useState<string[] | undefined>();
+  const [mes, setMes] = useState<string | null>(null);
+  const [item, setItem] = useState<number | null>(null);
+  const [unid, setUnid] = useState<string[] | undefined>();
+  const [explorar, setExplorar] = useState(false);
+  const corDe = (l: string) => G_CLASS.findIndex((f) => f.label === l);
+  const alterna = <T,>(atual: T | null | undefined, novo: T, set: (v: T | undefined) => void) =>
+    set(JSON.stringify(atual) === JSON.stringify(novo) ? undefined : novo);
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
+        <ChartCard title="Classificação dos Itens" subtitle="Toque para filtrar — as outras esmaecem" onExpandir={() => setExplorar(true)}>
+          <ClassificacaoChart
+            data={G_CLASS}
+            corDe={corDe}
+            ativos={classe}
+            onSelecionar={(r) => r.dim === "classificacao" && alterna(classe, r.labels, setClasse)}
+          />
+        </ChartCard>
+        <ChartCard title="Cronograma Mensal" subtitle="Colunas por token — toque para filtrar">
+          <MensalChart data={G_MES} ativo={mes} onSelecionar={(r) => r.dim === "mes" && setMes((m) => (m === `${r.ano}-${r.mes}` ? null : `${r.ano}-${r.mes}`))} />
+        </ChartCard>
+        <ChartCard title="Top Itens por Valor" subtitle="Barras horizontais por token">
+          <TopItensChart data={G_TOP} ativo={item} onSelecionar={(r) => r.dim === "item" && setItem((i) => (i === r.id ? null : r.id))} />
+        </ChartCard>
+        <ChartCard title="Unidades de Medida" subtitle="As 10 maiores + Outras; Itens ou Valor">
+          <UnidadeChart data={G_UNID} ativos={unid} onSelecionar={(r) => r.dim === "unidadeMedida" && alterna(unid, r.labels, setUnid)} />
+        </ChartCard>
+      </div>
+      <ExploradorGrafico
+        aberto={explorar}
+        onClose={() => setExplorar(false)}
+        titulo="Classificação dos Itens"
+        serie={G_CLASS.map((f) => ({ chave: f.label, rotulo: f.label, valor: f.total, count: f.count }))}
+        medida="valor"
+        formatar={brl}
+        corDe={corDe}
+        ativa={classe?.length === 1 ? classe[0] : null}
+        onFiltrar={(c) => alterna(classe, [c], setClasse)}
+      />
+    </>
   );
 }
 
@@ -3184,21 +3230,8 @@ export function Catalogo() {
         />
       </Secao>
 
-      <Secao titulo="Gráficos (Recharts, eixos por token)">
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
-          <ChartCard title="Classificação dos Itens" subtitle="Distribuição do valor por categoria">
-            <ClassificacaoChart data={G_CLASS} />
-          </ChartCard>
-          <ChartCard title="Cronograma Mensal" subtitle="Valor planejado por mês desejado">
-            <MensalChart data={G_MES} />
-          </ChartCard>
-          <ChartCard title="Top Itens por Valor" subtitle="Maiores contratações planejadas">
-            <TopItensChart data={G_TOP} />
-          </ChartCard>
-          <ChartCard title="Unidades de Medida" subtitle="Itens por unidade de medida">
-            <UnidadeChart data={G_UNID} />
-          </ChartCard>
-        </div>
+      <Secao titulo="Gráficos do Dashboard do PCA (paleta --serie-*, filtro cruzado e explorador)">
+        <GraficosDashboardDemo />
       </Secao>
 
       <Secao titulo="OrigemDados (clique numa linha/fatia/barra → de onde vêm os dados)">

@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.7.0",
+    data: "2026-10-06",
+    titulo: "Gráficos do PCA que se filtram e se expandem",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Filtro cruzado: tocar numa fatia ou barra filtra os outros gráficos, os indicadores e a Consulta; os filtros ficam em etiquetas removíveis, com \"Ver origem\".", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA", texto: "Expandir o gráfico: ranking de todas as categorias, detalhe com valor, participação e posição, tabela com % do total e a imagem em PNG.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Gráficos com um visual só (cores do tema claro e escuro, mesma cor por categoria), unidades de medida com \"Outras\" e Itens ou Valor, e o cartão \"Maior item\" abre o item.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.6.0",
     data: "2026-10-06",
     titulo: "Quem do grupo está online",
