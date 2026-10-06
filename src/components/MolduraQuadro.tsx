@@ -4,7 +4,7 @@ import { type ReactNode, useRef } from "react";
 import { AJUSTE_FUNDO_PADRAO, type AjusteFundo, cssGradiente, estiloFundo, type Gradiente } from "@/lib/imagem-fundo-core";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { alternarValor, type FiltroTarefas } from "@/lib/tarefas-core";
-import { Avatar } from "./Avatar";
+import { AvatarPessoa } from "./PessoaTag";
 import { useAlturaTela } from "./AlturaCheia";
 import { Dropdown } from "./Dropdown";
 import { useImagemCarrega } from "./FundoQuadro";
@@ -224,7 +224,7 @@ export function MembrosQuadro({ pessoas, filtro, onFiltro }: { pessoas: Pessoa[]
               ativo ? "z-10 ring-2 ring-accent" : "ring-2 ring-surface"
             }`}
           >
-            <Avatar nome={p.nome} foto={p.foto} size="md" />
+            <AvatarPessoa pessoa={p} size="md" />
           </button>
         );
       })}

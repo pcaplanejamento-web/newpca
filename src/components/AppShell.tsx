@@ -10,7 +10,8 @@ import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
 import { VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
-import { PresencaDoCabecalho, type PresencaShell } from "./PresencaGrupo";
+import { CanalGrupo, type PresencaShell } from "./CanalGrupo";
+import { PresencaGrupo } from "./PresencaGrupo";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
@@ -450,6 +451,7 @@ export function AppShell({
   const filtraPca = abasSet.has("dfd") || abasSet.has("pca") || abasSet.has("orcamento");
 
   return (
+    <CanalGrupo presenca={presenca} usuarioId={usuario.id} grupoId={grupoAtivoId} grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null}>
     <div className="min-h-dvh bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versao={versaoDados} />}
       {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
@@ -528,9 +530,7 @@ export function AppShell({
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
-            {presenca && (
-              <PresencaDoCabecalho presenca={presenca} usuarioId={usuario.id} grupoId={grupoAtivoId} grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null} />
-            )}
+            {presenca && <PresencaGrupo verMesa={abasSet.has("dfd")} />}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
@@ -549,5 +549,6 @@ export function AppShell({
       {/* Navegação inferior (mobile) */}
       <BottomNav abas={abasSet} />
     </div>
+    </CanalGrupo>
   );
 }

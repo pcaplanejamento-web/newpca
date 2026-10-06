@@ -32,6 +32,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.10.0",
+    data: "2026-10-06",
+    titulo: "Presença ao vivo 2.0",
+    mudancas: [
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Quem está online pulsa ao vivo: as fotos se abrem em leque, quem acaba de entrar brilha e o número desliza." },
+      { tipo: "novo", area: "Cabeçalho", texto: "Seu status — Disponível, Ocupado, Em reunião ou Não perturbe — com recado e prazo; o Não perturbe silencia o som do sino." },
+      { tipo: "novo", area: "Cabeçalho", texto: "Online · Ausente · Visto recentemente, com busca; tocar numa pessoa abre o WhatsApp ou os protocolos dela na Mesa." },
+      { tipo: "melhoria", area: "Sistema", texto: "O ponto de presença aparece nas fotos do sistema: Responsável da Mesa, seletores de pessoa, membros do quadro e convidados." },
+      { tipo: "novo", area: "Configurações", texto: "Ausente por inatividade: o ADM escolhe depois de quantos minutos parado.", link: "/painel/configuracoes?aba=presenca" },
+      { tipo: "novo", area: "Armazenamento", texto: "Online agora: quem está com o sistema aberto em cada grupo.", link: "/painel/armazenamento" },
+    ],
+  },
+  {
     versao: "1.9.0",
     data: "2026-10-06",
     titulo: "Dashboard do PCA mais imersivo, com filtros e a Consulta em aba própria",

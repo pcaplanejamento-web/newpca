@@ -1,6 +1,7 @@
-import { and, eq, sql } from "drizzle-orm";
-import { configuracoes, preferenciasTabela } from "@/db/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { configuracoes, preferenciasTabela, usuarios } from "@/db/schema";
 import { getDb } from "./db";
+import { lotesDeIds } from "./reparticoes";
 import { lerBlobConfiguracoes } from "./integracoes";
 import { CHAVE_PREF_PRESENCA, type ConfigPresenca, lerConfigPresenca, lerPrefsPresenca, type PrefsPresenca } from "./presenca-core";
 
@@ -43,5 +44,24 @@ export async function prefsPresencaDe(usuarioId: number): Promise<PrefsPresenca>
     return lerPrefsPresenca(r?.valor ?? null);
   } catch {
     return lerPrefsPresenca(null);
+  }
+}
+
+/** O WhatsApp de quem MARCOU o contato institucional como WhatsApp (id → só dígitos) — a ação "WhatsApp" da presença. */
+export async function whatsappDe(ids: number[]): Promise<Record<number, string>> {
+  if (ids.length === 0) return {};
+  try {
+    const db = getDb();
+    const lotes = await Promise.all(
+      lotesDeIds(ids).map((l) =>
+        db
+          .select({ id: usuarios.id, telefone: usuarios.telefone })
+          .from(usuarios)
+          .where(and(inArray(usuarios.id, l), eq(usuarios.telefoneWhatsapp, true))),
+      ),
+    );
+    return Object.fromEntries(lotes.flat().filter((r) => r.telefone).map((r) => [r.id, r.telefone as string]));
+  } catch {
+    return {};
   }
 }

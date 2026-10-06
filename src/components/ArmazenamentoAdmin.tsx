@@ -14,6 +14,8 @@ import { BotaoAtualizar } from "./BotaoAtualizar";
 import { IconDatabase, IconImage, IconLayers, IconTrash } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { MonitoramentoWorker } from "./MonitoramentoWorker";
+import { OnlineAgoraAdmin } from "./OnlineAgoraAdmin";
+import { useCanalGrupo } from "./CanalGrupo";
 import { SaudeDados } from "./SaudeDados";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatCard } from "./StatCard";
@@ -29,6 +31,8 @@ type Dados = Armazenamento & { oficial: UsoOficial; monitoramento: Monitoramento
 // Tela de armazenamento do ADM: raio-x do banco (D1). Busca o snapshot no mount
 // (introspecção só roda ao abrir a tela); só componentes do design-system.
 export function ArmazenamentoAdmin() {
+  // A presença ligada (o canal do grupo existe) = a seção "Online agora".
+  const presencaAtiva = useCanalGrupo() != null;
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregando, setRecarregando] = useState(false);
@@ -284,6 +288,14 @@ export function ArmazenamentoAdmin() {
         </h2>
         <MonitoramentoWorker monitoramento={dados.monitoramento} hojeUtc={new Date().toISOString().slice(0, 10)} />
       </section>
+
+      {/* Quem está online agora em cada grupo (com a presença ligada) */}
+      {presencaAtiva && (
+        <section className="space-y-2">
+          <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Online agora</h2>
+          <OnlineAgoraAdmin />
+        </section>
+      )}
 
       {/* Saúde dos dados — integridade dos totais e dados a tratar */}
       {secaoSaude}

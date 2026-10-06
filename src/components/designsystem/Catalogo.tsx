@@ -177,7 +177,8 @@ import { AutomacoesQuadro, ModelosQuadro } from "@/components/AutomacoesQuadro";
 import { DashboardTarefas } from "@/components/DashboardTarefas";
 import { RecorrenciaTarefa } from "@/components/RecorrenciaTarefa";
 import { ItemNotificacao } from "@/components/SinoNotificacoes";
-import { PresencaGrupo } from "@/components/PresencaGrupo";
+import { PresencaGrupo, SeloAoVivo } from "@/components/PresencaGrupo";
+import { CanalGrupoDemo } from "@/components/CanalGrupo";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { CamposPeriodo, QuadroNovoCard } from "@/components/QuadroCard";
 import { EstrelaFavorito } from "@/components/FavoritosQuadros";
@@ -3345,17 +3346,31 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="PresencaGrupo (quem do grupo está online, AO VIVO no cabeçalho — as fotos com o ponto + “+N”; no celular, o ícone com o número; tocar abre a lista, você primeiro. Só existe com Configurações → Presença ligada)">
-        <div className="flex flex-wrap items-center gap-6">
-          <PresencaGrupo
-            pessoas={PESSOAS_DEMO}
-            usuarioId={PESSOAS_DEMO[0].id}
-            estados={new Map(PESSOAS_DEMO.map((p, i) => [p.id, i % 3 === 2 ? ("ausente" as const) : ("online" as const)]))}
-            aoVivo
-            grupoNome="Planejamento"
-          />
-          <PresencaGrupo pessoas={PESSOAS_DEMO} usuarioId={PESSOAS_DEMO[0].id} estados={new Map()} aoVivo={false} invisivel grupoNome="Planejamento" />
-        </div>
+      <Secao titulo="PresencaGrupo + CanalGrupo + SeloAoVivo (quem do grupo está online, AO VIVO no cabeçalho: as fotos com o ponto que PULSA, em leque ao passar o mouse, “+N” que desliza e o brilho em quem acabou de entrar; tocar abre “Online agora” — o seu status, Online · Ausente · Visto recentemente e as ações de cada pessoa. O ponto de presença aparece também nas fotos do sistema — PessoaTag, seletores, membros do quadro. Só existe com Configurações → Presença ligada)">
+        <CanalGrupoDemo
+          valor={{
+            usuarioId: PESSOAS_DEMO[0].id,
+            grupoId: 1,
+            grupoNome: "Planejamento",
+            pessoas: PESSOAS_DEMO,
+            whatsapp: { 4: "64999990000" },
+            invisivel: false,
+            aoVivo: true,
+            meuStatus: { status: "disponivel", recado: "", ate: null },
+            vistos: new Map(),
+            estados: new Map([
+              [4, { estado: "online", status: "reuniao", recado: "volto às 15h" }],
+              [7, { estado: "ausente", status: "disponivel", recado: "" }],
+            ]),
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-6">
+            <PresencaGrupo verMesa />
+            <SeloAoVivo aoVivo />
+            <SeloAoVivo aoVivo={false} />
+            <PessoaTag pessoa={PESSOAS_DEMO[1]} />
+          </div>
+        </CanalGrupoDemo>
       </Secao>
 
       <Secao titulo="PessoaTag (FOTO + APELIDO — colunas Responsável e Distribuição da Mesa; nome completo no title)">

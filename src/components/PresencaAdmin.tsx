@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
-import type { ConfigPresenca } from "@/lib/presenca-core";
+import { type ConfigPresenca, LIMITES_INATIVO } from "@/lib/presenca-core";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { ErroCarga } from "./ErroCarga";
+import { TextField } from "./Field";
 import { IconEyeOff, IconSave, IconUsers } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
 import { Switch } from "./Switch";
@@ -54,7 +55,13 @@ export function PresencaAdmin() {
             No cabeçalho, as fotos das pessoas do grupo ativo que estão com o sistema aberto, ao vivo (ponto verde). Tocar abre a
             lista. Cada pessoa vê só o próprio grupo.
           </TopicoAjuda>
-          <TopicoAjuda titulo="Mostrar ausentes">Quem está com o sistema aberto em outra aba ou janela aparece com o ponto âmbar.</TopicoAjuda>
+          <TopicoAjuda titulo="Mostrar ausentes">
+            Quem está com o sistema aberto em outra aba ou janela — ou parado há alguns minutos — aparece com o ponto âmbar.
+          </TopicoAjuda>
+          <TopicoAjuda titulo="Status e visto por último">
+            Cada pessoa pode escolher o status (Disponível, Ocupado, Em reunião, Não perturbe) no painel do cabeçalho. Quem saiu
+            aparece em "Visto recentemente" por 24 horas.
+          </TopicoAjuda>
           <TopicoAjuda icone={<IconEyeOff className="h-4 w-4" />} titulo="Permitir aparecer invisível">
             No Perfil, a pessoa pode escolher não aparecer para os outros (ela continua vendo quem está online).
           </TopicoAjuda>
@@ -64,6 +71,19 @@ export function PresencaAdmin() {
       <Switch dica="Mostra no cabeçalho, ao vivo, quem do grupo está com o sistema aberto" checked={c.ativo} onChange={(ativo) => setC({ ...c, ativo })} label="Mostrar quem do grupo está online" />
       <Switch dica="Quem está com o sistema em segundo plano aparece com o ponto âmbar" checked={c.ausente} disabled={!c.ativo} onChange={(ausente) => setC({ ...c, ausente })} label="Mostrar ausentes" />
       <Switch dica="No Perfil, cada pessoa pode escolher não aparecer" checked={c.invisivel} disabled={!c.ativo} onChange={(invisivel) => setC({ ...c, invisivel })} label="Permitir aparecer invisível" />
+      <div className="max-w-xs">
+        <TextField
+          label="Ficar ausente após (minutos parado)"
+          type="number"
+          inputMode="numeric"
+          min={LIMITES_INATIVO[0]}
+          max={LIMITES_INATIVO[1]}
+          disabled={!c.ativo || !c.ausente}
+          value={c.inativoMin}
+          onChange={(e) => setC({ ...c, inativoMin: Math.min(LIMITES_INATIVO[1], Math.max(LIMITES_INATIVO[0], Number.parseInt(e.target.value, 10) || 0)) })}
+          hint="0 = só quando o sistema fica em segundo plano."
+        />
+      </div>
       <div className="flex justify-end">
         <Button size="sm" icon={<IconSave className="h-4 w-4" />} loading={salvando} disabled={salvando || JSON.stringify(c) === JSON.stringify(salvo)} onClick={salvar} title="Salvar a presença">
           Salvar

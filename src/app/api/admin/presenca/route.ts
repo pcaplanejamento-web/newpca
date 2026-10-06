@@ -25,6 +25,7 @@ export async function PATCH(req: Request) {
   const antes = await getConfigPresenca({ fresco: true });
   const presenca = await gravarConfigPresenca(p.data, g.u.id);
   const diff = (Object.keys(ROTULO) as (keyof typeof ROTULO)[]).filter((k) => antes[k] !== presenca[k]).map((k) => `${ROTULO[k]} ${presenca[k] ? "ligado" : "desligado"}`);
+  if (antes.inativoMin !== presenca.inativoMin) diff.push(`ausente após ${presenca.inativoMin} min`);
   await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "configuracao", entidadeId: 1, resumo: `Presença (ADM): ${diff.join("; ") || "sem mudança"}` });
   return ok({ presenca });
 }

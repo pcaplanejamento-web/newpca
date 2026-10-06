@@ -32,6 +32,7 @@ export function Avatar({
   size = "md",
   className = "",
   presenca,
+  pulsar = false,
 }: {
   nome: string;
   foto?: string | null;
@@ -39,12 +40,14 @@ export function Avatar({
   className?: string;
   /** Mostra o ponto de presença (quem está online). */
   presenca?: keyof typeof PONTO;
+  /** O ponto PULSA (o "ao vivo" — no cabeçalho e no painel; nas tabelas fica parado). */
+  pulsar?: boolean;
 }) {
   if (presenca) {
     return (
       <span className={`relative inline-flex shrink-0 ${className}`}>
         <Avatar nome={nome} foto={foto} size={size} />
-        <span aria-hidden="true" className={`absolute right-0 bottom-0 rounded-full ring-2 ring-surface ${PONTO_DIM[size]} ${PONTO[presenca]}`} />
+        <span aria-hidden="true" className={`absolute right-0 bottom-0 rounded-full ring-2 ring-surface ${PONTO_DIM[size]} ${PONTO[presenca]} ${pulsar ? "ponto-vivo" : ""}`} />
       </span>
     );
   }

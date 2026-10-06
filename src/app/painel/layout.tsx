@@ -6,7 +6,7 @@ import { getAparencia } from "@/lib/aparencia";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { contarNaoLidas } from "@/lib/notificacoes";
-import { getConfigPresenca, prefsPresencaDe } from "@/lib/presenca";
+import { getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
 import { ficaInvisivel } from "@/lib/presenca-core";
 import { linhasTabela } from "@/lib/theme";
 import { listarPessoasDoGrupo } from "@/lib/usuarios";
@@ -71,7 +71,13 @@ async function presencaDoGrupo(usuarioId: number, grupoId: number | null) {
   if (!cfg.ativo) return null;
   try {
     const [pessoas, prefs] = await Promise.all([listarPessoasDoGrupo(grupoId), prefsPresencaDe(usuarioId)]);
-    return { pessoas, invisivel: ficaInvisivel(cfg, prefs) };
+    return {
+      pessoas,
+      whatsapp: await whatsappDe(pessoas.map((p) => p.id)),
+      invisivel: ficaInvisivel(cfg, prefs),
+      inativoMin: cfg.inativoMin,
+      status: { status: prefs.status, recado: prefs.recado, ate: prefs.ate },
+    };
   } catch {
     return null;
   }

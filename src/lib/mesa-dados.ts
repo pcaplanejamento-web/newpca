@@ -124,6 +124,8 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
     pode: ctx.pode,
     /** Filtro com que a Mesa ABRE (preferência do Perfil; na Mesa do PCA — ou sem ver o Responsável —, todos). */
     filtroInicial: pcaId || !vis.responsavel.ver ? FILTRO_MESA_TODOS : filtroInicialMesa(pref, u?.id ?? null),
+    /** O papel vê o Responsável (o filtro pela pessoa na URL só vale assim). */
+    verResponsavel: vis.responsavel.ver,
     /** O PCA do cabeçalho que está filtrando a Mesa principal (`null` = todos). */
     pcaFiltro,
     /** Mesa do PCA: o ano dos MARCADOS ainda na Mesa do sistema que ela também mostra (`null` = visão desligada). */

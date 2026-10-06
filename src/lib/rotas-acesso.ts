@@ -87,6 +87,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/notificacoes/retencao": { GET: ADMIN, PUT: ADMIN },
   "admin/notificacoes/limpar": { POST: ADMIN },
   "admin/presenca": { GET: ADMIN, PATCH: ADMIN },
+  "admin/presenca/online": { GET: ADMIN },
   "admin/integracoes/testar": { POST: ADMIN },
   "admin/integracoes/trello/membros": { GET: ADMIN, PUT: ADMIN },
   "admin/orgaos/[id]/rebaixar": { POST: ADMIN },

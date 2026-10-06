@@ -20,6 +20,7 @@ import { IconAdiar, IconBell, IconChevronDown, IconFixar, IconLidas, IconLimpar,
 import { Modal, duracaoMotionMs } from "./Modal";
 import { NovidadesFlutuantes } from "./Novidades";
 import { VISUAL_AVISO, visualAviso } from "./notificacoesVisual";
+import { useNaoPerturbe } from "./CanalGrupo";
 import { alertaSistema, tocarSom, usePreferenciasNotificacoes } from "./PreferenciasNotificacoes";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
@@ -695,8 +696,13 @@ function useCaixa(inicial: number) {
   /** As escolhas da pessoa para o APARELHO (som, alerta do sistema) — lidas só quando chega um aviso (10 min de cache). */
   const aparelho = useRef<{ em: number; som: boolean; sistema: boolean } | null>(null);
   const router = useRouter();
+  // "Não perturbe" (o status da presença): sem som nem alerta do sistema enquanto valer.
+  const naoPerturbe = useNaoPerturbe();
+  const silencio = useRef(naoPerturbe);
+  silencio.current = naoPerturbe;
   const alertasDoAparelho = useCallback(
     async (n: Notificacao) => {
+      if (silencio.current) return;
       try {
         if (!aparelho.current || Date.now() - aparelho.current.em > 600_000) {
           const j = await chamar<{ pessoa: { som: boolean; sistema: boolean } }>("/api/notificacoes/preferencias");
