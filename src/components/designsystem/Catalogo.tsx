@@ -38,6 +38,7 @@ import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
 import { ExploradorGrafico } from "@/components/ExploradorGrafico";
 import { MensalChart } from "@/components/charts/MensalChart";
+import { DefinicaoPrevisaoChart, PeriodicidadeChart } from "@/components/charts/PrevisaoChart";
 import { PrioridadeChart } from "@/components/charts/PrioridadeChart";
 import type { ModoCronograma } from "@/lib/origem-dash";
 import { UnidadeRequisitanteChart } from "@/components/charts/UnidadeRequisitanteChart";
@@ -1377,10 +1378,11 @@ function EdicoesTabelaDemo() {
 
 function CronogramaModosDemo() {
   const [modo, setModo] = useState<ModoCronograma>("mensal");
-  const base = [...G_MES.map((p) => ({ ...p, semAnuais: modo === "separado" || undefined })), ...(modo === "separado" ? [{ ano: 2027, mes: 0, total: 24_000_000, count: 12 }] : [])];
+  // "Distribuído": os genéricos (24 mi no ano) entram com 1/12 em cada mês.
+  const base = G_MES.map((p) => (modo === "distribuido" ? { ...p, total: p.total + 2_000_000, count: p.count + 1 } : p));
   const dados =
     modo === "acumulado" ? base.map((p, i) => ({ ...p, total: base.slice(0, i + 1).reduce((s, x) => s + x.total, 0) })) : base;
-  return <MensalChart data={dados} modo={modo} onModo={setModo} temAnuais />;
+  return <MensalChart data={dados} modo={modo} onModo={setModo} temGenericos />;
 }
 
 function FiltrosDashboardDemo() {
@@ -1393,7 +1395,7 @@ function FiltrosDashboardDemo() {
       opcoes: [
         { chave: "2026-1", rotulo: "jan/26", count: 40 },
         { chave: "2026-2", rotulo: "fev/26", count: 35 },
-        { chave: "2026-0", rotulo: "Anuais de 2026", count: 12 },
+        { chave: "2026-3", rotulo: "mar/26", count: 12 },
       ],
     },
     {
@@ -1459,8 +1461,28 @@ function GraficosDashboardDemo() {
             onSelecionar={() => undefined}
           />
         </ChartCard>
-        <ChartCard title="Cronograma — leituras" subtitle="Por mês · Acumulado · Anuais à parte">
+        <ChartCard title="Cronograma — leituras" subtitle="Por mês · Acumulado · Distribuído">
           <CronogramaModosDemo />
+        </ChartCard>
+        <ChartCard title="Definição da Previsão" subtitle="DefinicaoPrevisaoChart — mês definido × genérico × sem previsão">
+          <DefinicaoPrevisaoChart
+            data={[
+              { label: "Mês definido", total: 62_000_000, count: 410, pct: 62 },
+              { label: "Genérico", total: 31_000_000, count: 95, pct: 31 },
+              { label: "Sem previsão", total: 7_000_000, count: 22, pct: 7 },
+            ]}
+            onSelecionar={() => undefined}
+          />
+        </ChartCard>
+        <ChartCard title="Contratações Periódicas" subtitle="PeriodicidadeChart — os genéricos por periodicidade">
+          <PeriodicidadeChart
+            data={[
+              { label: "Anual", total: 20_000_000, count: 60, pct: 64.5 },
+              { label: "Semestral", total: 7_000_000, count: 20, pct: 22.6 },
+              { label: "Quadrimestral", total: 4_000_000, count: 15, pct: 12.9 },
+            ]}
+            onSelecionar={() => undefined}
+          />
         </ChartCard>
       </div>
       <ExploradorGrafico

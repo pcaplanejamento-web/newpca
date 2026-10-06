@@ -30,7 +30,7 @@ describe("itens do Dashboard em texto compacto", () => {
   it("ida e volta: os mesmos itens (nulos, anual, prioridade)", () => {
     const itens: ItemRow[] = [
       base,
-      { ...base, id: 2, nomeProduto: null, quantidade: null, valorTotal: null, mes: null, anual: true, prioridade: null, dataDesejada: null },
+      { ...base, id: 2, nomeProduto: null, quantidade: null, valorTotal: null, mes: null, anual: true, periodo: "SEMESTRAL", prioridade: null, dataDesejada: null },
     ];
     assert.deepEqual(itensDoTexto(itensParaTexto(itens)), itens);
   });

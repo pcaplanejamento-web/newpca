@@ -4,6 +4,7 @@
  * dos gráficos (`fatias` do `pca-core` e as consultas de `queries.ts`: valor vazio = "—").
  */
 
+import type { PeriodoPrevisao } from "./normalize.ts";
 import { agregarDashboard, type ItemDashboard } from "./pca-core.ts";
 
 export type RecorteDash =
@@ -11,8 +12,10 @@ export type RecorteDash =
   | { dim: "unidadeMedida"; labels: string[] }
   | { dim: "prioridade"; labels: string[] }
   | { dim: "unidade"; labels: string[] }
-  /** `mes: 0` = os itens ANUAIS do ano; `semAnuais` = só os do mês (o cronograma com os anuais à parte). */
-  | { dim: "mes"; ano: number; mes: number; semAnuais?: boolean; extras?: { ano: number; mes: number }[] }
+  /** A DEFINIÇÃO da previsão: "Mês definido", a periodicidade genérica ("Anual"…) ou "Sem previsão" (`previsaoDoItem`). */
+  | { dim: "previsao"; labels: string[] }
+  /** Os itens com o MÊS definido (os genéricos ficam fora — têm a dimensão `previsao`); `extras` = vários meses. */
+  | { dim: "mes"; ano: number; mes: number; extras?: { ano: number; mes: number }[] }
   | { dim: "item"; id: number };
 
 /** O mínimo de um item p/ o recorte (o `ItemRow` do dashboard). */
@@ -22,8 +25,10 @@ export type ItemRecortavel = {
   unidadeMedida: string | null;
   ano?: number | null;
   mes?: number | null;
-  /** Previsão ANUAL (fonte protocolo): o cronograma soma 1/12 do item em CADA mês do ano. */
+  /** Previsão GENÉRICA (fonte protocolo — sem mês definido; a periodicidade em `periodo`). */
   anual?: boolean;
+  /** A periodicidade da previsão genérica (ANUAL/SEMESTRAL/QUADRIMESTRAL/TRIMESTRAL; ausente = ANUAL). */
+  periodo?: string | null;
   /** Prioridade do DFD de origem (ALTA/MÉDIA/BAIXA; fonte protocolo). */
   prioridade?: string | null;
   /** Sigla da unidade (requisitante ou planilha). */
@@ -32,36 +37,50 @@ export type ItemRecortavel = {
 
 const chave = (v: string | null | undefined) => v || "—";
 
+/** As DEFINIÇÕES da previsão no Dashboard, na ordem dos gráficos, com a cor de cada uma (tokens). */
+export const PREVISOES_DASH = [
+  { chave: "Mês definido", cor: "var(--accent)" },
+  { chave: "Anual", cor: "var(--serie-2)" },
+  { chave: "Semestral", cor: "var(--serie-3)" },
+  { chave: "Quadrimestral", cor: "var(--serie-5)" },
+  { chave: "Trimestral", cor: "var(--serie-6)" },
+  { chave: "Sem previsão", cor: "var(--faint)" },
+] as const;
+/** As definições GENÉRICAS (sem mês — a periodicidade ao longo do ano do PCA). */
+export const PREVISOES_GENERICAS = ["Anual", "Semestral", "Quadrimestral", "Trimestral"];
+const ROTULO_PERIODO: Record<string, string> = { ANUAL: "Anual", SEMESTRAL: "Semestral", QUADRIMESTRAL: "Quadrimestral", TRIMESTRAL: "Trimestral" };
+
+/** A definição da previsão de um item: "Mês definido", a periodicidade genérica ou "Sem previsão". */
+export function previsaoDoItem(i: ItemRecortavel): string {
+  if (i.ano == null) return "Sem previsão";
+  if (i.anual) return ROTULO_PERIODO[i.periodo ?? "ANUAL"] ?? "Anual";
+  return i.mes != null ? "Mês definido" : "Sem previsão";
+}
+const ordemPrevisao = (c: string) => {
+  const k = PREVISOES_DASH.findIndex((p) => p.chave === c);
+  return k < 0 ? PREVISOES_DASH.length : k;
+};
+
 /** O campo de cada dimensão por rótulo (a MESMA chave dos gráficos: vazio = "—"). */
 const CAMPO = {
   classificacao: (i: ItemRecortavel) => i.classificacao,
   unidadeMedida: (i: ItemRecortavel) => i.unidadeMedida,
   prioridade: (i: ItemRecortavel) => i.prioridade,
   unidade: (i: ItemRecortavel) => i.codigo,
+  previsao: previsaoDoItem,
 };
 
-/** Itens do recorte + quantos entram por serem ANUAIS (no recorte de mês — 1/12 do valor em cada mês). */
-export function itensDoRecorte<T extends ItemRecortavel>(itens: T[], r: RecorteDash): { itens: T[]; anuais: number } {
-  if (r.dim === "item") return { itens: itens.filter((i) => i.id === r.id), anuais: 0 };
+/** Itens do recorte (a MESMA chave de agrupamento dos gráficos). No recorte de MÊS, só os itens com o mês definido. */
+export function itensDoRecorte<T extends ItemRecortavel>(itens: T[], r: RecorteDash): { itens: T[] } {
+  if (r.dim === "item") return { itens: itens.filter((i) => i.id === r.id) };
   if (r.dim === "mes") {
     // Vários meses (o filtro do topo): o item entra se casa QUALQUER um.
     const alvos = [{ ano: r.ano, mes: r.mes }, ...(r.extras ?? [])];
-    let anuais = 0;
-    const lista = itens.filter((i) => {
-      const casa = alvos.some((a) => {
-        if (i.ano !== a.ano) return false;
-        if (a.mes === 0) return !!i.anual;
-        if (i.anual) return !r.semAnuais;
-        return i.mes === a.mes;
-      });
-      if (casa && i.anual) anuais++;
-      return casa;
-    });
-    return { itens: lista, anuais };
+    return { itens: itens.filter((i) => !i.anual && alvos.some((a) => i.ano === a.ano && i.mes === a.mes)) };
   }
   const set = new Set(r.labels);
   const campo = CAMPO[r.dim] as (i: T) => string | null | undefined;
-  return { itens: itens.filter((i) => set.has(chave(campo(i)))), anuais: 0 };
+  return { itens: itens.filter((i) => set.has(chave(campo(i)))) };
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +96,7 @@ export type FiltroDash = { recorte: RecorteDash; rotulo: string };
 export type FiltrosDash = Partial<Record<DimDash, FiltroDash>>;
 
 const chaveRecorte = (r: RecorteDash): string =>
-  r.dim === "item" ? `i:${r.id}` : r.dim === "mes" ? `m:${[{ ano: r.ano, mes: r.mes }, ...(r.extras ?? [])].map((a) => `${a.ano}-${a.mes}`).sort().join("|")}${r.semAnuais ? ":s" : ""}` : `${r.dim}:${[...r.labels].sort().join("|")}`;
+  r.dim === "item" ? `i:${r.id}` : r.dim === "mes" ? `m:${[{ ano: r.ano, mes: r.mes }, ...(r.extras ?? [])].map((a) => `${a.ano}-${a.mes}`).sort().join("|")}` : `${r.dim}:${[...r.labels].sort().join("|")}`;
 
 /** Mesmo recorte (a chave do destaque e do alternar). */
 export const mesmoRecorte = (a: RecorteDash | undefined, b: RecorteDash): boolean => a != null && chaveRecorte(a) === chaveRecorte(b);
@@ -127,7 +146,14 @@ function paraDashboard(i: ItemAgregavel): ItemDashboard {
     valorUnitario: i.valorReferencia,
     valorTotal: Number(i.valorTotal ?? 0),
     classificacao: i.classificacao ?? "",
-    previsao: i.ano == null ? null : i.anual ? { ano: i.ano, anual: true } : i.mes != null ? { ano: i.ano, mes: i.mes } : null,
+    previsao:
+      i.ano == null
+        ? null
+        : i.anual
+          ? { ano: i.ano, anual: true, ...(i.periodo ? { periodo: i.periodo as PeriodoPrevisao } : {}) }
+          : i.mes != null
+            ? { ano: i.ano, mes: i.mes }
+            : null,
     unidade: i.codigo,
     origem: null,
   };
@@ -139,7 +165,7 @@ export function agregarItensDash(itens: ItemAgregavel[]) {
 }
 
 /** Fatias por um campo (rótulo vazio = "—"), pelo valor. */
-export function fatiasDash(itens: ItemAgregavel[], dim: "prioridade" | "unidade") {
+export function fatiasDash(itens: ItemAgregavel[], dim: "prioridade" | "unidade" | "previsao") {
   const m = new Map<string, { label: string; total: number; count: number }>();
   for (const i of itens) {
     const k = chave(CAMPO[dim](i));
@@ -151,18 +177,49 @@ export function fatiasDash(itens: ItemAgregavel[], dim: "prioridade" | "unidade"
   return [...m.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
 }
 
-export type ModoCronograma = "mensal" | "acumulado" | "separado";
-export type ColunaCronograma = { chave: string; ano: number; mes: number; total: number; count: number; semAnuais?: boolean };
+export type FatiaPrevisao = { label: string; total: number; count: number; pct: number };
+
+/** Uma linha por definição da lista dada (as zeradas também — o quadro fica estável), com a participação no valor. */
+function linhasPrevisao(itens: ItemAgregavel[], grupos: readonly { label: string; chaves: readonly string[] }[]): FatiaPrevisao[] {
+  const linhas = grupos.map((g) => ({ label: g.label, chaves: new Set(g.chaves), total: 0, count: 0 }));
+  for (const i of itens) {
+    const l = linhas.find((x) => x.chaves.has(previsaoDoItem(i)));
+    if (!l) continue;
+    l.total += Number(i.valorTotal ?? 0);
+    l.count += 1;
+  }
+  const soma = linhas.reduce((s, l) => s + l.total, 0);
+  return linhas.map(({ label, total, count }) => ({ label, total, count, pct: soma > 0 ? (total / soma) * 100 : 0 }));
+}
+
+/** MÊS DEFINIDO × GENÉRICO × SEM PREVISÃO (o quadro "Definição da previsão"; Σ = o valor dos itens). */
+export const DEFINICAO_GRUPOS = [
+  { label: "Mês definido", chaves: ["Mês definido"] },
+  { label: "Genérico", chaves: PREVISOES_GENERICAS },
+  { label: "Sem previsão", chaves: ["Sem previsão"] },
+] as const;
+export const definicaoDash = (itens: ItemAgregavel[]): FatiaPrevisao[] => linhasPrevisao(itens, DEFINICAO_GRUPOS);
+
+/** Os itens GENÉRICOS por periodicidade (o quadro "Contratações periódicas" — só as que existem). */
+export const periodicosDash = (itens: ItemAgregavel[]): FatiaPrevisao[] =>
+  linhasPrevisao(
+    itens,
+    PREVISOES_GENERICAS.map((g) => ({ label: g, chaves: [g] })),
+  ).filter((f) => f.count > 0);
+
+export type ModoCronograma = "mensal" | "acumulado" | "distribuido";
+export type ColunaCronograma = { chave: string; ano: number; mes: number; total: number; count: number };
 
 /**
- * O CRONOGRAMA em 3 leituras: `mensal` (o anual entra com 1/12 em cada mês — o padrão, a MESMA conta do servidor),
- * `acumulado` (a soma corrida do mensal) e `separado` (os meses SEM os anuais + uma coluna "Anual" por ano, `mes: 0`).
+ * O CRONOGRAMA dos itens com MÊS DEFINIDO em 3 leituras: `mensal` (só eles — os genéricos têm o quadro próprio; a MESMA
+ * conta do servidor), `acumulado` (a soma corrida do mensal) e `distribuido` (o fluxo do ano: os genéricos entram com
+ * 1/12 do valor em cada mês do ano do PCA).
  */
 export function cronogramaDash(itens: ItemAgregavel[], modo: ModoCronograma): ColunaCronograma[] {
   const m = new Map<string, ColunaCronograma>();
-  const soma = (ano: number, mes: number, v: number, c: number, semAnuais?: boolean) => {
+  const soma = (ano: number, mes: number, v: number, c: number) => {
     const k = `${ano}-${mes}`;
-    const p = m.get(k) ?? { chave: k, ano, mes, total: 0, count: 0, semAnuais };
+    const p = m.get(k) ?? { chave: k, ano, mes, total: 0, count: 0 };
     p.total += v;
     p.count += c;
     m.set(k, p);
@@ -171,14 +228,10 @@ export function cronogramaDash(itens: ItemAgregavel[], modo: ModoCronograma): Co
     if (i.ano == null) continue;
     const v = Number(i.valorTotal ?? 0);
     if (i.anual) {
-      if (modo === "separado") soma(i.ano, 0, v, 1);
-      else for (let mes = 1; mes <= 12; mes++) soma(i.ano, mes, v / 12, 1 / 12);
-    } else if (i.mes != null) soma(i.ano, i.mes, v, 1, modo === "separado" || undefined);
+      if (modo === "distribuido") for (let mes = 1; mes <= 12; mes++) soma(i.ano, mes, v / 12, 1 / 12);
+    } else if (i.mes != null) soma(i.ano, i.mes, v, 1);
   }
-  // "Anual" depois dos meses do ano.
-  const lista = [...m.values()]
-    .map((p) => ({ ...p, count: Math.round(p.count) }))
-    .sort((a, b) => a.ano - b.ano || (a.mes || 13) - (b.mes || 13));
+  const lista = [...m.values()].map((p) => ({ ...p, count: Math.round(p.count) })).sort((a, b) => a.ano - b.ano || a.mes - b.mes);
   if (modo !== "acumulado") return lista;
   let corrido = 0;
   let itensCorridos = 0;
@@ -198,15 +251,14 @@ export const mesesDoRecorte = (r: RecorteDash | undefined): string[] =>
 // conectadas, com a contagem) e a escolha de VÁRIOS valores vira UM recorte da dimensão.
 // ---------------------------------------------------------------------------
 
-export type DimTopo = "classificacao" | "mes" | "prioridade" | "unidade" | "unidadeMedida";
+export type DimTopo = "classificacao" | "mes" | "previsao" | "prioridade" | "unidade" | "unidadeMedida";
 export type OpcaoDash = { chave: string; count: number };
 
-/** A chave do mês de um item no filtro do topo: "AAAA-M"; o ANUAL = "AAAA-0" (opção própria); sem data = null. */
-const chaveMesTopo = (i: ItemRecortavel): string | null =>
-  i.ano == null ? null : i.anual ? `${i.ano}-0` : i.mes != null ? `${i.ano}-${i.mes}` : null;
+/** A chave do mês de um item no filtro do topo: "AAAA-M"; o genérico e o sem data = null (filtram-se pela Previsão). */
+const chaveMesTopo = (i: ItemRecortavel): string | null => (i.ano == null || i.anual || i.mes == null ? null : `${i.ano}-${i.mes}`);
 
-/** As opções da dimensão (com a contagem de itens) nos itens que passam nos OUTROS filtros. Mês em ordem do calendário
- * (os anuais depois dos meses do ano); as demais da maior contagem para a menor, "—" por último. */
+/** As opções da dimensão (com a contagem de itens) nos itens que passam nos OUTROS filtros. Mês em ordem do calendário,
+ * a Previsão na ordem fixa (`PREVISOES_DASH`); as demais da maior contagem para a menor, "—" por último. */
 export function opcoesDash(itens: ItemRecortavel[], filtros: FiltrosDash, dim: DimTopo): OpcaoDash[] {
   const conta = new Map<string, number>();
   for (const i of filtrarItensDash(itens, filtros, dim)) {
@@ -219,10 +271,11 @@ export function opcoesDash(itens: ItemRecortavel[], filtros: FiltrosDash, dim: D
   if (dim === "mes") {
     const ord = (c: string) => {
       const [a, m] = c.split("-").map(Number);
-      return a * 100 + (m === 0 ? 13 : m);
+      return a * 100 + m;
     };
     return lista.sort((a, b) => ord(a.chave) - ord(b.chave));
   }
+  if (dim === "previsao") return lista.sort((a, b) => ordemPrevisao(a.chave) - ordemPrevisao(b.chave));
   // "—" (sem valor) sempre no fim.
   return lista.sort((a, b) => Number(a.chave === "—") - Number(b.chave === "—") || b.count - a.count || a.chave.localeCompare(b.chave, "pt-BR"));
 }
@@ -235,7 +288,7 @@ export function chavesDoFiltro(filtros: FiltrosDash, dim: DimTopo): string[] {
   return r.dim === dim && "labels" in r ? r.labels : [];
 }
 
-/** As chaves escolhidas → o recorte (nenhuma = sem filtro). Mês: cada mês SEM os anuais (eles são a opção "AAAA-0"). */
+/** As chaves escolhidas → o recorte (nenhuma = sem filtro). Mês: os itens com aquele mês definido. */
 export function recorteDasChaves(dim: DimTopo, chaves: string[]): RecorteDash | null {
   if (!chaves.length) return null;
   if (dim !== "mes") return { dim, labels: [...chaves] };
@@ -243,7 +296,7 @@ export function recorteDasChaves(dim: DimTopo, chaves: string[]): RecorteDash | 
     const [ano, mes] = c.split("-").map(Number);
     return { ano, mes };
   });
-  return { dim: "mes", ano: p.ano, mes: p.mes, semAnuais: true, ...(resto.length ? { extras: resto } : {}) };
+  return { dim: "mes", ano: p.ano, mes: p.mes, ...(resto.length ? { extras: resto } : {}) };
 }
 
 /** O texto do chip de vários valores: "A", "A e B", "A, B e mais N". */

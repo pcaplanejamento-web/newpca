@@ -223,8 +223,10 @@ export type ItemRow = {
   /** Mês/ano do cronograma (a mesma chave do gráfico mensal) — a origem de cada barra. */
   ano?: number | null;
   mes?: number | null;
-  /** Previsão ANUAL (fonte protocolo): entra com 1/12 em cada mês do cronograma. */
+  /** Previsão GENÉRICA (fonte protocolo — sem mês definido): fora do cronograma mensal; no "Distribuído", 1/12 por mês. */
   anual?: boolean;
+  /** A periodicidade da previsão genérica (ANUAL/SEMESTRAL/QUADRIMESTRAL/TRIMESTRAL). */
+  periodo?: string | null;
   /** Prioridade do DFD de origem (ALTA/MÉDIA/BAIXA; fonte protocolo — o gráfico de prioridade). */
   prioridade?: string | null;
 };

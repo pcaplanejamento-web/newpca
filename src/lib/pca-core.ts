@@ -1,4 +1,4 @@
-import { MESES, normPrevisao, stripAccents } from "./normalize.ts";
+import { MESES, normPrevisao, type PeriodoPrevisao, stripAccents } from "./normalize.ts";
 import { norm } from "./parse-dfd-comum.ts";
 
 /**
@@ -237,21 +237,22 @@ export function foraDaSoma(linhas: LinhaVinculo[], c: Consolidacao): ForaDaSoma[
 
 type SecaoLike = { titulo?: string | null; texto?: string | null };
 
+/** A previsão de um DFD no cronograma: um MÊS definido ou GENÉRICA (a periodicidade — ausente = ANUAL). */
+export type PrevisaoDfd = { ano: number; mes: number } | { ano: number; anual: true; periodo?: PeriodoPrevisao };
+
 /**
- * Mês/ano da PREVISÃO DE ENTREGA do DFD (seção 5) para o cronograma: `{ano, mes}` ou
- * `{ano, anual:true}` (recorrente — distribuído pelos 12 meses) ou `null` (sem previsão).
+ * A PREVISÃO DE ENTREGA do DFD (seção 5) no cronograma: `{ano, mes}` (mês definido) ou `{ano, anual:true, periodo}`
+ * (genérica — anual/semestral/quadrimestral/trimestral) ou `null` (sem previsão). **O ano é SEMPRE o `anoPca`** (o do
+ * PCA em que o DFD está — `normPrevisao` ignora o ano escrito no texto).
  */
-export function previsaoDoDfd(
-  secoes: SecaoLike[] | null | undefined,
-  anoPca: number | null,
-): { ano: number; mes: number } | { ano: number; anual: true } | null {
+export function previsaoDoDfd(secoes: SecaoLike[] | null | undefined, anoPca: number | null): PrevisaoDfd | null {
   const s = (secoes ?? []).find((x) => norm(x.titulo).includes("PREVISAO DE ENTREGA"));
   if (!s) return null;
-  const { valor, anual } = normPrevisao(s.texto, anoPca);
+  const { valor, periodo } = normPrevisao(s.texto, anoPca);
   if (!valor) return null;
-  const ano = Number(valor.match(/(20\d{2})/)?.[1] ?? anoPca ?? Number.NaN);
+  const ano = anoPca ?? Number(valor.match(/(20\d{2})/)?.[1] ?? Number.NaN);
   if (!Number.isFinite(ano)) return null;
-  if (anual) return { ano, anual: true };
+  if (periodo) return { ano, anual: true, periodo };
   const nomeMes = stripAccents(valor.split("/")[0] ?? "");
   const mes = MESES.findIndex((m) => stripAccents(m) === nomeMes) + 1;
   return mes >= 1 ? { ano, mes } : null;
@@ -272,8 +273,8 @@ export type ItemDashboard = {
   valorUnitario: number | null;
   valorTotal: number;
   classificacao: string;
-  /** Previsão (mês/ano; `anual` = distribuir nos 12 meses). */
-  previsao: { ano: number; mes: number } | { ano: number; anual: true } | null;
+  /** Previsão (mês definido, ou GENÉRICA — `anual` + a periodicidade). */
+  previsao: PrevisaoDfd | null;
   /** Sigla da unidade (requisitante). */
   unidade: string | null;
   /** Rótulo complementar (ex.: "DFD 123"). */
@@ -328,9 +329,9 @@ export function agregarDashboard(itens: ItemDashboard[], topN = 10) {
     total += i.valorTotal;
     if (!maior || i.valorTotal > maior.valorTotal) maior = i;
     if (i.unidade) unidades.add(i.unidade);
+    // O cronograma mensal = SÓ os itens com MÊS definido (os genéricos têm gráfico próprio — `origem-dash.ts`).
     const p = i.previsao;
-    if (p && "anual" in p) for (let m = 1; m <= 12; m++) soma(p.ano, m, i.valorTotal / 12, 1 / 12);
-    else if (p) soma(p.ano, p.mes, i.valorTotal, 1);
+    if (p && !("anual" in p)) soma(p.ano, p.mes, i.valorTotal, 1);
   }
   const count = itens.length;
   const resumo: ResumoDash = {

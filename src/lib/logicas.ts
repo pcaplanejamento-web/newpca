@@ -425,7 +425,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "normalizacao",
     titulo: "Padroniza prioridade e previsão automaticamente",
     descricao:
-      "Ao conferir, a PRIORIDADE é reduzida a ALTA/MÉDIA/BAIXA e a PREVISÃO DE ENTREGA vira uma DATA (MÊS/AAAA) OU recorrente (ANUAL, com ou sem ano). O que não dá para padronizar fica para tratar à mão.",
+      "Ao conferir, a PRIORIDADE é reduzida a ALTA/MÉDIA/BAIXA e a PREVISÃO DE ENTREGA vira um MÊS DEFINIDO (MÊS/AAAA) OU uma definição GENÉRICA — ANUAL, SEMESTRAL, QUADRIMESTRAL ou TRIMESTRAL. O ANO é SEMPRE o do PCA (o ano escrito no texto, de um contrato ou de uma data antiga, não vale; o nº de um contrato/ata/processo nunca vira data). O que não dá para padronizar fica para tratar à mão.",
     fonte: "normPrioridade / normPrevisao (normalize)",
   },
   {
@@ -563,7 +563,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "pca",
     titulo: "Ano do PCA obrigatório e herdado",
     descricao:
-      "O ano do PCA é adivinhado pela descrição e confirmado no seletor. Não se protocola nem se importa DFD avulso sem o PCA definido (nível padrão). No protocolo, todos os DFDs herdam o ano do PCA do processo.",
+      "O ano do PCA é adivinhado pela descrição e confirmado no seletor. Não se protocola nem se importa DFD avulso sem o PCA definido (nível padrão). No protocolo, todos os DFDs herdam o ano do PCA do processo — e o ANO da previsão de entrega e do cronograma do Dashboard é SEMPRE esse (nunca o de um contrato ou de outro texto).",
     fonte: "anoPcaDoTexto / PcaPicker",
     configuravelEm: { rotulo: "Avaliação (dfd.anoPca / protocolo.anoPca)" },
   },

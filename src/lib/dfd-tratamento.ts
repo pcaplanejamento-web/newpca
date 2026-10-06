@@ -16,7 +16,7 @@ import {
   TIPOS_DFD,
 } from "./avaliacao-core.ts";
 import { juntarParaCopiar } from "./format.ts";
-import { normPrevisao, normPrioridade, normUnidadeMedida, type Prioridade, valoresBatem } from "./normalize.ts";
+import { normPrevisao, normPrioridade, normUnidadeMedida, type PeriodoPrevisao, type Prioridade, valoresBatem } from "./normalize.ts";
 import { type ConferenciaCompacta, type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 import {
@@ -75,14 +75,23 @@ export function setTextoSecao(
 }
 
 /**
- * Texto canônico da PREVISÃO a partir do editor (mês/ano/anual). É **um OU outro**: ANUAL (com ano
- * opcional → `ANUAL/AAAA`, senão só `ANUAL`) OU uma DATA `MÊS/AAAA` (exige mês E ano). Vazio = ainda a
- * preencher. Puro — usado pelo bloco Tratamento e pela edição em massa.
+ * Texto canônico da PREVISÃO a partir do editor (mês/ano/periodicidade). É **um OU outro**: GENÉRICA — a periodicidade
+ * `ANUAL`/`SEMESTRAL`/`QUADRIMESTRAL`/`TRIMESTRAL` (com ano opcional → `SEMESTRAL/AAAA`) — OU um MÊS DEFINIDO `MÊS/AAAA`
+ * (exige mês E ano). `periodo` vazio = mês definido. Vazio = ainda a preencher. Puro — o bloco Tratamento e a massa.
  */
-export function buildPrevisao(mes: string, ano: string, anual: boolean): string {
-  if (anual) return ano ? `ANUAL/${ano}` : "ANUAL";
+export function buildPrevisao(mes: string, ano: string, periodo: PeriodoPrevisao | ""): string {
+  if (periodo) return ano ? `${periodo}/${ano}` : periodo;
   return mes && ano ? `${mes}/${ano}` : "";
 }
+
+/** As DEFINIÇÕES da previsão no editor (Tratamento e massa): o mês definido ou uma periodicidade. */
+export const DEFINICOES_PREVISAO: { value: PeriodoPrevisao | ""; label: string }[] = [
+  { value: "", label: "Mês definido" },
+  { value: "ANUAL", label: "Anual" },
+  { value: "SEMESTRAL", label: "Semestral" },
+  { value: "QUADRIMESTRAL", label: "Quadrimestral" },
+  { value: "TRIMESTRAL", label: "Trimestral" },
+];
 
 // ---- Edição EM MASSA — fonte única (análise do protocolo, protocolo gravado e lista de DFDs) ----
 export type CampoMassa = "reparticao" | "tipo" | "prioridade" | "previsao" | "fundamentacao";

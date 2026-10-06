@@ -1430,14 +1430,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (o `AvaliacaoAdmin` inclui as chaves novas no PATCH → sem clobber das irmãs).
 - **Tratamento + normalização das seções (`src/lib/normalize.ts` + `src/lib/dfd-tratamento.ts`, puros/testáveis):**
   ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
-  `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: uma DATA `MÊS/AAAA` **ou** recorrente `ANUAL`
-  — `ANUAL` vale **sem ano**, com ano vira `ANUAL/AAAA`; reconhece `MENSAL(MENTE)`/`ANUAL(MENTE)`/`AO LONGO DO ANO`…
-  — `normPrevisao(texto, anoPca?)`). **O ANO da previsão segue o PCA do processo** (pontos 7/8): `normPrevisao`
-  reconhece **só o MÊS por extenso** ("FEVEREIRO") e completa o ano com o `anoPca`; um ano explícito no texto tem
-  precedência (permite a edição do usuário). `normalizarSecoesDfd(dfd, regras, anoPca?)` recebe o ano do PCA (do
-  protocolo, ou do próprio DFD no avulso). O que não dá
+  `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: um MÊS DEFINIDO `MÊS/AAAA` **ou** uma definição GENÉRICA —
+  a periodicidade `ANUAL`/`SEMESTRAL`/`QUADRIMESTRAL`/`TRIMESTRAL` (`PERIODOS_PREVISAO`; sem ano vale, com ano vira
+  `SEMESTRAL/AAAA`); o recorrente `MENSAL(MENTE)`/`ANUAL(MENTE)`/`AO LONGO DO ANO`… = `ANUAL` — `normPrevisao(texto,
+  anoPca?)` → `{valor, anual (= genérica), periodo, auto}`). **O ANO É SEMPRE O DO PCA** (v1.18.0 — regra do usuário): com
+  o `anoPca`, o ano escrito no texto (de um contrato, de uma data antiga) NUNCA vale ("MARÇO/2025" num PCA 2027 =
+  `MARÇO/2027`, `auto`) e o mês numérico só vale fora de uma REFERÊNCIA (`ANTES_REFERENCIA`: CONTRATO/ATA/ARP/PREGÃO/
+  LICITAÇÃO/PROCESSO/Nº — "Contrato 12/2025" nunca vira dezembro) e com o ano do PCA; sem o PCA (avulso antes de
+  escolher), o ano do texto fica provisório. `normalizarSecoesDfd(dfd, regras, anoPca?)` recebe o ano do PCA (do
+  protocolo, ou do próprio DFD no avulso); o "Atualizar" (`revisarDfd`) corrige os gravados. O que não dá
   para padronizar fica para **tratar** à mão. O bloco **Tratamento** do `DfdConferir` edita PRIORIDADE (`Segmented`),
-  PREVISÃO (mês + ano [padrão = ano do PCA] + toggle ANUAL; `buildPrevisao`, puro) e FUNDAMENTAÇÃO LEGAL (`TextField`,
+  PREVISÃO (seletor **Definição** Mês definido · Anual · Semestral · Quadrimestral · Trimestral — `DEFINICOES_PREVISAO` —
+  + o mês + o ano TRAVADO no do PCA; `buildPrevisao(mes, ano, periodo)`, puro; a massa igual) e FUNDAMENTAÇÃO LEGAL (`TextField`,
   padrão "Lei 14.133/2021") — só componentes do DS; o texto canônico volta para `secoes[i].texto` e flui pelo envio
   normal (sem migração). A JUSTIFICATIVA e as demais seções editam-se direto na seção (cadeado por seção, ver acima). Cada DFD ganha um
   **estado** (`estadoDfd`: com erro › editado › regularizado › regular › pendente; cor por token `--danger/--info/
@@ -2366,8 +2370,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (só com dado) — **Prioridade dos DFDs** (`PrioridadeChart`: cores pela CATEGORIA — `--danger/--warn/--ok/--faint`,
     `PRIORIDADES_DASH`; `ItemRow.prioridade` = `prioridadeDoDfd` lida UMA vez por DFD em `itensConsolidados`) e **Valor por
     unidade** requisitante/planilha (`UnidadeRequisitanteChart`, pelo `ItemRow.codigo`) —, as dimensões `prioridade`/`unidade`
-    no `RecorteDash` (`fatiasDash`), o **cronograma em 3 leituras** (`MensalChart` `modo`/`onModo`: Por mês · Acumulado ·
-    Anuais à parte — `cronogramaDash`; recortes `mes: 0` = os anuais do ano e `semAnuais`) e o **Relatório (PDF)** na barra
+    no `RecorteDash` (`fatiasDash`), o **cronograma em 3 leituras** (`MensalChart` `modo`/`onModo`; desde a v1.18.0: Por
+    mês = SÓ os itens com o MÊS DEFINIDO — também o `porMes` do servidor — · Acumulado · **Distribuído** = os genéricos em
+    1/12 por mês; o recorte de mês só pega os de mês definido), a **PREVISÃO** separada (v1.18.0 — dimensão `previsao` do
+    `RecorteDash`/filtro do topo "Previsão": `previsaoDoItem` = "Mês definido" · Anual · Semestral · Quadrimestral ·
+    Trimestral · "Sem previsão", pelo `ItemRow.periodo`/`anual`, `PREVISOES_DASH` com as cores por token): o quadro
+    **Definição da Previsão** (`DefinicaoPrevisaoChart`, `charts/PrevisaoChart.tsx` — `definicaoDash`: Mês definido ×
+    Genérico × Sem previsão com valor, itens e %, Σ = o valor) e **Contratações Periódicas** (`PeriodicidadeChart` —
+    `periodicosDash`), só no PCA de fonte protocolo; o ano da previsão de cada item = o do PCA (`previsaoDoDfd(secoes,
+    pca.ano)` em `itensConsolidados` e `cronogramaPcas`) — e o **Relatório (PDF)** na barra
     dos filtros (`blocosRelatorioDashboard`, `dashboard-relatorio.ts`: KPIs, filtros e uma tabela por gráfico com % e TOTAL;
     com Exportar). O explorador aceita a cor CSS da categoria (`corDe` → número ou cor). Antes (até a 1.6): a
     prop `onSelecionar(recorte, rótulo)` abria a origem; a legenda da pizza vira botões ≥44px; `itensDoRecorte`

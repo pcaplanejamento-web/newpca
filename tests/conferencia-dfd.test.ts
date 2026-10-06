@@ -269,7 +269,7 @@ describe("aplicarMassaDfd + buildPrevisao — edição em massa (fonte única)",
     const p = aplicarMassaDfd(base, { campo: "prioridade", valor: "ALTA" });
     assert.equal(textoSecao(p.secoes, "PRIORIDADE"), "ALTA");
     assert.equal(textoSecao(p.secoes, "JUSTIFICATIVA"), "x");
-    const v = aplicarMassaDfd(p, { campo: "previsao", valor: buildPrevisao("MARÇO", "2027", false) });
+    const v = aplicarMassaDfd(p, { campo: "previsao", valor: buildPrevisao("MARÇO", "2027", "") });
     assert.equal(textoSecao(v.secoes, "PREVISAO DE ENTREGA"), "MARÇO/2027");
     const f = aplicarMassaDfd(v, { campo: "fundamentacao", valor: "Lei 14.133/2021" });
     assert.equal(textoSecao(f.secoes, "FUNDAMENTACAO LEGAL"), "Lei 14.133/2021");
@@ -280,10 +280,12 @@ describe("aplicarMassaDfd + buildPrevisao — edição em massa (fonte única)",
     assert.equal(aplicarMassaDfd(base, { campo: "reparticao", reparticaoId: 3 }), base);
   });
 
-  it("buildPrevisao: ANUAL (com/sem ano) OU MÊS/AAAA (exige os dois)", () => {
-    assert.equal(buildPrevisao("", "", true), "ANUAL");
-    assert.equal(buildPrevisao("", "2027", true), "ANUAL/2027");
-    assert.equal(buildPrevisao("MAIO", "2027", false), "MAIO/2027");
-    assert.equal(buildPrevisao("MAIO", "", false), "");
+  it("buildPrevisao: GENÉRICA (a periodicidade, com/sem ano) OU MÊS/AAAA (exige os dois)", () => {
+    assert.equal(buildPrevisao("", "", "ANUAL"), "ANUAL");
+    assert.equal(buildPrevisao("", "2027", "ANUAL"), "ANUAL/2027");
+    assert.equal(buildPrevisao("MAIO", "2027", "SEMESTRAL"), "SEMESTRAL/2027");
+    assert.equal(buildPrevisao("", "2027", "QUADRIMESTRAL"), "QUADRIMESTRAL/2027");
+    assert.equal(buildPrevisao("MAIO", "2027", ""), "MAIO/2027");
+    assert.equal(buildPrevisao("MAIO", "", ""), "");
   });
 });

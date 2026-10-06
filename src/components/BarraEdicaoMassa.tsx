@@ -2,10 +2,10 @@
 
 import { type ReactNode, useState } from "react";
 import { type ChaveAvaliacao, editavelDe, opcoesAssunto, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
-import { type AcaoMassa, buildPrevisao, type CampoMassa } from "@/lib/dfd-tratamento";
+import { type AcaoMassa, buildPrevisao, type CampoMassa, DEFINICOES_PREVISAO } from "@/lib/dfd-tratamento";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import type { AcaoMassaItem, CampoMassaItem } from "@/lib/massa-itens";
-import { MESES, type Prioridade, parseNumberBR } from "@/lib/normalize";
+import { MESES, type PeriodoPrevisao, type Prioridade, parseNumberBR } from "@/lib/normalize";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { Lado } from "@/lib/sobrescrita-dfd";
 import { type EtiquetaTarefa, type ListaTarefas, PRIORIDADES as PRIORIDADES_TAREFA, type Prioridade as PrioridadeTarefa, ROTULO_PRIORIDADE } from "@/lib/tarefas-core";
@@ -134,11 +134,12 @@ export function BarraEdicaoMassa({
   const [prio, setPrio] = useState<Prioridade | "">("");
   const [mes, setMes] = useState("");
   const [ano, setAno] = useState(anoPadrao != null ? String(anoPadrao) : "");
-  const [anual, setAnual] = useState(false);
+  const [periodo, setPeriodo] = useState<PeriodoPrevisao | "">("");
   const [fund, setFund] = useState("Lei 14.133/2021");
   if (campos.length === 0) return <Nota>Os campos editáveis em massa estão travados nas Configurações → Avaliação.</Nota>;
 
-  const previsao = buildPrevisao(mes, ano, anual);
+  // O ano é SEMPRE o do PCA (travado); sem PCA definido, o digitado.
+  const previsao = buildPrevisao(mes, anoPadrao != null ? String(anoPadrao) : ano, periodo);
   const acao: AcaoMassa | null =
     campo === "versao"
       ? null
@@ -225,31 +226,46 @@ export function BarraEdicaoMassa({
           {campo === "previsao" && (
             <>
               <select
-                aria-label="Mês"
+                aria-label="Definição da previsão"
                 className={inputCls}
-                style={{ width: "auto", flex: "0 1 140px" }}
-                value={mes}
-                disabled={anual}
-                onChange={(e) => setMes(e.target.value)}
+                style={{ width: "auto", flex: "0 1 160px" }}
+                value={periodo}
+                onChange={(e) => setPeriodo(e.target.value as PeriodoPrevisao | "")}
               >
-                <option value="">— Mês —</option>
-                {MESES.map((m) => (
-                  <option key={m} value={m}>
-                    {m[0] + m.slice(1).toLowerCase()}
+                {DEFINICOES_PREVISAO.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
                   </option>
                 ))}
               </select>
+              {!periodo && (
+                <select
+                  aria-label="Mês"
+                  className={inputCls}
+                  style={{ width: "auto", flex: "0 1 140px" }}
+                  value={mes}
+                  onChange={(e) => setMes(e.target.value)}
+                >
+                  <option value="">— Mês —</option>
+                  {MESES.map((m) => (
+                    <option key={m} value={m}>
+                      {m[0] + m.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 aria-label="Ano"
+                title={anoPadrao != null ? "O ano é sempre o do PCA" : undefined}
                 className={inputCls}
                 style={{ width: 84 }}
                 inputMode="numeric"
                 maxLength={4}
                 placeholder="Ano"
-                value={ano}
+                value={anoPadrao != null ? String(anoPadrao) : ano}
+                readOnly={anoPadrao != null}
                 onChange={(e) => setAno(e.target.value.replace(/\D/g, "").slice(0, 4))}
               />
-              <Checkbox label="Anual" checked={anual} onChange={(e) => setAnual(e.target.checked)} />
             </>
           )}
           {campo === "fundamentacao" && (

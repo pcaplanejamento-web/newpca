@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.18.0",
+    data: "2026-10-06",
+    titulo: "Ano do PCA na previsão e periodicidade no Dashboard",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "O ano da previsão de entrega do DFD é SEMPRE o ano do PCA: o ano escrito no texto, de um contrato ou de uma data antiga, não vale mais, e o nº de um contrato/ata/processo nunca vira data.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Mesa", texto: "Previsão GENÉRICA reconhecida e escolhida no Tratamento e na edição em massa: anual, semestral, quadrimestral ou trimestral — o ano fica travado no do PCA.", link: "/painel/mesa" },
+      { tipo: "novo", area: "PCA", texto: "Dashboard: \"Definição da Previsão\" compara os itens com o mês definido, os de definição genérica e os sem previsão (valor, itens e %).", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA", texto: "Dashboard: \"Contratações Periódicas\" separa os itens anuais, semestrais, quadrimestrais e trimestrais do cronograma, com o filtro \"Previsão\" no topo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "O Cronograma Mensal mostra só os itens com o mês definido; a leitura \"Distribuído\" soma os genéricos em 1/12 por mês (o fluxo do ano).", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.17.3",
     data: "2026-10-06",
     titulo: "Não lidas reais nas bolhas",

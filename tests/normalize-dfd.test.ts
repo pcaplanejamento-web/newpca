@@ -42,7 +42,7 @@ describe("normPrevisao (MÊS/AAAA ou ANUAL/AAAA)", () => {
     assert.equal(r.anual, true);
   });
   it("anual SEM ano é válido (bare ANUAL) — várias escritas", () => {
-    assert.deepEqual(normPrevisao("ANUAL"), { valor: "ANUAL", anual: true, auto: false }); // já canônico
+    assert.deepEqual(normPrevisao("ANUAL"), { valor: "ANUAL", anual: true, periodo: "ANUAL", auto: false }); // já canônico
     assert.equal(normPrevisao("Anual").valor, "ANUAL"); // caixa diferente
     assert.equal(normPrevisao("anual").anual, true);
     assert.equal(normPrevisao("ANUALMENTE").valor, "ANUAL");
@@ -66,9 +66,28 @@ describe("normPrevisao (MÊS/AAAA ou ANUAL/AAAA)", () => {
     assert.equal(normPrevisao("ANUAL", 2027).valor, "ANUAL/2027"); // recorrente ganha o ano do PCA
     assert.equal(normPrevisao("FEVEREIRO").valor, null); // sem ano do texto e sem PCA → a definir
   });
-  it("ponto 7 — o ano do TEXTO tem precedência sobre o do PCA (edição preservada)", () => {
-    assert.equal(normPrevisao("MAIO/2028", 2027).valor, "MAIO/2028");
+  it("o ANO é SEMPRE o do PCA — nunca o do texto, de um contrato ou de uma data antiga", () => {
+    assert.equal(normPrevisao("MAIO/2028", 2027).valor, "MAIO/2027");
+    assert.equal(normPrevisao("MARÇO/2025", 2027).valor, "MARÇO/2027");
+    assert.equal(normPrevisao("MARÇO/2025", 2027).auto, true);
     assert.equal(normPrevisao("31/05/2027", 2027).valor, "MAIO/2027");
+    assert.equal(normPrevisao("ANUAL, conforme contrato 045/2025", 2027).valor, "ANUAL/2027");
+    assert.equal(normPrevisao("ANUAL/2025", 2027).valor, "ANUAL/2027");
+  });
+  it("um nº de REFERÊNCIA (contrato/ata/processo) nunca vira data", () => {
+    assert.equal(normPrevisao("Contrato 12/2025", 2027).valor, null);
+    assert.equal(normPrevisao("Contrato nº 12/2025").valor, null);
+    assert.equal(normPrevisao("Ata 03/2026 — entrega em março", 2027).valor, "MARÇO/2027");
+    assert.equal(normPrevisao("vigência até 12/2025", 2027).valor, null); // outro ano não é a data do PCA
+  });
+  it("definição GENÉRICA: semestral, quadrimestral, trimestral e anual (a periodicidade)", () => {
+    assert.deepEqual(normPrevisao("SEMESTRAL", 2027), { valor: "SEMESTRAL/2027", anual: true, periodo: "SEMESTRAL", auto: true });
+    assert.equal(normPrevisao("Entregas semestrais", 2027).periodo, "SEMESTRAL");
+    assert.equal(normPrevisao("QUADRIMESTRALMENTE", 2027).valor, "QUADRIMESTRAL/2027");
+    assert.equal(normPrevisao("a cada trimestre").valor, "TRIMESTRAL");
+    assert.equal(normPrevisao("Durante o 1º semestre", 2027).periodo, "SEMESTRAL"); // o específico vence o recorrente
+    assert.equal(normPrevisao("MENSALMENTE", 2027).periodo, "ANUAL");
+    assert.equal(normPrevisao("MARÇO", 2027).periodo, null); // mês definido
   });
 });
 

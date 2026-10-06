@@ -27,6 +27,7 @@ const CAMPOS = [
   "ano",
   "mes",
   "anual",
+  "periodo",
   "prioridade",
 ] as const satisfies readonly (keyof ItemRow)[];
 
@@ -40,7 +41,7 @@ export function itensParaTexto(itens: readonly ItemRow[]): string {
 }
 
 /** Texto compacto → itens (tolerante: o formato antigo — a lista de objetos — também é lido). Campo `null` que era
- * opcional volta ausente só no `anual` (falso); os demais voltam `null` (o mesmo significado na tela). */
+ * opcional volta ausente só no `anual` (falso) e no `periodo` (mês definido); os demais voltam `null` (o mesmo significado na tela). */
 export function itensDoTexto(texto: string): ItemRow[] {
   const dado = JSON.parse(texto) as unknown;
   if (Array.isArray(dado)) return dado as ItemRow[];
@@ -49,7 +50,7 @@ export function itensDoTexto(texto: string): ItemRow[] {
     const item: Record<string, unknown> = {};
     for (let k = 0; k < c.length; k++) {
       const v = t[k];
-      if (v === null && c[k] === "anual") continue;
+      if (v === null && (c[k] === "anual" || c[k] === "periodo")) continue;
       item[c[k]] = v;
     }
     return item as ItemRow;

@@ -6,7 +6,10 @@ import {
   agregarItensDash,
   alternarFiltro,
   cronogramaDash,
+  definicaoDash,
   fatiasDash,
+  periodicosDash,
+  previsaoDoItem,
   itensDoRecorte,
   type ItemAgregavel, type FiltrosDash, chavesDoFiltro, filtrarItensDash, mesesDoRecorte, mesmoRecorte, opcoesDash, recorteDasChaves, rotuloVarios, temFiltro } from "../src/lib/origem-dash.ts";
 import { agregarDashboard } from "../src/lib/pca-core.ts";
@@ -40,8 +43,8 @@ describe("filtro cruzado do Dashboard", () => {
       mes: { recorte: { dim: "mes", ano: 2026, mes: 3 }, rotulo: "mar/26" },
     };
     assert.deepEqual(filtrarItensDash(I, f).map((i) => i.id), [1, 4]);
-    // O mês 3 traz o anual (id 3) — sem o filtro de classificação, ele aparece no gráfico de classificação.
-    assert.deepEqual(filtrarItensDash(I, f, "classificacao").map((i) => i.id), [1, 3, 4]);
+    // O mês 3 = só os itens com o mês definido (o genérico id 3 fica fora — tem a dimensão Previsão).
+    assert.deepEqual(filtrarItensDash(I, f, "classificacao").map((i) => i.id), [1, 4]);
     assert.deepEqual(filtrarItensDash(I, {}).length, I.length);
   });
   it("sem filtro, a agregação no navegador = a do servidor (agregarDashboard)", () => {
@@ -143,24 +146,48 @@ describe("novos gráficos (prioridade, unidade, cronograma)", () => {
     assert.deepEqual(itensDoRecorte(J, { dim: "prioridade", labels: ["—"] }).itens.map((i) => i.id), [2]);
     assert.deepEqual(itensDoRecorte(J, { dim: "unidade", labels: ["SMS"] }).itens.map((i) => i.id), [1, 3]);
   });
-  it("cronograma: por mês (1/12), acumulado e os anuais à parte; os recortes de cada leitura", () => {
+  it("cronograma: só os de MÊS definido; acumulado; distribuído (os genéricos em 1/12) — e o recorte de mês", () => {
     const mensal = cronogramaDash(J, "mensal");
-    assert.equal(mensal.length, 12);
-    assert.equal(mensal.find((p) => p.mes === 3)?.total, 200);
-    const acum = cronogramaDash(J, "acumulado");
-    assert.equal(acum.at(-1)?.total, 1350);
-    const sep = cronogramaDash(J, "separado");
     assert.deepEqual(
-      sep.map((p) => [p.mes, p.total]),
+      mensal.map((p) => [p.mes, p.total]),
       [
         [3, 100],
         [4, 50],
-        [0, 1200],
       ],
     );
-    assert.deepEqual(itensDoRecorte(J, { dim: "mes", ano: 2026, mes: 0 }).itens.map((i) => i.id), [3]);
-    assert.deepEqual(itensDoRecorte(J, { dim: "mes", ano: 2026, mes: 3, semAnuais: true }).itens.map((i) => i.id), [1]);
-    assert.deepEqual(itensDoRecorte(J, { dim: "mes", ano: 2026, mes: 3 }).itens.map((i) => i.id), [1, 3]);
+    assert.equal(cronogramaDash(J, "acumulado").at(-1)?.total, 150);
+    const dist = cronogramaDash(J, "distribuido");
+    assert.equal(dist.length, 12);
+    assert.equal(dist.find((p) => p.mes === 3)?.total, 200);
+    assert.equal(dist.reduce((s, p) => s + p.total, 0), 1350);
+    assert.deepEqual(itensDoRecorte(J, { dim: "mes", ano: 2026, mes: 3 }).itens.map((i) => i.id), [1]);
+  });
+  it("previsão: mês definido × genérico × sem previsão (Σ = o valor) e as periodicidades", () => {
+    const K: ItemAgregavel[] = [
+      ...J,
+      { ...base, id: 5, nomeProduto: "E", classificacao: "S", unidadeMedida: "UN", ano: 2026, mes: null, anual: true, periodo: "SEMESTRAL", valorTotal: 300, codigo: "SMS" },
+      { ...base, id: 6, nomeProduto: "F", classificacao: "S", unidadeMedida: "UN", ano: null, mes: null, valorTotal: 7, codigo: "SMS" },
+    ];
+    assert.deepEqual(K.map(previsaoDoItem), ["Mês definido", "Mês definido", "Anual", "Semestral", "Sem previsão"]);
+    const d = definicaoDash(K);
+    assert.deepEqual(
+      d.map((f) => [f.label, f.total, f.count]),
+      [
+        ["Mês definido", 150, 2],
+        ["Genérico", 1500, 2],
+        ["Sem previsão", 7, 1],
+      ],
+    );
+    assert.equal(Math.round(d.reduce((s, f) => s + f.pct, 0)), 100);
+    assert.deepEqual(
+      periodicosDash(K).map((f) => [f.label, f.total]),
+      [
+        ["Anual", 1200],
+        ["Semestral", 300],
+      ],
+    );
+    assert.deepEqual(itensDoRecorte(K, { dim: "previsao", labels: ["Anual", "Semestral", "Quadrimestral", "Trimestral"] }).itens.map((i) => i.id), [3, 5]);
+    assert.deepEqual(opcoesDash(K, {}, "previsao").map((o) => o.chave), ["Mês definido", "Anual", "Semestral", "Sem previsão"]);
   });
   it("relatório do Dashboard: KPIs, filtros e uma tabela por gráfico com % e TOTAL", () => {
     const b = blocosRelatorioDashboard({
@@ -182,11 +209,10 @@ describe("novos gráficos (prioridade, unidade, cronograma)", () => {
 });
 
 describe("filtros do topo (menus)", () => {
-  it("opções conectadas: contagem pelos DEMAIS filtros; o mês em ordem com os anuais como opção própria", () => {
+  it("opções conectadas: contagem pelos DEMAIS filtros; o mês em ordem (só os de mês definido)", () => {
     assert.deepEqual(opcoesDash(I, {}, "mes"), [
       { chave: "2026-3", count: 2 },
       { chave: "2026-4", count: 1 },
-      { chave: "2026-0", count: 1 },
     ]);
     const f: FiltrosDash = { unidade: { recorte: { dim: "unidade", labels: ["SMS"] }, rotulo: "SMS" } };
     assert.deepEqual(opcoesDash(I, f, "classificacao"), [
@@ -198,11 +224,11 @@ describe("filtros do topo (menus)", () => {
   });
 
   it("vários valores viram UM recorte; a contagem da opção bate com o filtro", () => {
-    const r = recorteDasChaves("mes", ["2026-3", "2026-0"]);
+    const r = recorteDasChaves("mes", ["2026-3", "2026-4"]);
     assert.ok(r);
-    assert.deepEqual(mesesDoRecorte(r).sort(), ["2026-0", "2026-3"]);
+    assert.deepEqual(mesesDoRecorte(r).sort(), ["2026-3", "2026-4"]);
     const lista = filtrarItensDash(I, { mes: { recorte: r, rotulo: "x" } });
-    assert.deepEqual(lista.map((i) => i.id).sort(), [1, 3, 4]);
+    assert.deepEqual(lista.map((i) => i.id).sort(), [1, 2, 4]);
     const so = recorteDasChaves("mes", ["2026-3"]);
     assert.ok(so);
     assert.equal(filtrarItensDash(I, { mes: { recorte: so, rotulo: "x" } }).length, 2);

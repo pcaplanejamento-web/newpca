@@ -572,7 +572,6 @@ export async function itensConsolidados(pca: PcaEspaco) {
       planejamento: string | null;
       tipo: string | null;
       secoes: string | null;
-      anoPca: number | null;
       reparticaoId: number | null;
       sigla: string | null;
       protocoloId: number | null;
@@ -596,7 +595,6 @@ export async function itensConsolidados(pca: PcaEspaco) {
           planejamento: dfds.planejamento,
           tipo: dfds.tipo,
           secoes: dfds.secoes,
-          anoPca: dfds.anoPca,
           reparticaoId: dfds.reparticaoId,
           sigla: reparticoes.codigo,
           protocoloId: dfds.protocoloId,
@@ -636,7 +634,8 @@ export async function itensConsolidados(pca: PcaEspaco) {
       } catch {
         secoes = [];
       }
-      previsaoPorDfd.set(d.id, previsaoDoDfd(secoes, d.anoPca ?? pca.ano));
+      // O ano da previsão é SEMPRE o do PCA em que o item está (nunca o do texto, de um contrato…).
+      previsaoPorDfd.set(d.id, previsaoDoDfd(secoes, pca.ano));
       prioridadePorDfd.set(d.id, prioridadeDoDfd(secoes.map((x) => ({ numero: 0, titulo: x.titulo ?? "", texto: x.texto ?? "" }))));
     }
   for (const [, its] of lotes)
@@ -685,6 +684,7 @@ type Consolidados = Awaited<ReturnType<typeof itensConsolidados>>;
 function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados["meta"], prioridades?: Map<number, string | null>): ItemRow {
   const p = i.previsao;
   const anual = !!p && "anual" in p;
+  const periodo = p && "anual" in p ? p.periodo : null;
   return {
     id: i.id,
     idProduto: i.codigoProduto,
@@ -705,6 +705,7 @@ function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados
     ano: p?.ano ?? null,
     mes: p && !("anual" in p) ? p.mes : null,
     anual,
+    ...(periodo ? { periodo } : {}),
     prioridade: prioridades?.get(i.dfdId) ?? null,
   };
 }
@@ -1193,7 +1194,7 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
       const vig = consolidarPca(vs.filter((v) => v.pcaId === p.id)).vigentes;
       for (const lote of lotesDeIds(vig)) {
         const ds = await db
-          .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, secoes: dfds.secoes, anoPca: dfds.anoPca, valor: dfds.valorTotal, sigla: reparticoes.codigo })
+          .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, secoes: dfds.secoes, valor: dfds.valorTotal, sigla: reparticoes.codigo })
           .from(dfds)
           .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
           .where(inArray(dfds.id, lote));
@@ -1204,7 +1205,7 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
           } catch {
             secoes = [];
           }
-          const pv = previsaoDoDfd(secoes, d.anoPca ?? p.ano);
+          const pv = previsaoDoDfd(secoes, p.ano);
           if (!pv) continue;
           out.push({
             pcaId: p.id,

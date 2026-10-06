@@ -119,13 +119,15 @@ describe("pca-core — consolidação", () => {
 });
 
 describe("pca-core — previsão e dashboard", () => {
-  it("mês/ano, anual e ausente", () => {
+  it("mês/ano, genérica (a periodicidade) e ausente — o ano é SEMPRE o do PCA", () => {
     assert.deepEqual(previsaoDoDfd([{ titulo: "5 - PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "Março de 2027" }], 2027), { ano: 2027, mes: 3 });
-    assert.deepEqual(previsaoDoDfd([{ titulo: "PREVISÃO DE ENTREGA", texto: "ANUAL" }], 2027), { ano: 2027, anual: true });
+    assert.deepEqual(previsaoDoDfd([{ titulo: "5 - PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "Março de 2025" }], 2027), { ano: 2027, mes: 3 });
+    assert.deepEqual(previsaoDoDfd([{ titulo: "PREVISÃO DE ENTREGA", texto: "ANUAL" }], 2027), { ano: 2027, anual: true, periodo: "ANUAL" });
+    assert.deepEqual(previsaoDoDfd([{ titulo: "PREVISÃO DE ENTREGA", texto: "Semestral (contrato 12/2025)" }], 2027), { ano: 2027, anual: true, periodo: "SEMESTRAL" });
     assert.equal(previsaoDoDfd([], 2027), null);
     assert.equal(previsaoDoDfd(null, 2027), null);
   });
-  it("agrega resumo, fatias, cronograma (anual espalhado) e top", () => {
+  it("agrega resumo, fatias, cronograma (só os de mês definido) e top", () => {
     const it0 = (id: number, v: number, extra: Partial<ItemDashboard> = {}): ItemDashboard => ({ id, codigoProduto: null, sequencial: id, nome: `I${id}`, unidadeMedida: "UN", quantidade: 1, valorUnitario: v, valorTotal: v, classificacao: "DFD-S", previsao: null, unidade: "SEMED", origem: null, ...extra });
     const d = agregarDashboard([
       it0(1, 1200, { previsao: { ano: 2027, anual: true } }),
@@ -135,8 +137,7 @@ describe("pca-core — previsão e dashboard", () => {
     assert.equal(d.resumo.count, 2);
     assert.equal(d.resumo.maiorNome, "I1");
     assert.equal(d.resumo.numUnidades, 2);
-    assert.equal(d.porMes.length, 12);
-    assert.equal(d.porMes.find((p) => p.mes === 2)?.total, 400);
+    assert.deepEqual(d.porMes, [{ ano: 2027, mes: 2, total: 300, count: 1 }]); // o genérico tem o quadro próprio
     assert.equal(d.top[0].valor, 1200);
     assert.deepEqual(d.porUnidadeMedida.map((f) => f.label).sort(), ["CX", "UN"]);
     assert.equal(agregarDashboard([]).resumo.ticket, 0);

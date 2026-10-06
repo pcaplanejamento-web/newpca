@@ -7,6 +7,7 @@ import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirAssinaturaDfd } from "@/lib/conferencia-dfd";
 import {
   buildPrevisao,
+  DEFINICOES_PREVISAO,
   type CampoTratavel,
   setTextoSecao,
   situacaoSecao,
@@ -30,7 +31,7 @@ import { Button } from "./Button";
 import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
-import { CampoLista, Checkbox, TextField } from "./Field";
+import { CampoLista, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck, IconShield } from "./icons";
 import { Segmented } from "./Segmented";
@@ -245,21 +246,20 @@ export function DfdConferir({
   // Valores atuais das seções tratáveis.
   const [pCfg, vCfg, fCfg] = TRATAVEIS;
   const prio = normPrioridade(textoSecao(dfd.secoes, pCfg.kw)).valor;
-  // Previsão: o ANO segue o PCA do processo (ponto 7) — passado a `normPrevisao`, que também
-  // reconhece só o MÊS por extenso e completa o ano com o do PCA (ponto 8).
-  const prev = normPrevisao(textoSecao(dfd.secoes, vCfg.kw), anoPca).valor;
+  // Previsão: o ANO é SEMPRE o do PCA do processo (`normPrevisao` com o `anoPca` — o ano do texto não vale).
+  const prevN = normPrevisao(textoSecao(dfd.secoes, vCfg.kw), anoPca);
+  const prev = prevN.valor;
   const fund = textoSecao(dfd.secoes, fCfg.kw);
   // Seções editáveis DIRETO no documento (cadeado por seção, no `DfdView`): todas, respeitando o
   // "editável" do ADM nos pontos que o suportam (previsão/prioridade/fundamentação).
   const secaoEditavel = ({ obrig }: { titulo: string; obrig?: string }) => !obrig || editavelDe(regras, obrig as ChaveAvaliacao);
   // Mesma régua dos erros (`situacaoSecao`): fundamentação precisa citar a norma.
   const fundOk = situacaoSecao(dfd.secoes, fCfg.kw) === "ok";
-  // "ANUAL" (bare) ou "ANUAL/AAAA" → anual; senão "MÊS/AAAA" → data. Ano é opcional
-  // no anual (não deixa o mês grudar como se fosse mês quando é só "ANUAL").
-  const anual = !!prev && /^ANUAL(\/|$)/.test(prev);
-  const mesSel = prev && !anual ? (prev.split("/")[0] ?? "") : "";
-  // Ano do campo: o da previsão; sem ele, o do PCA (o usuário ainda pode editar — ponto 8).
-  const anoSel = (prev ? (prev.split("/")[1] ?? "") : "") || (anoPca != null ? String(anoPca) : "");
+  // Genérica (a periodicidade) OU mês definido.
+  const periodo = prevN.periodo ?? "";
+  const mesSel = prev && !periodo ? (prev.split("/")[0] ?? "") : "";
+  // Ano: o do PCA (travado); sem PCA definido, o da previsão (editável).
+  const anoSel = anoPca != null ? String(anoPca) : prev ? (prev.split("/")[1] ?? "") : "";
 
   const status = (campo: CampoTratavel, ok: boolean): { txt: string; cor: string } => {
     if (!ok) {
@@ -403,36 +403,50 @@ export function DfdConferir({
             <div className="flex flex-wrap items-center gap-2">
               <select
                 className={inputCls}
-                style={{ width: "auto", flex: "1 1 120px" }}
-                value={mesSel}
-                disabled={anual || roPrev}
-                onChange={(e) => setSecao(vCfg, buildPrevisao(e.target.value, anoSel, false))}
+                style={{ width: "auto", flex: "1 1 140px" }}
+                aria-label="Definição da previsão"
+                value={periodo}
+                disabled={roPrev}
+                onChange={(e) => setSecao(vCfg, buildPrevisao(mesSel, anoSel, e.target.value as typeof periodo))}
               >
-                <option value="">— Mês —</option>
-                {MESES.map((m) => (
-                  <option key={m} value={m}>
-                    {m[0] + m.slice(1).toLowerCase()}
+                {DEFINICOES_PREVISAO.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
                   </option>
                 ))}
               </select>
+              {!periodo && (
+                <select
+                  className={inputCls}
+                  style={{ width: "auto", flex: "1 1 120px" }}
+                  aria-label="Mês da previsão"
+                  value={mesSel}
+                  disabled={roPrev}
+                  onChange={(e) => setSecao(vCfg, buildPrevisao(e.target.value, anoSel, ""))}
+                >
+                  <option value="">— Mês —</option>
+                  {MESES.map((m) => (
+                    <option key={m} value={m}>
+                      {m[0] + m.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 className={inputCls}
                 style={{ width: "84px" }}
                 inputMode="numeric"
                 placeholder="Ano"
+                aria-label="Ano da previsão"
+                title={anoPca != null ? "O ano é sempre o do PCA" : undefined}
                 maxLength={4}
                 value={anoSel}
+                readOnly={anoPca != null}
                 disabled={roPrev}
                 onChange={(e) => {
                   const ano = e.target.value.replace(/\D/g, "").slice(0, 4);
-                  setSecao(vCfg, buildPrevisao(mesSel, ano, anual));
+                  setSecao(vCfg, buildPrevisao(mesSel, ano, periodo));
                 }}
-              />
-              <Checkbox
-                label="Anual"
-                checked={anual}
-                disabled={roPrev}
-                onChange={(e) => setSecao(vCfg, buildPrevisao(mesSel, anoSel, e.target.checked))}
               />
             </div>
           </div>

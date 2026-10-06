@@ -9,6 +9,7 @@ import {
   alternarFiltro,
   chavesDoFiltro,
   cronogramaDash,
+  definicaoDash,
   type DimTopo,
   fatiasDash,
   type ModoCronograma,
@@ -17,6 +18,9 @@ import {
   filtrarItensDash,
   mesesDoRecorte,
   opcoesDash,
+  PREVISOES_DASH,
+  PREVISOES_GENERICAS,
+  periodicosDash,
   type RecorteDash,
   recorteDasChaves,
   rotuloVarios,
@@ -31,6 +35,7 @@ import { Button } from "./Button";
 import { ChartCard } from "./ChartCard";
 import { ClassificacaoChart } from "./charts/ClassificacaoChart";
 import { MensalChart } from "./charts/MensalChart";
+import { DefinicaoPrevisaoChart, PeriodicidadeChart } from "./charts/PrevisaoChart";
 import { PRIORIDADES_DASH, PrioridadeChart, rotuloPrioridade } from "./charts/PrioridadeChart";
 import { TopItensChart } from "./charts/TopItensChart";
 import { UnidadeChart } from "./charts/UnidadeChart";
@@ -52,11 +57,14 @@ import { useContagem } from "./useContagem";
  * consolidação deixou fora (só no painel; ausente na tela pública). */
 export type ConsultaDashboard = { pcaId: number; protocolos: ProtocoloDoPca[]; dfds: DfdDoPca[]; foraDaSoma?: DfdForaDaSoma[] };
 
-type Grafico = DimDash;
+/** Os gráficos (as dimensões + o quadro das periodicidades, que filtra a dimensão `previsao`). */
+type Grafico = DimDash | "periodo";
 
 const TITULO: Record<Grafico, string> = {
   classificacao: "Classificação dos Itens",
   mes: "Cronograma Mensal",
+  previsao: "Definição da Previsão",
+  periodo: "Contratações Periódicas",
   item: "Top 100 Itens por Valor",
   unidadeMedida: "Unidades de Medida",
   prioridade: "Prioridade dos DFDs",
@@ -70,17 +78,19 @@ const TOP_ITENS = 100;
 function rotuloOpcao(dim: DimTopo, chave: string): string {
   if (dim === "mes") {
     const [a, m] = chave.split("-").map(Number);
-    return m === 0 ? `Anuais de ${a}` : mesLabel(m, a);
+    return mesLabel(m, a);
   }
+  if (dim === "previsao") return chave;
   if (dim === "prioridade") return rotuloPrioridade(chave);
   if (chave !== "—") return chave;
   return dim === "classificacao" ? "Sem classificação" : "Sem unidade";
 }
 
 /** O nome curto de cada filtro no chip. */
-const TITULO_CHIP: Record<Grafico, string> = {
+const TITULO_CHIP: Record<DimDash, string> = {
   classificacao: "Classificação",
   mes: "Mês",
+  previsao: "Previsão",
   item: "Item",
   unidadeMedida: "Unidade de medida",
   prioridade: "Prioridade",
@@ -91,6 +101,7 @@ const TITULO_CHIP: Record<Grafico, string> = {
 const DIMS_TOPO: { dim: DimTopo; rotulo: string }[] = [
   { dim: "classificacao", rotulo: "Classificação" },
   { dim: "mes", rotulo: "Mês" },
+  { dim: "previsao", rotulo: "Previsão" },
   { dim: "prioridade", rotulo: "Prioridade" },
   { dim: "unidade", rotulo: "Unidade" },
   { dim: "unidadeMedida", rotulo: "Unidade de medida" },
@@ -188,7 +199,12 @@ export function DashboardPcaCliente({
   const unidades = useMemo(() => fatiasDash(filtrarItensDash(itens, filtros, "unidade"), "unidade"), [itens, filtros]);
   const temPrioridade = useMemo(() => itens.some((i) => i.prioridade), [itens]);
   const temUnidades = unidades.filter((f) => f.label !== "—").length > 1 || filtros.unidade != null;
-  const temAnuais = useMemo(() => itens.some((i) => i.anual), [itens]);
+  // A previsão (fonte protocolo): o mês definido × a definição genérica — cada quadro SEM o filtro da própria dimensão.
+  const temPrevisao = useMemo(() => itens.some((i) => i.ano != null), [itens]);
+  const temGenericos = useMemo(() => itens.some((i) => i.anual), [itens]);
+  const basePrevisao = useMemo(() => filtrarItensDash(itens, filtros, "previsao"), [itens, filtros]);
+  const definicao = useMemo(() => definicaoDash(basePrevisao), [basePrevisao]);
+  const periodicos = useMemo(() => periodicosDash(basePrevisao), [basePrevisao]);
   const cronograma = useMemo(
     () => (modoCrono === "mensal" && !ativo ? porMes : cronogramaDash(ativo ? filtrarItensDash(itens, filtros, "mes") : itens, modoCrono)),
     [modoCrono, ativo, porMes, itens, filtros],
@@ -198,9 +214,10 @@ export function DashboardPcaCliente({
   const indiceCor = useMemo(() => new Map(porClassificacao.map((f, i) => [f.label, i])), [porClassificacao]);
   const corDe = (label: string) => indiceCor.get(label) ?? -1;
   const corPrioridade = (chave: string) => PRIORIDADES_DASH.find((p) => p.chave === chave)?.cor ?? "var(--faint)";
+  const corPeriodo = (chave: string) => PREVISOES_DASH.find((p) => p.chave === chave)?.cor ?? "var(--faint)";
 
   const filtrar = (r: RecorteDash, rotulo: string) => setFiltros((f) => alternarFiltro(f, r, rotulo));
-  const labels = (dim: "classificacao" | "unidadeMedida" | "prioridade" | "unidade") => {
+  const labels = (dim: "classificacao" | "unidadeMedida" | "prioridade" | "unidade" | "previsao") => {
     const r = filtros[dim]?.recorte;
     return r && r.dim === dim ? r.labels : undefined;
   };
@@ -213,13 +230,13 @@ export function DashboardPcaCliente({
   // Os menus do topo: as opções CONECTADAS (os demais filtros valem) com o texto de cada uma.
   const campos: CampoFiltroDash[] = useMemo(
     () =>
-      DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades : true)).map((d) => ({
+      DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades : d.dim === "previsao" ? temPrevisao : true)).map((d) => ({
         dim: d.dim,
         rotulo: d.dim === "unidade" ? rotuloUnidade : d.rotulo,
         opcoes: opcoesDash(itens, filtros, d.dim).map((o) => ({ ...o, rotulo: rotuloOpcao(d.dim, o.chave) })),
         selecionados: chavesDoFiltro(filtros, d.dim),
       })),
-    [itens, filtros, temPrioridade, temUnidades, rotuloUnidade],
+    [itens, filtros, temPrioridade, temUnidades, temPrevisao, rotuloUnidade],
   );
   function mudarTopo(dim: string, chaves: string[]) {
     const d = dim as DimTopo;
@@ -247,7 +264,6 @@ export function DashboardPcaCliente({
   const chips = Object.entries(filtros).filter(([, f]) => f) as [DimDash, NonNullable<FiltrosDash[DimDash]>][];
   const textoFiltros = chips.map(([dim, f]) => `${TITULO_CHIP[dim]}: ${f.rotulo}`).join(" · ");
   const valorFiltrado = filtrados.reduce((s, i) => s + (i.valorTotal ?? 0), 0);
-  const anuaisNoMes = filtros.mes ? filtrados.filter((i) => i.anual).length : 0;
 
   // A série do explorador do gráfico aberto (todas as categorias — as pequenas também).
   const serieExplorar = useMemo((): PontoSerie[] => {
@@ -255,14 +271,16 @@ export function DashboardPcaCliente({
     if (explorar === "mes") {
       // No acumulado, o ranking é o de cada mês (a soma corrida não se compara).
       const base = modoCrono === "acumulado" ? cronogramaDash(ativo ? filtrarItensDash(itens, filtros, "mes") : itens, "mensal") : cronograma;
-      return base.map((p) => ({ chave: `${p.ano}-${p.mes}`, rotulo: p.mes === 0 ? `Anuais de ${p.ano}` : mesLabel(p.mes, p.ano), valor: p.total, count: p.count }));
+      return base.map((p) => ({ chave: `${p.ano}-${p.mes}`, rotulo: mesLabel(p.mes, p.ano), valor: p.total, count: p.count }));
     }
+    if (explorar === "previsao") return definicao.map((f) => ({ chave: f.label, rotulo: f.label, valor: f.total, count: f.count }));
+    if (explorar === "periodo") return periodicos.map((f) => ({ chave: f.label, rotulo: f.label, valor: f.total, count: f.count }));
     if (explorar === "unidadeMedida") return unids.map((f) => ({ chave: f.label, rotulo: f.label, valor: f.count }));
     if (explorar === "prioridade") return prioridades.map((f) => ({ chave: f.label, rotulo: rotuloPrioridade(f.label), valor: f.total, count: f.count }));
     if (explorar === "unidade") return unidades.map((f) => ({ chave: f.label, rotulo: f.label === "—" ? "Sem unidade" : f.label, valor: f.total, count: f.count }));
     if (explorar === "item") return ordenados.map((i) => ({ chave: String(i.id), rotulo: i.nomeProduto ?? `Item ${i.id}`, valor: i.valorTotal ?? 0 }));
     return [];
-  }, [explorar, classes, cronograma, modoCrono, unids, prioridades, unidades, itens, filtros, ativo, ordenados]);
+  }, [explorar, classes, cronograma, modoCrono, definicao, periodicos, unids, prioridades, unidades, itens, filtros, ativo, ordenados]);
 
   async function relatorio() {
     if (gerando) return;
@@ -281,7 +299,9 @@ export function DashboardPcaCliente({
             resumo: resumoVisto,
             graficos: [
               { titulo: TITULO.classificacao, rotulo: "Classificação", fatias: classes },
-              { titulo: TITULO.mes, rotulo: "Mês", fatias: mensal.map((p) => ({ label: p.mes === 0 ? `Anuais de ${p.ano}` : mesLabel(p.mes, p.ano), total: p.total, count: p.count })) },
+              { titulo: TITULO.mes, rotulo: "Mês", fatias: mensal.map((p) => ({ label: mesLabel(p.mes, p.ano), total: p.total, count: p.count })) },
+              ...(temPrevisao ? [{ titulo: TITULO.previsao, rotulo: "Definição", fatias: definicao.filter((f) => f.count > 0) }] : []),
+              ...(periodicos.length ? [{ titulo: TITULO.periodo, rotulo: "Periodicidade", fatias: periodicos }] : []),
               ...(temPrioridade ? [{ titulo: TITULO.prioridade, rotulo: "Prioridade", fatias: prioridades.map((f) => ({ ...f, label: rotuloPrioridade(f.label) })) }] : []),
               ...(temUnidades ? [{ titulo: `Valor por ${rotuloUnidade}`, rotulo: rotuloUnidade, fatias: unidades.map((f) => ({ ...f, label: f.label === "—" ? "Sem unidade" : f.label })) }] : []),
               { titulo: TITULO.unidadeMedida, rotulo: "Unidade de medida", fatias: unids },
@@ -305,9 +325,12 @@ export function DashboardPcaCliente({
     else if (explorar === "unidade") filtrar({ dim: "unidade", labels: [chave] }, chave === "—" ? "Sem unidade" : chave);
     else if (explorar === "mes") {
       const [a, m] = chave.split("-").map(Number);
-      if (m === 0) filtrar({ dim: "mes", ano: a, mes: 0 }, `Anuais de ${a}`);
-      else filtrar({ dim: "mes", ano: a, mes: m, ...(modoCrono === "separado" ? { semAnuais: true } : {}) }, mesLabel(m, a));
-    } else if (explorar === "item") {
+      filtrar({ dim: "mes", ano: a, mes: m }, mesLabel(m, a));
+    } else if (explorar === "previsao") {
+      const genericos = chave === "Genérico";
+      filtrar({ dim: "previsao", labels: genericos ? [...PREVISOES_GENERICAS] : [chave] }, genericos ? "Genérico (anual, semestral…)" : chave);
+    } else if (explorar === "periodo") filtrar({ dim: "previsao", labels: [chave] }, chave);
+    else if (explorar === "item") {
       const it = itens.find((i) => String(i.id) === chave);
       filtrar({ dim: "item", id: Number(chave) }, it?.nomeProduto ?? `Item ${chave}`);
     }
@@ -315,6 +338,15 @@ export function DashboardPcaCliente({
   const ativaExplorar =
     explorar === "classificacao" || explorar === "unidadeMedida" || explorar === "prioridade" || explorar === "unidade"
       ? (labels(explorar)?.length === 1 ? labels(explorar)?.[0] : null) ?? null
+      : explorar === "periodo"
+        ? (labels("previsao")?.length === 1 ? labels("previsao")?.[0] : null) ?? null
+        : explorar === "previsao"
+          ? (() => {
+              const l = labels("previsao");
+              if (!l?.length) return null;
+              if (l.length === 1 && !PREVISOES_GENERICAS.includes(l[0])) return l[0];
+              return l.length === PREVISOES_GENERICAS.length && PREVISOES_GENERICAS.every((g) => l.includes(g)) ? "Genérico" : null;
+            })()
       : explorar === "mes"
         ? mesesAtivos.length === 1
           ? mesesAtivos[0]
@@ -425,9 +457,24 @@ export function DashboardPcaCliente({
               <ChartCard key="classificacao" title={TITULO.classificacao} subtitle="Valor por categoria — toque para filtrar" onExpandir={() => setExplorar("classificacao")}>
                 <ClassificacaoChart data={classes} onSelecionar={filtrar} ativos={labels("classificacao")} corDe={corDe} />
               </ChartCard>,
-              <ChartCard key="mes" title={TITULO.mes} subtitle="Valor planejado por mês desejado — toque para filtrar" onExpandir={() => setExplorar("mes")}>
-                <MensalChart data={cronograma} onSelecionar={filtrar} ativos={mesesAtivos} modo={modoCrono} onModo={setModoCrono} temAnuais={temAnuais} />
+              <ChartCard
+                key="mes"
+                title={TITULO.mes}
+                subtitle={temGenericos ? "Só os itens com o mês definido — toque para filtrar" : "Valor planejado por mês desejado — toque para filtrar"}
+                onExpandir={() => setExplorar("mes")}
+              >
+                <MensalChart data={cronograma} onSelecionar={filtrar} ativos={mesesAtivos} modo={modoCrono} onModo={setModoCrono} temGenericos={temGenericos} />
               </ChartCard>,
+              temPrevisao ? (
+                <ChartCard key="previsao" title={TITULO.previsao} subtitle="Mês definido × definição genérica — toque para filtrar" onExpandir={() => setExplorar("previsao")}>
+                  <DefinicaoPrevisaoChart data={definicao} onSelecionar={filtrar} ativos={labels("previsao")} />
+                </ChartCard>
+              ) : null,
+              temGenericos ? (
+                <ChartCard key="periodo" title={TITULO.periodo} subtitle="Anual, semestral, quadrimestral e trimestral — fora do cronograma mensal" onExpandir={() => setExplorar("periodo")}>
+                  <PeriodicidadeChart data={periodicos} onSelecionar={filtrar} ativos={labels("previsao")} />
+                </ChartCard>
+              ) : null,
               <ChartCard key="item" title={TITULO.item} subtitle={`Os ${num(tops.length)} maiores itens — role a lista; toque para filtrar`} onExpandir={() => setExplorar("item")}>
                 <TopItensChart data={tops} onSelecionar={filtrar} ativo={itemAtivo} alturaMax={420} />
               </ChartCard>,
@@ -487,7 +534,7 @@ export function DashboardPcaCliente({
         serie={serieExplorar}
         medida={explorar === "unidadeMedida" ? "itens" : "valor"}
         formatar={explorar === "unidadeMedida" ? num : brl}
-        corDe={explorar === "classificacao" ? corDe : explorar === "prioridade" ? corPrioridade : undefined}
+        corDe={explorar === "classificacao" ? corDe : explorar === "prioridade" ? corPrioridade : explorar === "periodo" ? corPeriodo : undefined}
         ativa={ativaExplorar}
         onFiltrar={filtrarDoExplorador}
         recorte={textoFiltros || undefined}
@@ -507,11 +554,6 @@ export function DashboardPcaCliente({
             ? `Os itens ATIVOS dos DFDs incorporados a este PCA${previa ? " + os da PRÉVIA (ainda não incorporados: enviados e marcados da Mesa do sistema)" : ""} que passam em TODOS os filtros — a mesma lista da Consulta de Itens.`
             : "Os itens das planilhas importadas neste PCA que passam em TODOS os filtros — a mesma lista da Consulta de Itens."
         }
-        avisos={[
-          anuaisNoMes
-            ? `${num(anuaisNoMes)} item(ns) com previsão ANUAL entram no mês com 1/12 do valor no cronograma (a lista mostra o valor cheio).`
-            : null,
-        ]}
       >
         <ItemTable rows={filtrados} showUnidade={showUnidade} origem={!!consulta} onRowClick={abrirItem} ativo={aberto?.tipo === "item" ? aberto.itemId : null} />
       </OrigemDados>
