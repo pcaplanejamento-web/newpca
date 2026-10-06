@@ -3372,8 +3372,9 @@ export function Catalogo() {
           }}
         >
           <div className="flex flex-wrap items-center gap-6">
-            <PresencaGrupo verMesa />
-            <ChatAoVivo config={{ grupo: true, privado: true }} />
+            <ChatAoVivo config={{ grupo: true, privado: true }}>
+              <PresencaGrupo verMesa />
+            </ChatAoVivo>
             <SeloAoVivo aoVivo />
             <SeloAoVivo aoVivo={false} />
             <PessoaTag pessoa={PESSOAS_DEMO[1]} />

@@ -20,6 +20,8 @@ import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { EVENTO_ABRIR_CHAT, type MeuStatus, useCanalGrupo } from "./CanalGrupo";
+import { ConversasDoChat, useChatAoVivo } from "./ChatAoVivo";
+import { Segmented } from "./Segmented";
 import { ChipsEscolha } from "./ChipsEscolha";
 import { AtividadePessoa } from "./PresencaNoItem";
 import { Dropdown } from "./Dropdown";
@@ -90,7 +92,18 @@ type Linha = { pessoa: Pessoa; info: InfoPresenca | null; voce: boolean; visto: 
  */
 export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a ação "Ver na Mesa"). */ verMesa?: boolean }) {
   const c = useCanalGrupo();
+  const chatV = useChatAoVivo();
   const [folha, setFolha] = useState(false);
+  const [aberto, setAberto] = useState(false);
+  const [aba, setAba] = useState<AbaAoVivo>("online");
+  // O "+N" das bolhas pede a LISTA das conversas: abre o painel na aba Conversas.
+  const pedido = chatV?.pedidoLista ?? 0;
+  useEffect(() => {
+    if (!pedido) return;
+    setAba("conversas");
+    if (window.matchMedia("(min-width: 64rem)").matches) setAberto(true);
+    else setFolha(true);
+  }, [pedido]);
   const linhas = useMemo<Linha[]>(() => {
     if (!c) return [];
     const comVoce = new Map(c.estados);
@@ -116,6 +129,8 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
   const rotulo = !c.aoVivo
     ? "Quem está online — conectando"
     : `Quem está online${c.grupoNome ? ` em ${c.grupoNome}` : ""} — ${outros.length ? `${online} online${ausentes ? `, ${ausentes} ausente${ausentes === 1 ? "" : "s"}` : ""}` : "só você"}`;
+  const naoLidas = chatV?.naoLidas ?? 0;
+  const rotuloGatilho = `${rotulo}${chatV ? ` — conversas${naoLidas ? `: ${naoLidas} mensage${naoLidas === 1 ? "m" : "ns"} não lida${naoLidas === 1 ? "" : "s"}` : ""}` : ""}`;
   const fotos = outros.slice(0, MAX_FOTOS);
   const resto = outros.length - fotos.length;
   const gatilho =
@@ -130,12 +145,16 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
         <Dropdown
           align="end"
           papel="dialog"
-          ariaLabel={rotulo}
-          title={rotulo}
-          width={340}
+          ariaLabel={rotuloGatilho}
+          title={rotuloGatilho}
+          width={360}
+          aberto={aberto}
+          onAberto={setAberto}
+          panelClassName="!p-0 !shadow-flutuante"
           triggerClassName={`${gatilho} group/pilha inline-flex h-[var(--h-control-sm)] min-w-[var(--h-control-sm)] gap-1.5 px-1.5`}
           trigger={
-            fotos.length ? (
+            <>
+              {fotos.length ? (
                 <span className="flex items-center">
                   {/* A primeira por cima (o ponto, no canto direito, não fica coberto pela vizinha); ao passar o mouse, abrem em
                       leque. Depois de 5, o círculo "+N" no MESMO tamanho, fechando a pilha. */}
@@ -170,30 +189,122 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
                 </span>
             ) : (
               <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} />
-            )
+            )}
+              {chatV && <IconeConversas naoLidas={naoLidas} />}
+            </>
           }
         >
-          {() => <PainelOnline linhas={linhas} verMesa={verMesa} />}
+          {(fechar) => <PainelAoVivo linhas={linhas} verMesa={verMesa} aba={aba} onAba={setAba} onFechar={fechar} />}
         </Dropdown>
       </div>
-      <button type="button" aria-label={rotulo} title={rotulo} aria-haspopup="dialog" onClick={() => setFolha(true)} className={`${gatilho} inline-flex h-11 w-11 lg:hidden`}>
+      <button type="button" aria-label={rotuloGatilho} title={rotuloGatilho} aria-haspopup="dialog" onClick={() => setFolha(true)} className={`${gatilho} inline-flex h-11 w-11 lg:hidden`}>
         <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} />
-        {online > 0 && (
+        {naoLidas > 0 ? (
+          <span key={`c${naoLidas}`} className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white">
+            {naoLidas > 99 ? "99+" : naoLidas}
+          </span>
+        ) : online > 0 && (
           <span key={online} className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ok)] px-1 text-[10px] font-bold leading-none text-white">
             <span aria-hidden="true" className="ponto-vivo absolute inset-0 -z-10 rounded-full bg-[var(--ok)]" />
             {online > 99 ? "99+" : online}
           </span>
         )}
       </button>
-      <Modal open={folha} onClose={() => setFolha(false)} titulo={`Online agora${c.grupoNome ? ` · ${c.grupoNome}` : ""}`} size="md">
-        {folha && <PainelOnline linhas={linhas} verMesa={verMesa} semTitulo onNavegar={() => setFolha(false)} />}
+      <Modal open={folha} onClose={() => setFolha(false)} titulo={`Ao vivo${c.grupoNome ? ` · ${c.grupoNome}` : ""}`} size="md">
+        {folha && <PainelAoVivo linhas={linhas} verMesa={verMesa} aba={aba} onAba={setAba} onFechar={() => setFolha(false)} celular />}
       </Modal>
     </>
   );
 }
 
-/** O painel "Online agora": o seu status, a busca, as seções e as ações de cada pessoa. */
-function PainelOnline({ linhas, verMesa, semTitulo = false, onNavegar }: { linhas: Linha[]; verMesa: boolean; semTitulo?: boolean; onNavegar?: () => void }) {
+type AbaAoVivo = "online" | "conversas";
+
+/** O ícone das CONVERSAS no gatilho "Ao vivo" (com as não lidas — pop). */
+function IconeConversas({ naoLidas }: { naoLidas: number }) {
+  return (
+    <span className="relative ml-1 inline-flex h-7 w-7 items-center justify-center border-l border-border pl-1.5 text-muted">
+      <IconChat className="h-[18px] w-[18px]" />
+      {naoLidas > 0 && (
+        <span key={naoLidas} className="animate-selo-pop absolute -top-1 -right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white">
+          {naoLidas > 99 ? "99+" : naoLidas}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** O painel ÚNICO "Ao vivo": quem está online e (com o chat ligado) as CONVERSAS, em abas. */
+function PainelAoVivo({
+  linhas,
+  verMesa,
+  aba,
+  onAba,
+  onFechar,
+  celular = false,
+}: {
+  linhas: Linha[];
+  verMesa: boolean;
+  aba: AbaAoVivo;
+  onAba: (a: AbaAoVivo) => void;
+  onFechar: () => void;
+  celular?: boolean;
+}) {
+  const c = useCanalGrupo();
+  const chatV = useChatAoVivo();
+  if (!c) return null;
+  const online = linhas.filter((l) => !l.voce && l.info?.estado === "online").length;
+  const n = chatV?.naoLidas ?? 0;
+  const atual = chatV ? aba : "online";
+  return (
+    <div className={`flex flex-col ${celular ? "min-h-[60dvh]" : "h-[min(72vh,560px)]"}`}>
+      <div className={`flex shrink-0 flex-col gap-2 border-b border-border px-3 ${celular ? "pb-2.5" : "py-2.5"}`}>
+        {!celular && (
+          <div className="flex items-center gap-2">
+            <IconUsers className="h-4 w-4 text-accent" />
+            <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">Ao vivo{c.grupoNome ? ` · ${c.grupoNome}` : ""}</p>
+            <SeloAoVivo aoVivo={c.aoVivo} />
+          </div>
+        )}
+        {chatV && (
+          <Segmented
+            value={atual}
+            onChange={onAba}
+            ariaLabel="Ao vivo"
+            className="w-full [&>button]:flex-1"
+            options={[
+              { value: "online", label: `Online (${online})`, icone: <IconUsers className="h-4 w-4" />, dica: "Quem do grupo está com o sistema aberto" },
+              { value: "conversas", label: n ? `Conversas (${n})` : "Conversas", icone: <IconChat className="h-4 w-4" />, dica: "As conversas do chat ao vivo (nada é salvo)" },
+            ]}
+          />
+        )}
+      </div>
+      <div key={atual} className="flex min-h-0 flex-1 animate-fade-in-up flex-col">
+        {atual === "conversas" ? <ConversasDoChat onEscolher={onFechar} /> : <PainelOnline linhas={linhas} verMesa={verMesa} embutido onNavegar={onFechar} />}
+      </div>
+      {celular && (
+        <div className="shrink-0 border-t border-border px-3 pt-2">
+          <SeloAoVivo aoVivo={c.aoVivo} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** O painel "Online agora": o seu status, a busca, as seções e as ações de cada pessoa (`embutido` = dentro do "Ao vivo",
+ * sem título nem selo — ocupa a altura que sobra). */
+function PainelOnline({
+  linhas,
+  verMesa,
+  semTitulo = false,
+  embutido = false,
+  onNavegar,
+}: {
+  linhas: Linha[];
+  verMesa: boolean;
+  semTitulo?: boolean;
+  embutido?: boolean;
+  onNavegar?: () => void;
+}) {
   const c = useCanalGrupo();
   const [busca, setBusca] = useState("");
   const [aberta, setAberta] = useState<number | null>(null);
@@ -219,8 +330,8 @@ function PainelOnline({ linhas, verMesa, semTitulo = false, onNavegar }: { linha
   ];
   const outros = linhas.filter((l) => !l.voce && l.info).length;
   return (
-    <div className="flex max-h-[min(72vh,560px)] flex-col">
-      {!semTitulo && (
+    <div className={embutido ? "flex min-h-0 flex-1 flex-col" : "flex max-h-[min(72vh,560px)] flex-col"}>
+      {!semTitulo && !embutido && (
         <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <IconUsers className="h-4 w-4 text-accent" />
           <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">Online agora{c.grupoNome ? ` · ${c.grupoNome}` : ""}</p>
@@ -258,7 +369,7 @@ function PainelOnline({ linhas, verMesa, semTitulo = false, onNavegar }: { linha
         )}
         {outros === 0 && <p className="px-3 py-2 text-[12.5px] text-muted">{c.aoVivo ? "Ninguém mais do grupo está online agora." : "Conectando à presença do grupo…"}</p>}
       </div>
-      {semTitulo && (
+      {semTitulo && !embutido && (
         <div className="border-t border-border px-3 py-2">
           <SeloAoVivo aoVivo={c.aoVivo} />
         </div>

@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createContext, type KeyboardEvent, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   type CartaoLink,
   type ConfigChat,
@@ -41,9 +40,8 @@ import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
 import { EVENTO_ABRIR_CHAT, EVENTO_CHAT_PRIVADO, useCanalGrupo, useNaoPerturbe } from "./CanalGrupo";
-import { IconArrowDown, IconChat, IconCheck, IconChevronLeft, IconClose, IconEnviar, IconLidas, IconMenos, IconPlus, IconLogout, IconResponder, IconUsers } from "./icons";
+import { IconArrowDown, IconChat, IconCheck, IconChevronLeft, IconClose, IconEnviar, IconFixar, IconLidas, IconMenos, IconPlus, IconLogout, IconResponder, IconUsers } from "./icons";
 import { tocarSom } from "./PreferenciasNotificacoes";
-import { SeloAoVivo } from "./PresencaGrupo";
 import { type Bolha, BolhasChat } from "./BolhasChat";
 import { TextoFormatado } from "./TextoFormatado";
 
@@ -71,9 +69,20 @@ const ESPERA_CONFIRMACAO_MS = 8000;
 function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conversa | null }, aoChegar: (c: Conversa) => void) {
   const canal = useCanalGrupo();
   const naoPerturbe = useNaoPerturbe();
+  const meuId = canal?.usuarioId ?? 0;
   const [conversas, setConversas] = useState<Map<Conversa, ConversaTela>>(() => new Map());
   const conversasRef = useRef(conversas);
   conversasRef.current = conversas;
+  /** O sinal (lida/digitando) da privada/conversa em grupo — pelas caixas pessoais (rota), sem bloquear a tela. */
+  const enviarSinal = useCallback(
+    (c: Conversa, t: "lida" | "digitando", ate?: string) => {
+      const privada = idDaConversa(c);
+      const para = privada != null ? [privada] : (conversasRef.current.get(c)?.membros ?? []).filter((x) => x !== meuId);
+      if (!para.length) return;
+      void fetch("/api/chat/sinal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversa: c, para, t, ...(ate ? { ate } : {}) }) }).catch(() => {});
+    },
+    [meuId],
+  );
   /** Quem escreveu no privado sem estar no grupo ativo (foto + nome vêm na mensagem). */
   const [autores, setAutores] = useState<Map<number, Pessoa>>(() => new Map());
   const [, setRelogio] = useState(0);
@@ -83,7 +92,6 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
   dndRef.current = naoPerturbe;
   const chegarRef = useRef(aoChegar);
   chegarRef.current = aoChegar;
-  const meuId = canal?.usuarioId ?? 0;
   const grupoId = canal?.grupoId ?? null;
 
   const mudar = useCallback((c: Conversa, f: (x: ConversaTela) => ConversaTela) => {
@@ -183,7 +191,17 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
     if (!config.privado) return;
     const ouvir = (e: Event) => {
       try {
-        const m = lerMensagemRecebida(JSON.parse(String((e as CustomEvent).detail)) as Record<string, unknown>);
+        const o = JSON.parse(String((e as CustomEvent).detail)) as Record<string, unknown>;
+        // O SINAL (lida/digitando) da privada e da conversa em grupo também chega pela caixa.
+        if (o.t === "chat-sinal") {
+          const de = Number(o.de);
+          const c = o.conversa;
+          if (!Number.isInteger(de) || !conversaValida(c) || c === "grupo") return;
+          if (o.tipo === "digitando") mudar(c, (x) => ({ ...x, digitando: new Map(x.digitando).set(de, Date.now() + DIGITANDO_DURA_MS) }));
+          else if (o.tipo === "lida" && typeof o.ate === "string") mudar(c, (x) => ({ ...x, lidaAte: new Map(x.lidaAte).set(de, o.ate as string) }));
+          return;
+        }
+        const m = lerMensagemRecebida(o);
         if (m && m.conversa !== "grupo") receber(m);
       } catch {
         /* mensagem ilegível */
@@ -191,7 +209,7 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
     };
     window.addEventListener(EVENTO_CHAT_PRIVADO, ouvir);
     return () => window.removeEventListener(EVENTO_CHAT_PRIVADO, ouvir);
-  }, [config.privado, receber]);
+  }, [config.privado, receber, mudar]);
 
   // O "digitando" some sozinho (um relógio só enquanto há alguém digitando).
   const algumDigitando = [...conversas.values()].some((c) => c.digitando.size > 0);
@@ -228,15 +246,15 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
       mudar(c, (x) => (x.naoLidas ? { ...x, naoLidas: 0 } : x));
       if (ultimaDosOutros && lidaEnviada.current.get(c) !== ultimaDosOutros) {
         lidaEnviada.current.set(c, ultimaDosOutros);
-        // Na conversa em grupo escolhida, a "lida" vai só aos membros (o servidor entrega às abas deles).
-        const para = ehConversaEmGrupo(c) ? (conversasRef.current.get(c)?.membros ?? []).filter((x) => x !== meuId) : undefined;
-        canal.enviar({ t: "lida", conversa: c, ate: ultimaDosOutros, ...(para ? { para } : {}) });
+        // No grupo ativo, pelo canal do grupo; na privada/conversa em grupo, pelas caixas pessoais (valem em qualquer grupo).
+        if (c === "grupo") canal.enviar({ t: "lida", conversa: c, ate: ultimaDosOutros });
+        else enviarSinal(c, "lida", ultimaDosOutros);
       }
     };
     marcar();
     document.addEventListener("visibilitychange", marcar);
     return () => document.removeEventListener("visibilitychange", marcar);
-  }, [aberto.painel, aberto.conversa, ultimaDosOutros, canal, mudar, meuId]);
+  }, [aberto.painel, aberto.conversa, ultimaDosOutros, canal, mudar, enviarSinal]);
 
   // Fechar/recarregar a aba com conversa em andamento: o navegador pergunta (nada é guardado).
   const temConversa = [...conversas.values()].some((c) => c.msgs.length > 0);
@@ -293,11 +311,10 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
       const agora = Date.now();
       if (!canal || agora - ultimoDigitando.current < INTERVALO_DIGITANDO_MS) return;
       ultimoDigitando.current = agora;
-      const para = ehConversaEmGrupo(c) ? (conversasRef.current.get(c)?.membros ?? []).filter((x) => x !== meuId) : undefined;
-      if (para && !para.length) return;
-      canal.enviar({ t: "digitando", conversa: c, ...(para ? { para } : {}) });
+      if (c === "grupo") canal.enviar({ t: "digitando", conversa: c });
+      else enviarSinal(c, "digitando");
     },
-    [canal, meuId],
+    [canal, enviarSinal],
   );
 
   const garantir = useCallback((c: Conversa) => setConversas((m) => (m.has(c) ? m : new Map(m).set(c, nova()))), []);
@@ -325,29 +342,62 @@ function useChat(config: ConfigChat, aberto: { painel: boolean; conversa: Conver
 
 /** A posição da pilha de bolhas fica no aparelho (conveniência — some ao limpar o navegador). */
 const CHAVE_POSICAO = "chat:posicao";
+/** O alfinete "manter a conversa aberta" (no aparelho): sem ele, qualquer toque fora minimiza. */
+const CHAVE_FIXADA = "chat:fixada";
+
+/** O que o painel "Ao vivo" do cabeçalho usa do chat: a lista das conversas, as não lidas e o pedido de abrir a lista (o
+ * "+N" das bolhas). */
+type ChatAoVivoValor = {
+  config: ConfigChat;
+  chat: Chat;
+  abrirConversa: (c: Conversa) => void;
+  naoLidas: number;
+  /** Muda a cada pedido de abrir a lista (o painel "Ao vivo" abre na aba Conversas). */
+  pedidoLista: number;
+};
+const ChatCtx = createContext<ChatAoVivoValor | null>(null);
+/** O chat ao vivo (`null` = desligado pelo ADM). */
+export const useChatAoVivo = () => useContext(ChatCtx);
 
 /**
- * O CHAT AO VIVO no estilo Messenger (com o canal do grupo): no cabeçalho, o ícone com as não lidas abre a LISTA das
- * conversas (o grupo ativo, as privadas, as conversas em grupo e "Nova conversa"); cada conversa aberta vira uma BOLHA
- * flutuante com a foto (`BolhasChat` — arrastável, encosta na borda) e tocar nela abre a JANELA da conversa ao lado.
- * Mensagem nova = a bolha aparece quicando. As mensagens NÃO SÃO SALVAS: chegam só a quem está com o sistema aberto e somem
- * ao recarregar/fechar.
+ * O CHAT AO VIVO no estilo Messenger (com o canal do grupo) — o PROVEDOR em volta do painel "Ao vivo" do cabeçalho (que
+ * mostra a lista das conversas numa aba): cada conversa aberta vira uma BOLHA flutuante com a foto (`BolhasChat` —
+ * arrastável, encosta na borda) e tocar nela abre a JANELA da conversa ao lado. Mensagem nova = a bolha aparece quicando.
+ * As mensagens NÃO SÃO SALVAS: chegam só a quem está com o sistema aberto e somem ao recarregar/fechar.
  */
-export function ChatAoVivo({ config }: { config: ConfigChat }) {
+export function ChatAoVivo({ config, children }: { config: ConfigChat | null; children: ReactNode }) {
+  if (!config) return <>{children}</>;
+  return <ChatAtivo config={config}>{children}</ChatAtivo>;
+}
+
+function ChatAtivo({ config, children }: { config: ConfigChat; children: ReactNode }) {
   const canal = useCanalGrupo();
-  const [lista, setLista] = useState(false);
+  const [pedidoLista, setPedidoLista] = useState(0);
   const [bolhas, setBolhas] = useState<Conversa[]>([]);
   const [ativa, setAtiva] = useState<Conversa | null>(null);
   const [novas, setNovas] = useState<Set<Conversa>>(() => new Set());
   const [posicao, setPosicao] = useState<PosicaoBolhas>(POSICAO_BOLHAS_PADRAO);
+  const [fixada, setFixada] = useState(false);
   useEffect(() => {
     try {
       const v = localStorage.getItem(CHAVE_POSICAO);
       if (v) setPosicao(lerPosicaoBolhas(JSON.parse(v)));
+      setFixada(localStorage.getItem(CHAVE_FIXADA) === "1");
     } catch {
-      /* sem armazenamento: a posição padrão */
+      /* sem armazenamento: a posição padrão, sem o alfinete */
     }
   }, []);
+  const alternarFixada = useCallback(() => {
+    setFixada((f) => {
+      try {
+        localStorage.setItem(CHAVE_FIXADA, f ? "0" : "1");
+      } catch {
+        /* sem armazenamento: vale só nesta página */
+      }
+      return !f;
+    });
+  }, []);
+  const minimizar = useCallback(() => setAtiva(null), []);
   const mudarPosicao = useCallback((p: PosicaoBolhas) => {
     setPosicao(p);
     try {
@@ -359,7 +409,6 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
   const abrirConversa = useCallback((c: Conversa) => {
     setBolhas((b) => abrirBolha(b, c));
     setAtiva(c);
-    setLista(false);
   }, []);
   /** Chegou mensagem: a conversa vira bolha (no topo, se ainda não estava) e QUICA. */
   const aoChegar = useCallback((c: Conversa) => {
@@ -376,11 +425,6 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
     );
   }, []);
   const chat = useChat(config, { painel: ativa != null, conversa: ativa }, aoChegar);
-  const botao = useRef<HTMLButtonElement>(null);
-  const fecharLista = useCallback(() => {
-    setLista(false);
-    botao.current?.focus();
-  }, []);
   const fecharBolha = useCallback((c: Conversa) => {
     setBolhas((b) => b.filter((x) => x !== c));
     setAtiva((a) => (a === c ? null : a));
@@ -400,18 +444,8 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
     window.addEventListener(EVENTO_ABRIR_CHAT, abrir);
     return () => window.removeEventListener(EVENTO_ABRIR_CHAT, abrir);
   }, [config.grupo, config.privado, chat.garantir, abrirConversa]);
-  // Esc fecha a lista (menos com um diálogo por cima).
-  useEffect(() => {
-    if (!lista) return;
-    const tecla = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[role='dialog'][aria-modal='true']")) fecharLista();
-    };
-    document.addEventListener("keydown", tecla);
-    return () => document.removeEventListener("keydown", tecla);
-  }, [lista, fecharLista]);
-  if (!canal) return null;
-  const n = chat.naoLidas;
-  const rotulo = n ? `Chat ao vivo — ${n} mensage${n === 1 ? "m" : "ns"} não lida${n === 1 ? "" : "s"}` : "Chat ao vivo";
+  const valor = useMemo<ChatAoVivoValor>(() => ({ config, chat, abrirConversa, naoLidas: chat.naoLidas, pedidoLista }), [config, chat, abrirConversa, pedidoLista]);
+  if (!canal) return <>{children}</>;
   const { visiveis, extras } = bolhasVisiveis(bolhas);
   const pessoaDe = (id: number) => canal.pessoas.find((x) => x.id === id) ?? chat.autores.get(id) ?? null;
   const dados: Bolha[] = visiveis.map((c) => {
@@ -431,80 +465,82 @@ export function ChatAoVivo({ config }: { config: ConfigChat }) {
     };
   });
   return (
-    <>
-      <button
-        ref={botao}
-        type="button"
-        aria-label={rotulo}
-        title={rotulo}
-        aria-expanded={lista}
-        onClick={() => (lista ? fecharLista() : setLista(true))}
-        className={`relative inline-flex h-11 w-11 items-center justify-center rounded-control transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${lista ? "bg-accent-soft text-accent" : "text-muted"}`}
-      >
-        <IconChat className="h-5 w-5" />
-        {n > 0 && (
-          <span key={n} className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white lg:top-0 lg:right-0">
-            {n > 99 ? "99+" : n}
-          </span>
-        )}
-      </button>
-      {/* Por PORTAL no body: o cabeçalho (com desfoque) prenderia o painel fixo dentro dele. */}
-      {lista &&
-        createPortal(
-          <section
-            aria-label="Conversas do chat"
-            className="fixed inset-0 z-[62] flex animate-fade-in-up flex-col bg-surface lg:inset-auto lg:top-[calc(var(--h-header)+8px)] lg:right-[var(--pad-canvas)] lg:max-h-[min(72vh,600px)] lg:w-[360px] lg:rounded-card lg:border lg:border-border lg:shadow-soft"
-          >
-            <ListaConversas config={config} chat={chat} onAbrir={abrirConversa} onFechar={fecharLista} />
-          </section>,
-          document.body,
-        )}
+    <ChatCtx.Provider value={valor}>
+      {children}
       <BolhasChat
         bolhas={dados}
         extras={extras.length}
         ativa={ativa}
+        fixada={fixada}
         posicao={posicao}
         onPosicao={mudarPosicao}
         onTocar={alternar}
-        onFechar={fecharBolha}
-        onFecharTodas={() => {
-          setBolhas([]);
-          setAtiva(null);
+        onMinimizar={minimizar}
+        onExcluir={(c) => {
+          // EXCLUIR (arrastar até a lixeira): a bolha sai e a conversa some desta aba (nada é guardado).
+          fecharBolha(c);
+          chat.sair(c);
         }}
-        onExtras={() => setLista(true)}
-        janela={
-          ativa && (
-            <ConversaChat
-              config={config}
-              conversa={ativa}
-              chat={chat}
-              rascunho={rascunho}
-              onMinimizar={() => setAtiva(null)}
-              onFechar={() => fecharBolha(ativa)}
-              onSair={
-                ehConversaEmGrupo(ativa)
-                  ? () => {
-                      fecharBolha(ativa);
-                      chat.sair(ativa);
-                    }
-                  : undefined
-              }
-            />
-          )
-        }
+        onExtras={() => setPedidoLista((n) => n + 1)}
+        janela={(c) => (
+          <ConversaChat
+            config={config}
+            conversa={c}
+            chat={chat}
+            rascunho={rascunho}
+            fixada={fixada}
+            onFixar={alternarFixada}
+            onMinimizar={minimizar}
+            onSair={
+              ehConversaEmGrupo(c)
+                ? () => {
+                    fecharBolha(c);
+                    chat.sair(c);
+                  }
+                : undefined
+            }
+          />
+        )}
       />
-    </>
+    </ChatCtx.Provider>
+  );
+}
+
+/** A LISTA DAS CONVERSAS dentro do painel "Ao vivo" do cabeçalho: escolher abre a bolha + a janela (e fecha o painel). */
+export function ConversasDoChat({ onEscolher }: { onEscolher: () => void }) {
+  const v = useChatAoVivo();
+  if (!v) return null;
+  return (
+    <ListaConversas
+      config={v.config}
+      chat={v.chat}
+      onAbrir={(c) => {
+        v.abrirConversa(c);
+        onEscolher();
+      }}
+      onFechar={onEscolher}
+    />
   );
 }
 
 type Chat = ReturnType<typeof useChat>;
 
-function CabecalhoPainel({ children, onFechar, rotuloFechar = "Fechar o chat (Esc)" }: { children: React.ReactNode; onFechar: () => void; rotuloFechar?: string }) {
+function CabecalhoPainel({
+  children,
+  onFechar,
+  rotuloFechar = "Fechar o chat (Esc)",
+  iconeFechar,
+}: {
+  children: React.ReactNode;
+  onFechar: () => void;
+  rotuloFechar?: string;
+  iconeFechar?: ReactNode;
+}) {
   return (
     <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2 lg:h-12">
       {children}
       <button type="button" onClick={onFechar} aria-label={rotuloFechar} title={rotuloFechar} className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
-        <IconClose className="h-4 w-4" />
+        {iconeFechar ?? <IconClose className="h-4 w-4" />}
       </button>
     </div>
   );
@@ -538,12 +574,7 @@ function ListaConversas({ config, chat, onAbrir, onFechar }: { config: ConfigCha
   const pessoaDe = (id: number) => canal.pessoas.find((x) => x.id === id) ?? chat.autores.get(id) ?? null;
   return (
     <>
-      <CabecalhoPainel onFechar={onFechar}>
-        <IconChat className="ml-1 h-4 w-4 text-accent" />
-        <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">Chat ao vivo</p>
-        <SeloAoVivo aoVivo={canal.aoVivo} />
-      </CabecalhoPainel>
-      <p className="shrink-0 border-b border-border bg-surface-2 px-3 py-1.5 text-[11.5px] text-muted">As conversas não são salvas — somem ao fechar ou recarregar a página.</p>
+      <p className="shrink-0 rounded-control bg-surface-2 px-3 py-1.5 text-[11.5px] text-muted">As conversas não são salvas — somem ao fechar ou recarregar a página.</p>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {config.grupo && (
           <LinhaConversa
@@ -650,7 +681,7 @@ function FotoBolhaPequena({ fotos }: { fotos: { nome: string; foto?: string | nu
   return (
     <span className="relative block h-9 w-9 shrink-0">
       {fotos.slice(0, 2).map((f, i) => (
-        <span key={`${f.nome}-${i}`} className={`absolute rounded-full ring-2 ring-surface ${i ? "right-0 bottom-0" : "top-0 left-0"}`}>
+        <span key={`${f.nome}-${i}`} className={`absolute flex rounded-full ring-2 ring-surface ${i ? "right-0 bottom-0" : "top-0 left-0"}`}>
           <Avatar nome={f.nome} foto={f.foto} size="sm" />
         </span>
       ))}
@@ -787,8 +818,9 @@ function ConversaChat({
   conversa,
   chat,
   rascunho,
+  fixada,
+  onFixar,
   onMinimizar,
-  onFechar,
   onSair,
 }: {
   config: ConfigChat;
@@ -796,10 +828,11 @@ function ConversaChat({
   chat: Chat;
   /** Texto pronto para o campo (o "Conversar sobre…"); `n` muda a cada pedido. */
   rascunho: { texto: string; n: number } | null;
-  /** Fecha a janela (a bolha fica). */
+  /** O alfinete: a janela fica aberta mesmo tocando fora. */
+  fixada: boolean;
+  onFixar: () => void;
+  /** Fecha a janela (a bolha fica — excluir é arrastá-la até a lixeira). */
   onMinimizar: () => void;
-  /** Fecha a bolha. */
-  onFechar: () => void;
   /** Conversa em grupo escolhida: sair dela (some desta aba). */
   onSair?: () => void;
 }) {
@@ -908,7 +941,7 @@ function ConversaChat({
 
   return (
     <>
-      <CabecalhoPainel onFechar={onFechar} rotuloFechar="Fechar a conversa">
+      <CabecalhoPainel onFechar={onMinimizar} rotuloFechar="Minimizar (Esc)" iconeFechar={<IconMenos className="h-4 w-4" />}>
         {emGrupo ? (
           <FotoBolhaPequena fotos={membros.filter((x) => x !== chat.meuId).slice(0, 3).map((x) => ({ nome: pessoaDe(x)?.nome ?? "?", foto: pessoaDe(x)?.foto }))} />
         ) : conversa === "grupo" ? (
@@ -929,8 +962,15 @@ function ConversaChat({
             <IconLogout className="h-4 w-4" />
           </button>
         )}
-        <button type="button" onClick={onMinimizar} aria-label="Minimizar (Esc)" title="Minimizar (Esc)" className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-surface-2 lg:h-9 lg:w-9">
-          <IconMenos className="h-4 w-4" />
+        <button
+          type="button"
+          onClick={onFixar}
+          aria-pressed={fixada}
+          aria-label={fixada ? "Manter aberta: ligado (tocar fora não minimiza)" : "Manter aberta: desligado (tocar fora minimiza)"}
+          title={fixada ? "Fixada: tocar fora não minimiza — toque para soltar" : "Manter a conversa aberta ao tocar fora"}
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-control transition-colors hover:bg-surface-2 lg:h-9 lg:w-9 ${fixada ? "text-accent" : "text-muted"}`}
+        >
+          <IconFixar className={`h-4 w-4 transition-transform duration-[var(--motion-duration)] ${fixada ? "-rotate-45" : ""}`} />
         </button>
       </CabecalhoPainel>
       <div

@@ -471,6 +471,26 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
   zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
 
+## Chat estável + "Ao vivo" único + lixeira (v1.14.2)
+- **Nunca desmonta:** o layout devolve `undefined` quando a leitura da presença/config do chat FALHA (`presencaDoGrupo`,
+  `getConfigChat` → `null` sem cache) e o `AppShell` mantém o último valor válido (`useUltimoValido`); o `CanalGrupo` monta
+  SEMPRE a mesma árvore (`CanalAtivo` com `ativo` — ligar/desligar troca só o contexto, nada remonta).
+- **Entrega real:** a `CaixaNotificacoes` só conta como "entregue" a aba com ping há ≤ 2 min (`SINAL_ENTREGA_MS`); o canal do
+  sino conecta UMA vez (a função por ref), reconecta sem o "pong" em 10 s e no `online`.
+- **Sinais pelas caixas:** "lida"/"digitando" da privada e da conversa em grupo vão por **`POST /api/chat/sinal`**
+  (`chatSinalSchema`; `{t:"chat-sinal", tipo, conversa, de, ate}` às caixas — valem em qualquer grupo ativo); o do grupo
+  ativo segue pelo socket do grupo.
+- **Um painel só — "Ao vivo":** o `ChatAoVivo` virou o PROVEDOR (`useChatAoVivo`: a lista, as não lidas, `pedidoLista`) em
+  volta do `PresencaGrupo`, cujo gatilho mostra a pilha + o ícone das conversas (não lidas) e o painel tem as abas
+  **Online | Conversas** (`PainelAoVivo` → `PainelOnline embutido` / `ConversasDoChat`). O `Dropdown` ganhou o modo
+  CONTROLADO (`aberto`/`onAberto`) — o "+N" das bolhas abre na aba Conversas.
+- **Bolhas:** tocar abre/minimiza; QUALQUER toque fora (ou Esc) minimiza, menos com o **alfinete** "Manter aberta"
+  (`chat:fixada` no aparelho); EXCLUIR = arrastar a bolha até a **LIXEIRA** no centro inferior (surge no arrasto —
+  `animate-lixeira-entra`; ímã que puxa a bolha, ela encolhe e some dentro). A janela cresce A PARTIR da bolha
+  (`animate-janela-cresce` com origem no centro dela) e sai encolhendo (`animate-janela-sai`, o mesmo elemento). Sombra
+  `shadow-flutuante`/`shadow-erguida` (tokens `--sombra-flutuante`/`--sombra-erguida`, claro e escuro). Fotos sempre
+  redondas: todo invólucro com anel em volta de um `Avatar` é `flex`/`inline-flex` (num bloco, a altura da linha esticava o anel).
+
 ## Presença no nível profissional (v1.14.1)
 - **Cabeçalho:** até `MAX_FOTOS`=5 fotos (a primeira por cima — o ponto no canto não é coberto) e o círculo **"+N"** do mesmo
   tamanho (os nomes na dica). O ponto da foto é `absolute` no `Avatar`: a regra `.ponto-vivo` do `globals.css` NÃO fixa

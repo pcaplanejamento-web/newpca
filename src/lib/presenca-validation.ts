@@ -35,3 +35,15 @@ export const chatEnviarSchema = z.strictObject({
   texto: z.string().min(1).max(MAX_TEXTO_CHAT * 2),
   resp: z.strictObject({ id: z.string().regex(/^[A-Za-z0-9_-]{8,40}$/), de: z.number().int().positive(), trecho: z.string().max(MAX_TRECHO_RESPOSTA * 2) }).nullable().optional(),
 });
+
+/** O SINAL do chat ("lida" até a mensagem X, "digitando") na privada/conversa em grupo — pelas caixas pessoais, que valem
+ * em qualquer grupo ativo. */
+export const chatSinalSchema = z.strictObject({
+  conversa: z.string().regex(/^(p\d{1,9}|c[a-z0-9]{6,20})$/),
+  para: z.array(z.number().int().positive()).min(1).max(MAX_MEMBROS_CONVERSA - 1),
+  t: z.enum(["lida", "digitando"]),
+  ate: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,40}$/)
+    .optional(),
+});

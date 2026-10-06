@@ -1,5 +1,8 @@
 import { MAX_ABAS_AO_VIVO } from "./ao-vivo-core";
 
+/** Sem ping há mais que isto (a aba manda a cada 45 s), a aba não conta como "entregue". */
+const SINAL_ENTREGA_MS = 120_000;
+
 /**
  * A CAIXA de notificações de UMA pessoa (Durable Object, um por usuário — `idFromName("u<id>")`): guarda os WebSockets
  * das abas abertas (HIBERNAÇÃO — parado, não custa) e, a cada `POST /ping` (gravou-se um aviso, leu-se, limpou-se), avisa
@@ -28,6 +31,7 @@ export class CaixaNotificacoes {
       const par = new WebSocketPair();
       const [cliente, servidor] = [par[0], par[1]];
       this.state.acceptWebSocket(servidor);
+      servidor.serializeAttachment({ desde: Date.now() });
       return new Response(null, { status: 101, webSocket: cliente });
     }
     // O CHAT PRIVADO (só ao vivo — nada é gravado): repassa a mensagem às abas abertas e diz quantas receberam (0 = a pessoa
@@ -35,11 +39,16 @@ export class CaixaNotificacoes {
     if (pathname === "/chat" && req.method === "POST") {
       const texto = await req.text();
       if (texto.length > 16_000) return new Response("Grande demais.", { status: 413 });
+      // "Entregue" só conta a aba com SINAL recente (o ping de 45 s, ou conectou há pouco): a que caiu sem fechar a conexão
+      // (internet perdida) recebe, mas não conta — senão o remetente veria "entregue" para quem não está mais lá.
+      const agora = Date.now();
       let n = 0;
       for (const ws of this.state.getWebSockets()) {
+        const ping = this.state.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0;
+        const desde = (ws.deserializeAttachment() as { desde?: number } | null)?.desde ?? 0;
         try {
           ws.send(texto);
-          n++;
+          if (agora - Math.max(ping, desde) <= SINAL_ENTREGA_MS) n++;
         } catch {
           /* aba que caiu */
         }

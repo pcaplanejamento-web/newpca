@@ -31,7 +31,7 @@ export function PresencaNoItem({ alvo, className = "" }: { alvo: string; classNa
       {outros.slice(0, 2).map((o, i) => {
         const p = c.pessoas.get(o.id);
         return (
-          <span key={o.id} className={`rounded-full ring-2 ring-surface ${i ? "-ml-1.5" : ""}`} style={{ zIndex: 2 - i }}>
+          <span key={o.id} className={`inline-flex rounded-full ring-2 ring-surface ${i ? "-ml-1.5" : ""}`} style={{ zIndex: 2 - i }}>
             <Avatar nome={p?.nome ?? "?"} foto={p?.foto} size="xs" presenca="online" />
           </span>
         );

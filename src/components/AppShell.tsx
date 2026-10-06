@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
@@ -404,6 +404,13 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
   );
 }
 
+/** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */
+function useUltimoValido<T>(v: T | null | undefined): T | null {
+  const ref = useRef<T | null>(v ?? null);
+  if (v !== undefined) ref.current = v;
+  return ref.current;
+}
+
 export function AppShell({
   children,
   usuario,
@@ -417,8 +424,8 @@ export function AppShell({
   identidade,
   notificacoes = 0,
   versaoDados,
-  presenca = null,
-  chat = null,
+  presenca: presencaServidor,
+  chat: chatServidor,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
@@ -435,11 +442,14 @@ export function AppShell({
   notificacoes?: number;
   /** A VERSÃO DOS DADOS do servidor (`versaoDados`) — o `SincronizarDados` só recarrega quando ela muda. */
   versaoDados?: string;
-  /** A PRESENÇA do grupo ativo (quem está online) — só quando o ADM a ligou; `null` = nada é montado. */
+  /** A PRESENÇA do grupo ativo (quem está online) — só quando o ADM a ligou; `null` = nada é montado; `undefined` = a
+   * leitura falhou (mantém a que já estava — o canal e as conversas nunca caem por uma falha passageira). */
   presenca?: PresencaShell | null;
   /** O CHAT AO VIVO (o do grupo e/ou o privado ligados pelo ADM; só com a presença) — `null` = sem o chat. */
   chat?: ConfigChat | null;
 }) {
+  const presenca = useUltimoValido(presencaServidor);
+  const chat = useUltimoValido(chatServidor);
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
   // Esc fecha a gaveta (o caminho do teclado; o fundo escurecido é só do ponteiro) — menos com um diálogo por cima.
@@ -541,8 +551,12 @@ export function AppShell({
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
-            {presenca && <PresencaGrupo verMesa={abasSet.has("dfd")} />}
-            {presenca && chat && <ChatAoVivo config={chat} />}
+            {/* UM componente só: quem está online + as conversas (abas no mesmo painel); as bolhas do chat flutuam. */}
+            {presenca && (
+              <ChatAoVivo config={chat}>
+                <PresencaGrupo verMesa={abasSet.has("dfd")} />
+              </ChatAoVivo>
+            )}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">

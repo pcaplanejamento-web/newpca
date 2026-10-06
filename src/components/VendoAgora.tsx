@@ -41,7 +41,7 @@ export function VendoAgora({ tipo, id, editando = false, rotulo = "" }: { tipo: 
           {outros.slice(0, 3).map((o, i) => {
             const p = pessoa(o.id);
             return (
-              <span key={o.id} className={`animate-entrar-pessoa rounded-full ring-2 ring-surface-2 ${i ? "-ml-1.5" : ""}`} style={{ zIndex: 3 - i }}>
+              <span key={o.id} className={`animate-entrar-pessoa inline-flex rounded-full ring-2 ring-surface-2 ${i ? "-ml-1.5" : ""}`} style={{ zIndex: 3 - i }}>
                 <Avatar nome={p?.nome ?? "?"} foto={p?.foto} size="xs" presenca="online" pulsar />
               </span>
             );

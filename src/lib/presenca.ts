@@ -67,16 +67,17 @@ export async function whatsappDe(ids: number[]): Promise<Record<number, string>>
   }
 }
 
-/** A config do CHAT ao vivo (blob `configuracoes`, chave `chat`) — cache 60 s, fail-safe = desligado. */
+/** A config do CHAT ao vivo (blob `configuracoes`, chave `chat`) — cache 60 s; falhou sem cache = `null` (quem usa decide:
+ * o layout mantém o que a tela já tinha; as rotas tratam como desligado). */
 let cacheChat: { at: number; dados: ConfigChat } | null = null;
-export async function getConfigChat(opcoes: { fresco?: boolean } = {}): Promise<ConfigChat> {
+export async function getConfigChat(opcoes: { fresco?: boolean } = {}): Promise<ConfigChat | null> {
   if (!opcoes.fresco && cacheChat && Date.now() - cacheChat.at < TTL) return cacheChat.dados;
   try {
     const dados = lerConfigChat((await lerBlobConfiguracoes()).chat);
     cacheChat = { at: Date.now(), dados };
     return dados;
   } catch {
-    return cacheChat?.dados ?? lerConfigChat(undefined);
+    return cacheChat?.dados ?? null;
   }
 }
 

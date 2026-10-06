@@ -57,7 +57,8 @@ export default async function PainelLayout({
       versaoDados={versao}
       presenca={presenca}
       // O chat ao vivo vive no canal da presença: sem ela, sem o chat.
-      chat={presenca && chatLigado(configChat) ? configChat : null}
+      // `undefined` = a leitura FALHOU (o AppShell mantém o que já estava): uma falha passageira nunca desmonta o canal e o chat.
+      chat={presenca === undefined || configChat === null ? undefined : presenca && chatLigado(configChat) ? configChat : null}
     >
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
@@ -68,7 +69,8 @@ export default async function PainelLayout({
 }
 
 /** A PRESENÇA do grupo ativo (quem está online): só com o ADM tendo ligado e um grupo ativo — o diretório (foto + apelido)
- * vai uma vez; o canal manda só ids. Desligada ou falhou = `null` (nada é montado). */
+ * vai uma vez; o canal manda só ids. Desligada = `null` (nada é montado); a leitura FALHOU = `undefined` (a tela mantém a
+ * presença que já tinha — nunca derruba o canal nem as conversas por uma falha passageira). */
 async function presencaDoGrupo(usuarioId: number, grupoId: number | null) {
   if (grupoId == null) return null;
   const cfg = await getConfigPresenca();
@@ -83,6 +85,6 @@ async function presencaDoGrupo(usuarioId: number, grupoId: number | null) {
       status: { status: prefs.status, recado: prefs.recado, ate: prefs.ate },
     };
   } catch {
-    return null;
+    return undefined;
   }
 }

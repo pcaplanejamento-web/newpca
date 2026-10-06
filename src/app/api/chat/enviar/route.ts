@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(chatEnviarSchema, req);
   if ("resp" in p) return p.resp;
-  if (!(await getConfigChat()).privado) return erro("O chat privado está desligado pelo administrador.", 409);
+  if (!(await getConfigChat())?.privado) return erro("O chat privado está desligado pelo administrador.", 409);
   const { conversa, id, resp } = p.data;
   const texto = limparTextoChat(p.data.texto);
   if (!texto) return erro("Mensagem vazia.", 422);

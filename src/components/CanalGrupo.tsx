@@ -203,7 +203,7 @@ export function CanalGrupo({
   chatPrivado?: boolean;
   children: ReactNode;
 }) {
-  if (!presenca || grupoId == null) return <>{children}</>;
+  // SEMPRE a mesma árvore (ligado ou não): ligar/desligar a presença nunca REMONTA a tela inteira — só troca o contexto.
   return (
     <CanalAtivo presenca={presenca} usuarioId={usuarioId} grupoId={grupoId} grupoNome={grupoNome} chatGrupo={chatGrupo} chatPrivado={chatPrivado}>
       {children}
@@ -211,23 +211,28 @@ export function CanalGrupo({
   );
 }
 
+const PRESENCA_VAZIA: PresencaShell = { pessoas: [], whatsapp: {}, invisivel: false, inativoMin: 0, status: { status: "disponivel", recado: "", ate: null } };
+
 function CanalAtivo({
-  presenca,
+  presenca: presencaOuNada,
   usuarioId,
-  grupoId,
+  grupoId: grupoOuNada,
   grupoNome,
   chatGrupo,
   chatPrivado,
   children,
 }: {
-  presenca: PresencaShell;
+  presenca: PresencaShell | null;
   usuarioId: number;
-  grupoId: number;
+  grupoId: number | null;
   grupoNome: string | null;
   chatGrupo: boolean;
   chatPrivado: boolean;
   children: ReactNode;
 }) {
+  const ativo = presencaOuNada != null && grupoOuNada != null;
+  const presenca = presencaOuNada ?? PRESENCA_VAZIA;
+  const grupoId = grupoOuNada ?? 0;
   const [estados, setEstados] = useState<Map<number, InfoPresenca>>(() => new Map());
   const [vistos, setVistos] = useState<Map<number, number>>(() => new Map());
   const [aoVivo, setAoVivo] = useState(false);
@@ -328,6 +333,12 @@ function CanalAtivo({
   // biome-ignore lint/correctness/useExhaustiveDependencies: `invisivel` só RECONECTA (o servidor lê a escolha na abertura).
   useEffect(() => {
     setEstados(new Map());
+    if (!ativo) {
+      armazem.definir(new Map());
+      armazemVendo.definir(new Map(), null);
+      setAoVivo(false);
+      return;
+    }
     armazem.definir(new Map());
     setAoVivo(false);
     let tentativa = 0;
@@ -448,7 +459,7 @@ function CanalAtivo({
       ws.current?.close();
       ws.current = null;
     };
-  }, [grupoId, invisivel, inativoMin, armazem, armazemVendo, mandarVendo, mandarOnde]);
+  }, [ativo, grupoId, invisivel, inativoMin, armazem, armazemVendo, mandarVendo, mandarOnde]);
 
   const definirStatus = useCallback(
     async (s: MeuStatus) => {
@@ -520,8 +531,8 @@ function CanalAtivo({
   );
   const estavel = useMemo<CanalEstavel>(() => ({ usuarioId, pessoas: new Map(presenca.pessoas.map((p) => [p.id, p])), armazemVendo }), [usuarioId, presenca.pessoas, armazemVendo]);
   return (
-    <CtxEstavel.Provider value={estavel}>
-      <Ctx.Provider value={valor}>{children}</Ctx.Provider>
+    <CtxEstavel.Provider value={ativo ? estavel : null}>
+      <Ctx.Provider value={ativo ? valor : null}>{children}</Ctx.Provider>
     </CtxEstavel.Provider>
   );
 }

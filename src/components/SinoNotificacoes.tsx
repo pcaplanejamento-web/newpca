@@ -742,12 +742,17 @@ function useCaixa(inicial: number) {
     void conferirNovo();
   }, [conferirNovo]);
 
-  // O canal AO VIVO (reconecta com espera crescente; a caixa responde ao "ping" sem acordar).
+  // O canal AO VIVO (reconecta com espera crescente; a caixa responde ao "ping" sem acordar). Conectado UMA vez: a função de
+  // conferir vai por ref (trocar a identidade dela não pode derrubar o canal — uma mensagem do chat no meio se perderia).
+  const conferirRef = useRef(conferirNovo);
+  conferirRef.current = conferirNovo;
   useEffect(() => {
+    const conferirNovo = () => conferirRef.current();
     let ws: WebSocket | null = null;
     let tentativa = 0;
     let timer = 0;
     let batida = 0;
+    let semPong = 0;
     let vivo = true;
     const agendar = () => {
       if (vivo) timer = window.setTimeout(conectar, esperaReconexao(tentativa++));
@@ -764,10 +769,20 @@ function useCaixa(inicial: number) {
         tentativa = 0;
         setAoVivo(true);
         void conferirNovo();
-        batida = window.setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send("ping"), 45_000);
+        // Sem o "pong" em 10 s, a conexão morreu sem avisar (a rede caiu): fecha e reconecta.
+        batida = window.setInterval(() => {
+          if (ws?.readyState !== WebSocket.OPEN) return;
+          ws.send("ping");
+          const s = ws;
+          window.clearTimeout(semPong);
+          semPong = window.setTimeout(() => s.close(), 10_000);
+        }, 45_000);
       };
       ws.onmessage = (e) => {
-        if (e.data === "pong") return;
+        if (e.data === "pong") {
+          window.clearTimeout(semPong);
+          return;
+        }
         // A mensagem PRIVADA do chat ao vivo vem pelo mesmo canal: vai ao chat (não é aviso do sino).
         if (typeof e.data === "string" && e.data.startsWith('{"t":"chat"')) {
           window.dispatchEvent(new CustomEvent(EVENTO_CHAT_PRIVADO, { detail: e.data }));
@@ -779,18 +794,33 @@ function useCaixa(inicial: number) {
       ws.onclose = () => {
         setAoVivo(false);
         window.clearInterval(batida);
+        window.clearTimeout(semPong);
+        ws = null;
         agendar();
       };
     }
     void conferirNovo();
     conectar();
+    // Sem rede: fecha na hora; a rede voltou: reconecta já (sem a espera crescente).
+    const semRede = () => ws?.close();
+    const comRede = () => {
+      if (ws) return;
+      window.clearTimeout(timer);
+      tentativa = 0;
+      conectar();
+    };
+    window.addEventListener("offline", semRede);
+    window.addEventListener("online", comRede);
     return () => {
       vivo = false;
+      window.removeEventListener("offline", semRede);
+      window.removeEventListener("online", comRede);
       window.clearTimeout(timer);
+      window.clearTimeout(semPong);
       window.clearInterval(batida);
       ws?.close();
     };
-  }, [conferirNovo]);
+  }, []);
 
   // Sem o canal: reconta ao trocar de tela, ao voltar à janela e a cada 60 s com a aba à vista.
   // biome-ignore lint/correctness/useExhaustiveDependencies: dispara pela troca de tela.

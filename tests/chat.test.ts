@@ -28,7 +28,7 @@ import {
   rotuloConversa,
   topoDasBolhas,
 } from "../src/lib/chat-core.ts";
-import { chatEnviarSchema, configChatSchema } from "../src/lib/presenca-validation.ts";
+import { chatEnviarSchema, chatSinalSchema, configChatSchema } from "../src/lib/presenca-validation.ts";
 
 describe("chat ao vivo: configuração e conversas", () => {
   it("desligado por padrão; só true liga", () => {
@@ -185,5 +185,16 @@ describe("chat ao vivo: conversas em grupo e bolhas", () => {
     assert.equal(topoDasBolhas({ lado: "dir", y: 1 }, { ...tela, altura: 100 }, 120), 60);
     assert.deepEqual(lerPosicaoBolhas({ lado: "x", y: 7 }), { lado: "dir", y: 1 });
     assert.deepEqual(lerPosicaoBolhas(null), { lado: "dir", y: 1 });
+  });
+});
+
+describe("chat ao vivo: sinal (lida/digitando) pelas caixas", () => {
+  it("schema do sinal: conversa privada/em grupo, para, tipo e a mensagem lida", () => {
+    assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [2], t: "lida", ate: "abcdefgh12" }).success, true);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "cabc123xyz", para: [2, 3], t: "digitando" }).success, true);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "grupo", para: [2], t: "digitando" }).success, false);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [2], t: "outro" }).success, false);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [], t: "digitando" }).success, false);
+    assert.equal(chatSinalSchema.safeParse({ conversa: "p2", para: [2], t: "lida", ate: "x" }).success, false);
   });
 });

@@ -1,6 +1,6 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { ok, parseCorpo } from "@/lib/http";
+import { erro, ok, parseCorpo } from "@/lib/http";
 import { getConfigChat, gravarConfigChat } from "@/lib/presenca";
 import { configChatSchema } from "@/lib/presenca-validation";
 
@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
-  return ok({ chat: await getConfigChat({ fresco: true }) });
+  const chat = await getConfigChat({ fresco: true });
+  if (!chat) return erro("Não foi possível ler a configuração do chat — tente de novo.", 503);
+  return ok({ chat });
 }
 
 export async function PATCH(req: Request) {
@@ -20,7 +22,7 @@ export async function PATCH(req: Request) {
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(configChatSchema, req);
   if ("resp" in p) return p.resp;
-  const antes = await getConfigChat({ fresco: true });
+  const antes = (await getConfigChat({ fresco: true })) ?? { grupo: false, privado: false };
   const chat = await gravarConfigChat(p.data, g.u.id);
   const diff = [
     ...(antes.grupo !== chat.grupo ? [`chat do grupo ${chat.grupo ? "ligado" : "desligado"}`] : []),

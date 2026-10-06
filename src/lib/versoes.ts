@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.14.2",
+    data: "2026-10-06",
+    titulo: "Chat estável, Ao vivo num só lugar e lixeira",
+    mudancas: [
+      { tipo: "correcao", area: "Chat", texto: "O chat não some mais: uma falha passageira ao recarregar a tela não desmonta o canal nem apaga as conversas." },
+      { tipo: "correcao", area: "Chat", texto: "\"Lida\" (✓✓) e \"digitando…\" das conversas privadas e em grupo funcionam mesmo com as pessoas em grupos ativos diferentes; \"entregue\" só conta quem está mesmo conectado." },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Quem está online e as conversas ficam num único painel \"Ao vivo\", com abas Online e Conversas." },
+      { tipo: "melhoria", area: "Chat", texto: "A conversa minimiza ao tocar em qualquer lugar da página ou no ícone — ou fica aberta com o alfinete. Para excluir, arraste a bolha até a lixeira no centro inferior." },
+      { tipo: "melhoria", area: "Chat", texto: "Fotos sempre redondas, sombra nos componentes flutuantes e animações novas (a janela cresce da bolha, a lixeira atrai a bolha)." },
+    ],
+  },
+  {
     versao: "1.14.1",
     data: "2026-10-06",
     titulo: "Presença no nível profissional",

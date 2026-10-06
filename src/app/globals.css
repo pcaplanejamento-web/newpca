@@ -51,6 +51,10 @@
   /* Sombra suave de contorno (popovers/dropdowns/cards flutuantes) */
   --shadow-soft: 0 4px 16px -4px rgba(17, 17, 12, 0.12),
     0 2px 6px -2px rgba(17, 17, 12, 0.08), 0 0 0 1px var(--border-2);
+  /* Sombra dos componentes FLUTUANTES (bolhas e janela do chat, painel "Ao vivo") — mais profunda que a dos cartões. */
+  --sombra-flutuante: 0 12px 32px -8px rgba(17, 17, 12, 0.28), 0 4px 10px -4px rgba(17, 17, 12, 0.18), 0 0 0 1px var(--border-2);
+  /* A bolha ERGUIDA (presa ao dedo durante o arrasto) — mais alta e difusa. */
+  --sombra-erguida: 0 22px 44px -10px rgba(17, 17, 12, 0.4), 0 8px 16px -6px rgba(17, 17, 12, 0.22);
   /* Scrim de modais/drawers — sempre escuro (escurece o fundo nos 2 temas) */
   --scrim: rgba(17, 17, 12, 0.45);
   /* Texto SOBRE uma cor do usuário (etiqueta sólida): `textoSobre` (color.ts) escolhe — iguais nos dois temas. */
@@ -158,6 +162,8 @@
   --serie-8: #a3e635;
   --ring: 0 0 0 1px var(--border-2);
   --shadow-soft: 0 0 0 1px var(--border-2), 0 10px 28px -8px rgba(0, 0, 0, 0.6);
+  --sombra-flutuante: 0 0 0 1px var(--border-2), 0 16px 40px -8px rgba(0, 0, 0, 0.75), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+  --sombra-erguida: 0 0 0 1px var(--border-2), 0 26px 52px -10px rgba(0, 0, 0, 0.85);
   --scrim: rgba(0, 0, 0, 0.6);
   --veu-capa: rgba(0, 0, 0, 0.78);
   --tint-target: #ffffff;
@@ -272,6 +278,8 @@
 
   --shadow-ring: var(--ring);
   --shadow-soft: var(--shadow-soft);
+  --shadow-flutuante: var(--sombra-flutuante);
+  --shadow-erguida: var(--sombra-erguida);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -544,10 +552,17 @@
 .animate-cabeca-entra {
   animation: cabeca-entra 0.5s var(--motion-ease) both;
 }
+/* A janela da conversa CRESCE a partir da bolha (a origem é o centro dela) com uma mola curta e SAI encolhendo de volta. */
 @keyframes janela-cresce {
   0% {
     opacity: 0;
-    scale: 0.85;
+    scale: 0.6;
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    scale: 1.015;
+    filter: blur(0);
   }
   100% {
     opacity: 1;
@@ -555,19 +570,52 @@
   }
 }
 .animate-janela-cresce {
-  animation: janela-cresce 0.22s var(--motion-ease) both;
+  animation: janela-cresce calc(var(--motion-duration) * 1.6) cubic-bezier(0.2, 0.9, 0.25, 1) both;
 }
-@keyframes alvo-fechar {
-  0%,
-  100% {
+@keyframes janela-sai {
+  0% {
+    opacity: 1;
     scale: 1;
   }
-  50% {
-    scale: 1.12;
+  100% {
+    opacity: 0;
+    scale: 0.6;
+    filter: blur(3px);
   }
 }
-.animate-alvo-fechar {
-  animation: alvo-fechar 0.7s ease-in-out infinite;
+.animate-janela-sai {
+  animation: janela-sai var(--motion-duration) cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+/* A LIXEIRA sobe do rodapé quando o arrasto começa e desce ao terminar. */
+@keyframes lixeira-entra {
+  0% {
+    opacity: 0;
+    translate: 0 40px;
+    scale: 0.6;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+.animate-lixeira-entra {
+  animation: lixeira-entra calc(var(--motion-duration) * 1.4) cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes lixeira-sai {
+  0% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 40px;
+    scale: 0.7;
+  }
+}
+.animate-lixeira-sai {
+  animation: lixeira-sai var(--motion-duration) ease-in both;
 }
 .bolha-encosta {
   transition:
@@ -577,15 +625,19 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-cabeca-entra,
   .animate-janela-cresce,
-  .animate-alvo-fechar {
+  .animate-janela-sai,
+  .animate-lixeira-entra,
+  .animate-lixeira-sai {
     animation: none;
   }
 }
 [data-motion="off"] .animate-cabeca-entra,
 [data-motion="off"] .animate-janela-cresce,
-[data-motion="off"] .animate-alvo-fechar,
+[data-motion="off"] .animate-janela-sai,
+[data-motion="off"] .animate-lixeira-entra,
+[data-motion="off"] .animate-lixeira-sai,
 [data-motion="reduced"] .animate-cabeca-entra,
-[data-motion="reduced"] .animate-alvo-fechar {
+[data-motion="reduced"] .animate-lixeira-entra {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {

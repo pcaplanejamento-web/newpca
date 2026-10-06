@@ -26,6 +26,8 @@ export function Dropdown({
   title,
   papel = "menu",
   bloqueado = false,
+  aberto,
+  onAberto,
 }: {
   trigger: ReactNode;
   children: ReactNode | ((close: () => void, abertura: { teclado: boolean }) => ReactNode);
@@ -39,8 +41,19 @@ export function Dropdown({
   title?: string;
   papel?: "menu" | "dialog";
   bloqueado?: boolean;
+  /** CONTROLADO por fora (ex.: abrir a lista do chat a partir de uma bolha): o estado aberto e quem o muda. */
+  aberto?: boolean;
+  onAberto?: (aberto: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openInterno, setOpenInterno] = useState(false);
+  const open = aberto ?? openInterno;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const setOpen = (v: boolean | ((o: boolean) => boolean)) => {
+    const novo = typeof v === "function" ? v(openRef.current) : v;
+    if (aberto === undefined) setOpenInterno(novo);
+    onAberto?.(novo);
+  };
   // Aberto pelo teclado (o clique de Enter/Espaço tem `detail` 0): quem usa leva o foco para dentro do painel.
   const [teclado, setTeclado] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, w: 224, maxH: 520 });
