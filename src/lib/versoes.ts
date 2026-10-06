@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.20.1",
+    data: "2026-10-06",
+    titulo: "Salvar no rodapé do órgão",
+    mudancas: [
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "No banner de editar/criar órgão, o Salvar fica fixo no rodapé, como nos demais banners; o Cancelar saiu (o X já fecha).", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.20.0",
     data: "2026-10-06",
     titulo: "ID da entidade da Centi no órgão",

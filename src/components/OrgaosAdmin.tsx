@@ -345,8 +345,19 @@ export function OrgaosAdmin() {
 
       <DataTable columns={colunas} rows={lista} getKey={(o) => o.id} minWidth={900} onRowClick={(o) => router.push(`/painel/orgaos/${o.id}`)} />
 
-      <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo órgão" : "Editar órgão"}>
-        <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
+      <Modal
+        open={!!editando}
+        onClose={() => setEditando(null)}
+        titulo={editando === "novo" ? "Novo órgão" : "Editar órgão"}
+        rodape={
+          <div className="flex justify-end">
+            <Button type="submit" form="form-orgao" loading={salvando}>
+              Salvar
+            </Button>
+          </div>
+        }
+      >
+        <form id="form-orgao" onSubmit={salvar} className="space-y-[var(--gap-block)]">
           <TextField label="Sigla" value={sigla} onChange={(e) => setSigla(e.target.value)} placeholder="Ex.: PMRV" required />
           <TextField label="Nome do órgão" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Prefeitura Municipal de Rio Verde" required />
           <TextField
@@ -387,14 +398,6 @@ export function OrgaosAdmin() {
           ) : (
             <Callout kind="info">Cada unidade define os seus responsáveis por DFDs (na tela de unidades do órgão).</Callout>
           )}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setEditando(null)}>
-              Cancelar
-            </Button>
-            <Button type="submit" loading={salvando}>
-              Salvar
-            </Button>
-          </div>
         </form>
         {emEdicao && (
           <div className="mt-4 space-y-3 border-t border-border pt-4">
