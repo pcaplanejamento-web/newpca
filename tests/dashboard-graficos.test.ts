@@ -8,7 +8,7 @@ import {
   cronogramaDash,
   fatiasDash,
   itensDoRecorte,
-  type ItemAgregavel, type FiltrosDash, filtrarItensDash, mesmoRecorte, temFiltro } from "../src/lib/origem-dash.ts";
+  type ItemAgregavel, type FiltrosDash, chavesDoFiltro, filtrarItensDash, mesesDoRecorte, mesmoRecorte, opcoesDash, recorteDasChaves, rotuloVarios, temFiltro } from "../src/lib/origem-dash.ts";
 import { agregarDashboard } from "../src/lib/pca-core.ts";
 import { fatiasPequenas, rankingSerie, textoParticipacao } from "../src/lib/ranking-grafico.ts";
 
@@ -178,5 +178,51 @@ describe("novos gráficos (prioridade, unidade, cronograma)", () => {
     assert.deepEqual(t.linhas.at(-1)?.celulas[0], "TOTAL");
     assert.ok(t.linhas[0].celulas[3].startsWith("100"));
     assert.ok(b.some((x) => x.tipo === "paragrafo" && x.texto.includes("Prioridade: Alta")));
+  });
+});
+
+describe("filtros do topo (menus)", () => {
+  it("opções conectadas: contagem pelos DEMAIS filtros; o mês em ordem com os anuais como opção própria", () => {
+    assert.deepEqual(opcoesDash(I, {}, "mes"), [
+      { chave: "2026-3", count: 2 },
+      { chave: "2026-4", count: 1 },
+      { chave: "2026-0", count: 1 },
+    ]);
+    const f: FiltrosDash = { unidade: { recorte: { dim: "unidade", labels: ["SMS"] }, rotulo: "SMS" } };
+    assert.deepEqual(opcoesDash(I, f, "classificacao"), [
+      { chave: "Serviço", count: 1 },
+      { chave: "—", count: 1 },
+    ]);
+    // a própria dimensão não se filtra: todas as unidades continuam
+    assert.equal(opcoesDash(I, f, "unidade").length, 3);
+  });
+
+  it("vários valores viram UM recorte; a contagem da opção bate com o filtro", () => {
+    const r = recorteDasChaves("mes", ["2026-3", "2026-0"]);
+    assert.ok(r);
+    assert.deepEqual(mesesDoRecorte(r).sort(), ["2026-0", "2026-3"]);
+    const lista = filtrarItensDash(I, { mes: { recorte: r, rotulo: "x" } });
+    assert.deepEqual(lista.map((i) => i.id).sort(), [1, 3, 4]);
+    const so = recorteDasChaves("mes", ["2026-3"]);
+    assert.ok(so);
+    assert.equal(filtrarItensDash(I, { mes: { recorte: so, rotulo: "x" } }).length, 2);
+    assert.equal(recorteDasChaves("classificacao", []), null);
+    const c = recorteDasChaves("classificacao", ["Serviço", "Material"]);
+    assert.ok(c);
+    assert.deepEqual(chavesDoFiltro({ classificacao: { recorte: c, rotulo: "" } }, "classificacao"), ["Serviço", "Material"]);
+  });
+
+  it("o escolhido zerado pelos outros filtros continua na lista (dá para desmarcar)", () => {
+    const f: FiltrosDash = {
+      classificacao: { recorte: { dim: "classificacao", labels: ["Material"] }, rotulo: "Material" },
+      unidade: { recorte: { dim: "unidade", labels: ["SMS"] }, rotulo: "SMS" },
+    };
+    assert.ok(opcoesDash(I, f, "classificacao").some((o) => o.chave === "Material" && o.count === 0));
+  });
+
+  it("texto do chip com vários valores", () => {
+    assert.equal(rotuloVarios(["A"]), "A");
+    assert.equal(rotuloVarios(["A", "B"]), "A e B");
+    assert.equal(rotuloVarios(["A", "B", "C", "D"]), "A, B e mais 2");
   });
 });

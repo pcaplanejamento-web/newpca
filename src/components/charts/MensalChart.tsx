@@ -14,19 +14,19 @@ const rotulo = (p: PontoCronograma) => (p.mes === 0 ? `anual/${String(p.ano).sli
 /**
  * CRONOGRAMA (colunas por token). Com `onModo`, a leitura: Por mês (o anual entra com 1/12 em cada mês) · Acumulado (a
  * soma corrida) · Anuais à parte (só com anuais — os meses sem eles + a coluna "Anual"). `onSelecionar`: tocar num mês
- * devolve o recorte (FILTRO cruzado); `ativo` = a coluna filtrada ("AAAA-M") — as demais esmaecem.
+ * devolve o recorte (FILTRO cruzado); `ativos` = as colunas filtradas ("AAAA-M") — as demais esmaecem.
  */
 export function MensalChart({
   data,
   onSelecionar,
-  ativo,
+  ativos,
   modo = "mensal",
   onModo,
   temAnuais = false,
 }: {
   data: PontoCronograma[];
   onSelecionar?: (r: RecorteDash, rotulo: string) => void;
-  ativo?: string | null;
+  ativos?: string[];
   modo?: ModoCronograma;
   onModo?: (m: ModoCronograma) => void;
   temAnuais?: boolean;
@@ -62,7 +62,7 @@ export function MensalChart({
               rotulo: `${d.mes === 0 ? `Anuais de ${d.ano}` : mesLabel(d.mes, d.ano)} · ${num(d.count)} itens${modo === "acumulado" ? " (acumulado)" : ""}`,
             },
             cor:
-              ativo && ativo !== chave(d)
+              ativos?.length && !ativos.includes(chave(d))
                 ? "color-mix(in srgb, var(--accent) 30%, transparent)"
                 : d.mes === 0
                   ? "var(--serie-4)"

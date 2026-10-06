@@ -2187,7 +2187,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     prop `onSelecionar(recorte, rótulo)` abria a origem; a legenda da pizza vira botões ≥44px; `itensDoRecorte`
     (`origem-dash.ts`, puro: classificação/unidade de medida com "—" p/ vazio e a fatia "Outros" com todos os rótulos; mês
     com os ANUAIS do ano — 1/12 no gráfico; item pelo `id`, que `TopItem`/`TopDash` passaram a trazer). `ItemRow` ganhou
-    `ano`/`mes`/`anual`. A lista traz TODOS os itens do KPI (sem teto).
+    `ano`/`mes`/`anual`. A lista traz TODOS os itens do KPI (sem teto). **v1.9.0 (imersivo):** os FILTROS DO TOPO
+    (**`FiltrosDashboard`**, DS — um `SeletorMultiplo suspenso` por dimensão: Classificação · Mês [os anuais = a opção "Anuais
+    de AAAA"] · Prioridade · Unidade · Unidade de medida; núcleo puro `opcoesDash` [opções CONECTADAS com a contagem, a
+    escolhida zerada fica para desmarcar, "—" no fim] / `chavesDoFiltro` / `recorteDasChaves` [mês = cada mês SEM os anuais,
+    vários pelo `extras`] / `rotuloVarios`) ligam os MESMOS `FiltrosDash` do toque nos gráficos; abaixo deles, os chips, "N
+    itens · R$", Ver origem, Limpar e o Relatório. Abas **Gráficos | Consulta de itens (N)** (`Segmented` + morph; a Consulta
+    saiu de baixo dos gráficos). O gráfico de itens é o **TOP 100** (calculado no navegador sobre os itens sem o filtro de
+    item; `TopItensChart alturaMax` = a lista rola por dentro, com a posição; o explorador e o relatório usam os mesmos).
+    Animações (todas desligam com "reduzir movimento"/`data-motion`): KPIs que correm até o valor (`useContagem`) com o
+    fundo `KpiStat realce`, os cartões entrando em sequência (`.grafico-entrada` + `--atraso`), barras/colunas que crescem
+    (`.grafico-barra`/`.grafico-coluna`) e a rosca com a fatia em foco ampliada e o valor dela no CENTRO. `MensalChart.ativos`
+    = vários meses (`mesesDoRecorte`).
   - **Dashboard de governança da Mesa** (`DashboardMesa`, prop `onAbrir` → a pilha `BannersMesa`): o gráfico único (`BarrasH`
     com `acao` + `LinhaBarra.clicavel` p/ "Sem …"/"Outras N"; `Colunas.onEscolher` no Dado Data) e as linhas do desempenho →
     `graficoMetricas(…).origem(chaves)`/`protocolosDaPessoa` (`mesa-metricas.ts`, a MESMA lista de lançamentos das barras); a

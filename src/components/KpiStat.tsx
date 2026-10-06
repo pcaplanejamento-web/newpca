@@ -15,6 +15,7 @@ export function KpiStat({
   hint,
   onClick,
   acao,
+  realce = false,
 }: {
   label: string;
   value: ReactNode;
@@ -25,6 +26,8 @@ export function KpiStat({
   /** O cartão vira BOTÃO (ex.: "Maior item" abre o item); `acao` = o que o toque faz (nome acessível). */
   onClick?: () => void;
   acao?: string;
+  /** Fundo levemente tingido na cor do KPI e o brilho no canto (o Dashboard do PCA). */
+  realce?: boolean;
 }) {
   const Raiz = onClick ? "button" : "div";
   return (
@@ -33,7 +36,16 @@ export function KpiStat({
       className={`kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
         onClick ? "transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" : ""
       }`}
-      style={{ "--kpi-accent": cor } as CSSProperties}
+      style={
+        {
+          "--kpi-accent": cor,
+          ...(realce
+            ? {
+                background: `radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, ${cor} 16%, transparent) 0%, transparent 55%), color-mix(in srgb, ${cor} 4%, var(--surface))`,
+              }
+            : {}),
+        } as CSSProperties
+      }
     >
       <span
         aria-hidden

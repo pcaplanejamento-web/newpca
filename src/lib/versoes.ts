@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.9.0",
+    data: "2026-10-06",
+    titulo: "Dashboard do PCA mais imersivo, com filtros e a Consulta em aba própria",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Filtros do Dashboard em menus: Classificação, Mês (com os anuais à parte), Prioridade, Unidade e Unidade de medida — vários valores, só as opções que existem com os demais filtros, com a contagem de itens.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Consulta de itens numa aba própria (Gráficos | Consulta de itens), seguindo os mesmos filtros.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Top 100 itens por valor (antes Top 10), numa lista que rola por dentro, com a posição de cada item.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Gráficos animados: indicadores que correm até o valor novo, barras e colunas que crescem, rosca com o destaque da fatia e o valor no centro.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.8.0",
     data: "2026-10-06",
     titulo: "Novos gráficos e relatório do Dashboard do PCA",

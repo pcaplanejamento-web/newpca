@@ -53,7 +53,6 @@ export function PainelPca({
         porClassificacao={dados.porClassificacao}
         porMes={dados.porMes}
         porUnidadeMedida={dados.porUnidadeMedida}
-        top={dados.top}
         itensTexto={JSON.stringify(dados.itens)}
         showUnidade={!unidadeFiltrada}
         consulta={consulta}

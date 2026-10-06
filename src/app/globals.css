@@ -461,6 +461,57 @@
   }
 }
 
+/* GRÁFICOS: as marcas CRESCEM ao entrar (barras a partir da esquerda, colunas a partir da base), em CASCATA (`--atraso`),
+   e acompanham a mudança de valor com uma transição (filtrar redesenha sem salto). Os quadros entram subindo. */
+@keyframes grafico-crescer-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes grafico-crescer-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.grafico-barra {
+  transform-origin: left center;
+  animation: grafico-crescer-x 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--atraso, 0ms);
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.grafico-coluna {
+  transform-origin: center bottom;
+  animation: grafico-crescer-y 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--atraso, 0ms);
+  transition:
+    height 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.3s ease,
+    opacity 0.2s ease;
+}
+.grafico-entrada {
+  animation: fade-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--atraso, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .grafico-barra,
+  .grafico-coluna,
+  .grafico-entrada {
+    animation: none;
+    transition: none;
+  }
+}
+[data-motion="off"] :is(.grafico-barra, .grafico-coluna, .grafico-entrada),
+[data-motion="reduced"] :is(.grafico-barra, .grafico-coluna, .grafico-entrada) {
+  animation: none;
+  transition: none;
+}
+
 /* Transição suave entre visões (lista de itens ↔ catálogo): as linhas parecem
    se transformar nos cards e vice-versa (fade + leve escala). Respeita o motion. */
 @keyframes cat-morph {

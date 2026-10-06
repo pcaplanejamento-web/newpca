@@ -17,6 +17,7 @@ import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
 import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
+import { type CampoFiltroDash, FiltrosDashboard } from "@/components/FiltrosDashboard";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
 import { DicaFlutuante } from "@/components/DicaFlutuante";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
@@ -1378,6 +1379,32 @@ function CronogramaModosDemo() {
   return <MensalChart data={dados} modo={modo} onModo={setModo} temAnuais />;
 }
 
+function FiltrosDashboardDemo() {
+  const [sel, setSel] = useState<Record<string, string[]>>({ classificacao: ["Serviço"] });
+  const campos: CampoFiltroDash[] = [
+    { dim: "classificacao", rotulo: "Classificação", opcoes: G_CLASS.map((f) => ({ chave: f.label, rotulo: f.label, count: f.count })) },
+    {
+      dim: "mes",
+      rotulo: "Mês",
+      opcoes: [
+        { chave: "2026-1", rotulo: "jan/26", count: 40 },
+        { chave: "2026-2", rotulo: "fev/26", count: 35 },
+        { chave: "2026-0", rotulo: "Anuais de 2026", count: 12 },
+      ],
+    },
+    {
+      dim: "prioridade",
+      rotulo: "Prioridade",
+      opcoes: [
+        { chave: "ALTA", rotulo: "Alta", count: 210 },
+        { chave: "MÉDIA", rotulo: "Média", count: 150 },
+        { chave: "BAIXA", rotulo: "Baixa", count: 80 },
+      ],
+    },
+  ].map((c) => ({ ...c, selecionados: sel[c.dim] ?? [] }));
+  return <FiltrosDashboard campos={campos} onMudar={(dim, chaves) => setSel((s) => ({ ...s, [dim]: chaves }))} />;
+}
+
 function GraficosDashboardDemo() {
   const [classe, setClasse] = useState<string[] | undefined>();
   const [mes, setMes] = useState<string | null>(null);
@@ -1399,7 +1426,7 @@ function GraficosDashboardDemo() {
           />
         </ChartCard>
         <ChartCard title="Cronograma Mensal" subtitle="Colunas por token — toque para filtrar">
-          <MensalChart data={G_MES} ativo={mes} onSelecionar={(r) => r.dim === "mes" && setMes((m) => (m === `${r.ano}-${r.mes}` ? null : `${r.ano}-${r.mes}`))} />
+          <MensalChart data={G_MES} ativos={mes ? [mes] : []} onSelecionar={(r) => r.dim === "mes" && setMes((m) => (m === `${r.ano}-${r.mes}` ? null : `${r.ano}-${r.mes}`))} />
         </ChartCard>
         <ChartCard title="Top Itens por Valor" subtitle="Barras horizontais por token">
           <TopItensChart data={G_TOP} ativo={item} onSelecionar={(r) => r.dim === "item" && setItem((i) => (i === r.id ? null : r.id))} />
@@ -3267,6 +3294,10 @@ export function Catalogo() {
 
       <Secao titulo="Gráficos do Dashboard do PCA (paleta --serie-*, filtro cruzado e explorador)">
         <GraficosDashboardDemo />
+      </Secao>
+
+      <Secao titulo="FiltrosDashboard (menus suspensos por dimensão — opções conectadas com a contagem)">
+        <FiltrosDashboardDemo />
       </Secao>
 
       <Secao titulo="OrigemDados (clique numa linha/fatia/barra → de onde vêm os dados)">

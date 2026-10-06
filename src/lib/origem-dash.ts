@@ -12,7 +12,7 @@ export type RecorteDash =
   | { dim: "prioridade"; labels: string[] }
   | { dim: "unidade"; labels: string[] }
   /** `mes: 0` = os itens ANUAIS do ano; `semAnuais` = só os do mês (o cronograma com os anuais à parte). */
-  | { dim: "mes"; ano: number; mes: number; semAnuais?: boolean }
+  | { dim: "mes"; ano: number; mes: number; semAnuais?: boolean; extras?: { ano: number; mes: number }[] }
   | { dim: "item"; id: number };
 
 /** O mínimo de um item p/ o recorte (o `ItemRow` do dashboard). */
@@ -44,18 +44,20 @@ const CAMPO = {
 export function itensDoRecorte<T extends ItemRecortavel>(itens: T[], r: RecorteDash): { itens: T[]; anuais: number } {
   if (r.dim === "item") return { itens: itens.filter((i) => i.id === r.id), anuais: 0 };
   if (r.dim === "mes") {
+    // Vários meses (o filtro do topo): o item entra se casa QUALQUER um.
+    const alvos = [{ ano: r.ano, mes: r.mes }, ...(r.extras ?? [])];
     let anuais = 0;
     const lista = itens.filter((i) => {
-      if (i.ano !== r.ano) return false;
-      if (r.mes === 0) return !!i.anual;
-      if (i.anual) {
-        if (r.semAnuais) return false;
-        anuais++;
-        return true;
-      }
-      return i.mes === r.mes;
+      const casa = alvos.some((a) => {
+        if (i.ano !== a.ano) return false;
+        if (a.mes === 0) return !!i.anual;
+        if (i.anual) return !r.semAnuais;
+        return i.mes === a.mes;
+      });
+      if (casa && i.anual) anuais++;
+      return casa;
     });
-    return { itens: lista, anuais: r.mes === 0 ? lista.length : anuais };
+    return { itens: lista, anuais };
   }
   const set = new Set(r.labels);
   const campo = CAMPO[r.dim] as (i: T) => string | null | undefined;
@@ -75,7 +77,7 @@ export type FiltroDash = { recorte: RecorteDash; rotulo: string };
 export type FiltrosDash = Partial<Record<DimDash, FiltroDash>>;
 
 const chaveRecorte = (r: RecorteDash): string =>
-  r.dim === "item" ? `i:${r.id}` : r.dim === "mes" ? `m:${r.ano}-${r.mes}${r.semAnuais ? ":s" : ""}` : `${r.dim}:${[...r.labels].sort().join("|")}`;
+  r.dim === "item" ? `i:${r.id}` : r.dim === "mes" ? `m:${[{ ano: r.ano, mes: r.mes }, ...(r.extras ?? [])].map((a) => `${a.ano}-${a.mes}`).sort().join("|")}${r.semAnuais ? ":s" : ""}` : `${r.dim}:${[...r.labels].sort().join("|")}`;
 
 /** Mesmo recorte (a chave do destaque e do alternar). */
 export const mesmoRecorte = (a: RecorteDash | undefined, b: RecorteDash): boolean => a != null && chaveRecorte(a) === chaveRecorte(b);
@@ -185,4 +187,68 @@ export function cronogramaDash(itens: ItemAgregavel[], modo: ModoCronograma): Co
     itensCorridos += p.count;
     return { ...p, total: corrido, count: itensCorridos };
   });
+}
+
+/** As colunas ("AAAA-M") que um recorte de mês marca no cronograma. */
+export const mesesDoRecorte = (r: RecorteDash | undefined): string[] =>
+  r?.dim === "mes" ? [{ ano: r.ano, mes: r.mes }, ...(r.extras ?? [])].map((a) => `${a.ano}-${a.mes}`) : [];
+
+// ---------------------------------------------------------------------------
+// FILTROS DO TOPO (menus suspensos): as opções de cada dimensão vêm dos itens que passam nos DEMAIS filtros (facetas
+// conectadas, com a contagem) e a escolha de VÁRIOS valores vira UM recorte da dimensão.
+// ---------------------------------------------------------------------------
+
+export type DimTopo = "classificacao" | "mes" | "prioridade" | "unidade" | "unidadeMedida";
+export type OpcaoDash = { chave: string; count: number };
+
+/** A chave do mês de um item no filtro do topo: "AAAA-M"; o ANUAL = "AAAA-0" (opção própria); sem data = null. */
+const chaveMesTopo = (i: ItemRecortavel): string | null =>
+  i.ano == null ? null : i.anual ? `${i.ano}-0` : i.mes != null ? `${i.ano}-${i.mes}` : null;
+
+/** As opções da dimensão (com a contagem de itens) nos itens que passam nos OUTROS filtros. Mês em ordem do calendário
+ * (os anuais depois dos meses do ano); as demais da maior contagem para a menor, "—" por último. */
+export function opcoesDash(itens: ItemRecortavel[], filtros: FiltrosDash, dim: DimTopo): OpcaoDash[] {
+  const conta = new Map<string, number>();
+  for (const i of filtrarItensDash(itens, filtros, dim)) {
+    const c = dim === "mes" ? chaveMesTopo(i) : chave(CAMPO[dim](i));
+    if (c != null) conta.set(c, (conta.get(c) ?? 0) + 1);
+  }
+  // As escolhidas continuam na lista (mesmo zeradas pelos outros filtros) — dá para desmarcar.
+  for (const c of chavesDoFiltro(filtros, dim)) if (!conta.has(c)) conta.set(c, 0);
+  const lista = [...conta].map(([c, n]) => ({ chave: c, count: n }));
+  if (dim === "mes") {
+    const ord = (c: string) => {
+      const [a, m] = c.split("-").map(Number);
+      return a * 100 + (m === 0 ? 13 : m);
+    };
+    return lista.sort((a, b) => ord(a.chave) - ord(b.chave));
+  }
+  // "—" (sem valor) sempre no fim.
+  return lista.sort((a, b) => Number(a.chave === "—") - Number(b.chave === "—") || b.count - a.count || a.chave.localeCompare(b.chave, "pt-BR"));
+}
+
+/** As chaves escolhidas de uma dimensão (o que os menus mostram marcado). */
+export function chavesDoFiltro(filtros: FiltrosDash, dim: DimTopo): string[] {
+  const r = filtros[dim]?.recorte;
+  if (!r) return [];
+  if (r.dim === "mes") return mesesDoRecorte(r);
+  return r.dim === dim && "labels" in r ? r.labels : [];
+}
+
+/** As chaves escolhidas → o recorte (nenhuma = sem filtro). Mês: cada mês SEM os anuais (eles são a opção "AAAA-0"). */
+export function recorteDasChaves(dim: DimTopo, chaves: string[]): RecorteDash | null {
+  if (!chaves.length) return null;
+  if (dim !== "mes") return { dim, labels: [...chaves] };
+  const [p, ...resto] = chaves.map((c) => {
+    const [ano, mes] = c.split("-").map(Number);
+    return { ano, mes };
+  });
+  return { dim: "mes", ano: p.ano, mes: p.mes, semAnuais: true, ...(resto.length ? { extras: resto } : {}) };
+}
+
+/** O texto do chip de vários valores: "A", "A e B", "A, B e mais N". */
+export function rotuloVarios(rotulos: string[]): string {
+  if (rotulos.length <= 1) return rotulos[0] ?? "";
+  if (rotulos.length === 2) return `${rotulos[0]} e ${rotulos[1]}`;
+  return `${rotulos[0]}, ${rotulos[1]} e mais ${rotulos.length - 2}`;
 }
