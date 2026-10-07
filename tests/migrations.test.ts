@@ -1001,6 +1001,60 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual(t(3), { n: 1, v: null }, "sem valor: NULL, nunca estimado");
   });
 
+  it("0099 responsáveis: os JSON (todos os formatos) viram a planilha + vínculos, a pessoa repetida vira UMA, idempotente", () => {
+    const d = new DatabaseSync(":memory:");
+    const i99 = arquivos.findIndex((f) => f.startsWith("0099"));
+    assert.ok(i99 > 0, "migração 0099 ausente");
+    for (const arq of arquivos.slice(0, i99)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const novo = JSON.stringify({
+      padroes: [{ nome: " José Ávila ", matricula: "123", funcao: "Secretário", nomeacao: { tipo: "portaria", numero: "10/2025", link: "https://x/p10" } }, { nome: "" }],
+      temporarios: [
+        { nome: "Bia Lima", matricula: "", funcao: "Diretora", nomeacao: { tipo: "decreto", numero: "5", link: "" }, inicio: "2026-01-01", fim: "2026-03-31" },
+        { nome: "Sem Data", inicio: "", fim: "" },
+        { nome: "Invertido", inicio: "2026-05-01", fim: "2026-04-01" },
+      ],
+    });
+    d.exec(`INSERT INTO orgaos (id, nome, sigla, assinatura_unica, responsavel_dfd) VALUES
+        (800, 'Órgão Único', 'OU', 1, '${JSON.stringify({ padroes: [{ nome: "JOSE AVILA", matricula: "123", funcao: "Prefeito" }], temporarios: [] })}'),
+        (801, 'Órgão Por Unidade', 'OP', 0, 'Texto Solto');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id, responsavel_dfd) VALUES
+        (810, 'U1', 'Unidade 1', 801, '${novo}'),
+        (811, 'U2', 'Unidade 2', 801, '${JSON.stringify({ padrao: "Carlos", temporarios: [{ nome: "Dani", inicio: "2026-02-01", fim: "2026-02-28", ato: "Portaria 9" }] })}'),
+        (812, 'U3', 'Unidade 3', 801, '["", "Eva", "Fábio"]'),
+        (813, 'U4', 'Unidade 4', 801, NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i99]), "utf8"));
+    d.exec(readFileSync(join(DIR, arquivos[i99]), "utf8")); // idempotente
+    const pessoas = d.prepare("SELECT nome, matricula, chave FROM responsaveis ORDER BY chave").all() as { nome: string; matricula: string; chave: string }[];
+    assert.deepEqual(
+      pessoas.map((p) => `${p.chave}|${p.matricula}`),
+      ["BIA LIMA|", "CARLOS|", "DANI|", "EVA|", "JOSE AVILA|123", "TEXTO SOLTO|"],
+      "José da unidade e do órgão = UMA pessoa; sem nome, sem data e invertido ficam de fora",
+    );
+    const v = d
+      .prepare(
+        `SELECT p.chave AS c, v.orgao_id AS o, v.reparticao_id AS r, v.tipo AS t, v.funcao AS f, v.ato_tipo AS a, v.ato_numero AS n, v.ato_link AS l, v.inicio AS i, v.fim AS fim
+         FROM responsaveis_vinculos v JOIN responsaveis p ON p.id = v.responsavel_id ORDER BY v.orgao_id IS NULL, v.orgao_id, v.reparticao_id, v.tipo, p.chave`,
+      )
+      .all() as Record<string, unknown>[];
+    assert.deepEqual(
+      v.map((x) => [x.c, x.o, x.r, x.t, x.f, x.a, x.n, x.l, x.i, x.fim]),
+      [
+        ["JOSE AVILA", 800, null, "padrao", "Prefeito", null, "", "", null, null],
+        ["TEXTO SOLTO", 801, null, "padrao", "", null, "", "", null, null],
+        ["JOSE AVILA", null, 810, "padrao", "Secretário", "portaria", "10/2025", "https://x/p10", null, null],
+        ["BIA LIMA", null, 810, "temporario", "Diretora", "decreto", "5", "", "2026-01-01", "2026-03-31"],
+        ["CARLOS", null, 811, "padrao", "", null, "", "", null, null],
+        ["DANI", null, 811, "temporario", "", null, "Portaria 9", "", "2026-02-01", "2026-02-28"],
+        ["EVA", null, 812, "padrao", "", null, "", "", null, null],
+      ],
+    );
+    d.exec("PRAGMA foreign_keys = ON");
+    d.exec("DELETE FROM reparticoes WHERE id = 810");
+    assert.equal((d.prepare("SELECT COUNT(*) AS n FROM responsaveis_vinculos WHERE reparticao_id = 810").get() as { n: number }).n, 0, "cascade");
+    assert.throws(() => d.exec("INSERT INTO responsaveis_vinculos (responsavel_id, orgao_id, reparticao_id, tipo) VALUES (1, 800, 811, 'padrao')"), /CHECK/);
+    assert.throws(() => d.exec("INSERT INTO responsaveis_vinculos (responsavel_id, orgao_id, tipo) VALUES (1, 800, 'temporario')"), /CHECK/);
+  });
+
   it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
     const d = new DatabaseSync(":memory:");
     const i78 = arquivos.findIndex((f) => f.startsWith("0078"));

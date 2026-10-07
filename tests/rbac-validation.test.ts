@@ -10,9 +10,12 @@ import {
   MAX_NOME_RBAC,
   orgaoSchema,
   permissaoPatchSchema,
+  pessoaResponsavelPatchSchema,
+  pessoaResponsavelSchema,
   permissaoSchema,
   reparticaoAtivaSchema,
   reparticaoSchema,
+  vinculoResponsavelSchema,
 } from "../src/lib/rbac-validation.ts";
 
 // Validação da administração de Grupos, Permissões e Unidades — em especial o PATCH, que NÃO pode injetar os
@@ -109,5 +112,29 @@ describe("mensagens padrão do Zod em português", () => {
     const msg = r.error?.issues[0]?.message ?? "";
     assert.doesNotMatch(msg, /Invalid input|expected/i);
     assert.match(msg, /inválid|esperado/i);
+  });
+});
+
+describe("planilha de responsáveis (pessoa + vínculo)", () => {
+  it("a pessoa exige o nome; a matrícula é opcional; o PATCH não injeta padrões", () => {
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "" });
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "  " }).success, false);
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ matricula: "12" }), { matricula: "12" });
+  });
+
+  it("o vínculo vai a UMA unidade OU a UM órgão", () => {
+    const base = { responsavelId: 1, tipo: "padrao" };
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, orgaoId: 2 }).success, true);
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, reparticaoId: 3 }).success, true);
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: 3 }).success, false);
+    assert.equal(vinculoResponsavelSchema.safeParse(base).success, false);
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, tipo: "outro", orgaoId: 2 }).success, false);
+  });
+
+  it("órgão e unidade não carregam mais os responsáveis (o campo é descartado)", () => {
+    const o = orgaoSchema.parse({ sigla: "PMRV", nome: "Prefeitura", responsaveis: { padroes: [], temporarios: [] } });
+    assert.equal("responsaveis" in o, false);
+    const u = reparticaoSchema.parse({ codigo: "SMS", nome: "Saúde", orgaoId: 1, responsaveis: { padroes: [], temporarios: [] } });
+    assert.equal("responsaveis" in u, false);
   });
 });

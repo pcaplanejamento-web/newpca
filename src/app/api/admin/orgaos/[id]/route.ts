@@ -5,7 +5,6 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { numeroInteressadoEmUso, orgaoTemVinculo } from "@/lib/orgaos";
-import { serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +29,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       ...(corpo.data.entidadeCenti === undefined ? {} : { entidadeCenti: corpo.data.entidadeCenti?.trim() || null }),
       assinaturaUnica: corpo.data.assinaturaUnica,
       oculto: corpo.data.oculto,
-      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(orgaos.id, id));

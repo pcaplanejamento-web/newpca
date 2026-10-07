@@ -7,7 +7,6 @@ import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
-import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 
 export const dynamic = "force-dynamic";
 
@@ -30,14 +29,12 @@ export async function GET(req: Request) {
       orgaoId: reparticoes.orgaoId,
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
-      responsavelDfd: reparticoes.responsavelDfd,
     })
     .from(reparticoes)
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
-  // A coluna guarda JSON; expõe como lista de nomes `responsaveis`.
-  const lista = rows.map(({ responsavelDfd, ...r }) => ({ ...r, responsaveis: parseResponsaveis(responsavelDfd) }));
-  return ok({ reparticoes: lista });
+  // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
+  return ok({ reparticoes: rows });
 }
 
 export async function POST(req: Request) {
@@ -66,7 +63,6 @@ export async function POST(req: Request) {
       setorRequisitante: corpo.data.setorRequisitante ?? null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
-      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
     })
     .returning({ id: reparticoes.id });
   await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "reparticao", entidadeId: row?.id ?? null, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) criada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });

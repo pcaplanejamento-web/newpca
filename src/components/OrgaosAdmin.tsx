@@ -1,20 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { RESPONSAVEIS_VAZIO, type Responsaveis } from "@/lib/reparticao-responsaveis";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { conferenciaDoOrgao, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import { Ajuda, TopicoAjuda } from "./Ajuda";
+import { AcoesCadastro } from "./AcoesCadastro";
 import { Badge } from "./Badge";
+import { BannerCadastro, type CampoCadastro } from "./BannerCadastro";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { TextField } from "./Field";
 import { selectCls } from "./formStyles";
-import { BotaoAtualizar } from "./BotaoAtualizar";
-import { IconArrowDown, IconArrowUp, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPencil, IconPlus, IconTrash } from "./icons";
-import { Modal } from "./Modal";
-import { ResponsaveisEditor } from "./ResponsaveisEditor";
+import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
+import { CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
+import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
+import { toast } from "./Toast";
+import { CelulaResponsaveis } from "./VinculosResponsaveis";
 
 type Orgao = {
   id: number;
@@ -31,236 +35,209 @@ type Orgao = {
   tambemUnidade: boolean;
   /** Tem unidades-filhas comuns (impede rebaixar e virar dual). */
   temUnidades: boolean;
-  responsaveis: Responsaveis;
 };
 
-export function OrgaosAdmin() {
+export type AbaOrgaos = "orgaos" | "responsaveis";
+
+const CAMPOS: CampoCadastro[] = [
+  { chave: "sigla", label: "Sigla", placeholder: "Ex.: PMRV", max: 30, obrigatorio: true, mono: true },
+  { chave: "entidadeCenti", label: "ID na Centi", placeholder: "Ex.: 02", max: 4, mono: true, inputMode: "numeric", filtro: (v) => v.replace(/\D/g, "").slice(0, 4) },
+  { chave: "nome", label: "Nome do órgão", placeholder: "Ex.: Prefeitura Municipal de Rio Verde", max: 160, obrigatorio: true, span: true },
+  { chave: "orgaoEntidade", label: "Órgão/Entidade (identifica o DFD)", placeholder: "Ex.: PREFEITURA MUNICIPAL DE RIO VERDE", max: 200, span: true },
+  { chave: "numeroInteressado", label: "Nº do interessado (protocolo em nome do órgão)", placeholder: "Ex.: 1008171", max: 60, mono: true, inputMode: "numeric", dica: "Único no sistema (órgãos e unidades)." },
+  {
+    chave: "assinatura",
+    label: "Assinatura (responsáveis por DFDs)",
+    opcoes: [
+      { valor: "unidade", rotulo: "Cada unidade tem a sua" },
+      { valor: "unica", rotulo: "Uma para todas as unidades" },
+    ],
+    dica: "Trocar não apaga vínculos: só muda de onde vêm os responsáveis (do órgão ou de cada unidade).",
+  },
+];
+
+const valoresDe = (o: Orgao | null): Record<string, string> => ({
+  sigla: o?.sigla ?? "",
+  nome: o?.nome ?? "",
+  orgaoEntidade: o?.orgaoEntidade ?? "",
+  numeroInteressado: o?.numeroInteressado ?? "",
+  entidadeCenti: o?.entidadeCenti ?? "",
+  assinatura: o?.assinaturaUnica ? "unica" : "unidade",
+});
+
+/**
+ * ÓRGÃOS E UNIDADES (ADM) — abas **Órgãos | Responsáveis**. Órgãos na tabela padrão da Mesa (compacta, rolagem interna,
+ * filtros por coluna, exportar): sigla, nome, identificação do DFD, Centi, assinatura, os responsáveis VIGENTES, as
+ * unidades (abre a tela delas) e a CONFERÊNCIA (o que está mal cadastrado). Tocar na linha abre o BANNER do órgão (dados
+ * por cadeado, responsáveis, estrutura, ocultar, excluir). Responsáveis = a planilha única de pessoas.
+ */
+export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
   const router = useRouter();
+  const ctx = usePlanilhaResponsaveis();
+  const [aba, setAba] = useState<AbaOrgaos>(abaInicial);
   const [lista, setLista] = useState<Orgao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [editando, setEditando] = useState<Orgao | "novo" | null>(null);
-  const [sigla, setSigla] = useState("");
-  const [nome, setNome] = useState("");
-  const [orgaoEntidade, setOrgaoEntidade] = useState("");
-  const [numeroInteressado, setNumeroInteressado] = useState("");
-  const [entidadeCenti, setEntidadeCenti] = useState("");
-  const [assinaturaUnica, setAssinaturaUnica] = useState(false);
-  const [formOculto, setFormOculto] = useState(false); // preservado no PATCH (togglado pela ação da linha)
-  const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
-  const [salvando, setSalvando] = useState(false);
-  const [recarregando, setRecarregando] = useState(false);
-  const [estruturando, setEstruturando] = useState(false); // rebaixar / tornar-unidade em andamento
-  const [destinoRebaixar, setDestinoRebaixar] = useState(""); // órgão destino do rebaixamento
+  const [aberto, setAberto] = useState<number | "novo" | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [destino, setDestino] = useState("");
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async () => {
-    setErro(null);
     try {
       const r = await fetch("/api/admin/orgaos");
-      const j = (await r.json()) as { ok?: boolean; error?: string; orgaos?: Orgao[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; orgaos?: Orgao[] };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar os órgãos.");
       setLista(j.orgaos ?? []);
+      setErro(null);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao carregar.");
-      setLista([]);
+      setErro(e instanceof Error ? e.message : "Erro ao carregar os órgãos.");
+      setLista((l) => l ?? []);
     }
   }, []);
 
   useEffect(() => {
-    carregar();
+    void carregar();
   }, [carregar]);
 
-  async function recarregar() {
-    setRecarregando(true);
-    await carregar();
-    setRecarregando(false);
-  }
-
-  function abrirNovo() {
-    setEditando("novo");
-    setSigla("");
-    setNome("");
-    setOrgaoEntidade("");
-    setNumeroInteressado("");
-    setEntidadeCenti("");
-    setAssinaturaUnica(false);
-    setFormOculto(false);
-    setResponsaveis(RESPONSAVEIS_VAZIO);
-  }
-  function abrirEdicao(o: Orgao) {
-    setEditando(o);
-    setSigla(o.sigla);
-    setNome(o.nome);
-    setOrgaoEntidade(o.orgaoEntidade ?? "");
-    setNumeroInteressado(o.numeroInteressado ?? "");
-    setEntidadeCenti(o.entidadeCenti ?? "");
-    setAssinaturaUnica(o.assinaturaUnica);
-    setFormOculto(o.oculto);
-    setResponsaveis(o.responsaveis);
-    setDestinoRebaixar("");
-  }
-
-  /** Requisito 3: ligar/desligar "o órgão também funciona como unidade" (cria/remove a unidade própria). */
-  async function tornarUnidade(o: Orgao, ativar: boolean) {
-    if (!confirm(ativar ? `Fazer o órgão “${o.nome}” funcionar também como unidade?` : `“${o.nome}” deixa de funcionar como unidade? A unidade própria será removida.`)) return;
-    setEstruturando(true);
-    setErro(null);
+  function trocarAba(a: AbaOrgaos) {
+    setAba(a);
     try {
-      const resp = await fetch(`/api/admin/orgaos/${o.id}/unidade-propria`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ativar }),
-      });
-      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível atualizar.");
-      setEditando(null);
-      await carregar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível atualizar.");
-    } finally {
-      setEstruturando(false);
+      const url = new URL(window.location.href);
+      if (a === "orgaos") url.searchParams.delete("aba");
+      else url.searchParams.set("aba", a);
+      window.history.replaceState(window.history.state, "", url);
+    } catch {
+      /* sem a URL, a aba vale só nesta visita */
     }
   }
 
-  /** Requisito 2: REBAIXAR o órgão a unidade de outro órgão (destino escolhido). */
-  async function rebaixar(o: Orgao) {
-    const destino = Number(destinoRebaixar);
-    if (!destino) return;
-    const nomeDestino = lista?.find((x) => x.id === destino)?.nome ?? "";
-    if (
-      !confirm(
-        `Rebaixar o órgão “${o.nome}” a unidade de “${nomeDestino}”? O órgão deixa de existir e vira uma unidade — DFDs, protocolos e itens vinculados são preservados e passam para essa unidade.`,
-      )
-    )
-      return;
-    setEstruturando(true);
-    setErro(null);
+  /** Executa a ação (o banner fica travado) e diz o desfecho num aviso flutuante; recarrega órgãos e responsáveis. */
+  async function acao(url: string, init: RequestInit, sucesso: string): Promise<boolean> {
+    setOcupado(true);
     try {
-      const resp = await fetch(`/api/admin/orgaos/${o.id}/rebaixar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgaoDestino: destino }),
-      });
-      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível rebaixar.");
-      setEditando(null);
-      await carregar();
+      const r = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir — tente de novo.");
+      toast.success(sucesso);
+      await Promise.all([carregar(), ctx.carregar()]);
+      return true;
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível rebaixar.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível concluir — tente de novo.");
+      return false;
     } finally {
-      setEstruturando(false);
+      setOcupado(false);
     }
   }
 
-  /** Corpo do PATCH/POST a partir do estado do form (+ overrides). */
-  function corpoOrgao(o: Orgao, over: Partial<{ oculto: boolean }> = {}) {
+  const unidadesDe = useMemo(() => {
+    const m = new Map<number, { id: number; oculto: boolean }[]>();
+    for (const u of ctx.planilha?.unidades ?? []) if (u.orgaoId != null) m.set(u.orgaoId, [...(m.get(u.orgaoId) ?? []), u]);
+    return m;
+  }, [ctx.planilha]);
+
+  const conf = useMemo(() => {
+    const m = new Map<number, ReturnType<typeof conferenciaDoOrgao>>();
+    if (ctx.planilha) for (const o of lista ?? []) m.set(o.id, conferenciaDoOrgao(o, unidadesDe.get(o.id) ?? [], ctx.grupos, ctx.hoje));
+    return m;
+  }, [lista, unidadesDe, ctx.planilha, ctx.grupos, ctx.hoje]);
+
+  if (lista === null) {
+    return (
+      <div className="rounded-card border border-border p-4">
+        <SkeletonLinhas linhas={6} />
+      </div>
+    );
+  }
+
+  const orgao = typeof aberto === "number" ? (lista.find((o) => o.id === aberto) ?? null) : null;
+  const posDe = new Map(lista.map((o, i) => [o.id, i]));
+
+  function corpo(o: Orgao | null, v: Record<string, string>, extra: { oculto?: boolean } = {}) {
     return {
-      sigla: o.sigla,
-      nome: o.nome,
-      orgaoEntidade: o.orgaoEntidade,
-      numeroInteressado: o.numeroInteressado,
-      assinaturaUnica: o.assinaturaUnica,
-      oculto: over.oculto ?? o.oculto,
-      responsaveis: o.responsaveis,
+      sigla: v.sigla,
+      nome: v.nome,
+      orgaoEntidade: v.orgaoEntidade || null,
+      numeroInteressado: v.numeroInteressado || null,
+      entidadeCenti: v.entidadeCenti || null,
+      assinaturaUnica: v.assinatura === "unica",
+      oculto: extra.oculto ?? o?.oculto ?? false,
     };
   }
 
-  /** Ponto 8: ocultar/reexibir um órgão (não apaga; some do uso em documentos novos). */
-  async function toggleOculto(o: Orgao) {
-    setErro(null);
-    const resp = await fetch(`/api/admin/orgaos/${o.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(corpoOrgao(o, { oculto: !o.oculto })),
-    });
-    if (!resp.ok) {
-      const j = (await resp.json().catch(() => ({}))) as { error?: string };
-      setErro(j.error ?? "Não foi possível atualizar.");
-      return;
+  async function salvar(patch: Record<string, string>): Promise<boolean> {
+    if (aberto === "novo") {
+      const ok = await acao("/api/admin/orgaos", { method: "POST", body: JSON.stringify(corpo(null, patch)) }, "Órgão cadastrado.");
+      if (ok) setAberto(null);
+      return ok;
     }
-    await carregar();
+    if (!orgao) return false;
+    return acao(`/api/admin/orgaos/${orgao.id}`, { method: "PATCH", body: JSON.stringify(corpo(orgao, { ...valoresDe(orgao), ...patch })) }, "Órgão atualizado.");
   }
 
-  async function salvar(e: FormEvent) {
-    e.preventDefault();
-    setSalvando(true);
-    setErro(null);
-    try {
-      const novo = editando === "novo";
-      const r = await fetch(novo ? "/api/admin/orgaos" : `/api/admin/orgaos/${(editando as Orgao).id}`, {
-        method: novo ? "POST" : "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sigla, nome, orgaoEntidade: orgaoEntidade.trim() || null, numeroInteressado: numeroInteressado.trim() || null, entidadeCenti: entidadeCenti.trim() || null, assinaturaUnica, oculto: formOculto, responsaveis }),
-      });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
-      setEditando(null);
-      await carregar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao salvar.");
-    } finally {
-      setSalvando(false);
-    }
-  }
+  const ocultar = (o: Orgao) =>
+    acao(`/api/admin/orgaos/${o.id}`, { method: "PATCH", body: JSON.stringify(corpo(o, valoresDe(o), { oculto: !o.oculto })) }, o.oculto ? "Órgão reexibido." : "Órgão ocultado.");
 
   async function excluir(o: Orgao) {
-    if (!confirm(`Excluir o órgão "${o.nome}"? As unidades deste órgão também serão excluídas.`)) return;
-    const resp = await fetch(`/api/admin/orgaos/${o.id}`, { method: "DELETE" });
-    if (!resp.ok) {
-      const j = (await resp.json().catch(() => ({}))) as { error?: string };
-      setErro(j.error ?? "Não foi possível excluir.");
-      return;
-    }
-    await carregar();
+    const n = unidadesDe.get(o.id)?.length ?? 0;
+    const ok = await confirmar({
+      titulo: `Excluir o órgão ${o.sigla}?`,
+      texto: `${n ? `As ${n} unidade(s) dele também são excluídas. ` : ""}Órgão com DFD ou protocolo não se exclui — oculte-o.`,
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (ok && (await acao(`/api/admin/orgaos/${o.id}`, { method: "DELETE" }, "Órgão excluído."))) setAberto(null);
   }
 
-  async function persistirOrdem(ids: number[]) {
-    setErro(null);
-    try {
-      const r = await fetch("/api/admin/orgaos/ordem", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
-      });
-      if (!r.ok) throw new Error();
-    } catch {
-      setErro("Não foi possível salvar a nova ordem.");
-      await carregar();
+  async function tornarUnidade(o: Orgao, ativar: boolean) {
+    const ok = await confirmar({
+      titulo: ativar ? `${o.sigla} também funciona como unidade?` : `${o.sigla} deixa de ser unidade?`,
+      texto: ativar ? "O órgão ganha a unidade própria (recebe DFDs e protocolos como uma unidade)." : "A unidade própria é removida.",
+      confirmar: ativar ? "Também unidade" : "Deixar de ser unidade",
+    });
+    if (ok) await acao(`/api/admin/orgaos/${o.id}/unidade-propria`, { method: "POST", body: JSON.stringify({ ativar }) }, "Estrutura atualizada.");
+  }
+
+  async function rebaixar(o: Orgao) {
+    const d = lista?.find((x) => String(x.id) === destino);
+    if (!d) return;
+    const ok = await confirmar({
+      titulo: `Rebaixar ${o.sigla} a unidade de ${d.sigla}?`,
+      texto: "O órgão deixa de existir e vira uma unidade — DFDs, protocolos, itens e os responsáveis dele passam para ela.",
+      confirmar: "Rebaixar",
+      perigo: true,
+    });
+    if (ok && (await acao(`/api/admin/orgaos/${o.id}/rebaixar`, { method: "POST", body: JSON.stringify({ orgaoDestino: d.id }) }, "Órgão rebaixado a unidade."))) {
+      setAberto(null);
+      setDestino("");
     }
   }
 
   function mover(id: number, dir: -1 | 1) {
     if (!lista) return;
-    const idx = lista.findIndex((x) => x.id === id);
-    const alvo = idx + dir;
-    if (idx < 0 || alvo < 0 || alvo >= lista.length) return;
+    const i = lista.findIndex((x) => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= lista.length) return;
     const nova = [...lista];
-    [nova[idx], nova[alvo]] = [nova[alvo], nova[idx]];
+    [nova[i], nova[j]] = [nova[j], nova[i]];
     setLista(nova);
-    persistirOrdem(nova.map((x) => x.id));
+    void fetch("/api/admin/orgaos/ordem", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: nova.map((x) => x.id) }) }).then((r) => {
+      if (!r.ok) {
+        toast.error("Não foi possível salvar a nova ordem.");
+        void carregar();
+      }
+    });
   }
 
-  if (lista === null) {
-    return (
-      <div className="rounded-card border border-border p-4">
-        <SkeletonLinhas linhas={4} />
-      </div>
-    );
-  }
-
-  const posDe = new Map(lista.map((o, i) => [o.id, i]));
-  const emEdicao = editando && editando !== "novo" ? (editando as Orgao) : null;
-  // Órgãos de destino para rebaixar: todos menos o próprio e menos os que funcionam como
-  // unidade (esses não recebem unidades-filhas).
-  const destinos = emEdicao ? lista.filter((o) => o.id !== emEdicao.id && !o.tambemUnidade) : [];
-
+  const vigentes = (o: Orgao) => (o.assinaturaUnica ? vigentesDoAlvo(ctx.grupos.get(`o${o.id}`) ?? [], ctx.hoje) : null);
   const colunas: Column<Orgao>[] = [
-    { key: "pos", header: "#", filter: "none", minWidth: 40, render: (o) => <span className="tabular-nums text-faint">{(posDe.get(o.id) ?? 0) + 1}</span> },
-    { key: "sigla", header: "Sigla", filter: "none", minWidth: 100, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
+    { key: "pos", header: "#", filter: "none", nowrap: true, numero: (o) => (posDe.get(o.id) ?? 0) + 1, total: false, render: (o) => <span className="tabular-nums text-faint">{(posDe.get(o.id) ?? 0) + 1}</span> },
+    { key: "sigla", header: "Sigla", nowrap: true, value: (o) => o.sigla, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
     {
       key: "nome",
       header: "Nome do órgão",
-      filter: "none",
+      align: "left",
       minWidth: 220,
+      value: (o) => o.nome,
       render: (o) => (
         <span className="inline-flex items-center gap-2">
           <span className={`font-medium ${o.oculto ? "text-faint" : "text-text"}`}>{o.nome}</span>
@@ -271,181 +248,235 @@ export function OrgaosAdmin() {
     },
     {
       key: "orgaoEntidade",
-      header: "Órgão/Entidade (identificação do DFD)",
-      filter: "none",
-      minWidth: 200,
-      render: (o) =>
-        o.orgaoEntidade ? (
-          <span className="line-clamp-1 text-[12px] text-text-2" title={o.orgaoEntidade}>{o.orgaoEntidade}</span>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
+      header: "Órgão/Entidade (DFD)",
+      minWidth: 180,
+      value: (o) => o.orgaoEntidade ?? "—",
+      render: (o) => (o.orgaoEntidade ? <span className="line-clamp-1 text-[12px] text-text-2" title={o.orgaoEntidade}>{o.orgaoEntidade}</span> : <span className="text-faint">—</span>),
     },
-    {
-      key: "numeroInteressado",
-      header: "Nº interessado",
-      filter: "none",
-      minWidth: 110,
-      render: (o) =>
-        o.numeroInteressado ? (
-          <span className="font-mono text-[12px] text-text-2">{o.numeroInteressado}</span>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
-    },
-    {
-      key: "entidadeCenti",
-      header: "Centi",
-      filter: "none",
-      minWidth: 70,
-      render: (o) =>
-        o.entidadeCenti ? <span className="font-mono text-[12px] text-text-2">{o.entidadeCenti}</span> : <span className="text-faint">—</span>,
-    },
+    { key: "numeroInteressado", header: "Nº interessado", nowrap: true, value: (o) => o.numeroInteressado ?? "—", render: (o) => <Mono v={o.numeroInteressado} /> },
+    { key: "entidadeCenti", header: "Centi", nowrap: true, value: (o) => o.entidadeCenti ?? "—", render: (o) => <Mono v={o.entidadeCenti} /> },
     {
       key: "assinatura",
       header: "Assinatura",
-      filter: "none",
-      minWidth: 120,
+      nowrap: true,
+      value: (o) => (o.assinaturaUnica ? "Única" : "Por unidade"),
       render: (o) => (o.assinaturaUnica ? <Badge tone="blue">Única</Badge> : <span className="text-[12px] text-faint">Por unidade</span>),
     },
     {
-      key: "acoes",
-      header: "Ações",
-      filter: "none",
-      align: "right",
-      minWidth: 150,
+      key: "responsaveis",
+      header: "Responsáveis vigentes",
+      nowrap: true,
+      value: (o) => vigentes(o)?.nomes.join(", ") || (o.assinaturaUnica ? "—" : "Por unidade"),
+      valores: (o) => vigentes(o)?.nomes ?? ["Por unidade"],
       render: (o) => {
-        const idx = posDe.get(o.id) ?? 0;
-        return (
-          <div className="flex justify-end gap-1">
-            <Button variant="ghost" onClick={() => mover(o.id, -1)} disabled={idx === 0} aria-label="Mover para cima" icon={<IconArrowUp className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => mover(o.id, 1)} disabled={idx === lista.length - 1} aria-label="Mover para baixo" icon={<IconArrowDown className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => toggleOculto(o)} aria-label={o.oculto ? "Reexibir" : "Ocultar"} icon={o.oculto ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => abrirEdicao(o)} aria-label="Editar" icon={<IconPencil className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => excluir(o)} aria-label="Excluir" style={{ color: "var(--danger)" }} icon={<IconTrash className="h-4 w-4" />} />
-          </div>
-        );
+        const v = vigentes(o);
+        return v ? <CelulaResponsaveis nomes={v.nomes} temporario={v.temporario} /> : <CelulaResponsaveis nomes={[]} temporario={false} nota="Por unidade" />;
       },
+    },
+    {
+      key: "unidades",
+      header: "Unidades",
+      nowrap: true,
+      filter: "range",
+      formatarFaixa: (n) => String(n),
+      total: false,
+      numero: (o) => unidadesDe.get(o.id)?.length ?? 0,
+      render: (o) => (
+        <Button size="xs" variant="secondary" icon={<IconLayers className="h-4 w-4" />} onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/painel/orgaos/${o.id}`);
+          }} aria-label={`Unidades de ${o.sigla}`}>
+          {unidadesDe.get(o.id)?.length ?? 0}
+        </Button>
+      ),
+    },
+    {
+      key: "conf",
+      header: "Conferência",
+      nowrap: true,
+      value: (o) => rotulosConferencia(conf.get(o.id) ?? [])[0],
+      valores: (o) => rotulosConferencia(conf.get(o.id) ?? []),
+      render: (o) => (ctx.planilha ? <CelulaConferencia msgs={conf.get(o.id) ?? []} /> : <span className="text-faint">…</span>),
+    },
+    {
+      key: "acoes",
+      header: "Ordem",
+      filter: "none",
+      nowrap: true,
+      render: (o) => (
+        <span role="none" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <AcoesCadastro
+            nome={o.sigla}
+            primeira={(posDe.get(o.id) ?? 0) === 0}
+            ultima={(posDe.get(o.id) ?? 0) === lista.length - 1}
+            disabled={ocupado}
+            onMover={(d) => mover(o.id, d)}
+            onEditar={() => setAberto(o.id)}
+            onExcluir={() => void excluir(o)}
+          />
+        </span>
+      ),
     },
   ];
 
+  const destinos = orgao ? lista.filter((o) => o.id !== orgao.id && !o.tambemUnidade) : [];
+
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Clique num órgão para gerenciar suas unidades. O “Órgão/Entidade” identifica de qual órgão é o DFD. Use ↑/↓ para ordenar.</p>
-        <div className="flex items-center gap-2">
-          <BotaoAtualizar ativo={recarregando} rotulo="Recarregar" detalhe="Recarregando os órgãos…" onClick={() => void recarregar()} />
-          <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
-            Novo órgão
-          </Button>
-        </div>
-      </div>
-
+      <Segmented<AbaOrgaos>
+        ariaLabel="Órgãos ou responsáveis"
+        value={aba}
+        onChange={trocarAba}
+        options={[
+          { value: "orgaos", label: `Órgãos (${lista.length})`, icone: <IconLandmark className="h-4 w-4" /> },
+          { value: "responsaveis", label: `Responsáveis (${ctx.planilha?.pessoas.length ?? "…"})`, icone: <IconUsers className="h-4 w-4" />, dica: "A planilha única dos responsáveis por DFDs" },
+        ]}
+      />
       {erro && <Callout kind="danger">{erro}</Callout>}
+      {ctx.erro && <Callout kind="warn">{ctx.erro}</Callout>}
 
-      <DataTable columns={colunas} rows={lista} getKey={(o) => o.id} minWidth={900} onRowClick={(o) => router.push(`/painel/orgaos/${o.id}`)} />
-
-      <Modal
-        open={!!editando}
-        onClose={() => setEditando(null)}
-        titulo={editando === "novo" ? "Novo órgão" : "Editar órgão"}
-        rodape={
-          <div className="flex justify-end">
-            <Button type="submit" form="form-orgao" loading={salvando}>
-              Salvar
-            </Button>
-          </div>
-        }
-      >
-        <form id="form-orgao" onSubmit={salvar} className="space-y-[var(--gap-block)]">
-          <TextField label="Sigla" value={sigla} onChange={(e) => setSigla(e.target.value)} placeholder="Ex.: PMRV" required />
-          <TextField label="Nome do órgão" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Prefeitura Municipal de Rio Verde" required />
-          <TextField
-            label="Órgão/Entidade (padrão para identificar o DFD)"
-            value={orgaoEntidade}
-            onChange={(e) => setOrgaoEntidade(e.target.value)}
-            placeholder="Ex.: PREFEITURA MUNICIPAL DE RIO VERDE"
-          />
-          <TextField
-            label="Número do interessado (protocolo em nome do órgão) — único no sistema"
-            value={numeroInteressado}
-            onChange={(e) => setNumeroInteressado(e.target.value)}
-            placeholder="Ex.: 1008171"
-          />
-          <TextField
-            label="ID do órgão na Centi (o seletor do topo da Centi — ex.: 02 - PREFEITURA)"
-            value={entidadeCenti}
-            onChange={(e) => setEntidadeCenti(e.target.value.replace(/\D/g, "").slice(0, 4))}
-            placeholder="Ex.: 02"
-            inputMode="numeric"
-          />
-          <div>
-            <span className="mb-2 block text-[13px] font-semibold text-text">Assinatura (responsáveis por DFDs)</span>
-            <Segmented<"unidade" | "unica">
-              value={assinaturaUnica ? "unica" : "unidade"}
-              options={[
-                { value: "unidade", label: "Cada unidade tem a sua" },
-                { value: "unica", label: "Uma para todas as unidades" },
-              ]}
-              onChange={(v) => setAssinaturaUnica(v === "unica")}
-            />
-          </div>
-          {assinaturaUnica ? (
-            <div>
-              <span className="mb-2 block text-[13px] font-semibold text-text">Responsáveis do órgão (valem para todas as unidades)</span>
-              <ResponsaveisEditor valor={responsaveis} onChange={setResponsaveis} />
-            </div>
-          ) : (
-            <Callout kind="info">Cada unidade define os seus responsáveis por DFDs (na tela de unidades do órgão).</Callout>
-          )}
-        </form>
-        {emEdicao && (
-          <div className="mt-4 space-y-3 border-t border-border pt-4">
-            <span className="block text-[13px] font-semibold text-text">Estrutura</span>
-
-            {/* Requisito 3 — órgão que também funciona como unidade */}
-            {emEdicao.tambemUnidade ? (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[13px] text-muted">Funciona também como unidade (unidade própria).</p>
-                <Button variant="secondary" onClick={() => tornarUnidade(emEdicao, false)} loading={estruturando} icon={<IconLayers className="h-4 w-4" />}>
-                  Deixar de ser unidade
+      <div key={aba} className="animate-cat-morph">
+        {aba === "orgaos" ? (
+          <DataTable
+            columns={colunas}
+            rows={lista}
+            getKey={(o) => o.id}
+            onRowClick={(o) => setAberto(o.id)}
+            activeKey={typeof aberto === "number" ? aberto : null}
+            scrollInterno
+            density="compact"
+            exportar={{ nome: "Órgãos" }}
+            vazio="Nenhum órgão cadastrado — use “Novo órgão”."
+            acoesRodape={
+              <>
+                <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => setAberto("novo")}>
+                  Novo órgão
                 </Button>
-              </div>
-            ) : emEdicao.temUnidades ? (
-              <Callout kind="info">Para funcionar também como unidade, o órgão não pode ter unidades-filhas.</Callout>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[13px] text-muted">Fazer o órgão funcionar também como unidade (os dois status).</p>
-                <Button variant="secondary" onClick={() => tornarUnidade(emEdicao, true)} loading={estruturando} icon={<IconLayers className="h-4 w-4" />}>
-                  Também unidade
-                </Button>
-              </div>
-            )}
-
-            {/* Requisito 2 — rebaixar a unidade de outro órgão */}
-            {emEdicao.temUnidades ? (
-              <Callout kind="info">Para rebaixar o órgão a unidade, ele não pode ter unidades-filhas.</Callout>
-            ) : (
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <label className="min-w-0 flex-1">
-                  <span className="mb-1 block text-[13px] text-muted">Rebaixar este órgão a unidade de:</span>
-                  <select className={`${selectCls} w-full`} value={destinoRebaixar} onChange={(e) => setDestinoRebaixar(e.target.value)}>
-                    <option value="">Escolha o órgão de destino…</option>
-                    {destinos.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.nome}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button variant="secondary" onClick={() => rebaixar(emEdicao)} disabled={!destinoRebaixar} loading={estruturando} icon={<IconLandmark className="h-4 w-4" />}>
-                  Rebaixar
-                </Button>
-              </div>
-            )}
+                <Ajuda titulo="Órgãos">
+                  <p>Toque numa linha para abrir o órgão: os dados (cadeado), os responsáveis, a estrutura, ocultar e excluir. “Unidades” abre as unidades dele.</p>
+                  <TopicoAjuda titulo="Órgão/Entidade">Identifica de qual órgão é o DFD (o campo do formulário).</TopicoAjuda>
+                  <TopicoAjuda titulo="Assinatura">
+                    Única = os responsáveis do órgão valem para todas as unidades. Por unidade = cada unidade tem os seus.
+                  </TopicoAjuda>
+                  <TopicoAjuda titulo="Conferência">Sem responsável vigente, nomeação ou função faltando, temporário encerrado, unidades sem responsável.</TopicoAjuda>
+                  <TopicoAjuda titulo="Ordem">↑/↓ ordenam a lista (salvo na hora).</TopicoAjuda>
+                </Ajuda>
+              </>
+            }
+          />
+        ) : ctx.planilha ? (
+          <PlanilhaResponsaveis ctx={ctx} />
+        ) : (
+          <div className="rounded-card border border-border p-4">
+            <SkeletonLinhas linhas={6} />
           </div>
         )}
-      </Modal>
+      </div>
+
+      <BannerCadastro
+        aberto={aberto != null}
+        novo={aberto === "novo"}
+        titulo={aberto === "novo" ? "Novo órgão" : (orgao?.nome ?? "Órgão")}
+        cabecalho={
+          orgao ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Badge tone="violet">{orgao.sigla}</Badge>
+              <span className="truncate text-[15px] font-semibold text-text">{orgao.nome}</span>
+              {orgao.tambemUnidade && <Badge tone="cyan">Também unidade</Badge>}
+              {orgao.oculto && <Badge tone="slate">Oculto</Badge>}
+            </div>
+          ) : undefined
+        }
+        campos={CAMPOS}
+        inicial={valoresDe(orgao)}
+        ocupado={ocupado}
+        onSalvar={salvar}
+        onFechar={() => setAberto(null)}
+        confirmarDescarte={() => confirmar({ titulo: "Descartar as alterações?", texto: "Os dados alterados não foram salvos.", confirmar: "Descartar", perigo: true })}
+        rodapeEsquerda={
+          orgao ? (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="danger" disabled={ocupado} icon={<IconTrash className="h-4 w-4" />} onClick={() => void excluir(orgao)}>
+                Excluir
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={ocupado}
+                icon={orgao.oculto ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />}
+                onClick={() => void ocultar(orgao)}
+              >
+                {orgao.oculto ? "Reexibir" : "Ocultar"}
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
+        {orgao && (
+          <>
+            <SecaoBanner
+              titulo="Responsáveis por DFDs"
+              acao={
+                <Button size="sm" variant="ghost" icon={<IconLayers className="h-4 w-4" />} onClick={() => router.push(`/painel/orgaos/${orgao.id}`)}>
+                  Unidades ({unidadesDe.get(orgao.id)?.length ?? 0})
+                </Button>
+              }
+            >
+              <ResponsaveisDoAlvo ctx={ctx} alvo={{ orgaoId: orgao.id }} nota="Assinatura por unidade: cada unidade tem os seus responsáveis (abra as unidades)." />
+            </SecaoBanner>
+            <SecaoBanner titulo="Estrutura">
+              {orgao.tambemUnidade ? (
+                <Linha texto="Funciona também como unidade (unidade própria).">
+                  <Button size="sm" variant="secondary" loading={ocupado} icon={<IconLayers className="h-4 w-4" />} onClick={() => void tornarUnidade(orgao, false)}>
+                    Deixar de ser unidade
+                  </Button>
+                </Linha>
+              ) : orgao.temUnidades ? (
+                <p className="text-[13px] text-muted">Com unidades-filhas, o órgão não pode funcionar também como unidade nem ser rebaixado.</p>
+              ) : (
+                <Linha texto="Fazer o órgão funcionar também como unidade (os dois status).">
+                  <Button size="sm" variant="secondary" loading={ocupado} icon={<IconLayers className="h-4 w-4" />} onClick={() => void tornarUnidade(orgao, true)}>
+                    Também unidade
+                  </Button>
+                </Linha>
+              )}
+              {!orgao.temUnidades && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="min-w-0 flex-1">
+                    <span className="mb-1 block text-[13px] text-muted">Rebaixar a unidade de:</span>
+                    <select className={`${selectCls} w-full`} value={destino} onChange={(e) => setDestino(e.target.value)} disabled={ocupado}>
+                      <option value="">Escolha o órgão de destino…</option>
+                      {destinos.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.sigla} — {d.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Button size="sm" variant="secondary" disabled={!destino} loading={ocupado} icon={<IconLandmark className="h-4 w-4" />} onClick={() => void rebaixar(orgao)}>
+                    Rebaixar
+                  </Button>
+                </div>
+              )}
+            </SecaoBanner>
+          </>
+        )}
+      </BannerCadastro>
+      {confirmacao}
+      {ctx.confirmacao}
+    </div>
+  );
+}
+
+function Mono({ v }: { v: string | null }) {
+  return v ? <span className="font-mono text-[12px] text-text-2">{v}</span> : <span className="text-faint">—</span>;
+}
+
+function Linha({ texto, children }: { texto: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className="text-[13px] text-muted">{texto}</p>
+      {children}
     </div>
   );
 }

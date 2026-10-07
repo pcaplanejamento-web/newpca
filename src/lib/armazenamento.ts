@@ -84,7 +84,8 @@ const COLUNAS_PESADAS: { tabela: string; coluna: string; rotulo: string }[] = [
   { tabela: "dfds", coluna: "secoes", rotulo: "Seções dos DFDs (JSON)" },
   { tabela: "dfds", coluna: "assinaturas", rotulo: "Assinaturas dos DFDs (JSON)" },
   { tabela: "configuracoes", coluna: "dados", rotulo: "Configurações do ADM (JSON)" },
-  { tabela: "reparticoes", coluna: "responsavel_dfd", rotulo: "Responsáveis por DFDs (JSON)" },
+  { tabela: "reparticoes", coluna: "responsavel_dfd", rotulo: "Responsáveis por DFDs — JSON legado (dormente desde a 0099)" },
+  { tabela: "orgaos", coluna: "responsavel_dfd", rotulo: "Responsáveis do órgão — JSON legado (dormente desde a 0099)" },
   { tabela: "linhas", coluna: "dados", rotulo: "Linhas legadas (JSON)" },
   { tabela: "tarefa_anexos", coluna: "conteudo", rotulo: "Anexos legados das tarefas (base64)" },
 ];

@@ -10,8 +10,6 @@ import {
   dataAssinaturaValida,
   definirDataAssinaturaEquipe,
   desfazerValidacaoEquipe,
-  novoResponsavel,
-  novoTemporario,
   pdfExigeAssinatura,
   type Responsaveis,
   RESPONSAVEIS_VAZIO,
@@ -33,15 +31,12 @@ function mkAdobe(nome: string, data = "01/09/2026 14:58:52 -03:00"): Assinatura 
   return { nome, eCpf: "***.516.261-**", usuario: "", local: "", data, ip: "", codigo: "", url: "", fonte: "adobe" };
 }
 
-const padrao = (nome: string): Responsaveis => ({ padroes: [novoResponsavel(nome)], temporarios: [] });
+const pessoa = (nome: string) => ({ nome, matricula: "", funcao: "", nomeacao: { tipo: null, numero: "", link: "" } });
+const padrao = (nome: string): Responsaveis => ({ padroes: [pessoa(nome)], temporarios: [] });
 
 function comTemporario(nome: string, inicio: string, fim: string): Responsaveis {
-  const t = novoTemporario();
-  t.nome = nome;
-  t.inicio = inicio;
-  t.fim = fim;
-  t.nomeacao = { tipo: "portaria", numero: "123/2026", link: "" };
-  return { padroes: [novoResponsavel("OUTRO TITULAR")], temporarios: [t] };
+  const t = { ...pessoa(nome), inicio, fim, nomeacao: { tipo: "portaria" as const, numero: "123/2026", link: "" } };
+  return { padroes: [pessoa("OUTRO TITULAR")], temporarios: [t] };
 }
 
 describe("dataAssinaturaISO", () => {

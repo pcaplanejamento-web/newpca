@@ -7,7 +7,7 @@ import { listarOrgaos } from "@/lib/orgaos";
 export const dynamic = "force-dynamic";
 
 /** Unidades de UM órgão (`/painel/orgaos/[id]`) — drill-down a partir da lista de órgãos. */
-export default async function OrgaoUnidadesPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OrgaoUnidadesPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string }> }) {
   const atual = await getUsuarioAtual();
   if (!atual?.admin) {
     return <AcessoRestrito mensagem="Somente administradores podem gerenciar unidades." />;
@@ -16,5 +16,14 @@ export default async function OrgaoUnidadesPage({ params }: { params: Promise<{ 
   if (!Number.isInteger(orgaoId) || orgaoId <= 0) notFound();
   const orgao = (await listarOrgaos()).find((o) => o.id === orgaoId);
   if (!orgao) notFound();
-  return <ReparticoesAdmin orgaoId={orgao.id} orgaoNome={orgao.nome} assinaturaUnica={orgao.assinaturaUnica} />;
+  const { aba } = await searchParams;
+  return (
+    <ReparticoesAdmin
+      orgaoId={orgao.id}
+      orgaoSigla={orgao.sigla}
+      orgaoNome={orgao.nome}
+      assinaturaUnica={orgao.assinaturaUnica}
+      abaInicial={aba === "responsaveis" ? "responsaveis" : "unidades"}
+    />
+  );
 }

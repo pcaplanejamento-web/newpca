@@ -636,38 +636,66 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `protocolos`/`protocolo_opcoes` ficam no banco **DORMENTES** (dados preservados, sem código, fora do `schema.ts`; sem
   migração de DROP).
 - **Unidades** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**setor_requisitante** (matchers) +
-  **orgao_id** (FK→`orgaos`, migração `0022`) + **responsavel_dfd** — cadastro do ADM, nullable): lista global
-  **reordenável por botões ↑/↓** (`DataTable` com colunas `filter:"none"`; persiste em
-  `PATCH /api/admin/reparticoes/ordem`). O CRUD (`ReparticoesAdmin`, `reparticaoSchema`) vive **DENTRO de um órgão**
-  (`/painel/orgaos/[id]`): a unidade herda `orgao_id` do escopo da URL (sem seletor de órgão), e o
-  `GET /api/admin/reparticoes?orgaoId=` filtra por órgão. **Não há mais `/painel/reparticoes`** (removida). O
-  `ReorderTable` foi **removido** (DataTable + ↑/↓ é o padrão de ordenação).
-  `responsavel_dfd` guarda os **responsáveis por DFDs** como **JSON** (coluna reaproveitada, sem migração nova):
-  **N padrões** + **N temporários**. Todo responsável tem **nome, matrícula, função** e uma **nomeação** (ato:
-  `portaria`/`decreto`/`lei` + número + **link** do documento). O temporário tem, além disso, **período** início/fim.
-  No período de um temporário, **ele é o efetivo** (os padrões ficam em cinza); fora do período, o temporário fica em
-  cinza e os padrões voltam — com **estados** (Agendado/Vigente/Encerrado). Lógica pura/testável em
-  `src/lib/reparticao-responsaveis.ts` (`parseResponsaveis`/`serializeResponsaveis` tolerantes a TODOS os formatos
-  anteriores; `temporariosVigentes`/`responsaveisVigentes`/`padroesInativos`/`estadoTemporario`); UI no componente
-  `ResponsaveisEditor` (sub-campos compartilhados entre padrão e temporário). Unidade ativa por cookie
-  `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
-  `/api/reparticoes/ativo`.
+  **orgao_id** (FK→`orgaos`, migração `0022`) — cadastro do ADM): lista **reordenável por ↑/↓** (`AcoesCadastro`;
+  persiste em `PATCH /api/admin/reparticoes/ordem`). O CRUD (`ReparticoesAdmin`, `reparticaoSchema`) vive **DENTRO de um
+  órgão** (`/painel/orgaos/[id]`): a unidade herda `orgao_id` do escopo da URL, e o `GET /api/admin/reparticoes?orgaoId=`
+  filtra por órgão. Unidade ativa por cookie `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em
+  `/api/admin/reparticoes*` e `/api/reparticoes/ativo`.
+- **RESPONSÁVEIS POR DFDs numa PLANILHA ÚNICA (v1.53.0, migração `0099`, aditiva — tabelas `responsaveis` +
+  `responsaveis_vinculos`; os JSON `reparticoes.responsavel_dfd`/`orgaos.responsavel_dfd` ficam DORMENTES):** a PESSOA é
+  cadastrada UMA vez (`responsaveis`: nome + matrícula + `chave` = `norm(nome)`, único chave + matrícula) e VINCULADA a
+  exatamente UMA unidade OU UM órgão (`responsaveis_vinculos`: tipo `padrao`|`temporario`, função, nomeação — `ato_tipo`
+  portaria/decreto/lei + número + link —, período no temporário, ordem; CHECKs no banco: um alvo só, o temporário com
+  início ≤ fim; cascade ao excluir a pessoa/unidade/órgão). A `0099` converteu TODOS os formatos já lidos (o atual, o
+  `{padrao, temporarios[ato]}`, o array de nomes, o texto solto), juntou a mesma pessoa de vários lugares numa linha,
+  completou a matrícula vazia quando o nome tem uma só e descartou só o temporário sem datas/invertido (o
+  `serializeResponsaveis` já os descartava). Núcleo PURO **`responsaveis-planilha-core.ts`** (testado):
+  `responsaveisDosVinculos` monta o MESMO `Responsaveis` de sempre (então `validarAssinatura`, `preverUnidadePorAssinatura`,
+  a conferência, `DfdConferir`, o solicitante público e a Mesa NÃO mudaram), **`alvoEfetivo`** (a regra da assinatura —
+  ver abaixo), `responsaveisEfetivosDasUnidades`, **`alvoVale`**/`motivoAlvoNaoVale` (só se vincula onde vale pela regra —
+  também no servidor, 422), `motivoVinculoInvalido`/`normalizarVinculo`/`vinculoConflita` (a mesma pessoa padrão duas
+  vezes, ou temporários que se cruzam, no MESMO alvo = 409), `estadoDoVinculo` (Vigente/Agendado/Encerrado/Inativo — o
+  padrão fica inativo com um temporário vigente), `vigentesDoAlvo`, `alvosParaVincular`, `rotuloAlvo` e a **CONFERÊNCIA**
+  (`problemasDoVinculo`/`problemasDaPessoa`/`problemasDoAlvo`/`conferenciaDaUnidade`/`conferenciaDoOrgao`/
+  `conferenciaDaPessoa`: sem responsável vigente = erro; sem matrícula, sem função, sem nomeação, temporário encerrado,
+  mesmo nome com outra matrícula, sem vínculo, vínculo sem efeito pela regra e "Unidades sem responsável (N)" = atenção).
+  Builders **`responsaveis-sql.ts`** (testados no driver D1 real dentro de `db.batch`: consulta por alvos num parâmetro
+  JSON, mover/copiar/apagar os vínculos — promover/rebaixar) e D1 **`responsaveis.ts`** (`listarPlanilha`, pessoas,
+  vínculos, `motivoAlvoInvalido`, `conflitoDoVinculo`). A LEITURA da conferência da assinatura continua por
+  `carregarResponsaveis`/`responsaveisPorReparticao` (`reparticoes.ts`), agora pelos vínculos. Rotas (`exigirAdmin`, Zod
+  `pessoaResponsavelSchema`/`vinculoResponsavelSchema`, auditoria `responsavel`): `GET`/`POST /api/admin/responsaveis`
+  (a planilha / pessoa nova — 409 se repetida), `PATCH`/`DELETE /api/admin/responsaveis/[id]` (excluir com vínculos pede
+  `?confirmar=1`), `POST /api/admin/responsaveis/vinculos` e `PATCH`/`DELETE /api/admin/responsaveis/vinculos/[id]` (o
+  alvo do vínculo é fixo; a pessoa pode trocar). Órgão/unidade não recebem mais `responsaveis` (o campo saiu dos schemas).
+  **Telas:** `/painel/orgaos` = `Segmented` **Órgãos | Responsáveis** (`?aba=responsaveis`) e `/painel/orgaos/[id]` =
+  **Unidades | Responsáveis** (só quem responde no órgão ou nas unidades dele) — tabelas no PADRÃO DA MESA (`DataTable
+  scrollInterno density="compact"`, filtros por coluna, XLSX/PDF, `AcoesCadastro` ↑/↓ na coluna Ordem, "Novo órgão"/"Nova
+  unidade"/"Nova pessoa" + Ajuda no rodapé) com as colunas **Responsáveis vigentes** (`CelulaResponsaveis`; "Por unidade"
+  / "Pelo órgão") e **Conferência** (`CelulaConferencia` = `EstadoResumo` ou "Regular"); a de órgãos tem **Unidades (N)**
+  (abre a tela delas). Tocar na linha abre o BANNER (`BannerCadastro`, DS: dados por cadeado, "Salvar alterações" só com
+  o que mudou, fechar com alteração confirma) com as seções **Responsáveis por DFDs** (`ResponsaveisDoAlvo` — os vínculos
+  com o estado, "Adicionar padrão/temporário" só onde vale; onde não vale, a nota de onde vêm), **Estrutura**
+  (também unidade / rebaixar / promover) e, no rodapé, Excluir/Ocultar — confirmações pelo `useConfirmacao`. A aba
+  Responsáveis = **`PlanilhaResponsaveis`** (uma linha por pessoa: nome, matrícula, onde responde, vigente hoje em,
+  conferência) + o banner da pessoa (nome/matrícula por cadeado — vale em todos os vínculos —, "Onde responde" com
+  editar/remover/"Vincular", excluir). O **`EditorVinculo`** (DS) escolhe a pessoa da planilha (`SeletorBusca` por nome ou
+  matrícula) ou cadastra na hora, o alvo (só os que valem), padrão/temporário, função, nomeação e período. Hook único
+  `usePlanilhaResponsaveis` (dados + gravações + aviso flutuante). Peças: `VinculosResponsaveis.tsx` (`CelulaResponsaveis`,
+  `ListaVinculos`, `EditorVinculo`), `SecaoBanner.tsx` (`SecaoBanner`/`ValorCampo` — também no banner do usuário).
 - **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD)+ordem, migração `0022`) —
-  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`, ↑/↓); **clicar
-  numa linha** (`onRowClick`) navega para `/painel/orgaos/[id]` = as Unidades daquele órgão (`ReparticoesAdmin`
-  escopado). Nav = um item **"Órgãos e Unidades"**. Rotas
+  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`, ↑/↓); **tocar
+  numa linha** abre o banner do órgão e o botão **Unidades (N)** (na linha e no banner) leva a `/painel/orgaos/[id]` = as
+  Unidades daquele órgão (`ReparticoesAdmin` escopado). Nav = um item **"Órgãos e Unidades"**. Rotas
   `/api/admin/orgaos*` (CRUD + `/ordem`). **Toda unidade pertence a um órgão** (migração `0078` apagou as sem órgão, menos a "Geral"; `reparticaoSchema.orgaoId` obrigatório e conferido nas rotas — 422) e **excluir um órgão exclui as unidades dele** no mesmo lote (o órgão com DFD/protocolo, direto ou pelas unidades, segue só ocultável — 409). Loader
   `src/lib/orgaos.ts` (`listarOrgaos`). A migração `0022` é **aditiva** (só `ADD COLUMN`/`CREATE`) e **preserva o
   legado**: semeia a "Prefeitura Municipal de Rio Verde" e vincula as unidades atuais a ela (`orgao_id=1`).
 - **Assinatura ÚNICA por órgão (migração `0023`):** o órgão define se a assinatura (responsáveis por DFDs) é
-  **uma só para todas as unidades** (`orgaos.assinatura_unica=1` → responsáveis no `orgaos.responsavel_dfd`, editados
-  no `OrgaosAdmin` com o **mesmo `ResponsaveisEditor`**) ou **por unidade** (padrão `=0`, cada unidade tem os seus). A
-  resolução é **pura e única** (`responsaveisEfetivos`, `reparticao-responsaveis.ts`) aplicada nos DOIS chokepoints que
-  carregam os responsáveis (`carregarResponsaveis` servidor + `responsaveisPorReparticao` cliente, ambos com `leftJoin`
-  em `orgaos`) → toda a conferência de assinatura (`validarAssinatura`, `DfdConferir`, `POST /api/dfd`) usa os
-  responsáveis certos **sem mudança**. No `ReparticoesAdmin`, quando o órgão é "única", o editor da unidade some (nota
-  apontando o órgão). `orgaoSchema` ganhou `assinaturaUnica`+`responsaveis` (schema `responsaveisSchema` compartilhado
-  com `reparticaoSchema`). Migração aditiva; default preserva o comportamento atual.
+  **uma só para todas as unidades** (`orgaos.assinatura_unica=1` → valem os VÍNCULOS do órgão na planilha) ou **por
+  unidade** (padrão `=0`, cada unidade tem os seus). A regra é **pura e única** (`alvoEfetivo`,
+  `responsaveis-planilha-core.ts`) aplicada nos DOIS pontos que carregam os responsáveis (`carregarResponsaveis` servidor +
+  `responsaveisPorReparticao`) → toda a conferência de assinatura (`validarAssinatura`, `DfdConferir`, `POST /api/dfd`)
+  usa os responsáveis certos. Trocar a regra NÃO apaga vínculos: só muda qual alvo vale (os que deixam de valer aparecem
+  "sem efeito" na Conferência).
 - **"Geral" virtual:** `codigo='GERAL'` = **todas as unidades** — **escondida do CRUD de Unidades** (GET filtra;
   PATCH/DELETE recusam), **não editável**, mas continua **concedível por grupo** em `GruposAdmin` (grupos
   autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada. Em **"Geral"**,
@@ -714,19 +742,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   recém-criado é o `(SELECT MAX(id) …)` — o batch do D1 é uma transação sequencial). Nada é excluído com vínculo.
   Núcleo PURO/testável **`orgao-unidade-ops.ts`** (o MAPA dos campos que "seguem" na transformação + os predicados de
   permissão sobre os fatos apurados no servidor). Travas de contagem em `orgaos.ts` (`contarUnidadesDoOrgao`,
-  `estruturaPorOrgao`). Ações no **modal de edição** (aba "Estrutura"), não como ícones de linha (mobile-friendly).
+  `estruturaPorOrgao`). Ações na seção **Estrutura** do banner do órgão/unidade, não como ícones de linha (mobile-friendly).
+  Os VÍNCULOS dos responsáveis acompanham no MESMO lote (`vinculosNoPromover`/`vinculosNoRebaixar`, puros e testados;
+  builders `comandoMoverVinculos`/`comandoCopiarVinculosParaUnidade`/`comandoApagarVinculos`).
   - **Promover unidade→órgão (req. 1):** `POST /api/admin/reparticoes/[id]/promover` cria o órgão com a identidade da
     unidade. Sem vínculo, a unidade é **EXCLUÍDA**; **com vínculo**, ela vira a **UNIDADE PRÓPRIA** do novo órgão (dual —
-    `unidadePreservadaNoPromover`: nº do interessado sobe p/ o órgão; responsáveis ficam na unidade, herdando os do órgão
-    de origem de assinatura única se ela não tinha os seus) e `dfds.orgao_id` passa ao novo órgão. Barrado só p/ a
+    `unidadePreservadaNoPromover`: nº do interessado sobe p/ o órgão; os vínculos ficam na unidade, que recebe a CÓPIA dos
+    do órgão de origem de assinatura única se não tinha os seus; sem preservar, os vínculos dela passam ao órgão novo) e `dfds.orgao_id` passa ao novo órgão. Barrado só p/ a
     unidade própria de um órgão dual. Devolve `{id, preservada}`.
     (`ReparticoesAdmin` → Estrutura → "Promover a órgão"; ao concluir vai para `/painel/orgaos`.)
   - **Rebaixar órgão→unidade (req. 2):** `POST /api/admin/orgaos/[id]/rebaixar` `{orgaoDestino}` cria a unidade **sob o
     destino escolhido** e **EXCLUI** o órgão — com ou sem vínculo. Órgão **dual**: a unidade própria **desce** como unidade
-    comum do destino (`propriaRebaixada`, mesmo id, vínculos junto; recebe o nº do órgão e, se assinatura única, os
-    responsáveis do órgão). Órgão sem própria: cria a unidade nova (`unidadeDeOrgao`). Antes do delete, DFDs com
+    comum do destino (`propriaRebaixada`, mesmo id, vínculos junto; recebe o nº do órgão e, se assinatura única com
+    responsáveis, os vínculos do órgão no lugar dos dela). Órgão sem própria: cria a unidade nova (`unidadeDeOrgao`). Antes do delete, DFDs com
     `orgao_id`=órgão (sem unidade → ganham a unidade nova) e protocolos em nome do órgão (`orgao_id`→`NULL`, unidade
-    preenchida se vazia) são realinhados. Barrado só se o órgão tiver unidades-**FILHAS** comuns.
+    preenchida se vazia) são realinhados e os vínculos do órgão passam à unidade. Barrado só se o órgão tiver unidades-**FILHAS** comuns.
     (`OrgaosAdmin` → Estrutura → seletor de destino + "Rebaixar".)
   - **Órgão que TAMBÉM é unidade (req. 3 — dual):** `reparticoes.orgao_proprio=1` = a **unidade PRÓPRIA** que representa
     o órgão. Um órgão é dual ⟺ tem a unidade própria (**só permitido p/ órgão SEM unidades-filhas**). `POST
@@ -907,7 +937,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   vêm de `parseDfdFromPdfItems`; `.xlsx` = `[]`. Guardadas em `dfds.assinaturas` (JSON `Assinatura[]`). **Conferência (`validarAssinatura`,
   `reparticao-responsaveis.ts`, puro/testável):** o assinante tem de bater (nome normalizado por `norm`) com um
   **responsável padrão** OU um **temporário** cujo período cobre a **data da assinatura** (reusa `Responsaveis` de
-  `reparticao-responsaveis.ts`; o cadastro fica em `ReparticoesAdmin`/`ResponsaveisEditor`). Regras (fonte única
+  `reparticao-responsaveis.ts`; o cadastro é a planilha única de Órgãos e Unidades → Responsáveis). Regras (fonte única
   cliente+servidor): **PDF sem assinatura → bloqueia** (protocolar trava com qualquer DFD sem assinatura); `.xlsx`
   sem assinatura → permitido (informativo); **repartição sem responsável cadastrado → bloqueia**; assinante não
   autorizado → bloqueia. **Dropsigner e Adobe seguem a MESMA lógica dos demais formatos** — muda só a cor/rótulo (visual):
@@ -3482,8 +3512,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de protocolos, DFDs e itens: TODA linha na MESMA altura (`--h-control-sm`) e o cabeçalho baixo;
   **`Column.nowrap`** = sem quebra de linha, a coluna ganha a LARGURA DO CONTEÚDO (dados curtos: nº, sigla, badges,
   valores) — usado em todas as tabelas de protocolo/DFD/itens/PCA; textos longos seguem com `minWidth` + `line-clamp`),
-  `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
-  matrícula/função + nomeação portaria/decreto/lei + link; período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
+  `Dropzone` (importação: soltar OU clicar p/ escolher), **`ListaVinculos`**/**`EditorVinculo`**/**`CelulaResponsaveis`**
+  (`VinculosResponsaveis.tsx` — os responsáveis da planilha única: os vínculos com o estado, o editor do vínculo com a
+  pessoa da planilha ou cadastrada na hora, a célula dos vigentes), **`BannerCadastro`** (o banner de um cadastro — órgão,
+  unidade — com os dados por cadeado e só o que mudou ao salvar) + **`SecaoBanner`**/`ValorCampo`, `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; **`cabecalho`** = cabeçalho FIXO rico (ReactNode) que substitui o `titulo`
   textual — ex.: `DfdCabecalho`/`ProtocoloCabecalho` com nº + badges (tipo/Id) + planejamento/assunto; + painel `lateral`
   mestre-detalhe: 2º banner ao lado, com **fechar animado** simétrico ao abrir + **`lateral2`** = 3º banner à direita

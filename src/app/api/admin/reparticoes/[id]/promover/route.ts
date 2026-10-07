@@ -4,8 +4,9 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok } from "@/lib/http";
-import { orgaoDeUnidade, podePromoverUnidade, unidadePreservadaNoPromover } from "@/lib/orgao-unidade-ops";
+import { orgaoDeUnidade, podePromoverUnidade, unidadePreservadaNoPromover, vinculosNoPromover } from "@/lib/orgao-unidade-ops";
 import { unidadeTemVinculo } from "@/lib/reparticoes";
+import { comandoCopiarVinculosParaUnidade, comandoMoverVinculos, consultaContaVinculos } from "@/lib/responsaveis-sql";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,6 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       codigo: reparticoes.codigo,
       nome: reparticoes.nome,
       numeroInteressado: reparticoes.numeroInteressado,
-      responsavelDfd: reparticoes.responsavelDfd,
       oculto: reparticoes.oculto,
       orgaoProprio: reparticoes.orgaoProprio,
       orgaoId: reparticoes.orgaoId,
@@ -42,34 +42,38 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const preservar = await unidadeTemVinculo(id);
 
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${orgaos.ordem}), -1)` }).from(orgaos);
-  const dados = orgaoDeUnidade(u);
   const insOrgao = db
     .insert(orgaos)
-    // Com vínculo os responsáveis ficam na unidade preservada (é ela que confere a assinatura).
-    .values({ ...dados, responsavelDfd: preservar ? null : dados.responsavelDfd, ordem: Number(max) + 1 })
+    .values({ ...orgaoDeUnidade(u), ordem: Number(max) + 1 })
     .returning({ id: orgaos.id });
+  // O batch do D1 é UMA transação sequencial → o órgão recém-criado é o MAX(id) logo após o insert.
+  const novoOrgao = sql`(SELECT MAX(id) FROM orgaos)`;
+  const [origem] =
+    u.orgaoId != null ? await db.select({ assinaturaUnica: orgaos.assinaturaUnica }).from(orgaos).where(eq(orgaos.id, u.orgaoId)).limit(1) : [];
+  const [[{ n: daUnidade }], [{ n: daOrigem }]] = await Promise.all([
+    consultaContaVinculos(db, { reparticaoId: id }),
+    u.orgaoId != null ? consultaContaVinculos(db, { orgaoId: u.orgaoId }) : Promise.resolve([{ n: 0 }]),
+  ]);
+  const responsaveis = vinculosNoPromover({
+    preservar,
+    unidadeTemVinculos: Number(daUnidade) > 0,
+    origemUnica: origem?.assinaturaUnica ?? false,
+    origemTemVinculos: Number(daOrigem) > 0,
+  });
   const stmts: unknown[] = [insOrgao];
   if (preservar) {
-    const [origem] =
-      u.orgaoId != null
-        ? await db
-            .select({ assinaturaUnica: orgaos.assinaturaUnica, responsavelDfd: orgaos.responsavelDfd })
-            .from(orgaos)
-            .where(eq(orgaos.id, u.orgaoId))
-            .limit(1)
-        : [];
-    // O batch do D1 é UMA transação sequencial → o órgão recém-criado é o MAX(id) logo após o insert.
-    const novoOrgao = sql`(SELECT MAX(id) FROM orgaos)`;
     stmts.push(
       db
         .update(reparticoes)
-        .set({ ...unidadePreservadaNoPromover(u, origem ?? null), orgaoId: novoOrgao, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+        .set({ ...unidadePreservadaNoPromover(), orgaoId: novoOrgao, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
         .where(eq(reparticoes.id, id)),
       db.update(dfds).set({ orgaoId: novoOrgao }).where(eq(dfds.reparticaoId, id)),
     );
+    // Sem responsáveis próprios e com o órgão de origem de assinatura ÚNICA: a unidade fica com uma cópia dos dele.
+    if (responsaveis === "copiarDaOrigem" && u.orgaoId != null) stmts.push(comandoCopiarVinculosParaUnidade(db, u.orgaoId, id));
   } else {
-    // Sem vínculo: cria o órgão e apaga a unidade de origem (a identidade "sobe" de tabela).
-    stmts.push(db.delete(reparticoes).where(eq(reparticoes.id, id)));
+    // Sem vínculo: os responsáveis da unidade passam ao órgão novo e a unidade é apagada (a identidade "sobe" de tabela).
+    stmts.push(comandoMoverVinculos(db, { reparticaoId: id }, { orgaoId: novoOrgao }), db.delete(reparticoes).where(eq(reparticoes.id, id)));
   }
   const [ins] = await db.batch(stmts as unknown as Parameters<typeof db.batch>[0]);
   const novoId = (ins as { id: number }[])[0]?.id ?? null;

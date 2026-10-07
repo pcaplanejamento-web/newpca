@@ -7,7 +7,6 @@ import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
-import { serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { unidadeTemVinculo } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +40,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       setorRequisitante: corpo.data.setorRequisitante ?? null,
       orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
-      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));
