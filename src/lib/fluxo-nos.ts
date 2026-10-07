@@ -77,7 +77,8 @@ const CAMPO_CONDICAO: CampoNo[] = [
     chave: "valor",
     rotulo: "Valor",
     tipo: "texto",
-    ajuda: "Texto fixo ou {{campo}} do próprio item.",
+    aceitaCampo: true,
+    ajuda: "Um valor fixo ou um campo do item que chega (escolha a origem).",
     quando: { campo: "operador", valores: OPERADORES.filter((o) => o.valor !== "vazio" && o.valor !== "nao_vazio").map((o) => o.valor) },
   },
 ];
@@ -288,11 +289,11 @@ const NOS: DefNo[] = [
           { valor: "fixo", rotulo: "Órgãos fixos" },
         ],
       },
-      { chave: "campo", rotulo: "Campo do órgão no item", tipo: "texto", padrao: "entidade", quando: { campo: "origem", valores: ["itens"] } },
+      { chave: "campo", rotulo: "Campo do órgão no item", tipo: "caminho", padrao: "entidade", ajuda: "O campo do item que traz o ID do órgão na Centi (o padrão “entidade” vem do cadastro do órgão).", quando: { campo: "origem", valores: ["itens"] } },
       {
         chave: "orgaos",
         rotulo: "Órgãos (ID na Centi)",
-        tipo: "texto",
+        tipo: "orgaosCenti",
         entrada: true,
         ajuda: "Ex.: 2; 3. Fixos: todos os itens são analisados nestes órgãos. No “de cada item”, trava a análise só nestes (vazio = todos).",
       },
@@ -351,7 +352,7 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "entidades", rotulo: "Órgãos (ID na Centi)", tipo: "texto", entrada: true, ajuda: "Ex.: 2; 3. Vazio = os cadastrados em Órgãos e Unidades." },
+      { chave: "entidades", rotulo: "Órgãos (ID na Centi)", tipo: "orgaosCenti", entrada: true, ajuda: "Marque os órgãos a ler. Nenhum marcado = todos os cadastrados em Órgãos e Unidades com o ID na Centi." },
       { chave: "colunas", rotulo: "Trazer todas as colunas da Centi", tipo: "booleano", padrao: false, ajuda: "Em “centi.<coluna>” — escolha as que analisa no nó “Escolher colunas”." },
       {
         chave: "dosItens",
@@ -458,7 +459,9 @@ const NOS: DefNo[] = [
         rotulo: "Valor procurado",
         tipo: "texto",
         entrada: true,
-        ajuda: "Vários por ; — ou {{campo}} do item que chega (ex.: {{planejamento}}). Vazio em “Todos”.",
+        aceitaCampo: true,
+        ajuda:
+          "Do nó anterior: o campo de cada item que chega (ex.: o planejamento). Rodando sozinho — sem esse campo nos itens —, lê TODOS e a seleção mostra tudo. Valor fixo: vários separados por ;",
       },
       {
         chave: "entrega",
@@ -479,7 +482,7 @@ const NOS: DefNo[] = [
         const objeto = (str(c.objeto, "dfds") as ObjetoLeitura) in BUSCAS ? (str(c.objeto, "dfds") as ObjetoLeitura) : "dfds";
         const pedida = str(objeto === "protocolos" ? c.buscaProtocolos : objeto === "dfds" ? c.buscaDfds : c.buscaItens, "todos");
         const valores = valoresProcurados(str(c.valor), e.entrada);
-        const busca = buscaEfetiva(pedida, str(c.valor), e.entrada, valores);
+        const busca = buscaEfetiva(pedida, str(c.valor), valores);
         if (!busca) throw new Error("Informe o valor procurado (ou {{campo}} do item que chega).");
         const lidos = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
         if (str(c.entrega, "lista") !== "umPorVez") return { saida: lidos, fim: marcarExecutado([], lidos.length) };
@@ -769,7 +772,7 @@ const NOS: DefNo[] = [
     saidas: ["encontrados", "naoEncontrados"],
     rotulosPortas: { entrada: "Itens", tabela: "Tabela", encontrados: "Encontrados", naoEncontrados: "Não encontrados" },
     campos: [
-      { chave: "valor", rotulo: "Valor procurado", tipo: "texto", obrigatorio: true, entrada: true, padrao: "{{planejamento}}", ajuda: "Aceita {{campo}} do item. Sem itens que chegam, procura o texto como está." },
+      { chave: "valor", rotulo: "Valor procurado", tipo: "texto", obrigatorio: true, entrada: true, aceitaCampo: true, padrao: "{{planejamento}}", ajuda: "Do nó anterior: o campo de cada item. Valor fixo: o texto como está." },
       { chave: "onde", rotulo: "Onde procurar", tipo: "selecao", padrao: "coluna", opcoes: [{ valor: "coluna", rotulo: "Numa coluna" }, { valor: "tudo", rotulo: "Em todas as colunas (ler tudo)" }] },
       { chave: "coluna", rotulo: "Coluna da tabela", tipo: "caminho", obrigatorio: true, quando: { campo: "onde", valores: ["coluna"] }, ajuda: "Ex.: planejamento ou centi.Id" },
       { chave: "operador", rotulo: "Casa quando a coluna", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
@@ -931,7 +934,7 @@ const NOS: DefNo[] = [
         ],
       },
       { chave: "nome", rotulo: "Nome da variável", tipo: "texto", obrigatorio: true, ajuda: "Letras, números e _ (ex.: total_lido)." },
-      { chave: "valor", rotulo: "Valor", tipo: "texto", ajuda: "Aceita {{campo}} do item.", quando: { campo: "acao", valores: ["definir", "somar", "acrescentar"] } },
+      { chave: "valor", rotulo: "Valor", tipo: "texto", aceitaCampo: true, ajuda: "Um valor fixo ou um campo do item que chega.", quando: { campo: "acao", valores: ["definir", "somar", "acrescentar"] } },
       { chave: "destino", rotulo: "Gravar no campo", tipo: "texto", ajuda: "Vazio = o nome da variável.", quando: { campo: "acao", valores: ["ler"] } },
     ],
     rodaSemItens: true,
@@ -1242,7 +1245,7 @@ const NOS: DefNo[] = [
     campos: [
       { chave: "todos", rotulo: "Todos os itens que chegam são erros", tipo: "booleano", padrao: true },
       ...CAMPO_CONDICAO.map((x) => ({ ...x, obrigatorio: false, quando: x.quando ?? { campo: "todos", valores: ["false"] } })),
-      { chave: "mensagem", rotulo: "Mensagem", tipo: "texto", obrigatorio: true, ajuda: "Aceita {{campo}}. Ex.: DFD {{numero}} com situação {{b.situacao}}" },
+      { chave: "mensagem", rotulo: "Mensagem", tipo: "texto", obrigatorio: true, aceitaCampo: "inserir", ajuda: "O texto do apontamento. Use “Inserir campo” para pôr um dado do item (ex.: DFD {{numero}})." },
       { chave: "nivel", rotulo: "Nível", tipo: "selecao", opcoes: [{ valor: "erro", rotulo: "Erro" }, { valor: "atencao", rotulo: "Atenção" }], padrao: "erro" },
     ],
     executar: async (e, c) => {
@@ -1602,7 +1605,17 @@ const NOS: DefNo[] = [
     icone: "bell",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "mensagem", rotulo: "Mensagem", tipo: "texto", obrigatorio: true, padrao: "{{quantidade}} item(ns) no fluxo" }],
+    campos: [
+      {
+        chave: "mensagem",
+        rotulo: "Mensagem",
+        tipo: "texto",
+        obrigatorio: true,
+        aceitaCampo: "inserir",
+        padrao: "{{quantidade}} item(ns) no fluxo",
+        ajuda: "O texto do aviso. Use “Inserir campo” para pôr um dado (ex.: {{quantidade}} = quantos itens chegaram).",
+      },
+    ],
     rodaSemItens: true,
     executar: async (e, c, ctx) => {
       const n = so(e).length;

@@ -109,7 +109,7 @@ export function PainelFluxo({
                     <AjudaNo def={def} />
                   </legend>
                   {campos.map((c) => (
-                    <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} lista="" somenteLeitura={rodando} />
+                    <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} somenteLeitura={rodando} />
                   ))}
                 </fieldset>
               ))}

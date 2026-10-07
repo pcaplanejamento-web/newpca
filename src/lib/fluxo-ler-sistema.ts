@@ -42,11 +42,12 @@ export function valoresProcurados(valor: string, entrada: Item[]): string[] {
   return [...new Set(vals)];
 }
 
-/** A busca efetiva: com {{campo}} e NENHUM item chegando (execução avulsa ou a prévia da seleção), lê TODOS — a seleção
- * mostra tudo e o usuário escolhe; com itens (ex.: da Mesa), filtra pelo valor. Valor fixo vazio = `null` (erro). */
-export function buscaEfetiva(busca: string, valor: string, entrada: Item[], valores: string[]): string | null {
+/** A busca efetiva: com {{campo}} que NENHUM item que chega preenche (execução avulsa — o Início entrega um item sem
+ * o campo —, a prévia da seleção), lê TODOS: a seleção mostra tudo e o usuário escolhe; com o campo nos itens (ex.: os
+ * DFDs da Mesa), filtra pelo valor. Valor fixo vazio = `null` (erro). */
+export function buscaEfetiva(busca: string, valor: string, valores: string[]): string | null {
   if (busca === "todos" || valores.length) return busca;
-  return /\{\{/.test(valor) && !entrada.length ? "todos" : null;
+  return /\{\{/.test(valor) ? "todos" : null;
 }
 
 /** Os itens do recorte, na ordem da fonte (sem repetir). `todos` ignora os valores. */

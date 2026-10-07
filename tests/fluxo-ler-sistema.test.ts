@@ -57,11 +57,45 @@ test("Ler do sistema UM POR VEZ: lê um, processa, volta, lê outro — o fim le
   assert.equal(r.passos.c.vezes, 2);
 });
 
-test("buscaEfetiva: {{campo}} sem itens lê todos; com itens filtra; fixo vazio = erro", async () => {
+test("buscaEfetiva: {{campo}} que nenhum item preenche lê todos; com o campo filtra; fixo vazio = erro", async () => {
   const { buscaEfetiva } = await import("../src/lib/fluxo-ler-sistema.ts");
-  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", [], []), "todos");
-  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", [{ planejamento: 12 }], ["12"]), "planejamento");
-  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", [{}], []), null);
-  assert.equal(buscaEfetiva("planejamento", "", [], []), null);
-  assert.equal(buscaEfetiva("todos", "", [], []), "todos");
+  // O Início entrega um item SEM o campo — antes isso dava "Informe o valor procurado".
+  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", valoresProcurados("{{planejamento}}", [{ iniciadoEm: "x" }])), "todos");
+  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", valoresProcurados("{{planejamento}}", [])), "todos");
+  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", ["12"]), "planejamento");
+  assert.equal(buscaEfetiva("planejamento", "", []), null);
+  assert.equal(buscaEfetiva("todos", "", []), "todos");
+});
+
+test("Início → Ler do sistema com {{planejamento}}: sozinho lê TODOS; com os DFDs da Mesa, filtra", async () => {
+  const g: Grafo = {
+    v: 1,
+    nos: [
+      { id: "i", tipo: "gatilho.inicio", x: 0, y: 0, config: {} },
+      { id: "l", tipo: "sistema.ler", x: 200, y: 0, config: { objeto: "dfds", buscaDfds: "planejamento", valor: "{{planejamento}}", entrega: "lista" } },
+    ],
+    conexoes: [{ de: "i", saida: "saida", para: "l", entrada: "entrada" }],
+  };
+  const rodar = async (extra: Record<string, unknown>) => {
+    const host = { protocolos: fontes.protocolos, __cache: new Map([["dfds", Promise.resolve(fontes.dfds)]]), ...extra };
+    const r = await executarFluxo(g, REGISTRO_NOS, { centi: async () => ({ ok: false }), api: async () => ({ ok: false }), cancelado: () => false, host });
+    assert.equal(r.estado, "concluido", r.erro);
+    return (r.passos.l.amostra?.saida ?? []).map((d) => d.numero);
+  };
+  assert.deepEqual(await rodar({}), ["10", "11", "12"]);
+  assert.deepEqual(await rodar({ __entrada: [{ id: 12, planejamento: "130" }] }), ["12"]);
+});
+
+test("campos dos nós: origem {{campo}}, ajuda em todo tipo e os campos que aceitam o nó anterior", async () => {
+  const { campoDoValor, AJUDA_TIPO_CAMPO } = await import("../src/lib/fluxo-core.ts");
+  assert.equal(campoDoValor("{{planejamento}}"), "planejamento");
+  assert.equal(campoDoValor(" {{ centi.situacao }} "), "centi.situacao");
+  assert.equal(campoDoValor("DFD {{numero}}"), null);
+  assert.equal(campoDoValor("1154; 1155"), null);
+  assert.equal(campoDoValor(undefined), null);
+  for (const def of REGISTRO_NOS.values())
+    for (const c of def.campos) {
+      assert.ok(c.ajuda || AJUDA_TIPO_CAMPO[c.tipo], `${def.tipo}.${c.chave} sem explicação`);
+      if (c.aceitaCampo) assert.equal(c.tipo, "texto", `${def.tipo}.${c.chave}: aceitaCampo só em texto`);
+    }
 });

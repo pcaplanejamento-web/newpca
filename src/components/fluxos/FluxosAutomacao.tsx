@@ -1,6 +1,6 @@
 "use client";
 
-import { type MutableRefObject, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type MutableRefObject, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { chaveOrgaoCenti, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import type { PedirExtensao } from "@/lib/arquivo-navegador";
 import { dataHoraBR } from "@/lib/format";
@@ -600,8 +600,9 @@ export function FluxosAutomacao({
       recomecar,
       previas,
       carregarPrevia: (g, no) => void carregarPrevia(g, no),
+      orgaos: importacao.orgaos as unknown as HostPainel["orgaos"],
     }),
-    [previas, carregarPrevia, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
+    [importacao.orgaos, previas, carregarPrevia, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
   );
   return (
     <HostPainelCtx.Provider value={hostPainel}>
@@ -1191,11 +1192,13 @@ function EditorFluxo({
     toast.success("Fluxo salvo.");
   }
 
-  // Os dados buscados pelos nós ANTES do marcado (o seletor de campos do painel).
+  // Os campos que os nós ANTES do aberto entregam (as escolhas dos campos do painel): da última execução e da prévia.
+  const hostP = useContext(HostPainelCtx);
+  const alvoCampos = config?.id ?? sel;
   const caminhos = useMemo(() => {
-    if (!sel) return [];
+    if (!alvoCampos) return [];
     const antes = new Set<string>();
-    const fila = [sel];
+    const fila = [alvoCampos];
     while (fila.length) {
       const id = fila.shift() as string;
       for (const c of grafo.conexoes) if (c.para === id && !antes.has(c.de)) {
@@ -1204,9 +1207,18 @@ function EditorFluxo({
       }
     }
     const itens: Item[] = [];
-    for (const id of antes) for (const l of Object.values(passos[id]?.amostra ?? {})) itens.push(...l.slice(0, 5));
+    for (const id of antes) {
+      for (const l of Object.values(passos[id]?.amostra ?? {})) itens.push(...l.slice(0, 5));
+      itens.push(...(hostP?.saidas[id] ?? []).slice(0, 5));
+    }
     return caminhosDosItens(itens, 120);
-  }, [sel, grafo.conexoes, passos]);
+  }, [alvoCampos, grafo.conexoes, passos, hostP?.saidas]);
+  // O nó LIGADO antes do aberto (a origem dos valores travados) e a leitura dos campos dele sem executar.
+  const anterior = alvoCampos ? grafo.nos.find((n) => grafo.conexoes.some((c) => c.para === alvoCampos && c.de === n.id)) : undefined;
+  const lerCampos =
+    alvoCampos && hostP && subgrafoSoLeitura(subgrafoAte(grafo, alvoCampos), REGISTRO_NOS)
+      ? { ler: () => hostP.carregarPrevia(grafo, alvoCampos), lendo: !!hostP.previas[alvoCampos]?.carregando, erro: hostP.previas[alvoCampos]?.erro }
+      : undefined;
 
   const noConfig = config ? (grafo.nos.find((n) => n.id === config.id) ?? null) : null;
   const enquadrar = (g: Grafo = grafo) => {
@@ -1433,6 +1445,8 @@ function EditorFluxo({
               def={REGISTRO_NOS.get(noConfig.tipo)}
               passo={passos[noConfig.id]}
               caminhos={caminhos}
+              origem={anterior ? nomeDoNo(anterior, REGISTRO_NOS) : undefined}
+              lerCampos={lerCampos}
               somenteLeitura={rodando}
               onMudar={(n) => setGrafo((g) => ({ ...g, nos: g.nos.map((x) => (x.id === n.id ? n : x)) }))}
               onExcluir={() => {

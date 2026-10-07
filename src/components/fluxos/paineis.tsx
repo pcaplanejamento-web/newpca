@@ -51,6 +51,8 @@ export type HostPainel = {
   /** A prévia de cada seleção: roda o trecho só de leitura antes dela e lista os itens (sem executar o fluxo). */
   previas: Record<string, { carregando: boolean; erro?: string }>;
   carregarPrevia: (grafo: Grafo, no: string) => void;
+  /** Os órgãos cadastrados (o campo "Órgãos (ID na Centi)" escolhe entre os que têm o ID). */
+  orgaos: { sigla: string; nome: string; entidadeCenti: string | null }[];
 };
 export const HostPainelCtx = createContext<HostPainel | null>(null);
 const useHost = () => useContext(HostPainelCtx);
@@ -96,6 +98,30 @@ export function CampoReparticoesCenti({ rotulo, valor, onValor, somenteLeitura }
   );
 }
 
+/** Os ÓRGÃOS na Centi (o valor = os IDs "2; 3"): os cadastrados em Órgãos e Unidades com o ID; um ID digitado antes e
+ * sem órgão segue à vista para desmarcar. */
+export function CampoOrgaosCenti({ rotulo, valor, onValor, somenteLeitura }: { rotulo: string; valor: string; onValor: (v: string) => void; somenteLeitura?: boolean }) {
+  const host = useHost();
+  const escolhidos = valor.split(/[;,\s]+/).map((x) => x.trim()).filter(Boolean);
+  const cadastrados = (host?.orgaos ?? []).filter((o) => o.entidadeCenti);
+  const ids = new Set(cadastrados.map((o) => o.entidadeCenti as string));
+  const opcoes = [
+    ...cadastrados.map((o) => ({ valor: o.entidadeCenti as string, rotulo: `${o.sigla || o.nome} — ID ${o.entidadeCenti}` })),
+    ...escolhidos.filter((e) => !ids.has(e)).map((e) => ({ valor: e, rotulo: `ID ${e} (sem órgão cadastrado)` })),
+  ];
+  return (
+    <SeletorMultiplo
+      suspenso
+      rotulo={rotulo}
+      textoVazio="Todos"
+      opcoes={opcoes}
+      selecionados={escolhidos}
+      onChange={(v) => onValor(v.join("; "))}
+      disabled={somenteLeitura || !opcoes.length}
+    />
+  );
+}
+
 /** Um fluxo salvo (o "Executar fluxo") — sem o próprio fluxo aberto. */
 export function CampoFluxo({ rotulo, valor, onValor, varios, somenteLeitura }: { rotulo: string; valor: string; onValor: (v: string) => void; varios?: boolean; somenteLeitura?: boolean }) {
   const host = useHost();
@@ -115,7 +141,7 @@ export function CampoFluxo({ rotulo, valor, onValor, varios, somenteLeitura }: {
     );
   }
   return (
-    <SelectField label={rotulo} value={valor} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
+    <SelectField aria-label={rotulo} value={valor} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
       <option value="">Escolha um fluxo salvo…</option>
       {lista.map((f) => (
         <option key={f.id} value={String(f.id)}>

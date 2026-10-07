@@ -7,7 +7,8 @@ import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField } from "./Field";
 import { IconChevronDown } from "./icons";
 
-export type OpcaoMultipla = { valor: string; contagem?: number };
+/** `rotulo` = o texto mostrado (padrão: o próprio valor — ex.: o nome de um fluxo cujo valor é o id). */
+export type OpcaoMultipla = { valor: string; rotulo?: string; contagem?: number };
 
 /** Máximo de opções renderizadas de uma vez (a busca restringe o resto) — leve com milhares. */
 const MAX_VISIVEIS = 300;
@@ -105,8 +106,8 @@ function CorpoSelecao({
   const [busca, setBusca] = useState("");
   const sel = useMemo(() => new Set(selecionados), [selecionados]);
   const filtradas = useMemo(() => {
-    const casam = new Set(opcoesDaBusca(opcoes.map((o) => o.valor), busca));
-    return casam.size === opcoes.length ? opcoes : opcoes.filter((o) => casam.has(o.valor));
+    const casam = new Set(opcoesDaBusca(opcoes.map((o) => o.rotulo ?? o.valor), busca));
+    return casam.size === opcoes.length ? opcoes : opcoes.filter((o) => casam.has(o.rotulo ?? o.valor));
   }, [opcoes, busca]);
   const marcarFiltradas = () => onChange([...new Set([...selecionados, ...filtradas.map((o) => o.valor)])]);
   // Selecionados que sumiram das opções (facetas) continuam valendo — listados no topo.
@@ -155,7 +156,7 @@ function CorpoSelecao({
         ))}
         {filtradas.slice(0, MAX_VISIVEIS).map((o) => (
           <li key={o.valor} className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
-            <Checkbox checked={sel.has(o.valor)} onChange={() => alternar(o.valor)} label={o.valor} disabled={disabled} />
+            <Checkbox checked={sel.has(o.valor)} onChange={() => alternar(o.valor)} label={o.rotulo ?? o.valor} disabled={disabled} />
             {o.contagem != null && <span className="shrink-0 text-xs tabular-nums text-faint">{num(o.contagem)}</span>}
           </li>
         ))}

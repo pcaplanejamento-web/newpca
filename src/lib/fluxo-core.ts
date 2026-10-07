@@ -74,7 +74,19 @@ export const MAX_ITERACOES_LACO = 500;
 
 /** `reparticoesCenti` = as repartições da Tela Protocolo da Centi (escolha múltipla; o valor = "a; b"). */
 /** `fluxo`/`fluxos` = um/vários fluxos salvos (subfluxos — o valor é o id / "1; 2"). */
-export type TipoCampo = "texto" | "textoLongo" | "numero" | "selecao" | "booleano" | "caminho" | "lista" | "reparticoesCenti" | "fluxo" | "fluxos";
+/** `orgaosCenti` = os órgãos cadastrados com o ID na Centi (escolha múltipla; o valor = os IDs "2; 3"). */
+export type TipoCampo =
+  | "texto"
+  | "textoLongo"
+  | "numero"
+  | "selecao"
+  | "booleano"
+  | "caminho"
+  | "lista"
+  | "reparticoesCenti"
+  | "orgaosCenti"
+  | "fluxo"
+  | "fluxos";
 export type CampoNo = {
   chave: string;
   rotulo: string;
@@ -87,7 +99,31 @@ export type CampoNo = {
   quando?: { campo: string; valores: string[] };
   /** DADO DE ENTRADA: aparece na tela inicial do fluxo (o que a pessoa ajusta antes de executar, sem abrir o diagrama). */
   entrada?: boolean;
+  /** O valor pode VIR DO NÓ ANTERIOR: `true` = o valor INTEIRO é um campo do item que chega ({{campo}} — o painel oferece
+   * os campos dele e trava); `"inserir"` = texto livre com campos inseridos no meio (ex.: a mensagem "DFD {{numero}}"). */
+  aceitaCampo?: boolean | "inserir";
 };
+
+/** A explicação padrão de cada tipo de campo (o "(?)" do campo que não traz a sua). */
+export const AJUDA_TIPO_CAMPO: Record<TipoCampo, string> = {
+  texto: "Digite o valor.",
+  textoLongo: "Digite o texto; uma informação por linha.",
+  numero: "Digite um número (vírgula ou ponto nos decimais).",
+  selecao: "Escolha uma das opções.",
+  booleano: "Marque para ligar.",
+  caminho: "Escolha um dos campos que o nó anterior entrega.",
+  lista: "Escolha um ou mais valores.",
+  reparticoesCenti: "Busque as repartições na Centi e marque as que entram.",
+  orgaosCenti: "Marque os órgãos (os cadastrados com o ID na Centi). Nenhum marcado = todos.",
+  fluxo: "Escolha um fluxo salvo.",
+  fluxos: "Escolha um ou mais fluxos salvos.",
+};
+
+/** "{{campo}}" → "campo" (o valor que vem do nó anterior); qualquer outro texto → null (valor fixo). */
+export function campoDoValor(v: unknown): string | null {
+  const m = typeof v === "string" ? /^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/.exec(v) : null;
+  return m ? m[1] : null;
+}
 export type CategoriaNo = "gatilho" | "entrada" | "centi" | "sistema" | "leitura" | "logica" | "fluxo" | "dados" | "erros" | "saida";
 
 export type ContextoNo = {

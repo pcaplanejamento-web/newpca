@@ -32,6 +32,27 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.51.0",
+    data: "2026-10-07",
+    titulo: "Seleção carrega todos os DFDs e campos dos nós por escolha",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A seleção do “Substituir DFDs” voltou a carregar: rodando sozinho, o “Ler do sistema” com o campo do nó anterior lê TODOS os DFDs; vindo da Mesa, só os escolhidos lá.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Campos dos nós por escolha: os dados do nó anterior em lista (com “Ler os campos” sem executar), o valor que vem do nó anterior fica travado com a origem à vista, órgãos da Centi em lista, Repetir/Esperar em opções e o (?) em todo campo.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.50.1",
     data: "2026-10-07",
     titulo: "Seleção da automação carrega os itens",

@@ -4270,7 +4270,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   página única é lida página a página; o nó `centi.cm002` só falha se TODAS as entidades falharem.
   **v1.43.0 — `sistema.ler` ("Ler do sistema"):** núcleo puro **`fluxo-ler-sistema.ts`** (`lerDoSistema(fontes, objeto,
   busca, valores)`: protocolos por nº/Id · DFDs por planejamento/nº/protocolo · itens por planejamento/nº do DFD/protocolo/
-  produto; `BUSCAS`; `valoresProcurados` — vários por ";"/":" e `{{campo}}` do item que chega; `marcarExecutado`; `buscaEfetiva` — com `{{campo}}` e NENHUM item chegando, lê TODOS: a prévia da seleção e a execução avulsa nunca falham). Fontes
+  produto; `BUSCAS`; `valoresProcurados` — vários por ";"/":" e `{{campo}}` do item que chega; `marcarExecutado`; `buscaEfetiva` — com `{{campo}}` que NENHUM item que chega preenche — o Início entrega um item sem o campo —, lê TODOS: a prévia da seleção e a execução avulsa nunca falham). Fontes
   lidas UMA vez por execução (`fontesDoSistema`, `host.__cache`: protocolos do host, DFDs da `execucao-dfds`, itens da rota
   ADM nova `GET /api/admin/automacao/itens-sistema` = `listarItensDfds()`). Entrega "Tudo" (porta `saida` + `fim`) ou "Um
   por vez" (porta `item` → corpo → `volta`; `fim` = os que voltaram com `executado:true`, `totalLido`). O motor ganhou
@@ -4349,6 +4349,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `host.__entrada` + **`__daMesa`** (o `entrada.selecionar` deixa passar todos: a seleção da Mesa vale); o andamento,
   Parar e Detalhes ficam no **painel flutuante** do canto; sem a extensão pronta, avisa. No editor, o `Switch`
   "Disponível na Mesa" grava a preferência na hora; o `GET …/fluxos` devolve `naMesa`.
+- **CAMPOS DOS NÓS POR ESCOLHA (v1.51.0, sem migração):** `CampoDoNo` (`PainelNo.tsx` — o MESMO no diagrama e nos Dados
+  de entrada) põe o (?) em TODO campo (`RotuloCampo` + `Ajuda compacta`: a `ajuda` do campo, senão `AJUDA_TIPO_CAMPO` do
+  tipo); `caminho` = SELEÇÃO dos campos que os nós anteriores entregam (`CampoCaminho`, "Outro (digitar)…"); `aceitaCampo:
+  true` = a ORIGEM do valor ("Valor fixo" | "Do nó anterior: campo" — gravado `{{campo}}`, `campoDoValor`) e, vindo do nó
+  anterior, o valor TRAVADO com o cadeado e o nome do nó (`CampoComOrigem`); `aceitaCampo: "inserir"` = texto livre + "Inserir
+  campo" (as mensagens); tipo **`orgaosCenti`** = os órgãos com o ID na Centi em `SeletorMultiplo` (`CampoOrgaosCenti`,
+  `HostPainel.orgaos`; a `OpcaoMultipla` ganhou `rotulo`). Os campos conhecidos vêm da última execução E da prévia
+  (`HostPainel.saidas`); sem nenhum, o painel do nó oferece **"Ler os campos"** (a prévia só de leitura do trecho anterior).
+  Comportamento: Repetir (0–5) e Esperar em opções.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
