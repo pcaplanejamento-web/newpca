@@ -677,6 +677,7 @@ function ListaFluxos({
       onCriar={onCriar}
       onAbrir={onAbrir}
       arrastar={lateral ? { iniciar, foiArrasto, chave: arrasto?.chave ?? null } : undefined}
+      coluna={lateral}
     />
   );
   return (
@@ -705,7 +706,7 @@ function ListaFluxos({
       {/* DESKTOP: o painel ocupa a ÚLTIMA coluna e ENTRA da direita; os cartões deslizam para o lugar novo. */}
       {lateral && novo && (
         <aside
-          className={`${CARTAO} animate-aba-direita sticky top-[var(--pad-canvas)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas)*2)] shrink-0 flex-col gap-3 !p-0`}
+          className="animate-aba-direita sticky top-[var(--pad-canvas)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas)*2)] shrink-0 flex-col"
           style={{ width: col.largura }}
         >
           {escolha}
@@ -761,6 +762,7 @@ function EscolherNovoFluxo({
   onCriar,
   onAbrir,
   arrastar,
+  coluna = false,
 }: {
   fluxos: FluxoAutomacao[];
   onFechar: () => void;
@@ -768,6 +770,8 @@ function EscolherNovoFluxo({
   onAbrir: (id: number) => void;
   /** No desktop, os MODELOS se arrastam até a lista (criam o fluxo ali). */
   arrastar?: { iniciar: (e: React.PointerEvent<HTMLElement>, chave: string) => void; foiArrasto: () => boolean; chave: string | null };
+  /** No desktop (a última coluna da lista): os cartões soltos na coluna, na MESMA largura dos da lista; o topo e o rodapé em cartões próprios. */
+  coluna?: boolean;
 }) {
   const [nome, setNome] = useState("");
   const [modelo, setModelo] = useState<string>("");
@@ -782,17 +786,19 @@ function EscolherNovoFluxo({
     setModelo("");
   };
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-border px-[var(--pad-card)] py-2.5 max-lg:hidden">
+    <div className={`flex min-h-0 flex-1 flex-col ${coluna ? "gap-[var(--gap-block)]" : ""}`}>
+      <div className={`flex items-center gap-2 px-[var(--pad-card)] py-2.5 max-lg:hidden ${coluna ? `${CARTAO} !py-2.5` : "border-b border-border"}`}>
         <h3 className="min-w-0 flex-1 text-base font-bold text-text">Novo fluxo</h3>
         <Button variant="icon" aria-label="Fechar" onClick={onFechar}>
           <IconClose className="size-5" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-[var(--pad-card)]">
-        <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
-        <p className="text-sm font-medium text-text">Começar de</p>
-        <div className={GRADE_CARTOES}>
+      <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto ${coluna ? "rolagem-fina -mr-2.5 pr-2.5" : "p-[var(--pad-card)]"}`}>
+        <div className={coluna ? `${CARTAO} space-y-3` : "space-y-3"}>
+          <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
+          <p className="text-sm font-medium text-text">Começar de</p>
+        </div>
+        <div className={coluna ? "grid gap-[var(--gap-block)]" : GRADE_CARTOES}>
           {[EM_BRANCO, ...MODELOS_FLUXO].map((x) => (
             <div
               key={x.id || "branco"}
@@ -812,7 +818,7 @@ function EscolherNovoFluxo({
           ))}
         </div>
       </div>
-      <div className="flex flex-wrap justify-end gap-2 border-t border-border px-[var(--pad-card)] py-2.5">
+      <div className={`flex flex-wrap justify-end gap-2 px-[var(--pad-card)] py-2.5 ${coluna ? `${CARTAO} !py-2.5` : "border-t border-border"}`}>
         {existente && (
           <Button size="sm" variant="secondary" onClick={() => onAbrir(existente.id)}>
             Abrir o existente
@@ -866,6 +872,7 @@ function EditorFluxo({
     JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo;
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
+  const atencoes = problemas.filter((p) => p.nivel !== "erro");
   const ref = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(ref, 320) ?? 560;
   useEffect(() => {
@@ -974,11 +981,9 @@ function EditorFluxo({
         </SelectField>
         <EditorFrequencia freq={freq} onFreq={setFreq} />
         {freq.tipo !== "manual" && <Switch checked={ativo} onChange={setAtivo} label="Agendar" dica="Roda sozinho na hora marcada (com esta tela aberta e a extensão pronta)" />}
-        {erros.length > 0 && (
-          <span title={erros.map((p) => p.texto).join("\n")}>
-            <Badge tone="red">{erros.length} problema(s)</Badge>
-          </span>
-        )}
+        {erros.length > 0 && <Badge tone="red" title={erros.map((p) => p.texto).join("\n")}>{erros.length} problema(s)</Badge>}
+        {/* As ATENÇÕES não impedem executar, mas ficam à vista (a lista inteira na dica). */}
+        {atencoes.length > 0 && <Badge tone="amber" title={atencoes.map((p) => p.texto).join("\n")}>{atencoes.length} atenção(ões)</Badge>}
         <Button
           size="sm"
           variant="ghost"

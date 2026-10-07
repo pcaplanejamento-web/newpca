@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.37.1",
+    data: "2026-10-07",
+    titulo: "Automação: acabamento dos cartões e avisos",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "No painel “Novo fluxo”, os cartões dos modelos têm exatamente a largura dos da lista.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "A capa dos cartões segue a cor de destaque escolhida em Aparência (claro e escuro).", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "No editor do fluxo, as atenções voltaram a aparecer (selo âmbar com a lista na dica) ao lado dos problemas.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.37.0",
     data: "2026-10-07",
     titulo: "Automação: cartões no padrão de Tarefas",
