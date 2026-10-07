@@ -326,6 +326,8 @@ export const responsaveis = sqliteTable(
     cargo: text("cargo").notNull().default(""),
     // O USUÁRIO da plataforma (opcional, um usuário em UMA pessoa) — dá a foto.
     usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    // A EXONERAÇÃO ("AAAA-MM-DD", migração 0101): os vínculos seguem valendo; a partir dela, nenhum vínculo novo.
+    exoneradoEm: text("exonerado_em"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

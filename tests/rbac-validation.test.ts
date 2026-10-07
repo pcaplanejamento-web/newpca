@@ -124,6 +124,10 @@ describe("planilha de responsáveis (pessoa + vínculo)", () => {
     assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", cargo: "x".repeat(81) }).success, false);
     assert.deepEqual(pessoaResponsavelPatchSchema.parse({ matricula: "12" }), { matricula: "12" });
     assert.deepEqual(pessoaResponsavelPatchSchema.parse({ usuarioId: null }), { usuarioId: null });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ exoneradoEm: "2026-03-15" }), { exoneradoEm: "2026-03-15" });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ exoneradoEm: null }), { exoneradoEm: null });
+    assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "2026-02-30" }).success, false);
+    assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "15/03/2026" }).success, false);
   });
 
   it("o vínculo vai a UMA unidade OU a UM órgão", () => {

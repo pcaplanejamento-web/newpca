@@ -2,8 +2,9 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { vinculoResponsavelSchema } from "@/lib/rbac-validation";
+import { hojeISO } from "@/lib/reparticao-responsaveis";
 import { alvoExiste, cargoParaGravar, conflitoDoVinculo, criarVinculo, getPessoa, MSG_CARGO_FORA, motivoAlvoInvalido } from "@/lib/responsaveis";
-import { motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
+import { motivoNaoVincular, motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ export async function POST(req: Request) {
   const d = { ...n, funcao };
   const pessoa = await getPessoa(d.responsavelId);
   if (!pessoa) return erro("Pessoa não encontrada na planilha.", 422);
+  const exonerada = motivoNaoVincular(pessoa, d, hojeISO(), true);
+  if (exonerada) return erro(exonerada, 409);
   if (!(await alvoExiste(d))) return erro("Unidade ou órgão não encontrado.", 422);
   const naoVale = await motivoAlvoInvalido(d);
   if (naoVale) return erro(naoVale, 422);

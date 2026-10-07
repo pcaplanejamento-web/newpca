@@ -19,8 +19,17 @@ import {
 
 export type TipoVinculo = "padrao" | "temporario";
 
-/** Uma pessoa da planilha: `cargo` = o nome do cargo cadastrado; `usuarioId`/`foto` = o usuário ligado (URL da foto). */
-export type PessoaResponsavel = { id: number; nome: string; matricula: string; cargo: string; usuarioId: number | null; foto: string | null };
+/** Uma pessoa da planilha: `cargo` = o nome do cargo cadastrado; `usuarioId`/`foto` = o usuário ligado (URL da foto);
+ * `exoneradoEm` = a data da EXONERAÇÃO ("AAAA-MM-DD"; null = em exercício). */
+export type PessoaResponsavel = {
+  id: number;
+  nome: string;
+  matricula: string;
+  cargo: string;
+  usuarioId: number | null;
+  foto: string | null;
+  exoneradoEm: string | null;
+};
 
 /** Um vínculo pessoa → unidade OU órgão (exatamente um dos dois). */
 export type VinculoResponsavel = {
@@ -47,9 +56,35 @@ export function funcaoDoVinculo(v: { tipo: TipoVinculo; funcao: string; cargo: s
   return (v.tipo === "temporario" ? v.funcao : v.cargo).trim();
 }
 
-/** Os vínculos separados em PADRÃO e TEMPORÁRIOS (as duas seções das telas), cada grupo na ordem. */
-export function separarVinculos<T extends { tipo: TipoVinculo; ordem: number; id: number }>(lista: readonly T[]): { padroes: T[]; temporarios: T[] } {
-  const ord = ordenarVinculos([...lista]);
+/**
+ * A PRIORIDADE de um cargo: a posição na lista de Configurações → Cargos e funções (mais acima = mais prioridade), sem
+ * caixa; cargo fora da lista vem depois dos da lista e sem cargo por último.
+ */
+export function prioridadeCargo(cargo: string, cargos: readonly string[]): number {
+  const c = cargo.trim().toLowerCase();
+  if (!c) return Number.MAX_SAFE_INTEGER;
+  const i = cargos.findIndex((x) => x.trim().toLowerCase() === c);
+  return i < 0 ? cargos.length : i;
+}
+
+const comparaNome = (a: string, b: string) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+
+/** As pessoas na ORDEM de prioridade do cargo, depois pelo nome. */
+export function ordenarPorPrioridade<T extends { nome: string; cargo: string }>(pessoas: readonly T[], cargos: readonly string[]): T[] {
+  return [...pessoas].sort((a, b) => prioridadeCargo(a.cargo, cargos) - prioridadeCargo(b.cargo, cargos) || comparaNome(a.nome, b.nome));
+}
+
+/** Os vínculos separados em PADRÃO e TEMPORÁRIOS (as duas seções das telas). Com `cargos`, cada seção vai na prioridade do
+ * cargo que vale no vínculo (`funcaoDoVinculo`) e depois pelo nome; sem eles, na ordem gravada. */
+export function separarVinculos<T extends { tipo: TipoVinculo; ordem: number; id: number; nome?: string; cargo?: string; funcao?: string }>(
+  lista: readonly T[],
+  cargos?: readonly string[],
+): { padroes: T[]; temporarios: T[] } {
+  let ord = ordenarVinculos([...lista]);
+  if (cargos) {
+    const p = (v: T) => prioridadeCargo(funcaoDoVinculo({ tipo: v.tipo, funcao: v.funcao ?? "", cargo: v.cargo ?? "" }), cargos);
+    ord = [...ord].sort((a, b) => p(a) - p(b) || comparaNome(a.nome ?? "", b.nome ?? ""));
+  }
   return { padroes: ord.filter((v) => v.tipo === "padrao"), temporarios: ord.filter((v) => v.tipo === "temporario") };
 }
 
@@ -153,6 +188,25 @@ export function motivoVinculoInvalido(d: DadosVinculo): string | null {
   return null;
 }
 
+const dataBR = (iso: string) => iso.split("-").reverse().join("/");
+
+/** A pessoa está EXONERADA (a data já chegou). Os vínculos dela continuam valendo — a exoneração só fecha vínculos novos. */
+export function exonerado(p: { exoneradoEm: string | null }, hoje: string): boolean {
+  return !!p.exoneradoEm && p.exoneradoEm <= hoje;
+}
+
+/**
+ * O motivo de NÃO vincular a pessoa (`null` = pode) — a mesma régua na tela e no servidor (409): com a exoneração em
+ * vigor, nenhum vínculo NOVO (`novo` = criar o vínculo ou trocá-lo para esta pessoa); e nenhum vínculo começa DEPOIS da
+ * data da exoneração.
+ */
+export function motivoNaoVincular(p: { exoneradoEm: string | null }, d: { inicio: string | null }, hoje: string, novo: boolean): string | null {
+  if (!p.exoneradoEm) return null;
+  if (novo && exonerado(p, hoje)) return `Pessoa exonerada em ${dataBR(p.exoneradoEm)} — não recebe vínculos novos.`;
+  if (d.inicio && d.inicio > p.exoneradoEm) return `O vínculo não pode começar depois da exoneração (${dataBR(p.exoneradoEm)}).`;
+  return null;
+}
+
 /** Normaliza: o padrão não guarda função (segue o cargo da pessoa); sem tipo de ato, o número e o link continuam (a
  * nomeação antiga só tinha o texto). */
 export function normalizarVinculo(d: DadosVinculo): DadosVinculo {
@@ -190,21 +244,14 @@ export function vinculoConflita(
 
 export type MensagemConferencia = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string };
 
-/** Problemas de UM vínculo (cargo do temporário, nomeação, início do padrão, período encerrado). O cargo da PESSOA (o do
- * padrão) é conferido na pessoa. */
-export function problemasDoVinculo(v: VinculoResponsavel, hoje: string): MensagemConferencia[] {
+/** Problemas de UM vínculo (cargo do temporário, nomeação, início do padrão). O cargo da PESSOA (o do padrão) é conferido
+ * na pessoa; o vínculo ENCERRADO não é problema (fica à parte, em cinza — `estadoDoVinculo`). */
+export function problemasDoVinculo(v: VinculoResponsavel): MensagemConferencia[] {
   const out: MensagemConferencia[] = [];
   const temp = v.tipo === "temporario";
   if (temp && !v.funcao.trim()) out.push({ status: "atencao", chave: "resp.funcao", texto: "Temporário sem o cargo ou a função do período.", rotulo: "Temporário sem cargo" });
   if (!temp && !v.inicio) out.push({ status: "atencao", chave: "resp.semInicio", texto: "Padrão sem a data inicial.", rotulo: "Padrão sem início" });
   if (!v.atoTipo && !v.atoNumero.trim()) out.push({ status: "atencao", chave: "resp.ato", texto: "Vínculo sem a nomeação (portaria, decreto ou lei).", rotulo: "Sem nomeação" });
-  if (v.fim && hoje > v.fim)
-    out.push({
-      status: "atencao",
-      chave: temp ? "resp.encerrado" : "resp.padraoEncerrado",
-      texto: `${temp ? "Período temporário" : "Padrão"} encerrado em ${v.fim.split("-").reverse().join("/")}.`,
-      rotulo: temp ? "Temporário encerrado" : "Padrão encerrado",
-    });
   return out;
 }
 
@@ -228,7 +275,7 @@ export function problemasDaPessoa(
       rotulo: "Possível duplicidade",
     });
   if (vinculos.length === 0) out.push({ status: "atencao", chave: "resp.semVinculo", texto: "Pessoa sem vínculo com unidade ou órgão.", rotulo: "Sem vínculo" });
-  for (const v of vinculos) for (const m of problemasDoVinculo(v, hoje)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
+  for (const v of vinculos) for (const m of problemasDoVinculo(v)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
   return out;
 }
 
@@ -255,7 +302,7 @@ export function problemasDoAlvo(a: { valem: boolean; vinculos: readonly VinculoC
   const vigentes = responsaveisVigentes(responsaveisDosVinculos(a.vinculos), hoje);
   if (vigentes.length === 0)
     out.push({ status: "erro", chave: "resp.semVigente", texto: "Sem responsável vigente — a assinatura dos DFDs não é conferida.", rotulo: "Sem responsável" });
-  for (const v of a.vinculos) for (const m of problemasDoVinculo(v, hoje)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
+  for (const v of a.vinculos) for (const m of problemasDoVinculo(v)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
   return out;
 }
 

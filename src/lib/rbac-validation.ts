@@ -70,6 +70,13 @@ export const pessoaResponsavelPatchSchema = z.object({
   matricula: matriculaPessoa.optional(),
   cargo: cargoPessoa.optional(),
   usuarioId: usuarioPessoa.optional(),
+  // A EXONERAÇÃO: data "AAAA-MM-DD" válida ou null (desfazer).
+  exoneradoEm: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
+    .refine((d) => !Number.isNaN(Date.parse(`${d}T12:00:00Z`)) && new Date(`${d}T12:00:00Z`).toISOString().startsWith(d), "Data inválida.")
+    .nullable()
+    .optional(),
 });
 
 const dadosVinculoSchema = z.object({

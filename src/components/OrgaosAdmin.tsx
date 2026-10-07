@@ -13,7 +13,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { selectCls } from "./formStyles";
 import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
-import { CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
+import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
@@ -85,6 +85,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
   const { confirmar, confirmacao } = useConfirmacao();
   // As EDIÇÕES SALVAS da tabela (guardadas aqui: trocar de aba remonta a tabela, que volta com as edições novas).
   const [ed, setEd] = useState(edicoes);
+  const [exonerados, setExonerados] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -229,15 +230,22 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
       key: "nome",
       header: "Nome do órgão",
       align: "left",
-      minWidth: 220,
+      minWidth: 280,
       value: (o) => o.nome,
+      // O nome inteiro em no máximo DUAS linhas (o completo na dica).
       render: (o) => (
-        <span className="inline-flex items-center gap-2">
-          <span className={`font-medium ${o.oculto ? "text-faint" : "text-text"}`}>{o.nome}</span>
-          {o.tambemUnidade && <Badge tone="cyan">Também unidade</Badge>}
+        <span className="flex items-center gap-2" title={o.nome}>
+          <span className={`line-clamp-2 font-medium ${o.oculto ? "text-faint" : "text-text"}`}>{o.nome}</span>
           {o.oculto && <Badge tone="slate">Oculto</Badge>}
         </span>
       ),
+    },
+    {
+      key: "tambemUnidade",
+      header: "Também unidade",
+      nowrap: true,
+      value: (o) => (o.tambemUnidade ? "Sim" : "Não"),
+      render: (o) => (o.tambemUnidade ? <Badge tone="cyan">Também unidade</Badge> : <span className="text-faint">—</span>),
     },
     { key: "sigla", header: "Sigla", nowrap: true, value: (o) => o.sigla, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
     {
@@ -297,15 +305,18 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <Segmented<AbaOrgaos>
-        ariaLabel="Órgãos ou responsáveis"
-        value={aba}
-        onChange={trocarAba}
-        options={[
-          { value: "orgaos", label: `Órgãos (${lista.length})`, icone: <IconLandmark className="h-4 w-4" /> },
-          { value: "responsaveis", label: `Responsáveis (${ctx.planilha?.pessoas.length ?? "…"})`, icone: <IconUsers className="h-4 w-4" />, dica: "A planilha única dos responsáveis por DFDs" },
-        ]}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented<AbaOrgaos>
+          ariaLabel="Órgãos ou responsáveis"
+          value={aba}
+          onChange={trocarAba}
+          options={[
+            { value: "orgaos", label: `Órgãos (${lista.length})`, icone: <IconLandmark className="h-4 w-4" /> },
+            { value: "responsaveis", label: `Responsáveis (${ctx.planilha?.pessoas.length ?? "…"})`, icone: <IconUsers className="h-4 w-4" />, dica: "A planilha única dos responsáveis por DFDs" },
+          ]}
+        />
+        {aba === "responsaveis" && <BotaoExonerados ctx={ctx} ativo={exonerados} onAlternar={() => setExonerados((x) => !x)} className="ml-auto" />}
+      </div>
       {erro && <Callout kind="danger">{erro}</Callout>}
       {ctx.erro && <Callout kind="warn">{ctx.erro}</Callout>}
 
@@ -333,14 +344,14 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
                   <TopicoAjuda titulo="Assinatura">
                     Única = os responsáveis do órgão valem para todas as unidades. Por unidade = cada unidade tem os seus.
                   </TopicoAjuda>
-                  <TopicoAjuda titulo="Conferência">Sem responsável vigente, nomeação ou função faltando, temporário encerrado, unidades sem responsável.</TopicoAjuda>
+                  <TopicoAjuda titulo="Conferência">Sem responsável vigente, nomeação ou função faltando, unidades sem responsável. Vínculo encerrado não é problema (fica em cinza na coluna Encerrados dos responsáveis).</TopicoAjuda>
                   <TopicoAjuda titulo="Ordem">Pelo código da entidade na Centi (sem código, por último). O lápis no rodapé edita a tabela: ordenar, ocultar, arrastar e congelar colunas — e salvar a edição.</TopicoAjuda>
                 </Ajuda>
               </>
             }
           />
         ) : ctx.planilha ? (
-          <PlanilhaResponsaveis ctx={ctx} />
+          <PlanilhaResponsaveis ctx={ctx} exonerados={exonerados} />
         ) : (
           <div className="rounded-card border border-border p-4">
             <SkeletonLinhas linhas={6} />

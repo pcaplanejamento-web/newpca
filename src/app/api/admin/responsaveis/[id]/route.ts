@@ -16,7 +16,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/** Edita a PESSOA (nome, matrícula, cargo, usuário) — vale em todas as unidades e órgãos em que ela está vinculada. */
+/** Edita a PESSOA (nome, matrícula, cargo, usuário, exoneração) — vale em todas as unidades e órgãos em que ela está vinculada. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -32,20 +32,27 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const m = await motivoUsuarioInvalido(p.data.usuarioId, id);
     if (m) return erro(m.motivo, m.status);
   }
+  const exoneradoEm = p.data.exoneradoEm === undefined ? antes.exoneradoEm : p.data.exoneradoEm;
+  if (exoneradoEm && exoneradoEm !== antes.exoneradoEm) {
+    // Nenhum vínculo começa DEPOIS da exoneração (a mesma régua do vincular).
+    const depoisDela = (await vinculosDaPessoa(id)).find((v) => v.inicio && v.inicio > exoneradoEm);
+    if (depoisDela) return erro("A pessoa tem vínculo que começa depois desta data — ajuste o vínculo ou a data da exoneração.", 409);
+  }
   const depois = {
     nome: p.data.nome ?? antes.nome,
     matricula: p.data.matricula ?? antes.matricula,
     cargo,
     usuarioId: p.data.usuarioId === undefined ? antes.usuarioId : p.data.usuarioId,
+    exoneradoEm,
   };
   if ((await pessoaRepetida(depois.nome, depois.matricula, id)) != null)
     return erro("Já existe outra pessoa na planilha com o mesmo nome e matrícula.", 409);
   await atualizarPessoa(id, { ...p.data, ...(p.data.cargo === undefined ? {} : { cargo }) });
   const d = diffCampos(
-    { nome: antes.nome, matricula: antes.matricula, cargo: antes.cargo, usuarioId: antes.usuarioId },
+    { nome: antes.nome, matricula: antes.matricula, cargo: antes.cargo, usuarioId: antes.usuarioId, exoneradoEm: antes.exoneradoEm },
     depois,
-    ["nome", "matricula", "cargo", "usuarioId"],
-    { nome: "Nome", matricula: "Matrícula", cargo: "Cargo/função", usuarioId: "Usuário ligado" },
+    ["nome", "matricula", "cargo", "usuarioId", "exoneradoEm"],
+    { nome: "Nome", matricula: "Matrícula", cargo: "Cargo/função", usuarioId: "Usuário ligado", exoneradoEm: "Exonerado em" },
   );
   if (d.mudou)
     await registrarAuditoria({

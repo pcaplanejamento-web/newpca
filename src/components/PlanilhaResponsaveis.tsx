@@ -9,8 +9,11 @@ import {
   alvoVale,
   conferenciaDaPessoa,
   estadoDoVinculo,
+  exonerado,
   type MensagemConferencia,
   motivoAlvoNaoVale,
+  motivoNaoVincular,
+  ordenarPorPrioridade,
   type PessoaResponsavel,
   type PlanilhaResponsaveis as Planilha,
   porAlvo,
@@ -21,14 +24,16 @@ import {
 } from "@/lib/responsaveis-planilha-core";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { LinhaCampo, useCadeados } from "./CampoCadeado";
 import { CelulaLista } from "./CelulaLista";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { EstadoResumo } from "./EstadoCelula";
+import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
-import { IconPlus, IconSave, IconTrash, IconUserCheck, IconUserX } from "./icons";
+import { IconArquivar, IconPlus, IconSave, IconTrash, IconUserCheck, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { SeletorPessoa } from "./SeletorPessoa";
@@ -118,9 +123,49 @@ export function usePlanilhaResponsaveis() {
     async salvarVinculo(e: EnvioVinculo, id?: number): Promise<boolean> {
       if (id != null)
         return !!(await chamar(`/api/admin/responsaveis/vinculos/${id}`, { method: "PATCH", body: JSON.stringify({ responsavelId: e.responsavelId, ...e.dados }) }, "Vínculo atualizado."));
-      const alvo = alvoDoValor(e.alvo);
-      if (!alvo) return false;
-      return !!(await chamar("/api/admin/responsaveis/vinculos", { method: "POST", body: JSON.stringify({ responsavelId: e.responsavelId, ...alvo, ...e.dados }) }, "Vínculo criado."));
+      // CRIAR: um vínculo por lugar escolhido (a mesma nomeação), em ordem; a 1ª recusa para e diz o que entrou.
+      setOcupado(true);
+      let feitos = 0;
+      try {
+        for (const valor of e.alvos) {
+          const alvo = alvoDoValor(valor);
+          if (!alvo) continue;
+          const r = await fetch("/api/admin/responsaveis/vinculos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ responsavelId: e.responsavelId, ...alvo, ...e.dados }),
+          });
+          const j = (await r.json().catch(() => ({}))) as Resposta;
+          if (!r.ok || !j.ok) {
+            const onde = planilha ? rotuloAlvo(alvo, planilha).texto : valor;
+            throw new Error(`${feitos ? `${feitos} vínculo(s) criado(s); ` : ""}${onde}: ${j.error ?? "não foi possível vincular."}`);
+          }
+          feitos++;
+        }
+        toast.success(feitos > 1 ? `${feitos} vínculos criados com a mesma nomeação.` : "Vínculo criado.");
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Não foi possível concluir — tente de novo.");
+        return false;
+      } finally {
+        await carregar();
+        setOcupado(false);
+      }
+    },
+    /** EXONERA a pessoa na data (null = desfaz). Os vínculos dela continuam valendo; a partir da data, nenhum novo. */
+    async exonerar(p: PessoaResponsavel, data: string | null): Promise<boolean> {
+      const ok = await confirmar(
+        data
+          ? {
+              titulo: `Exonerar ${p.nome} em ${data.split("-").reverse().join("/")}?`,
+              texto: "Os vínculos cadastrados continuam valendo (inclusive na conferência das assinaturas). A partir desta data, a pessoa não recebe vínculos novos e vai para os Exonerados.",
+              confirmar: "Exonerar",
+              perigo: true,
+            }
+          : { titulo: `Desfazer a exoneração de ${p.nome}?`, texto: "A pessoa volta às pessoas em exercício e pode receber vínculos novos.", confirmar: "Desfazer" },
+      );
+      if (!ok) return false;
+      return !!(await chamar(`/api/admin/responsaveis/${p.id}`, { method: "PATCH", body: JSON.stringify({ exoneradoEm: data }) }, data ? `${p.nome} exonerado(a).` : "Exoneração desfeita."));
     },
     async removerVinculo(v: VinculoComPessoa): Promise<boolean> {
       const onde = planilha ? rotuloAlvo(v, planilha).texto : "";
@@ -147,14 +192,39 @@ export function CelulaConferencia({ msgs }: { msgs: MensagemConferencia[] }) {
 /** Os rótulos de todos os problemas (o filtro da coluna acha qualquer um). */
 export const rotulosConferencia = (msgs: MensagemConferencia[]) => (msgs.length ? msgs.map((m) => m.rotulo) : ["Regular"]);
 
-type LinhaPessoa = PessoaResponsavel & { vinculos: VinculoComPessoa[]; vigenteEm: string[]; conf: MensagemConferencia[] };
+type LinhaPessoa = PessoaResponsavel & { vinculos: VinculoComPessoa[]; vigenteEm: string[]; encerradoEm: string[]; conf: MensagemConferencia[] };
+
+const dataBR = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "");
+const valorAlvo = (v: { orgaoId: number | null; reparticaoId: number | null }) => (v.orgaoId != null ? `o${v.orgaoId}` : `u${v.reparticaoId}`);
+
+/** Quantos estão EXONERADOS (a data já chegou) — o número do botão "Exonerados". */
+export const contarExonerados = (ctx: CtxPlanilha) => ctx.planilha?.pessoas.filter((p) => exonerado(p, ctx.hoje)).length ?? 0;
+
+/** O botão "Exonerados (N)" (alinhado à direita, na linha das abas): alterna a planilha entre quem está em exercício e
+ * os EXONERADOS — arquivados, em cinza, com os vínculos ainda valendo. */
+export function BotaoExonerados({ ctx, ativo, onAlternar, className }: { ctx: CtxPlanilha; ativo: boolean; onAlternar: () => void; className?: string }) {
+  const n = contarExonerados(ctx);
+  return (
+    <Button
+      size="sm"
+      variant={ativo ? "primary" : "secondary"}
+      className={className}
+      aria-pressed={ativo}
+      title={ativo ? "Voltar às pessoas em exercício" : "Ver os responsáveis exonerados (arquivados)"}
+      icon={<IconArquivar className="h-4 w-4" />}
+      onClick={onAlternar}
+    >
+      Exonerados ({n})
+    </Button>
+  );
+}
 
 /**
  * A TABELA das pessoas (padrão da Mesa: compacta, rolagem interna, filtros por coluna, exportar): a foto + o nome (a foto
  * do usuário ligado), a matrícula, o cargo/função padrão, onde responde, onde vale HOJE e a conferência. Dentro de um órgão (`orgaoId`), só quem responde nele ou nas unidades dele.
  * Tocar abre o banner da pessoa; "Nova pessoa" no rodapé.
  */
-export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgaoId?: number }) {
+export function PlanilhaResponsaveis({ ctx, orgaoId, exonerados = false }: { ctx: CtxPlanilha; orgaoId?: number; exonerados?: boolean }) {
   const { planilha, grupos, hoje } = ctx;
   const [aberta, setAberta] = useState<number | "nova" | null>(null);
   const linhas = useMemo<LinhaPessoa[]>(() => {
@@ -162,16 +232,18 @@ export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgao
     const doEscopo = (v: VinculoComPessoa) =>
       orgaoId == null || v.orgaoId === orgaoId || (v.reparticaoId != null && planilha.unidades.find((u) => u.id === v.reparticaoId)?.orgaoId === orgaoId);
     const out: LinhaPessoa[] = [];
-    for (const p of planilha.pessoas) {
+    // A ordem inicial: a prioridade do cargo (Configurações → Cargos e funções), depois o nome.
+    for (const p of ordenarPorPrioridade(planilha.pessoas, planilha.cargos)) {
+      if (exonerado(p, hoje) !== exonerados) continue;
       const vinculos = planilha.vinculos.filter((v) => v.responsavelId === p.id);
       if (orgaoId != null && !vinculos.some(doEscopo)) continue;
-      const vigenteEm = vinculos
-        .filter((v) => alvoVale(v, planilha) && estadoDoVinculo(v, grupos.get(v.orgaoId != null ? `o${v.orgaoId}` : `u${v.reparticaoId}`) ?? [], hoje) === "vigente")
-        .map((v) => rotuloAlvo(v, planilha).sigla);
-      out.push({ ...p, vinculos, vigenteEm, conf: conferenciaDaPessoa(p, planilha, hoje) });
+      const estado = (v: VinculoComPessoa) => estadoDoVinculo(v, grupos.get(valorAlvo(v)) ?? [], hoje);
+      const vigenteEm = vinculos.filter((v) => alvoVale(v, planilha) && estado(v) === "vigente").map((v) => rotuloAlvo(v, planilha).sigla);
+      const encerradoEm = vinculos.filter((v) => estado(v) === "encerrado").map((v) => rotuloAlvo(v, planilha).sigla);
+      out.push({ ...p, vinculos: vinculos.filter((v) => estado(v) !== "encerrado"), vigenteEm, encerradoEm, conf: conferenciaDaPessoa(p, planilha, hoje) });
     }
     return out;
-  }, [planilha, grupos, hoje, orgaoId]);
+  }, [planilha, grupos, hoje, orgaoId, exonerados]);
 
   if (!planilha) return null;
   const onde = (l: LinhaPessoa) => l.vinculos.map((v) => `${rotuloAlvo(v, planilha).sigla}${v.tipo === "temporario" ? " (temp.)" : ""}`);
@@ -184,8 +256,10 @@ export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgao
       value: (l) => l.nome,
       render: (l) => (
         <span className="flex min-w-0 items-center gap-2">
-          <Avatar nome={l.nome} foto={l.foto} size="sm" />
-          <span className="truncate font-medium text-text">{l.nome}</span>
+          <span className={exonerados ? "opacity-50 grayscale" : undefined}>
+            <Avatar nome={l.nome} foto={l.foto} size="sm" />
+          </span>
+          <span className={`truncate font-medium ${exonerados ? "text-faint" : "text-text"}`}>{l.nome}</span>
         </span>
       ),
     },
@@ -194,7 +268,7 @@ export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgao
       header: "Matrícula",
       nowrap: true,
       value: (l) => l.matricula || "—",
-      render: (l) => (l.matricula ? <span className="font-mono text-[12px] text-text-2">{l.matricula}</span> : <span className="text-faint">—</span>),
+      render: (l) => (l.matricula ? <span className={`font-mono text-[12px] ${exonerados ? "text-faint" : "text-text-2"}`}>{l.matricula}</span> : <span className="text-faint">—</span>),
     },
     {
       key: "cargo",
@@ -202,10 +276,23 @@ export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgao
       align: "left",
       minWidth: 180,
       value: (l) => l.cargo || "—",
-      render: (l) => (l.cargo ? <span className="text-text-2">{l.cargo}</span> : <span className="text-[color:var(--warn)]">Sem cargo</span>),
+      render: (l) => (l.cargo ? <span className={exonerados ? "text-faint" : "text-text-2"}>{l.cargo}</span> : <span className="text-[color:var(--warn)]">Sem cargo</span>),
     },
+    ...(exonerados
+      ? [
+          {
+            key: "exonerado",
+            header: "Exonerado em",
+            nowrap: true,
+            value: (l: LinhaPessoa) => l.exoneradoEm ?? "",
+            render: (l: LinhaPessoa) => <span className="tabular-nums text-faint">{dataBR(l.exoneradoEm)}</span>,
+          } satisfies Column<LinhaPessoa>,
+        ]
+      : []),
     { key: "vinculos", header: "Responde em", nowrap: true, value: (l) => onde(l).join(", "), valores: onde, render: (l) => <CelulaLista valores={onde(l)} mono max={3} /> },
-    { key: "vigente", header: "Vigente hoje em", nowrap: true, value: (l) => l.vigenteEm.join(", "), valores: (l) => l.vigenteEm, render: (l) => <CelulaLista valores={l.vigenteEm} mono destaque max={3} /> },
+    { key: "vigente", header: "Vigente hoje em", nowrap: true, value: (l) => l.vigenteEm.join(", "), valores: (l) => l.vigenteEm, render: (l) => <CelulaLista valores={l.vigenteEm} mono destaque={!exonerados} max={3} /> },
+    // O que já ENCERROU não é problema — fica aqui, em cinza.
+    { key: "encerrados", header: "Encerrados", nowrap: true, value: (l) => l.encerradoEm.join(", "), valores: (l) => l.encerradoEm, render: (l) => <CelulaLista valores={l.encerradoEm} mono esmaecido max={3} /> },
     {
       key: "conf",
       header: "Conferência",
@@ -227,8 +314,14 @@ export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgao
         activeKey={typeof aberta === "number" ? aberta : null}
         scrollInterno
         density="compact"
-        exportar={{ nome: "Responsáveis por DFDs" }}
-        vazio={orgaoId != null ? "Ninguém responde neste órgão ou nas unidades dele ainda." : "Nenhuma pessoa na planilha ainda — use “Nova pessoa”."}
+        exportar={{ nome: exonerados ? "Responsáveis exonerados" : "Responsáveis por DFDs" }}
+        vazio={
+          exonerados
+            ? "Nenhum responsável exonerado."
+            : orgaoId != null
+              ? "Ninguém responde neste órgão ou nas unidades dele ainda."
+              : "Nenhuma pessoa na planilha ainda — use “Nova pessoa”."
+        }
         acoesRodape={
           <>
             <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => setAberta("nova")}>
@@ -269,8 +362,21 @@ export function AjudaResponsaveis() {
       </TopicoAjuda>
       <TopicoAjuda titulo="Conferência">
         Aponta o que está mal cadastrado: sem matrícula, sem cargo, padrão sem data inicial, temporário sem cargo, sem
-        nomeação, períodos encerrados, nomes repetidos com matrículas diferentes e unidades ou órgãos sem responsável vigente
-        (a assinatura dos DFDs deles não é conferida).
+        nomeação, nomes repetidos com matrículas diferentes e unidades ou órgãos sem responsável vigente (a assinatura dos
+        DFDs deles não é conferida). O vínculo ENCERRADO não é problema: aparece em cinza na coluna “Encerrados”.
+      </TopicoAjuda>
+      <TopicoAjuda titulo="Ordem">
+        A planilha abre pela PRIORIDADE do cargo — a ordem da lista em Configurações → Cargos e funções (mais acima = mais
+        prioridade); depois, pelo nome. Os vínculos de cada lugar seguem a mesma ordem.
+      </TopicoAjuda>
+      <TopicoAjuda titulo="Vários lugares na mesma nomeação">
+        Ao vincular, escolha VÁRIAS unidades e órgãos de uma vez: cada um ganha o vínculo com a mesma nomeação e o mesmo
+        período.
+      </TopicoAjuda>
+      <TopicoAjuda titulo="Exonerados">
+        No banner da pessoa, “Exonerar” informa a data da exoneração. Os vínculos já cadastrados continuam valendo (assinaturas
+        e conferência), mas a pessoa não recebe vínculos novos e nenhum vínculo pode começar depois dessa data. Os exonerados
+        ficam no botão “Exonerados”, à direita, com as linhas em cinza; “Desfazer exoneração” volta.
       </TopicoAjuda>
     </Ajuda>
   );
@@ -304,6 +410,7 @@ function ResponsavelDetalhe({
   const [chaveR, setChaveR] = useState(chave);
   const { abertos, alternar, setAbertos } = useCadeados<CampoPessoa>();
   const [editor, setEditor] = useState<AberturaVinculo | null>(null);
+  const [dataExon, setDataExon] = useState(hoje);
   if (chave !== chaveR) {
     setChaveR(chave);
     setR(base);
@@ -334,9 +441,17 @@ function ResponsavelDetalhe({
     } else if (pessoa && typeof pessoa !== "string" && (await acoes.salvarPessoa(pessoa.id, patch))) setAbertos(new Set());
   }
 
+  const semVinculoNovo = pessoa && typeof pessoa !== "string" ? motivoNaoVincular(pessoa, { inicio: null }, hoje, true) : null;
   const novoVinculo = (tipo: TipoVinculo) =>
     pessoa && typeof pessoa !== "string" && (
-      <Button size="sm" variant="secondary" disabled={ocupado || alvos.length === 0} icon={<IconPlus className="h-4 w-4" />} onClick={() => setEditor({ responsavelId: pessoa.id, alvo: "", dados: dadosVazios(tipo) })}>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={ocupado || alvos.length === 0 || !!semVinculoNovo}
+        title={semVinculoNovo ?? undefined}
+        icon={<IconPlus className="h-4 w-4" />}
+        onClick={() => setEditor({ responsavelId: pessoa.id, alvo: "", dados: dadosVazios(tipo) })}
+      >
         {tipo === "padrao" ? "Vincular padrão" : "Vincular temporário"}
       </Button>
     );
@@ -356,6 +471,11 @@ function ResponsavelDetalhe({
               <div className="min-w-0">
                 <p className="truncate text-[15px] font-semibold text-text">{pessoa.nome}</p>
                 <p className="truncate text-[12.5px] text-muted">{[pessoa.cargo || "Sem cargo", pessoa.matricula ? `Matrícula ${pessoa.matricula}` : ""].filter(Boolean).join(" · ")}</p>
+                {pessoa.exoneradoEm && (
+                  <Badge tone="slate" className="mt-1">
+                    {exonerado(pessoa, hoje) ? "Exonerado" : "Exoneração"} em {dataBR(pessoa.exoneradoEm)}
+                  </Badge>
+                )}
               </div>
             </div>
           ) : undefined
@@ -450,6 +570,30 @@ function ResponsavelDetalhe({
             )}
           </SecaoBanner>
           {!nova && pessoa && (
+            <SecaoBanner titulo="Exoneração">
+              {pessoa.exoneradoEm ? (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[13px] text-text-2">
+                    {exonerado(pessoa, hoje) ? "Exonerado" : "Exoneração marcada"} em <strong>{dataBR(pessoa.exoneradoEm)}</strong> — os vínculos cadastrados
+                    continuam valendo; a partir desta data, nenhum vínculo novo.
+                  </p>
+                  <Button size="sm" variant="secondary" disabled={ocupado} onClick={() => void acoes.exonerar(pessoa, null)}>
+                    Desfazer exoneração
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="w-44">
+                    <TextField label="Data da exoneração" type="date" value={dataExon} onChange={(e) => setDataExon(e.target.value)} denso />
+                  </div>
+                  <Button size="sm" variant="secondary" disabled={ocupado || !dataExon} icon={<IconArquivar className="h-4 w-4" />} onClick={() => void acoes.exonerar(pessoa, dataExon)}>
+                    Exonerar
+                  </Button>
+                </div>
+              )}
+            </SecaoBanner>
+          )}
+          {!nova && pessoa && (
             <SecaoBanner titulo={`Onde responde (${vinculos.length})`}>
               <ListaVinculos
                 vinculos={vinculos}
@@ -461,6 +605,7 @@ function ResponsavelDetalhe({
                   aviso: alvoVale(v, planilha) ? undefined : `Sem efeito: ${motivoAlvoNaoVale(v)}`,
                 })}
                 vazio={{ padrao: "Não é padrão em nenhuma unidade ou órgão.", temporario: "Sem períodos temporários." }}
+                cargos={planilha.cargos}
                 acoes={{ padrao: novoVinculo("padrao"), temporario: novoVinculo("temporario") }}
                 desabilitado={ocupado}
                 onEditar={(v) => setEditor({ id: v.id, responsavelId: v.responsavelId, alvo: v.orgaoId != null ? `o${v.orgaoId}` : `u${v.reparticaoId}`, dados: dadosDoVinculo(v) })}
@@ -519,7 +664,9 @@ export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo
             detalhe: v.matricula ? `Matrícula ${v.matricula}` : "Sem matrícula",
             aviso: vale ? undefined : "Sem efeito pela regra de assinatura do órgão.",
             avatar: { nome: v.nome, foto: pessoaDe(v.responsavelId)?.foto ?? null },
+            exonerado: pessoaDe(v.responsavelId)?.exoneradoEm ?? null,
           })}
+          cargos={planilha.cargos}
           vazio={{ padrao: "Nenhum responsável padrão — a assinatura dos DFDs não é conferida.", temporario: "Sem períodos temporários." }}
           acoes={{ padrao: novo("padrao"), temporario: novo("temporario") }}
           desabilitado={ocupado}

@@ -23,6 +23,7 @@ export function CelulaLista({
   max = 2,
   mono = false,
   destaque = false,
+  esmaecido = false,
   dica,
 }: {
   valores: readonly ValorLista[];
@@ -32,6 +33,8 @@ export function CelulaLista({
   mono?: boolean;
   /** Cor de destaque (accent — ex.: a sigla da unidade). */
   destaque?: boolean;
+  /** Tudo em cinza (o que não vale mais — ex.: vínculos encerrados). */
+  esmaecido?: boolean;
   /** Dica própria (senão, a lista — um por linha, até 30 + "… e mais N"). */
   dica?: string;
 }) {
@@ -45,7 +48,7 @@ export function CelulaLista({
       className={`inline-flex items-center gap-1 ${completo ? "max-w-[22rem] whitespace-normal" : "whitespace-nowrap"}`}
       title={dica ?? dicaLista(lista, (v) => (v.riscado ? `${v.texto} (inativo)` : v.texto))}
     >
-      <span className={`${mono ? "font-mono text-[12px]" : "text-[12.5px]"} ${destaque ? "font-semibold text-accent" : ""}`}>
+      <span className={`${mono ? "font-mono text-[12px]" : "text-[12.5px]"} ${destaque ? "font-semibold text-accent" : esmaecido ? "text-faint" : ""}`}>
         {vistos.map((v, i) => (
           <Fragment key={`${v.texto}-${i}`}>
             {i > 0 && <span className="text-faint"> · </span>}

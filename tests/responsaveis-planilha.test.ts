@@ -10,9 +10,12 @@ import {
   conferenciaDaUnidade,
   conferenciaDoOrgao,
   estadoDoVinculo,
+  exonerado,
   funcaoDoVinculo,
+  motivoNaoVincular,
   motivoVinculoInvalido,
   normalizarVinculo,
+  ordenarPorPrioridade,
   type PlanilhaResponsaveis,
   periodoVinculo,
   porAlvo,
@@ -49,7 +52,7 @@ function v(over: Partial<VinculoComPessoa> & { nome: string }): VinculoComPessoa
   };
 }
 
-const pessoa = (id: number, nome: string, matricula: string, cargo = "Secretário") => ({ id, nome, matricula, cargo, usuarioId: null, foto: null });
+const pessoa = (id: number, nome: string, matricula: string, cargo = "Secretário") => ({ id, nome, matricula, cargo, usuarioId: null, foto: null, exoneradoEm: null });
 
 const PLANILHA = (vinculos: VinculoComPessoa[]): PlanilhaResponsaveis => ({
   pessoas: [...new Map(vinculos.map((x) => [x.responsavelId, pessoa(x.responsavelId, x.nome, x.matricula, x.cargo)])).values()],
@@ -253,12 +256,12 @@ describe("conferência: o que está mal cadastrado", () => {
     );
   });
 
-  it("pessoa: sem matrícula, homônimo com outra matrícula, sem vínculo, vínculo sem efeito, temporário encerrado", () => {
+  it("pessoa: sem matrícula, homônimo com outra matrícula, sem vínculo, vínculo sem efeito — o encerrado NÃO é problema", () => {
     const enc = v({ nome: "Ana", responsavelId: 1, matricula: "", reparticaoId: 12, tipo: "temporario", inicio: "2026-01-01", fim: "2026-01-31" });
     const p = PLANILHA([enc]);
     p.pessoas.push(pessoa(2, "ANA", "999", ""));
     const msgs = conferenciaDaPessoa(pessoa(1, "Ana", ""), p, HOJE).map((m) => m.chave);
-    assert.deepEqual(msgs, ["resp.matricula", "resp.duplicada", "resp.funcao", "resp.encerrado", "resp.naoValem"]);
+    assert.deepEqual(msgs, ["resp.matricula", "resp.duplicada", "resp.funcao", "resp.naoValem"]);
     assert.deepEqual(
       conferenciaDaPessoa(pessoa(2, "ANA", "999", ""), p, HOJE).map((m) => m.chave),
       ["resp.semCargo", "resp.duplicada", "resp.semVinculo"],
@@ -274,5 +277,50 @@ describe("conferência: o que está mal cadastrado", () => {
     assert.equal(usuarioSugerido("123", us)?.id, 1);
     assert.equal(usuarioSugerido("55", us), null, "duas pessoas — não adivinha");
     assert.equal(usuarioSugerido("", us), null);
+  });
+
+  it("ordenarPorPrioridade: a ordem dos cargos do cadastro, fora da lista depois, sem cargo por último, empate pelo nome", () => {
+    const cargos = ["Secretário", "Diretor"];
+    const ps = [
+      { nome: "Zeca", cargo: "" },
+      { nome: "Bia", cargo: "diretor" },
+      { nome: "Caio", cargo: "Assessor" },
+      { nome: "ana", cargo: "Diretor" },
+      { nome: "Davi", cargo: "SECRETÁRIO" },
+    ];
+    assert.deepEqual(
+      ordenarPorPrioridade(ps, cargos).map((p) => p.nome),
+      ["Davi", "ana", "Bia", "Caio", "Zeca"],
+    );
+  });
+
+  it("separarVinculos com cargos: cada seção pela prioridade (o padrão pelo cargo da pessoa, o temporário pelo do período)", () => {
+    const a = v({ nome: "Ana", cargo: "Diretor", ordem: 1 });
+    const b = v({ nome: "Bia", cargo: "Secretário", ordem: 2 });
+    const t1 = v({ nome: "Caio", cargo: "Secretário", tipo: "temporario", funcao: "Diretor", inicio: "2026-06-01", fim: "2026-06-30", ordem: 3 });
+    const t2 = v({ nome: "Duda", cargo: "Diretor", tipo: "temporario", funcao: "Secretário", inicio: "2026-07-01", fim: "2026-07-30", ordem: 4 });
+    const r = separarVinculos([a, b, t1, t2], ["Secretário", "Diretor"]);
+    assert.deepEqual(r.padroes.map((x) => x.nome), ["Bia", "Ana"]);
+    assert.deepEqual(r.temporarios.map((x) => x.nome), ["Duda", "Caio"]);
+  });
+
+  it("exoneração: vale a partir da data; nada de vínculo NOVO depois dela nem começando depois", () => {
+    const futura = { exoneradoEm: "2026-12-31" };
+    const passada = { exoneradoEm: "2026-01-10" };
+    assert.equal(exonerado({ exoneradoEm: null }, HOJE), false);
+    assert.equal(exonerado(futura, HOJE), false);
+    assert.equal(exonerado(passada, HOJE), true);
+    assert.equal(motivoNaoVincular({ exoneradoEm: null }, { inicio: "2030-01-01" }, HOJE, true), null);
+    assert.equal(motivoNaoVincular(futura, { inicio: "2026-02-01" }, HOJE, true), null, "exoneração futura: vincula antes dela");
+    assert.match(motivoNaoVincular(futura, { inicio: "2027-01-01" }, HOJE, true) ?? "", /depois da exoneração/);
+    assert.match(motivoNaoVincular(passada, { inicio: "2026-01-01" }, HOJE, true) ?? "", /não recebe vínculos novos/);
+    assert.equal(motivoNaoVincular(passada, { inicio: "2026-01-01" }, HOJE, false), null, "o vínculo já existente segue editável");
+  });
+
+  it("exonerado: os vínculos cadastrados continuam valendo nos vigentes", () => {
+    const p = v({ nome: "Ana", responsavelId: 1, reparticaoId: 11 });
+    const pl = PLANILHA([p]);
+    pl.pessoas[0] = { ...pl.pessoas[0], exoneradoEm: "2026-01-01" };
+    assert.deepEqual(vigentesDoAlvo(pl.vinculos, HOJE).nomes, ["Ana"]);
   });
 });

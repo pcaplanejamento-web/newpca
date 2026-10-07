@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.58.0",
+    data: "2026-10-07",
+    titulo: "Responsáveis exonerados, vários lugares por nomeação e ordem por cargo",
+    mudancas: [
+      { tipo: "novo", area: "Responsáveis", texto: "Exonerar um responsável com a data: os vínculos cadastrados continuam valendo, mas ele não recebe vínculos novos nem um vínculo que comece depois da exoneração. Os exonerados ficam no botão “Exonerados”, à direita, com as linhas em cinza.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "Ao vincular, escolha várias unidades e órgãos de uma vez — todos recebem a mesma nomeação e o mesmo período.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Responsáveis", texto: "Vínculo encerrado não é mais erro nem atenção: aparece em cinza na nova coluna “Encerrados”.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Responsáveis", texto: "A planilha abre pela prioridade do cargo (a ordem de Configurações → Cargos e funções) e depois pelo nome; os vínculos de cada lugar seguem a mesma ordem.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Órgãos", texto: "“Também unidade” virou uma coluna própria e o nome do órgão aparece inteiro em até duas linhas.", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.57.0",
     data: "2026-10-07",
     titulo: "Tabelas das automações iguais às da Mesa",

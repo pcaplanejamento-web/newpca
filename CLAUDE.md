@@ -642,6 +642,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   órgão** (`/painel/orgaos/[id]`): a unidade herda `orgao_id` do escopo da URL, e o `GET /api/admin/reparticoes?orgaoId=`
   filtra por órgão. Unidade ativa por cookie `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em
   `/api/admin/reparticoes*` e `/api/reparticoes/ativo`.
+- **EXONERAÇÃO, ENCERRADOS, PRIORIDADE e VÁRIOS LUGARES por nomeação (v1.58.0, migração `0101`, aditiva —
+  `responsaveis.exonerado_em`):** `exonerado(p, hoje)` = a data já chegou; os vínculos cadastrados CONTINUAM valendo
+  (assinatura, vigentes, conferência) e **`motivoNaoVincular`** (puro, a MESMA régua na tela e nas rotas de vínculo — 409)
+  recusa vínculo NOVO de quem já foi exonerado e qualquer vínculo que comece DEPOIS da data. `PATCH
+  /api/admin/responsaveis/[id]` `{exoneradoEm | null}` (409 se algum vínculo começa depois; auditoria). Tela: no banner da
+  pessoa "Exonerar" (data) / "Desfazer exoneração" e o selo; o botão **`BotaoExonerados`** ("Exonerados (N)", à direita do
+  `Segmented` em Órgãos e Unidades) alterna a planilha para os exonerados (linhas em cinza + coluna "Exonerado em"); o
+  `EditorVinculo` não oferece quem já está exonerado. O vínculo ENCERRADO não é mais problema da Conferência
+  (`problemasDoVinculo` sem `resp.encerrado`): coluna cinza **"Encerrados"** (`CelulaLista esmaecido`); "Responde em" só os
+  não encerrados. **Ordem:** `ordenarPorPrioridade` (a posição do cargo em Configurações → Cargos e funções, sem caixa; fora
+  da lista depois; sem cargo por último; empate pelo nome) na planilha, e `separarVinculos(lista, cargos)` nas seções dos
+  vínculos. **Criar um vínculo escolhe VÁRIOS lugares** (`SeletorMultiplo` "Unidades e órgãos"): um POST por lugar com a
+  mesma nomeação/período, para no 1º erro, um aviso só.
 - **CARGO, PERÍODO DO PADRÃO e USUÁRIO do responsável (v1.56.0, migração `0100`, aditiva — `responsaveis.cargo` +
   `responsaveis.usuario_id` FK set null, único parcial):** o CARGO/FUNÇÃO é da PESSOA (o NOME de um cargo cadastrado —
   `cargoParaGravar`: o cadastrado, manter o atual fora da lista ou nenhum; 422 `MSG_CARGO_FORA`) e o vínculo PADRÃO segue
@@ -701,8 +714,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD), migração `0022`) —
   entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`) — **SEM ordenação
   manual (v1.56.0):** a ordem é a do **código da Centi** (`ORDEM_ORGAOS`, `orgaos.ts`: `entidade_centi` numérico, sem
-  ele por último, depois o nome — a MESMA em todo seletor; `orgaos.ordem` DORMENTE), colunas **Código Centi · Nome ·
-  Sigla** · Órgão/Entidade · Nº interessado · Assinatura · Responsáveis vigentes · Unidades · Conferência e a EDIÇÃO DA
+  ele por último, depois o nome — a MESMA em todo seletor; `orgaos.ordem` DORMENTE), colunas **Código Centi · Nome
+  (inteiro em até 2 linhas, `line-clamp-2`) · Também unidade (coluna própria, sem quebra — v1.58.0) · Sigla** · Órgão/Entidade · Nº interessado · Assinatura · Responsáveis vigentes · Unidades · Conferência e a EDIÇÃO DA
   TABELA (`DataTable.edicoes`, chave `admin:orgaos:tabela` — `CHAVE_TABELA_ORGAOS`; as chaves `admin:` — `chaveDeAdmin` —
   só o ADM grava, `recusaNaChave`); **tocar
   numa linha** abre o banner do órgão e o botão **Unidades (N)** (na linha e no banner) leva a `/painel/orgaos/[id]` = as

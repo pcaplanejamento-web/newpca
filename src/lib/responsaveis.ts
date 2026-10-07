@@ -31,11 +31,12 @@ const colunasPessoa = {
   matricula: responsaveis.matricula,
   cargo: responsaveis.cargo,
   usuarioId: responsaveis.usuarioId,
+  exoneradoEm: responsaveis.exoneradoEm,
   temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
   versao: usuarios.atualizadoEm,
 };
 
-function pessoaDaLinha({ temFoto, versao, ...p }: { id: number; nome: string; matricula: string; cargo: string; usuarioId: number | null; temFoto: number | null; versao: string | null }): PessoaResponsavel {
+function pessoaDaLinha({ temFoto, versao, ...p }: { id: number; nome: string; matricula: string; cargo: string; usuarioId: number | null; exoneradoEm: string | null; temFoto: number | null; versao: string | null }): PessoaResponsavel {
   return { ...p, foto: p.usuarioId != null ? urlFoto(p.usuarioId, !!temFoto, versao) : null };
 }
 
@@ -128,7 +129,7 @@ export async function criarPessoa(d: DadosPessoa): Promise<number> {
   return r.id;
 }
 
-export async function atualizarPessoa(id: number, d: Partial<DadosPessoa>) {
+export async function atualizarPessoa(id: number, d: Partial<DadosPessoa & { exoneradoEm: string | null }>) {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
   if (d.nome !== undefined) {
     set.nome = d.nome.trim();
@@ -137,6 +138,7 @@ export async function atualizarPessoa(id: number, d: Partial<DadosPessoa>) {
   if (d.matricula !== undefined) set.matricula = d.matricula.trim();
   if (d.cargo !== undefined) set.cargo = d.cargo;
   if (d.usuarioId !== undefined) set.usuarioId = d.usuarioId;
+  if (d.exoneradoEm !== undefined) set.exoneradoEm = d.exoneradoEm;
   await getDb().update(responsaveis).set(set).where(eq(responsaveis.id, id));
 }
 

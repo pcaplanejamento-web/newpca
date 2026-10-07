@@ -2,8 +2,9 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { vinculoResponsavelPatchSchema } from "@/lib/rbac-validation";
+import { hojeISO } from "@/lib/reparticao-responsaveis";
 import { atualizarVinculo, cargoParaGravar, conflitoDoVinculo, excluirVinculo, getPessoa, getVinculo, MSG_CARGO_FORA } from "@/lib/responsaveis";
-import { motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
+import { motivoNaoVincular, motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const d = { ...n, funcao };
   const pessoa = await getPessoa(d.responsavelId);
   if (!pessoa) return erro("Pessoa não encontrada na planilha.", 422);
+  const exonerada = motivoNaoVincular(pessoa, d, hojeISO(), d.responsavelId !== antes.responsavelId);
+  if (exonerada) return erro(exonerada, 409);
   const conflito = await conflitoDoVinculo({ ...d, id, orgaoId: antes.orgaoId, reparticaoId: antes.reparticaoId });
   if (conflito) return erro(conflito, 409);
   await atualizarVinculo(id, d);

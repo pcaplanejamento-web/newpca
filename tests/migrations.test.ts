@@ -1090,6 +1090,15 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.throws(() => d.exec("UPDATE responsaveis SET usuario_id = 951 WHERE id = 922"), /UNIQUE/, "um usuário em UMA pessoa");
   });
 
+  it("0101 responsáveis: a data da exoneração (NULL = em exercício)", () => {
+    const d = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f <= "0101~")) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const cols = (d.prepare("PRAGMA table_info(responsaveis)").all() as { name: string }[]).map((c) => c.name);
+    assert.ok(cols.includes("exonerado_em"));
+    d.exec("INSERT INTO responsaveis (id, nome, chave, matricula) VALUES (1, 'Ana', 'ANA', '1')");
+    assert.equal((d.prepare("SELECT exonerado_em AS e FROM responsaveis").get() as { e: string | null }).e, null);
+  });
+
   it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
     const d = new DatabaseSync(":memory:");
     const i78 = arquivos.findIndex((f) => f.startsWith("0078"));

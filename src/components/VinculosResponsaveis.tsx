@@ -1,13 +1,15 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import { TIPOS_ATO } from "@/lib/reparticao-responsaveis";
+import { hojeISO, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import {
   type DadosVinculo,
   type EstadoVinculo,
   estadoDoVinculo,
+  exonerado,
   funcaoDoVinculo,
   lerTipoAto,
+  motivoNaoVincular,
   motivoVinculoInvalido,
   type PessoaResponsavel,
   periodoVinculo,
@@ -26,6 +28,7 @@ import { IconLink, IconPencil, IconPlus, IconTrash, IconUserCheck } from "./icon
 import { LinkExterno } from "./LinkExterno";
 import { Modal } from "./Modal";
 import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
+import { SeletorMultiplo } from "./SeletorMultiplo";
 import { Segmented } from "./Segmented";
 
 /**
@@ -57,7 +60,8 @@ export function textoAto(v: { atoTipo: string | null; atoNumero: string }): stri
 }
 
 /** O texto principal do cartão (a pessoa ou o alvo), o detalhe e o aviso; `avatar` = a foto da pessoa no cartão. */
-export type TituloVinculo = { texto: string; detalhe?: string; aviso?: string; avatar?: { nome: string; foto: string | null } };
+/** `exonerado` = a data da exoneração da pessoa ("AAAA-MM-DD") — o selo cinza no cartão (o vínculo segue valendo). */
+export type TituloVinculo = { texto: string; detalhe?: string; aviso?: string; avatar?: { nome: string; foto: string | null }; exonerado?: string | null };
 
 /**
  * A LISTA de vínculos em DUAS seções — **Padrão** (o cargo da pessoa, o período com o fim em aberto) e **Temporários** (o
@@ -75,6 +79,7 @@ export function ListaVinculos({
   onEditar,
   onRemover,
   desabilitado = false,
+  cargos,
 }: {
   vinculos: readonly VinculoComPessoa[];
   irmaos: (v: VinculoComPessoa) => readonly VinculoComPessoa[];
@@ -86,8 +91,10 @@ export function ListaVinculos({
   onEditar?: (v: VinculoComPessoa) => void;
   onRemover?: (v: VinculoComPessoa) => void;
   desabilitado?: boolean;
+  /** Os cargos na ordem de Configurações (a prioridade): cada seção vai por ela e depois pelo nome. */
+  cargos?: readonly string[];
 }) {
-  const { padroes, temporarios } = separarVinculos(vinculos);
+  const { padroes, temporarios } = separarVinculos(vinculos, cargos);
   const secao = (tipo: TipoVinculo, rotulo: string, lista: VinculoComPessoa[]) => (
     <section className="space-y-2" aria-label={rotulo}>
       <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
@@ -150,6 +157,7 @@ function CartaoVinculo({
         {t.detalhe && <p className="break-words text-[12px] text-muted">{t.detalhe}</p>}
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={TOM_ESTADO[estado]}>{ROTULO_ESTADO_VINCULO[estado]}</Badge>
+          {t.exonerado && <Badge tone="slate">Exonerado em {t.exonerado.split("-").reverse().join("/")}</Badge>}
           <span className={`text-[12px] tabular-nums ${!temp && !v.inicio ? "text-[color:var(--warn)]" : "text-text-2"}`}>{periodoVinculo(v)}</span>
         </div>
         <p className="text-[12.5px] text-text-2">
@@ -184,8 +192,9 @@ function CartaoVinculo({
   );
 }
 
-/** O que o editor manda gravar: a pessoa, o alvo (`o<id>` | `u<id>`) e os dados. */
-export type EnvioVinculo = { responsavelId: number; alvo: string; dados: DadosVinculo };
+/** O que o editor manda gravar: a pessoa, os alvos (`o<id>` | `u<id>` — vários ao CRIAR: a mesma nomeação vincula a
+ * pessoa a várias unidades/órgãos de uma vez; editando, o do vínculo) e os dados. */
+export type EnvioVinculo = { responsavelId: number; alvos: string[]; dados: DadosVinculo };
 
 /** Como o editor abre: novo (com o tipo e, quando já se sabe, a pessoa ou o alvo) ou editando um vínculo. */
 export type AberturaVinculo = { id?: number; responsavelId: number | null; alvo: string; dados: DadosVinculo };
@@ -279,15 +288,18 @@ function CorpoEditor({
   onFechar: () => void;
 }) {
   const [pessoa, setPessoa] = useState(abertura.responsavelId == null ? "" : String(abertura.responsavelId));
-  const [alvo, setAlvo] = useState(abertura.alvo);
+  const [alvosEscolhidos, setAlvos] = useState<string[]>(abertura.alvo ? [abertura.alvo] : []);
   const [d, setD] = useState<DadosVinculo>(abertura.dados);
   const [nova, setNova] = useState<NovaPessoa | null>(null);
   const set = <K extends keyof DadosVinculo>(k: K, v: DadosVinculo[K]) => setD((x) => ({ ...x, [k]: v }));
   const escolhida = pessoas.find((p) => String(p.id) === pessoa) ?? null;
-  const motivo = motivoVinculoInvalido(d);
-  const falta = !pessoa ? "Escolha a pessoa." : !alvo ? "Escolha a unidade ou o órgão." : motivo;
+  // A EXONERAÇÃO: quem já foi exonerado não recebe vínculo novo e nenhum começa depois dela.
+  const novoParaPessoa = !abertura.id || String(abertura.responsavelId) !== pessoa;
+  const exoneracao = escolhida ? motivoNaoVincular(escolhida, d, hojeISO(), novoParaPessoa) : null;
+  const motivo = motivoVinculoInvalido(d) ?? exoneracao;
+  const falta = !pessoa ? "Escolha a pessoa." : alvosEscolhidos.length === 0 ? "Escolha a unidade ou o órgão." : motivo;
   const temp = d.tipo === "temporario";
-  const opcoesPessoas: OpcaoBusca[] = pessoas.map((p) => ({
+  const opcoesPessoas: OpcaoBusca[] = pessoas.filter((p) => String(p.id) === pessoa || !exonerado(p, hojeISO())).map((p) => ({
     valor: String(p.id),
     rotulo: p.nome,
     detalhe: [p.matricula ? `Matrícula ${p.matricula}` : "Sem matrícula", p.cargo].filter(Boolean).join(" · "),
@@ -305,7 +317,7 @@ function CorpoEditor({
 
   async function salvar() {
     if (falta || !pessoa) return;
-    if (await onSalvar({ responsavelId: Number(pessoa), alvo, dados: d }, abertura.id)) onFechar();
+    if (await onSalvar({ responsavelId: Number(pessoa), alvos: alvosEscolhidos, dados: d }, abertura.id)) onFechar();
   }
 
   return (
@@ -351,11 +363,26 @@ function CorpoEditor({
       <section className="space-y-2">
         <span className="block text-[13px] font-semibold text-text">Onde responde</span>
         {alvoFixo || abertura.id ? (
-          <p className="text-sm font-semibold text-text">{alvoFixo?.rotulo ?? alvos.find((a) => a.valor === alvo)?.rotulo ?? "—"}</p>
+          <p className="text-sm font-semibold text-text">{alvoFixo?.rotulo ?? alvos.find((a) => a.valor === alvosEscolhidos[0])?.rotulo ?? "—"}</p>
         ) : alvos.length === 0 ? (
           <Callout kind="info">Nenhuma unidade ou órgão recebe responsáveis aqui pela regra de assinatura.</Callout>
         ) : (
-          <SeletorBusca opcoes={alvos} valor={alvo} onChange={setAlvo} ariaLabel="Unidade ou órgão" placeholder="Buscar unidade ou órgão…" disabled={ocupado} />
+          <>
+            <SeletorMultiplo
+              rotulo="Unidades e órgãos"
+              opcoes={alvos.map((a) => ({ valor: a.valor, rotulo: a.rotulo }))}
+              selecionados={alvosEscolhidos}
+              onChange={setAlvos}
+              disabled={ocupado}
+              suspenso
+              textoVazio="Escolha…"
+            />
+            {alvosEscolhidos.length > 1 && (
+              <p className="text-[12px] text-muted">
+                A mesma nomeação vincula a pessoa a {alvosEscolhidos.length} lugares: {alvosEscolhidos.map((v) => alvos.find((a) => a.valor === v)?.rotulo ?? v).join(" · ")}.
+              </p>
+            )}
+          </>
         )}
       </section>
 
@@ -408,7 +435,7 @@ function CorpoEditor({
         />
       </div>
 
-      {motivo && (d.inicio || d.fim || d.atoLink || d.funcao) && <Callout kind="warn">{motivo}</Callout>}
+      {motivo && (exoneracao || d.inicio || d.fim || d.atoLink || d.funcao) && <Callout kind="warn">{motivo}</Callout>}
 
       <div className="flex justify-end gap-2 border-t border-border pt-3">
         <Button size="sm" variant="secondary" disabled={ocupado} onClick={onFechar}>

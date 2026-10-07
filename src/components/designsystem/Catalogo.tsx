@@ -4010,7 +4010,7 @@ export function Catalogo() {
         </div>
         <EditorVinculo
           abertura={vincDemo}
-          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula, cargo: v.cargo, usuarioId: null, foto: null }))}
+          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula, cargo: v.cargo, usuarioId: null, foto: null, exoneradoEm: null }))}
           cargos={["Secretária", "Diretor", "Secretário Adjunto"]}
           alvos={[]}
           alvoFixo={{ rotulo: "SMS — Secretaria Municipal de Saúde · PMRV" }}
