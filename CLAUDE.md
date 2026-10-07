@@ -2290,7 +2290,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   vínculo), embaixo "Incluir ações futuras desta unidade" (= "as demais"; ou a nota de quem já as leva) e as de outros
   vínculos numa linha só com cadeado ("Em outros vínculos: 2 em GGIM", a lista na dica); botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`). A gravação
   é a da aba Vínculos (`useGravacaoVinculos`, `OrcamentoVinculosAba.tsx`) → `router.refresh` (o orçamento do PCA recalcula)
-  abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
+  abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração; a MESMA
+  escolha fica À VISTA na barra do PCA × Orçamento — **`SeletorVisaoPca`**, `SelectField compacto` no vão entre a faixa e o
+  Relatório, travado sem Configurar no PCA; os dois gravam pelo hook único `useVisaoDoPca`) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
   os lançamentos do orçamento do ano (os do Comparativo — sem consulta nova); o Comparativo acompanha a visão do PCA quando
   ela muda (`visaoInicial` re-sincroniza) e o KPI Dotação diz QUAL orçamento do ano é usado (o importado por último); KPIs Dotação <ano> (filtrada pela visão) · Planejado ·

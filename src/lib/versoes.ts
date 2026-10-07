@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.55.0",
+    data: "2026-10-07",
+    titulo: "Visão do orçamento à vista no PCA",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "PCA × Orçamento: o seletor “Visão” na barra da tabela — escolher a visão do orçamento do PCA na hora, sem abrir a engrenagem (quem não configura o PCA vê a visão em uso, travada).", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.54.2",
     data: "2026-10-07",
     titulo: "DFDs com textos longos aceitos",

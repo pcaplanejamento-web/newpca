@@ -39,7 +39,7 @@ import { toast } from "./Toast";
 import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
 import { DicaFlutuante } from "./DicaFlutuante";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
-import { VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
+import { SeletorVisaoPca, VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 
 type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
@@ -539,6 +539,11 @@ export function OrcamentoPca({
                 { value: "dentro", label: `Dentro (${linhas.length - acima.length})` },
               ]}
             />
+            {(podePublicar || visoes.length > 0) && (
+              <div className="w-full min-w-[12rem] sm:w-auto sm:max-w-xs sm:flex-1">
+                <SeletorVisaoPca pcaId={dados.pcaId} visaoId={dados.visaoId ?? null} visoes={visoes} podeEscolher={podePublicar} />
+              </div>
+            )}
             <div className="flex items-center gap-2 lg:ml-auto">
               {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
               {botaoVisao}

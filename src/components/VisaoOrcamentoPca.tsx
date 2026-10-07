@@ -13,6 +13,82 @@ import { Modal } from "./Modal";
 import { toast } from "./Toast";
 
 /**
+ * A gravação da VISÃO do PCA (fonte única do modal da engrenagem e do `SeletorVisaoPca` da barra): `PATCH /api/pca/[id]`
+ * `{orcamentoVisaoId}` → aviso + `router.refresh` (KPIs, tabela e relatório recalculam). Falhou → volta ao gravado.
+ */
+export function useVisaoDoPca(pcaId: number, visaoId: number | null) {
+  const router = useRouter();
+  const [escolha, setEscolha] = useState<number | null>(visaoId);
+  const [gravando, setGravando] = useState(false);
+  // A tela recarregou com outra visão gravada (aqui ou pela engrenagem) — ela vale.
+  useEffect(() => setEscolha(visaoId), [visaoId]);
+
+  async function gravar(id: number | null, msg = "Visão do orçamento do PCA salva.") {
+    if (gravando) return;
+    setGravando(true);
+    setEscolha(id);
+    try {
+      const r = await fetch(`/api/pca/${pcaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orcamentoVisaoId: id }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar a visão do PCA.");
+      toast.success(msg);
+      router.refresh();
+    } catch (e) {
+      setEscolha(visaoId);
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar a visão do PCA.");
+    } finally {
+      setGravando(false);
+    }
+  }
+  return { escolha, setEscolha, gravando, gravar };
+}
+
+/**
+ * A VISÃO do orçamento do PCA NA BARRA do PCA × Orçamento (à vista, sem abrir a engrenagem): `SelectField compacto` com o
+ * orçamento inteiro e as visões salvas (o resumo de cada uma na dica); escolher grava na hora no PCA (`useVisaoDoPca`). Sem
+ * `podeEscolher`, mostra a visão em uso travada. Editar/criar visões segue pela engrenagem.
+ */
+export function SeletorVisaoPca({
+  pcaId,
+  visaoId,
+  visoes,
+  podeEscolher,
+}: {
+  pcaId: number;
+  visaoId: number | null;
+  visoes: VisaoOrcamento[];
+  /** Configura o PCA (escolher a visão dele). */
+  podeEscolher: boolean;
+}) {
+  const { escolha, gravando, gravar } = useVisaoDoPca(pcaId, visaoId);
+  const atual = visoes.find((v) => v.id === escolha) ?? null;
+  const dica = atual ? `${atual.nome} — ${resumoVisao(atual.filtros)}` : "Orçamento inteiro (sem visão)";
+  return (
+    <div className="min-w-0" title={podeEscolher ? dica : `${dica} — só quem configura o PCA troca a visão`}>
+      <SelectField
+        compacto
+        label="Visão"
+        value={escolha ?? ""}
+        disabled={!podeEscolher || gravando}
+        aria-busy={gravando || undefined}
+        onChange={(e) => void gravar(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">Orçamento inteiro</option>
+        {visoes.map((v) => (
+          <option key={v.id} value={v.id} title={resumoVisao(v.filtros)}>
+            {v.nome}
+          </option>
+        ))}
+      </SelectField>
+    </div>
+  );
+}
+
+/**
  * A VISÃO DO ORÇAMENTO do PCA pela ENGRENAGEM da aba Orçamento (contêiner): escolher a visão (grava na hora no PCA —
  * `PATCH /api/pca/[id]`, o mesmo da Configuração) e, para quem configura o Orçamento, EDITAR a visão escolhida ou criar
  * uma NOVA (que já vira a do PCA) no MESMO editor da tela do orçamento (`EditorVisaoOrcamento`). Mostra o Σ que cada
@@ -39,14 +115,13 @@ export function VisaoOrcamentoPca({
   podeEditarVisao: boolean;
 }) {
   const router = useRouter();
-  const [escolha, setEscolha] = useState<number | null>(visaoId);
-  const [gravando, setGravando] = useState(false);
+  const { escolha, setEscolha, gravando, gravar } = useVisaoDoPca(pcaId, visaoId);
   const [editor, setEditor] = useState<VisaoOrcamento | "nova" | null>(null);
 
-  // Abriu (ou a tela recarregou) — parte do que está gravado no PCA.
+  // Abriu — parte do que está gravado no PCA.
   useEffect(() => {
     if (aberto) setEscolha(visaoId);
-  }, [aberto, visaoId]);
+  }, [aberto, visaoId, setEscolha]);
 
   const visao = visoes.find((v) => v.id === escolha) ?? null;
   const total = useMemo(() => (itens ?? []).reduce((s, i) => s + i.valorInicial, 0), [itens]);
@@ -54,27 +129,6 @@ export function VisaoOrcamentoPca({
   const soma = naVisao.reduce((s, i) => s + i.valorInicial, 0);
   const ausentes = useMemo(() => (itens && visao ? contarAusentes(valoresAusentes(itens, visao.filtros)) : 0), [itens, visao]);
   const outros = (visao?.pcas ?? []).length - (visaoId != null && visaoId === visao?.id ? 1 : 0);
-
-  async function gravar(id: number | null, msg = "Visão do orçamento do PCA salva.") {
-    setGravando(true);
-    try {
-      const r = await fetch(`/api/pca/${pcaId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orcamentoVisaoId: id }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar a visão do PCA.");
-      setEscolha(id);
-      toast.success(msg);
-      router.refresh();
-    } catch (e) {
-      setEscolha(visaoId);
-      toast.error(e instanceof Error ? e.message : "Não foi possível salvar a visão do PCA.");
-    } finally {
-      setGravando(false);
-    }
-  }
 
   return (
     <>
