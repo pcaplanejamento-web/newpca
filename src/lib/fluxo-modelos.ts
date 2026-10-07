@@ -160,6 +160,34 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     },
   },
   {
+    id: "dfds-de-protocolo-centi",
+    nome: "DFDs de um protocolo × Centi (um por vez)",
+    descricao: "Lê os DFDs de um protocolo do sistema, UM POR VEZ: busca cada um na Centi, compara e volta para o próximo; no fim, executado.",
+    ajuda: {
+      funciona: "O “Ler do sistema” identifica os DFDs do protocolo informado (nº ou Id) e entrega um de cada vez; cada DFD é buscado na Centi pelo nº de planejamento e comparado (nº, tipo, objeto, valor e itens).",
+      executa: "Informe o protocolo nos Dados de entrada e execute com a extensão da Centi pronta. O laço guarda o estado: lê um, procura na Centi, volta e lê o próximo.",
+      resultado: "As divergências apontadas na Análise e, ao terminar, todos os DFDs comparados com executado = sim.",
+    },
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("ler1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "protocolo", valor: "", entrega: "umPorVez" }),
+        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 1 }),
+        n("cmp1", "dados.compararDfdCenti", 880, 160, { tolerancia: 0.01, objeto: true }),
+        n("err1", "erros.apontar", 1184, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }),
+      ],
+      conexoes: [
+        c("inicio1", "ler1"),
+        c("ler1", "busca1", "item"),
+        c("busca1", "cmp1"),
+        c("cmp1", "err1", "divergentes"),
+        c("cmp1", "ler1", "divergentes", "volta"),
+        c("cmp1", "ler1", "conformes", "volta"),
+      ],
+    },
+  },
+  {
     id: "conferir-dfds-cm002",
     nome: "Conferir DFDs × Centi",
     descricao:

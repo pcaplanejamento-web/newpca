@@ -4268,6 +4268,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   tipo dos modelos está na paleta. **CM002 robusta (extensão 1.18.0):** `planejamentosCm002(j, conhecida)` aceita lista
   vazia e linha sem finalidade na consulta aprendida; `comPagina` (`semPaginacao` = página `null`) — a Centi que recusa a
   página única é lida página a página; o nó `centi.cm002` só falha se TODAS as entidades falharem.
+  **v1.43.0 — `sistema.ler` ("Ler do sistema"):** núcleo puro **`fluxo-ler-sistema.ts`** (`lerDoSistema(fontes, objeto,
+  busca, valores)`: protocolos por nº/Id · DFDs por planejamento/nº/protocolo · itens por planejamento/nº do DFD/protocolo/
+  produto; `BUSCAS`; `valoresProcurados` — vários por ";"/":" e `{{campo}}` do item que chega; `marcarExecutado`). Fontes
+  lidas UMA vez por execução (`fontesDoSistema`, `host.__cache`: protocolos do host, DFDs da `execucao-dfds`, itens da rota
+  ADM nova `GET /api/admin/automacao/itens-sistema` = `listarItensDfds()`). Entrega "Tudo" (porta `saida` + `fim`) ou "Um
+  por vez" (porta `item` → corpo → `volta`; `fim` = os que voltaram com `executado:true`, `totalLido`). O motor ganhou
+  **`DefNo.iterador`** (o Laço e o Ler do sistema): recebe pela entrada OU pela volta e a volta é o único ciclo permitido
+  (antes preso a `TIPO_LACO`). Modelo `dfds-de-protocolo-centi`. Testes: `tests/fluxo-ler-sistema.test.ts`.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

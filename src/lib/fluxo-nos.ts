@@ -11,6 +11,7 @@ import {
   chaveJuncao,
   comparar,
   chaveDoItem,
+  type ContextoNo,
   type DefNo,
   executarEmPool,
   executarFluxo,
@@ -33,6 +34,7 @@ import {
   TIPO_LACO,
 } from "./fluxo-core.ts";
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
+import { BUSCAS, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 
 export const CATEGORIAS: { valor: CategoriaNo; rotulo: string; cor: string }[] = [
@@ -272,6 +274,71 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "sistema.ler",
+    categoria: "sistema",
+    rotulo: "Ler do sistema",
+    descricao:
+      "Identifica protocolos, DFDs ou itens do sistema: todos (geral) ou um recorte (os DFDs de um protocolo, os itens de um DFD, um produto). Entrega em lista ou UM POR VEZ (ligue o fim do corpo à “volta”); ao terminar, “fim” leva executado = sim.",
+    icone: "file",
+    entradas: ["entrada", PORTA_VOLTA],
+    saidas: ["saida", "item", "fim"],
+    rotulosPortas: { saida: "Todos", item: "Próximo", volta: "Volta", fim: "Fim (executado)" },
+    campos: [
+      {
+        chave: "objeto",
+        rotulo: "Ler",
+        tipo: "selecao",
+        padrao: "dfds",
+        opcoes: [
+          { valor: "protocolos", rotulo: "Protocolos" },
+          { valor: "dfds", rotulo: "DFDs" },
+          { valor: "itens", rotulo: "Itens (produtos)" },
+        ],
+      },
+      { chave: "buscaProtocolos", rotulo: "Quais", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.protocolos, quando: { campo: "objeto", valores: ["protocolos"] } },
+      { chave: "buscaDfds", rotulo: "Quais", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.dfds, quando: { campo: "objeto", valores: ["dfds"] } },
+      { chave: "buscaItens", rotulo: "Quais", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.itens, quando: { campo: "objeto", valores: ["itens"] } },
+      {
+        chave: "valor",
+        rotulo: "Valor procurado",
+        tipo: "texto",
+        entrada: true,
+        ajuda: "Vários por ; — ou {{campo}} do item que chega (ex.: {{planejamento}}). Vazio em “Todos”.",
+      },
+      {
+        chave: "entrega",
+        rotulo: "Entregar",
+        tipo: "selecao",
+        padrao: "lista",
+        opcoes: [
+          { valor: "lista", rotulo: "Tudo de uma vez (Todos)" },
+          { valor: "umPorVez", rotulo: "Um por vez (Próximo → Volta)" },
+        ],
+      },
+    ],
+    rodaSemItens: true,
+    entregaParcial: true,
+    iterador: true,
+    executar: async (e, c, ctx, est): Promise<Portas> => {
+      if (e.entrada) {
+        const objeto = (str(c.objeto, "dfds") as ObjetoLeitura) in BUSCAS ? (str(c.objeto, "dfds") as ObjetoLeitura) : "dfds";
+        const busca = str(objeto === "protocolos" ? c.buscaProtocolos : objeto === "dfds" ? c.buscaDfds : c.buscaItens, "todos");
+        const valores = valoresProcurados(str(c.valor), e.entrada);
+        if (busca !== "todos" && !valores.length) throw new Error("Informe o valor procurado (ou {{campo}} do item que chega).");
+        const lidos = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
+        if (str(c.entrega, "lista") !== "umPorVez") return { saida: lidos, fim: marcarExecutado([], lidos.length) };
+        est.fila = [...lidos];
+        est.total = lidos.length;
+        est.acumulado = [];
+      } else (est.acumulado as Item[]).push(...(e[PORTA_VOLTA] ?? []));
+      const fila = (est.fila ?? []) as Item[];
+      const proximo = fila.shift();
+      if (!proximo) return { fim: marcarExecutado(est.acumulado as Item[], est.total as number) };
+      ctx.aviso(`${(est.total as number) - fila.length} de ${est.total as number}`);
+      return { item: [proximo] };
+    },
+  },
+  {
     tipo: "sistema.completarDfd",
     categoria: "sistema",
     rotulo: "Completar com o DFD do sistema",
@@ -497,6 +564,7 @@ const NOS: DefNo[] = [
     campos: [{ chave: "tamanho", rotulo: "Itens por lote", tipo: "numero", padrao: 1 }],
     rodaSemItens: true,
     entregaParcial: true,
+    iterador: true,
     executar: async (e, c, ctx, est): Promise<Portas> => {
       const tam = Math.min(1000, Math.max(1, numeroDe(c.tamanho) ?? 1));
       if (e.entrada) {
@@ -1117,6 +1185,33 @@ export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));
 export const NOS_POR_CATEGORIA = CATEGORIAS.map((c) => ({ ...c, nos: NOS.filter((n) => n.categoria === c.valor) }));
 
 /** Os protocolos do sistema (um item por protocolo, ou por DFD). */
+/** As fontes do "Ler do sistema" — cada uma lida UMA vez por execução (o cache do host vale para os subfluxos). */
+async function fontesDoSistema(ctx: ContextoNo, objeto: ObjetoLeitura): Promise<FontesSistema> {
+  const cache = ctx.host.__cache as Map<string, unknown> | undefined;
+  const uma = async (k: string, ler: () => Promise<Item[]>) => {
+    let p = cache?.get(k) as Promise<Item[]> | undefined;
+    if (!p) {
+      p = ler();
+      cache?.set(k, p);
+    }
+    return p.catch((x) => {
+      cache?.delete(k);
+      throw x;
+    });
+  };
+  const protocolos = protocolosDoSistema({}, ctx.host);
+  const dfds = objeto === "dfds" ? await uma("dfds", async () => (await (REGISTRO_NOS.get("sistema.dfds") as DefNo).executar({ entrada: [{}] }, {}, ctx, {})).saida ?? []) : [];
+  const itens =
+    objeto === "itens"
+      ? await uma("itens", async () => {
+          const r = await ctx.api("/api/admin/automacao/itens-sistema");
+          if (!r.ok || !Array.isArray(r.itens)) throw new Error(r.error || "Não consegui ler os itens do sistema.");
+          return r.itens.map(obj);
+        })
+      : [];
+  return { protocolos, dfds, itens };
+}
+
 function protocolosDoSistema(c: Record<string, unknown>, host: Record<string, unknown>): Item[] {
   const ps = (host.protocolos ?? []) as Item[];
   if (c.dfds !== true) return ps.map((p) => ({ ...p, totalDfds: Array.isArray(p.dfds) ? p.dfds.length : 0 }));

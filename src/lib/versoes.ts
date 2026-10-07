@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.43.0",
+    data: "2026-10-07",
+    titulo: "Nó “Ler do sistema” e laços em qualquer leitura",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Nó “Ler do sistema”: protocolos, DFDs ou itens — todos ou um recorte (DFDs de um protocolo, itens de um DFD, um produto) por nº, Id, planejamento ou código, inclusive pelo {{campo}} do item que chega.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Entrega tudo de uma vez ou UM POR VEZ (Próximo → Volta): guarda o estado, lê o próximo e, ao terminar, “Fim” leva executado = sim.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Modelo “DFDs de um protocolo × Centi (um por vez)”.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.42.0",
     data: "2026-10-07",
     titulo: "Nós padronizados e CM002 robusta",

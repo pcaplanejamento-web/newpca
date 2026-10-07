@@ -97,6 +97,8 @@ export type DefNo = {
   rodaSemItens?: boolean;
   /** Entrega só as portas devolvidas (o Laço: "lote" e "fim" não saem juntos). */
   entregaParcial?: boolean;
+  /** ITERADOR (o Laço, o Ler do sistema um por vez): recebe pela "entrada" OU pela "volta" — o único ciclo permitido. */
+  iterador?: boolean;
   /** Os itens que o nó daria SEM executar (dados já carregados no host) — a tabela de seleção do painel antes de rodar. */
   previa?: (config: Record<string, unknown>, host: Record<string, unknown>) => Item[];
   executar: (entradas: Portas, config: Record<string, unknown>, ctx: ContextoNo, estado: EstadoNo) => Promise<Portas>;
@@ -208,10 +210,9 @@ export function campoVisivel(c: CampoNo, config: Record<string, unknown>, campos
   return c.quando.valores.includes(String(v ?? ""));
 }
 
-/** Ciclo que NÃO passa pela porta "volta" de um Laço (o único ciclo permitido). */
+/** Ciclo que NÃO passa pela porta "volta" de um ITERADOR (o único ciclo permitido). */
 export function temCicloSemLaco(g: Grafo, reg: Registro): boolean {
-  const arestas = g.conexoes.filter((c) => !(c.entrada === PORTA_VOLTA && g.nos.find((n) => n.id === c.para)?.tipo === TIPO_LACO));
-  void reg;
+  const arestas = g.conexoes.filter((c) => !(c.entrada === PORTA_VOLTA && reg.get(g.nos.find((n) => n.id === c.para)?.tipo ?? "")?.iterador));
   const adj = new Map<string, string[]>();
   for (const c of arestas) adj.set(c.de, [...(adj.get(c.de) ?? []), c.para]);
   const cor = new Map<string, 0 | 1 | 2>();
@@ -502,7 +503,7 @@ export async function executarFluxo(
     const n = nos.get(id);
     const d = n && reg.get(n.tipo);
     if (!n || !d) return false;
-    if (n.tipo === TIPO_LACO) return prontaPorta(id, "entrada") || prontaPorta(id, PORTA_VOLTA);
+    if (d.iterador) return prontaPorta(id, "entrada") || prontaPorta(id, PORTA_VOLTA);
     const ligadas = d.entradas.filter((p) => entrando(id, p).length);
     return ligadas.length > 0 && ligadas.every((p) => prontaPorta(id, p));
   };
@@ -520,8 +521,8 @@ export async function executarFluxo(
     const cx = caixa.get(id) ?? new Map();
     const ent: Portas = {};
     const n = nos.get(id);
-    // O laço consome UMA porta por vez (volta antes de entrada nova).
-    const portas = n?.tipo === TIPO_LACO ? (prontaPorta(id, PORTA_VOLTA) ? [PORTA_VOLTA] : ["entrada"]) : d.entradas;
+    // O iterador consome UMA porta por vez (volta antes de entrada nova).
+    const portas = d.iterador ? (prontaPorta(id, PORTA_VOLTA) ? [PORTA_VOLTA] : ["entrada"]) : d.entradas;
     for (const p of portas) {
       ent[p] = entrando(id, p).flatMap((c) => cx.get(chaveC(c)) ?? []);
       for (const c of entrando(id, p)) cx.delete(chaveC(c));
