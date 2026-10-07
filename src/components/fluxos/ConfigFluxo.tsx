@@ -17,7 +17,7 @@ const TOPICOS: { chave: keyof AjudaFluxo; titulo: string; icone: ReactNode; dica
 /** O (?) de UMA automação: como funciona, como executa e o resultado (cadastrados nas configurações dela). */
 export function AjudaDoFluxo({ titulo, ajuda }: { titulo: string; ajuda: AjudaFluxo }) {
   return (
-    <Ajuda botao titulo={titulo} rotulo="Sobre a automação">
+    <Ajuda botao="sm" titulo={titulo} rotulo="Sobre a automação">
       {ajudaVazia(ajuda) ? (
         <p className="text-muted">Sem explicação ainda — cadastre em Configurações da automação.</p>
       ) : (

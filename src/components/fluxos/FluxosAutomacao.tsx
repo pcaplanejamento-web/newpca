@@ -925,6 +925,9 @@ function EscolherNovoFluxo({
   );
 }
 
+/** O diagrama com um nó a milhares de pixels dos outros (o antigo organizar empurrava o nó do "erro"). */
+const espalhado = (g: Grafo) => g.nos.length > 1 && Math.max(...g.nos.map((n) => n.y)) - Math.min(...g.nos.map((n) => n.y)) > 6000;
+
 function EditorFluxo({
   fluxo,
   rodando,
@@ -948,7 +951,8 @@ function EditorFluxo({
   onParar: () => void;
   onExcluir: () => void;
 }) {
-  const [grafo, setGrafo] = useState<Grafo>(fluxo.grafo);
+  // Um nó jogado para longe (a saída "erro" organizada antes da v1.41.0 — linha "infinita") reorganiza ao abrir.
+  const [grafo, setGrafo] = useState<Grafo>(() => (espalhado(fluxo.grafo) ? organizarGrafo(fluxo.grafo, REGISTRO_NOS) : fluxo.grafo));
   const [nome, setNome] = useState(fluxo.nome);
   const [freq, setFreq] = useState<Frequencia>(fluxo.frequencia);
   const [ativo, setAtivo] = useState(fluxo.ativo);

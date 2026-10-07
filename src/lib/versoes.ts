@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.41.0",
+    data: "2026-10-07",
+    titulo: "Diagramas mais limpos",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Ligações que saem da mesma porta dobram no mesmo ponto — uma sobe, a outra desce, sem linha sobre linha.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Organizar alinha a entrada de cada nó com a saída de quem chega: as linhas saem retas, sem degrau, e os nós ficam próximos.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O nó ligado à saída “erro” não vai mais para longe (a linha “infinita” para baixo); o diagrama afetado se reorganiza ao abrir.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O botão (?) da barra do editor ficou no mesmo desenho dos demais botões.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.40.0",
     data: "2026-10-07",
     titulo: "(?) em cada componente do fluxo",

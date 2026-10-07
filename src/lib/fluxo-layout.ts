@@ -73,11 +73,10 @@ export function organizarGrafo(g: Grafo, reg: Registro): Grafo {
     colunas.set(k, [...(colunas.get(k) ?? []), id]);
   }
   const pos = new Map<string, Ponto>();
-  const ordemSaida = (c: Grafo["conexoes"][number]) => {
-    const d = reg.get(porId.get(c.de)?.tipo ?? "");
-    const saidas = portasDo(d)?.saidas ?? [];
-    // A saída "erro" por último: o caminho feliz fica em cima.
-    return c.saida === SAIDA_ERRO ? 1000 : Math.max(0, saidas.indexOf(c.saida));
+  // A posição da porta na lista do nó (a saída "erro" é a última — o caminho feliz fica em cima).
+  const indicePorta = (id: string, lado: "entradas" | "saidas", porta: string) => {
+    const lista = portasDo(reg.get(porId.get(id)?.tipo ?? ""))?.[lado] ?? [];
+    return porta === SAIDA_ERRO && lado === "saidas" ? lista.length : Math.max(0, lista.indexOf(porta));
   };
   for (const k of [...colunas.keys()].sort((a, b) => a - b)) {
     const col = colunas.get(k) ?? [];
@@ -85,12 +84,14 @@ export function organizarGrafo(g: Grafo, reg: Registro): Grafo {
     const peso = (id: string) => {
       const cs = entram.get(id) ?? [];
       if (!cs.length) return Number.POSITIVE_INFINITY;
-      return cs.reduce((s, c) => s + (pos.get(c.de)?.y ?? 0) + ordemSaida(c) * PASSO_PORTA, 0) / cs.length;
+      // O nó fica com a ENTRADA na altura da saída de quem chega — a linha sai RETA (sem degrau).
+      return cs.reduce((s, c) => s + (pos.get(c.de)?.y ?? 0) + (indicePorta(c.de, "saidas", c.saida) - indicePorta(id, "entradas", c.entrada)) * PASSO_PORTA, 0) / cs.length;
     };
     const ordenada = [...col].sort((a, b) => peso(a) - peso(b) || ids.indexOf(a) - ids.indexOf(b));
     let y = 0;
     for (const id of ordenada) {
-      const alvo = Number.isFinite(peso(id)) ? Math.max(y, snap(peso(id))) : y;
+      // Sem arredondar à grade: o passo das portas (24) não é múltiplo dela e a linha ganharia um degrau.
+      const alvo = Number.isFinite(peso(id)) ? Math.max(y, Math.round(peso(id))) : y;
       pos.set(id, { x: k * (LARGURA_NO + VAO_COLUNA), y: alvo });
       y = alvo + alturaNo(reg.get(porId.get(id)?.tipo ?? "")) + VAO_LINHA;
     }
@@ -192,6 +193,20 @@ export function rotasDoGrafo(g: Grafo, reg: Registro): (Ponto[] | null)[] {
   // As ajustadas à mão primeiro: as automáticas desviam delas.
   const ordem = g.conexoes.map((c, i) => i).sort((p, q) => Number(g.conexoes[q].x != null) - Number(g.conexoes[p].x != null));
   const saida: (Ponto[] | null)[] = g.conexoes.map(() => null);
+  // As que saem da MESMA porta dobram no MESMO ponto (a mais perto): uma vai para cima, a outra para baixo — sem uma
+  // correr por cima da outra no trecho de saída. As que vão para o mesmo lado ganham faixas vizinhas (abaixo).
+  const forquilha = new Map<string, number>();
+  for (const c of g.conexoes) {
+    const a = nos.get(c.de);
+    const b = nos.get(c.para);
+    if (!a || !b || c.x != null) continue;
+    const k = `${c.de}|${c.saida}`;
+    const sai = posPorta(a, reg.get(a.tipo), "saida", c.saida).x + FOLGA * 1.5;
+    const entra = b.x - FOLGA * 1.5;
+    if (entra >= sai) forquilha.set(k, Math.min(forquilha.get(k) ?? Number.POSITIVE_INFINITY, snap((sai + entra) / 2)));
+  }
+  const juntas = new Map<string, number>();
+  for (const c of g.conexoes) juntas.set(`${c.de}|${c.saida}`, (juntas.get(`${c.de}|${c.saida}`) ?? 0) + 1);
   for (const i of ordem) {
     const c = g.conexoes[i];
     const a = nos.get(c.de);
@@ -201,7 +216,8 @@ export function rotasDoGrafo(g: Grafo, reg: Registro): (Ponto[] | null)[] {
     const pa = posPorta(a, reg.get(a.tipo), "saida", c.saida);
     const pb = posPorta(b, reg.get(b.tipo), "entrada", c.entrada);
     const rota = (x?: number) => rotaOrtogonal(pa, pb, obst, caixas.get(c.de), caixas.get(c.para), x);
-    let r = rota(c.x);
+    const k = `${c.de}|${c.saida}`;
+    let r = rota(c.x ?? ((juntas.get(k) ?? 0) > 1 ? forquilha.get(k) : undefined));
     if (c.x == null) {
       const base = verticais(r).find((v) => v.x !== pa.x && v.x !== pb.x)?.x;
       if (base != null && verticais(r).some((v) => usadas.some((u) => sobrepoe(v, u)))) {

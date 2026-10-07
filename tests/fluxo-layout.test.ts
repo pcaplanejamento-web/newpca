@@ -78,3 +78,26 @@ test("todas as ligações: sem linha sobre linha, setas no meio, cores por nó e
   assert.equal(dobraDaRota(manual as never)?.x, 320, "a dobra ajustada à mão vale");
   assert.equal(organizarGrafo({ ...g, conexoes: [{ ...g.conexoes[1], x: 320 }] }, REGISTRO_NOS).conexoes[0].x, undefined);
 });
+
+test("organizar: a saída erro não joga o nó para longe e a linha sai reta", () => {
+  const g: Grafo = {
+    v: 1,
+    nos: [no("i", "gatilho.inicio"), no("c", "centi.cm002"), no("e", "erros.apontar"), no("f", "dados.filtrar")],
+    conexoes: [con("i", "c"), con("c", "e", "erro"), con("c", "f")],
+  };
+  const o = organizarGrafo(g, REGISTRO_NOS);
+  const y = (id: string) => o.nos.find((n) => n.id === id)?.y ?? 0;
+  assert.ok(y("e") - y("c") < 400, "o nó do erro fica perto");
+  const r = rotasDoGrafo(o, REGISTRO_NOS)[2] ?? [];
+  assert.equal(r.length, 2, "linha reta, sem degrau");
+});
+
+test("ligações da mesma porta dobram no mesmo ponto e não correm uma sobre a outra", () => {
+  const g: Grafo = {
+    v: 1,
+    nos: [no("i", "gatilho.inicio", 0, 200), no("a", "dados.filtrar", 312, 0), no("b", "dados.ordenar", 624, 400)],
+    conexoes: [con("i", "a"), con("i", "b")],
+  };
+  const [ra, rb] = rotasDoGrafo(g, REGISTRO_NOS);
+  assert.equal(dobraDaRota(ra ?? [])?.x, dobraDaRota(rb ?? [])?.x, "a mesma dobra: uma sobe, outra desce");
+});

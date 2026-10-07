@@ -4259,6 +4259,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   textos da ajuda — controlado, o Salvar do editor grava). **`AjudaNo`** (v1.40.0, `fluxos/AjudaNo.tsx`): o (?) de cada
   COMPONENTE (descrição, recebe, entrega, configuração) no nó do diagrama, na paleta, no `PainelNo` e nas etapas do
   `PainelFluxo` (para o ponteiro — não arrasta o nó). O "Em branco" do Novo fluxo também se arrasta até a lista (`m:`).
+  **v1.41.0 — diagramas:** `organizarGrafo` alinha a ENTRADA do nó à saída de quem chega (índice das portas, sem `snap` —
+  linha reta) e a saída "erro" conta como a última porta (antes ×1000 jogava o nó para longe; `espalhado` reorganiza ao
+  abrir); `rotasDoGrafo` faz as ligações da MESMA porta dobrarem no mesmo ponto (`forquilha` — uma sobe, outra desce).
+  `Ajuda botao="sm"` = o (?) no tamanho dos `Button size="sm" variant="icon"`.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

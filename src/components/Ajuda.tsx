@@ -21,8 +21,8 @@ export function Ajuda({
   rotulo?: string;
   /** COMPACTA: o "(?)" pequeno AO LADO DO RÓTULO de um campo (visual de 20px, área de toque de 44px) — abre à esquerda. */
   compacta?: boolean;
-  /** BOTÃO: o "(?)" no MESMO desenho dos botões só-ícone pequenos (`Button size="xs" variant="icon"`) — numa barra deles. */
-  botao?: boolean;
+  /** BOTÃO: o "(?)" no MESMO desenho dos botões só-ícone (`Button variant="icon"`) — numa barra deles; `true` = `xs`. */
+  botao?: boolean | "xs" | "sm";
 }) {
   return (
     <Dropdown
@@ -32,7 +32,9 @@ export function Ajuda({
       width={compacta ? 300 : 360}
       triggerClassName={
         botao
-          ? "grid h-11 w-11 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 lg:h-[calc(var(--h-control-sm)-6px)] lg:w-[calc(var(--h-control-sm)-6px)]"
+          ? `h-11 w-11 shrink-0 justify-center !rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 ${
+              botao === "sm" ? "lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]" : "lg:h-[calc(var(--h-control-sm)-6px)] lg:w-[calc(var(--h-control-sm)-6px)]"
+            }`
           : compacta
           ? "relative grid h-5 w-5 place-items-center rounded-full text-muted transition-colors after:absolute after:-inset-3 after:content-[''] hover:text-accent"
           : "grid h-11 w-11 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
