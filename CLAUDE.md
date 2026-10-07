@@ -4206,7 +4206,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   entidade) · Sistema (DFDs, Protocolos) · Leitura (Ler protocolo — `fluxo-navegador.ts`: emissão POR CÓDIGO + leitura do
   PDF) · Lógica (SE, Comparar A × B → iguais/diferentes/só em A/só em B, Laço até o fim, Juntar) · Dados (Filtrar, Definir
   campos, Ordenar, Remover duplicados, Agrupar e somar) · Erros (Apontar erros → relatório) · Saída (Gravar execução nos
-  DFDs, Avisar). Modelos prontos em `fluxo-modelos.ts`. **Editor:** paleta (tocar = acrescenta ligado ao nó marcado;
+  DFDs, Avisar). Modelos prontos em `fluxo-modelos.ts` (com `frequencia`/`ativo` — o POST os aceita): **Inclusão PCA — conferir na CM002 e
+  protocolar** (v1.25.0, a cada 120 min: Protocolos Em análise da repartição fixa → Laço → Ler → filtra assunto INCLUS →
+  **`dados.desdobrar`** (um item por DFD, com o protocolo do pai) × CM002 pelo planejamento → aponta fora da CM002/cancelado
+  → **`saida.importarProtocolo`** (entradas entrada + apontamentos, casados por protocolo/ano). A importação headless é
+  **`importar-protocolo-auto.ts`** (`lerProtocoloCompleto` = índice + parse completo + OCR + normalização; `importarProtocolo`
+  = a régua da Mesa — pula o já cadastrado/DFD existente/PCA sem cadastro/trava do ADM/duplicado/DFD em erro; grava com
+  `origem:"automacao"` e os apontamentos na observação). A leitura fica num cache da execução (`CacheLeitura`) — o
+  importar não emite de novo; um protocolo que falha vira `leitura:"falha"` e segue. **Editor:** paleta (tocar = acrescenta ligado ao nó marcado;
   arrastar = solta no quadro), `CanvasFluxo` (DS — grade, pan, zoom, portas, curvas, Delete), `PainelNo` (o formulário
   do tipo + o seletor de "dado buscado" pelos campos da última execução + a saída numa tabela), relatório da execução.
   **Agendador:** com a tela aberta e a extensão pronta, a cada minuto roda o fluxo ligado cuja hora chegou

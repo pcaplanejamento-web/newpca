@@ -121,7 +121,7 @@ export const dfdMetaSchema = z.object({
   /** Canal da gravação (histórico): protocolação, reenvio do protocolo, DFD avulso ou a SOBRESCRITA de um
    * DFD por um arquivo novo (banner do DFD). Ausente ⇒ o servidor deduz (com protocolo = protocolação;
    * sem = avulso). */
-  origem: z.enum(["protocolacao", "reenvio", "avulso", "sobrescrita"]).optional(),
+  origem: z.enum(["protocolacao", "reenvio", "avulso", "sobrescrita", "automacao"]).optional(),
   /** SOBRESCRITA com escolha por dado: o que foi MANTIDO do gravado e o que foi EDITADO à mão — os primeiros
    * rótulos + as quantidades (`escolhasParaHistorico`) — só para o histórico (o DFD enviado já é o resultado
    * das escolhas). */
@@ -174,6 +174,8 @@ export const protocoloMetaSchema = z.object({
 export const startProtocoloSchema = z.object({
   mode: z.literal("start-protocolo"),
   protocolo: protocoloMetaSchema,
+  /** Protocolado por um FLUXO de automação (o histórico diz "Automação"). */
+  origem: z.literal("automacao").optional(),
   /** REENVIO (sobrescrever o protocolo gravado com o mesmo PDF corrigido): o servidor confere que é o
    * MESMO protocolo (nº e Id) e registra a sobrescrita com o resumo das diferenças na auditoria. */
   reenvio: z

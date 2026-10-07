@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.25.0",
+    data: "2026-10-07",
+    titulo: "Fluxo Inclusão PCA: CM002 + protocolação automática",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Modelo de fluxo “Inclusão PCA — conferir na CM002 e protocolar”, a cada 2 horas: lê os protocolos Em análise da repartição escolhida, confere os DFDs de Inclusão na CM002, aponta os divergentes e importa o protocolo na Mesa com os apontamentos na observação.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Blocos novos: Desdobrar lista (um item por DFD) e Importar protocolo na Mesa (a mesma régua da importação manual — não importa o que já está no sistema nem o protocolo com DFD em erro). O bloco Protocolos ganhou as repartições fixas.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Ler protocolo traz os DFDs completos (nº de planejamento, tipo, valor, itens) e um protocolo que falha não para os outros.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.24.0",
     data: "2026-10-06",
     titulo: "Fluxos de automação (estilo N8N)",

@@ -1,10 +1,58 @@
-import type { Grafo } from "./fluxo-core";
+import type { Frequencia, Grafo } from "./fluxo-core";
 
 const n = (id: string, tipo: string, x: number, y: number, config: Record<string, unknown> = {}, nome?: string) => ({ id, tipo, x, y, config, nome });
 const c = (de: string, para: string, saida = "saida", entrada = "entrada") => ({ de, saida, para, entrada });
 
 /** Fluxos PRONTOS para começar (o "Novo fluxo"). Cada um é só um grafo — editável depois. */
-export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo: Grafo }[] = [
+export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo: Grafo; frequencia?: Frequencia; ativo?: boolean }[] = [
+  {
+    id: "inclusao-pca",
+    nome: "Inclusão PCA — conferir na CM002 e protocolar",
+    descricao:
+      "A cada 2 h: protocolos Em análise da repartição escolhida → lê cada um (só os de INCLUSÃO) → confere os DFDs na CM002 → aponta os divergentes → importa na Mesa com os apontamentos.",
+    frequencia: { tipo: "intervalo", minutos: 120 },
+    ativo: true,
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 192),
+        n("prot1", "centi.protocolos", 280, 96, { situacao: "", reparticao: "PCA" }, "Protocolos em análise"),
+        n("laco1", "logica.laco", 576, 96, { tamanho: 1 }),
+        n("ler1", "leitura.protocolo", 880, -32, { limite: 200 }),
+        n("seLer", "logica.se", 1184, -32, { campo: "leitura", operador: "igual", valor: "falha" }, "Leitura falhou?"),
+        n("errLer", "erros.apontar", 1488, -96, { todos: true, mensagem: "Protocolo {{protocolo}}/{{ano}}: {{leituraTexto}}" }, "Falha ao ler"),
+        n("inc1", "dados.filtrar", 880, 224, { campo: "assunto", operador: "contem", valor: "INCLUS" }, "Assunto: Inclusão"),
+        n("des1", "dados.desdobrar", 1184, 224, { campo: "dfds" }, "Um item por DFD"),
+        n("cm1", "centi.cm002", 1184, 448),
+        n("cmp1", "logica.comparar", 1488, 320, { chaveA: "planejamento", chaveB: "planejamento", operador: "igual" }, "DFD × CM002"),
+        n("err1", "erros.apontar", 1792, 448, { todos: true, mensagem: "DFD {{numero}} (Planej. {{planejamento}}) não está na CM002", nivel: "erro" }, "Fora da CM002"),
+        n("se1", "logica.se", 1792, 224, { campo: "b.situacao", operador: "contem", valor: "CANCEL" }, "Cancelado na CM002?"),
+        n("err2", "erros.apontar", 2096, 160, { todos: true, mensagem: "DFD {{numero}} (Planej. {{planejamento}}): situação {{b.situacao}} na CM002", nivel: "erro" }, "Cancelado"),
+        n("jun1", "logica.juntar", 2400, 320, {}, "Apontamentos"),
+        n("imp1", "saida.importarProtocolo", 2704, 192, { limite: 200 }),
+      ],
+      conexoes: [
+        c("inicio1", "prot1"),
+        c("inicio1", "cm1"),
+        c("prot1", "laco1"),
+        c("laco1", "ler1", "lote"),
+        c("ler1", "laco1", "saida", "volta"),
+        c("laco1", "seLer", "fim"),
+        c("seLer", "errLer", "verdadeiro"),
+        c("laco1", "inc1", "fim"),
+        c("inc1", "des1"),
+        c("inc1", "imp1"),
+        c("des1", "cmp1", "saida", "a"),
+        c("cm1", "cmp1", "saida", "b"),
+        c("cmp1", "err1", "soEmA"),
+        c("cmp1", "se1", "iguais"),
+        c("se1", "err2", "verdadeiro"),
+        c("err1", "jun1", "saida", "a"),
+        c("err2", "jun1", "saida", "b"),
+        c("jun1", "imp1", "saida", "apontamentos"),
+      ],
+    },
+  },
   {
     id: "cm002",
     nome: "Execução dos DFDs na CM002",

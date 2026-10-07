@@ -181,3 +181,49 @@ test("modelo de protocolos analisados roda o laço com erro de leitura sem trava
   assert.equal(lidos, 2);
   assert.equal(r.apontados.length, 1);
 });
+
+test("modelo Inclusão PCA: compara os DFDs com a CM002 e importa com os apontamentos certos", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "inclusao-pca");
+  assert.deepEqual(m?.frequencia, { tipo: "intervalo", minutos: 120 });
+  const importados: { protocolo: unknown; ap: string[] }[] = [];
+  const r = await executarFluxo(m?.grafo as Grafo, REGISTRO_NOS, {
+    centi: async (a: string) =>
+      a === "cm002"
+        ? { ok: true, linhas: [{ id: "100", situacao: "EM ELABORAÇÃO" }, { id: "101", situacao: "CANCELADO" }] }
+        : {
+            ok: true,
+            filtro: "",
+            protocolos: [
+              { protocolo: "1", ano: "2026", id: "9", departamento: "DEP. PLANEJAMENTO - PCA" },
+              { protocolo: "2", ano: "2026", id: "8", departamento: "DEP. PLANEJAMENTO - PCA" },
+              { protocolo: "3", ano: "2026", id: "7", departamento: "OUTRA" },
+            ],
+          },
+    api: async () => ({ ok: false }),
+    cancelado: () => false,
+    host: {
+      mapaEntidades: { "o:1": "2" },
+      lerProtocolo: async (it: Record<string, unknown>) =>
+        it.protocolo === "1"
+          ? { leitura: "ok", assunto: "INCLUSÃO PCA 2027", dfds: [{ numero: "10", planejamento: "100" }, { numero: "11", planejamento: "101" }, { numero: "12", planejamento: "999" }] }
+          : { leitura: "ok", assunto: "EXCLUSÃO PCA 2027", dfds: [{ numero: "20", planejamento: "200" }] },
+      importarProtocolo: async (it: Record<string, unknown>, ap: string[]) => {
+        importados.push({ protocolo: it.protocolo, ap });
+        return { importado: true, protocoloId: 1 };
+      },
+    },
+  });
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.equal(importados.length, 1, "só o de inclusão da repartição");
+  assert.equal(importados[0].protocolo, "1");
+  assert.deepEqual(importados[0].ap.sort(), ["DFD 11 (Planej. 101): situação CANCELADO na CM002", "DFD 12 (Planej. 999) não está na CM002"]);
+});
+
+test("desdobrar leva o protocolo do pai; apontamentos agrupados por protocolo", async () => {
+  const { desdobrar, apontamentosPorProtocolo } = await import("../src/lib/fluxo-nos.ts");
+  const d = desdobrar([{ protocolo: "5", ano: "2026", id: "1", dfds: [{ numero: "1" }, { numero: "2" }] }, { protocolo: "6", ano: "2026" }], "dfds");
+  assert.deepEqual(d, [{ protocolo: "5", ano: "2026", id: "1", numero: "1" }, { protocolo: "5", ano: "2026", id: "1", numero: "2" }]);
+  const m = apontamentosPorProtocolo([{ mensagem: "x", item: d[0] }, { mensagem: "x", item: d[1] }, { mensagem: "y", item: d[1] }]);
+  assert.deepEqual(m.get("5/2026"), ["x", "y"]);
+});

@@ -8,6 +8,12 @@ import { coerceEmissaoProtocolo, conferirLeituraProtocolo, corpoEmissaoProtocolo
 import { baixarPelaExtensao, comoBlob, deBase64, type PedirExtensao, pdfDoAchado, pdfDosBytes } from "./arquivo-navegador";
 import { dataIsoBrasilia } from "./format";
 import type { Item } from "./fluxo-core";
+import type { RegrasAvaliacao } from "./avaliacao-core";
+import { lerProtocoloCompleto, type ProtocoloLido } from "./importar-protocolo-auto";
+
+/** Os protocolos lidos NESTA execução (o nó "Importar protocolo" usa a mesma leitura — não emite de novo). */
+export type CacheLeitura = Map<string, ProtocoloLido>;
+export const chaveLeitura = (protocolo: unknown, ano: unknown) => `${s(protocolo).split("/")[0]}/${s(ano)}`;
 
 export async function emissaoDoServidor(): Promise<EmissaoProtocolo | null> {
   const r = (await fetch("/api/admin/automacao/config", { cache: "no-store" })
@@ -19,7 +25,13 @@ export async function emissaoDoServidor(): Promise<EmissaoProtocolo | null> {
 const s = (v: unknown) => (v == null ? "" : String(v).trim());
 
 /** Lê um protocolo (item com protocolo, ano e id) → a capa + os DFDs. Lança com a mensagem quando não dá. */
-export async function lerProtocoloPorCodigo(pedir: PedirExtensao, emissao: EmissaoProtocolo | null, it: Item): Promise<Item> {
+export async function lerProtocoloPorCodigo(
+  pedir: PedirExtensao,
+  emissao: EmissaoProtocolo | null,
+  it: Item,
+  regras: RegrasAvaliacao,
+  cache?: CacheLeitura,
+): Promise<Item> {
   const alvo = { id: s(it.id ?? it.idExterno), protocolo: s(it.protocolo ?? it.numero).split("/")[0], ano: s(it.ano) };
   if (!alvo.protocolo) throw new Error("O item não tem o nº do protocolo (campo “protocolo”).");
   if (!emissao) throw new Error("A emissão do protocolo ainda não foi aprendida — emita UM protocolo pela tarefa “Ler a Tela Protocolo”.");
@@ -35,16 +47,26 @@ export async function lerProtocoloPorCodigo(pedir: PedirExtensao, emissao: Emiss
   const direto = await pdfDosBytes(bytes).catch(() => null);
   const x = direto ? { pdf: direto } : await pdfDoAchado(analisarRespostaCenti(bytes, r.status ?? 0), baixarPelaExtensao(pedir));
   if (!("pdf" in x)) throw new Error(x.erro);
-  const { indexarProtocoloPdf } = await import("./parse-protocolo-pdf");
-  const { index, doc } = await indexarProtocoloPdf(new File([comoBlob(x.pdf)], `Protocolo ${alvo.protocolo}.pdf`, { type: "application/pdf" }));
-  await doc.destroy().catch(() => undefined);
-  const numeros = index.dfds.map((d) => d.numero);
-  const leitura = conferirLeituraProtocolo(alvo, index.protocolo, numeros);
+  const lido = await lerProtocoloCompleto(new File([comoBlob(x.pdf)], `Protocolo ${alvo.protocolo}.pdf`, { type: "application/pdf" }), regras);
+  const numeros = lido.dfds.map((d) => d.numero);
+  const leitura = conferirLeituraProtocolo(alvo, lido.capa, numeros);
+  if (leitura.estado !== "falha") cache?.set(chaveLeitura(alvo.protocolo, alvo.ano), lido);
   return {
     leitura: leitura.estado,
     leituraTexto: leitura.texto,
-    capa: { ...index.protocolo },
+    capa: { ...lido.capa },
+    assunto: lido.capa.assunto ?? "",
     totalDfds: numeros.length,
-    dfds: index.dfds.map((d) => ({ numero: d.numero, sigla: d.siglaSetor, orgao: d.orgaoEntidade, objeto: d.objeto, assinaturas: d.assinaturas.length })),
+    dfds: lido.dfds.map((d) => ({
+      numero: d.numero,
+      planejamento: d.planejamento ?? "",
+      tipo: d.tipo ?? "",
+      sigla: d.siglaSetor ?? "",
+      orgao: d.orgaoEntidade ?? "",
+      objeto: d.objeto ?? "",
+      valor: d.valorTotal ?? 0,
+      itens: d.itens.length,
+      assinaturas: d.assinaturas.length,
+    })),
   };
 }

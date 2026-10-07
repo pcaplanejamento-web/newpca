@@ -129,10 +129,14 @@ const NOS: DefNo[] = [
         tipo: "caminho",
         ajuda: "Ligue o nó Repartições antes e use “reparticao” — só os protocolos delas. Vazio = todas.",
       },
+      { chave: "reparticao", rotulo: "Repartições (fixas)", tipo: "texto", ajuda: "Ex.: DEP. PLANEJAMENTO - PCA (várias separadas por ;). Soma às vindas do item." },
     ],
     executar: async (e, c, ctx) => {
       const sit = str(c.situacao) === "outra" ? str(c.outra).trim() : str(c.situacao);
-      const reps = str(c.campoReparticao) ? so(e).map((it) => str(resolverCaminho(it, str(c.campoReparticao)))).filter(Boolean) : [];
+      const reps = [
+        ...lista(c.reparticao),
+        ...(str(c.campoReparticao) ? so(e).map((it) => str(resolverCaminho(it, str(c.campoReparticao)))).filter(Boolean) : []),
+      ];
       ctx.aviso("Lendo os protocolos na Centi…");
       const r = await ctx.centi("telaApi", { situacao: sit }, 180_000);
       if (r.interrompido) throw new Error("Interrompido na extensão.");
@@ -243,7 +247,14 @@ const NOS: DefNo[] = [
       for (const [i, it] of itens.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Protocolo ${str(it.protocolo)} (${i + 1} de ${itens.length})…`);
-        out.push({ ...it, ...(await ler(it)) });
+        try {
+          out.push({ ...it, ...(await ler(it)) });
+        } catch (x) {
+          const msg = x instanceof Error ? x.message : String(x);
+          if (/interrompido/i.test(msg)) throw x;
+          // Um protocolo que não lê não para os outros: segue marcado como falha (o relatório e a importação o apontam).
+          out.push({ ...it, leitura: "falha", leituraTexto: msg });
+        }
       }
       return { saida: out };
     },
@@ -456,6 +467,18 @@ const NOS: DefNo[] = [
     },
   },
 
+  {
+    tipo: "dados.desdobrar",
+    categoria: "dados",
+    rotulo: "Desdobrar lista",
+    descricao: "Um item por elemento de um campo de lista (ex.: dfds do protocolo lido), levando o protocolo, o ano e o Id do pai.",
+    icone: "list",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [{ chave: "campo", rotulo: "Campo de lista", tipo: "caminho", obrigatorio: true, padrao: "dfds" }],
+    executar: async (e, c) => ({ saida: desdobrar(so(e), str(c.campo, "dfds")) }),
+  },
+
   // ——— Erros
   {
     tipo: "erros.apontar",
@@ -524,6 +547,38 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "saida.importarProtocolo",
+    categoria: "saida",
+    rotulo: "Importar protocolo na Mesa",
+    descricao:
+      "Importa cada protocolo LIDO na Mesa (como a importação manual), com os apontamentos na observação. Não importa o que já está no sistema nem o protocolo com DFD em erro.",
+    icone: "save",
+    entradas: ["entrada", "apontamentos"],
+    saidas: ["importados", "naoImportados"],
+    rotulosPortas: { apontamentos: "Apontamentos", importados: "Importados", naoImportados: "Não importados" },
+    campos: [{ chave: "limite", rotulo: "Máximo de protocolos", tipo: "numero", padrao: 50, ajuda: "Proteção — até 500." }],
+    executar: async (e, c, ctx) => {
+      const imp = ctx.host.importarProtocolo as ((it: Item, apontamentos: string[]) => Promise<Item>) | undefined;
+      if (!imp) throw new Error("A importação só funciona na tela da Automação.");
+      const max = Math.min(500, Math.max(1, numeroDe(c.limite) ?? 50));
+      const porProto = apontamentosPorProtocolo(so(e, "apontamentos"));
+      const out: Portas = { importados: [], naoImportados: [] };
+      for (const [i, it] of so(e).slice(0, max).entries()) {
+        if (ctx.cancelado()) break;
+        if (str(it.leitura) === "falha") {
+          out.naoImportados.push({ ...it, motivo: str(it.leituraTexto, "Leitura do PDF falhou.") });
+          continue;
+        }
+        ctx.aviso(`Importando o protocolo ${str(it.protocolo)} (${i + 1})…`);
+        const ap = porProto.get(chaveProto(it)) ?? [];
+        const r = obj(await imp(it, ap));
+        const linha = { protocolo: it.protocolo, ano: it.ano, id: it.id, apontamentos: ap.length, ...r, erros: Array.isArray(r.erros) ? r.erros.join(" | ") : r.erros };
+        (r.importado === true ? out.importados : out.naoImportados).push(linha);
+      }
+      return out;
+    },
+  },
+  {
     tipo: "saida.notificar",
     categoria: "saida",
     rotulo: "Avisar no sino",
@@ -544,6 +599,31 @@ const NOS: DefNo[] = [
 
 export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));
 export const NOS_POR_CATEGORIA = CATEGORIAS.map((c) => ({ ...c, nos: NOS.filter((n) => n.categoria === c.valor) }));
+
+const chaveProto = (it: Item) => `${str(it.protocolo ?? it.numero).split("/")[0].trim()}/${str(it.ano).trim()}`;
+
+/** Um item por elemento da lista do campo, com o protocolo/ano/Id do pai (o elemento vence em conflito de nome). */
+export function desdobrar(itens: Item[], campo: string): Item[] {
+  return itens.flatMap((p) => {
+    const l = resolverCaminho(p, campo);
+    return (Array.isArray(l) ? l : []).map((x) => ({ protocolo: p.protocolo, ano: p.ano, id: p.id, ...obj(x) }));
+  });
+}
+
+/** As mensagens dos itens apontados, por protocolo (o item apontado leva protocolo + ano — o do Desdobrar). */
+export function apontamentosPorProtocolo(apontados: Item[]): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  for (const a of apontados) {
+    const it = obj(a.item ?? a);
+    const k = chaveProto(it);
+    const msg = str(a.mensagem).trim();
+    if (!msg) continue;
+    const l = m.get(k) ?? [];
+    if (!l.includes(msg)) l.push(msg);
+    m.set(k, l);
+  }
+  return m;
+}
 
 function normalizar(v: unknown): Item[] {
   return (Array.isArray(v) ? v : []).map(obj).map((p) => ({

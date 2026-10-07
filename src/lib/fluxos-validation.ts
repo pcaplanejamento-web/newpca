@@ -11,6 +11,8 @@ export const criarFluxoSchema = z.strictObject({
   nome: z.string().trim().min(1).max(80),
   descricao: z.string().trim().max(400).optional(),
   grafo: grafoSchema.optional(),
+  frequencia: z.record(z.string(), z.unknown()).optional(),
+  ativo: z.boolean().optional(),
 });
 
 export const editarFluxoSchema = z.strictObject({

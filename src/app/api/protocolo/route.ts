@@ -112,10 +112,10 @@ export async function POST(req: Request) {
     entidadeId: r.id,
     resumo: reenvio
       ? `Protocolo ${r.numero} REENVIADO (sobrescrito): ${reenvio.resumo}`.slice(0, 500)
-      : `Protocolo ${r.numero} protocolado${renumerado ? ` (mesmo Id do ${renumerado.numero} — renumerado)` : ""}`,
+      : `Protocolo ${r.numero} protocolado${p.data.origem === "automacao" ? " pela automação" : ""}${renumerado ? ` (mesmo Id do ${renumerado.numero} — renumerado)` : ""}`,
     depois: reenvio ? null : { numero: r.numero, assunto: protocolo.assunto, reparticaoId: protocolo.reparticaoId, anoPca: protocolo.anoPca },
     protocoloId: r.id,
-    origem: reenvio ? "reenvio" : "protocolacao",
+    origem: reenvio ? "reenvio" : (p.data.origem ?? "protocolacao"),
     detalhe,
   });
   // REENVIADO: o responsável do protocolo sabe (o próprio autor do reenvio, não).

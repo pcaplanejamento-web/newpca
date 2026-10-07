@@ -46,10 +46,23 @@ export async function getFluxo(id: number): Promise<FluxoAutomacao | null> {
   return l ? doBanco(l) : null;
 }
 
-export async function criarFluxo(d: { nome: string; descricao?: string; grafo?: unknown }, usuarioId: number): Promise<FluxoAutomacao> {
+export async function criarFluxo(
+  d: { nome: string; descricao?: string; grafo?: unknown; frequencia?: unknown; ativo?: boolean },
+  usuarioId: number,
+): Promise<FluxoAutomacao> {
+  const frequencia = lerFrequencia(d.frequencia ?? {});
+  const ativo = d.ativo === true;
   const [l] = await getDb()
     .insert(automacaoFluxos)
-    .values({ nome: d.nome, descricao: d.descricao || null, grafo: JSON.stringify(lerGrafo(d.grafo ?? {})), criadoPor: usuarioId })
+    .values({
+      nome: d.nome,
+      descricao: d.descricao || null,
+      grafo: JSON.stringify(lerGrafo(d.grafo ?? {})),
+      frequencia: JSON.stringify(frequencia),
+      ativo,
+      proximaEm: ativo ? proximaExecucao(frequencia, new Date()) : null,
+      criadoPor: usuarioId,
+    })
     .returning();
   return doBanco(l);
 }

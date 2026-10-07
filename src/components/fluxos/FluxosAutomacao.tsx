@@ -22,7 +22,8 @@ import {
   rotuloFrequencia,
   validarGrafo,
 } from "@/lib/fluxo-core";
-import { emissaoDoServidor, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
+import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
+import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
 import { NOS_POR_CATEGORIA, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { MODELOS_FLUXO } from "@/lib/fluxo-modelos";
 import type { FluxoAutomacao } from "@/lib/fluxos";
@@ -68,6 +69,7 @@ export function FluxosAutomacao({
   pronto,
   mapaEntidades,
   protocolos,
+  importacao,
   onRodando,
 }: {
   pedir: Pedir;
@@ -76,6 +78,8 @@ export function FluxosAutomacao({
   pronto: boolean;
   mapaEntidades: Record<string, string>;
   protocolos: ProtocoloAutomacao[];
+  /** O contexto da importação na Mesa (unidades, órgãos, regras, PCAs) — o nó "Importar protocolo". */
+  importacao: ContextoImportacao;
   onRodando: (r: boolean) => void;
 }) {
   const [fluxos, setFluxos] = useState<FluxoAutomacao[] | null>(null);
@@ -99,6 +103,8 @@ export function FluxosAutomacao({
   }, []);
 
   const emissao = useRef<ReturnType<typeof emissaoDoServidor> | null>(null);
+  /** Os protocolos lidos na execução em curso (zerado a cada execução). */
+  const leituras = useRef<CacheLeitura>(new Map());
   const host = useMemo(
     () => ({
       mapaEntidades,
@@ -106,11 +112,16 @@ export function FluxosAutomacao({
       protocolos: protocolos as unknown as Item[],
       lerProtocolo: async (it: Item) => {
         emissao.current ??= emissaoDoServidor();
-        return lerProtocoloPorCodigo(pedir as unknown as PedirExtensao, await emissao.current, it);
+        return lerProtocoloPorCodigo(pedir as unknown as PedirExtensao, await emissao.current, it, importacao.regras, leituras.current);
+      },
+      importarProtocolo: async (it: Item, apontamentos: string[]) => {
+        const lido = leituras.current.get(chaveLeitura(it.protocolo ?? it.numero, it.ano));
+        if (!lido) return { importado: false, motivo: "O protocolo não foi lido nesta execução (ligue o nó “Ler protocolo” antes)." };
+        return importarProtocolo(lido, apontamentos, importacao);
       },
       avisar: (t: string) => toast.info(t, 8000),
     }),
-    [mapaEntidades, protocolos, pedir],
+    [mapaEntidades, protocolos, pedir, importacao],
   );
 
   /** Executa um fluxo (o grafo passado — o do editor, mesmo sem salvar) e grava o resumo. */
@@ -124,6 +135,7 @@ export function FluxosAutomacao({
       setRodando(f.id);
       setPassos({});
       setResultado(null);
+      leituras.current = new Map();
       cancelar.current = false;
       interrompido.current = false;
       try {
@@ -151,6 +163,7 @@ export function FluxosAutomacao({
         else toast.warning(msg, 12000);
         return r;
       } finally {
+        leituras.current = new Map();
         lote.current = null;
         setRodando(null);
       }
@@ -185,7 +198,13 @@ export function FluxosAutomacao({
   carregarRef.current = carregar;
 
   async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string) {
-    const r = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: { nome, grafo: modelo?.grafo ?? GRAFO_VAZIO_COM_INICIO, descricao: modelo?.descricao } });
+    const r = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: {
+        nome,
+        grafo: modelo?.grafo ?? GRAFO_VAZIO_COM_INICIO,
+        descricao: modelo?.descricao,
+        ...(modelo?.frequencia ? { frequencia: modelo.frequencia, ativo: modelo.ativo === true } : {}),
+      },
+    });
     if (!r.ok || !r.fluxo) return toast.error(r.error ?? "Não consegui criar o fluxo.");
     setFluxos((fs) => [r.fluxo as FluxoAutomacao, ...(fs ?? [])]);
     setNovo(false);

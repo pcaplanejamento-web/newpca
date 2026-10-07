@@ -72,6 +72,7 @@ import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
 import { HistoricoExecucoes } from "./HistoricoExecucoes";
 import { FluxosAutomacao } from "./fluxos/FluxosAutomacao";
+import type { ContextoImportacao } from "@/lib/importar-protocolo-auto";
 import { TarefaExecucaoDfds } from "./TarefaExecucaoDfds";
 import { TarefaTelaProtocolo } from "./TarefaTelaProtocolo";
 
@@ -1691,6 +1692,7 @@ export function AutomacaoAdmin({
             pronto={pronto}
             mapaEntidades={{ ...mapa, ...cadastradas }}
             protocolos={protocolos}
+            importacao={{ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas } as unknown as ContextoImportacao}
             onRodando={setRodandoTela}
           />
         ) : modo === "execucao" ? (
