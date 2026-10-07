@@ -227,3 +227,60 @@ test("desdobrar leva o protocolo do pai; apontamentos agrupados por protocolo", 
   const m = apontamentosPorProtocolo([{ mensagem: "x", item: d[0] }, { mensagem: "x", item: d[1] }, { mensagem: "y", item: d[1] }]);
   assert.deepEqual(m.get("5/2026"), ["x", "y"]);
 });
+
+test("só os não cadastrados: pelo Id da capa ou nº/ano", async () => {
+  const { separarCadastrados } = await import("../src/lib/fluxo-nos.ts");
+  const r = separarCadastrados(
+    [{ protocolo: "1", ano: "2026", id: "9" }, { protocolo: "2", ano: "2026", id: "8" }, { protocolo: "3", ano: "2026", id: "" }, { protocolo: "4", ano: "2026", id: "7" }],
+    [{ numero: "50/2026", idExterno: "9" }, { numero: "3/2026", idExterno: null }],
+  );
+  assert.deepEqual(r.novos.map((x) => x.protocolo), ["2", "4"]);
+  assert.deepEqual(r.cadastrados.map((x) => x.protocolo), ["1", "3"]);
+});
+
+test("conferir na CM002: fora, proibida, esperada, valor e entidade", async () => {
+  const { conferirCm002 } = await import("../src/lib/fluxo-nos.ts");
+  const r = conferirCm002(
+    [
+      { numero: "1", planejamento: "10", valor: 100, entidade: "2" },
+      { numero: "2", planejamento: "11", valor: 100, entidade: "2" },
+      { numero: "3", planejamento: "12", valor: 100, entidade: "2" },
+      { numero: "4", planejamento: "13", valor: 100, entidade: "2" },
+      { numero: "5", planejamento: "99", valor: 1, entidade: "2" },
+    ],
+    [
+      { planejamento: "10", situacao: "EM ELABORAÇÃO", valor: "100,005", entidade: "2" },
+      { planejamento: "11", situacao: "CANCELADO", valor: 100, entidade: "2" },
+      { planejamento: "12", situacao: "APROVADO", valor: "150,00", entidade: "2" },
+      { planejamento: "13", situacao: "EM ELABORAÇÃO", valor: 100, entidade: "3" },
+    ],
+    { proibidas: ["CANCEL"], esperada: ["ELABORA"], campoValor: "valor", tolerancia: 0.01, entidade: (d) => String(d.entidade) },
+  );
+  assert.deepEqual(r.conformes.map((x) => x.numero), ["1"]);
+  assert.deepEqual(r.divergentes.map((x) => x.mensagem), [
+    "DFD 2 (Planej. 11): situação CANCELADO na CM002",
+    "DFD 3 (Planej. 12): situação APROVADO na CM002 (esperada ELABORA)",
+    "DFD 3 (Planej. 12): valor 100,00 no DFD × 150,00 na CM002",
+    "DFD 4 (Planej. 13): na CM002 está na entidade 3, o órgão do DFD é da 2",
+    "DFD 5 (Planej. 99) não está na CM002",
+  ]);
+});
+
+test("protocolos com repartição e sem departamento na resposta: para com erro", async () => {
+  const g: Grafo = {
+    v: 1,
+    nos: [
+      { id: "i", tipo: "gatilho.inicio", x: 0, y: 0, config: {} },
+      { id: "p", tipo: "centi.protocolos", x: 0, y: 0, config: { reparticao: "PCA" } },
+    ],
+    conexoes: [{ de: "i", saida: "saida", para: "p", entrada: "entrada" }],
+  } as unknown as Grafo;
+  const r = await executarFluxo(g, REGISTRO_NOS, {
+    centi: async () => ({ ok: true, filtro: "", protocolos: [{ protocolo: "1", ano: "2026" }] }),
+    api: async () => ({ ok: false }),
+    cancelado: () => false,
+    host: {},
+  });
+  assert.equal(r.estado, "falhou");
+  assert.match(r.erro ?? "", /departamento/);
+});

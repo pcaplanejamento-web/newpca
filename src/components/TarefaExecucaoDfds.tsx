@@ -142,7 +142,12 @@ export function TarefaExecucaoDfds({
         const item: ResumoEntidade = { entidade: ent, orgaos: [...new Set(dfds.map((d) => d.orgaoNome))].join(", "), dfds: dfds.length, lidos: 0, diferentes: 0, soCenti: 0 };
         resumo.push(item);
         if (lote.current) await pedir("lote", { fase: "passo", loteId: lote.current, feito: i, total: entidades.length, texto }, 8000);
-        const r = (await pedir("cm002", { entidade: ent }, 300_000)) as RespostaTela & { linhas?: PlanCenti[]; semConsulta?: boolean };
+        let r = (await pedir("cm002", { entidade: ent }, 300_000)) as RespostaTela & { linhas?: PlanCenti[]; semConsulta?: boolean };
+        if (!r.ok && r.semConsulta && !r.interrompido) {
+          // Ensina a consulta sozinho: a extensão abre a CM002, pesquisa uma vez e a API passa a valer.
+          await pedir("telaPlanejamentos", { aprender: true }, 120_000);
+          r = (await pedir("cm002", { entidade: ent }, 300_000)) as typeof r;
+        }
         if (r.interrompido) break;
         if (!r.ok || !Array.isArray(r.linhas)) {
           item.erro = r.erro ?? "a extensão não respondeu.";

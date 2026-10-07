@@ -32,4 +32,9 @@ export const execucaoFluxoSchema = z.strictObject({
   apontados: z.number().int().min(0).max(1_000_000),
   inicio: z.string().max(40),
   fim: z.string().max(40),
+  /** O resultado por protocolo do nó "Importar protocolo" (o aviso no sino). */
+  relatorio: z
+    .array(z.strictObject({ protocolo: z.string().max(40), status: z.enum(["importado", "nao-importado"]), motivo: z.string().max(300).optional(), apontamentos: z.number().int().min(0).max(10_000) }))
+    .max(500)
+    .optional(),
 });

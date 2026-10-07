@@ -1,3 +1,4 @@
+import { notificar } from "@/lib/notificacoes";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { rotuloFrequencia } from "@/lib/fluxo-core";
@@ -56,6 +57,19 @@ export async function POST(req: Request, { params }: Ctx) {
       origem: "centi",
       resumo: `Fluxo “${fluxo.nome}” ${p.data.estado}${p.data.erro ? `: ${p.data.erro}` : ""} · ${p.data.apontados} erro(s) apontado(s)`,
     });
+  const rel = p.data.relatorio;
+  if (rel?.length || p.data.estado === "falhou") {
+    const imp = rel?.filter((x) => x.status === "importado") ?? [];
+    const nao = rel?.filter((x) => x.status !== "importado") ?? [];
+    const linhas = [
+      `${imp.length} importado(s) · ${nao.length} não importado(s)${p.data.apontados ? ` · ${p.data.apontados} apontamento(s)` : ""}`,
+      ...nao.slice(0, 3).map((x) => `${x.protocolo}: ${x.motivo ?? "não importado"}`),
+      ...(p.data.erro ? [p.data.erro] : []),
+    ];
+    await notificar([
+      { usuarioId: g.u.id, tipo: "centi", titulo: `Fluxo “${fluxo.nome}” — ${p.data.estado === "concluido" ? "concluído" : p.data.estado}`, texto: linhas.join("\n").slice(0, 500), link: "/painel/automacao" },
+    ]);
+  }
   return ok({ fluxo });
 }
 

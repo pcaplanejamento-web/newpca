@@ -4208,12 +4208,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   campos, Ordenar, Remover duplicados, Agrupar e somar) · Erros (Apontar erros → relatório) · Saída (Gravar execução nos
   DFDs, Avisar). Modelos prontos em `fluxo-modelos.ts` (só pela API da Centi — sem cair na tela, v1.25.2; cards "Modelos prontos" na lista com "Usar este modelo" — v1.25.1; com `frequencia`/`ativo` — o POST os aceita): **Inclusão PCA — conferir na CM002 e
   protocolar** (v1.25.0, a cada 120 min: Protocolos Em análise da repartição fixa → Laço → Ler → filtra assunto INCLUS →
-  **`dados.desdobrar`** (um item por DFD, com o protocolo do pai) × CM002 pelo planejamento → aponta fora da CM002/cancelado
+  **`sistema.naoCadastrados`** (v1.26.0: pula os protocolos já no sistema — Id da capa ou nº/ano — antes de emitir) → **`dados.desdobrar`** (um item por DFD, com o protocolo do pai) → **`dados.conferirCm002`** (v1.26.0, puro `conferirCm002`: fora da CM002, situação proibida/fora da esperada, valor com tolerância, entidade do órgão divergente — um apontamento por problema)
   → **`saida.importarProtocolo`** (entradas entrada + apontamentos, casados por protocolo/ano). A importação headless é
   **`importar-protocolo-auto.ts`** (`lerProtocoloCompleto` = índice + parse completo + OCR + normalização; `importarProtocolo`
   = a régua da Mesa — pula o já cadastrado/DFD existente/PCA sem cadastro/trava do ADM/duplicado/DFD em erro; grava com
   `origem:"automacao"` e os apontamentos na observação). A leitura fica num cache da execução (`CacheLeitura`) — o
-  importar não emite de novo; um protocolo que falha vira `leitura:"falha"` e segue. **Editor:** paleta (tocar = acrescenta ligado ao nó marcado;
+  importar não emite de novo; um protocolo que falha vira `leitura:"falha"` e segue. Sem a consulta aprendida (`semConsulta`), os nós `centi.cm002`/`centi.protocolos` e a `TarefaExecucaoDfds` ENSINAM sozinhos (extensão 1.15.1: `telaPlanejamentos {aprender:true}` abre a CM002 — aba ou busca do menu — e clica em Pesquisar; `telaEmAnalise` das repartições) e repetem pela API. O `centi.protocolos` com repartição e SEM departamento nas linhas PARA com erro (nunca passa todas). Ao fim, o relatório por protocolo do Importar (`host.relatorio`) vai no `POST …/fluxos/[id]` (`relatorio`) e o servidor avisa no sino (tipo `centi`) quem executou. **Editor:** paleta (tocar = acrescenta ligado ao nó marcado;
   arrastar = solta no quadro), `CanvasFluxo` (DS — grade, pan, zoom, portas, curvas, Delete), `PainelNo` (o formulário
   do tipo + o seletor de "dado buscado" pelos campos da última execução + a saída numa tabela), relatório da execução.
   **Agendador:** com a tela aberta e a extensão pronta, a cada minuto roda o fluxo ligado cuja hora chegou

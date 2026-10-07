@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 10;
+  const VERSAO = 11;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -946,20 +946,35 @@
     return m ? Number(m[1]) : null;
   }
 
-  async function planejamentos(ctx, ids) {
+  /** Abre a CM002 pela aba do topo ou, sem ela, pela busca do menu (como a PO011). */
+  async function abrirCm002(ctx) {
+    const { doc, win } = ctx;
+    const aba = porTexto(doc, (x) => /^CM002\b/.test(x) && x.length < 60)[0];
+    if (aba) {
+      clicar(win, aba);
+      return esperarAte(ctx, () => lerTabelaCm002(doc), "Abri a aba CM002, mas a tabela Resultados não apareceu.");
+    }
+    const busca = todos(doc).find((el) => el.tagName === "INPUT" && visivel(el) && norm(attr(el, "placeholder")).startsWith("PESQUISAR"));
+    if (!busca) throw new Error("Não achei a CM002 nem a busca do menu da Centi — abra o sistema Compras na aba da automação.");
+    digitar(win, busca, "CM002");
+    const item = await esperarAte(
+      ctx,
+      () => porTexto(doc, (s) => /CM002|PLANEJAMENTO/.test(s) && /CM002/.test(s) && s.length < 60).find((el) => el !== busca && el.tagName !== "INPUT"),
+      "A busca do menu não mostrou a CM002 - Planejamento.",
+    );
+    clicar(win, item);
+    return esperarAte(ctx, () => lerTabelaCm002(doc), "Abri a CM002, mas a tabela Resultados não apareceu.", 30000);
+  }
+
+  async function planejamentos(ctx, ids, aprender) {
     const { doc, win } = ctx;
     const quer = new Set((Array.isArray(ids) ? ids : []).map((x) => String(x).replace(/\D/g, "").replace(/^0+/, "")).filter(Boolean));
     ctx.etapa = "achar a CM002";
     let t = lerTabelaCm002(doc);
     // Só abre a aba quando a tabela não está à vista (a aba "CM002 - Planejamento" do topo).
-    if (!t) {
-      const aba = porTexto(doc, (x) => /^CM002\b/.test(x) && x.length < 60)[0];
-      if (!aba) throw new Error("Abra a tela CM002 - Planejamento na aba da automação da Centi (com a pesquisa feita) e tente de novo.");
-      clicar(win, aba);
-      t = await esperarAte(ctx, () => lerTabelaCm002(doc), "Abri a aba CM002, mas a tabela Resultados não apareceu.");
-    }
-    // Sem resultado: o Pesquisar (o único clique de pesquisa — sem filtro).
-    if (!t.linhas.length) {
+    if (!t) t = await abrirCm002(ctx);
+    // Sem resultado (ou para ENSINAR a consulta à API): o Pesquisar (o único clique de pesquisa — sem filtro).
+    if (!t.linhas.length || aprender) {
       ctx.etapa = "pesquisar";
       let b = null;
       for (const x of porTexto(doc, (v) => v === "PESQUISAR")) {
@@ -972,6 +987,7 @@
         const x = lerTabelaCm002(doc);
         return x?.linhas.length ? x : null;
       }, "A pesquisa da CM002 não trouxe resultados.", 30000);
+      if (aprender) return { colunas: t.colunas, linhas: [], total: 0, aprendido: true };
     }
     t = (await lerPaginaCm002(ctx)) ?? t;
     const colunas = t.colunas;
@@ -1012,7 +1028,7 @@
     try {
       if (acao === "telaDepartamentos") return { ok: true, departamentos: await departamentos(ctx) };
       if (acao === "telaEmAnalise") return { ok: true, ...(await emAnalise(ctx, dados?.departamentos)) };
-      if (acao === "telaPlanejamentos") return { ok: true, ...(await planejamentos(ctx, dados?.ids)) };
+      if (acao === "telaPlanejamentos") return { ok: true, ...(await planejamentos(ctx, dados?.ids, dados?.aprender === true)) };
       if (acao === "telaEmitir") return { ok: true, ...(await emitirDocumento(ctx, dados?.protocolo, dados?.ano, dados?.departamentos)) };
       return { ok: false, erro: "Ação desconhecida." };
     } catch (e) {

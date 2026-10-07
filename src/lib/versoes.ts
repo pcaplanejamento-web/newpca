@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.26.0",
+    data: "2026-10-07",
+    titulo: "Fluxo Inclusão PCA mais robusto",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Nó “Só os não cadastrados”: os protocolos que já estão no sistema não são emitidos nem lidos de novo.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Nó “Conferir DFDs na CM002”: fora da CM002, situação proibida ou fora da esperada, valor divergente (com tolerância) e entidade diferente.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Filtro de repartição seguro: sem o departamento na resposta da Centi, o fluxo para em vez de pegar todos os protocolos.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "A Centi é reconhecida sozinha: sem a consulta aprendida, a extensão (1.15.1) abre a CM002/Tela Protocolo, pesquisa uma vez e segue pela API — sem o erro “Abra a CM002…”.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Notificações", texto: "Ao terminar, o fluxo avisa no sino: importados, não importados com o motivo e os apontamentos.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.25.2",
     data: "2026-10-07",
     titulo: "Fluxos só pela API",

@@ -105,6 +105,8 @@ export function FluxosAutomacao({
   const emissao = useRef<ReturnType<typeof emissaoDoServidor> | null>(null);
   /** Os protocolos lidos na execução em curso (zerado a cada execução). */
   const leituras = useRef<CacheLeitura>(new Map());
+  /** O resultado por protocolo do nó "Importar protocolo" (vai ao servidor → aviso no sino). */
+  const relatorio = useRef<Item[]>([]);
   const host = useMemo(
     () => ({
       mapaEntidades,
@@ -120,6 +122,9 @@ export function FluxosAutomacao({
         return importarProtocolo(lido, apontamentos, importacao);
       },
       avisar: (t: string) => toast.info(t, 8000),
+      relatorio: (l: Item[]) => {
+        relatorio.current.push(...l);
+      },
     }),
     [mapaEntidades, protocolos, pedir, importacao],
   );
@@ -136,6 +141,7 @@ export function FluxosAutomacao({
       setPassos({});
       setResultado(null);
       leituras.current = new Map();
+      relatorio.current = [];
       cancelar.current = false;
       interrompido.current = false;
       try {
@@ -156,7 +162,20 @@ export function FluxosAutomacao({
         );
         setResultado(r);
         if (lote.current) await pedir("lote", { fase: "fim", loteId: lote.current, resumo: r.estado === "concluido" ? "Fluxo concluído." : (r.erro ?? r.estado) }, 8000);
-        const g = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${f.id}`, { method: "POST", body: resumoExecucao(r) });
+        const g = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${f.id}`, {
+          method: "POST",
+          body: {
+            ...resumoExecucao(r),
+            relatorio: relatorio.current.length
+              ? relatorio.current.slice(0, 500).map((x) => ({
+                  protocolo: `${String(x.protocolo ?? "")}${x.ano ? `/${String(x.ano)}` : ""}`.slice(0, 40),
+                  status: x.status === "importado" ? ("importado" as const) : ("nao-importado" as const),
+                  motivo: x.motivo == null ? undefined : String(x.motivo).slice(0, 300),
+                  apontamentos: typeof x.apontamentos === "number" ? x.apontamentos : 0,
+                }))
+              : undefined,
+          },
+        });
         if (g.ok && g.fluxo) setFluxos((fs) => fs?.map((x) => (x.id === f.id ? { ...x, ...g.fluxo, grafo: x.grafo } : x)) ?? fs);
         const msg = `${f.nome}: ${r.estado === "concluido" ? "concluído" : r.estado === "cancelado" ? "interrompido" : `falhou — ${r.erro}`}${r.apontados.length ? ` · ${r.apontados.length} erro(s) apontado(s)` : ""}`;
         if (r.estado === "concluido" && !r.apontados.length) toast.success(msg);

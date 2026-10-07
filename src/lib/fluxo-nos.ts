@@ -138,7 +138,13 @@ const NOS: DefNo[] = [
         ...(str(c.campoReparticao) ? so(e).map((it) => str(resolverCaminho(it, str(c.campoReparticao)))).filter(Boolean) : []),
       ];
       ctx.aviso("Lendo os protocolos na Centi…");
-      const r = await ctx.centi("telaApi", { situacao: sit }, 180_000);
+      let r = await ctx.centi("telaApi", { situacao: sit }, 180_000);
+      if (!r.ok && r.semConsulta && !r.interrompido && reps.length) {
+        // Sem a consulta aprendida: a extensão lista os "Em análise" das repartições pela Tela Protocolo (aprende) e repete.
+        ctx.aviso("Ensinando a consulta da Tela Protocolo (PO011)…");
+        await pedirCenti(ctx, "telaEmAnalise", { departamentos: reps }, 300_000);
+        r = await ctx.centi("telaApi", { situacao: sit }, 180_000);
+      }
       if (r.interrompido) throw new Error("Interrompido na extensão.");
       if (!r.ok) {
         throw new Error(
@@ -148,10 +154,11 @@ const NOS: DefNo[] = [
       if (sit && r.filtro !== sit) throw new Error("A extensão da Centi está desatualizada (1.15.0 ou maior filtra por situação) — baixe a nova.");
       const linhas = normalizar(r.protocolos);
       const alvo = reps.map(normTexto);
-      const temDep = linhas.some((l) => str(l.departamento));
-      return {
-        saida: alvo.length && temDep ? linhas.filter((l) => alvo.some((a) => normTexto(l.departamento).includes(a) || a.includes(normTexto(l.departamento)))) : linhas,
-      };
+      if (!alvo.length) return { saida: linhas };
+      // Filtro SEGURO: sem o departamento nas linhas não dá para saber a repartição — para (nunca passa todas).
+      if (linhas.length && !linhas.some((l) => str(l.departamento)))
+        throw new Error("A Centi não devolveu o departamento dos protocolos — não dá para filtrar pela repartição. Liste os protocolos uma vez na Tela Protocolo (PO011) com a coluna Departamento.");
+      return { saida: linhas.filter((l) => alvo.some((a) => normTexto(l.departamento).includes(a) || a.includes(normTexto(l.departamento)))) };
     },
   },
   {
@@ -171,7 +178,15 @@ const NOS: DefNo[] = [
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Entidade ${ent} (${i + 1} de ${ents.length})…`);
-        const r = await pedirCenti(ctx, "cm002", { entidade: ent }, 300_000);
+        let r = await ctx.centi("cm002", { entidade: ent }, 300_000);
+        if (!r.ok && r.semConsulta && !r.interrompido) {
+          // A consulta ainda não foi aprendida: a extensão abre a CM002 e clica em Pesquisar UMA vez (aprende) e repete.
+          ctx.aviso("Ensinando a consulta da CM002 (abrindo a tela e pesquisando)…");
+          await pedirCenti(ctx, "telaPlanejamentos", { aprender: true }, 120_000);
+          r = await ctx.centi("cm002", { entidade: ent }, 300_000);
+        }
+        if (r.interrompido) throw new Error("Interrompido na extensão.");
+        if (!r.ok) throw new Error(r.erro || "A extensão da Centi não respondeu.");
         for (const p of Array.isArray(r.linhas) ? r.linhas : []) out.push({ ...obj(p), planejamento: str(obj(p).id), entidade: ent });
       }
       return { saida: out };
@@ -220,6 +235,19 @@ const NOS: DefNo[] = [
         ),
       };
     },
+  },
+
+  {
+    tipo: "sistema.naoCadastrados",
+    categoria: "sistema",
+    rotulo: "Só os não cadastrados",
+    descricao: "Separa os protocolos que JÁ estão no sistema (pelo Id da capa ou nº/ano) — evita emitir e ler o PDF de novo.",
+    icone: "filter",
+    entradas: ["entrada"],
+    saidas: ["novos", "cadastrados"],
+    rotulosPortas: { novos: "Novos", cadastrados: "Já cadastrados" },
+    campos: [],
+    executar: async (e, _c, ctx) => separarCadastrados(so(e), (ctx.host.protocolos ?? []) as Item[]),
   },
 
   // ——— Leitura
@@ -473,6 +501,40 @@ const NOS: DefNo[] = [
     executar: async (e, c) => ({ saida: desdobrar(so(e), str(c.campo, "dfds")) }),
   },
 
+  {
+    tipo: "dados.conferirCm002",
+    categoria: "dados",
+    rotulo: "Conferir DFDs na CM002",
+    descricao: "Cada DFD (A) × a CM002 (B) pelo planejamento: fora da CM002, situação proibida/fora da esperada, valor e entidade divergentes.",
+    icone: "compare",
+    entradas: ["a", "b"],
+    saidas: ["divergentes", "conformes"],
+    rotulosPortas: { a: "DFDs", b: "CM002", divergentes: "Divergentes", conformes: "Conformes" },
+    campos: [
+      { chave: "proibidas", rotulo: "Situações que são erro", tipo: "texto", padrao: "CANCEL", ajuda: "Contém (várias por ;). Ex.: CANCEL" },
+      { chave: "esperada", rotulo: "Situação esperada", tipo: "texto", ajuda: "Vazio = qualquer uma (menos as de erro). Várias por ;" },
+      { chave: "campoValor", rotulo: "Campo do valor na CM002", tipo: "caminho", padrao: "valor", ajuda: "Vazio = não confere o valor." },
+      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", padrao: 0.01 },
+      { chave: "entidade", rotulo: "Conferir a entidade do órgão", tipo: "booleano", padrao: true },
+    ],
+    executar: async (e, c, ctx) => {
+      const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
+      const chave = ctx.host.chaveOrgao as ((id: number | null, ent: string | null) => string | null) | undefined;
+      const entidadeDe = (d: Item) => {
+        if (str(d.entidade)) return str(d.entidade);
+        const k = chave?.(null, str(d.orgao) || null);
+        return (k && mapa[k]?.replace(/^0+(?=\d)/, "")) || "";
+      };
+      return conferirCm002(so(e, "a"), so(e, "b"), {
+        proibidas: lista(c.proibidas ?? "CANCEL"),
+        esperada: lista(c.esperada),
+        campoValor: str(c.campoValor ?? "valor"),
+        tolerancia: numeroDe(c.tolerancia) ?? 0.01,
+        entidade: c.entidade !== false ? entidadeDe : null,
+      });
+    },
+  },
+
   // ——— Erros
   {
     tipo: "erros.apontar",
@@ -569,6 +631,10 @@ const NOS: DefNo[] = [
         const linha = { protocolo: it.protocolo, ano: it.ano, id: it.id, apontamentos: ap.length, ...r, erros: Array.isArray(r.erros) ? r.erros.join(" | ") : r.erros };
         (r.importado === true ? out.importados : out.naoImportados).push(linha);
       }
+      (ctx.host.relatorio as ((l: Item[]) => void) | undefined)?.([
+        ...out.importados.map((x) => ({ ...x, status: "importado" })),
+        ...out.naoImportados.map((x) => ({ ...x, status: "nao-importado" })),
+      ]);
       return out;
     },
   },
@@ -617,6 +683,54 @@ export function apontamentosPorProtocolo(apontados: Item[]): Map<string, string[
     m.set(k, l);
   }
   return m;
+}
+
+const anoDoNumero = (n: string) => n.split("/")[1]?.trim() ?? "";
+
+/** Os protocolos que chegam × os do sistema: pelo Id da capa (quando os dois têm) ou pelo nº + ano. */
+export function separarCadastrados(itens: Item[], sistema: Item[]): { novos: Item[]; cadastrados: Item[] } {
+  const ids = new Set(sistema.map((p) => str(p.idExterno).trim()).filter(Boolean));
+  const nums = new Set(sistema.map((p) => `${str(p.numero).split("/")[0].trim()}/${str(p.ano) || anoDoNumero(str(p.numero)) || str(p.anoPca)}`));
+  const out = { novos: [] as Item[], cadastrados: [] as Item[] };
+  for (const it of itens) {
+    const id = str(it.id).trim();
+    (id && ids.has(id)) || nums.has(chaveProto(it)) ? out.cadastrados.push(it) : out.novos.push(it);
+  }
+  return out;
+}
+
+export type OpcoesCm002 = { proibidas: string[]; esperada: string[]; campoValor: string; tolerancia: number; entidade: ((d: Item) => string) | null };
+
+/** A conferência DFD × CM002 (pura): cada DFD divergente sai com a `mensagem` (um item por problema). */
+export function conferirCm002(dfds: Item[], cm: Item[], o: OpcoesCm002): { divergentes: Item[]; conformes: Item[] } {
+  const porPlan = new Map<string, Item[]>();
+  for (const l of cm) {
+    const k = str(l.planejamento ?? l.id).trim();
+    if (k) porPlan.set(k, [...(porPlan.get(k) ?? []), l]);
+  }
+  const out = { divergentes: [] as Item[], conformes: [] as Item[] };
+  for (const d of dfds) {
+    const ref = `DFD ${str(d.numero)} (Planej. ${str(d.planejamento)})`;
+    const linhas = porPlan.get(str(d.planejamento).trim()) ?? [];
+    const msgs: string[] = [];
+    const entD = o.entidade?.(d) ?? "";
+    const b = (entD && linhas.find((l) => str(l.entidade) === entD)) || linhas[0];
+    if (!b) msgs.push(`${ref} não está na CM002`);
+    else {
+      const sit = str(b.situacao);
+      const ns = normTexto(sit);
+      if (o.proibidas.some((p) => ns.includes(normTexto(p)))) msgs.push(`${ref}: situação ${sit} na CM002`);
+      else if (o.esperada.length && !o.esperada.some((p) => ns.includes(normTexto(p)))) msgs.push(`${ref}: situação ${sit} na CM002 (esperada ${o.esperada.join(" ou ")})`);
+      const vb = o.campoValor ? numeroDe(resolverCaminho(b, o.campoValor)) : null;
+      const vd = numeroDe(d.valor);
+      if (vb != null && vd != null && Math.abs(vb - vd) > o.tolerancia)
+        msgs.push(`${ref}: valor ${vd.toFixed(2).replace(".", ",")} no DFD × ${vb.toFixed(2).replace(".", ",")} na CM002`);
+      if (entD && str(b.entidade) && str(b.entidade) !== entD) msgs.push(`${ref}: na CM002 está na entidade ${str(b.entidade)}, o órgão do DFD é da ${entD}`);
+    }
+    if (msgs.length) for (const mensagem of msgs) out.divergentes.push({ ...d, b, mensagem });
+    else out.conformes.push({ ...d, b });
+  }
+  return out;
 }
 
 function normalizar(v: unknown): Item[] {
