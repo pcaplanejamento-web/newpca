@@ -172,6 +172,17 @@ export function FluxosAutomacao({
       : null,
   );
   useEffect(() => onEditor(aberto != null), [aberto, onEditor]);
+  // Trocar de fluxo zera o que a tela mostrava do anterior: as saídas são guardadas pelo id do NÓ, e fluxos diferentes
+  // reusam os mesmos ids ("dfds1"…) — a seleção de um mostrava os itens de outro. Rodando, a execução manda.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só a troca do fluxo aberto limpa.
+  useEffect(() => {
+    if (rodandoRef.current != null) return;
+    setSaidas({});
+    setParciais({});
+    setPrevias({});
+    setDfds(null);
+    entradaMesa.current = null;
+  }, [aberto]);
   useEffect(() => {
     // O "+" do cabeçalho ALTERNA o painel (aberto, fecha).
     if (pedidoNovo > 0) {
@@ -306,7 +317,8 @@ export function FluxosAutomacao({
         if (!agendado) toast.warning("A extensão da Centi não está pronta (instale, abra a Centi e entre).");
         return null;
       }
-      if (entrada) entradaMesa.current = entrada;
+      // A entrada da Mesa vale só para ESTA execução — uma execução manual depois não herda os itens de antes.
+      entradaMesa.current = entrada ?? null;
       rodandoRef.current = f.id;
       setRodando(f.id);
       setExec({ id: f.id, nome: f.nome, total: grafo.nos.length });
