@@ -21,7 +21,7 @@ import { Dropdown } from "./Dropdown";
 import { TextField } from "./Field";
 import { cellCls } from "./formStyles";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { IconDownload, IconKey, IconRobo, IconSettings, } from "./icons";
+import { IconDownload, IconKey, IconPlus, IconRobo, IconSettings } from "./icons";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import { GravadorReceitas, type PassoGravado } from "./GravadorReceitas";
@@ -340,6 +340,9 @@ export function AutomacaoAdmin({
   cadastradasRef.current = cadastradas;
   const [logado, setLogado] = useState<Resposta | null>(null);
   const [rodando, setRodando] = useState(false);
+  /** "Novo fluxo" do cabeçalho: cada toque abre o painel (o contador da Mesa); some dentro de um fluxo aberto. */
+  const [novoFluxo, setNovoFluxo] = useState(0);
+  const [noEditor, setNoEditor] = useState(false);
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   useEffect(() => {
@@ -609,14 +612,22 @@ export function AutomacaoAdmin({
           <Button size="sm" variant={atualizada ? "secondary" : "primary"} onClick={baixarExtensao} title={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}>
             <IconDownload className="h-4 w-4" /> Extensão {VERSAO_EXTENSAO_CENTI}
           </Button>
+          {!noEditor && (
+            <Button size="sm" onClick={() => setNovoFluxo((n) => n + 1)}>
+              <IconPlus className="h-4 w-4" /> Novo fluxo
+            </Button>
+          )}
           <Dropdown
             papel="dialog"
             ariaLabel="Ajustes"
             align="end"
             width={360}
             trigger={
-              <span className="inline-flex h-11 items-center gap-2 rounded-control border border-border-2 bg-surface px-3 text-sm font-semibold text-text lg:h-[var(--h-control-sm)]">
-                <IconSettings className="h-4 w-4" /> Ajustes
+              <span
+                title="Ajustes"
+                className="inline-flex size-11 items-center justify-center rounded-control border border-border-2 bg-surface text-text lg:size-[var(--h-control-sm)]"
+              >
+                <IconSettings className="h-4 w-4" aria-hidden="true" />
               </span>
             }
           >
@@ -651,6 +662,8 @@ export function AutomacaoAdmin({
         importacao={importacao}
         onAbrirProtocolo={abrirProtocolo}
         onRodando={setRodando}
+        novo={novoFluxo}
+        onEditor={setNoEditor}
       />
 
       <BannersMesa

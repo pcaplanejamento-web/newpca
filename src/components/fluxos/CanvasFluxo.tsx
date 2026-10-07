@@ -1,7 +1,7 @@
 "use client";
 
 import { type DragEvent, type PointerEvent as RPointerEvent, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { type DefNo, type Grafo, type NoFluxo, type PassoExec, portasDo, type Registro, SAIDA_ERRO } from "@/lib/fluxo-core";
+import { type Grafo, type PassoExec, portasDo, type Registro, SAIDA_ERRO } from "@/lib/fluxo-core";
 import { corCategoria } from "@/lib/fluxo-nos";
 import { alturaNo, caixasDoGrafo, caminhoSvg, GRADE, LARGURA_NO, PASSO_PORTA, type Ponto, posPorta, rotaOrtogonal, snap, TOPO_PORTAS } from "@/lib/fluxo-layout";
 
@@ -275,6 +275,7 @@ export function CanvasFluxo({
           return (
             <div
               key={n.id}
+              data-no={n.id}
               className={`absolute rounded-xl border bg-surface shadow-soft transition-shadow ${sel ? "border-accent shadow-[0_0_0_2px_var(--accent)]" : "border-border"} ${n.desativado ? "opacity-50" : ""}`}
               style={{ left: n.x, top: n.y, width: LARGURA_NO, height: alturaNo(d), borderTop: `3px solid ${cor}` }}
             >

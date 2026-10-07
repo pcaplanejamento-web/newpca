@@ -32,7 +32,8 @@ import { Button } from "../Button";
 import { Callout } from "../Callout";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
-import { IconChevronLeft, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconSave, IconTrash } from "../icons";
+import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconSave, IconTrash } from "../icons";
+import { JanelaFlutuante } from "../JanelaFlutuante";
 import { Modal } from "../Modal";
 import { Switch } from "../Switch";
 import { toast } from "../Toast";
@@ -41,7 +42,7 @@ import { organizarGrafo } from "@/lib/fluxo-layout";
 import { IconeNo } from "./IconeNo";
 import { Ajuda } from "../Ajuda";
 import { SkeletonCartao } from "../Skeleton";
-import { CartaoFluxo } from "./CartaoFluxo";
+import { CartaoFluxo, GRADE_CARTOES } from "./CartaoFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
 import { type HostPainel, HostPainelCtx } from "./paineis";
@@ -83,6 +84,8 @@ export function FluxosAutomacao({
   importacao,
   onAbrirProtocolo,
   onRodando,
+  novo: pedidoNovo,
+  onEditor,
 }: {
   pedir: Pedir;
   lote: MutableRefObject<string | null>;
@@ -98,6 +101,10 @@ export function FluxosAutomacao({
   importacao: ContextoImportacao;
   onAbrirProtocolo: (id: number) => void;
   onRodando: (r: boolean) => void;
+  /** Cada valor novo abre o "Novo fluxo" (o botão do cabeçalho da Automação). */
+  novo: number;
+  /** Avisa quando um fluxo está aberto (o cabeçalho esconde o "Novo fluxo"). */
+  onEditor: (aberto: boolean) => void;
 }) {
   const [fluxos, setFluxos] = useState<FluxoAutomacao[] | null>(null);
   const [aberto, setAberto] = useState<number | null>(null);
@@ -107,6 +114,13 @@ export function FluxosAutomacao({
   const [novo, setNovo] = useState(false);
   const cancelar = useRef(false);
   useEffect(() => onRodando(rodando != null), [rodando, onRodando]);
+  useEffect(() => onEditor(aberto != null), [aberto, onEditor]);
+  useEffect(() => {
+    if (pedidoNovo > 0) {
+      setAberto(null);
+      setNovo(true);
+    }
+  }, [pedidoNovo]);
 
   const carregar = useCallback(async () => {
     const r = await api<{ fluxos?: FluxoAutomacao[] }>("/api/admin/automacao/fluxos");
@@ -439,18 +453,19 @@ export function FluxosAutomacao({
           onExcluir={() => void excluir(fluxo)}
         />
       ) : (
-        <ListaFluxos fluxos={fluxos} rodando={rodando} onAbrir={setAberto} onNovo={() => setNovo(true)} />
+        <ListaFluxos
+          fluxos={fluxos}
+          rodando={rodando}
+          novo={novo}
+          onAbrir={(id) => {
+            setNovo(false);
+            setAberto(id);
+          }}
+          onNovo={() => setNovo(true)}
+          onFecharNovo={() => setNovo(false)}
+          onCriar={criar}
+        />
       )}
-      <NovoFluxo
-        aberto={novo}
-        fluxos={fluxos ?? []}
-        onFechar={() => setNovo(false)}
-        onCriar={criar}
-        onAbrir={(id) => {
-          setNovo(false);
-          setAberto(id);
-        }}
-      />
       <ProtocoloUploadForm
         reparticoes={importacao.reparticoes as never}
         reparticaoAtivaId={null}
@@ -470,76 +485,121 @@ export function FluxosAutomacao({
 
 const GRAFO_VAZIO_COM_INICIO: Grafo = { ...GRAFO_VAZIO, nos: [{ id: "inicio1", tipo: "gatilho.inicio", config: {}, x: 64, y: 160 }] };
 
-const GRADE_CARTOES = "grid auto-rows-fr gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]";
+/** O painel "Novo fluxo" ocupa esta largura no desktop (empurra os cartões). */
+const LARGURA_NOVO = "26rem";
 
-function ListaFluxos({ fluxos, rodando, onAbrir, onNovo }: { fluxos: FluxoAutomacao[] | null; rodando: number | null; onAbrir: (id: number) => void; onNovo: () => void }) {
+function ListaFluxos({
+  fluxos,
+  rodando,
+  novo,
+  onAbrir,
+  onNovo,
+  onFecharNovo,
+  onCriar,
+}: {
+  fluxos: FluxoAutomacao[] | null;
+  rodando: number | null;
+  novo: boolean;
+  onAbrir: (id: number) => void;
+  onNovo: () => void;
+  onFecharNovo: () => void;
+  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string) => Promise<void>;
+}) {
+  const desktop = useDesktop();
+  const escolha = <EscolherNovoFluxo fluxos={fluxos ?? []} onFechar={onFecharNovo} onCriar={onCriar} onAbrir={onAbrir} />;
   return (
-    <div className="space-y-[var(--gap-block)]">
-      <div className="flex items-center justify-end">
-        <Button size="sm" icon={<IconPlus className="size-4" />} onClick={onNovo}>
-          Novo fluxo
-        </Button>
-      </div>
-      {!fluxos ? (
-        <div className={GRADE_CARTOES} aria-busy="true">
-          {[0, 1, 2].map((i) => (
-            <SkeletonCartao key={i} linhas={3} />
-          ))}
-        </div>
-      ) : !fluxos.length ? (
-        <div className={`${CARTAO} flex flex-col items-center gap-3 py-10 text-center`}>
-          <IconFluxo className="size-8 text-accent" aria-hidden="true" />
-          <p className="text-sm text-muted">Nenhum fluxo ainda. Comece de um modelo pronto ou do zero.</p>
-          <Button size="sm" onClick={onNovo}>
-            Criar o primeiro fluxo
-          </Button>
-        </div>
-      ) : (
-        <div className={GRADE_CARTOES}>
-          {fluxos.map((f) => {
-            const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
-            return (
-              <CartaoFluxo
-                key={f.id}
-                titulo={f.nome}
-                descricao={f.descricao}
-                onClick={() => onAbrir(f.id)}
-                selo={rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : <Badge tone="slate">Manual</Badge>}
-                rodape={
-                  <>
-                    <span className="block">
-                      {f.grafo.nos.length} nó(s) · {rotuloFrequencia(f.frequencia)}
-                      {f.ativo && f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}
-                    </span>
-                    {u?.estado && (
-                      <span className={`block ${u.estado === "concluido" && !u.apontados ? "text-[var(--ok)]" : "text-[var(--warn)]"}`}>
-                        Última: {u.estado === "concluido" ? "concluída" : u.estado}
-                        {u.apontados ? ` · ${u.apontados} erro(s) apontado(s)` : ""}
-                        {f.ultimaEm ? ` · ${dataHoraBR(f.ultimaEm)}` : ""}
+    <div className="flex items-start gap-[var(--gap-block)]">
+      <div className="min-w-0 flex-1">
+        {!fluxos ? (
+          <div className={GRADE_CARTOES} aria-busy="true">
+            {[0, 1, 2].map((i) => (
+              <SkeletonCartao key={i} linhas={3} />
+            ))}
+          </div>
+        ) : !fluxos.length ? (
+          <div className={`${CARTAO} flex flex-col items-center gap-3 py-10 text-center`}>
+            <IconFluxo className="size-8 text-accent" aria-hidden="true" />
+            <p className="text-sm text-muted">Nenhum fluxo ainda. Comece de um modelo pronto ou do zero.</p>
+            <Button size="sm" onClick={onNovo}>
+              Criar o primeiro fluxo
+            </Button>
+          </div>
+        ) : (
+          <div className={GRADE_CARTOES}>
+            {fluxos.map((f) => {
+              const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
+              return (
+                <CartaoFluxo
+                  key={f.id}
+                  titulo={f.nome}
+                  descricao={f.descricao}
+                  onClick={() => onAbrir(f.id)}
+                  selo={rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : <Badge tone="slate">Manual</Badge>}
+                  rodape={
+                    <>
+                      <span className="block truncate">
+                        {f.grafo.nos.length} nó(s) · {rotuloFrequencia(f.frequencia)}
+                        {f.ativo && f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}
                       </span>
-                    )}
-                  </>
-                }
-              />
-            );
-          })}
+                      {u?.estado && (
+                        <span className={`block truncate ${u.estado === "concluido" && !u.apontados ? "text-[var(--ok)]" : "text-[var(--warn)]"}`}>
+                          Última: {u.estado === "concluido" ? "concluída" : u.estado}
+                          {u.apontados ? ` · ${u.apontados} erro(s)` : ""}
+                          {f.ultimaEm ? ` · ${dataHoraBR(f.ultimaEm)}` : ""}
+                        </span>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {/* DESKTOP: o painel entra da direita para a esquerda EMPURRANDO os cartões (a largura anima). */}
+      {desktop && (
+        <div
+          className="shrink-0 overflow-hidden transition-[width,opacity] duration-[var(--motion-duration)] ease-[var(--motion-ease)]"
+          style={{ width: novo ? LARGURA_NOVO : 0, opacity: novo ? 1 : 0 }}
+          aria-hidden={!novo}
+          inert={!novo}
+        >
+          <aside className={`${CARTAO} sticky top-[var(--pad-canvas)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas)*2)] flex-col gap-3 !p-0`} style={{ width: LARGURA_NOVO }}>
+            {escolha}
+          </aside>
         </div>
+      )}
+      {!desktop && (
+        <Modal open={novo} onClose={onFecharNovo} titulo="Novo fluxo">
+          {escolha}
+        </Modal>
       )}
     </div>
   );
 }
 
+/** Desktop (≥ lg) — o mesmo corte das medidas do sistema. */
+function useDesktop(): boolean {
+  const [d, setD] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 64rem)");
+    const on = () => setD(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return d;
+}
+
 const EM_BRANCO: { id: string; nome: string; descricao: string; grafo?: Grafo; frequencia?: Frequencia } = { id: "", nome: "Em branco", descricao: "Só o Início — monte do zero." };
 
-/** "Novo fluxo": painel à direita com o "Em branco" e TODOS os modelos prontos (o já criado pode ser aberto). */
-function NovoFluxo({
-  aberto,
+/** "Novo fluxo": o nome + "Em branco" e TODOS os modelos no MESMO cartão da lista (o já criado pode ser aberto). */
+function EscolherNovoFluxo({
   fluxos,
   onFechar,
   onCriar,
   onAbrir,
 }: {
-  aberto: boolean;
   fluxos: FluxoAutomacao[];
   onFechar: () => void;
   onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string) => Promise<void>;
@@ -558,47 +618,41 @@ function NovoFluxo({
     setModelo("");
   };
   return (
-    <Modal
-      open={aberto}
-      onClose={onFechar}
-      titulo="Novo fluxo"
-      size="lg"
-      lado="direita"
-      rodape={
-        <div className="flex flex-wrap justify-end gap-2">
-          {existente && (
-            <Button size="sm" variant="secondary" onClick={() => onAbrir(existente.id)}>
-              Abrir o existente
-            </Button>
-          )}
-          <Button size="sm" loading={criando} disabled={!(nome.trim() || m)} onClick={() => void criar()}>
-            {existente ? "Criar outro" : "Criar"}
-          </Button>
-        </div>
-      }
-    >
-      <div className="space-y-3">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-2 border-b border-border px-[var(--pad-card)] py-2.5 max-lg:hidden">
+        <h3 className="min-w-0 flex-1 text-base font-bold text-text">Novo fluxo</h3>
+        <Button variant="icon" aria-label="Fechar" onClick={onFechar}>
+          <IconClose className="size-5" />
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-[var(--pad-card)]">
         <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
         <p className="text-sm font-medium text-text">Começar de</p>
         <div className={GRADE_CARTOES}>
-          {[EM_BRANCO, ...MODELOS_FLUXO].map((x) => {
-            const criado = x.id ? fluxos.some((f) => f.nome === x.nome) : false;
-            return (
-              <CartaoFluxo
-                key={x.id || "branco"}
-                titulo={x.nome}
-                descricao={x.descricao}
-                tracejado
-                marcado={modelo === x.id}
-                onClick={() => setModelo(x.id)}
-                selo={criado ? <Badge tone="emerald">Já existe</Badge> : undefined}
-                rodape={x.grafo ? `${x.grafo.nos.length} nó(s) · ${x.frequencia ? rotuloFrequencia(x.frequencia) : "Manual"}` : undefined}
-              />
-            );
-          })}
+          {[EM_BRANCO, ...MODELOS_FLUXO].map((x) => (
+            <CartaoFluxo
+              key={x.id || "branco"}
+              titulo={x.nome}
+              descricao={x.descricao}
+              marcado={modelo === x.id}
+              onClick={() => setModelo(x.id)}
+              selo={x.id && fluxos.some((f) => f.nome === x.nome) ? <Badge tone="emerald">Já existe</Badge> : undefined}
+              rodape={x.grafo ? `${x.grafo.nos.length} nó(s) · ${x.frequencia ? rotuloFrequencia(x.frequencia) : "Manual"}` : undefined}
+            />
+          ))}
         </div>
       </div>
-    </Modal>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-border px-[var(--pad-card)] py-2.5">
+        {existente && (
+          <Button size="sm" variant="secondary" onClick={() => onAbrir(existente.id)}>
+            Abrir o existente
+          </Button>
+        )}
+        <Button size="sm" loading={criando} disabled={!(nome.trim() || m)} onClick={() => void criar()}>
+          {existente ? "Criar outro" : "Criar"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -633,7 +687,9 @@ function EditorFluxo({
   const [vista, setVista] = useState<Vista>({ x: 40, y: 20, z: 0.9 });
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
-  const [painel, setPainel] = useState<"no" | "relatorio">("no");
+  const [relatorio, setRelatorio] = useState(false);
+  /** O nó cuja configuração está aberta (janela flutuante sobre o diagrama) e onde ele está na tela. */
+  const [config, setConfig] = useState<{ id: string; ancora: { x: number; y: number; w: number; h: number } } | null>(null);
   // A TELA INICIAL é o painel (entradas · etapas · análise); o diagrama só ao montar o fluxo.
   const [modo, setModo] = useState<"painel" | "diagrama">(fluxo.grafo.nos.length <= 1 ? "diagrama" : "painel");
   const sujo =
@@ -652,7 +708,7 @@ function EditorFluxo({
     return () => window.removeEventListener("resize", calc);
   }, []);
   useEffect(() => {
-    if (resultado?.apontados.length || resultado?.estado === "falhou") setPainel("relatorio");
+    if (resultado?.apontados.length || resultado?.estado === "falhou") setRelatorio(true);
     if (resultado?.noErro) setSel(resultado.noErro);
   }, [resultado]);
   // Avisa ao sair com alteração não salva.
@@ -681,7 +737,6 @@ function EditorFluxo({
     }
     setGrafo({ ...grafo, nos: [...grafo.nos, n], conexoes: [...grafo.conexoes, ...liga] });
     setSel(id);
-    setPainel("no");
   };
 
   async function salvar() {
@@ -714,7 +769,7 @@ function EditorFluxo({
     return caminhosDosItens(itens, 120);
   }, [sel, grafo.conexoes, passos]);
 
-  const noSel = grafo.nos.find((n) => n.id === sel) ?? null;
+  const noConfig = config ? (grafo.nos.find((n) => n.id === config.id) ?? null) : null;
   const enquadrar = (g: Grafo = grafo) => {
     if (!g.nos.length) return setVista({ x: 40, y: 20, z: 0.9 });
     const xs = g.nos.map((n) => n.x);
@@ -773,6 +828,11 @@ function EditorFluxo({
         >
           {modo === "painel" ? "Diagrama" : "Painel"}
         </Button>
+        {resultado && (
+          <Button size="sm" variant="ghost" onClick={() => setRelatorio(true)} title="O relatório da última execução">
+            Relatório{resultado.apontados.length ? ` (${resultado.apontados.length})` : ""}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" icon={<IconSave className="size-4" />} disabled={!sujo || rodando} loading={salvando} onClick={() => void salvar()}>
           Salvar
         </Button>
@@ -806,7 +866,7 @@ function EditorFluxo({
       {modo === "painel" && (
         <PainelFluxo grafo={grafo} onGrafo={setGrafo} passos={passos} resultado={resultado} rodando={rodando} ultima={{ em: fluxo.ultimaEm, resumo: fluxo.ultimaExecucao }} />
       )}
-      <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_20rem]`} style={{ minHeight: altura }}>
+      <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} gap-3 lg:grid-cols-[14rem_minmax(0,1fr)]`} style={{ minHeight: altura }}>
         <aside className={`${CARTAO} flex min-h-0 flex-col gap-2 overflow-hidden lg:h-[var(--h)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
           <SearchField compacto placeholder="Buscar bloco" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar bloco" />
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
@@ -844,7 +904,9 @@ function EditorFluxo({
           selecionado={sel}
           onSelecionar={(id) => {
             setSel(id);
-            if (id) setPainel("no");
+            const el = id ? document.querySelector(`[data-no="${CSS.escape(id)}"]`) : null;
+            const r = el?.getBoundingClientRect();
+            setConfig(id && r ? { id, ancora: { x: r.x, y: r.y, w: r.width, h: r.height } } : null);
           }}
           onMudar={setGrafo}
           passos={passos}
@@ -893,53 +955,39 @@ function EditorFluxo({
             </div>
           }
         />
-        <aside className={`${CARTAO} flex min-h-[20rem] flex-col gap-3 overflow-hidden lg:h-[var(--h)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
-          {resultado && (
-            <div className="flex gap-1">
-              <Button size="xs" variant={painel === "no" ? "primary" : "ghost"} onClick={() => setPainel("no")}>
-                Nó
-              </Button>
-              <Button size="xs" variant={painel === "relatorio" ? "primary" : "ghost"} onClick={() => setPainel("relatorio")}>
-                Relatório{resultado.apontados.length ? ` (${resultado.apontados.length})` : ""}
-              </Button>
-            </div>
-          )}
-          {painel === "relatorio" && resultado ? (
-            <RelatorioExecucao resultado={resultado} onIr={(id) => {
-              setSel(id);
-              setPainel("no");
-            }} />
-          ) : noSel ? (
+      </div>
+      <JanelaFlutuante aberta={!!noConfig} ancora={config?.ancora ?? null} titulo={noConfig?.nome || "Configurar o nó"} largura={380} onFechar={() => setConfig(null)}>
+        {noConfig && (
+          <div className="flex max-h-[min(70vh,36rem)] flex-col">
             <PainelNo
-              key={noSel.id}
-              no={noSel}
-              def={REGISTRO_NOS.get(noSel.tipo)}
-              passo={passos[noSel.id]}
+              key={noConfig.id}
+              no={noConfig}
+              def={REGISTRO_NOS.get(noConfig.tipo)}
+              passo={passos[noConfig.id]}
               caminhos={caminhos}
               somenteLeitura={rodando}
               onMudar={(n) => setGrafo((g) => ({ ...g, nos: g.nos.map((x) => (x.id === n.id ? n : x)) }))}
               onExcluir={() => {
-                setGrafo((g) => ({ ...g, nos: g.nos.filter((x) => x.id !== noSel.id), conexoes: g.conexoes.filter((c) => c.de !== noSel.id && c.para !== noSel.id) }));
+                setGrafo((g) => ({ ...g, nos: g.nos.filter((x) => x.id !== noConfig.id), conexoes: g.conexoes.filter((c) => c.de !== noConfig.id && c.para !== noConfig.id) }));
                 setSel(null);
+                setConfig(null);
               }}
             />
-          ) : (
-            <div className="space-y-3 text-sm text-muted">
-              <p>Toque num nó para configurá-lo.</p>
-              {problemas.length > 0 && (
-                <Callout kind={erros.length ? "danger" : "warn"}>
-<strong className="block">{"Antes de executar"}</strong>
-                  <ul className="list-disc pl-4">
-                    {problemas.slice(0, 8).map((p, i) => (
-                      <li key={i}>{p.texto}</li>
-                    ))}
-                  </ul>
-                </Callout>
-              )}
-            </div>
-          )}
-        </aside>
-      </div>
+          </div>
+        )}
+      </JanelaFlutuante>
+      <Modal open={relatorio && !!resultado} onClose={() => setRelatorio(false)} titulo="Relatório da execução" size="lg">
+        {resultado && (
+          <RelatorioExecucao
+            resultado={resultado}
+            onIr={(id) => {
+              setRelatorio(false);
+              setModo("diagrama");
+              setSel(id);
+            }}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

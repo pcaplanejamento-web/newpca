@@ -3164,9 +3164,9 @@ export function Catalogo() {
         <CanvasFluxoDemo />
       </Secao>
       <Secao titulo="Cartão de automação (CartaoFluxo)">
-        <div className="grid auto-rows-fr gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
           <CartaoFluxo titulo="Conferir DFDs × Centi — um título longo que quebra linha sem cortar" descricao="Cada DFD do sistema passa pelo fluxo de conferência." selo={<Badge tone="emerald">Agendado</Badge>} rodape="4 nó(s) · Manual" onClick={() => undefined} />
-          <CartaoFluxo titulo="Em branco" descricao="Só o Início — monte do zero." tracejado marcado onClick={() => undefined} />
+          <CartaoFluxo titulo="Em branco" descricao="Só o Início — monte do zero." marcado onClick={() => undefined} />
         </div>
       </Secao>
       <Secao titulo="Cores — neutros">
