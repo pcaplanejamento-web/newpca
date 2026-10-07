@@ -10,6 +10,7 @@ import { type Column, DataTable } from "../DataTable";
 import { Progress } from "../Progress";
 import { Segmented } from "../Segmented";
 import { StatMini } from "../StatMini";
+import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { CampoDoNo } from "./PainelNo";
 import { estadoDoItem, HostPainelCtx, rotuloItem, VISOES } from "./paineis";
@@ -105,6 +106,7 @@ export function PainelFluxo({
                       <IconeNo nome={def.icone} className="size-3" />
                     </span>
                     {n.nome || def.rotulo}
+                    <AjudaNo def={def} />
                   </legend>
                   {campos.map((c) => (
                     <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} lista="" somenteLeitura={rodando} />
@@ -140,6 +142,7 @@ export function PainelFluxo({
                       <span className="min-w-0 flex-1 truncate text-[13px] text-text">{n.nome || def?.rotulo || n.tipo}</span>
                       {p && p.estado !== "fila" && <span className="text-xs tabular-nums text-muted">{p.estado === "rodando" && vivos ? vivos : p.itens}</span>}
                       {e && <Badge tone={e.tom}>{e.rotulo}</Badge>}
+                      {def && <AjudaNo def={def} />}
                     </div>
                     {p?.estado === "erro" && <p className="text-xs text-[var(--danger)]">{p.erro}</p>}
                     {p?.estado === "rodando" && p.aviso && <p className="truncate text-xs text-muted">{p.aviso}</p>}

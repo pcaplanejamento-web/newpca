@@ -4256,7 +4256,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Atualizar pelo modelo" gravam; fluxo sem ajuda mostra a do modelo de mesmo nome). No `EditorFluxo` a barra é SÓ de ícones
   (Diagrama · Relatório com a contagem · Salvar · Executar/Parar · Configurações · Excluir) + o (?) **`AjudaDoFluxo`**; a
   engrenagem abre o **`ConfigFluxo`** (`fluxos/ConfigFluxo.tsx`, catalogados: nome, descrição, frequência/agendar e os 3
-  textos da ajuda — controlado, o Salvar do editor grava).
+  textos da ajuda — controlado, o Salvar do editor grava). **`AjudaNo`** (v1.40.0, `fluxos/AjudaNo.tsx`): o (?) de cada
+  COMPONENTE (descrição, recebe, entrega, configuração) no nó do diagrama, na paleta, no `PainelNo` e nas etapas do
+  `PainelFluxo` (para o ponteiro — não arrasta o nó). O "Em branco" do Novo fluxo também se arrasta até a lista (`m:`).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

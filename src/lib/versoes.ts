@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.40.0",
+    data: "2026-10-07",
+    titulo: "(?) em cada componente do fluxo",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Cada componente (nó) tem o (?) com o que faz, o que recebe, o que entrega e o que se configura — no diagrama, na paleta, no painel do nó e nas etapas.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O cartão “Em branco” do Novo fluxo também se arrasta até a lista e cria a automação manual ali.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.39.0",
     data: "2026-10-07",
     titulo: "Ajuda e configurações de cada automação",

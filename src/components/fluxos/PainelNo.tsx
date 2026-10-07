@@ -10,6 +10,7 @@ import { Checkbox, SelectField, TextArea, TextField } from "../Field";
 import { IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
 import { Switch } from "../Switch";
+import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { CampoFluxo, CampoReparticoesCenti, RecomecarSubfluxo } from "./paineis";
 
@@ -56,6 +57,7 @@ export function PainelNo({
           <p className="truncate text-sm font-semibold text-text">{def.rotulo}</p>
           <p className="text-xs text-muted">{def.descricao}</p>
         </div>
+        <AjudaNo def={def} />
         {!somenteLeitura && (
           <Button size="sm" variant="icon" aria-label="Excluir o nó" title="Excluir o nó (Delete)" onClick={onExcluir}>
             <IconTrash className="size-4" />

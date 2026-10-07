@@ -7,6 +7,7 @@ import { alturaNo, caminhoSvg, coresDasLigacoes, dobraDaRota, GRADE, LARGURA_NO,
 
 export { alturaNo, LARGURA_NO };
 import { segurar } from "../segurar";
+import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 
 const ZOOM_MIN = 0.3;
@@ -290,7 +291,7 @@ export function CanvasFluxo({
             >
               <button
                 type="button"
-                className="flex h-[46px] w-full cursor-grab items-center gap-2 rounded-t-xl px-2.5 text-left active:cursor-grabbing"
+                className="flex h-[46px] w-full cursor-grab items-center gap-2 rounded-t-xl pl-2.5 pr-8 text-left active:cursor-grabbing"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -314,6 +315,11 @@ export function CanvasFluxo({
                   />
                 )}
               </button>
+              {d && (
+                <span className="absolute right-1.5 top-1.5">
+                  <AjudaNo def={d} />
+                </span>
+              )}
               {p?.entradas.map((porta, i) => (
                 <Porta key={`e-${porta}`} lado="entrada" no={n.id} porta={porta} cor={corPorta.get(`e|${n.id}|${porta}`)} rotulo={d?.rotulosPortas?.[porta] ?? (p.entradas.length > 1 ? porta : "")} indice={i} />
               ))}

@@ -41,6 +41,7 @@ import { Switch } from "../Switch";
 import { toast } from "../Toast";
 import { alturaNo, CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
 import { organizarGrafo } from "@/lib/fluxo-layout";
+import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { Ajuda } from "../Ajuda";
 import { useAlturaTela } from "../AlturaCheia";
@@ -700,7 +701,7 @@ function ListaFluxos({
         const r = grade.current?.getBoundingClientRect();
         if (!r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
         const m = MODELOS_FLUXO.find((x) => x.id === chave.slice(2)) ?? null;
-        return void onCriar(m, m?.nome ?? "Fluxo", { antesDe });
+        return void onCriar(m, m?.nome ?? "Novo fluxo", { antesDe });
       }
       const id = Number(chave.slice(2));
       const sem = lista.filter((f) => f.id !== id);
@@ -743,7 +744,7 @@ function ListaFluxos({
   if (sombra && !arrasto?.destino.antesDe) itens.push(sombra);
   // O cartão PRESO ao ponteiro: o próprio cartão (fluxo ou modelo), igual ao que está na grade.
   const fPreso = arrasto ? lista.find((f) => `f:${f.id}` === arrasto.chave) : undefined;
-  const mPreso = arrasto && !fPreso ? MODELOS_FLUXO.find((m) => `m:${m.id}` === arrasto.chave) : undefined;
+  const mPreso = arrasto && !fPreso ? [EM_BRANCO, ...MODELOS_FLUXO].find((m) => `m:${m.id}` === arrasto.chave) : undefined;
   const preso = fPreso ? cartaoDoFluxo(fPreso, rodando) : mPreso ? cartaoDoModelo(mPreso, lista) : null;
 
   const escolha = (
@@ -882,7 +883,7 @@ function EscolherNovoFluxo({
               role="none"
               title={x.descricao}
               className={`touch-manipulation select-none [-webkit-touch-callout:none] transition-opacity ${arrastar?.chave === `m:${x.id}` ? "opacity-40" : ""}`}
-              onPointerDown={x.id && arrastar ? (e) => arrastar.iniciar(e, `m:${x.id}`) : undefined}
+              onPointerDown={arrastar ? (e) => arrastar.iniciar(e, `m:${x.id}`) : undefined}
               onClickCapture={(e) => {
                 if (arrastar?.foiArrasto()) {
                   e.preventDefault();
@@ -1166,8 +1167,8 @@ function EditorFluxo({
                 <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{c.rotulo}</p>
                 <div className="space-y-1">
                   {c.nos.map((n) => (
+                    <div key={n.tipo} className="flex items-center gap-1">
                     <button
-                      key={n.tipo}
                       type="button"
                       draggable
                       onDragStart={(e) => {
@@ -1176,13 +1177,15 @@ function EditorFluxo({
                       }}
                       onClick={() => adicionar(n.tipo)}
                       title={`${n.descricao} — toque para acrescentar (ligado ao nó marcado) ou arraste para o quadro`}
-                      className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 py-1.5 text-left hover:bg-[var(--accent-soft)] lg:min-h-0"
+                      className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-control px-2 py-1.5 text-left hover:bg-[var(--accent-soft)] lg:min-h-0"
                     >
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-md text-white" style={{ background: c.cor }}>
                         <IconeNo nome={n.icone} className="size-3.5" />
                       </span>
                       <span className="min-w-0 truncate text-[13px] text-text">{n.rotulo}</span>
                     </button>
+                    <AjudaNo def={n} />
+                    </div>
                   ))}
                 </div>
               </div>
