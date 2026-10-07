@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.30.0",
+    data: "2026-10-07",
+    titulo: "Fluxos com tela de painel padronizada",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Todo fluxo abre num PAINEL padronizado: Dados de entrada (os campos dos próprios componentes), Etapas ao vivo (estado e itens de cada componente) e Análise (números + tabela dos apontamentos, exportável). O diagrama só aparece em “Diagrama”, para montar o fluxo.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O Emitir DFD dos fluxos usa a mesma operação do Baixar DFDs (a do servidor) e, se a Centi a recusar, pega a nova da extensão e tenta de novo — como o Baixar DFDs. Campos numéricos aceitam decimais (ex.: tolerância 0,01).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.29.1",
     data: "2026-10-07",
     titulo: "Fluxo não para no meio",

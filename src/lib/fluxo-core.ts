@@ -40,6 +40,8 @@ export type CampoNo = {
   ajuda?: string;
   /** Mostra o campo só quando outro campo tem um destes valores. */
   quando?: { campo: string; valores: string[] };
+  /** DADO DE ENTRADA: aparece na tela inicial do fluxo (o que a pessoa ajusta antes de executar, sem abrir o diagrama). */
+  entrada?: boolean;
 };
 export type CategoriaNo = "gatilho" | "centi" | "sistema" | "leitura" | "logica" | "dados" | "erros" | "saida";
 

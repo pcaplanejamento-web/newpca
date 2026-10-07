@@ -88,7 +88,7 @@ const NOS: DefNo[] = [
     icone: "building",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "filtro", rotulo: "Só as que contêm", tipo: "texto", ajuda: "Ex.: PCA (vazio = todas). Separe vários por ;" }],
+    campos: [{ chave: "filtro", rotulo: "Só as que contêm", tipo: "texto", entrada: true, ajuda: "Ex.: PCA (vazio = todas). Separe vários por ;" }],
     executar: async (_e, c, ctx) => {
       ctx.aviso("Lendo as repartições na Centi…");
       const r = await ctx.centi("reparticoesApi", null, 30_000);
@@ -112,6 +112,7 @@ const NOS: DefNo[] = [
         chave: "situacao",
         rotulo: "Situação",
         tipo: "selecao",
+        entrada: true,
         opcoes: [
           { valor: "", rotulo: "Em análise" },
           { valor: "ANALISADO", rotulo: "Analisado" },
@@ -120,14 +121,14 @@ const NOS: DefNo[] = [
         ],
         padrao: "",
       },
-      { chave: "outra", rotulo: "Situação (texto)", tipo: "texto", obrigatorio: true, quando: { campo: "situacao", valores: ["outra"] } },
+      { chave: "outra", rotulo: "Situação (texto)", tipo: "texto", entrada: true, obrigatorio: true, quando: { campo: "situacao", valores: ["outra"] } },
       {
         chave: "campoReparticao",
         rotulo: "Repartições vindas do item (campo)",
         tipo: "caminho",
         ajuda: "Ligue o nó Repartições antes e use “reparticao” — só os protocolos delas. Vazio = todas.",
       },
-      { chave: "reparticao", rotulo: "Repartições (fixas)", tipo: "texto", ajuda: "Ex.: DEP. PLANEJAMENTO - PCA (várias separadas por ;). Soma às vindas do item." },
+      { chave: "reparticao", rotulo: "Repartições (fixas)", tipo: "texto", entrada: true, ajuda: "Ex.: DEP. PLANEJAMENTO - PCA (várias separadas por ;). Soma às vindas do item." },
     ],
     executar: async (e, c, ctx) => {
       const sit = str(c.situacao) === "outra" ? str(c.outra).trim() : str(c.situacao);
@@ -162,7 +163,7 @@ const NOS: DefNo[] = [
     icone: "list",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "entidades", rotulo: "Entidades", tipo: "texto", ajuda: "Ex.: 2; 3. Vazio = as cadastradas nos órgãos." }],
+    campos: [{ chave: "entidades", rotulo: "Entidades", tipo: "texto", entrada: true, ajuda: "Ex.: 2; 3. Vazio = as cadastradas nos órgãos." }],
     executar: async (_e, c, ctx) => {
       const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
       const ents = [...new Set((lista(c.entidades).length ? lista(c.entidades) : Object.values(mapa)).map((x) => x.replace(/^0+(?=\d)/, "")))].filter(Boolean);
@@ -280,7 +281,7 @@ const NOS: DefNo[] = [
     saidas: ["saida"],
     campos: [
       { chave: "limite", rotulo: "Máximo de DFDs", tipo: "numero", padrao: 5000, ajuda: "Proteção — até 20000." },
-      { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
+      { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
     ],
     executar: async (e, c, ctx) => {
       const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean) => Promise<Item>) | undefined;
@@ -545,10 +546,10 @@ const NOS: DefNo[] = [
     saidas: ["divergentes", "conformes"],
     rotulosPortas: { a: "DFDs", b: "CM002", divergentes: "Divergentes", conformes: "Conformes" },
     campos: [
-      { chave: "proibidas", rotulo: "Situações que são erro", tipo: "texto", padrao: "CANCEL", ajuda: "Contém (várias por ;). Ex.: CANCEL" },
-      { chave: "esperada", rotulo: "Situação esperada", tipo: "texto", ajuda: "Vazio = qualquer uma (menos as de erro). Várias por ;" },
+      { chave: "proibidas", rotulo: "Situações que são erro", tipo: "texto", entrada: true, padrao: "CANCEL", ajuda: "Contém (várias por ;). Ex.: CANCEL" },
+      { chave: "esperada", rotulo: "Situação esperada", tipo: "texto", entrada: true, ajuda: "Vazio = qualquer uma (menos as de erro). Várias por ;" },
       { chave: "campoValor", rotulo: "Campo do valor na CM002", tipo: "caminho", padrao: "valor", ajuda: "Vazio = não confere o valor." },
-      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", padrao: 0.01 },
+      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", entrada: true, padrao: 0.01 },
       { chave: "entidade", rotulo: "Conferir a entidade do órgão", tipo: "booleano", padrao: true },
     ],
     executar: async (e, c, ctx) => {
@@ -579,8 +580,8 @@ const NOS: DefNo[] = [
     saidas: ["divergentes", "conformes"],
     rotulosPortas: { divergentes: "Divergentes", conformes: "Conformes" },
     campos: [
-      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", padrao: 0.01 },
-      { chave: "objeto", rotulo: "Comparar o objeto", tipo: "booleano", padrao: true },
+      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", entrada: true, padrao: 0.01 },
+      { chave: "objeto", rotulo: "Comparar o objeto", tipo: "booleano", entrada: true, padrao: true },
     ],
     executar: async (e, c) => compararDfdCenti(so(e), { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false }),
   },

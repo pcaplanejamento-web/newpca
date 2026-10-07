@@ -38,6 +38,7 @@ import { Switch } from "../Switch";
 import { toast } from "../Toast";
 import { CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
 import { IconeNo } from "./IconeNo";
+import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
 
 type Pedir = (acao: string, dados: unknown, ms: number) => Promise<Record<string, unknown> & { ok?: boolean; erro?: string; loteId?: string; interrompido?: boolean }>;
@@ -454,6 +455,8 @@ function EditorFluxo({
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [painel, setPainel] = useState<"no" | "relatorio">("no");
+  // A TELA INICIAL é o painel (entradas · etapas · análise); o diagrama só ao montar o fluxo.
+  const [modo, setModo] = useState<"painel" | "diagrama">(fluxo.grafo.nos.length <= 1 ? "diagrama" : "painel");
   const sujo =
     JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo;
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
@@ -580,6 +583,16 @@ function EditorFluxo({
             <Badge tone="red">{erros.length} problema(s)</Badge>
           </span>
         )}
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={<IconFluxo className="size-4" />}
+          aria-pressed={modo === "diagrama"}
+          title={modo === "painel" ? "Ver o diagrama e montar o fluxo" : "Voltar ao painel do fluxo"}
+          onClick={() => setModo(modo === "painel" ? "diagrama" : "painel")}
+        >
+          {modo === "painel" ? "Diagrama" : "Painel"}
+        </Button>
         <Button size="sm" variant="ghost" icon={<IconSave className="size-4" />} disabled={!sujo || rodando} loading={salvando} onClick={() => void salvar()}>
           Salvar
         </Button>
@@ -610,7 +623,10 @@ function EditorFluxo({
           })()}` : "agendamento desligado"} · roda com esta tela aberta e a extensão pronta.
         </p>
       )}
-      <div ref={ref} className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_20rem]" style={{ minHeight: altura }}>
+      {modo === "painel" && (
+        <PainelFluxo grafo={grafo} onGrafo={setGrafo} passos={passos} resultado={resultado} rodando={rodando} ultima={{ em: fluxo.ultimaEm, resumo: fluxo.ultimaExecucao }} />
+      )}
+      <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_20rem]`} style={{ minHeight: altura }}>
         <aside className={`${CARTAO} flex min-h-0 flex-col gap-2 overflow-hidden lg:h-[var(--h)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
           <SearchField compacto placeholder="Buscar bloco" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar bloco" />
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">

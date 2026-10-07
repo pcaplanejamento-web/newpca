@@ -98,7 +98,7 @@ export function PainelNo({
   );
 }
 
-function CampoDoNo({ campo: c, valor, onValor, lista, somenteLeitura }: { campo: CampoNo; valor: unknown; onValor: (v: unknown) => void; lista: string; somenteLeitura?: boolean }) {
+export function CampoDoNo({ campo: c, valor, onValor, lista, somenteLeitura }: { campo: CampoNo; valor: unknown; onValor: (v: unknown) => void; lista: string; somenteLeitura?: boolean }) {
   const s = valor == null ? "" : String(valor);
   const rot = `${c.rotulo}${c.obrigatorio ? " *" : ""}`;
   switch (c.tipo) {
@@ -121,12 +121,14 @@ function CampoDoNo({ campo: c, valor, onValor, lista, somenteLeitura }: { campo:
         <TextField
           label={rot}
           hint={c.ajuda}
-          inputMode="numeric"
+          inputMode="decimal"
           value={s}
           disabled={somenteLeitura}
           onChange={(e) => {
-            const t = e.target.value.replace(/[^\d]/g, "");
-            onValor(t ? Number(t) : undefined);
+            // Inteiros e decimais (vírgula ou ponto — ex.: tolerância 0,01); o texto parcial "0," fica até completar.
+            const t = e.target.value.replace(/[^\d.,]/g, "");
+            const n = Number(t.replace(",", "."));
+            onValor(!t ? undefined : /[.,]$/.test(t) || !Number.isFinite(n) ? t : n);
           }}
         />
       );
