@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.29.0",
+    data: "2026-10-07",
+    titulo: "Automações só por API",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Emitir DFD voltou a funcionar: como a tela da Centi, o sistema abre o planejamento (load da CM002) na entidade do órgão ANTES de emitir — sem isso a Centi respondia “Usuário sem permissão!”. Extensão 1.16.0.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Todas as automações são só por API: a extensão não opera mais as telas da Centi (repartições, Tela Protocolo, CM002 e emissão de protocolo vêm das consultas da própria Centi).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Fluxos “Inclusão PCA” e “Execução dos DFDs” buscam cada DFD na Centi pelo planejamento (por API), sem depender da lista da CM002.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.28.0",
     data: "2026-10-07",
     titulo: "Conferir DFDs × Centi pelo Emitir DFD",

@@ -10,7 +10,6 @@ import {
   type CategoriaNo,
   chaveJuncao,
   comparar,
-  type ContextoNo,
   type DefNo,
   interpolar,
   type Item,
@@ -46,12 +45,9 @@ const lista = (v: unknown) =>
     .filter(Boolean);
 const obj = (v: unknown): Item => (v && typeof v === "object" && !Array.isArray(v) ? (v as Item) : { valor: v });
 
-async function pedirCenti(ctx: ContextoNo, acao: string, dados: unknown, ms: number) {
-  const r = await ctx.centi(acao, dados, ms);
-  if (r.interrompido) throw new Error("Interrompido na extensão.");
-  if (!r.ok) throw new Error(r.erro || "A extensão da Centi não respondeu.");
-  return r;
-}
+/** As automações são SÓ API: a consulta é reconhecida quando a própria Centi a faz (a extensão observa, sem tocar na tela). */
+const COMO_ENSINAR_TELA =
+  "Na Centi, abra a Tela Protocolo (PO011) e pesquise uma vez — a extensão reconhece a consulta e daí em diante tudo vai só pela API.";
 
 const CAMPO_CONDICAO: CampoNo[] = [
   { chave: "campo", rotulo: "Campo", tipo: "caminho", obrigatorio: true, ajuda: "O dado de cada item (ex.: situacao)." },
@@ -95,7 +91,9 @@ const NOS: DefNo[] = [
     campos: [{ chave: "filtro", rotulo: "Só as que contêm", tipo: "texto", ajuda: "Ex.: PCA (vazio = todas). Separe vários por ;" }],
     executar: async (_e, c, ctx) => {
       ctx.aviso("Lendo as repartições na Centi…");
-      const r = await pedirCenti(ctx, "telaDepartamentos", null, 90_000);
+      const r = await ctx.centi("reparticoesApi", null, 30_000);
+      if (r.interrompido) throw new Error("Interrompido na extensão.");
+      if (!r.ok) throw new Error(`${r.erro || "A Centi não respondeu."}${r.semConsulta ? ` ${COMO_ENSINAR_TELA}` : ""}`);
       const filtros = lista(c.filtro).map(normTexto);
       const deps = (Array.isArray(r.departamentos) ? r.departamentos : []).filter((d): d is string => typeof d === "string" && !!d.trim());
       return { saida: deps.filter((d) => !filtros.length || filtros.some((f) => normTexto(d).includes(f))).map((reparticao) => ({ reparticao })) };
@@ -138,17 +136,11 @@ const NOS: DefNo[] = [
         ...(str(c.campoReparticao) ? so(e).map((it) => str(resolverCaminho(it, str(c.campoReparticao)))).filter(Boolean) : []),
       ];
       ctx.aviso("Lendo os protocolos na Centi…");
-      let r = await ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000);
-      if (!r.ok && r.semConsulta && !r.interrompido && reps.length) {
-        // Sem a consulta aprendida: a extensão lista os "Em análise" das repartições pela Tela Protocolo (aprende) e repete.
-        ctx.aviso("Ensinando a consulta da Tela Protocolo (PO011)…");
-        await pedirCenti(ctx, "telaEmAnalise", { departamentos: reps }, 300_000);
-        r = await ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000);
-      }
+      const r = await ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000);
       if (r.interrompido) throw new Error("Interrompido na extensão.");
       if (!r.ok) {
         throw new Error(
-          `${r.erro || "A Centi não respondeu."}${r.semConsulta ? " A consulta da API ainda não foi aprendida: abra a Tela Protocolo (PO011) na Centi e liste os protocolos uma vez — a extensão guarda a consulta e daí em diante tudo vai pela API." : ""}`,
+          `${r.erro || "A Centi não respondeu."}${r.semConsulta ? ` ${COMO_ENSINAR_TELA}` : ""}`,
         );
       }
       if (sit && r.filtro !== sit) throw new Error("A extensão da Centi está desatualizada (1.15.0 ou maior filtra por situação) — baixe a nova.");
@@ -179,13 +171,7 @@ const NOS: DefNo[] = [
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Entidade ${ent} (${i + 1} de ${ents.length})…`);
-        let r = await ctx.centi("cm002", { entidade: ent }, 300_000);
-        if (!r.ok && r.semConsulta && !r.interrompido) {
-          // A consulta ainda não foi aprendida: a extensão abre a CM002 e clica em Pesquisar UMA vez (aprende) e repete.
-          ctx.aviso("Ensinando a consulta da CM002 (abrindo a tela e pesquisando)…");
-          await pedirCenti(ctx, "telaPlanejamentos", { aprender: true }, 120_000);
-          r = await ctx.centi("cm002", { entidade: ent }, 300_000);
-        }
+        const r = await ctx.centi("cm002", { entidade: ent }, 300_000);
         if (r.interrompido) throw new Error("Interrompido na extensão.");
         if (!r.ok) throw new Error(r.erro || "A extensão da Centi não respondeu.");
         for (const p of Array.isArray(r.linhas) ? r.linhas : []) out.push({ ...obj(p), planejamento: str(obj(p).id), entidade: ent });
@@ -291,18 +277,30 @@ const NOS: DefNo[] = [
     icone: "scan",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "limite", rotulo: "Máximo de DFDs", tipo: "numero", padrao: 5000, ajuda: "Proteção — até 20000." }],
+    campos: [
+      { chave: "limite", rotulo: "Máximo de DFDs", tipo: "numero", padrao: 5000, ajuda: "Proteção — até 20000." },
+      { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
+    ],
     executar: async (e, c, ctx) => {
-      const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string) => Promise<Item>) | undefined;
+      const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean) => Promise<Item>) | undefined;
       if (!ler) throw new Error("A busca do DFD na Centi só funciona na tela da Automação.");
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
       const itens = so(e).slice(0, max);
       const out: Item[] = [];
-      for (const [i, it] of itens.entries()) {
+      const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
+      const chave = ctx.host.chaveOrgao as ((id: number | null, ent: string | null) => string | null) | undefined;
+      // A entidade da Centi do DFD: a dele; senão a do órgão (cadastro/mapa) — o load e a emissão vão nela.
+      const entidadeDe = (d: Item) => {
+        if (str(d.entidade)) return str(d.entidade);
+        const k = chave?.((d.orgaoId as number | null) ?? null, str(d.orgaoEntidade ?? d.orgao) || null);
+        return (k && mapa[k]?.replace(/^0+(?=\d)/, "")) || "";
+      };
+      for (const [i, it0] of itens.entries()) {
+        const it: Item = { ...it0, entidade: entidadeDe(it0) };
         if (ctx.cancelado()) break;
         ctx.aviso(`DFD ${str(it.numero)} · planejamento ${str(it.planejamento)} (${i + 1} de ${itens.length})…`);
         try {
-          out.push({ ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined) });
+          out.push({ ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, c.pdf !== false) });
         } catch (x) {
           const msg = x instanceof Error ? x.message : String(x);
           if (/interrompido/i.test(msg)) throw x;
@@ -619,6 +617,25 @@ const NOS: DefNo[] = [
     saidas: ["saida"],
     campos: [],
     executar: async (e, _c, ctx) => {
+      // Do "Buscar DFD na Centi": cada item JÁ é o DFD (id) com a situação lida — grava direto nesses DFDs.
+      const lidos = so(e).filter((it) => it.centi && typeof it.centi === "object" && str((it.centi as Item).situacao) && Number(it.id) > 0);
+      if (lidos.length) {
+        const out: Item[] = [];
+        for (let i = 0; i < lidos.length; i += 5000) {
+          const f = lidos.slice(i, i + 5000);
+          const g = await ctx.api("/api/admin/automacao/execucao-dfds", {
+            method: "POST",
+            body: {
+              colunas: ["ID", "SITUACAO"],
+              linhas: f.map((p) => ({ valores: [str(p.planejamento), str((p.centi as Item).situacao)] })),
+              dfdIds: f.map((p) => Number(p.id)),
+            },
+          });
+          if (!g.ok) throw new Error(g.error || "Falhou ao gravar a execução.");
+          out.push({ lidos: g.lidos, atualizados: g.atualizados });
+        }
+        return { saida: out };
+      }
       const r = await ctx.api("/api/admin/automacao/execucao-dfds");
       if (!r.ok || !Array.isArray(r.dfds)) throw new Error(r.error || "Não consegui ler os DFDs.");
       const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
@@ -785,12 +802,13 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     const msgs: string[] = [];
     if (!x) msgs.push(`${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}`);
     else {
+      if (/CANCEL/.test(normTexto(x.situacao))) msgs.push(`${ref}: situação ${str(x.situacao)} na Centi`);
       if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) msgs.push(`${ref}: na Centi é o DFD ${str(x.numero)}`);
       if (str(d.tipo) && str(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) msgs.push(`${ref}: tipo ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
       const vs = numeroDe(d.valor);
       const vc = numeroDe(x.valor);
       if (vs != null && vc != null && Math.abs(vs - vc) > o.tolerancia) msgs.push(`${ref}: valor R$ ${brl(vs)} no sistema × R$ ${brl(vc)} na Centi`);
-      const is = numeroDe(d.totalItens);
+      const is = numeroDe(d.totalItens ?? d.itens);
       const ic = numeroDe(x.totalItens);
       if (is != null && ic != null && is !== ic) msgs.push(`${ref}: ${is} item(ns) no sistema × ${ic} na Centi`);
       if (o.objeto && str(d.objeto) && str(x.objeto) && normTexto(d.objeto).replace(/[^A-Z0-9]/g, "") !== normTexto(x.objeto).replace(/[^A-Z0-9]/g, ""))

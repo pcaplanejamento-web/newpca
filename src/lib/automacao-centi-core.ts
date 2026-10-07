@@ -35,7 +35,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.15.3";
+export const VERSAO_EXTENSAO_CENTI = "1.16.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -623,3 +623,8 @@ export function formatoEntidade(valor: string, aberta: string | null): string {
   const n = v.replace(/^0+/, "") || "0";
   return aberta && /^\d{1,4}$/.test(aberta) ? n.padStart(aberta.length, "0") : v;
 }
+
+/** O módulo do PLANEJAMENTO na Centi (CM002): a tela carrega o planejamento ANTES do Emitir DFD — sem esse load a Centi
+ * recusa a operação ("Usuário sem permissão!"). Gravado pelo gravador de ações (GET restauth/load?entity=101026&key=). */
+export const MODULO_PLANEJAMENTO = 101026;
+export const caminhoLoadPlanejamento = (id: string) => `restauth/load?entity=${MODULO_PLANEJAMENTO}&key=${encodeURIComponent(String(id).replace(/\D/g, ""))}`;

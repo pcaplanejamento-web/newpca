@@ -816,6 +816,20 @@
     if (!A.consultaPermitida(caminho, metodo)) return { ok: false, erro: "Só consultas (leitura) da Centi podem ser repetidas." };
     const corpo = metodo === "POST" ? (d.corpo ?? null) : null;
     if (corpo !== null && (typeof corpo !== "object" || JSON.stringify(corpo).length > 65536)) return { ok: false, erro: "Consulta inválida." };
+    // Numa ENTIDADE da Centi (cabeçalho Company só neste pedido) — ex.: o load do planejamento antes do Emitir DFD.
+    const ent = d?.entidade == null || d.entidade === "" ? null : String(d.entidade);
+    if (ent !== null) {
+      if (!/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
+      const url = destino(caminho);
+      if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
+      const r = await executar(metodo, url, corpo, ent, true);
+      let j = null;
+      try {
+        j = JSON.parse(r.texto);
+      } catch {}
+      if (r.status >= 400 || !j) return { ok: false, erro: `A Centi recusou a consulta (${r.status}).` };
+      return { ok: true, j };
+    }
     return { ok: true, j: await apiCenti(metodo, caminho, corpo, "consulta") };
   }
 
@@ -962,7 +976,18 @@
     return { ok: false };
   }
 
-  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela, cm002, telaApi };
+  // As REPARTIÇÕES da Tela Protocolo pela consulta guardada (Data.Reparticoes do postdata) — sem tocar na tela.
+  function reparticoesApi() {
+    let g = null;
+    try {
+      g = JSON.parse(localStorage.getItem(TELA) || "null");
+    } catch {}
+    const l = g?.corpo?.Data?.Reparticoes;
+    if (!Array.isArray(l)) return { ok: false, semConsulta: true, erro: "A consulta da Tela Protocolo ainda não foi reconhecida." };
+    const nomes = [...new Set(l.map((r) => String(r?.Descricao ?? "").trim()).filter(Boolean))];
+    return { ok: true, departamentos: nomes };
+  }
+  const ACOES = { pedir, protocolo, anexar, gravador, aprender, ler, captura: capturaEmissao, grade: gradeDaTela, cm002, telaApi, reparticoesApi };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.fonte !== "pca-centi-pedido" || e.data.p !== PROTOCOLO) return;
     const { id, acao, dados } = e.data;

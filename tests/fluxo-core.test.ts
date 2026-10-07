@@ -164,7 +164,7 @@ test("modelo de protocolos analisados roda o laço com erro de leitura sem trava
   let lidos = 0;
   const r = await executarFluxo(g, REGISTRO_NOS, {
     centi: async (a: string) =>
-      a === "telaDepartamentos"
+      a === "reparticoesApi"
         ? { ok: true, departamentos: ["DEP. PLANEJAMENTO - PCA", "OUTRO"] }
         : { ok: true, filtro: "ANALISADO", protocolos: [{ protocolo: "1", ano: "2026", id: "9", departamento: "DEP. PLANEJAMENTO - PCA" }, { protocolo: "2", ano: "2026", id: "8", departamento: "DEP. PLANEJAMENTO - PCA" }, { protocolo: "3", ano: "2026", departamento: "OUTRO" }] },
     api: async () => ({ ok: false }),
@@ -188,10 +188,7 @@ test("modelo Inclusão PCA: compara os DFDs com a CM002 e importa com os apontam
   assert.deepEqual(m?.frequencia, { tipo: "intervalo", minutos: 120 });
   const importados: { protocolo: unknown; ap: string[] }[] = [];
   const r = await executarFluxo(m?.grafo as Grafo, REGISTRO_NOS, {
-    centi: async (a: string) =>
-      a === "cm002"
-        ? { ok: true, linhas: [{ id: "100", situacao: "EM ELABORAÇÃO" }, { id: "101", situacao: "CANCELADO" }] }
-        : {
+    centi: async () => ({
             ok: true,
             filtro: "",
             protocolos: [
@@ -199,11 +196,16 @@ test("modelo Inclusão PCA: compara os DFDs com a CM002 e importa com os apontam
               { protocolo: "2", ano: "2026", id: "8", departamento: "PCA - COORDENADOR (JHONE)" },
               { protocolo: "3", ano: "2026", id: "7", departamento: "OUTRA" },
             ],
-          },
+          }),
     api: async () => ({ ok: false }),
     cancelado: () => false,
     host: {
       mapaEntidades: { "o:1": "2" },
+      lerDfdCenti: async (plan: string) => {
+        const c: Record<string, unknown> = { "100": { numero: "10", planejamento: "100", situacao: "EM ELABORAÇÃO" }, "101": { numero: "11", planejamento: "101", situacao: "CANCELADO" } };
+        if (!c[plan]) throw new Error("Planejamento não encontrado na Centi");
+        return c[plan];
+      },
       lerProtocolo: async (it: Record<string, unknown>) =>
         it.protocolo === "1"
           ? { leitura: "ok", assunto: "INCLUSÃO PCA 2027", dfds: [{ numero: "10", planejamento: "100" }, { numero: "11", planejamento: "101" }, { numero: "12", planejamento: "999" }] }
@@ -217,7 +219,7 @@ test("modelo Inclusão PCA: compara os DFDs com a CM002 e importa com os apontam
   assert.equal(r.estado, "concluido", r.erro);
   assert.equal(importados.length, 1, "só o de inclusão da repartição");
   assert.equal(importados[0].protocolo, "1");
-  assert.deepEqual(importados[0].ap.sort(), ["DFD 11 (Planej. 101): situação CANCELADO na CM002", "DFD 12 (Planej. 999) não está na CM002"]);
+  assert.deepEqual(importados[0].ap.sort(), ["DFD 11 (Planej. 101): situação CANCELADO na Centi", "DFD 12 (Planej. 999): não encontrado na Centi — Planejamento não encontrado na Centi"]);
 });
 
 test("desdobrar leva o protocolo do pai; apontamentos agrupados por protocolo", async () => {

@@ -121,7 +121,7 @@ export function FluxosAutomacao({
         if (!lido) return { importado: false, motivo: "O protocolo não foi lido nesta execução (ligue o nó “Ler protocolo” antes)." };
         return importarProtocolo(lido, apontamentos, importacao);
       },
-      lerDfdCenti: (plan: string, entidade?: string) => lerDfdCentiPorCodigo(pedir as unknown as PedirExtensao, plan, entidade),
+      lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean) => lerDfdCentiPorCodigo(pedir as unknown as PedirExtensao, plan, entidade, pdf !== false),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {
         relatorio.current.push(...l);

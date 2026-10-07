@@ -540,3 +540,38 @@ export function novoIdNo(g: Grafo, tipo: string): string {
     if (!g.nos.some((n) => n.id === id)) return id;
   }
 }
+
+/** O 1º valor de uma chave que casa `re` em qualquer profundidade (também os pares {Key, Value} da Centi); objeto →
+ * a Descricao/Description/Value dele. Puro. */
+export function acharValor(v: unknown, re: RegExp, prof = 0): unknown {
+  if (prof > 8 || v == null || typeof v !== "object") return undefined;
+  const texto = (x: unknown): unknown => {
+    if (x == null || typeof x !== "object") return x;
+    const o = x as Record<string, unknown>;
+    return o.Descricao ?? o.Description ?? o.Nome ?? o.Value ?? undefined;
+  };
+  if (Array.isArray(v)) {
+    for (const x of v) {
+      if (x && typeof x === "object" && "Key" in x && re.test(String((x as { Key: unknown }).Key))) {
+        const t = texto((x as { Value: unknown }).Value);
+        if (t != null && t !== "") return t;
+      }
+    }
+    for (const x of v) {
+      const r = acharValor(x, re, prof + 1);
+      if (r !== undefined) return r;
+    }
+    return undefined;
+  }
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (re.test(k)) {
+      const t = texto(x);
+      if (t != null && t !== "") return t;
+    }
+  }
+  for (const x of Object.values(v as Record<string, unknown>)) {
+    const r = acharValor(x, re, prof + 1);
+    if (r !== undefined) return r;
+  }
+  return undefined;
+}

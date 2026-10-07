@@ -3,7 +3,8 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { analisarRespostaCenti, lerConfigCenti, operacaoRecusada, pedidoEmitirDfd } from "./automacao-centi-core";
+import { analisarRespostaCenti, caminhoLoadPlanejamento, lerConfigCenti, operacaoRecusada, pedidoEmitirDfd } from "./automacao-centi-core";
+import { acharValor } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
 import { coerceEmissaoProtocolo, conferirLeituraProtocolo, corpoEmissaoProtocolo, type EmissaoProtocolo } from "./automacao-tela-protocolo";
 import { baixarPelaExtensao, comoBlob, deBase64, type PedirExtensao, pdfDoAchado, pdfDosBytes } from "./arquivo-navegador";
@@ -83,9 +84,20 @@ function configDfd() {
 
 /** Busca UM DFD na Centi pelo nº de PLANEJAMENTO — o mesmo Emitir DFD do "Baixar DFDs" (por API) — e lê o PDF:
  * nº, tipo, objeto, valor total e itens como estão na Centi. Lança com a mensagem quando não dá. */
-export async function lerDfdCentiPorCodigo(pedir: PedirExtensao, planejamento: string, entidade?: string): Promise<Item> {
+export async function lerDfdCentiPorCodigo(pedir: PedirExtensao, planejamento: string, entidade?: string, comPdf = true): Promise<Item> {
   const plan = s(planejamento).replace(/\D/g, "");
   if (!plan) throw new Error("O DFD não tem nº de planejamento.");
+  // 1) O planejamento (CM002) pela API — como a tela faz antes de emitir: dá a SITUAÇÃO e libera a operação.
+  const l = (await pedir("ler", { metodo: "GET", caminho: caminhoLoadPlanejamento(plan), entidade: entidade || undefined }, 60_000)) as {
+    ok?: boolean;
+    erro?: string;
+    j?: unknown;
+    interrompido?: boolean;
+  };
+  if (l.interrompido) throw new Error("Interrompido na extensão.");
+  if (!l.ok) throw new Error(`Planejamento ${plan} não encontrado na Centi: ${l.erro ?? "sem resposta"}`);
+  const situacao = s(acharValor(l.j, /^situa/i));
+  if (!comPdf) return { planejamento: plan, situacao };
   const r = (await pedir(
     "pedir",
     { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(plan, configDfd(), new Date()), entidade: entidade || undefined },
@@ -108,5 +120,6 @@ export async function lerDfdCentiPorCodigo(pedir: PedirExtensao, planejamento: s
     objeto: d.objeto,
     valor: d.valorTotal ?? 0,
     totalItens: d.itens.length,
+    situacao,
   };
 }

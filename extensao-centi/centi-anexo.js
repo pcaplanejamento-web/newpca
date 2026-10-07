@@ -574,7 +574,7 @@
       }
       return { ...r, selected: !!a };
     });
-    return { corpo: { ...corpo, Data: { ...corpo.Data, Reparticoes: nova } }, achadas, faltam: nomes.filter((x, i) => !usados.has(alvos[i])) };
+    return { corpo: { ...corpo, Data: { ...corpo.Data, Reparticoes: nova } }, achadas, faltam: nomes.filter((_x, i) => !usados.has(alvos[i])) };
   }
 
   globalThis[NOME] = Object.freeze({

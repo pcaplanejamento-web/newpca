@@ -25,6 +25,7 @@ import {
   type OpcoesSaida,
   type ProtocoloAutomacao,
   paraBase64,
+  caminhoLoadPlanejamento,
   pedidoEmitirDfd,
   ajusteDaOperacao,
   operacaoRecusada,
@@ -1161,6 +1162,10 @@ export function AutomacaoAdmin({
   // A LÓGICA da emissão (a extensão só leva o pedido à aba da Centi): Processar → o PDF, ou a chave do arquivo → baixa.
   async function emitirUm(id: string, entidade?: string, deNovo = false): Promise<Emissao> {
     const ambiente = (r: Resposta): Emissao => ({ erro: r.erro ?? "Falha na extensão.", ambiente: true });
+    // Como a tela da Centi: carrega o planejamento ANTES do Emitir DFD (sem o load, "Usuário sem permissão!").
+    const l = await pedir("ler", { metodo: "GET", caminho: caminhoLoadPlanejamento(id), entidade }, 60_000);
+    if (l.interrompido) return { erro: "Interrompido na extensão." };
+    if (!l.ok) return { erro: `Não consegui abrir o planejamento ${id} na Centi: ${l.erro ?? "sem resposta"}.` };
     const r = await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(id, cfgRef.current, new Date()), entidade }, 150_000);
     if (!r.ok || r.b64 == null) return ambiente(r);
     const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);

@@ -1,21 +1,17 @@
 "use client";
 
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { analisarRespostaCenti, linkDaResposta, operacaoRecusada, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { analisarRespostaCenti, operacaoRecusada, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { cancelarExecucao, concluirPassos, iniciarExecucaoLeitura } from "@/lib/automacao-cliente";
 import {
   coerceEmissaoProtocolo,
   conferirLeituraProtocolo,
   corpoEmissaoProtocolo,
-  dadosCentiValidos,
   departamentosEscolhidosValidos,
   type EmissaoProtocolo,
-  emissaoDoPedido,
   falhaTransitoria,
   type LeituraProtocolo,
-  mesmaEmissao,
   nomePdfEmAnalise,
-  apiCobreReparticoes,
   normalizarProtocolosTela,
   soDasReparticoes,
   noSistemaTela,
@@ -24,7 +20,7 @@ import {
 import { dataIsoBrasilia } from "@/lib/format";
 import { buscarExistentes } from "@/lib/importar-dfd";
 import { indexarProtocoloPdf } from "@/lib/parse-protocolo-pdf";
-import { amostraBytes, baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado, pdfDosBytes } from "@/lib/arquivo-navegador";
+import { baixarPelaExtensao, comoBlob, deBase64, pdfDoAchado, pdfDosBytes } from "@/lib/arquivo-navegador";
 import { Badge, type Tone } from "./Badge";
 import { BotaoCopiar, CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
@@ -77,23 +73,6 @@ const CHAVE_ESCOLHA = "automacao:tela-departamentos";
 const hojeBrasilia = () => dataIsoBrasilia(new Date().toISOString());
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
-/** As repartições da última leitura PELA TELA — a consulta que a extensão guardou foi feita com elas (no aparelho). */
-const CHAVE_APRENDIDAS = "automacao:tela-api-reparticoes";
-type Aprendidas = { reparticoes: string[]; comDepartamento: boolean };
-function lerAprendidas(): Aprendidas | null {
-  try {
-    const v = JSON.parse(localStorage.getItem(CHAVE_APRENDIDAS) ?? "null") as Partial<Aprendidas> | null;
-    return v && Array.isArray(v.reparticoes) ? { reparticoes: v.reparticoes.filter((x) => typeof x === "string"), comDepartamento: !!v.comDepartamento } : null;
-  } catch {
-    return null;
-  }
-}
-function gravarAprendidas(a: Aprendidas) {
-  try {
-    localStorage.setItem(CHAVE_APRENDIDAS, JSON.stringify(a));
-  } catch {}
-}
-
 function lerEscolha(): unknown {
   try {
     return JSON.parse(localStorage.getItem(CHAVE_ESCOLHA) ?? "null");
@@ -142,20 +121,14 @@ export function TarefaTelaProtocolo({
   const [ocupado, setOcupado] = useState<"deps" | "ler" | null>(null);
   // O andamento do documento de cada protocolo.
   // O Id da Centi de cada protocolo lido do CADASTRO (quando a grade não o trouxe).
-  const [ids, setIdsEstado] = useState<Map<string, string>>(new Map());
+  const [ids] = useState<Map<string, string>>(new Map());
   // A fila roda por várias chamadas assíncronas: o que ela lê (a emissão aprendida, os Ids, as repartições lidas) fica em
   // REFS — o aprendido no meio do lote vale já para os próximos protocolos (o estado seria o do render em que a fila começou).
   // A emissão "por código" do Emitir documentos (aprendida da tela da Centi; vale para todos — config do servidor).
   const emissaoRef = useRef<EmissaoProtocolo | null>(null);
   const idsRef = useRef(new Map<string, string>());
-  const reparticoesRef = useRef<string[]>([]);
   const configRef = useRef<Promise<boolean> | null>(null);
-  const setId = (chave: string, id: string) => {
-    idsRef.current = new Map(idsRef.current).set(chave, id);
-    setIdsEstado(idsRef.current);
-  };
   const setLidos = (l: { protocolos: ProtocoloEmAnalise[]; total: number; reparticoes: string[] }) => {
-    reparticoesRef.current = l.reparticoes;
     setLidosEstado(l);
   };
   const [docs, setDocs] = useState<Map<string, Doc>>(new Map());
@@ -193,7 +166,7 @@ export function TarefaTelaProtocolo({
     setOcupado("deps");
     setFalha(null);
     try {
-      const r = await comLote("Tela Protocolo", "Lendo as repartições (Departamentos)", () => pedir("telaDepartamentos", null, 90_000), (x) =>
+      const r = await comLote("Tela Protocolo", "Lendo as repartições (Departamentos)", () => pedir("reparticoesApi", null, 30_000), (x) =>
         x.ok ? `${x.departamentos?.length ?? 0} repartição(ões)` : (x.erro ?? "Falhou"),
       );
       if (!r.ok) return falhou(r);
@@ -221,18 +194,14 @@ export function TarefaTelaProtocolo({
       const ex = await iniciarExecucaoLeitura("protocolos-por-reparticao", "consultar", [{ chave: "em-analise", alvo: reparticoes.join("; ") }], {
         reparticoes: reparticoes.length,
       });
-      const aprendidas = lerAprendidas();
       const leitura = async (): Promise<RespostaTela & { viaApi?: boolean }> => {
-        // Pela API (a consulta que a própria tela fez): todas as linhas, sem mexer na tela.
-        if (apiCobreReparticoes(reparticoes, aprendidas?.reparticoes ?? null, aprendidas?.comDepartamento ?? false)) {
-          const a = await pedir("telaApi", null, 180_000);
-          if (a.ok) return { ...a, protocolos: soDasReparticoes(normalizarProtocolosTela(a.protocolos), reparticoes), viaApi: true };
-          if (a.interrompido) return a;
-        }
-        // Pela tela — só para ensinar a consulta (a próxima leitura já vai pela API).
-        const t = await pedir("telaEmAnalise", { departamentos: reparticoes }, 180_000);
-        if (t.ok) gravarAprendidas({ reparticoes, comDepartamento: normalizarProtocolosTela(t.protocolos).some((x) => x.departamento) });
-        return t;
+        // SÓ pela API: a consulta da própria Centi com as repartições no pedido (Data.Reparticoes) — a tela nunca é tocada.
+        const a = await pedir("telaApi", { reparticoes }, 180_000);
+        if (!a.ok) return a;
+        const ps = normalizarProtocolosTela(a.protocolos);
+        const pr = (a as { porReparticao?: unknown }).porReparticao;
+        const filtrou = Array.isArray(pr) && pr.length > 0;
+        return { ...a, protocolos: filtrou ? ps : soDasReparticoes(ps, reparticoes), viaApi: true };
       };
       const r = await comLote(
         "Tela Protocolo · Em Análise",
@@ -270,18 +239,6 @@ export function TarefaTelaProtocolo({
     void carregarConfig();
   }, [carregarConfig]);
 
-  /** O operation da tela + o protocolo → a emissão "por código" (grava no servidor só quando mudou). */
-  async function aprenderEmissao(operacao: unknown, alvo: { id: string; protocolo: string; ano: string }) {
-    const nova = emissaoDoPedido(operacao, { ...alvo, hoje: hojeBrasilia() });
-    if (!nova || mesmaEmissao(nova, emissaoRef.current)) return;
-    emissaoRef.current = nova;
-    await fetch("/api/admin/automacao/config", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ emissaoProtocolo: nova }),
-    }).catch(() => {});
-  }
-
   // ---------------------------------------------------------------- EMITIR + LER (o lote) · ABRIR A ANÁLISE (um)
   const marcar = (chave: string, d: Doc) =>
     setDocs((m) => {
@@ -296,27 +253,6 @@ export function TarefaTelaProtocolo({
     const direto = await pdfDosBytes(bytes).catch(() => null);
     if (direto) return { pdf: direto };
     return pdfDoAchado(analisarRespostaCenti(bytes, status), baixarPelaExtensao(pedir));
-  }
-
-  /** O PDF do que a extensão capturou na emissão pela tela (o arquivo, a resposta do operation ou o endereço). */
-  async function pdfDaEmissao(a: RespostaTela["arquivo"]): Promise<{ pdf: Uint8Array } | { erro: string; amostra?: string }> {
-    if (a?.pdf) {
-      const pdf = await pdfDosBytes(deBase64(a.pdf)).catch(() => null);
-      return pdf ? { pdf } : { erro: "O arquivo emitido pela Centi não tem PDF.", amostra: amostraBytes(deBase64(a.pdf)) };
-    }
-    if (a?.resposta) return pdfDaResposta(a.resposta.b64, a.resposta.status);
-    if (a?.link) {
-      const baixar = baixarPelaExtensao(pedir);
-      const d = await baixar(a.link);
-      const pdf = await pdfDosBytes(d.bytes).catch(() => null);
-      if (pdf) return { pdf };
-      const link = d.bytes ? linkDaResposta(d.bytes) : null;
-      const c = link ? await baixar(link) : null;
-      const pdf2 = await pdfDosBytes(c?.bytes ?? null).catch(() => null);
-      if (pdf2) return { pdf: pdf2 };
-      return { erro: "Não consegui baixar o arquivo do “Emitir documentos”.", amostra: `${a.link.split("?")[0]} → ${d.status || d.erro || "sem resposta"} · ${amostraBytes(d.bytes)}` };
-    }
-    return { erro: "A Centi não entregou o PDF do “Emitir documentos”." };
   }
 
   /**
@@ -350,17 +286,14 @@ export function TarefaTelaProtocolo({
     let x: { pdf: Uint8Array } | { erro: string; amostra?: string } | { recusada: string } | null =
       e && id ? await emitirPorCodigo(e, { id, protocolo: p.protocolo, ano: p.ano }) : null;
     if (interrompido.current) return { erro: "Interrompido na extensão." };
-    if (!x || "recusada" in x) {
-      const r = await pedir("telaEmitir", { protocolo: p.protocolo, ano: p.ano, departamentos: reparticoesRef.current }, 300_000);
-      if (r.interrompido) interrompido.current = true;
-      const d = r.ok ? dadosCentiValidos(r.dados) : null;
-      if (d?.id) setId(p.chave, d.id);
-      if (!r.ok) x = { erro: r.erro ?? "A extensão não respondeu.", amostra: r.diagnostico };
-      else {
-        if (r.operacao) await aprenderEmissao(r.operacao, { id: d?.id || id, protocolo: p.protocolo, ano: p.ano });
-        x = await pdfDaEmissao(r.arquivo);
-      }
-    }
+    // SÓ por código (API): sem a emissão aprendida, sem o Id ou recusada, diz o que fazer — a tela nunca é tocada.
+    if (!x)
+      x = {
+        erro: !e
+          ? "A emissão do protocolo ainda não foi reconhecida: na Centi, emita UM protocolo (Operações → Emitir documentos) — a extensão a reconhece e daí em diante tudo vai pela API."
+          : `Protocolo ${p.protocolo}/${p.ano}: sem o Id da Centi na resposta da API.`,
+      };
+    else if ("recusada" in x) x = { erro: `A Centi recusou a emissão guardada (${x.recusada}) — emita UM protocolo pela própria Centi para a extensão reconhecer a operação nova.` };
     if ("pdf" in x) return { pdf: x.pdf };
     if (tentativa === 0 && !interrompido.current && falhaTransitoria(x.erro)) {
       await new Promise((ok) => setTimeout(ok, 3000));
