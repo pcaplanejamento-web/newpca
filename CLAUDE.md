@@ -4238,7 +4238,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ele, o que os nós finais produziram (`ResultadoExec.retorno`); apontados do filho sobem com `subfluxo`; falha de um item
   vai à porta `falhas` (o "interrompido"/operação recusada para tudo). **Retomada** (`retomar`, chave do item `chave`):
   tabela `automacao_progresso` (fluxo de topo + caminho do nó `ids/nó` + chave; builders `fluxos-sql.ts`, testados no D1 real)
-  por `GET/POST/DELETE /api/admin/automacao/fluxos/[id]/progresso?no=` — pula os `ok`, grava a cada 10, esquece tudo ao
+  por `GET/POST/DELETE /api/admin/automacao/fluxos/[id]/progresso?no=` — pula os `ok`, grava a CADA item (v1.33.3), esquece tudo ao
   concluir sem falha; `RecomecarSubfluxo` no painel do nó. **`fluxo.paralelo`** (campo `fluxos`): vários fluxos ao mesmo
   tempo (`Promise.allSettled`, até 6). Segurança: ciclo recusado ao salvar (`cicloAoGravar` → 409, `cicloDeSubfluxos`) e na
   execução (`host.__pilha`), profundidade ≤ `PROFUNDIDADE_MAX`=3; excluir fluxo usado por outro = 409 (`fluxosQueUsam`); o

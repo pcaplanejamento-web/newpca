@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.33.3",
+    data: "2026-10-07",
+    titulo: "Conferir DFDs: progresso a cada DFD",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Cada DFD é buscado, lido, comparado, marcado e registrado como feito antes do próximo — parar não perde nenhum DFD já conferido.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.33.2",
     data: "2026-10-07",
     titulo: "Editor de fluxos numa tela só",

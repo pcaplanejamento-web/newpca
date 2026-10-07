@@ -768,7 +768,7 @@ const NOS: DefNo[] = [
                 ctx.parcial?.(volta);
               }
               feitosAgora++;
-              if (gravar.length >= 10) await descarregar();
+              await descarregar(); // cada DFD já gravado: parar não perde nada
             } finally {
               emCurso--;
               avisar();
