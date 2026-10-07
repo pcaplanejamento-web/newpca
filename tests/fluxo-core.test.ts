@@ -195,8 +195,8 @@ test("modelo Inclusão PCA: compara os DFDs com a CM002 e importa com os apontam
             ok: true,
             filtro: "",
             protocolos: [
-              { protocolo: "1", ano: "2026", id: "9", departamento: "DEP. PLANEJAMENTO - PCA" },
-              { protocolo: "2", ano: "2026", id: "8", departamento: "DEP. PLANEJAMENTO - PCA" },
+              { protocolo: "1", ano: "2026", id: "9", departamento: "PCA - COORDENADOR (JHONE)" },
+              { protocolo: "2", ano: "2026", id: "8", departamento: "PCA - COORDENADOR (JHONE)" },
               { protocolo: "3", ano: "2026", id: "7", departamento: "OUTRA" },
             ],
           },

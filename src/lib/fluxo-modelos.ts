@@ -16,7 +16,7 @@ export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 192),
-        n("prot1", "centi.protocolos", 280, 96, { situacao: "", reparticao: "PCA" }, "Protocolos em análise"),
+        n("prot1", "centi.protocolos", 280, 96, { situacao: "", reparticao: "PCA - COORDENADOR (JHONE)" }, "Protocolos em análise"),
         n("laco1", "logica.laco", 576, 96, { tamanho: 1 }),
         n("ler1", "leitura.protocolo", 880, -32, { limite: 200 }),
         n("seLer", "logica.se", 1184, -32, { campo: "leitura", operador: "igual", valor: "falha" }, "Leitura falhou?"),

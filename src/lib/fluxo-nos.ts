@@ -141,14 +141,8 @@ const NOS: DefNo[] = [
       const r = await ctx.centi("telaApi", { situacao: sit }, 180_000);
       if (r.interrompido) throw new Error("Interrompido na extensão.");
       if (!r.ok) {
-        if (!sit && reps.length) {
-          // Em análise sem a consulta aprendida: pela tela (uma vez — a próxima vai pela API).
-          ctx.aviso("Ensinando a consulta pela tela da Centi…");
-          const t = await pedirCenti(ctx, "telaEmAnalise", { departamentos: reps }, 180_000);
-          return { saida: normalizar(t.protocolos) };
-        }
         throw new Error(
-          `${r.erro || "A Centi não respondeu."}${r.semConsulta ? " Leia uma vez pela tarefa “Ler a Tela Protocolo” para a extensão aprender a consulta." : ""}`,
+          `${r.erro || "A Centi não respondeu."}${r.semConsulta ? " A consulta da API ainda não foi aprendida: abra a Tela Protocolo (PO011) na Centi e liste os protocolos uma vez — a extensão guarda a consulta e daí em diante tudo vai pela API." : ""}`,
         );
       }
       if (sit && r.filtro !== sit) throw new Error("A extensão da Centi está desatualizada (1.15.0 ou maior filtra por situação) — baixe a nova.");

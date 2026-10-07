@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.25.2",
+    data: "2026-10-07",
+    titulo: "Fluxos só pela API",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Os fluxos buscam os protocolos SÓ pela API da Centi (nunca mais pela tela); o modelo Inclusão PCA já vem na repartição “PCA - COORDENADOR (JHONE)”.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.25.1",
     data: "2026-10-07",
     titulo: "Modelos de fluxo à vista",
