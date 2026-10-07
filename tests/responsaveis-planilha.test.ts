@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { validarAssinatura } from "../src/lib/reparticao-responsaveis.ts";
 import {
+  agruparPorNomeacao,
   alvoDoValor,
   alvoEfetivo,
   alvosParaVincular,
   alvoVale,
   cargoForaDaLista,
+  chaveNomeacao,
   conferenciaDaPessoa,
   conferenciaDaUnidade,
   conferenciaDoOrgao,
@@ -16,6 +18,7 @@ import {
   motivoNaoVincular,
   motivoVinculoInvalido,
   normalizarVinculo,
+  numeroAtoNormal,
   ordenarPorPrioridade,
   type PlanilhaResponsaveis,
   periodoVinculo,
@@ -338,5 +341,22 @@ describe("conferência: o que está mal cadastrado", () => {
     const padrao = v({ nome: "Bia", responsavelId: 2, cargo: "Assessor", reparticaoId: 11 });
     const alvo = conferenciaDaUnidade({ id: 11 }, false, new Map([["u11", [padrao]]]), HOJE, ["Secretário"]);
     assert.ok(alvo.some((m) => m.chave === "resp.cargoFora" && m.status === "erro"));
+  });
+
+  it("nomeação UNIFICADA: a mesma pessoa, o mesmo tipo e o ato de mesmo nº viram um grupo", () => {
+    assert.equal(numeroAtoNormal(" 1912 / 2026 "), "1912/2026");
+    assert.equal(numeroAtoNormal("01912/2026"), "1912/2026");
+    const a = v({ nome: "Ana", responsavelId: 1, reparticaoId: 11, atoTipo: "decreto", atoNumero: "1912/2026" });
+    const b = v({ nome: "Ana", responsavelId: 1, reparticaoId: 12, atoTipo: "decreto", atoNumero: "1912 / 2026" });
+    const c = v({ nome: "Ana", responsavelId: 1, reparticaoId: 13, atoTipo: "portaria", atoNumero: "1912/2026" });
+    const d = v({ nome: "Ana", responsavelId: 1, reparticaoId: 14, atoTipo: "decreto", atoNumero: "" });
+    const e = v({ nome: "Ana", responsavelId: 1, reparticaoId: 15, atoTipo: null, atoNumero: "" });
+    assert.equal(chaveNomeacao(d), null, "sem nº, não unifica");
+    assert.deepEqual(
+      agruparPorNomeacao([a, c, b, d, e]).map((g) => g.map((x) => x.reparticaoId)),
+      [[11, 12], [13], [14], [15]],
+    );
+    const t = v({ nome: "Ana", responsavelId: 1, reparticaoId: 16, tipo: "temporario", atoTipo: "decreto", atoNumero: "1912/2026", inicio: "2026-01-01", fim: "2026-02-01" });
+    assert.equal(agruparPorNomeacao([a, t]).length, 2, "padrão e temporário não se juntam");
   });
 });

@@ -660,7 +660,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   no editor, o mesmo `SeletorMultiplo` — o próprio vínculo fica onde já respondia (senão vai ao 1º escolhido) e os demais
   lugares são criados com a mesma nomeação. **Cargo/função FORA da lista** de Cargos e funções (`cargoForaDaLista`) é ERRO
   na Conferência — o da pessoa (`resp.cargoFora`, também no órgão/unidade onde ela responde como padrão) e o do temporário
-  (`resp.funcaoFora`); sem lista cadastrada não confere.
+  (`resp.funcaoFora`); sem lista cadastrada não confere. **NOMEAÇÕES UNIFICADAS (v1.60.0):** no banner da pessoa
+  (`ListaVinculos agrupar`), os vínculos de mesma pessoa + tipo + ato de MESMO nº (`chaveNomeacao`/`numeroAtoNormal` — sem
+  espaço/caixa/zeros à esquerda; `agruparPorNomeacao`, puro e testado) viram UM cartão (`CartaoNomeacao`: o ato, o cargo, o
+  link e editar no topo; cada lugar com o estado, o período quando difere e remover). Editar a nomeação
+  (`AberturaVinculo.grupo` → `EnvioVinculo.grupo`): os lugares que ficam recebem os mesmos dados (PATCH), os que saem vão
+  para os lugares novos (o mesmo vínculo muda de lugar) e, sem lugar novo, são removidos (confirma); os novos que sobram são
+  criados.
 - **CARGO, PERÍODO DO PADRÃO e USUÁRIO do responsável (v1.56.0, migração `0100`, aditiva — `responsaveis.cargo` +
   `responsaveis.usuario_id` FK set null, único parcial):** o CARGO/FUNÇÃO é da PESSOA (o NOME de um cargo cadastrado —
   `cargoParaGravar`: o cadastrado, manter o atual fora da lista ou nenhum; 422 `MSG_CARGO_FORA`) e o vínculo PADRÃO segue

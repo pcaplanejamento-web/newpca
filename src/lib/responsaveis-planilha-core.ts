@@ -88,6 +88,41 @@ export function separarVinculos<T extends { tipo: TipoVinculo; ordem: number; id
   return { padroes: ord.filter((v) => v.tipo === "padrao"), temporarios: ord.filter((v) => v.tipo === "temporario") };
 }
 
+/** O nº do ato comparável: sem espaços, sem caixa e sem zeros à esquerda em cada parte ("1912 / 2026" = "1912/2026"). */
+export function numeroAtoNormal(numero: string): string {
+  return numero
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/\b0+(\d)/g, "$1");
+}
+
+/** A chave da NOMEAÇÃO de um vínculo — a MESMA pessoa, o mesmo tipo (padrão/temporário) e o mesmo ato (tipo + nº);
+ * `null` quando não há nº do ato (não se unifica). */
+export function chaveNomeacao(v: { responsavelId: number; tipo: TipoVinculo; atoTipo: string | null; atoNumero: string }): string | null {
+  const n = numeroAtoNormal(v.atoNumero);
+  return n ? `${v.responsavelId}|${v.tipo}|${v.atoTipo ?? ""}|${n}` : null;
+}
+
+/** Os vínculos UNIFICADOS pelo ato: os de mesma nomeação (`chaveNomeacao`) viram UM grupo, na ordem em que aparecem
+ * (o 1º de cada grupo marca a posição); sem nº do ato, cada vínculo é um grupo próprio. */
+export function agruparPorNomeacao<T extends { id: number; responsavelId: number; tipo: TipoVinculo; atoTipo: string | null; atoNumero: string }>(
+  vinculos: readonly T[],
+): T[][] {
+  const grupos: T[][] = [];
+  const porChave = new Map<string, T[]>();
+  for (const v of vinculos) {
+    const k = chaveNomeacao(v);
+    const g = k ? porChave.get(k) : undefined;
+    if (g) g.push(v);
+    else {
+      const novo = [v];
+      grupos.push(novo);
+      if (k) porChave.set(k, novo);
+    }
+  }
+  return grupos;
+}
+
 /** A CHAVE da pessoa: o nome sem acento/caixa/espaços repetidos (a mesma régua da conferência da assinatura). */
 export function chaveNome(nome: string): string {
   return norm(nome);

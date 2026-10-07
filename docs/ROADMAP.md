@@ -1696,6 +1696,8 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 ✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
 
+✅ **v1.60.0 — Nomeações unificadas**: no banner da pessoa, os vínculos com o mesmo ato (decreto/portaria/lei de mesmo nº) num cartão só; editar vale para todos os lugares.
+
 ✅ **v1.59.0 — Editar onde o responsável responde**: no "Editar vínculo", trocar a unidade/órgão, a pessoa e os dados, e acrescentar lugares com a mesma nomeação.
 
 ✅ **v1.58.0 — Responsáveis exonerados**: "Exonerar" com a data (os vínculos cadastrados continuam valendo; nenhum vínculo novo nem começando depois), botão "Exonerados" à direita com as linhas em cinza; vínculo encerrado em cinza numa coluna própria, fora da Conferência; planilha pela prioridade do cargo e depois o nome; um vínculo novo pode ir a várias unidades e órgãos com a mesma nomeação. Órgãos: "Também unidade" em coluna própria e o nome em até 2 linhas.

@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import { hojeISO, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import {
+  agruparPorNomeacao,
   type DadosVinculo,
   type EstadoVinculo,
   estadoDoVinculo,
@@ -80,6 +81,7 @@ export function ListaVinculos({
   onRemover,
   desabilitado = false,
   cargos,
+  agrupar = false,
 }: {
   vinculos: readonly VinculoComPessoa[];
   irmaos: (v: VinculoComPessoa) => readonly VinculoComPessoa[];
@@ -88,11 +90,15 @@ export function ListaVinculos({
   /** O texto de cada seção vazia. */
   vazio: Record<TipoVinculo, string>;
   acoes?: Partial<Record<TipoVinculo, ReactNode>>;
-  onEditar?: (v: VinculoComPessoa) => void;
+  /** Editar: o vínculo e — com `agrupar` — todos os da mesma nomeação. */
+  onEditar?: (v: VinculoComPessoa, grupo: VinculoComPessoa[]) => void;
   onRemover?: (v: VinculoComPessoa) => void;
   desabilitado?: boolean;
   /** Os cargos na ordem de Configurações (a prioridade): cada seção vai por ela e depois pelo nome. */
   cargos?: readonly string[];
+  /** UNIFICA os vínculos de mesma nomeação (a pessoa + o tipo + o ato de mesmo nº): um cartão com os lugares — o banner
+   * da pessoa. */
+  agrupar?: boolean;
 }) {
   const { padroes, temporarios } = separarVinculos(vinculos, cargos);
   const secao = (tipo: TipoVinculo, rotulo: string, lista: VinculoComPessoa[]) => (
@@ -107,17 +113,29 @@ export function ListaVinculos({
         <p className="text-[13px] text-muted">{vazio[tipo]}</p>
       ) : (
         <ul className="space-y-2">
-          {lista.map((v) => (
-            <CartaoVinculo
-              key={v.id}
-              v={v}
-              estado={estadoDoVinculo(v, irmaos(v), hoje)}
-              t={titulo(v)}
-              onEditar={onEditar}
-              onRemover={onRemover}
-              desabilitado={desabilitado}
-            />
-          ))}
+          {(agrupar ? agruparPorNomeacao(lista) : lista.map((v) => [v])).map((g) =>
+            g.length > 1 ? (
+              <CartaoNomeacao
+                key={g[0].id}
+                grupo={g}
+                estado={(v) => estadoDoVinculo(v, irmaos(v), hoje)}
+                titulo={titulo}
+                onEditar={onEditar}
+                onRemover={onRemover}
+                desabilitado={desabilitado}
+              />
+            ) : (
+              <CartaoVinculo
+                key={g[0].id}
+                v={g[0]}
+                estado={estadoDoVinculo(g[0], irmaos(g[0]), hoje)}
+                t={titulo(g[0])}
+                onEditar={onEditar && ((v) => onEditar(v, [v]))}
+                onRemover={onRemover}
+                desabilitado={desabilitado}
+              />
+            ),
+          )}
         </ul>
       )}
     </section>
@@ -127,6 +145,95 @@ export function ListaVinculos({
       {secao("padrao", "Padrão", padroes)}
       {secao("temporario", "Temporários", temporarios)}
     </div>
+  );
+}
+
+/** UMA nomeação (o mesmo ato) com VÁRIOS lugares: o cargo, o ato com o link e editar tudo de uma vez no topo; cada lugar
+ * com o estado, o período (quando difere) e remover. */
+function CartaoNomeacao({
+  grupo,
+  estado,
+  titulo,
+  onEditar,
+  onRemover,
+  desabilitado,
+}: {
+  grupo: VinculoComPessoa[];
+  estado: (v: VinculoComPessoa) => EstadoVinculo;
+  titulo: (v: VinculoComPessoa) => TituloVinculo;
+  onEditar?: (v: VinculoComPessoa, grupo: VinculoComPessoa[]) => void;
+  onRemover?: (v: VinculoComPessoa) => void;
+  desabilitado: boolean;
+}) {
+  const v0 = grupo[0];
+  const ato = textoAto(v0);
+  const funcao = funcaoDoVinculo(v0);
+  const temp = v0.tipo === "temporario";
+  const periodos = new Set(grupo.map((v) => periodoVinculo(v)));
+  const link = grupo.find((v) => v.atoLink)?.atoLink ?? "";
+  const t0 = titulo(v0);
+  return (
+    <li className="space-y-2 rounded-control border border-border p-3">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="break-words text-[13.5px] font-semibold text-text">
+            {ato} <span className="font-normal text-muted">· {grupo.length} lugares</span>
+          </p>
+          <p className="text-[12.5px] text-text-2">
+            {funcao || <span className="text-[color:var(--warn)]">{temp ? "Sem cargo do período" : "Pessoa sem cargo"}</span>}
+            {periodos.size === 1 && <span className="tabular-nums"> · {periodoVinculo(v0)}</span>}
+          </p>
+          {t0.exonerado && <Badge tone="slate">Exonerado em {t0.exonerado.split("-").reverse().join("/")}</Badge>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {link && (
+            <LinkExterno href={link} size="xs" icon={<IconLink className="h-4 w-4" />} titulo={`Abrir ${ato}`}>
+              Ato
+            </LinkExterno>
+          )}
+          {onEditar && (
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={desabilitado}
+              aria-label={`Editar a nomeação (${ato}) nos ${grupo.length} lugares`}
+              title="Editar a nomeação e os lugares"
+              icon={<IconPencil className="h-4 w-4" />}
+              onClick={() => onEditar(v0, grupo)}
+            />
+          )}
+        </div>
+      </div>
+      <ul className="divide-y divide-border border-t border-border">
+        {grupo.map((v) => {
+          const t = titulo(v);
+          const e = estado(v);
+          const apagado = e === "encerrado" || e === "inativo";
+          return (
+            <li key={v.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 [&:not(:first-child)]:mt-2">
+              <span className={`min-w-0 flex-1 break-words text-[13px] ${apagado ? "text-muted" : "text-text"}`}>
+                {t.texto}
+                {t.detalhe && <span className="text-[12px] text-muted"> · {t.detalhe}</span>}
+              </span>
+              <Badge tone={TOM_ESTADO[e]}>{ROTULO_ESTADO_VINCULO[e]}</Badge>
+              {periodos.size > 1 && <span className="text-[12px] tabular-nums text-text-2">{periodoVinculo(v)}</span>}
+              {t.aviso && <span className="w-full text-[12px] text-[color:var(--warn)]">{t.aviso}</span>}
+              {onRemover && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  disabled={desabilitado}
+                  aria-label={`Remover o vínculo em ${t.texto}`}
+                  style={{ color: "var(--danger)" }}
+                  icon={<IconTrash className="h-4 w-4" />}
+                  onClick={() => onRemover(v)}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </li>
   );
 }
 
@@ -195,10 +302,17 @@ function CartaoVinculo({
 /** O que o editor manda gravar: a pessoa, os alvos (`o<id>` | `u<id>` — vários: a mesma nomeação vincula a pessoa a
  * várias unidades/órgãos de uma vez; EDITANDO, o 1º é onde o próprio vínculo passa a responder e os demais viram vínculos
  * novos) e os dados. */
-export type EnvioVinculo = { responsavelId: number; alvos: string[]; dados: DadosVinculo };
+export type EnvioVinculo = { responsavelId: number; alvos: string[]; dados: DadosVinculo; grupo?: { id: number; alvo: string }[] };
 
 /** Como o editor abre: novo (com o tipo e, quando já se sabe, a pessoa ou o alvo) ou editando um vínculo. */
-export type AberturaVinculo = { id?: number; responsavelId: number | null; alvo: string; dados: DadosVinculo };
+export type AberturaVinculo = {
+  id?: number;
+  responsavelId: number | null;
+  alvo: string;
+  dados: DadosVinculo;
+  /** A NOMEAÇÃO unificada: os vínculos dela (id + lugar) — editar vale para todos; desmarcar um lugar o remove. */
+  grupo?: { id: number; alvo: string }[];
+};
 
 export const dadosVazios = (tipo: TipoVinculo): DadosVinculo => ({ tipo, funcao: "", atoTipo: null, atoNumero: "", atoLink: "", inicio: null, fim: null });
 
@@ -245,7 +359,7 @@ export function EditorVinculo({
   onFechar: () => void;
 }) {
   return (
-    <Modal open={!!abertura} onClose={onFechar} bloqueado={ocupado} size="md" titulo={abertura?.id ? "Editar vínculo" : "Novo vínculo"}>
+    <Modal open={!!abertura} onClose={onFechar} bloqueado={ocupado} size="md" titulo={abertura?.id ? ((abertura.grupo?.length ?? 0) > 1 ? "Editar nomeação" : "Editar vínculo") : "Novo vínculo"}>
       {abertura && (
         <CorpoEditor
           key={`${abertura.id ?? "novo"}:${abertura.alvo}:${abertura.responsavelId ?? ""}`}
@@ -289,13 +403,14 @@ function CorpoEditor({
   onFechar: () => void;
 }) {
   const [pessoa, setPessoa] = useState(abertura.responsavelId == null ? "" : String(abertura.responsavelId));
-  const [alvosEscolhidos, setAlvos] = useState<string[]>(abertura.alvo ? [abertura.alvo] : []);
+  const originais = abertura.grupo?.map((g) => g.alvo) ?? (abertura.alvo ? [abertura.alvo] : []);
+  const [alvosEscolhidos, setAlvos] = useState<string[]>(originais);
   const [d, setD] = useState<DadosVinculo>(abertura.dados);
   const [nova, setNova] = useState<NovaPessoa | null>(null);
   const set = <K extends keyof DadosVinculo>(k: K, v: DadosVinculo[K]) => setD((x) => ({ ...x, [k]: v }));
   const escolhida = pessoas.find((p) => String(p.id) === pessoa) ?? null;
   // A EXONERAÇÃO: quem já foi exonerado não recebe vínculo novo e nenhum começa depois dela.
-  const novoParaPessoa = !abertura.id || String(abertura.responsavelId) !== pessoa || alvosEscolhidos.some((a) => a !== abertura.alvo);
+  const novoParaPessoa = !abertura.id || String(abertura.responsavelId) !== pessoa || alvosEscolhidos.some((a) => !originais.includes(a));
   const exoneracao = escolhida ? motivoNaoVincular(escolhida, d, hojeISO(), novoParaPessoa) : null;
   const motivo = motivoVinculoInvalido(d) ?? exoneracao;
   const falta = !pessoa ? "Escolha a pessoa." : alvosEscolhidos.length === 0 ? "Escolha a unidade ou o órgão." : motivo;
@@ -321,7 +436,8 @@ function CorpoEditor({
     if (falta || !pessoa) return;
     // Editando: o próprio vínculo fica onde já respondia (se continua escolhido) — senão vai ao 1º escolhido.
     const ordem = abertura.id && alvosEscolhidos.includes(abertura.alvo) ? [abertura.alvo, ...alvosEscolhidos.filter((a) => a !== abertura.alvo)] : alvosEscolhidos;
-    if (await onSalvar({ responsavelId: Number(pessoa), alvos: ordem, dados: d }, abertura.id)) onFechar();
+    if (await onSalvar({ responsavelId: Number(pessoa), alvos: ordem, dados: d, grupo: abertura.grupo ?? (abertura.id ? [{ id: abertura.id, alvo: abertura.alvo }] : undefined) }, abertura.id))
+      onFechar();
   }
 
   return (
@@ -381,7 +497,12 @@ function CorpoEditor({
               suspenso
               textoVazio="Escolha…"
             />
-            {abertura.id && !alvosEscolhidos.includes(abertura.alvo) && alvosEscolhidos.length > 0 && (
+            {abertura.grupo && abertura.grupo.length > 1 && originais.some((a) => !alvosEscolhidos.includes(a)) && (
+              <p className="text-[12px] text-[color:var(--warn)]">
+                Sai desta nomeação: {originais.filter((a) => !alvosEscolhidos.includes(a)).map(rotuloDe).join(" · ")}.
+              </p>
+            )}
+            {abertura.id && (abertura.grupo?.length ?? 1) <= 1 && !alvosEscolhidos.includes(abertura.alvo) && alvosEscolhidos.length > 0 && (
               <p className="text-[12px] text-muted">
                 Este vínculo deixa {rotuloDe(abertura.alvo)} e passa a responder em {rotuloDe(alvosEscolhidos[0])}.
               </p>

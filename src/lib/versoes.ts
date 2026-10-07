@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.60.0",
+    data: "2026-10-07",
+    titulo: "Nomeações unificadas nos Responsáveis",
+    mudancas: [
+      { tipo: "novo", area: "Responsáveis", texto: "No banner da pessoa, os vínculos com o mesmo ato (decreto, portaria ou lei de mesmo número) aparecem num cartão só, com todos os lugares em que ela responde.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "Editar a nomeação vale para todos os lugares de uma vez: os dados ficam iguais em todos, lugares novos entram e o lugar desmarcado sai (com confirmação).", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
     versao: "1.59.0",
     data: "2026-10-07",
     titulo: "Editar onde o responsável responde; cargo fora da lista é erro",
