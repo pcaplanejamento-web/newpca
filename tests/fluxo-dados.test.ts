@@ -214,13 +214,15 @@ test("Modelo “Execução dos DFDs na CM002”: grava a situação, aponta os f
   assert.equal(r.estado, "concluido", r.erro);
   assert.deepEqual(pedidos.sort(), ["2", "3"], "só as entidades dos DFDs, uma vez cada");
   const grav = posts.find((p) => p.c.includes("execucao-dfds"));
-  assert.deepEqual((grav?.body as { linhas: unknown[]; dfdIds: number[] }).dfdIds, [1, 2]);
-  assert.deepEqual((grav?.body as { linhas: { valores: string[] }[] }).linhas.map((l) => l.valores), [
+  assert.ok(grav);
+  assert.deepEqual(((grav as { body: unknown }).body as { linhas: unknown[]; dfdIds: number[] }).dfdIds, [1, 2]);
+  assert.deepEqual(((grav as { body: unknown }).body as { linhas: { valores: string[] }[] }).linhas.map((l) => l.valores), [
     ["1732", "Executado"],
     ["0278", "Não Executado"],
   ]);
   const tab = posts.find((p) => p.c.includes("/tabelas"));
-  assert.deepEqual((tab?.body as { linhas: { planejamento: string }[] }).linhas.map((l) => l.planejamento), ["1731"]);
+  assert.ok(tab);
+  assert.deepEqual(((tab as { body: unknown }).body as { linhas: { planejamento: string }[] }).linhas.map((l) => l.planejamento), ["1731"]);
   assert.deepEqual(r.apontados.map((a) => a.mensagem).sort(), [
     "DFD 228 (planejamento 0278): Não Executado na CM002",
     "DFD 500 (planejamento 999) não está na CM002 da entidade 3",
