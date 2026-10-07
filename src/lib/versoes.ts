@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.27.1",
+    data: "2026-10-07",
+    titulo: "CM002 aprendida sem depender da tabela",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Sem a consulta da CM002 guardada, a extensão (1.15.3) abre a CM002, clica em Pesquisar e espera a consulta ser reconhecida — não depende mais de achar a tabela Resultados (erro “Abri a aba CM002, mas a tabela Resultados não apareceu”).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.27.0",
     data: "2026-10-07",
     titulo: "DFDs conferidos com a CM002",

@@ -5,7 +5,7 @@
 (() => {
   const g = globalThis;
   // Uma versão por vez: a cópia mais NOVA substitui a que tenha ficado na aba (atualizar a extensão não deixa a velha).
-  const VERSAO = 11;
+  const VERSAO = 12;
   if (g.__pcaCentiTela && (g.__pcaCentiTela.versao ?? 1) >= VERSAO) return;
 
   const norm = (s) =>
@@ -966,7 +966,48 @@
     return esperarAte(ctx, () => lerTabelaCm002(doc), "Abri a CM002, mas a tabela Resultados não apareceu.", 30000);
   }
 
+  /** O botão "Pesquisar" da CM002 (texto PESQUISAR; nunca o campo de busca do menu). */
+  function pesquisarCm002(doc) {
+    for (const x of porTexto(doc, (v) => v === "PESQUISAR")) {
+      let n = x;
+      for (let i = 0; n && i < 4; i++, n = n.parentElement) if (ehBotao(n) && seguro(n)) return n;
+    }
+    return null;
+  }
+
+  /** ENSINAR a consulta da CM002 à API: abre a tela (aba do topo ou busca do menu), clica em Pesquisar e espera a
+   * extensão guardar a consulta (localStorage da Centi — o mundo da página a grava ao ver a resposta). Não lê a tabela. */
+  async function aprenderCm002(ctx) {
+    const { doc, win } = ctx;
+    const CHAVE = "__pcaCm002_v1";
+    const antes = localStorage.getItem(CHAVE);
+    ctx.etapa = "abrir a CM002";
+    let b = pesquisarCm002(doc);
+    if (!b) {
+      const aba = porTexto(doc, (x) => /^CM002\b/.test(x) && x.length < 60)[0];
+      if (aba) clicar(win, aba);
+      else {
+        const busca = todos(doc).find((el) => el.tagName === "INPUT" && visivel(el) && norm(attr(el, "placeholder")).startsWith("PESQUISAR"));
+        if (!busca) throw new Error("Não achei a CM002 nem a busca do menu da Centi — abra o sistema Compras na aba da automação.");
+        digitar(win, busca, "CM002");
+        const item = await esperarAte(ctx, () => porTexto(doc, (s) => /CM002/.test(s) && s.length < 60).find((el) => el !== busca && el.tagName !== "INPUT"), "A busca do menu não mostrou a CM002 - Planejamento.");
+        clicar(win, item);
+      }
+      b = await esperarAte(ctx, () => pesquisarCm002(doc), "Abri a CM002, mas o botão Pesquisar não apareceu.", 30000);
+    }
+    ctx.etapa = "pesquisar";
+    clicar(win, b);
+    await esperarAte(ctx, () => {
+      const v = localStorage.getItem(CHAVE);
+      return v && v !== antes ? v : null;
+    }, antes ? "" : "Cliquei em Pesquisar na CM002, mas a consulta não foi reconhecida (aperte F5 na aba da Centi e tente de novo).", 60000).catch((e) => {
+      if (!antes) throw e;
+    });
+    return { colunas: [], linhas: [], total: 0, aprendido: true };
+  }
+
   async function planejamentos(ctx, ids, aprender) {
+    if (aprender) return aprenderCm002(ctx);
     const { doc, win } = ctx;
     const quer = new Set((Array.isArray(ids) ? ids : []).map((x) => String(x).replace(/\D/g, "").replace(/^0+/, "")).filter(Boolean));
     ctx.etapa = "achar a CM002";
