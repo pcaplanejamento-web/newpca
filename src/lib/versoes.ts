@@ -32,6 +32,33 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.52.0",
+    data: "2026-10-07",
+    titulo: "Nós das automações: tudo por escolha e (?) didático",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Comportamento 100% por escolha (Repetir, Esperar, Guardar o resultado — com o nome sugerido — e Desativar), cada um com o (?).",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto:
+          "Todos os nós revisados: limites, tempos, lotes e tolerâncias em opções; tabelas salvas, colunas da Mesa e variáveis escolhidas da lista (ou um nome novo); “Gravar no campo” pelos campos do item.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "O (?) de cada campo agora explica para que serve, como preencher e as opções.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.51.0",
     data: "2026-10-07",
     titulo: "Seleção carrega todos os DFDs e campos dos nós por escolha",

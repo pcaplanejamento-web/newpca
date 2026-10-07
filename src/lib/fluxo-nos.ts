@@ -59,6 +59,10 @@ export const corCategoria = (c: CategoriaNo) => CATEGORIAS.find((x) => x.valor =
 
 const so = (entradas: Portas, porta = "entrada") => entradas[porta] ?? [];
 const str = (v: unknown, padrao = "") => (typeof v === "string" ? v : v == null ? padrao : String(v));
+/** Opções numéricas de um campo de seleção (o valor gravado é o número em texto — `numeroDe` lê). */
+const opcoesNum = (ns: number[], rot: (n: number) => string = (n) => n.toLocaleString("pt-BR")) => ns.map((n) => ({ valor: String(n), rotulo: rot(n) }));
+const rotSeg = (n: number) => (n < 60 ? `${n} segundo${n === 1 ? "" : "s"}` : `${n / 60} minuto${n === 60 ? "" : "s"}`);
+
 const lista = (v: unknown) =>
   str(v)
     .split(/[;\n]/)
@@ -71,8 +75,8 @@ const COMO_ENSINAR_TELA =
   "Na Centi, abra a Tela Protocolo (PO011) e pesquise uma vez — a extensão reconhece a consulta e daí em diante tudo vai só pela API.";
 
 const CAMPO_CONDICAO: CampoNo[] = [
-  { chave: "campo", rotulo: "Campo", tipo: "caminho", obrigatorio: true, ajuda: "O dado de cada item (ex.: situacao)." },
-  { chave: "operador", rotulo: "Condição", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
+  { chave: "campo", rotulo: "Campo", tipo: "caminho", obrigatorio: true, ajuda: "O dado de cada item que será testado (ex.: situacao)." },
+  { chave: "operador", rotulo: "Condição", ajuda: "Como comparar o dado com o valor (igual, contém, maior que, vazio…).", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
   {
     chave: "valor",
     rotulo: "Valor",
@@ -134,10 +138,10 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "chave", rotulo: "Campo que identifica o item", tipo: "caminho", padrao: "id", obrigatorio: true },
+      { chave: "chave", rotulo: "Campo que identifica o item", ajuda: "O dado que diferencia um item do outro (ex.: id ou planejamento). A marcação de cada linha fica guardada por ele.", tipo: "caminho", padrao: "id", obrigatorio: true },
       {
         chave: "semMarcar",
-        rotulo: "Sem nada marcado",
+        rotulo: "Sem nada marcado", ajuda: "O que acontece se você executar sem marcar nenhuma linha na tabela de seleção.",
         tipo: "selecao",
         entrada: true,
         opcoes: [
@@ -158,7 +162,7 @@ const NOS: DefNo[] = [
     icone: "edit",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "ids", rotulo: "Nºs de planejamento", tipo: "texto", entrada: true, ajuda: `Ex.: 1154:1155:1160 (até ${MAX_IDS_CENTI}).` }],
+    campos: [{ chave: "ids", rotulo: "Nºs de planejamento", tipo: "texto", entrada: true, ajuda: `Os números de planejamento dos DFDs que o fluxo vai processar (até ${MAX_IDS_CENTI}). Separe vários com “:” (ex.: 1154:1155:1160).` }],
     previa: (c) => lerIdsCenti(str(c.ids)).ids.map((id) => ({ id, planejamento: id })),
     executar: async (_e, c) => {
       const { ids } = lerIdsCenti(str(c.ids));
@@ -177,10 +181,10 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "nome", rotulo: "Nome da tabela", tipo: "texto", obrigatorio: true, entrada: true },
-      { chave: "colunas", rotulo: "Colunas", tipo: "textoLongo", ajuda: "Opcional — uma por linha: coluna => nome. Vazio = todas." },
-      { chave: "de", rotulo: "Da linha", tipo: "numero", ajuda: "1 = a primeira. Vazio = desde o início." },
-      { chave: "ate", rotulo: "Até a linha", tipo: "numero", ajuda: "Vazio = até o fim." },
+      { chave: "nome", rotulo: "Nome da tabela", tipo: "nomeLista", fonte: "tabelas", obrigatorio: true, entrada: true, ajuda: "A tabela salva por um nó “Guardar em tabela” que este nó vai ler." },
+      { chave: "colunas", rotulo: "Colunas", tipo: "textoLongo", ajuda: "Quais colunas da tabela salva entram e com que nome. Deixe vazio para trazer todas. Uma por linha, no formato “coluna => novo nome”." },
+      { chave: "de", rotulo: "Da linha", tipo: "numero", ajuda: "A partir de qual linha da tabela começar a ler (1 = a primeira). Vazio = do início." },
+      { chave: "ate", rotulo: "Até a linha", tipo: "numero", ajuda: "Até qual linha da tabela ler. Vazio = até o fim." },
     ],
     rodaSemItens: true,
     executar: async (_e, c, ctx) => {
@@ -201,7 +205,7 @@ const NOS: DefNo[] = [
     icone: "building",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "filtro", rotulo: "Só as que contêm", tipo: "texto", entrada: true, ajuda: "Ex.: PCA (vazio = todas). Separe vários por ;" }],
+    campos: [{ chave: "filtro", rotulo: "Só as que contêm", tipo: "texto", entrada: true, ajuda: "Traz só as repartições cujo nome contém este texto (ex.: PCA). Vazio = todas. Separe vários com “;”." }],
     executar: async (_e, c, ctx) => {
       ctx.aviso("Lendo as repartições na Centi…");
       const r = await ctx.centi("reparticoesApi", null, 30_000);
@@ -223,7 +227,7 @@ const NOS: DefNo[] = [
     campos: [
       {
         chave: "situacao",
-        rotulo: "Situação",
+        rotulo: "Situação", ajuda: "Em qual situação da Tela Protocolo da Centi os protocolos devem estar (ex.: Em análise).",
         tipo: "selecao",
         entrada: true,
         opcoes: [
@@ -234,14 +238,14 @@ const NOS: DefNo[] = [
         ],
         padrao: "",
       },
-      { chave: "outra", rotulo: "Situação (texto)", tipo: "texto", entrada: true, obrigatorio: true, quando: { campo: "situacao", valores: ["outra"] } },
+      { chave: "outra", rotulo: "Situação (texto)", ajuda: "O nome exato da situação, quando ela não está na lista acima.", tipo: "texto", entrada: true, obrigatorio: true, quando: { campo: "situacao", valores: ["outra"] } },
       {
         chave: "campoReparticao",
         rotulo: "Repartições vindas do item (campo)",
         tipo: "caminho",
-        ajuda: "Ligue o nó Repartições antes e use “reparticao” — só os protocolos delas. Vazio = todas.",
+        ajuda: "O dado do item que traz o nome da repartição (use “reparticao” com o nó Repartições antes). Vazio = todas as repartições.",
       },
-      { chave: "reparticao", rotulo: "Repartições", tipo: "reparticoesCenti", entrada: true, ajuda: "Ex.: DEP. PLANEJAMENTO - PCA (várias separadas por ;). Soma às vindas do item." },
+      { chave: "reparticao", rotulo: "Repartições", tipo: "reparticoesCenti", entrada: true, ajuda: "As repartições da Centi cujos protocolos serão lidos. Somam-se às que vêm do nó anterior." },
     ],
     executar: async (e, c, ctx) => {
       const sit = str(c.situacao) === "outra" ? str(c.outra).trim() : str(c.situacao);
@@ -281,7 +285,7 @@ const NOS: DefNo[] = [
     campos: [
       {
         chave: "origem",
-        rotulo: "Órgão",
+        rotulo: "Órgão", ajuda: "De onde vem o órgão (entidade) da Centi em que cada item é analisado: do cadastro do órgão de cada item ou de órgãos fixos.",
         tipo: "selecao",
         padrao: "itens",
         opcoes: [
@@ -299,7 +303,7 @@ const NOS: DefNo[] = [
       },
       {
         chave: "entrega",
-        rotulo: "Entregar",
+        rotulo: "Entregar", ajuda: "Se o nó entrega todos os itens de uma vez ou um órgão por vez (troca o órgão na Centi a cada volta do laço).",
         tipo: "selecao",
         padrao: "todos",
         opcoes: [
@@ -442,7 +446,7 @@ const NOS: DefNo[] = [
     campos: [
       {
         chave: "objeto",
-        rotulo: "Ler",
+        rotulo: "Ler", ajuda: "O que buscar no próprio sistema: protocolos, DFDs ou itens.",
         tipo: "selecao",
         padrao: "dfds",
         opcoes: [
@@ -451,9 +455,9 @@ const NOS: DefNo[] = [
           { valor: "itens", rotulo: "Itens (produtos)" },
         ],
       },
-      { chave: "buscaProtocolos", rotulo: "Quais", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.protocolos, quando: { campo: "objeto", valores: ["protocolos"] } },
-      { chave: "buscaDfds", rotulo: "Quais", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.dfds, quando: { campo: "objeto", valores: ["dfds"] } },
-      { chave: "buscaItens", rotulo: "Quais", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.itens, quando: { campo: "objeto", valores: ["itens"] } },
+      { chave: "buscaProtocolos", rotulo: "Quais", ajuda: "Quais protocolos trazer: todos ou só os que casam com o valor procurado (pelo nº ou pelo Id).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.protocolos, quando: { campo: "objeto", valores: ["protocolos"] } },
+      { chave: "buscaDfds", rotulo: "Quais", ajuda: "Quais DFDs trazer: todos ou só os que casam com o valor procurado (pelo planejamento, pelo nº do DFD ou pelo protocolo).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.dfds, quando: { campo: "objeto", valores: ["dfds"] } },
+      { chave: "buscaItens", rotulo: "Quais", ajuda: "Quais itens trazer: todos ou só os que casam com o valor procurado (planejamento, nº do DFD, protocolo ou produto).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.itens, quando: { campo: "objeto", valores: ["itens"] } },
       {
         chave: "valor",
         rotulo: "Valor procurado",
@@ -465,7 +469,7 @@ const NOS: DefNo[] = [
       },
       {
         chave: "entrega",
-        rotulo: "Entregar",
+        rotulo: "Entregar", ajuda: "“Tudo de uma vez” entrega a lista inteira; “Um por vez” entrega um item, espera ele voltar pela porta “Volta” e entrega o próximo.",
         tipo: "selecao",
         padrao: "lista",
         opcoes: [
@@ -510,7 +514,7 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida", "naoEncontrados"],
     rotulosPortas: { saida: "DFDs", naoEncontrados: "Não encontrados" },
-    campos: [{ chave: "planejamento", rotulo: "Planejamento (rodando sozinho)", tipo: "texto", entrada: true, ajuda: "Usado quando o item que chega não traz o planejamento." }],
+    campos: [{ chave: "planejamento", rotulo: "Planejamento (rodando sozinho)", tipo: "texto", entrada: true, ajuda: "O nº de planejamento usado quando o item que chega não traz um — ex.: para testar o fluxo com um DFD só." }],
     executar: async (e, c, ctx) => {
       const itens = so(e).map((it) => (str(it.planejamento) ? it : { ...it, planejamento: str(c.planejamento) }));
       const prontos = itens.filter((it) => it.id != null && str(it.numero) && str(it.planejamento));
@@ -547,7 +551,7 @@ const NOS: DefNo[] = [
     icone: "folder",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "dfds", rotulo: "Um item por DFD (em vez de por protocolo)", tipo: "booleano", padrao: false }],
+    campos: [{ chave: "dfds", rotulo: "Um item por DFD (em vez de por protocolo)", ajuda: "Ligado: cada DFD de cada protocolo vira um item. Desligado: um item por protocolo.", tipo: "booleano", padrao: false }],
     previa: (c, host) => protocolosDoSistema(c, host),
     executar: async (_e, c, ctx) => ({ saida: protocolosDoSistema(c, ctx.host) }),
   },
@@ -574,7 +578,7 @@ const NOS: DefNo[] = [
     icone: "scan",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "limite", rotulo: "Máximo de protocolos", tipo: "numero", padrao: 50, ajuda: "Proteção — até 500." }],
+    campos: [{ chave: "limite", rotulo: "Máximo de protocolos", tipo: "selecao", padrao: 50, opcoes: opcoesNum([10, 25, 50, 100, 200, 500]), ajuda: "Um teto de segurança: o nó processa no máximo esta quantidade de protocolos por execução." }],
     executar: async (e, c, ctx) => {
       const ler = ctx.host.lerProtocolo as ((it: Item) => Promise<Item>) | undefined;
       if (!ler) throw new Error("A leitura de PDF só funciona na tela da Automação.");
@@ -609,7 +613,7 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "limite", rotulo: "Máximo de DFDs", tipo: "numero", padrao: 5000, ajuda: "Proteção — até 20000." },
+      { chave: "limite", rotulo: "Máximo de DFDs", tipo: "selecao", padrao: 5000, opcoes: opcoesNum([100, 500, 1000, 5000, 10000, 20000]), ajuda: "Um teto de segurança: o nó busca no máximo esta quantidade de DFDs na Centi por execução." },
       { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
       { chave: "completo", rotulo: "Guardar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo vai em “centi.dfd” — a base do “Substituir DFD pela Centi”." },
       {
@@ -684,11 +688,11 @@ const NOS: DefNo[] = [
     saidas: ["iguais", "diferentes", "soEmA", "soEmB"],
     rotulosPortas: { a: "A", b: "B", iguais: "Iguais", diferentes: "Diferentes", soEmA: "Só em A", soEmB: "Só em B" },
     campos: [
-      { chave: "chaveA", rotulo: "Chave em A", tipo: "caminho", obrigatorio: true, ajuda: "Ex.: planejamento" },
-      { chave: "chaveB", rotulo: "Chave em B", tipo: "caminho", obrigatorio: true, ajuda: "Ex.: id" },
-      { chave: "campoA", rotulo: "Dado de A a comparar", tipo: "caminho", ajuda: "Vazio = só casa pela chave." },
-      { chave: "campoB", rotulo: "Dado de B a comparar", tipo: "caminho" },
-      { chave: "operador", rotulo: "Iguais quando", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
+      { chave: "chaveA", rotulo: "Chave em A", tipo: "caminho", obrigatorio: true, ajuda: "O dado que identifica cada item da entrada A — usado para achar o par dele na entrada B (ex.: planejamento)." },
+      { chave: "chaveB", rotulo: "Chave em B", tipo: "caminho", obrigatorio: true, ajuda: "O dado que identifica cada item da entrada B — o mesmo valor da chave em A (ex.: id)." },
+      { chave: "campoA", rotulo: "Dado de A a comparar", tipo: "caminho", ajuda: "O dado de A que deve bater com o de B. Vazio = só verifica se o par existe." },
+      { chave: "campoB", rotulo: "Dado de B a comparar", ajuda: "O dado de B comparado com o dado de A.", tipo: "caminho" },
+      { chave: "operador", rotulo: "Iguais quando", ajuda: "Quando os dois dados são considerados iguais (exatamente igual, sem acento/maiúsculas, número…).", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
     ],
     rodaSemItens: true,
     executar: async (e, c) => {
@@ -724,7 +728,7 @@ const NOS: DefNo[] = [
     entradas: ["entrada", PORTA_VOLTA],
     saidas: ["lote", "fim"],
     rotulosPortas: { volta: "Volta", lote: "Lote", fim: "Fim" },
-    campos: [{ chave: "tamanho", rotulo: "Itens por lote", tipo: "numero", padrao: 1 }],
+    campos: [{ chave: "tamanho", rotulo: "Itens por lote", tipo: "selecao", padrao: 1, opcoes: opcoesNum([1, 5, 10, 20, 50, 100]), ajuda: "Quantos itens o laço entrega de cada vez para os nós de dentro. 1 = um item por volta." }],
     rodaSemItens: true,
     entregaParcial: true,
     iterador: true,
@@ -773,12 +777,12 @@ const NOS: DefNo[] = [
     rotulosPortas: { entrada: "Itens", tabela: "Tabela", encontrados: "Encontrados", naoEncontrados: "Não encontrados" },
     campos: [
       { chave: "valor", rotulo: "Valor procurado", tipo: "texto", obrigatorio: true, entrada: true, aceitaCampo: true, padrao: "{{planejamento}}", ajuda: "Do nó anterior: o campo de cada item. Valor fixo: o texto como está." },
-      { chave: "onde", rotulo: "Onde procurar", tipo: "selecao", padrao: "coluna", opcoes: [{ valor: "coluna", rotulo: "Numa coluna" }, { valor: "tudo", rotulo: "Em todas as colunas (ler tudo)" }] },
-      { chave: "coluna", rotulo: "Coluna da tabela", tipo: "caminho", obrigatorio: true, quando: { campo: "onde", valores: ["coluna"] }, ajuda: "Ex.: planejamento ou centi.Id" },
-      { chave: "operador", rotulo: "Casa quando a coluna", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
-      { chave: "resultado", rotulo: "Resultado", tipo: "selecao", padrao: "primeiro", opcoes: [{ valor: "primeiro", rotulo: "A primeira linha que casa" }, { valor: "todas", rotulo: "Todas as linhas (lista)" }] },
-      { chave: "extraCampo", rotulo: "E também igual: campo do item", tipo: "caminho", ajuda: "Opcional. Ex.: entidade = o órgão (o mesmo nº pode existir em outro órgão)." },
-      { chave: "extraColuna", rotulo: "… à coluna da tabela", tipo: "caminho", ajuda: "Ex.: entidade" },
+      { chave: "onde", rotulo: "Onde procurar", ajuda: "Procurar o valor numa coluna específica da tabela ou em qualquer coluna da linha.", tipo: "selecao", padrao: "coluna", opcoes: [{ valor: "coluna", rotulo: "Numa coluna" }, { valor: "tudo", rotulo: "Em todas as colunas (ler tudo)" }] },
+      { chave: "coluna", rotulo: "Coluna da tabela", tipo: "caminho", obrigatorio: true, quando: { campo: "onde", valores: ["coluna"] }, ajuda: "A coluna da tabela onde o valor é procurado (ex.: planejamento)." },
+      { chave: "operador", rotulo: "Casa quando a coluna", ajuda: "Como a coluna deve casar com o valor procurado (igual, contém…).", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
+      { chave: "resultado", rotulo: "Resultado", ajuda: "Guardar só a primeira linha que casa ou todas as linhas que casam.", tipo: "selecao", padrao: "primeiro", opcoes: [{ valor: "primeiro", rotulo: "A primeira linha que casa" }, { valor: "todas", rotulo: "Todas as linhas (lista)" }] },
+      { chave: "extraCampo", rotulo: "E também igual: campo do item", tipo: "caminho", ajuda: "Opcional: um segundo dado do item que também precisa bater (ex.: entidade — o mesmo nº pode existir em outro órgão)." },
+      { chave: "extraColuna", rotulo: "… à coluna da tabela", tipo: "caminho", ajuda: "A coluna da tabela que deve ser igual ao segundo dado acima (ex.: entidade)." },
     ],
     rodaSemItens: true,
     executar: async (e, c) =>
@@ -813,7 +817,7 @@ const NOS: DefNo[] = [
     icone: "clock",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "segundos", rotulo: "Segundos", tipo: "numero", padrao: 5, obrigatorio: true, ajuda: `1 a ${MAX_ESPERA_S}.` }],
+    campos: [{ chave: "segundos", rotulo: "Tempo de espera", tipo: "selecao", padrao: 5, obrigatorio: true, opcoes: opcoesNum([1, 5, 10, 30, 60, 120, MAX_ESPERA_S], rotSeg), ajuda: "Quanto tempo o fluxo para aqui antes de seguir (ex.: dar tempo de a Centi terminar uma tarefa)." }],
     rodaSemItens: true,
     executar: async (e, c, ctx) => {
       const seg = Math.min(MAX_ESPERA_S, Math.max(1, numeroDe(c.segundos) ?? 5));
@@ -843,8 +847,8 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "linhas", rotulo: "Campos", tipo: "textoLongo", obrigatorio: true, ajuda: "Ex.: chave = {{planejamento}}" },
-      { chave: "manter", rotulo: "Manter os outros campos", tipo: "booleano", padrao: true },
+      { chave: "linhas", rotulo: "Campos", tipo: "textoLongo", obrigatorio: true, ajuda: "Os campos criados ou trocados em cada item. Um por linha: “nome = valor” — o valor pode usar {{campo}} do item." },
+      { chave: "manter", rotulo: "Manter os outros campos", ajuda: "Ligado: os campos que o item já tinha continuam. Desligado: o item fica só com os campos definidos aqui.", tipo: "booleano", padrao: true },
     ],
     executar: async (e, c) => {
       const regras = str(c.linhas)
@@ -864,8 +868,8 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "colunas", rotulo: "Colunas", tipo: "textoLongo", obrigatorio: true, ajuda: "Ex.: centi.Situacao => situacao (sem “=>” fica o último nome do caminho)." },
-      { chave: "manter", rotulo: "Manter as outras colunas", tipo: "booleano", padrao: false },
+      { chave: "colunas", rotulo: "Colunas", tipo: "textoLongo", obrigatorio: true, ajuda: "Quais dados seguem e com que nome. Um por linha: “caminho => nome” (ex.: centi.Situacao => situacao)." },
+      { chave: "manter", rotulo: "Manter as outras colunas", ajuda: "Ligado: os outros dados do item continuam. Desligado: o item fica só com as colunas escolhidas.", tipo: "booleano", padrao: false },
     ],
     executar: async (e, c) => {
       const colunas = lerColunas(str(c.colunas));
@@ -883,12 +887,12 @@ const NOS: DefNo[] = [
     saidas: ["saida", "semRegra"],
     rotulosPortas: { saida: "Com valor", semRegra: "Nenhuma regra casou" },
     campos: [
-      { chave: "origem", rotulo: "Campo lido", tipo: "caminho", obrigatorio: true, ajuda: "Ex.: encontrado.situacao" },
-      { chave: "operador", rotulo: "A regra casa quando o campo", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "contem" },
-      { chave: "regras", rotulo: "Regras (X => Y)", tipo: "textoLongo", obrigatorio: true, entrada: true, ajuda: "Uma por linha, na ordem. Y aceita {{campo}}. Ex.: CANCEL => Cancelado" },
+      { chave: "origem", rotulo: "Campo lido", tipo: "caminho", obrigatorio: true, ajuda: "O dado lido em cada item para aplicar as regras (ex.: encontrado.situacao)." },
+      { chave: "operador", rotulo: "A regra casa quando o campo", ajuda: "Como o dado lido deve casar com o lado esquerdo de cada regra (igual, contém…).", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "contem" },
+      { chave: "regras", rotulo: "Regras (X => Y)", tipo: "textoLongo", obrigatorio: true, entrada: true, ajuda: "As regras, uma por linha e na ordem: “X => Y” — quando o dado casa com X, grava Y (Y pode usar {{campo}}). Ex.: CANCEL => Cancelado." },
       {
         chave: "senao",
-        rotulo: "Senão",
+        rotulo: "Senão", ajuda: "O que gravar quando nenhuma regra casa.",
         tipo: "selecao",
         padrao: "valor",
         opcoes: [
@@ -898,8 +902,8 @@ const NOS: DefNo[] = [
           { valor: "manter", rotulo: "Não gravar nada" },
         ],
       },
-      { chave: "senaoValor", rotulo: "Valor fixo", tipo: "texto", quando: { campo: "senao", valores: ["fixo"] } },
-      { chave: "destino", rotulo: "Gravar no campo", tipo: "texto", padrao: "valor", ajuda: "O campo do item que recebe (ex.: valor — o “Gravar na coluna da Mesa” lê este)." },
+      { chave: "senaoValor", rotulo: "Valor fixo", ajuda: "O texto gravado quando nenhuma regra casa.", tipo: "texto", quando: { campo: "senao", valores: ["fixo"] } },
+      { chave: "destino", rotulo: "Gravar no campo", tipo: "caminho", padrao: "valor", ajuda: "O campo do item que recebe o resultado da regra (ex.: valor — o “Gravar na coluna da Mesa” lê este). Pode ser um campo novo." },
     ],
     executar: async (e, c) => {
       const regras = lerRegras(str(c.regras));
@@ -921,7 +925,7 @@ const NOS: DefNo[] = [
     campos: [
       {
         chave: "acao",
-        rotulo: "Ação",
+        rotulo: "Ação", ajuda: "O que fazer com a variável: definir, somar, contar, acrescentar, ler ou limpar.",
         tipo: "selecao",
         padrao: "definir",
         opcoes: [
@@ -933,9 +937,9 @@ const NOS: DefNo[] = [
           { valor: "limpar", rotulo: "Limpar" },
         ],
       },
-      { chave: "nome", rotulo: "Nome da variável", tipo: "texto", obrigatorio: true, ajuda: "Letras, números e _ (ex.: total_lido)." },
+      { chave: "nome", rotulo: "Nome da variável", tipo: "nomeLista", fonte: "variaveis", obrigatorio: true, ajuda: "A variável do fluxo que este nó lê ou altera — um valor que fica guardado enquanto o fluxo roda (ex.: total_lido)." },
       { chave: "valor", rotulo: "Valor", tipo: "texto", aceitaCampo: true, ajuda: "Um valor fixo ou um campo do item que chega.", quando: { campo: "acao", valores: ["definir", "somar", "acrescentar"] } },
-      { chave: "destino", rotulo: "Gravar no campo", tipo: "texto", ajuda: "Vazio = o nome da variável.", quando: { campo: "acao", valores: ["ler"] } },
+      { chave: "destino", rotulo: "Gravar no campo", tipo: "caminho", ajuda: "O campo do item que recebe o valor lido da variável. Vazio = um campo com o nome da variável.", quando: { campo: "acao", valores: ["ler"] } },
     ],
     rodaSemItens: true,
     executar: async (e, c, ctx) => {
@@ -959,9 +963,9 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "campo", rotulo: "Campo", tipo: "caminho", obrigatorio: true },
-      { chave: "ordem", rotulo: "Ordem", tipo: "selecao", opcoes: [{ valor: "asc", rotulo: "Crescente" }, { valor: "desc", rotulo: "Decrescente" }], padrao: "asc" },
-      { chave: "limite", rotulo: "Limite (0 = todos)", tipo: "numero", padrao: 0 },
+      { chave: "campo", rotulo: "Campo", ajuda: "O dado pelo qual os itens são ordenados.", tipo: "caminho", obrigatorio: true },
+      { chave: "ordem", rotulo: "Ordem", ajuda: "Do menor para o maior (crescente) ou do maior para o menor (decrescente).", tipo: "selecao", opcoes: [{ valor: "asc", rotulo: "Crescente" }, { valor: "desc", rotulo: "Decrescente" }], padrao: "asc" },
+      { chave: "limite", rotulo: "Quantos itens manter", tipo: "selecao", padrao: 0, opcoes: [{ valor: "0", rotulo: "Todos" }, ...opcoesNum([1, 10, 50, 100, 500, 1000])], ajuda: "Depois de ordenar, quantos itens seguem — ex.: os 10 primeiros." },
     ],
     executar: async (e, c) => {
       const s = str(c.ordem) === "desc" ? -1 : 1;
@@ -984,7 +988,7 @@ const NOS: DefNo[] = [
     icone: "copy",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "campo", rotulo: "Campo", tipo: "caminho", obrigatorio: true }],
+    campos: [{ chave: "campo", rotulo: "Campo", ajuda: "O dado que define a repetição: itens com o mesmo valor viram um só (fica o primeiro).", tipo: "caminho", obrigatorio: true }],
     executar: async (e, c) => {
       const vistos = new Set<string>();
       return {
@@ -1006,8 +1010,8 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "campo", rotulo: "Agrupar por", tipo: "caminho", obrigatorio: true },
-      { chave: "somar", rotulo: "Somar o campo", tipo: "caminho" },
+      { chave: "campo", rotulo: "Agrupar por", ajuda: "O dado que junta os itens num grupo (ex.: unidade — um item por unidade).", tipo: "caminho", obrigatorio: true },
+      { chave: "somar", rotulo: "Somar o campo", ajuda: "O dado numérico somado dentro de cada grupo (ex.: valor). Vazio = só conta.", tipo: "caminho" },
     ],
     executar: async (e, c) => {
       const m = new Map<string, { grupo: string; quantidade: number; soma: number }>();
@@ -1030,7 +1034,7 @@ const NOS: DefNo[] = [
     icone: "list",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "campo", rotulo: "Campo de lista", tipo: "caminho", obrigatorio: true, padrao: "dfds" }],
+    campos: [{ chave: "campo", rotulo: "Campo de lista", ajuda: "O dado que é uma LISTA (ex.: os dfds de um protocolo): cada elemento vira um item.", tipo: "caminho", obrigatorio: true, padrao: "dfds" }],
     executar: async (e, c) => ({ saida: desdobrar(so(e), str(c.campo, "dfds")) }),
   },
 
@@ -1044,11 +1048,11 @@ const NOS: DefNo[] = [
     saidas: ["divergentes", "conformes"],
     rotulosPortas: { a: "DFDs", b: "CM002", divergentes: "Divergentes", conformes: "Conformes" },
     campos: [
-      { chave: "proibidas", rotulo: "Situações que são erro", tipo: "texto", entrada: true, padrao: "CANCEL", ajuda: "Contém (várias por ;). Ex.: CANCEL" },
-      { chave: "esperada", rotulo: "Situação esperada", tipo: "texto", entrada: true, ajuda: "Vazio = qualquer uma (menos as de erro). Várias por ;" },
-      { chave: "campoValor", rotulo: "Campo do valor na CM002", tipo: "caminho", padrao: "valor", ajuda: "Vazio = não confere o valor." },
-      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", entrada: true, padrao: 0.01 },
-      { chave: "entidade", rotulo: "Conferir o órgão", tipo: "booleano", padrao: true },
+      { chave: "proibidas", rotulo: "Situações que são erro", tipo: "texto", entrada: true, padrao: "CANCEL", ajuda: "Situações da CM002 que são erro. O DFD com uma delas é apontado. Várias separadas por “;” (ex.: CANCEL)." },
+      { chave: "esperada", rotulo: "Situação esperada", tipo: "texto", entrada: true, ajuda: "A situação que o DFD deve ter. Vazio = qualquer uma, menos as de erro. Várias separadas por “;”." },
+      { chave: "campoValor", rotulo: "Campo do valor na CM002", tipo: "caminho", padrao: "valor", ajuda: "O dado da linha da CM002 com o valor, comparado ao do DFD. Vazio = não confere o valor." },
+      { chave: "tolerancia", rotulo: "Tolerância do valor", tipo: "selecao", entrada: true, padrao: 0.01, opcoes: [{ valor: "0", rotulo: "Nenhuma (exato)" }, ...opcoesNum([0.01, 0.1, 1, 10, 100], (n) => `Até R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)], ajuda: "A diferença de valor aceita entre o sistema e a Centi sem apontar divergência (centavos de arredondamento)." },
+      { chave: "entidade", rotulo: "Conferir o órgão", ajuda: "Ligado: aponta quando o órgão do DFD não é o da linha achada na CM002.", tipo: "booleano", padrao: true },
     ],
     executar: async (e, c, ctx) => {
       const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
@@ -1078,8 +1082,8 @@ const NOS: DefNo[] = [
     saidas: ["divergentes", "conformes"],
     rotulosPortas: { divergentes: "Divergentes", conformes: "Conformes" },
     campos: [
-      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", entrada: true, padrao: 0.01 },
-      { chave: "objeto", rotulo: "Comparar o objeto", tipo: "booleano", entrada: true, padrao: true },
+      { chave: "tolerancia", rotulo: "Tolerância do valor", tipo: "selecao", entrada: true, padrao: 0.01, opcoes: [{ valor: "0", rotulo: "Nenhuma (exato)" }, ...opcoesNum([0.01, 0.1, 1, 10, 100], (n) => `Até R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)], ajuda: "A diferença de valor aceita entre o sistema e a Centi sem apontar divergência (centavos de arredondamento)." },
+      { chave: "objeto", rotulo: "Comparar o objeto", ajuda: "Ligado: o objeto (descrição) do DFD também precisa ser igual ao da Centi.", tipo: "booleano", entrada: true, padrao: true },
     ],
     executar: async (e, c) => compararDfdCenti(so(e), { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false }),
   },
@@ -1096,10 +1100,10 @@ const NOS: DefNo[] = [
     saidas: ["saida", "falhas"],
     rotulosPortas: { saida: "Concluídos", falhas: "Falhas" },
     campos: [
-      { chave: "fluxoId", rotulo: "Fluxo", tipo: "fluxo", obrigatorio: true },
+      { chave: "fluxoId", rotulo: "Fluxo", ajuda: "O fluxo salvo que roda dentro deste — como uma etapa pronta reaproveitada.", tipo: "fluxo", obrigatorio: true },
       {
         chave: "modo",
-        rotulo: "Como executar",
+        rotulo: "Como executar", ajuda: "“Por item”: o fluxo escolhido roda uma vez para cada item. “Em lote”: roda uma vez só com todos os itens.",
         tipo: "selecao",
         opcoes: [
           { valor: "porItem", rotulo: "Uma vez para cada item" },
@@ -1107,10 +1111,10 @@ const NOS: DefNo[] = [
         ],
         padrao: "porItem",
       },
-      { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "numero", entrada: true, padrao: 3, ajuda: "1 a 6.", quando: { campo: "modo", valores: ["porItem"] } },
-      { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", entrada: true, padrao: true, ajuda: "Pula os itens já concluídos numa execução interrompida.", quando: { campo: "modo", valores: ["porItem"] } },
-      { chave: "chave", rotulo: "Campo que identifica o item", tipo: "caminho", padrao: "id", quando: { campo: "modo", valores: ["porItem"] } },
-      { chave: "limite", rotulo: "Máximo de itens", tipo: "numero", padrao: 20000, quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "selecao", entrada: true, padrao: 3, opcoes: opcoesNum([1, 2, 3, 4, 5, 6]), ajuda: "Quantos itens o fluxo escolhido processa juntos. Mais = mais rápido, porém mais pedidos à Centi ao mesmo tempo.", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", entrada: true, padrao: true, ajuda: "Se a execução parar no meio, a próxima pula os itens já concluídos e continua de onde parou.", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "chave", rotulo: "Campo que identifica o item", ajuda: "O dado que identifica cada item na retomada (ex.: planejamento).", tipo: "caminho", padrao: "id", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "limite", rotulo: "Máximo de itens", tipo: "selecao", padrao: 20000, opcoes: opcoesNum([10, 100, 1000, 5000, 20000]), ajuda: "Um teto de segurança: quantos itens, no máximo, rodam o fluxo escolhido.", quando: { campo: "modo", valores: ["porItem"] } },
     ],
     rodaSemItens: false,
     executar: async (e, c, ctx) => {
@@ -1196,7 +1200,7 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida", "falhas"],
     rotulosPortas: { saida: "Concluídos", falhas: "Falhas" },
-    campos: [{ chave: "fluxoIds", rotulo: "Fluxos", tipo: "fluxos", obrigatorio: true, ajuda: "Até 6, todos ao mesmo tempo." }],
+    campos: [{ chave: "fluxoIds", rotulo: "Fluxos", tipo: "fluxos", obrigatorio: true, ajuda: "Os fluxos salvos que rodam ao mesmo tempo, cada um com os mesmos itens (até 6)." }],
     rodaSemItens: true,
     executar: async (e, c, ctx) => {
       const ids = [...new Set(str(c.fluxoIds).split(/[;,\s]+/).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 6);
@@ -1243,10 +1247,10 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "todos", rotulo: "Todos os itens que chegam são erros", tipo: "booleano", padrao: true },
+      { chave: "todos", rotulo: "Todos os itens que chegam são erros", ajuda: "Ligado: todo item que chega é apontado como problema, sem testar condição.", tipo: "booleano", padrao: true },
       ...CAMPO_CONDICAO.map((x) => ({ ...x, obrigatorio: false, quando: x.quando ?? { campo: "todos", valores: ["false"] } })),
       { chave: "mensagem", rotulo: "Mensagem", tipo: "texto", obrigatorio: true, aceitaCampo: "inserir", ajuda: "O texto do apontamento. Use “Inserir campo” para pôr um dado do item (ex.: DFD {{numero}})." },
-      { chave: "nivel", rotulo: "Nível", tipo: "selecao", opcoes: [{ valor: "erro", rotulo: "Erro" }, { valor: "atencao", rotulo: "Atenção" }], padrao: "erro" },
+      { chave: "nivel", rotulo: "Nível", ajuda: "A gravidade do apontamento no relatório: erro ou atenção.", tipo: "selecao", opcoes: [{ valor: "erro", rotulo: "Erro" }, { valor: "atencao", rotulo: "Atenção" }], padrao: "erro" },
     ],
     executar: async (e, c) => {
       const todos = c.todos !== false;
@@ -1390,7 +1394,7 @@ const NOS: DefNo[] = [
     entradas: ["entrada", "apontamentos"],
     saidas: ["importados", "naoImportados"],
     rotulosPortas: { apontamentos: "Apontamentos", importados: "Importados", naoImportados: "Não importados" },
-    campos: [{ chave: "limite", rotulo: "Máximo de protocolos", tipo: "numero", padrao: 50, ajuda: "Proteção — até 500." }],
+    campos: [{ chave: "limite", rotulo: "Máximo de protocolos", tipo: "selecao", padrao: 50, opcoes: opcoesNum([10, 25, 50, 100, 200, 500]), ajuda: "Um teto de segurança: o nó processa no máximo esta quantidade de protocolos por execução." }],
     executar: async (e, c, ctx) => {
       const imp = ctx.host.importarProtocolo as ((it: Item, apontamentos: string[]) => Promise<Item>) | undefined;
       if (!imp) throw new Error("A importação só funciona na tela da Automação.");
@@ -1428,7 +1432,7 @@ const NOS: DefNo[] = [
     campos: [
       {
         chave: "destino",
-        rotulo: "Destino",
+        rotulo: "Destino", ajuda: "Para onde vão os PDFs dos DFDs: uma pasta do computador ou anexados a um protocolo na Centi.",
         tipo: "selecao",
         entrada: true,
         opcoes: [
@@ -1438,12 +1442,12 @@ const NOS: DefNo[] = [
         ],
         padrao: "pasta",
       },
-      { chave: "alvoId", rotulo: "Id do protocolo (Centi)", tipo: "texto", entrada: true, obrigatorio: true, quando: { campo: "destino", valores: ["protocolo"] } },
-      { chave: "alvoNumero", rotulo: "Nº do protocolo", tipo: "texto", entrada: true, obrigatorio: true, ajuda: "Ex.: 156844/2026", quando: { campo: "destino", valores: ["protocolo"] } },
-      { chave: "tipoDocumento", rotulo: "Tipo do documento", tipo: "texto", entrada: true, padrao: TIPO_DOCUMENTO_DFD, quando: { campo: "destino", valores: ["protocolo", "proprio"] } },
+      { chave: "alvoId", rotulo: "Id do protocolo (Centi)", ajuda: "O Id do protocolo na Centi que recebe os PDFs (o “Id:” da capa do protocolo).", tipo: "texto", entrada: true, obrigatorio: true, quando: { campo: "destino", valores: ["protocolo"] } },
+      { chave: "alvoNumero", rotulo: "Nº do protocolo", tipo: "texto", entrada: true, obrigatorio: true, ajuda: "O número do protocolo na Centi, para conferir que é o protocolo certo (ex.: 156844/2026).", quando: { campo: "destino", valores: ["protocolo"] } },
+      { chave: "tipoDocumento", rotulo: "Tipo do documento", ajuda: "O código do tipo de documento na Centi com que os PDFs são anexados (o padrão é o do DFD).", tipo: "texto", entrada: true, padrao: TIPO_DOCUMENTO_DFD, quando: { campo: "destino", valores: ["protocolo", "proprio"] } },
       {
         chave: "formato",
-        rotulo: "PDFs",
+        rotulo: "PDFs", ajuda: "Como gerar os PDFs: um por DFD, um por protocolo, um por unidade ou um único arquivo.",
         tipo: "selecao",
         entrada: true,
         opcoes: [
@@ -1454,10 +1458,10 @@ const NOS: DefNo[] = [
         ],
         padrao: "separados",
       },
-      { chave: "pastaPca", rotulo: "Pasta “PCA ano”", tipo: "booleano", entrada: true, padrao: true, quando: { campo: "destino", valores: ["pasta"] } },
-      { chave: "escolherPasta", rotulo: "Escolher a pasta de destino", tipo: "booleano", entrada: true, padrao: false, quando: { campo: "destino", valores: ["pasta"] } },
-      { chave: "ordenarPlanejamento", rotulo: "Ordenar pelo planejamento", tipo: "booleano", entrada: true, padrao: true },
-      { chave: "conferir", rotulo: "Conferir o conteúdo de cada PDF", tipo: "booleano", entrada: true, padrao: true },
+      { chave: "pastaPca", rotulo: "Pasta “PCA ano”", ajuda: "Ligado: cria uma pasta “PCA ano” por cima das pastas dos protocolos.", tipo: "booleano", entrada: true, padrao: true, quando: { campo: "destino", valores: ["pasta"] } },
+      { chave: "escolherPasta", rotulo: "Escolher a pasta de destino", ajuda: "Ligado: você escolhe a pasta do computador antes de salvar. Desligado: vai para Downloads.", tipo: "booleano", entrada: true, padrao: false, quando: { campo: "destino", valores: ["pasta"] } },
+      { chave: "ordenarPlanejamento", rotulo: "Ordenar pelo planejamento", ajuda: "Ligado: os DFDs saem na ordem do nº de planejamento.", tipo: "booleano", entrada: true, padrao: true },
+      { chave: "conferir", rotulo: "Conferir o conteúdo de cada PDF", ajuda: "Ligado: abre cada PDF e confere se é mesmo o DFD pedido antes de contar como salvo.", tipo: "booleano", entrada: true, padrao: true },
     ],
     executar: async (e, c, ctx) => {
       const baixar = ctx.host.baixarDfds as ((itens: Item[], config: Record<string, unknown>) => Promise<{ linhas: Item[]; erro?: string }>) | undefined;
@@ -1510,15 +1514,15 @@ const NOS: DefNo[] = [
     campos: [
       {
         chave: "entidade",
-        rotulo: "Tabela da Mesa",
+        rotulo: "Tabela da Mesa", ajuda: "Em qual tabela da Mesa a coluna aparece: Protocolos, DFDs ou Itens.",
         tipo: "selecao",
         padrao: "dfd",
         opcoes: ENTIDADES_COLUNA.map((x) => ({ valor: x, rotulo: ROTULO_ENTIDADE_COLUNA[x] })),
       },
-      { chave: "coluna", rotulo: "Coluna", tipo: "texto", obrigatorio: true, entrada: true, ajuda: "O nome (a existente é usada; senão, criada). Ex.: Situação na Centi" },
-      { chave: "campoValor", rotulo: "Campo do valor", tipo: "caminho", padrao: "valor", ajuda: "Ex.: valor (o da Regra) ou encontrado.situacao" },
-      { chave: "campoId", rotulo: "Campo do id do registro", tipo: "caminho", padrao: "id", ajuda: "O id do protocolo, DFD ou item no sistema." },
-      { chave: "apagar", rotulo: "Valor vazio apaga o da coluna", tipo: "booleano", padrao: false },
+      { chave: "coluna", rotulo: "Coluna", tipo: "nomeLista", fonte: "colunasMesa", obrigatorio: true, entrada: true, ajuda: "A coluna da Mesa que recebe o valor. Escolha uma que já existe ou crie uma nova (ex.: Situação na Centi)." },
+      { chave: "campoValor", rotulo: "Campo do valor", tipo: "caminho", padrao: "valor", ajuda: "O dado de cada item que vai para a coluna (ex.: valor — o da Regra — ou encontrado.situacao)." },
+      { chave: "campoId", rotulo: "Campo do id do registro", tipo: "caminho", padrao: "id", ajuda: "O dado que diz em qual linha da Mesa gravar: o id do protocolo, DFD ou item no sistema." },
+      { chave: "apagar", rotulo: "Valor vazio apaga o da coluna", ajuda: "Ligado: quando o valor vem vazio, apaga o que já estava na coluna. Desligado: mantém.", tipo: "booleano", padrao: false },
     ],
     executar: async (e, c, ctx) => {
       const entidade = (ENTIDADES_COLUNA as readonly string[]).includes(str(c.entidade)) ? (str(c.entidade) as EntidadeColuna) : "dfd";
@@ -1559,11 +1563,11 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "nome", rotulo: "Nome da tabela", tipo: "texto", obrigatorio: true, entrada: true, ajuda: "Ex.: CM002 sem DFD no sistema" },
-      { chave: "colunas", rotulo: "Colunas a guardar", tipo: "textoLongo", ajuda: "Opcional — uma por linha: campo => nome. Vazio = todas." },
+      { chave: "nome", rotulo: "Nome da tabela", tipo: "nomeLista", fonte: "tabelas", obrigatorio: true, entrada: true, ajuda: "Onde os itens são guardados. Escolha uma tabela que já existe (para substituir ou acrescentar) ou crie uma nova (ex.: CM002 sem DFD no sistema)." },
+      { chave: "colunas", rotulo: "Colunas a guardar", tipo: "textoLongo", ajuda: "Quais dados guardar e com que nome. Vazio = todos. Um por linha: “campo => nome”." },
       {
         chave: "modo",
-        rotulo: "Ao gravar",
+        rotulo: "Ao gravar", ajuda: "“Substituir” troca tudo o que a tabela tinha; “Acrescentar” soma as linhas novas às antigas.",
         tipo: "selecao",
         padrao: "substituir",
         opcoes: [

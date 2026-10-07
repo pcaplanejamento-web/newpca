@@ -1,7 +1,9 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
+  AJUDA_INSERIR,
+  AJUDA_ORIGEM,
   AJUDA_TIPO_CAMPO,
   type CampoNo,
   caminhosDosItens,
@@ -10,12 +12,12 @@ import {
   type DefNo,
   type Item,
   lerTentar,
-  MAX_ESPERA_S,
   MAX_TENTATIVAS,
   type NoFluxo,
   nomeVariavel,
   type PassoExec,
   resumoDoNo,
+  sugerirVariavel,
   type TentarNo,
 } from "@/lib/fluxo-core";
 import { corCategoria } from "@/lib/fluxo-nos";
@@ -26,7 +28,6 @@ import { type Column, DataTable } from "../DataTable";
 import { Checkbox, SelectField, TextArea, TextField } from "../Field";
 import { IconLock, IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
-import { Switch } from "../Switch";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { CampoFluxo, CampoOrgaosCenti, CampoReparticoesCenti, RecomecarSubfluxo } from "./paineis";
@@ -42,6 +43,7 @@ export function PainelNo({
   passo,
   caminhos,
   origem,
+  variaveis = [],
   lerCampos,
   onMudar,
   onExcluir,
@@ -54,6 +56,8 @@ export function PainelNo({
   caminhos: string[];
   /** O nome do nó anterior (a origem dos valores travados). */
   origem?: string;
+  /** As variáveis do fluxo (o "Guardar o resultado" e o nó "Variável" escolhem entre elas). */
+  variaveis?: string[];
   /** Lê os campos do nó anterior sem executar o fluxo (a prévia só de leitura); ausente = não dá (trecho com gravação). */
   lerCampos?: { ler: () => void; lendo: boolean; erro?: string };
   onMudar: (n: NoFluxo) => void;
@@ -118,12 +122,13 @@ export function PainelNo({
                 onValor={(v) => definir(c.chave, v)}
                 caminhos={caminhos}
                 origem={origem}
+                variaveis={variaveis}
+                config={no.config}
                 somenteLeitura={somenteLeitura}
               />
             ))}
           {no.tipo === "fluxo.executar" && no.config.retomar !== false && (no.config.modo ?? "porItem") === "porItem" && <RecomecarSubfluxo no={no.id} somenteLeitura={somenteLeitura} />}
-          {def.categoria !== "gatilho" && <ComportamentoNo key={no.id} no={no} onMudar={onMudar} somenteLeitura={somenteLeitura} />}
-          {!somenteLeitura && <Switch checked={!!no.desativado} onChange={(v) => onMudar({ ...no, desativado: v || undefined })} label="Desativar (repassa os itens sem executar)" />}
+          {def.categoria !== "gatilho" && <ComportamentoNo key={no.id} no={no} rotulo={def.rotulo} variaveis={variaveis} onMudar={onMudar} somenteLeitura={somenteLeitura} />}
           {passo?.estado === "erro" && (
             <Callout kind="danger">
 <strong className="block">{"Erro na última execução"}</strong>
@@ -143,62 +148,123 @@ export function PainelNo({
  * itens, vezes, valor) — lida pelo nó "Variável" ({{nome.executado}}) para terminar laços.
  */
 /** As esperas oferecidas entre as tentativas (s). */
-const ESPERAS = [0, 5, 10, 30, 60, 120, 300];
+const ESPERAS = [5, 10, 30, 60, 120, 300];
+const rotuloEspera = (x: number) => (x < 60 ? `${x} segundos` : `${x / 60} minuto${x === 60 ? "" : "s"}`);
 
-function ComportamentoNo({ no, onMudar, somenteLeitura }: { no: NoFluxo; onMudar: (n: NoFluxo) => void; somenteLeitura?: boolean }) {
+/** Os campos do COMPORTAMENTO comum a todo nó — os MESMOS `CampoDoNo` (seleção + "(?)" didático). */
+const CAMPOS_COMPORTAMENTO: Record<"vezes" | "espera" | "guardar" | "desativado", CampoNo> = {
+  vezes: {
+    chave: "vezes",
+    rotulo: "Repetir se falhar",
+    tipo: "selecao",
+    ajuda: "Se o nó der erro (ex.: a Centi não respondeu), ele roda de novo antes de parar o fluxo.",
+    opcoes: Array.from({ length: MAX_TENTATIVAS + 1 }, (_, i) => ({ valor: String(i), rotulo: i === 0 ? "Não repetir" : `Repetir ${i} vez${i === 1 ? "" : "es"}` })),
+  },
+  espera: {
+    chave: "espera",
+    rotulo: "Esperar antes de repetir",
+    tipo: "selecao",
+    ajuda: "Quanto tempo esperar entre uma tentativa e a próxima (dá tempo de o sistema de fora voltar).",
+    opcoes: ESPERAS.map((x) => ({ valor: String(x), rotulo: rotuloEspera(x) })),
+  },
+  guardar: {
+    chave: "guardar",
+    rotulo: "Guardar o resultado na variável",
+    tipo: "nomeLista",
+    fonte: "variaveis",
+    ajuda:
+      "Guarda como este nó terminou (executado, itens, vezes, valor) numa variável do fluxo. Outro nó lê com {{nome.executado}} — ex.: para encerrar um laço quando a leitura terminar.",
+  },
+  desativado: {
+    chave: "desativado",
+    rotulo: "Desativar este nó",
+    tipo: "booleano",
+    ajuda: "O nó não executa: os itens que chegam passam direto para o próximo. Útil para testar o fluxo sem uma etapa.",
+  },
+};
+
+/**
+ * O COMPORTAMENTO comum a todo nó: REPETIR quando falha (vezes + espera), GUARDAR o resultado numa variável (lida pelo
+ * nó "Variável" — {{nome.executado}}) e DESATIVAR — tudo por escolha, com o "(?)".
+ */
+function ComportamentoNo({
+  no,
+  rotulo,
+  variaveis,
+  onMudar,
+  somenteLeitura,
+}: {
+  no: NoFluxo;
+  rotulo: string;
+  variaveis: string[];
+  onMudar: (n: NoFluxo) => void;
+  somenteLeitura?: boolean;
+}) {
+  const id = useId();
   const vezes = no.tentar?.vezes ?? 0;
-  const tentar = (t: Partial<TentarNo>) => {
-    const novo = lerTentar({ vezes, esperaS: no.tentar?.esperaS ?? 10, ...t });
-    onMudar({ ...no, tentar: novo });
-  };
-  const [nome, setNome] = useState(no.guardar ?? "");
-  const invalido = nome.trim() !== "" && !nomeVariavel(nome);
+  const espera = no.tentar?.esperaS ?? 10;
+  const tentar = (t: Partial<TentarNo>) => onMudar({ ...no, tentar: lerTentar({ vezes, esperaS: espera, ...t }) });
+  const outras = variaveis.filter((v) => v !== no.guardar);
+  const espe = ESPERAS.includes(espera) ? CAMPOS_COMPORTAMENTO.espera : { ...CAMPOS_COMPORTAMENTO.espera, opcoes: [{ valor: String(espera), rotulo: rotuloEspera(espera) }, ...(CAMPOS_COMPORTAMENTO.espera.opcoes ?? [])] };
   return (
     <fieldset className="space-y-3 rounded-lg border border-border p-3">
       <legend className="px-1 text-xs font-semibold text-muted">Comportamento</legend>
-      <div className="grid grid-cols-2 gap-2">
-        <SelectField label="Repetir se falhar" hint="Quantas vezes repetir o nó quando ele falha" value={String(vezes)} disabled={somenteLeitura} onChange={(e) => tentar({ vezes: Number(e.target.value) })}>
-          {Array.from({ length: MAX_TENTATIVAS + 1 }, (_, i) => (
-            <option key={i} value={i}>
-              {i === 0 ? "Não repetir" : `${i} vez${i === 1 ? "" : "es"}`}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          label="Esperar"
-          hint="Entre uma tentativa e outra"
-          value={String(no.tentar?.esperaS ?? 10)}
-          disabled={somenteLeitura || !vezes}
-          onChange={(e) => tentar({ esperaS: Number(e.target.value) })}
-        >
-          {[...new Set([...ESPERAS, no.tentar?.esperaS ?? 10])]
-            .filter((x) => x <= MAX_ESPERA_S)
-            .sort((x, y) => x - y)
-            .map((x) => (
-              <option key={x} value={x}>
-                {x < 60 ? `${x} s` : `${x / 60} min`}
-              </option>
-            ))}
-        </SelectField>
+      <CampoDoNo campo={CAMPOS_COMPORTAMENTO.vezes} valor={String(vezes)} onValor={(v) => tentar({ vezes: Number(v) })} somenteLeitura={somenteLeitura} />
+      {vezes > 0 && <CampoDoNo campo={espe} valor={String(espera)} onValor={(v) => tentar({ esperaS: Number(v) })} somenteLeitura={somenteLeitura} />}
+      <div>
+        <RotuloCampo campo={CAMPOS_COMPORTAMENTO.guardar} htmlFor={id} />
+        <CampoNomeLista
+          id={id}
+          campo={CAMPOS_COMPORTAMENTO.guardar}
+          valor={no.guardar ?? ""}
+          variaveis={outras}
+          vazio="Não guardar"
+          sugestao={sugerirVariavel(rotulo, variaveis)}
+          somenteLeitura={somenteLeitura}
+          onValor={(v) => {
+            const n = nomeVariavel(v);
+            if (n || !v) onMudar({ ...no, guardar: n || undefined });
+          }}
+        />
       </div>
-      <TextField
-        label="Guardar o estado na variável"
-        hint="Ex.: leitura_cm002 → {{leitura_cm002.executado}} no nó Variável (executado, itens, vezes, valor)."
-        value={nome}
-        error={invalido ? "Só letras, números e _." : undefined}
-        disabled={somenteLeitura}
-        maxLength={40}
-        onChange={(e) => {
-          setNome(e.target.value);
-          const v = nomeVariavel(e.target.value);
-          if (v || !e.target.value.trim()) onMudar({ ...no, guardar: v || undefined });
-        }}
-      />
+      <CampoDoNo campo={CAMPOS_COMPORTAMENTO.desativado} valor={!!no.desativado} onValor={(v) => onMudar({ ...no, desativado: v === true || undefined })} somenteLeitura={somenteLeitura} />
     </fieldset>
   );
 }
 
-/** O RÓTULO de todo campo de nó: o nome + o "(?)" com a explicação (a do campo, senão a do tipo). */
+/** O "(?)" DIDÁTICO de todo campo: PARA QUE SERVE (a `ajuda` do campo) · COMO PREENCHER (pelo tipo/origem) · as OPÇÕES
+ * (seleção) · se é obrigatório. */
+function AjudaCampo({ campo: c }: { campo: CampoNo }) {
+  const como = c.aceitaCampo === true ? AJUDA_ORIGEM : c.aceitaCampo === "inserir" ? AJUDA_INSERIR : AJUDA_TIPO_CAMPO[c.tipo];
+  const opcoes = c.tipo === "selecao" ? (c.opcoes ?? []) : [];
+  return (
+    <Ajuda compacta titulo={c.rotulo}>
+      <div className="space-y-2">
+        {c.ajuda && (
+          <p>
+            <strong>Para que serve:</strong> {c.ajuda}
+          </p>
+        )}
+        <p>
+          <strong>Como preencher:</strong> {como}
+        </p>
+        {opcoes.length > 0 && opcoes.length <= 10 && (
+          <div>
+            <strong>Opções:</strong>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {opcoes.map((o) => (
+                <li key={o.valor}>{o.rotulo}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {c.obrigatorio && <p className="text-muted">Campo obrigatório (*).</p>}
+      </div>
+    </Ajuda>
+  );
+}
+
+/** O RÓTULO de todo campo de nó: o nome + o "(?)" didático. */
 function RotuloCampo({ campo: c, htmlFor }: { campo: CampoNo; htmlFor?: string }) {
   return (
     <div className="mb-2 flex items-center gap-1">
@@ -206,9 +272,7 @@ function RotuloCampo({ campo: c, htmlFor }: { campo: CampoNo; htmlFor?: string }
         {c.rotulo}
         {c.obrigatorio ? " *" : ""}
       </label>
-      <Ajuda compacta titulo={c.rotulo}>
-        <p>{c.ajuda ?? AJUDA_TIPO_CAMPO[c.tipo]}</p>
-      </Ajuda>
+      <AjudaCampo campo={c} />
     </div>
   );
 }
@@ -226,6 +290,8 @@ export function CampoDoNo({
   onValor,
   caminhos = [],
   origem,
+  variaveis = [],
+  config,
   somenteLeitura,
 }: {
   campo: CampoNo;
@@ -235,6 +301,10 @@ export function CampoDoNo({
   caminhos?: string[];
   /** O nome do nó anterior (de onde vem o valor travado). */
   origem?: string;
+  /** As variáveis do fluxo (a lista do `nomeLista` de variáveis). */
+  variaveis?: string[];
+  /** A configuração do nó (ex.: a tabela da Mesa escolhida filtra as colunas). */
+  config?: Record<string, unknown>;
   somenteLeitura?: boolean;
 }) {
   const id = useId();
@@ -243,15 +313,17 @@ export function CampoDoNo({
     return (
       <div className="flex items-center gap-1">
         <Checkbox label={c.rotulo} checked={valor === true} disabled={somenteLeitura} onChange={(e) => onValor(e.target.checked)} />
-        <Ajuda compacta titulo={c.rotulo}>
-          <p>{c.ajuda ?? AJUDA_TIPO_CAMPO.booleano}</p>
-        </Ajuda>
+        <AjudaCampo campo={c} />
       </div>
     );
   return (
     <div>
       <RotuloCampo campo={c} htmlFor={id} />
-      <ControleCampo id={id} campo={c} s={s} onValor={onValor} caminhos={caminhos} origem={origem} somenteLeitura={somenteLeitura} />
+      {c.tipo === "nomeLista" ? (
+        <CampoNomeLista id={id} campo={c} valor={s} onValor={onValor} variaveis={variaveis} config={config} somenteLeitura={somenteLeitura} />
+      ) : (
+        <ControleCampo id={id} campo={c} s={s} onValor={onValor} caminhos={caminhos} origem={origem} somenteLeitura={somenteLeitura} />
+      )}
     </div>
   );
 }
@@ -277,6 +349,8 @@ function ControleCampo({
     case "selecao":
       return (
         <SelectField id={id} value={s} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
+          {/* Um valor gravado antes e fora das opções (ex.: um limite antigo) segue à vista. */}
+          {s && !(c.opcoes ?? []).some((o) => o.valor === s) && <option value={s}>{s}</option>}
           {(c.opcoes ?? []).map((o) => (
             <option key={o.valor} value={o.valor}>
               {o.rotulo}
@@ -330,6 +404,81 @@ function ControleCampo({
         );
       return <TextField id={id} value={s} disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />;
   }
+}
+
+/** Os nomes já existentes de cada fonte (tabelas salvas e colunas da Mesa: lidos UMA vez por tela). */
+const cacheNomes = new Map<string, Promise<{ nome: string; entidade?: string }[]>>();
+function nomesDaApi(fonte: "tabelas" | "colunasMesa") {
+  let p = cacheNomes.get(fonte);
+  if (!p) {
+    p = fetch(fonte === "tabelas" ? "/api/admin/automacao/tabelas" : "/api/admin/automacao/colunas")
+      .then((r) => r.json() as Promise<{ tabelas?: { nome: string }[]; colunas?: { nome: string; entidade: string }[] }>)
+      .then((j) => j.tabelas ?? j.colunas ?? [])
+      .catch(() => {
+        cacheNomes.delete(fonte);
+        return [];
+      });
+    cacheNomes.set(fonte, p);
+  }
+  return p;
+}
+
+/**
+ * Um NOME que pode já existir (tabela salva, coluna da Mesa, variável): ESCOLHIDO da lista ou "Novo nome…" (digitar).
+ * `vazio` = o rótulo da opção sem nome (ex.: "Não guardar"); `sugestao` = um nome novo já pronto para escolher.
+ */
+export function CampoNomeLista({
+  id,
+  campo: c,
+  valor,
+  onValor,
+  variaveis,
+  config,
+  vazio,
+  sugestao,
+  somenteLeitura,
+}: {
+  id: string;
+  campo: CampoNo;
+  valor: string;
+  onValor: (v: unknown) => void;
+  variaveis: string[];
+  config?: Record<string, unknown>;
+  vazio?: string;
+  sugestao?: string;
+  somenteLeitura?: boolean;
+}) {
+  const [api, setApi] = useState<{ nome: string; entidade?: string }[]>([]);
+  const [digitar, setDigitar] = useState(false);
+  const fonte = c.fonte;
+  useEffect(() => {
+    if (fonte === "tabelas" || fonte === "colunasMesa") void nomesDaApi(fonte).then(setApi);
+  }, [fonte]);
+  const entidade = typeof config?.entidade === "string" ? config.entidade : "dfd";
+  const nomes = fonte === "variaveis" ? variaveis : api.filter((x) => fonte !== "colunasMesa" || x.entidade === entidade).map((x) => x.nome);
+  const lista = [...new Set([...(valor ? [valor] : []), ...nomes, ...(sugestao ? [sugestao] : [])])];
+  if (digitar || (!lista.length && !vazio))
+    return (
+      <div className="space-y-1">
+        <TextField id={id} value={valor} placeholder="Digite o nome" disabled={somenteLeitura} maxLength={60} onChange={(e) => onValor(e.target.value)} />
+        {lista.length > 0 && (
+          <Button size="xs" variant="ghost" onClick={() => setDigitar(false)}>
+            Escolher da lista
+          </Button>
+        )}
+      </div>
+    );
+  return (
+    <SelectField id={id} value={valor} disabled={somenteLeitura} onChange={(e) => (e.target.value === OUTRO ? setDigitar(true) : onValor(e.target.value))}>
+      <option value="">{vazio ?? "Escolha…"}</option>
+      {lista.map((x) => (
+        <option key={x} value={x}>
+          {x === sugestao && !nomes.includes(x) ? `Nova: ${x}` : x}
+        </option>
+      ))}
+      <option value={OUTRO}>Novo nome (digitar)…</option>
+    </SelectField>
+  );
 }
 
 /** Um CAMPO DO ITEM: escolhido entre os que o nó anterior entrega; "Outro" (ou sem campos conhecidos) = digitar. */

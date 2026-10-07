@@ -85,6 +85,7 @@ export type TipoCampo =
   | "lista"
   | "reparticoesCenti"
   | "orgaosCenti"
+  | "nomeLista"
   | "fluxo"
   | "fluxos";
 export type CampoNo = {
@@ -102,22 +103,60 @@ export type CampoNo = {
   /** O valor pode VIR DO NÓ ANTERIOR: `true` = o valor INTEIRO é um campo do item que chega ({{campo}} — o painel oferece
    * os campos dele e trava); `"inserir"` = texto livre com campos inseridos no meio (ex.: a mensagem "DFD {{numero}}"). */
   aceitaCampo?: boolean | "inserir";
+  /** `nomeLista`: de onde vêm os nomes JÁ existentes para escolher (ou digitar um novo). */
+  fonte?: FonteNomes;
+};
+/** As listas de nomes do `nomeLista`: as tabelas salvas, as colunas da Mesa (da tabela escolhida no nó) e as variáveis do fluxo. */
+export type FonteNomes = "tabelas" | "colunasMesa" | "variaveis";
+
+/** COMO PREENCHER cada tipo de campo (a 2ª parte do "(?)" de todo campo — a 1ª é a `ajuda` do próprio campo). */
+export const AJUDA_TIPO_CAMPO: Record<TipoCampo, string> = {
+  texto: "Digite o valor no campo.",
+  textoLongo: "Digite o texto. Para várias informações, use uma por linha.",
+  numero: "Digite só o número. Para decimais, use vírgula (ex.: 0,01).",
+  selecao: "Toque no campo e escolha uma das opções da lista.",
+  booleano: "Marque a caixa para ligar; desmarque para desligar.",
+  caminho:
+    "Toque no campo e escolha um dos dados que o nó anterior entrega. Se a lista estiver vazia, use “Ler os campos” no topo do painel. Não achou? Escolha “Outro (digitar)”.",
+  lista: "Toque no campo e marque um ou mais valores.",
+  reparticoesCenti: "Toque em “Buscar” para trazer as repartições da Centi e marque as que entram.",
+  orgaosCenti: "Toque no campo e marque os órgãos. Sem nenhum marcado, entram todos os órgãos que têm o ID na Centi.",
+  nomeLista: "Escolha um nome que já existe na lista ou “Novo nome…” para criar outro.",
+  fluxo: "Toque no campo e escolha um dos fluxos salvos.",
+  fluxos: "Toque no campo e marque um ou mais fluxos salvos.",
 };
 
-/** A explicação padrão de cada tipo de campo (o "(?)" do campo que não traz a sua). */
-export const AJUDA_TIPO_CAMPO: Record<TipoCampo, string> = {
-  texto: "Digite o valor.",
-  textoLongo: "Digite o texto; uma informação por linha.",
-  numero: "Digite um número (vírgula ou ponto nos decimais).",
-  selecao: "Escolha uma das opções.",
-  booleano: "Marque para ligar.",
-  caminho: "Escolha um dos campos que o nó anterior entrega.",
-  lista: "Escolha um ou mais valores.",
-  reparticoesCenti: "Busque as repartições na Centi e marque as que entram.",
-  orgaosCenti: "Marque os órgãos (os cadastrados com o ID na Centi). Nenhum marcado = todos.",
-  fluxo: "Escolha um fluxo salvo.",
-  fluxos: "Escolha um ou mais fluxos salvos.",
+/** COMO PREENCHER o valor que pode vir do nó anterior (o "(?)" dos campos com `aceitaCampo`). */
+export const AJUDA_ORIGEM =
+  "Escolha a ORIGEM: “Do nó anterior: campo” usa o dado de cada item que chega (fica travado com o cadeado); “Valor fixo” deixa você digitar o valor.";
+export const AJUDA_INSERIR = "Digite o texto. Para pôr um dado do item no meio, escolha-o em “Inserir campo”.";
+
+/** Uma variável do fluxo: letras, números e _ (começando por letra). */
+export const sugerirVariavel = (rotulo: string, ocupados: string[]) => {
+  const base =
+    rotulo
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 30)
+      .replace(/^(\d)/, "v_$1") || "estado";
+  const usados = new Set(ocupados);
+  let n = base;
+  for (let i = 2; usados.has(n); i++) n = `${base}_${i}`;
+  return n;
 };
+
+/** As variáveis do fluxo: o "guardar o estado" de cada nó + os nomes do nó "Variável". */
+export function variaveisDoGrafo(g: Grafo): string[] {
+  const v = new Set<string>();
+  for (const n of g.nos) {
+    if (n.guardar) v.add(n.guardar);
+    if (n.tipo === "dados.variavel" && typeof n.config.nome === "string" && n.config.nome.trim()) v.add(n.config.nome.trim());
+  }
+  return [...v].sort();
+}
 
 /** "{{campo}}" → "campo" (o valor que vem do nó anterior); qualquer outro texto → null (valor fixo). */
 export function campoDoValor(v: unknown): string | null {

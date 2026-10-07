@@ -4358,6 +4358,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `HostPainel.orgaos`; a `OpcaoMultipla` ganhou `rotulo`). Os campos conhecidos vêm da última execução E da prévia
   (`HostPainel.saidas`); sem nenhum, o painel do nó oferece **"Ler os campos"** (a prévia só de leitura do trecho anterior).
   Comportamento: Repetir (0–5) e Esperar em opções.
+  **v1.52.0 — tudo por escolha + (?) DIDÁTICO:** o (?) de cada campo (`AjudaCampo`) = **Para que serve** (a `ajuda` do campo —
+  o teste exige uma em TODO campo de nó não legado) · **Como preencher** (`AJUDA_TIPO_CAMPO` pelo tipo; `AJUDA_ORIGEM`/
+  `AJUDA_INSERIR` pela origem) · **Opções** (a lista da seleção) · obrigatório. Tipo **`nomeLista`** + `CampoNo.fonte`
+  (`tabelas` | `colunasMesa` — filtradas pela tabela da Mesa do nó | `variaveis` — `variaveisDoGrafo`): escolhe um nome que
+  existe ou "Novo nome (digitar)…" (`CampoNomeLista`; as listas da API lidas uma vez por tela). Limites, tempos, lotes,
+  paralelo e tolerâncias viraram SELEÇÃO (`opcoesNum`; o valor antigo fora das opções segue à vista). O **Comportamento** é
+  montado com os MESMOS `CampoDoNo` (`CAMPOS_COMPORTAMENTO`): Repetir · Esperar (só com repetição) · Guardar o resultado
+  (`nomeLista` de variáveis com "Não guardar" e o nome NOVO sugerido — `sugerirVariavel`) · Desativar.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

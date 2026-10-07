@@ -26,6 +26,7 @@ import {
   validarGrafo,
   subgrafoAte,
   subgrafoSoLeitura,
+  variaveisDoGrafo,
 } from "@/lib/fluxo-core";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
@@ -1446,6 +1447,7 @@ function EditorFluxo({
               passo={passos[noConfig.id]}
               caminhos={caminhos}
               origem={anterior ? nomeDoNo(anterior, REGISTRO_NOS) : undefined}
+              variaveis={variaveisDoGrafo(grafo)}
               lerCampos={lerCampos}
               somenteLeitura={rodando}
               onMudar={(n) => setGrafo((g) => ({ ...g, nos: g.nos.map((x) => (x.id === n.id ? n : x)) }))}

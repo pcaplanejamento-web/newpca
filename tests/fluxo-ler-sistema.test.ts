@@ -93,9 +93,20 @@ test("campos dos nós: origem {{campo}}, ajuda em todo tipo e os campos que acei
   assert.equal(campoDoValor("DFD {{numero}}"), null);
   assert.equal(campoDoValor("1154; 1155"), null);
   assert.equal(campoDoValor(undefined), null);
+  const { sugerirVariavel, variaveisDoGrafo, nomeVariavel } = await import("../src/lib/fluxo-core.ts");
+  assert.equal(sugerirVariavel("Ler do sistema", []), "ler_do_sistema");
+  assert.equal(sugerirVariavel("Ler do sistema", ["ler_do_sistema"]), "ler_do_sistema_2");
+  assert.equal(sugerirVariavel("2 vias", []), "v_2_vias");
+  assert.ok(nomeVariavel(sugerirVariavel("Órgão na Centi", [])));
+  assert.deepEqual(
+    variaveisDoGrafo({ v: 1, conexoes: [], nos: [{ id: "a", tipo: "sistema.ler", x: 0, y: 0, config: {}, guardar: "lido" }, { id: "b", tipo: "dados.variavel", x: 0, y: 0, config: { nome: "total" } }] }),
+    ["lido", "total"],
+  );
   for (const def of REGISTRO_NOS.values())
     for (const c of def.campos) {
-      assert.ok(c.ajuda || AJUDA_TIPO_CAMPO[c.tipo], `${def.tipo}.${c.chave} sem explicação`);
+      assert.ok(AJUDA_TIPO_CAMPO[c.tipo], `${def.tipo}.${c.chave}: tipo sem “como preencher”`);
+      if (!def.legado) assert.ok(c.ajuda && c.ajuda.length >= 20, `${def.tipo}.${c.chave}: sem “para que serve” didático`);
+      if (c.tipo === "selecao") assert.ok(c.opcoes?.length, `${def.tipo}.${c.chave}: seleção sem opções`);
       if (c.aceitaCampo) assert.equal(c.tipo, "texto", `${def.tipo}.${c.chave}: aceitaCampo só em texto`);
     }
 });
