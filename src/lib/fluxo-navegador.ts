@@ -111,7 +111,7 @@ export async function lerDfdCentiPorCodigo(
   if (!comPdf) return { planejamento: plan, situacao };
   const e = await emitirUm(c, plan, entidade || undefined, false, true);
   if (!e.pdf) throw new Error(e.recusada ? `A Centi recusou o Emitir DFD — ${e.erro}` : (e.erro ?? "Falha ao emitir."));
-  const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr: false });
+  const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr: completo }); // a sobrescrita lê como a importação (assinatura achatada por OCR); a conferência só o texto
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
   const resumo = { numero: d.numero, planejamento: d.planejamento, tipo: d.tipo, objeto: d.objeto, valor: d.valorTotal ?? 0, totalItens: d.itens.length, situacao };

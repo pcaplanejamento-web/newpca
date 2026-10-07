@@ -428,6 +428,11 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     const d = DOC[s(it.leitura)];
     return d ? { rotulo: d.rotulo, tom: d.tom, texto: s(it.leituraTexto) } : null;
   }
+  if (tipo === "saida.substituirDfd") {
+    if (s(it.erro)) return { rotulo: "Falhou", tom: "red", texto: s(it.erro) };
+    if (it.substituido === true) return { rotulo: "Substituído", tom: "emerald", texto: `${s(it.itensGravados) || "0"} item(ns) gravado(s) com os dados da Centi` };
+    return null;
+  }
   if (tipo === "fluxo.executar") {
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
