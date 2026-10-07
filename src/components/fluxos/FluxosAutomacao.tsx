@@ -867,7 +867,7 @@ function EscolherNovoFluxo({
           <IconClose className="size-5" />
         </Button>
       </div>
-      <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto ${coluna ? "rolagem-fina -mr-2.5 pr-2.5" : "p-[var(--pad-card)]"}`}>
+      <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto ${coluna ? "rolagem-fina -mx-1 -my-1 py-1 pl-1 pr-2.5 -mr-2.5" : "p-[var(--pad-card)]"}`}>
         <div className={coluna ? `${CARTAO} space-y-3` : "space-y-3"}>
           <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
           <p className="text-sm font-medium text-text">Começar de</p>

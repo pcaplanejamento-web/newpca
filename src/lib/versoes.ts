@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.38.2",
+    data: "2026-10-07",
+    titulo: "Contorno do modelo escolhido inteiro",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "No painel “Novo fluxo”, o contorno do modelo escolhido (Em branco, por padrão) aparece inteiro — não é mais cortado nas bordas.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.38.1",
     data: "2026-10-07",
     titulo: "Arrastar cartões sem tremer",
