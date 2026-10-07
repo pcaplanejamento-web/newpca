@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { type CampoNo, caminhosDosItens, campoVisivel, type DefNo, type Item, type NoFluxo, type PassoExec } from "@/lib/fluxo-core";
+import { type CampoNo, caminhosDosItens, campoVisivel, resumoDoNo, type DefNo, type Item, type NoFluxo, type PassoExec } from "@/lib/fluxo-core";
 import { corCategoria } from "@/lib/fluxo-nos";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
@@ -55,7 +55,7 @@ export function PainelNo({
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-text">{def.rotulo}</p>
-          <p className="text-xs text-muted">{def.descricao}</p>
+          {resumoDoNo(no, def) && <p className="truncate text-xs text-muted">{resumoDoNo(no, def)}</p>}
         </div>
         <AjudaNo def={def} />
         {!somenteLeitura && (
@@ -65,6 +65,7 @@ export function PainelNo({
         )}
       </div>
       <Segmented
+        className="shrink-0"
         ariaLabel="Painel do nó"
         value={aba}
         onChange={(v) => setAba(v as "config" | "saida")}
@@ -75,7 +76,6 @@ export function PainelNo({
       />
       {aba === "config" ? (
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          <TextField label="Nome do nó" value={no.nome ?? ""} placeholder={def.rotulo} disabled={somenteLeitura} maxLength={80} onChange={(e) => onMudar({ ...no, nome: e.target.value || undefined })} />
           {def.campos
             .filter((c) => campoVisivel(c, no.config, def.campos))
             .map((c) => (

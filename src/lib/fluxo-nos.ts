@@ -228,14 +228,21 @@ const NOS: DefNo[] = [
       const ents = [...new Set((lista(c.entidades).length ? lista(c.entidades) : Object.values(mapa)).map((x) => x.replace(/^0+(?=\d)/, "")))].filter(Boolean);
       if (!ents.length) throw new Error("Nenhuma entidade — informe no nó ou cadastre o ID da Centi nos órgãos.");
       const out: Item[] = [];
+      // Uma entidade que falha não derruba as outras: segue e avisa; só falha quando NENHUMA respondeu.
+      const falhas: string[] = [];
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Entidade ${ent} (${i + 1} de ${ents.length})…`);
         const r = await ctx.centi("cm002", { entidade: ent }, 300_000);
         if (r.interrompido) throw new Error("Interrompido na extensão.");
-        if (!r.ok) throw new Error(r.erro || "A extensão da Centi não respondeu.");
+        if (!r.ok) {
+          falhas.push(`entidade ${ent}: ${r.erro || "a extensão da Centi não respondeu"}`);
+          continue;
+        }
         for (const p of Array.isArray(r.linhas) ? r.linhas : []) out.push({ ...obj(p), planejamento: str(obj(p).id), entidade: ent });
       }
+      if (falhas.length && falhas.length === ents.length) throw new Error(falhas.join(" · "));
+      if (falhas.length) ctx.aviso(`Sem a lista de ${falhas.length} entidade(s) — ${falhas.join(" · ")}`);
       return { saida: out };
     },
   },

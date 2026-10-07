@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.42.0",
+    data: "2026-10-07",
+    titulo: "Nós padronizados e CM002 robusta",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "O nome de cada nó é a função dele (não se edita); abaixo, uma linha diz como está configurado.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O painel do nó não corta mais as abas Configurar/Saída; todo componente aparece na paleta.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Lista da CM002: entidade sem planejamentos vale como lista vazia, a Centi que recusa a página única é lida página a página e uma entidade com falha não derruba as outras (extensão 1.18.0).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.41.0",
     data: "2026-10-07",
     titulo: "Diagramas mais limpos",

@@ -4263,6 +4263,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   linha reta) e a saída "erro" conta como a última porta (antes ×1000 jogava o nó para longe; `espalhado` reorganiza ao
   abrir); `rotasDoGrafo` faz as ligações da MESMA porta dobrarem no mesmo ponto (`forquilha` — uma sobe, outra desce).
   `Ajuda botao="sm"` = o (?) no tamanho dos `Button size="sm" variant="icon"`.
+  **v1.42.0 — nó = função:** o nó NÃO tem nome próprio (`NoFluxo.nome` saiu; `lerGrafo` descarta o gravado) — o título é
+  `nomeDoNo` (o rótulo do tipo) e a linha de baixo, `resumoDoNo` (os 2 primeiros campos preenchidos); teste garante que todo
+  tipo dos modelos está na paleta. **CM002 robusta (extensão 1.18.0):** `planejamentosCm002(j, conhecida)` aceita lista
+  vazia e linha sem finalidade na consulta aprendida; `comPagina` (`semPaginacao` = página `null`) — a Centi que recusa a
+  página única é lida página a página; o nó `centi.cm002` só falha se TODAS as entidades falharem.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

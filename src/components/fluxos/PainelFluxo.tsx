@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { campoVisivel, type Grafo, type Item, type NoFluxo, type PassoExec, type ResultadoExec } from "@/lib/fluxo-core";
+import { campoVisivel, type Grafo, type Item, type NoFluxo, nomeDoNo, type PassoExec, type ResultadoExec } from "@/lib/fluxo-core";
 import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { dataHoraBR } from "@/lib/format";
 import { useAlturaTela } from "../AlturaCheia";
@@ -71,7 +71,7 @@ export function PainelFluxo({
 
   // As ABAS: as visões dos componentes do fluxo + a Análise.
   const visoes = etapas.filter((n) => VISOES[n.tipo] && !n.desativado);
-  const opcoes = [...visoes.map((n) => ({ value: n.id, label: VISOES[n.tipo].titulo(n) })), { value: ANALISE, label: "Análise" }];
+  const opcoes = [...visoes.map((n) => ({ value: n.id, label: VISOES[n.tipo].titulo })), { value: ANALISE, label: "Análise" }];
   const [aba, setAba] = useState<string>(opcoes[0].value);
   const abaValida = opcoes.some((o) => o.value === aba) ? aba : opcoes[0].value;
   // Ao executar, a aba que acompanha ao vivo: a dos DFDs (Baixar/anexar), senão a Análise.
@@ -105,7 +105,7 @@ export function PainelFluxo({
                     <span className="flex size-5 items-center justify-center rounded text-white" style={{ background: corCategoria(def.categoria) }}>
                       <IconeNo nome={def.icone} className="size-3" />
                     </span>
-                    {n.nome || def.rotulo}
+                    {def.rotulo}
                     <AjudaNo def={def} />
                   </legend>
                   {campos.map((c) => (
@@ -139,7 +139,7 @@ export function PainelFluxo({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-text">{n.nome || def?.rotulo || n.tipo}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-text">{def?.rotulo ?? n.tipo}</span>
                       {p && p.estado !== "fila" && <span className="text-xs tabular-nums text-muted">{p.estado === "rodando" && vivos ? vivos : p.itens}</span>}
                       {e && <Badge tone={e.tom}>{e.rotulo}</Badge>}
                       {def && <AjudaNo def={def} />}
@@ -269,7 +269,7 @@ function AnaliseAoVivo({
       {processados.length > 0 && (
         <div className="space-y-1">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            {fonte ? `${fonte.nome || REGISTRO_NOS.get(fonte.tipo)?.rotulo} · ${rodando ? "ao vivo" : "resultado"}` : "Itens"}
+            {fonte ? `${nomeDoNo(fonte, REGISTRO_NOS)} · ${rodando ? "ao vivo" : "resultado"}` : "Itens"}
           </h4>
           <DataTable columns={colunasVivo} rows={processados} getKey={(r) => r.chave} density="compact" exportar={{ nome: "Itens processados" }} pageSize={20} />
         </div>

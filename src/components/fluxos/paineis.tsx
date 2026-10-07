@@ -51,7 +51,7 @@ export const HostPainelCtx = createContext<HostPainel | null>(null);
 const useHost = () => useContext(HostPainelCtx);
 
 export type PropsVisao = { no: NoFluxo; grafo: Grafo; onGrafo: (g: Grafo) => void };
-export type Visao = { titulo: (no: NoFluxo) => string; Componente: (p: PropsVisao) => React.ReactNode };
+export type Visao = { titulo: string; Componente: (p: PropsVisao) => React.ReactNode };
 
 /** Os nós ligados à ENTRADA de um nó. */
 const anteriores = (g: Grafo, id: string) => g.conexoes.filter((c) => c.para === id).map((c) => g.nos.find((n) => n.id === c.de)).filter((n): n is NoFluxo => !!n);
@@ -304,9 +304,9 @@ function VistaLidos({ no }: PropsVisao) {
 
 /** As visões que cada tipo de componente traz ao painel do fluxo. */
 export const VISOES: Record<string, Visao> = {
-  "entrada.selecionar": { titulo: (n) => n.nome || "Seleção", Componente: VistaSelecao },
-  "saida.dfdsCenti": { titulo: () => "DFDs", Componente: VistaDfds },
-  "leitura.protocolo": { titulo: () => "Protocolos lidos", Componente: VistaLidos },
+  "entrada.selecionar": { titulo: "Seleção", Componente: VistaSelecao },
+  "saida.dfdsCenti": { titulo: "DFDs", Componente: VistaDfds },
+  "leitura.protocolo": { titulo: "Protocolos lidos", Componente: VistaLidos },
 };
 
 /** O ESTADO de um item processado (a análise ao vivo): o rótulo, o tom e o detalhe — por tipo de componente. */

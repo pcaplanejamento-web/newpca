@@ -522,3 +522,19 @@ test("lerAjudaFluxo: qualquer JSON vira os 3 textos", () => {
   assert.deepEqual(lerAjudaFluxo({ funciona: " a ", executa: 3, resultado: "x".repeat(3000) }).funciona, "a");
   assert.equal(lerAjudaFluxo({ resultado: "x".repeat(3000) }).resultado.length, 2000);
 });
+
+test("nome do nó = a função; o resumo diz como está configurado", async () => {
+  const { REGISTRO_NOS } = await import("../src/lib/fluxo-nos.ts");
+  const { nomeDoNo, resumoDoNo } = await import("../src/lib/fluxo-core.ts");
+  const n = { id: "c", tipo: "logica.comparar", x: 0, y: 0, config: { chaveA: "planejamento", chaveB: "id" } };
+  assert.equal(nomeDoNo(n, REGISTRO_NOS), REGISTRO_NOS.get("logica.comparar")?.rotulo);
+  assert.match(resumoDoNo(n, REGISTRO_NOS.get("logica.comparar")), /planejamento/);
+});
+
+test("todo tipo dos modelos existe e está na paleta", async () => {
+  const { REGISTRO_NOS, NOS_POR_CATEGORIA } = await import("../src/lib/fluxo-nos.ts");
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const naPaleta = new Set(NOS_POR_CATEGORIA.flatMap((c) => c.nos.map((n) => n.tipo)));
+  assert.equal(naPaleta.size, REGISTRO_NOS.size);
+  for (const m of MODELOS_FLUXO) for (const n of m.grafo.nos) assert.ok(naPaleta.has(n.tipo), `${m.id}: ${n.tipo}`);
+});

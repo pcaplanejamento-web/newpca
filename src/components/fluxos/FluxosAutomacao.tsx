@@ -14,6 +14,7 @@ import {
   type Item,
   lerFrequencia,
   lerGrafo,
+  nomeDoNo,
   type NoFluxo,
   novoIdNo,
   type PassoExec,
@@ -1255,7 +1256,7 @@ function EditorFluxo({
           }
         />
       </div>
-      <JanelaFlutuante aberta={!!noConfig} ancora={config?.ancora ?? null} titulo={noConfig?.nome || "Configurar o nó"} largura={380} onFechar={() => setConfig(null)}>
+      <JanelaFlutuante aberta={!!noConfig} ancora={config?.ancora ?? null} titulo={noConfig ? nomeDoNo(noConfig, REGISTRO_NOS) : "Configurar o nó"} largura={380} onFechar={() => setConfig(null)}>
         {noConfig && (
           <div className="flex max-h-[min(70vh,36rem)] flex-col">
             <PainelNo

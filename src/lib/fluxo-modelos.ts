@@ -1,6 +1,6 @@
 import type { AjudaFluxo, Frequencia, Grafo } from "./fluxo-core";
 
-const n = (id: string, tipo: string, x: number, y: number, config: Record<string, unknown> = {}, nome?: string) => ({ id, tipo, x, y, config, nome });
+const n = (id: string, tipo: string, x: number, y: number, config: Record<string, unknown> = {}) => ({ id, tipo, x, y, config });
 const c = (de: string, para: string, saida = "saida", entrada = "entrada") => ({ de, saida, para, entrada });
 
 /** Fluxos PRONTOS para começar (o "Novo fluxo"). Cada um é só um grafo — editável depois. */
@@ -33,7 +33,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
         n("prot1", "sistema.protocolos", 280, 160),
-        n("sel1", "entrada.selecionar", 576, 160, { chave: "id", semMarcar: "nenhum" }, "Protocolos"),
+        n("sel1", "entrada.selecionar", 576, 160, { chave: "id", semMarcar: "nenhum" }),
         n("dfds1", "saida.dfdsCenti", 880, 160),
       ],
       conexoes: [c("inicio1", "prot1"), c("prot1", "sel1"), c("sel1", "dfds1")],
@@ -68,11 +68,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
-        n("prot1", "centi.protocolos", 280, 160, { situacao: "", reparticao: "" }, "Em análise"),
-        n("sel1", "entrada.selecionar", 576, 160, { chave: "protocolo", semMarcar: "nenhum" }, "Protocolos"),
+        n("prot1", "centi.protocolos", 280, 160, { situacao: "", reparticao: "" }),
+        n("sel1", "entrada.selecionar", 576, 160, { chave: "protocolo", semMarcar: "nenhum" }),
         n("laco1", "logica.laco", 880, 160, { tamanho: 1 }),
         n("ler1", "leitura.protocolo", 1184, 64, { limite: 500 }),
-        n("err1", "erros.apontar", 1488, 64, { todos: true, mensagem: "{{no}}: {{erro}}" }, "Falha ao emitir"),
+        n("err1", "erros.apontar", 1488, 64, { todos: true, mensagem: "{{no}}: {{erro}}" }),
       ],
       conexoes: [c("inicio1", "prot1"), c("prot1", "sel1"), c("sel1", "laco1"), c("laco1", "ler1", "lote"), c("ler1", "laco1", "saida", "volta"), c("ler1", "err1", "erro")],
     },
@@ -93,17 +93,17 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 192),
-        n("prot1", "centi.protocolos", 280, 96, { situacao: "", reparticao: "PCA - COORDENADOR (JHONE)" }, "Protocolos em análise"),
+        n("prot1", "centi.protocolos", 280, 96, { situacao: "", reparticao: "PCA - COORDENADOR (JHONE)" }),
         n("novos1", "sistema.naoCadastrados", 576, 96),
         n("laco1", "logica.laco", 880, 96, { tamanho: 1 }),
         n("ler1", "leitura.protocolo", 880, -32, { limite: 200 }),
-        n("seLer", "logica.se", 1184, -32, { campo: "leitura", operador: "igual", valor: "falha" }, "Leitura falhou?"),
-        n("errLer", "erros.apontar", 1488, -96, { todos: true, mensagem: "Protocolo {{protocolo}}/{{ano}}: {{leituraTexto}}" }, "Falha ao ler"),
-        n("inc1", "dados.filtrar", 880, 224, { campo: "assunto", operador: "contem", valor: "INCLUS" }, "Assunto: Inclusão"),
-        n("des1", "dados.desdobrar", 1184, 224, { campo: "dfds" }, "Um item por DFD"),
-        n("busca1", "leitura.dfdCenti", 1488, 224, { limite: 2000 }, "DFD na Centi"),
-        n("conf1", "dados.compararDfdCenti", 1488, 448, { tolerancia: 0.01, objeto: true }, "DFD × Centi"),
-        n("err1", "erros.apontar", 1792, 320, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }, "Divergências"),
+        n("seLer", "logica.se", 1184, -32, { campo: "leitura", operador: "igual", valor: "falha" }),
+        n("errLer", "erros.apontar", 1488, -96, { todos: true, mensagem: "Protocolo {{protocolo}}/{{ano}}: {{leituraTexto}}" }),
+        n("inc1", "dados.filtrar", 880, 224, { campo: "assunto", operador: "contem", valor: "INCLUS" }),
+        n("des1", "dados.desdobrar", 1184, 224, { campo: "dfds" }),
+        n("busca1", "leitura.dfdCenti", 1488, 224, { limite: 2000 }),
+        n("conf1", "dados.compararDfdCenti", 1488, 448, { tolerancia: 0.01, objeto: true }),
+        n("err1", "erros.apontar", 1792, 320, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }),
         n("imp1", "saida.importarProtocolo", 2096, 192, { limite: 200 }),
       ],
       conexoes: [
@@ -138,13 +138,13 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
-        n("dfd1", "sistema.completarDfd", 280, 160, {}, "O DFD"),
+        n("dfd1", "sistema.completarDfd", 280, 160, {}),
         n("busca1", "leitura.dfdCenti", 576, 160, { limite: 1, falhaErro: true }),
-        n("cmp1", "dados.compararDfdCenti", 880, 160, { tolerancia: 0.01, objeto: true }, "DFD × Centi"),
-        n("err1", "erros.apontar", 1184, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }, "Divergências"),
+        n("cmp1", "dados.compararDfdCenti", 880, 160, { tolerancia: 0.01, objeto: true }),
+        n("err1", "erros.apontar", 1184, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }),
         n("marcar1", "saida.marcarConferencia", 1184, 224),
-        n("err2", "erros.apontar", 576, 352, { todos: true, mensagem: "Planejamento {{planejamento}}: DFD não encontrado no sistema", nivel: "erro" }, "Sem DFD"),
-        n("ret1", "saida.retornar", 1488, 160, {}, "Devolver o resultado"),
+        n("err2", "erros.apontar", 576, 352, { todos: true, mensagem: "Planejamento {{planejamento}}: DFD não encontrado no sistema", nivel: "erro" }),
+        n("ret1", "saida.retornar", 1488, 160, {}),
       ],
       conexoes: [
         c("inicio1", "dfd1"),
@@ -175,8 +175,8 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
         n("dfds1", "sistema.dfds", 280, 160),
-        n("sub1", "fluxo.executar", 576, 160, { fluxoModelo: "conferir-1-dfd", modo: "porItem", paralelo: 3, retomar: true, chave: "id", limite: 20000 }, "Conferir cada DFD"),
-        n("err1", "erros.apontar", 880, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{subfluxo.erro}}", nivel: "erro" }, "Não conferidos"),
+        n("sub1", "fluxo.executar", 576, 160, { fluxoModelo: "conferir-1-dfd", modo: "porItem", paralelo: 3, retomar: true, chave: "id", limite: 20000 }),
+        n("err1", "erros.apontar", 880, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{subfluxo.erro}}", nivel: "erro" }),
       ],
       conexoes: [c("inicio1", "dfds1"), c("dfds1", "sub1"), c("sub1", "err1", "falhas")],
     },
@@ -195,16 +195,16 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
         n("dfds1", "sistema.dfds", 280, 160),
-        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 20000, pdf: false }, "Planejamento na Centi"),
+        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 20000, pdf: false }),
         n("gravar1", "saida.gravarExecucao", 880, 32),
-        n("se0", "logica.se", 880, 288, { campo: "centiErro", operador: "nao_vazio" }, "Não encontrado?"),
-        n("err2", "erros.apontar", 1184, 352, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{centiErro}}", nivel: "erro" }, "Fora da Centi"),
-        n("se1", "logica.se", 1184, 192, { campo: "centi.situacao", operador: "nao_contem", valor: "EXECUTADO" }, "Não executado?"),
-        n("err1", "erros.apontar", 1488, 192, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{centi.situacao}}", nivel: "atencao" }, "Não executados"),
-        n("cm1", "centi.cm002", 576, 448, {}, "Lista da CM002"),
-        n("cmp1", "logica.comparar", 880, 448, { chaveA: "planejamento", chaveB: "planejamento", operador: "igual" }, "Sistema × CM002"),
-        n("err3", "erros.apontar", 1184, 512, { todos: true, mensagem: "Planejamento {{planejamento}} ({{situacao}}) só na Centi — sem DFD no sistema", nivel: "atencao" }, "Só na Centi"),
-        n("err4", "erros.apontar", 880, 640, { todos: true, mensagem: "Lista da CM002 não lida: {{erro}}", nivel: "atencao" }, "CM002 indisponível"),
+        n("se0", "logica.se", 880, 288, { campo: "centiErro", operador: "nao_vazio" }),
+        n("err2", "erros.apontar", 1184, 352, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{centiErro}}", nivel: "erro" }),
+        n("se1", "logica.se", 1184, 192, { campo: "centi.situacao", operador: "nao_contem", valor: "EXECUTADO" }),
+        n("err1", "erros.apontar", 1488, 192, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{centi.situacao}}", nivel: "atencao" }),
+        n("cm1", "centi.cm002", 576, 448, {}),
+        n("cmp1", "logica.comparar", 880, 448, { chaveA: "planejamento", chaveB: "planejamento", operador: "igual" }),
+        n("err3", "erros.apontar", 1184, 512, { todos: true, mensagem: "Planejamento {{planejamento}} ({{situacao}}) só na Centi — sem DFD no sistema", nivel: "atencao" }),
+        n("err4", "erros.apontar", 880, 640, { todos: true, mensagem: "Lista da CM002 não lida: {{erro}}", nivel: "atencao" }),
       ],
       conexoes: [
         c("inicio1", "dfds1"),
@@ -239,9 +239,9 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
         n("prot1", "centi.protocolos", 576, 160, { situacao: "ANALISADO", campoReparticao: "reparticao" }),
         n("laco1", "logica.laco", 880, 160, { tamanho: 1 }),
         n("ler1", "leitura.protocolo", 1184, 32, { limite: 50 }),
-        n("se1", "logica.se", 1184, 288, { campo: "leitura", operador: "igual", valor: "falha" }, "Leitura falhou?"),
-        n("err1", "erros.apontar", 1488, 224, { todos: true, mensagem: "Protocolo {{protocolo}}/{{ano}}: {{leituraTexto}}" }, "PDF inválido"),
-        n("err2", "erros.apontar", 1488, 32, { todos: true, mensagem: "{{no}}: {{erro}}" }, "Falha ao emitir"),
+        n("se1", "logica.se", 1184, 288, { campo: "leitura", operador: "igual", valor: "falha" }),
+        n("err1", "erros.apontar", 1488, 224, { todos: true, mensagem: "Protocolo {{protocolo}}/{{ano}}: {{leituraTexto}}" }),
+        n("err2", "erros.apontar", 1488, 32, { todos: true, mensagem: "{{no}}: {{erro}}" }),
       ],
       conexoes: [
         c("inicio1", "rep1"),

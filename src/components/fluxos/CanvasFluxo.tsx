@@ -1,7 +1,7 @@
 "use client";
 
 import { type DragEvent, type PointerEvent as RPointerEvent, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { type Grafo, type PassoExec, portasDo, type Registro, SAIDA_ERRO } from "@/lib/fluxo-core";
+import { type Grafo, type PassoExec, portasDo, type Registro, resumoDoNo, SAIDA_ERRO } from "@/lib/fluxo-core";
 import { corCategoria } from "@/lib/fluxo-nos";
 import { alturaNo, caminhoSvg, coresDasLigacoes, dobraDaRota, GRADE, LARGURA_NO, PASSO_PORTA, type Ponto, posPorta, rotaOrtogonal, rotasDoGrafo, setasDaRota, snap, TOPO_PORTAS } from "@/lib/fluxo-layout";
 
@@ -304,8 +304,8 @@ export function CanvasFluxo({
                   <IconeNo nome={d?.icone ?? "alert"} className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold text-text">{n.nome || d?.rotulo || n.tipo}</span>
-                  <span className="block truncate text-[11px] text-muted">{passo && passo.estado !== "fila" ? textoPasso(passo) : (d?.rotulo ?? "Tipo desconhecido")}</span>
+                  <span className="block truncate text-[13px] font-semibold text-text">{d?.rotulo ?? n.tipo}</span>
+                  <span className="block truncate text-[11px] text-muted">{passo && passo.estado !== "fila" ? textoPasso(passo) : d ? resumoDoNo(n, d) || d.descricao : "Tipo desconhecido"}</span>
                 </span>
                 {passo && passo.estado !== "fila" && (
                   <span

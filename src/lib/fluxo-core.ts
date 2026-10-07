@@ -12,7 +12,7 @@
 export type Item = Record<string, unknown>;
 export type Portas = Record<string, Item[]>;
 
-export type NoFluxo = { id: string; tipo: string; nome?: string; config: Record<string, unknown>; x: number; y: number; desativado?: boolean };
+export type NoFluxo = { id: string; tipo: string; config: Record<string, unknown>; x: number; y: number; desativado?: boolean };
 /** `x` = a DOBRA vertical da linha ajustada à mão no diagrama (sem ela, a rota automática). */
 export type Conexao = { de: string; saida: string; para: string; entrada: string; x?: number };
 export type Grafo = { v: 1; nos: NoFluxo[]; conexoes: Conexao[] };
@@ -123,7 +123,7 @@ export function lerGrafo(v: unknown): Grafo {
     if (!id || !tipo || ids.has(id)) continue;
     ids.add(id);
     const config = x.config && typeof x.config === "object" && !Array.isArray(x.config) ? (x.config as Record<string, unknown>) : {};
-    nos.push({ id, tipo, nome: texto(x.nome, 80) || undefined, config, x: numero(x.x), y: numero(x.y), desativado: x.desativado === true || undefined });
+    nos.push({ id, tipo, config, x: numero(x.x), y: numero(x.y), desativado: x.desativado === true || undefined });
   }
   const conexoes: Conexao[] = [];
   const vistas = new Set<string>();
@@ -142,6 +142,24 @@ export function lerGrafo(v: unknown): Grafo {
 
 export type ProblemaGrafo = { no?: string; texto: string; nivel: "erro" | "atencao" };
 
+/** O NOME do nó = a função do tipo (não se edita). */
+export const nomeDoNo = (n: NoFluxo, reg: Registro) => reg.get(n.tipo)?.rotulo ?? n.tipo;
+
+/** O RESUMO do que o nó está configurado para fazer: os 2 primeiros campos visíveis e preenchidos ("Rótulo: valor"). */
+export function resumoDoNo(n: NoFluxo, def: DefNo | undefined): string {
+  if (!def) return "";
+  const partes: string[] = [];
+  for (const c of def.campos) {
+    if (partes.length >= 2 || !campoVisivel(c, n.config, def.campos)) continue;
+    const v = n.config[c.chave] ?? c.padrao;
+    if (v == null || v === "" || v === false || (Array.isArray(v) && !v.length)) continue;
+    const t =
+      c.tipo === "booleano" ? "sim" : c.tipo === "selecao" ? (c.opcoes?.find((o) => o.valor === String(v))?.rotulo ?? String(v)) : Array.isArray(v) ? `${v.length}` : String(v);
+    partes.push(`${c.rotulo}: ${t.replace(/\s+/g, " ").slice(0, 40)}`);
+  }
+  return partes.join(" · ");
+}
+
 /** As portas (com a saída "erro" implícita) — ou null quando o tipo não existe. */
 export function portasDo(def: DefNo | undefined): { entradas: string[]; saidas: string[] } | null {
   return def ? { entradas: def.entradas, saidas: [...def.saidas, SAIDA_ERRO] } : null;
@@ -150,7 +168,7 @@ export function portasDo(def: DefNo | undefined): { entradas: string[]; saidas: 
 /** Os problemas do fluxo (erros impedem executar; atenções não). */
 export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
   const p: ProblemaGrafo[] = [];
-  const nome = (n: NoFluxo) => n.nome || reg.get(n.tipo)?.rotulo || n.tipo;
+  const nome = (n: NoFluxo) => nomeDoNo(n, reg);
   const porId = new Map(g.nos.map((n) => [n.id, n]));
   if (!g.nos.some((n) => reg.get(n.tipo)?.categoria === "gatilho")) p.push({ texto: "O fluxo precisa de um Início.", nivel: "erro" });
   const unicos = new Map<string, number>();
@@ -554,11 +572,11 @@ export async function executarFluxo(
       marcar(id, { estado: "erro", erro: msg, ms: (anterior?.ms ?? 0) + Date.now() - t0 });
       if (ctx.cancelado()) return fim({ estado: "cancelado", erro: "Interrompido." });
       if (g.conexoes.some((c) => c.de === id && c.saida === SAIDA_ERRO)) {
-        const erroItem: Item = { erro: msg, no: n.nome || d.rotulo, entrada: Object.values(ent)[0]?.length ?? 0 };
+        const erroItem: Item = { erro: msg, no: d.rotulo, entrada: Object.values(ent)[0]?.length ?? 0 };
         entregar(id, { ...Object.fromEntries(d.saidas.map((s) => [s, []])), [SAIDA_ERRO]: [erroItem] });
         continue;
       }
-      return fim({ estado: "falhou", erro: `${n.nome || d.rotulo}: ${msg}`, noErro: id });
+      return fim({ estado: "falhou", erro: `${d.rotulo}: ${msg}`, noErro: id });
     }
     const total = d.saidas.reduce((s, p) => s + (saidas[p]?.length ?? 0), 0);
     marcar(id, { estado: "ok", itens: total, ms: (anterior?.ms ?? 0) + Date.now() - t0, amostra: amostrar(saidas), erro: undefined });

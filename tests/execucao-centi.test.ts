@@ -54,8 +54,9 @@ function pecasCm002() {
   vmCm.runInNewContext(lerArq("extensao-centi/centi-anexo.js", "utf8"), ctx);
   const p = Number(/const PROTOCOLO = (\d+)/.exec(lerArq("extensao-centi/centi-main.js", "utf8"))?.[1]);
   return ctx[`__pcaCentiAnexo_p${p}`] as {
-    planejamentosCm002: (j: unknown) => { id: string; situacao: string; finalidade: string; centroCusto: string }[] | null;
+    planejamentosCm002: (j: unknown, conhecida?: boolean) => { id: string; situacao: string; finalidade: string; centroCusto: string }[] | null;
     semPaginacao: (c: string, b: unknown) => { caminho: string; corpo: unknown };
+    comPagina: (c: string, b: unknown, i: number | null) => { caminho: string; corpo: unknown; tamanho: number };
     comReparticoes: (b: unknown, n: string[]) => { corpo: { Data: { Reparticoes: { Id: number; selected: boolean }[] } }; achadas: string[]; faltam: string[] } | null;
   };
 }
@@ -79,6 +80,19 @@ test("CM002 pela API: a consulta repetida sem paginação (corpo e URL)", () => 
   const r = semPaginacao("restauth/list?entity=9&take=50&skip=100", { Take: 50, Skip: 50, Filtros: [{ Campo: "x" }], Page: 3 });
   assert.equal(r.caminho, "restauth/list?entity=9&take=100000&skip=0");
   assert.deepEqual(JSON.parse(JSON.stringify(r.corpo)), { Take: 100000, Skip: 0, Filtros: [{ Campo: "x" }], Page: 1 });
+});
+
+test("CM002 pela API: a consulta aprendida aceita a lista vazia e sem finalidade; a paginação de reserva", () => {
+  const { planejamentosCm002, comPagina } = pecasCm002();
+  assert.equal(planejamentosCm002({ Data: { Items: [], Total: 0 } }), null);
+  assert.equal(planejamentosCm002({ Data: { Items: [], Total: 0 } }, true)?.length, 0);
+  const sem = { Items: [{ Id: 7, Situacao: "Executado", Finalidade: null }] };
+  assert.equal(planejamentosCm002(sem), null);
+  assert.equal(planejamentosCm002(sem, true)?.[0]?.id, "7");
+  const p = comPagina("restauth/list?take=50&skip=0", { ItensPerPage: 20, Page: 1 }, 2);
+  assert.equal(p.tamanho, 20);
+  assert.deepEqual(JSON.parse(JSON.stringify(p.corpo)), { ItensPerPage: 20, Page: 3 });
+  assert.equal(p.caminho, "restauth/list?take=50&skip=40");
 });
 
 test("Tela Protocolo pela API: as repartições vão no pedido (postdata) e sem paginação", () => {

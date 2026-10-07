@@ -446,16 +446,18 @@
     return chaves.sort((a, b) => texto(b) - texto(a) || a.length - b.length)[0] ?? null;
   }
   /** Os planejamentos da resposta da CM002 ([{id, situacao, finalidade, centroCusto}]) — ou null (não é a lista da CM002). */
-  function planejamentosCm002(j) {
+  function planejamentosCm002(j, conhecida = false) {
     const l = acharLista(j);
-    if (!l) return null;
+    // A consulta já aprendida que volta SEM linhas (entidade sem planejamentos) é uma lista vazia, não "outra forma".
+    if (!l) return conhecida && temListaVazia(j) ? [] : null;
     const linhas = l.itens.map(linhaPlana);
     const amostra = linhas.slice(0, 50);
     const kId = [...new Set(amostra.flatMap((x) => Object.keys(x)))].filter((k) => /^id$/i.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0];
     const kSit = campoTexto(amostra, /situa/i);
     const kFin = campoTexto(amostra, /finalidade/i);
     const kCc = campoTexto(amostra, /centro.?custo/i);
-    if (!kId || !kSit || (!kFin && !kCc)) return null;
+    // Na consulta já aprendida basta Id + Situação (finalidade/centro de custo podem vir vazios).
+    if (!kId || !kSit || (!conhecida && !kFin && !kCc)) return null;
     return linhas
       .map((x) => ({
         id: String(x[kId] ?? "").replace(/\D/g, "").replace(/^0+/, ""),
@@ -510,30 +512,62 @@
   const emAnalise = (s) => /ANALISE/.test(String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase());
   const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|itensperpage|itemsperpage|itensporpagina|registros|quantidade|qtd|maxresults|count)$/i;
   const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|currentpage)$/i;
-  /** O pedido da lista SEM paginação: tamanho da página → 100000, início → 0 (no corpo e na URL). */
-  function semPaginacao(caminho, corpo) {
+  /** Alguma lista vazia na resposta (a lista de linhas que veio sem nenhuma). */
+  function temListaVazia(j) {
+    const ir = (v, prof) => v != null && typeof v === "object" && prof <= 5 && (Array.isArray(v) ? !v.length : Object.values(v).some((x) => ir(x, prof + 1)));
+    return ir(j, 0);
+  }
+  /** O pedido da lista numa PÁGINA: `pagina` null = sem paginação (tamanho → 100000, início → o primeiro); senão a página
+   * `pagina` (0, 1, 2…) no tamanho ORIGINAL da consulta — o início vira o nº da página (page/pagina, 1 em diante quando a
+   * consulta contava de 1) ou o deslocamento (skip/offset/start = página × tamanho). Devolve também o `tamanho` original. */
+  function comPagina(caminho, corpo, pagina) {
+    let tamanho = 0;
+    const achar = (v, prof) => {
+      if (prof > 6 || v == null || typeof v !== "object") return;
+      for (const [k, x] of Object.entries(v)) {
+        if (typeof x === "number" && RE_TAMANHO.test(k) && !tamanho) tamanho = x;
+        else achar(x, prof + 1);
+      }
+    };
+    achar(corpo, 0);
+    let c = String(caminho);
+    let u = null;
+    try {
+      u = new URL(c, "https://x/");
+      for (const [k, v] of u.searchParams) if (!tamanho && /^\d+$/.test(v) && RE_TAMANHO.test(k)) tamanho = Number(v);
+    } catch {}
+    const inicio = (k, x) => {
+      const base1 = /page|pagina/i.test(k) && !/index/i.test(k) && x >= 1;
+      if (pagina == null) return base1 ? 1 : 0;
+      if (/page|pagina/i.test(k)) return pagina + (base1 ? 1 : 0);
+      return pagina * tamanho;
+    };
     const ir = (v, prof) => {
       if (prof > 6 || v == null || typeof v !== "object") return v;
       if (Array.isArray(v)) return v.map((x) => ir(x, prof + 1));
       const o = {};
       for (const [k, x] of Object.entries(v)) {
-        if (typeof x === "number" && RE_TAMANHO.test(k)) o[k] = 100000;
-        else if (typeof x === "number" && RE_INICIO.test(k)) o[k] = /page|pagina/i.test(k) && x >= 1 && !/index/i.test(k) ? 1 : 0;
+        if (typeof x === "number" && RE_TAMANHO.test(k)) o[k] = pagina == null ? 100000 : x;
+        else if (typeof x === "number" && RE_INICIO.test(k)) o[k] = inicio(k, x);
         else o[k] = ir(x, prof + 1);
       }
       return o;
     };
-    let c = String(caminho);
-    try {
-      const u = new URL(c, "https://x/");
+    if (u) {
       for (const k of [...u.searchParams.keys()]) {
         const v = u.searchParams.get(k);
-        if (/^\d+$/.test(v ?? "") && RE_TAMANHO.test(k)) u.searchParams.set(k, "100000");
-        else if (/^\d+$/.test(v ?? "") && RE_INICIO.test(k)) u.searchParams.set(k, /page|pagina/i.test(k) && Number(v) >= 1 && !/index/i.test(k) ? "1" : "0");
+        if (!/^\d+$/.test(v ?? "")) continue;
+        if (RE_TAMANHO.test(k) && pagina == null) u.searchParams.set(k, "100000");
+        else if (RE_INICIO.test(k)) u.searchParams.set(k, String(inicio(k, Number(v))));
       }
       c = `${u.pathname.replace(/^\//, "")}${u.search}`;
-    } catch {}
-    return { caminho: c, corpo: ir(corpo, 0) };
+    }
+    return { caminho: c, corpo: ir(corpo, 0), tamanho };
+  }
+  /** O pedido da lista SEM paginação: tamanho da página → 100000, início → o primeiro (no corpo e na URL). */
+  function semPaginacao(caminho, corpo) {
+    const p = comPagina(caminho, corpo, null);
+    return { caminho: p.caminho, corpo: p.corpo };
   }
 
   /** A consulta da PO011 só nas repartições pedidas: marca `selected` em Data.Reparticoes pela Descricao (sem acento/
@@ -558,7 +592,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, protocolosTela, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, comPagina, protocolosTela, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

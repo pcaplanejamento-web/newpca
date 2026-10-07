@@ -693,19 +693,41 @@
     if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, erro: "Consulta guardada inválida." };
     const ent = d?.entidade == null || d.entidade === "" ? null : String(d.entidade);
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
-    const p = A.semPaginacao(g.caminho, g.corpo);
-    const url = destino(p.caminho);
-    if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
-    const r = await executar(g.metodo, url, g.metodo === "POST" ? p.corpo : null, ent, true);
-    if (r.status >= 400) return { ok: false, erro: `A Centi recusou a consulta da CM002 (${r.status}).` };
-    let j;
-    try {
-      j = JSON.parse(r.texto);
-    } catch {
-      return { ok: false, erro: "A Centi não devolveu a lista da CM002." };
+    // Uma página: o pedido guardado na página `i` (null = tudo de uma vez) → {linhas} | {status} | {forma}.
+    const pagina = async (i) => {
+      const p = A.comPagina(g.caminho, g.corpo, i);
+      const url = destino(p.caminho);
+      if (!url) return { fora: true };
+      const r = await executar(g.metodo, url, g.metodo === "POST" ? p.corpo : null, ent, true);
+      if (r.status >= 400) return { status: r.status };
+      let j;
+      try {
+        j = JSON.parse(r.texto);
+      } catch {
+        return { forma: "não é JSON" };
+      }
+      const linhas = A.planejamentosCm002(j, true);
+      if (!linhas) return { forma: JSON.stringify(A.resumoResposta(j) ?? Object.keys(j ?? {})).slice(0, 300) };
+      return { linhas, tamanho: p.tamanho };
+    };
+    const tudo = await pagina(null);
+    if (tudo.fora) return { ok: false, erro: "Destino fora da API da Centi." };
+    if (tudo.linhas) return { ok: true, entidade: ent ?? entidadeAtual(), linhas: tudo.linhas };
+    // A Centi recusou a página única (tamanho grande demais): página a página, no tamanho da tela, até a última.
+    const linhas = [];
+    const vistos = new Set();
+    for (let i = 0; i < 200; i++) {
+      const r = await pagina(i);
+      if (!r.linhas) {
+        if (i > 0) break;
+        const motivo = r.status ? `recusou a consulta (${r.status})` : `devolveu outra forma (${r.forma ?? tudo.forma ?? "?"})`;
+        return { ok: false, erro: `A Centi ${motivo} na CM002 — abra a CM002 na Centi e clique em Pesquisar para o sistema reaprender.`, semConsulta: true };
+      }
+      const novas = r.linhas.filter((x) => !vistos.has(x.id));
+      for (const x of novas) vistos.add(x.id);
+      linhas.push(...novas);
+      if (!novas.length || !r.tamanho || r.linhas.length < r.tamanho) break;
     }
-    const linhas = A.planejamentosCm002(j);
-    if (!linhas) return { ok: false, erro: "A resposta não tem a forma da lista da CM002 (Id + Situação)." };
     return { ok: true, entidade: ent ?? entidadeAtual(), linhas };
   }
 
