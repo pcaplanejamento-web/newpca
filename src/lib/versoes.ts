@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.37.2",
+    data: "2026-10-07",
+    titulo: "Conferir DFDs × Centi: falha refeita e fluxo atualizável",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Conferir DFDs × Centi: o DFD que falha na comunicação com a Centi não é marcado nem dado como feito — a retomada tenta ele de novo.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "“Atualizar pelo modelo” no Novo fluxo: regrava o fluxo salvo (e os que ele usa) com o modelo de hoje, mantendo a frequência.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.37.1",
     data: "2026-10-07",
     titulo: "Automação: acabamento dos cartões e avisos",

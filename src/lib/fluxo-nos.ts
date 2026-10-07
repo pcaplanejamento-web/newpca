@@ -375,6 +375,13 @@ const NOS: DefNo[] = [
     campos: [
       { chave: "limite", rotulo: "Máximo de DFDs", tipo: "numero", padrao: 5000, ajuda: "Proteção — até 20000." },
       { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
+      {
+        chave: "falhaErro",
+        rotulo: "Falha de comunicação para o fluxo",
+        tipo: "booleano",
+        padrao: false,
+        ajuda: "Ligado (o fluxo de UM DFD): a falha vira erro — o fluxo pai a registra e a retomada tenta o DFD de novo. Desligado: só aponta “não conferido”.",
+      },
     ],
     executar: async (e, c, ctx) => {
       const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean) => Promise<Item>) | undefined;
@@ -404,6 +411,7 @@ const NOS: DefNo[] = [
           if (/recusou o Emitir DFD|Interrompido/i.test(msg)) throw x;
           // "Não encontrado" só quando a Centi respondeu sem o planejamento; o resto é falha de comunicação (não conferido).
           const nao = msg.startsWith("NAO_ENCONTRADO: ");
+          if (!nao && c.falhaErro === true) throw new Error(`DFD ${str(it.numero)} (planejamento ${str(it.planejamento)}) não conferido: ${msg}`);
           out.push({ ...it, centi: null, centiErro: nao ? msg.slice(16) : msg, centiFalha: !nao });
           ctx.parcial?.([out[out.length - 1]]);
         }

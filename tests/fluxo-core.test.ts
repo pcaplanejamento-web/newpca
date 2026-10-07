@@ -470,3 +470,48 @@ test("Executar fluxo: retoma de onde parou e manda as falhas à porta Falhas; Ex
   assert.equal(rp.estado, "concluido", rp.erro);
   assert.equal(rp.passos.p.itens, 2);
 });
+
+test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha e a retomada tenta o DFD de novo", async () => {
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  const progresso = new Map<string, string>();
+  const marcados: { dfdId: number }[] = [];
+  let rede = false;
+  const lidos: string[] = [];
+  const rodar = () =>
+    executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
+      centi: async () => ({ ok: false }),
+      api: async (url: string, o?: { body?: unknown }) => {
+        if (url.endsWith("execucao-dfds"))
+          return { ok: true, dfds: [{ id: 1, numero: "10", planejamento: "100", valor: 5, totalItens: 1 }, { id: 2, numero: "11", planejamento: "101", valor: 7, totalItens: 1 }] };
+        marcados.push(...((o?.body as { itens: { dfdId: number }[] } | undefined)?.itens ?? []));
+        return { ok: true };
+      },
+      cancelado: () => false,
+      host: {
+        carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+        progresso: {
+          ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
+          gravar: async (_no: string, its: { chave: string; estado: string }[]) => {
+            for (const x of its) progresso.set(x.chave, x.estado);
+          },
+          limpar: async () => progresso.clear(),
+        },
+        lerDfdCenti: async (plan: string) => {
+          lidos.push(plan);
+          if (plan === "101" && !rede) throw new Error("Sem resposta da extensão.");
+          return { numero: plan === "100" ? "10" : "11", planejamento: plan, valor: plan === "100" ? 5 : 7, totalItens: 1 };
+        },
+      },
+    } as never);
+  await rodar();
+  assert.deepEqual(marcados.map((x) => x.dfdId), [1], "o DFD que falhou na comunicação NÃO é marcado");
+  assert.equal(progresso.get("1"), "ok");
+  assert.equal(progresso.get("2"), "falha", "a falha fica registrada para a retomada");
+  rede = true;
+  lidos.length = 0;
+  await rodar();
+  assert.deepEqual(lidos, ["101"], "a retomada pula o já conferido e tenta de novo só o que falhou");
+  assert.deepEqual(marcados.map((x) => x.dfdId).sort(), [1, 2]);
+});

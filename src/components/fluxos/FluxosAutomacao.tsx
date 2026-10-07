@@ -336,14 +336,28 @@ export function FluxosAutomacao({
   const carregarRef = useRef(carregar);
   carregarRef.current = carregar;
 
-  async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe: number | null }) {
-    // Os modelos usados DENTRO deste: reaproveita o fluxo já criado (pelo nome do modelo) ou cria antes.
+  /** Regrava um fluxo salvo com o grafo e a descrição do modelo (o "Atualizar pelo modelo"). */
+  async function regravar(f: FluxoAutomacao, grafo: Grafo, descricao: string): Promise<boolean> {
+    const r = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${f.id}`, { method: "PATCH", body: { grafo, descricao } });
+    if (!r.ok || !r.fluxo) {
+      toast.error(r.error ?? `Não consegui atualizar “${f.nome}”.`);
+      return false;
+    }
+    const novo = { ...r.fluxo, grafo: lerGrafo(r.fluxo.grafo), frequencia: lerFrequencia(r.fluxo.frequencia) };
+    setFluxos((fs) => fs?.map((x) => (x.id === novo.id ? novo : x)) ?? fs);
+    return true;
+  }
+
+  async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe?: number | null; atualizar?: boolean }) {
+    // Os modelos usados DENTRO deste: reaproveita o fluxo já criado (pelo nome do modelo) ou cria antes. Com `atualizar`,
+    // o já criado é REGRAVADO com o modelo atual (o fluxo antigo passa a funcionar como o modelo de hoje).
     const criados = new Map<string, number>();
     for (const dep of modelo?.dependencias ?? []) {
       const md = MODELOS_FLUXO.find((x) => x.id === dep);
       if (!md) continue;
       const existe = (fluxos ?? []).find((f) => f.nome === md.nome);
       if (existe) {
+        if (opcoes?.atualizar && !(await regravar(existe, organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), md.descricao))) return;
         criados.set(dep, existe.id);
         continue;
       }
@@ -352,6 +366,14 @@ export function FluxosAutomacao({
       const novoDep = rd.fluxo;
       criados.set(dep, novoDep.id);
       setFluxos((fs) => [novoDep, ...(fs ?? [])]);
+    }
+    const existente = opcoes?.atualizar && modelo ? (fluxos ?? []).find((f) => f.nome === modelo.nome) : undefined;
+    if (existente && modelo) {
+      if (!(await regravar(existente, organizarGrafo(grafoDoModelo(modelo, criados), REGISTRO_NOS), modelo.descricao))) return;
+      toast.success(`“${existente.nome}” atualizado pelo modelo.`);
+      setNovo(false);
+      setAberto(existente.id);
+      return;
     }
     const r = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: {
         nome,
@@ -363,7 +385,7 @@ export function FluxosAutomacao({
     if (!r.ok || !r.fluxo) return toast.error(r.error ?? "Não consegui criar o fluxo.");
     const criado = r.fluxo;
     // Solto na lista (arrastado do painel): entra NAQUELE lugar e a lista segue à vista; senão, abre o fluxo.
-    if (opcoes?.antesDe !== undefined) {
+    if (opcoes && "antesDe" in opcoes && opcoes.antesDe !== undefined) {
       setFluxos((fs) => {
         const lista = fs ?? [];
         const i = opcoes.antesDe == null ? lista.length : Math.max(0, lista.findIndex((f) => f.id === opcoes.antesDe));
@@ -603,7 +625,7 @@ function ListaFluxos({
   onAbrir: (id: number) => void;
   onNovo: () => void;
   onFecharNovo: () => void;
-  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe: number | null }) => Promise<void>;
+  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe?: number | null; atualizar?: boolean }) => Promise<void>;
   onOrdem: (lista: FluxoAutomacao[]) => void;
 }) {
   const desktop = useDesktop();
@@ -766,7 +788,7 @@ function EscolherNovoFluxo({
 }: {
   fluxos: FluxoAutomacao[];
   onFechar: () => void;
-  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string) => Promise<void>;
+  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { atualizar?: boolean }) => Promise<void>;
   onAbrir: (id: number) => void;
   /** No desktop, os MODELOS se arrastam até a lista (criam o fluxo ali). */
   arrastar?: { iniciar: (e: React.PointerEvent<HTMLElement>, chave: string) => void; foiArrasto: () => boolean; chave: string | null };
@@ -776,6 +798,7 @@ function EscolherNovoFluxo({
   const [nome, setNome] = useState("");
   const [modelo, setModelo] = useState<string>("");
   const [criando, setCriando] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
   const m = MODELOS_FLUXO.find((x) => x.id === modelo) ?? null;
   const existente = m ? fluxos.find((f) => f.nome === m.nome) : undefined;
   const criar = async () => {
@@ -822,6 +845,21 @@ function EscolherNovoFluxo({
         {existente && (
           <Button size="sm" variant="secondary" onClick={() => onAbrir(existente.id)}>
             Abrir o existente
+          </Button>
+        )}
+        {existente && m && (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={atualizando}
+            title="Regrava o fluxo salvo (e os que ele usa) com o modelo de hoje — a frequência e o agendamento ficam"
+            onClick={async () => {
+              setAtualizando(true);
+              await onCriar(m, m.nome, { atualizar: true });
+              setAtualizando(false);
+            }}
+          >
+            Atualizar pelo modelo
           </Button>
         )}
         <Button size="sm" loading={criando} disabled={!(nome.trim() || m)} onClick={() => void criar()}>

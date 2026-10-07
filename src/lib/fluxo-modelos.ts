@@ -112,7 +112,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
         n("dfd1", "sistema.completarDfd", 280, 160, {}, "O DFD"),
-        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 1 }),
+        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 1, falhaErro: true }),
         n("cmp1", "dados.compararDfdCenti", 880, 160, { tolerancia: 0.01, objeto: true }, "DFD × Centi"),
         n("err1", "erros.apontar", 1184, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }, "Divergências"),
         n("marcar1", "saida.marcarConferencia", 1184, 224),
