@@ -13,7 +13,8 @@ export type Item = Record<string, unknown>;
 export type Portas = Record<string, Item[]>;
 
 export type NoFluxo = { id: string; tipo: string; nome?: string; config: Record<string, unknown>; x: number; y: number; desativado?: boolean };
-export type Conexao = { de: string; saida: string; para: string; entrada: string };
+/** `x` = a DOBRA vertical da linha ajustada à mão no diagrama (sem ela, a rota automática). */
+export type Conexao = { de: string; saida: string; para: string; entrada: string; x?: number };
 export type Grafo = { v: 1; nos: NoFluxo[]; conexoes: Conexao[] };
 
 export const GRAFO_VAZIO: Grafo = { v: 1, nos: [], conexoes: [] };
@@ -118,6 +119,7 @@ export function lerGrafo(v: unknown): Grafo {
     if (!c || typeof c !== "object" || conexoes.length >= MAX_CONEXOES) continue;
     const x = c as Record<string, unknown>;
     const k: Conexao = { de: texto(x.de, 40), saida: texto(x.saida, 40) || "saida", para: texto(x.para, 40), entrada: texto(x.entrada, 40) || "entrada" };
+    if (typeof x.x === "number" && Number.isFinite(x.x) && Math.abs(x.x) < 1e6) k.x = Math.round(x.x);
     const chave = `${k.de}|${k.saida}|${k.para}|${k.entrada}`;
     if (!ids.has(k.de) || !ids.has(k.para) || k.de === k.para || vistas.has(chave)) continue;
     vistas.add(chave);

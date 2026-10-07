@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.35.0",
+    data: "2026-10-07",
+    titulo: "Diagrama de fluxo mais legível",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Linhas nunca uma sobre a outra: a dobra que dividiria o corredor vai para uma faixa livre ao lado.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Setas no meio dos trechos e na chegada; cada ligação de um mesmo nó em uma cor; a bolinha da porta ligada fica preenchida na cor da linha.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Arraste o trecho vertical de uma linha para ajustá-la (duplo clique volta ao automático; Organizar refaz todas).", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O (?) do diagrama no mesmo tamanho e alinhamento dos botões de zoom.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.34.0",
     data: "2026-10-07",
     titulo: "Automação: cartões fixos e cabeçalho enxuto",

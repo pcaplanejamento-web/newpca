@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Grafo } from "../src/lib/fluxo-core.ts";
-import { alturaNo, caixasDoGrafo, caminhoSvg, organizarGrafo, posPorta, rotaOrtogonal } from "../src/lib/fluxo-layout.ts";
+import { alturaNo, caixasDoGrafo, caminhoSvg, coresDasLigacoes, dobraDaRota, organizarGrafo, posPorta, rotaOrtogonal, rotasDoGrafo, setasDaRota } from "../src/lib/fluxo-layout.ts";
 import { REGISTRO_NOS } from "../src/lib/fluxo-nos.ts";
 
 const no = (id: string, tipo: string, x = 0, y = 0) => ({ id, tipo, config: {}, x, y });
@@ -57,4 +57,24 @@ test("ligações: só ângulos retos, não passam por cima de componentes, e a v
   assert.equal(m.x, 312);
   assert.match(caminhoSvg(r), /^M .* L /);
   assert.ok(alturaNo(REGISTRO_NOS.get("dados.filtrar")) > 0);
+});
+
+test("todas as ligações: sem linha sobre linha, setas no meio, cores por nó e a dobra à mão", () => {
+  const g: Grafo = {
+    v: 1,
+    nos: [no("c", "dados.compararDfdCenti", 0, 0), no("e", "erros.apontar", 560, 0), no("m", "saida.marcarConferencia", 560, 160)],
+    conexoes: [con("c", "e", "divergentes"), con("c", "m", "divergentes", "divergentes"), con("c", "m", "conformes", "conformes")],
+  };
+  const rs = rotasDoGrafo(g, REGISTRO_NOS);
+  const vs = rs.flatMap((r, i) => (r ? (dobraDaRota(r) ? [{ i, ...(dobraDaRota(r) as { x: number; y0: number; y1: number }) }] : []) : []));
+  for (const [k, a] of vs.entries())
+    for (const b of vs.slice(k + 1)) assert.ok(a.x !== b.x || Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) <= 2, "dobras em faixas diferentes");
+  const cores = coresDasLigacoes(g);
+  assert.equal(new Set(cores).size, 3, "cada ligação do mesmo nó numa cor");
+  const longa = rs[0] as { x: number; y: number }[];
+  assert.ok(setasDaRota([{ x: 0, y: 0 }, { x: 200, y: 0 }]).length === 2, "seta no meio e na chegada");
+  assert.ok(longa.length >= 2);
+  const manual = rotasDoGrafo({ ...g, conexoes: [{ ...g.conexoes[1], x: 320 }] }, REGISTRO_NOS)[0];
+  assert.equal(dobraDaRota(manual as never)?.x, 320, "a dobra ajustada à mão vale");
+  assert.equal(organizarGrafo({ ...g, conexoes: [{ ...g.conexoes[1], x: 320 }] }, REGISTRO_NOS).conexoes[0].x, undefined);
 });

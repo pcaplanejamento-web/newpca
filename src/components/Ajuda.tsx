@@ -14,12 +14,15 @@ export function Ajuda({
   children,
   rotulo = "Ajuda",
   compacta = false,
+  botao = false,
 }: {
   titulo: string;
   children: ReactNode;
   rotulo?: string;
   /** COMPACTA: o "(?)" pequeno AO LADO DO RÓTULO de um campo (visual de 20px, área de toque de 44px) — abre à esquerda. */
   compacta?: boolean;
+  /** BOTÃO: o "(?)" no MESMO desenho dos botões só-ícone pequenos (`Button size="xs" variant="icon"`) — numa barra deles. */
+  botao?: boolean;
 }) {
   return (
     <Dropdown
@@ -28,11 +31,13 @@ export function Ajuda({
       align={compacta ? "start" : "end"}
       width={compacta ? 300 : 360}
       triggerClassName={
-        compacta
+        botao
+          ? "grid h-11 w-11 place-items-center rounded-control border border-border-2 bg-surface text-text-2 transition-colors hover:bg-surface-2 lg:h-[calc(var(--h-control-sm)-6px)] lg:w-[calc(var(--h-control-sm)-6px)]"
+          : compacta
           ? "relative grid h-5 w-5 place-items-center rounded-full text-muted transition-colors after:absolute after:-inset-3 after:content-[''] hover:text-accent"
           : "grid h-11 w-11 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
       }
-      trigger={<IconAjuda className={compacta ? "h-4 w-4" : "h-[18px] w-[18px]"} />}
+      trigger={<IconAjuda className={compacta || botao ? "h-4 w-4" : "h-[18px] w-[18px]"} />}
     >
       <div className="space-y-3 p-1.5 text-[13px] leading-relaxed text-text-2">
         <p className="text-[14px] font-semibold text-text">{titulo}</p>

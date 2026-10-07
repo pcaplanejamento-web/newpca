@@ -95,7 +95,8 @@ export function organizarGrafo(g: Grafo, reg: Registro): Grafo {
       y = alvo + alturaNo(reg.get(porId.get(id)?.tipo ?? "")) + VAO_LINHA;
     }
   }
-  return { ...g, nos: g.nos.map((n) => ({ ...n, ...(pos.get(n.id) ?? {}) })) };
+  // Organizar também desfaz as dobras ajustadas à mão (as posições mudaram).
+  return { ...g, nos: g.nos.map((n) => ({ ...n, ...(pos.get(n.id) ?? {}) })), conexoes: g.conexoes.map(({ x: _x, ...c }) => c) };
 }
 
 // ———————————————————————————————————————————————— ligações em ângulo reto
@@ -120,7 +121,7 @@ function limpar(pts: Ponto[]): Ponto[] {
  * ESQUERDA; a dobra vertical fica num corredor livre; se algum segmento passaria por cima de um componente (`obst` — sem
  * os dois nós da ligação), desvia por cima ou por baixo deles. Ligação que volta (b à esquerda de a) contorna por baixo.
  */
-export function rotaOrtogonal(a: Ponto, b: Ponto, obst: Caixa[], de?: Caixa, para?: Caixa): Ponto[] {
+export function rotaOrtogonal(a: Ponto, b: Ponto, obst: Caixa[], de?: Caixa, para?: Caixa, preferido?: number): Ponto[] {
   const sai = a.x + FOLGA * 1.5;
   const entra = b.x - FOLGA * 1.5;
   const todos = [...obst, ...(de ? [de] : []), ...(para ? [para] : [])];
@@ -129,6 +130,12 @@ export function rotaOrtogonal(a: Ponto, b: Ponto, obst: Caixa[], de?: Caixa, par
   if (entra >= sai) {
     // Dobra no meio, junto da saída e junto da entrada.
     for (const x of [snap((sai + entra) / 2), sai, entra]) candidatos.push(tentar([{ x, y: a.y }, { x, y: b.y }]));
+  }
+  // A dobra escolhida (à mão ou a faixa livre) vale primeiro — entre a saída e a entrada.
+  if (preferido != null && entra >= sai) {
+    const x = Math.min(entra, Math.max(sai, preferido));
+    const r = tentar([{ x, y: a.y }, { x, y: b.y }]);
+    if (livre(r, obst)) return r;
   }
   // Corredor horizontal por cima/por baixo de tudo o que fica entre as duas pontas.
   const entre = todos.filter((c) => c.x1 + FOLGA > Math.min(sai, entra) && c.x0 - FOLGA < Math.max(sai, entra));
@@ -163,3 +170,86 @@ export function caminhoSvg(pts: Ponto[]): string {
 
 /** As caixas de todos os nós (para desviar). */
 export const caixasDoGrafo = (g: Grafo, reg: Registro) => new Map(g.nos.map((n) => [n.id, caixaDo(n, reg)]));
+
+// ———————————————————————————————————————————————— todas as ligações: faixas, setas e cores
+
+/** A distância entre duas linhas que dividiriam o mesmo corredor. */
+export const FAIXA = 12;
+
+const verticais = (pts: Ponto[]) =>
+  pts.flatMap((p, i) => (i && pts[i - 1].x === p.x && pts[i - 1].y !== p.y ? [{ x: p.x, y0: Math.min(p.y, pts[i - 1].y), y1: Math.max(p.y, pts[i - 1].y) }] : []));
+const sobrepoe = (a: { x: number; y0: number; y1: number }, b: { x: number; y0: number; y1: number }) => a.x === b.x && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 2;
+
+/**
+ * As ROTAS de todas as ligações do grafo, SEM LINHA SOBRE LINHA: a dobra vertical que cairia em cima da de outra ligação
+ * vai para a faixa livre mais perto (±12px, ±24px…), sempre sem passar por cima de um componente. A dobra ajustada à mão
+ * (`Conexao.x`) é respeitada. `null` = a ligação aponta um nó que não existe.
+ */
+export function rotasDoGrafo(g: Grafo, reg: Registro): (Ponto[] | null)[] {
+  const caixas = caixasDoGrafo(g, reg);
+  const nos = new Map(g.nos.map((n) => [n.id, n]));
+  const usadas: { x: number; y0: number; y1: number }[] = [];
+  // As ajustadas à mão primeiro: as automáticas desviam delas.
+  const ordem = g.conexoes.map((c, i) => i).sort((p, q) => Number(g.conexoes[q].x != null) - Number(g.conexoes[p].x != null));
+  const saida: (Ponto[] | null)[] = g.conexoes.map(() => null);
+  for (const i of ordem) {
+    const c = g.conexoes[i];
+    const a = nos.get(c.de);
+    const b = nos.get(c.para);
+    if (!a || !b) continue;
+    const obst = [...caixas].filter(([id]) => id !== c.de && id !== c.para).map(([, cx]) => cx);
+    const pa = posPorta(a, reg.get(a.tipo), "saida", c.saida);
+    const pb = posPorta(b, reg.get(b.tipo), "entrada", c.entrada);
+    const rota = (x?: number) => rotaOrtogonal(pa, pb, obst, caixas.get(c.de), caixas.get(c.para), x);
+    let r = rota(c.x);
+    if (c.x == null) {
+      const base = verticais(r).find((v) => v.x !== pa.x && v.x !== pb.x)?.x;
+      if (base != null && verticais(r).some((v) => usadas.some((u) => sobrepoe(v, u)))) {
+        for (let k = 1; k <= 8; k++) {
+          const x = base + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * FAIXA;
+          const t = rota(x);
+          if (verticais(t).some((v) => v.x === x) && !verticais(t).some((v) => usadas.some((u) => sobrepoe(v, u)))) {
+            r = t;
+            break;
+          }
+        }
+      }
+    }
+    usadas.push(...verticais(r));
+    saida[i] = r;
+  }
+  return saida;
+}
+
+/** A DOBRA arrastável de uma rota (o segmento vertical do meio), ou `null` quando não há. */
+export function dobraDaRota(pts: Ponto[]): { x: number; y0: number; y1: number } | null {
+  const vs = verticais(pts).filter((v) => v.x !== pts[0].x && v.x !== pts[pts.length - 1].x);
+  return vs.length === 1 ? vs[0] : null;
+}
+
+/**
+ * As SETAS da direção do fluxo ao longo da linha: no meio de cada trecho comprido (≥ 64px) e na chegada (antes da
+ * bolinha da porta). `ang` em graus (0 = para a direita).
+ */
+export function setasDaRota(pts: Ponto[], raioPorta = 8): { x: number; y: number; ang: number }[] {
+  const out: { x: number; y: number; ang: number }[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const p = pts[i];
+    const ang = (Math.atan2(p.y - a.y, p.x - a.x) * 180) / Math.PI;
+    if (Math.hypot(p.x - a.x, p.y - a.y) >= 64) out.push({ x: (a.x + p.x) / 2, y: (a.y + p.y) / 2, ang });
+    if (i === pts.length - 1) out.push({ x: p.x - Math.cos((ang * Math.PI) / 180) * raioPorta, y: p.y - Math.sin((ang * Math.PI) / 180) * raioPorta, ang });
+  }
+  return out;
+}
+
+/** A COR de cada ligação: a saída "erro" em vermelho; as demais de um MESMO nó em cores diferentes (as séries do tema). */
+export function coresDasLigacoes(g: Grafo): string[] {
+  const conta = new Map<string, number>();
+  return g.conexoes.map((c) => {
+    if (c.saida === SAIDA_ERRO) return "var(--danger)";
+    const k = conta.get(c.de) ?? 0;
+    conta.set(c.de, k + 1);
+    return `var(--serie-${(k % 8) + 1})`;
+  });
+}
