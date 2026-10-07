@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.48.0",
+    data: "2026-10-07",
+    titulo: "Automações de cada ADM, públicas ou privadas",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Cada Administrador tem o PRÓPRIO painel de automações; os outros ADMs não veem nem mexem nas suas.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Automação PÚBLICA ou privada (Configurações da automação): as públicas aparecem no painel lateral “Novo fluxo” dos outros ADMs, que usam uma cópia ou a chamam dentro dos fluxos deles. As que já existiam ficaram públicas.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Tabela dos itens processados: coluna Órgão, rolagem estável durante a execução (os novos entram no fim) e linhas por página escolhidas no rodapé e salvas.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.47.0",
     data: "2026-10-07",
     titulo: "CM002 com “Mostrar: Todos” e o nó Órgão na Centi",

@@ -121,6 +121,7 @@ export function DataTable<R>({
   activeKey = null,
   fillHeight = false,
   scrollInterno = false,
+  linhasSalvas,
   density,
   reservaInferior = 0,
   acoesRodape,
@@ -159,6 +160,8 @@ export function DataTable<R>({
    * mobile rola normal (paginado). Opt-in (não afeta as demais tabelas). Exclui o `fillHeight`.
    */
   scrollInterno?: boolean;
+  /** As LINHAS POR PÁGINA escolhidas no rodapé ficam salvas NESTE aparelho com esta chave (vale também sem `scrollInterno`). */
+  linhasSalvas?: string;
   /**
    * Densidade da linha (LOCAL, sem afetar as outras tabelas): `compact` = a das tabelas de PROTOCOLOS, DFDs e ITENS —
    * TODA linha com a MESMA altura (a dos controles, `--h-control-sm`) e o cabeçalho baixo; `comfortable` = mais alta;
@@ -229,6 +232,14 @@ export function DataTable<R>({
   // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
   const linhasAdm = useLinhasTabela();
   const [limite, setLimite] = useState<number>(linhasAdm);
+  // As linhas por página salvas no aparelho (lidas depois da montagem — o HTML do servidor não as conhece).
+  useEffect(() => {
+    if (!linhasSalvas) return;
+    try {
+      const n = Number(localStorage.getItem(`tabela-linhas:${linhasSalvas}`));
+      if ((LINHAS_TABELA as readonly number[]).includes(n)) setLimite(n);
+    } catch {}
+  }, [linhasSalvas]);
 
   // fillHeight: mede as linhas que cabem até o fim da viewport (recalcula no resize).
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -290,7 +301,7 @@ export function DataTable<R>({
   }, [scrollInterno]);
 
   // Linhas por página efetivas: scrollInterno (seletor) › fillHeight (medido) › pageSize.
-  const tamPagina = scrollInterno ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
+  const tamPagina = scrollInterno || linhasSalvas ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
 
   // Valores de cada coluna extraídos UMA vez por linha (filtro/faceta/ordenação leem daqui).
   const dados = useMemo<ColunaDados[]>(
@@ -740,7 +751,7 @@ export function DataTable<R>({
             <BotaoExportar nome={nomeExportar} disabled={ordenadas.length === 0} carregando={exportando} onExportar={(f) => void exportarTabela(f)} />
           )}
           {acoesRodape}
-          {scrollInterno && (
+          {(scrollInterno || linhasSalvas) && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
               <span className="hidden sm:inline">Linhas</span>
               <select
@@ -749,6 +760,10 @@ export function DataTable<R>({
                 onChange={(e) => {
                   setLimite(Number(e.target.value));
                   setPage(1);
+                  if (linhasSalvas)
+                    try {
+                      localStorage.setItem(`tabela-linhas:${linhasSalvas}`, e.target.value);
+                    } catch {}
                 }}
                 className="min-h-11 rounded-[8px] border border-border bg-surface px-2 py-1 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:min-h-0"
               >

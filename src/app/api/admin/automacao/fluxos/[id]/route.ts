@@ -1,13 +1,20 @@
 import { notificar } from "@/lib/notificacoes";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { rotuloFrequencia } from "@/lib/fluxo-core";
-import { cicloAoGravar, editarFluxo, excluirFluxo, fluxosQueUsam, getFluxo, registrarExecucaoFluxo } from "@/lib/fluxos";
+import { fluxoEditavel, fluxoVisivel, rotuloFrequencia } from "@/lib/fluxo-core";
+import { cicloAoGravar, editarFluxo, excluirFluxo, type FluxoAutomacao, fluxosQueUsam, getFluxo, registrarExecucaoFluxo, subfluxosProibidos } from "@/lib/fluxos";
 import { editarFluxoSchema, execucaoFluxoSchema } from "@/lib/fluxos-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
+const NAO_ENCONTRADO = "Fluxo não encontrado.";
+
+/** O fluxo que a pessoa pode MEXER (editar, executar, excluir) — o de outra pessoa responde como inexistente. */
+async function doDono(id: number, usuarioId: number): Promise<FluxoAutomacao | null> {
+  const f = await getFluxo(id);
+  return f && fluxoEditavel(f, usuarioId) ? f : null;
+}
 
 export async function GET(_req: Request, { params }: Ctx) {
   const g = await exigirAdmin();
@@ -15,7 +22,7 @@ export async function GET(_req: Request, { params }: Ctx) {
   const id = intId((await params).id);
   if (!id) return erro("Id inválido.", 400);
   const fluxo = await getFluxo(id);
-  return fluxo ? ok({ fluxo }) : erro("Fluxo não encontrado.", 404);
+  return fluxo && fluxoVisivel(fluxo, g.u.id) ? ok({ fluxo }) : erro(NAO_ENCONTRADO, 404);
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
@@ -25,18 +32,27 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!id) return erro("Id inválido.", 400);
   const p = await parseCorpo(editarFluxoSchema, req);
   if ("resp" in p) return p.resp;
+  const antes = await doDono(id, g.u.id);
+  if (!antes) return erro(NAO_ENCONTRADO, 404);
   if (p.data.grafo) {
+    if ((await subfluxosProibidos(p.data.grafo, g.u.id)).length) return erro("O fluxo usa um subfluxo privado de outra pessoa (ou que não existe mais).", 422);
     const ciclo = await cicloAoGravar(id, p.data.grafo);
     if (ciclo) return erro(ciclo, 409);
   }
-  const antes = await getFluxo(id);
+  // Tornar PRIVADO um fluxo que outras pessoas usam dentro dos delas quebraria esses fluxos.
+  if (p.data.publico === false && antes.publico) {
+    const deOutros = (await fluxosQueUsam(id)).filter((f) => f.criadoPor !== g.u.id);
+    if (deOutros.length)
+      return erro(`Outras pessoas usam este fluxo dentro de: ${deOutros.map((f) => `“${f.nome}”${f.autor ? ` (${f.autor})` : ""}`).join(", ")}. Ele precisa seguir público.`, 409);
+  }
   const fluxo = await editarFluxo(id, p.data);
-  if (!antes || !fluxo) return erro("Fluxo não encontrado.", 404);
+  if (!fluxo) return erro(NAO_ENCONTRADO, 404);
   const partes: string[] = [];
   if (p.data.nome && p.data.nome !== antes.nome) partes.push(`renomeado para “${fluxo.nome}”`);
   if (p.data.grafo) partes.push(`${fluxo.grafo.nos.length} nó(s), ${fluxo.grafo.conexoes.length} conexão(ões)`);
   if (p.data.frequencia) partes.push(`frequência: ${rotuloFrequencia(fluxo.frequencia)}`);
   if (p.data.ativo !== undefined && p.data.ativo !== antes.ativo) partes.push(fluxo.ativo ? "agendamento LIGADO" : "agendamento desligado");
+  if (p.data.publico !== undefined && p.data.publico !== antes.publico) partes.push(fluxo.publico ? "tornado PÚBLICO" : "tornado privado");
   if (partes.length)
     await registrarAuditoria({ usuario: g.u, acao: "editar", entidade: "automacao", entidadeId: id, origem: "centi", resumo: `Fluxo “${fluxo.nome}”: ${partes.join(" · ")}` });
   return ok({ fluxo });
@@ -50,8 +66,9 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!id) return erro("Id inválido.", 400);
   const p = await parseCorpo(execucaoFluxoSchema, req);
   if ("resp" in p) return p.resp;
+  if (!(await doDono(id, g.u.id))) return erro(NAO_ENCONTRADO, 404);
   const fluxo = await registrarExecucaoFluxo(id, p.data);
-  if (!fluxo) return erro("Fluxo não encontrado.", 404);
+  if (!fluxo) return erro(NAO_ENCONTRADO, 404);
   if (p.data.estado !== "concluido" || p.data.apontados)
     await registrarAuditoria({
       usuario: g.u,
@@ -82,11 +99,12 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   if ("erro" in g) return g.erro;
   const id = intId((await params).id);
   if (!id) return erro("Id inválido.", 400);
-  const antes = await getFluxo(id);
-  if (!antes) return erro("Fluxo não encontrado.", 404);
+  const antes = await doDono(id, g.u.id);
+  if (!antes) return erro(NAO_ENCONTRADO, 404);
   const usam = await fluxosQueUsam(id);
-  if (usam.length) return erro(`Este fluxo é usado dentro de: ${usam.map((f) => `“${f.nome}”`).join(", ")}. Tire-o de lá antes de excluir.`, 409);
-  if (!(await excluirFluxo(id))) return erro("Fluxo não encontrado.", 404);
+  if (usam.length)
+    return erro(`Este fluxo é usado dentro de: ${usam.map((f) => `“${f.nome}”${f.autor && f.criadoPor !== g.u.id ? ` (${f.autor})` : ""}`).join(", ")}. Tire-o de lá antes de excluir.`, 409);
+  if (!(await excluirFluxo(id))) return erro(NAO_ENCONTRADO, 404);
   await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "automacao", entidadeId: id, origem: "centi", resumo: `Fluxo de automação excluído: ${antes.nome}` });
   return ok();
 }

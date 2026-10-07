@@ -31,7 +31,7 @@ const ANALISE = "__analise";
 const etapasDoGrafo = (g: Grafo): NoFluxo[] => g.nos.filter((n) => n.tipo !== "gatilho.inicio").sort((a, b) => a.x - b.x || a.y - b.y);
 
 type Apontado = { nivel: string; mensagem: string; item: string };
-type Processado = { chave: string; item: string; estado: { rotulo: string; tom: Tone; texto: string } };
+type Processado = { chave: string; item: string; orgao: string; estado: { rotulo: string; tom: Tone; texto: string } };
 
 /**
  * O PAINEL de um fluxo (a tela inicial; o diagrama só ao montar), o MESMO para qualquer fluxo: à esquerda os DADOS DE
@@ -195,8 +195,13 @@ function AnaliseAoVivo({
     () =>
       fonte
         ? itensFonte
-            .map((it, i) => ({ chave: String(i), item: rotuloItem(it), estado: estadoDoItem(fonte.tipo, it) ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" } }))
-            .reverse()
+            // Na ORDEM em que foram processados (os novos entram no fim — rolar a tabela durante a execução não pula).
+            .map((it, i) => ({
+              chave: String(i),
+              item: rotuloItem(it),
+              orgao: s(it.orgaoNome) || s(it.orgao) || (s(it.entidade) ? `Centi ${s(it.entidade)}` : ""),
+              estado: estadoDoItem(fonte.tipo, it) ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" },
+            }))
         : [],
     [fonte, itensFonte],
   );
@@ -214,6 +219,7 @@ function AnaliseAoVivo({
   );
   const colunasVivo: Column<Processado>[] = [
     { key: "item", header: "Item", nowrap: true, align: "left", value: (p) => p.item, render: (p) => p.item },
+    { key: "orgao", header: "Órgão", align: "left", minWidth: 160, value: (p) => p.orgao || "—", render: (p) => <span className="whitespace-normal">{p.orgao || "—"}</span> },
     { key: "estado", header: "Estado", nowrap: true, value: (p) => p.estado.rotulo, render: (p) => <Badge tone={p.estado.tom} dot>{p.estado.rotulo}</Badge> },
     { key: "texto", header: "Detalhe", align: "left", minWidth: 240, value: (p) => p.estado.texto, render: (p) => <span className="whitespace-normal text-muted">{p.estado.texto || "—"}</span> },
   ];
@@ -271,7 +277,7 @@ function AnaliseAoVivo({
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
             {fonte ? `${nomeDoNo(fonte, REGISTRO_NOS)} · ${rodando ? "ao vivo" : "resultado"}` : "Itens"}
           </h4>
-          <DataTable columns={colunasVivo} rows={processados} getKey={(r) => r.chave} density="compact" exportar={{ nome: "Itens processados" }} pageSize={20} />
+          <DataTable columns={colunasVivo} rows={processados} getKey={(r) => r.chave} density="compact" exportar={{ nome: "Itens processados" }} linhasSalvas="automacao:itens-processados" />
         </div>
       )}
     </div>

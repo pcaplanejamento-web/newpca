@@ -4320,6 +4320,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   órgão) ou "Um órgão por vez" (Lote → Volta, troca o órgão na Centi a cada lote, libera no fim). Modelo `cm002`: DFDs →
   Órgão na Centi → CM002/Procurar (sem órgão = atenção). Na Mesa a coluna Execução chama-se **Situação**; na Mesa do PCA,
   Situação e Centi abrem ocultas (`DataTable.ocultasPadrao` = o layout padrão do sistema; a edição da tabela as mostra).
+- **AUTOMAÇÕES POR ADM + PÚBLICAS (v1.48.0, migração `0098` — `automacao_fluxos.publico` + índice `criado_por`; os
+  existentes viraram públicos):** o PAINEL é do dono (`listarFluxosDe` — os dele + os sem dono); `listarPublicos` = os
+  públicos de OUTRAS pessoas, mostrados no painel lateral "Novo fluxo" (seção "Públicas de outras pessoas", `cartaoDoPublico`;
+  "Usar"/arrastar = CÓPIA privada no meu painel — `OpcoesCriar.copiar`) e no seletor de subfluxo do `fluxo.executar`. Regras
+  puras em `fluxo-core.ts`: **`fluxoVisivel`** (dono, público ou sem dono — `GET [id]`, subfluxos) e **`fluxoEditavel`** (dono
+  ou sem dono — PATCH/POST/DELETE/progresso; outro = 404). Gravar um grafo com subfluxo PRIVADO de outra pessoa = 422
+  (`subfluxosProibidos`); tornar privado um fluxo usado por fluxos de outras pessoas = 409. `Switch` "Pública" no
+  `ConfigFluxo`, selo "Pública" no cartão. `DataTable.linhasSalvas` = as linhas por página do rodapé salvas no aparelho
+  (a tabela dos itens processados: ordem de processamento, coluna Órgão).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

@@ -786,3 +786,11 @@ export function grafoComEntrada(g: Grafo, reg: Registro, it: Item): Grafo {
     }),
   };
 }
+
+// ———————————————————————————————————————————————— dono e visibilidade
+
+/** Quem LÊ o fluxo (abrir, usar como subfluxo, copiar): o dono, ou qualquer ADM se é público ou ficou sem dono. */
+export const fluxoVisivel = (f: { publico: boolean; criadoPor: number | null }, usuarioId: number): boolean =>
+  f.criadoPor === usuarioId || f.publico || f.criadoPor === null;
+/** Quem MEXE no fluxo (editar, executar, excluir, retomada): só o dono — o sem dono, qualquer ADM. */
+export const fluxoEditavel = (f: { criadoPor: number | null }, usuarioId: number): boolean => f.criadoPor === usuarioId || f.criadoPor === null;

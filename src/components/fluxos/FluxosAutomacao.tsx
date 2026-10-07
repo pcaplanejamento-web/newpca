@@ -22,6 +22,7 @@ import {
   type ResultadoExec,
   resumoExecucao,
   rotuloFrequencia,
+  subfluxosDoGrafo,
   validarGrafo,
 } from "@/lib/fluxo-core";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
@@ -117,6 +118,8 @@ export function FluxosAutomacao({
   onEditor: (aberto: boolean) => void;
 }) {
   const [fluxos, setFluxos] = useState<FluxoAutomacao[] | null>(null);
+  // Os PÚBLICOS de outras pessoas (o painel lateral "Novo fluxo").
+  const [publicos, setPublicos] = useState<FluxoAutomacao[]>([]);
   const [aberto, setAberto] = useState<number | null>(null);
   const [rodando, setRodando] = useState<number | null>(null);
   const [passos, setPassos] = useState<Record<string, PassoExec>>({});
@@ -169,7 +172,8 @@ export function FluxosAutomacao({
   }, [pedidoNovo]);
 
   const carregar = useCallback(async () => {
-    const r = await api<{ fluxos?: FluxoAutomacao[]; ordem?: number[] }>("/api/admin/automacao/fluxos");
+    const r = await api<{ fluxos?: FluxoAutomacao[]; publicos?: FluxoAutomacao[]; ordem?: number[] }>("/api/admin/automacao/fluxos");
+    if (r.ok && r.publicos) setPublicos(r.publicos);
     if (r.ok && r.fluxos) setFluxos(naOrdem(r.fluxos, r.ordem ?? []));
     else if (!fluxos) setFluxos([]);
   }, [fluxos]);
@@ -403,7 +407,7 @@ export function FluxosAutomacao({
     return true;
   }
 
-  async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe?: number | null; atualizar?: boolean }) {
+  async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: OpcoesCriar) {
     // Os modelos usados DENTRO deste: reaproveita o fluxo já criado (pelo nome do modelo) ou cria antes. Com `atualizar`,
     // o já criado é REGRAVADO com o modelo atual (o fluxo antigo passa a funcionar como o modelo de hoje).
     const criados = new Map<string, number>();
@@ -430,7 +434,11 @@ export function FluxosAutomacao({
       setAberto(existente.id);
       return;
     }
-    const r = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: {
+    // Um fluxo PÚBLICO de outra pessoa: a CÓPIA (privada) dele no painel (os subfluxos seguem apontando para os públicos).
+    const copia = opcoes?.copiar;
+    const r = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: copia
+      ? { nome, grafo: copia.grafo, ...(copia.descricao ? { descricao: copia.descricao } : {}), ajuda: copia.ajuda }
+      : {
         nome,
         grafo: modelo ? organizarGrafo(grafoDoModelo(modelo, criados), REGISTRO_NOS) : GRAFO_VAZIO_COM_INICIO,
         descricao: modelo?.descricao,
@@ -487,7 +495,11 @@ export function FluxosAutomacao({
     await progressoDe(aberto).limpar(no);
     toast.info("A próxima execução recomeça do primeiro item.");
   }, [aberto]);
-  const listaFluxos = useMemo(() => (fluxos ?? []).map((f) => ({ id: f.id, nome: f.nome })), [fluxos]);
+  // Os subfluxos que dá para usar: os meus + os PÚBLICOS de outras pessoas (com o autor).
+  const listaFluxos = useMemo(
+    () => [...(fluxos ?? []).map((f) => ({ id: f.id, nome: f.nome })), ...publicos.map((f) => ({ id: f.id, nome: `${f.nome} (pública · ${f.autor ?? "sem dono"})` }))],
+    [fluxos, publicos],
+  );
   const hostPainel = useMemo<HostPainel>(
     () => ({
       protocolos,
@@ -551,6 +563,7 @@ export function FluxosAutomacao({
       ) : (
         <ListaFluxos
           fluxos={fluxos}
+          publicos={publicos}
           rodando={rodando}
           novo={novo}
           onAbrir={(id) => {
@@ -656,7 +669,16 @@ function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
     titulo: f.nome,
     // Sem repetir: o sobretítulo diz QUANDO roda; o selo, só o estado especial (executando/agendado).
     sobretitulo: f.ativo ? `${rotuloFrequencia(f.frequencia)}${f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}` : "Manual",
-    selo: rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : undefined,
+    selo:
+      rodando === f.id ? (
+        <Badge tone="blue">Executando</Badge>
+      ) : f.ativo ? (
+        <Badge tone="emerald">Agendado</Badge>
+      ) : f.publico ? (
+        <Badge tone="violet" title="Pública — outros ADMs a veem no painel lateral">
+          Pública
+        </Badge>
+      ) : undefined,
     metricas: [
       { rotulo: "Nós", valor: String(f.grafo.nos.length) },
       { rotulo: "Última", valor: ultima, cor: !u?.estado ? undefined : u.estado === "concluido" && !u.apontados ? "var(--ok)" : "var(--warn)" },
@@ -665,8 +687,12 @@ function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
   };
 }
 
+/** Como criar: o lugar na lista (arrastado do painel), regravar pelo modelo ou COPIAR um fluxo público. */
+type OpcoesCriar = { antesDe?: number | null; atualizar?: boolean; copiar?: FluxoAutomacao };
+
 function ListaFluxos({
   fluxos,
+  publicos,
   rodando,
   novo,
   onAbrir,
@@ -681,7 +707,8 @@ function ListaFluxos({
   onAbrir: (id: number) => void;
   onNovo: () => void;
   onFecharNovo: () => void;
-  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe?: number | null; atualizar?: boolean }) => Promise<void>;
+  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: OpcoesCriar) => Promise<void>;
+  publicos: FluxoAutomacao[];
   onOrdem: (lista: FluxoAutomacao[]) => void;
 }) {
   const desktop = useDesktop();
@@ -703,6 +730,14 @@ function ListaFluxos({
         if (!r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
         const m = MODELOS_FLUXO.find((x) => x.id === chave.slice(2)) ?? null;
         return void onCriar(m, m?.nome ?? "Novo fluxo", { antesDe });
+      }
+      // Um PÚBLICO arrastado do painel: a cópia entra ali.
+      if (chave.startsWith("p:")) {
+        const ponto = soltoEm.current;
+        const r = grade.current?.getBoundingClientRect();
+        const pub = publicos.find((x) => `p:${x.id}` === chave);
+        if (!pub || !r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
+        return void onCriar(null, pub.nome, { antesDe, copiar: pub });
       }
       const id = Number(chave.slice(2));
       const sem = lista.filter((f) => f.id !== id);
@@ -746,11 +781,13 @@ function ListaFluxos({
   // O cartão PRESO ao ponteiro: o próprio cartão (fluxo ou modelo), igual ao que está na grade.
   const fPreso = arrasto ? lista.find((f) => `f:${f.id}` === arrasto.chave) : undefined;
   const mPreso = arrasto && !fPreso ? [EM_BRANCO, ...MODELOS_FLUXO].find((m) => `m:${m.id}` === arrasto.chave) : undefined;
-  const preso = fPreso ? cartaoDoFluxo(fPreso, rodando) : mPreso ? cartaoDoModelo(mPreso, lista) : null;
+  const pPreso = arrasto ? publicos.find((p) => `p:${p.id}` === arrasto.chave) : undefined;
+  const preso = fPreso ? cartaoDoFluxo(fPreso, rodando) : mPreso ? cartaoDoModelo(mPreso, lista) : pPreso ? cartaoDoPublico(pPreso) : null;
 
   const escolha = (
     <EscolherNovoFluxo
       fluxos={lista}
+      publicos={publicos}
       onFechar={onFecharNovo}
       onCriar={onCriar}
       onAbrir={onAbrir}
@@ -817,6 +854,20 @@ function useDesktop(): boolean {
   return d;
 }
 
+/** O cartão de um fluxo PÚBLICO de outra pessoa no painel lateral: de quem é e o que tem. */
+function cartaoDoPublico(f: FluxoAutomacao) {
+  return {
+    titulo: f.nome,
+    sobretitulo: `Pública · ${f.autor ?? "sem dono"}`,
+    selo: <Badge tone="blue">Pública</Badge>,
+    metricas: [
+      { rotulo: "Nós", valor: String(f.grafo.nos.length) },
+      { rotulo: "Frequência", valor: f.ativo ? rotuloFrequencia(f.frequencia) : "Manual" },
+      { rotulo: "Usa", valor: String(subfluxosDoGrafo(f.grafo).length) },
+    ],
+  };
+}
+
 /** O cartão de um MODELO (ou "Em branco") no painel "Novo fluxo" — o mesmo desenho dos fluxos salvos. */
 function cartaoDoModelo(x: { id: string; nome: string; grafo?: Grafo; frequencia?: Frequencia }, fluxos: FluxoAutomacao[]) {
   return {
@@ -836,6 +887,7 @@ const EM_BRANCO: { id: string; nome: string; descricao: string; grafo?: Grafo; f
 /** "Novo fluxo": o nome + "Em branco" e TODOS os modelos no MESMO cartão da lista (o já criado pode ser aberto). */
 function EscolherNovoFluxo({
   fluxos,
+  publicos,
   onFechar,
   onCriar,
   onAbrir,
@@ -843,8 +895,10 @@ function EscolherNovoFluxo({
   coluna = false,
 }: {
   fluxos: FluxoAutomacao[];
+  /** Os fluxos PÚBLICOS de outras pessoas — "Usar" cria a cópia no painel. */
+  publicos: FluxoAutomacao[];
   onFechar: () => void;
-  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { atualizar?: boolean }) => Promise<void>;
+  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: OpcoesCriar) => Promise<void>;
   onAbrir: (id: number) => void;
   /** No desktop, os MODELOS se arrastam até a lista (criam o fluxo ali). */
   arrastar?: { iniciar: (e: React.PointerEvent<HTMLElement>, chave: string) => void; foiArrasto: () => boolean; chave: string | null };
@@ -856,10 +910,11 @@ function EscolherNovoFluxo({
   const [criando, setCriando] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
   const m = MODELOS_FLUXO.find((x) => x.id === modelo) ?? null;
+  const pub = publicos.find((x) => `p:${x.id}` === modelo) ?? null;
   const existente = m ? fluxos.find((f) => f.nome === m.nome) : undefined;
   const criar = async () => {
     setCriando(true);
-    await onCriar(m, nome.trim() || m?.nome || "Fluxo");
+    await onCriar(m, nome.trim() || m?.nome || pub?.nome || "Fluxo", pub ? { copiar: pub } : undefined);
     setCriando(false);
     setNome("");
     setModelo("");
@@ -874,7 +929,7 @@ function EscolherNovoFluxo({
       </div>
       <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto ${coluna ? "rolagem-fina -mx-1 -my-1 py-1 pl-1 pr-2.5 -mr-2.5" : "p-[var(--pad-card)]"}`}>
         <div className={coluna ? `${CARTAO} space-y-3` : "space-y-3"}>
-          <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
+          <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? pub?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
           <p className="text-sm font-medium text-text">Começar de</p>
         </div>
         <div className={coluna ? "grid gap-[var(--gap-block)]" : GRADE_CARTOES}>
@@ -896,6 +951,30 @@ function EscolherNovoFluxo({
             </div>
           ))}
         </div>
+        {publicos.length > 0 && (
+          <>
+            <p className={`text-sm font-medium text-text ${coluna ? `${CARTAO} !py-2.5` : "pt-1"}`}>Públicas de outras pessoas</p>
+            <div className={coluna ? "grid gap-[var(--gap-block)]" : GRADE_CARTOES}>
+              {publicos.map((x) => (
+                <div
+                  key={x.id}
+                  role="none"
+                  title={x.descricao ?? undefined}
+                  className={`touch-manipulation select-none [-webkit-touch-callout:none] transition-opacity ${arrastar?.chave === `p:${x.id}` ? "opacity-40" : ""}`}
+                  onPointerDown={arrastar ? (e) => arrastar.iniciar(e, `p:${x.id}`) : undefined}
+                  onClickCapture={(e) => {
+                    if (arrastar?.foiArrasto()) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                >
+                  <CartaoFluxo {...cartaoDoPublico(x)} marcado={modelo === `p:${x.id}`} onClick={() => setModelo(`p:${x.id}`)} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
       <div className={`flex flex-wrap justify-end gap-2 px-[var(--pad-card)] py-2.5 ${coluna ? `${CARTAO} !py-2.5` : "border-t border-border"}`}>
         {existente && (
@@ -918,8 +997,8 @@ function EscolherNovoFluxo({
             Atualizar pelo modelo
           </Button>
         )}
-        <Button size="sm" loading={criando} disabled={!(nome.trim() || m)} onClick={() => void criar()}>
-          {existente ? "Criar outro" : "Criar"}
+        <Button size="sm" loading={criando} disabled={!(nome.trim() || m || pub)} onClick={() => void criar()}>
+          {pub ? "Usar (cópia no meu painel)" : existente ? "Criar outro" : "Criar"}
         </Button>
       </div>
     </div>
@@ -957,6 +1036,7 @@ function EditorFluxo({
   const [nome, setNome] = useState(fluxo.nome);
   const [freq, setFreq] = useState<Frequencia>(fluxo.frequencia);
   const [ativo, setAtivo] = useState(fluxo.ativo);
+  const [publico, setPublico] = useState(fluxo.publico);
   const [descricao, setDescricao] = useState(fluxo.descricao ?? "");
   // A ajuda: a do fluxo; sem ela, a do modelo de mesmo nome (o fluxo criado antes da ajuda existir).
   const ajudaBase = useMemo(
@@ -975,7 +1055,7 @@ function EditorFluxo({
   // A TELA INICIAL é o painel (entradas · etapas · análise); o diagrama só ao montar o fluxo.
   const [modo, setModo] = useState<"painel" | "diagrama">(fluxo.grafo.nos.length <= 1 ? "diagrama" : "painel");
   const sujo =
-    JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo || descricao.trim() !== (fluxo.descricao ?? "") || JSON.stringify(ajuda) !== JSON.stringify(ajudaBase);
+    JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo || publico !== fluxo.publico || descricao.trim() !== (fluxo.descricao ?? "") || JSON.stringify(ajuda) !== JSON.stringify(ajudaBase);
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
   const atencoes = problemas.filter((p) => p.nivel !== "erro");
@@ -1021,7 +1101,7 @@ function EditorFluxo({
     setSalvando(true);
     const r = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${fluxo.id}`, {
       method: "PATCH",
-      body: { nome: nome.trim() || fluxo.nome, descricao: descricao.trim() || null, ajuda, grafo, frequencia: freq, ativo },
+      body: { nome: nome.trim() || fluxo.nome, descricao: descricao.trim() || null, ajuda, grafo, frequencia: freq, ativo, publico },
     });
     setSalvando(false);
     if (!r.ok || !r.fluxo) return toast.error(r.error ?? "Não consegui salvar.");
@@ -1150,6 +1230,7 @@ function EditorFluxo({
         </SelectField>
         <EditorFrequencia freq={freq} onFreq={setFreq} />
         {freq.tipo !== "manual" && <Switch checked={ativo} onChange={setAtivo} label="Agendar" dica="Roda sozinho na hora marcada (com esta tela aberta e a extensão pronta)" />}
+        <Switch checked={publico} onChange={setPublico} label="Pública" dica="Outros ADMs a veem no painel lateral (Novo fluxo) e podem usar uma cópia ou chamá-la dentro dos fluxos deles" />
         </ConfigFluxo>
       </div>
       {freq.tipo !== "manual" && (

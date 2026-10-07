@@ -17,6 +17,7 @@ export const criarFluxoSchema = z.strictObject({
   grafo: grafoSchema.optional(),
   frequencia: z.record(z.string(), z.unknown()).optional(),
   ativo: z.boolean().optional(),
+  publico: z.boolean().optional(),
 });
 
 export const editarFluxoSchema = z.strictObject({
@@ -26,6 +27,7 @@ export const editarFluxoSchema = z.strictObject({
   grafo: grafoSchema.optional(),
   frequencia: z.record(z.string(), z.unknown()).optional(),
   ativo: z.boolean().optional(),
+  publico: z.boolean().optional(),
 });
 
 /** O fim de uma execução: o resumo (estado, contagens) — a próxima é calculada no servidor pela frequência. */

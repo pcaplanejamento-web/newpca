@@ -539,3 +539,17 @@ test("todo tipo dos modelos existe e está na paleta", async () => {
   assert.equal(naPaleta.size, [...REGISTRO_NOS.values()].filter((d) => !d.legado).length);
   for (const m of MODELOS_FLUXO) for (const n of m.grafo.nos) assert.ok(naPaleta.has(n.tipo), `${m.id}: ${n.tipo}`);
 });
+
+test("fluxos por ADM: o dono mexe; o público e o sem dono, qualquer ADM lê", async () => {
+  const { fluxoVisivel, fluxoEditavel } = await import("../src/lib/fluxo-core.ts");
+  const privado = { publico: false, criadoPor: 1 };
+  const publico = { publico: true, criadoPor: 1 };
+  const semDono = { publico: false, criadoPor: null };
+  assert.equal(fluxoVisivel(privado, 1), true);
+  assert.equal(fluxoVisivel(privado, 2), false);
+  assert.equal(fluxoVisivel(publico, 2), true);
+  assert.equal(fluxoEditavel(publico, 2), false);
+  assert.equal(fluxoEditavel(publico, 1), true);
+  assert.equal(fluxoVisivel(semDono, 2), true);
+  assert.equal(fluxoEditavel(semDono, 2), true);
+});

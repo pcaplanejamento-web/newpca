@@ -1692,11 +1692,13 @@ export const automacaoFluxos = sqliteTable(
     ultimaEm: text("ultima_em"),
     /** O resumo da última execução (estado, nós, itens, erros) — JSON. */
     ultimaExecucao: text("ultima_execucao"),
+    /** PÚBLICO = os outros ADMs o veem no painel lateral (e o usam); privado = só no painel do dono. */
+    publico: integer("publico", { mode: "boolean" }).notNull().default(false),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [index("automacao_fluxos_proxima_idx").on(t.proximaEm)],
+  (t) => [index("automacao_fluxos_proxima_idx").on(t.proximaEm), index("automacao_fluxos_criado_por_idx").on(t.criadoPor)],
 );
 
 /** RETOMADA dos subfluxos: o que um nó "Executar fluxo" já concluiu (ok) ou tentou (falha) — por fluxo de topo + nó. */
