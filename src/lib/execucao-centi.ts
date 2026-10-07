@@ -18,13 +18,13 @@ const semAcento = (s: string) =>
     .trim()
     .toUpperCase();
 
-/** A situação como a Centi mostra, limpa (≤ 40); vazio = null. */
+/** A situação como a Centi mostra, limpa (≤ 40); vazio ou só CÓDIGO numérico (não é o texto) = null. */
 export function limparSituacao(v: unknown): string | null {
   const s = String(v ?? "")
     .replace(/\p{Cc}/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return s ? s.slice(0, 40) : null;
+  return s && !/^-?\d+$/.test(s) ? s.slice(0, 40) : null;
 }
 
 /** A classe da situação: "Executado" (e "Executada") = executado; "Cancelado" = cancelado; o resto (inclusive "Não executado") = outro. */

@@ -213,10 +213,10 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "cm002",
     nome: "Execução dos DFDs na CM002",
     descricao:
-      "Os DFDs do sistema são procurados na lista da CM002 (nº de planejamento = ID, na entidade do órgão de cada um); a Situação encontrada é gravada na coluna Execução da Mesa; os planejamentos da CM002 sem DFD no sistema ficam numa tabela.",
+      "Os DFDs do sistema são procurados na lista da CM002 (nº de planejamento = ID, no órgão de cada um); a Situação encontrada é gravada na coluna Execução da Mesa; os planejamentos da CM002 sem DFD no sistema ficam numa tabela.",
     ajuda: {
       funciona:
-        "Lê os DFDs do sistema (ordenados por órgão) e, de cada entidade desses órgãos, a lista INTEIRA da CM002 — uma vez por órgão. Cada DFD é procurado pelo nº de planejamento = ID da CM002, na mesma entidade.",
+        "Lê os DFDs do sistema (ordenados por órgão) e, de cada um desses órgãos, a lista INTEIRA da CM002 — uma vez por órgão. Cada DFD é procurado pelo nº de planejamento = ID da CM002, no mesmo órgão. Todo DFD de órgão cadastrado recebe um texto: a Situação ou “Não encontrado na CM002”.",
       executa: "Execute com a extensão pronta (a consulta da CM002 aprendida). O ID da Centi de cada órgão vem de Órgãos e Unidades.",
       resultado:
         "A Situação da CM002 na coluna Execução da Mesa → DFDs; atenção para os não executados e os DFDs fora da CM002; a tabela “CM002 sem DFD no sistema” com os planejamentos só na Centi (para ver e usar em outras automações).",
@@ -232,8 +232,10 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
         n("grav1", "saida.gravarExecucao", 1184, 0, { campoSituacao: "encontrado.situacao" }),
         n("se1", "logica.se", 1184, 160, { campo: "encontrado.situacao", operador: "diferente", valor: "Executado" }),
         n("err1", "erros.apontar", 1488, 160, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{encontrado.situacao}} na CM002", nivel: "atencao" }),
-        n("err2", "erros.apontar", 1184, 320, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) não está na CM002 da entidade {{entidade}}", nivel: "atencao" }),
+        n("err2", "erros.apontar", 1184, 320, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) não está na CM002 do órgão {{entidade}}", nivel: "atencao" }),
         n("proc2", "logica.procurar", 880, 480, { valor: "{{planejamento}}", onde: "coluna", coluna: "planejamento", operador: "igual", resultado: "primeiro", extraCampo: "entidade", extraColuna: "entidade" }),
+        n("se2", "logica.se", 1488, 320, { campo: "entidade", operador: "nao_vazio", valor: "" }),
+        n("grav2", "saida.gravarExecucao", 1792, 320, { situacaoFixa: "Não encontrado na CM002" }),
         n("tab1", "saida.tabela", 1184, 544, { nome: "CM002 sem DFD no sistema", modo: "substituir" }),
       ],
       conexoes: [
@@ -246,6 +248,8 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
         c("proc1", "se1", "encontrados"),
         c("se1", "err1", "verdadeiro"),
         c("proc1", "err2", "naoEncontrados"),
+        c("proc1", "se2", "naoEncontrados"),
+        c("se2", "grav2", "verdadeiro"),
         c("cm1", "proc2"),
         c("dfds1", "proc2", "saida", "tabela"),
         c("proc2", "tab1", "naoEncontrados"),

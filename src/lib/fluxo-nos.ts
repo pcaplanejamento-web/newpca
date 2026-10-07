@@ -254,44 +254,44 @@ const NOS: DefNo[] = [
     tipo: "centi.cm002",
     categoria: "centi",
     rotulo: "CM002 · planejamentos",
-    descricao: "A lista INTEIRA da CM002 por entidade (ID = nº de planejamento, situação, finalidade). Pela API.",
+    descricao: "A lista INTEIRA da CM002 por órgão (ID = nº de planejamento, situação, finalidade). Pela API.",
     icone: "list",
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [
-      { chave: "entidades", rotulo: "Entidades", tipo: "texto", entrada: true, ajuda: "Ex.: 2; 3. Vazio = as cadastradas nos órgãos." },
+      { chave: "entidades", rotulo: "Órgãos (ID na Centi)", tipo: "texto", entrada: true, ajuda: "Ex.: 2; 3. Vazio = os cadastrados em Órgãos e Unidades." },
       { chave: "colunas", rotulo: "Trazer todas as colunas da Centi", tipo: "booleano", padrao: false, ajuda: "Em “centi.<coluna>” — escolha as que analisa no nó “Escolher colunas”." },
       {
         chave: "dosItens",
-        rotulo: "Só as entidades dos itens que chegam",
+        rotulo: "Só os órgãos dos itens que chegam",
         tipo: "booleano",
         padrao: false,
-        ajuda: "Ligue a entrada aos DFDs: lê só as entidades (órgãos) deles, uma por vez — nada além do necessário.",
+        ajuda: "Ligue a entrada aos DFDs: lê só os órgãos deles, um por vez — nada além do necessário.",
       },
     ],
     executar: async (e, c, ctx) => {
       const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
       const doItens = c.dosItens === true ? so(e).map((it) => str(it.entidade)).filter(Boolean) : [];
-      if (c.dosItens === true && !doItens.length) throw new Error("Nenhum item com a entidade da Centi — cadastre o ID da Centi nos órgãos (Órgãos e Unidades).");
+      if (c.dosItens === true && !doItens.length) throw new Error("Nenhum item com o órgão da Centi — cadastre o ID da Centi nos órgãos (Órgãos e Unidades).");
       const base = lista(c.entidades).length ? lista(c.entidades) : doItens.length ? doItens : Object.values(mapa);
       const ents = [...new Set(base.map((x) => x.replace(/^0+(?=\d)/, "")))].filter(Boolean);
-      if (!ents.length) throw new Error("Nenhuma entidade — informe no nó ou cadastre o ID da Centi nos órgãos.");
+      if (!ents.length) throw new Error("Nenhum órgão — informe no nó ou cadastre o ID da Centi nos órgãos.");
       const out: Item[] = [];
       // Uma entidade que falha não derruba as outras: segue e avisa; só falha quando NENHUMA respondeu.
       const falhas: string[] = [];
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
-        ctx.aviso(`Entidade ${ent} (${i + 1} de ${ents.length})…`);
+        ctx.aviso(`Órgão ${ent} (${i + 1} de ${ents.length})…`);
         const r = await ctx.centi("cm002", { entidade: ent, colunas: c.colunas === true }, 300_000);
         if (r.interrompido) throw new Error("Interrompido na extensão.");
         if (!r.ok) {
-          falhas.push(`entidade ${ent}: ${r.erro || "a extensão da Centi não respondeu"}`);
+          falhas.push(`órgão ${ent}: ${r.erro || "a extensão da Centi não respondeu"}`);
           continue;
         }
         for (const p of Array.isArray(r.linhas) ? r.linhas : []) out.push({ ...obj(p), planejamento: str(obj(p).id), entidade: ent });
       }
       if (falhas.length && falhas.length === ents.length) throw new Error(falhas.join(" · "));
-      if (falhas.length) ctx.aviso(`Sem a lista de ${falhas.length} entidade(s) — ${falhas.join(" · ")}`);
+      if (falhas.length) ctx.aviso(`Sem a lista de ${falhas.length} órgão(s) — ${falhas.join(" · ")}`);
       return { saida: out };
     },
   },
@@ -301,7 +301,7 @@ const NOS: DefNo[] = [
     tipo: "sistema.dfds",
     categoria: "sistema",
     rotulo: "DFDs do sistema",
-    descricao: "Os DFDs com nº de planejamento (nº, planejamento, órgão, entidade da Centi e a execução gravada). Substituído por “Ler do sistema” (DFDs · Todos).",
+    descricao: "Os DFDs com nº de planejamento (nº, planejamento, órgão (ID na Centi) e a execução gravada). Substituído por “Ler do sistema” (DFDs · Todos).",
     legado: true,
     icone: "file",
     entradas: ["entrada"],
@@ -665,7 +665,7 @@ const NOS: DefNo[] = [
       { chave: "coluna", rotulo: "Coluna da tabela", tipo: "caminho", obrigatorio: true, quando: { campo: "onde", valores: ["coluna"] }, ajuda: "Ex.: planejamento ou centi.Id" },
       { chave: "operador", rotulo: "Casa quando a coluna", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
       { chave: "resultado", rotulo: "Resultado", tipo: "selecao", padrao: "primeiro", opcoes: [{ valor: "primeiro", rotulo: "A primeira linha que casa" }, { valor: "todas", rotulo: "Todas as linhas (lista)" }] },
-      { chave: "extraCampo", rotulo: "E também igual: campo do item", tipo: "caminho", ajuda: "Opcional. Ex.: entidade (o mesmo nº pode existir em outro órgão)." },
+      { chave: "extraCampo", rotulo: "E também igual: campo do item", tipo: "caminho", ajuda: "Opcional. Ex.: entidade = o órgão (o mesmo nº pode existir em outro órgão)." },
       { chave: "extraColuna", rotulo: "… à coluna da tabela", tipo: "caminho", ajuda: "Ex.: entidade" },
     ],
     rodaSemItens: true,
@@ -926,7 +926,7 @@ const NOS: DefNo[] = [
     tipo: "dados.conferirCm002",
     categoria: "dados",
     rotulo: "Conferir DFDs na CM002",
-    descricao: "Cada DFD (A) × a CM002 (B) pelo planejamento: fora da CM002, situação proibida/fora da esperada, valor e entidade divergentes.",
+    descricao: "Cada DFD (A) × a CM002 (B) pelo planejamento: fora da CM002, situação proibida/fora da esperada, valor e órgão divergentes.",
     icone: "compare",
     entradas: ["a", "b"],
     saidas: ["divergentes", "conformes"],
@@ -936,7 +936,7 @@ const NOS: DefNo[] = [
       { chave: "esperada", rotulo: "Situação esperada", tipo: "texto", entrada: true, ajuda: "Vazio = qualquer uma (menos as de erro). Várias por ;" },
       { chave: "campoValor", rotulo: "Campo do valor na CM002", tipo: "caminho", padrao: "valor", ajuda: "Vazio = não confere o valor." },
       { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", entrada: true, padrao: 0.01 },
-      { chave: "entidade", rotulo: "Conferir a entidade do órgão", tipo: "booleano", padrao: true },
+      { chave: "entidade", rotulo: "Conferir o órgão", tipo: "booleano", padrao: true },
     ],
     executar: async (e, c, ctx) => {
       const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
@@ -1150,7 +1150,7 @@ const NOS: DefNo[] = [
     tipo: "saida.gravarExecucao",
     categoria: "saida",
     rotulo: "Gravar execução nos DFDs",
-    descricao: "Grava a situação da CM002 (itens do nó CM002) nos DFDs do sistema, por entidade.",
+    descricao: "Grava a situação da CM002 (itens do nó CM002) nos DFDs do sistema, por órgão.",
     icone: "save",
     entradas: ["entrada"],
     saidas: ["saida"],
@@ -1162,11 +1162,18 @@ const NOS: DefNo[] = [
         padrao: "centi.situacao",
         ajuda: "Onde está a situação em cada DFD que chega. Ex.: encontrado.situacao (a linha achada na CM002).",
       },
+      {
+        chave: "situacaoFixa",
+        rotulo: "Texto fixo",
+        tipo: "texto",
+        ajuda: "Grava este texto em todos os DFDs que chegam (ex.: Não encontrado na CM002). Vazio = o campo da situação.",
+      },
     ],
     executar: async (e, c, ctx) => {
       // Cada item JÁ é o DFD (id) com a situação lida (do "Buscar DFD na Centi" ou da linha achada na CM002) — grava direto.
       const campo = str(c.campoSituacao, "centi.situacao") || "centi.situacao";
-      const situacao = (it: Item) => str(resolverCaminho(it, campo)).trim();
+      const fixa = str(c.situacaoFixa).trim();
+      const situacao = (it: Item) => fixa || str(resolverCaminho(it, campo)).trim();
       const lidos = so(e).filter((it) => situacao(it) && Number(it.id) > 0);
       if (lidos.length) {
         const out: Item[] = [];
@@ -1205,14 +1212,14 @@ const NOS: DefNo[] = [
           })
           .map((d) => d.id as number);
         if (!dfdIds.length) {
-          out.push({ entidade: ent, atualizados: 0, aviso: "Nenhum DFD do sistema nesta entidade." });
+          out.push({ entidade: ent, atualizados: 0, aviso: "Nenhum DFD do sistema neste órgão." });
           continue;
         }
         const g = await ctx.api("/api/admin/automacao/execucao-dfds", {
           method: "POST",
           body: { colunas: ["ID", "SITUACAO"], linhas: its.map((p) => ({ valores: [str(p.id ?? p.planejamento), str(p.situacao)] })), dfdIds },
         });
-        if (!g.ok) throw new Error(`Entidade ${ent}: ${g.error || "falhou ao gravar"}`);
+        if (!g.ok) throw new Error(`Órgão ${ent}: ${g.error || "falhou ao gravar"}`);
         out.push({ entidade: ent, lidos: g.lidos, atualizados: g.atualizados });
       }
       return { saida: out };
@@ -1259,7 +1266,7 @@ const NOS: DefNo[] = [
     categoria: "saida",
     rotulo: "Baixar/anexar DFDs",
     descricao:
-      "Emite cada DFD na Centi (por API, na entidade do órgão, conferido) e leva o PDF ao destino: pasta (Downloads, a escolhida ou .zip), o protocolo da Centi indicado ou o de cada DFD (anexo com autorização). Entrada: protocolos do sistema ou nºs de planejamento.",
+      "Emite cada DFD na Centi (por API, no órgão de cada um, conferido) e leva o PDF ao destino: pasta (Downloads, a escolhida ou .zip), o protocolo da Centi indicado ou o de cada DFD (anexo com autorização). Entrada: protocolos do sistema ou nºs de planejamento.",
     icone: "save",
     entradas: ["entrada"],
     saidas: ["saida"],

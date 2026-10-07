@@ -273,10 +273,10 @@ function Ajustes({
         <Switch checked={cfg.valorReferencia} onChange={(v) => onCfg({ valorReferencia: v })} label="Emitir valor de referência" />
         <Switch checked={cfg.emitirData} onChange={(v) => onCfg({ emitirData: v })} label="Emitir data" />
       </Grupo>
-      <Grupo titulo="Entidade da Centi por órgão">
+      <Grupo titulo="Órgão na Centi (ID)">
         <p className="text-[12px] text-muted">O ID cadastrado no órgão (Órgãos e Unidades) vale sempre; descobrir/tentar só para os órgãos sem ele.</p>
         <Switch checked={cfg.descobrirEntidade} onChange={(v) => onCfg({ descobrirEntidade: v })} label="Descobrir sozinho (órgãos sem ID)" />
-        <TextField label="Entidades a tentar" placeholder={aberta ? `vazio = 0 a 28 (aberta: ${aberta})` : "02:03:04"} value={cfg.entidades} onChange={(e) => onCfg({ entidades: e.target.value })} />
+        <TextField label="IDs de órgão a tentar" placeholder={aberta ? `vazio = 0 a 28 (aberta: ${aberta})` : "02:03:04"} value={cfg.entidades} onChange={(e) => onCfg({ entidades: e.target.value })} />
         {orgaos.length > 0 && (
           <ul className="max-h-56 divide-y divide-border overflow-y-auto">
             {orgaos.map(([chave, o]) => (
@@ -299,7 +299,7 @@ function Ajustes({
                 />
                 )}
                 {!fixas[chave] && aberta && mapa[chave] !== aberta && (
-                  <Button size="xs" variant="ghost" onClick={() => onEntidade(chave, aberta)} title="Usar a entidade aberta na Centi agora">
+                  <Button size="xs" variant="ghost" onClick={() => onEntidade(chave, aberta)} title="Usar o órgão aberto na Centi agora">
                     {aberta}
                   </Button>
                 )}
@@ -568,7 +568,7 @@ export function AutomacaoAdmin({
           <p>
             <strong>Extensão:</strong> “Extensão” → descompacte (na atualização, na MESMA pasta) → chrome://extensions → Modo do
             desenvolvedor → Carregar sem compactação (ou ↻) → F5 nesta tela. O login fica salvo nela (e, opcional, cifrado no
-            sistema — Ajustes → Login da Centi). <strong>Entidade:</strong> cada DFD vai na entidade da Centi do órgão dele (o
+            sistema — Ajustes → Login da Centi). <strong>Órgão:</strong> cada DFD vai no órgão da Centi dele (o
             ID cadastrado no órgão; sem ele, o mapa de Ajustes, a aberta e — com “Descobrir sozinho” — as outras).
           </p>
         </Ajuda>

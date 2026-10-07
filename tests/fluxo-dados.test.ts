@@ -220,11 +220,14 @@ test("Modelo “Execução dos DFDs na CM002”: grava a situação, aponta os f
     ["1732", "Executado"],
     ["0278", "Não Executado"],
   ]);
+  const nao = posts.filter((p) => p.c.includes("execucao-dfds"))[1];
+  assert.ok(nao);
+  assert.deepEqual(((nao as { body: unknown }).body as { linhas: { valores: string[] }[] }).linhas.map((l) => l.valores), [["999", "Não encontrado na CM002"]]);
   const tab = posts.find((p) => p.c.includes("/tabelas"));
   assert.ok(tab);
   assert.deepEqual(((tab as { body: unknown }).body as { linhas: { planejamento: string }[] }).linhas.map((l) => l.planejamento), ["1731"]);
   assert.deepEqual(r.apontados.map((a) => a.mensagem).sort(), [
     "DFD 228 (planejamento 0278): Não Executado na CM002",
-    "DFD 500 (planejamento 999) não está na CM002 da entidade 3",
+    "DFD 500 (planejamento 999) não está na CM002 do órgão 3",
   ]);
 });

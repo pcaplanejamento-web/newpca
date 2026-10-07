@@ -373,7 +373,7 @@ export function OrgaosAdmin() {
             placeholder="Ex.: 1008171"
           />
           <TextField
-            label="ID da entidade na Centi (o seletor do topo da Centi — ex.: 02 - PREFEITURA)"
+            label="ID do órgão na Centi (o seletor do topo da Centi — ex.: 02 - PREFEITURA)"
             value={entidadeCenti}
             onChange={(e) => setEntidadeCenti(e.target.value.replace(/\D/g, "").slice(0, 4))}
             placeholder="Ex.: 02"

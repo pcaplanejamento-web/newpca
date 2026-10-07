@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.45.1",
+    data: "2026-10-07",
+    titulo: "Execução dos DFDs sempre em texto e todos avaliados",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "A coluna Execução mostra só o texto da Situação da CM002 — os códigos numéricos antigos foram apagados e nunca mais são gravados.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Automação", texto: "Todo DFD de órgão cadastrado recebe a Execução: a Situação da CM002 ou “Não encontrado na CM002” (refaça o fluxo pelo modelo).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "“Entidade” virou “Órgão” nos nós e ajustes da Centi.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.45.0",
     data: "2026-10-07",
     titulo: "Execução dos DFDs pela lista da CM002 e tabelas nas automações",

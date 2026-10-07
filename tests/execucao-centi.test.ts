@@ -112,3 +112,9 @@ test("Tela Protocolo pela API: as repartições vão no pedido (postdata) e sem 
   assert.deepEqual(comReparticoes(corpo, ["NÃO EXISTE"])?.faltam, ["NÃO EXISTE"]);
   assert.equal(comReparticoes({ Data: {} }, ["X"]), null);
 });
+
+test("situação só com código numérico nunca é gravada", () => {
+  const m = situacoesDaGrade(["ID", "SITUACAO"], [["10", "4"], ["11", "Executado"]]);
+  assert.equal(m.has("10"), false);
+  assert.equal(m.get("11"), "Executado");
+});

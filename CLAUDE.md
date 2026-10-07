@@ -4308,7 +4308,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   acrescentar → `POST /api/admin/automacao/tabelas`) e **`entrada.tabela`** ("Ler tabela salva": colunas + linhas de/até —
   `recorteTabela`); visão "Tabela" no painel (`VistaTabela`, relê do servidor a cada execução, exportável). D1
   `automacao-tabelas.ts`; puro `linhasParaTabela`/`recorteTabela`/`chaveTabela` (`fluxo-dados.ts`); rotas `GET` (lista |
-  `?nome=`), `POST`, `DELETE ?nome=` (`exigirAdmin`, auditoria). Teste do modelo de ponta a ponta em `tests/fluxo-dados.test.ts`.
+  `?nome=`), `POST`, `DELETE ?nome=` (`exigirAdmin`, auditoria). Teste do modelo de ponta a ponta em `tests/fluxo-dados.test.ts`. **v1.45.1:** `limparSituacao` recusa situação só de dígitos (nunca grava código) e a migração `0097` apagou os códigos antigos; o `saida.gravarExecucao` ganhou `situacaoFixa` — no modelo, os DFDs de órgão cadastrado fora da CM002 gravam “Não encontrado na CM002” (SE `entidade` não vazio → `grav2`); na interface “entidade” virou “órgão” (o código segue `entidade`).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
