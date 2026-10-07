@@ -4251,6 +4251,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
   com "Em branco" + TODOS os modelos no mesmo cartão (v1.33.2: o `lado` do `Modal` saiu — o painel desliza na própria tela; o editor do diagrama tem a altura FIXA do display pelo `useAlturaTela`, a paleta e o quadro rolam por dentro) (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
   montar" do diagrama mora no `Ajuda` (?) dos controles de zoom.
+- **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
+  o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
+  conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
+  curso move o nó para um estacionamento escondido; voltar o devolve com o estado inteiro; ocioso, desmonta) +
+  **`useTrabalhoSegundoPlano({id, titulo, estado rodando|fila|concluido|falhou|cancelado, feito, total, texto, rota,
+  onAbrir, onParar})`** + **`useNaTela`** (fora da página nada abre diálogo sozinho) + **`PainelSegundoPlano`**: pílula
+  MINIMIZADA no canto inferior direito (só fora da página dona; título · n/total · barra fina; "+N") que expande na lista
+  com Parar · Dispensar · **Detalhes** (volta à página e abre a execução). A altura vai em **`--reserva-flutuante`**: as
+  bolhas do chat (`BolhasChat` `tela().base`) e os avisos flutuantes ficam acima; respeita `--reserva-rodape`. Usado pela
+  Automação (`page.tsx` → `ManterVivo chave="automacao"`); os fluxos (`FluxosAutomacao`) informam o andamento e têm FILA
+  (executar com outro rodando enfileira — roda em seguida; o agendador também).
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
   ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só

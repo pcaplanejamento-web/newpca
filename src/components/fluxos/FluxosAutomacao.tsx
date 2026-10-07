@@ -35,6 +35,7 @@ import { SearchField, SelectField, TextField } from "../Field";
 import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconSave, IconTrash } from "../icons";
 import { JanelaFlutuante } from "../JanelaFlutuante";
 import { Modal } from "../Modal";
+import { useNaTela, useTrabalhoSegundoPlano } from "../SegundoPlano";
 import { Switch } from "../Switch";
 import { toast } from "../Toast";
 import { alturaNo, CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
@@ -118,7 +119,42 @@ export function FluxosAutomacao({
   const [resultado, setResultado] = useState<ResultadoExec | null>(null);
   const [novo, setNovo] = useState(false);
   const cancelar = useRef(false);
-  useEffect(() => onRodando(rodando != null), [rodando, onRodando]);
+  /** O fluxo da última execução (os passos/resultado mostrados são dele) e o que está acontecendo agora. */
+  const [exec, setExec] = useState<{ id: number; nome: string; total: number } | null>(null);
+  const [agora, setAgora] = useState("");
+  /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
+  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo }[]>([]);
+  const [naFila, setNaFila] = useState(0);
+  const rodandoRef = useRef<number | null>(null);
+  useEffect(() => onRodando(rodando != null || naFila > 0), [rodando, naFila, onRodando]);
+  // O andamento vai ao painel de SEGUNDO PLANO (minimizado fora desta tela; "Detalhes" volta ao fluxo).
+  const emCurso = rodando != null;
+  useTrabalhoSegundoPlano(
+    exec
+      ? {
+          id: `fluxo-${exec.id}`,
+          titulo: exec.nome,
+          estado: emCurso ? "rodando" : (resultado?.estado ?? "concluido"),
+          feito: Object.values(passos).filter((p) => p.estado === "ok").length,
+          total: exec.total,
+          texto: emCurso
+            ? `${agora}${naFila ? `${agora ? " · " : ""}${naFila} na fila` : ""}`
+            : resultado?.estado === "falhou"
+              ? resultado.erro
+              : resultado?.apontados.length
+                ? `${resultado.apontados.length} erro(s) apontado(s)`
+                : undefined,
+          rota: "/painel/automacao",
+          onAbrir: () => {
+            setNovo(false);
+            setAberto(exec.id);
+          },
+          onParar: () => {
+            cancelar.current = true;
+          },
+        }
+      : null,
+  );
   useEffect(() => onEditor(aberto != null), [aberto, onEditor]);
   useEffect(() => {
     // O "+" do cabeçalho ALTERNA o painel (aberto, fecha).
@@ -237,12 +273,21 @@ export function FluxosAutomacao({
   /** Executa um fluxo (o grafo passado — o do editor, mesmo sem salvar) e grava o resumo. */
   const executar = useCallback(
     async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false): Promise<ResultadoExec | null> => {
-      if (rodando != null) return null;
+      if (rodandoRef.current != null) {
+        if (rodandoRef.current === f.id || fila.current.some((x) => x.f.id === f.id)) return null;
+        fila.current.push({ f, grafo });
+        setNaFila(fila.current.length);
+        if (!agendado) toast.info(`${f.nome}: na fila — roda quando o fluxo atual terminar.`);
+        return null;
+      }
       if (!pronto) {
         if (!agendado) toast.warning("A extensão da Centi não está pronta (instale, abra a Centi e entre).");
         return null;
       }
+      rodandoRef.current = f.id;
       setRodando(f.id);
+      setExec({ id: f.id, nome: f.nome, total: grafo.nos.length });
+      setAgora("");
       setPassos({});
       setResultado(null);
       setSaidas({});
@@ -274,6 +319,7 @@ export function FluxosAutomacao({
           },
           (p) => {
             setPassos((m) => ({ ...m, [p.no]: p }));
+            if (p.aviso) setAgora(p.aviso);
             if (p.estado === "ok" && lote.current) {
               feitos++;
               void pedir("lote", { fase: "passo", loteId: lote.current, feito: Math.min(feitos, grafo.nos.length), total: grafo.nos.length, texto: p.no }, 8000);
@@ -304,10 +350,15 @@ export function FluxosAutomacao({
       } finally {
         leituras.current = new Map();
         lote.current = null;
+        rodandoRef.current = null;
         setRodando(null);
+        // O próximo da fila (no próximo tique — o estado desta execução já assentou).
+        const prox = fila.current.shift();
+        setNaFila(fila.current.length);
+        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo), 0);
       }
     },
-    [rodando, pronto, pedir, lote, interrompido, host],
+    [pronto, pedir, lote, interrompido, host],
   );
 
   // AGENDADOR: com a tela aberta e a extensão pronta, a cada minuto roda o 1º fluxo ligado cuja hora chegou.
@@ -478,8 +529,8 @@ export function FluxosAutomacao({
           fluxo={fluxo}
           rodando={rodando === fluxo.id}
           outroRodando={rodando != null && rodando !== fluxo.id}
-          passos={rodando === fluxo.id || resultado ? passos : {}}
-          resultado={resultado}
+          passos={exec?.id === fluxo.id ? passos : {}}
+          resultado={exec?.id === fluxo.id ? resultado : null}
           onVoltar={() => {
             setAberto(null);
             setPassos({});
@@ -913,7 +964,11 @@ function EditorFluxo({
   const atencoes = problemas.filter((p) => p.nivel !== "erro");
   const ref = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(ref, 320) ?? 560;
+  const naTela = useNaTela();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só quando chega um resultado novo
   useEffect(() => {
+    // Fora da tela (execução em segundo plano), o relatório não abre sozinho — o painel minimizado avisa o desfecho.
+    if (!naTela) return;
     if (resultado?.apontados.length || resultado?.estado === "falhou") setRelatorio(true);
     if (resultado?.noErro) setSel(resultado.noErro);
   }, [resultado]);
@@ -1048,8 +1103,8 @@ function EditorFluxo({
           <Button
             size="sm"
             icon={<IconPlay className="size-4" />}
-            disabled={outroRodando || erros.length > 0}
-            title={erros.length ? erros[0].texto : outroRodando ? "Outro fluxo está rodando" : "Executar agora (sem precisar salvar)"}
+            disabled={erros.length > 0}
+            title={erros.length ? erros[0].texto : outroRodando ? "Outro fluxo está rodando — este entra na fila" : "Executar agora (sem precisar salvar)"}
             onClick={() => onExecutar(grafo)}
           >
             Executar

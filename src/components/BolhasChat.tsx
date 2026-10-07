@@ -47,7 +47,9 @@ function tela() {
   const largura = window.innerWidth;
   const altura = window.innerHeight;
   const desktop = largura >= 1024;
-  return { largura, altura, desktop, topo: 64, base: desktop ? 16 : 84, tam: desktop ? TAM.desktop : TAM.celular };
+  // O painel de trabalhos em segundo plano (canto inferior direito) reserva a altura dele: as bolhas ficam acima.
+  const reserva = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--reserva-flutuante")) || 0;
+  return { largura, altura, desktop, topo: 64, base: (desktop ? 16 : 84) + reserva, tam: desktop ? TAM.desktop : TAM.celular };
 }
 
 /** A prévia de onde a bolha vai pousar: os lugares de TODAS (as outras já abrindo espaço), o alvo dela e se o ímã agiu. */

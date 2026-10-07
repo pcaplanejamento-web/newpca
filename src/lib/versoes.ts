@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.38.0",
+    data: "2026-10-07",
+    titulo: "Automações em segundo plano",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "A automação continua rodando ao sair da tela: use o sistema normalmente — ela fica minimizada no canto inferior direito, com o andamento.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Tocar no painel minimizado expande: “Detalhes” volta à execução completa e “Parar” interrompe.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Executar outro fluxo com um rodando o põe na FILA — roda em seguida, sem bloquear a edição dos demais.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Chat", texto: "As bolhas do chat e os avisos flutuantes ficam acima do painel da automação — nada se sobrepõe.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.37.3",
     data: "2026-10-07",
     titulo: "Conferir DFDs × Centi: o resultado de cada DFD ao vivo",

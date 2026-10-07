@@ -231,6 +231,7 @@ import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
 import { CartaoVersao, VersaoSistema } from "@/components/Novidades";
+import { PainelSegundoPlano } from "@/components/SegundoPlano";
 import { VERSOES } from "@/lib/versoes";
 import { PainelPendencias } from "@/components/PainelPendencias";
 import { PreviaDocumento } from "@/components/PreviaDocumento";
@@ -3209,6 +3210,10 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="Trabalhos em segundo plano (SegundoPlano · ManterVivo · useTrabalhoSegundoPlano · PainelSegundoPlano)">
+        <DemoSegundoPlano />
+      </Secao>
+
       <Secao titulo="Versão do sistema (VersaoSistema — fim do menu) · Novidades (CartaoVersao)">
         <div className="space-y-3">
           <div className="w-64 rounded-card border border-border bg-surface p-2">
@@ -4790,5 +4795,25 @@ function IntegracaoTrelloDemo() {
       onTestar={() => {}}
       testando={false}
     />
+  );
+}
+
+/** O painel minimizado no canto inferior direito (ligue para ver; tocar expande). */
+function DemoSegundoPlano() {
+  const [ligado, setLigado] = useState(false);
+  return (
+    <div className="space-y-2">
+      <Switch checked={ligado} onChange={setLigado} label="Mostrar o painel de exemplo" />
+      {ligado && (
+        <PainelSegundoPlano
+          naTela={new Set()}
+          onDispensar={() => setLigado(false)}
+          trabalhos={[
+            { id: "a", chave: "demo", titulo: "Conferir DFDs × Centi", estado: "rodando", feito: 3, total: 8, texto: "Conferir 1 DFD × Centi: 42 de 300", rota: "/design-system" },
+            { id: "b", chave: "demo", titulo: "Execução dos DFDs na CM002", estado: "concluido", feito: 6, total: 6, rota: "/design-system" },
+          ]}
+        />
+      )}
+    </div>
   );
 }

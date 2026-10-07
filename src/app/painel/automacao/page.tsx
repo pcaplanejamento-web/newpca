@@ -1,5 +1,6 @@
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { AutomacaoAdmin } from "@/components/AutomacaoAdmin";
+import { ManterVivo } from "@/components/SegundoPlano";
 import { getUsuarioAtual } from "@/lib/auth";
 import { protocolosParaAutomacao } from "@/lib/automacao";
 import { getGrupoAtivoId } from "@/lib/grupos";
@@ -18,11 +19,14 @@ export default async function AutomacaoPage() {
   const doGrupo = new Set(pessoas.map((p) => p.id));
   const outras = await pessoasPorIds(protocolos.map((p) => p.responsavelId).filter((id) => id != null && !doGrupo.has(id)));
   // Os banners da Mesa (o protocolo aberto pela linha) com o MESMO contexto da Mesa.
+  // ManterVivo: uma execução em curso SEGUE ao sair desta tela (minimizada no canto inferior direito).
   return (
+    <ManterVivo chave="automacao">
     <AutomacaoAdmin
       protocolos={protocolos}
       gestao={{ pessoas, outras, situacoes: situacoes.map((s) => ({ id: s.id, nome: s.nome, cor: s.cor })), usuarioId: atual.id }}
       banners={{ pode: ctx.pode, reparticoes: ctx.reparticoes, regras: ctx.regras, orgaos: ctx.orgaos, pcas: ctx.pcas }}
     />
+    </ManterVivo>
   );
 }
