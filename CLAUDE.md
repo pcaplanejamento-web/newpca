@@ -4298,6 +4298,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`PlanilhaDfds.colunasExtras`) e Itens (`colunasDaAutomacao`, `ColunasAutomacao.tsx`). **Legado:** `DefNo.legado` tira o
   nó da paleta e mantém os fluxos salvos (`sistema.dfds` → "Ler do sistema" nos modelos). Modelo
   "Situação da CM002 numa coluna da Mesa".
+- **EXECUÇÃO PELA CM002 + TABELAS (v1.45.0, migração `0096` — `automacao_tabelas`: nome, `chave` única sem caixa/acento,
+  colunas/linhas JSON ≤ 5000 linhas e 1,5 MB, `total`):** modelo **`cm002`** = Ler do sistema (DFDs) → Ordenar por
+  `entidade` → `logica.procurar` (planejamento = `planejamento` da CM002 E `entidade` = `entidade` — `OpcoesProcura.extra`,
+  índice com a régua do "igual") ← `centi.cm002 {dosItens}` (lê SÓ as entidades dos DFDs que chegam, uma por órgão; `tentar`
+  2×30 s) → `saida.gravarExecucao {campoSituacao: "encontrado.situacao"}` (o TEXTO da Situação na coluna Execução — antes o
+  load do planejamento gravava o código numérico) + atenção aos ≠ "Executado" e aos fora da CM002; a CM002 × DFDs ao
+  contrário → **`saida.tabela`** "CM002 sem DFD no sistema". Nós **`saida.tabela`** (nome, colunas opcionais, substituir |
+  acrescentar → `POST /api/admin/automacao/tabelas`) e **`entrada.tabela`** ("Ler tabela salva": colunas + linhas de/até —
+  `recorteTabela`); visão "Tabela" no painel (`VistaTabela`, relê do servidor a cada execução, exportável). D1
+  `automacao-tabelas.ts`; puro `linhasParaTabela`/`recorteTabela`/`chaveTabela` (`fluxo-dados.ts`); rotas `GET` (lista |
+  `?nome=`), `POST`, `DELETE ?nome=` (`exigirAdmin`, auditoria). Teste do modelo de ponta a ponta em `tests/fluxo-dados.test.ts`.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

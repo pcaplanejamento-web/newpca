@@ -157,3 +157,72 @@ test("Gravar na coluna da Mesa: cria/acha a coluna e grava por id; sem id/valor 
   assert.deepEqual(chamadas[1].body, { valores: [{ alvoId: 1, valor: "Executado" }] });
   assert.equal(r.passos.g.itens, 3, "1 gravado + 2 ignorados (valor vazio e sem id)");
 });
+
+test("Procurar com a chave extra (entidade): o mesmo nº em outra entidade não casa", () => {
+  const tabela = [
+    { planejamento: "10", entidade: "2", situacao: "Executado" },
+    { planejamento: "10", entidade: "3", situacao: "Não Executado" },
+  ];
+  const r = procurarNaTabela([{ planejamento: "010", entidade: "3" }, { planejamento: "10", entidade: "9" }], tabela, {
+    valor: "{{planejamento}}",
+    coluna: "planejamento",
+    operador: "igual",
+    resultado: "primeiro",
+    extra: { campo: "entidade", coluna: "entidade" },
+  });
+  assert.deepEqual(r.encontrados.map((x) => (x.encontrado as { situacao: string }).situacao), ["Não Executado"]);
+  assert.equal(r.naoEncontrados.length, 1);
+});
+
+test("Tabela: teto de linhas/bytes, colunas pela união e o recorte de colunas e linhas", async () => {
+  const { linhasParaTabela, recorteTabela, MAX_LINHAS_TABELA } = await import("../src/lib/fluxo-dados.ts");
+  const r = linhasParaTabela(Array.from({ length: MAX_LINHAS_TABELA + 3 }, (_, i) => (i % 2 ? { a: i } : { a: i, b: "x" })));
+  assert.equal(r.linhas.length, MAX_LINHAS_TABELA);
+  assert.equal(r.cortadas, 3);
+  assert.deepEqual(r.colunas, ["a", "b"]);
+  assert.deepEqual(recorteTabela([{ a: 1, b: 2 }, { a: 3, b: 4 }, { a: 5, b: 6 }], lerColunas("b => B"), 2, 3), [{ B: 4 }, { B: 6 }]);
+});
+
+test("Modelo “Execução dos DFDs na CM002”: grava a situação, aponta os fora da CM002 e salva os só na Centi numa tabela", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "cm002");
+  assert.ok(m);
+  const dfds = [
+    { id: 1, numero: "1707", planejamento: "1732", entidade: "2" },
+    { id: 2, numero: "228", planejamento: "0278", entidade: "2" },
+    { id: 3, numero: "500", planejamento: "999", entidade: "3" },
+  ];
+  const pedidos: string[] = [];
+  const posts: { c: string; body: unknown }[] = [];
+  const centi = async (_a: string, d: unknown) => {
+    const ent = (d as { entidade: string }).entidade;
+    pedidos.push(ent);
+    return ent === "2"
+      ? { ok: true, linhas: [{ id: "1732", situacao: "Executado" }, { id: "278", situacao: "Não Executado" }, { id: "1731", situacao: "Não Executado" }] }
+      : { ok: true, linhas: [] };
+  };
+  const api = async (c: string, init?: unknown) => {
+    posts.push({ c, body: (init as { body?: unknown } | undefined)?.body });
+    return c.includes("execucao-dfds") ? { ok: true, lidos: 2, atualizados: 2 } : { ok: true, total: 1, cortadas: 0 };
+  };
+  const r = await executarFluxo(lerGrafo(m.grafo), REGISTRO_NOS, {
+    centi,
+    api,
+    cancelado: () => false,
+    host: { protocolos: [], __cache: new Map([["dfds", Promise.resolve(dfds)]]) },
+  });
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual(pedidos.sort(), ["2", "3"], "só as entidades dos DFDs, uma vez cada");
+  const grav = posts.find((p) => p.c.includes("execucao-dfds"));
+  assert.deepEqual((grav?.body as { linhas: unknown[]; dfdIds: number[] }).dfdIds, [1, 2]);
+  assert.deepEqual((grav?.body as { linhas: { valores: string[] }[] }).linhas.map((l) => l.valores), [
+    ["1732", "Executado"],
+    ["0278", "Não Executado"],
+  ]);
+  const tab = posts.find((p) => p.c.includes("/tabelas"));
+  assert.deepEqual((tab?.body as { linhas: { planejamento: string }[] }).linhas.map((l) => l.planejamento), ["1731"]);
+  assert.deepEqual(r.apontados.map((a) => a.mensagem).sort(), [
+    "DFD 228 (planejamento 0278): Não Executado na CM002",
+    "DFD 500 (planejamento 999) não está na CM002 da entidade 3",
+  ]);
+});

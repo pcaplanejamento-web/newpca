@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.45.0",
+    data: "2026-10-07",
+    titulo: "Execução dos DFDs pela lista da CM002 e tabelas nas automações",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "O modelo “Execução dos DFDs na CM002” lê a lista da CM002 uma vez por órgão (só as entidades dos DFDs), casa o nº de planejamento com o ID na mesma entidade e grava a Situação na coluna Execução.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Mesa", texto: "A coluna Execução passa a receber o texto da Situação da CM002 (Executado, Não Executado…), não mais um código numérico.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Automação", texto: "Nós “Salvar em tabela” e “Ler tabela salva”: guarde dados de uma automação (ex.: planejamentos da CM002 sem DFD no sistema), veja no painel e use colunas e linhas em outras automações.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "“Procurar nas linhas” casa também um segundo campo (ex.: a entidade) e “Gravar execução” lê a situação de qualquer campo.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.44.0",
     data: "2026-10-07",
     titulo: "Colunas da Centi, procurar, regras e colunas na Mesa",

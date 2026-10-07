@@ -1,10 +1,11 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { AlvoCenti, ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, type Grafo, type Item, type NoFluxo } from "@/lib/fluxo-core";
+import { dataHoraBR } from "@/lib/format";
 import { chaveSelecao, REGISTRO_NOS, selecionados } from "@/lib/fluxo-nos";
 import { Badge, type Tone } from "../Badge";
 import { Button } from "../Button";
@@ -302,11 +303,62 @@ function VistaLidos({ no }: PropsVisao) {
   );
 }
 
+
+const celula = (v: unknown) => (v && typeof v === "object" ? JSON.stringify(v) : s(v));
+
+/** A TABELA salva (nó "Salvar em tabela" / "Ler tabela salva"): as linhas gravadas, todas as colunas, filtráveis e exportáveis. */
+function VistaTabela({ no }: PropsVisao) {
+  const host = useHost();
+  const nome = s(no.config.nome).trim();
+  const execucao = host?.saidas[no.id];
+  const [tabela, setTabela] = useState<{ linhas: Item[]; colunas: string[]; atualizadoEm: string | null } | null | "erro">(null);
+  // Relê do servidor ao trocar de nome e a cada execução que gravou (as linhas salvas são a fonte).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a execução só dispara a releitura
+  useEffect(() => {
+    if (!nome) return setTabela(null);
+    let vivo = true;
+    fetch(`/api/admin/automacao/tabelas?nome=${encodeURIComponent(nome)}`)
+      .then((r) => r.json() as Promise<{ ok?: boolean; tabela?: { linhas: Item[]; colunas: string[]; atualizadoEm: string | null } }>)
+      .then((j) => vivo && setTabela(j.ok && j.tabela ? j.tabela : null))
+      .catch(() => vivo && setTabela("erro"));
+    return () => {
+      vivo = false;
+    };
+  }, [nome, execucao]);
+  const linhas = tabela && tabela !== "erro" ? tabela.linhas : [];
+  const colunas = useMemo<Column<Item>[]>(
+    () =>
+      (tabela && tabela !== "erro" ? tabela.colunas : caminhosDosItens(linhas.slice(0, 50), 30)).map((c) => ({
+        key: c,
+        header: c,
+        nowrap: true,
+        value: (it: Item) => celula(it[c]),
+        render: (it: Item) => <span className="block max-w-[16rem] truncate">{celula(it[c])}</span>,
+      })),
+    [tabela, linhas],
+  );
+  if (!nome) return <p className="text-sm text-muted">Informe o nome da tabela no componente.</p>;
+  return (
+    <DataTable
+      columns={colunas}
+      rows={linhas}
+      getKey={(it) => linhas.indexOf(it)}
+      density="compact"
+      scrollInterno
+      exportar={{ nome }}
+      vazio={tabela === "erro" ? "Não consegui ler a tabela — tente de novo." : tabela ? "A tabela está vazia." : "Tabela ainda não gravada — execute o fluxo."}
+      resumo={(ls) => `${ls.length} linha(s) · “${nome}”${tabela && tabela !== "erro" && tabela.atualizadoEm ? ` · gravada em ${dataHoraBR(tabela.atualizadoEm)}` : ""}`}
+    />
+  );
+}
+
 /** As visões que cada tipo de componente traz ao painel do fluxo. */
 export const VISOES: Record<string, Visao> = {
   "entrada.selecionar": { titulo: "Seleção", Componente: VistaSelecao },
   "saida.dfdsCenti": { titulo: "DFDs", Componente: VistaDfds },
   "leitura.protocolo": { titulo: "Protocolos lidos", Componente: VistaLidos },
+  "saida.tabela": { titulo: "Tabela", Componente: VistaTabela },
+  "entrada.tabela": { titulo: "Tabela", Componente: VistaTabela },
 };
 
 /** O ESTADO de um item processado (a análise ao vivo): o rótulo, o tom e o detalhe — por tipo de componente. */

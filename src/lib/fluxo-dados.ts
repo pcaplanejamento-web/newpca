@@ -47,6 +47,8 @@ export type OpcoesProcura = {
   operador: string;
   /** "primeiro" = a 1ª linha que casa; "todas" = a lista das linhas. */
   resultado: "primeiro" | "todas";
+  /** Casar TAMBÉM este campo do item com esta coluna da tabela (igual — ex.: a entidade/órgão). */
+  extra?: { campo: string; coluna: string };
 };
 
 /** Os textos de TODAS as colunas de uma linha (objetos de dentro também, até 3 níveis). */
@@ -68,12 +70,14 @@ export const linhaCasa = (linha: Item, valor: string, coluna: string, operador: 
  */
 export function procurarNaTabela(itens: Item[], tabela: Item[], o: OpcoesProcura): { encontrados: Item[]; naoEncontrados: Item[] } {
   const base = itens.length ? itens : [{}];
+  const extra = o.extra?.campo.trim() && o.extra.coluna.trim() ? o.extra : null;
+  const kExtra = (v: unknown) => (extra ? `|${chaveIgual(v)}` : "");
   const indice =
     o.coluna.trim() && o.operador === "igual"
       ? (() => {
           const m = new Map<string, Item[]>();
           for (const l of tabela) {
-            const k = chaveIgual(resolverCaminho(l, o.coluna));
+            const k = chaveIgual(resolverCaminho(l, o.coluna)) + kExtra(extra && resolverCaminho(l, extra.coluna));
             m.set(k, [...(m.get(k) ?? []), l]);
           }
           return m;
@@ -87,7 +91,10 @@ export function procurarNaTabela(itens: Item[], tabela: Item[], o: OpcoesProcura
       naoEncontrados.push(it);
       continue;
     }
-    const casam = indice ? (indice.get(chaveIgual(valor)) ?? []) : tabela.filter((l) => linhaCasa(l, valor, o.coluna, o.operador));
+    const vExtra = extra ? resolverCaminho(it, extra.campo) : undefined;
+    const casam = indice
+      ? (indice.get(chaveIgual(valor) + kExtra(vExtra)) ?? [])
+      : tabela.filter((l) => linhaCasa(l, valor, o.coluna, o.operador) && (!extra || comparar(resolverCaminho(l, extra.coluna), "igual", vExtra)));
     if (!casam.length) naoEncontrados.push(it);
     else encontrados.push({ ...it, encontrado: o.resultado === "todas" ? casam : casam[0], encontrados: casam.length });
   }
@@ -154,4 +161,34 @@ export function operarVariavel(atual: unknown, acao: AcaoVariavel, valor: string
     default:
       return atual;
   }
+}
+
+// ———————————————————————————————————————————————— tabelas salvas
+
+export const MAX_LINHAS_TABELA = 5000;
+export const MAX_BYTES_TABELA = 1_500_000;
+export const MAX_NOME_TABELA = 60;
+/** O nome comparável da tabela (sem caixa/acento/espaços repetidos). */
+export const chaveTabela = (nome: string) => normTexto(nome).toLowerCase();
+
+/** As linhas que cabem na tabela (≤ 5000 e ≤ 1,5 MB em JSON) + as colunas (a união dos campos, na ordem em que aparecem). */
+export function linhasParaTabela(itens: Item[]): { linhas: Item[]; colunas: string[]; cortadas: number } {
+  const linhas: Item[] = [];
+  let bytes = 2;
+  for (const it of itens.slice(0, MAX_LINHAS_TABELA)) {
+    const t = JSON.stringify(it).length + 1;
+    if (bytes + t > MAX_BYTES_TABELA) break;
+    bytes += t;
+    linhas.push(it);
+  }
+  const colunas = [...new Set(linhas.flatMap((l) => Object.keys(l)))].slice(0, 60);
+  return { linhas, colunas, cortadas: itens.length - linhas.length };
+}
+
+/** O recorte de uma tabela salva: as colunas escolhidas (vazio = todas) e as linhas de/até (1 = a primeira; vazio = todas). */
+export function recorteTabela(linhas: Item[], colunas: ColunaEscolhida[], de?: number, ate?: number): Item[] {
+  const ini = de && de > 0 ? de - 1 : 0;
+  const fim = ate && ate > 0 ? ate : linhas.length;
+  const fatia = linhas.slice(ini, Math.max(ini, fim));
+  return colunas.length ? escolherColunas(fatia, colunas, false) : fatia;
 }

@@ -40,7 +40,7 @@ import {
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { BUSCAS, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, escolherColunas, lerColunas, lerRegras, operarVariavel, procurarNaTabela } from "./fluxo-dados.ts";
+import { aplicarRegra, escolherColunas, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
 import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
 export const CATEGORIAS: { valor: CategoriaNo; rotulo: string; cor: string }[] = [
@@ -151,6 +151,31 @@ const NOS: DefNo[] = [
 
   // ——— Centi (só leitura, pela extensão)
   {
+    tipo: "entrada.tabela",
+    categoria: "entrada",
+    rotulo: "Ler tabela salva",
+    descricao: "Os dados de uma tabela salva por uma automação — escolha as colunas e as linhas que seguem (um item por linha).",
+    icone: "list",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [
+      { chave: "nome", rotulo: "Nome da tabela", tipo: "texto", obrigatorio: true, entrada: true },
+      { chave: "colunas", rotulo: "Colunas", tipo: "textoLongo", ajuda: "Opcional — uma por linha: coluna => nome. Vazio = todas." },
+      { chave: "de", rotulo: "Da linha", tipo: "numero", ajuda: "1 = a primeira. Vazio = desde o início." },
+      { chave: "ate", rotulo: "Até a linha", tipo: "numero", ajuda: "Vazio = até o fim." },
+    ],
+    rodaSemItens: true,
+    executar: async (_e, c, ctx) => {
+      const nome = str(c.nome).trim();
+      if (!nome) throw new Error("Informe o nome da tabela.");
+      const r = await ctx.api(`/api/admin/automacao/tabelas?nome=${encodeURIComponent(nome)}`);
+      const t = r.tabela as { linhas?: unknown } | undefined;
+      if (!r.ok || !t) throw new Error(r.error || `Tabela “${nome}” não encontrada.`);
+      const linhas = (Array.isArray(t.linhas) ? t.linhas : []).map(obj);
+      return { saida: recorteTabela(linhas, lerColunas(str(c.colunas)), numeroDe(c.de) ?? undefined, numeroDe(c.ate) ?? undefined) };
+    },
+  },
+  {
     tipo: "centi.reparticoes",
     categoria: "centi",
     rotulo: "Repartições (Tela Protocolo)",
@@ -236,10 +261,20 @@ const NOS: DefNo[] = [
     campos: [
       { chave: "entidades", rotulo: "Entidades", tipo: "texto", entrada: true, ajuda: "Ex.: 2; 3. Vazio = as cadastradas nos órgãos." },
       { chave: "colunas", rotulo: "Trazer todas as colunas da Centi", tipo: "booleano", padrao: false, ajuda: "Em “centi.<coluna>” — escolha as que analisa no nó “Escolher colunas”." },
+      {
+        chave: "dosItens",
+        rotulo: "Só as entidades dos itens que chegam",
+        tipo: "booleano",
+        padrao: false,
+        ajuda: "Ligue a entrada aos DFDs: lê só as entidades (órgãos) deles, uma por vez — nada além do necessário.",
+      },
     ],
-    executar: async (_e, c, ctx) => {
+    executar: async (e, c, ctx) => {
       const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
-      const ents = [...new Set((lista(c.entidades).length ? lista(c.entidades) : Object.values(mapa)).map((x) => x.replace(/^0+(?=\d)/, "")))].filter(Boolean);
+      const doItens = c.dosItens === true ? so(e).map((it) => str(it.entidade)).filter(Boolean) : [];
+      if (c.dosItens === true && !doItens.length) throw new Error("Nenhum item com a entidade da Centi — cadastre o ID da Centi nos órgãos (Órgãos e Unidades).");
+      const base = lista(c.entidades).length ? lista(c.entidades) : doItens.length ? doItens : Object.values(mapa);
+      const ents = [...new Set(base.map((x) => x.replace(/^0+(?=\d)/, "")))].filter(Boolean);
       if (!ents.length) throw new Error("Nenhuma entidade — informe no nó ou cadastre o ID da Centi nos órgãos.");
       const out: Item[] = [];
       // Uma entidade que falha não derruba as outras: segue e avisa; só falha quando NENHUMA respondeu.
@@ -630,6 +665,8 @@ const NOS: DefNo[] = [
       { chave: "coluna", rotulo: "Coluna da tabela", tipo: "caminho", obrigatorio: true, quando: { campo: "onde", valores: ["coluna"] }, ajuda: "Ex.: planejamento ou centi.Id" },
       { chave: "operador", rotulo: "Casa quando a coluna", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
       { chave: "resultado", rotulo: "Resultado", tipo: "selecao", padrao: "primeiro", opcoes: [{ valor: "primeiro", rotulo: "A primeira linha que casa" }, { valor: "todas", rotulo: "Todas as linhas (lista)" }] },
+      { chave: "extraCampo", rotulo: "E também igual: campo do item", tipo: "caminho", ajuda: "Opcional. Ex.: entidade (o mesmo nº pode existir em outro órgão)." },
+      { chave: "extraColuna", rotulo: "… à coluna da tabela", tipo: "caminho", ajuda: "Ex.: entidade" },
     ],
     rodaSemItens: true,
     executar: async (e, c) =>
@@ -638,6 +675,7 @@ const NOS: DefNo[] = [
         coluna: str(c.onde, "coluna") === "tudo" ? "" : str(c.coluna),
         operador: str(c.operador, "igual"),
         resultado: c.resultado === "todas" ? "todas" : "primeiro",
+        extra: { campo: str(c.extraCampo), coluna: str(c.extraColuna) },
       }),
   },
   {
@@ -1116,10 +1154,20 @@ const NOS: DefNo[] = [
     icone: "save",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [],
-    executar: async (e, _c, ctx) => {
-      // Do "Buscar DFD na Centi": cada item JÁ é o DFD (id) com a situação lida — grava direto nesses DFDs.
-      const lidos = so(e).filter((it) => it.centi && typeof it.centi === "object" && str((it.centi as Item).situacao) && Number(it.id) > 0);
+    campos: [
+      {
+        chave: "campoSituacao",
+        rotulo: "Campo da situação",
+        tipo: "caminho",
+        padrao: "centi.situacao",
+        ajuda: "Onde está a situação em cada DFD que chega. Ex.: encontrado.situacao (a linha achada na CM002).",
+      },
+    ],
+    executar: async (e, c, ctx) => {
+      // Cada item JÁ é o DFD (id) com a situação lida (do "Buscar DFD na Centi" ou da linha achada na CM002) — grava direto.
+      const campo = str(c.campoSituacao, "centi.situacao") || "centi.situacao";
+      const situacao = (it: Item) => str(resolverCaminho(it, campo)).trim();
+      const lidos = so(e).filter((it) => situacao(it) && Number(it.id) > 0);
       if (lidos.length) {
         const out: Item[] = [];
         for (let i = 0; i < lidos.length; i += 5000) {
@@ -1128,12 +1176,13 @@ const NOS: DefNo[] = [
             method: "POST",
             body: {
               colunas: ["ID", "SITUACAO"],
-              linhas: f.map((p) => ({ valores: [str(p.planejamento), str((p.centi as Item).situacao)] })),
+              linhas: f.map((p) => ({ valores: [str(p.planejamento), situacao(p)] })),
               dfdIds: f.map((p) => Number(p.id)),
             },
           });
           if (!g.ok) throw new Error(g.error || "Falhou ao gravar a execução.");
           out.push({ lidos: g.lidos, atualizados: g.atualizados });
+          ctx.aviso(`Gravados ${Math.min(i + 5000, lidos.length)} de ${lidos.length}…`);
         }
         return { saida: out };
       }
@@ -1337,6 +1386,41 @@ const NOS: DefNo[] = [
       }
       if (ignorados.length) ctx.aviso(`${ignorados.length} item(ns) sem id ou valor — não gravados.`);
       return { saida, ignorados };
+    },
+  },
+  {
+    tipo: "saida.tabela",
+    categoria: "saida",
+    rotulo: "Salvar em tabela",
+    descricao: "Guarda os itens que chegam numa TABELA com nome — para ver no painel e usar em outras automações (nó “Ler tabela salva”).",
+    icone: "list",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [
+      { chave: "nome", rotulo: "Nome da tabela", tipo: "texto", obrigatorio: true, entrada: true, ajuda: "Ex.: CM002 sem DFD no sistema" },
+      { chave: "colunas", rotulo: "Colunas a guardar", tipo: "textoLongo", ajuda: "Opcional — uma por linha: campo => nome. Vazio = todas." },
+      {
+        chave: "modo",
+        rotulo: "Ao gravar",
+        tipo: "selecao",
+        padrao: "substituir",
+        opcoes: [
+          { valor: "substituir", rotulo: "Substituir as linhas" },
+          { valor: "acrescentar", rotulo: "Acrescentar às linhas" },
+        ],
+      },
+    ],
+    rodaSemItens: true,
+    executar: async (e, c, ctx) => {
+      const nome = str(c.nome).trim();
+      if (!nome) throw new Error("Informe o nome da tabela.");
+      const colunas = lerColunas(str(c.colunas));
+      const linhas = colunas.length ? escolherColunas(so(e), colunas, false) : so(e);
+      const r = await ctx.api("/api/admin/automacao/tabelas", { method: "POST", body: { nome, modo: c.modo === "acrescentar" ? "acrescentar" : "substituir", linhas: linhas.slice(0, MAX_LINHAS_TABELA) } });
+      if (!r.ok) throw new Error(r.error || "Não consegui gravar a tabela.");
+      const cortadas = Number(r.cortadas) || 0;
+      ctx.aviso(`Tabela “${nome}”: ${Number(r.total) || 0} linha(s)${cortadas ? ` — ${cortadas} não couberam` : ""}.`);
+      return { saida: linhas };
     },
   },
   {

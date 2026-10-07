@@ -1742,3 +1742,19 @@ export const mesaColunasValores = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.colunaId, t.alvoId] })],
 );
+
+/** TABELAS das automações (o nó "Salvar em tabela"): as linhas em JSON (≤ 5000), as colunas na ordem; `chave` = o nome sem caixa/acento. */
+export const automacaoTabelas = sqliteTable(
+  "automacao_tabelas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    chave: text("chave").notNull(),
+    colunas: text("colunas").notNull().default("[]"),
+    linhas: text("linhas").notNull().default("[]"),
+    total: integer("total").notNull().default(0),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoPor: integer("atualizado_por").references(() => usuarios.id, { onDelete: "set null" }),
+  },
+  (t) => [uniqueIndex("automacao_tabelas_chave_uq").on(t.chave)],
+);
