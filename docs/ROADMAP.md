@@ -29,6 +29,11 @@ a cada gravação completa, vínculo legado respeitado; consulta pública e cale
 PCA sem avulsos · ✅ Fusão por Id: todos os de mesmo Id conferidos, recusa com PCA, sem rastro em dobro · ✅ Re-importar um
 protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
 
+### DFDs com textos longos aceitos (v1.54.2) — entregue
+✅ Descrição do item, objeto, órgão, setor, responsável e texto de cada seção até **20 mil caracteres** (`MAX_TEXTO_DFD`) na
+importação, no reenvio e na edição — antes um DFD com uma descrição acima de 4.000 era recusado inteiro ("Grande demais",
+reenvio do 122516/2026) · ✅ Os itens vão ao servidor em lotes de até 200 **e** ~500 mil caracteres (nenhum pedido pesado).
+
 ### Fluxos de automação estilo N8N (v1.24.0) — entregue
 Editor visual de fluxos na Automação: blocos de busca (Centi/sistema), leitura de protocolos, lógica (SE, Comparar, Laço até
 o fim), transformação, apontar erros e saída; frequência por fluxo e modelos prontos. Próximas fases (o registro de nós já

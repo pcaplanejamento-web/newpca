@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.54.2",
+    data: "2026-10-07",
+    titulo: "DFDs com textos longos aceitos",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "DFDs com descrição de item, objeto, órgão, setor ou seção muito longos eram recusados na protocolação, no reenvio e na importação avulsa (“Grande demais: esperava que o texto tivesse <= 4000 caracteres”). Agora cada um desses textos aceita até 20 mil caracteres — também ao editar o DFD gravado.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "O envio dos itens de um DFD se divide também pelo tamanho das descrições: DFDs com muitas descrições longas são gravados sem nenhum pedido pesado.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.54.1",
     data: "2026-10-07",
     titulo: "Seleção das automações com os itens certos",

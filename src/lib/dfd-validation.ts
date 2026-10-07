@@ -42,6 +42,12 @@ export function faltasObrigatorias(
   return avaliarDfd(d, regras, ctx).bloqueantes;
 }
 
+/** Textos LONGOS do DFD — descrição do item, objeto, órgão, setor, responsável e o texto de cada seção. O leitor nunca
+ * corta (a descrição do item pode atravessar páginas), então o teto só barra o absurdo: cabe numa célula do .xlsx
+ * exportado (32.767) e a linha do DFD (os campos + 50 seções) fica abaixo dos 2 MB por linha do D1. */
+export const MAX_TEXTO_DFD = 20_000;
+const textoLongoOpc = z.string().trim().max(MAX_TEXTO_DFD).optional().nullable();
+/** Textos da capa do protocolo (interessado, assunto, local). */
 const textoOpc = z.string().trim().max(4000).optional().nullable();
 const textoCurtoOpc = z.string().trim().max(255).optional().nullable();
 /** Referências de renovação (DFD-R): VÁRIAS por campo, separadas por "; " (`SEPARADOR_REFS`). */
@@ -50,7 +56,7 @@ const refsOpc = z.string().trim().max(1000).optional().nullable();
 const dfdItemSchema = z.object({
   item: z.number().int().optional().nullable(),
   codigo: textoCurtoOpc,
-  descricao: textoOpc,
+  descricao: textoLongoOpc,
   unidade: z.string().trim().max(100).optional().nullable(),
   quantidade: z.number().optional().nullable(),
   valorUnitario: z.number().optional().nullable(),
@@ -60,7 +66,7 @@ const dfdItemSchema = z.object({
 const dfdSecaoSchema = z.object({
   numero: z.number().int().nonnegative(),
   titulo: z.string().trim().max(300),
-  texto: z.string().max(10000),
+  texto: z.string().max(MAX_TEXTO_DFD),
 });
 
 /** Uma assinatura digital lida do PDF (ver `Assinatura` em parse-dfd-comum). */
@@ -99,11 +105,11 @@ export const dfdMetaSchema = z.object({
   numero: z.coerce.string().trim().min(1, "Número do DFD ausente no arquivo.").max(50),
   planejamento: textoCurtoOpc,
   tipo: textoCurtoOpc,
-  objeto: textoOpc,
-  orgaoEntidade: textoCurtoOpc,
-  setorRequisitante: textoOpc,
+  objeto: textoLongoOpc,
+  orgaoEntidade: textoLongoOpc,
+  setorRequisitante: textoLongoOpc,
   siglaSetor: z.string().trim().max(60).optional().nullable(),
-  responsavel: textoCurtoOpc,
+  responsavel: textoLongoOpc,
   matricula: textoCurtoOpc,
   email: textoCurtoOpc,
   telefone: textoCurtoOpc,
@@ -240,10 +246,10 @@ export const editarDfdSchema = z
     numeroAta: refsOpc,
     numeroLicitacao: refsOpc,
     // Conteúdo do cabeçalho (cadeado por campo). Identificadores ficam de fora (imutáveis).
-    objeto: textoOpc,
-    orgaoEntidade: textoOpc,
-    setorRequisitante: textoOpc,
-    responsavel: textoOpc,
+    objeto: textoLongoOpc,
+    orgaoEntidade: textoLongoOpc,
+    setorRequisitante: textoLongoOpc,
+    responsavel: textoLongoOpc,
     matricula: textoCurtoOpc,
     email: textoCurtoOpc,
     telefone: textoCurtoOpc,

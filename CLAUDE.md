@@ -1490,7 +1490,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Escrita de DFD em LOTES (escala a milhares de itens):** `dfd.ts` decompõe em `upsertDfdCabecalho` (cabeçalho +
   apaga itens antigos + 1º lote) e `appendDfdItens` (lotes seguintes, **11×9=99** params). `POST /api/dfd` é uma
   **discriminated union em `mode`** (`start-dfd` | `append-dfd-itens`, `dfdOpSchema`) — o cliente
-  (`src/lib/importar-dfd.ts`, `enviarDfdEmLotes`) envia em lotes de 200 com **barra de progresso** (`Progress`).
+  (`src/lib/importar-dfd.ts`, `enviarDfdEmLotes`) envia em lotes de até 200 itens **e** até ~500 mil caracteres de
+  descrição (`LOTE_CARACTERES` — `finsDosLotes`: descrições longas nunca fazem um pedido pesado para o Worker) com
+  **barra de progresso** (`Progress`).
   `start-dfd` re-valida `faltasObrigatorias` (defeituoso nunca grava, 422); idempotente por `numero` (retomável).
 - **Gravação garantida (all-or-nothing por DFD):** `enviarDfdEmLotes` faz **retry** de falha transitória (rede/5xx;
   4xx não) e, se um lote falhar de vez, **apaga o DFD parcial** (`DELETE`) — não fica DFD pela metade. **Exceção: DFD que
@@ -1513,8 +1515,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   o `PATCH /api/protocolo/[id]`
   (`editarProtocoloSchema`) edita a **repartição + os campos de CONTEÚDO da capa** (interessado/assunto/observação/
   CPF-CNPJ/valor/local) — os **IDENTIFICADORES** (número/Id/data/ano do PCA) são IMUTÁVEIS (o schema **não** os aceita).
-  Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod;
-  Drizzle parametriza (sem SQL injection).
+  Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod; **textos longos do DFD** (descrição do item, objeto, órgão,
+  setor, responsável e o texto de cada seção — na importação E na edição) até **`MAX_TEXTO_DFD` = 20 mil caracteres**
+  (`dfd-validation.ts`, v1.54.2): o leitor nunca corta, cabe numa célula do .xlsx exportado (32.767) e a linha do DFD (os
+  campos + 50 seções) fica abaixo dos 2 MB por linha do D1 — antes eram 4.000/255/10.000 e o DFD com uma descrição técnica
+  longa era recusado INTEIRO ("Grande demais: esperava que o texto tivesse <= 4000 caracteres"); a capa do protocolo segue
+  com 4.000 (`textoOpc`). Drizzle parametriza (sem SQL injection).
 - Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `PATCH`/`DELETE /api/pca/[id]`
   (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (cards 4:5 → espaço do PCA, ver "PCA como ESPAÇO");
   a edição legada segue em `/painel/pca/edicao/[id]`.

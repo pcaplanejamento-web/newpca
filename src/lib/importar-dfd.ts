@@ -38,7 +38,28 @@ export function metaDoDfd(
 }
 
 const LOTE = 200; // itens por request no cliente (o servidor aceita até 1000)
+// …e até ~500 mil caracteres de descrição por request: descrições longas (até `MAX_TEXTO_DFD` cada) nunca fazem um
+// pedido pesado demais para o Worker.
+const LOTE_CARACTERES = 500_000;
 const TENTATIVAS = 3; // tentativas por request (só p/ falhas transitórias)
+
+/** Onde cada lote termina: até `LOTE` itens e até `LOTE_CARACTERES` de descrição — sempre ao menos 1 item. */
+function finsDosLotes(itens: DfdItemPayload[]): number[] {
+  const fins: number[] = [];
+  let inicio = 0;
+  let caracteres = 0;
+  for (let i = 0; i < itens.length; i++) {
+    const n = itens[i].descricao?.length ?? 0;
+    if (i > inicio && (i - inicio >= LOTE || caracteres + n > LOTE_CARACTERES)) {
+      fins.push(i);
+      inicio = i;
+      caracteres = 0;
+    }
+    caracteres += n;
+  }
+  fins.push(itens.length);
+  return fins;
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -96,14 +117,15 @@ export async function enviarDfdEmLotes(
   opcoes: { existia?: boolean } = {},
 ): Promise<{ dfdId: number }> {
   const total = itens.length;
-  const j = await postDfd({ mode: "start-dfd", ...meta, totalItens: total, rows: itens.slice(0, LOTE) });
+  const fins = finsDosLotes(itens);
+  const j = await postDfd({ mode: "start-dfd", ...meta, totalItens: total, rows: itens.slice(0, fins[0]) });
   const dfdId = Number(j.dfdId);
-  let enviados = Math.min(LOTE, total);
+  let enviados = fins[0];
   onLote?.(enviados, total);
   try {
-    for (let i = LOTE; i < total; i += LOTE) {
-      await postDfd({ mode: "append-dfd-itens", dfdId, desde: i, rows: itens.slice(i, i + LOTE) });
-      enviados = Math.min(i + LOTE, total);
+    for (const fim of fins.slice(1)) {
+      await postDfd({ mode: "append-dfd-itens", dfdId, desde: enviados, rows: itens.slice(enviados, fim) });
+      enviados = fim;
       onLote?.(enviados, total);
     }
   } catch (e) {
