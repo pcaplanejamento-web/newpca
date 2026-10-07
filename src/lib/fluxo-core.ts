@@ -205,6 +205,26 @@ export function portasDo(def: DefNo | undefined): { entradas: string[]; saidas: 
 }
 
 /** Os problemas do fluxo (erros impedem executar; atenções não). */
+/** O trecho do grafo ANTES de um nó (os ancestrais pelas conexões, sem o próprio nó) — a prévia de uma seleção. */
+export function subgrafoAte(g: Grafo, noId: string): Grafo {
+  const ids = new Set<string>();
+  const fila = g.conexoes.filter((c) => c.para === noId).map((c) => c.de);
+  while (fila.length) {
+    const id = fila.pop() as string;
+    if (id === noId || ids.has(id)) continue;
+    ids.add(id);
+    for (const c of g.conexoes) if (c.para === id) fila.push(c.de);
+  }
+  return { v: 1, nos: g.nos.filter((n) => ids.has(n.id)), conexoes: g.conexoes.filter((c) => ids.has(c.de) && ids.has(c.para)) };
+}
+
+/** As categorias que só LEEM — o trecho de uma prévia nunca grava nada (saída, erros e subfluxos ficam de fora). */
+const SO_LEITURA: ReadonlySet<CategoriaNo> = new Set(["gatilho", "entrada", "centi", "sistema", "leitura", "logica", "dados"]);
+/** O trecho tem nós e todos só leem. */
+export function subgrafoSoLeitura(g: Grafo, reg: Registro): boolean {
+  return g.nos.length > 0 && g.nos.every((n) => SO_LEITURA.has(reg.get(n.tipo)?.categoria as CategoriaNo));
+}
+
 export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
   const p: ProblemaGrafo[] = [];
   const nome = (n: NoFluxo) => nomeDoNo(n, reg);

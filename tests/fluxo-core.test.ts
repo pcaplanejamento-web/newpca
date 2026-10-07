@@ -12,6 +12,8 @@ import {
   numeroDe,
   proximaExecucao,
   resolverCaminho,
+  subgrafoAte,
+  subgrafoSoLeitura,
   temCicloSemLaco,
   validarGrafo,
 } from "../src/lib/fluxo-core.ts";
@@ -552,4 +554,16 @@ test("fluxos por ADM: o dono mexe; o público e o sem dono, qualquer ADM lê", a
   assert.equal(fluxoEditavel(publico, 1), true);
   assert.equal(fluxoVisivel(semDono, 2), true);
   assert.equal(fluxoEditavel(semDono, 2), true);
+});
+
+test("prévia da seleção: só o trecho antes dela e só de leitura", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "substituir-dfds-centi");
+  assert.ok(m);
+  const sub = subgrafoAte(m.grafo, "sel1");
+  assert.deepEqual(sub.nos.map((n) => n.id).sort(), ["dfds1", "inicio1"]);
+  assert.equal(sub.conexoes.length, 1);
+  assert.equal(subgrafoSoLeitura(sub, REGISTRO_NOS), true);
+  assert.equal(subgrafoSoLeitura(subgrafoAte(m.grafo, "err2"), REGISTRO_NOS), false);
+  assert.equal(subgrafoSoLeitura({ v: 1, nos: [], conexoes: [] }, REGISTRO_NOS), false);
 });

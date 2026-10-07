@@ -4335,7 +4335,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   /api/dfd/[id]` → o MESMO nº de planejamento (senão erro) → `normalizarSecoesDfd` + `herdarTratamentos` (sem assinatura lida
   — PDF sem OCR — ficam as do gravado) → `enviarDfdEmLotes(metaDoDfd(…, {origem:"sobrescrita"}), …, {existia:true})` — a
   unidade, o protocolo e o PCA do gravado ficam; `metaDoDfd` (`importar-dfd.ts`) é o cabeçalho único do envio (também na
-  protocolação automática). Modelo **`substituir-dfds-centi`** (Início → Ler do sistema pelo `{{planejamento}}` → `entrada.selecionar` [v1.49.1: o usuário marca QUAIS DFDs serão substituídos; nenhum vem marcado] → Órgão na
+  protocolação automática). Modelo **`substituir-dfds-centi`** (Início → Ler do sistema pelo `{{planejamento}}` → `entrada.selecionar` [v1.49.1: o usuário marca QUAIS DFDs serão substituídos; nenhum vem marcado]. **PRÉVIA da seleção (v1.49.2, padrão de TODA automação):** o `entrada.selecionar` sem itens roda sozinho SÓ o trecho antes dele (`subgrafoAte`) quando ele só lê (`subgrafoSoLeitura` — sem saída/erros/subfluxo), com os itens da Mesa se vieram (`HostPainel.carregarPrevia`/`previas`); "Recarregar itens" no rodapé da tabela → Órgão na
   Centi → Buscar DFD {completo} → Substituir). **Mesa do SISTEMA (nunca a do PCA):** `AutomacoesMesa` (DS — o quadrado
   `IconRobo` na barra, ao lado dos Dados completos) lista as automações da preferência PESSOAL `automacao:mesa` `{ids}`
   (`automacao-mesa.ts`: `idsAutomacoesMesa`/`alternarAutomacaoMesa`; `automacoesDaMesa` em `fluxos.ts` — só as que a pessoa

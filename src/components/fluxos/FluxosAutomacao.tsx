@@ -24,6 +24,8 @@ import {
   rotuloFrequencia,
   subfluxosDoGrafo,
   validarGrafo,
+  subgrafoAte,
+  subgrafoSoLeitura,
 } from "@/lib/fluxo-core";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
@@ -189,6 +191,9 @@ export function FluxosAutomacao({
   // O que o PAINEL mostra: a saída completa de cada nó, os itens processados AO VIVO, os DFDs do Baixar/anexar.
   const [saidas, setSaidas] = useState<Record<string, Item[]>>({});
   const [parciais, setParciais] = useState<Record<string, Item[]>>({});
+  // A PRÉVIA de cada seleção (o trecho só de leitura antes dela) e os itens vindos da Mesa (para a prévia usá-los também).
+  const [previas, setPrevias] = useState<Record<string, { carregando: boolean; erro?: string }>>({});
+  const entradaMesa = useRef<Item[] | null>(null);
   const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
   const [pasta, setPasta] = useState<PastaDestino | null>(null);
   const [podePasta, setPodePasta] = useState(false);
@@ -298,6 +303,7 @@ export function FluxosAutomacao({
         if (!agendado) toast.warning("A extensão da Centi não está pronta (instale, abra a Centi e entre).");
         return null;
       }
+      if (entrada) entradaMesa.current = entrada;
       rodandoRef.current = f.id;
       setRodando(f.id);
       setExec({ id: f.id, nome: f.nome, total: grafo.nos.length });
@@ -521,6 +527,26 @@ export function FluxosAutomacao({
     },
     [pedir, importacao.regras],
   );
+  /** Roda SÓ o trecho de leitura antes de uma seleção e põe o que ele produziu nas saídas — a tabela já lista os itens. */
+  const carregarPrevia = useCallback(
+    async (grafo: Grafo, no: string) => {
+      const sub = subgrafoAte(grafo, no);
+      if (!subgrafoSoLeitura(sub, REGISTRO_NOS) || rodandoRef.current != null) return;
+      setPrevias((m) => ({ ...m, [no]: { carregando: true } }));
+      const r = await executarFluxo(sub, REGISTRO_NOS, {
+        centi: (a, d, ms) => pedir(a, d, ms),
+        api,
+        cancelado: () => false,
+        host: { ...host, __cache: new Map<string, unknown>(), carregarFluxo: carregadorDeFluxos(), ...(entradaMesa.current ? { __entrada: entradaMesa.current } : {}) },
+        aoConcluir: (id, ps) => {
+          const its = Object.entries(ps).find(([k, v]) => k !== "__apontados" && k !== "__retorno" && k !== "erro" && v.length)?.[1] ?? [];
+          setSaidas((m) => ({ ...m, [id]: its }));
+        },
+      }).catch((e: unknown) => ({ estado: "falhou" as const, erro: e instanceof Error ? e.message : String(e) }));
+      setPrevias((m) => ({ ...m, [no]: { carregando: false, erro: r.estado === "falhou" ? (r.erro ?? "Não consegui carregar os itens.") : undefined } }));
+    },
+    [pedir, host],
+  );
   const recomecar = useCallback(async (no: string) => {
     if (aberto == null) return;
     await progressoDe(aberto).limpar(no);
@@ -565,8 +591,10 @@ export function FluxosAutomacao({
       fluxos: listaFluxos,
       fluxoAtual: aberto,
       recomecar,
+      previas,
+      carregarPrevia: (g, no) => void carregarPrevia(g, no),
     }),
-    [listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
+    [previas, carregarPrevia, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
   );
   return (
     <HostPainelCtx.Provider value={hostPainel}>

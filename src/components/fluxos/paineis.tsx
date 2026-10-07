@@ -1,13 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AlvoCenti, ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
-import { caminhosDosItens, type Grafo, type Item, type NoFluxo } from "@/lib/fluxo-core";
+import { caminhosDosItens, type Grafo, type Item, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
 import { chaveSelecao, REGISTRO_NOS, selecionados } from "@/lib/fluxo-nos";
 import { Badge, type Tone } from "../Badge";
+import { BotaoAtualizar } from "../BotaoAtualizar";
 import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
 import { SelectField } from "../Field";
@@ -47,6 +48,9 @@ export type HostPainel = {
   fluxoAtual: number | null;
   /** Esquece o progresso de um nó "Executar fluxo" (a próxima execução recomeça do zero). */
   recomecar: (no: string) => Promise<void>;
+  /** A prévia de cada seleção: roda o trecho só de leitura antes dela e lista os itens (sem executar o fluxo). */
+  previas: Record<string, { carregando: boolean; erro?: string }>;
+  carregarPrevia: (grafo: Grafo, no: string) => void;
 };
 export const HostPainelCtx = createContext<HostPainel | null>(null);
 const useHost = () => useContext(HostPainelCtx);
@@ -153,6 +157,17 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
   const host = useHost();
   const origem = anteriores(grafo, no.id)[0];
   const itens = useMemo(() => (host && origem ? itensDoNo(grafo, origem, host) : []), [host, grafo, origem]);
+  // PRÉVIA (padrão de toda seleção): sem itens, roda sozinho o trecho só de leitura antes dela — uma vez por grafo.
+  const previa = host?.previas[no.id];
+  const podePrevia = useMemo(() => !!origem && subgrafoSoLeitura(subgrafoAte(grafo, no.id), REGISTRO_NOS), [grafo, no.id, origem]);
+  const chaveGrafo = JSON.stringify(subgrafoAte(grafo, no.id));
+  const pedida = useRef("");
+  const carregar = host?.carregarPrevia;
+  useEffect(() => {
+    if (!carregar || !podePrevia || itens.length || host?.rodando || pedida.current === chaveGrafo) return;
+    pedida.current = chaveGrafo;
+    carregar(grafo, no.id);
+  }, [carregar, podePrevia, itens.length, host?.rodando, chaveGrafo, grafo, no.id]);
   const marcados = useMemo(() => new Set((Array.isArray(no.config.marcados) ? no.config.marcados : []).map(String)), [no.config.marcados]);
   const ehProtocolo = origem?.tipo === "sistema.protocolos" && no.config.dfds !== true && itens.some((it) => Array.isArray(it.dfds));
   const gestao = useColunasGestao(host?.gestao ?? { pessoas: [], outras: [], situacoes: [], usuarioId: 0 });
@@ -193,7 +208,22 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
       onRowClick={ehProtocolo && host ? (it) => host.abrirProtocolo(Number(it.id)) : undefined}
       density="compact"
       scrollInterno
-      vazio={origem ? "Execute o fluxo para listar os itens; depois marque e execute de novo." : "Ligue um componente à entrada desta seleção."}
+      vazio={
+        !origem
+          ? "Ligue um componente à entrada desta seleção."
+          : previa?.carregando
+            ? "Carregando itens…"
+            : previa?.erro
+              ? `Não consegui carregar os itens: ${previa.erro}`
+              : podePrevia
+                ? "Nenhum item encontrado."
+                : "Execute o fluxo para listar os itens; depois marque e execute de novo."
+      }
+      acoesRodape={
+        podePrevia && host ? (
+          <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={() => host.carregarPrevia(grafo, no.id)} disabled={host.rodando} />
+        ) : undefined
+      }
       resumo={(ls) => `${ls.length} item(ns) · ${marcados.size} marcado(s)`}
     />
   );

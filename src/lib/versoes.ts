@@ -32,6 +32,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.49.2",
+    data: "2026-10-07",
+    titulo: "A seleção das automações carrega os itens sozinha",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "A tabela “Selecionar itens” de qualquer automação já lista os itens ao abrir (lê só o que vem antes dela, sem gravar nada) — com “Recarregar itens” no rodapé. Marque e execute.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.49.1",
     data: "2026-10-07",
     titulo: "Escolher quais DFDs serão substituídos",
