@@ -29,6 +29,7 @@ export type EntidadeAuditoria =
   | "permissao"
   | "orgao"
   | "reparticao"
+  | "responsavel"
   | "usuario"
   | "configuracao"
   | "planilha"
@@ -82,6 +83,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   permissao: "Permissão",
   orgao: "Órgão",
   reparticao: "Unidade",
+  responsavel: "Responsável por DFDs",
   usuario: "Usuário",
   configuracao: "Configuração",
   planilha: "Planilha (PCA)",

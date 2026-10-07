@@ -6,7 +6,8 @@ import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao } from "@/lib/orgaos";
 import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
-import { podeRebaixarOrgao, propriaRebaixada, unidadeDeOrgao } from "@/lib/orgao-unidade-ops";
+import { podeRebaixarOrgao, propriaRebaixada, unidadeDeOrgao, vinculosNoRebaixar } from "@/lib/orgao-unidade-ops";
+import { comandoApagarVinculos, comandoMoverVinculos, consultaContaVinculos } from "@/lib/responsaveis-sql";
 import { rebaixarOrgaoSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       sigla: orgaos.sigla,
       nome: orgaos.nome,
       numeroInteressado: orgaos.numeroInteressado,
-      responsavelDfd: orgaos.responsavelDfd,
       assinaturaUnica: orgaos.assinaturaUnica,
       oculto: orgaos.oculto,
     })
@@ -61,7 +61,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const [propria] =
     propriaId != null
       ? await db
-          .select({ numeroInteressado: reparticoes.numeroInteressado, responsavelDfd: reparticoes.responsavelDfd, oculto: reparticoes.oculto })
+          .select({ numeroInteressado: reparticoes.numeroInteressado, oculto: reparticoes.oculto })
           .from(reparticoes)
           .where(eq(reparticoes.id, propriaId))
           .limit(1)
@@ -79,6 +79,24 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           .insert(reparticoes)
           .values({ ...unidadeDeOrgao(o, destino), ordem: Number(max) + 1 })
           .returning({ id: reparticoes.id });
+  // Os RESPONSÁVEIS do órgão nunca ficam para trás (o órgão é excluído — os vínculos dele iriam em cascata).
+  const [[{ n: doOrgao }], [{ n: daPropria }]] = await Promise.all([
+    consultaContaVinculos(db, { orgaoId: id }),
+    propriaId != null ? consultaContaVinculos(db, { reparticaoId: propriaId }) : Promise.resolve([{ n: 0 }]),
+  ]);
+  const responsaveis = vinculosNoRebaixar({
+    propria: !!propria,
+    orgaoUnica: o.assinaturaUnica,
+    orgaoTemVinculos: Number(doOrgao) > 0,
+    propriaTemVinculos: Number(daPropria) > 0,
+  });
+  const stmtsResp =
+    responsaveis === "manter"
+      ? []
+      : [
+          ...(responsaveis === "substituirPelosDoOrgao" ? [comandoApagarVinculos(db, { reparticaoId: unidade })] : []),
+          comandoMoverVinculos(db, { orgaoId: id }, { reparticaoId: unidade }),
+        ];
   // Realinha os vínculos (antes de excluir o órgão): DFD sem unidade ou já na unidade → unidade + órgão
   // destino; DFD em outra unidade → o órgão DELA. Protocolo em nome do órgão → passa a ser da unidade.
   const stmts = [
@@ -95,6 +113,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       .update(dfdProtocolos)
       .set({ orgaoId: null, reparticaoId: sql`COALESCE(${dfdProtocolos.reparticaoId}, ${unidade})` })
       .where(eq(dfdProtocolos.orgaoId, id)),
+    ...stmtsResp,
     db.delete(orgaos).where(eq(orgaos.id, id)),
   ];
   const [ins] = await db.batch(stmts as unknown as Parameters<typeof db.batch>[0]);

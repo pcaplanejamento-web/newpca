@@ -533,11 +533,11 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "ass-responsaveis",
     dominio: "assinatura",
-    titulo: "Responsáveis por DFDs: padrões e temporários",
+    titulo: "Responsáveis por DFDs: planilha única, padrões e temporários",
     descricao:
-      "Cada repartição tem N responsáveis padrões e N temporários. No período de um temporário, ele é o efetivo (os padrões ficam em cinza); fora do período, volta aos padrões — com estados Agendado/Vigente/Encerrado. Cada responsável tem nome, matrícula, função e uma nomeação (ato + número + link).",
-    fonte: "ResponsaveisEditor / reparticao-responsaveis",
-    configuravelEm: { rotulo: "Unidades", href: "/painel/orgaos" },
+      "As pessoas ficam numa PLANILHA ÚNICA (nome + matrícula, cadastradas uma vez) e são VINCULADAS a unidades ou órgãos: no órgão de assinatura única, os vínculos do órgão valem para todas as unidades; no órgão por unidade, cada unidade tem os seus. Cada vínculo é padrão ou temporário, com função e nomeação (ato + número + link). No período de um temporário, ele é o efetivo (os padrões ficam inativos); fora do período, volta aos padrões — estados Agendado/Vigente/Encerrado. A coluna Conferência aponta o que está mal cadastrado.",
+    fonte: "responsaveis-planilha-core / PlanilhaResponsaveis / reparticao-responsaveis",
+    configuravelEm: { rotulo: "Órgãos e Unidades → Responsáveis", href: "/painel/orgaos?aba=responsaveis" },
   },
 
   // ---- PCA ----

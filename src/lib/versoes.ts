@@ -32,12 +32,47 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.53.0",
+    versao: "1.54.0",
     data: "2026-10-07",
     titulo: "Baixar DFDs por DFD e andamento sempre à vista",
     mudancas: [
       { tipo: "novo", area: "Automação", texto: "Modelo “Baixar DFDs · por DFD”: escolha DFD a DFD no sistema (ou os selecionados na Mesa) e baixe cada um da Centi.", link: "/painel/automacao" },
       { tipo: "melhoria", area: "Automação", texto: "O andamento fica minimizado no canto em qualquer tela, inclusive na da Automação; expandir mostra DFD a DFD (Salvo, Falhou, Baixando) com a contagem correta.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.53.0",
+    data: "2026-10-07",
+    titulo: "Responsáveis por DFDs numa planilha única",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Órgãos e Unidades",
+        texto:
+          "Planilha única dos responsáveis: cada pessoa (nome + matrícula) é cadastrada uma vez e vinculada a unidades ou órgãos — padrão ou temporário, com função, nomeação e período. Os responsáveis cadastrados antes foram convertidos sem perder nada.",
+        link: "/painel/orgaos?aba=responsaveis",
+      },
+      {
+        tipo: "novo",
+        area: "Órgãos e Unidades",
+        texto:
+          "Vincular segue a regra do órgão: assinatura única = os responsáveis do órgão; por unidade = os de cada unidade. Escolha a pessoa da planilha (busca por nome ou matrícula) ou cadastre na hora.",
+        link: "/painel/orgaos",
+      },
+      {
+        tipo: "novo",
+        area: "Órgãos e Unidades",
+        texto:
+          "Coluna Conferência: aponta quem está sem responsável vigente, sem matrícula, sem função ou nomeação, temporário encerrado e nomes repetidos com matrículas diferentes.",
+        link: "/painel/orgaos",
+      },
+      {
+        tipo: "melhoria",
+        area: "Órgãos e Unidades",
+        texto:
+          "Tabelas de órgãos e unidades no padrão da Mesa (filtros por coluna, exportar XLSX/PDF) e um banner por órgão/unidade com os dados por cadeado, os responsáveis, a estrutura, ocultar e excluir.",
+        link: "/painel/orgaos",
+      },
     ],
   },
   {

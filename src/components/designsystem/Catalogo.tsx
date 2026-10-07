@@ -240,8 +240,11 @@ import { PreviaDocumento } from "@/components/PreviaDocumento";
 import { BotaoAcao } from "@/components/BotaoAcao";
 import { IndicadorPendencias } from "@/components/IndicadorPendencias";
 import { Dropzone } from "@/components/Dropzone";
-import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
-import type { Responsaveis } from "@/lib/reparticao-responsaveis";
+import { BannerCadastro } from "@/components/BannerCadastro";
+import { CelulaConferencia } from "@/components/PlanilhaResponsaveis";
+import { SecaoBanner } from "@/components/SecaoBanner";
+import { type AberturaVinculo, CelulaResponsaveis, dadosVazios, EditorVinculo, ListaVinculos } from "@/components/VinculosResponsaveis";
+import type { VinculoComPessoa } from "@/lib/responsaveis-planilha-core";
 import { duracaoMotionMs, Modal } from "@/components/Modal";
 import { MonitoramentoWorker } from "@/components/MonitoramentoWorker";
 import { SaudeDados } from "@/components/SaudeDados";
@@ -3136,26 +3139,8 @@ export function Catalogo() {
   ]);
   const [editorDemo, setEditorDemo] = useState<"dfds" | "protocolos" | "itens">("dfds");
   const [dzFile, setDzFile] = useState<string | null>(null);
-  const [respDemo, setRespDemo] = useState<Responsaveis>({
-    padroes: [
-      {
-        nome: "Ana Souza",
-        matricula: "12345",
-        funcao: "Secretária",
-        nomeacao: { tipo: "portaria", numero: "10/2025", link: "https://exemplo.gov.br/portaria-10" },
-      },
-    ],
-    temporarios: [
-      {
-        nome: "Carlos Lima",
-        matricula: "67890",
-        funcao: "Diretor",
-        nomeacao: { tipo: "decreto", numero: "5/2026", link: "" },
-        inicio: "2026-01-01",
-        fim: "2026-12-31",
-      },
-    ],
-  });
+  const [vincDemo, setVincDemo] = useState<AberturaVinculo | null>(null);
+  const [cadDemo, setCadDemo] = useState(false);
   const [pag, setPag] = useState(2);
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
@@ -3972,10 +3957,60 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Responsáveis (N padrões + N temporários; nomeação portaria/decreto/lei + link, matrícula/função)">
-        <div className="max-w-lg">
-          <ResponsaveisEditor valor={respDemo} onChange={setRespDemo} />
+      <Secao titulo="Responsáveis por DFDs (planilha única: a pessoa + os vínculos — padrão/temporário, função, nomeação, período)">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <CelulaResponsaveis nomes={["Carlos Lima"]} temporario />
+              <CelulaResponsaveis nomes={[]} temporario={false} nota="Pelo órgão (PMRV)" />
+              <CelulaConferencia msgs={[]} />
+              <CelulaConferencia msgs={[{ status: "erro", chave: "resp.semVigente", texto: "Sem responsável vigente.", rotulo: "Sem responsável" }]} />
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setVincDemo({ responsavelId: null, alvo: "u1", dados: dadosVazios("padrao") })}>
+              Abrir o editor do vínculo
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setCadDemo(true)}>
+              Abrir o banner de cadastro
+            </Button>
+          </div>
+          <ListaVinculos
+            vinculos={VINCULOS_DEMO}
+            irmaos={() => VINCULOS_DEMO}
+            hoje="2026-06-15"
+            titulo={(v) => ({ texto: v.nome, detalhe: `Matrícula ${v.matricula}` })}
+            vazio="Nenhum responsável."
+            onEditar={() => toast.info("Editar o vínculo")}
+            onRemover={() => toast.info("Remover o vínculo")}
+          />
         </div>
+        <EditorVinculo
+          abertura={vincDemo}
+          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula }))}
+          alvos={[]}
+          alvoFixo={{ rotulo: "SMS — Secretaria Municipal de Saúde · PMRV" }}
+          ocupado={false}
+          onCriarPessoa={async () => 99}
+          onSalvar={async () => true}
+          onFechar={() => setVincDemo(null)}
+        />
+        <BannerCadastro
+          aberto={cadDemo}
+          novo={false}
+          titulo="SMS — Secretaria Municipal de Saúde"
+          campos={[
+            { chave: "codigo", label: "Sigla", mono: true, obrigatorio: true },
+            { chave: "nome", label: "Nome", span: true, obrigatorio: true },
+          ]}
+          inicial={{ codigo: "SMS", nome: "Secretaria Municipal de Saúde" }}
+          ocupado={false}
+          onSalvar={async () => true}
+          onFechar={() => setCadDemo(false)}
+          confirmarDescarte={async () => true}
+        >
+          <SecaoBanner titulo="Outra seção">
+            <p className="text-[13px] text-muted">As demais seções do cadastro (responsáveis, estrutura…).</p>
+          </SecaoBanner>
+        </BannerCadastro>
       </Secao>
 
       <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha + Exportar .xlsx — as linhas filtradas e as colunas à vista)">
@@ -4823,3 +4858,8 @@ function DemoSegundoPlano() {
     </div>
   );
 }
+
+const VINCULOS_DEMO: VinculoComPessoa[] = [
+  { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "Secretária", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: null, fim: null, ordem: 0 },
+  { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
+];

@@ -50,32 +50,32 @@ export const grupoAtivoSchema = z.object({ grupoId: z.number().int().positive("G
 /** Unidade ativa do cabeçalho (cookie). */
 export const reparticaoAtivaSchema = z.object({ reparticaoId: z.number().int().positive("Unidade inválida.") });
 
-// Nomeação (ato) de um responsável: portaria/decreto/lei + número + link (todos opcionais).
-const nomeacaoSchema = z.object({
-  tipo: z.enum(["portaria", "decreto", "lei"]).nullable().default(null),
-  numero: z.string().trim().max(120).default(""),
-  link: z.string().trim().max(500).default(""),
-});
-const responsavelSchema = z.object({
-  nome: z.string().trim().max(160),
+// RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA (migração 0099): a PESSOA (nome + matrícula) e o VÍNCULO dela com uma
+// unidade OU um órgão (padrão | temporário + função + nomeação + período). As regras do vínculo moram no núcleo puro
+// (`motivoVinculoInvalido`, `responsaveis-planilha-core.ts`) — a MESMA na tela e na rota.
+export const pessoaResponsavelSchema = z.object({
+  nome: z.string().trim().min(1, "Informe o nome.").max(160),
   matricula: z.string().trim().max(60).default(""),
-  funcao: z.string().trim().max(120).default(""),
-  nomeacao: nomeacaoSchema.default({ tipo: null, numero: "", link: "" }),
 });
-const responsavelTemporarioSchema = responsavelSchema.extend({
-  inicio: z.string().trim().max(10).default(""), // "YYYY-MM-DD"
-  fim: z.string().trim().max(10).default(""),
-});
+export const pessoaResponsavelPatchSchema = pessoaResponsavelSchema.partial();
 
-// Responsáveis por DFDs (N padrões + N temporários) — mesmo shape na unidade E no órgão
-// (assinatura única). Fonte única do schema.
-const responsaveisSchema = z
-  .object({
-    padroes: z.array(responsavelSchema).max(30).default([]),
-    temporarios: z.array(responsavelTemporarioSchema).max(30).default([]),
+const dadosVinculoSchema = z.object({
+  tipo: z.enum(["padrao", "temporario"]),
+  funcao: z.string().trim().max(120).default(""),
+  atoTipo: z.enum(["portaria", "decreto", "lei"]).nullable().default(null),
+  atoNumero: z.string().trim().max(120).default(""),
+  atoLink: z.string().trim().max(500).default(""),
+  inicio: z.string().trim().max(10).nullable().default(null), // "YYYY-MM-DD"
+  fim: z.string().trim().max(10).nullable().default(null),
+});
+export const vinculoResponsavelSchema = dadosVinculoSchema
+  .extend({
+    responsavelId: z.number().int().positive(),
+    orgaoId: z.number().int().positive().nullable().default(null),
+    reparticaoId: z.number().int().positive().nullable().default(null),
   })
-  .optional()
-  .default({ padroes: [], temporarios: [] });
+  .refine((v) => (v.orgaoId == null) !== (v.reparticaoId == null), "Escolha UMA unidade ou UM órgão.");
+export const vinculoResponsavelPatchSchema = dadosVinculoSchema.extend({ responsavelId: z.number().int().positive() });
 
 export const reparticaoSchema = z.object({
   codigo: z
@@ -92,7 +92,6 @@ export const reparticaoSchema = z.object({
   // Toda unidade pertence a um ÓRGÃO (obrigatório).
   orgaoId: z.number({ error: "Escolha o órgão da unidade." }).int().positive(),
   oculto: z.boolean().default(false),
-  responsaveis: responsaveisSchema,
 });
 
 export const reordenarSchema = z.object({
@@ -100,7 +99,7 @@ export const reordenarSchema = z.object({
 });
 
 // Órgão = entidade organizacional acima da unidade. `orgaoEntidade` é o padrão que casa o
-// campo "Órgão/Entidade" do DFD. `assinaturaUnica` = os `responsaveis` do órgão valem p/ TODAS
+// campo "Órgão/Entidade" do DFD. `assinaturaUnica` = os responsáveis VINCULADOS ao órgão valem p/ TODAS
 // as unidades (senão cada unidade tem os seus). Tudo opcional (cadastro do ADM).
 export const orgaoSchema = z.object({
   // A sigla do órgão vira o código da unidade ao rebaixá-lo ou ao ligar "também unidade" — "GERAL" é reservado.
@@ -122,7 +121,6 @@ export const orgaoSchema = z.object({
     .nullable(),
   assinaturaUnica: z.boolean().default(false),
   oculto: z.boolean().default(false),
-  responsaveis: responsaveisSchema,
 });
 
 // Rebaixar um órgão a unidade de OUTRO órgão (destino obrigatório).

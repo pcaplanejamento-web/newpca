@@ -276,10 +276,10 @@ export const orgaos = sqliteTable(
     sigla: text("sigla").notNull(),
     orgaoEntidade: text("orgao_entidade"), // padrão do "Órgão/Entidade" do DFD → órgão (match)
     ordem: integer("ordem").notNull().default(0),
-    // Assinatura ÚNICA: 1 = os responsáveis do órgão valem p/ TODAS as unidades (guardados aqui);
-    // 0 = cada unidade tem os seus (`reparticoes.responsavel_dfd`). Ver `responsaveisEfetivos`.
+    // Assinatura ÚNICA: 1 = os responsáveis do órgão (os vínculos dele) valem p/ TODAS as unidades;
+    // 0 = cada unidade tem os seus (vínculos da planilha `responsaveis_vinculos`). Ver `alvoEfetivo`.
     assinaturaUnica: integer("assinatura_unica", { mode: "boolean" }).notNull().default(false),
-    responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs do órgão (JSON), quando assinatura única
+    responsavelDfd: text("responsavel_dfd"), // DORMENTE desde a 0099 (a planilha `responsaveis` + vínculos)
     numeroInteressado: text("numero_interessado"), // Interessado do protocolo → órgão (único GLOBAL com unidades)
     entidadeCenti: text("entidade_centi"), // ID da entidade na Centi ("02", "03"…) — a Automação usa direto (migração 0090)
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultado (tem DFD/protocolo) — some do uso futuro
@@ -302,12 +302,56 @@ export const reparticoes = sqliteTable(
     // 1 = unidade "própria" do órgão (o órgão funciona TAMBÉM como unidade). Só uma por órgão,
     // só quando o órgão não tem unidades-filhas comuns. Ver `orgao-unidade-ops.ts`.
     orgaoProprio: integer("orgao_proprio", { mode: "boolean" }).notNull().default(false),
-    responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs: JSON array de nomes (parseResponsaveis)
+    responsavelDfd: text("responsavel_dfd"), // DORMENTE desde a 0099 (a planilha `responsaveis` + vínculos)
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultada (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId)],
+);
+
+/**
+ * RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA de pessoas (migração 0099): cada pessoa UMA vez (nome + matrícula; `chave` =
+ * o nome sem acento/caixa — `norm`). Os VÍNCULOS ligam a pessoa a uma UNIDADE ou a um ÓRGÃO (exatamente um) como padrão
+ * ou temporário e guardam a função, a nomeação (ato) e o período. Ver `responsaveis-planilha-core.ts`.
+ */
+export const responsaveis = sqliteTable(
+  "responsaveis",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    matricula: text("matricula").notNull().default(""),
+    chave: text("chave").notNull(),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("responsaveis_chave_matricula_uq").on(t.chave, t.matricula)],
+);
+
+export const responsaveisVinculos = sqliteTable(
+  "responsaveis_vinculos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    responsavelId: integer("responsavel_id")
+      .notNull()
+      .references(() => responsaveis.id, { onDelete: "cascade" }),
+    orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "cascade" }),
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "cascade" }),
+    tipo: text("tipo").notNull(), // padrao | temporario
+    funcao: text("funcao").notNull().default(""),
+    atoTipo: text("ato_tipo"), // portaria | decreto | lei
+    atoNumero: text("ato_numero").notNull().default(""),
+    atoLink: text("ato_link").notNull().default(""),
+    inicio: text("inicio"), // temporário: AAAA-MM-DD
+    fim: text("fim"),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    index("responsaveis_vinculos_orgao_idx").on(t.orgaoId),
+    index("responsaveis_vinculos_reparticao_idx").on(t.reparticaoId),
+    index("responsaveis_vinculos_responsavel_idx").on(t.responsavelId),
+  ],
 );
 
 export const grupoReparticoes = sqliteTable(

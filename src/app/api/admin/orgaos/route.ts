@@ -5,7 +5,6 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { estruturaPorOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
-import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
@@ -24,16 +23,14 @@ export async function GET() {
       numeroInteressado: orgaos.numeroInteressado,
       entidadeCenti: orgaos.entidadeCenti,
       oculto: orgaos.oculto,
-      responsavelDfd: orgaos.responsavelDfd,
     })
     .from(orgaos)
     .orderBy(asc(orgaos.ordem), asc(orgaos.id));
   // Estrutura (dual / tem unidades-filhas) para os badges e as travas de rebaixar/dual na UI.
   const estrutura = await estruturaPorOrgao();
-  // A coluna guarda JSON; expõe como `responsaveis`.
-  const lista = rows.map(({ responsavelDfd, ...o }) => ({
+  // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
+  const lista = rows.map((o) => ({
     ...o,
-    responsaveis: parseResponsaveis(responsavelDfd),
     tambemUnidade: estrutura[o.id]?.tambemUnidade ?? false,
     temUnidades: estrutura[o.id]?.temUnidades ?? false,
   }));
@@ -61,7 +58,6 @@ export async function POST(req: Request) {
       entidadeCenti: corpo.data.entidadeCenti?.trim() || null,
       assinaturaUnica: corpo.data.assinaturaUnica,
       oculto: corpo.data.oculto,
-      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       ordem: Number(max) + 1,
     })
     .returning({ id: orgaos.id });

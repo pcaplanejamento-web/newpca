@@ -1,34 +1,15 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { dfdProtocolos, dfds, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
-import { RESPONSAVEIS_VAZIO, type Responsaveis, responsaveisEfetivos } from "./reparticao-responsaveis";
+import { RESPONSAVEIS_VAZIO, type Responsaveis } from "./reparticao-responsaveis";
+import { alvoEfetivo, responsaveisEfetivosDasUnidades } from "./responsaveis-planilha-core";
+import { consultaVinculosDosAlvos, linhaVinculo } from "./responsaveis-sql";
 
 /**
- * Acesso aos RESPONSÁVEIS por DFDs das repartições (coluna `responsavel_dfd`, JSON).
- * Separado de `grupos.ts` (que só devolve `{id,codigo,nome}`) — usado para conferir
- * a assinatura no servidor (gravação) e para enriquecer os banners no cliente.
- * Só escopo de request (usa `getDb`).
+ * Acesso aos RESPONSÁVEIS por DFDs das unidades — os VÍNCULOS da planilha única (`responsaveis` +
+ * `responsaveis_vinculos`, migração 0099), montados no MESMO `Responsaveis` de sempre. Usado para conferir a
+ * assinatura no servidor (gravação) e para enriquecer os banners no cliente. Só escopo de request (usa `getDb`).
  */
-
-/**
- * Responsáveis EFETIVOS de UMA unidade (para conferir a assinatura no servidor); vazio se não
- * houver. Resolve a fonte: órgão em "assinatura única" → os do órgão; senão os da unidade.
- */
-export async function carregarResponsaveis(reparticaoId: number | null | undefined): Promise<Responsaveis> {
-  if (reparticaoId == null) return RESPONSAVEIS_VAZIO;
-  const [r] = await getDb()
-    .select({
-      unidadeRaw: reparticoes.responsavelDfd,
-      assinaturaUnica: orgaos.assinaturaUnica,
-      orgaoRaw: orgaos.responsavelDfd,
-    })
-    .from(reparticoes)
-    .leftJoin(orgaos, eq(reparticoes.orgaoId, orgaos.id))
-    .where(eq(reparticoes.id, reparticaoId))
-    .limit(1);
-  if (!r) return RESPONSAVEIS_VAZIO;
-  return responsaveisEfetivos({ assinaturaUnica: r.assinaturaUnica ?? false, orgaoRaw: r.orgaoRaw, unidadeRaw: r.unidadeRaw });
-}
 
 /** Ids únicos válidos em LOTES de ≤ 90 (folga sob o limite de 100 parâmetros por statement do D1). */
 export function lotesDeIds(ids: number[]): number[][] {
@@ -38,30 +19,32 @@ export function lotesDeIds(ids: number[]): number[][] {
   return out;
 }
 
-/** Mapa `reparticaoId → Responsaveis` EFETIVOS (enriquece a lista de unidades dos banners). */
+/** Mapa `reparticaoId → Responsaveis` EFETIVOS: órgão em "assinatura única" → os do órgão; senão os da unidade. Duas
+ * consultas para qualquer quantidade (os ids num parâmetro JSON). */
 export async function responsaveisPorReparticao(ids: number[]): Promise<Record<number, Responsaveis>> {
-  const lotes = lotesDeIds(ids);
-  if (lotes.length === 0) return {};
-  const linhas = (
-    await Promise.all(
-      lotes.map((lote) =>
-        getDb()
-          .select({
-            id: reparticoes.id,
-            unidadeRaw: reparticoes.responsavelDfd,
-            assinaturaUnica: orgaos.assinaturaUnica,
-            orgaoRaw: orgaos.responsavelDfd,
-          })
-          .from(reparticoes)
-          .leftJoin(orgaos, eq(reparticoes.orgaoId, orgaos.id))
-          .where(inArray(reparticoes.id, lote)),
-      ),
-    )
-  ).flat();
-  const out: Record<number, Responsaveis> = {};
-  for (const l of linhas)
-    out[l.id] = responsaveisEfetivos({ assinaturaUnica: l.assinaturaUnica ?? false, orgaoRaw: l.orgaoRaw, unidadeRaw: l.unidadeRaw });
-  return out;
+  const uniq = [...new Set(ids)].filter((n) => Number.isInteger(n));
+  if (uniq.length === 0) return {};
+  const db = getDb();
+  const unidades = await db
+    .select({ id: reparticoes.id, orgaoId: reparticoes.orgaoId, assinaturaUnica: orgaos.assinaturaUnica })
+    .from(reparticoes)
+    .leftJoin(orgaos, eq(reparticoes.orgaoId, orgaos.id))
+    .where(sql`${reparticoes.id} IN (SELECT value FROM json_each(${JSON.stringify(uniq)}))`);
+  const lista = unidades.map((u) => ({ id: u.id, orgaoId: u.orgaoId, assinaturaUnica: u.assinaturaUnica ?? false }));
+  const alvos = { orgaos: [] as number[], unidades: [] as number[] };
+  for (const u of lista) {
+    const a = alvoEfetivo({ reparticaoId: u.id, orgaoId: u.orgaoId, assinaturaUnica: u.assinaturaUnica });
+    if ("orgaoId" in a) alvos.orgaos.push(a.orgaoId);
+    else alvos.unidades.push(a.reparticaoId);
+  }
+  const vinculos = (await consultaVinculosDosAlvos(db, alvos)).map(linhaVinculo);
+  return responsaveisEfetivosDasUnidades(lista, vinculos);
+}
+
+/** Responsáveis EFETIVOS de UMA unidade (para conferir a assinatura no servidor); vazio se não houver. */
+export async function carregarResponsaveis(reparticaoId: number | null | undefined): Promise<Responsaveis> {
+  if (reparticaoId == null) return RESPONSAVEIS_VAZIO;
+  return (await responsaveisPorReparticao([reparticaoId]))[reparticaoId] ?? RESPONSAVEIS_VAZIO;
 }
 
 /** Órgão dono de UMA unidade (para o portão de divergência no servidor). `null` se não houver. */
