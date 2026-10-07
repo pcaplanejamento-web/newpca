@@ -30,4 +30,5 @@ test("modelo Substituir DFDs pela Centi: lê o DFD inteiro e substitui", () => {
   const ler = m.grafo.nos.find((n) => n.tipo === "leitura.dfdCenti");
   assert.equal(ler?.config.completo, true);
   assert.ok(m.grafo.nos.some((n) => n.tipo === "saida.substituirDfd"));
+  assert.ok(m.grafo.nos.some((n) => n.tipo === "entrada.selecionar"));
 });

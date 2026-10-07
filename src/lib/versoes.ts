@@ -32,6 +32,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.49.1",
+    data: "2026-10-07",
+    titulo: "Escolher quais DFDs serão substituídos",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Na automação “Substituir DFDs pelos dados da Centi”, uma tabela de seleção mostra os DFDs encontrados e só os marcados são substituídos (use “Atualizar pelo modelo” nas automações já criadas).",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.49.0",
     data: "2026-10-07",
     titulo: "Substituir DFD pelos dados da Centi e automações na Mesa",
