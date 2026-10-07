@@ -1055,6 +1055,41 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.throws(() => d.exec("INSERT INTO responsaveis_vinculos (responsavel_id, orgao_id, tipo) VALUES (1, 800, 'temporario')"), /CHECK/);
   });
 
+  it("0100 responsáveis: as funções viram cargos, o cargo é da PESSOA (pelo padrão), o usuário liga pela matrícula única", () => {
+    const d = new DatabaseSync(":memory:");
+    const i100 = arquivos.findIndex((f) => f.startsWith("0100"));
+    assert.ok(i100 > 0, "migração 0100 ausente");
+    for (const arq of arquivos.slice(0, i100)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (901, 'Órgão', 'OG');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (911, 'U1', 'Unidade 1', 901), (912, 'U2', 'Unidade 2', 901);
+      INSERT INTO cargos (nome, ordem) VALUES ('Secretário', 0);
+      INSERT INTO usuarios (id, nome, email, senha_hash, matricula) VALUES (951, 'Ana', 'a@x', 'h', '000123'), (952, 'B1', 'b1@x', 'h', '77');
+      INSERT INTO responsaveis (id, nome, chave, matricula) VALUES (921, 'Ana', 'ANA', '123'), (922, 'Bia', 'BIA', '77'), (923, 'Caio', 'CAIO', '077');
+      INSERT INTO responsaveis_vinculos (responsavel_id, reparticao_id, tipo, funcao) VALUES
+        (921, 911, 'padrao', ' secretário '), (921, 912, 'padrao', 'Secretário'), (922, 911, 'padrao', 'Diretora');
+      INSERT INTO responsaveis_vinculos (responsavel_id, reparticao_id, tipo, funcao, inicio, fim) VALUES
+        (923, 912, 'temporario', 'diretora', '2026-01-01', '2026-01-31');`);
+    d.exec(readFileSync(join(DIR, arquivos[i100]), "utf8"));
+    const cargos = (d.prepare("SELECT nome FROM cargos ORDER BY ordem").all() as { nome: string }[]).map((c) => c.nome);
+    assert.deepEqual(cargos, ["Secretário", "Diretora"], "a função nova vira cargo; a repetida (sem caixa) não");
+    const p = d.prepare("SELECT id, cargo, usuario_id AS u FROM responsaveis ORDER BY id").all() as { id: number; cargo: string; u: number | null }[];
+    assert.deepEqual(
+      p.map((x) => [x.id, x.cargo, x.u]),
+      [
+        [921, "Secretário", 951],
+        [922, "Diretora", null],
+        [923, "", null],
+      ],
+      "cargo pelo padrão (grafia do cadastro; o temporário não dá cargo à pessoa); matrícula de 2 pessoas não liga",
+    );
+    const v = d.prepare("SELECT tipo, funcao FROM responsaveis_vinculos ORDER BY id").all() as { tipo: string; funcao: string }[];
+    assert.deepEqual(
+      v.map((x) => `${x.tipo}:${x.funcao}`),
+      ["padrao:", "padrao:", "padrao:", "temporario:Diretora"],
+    );
+    assert.throws(() => d.exec("UPDATE responsaveis SET usuario_id = 951 WHERE id = 922"), /UNIQUE/, "um usuário em UMA pessoa");
+  });
+
   it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
     const d = new DatabaseSync(":memory:");
     const i78 = arquivos.findIndex((f) => f.startsWith("0078"));

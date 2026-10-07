@@ -1,10 +1,9 @@
-import { asc, sql } from "drizzle-orm";
 import { orgaos } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { estruturaPorOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
+import { estruturaPorOrgao, numeroInteressadoEmUso, ORDEM_ORGAOS } from "@/lib/orgaos";
 import { orgaoSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
@@ -18,14 +17,13 @@ export async function GET() {
       sigla: orgaos.sigla,
       nome: orgaos.nome,
       orgaoEntidade: orgaos.orgaoEntidade,
-      ordem: orgaos.ordem,
       assinaturaUnica: orgaos.assinaturaUnica,
       numeroInteressado: orgaos.numeroInteressado,
       entidadeCenti: orgaos.entidadeCenti,
       oculto: orgaos.oculto,
     })
     .from(orgaos)
-    .orderBy(asc(orgaos.ordem), asc(orgaos.id));
+    .orderBy(...ORDEM_ORGAOS);
   // Estrutura (dual / tem unidades-filhas) para os badges e as travas de rebaixar/dual na UI.
   const estrutura = await estruturaPorOrgao();
   // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
@@ -47,7 +45,6 @@ export async function POST(req: Request) {
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
   const db = getDb();
-  const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${orgaos.ordem}), -1)` }).from(orgaos);
   const [row] = await db
     .insert(orgaos)
     .values({
@@ -58,7 +55,6 @@ export async function POST(req: Request) {
       entidadeCenti: corpo.data.entidadeCenti?.trim() || null,
       assinaturaUnica: corpo.data.assinaturaUnica,
       oculto: corpo.data.oculto,
-      ordem: Number(max) + 1,
     })
     .returning({ id: orgaos.id });
   await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "orgao", entidadeId: row?.id ?? null, resumo: `Órgão "${corpo.data.nome}" (${corpo.data.sigla}) criado`, depois: { nome: corpo.data.nome, sigla: corpo.data.sigla } });

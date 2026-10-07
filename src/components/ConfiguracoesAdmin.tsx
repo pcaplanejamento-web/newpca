@@ -11,12 +11,14 @@ import { AvaliacaoAdmin } from "./AvaliacaoAdmin";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { CargosAdmin } from "./CargosAdmin";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import {
   IconAvaliacao,
   IconBell,
+  IconBriefcase,
   IconCalendar,
   IconLayers,
   IconLinhas,
@@ -489,6 +491,7 @@ export function ConfiguracoesAdmin({
           tabs={[
             { key: "identidade", label: "Identidade", icon: <IconImage />, dica: "Nome, subtítulo e favicon do site", content: abaIdentidade },
             { key: "papeis", label: "Papéis", icon: <IconShield />, dica: "O que cada papel pode fazer em cada tela", content: <PapeisAdmin /> },
+            { key: "cargos", label: "Cargos e funções", icon: <IconBriefcase />, dica: "A lista de cargos dos usuários e dos responsáveis", content: <CargosAdmin /> },
             { key: "acesso", label: "Tela de acesso", icon: <IconTelaAcesso />, dica: "Os textos da tela de login e cadastro", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
             { key: "tabelas", label: "Tabelas", icon: <IconLinhas />, dica: "Quantas linhas as tabelas mostram ao abrir", content: abaTabelas },
             { key: "pcas", label: "PCAs", icon: <IconLayers />, dica: "Os PCAs cadastrados e o vigente", content: abaPcas },

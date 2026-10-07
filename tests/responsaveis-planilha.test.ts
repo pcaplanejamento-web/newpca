@@ -10,13 +10,17 @@ import {
   conferenciaDaUnidade,
   conferenciaDoOrgao,
   estadoDoVinculo,
+  funcaoDoVinculo,
   motivoVinculoInvalido,
   normalizarVinculo,
   type PlanilhaResponsaveis,
+  periodoVinculo,
   porAlvo,
   responsaveisDosVinculos,
   responsaveisEfetivosDasUnidades,
   rotuloAlvo,
+  separarVinculos,
+  usuarioSugerido,
   type VinculoComPessoa,
   vigentesDoAlvo,
   vinculoConflita,
@@ -30,23 +34,28 @@ function v(over: Partial<VinculoComPessoa> & { nome: string }): VinculoComPessoa
     id: seq,
     responsavelId: seq,
     matricula: "123",
+    cargo: "Secretário",
     orgaoId: null,
     reparticaoId: 10,
     tipo: "padrao",
-    funcao: "Secretário",
+    funcao: "",
     atoTipo: "portaria",
     atoNumero: "1/2026",
     atoLink: "",
-    inicio: null,
+    inicio: "2026-01-01",
     fim: null,
     ordem: seq,
     ...over,
   };
 }
 
+const pessoa = (id: number, nome: string, matricula: string, cargo = "Secretário") => ({ id, nome, matricula, cargo, usuarioId: null, foto: null });
+
 const PLANILHA = (vinculos: VinculoComPessoa[]): PlanilhaResponsaveis => ({
-  pessoas: [...new Map(vinculos.map((x) => [x.responsavelId, { id: x.responsavelId, nome: x.nome, matricula: x.matricula }])).values()],
+  pessoas: [...new Map(vinculos.map((x) => [x.responsavelId, pessoa(x.responsavelId, x.nome, x.matricula, x.cargo)])).values()],
   vinculos,
+  cargos: ["Secretário", "Diretor"],
+  usuarios: [],
   orgaos: [
     { id: 1, sigla: "OU", nome: "Órgão Único", assinaturaUnica: true, oculto: false },
     { id: 2, sigla: "OP", nome: "Órgão Por Unidade", assinaturaUnica: false, oculto: false },
@@ -67,7 +76,9 @@ describe("responsaveisDosVinculos: o MESMO `Responsaveis` de sempre", () => {
       v({ nome: "Sem Data", tipo: "temporario", ordem: 3 }),
       v({ nome: "  ", ordem: 4 }),
     ]);
-    assert.deepEqual(r.padroes, [{ nome: "Ana", matricula: "123", funcao: "Secretário", nomeacao: { tipo: "portaria", numero: "1/2026", link: "https://x" } }]);
+    assert.deepEqual(r.padroes, [
+      { nome: "Ana", matricula: "123", funcao: "Secretário", nomeacao: { tipo: "portaria", numero: "1/2026", link: "https://x" }, inicio: "2026-01-01" },
+    ]);
     assert.deepEqual(
       r.temporarios.map((t) => [t.nome, t.inicio, t.fim]),
       [["Bia", "2026-06-01", "2026-06-30"]],
@@ -126,26 +137,48 @@ describe("alvo efetivo: assinatura única do órgão × por unidade", () => {
 });
 
 describe("regras do vínculo", () => {
-  it("temporário exige período válido; link só http(s); o padrão perde o período", () => {
-    const base = { tipo: "temporario" as const, funcao: "", atoTipo: null, atoNumero: "", atoLink: "", inicio: null, fim: null };
+  it("temporário exige o cargo e o período; padrão exige o início (fim em aberto); link só http(s)", () => {
+    const base = { tipo: "temporario" as const, funcao: "Diretor", atoTipo: null, atoNumero: "", atoLink: "", inicio: null, fim: null };
     assert.match(motivoVinculoInvalido(base) ?? "", /início e do fim/);
+    assert.match(motivoVinculoInvalido({ ...base, funcao: " ", inicio: "2026-04-01", fim: "2026-05-01" }) ?? "", /cargo/);
     assert.match(motivoVinculoInvalido({ ...base, inicio: "2026-05-01", fim: "2026-04-01" }) ?? "", /depois/);
     assert.equal(motivoVinculoInvalido({ ...base, inicio: "2026-04-01", fim: "2026-05-01" }), null);
-    assert.match(motivoVinculoInvalido({ ...base, tipo: "padrao", atoLink: "javascript:alert(1)" }) ?? "", /http/);
-    assert.deepEqual(normalizarVinculo({ ...base, tipo: "padrao", funcao: " X ", inicio: "2026-01-01", fim: "2026-02-01" }), {
+    const padrao = { ...base, tipo: "padrao" as const, funcao: "" };
+    assert.match(motivoVinculoInvalido(padrao) ?? "", /data inicial/);
+    assert.equal(motivoVinculoInvalido({ ...padrao, inicio: "2026-01-01" }), null, "sem fim = em aberto");
+    assert.match(motivoVinculoInvalido({ ...padrao, inicio: "2026-03-01", fim: "2026-02-01" }) ?? "", /depois/);
+    assert.match(motivoVinculoInvalido({ ...padrao, inicio: "2026-01-01", atoLink: "javascript:alert(1)" }) ?? "", /http/);
+    assert.deepEqual(normalizarVinculo({ ...base, tipo: "padrao", funcao: " X ", inicio: " 2026-01-01 ", fim: "" }), {
       ...base,
       tipo: "padrao",
-      funcao: "X",
+      funcao: "",
+      inicio: "2026-01-01",
+      fim: null,
     });
+    assert.equal(normalizarVinculo({ ...base, funcao: "  Diretor   Geral " }).funcao, "Diretor Geral");
   });
 
-  it("conflito: a mesma pessoa padrão duas vezes ou temporários que se cruzam no MESMO alvo", () => {
+  it("separarVinculos e funcaoDoVinculo: o padrão segue o cargo da pessoa, o temporário o do período", () => {
+    const p = v({ nome: "Ana", cargo: "Secretário", ordem: 2 });
+    const t = v({ nome: "Bia", cargo: "Diretor", tipo: "temporario", funcao: "Secretário Adjunto", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 });
+    assert.deepEqual(separarVinculos([t, p]), { padroes: [p], temporarios: [t] });
+    assert.equal(funcaoDoVinculo(p), "Secretário");
+    assert.equal(funcaoDoVinculo(t), "Secretário Adjunto");
+    const r = responsaveisDosVinculos([p, t]);
+    assert.equal(r.temporarios[0].funcao, "Secretário Adjunto");
+    assert.equal(periodoVinculo(p), "desde 01/01/2026");
+    assert.equal(periodoVinculo(t), "01/06/2026 a 30/06/2026");
+  });
+
+  it("conflito: a mesma pessoa no MESMO alvo e tipo com períodos que se cruzam (fim vazio = em aberto)", () => {
     const a = v({ nome: "Ana", responsavelId: 99 });
     const t = v({ nome: "Ana", responsavelId: 99, tipo: "temporario", inicio: "2026-01-01", fim: "2026-03-31" });
     const novo = { responsavelId: 99, orgaoId: null, reparticaoId: 10 };
-    assert.match(vinculoConflita({ ...novo, tipo: "padrao", inicio: null, fim: null }, [a]) ?? "", /padrão/);
-    assert.equal(vinculoConflita({ ...novo, id: a.id, tipo: "padrao", inicio: null, fim: null }, [a]), null, "editar o próprio");
-    assert.equal(vinculoConflita({ ...novo, reparticaoId: 11, tipo: "padrao", inicio: null, fim: null }, [a]), null, "outro alvo");
+    assert.match(vinculoConflita({ ...novo, tipo: "padrao", inicio: "2026-05-01", fim: null }, [a]) ?? "", /padrão/);
+    assert.equal(vinculoConflita({ ...novo, id: a.id, tipo: "padrao", inicio: "2026-01-01", fim: null }, [a]), null, "editar o próprio");
+    assert.equal(vinculoConflita({ ...novo, reparticaoId: 11, tipo: "padrao", inicio: "2026-01-01", fim: null }, [a]), null, "outro alvo");
+    const antigo = v({ nome: "Ana", responsavelId: 99, inicio: "2020-01-01", fim: "2025-12-31" });
+    assert.equal(vinculoConflita({ ...novo, tipo: "padrao", inicio: "2026-01-01", fim: null }, [antigo]), null, "padrão de novo depois do fim do anterior");
     assert.match(vinculoConflita({ ...novo, tipo: "temporario", inicio: "2026-03-01", fim: "2026-04-30" }, [t]) ?? "", /cruza/);
     assert.equal(vinculoConflita({ ...novo, tipo: "temporario", inicio: "2026-04-01", fim: "2026-04-30" }, [t]), null);
   });
@@ -162,15 +195,30 @@ describe("regras do vínculo", () => {
     assert.equal(estadoDoVinculo(p, [p, ag, enc], HOJE), "vigente");
     assert.deepEqual(vigentesDoAlvo([p, vig], HOJE), { nomes: ["Bia"], temporario: true });
   });
+
+  it("estado do PADRÃO pelo período: agendado, vigente em aberto, encerrado (e fora dos vigentes)", () => {
+    const aberto = v({ nome: "Ana", inicio: "2026-01-01", fim: null });
+    const futuro = v({ nome: "Bia", inicio: "2026-07-01" });
+    const acabou = v({ nome: "Cid", inicio: "2025-01-01", fim: "2026-05-31" });
+    const antigo = v({ nome: "Dan", inicio: null });
+    assert.equal(estadoDoVinculo(aberto, [aberto], HOJE), "vigente");
+    assert.equal(estadoDoVinculo(futuro, [futuro], HOJE), "agendado");
+    assert.equal(estadoDoVinculo(acabou, [acabou], HOJE), "encerrado");
+    assert.equal(estadoDoVinculo(antigo, [antigo], HOJE), "vigente", "sem período (dado antigo) vale sempre");
+    assert.deepEqual(vigentesDoAlvo([aberto, futuro, acabou, antigo], HOJE).nomes, ["Ana", "Dan"]);
+  });
 });
 
 describe("conferência: o que está mal cadastrado", () => {
-  it("unidade sem responsável vigente = erro; com função/nomeação faltando = atenção; único = sem cobrança", () => {
-    const vs = [v({ nome: "Ana", reparticaoId: 10, funcao: "", atoTipo: null, atoNumero: "" })];
+  it("unidade sem responsável vigente = erro; sem início/nomeação, temporário sem cargo = atenção; único = sem cobrança", () => {
+    const vs = [
+      v({ nome: "Ana", reparticaoId: 10, inicio: null, atoTipo: null, atoNumero: "" }),
+      v({ nome: "Bia", reparticaoId: 10, tipo: "temporario", inicio: "2026-08-01", fim: "2026-08-31" }),
+    ];
     const g = porAlvo(vs);
     assert.deepEqual(
       conferenciaDaUnidade({ id: 10 }, false, g, HOJE).map((m) => m.chave),
-      ["resp.funcao", "resp.ato"],
+      ["resp.semInicio", "resp.ato", "resp.funcao"],
     );
     assert.deepEqual(
       conferenciaDaUnidade({ id: 11 }, false, g, HOJE).map((m) => [m.status, m.chave]),
@@ -208,12 +256,23 @@ describe("conferência: o que está mal cadastrado", () => {
   it("pessoa: sem matrícula, homônimo com outra matrícula, sem vínculo, vínculo sem efeito, temporário encerrado", () => {
     const enc = v({ nome: "Ana", responsavelId: 1, matricula: "", reparticaoId: 12, tipo: "temporario", inicio: "2026-01-01", fim: "2026-01-31" });
     const p = PLANILHA([enc]);
-    p.pessoas.push({ id: 2, nome: "ANA", matricula: "999" });
-    const msgs = conferenciaDaPessoa({ id: 1, nome: "Ana", matricula: "" }, p, HOJE).map((m) => m.chave);
-    assert.deepEqual(msgs, ["resp.matricula", "resp.duplicada", "resp.encerrado", "resp.naoValem"]);
+    p.pessoas.push(pessoa(2, "ANA", "999", ""));
+    const msgs = conferenciaDaPessoa(pessoa(1, "Ana", ""), p, HOJE).map((m) => m.chave);
+    assert.deepEqual(msgs, ["resp.matricula", "resp.duplicada", "resp.funcao", "resp.encerrado", "resp.naoValem"]);
     assert.deepEqual(
-      conferenciaDaPessoa({ id: 2, nome: "ANA", matricula: "999" }, p, HOJE).map((m) => m.chave),
-      ["resp.duplicada", "resp.semVinculo"],
+      conferenciaDaPessoa(pessoa(2, "ANA", "999", ""), p, HOJE).map((m) => m.chave),
+      ["resp.semCargo", "resp.duplicada", "resp.semVinculo"],
     );
+  });
+
+  it("usuarioSugerido: só o usuário ÚNICO de mesma matrícula (sem zeros à esquerda)", () => {
+    const us = [
+      { id: 1, nome: "Ana", apelido: null, matricula: "000123", foto: null },
+      { id: 2, nome: "Bia", apelido: null, matricula: "55", foto: null },
+      { id: 3, nome: "Bia 2", apelido: null, matricula: "055", foto: null },
+    ];
+    assert.equal(usuarioSugerido("123", us)?.id, 1);
+    assert.equal(usuarioSugerido("55", us), null, "duas pessoas — não adivinha");
+    assert.equal(usuarioSugerido("", us), null);
   });
 });

@@ -313,7 +313,7 @@ export const reparticoes = sqliteTable(
 /**
  * RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA de pessoas (migração 0099): cada pessoa UMA vez (nome + matrícula; `chave` =
  * o nome sem acento/caixa — `norm`). Os VÍNCULOS ligam a pessoa a uma UNIDADE ou a um ÓRGÃO (exatamente um) como padrão
- * ou temporário e guardam a função, a nomeação (ato) e o período. Ver `responsaveis-planilha-core.ts`.
+ * ou temporário e guardam a nomeação (ato), o período e, no temporário, o cargo do período (o padrão segue o da pessoa). Ver `responsaveis-planilha-core.ts`.
  */
 export const responsaveis = sqliteTable(
   "responsaveis",
@@ -322,10 +322,17 @@ export const responsaveis = sqliteTable(
     nome: text("nome").notNull(),
     matricula: text("matricula").notNull().default(""),
     chave: text("chave").notNull(),
+    // O CARGO/FUNÇÃO da pessoa (migração 0100) — o NOME de um cargo cadastrado (`cargos`); o vínculo padrão segue ele.
+    cargo: text("cargo").notNull().default(""),
+    // O USUÁRIO da plataforma (opcional, um usuário em UMA pessoa) — dá a foto.
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [uniqueIndex("responsaveis_chave_matricula_uq").on(t.chave, t.matricula)],
+  (t) => [
+    uniqueIndex("responsaveis_chave_matricula_uq").on(t.chave, t.matricula),
+    uniqueIndex("responsaveis_usuario_uq").on(t.usuarioId).where(sql`${t.usuarioId} IS NOT NULL`),
+  ],
 );
 
 export const responsaveisVinculos = sqliteTable(
@@ -338,11 +345,11 @@ export const responsaveisVinculos = sqliteTable(
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "cascade" }),
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "cascade" }),
     tipo: text("tipo").notNull(), // padrao | temporario
-    funcao: text("funcao").notNull().default(""),
+    funcao: text("funcao").notNull().default(""), // o cargo do TEMPORÁRIO (o padrão segue o da pessoa — vazio)
     atoTipo: text("ato_tipo"), // portaria | decreto | lei
     atoNumero: text("ato_numero").notNull().default(""),
     atoLink: text("ato_link").notNull().default(""),
-    inicio: text("inicio"), // temporário: AAAA-MM-DD
+    inicio: text("inicio"), // AAAA-MM-DD (o temporário exige as duas; o padrão, o início — fim vazio = em aberto)
     fim: text("fim"),
     ordem: integer("ordem").notNull().default(0),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),

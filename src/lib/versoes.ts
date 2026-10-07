@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.56.0",
+    data: "2026-10-07",
+    titulo: "Responsáveis com cargo, período e foto; órgãos pelo código da Centi",
+    mudancas: [
+      { tipo: "novo", area: "Responsáveis", texto: "O cargo ou função é da PESSOA, escolhido entre os cargos cadastrados (nova coluna “Cargo/função padrão”); o vínculo padrão segue o cargo dela e o temporário tem o cargo próprio do período. As funções digitadas antes viraram cargos cadastrados.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "O padrão agora tem data inicial e final — sem data final, vale até ser informada; a assinatura do DFD só confere dentro do período (o padrão antigo, sem datas, segue igual). Padrão e temporários aparecem em seções separadas.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "O responsável pode ser ligado a um usuário da plataforma (sugerido pela mesma matrícula) e ganha a foto dele no nome.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Configurações", texto: "Aba “Cargos e funções”: a lista usada no cadastro dos usuários e dos responsáveis — renomear um cargo renomeia em todos.", link: "/painel/configuracoes?aba=cargos" },
+      { tipo: "melhoria", area: "Órgãos", texto: "Órgãos ordenados pelo código da Centi (sem ordenação manual), com as colunas Código Centi · Nome · Sigla à frente e a edição da tabela (ocultar, arrastar, congelar e salvar edições).", link: "/painel/orgaos" },
+    ],
+  },
+  {
     versao: "1.55.0",
     data: "2026-10-07",
     titulo: "Visão do orçamento à vista no PCA",

@@ -51,6 +51,9 @@ export function edicaoInicial(edicoes: EdicaoTabela[], padroes: Record<string, u
 /** A chave das edições salvas da tabela de LANÇAMENTOS do orçamento (as colunas são as mesmas em todo orçamento). */
 export const CHAVE_LANCAMENTOS = "orcamento-lancamentos:tabela";
 
+/** Chave de uma tabela da ADMINISTRAÇÃO (`admin:orgaos:tabela`…): só o Administrador grava edições nela. */
+export const chaveDeAdmin = (chave: string) => /^admin:[a-z-]+:[a-z-]+$/.test(chave);
+
 export function telasDaChave(chave: string): { telas: readonly Tela[]; quadroId: number | null } | null {
   if (chave.startsWith("orcamento-lancamentos:")) return { telas: ["orcamento"], quadroId: null };
   if (chave.startsWith("mesa-pca:")) return { telas: ["pca"], quadroId: null };

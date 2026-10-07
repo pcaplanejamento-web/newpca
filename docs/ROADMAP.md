@@ -1596,6 +1596,8 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 | ✅ | **Configurações (`/painel/configuracoes`)**: tela única do ADM — **identidade do site** (nome/subtítulo/favicon, renderizados), **cadastro de PCAs** (nome+ano, editar, marcar ativo, excluir) e **atalhos** para as telas admin |
 | ✅ | **Avaliação configurável** (aba Avaliação): níveis (fundamental/intermediário/automático/ignorar) por dado de Protocolo/DFD/Item, com exceções por tipo de DFD e categoria de protocolo |
 | ✅ | **Responsáveis por DFDs numa planilha única (v1.53.0)**: pessoas (nome + matrícula) cadastradas uma vez e vinculadas a unidades ou órgãos (padrão/temporário, função, nomeação, período) pela regra de assinatura do órgão; coluna Conferência (o que está mal cadastrado); órgãos e unidades no padrão da Mesa com banner por cadastro (migração `0099` converteu os JSON antigos) |
+| ✅ | **Responsáveis com cargo, período e usuário (v1.56.0)**: o cargo/função é da pessoa (lista de Configurações → Cargos e funções), o padrão tem início e fim (fim em aberto), o temporário tem cargo próprio; ligação ao usuário da plataforma com a foto; órgãos ordenados pelo código da Centi com edição de tabela (migração `0100`) |
+| ⏳ | **Protocolos no meu nome**: o responsável ligado a um usuário vê os protocolos/DFDs em que é o solicitante |
 | 🔜 | Mais configurações da plataforma (secretarias/listas padrão, exercícios) |
 | 💡 | Painel de auditoria e uso |
 
@@ -1692,6 +1694,8 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **v1.17.3 — Não lidas reais**: a "lida" chega às outras abas/aparelhos de quem leu (o selo zera em todos), a hora lida guardada é a da mensagem lida e a lista guardada soma só as que chegaram ao vivo depois do retrato.
 
 ✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
+
+✅ **v1.56.0 — Responsáveis com cargo, período e foto**: o cargo/função passa a ser da pessoa, escolhido entre os cargos cadastrados (nova aba Configurações → Cargos e funções); o padrão segue esse cargo e tem início e fim (sem fim = vigente até informar — a assinatura só confere dentro do período); o temporário tem o cargo próprio; padrão e temporários em seções separadas; o responsável pode ser ligado a um usuário (foto no nome). Órgãos ordenados pelo código da Centi, com a edição da tabela.
 
 ✅ **v1.53.0 — Responsáveis numa planilha única**: Órgãos e Unidades → Responsáveis — cada pessoa cadastrada uma vez (nome + matrícula) e vinculada a unidades ou órgãos conforme a assinatura do órgão (única = os do órgão; por unidade = os de cada unidade); padrão ou temporário, função, nomeação com link e período; a coluna Conferência aponta quem está sem responsável vigente, sem matrícula/função/nomeação, temporário encerrado e nomes repetidos. Tabelas de órgãos e unidades no padrão da Mesa, com o banner de cada um (dados por cadeado, responsáveis, estrutura). A migração `0099` converteu os responsáveis já cadastrados, sem perder nada.
 

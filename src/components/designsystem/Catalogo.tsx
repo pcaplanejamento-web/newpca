@@ -3962,7 +3962,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Responsáveis por DFDs (planilha única: a pessoa + os vínculos — padrão/temporário, função, nomeação, período)">
+      <Secao titulo="Responsáveis por DFDs (planilha única: a pessoa com o cargo e a foto do usuário + os vínculos — padrão e temporários separados, nomeação, período)">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
@@ -3982,15 +3982,23 @@ export function Catalogo() {
             vinculos={VINCULOS_DEMO}
             irmaos={() => VINCULOS_DEMO}
             hoje="2026-06-15"
-            titulo={(v) => ({ texto: v.nome, detalhe: `Matrícula ${v.matricula}` })}
-            vazio="Nenhum responsável."
+            titulo={(v) => ({ texto: v.nome, detalhe: `Matrícula ${v.matricula}`, avatar: { nome: v.nome, foto: null } })}
+            vazio={{ padrao: "Nenhum responsável padrão.", temporario: "Sem períodos temporários." }}
+            acoes={{
+              padrao: (
+                <Button size="sm" variant="secondary" onClick={() => toast.info("Adicionar padrão")}>
+                  Adicionar padrão
+                </Button>
+              ),
+            }}
             onEditar={() => toast.info("Editar o vínculo")}
             onRemover={() => toast.info("Remover o vínculo")}
           />
         </div>
         <EditorVinculo
           abertura={vincDemo}
-          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula }))}
+          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula, cargo: v.cargo, usuarioId: null, foto: null }))}
+          cargos={["Secretária", "Diretor", "Secretário Adjunto"]}
           alvos={[]}
           alvoFixo={{ rotulo: "SMS — Secretaria Municipal de Saúde · PMRV" }}
           ocupado={false}
@@ -4865,6 +4873,6 @@ function DemoSegundoPlano() {
 }
 
 const VINCULOS_DEMO: VinculoComPessoa[] = [
-  { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "Secretária", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: null, fim: null, ordem: 0 },
-  { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
+  { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", cargo: "Secretária", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: "2025-01-01", fim: null, ordem: 0 },
+  { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", cargo: "Diretor", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "Secretário Adjunto", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
 ];

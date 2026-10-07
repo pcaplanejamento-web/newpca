@@ -3,11 +3,20 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { pessoaResponsavelPatchSchema } from "@/lib/rbac-validation";
-import { atualizarPessoa, excluirPessoa, getPessoa, pessoaRepetida, vinculosDaPessoa } from "@/lib/responsaveis";
+import {
+  atualizarPessoa,
+  cargoParaGravar,
+  excluirPessoa,
+  getPessoa,
+  MSG_CARGO_FORA,
+  motivoUsuarioInvalido,
+  pessoaRepetida,
+  vinculosDaPessoa,
+} from "@/lib/responsaveis";
 
 export const dynamic = "force-dynamic";
 
-/** Edita nome/matrícula da PESSOA — vale em todas as unidades e órgãos em que ela está vinculada. */
+/** Edita a PESSOA (nome, matrícula, cargo, usuário) — vale em todas as unidades e órgãos em que ela está vinculada. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -17,11 +26,27 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("resp" in p) return p.resp;
   const antes = await getPessoa(id);
   if (!antes) return erro("Pessoa não encontrada.", 404);
-  const depois = { nome: p.data.nome ?? antes.nome, matricula: p.data.matricula ?? antes.matricula };
+  const cargo = p.data.cargo === undefined ? antes.cargo : await cargoParaGravar(p.data.cargo, antes.cargo);
+  if (cargo == null) return erro(MSG_CARGO_FORA, 422);
+  if (p.data.usuarioId != null && p.data.usuarioId !== antes.usuarioId) {
+    const m = await motivoUsuarioInvalido(p.data.usuarioId, id);
+    if (m) return erro(m.motivo, m.status);
+  }
+  const depois = {
+    nome: p.data.nome ?? antes.nome,
+    matricula: p.data.matricula ?? antes.matricula,
+    cargo,
+    usuarioId: p.data.usuarioId === undefined ? antes.usuarioId : p.data.usuarioId,
+  };
   if ((await pessoaRepetida(depois.nome, depois.matricula, id)) != null)
     return erro("Já existe outra pessoa na planilha com o mesmo nome e matrícula.", 409);
-  await atualizarPessoa(id, p.data);
-  const d = diffCampos({ nome: antes.nome, matricula: antes.matricula }, depois, ["nome", "matricula"], { nome: "Nome", matricula: "Matrícula" });
+  await atualizarPessoa(id, { ...p.data, ...(p.data.cargo === undefined ? {} : { cargo }) });
+  const d = diffCampos(
+    { nome: antes.nome, matricula: antes.matricula, cargo: antes.cargo, usuarioId: antes.usuarioId },
+    depois,
+    ["nome", "matricula", "cargo", "usuarioId"],
+    { nome: "Nome", matricula: "Matrícula", cargo: "Cargo/função", usuarioId: "Usuário ligado" },
+  );
   if (d.mudou)
     await registrarAuditoria({
       usuario: g.u,
@@ -53,7 +78,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     entidade: "responsavel",
     entidadeId: id,
     resumo: `Responsável "${p.nome}" excluído${vinculos.length ? ` com ${vinculos.length} vínculo(s)` : ""}`,
-    antes: { nome: p.nome, matricula: p.matricula, vinculos: vinculos.length },
+    antes: { nome: p.nome, matricula: p.matricula, cargo: p.cargo, vinculos: vinculos.length },
   });
   return ok();
 }

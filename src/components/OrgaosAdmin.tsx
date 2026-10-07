@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { conferenciaDoOrgao, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
-import { AcoesCadastro } from "./AcoesCadastro";
 import { Badge } from "./Badge";
 import { BannerCadastro, type CampoCadastro } from "./BannerCadastro";
 import { Button } from "./Button";
@@ -25,7 +25,6 @@ type Orgao = {
   sigla: string;
   nome: string;
   orgaoEntidade: string | null;
-  ordem: number;
   assinaturaUnica: boolean;
   numeroInteressado: string | null;
   /** O ID da entidade do órgão na Centi (ex.: "02"). */
@@ -36,6 +35,9 @@ type Orgao = {
   /** Tem unidades-filhas comuns (impede rebaixar e virar dual). */
   temUnidades: boolean;
 };
+
+/** A chave das edições salvas da tabela de órgãos (tabela da Administração — só o ADM). */
+export const CHAVE_TABELA_ORGAOS = "admin:orgaos:tabela";
 
 export type AbaOrgaos = "orgaos" | "responsaveis";
 
@@ -71,7 +73,7 @@ const valoresDe = (o: Orgao | null): Record<string, string> => ({
  * unidades (abre a tela delas) e a CONFERÊNCIA (o que está mal cadastrado). Tocar na linha abre o BANNER do órgão (dados
  * por cadeado, responsáveis, estrutura, ocultar, excluir). Responsáveis = a planilha única de pessoas.
  */
-export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
+export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; edicoes: { lista: EdicaoTabela[]; padroes: Record<string, unknown> } }) {
   const router = useRouter();
   const ctx = usePlanilhaResponsaveis();
   const [aba, setAba] = useState<AbaOrgaos>(abaInicial);
@@ -81,6 +83,8 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
   const [ocupado, setOcupado] = useState(false);
   const [destino, setDestino] = useState("");
   const { confirmar, confirmacao } = useConfirmacao();
+  // As EDIÇÕES SALVAS da tabela (guardadas aqui: trocar de aba remonta a tabela, que volta com as edições novas).
+  const [ed, setEd] = useState(edicoes);
 
   const carregar = useCallback(async () => {
     try {
@@ -150,7 +154,6 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
   }
 
   const orgao = typeof aberto === "number" ? (lista.find((o) => o.id === aberto) ?? null) : null;
-  const posDe = new Map(lista.map((o, i) => [o.id, i]));
 
   function corpo(o: Orgao | null, v: Record<string, string>, extra: { oculto?: boolean } = {}) {
     return {
@@ -212,26 +215,16 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
     }
   }
 
-  function mover(id: number, dir: -1 | 1) {
-    if (!lista) return;
-    const i = lista.findIndex((x) => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= lista.length) return;
-    const nova = [...lista];
-    [nova[i], nova[j]] = [nova[j], nova[i]];
-    setLista(nova);
-    void fetch("/api/admin/orgaos/ordem", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: nova.map((x) => x.id) }) }).then((r) => {
-      if (!r.ok) {
-        toast.error("Não foi possível salvar a nova ordem.");
-        void carregar();
-      }
-    });
-  }
-
   const vigentes = (o: Orgao) => (o.assinaturaUnica ? vigentesDoAlvo(ctx.grupos.get(`o${o.id}`) ?? [], ctx.hoje) : null);
   const colunas: Column<Orgao>[] = [
-    { key: "pos", header: "#", filter: "none", nowrap: true, numero: (o) => (posDe.get(o.id) ?? 0) + 1, total: false, render: (o) => <span className="tabular-nums text-faint">{(posDe.get(o.id) ?? 0) + 1}</span> },
-    { key: "sigla", header: "Sigla", nowrap: true, value: (o) => o.sigla, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
+    {
+      key: "entidadeCenti",
+      header: "Código Centi",
+      nowrap: true,
+      // A ordem natural ("2" antes de "10"; sem código, por último) = a do servidor.
+      value: (o) => o.entidadeCenti ?? "—",
+      render: (o) => <Mono v={o.entidadeCenti} />,
+    },
     {
       key: "nome",
       header: "Nome do órgão",
@@ -246,6 +239,7 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
         </span>
       ),
     },
+    { key: "sigla", header: "Sigla", nowrap: true, value: (o) => o.sigla, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
     {
       key: "orgaoEntidade",
       header: "Órgão/Entidade (DFD)",
@@ -254,7 +248,6 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
       render: (o) => (o.orgaoEntidade ? <span className="line-clamp-1 text-[12px] text-text-2" title={o.orgaoEntidade}>{o.orgaoEntidade}</span> : <span className="text-faint">—</span>),
     },
     { key: "numeroInteressado", header: "Nº interessado", nowrap: true, value: (o) => o.numeroInteressado ?? "—", render: (o) => <Mono v={o.numeroInteressado} /> },
-    { key: "entidadeCenti", header: "Centi", nowrap: true, value: (o) => o.entidadeCenti ?? "—", render: (o) => <Mono v={o.entidadeCenti} /> },
     {
       key: "assinatura",
       header: "Assinatura",
@@ -298,25 +291,6 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
       valores: (o) => rotulosConferencia(conf.get(o.id) ?? []),
       render: (o) => (ctx.planilha ? <CelulaConferencia msgs={conf.get(o.id) ?? []} /> : <span className="text-faint">…</span>),
     },
-    {
-      key: "acoes",
-      header: "Ordem",
-      filter: "none",
-      nowrap: true,
-      render: (o) => (
-        <span role="none" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <AcoesCadastro
-            nome={o.sigla}
-            primeira={(posDe.get(o.id) ?? 0) === 0}
-            ultima={(posDe.get(o.id) ?? 0) === lista.length - 1}
-            disabled={ocupado}
-            onMover={(d) => mover(o.id, d)}
-            onEditar={() => setAberto(o.id)}
-            onExcluir={() => void excluir(o)}
-          />
-        </span>
-      ),
-    },
   ];
 
   const destinos = orgao ? lista.filter((o) => o.id !== orgao.id && !o.tambemUnidade) : [];
@@ -346,6 +320,7 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
             scrollInterno
             density="compact"
             exportar={{ nome: "Órgãos" }}
+            edicoes={{ chave: CHAVE_TABELA_ORGAOS, lista: ed.lista, padroes: ed.padroes, podePublicar: true, onMudar: (lista, padroes) => setEd({ lista, padroes }) }}
             vazio="Nenhum órgão cadastrado — use “Novo órgão”."
             acoesRodape={
               <>
@@ -359,7 +334,7 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
                     Única = os responsáveis do órgão valem para todas as unidades. Por unidade = cada unidade tem os seus.
                   </TopicoAjuda>
                   <TopicoAjuda titulo="Conferência">Sem responsável vigente, nomeação ou função faltando, temporário encerrado, unidades sem responsável.</TopicoAjuda>
-                  <TopicoAjuda titulo="Ordem">↑/↓ ordenam a lista (salvo na hora).</TopicoAjuda>
+                  <TopicoAjuda titulo="Ordem">Pelo código da entidade na Centi (sem código, por último). O lápis no rodapé edita a tabela: ordenar, ocultar, arrastar e congelar colunas — e salvar a edição.</TopicoAjuda>
                 </Ajuda>
               </>
             }

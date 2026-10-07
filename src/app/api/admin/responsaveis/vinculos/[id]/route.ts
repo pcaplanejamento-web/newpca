@@ -2,12 +2,13 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { vinculoResponsavelPatchSchema } from "@/lib/rbac-validation";
-import { atualizarVinculo, conflitoDoVinculo, excluirVinculo, getPessoa, getVinculo } from "@/lib/responsaveis";
+import { atualizarVinculo, cargoParaGravar, conflitoDoVinculo, excluirVinculo, getPessoa, getVinculo, MSG_CARGO_FORA } from "@/lib/responsaveis";
 import { motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
 
 export const dynamic = "force-dynamic";
 
-/** Edita o vínculo (tipo, função, nomeação, período — ou troca a pessoa). O alvo não muda (remova e vincule de novo). */
+/** Edita o vínculo (tipo, cargo do temporário, nomeação, período — ou troca a pessoa). O alvo não muda (remova e
+ * vincule de novo). O cargo fora da lista só fica quando já era o do vínculo (dado antigo). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -17,9 +18,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("resp" in p) return p.resp;
   const antes = await getVinculo(id);
   if (!antes) return erro("Vínculo não encontrado.", 404);
-  const d = { ...p.data, ...normalizarVinculo(p.data) };
-  const invalido = motivoVinculoInvalido(d);
+  const n = { ...p.data, ...normalizarVinculo(p.data) };
+  const invalido = motivoVinculoInvalido(n);
   if (invalido) return erro(invalido, 422);
+  const funcao = await cargoParaGravar(n.funcao, antes.funcao);
+  if (funcao == null) return erro(MSG_CARGO_FORA, 422);
+  const d = { ...n, funcao };
   const pessoa = await getPessoa(d.responsavelId);
   if (!pessoa) return erro("Pessoa não encontrada na planilha.", 422);
   const conflito = await conflitoDoVinculo({ ...d, id, orgaoId: antes.orgaoId, reparticaoId: antes.reparticaoId });

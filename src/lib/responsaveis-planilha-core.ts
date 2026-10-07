@@ -1,8 +1,10 @@
 /**
  * RESPONSÁVEIS POR DFDs numa PLANILHA ÚNICA — núcleo PURO (testado em `tests/responsaveis-planilha.test.ts`).
  *
- * A PESSOA é cadastrada UMA vez (nome + matrícula) e VINCULADA a unidades ou órgãos como padrão ou temporário; o VÍNCULO
- * guarda a função, a nomeação (ato) e, no temporário, o período. A montagem devolve o MESMO `Responsaveis` de sempre
+ * A PESSOA é cadastrada UMA vez (nome + matrícula + o CARGO/FUNÇÃO dela — da lista de cargos — e, opcionalmente, o
+ * USUÁRIO da plataforma, que dá a foto) e VINCULADA a unidades ou órgãos como padrão ou temporário. O VÍNCULO guarda a
+ * nomeação (ato) e o PERÍODO: o padrão segue o cargo da pessoa, tem início e um fim opcional (vazio = em aberto); o
+ * temporário tem o cargo PRÓPRIO do período, início e fim. A montagem devolve o MESMO `Responsaveis` de sempre
  * (`reparticao-responsaveis.ts`), então a conferência da assinatura, a previsão da unidade e o solicitante não mudam.
  */
 
@@ -17,8 +19,8 @@ import {
 
 export type TipoVinculo = "padrao" | "temporario";
 
-/** Uma pessoa da planilha. */
-export type PessoaResponsavel = { id: number; nome: string; matricula: string };
+/** Uma pessoa da planilha: `cargo` = o nome do cargo cadastrado; `usuarioId`/`foto` = o usuário ligado (URL da foto). */
+export type PessoaResponsavel = { id: number; nome: string; matricula: string; cargo: string; usuarioId: number | null; foto: string | null };
 
 /** Um vínculo pessoa → unidade OU órgão (exatamente um dos dois). */
 export type VinculoResponsavel = {
@@ -27,6 +29,7 @@ export type VinculoResponsavel = {
   orgaoId: number | null;
   reparticaoId: number | null;
   tipo: TipoVinculo;
+  /** O cargo do TEMPORÁRIO (o padrão não guarda — segue o `cargo` da pessoa). */
   funcao: string;
   atoTipo: TipoAto | null;
   atoNumero: string;
@@ -36,8 +39,19 @@ export type VinculoResponsavel = {
   ordem: number;
 };
 
-/** O vínculo com a pessoa (a forma que as telas e a montagem usam). */
-export type VinculoComPessoa = VinculoResponsavel & { nome: string; matricula: string };
+/** O vínculo com a pessoa (a forma que as telas e a montagem usam) — `cargo` = o da pessoa. */
+export type VinculoComPessoa = VinculoResponsavel & { nome: string; matricula: string; cargo: string };
+
+/** A função que VALE no vínculo: a do período no temporário; a da pessoa no padrão. */
+export function funcaoDoVinculo(v: { tipo: TipoVinculo; funcao: string; cargo: string }): string {
+  return (v.tipo === "temporario" ? v.funcao : v.cargo).trim();
+}
+
+/** Os vínculos separados em PADRÃO e TEMPORÁRIOS (as duas seções das telas), cada grupo na ordem. */
+export function separarVinculos<T extends { tipo: TipoVinculo; ordem: number; id: number }>(lista: readonly T[]): { padroes: T[]; temporarios: T[] } {
+  const ord = ordenarVinculos([...lista]);
+  return { padroes: ord.filter((v) => v.tipo === "padrao"), temporarios: ord.filter((v) => v.tipo === "temporario") };
+}
 
 /** A CHAVE da pessoa: o nome sem acento/caixa/espaços repetidos (a mesma régua da conferência da assinatura). */
 export function chaveNome(nome: string): string {
@@ -54,7 +68,8 @@ function ordenarVinculos<T extends { ordem: number; id: number }>(lista: T[]): T
 }
 
 /** Os vínculos de UM alvo → o `Responsaveis` de sempre (padrões e temporários na ordem; temporário sem período fica de
- * fora, como o `serializeResponsaveis` já fazia). */
+ * fora, como o `serializeResponsaveis` já fazia). A função do padrão é o cargo da pessoa; o padrão leva o período
+ * quando tem (sem período = como antes — vale sempre). */
 export function responsaveisDosVinculos(vinculos: readonly VinculoComPessoa[]): Responsaveis {
   if (vinculos.length === 0) return RESPONSAVEIS_VAZIO;
   const padroes: Responsaveis["padroes"] = [];
@@ -65,12 +80,12 @@ export function responsaveisDosVinculos(vinculos: readonly VinculoComPessoa[]): 
     const base = {
       nome,
       matricula: v.matricula,
-      funcao: v.funcao,
+      funcao: funcaoDoVinculo(v),
       nomeacao: { tipo: v.atoTipo, numero: v.atoNumero, link: v.atoLink },
     };
     if (v.tipo === "temporario") {
       if (v.inicio && v.fim) temporarios.push({ ...base, inicio: v.inicio, fim: v.fim });
-    } else padroes.push(base);
+    } else padroes.push({ ...base, ...(v.inicio ? { inicio: v.inicio } : {}), ...(v.fim ? { fim: v.fim } : {}) });
   }
   return { padroes, temporarios };
 }
@@ -111,7 +126,8 @@ export function responsaveisEfetivosDasUnidades(
   return out;
 }
 
-/** Os dados do vínculo que se gravam (sem id/pessoa) — a mesma régua na tela e no servidor. */
+/** Os dados do vínculo que se gravam (sem id/pessoa) — a mesma régua na tela e no servidor (`funcao` = o cargo do
+ * temporário; o padrão grava vazio). */
 export type DadosVinculo = {
   tipo: TipoVinculo;
   funcao: string;
@@ -124,28 +140,30 @@ export type DadosVinculo = {
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
-/** O que está errado nos dados de um vínculo (vazio = pode gravar). */
+/** O que está errado nos dados de um vínculo (vazio = pode gravar). O padrão precisa do início (o fim é opcional — vazio
+ * = em aberto); o temporário, do cargo do período e das duas datas. */
 export function motivoVinculoInvalido(d: DadosVinculo): string | null {
   if (d.tipo === "temporario") {
+    if (!d.funcao.trim()) return "Escolha o cargo ou a função do temporário.";
     if (!d.inicio || !d.fim) return "O temporário precisa do início e do fim.";
-    if (!DATA.test(d.inicio) || !DATA.test(d.fim)) return "Datas inválidas.";
-    if (d.inicio > d.fim) return "O início vem depois do fim.";
-  }
+  } else if (!d.inicio) return "Informe a data inicial do padrão (o fim pode ficar em aberto).";
+  if ((d.inicio && !DATA.test(d.inicio)) || (d.fim && !DATA.test(d.fim))) return "Datas inválidas.";
+  if (d.inicio && d.fim && d.inicio > d.fim) return "O início vem depois do fim.";
   if (d.atoLink && !/^https?:\/\//i.test(d.atoLink)) return "O link da nomeação precisa começar com http:// ou https://.";
   return null;
 }
 
-/** Normaliza: o padrão não tem período; sem tipo de ato, o número e o link continuam (a nomeação antiga só tinha o texto). */
+/** Normaliza: o padrão não guarda função (segue o cargo da pessoa); sem tipo de ato, o número e o link continuam (a
+ * nomeação antiga só tinha o texto). */
 export function normalizarVinculo(d: DadosVinculo): DadosVinculo {
-  const padrao = d.tipo === "padrao";
   return {
     tipo: d.tipo,
-    funcao: d.funcao.trim(),
+    funcao: d.tipo === "padrao" ? "" : d.funcao.trim().replace(/\s+/g, " "),
     atoTipo: lerTipoAto(d.atoTipo),
     atoNumero: d.atoNumero.trim(),
     atoLink: d.atoLink.trim(),
-    inicio: padrao ? null : d.inicio?.trim() || null,
-    fim: padrao ? null : d.fim?.trim() || null,
+    inicio: d.inicio?.trim() || null,
+    fim: d.fim?.trim() || null,
   };
 }
 
@@ -153,7 +171,7 @@ function cruzam(a: { inicio: string | null; fim: string | null }, b: { inicio: s
   return (a.inicio ?? "") <= (b.fim ?? "9999-12-31") && (b.inicio ?? "") <= (a.fim ?? "9999-12-31");
 }
 
-/** A mesma pessoa no MESMO alvo: duas vezes como padrão, ou temporários com períodos que se cruzam → o motivo (409). */
+/** A mesma pessoa no MESMO alvo e no MESMO tipo com períodos que se cruzam (fim vazio = em aberto) → o motivo (409). */
 export function vinculoConflita(
   novo: { id?: number; responsavelId: number; orgaoId: number | null; reparticaoId: number | null; tipo: TipoVinculo; inicio: string | null; fim: string | null },
   existentes: readonly VinculoResponsavel[],
@@ -161,8 +179,8 @@ export function vinculoConflita(
   for (const v of existentes) {
     if (v.id === novo.id || v.responsavelId !== novo.responsavelId) continue;
     if (v.orgaoId !== novo.orgaoId || v.reparticaoId !== novo.reparticaoId || v.tipo !== novo.tipo) continue;
-    if (novo.tipo === "padrao") return "Esta pessoa já é responsável padrão aqui.";
-    if (cruzam(v, novo)) return "Esta pessoa já tem um período temporário que se cruza com este aqui.";
+    if (cruzam(v, novo))
+      return novo.tipo === "padrao" ? "Esta pessoa já é responsável padrão aqui num período que se cruza com este." : "Esta pessoa já tem um período temporário que se cruza com este aqui.";
   }
   return null;
 }
@@ -172,13 +190,21 @@ export function vinculoConflita(
 
 export type MensagemConferencia = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string };
 
-/** Problemas de UM vínculo (função, nomeação, período encerrado). */
+/** Problemas de UM vínculo (cargo do temporário, nomeação, início do padrão, período encerrado). O cargo da PESSOA (o do
+ * padrão) é conferido na pessoa. */
 export function problemasDoVinculo(v: VinculoResponsavel, hoje: string): MensagemConferencia[] {
   const out: MensagemConferencia[] = [];
-  if (!v.funcao.trim()) out.push({ status: "atencao", chave: "resp.funcao", texto: "Vínculo sem a função.", rotulo: "Sem função" });
+  const temp = v.tipo === "temporario";
+  if (temp && !v.funcao.trim()) out.push({ status: "atencao", chave: "resp.funcao", texto: "Temporário sem o cargo ou a função do período.", rotulo: "Temporário sem cargo" });
+  if (!temp && !v.inicio) out.push({ status: "atencao", chave: "resp.semInicio", texto: "Padrão sem a data inicial.", rotulo: "Padrão sem início" });
   if (!v.atoTipo && !v.atoNumero.trim()) out.push({ status: "atencao", chave: "resp.ato", texto: "Vínculo sem a nomeação (portaria, decreto ou lei).", rotulo: "Sem nomeação" });
-  if (v.tipo === "temporario" && v.fim && hoje > v.fim)
-    out.push({ status: "atencao", chave: "resp.encerrado", texto: `Período temporário encerrado em ${v.fim.split("-").reverse().join("/")}.`, rotulo: "Temporário encerrado" });
+  if (v.fim && hoje > v.fim)
+    out.push({
+      status: "atencao",
+      chave: temp ? "resp.encerrado" : "resp.padraoEncerrado",
+      texto: `${temp ? "Período temporário" : "Padrão"} encerrado em ${v.fim.split("-").reverse().join("/")}.`,
+      rotulo: temp ? "Temporário encerrado" : "Padrão encerrado",
+    });
   return out;
 }
 
@@ -191,6 +217,7 @@ export function problemasDaPessoa(
 ): MensagemConferencia[] {
   const out: MensagemConferencia[] = [];
   if (!p.matricula.trim()) out.push({ status: "atencao", chave: "resp.matricula", texto: "Pessoa sem matrícula.", rotulo: "Sem matrícula" });
+  if (!p.cargo.trim()) out.push({ status: "atencao", chave: "resp.semCargo", texto: "Pessoa sem o cargo ou a função padrão.", rotulo: "Sem cargo" });
   const chave = chaveNome(p.nome);
   const homonimos = todas.filter((o) => o.id !== p.id && chaveNome(o.nome) === chave);
   if (homonimos.length)
@@ -232,11 +259,17 @@ export function problemasDoAlvo(a: { valem: boolean; vinculos: readonly VinculoC
   return out;
 }
 
-/** Rótulo curto do vínculo ("Padrão" | "Temporário 01/01 a 31/01/2026"). */
+/** O período por extenso ("01/01/2026 a 31/01/2026", "desde 01/01/2026", "sem data inicial"). */
+export function periodoVinculo(v: { inicio: string | null; fim: string | null }): string {
+  const br = (d: string) => d.split("-").reverse().join("/");
+  if (v.inicio && v.fim) return `${br(v.inicio)} a ${br(v.fim)}`;
+  if (v.inicio) return `desde ${br(v.inicio)}`;
+  return v.fim ? `até ${br(v.fim)}` : "sem data inicial";
+}
+
+/** Rótulo curto do vínculo ("Padrão desde 01/01/2026" | "Temporário 01/01/2026 a 31/01/2026"). */
 export function rotuloVinculo(v: { tipo: TipoVinculo; inicio: string | null; fim: string | null }): string {
-  if (v.tipo === "padrao") return "Padrão";
-  const br = (d: string | null) => (d ? d.split("-").reverse().join("/") : "?");
-  return `Temporário ${br(v.inicio)} a ${br(v.fim)}`;
+  return `${v.tipo === "padrao" ? "Padrão" : "Temporário"} ${periodoVinculo(v)}`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -244,12 +277,29 @@ export function rotuloVinculo(v: { tipo: TipoVinculo; inicio: string | null; fim
 
 export type AlvoOrgao = { id: number; sigla: string; nome: string; assinaturaUnica: boolean; oculto: boolean };
 export type AlvoUnidade = { id: number; codigo: string; nome: string; orgaoId: number | null; oculto: boolean };
+/** Um usuário que pode ser ligado a uma pessoa (a foto como URL). */
+export type UsuarioLigavel = { id: number; nome: string; apelido: string | null; matricula: string; foto: string | null };
 export type PlanilhaResponsaveis = {
   pessoas: PessoaResponsavel[];
   vinculos: VinculoComPessoa[];
   orgaos: AlvoOrgao[];
   unidades: AlvoUnidade[];
+  /** Os nomes dos cargos cadastrados (Configurações → Cargos e funções), na ordem. */
+  cargos: string[];
+  /** Os usuários ATIVOS (ligar a pessoa a um usuário). */
+  usuarios: UsuarioLigavel[];
 };
+
+/** A matrícula sem zeros à esquerda (a régua da matrícula única dos usuários). */
+const semZeros = (m: string) => m.trim().replace(/^0+/, "");
+
+/** O usuário de MESMA matrícula (só quando há UM) — a sugestão ao ligar a pessoa. */
+export function usuarioSugerido(matricula: string, usuarios: readonly UsuarioLigavel[]): UsuarioLigavel | null {
+  const m = semZeros(matricula);
+  if (!m) return null;
+  const achados = usuarios.filter((u) => semZeros(u.matricula) === m);
+  return achados.length === 1 ? achados[0] : null;
+}
 
 /** O vínculo VALE pela regra do órgão? Órgão = só com assinatura única; unidade = só quando o órgão dela é "por unidade". */
 export function alvoVale(alvo: { orgaoId: number | null; reparticaoId: number | null }, p: Pick<PlanilhaResponsaveis, "orgaos" | "unidades">): boolean {
@@ -268,10 +318,13 @@ export function motivoAlvoNaoVale(alvo: { orgaoId: number | null; reparticaoId: 
 
 export type EstadoVinculo = "vigente" | "agendado" | "encerrado" | "inativo";
 
-/** O estado do vínculo hoje: o temporário pelo período; o padrão fica INATIVO enquanto um temporário do alvo vale. */
+/** O estado do vínculo hoje pelo período (o padrão sem fim segue em aberto; sem início — dado antigo — vale desde
+ * sempre); o padrão vigente fica INATIVO enquanto um temporário do alvo vale. */
 export function estadoDoVinculo(v: VinculoResponsavel, doAlvo: readonly VinculoResponsavel[], hoje: string): EstadoVinculo {
   const vale = (t: VinculoResponsavel) => !!t.inicio && !!t.fim && t.inicio <= hoje && hoje <= t.fim;
   if (v.tipo === "temporario") return vale(v) ? "vigente" : v.inicio && hoje < v.inicio ? "agendado" : "encerrado";
+  if (v.inicio && hoje < v.inicio) return "agendado";
+  if (v.fim && hoje > v.fim) return "encerrado";
   return doAlvo.some((t) => t.tipo === "temporario" && vale(t)) ? "inativo" : "vigente";
 }
 

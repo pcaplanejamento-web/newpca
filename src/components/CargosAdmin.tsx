@@ -13,11 +13,17 @@ import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 
 /**
- * CARGOS E FUNÇÕES (Usuários → Cargos e funções, só o ADM): a lista que o CADASTRO oferece para a pessoa escolher.
- * Cadastrar/renomear no campo do topo (renomear leva junto o cargo das pessoas), ordenar ↑/↓ (a ordem da lista do
- * cadastro) e excluir (as pessoas mantêm o cargo até o ADM trocar — a confirmação diz quantas). `onMudou` = a lista mudou
+ * CARGOS E FUNÇÕES (Configurações → Cargos e funções, ou Usuários → Cargos e funções; só o ADM): a lista que o CADASTRO
+ * dos usuários e a planilha dos RESPONSÁVEIS oferecem. Cadastrar/renomear no campo do topo (renomear leva junto o cargo de
+ * usuários e responsáveis), ordenar ↑/↓ (a ordem da lista) e excluir (quem o tem mantém até o ADM trocar — a confirmação
+ * diz quantos). `onMudou` = a lista mudou
  * (quem abriu recarrega). Só componentes do design-system.
  */
+/** Quantos cadastros usam o cargo (usuários + responsáveis) e o texto por extenso. */
+const uso = (c: CargoComUso) => c.emUso + c.responsaveis;
+const textoUso = (c: CargoComUso) =>
+  [c.emUso ? `${c.emUso} usuário(s)` : "", c.responsaveis ? `${c.responsaveis} responsável(is)` : ""].filter(Boolean).join(" e ");
+
 export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
   const [lista, setLista] = useState<CargoComUso[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -65,7 +71,7 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
     const ok = await chamar(
       editando ? `/api/admin/cargos/${editando.id}` : "/api/admin/cargos",
       { method: editando ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: n }) },
-      editando ? `Renomeado para "${n}"${editando.emUso ? ` — e em ${editando.emUso} pessoa(s)` : ""}.` : `"${n}" cadastrado.`,
+      editando ? `Renomeado para "${n}"${uso(editando) ? ` — e em ${uso(editando)} cadastro(s)` : ""}.` : `"${n}" cadastrado.`,
     );
     setSalvando(false);
     if (ok) {
@@ -77,7 +83,7 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
   async function excluir(c: CargoComUso) {
     const sim = await confirmar({
       titulo: `Excluir "${c.nome}"?`,
-      texto: c.emUso ? `${c.emUso} pessoa(s) continuam com este cargo até você trocar; ele só sai da lista do cadastro.` : "Ele sai da lista do cadastro.",
+      texto: uso(c) ? `${textoUso(c)} continuam com este cargo até você trocar; ele só sai da lista.` : "Ele sai da lista.",
       confirmar: "Excluir",
       perigo: true,
     });
@@ -110,7 +116,17 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
   const pos = new Map(lista.map((c, i) => [c.id, i]));
   const cols: Column<CargoComUso>[] = [
     { key: "nome", header: "Cargo ou função", filter: "none", align: "left", minWidth: 110, render: (c) => <span className="font-medium text-text">{c.nome}</span> },
-    { key: "uso", header: "Uso", filter: "none", nowrap: true, render: (c) => <span className="tabular-nums">{c.emUso}</span> },
+    {
+      key: "uso",
+      header: "Uso",
+      filter: "none",
+      nowrap: true,
+      render: (c) => (
+        <span className="tabular-nums" title={textoUso(c) || "Sem uso"}>
+          {uso(c)}
+        </span>
+      ),
+    },
     {
       key: "acoes",
       header: "",

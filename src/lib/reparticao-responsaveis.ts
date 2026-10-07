@@ -1,7 +1,8 @@
 /**
  * Responsáveis por DFDs de uma unidade/órgão. Modelo: **N padrões** + **N temporários**.
  * Todo responsável tem nome, matrícula, função e uma **nomeação** (ato: portaria/decreto/
- * lei + número + link). O temporário tem, além disso, **período** (início/fim). No período
+ * lei + número + link). O temporário tem **período** (início/fim); o padrão pode ter um
+ * período com o fim em aberto (sem período = vale sempre — os dados antigos). No período
  * de um temporário, ELE é o efetivo (os padrões ficam em cinza). Montado a partir da PLANILHA
  * ÚNICA (`responsaveis-planilha-core.ts` — pessoas + vínculos, migração 0099) e conferido aqui
  * contra a assinatura do DFD. Puro/testável.
@@ -20,8 +21,8 @@ export const TIPOS_ATO: { valor: TipoAto; rotulo: string }[] = [
 
 /** Ato que nomeia o responsável (opcional). */
 export type Nomeacao = { tipo: TipoAto | null; numero: string; link: string };
-/** Responsável (padrão ou base do temporário). */
-export type Responsavel = { nome: string; matricula: string; funcao: string; nomeacao: Nomeacao };
+/** Responsável (padrão ou base do temporário). No padrão, `inicio`/`fim` opcionais (ausente = sem limite). */
+export type Responsavel = { nome: string; matricula: string; funcao: string; nomeacao: Nomeacao; inicio?: string; fim?: string };
 /** Responsável temporário = responsável + período de vigência. */
 export type ResponsavelTemporario = Responsavel & { inicio: string; fim: string };
 export type Responsaveis = { padroes: Responsavel[]; temporarios: ResponsavelTemporario[] };
@@ -74,14 +75,19 @@ export function padroesInativos(r: Responsaveis, hoje: string): boolean {
   return temporariosVigentes(r, hoje).length > 0;
 }
 
-/** Responsáveis EFETIVOS hoje: os temporários vigentes, senão os padrões. */
+/** O período do PADRÃO cobre a data `iso` ("aaaa-mm-dd")? Sem data, ou sem limite, cobre. */
+export function padraoCobre(p: Responsavel, iso: string): boolean {
+  return !iso || ((!p.inicio || p.inicio <= iso) && (!p.fim || iso <= p.fim));
+}
+
+/** Responsáveis EFETIVOS hoje: os temporários vigentes, senão os padrões cujo período cobre hoje. */
 export function responsaveisVigentes(
   r: Responsaveis,
   hoje: string,
 ): { resp: Responsavel; tipo: "temporario" | "padrao" }[] {
   const temps = temporariosVigentes(r, hoje);
   if (temps.length > 0) return temps.map((t) => ({ resp: t, tipo: "temporario" as const }));
-  return r.padroes.filter((p) => p.nome).map((p) => ({ resp: p, tipo: "padrao" as const }));
+  return r.padroes.filter((p) => p.nome && padraoCobre(p, hoje)).map((p) => ({ resp: p, tipo: "padrao" as const }));
 }
 
 // ————————————————————————————————————————————————————————————————————————————
@@ -139,7 +145,7 @@ export type ResultadoAssinatura =
  * (visual, por `fonte`):
  * - sem assinatura → `erro` se PDF (exigeAssinatura), senão `sem-assinatura` (.xlsx);
  * - vale (→ `ok`) se AO MENOS UMA assinatura (certificado/sistema/dropsigner/adobe) casar (nome) com
- *   um **padrão**, ou com um **temporário** cujo período cobre a data;
+ *   um **padrão** (com período: só a assinatura dentro dele), ou com um **temporário** cujo período cobre a data;
  * - com assinatura mas sem responsável cadastrado → `erro`; assinante não autorizado → `erro`;
  * - **exceção estreita:** a Dropsigner "só carimbo" (marca d'água sem bloco visível → nome vazio)
  *   é reconhecida SEM match (verificável pela URL) → `dropsigner` (não bloqueia).
@@ -168,7 +174,8 @@ export function validarAssinatura(
     // (`manual`) leva o nome do responsável atestado — não é leitura: vale só como validação da equipe.
     const lidas = assinaturas.filter((a) => a.fonte !== "manual");
     for (const a of lidas) {
-      const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome));
+      const iso = dataAssinaturaISO(a.data);
+      const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, a.nome) && padraoCobre(p, iso));
       if (padrao) return { status: "ok", origem: "auto", tipo: "padrao", assinatura: a, responsavel: padrao };
     }
     for (const a of lidas) {
@@ -184,9 +191,9 @@ export function validarAssinatura(
     for (const a of assinaturas) {
       const nome = a.validacao?.por === "equipe" ? a.validacao.responsavel : "";
       if (!nome) continue;
-      const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, nome));
-      if (padrao) return { status: "ok", origem: "equipe", tipo: "padrao", assinatura: a, responsavel: padrao };
       const iso = a.fonte === "manual" ? dataAssinaturaISO(a.data) : "";
+      const padrao = responsaveis.padroes.find((p) => mesmoNome(p.nome, nome) && padraoCobre(p, iso));
+      if (padrao) return { status: "ok", origem: "equipe", tipo: "padrao", assinatura: a, responsavel: padrao };
       const temp = responsaveis.temporarios.find((t) => mesmoNome(t.nome, nome) && (!iso || cobre(t, iso)));
       if (temp) return { status: "ok", origem: "equipe", tipo: "temporario", assinatura: a, responsavel: temp };
     }
@@ -211,7 +218,7 @@ export function validarAssinatura(
   return {
     status: "erro",
     motivo:
-      "Assinante não é responsável autorizado desta repartição (ou fora do período do responsável temporário).",
+      "Assinante não é responsável autorizado desta repartição (ou fora do período do responsável).",
   };
 }
 

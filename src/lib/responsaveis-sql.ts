@@ -28,6 +28,7 @@ const colunasVinculo = {
   ordem: responsaveisVinculos.ordem,
   nome: responsaveis.nome,
   matricula: responsaveis.matricula,
+  cargo: responsaveis.cargo,
 };
 
 /** Os vínculos (com a pessoa) dos alvos pedidos — os ids num parâmetro JSON cada (qualquer quantidade). */
@@ -69,6 +70,7 @@ export function linhaVinculo(l: {
   ordem: number;
   nome: string;
   matricula: string;
+  cargo: string;
 }): VinculoComPessoa {
   const ato = l.atoTipo === "portaria" || l.atoTipo === "decreto" || l.atoTipo === "lei" ? l.atoTipo : null;
   return { ...l, tipo: l.tipo === "temporario" ? "temporario" : "padrao", atoTipo: ato };

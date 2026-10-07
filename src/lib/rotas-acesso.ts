@@ -104,7 +104,6 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/orgaos/[id]/rebaixar": { POST: ADMIN },
   "admin/orgaos/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/orgaos/[id]/unidade-propria": { POST: ADMIN },
-  "admin/orgaos/ordem": { PATCH: ADMIN },
   "admin/orgaos": { GET: ADMIN, POST: ADMIN },
   "admin/papeis/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/papeis": { GET: ADMIN, POST: ADMIN },

@@ -51,17 +51,30 @@ export const grupoAtivoSchema = z.object({ grupoId: z.number().int().positive("G
 export const reparticaoAtivaSchema = z.object({ reparticaoId: z.number().int().positive("Unidade inválida.") });
 
 // RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA (migração 0099): a PESSOA (nome + matrícula) e o VÍNCULO dela com uma
-// unidade OU um órgão (padrão | temporário + função + nomeação + período). As regras do vínculo moram no núcleo puro
+// unidade OU um órgão (padrão | temporário + nomeação + período; o temporário com o cargo do período). As regras do vínculo moram no núcleo puro
 // (`motivoVinculoInvalido`, `responsaveis-planilha-core.ts`) — a MESMA na tela e na rota.
+// A PESSOA guarda também o CARGO/FUNÇÃO (o nome de um cargo cadastrado — conferido na rota) e o USUÁRIO ligado (opcional).
+const nomePessoa = z.string().trim().min(1, "Informe o nome.").max(160);
+const matriculaPessoa = z.string().trim().max(60);
+const cargoPessoa = z.string().trim().max(80);
+const usuarioPessoa = z.number().int().positive().nullable();
 export const pessoaResponsavelSchema = z.object({
-  nome: z.string().trim().min(1, "Informe o nome.").max(160),
-  matricula: z.string().trim().max(60).default(""),
+  nome: nomePessoa,
+  matricula: matriculaPessoa.default(""),
+  cargo: cargoPessoa.default(""),
+  usuarioId: usuarioPessoa.default(null),
 });
-export const pessoaResponsavelPatchSchema = pessoaResponsavelSchema.partial();
+// PATCH sem os padrões da criação (o que não vier fica como está).
+export const pessoaResponsavelPatchSchema = z.object({
+  nome: nomePessoa.optional(),
+  matricula: matriculaPessoa.optional(),
+  cargo: cargoPessoa.optional(),
+  usuarioId: usuarioPessoa.optional(),
+});
 
 const dadosVinculoSchema = z.object({
   tipo: z.enum(["padrao", "temporario"]),
-  funcao: z.string().trim().max(120).default(""),
+  funcao: z.string().trim().max(80).default(""), // o cargo do temporário (conferido na rota)
   atoTipo: z.enum(["portaria", "decreto", "lei"]).nullable().default(null),
   atoNumero: z.string().trim().max(120).default(""),
   atoLink: z.string().trim().max(500).default(""),

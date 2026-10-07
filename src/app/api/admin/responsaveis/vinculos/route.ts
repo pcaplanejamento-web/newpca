@@ -2,20 +2,24 @@ import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { vinculoResponsavelSchema } from "@/lib/rbac-validation";
-import { alvoExiste, conflitoDoVinculo, criarVinculo, getPessoa, motivoAlvoInvalido } from "@/lib/responsaveis";
+import { alvoExiste, cargoParaGravar, conflitoDoVinculo, criarVinculo, getPessoa, MSG_CARGO_FORA, motivoAlvoInvalido } from "@/lib/responsaveis";
 import { motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
 
 export const dynamic = "force-dynamic";
 
-/** VINCULA uma pessoa da planilha a uma unidade OU a um órgão (padrão ou temporário). */
+/** VINCULA uma pessoa da planilha a uma unidade OU a um órgão (padrão — o cargo da pessoa — ou temporário — o cargo do
+ * período, da lista de cargos). */
 export async function POST(req: Request) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
   const p = await parseCorpo(vinculoResponsavelSchema, req);
   if ("resp" in p) return p.resp;
-  const d = { ...p.data, ...normalizarVinculo(p.data) };
-  const invalido = motivoVinculoInvalido(d);
+  const n = { ...p.data, ...normalizarVinculo(p.data) };
+  const invalido = motivoVinculoInvalido(n);
   if (invalido) return erro(invalido, 422);
+  const funcao = await cargoParaGravar(n.funcao);
+  if (funcao == null) return erro(MSG_CARGO_FORA, 422);
+  const d = { ...n, funcao };
   const pessoa = await getPessoa(d.responsavelId);
   if (!pessoa) return erro("Pessoa não encontrada na planilha.", 422);
   if (!(await alvoExiste(d))) return erro("Unidade ou órgão não encontrado.", 422);

@@ -1,7 +1,10 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
-import { orgaos, reparticoes, responsaveis, responsaveisVinculos } from "@/db/schema";
+import { orgaos, reparticoes, responsaveis, responsaveisVinculos, usuarios } from "@/db/schema";
+import { cargoCadastrado, listarCargos, normalizarCargo } from "./cargos";
 import { getDb } from "./db";
 import { CODIGO_GERAL } from "./escopo-unidades-core";
+import { urlFoto } from "./pessoa";
+import { ORDEM_ORGAOS } from "./orgaos";
 import {
   alvoVale,
   chaveNome,
@@ -21,35 +24,90 @@ import { consultaTodosVinculos, linhaVinculo } from "./responsaveis-sql";
  * A leitura usada na conferência da assinatura é `responsaveisPorReparticao` (`reparticoes.ts`).
  */
 
-/** A planilha inteira: as pessoas, os vínculos e os alvos possíveis (órgãos e unidades, sem a "Geral"). */
+/** As colunas da pessoa + a foto do usuário ligado (a URL da rota da foto — nunca o data-URL). */
+const colunasPessoa = {
+  id: responsaveis.id,
+  nome: responsaveis.nome,
+  matricula: responsaveis.matricula,
+  cargo: responsaveis.cargo,
+  usuarioId: responsaveis.usuarioId,
+  temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
+  versao: usuarios.atualizadoEm,
+};
+
+function pessoaDaLinha({ temFoto, versao, ...p }: { id: number; nome: string; matricula: string; cargo: string; usuarioId: number | null; temFoto: number | null; versao: string | null }): PessoaResponsavel {
+  return { ...p, foto: p.usuarioId != null ? urlFoto(p.usuarioId, !!temFoto, versao) : null };
+}
+
+/** A planilha inteira: as pessoas, os vínculos, os alvos possíveis (órgãos e unidades, sem a "Geral"), os cargos
+ * cadastrados e os usuários ativos (para ligar). */
 export async function listarPlanilha(): Promise<PlanilhaResponsaveis> {
   const db = getDb();
-  const [pessoas, vinculos, os, us] = await Promise.all([
+  const [pessoas, vinculos, os, us, cargos, users] = await Promise.all([
     db
-      .select({ id: responsaveis.id, nome: responsaveis.nome, matricula: responsaveis.matricula })
+      .select(colunasPessoa)
       .from(responsaveis)
+      .leftJoin(usuarios, eq(usuarios.id, responsaveis.usuarioId))
       .orderBy(asc(responsaveis.chave), asc(responsaveis.id)),
     consultaTodosVinculos(db),
     db
       .select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome, assinaturaUnica: orgaos.assinaturaUnica, oculto: orgaos.oculto })
       .from(orgaos)
-      .orderBy(asc(orgaos.ordem), asc(orgaos.id)),
+      .orderBy(...ORDEM_ORGAOS),
     db
       .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculto: reparticoes.oculto })
       .from(reparticoes)
       .where(ne(reparticoes.codigo, CODIGO_GERAL))
       .orderBy(asc(reparticoes.ordem), asc(reparticoes.id)),
+    listarCargos(),
+    db
+      .select({
+        id: usuarios.id,
+        nome: usuarios.nome,
+        apelido: usuarios.apelido,
+        matricula: usuarios.matricula,
+        temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
+        versao: usuarios.atualizadoEm,
+      })
+      .from(usuarios)
+      .where(eq(usuarios.status, "ativo"))
+      .orderBy(asc(usuarios.nome)),
   ]);
-  return { pessoas, vinculos: vinculos.map(linhaVinculo), orgaos: os, unidades: us };
+  return {
+    pessoas: pessoas.map(pessoaDaLinha),
+    vinculos: vinculos.map(linhaVinculo),
+    orgaos: os,
+    unidades: us,
+    cargos: cargos.map((c) => c.nome),
+    usuarios: users.map(({ temFoto, versao, ...u }) => ({ ...u, matricula: u.matricula ?? "", foto: urlFoto(u.id, !!temFoto, versao) })),
+  };
 }
 
 export async function getPessoa(id: number): Promise<PessoaResponsavel | null> {
-  const [p] = await getDb()
-    .select({ id: responsaveis.id, nome: responsaveis.nome, matricula: responsaveis.matricula })
-    .from(responsaveis)
-    .where(eq(responsaveis.id, id))
-    .limit(1);
-  return p ?? null;
+  const [p] = await getDb().select(colunasPessoa).from(responsaveis).leftJoin(usuarios, eq(usuarios.id, responsaveis.usuarioId)).where(eq(responsaveis.id, id)).limit(1);
+  return p ? pessoaDaLinha(p) : null;
+}
+
+export const MSG_CARGO_FORA = "Escolha um cargo ou função cadastrado (Configurações → Cargos e funções).";
+
+/** O cargo a gravar: vazio, o nome CADASTRADO (a grafia do cadastro) ou o `atual` mantido (fora da lista — dado antigo);
+ * `null` = não está na lista (422). */
+export async function cargoParaGravar(nome: string, atual?: string): Promise<string | null> {
+  const n = normalizarCargo(nome);
+  if (!n) return "";
+  if (atual != null && n.toLowerCase() === normalizarCargo(atual).toLowerCase()) return atual;
+  return cargoCadastrado(n);
+}
+
+/** Por que o usuário não pode ser ligado a esta pessoa (`null` = pode): tem de existir e não estar em OUTRA pessoa. */
+export async function motivoUsuarioInvalido(usuarioId: number, pessoaId?: number): Promise<{ status: 404 | 409; motivo: string } | null> {
+  const db = getDb();
+  const [u] = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.id, usuarioId)).limit(1);
+  if (!u) return { status: 404, motivo: "Usuário não encontrado." };
+  const conds = [eq(responsaveis.usuarioId, usuarioId)];
+  if (pessoaId != null) conds.push(ne(responsaveis.id, pessoaId));
+  const [outra] = await db.select({ nome: responsaveis.nome }).from(responsaveis).where(and(...conds)).limit(1);
+  return outra ? { status: 409, motivo: `Este usuário já está ligado a ${outra.nome} na planilha.` } : null;
 }
 
 /** Outra pessoa com o MESMO nome (sem acento/caixa) e a MESMA matrícula → o id dela (a planilha não repete pessoas). */
@@ -60,21 +118,25 @@ export async function pessoaRepetida(nome: string, matricula: string, ignorar?: 
   return p?.id ?? null;
 }
 
-export async function criarPessoa(nome: string, matricula: string): Promise<number> {
+export type DadosPessoa = { nome: string; matricula: string; cargo: string; usuarioId: number | null };
+
+export async function criarPessoa(d: DadosPessoa): Promise<number> {
   const [r] = await getDb()
     .insert(responsaveis)
-    .values({ nome: nome.trim(), matricula: matricula.trim(), chave: chaveNome(nome) })
+    .values({ nome: d.nome.trim(), matricula: d.matricula.trim(), chave: chaveNome(d.nome), cargo: d.cargo, usuarioId: d.usuarioId })
     .returning({ id: responsaveis.id });
   return r.id;
 }
 
-export async function atualizarPessoa(id: number, d: { nome?: string; matricula?: string }) {
+export async function atualizarPessoa(id: number, d: Partial<DadosPessoa>) {
   const set: Record<string, unknown> = { atualizadoEm: sql`(CURRENT_TIMESTAMP)` };
   if (d.nome !== undefined) {
     set.nome = d.nome.trim();
     set.chave = chaveNome(d.nome);
   }
   if (d.matricula !== undefined) set.matricula = d.matricula.trim();
+  if (d.cargo !== undefined) set.cargo = d.cargo;
+  if (d.usuarioId !== undefined) set.usuarioId = d.usuarioId;
   await getDb().update(responsaveis).set(set).where(eq(responsaveis.id, id));
 }
 

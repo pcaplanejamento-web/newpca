@@ -16,9 +16,11 @@ import {
   porAlvo,
   rotuloAlvo,
   type TipoVinculo,
+  usuarioSugerido,
   type VinculoComPessoa,
 } from "@/lib/responsaveis-planilha-core";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
+import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { LinhaCampo, useCadeados } from "./CampoCadeado";
 import { CelulaLista } from "./CelulaLista";
@@ -26,16 +28,27 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { EstadoResumo } from "./EstadoCelula";
 import { cellCls } from "./formStyles";
-import { IconPlus, IconSave, IconTrash, IconUserCheck } from "./icons";
+import { IconPlus, IconSave, IconTrash, IconUserCheck, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
+import { SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
-import { type AberturaVinculo, dadosDoVinculo, dadosVazios, EditorVinculo, type EnvioVinculo, ListaVinculos } from "./VinculosResponsaveis";
+import {
+  type AberturaVinculo,
+  dadosDoVinculo,
+  dadosVazios,
+  EditorVinculo,
+  type EnvioVinculo,
+  ListaVinculos,
+  type NovaPessoa,
+  OpcoesCargo,
+} from "./VinculosResponsaveis";
 
 /**
  * A PLANILHA ÚNICA dos responsáveis por DFDs (Órgãos e Unidades → aba Responsáveis): o hook com os dados e as gravações
  * (`usePlanilhaResponsaveis` — o MESMO nas telas de órgãos e de unidades), a tabela das pessoas no padrão da Mesa, o
- * banner da PESSOA e a seção de responsáveis de UM órgão/unidade (`ResponsaveisDoAlvo`).
+ * banner da PESSOA (com o cargo da lista e o usuário ligado — a foto) e a seção de responsáveis de UM órgão/unidade
+ * (`ResponsaveisDoAlvo`).
  */
 
 type Resposta = { ok?: boolean; error?: string; id?: number; planilha?: Planilha };
@@ -84,11 +97,11 @@ export function usePlanilhaResponsaveis() {
   }
 
   const acoes = {
-    async criarPessoa(nome: string, matricula: string): Promise<number | null> {
-      const j = await chamar("/api/admin/responsaveis", { method: "POST", body: JSON.stringify({ nome, matricula }) }, `${nome.trim()} cadastrado(a) na planilha.`);
+    async criarPessoa(d: NovaPessoa & { usuarioId?: number | null }): Promise<number | null> {
+      const j = await chamar("/api/admin/responsaveis", { method: "POST", body: JSON.stringify(d) }, `${d.nome.trim()} cadastrado(a) na planilha.`);
       return j?.id ?? null;
     },
-    async salvarPessoa(id: number, patch: { nome?: string; matricula?: string }): Promise<boolean> {
+    async salvarPessoa(id: number, patch: PatchPessoa): Promise<boolean> {
       return !!(await chamar(`/api/admin/responsaveis/${id}`, { method: "PATCH", body: JSON.stringify(patch) }, "Pessoa atualizada — vale em todos os vínculos."));
     },
     async excluirPessoa(p: PessoaResponsavel): Promise<boolean> {
@@ -122,6 +135,9 @@ export function usePlanilhaResponsaveis() {
 
 export type CtxPlanilha = ReturnType<typeof usePlanilhaResponsaveis>;
 
+/** O que muda numa pessoa (só o que mudou vai ao servidor). */
+type PatchPessoa = { nome?: string; matricula?: string; cargo?: string; usuarioId?: number | null };
+
 /** A célula "Conferência": o problema principal (+N) na cor, ou "Regular". */
 export function CelulaConferencia({ msgs }: { msgs: MensagemConferencia[] }) {
   if (msgs.length === 0) return <span className="whitespace-nowrap text-[12px] font-medium text-[color:var(--ok)]">Regular</span>;
@@ -134,8 +150,8 @@ export const rotulosConferencia = (msgs: MensagemConferencia[]) => (msgs.length 
 type LinhaPessoa = PessoaResponsavel & { vinculos: VinculoComPessoa[]; vigenteEm: string[]; conf: MensagemConferencia[] };
 
 /**
- * A TABELA das pessoas (padrão da Mesa: compacta, rolagem interna, filtros por coluna, exportar): nome, matrícula, onde
- * responde, onde vale HOJE e a conferência. Dentro de um órgão (`orgaoId`), só quem responde nele ou nas unidades dele.
+ * A TABELA das pessoas (padrão da Mesa: compacta, rolagem interna, filtros por coluna, exportar): a foto + o nome (a foto
+ * do usuário ligado), a matrícula, o cargo/função padrão, onde responde, onde vale HOJE e a conferência. Dentro de um órgão (`orgaoId`), só quem responde nele ou nas unidades dele.
  * Tocar abre o banner da pessoa; "Nova pessoa" no rodapé.
  */
 export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgaoId?: number }) {
@@ -160,13 +176,33 @@ export function PlanilhaResponsaveis({ ctx, orgaoId }: { ctx: CtxPlanilha; orgao
   if (!planilha) return null;
   const onde = (l: LinhaPessoa) => l.vinculos.map((v) => `${rotuloAlvo(v, planilha).sigla}${v.tipo === "temporario" ? " (temp.)" : ""}`);
   const colunas: Column<LinhaPessoa>[] = [
-    { key: "nome", header: "Nome", align: "left", minWidth: 220, value: (l) => l.nome, render: (l) => <span className="font-medium text-text">{l.nome}</span> },
+    {
+      key: "nome",
+      header: "Nome",
+      align: "left",
+      minWidth: 240,
+      value: (l) => l.nome,
+      render: (l) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <Avatar nome={l.nome} foto={l.foto} size="sm" />
+          <span className="truncate font-medium text-text">{l.nome}</span>
+        </span>
+      ),
+    },
     {
       key: "matricula",
       header: "Matrícula",
       nowrap: true,
       value: (l) => l.matricula || "—",
       render: (l) => (l.matricula ? <span className="font-mono text-[12px] text-text-2">{l.matricula}</span> : <span className="text-faint">—</span>),
+    },
+    {
+      key: "cargo",
+      header: "Cargo/função padrão",
+      align: "left",
+      minWidth: 180,
+      value: (l) => l.cargo || "—",
+      render: (l) => (l.cargo ? <span className="text-text-2">{l.cargo}</span> : <span className="text-[color:var(--warn)]">Sem cargo</span>),
     },
     { key: "vinculos", header: "Responde em", nowrap: true, value: (l) => onde(l).join(", "), valores: onde, render: (l) => <CelulaLista valores={onde(l)} mono max={3} /> },
     { key: "vigente", header: "Vigente hoje em", nowrap: true, value: (l) => l.vigenteEm.join(", "), valores: (l) => l.vigenteEm, render: (l) => <CelulaLista valores={l.vigenteEm} mono destaque max={3} /> },
@@ -218,26 +254,34 @@ export function AjudaResponsaveis() {
   return (
     <Ajuda titulo="Responsáveis por DFDs">
       <p>
-        Cada pessoa é cadastrada UMA vez (nome + matrícula) e VINCULADA a unidades ou órgãos — a mesma pessoa pode responder
-        em vários lugares. O vínculo guarda a função, a nomeação (portaria, decreto ou lei, com o link) e, no temporário, o
-        período.
+        Cada pessoa é cadastrada UMA vez (nome, matrícula e o cargo/função padrão — da lista de Configurações → Cargos e
+        funções) e VINCULADA a unidades ou órgãos — a mesma pessoa pode responder em vários lugares. Ligada a um usuário da
+        plataforma, ganha a foto dele. O vínculo guarda a nomeação (portaria, decreto ou lei, com o link) e o período.
       </p>
       <TopicoAjuda titulo="Assinatura única × por unidade">
         No órgão de assinatura ÚNICA, os responsáveis são os do órgão (valem para todas as unidades). No órgão “por unidade”,
         cada unidade tem os seus. Só se vincula onde vale; vínculos antigos onde não valem aparecem como “sem efeito”.
       </TopicoAjuda>
       <TopicoAjuda titulo="Padrão × temporário">
-        No período de um temporário, ele é quem responde e os padrões ficam inativos; fora do período, os padrões voltam.
+        O padrão responde com o cargo da pessoa, desde a data inicial — sem data final, segue em aberto até alguém informar.
+        O temporário tem o cargo próprio do período, com início e fim: no período dele, ele é quem responde e os padrões
+        ficam inativos; fora do período, os padrões voltam. A assinatura do DFD só confere com quem respondia na data dela.
       </TopicoAjuda>
       <TopicoAjuda titulo="Conferência">
-        Aponta o que está mal cadastrado: sem matrícula, sem função, sem nomeação, temporário encerrado, nomes repetidos com
-        matrículas diferentes e unidades ou órgãos sem responsável vigente (a assinatura dos DFDs deles não é conferida).
+        Aponta o que está mal cadastrado: sem matrícula, sem cargo, padrão sem data inicial, temporário sem cargo, sem
+        nomeação, períodos encerrados, nomes repetidos com matrículas diferentes e unidades ou órgãos sem responsável vigente
+        (a assinatura dos DFDs deles não é conferida).
       </TopicoAjuda>
     </Ajuda>
   );
 }
 
-/** O banner de UMA pessoa: nome e matrícula por cadeado, onde responde (editar/remover/vincular) e excluir. */
+type CampoPessoa = "nome" | "matricula" | "cargo" | "usuario";
+type RascunhoPessoa = { nome: string; matricula: string; cargo: string; usuarioId: number | null };
+const NENHUM = "";
+
+/** O banner de UMA pessoa: nome, matrícula, cargo/função padrão e o usuário ligado por cadeado; onde responde (padrão e
+ * temporários separados — editar/remover/vincular) e excluir. */
 function ResponsavelDetalhe({
   ctx,
   pessoa,
@@ -253,11 +297,12 @@ function ResponsavelDetalhe({
 }) {
   const { planilha, grupos, hoje, ocupado, acoes } = ctx;
   const nova = pessoa === "nova";
-  const base = nova || !pessoa ? { nome: "", matricula: "" } : { nome: pessoa.nome, matricula: pessoa.matricula };
-  const chave = nova ? "nova" : pessoa ? `${pessoa.id}:${pessoa.nome}:${pessoa.matricula}` : "";
+  const base: RascunhoPessoa =
+    nova || !pessoa ? { nome: "", matricula: "", cargo: "", usuarioId: null } : { nome: pessoa.nome, matricula: pessoa.matricula, cargo: pessoa.cargo, usuarioId: pessoa.usuarioId };
+  const chave = nova ? "nova" : pessoa ? `${pessoa.id}:${pessoa.nome}:${pessoa.matricula}:${pessoa.cargo}:${pessoa.usuarioId}` : "";
   const [r, setR] = useState(base);
   const [chaveR, setChaveR] = useState(chave);
-  const { abertos, alternar, setAbertos } = useCadeados<"nome" | "matricula">();
+  const { abertos, alternar, setAbertos } = useCadeados<CampoPessoa>();
   const [editor, setEditor] = useState<AberturaVinculo | null>(null);
   if (chave !== chaveR) {
     setChaveR(chave);
@@ -265,21 +310,36 @@ function ResponsavelDetalhe({
     setAbertos(new Set());
   }
   if (!planilha) return null;
-  const patch: { nome?: string; matricula?: string } = {};
+  const patch: PatchPessoa = {};
   if (r.nome.trim() !== base.nome) patch.nome = r.nome.trim();
   if (r.matricula.trim() !== base.matricula) patch.matricula = r.matricula.trim();
+  if (r.cargo !== base.cargo) patch.cargo = r.cargo;
+  if (r.usuarioId !== base.usuarioId) patch.usuarioId = r.usuarioId;
   const sujo = Object.keys(patch).length > 0;
-  const aberto = (c: "nome" | "matricula") => nova || abertos.has(c);
-  const lock = (c: "nome" | "matricula") => ({ editavel: !nova, aberto: abertos.has(c), bloqueado: false, onLock: () => alternar(c) });
+  const aberto = (c: CampoPessoa) => nova || abertos.has(c);
+  const lock = (c: CampoPessoa) => ({ editavel: !nova, aberto: abertos.has(c), bloqueado: false, onLock: () => alternar(c) });
   const vinculos = nova || !pessoa ? [] : planilha.vinculos.filter((v) => v.responsavelId === pessoa.id);
   const alvos = alvosParaVincular(planilha, orgaoId);
+  // Um usuário em UMA pessoa: a lista oferece os livres (e o desta pessoa).
+  const ligados = new Set(planilha.pessoas.filter((p) => p.usuarioId != null && (nova || p.id !== (pessoa as PessoaResponsavel | null)?.id)).map((p) => p.usuarioId));
+  const usuarios = planilha.usuarios.filter((u) => !ligados.has(u.id));
+  const usuario = planilha.usuarios.find((u) => u.id === r.usuarioId) ?? null;
+  const sugerido = r.usuarioId == null ? usuarioSugerido(r.matricula, usuarios) : null;
+  const foto = usuario?.foto ?? null;
 
   async function salvar() {
     if (nova) {
-      const id = await acoes.criarPessoa(r.nome, r.matricula);
+      const id = await acoes.criarPessoa(r);
       if (id != null) onCriada(id);
     } else if (pessoa && typeof pessoa !== "string" && (await acoes.salvarPessoa(pessoa.id, patch))) setAbertos(new Set());
   }
+
+  const novoVinculo = (tipo: TipoVinculo) =>
+    pessoa && typeof pessoa !== "string" && (
+      <Button size="sm" variant="secondary" disabled={ocupado || alvos.length === 0} icon={<IconPlus className="h-4 w-4" />} onClick={() => setEditor({ responsavelId: pessoa.id, alvo: "", dados: dadosVazios(tipo) })}>
+        {tipo === "padrao" ? "Vincular padrão" : "Vincular temporário"}
+      </Button>
+    );
 
   return (
     <>
@@ -289,6 +349,17 @@ function ResponsavelDetalhe({
         bloqueado={ocupado}
         size="xl"
         titulo={nova ? "Nova pessoa na planilha" : (pessoa?.nome ?? "Responsável")}
+        cabecalho={
+          !nova && pessoa ? (
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar nome={pessoa.nome} foto={pessoa.foto} size="lg" />
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-semibold text-text">{pessoa.nome}</p>
+                <p className="truncate text-[12.5px] text-muted">{[pessoa.cargo || "Sem cargo", pessoa.matricula ? `Matrícula ${pessoa.matricula}` : ""].filter(Boolean).join(" · ")}</p>
+              </div>
+            </div>
+          ) : undefined
+        }
         rodape={
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
             {!nova && pessoa ? (
@@ -332,24 +403,54 @@ function ResponsavelDetalhe({
                   <ValorCampo>{r.matricula || "—"}</ValorCampo>
                 )}
               </LinhaCampo>
+              <LinhaCampo label="Cargo ou função padrão" {...lock("cargo")}>
+                {aberto("cargo") ? (
+                  <OpcoesCargo label="Cargo ou função padrão" oculto valor={r.cargo} cargos={planilha.cargos} onChange={(c) => setR({ ...r, cargo: c })} />
+                ) : (
+                  <ValorCampo>{r.cargo || <span className="text-[color:var(--warn)]">Sem cargo</span>}</ValorCampo>
+                )}
+              </LinhaCampo>
+              <LinhaCampo label="Usuário da plataforma" {...lock("usuario")}>
+                {aberto("usuario") ? (
+                  <div className="space-y-1.5">
+                    <SeletorPessoa
+                      variante="campo"
+                      rotulo="Usuário da plataforma"
+                      pessoas={usuarios}
+                      valor={r.usuarioId == null ? NENHUM : String(r.usuarioId)}
+                      onChange={(v) => setR({ ...r, usuarioId: v === NENHUM ? null : Number(v) })}
+                      extras={[{ valor: NENHUM, rotulo: "Sem usuário", icone: <IconUserX className="h-3.5 w-3.5" /> }]}
+                      vazio="Sem usuário"
+                    />
+                    {sugerido && (
+                      <Button size="xs" variant="ghost" onClick={() => setR({ ...r, usuarioId: sugerido.id })}>
+                        Ligar a {sugerido.nome} (mesma matrícula)
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <ValorCampo>
+                    {usuario ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Avatar nome={usuario.nome} foto={foto} size="xs" />
+                        {usuario.nome}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </ValorCampo>
+                )}
+              </LinhaCampo>
             </div>
-            {!nova && <p className="text-[12px] text-muted">Alterar aqui vale em todos os lugares em que a pessoa responde (o nome confere a assinatura dos DFDs).</p>}
+            {!nova && (
+              <p className="text-[12px] text-muted">
+                Vale em todos os lugares em que a pessoa responde (o nome confere a assinatura dos DFDs; o cargo é o dos vínculos padrão). Ligada a um usuário,
+                ganha a foto dele.
+              </p>
+            )}
           </SecaoBanner>
           {!nova && pessoa && (
-            <SecaoBanner
-              titulo={`Onde responde (${vinculos.length})`}
-              acao={
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={ocupado || alvos.length === 0}
-                  icon={<IconPlus className="h-4 w-4" />}
-                  onClick={() => setEditor({ responsavelId: pessoa.id, alvo: "", dados: dadosVazios("padrao") })}
-                >
-                  Vincular
-                </Button>
-              }
-            >
+            <SecaoBanner titulo={`Onde responde (${vinculos.length})`}>
               <ListaVinculos
                 vinculos={vinculos}
                 irmaos={(v) => grupos.get(v.orgaoId != null ? `o${v.orgaoId}` : `u${v.reparticaoId}`) ?? []}
@@ -359,7 +460,8 @@ function ResponsavelDetalhe({
                   detalhe: rotuloAlvo(v, planilha).orgao ? "Órgão" : "Unidade",
                   aviso: alvoVale(v, planilha) ? undefined : `Sem efeito: ${motivoAlvoNaoVale(v)}`,
                 })}
-                vazio="A pessoa ainda não responde em nenhuma unidade ou órgão."
+                vazio={{ padrao: "Não é padrão em nenhuma unidade ou órgão.", temporario: "Sem períodos temporários." }}
+                acoes={{ padrao: novoVinculo("padrao"), temporario: novoVinculo("temporario") }}
                 desabilitado={ocupado}
                 onEditar={(v) => setEditor({ id: v.id, responsavelId: v.responsavelId, alvo: v.orgaoId != null ? `o${v.orgaoId}` : `u${v.reparticaoId}`, dados: dadosDoVinculo(v) })}
                 onRemover={(v) => void acoes.removerVinculo(v)}
@@ -371,6 +473,7 @@ function ResponsavelDetalhe({
       <EditorVinculo
         abertura={editor}
         pessoas={planilha.pessoas}
+        cargos={planilha.cargos}
         alvos={editor?.id ? [{ valor: editor.alvo, rotulo: rotuloAlvo(alvoDoValor(editor.alvo) ?? { orgaoId: null, reparticaoId: null }, planilha).texto }] : alvos}
         pessoaFixa
         ocupado={ocupado}
@@ -383,9 +486,10 @@ function ResponsavelDetalhe({
 }
 
 /**
- * Os RESPONSÁVEIS de UM órgão ou UMA unidade (a seção do banner dele): os vínculos com o estado de hoje e, onde vale pela
- * regra do órgão, "Adicionar padrão" / "Adicionar temporário" escolhendo a pessoa da planilha (ou cadastrando-a). Onde
- * NÃO vale, a `nota` diz de onde vêm os responsáveis e os vínculos antigos aparecem só para remover.
+ * Os RESPONSÁVEIS de UM órgão ou UMA unidade (a seção do banner dele): o PADRÃO e os TEMPORÁRIOS separados, com o estado
+ * de hoje e, onde vale pela regra do órgão, "Adicionar padrão" / "Adicionar temporário" no topo de cada seção (a pessoa da
+ * planilha, ou cadastrada ali). Onde NÃO vale, a `nota` diz de onde vêm os responsáveis e os vínculos antigos aparecem só
+ * para remover.
  */
 export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo: { orgaoId: number } | { reparticaoId: number }; nota?: string }) {
   const { planilha, grupos, hoje, ocupado, acoes } = ctx;
@@ -395,7 +499,13 @@ export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo
   const valor = a.orgaoId != null ? `o${a.orgaoId}` : `u${a.reparticaoId}`;
   const vinculos = grupos.get(valor) ?? [];
   const vale = alvoVale(a, planilha);
-  const novo = (tipo: TipoVinculo) => setEditor({ responsavelId: null, alvo: valor, dados: dadosVazios(tipo) });
+  const pessoaDe = (id: number) => planilha.pessoas.find((p) => p.id === id);
+  const novo = (tipo: TipoVinculo) =>
+    vale && (
+      <Button size="sm" variant="secondary" disabled={ocupado} icon={<IconPlus className="h-4 w-4" />} onClick={() => setEditor({ responsavelId: null, alvo: valor, dados: dadosVazios(tipo) })}>
+        {tipo === "padrao" ? "Adicionar padrão" : "Adicionar temporário"}
+      </Button>
+    );
   return (
     <div className="space-y-3">
       {!vale && <p className="text-[13px] text-muted">{nota ?? motivoAlvoNaoVale(a)}</p>}
@@ -404,26 +514,23 @@ export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo
           vinculos={vinculos}
           irmaos={() => vinculos}
           hoje={hoje}
-          titulo={(v) => ({ texto: v.nome, detalhe: v.matricula ? `Matrícula ${v.matricula}` : "Sem matrícula", aviso: vale ? undefined : "Sem efeito pela regra de assinatura do órgão." })}
-          vazio="Nenhum responsável — a assinatura dos DFDs não é conferida."
+          titulo={(v) => ({
+            texto: v.nome,
+            detalhe: v.matricula ? `Matrícula ${v.matricula}` : "Sem matrícula",
+            aviso: vale ? undefined : "Sem efeito pela regra de assinatura do órgão.",
+            avatar: { nome: v.nome, foto: pessoaDe(v.responsavelId)?.foto ?? null },
+          })}
+          vazio={{ padrao: "Nenhum responsável padrão — a assinatura dos DFDs não é conferida.", temporario: "Sem períodos temporários." }}
+          acoes={{ padrao: novo("padrao"), temporario: novo("temporario") }}
           desabilitado={ocupado}
           onEditar={vale ? (v) => setEditor({ id: v.id, responsavelId: v.responsavelId, alvo: valor, dados: dadosDoVinculo(v) }) : undefined}
           onRemover={(v) => void acoes.removerVinculo(v)}
         />
       )}
-      {vale && (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="secondary" disabled={ocupado} icon={<IconPlus className="h-4 w-4" />} onClick={() => novo("padrao")}>
-            Adicionar padrão
-          </Button>
-          <Button size="sm" variant="secondary" disabled={ocupado} icon={<IconPlus className="h-4 w-4" />} onClick={() => novo("temporario")}>
-            Adicionar temporário
-          </Button>
-        </div>
-      )}
       <EditorVinculo
         abertura={editor}
         pessoas={planilha.pessoas}
+        cargos={planilha.cargos}
         alvos={[]}
         alvoFixo={{ rotulo: rotuloAlvo(a, planilha).texto }}
         ocupado={ocupado}

@@ -116,10 +116,14 @@ describe("mensagens padrão do Zod em português", () => {
 });
 
 describe("planilha de responsáveis (pessoa + vínculo)", () => {
-  it("a pessoa exige o nome; a matrícula é opcional; o PATCH não injeta padrões", () => {
-    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "" });
+  it("a pessoa exige o nome; matrícula, cargo e usuário são opcionais; o PATCH não injeta padrões", () => {
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "", cargo: "", usuarioId: null });
     assert.equal(pessoaResponsavelSchema.safeParse({ nome: "  " }).success, false);
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: "Ana", cargo: "Secretário", usuarioId: 7 }), { nome: "Ana", matricula: "", cargo: "Secretário", usuarioId: 7 });
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", usuarioId: 0 }).success, false);
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", cargo: "x".repeat(81) }).success, false);
     assert.deepEqual(pessoaResponsavelPatchSchema.parse({ matricula: "12" }), { matricula: "12" });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ usuarioId: null }), { usuarioId: null });
   });
 
   it("o vínculo vai a UMA unidade OU a UM órgão", () => {

@@ -314,9 +314,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **E-mail institucional = só a parte antes do "@"**: o domínio `@rioverde.go.gov.br` fica FIXO no fim do campo
     (`TextField trailing`); colar o e-mail inteiro vale (`parteLocalEmail`/`emailDaParteLocal`, `cadastro-core.ts`).
   - **CARGOS E FUNÇÕES do ADM (migração `0070`, tabela `cargos`: nome único sem caixa + ordem; semeada com os cargos já
-    informados):** Usuários → botão **"Cargos e funções"** → `Modal` com **`CargosAdmin`** (cadastrar/renomear no campo do
+    informados):** **Configurações → "Cargos e funções"** (aba própria, `?aba=cargos`) e Usuários → botão **"Cargos e funções"** → `Modal` — o MESMO **`CargosAdmin`** (cadastrar/renomear no campo do
     topo, ↑/↓ = a ordem da lista do cadastro — `AcoesCadastro` —, excluir com `useConfirmacao`; quantas pessoas usam cada um).
-    A pessoa guarda o NOME (`usuarios.cargo`): **renomear** renomeia o das pessoas no MESMO lote (`renomearCargo`);
+    A pessoa guarda o NOME (`usuarios.cargo`; também `responsaveis.cargo` e o cargo do temporário `responsaveis_vinculos.funcao`
+    — v1.56.0): **renomear** renomeia os três no MESMO lote (`renomearCargo`; o "Uso" soma usuários + responsáveis);
     **excluir** só tira da lista (as pessoas mantêm até o ADM trocar). D1 em **`cargos.ts`** (`listarCargos`,
     `cargoCadastrado` — sem caixa, devolve o nome canônico); rotas `GET/POST /api/admin/cargos`, `PATCH/DELETE
     /api/admin/cargos/[id]`, `PATCH /api/admin/cargos/ordem` (`exigirAdmin`, `cargoSchema`, auditoria `cargo`). O **cadastro**
@@ -641,6 +642,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   órgão** (`/painel/orgaos/[id]`): a unidade herda `orgao_id` do escopo da URL, e o `GET /api/admin/reparticoes?orgaoId=`
   filtra por órgão. Unidade ativa por cookie `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em
   `/api/admin/reparticoes*` e `/api/reparticoes/ativo`.
+- **CARGO, PERÍODO DO PADRÃO e USUÁRIO do responsável (v1.56.0, migração `0100`, aditiva — `responsaveis.cargo` +
+  `responsaveis.usuario_id` FK set null, único parcial):** o CARGO/FUNÇÃO é da PESSOA (o NOME de um cargo cadastrado —
+  `cargoParaGravar`: o cadastrado, manter o atual fora da lista ou nenhum; 422 `MSG_CARGO_FORA`) e o vínculo PADRÃO segue
+  ele (`funcao` vazia; `funcaoDoVinculo`); o TEMPORÁRIO guarda o cargo PRÓPRIO do período (`funcao`, da mesma lista). O
+  PADRÃO tem PERÍODO: início obrigatório, fim opcional (em aberto = vigente até informar); `estadoDoVinculo` (agendado/
+  encerrado/inativo/vigente), `vinculoConflita` (só se os períodos se cruzam), `motivoVinculoInvalido` e a conferência
+  (`resp.semCargo`, `resp.semInicio`, `resp.padraoEncerrado`). Na assinatura, `padraoCobre` — o padrão com período só casa
+  a assinatura datada dentro dele; o padrão sem período (os antigos) segue como antes (`validarAssinatura`,
+  `responsaveisVigentes`). A pessoa pode ser LIGADA a UM usuário (`motivoUsuarioInvalido` — 404/409; sugestão pela mesma
+  matrícula — `usuarioSugerido`) e ganha a FOTO dele (`listarPlanilha` faz o join; `PlanilhaResponsaveis.usuarios`); base
+  para ver os protocolos no nome dele. A `0100` transformou as funções digitadas em cargos cadastrados, deu à pessoa o
+  cargo mais usado nos padrões dela e ligou o usuário de matrícula ÚNICA. Telas: coluna **"Cargo/função padrão"** e o
+  `Avatar` no nome; banner da pessoa com cargo (`OpcoesCargo`) e usuário (`SeletorPessoa`) por cadeado; **`ListaVinculos`**
+  separa **Padrão | Temporários** (`separarVinculos`, cada seção com a sua ação "Adicionar…"/"Vincular…"); o `EditorVinculo`
+  mostra o cargo da pessoa no padrão e escolhe o do temporário, com Início/Fim nos dois.
 - **RESPONSÁVEIS POR DFDs numa PLANILHA ÚNICA (v1.53.0, migração `0099`, aditiva — tabelas `responsaveis` +
   `responsaveis_vinculos`; os JSON `reparticoes.responsavel_dfd`/`orgaos.responsavel_dfd` ficam DORMENTES):** a PESSOA é
   cadastrada UMA vez (`responsaveis`: nome + matrícula + `chave` = `norm(nome)`, único chave + matrícula) e VINCULADA a
@@ -669,7 +685,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   alvo do vínculo é fixo; a pessoa pode trocar). Órgão/unidade não recebem mais `responsaveis` (o campo saiu dos schemas).
   **Telas:** `/painel/orgaos` = `Segmented` **Órgãos | Responsáveis** (`?aba=responsaveis`) e `/painel/orgaos/[id]` =
   **Unidades | Responsáveis** (só quem responde no órgão ou nas unidades dele) — tabelas no PADRÃO DA MESA (`DataTable
-  scrollInterno density="compact"`, filtros por coluna, XLSX/PDF, `AcoesCadastro` ↑/↓ na coluna Ordem, "Novo órgão"/"Nova
+  scrollInterno density="compact"`, filtros por coluna, XLSX/PDF, `AcoesCadastro` ↑/↓ na coluna Ordem das unidades, "Novo órgão"/"Nova
   unidade"/"Nova pessoa" + Ajuda no rodapé) com as colunas **Responsáveis vigentes** (`CelulaResponsaveis`; "Por unidade"
   / "Pelo órgão") e **Conferência** (`CelulaConferencia` = `EstadoResumo` ou "Regular"); a de órgãos tem **Unidades (N)**
   (abre a tela delas). Tocar na linha abre o BANNER (`BannerCadastro`, DS: dados por cadeado, "Salvar alterações" só com
@@ -682,11 +698,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   matrícula) ou cadastra na hora, o alvo (só os que valem), padrão/temporário, função, nomeação e período. Hook único
   `usePlanilhaResponsaveis` (dados + gravações + aviso flutuante). Peças: `VinculosResponsaveis.tsx` (`CelulaResponsaveis`,
   `ListaVinculos`, `EditorVinculo`), `SecaoBanner.tsx` (`SecaoBanner`/`ValorCampo` — também no banner do usuário).
-- **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD)+ordem, migração `0022`) —
-  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`, ↑/↓); **tocar
+- **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD), migração `0022`) —
+  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`) — **SEM ordenação
+  manual (v1.56.0):** a ordem é a do **código da Centi** (`ORDEM_ORGAOS`, `orgaos.ts`: `entidade_centi` numérico, sem
+  ele por último, depois o nome — a MESMA em todo seletor; `orgaos.ordem` DORMENTE), colunas **Código Centi · Nome ·
+  Sigla** · Órgão/Entidade · Nº interessado · Assinatura · Responsáveis vigentes · Unidades · Conferência e a EDIÇÃO DA
+  TABELA (`DataTable.edicoes`, chave `admin:orgaos:tabela` — `CHAVE_TABELA_ORGAOS`; as chaves `admin:` — `chaveDeAdmin` —
+  só o ADM grava, `recusaNaChave`); **tocar
   numa linha** abre o banner do órgão e o botão **Unidades (N)** (na linha e no banner) leva a `/painel/orgaos/[id]` = as
   Unidades daquele órgão (`ReparticoesAdmin` escopado). Nav = um item **"Órgãos e Unidades"**. Rotas
-  `/api/admin/orgaos*` (CRUD + `/ordem`). **Toda unidade pertence a um órgão** (migração `0078` apagou as sem órgão, menos a "Geral"; `reparticaoSchema.orgaoId` obrigatório e conferido nas rotas — 422) e **excluir um órgão exclui as unidades dele** no mesmo lote (o órgão com DFD/protocolo, direto ou pelas unidades, segue só ocultável — 409). Loader
+  `/api/admin/orgaos*` (CRUD). **Toda unidade pertence a um órgão** (migração `0078` apagou as sem órgão, menos a "Geral"; `reparticaoSchema.orgaoId` obrigatório e conferido nas rotas — 422) e **excluir um órgão exclui as unidades dele** no mesmo lote (o órgão com DFD/protocolo, direto ou pelas unidades, segue só ocultável — 409). Loader
   `src/lib/orgaos.ts` (`listarOrgaos`). A migração `0022` é **aditiva** (só `ADD COLUMN`/`CREATE`) e **preserva o
   legado**: semeia a "Prefeitura Municipal de Rio Verde" e vincula as unidades atuais a ela (`orgao_id=1`).
 - **Assinatura ÚNICA por órgão (migração `0023`):** o órgão define se a assinatura (responsáveis por DFDs) é

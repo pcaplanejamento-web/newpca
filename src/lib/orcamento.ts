@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-or
 import { orcamentoItens, orcamentos, orcamentoVinculos, orgaos, reparticoes } from "@/db/schema";
 import { getDb } from "./db";
 import { comandosSubstituirLancamentos } from "./orcamento-sql";
+import { ORDEM_ORGAOS } from "./orgaos";
 import { lotesDeIds } from "./reparticoes";
 import type { OrcamentoItemImport } from "./orcamento-validation";
 import { type AlvosVinculo, chaveVinculo, conflitoVinculo, lerListaAcoes, SEM_ACAO, type VinculoOrcamento } from "./orcamento-vinculo";
@@ -263,7 +264,7 @@ export async function alvosVinculoOrcamento(): Promise<AlvosVinculo> {
     db
       .select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome, oculto: orgaos.oculto })
       .from(orgaos)
-      .orderBy(asc(orgaos.ordem), asc(orgaos.id)),
+      .orderBy(...ORDEM_ORGAOS),
     db
       .select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome, oculto: reparticoes.oculto, orgaoId: reparticoes.orgaoId })
       .from(reparticoes)
