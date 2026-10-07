@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.25.1",
+    data: "2026-10-07",
+    titulo: "Modelos de fluxo à vista",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Os modelos prontos (como “Inclusão PCA — conferir na CM002 e protocolar”) aparecem na lista de fluxos com “Usar este modelo”; o já criado abre direto.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.25.0",
     data: "2026-10-07",
     titulo: "Fluxo Inclusão PCA: CM002 + protocolação automática",

@@ -4206,7 +4206,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   entidade) · Sistema (DFDs, Protocolos) · Leitura (Ler protocolo — `fluxo-navegador.ts`: emissão POR CÓDIGO + leitura do
   PDF) · Lógica (SE, Comparar A × B → iguais/diferentes/só em A/só em B, Laço até o fim, Juntar) · Dados (Filtrar, Definir
   campos, Ordenar, Remover duplicados, Agrupar e somar) · Erros (Apontar erros → relatório) · Saída (Gravar execução nos
-  DFDs, Avisar). Modelos prontos em `fluxo-modelos.ts` (com `frequencia`/`ativo` — o POST os aceita): **Inclusão PCA — conferir na CM002 e
+  DFDs, Avisar). Modelos prontos em `fluxo-modelos.ts` (cards "Modelos prontos" na lista com "Usar este modelo" — v1.25.1; com `frequencia`/`ativo` — o POST os aceita): **Inclusão PCA — conferir na CM002 e
   protocolar** (v1.25.0, a cada 120 min: Protocolos Em análise da repartição fixa → Laço → Ler → filtra assunto INCLUS →
   **`dados.desdobrar`** (um item por DFD, com o protocolo do pai) × CM002 pelo planejamento → aponta fora da CM002/cancelado
   → **`saida.importarProtocolo`** (entradas entrada + apontamentos, casados por protocolo/ano). A importação headless é

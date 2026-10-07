@@ -243,7 +243,7 @@ export function FluxosAutomacao({
           onExcluir={() => void excluir(fluxo)}
         />
       ) : (
-        <ListaFluxos fluxos={fluxos} rodando={rodando} onAbrir={setAberto} onNovo={() => setNovo(true)} />
+        <ListaFluxos fluxos={fluxos} rodando={rodando} onAbrir={setAberto} onNovo={() => setNovo(true)} onModelo={(m) => void criar(m, m.nome)} />
       )}
       <NovoFluxo aberto={novo} onFechar={() => setNovo(false)} onCriar={criar} />
       {confirmacao}
@@ -253,7 +253,19 @@ export function FluxosAutomacao({
 
 const GRAFO_VAZIO_COM_INICIO: Grafo = { ...GRAFO_VAZIO, nos: [{ id: "inicio1", tipo: "gatilho.inicio", config: {}, x: 64, y: 160 }] };
 
-function ListaFluxos({ fluxos, rodando, onAbrir, onNovo }: { fluxos: FluxoAutomacao[] | null; rodando: number | null; onAbrir: (id: number) => void; onNovo: () => void }) {
+function ListaFluxos({
+  fluxos,
+  rodando,
+  onAbrir,
+  onNovo,
+  onModelo,
+}: {
+  fluxos: FluxoAutomacao[] | null;
+  rodando: number | null;
+  onAbrir: (id: number) => void;
+  onNovo: () => void;
+  onModelo: (m: (typeof MODELOS_FLUXO)[number]) => void;
+}) {
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -299,6 +311,39 @@ function ListaFluxos({ fluxos, rodando, onAbrir, onNovo }: { fluxos: FluxoAutoma
             );
           })}
         </div>
+      )}
+      {fluxos && (
+        <section className="space-y-2" aria-label="Modelos prontos">
+          <h3 className="text-sm font-semibold text-text">Modelos prontos</h3>
+          <div className="grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))]">
+            {MODELOS_FLUXO.map((m) => {
+              const criado = fluxos.find((f) => f.nome === m.nome);
+              return (
+                <div key={m.id} className={`${CARTAO} flex min-h-[9rem] flex-col gap-2 border-dashed`}>
+                  <div className="flex items-center gap-2">
+                    <IconFluxo className="size-5 shrink-0 text-muted" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 font-semibold text-text">{m.nome}</span>
+                  </div>
+                  <p className="line-clamp-3 text-xs text-muted">{m.descricao}</p>
+                  <p className="text-xs text-muted">
+                    {m.grafo.nos.length} nó(s) · {m.frequencia ? rotuloFrequencia(m.frequencia) : "Manual"}
+                  </p>
+                  <div className="mt-auto">
+                    {criado ? (
+                      <Button size="sm" variant="ghost" onClick={() => onAbrir(criado.id)}>
+                        Já criado — abrir
+                      </Button>
+                    ) : (
+                      <Button size="sm" icon={<IconPlus className="size-4" />} onClick={() => onModelo(m)}>
+                        Usar este modelo
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );
