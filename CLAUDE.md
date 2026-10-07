@@ -4309,13 +4309,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `recorteTabela`); visão "Tabela" no painel (`VistaTabela`, relê do servidor a cada execução, exportável). D1
   `automacao-tabelas.ts`; puro `linhasParaTabela`/`recorteTabela`/`chaveTabela` (`fluxo-dados.ts`); rotas `GET` (lista |
   `?nome=`), `POST`, `DELETE ?nome=` (`exigirAdmin`, auditoria). Teste do modelo de ponta a ponta em `tests/fluxo-dados.test.ts`. **v1.45.1:** `limparSituacao` recusa situação só de dígitos (nunca grava código) e a migração `0097` apagou os códigos antigos; o `saida.gravarExecucao` ganhou `situacaoFixa` — no modelo, os DFDs de órgão cadastrado fora da CM002 gravam “Não encontrado na CM002” (SE `entidade` não vazio → `grav2`); na interface “entidade” virou “órgão” (o código segue `entidade`).
-- **CM002 INTEIRA (v1.46.0, extensão 1.20.0, protocolo 37):** a ação `cm002` tira os filtros de tela da consulta guardada
-  (`semFiltrosCm002`: textos de Referência/Exercício/Ano/PCA/Finalidade/Situação/Busca → "") e confere o total da resposta
-  (`totalDaResposta`); página única incompleta → página a página até o total (≤ 2000) e devolve `{linhas, total, lidas,
-  paginas}`. O nó `centi.cm002` avisa "órgão X: N de T lidas" e PARA quando a leitura vem incompleta ou quando nenhum
-  planejamento dos DFDs do órgão veio (consulta filtrada) — nada é gravado como "Não encontrado". Na Mesa a coluna
-  Execução chama-se **Situação**; na Mesa do PCA, Situação e Centi abrem ocultas (`DataTable.ocultasPadrao` = o layout
-  padrão do sistema; a edição da tabela as mostra).
+- **CM002 INTEIRA + ÓRGÃO NA CENTI (v1.47.0, extensão 1.21.0, protocolo 38):** a ação `cm002` tenta a consulta guardada
+  como a tela pediu e com o tamanho "todos" (`comPagina(…, null, todos)` — 100000, 0, -1, null), vale a de MAIS linhas
+  (completa quando bate `totalDaResposta`) e, senão, página a página (≤ 2000) → `{linhas, total, lidas, paginas, modo}`; o
+  `lembrarCm002` guarda a consulta que trouxe MAIS linhas (o "Mostrar: Todos" da tela). O nó `centi.cm002` avisa "órgão X:
+  N de T lidas" e PARA na leitura incompleta ou quando nenhum planejamento dos DFDs do órgão veio. Ação **`trocarOrgao
+  {entidade|null}`** = o órgão (Company) em análise FIXADO na aba (`sessionStorage`), usado por toda leitura sem órgão
+  explícito. Nó **`centi.orgao`** ("Órgão na Centi", iterador): o órgão de cada item (campo, padrão `entidade` = o ID da
+  Centi do órgão cadastrado; "Órgãos" filtra — trava) ou órgãos FIXOS (os itens em cada um); "Todos" (portas Com órgão/Sem
+  órgão) ou "Um órgão por vez" (Lote → Volta, troca o órgão na Centi a cada lote, libera no fim). Modelo `cm002`: DFDs →
+  Órgão na Centi → CM002/Procurar (sem órgão = atenção). Na Mesa a coluna Execução chama-se **Situação**; na Mesa do PCA,
+  Situação e Centi abrem ocultas (`DataTable.ocultasPadrao` = o layout padrão do sistema; a edição da tabela as mostra).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

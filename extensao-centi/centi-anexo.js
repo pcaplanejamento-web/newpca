@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p37";
+  const NOME = "__pcaCentiAnexo_p38";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -522,7 +522,7 @@
   /** O pedido da lista numa PÁGINA: `pagina` null = sem paginação (tamanho → 100000, início → o primeiro); senão a página
    * `pagina` (0, 1, 2…) no tamanho ORIGINAL da consulta — o início vira o nº da página (page/pagina, 1 em diante quando a
    * consulta contava de 1) ou o deslocamento (skip/offset/start = página × tamanho). Devolve também o `tamanho` original. */
-  function comPagina(caminho, corpo, pagina) {
+  function comPagina(caminho, corpo, pagina, todos = 100000) {
     let tamanho = 0;
     const achar = (v, prof) => {
       if (prof > 6 || v == null || typeof v !== "object") return;
@@ -549,7 +549,7 @@
       if (Array.isArray(v)) return v.map((x) => ir(x, prof + 1));
       const o = {};
       for (const [k, x] of Object.entries(v)) {
-        if (typeof x === "number" && RE_TAMANHO.test(k)) o[k] = pagina == null ? 100000 : x;
+        if ((typeof x === "number" || (x === null && pagina == null)) && RE_TAMANHO.test(k)) o[k] = pagina == null ? todos : x;
         else if (typeof x === "number" && RE_INICIO.test(k)) o[k] = inicio(k, x);
         else o[k] = ir(x, prof + 1);
       }
@@ -558,8 +558,8 @@
     if (u) {
       for (const k of [...u.searchParams.keys()]) {
         const v = u.searchParams.get(k);
-        if (!/^\d+$/.test(v ?? "")) continue;
-        if (RE_TAMANHO.test(k) && pagina == null) u.searchParams.set(k, "100000");
+        if (!/^-?\d+$/.test(v ?? "")) continue;
+        if (RE_TAMANHO.test(k) && pagina == null) u.searchParams.set(k, String(todos ?? ""));
         else if (RE_INICIO.test(k)) u.searchParams.set(k, String(inicio(k, Number(v))));
       }
       c = `${u.pathname.replace(/^\//, "")}${u.search}`;
@@ -581,19 +581,6 @@
     return t;
   }
   const RE_TOTAL = /^(total|totalitems|totalitens|totalcount|totalrecords|totalregistros|totalrows|totallinhas|recordcount|recordstotal|quantidadetotal|qtdtotal|count)$/i;
-  /** A consulta da CM002 SEM os filtros de tela (referência, exercício, PCA, finalidade, situação, busca): os textos
-   * desses campos viram "" — a lista volta inteira. Paginação, listas de opções e números técnicos ficam. */
-  function semFiltrosCm002(corpo) {
-    const ir = (v, prof) => {
-      if (prof > 6 || v == null || typeof v !== "object") return v;
-      if (Array.isArray(v)) return v.map((x) => ir(x, prof + 1));
-      const o = {};
-      for (const [k, x] of Object.entries(v)) o[k] = typeof x === "string" && x && RE_FILTRO.test(k) ? "" : ir(x, prof + 1);
-      return o;
-    };
-    return ir(corpo, 0);
-  }
-  const RE_FILTRO = /(referencia|exercicio|^ano$|anopca|^pca|finalidade|situa|busca|filtro|pesquisa|search|termo)/i;
   function semPaginacao(caminho, corpo) {
     const p = comPagina(caminho, corpo, null);
     return { caminho: p.caminho, corpo: p.corpo };
@@ -621,7 +608,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, semFiltrosCm002, comPagina, protocolosTela, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, comPagina, protocolosTela, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

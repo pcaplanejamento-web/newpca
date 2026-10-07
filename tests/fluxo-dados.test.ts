@@ -231,3 +231,35 @@ test("Modelo “Execução dos DFDs na CM002”: grava a situação, aponta os f
     "DFD 500 (planejamento 999) não está na CM002 do órgão 3",
   ]);
 });
+
+test("Órgão na Centi: o do item (com trava), fixos e um órgão por vez trocando na Centi", async () => {
+  const def = REGISTRO_NOS.get("centi.orgao") as DefNo;
+  const trocas: unknown[] = [];
+  const c = {
+    centi: async (acao: string, d: unknown) => {
+      trocas.push([acao, (d as { entidade: unknown }).entidade]);
+      return { ok: true };
+    },
+    api: async () => ({ ok: false }),
+    cancelado: () => false,
+    host: {},
+    aviso: () => {},
+  } as never;
+  const itens = [{ n: 1, entidade: "02" }, { n: 2, entidade: "6" }, { n: 3, entidade: "" }];
+  const r1 = await def.executar({ entrada: itens }, { origem: "itens" }, c, {});
+  assert.deepEqual(r1.saida?.map((x) => x.entidade), ["2", "6"]);
+  assert.equal(r1.semOrgao?.length, 1);
+  const r2 = await def.executar({ entrada: itens }, { origem: "itens", orgaos: "6" }, c, {});
+  assert.deepEqual(r2.saida?.map((x) => x.n), [2]);
+  const r3 = await def.executar({ entrada: itens.slice(0, 1) }, { origem: "fixo", orgaos: "3; 4" }, c, {});
+  assert.deepEqual(r3.saida?.map((x) => x.entidade), ["3", "4"]);
+  const est = {};
+  const a = await def.executar({ entrada: itens }, { origem: "itens", entrega: "umPorVez" }, c, est);
+  assert.deepEqual(a.lote?.map((x) => x.n), [1]);
+  assert.equal(a.semOrgao?.length, 1);
+  const b = await def.executar({ volta: [{ ok: 1 }] }, { origem: "itens", entrega: "umPorVez" }, c, est);
+  assert.deepEqual(b.lote?.map((x) => x.n), [2]);
+  const f = await def.executar({ volta: [{ ok: 2 }] }, { origem: "itens", entrega: "umPorVez" }, c, est);
+  assert.equal(f.fim?.length, 2);
+  assert.deepEqual(trocas, [["trocarOrgao", "2"], ["trocarOrgao", "6"], ["trocarOrgao", null]]);
+});

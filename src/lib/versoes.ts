@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.47.0",
+    data: "2026-10-07",
+    titulo: "CM002 com “Mostrar: Todos” e o nó Órgão na Centi",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A CM002 é lida como a tela pediu e com “Mostrar: Todos” — vale a resposta com mais linhas, página a página se preciso; a consulta guardada é a que trouxe mais linhas. Saiu a limpeza de filtros da 1.46.0 (extensão 1.21.0).", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Nó “Órgão na Centi”: cada DFD é analisado no órgão dele (o ID da Centi cadastrado no órgão) ou em órgãos fixos; “um órgão por vez” troca o órgão em análise na Centi a cada lote. O modelo “Execução dos DFDs na CM002” já o usa.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.46.0",
     data: "2026-10-07",
     titulo: "CM002 lida por inteiro e coluna Situação na Mesa",

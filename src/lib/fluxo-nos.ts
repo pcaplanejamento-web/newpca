@@ -87,6 +87,22 @@ const pedeParar = (itens: Item[] | undefined) => (itens ?? []).some((it) => it.p
 const passa = (it: Item, c: Record<string, unknown>) =>
   comparar(resolverCaminho(it, str(c.campo)), str(c.operador, "igual"), interpolar(str(c.valor), it));
 
+/** O próximo lote do "Órgão na Centi" (um por vez): troca o órgão em análise na Centi; no fim, volta ao da tela. */
+async function proximoOrgao(est: Record<string, unknown>, ctx: ContextoNo): Promise<Portas> {
+  const fila = (est.fila ?? []) as Item[][];
+  const lote = fila.shift();
+  if (!lote) {
+    await ctx.centi("trocarOrgao", { entidade: null }, 30_000).catch(() => null);
+    return { fim: marcarExecutado(est.acumulado as Item[], est.total as number) };
+  }
+  const o = str(lote[0]?.entidade);
+  const r = await ctx.centi("trocarOrgao", { entidade: o }, 30_000);
+  if (r.interrompido) throw new Error("Interrompido na extensão.");
+  if (!r.ok) throw new Error(`Não deu para trocar para o órgão ${o} na Centi: ${r.erro || "a extensão não respondeu"}.`);
+  ctx.aviso(`Órgão ${o} (${(est.total as number) - fila.length} de ${est.total as number}) — ${lote.length} item(ns)`);
+  return { lote };
+}
+
 // ———————————————————————————————————————————————— os nós
 
 const NOS: DefNo[] = [
@@ -248,6 +264,81 @@ const NOS: DefNo[] = [
       if (linhas.length && !linhas.some((l) => str(l.departamento)))
         throw new Error("A Centi não devolveu o departamento dos protocolos — não dá para filtrar pela repartição. Liste os protocolos uma vez na Tela Protocolo (PO011) com a coluna Departamento.");
       return { saida: linhas.filter((l) => alvo.some((a) => normTexto(l.departamento).includes(a) || a.includes(normTexto(l.departamento)))) };
+    },
+  },
+  {
+    tipo: "centi.orgao",
+    categoria: "centi",
+    rotulo: "Órgão na Centi",
+    descricao:
+      "Define em que órgão da Centi cada item é analisado: o do próprio item (o ID da Centi cadastrado no órgão do sistema) ou órgãos fixos. Um por vez troca o órgão em análise na Centi a cada lote.",
+    icone: "building",
+    entradas: ["entrada"],
+    saidas: ["saida", "semOrgao", "lote", "fim"],
+    rotulosPortas: { saida: "Com órgão", semOrgao: "Sem órgão", lote: "Lote do órgão", fim: "Fim" },
+    campos: [
+      {
+        chave: "origem",
+        rotulo: "Órgão",
+        tipo: "selecao",
+        padrao: "itens",
+        opcoes: [
+          { valor: "itens", rotulo: "O de cada item (cadastro do órgão)" },
+          { valor: "fixo", rotulo: "Órgãos fixos" },
+        ],
+      },
+      { chave: "campo", rotulo: "Campo do órgão no item", tipo: "texto", padrao: "entidade", quando: { campo: "origem", valores: ["itens"] } },
+      {
+        chave: "orgaos",
+        rotulo: "Órgãos (ID na Centi)",
+        tipo: "texto",
+        entrada: true,
+        ajuda: "Ex.: 2; 3. Fixos: todos os itens são analisados nestes órgãos. No “de cada item”, trava a análise só nestes (vazio = todos).",
+      },
+      {
+        chave: "entrega",
+        rotulo: "Entregar",
+        tipo: "selecao",
+        padrao: "todos",
+        opcoes: [
+          { valor: "todos", rotulo: "Todos de uma vez (cada item com o órgão)" },
+          { valor: "umPorVez", rotulo: "Um órgão por vez (Lote → Volta)" },
+        ],
+      },
+    ],
+    rodaSemItens: true,
+    entregaParcial: true,
+    iterador: true,
+    executar: async (e, c, ctx, est): Promise<Portas> => {
+      const soNum = (v: unknown) => str(v).trim().replace(/^0+(?=\d)/, "");
+      if (e.entrada) {
+        const fixos = [...new Set(lista(c.orgaos).map(soNum))].filter(Boolean);
+        const itens = e.entrada;
+        const com: Item[] = [];
+        const sem: Item[] = [];
+        if (str(c.origem, "itens") === "fixo") {
+          if (!fixos.length) throw new Error("Informe os órgãos fixos (ID na Centi).");
+          for (const o of fixos) for (const it of itens) com.push({ ...it, entidade: o });
+        } else {
+          const campo = str(c.campo, "entidade") || "entidade";
+          for (const it of itens) {
+            const o = soNum(resolverCaminho(it, campo));
+            if (!o) sem.push(it);
+            else if (!fixos.length || fixos.includes(o)) com.push({ ...it, entidade: o });
+          }
+        }
+        const orgaos = [...new Set(com.map((it) => str(it.entidade)))];
+        ctx.aviso(`${com.length} item(ns) em ${orgaos.length} órgão(s) da Centi: ${orgaos.join(", ") || "—"}${sem.length ? ` · ${sem.length} sem órgão` : ""}`);
+        if (str(c.entrega, "todos") !== "umPorVez") return { saida: com, semOrgao: sem, fim: marcarExecutado([], com.length) };
+        est.fila = orgaos.map((o) => com.filter((it) => str(it.entidade) === o));
+        est.total = orgaos.length;
+        est.acumulado = [];
+        if (sem.length) return { semOrgao: sem, ...(await proximoOrgao(est, ctx)) };
+      } else {
+        (est.acumulado as Item[]).push(...(e[PORTA_VOLTA] ?? []));
+        if (pedeParar(e[PORTA_VOLTA])) est.fila = [];
+      }
+      return proximoOrgao(est, ctx);
     },
   },
   {

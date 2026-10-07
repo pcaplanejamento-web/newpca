@@ -216,7 +216,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       "Os DFDs do sistema são procurados na lista da CM002 (nº de planejamento = ID, no órgão de cada um); a Situação encontrada é gravada na coluna Execução da Mesa; os planejamentos da CM002 sem DFD no sistema ficam numa tabela.",
     ajuda: {
       funciona:
-        "Lê os DFDs do sistema (ordenados por órgão) e, de cada um desses órgãos, a lista INTEIRA da CM002 — uma vez por órgão. Cada DFD é procurado pelo nº de planejamento = ID da CM002, no mesmo órgão. Todo DFD de órgão cadastrado recebe um texto: a Situação ou “Não encontrado na CM002”.",
+        "Lê os DFDs do sistema; o nó “Órgão na Centi” define o órgão de cada um (o ID da Centi cadastrado no órgão — ou fixe órgãos ali) e, de cada órgão, a lista INTEIRA da CM002 (Mostrar: Todos) é lida uma vez. Cada DFD é procurado pelo nº de planejamento = ID da CM002, no mesmo órgão. Todo DFD de órgão cadastrado recebe um texto: a Situação ou “Não encontrado na CM002”.",
       executa: "Execute com a extensão pronta (a consulta da CM002 aprendida). O ID da Centi de cada órgão vem de Órgãos e Unidades.",
       resultado:
         "A Situação da CM002 na coluna Execução da Mesa → DFDs; atenção para os não executados e os DFDs fora da CM002; a tabela “CM002 sem DFD no sistema” com os planejamentos só na Centi (para ver e usar em outras automações).",
@@ -226,6 +226,8 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       nos: [
         n("inicio1", "gatilho.inicio", 0, 224),
         n("dfds1", "sistema.ler", 280, 224, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("org1", "centi.orgao", 280, 416, { origem: "itens", campo: "entidade", entrega: "todos" }),
+        n("err3", "erros.apontar", 576, 560, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): o órgão não tem o ID da Centi cadastrado", nivel: "atencao" }),
         n("ord1", "dados.ordenar", 576, 96, { campo: "entidade", ordem: "asc", limite: 0 }),
         { ...n("cm1", "centi.cm002", 576, 352, { dosItens: true }), tentar: { vezes: 2, esperaS: 30 } },
         n("proc1", "logica.procurar", 880, 96, { valor: "{{planejamento}}", onde: "coluna", coluna: "planejamento", operador: "igual", resultado: "primeiro", extraCampo: "entidade", extraColuna: "entidade" }),
@@ -240,8 +242,10 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       ],
       conexoes: [
         c("inicio1", "dfds1"),
-        c("dfds1", "ord1"),
-        c("dfds1", "cm1"),
+        c("dfds1", "org1"),
+        c("org1", "ord1"),
+        c("org1", "cm1"),
+        c("org1", "err3", "semOrgao"),
         c("ord1", "proc1"),
         c("cm1", "proc1", "saida", "tabela"),
         c("proc1", "grav1", "encontrados"),
@@ -251,7 +255,7 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
         c("proc1", "se2", "naoEncontrados"),
         c("se2", "grav2", "verdadeiro"),
         c("cm1", "proc2"),
-        c("dfds1", "proc2", "saida", "tabela"),
+        c("org1", "proc2", "saida", "tabela"),
         c("proc2", "tab1", "naoEncontrados"),
       ],
     },
