@@ -22,7 +22,7 @@ import {
   rotuloFrequencia,
   validarGrafo,
 } from "@/lib/fluxo-core";
-import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
+import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
 import { NOS_POR_CATEGORIA, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { MODELOS_FLUXO } from "@/lib/fluxo-modelos";
@@ -121,6 +121,7 @@ export function FluxosAutomacao({
         if (!lido) return { importado: false, motivo: "O protocolo não foi lido nesta execução (ligue o nó “Ler protocolo” antes)." };
         return importarProtocolo(lido, apontamentos, importacao);
       },
+      lerDfdCenti: (plan: string, entidade?: string) => lerDfdCentiPorCodigo(pedir as unknown as PedirExtensao, plan, entidade),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {
         relatorio.current.push(...l);

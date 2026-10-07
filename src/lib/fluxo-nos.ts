@@ -283,6 +283,38 @@ const NOS: DefNo[] = [
     },
   },
 
+  {
+    tipo: "leitura.dfdCenti",
+    categoria: "leitura",
+    rotulo: "Buscar DFD na Centi",
+    descricao: "Para cada DFD, emite o DFD da Centi pelo nº de planejamento (o mesmo do “Baixar DFDs”, por API) e lê o PDF → campo “centi”.",
+    icone: "scan",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [{ chave: "limite", rotulo: "Máximo de DFDs", tipo: "numero", padrao: 5000, ajuda: "Proteção — até 20000." }],
+    executar: async (e, c, ctx) => {
+      const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string) => Promise<Item>) | undefined;
+      if (!ler) throw new Error("A busca do DFD na Centi só funciona na tela da Automação.");
+      const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
+      const itens = so(e).slice(0, max);
+      const out: Item[] = [];
+      for (const [i, it] of itens.entries()) {
+        if (ctx.cancelado()) break;
+        ctx.aviso(`DFD ${str(it.numero)} · planejamento ${str(it.planejamento)} (${i + 1} de ${itens.length})…`);
+        try {
+          out.push({ ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined) });
+        } catch (x) {
+          const msg = x instanceof Error ? x.message : String(x);
+          if (/interrompido/i.test(msg)) throw x;
+          // A Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
+          if (/recusou o Emitir DFD/i.test(msg)) throw x;
+          out.push({ ...it, centi: null, centiErro: msg });
+        }
+      }
+      return { saida: out };
+    },
+  },
+
   // ——— Lógica
   {
     tipo: "logica.se",
@@ -536,6 +568,22 @@ const NOS: DefNo[] = [
     },
   },
 
+  {
+    tipo: "dados.compararDfdCenti",
+    categoria: "dados",
+    rotulo: "Comparar DFD × Centi",
+    descricao: "O DFD do sistema × o lido na Centi (nó “Buscar DFD na Centi”): nº do DFD, tipo, objeto, valor total e nº de itens.",
+    icone: "compare",
+    entradas: ["entrada"],
+    saidas: ["divergentes", "conformes"],
+    rotulosPortas: { divergentes: "Divergentes", conformes: "Conformes" },
+    campos: [
+      { chave: "tolerancia", rotulo: "Tolerância do valor (R$)", tipo: "numero", padrao: 0.01 },
+      { chave: "objeto", rotulo: "Comparar o objeto", tipo: "booleano", padrao: true },
+    ],
+    executar: async (e, c) => compararDfdCenti(so(e), { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false }),
+  },
+
   // ——— Erros
   {
     tipo: "erros.apontar",
@@ -721,6 +769,35 @@ export function separarCadastrados(itens: Item[], sistema: Item[]): { novos: Ite
   for (const it of itens) {
     const id = str(it.id).trim();
     (id && ids.has(id)) || nums.has(chaveProto(it)) ? out.cadastrados.push(it) : out.novos.push(it);
+  }
+  return out;
+}
+
+const brl = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const tipoCurto = (t: unknown) => (/DFD-?\s*([SROE])\b/i.exec(str(t))?.[1] ?? normTexto(t).slice(0, 1)).toUpperCase();
+
+/** O DFD do sistema × o lido na Centi (`centi`): um item DIVERGENTE por diferença (com a `mensagem`). Pura. */
+export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto: boolean }): { divergentes: Item[]; conformes: Item[] } {
+  const out = { divergentes: [] as Item[], conformes: [] as Item[] };
+  for (const d of itens) {
+    const ref = `DFD ${str(d.numero)} (Planej. ${str(d.planejamento)})`;
+    const x = d.centi && typeof d.centi === "object" ? (d.centi as Item) : null;
+    const msgs: string[] = [];
+    if (!x) msgs.push(`${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}`);
+    else {
+      if (str(x.numero) && str(x.numero).replace(/^0+/, "") !== str(d.numero).replace(/^0+/, "")) msgs.push(`${ref}: na Centi é o DFD ${str(x.numero)}`);
+      if (str(d.tipo) && str(x.tipo) && tipoCurto(d.tipo) !== tipoCurto(x.tipo)) msgs.push(`${ref}: tipo ${str(d.tipo)} no sistema × ${str(x.tipo)} na Centi`);
+      const vs = numeroDe(d.valor);
+      const vc = numeroDe(x.valor);
+      if (vs != null && vc != null && Math.abs(vs - vc) > o.tolerancia) msgs.push(`${ref}: valor R$ ${brl(vs)} no sistema × R$ ${brl(vc)} na Centi`);
+      const is = numeroDe(d.totalItens);
+      const ic = numeroDe(x.totalItens);
+      if (is != null && ic != null && is !== ic) msgs.push(`${ref}: ${is} item(ns) no sistema × ${ic} na Centi`);
+      if (o.objeto && str(d.objeto) && str(x.objeto) && normTexto(d.objeto).replace(/[^A-Z0-9]/g, "") !== normTexto(x.objeto).replace(/[^A-Z0-9]/g, ""))
+        msgs.push(`${ref}: objeto diferente da Centi`);
+    }
+    if (msgs.length) for (const mensagem of msgs) out.divergentes.push({ ...d, mensagem });
+    else out.conformes.push(d);
   }
   return out;
 }

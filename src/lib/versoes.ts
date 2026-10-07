@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.28.0",
+    data: "2026-10-07",
+    titulo: "Conferir DFDs × Centi pelo Emitir DFD",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "O fluxo “Conferir DFDs × Centi” busca CADA DFD na Centi pelo nº de planejamento com o mesmo Emitir DFD do “Baixar DFDs” (por API, sem a lista da CM002) e compara nº, tipo, objeto, valor e itens — marca Divergente (com o motivo) ou Convergente.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Nós “Buscar DFD na Centi” e “Comparar DFD × Centi” para montar fluxos próprios.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.27.1",
     data: "2026-10-07",
     titulo: "CM002 aprendida sem depender da tabela",

@@ -3,7 +3,8 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { analisarRespostaCenti, operacaoRecusada } from "./automacao-centi-core";
+import { analisarRespostaCenti, lerConfigCenti, operacaoRecusada, pedidoEmitirDfd } from "./automacao-centi-core";
+import { parseDfdPdf } from "./parse-dfd-pdf";
 import { coerceEmissaoProtocolo, conferirLeituraProtocolo, corpoEmissaoProtocolo, type EmissaoProtocolo } from "./automacao-tela-protocolo";
 import { baixarPelaExtensao, comoBlob, deBase64, type PedirExtensao, pdfDoAchado, pdfDosBytes } from "./arquivo-navegador";
 import { dataIsoBrasilia } from "./format";
@@ -68,5 +69,44 @@ export async function lerProtocoloPorCodigo(
       itens: d.itens.length,
       assinaturas: d.assinaturas.length,
     })),
+  };
+}
+
+/** A configuração do Emitir DFD deste aparelho (a mesma do "Baixar DFDs" — Ajustes da Automação). */
+function configDfd() {
+  try {
+    return lerConfigCenti(JSON.parse(localStorage.getItem("automacao:centi") || "null"));
+  } catch {
+    return lerConfigCenti(null);
+  }
+}
+
+/** Busca UM DFD na Centi pelo nº de PLANEJAMENTO — o mesmo Emitir DFD do "Baixar DFDs" (por API) — e lê o PDF:
+ * nº, tipo, objeto, valor total e itens como estão na Centi. Lança com a mensagem quando não dá. */
+export async function lerDfdCentiPorCodigo(pedir: PedirExtensao, planejamento: string, entidade?: string): Promise<Item> {
+  const plan = s(planejamento).replace(/\D/g, "");
+  if (!plan) throw new Error("O DFD não tem nº de planejamento.");
+  const r = (await pedir(
+    "pedir",
+    { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(plan, configDfd(), new Date()), entidade: entidade || undefined },
+    150_000,
+  )) as { ok?: boolean; erro?: string; b64?: string; status?: number; interrompido?: boolean };
+  if (r.interrompido) throw new Error("Interrompido na extensão.");
+  if (!r.ok || r.b64 == null) throw new Error(r.erro || "A extensão não respondeu.");
+  const a = analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
+  if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro))
+    throw new Error("A Centi recusou o Emitir DFD — emita UM DFD pela tarefa “Baixar DFDs” (ou pela tela da Centi) para a extensão pegar a operação nova.");
+  const x = await pdfDoAchado(a, baixarPelaExtensao(pedir, entidade || undefined));
+  if (!("pdf" in x)) throw new Error(x.erro);
+  const d = await parseDfdPdf(new File([comoBlob(x.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }));
+  if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
+    throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
+  return {
+    numero: d.numero,
+    planejamento: d.planejamento,
+    tipo: d.tipo,
+    objeto: d.objeto,
+    valor: d.valorTotal ?? 0,
+    totalItens: d.itens.length,
   };
 }
