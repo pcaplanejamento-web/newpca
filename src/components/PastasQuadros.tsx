@@ -250,6 +250,18 @@ function rolagemDe(el: HTMLElement): HTMLElement | null {
  * do arrasto é engolido. O DOM: `[data-grade-area]` (a raiz = "", a pasta aberta = o id) › `[data-grade-item]`;
  * `[data-pasta-id]` = o card da pasta; `[data-painel-pasta]` = o painel da pasta aberta.
  */
+/** O retângulo de LAYOUT do elemento: sem a translação do `transform` (o FLIP que desliza os cartões) — medir durante a
+ * animação fazia o destino mudar a cada quadro (o cartão tremia). */
+function rectDeLayout(el: Element) {
+  const r = el.getBoundingClientRect();
+  const t = getComputedStyle(el).transform;
+  if (!t || t === "none") return r;
+  const m = new DOMMatrixReadOnly(t);
+  return { left: r.left - m.e, right: r.right - m.e, top: r.top - m.f, bottom: r.bottom - m.f, width: r.width, height: r.height };
+}
+const dentroDe = (p: { x: number; y: number }, r: { left: number; right: number; top: number; bottom: number }) =>
+  p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
+
 export function useArrastoGrade({
   raiz,
   onSoltar,
@@ -296,8 +308,8 @@ export function useArrastoGrade({
       let area: string | null = null;
       if (!ehPasta)
         for (const p of grade.querySelectorAll<HTMLElement>("[data-painel-pasta]")) {
-          const r = p.getBoundingClientRect();
-          if (r.height > 8 && ultimo.x >= r.left && ultimo.x <= r.right && ultimo.y >= r.top && ultimo.y <= r.bottom) area = p.dataset.painelPasta ?? null;
+          const r = rectDeLayout(p);
+          if (r.height > 8 && dentroDe(ultimo, r)) area = p.dataset.painelPasta ?? null;
         }
       const el = area == null ? grade : grade.querySelector<HTMLElement>(`[data-grade-area="${CSS.escape(area)}"]`);
       if (!el) return;
@@ -309,16 +321,20 @@ export function useArrastoGrade({
         for (const i of itens) {
           const id = i.dataset.pastaId;
           if (!id) continue;
-          const r = i.getBoundingClientRect();
+          const r = rectDeLayout(i);
           const mx = r.width * 0.2;
           const my = r.height * 0.15;
           if (ultimo.x > r.left + mx && ultimo.x < r.right - mx && ultimo.y > r.top + my && ultimo.y < r.bottom - my) novo = { ...destino, dentro: id };
         }
       }
+      // O ponteiro já está sobre a SOMBRA (o lugar escolhido): nada muda — sem isso a sombra empurrava o cartão-alvo, o
+      // destino voltava, a sombra saía, o cartão voltava… (o vai-e-vem).
+      const sombra = inicial && !novo.dentro && novo.area === destino.area ? el.querySelector<HTMLElement>(":scope > [data-sombra-grade]") : null;
+      if (sombra && dentroDe(ultimo, rectDeLayout(sombra))) return;
       if (!novo.dentro) {
         // A POSIÇÃO: antes do 1º item que está depois do ponteiro na ordem de leitura; senão, depois do último.
         const antes = itens.find((i) => {
-          const r = i.getBoundingClientRect();
+          const r = rectDeLayout(i);
           return ultimo.y < r.top || (ultimo.y <= r.bottom && ultimo.x < r.left + r.width / 2);
         });
         novo = antes ? { ...novo, antesDe: antes.dataset.gradeItem ?? null } : { ...novo, depoisDe: itens.at(-1)?.dataset.gradeItem ?? null };

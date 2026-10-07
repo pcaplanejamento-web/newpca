@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.38.1",
+    data: "2026-10-07",
+    titulo: "Arrastar cartões sem tremer",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Reordenar os cartões das automações não pula nem fica oscilando — o lugar é medido sem a animação e a sombra segura a posição.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Tarefas", texto: "O mesmo ajuste no arrasto dos quadros e das pastas.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.38.0",
     data: "2026-10-07",
     titulo: "Automações em segundo plano",
