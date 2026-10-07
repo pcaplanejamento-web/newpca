@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.34.0",
+    data: "2026-10-07",
+    titulo: "Automação: cartões fixos e cabeçalho enxuto",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Os cartões dos fluxos têm formato fixo — abrir o painel “Novo fluxo” só muda quantos cabem por linha — com animação suave ao passar o mouse.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "“Novo fluxo” só com o ícone; a extensão mostra só o número e, com tudo certo, encolhe para o ícone.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "“Centi logada” pulsa ao vivo e explica o estado ao passar o mouse.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.33.3",
     data: "2026-10-07",
     titulo: "Conferir DFDs: progresso a cada DFD",

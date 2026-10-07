@@ -4246,7 +4246,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `sistema.completarDfd` — um item que já é DFD passa direto; sozinho, o planejamento do campo). Modelos com
   `dependencias` + `fluxoModelo` (`grafoDoModelo`): "Conferir DFDs × Centi" = DFDs → Executar "Conferir 1 DFD × Centi"
   (paralelo 3, retomar).
-  **Tela (v1.32.1):** a lista mostra SÓ os fluxos salvos, em **`CartaoFluxo`** (DS, `fluxos/CartaoFluxo.tsx` — título
+  **Tela (v1.32.1):** a lista mostra SÓ os fluxos salvos, em **`CartaoFluxo`** (DS, `fluxos/CartaoFluxo.tsx` — v1.34.0: LARGURA FIXA `LARGURA_CARTAO`=17rem × h-48, a grade em colunas fixas e o painel do Novo fluxo com a largura de um cartão; o `Badge` ganhou `vivo`/`title`; título
   INTEIRO, descrição em 3 linhas, rodapé; grade `auto-rows-fr` ≥ 16rem; esqueleto `SkeletonCartao` ao carregar); **"Novo
   fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
   com "Em branco" + TODOS os modelos no mesmo cartão (v1.33.2: o `lado` do `Modal` saiu — o painel desliza na própria tela; o editor do diagrama tem a altura FIXA do display pelo `useAlturaTela`, a paleta e o quadro rolam por dentro) (o que já existe: "Abrir o existente" | "Criar outro"); o "Como

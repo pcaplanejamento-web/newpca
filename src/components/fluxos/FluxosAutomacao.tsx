@@ -43,7 +43,7 @@ import { IconeNo } from "./IconeNo";
 import { Ajuda } from "../Ajuda";
 import { useAlturaTela } from "../AlturaCheia";
 import { SkeletonCartao } from "../Skeleton";
-import { CartaoFluxo, GRADE_CARTOES } from "./CartaoFluxo";
+import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
 import { type HostPainel, HostPainelCtx } from "./paineis";
@@ -487,7 +487,8 @@ export function FluxosAutomacao({
 const GRAFO_VAZIO_COM_INICIO: Grafo = { ...GRAFO_VAZIO, nos: [{ id: "inicio1", tipo: "gatilho.inicio", config: {}, x: 64, y: 160 }] };
 
 /** O painel "Novo fluxo" ocupa esta largura no desktop (empurra os cartões). */
-const LARGURA_NOVO = "26rem";
+/** O painel cabe UM cartão na largura fixa (o mesmo formato da lista) + o respiro e a barra de rolagem. */
+const LARGURA_NOVO = `calc(${LARGURA_CARTAO} + var(--pad-card) * 2 + 0.75rem)`;
 
 function ListaFluxos({
   fluxos,

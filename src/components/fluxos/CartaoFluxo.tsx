@@ -3,8 +3,11 @@
 import type { ReactNode } from "react";
 import { IconFluxo } from "../icons";
 
-/** A grade dos cartões de automação (a mesma na lista e no painel "Novo fluxo"): vão padrão do sistema. */
-export const GRADE_CARTOES = "grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]";
+/** A LARGURA fixa do cartão: o formato nunca muda (abrir o painel "Novo fluxo" só muda quantos cabem por linha). */
+export const LARGURA_CARTAO = "17rem";
+
+/** A grade dos cartões de automação (a mesma na lista e no painel "Novo fluxo"): colunas de largura FIXA, vão padrão. */
+export const GRADE_CARTOES = "grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),17rem))]";
 
 /**
  * O CARTÃO de uma automação — o MESMO na lista dos fluxos salvos e no painel "Novo fluxo" (modelos e "Em branco"): sólido
@@ -32,7 +35,7 @@ export function CartaoFluxo({
       onClick={onClick}
       aria-pressed={marcado}
       title={titulo}
-      className={`flex h-48 flex-col gap-2 overflow-hidden rounded-card border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-shadow hover:shadow-soft focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
+      className={`flex h-48 flex-col gap-2 overflow-hidden rounded-card border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-[box-shadow,transform,border-color] duration-[var(--motion-duration)] ease-[var(--motion-ease)] hover:-translate-y-0.5 hover:shadow-soft motion-reduce:hover:translate-y-0 focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
         marcado ? "border-accent shadow-[0_0_0_1px_var(--accent)]" : "border-border"
       }`}
     >

@@ -592,7 +592,12 @@ export function AutomacaoAdmin({
               Extensão v{ext.versao} desatualizada
             </Badge>
           ) : logado?.ok && logado.logado ? (
-            <Badge tone="emerald" dot>
+            <Badge
+              tone="emerald"
+              dot
+              vivo
+              title={`Ao vivo: a extensão está conectada e a Centi está logada${logado.entidade ? ` na entidade ${logado.entidade}` : ""}. Conferido ao abrir, ao voltar à janela e a cada 20 s.`}
+            >
               Centi logada{logado.entidade ? ` · ${logado.entidade}` : ""}
             </Badge>
           ) : logado?.tela === "login" ? (
@@ -609,12 +614,26 @@ export function AutomacaoAdmin({
             detalhe="Verificando a extensão e a Centi…"
             onClick={() => void giroVerificar.girar(async () => (ext ? void (await verificar(true)) : window.location.reload()))}
           />
-          <Button size="sm" variant={atualizada ? "secondary" : "primary"} onClick={baixarExtensao} title={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}>
-            <IconDownload className="h-4 w-4" /> Extensão {VERSAO_EXTENSAO_CENTI}
+          <Button
+            size="sm"
+            variant={atualizada ? "secondary" : "primary"}
+            onClick={baixarExtensao}
+            title={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}
+            aria-label={`Baixar a extensão ${VERSAO_EXTENSAO_CENTI}`}
+          >
+            <IconDownload className="h-4 w-4 shrink-0" />
+            {/* Tudo certo (extensão em dia e Centi logada) = o número ENCOLHE e fica só o ícone. */}
+            <span
+              className={`overflow-hidden whitespace-nowrap tabular-nums transition-[max-width,opacity,margin] duration-[var(--motion-duration)] ease-[var(--motion-ease)] ${
+                pronto ? "-ml-2 max-w-0 opacity-0" : "ml-0 max-w-24 opacity-100"
+              }`}
+            >
+              {VERSAO_EXTENSAO_CENTI}
+            </span>
           </Button>
           {!noEditor && (
-            <Button size="sm" onClick={() => setNovoFluxo((n) => n + 1)}>
-              <IconPlus className="h-4 w-4" /> Novo fluxo
+            <Button size="sm" variant="primary" onClick={() => setNovoFluxo((n) => n + 1)} title="Novo fluxo" aria-label="Novo fluxo">
+              <IconPlus className="h-4 w-4" />
             </Button>
           )}
           <Dropdown

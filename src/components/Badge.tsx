@@ -35,6 +35,8 @@ export function Badge({
   tone = "slate",
   dot = false,
   solid = false,
+  vivo = false,
+  title,
   className = "",
 }: {
   children: ReactNode;
@@ -42,6 +44,10 @@ export function Badge({
   dot?: boolean;
   /** `solid` = pílula PREENCHIDA (fundo no tom, texto branco) — p/ chips de MARCA (ex.: Adobe). */
   solid?: boolean;
+  /** `vivo` = o ponto PULSA (estado ao vivo — ex.: Centi logada). */
+  vivo?: boolean;
+  /** A explicação ao passar o mouse. */
+  title?: string;
   className?: string;
 }) {
   const c = TONE_VAR[tone];
@@ -57,8 +63,9 @@ export function Badge({
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
       style={style}
+      title={title}
     >
-      {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: solid ? "#fff" : c }} />}
+      {dot && <span className={`h-1.5 w-1.5 rounded-full ${vivo ? "ponto-vivo relative" : ""}`} style={{ background: solid ? "#fff" : c }} />}
       {children}
     </span>
   );
