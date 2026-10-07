@@ -1,6 +1,6 @@
 "use client";
 
-import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MutableRefObject, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { chaveOrgaoCenti, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import type { PedirExtensao } from "@/lib/arquivo-navegador";
 import { dataHoraBR } from "@/lib/format";
@@ -48,6 +48,10 @@ import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
 import { type HostPainel, HostPainelCtx } from "./paineis";
 import { ProtocoloUploadForm } from "../ProtocoloUploadForm";
+import { CartaoPreso } from "../ArrastoCartoes";
+import { tokenPx } from "../espacamento";
+import { duracaoMotionMs } from "../Modal";
+import { SombraGrade, useArrastoGrade } from "../PastasQuadros";
 import type { GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
 import { type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, testarAnexo } from "@/lib/automacao-dfds-motor";
 
@@ -117,15 +121,16 @@ export function FluxosAutomacao({
   useEffect(() => onRodando(rodando != null), [rodando, onRodando]);
   useEffect(() => onEditor(aberto != null), [aberto, onEditor]);
   useEffect(() => {
+    // O "+" do cabeçalho ALTERNA o painel (aberto, fecha).
     if (pedidoNovo > 0) {
       setAberto(null);
-      setNovo(true);
+      setNovo((v) => !v);
     }
   }, [pedidoNovo]);
 
   const carregar = useCallback(async () => {
-    const r = await api<{ fluxos?: FluxoAutomacao[] }>("/api/admin/automacao/fluxos");
-    if (r.ok && r.fluxos) setFluxos(r.fluxos);
+    const r = await api<{ fluxos?: FluxoAutomacao[]; ordem?: number[] }>("/api/admin/automacao/fluxos");
+    if (r.ok && r.fluxos) setFluxos(naOrdem(r.fluxos, r.ordem ?? []));
     else if (!fluxos) setFluxos([]);
   }, [fluxos]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: carrega uma vez ao abrir
@@ -331,7 +336,7 @@ export function FluxosAutomacao({
   const carregarRef = useRef(carregar);
   carregarRef.current = carregar;
 
-  async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string) {
+  async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe: number | null }) {
     // Os modelos usados DENTRO deste: reaproveita o fluxo já criado (pelo nome do modelo) ou cria antes.
     const criados = new Map<string, number>();
     for (const dep of modelo?.dependencias ?? []) {
@@ -356,9 +361,21 @@ export function FluxosAutomacao({
       },
     });
     if (!r.ok || !r.fluxo) return toast.error(r.error ?? "Não consegui criar o fluxo.");
-    setFluxos((fs) => [r.fluxo as FluxoAutomacao, ...(fs ?? [])]);
+    const criado = r.fluxo;
+    // Solto na lista (arrastado do painel): entra NAQUELE lugar e a lista segue à vista; senão, abre o fluxo.
+    if (opcoes?.antesDe !== undefined) {
+      setFluxos((fs) => {
+        const lista = fs ?? [];
+        const i = opcoes.antesDe == null ? lista.length : Math.max(0, lista.findIndex((f) => f.id === opcoes.antesDe));
+        const nova = [...lista.slice(0, i), criado, ...lista.slice(i)];
+        salvarOrdem(nova);
+        return nova;
+      });
+      return toast.success(`“${criado.nome}” criado.`);
+    }
+    setFluxos((fs) => [criado, ...(fs ?? [])]);
     setNovo(false);
-    setAberto(r.fluxo.id);
+    setAberto(criado.id);
   }
 
   async function excluir(f: FluxoAutomacao) {
@@ -465,6 +482,10 @@ export function FluxosAutomacao({
           onNovo={() => setNovo(true)}
           onFecharNovo={() => setNovo(false)}
           onCriar={criar}
+          onOrdem={(lista) => {
+            setFluxos(lista);
+            salvarOrdem(lista);
+          }}
         />
       )}
       <ProtocoloUploadForm
@@ -486,9 +507,63 @@ export function FluxosAutomacao({
 
 const GRAFO_VAZIO_COM_INICIO: Grafo = { ...GRAFO_VAZIO, nos: [{ id: "inicio1", tipo: "gatilho.inicio", config: {}, x: 64, y: 160 }] };
 
-/** O painel "Novo fluxo" ocupa esta largura no desktop (empurra os cartões). */
-/** O painel cabe UM cartão na largura fixa (o mesmo formato da lista) + o respiro e a barra de rolagem. */
-const LARGURA_NOVO = `calc(${LARGURA_CARTAO} + var(--pad-card) * 2 + 0.75rem)`;
+/** A ordem da PESSOA (arrastar e soltar); os que ela ainda não ordenou (novos) vêm primeiro. */
+function naOrdem(fluxos: FluxoAutomacao[], ordem: number[]): FluxoAutomacao[] {
+  const pos = new Map(ordem.map((id, i) => [id, i]));
+  return [...fluxos.filter((f) => !pos.has(f.id)), ...fluxos.filter((f) => pos.has(f.id)).sort((a, b) => (pos.get(a.id) ?? 0) - (pos.get(b.id) ?? 0))];
+}
+
+/** Grava a ordem dos cartões (preferência da pessoa) — silencioso: a ordem na tela já mudou. */
+function salvarOrdem(lista: FluxoAutomacao[]) {
+  void api("/api/preferencias/tabela", { method: "PUT", body: { chave: "automacao:ordem-fluxos", valor: { ids: lista.map((f) => f.id).slice(0, 500) } } });
+}
+
+/**
+ * As COLUNAS dos cartões: quantas cabem (cada uma ≥ `LARGURA_CARTAO`) e a largura EXATA de cada — a grade enche a
+ * largura toda (sem sobra) e o painel "Novo fluxo" ocupa a ÚLTIMA coluna: o cartão nunca muda de tamanho ao abrir/fechar.
+ */
+function useColunas(ref: React.RefObject<HTMLDivElement | null>) {
+  const [c, setC] = useState<{ n: number; largura: number; vao: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const calc = () => {
+      const w = el.clientWidth;
+      const vao = tokenPx("--gap-block", 12);
+      const min = Number.parseFloat(LARGURA_CARTAO) * Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const n = Math.max(1, Math.floor((w + vao) / (min + vao)));
+      setC((v) => {
+        const largura = (w - (n - 1) * vao) / n;
+        return v && v.n === n && Math.abs(v.largura - largura) < 0.5 && v.vao === vao ? v : { n, largura, vao };
+      });
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return c;
+}
+
+/** A reorganização SUAVE: cada cartão que mudou de lugar desliza do lugar antigo ao novo (FLIP), só com `transform`. */
+function useDeslizar(ref: React.RefObject<HTMLDivElement | null>, versao: unknown) {
+  const antes = useRef(new Map<string, DOMRect>());
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ms = duracaoMotionMs();
+    const agora = new Map<string, DOMRect>();
+    for (const i of el.querySelectorAll<HTMLElement>("[data-grade-item]")) {
+      const k = i.dataset.gradeItem ?? "";
+      const r = i.getBoundingClientRect();
+      agora.set(k, r);
+      const v = antes.current.get(k);
+      if (!v || ms <= 0 || (Math.abs(v.left - r.left) < 1 && Math.abs(v.top - r.top) < 1)) continue;
+      i.animate([{ transform: `translate(${v.left - r.left}px, ${v.top - r.top}px)` }, { transform: "none" }], { duration: ms, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+    }
+    antes.current = agora;
+  }, [ref, versao]);
+}
 
 function ListaFluxos({
   fluxos,
@@ -498,6 +573,7 @@ function ListaFluxos({
   onNovo,
   onFecharNovo,
   onCriar,
+  onOrdem,
 }: {
   fluxos: FluxoAutomacao[] | null;
   rodando: number | null;
@@ -505,21 +581,110 @@ function ListaFluxos({
   onAbrir: (id: number) => void;
   onNovo: () => void;
   onFecharNovo: () => void;
-  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string) => Promise<void>;
+  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: { antesDe: number | null }) => Promise<void>;
+  onOrdem: (lista: FluxoAutomacao[]) => void;
 }) {
   const desktop = useDesktop();
-  const escolha = <EscolherNovoFluxo fluxos={fluxos ?? []} onFechar={onFecharNovo} onCriar={onCriar} onAbrir={onAbrir} />;
+  const area = useRef<HTMLDivElement>(null);
+  const grade = useRef<HTMLDivElement>(null);
+  const col = useColunas(area);
+  // No desktop o painel ocupa a ÚLTIMA coluna (com 1 coluna só, ele vira a folha do celular).
+  const lateral = desktop && !!col && col.n >= 2;
+  const colunas = col ? (lateral && novo ? col.n - 1 : col.n) : 0;
+  const lista = fluxos ?? [];
+  const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoGrade({
+    raiz: grade,
+    onSoltar: (chave, d) => {
+      const antesDe = d.antesDe ? Number(d.antesDe.slice(2)) : null;
+      // Um MODELO arrastado do painel: cria o fluxo ali (só se soltou sobre a lista).
+      if (chave.startsWith("m:")) {
+        const ponto = soltoEm.current;
+        const r = grade.current?.getBoundingClientRect();
+        if (!r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
+        const m = MODELOS_FLUXO.find((x) => x.id === chave.slice(2)) ?? null;
+        return void onCriar(m, m?.nome ?? "Fluxo", { antesDe });
+      }
+      const id = Number(chave.slice(2));
+      const sem = lista.filter((f) => f.id !== id);
+      const f = lista.find((x) => x.id === id);
+      if (!f) return;
+      const i = antesDe != null ? sem.findIndex((x) => x.id === antesDe) : d.depoisDe ? sem.findIndex((x) => `f:${x.id}` === d.depoisDe) + 1 : sem.length;
+      onOrdem([...sem.slice(0, Math.max(0, i)), f, ...sem.slice(Math.max(0, i))]);
+    },
+  });
+  // Onde o ponteiro estava ao soltar (o modelo só vira fluxo se cair sobre a lista).
+  const soltoEm = useRef<{ x: number; y: number } | null>(null);
+  if (arrasto) soltoEm.current = { x: arrasto.x, y: arrasto.y };
+  useDeslizar(grade, `${colunas}|${lista.map((f) => f.id).join(",")}|${arrasto?.destino.antesDe ?? ""}|${arrasto?.destino.depoisDe ?? ""}|${!!arrasto}`);
+
+  const estiloGrade = col ? { gridTemplateColumns: `repeat(${colunas}, ${col.largura}px)`, gap: col.vao } : undefined;
+  const sombra = arrasto && !arrasto.pousando ? <SombraGrade key="__sombra" altura={arrasto.altura} /> : null;
+  const itens: ReactNode[] = [];
+  for (const f of lista) {
+    const chave = `f:${f.id}`;
+    if (sombra && arrasto?.destino.antesDe === chave) itens.push(sombra);
+    const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
+    itens.push(
+      <div
+        key={chave}
+        data-grade-item={chave}
+        role="none"
+        className={`${arrasto?.chave === chave ? "hidden" : ""} touch-manipulation select-none [-webkit-touch-callout:none]`}
+        onPointerDown={(e) => iniciar(e, chave)}
+        onClickCapture={(e) => {
+          if (foiArrasto()) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
+        <CartaoFluxo
+          titulo={f.nome}
+          descricao={f.descricao}
+          onClick={() => onAbrir(f.id)}
+          selo={rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : <Badge tone="slate">Manual</Badge>}
+          rodape={
+            <>
+              <span className="block truncate">
+                {f.grafo.nos.length} nó(s) · {rotuloFrequencia(f.frequencia)}
+                {f.ativo && f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}
+              </span>
+              {u?.estado && (
+                <span className={`block truncate ${u.estado === "concluido" && !u.apontados ? "text-[var(--ok)]" : "text-[var(--warn)]"}`}>
+                  Última: {u.estado === "concluido" ? "concluída" : u.estado}
+                  {u.apontados ? ` · ${u.apontados} erro(s)` : ""}
+                  {f.ultimaEm ? ` · ${dataHoraBR(f.ultimaEm)}` : ""}
+                </span>
+              )}
+            </>
+          }
+        />
+      </div>,
+    );
+  }
+  if (sombra && !arrasto?.destino.antesDe) itens.push(sombra);
+  const preso = arrasto ? (lista.find((f) => `f:${f.id}` === arrasto.chave)?.nome ?? MODELOS_FLUXO.find((m) => `m:${m.id}` === arrasto.chave)?.nome) : null;
+
+  const escolha = (
+    <EscolherNovoFluxo
+      fluxos={lista}
+      onFechar={onFecharNovo}
+      onCriar={onCriar}
+      onAbrir={onAbrir}
+      arrastar={lateral ? { iniciar, foiArrasto, chave: arrasto?.chave ?? null } : undefined}
+    />
+  );
   return (
-    <div className="flex items-start gap-[var(--gap-block)]">
+    <div ref={area} className="flex items-start" style={{ gap: col?.vao }}>
       <div className="min-w-0 flex-1">
-        {!fluxos ? (
+        {!fluxos || !col ? (
           <div className={GRADE_CARTOES} aria-busy="true">
             {[0, 1, 2].map((i) => (
               <SkeletonCartao key={i} linhas={3} />
             ))}
           </div>
-        ) : !fluxos.length ? (
-          <div className={`${CARTAO} flex flex-col items-center gap-3 py-10 text-center`}>
+        ) : !fluxos.length && !arrasto ? (
+          <div ref={grade} className={`${CARTAO} flex flex-col items-center gap-3 py-10 text-center`}>
             <IconFluxo className="size-8 text-accent" aria-hidden="true" />
             <p className="text-sm text-muted">Nenhum fluxo ainda. Comece de um modelo pronto ou do zero.</p>
             <Button size="sm" onClick={onNovo}>
@@ -527,54 +692,29 @@ function ListaFluxos({
             </Button>
           </div>
         ) : (
-          <div className={GRADE_CARTOES}>
-            {fluxos.map((f) => {
-              const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
-              return (
-                <CartaoFluxo
-                  key={f.id}
-                  titulo={f.nome}
-                  descricao={f.descricao}
-                  onClick={() => onAbrir(f.id)}
-                  selo={rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : <Badge tone="slate">Manual</Badge>}
-                  rodape={
-                    <>
-                      <span className="block truncate">
-                        {f.grafo.nos.length} nó(s) · {rotuloFrequencia(f.frequencia)}
-                        {f.ativo && f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}
-                      </span>
-                      {u?.estado && (
-                        <span className={`block truncate ${u.estado === "concluido" && !u.apontados ? "text-[var(--ok)]" : "text-[var(--warn)]"}`}>
-                          Última: {u.estado === "concluido" ? "concluída" : u.estado}
-                          {u.apontados ? ` · ${u.apontados} erro(s)` : ""}
-                          {f.ultimaEm ? ` · ${dataHoraBR(f.ultimaEm)}` : ""}
-                        </span>
-                      )}
-                    </>
-                  }
-                />
-              );
-            })}
+          <div ref={grade} className="grid" style={estiloGrade}>
+            {itens}
           </div>
         )}
       </div>
-      {/* DESKTOP: o painel entra da direita para a esquerda EMPURRANDO os cartões (a largura anima). */}
-      {desktop && (
-        <div
-          className="shrink-0 overflow-hidden transition-[width,opacity] duration-[var(--motion-duration)] ease-[var(--motion-ease)]"
-          style={{ width: novo ? LARGURA_NOVO : 0, opacity: novo ? 1 : 0 }}
-          aria-hidden={!novo}
-          inert={!novo}
+      {/* DESKTOP: o painel ocupa a ÚLTIMA coluna e ENTRA da direita; os cartões deslizam para o lugar novo. */}
+      {lateral && novo && (
+        <aside
+          className={`${CARTAO} animate-aba-direita sticky top-[var(--pad-canvas)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas)*2)] shrink-0 flex-col gap-3 !p-0`}
+          style={{ width: col.largura }}
         >
-          <aside className={`${CARTAO} sticky top-[var(--pad-canvas)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas)*2)] flex-col gap-3 !p-0`} style={{ width: LARGURA_NOVO }}>
-            {escolha}
-          </aside>
-        </div>
+          {escolha}
+        </aside>
       )}
-      {!desktop && (
+      {!lateral && (
         <Modal open={novo} onClose={onFecharNovo} titulo="Novo fluxo">
           {escolha}
         </Modal>
+      )}
+      {arrasto && preso && (
+        <CartaoPreso arrasto={arrasto} fantasma={fantasma}>
+          <CartaoFluxo titulo={preso} onClick={() => {}} />
+        </CartaoPreso>
       )}
     </div>
   );
@@ -601,11 +741,14 @@ function EscolherNovoFluxo({
   onFechar,
   onCriar,
   onAbrir,
+  arrastar,
 }: {
   fluxos: FluxoAutomacao[];
   onFechar: () => void;
   onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string) => Promise<void>;
   onAbrir: (id: number) => void;
+  /** No desktop, os MODELOS se arrastam até a lista (criam o fluxo ali). */
+  arrastar?: { iniciar: (e: React.PointerEvent<HTMLElement>, chave: string) => void; foiArrasto: () => boolean; chave: string | null };
 }) {
   const [nome, setNome] = useState("");
   const [modelo, setModelo] = useState<string>("");
@@ -632,8 +775,19 @@ function EscolherNovoFluxo({
         <p className="text-sm font-medium text-text">Começar de</p>
         <div className={GRADE_CARTOES}>
           {[EM_BRANCO, ...MODELOS_FLUXO].map((x) => (
-            <CartaoFluxo
+            <div
               key={x.id || "branco"}
+              role="none"
+              className={`touch-manipulation select-none [-webkit-touch-callout:none] transition-opacity ${arrastar?.chave === `m:${x.id}` ? "opacity-40" : ""}`}
+              onPointerDown={x.id && arrastar ? (e) => arrastar.iniciar(e, `m:${x.id}`) : undefined}
+              onClickCapture={(e) => {
+                if (arrastar?.foiArrasto()) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
+            >
+            <CartaoFluxo
               titulo={x.nome}
               descricao={x.descricao}
               marcado={modelo === x.id}
@@ -641,6 +795,7 @@ function EscolherNovoFluxo({
               selo={x.id && fluxos.some((f) => f.nome === x.nome) ? <Badge tone="emerald">Já existe</Badge> : undefined}
               rodape={x.grafo ? `${x.grafo.nos.length} nó(s) · ${x.frequencia ? rotuloFrequencia(x.frequencia) : "Manual"}` : undefined}
             />
+            </div>
           ))}
         </div>
       </div>

@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.36.0",
+    data: "2026-10-07",
+    titulo: "Automação: cartões que enchem a tela e se arrastam",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Os cartões enchem a largura em colunas iguais (sem sobra) e o painel “Novo fluxo” ocupa a última coluna — o cartão nunca muda de tamanho; ao abrir e fechar, os cartões deslizam suaves para o lugar novo.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Arraste os cartões para reordenar as automações (a ordem fica guardada) e arraste um modelo do painel até a lista para criar o fluxo ali — o mesmo arrasto de Tarefas.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O “+” com o painel aberto o fecha.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.35.0",
     data: "2026-10-07",
     titulo: "Diagrama de fluxo mais legível",

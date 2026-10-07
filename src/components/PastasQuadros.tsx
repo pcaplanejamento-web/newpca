@@ -430,7 +430,7 @@ export function useArrastoGrade({
 }
 
 /** O LUGAR onde o card vai cair: só o ESPAÇO vazio, no tamanho da célula (sem contorno nem fundo). */
-function SombraGrade({ altura }: { altura: number }) {
+export function SombraGrade({ altura }: { altura: number }) {
   return <div data-sombra-grade aria-hidden style={{ minHeight: altura }} />;
 }
 

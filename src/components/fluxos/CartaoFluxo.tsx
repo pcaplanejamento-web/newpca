@@ -3,11 +3,11 @@
 import type { ReactNode } from "react";
 import { IconFluxo } from "../icons";
 
-/** A LARGURA fixa do cartão: o formato nunca muda (abrir o painel "Novo fluxo" só muda quantos cabem por linha). */
+/** A largura MÍNIMA do cartão: a lista divide a largura em colunas iguais (≥ esta) e o painel "Novo fluxo" ocupa a última. */
 export const LARGURA_CARTAO = "17rem";
 
-/** A grade dos cartões de automação (a mesma na lista e no painel "Novo fluxo"): colunas de largura FIXA, vão padrão. */
-export const GRADE_CARTOES = "grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),17rem))]";
+/** A grade simples dos cartões (o esqueleto e o painel "Novo fluxo"); a lista mede as colunas em JS (`useColunas`). */
+export const GRADE_CARTOES = "grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]";
 
 /**
  * O CARTÃO de uma automação — o MESMO na lista dos fluxos salvos e no painel "Novo fluxo" (modelos e "Em branco"): sólido
