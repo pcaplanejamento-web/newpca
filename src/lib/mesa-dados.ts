@@ -5,6 +5,7 @@ import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
 import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
+import { colunasDaMesa } from "./mesa-colunas";
 import { idDoFiltro } from "./escopo-unidades-core";
 import { unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
@@ -108,9 +109,12 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
   const outrasPessoas = await pessoasPorIds(
     [...protocolos.flatMap((p) => [p.responsavelId, p.distribuidorId]), u?.id].filter((id): id is number => id != null && !doGrupo.has(id)),
   );
+  // As COLUNAS criadas pelas automações (os valores só das linhas que a pessoa vê).
+  const colunasAuto = await colunasDaMesa({ protocolos: new Set(protocolos.map((p) => p.id)), dfds: new Set(dfds.map((d) => d.id)) });
   return {
     dfds,
     protocolos,
+    colunasAuto,
     reparticoes: ctx.reparticoes,
     // Em "Geral" não há unidade ativa específica — Geral comporta qualquer unidade.
     reparticaoAtivaId: repId || null,
@@ -185,6 +189,7 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     usuarioId: m.usuarioId,
     edicoes: m.edicoes,
     dadosCompletos: m.dadosCompletos,
+    colunasAuto: m.colunasAuto,
   };
 }
 

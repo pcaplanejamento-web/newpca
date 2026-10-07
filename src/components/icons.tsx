@@ -83,6 +83,8 @@ import {
   RefreshCw,
   Save,
   Search,
+  Columns3,
+  Variable,
   Settings,
   Shield,
   Star,
@@ -164,6 +166,8 @@ export const IconTrend = TrendingUp;
 export const IconSun = Sun;
 export const IconMoon = Moon;
 export const IconSearch = Search;
+export const IconColunas = Columns3;
+export const IconVariavel = Variable;
 export const IconChevronLeft = ChevronLeft;
 export const IconChevronRight = ChevronRight;
 export const IconSort = ArrowUpDown;

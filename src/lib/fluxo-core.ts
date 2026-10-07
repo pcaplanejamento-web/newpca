@@ -12,7 +12,37 @@
 export type Item = Record<string, unknown>;
 export type Portas = Record<string, Item[]>;
 
-export type NoFluxo = { id: string; tipo: string; config: Record<string, unknown>; x: number; y: number; desativado?: boolean };
+/** `tentar` = REPETIR o nó quando falha (vezes + espera em segundos); `guardar` = o nome da VARIÁVEL em que o nó guarda o
+ * próprio estado ao terminar (executado, itens, vezes, valor) — lida pelo nó "Variável" e pelo "Parar o laço". */
+export type TentarNo = { vezes: number; esperaS: number };
+export type NoFluxo = { id: string; tipo: string; config: Record<string, unknown>; x: number; y: number; desativado?: boolean; tentar?: TentarNo; guardar?: string };
+export const MAX_TENTATIVAS = 5;
+export const MAX_ESPERA_S = 300;
+/** Nome de variável válido (letras, números e _; começa por letra ou _). */
+export const nomeVariavel = (v: unknown) => (typeof v === "string" && /^[A-Za-z_À-ÿ][\wÀ-ÿ]{0,39}$/.test(v.trim()) ? v.trim() : "");
+/** Qualquer JSON → a repetição válida (sem vezes = sem repetição). */
+export function lerTentar(v: unknown): TentarNo | undefined {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  const vezes = Math.min(MAX_TENTATIVAS, Math.max(0, Math.round(Number(o.vezes) || 0)));
+  if (!vezes) return undefined;
+  return { vezes, esperaS: Math.min(MAX_ESPERA_S, Math.max(0, Math.round(Number(o.esperaS) || 0))) };
+}
+/** Espera `ms` acordando a cada 250 ms para ver o cancelamento (true = esperou inteiro). */
+export async function esperar(ms: number, cancelado: () => boolean): Promise<boolean> {
+  const ate = Date.now() + ms;
+  while (Date.now() < ate) {
+    if (cancelado()) return false;
+    await new Promise((r) => setTimeout(r, Math.min(250, ate - Date.now())));
+  }
+  return !cancelado();
+}
+/** O estado guardado de um nó (`host.__vars[nome]`). */
+export type EstadoGuardado = { executado: boolean; itens: number; vezes: number; valor: Item[]; erro?: string };
+/** As variáveis da execução (compartilhadas com os subfluxos pelo host). */
+export function variaveis(host: Record<string, unknown>): Record<string, unknown> {
+  if (!host.__vars || typeof host.__vars !== "object") host.__vars = {};
+  return host.__vars as Record<string, unknown>;
+}
 /** `x` = a DOBRA vertical da linha ajustada à mão no diagrama (sem ela, a rota automática). */
 export type Conexao = { de: string; saida: string; para: string; entrada: string; x?: number };
 export type Grafo = { v: 1; nos: NoFluxo[]; conexoes: Conexao[] };
@@ -101,6 +131,8 @@ export type DefNo = {
   iterador?: boolean;
   /** Os itens que o nó daria SEM executar (dados já carregados no host) — a tabela de seleção do painel antes de rodar. */
   previa?: (config: Record<string, unknown>, host: Record<string, unknown>) => Item[];
+  /** Fora da paleta (substituído por outro nó) — continua funcionando nos fluxos já salvos. */
+  legado?: boolean;
   executar: (entradas: Portas, config: Record<string, unknown>, ctx: ContextoNo, estado: EstadoNo) => Promise<Portas>;
 };
 /** Memória de um nó durante UMA execução (o laço guarda a fila e o acumulado). */
@@ -125,7 +157,12 @@ export function lerGrafo(v: unknown): Grafo {
     if (!id || !tipo || ids.has(id)) continue;
     ids.add(id);
     const config = x.config && typeof x.config === "object" && !Array.isArray(x.config) ? (x.config as Record<string, unknown>) : {};
-    nos.push({ id, tipo, config, x: numero(x.x), y: numero(x.y), desativado: x.desativado === true || undefined });
+    const no: NoFluxo = { id, tipo, config, x: numero(x.x), y: numero(x.y), desativado: x.desativado === true || undefined };
+    const tentar = lerTentar(x.tentar);
+    if (tentar) no.tentar = tentar;
+    const guardar = nomeVariavel(x.guardar);
+    if (guardar) no.guardar = guardar;
+    nos.push(no);
   }
   const conexoes: Conexao[] = [];
   const vistas = new Set<string>();
@@ -558,8 +595,26 @@ export async function executarFluxo(
     const estado = estados.get(id) ?? {};
     estados.set(id, estado);
     let saidas: Portas;
+    const guardar = (s: Omit<EstadoGuardado, "vezes">) => {
+      if (!n.guardar) return;
+      const vars = variaveis(ctx.host);
+      const antes = vars[n.guardar] as EstadoGuardado | undefined;
+      vars[n.guardar] = { ...s, vezes: (antes && typeof antes === "object" ? Number(antes.vezes) || 0 : 0) + 1 };
+    };
     try {
-      saidas = await d.executar(ent, n.config, { ...ctx, no: id, aviso: (t) => marcar(id, { aviso: t.slice(0, 200) }), parcial: (its) => ctx.aoParcial?.(id, its) }, estado);
+      const ctxNo = { ...ctx, no: id, aviso: (t: string) => marcar(id, { aviso: t.slice(0, 200) }), parcial: (its: Item[]) => ctx.aoParcial?.(id, its) };
+      // REPETIR quando falha (o nó configurado com "tentar"): espera entre as tentativas; o cancelamento interrompe.
+      for (let tentativa = 0; ; tentativa++) {
+        try {
+          saidas = await d.executar(ent, n.config, ctxNo, estado);
+          break;
+        } catch (e) {
+          const t = n.tentar;
+          if (!t || tentativa >= t.vezes || ctx.cancelado() || /interrompid/i.test(e instanceof Error ? e.message : "")) throw e;
+          marcar(id, { aviso: `Falhou — tentando de novo (${tentativa + 1} de ${t.vezes})…` });
+          if (t.esperaS && !(await esperar(t.esperaS * 1000, ctx.cancelado))) throw e;
+        }
+      }
       for (const [porta, itens] of Object.entries(saidas)) {
         if (itens.length > MAX_ITENS) throw new Error(`Itens demais na saída “${porta}” (${itens.length}; máximo ${MAX_ITENS}).`);
         if (porta === PORTA_APONTADOS) apontados.push(...itens);
@@ -571,6 +626,7 @@ export async function executarFluxo(
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       marcar(id, { estado: "erro", erro: msg, ms: (anterior?.ms ?? 0) + Date.now() - t0 });
+      guardar({ executado: false, itens: 0, valor: [], erro: msg.slice(0, 300) });
       if (ctx.cancelado()) return fim({ estado: "cancelado", erro: "Interrompido." });
       if (g.conexoes.some((c) => c.de === id && c.saida === SAIDA_ERRO)) {
         const erroItem: Item = { erro: msg, no: d.rotulo, entrada: Object.values(ent)[0]?.length ?? 0 };
@@ -581,6 +637,8 @@ export async function executarFluxo(
     }
     const total = d.saidas.reduce((s, p) => s + (saidas[p]?.length ?? 0), 0);
     marcar(id, { estado: "ok", itens: total, ms: (anterior?.ms ?? 0) + Date.now() - t0, amostra: amostrar(saidas), erro: undefined });
+    // O iterador só fica "executado" quando entrega o fim (o laço terminou).
+    guardar({ executado: d.iterador ? "fim" in saidas : true, itens: total, valor: (d.iterador ? (saidas.fim ?? []) : (d.saidas.map((p) => saidas[p] ?? []).find((l) => l.length) ?? [])).slice(0, 200) });
     ctx.aoConcluir?.(id, saidas);
     const publicas = Object.fromEntries(Object.entries(saidas).filter(([k]) => k !== PORTA_APONTADOS && k !== PORTA_RETORNO));
     if (!g.conexoes.some((c) => c.de === id) && d.categoria !== "gatilho")

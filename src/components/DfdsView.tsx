@@ -1,5 +1,7 @@
 "use client";
 
+import type { ColunasMesa } from "@/lib/mesa-colunas-core";
+import { colunasDaAutomacao } from "./ColunasAutomacao";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -210,6 +212,7 @@ export function DfdsView({
   abrirInicial = null,
   dadosCompletos = false,
   seletorMesa,
+  colunasAuto,
 }: {
   /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
   pode: PodeMesa;
@@ -244,6 +247,8 @@ export function DfdsView({
   dadosCompletos?: boolean;
   /** O SELETOR DE MESA (Mesa do sistema | Mesa de um PCA) — 1º item da barra, só na Mesa principal (`SeletorMesa`). */
   seletorMesa?: ReactNode;
+  /** As COLUNAS criadas pelas automações (o nó "Gravar na coluna da Mesa") — no fim de cada tabela. */
+  colunasAuto?: ColunasMesa;
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -1898,7 +1903,7 @@ export function DfdsView({
     `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${dica ? " Use “Importar” no rodapé da tabela." : ""}`;
   const tabelaProtocolos = (
     <DataTable
-      columns={(modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto).filter((c) => !ocultasProto.has(c.key))}
+      columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key))}
       rows={protocolosF}
       getKey={(r) => r.id}
       selectable={podeAqui.manipular}
@@ -1937,6 +1942,7 @@ export function DfdsView({
       acoes={acoesDfd}
       regras={regras}
       acoesRodape={botaoImportar}
+      colunasExtras={colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key)}
       edicoes={edicoesDe("dfds")}
       exportar={exportarComo("DFDs")}
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
@@ -1946,7 +1952,7 @@ export function DfdsView({
   const larguraPadronizacao = (classeDoItem ? 150 : 0) + (unidadeDoItem ? 130 : 0);
   const tabelaItens = (
     <DataTable
-      columns={modoPca?.colunasItens ? [...modoPca.colunasItens, ...colsItens] : colsItens}
+      columns={[...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)]}
       rows={itensF ?? []}
       getKey={(r) => r.id}
       // Itens: a edição em massa (Manipular) e, na Mesa do PCA, "Retirar do PCA" (Excluir).

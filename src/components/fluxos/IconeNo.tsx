@@ -3,6 +3,11 @@ import {
   IconBell,
   IconBuilding,
   IconCheck,
+  IconClock,
+  IconColunas,
+  IconParar,
+  IconSearch,
+  IconVariavel,
   IconCompare,
   IconCopy,
   IconFile,
@@ -46,6 +51,11 @@ const MAPA = {
   fluxo: IconFluxo,
   layers: IconLayers,
   check: IconCheck,
+  clock: IconClock,
+  columns: IconColunas,
+  search: IconSearch,
+  stop: IconParar,
+  variable: IconVariavel,
 } as const;
 
 /** O ícone de um tipo de nó (o nome vem do registro — `fluxo-nos.ts`). */

@@ -1714,3 +1714,31 @@ export const automacaoProgresso = sqliteTable(
   },
   (t) => [uniqueIndex("automacao_progresso_uq").on(t.fluxoId, t.no, t.chave)],
 );
+
+/** COLUNAS DA MESA criadas pelas automações (protocolo | dfd | item) — `chave` = o nome sem caixa/acento (único por entidade). */
+export const mesaColunas = sqliteTable(
+  "mesa_colunas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    entidade: text("entidade").notNull(),
+    nome: text("nome").notNull(),
+    chave: text("chave").notNull(),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("mesa_colunas_uq").on(t.entidade, t.chave)],
+);
+
+/** O valor de uma coluna da Mesa por registro (o id do protocolo, DFD ou item). */
+export const mesaColunasValores = sqliteTable(
+  "mesa_colunas_valores",
+  {
+    colunaId: integer("coluna_id")
+      .notNull()
+      .references(() => mesaColunas.id, { onDelete: "cascade" }),
+    alvoId: integer("alvo_id").notNull(),
+    valor: text("valor").notNull(),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [primaryKey({ columns: [t.colunaId, t.alvoId] })],
+);

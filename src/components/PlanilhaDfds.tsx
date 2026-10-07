@@ -145,6 +145,7 @@ export function PlanilhaDfds({
   acaoDescartados,
   edicoes,
   exportar,
+  colunasExtras = [],
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -177,6 +178,8 @@ export function PlanilhaDfds({
   edicoes?: EdicoesDaTabela;
   /** Exportar a planilha em .xlsx (a tabela principal — só com a ação Exportar do papel). */
   exportar?: { nome: string } | false;
+  /** Colunas a mais no fim (antes das ações) — ex.: as criadas pelas automações na Mesa. */
+  colunasExtras?: Column<LinhaDfd>[];
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -378,6 +381,7 @@ export function PlanilhaDfds({
       numero: (r) => r.valor,
       render: (r) => (r.valor == null ? <span className="text-faint">…</span> : brl(r.valor)),
     },
+    ...colunasExtras,
     ...(acoes
       ? [{ key: "acoes", header: "", filter: "none" as const, nowrap: true, render: (r: LinhaDfd) => acoes(r) }]
       : []),

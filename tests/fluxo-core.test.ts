@@ -535,6 +535,7 @@ test("todo tipo dos modelos existe e está na paleta", async () => {
   const { REGISTRO_NOS, NOS_POR_CATEGORIA } = await import("../src/lib/fluxo-nos.ts");
   const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
   const naPaleta = new Set(NOS_POR_CATEGORIA.flatMap((c) => c.nos.map((n) => n.tipo)));
-  assert.equal(naPaleta.size, REGISTRO_NOS.size);
+  // Todo nó está na paleta, menos os LEGADOS (substituídos — seguem valendo nos fluxos salvos).
+  assert.equal(naPaleta.size, [...REGISTRO_NOS.values()].filter((d) => !d.legado).length);
   for (const m of MODELOS_FLUXO) for (const n of m.grafo.nos) assert.ok(naPaleta.has(n.tipo), `${m.id}: ${n.tipo}`);
 });

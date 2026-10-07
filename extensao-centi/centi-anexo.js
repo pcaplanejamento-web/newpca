@@ -446,7 +446,7 @@
     return chaves.sort((a, b) => texto(b) - texto(a) || a.length - b.length)[0] ?? null;
   }
   /** Os planejamentos da resposta da CM002 ([{id, situacao, finalidade, centroCusto}]) — ou null (não é a lista da CM002). */
-  function planejamentosCm002(j, conhecida = false) {
+  function planejamentosCm002(j, conhecida = false, colunas = false) {
     const l = acharLista(j);
     // A consulta já aprendida que volta SEM linhas (entidade sem planejamentos) é uma lista vazia, não "outra forma".
     if (!l) return conhecida && temListaVazia(j) ? [] : null;
@@ -464,6 +464,8 @@
         situacao: String(x[kSit] ?? "").trim().slice(0, 40),
         finalidade: kFin ? String(x[kFin] ?? "").trim().slice(0, 200) : "",
         centroCusto: kCc && kCc !== kFin ? String(x[kCc] ?? "").trim().slice(0, 200) : "",
+        // TODAS as colunas da linha (o nó "Escolher colunas" do fluxo escolhe as que analisa).
+        ...(colunas ? { centi: x } : {}),
       }))
       .filter((x) => x.id);
   }

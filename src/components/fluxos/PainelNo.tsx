@@ -1,7 +1,21 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { type CampoNo, caminhosDosItens, campoVisivel, resumoDoNo, type DefNo, type Item, type NoFluxo, type PassoExec } from "@/lib/fluxo-core";
+import {
+  type CampoNo,
+  caminhosDosItens,
+  campoVisivel,
+  type DefNo,
+  type Item,
+  lerTentar,
+  MAX_ESPERA_S,
+  MAX_TENTATIVAS,
+  type NoFluxo,
+  nomeVariavel,
+  type PassoExec,
+  resumoDoNo,
+  type TentarNo,
+} from "@/lib/fluxo-core";
 import { corCategoria } from "@/lib/fluxo-nos";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
@@ -82,6 +96,7 @@ export function PainelNo({
               <CampoDoNo key={c.chave} campo={c} valor={no.config[c.chave] ?? c.padrao} onValor={(v) => definir(c.chave, v)} lista={listaId} somenteLeitura={somenteLeitura} />
             ))}
           {no.tipo === "fluxo.executar" && no.config.retomar !== false && (no.config.modo ?? "porItem") === "porItem" && <RecomecarSubfluxo no={no.id} somenteLeitura={somenteLeitura} />}
+          {def.categoria !== "gatilho" && <ComportamentoNo key={no.id} no={no} onMudar={onMudar} somenteLeitura={somenteLeitura} />}
           {!somenteLeitura && <Switch checked={!!no.desativado} onChange={(v) => onMudar({ ...no, desativado: v || undefined })} label="Desativar (repassa os itens sem executar)" />}
           <datalist id={listaId}>
             {caminhos.map((c) => (
@@ -99,6 +114,57 @@ export function PainelNo({
         <SaidaNo passo={passo} />
       )}
     </div>
+  );
+}
+
+/**
+ * O COMPORTAMENTO comum a todo nó: REPETIR quando falha (vezes + espera) e GUARDAR O ESTADO numa variável (executado,
+ * itens, vezes, valor) — lida pelo nó "Variável" ({{nome.executado}}) para terminar laços.
+ */
+function ComportamentoNo({ no, onMudar, somenteLeitura }: { no: NoFluxo; onMudar: (n: NoFluxo) => void; somenteLeitura?: boolean }) {
+  const vezes = no.tentar?.vezes ?? 0;
+  const tentar = (t: Partial<TentarNo>) => {
+    const novo = lerTentar({ vezes, esperaS: no.tentar?.esperaS ?? 10, ...t });
+    onMudar({ ...no, tentar: novo });
+  };
+  const [nome, setNome] = useState(no.guardar ?? "");
+  const invalido = nome.trim() !== "" && !nomeVariavel(nome);
+  return (
+    <fieldset className="space-y-3 rounded-lg border border-border p-3">
+      <legend className="px-1 text-xs font-semibold text-muted">Comportamento</legend>
+      <div className="grid grid-cols-2 gap-2">
+        <TextField
+          label="Repetir se falhar"
+          hint={`0 a ${MAX_TENTATIVAS} vezes`}
+          inputMode="numeric"
+          value={vezes ? String(vezes) : ""}
+          placeholder="0"
+          disabled={somenteLeitura}
+          onChange={(e) => tentar({ vezes: Number(e.target.value.replace(/\D/g, "")) || 0 })}
+        />
+        <TextField
+          label="Esperar (s)"
+          hint={`Entre as tentativas (até ${MAX_ESPERA_S})`}
+          inputMode="numeric"
+          value={vezes ? String(no.tentar?.esperaS ?? 0) : ""}
+          disabled={somenteLeitura || !vezes}
+          onChange={(e) => tentar({ esperaS: Number(e.target.value.replace(/\D/g, "")) || 0 })}
+        />
+      </div>
+      <TextField
+        label="Guardar o estado na variável"
+        hint="Ex.: leitura_cm002 → {{leitura_cm002.executado}} no nó Variável (executado, itens, vezes, valor)."
+        value={nome}
+        error={invalido ? "Só letras, números e _." : undefined}
+        disabled={somenteLeitura}
+        maxLength={40}
+        onChange={(e) => {
+          setNome(e.target.value);
+          const v = nomeVariavel(e.target.value);
+          if (v || !e.target.value.trim()) onMudar({ ...no, guardar: v || undefined });
+        }}
+      />
+    </fieldset>
   );
 }
 

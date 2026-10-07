@@ -19,7 +19,11 @@ import {
   grafoComEntrada,
   interpolar,
   type Item,
+  esperar,
+  MAX_ESPERA_S,
   MAX_ITERACOES_LACO,
+  nomeVariavel,
+  variaveis,
   normTexto,
   numeroDe,
   OPERADORES,
@@ -36,6 +40,8 @@ import {
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
 import { BUSCAS, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
+import { aplicarRegra, escolherColunas, lerColunas, lerRegras, operarVariavel, procurarNaTabela } from "./fluxo-dados.ts";
+import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
 export const CATEGORIAS: { valor: CategoriaNo; rotulo: string; cor: string }[] = [
   { valor: "gatilho", rotulo: "Início", cor: "var(--serie-1)" },
@@ -75,6 +81,9 @@ const CAMPO_CONDICAO: CampoNo[] = [
     quando: { campo: "operador", valores: OPERADORES.filter((o) => o.valor !== "vazio" && o.valor !== "nao_vazio").map((o) => o.valor) },
   },
 ];
+/** Um item da "volta" marcado pelo "Parar o laço" encerra o iterador (entrega o fim com o que acumulou). */
+const pedeParar = (itens: Item[] | undefined) => (itens ?? []).some((it) => it.pararLaco === true);
+
 const passa = (it: Item, c: Record<string, unknown>) =>
   comparar(resolverCaminho(it, str(c.campo)), str(c.operador, "igual"), interpolar(str(c.valor), it));
 
@@ -224,7 +233,10 @@ const NOS: DefNo[] = [
     icone: "list",
     entradas: ["entrada"],
     saidas: ["saida"],
-    campos: [{ chave: "entidades", rotulo: "Entidades", tipo: "texto", entrada: true, ajuda: "Ex.: 2; 3. Vazio = as cadastradas nos órgãos." }],
+    campos: [
+      { chave: "entidades", rotulo: "Entidades", tipo: "texto", entrada: true, ajuda: "Ex.: 2; 3. Vazio = as cadastradas nos órgãos." },
+      { chave: "colunas", rotulo: "Trazer todas as colunas da Centi", tipo: "booleano", padrao: false, ajuda: "Em “centi.<coluna>” — escolha as que analisa no nó “Escolher colunas”." },
+    ],
     executar: async (_e, c, ctx) => {
       const mapa = (ctx.host.mapaEntidades ?? {}) as Record<string, string>;
       const ents = [...new Set((lista(c.entidades).length ? lista(c.entidades) : Object.values(mapa)).map((x) => x.replace(/^0+(?=\d)/, "")))].filter(Boolean);
@@ -235,7 +247,7 @@ const NOS: DefNo[] = [
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Entidade ${ent} (${i + 1} de ${ents.length})…`);
-        const r = await ctx.centi("cm002", { entidade: ent }, 300_000);
+        const r = await ctx.centi("cm002", { entidade: ent, colunas: c.colunas === true }, 300_000);
         if (r.interrompido) throw new Error("Interrompido na extensão.");
         if (!r.ok) {
           falhas.push(`entidade ${ent}: ${r.erro || "a extensão da Centi não respondeu"}`);
@@ -254,7 +266,8 @@ const NOS: DefNo[] = [
     tipo: "sistema.dfds",
     categoria: "sistema",
     rotulo: "DFDs do sistema",
-    descricao: "Os DFDs com nº de planejamento (nº, planejamento, órgão, entidade da Centi e a execução gravada).",
+    descricao: "Os DFDs com nº de planejamento (nº, planejamento, órgão, entidade da Centi e a execução gravada). Substituído por “Ler do sistema” (DFDs · Todos).",
+    legado: true,
     icone: "file",
     entradas: ["entrada"],
     saidas: ["saida"],
@@ -330,7 +343,10 @@ const NOS: DefNo[] = [
         est.fila = [...lidos];
         est.total = lidos.length;
         est.acumulado = [];
-      } else (est.acumulado as Item[]).push(...(e[PORTA_VOLTA] ?? []));
+      } else {
+        (est.acumulado as Item[]).push(...(e[PORTA_VOLTA] ?? []));
+        if (pedeParar(e[PORTA_VOLTA])) est.fila = [];
+      }
       const fila = (est.fila ?? []) as Item[];
       const proximo = fila.shift();
       if (!proximo) return { fim: marcarExecutado(est.acumulado as Item[], est.total as number) };
@@ -573,6 +589,7 @@ const NOS: DefNo[] = [
         est.voltas = 0;
       } else {
         (est.acumulado as Item[]).push(...(e[PORTA_VOLTA] ?? []));
+        if (pedeParar(e[PORTA_VOLTA])) est.fila = [];
         est.voltas = (est.voltas as number) + 1;
         if ((est.voltas as number) > MAX_ITERACOES_LACO) throw new Error(`O laço passou de ${MAX_ITERACOES_LACO} voltas.`);
       }
@@ -597,6 +614,64 @@ const NOS: DefNo[] = [
     executar: async (e) => ({ saida: [...so(e, "a"), ...so(e, "b")] }),
   },
 
+  {
+    tipo: "logica.procurar",
+    categoria: "logica",
+    rotulo: "Procurar nas linhas",
+    descricao:
+      "Procura o valor de cada item que chega (ex.: {{planejamento}}) nas linhas da TABELA (ex.: a CM002): numa coluna ou em TODAS as colunas da linha. Encontrado leva a linha em “encontrado”.",
+    icone: "search",
+    entradas: ["entrada", "tabela"],
+    saidas: ["encontrados", "naoEncontrados"],
+    rotulosPortas: { entrada: "Itens", tabela: "Tabela", encontrados: "Encontrados", naoEncontrados: "Não encontrados" },
+    campos: [
+      { chave: "valor", rotulo: "Valor procurado", tipo: "texto", obrigatorio: true, entrada: true, padrao: "{{planejamento}}", ajuda: "Aceita {{campo}} do item. Sem itens que chegam, procura o texto como está." },
+      { chave: "onde", rotulo: "Onde procurar", tipo: "selecao", padrao: "coluna", opcoes: [{ valor: "coluna", rotulo: "Numa coluna" }, { valor: "tudo", rotulo: "Em todas as colunas (ler tudo)" }] },
+      { chave: "coluna", rotulo: "Coluna da tabela", tipo: "caminho", obrigatorio: true, quando: { campo: "onde", valores: ["coluna"] }, ajuda: "Ex.: planejamento ou centi.Id" },
+      { chave: "operador", rotulo: "Casa quando a coluna", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "igual" },
+      { chave: "resultado", rotulo: "Resultado", tipo: "selecao", padrao: "primeiro", opcoes: [{ valor: "primeiro", rotulo: "A primeira linha que casa" }, { valor: "todas", rotulo: "Todas as linhas (lista)" }] },
+    ],
+    rodaSemItens: true,
+    executar: async (e, c) =>
+      procurarNaTabela(so(e), so(e, "tabela"), {
+        valor: str(c.valor),
+        coluna: str(c.onde, "coluna") === "tudo" ? "" : str(c.coluna),
+        operador: str(c.operador, "igual"),
+        resultado: c.resultado === "todas" ? "todas" : "primeiro",
+      }),
+  },
+  {
+    tipo: "logica.parar",
+    categoria: "logica",
+    rotulo: "Parar o laço quando",
+    descricao: "Ligado antes da “volta” de um laço (ou do Ler do sistema um por vez): quando algum item passa na condição, o laço termina e entrega o fim.",
+    icone: "stop",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: CAMPO_CONDICAO,
+    executar: async (e, c, ctx) => {
+      const itens = so(e).map((it) => (passa(it, c) ? { ...it, pararLaco: true } : it));
+      if (pedeParar(itens)) ctx.aviso("Condição atingida — o laço termina.");
+      return { saida: itens };
+    },
+  },
+  {
+    tipo: "logica.esperar",
+    categoria: "logica",
+    rotulo: "Esperar",
+    descricao: "Espera os segundos informados e repassa os itens (dar tempo à Centi entre pedidos, por exemplo).",
+    icone: "clock",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [{ chave: "segundos", rotulo: "Segundos", tipo: "numero", padrao: 5, obrigatorio: true, ajuda: `1 a ${MAX_ESPERA_S}.` }],
+    rodaSemItens: true,
+    executar: async (e, c, ctx) => {
+      const seg = Math.min(MAX_ESPERA_S, Math.max(1, numeroDe(c.segundos) ?? 5));
+      ctx.aviso(`Esperando ${seg} s…`);
+      if (!(await esperar(seg * 1000, ctx.cancelado))) throw new Error("Interrompido.");
+      return { saida: so(e) };
+    },
+  },
   // ——— Dados
   {
     tipo: "dados.filtrar",
@@ -628,6 +703,101 @@ const NOS: DefNo[] = [
         .filter((p) => p.length >= 2 && p[0].trim())
         .map((p) => [p[0].trim(), p.slice(1).join("=").trim()] as const);
       return { saida: so(e).map((it) => ({ ...(c.manter === false ? {} : it), ...Object.fromEntries(regras.map(([k, v]) => [k, interpolar(v, it)])) })) };
+    },
+  },
+  {
+    tipo: "dados.colunas",
+    categoria: "dados",
+    rotulo: "Escolher colunas",
+    descricao: "Escolhe as colunas que seguem (ex.: as da Centi em centi.<coluna>) e o nome de cada uma. Uma por linha: coluna => novo nome.",
+    icone: "columns",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [
+      { chave: "colunas", rotulo: "Colunas", tipo: "textoLongo", obrigatorio: true, ajuda: "Ex.: centi.Situacao => situacao (sem “=>” fica o último nome do caminho)." },
+      { chave: "manter", rotulo: "Manter as outras colunas", tipo: "booleano", padrao: false },
+    ],
+    executar: async (e, c) => {
+      const colunas = lerColunas(str(c.colunas));
+      if (!colunas.length) throw new Error("Informe ao menos uma coluna.");
+      return { saida: escolherColunas(so(e), colunas, c.manter === true) };
+    },
+  },
+  {
+    tipo: "dados.regra",
+    categoria: "dados",
+    rotulo: "Regra: se encontrar, grava",
+    descricao: "Lê um campo e grava no destino o valor da 1ª regra que casa (X => Y); sem regra que case, o “senão”. Ex.: EXECUTADO => Executado.",
+    icone: "edit",
+    entradas: ["entrada"],
+    saidas: ["saida", "semRegra"],
+    rotulosPortas: { saida: "Com valor", semRegra: "Nenhuma regra casou" },
+    campos: [
+      { chave: "origem", rotulo: "Campo lido", tipo: "caminho", obrigatorio: true, ajuda: "Ex.: encontrado.situacao" },
+      { chave: "operador", rotulo: "A regra casa quando o campo", tipo: "selecao", opcoes: OPERADORES.map((o) => ({ valor: o.valor, rotulo: o.rotulo })), padrao: "contem" },
+      { chave: "regras", rotulo: "Regras (X => Y)", tipo: "textoLongo", obrigatorio: true, entrada: true, ajuda: "Uma por linha, na ordem. Y aceita {{campo}}. Ex.: CANCEL => Cancelado" },
+      {
+        chave: "senao",
+        rotulo: "Senão",
+        tipo: "selecao",
+        padrao: "valor",
+        opcoes: [
+          { valor: "valor", rotulo: "Gravar o próprio valor lido" },
+          { valor: "fixo", rotulo: "Gravar um valor fixo" },
+          { valor: "vazio", rotulo: "Gravar vazio" },
+          { valor: "manter", rotulo: "Não gravar nada" },
+        ],
+      },
+      { chave: "senaoValor", rotulo: "Valor fixo", tipo: "texto", quando: { campo: "senao", valores: ["fixo"] } },
+      { chave: "destino", rotulo: "Gravar no campo", tipo: "texto", padrao: "valor", ajuda: "O campo do item que recebe (ex.: valor — o “Gravar na coluna da Mesa” lê este)." },
+    ],
+    executar: async (e, c) => {
+      const regras = lerRegras(str(c.regras));
+      if (!regras.length) throw new Error("Informe ao menos uma regra (X => Y).");
+      const senao = (["valor", "fixo", "vazio", "manter"] as const).find((x) => x === c.senao) ?? "valor";
+      const itens = aplicarRegra(so(e), { origem: str(c.origem), regras, operador: str(c.operador, "contem"), senao, senaoValor: str(c.senaoValor), destino: str(c.destino, "valor") });
+      return { saida: itens.filter((it) => it.regra !== "" || senao !== "manter"), semRegra: itens.filter((it) => it.regra === "") };
+    },
+  },
+  {
+    tipo: "dados.variavel",
+    categoria: "dados",
+    rotulo: "Variável",
+    descricao:
+      "Guarda um valor durante a execução (definir, somar, contar, acrescentar) ou o lê nos itens — também o estado que um nó guardou (“Guardar o estado do nó”), ex.: {{minhaVar.executado}}.",
+    icone: "variable",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [
+      {
+        chave: "acao",
+        rotulo: "Ação",
+        tipo: "selecao",
+        padrao: "definir",
+        opcoes: [
+          { valor: "definir", rotulo: "Definir" },
+          { valor: "somar", rotulo: "Somar (o valor de cada item)" },
+          { valor: "contar", rotulo: "Contar os itens" },
+          { valor: "acrescentar", rotulo: "Acrescentar à lista" },
+          { valor: "ler", rotulo: "Ler nos itens" },
+          { valor: "limpar", rotulo: "Limpar" },
+        ],
+      },
+      { chave: "nome", rotulo: "Nome da variável", tipo: "texto", obrigatorio: true, ajuda: "Letras, números e _ (ex.: total_lido)." },
+      { chave: "valor", rotulo: "Valor", tipo: "texto", ajuda: "Aceita {{campo}} do item.", quando: { campo: "acao", valores: ["definir", "somar", "acrescentar"] } },
+      { chave: "destino", rotulo: "Gravar no campo", tipo: "texto", ajuda: "Vazio = o nome da variável.", quando: { campo: "acao", valores: ["ler"] } },
+    ],
+    rodaSemItens: true,
+    executar: async (e, c, ctx) => {
+      const nome = nomeVariavel(c.nome);
+      if (!nome) throw new Error("Nome de variável inválido (letras, números e _).");
+      const vars = variaveis(ctx.host);
+      const acao = (["definir", "somar", "contar", "acrescentar", "ler", "limpar"] as const).find((x) => x === c.acao) ?? "definir";
+      if (acao !== "ler") vars[nome] = operarVariavel(vars[nome], acao, str(c.valor), so(e));
+      const campo = str(c.destino).trim() || nome;
+      const itens = so(e);
+      // Sem itens que chegam, um item com a variável (o laço segue com ela).
+      return { saida: (itens.length ? itens : [{}]).map((it) => ({ ...it, [campo]: vars[nome] ?? "" })) };
     },
   },
   {
@@ -1117,6 +1287,59 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "saida.gravarColuna",
+    categoria: "saida",
+    rotulo: "Gravar na coluna da Mesa",
+    descricao:
+      "Grava o valor de cada item numa COLUNA da Mesa (protocolos, DFDs ou itens) — a cadastrada com esse nome ou uma nova, criada sozinha. O registro é achado pelo id do item.",
+    icone: "columns",
+    entradas: ["entrada"],
+    saidas: ["saida", "ignorados"],
+    rotulosPortas: { saida: "Gravados", ignorados: "Sem id/valor" },
+    campos: [
+      {
+        chave: "entidade",
+        rotulo: "Tabela da Mesa",
+        tipo: "selecao",
+        padrao: "dfd",
+        opcoes: ENTIDADES_COLUNA.map((x) => ({ valor: x, rotulo: ROTULO_ENTIDADE_COLUNA[x] })),
+      },
+      { chave: "coluna", rotulo: "Coluna", tipo: "texto", obrigatorio: true, entrada: true, ajuda: "O nome (a existente é usada; senão, criada). Ex.: Situação na Centi" },
+      { chave: "campoValor", rotulo: "Campo do valor", tipo: "caminho", padrao: "valor", ajuda: "Ex.: valor (o da Regra) ou encontrado.situacao" },
+      { chave: "campoId", rotulo: "Campo do id do registro", tipo: "caminho", padrao: "id", ajuda: "O id do protocolo, DFD ou item no sistema." },
+      { chave: "apagar", rotulo: "Valor vazio apaga o da coluna", tipo: "booleano", padrao: false },
+    ],
+    executar: async (e, c, ctx) => {
+      const entidade = (ENTIDADES_COLUNA as readonly string[]).includes(str(c.entidade)) ? (str(c.entidade) as EntidadeColuna) : "dfd";
+      const nome = str(c.coluna).trim();
+      if (!nome) throw new Error("Informe o nome da coluna.");
+      const gravar: { alvoId: number; valor: string | null }[] = [];
+      const saida: Item[] = [];
+      const ignorados: Item[] = [];
+      for (const it of so(e)) {
+        const alvoId = Number(resolverCaminho(it, str(c.campoId, "id") || "id"));
+        const valor = valorParaColuna(resolverCaminho(it, str(c.campoValor, "valor") || "valor"));
+        if (!Number.isInteger(alvoId) || alvoId <= 0 || (valor == null && c.apagar !== true)) ignorados.push(it);
+        else {
+          gravar.push({ alvoId, valor });
+          saida.push({ ...it, colunaGravada: nome });
+        }
+      }
+      if (!gravar.length) return { saida, ignorados };
+      const r = await ctx.api("/api/admin/automacao/colunas", { method: "POST", body: { entidade, nome } });
+      const id = (r.coluna as { id?: number } | undefined)?.id;
+      if (!r.ok || !id) throw new Error(r.error || "Não consegui criar/achar a coluna.");
+      for (let i = 0; i < gravar.length; i += 500) {
+        if (ctx.cancelado()) throw new Error("Interrompido.");
+        ctx.aviso(`Gravando ${Math.min(i + 500, gravar.length)} de ${gravar.length}…`);
+        const g = await ctx.api(`/api/admin/automacao/colunas/${id}`, { method: "POST", body: { valores: gravar.slice(i, i + 500) } });
+        if (!g.ok) throw new Error(g.error || "Não consegui gravar os valores da coluna.");
+      }
+      if (ignorados.length) ctx.aviso(`${ignorados.length} item(ns) sem id ou valor — não gravados.`);
+      return { saida, ignorados };
+    },
+  },
+  {
     tipo: "saida.retornar",
     categoria: "saida",
     rotulo: "Retornar ao fluxo pai",
@@ -1182,7 +1405,7 @@ async function rodarFilho(f: FluxoFilho, itens: Item[], ctx: Parameters<DefNo["e
 const comOrigem = (aps: Item[], nome: string) => aps.map((a) => ({ ...a, subfluxo: nome }));
 
 export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));
-export const NOS_POR_CATEGORIA = CATEGORIAS.map((c) => ({ ...c, nos: NOS.filter((n) => n.categoria === c.valor) }));
+export const NOS_POR_CATEGORIA = CATEGORIAS.map((c) => ({ ...c, nos: NOS.filter((n) => n.categoria === c.valor && !n.legado) }));
 
 /** Os protocolos do sistema (um item por protocolo, ou por DFD). */
 /** As fontes do "Ler do sistema" — cada uma lida UMA vez por execução (o cache do host vale para os subfluxos). */

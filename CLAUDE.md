@@ -4276,6 +4276,28 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   por vez" (porta `item` → corpo → `volta`; `fim` = os que voltaram com `executado:true`, `totalLido`). O motor ganhou
   **`DefNo.iterador`** (o Laço e o Ler do sistema): recebe pela entrada OU pela volta e a volta é o único ciclo permitido
   (antes preso a `TIPO_LACO`). Modelo `dfds-de-protocolo-centi`. Testes: `tests/fluxo-ler-sistema.test.ts`.
+- **NÓS DE DADOS + COLUNAS DA MESA + COMPORTAMENTO (v1.44.0, migração `0095`, extensão 1.19.0):** núcleo PURO
+  **`fluxo-dados.ts`** (testado — `tests/fluxo-dados.test.ts`): `lerColunas`/`escolherColunas` (nó **`dados.colunas`**:
+  "caminho => nome" por linha — a CM002 com `colunas: true` traz TODAS as colunas da Centi em `centi.<coluna>`; extensão:
+  `planejamentosCm002(j, conhecida, colunas)`), `procurarNaTabela` (nó **`logica.procurar`**: entradas Itens + Tabela;
+  numa coluna — índice com a régua do "igual" — ou em TODAS as colunas; primeiro × todas → `encontrado`/`encontrados`;
+  saídas encontrados/naoEncontrados), `lerRegras`/`aplicarRegra` (nó **`dados.regra`**: "X => Y" na ordem, senão
+  valor/fixo/vazio/manter → o campo destino, padrão `valor`; porta `semRegra`) e `operarVariavel` (nó **`dados.variavel`**:
+  definir/somar/contar/acrescentar/ler/limpar em `host.__vars` — compartilhado com subfluxos). Nós **`logica.esperar`** e
+  **`logica.parar`** (marca `pararLaco` — o Laço e o "Ler do sistema" um por vez encerram ao recebê-lo na volta).
+  **Comportamento de TODO nó** (`NoFluxo.tentar {vezes ≤ 5, esperaS ≤ 300}` + `NoFluxo.guardar` — `lerTentar`/
+  `nomeVariavel`/`esperar`/`variaveis` em `fluxo-core.ts`): o motor repete o nó que falha (espera cancelável; "interrompido"
+  não repete) e guarda `{executado, itens, vezes, valor, erro?}` na variável (iterador: `executado` só ao entregar o fim);
+  seção "Comportamento" no `PainelNo`. **Colunas da Mesa:** tabelas `mesa_colunas` (entidade protocolo|dfd|item, nome,
+  `chave` única sem caixa/acento) + `mesa_colunas_valores` (PK coluna + alvo, cascade); núcleo `mesa-colunas-core.ts`,
+  builders `mesa-colunas-sql.ts` (INSERTs de 30 + DELETE por `json_each` — testados no D1 real, `tests/mesa-colunas.test.ts`),
+  D1 `mesa-colunas.ts` (`colunasDaMesa` — só os valores das linhas visíveis; teto 30 colunas por entidade); rotas
+  `GET/POST /api/admin/automacao/colunas` (POST idempotente pelo nome) e `POST/DELETE …/colunas/[id]` (≤ 500 valores, null
+  apaga; auditoria). Nó **`saida.gravarColuna`** (tabela, nome da coluna, campo do valor/id, "vazio apaga"; porta
+  `ignorados`). A Mesa (`montarMesa` → `colunasAuto` → `DfdsView`) mostra as colunas no fim das tabelas de Protocolos, DFDs
+  (`PlanilhaDfds.colunasExtras`) e Itens (`colunasDaAutomacao`, `ColunasAutomacao.tsx`). **Legado:** `DefNo.legado` tira o
+  nó da paleta e mantém os fluxos salvos (`sistema.dfds` → "Ler do sistema" nos modelos). Modelo
+  "Situação da CM002 numa coluna da Mesa".
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

@@ -706,7 +706,7 @@
       } catch {
         return { forma: "não é JSON" };
       }
-      const linhas = A.planejamentosCm002(j, true);
+      const linhas = A.planejamentosCm002(j, true, d?.colunas === true);
       if (!linhas) return { forma: JSON.stringify(A.resumoResposta(j) ?? Object.keys(j ?? {})).slice(0, 300) };
       return { linhas, tamanho: p.tamanho };
     };

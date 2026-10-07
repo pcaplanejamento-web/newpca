@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.44.0",
+    data: "2026-10-07",
+    titulo: "Colunas da Centi, procurar, regras e colunas na Mesa",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Nós “Escolher colunas” (as colunas da Centi — a CM002 traz todas com a extensão 1.19.0), “Procurar nas linhas” (numa coluna ou em todas) e “Regra: se encontrar, grava” (X => Y, com o senão).", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Nó “Gravar na coluna da Mesa”: cria a coluna (ou usa a cadastrada) em Protocolos, DFDs ou Itens e grava o valor de cada registro.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Automação", texto: "Todo nó pode REPETIR quando falha (vezes + espera) e GUARDAR o estado numa variável; nós “Variável”, “Esperar” e “Parar o laço quando”.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "“DFDs do sistema” virou “Ler do sistema” nos modelos; novo modelo “Situação da CM002 numa coluna da Mesa”.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.43.0",
     data: "2026-10-07",
     titulo: "Nó “Ler do sistema” e laços em qualquer leitura",
