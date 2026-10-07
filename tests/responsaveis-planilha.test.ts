@@ -6,6 +6,7 @@ import {
   alvoEfetivo,
   alvosParaVincular,
   alvoVale,
+  cargoForaDaLista,
   conferenciaDaPessoa,
   conferenciaDaUnidade,
   conferenciaDoOrgao,
@@ -322,5 +323,20 @@ describe("conferência: o que está mal cadastrado", () => {
     const pl = PLANILHA([p]);
     pl.pessoas[0] = { ...pl.pessoas[0], exoneradoEm: "2026-01-01" };
     assert.deepEqual(vigentesDoAlvo(pl.vinculos, HOJE).nomes, ["Ana"]);
+  });
+
+  it("cargo ou função FORA da lista de Cargos e funções é ERRO (pessoa, temporário e o lugar em que responde)", () => {
+    assert.equal(cargoForaDaLista("secretário", ["Secretário"]), false);
+    assert.equal(cargoForaDaLista("Assessor", ["Secretário"]), true);
+    assert.equal(cargoForaDaLista("", ["Secretário"]), false, "vazio é o 'Sem cargo'");
+    assert.equal(cargoForaDaLista("Assessor", []), false, "sem lista cadastrada, não confere");
+    const t = v({ nome: "Ana", responsavelId: 1, cargo: "Assessor", reparticaoId: 11, tipo: "temporario", funcao: "Chefe", inicio: "2026-01-01", fim: "2026-12-31" });
+    const pl = PLANILHA([t]);
+    const msgs = conferenciaDaPessoa(pl.pessoas[0], pl, HOJE);
+    assert.ok(msgs.some((m) => m.chave === "resp.cargoFora" && m.status === "erro"));
+    assert.ok(msgs.some((m) => m.chave === "resp.funcaoFora" && m.status === "erro"));
+    const padrao = v({ nome: "Bia", responsavelId: 2, cargo: "Assessor", reparticaoId: 11 });
+    const alvo = conferenciaDaUnidade({ id: 11 }, false, new Map([["u11", [padrao]]]), HOJE, ["Secretário"]);
+    assert.ok(alvo.some((m) => m.chave === "resp.cargoFora" && m.status === "erro"));
   });
 });

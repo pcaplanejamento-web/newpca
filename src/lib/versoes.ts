@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.59.0",
+    data: "2026-10-07",
+    titulo: "Editar onde o responsável responde; cargo fora da lista é erro",
+    mudancas: [
+      { tipo: "melhoria", area: "Responsáveis", texto: "Cargo ou função fora da lista de Cargos e funções (da pessoa ou do temporário) agora é ERRO na Conferência — também no órgão e na unidade em que a pessoa responde.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "Ao editar um vínculo, dá para trocar onde ele responde (unidade ou órgão), a pessoa e os dados — e escolher mais lugares, que viram vínculos novos com a mesma nomeação.", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
     versao: "1.58.0",
     data: "2026-10-07",
     titulo: "Responsáveis exonerados, vários lugares por nomeação e ordem por cargo",

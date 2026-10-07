@@ -125,7 +125,7 @@ export function ReparticoesAdmin({
 
   const conf = useMemo(() => {
     const m = new Map<number, ReturnType<typeof conferenciaDaUnidade>>();
-    if (ctx.planilha) for (const u of lista ?? []) m.set(u.id, conferenciaDaUnidade(u, assinaturaUnica, ctx.grupos, ctx.hoje));
+    if (ctx.planilha) for (const u of lista ?? []) m.set(u.id, conferenciaDaUnidade(u, assinaturaUnica, ctx.grupos, ctx.hoje, ctx.planilha.cargos));
     return m;
   }, [lista, assinaturaUnica, ctx.planilha, ctx.grupos, ctx.hoje]);
 

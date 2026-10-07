@@ -95,7 +95,14 @@ export const vinculoResponsavelSchema = dadosVinculoSchema
     reparticaoId: z.number().int().positive().nullable().default(null),
   })
   .refine((v) => (v.orgaoId == null) !== (v.reparticaoId == null), "Escolha UMA unidade ou UM órgão.");
-export const vinculoResponsavelPatchSchema = dadosVinculoSchema.extend({ responsavelId: z.number().int().positive() });
+// Editar: os dados, a pessoa e — opcional — o ALVO (onde responde): sem ele, fica o de antes; com ele, UM só.
+export const vinculoResponsavelPatchSchema = dadosVinculoSchema
+  .extend({
+    responsavelId: z.number().int().positive(),
+    orgaoId: z.number().int().positive().nullable().optional(),
+    reparticaoId: z.number().int().positive().nullable().optional(),
+  })
+  .refine((v) => (v.orgaoId === undefined && v.reparticaoId === undefined) || (v.orgaoId == null) !== (v.reparticaoId == null), "Escolha UMA unidade ou UM órgão.");
 
 export const reparticaoSchema = z.object({
   codigo: z

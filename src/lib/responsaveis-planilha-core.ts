@@ -244,12 +244,25 @@ export function vinculoConflita(
 
 export type MensagemConferencia = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string };
 
-/** Problemas de UM vínculo (cargo do temporário, nomeação, início do padrão). O cargo da PESSOA (o do padrão) é conferido
- * na pessoa; o vínculo ENCERRADO não é problema (fica à parte, em cinza — `estadoDoVinculo`). */
-export function problemasDoVinculo(v: VinculoResponsavel): MensagemConferencia[] {
+/** O cargo é da LISTA de Configurações → Cargos e funções (sem caixa)? Sem lista (nada cadastrado) ou vazio = não confere. */
+export function cargoForaDaLista(cargo: string, cargos?: readonly string[]): boolean {
+  const c = cargo.trim().toLowerCase();
+  return !!c && !!cargos?.length && !cargos.some((x) => x.trim().toLowerCase() === c);
+}
+
+/** Problemas de UM vínculo (cargo do temporário — vazio ou FORA DA LISTA de cargos —, nomeação, início do padrão). O cargo
+ * da PESSOA (o do padrão) é conferido na pessoa; o vínculo ENCERRADO não é problema (fica à parte, em cinza). */
+export function problemasDoVinculo(v: VinculoResponsavel, cargos?: readonly string[]): MensagemConferencia[] {
   const out: MensagemConferencia[] = [];
   const temp = v.tipo === "temporario";
   if (temp && !v.funcao.trim()) out.push({ status: "atencao", chave: "resp.funcao", texto: "Temporário sem o cargo ou a função do período.", rotulo: "Temporário sem cargo" });
+  if (temp && cargoForaDaLista(v.funcao, cargos))
+    out.push({
+      status: "erro",
+      chave: "resp.funcaoFora",
+      texto: `O cargo do temporário (“${v.funcao.trim()}”) não está na lista de Cargos e funções — escolha um cadastrado.`,
+      rotulo: "Cargo fora da lista",
+    });
   if (!temp && !v.inicio) out.push({ status: "atencao", chave: "resp.semInicio", texto: "Padrão sem a data inicial.", rotulo: "Padrão sem início" });
   if (!v.atoTipo && !v.atoNumero.trim()) out.push({ status: "atencao", chave: "resp.ato", texto: "Vínculo sem a nomeação (portaria, decreto ou lei).", rotulo: "Sem nomeação" });
   return out;
@@ -261,10 +274,18 @@ export function problemasDaPessoa(
   vinculos: readonly VinculoResponsavel[],
   todas: readonly PessoaResponsavel[],
   hoje: string,
+  cargos?: readonly string[],
 ): MensagemConferencia[] {
   const out: MensagemConferencia[] = [];
   if (!p.matricula.trim()) out.push({ status: "atencao", chave: "resp.matricula", texto: "Pessoa sem matrícula.", rotulo: "Sem matrícula" });
   if (!p.cargo.trim()) out.push({ status: "atencao", chave: "resp.semCargo", texto: "Pessoa sem o cargo ou a função padrão.", rotulo: "Sem cargo" });
+  if (cargoForaDaLista(p.cargo, cargos))
+    out.push({
+      status: "erro",
+      chave: "resp.cargoFora",
+      texto: `O cargo “${p.cargo.trim()}” não está na lista de Cargos e funções — escolha um cadastrado.`,
+      rotulo: "Cargo fora da lista",
+    });
   const chave = chaveNome(p.nome);
   const homonimos = todas.filter((o) => o.id !== p.id && chaveNome(o.nome) === chave);
   if (homonimos.length)
@@ -275,7 +296,7 @@ export function problemasDaPessoa(
       rotulo: "Possível duplicidade",
     });
   if (vinculos.length === 0) out.push({ status: "atencao", chave: "resp.semVinculo", texto: "Pessoa sem vínculo com unidade ou órgão.", rotulo: "Sem vínculo" });
-  for (const v of vinculos) for (const m of problemasDoVinculo(v)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
+  for (const v of vinculos) for (const m of problemasDoVinculo(v, cargos)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
   return out;
 }
 
@@ -285,7 +306,11 @@ export function problemasDaPessoa(
  * - `valem`: os responsáveis deste alvo são os usados (unidade de órgão "por unidade"; órgão de assinatura única).
  * - `vinculos`: quantos vínculos o alvo tem.
  */
-export function problemasDoAlvo(a: { valem: boolean; vinculos: readonly VinculoComPessoa[]; ehOrgao: boolean }, hoje: string): MensagemConferencia[] {
+export function problemasDoAlvo(
+  a: { valem: boolean; vinculos: readonly VinculoComPessoa[]; ehOrgao: boolean },
+  hoje: string,
+  cargos?: readonly string[],
+): MensagemConferencia[] {
   const out: MensagemConferencia[] = [];
   if (!a.valem) {
     if (a.vinculos.length)
@@ -302,7 +327,16 @@ export function problemasDoAlvo(a: { valem: boolean; vinculos: readonly VinculoC
   const vigentes = responsaveisVigentes(responsaveisDosVinculos(a.vinculos), hoje);
   if (vigentes.length === 0)
     out.push({ status: "erro", chave: "resp.semVigente", texto: "Sem responsável vigente — a assinatura dos DFDs não é conferida.", rotulo: "Sem responsável" });
-  for (const v of a.vinculos) for (const m of problemasDoVinculo(v)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
+  for (const v of a.vinculos) for (const m of problemasDoVinculo(v, cargos)) if (!out.some((o) => o.chave === m.chave)) out.push(m);
+  // O cargo da PESSOA fora da lista também é erro no lugar em que ela responde (o padrão segue o cargo dela).
+  const foraPessoa = a.vinculos.find((v) => v.tipo === "padrao" && cargoForaDaLista(v.cargo, cargos));
+  if (foraPessoa && !out.some((o) => o.chave === "resp.cargoFora"))
+    out.push({
+      status: "erro",
+      chave: "resp.cargoFora",
+      texto: `O cargo de ${foraPessoa.nome} (“${foraPessoa.cargo.trim()}”) não está na lista de Cargos e funções.`,
+      rotulo: "Cargo fora da lista",
+    });
   return out;
 }
 
@@ -383,8 +417,14 @@ export const ROTULO_ESTADO_VINCULO: Record<EstadoVinculo, string> = {
 };
 
 /** Conferência de uma UNIDADE: os responsáveis dela (quando o órgão é "por unidade"). */
-export function conferenciaDaUnidade(u: { id: number }, orgaoUnico: boolean, grupos: Map<string, VinculoComPessoa[]>, hoje: string): MensagemConferencia[] {
-  return problemasDoAlvo({ valem: !orgaoUnico, vinculos: grupos.get(`u${u.id}`) ?? [], ehOrgao: false }, hoje);
+export function conferenciaDaUnidade(
+  u: { id: number },
+  orgaoUnico: boolean,
+  grupos: Map<string, VinculoComPessoa[]>,
+  hoje: string,
+  cargos?: readonly string[],
+): MensagemConferencia[] {
+  return problemasDoAlvo({ valem: !orgaoUnico, vinculos: grupos.get(`u${u.id}`) ?? [], ehOrgao: false }, hoje, cargos);
 }
 
 /** Conferência de um ÓRGÃO: os responsáveis dele (assinatura única) ou quantas unidades VISÍVEIS estão sem responsável. */
@@ -393,8 +433,9 @@ export function conferenciaDoOrgao(
   unidades: readonly { id: number; oculto: boolean }[],
   grupos: Map<string, VinculoComPessoa[]>,
   hoje: string,
+  cargos?: readonly string[],
 ): MensagemConferencia[] {
-  const msgs = problemasDoAlvo({ valem: o.assinaturaUnica, vinculos: grupos.get(`o${o.id}`) ?? [], ehOrgao: true }, hoje);
+  const msgs = problemasDoAlvo({ valem: o.assinaturaUnica, vinculos: grupos.get(`o${o.id}`) ?? [], ehOrgao: true }, hoje, cargos);
   if (!o.assinaturaUnica) {
     const sem = unidades.filter((u) => !u.oculto && conferenciaDaUnidade(u, false, grupos, hoje).some((m) => m.chave === "resp.semVigente")).length;
     if (sem)
@@ -412,7 +453,7 @@ export function vigentesDoAlvo(vinculos: readonly VinculoComPessoa[], hoje: stri
 /** Conferência de uma PESSOA na planilha: os problemas dela e dos vínculos + o vínculo num alvo que não vale. */
 export function conferenciaDaPessoa(p: PessoaResponsavel, planilha: PlanilhaResponsaveis, hoje: string): MensagemConferencia[] {
   const dela = planilha.vinculos.filter((v) => v.responsavelId === p.id);
-  const msgs = problemasDaPessoa(p, dela, planilha.pessoas, hoje);
+  const msgs = problemasDaPessoa(p, dela, planilha.pessoas, hoje, planilha.cargos);
   if (dela.some((v) => !alvoVale(v, planilha)))
     msgs.push({
       status: "atencao",

@@ -15,6 +15,7 @@ import {
   permissaoSchema,
   reparticaoAtivaSchema,
   reparticaoSchema,
+  vinculoResponsavelPatchSchema,
   vinculoResponsavelSchema,
 } from "../src/lib/rbac-validation.ts";
 
@@ -128,6 +129,15 @@ describe("planilha de responsáveis (pessoa + vínculo)", () => {
     assert.deepEqual(pessoaResponsavelPatchSchema.parse({ exoneradoEm: null }), { exoneradoEm: null });
     assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "2026-02-30" }).success, false);
     assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "15/03/2026" }).success, false);
+  });
+
+  it("editar o vínculo: onde responde é opcional e, quando vem, UM só", () => {
+    const base = { responsavelId: 1, tipo: "padrao", inicio: "2026-01-01" };
+    assert.equal(vinculoResponsavelPatchSchema.safeParse(base).success, true, "sem alvo = fica o de antes");
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: null }).success, true);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, reparticaoId: 5 }).success, true);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: 5 }).success, false);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: null, reparticaoId: null }).success, false);
   });
 
   it("o vínculo vai a UMA unidade OU a UM órgão", () => {

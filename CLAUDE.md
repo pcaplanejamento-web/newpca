@@ -654,7 +654,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   não encerrados. **Ordem:** `ordenarPorPrioridade` (a posição do cargo em Configurações → Cargos e funções, sem caixa; fora
   da lista depois; sem cargo por último; empate pelo nome) na planilha, e `separarVinculos(lista, cargos)` nas seções dos
   vínculos. **Criar um vínculo escolhe VÁRIOS lugares** (`SeletorMultiplo` "Unidades e órgãos"): um POST por lugar com a
-  mesma nomeação/período, para no 1º erro, um aviso só.
+  mesma nomeação/período, para no 1º erro, um aviso só. **Editar o vínculo (v1.59.0)** troca também a pessoa e ONDE
+  RESPONDE (`PATCH …/vinculos/[id]` com `orgaoId`/`reparticaoId` opcionais — sem eles fica o de antes; o alvo novo passa
+  por `motivoAlvoInvalido` + conflito no alvo novo, vai ao fim da ordem dele e conta como vínculo NOVO para a exoneração);
+  no editor, o mesmo `SeletorMultiplo` — o próprio vínculo fica onde já respondia (senão vai ao 1º escolhido) e os demais
+  lugares são criados com a mesma nomeação. **Cargo/função FORA da lista** de Cargos e funções (`cargoForaDaLista`) é ERRO
+  na Conferência — o da pessoa (`resp.cargoFora`, também no órgão/unidade onde ela responde como padrão) e o do temporário
+  (`resp.funcaoFora`); sem lista cadastrada não confere.
 - **CARGO, PERÍODO DO PADRÃO e USUÁRIO do responsável (v1.56.0, migração `0100`, aditiva — `responsaveis.cargo` +
   `responsaveis.usuario_id` FK set null, único parcial):** o CARGO/FUNÇÃO é da PESSOA (o NOME de um cargo cadastrado —
   `cargoParaGravar`: o cadastrado, manter o atual fora da lista ou nenhum; 422 `MSG_CARGO_FORA`) e o vínculo PADRÃO segue
@@ -694,8 +700,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `carregarResponsaveis`/`responsaveisPorReparticao` (`reparticoes.ts`), agora pelos vínculos. Rotas (`exigirAdmin`, Zod
   `pessoaResponsavelSchema`/`vinculoResponsavelSchema`, auditoria `responsavel`): `GET`/`POST /api/admin/responsaveis`
   (a planilha / pessoa nova — 409 se repetida), `PATCH`/`DELETE /api/admin/responsaveis/[id]` (excluir com vínculos pede
-  `?confirmar=1`), `POST /api/admin/responsaveis/vinculos` e `PATCH`/`DELETE /api/admin/responsaveis/vinculos/[id]` (o
-  alvo do vínculo é fixo; a pessoa pode trocar). Órgão/unidade não recebem mais `responsaveis` (o campo saiu dos schemas).
+  `?confirmar=1`), `POST /api/admin/responsaveis/vinculos` e `PATCH`/`DELETE /api/admin/responsaveis/vinculos/[id]` (a
+  pessoa e o alvo podem trocar — v1.59.0). Órgão/unidade não recebem mais `responsaveis` (o campo saiu dos schemas).
   **Telas:** `/painel/orgaos` = `Segmented` **Órgãos | Responsáveis** (`?aba=responsaveis`) e `/painel/orgaos/[id]` =
   **Unidades | Responsáveis** (só quem responde no órgão ou nas unidades dele) — tabelas no PADRÃO DA MESA (`DataTable
   scrollInterno density="compact"`, filtros por coluna, XLSX/PDF, `AcoesCadastro` ↑/↓ na coluna Ordem das unidades, "Novo órgão"/"Nova

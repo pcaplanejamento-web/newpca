@@ -121,28 +121,35 @@ export function usePlanilhaResponsaveis() {
       return !!(await chamar(`/api/admin/responsaveis/${p.id}?confirmar=1`, { method: "DELETE" }, `${p.nome} excluído(a) da planilha.`));
     },
     async salvarVinculo(e: EnvioVinculo, id?: number): Promise<boolean> {
-      if (id != null)
-        return !!(await chamar(`/api/admin/responsaveis/vinculos/${id}`, { method: "PATCH", body: JSON.stringify({ responsavelId: e.responsavelId, ...e.dados }) }, "Vínculo atualizado."));
-      // CRIAR: um vínculo por lugar escolhido (a mesma nomeação), em ordem; a 1ª recusa para e diz o que entrou.
+      // Um vínculo por lugar escolhido (a mesma nomeação), em ordem; EDITANDO, o 1º é o próprio vínculo (PATCH, com onde
+      // responde) e os demais são criados. A 1ª recusa para e diz o que entrou.
       setOcupado(true);
       let feitos = 0;
       try {
-        for (const valor of e.alvos) {
+        for (const [i, valor] of e.alvos.entries()) {
           const alvo = alvoDoValor(valor);
           if (!alvo) continue;
-          const r = await fetch("/api/admin/responsaveis/vinculos", {
-            method: "POST",
+          const editar = id != null && i === 0;
+          const r = await fetch(editar ? `/api/admin/responsaveis/vinculos/${id}` : "/api/admin/responsaveis/vinculos", {
+            method: editar ? "PATCH" : "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ responsavelId: e.responsavelId, ...alvo, ...e.dados }),
           });
           const j = (await r.json().catch(() => ({}))) as Resposta;
           if (!r.ok || !j.ok) {
             const onde = planilha ? rotuloAlvo(alvo, planilha).texto : valor;
-            throw new Error(`${feitos ? `${feitos} vínculo(s) criado(s); ` : ""}${onde}: ${j.error ?? "não foi possível vincular."}`);
+            throw new Error(`${feitos ? `${feitos} vínculo(s) gravado(s); ` : ""}${onde}: ${j.error ?? "não foi possível gravar o vínculo."}`);
           }
           feitos++;
         }
-        toast.success(feitos > 1 ? `${feitos} vínculos criados com a mesma nomeação.` : "Vínculo criado.");
+        const criados = id != null ? feitos - 1 : feitos;
+        toast.success(
+          id != null
+            ? `Vínculo atualizado${criados > 0 ? ` e ${criados} novo(s) com a mesma nomeação` : ""}.`
+            : feitos > 1
+              ? `${feitos} vínculos criados com a mesma nomeação.`
+              : "Vínculo criado.",
+        );
         return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Não foi possível concluir — tente de novo.");
@@ -371,7 +378,8 @@ export function AjudaResponsaveis() {
       </TopicoAjuda>
       <TopicoAjuda titulo="Vários lugares na mesma nomeação">
         Ao vincular, escolha VÁRIAS unidades e órgãos de uma vez: cada um ganha o vínculo com a mesma nomeação e o mesmo
-        período.
+        período. Editando um vínculo, dá para trocar a pessoa, os dados e onde ele responde — e acrescentar lugares (viram
+        vínculos novos com a mesma nomeação).
       </TopicoAjuda>
       <TopicoAjuda titulo="Exonerados">
         No banner da pessoa, “Exonerar” informa a data da exoneração. Os vínculos já cadastrados continuam valendo (assinaturas
@@ -619,7 +627,7 @@ function ResponsavelDetalhe({
         abertura={editor}
         pessoas={planilha.pessoas}
         cargos={planilha.cargos}
-        alvos={editor?.id ? [{ valor: editor.alvo, rotulo: rotuloAlvo(alvoDoValor(editor.alvo) ?? { orgaoId: null, reparticaoId: null }, planilha).texto }] : alvos}
+        alvos={editor?.id ? comAlvoAtual(alvos, editor.alvo, planilha) : alvos}
         pessoaFixa
         ocupado={ocupado}
         onCriarPessoa={acoes.criarPessoa}
@@ -628,6 +636,13 @@ function ResponsavelDetalhe({
       />
     </>
   );
+}
+
+/** Os lugares para escolher ao EDITAR um vínculo: os que valem + o atual dele (mesmo que hoje não valha mais). */
+function comAlvoAtual(alvos: { valor: string; rotulo: string }[], atual: string, planilha: Planilha): { valor: string; rotulo: string }[] {
+  if (alvos.some((a) => a.valor === atual)) return alvos;
+  const alvo = alvoDoValor(atual);
+  return alvo ? [{ valor: atual, rotulo: rotuloAlvo(alvo, planilha).texto }, ...alvos] : alvos;
 }
 
 /**
@@ -678,7 +693,7 @@ export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo
         abertura={editor}
         pessoas={planilha.pessoas}
         cargos={planilha.cargos}
-        alvos={[]}
+        alvos={editor?.id ? comAlvoAtual(alvosParaVincular(planilha), editor.alvo, planilha) : []}
         alvoFixo={{ rotulo: rotuloAlvo(a, planilha).texto }}
         ocupado={ocupado}
         onCriarPessoa={acoes.criarPessoa}

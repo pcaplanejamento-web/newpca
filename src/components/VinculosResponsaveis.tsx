@@ -192,8 +192,9 @@ function CartaoVinculo({
   );
 }
 
-/** O que o editor manda gravar: a pessoa, os alvos (`o<id>` | `u<id>` — vários ao CRIAR: a mesma nomeação vincula a
- * pessoa a várias unidades/órgãos de uma vez; editando, o do vínculo) e os dados. */
+/** O que o editor manda gravar: a pessoa, os alvos (`o<id>` | `u<id>` — vários: a mesma nomeação vincula a pessoa a
+ * várias unidades/órgãos de uma vez; EDITANDO, o 1º é onde o próprio vínculo passa a responder e os demais viram vínculos
+ * novos) e os dados. */
 export type EnvioVinculo = { responsavelId: number; alvos: string[]; dados: DadosVinculo };
 
 /** Como o editor abre: novo (com o tipo e, quando já se sabe, a pessoa ou o alvo) ou editando um vínculo. */
@@ -294,11 +295,12 @@ function CorpoEditor({
   const set = <K extends keyof DadosVinculo>(k: K, v: DadosVinculo[K]) => setD((x) => ({ ...x, [k]: v }));
   const escolhida = pessoas.find((p) => String(p.id) === pessoa) ?? null;
   // A EXONERAÇÃO: quem já foi exonerado não recebe vínculo novo e nenhum começa depois dela.
-  const novoParaPessoa = !abertura.id || String(abertura.responsavelId) !== pessoa;
+  const novoParaPessoa = !abertura.id || String(abertura.responsavelId) !== pessoa || alvosEscolhidos.some((a) => a !== abertura.alvo);
   const exoneracao = escolhida ? motivoNaoVincular(escolhida, d, hojeISO(), novoParaPessoa) : null;
   const motivo = motivoVinculoInvalido(d) ?? exoneracao;
   const falta = !pessoa ? "Escolha a pessoa." : alvosEscolhidos.length === 0 ? "Escolha a unidade ou o órgão." : motivo;
   const temp = d.tipo === "temporario";
+  const rotuloDe = (v: string) => alvos.find((a) => a.valor === v)?.rotulo ?? v;
   const opcoesPessoas: OpcaoBusca[] = pessoas.filter((p) => String(p.id) === pessoa || !exonerado(p, hojeISO())).map((p) => ({
     valor: String(p.id),
     rotulo: p.nome,
@@ -317,14 +319,16 @@ function CorpoEditor({
 
   async function salvar() {
     if (falta || !pessoa) return;
-    if (await onSalvar({ responsavelId: Number(pessoa), alvos: alvosEscolhidos, dados: d }, abertura.id)) onFechar();
+    // Editando: o próprio vínculo fica onde já respondia (se continua escolhido) — senão vai ao 1º escolhido.
+    const ordem = abertura.id && alvosEscolhidos.includes(abertura.alvo) ? [abertura.alvo, ...alvosEscolhidos.filter((a) => a !== abertura.alvo)] : alvosEscolhidos;
+    if (await onSalvar({ responsavelId: Number(pessoa), alvos: ordem, dados: d }, abertura.id)) onFechar();
   }
 
   return (
     <div className="space-y-[var(--gap-block)]">
       <section className="space-y-2">
         <span className="block text-[13px] font-semibold text-text">Pessoa</span>
-        {pessoaFixa || abertura.id ? (
+        {pessoaFixa ? (
           <p className="text-sm font-semibold text-text">
             {escolhida?.nome ?? "—"} <span className="font-normal text-muted">{escolhida?.matricula ? `· Matrícula ${escolhida.matricula}` : "· Sem matrícula"}</span>
           </p>
@@ -362,8 +366,8 @@ function CorpoEditor({
 
       <section className="space-y-2">
         <span className="block text-[13px] font-semibold text-text">Onde responde</span>
-        {alvoFixo || abertura.id ? (
-          <p className="text-sm font-semibold text-text">{alvoFixo?.rotulo ?? alvos.find((a) => a.valor === alvosEscolhidos[0])?.rotulo ?? "—"}</p>
+        {alvoFixo && !abertura.id ? (
+          <p className="text-sm font-semibold text-text">{alvoFixo.rotulo}</p>
         ) : alvos.length === 0 ? (
           <Callout kind="info">Nenhuma unidade ou órgão recebe responsáveis aqui pela regra de assinatura.</Callout>
         ) : (
@@ -377,9 +381,15 @@ function CorpoEditor({
               suspenso
               textoVazio="Escolha…"
             />
+            {abertura.id && !alvosEscolhidos.includes(abertura.alvo) && alvosEscolhidos.length > 0 && (
+              <p className="text-[12px] text-muted">
+                Este vínculo deixa {rotuloDe(abertura.alvo)} e passa a responder em {rotuloDe(alvosEscolhidos[0])}.
+              </p>
+            )}
             {alvosEscolhidos.length > 1 && (
               <p className="text-[12px] text-muted">
-                A mesma nomeação vincula a pessoa a {alvosEscolhidos.length} lugares: {alvosEscolhidos.map((v) => alvos.find((a) => a.valor === v)?.rotulo ?? v).join(" · ")}.
+                A mesma nomeação vincula a pessoa a {alvosEscolhidos.length} lugares: {alvosEscolhidos.map(rotuloDe).join(" · ")}
+                {abertura.id ? " (os novos lugares viram vínculos próprios)." : "."}
               </p>
             )}
           </>

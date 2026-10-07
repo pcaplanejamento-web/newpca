@@ -233,10 +233,22 @@ export async function criarVinculo(d: DadosVinculo & { responsavelId: number; or
   return r.id;
 }
 
-export async function atualizarVinculo(id: number, d: DadosVinculo & { responsavelId: number }) {
-  await getDb()
+/** Atualiza o vínculo; com `alvo` (onde responde mudou), ele vai ao fim da ordem do alvo novo. */
+export async function atualizarVinculo(
+  id: number,
+  d: DadosVinculo & { responsavelId: number },
+  alvo?: { orgaoId: number | null; reparticaoId: number | null },
+) {
+  const db = getDb();
+  let extra: { orgaoId?: number | null; reparticaoId?: number | null; ordem?: number } = {};
+  if (alvo) {
+    const cond = alvo.orgaoId != null ? eq(responsaveisVinculos.orgaoId, alvo.orgaoId) : eq(responsaveisVinculos.reparticaoId, alvo.reparticaoId ?? -1);
+    const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${responsaveisVinculos.ordem}), -1)` }).from(responsaveisVinculos).where(cond);
+    extra = { orgaoId: alvo.orgaoId, reparticaoId: alvo.reparticaoId, ordem: Number(max) + 1 };
+  }
+  await db
     .update(responsaveisVinculos)
-    .set({ ...normalizarVinculo(d), responsavelId: d.responsavelId })
+    .set({ ...normalizarVinculo(d), responsavelId: d.responsavelId, ...extra })
     .where(eq(responsaveisVinculos.id, id));
 }
 

@@ -142,7 +142,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
 
   const conf = useMemo(() => {
     const m = new Map<number, ReturnType<typeof conferenciaDoOrgao>>();
-    if (ctx.planilha) for (const o of lista ?? []) m.set(o.id, conferenciaDoOrgao(o, unidadesDe.get(o.id) ?? [], ctx.grupos, ctx.hoje));
+    if (ctx.planilha) for (const o of lista ?? []) m.set(o.id, conferenciaDoOrgao(o, unidadesDe.get(o.id) ?? [], ctx.grupos, ctx.hoje, ctx.planilha.cargos));
     return m;
   }, [lista, unidadesDe, ctx.planilha, ctx.grupos, ctx.hoje]);
 
