@@ -203,7 +203,7 @@ test("modelo Inclusão PCA: compara os DFDs com a CM002 e importa com os apontam
       mapaEntidades: { "o:1": "2" },
       lerDfdCenti: async (plan: string) => {
         const c: Record<string, unknown> = { "100": { numero: "10", planejamento: "100", situacao: "EM ELABORAÇÃO" }, "101": { numero: "11", planejamento: "101", situacao: "CANCELADO" } };
-        if (!c[plan]) throw new Error("Planejamento não encontrado na Centi");
+        if (!c[plan]) throw new Error("NAO_ENCONTRADO: Planejamento não encontrado na Centi");
         return c[plan];
       },
       lerProtocolo: async (it: Record<string, unknown>) =>
@@ -313,7 +313,7 @@ test("modelo Conferir DFDs × Centi: busca cada DFD pelo planejamento e marca di
     cancelado: () => false,
     host: {
       lerDfdCenti: async (plan: string) => {
-        if (!centi[plan]) throw new Error("A Centi não devolveu o DFD.");
+        if (!centi[plan]) throw new Error("NAO_ENCONTRADO: A Centi não devolveu o DFD.");
         return centi[plan];
       },
     },

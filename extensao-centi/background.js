@@ -456,7 +456,9 @@ async function conferirAba(tabId) {
   if (e?.tela === "login") await tentarLogin({ id: tabId }, false);
 }
 chrome.tabs?.onUpdated?.addListener((tabId, info, tab) => {
-  if (info.status === "loading" && !info.url?.includes("/painel/automacao")) donoSaiu(tabId).catch(() => {});
+  // Só uma NAVEGAÇÃO de verdade para fora da Automação para o lote (o "loading" sem url muda de status sem sair da tela —
+  // marcava o lote como parado no meio de um fluxo). O F5 / fechar a página avisa pela ponte ("saiu", pagehide).
+  if (info.url && !info.url.includes("/painel/automacao")) donoSaiu(tabId).catch(() => {});
   if (info.status !== "complete" || !tab?.url?.startsWith(INICIO_CENTI)) return;
   setTimeout(() => conferirAba(tabId).catch(() => {}), 1500);
 });
@@ -544,6 +546,10 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   (async () => {
     if (msg.acao === "abrirOpcoes") return { ok: await abrirCredenciais(true) };
     if (msg.acao === "lote") return lote(msg.dados, sender.tab?.id ?? null);
+    if (msg.acao === "saiu") {
+      if (sender.tab?.id != null) await donoSaiu(sender.tab.id);
+      return { ok: true };
+    }
     if (msg.acao === "entrarAgora") {
       const r = await garantirSessao({ criar: true, esperarLogin: true, forcar: true });
       return r.motivo ? await resumoLogin(r) : await respostaLogada(r);

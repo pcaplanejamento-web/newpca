@@ -95,7 +95,12 @@ test("interromper: só o popup, o banner e o cartão da ABA DA AUTOMAÇÃO podem
 test("F5 na tela do sistema: o lote que ela dirigia é marcado como parado (a extensão não segue sozinha)", async () => {
   const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS }, { id: 50, url: TELA }], sessao: { abaAutomacao: 1 } });
   await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Baixar", total: 4 } });
+  // Um "loading" sem navegação não para o lote (mudava no meio de um fluxo)…
   s.atualizarAba(50, { status: "loading" });
+  await pausa(10);
+  assert.equal((s.sessao.atividade as { estado: string }).estado, "rodando");
+  // …o F5 / fechar avisa pela ponte (pagehide → "saiu").
+  await s.pedir({ acao: "saiu" });
   await pausa(10);
   const a = s.sessao.atividade as { estado: string; passo: string };
   assert.equal(a.estado, "parado");

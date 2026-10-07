@@ -95,7 +95,8 @@ export async function lerDfdCentiPorCodigo(pedir: PedirExtensao, planejamento: s
     interrompido?: boolean;
   };
   if (l.interrompido) throw new Error("Interrompido na extensão.");
-  if (!l.ok) throw new Error(`Planejamento ${plan} não encontrado na Centi: ${l.erro ?? "sem resposta"}`);
+  if (!l.ok) throw new Error(/encerrado|interrompido/i.test(l.erro ?? "") ? (l.erro ?? "Lote encerrado.") : `Não consegui abrir o planejamento ${plan} na Centi: ${l.erro ?? "sem resposta"}`);
+  if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
   const situacao = s(acharValor(l.j, /^situa/i));
   if (!comPdf) return { planejamento: plan, situacao };
   const r = (await pedir(

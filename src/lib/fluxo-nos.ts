@@ -260,7 +260,8 @@ const NOS: DefNo[] = [
           out.push({ ...it, ...(await ler(it)) });
         } catch (x) {
           const msg = x instanceof Error ? x.message : String(x);
-          if (/interrompido/i.test(msg)) throw x;
+          // O lote acabou na extensão (interrompido, tela recarregada): para o fluxo — os demais DFDs falhariam igual.
+          if (/interrompido|lote foi encerrado/i.test(msg)) throw x;
           // Um protocolo que não lê não para os outros: segue marcado como falha (o relatório e a importação o apontam).
           out.push({ ...it, leitura: "falha", leituraTexto: msg });
         }
@@ -306,7 +307,9 @@ const NOS: DefNo[] = [
           if (/interrompido/i.test(msg)) throw x;
           // A Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
           if (/recusou o Emitir DFD/i.test(msg)) throw x;
-          out.push({ ...it, centi: null, centiErro: msg });
+          // "Não encontrado" só quando a Centi respondeu sem o planejamento; o resto é falha de comunicação (não conferido).
+          const nao = msg.startsWith("NAO_ENCONTRADO: ");
+          out.push({ ...it, centi: null, centiErro: nao ? msg.slice(16) : msg, centiFalha: !nao });
         }
       }
       return { saida: out };
@@ -800,6 +803,11 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
     const ref = `DFD ${str(d.numero)} (Planej. ${str(d.planejamento)})`;
     const x = d.centi && typeof d.centi === "object" ? (d.centi as Item) : null;
     const msgs: string[] = [];
+    if (!x && d.centiFalha) {
+      // Falha de comunicação: aponta, mas NÃO marca o DFD (não foi conferido).
+      out.divergentes.push({ ...d, naoMarcar: true, mensagem: `${ref}: não conferido — ${str(d.centiErro)}` });
+      continue;
+    }
     if (!x) msgs.push(`${ref}: não encontrado na Centi${d.centiErro ? ` — ${str(d.centiErro)}` : ""}`);
     else {
       if (/CANCEL/.test(normTexto(x.situacao))) msgs.push(`${ref}: situação ${str(x.situacao)} na Centi`);
@@ -828,6 +836,7 @@ export function marcacoesConferencia(divergentes: Item[], conformes: Item[]): { 
     return Number.isInteger(n) && n > 0 ? n : null;
   };
   for (const it of divergentes) {
+    if (it.naoMarcar === true) continue;
     const id = idDe(it);
     if (id == null) continue;
     const x = m.get(id) ?? { dfdId: id, status: "divergente" as const, msgs: [] };

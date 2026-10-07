@@ -75,7 +75,7 @@ function ponte(respostaServidor: { status: number; corpo: unknown }) {
   const pedidos: { url: string; corpo: unknown }[] = [];
   const window: Record<string, unknown> = {
     location: { origin: "https://governarv.com.br" },
-    addEventListener: (_t: string, f: (e: unknown) => void) => ouvintes.push(f),
+    addEventListener: (t: string, f: (e: unknown) => void) => (t === "message" ? ouvintes.push(f) : 0),
     postMessage: (m: unknown) => postados.push(m),
   };
   const chrome = {

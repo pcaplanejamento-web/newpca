@@ -60,6 +60,12 @@
       }
     });
   });
+  // A página foi recarregada ou fechada (F5, outra tela): o lote em curso desta aba para.
+  window.addEventListener("pagehide", () => {
+    try {
+      chrome.runtime.sendMessage({ acao: "saiu" });
+    } catch {}
+  });
   // INTERROMPIDO pela extensão (popup ou cartão na aba da automação): a tela para o lote na hora.
   try {
     chrome.runtime.onMessage.addListener((msg, sender) => {

@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.29.1",
+    data: "2026-10-07",
+    titulo: "Fluxo não para no meio",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A extensão (1.16.1) encerrava o lote no meio do fluxo (“O lote foi encerrado”) e cada DFD seguinte virava “não encontrado na Centi”: agora só para quando a tela do sistema é recarregada ou fechada de verdade.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Falha de comunicação com a Centi não marca mais o DFD como divergente (fica “não conferido”); o lote encerrado para o fluxo na hora.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.29.0",
     data: "2026-10-07",
     titulo: "Automações só por API",
