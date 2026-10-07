@@ -389,7 +389,9 @@ function Porta({
   contagem?: number;
   onPointerDown?: (e: RPointerEvent) => void;
 }) {
-  const top = TOPO_PORTAS + indice * PASSO_PORTA;
+  // As portas ficam DENTRO da borda do nó (3px em cima, 1px dos lados): desconta para o centro da bolinha cair
+  // exatamente onde a linha chega (`posPorta`).
+  const top = TOPO_PORTAS + indice * PASSO_PORTA - 3;
   const dados = lado === "entrada" ? { "data-porta-entrada": porta, "data-no": no } : {};
   return (
     <div className={`absolute flex h-6 items-center gap-1 ${lado === "entrada" ? "left-0 pl-3" : "right-0 flex-row-reverse pr-3"}`} style={{ top }}>
@@ -398,7 +400,7 @@ function Porta({
         role="none"
         onPointerDown={onPointerDown}
         style={cor ? { background: cor, borderColor: cor } : undefined}
-        className={`absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full border-2 bg-surface transition-colors duration-[var(--motion-duration)] ${lado === "entrada" ? "-left-[7px]" : "-right-[7px] cursor-crosshair"} ${erro ? "border-[var(--danger)]" : "border-[var(--muted)] hover:border-accent"} before:absolute before:-inset-2.5 before:content-['']`}
+        className={`absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full border-2 bg-surface transition-colors duration-[var(--motion-duration)] ${lado === "entrada" ? "-left-[8px]" : "-right-[8px] cursor-crosshair"} ${erro ? "border-[var(--danger)]" : "border-[var(--muted)] hover:border-accent"} before:absolute before:-inset-2.5 before:content-['']`}
       />
       {rotulo && <span className={`text-[10px] font-medium ${erro ? "text-[var(--danger)]" : "text-muted"}`}>{rotulo}</span>}
       {contagem != null && contagem > 0 && <span className="rounded bg-[var(--accent-soft)] px-1 text-[10px] tabular-nums text-accent">{contagem}</span>}

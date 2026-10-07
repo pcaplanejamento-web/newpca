@@ -39,6 +39,7 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "Automação", texto: "Os cartões enchem a largura em colunas iguais (sem sobra) e o painel “Novo fluxo” ocupa a última coluna — o cartão nunca muda de tamanho; ao abrir e fechar, os cartões deslizam suaves para o lugar novo.", link: "/painel/automacao" },
       { tipo: "novo", area: "Automação", texto: "Arraste os cartões para reordenar as automações (a ordem fica guardada) e arraste um modelo do painel até a lista para criar o fluxo ali — o mesmo arrasto de Tarefas.", link: "/painel/automacao" },
       { tipo: "melhoria", area: "Automação", texto: "O “+” com o painel aberto o fecha.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "No diagrama, a linha chega exatamente no centro da bolinha da porta.", link: "/painel/automacao" },
     ],
   },
   {
