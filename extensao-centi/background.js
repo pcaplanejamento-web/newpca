@@ -27,7 +27,7 @@ const numero = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.floor
 
 async function injetarCenti(tabId) {
   await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-anexo.js", "centi-main.js"], world: "MAIN" });
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-login.js", "centi-tela.js", "centi-ponte.js"] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["centi-login.js", "centi-ponte.js"] });
 }
 
 async function estadoDaAba(tabId) {

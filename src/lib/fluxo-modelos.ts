@@ -119,7 +119,7 @@ export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo
   {
     id: "cm002",
     nome: "Execução dos DFDs na CM002",
-    descricao: "Cada DFD do sistema: o planejamento é aberto na Centi por API, a situação é gravada no DFD e os não executados e os que não estão na Centi são apontados.",
+    descricao: "Cada DFD do sistema: o planejamento é aberto na Centi por API, a situação é gravada no DFD; aponta os não executados, os que não estão na Centi e os planejamentos SÓ na Centi (pela lista da CM002, quando disponível).",
     grafo: {
       v: 1,
       nos: [
@@ -131,6 +131,10 @@ export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo
         n("err2", "erros.apontar", 1184, 352, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{centiErro}}", nivel: "erro" }, "Fora da Centi"),
         n("se1", "logica.se", 1184, 192, { campo: "centi.situacao", operador: "nao_contem", valor: "EXECUTADO" }, "Não executado?"),
         n("err1", "erros.apontar", 1488, 192, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{centi.situacao}}", nivel: "atencao" }, "Não executados"),
+        n("cm1", "centi.cm002", 576, 448, {}, "Lista da CM002"),
+        n("cmp1", "logica.comparar", 880, 448, { chaveA: "planejamento", chaveB: "planejamento", operador: "igual" }, "Sistema × CM002"),
+        n("err3", "erros.apontar", 1184, 512, { todos: true, mensagem: "Planejamento {{planejamento}} ({{situacao}}) só na Centi — sem DFD no sistema", nivel: "atencao" }, "Só na Centi"),
+        n("err4", "erros.apontar", 880, 640, { todos: true, mensagem: "Lista da CM002 não lida: {{erro}}", nivel: "atencao" }, "CM002 indisponível"),
       ],
       conexoes: [
         c("inicio1", "dfds1"),
@@ -140,6 +144,11 @@ export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo
         c("se0", "err2", "verdadeiro"),
         c("se0", "se1", "falso"),
         c("se1", "err1", "verdadeiro"),
+        c("inicio1", "cm1"),
+        c("dfds1", "cmp1", "saida", "a"),
+        c("cm1", "cmp1", "saida", "b"),
+        c("cmp1", "err3", "soEmB"),
+        c("cm1", "err4", "erro"),
       ],
     },
   },

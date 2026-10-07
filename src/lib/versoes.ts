@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.31.0",
+    data: "2026-10-07",
+    titulo: "Todas as automações viraram fluxos",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "As tarefas antigas viraram FLUXOS editáveis, com as mesmas funções: Baixar/anexar DFDs por protocolo ou por nºs, Ler a Tela Protocolo e Execução dos DFDs (agora também “Só na Centi”). Crie pelos Modelos prontos.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Componentes novos: Selecionar itens (tabela de seleção no painel), Nºs de planejamento, Baixar/anexar DFDs e o seletor de repartições da Centi.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Análise única e AO VIVO: acompanha cada item processado; o painel cabe na tela sem rolar o navegador. Buscar DFD mais rápido (sem OCR, a mesma emissão do Baixar).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Extensão 1.17.0: só API — o código que operava as telas da Centi saiu. Instale a versão nova.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.30.0",
     data: "2026-10-07",
     titulo: "Fluxos com tela de painel padronizada",

@@ -3,7 +3,7 @@
 // extensão e vão direto aos campos da tela — o script da página e o sistema PCA nunca os veem.
 (() => {
   // Protocolo da conversa com o script da página (centi-main.js): só muda se o formato das mensagens mudar.
-  const P = 35;
+  const P = 36;
   const MARCA = `__pcaCentiPonte_p${P}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -72,14 +72,6 @@
       return true;
     }
     if (msg?.alvo !== "centi") return false;
-    // A TELA PROTOCOLO é operada AQUI (mundo isolado, centi-tela.js) pela própria interface — só leitura.
-    if (msg.acao === "telaDepartamentos" || msg.acao === "telaEmAnalise" || msg.acao === "telaEmitir" || msg.acao === "telaPlanejamentos") {
-      const t = globalThis.__pcaCentiTela;
-      // `pagina` = a captura da emissão no script da página (o PDF que a própria Centi gera).
-      if (!t) responder({ ok: false, erro: "Peça da Tela Protocolo ausente — atualize a extensão e aperte F5 na aba." });
-      else t.executar(msg.acao, msg.dados, { doc: document, win: window, pagina: pedirPagina }).then(responder);
-      return true;
-    }
     if (msg.acao === "estado") estado().then(responder);
     else pedirPagina(msg.acao, msg.dados, 300000).then(responder);
     return true;

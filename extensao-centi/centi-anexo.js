@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p35";
+  const NOME = "__pcaCentiAnexo_p36";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -432,26 +432,6 @@
   // As TRAVAS de toda operação de emissão: não anexa ao protocolo, não assina, não envia e-mail, não guarda, não roda em
   // segundo plano.
   const TRAVAS = Object.freeze({ AnexarAoProtocolo: "0", AssinarDocumento: "0", Sign: "0", SendMail: "0", StorageReport: "0", Background: "0" });
-  /** O corpo de um operation que a PRÓPRIA tela da Centi manda durante a emissão acompanhada (Emitir documentos), com as
-   * TRAVAS forçadas nos parâmetros que ele já traz (nenhum é acrescentado). Corpo que não é um operation volta igual. */
-  function travarCorpoOperacao(corpo) {
-    if (typeof corpo !== "string") return corpo;
-    let c;
-    try {
-      c = JSON.parse(corpo);
-    } catch {
-      return corpo;
-    }
-    if (!c || typeof c !== "object" || !Array.isArray(c.Params)) return corpo;
-    const Params = c.Params.map((x) => (x && typeof x === "object" && Object.hasOwn(TRAVAS, x.Key) ? { ...x, Value: TRAVAS[x.Key] } : x));
-    return JSON.stringify({ ...c, Params });
-  }
-  /** A resposta traz um ARQUIVO? (o PDF cru, ou o JSON com a chave do arquivo gerado — { File: { Key, FileName } }). */
-  function respostaComArquivo(tipo, texto) {
-    if (/pdf|octet/i.test(String(tipo || ""))) return true;
-    const t = String(texto ?? "");
-    return t.startsWith("%PDF") || t.search(/"Key"\s*:\s*"[0-9a-f-]{20,}"/i) >= 0;
-  }
 
   /** A operação aprendida (o relatório que gerou um arquivo) — a chave que libera repeti-la nesta aba. */
   const chaveOperacao = (c) => (c && Number.isInteger(c.ModuleKey) ? `${c.ModuleKey}|${String(c.Guid ?? "").toLowerCase()}` : null);
@@ -579,7 +559,7 @@
 
   globalThis[NOME] = Object.freeze({
     comReparticoes, planejamentosCm002, semPaginacao, protocolosTela, emAnalise,
-    caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, travarCorpoOperacao, respostaComArquivo, resumoResposta, linhaPlana, acharLista, chaveOperacao,
+    caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,
     renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });

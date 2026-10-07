@@ -4219,6 +4219,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Agendador:** com a tela aberta e a extensão pronta, a cada minuto roda o fluxo ligado cuja hora chegou
   (`navigator.locks` — uma aba por fluxo); o servidor agenda a próxima no fim. Futuro (o registro comporta): gatilho por
   evento/webhook, HTTP genérico, e-mail, IA (Claude) no servidor, escrita na Centi com autorização.
+  **TUDO VIROU FLUXO (v1.31.0, extensão 1.17.0, PROTOCOLO 36):** a tela da Automação (`AutomacaoAdmin`) renderiza SÓ os
+  fluxos (`FluxosAutomacao`) — saíram o seletor de Tarefa, `TarefaTelaProtocolo`, `TarefaExecucaoDfds`, o `centi-tela.js`
+  e a captura de emissão do `centi-main.js` (as descrições dessas peças acima são HISTÓRICO). As funções antigas são os
+  MODELOS (`fluxo-modelos.ts`): **dfds-protocolo** (`sistema.protocolos` → `entrada.selecionar` → `saida.dfdsCenti`),
+  **dfds-ids** (`entrada.ids` → `saida.dfdsCenti`), **tela-protocolo** (`centi.protocolos` → selecionar → laço →
+  `leitura.protocolo`) e **cm002** (com o ramo "Só na Centi"). Motor do Baixar/anexar em **`automacao-dfds-motor.ts`**
+  (`ContextoEmissor`, `emitirUm`/`emitirNaEntidade`, `planoDosItens`, `executarDfds`, `anexarPelaPlataforma`/`testarAnexo`),
+  compartilhado com `lerDfdCentiPorCodigo` (sem OCR — `parseDfdPdf(f,{ocr:false})`). Nós novos: `entrada.selecionar`
+  (tabela de seleção no painel), `entrada.ids`, `saida.dfdsCenti`; campo `reparticoesCenti`; `DefNo.previa` (itens sem
+  executar) e `ContextoNo.parcial` (itens ao vivo). Painel: **`paineis.tsx`** (`HostPainelCtx` + `VISOES` por tipo de nó —
+  Seleção, DFDs, Protocolos lidos) e `PainelFluxo` (Dados de entrada + Etapas | abas das visões + **Análise ao vivo**,
+  altura pelo `useAlturaTela`, sem rolar o navegador). Colunas/gestão de protocolos em `automacao/ProtocolosAutomacao.tsx`.
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
   ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só
