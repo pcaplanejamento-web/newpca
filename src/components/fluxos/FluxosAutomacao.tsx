@@ -41,6 +41,7 @@ import { alturaNo, CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
 import { organizarGrafo } from "@/lib/fluxo-layout";
 import { IconeNo } from "./IconeNo";
 import { Ajuda } from "../Ajuda";
+import { useAlturaTela } from "../AlturaCheia";
 import { SkeletonCartao } from "../Skeleton";
 import { CartaoFluxo, GRADE_CARTOES } from "./CartaoFluxo";
 import { PainelFluxo } from "./PainelFluxo";
@@ -697,16 +698,7 @@ function EditorFluxo({
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
   const ref = useRef<HTMLDivElement>(null);
-  const [altura, setAltura] = useState(560);
-  useEffect(() => {
-    const calc = () => {
-      const t = ref.current?.getBoundingClientRect().top ?? 0;
-      setAltura(Math.max(420, window.innerHeight - t - 24));
-    };
-    calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
-  }, []);
+  const altura = useAlturaTela(ref, 320) ?? 560;
   useEffect(() => {
     if (resultado?.apontados.length || resultado?.estado === "falhou") setRelatorio(true);
     if (resultado?.noErro) setSel(resultado.noErro);
@@ -866,8 +858,8 @@ function EditorFluxo({
       {modo === "painel" && (
         <PainelFluxo grafo={grafo} onGrafo={setGrafo} passos={passos} resultado={resultado} rodando={rodando} ultima={{ em: fluxo.ultimaEm, resumo: fluxo.ultimaExecucao }} />
       )}
-      <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} gap-3 lg:grid-cols-[14rem_minmax(0,1fr)]`} style={{ minHeight: altura }}>
-        <aside className={`${CARTAO} flex min-h-0 flex-col gap-2 overflow-hidden lg:h-[var(--h)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
+      <div ref={ref} className={`${modo === "painel" ? "hidden" : "grid"} gap-3 lg:h-[var(--h)] lg:grid-cols-[14rem_minmax(0,1fr)]`} style={{ "--h": `${altura}px` } as React.CSSProperties}>
+        <aside className={`${CARTAO} flex max-h-80 min-h-0 flex-col gap-2 overflow-hidden lg:max-h-none`}>
           <SearchField compacto placeholder="Buscar bloco" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar bloco" />
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
             {filtradas.map((c) => (

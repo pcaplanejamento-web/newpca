@@ -4249,7 +4249,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Tela (v1.32.1):** a lista mostra SÓ os fluxos salvos, em **`CartaoFluxo`** (DS, `fluxos/CartaoFluxo.tsx` — título
   INTEIRO, descrição em 3 linhas, rodapé; grade `auto-rows-fr` ≥ 16rem; esqueleto `SkeletonCartao` ao carregar); **"Novo
   fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
-  com "Em branco" + TODOS os modelos no mesmo cartão (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
+  com "Em branco" + TODOS os modelos no mesmo cartão (v1.33.2: o `lado` do `Modal` saiu — o painel desliza na própria tela; o editor do diagrama tem a altura FIXA do display pelo `useAlturaTela`, a paleta e o quadro rolam por dentro) (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
   montar" do diagrama mora no `Ajuda` (?) dos controles de zoom.
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +

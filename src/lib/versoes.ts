@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.33.2",
+    data: "2026-10-07",
+    titulo: "Editor de fluxos numa tela só",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "O diagrama do fluxo cabe na tela: a lista de blocos e o quadro rolam por dentro, sem rolar o navegador.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.33.1",
     data: "2026-10-07",
     titulo: "Automação: tela mais limpa",
