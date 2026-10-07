@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.37.3",
+    data: "2026-10-07",
+    titulo: "Conferir DFDs × Centi: o resultado de cada DFD ao vivo",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A análise ao vivo mostra Convergente, Divergente (com o motivo), Não conferido ou Falhou em cada DFD — antes ficava só “Processado”.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Cada DFD divergente aparece UMA vez, com todas as divergências juntas.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.37.2",
     data: "2026-10-07",
     titulo: "Conferir DFDs × Centi: falha refeita e fluxo atualizável",

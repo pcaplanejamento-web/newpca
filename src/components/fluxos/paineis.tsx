@@ -320,6 +320,13 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     const d = DOC[s(it.leitura)];
     return d ? { rotulo: d.rotulo, tom: d.tom, texto: s(it.leituraTexto) } : null;
   }
+  if (tipo === "fluxo.executar") {
+    const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
+    if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
+    if (it.naoMarcar === true) return { rotulo: "Não conferido", tom: "amber", texto: s(it.mensagem) };
+    if (s(it.mensagem)) return { rotulo: "Divergente", tom: "red", texto: s(it.mensagem) };
+    return { rotulo: "Convergente", tom: "emerald", texto: "" };
+  }
   return null;
 }
 

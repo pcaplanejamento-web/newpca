@@ -1187,7 +1187,8 @@ export function compararDfdCenti(itens: Item[], o: { tolerancia: number; objeto:
       if (o.objeto && str(d.objeto) && str(x.objeto) && normTexto(d.objeto).replace(/[^A-Z0-9]/g, "") !== normTexto(x.objeto).replace(/[^A-Z0-9]/g, ""))
         msgs.push(`${ref}: objeto diferente da Centi`);
     }
-    if (msgs.length) for (const mensagem of msgs) out.divergentes.push({ ...d, mensagem });
+    // UM item por DFD (as mensagens juntas): a análise ao vivo e o apontamento não repetem o DFD.
+    if (msgs.length) out.divergentes.push({ ...d, mensagem: msgs.join("; ") });
     else out.conformes.push(d);
   }
   return out;
