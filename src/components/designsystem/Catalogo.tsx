@@ -92,6 +92,7 @@ import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos
 import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
+import { AjudaDoFluxo } from "@/components/fluxos/ConfigFluxo";
 import type { Grafo } from "@/lib/fluxo-core";
 import { MODELOS_FLUXO } from "@/lib/fluxo-modelos";
 import { REGISTRO_NOS } from "@/lib/fluxo-nos";
@@ -3169,6 +3170,9 @@ export function Catalogo() {
           <CartaoFluxo titulo="Conferir DFDs × Centi — um título longo que quebra linha" sobretitulo="A cada 2 h" selo={<Badge tone="emerald">Agendado</Badge>} metricas={[{ rotulo: "Nós", valor: "4" }, { rotulo: "Última", valor: "Concluída", cor: "var(--ok)" }, { rotulo: "Erros", valor: "0" }]} onClick={() => undefined} />
           <CartaoFluxo titulo="Em branco" sobretitulo="Do zero" marcado metricas={[{ rotulo: "Nós", valor: "1" }, { rotulo: "Frequência", valor: "Manual" }, { rotulo: "Usa", valor: "—" }]} onClick={() => undefined} />
         </div>
+      </Secao>
+      <Secao titulo="Ajuda de uma automação (AjudaDoFluxo · ConfigFluxo)">
+        <AjudaDoFluxo titulo="Conferir DFDs × Centi" ajuda={{ funciona: "Busca cada DFD na Centi e compara.", executa: "Manual ou agendada, com a extensão pronta.", resultado: "Convergente ou Divergente na Mesa." }} />
       </Secao>
       <Secao titulo="Cores — neutros">
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 lg:grid-cols-11">

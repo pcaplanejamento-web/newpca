@@ -1,13 +1,14 @@
 import { desc, eq } from "drizzle-orm";
 import { automacaoFluxos } from "@/db/schema";
 import { getDb } from "./db";
-import { cicloDeSubfluxos, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
+import { type AjudaFluxo, cicloDeSubfluxos, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
 import { comandoLimparProgresso, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
 
 export type FluxoAutomacao = {
   id: number;
   nome: string;
   descricao: string | null;
+  ajuda: AjudaFluxo;
   grafo: Grafo;
   frequencia: Frequencia;
   ativo: boolean;
@@ -29,6 +30,7 @@ const doBanco = (l: Linha): FluxoAutomacao => ({
   id: l.id,
   nome: l.nome,
   descricao: l.descricao,
+  ajuda: lerAjudaFluxo(json(l.ajuda)),
   grafo: lerGrafo(json(l.grafo)),
   frequencia: lerFrequencia(json(l.frequencia)),
   ativo: l.ativo,
@@ -48,7 +50,7 @@ export async function getFluxo(id: number): Promise<FluxoAutomacao | null> {
 }
 
 export async function criarFluxo(
-  d: { nome: string; descricao?: string; grafo?: unknown; frequencia?: unknown; ativo?: boolean },
+  d: { nome: string; descricao?: string; ajuda?: unknown; grafo?: unknown; frequencia?: unknown; ativo?: boolean },
   usuarioId: number,
 ): Promise<FluxoAutomacao> {
   const frequencia = lerFrequencia(d.frequencia ?? {});
@@ -58,6 +60,7 @@ export async function criarFluxo(
     .values({
       nome: d.nome,
       descricao: d.descricao || null,
+      ajuda: d.ajuda === undefined ? null : JSON.stringify(lerAjudaFluxo(d.ajuda)),
       grafo: JSON.stringify(lerGrafo(d.grafo ?? {})),
       frequencia: JSON.stringify(frequencia),
       ativo,
@@ -71,7 +74,7 @@ export async function criarFluxo(
 /** Edita (só o que veio); a próxima execução segue a frequência e o ligado. */
 export async function editarFluxo(
   id: number,
-  d: { nome?: string; descricao?: string | null; grafo?: unknown; frequencia?: unknown; ativo?: boolean },
+  d: { nome?: string; descricao?: string | null; ajuda?: unknown; grafo?: unknown; frequencia?: unknown; ativo?: boolean },
   agora = new Date(),
 ): Promise<FluxoAutomacao | null> {
   const atual = await getFluxo(id);
@@ -84,6 +87,7 @@ export async function editarFluxo(
     .set({
       ...(d.nome === undefined ? {} : { nome: d.nome }),
       ...(d.descricao === undefined ? {} : { descricao: d.descricao || null }),
+      ...(d.ajuda === undefined ? {} : { ajuda: JSON.stringify(lerAjudaFluxo(d.ajuda)) }),
       ...(d.grafo === undefined ? {} : { grafo: JSON.stringify(lerGrafo(d.grafo)) }),
       frequencia: JSON.stringify(frequencia),
       ativo,

@@ -23,6 +23,18 @@ export const PORTA_VOLTA = "volta";
 export const TIPO_LACO = "logica.laco";
 
 export const MAX_NOS = 120;
+
+/** A AJUDA (?) de uma automação — cadastrada nas configurações dela. */
+export type AjudaFluxo = { funciona: string; executa: string; resultado: string };
+export const MAX_AJUDA = 2000;
+export const AJUDA_VAZIA: AjudaFluxo = { funciona: "", executa: "", resultado: "" };
+/** Qualquer JSON → os 3 textos (vazio = ""; cortados no teto). */
+export function lerAjudaFluxo(v: unknown): AjudaFluxo {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  const t = (x: unknown) => (typeof x === "string" ? x.trim().slice(0, MAX_AJUDA) : "");
+  return { funciona: t(o.funciona), executa: t(o.executa), resultado: t(o.resultado) };
+}
+export const ajudaVazia = (a: AjudaFluxo) => !a.funciona && !a.executa && !a.resultado;
 export const MAX_CONEXOES = 300;
 export const MAX_ITENS = 20_000;
 export const MAX_PASSOS = 2_000;

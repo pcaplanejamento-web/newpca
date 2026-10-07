@@ -1,4 +1,4 @@
-import type { Frequencia, Grafo } from "./fluxo-core";
+import type { AjudaFluxo, Frequencia, Grafo } from "./fluxo-core";
 
 const n = (id: string, tipo: string, x: number, y: number, config: Record<string, unknown> = {}, nome?: string) => ({ id, tipo, x, y, config, nome });
 const c = (de: string, para: string, saida = "saida", entrada = "entrada") => ({ de, saida, para, entrada });
@@ -8,6 +8,8 @@ export type ModeloFluxo = {
   id: string;
   nome: string;
   descricao: string;
+  /** O (?) da automação: como funciona, como executa e o resultado. */
+  ajuda: AjudaFluxo;
   grafo: Grafo;
   frequencia?: Frequencia;
   ativo?: boolean;
@@ -21,6 +23,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     nome: "Baixar/anexar DFDs · por protocolo",
     descricao:
       "Os protocolos do sistema numa tabela de seleção → cada DFD dos marcados é emitido na Centi (entidade do órgão, conferido) e vai à pasta, ao protocolo da Centi indicado ou ao de cada DFD.",
+    ajuda: {
+      funciona: "Lista os protocolos já gravados no sistema numa tabela. Os DFDs de cada protocolo marcado são emitidos na Centi, um a um, na entidade do órgão de cada DFD.",
+      executa: "Execute com a extensão da Centi pronta: marque os protocolos e toque em Executar. Cada PDF é conferido (planejamento e nº do DFD) antes de contar como salvo. Destino e formato ficam nos Ajustes da Automação.",
+      resultado: "Os PDFs dos DFDs na pasta escolhida (ou em Downloads) ou anexados ao protocolo da Centi, com o estado de cada um: Salvo, Falhou ou Sem planejamento.",
+    },
     grafo: {
       v: 1,
       nos: [
@@ -36,6 +43,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "dfds-ids",
     nome: "Baixar/anexar DFDs · por nºs de planejamento",
     descricao: "Os nºs de planejamento digitados (separados por “:”) → cada DFD é emitido na Centi e vai à pasta ou ao protocolo da Centi.",
+    ajuda: {
+      funciona: "Recebe os nºs de planejamento digitados e emite cada DFD na Centi pela mesma operação do “Emitir DFD”.",
+      executa: "Digite os nºs separados por “:” (ex.: 1525:1549) e toque em Executar, com a extensão da Centi pronta.",
+      resultado: "Os PDFs dos DFDs na pasta ou no protocolo da Centi indicado, com o estado de cada nº.",
+    },
     grafo: {
       v: 1,
       nos: [n("inicio1", "gatilho.inicio", 0, 160), n("ids1", "entrada.ids", 280, 160), n("dfds1", "saida.dfdsCenti", 576, 160)],
@@ -47,6 +59,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     nome: "Ler a Tela Protocolo",
     descricao:
       "Os protocolos “Em análise” das repartições escolhidas (pela API) numa tabela de seleção → cada marcado é emitido e lido (capa e DFDs); tocar num lido abre a análise completa da importação.",
+    ajuda: {
+      funciona: "Busca, pela API da Centi, os protocolos “Em análise” das repartições escolhidas e os mostra numa tabela de seleção.",
+      executa: "Escolha as repartições, execute e marque os protocolos. Cada marcado é emitido e lido no navegador (capa e DFDs).",
+      resultado: "A lista de protocolos com o estado da leitura (Lido, Atenção, Falhou); tocar num lido abre a análise completa da importação.",
+    },
     grafo: {
       v: 1,
       nos: [
@@ -67,6 +84,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       "A cada 2 h: protocolos Em análise da repartição escolhida → pula os já cadastrados → lê cada um (só os de INCLUSÃO) → busca cada DFD na Centi por API (planejamento + Emitir DFD) e compara nº, tipo, objeto, valor, itens e situação → importa na Mesa com os apontamentos e avisa no sino.",
     frequencia: { tipo: "intervalo", minutos: 120 },
     ativo: true,
+    ajuda: {
+      funciona: "Confere os protocolos de INCLUSÃO no PCA contra a Centi: cada DFD é buscado pelo nº de planejamento e comparado (nº, tipo, objeto, valor, itens e situação).",
+      executa: "Roda sozinho a cada 2 horas (com a tela da Automação aberta e a extensão pronta) ou ao tocar em Executar. Pula os protocolos já cadastrados.",
+      resultado: "Os protocolos importados na Mesa com os apontamentos na observação, o relatório por protocolo e o aviso no sino de quem executou.",
+    },
     grafo: {
       v: 1,
       nos: [
@@ -107,6 +129,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     nome: "Conferir 1 DFD × Centi",
     descricao:
       "UM DFD: buscado na Centi pelo nº de planejamento e comparado (nº, tipo, objeto, valor e itens) → marca Divergente ou Convergente. Usado pelo “Conferir DFDs × Centi”; sozinho, informe o planejamento.",
+    ajuda: {
+      funciona: "Busca UM DFD na Centi pelo nº de planejamento e compara nº, tipo, objeto, valor e itens com o gravado no sistema.",
+      executa: "É usado pelo “Conferir DFDs × Centi”, um DFD por vez. Sozinho, informe o nº de planejamento e execute.",
+      resultado: "O DFD marcado Convergente ou Divergente (com o motivo) — coluna “Centi” da Mesa.",
+    },
     grafo: {
       v: 1,
       nos: [
@@ -138,6 +165,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     descricao:
       "Cada DFD do sistema passa pelo fluxo “Conferir 1 DFD × Centi” — várias conferências ao mesmo tempo e, se parar, continua do DFD em que parou. Marca Divergente ou Convergente (coluna “Centi” da Mesa).",
     dependencias: ["conferir-1-dfd"],
+    ajuda: {
+      funciona: "Passa cada DFD do sistema pelo fluxo “Conferir 1 DFD × Centi”.",
+      executa: "Execute com a extensão pronta: até 3 conferências ao mesmo tempo; se parar, a próxima execução continua do DFD em que parou.",
+      resultado: "Todos os DFDs marcados Convergente ou Divergente na coluna “Centi” da Mesa e os divergentes na Análise.",
+    },
     grafo: {
       v: 1,
       nos: [
@@ -153,6 +185,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "cm002",
     nome: "Execução dos DFDs na CM002",
     descricao: "Cada DFD do sistema: o planejamento é aberto na Centi por API, a situação é gravada no DFD; aponta os não executados, os que não estão na Centi e os planejamentos SÓ na Centi (pela lista da CM002, quando disponível).",
+    ajuda: {
+      funciona: "Abre na Centi o planejamento de cada DFD do sistema e lê a situação de execução; compara também com a lista da CM002.",
+      executa: "Execute com a extensão pronta; a situação de cada DFD é gravada sem precisar abrir a tela da Centi.",
+      resultado: "A situação gravada em cada DFD (coluna Execução) e os apontamentos: não executados, fora da Centi e planejamentos só na Centi.",
+    },
     grafo: {
       v: 1,
       nos: [
@@ -189,6 +226,11 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     id: "analisados",
     nome: "Ler protocolos analisados",
     descricao: "Repartições automáticas → protocolos “Analisado” delas → lê cada PDF (laço até o fim) e aponta os que falharam.",
+    ajuda: {
+      funciona: "Pega as repartições automaticamente e os protocolos “Analisado” delas na Centi.",
+      executa: "Execute com a extensão pronta: cada protocolo é emitido e lido, um a um, em laço até o fim.",
+      resultado: "A leitura de cada protocolo e os apontamentos dos que falharam.",
+    },
     grafo: {
       v: 1,
       nos: [

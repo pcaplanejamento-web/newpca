@@ -1683,6 +1683,8 @@ export const automacaoFluxos = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     nome: text("nome").notNull(),
     descricao: text("descricao"),
+    /** A ajuda (?) — JSON `{funciona, executa, resultado}` (`lerAjudaFluxo`). */
+    ajuda: text("ajuda"),
     grafo: text("grafo").notNull().default('{"nos":[],"conexoes":[]}'),
     frequencia: text("frequencia").notNull().default('{"tipo":"manual"}'),
     ativo: integer("ativo", { mode: "boolean" }).notNull().default(false),

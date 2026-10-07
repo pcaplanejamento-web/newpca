@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.39.0",
+    data: "2026-10-07",
+    titulo: "Ajuda e configurações de cada automação",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Cada automação tem o (?) com como funciona, como executa e a informação resultante — todas as automações prontas já vêm explicadas.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Botão de Configurações da automação: nome, descrição, frequência e o texto da ajuda.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Diagrama, Relatório, Salvar, Executar e Excluir viraram botões de ícone (o nome na dica).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.38.2",
     data: "2026-10-07",
     titulo: "Contorno do modelo escolhido inteiro",

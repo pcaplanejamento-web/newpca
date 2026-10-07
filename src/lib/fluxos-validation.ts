@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { MAX_CONEXOES, MAX_NOS } from "./fluxo-core";
+import { MAX_AJUDA, MAX_CONEXOES, MAX_NOS } from "./fluxo-core";
+
+const textoAjuda = z.string().trim().max(MAX_AJUDA).optional();
+const ajudaSchema = z.strictObject({ funciona: textoAjuda, executa: textoAjuda, resultado: textoAjuda });
 
 /** O grafo chega como objeto e é normalizado por `lerGrafo` (a forma); aqui só os tetos de tamanho. */
 const grafoSchema = z
@@ -10,6 +13,7 @@ const grafoSchema = z
 export const criarFluxoSchema = z.strictObject({
   nome: z.string().trim().min(1).max(80),
   descricao: z.string().trim().max(400).optional(),
+  ajuda: ajudaSchema.optional(),
   grafo: grafoSchema.optional(),
   frequencia: z.record(z.string(), z.unknown()).optional(),
   ativo: z.boolean().optional(),
@@ -18,6 +22,7 @@ export const criarFluxoSchema = z.strictObject({
 export const editarFluxoSchema = z.strictObject({
   nome: z.string().trim().min(1).max(80).optional(),
   descricao: z.string().trim().max(400).nullable().optional(),
+  ajuda: ajudaSchema.optional(),
   grafo: grafoSchema.optional(),
   frequencia: z.record(z.string(), z.unknown()).optional(),
   ativo: z.boolean().optional(),

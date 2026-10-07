@@ -5,6 +5,7 @@ import { chaveOrgaoCenti, type ProtocoloAutomacao } from "@/lib/automacao-centi-
 import type { PedirExtensao } from "@/lib/arquivo-navegador";
 import { dataHoraBR } from "@/lib/format";
 import {
+  ajudaVazia,
   caminhosDosItens,
   executarFluxo,
   type Frequencia,
@@ -25,14 +26,14 @@ import {
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
 import { type FluxoFilho, NOS_POR_CATEGORIA, type ProgressoHost, REGISTRO_NOS } from "@/lib/fluxo-nos";
-import { grafoDoModelo, MODELOS_FLUXO } from "@/lib/fluxo-modelos";
+import { grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo } from "@/lib/fluxo-modelos";
 import type { FluxoAutomacao } from "@/lib/fluxos";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
-import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconSave, IconTrash } from "../icons";
+import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
 import { JanelaFlutuante } from "../JanelaFlutuante";
 import { Modal } from "../Modal";
 import { useNaTela, useTrabalhoSegundoPlano } from "../SegundoPlano";
@@ -45,6 +46,7 @@ import { Ajuda } from "../Ajuda";
 import { useAlturaTela } from "../AlturaCheia";
 import { SkeletonCartao } from "../Skeleton";
 import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
+import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
 import { type HostPainel, HostPainelCtx } from "./paineis";
@@ -388,8 +390,8 @@ export function FluxosAutomacao({
   carregarRef.current = carregar;
 
   /** Regrava um fluxo salvo com o grafo e a descrição do modelo (o "Atualizar pelo modelo"). */
-  async function regravar(f: FluxoAutomacao, grafo: Grafo, descricao: string): Promise<boolean> {
-    const r = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${f.id}`, { method: "PATCH", body: { grafo, descricao } });
+  async function regravar(f: FluxoAutomacao, grafo: Grafo, m: ModeloFluxo): Promise<boolean> {
+    const r = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${f.id}`, { method: "PATCH", body: { grafo, descricao: m.descricao, ajuda: m.ajuda } });
     if (!r.ok || !r.fluxo) {
       toast.error(r.error ?? `Não consegui atualizar “${f.nome}”.`);
       return false;
@@ -408,11 +410,11 @@ export function FluxosAutomacao({
       if (!md) continue;
       const existe = (fluxos ?? []).find((f) => f.nome === md.nome);
       if (existe) {
-        if (opcoes?.atualizar && !(await regravar(existe, organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), md.descricao))) return;
+        if (opcoes?.atualizar && !(await regravar(existe, organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), md))) return;
         criados.set(dep, existe.id);
         continue;
       }
-      const rd = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: { nome: md.nome, grafo: organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), descricao: md.descricao } });
+      const rd = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: { nome: md.nome, grafo: organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), descricao: md.descricao, ajuda: md.ajuda } });
       if (!rd.ok || !rd.fluxo) return toast.error(rd.error ?? `Não consegui criar “${md.nome}”.`);
       const novoDep = rd.fluxo;
       criados.set(dep, novoDep.id);
@@ -420,7 +422,7 @@ export function FluxosAutomacao({
     }
     const existente = opcoes?.atualizar && modelo ? (fluxos ?? []).find((f) => f.nome === modelo.nome) : undefined;
     if (existente && modelo) {
-      if (!(await regravar(existente, organizarGrafo(grafoDoModelo(modelo, criados), REGISTRO_NOS), modelo.descricao))) return;
+      if (!(await regravar(existente, organizarGrafo(grafoDoModelo(modelo, criados), REGISTRO_NOS), modelo))) return;
       toast.success(`“${existente.nome}” atualizado pelo modelo.`);
       setNovo(false);
       setAberto(existente.id);
@@ -430,6 +432,7 @@ export function FluxosAutomacao({
         nome,
         grafo: modelo ? organizarGrafo(grafoDoModelo(modelo, criados), REGISTRO_NOS) : GRAFO_VAZIO_COM_INICIO,
         descricao: modelo?.descricao,
+        ajuda: modelo?.ajuda,
         ...(modelo?.frequencia ? { frequencia: modelo.frequencia, ativo: modelo.ativo === true } : {}),
       },
     });
@@ -948,6 +951,14 @@ function EditorFluxo({
   const [nome, setNome] = useState(fluxo.nome);
   const [freq, setFreq] = useState<Frequencia>(fluxo.frequencia);
   const [ativo, setAtivo] = useState(fluxo.ativo);
+  const [descricao, setDescricao] = useState(fluxo.descricao ?? "");
+  // A ajuda: a do fluxo; sem ela, a do modelo de mesmo nome (o fluxo criado antes da ajuda existir).
+  const ajudaBase = useMemo(
+    () => (ajudaVazia(fluxo.ajuda) ? (MODELOS_FLUXO.find((m) => m.nome === fluxo.nome)?.ajuda ?? fluxo.ajuda) : fluxo.ajuda),
+    [fluxo.ajuda, fluxo.nome],
+  );
+  const [ajuda, setAjuda] = useState(ajudaBase);
+  const [configAberta, setConfigAberta] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [vista, setVista] = useState<Vista>({ x: 40, y: 20, z: 0.9 });
   const [busca, setBusca] = useState("");
@@ -958,7 +969,7 @@ function EditorFluxo({
   // A TELA INICIAL é o painel (entradas · etapas · análise); o diagrama só ao montar o fluxo.
   const [modo, setModo] = useState<"painel" | "diagrama">(fluxo.grafo.nos.length <= 1 ? "diagrama" : "painel");
   const sujo =
-    JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo;
+    JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo || descricao.trim() !== (fluxo.descricao ?? "") || JSON.stringify(ajuda) !== JSON.stringify(ajudaBase);
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
   const atencoes = problemas.filter((p) => p.nivel !== "erro");
@@ -1004,7 +1015,7 @@ function EditorFluxo({
     setSalvando(true);
     const r = await api<{ fluxo?: FluxoAutomacao }>(`/api/admin/automacao/fluxos/${fluxo.id}`, {
       method: "PATCH",
-      body: { nome: nome.trim() || fluxo.nome, grafo, frequencia: freq, ativo },
+      body: { nome: nome.trim() || fluxo.nome, descricao: descricao.trim() || null, ajuda, grafo, frequencia: freq, ativo },
     });
     setSalvando(false);
     if (!r.ok || !r.fluxo) return toast.error(r.error ?? "Não consegui salvar.");
@@ -1060,6 +1071,65 @@ function EditorFluxo({
           onChange={(e) => setNome(e.target.value)}
           className="min-w-0 flex-1 rounded-control bg-transparent px-2 py-1 text-base font-semibold text-text outline-none hover:bg-[var(--accent-soft)] focus:bg-surface focus:shadow-ring"
         />
+        {erros.length > 0 && <Badge tone="red" title={erros.map((p) => p.texto).join("\n")}>{erros.length} problema(s)</Badge>}
+        {/* As ATENÇÕES não impedem executar, mas ficam à vista (a lista inteira na dica). */}
+        {atencoes.length > 0 && <Badge tone="amber" title={atencoes.map((p) => p.texto).join("\n")}>{atencoes.length} atenção(ões)</Badge>}
+        <Button
+          size="sm"
+          variant="icon"
+          aria-pressed={modo === "diagrama"}
+          aria-label={modo === "painel" ? "Diagrama" : "Painel"}
+          title={modo === "painel" ? "Ver o diagrama e montar o fluxo" : "Voltar ao painel do fluxo"}
+          onClick={() => setModo(modo === "painel" ? "diagrama" : "painel")}
+        >
+          <IconFluxo className="size-4" />
+        </Button>
+        {resultado && (
+          <Button size="sm" variant="icon" className="relative" aria-label="Relatório da última execução" title={`Relatório da última execução${resultado.apontados.length ? ` (${resultado.apontados.length})` : ""}`} onClick={() => setRelatorio(true)}>
+            <IconClipboard className="size-4" />
+            {resultado.apontados.length > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-[var(--danger)] px-1 text-[10px] font-semibold leading-4 text-white">
+                {resultado.apontados.length > 999 ? "999+" : resultado.apontados.length}
+              </span>
+            )}
+          </Button>
+        )}
+        <Button size="sm" variant="icon" aria-label="Salvar" title={sujo ? "Salvar as alterações" : "Nada a salvar"} disabled={!sujo || rodando} loading={salvando} onClick={() => void salvar()}>
+          <IconSave className="size-4" />
+        </Button>
+        {rodando ? (
+          <Button size="sm" variant="icon" className="text-[var(--danger)]" aria-label="Parar" title="Parar a execução" onClick={onParar}>
+            <IconParar className="size-4" />
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="icon"
+            aria-label="Executar"
+            disabled={erros.length > 0}
+            title={erros.length ? erros[0].texto : outroRodando ? "Executar — outro fluxo está rodando, este entra na fila" : "Executar agora (sem precisar salvar)"}
+            onClick={() => onExecutar(grafo)}
+          >
+            <IconPlay className="size-4" />
+          </Button>
+        )}
+        <Button size="sm" variant="icon" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
+          <IconSettings className="size-4" />
+        </Button>
+        <Button size="sm" variant="icon" aria-label="Excluir o fluxo" title="Excluir o fluxo" disabled={rodando} onClick={onExcluir}>
+          <IconTrash className="size-4" />
+        </Button>
+        <AjudaDoFluxo titulo={nome.trim() || fluxo.nome} ajuda={ajuda} />
+        <ConfigFluxo
+          open={configAberta}
+          onClose={() => setConfigAberta(false)}
+          nome={nome}
+          descricao={descricao}
+          ajuda={ajuda}
+          onNome={setNome}
+          onDescricao={setDescricao}
+          onAjuda={setAjuda}
+        >
         <SelectField
           compacto
           label="Frequência"
@@ -1074,45 +1144,7 @@ function EditorFluxo({
         </SelectField>
         <EditorFrequencia freq={freq} onFreq={setFreq} />
         {freq.tipo !== "manual" && <Switch checked={ativo} onChange={setAtivo} label="Agendar" dica="Roda sozinho na hora marcada (com esta tela aberta e a extensão pronta)" />}
-        {erros.length > 0 && <Badge tone="red" title={erros.map((p) => p.texto).join("\n")}>{erros.length} problema(s)</Badge>}
-        {/* As ATENÇÕES não impedem executar, mas ficam à vista (a lista inteira na dica). */}
-        {atencoes.length > 0 && <Badge tone="amber" title={atencoes.map((p) => p.texto).join("\n")}>{atencoes.length} atenção(ões)</Badge>}
-        <Button
-          size="sm"
-          variant="ghost"
-          icon={<IconFluxo className="size-4" />}
-          aria-pressed={modo === "diagrama"}
-          title={modo === "painel" ? "Ver o diagrama e montar o fluxo" : "Voltar ao painel do fluxo"}
-          onClick={() => setModo(modo === "painel" ? "diagrama" : "painel")}
-        >
-          {modo === "painel" ? "Diagrama" : "Painel"}
-        </Button>
-        {resultado && (
-          <Button size="sm" variant="ghost" onClick={() => setRelatorio(true)} title="O relatório da última execução">
-            Relatório{resultado.apontados.length ? ` (${resultado.apontados.length})` : ""}
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" icon={<IconSave className="size-4" />} disabled={!sujo || rodando} loading={salvando} onClick={() => void salvar()}>
-          Salvar
-        </Button>
-        {rodando ? (
-          <Button size="sm" variant="danger" icon={<IconParar className="size-4" />} onClick={onParar}>
-            Parar
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            icon={<IconPlay className="size-4" />}
-            disabled={erros.length > 0}
-            title={erros.length ? erros[0].texto : outroRodando ? "Outro fluxo está rodando — este entra na fila" : "Executar agora (sem precisar salvar)"}
-            onClick={() => onExecutar(grafo)}
-          >
-            Executar
-          </Button>
-        )}
-        <Button size="sm" variant="icon" aria-label="Excluir o fluxo" title="Excluir o fluxo" disabled={rodando} onClick={onExcluir}>
-          <IconTrash className="size-4" />
-        </Button>
+        </ConfigFluxo>
       </div>
       {freq.tipo !== "manual" && (
         <p className="text-xs text-muted">

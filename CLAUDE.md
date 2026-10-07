@@ -4251,6 +4251,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
   com "Em branco" + TODOS os modelos no mesmo cartão (v1.33.2: o `lado` do `Modal` saiu — o painel desliza na própria tela; o editor do diagrama tem a altura FIXA do display pelo `useAlturaTela`, a paleta e o quadro rolam por dentro) (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
   montar" do diagrama mora no `Ajuda` (?) dos controles de zoom.
+- **AJUDA + CONFIGURAÇÕES por automação (v1.39.0, migração `0094` — `automacao_fluxos.ajuda` JSON `{funciona, executa,
+  resultado}`, `lerAjudaFluxo`/`MAX_AJUDA` em `fluxo-core.ts`):** cada modelo de `fluxo-modelos.ts` traz a `ajuda` (criar e
+  "Atualizar pelo modelo" gravam; fluxo sem ajuda mostra a do modelo de mesmo nome). No `EditorFluxo` a barra é SÓ de ícones
+  (Diagrama · Relatório com a contagem · Salvar · Executar/Parar · Configurações · Excluir) + o (?) **`AjudaDoFluxo`**; a
+  engrenagem abre o **`ConfigFluxo`** (`fluxos/ConfigFluxo.tsx`, catalogados: nome, descrição, frequência/agendar e os 3
+  textos da ajuda — controlado, o Salvar do editor grava).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

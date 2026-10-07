@@ -6,6 +6,7 @@ import {
   executarFluxo,
   type Grafo,
   interpolar,
+  lerAjudaFluxo,
   lerFrequencia,
   lerGrafo,
   numeroDe,
@@ -514,4 +515,10 @@ test("Conferir DFDs × Centi: falha de comunicação não marca, fica como falha
   await rodar();
   assert.deepEqual(lidos, ["101"], "a retomada pula o já conferido e tenta de novo só o que falhou");
   assert.deepEqual(marcados.map((x) => x.dfdId).sort(), [1, 2]);
+});
+
+test("lerAjudaFluxo: qualquer JSON vira os 3 textos", () => {
+  assert.deepEqual(lerAjudaFluxo(null), { funciona: "", executa: "", resultado: "" });
+  assert.deepEqual(lerAjudaFluxo({ funciona: " a ", executa: 3, resultado: "x".repeat(3000) }).funciona, "a");
+  assert.equal(lerAjudaFluxo({ resultado: "x".repeat(3000) }).resultado.length, 2000);
 });
