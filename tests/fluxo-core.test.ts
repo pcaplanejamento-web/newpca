@@ -325,3 +325,41 @@ test("modelo Conferir DFDs × Centi: busca cada DFD pelo planejamento e marca di
     { dfdId: 1, status: "convergente" },
   ]);
 });
+
+test("modelo Baixar/anexar por protocolo: só os MARCADOS seguem; falha vira apontamento", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const g = structuredClone(MODELOS_FLUXO.find((m) => m.id === "dfds-protocolo")?.grafo as Grafo);
+  const sel = g.nos.find((x) => x.id === "sel1");
+  if (sel) sel.config.marcados = ["2"];
+  let recebidos: unknown[] = [];
+  const r = await executarFluxo(g, REGISTRO_NOS, {
+    centi: async () => ({ ok: true }),
+    api: async () => ({ ok: true }),
+    cancelado: () => false,
+    host: {
+      protocolos: [
+        { id: 1, numero: "10/2026", dfds: [] },
+        { id: 2, numero: "11/2026", dfds: [{ numero: "5", planejamento: "50" }] },
+      ],
+      baixarDfds: async (itens: Record<string, unknown>[]) => {
+        recebidos = itens.map((i) => i.id);
+        return { linhas: [{ chave: "a", id: "50", dfd: "5", estado: "falha", erro: "Centi fora" }] };
+      },
+    },
+  } as never);
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual(recebidos, [2]);
+  assert.deepEqual(r.apontados.map((a) => a.mensagem), ["Planej. 50 · DFD 5: Centi fora"]);
+});
+
+test("seleção: sem marcados segue nenhum (ou todos); nºs de planejamento viram itens", async () => {
+  const { selecionados } = await import("../src/lib/fluxo-nos.ts");
+  const its = [{ id: 1 }, { id: 2 }];
+  assert.deepEqual(selecionados(its, { chave: "id" }), []);
+  assert.deepEqual(selecionados(its, { chave: "id", semMarcar: "todos" }), its);
+  assert.deepEqual(selecionados(its, { chave: "id", marcados: ["1"] }), [{ id: 1 }]);
+  assert.deepEqual(REGISTRO_NOS.get("entrada.ids")?.previa?.({ ids: "1154:1155" }, {}), [
+    { id: "1154", planejamento: "1154" },
+    { id: "1155", planejamento: "1155" },
+  ]);
+});

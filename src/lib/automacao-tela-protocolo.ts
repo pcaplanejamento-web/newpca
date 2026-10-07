@@ -377,60 +377,9 @@ export type ProtocoloEmAnalise = {
 
 const soDigitos = (s: unknown) => String(s ?? "").replace(/\D/g, "");
 
-/** As linhas que a extensão devolveu → protocolos limpos (nº sem zeros à esquerda, ano de 4 dígitos), sem repetir. */
-export function normalizarProtocolosTela(v: unknown): ProtocoloEmAnalise[] {
-  const r = new Map<string, ProtocoloEmAnalise>();
-  for (const x of Array.isArray(v) ? v.slice(0, 5000) : []) {
-    const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
-    const protocolo = soDigitos(o.protocolo).replace(/^0+(?=\d)/, "").slice(0, 12);
-    if (!protocolo) continue;
-    const ano = /^\d{4}$/.test(soDigitos(o.ano)) ? soDigitos(o.ano) : "";
-    const t = (k: string) => String(o[k] ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
-    const chave = `${protocolo}/${ano}`;
-    const id = soDigitos(o.id).replace(/^0+(?=\d)/, "");
-    if (!r.has(chave))
-      r.set(chave, {
-        chave,
-        protocolo,
-        ano,
-        id: id.length <= 12 ? id : "",
-        entrada: t("entrada").slice(0, 40),
-        departamento: t("departamento"),
-        interessado: t("interessado"),
-        solicitante: t("solicitante"),
-        natureza: t("natureza"),
-      });
-  }
-  return [...r.values()];
-}
 
-const normDep = (t: string) =>
-  t
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, " ")
-    .trim()
-    .toUpperCase();
-const mesmoDep = (a: string, b: string) => {
-  const x = normDep(a);
-  const y = normDep(b);
-  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
-};
 
-/** A leitura pela API vale para as repartições ESCOLHIDAS? A consulta guardada é a que a tela fez com as repartições da
- * última leitura pela tela (`aprendidas`): sem o departamento nas linhas, só as MESMAS; com ele, qualquer parte delas
- * (o sistema filtra). Fora disso, a tela é lida de novo (e ensina a consulta nova). */
-export function apiCobreReparticoes(escolhidas: readonly string[], aprendidas: readonly string[] | null, comDepartamento: boolean): boolean {
-  if (!aprendidas?.length || !escolhidas.length) return false;
-  const cobre = escolhidas.every((e) => aprendidas.some((a) => mesmoDep(a, e)));
-  return comDepartamento ? cobre : cobre && aprendidas.every((a) => escolhidas.some((e) => mesmoDep(a, e)));
-}
 
-/** As linhas lidas pela API só das repartições escolhidas (sem o departamento na linha, ficam todas). */
-export function soDasReparticoes<T extends { departamento: string }>(linhas: readonly T[], escolhidas: readonly string[]): T[] {
-  if (!linhas.some((l) => l.departamento)) return [...linhas];
-  return linhas.filter((l) => escolhidas.some((e) => mesmoDep(l.departamento, e)));
-}
 
 /** O protocolo do SISTEMA com o mesmo nº (e o mesmo ano, quando os dois têm) — "156844/2026" ou "156844". */
 export function noSistemaTela<T extends { numero: string; idExterno?: string | null }>(
@@ -458,34 +407,9 @@ export function noSistemaTela<T extends { numero: string; idExterno?: string | n
   };
 }
 
-/** Os dados do cadastro do protocolo na Centi (lidos pela extensão na Tela Protocolo). */
-export type DadosCentiProtocolo = { id: string | null; campos: { rotulo: string; valor: string }[] };
 
-/** O que a extensão devolveu → dados limpos (até 80 campos; rótulo ≤ 60 e valor ≤ 2000, sem repetir o rótulo). */
-export function dadosCentiValidos(v: unknown): DadosCentiProtocolo | null {
-  const o = v && typeof v === "object" ? (v as { id?: unknown; campos?: unknown }) : null;
-  if (!o || !Array.isArray(o.campos)) return null;
-  const vistos = new Set<string>();
-  const campos: DadosCentiProtocolo["campos"] = [];
-  for (const c of o.campos.slice(0, 80)) {
-    const x = c && typeof c === "object" ? (c as { rotulo?: unknown; valor?: unknown }) : {};
-    const rotulo = typeof x.rotulo === "string" ? x.rotulo.replace(/\s+/g, " ").trim().slice(0, 60) : "";
-    if (!rotulo || vistos.has(rotulo)) continue;
-    vistos.add(rotulo);
-    campos.push({ rotulo, valor: typeof x.valor === "string" ? x.valor.trim().slice(0, 2000) : "" });
-  }
-  const id = soDigitos(o.id).replace(/^0+/, "");
-  return { id: id && id.length <= 12 ? id : null, campos };
-}
 
-/** O nome do PDF emitido de um protocolo da Tela Protocolo ("Protocolo 97608 - 2026.pdf"). */
-export const nomePdfEmAnalise = (p: Pick<ProtocoloEmAnalise, "protocolo" | "ano">) => `Protocolo ${p.protocolo}${p.ano ? ` - ${p.ano}` : ""}.pdf`;
 
-/** A escolha lembrada no aparelho, só com as repartições que a Centi ainda lista. */
-export function departamentosEscolhidosValidos(escolhidos: unknown, disponiveis: readonly string[]): string[] {
-  const set = new Set(disponiveis);
-  return Array.isArray(escolhidos) ? [...new Set(escolhidos.filter((x): x is string => typeof x === "string" && set.has(x)))] : [];
-}
 
 // ---------------------------------------------------------------- A EMISSÃO DOS DOCUMENTOS DO PROTOCOLO "POR CÓDIGO"
 /**
@@ -512,43 +436,7 @@ const semZeros = (s: unknown) => soDigitos(s).replace(/^0+(?=\d)/, "");
 const dmyDe = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 const ehIsoDia = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-/** O campo do protocolo que um parâmetro carrega (igualdade EXATA com os dados do protocolo ensinado); nenhum = null. */
-function campoDoParametro(p: { Key: string; Value: string }, a: AlvoEmissao): CampoEmissao | null {
-  const v = p.Value.trim();
-  const prot = semZeros(a.protocolo);
-  const ano = /^\d{4}$/.test(String(a.ano ?? "")) ? String(a.ano) : "";
-  if (prot && /^\d+$/.test(v) && semZeros(v) === prot) return "protocolo";
-  const pa = /^0*(\d+)\s*\/\s*(\d{4})$/.exec(v);
-  if (prot && ano && pa && pa[1] === prot && pa[2] === ano) return "protocoloAno";
-  // O ANO do protocolo só num parâmetro que se chama "ano…" — o exercício é da sessão, não do protocolo.
-  const chave = p.Key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (ano && v === ano && chave.includes("ano") && !chave.includes("exerc")) return "ano";
-  if (ehIsoDia(a.hoje)) {
-    if (v.includes(dmyDe(a.hoje))) return "hoje-dmy";
-    if (v.startsWith(a.hoje)) return "hoje-iso";
-  }
-  return null;
-}
 
-/** O operation da tela + o protocolo emitido → o modelo (o parâmetro cujo valor é o Id + os campos do protocolo). */
-export function emissaoDoPedido(corpo: unknown, a: AlvoEmissao): EmissaoProtocolo | null {
-  const alvo = semZeros(a.id);
-  const c = (corpo && typeof corpo === "object" ? corpo : null) as { ModuleKey?: unknown; Guid?: unknown; Params?: unknown } | null;
-  if (!alvo || !c || !Number.isInteger(c.ModuleKey) || !GUID.test(String(c.Guid ?? "")) || !Array.isArray(c.Params)) return null;
-  const params = c.Params.filter((x): x is { Key: unknown; Value: unknown } => !!x && typeof x === "object")
-    .map((x) => ({ Key: String(x.Key ?? "").slice(0, 80), Value: String(x.Value ?? "").slice(0, 400) }))
-    .filter((x) => x.Key)
-    .slice(0, 60);
-  const p = params.find((x) => semZeros(x.Value) === alvo && /^\d+$/.test(x.Value.trim()));
-  if (!p) return null;
-  const campos: Record<string, CampoEmissao> = {};
-  for (const x of params) {
-    if (x.Key === p.Key || ehParamAssincrono(x.Key)) continue;
-    const campo = campoDoParametro(x, a);
-    if (campo) campos[x.Key] = campo;
-  }
-  return { v: 2, moduleKey: c.ModuleKey as number, guid: String(c.Guid).toLowerCase(), params, param: p.Key, campos };
-}
 
 /** O modelo guardado (config do servidor) validado; inválido ou do formato antigo (sem `v: 2`) = null. */
 export function coerceEmissaoProtocolo(v: unknown): EmissaoProtocolo | null {
@@ -618,15 +506,6 @@ export function corpoEmissaoProtocolo(e: EmissaoProtocolo, a: AlvoEmissao): { Mo
   return { ModuleKey: e.moduleKey, Guid: e.guid, Params: e.params.map((x) => ({ Key: x.Key, Value: valor(x) })) };
 }
 
-/** O mesmo modelo (para só gravar no servidor quando mudou). */
-export const mesmaEmissao = (a: EmissaoProtocolo | null, b: EmissaoProtocolo | null) =>
-  !!a &&
-  !!b &&
-  a.moduleKey === b.moduleKey &&
-  a.guid === b.guid &&
-  a.param === b.param &&
-  JSON.stringify(a.params.map((x) => x.Key)) === JSON.stringify(b.params.map((x) => x.Key)) &&
-  JSON.stringify(Object.entries(a.campos).sort()) === JSON.stringify(Object.entries(b.campos).sort());
 
 // ---------------------------------------------------------------- A LEITURA EM LOTE (emitir + ler cada protocolo)
 /** O resultado da leitura AUTOMÁTICA de um protocolo emitido (o PDF lido no navegador; a análise completa abre à parte). */
@@ -664,6 +543,3 @@ export function conferirLeituraProtocolo(
   return { ...base, estado: "ok", texto: `${dfds.length} DFD(s)` };
 }
 
-/** Falha que vale UMA nova tentativa (rede, Centi fora do ar, sem resposta) — nunca uma recusa ou um PDF errado. */
-export const falhaTransitoria = (erro: string) =>
-  /n[aã]o respondeu|sem resposta|rede|demorou|tempo|timeout|\b5\d\d\b|indispon|inesperado/i.test(erro) && !/recus|permiss|bloquead|inv[aá]lid/i.test(erro);

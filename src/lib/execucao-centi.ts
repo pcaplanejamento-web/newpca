@@ -86,11 +86,3 @@ export function planoExecucao(dfds: DfdParaExecucao[], situacoes: Map<string, st
   return { atualizar, linhas, semPlanejamento };
 }
 
-/** A mesma entidade da Centi ("2" = "02"): só os dígitos, sem zeros à esquerda; texto, sem caixa. */
-export function mesmaEntidade(a: string | null | undefined, b: string | null | undefined): boolean {
-  const n = (v: string | null | undefined) => {
-    const t = String(v ?? "").trim();
-    return /^\d+$/.test(t) ? t.replace(/^0+/, "") || "0" : t.toUpperCase();
-  };
-  return !!a && !!b && n(a) === n(b);
-}

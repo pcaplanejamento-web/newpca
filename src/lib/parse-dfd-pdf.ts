@@ -149,7 +149,8 @@ export async function extractPdfItems(file: File): Promise<PdfItem[]> {
   }
 }
 
-export async function parseDfdPdf(file: File): Promise<DfdParseado> {
+/** `ocr: false` = sem o OCR das assinaturas achatadas (a conferência com a Centi não precisa — bem mais rápido). */
+export async function parseDfdPdf(file: File, opcoes?: { ocr?: boolean }): Promise<DfdParseado> {
   const doc = await abrirPdf(file);
   try {
     const items: PdfItem[] = [];
@@ -174,7 +175,7 @@ export async function parseDfdPdf(file: File): Promise<DfdParseado> {
     }
     const parsed = parseDfdFromPdfItems(items, file.name, render, tracos);
     // Assinatura ACHATADA (sem camada de texto): nenhuma assinatura NOMEADA de texto → OCR (lazy).
-    if (precisaOcr(parsed.assinaturas)) {
+    if (opcoes?.ocr !== false && precisaOcr(parsed.assinaturas)) {
       const paginas = Array.from({ length: doc.numPages }, (_, i) => i + 1);
       const ocr = await ocrAssinaturasEmPaginas(doc, paginas);
       return { ...parsed, assinaturas: mesclarAssinaturasOcr(parsed.assinaturas, ocr) };

@@ -29,7 +29,8 @@ export const MAX_ITERACOES_LACO = 500;
 
 // ———————————————————————————————————————————————— definição de nós (o registro mora em fluxo-nos.ts)
 
-export type TipoCampo = "texto" | "textoLongo" | "numero" | "selecao" | "booleano" | "caminho" | "lista";
+/** `reparticoesCenti` = as repartições da Tela Protocolo da Centi (escolha múltipla; o valor = "a; b"). */
+export type TipoCampo = "texto" | "textoLongo" | "numero" | "selecao" | "booleano" | "caminho" | "lista" | "reparticoesCenti";
 export type CampoNo = {
   chave: string;
   rotulo: string;
@@ -43,7 +44,7 @@ export type CampoNo = {
   /** DADO DE ENTRADA: aparece na tela inicial do fluxo (o que a pessoa ajusta antes de executar, sem abrir o diagrama). */
   entrada?: boolean;
 };
-export type CategoriaNo = "gatilho" | "centi" | "sistema" | "leitura" | "logica" | "dados" | "erros" | "saida";
+export type CategoriaNo = "gatilho" | "entrada" | "centi" | "sistema" | "leitura" | "logica" | "dados" | "erros" | "saida";
 
 export type ContextoNo = {
   /** Pedido à extensão da Centi (a ponte da tela). */
@@ -52,9 +53,15 @@ export type ContextoNo = {
   api: (caminho: string, init?: { method?: string; body?: unknown }) => Promise<Record<string, unknown> & { ok?: boolean; error?: string }>;
   /** Mensagem de andamento do nó (a tela mostra). */
   aviso: (texto: string) => void;
+  /** Cada item JÁ processado pelo nó (a análise acompanha ao vivo, antes de o nó terminar). */
+  parcial?: (itens: Item[]) => void;
   cancelado: () => boolean;
   /** Recursos do host (mapa de entidades, protocolos carregados, leitura de PDF…) — cada nó confere o que precisa. */
   host: Record<string, unknown>;
+  /** A SAÍDA COMPLETA de cada nó concluído (o painel do fluxo mostra as tabelas inteiras — a amostra tem 50). */
+  aoConcluir?: (no: string, saidas: Portas) => void;
+  /** Os itens processados ao vivo por um nó (o `parcial` de cada nó chega aqui com o id). */
+  aoParcial?: (no: string, itens: Item[]) => void;
 };
 
 export type DefNo = {
@@ -74,6 +81,8 @@ export type DefNo = {
   rodaSemItens?: boolean;
   /** Entrega só as portas devolvidas (o Laço: "lote" e "fim" não saem juntos). */
   entregaParcial?: boolean;
+  /** Os itens que o nó daria SEM executar (dados já carregados no host) — a tabela de seleção do painel antes de rodar. */
+  previa?: (config: Record<string, unknown>, host: Record<string, unknown>) => Item[];
   executar: (entradas: Portas, config: Record<string, unknown>, ctx: ContextoNo, estado: EstadoNo) => Promise<Portas>;
 };
 /** Memória de um nó durante UMA execução (o laço guarda a fila e o acumulado). */
@@ -496,7 +505,7 @@ export async function executarFluxo(
     estados.set(id, estado);
     let saidas: Portas;
     try {
-      saidas = await d.executar(ent, n.config, { ...ctx, aviso: (t) => marcar(id, { aviso: t.slice(0, 200) }) }, estado);
+      saidas = await d.executar(ent, n.config, { ...ctx, aviso: (t) => marcar(id, { aviso: t.slice(0, 200) }), parcial: (its) => ctx.aoParcial?.(id, its) }, estado);
       for (const [porta, itens] of Object.entries(saidas)) {
         if (itens.length > MAX_ITENS) throw new Error(`Itens demais na saída “${porta}” (${itens.length}; máximo ${MAX_ITENS}).`);
         if (porta === "__apontados") apontados.push(...itens);
@@ -514,6 +523,7 @@ export async function executarFluxo(
     }
     const total = d.saidas.reduce((s, p) => s + (saidas[p]?.length ?? 0), 0);
     marcar(id, { estado: "ok", itens: total, ms: (anterior?.ms ?? 0) + Date.now() - t0, amostra: amostrar(saidas), erro: undefined });
+    ctx.aoConcluir?.(id, saidas);
     const publicas = Object.fromEntries(Object.entries(saidas).filter(([k]) => k !== "__apontados"));
     entregar(id, d.entregaParcial ? publicas : { ...Object.fromEntries([...d.saidas, SAIDA_ERRO].map((s) => [s, []])), ...publicas });
   }

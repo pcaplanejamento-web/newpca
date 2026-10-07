@@ -23,9 +23,12 @@ import {
   resolverCaminho,
   TIPO_LACO,
 } from "./fluxo-core.ts";
+import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
+import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 
 export const CATEGORIAS: { valor: CategoriaNo; rotulo: string; cor: string }[] = [
   { valor: "gatilho", rotulo: "Início", cor: "var(--serie-1)" },
+  { valor: "entrada", rotulo: "Entrada de dados", cor: "var(--serie-7)" },
   { valor: "centi", rotulo: "Busca na Centi", cor: "var(--serie-2)" },
   { valor: "sistema", rotulo: "Dados do sistema", cor: "var(--serie-3)" },
   { valor: "leitura", rotulo: "Leitura", cor: "var(--serie-4)" },
@@ -79,6 +82,48 @@ const NOS: DefNo[] = [
     executar: async () => ({ saida: [{ iniciadoEm: new Date().toISOString() }] }),
   },
 
+  // ——— Entrada de dados
+  {
+    tipo: "entrada.selecionar",
+    categoria: "entrada",
+    rotulo: "Selecionar itens",
+    descricao: "Uma TABELA no painel com os itens do componente anterior: marque os que seguem (busca, filtros, marcar todos).",
+    icone: "list",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [
+      { chave: "chave", rotulo: "Campo que identifica o item", tipo: "caminho", padrao: "id", obrigatorio: true },
+      {
+        chave: "semMarcar",
+        rotulo: "Sem nada marcado",
+        tipo: "selecao",
+        entrada: true,
+        opcoes: [
+          { valor: "nenhum", rotulo: "Não segue nenhum" },
+          { valor: "todos", rotulo: "Seguem todos" },
+        ],
+        padrao: "nenhum",
+      },
+    ],
+    executar: async (e, c) => ({ saida: selecionados(so(e), c) }),
+  },
+  {
+    tipo: "entrada.ids",
+    categoria: "entrada",
+    rotulo: "Nºs de planejamento",
+    descricao: "Os nºs de planejamento digitados (separados por “:”) — um item por planejamento.",
+    icone: "edit",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [{ chave: "ids", rotulo: "Nºs de planejamento", tipo: "texto", entrada: true, ajuda: `Ex.: 1154:1155:1160 (até ${MAX_IDS_CENTI}).` }],
+    previa: (c) => lerIdsCenti(str(c.ids)).ids.map((id) => ({ id, planejamento: id })),
+    executar: async (_e, c) => {
+      const { ids } = lerIdsCenti(str(c.ids));
+      if (!ids.length) throw new Error("Informe os nºs de planejamento (separados por “:”).");
+      return { saida: ids.map((id) => ({ id, planejamento: id })) };
+    },
+  },
+
   // ——— Centi (só leitura, pela extensão)
   {
     tipo: "centi.reparticoes",
@@ -128,7 +173,7 @@ const NOS: DefNo[] = [
         tipo: "caminho",
         ajuda: "Ligue o nó Repartições antes e use “reparticao” — só os protocolos delas. Vazio = todas.",
       },
-      { chave: "reparticao", rotulo: "Repartições (fixas)", tipo: "texto", entrada: true, ajuda: "Ex.: DEP. PLANEJAMENTO - PCA (várias separadas por ;). Soma às vindas do item." },
+      { chave: "reparticao", rotulo: "Repartições", tipo: "reparticoesCenti", entrada: true, ajuda: "Ex.: DEP. PLANEJAMENTO - PCA (várias separadas por ;). Soma às vindas do item." },
     ],
     executar: async (e, c, ctx) => {
       const sit = str(c.situacao) === "outra" ? str(c.outra).trim() : str(c.situacao);
@@ -214,15 +259,8 @@ const NOS: DefNo[] = [
     entradas: ["entrada"],
     saidas: ["saida"],
     campos: [{ chave: "dfds", rotulo: "Um item por DFD (em vez de por protocolo)", tipo: "booleano", padrao: false }],
-    executar: async (_e, c, ctx) => {
-      const ps = (ctx.host.protocolos ?? []) as Item[];
-      if (c.dfds !== true) return { saida: ps.map((p) => ({ ...p, dfds: undefined, totalDfds: Array.isArray(p.dfds) ? p.dfds.length : 0 })) };
-      return {
-        saida: ps.flatMap((p) =>
-          (Array.isArray(p.dfds) ? p.dfds : []).map((d) => ({ ...obj(d), protocolo: p.numero, protocoloId: p.id, idExterno: p.idExterno, sigla: p.sigla })),
-        ),
-      };
-    },
+    previa: (c, host) => protocolosDoSistema(c, host),
+    executar: async (_e, c, ctx) => ({ saida: protocolosDoSistema(c, ctx.host) }),
   },
 
   {
@@ -259,12 +297,14 @@ const NOS: DefNo[] = [
         ctx.aviso(`Protocolo ${str(it.protocolo)} (${i + 1} de ${itens.length})…`);
         try {
           out.push({ ...it, ...(await ler(it)) });
+          ctx.parcial?.([out[out.length - 1]]);
         } catch (x) {
           const msg = x instanceof Error ? x.message : String(x);
           // O lote acabou na extensão (interrompido, tela recarregada): para o fluxo — os demais DFDs falhariam igual.
           if (/interrompido|lote foi encerrado/i.test(msg)) throw x;
           // Um protocolo que não lê não para os outros: segue marcado como falha (o relatório e a importação o apontam).
           out.push({ ...it, leitura: "falha", leituraTexto: msg });
+          ctx.parcial?.([out[out.length - 1]]);
         }
       }
       return { saida: out };
@@ -303,14 +343,16 @@ const NOS: DefNo[] = [
         ctx.aviso(`DFD ${str(it.numero)} · planejamento ${str(it.planejamento)} (${i + 1} de ${itens.length})…`);
         try {
           out.push({ ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, c.pdf !== false) });
+          ctx.parcial?.([out[out.length - 1]]);
         } catch (x) {
           const msg = x instanceof Error ? x.message : String(x);
           if (/interrompido/i.test(msg)) throw x;
           // A Centi recusou a OPERAÇÃO: os demais também falhariam — para já, com o que fazer.
-          if (/recusou o Emitir DFD/i.test(msg)) throw x;
+          if (/recusou o Emitir DFD|Interrompido/i.test(msg)) throw x;
           // "Não encontrado" só quando a Centi respondeu sem o planejamento; o resto é falha de comunicação (não conferido).
           const nao = msg.startsWith("NAO_ENCONTRADO: ");
           out.push({ ...it, centi: null, centiErro: nao ? msg.slice(16) : msg, centiFalha: !nao });
+          ctx.parcial?.([out[out.length - 1]]);
         }
       }
       return { saida: out };
@@ -709,6 +751,62 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "saida.dfdsCenti",
+    categoria: "saida",
+    rotulo: "Baixar/anexar DFDs",
+    descricao:
+      "Emite cada DFD na Centi (por API, na entidade do órgão, conferido) e leva o PDF ao destino: pasta (Downloads, a escolhida ou .zip), o protocolo da Centi indicado ou o de cada DFD (anexo com autorização). Entrada: protocolos do sistema ou nºs de planejamento.",
+    icone: "save",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [
+      {
+        chave: "destino",
+        rotulo: "Destino",
+        tipo: "selecao",
+        entrada: true,
+        opcoes: [
+          { valor: "pasta", rotulo: "Pasta" },
+          { valor: "protocolo", rotulo: "Protocolo indicado (Centi)" },
+          { valor: "proprio", rotulo: "Protocolo de cada DFD (Centi)" },
+        ],
+        padrao: "pasta",
+      },
+      { chave: "alvoId", rotulo: "Id do protocolo (Centi)", tipo: "texto", entrada: true, obrigatorio: true, quando: { campo: "destino", valores: ["protocolo"] } },
+      { chave: "alvoNumero", rotulo: "Nº do protocolo", tipo: "texto", entrada: true, obrigatorio: true, ajuda: "Ex.: 156844/2026", quando: { campo: "destino", valores: ["protocolo"] } },
+      { chave: "tipoDocumento", rotulo: "Tipo do documento", tipo: "texto", entrada: true, padrao: TIPO_DOCUMENTO_DFD, quando: { campo: "destino", valores: ["protocolo", "proprio"] } },
+      {
+        chave: "formato",
+        rotulo: "PDFs",
+        tipo: "selecao",
+        entrada: true,
+        opcoes: [
+          { valor: "separados", rotulo: "Separados" },
+          { valor: "protocolo", rotulo: "Um por protocolo" },
+          { valor: "unidade", rotulo: "Um por unidade" },
+          { valor: "unico", rotulo: "Um único" },
+        ],
+        padrao: "separados",
+      },
+      { chave: "pastaPca", rotulo: "Pasta “PCA ano”", tipo: "booleano", entrada: true, padrao: true, quando: { campo: "destino", valores: ["pasta"] } },
+      { chave: "escolherPasta", rotulo: "Escolher a pasta de destino", tipo: "booleano", entrada: true, padrao: false, quando: { campo: "destino", valores: ["pasta"] } },
+      { chave: "ordenarPlanejamento", rotulo: "Ordenar pelo planejamento", tipo: "booleano", entrada: true, padrao: true },
+      { chave: "conferir", rotulo: "Conferir o conteúdo de cada PDF", tipo: "booleano", entrada: true, padrao: true },
+    ],
+    executar: async (e, c, ctx) => {
+      const baixar = ctx.host.baixarDfds as ((itens: Item[], config: Record<string, unknown>) => Promise<{ linhas: Item[]; erro?: string }>) | undefined;
+      if (!baixar) throw new Error("Baixar/anexar DFDs só funciona na tela da Automação.");
+      if (!so(e).length) throw new Error("Nada a baixar — marque os protocolos (ou informe os nºs de planejamento).");
+      const r = await baixar(so(e), c);
+      if (r.erro) throw new Error(r.erro);
+      const falhas = r.linhas.filter((l) => l.estado === "falha");
+      return {
+        saida: r.linhas,
+        __apontados: falhas.map((l) => ({ mensagem: `Planej. ${str(l.id) || "—"}${l.dfd ? ` · DFD ${str(l.dfd)}` : ""}: ${str(l.erro, "falhou")}`, nivel: "erro", item: { ...l, planejamento: l.id, numero: l.dfd } })),
+      };
+    },
+  },
+  {
     tipo: "saida.marcarConferencia",
     categoria: "saida",
     rotulo: "Marcar DFDs × Centi",
@@ -755,6 +853,22 @@ const NOS: DefNo[] = [
 export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));
 export const NOS_POR_CATEGORIA = CATEGORIAS.map((c) => ({ ...c, nos: NOS.filter((n) => n.categoria === c.valor) }));
 
+/** Os protocolos do sistema (um item por protocolo, ou por DFD). */
+function protocolosDoSistema(c: Record<string, unknown>, host: Record<string, unknown>): Item[] {
+  const ps = (host.protocolos ?? []) as Item[];
+  if (c.dfds !== true) return ps.map((p) => ({ ...p, totalDfds: Array.isArray(p.dfds) ? p.dfds.length : 0 }));
+  return ps.flatMap((p) => (Array.isArray(p.dfds) ? p.dfds : []).map((d) => ({ ...obj(d), protocolo: p.numero, protocoloId: p.id, idExterno: p.idExterno, sigla: p.sigla })));
+}
+
+/** A chave de um item no "Selecionar itens" (o campo escolhido, como texto). */
+export const chaveSelecao = (it: Item, campo: unknown) => str(resolverCaminho(it, str(campo, "id") || "id"));
+/** Os itens MARCADOS no painel (`config.marcados`); sem marcação, todos ou nenhum. */
+export function selecionados(itens: Item[], c: Record<string, unknown>): Item[] {
+  const m = new Set((Array.isArray(c.marcados) ? c.marcados : []).map((x) => str(x)));
+  if (!m.size) return c.semMarcar === "todos" ? itens : [];
+  return itens.filter((it) => m.has(chaveSelecao(it, c.chave)));
+}
+
 const chaveProto = (it: Item) => `${str(it.protocolo ?? it.numero).split("/")[0].trim()}/${str(it.ano).trim()}`;
 
 /** Um item por elemento da lista do campo, com o protocolo/ano/Id do pai (o elemento vence em conflito de nome). */
@@ -780,17 +894,11 @@ export function apontamentosPorProtocolo(apontados: Item[]): Map<string, string[
   return m;
 }
 
-const anoDoNumero = (n: string) => n.split("/")[1]?.trim() ?? "";
-
-/** Os protocolos que chegam × os do sistema: pelo Id da capa (quando os dois têm) ou pelo nº + ano. */
+/** Os protocolos que chegam × os do sistema: a MESMA régua da coluna "No sistema" (o Id da capa decide; senão nº + ano). */
 export function separarCadastrados(itens: Item[], sistema: Item[]): { novos: Item[]; cadastrados: Item[] } {
-  const ids = new Set(sistema.map((p) => str(p.idExterno).trim()).filter(Boolean));
-  const nums = new Set(sistema.map((p) => `${str(p.numero).split("/")[0].trim()}/${str(p.ano) || anoDoNumero(str(p.numero)) || str(p.anoPca)}`));
+  const casa = noSistemaTela(sistema.map((p) => ({ numero: str(p.numero), idExterno: p.idExterno == null ? null : str(p.idExterno) })));
   const out = { novos: [] as Item[], cadastrados: [] as Item[] };
-  for (const it of itens) {
-    const id = str(it.id).trim();
-    (id && ids.has(id)) || nums.has(chaveProto(it)) ? out.cadastrados.push(it) : out.novos.push(it);
-  }
+  for (const it of itens) (casa({ protocolo: str(it.protocolo ?? it.numero).split("/")[0], ano: str(it.ano), id: str(it.id) }) ? out.cadastrados : out.novos).push(it);
   return out;
 }
 

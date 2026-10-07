@@ -38,12 +38,6 @@ test("plano: só grava o que mudou; ausente e sem planejamento contados", () => 
   assert.equal(r.semPlanejamento, 1);
 });
 
-test("mesma entidade da Centi", async () => {
-  const { mesmaEntidade } = await import("../src/lib/execucao-centi.ts");
-  assert.equal(mesmaEntidade("2", "02"), true);
-  assert.equal(mesmaEntidade("02", "03"), false);
-  assert.equal(mesmaEntidade(null, "2"), false);
-});
 
 test("entidade cadastrada no formato da aberta", async () => {
   const { formatoEntidade } = await import("../src/lib/automacao-centi-core.ts");

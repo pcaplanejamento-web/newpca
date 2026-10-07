@@ -3,7 +3,8 @@
  * — a mesma da tarefa "Ler a Tela Protocolo" — e lido no navegador: capa + DFDs, conferido contra o protocolo pedido).
  * Sem a emissão aprendida, o erro diz como ensinar (o fluxo nunca mexe na tela da Centi).
  */
-import { ajusteDaOperacao, analisarRespostaCenti, caminhoLoadPlanejamento, type ConfigCenti, lerConfigCenti, operacaoRecusada, pedidoEmitirDfd } from "./automacao-centi-core";
+import { analisarRespostaCenti, operacaoRecusada } from "./automacao-centi-core";
+import { carregarPlanejamento, type ContextoEmissor, emitirUm } from "./automacao-dfds-motor";
 import { acharValor } from "./fluxo-core";
 import { parseDfdPdf } from "./parse-dfd-pdf";
 import { coerceEmissaoProtocolo, conferirLeituraProtocolo, corpoEmissaoProtocolo, type EmissaoProtocolo } from "./automacao-tela-protocolo";
@@ -15,6 +16,8 @@ import { lerProtocoloCompleto, type ProtocoloLido } from "./importar-protocolo-a
 
 /** Os protocolos lidos NESTA execução (o nó "Importar protocolo" usa a mesma leitura — não emite de novo). */
 export type CacheLeitura = Map<string, ProtocoloLido>;
+/** Quantos PDFs de protocolo ficam na memória para abrir a análise completa sem emitir de novo. */
+export const PDFS_NA_MEMORIA = 8;
 export const chaveLeitura = (protocolo: unknown, ano: unknown) => `${s(protocolo).split("/")[0]}/${s(ano)}`;
 
 export async function emissaoDoServidor(): Promise<EmissaoProtocolo | null> {
@@ -33,6 +36,8 @@ export async function lerProtocoloPorCodigo(
   it: Item,
   regras: RegrasAvaliacao,
   cache?: CacheLeitura,
+  /** Os ÚLTIMOS PDFs lidos (a análise completa abre sem emitir de novo) — até `PDFS_NA_MEMORIA`. */
+  arquivos?: Map<string, File>,
 ): Promise<Item> {
   const alvo = { id: s(it.id ?? it.idExterno), protocolo: s(it.protocolo ?? it.numero).split("/")[0], ano: s(it.ano) };
   if (!alvo.protocolo) throw new Error("O item não tem o nº do protocolo (campo “protocolo”).");
@@ -49,10 +54,19 @@ export async function lerProtocoloPorCodigo(
   const direto = await pdfDosBytes(bytes).catch(() => null);
   const x = direto ? { pdf: direto } : await pdfDoAchado(analisarRespostaCenti(bytes, r.status ?? 0), baixarPelaExtensao(pedir));
   if (!("pdf" in x)) throw new Error(x.erro);
-  const lido = await lerProtocoloCompleto(new File([comoBlob(x.pdf)], `Protocolo ${alvo.protocolo}.pdf`, { type: "application/pdf" }), regras);
+  const file = new File([comoBlob(x.pdf)], `Protocolo ${alvo.protocolo}-${alvo.ano}.pdf`, { type: "application/pdf" });
+  const lido = await lerProtocoloCompleto(file, regras);
   const numeros = lido.dfds.map((d) => d.numero);
   const leitura = conferirLeituraProtocolo(alvo, lido.capa, numeros);
-  if (leitura.estado !== "falha") cache?.set(chaveLeitura(alvo.protocolo, alvo.ano), lido);
+  if (leitura.estado !== "falha") {
+    cache?.set(chaveLeitura(alvo.protocolo, alvo.ano), lido);
+    if (arquivos) {
+      const k = chaveLeitura(alvo.protocolo, alvo.ano);
+      arquivos.delete(k);
+      arquivos.set(k, file);
+      while (arquivos.size > PDFS_NA_MEMORIA) arquivos.delete(arquivos.keys().next().value as string);
+    }
+  }
   return {
     leitura: leitura.estado,
     leituraTexto: leitura.texto,
@@ -73,80 +87,20 @@ export async function lerProtocoloPorCodigo(
   };
 }
 
-/** A configuração do Emitir DFD — a MESMA do "Baixar DFDs": a do aparelho + a operação aprendida no servidor (vale
- * para todos os ADMs); a operação nova que a extensão pegou da Centi é aplicada e guardada (como no Baixar DFDs). */
-let opServidor: Promise<unknown> | null = null;
-function configLocal(): ConfigCenti {
-  try {
-    return lerConfigCenti(JSON.parse(localStorage.getItem("automacao:centi") || "null"));
-  } catch {
-    return lerConfigCenti(null);
-  }
-}
-function aplicarOp(cfg: ConfigCenti, op: unknown): ConfigCenti | null {
-  const a = ajusteDaOperacao(cfg, op);
-  if (!a) return null;
-  const n = lerConfigCenti({ ...cfg, ...a });
-  try {
-    localStorage.setItem("automacao:centi", JSON.stringify(n));
-  } catch {}
-  return n;
-}
-async function configDfd(): Promise<ConfigCenti> {
-  opServidor ??= fetch("/api/admin/automacao/config", { cache: "no-store" })
-    .then((r) => r.json() as Promise<{ ok?: boolean; config?: { operacao?: unknown } }>)
-    .then((j): unknown => (j?.ok ? (j.config?.operacao ?? null) : null))
-    .catch(() => null);
-  const cfg = configLocal();
-  const op = await opServidor;
-  return (op ? aplicarOp(cfg, op) : null) ?? cfg;
-}
-
-/** Busca UM DFD na Centi pelo nº de PLANEJAMENTO — o mesmo Emitir DFD do "Baixar DFDs" (por API) — e lê o PDF:
- * nº, tipo, objeto, valor total e itens como estão na Centi. Lança com a mensagem quando não dá. */
-export async function lerDfdCentiPorCodigo(pedir: PedirExtensao, planejamento: string, entidade?: string, comPdf = true): Promise<Item> {
+/** Busca UM DFD na Centi pelo nº de PLANEJAMENTO com o MESMO emissor do "Baixar DFDs" (por API): o load do planejamento
+ * (a SITUAÇÃO) e, com `comPdf`, o Emitir DFD lido SEM OCR (nº, tipo, objeto, valor e itens). Lança com a mensagem. */
+export async function lerDfdCentiPorCodigo(c: ContextoEmissor, planejamento: string, entidade?: string, comPdf = true): Promise<Item> {
   const plan = s(planejamento).replace(/\D/g, "");
   if (!plan) throw new Error("O DFD não tem nº de planejamento.");
-  // 1) O planejamento (CM002) pela API — como a tela faz antes de emitir: dá a SITUAÇÃO e libera a operação.
-  const l = (await pedir("ler", { metodo: "GET", caminho: caminhoLoadPlanejamento(plan), entidade: entidade || undefined }, 60_000)) as {
-    ok?: boolean;
-    erro?: string;
-    j?: unknown;
-    interrompido?: boolean;
-  };
-  if (l.interrompido) throw new Error("Interrompido na extensão.");
-  if (!l.ok) throw new Error(/encerrado|interrompido/i.test(l.erro ?? "") ? (l.erro ?? "Lote encerrado.") : `Não consegui abrir o planejamento ${plan} na Centi: ${l.erro ?? "sem resposta"}`);
+  const l = await carregarPlanejamento(c, plan, entidade || undefined);
+  if ("erro" in l) throw new Error(l.erro);
   if (!l.j || (typeof l.j === "object" && !Object.keys(l.j as object).length)) throw new Error(`NAO_ENCONTRADO: o planejamento ${plan} não existe nesta entidade da Centi.`);
   const situacao = s(acharValor(l.j, /^situa/i));
   if (!comPdf) return { planejamento: plan, situacao };
-  type R = { ok?: boolean; erro?: string; b64?: string; status?: number; interrompido?: boolean; operacao?: unknown };
-  const emitir = async (cfg: ConfigCenti) => {
-    const r = (await pedir("pedir", { metodo: "POST", caminho: "restauth/operation", corpo: pedidoEmitirDfd(plan, cfg, new Date()), entidade: entidade || undefined }, 150_000)) as R;
-    if (r.interrompido) throw new Error("Interrompido na extensão.");
-    if (!r.ok || r.b64 == null) throw new Error(r.erro || "A extensão não respondeu.");
-    return analisarRespostaCenti(deBase64(r.b64), r.status ?? 0);
-  };
-  let a = await emitir(await configDfd());
-  if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro)) {
-    // Como o Baixar DFDs: a operação nova que a extensão pegou da tela da Centi e UMA nova tentativa.
-    const e = (await pedir("estado", null, 8000)) as R;
-    const n = e.ok ? aplicarOp(configLocal(), e.operacao) : null;
-    if (n) a = await emitir(n);
-    if (a.tipo === "nada" && operacaoRecusada(a.amostra ?? a.erro))
-      throw new Error("A Centi recusou o Emitir DFD (operação mudou) — emita UM DFD pela própria Centi com a extensão instalada e execute de novo.");
-  }
-  const x = await pdfDoAchado(a, baixarPelaExtensao(pedir, entidade || undefined));
-  if (!("pdf" in x)) throw new Error(x.erro);
-  const d = await parseDfdPdf(new File([comoBlob(x.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }));
+  const e = await emitirUm(c, plan, entidade || undefined, false, true);
+  if (!e.pdf) throw new Error(e.recusada ? `A Centi recusou o Emitir DFD — ${e.erro}` : (e.erro ?? "Falha ao emitir."));
+  const d = await parseDfdPdf(new File([comoBlob(e.pdf)], `Planejamento ${plan}.pdf`, { type: "application/pdf" }), { ocr: false });
   if (s(d.planejamento).replace(/\D/g, "").replace(/^0+/, "") !== plan.replace(/^0+/, ""))
     throw new Error(`A Centi devolveu o DFD de outro planejamento (${s(d.planejamento) || "sem nº"}).`);
-  return {
-    numero: d.numero,
-    planejamento: d.planejamento,
-    tipo: d.tipo,
-    objeto: d.objeto,
-    valor: d.valorTotal ?? 0,
-    totalItens: d.itens.length,
-    situacao,
-  };
+  return { numero: d.numero, planejamento: d.planejamento, tipo: d.tipo, objeto: d.objeto, valor: d.valorTotal ?? 0, totalItens: d.itens.length, situacao };
 }

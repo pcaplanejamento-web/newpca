@@ -11,6 +11,7 @@ import { IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
 import { Switch } from "../Switch";
 import { IconeNo } from "./IconeNo";
+import { CampoReparticoesCenti } from "./paineis";
 
 /**
  * O painel do NÓ marcado: o nome, os campos do tipo (formulário DECLARATIVO do registro — novo tipo de nó não pede tela
@@ -132,6 +133,8 @@ export function CampoDoNo({ campo: c, valor, onValor, lista, somenteLeitura }: {
           }}
         />
       );
+    case "reparticoesCenti":
+      return <CampoReparticoesCenti rotulo={rot} valor={s} onValor={onValor} somenteLeitura={somenteLeitura} />;
     case "caminho":
       return <TextField label={rot} hint={c.ajuda ?? "Escolha um dado buscado ou digite."} list={lista} value={s} disabled={somenteLeitura} maxLength={200} onChange={(e) => onValor(e.target.value)} />;
     default:

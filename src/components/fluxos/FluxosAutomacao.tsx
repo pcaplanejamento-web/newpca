@@ -40,6 +40,10 @@ import { CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
 import { IconeNo } from "./IconeNo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
+import { type HostPainel, HostPainelCtx } from "./paineis";
+import { ProtocoloUploadForm } from "../ProtocoloUploadForm";
+import type { GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
+import { type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, testarAnexo } from "@/lib/automacao-dfds-motor";
 
 type Pedir = (acao: string, dados: unknown, ms: number) => Promise<Record<string, unknown> & { ok?: boolean; erro?: string; loteId?: string; interrompido?: boolean }>;
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
@@ -68,19 +72,27 @@ export function FluxosAutomacao({
   lote,
   interrompido,
   pronto,
-  mapaEntidades,
+  emissor,
+  atual,
   protocolos,
+  gestao,
   importacao,
+  onAbrirProtocolo,
   onRodando,
 }: {
   pedir: Pedir;
   lote: MutableRefObject<string | null>;
   interrompido: MutableRefObject<boolean>;
   pronto: boolean;
-  mapaEntidades: Record<string, string>;
+  /** O emissor de DFDs (a configuração e o mapa órgão → entidade da Centi — os mesmos dos Ajustes). */
+  emissor: ContextoEmissor;
+  /** A entidade aberta na Centi agora. */
+  atual: string | null;
   protocolos: ProtocoloAutomacao[];
-  /** O contexto da importação na Mesa (unidades, órgãos, regras, PCAs) — o nó "Importar protocolo". */
+  gestao: GestaoAutomacao;
+  /** O contexto da importação na Mesa (unidades, órgãos, regras, PCAs) — "Importar protocolo" e a análise completa. */
   importacao: ContextoImportacao;
+  onAbrirProtocolo: (id: number) => void;
   onRodando: (r: boolean) => void;
 }) {
   const [fluxos, setFluxos] = useState<FluxoAutomacao[] | null>(null);
@@ -90,7 +102,6 @@ export function FluxosAutomacao({
   const [resultado, setResultado] = useState<ResultadoExec | null>(null);
   const [novo, setNovo] = useState(false);
   const cancelar = useRef(false);
-  const { confirmar, confirmacao } = useConfirmacao();
   useEffect(() => onRodando(rodando != null), [rodando, onRodando]);
 
   const carregar = useCallback(async () => {
@@ -103,32 +114,100 @@ export function FluxosAutomacao({
     void carregar();
   }, []);
 
+  // O que o PAINEL mostra: a saída completa de cada nó, os itens processados AO VIVO, os DFDs do Baixar/anexar.
+  const [saidas, setSaidas] = useState<Record<string, Item[]>>({});
+  const [parciais, setParciais] = useState<Record<string, Item[]>>({});
+  const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
+  const [pasta, setPasta] = useState<PastaDestino | null>(null);
+  const [podePasta, setPodePasta] = useState(false);
+  useEffect(() => setPodePasta("showDirectoryPicker" in window), []);
+  const pastaRef = useRef(pasta);
+  pastaRef.current = pasta;
+  const atualRef = useRef(atual);
+  atualRef.current = atual;
+  const arquivos = useRef(new Map<string, File>());
+  const [analise, setAnalise] = useState<{ file: File; n: number } | null>(null);
+  const [naCenti, setNaCenti] = useState<Map<number, number>>(new Map());
+  const [reps, setReps] = useState<{ lista: string[] | null; buscando: boolean }>({ lista: null, buscando: false });
+  const buscarReparticoes = useCallback(async () => {
+    setReps((r) => ({ ...r, buscando: true }));
+    const r = await pedir("reparticoesApi", null, 30_000);
+    const lista = Array.isArray(r.departamentos) ? r.departamentos.filter((d): d is string => typeof d === "string" && !!d.trim()) : null;
+    setReps({ lista: lista ?? null, buscando: false });
+    if (!r.ok) toast.error(r.erro ?? "A extensão não respondeu.");
+  }, [pedir]);
+  // "Na Centi": quantos documentos o sistema registrou como anexados em cada protocolo.
+  const carregarNaCenti = useCallback(async () => {
+    const ids = protocolos.map((p) => p.id).slice(0, 2000);
+    if (!ids.length) return;
+    const j = await api<{ registros?: { protocoloId: number | null }[] }>(`/api/admin/automacao/registros?protocolos=${ids.join(",")}`);
+    if (!j.ok) return;
+    const m = new Map<number, number>();
+    for (const x of j.registros ?? []) if (x.protocoloId != null) m.set(x.protocoloId, (m.get(x.protocoloId) ?? 0) + 1);
+    setNaCenti(m);
+  }, [protocolos]);
+  useEffect(() => {
+    void carregarNaCenti();
+  }, [carregarNaCenti]);
   const emissao = useRef<ReturnType<typeof emissaoDoServidor> | null>(null);
   /** Os protocolos lidos na execução em curso (zerado a cada execução). */
   const leituras = useRef<CacheLeitura>(new Map());
   /** O resultado por protocolo do nó "Importar protocolo" (vai ao servidor → aviso no sino). */
   const relatorio = useRef<Item[]>([]);
+  const { confirmar, confirmacao } = useConfirmacao();
   const host = useMemo(
     () => ({
-      mapaEntidades,
+      get mapaEntidades() {
+        return { ...emissor.mapa(), ...emissor.cadastradas() };
+      },
       chaveOrgao: chaveOrgaoCenti,
       protocolos: protocolos as unknown as Item[],
       lerProtocolo: async (it: Item) => {
         emissao.current ??= emissaoDoServidor();
-        return lerProtocoloPorCodigo(pedir as unknown as PedirExtensao, await emissao.current, it, importacao.regras, leituras.current);
+        return lerProtocoloPorCodigo(pedir as unknown as PedirExtensao, await emissao.current, it, importacao.regras, leituras.current, arquivos.current);
+      },
+      // O "Baixar/anexar DFDs": o MESMO motor da emissão (entidade do órgão, conferência, destinos, anexo autorizado).
+      baixarDfds: async (itens: Item[], config: Record<string, unknown>) => {
+        const { saida, alvo, erroAlvo } = opcoesDoNo(config);
+        if (erroAlvo) return { linhas: [], erro: erroAlvo };
+        const plano = planoDosItens(itens, saida, protocolos);
+        if (!plano.arquivos.length) return { linhas: plano.previa as unknown as Item[], erro: "Nenhum DFD com nº de planejamento para emitir." };
+        if (saida.destino === "pasta" && saida.escolherPasta && podePasta && !pastaRef.current) return { linhas: [], erro: "Escolha a pasta de destino (na aba DFDs do painel)." };
+        let linhas = plano.previa;
+        const aplicar = (f: (l: LinhaDfd) => Partial<LinhaDfd> | null) => {
+          linhas = linhas.map((l) => {
+            const x = f(l);
+            return x ? { ...l, ...x } : l;
+          });
+          setDfds(linhas);
+        };
+        setDfds(linhas);
+        await executarDfds(plano.arquivos, saida, alvo, {
+          ...emissor,
+          lote,
+          interrompido: () => interrompido.current || cancelar.current,
+          atual: atualRef.current,
+          confirmar: (texto) => confirmar({ titulo: "A Centi pede confirmação", texto, confirmar: "Confirmar e anexar" }),
+          pasta: pastaRef.current,
+          protocolos,
+          marcar: (chave, l) => aplicar((x) => (x.chave === chave ? l : null)),
+          marcarVarias: aplicar,
+        });
+        if (saida.destino !== "pasta") void carregarNaCenti();
+        return { linhas: linhas as unknown as Item[] };
       },
       importarProtocolo: async (it: Item, apontamentos: string[]) => {
         const lido = leituras.current.get(chaveLeitura(it.protocolo ?? it.numero, it.ano));
         if (!lido) return { importado: false, motivo: "O protocolo não foi lido nesta execução (ligue o nó “Ler protocolo” antes)." };
         return importarProtocolo(lido, apontamentos, importacao);
       },
-      lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean) => lerDfdCentiPorCodigo(pedir as unknown as PedirExtensao, plan, entidade, pdf !== false),
+      lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean) => lerDfdCentiPorCodigo(emissor, plan, entidade, pdf !== false),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {
         relatorio.current.push(...l);
       },
     }),
-    [mapaEntidades, protocolos, pedir, importacao],
+    [emissor, protocolos, pedir, importacao, podePasta, lote, interrompido, confirmar, carregarNaCenti],
   );
 
   /** Executa um fluxo (o grafo passado — o do editor, mesmo sem salvar) e grava o resumo. */
@@ -142,6 +221,9 @@ export function FluxosAutomacao({
       setRodando(f.id);
       setPassos({});
       setResultado(null);
+      setSaidas({});
+      setParciais({});
+      setDfds(null);
       leituras.current = new Map();
       relatorio.current = [];
       cancelar.current = false;
@@ -153,7 +235,18 @@ export function FluxosAutomacao({
         const r = await executarFluxo(
           grafo,
           REGISTRO_NOS,
-          { centi: (a, d, ms) => pedir(a, d, ms), api, cancelado: () => cancelar.current || interrompido.current, host },
+          {
+            centi: (a, d, ms) => pedir(a, d, ms),
+            api,
+            cancelado: () => cancelar.current || interrompido.current,
+            host,
+            // A saída COMPLETA de cada nó (o corpo de um laço roda várias vezes: acumula) e os itens AO VIVO.
+            aoConcluir: (no, ps) => {
+              const its = Object.entries(ps).find(([k, v]) => k !== "__apontados" && k !== "erro" && v.length)?.[1] ?? [];
+              setSaidas((m) => ({ ...m, [no]: [...(m[no] ?? []), ...its] }));
+            },
+            aoParcial: (no, its) => setParciais((m) => ({ ...m, [no]: [...(m[no] ?? []), ...its] })),
+          },
           (p) => {
             setPassos((m) => ({ ...m, [p.no]: p }));
             if (p.estado === "ok" && lote.current) {
@@ -241,7 +334,59 @@ export function FluxosAutomacao({
   }
 
   const fluxo = fluxos?.find((f) => f.id === aberto) ?? null;
+  // A ANÁLISE COMPLETA de um protocolo lido (a mesma da importação): o PDF da memória ou lido de novo.
+  const abrirAnalise = useCallback(
+    async (it: Item) => {
+      const k = chaveLeitura(it.protocolo ?? it.numero, it.ano);
+      if (!arquivos.current.get(k)) {
+        emissao.current ??= emissaoDoServidor();
+        try {
+          await lerProtocoloPorCodigo(pedir as unknown as PedirExtensao, await emissao.current, it, importacao.regras, undefined, arquivos.current);
+        } catch (e) {
+          return toast.error(e instanceof Error ? e.message : "Não consegui emitir o protocolo.");
+        }
+      }
+      const file = arquivos.current.get(k);
+      if (file) setAnalise((a) => ({ file, n: (a?.n ?? 0) + 1 }));
+    },
+    [pedir, importacao.regras],
+  );
+  const hostPainel = useMemo<HostPainel>(
+    () => ({
+      protocolos,
+      gestao,
+      naCenti,
+      abrirProtocolo: onAbrirProtocolo,
+      saidas,
+      parciais,
+      dfds,
+      pasta: {
+        nome: pasta?.name ?? null,
+        pode: podePasta,
+        escolher: () =>
+          void (window as unknown as { showDirectoryPicker: (o: object) => Promise<PastaDestino> })
+            .showDirectoryPicker({ mode: "readwrite", startIn: "downloads" })
+            .then(setPasta)
+            .catch(() => undefined),
+      },
+      abrirAnalise: (it) => void abrirAnalise(it),
+      rodando: rodando != null,
+      reparticoes: { ...reps, buscar: () => void buscarReparticoes() },
+      conferirAlvo: async (al) => {
+        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: { numero: string; ano: string; assunto: string; descricao: string; documentos: number } };
+        return r.ok && r.protocolo
+          ? `${r.protocolo.numero}/${r.protocolo.ano} · ${r.protocolo.assunto || r.protocolo.descricao} · ${r.protocolo.documentos} documento(s)`
+          : (r.erro ?? "Não consegui abrir o protocolo na Centi.");
+      },
+      testarAnexo: async (al, tipo) => {
+        const r = await testarAnexo({ pedir: emissor.pedir, confirmar: (texto) => confirmar({ titulo: "A Centi pede confirmação", texto, confirmar: "Confirmar e anexar" }) }, al, tipo);
+        return "ok" in r ? r.ok : r.erro;
+      },
+    }),
+    [protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
+  );
   return (
+    <HostPainelCtx.Provider value={hostPainel}>
     <div className="min-w-0 lg:min-h-0">
       {fluxo ? (
         <EditorFluxo
@@ -267,8 +412,20 @@ export function FluxosAutomacao({
         <ListaFluxos fluxos={fluxos} rodando={rodando} onAbrir={setAberto} onNovo={() => setNovo(true)} onModelo={(m) => void criar(m, m.nome)} />
       )}
       <NovoFluxo aberto={novo} onFechar={() => setNovo(false)} onCriar={criar} />
+      <ProtocoloUploadForm
+        reparticoes={importacao.reparticoes as never}
+        reparticaoAtivaId={null}
+        pcas={importacao.pcas as never}
+        regras={importacao.regras}
+        orgaos={importacao.orgaos as never}
+        arquivo={analise}
+        onFechado={(erro) => {
+          if (erro) toast.error(erro);
+        }}
+      />
       {confirmacao}
     </div>
+    </HostPainelCtx.Provider>
   );
 }
 

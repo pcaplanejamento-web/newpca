@@ -6,6 +6,50 @@ const c = (de: string, para: string, saida = "saida", entrada = "entrada") => ({
 /** Fluxos PRONTOS para começar (o "Novo fluxo"). Cada um é só um grafo — editável depois. */
 export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo: Grafo; frequencia?: Frequencia; ativo?: boolean }[] = [
   {
+    id: "dfds-protocolo",
+    nome: "Baixar/anexar DFDs · por protocolo",
+    descricao:
+      "Os protocolos do sistema numa tabela de seleção → cada DFD dos marcados é emitido na Centi (entidade do órgão, conferido) e vai à pasta, ao protocolo da Centi indicado ou ao de cada DFD.",
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("prot1", "sistema.protocolos", 280, 160),
+        n("sel1", "entrada.selecionar", 576, 160, { chave: "id", semMarcar: "nenhum" }, "Protocolos"),
+        n("dfds1", "saida.dfdsCenti", 880, 160),
+      ],
+      conexoes: [c("inicio1", "prot1"), c("prot1", "sel1"), c("sel1", "dfds1")],
+    },
+  },
+  {
+    id: "dfds-ids",
+    nome: "Baixar/anexar DFDs · por nºs de planejamento",
+    descricao: "Os nºs de planejamento digitados (separados por “:”) → cada DFD é emitido na Centi e vai à pasta ou ao protocolo da Centi.",
+    grafo: {
+      v: 1,
+      nos: [n("inicio1", "gatilho.inicio", 0, 160), n("ids1", "entrada.ids", 280, 160), n("dfds1", "saida.dfdsCenti", 576, 160)],
+      conexoes: [c("inicio1", "ids1"), c("ids1", "dfds1")],
+    },
+  },
+  {
+    id: "tela-protocolo",
+    nome: "Ler a Tela Protocolo",
+    descricao:
+      "Os protocolos “Em análise” das repartições escolhidas (pela API) numa tabela de seleção → cada marcado é emitido e lido (capa e DFDs); tocar num lido abre a análise completa da importação.",
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("prot1", "centi.protocolos", 280, 160, { situacao: "", reparticao: "" }, "Em análise"),
+        n("sel1", "entrada.selecionar", 576, 160, { chave: "protocolo", semMarcar: "nenhum" }, "Protocolos"),
+        n("laco1", "logica.laco", 880, 160, { tamanho: 1 }),
+        n("ler1", "leitura.protocolo", 1184, 64, { limite: 500 }),
+        n("err1", "erros.apontar", 1488, 64, { todos: true, mensagem: "{{no}}: {{erro}}" }, "Falha ao emitir"),
+      ],
+      conexoes: [c("inicio1", "prot1"), c("prot1", "sel1"), c("sel1", "laco1"), c("laco1", "ler1", "lote"), c("ler1", "laco1", "saida", "volta"), c("ler1", "err1", "erro")],
+    },
+  },
+  {
     id: "inclusao-pca",
     nome: "Inclusão PCA — conferir na CM002 e protocolar",
     descricao:

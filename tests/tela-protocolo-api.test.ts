@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { apiCobreReparticoes, soDasReparticoes } from "../src/lib/automacao-tela-protocolo.ts";
 
 type Linha = { protocolo: string; ano: string; id: string; departamento: string; interessado: string; situacao: string };
 function pecas() {
@@ -37,13 +36,3 @@ test("Tela Protocolo pela API: a lista reconhecida pela forma, todas as linhas e
   assert.equal(protocolosTela({ Items: [{ Id: 1, Situacao: "x", Finalidade: "y" }] }), null, "a lista da CM002 não é a da Tela Protocolo");
 });
 
-test("Tela Protocolo pela API: só quando a consulta guardada cobre as repartições escolhidas", () => {
-  assert.equal(apiCobreReparticoes(["SMPG"], null, true), false);
-  assert.equal(apiCobreReparticoes(["SMPG"], ["SMPG", "SMDES"], true), true, "com o departamento na linha, filtra");
-  assert.equal(apiCobreReparticoes(["SMPG"], ["SMPG", "SMDES"], false), false, "sem ele, só as mesmas");
-  assert.equal(apiCobreReparticoes(["SMDES", "smpg"], ["SMPG", "SMDES"], false), true);
-  assert.equal(apiCobreReparticoes(["CGM"], ["SMPG"], true), false);
-  const l = [{ departamento: "SMPG" }, { departamento: "SMDES" }];
-  assert.deepEqual(soDasReparticoes(l, ["smpg"]), [{ departamento: "SMPG" }]);
-  assert.equal(soDasReparticoes([{ departamento: "" }], ["X"]).length, 1);
-});

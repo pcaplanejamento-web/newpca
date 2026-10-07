@@ -162,41 +162,16 @@ test("extensão: o `ler` passa pela trava de leitura, o `pedir` só repete a ope
   assert.deepEqual(JSON.parse(readFileSync("extensao-centi/background.js", "utf8").match(/const ACOES_CENTI = (\[[^\]]+\]);/)?.[1] ?? "[]"), ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "cm002", "telaApi", "reparticoesApi"]);
 });
 
-test("em análise: protocolos limpos e sem repetir; o casamento com o sistema respeita o ano; a escolha lembrada só com o que existe", async () => {
-  const { normalizarProtocolosTela, noSistemaTela, departamentosEscolhidosValidos } = await import("../src/lib/automacao-tela-protocolo.ts");
-  const ps = normalizarProtocolosTela([
-    { protocolo: "0156844", ano: "2026", departamento: " PCA  - X ", natureza: "INCLUSÃO - PCA" },
-    { protocolo: "156844", ano: "2026" },
-    { protocolo: "", ano: "2026" },
-    "lixo",
-  ]);
-  assert.deepEqual(
-    ps.map((p) => [p.chave, p.departamento]),
-    [["156844/2026", "PCA - X"]],
-  );
+test("no sistema: o casamento com o sistema respeita o ano", async () => {
+  const { noSistemaTela } = await import("../src/lib/automacao-tela-protocolo.ts");
   const casar = noSistemaTela([{ numero: "156844/2025" }, { numero: "157001" }, { numero: "160000/2026" }]);
   assert.equal(casar({ protocolo: "156844", ano: "2026" }), null);
   assert.deepEqual(casar({ protocolo: "157001", ano: "2026" }), { numero: "157001" });
   assert.deepEqual(casar({ protocolo: "160000", ano: "2026" }), { numero: "160000/2026" });
-  assert.deepEqual(departamentosEscolhidosValidos(["A", "Z", 3, "A"], ["A", "B"]), ["A"]);
-  assert.deepEqual(departamentosEscolhidosValidos(null, ["A"]), []);
 });
 
-test("tela protocolo: os dados do cadastro da Centi limpos, o casamento pelo Id e o nome do PDF", async () => {
-  const { dadosCentiValidos, noSistemaTela, nomePdfEmAnalise } = await import("../src/lib/automacao-tela-protocolo.ts");
-  assert.equal(dadosCentiValidos(null), null);
-  const d = dadosCentiValidos({
-    id: "002273524",
-    campos: [{ rotulo: " Id ", valor: "2273524" }, { rotulo: "Id", valor: "x" }, { rotulo: "Protocolo", valor: "97608" }, { rotulo: "", valor: "y" }, { rotulo: "Valor", valor: 3 }, "lixo"],
-  });
-  assert.deepEqual(d, {
-    id: "2273524",
-    campos: [
-      { rotulo: "Id", valor: "2273524" },
-      { rotulo: "Protocolo", valor: "97608" },
-      { rotulo: "Valor", valor: "" },
-    ],
-  });
+test("no sistema: o casamento pelo Id da Centi", async () => {
+  const { noSistemaTela } = await import("../src/lib/automacao-tela-protocolo.ts");
   // O Id da Centi decide (mesmo com o nº renumerado); sem Id, o nº + ano.
   const casar = noSistemaTela([
     { numero: "155000/2026", idExterno: "2273524" },
@@ -204,11 +179,10 @@ test("tela protocolo: os dados do cadastro da Centi limpos, o casamento pelo Id 
   ]);
   assert.equal(casar({ protocolo: "97608", ano: "2026", id: "2273524" })?.numero, "155000/2026");
   assert.equal(casar({ protocolo: "97608", ano: "2026" })?.numero, "97608/2026");
-  assert.equal(nomePdfEmAnalise({ protocolo: "97608", ano: "2026" }), "Protocolo 97608 - 2026.pdf");
 });
 
-test("tela protocolo: o Emitir documentos aprendido da tela vira a emissão POR CÓDIGO (o parâmetro com o Id)", async () => {
-  const { emissaoDoPedido, coerceEmissaoProtocolo, corpoEmissaoProtocolo, mesmaEmissao, normalizarProtocolosTela } = await import("../src/lib/automacao-tela-protocolo.ts");
+test("emissão do protocolo POR CÓDIGO (a do servidor): o parâmetro com o Id", async () => {
+  const { coerceEmissaoProtocolo, corpoEmissaoProtocolo } = await import("../src/lib/automacao-tela-protocolo.ts");
   const guid = "24e3e9d0-1111-2222-3333-444455556666";
   const pedido = {
     ModuleKey: 102999,
@@ -220,31 +194,14 @@ test("tela protocolo: o Emitir documentos aprendido da tela vira a emissão POR 
     ],
   };
   const hoje = "2026-10-02";
-  const e = emissaoDoPedido(pedido, { id: "2328622", protocolo: "152688", ano: "2026", hoje });
-  assert.deepEqual(e, { v: 2, moduleKey: 102999, guid, params: pedido.Params, param: "IdProtocolo", campos: {} });
-  assert.equal(emissaoDoPedido(pedido, { id: "999", hoje }), null);
-  assert.equal(emissaoDoPedido({ ...pedido, Guid: "x" }, { id: "2328622", hoje }), null);
+  const e = { v: 2 as const, moduleKey: 102999, guid, params: pedido.Params, param: "IdProtocolo", campos: {} };
   assert.deepEqual(coerceEmissaoProtocolo(e), e);
   assert.equal(coerceEmissaoProtocolo({ ...e, param: "Outro" }), null);
   // O modelo ANTIGO (sem v: 2 — sem os campos do protocolo) é descartado: a tela ensina de novo.
   assert.equal(coerceEmissaoProtocolo({ moduleKey: 102999, guid, params: pedido.Params, param: "IdProtocolo" }), null);
-  const corpo = corpoEmissaoProtocolo(e as NonNullable<typeof e>, { id: "002273524", protocolo: "97608", ano: "2025", hoje });
+  const corpo = corpoEmissaoProtocolo(e, { id: "002273524", protocolo: "97608", ano: "2025", hoje });
   assert.equal(corpo?.Params.find((x) => x.Key === "IdProtocolo")?.Value, "2273524");
   assert.equal(corpo?.Params.find((x) => x.Key === "Modelo")?.Value, "3");
-  assert.equal(mesmaEmissao(e, coerceEmissaoProtocolo(JSON.parse(JSON.stringify(e)))), true);
-  assert.equal(mesmaEmissao(e, null), false);
-  // A grade traz o Id e a data de entrada de cada protocolo.
-  assert.deepEqual(normalizarProtocolosTela([{ protocolo: "152688", ano: "2026", id: "02328622", entrada: "24/09/2026" }])[0], {
-    chave: "152688/2026",
-    protocolo: "152688",
-    ano: "2026",
-    id: "2328622",
-    entrada: "24/09/2026",
-    departamento: "",
-    interessado: "",
-    solicitante: "",
-    natureza: "",
-  });
 });
 
 test("tela protocolo: a emissão por código sai SÍNCRONA (Assíncrono = não, no formato capturado)", async () => {
@@ -275,7 +232,7 @@ test("tela protocolo: a emissão por código sai SÍNCRONA (Assíncrono = não, 
 });
 
 test("tela protocolo: os campos DO PROTOCOLO (nº, ano, nº/ano, data de hoje) seguem o protocolo pedido — não o que ensinou", async () => {
-  const { emissaoDoPedido, coerceEmissaoProtocolo, corpoEmissaoProtocolo, mesmaEmissao } = await import("../src/lib/automacao-tela-protocolo.ts");
+  const { coerceEmissaoProtocolo, corpoEmissaoProtocolo } = await import("../src/lib/automacao-tela-protocolo.ts");
   const pedido = {
     ModuleKey: 122310,
     Guid: "fe4d8f41-c3e6-77e5-8e58-94654fefe22e",
@@ -291,18 +248,17 @@ test("tela protocolo: os campos DO PROTOCOLO (nº, ano, nº/ano, data de hoje) s
       { Key: "Assincrono", Value: "true" },
     ],
   };
-  const e = emissaoDoPedido(pedido, { id: "2328622", protocolo: "152688", ano: "2026", hoje: "2026-10-02" });
-  assert.deepEqual(e?.campos, {
-    NumeroProtocolo: "protocolo",
-    AnoProtocolo: "ano",
-    Processo: "protocoloAno",
-    DataEmissao: "hoje-dmy",
-    DataBase: "hoje-iso",
-  });
+  const e = {
+    v: 2 as const,
+    moduleKey: pedido.ModuleKey,
+    guid: pedido.Guid,
+    params: pedido.Params,
+    param: "IdProtocolo",
+    campos: { NumeroProtocolo: "protocolo", AnoProtocolo: "ano", Processo: "protocoloAno", DataEmissao: "hoje-dmy", DataBase: "hoje-iso" } as const,
+  };
   assert.deepEqual(coerceEmissaoProtocolo(JSON.parse(JSON.stringify(e))), e);
-  assert.equal(mesmaEmissao(e, { ...(e as NonNullable<typeof e>), campos: {} }), false);
   // Outro protocolo, de OUTRO ano, num OUTRO dia: cada campo com o dado dele; o exercício (da sessão) fica.
-  const corpo = corpoEmissaoProtocolo(e as NonNullable<typeof e>, { id: "2273524", protocolo: "97608", ano: "2025", hoje: "2026-11-05" });
+  const corpo = corpoEmissaoProtocolo(e, { id: "2273524", protocolo: "97608", ano: "2025", hoje: "2026-11-05" });
   assert.deepEqual(Object.fromEntries((corpo?.Params ?? []).map((x) => [x.Key, x.Value])), {
     IdProtocolo: "2273524",
     NumeroProtocolo: "97608",
@@ -315,14 +271,14 @@ test("tela protocolo: os campos DO PROTOCOLO (nº, ano, nº/ano, data de hoje) s
     Assincrono: "false",
   });
   // Sem o nº/ano do protocolo pedido, o campo fica como aprendido (nunca vazio).
-  const sem = corpoEmissaoProtocolo(e as NonNullable<typeof e>, { id: "2273524", hoje: "2026-11-05" });
+  const sem = corpoEmissaoProtocolo(e, { id: "2273524", hoje: "2026-11-05" });
   assert.equal(sem?.Params.find((x) => x.Key === "NumeroProtocolo")?.Value, "152688");
   // Campo inventado no modelo guardado (fora dos parâmetros ou de tipo desconhecido) é descartado.
   assert.deepEqual(coerceEmissaoProtocolo({ ...e, campos: { Inexistente: "protocolo", Modelo: "x", IdProtocolo: "ano" } })?.campos, {});
 });
 
 test("tela protocolo: a leitura em lote CONFERE o PDF contra o protocolo pedido (nunca analisa o de outro)", async () => {
-  const { conferirLeituraProtocolo, falhaTransitoria } = await import("../src/lib/automacao-tela-protocolo.ts");
+  const { conferirLeituraProtocolo } = await import("../src/lib/automacao-tela-protocolo.ts");
   const capa = { numero: "152688/2026", idExterno: "2328622", valorCapa: 0, assunto: "INCLUSÃO - PCA", anoPca: 2027 };
   const p = { protocolo: "152688", ano: "2026", id: "2328622" };
   assert.deepEqual(conferirLeituraProtocolo(p, capa, ["1243", "1244"]), {
@@ -341,8 +297,4 @@ test("tela protocolo: a leitura em lote CONFERE o PDF contra o protocolo pedido 
   assert.equal(conferirLeituraProtocolo({ ...p, id: "" }, capa, ["1"]).estado, "ok");
   assert.equal(conferirLeituraProtocolo(p, { ...capa, numero: null }, ["1"]).estado, "falha");
   assert.equal(conferirLeituraProtocolo({ ...p, protocolo: "0152688" }, { ...capa, numero: "152688" }, ["1"]).estado, "ok");
-  for (const e of ["A extensão não respondeu.", "Sem resposta da Centi (rede).", "A Centi respondeu 502.", "A Centi demorou demais para responder."])
-    assert.equal(falhaTransitoria(e), true, e);
-  for (const e of ["A Centi recusou a operação guardada.", "Bloqueado: a automação não aciona", "O PDF é do protocolo 1, não do 2."])
-    assert.equal(falhaTransitoria(e), false, e);
 });
