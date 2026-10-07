@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
+import type { AlvosVinculo, VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { aplicarVisao, contarAusentes, resumoVisao, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -102,6 +103,8 @@ export function VisaoOrcamentoPca({
   visoes,
   itens,
   podeEditarVisao,
+  vinculos,
+  alvos,
 }: {
   pcaId: number;
   aberto: boolean;
@@ -113,6 +116,9 @@ export function VisaoOrcamentoPca({
   itens: LinhaVisaoOrcamento[] | null;
   /** Configura o ORÇAMENTO (as visões são de lá e globais). */
   podeEditarVisao: boolean;
+  /** TODOS os vínculos + os alvos — a aba Vínculos do banner da visão. */
+  vinculos?: VinculoOrcamento[];
+  alvos?: AlvosVinculo;
 }) {
   const router = useRouter();
   const { escolha, setEscolha, gravando, gravar } = useVisaoDoPca(pcaId, visaoId);
@@ -186,6 +192,9 @@ export function VisaoOrcamentoPca({
           aberta={editor}
           itens={itens}
           podeEditar={podeEditarVisao}
+          vinculos={vinculos}
+          alvos={alvos}
+          visoes={visoes}
           onFechar={() => setEditor(null)}
           onSalva={(r) => {
             setEditor(null);

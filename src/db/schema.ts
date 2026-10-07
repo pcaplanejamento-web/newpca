@@ -917,10 +917,16 @@ export const orcamentoVinculos = sqliteTable(
     acoes: text("acoes"),
     // As ações que ficam de FORA de um vínculo "com as demais" (JSON; NULL = nenhuma) — migração 0079.
     acoesFora: text("acoes_fora"),
+    // A VISÃO dona do vínculo (NULL = o PADRÃO) — migração 0102.
+    visaoId: integer("visao_id").references(() => orcamentoVisoes.id, { onDelete: "cascade" }),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  // Uma unidade do CUBO pode ter VÁRIOS vínculos (um por unidade cadastrada) — migração 0080.
-  (t) => [uniqueIndex("orcamento_vinculos_chave_rep_uq").on(t.chave, t.reparticaoId), index("orcamento_vinculos_chave_idx").on(t.chave)],
+  // Uma unidade do CUBO pode ter VÁRIOS vínculos (um por unidade cadastrada) — 0080; um por visão (IFNULL(visao_id,0)) — 0102.
+  (t) => [
+    uniqueIndex("orcamento_vinculos_chave_rep_uq").on(t.chave, t.reparticaoId, sql`IFNULL(${t.visaoId}, 0)`),
+    index("orcamento_vinculos_chave_idx").on(t.chave),
+    index("orcamento_vinculos_visao_idx").on(t.visaoId),
+  ],
 );
 
 export type Unidade = typeof unidades.$inferSelect;
@@ -1002,6 +1008,8 @@ export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),
   filtros: text("filtros").notNull().default("{}"),
+  // As unidades do CUBO (chaves) com vínculos PRÓPRIOS nesta visão (JSON) — migração 0102.
+  vinculosProprios: text("vinculos_proprios").notNull().default("[]"),
   ordem: integer("ordem").notNull().default(0),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),

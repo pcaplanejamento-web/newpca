@@ -2,13 +2,13 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { brl, dataIsoBrasilia, num } from "@/lib/format";
-import type { AlvosVinculo, UnidadeOrcamento, VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import type { AlvosVinculo, EscopoVinculos, UnidadeOrcamento, VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { blocosVinculosDaLinha, listaSemVinculo, type SemVinculoUnidade, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import { Badge } from "./Badge";
 import { BotaoAcao } from "./BotaoAcao";
 import { Button } from "./Button";
 import { useQuemExporta } from "./ConfigTabelas";
-import { type AberturaVinculo, type DadosVinculo, EditorVinculoOrcamento } from "./EditorVinculoOrcamento";
+import { type AberturaVinculo, type ContextoVisao, type DadosVinculo, EditorVinculoOrcamento } from "./EditorVinculoOrcamento";
 import { usePodeExportar } from "./ExportarTabelas";
 import { IconChevronDown, IconFile, IconPlus } from "./icons";
 import { Modal } from "./Modal";
@@ -127,6 +127,8 @@ export function VinculosDaUnidade({
   onEditar,
   onExcluir,
   onFechar,
+  contexto,
+  onUsarPadrao,
 }: {
   /** A linha aberta (`null` = fechado). */
   unidade: UnidadeDaLinha | null;
@@ -138,10 +140,13 @@ export function VinculosDaUnidade({
   orcamento: string;
   salvando?: boolean;
   erro?: string | null;
-  onCriar: (lista: DadosVinculo[]) => Promise<boolean>;
-  onEditar: (id: number, dados: DadosVinculo) => Promise<boolean>;
-  onExcluir: (id: number) => Promise<boolean>;
+  onCriar: (lista: DadosVinculo[], escopo?: EscopoVinculos) => Promise<boolean>;
+  onEditar: (id: number, dados: DadosVinculo, escopo?: EscopoVinculos) => Promise<boolean>;
+  onExcluir: (id: number, escopo?: EscopoVinculos) => Promise<boolean>;
   onFechar: () => void;
+  /** Vínculos por visão: `vinculos` = os que valem na visão aberta; o editor pergunta onde salvar. */
+  contexto?: ContextoVisao;
+  onUsarPadrao?: (chave: string) => Promise<boolean>;
 }) {
   const [aberto, setAberto] = useState<string | null>(null);
   const [gerando, setGerando] = useState(false);
@@ -155,8 +160,8 @@ export function VinculosDaUnidade({
     setAberto(null);
     onFechar();
   };
-  const salvar = async (inicial: AberturaVinculo, d: DadosVinculo) => {
-    const ok = inicial.id != null ? await onEditar(inicial.id, d) : await onCriar([d]);
+  const salvar = async (inicial: AberturaVinculo, d: DadosVinculo, escopo: EscopoVinculos) => {
+    const ok = inicial.id != null ? await onEditar(inicial.id, d, escopo) : await onCriar([d], escopo);
     if (ok) setAberto(null);
   };
   const alternar = (k: string) => setAberto((a) => (a === k ? null : k));
@@ -171,9 +176,11 @@ export function VinculosDaUnidade({
       fixosNoContexto
       salvando={salvando}
       erro={erro}
-      onSalvar={(d) => void salvar(inicial, d)}
-      onExcluir={inicial.id != null ? () => void onExcluir(inicial.id as number).then((ok) => ok && setAberto(null)) : undefined}
+      onSalvar={(d, escopo) => void salvar(inicial, d, escopo)}
+      onExcluir={inicial.id != null ? (escopo) => void onExcluir(inicial.id as number, escopo).then((ok) => ok && setAberto(null)) : undefined}
       onFechar={() => setAberto(null)}
+      contexto={contexto}
+      onUsarPadrao={onUsarPadrao ? (chave) => void onUsarPadrao(chave).then((ok) => ok && setAberto(null)) : undefined}
     />
   );
   const abertura = (vin: VinculoOrcamento): AberturaVinculo => ({ id: vin.id, chave: vin.chave, alvoId: vin.alvoId, acoes: vin.acoes, acoesFora: vin.acoesFora });

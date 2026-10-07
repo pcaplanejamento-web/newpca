@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import {
   type AlvosVinculo,
+  type EscopoVinculos,
+  escopoEscolhido,
   type LinhaVinculo,
   linhasVinculos,
   type PendenciaVinculo,
@@ -14,11 +16,12 @@ import {
 } from "@/lib/orcamento-vinculo";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
+import { AjudaVisoes } from "./AjudaVisoes";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
-import { type AberturaVinculo, type DadosVinculo, EditorVinculoOrcamento, useRotuloUnidade } from "./EditorVinculoOrcamento";
-import { SearchField } from "./Field";
+import { type AberturaVinculo, type ContextoVisao, type DadosVinculo, EditorVinculoOrcamento, useRotuloUnidade } from "./EditorVinculoOrcamento";
+import { SearchField, SelectField } from "./Field";
 import { IconLink, IconPencil, IconPlus } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
@@ -41,7 +44,9 @@ const abertura = (v: VinculoOrcamento): AberturaVinculo => ({ id: v.id, chave: v
  * criados que aparecem neste orçamento: unidade do orçamento · unidade e órgão do cadastro · ações · lançamentos ·
  * dotação vinculada; tocar edita) e **Sem vínculo** (as unidades com ações sem vínculo — "Vincular" abre o editor com
  * ela; a SUGESTÃO por nome/sigla para as que não têm nenhum, uma a uma ou todas). "Novo vínculo" na barra das abas. O
- * vínculo vale para TODOS os orçamentos (é pelo texto). Apresentacional: grava via `onCriar`/`onEditar`/`onExcluir`.
+ * vínculo vale para TODOS os orçamentos (é pelo texto). VÍNCULOS POR VISÃO (`contexto`): `vinculos` = os que valem na
+ * visão aberta; a coluna Origem diz se cada um é do Padrão ou Desta visão; com `onVisao`, a escolha da visão na barra; o
+ * editor pergunta onde salvar. Apresentacional: grava via `onCriar`/`onEditar`/`onExcluir`/`onUsarPadrao`.
  */
 export function OrcamentoVinculos({
   unidades,
@@ -54,6 +59,9 @@ export function OrcamentoVinculos({
   onCriar,
   onEditar,
   onExcluir,
+  contexto,
+  onVisao,
+  onUsarPadrao,
 }: {
   unidades: UnidadeOrcamento[];
   vinculos: VinculoOrcamento[];
@@ -63,10 +71,16 @@ export function OrcamentoVinculos({
   /** O erro da última gravação (aparece no editor aberto). */
   erro?: string | null;
   scrollInterno?: boolean;
-  /** Grava vínculos novos; devolve se gravou (o editor fecha). */
-  onCriar: (lista: DadosVinculo[]) => Promise<boolean>;
-  onEditar: (id: number, dados: DadosVinculo) => Promise<boolean>;
-  onExcluir: (id: number) => Promise<boolean>;
+  /** Grava vínculos novos no escopo; devolve se gravou (o editor fecha). */
+  onCriar: (lista: DadosVinculo[], escopo?: EscopoVinculos) => Promise<boolean>;
+  onEditar: (id: number, dados: DadosVinculo, escopo?: EscopoVinculos) => Promise<boolean>;
+  onExcluir: (id: number, escopo?: EscopoVinculos) => Promise<boolean>;
+  /** Vínculos por visão: as visões e a aberta (`null` = o padrão). */
+  contexto?: ContextoVisao;
+  /** Trocar a visão aberta (mostra a escolha na barra). */
+  onVisao?: (visaoId: number | null) => void;
+  /** A visão aberta volta a seguir o padrão numa unidade do CUBO. */
+  onUsarPadrao?: (chave: string) => Promise<boolean>;
 }) {
   const [vista, setVista] = useState<Vista>("vinculos");
   const [busca, setBusca] = useState("");
@@ -89,10 +103,13 @@ export function OrcamentoVinculos({
   const pendVis = casa ? pendencias.filter((p) => casa([p.unidade.texto, p.unidade.contexto])) : pendencias;
 
   const fechar = () => setAberto(null);
-  const salvar = async (d: DadosVinculo) => {
-    const ok = aberto?.id != null ? await onEditar(aberto.id, d) : await onCriar([d]);
+  const salvar = async (d: DadosVinculo, escopo: EscopoVinculos) => {
+    const ok = aberto?.id != null ? await onEditar(aberto.id, d, escopo) : await onCriar([d], escopo);
     if (ok) fechar();
   };
+  // As sugestões gravam onde se está (a visão aberta ou o padrão).
+  const aqui: EscopoVinculos | undefined = contexto ? escopoEscolhido("esta", [], contexto.visaoId, contexto.visoes) : undefined;
+  const visaoAberta = contexto?.visaoId ?? null;
   const unidadeTexto = (u: UnidadeOrcamento) => (
     <span className="block max-w-[340px]">
       <span className="block truncate font-medium text-text" title={u.texto}>
@@ -135,6 +152,18 @@ export function OrcamentoVinculos({
         </span>
       ),
     },
+    ...(visaoAberta != null
+      ? [
+          {
+            key: "origem",
+            header: "Origem",
+            nowrap: true,
+            value: (l: LinhaVinculo) => (l.vinculo.visaoId === visaoAberta ? "Desta visão" : "Padrão"),
+            render: (l: LinhaVinculo) =>
+              l.vinculo.visaoId === visaoAberta ? <Badge tone="violet">Desta visão</Badge> : <span className="text-text-2">Padrão</span>,
+          } satisfies Column<LinhaVinculo>,
+        ]
+      : []),
     { key: "lancamentos", header: "Lançamentos", nowrap: true, filter: "range", formatarFaixa: num, numero: (l) => l.lancamentos, render: (l) => num(l.lancamentos) },
     {
       key: "valor",
@@ -198,7 +227,7 @@ export function OrcamentoVinculos({
             title={rotulo.deId(p.sugestaoId)}
             onClick={(e) => {
               e.stopPropagation();
-              void onCriar([{ texto: p.unidade.texto, alvoId: p.sugestaoId as number, acoes: null, acoesFora: [] }]);
+              void onCriar([{ texto: p.unidade.texto, alvoId: p.sugestaoId as number, acoes: null, acoesFora: [] }], aqui);
             }}
           >
             Aceitar {alvos.unidades.find((u) => u.id === p.sugestaoId)?.sigla}
@@ -243,6 +272,25 @@ export function OrcamentoVinculos({
   return (
     <>
       <FerramentasAba>
+        {contexto && onVisao && contexto.visoes.length > 0 && (
+          <div className="w-full min-w-[12rem] sm:w-auto sm:max-w-xs sm:flex-1">
+            <SelectField
+              compacto
+              label="Visão"
+              value={visaoAberta ?? ""}
+              onChange={(e) => onVisao(e.target.value ? Number(e.target.value) : null)}
+              title="Os vínculos que valem na visão escolhida (o padrão vale onde a visão não tem os seus)"
+            >
+              <option value="">Padrão</option>
+              {contexto.visoes.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nome}
+                  {v.proprias.length ? ` · ${v.proprias.length} ${v.proprias.length === 1 ? "própria" : "próprias"}` : ""}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+        )}
         <div className="min-w-0 flex-1 sm:max-w-sm">
           <SearchField
             compacto
@@ -260,7 +308,7 @@ export function OrcamentoVinculos({
             icon={<IconLink className="h-4 w-4" />}
             loading={salvando}
             title="Cria um vínculo com as ações de cada unidade sugerida (vale para todos os orçamentos)"
-            onClick={() => void onCriar(sugeridas.map((p) => ({ texto: p.unidade.texto, alvoId: p.sugestaoId as number, acoes: null, acoesFora: [] })))}
+            onClick={() => void onCriar(sugeridas.map((p) => ({ texto: p.unidade.texto, alvoId: p.sugestaoId as number, acoes: null, acoesFora: [] })), aqui)}
           >
             Vincular {sugeridas.length} {sugeridas.length === 1 ? "sugestão" : "sugestões"}
           </Button>
@@ -271,6 +319,7 @@ export function OrcamentoVinculos({
             <span className="sm:hidden">Novo</span>
           </Button>
         )}
+        {contexto && <AjudaVisoes botao="sm" />}
       </FerramentasAba>
       <div className="mb-[var(--gap-block)]">
         <Segmented<Vista>
@@ -317,17 +366,19 @@ export function OrcamentoVinculos({
       <Modal open={aberto != null} onClose={fechar} titulo={aberto?.id != null ? "Editar vínculo" : "Novo vínculo"} size="lg" bloqueado={salvando}>
         {aberto && (
           <EditorVinculoOrcamento
-            key={`${aberto.id ?? "novo"}:${aberto.chave ?? ""}`}
+            key={`${aberto.id ?? "novo"}:${aberto.chave ?? ""}:${visaoAberta ?? ""}`}
             unidades={unidades}
             vinculos={vinculos}
             alvos={alvos}
             inicial={aberto}
             salvando={salvando}
             erro={erro}
-            onSalvar={(d) => void salvar(d)}
-            onExcluir={aberto.id != null ? () => void onExcluir(aberto.id as number).then((ok) => ok && fechar()) : undefined}
+            onSalvar={(d, escopo) => void salvar(d, escopo)}
+            onExcluir={aberto.id != null ? (escopo) => void onExcluir(aberto.id as number, escopo).then((ok) => ok && fechar()) : undefined}
             onFechar={fechar}
             onAbrirVinculo={(v) => setAberto(abertura(v))}
+            contexto={contexto}
+            onUsarPadrao={onUsarPadrao ? (chave) => void onUsarPadrao(chave).then((ok) => ok && fechar()) : undefined}
           />
         )}
       </Modal>

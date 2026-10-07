@@ -32,6 +32,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.61.0",
+    data: "2026-10-07",
+    titulo: "Vínculos por visão do orçamento",
+    mudancas: [
+      { tipo: "novo", area: "Orçamento", texto: "Cada visão pode ter os seus vínculos por unidade do orçamento. Os vínculos de antes viram o padrão, e a visão segue o padrão até ganhar os seus. Na aba Vínculos, escolha a visão na barra.", link: "/painel/orcamento" },
+      { tipo: "novo", area: "Orçamento", texto: "Ao salvar um vínculo, escolha onde ele vale: só esta visão, todas, ou as visões que você marcar. “Usar o padrão” devolve a unidade ao padrão na visão.", link: "/painel/orcamento" },
+      { tipo: "novo", area: "Orçamento", texto: "O banner da visão ganhou a parte Vínculos, ao lado dos filtros, e a lista de visões mostra quais têm vínculos próprios.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "PCA", texto: "O Orçamento do PCA usa os vínculos da visão do PCA: KPIs, PCA × Orçamento, Comparativo e relatório. O vínculo de cada linha também pergunta onde salvar.", link: "/painel/pca" },
+      { tipo: "novo", area: "Orçamento", texto: "Um (?) explica as visões, nas abas Visões e Vínculos, no banner da visão e no PCA × Orçamento.", link: "/painel/orcamento" },
+    ],
+  },
+  {
     versao: "1.60.0",
     data: "2026-10-07",
     titulo: "Nomeações unificadas nos Responsáveis",

@@ -15,7 +15,16 @@ import { norm } from "./parse-dfd-comum.ts";
  * Vínculo gravado (`orcamento_vinculos`), como chega ao cliente: `acoes` = as chaves das ações EXPLÍCITAS (null = as
  * DEMAIS); `acoesFora` = as que ficam de fora de um vínculo "com as demais".
  */
-export type VinculoOrcamento = { id: number; chave: string; texto: string; alvoId: number; acoes: string[] | null; acoesFora: string[] };
+export type VinculoOrcamento = {
+  id: number;
+  chave: string;
+  texto: string;
+  alvoId: number;
+  acoes: string[] | null;
+  acoesFora: string[];
+  /** A VISÃO dona do vínculo (`null` = o PADRÃO — vale em toda visão que não define a unidade por conta própria). */
+  visaoId: number | null;
+};
 
 /** Alvo possível do vínculo (unidade: `codigo` → aqui `sigla`; órgão: o dono da unidade). */
 export type AlvoVinculo = { id: number; sigla: string; nome: string; oculto?: boolean; orgaoId?: number | null };
@@ -234,4 +243,116 @@ export function lerListaAcoes(v: unknown): string[] | null {
     }
   }
   return Array.isArray(o) ? [...new Set(o.filter((x): x is string => typeof x === "string" && x.trim() !== ""))] : null;
+}
+
+// ── VÍNCULOS POR VISÃO ───────────────────────────────────────────────────────────────────────────────────────────────
+// Os vínculos sem visão são o PADRÃO. Uma visão segue o padrão em cada unidade do CUBO até definir a unidade por conta
+// própria (`proprias` = as chaves) — aí valem os vínculos DELA para aquela unidade (inclusive nenhum = sem vínculo).
+
+/** A visão como os vínculos a enxergam: o id e as unidades do CUBO (chaves) com vínculos próprios. */
+export type VisaoVinculos = { id: number; nome?: string; proprias: string[] };
+
+/** Onde uma alteração de vínculo é gravada: no padrão e/ou nas visões escolhidas. */
+export type EscopoVinculos = { padrao: boolean; visoes: number[] };
+
+/** Como a tela escolhe ONDE salvar: só no contexto (o padrão ou a visão aberta), em TODAS ou nas escolhidas ("0" = o padrão). */
+export type ModoEscopo = "esta" | "todas" | "escolher";
+export const PADRAO_ESCOLHA = "0";
+
+/** O escopo da escolha da tela (`contexto` = a visão aberta; `null` = o padrão). */
+export function escopoEscolhido(modo: ModoEscopo, escolhidas: string[], contexto: number | null, visoes: Pick<VisaoVinculos, "id">[]): EscopoVinculos {
+  if (modo === "todas") return { padrao: true, visoes: visoes.map((v) => v.id) };
+  if (modo === "escolher")
+    return { padrao: escolhidas.includes(PADRAO_ESCOLHA), visoes: escolhidas.filter((e) => e !== PADRAO_ESCOLHA).map(Number).filter((n) => Number.isInteger(n) && n > 0) };
+  return contexto == null ? { padrao: true, visoes: [] } : { padrao: false, visoes: [contexto] };
+}
+
+/** O escopo por extenso (auditoria): "padrão + 2 visões". */
+export function textoEscopo(e: EscopoVinculos): string {
+  const n = new Set(e.visoes).size;
+  const visoes = n ? `${n} ${n === 1 ? "visão" : "visões"}` : "";
+  return [e.padrao ? "padrão" : "", visoes].filter(Boolean).join(" + ") || "nenhum destino";
+}
+
+/** Os vínculos que VALEM na visão (sem visão = só o padrão). */
+export function vinculosDaVisao(todos: VinculoOrcamento[], visao: Pick<VisaoVinculos, "id" | "proprias"> | null | undefined): VinculoOrcamento[] {
+  const padrao = todos.filter((v) => v.visaoId == null);
+  if (!visao) return padrao;
+  const proprias = new Set(visao.proprias);
+  if (proprias.size === 0) return padrao;
+  return [...padrao.filter((v) => !proprias.has(v.chave)), ...todos.filter((v) => v.visaoId === visao.id && proprias.has(v.chave))];
+}
+
+/** Lê a lista de chaves próprias de uma visão gravada em JSON (tolerante). */
+export const lerProprias = (v: unknown): string[] => lerListaAcoes(v) ?? [];
+
+/** Um vínculo como é gravado numa unidade do CUBO (as ações já em chaves). */
+export type DadosGravacaoVinculo = { texto: string; alvoId: number; acoes: string[] | null; acoesFora: string[] };
+
+/** Uma operação sobre os vínculos de UMA unidade do CUBO: criar (`de` null), alterar o vínculo de `de` ou excluí-lo (`para` null). */
+export type OpVinculo = { chave: string; texto: string; de: number | null; para: Omit<DadosGravacaoVinculo, "texto"> | null };
+
+/** O que gravar num destino: a lista INTEIRA de uma unidade do CUBO no padrão (`visaoId` null) ou numa visão. */
+export type DestinoVinculos = { visaoId: number | null; chave: string; lista: DadosGravacaoVinculo[] };
+
+const mesmoVinculo = (a: Omit<DadosGravacaoVinculo, "texto">, b: Omit<DadosGravacaoVinculo, "texto">) =>
+  a.alvoId === b.alvoId && JSON.stringify(a.acoes) === JSON.stringify(b.acoes) && JSON.stringify(a.acoesFora) === JSON.stringify(b.acoesFora);
+
+/**
+ * A lista de UMA unidade do CUBO depois das operações (na ordem), pela REGRA de sempre (`conflitoVinculo`). Alterar um
+ * vínculo que não existe neste destino o CRIA (o destino passa a ter o vínculo como foi pedido); excluir o que não existe
+ * não faz nada. Devolve a lista nova ou o motivo da recusa.
+ */
+export function aplicarNoEscopo(lista: DadosGravacaoVinculo[], ops: OpVinculo[]): DadosGravacaoVinculo[] | string {
+  let atual = [...lista];
+  for (const op of ops) {
+    const i = op.de == null ? -1 : atual.findIndex((v) => v.alvoId === op.de);
+    const outros = i >= 0 ? atual.filter((_, j) => j !== i) : atual;
+    if (!op.para) {
+      atual = outros;
+      continue;
+    }
+    const motivo = conflitoVinculo(outros, op.para);
+    if (motivo) return motivo;
+    const novo = { texto: op.texto, ...op.para };
+    atual = i >= 0 ? atual.map((v, j) => (j === i ? novo : v)) : [...atual, novo];
+  }
+  return atual;
+}
+
+/**
+ * O PLANO de uma gravação de vínculos com ESCOPO: para cada destino (o padrão e/ou as visões) e cada unidade do CUBO das
+ * operações, a lista nova. Uma visão que ainda segue o padrão na unidade parte da lista do padrão; quando o padrão também
+ * está no escopo, ela é pulada (já acompanha). Tudo ou nada: o 1º destino que a regra recusa devolve o motivo (com o nome).
+ */
+export function planoVinculos(
+  todos: VinculoOrcamento[],
+  visoes: VisaoVinculos[],
+  ops: OpVinculo[],
+  escopo: EscopoVinculos,
+): { destinos: DestinoVinculos[]; proprias: Map<number, string[]> } | { erro: string } {
+  const chaves = [...new Set(ops.map((o) => o.chave))];
+  const porId = new Map(visoes.map((v) => [v.id, v]));
+  const alvos: (VisaoVinculos | null)[] = [...(escopo.padrao ? [null] : []), ...[...new Set(escopo.visoes)].map((id) => porId.get(id) ?? { id, proprias: [] })];
+  const destinos: DestinoVinculos[] = [];
+  const proprias = new Map<number, string[]>();
+  const comoDados = (v: VinculoOrcamento): DadosGravacaoVinculo => ({ texto: v.texto, alvoId: v.alvoId, acoes: v.acoes, acoesFora: v.acoesFora });
+  for (const d of alvos) {
+    const eff = vinculosDaVisao(todos, d);
+    for (const chave of chaves) {
+      const propria = d != null && d.proprias.includes(chave);
+      if (d != null && escopo.padrao && !propria) continue;
+      const base = eff.filter((v) => v.chave === chave).map(comoDados);
+      const r = aplicarNoEscopo(
+        base,
+        ops.filter((o) => o.chave === chave),
+      );
+      if (typeof r === "string") return { erro: `${d ? `Visão "${d.nome ?? d.id}"` : "Padrão"}: ${r}` };
+      const igual = r.length === base.length && r.every((v, j) => mesmoVinculo(v, base[j]));
+      if (igual && (d == null || propria)) continue;
+      destinos.push({ visaoId: d?.id ?? null, chave, lista: r });
+      if (d && !propria) proprias.set(d.id, [...new Set([...(proprias.get(d.id) ?? d.proprias), chave])]);
+    }
+  }
+  return { destinos, proprias };
 }

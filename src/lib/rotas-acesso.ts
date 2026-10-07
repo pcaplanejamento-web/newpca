@@ -213,6 +213,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "orcamento/[id]/substituir": { POST: tela("orcamento", "importar", "reenviar a planilha") },
   "orcamento/vinculos": { POST: tela("orcamento", "configurar") },
   "orcamento/vinculos/[id]": { PATCH: tela("orcamento", "configurar"), DELETE: tela("orcamento", "configurar") },
+  "orcamento/vinculos/padrao": { POST: tela("orcamento", "configurar") },
   "orcamento/visoes": { POST: tela("orcamento", "configurar") },
   "orcamento/visoes/[id]": { PATCH: tela("orcamento", "configurar"), DELETE: tela("orcamento", "configurar") },
 

@@ -14,14 +14,21 @@ import {
   type VisaoOrcamento,
   valoresAusentes,
 } from "@/lib/orcamento-visao";
-import { Ajuda, TopicoAjuda } from "./Ajuda";
+import { type AlvosVinculo, unidadesDoOrcamento, type VinculoOrcamento, type VisaoVinculos, vinculosDaVisao } from "@/lib/orcamento-vinculo";
+import { FerramentasNoLugar } from "./AbasEspaco";
+import { AjudaVisoes } from "./AjudaVisoes";
+import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
-import { IconLink, IconUsers } from "./icons";
 import { Modal } from "./Modal";
+import { OrcamentoVinculos } from "./OrcamentoVinculos";
+import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
+import { Segmented } from "./Segmented";
 import { SeletorMultiplo } from "./SeletorMultiplo";
+
+const SEM_VINCULOS: VinculoOrcamento[] = [];
 
 /** Um lançamento do orçamento como a visão o enxerga (as dimensões + a dotação inicial, a prévia do Σ). */
 export type LinhaVisaoOrcamento = LinhaOrcamentoVisao & { valorInicial: number };
@@ -40,6 +47,10 @@ export function EditorVisaoOrcamento({
   podeEditar,
   onFechar,
   onSalva,
+  vinculos,
+  alvos,
+  visoes,
+  podeEditarVinculos = podeEditar,
 }: {
   /** A visão aberta, "nova" ou `null` (fechado). */
   aberta: VisaoOrcamento | "nova" | null;
@@ -47,12 +58,19 @@ export function EditorVisaoOrcamento({
   podeEditar: boolean;
   onFechar: () => void;
   onSalva: (r: { id: number; nova: boolean; nome: string }) => void;
+  /** TODOS os vínculos (o padrão e os das visões) + os alvos + as visões — a aba Vínculos (sem eles, não aparece). */
+  vinculos?: VinculoOrcamento[];
+  alvos?: AlvosVinculo;
+  visoes?: VisaoVinculos[];
+  /** Configura os vínculos (Configurar no Orçamento). */
+  podeEditarVinculos?: boolean;
 }) {
   const [nome, setNome] = useState("");
   const [filtros, setFiltros] = useState<FiltrosVisao>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
+  const [parte, setParte] = useState<"filtros" | "vinculos">("filtros");
 
   // Cada abertura começa do que está gravado.
   useEffect(() => {
@@ -60,7 +78,19 @@ export function EditorVisaoOrcamento({
     setNome(aberta === "nova" ? "" : aberta.nome);
     setFiltros(aberta === "nova" ? {} : aberta.filtros);
     setErro(null);
+    setParte("filtros");
   }, [aberta]);
+
+  // VÍNCULOS desta visão (só da gravada): os que valem nela + a gravação com escopo.
+  const g = useGravacaoVinculos(vinculos ?? SEM_VINCULOS, visoes);
+  const visaoVinc = aberta && aberta !== "nova" ? (g.visoesAtuais.find((v) => v.id === aberta.id) ?? { id: aberta.id, nome: aberta.nome, proprias: aberta.proprias }) : null;
+  const efetivos = useMemo(() => (visaoVinc ? vinculosDaVisao(g.atuais, visaoVinc) : []), [g.atuais, visaoVinc]);
+  const unidades = useMemo(
+    () => (vinculos ? unidadesDoOrcamento(itens.map((i) => ({ orgao: i.orgao ?? null, unidade: i.unidade ?? null, acao: i.acao ?? null, valorInicial: i.valorInicial }))) : []),
+    [vinculos, itens],
+  );
+  const comVinculos = !!vinculos && !!alvos;
+  const proprias = visaoVinc?.proprias.length ?? 0;
 
   const total = useMemo(() => itens.reduce((s, i) => s + i.valorInicial, 0), [itens]);
   const naVisao = useMemo(() => aplicarVisao(itens, filtros), [itens, filtros]);
@@ -113,22 +143,10 @@ export function EditorVisaoOrcamento({
       <Modal
         open={aberta != null}
         onClose={onFechar}
-        bloqueado={salvando}
-        size="lg"
+        bloqueado={salvando || g.salvando}
+        size={parte === "vinculos" ? "xl" : "lg"}
         titulo={aberta === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : "Visão"}
-        acoesCabecalho={
-          <Ajuda titulo="Visão do orçamento">
-            <TopicoAjuda icone={<IconLink className="h-4 w-4" />} titulo="O que a visão filtra">
-              Unidades, ações e órgãos são definidos nos Vínculos — a visão filtra só o restante do orçamento (função, programa, elemento,
-              código, ficha e fonte). Dentro de uma dimensão vale qualquer valor marcado; entre dimensões, todas.
-            </TopicoAjuda>
-            <TopicoAjuda icone={<IconUsers className="h-4 w-4" />} titulo="Quem usa">
-              {usos.length > 0
-                ? `Usada por ${usos.length === 1 ? "1 PCA" : `${num(usos.length)} PCAs`}: ${usos.join("; ")} — alterar a visão muda o orçamento de todos eles.`
-                : "Nenhum PCA usa esta visão ainda."}
-            </TopicoAjuda>
-          </Ajuda>
-        }
+        acoesCabecalho={<AjudaVisoes usos={aberta && aberta !== "nova" ? usos : undefined} />}
         rodape={
           // Altura FIXA: a prévia numa linha própria (truncada) e os botões abaixo — marcar um item não muda o banner.
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -148,45 +166,89 @@ export function EditorVisaoOrcamento({
         }
       >
         <div className="space-y-[var(--gap-block)]">
-          {erro && <Callout kind="danger">{erro}</Callout>}
-          <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: PCA" maxLength={80} disabled={!podeEditar} />
-          {contarAusentes(ausentes) > 0 && (
-            <Callout kind="warn">
-              <div className="space-y-1.5">
-                <p>
-                  <b>{num(contarAusentes(ausentes))} valor(es) da visão não existem neste orçamento</b> (o QDD foi reenviado ou o texto
-                  mudou) e não contam nada:
-                </p>
-                <ul className="list-disc pl-5 text-[13px]">
-                  {ausentes.map((a) => (
-                    <li key={a.dimensao}>
-                      {a.rotulo}: {a.valores.join("; ")}
-                    </li>
-                  ))}
-                </ul>
-                {podeEditar && (
-                  <Button size="sm" variant="secondary" onClick={removerAusentes} disabled={salvando}>
-                    Remover ausentes
-                  </Button>
-                )}
-              </div>
-            </Callout>
+          {comVinculos && (
+            <Segmented
+              value={parte}
+              onChange={setParte}
+              ariaLabel="Parte da visão"
+              options={[
+                { value: "filtros", label: "Filtros", dica: "O que a visão considera do orçamento" },
+                {
+                  value: "vinculos",
+                  label: proprias ? `Vínculos (${proprias} ${proprias === 1 ? "própria" : "próprias"})` : "Vínculos",
+                  dica: "Os vínculos das unidades nesta visão — os próprios dela e, nas demais, o padrão",
+                },
+              ]}
+            />
           )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {DIMENSOES_VISAO.map((d) => (
-              <SeletorMultiplo
-                key={d.key}
-                suspenso
-                rotulo={d.rotulo}
-                opcoes={opcoes.get(d.key) ?? []}
-                selecionados={filtros[d.key] ?? []}
-                disabled={!podeEditar || salvando}
-                onChange={(vals) => setFiltros((f) => ({ ...f, [d.key]: vals.length ? vals : undefined }))}
-              />
-            ))}
-          </div>
+          {parte === "vinculos" && comVinculos ? (
+            visaoVinc && alvos ? (
+              <FerramentasNoLugar>
+                <OrcamentoVinculos
+                  unidades={unidades}
+                  vinculos={efetivos}
+                  alvos={alvos}
+                  podeEditar={podeEditarVinculos}
+                  salvando={g.salvando}
+                  erro={g.erro}
+                  contexto={{ visoes: g.visoesAtuais, visaoId: visaoVinc.id }}
+                  onCriar={g.criar}
+                  onEditar={g.editar}
+                  onExcluir={g.excluir}
+                  onUsarPadrao={(chave) => g.usarPadrao(visaoVinc.id, chave)}
+                />
+              </FerramentasNoLugar>
+            ) : (
+              <Callout kind="info">Crie a visão para ajustar os vínculos dela.</Callout>
+            )
+          ) : (
+            <>
+              {erro && <Callout kind="danger">{erro}</Callout>}
+              <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: PCA" maxLength={80} disabled={!podeEditar} />
+              {contarAusentes(ausentes) > 0 && (
+                <Callout kind="warn">
+                  <div className="space-y-1.5">
+                    <p>
+                      <b>{num(contarAusentes(ausentes))} valor(es) da visão não existem neste orçamento</b> (o QDD foi reenviado ou o texto
+                      mudou) e não contam nada:
+                    </p>
+                    <ul className="list-disc pl-5 text-[13px]">
+                      {ausentes.map((a) => (
+                        <li key={a.dimensao}>
+                          {a.rotulo}: {a.valores.join("; ")}
+                        </li>
+                      ))}
+                    </ul>
+                    {podeEditar && (
+                      <Button size="sm" variant="secondary" onClick={removerAusentes} disabled={salvando}>
+                        Remover ausentes
+                      </Button>
+                    )}
+                  </div>
+                </Callout>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {DIMENSOES_VISAO.map((d) => (
+                  <SeletorMultiplo
+                    key={d.key}
+                    suspenso
+                    rotulo={d.rotulo}
+                    opcoes={opcoes.get(d.key) ?? []}
+                    selecionados={filtros[d.key] ?? []}
+                    disabled={!podeEditar || salvando}
+                    onChange={(vals) => setFiltros((f) => ({ ...f, [d.key]: vals.length ? vals : undefined }))}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </Modal>
+      {g.erro && (
+        <AvisoFlutuante kind="danger" titulo="Não foi possível gravar o vínculo" onClose={g.limparErro}>
+          {g.erro}
+        </AvisoFlutuante>
+      )}
       {confirmacao}
     </>
   );

@@ -60,6 +60,8 @@ export type VisaoOrcamento = {
   nome: string;
   filtros: FiltrosVisao;
   ordem: number;
+  /** As unidades do CUBO (chaves) com VÍNCULOS PRÓPRIOS nesta visão — nas demais ela segue os vínculos padrão. */
+  proprias: string[];
   /** Os PCAs que usam a visão (nome · ano) — editar/excluir a visão muda o orçamento deles. */
   pcas?: string[];
 };

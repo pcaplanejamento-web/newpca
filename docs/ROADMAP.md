@@ -1696,6 +1696,7 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 ✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
 
+✅ **v1.61.0 — Vínculos por visão do orçamento**: cada visão pode ter os seus vínculos por unidade (os de antes viram o padrão); ao salvar, “Esta visão · Todas · Escolher”; “Usar o padrão”; Vínculos no banner da visão; o PCA usa os vínculos da visão dele; (?) das visões.
 ✅ **v1.60.0 — Nomeações unificadas**: no banner da pessoa, os vínculos com o mesmo ato (decreto/portaria/lei de mesmo nº) num cartão só; editar vale para todos os lugares.
 
 ✅ **v1.59.0 — Editar onde o responsável responde**: no "Editar vínculo", trocar a unidade/órgão, a pessoa e os dados, e acrescentar lugares com a mesma nomeação.

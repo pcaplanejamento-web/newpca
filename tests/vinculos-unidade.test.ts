@@ -15,8 +15,8 @@ const fmas = unidades.find((u) => u.texto === "2 - FMAS") ?? unidades[0];
 const acao = (t: string) => fmas.acoes.find((a) => a.texto === t)?.chave ?? "";
 // FMAS: o CRAS vai à unidade 1; o CREAS à 2; o CONSELHO fica sem vínculo. GAB sem vínculo nenhum.
 const vinculos: VinculoOrcamento[] = [
-  { id: 1, chave: fmas.chave, texto: fmas.texto, alvoId: 1, acoes: [acao("2101 - CRAS")], acoesFora: [] },
-  { id: 2, chave: fmas.chave, texto: fmas.texto, alvoId: 2, acoes: [acao("2102 - CREAS")], acoesFora: [] },
+  { id: 1, chave: fmas.chave, texto: fmas.texto, alvoId: 1, acoes: [acao("2101 - CRAS")], acoesFora: [], visaoId: null },
+  { id: 2, chave: fmas.chave, texto: fmas.texto, alvoId: 2, acoes: [acao("2102 - CREAS")], acoesFora: [], visaoId: null },
 ];
 
 describe("vínculos de uma unidade cadastrada (a linha do PCA)", () => {

@@ -1099,6 +1099,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((d.prepare("SELECT exonerado_em AS e FROM responsaveis").get() as { e: string | null }).e, null);
   });
 
+  it("0102 vínculos por visão: os gravados viram o PADRÃO; a mesma unidade em visões diferentes; excluir a visão leva os dela", () => {
+    const d = new DatabaseSync(":memory:");
+    const i102 = arquivos.findIndex((f) => f.startsWith("0102"));
+    assert.ok(i102 > 0, "migração 0102 ausente");
+    for (const arq of arquivos.slice(0, i102)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (900, 'Órgão X', 'OX');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (901, 'SMS', 'Saúde', 900);
+      INSERT INTO orcamento_visoes (id, nome) VALUES (7, 'PCA');
+      INSERT INTO orcamento_vinculos (id, tipo, chave, texto, reparticao_id) VALUES (1, 'unidade', 'SAUDE', 'Saúde', 901);`);
+    d.exec(readFileSync(join(DIR, arquivos[i102]), "utf8"));
+    d.exec("PRAGMA foreign_keys = ON");
+    assert.equal((d.prepare("SELECT visao_id AS v FROM orcamento_vinculos WHERE id = 1").get() as { v: number | null }).v, null);
+    assert.equal((d.prepare("SELECT vinculos_proprios AS p FROM orcamento_visoes WHERE id = 7").get() as { p: string }).p, "[]");
+    d.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, visao_id) VALUES ('unidade', 'SAUDE', 'Saúde', 901, 7)");
+    assert.throws(() => d.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id) VALUES ('unidade', 'SAUDE', 'Saúde', 901)"), /UNIQUE/);
+    assert.throws(() => d.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, visao_id) VALUES ('unidade', 'SAUDE', 'Saúde', 901, 7)"), /UNIQUE/);
+    d.exec("DELETE FROM orcamento_visoes WHERE id = 7");
+    assert.equal((d.prepare("SELECT COUNT(*) AS n FROM orcamento_vinculos").get() as { n: number }).n, 1, "fica só o padrão");
+  });
+
   it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
     const d = new DatabaseSync(":memory:");
     const i78 = arquivos.findIndex((f) => f.startsWith("0078"));

@@ -20,6 +20,8 @@ import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { type CampoFiltroDash, FiltrosDashboard } from "@/components/FiltrosDashboard";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
 import { SeletorVisaoPca } from "@/components/VisaoOrcamentoPca";
+import { AjudaVisoes } from "@/components/AjudaVisoes";
+import { EscopoVinculo, type ValorEscopo } from "@/components/EditorVinculoOrcamento";
 import { DicaFlutuante } from "@/components/DicaFlutuante";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
 import { vinculosDaLinha } from "@/lib/vinculos-unidade";
@@ -1150,7 +1152,7 @@ function MetricasMesaDemo() {
 }
 
 const VISOES_DEMO: VisaoOrcamento[] = [
-  { id: 1, nome: "PCA", ordem: 0, filtros: { nomeElemento: ["MATERIAL DE CONSUMO", "EQUIPAMENTOS"], fonte: ["999 - FONTE EXTINTA"] }, pcas: ["PCA 2027 (2027)"] },
+  { id: 1, nome: "PCA", ordem: 0, filtros: { nomeElemento: ["MATERIAL DE CONSUMO", "EQUIPAMENTOS"], fonte: ["999 - FONTE EXTINTA"] }, pcas: ["PCA 2027 (2027)"], proprias: [] },
 ];
 const LINHAS_VISAO_DEMO: LinhaVisaoOrcamento[] = [
   { nomeElemento: "MATERIAL DE CONSUMO", fonte: "100 - RECURSOS ORDINÁRIOS", valorInicial: 1_390_566.98 },
@@ -1161,6 +1163,7 @@ const LINHAS_VISAO_DEMO: LinhaVisaoOrcamento[] = [
 /** O editor de UMA visão do orçamento (aba Visões e engrenagem do PCA): usos, valores ausentes, prévia do Σ. */
 function EditorVisaoDemo() {
   const [aberta, setAberta] = useState<VisaoOrcamento | "nova" | null>(null);
+  const [escopo, setEscopo] = useState<ValorEscopo>({ modo: "esta", escolhidas: ["1"] });
   return (
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="secondary" onClick={() => setAberta(VISOES_DEMO[0])}>
@@ -1173,6 +1176,18 @@ function EditorVisaoDemo() {
       {/* SeletorVisaoPca — a visão do PCA na barra do PCA × Orçamento (aqui travado: sem permissão não troca). */}
       <div className="w-full sm:w-72">
         <SeletorVisaoPca pcaId={0} visaoId={VISOES_DEMO[0].id} visoes={VISOES_DEMO} podeEscolher={false} />
+      </div>
+      {/* AjudaVisoes — o (?) único das visões (tela do orçamento e orçamento do PCA). */}
+      <AjudaVisoes botao="sm" />
+      {/* EscopoVinculo — onde salvar um vínculo (vínculos por visão): esta visão · todas · escolher. */}
+      <div className="w-full">
+        <EscopoVinculo
+          contexto={{ visoes: [{ id: 1, nome: "PCA", proprias: ["2 - SMS"] }, { id: 2, nome: "Investimentos", proprias: [] }], visaoId: 1 }}
+          chave="2 - SMS"
+          valor={escopo}
+          onChange={setEscopo}
+          onUsarPadrao={() => undefined}
+        />
       </div>
     </div>
   );
@@ -1188,7 +1203,7 @@ function VinculosDaUnidadeDemo() {
   ];
   const unidades = unidadesDoOrcamento(itens);
   const alvos = { orgaos: [{ id: 1, sigla: "PMRV", nome: "Prefeitura" }], unidades: [{ id: 2, sigla: "FMAS", nome: "Fundo de Assistência", orgaoId: 1 }] };
-  const vinculos = [{ id: 1, chave: unidades[0]?.chave ?? "", texto: "2 - FMAS", alvoId: 2, acoes: null, acoesFora: [] }];
+  const vinculos = [{ id: 1, chave: unidades[0]?.chave ?? "", texto: "2 - FMAS", alvoId: 2, acoes: null, acoesFora: [], visaoId: null }];
   const ok = async () => true;
   return (
     <div className="flex flex-wrap gap-2">
@@ -3390,7 +3405,7 @@ export function Catalogo() {
       <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
-      <Secao titulo="EditorVisaoOrcamento (uma visão do orçamento: nome + dimensões em listas suspensas + prévia do Σ; avisa os PCAs que a usam e os valores que o orçamento atual não traz, com “Remover ausentes”) + VisaoOrcamentoPca (a engrenagem da aba Orçamento do PCA — no OrcamentoPca acima) + SeletorVisaoPca (a visão na barra do PCA × Orçamento; travado sem permissão)">
+      <Secao titulo="EditorVisaoOrcamento (uma visão do orçamento: nome + dimensões em listas suspensas + prévia do Σ; avisa os PCAs que a usam e os valores que o orçamento atual não traz, com “Remover ausentes”) + VisaoOrcamentoPca (a engrenagem da aba Orçamento do PCA — no OrcamentoPca acima) + SeletorVisaoPca (a visão na barra do PCA × Orçamento; travado sem permissão) + AjudaVisoes (o (?) das visões) + EscopoVinculo (onde salvar um vínculo: esta visão · todas · escolher)">
         <EditorVisaoDemo />
       </Secao>
       <Secao titulo="VinculosDaUnidade (o lápis da linha do PCA × Orçamento: os vínculos que trazem orçamento à unidade — ou, na linha Sem vínculo, as unidades do orçamento a vincular — editados no mesmo editor da aba Vínculos)">
@@ -4625,8 +4640,8 @@ export function Catalogo() {
             },
           ]}
           vinculos={[
-            { id: 1, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 16, acoes: null, acoesFora: [] },
-            { id: 2, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 17, acoes: ["2002 VIGILANCIA"], acoesFora: [] },
+            { id: 1, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 16, acoes: null, acoesFora: [], visaoId: null },
+            { id: 2, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 17, acoes: ["2002 VIGILANCIA"], acoesFora: [], visaoId: null },
           ]}
         />
       </Secao>

@@ -6,6 +6,7 @@ import {
   dfds,
   orcamentoItens,
   orcamentos,
+  orcamentoVinculos,
   orcamentoVisoes,
   orgaos,
   pcaDfds,
@@ -24,7 +25,7 @@ import { prioridadeDoDfd } from "./dfd-tratamento";
 import { normUnidadeMedida } from "./normalize";
 import { type RelatorioOrcamento, relatorioOrcamentoPca } from "./orcamento-relatorio";
 import { type AusentesVisao, aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento, valoresAusentes } from "./orcamento-visao";
-import { comVinculos, mapaVinculos, unidadeDoLancamento } from "./orcamento-vinculo";
+import { comVinculos, lerProprias, mapaVinculos, unidadeDoLancamento, vinculosDaVisao } from "./orcamento-vinculo";
 import { listarVinculosOrcamento } from "./orcamento";
 import { tipoCurtoDfd } from "./parse-dfd-comum";
 import {
@@ -960,8 +961,8 @@ export async function consultaHistorico(
 // Orçamento do PCA
 // ---------------------------------------------------------------------------
 
-function paraVisao(r: { id: number; nome: string; filtros: string; ordem: number }): VisaoOrcamento {
-  return { id: r.id, nome: r.nome, ordem: r.ordem, filtros: coerceFiltros(r.filtros) };
+function paraVisao(r: { id: number; nome: string; filtros: string; ordem: number; vinculosProprios: string }): VisaoOrcamento {
+  return { id: r.id, nome: r.nome, ordem: r.ordem, filtros: coerceFiltros(r.filtros), proprias: lerProprias(r.vinculosProprios) };
 }
 
 /** As visões salvas + os PCAs que usam cada uma (a visão é GLOBAL — alterar uma muda o orçamento de todos eles). */
@@ -1002,8 +1003,10 @@ export async function atualizarVisaoOrcamento(id: number, nome: string, filtros:
     .where(eq(orcamentoVisoes.id, id));
 }
 
+/** Exclui a visão e os vínculos PRÓPRIOS dela (também pela FK cascade). */
 export async function excluirVisaoOrcamento(id: number): Promise<void> {
-  await getDb().delete(orcamentoVisoes).where(eq(orcamentoVisoes.id, id));
+  const db = getDb();
+  await db.batch([db.delete(orcamentoVinculos).where(eq(orcamentoVinculos.visaoId, id)), db.delete(orcamentoVisoes).where(eq(orcamentoVisoes.id, id))]);
 }
 
 export type LancamentoOrcamentoPca = {
@@ -1064,7 +1067,7 @@ export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnTy
  * (todas as dimensões — senão o filtro da visão não casa). A MESMA base do comparativo e do relatório da composição. */
 async function baseOrcamentoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>) {
   const db = getDb();
-  const [visao, repsBrutas, orgs, vincs] = await Promise.all([
+  const [visao, repsBrutas, orgs, todosVinculos] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
     db
       .select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculta: reparticoes.oculto })
@@ -1073,6 +1076,8 @@ async function baseOrcamentoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof o
     db.select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome }).from(orgaos),
     listarVinculosOrcamento(),
   ]);
+  // Os vínculos que VALEM na visão do PCA (os próprios dela; nas demais unidades, o padrão).
+  const vincs = vinculosDaVisao(todosVinculos, visao);
   const orgaoLista = orgs.map((o) => ({ id: o.id, sigla: (o.sigla ?? "").trim() || o.nome, nome: o.nome }));
   const siglaOrgao = new Map(orgaoLista.map((o) => [o.id, o.sigla]));
   const reps = repsBrutas.map((r) => ({

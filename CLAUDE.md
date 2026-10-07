@@ -2736,6 +2736,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`EditorVinculoOrcamento`** (DS, num `Modal`): unidade do orçamento, unidade cadastrada (por órgão; sigla repetida mostra o
   órgão — `useRotuloUnidade`), "Incluir as demais ações" e as ações livres (`SeletorMultiplo`), a regra na hora (trava o
   Salvar, com "Abrir o vínculo com …" — o que a regra acusa) e a prévia do que leva; Excluir. `OrcamentoVinculosAba` = o contêiner (uma gravação por vez + `router.refresh`).
+- **VÍNCULOS POR VISÃO (v1.61.0, migração `0102`, aditiva — `orcamento_vinculos.visao_id` FK cascade [NULL = o PADRÃO; os
+  gravados viraram o padrão], único `(chave, reparticao_id, IFNULL(visao_id,0))`, `orcamento_visoes.vinculos_proprios` JSON
+  das chaves):** a visão SEGUE o padrão em cada unidade do CUBO até definir a unidade por conta própria — aí valem os vínculos
+  DELA naquela unidade (inclusive nenhum). Núcleo puro (`orcamento-vinculo.ts`, testado em `tests/vinculos-por-visao.test.ts`):
+  **`vinculosDaVisao(todos, visao)`** (sem visão = o padrão — TODO leitor usa: página do orçamento, `comparativo-dados`,
+  `baseOrcamentoPca`, `OrcamentoComparativo` [refaz `comVinculos` no navegador quando a visão escolhida tem próprios]),
+  `aplicarNoEscopo` (criar/alterar pela unidade de origem/excluir com o `conflitoVinculo`), **`planoVinculos`** (por destino
+  — padrão e/ou visões —, a lista nova de cada unidade; a visão que ainda segue o padrão parte dele e, com o padrão no escopo,
+  é pulada; TUDO OU NADA com o nome da visão), `escopoEscolhido` ("esta" · "todas" · "escolher", "0" = padrão) e
+  `textoEscopo`. Gravação única **`gravarVinculosOrcamento(pedidos, escopo)`** (`orcamento.ts`; builders
+  `comandosDestinoVinculos` — apaga e reinsere a lista do destino, 14 por INSERT — e `comandoPropriasVisao`, testados no D1
+  real) e **`usarPadraoNaVisao`**; as rotas `POST/PATCH/DELETE /api/orcamento/vinculos*` aceitam `escopo` (ausente = onde o
+  vínculo está; criar = o padrão) e devolvem `{vinculos, visoes:[{id, proprias}]}` (`vinculosGravados`); `POST
+  /api/orcamento/vinculos/padrao` `{visaoId, chave}`. Excluir a visão leva os dela. Telas: **`EscopoVinculo`** (DS, em
+  `EditorVinculoOrcamento.tsx` — "Salvar em" Esta visão/Padrão · Todas · Escolher [`SeletorMultiplo`; "· própria"], selo
+  "Próprio desta visão" + "Usar o padrão") no editor do vínculo (`contexto`); aba **Vínculos** com a **Visão** na barra e a
+  coluna Origem (Padrão | Desta visão); o **banner da visão** (`EditorVisaoOrcamento`) com `Segmented` **Filtros | Vínculos**
+  (a MESMA `OrcamentoVinculos` com o contexto da visão; `FerramentasNoLugar` — a barra fica no banner); coluna **Vínculos**
+  na lista de visões; o Orçamento do PCA usa os vínculos da visão do PCA (o banner da linha pergunta onde salvar).
+  `useGravacaoVinculos(vinculos, visoes)` guarda também os `proprias` gravados (`visoesAtuais`). O (?) ÚNICO das visões =
+  **`AjudaVisoes`** (abas Visões e Vínculos, cabeçalho do banner da visão, PCA × Orçamento).
 
 ## Tarefas (quadro estilo Trello) — migração `0042`
 - **O que é:** o módulo **`tarefas`** (`ABA_KEYS`/`NAV_MODULOS`, ícone `IconKanban`; a `0042` concede a aba a quem tem a

@@ -19,11 +19,12 @@ import {
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
-import { unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { unidadesDoOrcamento, type VinculoOrcamento, vinculosDaVisao } from "@/lib/orcamento-vinculo";
 import { semVinculoPorAlvo, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
+import { AjudaVisoes } from "./AjudaVisoes";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -297,16 +298,19 @@ export function OrcamentoPca({
   const ausentes = contarAusentes(dados.ausentes ?? []);
   // VÍNCULOS por linha (o lápis): as unidades do CUBO do orçamento do ano + a gravação da aba Vínculos.
   const unidadesCubo = useMemo(() => (comparativo ? unidadesDoOrcamento(comparativo.itens) : []), [comparativo]);
-  const gravacao = useGravacaoVinculos(comparativo?.vinculos ?? SEM_VINCULOS);
+  const gravacao = useGravacaoVinculos(comparativo?.vinculos ?? SEM_VINCULOS, visoes);
+  // Os vínculos que VALEM na visão do PCA (os próprios dela; nas demais unidades, o padrão) — editar pergunta onde salvar.
+  const visaoPca = gravacao.visoesAtuais.find((v) => v.id === dados.visaoId) ?? null;
+  const efetivos = useMemo(() => vinculosDaVisao(gravacao.atuais, visaoPca), [gravacao.atuais, visaoPca]);
   const [vinculosDe, setVinculosDe] = useState<UnidadeDaLinha | null>(null);
   const editaVinculos = podeConfigurarOrcamento && comparativo != null;
   // Ações do orçamento SEM vínculo (como na aba Vínculos): por unidade cadastrada — as das unidades do orçamento ligadas a
   // ela — e de todo o orçamento (a linha "Sem vínculo"). Recalculadas na hora a cada gravação (a lista já gravada).
   const semVinculoPorLinha = useMemo(() => {
-    const porAlvo = semVinculoPorAlvo(unidadesCubo, gravacao.atuais);
-    const todas = vinculosDaLinha(unidadesCubo, gravacao.atuais, null).semVinculo;
+    const porAlvo = semVinculoPorAlvo(unidadesCubo, efetivos);
+    const todas = vinculosDaLinha(unidadesCubo, efetivos, null).semVinculo;
     return { porAlvo, todas };
-  }, [unidadesCubo, gravacao.atuais]);
+  }, [unidadesCubo, efetivos]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivel, setNivel] = useState<Nivel>("unidade");
@@ -540,8 +544,11 @@ export function OrcamentoPca({
               ]}
             />
             {(podePublicar || visoes.length > 0) && (
-              <div className="w-full min-w-[12rem] sm:w-auto sm:max-w-xs sm:flex-1">
-                <SeletorVisaoPca pcaId={dados.pcaId} visaoId={dados.visaoId ?? null} visoes={visoes} podeEscolher={podePublicar} />
+              <div className="flex w-full min-w-[12rem] items-center gap-2 sm:w-auto sm:max-w-sm sm:flex-1">
+                <div className="min-w-0 flex-1">
+                  <SeletorVisaoPca pcaId={dados.pcaId} visaoId={dados.visaoId ?? null} visoes={visoes} podeEscolher={podePublicar} />
+                </div>
+                <AjudaVisoes botao="sm" />
               </div>
             )}
             <div className="flex items-center gap-2 lg:ml-auto">
@@ -571,8 +578,10 @@ export function OrcamentoPca({
         <VinculosDaUnidade
           unidade={vinculosDe}
           unidades={unidadesCubo}
-          vinculos={gravacao.atuais}
+          vinculos={efetivos}
           alvos={comparativo.alvos}
+          contexto={{ visoes: gravacao.visoesAtuais, visaoId: visaoPca?.id ?? null }}
+          onUsarPadrao={visaoPca ? (chave) => gravacao.usarPadrao(visaoPca.id, chave) : undefined}
           orcamento={dados.orcamento ? `${dados.orcamento.nome} (${dados.orcamento.ano})` : String(dados.ano ?? "")}
           salvando={gravacao.salvando}
           erro={gravacao.erro}
@@ -593,6 +602,8 @@ export function OrcamentoPca({
           visaoId={dados.visaoId ?? null}
           visoes={visoes}
           itens={linhasVisao}
+          vinculos={comparativo?.vinculos}
+          alvos={comparativo?.alvos}
           podeEditarVisao={podeConfigurarOrcamento}
         />
       )}

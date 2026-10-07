@@ -20,6 +20,11 @@ export function FerramentasAba({ children }: { children: ReactNode }) {
   return slot ? createPortal(children, slot) : null;
 }
 
+/** As ferramentas dos filhos ficam NO LUGAR (numa linha própria) — ex.: uma aba reaproveitada DENTRO de um banner. */
+export function FerramentasNoLugar({ children }: { children: ReactNode }) {
+  return <SlotFerramentas.Provider value={undefined}>{children}</SlotFerramentas.Provider>;
+}
+
 /**
  * A TROCA DE ABA de um espaço (a mesma do `AbasEspaco` e da pílula de vistas do quadro): a aba pedida (clique) vale até o
  * servidor devolvê-la (`?aba=`); depois, a do servidor (voltar/avançar do navegador seguem a aba do servidor).

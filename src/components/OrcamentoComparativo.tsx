@@ -33,7 +33,7 @@ import {
   permissoesLinhas,
   semVazios,
 } from "@/lib/orcamento-cruzamento";
-import { type AlvosVinculo, alvosDaUnidade, type DimensoesCadastro, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { type AlvosVinculo, alvosDaUnidade, comVinculos, type DimensoesCadastro, mapaVinculos, type VinculoOrcamento, vinculosDaVisao } from "@/lib/orcamento-vinculo";
 import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
@@ -122,7 +122,13 @@ export function OrcamentoComparativo({
   const [ordemVista, setOrdemVista] = useState<OrdemCruzamento | null>(null); // ordenação só da vista (fora da edição)
 
   const visao = visoes.find((v) => v.id === visaoId) ?? null;
-  const base = useMemo(() => (visao ? aplicarVisao(itens, visao.filtros) : itens), [itens, visao]);
+  // Os vínculos que VALEM na visão (os próprios dela; nas demais unidades, o padrão) — a Unidade/Órgão do cadastro e a
+  // Sigla seguem a visão. Os itens chegam com o padrão: só refaz quando a visão tem vínculos próprios.
+  const efetivos = useMemo(() => vinculosDaVisao(vinculos, visao), [vinculos, visao]);
+  const base = useMemo(() => {
+    const comVisao = visao?.proprias.length ? comVinculos(itens, efetivos, alvos) : itens;
+    return visao ? aplicarVisao(comVisao, visao.filtros) : comVisao;
+  }, [itens, visao, efetivos, alvos]);
 
   // As duas colunas LIGADAS: a das linhas (com dados) e a das colunas (a permitida — senão a 1ª permitida).
   const permLinhas = useMemo(() => permissoesLinhas(base), [base]);
@@ -158,7 +164,7 @@ export function OrcamentoComparativo({
   // A sigla do CADASTRO (Vínculos) ao lado da Unidade do CUBO — a chave do vínculo é a MESMA do agrupamento.
   const siglaDe = useMemo(() => {
     if (linha !== "unidade") return null;
-    const mapa = mapaVinculos(vinculos);
+    const mapa = mapaVinculos(efetivos);
     const porId = new Map(alvos.unidades.map((a) => [a.id, a.sigla]));
     // Uma unidade do CUBO pode ter VÁRIOS vínculos: as siglas de todos.
     return (k: string) =>
@@ -166,7 +172,7 @@ export function OrcamentoComparativo({
         .map((id) => porId.get(id) ?? "")
         .filter(Boolean)
         .join(" / ");
-  }, [linha, vinculos, alvos]);
+  }, [linha, efetivos, alvos]);
 
   const casa = useMemo(() => predicadoBusca(busca), [busca]);
   const linhasDe = (c: Cruzamento) => {
