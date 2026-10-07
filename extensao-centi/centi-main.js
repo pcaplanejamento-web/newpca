@@ -860,6 +860,17 @@
     if (!g?.caminho) return { ok: false, semConsulta: true, erro: "A consulta da Tela Protocolo ainda não foi aprendida." };
     if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, semConsulta: true, erro: "Consulta guardada inválida." };
     const p = A.semPaginacao(g.caminho, g.corpo);
+    // As repartições pedidas vão NO PRÓPRIO pedido (Data.Reparticoes.selected) — a Centi devolve só as delas.
+    const pedidas = Array.isArray(d?.reparticoes) ? d.reparticoes.filter((x) => typeof x === "string" && x.trim()) : [];
+    let porReparticao = null;
+    if (pedidas.length) {
+      const c = A.comReparticoes ? A.comReparticoes(p.corpo, pedidas) : null;
+      if (c) {
+        if (c.faltam.length) return { ok: false, erro: `Repartição não encontrada na Tela Protocolo da Centi: ${c.faltam.join(", ")}.` };
+        p.corpo = c.corpo;
+        porReparticao = c.achadas;
+      }
+    }
     const url = destino(p.caminho);
     if (!url) return { ok: false, erro: "Destino fora da API da Centi." };
     const r = await executar(g.metodo, url, g.metodo === "POST" ? p.corpo : null, null, true);
@@ -876,7 +887,8 @@
     const alvo = typeof d?.situacao === "string" ? d.situacao : "";
     const norm = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
     const passa = (x) => (!alvo ? A.emAnalise(x.situacao) : alvo === "*" || norm(x.situacao).includes(norm(alvo)));
-    return { ok: true, filtro: alvo || null, comSituacao: !!l.situacao, protocolos: l.situacao ? l.linhas.filter(passa) : l.linhas };
+    const linhas = (l.situacao ? l.linhas.filter(passa) : l.linhas).map((x) => (porReparticao?.length === 1 && !x.departamento ? { ...x, departamento: porReparticao[0] } : x));
+    return { ok: true, filtro: alvo || null, comSituacao: !!l.situacao, porReparticao, protocolos: linhas };
   }
 
   // Os DADOS da grade da Tela Protocolo (Wijmo FlexGrid — o controle mora no elemento, "wj-Control"): TODAS as linhas da

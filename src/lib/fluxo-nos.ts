@@ -138,12 +138,12 @@ const NOS: DefNo[] = [
         ...(str(c.campoReparticao) ? so(e).map((it) => str(resolverCaminho(it, str(c.campoReparticao)))).filter(Boolean) : []),
       ];
       ctx.aviso("Lendo os protocolos na Centi…");
-      let r = await ctx.centi("telaApi", { situacao: sit }, 180_000);
+      let r = await ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000);
       if (!r.ok && r.semConsulta && !r.interrompido && reps.length) {
         // Sem a consulta aprendida: a extensão lista os "Em análise" das repartições pela Tela Protocolo (aprende) e repete.
         ctx.aviso("Ensinando a consulta da Tela Protocolo (PO011)…");
         await pedirCenti(ctx, "telaEmAnalise", { departamentos: reps }, 300_000);
-        r = await ctx.centi("telaApi", { situacao: sit }, 180_000);
+        r = await ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000);
       }
       if (r.interrompido) throw new Error("Interrompido na extensão.");
       if (!r.ok) {
@@ -154,7 +154,8 @@ const NOS: DefNo[] = [
       if (sit && r.filtro !== sit) throw new Error("A extensão da Centi está desatualizada (1.15.0 ou maior filtra por situação) — baixe a nova.");
       const linhas = normalizar(r.protocolos);
       const alvo = reps.map(normTexto);
-      if (!alvo.length) return { saida: linhas };
+      // A Centi já filtrou pelas repartições no próprio pedido (Data.Reparticoes).
+      if (!alvo.length || (Array.isArray(r.porReparticao) && r.porReparticao.length)) return { saida: linhas };
       // Filtro SEGURO: sem o departamento nas linhas não dá para saber a repartição — para (nunca passa todas).
       if (linhas.length && !linhas.some((l) => str(l.departamento)))
         throw new Error("A Centi não devolveu o departamento dos protocolos — não dá para filtrar pela repartição. Liste os protocolos uma vez na Tela Protocolo (PO011) com a coluna Departamento.");

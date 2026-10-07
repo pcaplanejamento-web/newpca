@@ -62,6 +62,7 @@ function pecasCm002() {
   return ctx[`__pcaCentiAnexo_p${p}`] as {
     planejamentosCm002: (j: unknown) => { id: string; situacao: string; finalidade: string; centroCusto: string }[] | null;
     semPaginacao: (c: string, b: unknown) => { caminho: string; corpo: unknown };
+    comReparticoes: (b: unknown, n: string[]) => { corpo: { Data: { Reparticoes: { Id: number; selected: boolean }[] } }; achadas: string[]; faltam: string[] } | null;
   };
 }
 
@@ -84,4 +85,22 @@ test("CM002 pela API: a consulta repetida sem paginação (corpo e URL)", () => 
   const r = semPaginacao("restauth/list?entity=9&take=50&skip=100", { Take: 50, Skip: 50, Filtros: [{ Campo: "x" }], Page: 3 });
   assert.equal(r.caminho, "restauth/list?entity=9&take=100000&skip=0");
   assert.deepEqual(JSON.parse(JSON.stringify(r.corpo)), { Take: 100000, Skip: 0, Filtros: [{ Campo: "x" }], Page: 1 });
+});
+
+test("Tela Protocolo pela API: as repartições vão no pedido (postdata) e sem paginação", () => {
+  const { comReparticoes, semPaginacao } = pecasCm002();
+  const corpo = {
+    Data: { Reparticoes: [{ Id: 1, Descricao: "PCA - COORDENADOR (JHONE)", selected: false }, { Id: 2, Descricao: "OUTRA", selected: true }] },
+    ItensPerPage: 20,
+    Method: "x",
+    Page: 3,
+  };
+  const p = semPaginacao("restauth/postdata", corpo).corpo as { ItensPerPage: number; Page: number };
+  assert.equal(p.ItensPerPage, 100000);
+  assert.equal(p.Page, 1);
+  const r = comReparticoes(corpo, ["pca - coordenador (jhone)"]);
+  assert.deepEqual(r?.corpo.Data.Reparticoes.map((x) => [x.Id, x.selected]), [[1, true], [2, false]]);
+  assert.deepEqual(r?.faltam, []);
+  assert.deepEqual(comReparticoes(corpo, ["NÃO EXISTE"])?.faltam, ["NÃO EXISTE"]);
+  assert.equal(comReparticoes({ Data: {} }, ["X"]), null);
 });

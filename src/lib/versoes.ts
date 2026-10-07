@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.26.1",
+    data: "2026-10-07",
+    titulo: "Tela Protocolo pela API, por repartição",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A consulta da Tela Protocolo (postdata) vai à Centi já com a repartição escolhida (Data.Reparticoes) e sem paginação (ItensPerPage) — todos os protocolos dela, pela API. Extensão 1.15.2.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.26.0",
     data: "2026-10-07",
     titulo: "Fluxo Inclusão PCA mais robusto",

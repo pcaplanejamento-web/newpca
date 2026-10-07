@@ -528,7 +528,7 @@
   }
   /** "Em análise" (sem acento/caixa). */
   const emAnalise = (s) => /ANALISE/.test(String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase());
-  const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|registros|quantidade|qtd|maxresults|count)$/i;
+  const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|itensperpage|itemsperpage|itensporpagina|registros|quantidade|qtd|maxresults|count)$/i;
   const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|currentpage)$/i;
   /** O pedido da lista SEM paginação: tamanho da página → 100000, início → 0 (no corpo e na URL). */
   function semPaginacao(caminho, corpo) {
@@ -556,8 +556,29 @@
     return { caminho: c, corpo: ir(corpo, 0) };
   }
 
+  /** A consulta da PO011 só nas repartições pedidas: marca `selected` em Data.Reparticoes pela Descricao (sem acento/
+   * caixa; uma contém a outra) e desmarca as demais. Sem a lista no corpo → `null` (a consulta não filtra por repartição). */
+  function comReparticoes(corpo, nomes) {
+    const lista = corpo?.Data?.Reparticoes;
+    if (!Array.isArray(lista) || !Array.isArray(nomes) || !nomes.length) return null;
+    const n = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+    const alvos = nomes.map(n).filter(Boolean);
+    const casa = (d) => alvos.find((a) => d && (d === a || d.includes(a) || a.includes(d)));
+    const achadas = [];
+    const usados = new Set();
+    const nova = lista.map((r) => {
+      const a = casa(n(r?.Descricao));
+      if (a) {
+        achadas.push(String(r.Descricao));
+        usados.add(a);
+      }
+      return { ...r, selected: !!a };
+    });
+    return { corpo: { ...corpo, Data: { ...corpo.Data, Reparticoes: nova } }, achadas, faltam: nomes.filter((x, i) => !usados.has(alvos[i])) };
+  }
+
   globalThis[NOME] = Object.freeze({
-    planejamentosCm002, semPaginacao, protocolosTela, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, protocolosTela, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, travarCorpoOperacao, respostaComArquivo, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,
