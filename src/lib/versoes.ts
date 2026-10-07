@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.55.1",
+    data: "2026-10-07",
+    titulo: "Substituir DFDs pela Centi: estado real e leitura completa",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Na análise do “Substituir DFDs pelos dados da Centi”, cada DFD mostra Substituído (com os itens gravados) ou Falhou (com o motivo) — não fica mais em “Processado”, e o Ok conta os substituídos.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O PDF baixado da Centi para substituir um DFD é lido como na importação, inclusive a assinatura achatada por OCR.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.55.0",
     data: "2026-10-07",
     titulo: "Visão do orçamento à vista no PCA",
