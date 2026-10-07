@@ -58,6 +58,7 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { colunasItemMesa } from "./ColunasItensMesa";
 import { Button } from "./Button";
 import { CelulaLista, CelulaTexto } from "./CelulaLista";
 import { BotaoAtualizar } from "./BotaoAtualizar";
@@ -75,7 +76,7 @@ import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { CelulaPca, CelulaPrioridade, colunaPlanejamento, colunaTipoDfd, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -1477,6 +1478,13 @@ export function DfdsView({
 
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item
   // (mesma célula da tabela de itens do banner). Clicar abre o DFD de origem já no item.
+  const ci = colunasItemMesa<ItemDfdRow>({
+    protocolo: atributoItem.protocolo.valor,
+    dfd: atributoItem.dfd.valor,
+    sigla: atributoItem.sigla.valor,
+    descricao: atributoItem.descricao.valor,
+    unidade: atributoItem.unidade.valor,
+  });
   const colsItens: Column<ItemDfdRow>[] = [
     {
       key: "estado",
@@ -1495,20 +1503,7 @@ export function DfdsView({
         return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;
       },
     },
-    {
-      key: "protocolo",
-      header: "Protocolo",
-      nowrap: true,
-      value: atributoItem.protocolo.valor,
-      render: (r) =>
-        r.protocoloNumero ? (
-          <CelulaCopiavel copiar={numeroSemAno(r.protocoloNumero)} rotulo="nº do protocolo">
-            <span className="font-mono text-[12px]">{r.protocoloNumero}</span>
-          </CelulaCopiavel>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
-    },
+    ci.protocolo,
     ...(modoPca
       ? []
       : [
@@ -1521,26 +1516,10 @@ export function DfdsView({
             render: (r: ItemDfdRow) => <CelulaPca pca={pcaDe(anoPcaDoDfd(dfdPorId.get(r.dfdId)))} />,
           },
         ]),
-    colunaPlanejamento((r: ItemDfdRow) => r.dfdPlanejamento),
-    {
-      key: "dfd",
-      header: "Nº DFD",
-      nowrap: true,
-      value: atributoItem.dfd.valor,
-      render: (r) => (
-        <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
-          <span className="font-mono text-[12px]">{r.dfdNumero}</span>
-        </CelulaCopiavel>
-      ),
-    },
-    {
-      key: "sigla",
-      header: "Sigla",
-      nowrap: true,
-      value: atributoItem.sigla.valor,
-      render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
-    },
-    colunaTipoDfd((r: ItemDfdRow) => r.dfdTipo),
+    ci.planejamento,
+    ci.dfd,
+    ci.sigla,
+    ci.tipo,
     {
       key: "prioridade",
       header: "Prioridade",
@@ -1549,18 +1528,8 @@ export function DfdsView({
       value: atributoItem.prioridade.valor,
       render: (r) => <CelulaPrioridade prioridade={dfdPorId.get(r.dfdId)?.prioridade} />,
     },
-    { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
-    {
-      key: "codigo",
-      header: "Código",
-      nowrap: true,
-      value: (r) => r.codigo ?? "",
-      render: (r) => (
-        <CelulaCopiavel copiar={r.codigo} rotulo="código do item">
-          <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>
-        </CelulaCopiavel>
-      ),
-    },
+    ci.item,
+    ci.codigo,
     // Conformidade com o CATÁLOGO (veredito do servidor, na cor do nível do ADM; o tipo do DFD de origem conta).
     {
       key: "catalogo",
@@ -1581,20 +1550,8 @@ export function DfdsView({
           },
         ]
       : []),
-    {
-      key: "descricao",
-      header: "Descrição",
-      minWidth: 260,
-      value: atributoItem.descricao.valor,
-      // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica, no banner do item e com os DADOS
-      // COMPLETOS ligados (o botão da barra).
-      render: (r) => (
-        <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
-          <CelulaTexto texto={r.descricao} />
-        </CelulaCopiavel>
-      ),
-    },
-    { key: "unidade", header: "Unidade", nowrap: true, value: atributoItem.unidade.valor, render: (r) => r.unidade ?? "—" },
+    ci.descricao,
+    ci.unidade,
     // A unidade do item COMPARADA com o cadastro (Catálogo → Unidades de medida): a sigla cadastrada ou "Não cadastrada".
     ...(unidadeDoItem
       ? [
@@ -1607,8 +1564,8 @@ export function DfdsView({
           },
         ]
       : []),
-    { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
-    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, total: false, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
+    ci.qtd,
+    ci.vunit,
     // O valor unitário × o HISTÓRICO DE COMPRA do código (o valor atual; médio e faixa na dica) — o desvio na cor da régua da
     // variação aponta o item divergente; o filtro separa "Acima/Abaixo (mais de 50%)", "(25% a 50%)", "Dentro", "Sem histórico".
     ...(historico
@@ -1622,7 +1579,7 @@ export function DfdsView({
           },
         ]
       : []),
-    { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
+    ci.vtotal,
   ];
 
   // Colunas da visão CONSOLIDADA — as MESMAS da visão normal, com os dados dos itens do código JUNTOS na célula (listas

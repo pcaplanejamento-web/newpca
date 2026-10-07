@@ -528,7 +528,6 @@ export function AutomacaoAdmin({
 
   const atualizada = !!ext && versaoAtende(ext.versao);
   const pronto = atualizada && !!logado?.ok && !!logado.logado;
-  const abrirProtocolo = useCallback((id: number) => setAberto({ tipo: "protocolo", id }), []);
   const importacao = useMemo(
     () => ({ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas }) as unknown as ContextoImportacao,
     [banners],
@@ -679,7 +678,7 @@ export function AutomacaoAdmin({
         protocolos={protocolos}
         gestao={gestao}
         importacao={importacao}
-        onAbrirProtocolo={abrirProtocolo}
+        onAbrirMesa={setAberto}
         onRodando={setRodando}
         novo={novoFluxo}
         onEditor={setNoEditor}

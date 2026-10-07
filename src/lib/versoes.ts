@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.57.0",
+    data: "2026-10-07",
+    titulo: "Tabelas das automações iguais às da Mesa",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "As tabelas das automações (Seleção, Análise ao vivo e Tabela salva) usam as MESMAS tabelas da Mesa: protocolos, DFDs e itens com as mesmas colunas, filtros e exportação.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Tocar numa linha abre o protocolo, o DFD ou o item na mesma pilha de banners da Mesa, sem sair da automação.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.56.0",
     data: "2026-10-07",
     titulo: "Responsáveis com cargo, período e foto; órgãos pelo código da Centi",

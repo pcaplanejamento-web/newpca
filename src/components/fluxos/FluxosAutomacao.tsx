@@ -1,6 +1,7 @@
 "use client";
 
 import { type MutableRefObject, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { AberturaItem } from "@/lib/fluxo-tipo-item";
 import { chaveOrgaoCenti, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import type { PedirExtensao } from "@/lib/arquivo-navegador";
 import { dataHoraBR } from "@/lib/format";
@@ -98,7 +99,7 @@ export function FluxosAutomacao({
   protocolos,
   gestao,
   importacao,
-  onAbrirProtocolo,
+  onAbrirMesa,
   onRodando,
   novo: pedidoNovo,
   onEditor,
@@ -115,7 +116,8 @@ export function FluxosAutomacao({
   gestao: GestaoAutomacao;
   /** O contexto da importação na Mesa (unidades, órgãos, regras, PCAs) — "Importar protocolo" e a análise completa. */
   importacao: ContextoImportacao;
-  onAbrirProtocolo: (id: number) => void;
+  /** Abre o protocolo/DFD/item na pilha de banners da Mesa. */
+  onAbrirMesa: (a: AberturaItem) => void;
   onRodando: (r: boolean) => void;
   /** Cada valor novo abre o "Novo fluxo" (o botão do cabeçalho da Automação). */
   novo: number;
@@ -584,7 +586,7 @@ export function FluxosAutomacao({
       protocolos,
       gestao,
       naCenti,
-      abrirProtocolo: onAbrirProtocolo,
+      abrir: onAbrirMesa,
       saidas,
       parciais,
       dfds,
@@ -617,7 +619,7 @@ export function FluxosAutomacao({
       carregarPrevia: (g, no) => void carregarPrevia(g, no),
       orgaos: importacao.orgaos as unknown as HostPainel["orgaos"],
     }),
-    [importacao.orgaos, previas, carregarPrevia, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
+    [importacao.orgaos, previas, carregarPrevia, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirMesa, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
   );
   return (
     <HostPainelCtx.Provider value={hostPainel}>

@@ -10,6 +10,7 @@ import { type Column, DataTable } from "../DataTable";
 import { Progress } from "../Progress";
 import { Segmented } from "../Segmented";
 import { StatMini } from "../StatMini";
+import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { CampoDoNo } from "./PainelNo";
@@ -217,11 +218,15 @@ function AnaliseAoVivo({
       })),
     [resultado],
   );
-  const colunasVivo: Column<Processado>[] = [
-    { key: "item", header: "Item", nowrap: true, align: "left", value: (p) => p.item, render: (p) => p.item },
-    { key: "orgao", header: "Órgão", align: "left", minWidth: 160, value: (p) => p.orgao || "—", render: (p) => <span className="whitespace-normal">{p.orgao || "—"}</span> },
-    { key: "estado", header: "Estado", nowrap: true, value: (p) => p.estado.rotulo, render: (p) => <Badge tone={p.estado.tom} dot>{p.estado.rotulo}</Badge> },
-    { key: "texto", header: "Detalhe", align: "left", minWidth: 240, value: (p) => p.estado.texto, render: (p) => <span className="whitespace-normal text-muted">{p.estado.texto || "—"}</span> },
+  // A tabela ao vivo é a da MESA quando os itens são protocolos, DFDs ou itens (o toque abre o banner); o Órgão, o Estado e o
+  // Detalhe do componente vão no fim de qualquer tipo.
+  const estadoDe = (it: Item) => processados[itensFonte.indexOf(it)]?.estado ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" };
+  const orgaoDe = (it: Item) => processados[itensFonte.indexOf(it)]?.orgao ?? "";
+  const genericasVivo: Column<Item>[] = [{ key: "item", header: "Item", nowrap: true, align: "left", value: (it) => rotuloItem(it), render: (it) => rotuloItem(it) }];
+  const extrasVivo: Column<Item>[] = [
+    ...(processados.some((p) => p.orgao) ? [{ key: "orgao", header: "Órgão", align: "left" as const, minWidth: 160, value: (it: Item) => orgaoDe(it) || "—", render: (it: Item) => <span className="whitespace-normal">{orgaoDe(it) || "—"}</span> }] : []),
+    { key: "estadoEtapa", header: "Estado", nowrap: true, value: (it) => estadoDe(it).rotulo, render: (it) => <Badge tone={estadoDe(it).tom} dot>{estadoDe(it).rotulo}</Badge> },
+    { key: "detalhe", header: "Detalhe", align: "left", minWidth: 240, value: (it) => estadoDe(it).texto, render: (it) => <span className="whitespace-normal text-muted">{estadoDe(it).texto || "—"}</span> },
   ];
   const colunasAp: Column<Apontado>[] = [
     { key: "nivel", header: "Nível", nowrap: true, value: (a) => a.nivel, render: (a) => <Badge tone={a.nivel === "Erro" ? "red" : "amber"} dot>{a.nivel}</Badge> },
@@ -277,7 +282,19 @@ function AnaliseAoVivo({
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
             {fonte ? `${nomeDoNo(fonte, REGISTRO_NOS)} · ${rodando ? "ao vivo" : "resultado"}` : "Itens"}
           </h4>
-          <DataTable columns={colunasVivo} rows={processados} getKey={(r) => r.chave} density="compact" exportar={{ nome: "Itens processados" }} linhasSalvas="automacao:itens-processados" />
+          {host && (
+            <TabelaMesaFluxo
+              itens={itensFonte}
+              chave={(it) => itensFonte.indexOf(it)}
+              genericas={genericasVivo}
+              extras={extrasVivo}
+              gestao={host.gestao}
+              onAbrir={host.abrir}
+              scrollInterno={false}
+              exportar={{ nome: "Itens processados" }}
+              linhasSalvas="automacao:itens-processados"
+            />
+          )}
         </div>
       )}
     </div>

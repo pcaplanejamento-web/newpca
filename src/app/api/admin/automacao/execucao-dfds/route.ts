@@ -1,6 +1,6 @@
 import { eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
-import { dfds, orgaos } from "@/db/schema";
+import { dfdProtocolos, dfds, orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -26,9 +26,17 @@ const lerDfds = () =>
       orgaoId: dfds.orgaoId,
       orgaoEntidade: dfds.orgaoEntidade,
       orgaoNome: orgaos.nome,
+      // As colunas da planilha de DFDs da Mesa (a tabela das automações): a unidade, o protocolo e a conferência.
+      sigla: reparticoes.codigo,
+      protocolo: dfdProtocolos.numero,
+      protocoloId: dfds.protocoloId,
+      conferenciaCenti: dfds.conferenciaCenti,
+      conferenciaCentiMotivo: dfds.conferenciaCentiMotivo,
     })
     .from(dfds)
     .leftJoin(orgaos, eq(orgaos.id, dfds.orgaoId))
+    .leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId))
+    .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
     .where(isNotNull(dfds.planejamento));
 
 /** Os DFDs com nº de planejamento e a situação da Centi já gravada (a tela da Automação). */

@@ -59,6 +59,7 @@ import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "@/components/BarraEdicaoMassa";
+import { TabelaMesaFluxo } from "@/components/fluxos/TabelaMesaFluxo";
 import { BarraSelecao, BarraSelecaoDfds, type RegistroSelecao, ResumoSelecao } from "@/components/BarraSelecao";
 import { AvisoFlutuante } from "@/components/AvisoFlutuante";
 import { PessoaTag } from "@/components/PessoaTag";
@@ -3155,6 +3156,18 @@ export function Catalogo() {
     <>
       <Secao titulo="Fluxos de automação (CanvasFluxo)">
         <CanvasFluxoDemo />
+      </Secao>
+      <Secao titulo="Tabela de automação no padrão da Mesa (TabelaMesaFluxo)">
+        <TabelaMesaFluxo
+          itens={[
+            { id: 1, numero: "1209", planejamento: "1509", sigla: "SEMED", tipo: "DFD-S", totalItens: 3, valor: 1250.5, protocolo: "144756/2026" },
+            { id: 2, numero: "1210", planejamento: "1510", sigla: "SMS", tipo: "DFD-O", totalItens: 1, valor: 300, protocolo: "144757/2026" },
+          ]}
+          chave={(it) => Number(it.id)}
+          genericas={[]}
+          gestao={{ pessoas: [], outras: [], situacoes: [], usuarioId: 0 }}
+          scrollInterno={false}
+        />
       </Secao>
       <Secao titulo="Cartão de automação (CartaoFluxo)">
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">

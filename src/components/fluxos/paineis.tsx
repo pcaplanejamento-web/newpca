@@ -14,7 +14,9 @@ import { type Column, DataTable } from "../DataTable";
 import { SelectField } from "../Field";
 import { IconPastaAberta } from "../icons";
 import { SeletorMultiplo } from "../SeletorMultiplo";
-import { AnaliseDfds, COLUNAS_PROTOCOLOS, type GestaoAutomacao, useColunasGestao } from "../automacao/ProtocolosAutomacao";
+import type { AberturaItem } from "@/lib/fluxo-tipo-item";
+import { AnaliseDfds, type GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
+import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 
 /*
  * As VISÕES do painel de um fluxo que um COMPONENTE traz (além do formulário de entrada): a tabela de seleção, a análise
@@ -27,7 +29,8 @@ export type HostPainel = {
   gestao: GestaoAutomacao;
   /** Quantos documentos o sistema registrou como anexados na Centi, por protocolo. */
   naCenti: Map<number, number>;
-  abrirProtocolo: (id: number) => void;
+  /** Abre o protocolo/DFD/item na pilha de banners da Mesa. */
+  abrir: (a: AberturaItem) => void;
   /** A saída COMPLETA de cada nó na última execução (a 1ª porta com itens). */
   saidas: Record<string, Item[]>;
   /** Os itens processados AO VIVO por cada nó (antes de ele terminar). */
@@ -195,45 +198,45 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
     carregar(grafo, no.id);
   }, [carregar, podePrevia, itens.length, host?.rodando, chaveGrafo, grafo, no.id]);
   const marcados = useMemo(() => new Set((Array.isArray(no.config.marcados) ? no.config.marcados : []).map(String)), [no.config.marcados]);
-  const ehProtocolo = origem?.tipo === "sistema.protocolos" && no.config.dfds !== true && itens.some((it) => Array.isArray(it.dfds));
-  const gestao = useColunasGestao(host?.gestao ?? { pessoas: [], outras: [], situacoes: [], usuarioId: 0 });
-  const colunas = useMemo<Column<Item>[]>(() => {
-    if (ehProtocolo) {
-      const naCenti: Column<ProtocoloAutomacao> = {
-        key: "naCenti",
-        header: "Na Centi",
-        nowrap: true,
-        value: (p) => (host?.naCenti.get(p.id) ? `${host.naCenti.get(p.id)} anexado(s)` : "—"),
-        render: (p) => {
-          const n = host?.naCenti.get(p.id) ?? 0;
-          return n ? (
-            <Badge tone="emerald" dot>
-              {n} anexado(s)
-            </Badge>
-          ) : (
-            <span className="text-faint">—</span>
-          );
-        },
-      };
-      return [...gestao, ...COLUNAS_PROTOCOLOS, naCenti] as unknown as Column<Item>[];
-    }
-    return caminhosDosItens(itens.slice(0, 50), 14)
-      .filter((c) => !c.includes("."))
-      .map((c) => ({ key: c, header: c, nowrap: true, value: (it: Item) => s(it[c]), render: (it: Item) => <span className="block max-w-[18rem] truncate">{s(it[c]) || "—"}</span> }));
-  }, [ehProtocolo, gestao, host, itens]);
+  // Os protocolos ganham o "Na Centi" (quantos documentos já foram anexados); as demais colunas são as da Mesa.
+  const naCenti = useMemo<Column<Item>[]>(
+    () =>
+      itens.some((it) => Array.isArray(it.dfds))
+        ? [
+            {
+              key: "naCenti",
+              header: "Na Centi",
+              nowrap: true,
+              value: (p) => (host?.naCenti.get(Number(p.id)) ? `${host.naCenti.get(Number(p.id))} anexado(s)` : "—"),
+              render: (p) => {
+                const n = host?.naCenti.get(Number(p.id)) ?? 0;
+                return n ? (
+                  <Badge tone="emerald" dot>
+                    {n} anexado(s)
+                  </Badge>
+                ) : (
+                  <span className="text-faint">—</span>
+                );
+              },
+            },
+          ]
+        : [],
+    [host, itens],
+  );
+  const genericas = useMemo(() => colunasGenericas(itens), [itens]);
   const definir = (sel: Set<string | number>) =>
     onGrafo({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, marcados: [...sel].map(String) } } : n)) });
+  if (!host) return null;
   return (
-    <DataTable
-      columns={colunas}
-      rows={itens}
-      getKey={(it) => chaveSelecao(it, no.config.chave)}
-      selectable
+    <TabelaMesaFluxo
+      itens={itens}
+      chave={(it) => chaveSelecao(it, no.config.chave)}
+      genericas={genericas}
+      extras={naCenti}
+      gestao={host.gestao}
+      onAbrir={host.abrir}
       selected={marcados}
       onSelected={definir}
-      onRowClick={ehProtocolo && host ? (it) => host.abrirProtocolo(Number(it.id)) : undefined}
-      density="compact"
-      scrollInterno
       vazio={
         !origem
           ? "Ligue um componente à entrada desta seleção."
@@ -245,14 +248,17 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
                 ? "Nenhum item encontrado."
                 : "Execute o fluxo para listar os itens; depois marque e execute de novo."
       }
-      acoesRodape={
-        podePrevia && host ? (
-          <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={() => host.carregarPrevia(grafo, no.id)} disabled={host.rodando} />
-        ) : undefined
-      }
+      acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={() => host.carregarPrevia(grafo, no.id)} disabled={host.rodando} /> : undefined}
       resumo={(ls) => `${ls.length} item(ns) · ${marcados.size} marcado(s)`}
     />
   );
+}
+
+/** As colunas dos itens que NÃO são da Mesa (repartições, linhas da CM002…): os campos do 1º nível, como vêm. */
+function colunasGenericas(itens: Item[]): Column<Item>[] {
+  return caminhosDosItens(itens.slice(0, 50), 14)
+    .filter((c) => !c.includes("."))
+    .map((c) => ({ key: c, header: c, nowrap: true, value: (it: Item) => s(it[c]), render: (it: Item) => <span className="block max-w-[18rem] truncate">{s(it[c]) || "—"}</span> }));
 }
 
 // ---------------------------------------------------------------- DFDs (Baixar/anexar)
@@ -394,13 +400,14 @@ function VistaTabela({ no }: PropsVisao) {
     [tabela, linhas],
   );
   if (!nome) return <p className="text-sm text-muted">Informe o nome da tabela no componente.</p>;
+  if (!host) return null;
   return (
-    <DataTable
-      columns={colunas}
-      rows={linhas}
-      getKey={(it) => linhas.indexOf(it)}
-      density="compact"
-      scrollInterno
+    <TabelaMesaFluxo
+      itens={linhas}
+      chave={(it) => linhas.indexOf(it)}
+      genericas={colunas}
+      gestao={host.gestao}
+      onAbrir={host.abrir}
       exportar={{ nome }}
       vazio={tabela === "erro" ? "Não consegui ler a tabela — tente de novo." : tabela ? "A tabela está vazia." : "Tabela ainda não gravada — execute o fluxo."}
       resumo={(ls) => `${ls.length} linha(s) · “${nome}”${tabela && tabela !== "erro" && tabela.atualizadoEm ? ` · gravada em ${dataHoraBR(tabela.atualizadoEm)}` : ""}`}

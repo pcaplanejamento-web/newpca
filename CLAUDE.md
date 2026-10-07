@@ -4427,6 +4427,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   paralelo e tolerâncias viraram SELEÇÃO (`opcoesNum`; o valor antigo fora das opções segue à vista). O **Comportamento** é
   montado com os MESMOS `CampoDoNo` (`CAMPOS_COMPORTAMENTO`): Repetir · Esperar (só com repetição) · Guardar o resultado
   (`nomeLista` de variáveis com "Não guardar" e o nome NOVO sugerido — `sugerirVariavel`) · Desativar.
+- **TABELAS DAS AUTOMAÇÕES = TABELAS DA MESA (v1.57.0, sem migração):** `fluxos/TabelaMesaFluxo.tsx` (DS) — o tipo dos itens
+  vem do núcleo puro **`fluxo-tipo-item.ts`** (`tipoDosItens`: protocolo · DFD · item, testado) e cada tipo usa o componente
+  da Mesa: protocolos = `COLUNAS_PROTOCOLOS` + `useColunasGestao`; DFDs = `PlanilhaDfds semEstado` (`dadosDfdDoItem`); itens =
+  **`colunasItemMesa`** (`ColunasItensMesa.tsx`, a MESMA fábrica da visão Itens da `DfdsView`); outro dado = colunas genéricas.
+  Tocar abre a pilha `BannersMesa` (`aberturaDoItem` → `HostPainel.abrir`, que substituiu o `abrirProtocolo`). Usada na
+  Seleção, na Tabela salva e na Análise ao vivo. O `GET …/execucao-dfds` traz sigla e protocolo de cada DFD.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
