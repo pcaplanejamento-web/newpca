@@ -899,6 +899,7 @@ export function DfdsView({
       protocolo: d.protocoloNumero,
       prioridade: d.prioridade,
       execucao: d.execucaoCenti,
+      conferencia: { status: d.conferenciaCenti, motivo: d.conferenciaCentiMotivo },
       ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
     };
   });

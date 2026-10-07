@@ -284,3 +284,25 @@ test("protocolos com repartição e sem departamento na resposta: para com erro"
   assert.equal(r.estado, "falhou");
   assert.match(r.erro ?? "", /departamento/);
 });
+
+test("modelo Conferir DFDs × CM002: marca cada DFD divergente (com o motivo) ou convergente", async () => {
+  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+  const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
+  let marcados: unknown = null;
+  const r = await executarFluxo(m?.grafo as Grafo, REGISTRO_NOS, {
+    centi: async () => ({ ok: true, linhas: [{ id: "100", situacao: "EM ELABORAÇÃO" }, { id: "101", situacao: "CANCELADO" }] }),
+    api: async (url: string, o?: { body?: unknown }) => {
+      if (url.endsWith("execucao-dfds")) return { ok: true, dfds: [{ id: 1, numero: "10", planejamento: "100" }, { id: 2, numero: "11", planejamento: "101" }, { id: 3, numero: "12", planejamento: "999" }] };
+      marcados = (o?.body as { itens: unknown } | undefined)?.itens;
+      return { ok: true, marcados: 3, convergentes: 1, divergentes: 2 };
+    },
+    cancelado: () => false,
+    host: { mapaEntidades: { "o:1": "2" } },
+  } as never);
+  assert.equal(r.estado, "concluido", r.erro);
+  assert.deepEqual(marcados, [
+    { dfdId: 2, status: "divergente", motivo: "DFD 11 (Planej. 101): situação CANCELADO na CM002" },
+    { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999) não está na CM002" },
+    { dfdId: 1, status: "convergente" },
+  ]);
+});

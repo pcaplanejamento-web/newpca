@@ -17,6 +17,7 @@ const lerDfds = () =>
       id: dfds.id,
       numero: dfds.numero,
       planejamento: dfds.planejamento,
+      valor: dfds.valorTotal,
       execucaoCenti: dfds.execucaoCenti,
       execucaoCentiEm: dfds.execucaoCentiEm,
       orgaoId: dfds.orgaoId,

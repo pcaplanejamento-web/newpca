@@ -49,6 +49,32 @@ export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo
     },
   },
   {
+    id: "conferir-dfds-cm002",
+    nome: "Conferir DFDs × CM002",
+    descricao:
+      "Todos os DFDs do sistema × a CM002 de cada entidade: fora da CM002, situação cancelada, valor e entidade diferentes → marca cada DFD como Divergente ou Convergente (coluna “Centi” da Mesa).",
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("dfds1", "sistema.dfds", 280, 64),
+        n("cm1", "centi.cm002", 280, 288),
+        n("conf1", "dados.conferirCm002", 576, 160, { proibidas: "CANCEL", esperada: "", campoValor: "valor", tolerancia: 0.01, entidade: true }, "DFD × CM002"),
+        n("err1", "erros.apontar", 880, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }, "Divergências"),
+        n("marcar1", "saida.marcarConferencia", 880, 224),
+      ],
+      conexoes: [
+        c("inicio1", "dfds1"),
+        c("inicio1", "cm1"),
+        c("dfds1", "conf1", "saida", "a"),
+        c("cm1", "conf1", "saida", "b"),
+        c("conf1", "err1", "divergentes"),
+        c("conf1", "marcar1", "divergentes", "divergentes"),
+        c("conf1", "marcar1", "conformes", "conformes"),
+      ],
+    },
+  },
+  {
     id: "cm002",
     nome: "Execução dos DFDs na CM002",
     descricao: "Busca a CM002 de cada entidade, grava a situação nos DFDs e aponta os não executados e os que não estão na Centi.",

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CelulaExecucao } from "./CelulaExecucao";
+import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia } from "./CelulaExecucao";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import {
   ASSINATURA_ROTULO,
@@ -68,6 +68,8 @@ export type LinhaDfd = {
   prioridade?: string | null;
   /** Situação do planejamento na Centi (CM002); undefined = a tela não traz a coluna. */
   execucao?: string | null;
+  /** Conferência com a CM002: convergente | divergente (+ o motivo); undefined = a tela não traz a coluna. */
+  conferencia?: { status: string | null; motivo: string | null };
 };
 
 /** O PCA de uma linha (protocolo, DFD ou item): o ano + o nome do PCA cadastrado (a dica). */
@@ -182,6 +184,7 @@ export function PlanilhaDfds({
   const temPca = linhas.some((l) => l.pca !== undefined);
   const temPrioridade = linhas.some((l) => l.prioridade !== undefined);
   const temExecucao = linhas.some((l) => l.execucao != null);
+  const temConferencia = linhas.some((l) => l.conferencia?.status);
 
   const colEstado: Column<LinhaDfd>[] = semEstado
     ? []
@@ -287,6 +290,18 @@ export function PlanilhaDfds({
             nowrap: true,
             value: (r: LinhaDfd) => r.execucao ?? "Não verificado",
             render: (r: LinhaDfd) => <CelulaExecucao situacao={r.execucao} />,
+          },
+        ]
+      : []),
+    ...(temConferencia
+      ? [
+          {
+            key: "conferenciaCenti",
+            header: "Centi",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: LinhaDfd) => rotuloConferencia(r.conferencia?.status),
+            render: (r: LinhaDfd) => <CelulaConferenciaCenti status={r.conferencia?.status} motivo={r.conferencia?.motivo} />,
           },
         ]
       : []),

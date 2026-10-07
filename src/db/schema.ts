@@ -442,6 +442,10 @@ export const dfds = sqliteTable(
     // Situação do planejamento na Centi (CM002), lida pela Automação "Verificar execução" (migração `0089`).
     execucaoCenti: text("execucao_centi"),
     execucaoCentiEm: text("execucao_centi_em"),
+    // Conferência com a CM002 (migração `0092`): convergente | divergente + o motivo.
+    conferenciaCenti: text("conferencia_centi"),
+    conferenciaCentiMotivo: text("conferencia_centi_motivo"),
+    conferenciaCentiEm: text("conferencia_centi_em"),
     criadoPor: integer("criado_por").references(() => usuarios.id, {
       onDelete: "set null",
     }),

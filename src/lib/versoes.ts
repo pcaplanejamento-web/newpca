@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.27.0",
+    data: "2026-10-07",
+    titulo: "DFDs conferidos com a CM002",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Modelo de fluxo “Conferir DFDs × CM002”: todos os DFDs do sistema comparados com a CM002 (presença, situação, valor, entidade) e marcados como Divergente ou Convergente.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Mesa", texto: "Coluna “Centi” na tabela de DFDs: Convergente/Divergente, com o motivo da divergência na dica.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.26.1",
     data: "2026-10-07",
     titulo: "Tela Protocolo pela API, por repartição",

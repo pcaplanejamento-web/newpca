@@ -73,6 +73,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/automacao/registros": { GET: ADMIN, POST: ADMIN },
   "admin/automacao/credencial-centi": { GET: ADMIN, PUT: ADMIN, DELETE: ADMIN },
   "admin/automacao/execucao-dfds": { GET: ADMIN, POST: ADMIN },
+  "admin/automacao/conferencia-dfds": { POST: ADMIN },
   "admin/automacao/fluxos": { GET: ADMIN, POST: ADMIN },
   "admin/automacao/fluxos/[id]": { GET: ADMIN, PATCH: ADMIN, POST: ADMIN, DELETE: ADMIN },
   "admin/avaliacao": { GET: ADMIN, PATCH: ADMIN, DELETE: ADMIN },

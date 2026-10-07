@@ -640,6 +640,31 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "saida.marcarConferencia",
+    categoria: "saida",
+    rotulo: "Marcar DFDs × Centi",
+    descricao: "Marca cada DFD do sistema como DIVERGENTE (com o motivo) ou CONVERGENTE em relação à CM002 — a coluna “Centi” da Mesa.",
+    icone: "save",
+    entradas: ["divergentes", "conformes"],
+    saidas: ["saida"],
+    rotulosPortas: { divergentes: "Divergentes", conformes: "Convergentes" },
+    campos: [],
+    rodaSemItens: true,
+    executar: async (e, _c, ctx) => {
+      const itens = marcacoesConferencia(so(e, "divergentes"), so(e, "conformes"));
+      if (!itens.length) return { saida: [] };
+      const out: Item[] = [];
+      for (let i = 0; i < itens.length; i += 2000) {
+        if (ctx.cancelado()) break;
+        ctx.aviso(`Marcando os DFDs (${Math.min(i + 2000, itens.length)} de ${itens.length})…`);
+        const r = await ctx.api("/api/admin/automacao/conferencia-dfds", { method: "POST", body: { itens: itens.slice(i, i + 2000) } });
+        if (!r.ok) throw new Error(r.error || "Não consegui marcar os DFDs.");
+        out.push({ marcados: r.marcados, convergentes: r.convergentes, divergentes: r.divergentes });
+      }
+      return { saida: out };
+    },
+  },
+  {
     tipo: "saida.notificar",
     categoria: "saida",
     rotulo: "Avisar no sino",
@@ -698,6 +723,29 @@ export function separarCadastrados(itens: Item[], sistema: Item[]): { novos: Ite
     (id && ids.has(id)) || nums.has(chaveProto(it)) ? out.cadastrados.push(it) : out.novos.push(it);
   }
   return out;
+}
+
+/** Um status por DFD (pelo id do sistema): divergente vence; o motivo = as mensagens únicas, unidas por "; ". */
+export function marcacoesConferencia(divergentes: Item[], conformes: Item[]): { dfdId: number; status: "convergente" | "divergente"; motivo?: string }[] {
+  const m = new Map<number, { dfdId: number; status: "convergente" | "divergente"; msgs: string[] }>();
+  const idDe = (it: Item) => {
+    const n = Number(it.dfdId ?? it.id);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  };
+  for (const it of divergentes) {
+    const id = idDe(it);
+    if (id == null) continue;
+    const x = m.get(id) ?? { dfdId: id, status: "divergente" as const, msgs: [] };
+    x.status = "divergente";
+    const msg = str(it.mensagem).trim();
+    if (msg && !x.msgs.includes(msg)) x.msgs.push(msg);
+    m.set(id, x);
+  }
+  for (const it of conformes) {
+    const id = idDe(it);
+    if (id != null && !m.has(id)) m.set(id, { dfdId: id, status: "convergente", msgs: [] });
+  }
+  return [...m.values()].map((x) => (x.status === "divergente" ? { dfdId: x.dfdId, status: x.status, motivo: x.msgs.join("; ").slice(0, 2000) } : { dfdId: x.dfdId, status: x.status }));
 }
 
 export type OpcoesCm002 = { proibidas: string[]; esperada: string[]; campoValor: string; tolerancia: number; entidade: ((d: Item) => string) | null };
