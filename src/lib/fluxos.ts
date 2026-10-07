@@ -1,6 +1,8 @@
-import { and, desc, eq, getTableColumns, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, isNull, ne, or } from "drizzle-orm";
 import { automacaoFluxos, usuarios } from "@/db/schema";
 import { getDb } from "./db";
+import { idsAutomacoesMesa, PREF_AUTOMACOES_MESA } from "./automacao-mesa";
+import { listarPreferenciasTabela } from "./preferencias-tabela";
 import { type AjudaFluxo, cicloDeSubfluxos, fluxoVisivel, lerAjudaFluxo, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
 import { comandoLimparProgresso, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
 
@@ -79,6 +81,18 @@ export async function listarPublicos(usuarioId: number): Promise<FluxoAutomacao[
       .orderBy(desc(automacaoFluxos.atualizadoEm))
       .limit(200)
   ).map(doBanco);
+}
+
+/** As automações que a pessoa pôs na MESA DO SISTEMA (a preferência dela), só as que ela ainda pode ver — na ordem escolhida. */
+export async function automacoesDaMesa(usuarioId: number): Promise<{ id: number; nome: string }[]> {
+  const ids = idsAutomacoesMesa((await listarPreferenciasTabela(usuarioId, PREF_AUTOMACOES_MESA))[PREF_AUTOMACOES_MESA]);
+  if (!ids.length) return [];
+  const rows = await getDb()
+    .select({ id: automacaoFluxos.id, nome: automacaoFluxos.nome, publico: automacaoFluxos.publico, criadoPor: automacaoFluxos.criadoPor })
+    .from(automacaoFluxos)
+    .where(inArray(automacaoFluxos.id, ids.slice(0, 50)));
+  const por = new Map(rows.filter((r) => fluxoVisivel(r, usuarioId)).map((r) => [r.id, { id: r.id, nome: r.nome }]));
+  return ids.flatMap((id) => por.get(id) ?? []);
 }
 
 export async function getFluxo(id: number): Promise<FluxoAutomacao | null> {

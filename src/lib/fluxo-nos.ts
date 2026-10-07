@@ -606,6 +606,7 @@ const NOS: DefNo[] = [
     campos: [
       { chave: "limite", rotulo: "Máximo de DFDs", tipo: "numero", padrao: 5000, ajuda: "Proteção — até 20000." },
       { chave: "pdf", rotulo: "Emitir e ler o PDF do DFD", tipo: "booleano", entrada: true, padrao: true, ajuda: "Desligado = só o planejamento (situação) — bem mais rápido." },
+      { chave: "completo", rotulo: "Guardar o DFD inteiro", tipo: "booleano", padrao: false, ajuda: "Ligado: o DFD lido completo vai em “centi.dfd” — a base do “Substituir DFD pela Centi”." },
       {
         chave: "falhaErro",
         rotulo: "Falha de comunicação para o fluxo",
@@ -615,7 +616,7 @@ const NOS: DefNo[] = [
       },
     ],
     executar: async (e, c, ctx) => {
-      const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean) => Promise<Item>) | undefined;
+      const ler = ctx.host.lerDfdCenti as ((plan: string, entidade?: string, pdf?: boolean, completo?: boolean) => Promise<Item>) | undefined;
       if (!ler) throw new Error("A busca do DFD na Centi só funciona na tela da Automação.");
       const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 5000));
       const itens = so(e).slice(0, max);
@@ -633,7 +634,7 @@ const NOS: DefNo[] = [
         if (ctx.cancelado()) break;
         ctx.aviso(`DFD ${str(it.numero)} · planejamento ${str(it.planejamento)} (${i + 1} de ${itens.length})…`);
         try {
-          out.push({ ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, c.pdf !== false) });
+          out.push({ ...it, centi: await ler(str(it.planejamento), str(it.entidade) || undefined, c.pdf !== false, c.completo === true) });
           ctx.parcial?.([out[out.length - 1]]);
         } catch (x) {
           const msg = x instanceof Error ? x.message : String(x);
@@ -1252,6 +1253,49 @@ const NOS: DefNo[] = [
   },
 
   // ——— Saída
+  {
+    tipo: "saida.substituirDfd",
+    categoria: "saida",
+    rotulo: "Substituir DFD pela Centi",
+    descricao:
+      "Substitui os dados de cada DFD gravado (id) pelos do DFD lido na Centi (“Buscar DFD na Centi” com “Guardar o DFD inteiro”) — a mesma sobrescrita do banner, com o histórico.",
+    icone: "save",
+    entradas: ["entrada"],
+    saidas: ["substituidos", "erros"],
+    campos: [],
+    executar: async (e, _c, ctx) => {
+      const subst = ctx.host.substituirDfd as ((id: number, dfd: Item) => Promise<{ numero: string; itens: number }>) | undefined;
+      if (!subst) throw new Error("A substituição do DFD só funciona na tela da Automação.");
+      const ok: Item[] = [];
+      const erros: Item[] = [];
+      const itens = so(e);
+      for (const [i, it] of itens.entries()) {
+        if (ctx.cancelado()) break;
+        const dfd = (it.centi as Item | null | undefined)?.dfd as Item | undefined;
+        const id = Number(it.id);
+        if (!(id > 0) || !dfd) {
+          erros.push({ ...it, erro: !dfd ? str(it.centiErro) || "Sem o DFD lido na Centi (ligue “Guardar o DFD inteiro”)." : "Item sem o id do DFD." });
+          continue;
+        }
+        ctx.aviso(`Substituindo o DFD ${str(it.numero)} (${i + 1} de ${itens.length})…`);
+        // O DFD inteiro não segue adiante (pesado): fica só o resumo da Centi.
+        const leve = { ...it, centi: { ...(it.centi as Item), dfd: undefined } };
+        let feito: Item;
+        try {
+          const r = await subst(id, dfd);
+          feito = { ...leve, substituido: true, itensGravados: r.itens };
+          ok.push(feito);
+        } catch (x) {
+          const msg = x instanceof Error ? x.message : String(x);
+          if (/interrompido/i.test(msg)) throw x;
+          feito = { ...leve, erro: msg };
+          erros.push(feito);
+        }
+        ctx.parcial?.([feito]);
+      }
+      return { substituidos: ok, erros };
+    },
+  },
   {
     tipo: "saida.gravarExecucao",
     categoria: "saida",

@@ -4329,6 +4329,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`subfluxosProibidos`); tornar privado um fluxo usado por fluxos de outras pessoas = 409. `Switch` "Pública" no
   `ConfigFluxo`, selo "Pública" no cartão. `DataTable.linhasSalvas` = as linhas por página do rodapé salvas no aparelho
   (a tabela dos itens processados: ordem de processamento, coluna Órgão).
+- **SUBSTITUIR DFD PELA CENTI + AUTOMAÇÕES NA MESA (v1.49.0, sem migração):** `lerDfdCentiPorCodigo(…, completo)` devolve o
+  DFD lido INTEIRO (`centi.dfd`; campo "Guardar o DFD inteiro" do `leitura.dfdCenti`) e o nó **`saida.substituirDfd`**
+  (portas `substituidos`/`erros`) chama o host `substituirDfd` = **`substituirDfdPelaCenti`** (`fluxo-navegador.ts`): `GET
+  /api/dfd/[id]` → o MESMO nº de planejamento (senão erro) → `normalizarSecoesDfd` + `herdarTratamentos` (sem assinatura lida
+  — PDF sem OCR — ficam as do gravado) → `enviarDfdEmLotes(metaDoDfd(…, {origem:"sobrescrita"}), …, {existia:true})` — a
+  unidade, o protocolo e o PCA do gravado ficam; `metaDoDfd` (`importar-dfd.ts`) é o cabeçalho único do envio (também na
+  protocolação automática). Modelo **`substituir-dfds-centi`** (Início → Ler do sistema pelo `{{planejamento}}` → Órgão na
+  Centi → Buscar DFD {completo} → Substituir). **Mesa do SISTEMA (nunca a do PCA):** `AutomacoesMesa` (DS — o quadrado
+  `IconRobo` na barra, ao lado dos Dados completos) lista as automações da preferência PESSOAL `automacao:mesa` `{ids}`
+  (`automacao-mesa.ts`: `idsAutomacoesMesa`/`alternarAutomacaoMesa`; `automacoesDaMesa` em `fluxos.ts` — só as que a pessoa
+  vê, `fluxoVisivel`; `carregarMesa` só para o ADM). Escolher grava o DISPARO na aba (`gravarDisparoMesa`, `sessionStorage`
+  — os DFDs selecionados, senão os à vista: `{id, numero, planejamento}`) e vai à Automação, que o lê UMA vez
+  (`lerDisparoMesa`), confirma e roda com `host.__entrada` (`executar(…, entrada)` — também na fila). No editor, o `Switch`
+  "Disponível na Mesa" grava a preferência na hora; o `GET …/fluxos` devolve `naMesa`.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

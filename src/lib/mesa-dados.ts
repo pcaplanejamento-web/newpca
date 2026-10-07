@@ -5,6 +5,7 @@ import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
 import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
+import { automacoesDaMesa } from "./fluxos";
 import { colunasDaMesa } from "./mesa-colunas";
 import { idDoFiltro } from "./escopo-unidades-core";
 import { unidadesAcessiveis, unidadesDaSessao } from "./grupos";
@@ -145,8 +146,12 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
  * num ÚNICO texto (`listas` — `mesa-listas.ts`): o React não serializa milhares de linhas valor a valor (CPU do Worker).
  */
 export async function carregarMesa(u: UsuarioSessao | null) {
-  const { dfds, protocolos, ...resto } = await montarMesa(u);
-  return { ...resto, listas: listasParaTexto({ protocolos, dfds }, Date.now()) };
+  // As AUTOMAÇÕES que a pessoa pôs na Mesa (só a Mesa do SISTEMA; a Automação é do Administrador).
+  const [{ dfds, protocolos, ...resto }, automacoes] = await Promise.all([
+    montarMesa(u),
+    u?.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
+  ]);
+  return { ...resto, automacoes, listas: listasParaTexto({ protocolos, dfds }, Date.now()) };
 }
 
 /**

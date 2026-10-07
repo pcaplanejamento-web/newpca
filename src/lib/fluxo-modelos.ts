@@ -331,6 +331,32 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
       ],
     },
   },
+  {
+    id: "substituir-dfds-centi",
+    nome: "Substituir DFDs pelos dados da Centi",
+    descricao:
+      "Os DFDs escolhidos (na Mesa → botão Automações, ou pelos nºs de planejamento) são lidos na Centi e os dados gravados no sistema são SUBSTITUÍDOS pelos da Centi.",
+    ajuda: {
+      funciona:
+        "Cada DFD é procurado no sistema pelo nº de planejamento, emitido na Centi (no órgão dele) e lido inteiro. Os dados gravados são trocados pelos da Centi — a mesma sobrescrita do banner: a unidade, o protocolo e o PCA ficam; o que a Centi não traz e o sistema já tratou é mantido.",
+      executa:
+        "Na Mesa do sistema, selecione os DFDs e toque em Automações → esta automação (marque “Disponível na Mesa” nas configurações dela). Com a extensão da Centi pronta.",
+      resultado: "Os DFDs regravados com os dados da Centi (o histórico registra “Sobrescrita do DFD”) e a lista dos que não puderam ser substituídos, com o motivo.",
+    },
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("dfds1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "planejamento", valor: "{{planejamento}}", entrega: "lista" }),
+        n("org1", "centi.orgao", 576, 160, { origem: "itens", campo: "entidade", entrega: "todos" }),
+        n("err1", "erros.apontar", 880, 352, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): o órgão não tem o ID da Centi cadastrado", nivel: "atencao" }),
+        n("ler1", "leitura.dfdCenti", 880, 160, { pdf: true, completo: true }),
+        n("sub1", "saida.substituirDfd", 1184, 160),
+        n("err2", "erros.apontar", 1488, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}) não substituído: {{erro}}", nivel: "erro" }),
+      ],
+      conexoes: [c("inicio1", "dfds1"), c("dfds1", "org1"), c("org1", "ler1"), c("org1", "err1", "semOrgao"), c("ler1", "sub1"), c("sub1", "err2", "erros")],
+    },
+  },
 ];
 
 /** O grafo do modelo com os subfluxos (`fluxoModelo`) trocados pelos ids dos fluxos já criados (`criados`: modelo → id). */

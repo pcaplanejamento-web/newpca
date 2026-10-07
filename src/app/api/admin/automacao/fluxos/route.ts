@@ -3,6 +3,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { cicloAoGravar, criarFluxo, listarFluxosDe, listarPublicos, subfluxosProibidos } from "@/lib/fluxos";
 import { criarFluxoSchema } from "@/lib/fluxos-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
+import { idsAutomacoesMesa, PREF_AUTOMACOES_MESA } from "@/lib/automacao-mesa";
 import { listarPreferenciasTabela } from "@/lib/preferencias-tabela";
 
 /** A ORDEM dos cartões de cada pessoa (arrastar e soltar na lista). */
@@ -18,10 +19,16 @@ export async function GET() {
   const [fluxos, publicos, prefs] = await Promise.all([
     listarFluxosDe(g.u.id),
     listarPublicos(g.u.id),
-    listarPreferenciasTabela(g.u.id, CHAVE_ORDEM).catch(() => ({}) as Record<string, unknown>),
+    // As preferências da Automação numa consulta só: a ordem dos cartões e as que vão à Mesa.
+    listarPreferenciasTabela(g.u.id, "automacao:").catch(() => ({}) as Record<string, unknown>),
   ]);
   const o = (prefs[CHAVE_ORDEM] as { ids?: unknown } | undefined)?.ids;
-  return ok({ fluxos, publicos, ordem: Array.isArray(o) ? o.filter((x): x is number => Number.isInteger(x)) : [] });
+  return ok({
+    fluxos,
+    publicos,
+    ordem: Array.isArray(o) ? o.filter((x): x is number => Number.isInteger(x)) : [],
+    naMesa: idsAutomacoesMesa(prefs[PREF_AUTOMACOES_MESA]),
+  });
 }
 
 export async function POST(req: Request) {

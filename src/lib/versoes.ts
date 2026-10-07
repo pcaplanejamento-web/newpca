@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.49.0",
+    data: "2026-10-07",
+    titulo: "Substituir DFD pelos dados da Centi e automações na Mesa",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Modelo “Substituir DFDs pelos dados da Centi”: cada DFD é lido na Centi e os dados gravados no sistema são substituídos pelos da Centi (a mesma sobrescrita do banner, com o histórico).", link: "/painel/automacao" },
+      { tipo: "novo", area: "Mesa", texto: "Botão Automações na barra da Mesa do sistema: roda a automação escolhida com os DFDs selecionados (ou os à vista).", link: "/painel/mesa" },
+      { tipo: "novo", area: "Automação", texto: "“Disponível na Mesa” nas configurações de cada automação — escolha pessoal de quais aparecem no botão da Mesa.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.48.0",
     data: "2026-10-07",
     titulo: "Automações de cada ADM, públicas ou privadas",

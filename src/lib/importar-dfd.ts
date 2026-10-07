@@ -1,4 +1,5 @@
 import type { DfdItemPayload, DfdMetaPayload } from "./dfd-validation";
+import type { DfdParseado } from "./parse-dfd-comum";
 import type { DfdSobrescrito } from "./protocolo";
 
 /**
@@ -7,6 +8,34 @@ import type { DfdSobrescrito } from "./protocolo";
  * retry de falhas transitórias e, se um lote falhar de vez, apaga o DFD parcial
  * (não deixa DFD pela metade). Reusado pelo import avulso e pelo de protocolo.
  */
+
+/** O cabeçalho do envio a partir do DFD lido — a MESMA forma na protocolação automática, no avulso e na substituição. */
+export function metaDoDfd(
+  d: DfdParseado,
+  extra: Pick<DfdMetaPayload, "anoPca" | "reparticaoId" | "origem"> & Partial<Pick<DfdMetaPayload, "protocoloId" | "escolhas">>,
+): DfdMetaPayload {
+  return {
+    numero: d.numero,
+    planejamento: d.planejamento,
+    tipo: d.tipo,
+    objeto: d.objeto,
+    orgaoEntidade: d.orgaoEntidade,
+    setorRequisitante: d.setorRequisitante,
+    siglaSetor: d.siglaSetor,
+    responsavel: d.responsavel,
+    matricula: d.matricula,
+    email: d.email,
+    telefone: d.telefone,
+    numeroContrato: d.numeroContrato,
+    numeroAta: d.numeroAta,
+    numeroLicitacao: d.numeroLicitacao,
+    valorTotal: d.valorTotal,
+    nomeArquivo: d.nomeArquivo,
+    secoes: d.secoes,
+    assinaturas: d.assinaturas,
+    ...extra,
+  } as DfdMetaPayload;
+}
 
 const LOTE = 200; // itens por request no cliente (o servidor aceita até 1000)
 const TENTATIVAS = 3; // tentativas por request (só p/ falhas transitórias)

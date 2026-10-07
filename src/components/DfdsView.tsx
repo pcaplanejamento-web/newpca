@@ -84,6 +84,8 @@ import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
+import { AutomacoesMesa } from "./AutomacoesMesa";
+import { gravarDisparoMesa } from "@/lib/automacao-mesa";
 import { PresencaNoItem } from "./PresencaNoItem";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
@@ -216,6 +218,7 @@ export function DfdsView({
   dadosCompletos = false,
   seletorMesa,
   colunasAuto,
+  automacoes = [],
 }: {
   /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
   pode: PodeMesa;
@@ -252,6 +255,8 @@ export function DfdsView({
   seletorMesa?: ReactNode;
   /** As COLUNAS criadas pelas automações (o nó "Gravar na coluna da Mesa") — no fim de cada tabela. */
   colunasAuto?: ColunasMesa;
+  /** As AUTOMAÇÕES que a pessoa pôs na Mesa (só na Mesa do SISTEMA — a do PCA não recebe). */
+  automacoes?: { id: number; nome: string }[];
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -360,6 +365,17 @@ export function DfdsView({
   // Listas recarregadas OU filtradas: some da seleção o que não está mais à vista (a edição em massa
   // nunca atinge uma linha escondida pelo filtro).
   useEffect(() => setSelDfds((s) => podar(s, new Set(dfdsF.map((d) => d.id)))), [dfdsF]);
+  // AUTOMAÇÕES da Mesa: rodam com os DFDs SELECIONADOS; sem seleção, com os DFDs À VISTA (os filtros da Mesa).
+  const alvoAutomacao = useMemo(() => {
+    const lista = selDfds.size ? dfdsF.filter((d) => selDfds.has(d.id)) : dfdsF;
+    return { lista, rotulo: `${num(lista.length)} DFD(s) ${selDfds.size ? "selecionado(s)" : "à vista"}` };
+  }, [selDfds, dfdsF]);
+  const rodarAutomacao = (fluxoId: number) => {
+    const itens = alvoAutomacao.lista.map((d) => ({ id: d.id, numero: d.numero, planejamento: d.planejamento ?? "" }));
+    if (!itens.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre DFDs.");
+    if (!gravarDisparoMesa({ fluxoId, itens })) return void toast.error("O navegador não deixou levar os DFDs à Automação.");
+    router.push("/painel/automacao");
+  };
   useEffect(() => setSelProtos((s) => podar(s, new Set(protocolosF.map((p) => p.id)))), [protocolosF]);
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
@@ -2160,6 +2176,7 @@ export function DfdsView({
             onClick={reverificarTudo}
           />
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
+          {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao.rotulo} onEscolher={rodarAutomacao} />}
           {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
           {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
           {pode.vis.responsavel.ver && (

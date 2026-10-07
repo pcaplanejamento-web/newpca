@@ -7,7 +7,7 @@
 import { classificarAssunto, gateProtocolo, protocolarHabilitado, type RegrasAvaliacao } from "./avaliacao-core";
 import { avaliarLinhaDfd } from "./conferencia-dfd";
 import { duplicadosDfds, normalizarSecoesDfd } from "./dfd-tratamento";
-import { buscarExistentes, buscarProcesso, enviarDfdEmLotes } from "./importar-dfd";
+import { buscarExistentes, buscarProcesso, enviarDfdEmLotes, metaDoDfd } from "./importar-dfd";
 import { mesclarAssinaturasOcr, precisaOcr } from "./ocr-assinatura-core";
 import { type DfdParseado, tipoCurtoDfd } from "./parse-dfd-comum";
 import type { ProtocoloMeta } from "./parse-protocolo-pdf-core";
@@ -124,30 +124,7 @@ export async function importarProtocolo(lido: ProtocoloLido, apontamentos: strin
   for (const [i, d] of dfds.entries()) {
     try {
       await enviarDfdEmLotes(
-        {
-          numero: d.numero,
-          planejamento: d.planejamento,
-          tipo: d.tipo,
-          objeto: d.objeto,
-          orgaoEntidade: d.orgaoEntidade,
-          setorRequisitante: d.setorRequisitante,
-          siglaSetor: d.siglaSetor,
-          responsavel: d.responsavel,
-          matricula: d.matricula,
-          email: d.email,
-          telefone: d.telefone,
-          anoPca,
-          numeroContrato: d.numeroContrato,
-          numeroAta: d.numeroAta,
-          numeroLicitacao: d.numeroLicitacao,
-          reparticaoId: repIds[i],
-          protocoloId: pj.protocoloId,
-          valorTotal: d.valorTotal,
-          nomeArquivo: d.nomeArquivo,
-          secoes: d.secoes,
-          assinaturas: d.assinaturas,
-          origem: "automacao",
-        },
+        metaDoDfd(d, { anoPca, reparticaoId: repIds[i], protocoloId: pj.protocoloId, origem: "automacao" }),
         d.itens,
       );
     } catch (e) {

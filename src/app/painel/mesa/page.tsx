@@ -63,6 +63,7 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
       abrirInicial={abrirInicial}
       dadosCompletos={m.dadosCompletos}
       colunasAuto={m.colunasAuto}
+      automacoes={m.automacoes}
     />
   );
 }

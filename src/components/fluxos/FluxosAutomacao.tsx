@@ -25,7 +25,9 @@ import {
   subfluxosDoGrafo,
   validarGrafo,
 } from "@/lib/fluxo-core";
-import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
+import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
+import type { DfdParseado } from "@/lib/parse-dfd-comum";
+import { alternarAutomacaoMesa, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA } from "@/lib/automacao-mesa";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
 import { type FluxoFilho, NOS_POR_CATEGORIA, type ProgressoHost, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo } from "@/lib/fluxo-modelos";
@@ -120,6 +122,7 @@ export function FluxosAutomacao({
   const [fluxos, setFluxos] = useState<FluxoAutomacao[] | null>(null);
   // Os PÚBLICOS de outras pessoas (o painel lateral "Novo fluxo").
   const [publicos, setPublicos] = useState<FluxoAutomacao[]>([]);
+  const [naMesa, setNaMesa] = useState<number[]>([]);
   const [aberto, setAberto] = useState<number | null>(null);
   const [rodando, setRodando] = useState<number | null>(null);
   const [passos, setPassos] = useState<Record<string, PassoExec>>({});
@@ -130,7 +133,7 @@ export function FluxosAutomacao({
   const [exec, setExec] = useState<{ id: number; nome: string; total: number } | null>(null);
   const [agora, setAgora] = useState("");
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
-  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo }[]>([]);
+  const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[] }[]>([]);
   const [naFila, setNaFila] = useState(0);
   const rodandoRef = useRef<number | null>(null);
   useEffect(() => onRodando(rodando != null || naFila > 0), [rodando, naFila, onRodando]);
@@ -172,8 +175,9 @@ export function FluxosAutomacao({
   }, [pedidoNovo]);
 
   const carregar = useCallback(async () => {
-    const r = await api<{ fluxos?: FluxoAutomacao[]; publicos?: FluxoAutomacao[]; ordem?: number[] }>("/api/admin/automacao/fluxos");
+    const r = await api<{ fluxos?: FluxoAutomacao[]; publicos?: FluxoAutomacao[]; ordem?: number[]; naMesa?: number[] }>("/api/admin/automacao/fluxos");
     if (r.ok && r.publicos) setPublicos(r.publicos);
+    if (r.ok && r.naMesa) setNaMesa(r.naMesa);
     if (r.ok && r.fluxos) setFluxos(naOrdem(r.fluxos, r.ordem ?? []));
     else if (!fluxos) setFluxos([]);
   }, [fluxos]);
@@ -269,7 +273,9 @@ export function FluxosAutomacao({
         if (!lido) return { importado: false, motivo: "O protocolo não foi lido nesta execução (ligue o nó “Ler protocolo” antes)." };
         return importarProtocolo(lido, apontamentos, importacao);
       },
-      lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean) => lerDfdCentiPorCodigo(emissor, plan, entidade, pdf !== false),
+      lerDfdCenti: (plan: string, entidade?: string, pdf?: boolean, completo?: boolean) =>
+        lerDfdCentiPorCodigo(emissor, plan, entidade, pdf !== false, completo === true),
+      substituirDfd: (id: number, dfd: Item) => substituirDfdPelaCenti(id, dfd as unknown as DfdParseado),
       avisar: (t: string) => toast.info(t, 8000),
       relatorio: (l: Item[]) => {
         relatorio.current.push(...l);
@@ -280,10 +286,10 @@ export function FluxosAutomacao({
 
   /** Executa um fluxo (o grafo passado — o do editor, mesmo sem salvar) e grava o resumo. */
   const executar = useCallback(
-    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false): Promise<ResultadoExec | null> => {
+    async (f: Pick<FluxoAutomacao, "id" | "nome">, grafo: Grafo, agendado = false, entrada?: Item[]): Promise<ResultadoExec | null> => {
       if (rodandoRef.current != null) {
         if (rodandoRef.current === f.id || fila.current.some((x) => x.f.id === f.id)) return null;
-        fila.current.push({ f, grafo });
+        fila.current.push({ f, grafo, entrada });
         setNaFila(fila.current.length);
         if (!agendado) toast.info(`${f.nome}: na fila — roda quando o fluxo atual terminar.`);
         return null;
@@ -317,7 +323,14 @@ export function FluxosAutomacao({
             api,
             cancelado: () => cancelar.current || interrompido.current,
             // Por execução: o cache compartilhado com os subfluxos, os fluxos salvos (lidos UMA vez) e a retomada deste fluxo.
-            host: { ...host, __cache: new Map<string, unknown>(), carregarFluxo: carregadorDeFluxos(), progresso: progressoDe(f.id) },
+            // `__entrada` = os itens vindos de fora (a Mesa) — o Início os entrega.
+            host: {
+              ...host,
+              __cache: new Map<string, unknown>(),
+              carregarFluxo: carregadorDeFluxos(),
+              progresso: progressoDe(f.id),
+              ...(entrada ? { __entrada: entrada } : {}),
+            },
             // A saída COMPLETA de cada nó (o corpo de um laço roda várias vezes: acumula) e os itens AO VIVO.
             aoConcluir: (no, ps) => {
               const its = Object.entries(ps).find(([k, v]) => k !== "__apontados" && k !== "__retorno" && k !== "erro" && v.length)?.[1] ?? [];
@@ -363,7 +376,7 @@ export function FluxosAutomacao({
         // O próximo da fila (no próximo tique — o estado desta execução já assentou).
         const prox = fila.current.shift();
         setNaFila(fila.current.length);
-        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo), 0);
+        if (prox) window.setTimeout(() => void executarRef.current(prox.f, prox.grafo, false, prox.entrada), 0);
       }
     },
     [pronto, pedir, lote, interrompido, host],
@@ -394,6 +407,24 @@ export function FluxosAutomacao({
   }, [pronto]);
   const carregarRef = useRef(carregar);
   carregarRef.current = carregar;
+
+  // DISPARO pela Mesa do sistema: o fluxo escolhido roda com os DFDs que vieram de lá (uma vez; o disparo é apagado).
+  useEffect(() => {
+    if (!pronto || !fluxos) return;
+    const d = lerDisparoMesa();
+    if (!d) return;
+    const f = [...fluxos, ...publicos].find((x) => x.id === d.fluxoId);
+    if (!f) return void toast.error("A automação escolhida na Mesa não está mais disponível.");
+    if (fluxos.some((x) => x.id === f.id)) setAberto(f.id); // a pública de outra pessoa roda sem abrir o editor
+    void (async () => {
+      const sim = await confirmar({
+        titulo: `Executar “${f.nome}”?`,
+        texto: `Com ${d.itens.length} DFD(s) vindo(s) da Mesa.`,
+        confirmar: "Executar",
+      });
+      if (sim) await executarRef.current(f, f.grafo, false, d.itens);
+    })();
+  }, [pronto, fluxos, publicos, confirmar]);
 
   /** Regrava um fluxo salvo com o grafo e a descrição do modelo (o "Atualizar pelo modelo"). */
   async function regravar(f: FluxoAutomacao, grafo: Grafo, m: ModeloFluxo): Promise<boolean> {
@@ -559,6 +590,17 @@ export function FluxosAutomacao({
             cancelar.current = true;
           }}
           onExcluir={() => void excluir(fluxo)}
+          naMesa={naMesa.includes(fluxo.id)}
+          onNaMesa={(ligado) => {
+            // Preferência PESSOAL, gravada na hora (otimista; sem rede, vale nesta sessão).
+            const ids = alternarAutomacaoMesa(naMesa, fluxo.id, ligado);
+            setNaMesa(ids);
+            void fetch("/api/preferencias/tabela", {
+              method: ids.length ? "PUT" : "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(ids.length ? { chave: PREF_AUTOMACOES_MESA, valor: { ids } } : { chave: PREF_AUTOMACOES_MESA }),
+            }).catch(() => undefined);
+          }}
         />
       ) : (
         <ListaFluxos
@@ -1019,8 +1061,12 @@ function EditorFluxo({
   onExecutar,
   onParar,
   onExcluir,
+  naMesa,
+  onNaMesa,
 }: {
   fluxo: FluxoAutomacao;
+  naMesa: boolean;
+  onNaMesa: (ligado: boolean) => void;
   rodando: boolean;
   outroRodando: boolean;
   passos: Record<string, PassoExec>;
@@ -1231,6 +1277,12 @@ function EditorFluxo({
         <EditorFrequencia freq={freq} onFreq={setFreq} />
         {freq.tipo !== "manual" && <Switch checked={ativo} onChange={setAtivo} label="Agendar" dica="Roda sozinho na hora marcada (com esta tela aberta e a extensão pronta)" />}
         <Switch checked={publico} onChange={setPublico} label="Pública" dica="Outros ADMs a veem no painel lateral (Novo fluxo) e podem usar uma cópia ou chamá-la dentro dos fluxos deles" />
+        <Switch
+          checked={naMesa}
+          onChange={onNaMesa}
+          label="Disponível na Mesa"
+          dica="Só para você: aparece no botão Automações da Mesa do sistema e roda com os DFDs selecionados (grava na hora)"
+        />
         </ConfigFluxo>
       </div>
       {freq.tipo !== "manual" && (
