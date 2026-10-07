@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.36.1",
+    data: "2026-10-07",
+    titulo: "Diagrama: arrastar sem conflito com o quadro",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Arrastar o nó por qualquer ponto dele (não só o título) move o nó — antes, o corpo arrastava o quadro de fundo.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Arrastar a linha por qualquer trecho a ajusta para os lados; tocar só marca (não grava ajuste).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.36.0",
     data: "2026-10-07",
     titulo: "Automação: cartões que enchem a tela e se arrastam",

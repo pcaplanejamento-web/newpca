@@ -155,8 +155,11 @@ export function CanvasFluxo({
     if (!a) return;
     const z = vistaRef.current.z;
     if (a.tipo === "dobra") {
+      // Só um ARRASTO de verdade ajusta (tocar para marcar não vira dobra manual).
+      if (Math.abs(e.clientX - a.x0) < 4) return;
       const g = grafoRef.current;
       const x = snap(a.dx0 + (e.clientX - a.x0) / z);
+      if (g.conexoes[a.i]?.x === x) return;
       onMudar({ ...g, conexoes: g.conexoes.map((c, i) => (i === a.i ? { ...c, x } : c)) });
     } else if (a.tipo === "pan") onVista({ ...vistaRef.current, x: a.vx + e.clientX - a.x0, y: a.vy + e.clientY - a.y0 });
     else if (a.tipo === "no") {
@@ -231,20 +234,28 @@ export function CanvasFluxo({
             const dobra = somenteLeitura ? null : dobraDaRota(pts);
             return (
               <g key={`${c.de}-${c.saida}-${c.para}-${c.entrada}`}>
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: a linha se marca/ajusta com o ponteiro; pelo teclado, Organizar refaz as rotas */}
                 <path
                   d={d}
                   fill="none"
                   stroke="transparent"
                   strokeWidth={14}
-                  className={somenteLeitura ? "" : "pointer-events-auto cursor-pointer"}
+                  className={somenteLeitura ? "" : `pointer-events-auto ${dobra ? "cursor-ew-resize" : "cursor-pointer"}`}
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    if (!somenteLeitura) {
-                      setConSel(i);
-                      onSelecionar(null);
-                    }
+                    if (somenteLeitura) return;
+                    setConSel(i);
+                    onSelecionar(null);
+                    // Arrastar a LINHA (qualquer trecho) desloca a dobra vertical para os lados.
+                    if (dobra) comecar(e, { tipo: "dobra", i, x0: e.clientX, dx0: dobra.x });
                   }}
-                />
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    if (c.x != null) onMudar({ ...grafo, conexoes: grafo.conexoes.map((x, j) => (j === i ? { de: x.de, saida: x.saida, para: x.para, entrada: x.entrada } : x)) });
+                  }}
+                >
+                  <title>{dobra ? "Arraste para ajustar a linha · duplo clique volta ao automático · Delete remove" : "Toque para marcar · Delete remove"}</title>
+                </path>
                 <path
                   d={d}
                   fill="none"
@@ -256,29 +267,6 @@ export function CanvasFluxo({
                 {setasDaRota(pts).map((s, k) => (
                   <path key={k} d={SETA} fill={cor} transform={`translate(${s.x} ${s.y}) rotate(${s.ang})`} />
                 ))}
-                {/* A DOBRA: arrastar para os lados ajusta a linha (duplo clique volta à automática). */}
-                {dobra && (
-                  // biome-ignore lint/a11y/noStaticElementInteractions: ajuste fino só com ponteiro; pelo teclado, "Organizar" refaz as rotas
-                  <rect
-                    x={dobra.x - 6}
-                    y={dobra.y0 + 4}
-                    width={12}
-                    height={Math.max(0, dobra.y1 - dobra.y0 - 8)}
-                    fill="transparent"
-                    className="pointer-events-auto cursor-ew-resize"
-                    onPointerDown={(e) => {
-                      setConSel(i);
-                      onSelecionar(null);
-                      comecar(e, { tipo: "dobra", i, x0: e.clientX, dx0: dobra.x });
-                    }}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      onMudar({ ...grafo, conexoes: grafo.conexoes.map((x, j) => (j === i ? { de: x.de, saida: x.saida, para: x.para, entrada: x.entrada } : x)) });
-                    }}
-                  >
-                    <title>Arraste para ajustar a linha · duplo clique volta ao automático</title>
-                  </rect>
-                )}
               </g>
             );
           })}
@@ -294,13 +282,15 @@ export function CanvasFluxo({
             <div
               key={n.id}
               data-no={n.id}
-              className={`absolute rounded-xl border bg-surface shadow-soft transition-shadow ${sel ? "border-accent shadow-[0_0_0_2px_var(--accent)]" : "border-border"} ${n.desativado ? "opacity-50" : ""}`}
+              role="none"
+              // O NÓ INTEIRO arrasta (não só o título) — tocar no corpo nunca arrasta o quadro de fundo; as portas param antes.
+              onPointerDown={(e) => comecar(e, { tipo: "no", id: n.id, x0: e.clientX, y0: e.clientY, nx: n.x, ny: n.y, moveu: false })}
+              className={`absolute cursor-grab rounded-xl border bg-surface shadow-soft transition-shadow active:cursor-grabbing ${sel ? "border-accent shadow-[0_0_0_2px_var(--accent)]" : "border-border"} ${n.desativado ? "opacity-50" : ""}`}
               style={{ left: n.x, top: n.y, width: LARGURA_NO, height: alturaNo(d), borderTop: `3px solid ${cor}` }}
             >
               <button
                 type="button"
                 className="flex h-[46px] w-full cursor-grab items-center gap-2 rounded-t-xl px-2.5 text-left active:cursor-grabbing"
-                onPointerDown={(e) => comecar(e, { tipo: "no", id: n.id, x0: e.clientX, y0: e.clientY, nx: n.x, ny: n.y, moveu: false })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
