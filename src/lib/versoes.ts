@@ -32,6 +32,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.50.1",
+    data: "2026-10-07",
+    titulo: "Seleção da automação carrega os itens",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto:
+          "A tabela de seleção não carregava (“Informe o valor procurado”): o “Ler do sistema” com {{campo}} e sem itens chegando agora lê todos — você escolhe na tabela; vindos da Mesa, segue filtrando.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.50.0",
     data: "2026-10-07",
     titulo: "Automações rodam direto da Mesa, em segundo plano",

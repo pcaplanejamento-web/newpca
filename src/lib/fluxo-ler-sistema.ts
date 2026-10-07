@@ -42,6 +42,13 @@ export function valoresProcurados(valor: string, entrada: Item[]): string[] {
   return [...new Set(vals)];
 }
 
+/** A busca efetiva: com {{campo}} e NENHUM item chegando (execução avulsa ou a prévia da seleção), lê TODOS — a seleção
+ * mostra tudo e o usuário escolhe; com itens (ex.: da Mesa), filtra pelo valor. Valor fixo vazio = `null` (erro). */
+export function buscaEfetiva(busca: string, valor: string, entrada: Item[], valores: string[]): string | null {
+  if (busca === "todos" || valores.length) return busca;
+  return /\{\{/.test(valor) && !entrada.length ? "todos" : null;
+}
+
 /** Os itens do recorte, na ordem da fonte (sem repetir). `todos` ignora os valores. */
 export function lerDoSistema(f: FontesSistema, objeto: ObjetoLeitura, busca: string, valores: string[]): Item[] {
   const quer = new Set(valores);

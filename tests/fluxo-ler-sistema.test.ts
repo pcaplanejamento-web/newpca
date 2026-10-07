@@ -56,3 +56,12 @@ test("Ler do sistema UM POR VEZ: lê um, processa, volta, lê outro — o fim le
   assert.deepEqual(fim.map((x) => [x.visto, x.executado, x.totalLido]), [["1119", true, 2], ["0120", true, 2]]);
   assert.equal(r.passos.c.vezes, 2);
 });
+
+test("buscaEfetiva: {{campo}} sem itens lê todos; com itens filtra; fixo vazio = erro", async () => {
+  const { buscaEfetiva } = await import("../src/lib/fluxo-ler-sistema.ts");
+  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", [], []), "todos");
+  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", [{ planejamento: 12 }], ["12"]), "planejamento");
+  assert.equal(buscaEfetiva("planejamento", "{{planejamento}}", [{}], []), null);
+  assert.equal(buscaEfetiva("planejamento", "", [], []), null);
+  assert.equal(buscaEfetiva("todos", "", [], []), "todos");
+});

@@ -38,7 +38,7 @@ import {
   TIPO_LACO,
 } from "./fluxo-core.ts";
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
-import { BUSCAS, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, valoresProcurados } from "./fluxo-ler-sistema.ts";
+import { BUSCAS, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
 import { aplicarRegra, escolherColunas, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
 import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
@@ -477,9 +477,10 @@ const NOS: DefNo[] = [
     executar: async (e, c, ctx, est): Promise<Portas> => {
       if (e.entrada) {
         const objeto = (str(c.objeto, "dfds") as ObjetoLeitura) in BUSCAS ? (str(c.objeto, "dfds") as ObjetoLeitura) : "dfds";
-        const busca = str(objeto === "protocolos" ? c.buscaProtocolos : objeto === "dfds" ? c.buscaDfds : c.buscaItens, "todos");
+        const pedida = str(objeto === "protocolos" ? c.buscaProtocolos : objeto === "dfds" ? c.buscaDfds : c.buscaItens, "todos");
         const valores = valoresProcurados(str(c.valor), e.entrada);
-        if (busca !== "todos" && !valores.length) throw new Error("Informe o valor procurado (ou {{campo}} do item que chega).");
+        const busca = buscaEfetiva(pedida, str(c.valor), e.entrada, valores);
+        if (!busca) throw new Error("Informe o valor procurado (ou {{campo}} do item que chega).");
         const lidos = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
         if (str(c.entrega, "lista") !== "umPorVez") return { saida: lidos, fim: marcarExecutado([], lidos.length) };
         est.fila = [...lidos];
