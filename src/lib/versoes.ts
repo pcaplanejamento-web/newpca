@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.37.0",
+    data: "2026-10-07",
+    titulo: "Automação: cartões no padrão de Tarefas",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Os cartões das automações usam o MESMO cartão dos quadros de Tarefas (capa, nome e 3 números: nós, última execução, erros) — sem foto, todos do mesmo tamanho; os modelos do “Novo fluxo” também.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Arrastar e reordenar os cartões não embaralha mais a grade (a animação de reorganização mede as posições de layout).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.36.1",
     data: "2026-10-07",
     titulo: "Diagrama: arrastar sem conflito com o quadro",

@@ -2,50 +2,53 @@
 
 import type { ReactNode } from "react";
 import { IconFluxo } from "../icons";
+import { CapaQuadro, CartaoEspaco, type MetricaCartao } from "../QuadroCard";
 
-/** A largura MÍNIMA do cartão: a lista divide a largura em colunas iguais (≥ esta) e o painel "Novo fluxo" ocupa a última. */
-export const LARGURA_CARTAO = "17rem";
+/** A largura MÍNIMA do cartão — a MESMA dos quadros de Tarefas (a grade `auto-fill minmax(15rem)`). */
+export const LARGURA_CARTAO = "15rem";
 
 /** A grade simples dos cartões (o esqueleto e o painel "Novo fluxo"); a lista mede as colunas em JS (`useColunas`). */
-export const GRADE_CARTOES = "grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]";
+export const GRADE_CARTOES = "grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,15rem),1fr))]";
+
+/** O degradê da capa (sem foto): o accent → o accent mais escuro. */
+const DEGRADE = JSON.stringify({ cores: ["#3b82f6", "#1e40af"], angulo: 135 });
 
 /**
- * O CARTÃO de uma automação — o MESMO na lista dos fluxos salvos e no painel "Novo fluxo" (modelos e "Em branco"): sólido
- * e de FORMATO FIXO (a mesma altura sempre): ícone + título (até 3 linhas) + selo, a descrição em até 2 linhas e o rodapé
- * (nós, frequência, a última execução). O cartão inteiro é o botão (44px+ no toque); `marcado` = o escolhido.
+ * O CARTÃO de uma automação — o MESMO desenho dos quadros de Tarefas e dos catálogos (`CartaoEspaco`): a CAPA 16:9 (sem
+ * foto: o degradê + o ícone do fluxo), o sobretítulo, o selo, o nome em até 2 linhas e 3 números. Tamanho SÓLIDO: a altura
+ * vem da capa e das linhas fixas, então todos os cartões têm o mesmo formato. É o mesmo na lista e no painel "Novo fluxo".
  */
 export function CartaoFluxo({
   titulo,
-  descricao,
+  sobretitulo,
   selo,
-  rodape,
+  metricas,
   marcado,
   onClick,
 }: {
   titulo: string;
-  descricao?: string | null;
+  sobretitulo: string;
   selo?: ReactNode;
-  rodape?: ReactNode;
+  metricas: MetricaCartao[];
   marcado?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <CartaoEspaco
       onClick={onClick}
-      aria-pressed={marcado}
-      title={titulo}
-      className={`flex h-48 flex-col gap-2 overflow-hidden rounded-card border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-[box-shadow,transform,border-color] duration-[var(--motion-duration)] ease-[var(--motion-ease)] hover:-translate-y-0.5 hover:shadow-soft motion-reduce:hover:translate-y-0 focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
-        marcado ? "border-accent shadow-[0_0_0_1px_var(--accent)]" : "border-border"
-      }`}
-    >
-      <span className="flex items-start gap-2">
-        <IconFluxo className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
-        <span className="line-clamp-3 min-w-0 flex-1 break-words font-semibold leading-snug text-text">{titulo}</span>
-        {selo && <span className="shrink-0">{selo}</span>}
-      </span>
-      {descricao && <span className="line-clamp-2 text-xs text-muted">{descricao}</span>}
-      {rodape && <span className="mt-auto space-y-0.5 text-xs text-muted">{rodape}</span>}
-    </button>
+      ariaLabel={`Abrir ${titulo}`}
+      atual={marcado}
+      capa={
+        <CapaQuadro quadro={{ cor: "var(--accent)", fundoUrl: null, fundoAjuste: null, fundoGradiente: DEGRADE }}>
+          <span aria-hidden className="absolute inset-0 grid place-items-center text-white/85">
+            <IconFluxo className="h-10 w-10" />
+          </span>
+        </CapaQuadro>
+      }
+      sobretitulo={sobretitulo}
+      selo={selo}
+      nome={titulo}
+      metricas={metricas}
+    />
   );
 }

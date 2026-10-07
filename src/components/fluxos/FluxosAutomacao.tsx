@@ -545,24 +545,46 @@ function useColunas(ref: React.RefObject<HTMLDivElement | null>) {
   return c;
 }
 
-/** A reorganização SUAVE: cada cartão que mudou de lugar desliza do lugar antigo ao novo (FLIP), só com `transform`. */
-function useDeslizar(ref: React.RefObject<HTMLDivElement | null>, versao: unknown) {
-  const antes = useRef(new Map<string, DOMRect>());
+/**
+ * A reorganização SUAVE (FLIP): cada cartão que mudou de LUGAR NA GRADE desliza do lugar antigo ao novo. As posições são
+ * as de LAYOUT (`offsetLeft/Top` — nunca o retângulo com a animação em curso) e a animação anterior é cancelada antes.
+ */
+function useDeslizar(ref: React.RefObject<HTMLDivElement | null>, versao: string) {
+  const antes = useRef(new Map<string, { x: number; y: number }>());
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const ms = duracaoMotionMs();
-    const agora = new Map<string, DOMRect>();
-    for (const i of el.querySelectorAll<HTMLElement>("[data-grade-item]")) {
+    const agora = new Map<string, { x: number; y: number }>();
+    for (const i of el.querySelectorAll<HTMLElement>(":scope > [data-grade-item]")) {
+      if (i.offsetParent === null) continue; // escondido (o que está sendo arrastado)
       const k = i.dataset.gradeItem ?? "";
-      const r = i.getBoundingClientRect();
-      agora.set(k, r);
+      const pos = { x: i.offsetLeft, y: i.offsetTop };
+      agora.set(k, pos);
       const v = antes.current.get(k);
-      if (!v || ms <= 0 || (Math.abs(v.left - r.left) < 1 && Math.abs(v.top - r.top) < 1)) continue;
-      i.animate([{ transform: `translate(${v.left - r.left}px, ${v.top - r.top}px)` }, { transform: "none" }], { duration: ms, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+      if (!v || ms <= 0 || (v.x === pos.x && v.y === pos.y)) continue;
+      for (const an of i.getAnimations()) an.cancel();
+      i.animate([{ transform: `translate(${v.x - pos.x}px, ${v.y - pos.y}px)` }, { transform: "none" }], { duration: ms, easing: "cubic-bezier(0.2, 0, 0, 1)" });
     }
     antes.current = agora;
   }, [ref, versao]);
+}
+
+/** O cartão de um fluxo salvo: frequência, estado e os números (nós · última execução · erros). */
+function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
+  const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
+  const ultima = !u?.estado ? "—" : u.estado === "concluido" ? "Concluída" : u.estado === "falhou" ? "Falhou" : u.estado === "cancelado" ? "Cancelada" : u.estado;
+  return {
+    titulo: f.nome,
+    // Sem repetir: o sobretítulo diz QUANDO roda; o selo, só o estado especial (executando/agendado).
+    sobretitulo: f.ativo ? `${rotuloFrequencia(f.frequencia)}${f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}` : "Manual",
+    selo: rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : undefined,
+    metricas: [
+      { rotulo: "Nós", valor: String(f.grafo.nos.length) },
+      { rotulo: "Última", valor: ultima, cor: !u?.estado ? undefined : u.estado === "concluido" && !u.apontados ? "var(--ok)" : "var(--warn)" },
+      { rotulo: "Erros", valor: u?.estado ? String(u.apontados ?? 0) : "—", cor: u?.apontados ? "var(--danger)" : undefined },
+    ],
+  };
 }
 
 function ListaFluxos({
@@ -623,13 +645,13 @@ function ListaFluxos({
   for (const f of lista) {
     const chave = `f:${f.id}`;
     if (sombra && arrasto?.destino.antesDe === chave) itens.push(sombra);
-    const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
     itens.push(
       <div
         key={chave}
         data-grade-item={chave}
         role="none"
-        className={`${arrasto?.chave === chave ? "hidden" : ""} touch-manipulation select-none [-webkit-touch-callout:none]`}
+        title={f.descricao ?? undefined}
+        className={`${arrasto?.chave === chave ? "hidden" : ""} h-full touch-manipulation select-none [-webkit-touch-callout:none]`}
         onPointerDown={(e) => iniciar(e, chave)}
         onClickCapture={(e) => {
           if (foiArrasto()) {
@@ -638,32 +660,15 @@ function ListaFluxos({
           }
         }}
       >
-        <CartaoFluxo
-          titulo={f.nome}
-          descricao={f.descricao}
-          onClick={() => onAbrir(f.id)}
-          selo={rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : <Badge tone="slate">Manual</Badge>}
-          rodape={
-            <>
-              <span className="block truncate">
-                {f.grafo.nos.length} nó(s) · {rotuloFrequencia(f.frequencia)}
-                {f.ativo && f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}
-              </span>
-              {u?.estado && (
-                <span className={`block truncate ${u.estado === "concluido" && !u.apontados ? "text-[var(--ok)]" : "text-[var(--warn)]"}`}>
-                  Última: {u.estado === "concluido" ? "concluída" : u.estado}
-                  {u.apontados ? ` · ${u.apontados} erro(s)` : ""}
-                  {f.ultimaEm ? ` · ${dataHoraBR(f.ultimaEm)}` : ""}
-                </span>
-              )}
-            </>
-          }
-        />
+        <CartaoFluxo {...cartaoDoFluxo(f, rodando)} onClick={() => onAbrir(f.id)} />
       </div>,
     );
   }
   if (sombra && !arrasto?.destino.antesDe) itens.push(sombra);
-  const preso = arrasto ? (lista.find((f) => `f:${f.id}` === arrasto.chave)?.nome ?? MODELOS_FLUXO.find((m) => `m:${m.id}` === arrasto.chave)?.nome) : null;
+  // O cartão PRESO ao ponteiro: o próprio cartão (fluxo ou modelo), igual ao que está na grade.
+  const fPreso = arrasto ? lista.find((f) => `f:${f.id}` === arrasto.chave) : undefined;
+  const mPreso = arrasto && !fPreso ? MODELOS_FLUXO.find((m) => `m:${m.id}` === arrasto.chave) : undefined;
+  const preso = fPreso ? cartaoDoFluxo(fPreso, rodando) : mPreso ? cartaoDoModelo(mPreso, lista) : null;
 
   const escolha = (
     <EscolherNovoFluxo
@@ -692,7 +697,7 @@ function ListaFluxos({
             </Button>
           </div>
         ) : (
-          <div ref={grade} className="grid" style={estiloGrade}>
+          <div ref={grade} className="grid auto-rows-fr" style={estiloGrade}>
             {itens}
           </div>
         )}
@@ -713,7 +718,7 @@ function ListaFluxos({
       )}
       {arrasto && preso && (
         <CartaoPreso arrasto={arrasto} fantasma={fantasma}>
-          <CartaoFluxo titulo={preso} onClick={() => {}} />
+          <CartaoFluxo {...preso} onClick={() => {}} />
         </CartaoPreso>
       )}
     </div>
@@ -731,6 +736,20 @@ function useDesktop(): boolean {
     return () => mq.removeEventListener("change", on);
   }, []);
   return d;
+}
+
+/** O cartão de um MODELO (ou "Em branco") no painel "Novo fluxo" — o mesmo desenho dos fluxos salvos. */
+function cartaoDoModelo(x: { id: string; nome: string; grafo?: Grafo; frequencia?: Frequencia }, fluxos: FluxoAutomacao[]) {
+  return {
+    titulo: x.nome,
+    sobretitulo: x.id ? "Modelo pronto" : "Do zero",
+    selo: x.id && fluxos.some((f) => f.nome === x.nome) ? <Badge tone="emerald">Já existe</Badge> : undefined,
+    metricas: [
+      { rotulo: "Nós", valor: String(x.grafo?.nos.length ?? 1) },
+      { rotulo: "Frequência", valor: x.frequencia ? rotuloFrequencia(x.frequencia) : "Manual" },
+      { rotulo: "Usa", valor: x.id ? String(MODELOS_FLUXO.find((m) => m.id === x.id)?.dependencias?.length ?? 0) : "—" },
+    ],
+  };
 }
 
 const EM_BRANCO: { id: string; nome: string; descricao: string; grafo?: Grafo; frequencia?: Frequencia } = { id: "", nome: "Em branco", descricao: "Só o Início — monte do zero." };
@@ -778,6 +797,7 @@ function EscolherNovoFluxo({
             <div
               key={x.id || "branco"}
               role="none"
+              title={x.descricao}
               className={`touch-manipulation select-none [-webkit-touch-callout:none] transition-opacity ${arrastar?.chave === `m:${x.id}` ? "opacity-40" : ""}`}
               onPointerDown={x.id && arrastar ? (e) => arrastar.iniciar(e, `m:${x.id}`) : undefined}
               onClickCapture={(e) => {
@@ -787,14 +807,7 @@ function EscolherNovoFluxo({
                 }
               }}
             >
-            <CartaoFluxo
-              titulo={x.nome}
-              descricao={x.descricao}
-              marcado={modelo === x.id}
-              onClick={() => setModelo(x.id)}
-              selo={x.id && fluxos.some((f) => f.nome === x.nome) ? <Badge tone="emerald">Já existe</Badge> : undefined}
-              rodape={x.grafo ? `${x.grafo.nos.length} nó(s) · ${x.frequencia ? rotuloFrequencia(x.frequencia) : "Manual"}` : undefined}
-            />
+            <CartaoFluxo {...cartaoDoModelo(x, fluxos)} marcado={modelo === x.id} onClick={() => setModelo(x.id)} />
             </div>
           ))}
         </div>
