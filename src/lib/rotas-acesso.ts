@@ -65,6 +65,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/auditoria": { GET: ADMIN },
   "admin/automacao/extensao": { GET: ADMIN },
   "admin/automacao/config": { GET: ADMIN, PATCH: ADMIN },
+  "admin/automacao/contexto": { GET: ADMIN },
   "admin/automacao/execucoes": { GET: ADMIN, POST: ADMIN },
   "admin/automacao/execucoes/[id]": { GET: ADMIN, PATCH: ADMIN },
   "admin/automacao/execucoes/[id]/passos": { POST: ADMIN },

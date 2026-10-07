@@ -85,7 +85,9 @@ import { SeletorFiltro } from "./SeletorFiltro";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
 import { AutomacoesMesa } from "./AutomacoesMesa";
-import { gravarDisparoMesa } from "@/lib/automacao-mesa";
+import { dfdsDoAlvo, gravarDisparoMesa } from "@/lib/automacao-mesa";
+import { AutomacaoViva, CHAVE_AUTOMACAO } from "./AutomacaoViva";
+import { useRodarFora } from "./SegundoPlano";
 import { PresencaNoItem } from "./PresencaNoItem";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
@@ -365,17 +367,6 @@ export function DfdsView({
   // Listas recarregadas OU filtradas: some da seleção o que não está mais à vista (a edição em massa
   // nunca atinge uma linha escondida pelo filtro).
   useEffect(() => setSelDfds((s) => podar(s, new Set(dfdsF.map((d) => d.id)))), [dfdsF]);
-  // AUTOMAÇÕES da Mesa: rodam com os DFDs SELECIONADOS; sem seleção, com os DFDs À VISTA (os filtros da Mesa).
-  const alvoAutomacao = useMemo(() => {
-    const lista = selDfds.size ? dfdsF.filter((d) => selDfds.has(d.id)) : dfdsF;
-    return { lista, rotulo: `${num(lista.length)} DFD(s) ${selDfds.size ? "selecionado(s)" : "à vista"}` };
-  }, [selDfds, dfdsF]);
-  const rodarAutomacao = (fluxoId: number) => {
-    const itens = alvoAutomacao.lista.map((d) => ({ id: d.id, numero: d.numero, planejamento: d.planejamento ?? "" }));
-    if (!itens.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre DFDs.");
-    if (!gravarDisparoMesa({ fluxoId, itens })) return void toast.error("O navegador não deixou levar os DFDs à Automação.");
-    router.push("/painel/automacao");
-  };
   useEffect(() => setSelProtos((s) => podar(s, new Set(protocolosF.map((p) => p.id)))), [protocolosF]);
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
@@ -481,6 +472,36 @@ export function DfdsView({
   useEffect(() => {
     if (itensF) setSelItens((s) => podar(s, new Set(itensF.map((it) => it.id))));
   }, [itensF]);
+  // AUTOMAÇÕES da Mesa (só a do sistema): a visão aberta decide o alvo — protocolos, DFDs ou itens viram os DFDs deles.
+  // A barra do topo = TODOS os filtrados; a barra de seleção = os SELECIONADOS. Roda em segundo plano (sem sair da Mesa).
+  const rodarFora = useRodarFora();
+  const alvoAutomacao = (soSelecionados: boolean) => {
+    if (vista === "protocolos") {
+      const ps = soSelecionados ? protocolosF.filter((p) => selProtos.has(p.id)) : protocolosF;
+      const lista = dfdsDoAlvo(dfdsF, "protocoloId", new Set(ps.map((p) => p.id)));
+      return { lista, rotulo: `${num(ps.length)} protocolo(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"} (${num(lista.length)} DFDs)` };
+    }
+    if (vista === "itens") {
+      const its = (itensF ?? []).filter((it) => !soSelecionados || selItens.has(it.id));
+      const lista = dfdsDoAlvo(dfds, "id", new Set(its.map((it) => it.dfdId)));
+      return { lista, rotulo: `${num(its.length)} item(ns) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"} (${num(lista.length)} DFDs)` };
+    }
+    const lista = dfdsDoAlvo(dfdsF, "id", soSelecionados ? new Set([...selDfds].map(Number)) : new Set(dfdsF.map((d) => d.id)));
+    return { lista, rotulo: `${num(lista.length)} DFD(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"}` };
+  };
+  const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => {
+    const { lista } = alvoAutomacao(soSelecionados);
+    if (!lista.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre.");
+    if (!gravarDisparoMesa({ fluxoId, itens: lista })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
+    if (rodarFora) {
+      rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />);
+      toast.info("Automação iniciada em segundo plano — acompanhe no canto inferior.");
+    } else router.push("/painel/automacao");
+  };
+  const automacaoSel = (rotulo: string) =>
+    !modoPca && automacoes.length ? (
+      <AutomacoesMesa variante="selecao" automacoes={automacoes} alvo={rotulo} onEscolher={(id) => rodarAutomacao(id, true)} />
+    ) : null;
 
   // CONFERÊNCIA da lista de DFDs (a MESMA da análise, calculada no servidor sobre o DFD completo) —
   // lazy: só com a visão DFDs aberta, em fatias; cada linha mostra "Conferindo…" até chegar. Os
@@ -2049,6 +2070,7 @@ export function DfdsView({
         dfds={sel.map((d) => ({ key: d.id, numero: d.numero, planejamento: d.planejamento, valor: d.valorTotal, itens: d.totalItens }))}
         onRemover={tirar(setSelDfds)}
         onLimpar={() => setSelDfds(new Set())}
+        acoes={automacaoSel(alvoAutomacao(true).rotulo)}
       >
         {progressoMassa}
         <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} />
@@ -2067,10 +2089,13 @@ export function DfdsView({
         acoes={
           modoPca ? (
             modoPca.acoesProtocolos?.(sel, () => setSelProtos(new Set()))
-          ) : pode.pca.manipular ? (
-            // Enviar ao PCA tira da Mesa do sistema e põe na do PCA: Manipular nas duas.
-            <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />
-          ) : undefined
+          ) : (
+            <>
+              {/* Enviar ao PCA tira da Mesa do sistema e põe na do PCA: Manipular nas duas. */}
+              {pode.pca.manipular && <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />}
+              {automacaoSel(alvoAutomacao(true).rotulo)}
+            </>
+          )
         }
         resumo={
           <ResumoSelecao
@@ -2109,7 +2134,7 @@ export function DfdsView({
         onRemover={tirar(setSelItens)}
         onLimpar={() => setSelItens(new Set())}
         resumo={<ResumoSelecao qtd={sel.length} singular="item" plural="itens" soma={sel.reduce((t, it) => t + (it.valorTotal ?? 0), 0)} />}
-        acoes={modoPca?.acoesItens?.(sel, () => setSelItens(new Set()))}
+        acoes={modoPca ? modoPca.acoesItens?.(sel, () => setSelItens(new Set())) : automacaoSel(alvoAutomacao(true).rotulo)}
       >
         {/* Também o item incorporado (com nº no PCA): o nº segue o item; o removido o baixa. */}
         {podeAqui.manipular && (
@@ -2176,7 +2201,7 @@ export function DfdsView({
             onClick={reverificarTudo}
           />
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
-          {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao.rotulo} onEscolher={rodarAutomacao} />}
+          {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao(false).rotulo} onEscolher={(id) => rodarAutomacao(id, false)} />}
           {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
           {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
           {pode.vis.responsavel.ver && (

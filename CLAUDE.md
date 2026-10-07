@@ -4339,9 +4339,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Centi → Buscar DFD {completo} → Substituir). **Mesa do SISTEMA (nunca a do PCA):** `AutomacoesMesa` (DS — o quadrado
   `IconRobo` na barra, ao lado dos Dados completos) lista as automações da preferência PESSOAL `automacao:mesa` `{ids}`
   (`automacao-mesa.ts`: `idsAutomacoesMesa`/`alternarAutomacaoMesa`; `automacoesDaMesa` em `fluxos.ts` — só as que a pessoa
-  vê, `fluxoVisivel`; `carregarMesa` só para o ADM). Escolher grava o DISPARO na aba (`gravarDisparoMesa`, `sessionStorage`
-  — os DFDs selecionados, senão os à vista: `{id, numero, planejamento}`) e vai à Automação, que o lê UMA vez
-  (`lerDisparoMesa`), confirma e roda com `host.__entrada` (`executar(…, entrada)` — também na fila). No editor, o `Switch`
+  vê, `fluxoVisivel`; `carregarMesa` só para o ADM). **v1.50.0 — SEM sair da Mesa:** o robô da barra do topo = TODOS os filtrados da visão aberta; o botão
+  "Automação" da barra de seleção (Protocolos/DFDs/Itens) = os SELECIONADOS — protocolos e itens viram os DFDs deles
+  (`dfdsDoAlvo`, puro/testado). `AutomacoesMesa` confirma (`useConfirmacao`), grava o DISPARO (`gravarDisparoMesa` +
+  o evento `EVENTO_DISPARO_MESA`) e monta a Automação ESCONDIDA pelo segundo plano (`useRodarFora` → `SegundoPlano.rodarFora`:
+  monta sem a página dona e a mantém viva até o trabalho começar; já montada, fica a que está) — **`AutomacaoViva`**
+  (a raiz da Automação na página E fora dela, `CHAVE_AUTOMACAO`; sem dados, busca `GET /api/admin/automacao/contexto` =
+  `dadosDaAutomacao`, o mesmo loader da página). O `FluxosAutomacao` lê o disparo (sem confirmar de novo) e roda com
+  `host.__entrada` + **`__daMesa`** (o `entrada.selecionar` deixa passar todos: a seleção da Mesa vale); o andamento,
+  Parar e Detalhes ficam no **painel flutuante** do canto; sem a extensão pronta, avisa. No editor, o `Switch`
   "Disponível na Mesa" grava a preferência na hora; o `GET …/fluxos` devolve `naMesa`.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o

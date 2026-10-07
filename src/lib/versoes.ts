@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.50.0",
+    data: "2026-10-07",
+    titulo: "Automações rodam direto da Mesa, em segundo plano",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Botão “Automação” na barra de seleção: roda a automação com os protocolos, DFDs ou itens SELECIONADOS (a seleção da Mesa vale no componente de seleção do fluxo).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "O robô da barra do topo roda com TODOS os protocolos, DFDs ou itens filtrados da visão aberta.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Automação", texto: "A automação não leva mais à tela da Automação: confirma na Mesa e roda em segundo plano, acompanhada (e interrompida) pelo painel flutuante do canto inferior.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.49.2",
     data: "2026-10-07",
     titulo: "A seleção das automações carrega os itens sozinha",

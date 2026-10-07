@@ -32,3 +32,18 @@ test("modelo Substituir DFDs pela Centi: lê o DFD inteiro e substitui", () => {
   assert.ok(m.grafo.nos.some((n) => n.tipo === "saida.substituirDfd"));
   assert.ok(m.grafo.nos.some((n) => n.tipo === "entrada.selecionar"));
 });
+
+test("dfdsDoAlvo: protocolos e itens viram os DFDs deles, sem repetir", async () => {
+  const { dfdsDoAlvo } = await import("../src/lib/automacao-mesa.ts");
+  const dfds = [
+    { id: 1, numero: "10", planejamento: "100", protocoloId: 7 },
+    { id: 2, numero: "11", planejamento: null, protocoloId: 7 },
+    { id: 3, numero: "12", planejamento: "120", protocoloId: null },
+  ];
+  assert.deepEqual(dfdsDoAlvo(dfds, "protocoloId", new Set([7])), [
+    { id: 1, numero: "10", planejamento: "100" },
+    { id: 2, numero: "11", planejamento: "" },
+  ]);
+  assert.deepEqual(dfdsDoAlvo(dfds, "id", new Set([3, 3])).map((d) => d.id), [3]);
+  assert.deepEqual(dfdsDoAlvo(dfds, "protocoloId", new Set()), []);
+});

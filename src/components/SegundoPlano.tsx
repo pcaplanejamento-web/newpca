@@ -38,6 +38,9 @@ type Ctx = {
   soltar: (chave: string) => void;
   informar: (t: Trabalho) => void;
   retirar: (id: string) => void;
+  /** Monta o conteúdo SEM a página dona (escondido) e o mantém vivo por `prazoMs` — o tempo de ele começar o trabalho
+   * (depois, o trabalho em curso o mantém). Ex.: a Mesa roda uma automação sem abrir a tela da Automação. */
+  rodarFora: (chave: string, conteudo: ReactNode, prazoMs?: number) => void;
 };
 /** As AÇÕES (estáveis — o `ManterVivo` não reanexa a cada mudança) e, à parte, as chaves À VISTA. */
 const SegundoPlanoCtx = createContext<Ctx | null>(null);
@@ -71,7 +74,13 @@ export function SegundoPlano({ children }: { children: ReactNode }) {
     hosts.current.get(chave)?.remove();
     hosts.current.delete(chave);
   }, []);
-  const ocupado = useCallback((chave: string) => Object.values(trabalhosRef.current).some((t) => t.chave === chave && ATIVO(t.estado)), []);
+  // As montagens fora da página que ainda não começaram o trabalho: chave → até quando ficam vivas.
+  const reservas = useRef(new Map<string, number>());
+  const [, setTique] = useState(0);
+  const ocupado = useCallback(
+    (chave: string) => (reservas.current.get(chave) ?? 0) > Date.now() || Object.values(trabalhosRef.current).some((t) => t.chave === chave && ATIVO(t.estado)),
+    [],
+  );
 
   const ctx = useMemo<Ctx>(
     () => ({
@@ -94,6 +103,14 @@ export function SegundoPlano({ children }: { children: ReactNode }) {
       },
       informar: (t) => setTrabalhos((m) => ({ ...m, [t.id]: t })),
       retirar: (id) => setTrabalhos(({ [id]: _, ...resto }) => resto),
+      rodarFora: (chave, conteudo, prazoMs = 120_000) => {
+        reservas.current.set(chave, Date.now() + prazoMs);
+        host(chave);
+        // Já montado (a página ou um trabalho anterior): fica o que está — o estado não se perde.
+        setConteudos((c) => (chave in c ? c : { ...c, [chave]: conteudo }));
+        // Vencida a reserva sem trabalho em curso, o efeito de limpeza desmonta (um render no fim do prazo).
+        window.setTimeout(() => setTique((n) => n + 1), prazoMs + 50);
+      },
     }),
     [host, desmontar, ocupado],
   );
@@ -132,6 +149,11 @@ export function ManterVivo({ chave, children }: { chave: string; children: React
   }, [ctx, chave]);
   if (!ctx) return <>{children}</>;
   return <div ref={slot} className="contents" />;
+}
+
+/** Monta um conteúdo em segundo plano sem a página dona (ver `Ctx.rodarFora`); sem o provedor, null. */
+export function useRodarFora(): Ctx["rodarFora"] | null {
+  return useContext(SegundoPlanoCtx)?.rodarFora ?? null;
 }
 
 /** O componente está À VISTA (a página dona aberta)? Fora dela, nada de abrir diálogos sozinho. */

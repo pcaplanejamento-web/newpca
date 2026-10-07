@@ -128,7 +128,7 @@ const NOS: DefNo[] = [
     tipo: "entrada.selecionar",
     categoria: "entrada",
     rotulo: "Selecionar itens",
-    descricao: "Uma TABELA no painel com os itens do componente anterior: marque os que seguem (busca, filtros, marcar todos).",
+    descricao: "Uma TABELA no painel com os itens do componente anterior: marque os que seguem (busca, filtros, marcar todos). Rodando pela Mesa, vale a seleção feita lá.",
     icone: "list",
     entradas: ["entrada"],
     saidas: ["saida"],
@@ -146,7 +146,8 @@ const NOS: DefNo[] = [
         padrao: "nenhum",
       },
     ],
-    executar: async (e, c) => ({ saida: selecionados(so(e), c) }),
+    // Vindo da MESA (`__daMesa`), a seleção já foi feita lá: seguem todos os que chegam.
+    executar: async (e, c, ctx) => ({ saida: ctx.host.__daMesa ? so(e) : selecionados(so(e), c) }),
   },
   {
     tipo: "entrada.ids",

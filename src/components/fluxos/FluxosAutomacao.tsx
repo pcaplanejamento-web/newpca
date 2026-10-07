@@ -29,7 +29,7 @@ import {
 } from "@/lib/fluxo-core";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo, substituirDfdPelaCenti } from "@/lib/fluxo-navegador";
 import type { DfdParseado } from "@/lib/parse-dfd-comum";
-import { alternarAutomacaoMesa, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA } from "@/lib/automacao-mesa";
+import { alternarAutomacaoMesa, EVENTO_DISPARO_MESA, idsAutomacoesMesa, lerDisparoMesa, PREF_AUTOMACOES_MESA, temDisparoMesa } from "@/lib/automacao-mesa";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
 import { type FluxoFilho, NOS_POR_CATEGORIA, type ProgressoHost, REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { grafoDoModelo, MODELOS_FLUXO, type ModeloFluxo } from "@/lib/fluxo-modelos";
@@ -335,7 +335,7 @@ export function FluxosAutomacao({
               __cache: new Map<string, unknown>(),
               carregarFluxo: carregadorDeFluxos(),
               progresso: progressoDe(f.id),
-              ...(entrada ? { __entrada: entrada } : {}),
+              ...(entrada ? { __entrada: entrada, __daMesa: true } : {}),
             },
             // A saída COMPLETA de cada nó (o corpo de um laço roda várias vezes: acumula) e os itens AO VIVO.
             aoConcluir: (no, ps) => {
@@ -414,7 +414,21 @@ export function FluxosAutomacao({
   const carregarRef = useRef(carregar);
   carregarRef.current = carregar;
 
-  // DISPARO pela Mesa do sistema: o fluxo escolhido roda com os DFDs que vieram de lá (uma vez; o disparo é apagado).
+  // DISPARO pela Mesa do sistema (confirmado lá): o fluxo escolhido roda com os itens de lá — também com esta tela em
+  // segundo plano (a Mesa a monta escondida; o andamento fica no painel flutuante). Uma vez; o disparo é apagado.
+  const [disparos, setDisparos] = useState(0);
+  useEffect(() => {
+    const ouvir = () => setDisparos((n) => n + 1);
+    window.addEventListener(EVENTO_DISPARO_MESA, ouvir);
+    return () => window.removeEventListener(EVENTO_DISPARO_MESA, ouvir);
+  }, []);
+  // Sem a extensão pronta, o disparo espera — e avisa (uma vez) o que falta.
+  useEffect(() => {
+    if (pronto || !temDisparoMesa()) return;
+    const id = window.setTimeout(() => toast.warning("A automação da Mesa espera a extensão da Centi (instale, abra a Centi e entre).", 10000), 8000);
+    return () => window.clearTimeout(id);
+  }, [pronto, disparos]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `disparos` = um disparo novo da Mesa (relê o armazenado).
   useEffect(() => {
     if (!pronto || !fluxos) return;
     const d = lerDisparoMesa();
@@ -422,15 +436,8 @@ export function FluxosAutomacao({
     const f = [...fluxos, ...publicos].find((x) => x.id === d.fluxoId);
     if (!f) return void toast.error("A automação escolhida na Mesa não está mais disponível.");
     if (fluxos.some((x) => x.id === f.id)) setAberto(f.id); // a pública de outra pessoa roda sem abrir o editor
-    void (async () => {
-      const sim = await confirmar({
-        titulo: `Executar “${f.nome}”?`,
-        texto: `Com ${d.itens.length} DFD(s) vindo(s) da Mesa.`,
-        confirmar: "Executar",
-      });
-      if (sim) await executarRef.current(f, f.grafo, false, d.itens);
-    })();
-  }, [pronto, fluxos, publicos, confirmar]);
+    void executarRef.current(f, f.grafo, false, d.itens);
+  }, [pronto, fluxos, publicos, disparos]);
 
   /** Regrava um fluxo salvo com o grafo e a descrição do modelo (o "Atualizar pelo modelo"). */
   async function regravar(f: FluxoAutomacao, grafo: Grafo, m: ModeloFluxo): Promise<boolean> {
