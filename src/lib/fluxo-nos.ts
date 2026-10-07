@@ -279,6 +279,7 @@ const NOS: DefNo[] = [
       const out: Item[] = [];
       // Uma entidade que falha não derruba as outras: segue e avisa; só falha quando NENHUMA respondeu.
       const falhas: string[] = [];
+      const resumo: string[] = [];
       for (const [i, ent] of ents.entries()) {
         if (ctx.cancelado()) break;
         ctx.aviso(`Órgão ${ent} (${i + 1} de ${ents.length})…`);
@@ -288,10 +289,24 @@ const NOS: DefNo[] = [
           falhas.push(`órgão ${ent}: ${r.erro || "a extensão da Centi não respondeu"}`);
           continue;
         }
-        for (const p of Array.isArray(r.linhas) ? r.linhas : []) out.push({ ...obj(p), planejamento: str(obj(p).id), entidade: ent });
+        const linhas = Array.isArray(r.linhas) ? r.linhas.map(obj) : [];
+        const total = typeof r.total === "number" ? r.total : null;
+        resumo.push(`órgão ${ent}: ${linhas.length}${total != null ? ` de ${total}` : ""} lidas${typeof r.paginas === "number" ? ` (${r.paginas} pág.)` : ""}`);
+        // Leitura INCOMPLETA: para (nunca marca "não encontrado" um DFD que só não foi lido).
+        if (total != null && linhas.length < total)
+          throw new Error(`A CM002 do órgão ${ent} veio incompleta: ${linhas.length} de ${total} planejamentos — atualize a extensão da Centi e clique em Pesquisar UMA vez na CM002.`);
+        // Nenhum planejamento dos DFDs deste órgão na lista = a consulta está filtrada (outra referência/PCA): para.
+        const pedidos = new Set(so(e).filter((it) => str(it.entidade).replace(/^0+(?=\d)/, "") === ent).map((it) => str(it.planejamento).replace(/\D/g, "").replace(/^0+/, "")).filter(Boolean));
+        const ids = new Set(linhas.map((p) => str(p.id)));
+        if (c.dosItens === true && pedidos.size && linhas.length && ![...pedidos].some((x) => ids.has(x)))
+          throw new Error(
+            `Nenhum dos ${pedidos.size} planejamentos do órgão ${ent} veio na CM002 (${linhas.length} linhas lidas, IDs ${[...ids].slice(0, 3).join(", ") || "—"}…). A consulta aprendida está filtrada — na CM002 da Centi, limpe os filtros (Referência/Finalidade) e clique em Pesquisar UMA vez.`,
+          );
+        for (const p of linhas) out.push({ ...p, planejamento: str(p.id), entidade: ent });
       }
       if (falhas.length && falhas.length === ents.length) throw new Error(falhas.join(" · "));
       if (falhas.length) ctx.aviso(`Sem a lista de ${falhas.length} órgão(s) — ${falhas.join(" · ")}`);
+      if (resumo.length) ctx.aviso(`CM002 — ${resumo.join(" · ")}`);
       return { saida: out };
     },
   },

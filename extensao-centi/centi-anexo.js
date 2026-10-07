@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p36";
+  const NOME = "__pcaCentiAnexo_p37";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -567,6 +567,33 @@
     return { caminho: c, corpo: ir(corpo, 0), tamanho };
   }
   /** O pedido da lista SEM paginação: tamanho da página → 100000, início → o primeiro (no corpo e na URL). */
+  /** O TOTAL de linhas que a resposta informa (TotalItems/Total/RecordCount…) — o maior encontrado fora das listas — ou null. */
+  function totalDaResposta(j) {
+    let t = null;
+    const ir = (v, prof) => {
+      if (v == null || typeof v !== "object" || Array.isArray(v) || prof > 4) return;
+      for (const [k, x] of Object.entries(v)) {
+        if (typeof x === "number" && Number.isInteger(x) && x >= 0 && RE_TOTAL.test(k)) t = Math.max(t ?? 0, x);
+        else ir(x, prof + 1);
+      }
+    };
+    ir(j, 0);
+    return t;
+  }
+  const RE_TOTAL = /^(total|totalitems|totalitens|totalcount|totalrecords|totalregistros|totalrows|totallinhas|recordcount|recordstotal|quantidadetotal|qtdtotal|count)$/i;
+  /** A consulta da CM002 SEM os filtros de tela (referência, exercício, PCA, finalidade, situação, busca): os textos
+   * desses campos viram "" — a lista volta inteira. Paginação, listas de opções e números técnicos ficam. */
+  function semFiltrosCm002(corpo) {
+    const ir = (v, prof) => {
+      if (prof > 6 || v == null || typeof v !== "object") return v;
+      if (Array.isArray(v)) return v.map((x) => ir(x, prof + 1));
+      const o = {};
+      for (const [k, x] of Object.entries(v)) o[k] = typeof x === "string" && x && RE_FILTRO.test(k) ? "" : ir(x, prof + 1);
+      return o;
+    };
+    return ir(corpo, 0);
+  }
+  const RE_FILTRO = /(referencia|exercicio|^ano$|anopca|^pca|finalidade|situa|busca|filtro|pesquisa|search|termo)/i;
   function semPaginacao(caminho, corpo) {
     const p = comPagina(caminho, corpo, null);
     return { caminho: p.caminho, corpo: p.corpo };
@@ -594,7 +621,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, comPagina, protocolosTela, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, semFiltrosCm002, comPagina, protocolosTela, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,

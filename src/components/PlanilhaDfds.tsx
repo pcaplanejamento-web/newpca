@@ -144,6 +144,7 @@ export function PlanilhaDfds({
   vazio,
   acaoDescartados,
   edicoes,
+  ocultasPadrao,
   exportar,
   colunasExtras = [],
 }: {
@@ -176,6 +177,8 @@ export function PlanilhaDfds({
   acaoDescartados?: ReactNode;
   /** EDIÇÕES SALVAS da tabela principal (ex.: a Mesa) — repassadas ao `DataTable`. */
   edicoes?: EdicoesDaTabela;
+  /** Colunas ocultas no padrão (a edição da tabela as mostra) — ex.: Situação e Centi na Mesa do PCA. */
+  ocultasPadrao?: readonly string[];
   /** Exportar a planilha em .xlsx (a tabela principal — só com a ação Exportar do papel). */
   exportar?: { nome: string } | false;
   /** Colunas a mais no fim (antes das ações) — ex.: as criadas pelas automações na Mesa. */
@@ -288,7 +291,7 @@ export function PlanilhaDfds({
       ? [
           {
             key: "execucao",
-            header: "Execução",
+            header: "Situação",
             align: "center" as const,
             nowrap: true,
             value: (r: LinhaDfd) => r.execucao ?? "Não verificado",
@@ -416,7 +419,7 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

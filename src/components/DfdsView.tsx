@@ -117,6 +117,9 @@ type Vista = "dashboard" | "protocolos" | "dfds" | "itens";
 /** Visão dos ITENS: Normal (um por linha) | Consolidada (um por CÓDIGO — quantidades somadas, valor médio ponderado). */
 type ModoItens = "normal" | "consolidada";
 /** DFDs conferidos por requisição (fatias — a lista abre leve e o Estado chega em seguida). */
+/** Na Mesa do PCA a Situação (CM002) e a Centi abrem ocultas — a edição da tabela as mostra. */
+const OCULTAS_NO_PCA = ["execucao", "conferenciaCenti"] as const;
+
 const FATIA_CONFERENCIA = 150;
 /** DFDs/protocolos por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
 const FATIA_MASSA = 20;
@@ -1944,6 +1947,7 @@ export function DfdsView({
       acoesRodape={botaoImportar}
       colunasExtras={colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key)}
       edicoes={edicoesDe("dfds")}
+      ocultasPadrao={modoPca ? OCULTAS_NO_PCA : undefined}
       exportar={exportarComo("DFDs")}
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
     />

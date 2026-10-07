@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 36;
+  const PROTOCOLO = 37;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -693,9 +693,11 @@
     if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, erro: "Consulta guardada inválida." };
     const ent = d?.entidade == null || d.entidade === "" ? null : String(d.entidade);
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Entidade inválida." };
-    // Uma página: o pedido guardado na página `i` (null = tudo de uma vez) → {linhas} | {status} | {forma}.
+    // Sem os filtros da tela (referência/PCA/situação…): a lista INTEIRA do órgão.
+    const corpoBase = A.semFiltrosCm002 ? A.semFiltrosCm002(g.corpo) : g.corpo;
+    // Uma página: o pedido guardado na página `i` (null = tudo de uma vez) → {linhas, total} | {status} | {forma}.
     const pagina = async (i) => {
-      const p = A.comPagina(g.caminho, g.corpo, i);
+      const p = A.comPagina(g.caminho, corpoBase, i);
       const url = destino(p.caminho);
       if (!url) return { fora: true };
       const r = await executar(g.metodo, url, g.metodo === "POST" ? p.corpo : null, ent, true);
@@ -708,27 +710,35 @@
       }
       const linhas = A.planejamentosCm002(j, true, d?.colunas === true);
       if (!linhas) return { forma: JSON.stringify(A.resumoResposta(j) ?? Object.keys(j ?? {})).slice(0, 300) };
-      return { linhas, tamanho: p.tamanho };
+      return { linhas, tamanho: p.tamanho, total: A.totalDaResposta ? A.totalDaResposta(j) : null };
     };
+    const fim = (linhas, total, paginas) => ({ ok: true, entidade: ent ?? entidadeAtual(), linhas, total, lidas: linhas.length, paginas });
     const tudo = await pagina(null);
     if (tudo.fora) return { ok: false, erro: "Destino fora da API da Centi." };
-    if (tudo.linhas) return { ok: true, entidade: ent ?? entidadeAtual(), linhas: tudo.linhas };
-    // A Centi recusou a página única (tamanho grande demais): página a página, no tamanho da tela, até a última.
+    // A página única só vale se veio COMPLETA: o total informado bate, ou (sem total) não parou no tamanho da tela.
+    if (tudo.linhas && (tudo.total != null ? tudo.linhas.length >= tudo.total : !tudo.tamanho || tudo.linhas.length !== tudo.tamanho))
+      return fim(tudo.linhas, tudo.total, 1);
+    // Página a página, no tamanho da tela, até o total (ou até a última página).
     const linhas = [];
     const vistos = new Set();
-    for (let i = 0; i < 200; i++) {
+    let total = tudo.total ?? null;
+    let paginas = 0;
+    for (let i = 0; i < 2000; i++) {
       const r = await pagina(i);
       if (!r.linhas) {
         if (i > 0) break;
+        if (tudo.linhas) return fim(tudo.linhas, tudo.total, 1);
         const motivo = r.status ? `recusou a consulta (${r.status})` : `devolveu outra forma (${r.forma ?? tudo.forma ?? "?"})`;
         return { ok: false, erro: `A Centi ${motivo} na CM002 — abra a CM002 na Centi e clique em Pesquisar para o sistema reaprender.`, semConsulta: true };
       }
+      paginas++;
+      if (r.total != null) total = Math.max(total ?? 0, r.total);
       const novas = r.linhas.filter((x) => !vistos.has(x.id));
       for (const x of novas) vistos.add(x.id);
       linhas.push(...novas);
-      if (!novas.length || !r.tamanho || r.linhas.length < r.tamanho) break;
+      if (!novas.length || !r.tamanho || r.linhas.length < r.tamanho || (total != null && linhas.length >= total)) break;
     }
-    return { ok: true, entidade: ent ?? entidadeAtual(), linhas };
+    return fim(linhas, total, paginas);
   }
 
   // TELA PROTOCOLO pela API (só LEITURA): repete a lista "Em Análise" guardada SEM paginação — todas as linhas, sem tocar

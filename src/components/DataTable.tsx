@@ -128,6 +128,7 @@ export function DataTable<R>({
   edicoes,
   exportar,
   ocultas,
+  ocultasPadrao,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -191,12 +192,19 @@ export function DataTable<R>({
    * elas — nunca se filtra nem se ordena por uma coluna que não se vê.
    */
   ocultas?: ReadonlySet<string>;
+  /** Colunas OCULTAS no padrão do sistema (a tabela abre sem elas; a edição da tabela as mostra de volta). */
+  ocultasPadrao?: readonly string[];
 }) {
   // A chave ESTÁVEL das ocultas (o Set pode ser recriado a cada render do dono).
   const chaveOcultas = ocultas?.size ? [...ocultas].sort().join("|") : "";
   const semCols = useMemo(() => new Set(chaveOcultas ? chaveOcultas.split("|") : []), [chaveOcultas]);
   const columns = useMemo(() => (semCols.size ? todasColunas.filter((c) => !semCols.has(c.key)) : todasColunas), [todasColunas, semCols]);
   const coerceLayout = useCallback((v: unknown) => coerceLayoutTabela(v, semCols), [semCols]);
+  const chavePadrao = ocultasPadrao?.join("|") ?? "";
+  const layoutPadrao = useMemo(
+    () => (chavePadrao ? { ...LAYOUT_TABELA_PADRAO, ocultas: chavePadrao.split("|") } : LAYOUT_TABELA_PADRAO),
+    [chavePadrao],
+  );
   // A edição em uso (a padrão do usuário ao abrir) dá o layout das colunas e o ESTADO INICIAL da ordenação e dos filtros;
   // trocar de edição os aplica. Salvar leva a ordenação e os filtros do momento.
   const editor = useEditorEdicoes<LayoutTabela>({
@@ -207,7 +215,7 @@ export function DataTable<R>({
     podePublicar: edicoes?.podePublicar ?? false,
     coerce: coerceLayout,
     igual: layoutTabelaIgual,
-    padrao: LAYOUT_TABELA_PADRAO,
+    padrao: layoutPadrao,
     paraSalvar: (l: LayoutTabela): LayoutTabela => ({ ...l, ordem: sort.key ? { key: sort.key, dir: sort.dir } : null, filtros: filters }),
     aoEscolher: (l: LayoutTabela) => {
       setFilters(l.filtros);

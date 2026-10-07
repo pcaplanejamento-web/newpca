@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.46.0",
+    data: "2026-10-07",
+    titulo: "CM002 lida por inteiro e coluna Situação na Mesa",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A CM002 é lida INTEIRA: sem os filtros da tela (Referência/Finalidade/Situação) e página a página até o total que a Centi informa. Leitura incompleta ou filtrada para o fluxo com o motivo — nunca marca “não encontrado” à toa (extensão 1.20.0).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O nó CM002 avisa quantas linhas leu de cada órgão (lidas de total, páginas).", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Mesa", texto: "A coluna Execução virou “Situação”. Na Mesa do PCA, Situação e Centi abrem ocultas — mostre-as pela edição da tabela.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.45.1",
     data: "2026-10-07",
     titulo: "Execução dos DFDs sempre em texto e todos avaliados",

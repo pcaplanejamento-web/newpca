@@ -57,6 +57,8 @@ function pecasCm002() {
     planejamentosCm002: (j: unknown, conhecida?: boolean) => { id: string; situacao: string; finalidade: string; centroCusto: string }[] | null;
     semPaginacao: (c: string, b: unknown) => { caminho: string; corpo: unknown };
     comPagina: (c: string, b: unknown, i: number | null) => { caminho: string; corpo: unknown; tamanho: number };
+    totalDaResposta: (j: unknown) => number | null;
+    semFiltrosCm002: (b: unknown) => unknown;
     comReparticoes: (b: unknown, n: string[]) => { corpo: { Data: { Reparticoes: { Id: number; selected: boolean }[] } }; achadas: string[]; faltam: string[] } | null;
   };
 }
@@ -117,4 +119,15 @@ test("situação só com código numérico nunca é gravada", () => {
   const m = situacoesDaGrade(["ID", "SITUACAO"], [["10", "4"], ["11", "Executado"]]);
   assert.equal(m.has("10"), false);
   assert.equal(m.get("11"), "Executado");
+});
+
+test("CM002: o total informado e a consulta sem os filtros da tela", () => {
+  const { totalDaResposta, semFiltrosCm002, comPagina } = pecasCm002();
+  assert.equal(totalDaResposta({ Data: { Items: [{ Id: 1 }], TotalItems: 1294 } }), 1294);
+  assert.equal(totalDaResposta({ Items: [{ Id: 1, Count: 5 }] }), null);
+  const corpo = { Data: { Referencia: "10/2026", Finalidade: "PCA - 2026", Situacao: "Executado", Unidade: "SMS" }, ItensPerPage: 50, Page: 1 };
+  const f = semFiltrosCm002(corpo) as { Data: Record<string, string>; ItensPerPage: number };
+  assert.deepEqual({ ...f.Data }, { Referencia: "", Finalidade: "", Situacao: "", Unidade: "SMS" });
+  assert.equal(f.ItensPerPage, 50);
+  assert.equal(comPagina("/restauth/postdata", f, 2).tamanho, 50);
 });

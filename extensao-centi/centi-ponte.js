@@ -3,7 +3,7 @@
 // extensão e vão direto aos campos da tela — o script da página e o sistema PCA nunca os veem.
 (() => {
   // Protocolo da conversa com o script da página (centi-main.js): só muda se o formato das mensagens mudar.
-  const P = 36;
+  const P = 37;
   const MARCA = `__pcaCentiPonte_p${P}`;
   if (window[MARCA]) return;
   window[MARCA] = true;

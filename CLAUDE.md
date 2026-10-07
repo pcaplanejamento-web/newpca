@@ -4309,6 +4309,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `recorteTabela`); visão "Tabela" no painel (`VistaTabela`, relê do servidor a cada execução, exportável). D1
   `automacao-tabelas.ts`; puro `linhasParaTabela`/`recorteTabela`/`chaveTabela` (`fluxo-dados.ts`); rotas `GET` (lista |
   `?nome=`), `POST`, `DELETE ?nome=` (`exigirAdmin`, auditoria). Teste do modelo de ponta a ponta em `tests/fluxo-dados.test.ts`. **v1.45.1:** `limparSituacao` recusa situação só de dígitos (nunca grava código) e a migração `0097` apagou os códigos antigos; o `saida.gravarExecucao` ganhou `situacaoFixa` — no modelo, os DFDs de órgão cadastrado fora da CM002 gravam “Não encontrado na CM002” (SE `entidade` não vazio → `grav2`); na interface “entidade” virou “órgão” (o código segue `entidade`).
+- **CM002 INTEIRA (v1.46.0, extensão 1.20.0, protocolo 37):** a ação `cm002` tira os filtros de tela da consulta guardada
+  (`semFiltrosCm002`: textos de Referência/Exercício/Ano/PCA/Finalidade/Situação/Busca → "") e confere o total da resposta
+  (`totalDaResposta`); página única incompleta → página a página até o total (≤ 2000) e devolve `{linhas, total, lidas,
+  paginas}`. O nó `centi.cm002` avisa "órgão X: N de T lidas" e PARA quando a leitura vem incompleta ou quando nenhum
+  planejamento dos DFDs do órgão veio (consulta filtrada) — nada é gravado como "Não encontrado". Na Mesa a coluna
+  Execução chama-se **Situação**; na Mesa do PCA, Situação e Centi abrem ocultas (`DataTable.ocultasPadrao` = o layout
+  padrão do sistema; a edição da tabela as mostra).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
