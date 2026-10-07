@@ -64,7 +64,7 @@ import { tokenPx } from "../espacamento";
 import { duracaoMotionMs } from "../Modal";
 import { SombraGrade, useArrastoGrade } from "../PastasQuadros";
 import type { GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
-import { type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, testarAnexo } from "@/lib/automacao-dfds-motor";
+import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, testarAnexo } from "@/lib/automacao-dfds-motor";
 
 type Pedir = (acao: string, dados: unknown, ms: number) => Promise<Record<string, unknown> & { ok?: boolean; erro?: string; loteId?: string; interrompido?: boolean }>;
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
@@ -137,21 +137,24 @@ export function FluxosAutomacao({
   const [agora, setAgora] = useState("");
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
   const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[] }[]>([]);
+  const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
   const [naFila, setNaFila] = useState(0);
   const rodandoRef = useRef<number | null>(null);
   useEffect(() => onRodando(rodando != null || naFila > 0), [rodando, naFila, onRodando]);
   // O andamento vai ao painel de SEGUNDO PLANO (minimizado fora desta tela; "Detalhes" volta ao fluxo).
   const emCurso = rodando != null;
+  const andDfds = dfds?.length ? andamentoDfds(dfds) : null;
   useTrabalhoSegundoPlano(
     exec
       ? {
           id: `fluxo-${exec.id}`,
           titulo: exec.nome,
           estado: emCurso ? "rodando" : (resultado?.estado ?? "concluido"),
-          feito: Object.values(passos).filter((p) => p.estado === "ok").length,
-          total: exec.total,
+          feito: andDfds ? andDfds.feito : Object.values(passos).filter((p) => p.estado === "ok").length,
+          total: andDfds ? andDfds.total : exec.total,
+          itens: andDfds?.itens,
           texto: emCurso
-            ? `${agora}${naFila ? `${agora ? " · " : ""}${naFila} na fila` : ""}`
+            ? `${andDfds?.atual ?? agora}${naFila ? `${agora ? " · " : ""}${naFila} na fila` : ""}`
             : resultado?.estado === "falhou"
               ? resultado.erro
               : resultado?.apontados.length
@@ -195,7 +198,6 @@ export function FluxosAutomacao({
   // A PRÉVIA de cada seleção (o trecho só de leitura antes dela) e os itens vindos da Mesa (para a prévia usá-los também).
   const [previas, setPrevias] = useState<Record<string, { carregando: boolean; erro?: string }>>({});
   const entradaMesa = useRef<Item[] | null>(null);
-  const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
   const [pasta, setPasta] = useState<PastaDestino | null>(null);
   const [podePasta, setPodePasta] = useState(false);
   useEffect(() => setPodePasta("showDirectoryPicker" in window), []);

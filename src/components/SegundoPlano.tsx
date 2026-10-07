@@ -28,6 +28,8 @@ export type Trabalho = {
   texto?: string;
   /** A página dona (onde os detalhes ficam). */
   rota: string;
+  /** O andamento item a item (ex.: cada DFD) — visto ao expandir. */
+  itens?: { rotulo: string; estado: "ok" | "falhou" | "rodando" | "fila"; detalhe?: string }[];
   onAbrir?: () => void;
   onParar?: () => void;
 };
@@ -225,7 +227,8 @@ export function PainelSegundoPlano({
   const [aberto, setAberto] = useState(false);
   const [montado, setMontado] = useState(false);
   useEffect(() => setMontado(true), []);
-  const trabalhos = todos.filter((t) => !(naTela.has(t.chave) && caminho === t.rota.split("?")[0]));
+  // Ativo = sempre acompanhado (minimizado), também na página dona; concluído na página dona sai (o desfecho está à vista).
+  const trabalhos = todos.filter((t) => ATIVO(t.estado) || !(naTela.has(t.chave) && caminho === t.rota.split("?")[0]));
   const caixa = useRef<HTMLDivElement>(null);
 
   // A altura ocupada vai em --reserva-flutuante (as bolhas do chat e os avisos ficam acima); o "resize" re-mede as bolhas.
@@ -287,6 +290,17 @@ export function PainelSegundoPlano({
                 </div>
                 {ATIVO(t.estado) && t.total > 0 && <Progress value={pct(t)} label={undefined} />}
                 {t.texto && <p className="line-clamp-2 text-xs text-muted" title={t.texto}>{t.texto}</p>}
+                {!!t.itens?.length && (
+                  <ul aria-label="Andamento item a item" className="max-h-40 space-y-0.5 overflow-y-auto rounded-md bg-surface-2 p-1.5 text-xs">
+                    {t.itens.map((x, i) => (
+                      <li key={i} className="flex items-center gap-1.5" title={x.detalhe ? `${x.rotulo} — ${x.detalhe}` : x.rotulo}>
+                        {ICONE[x.estado === "ok" ? "concluido" : x.estado === "falhou" ? "falhou" : x.estado === "rodando" ? "rodando" : "fila"]}
+                        <span className="min-w-0 flex-1 truncate tabular-nums">{x.rotulo}</span>
+                        {x.detalhe && <span className={`max-w-[45%] shrink-0 truncate ${x.estado === "falhou" ? "text-danger" : "text-muted"}`}>{x.detalhe}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="flex justify-end gap-1.5">
                   {t.estado === "rodando" && t.onParar && (
                     <Button size="xs" variant="ghost" icon={<IconParar className="size-3.5" />} onClick={() => t.onParar?.()}>

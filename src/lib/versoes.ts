@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.53.0",
+    data: "2026-10-07",
+    titulo: "Baixar DFDs por DFD e andamento sempre à vista",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Modelo “Baixar DFDs · por DFD”: escolha DFD a DFD no sistema (ou os selecionados na Mesa) e baixe cada um da Centi.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O andamento fica minimizado no canto em qualquer tela, inclusive na da Automação; expandir mostra DFD a DFD (Salvo, Falhou, Baixando) com a contagem correta.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.52.0",
     data: "2026-10-07",
     titulo: "Nós das automações: tudo por escolha e (?) didático",

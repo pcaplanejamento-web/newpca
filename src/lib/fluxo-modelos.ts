@@ -55,6 +55,26 @@ export const MODELOS_FLUXO: ModeloFluxo[] = [
     },
   },
   {
+    id: "dfds-dfd",
+    nome: "Baixar DFDs · por DFD",
+    descricao: "Os DFDs do sistema numa tabela de seleção (ou os escolhidos na Mesa) → cada DFD marcado é emitido na Centi e vai à pasta ou ao protocolo da Centi.",
+    ajuda: {
+      funciona: "Lista todos os DFDs gravados no sistema. Você marca DFD a DFD quais baixar; pela Mesa, os DFDs selecionados lá já entram.",
+      executa: "Marque os DFDs e toque em Executar, com a extensão da Centi pronta. O andamento fica minimizado no canto da tela; toque nele para ver DFD a DFD.",
+      resultado: "O PDF de cada DFD na pasta escolhida (ou em Downloads) ou anexado ao protocolo da Centi, com o estado de cada um: Salvo, Falhou ou Sem planejamento.",
+    },
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("ler1", "sistema.ler", 280, 160, { objeto: "dfds", buscaDfds: "todos", entrega: "lista" }),
+        n("sel1", "entrada.selecionar", 576, 160, { chave: "id", semMarcar: "nenhum" }),
+        n("dfds1", "saida.dfdsCenti", 880, 160),
+      ],
+      conexoes: [c("inicio1", "ler1"), c("ler1", "sel1"), c("sel1", "dfds1")],
+    },
+  },
+  {
     id: "tela-protocolo",
     nome: "Ler a Tela Protocolo",
     descricao:

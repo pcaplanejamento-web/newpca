@@ -204,9 +204,26 @@ export function planoDosItens(itens: Record<string, unknown>[], saida: OpcoesSai
     const p = planoDosProtocolos(protos, saida);
     return { arquivos: p.arquivos, previa: previaDfds(p.arquivos, p) };
   }
-  const ids = [...new Set(itens.map((it) => String(it.id ?? it.planejamento ?? "").replace(/\D/g, "")).filter(Boolean))];
+  const ids = [...new Set(itens.map((it) => String(it.planejamento ?? it.id ?? "").replace(/\D/g, "")).filter(Boolean))];
   const arquivos = planoDosIds(ids, protocolos, saida);
   return { arquivos, previa: previaDfds(arquivos) };
+}
+
+/** O andamento dos DFDs (o painel de segundo plano): concluídos (salvos, falhos, pulados) / total e as linhas por extenso. */
+export function andamentoDfds(linhas: LinhaDfd[]): { feito: number; total: number; atual?: string; itens: { rotulo: string; estado: "ok" | "falhou" | "rodando" | "fila"; detalhe?: string }[] } {
+  const ref = (l: LinhaDfd) => `Planej. ${l.id || "—"}${l.dfd ? ` · DFD ${l.dfd}` : ""}`;
+  const estado = (e: EstadoDfd) => (e === "ok" ? "ok" : e === "falha" ? "falhou" : e === "baixando" ? "rodando" : e === "fila" ? "fila" : "ok");
+  const atual = linhas.find((l) => l.estado === "baixando");
+  return {
+    feito: linhas.filter((l) => l.estado !== "fila" && l.estado !== "baixando").length,
+    total: linhas.length,
+    atual: atual ? `Baixando ${ref(atual)}` : undefined,
+    itens: linhas.map((l) => ({
+      rotulo: ref(l),
+      estado: estado(l.estado),
+      detalhe: l.estado === "ok" ? "Salvo" : l.estado === "falha" ? (l.erro ?? "Falhou") : l.estado === "pulado" ? "Sem planejamento" : l.estado === "repetido" ? (l.erro ?? "Repetido") : undefined,
+    })),
+  };
 }
 
 /** A prévia da análise: cada DFD do plano (na ordem), os pulados por não terem planejamento e os repetidos. */
