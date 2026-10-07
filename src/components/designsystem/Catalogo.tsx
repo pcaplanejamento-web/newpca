@@ -91,6 +91,7 @@ import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
+import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
 import type { Grafo } from "@/lib/fluxo-core";
 import { MODELOS_FLUXO } from "@/lib/fluxo-modelos";
 import { REGISTRO_NOS } from "@/lib/fluxo-nos";
@@ -3161,6 +3162,12 @@ export function Catalogo() {
     <>
       <Secao titulo="Fluxos de automação (CanvasFluxo)">
         <CanvasFluxoDemo />
+      </Secao>
+      <Secao titulo="Cartão de automação (CartaoFluxo)">
+        <div className="grid auto-rows-fr gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
+          <CartaoFluxo titulo="Conferir DFDs × Centi — um título longo que quebra linha sem cortar" descricao="Cada DFD do sistema passa pelo fluxo de conferência." selo={<Badge tone="emerald">Agendado</Badge>} rodape="4 nó(s) · Manual" onClick={() => undefined} />
+          <CartaoFluxo titulo="Em branco" descricao="Só o Início — monte do zero." tracejado marcado onClick={() => undefined} />
+        </div>
       </Secao>
       <Secao titulo="Cores — neutros">
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 lg:grid-cols-11">

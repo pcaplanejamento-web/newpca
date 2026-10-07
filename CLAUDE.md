@@ -4246,6 +4246,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `sistema.completarDfd` — um item que já é DFD passa direto; sozinho, o planejamento do campo). Modelos com
   `dependencias` + `fluxoModelo` (`grafoDoModelo`): "Conferir DFDs × Centi" = DFDs → Executar "Conferir 1 DFD × Centi"
   (paralelo 3, retomar).
+  **Tela (v1.32.1):** a lista mostra SÓ os fluxos salvos, em **`CartaoFluxo`** (DS, `fluxos/CartaoFluxo.tsx` — título
+  INTEIRO, descrição em 3 linhas, rodapé; grade `auto-rows-fr` ≥ 16rem; esqueleto `SkeletonCartao` ao carregar); **"Novo
+  fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
+  com "Em branco" + TODOS os modelos no mesmo cartão (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
+  montar" do diagrama mora no `Ajuda` (?) dos controles de zoom.
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
   ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só

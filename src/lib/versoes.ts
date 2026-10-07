@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.32.1",
+    data: "2026-10-07",
+    titulo: "Automações mais limpas",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Cartões das automações proporcionais e com o título inteiro (quebra linha, nunca corta); a tela inicial mostra só os seus fluxos.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "“Novo fluxo” abre um painel à direita com “Em branco” e todos os modelos prontos — o que já existe pode ser aberto ou criado de novo.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O “Como montar” do diagrama foi para o (?) junto dos controles de zoom; a lista carrega com o esqueleto padrão.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.32.0",
     data: "2026-10-07",
     titulo: "Fluxos dentro de fluxos",

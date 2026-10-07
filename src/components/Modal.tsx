@@ -145,6 +145,7 @@ export function Modal({
   esquerda,
   larguraPrincipal,
   principalNoTopo = false,
+  lado = "centro",
   children,
 }: {
   open: boolean;
@@ -170,6 +171,9 @@ export function Modal({
   /** O principal acabou de mostrar um painel FILHO (ex.: as mensagens do DFD no lugar do item): conta como
    * o ÚLTIMO aberto — é o visível no celular e o 1º que o Esc fecha (o `onClose` dele volta um passo). */
   principalNoTopo?: boolean;
+  /** `direita` = no desktop, um painel na ALTURA TODA preso à direita (escolher algo sem perder a tela de vista); no
+   * celular segue a folha de baixo. Só no modo simples (sem pilha). */
+  lado?: "centro" | "direita";
   children: ReactNode;
 }) {
   const [montado, setMontado] = useState(false);
@@ -281,7 +285,9 @@ export function Modal({
   // Modo simples (1 banner) — comportamento original, inalterado.
   if (pilha.length === 0) {
     return createPortal(
-      <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
+      <div
+        className={`fixed inset-0 z-50 flex items-end justify-center p-0 sm:p-[var(--pad-canvas)] ${lado === "direita" ? "sm:items-stretch sm:justify-end" : "sm:items-center"}`}
+      >
         {scrim}
         <Painel
           titulo={titulo}
@@ -290,7 +296,7 @@ export function Modal({
           rodape={rodape}
           bloqueado={bloqueado}
           acoesCabecalho={acoesCabecalho}
-          className={TAMANHO[size]}
+          className={`${TAMANHO[size]} ${lado === "direita" ? "sm:max-h-none animate-aba-direita" : ""}`}
         >
           {children}
         </Painel>

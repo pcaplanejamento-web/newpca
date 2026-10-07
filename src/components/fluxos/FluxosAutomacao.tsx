@@ -38,6 +38,9 @@ import { Switch } from "../Switch";
 import { toast } from "../Toast";
 import { CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
 import { IconeNo } from "./IconeNo";
+import { Ajuda } from "../Ajuda";
+import { SkeletonCartao } from "../Skeleton";
+import { CartaoFluxo } from "./CartaoFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
 import { type HostPainel, HostPainelCtx } from "./paineis";
@@ -435,9 +438,18 @@ export function FluxosAutomacao({
           onExcluir={() => void excluir(fluxo)}
         />
       ) : (
-        <ListaFluxos fluxos={fluxos} rodando={rodando} onAbrir={setAberto} onNovo={() => setNovo(true)} onModelo={(m) => void criar(m, m.nome)} />
+        <ListaFluxos fluxos={fluxos} rodando={rodando} onAbrir={setAberto} onNovo={() => setNovo(true)} />
       )}
-      <NovoFluxo aberto={novo} onFechar={() => setNovo(false)} onCriar={criar} />
+      <NovoFluxo
+        aberto={novo}
+        fluxos={fluxos ?? []}
+        onFechar={() => setNovo(false)}
+        onCriar={criar}
+        onAbrir={(id) => {
+          setNovo(false);
+          setAberto(id);
+        }}
+      />
       <ProtocoloUploadForm
         reparticoes={importacao.reparticoes as never}
         reparticaoAtivaId={null}
@@ -457,29 +469,22 @@ export function FluxosAutomacao({
 
 const GRAFO_VAZIO_COM_INICIO: Grafo = { ...GRAFO_VAZIO, nos: [{ id: "inicio1", tipo: "gatilho.inicio", config: {}, x: 64, y: 160 }] };
 
-function ListaFluxos({
-  fluxos,
-  rodando,
-  onAbrir,
-  onNovo,
-  onModelo,
-}: {
-  fluxos: FluxoAutomacao[] | null;
-  rodando: number | null;
-  onAbrir: (id: number) => void;
-  onNovo: () => void;
-  onModelo: (m: (typeof MODELOS_FLUXO)[number]) => void;
-}) {
+const GRADE_CARTOES = "grid auto-rows-fr gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]";
+
+function ListaFluxos({ fluxos, rodando, onAbrir, onNovo }: { fluxos: FluxoAutomacao[] | null; rodando: number | null; onAbrir: (id: number) => void; onNovo: () => void }) {
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted">Monte automações ligando blocos: buscar na Centi, ler protocolos, comparar, repetir até o fim e apontar erros.</p>
+      <div className="flex items-center justify-end">
         <Button size="sm" icon={<IconPlus className="size-4" />} onClick={onNovo}>
           Novo fluxo
         </Button>
       </div>
       {!fluxos ? (
-        <p className="text-sm text-muted">Carregando…</p>
+        <div className={GRADE_CARTOES} aria-busy="true">
+          {[0, 1, 2].map((i) => (
+            <SkeletonCartao key={i} linhas={3} />
+          ))}
+        </div>
       ) : !fluxos.length ? (
         <div className={`${CARTAO} flex flex-col items-center gap-3 py-10 text-center`}>
           <IconFluxo className="size-8 text-accent" aria-hidden="true" />
@@ -489,98 +494,84 @@ function ListaFluxos({
           </Button>
         </div>
       ) : (
-        <div className="grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))]">
+        <div className={GRADE_CARTOES}>
           {fluxos.map((f) => {
-            const u = f.ultimaExecucao as { estado?: string; apontados?: number; erro?: string } | null;
+            const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
             return (
-              <button key={f.id} type="button" onClick={() => onAbrir(f.id)} className={`${CARTAO} flex min-h-[9rem] flex-col gap-2 text-left transition-shadow hover:shadow-soft`}>
-                <div className="flex items-center gap-2">
-                  <IconFluxo className="size-5 shrink-0 text-accent" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate font-semibold text-text">{f.nome}</span>
-                  {rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : <Badge tone="slate">Manual</Badge>}
-                </div>
-                {f.descricao && <p className="line-clamp-2 text-xs text-muted">{f.descricao}</p>}
-                <p className="mt-auto text-xs text-muted">
-                  {f.grafo.nos.length} nó(s) · {rotuloFrequencia(f.frequencia)}
-                  {f.ativo && f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}
-                </p>
-                {u?.estado && (
-                  <p className={`text-xs ${u.estado === "concluido" && !u.apontados ? "text-[var(--ok)]" : "text-[var(--warn)]"}`}>
-                    Última: {u.estado === "concluido" ? "concluída" : u.estado}
-                    {u.apontados ? ` · ${u.apontados} erro(s) apontado(s)` : ""}
-                    {f.ultimaEm ? ` · ${dataHoraBR(f.ultimaEm)}` : ""}
-                  </p>
-                )}
-              </button>
+              <CartaoFluxo
+                key={f.id}
+                titulo={f.nome}
+                descricao={f.descricao}
+                onClick={() => onAbrir(f.id)}
+                selo={rodando === f.id ? <Badge tone="blue">Executando</Badge> : f.ativo ? <Badge tone="emerald">Agendado</Badge> : <Badge tone="slate">Manual</Badge>}
+                rodape={
+                  <>
+                    <span className="block">
+                      {f.grafo.nos.length} nó(s) · {rotuloFrequencia(f.frequencia)}
+                      {f.ativo && f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}
+                    </span>
+                    {u?.estado && (
+                      <span className={`block ${u.estado === "concluido" && !u.apontados ? "text-[var(--ok)]" : "text-[var(--warn)]"}`}>
+                        Última: {u.estado === "concluido" ? "concluída" : u.estado}
+                        {u.apontados ? ` · ${u.apontados} erro(s) apontado(s)` : ""}
+                        {f.ultimaEm ? ` · ${dataHoraBR(f.ultimaEm)}` : ""}
+                      </span>
+                    )}
+                  </>
+                }
+              />
             );
           })}
         </div>
-      )}
-      {fluxos && (
-        <section className="space-y-2" aria-label="Modelos prontos">
-          <h3 className="text-sm font-semibold text-text">Modelos prontos</h3>
-          <div className="grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))]">
-            {MODELOS_FLUXO.map((m) => {
-              const criado = fluxos.find((f) => f.nome === m.nome);
-              return (
-                <div key={m.id} className={`${CARTAO} flex min-h-[9rem] flex-col gap-2 border-dashed`}>
-                  <div className="flex items-center gap-2">
-                    <IconFluxo className="size-5 shrink-0 text-muted" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 font-semibold text-text">{m.nome}</span>
-                  </div>
-                  <p className="line-clamp-3 text-xs text-muted">{m.descricao}</p>
-                  <p className="text-xs text-muted">
-                    {m.grafo.nos.length} nó(s) · {m.frequencia ? rotuloFrequencia(m.frequencia) : "Manual"}
-                  </p>
-                  <div className="mt-auto">
-                    {criado ? (
-                      <Button size="sm" variant="ghost" onClick={() => onAbrir(criado.id)}>
-                        Já criado — abrir
-                      </Button>
-                    ) : (
-                      <Button size="sm" icon={<IconPlus className="size-4" />} onClick={() => onModelo(m)}>
-                        Usar este modelo
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
       )}
     </div>
   );
 }
 
-function NovoFluxo({ aberto, onFechar, onCriar }: { aberto: boolean; onFechar: () => void; onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string) => Promise<void> }) {
+const EM_BRANCO: { id: string; nome: string; descricao: string; grafo?: Grafo; frequencia?: Frequencia } = { id: "", nome: "Em branco", descricao: "Só o Início — monte do zero." };
+
+/** "Novo fluxo": painel à direita com o "Em branco" e TODOS os modelos prontos (o já criado pode ser aberto). */
+function NovoFluxo({
+  aberto,
+  fluxos,
+  onFechar,
+  onCriar,
+  onAbrir,
+}: {
+  aberto: boolean;
+  fluxos: FluxoAutomacao[];
+  onFechar: () => void;
+  onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string) => Promise<void>;
+  onAbrir: (id: number) => void;
+}) {
   const [nome, setNome] = useState("");
   const [modelo, setModelo] = useState<string>("");
   const [criando, setCriando] = useState(false);
   const m = MODELOS_FLUXO.find((x) => x.id === modelo) ?? null;
+  const existente = m ? fluxos.find((f) => f.nome === m.nome) : undefined;
+  const criar = async () => {
+    setCriando(true);
+    await onCriar(m, nome.trim() || m?.nome || "Fluxo");
+    setCriando(false);
+    setNome("");
+    setModelo("");
+  };
   return (
     <Modal
       open={aberto}
       onClose={onFechar}
       titulo="Novo fluxo"
+      size="lg"
+      lado="direita"
       rodape={
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={onFechar}>
-            Cancelar
-          </Button>
-          <Button
-            size="sm"
-            loading={criando}
-            disabled={!(nome.trim() || m)}
-            onClick={async () => {
-              setCriando(true);
-              await onCriar(m, nome.trim() || m?.nome || "Fluxo");
-              setCriando(false);
-              setNome("");
-              setModelo("");
-            }}
-          >
-            Criar
+        <div className="flex flex-wrap justify-end gap-2">
+          {existente && (
+            <Button size="sm" variant="secondary" onClick={() => onAbrir(existente.id)}>
+              Abrir o existente
+            </Button>
+          )}
+          <Button size="sm" loading={criando} disabled={!(nome.trim() || m)} onClick={() => void criar()}>
+            {existente ? "Criar outro" : "Criar"}
           </Button>
         </div>
       }
@@ -588,18 +579,22 @@ function NovoFluxo({ aberto, onFechar, onCriar }: { aberto: boolean; onFechar: (
       <div className="space-y-3">
         <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
         <p className="text-sm font-medium text-text">Começar de</p>
-        <div className="grid gap-2">
-          {[{ id: "", nome: "Em branco", descricao: "Só o Início — monte do zero." }, ...MODELOS_FLUXO].map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              onClick={() => setModelo(x.id)}
-              className={`rounded-card border p-3 text-left ${modelo === x.id ? "border-accent bg-[var(--accent-soft)]" : "border-border"}`}
-            >
-              <span className="block text-sm font-semibold text-text">{x.nome}</span>
-              <span className="block text-xs text-muted">{x.descricao}</span>
-            </button>
-          ))}
+        <div className={GRADE_CARTOES}>
+          {[EM_BRANCO, ...MODELOS_FLUXO].map((x) => {
+            const criado = x.id ? fluxos.some((f) => f.nome === x.nome) : false;
+            return (
+              <CartaoFluxo
+                key={x.id || "branco"}
+                titulo={x.nome}
+                descricao={x.descricao}
+                tracejado
+                marcado={modelo === x.id}
+                onClick={() => setModelo(x.id)}
+                selo={criado ? <Badge tone="emerald">Já existe</Badge> : undefined}
+                rodape={x.grafo ? `${x.grafo.nos.length} nó(s) · ${x.frequencia ? rotuloFrequencia(x.frequencia) : "Manual"}` : undefined}
+              />
+            );
+          })}
         </div>
       </div>
     </Modal>
@@ -867,6 +862,16 @@ function EditorFluxo({
               <Button size="xs" variant="icon" aria-label="Enquadrar tudo" title="Enquadrar tudo" onClick={enquadrar}>
                 <IconEnquadrar className="size-4" />
               </Button>
+              <Ajuda titulo="Como montar">
+                <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
+                  <li>Toque num bloco à esquerda: ele entra ligado ao nó marcado (ou arraste até o quadro).</li>
+                  <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e Delete para desligar.</li>
+                  <li>Laço: ligue o fim do corpo à entrada “Volta” — repete até acabar.</li>
+                  <li>Toda caixa tem a saída vermelha “erro”: ligue-a a “Apontar erros” para seguir mesmo com falha.</li>
+                  <li>Nos campos, use {"{{campo}}"} para pegar um dado do item.</li>
+                  <li>“Executar fluxo” usa outro fluxo salvo como componente — para cada item, em paralelo e retomando de onde parou.</li>
+                </ul>
+              </Ajuda>
             </div>
           }
         />
@@ -902,14 +907,7 @@ function EditorFluxo({
             />
           ) : (
             <div className="space-y-3 text-sm text-muted">
-              <p className="font-semibold text-text">Como montar</p>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>Toque num bloco à esquerda: ele entra ligado ao nó marcado.</li>
-                <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e Delete para desligar.</li>
-                <li>Laço: ligue o fim do corpo à entrada “Volta” — repete até acabar.</li>
-                <li>Toda caixa tem a saída vermelha “erro”: ligue-a a “Apontar erros” para seguir mesmo com falha.</li>
-                <li>Nos campos, use {"{{campo}}"} para pegar um dado do item.</li>
-              </ul>
+              <p>Toque num nó para configurá-lo.</p>
               {problemas.length > 0 && (
                 <Callout kind={erros.length ? "danger" : "warn"}>
 <strong className="block">{"Antes de executar"}</strong>
