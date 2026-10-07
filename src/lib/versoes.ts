@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.32.0",
+    data: "2026-10-07",
+    titulo: "Fluxos dentro de fluxos",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Qualquer fluxo salvo pode ser usado dentro de outro pelo componente “Executar fluxo”: uma vez para cada item (várias execuções ao mesmo tempo, de 1 a 6) ou uma vez com todos. O Início do fluxo usado recebe os itens e o que ele produz segue adiante.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Retomada: um fluxo interrompido continua do item em que parou (vale em outro computador); “Recomeçar do zero” no componente.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "“Executar vários fluxos”: dispara vários fluxos AO MESMO TEMPO com os mesmos dados.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Conferir DFDs × Centi agora usa o fluxo “Conferir 1 DFD × Centi” para cada DFD, 3 de cada vez, retomando de onde parou. Um fluxo usado por outro não pode ser excluído, e fluxos que se usariam em círculo são recusados.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.31.0",
     data: "2026-10-07",
     titulo: "Todas as automações viraram fluxos",

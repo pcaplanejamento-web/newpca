@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "../src/db/schema.ts";
+import * as q from "../src/lib/fluxos-sql.ts";
+import { d1Sobre } from "./fixtures/d1-sqlite.ts";
+
+test("retomada dos subfluxos: grava em lotes (≤ 100 parâmetros), atualiza o estado, lê só os ok e limpa por nó (driver D1 real)", async () => {
+  const db = new DatabaseSync(":memory:");
+  for (const arq of readdirSync(join(process.cwd(), "drizzle")).filter((f) => f.endsWith(".sql")).sort()) db.exec(readFileSync(join(process.cwd(), "drizzle", arq), "utf8"));
+  db.exec("INSERT INTO automacao_fluxos (id, nome) VALUES (1, 'Pai'), (2, 'Outro')");
+  const orm = drizzle(d1Sobre(db) as never, { schema }) as never as Parameters<typeof q.consultaProgresso>[0];
+  const itens = Array.from({ length: 60 }, (_, i) => ({ chave: String(i), estado: (i % 10 ? "ok" : "falha") as "ok" | "falha" }));
+  const cmds = q.comandosGravarProgresso(orm, 1, "sub1", [...itens, { chave: "0", estado: "ok" }]);
+  assert.equal(cmds.length, Math.ceil(60 / q.LOTE_PROGRESSO));
+  await (orm as unknown as { batch: (c: unknown[]) => Promise<unknown> }).batch(cmds);
+  await (orm as unknown as { batch: (c: unknown[]) => Promise<unknown> }).batch(q.comandosGravarProgresso(orm, 1, "9/sub1", [{ chave: "5", estado: "ok" }]));
+  const ok = (await q.consultaProgresso(orm, 1, "sub1")).map((l) => l.chave);
+  assert.equal(ok.length, 55, "a chave repetida no lote vale uma vez (a última: ok)");
+  assert.ok(ok.includes("0"));
+  assert.ok(!ok.includes("10"));
+  await q.comandoLimparProgresso(orm, 1, "sub1");
+  assert.equal((await q.consultaProgresso(orm, 1, "sub1")).length, 0);
+  assert.equal((await q.consultaProgresso(orm, 1, "9/sub1")).length, 1, "o nó do subfluxo fica");
+  db.exec("DELETE FROM automacao_fluxos WHERE id = 1");
+  assert.equal((db.prepare("SELECT count(*) AS n FROM automacao_progresso").get() as { n: number }).n, 0, "excluir o fluxo apaga o progresso");
+});

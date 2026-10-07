@@ -11,7 +11,7 @@ import { IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
 import { Switch } from "../Switch";
 import { IconeNo } from "./IconeNo";
-import { CampoReparticoesCenti } from "./paineis";
+import { CampoFluxo, CampoReparticoesCenti, RecomecarSubfluxo } from "./paineis";
 
 /**
  * O painel do NÓ marcado: o nome, os campos do tipo (formulário DECLARATIVO do registro — novo tipo de nó não pede tela
@@ -75,10 +75,11 @@ export function PainelNo({
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           <TextField label="Nome do nó" value={no.nome ?? ""} placeholder={def.rotulo} disabled={somenteLeitura} maxLength={80} onChange={(e) => onMudar({ ...no, nome: e.target.value || undefined })} />
           {def.campos
-            .filter((c) => campoVisivel(c, no.config))
+            .filter((c) => campoVisivel(c, no.config, def.campos))
             .map((c) => (
               <CampoDoNo key={c.chave} campo={c} valor={no.config[c.chave] ?? c.padrao} onValor={(v) => definir(c.chave, v)} lista={listaId} somenteLeitura={somenteLeitura} />
             ))}
+          {no.tipo === "fluxo.executar" && no.config.retomar !== false && (no.config.modo ?? "porItem") === "porItem" && <RecomecarSubfluxo no={no.id} somenteLeitura={somenteLeitura} />}
           {!somenteLeitura && <Switch checked={!!no.desativado} onChange={(v) => onMudar({ ...no, desativado: v || undefined })} label="Desativar (repassa os itens sem executar)" />}
           <datalist id={listaId}>
             {caminhos.map((c) => (
@@ -133,6 +134,9 @@ export function CampoDoNo({ campo: c, valor, onValor, lista, somenteLeitura }: {
           }}
         />
       );
+    case "fluxo":
+    case "fluxos":
+      return <CampoFluxo rotulo={rot} valor={s} varios={c.tipo === "fluxos"} onValor={onValor} somenteLeitura={somenteLeitura} />;
     case "reparticoesCenti":
       return <CampoReparticoesCenti rotulo={rot} valor={s} onValor={onValor} somenteLeitura={somenteLeitura} />;
     case "caminho":
@@ -144,7 +148,7 @@ export function CampoDoNo({ campo: c, valor, onValor, lista, somenteLeitura }: {
 
 /** A saída da última execução (amostra de até 50 itens por porta). */
 function SaidaNo({ passo }: { passo?: PassoExec }) {
-  const portas = Object.entries(passo?.amostra ?? {}).filter(([k, v]) => v.length && k !== "__apontados");
+  const portas = Object.entries(passo?.amostra ?? {}).filter(([k, v]) => v.length && k !== "__apontados" && k !== "__retorno");
   const [porta, setPorta] = useState<string | null>(null);
   const atual = portas.find(([k]) => k === porta) ?? portas[0];
   const itens = atual?.[1] ?? [];

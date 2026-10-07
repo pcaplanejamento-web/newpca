@@ -38,3 +38,9 @@ export const execucaoFluxoSchema = z.strictObject({
     .max(500)
     .optional(),
 });
+
+/** A retomada de um nó "Executar fluxo": `no` = o caminho do nó (ids dos subfluxos + o nó). */
+export const noProgressoSchema = z.string().trim().min(1).max(200);
+export const progressoFluxoSchema = z.strictObject({
+  itens: z.array(z.strictObject({ chave: z.string().trim().min(1).max(200), estado: z.enum(["ok", "falha"]) })).min(1).max(200),
+});

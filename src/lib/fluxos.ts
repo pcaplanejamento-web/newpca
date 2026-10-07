@@ -1,7 +1,8 @@
 import { desc, eq } from "drizzle-orm";
 import { automacaoFluxos } from "@/db/schema";
 import { getDb } from "./db";
-import { type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao } from "./fluxo-core";
+import { cicloDeSubfluxos, type Frequencia, type Grafo, lerFrequencia, lerGrafo, proximaExecucao, subfluxosDoGrafo } from "./fluxo-core";
+import { comandoLimparProgresso, comandosGravarProgresso, consultaProgresso } from "./fluxos-sql";
 
 export type FluxoAutomacao = {
   id: number;
@@ -112,4 +113,40 @@ export async function registrarExecucaoFluxo(id: number, resumo: Record<string, 
 
 export async function excluirFluxo(id: number): Promise<boolean> {
   return (await getDb().delete(automacaoFluxos).where(eq(automacaoFluxos.id, id)).returning({ id: automacaoFluxos.id })).length > 0;
+}
+
+// ———————————————————————————————————————————————— subfluxos
+
+/** Os fluxos que USAM o fluxo `id` dentro deles (a exclusão é recusada enquanto houver). */
+export async function fluxosQueUsam(id: number): Promise<{ id: number; nome: string }[]> {
+  return (await listarFluxos()).filter((f) => f.id !== id && subfluxosDoGrafo(f.grafo).includes(id)).map((f) => ({ id: f.id, nome: f.nome }));
+}
+
+/** O ciclo (A usa B que usa A) que o grafo novo de `id` criaria — os nomes, ou null. `id` null = fluxo novo. */
+export async function cicloAoGravar(id: number | null, grafo: unknown): Promise<string | null> {
+  const novo = lerGrafo(grafo);
+  const usados = subfluxosDoGrafo(novo);
+  if (!usados.length) return null;
+  const todos = await listarFluxos();
+  const proprio = id ?? -1;
+  if (usados.includes(proprio)) return "Um fluxo não pode usar a si mesmo.";
+  const usa = new Map<number, number[]>(todos.map((f) => [f.id, subfluxosDoGrafo(f.grafo)]));
+  usa.set(proprio, usados);
+  const ciclo = cicloDeSubfluxos(proprio, usa);
+  if (!ciclo) return null;
+  const nome = (x: number) => (x === proprio ? "este fluxo" : (todos.find((f) => f.id === x)?.nome ?? `fluxo ${x}`));
+  return `Os fluxos se usariam em círculo: ${ciclo.map(nome).join(" → ")}.`;
+}
+
+export async function lerProgresso(fluxoId: number, no: string): Promise<string[]> {
+  return (await consultaProgresso(getDb(), fluxoId, no)).map((l) => l.chave);
+}
+
+export async function gravarProgresso(fluxoId: number, no: string, itens: { chave: string; estado: "ok" | "falha" }[]): Promise<void> {
+  const cmds = comandosGravarProgresso(getDb(), fluxoId, no, itens);
+  if (cmds.length) await getDb().batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+}
+
+export async function limparProgresso(fluxoId: number, no: string): Promise<void> {
+  await comandoLimparProgresso(getDb(), fluxoId, no);
 }

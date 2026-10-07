@@ -2,7 +2,7 @@ import { notificar } from "@/lib/notificacoes";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { rotuloFrequencia } from "@/lib/fluxo-core";
-import { editarFluxo, excluirFluxo, getFluxo, registrarExecucaoFluxo } from "@/lib/fluxos";
+import { cicloAoGravar, editarFluxo, excluirFluxo, fluxosQueUsam, getFluxo, registrarExecucaoFluxo } from "@/lib/fluxos";
 import { editarFluxoSchema, execucaoFluxoSchema } from "@/lib/fluxos-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 
@@ -25,6 +25,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!id) return erro("Id inválido.", 400);
   const p = await parseCorpo(editarFluxoSchema, req);
   if ("resp" in p) return p.resp;
+  if (p.data.grafo) {
+    const ciclo = await cicloAoGravar(id, p.data.grafo);
+    if (ciclo) return erro(ciclo, 409);
+  }
   const antes = await getFluxo(id);
   const fluxo = await editarFluxo(id, p.data);
   if (!antes || !fluxo) return erro("Fluxo não encontrado.", 404);
@@ -79,7 +83,10 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const id = intId((await params).id);
   if (!id) return erro("Id inválido.", 400);
   const antes = await getFluxo(id);
-  if (!antes || !(await excluirFluxo(id))) return erro("Fluxo não encontrado.", 404);
+  if (!antes) return erro("Fluxo não encontrado.", 404);
+  const usam = await fluxosQueUsam(id);
+  if (usam.length) return erro(`Este fluxo é usado dentro de: ${usam.map((f) => `“${f.nome}”`).join(", ")}. Tire-o de lá antes de excluir.`, 409);
+  if (!(await excluirFluxo(id))) return erro("Fluxo não encontrado.", 404);
   await registrarAuditoria({ usuario: g.u, acao: "excluir", entidade: "automacao", entidadeId: id, origem: "centi", resumo: `Fluxo de automação excluído: ${antes.nome}` });
   return ok();
 }

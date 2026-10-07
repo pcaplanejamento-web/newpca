@@ -155,7 +155,9 @@ test("Protocolos por situação exige a extensão que filtra", async () => {
 
 test("modelos prontos são válidos", async () => {
   const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
-  for (const m of MODELOS_FLUXO) assert.deepEqual(validarGrafo(m.grafo, REGISTRO_NOS).filter((p) => p.nivel === "erro"), [], m.nome);
+  const { grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
+  const ids = new Map(MODELOS_FLUXO.map((m, i) => [m.id, i + 1]));
+  for (const m of MODELOS_FLUXO) assert.deepEqual(validarGrafo(grafoDoModelo(m, ids), REGISTRO_NOS).filter((p) => p.nivel === "erro"), [], m.nome);
 });
 
 test("modelo de protocolos analisados roda o laço com erro de leitura sem travar", async () => {
@@ -287,15 +289,20 @@ test("protocolos com repartição e sem departamento na resposta: para com erro"
   assert.match(r.erro ?? "", /departamento/);
 });
 
-test("modelo Conferir DFDs × Centi: busca cada DFD pelo planejamento e marca divergente/convergente", async () => {
-  const { MODELOS_FLUXO } = await import("../src/lib/fluxo-modelos.ts");
+test("modelo Conferir DFDs × Centi: cada DFD pelo subfluxo “Conferir 1 DFD”, em paralelo, e marca divergente/convergente", async () => {
+  const { MODELOS_FLUXO, grafoDoModelo } = await import("../src/lib/fluxo-modelos.ts");
   const m = MODELOS_FLUXO.find((x) => x.id === "conferir-dfds-cm002");
-  let marcados: unknown = null;
+  const filho = MODELOS_FLUXO.find((x) => x.id === "conferir-1-dfd");
+  assert.deepEqual(m?.dependencias, ["conferir-1-dfd"]);
+  const marcados: { dfdId: number }[] = [];
   const centi: Record<string, unknown> = {
     "100": { numero: "10", planejamento: "100", tipo: "DFD-S", objeto: "Cadeiras", valor: 50, totalItens: 2 },
     "101": { numero: "11", planejamento: "101", tipo: "DFD-S", objeto: "Mesas", valor: 70, totalItens: 1 },
   };
-  const r = await executarFluxo(m?.grafo as Grafo, REGISTRO_NOS, {
+  const progresso = new Map<string, string>();
+  let lendoAoMesmoTempo = 0;
+  let maxSimultaneo = 0;
+  const r = await executarFluxo(grafoDoModelo(m as never, new Map([["conferir-1-dfd", 50]])), REGISTRO_NOS, {
     centi: async () => ({ ok: false }),
     api: async (url: string, o?: { body?: unknown }) => {
       if (url.endsWith("execucao-dfds"))
@@ -307,23 +314,41 @@ test("modelo Conferir DFDs × Centi: busca cada DFD pelo planejamento e marca di
             { id: 3, numero: "12", planejamento: "999", valor: 1, totalItens: 1 },
           ],
         };
-      marcados = (o?.body as { itens: unknown } | undefined)?.itens;
-      return { ok: true, marcados: 3 };
+      marcados.push(...((o?.body as { itens: { dfdId: number }[] } | undefined)?.itens ?? []));
+      return { ok: true, marcados: 1 };
     },
     cancelado: () => false,
     host: {
+      carregarFluxo: async (id: number) => ({ id, nome: "Conferir 1 DFD × Centi", grafo: filho?.grafo }),
+      progresso: {
+        ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
+        gravar: async (_no: string, its: { chave: string; estado: string }[]) => {
+          for (const x of its) progresso.set(x.chave, x.estado);
+        },
+        limpar: async () => progresso.clear(),
+      },
       lerDfdCenti: async (plan: string) => {
+        lendoAoMesmoTempo++;
+        maxSimultaneo = Math.max(maxSimultaneo, lendoAoMesmoTempo);
+        await new Promise((ok) => setTimeout(ok, 5));
+        lendoAoMesmoTempo--;
         if (!centi[plan]) throw new Error("NAO_ENCONTRADO: A Centi não devolveu o DFD.");
         return centi[plan];
       },
     },
   } as never);
   assert.equal(r.estado, "concluido", r.erro);
-  assert.deepEqual(marcados, [
-    { dfdId: 2, status: "divergente", motivo: "DFD 11 (Planej. 101): valor R$ 80,00 no sistema × R$ 70,00 na Centi" },
-    { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999): não encontrado na Centi — A Centi não devolveu o DFD." },
-    { dfdId: 1, status: "convergente" },
-  ]);
+  assert.ok(maxSimultaneo > 1, "as conferências correm em paralelo");
+  assert.deepEqual(
+    [...marcados].sort((x, y) => x.dfdId - y.dfdId),
+    [
+      { dfdId: 1, status: "convergente" },
+      { dfdId: 2, status: "divergente", motivo: "DFD 11 (Planej. 101): valor R$ 80,00 no sistema × R$ 70,00 na Centi" },
+      { dfdId: 3, status: "divergente", motivo: "DFD 12 (Planej. 999): não encontrado na Centi — A Centi não devolveu o DFD." },
+    ],
+  );
+  assert.equal(r.apontados.filter((a) => a.subfluxo === "Conferir 1 DFD × Centi").length, 2);
+  assert.equal(progresso.size, 0, "tudo concluído: o progresso é esquecido");
 });
 
 test("modelo Baixar/anexar por protocolo: só os MARCADOS seguem; falha vira apontamento", async () => {
@@ -362,4 +387,86 @@ test("seleção: sem marcados segue nenhum (ou todos); nºs de planejamento vira
     { id: "1154", planejamento: "1154" },
     { id: "1155", planejamento: "1155" },
   ]);
+});
+
+test("executarEmPool: no máximo N ao mesmo tempo, saída na ordem, cancelamento não começa novos", async () => {
+  const { executarEmPool } = await import("../src/lib/fluxo-core.ts");
+  let ag = 0;
+  let max = 0;
+  const r = await executarEmPool([5, 1, 3, 2, 4], 2, async (x) => {
+    ag++;
+    max = Math.max(max, ag);
+    await new Promise((ok) => setTimeout(ok, x));
+    ag--;
+    return x * 10;
+  }, () => false);
+  assert.deepEqual(r, [50, 10, 30, 20, 40]);
+  assert.equal(max, 2);
+  let rodou = 0;
+  await executarEmPool([1, 2, 3, 4], 1, async () => {
+    rodou++;
+  }, () => rodou >= 2);
+  assert.equal(rodou, 2);
+  await assert.rejects(executarEmPool([1, 2], 2, async (x) => {
+    if (x === 2) throw new Error("x");
+  }, () => false), /x/);
+});
+
+test("subfluxos: ciclo, recursão e profundidade recusados; retorno padrão = nós finais", async () => {
+  const { cicloDeSubfluxos, subfluxosDoGrafo } = await import("../src/lib/fluxo-core.ts");
+  assert.deepEqual(cicloDeSubfluxos(1, new Map([[1, [2]], [2, [3]], [3, [1]]])), [1, 2, 3, 1]);
+  assert.equal(cicloDeSubfluxos(1, new Map([[1, [2, 3]], [2, [3]]])), null);
+  assert.deepEqual(subfluxosDoGrafo({ v: 1, nos: [no("a", "fluxo.executar", { fluxoId: "7" }), no("b", "fluxo.paralelo", { fluxoIds: "8; 9" })], conexoes: [] }), [7, 8, 9]);
+  // A usa A (pela pilha) — falha sem travar.
+  const a: Grafo = { v: 1, nos: [no("i", "gatilho.inicio"), no("s", "fluxo.executar", { fluxoId: "1", modo: "lote" })], conexoes: [con("i", "s")] };
+  const r = await executarFluxo(a, REGISTRO_NOS, ctx({ __pilha: [1], carregarFluxo: async () => ({ id: 1, nome: "A", grafo: a }) }));
+  assert.equal(r.estado, "falhou");
+  assert.match(r.erro ?? "", /si mesmo/);
+  const fundo = await executarFluxo(a, REGISTRO_NOS, ctx({ __pilha: [5, 6, 7], carregarFluxo: async () => ({ id: 1, nome: "A", grafo: a }) }));
+  assert.match(fundo.erro ?? "", /níveis/);
+  // Sem nó Retornar: devolve o que os nós finais produziram (o Início entrega o item do pai).
+  const filho: Grafo = { v: 1, nos: [no("i", "gatilho.inicio"), no("d", "dados.campos", { linhas: "dobro = {{n}}{{n}}" })], conexoes: [con("i", "d")] };
+  const rf = await executarFluxo(filho, REGISTRO_NOS, ctx({ __entrada: [{ n: 2 }] }));
+  assert.equal(rf.estado, "concluido", rf.erro);
+  assert.equal(rf.retorno.length, 1);
+  assert.equal(rf.retorno[0].n, 2);
+});
+
+test("Executar fluxo: retoma de onde parou e manda as falhas à porta Falhas; Executar vários fluxos junta", async () => {
+  const filho: Grafo = {
+    v: 1,
+    nos: [no("i", "gatilho.inicio"), no("f", "logica.se", { campo: "id", operador: "igual", valor: "2" }), no("e", "erros.apontar", { todos: true, mensagem: "ruim {{id}}" })],
+    conexoes: [con("i", "f"), con("f", "e", "verdadeiro")],
+  };
+  const progresso = new Map<string, string>([["1", "ok"]]);
+  const vistos: unknown[] = [];
+  const pai: Grafo = {
+    v: 1,
+    nos: [no("i", "gatilho.inicio"), no("l", "entrada.ids", { ids: "1:2:3" }), no("s", "fluxo.executar", { fluxoId: "9", paralelo: 2, chave: "id" })],
+    conexoes: [con("i", "l"), con("l", "s")],
+  };
+  const host = {
+    carregarFluxo: async (id: number) => {
+      vistos.push(id);
+      return { id, nome: "Filho", grafo: filho };
+    },
+    progresso: {
+      ler: async () => [...progresso].filter(([, e]) => e === "ok").map(([k]) => k),
+      gravar: async (_n: string, its: { chave: string; estado: string }[]) => {
+        for (const x of its) progresso.set(x.chave, x.estado);
+      },
+      limpar: async () => progresso.clear(),
+    },
+  };
+  const r = await executarFluxo(pai, REGISTRO_NOS, ctx(host));
+  assert.equal(r.estado, "concluido", r.erro);
+  const passo = r.passos.s;
+  assert.equal(passo.itens, 2, "o item 1 já feito é pulado");
+  assert.deepEqual(r.apontados.map((a) => a.mensagem), ["ruim 2"]);
+  assert.equal(progresso.size, 0, "tudo concluído: o progresso é esquecido");
+  assert.ok(vistos.every((v) => v === 9));
+  const par: Grafo = { v: 1, nos: [no("i", "gatilho.inicio"), no("p", "fluxo.paralelo", { fluxoIds: "9; 10" })], conexoes: [con("i", "p")] };
+  const rp = await executarFluxo(par, REGISTRO_NOS, ctx(host));
+  assert.equal(rp.estado, "concluido", rp.erro);
+  assert.equal(rp.passos.p.itens, 2);
 });

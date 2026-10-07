@@ -9,6 +9,7 @@ import { chaveSelecao, REGISTRO_NOS, selecionados } from "@/lib/fluxo-nos";
 import { Badge, type Tone } from "../Badge";
 import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
+import { SelectField } from "../Field";
 import { IconPastaAberta } from "../icons";
 import { SeletorMultiplo } from "../SeletorMultiplo";
 import { AnaliseDfds, COLUNAS_PROTOCOLOS, type GestaoAutomacao, useColunasGestao } from "../automacao/ProtocolosAutomacao";
@@ -40,6 +41,11 @@ export type HostPainel = {
   /** Abre o protocolo indicado na Centi (só leitura) e confere Id + nº; e o TESTE do anexo (sem emitir DFD). */
   conferirAlvo: (alvo: AlvoCenti) => Promise<string>;
   testarAnexo: (alvo: AlvoCenti, tipo: string) => Promise<string>;
+  /** Os fluxos salvos (o seletor do "Executar fluxo") e o aberto agora (não pode usar a si mesmo). */
+  fluxos: { id: number; nome: string }[];
+  fluxoAtual: number | null;
+  /** Esquece o progresso de um nó "Executar fluxo" (a próxima execução recomeça do zero). */
+  recomecar: (no: string) => Promise<void>;
 };
 export const HostPainelCtx = createContext<HostPainel | null>(null);
 const useHost = () => useContext(HostPainelCtx);
@@ -81,6 +87,62 @@ export function CampoReparticoesCenti({ rotulo, valor, onValor, somenteLeitura }
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Um fluxo salvo (o "Executar fluxo") — sem o próprio fluxo aberto. */
+export function CampoFluxo({ rotulo, valor, onValor, varios, somenteLeitura }: { rotulo: string; valor: string; onValor: (v: string) => void; varios?: boolean; somenteLeitura?: boolean }) {
+  const host = useHost();
+  const lista = (host?.fluxos ?? []).filter((f) => f.id !== host?.fluxoAtual);
+  if (varios) {
+    const escolhidos = valor.split(/[;,\s]+/).filter(Boolean);
+    return (
+      <SeletorMultiplo
+        suspenso
+        rotulo={rotulo}
+        textoVazio="Nenhum"
+        opcoes={lista.map((f) => ({ valor: String(f.id), rotulo: f.nome }))}
+        selecionados={escolhidos}
+        onChange={(v) => onValor(v.slice(0, 6).join("; "))}
+        disabled={somenteLeitura || !lista.length}
+      />
+    );
+  }
+  return (
+    <SelectField label={rotulo} value={valor} disabled={somenteLeitura} onChange={(e) => onValor(e.target.value)}>
+      <option value="">Escolha um fluxo salvo…</option>
+      {lista.map((f) => (
+        <option key={f.id} value={String(f.id)}>
+          {f.nome}
+        </option>
+      ))}
+      {valor && !lista.some((f) => String(f.id) === valor) && <option value={valor}>Fluxo {valor} (não encontrado)</option>}
+    </SelectField>
+  );
+}
+
+/** "Recomeçar do zero" de um "Executar fluxo" com retomada. */
+export function RecomecarSubfluxo({ no, somenteLeitura }: { no: string; somenteLeitura?: boolean }) {
+  const host = useHost();
+  const [estado, setEstado] = useState<"" | "limpando" | "feito">("");
+  if (!host) return null;
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted">
+      <span className="min-w-0 flex-1">Interrompido, ele continua do item em que parou.</span>
+      <Button
+        size="xs"
+        variant="ghost"
+        disabled={somenteLeitura || host.rodando}
+        loading={estado === "limpando"}
+        onClick={async () => {
+          setEstado("limpando");
+          await host.recomecar(no).catch(() => undefined);
+          setEstado("feito");
+        }}
+      >
+        {estado === "feito" ? "Recomeça do zero" : "Recomeçar do zero"}
+      </Button>
     </div>
   );
 }

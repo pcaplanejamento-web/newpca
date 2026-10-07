@@ -30,7 +30,8 @@ export const MAX_ITERACOES_LACO = 500;
 // ———————————————————————————————————————————————— definição de nós (o registro mora em fluxo-nos.ts)
 
 /** `reparticoesCenti` = as repartições da Tela Protocolo da Centi (escolha múltipla; o valor = "a; b"). */
-export type TipoCampo = "texto" | "textoLongo" | "numero" | "selecao" | "booleano" | "caminho" | "lista" | "reparticoesCenti";
+/** `fluxo`/`fluxos` = um/vários fluxos salvos (subfluxos — o valor é o id / "1; 2"). */
+export type TipoCampo = "texto" | "textoLongo" | "numero" | "selecao" | "booleano" | "caminho" | "lista" | "reparticoesCenti" | "fluxo" | "fluxos";
 export type CampoNo = {
   chave: string;
   rotulo: string;
@@ -44,7 +45,7 @@ export type CampoNo = {
   /** DADO DE ENTRADA: aparece na tela inicial do fluxo (o que a pessoa ajusta antes de executar, sem abrir o diagrama). */
   entrada?: boolean;
 };
-export type CategoriaNo = "gatilho" | "entrada" | "centi" | "sistema" | "leitura" | "logica" | "dados" | "erros" | "saida";
+export type CategoriaNo = "gatilho" | "entrada" | "centi" | "sistema" | "leitura" | "logica" | "fluxo" | "dados" | "erros" | "saida";
 
 export type ContextoNo = {
   /** Pedido à extensão da Centi (a ponte da tela). */
@@ -56,6 +57,8 @@ export type ContextoNo = {
   /** Cada item JÁ processado pelo nó (a análise acompanha ao vivo, antes de o nó terminar). */
   parcial?: (itens: Item[]) => void;
   cancelado: () => boolean;
+  /** O id do nó em execução (a retomada do subfluxo grava por nó). */
+  no?: string;
   /** Recursos do host (mapa de entidades, protocolos carregados, leitura de PDF…) — cada nó confere o que precisa. */
   host: Record<string, unknown>;
   /** A SAÍDA COMPLETA de cada nó concluído (o painel do fluxo mostra as tabelas inteiras — a amostra tem 50). */
@@ -145,7 +148,7 @@ export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
     }
     if (d.unico) unicos.set(n.tipo, (unicos.get(n.tipo) ?? 0) + 1);
     for (const c of d.campos)
-      if (c.obrigatorio && campoVisivel(c, n.config) && vazio(n.config[c.chave] ?? c.padrao))
+      if (c.obrigatorio && campoVisivel(c, n.config, d.campos) && vazio(n.config[c.chave] ?? c.padrao))
         p.push({ no: n.id, texto: `${nome(n)}: preencha “${c.rotulo}”.`, nivel: "erro" });
     if (d.entradas.length && !g.conexoes.some((c) => c.para === n.id) && !n.desativado)
       p.push({ no: n.id, texto: `${nome(n)} não recebe nada (ligue uma entrada).`, nivel: "atencao" });
@@ -165,9 +168,11 @@ export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
 
 const vazio = (v: unknown) => v == null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && !v.length);
 
-export function campoVisivel(c: CampoNo, config: Record<string, unknown>): boolean {
+export function campoVisivel(c: CampoNo, config: Record<string, unknown>, campos?: readonly CampoNo[]): boolean {
   if (!c.quando) return true;
-  const v = config[c.quando.campo];
+  const quem = c.quando.campo;
+  // Sem valor escolhido, vale o PADRÃO do campo de que depende (ex.: "Como executar" = uma vez por item).
+  const v = config[quem] ?? campos?.find((x) => x.chave === quem)?.padrao;
   return c.quando.valores.includes(String(v ?? ""));
 }
 
@@ -400,9 +405,15 @@ export type ResultadoExec = {
   noErro?: string;
   /** Erros APONTADOS (nó "Apontar erros") — o relatório da execução. */
   apontados: Item[];
+  /** O que o fluxo DEVOLVE quando é usado dentro de outro: o nó "Retornar"; sem ele, as saídas dos nós finais que rodaram. */
+  retorno: Item[];
   inicio: string;
   fim: string;
 };
+
+/** Portas reservadas (não são entregues a outros nós): os erros apontados e o retorno ao fluxo pai. */
+export const PORTA_APONTADOS = "__apontados";
+export const PORTA_RETORNO = "__retorno";
 
 const AMOSTRA = 50;
 const amostrar = (p: Portas): Portas => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, v.slice(0, AMOSTRA)]));
@@ -421,7 +432,17 @@ export async function executarFluxo(
   const inicio = agora().toISOString();
   const passos: Record<string, PassoExec> = {};
   const apontados: Item[] = [];
-  const fim = (r: Omit<ResultadoExec, "passos" | "apontados" | "inicio" | "fim">): ResultadoExec => ({ ...r, passos, apontados, inicio, fim: agora().toISOString() });
+  const retornos: Item[] = [];
+  let temRetorno = false;
+  const finais = new Map<string, Item[]>(); // nó sem conexão de saída → o que ele produziu (o retorno padrão)
+  const fim = (r: Omit<ResultadoExec, "passos" | "apontados" | "retorno" | "inicio" | "fim">): ResultadoExec => ({
+    ...r,
+    passos,
+    apontados,
+    retorno: temRetorno ? retornos : [...finais.values()].flat(),
+    inicio,
+    fim: agora().toISOString(),
+  });
   const problemas = validarGrafo(g, reg).filter((p) => p.nivel === "erro");
   if (problemas.length) return fim({ estado: "falhou", erro: problemas.map((p) => p.texto).join(" "), noErro: problemas[0].no });
 
@@ -505,10 +526,14 @@ export async function executarFluxo(
     estados.set(id, estado);
     let saidas: Portas;
     try {
-      saidas = await d.executar(ent, n.config, { ...ctx, aviso: (t) => marcar(id, { aviso: t.slice(0, 200) }), parcial: (its) => ctx.aoParcial?.(id, its) }, estado);
+      saidas = await d.executar(ent, n.config, { ...ctx, no: id, aviso: (t) => marcar(id, { aviso: t.slice(0, 200) }), parcial: (its) => ctx.aoParcial?.(id, its) }, estado);
       for (const [porta, itens] of Object.entries(saidas)) {
         if (itens.length > MAX_ITENS) throw new Error(`Itens demais na saída “${porta}” (${itens.length}; máximo ${MAX_ITENS}).`);
-        if (porta === "__apontados") apontados.push(...itens);
+        if (porta === PORTA_APONTADOS) apontados.push(...itens);
+        if (porta === PORTA_RETORNO) {
+          temRetorno = true;
+          retornos.push(...itens);
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -524,7 +549,9 @@ export async function executarFluxo(
     const total = d.saidas.reduce((s, p) => s + (saidas[p]?.length ?? 0), 0);
     marcar(id, { estado: "ok", itens: total, ms: (anterior?.ms ?? 0) + Date.now() - t0, amostra: amostrar(saidas), erro: undefined });
     ctx.aoConcluir?.(id, saidas);
-    const publicas = Object.fromEntries(Object.entries(saidas).filter(([k]) => k !== "__apontados"));
+    const publicas = Object.fromEntries(Object.entries(saidas).filter(([k]) => k !== PORTA_APONTADOS && k !== PORTA_RETORNO));
+    if (!g.conexoes.some((c) => c.de === id) && d.categoria !== "gatilho")
+      finais.set(id, [...(finais.get(id) ?? []), ...d.saidas.flatMap((s) => publicas[s] ?? [])]);
     entregar(id, d.entregaParcial ? publicas : { ...Object.fromEntries([...d.saidas, SAIDA_ERRO].map((s) => [s, []])), ...publicas });
   }
   return fim({ estado: "concluido" });
@@ -586,4 +613,85 @@ export function acharValor(v: unknown, re: RegExp, prof = 0): unknown {
     if (r !== undefined) return r;
   }
   return undefined;
+}
+
+// ———————————————————————————————————————————————— subfluxos (um fluxo usado dentro de outro)
+
+export const TIPOS_SUBFLUXO = ["fluxo.executar", "fluxo.paralelo"] as const;
+export const PROFUNDIDADE_MAX = 3;
+export const MAX_PARALELO = 6;
+
+/** Os ids dos fluxos que um grafo usa (nós "Executar fluxo"/"Executar vários fluxos"). */
+export function subfluxosDoGrafo(g: Grafo): number[] {
+  const ids = new Set<number>();
+  for (const n of g.nos) {
+    if (!(TIPOS_SUBFLUXO as readonly string[]).includes(n.tipo)) continue;
+    for (const v of String(n.config.fluxoId ?? n.config.fluxoIds ?? "").split(/[;,\s]+/)) {
+      const id = Number(v);
+      if (Number.isInteger(id) && id > 0) ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
+/** O caminho de um ciclo a partir de `id` (A usa B que usa A) — ou null. `usa` = os subfluxos de cada fluxo. */
+export function cicloDeSubfluxos(id: number, usa: ReadonlyMap<number, readonly number[]>): number[] | null {
+  const pilha: number[] = [];
+  const visto = new Set<number>();
+  const ir = (f: number): number[] | null => {
+    if (pilha.includes(f)) return [...pilha.slice(pilha.indexOf(f)), f];
+    if (visto.has(f)) return null;
+    visto.add(f);
+    pilha.push(f);
+    for (const x of usa.get(f) ?? []) {
+      const c = ir(x);
+      if (c) return c;
+    }
+    pilha.pop();
+    return null;
+  };
+  return ir(id);
+}
+
+/** A chave que identifica um item (retomada): o valor do campo; vazio = sem chave. */
+export const chaveDoItem = (it: Item, campo: string): string => {
+  const v = resolverCaminho(it, campo || "id");
+  return v == null || typeof v === "object" ? "" : String(v).trim();
+};
+
+/**
+ * Roda `fn` em cada item com no máximo `n` ao mesmo tempo; a saída fica na ORDEM dos itens. Cancelado = não começa novos
+ * (os em curso terminam). `fn` que lança PARA o pool (os em curso terminam) e o erro é relançado.
+ */
+export async function executarEmPool<T, R>(itens: readonly T[], n: number, fn: (it: T, i: number) => Promise<R>, cancelado: () => boolean): Promise<(R | undefined)[]> {
+  const out: (R | undefined)[] = new Array(itens.length);
+  let prox = 0;
+  let falha: { e: unknown } | null = null;
+  const trabalhador = async () => {
+    while (!falha && !cancelado() && prox < itens.length) {
+      const i = prox++;
+      try {
+        out[i] = await fn(itens[i], i);
+      } catch (e) {
+        falha ??= { e };
+      }
+    }
+  };
+  const k = Math.max(1, Math.min(MAX_PARALELO, Math.floor(n) || 1, itens.length || 1));
+  await Promise.all(Array.from({ length: k }, trabalhador));
+  if (falha) throw (falha as { e: unknown }).e;
+  return out;
+}
+
+/** O grafo do subfluxo com os DADOS DE ENTRADA (campos `entrada`) preenchidos pelo item que chegou (pelo nome do campo). */
+export function grafoComEntrada(g: Grafo, reg: Registro, it: Item): Grafo {
+  return {
+    ...g,
+    nos: g.nos.map((n) => {
+      const d = reg.get(n.tipo);
+      const extra: Record<string, unknown> = {};
+      for (const c of d?.campos ?? []) if (c.entrada && it[c.chave] != null && it[c.chave] !== "") extra[c.chave] = it[c.chave];
+      return Object.keys(extra).length ? { ...n, config: { ...n.config, ...extra } } : n;
+    }),
+  };
 }

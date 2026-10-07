@@ -10,7 +10,12 @@ import {
   type CategoriaNo,
   chaveJuncao,
   comparar,
+  chaveDoItem,
   type DefNo,
+  executarEmPool,
+  executarFluxo,
+  type Grafo,
+  grafoComEntrada,
   interpolar,
   type Item,
   MAX_ITERACOES_LACO,
@@ -18,8 +23,12 @@ import {
   numeroDe,
   OPERADORES,
   PORTA_VOLTA,
+  PORTA_APONTADOS,
+  PORTA_RETORNO,
+  PROFUNDIDADE_MAX,
   type Portas,
   type Registro,
+  type ResultadoExec,
   resolverCaminho,
   TIPO_LACO,
 } from "./fluxo-core.ts";
@@ -33,6 +42,7 @@ export const CATEGORIAS: { valor: CategoriaNo; rotulo: string; cor: string }[] =
   { valor: "sistema", rotulo: "Dados do sistema", cor: "var(--serie-3)" },
   { valor: "leitura", rotulo: "Leitura", cor: "var(--serie-4)" },
   { valor: "logica", rotulo: "Lógica", cor: "var(--serie-5)" },
+  { valor: "fluxo", rotulo: "Fluxos (reutilizar)", cor: "var(--accent)" },
   { valor: "dados", rotulo: "Transformar dados", cor: "var(--serie-6)" },
   { valor: "erros", rotulo: "Erros", cor: "var(--danger)" },
   { valor: "saida", rotulo: "Saída", cor: "var(--serie-8)" },
@@ -79,7 +89,11 @@ const NOS: DefNo[] = [
     saidas: ["saida"],
     campos: [],
     unico: true,
-    executar: async () => ({ saida: [{ iniciadoEm: new Date().toISOString() }] }),
+    // Usado dentro de outro fluxo, o Início entrega o item que o fluxo pai mandou.
+    executar: async (_e, _c, ctx) => {
+      const ent = ctx.host.__entrada;
+      return { saida: Array.isArray(ent) ? (ent as Item[]) : [{ iniciadoEm: new Date().toISOString() }] };
+    },
   },
 
   // ——— Entrada de dados
@@ -248,6 +262,45 @@ const NOS: DefNo[] = [
           return { ...x, entidade: (k && mapa[k]?.replace(/^0+(?=\d)/, "")) || "" };
         }),
       };
+    },
+  },
+  {
+    tipo: "sistema.completarDfd",
+    categoria: "sistema",
+    rotulo: "Completar com o DFD do sistema",
+    descricao:
+      "Para cada item, o DFD do sistema pelo nº de planejamento (o item que já é um DFD passa direto). Rodando sozinho, use o planejamento informado.",
+    icone: "file",
+    entradas: ["entrada"],
+    saidas: ["saida", "naoEncontrados"],
+    rotulosPortas: { saida: "DFDs", naoEncontrados: "Não encontrados" },
+    campos: [{ chave: "planejamento", rotulo: "Planejamento (rodando sozinho)", tipo: "texto", entrada: true, ajuda: "Usado quando o item que chega não traz o planejamento." }],
+    executar: async (e, c, ctx) => {
+      const itens = so(e).map((it) => (str(it.planejamento) ? it : { ...it, planejamento: str(c.planejamento) }));
+      const prontos = itens.filter((it) => it.id != null && str(it.numero) && str(it.planejamento));
+      const faltam = itens.filter((it) => !prontos.includes(it));
+      if (!faltam.length) return { saida: prontos, naoEncontrados: [] };
+      // Os DFDs do sistema são lidos UMA vez por execução (o cache vive no host — vale para todos os subfluxos).
+      const cache = ctx.host.__cache as Map<string, unknown> | undefined;
+      let dfds = cache?.get("dfds") as Promise<Item[]> | undefined;
+      if (!dfds) {
+        dfds = (async () => (await (REGISTRO_NOS.get("sistema.dfds") as DefNo).executar({ entrada: [{}] }, {}, ctx, {})).saida ?? [])();
+        cache?.set("dfds", dfds);
+      }
+      const porPlan = new Map<string, Item>();
+      for (const d of await dfds.catch((x) => {
+        cache?.delete("dfds");
+        throw x;
+      }))
+        if (str(d.planejamento)) porPlan.set(str(d.planejamento).replace(/^0+(?=\d)/, ""), d);
+      const saida = [...prontos];
+      const naoEncontrados: Item[] = [];
+      for (const it of faltam) {
+        const d = porPlan.get(str(it.planejamento).replace(/^0+(?=\d)/, ""));
+        if (d) saida.push({ ...d, ...Object.fromEntries(Object.entries(it).filter(([k]) => !(k in d))) });
+        else naoEncontrados.push(it);
+      }
+      return { saida, naoEncontrados };
     },
   },
   {
@@ -628,6 +681,155 @@ const NOS: DefNo[] = [
     executar: async (e, c) => compararDfdCenti(so(e), { tolerancia: numeroDe(c.tolerancia) ?? 0.01, objeto: c.objeto !== false }),
   },
 
+  // ——— Fluxos: reutilizar um fluxo salvo dentro deste
+  {
+    tipo: "fluxo.executar",
+    categoria: "fluxo",
+    rotulo: "Executar fluxo",
+    descricao:
+      "Roda outro fluxo salvo como um componente: para CADA item (em paralelo, com retomada de onde parou) ou uma vez com todos. O que ele devolve segue adiante.",
+    icone: "fluxo",
+    entradas: ["entrada"],
+    saidas: ["saida", "falhas"],
+    rotulosPortas: { saida: "Concluídos", falhas: "Falhas" },
+    campos: [
+      { chave: "fluxoId", rotulo: "Fluxo", tipo: "fluxo", obrigatorio: true },
+      {
+        chave: "modo",
+        rotulo: "Como executar",
+        tipo: "selecao",
+        opcoes: [
+          { valor: "porItem", rotulo: "Uma vez para cada item" },
+          { valor: "lote", rotulo: "Uma vez com todos os itens" },
+        ],
+        padrao: "porItem",
+      },
+      { chave: "paralelo", rotulo: "Execuções ao mesmo tempo", tipo: "numero", entrada: true, padrao: 3, ajuda: "1 a 6.", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "retomar", rotulo: "Retomar de onde parou", tipo: "booleano", entrada: true, padrao: true, ajuda: "Pula os itens já concluídos numa execução interrompida.", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "chave", rotulo: "Campo que identifica o item", tipo: "caminho", padrao: "id", quando: { campo: "modo", valores: ["porItem"] } },
+      { chave: "limite", rotulo: "Máximo de itens", tipo: "numero", padrao: 20000, quando: { campo: "modo", valores: ["porItem"] } },
+    ],
+    rodaSemItens: false,
+    executar: async (e, c, ctx) => {
+      const id = Number(c.fluxoId);
+      const filho = await subfluxo(id, ctx);
+      const itens = so(e);
+      if (str(c.modo, "porItem") === "lote") {
+        const r = await rodarFilho(filho, itens, ctx);
+        if (r.estado !== "concluido") throw new Error(`${filho.nome}: ${r.erro ?? r.estado}`);
+        return { saida: r.retorno, falhas: [], [PORTA_APONTADOS]: comOrigem(r.apontados, filho.nome) };
+      }
+      const max = Math.min(20000, Math.max(1, numeroDe(c.limite) ?? 20000));
+      const lista = itens.slice(0, max);
+      const campo = str(c.chave, "id") || "id";
+      const prog = c.retomar !== false ? (ctx.host.progresso as ProgressoHost | undefined) : undefined;
+      const noProg = [...pilhaDe(ctx), str(ctx.no)].join("/");
+      const feitos = prog ? new Set(await prog.ler(noProg)) : new Set<string>();
+      const fila = lista.filter((it) => !feitos.has(chaveDoItem(it, campo)));
+      const pulados = lista.length - fila.length;
+      const saida: Item[] = [];
+      const falhas: Item[] = [];
+      const apontados: Item[] = [];
+      const gravar: { chave: string; estado: "ok" | "falha" }[] = [];
+      const descarregar = async () => {
+        if (!prog || !gravar.length) return;
+        await prog.gravar(noProg, gravar.splice(0)).catch(() => undefined);
+      };
+      let feitosAgora = 0;
+      let emCurso = 0;
+      const avisar = () =>
+        ctx.aviso(`${filho.nome}: ${feitosAgora} de ${fila.length}${emCurso ? ` · ${emCurso} em andamento` : ""}${pulados ? ` · ${pulados} já feitos antes` : ""}`);
+      avisar();
+      try {
+        await executarEmPool(
+          fila,
+          numeroDe(c.paralelo) ?? 3,
+          async (it) => {
+            emCurso++;
+            avisar();
+            try {
+              const r = await rodarFilho(filho, [it], ctx);
+              if (r.estado === "cancelado") return;
+              const erroTxt = r.estado === "falhou" ? (r.erro ?? "falhou") : "";
+              // A Centi recusou a operação / o lote foi encerrado: os demais falhariam igual — para tudo.
+              if (erroTxt && /interrompido|lote foi encerrado|recusou o Emitir DFD/i.test(erroTxt)) throw new Error(`${filho.nome}: ${erroTxt}`);
+              apontados.push(...comOrigem(r.apontados, filho.nome));
+              const k = chaveDoItem(it, campo);
+              if (erroTxt) {
+                const f = { ...it, subfluxo: { estado: "falhou", erro: erroTxt } };
+                falhas.push(f);
+                apontados.push({ mensagem: `${filho.nome}${k ? ` (${k})` : ""}: ${erroTxt}`, nivel: "erro", item: it });
+                if (k) gravar.push({ chave: k, estado: "falha" });
+                ctx.parcial?.([f]);
+              } else {
+                const volta = r.retorno.length ? r.retorno.map((x) => ({ ...x, subfluxo: { estado: "concluido" } })) : [{ ...it, subfluxo: { estado: "concluido" } }];
+                saida.push(...volta);
+                if (k) gravar.push({ chave: k, estado: "ok" });
+                ctx.parcial?.(volta);
+              }
+              feitosAgora++;
+              if (gravar.length >= 10) await descarregar();
+            } finally {
+              emCurso--;
+              avisar();
+            }
+          },
+          ctx.cancelado,
+        );
+      } finally {
+        await descarregar();
+      }
+      // Tudo concluído sem falha: a próxima execução recomeça do zero.
+      if (prog && !ctx.cancelado() && !falhas.length && fila.length + pulados === lista.length) await prog.limpar(noProg).catch(() => undefined);
+      return { saida, falhas, [PORTA_APONTADOS]: apontados };
+    },
+  },
+  {
+    tipo: "fluxo.paralelo",
+    categoria: "fluxo",
+    rotulo: "Executar vários fluxos",
+    descricao: "Roda vários fluxos salvos AO MESMO TEMPO com os mesmos itens; cada um devolve um resultado.",
+    icone: "layers",
+    entradas: ["entrada"],
+    saidas: ["saida", "falhas"],
+    rotulosPortas: { saida: "Concluídos", falhas: "Falhas" },
+    campos: [{ chave: "fluxoIds", rotulo: "Fluxos", tipo: "fluxos", obrigatorio: true, ajuda: "Até 6, todos ao mesmo tempo." }],
+    rodaSemItens: true,
+    executar: async (e, c, ctx) => {
+      const ids = [...new Set(str(c.fluxoIds).split(/[;,\s]+/).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 6);
+      if (!ids.length) throw new Error("Escolha os fluxos.");
+      const itens = so(e).length ? so(e) : [{ iniciadoEm: new Date().toISOString() }];
+      const res = await Promise.allSettled(
+        ids.map(async (id) => {
+          const f = await subfluxo(id, ctx);
+          ctx.aviso(`Rodando ${ids.length} fluxo(s) ao mesmo tempo…`);
+          return { f, r: await rodarFilho(f, itens, ctx) };
+        }),
+      );
+      const saida: Item[] = [];
+      const falhas: Item[] = [];
+      const apontados: Item[] = [];
+      for (const [i, x] of res.entries()) {
+        if (x.status === "rejected") {
+          const msg = x.reason instanceof Error ? x.reason.message : String(x.reason);
+          falhas.push({ fluxoId: ids[i], erro: msg });
+          apontados.push({ mensagem: msg, nivel: "erro", item: { fluxoId: ids[i] } });
+          continue;
+        }
+        const { f, r } = x.value;
+        apontados.push(...comOrigem(r.apontados, f.nome));
+        const linha = { fluxoId: f.id, fluxo: f.nome, estado: r.estado, erro: r.erro ?? "", itens: r.retorno.length, retorno: r.retorno };
+        if (r.estado === "concluido") saida.push(linha);
+        else {
+          falhas.push(linha);
+          apontados.push({ mensagem: `${f.nome}: ${r.erro ?? r.estado}`, nivel: "erro", item: linha });
+        }
+        ctx.parcial?.([linha]);
+      }
+      return { saida, falhas, [PORTA_APONTADOS]: apontados };
+    },
+  },
+
   // ——— Erros
   {
     tipo: "erros.apontar",
@@ -832,6 +1034,18 @@ const NOS: DefNo[] = [
     },
   },
   {
+    tipo: "saida.retornar",
+    categoria: "saida",
+    rotulo: "Retornar ao fluxo pai",
+    descricao: "O que este fluxo DEVOLVE quando usado dentro de outro (sem este nó, devolve o que os nós finais produziram).",
+    icone: "check",
+    entradas: ["entrada"],
+    saidas: ["saida"],
+    campos: [],
+    rodaSemItens: true,
+    executar: async (e) => ({ saida: so(e), [PORTA_RETORNO]: so(e) }),
+  },
+  {
     tipo: "saida.notificar",
     categoria: "saida",
     rotulo: "Avisar no sino",
@@ -849,6 +1063,40 @@ const NOS: DefNo[] = [
     },
   },
 ];
+
+// ———————————————————————————————————————————————— subfluxos (apoio)
+
+/** O fluxo salvo usado como componente. */
+export type FluxoFilho = { id: number; nome: string; grafo: Grafo };
+/** A retomada (o host grava no servidor por fluxo de topo + caminho do nó). */
+export type ProgressoHost = {
+  ler: (no: string) => Promise<string[]>;
+  gravar: (no: string, itens: { chave: string; estado: "ok" | "falha" }[]) => Promise<void>;
+  limpar: (no: string) => Promise<void>;
+};
+const pilhaDe = (ctx: { host: Record<string, unknown> }) => (Array.isArray(ctx.host.__pilha) ? (ctx.host.__pilha as number[]) : []);
+
+async function subfluxo(id: number, ctx: { host: Record<string, unknown> }): Promise<FluxoFilho> {
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Escolha o fluxo.");
+  const pilha = pilhaDe(ctx);
+  if (pilha.includes(id)) throw new Error("Um fluxo não pode usar a si mesmo (direta ou indiretamente).");
+  if (pilha.length >= PROFUNDIDADE_MAX) throw new Error(`Fluxos dentro de fluxos: no máximo ${PROFUNDIDADE_MAX} níveis.`);
+  const carregar = ctx.host.carregarFluxo as ((id: number) => Promise<FluxoFilho>) | undefined;
+  if (!carregar) throw new Error("Executar outro fluxo só funciona na tela da Automação.");
+  return carregar(id);
+}
+
+async function rodarFilho(f: FluxoFilho, itens: Item[], ctx: Parameters<DefNo["executar"]>[2]): Promise<ResultadoExec> {
+  const grafo = itens.length === 1 ? grafoComEntrada(f.grafo, REGISTRO_NOS, itens[0]) : f.grafo;
+  // O filho roda com o MESMO host (extensão, cache, carregar) — sem os ganchos do painel do pai.
+  return executarFluxo(grafo, REGISTRO_NOS, {
+    centi: ctx.centi,
+    api: ctx.api,
+    cancelado: ctx.cancelado,
+    host: { ...ctx.host, __entrada: itens, __pilha: [...pilhaDe(ctx), f.id] },
+  });
+}
+const comOrigem = (aps: Item[], nome: string) => aps.map((a) => ({ ...a, subfluxo: nome }));
 
 export const REGISTRO_NOS: Registro = new Map(NOS.map((n) => [n.tipo, n]));
 export const NOS_POR_CATEGORIA = CATEGORIAS.map((c) => ({ ...c, nos: NOS.filter((n) => n.categoria === c.valor) }));

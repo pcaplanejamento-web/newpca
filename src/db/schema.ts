@@ -1696,3 +1696,19 @@ export const automacaoFluxos = sqliteTable(
   },
   (t) => [index("automacao_fluxos_proxima_idx").on(t.proximaEm)],
 );
+
+/** RETOMADA dos subfluxos: o que um nó "Executar fluxo" já concluiu (ok) ou tentou (falha) — por fluxo de topo + nó. */
+export const automacaoProgresso = sqliteTable(
+  "automacao_progresso",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    fluxoId: integer("fluxo_id")
+      .notNull()
+      .references(() => automacaoFluxos.id, { onDelete: "cascade" }),
+    no: text("no").notNull(),
+    chave: text("chave").notNull(),
+    estado: text("estado").notNull(),
+    em: text("em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("automacao_progresso_uq").on(t.fluxoId, t.no, t.chave)],
+);

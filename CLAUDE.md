@@ -4231,6 +4231,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   executar) e `ContextoNo.parcial` (itens ao vivo). Painel: **`paineis.tsx`** (`HostPainelCtx` + `VISOES` por tipo de nó —
   Seleção, DFDs, Protocolos lidos) e `PainelFluxo` (Dados de entrada + Etapas | abas das visões + **Análise ao vivo**,
   altura pelo `useAlturaTela`, sem rolar o navegador). Colunas/gestão de protocolos em `automacao/ProtocolosAutomacao.tsx`.
+  **FLUXOS DENTRO DE FLUXOS (v1.32.0, migração `0093`):** QUALQUER fluxo salvo é um componente. Nó **`fluxo.executar`**
+  (categoria `fluxo`; campo tipo `fluxo`): `modo` porItem (cada item roda o filho, `paralelo` 1–6 por `executarEmPool`) |
+  lote (uma vez com todos); o `gatilho.inicio` do filho entrega `host.__entrada` (os itens do pai) e os campos `entrada` do
+  filho recebem os valores do item (`grafoComEntrada`); o RETORNO = o nó **`saida.retornar`** (porta `__retorno`) ou, sem
+  ele, o que os nós finais produziram (`ResultadoExec.retorno`); apontados do filho sobem com `subfluxo`; falha de um item
+  vai à porta `falhas` (o "interrompido"/operação recusada para tudo). **Retomada** (`retomar`, chave do item `chave`):
+  tabela `automacao_progresso` (fluxo de topo + caminho do nó `ids/nó` + chave; builders `fluxos-sql.ts`, testados no D1 real)
+  por `GET/POST/DELETE /api/admin/automacao/fluxos/[id]/progresso?no=` — pula os `ok`, grava a cada 10, esquece tudo ao
+  concluir sem falha; `RecomecarSubfluxo` no painel do nó. **`fluxo.paralelo`** (campo `fluxos`): vários fluxos ao mesmo
+  tempo (`Promise.allSettled`, até 6). Segurança: ciclo recusado ao salvar (`cicloAoGravar` → 409, `cicloDeSubfluxos`) e na
+  execução (`host.__pilha`), profundidade ≤ `PROFUNDIDADE_MAX`=3; excluir fluxo usado por outro = 409 (`fluxosQueUsam`); o
+  filho é lido UMA vez por execução (`carregadorDeFluxos`, a versão salva) e compartilha o `host.__cache` (ex.: os DFDs do
+  `sistema.completarDfd` — um item que já é DFD passa direto; sozinho, o planejamento do campo). Modelos com
+  `dependencias` + `fluxoModelo` (`grafoDoModelo`): "Conferir DFDs × Centi" = DFDs → Executar "Conferir 1 DFD × Centi"
+  (paralelo 3, retomar).
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
   ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só

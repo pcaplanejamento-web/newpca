@@ -61,7 +61,7 @@ export function PainelFluxo({
   const entradas = etapas
     .map((n) => {
       const def = REGISTRO_NOS.get(n.tipo);
-      const campos = (def?.campos ?? []).filter((c) => c.entrada && campoVisivel(c, n.config));
+      const campos = (def?.campos ?? []).filter((c) => c.entrada && campoVisivel(c, n.config, def?.campos));
       return def && campos.length && !n.desativado ? { n, def, campos } : null;
     })
     .filter((x) => !!x);

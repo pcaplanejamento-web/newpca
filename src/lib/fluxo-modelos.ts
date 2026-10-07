@@ -4,7 +4,18 @@ const n = (id: string, tipo: string, x: number, y: number, config: Record<string
 const c = (de: string, para: string, saida = "saida", entrada = "entrada") => ({ de, saida, para, entrada });
 
 /** Fluxos PRONTOS para começar (o "Novo fluxo"). Cada um é só um grafo — editável depois. */
-export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo: Grafo; frequencia?: Frequencia; ativo?: boolean }[] = [
+export type ModeloFluxo = {
+  id: string;
+  nome: string;
+  descricao: string;
+  grafo: Grafo;
+  frequencia?: Frequencia;
+  ativo?: boolean;
+  /** Os modelos usados DENTRO deste (nó "Executar fluxo" com `fluxoModelo`) — criados antes, se ainda não existem. */
+  dependencias?: string[];
+};
+
+export const MODELOS_FLUXO: ModeloFluxo[] = [
   {
     id: "dfds-protocolo",
     nome: "Baixar/anexar DFDs · por protocolo",
@@ -92,28 +103,50 @@ export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo
     },
   },
   {
+    id: "conferir-1-dfd",
+    nome: "Conferir 1 DFD × Centi",
+    descricao:
+      "UM DFD: buscado na Centi pelo nº de planejamento e comparado (nº, tipo, objeto, valor e itens) → marca Divergente ou Convergente. Usado pelo “Conferir DFDs × Centi”; sozinho, informe o planejamento.",
+    grafo: {
+      v: 1,
+      nos: [
+        n("inicio1", "gatilho.inicio", 0, 160),
+        n("dfd1", "sistema.completarDfd", 280, 160, {}, "O DFD"),
+        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 1 }),
+        n("cmp1", "dados.compararDfdCenti", 880, 160, { tolerancia: 0.01, objeto: true }, "DFD × Centi"),
+        n("err1", "erros.apontar", 1184, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }, "Divergências"),
+        n("marcar1", "saida.marcarConferencia", 1184, 224),
+        n("err2", "erros.apontar", 576, 352, { todos: true, mensagem: "Planejamento {{planejamento}}: DFD não encontrado no sistema", nivel: "erro" }, "Sem DFD"),
+        n("ret1", "saida.retornar", 1488, 160, {}, "Devolver o resultado"),
+      ],
+      conexoes: [
+        c("inicio1", "dfd1"),
+        c("dfd1", "busca1"),
+        c("dfd1", "err2", "naoEncontrados"),
+        c("busca1", "cmp1"),
+        c("cmp1", "err1", "divergentes"),
+        c("cmp1", "marcar1", "divergentes", "divergentes"),
+        c("cmp1", "marcar1", "conformes", "conformes"),
+        c("cmp1", "ret1", "divergentes"),
+        c("cmp1", "ret1", "conformes"),
+      ],
+    },
+  },
+  {
     id: "conferir-dfds-cm002",
     nome: "Conferir DFDs × Centi",
     descricao:
-      "Cada DFD do sistema é buscado na Centi pelo nº de planejamento (o mesmo Emitir DFD do “Baixar DFDs”, por API) e comparado: nº, tipo, objeto, valor e itens → marca Divergente ou Convergente (coluna “Centi” da Mesa).",
+      "Cada DFD do sistema passa pelo fluxo “Conferir 1 DFD × Centi” — várias conferências ao mesmo tempo e, se parar, continua do DFD em que parou. Marca Divergente ou Convergente (coluna “Centi” da Mesa).",
+    dependencias: ["conferir-1-dfd"],
     grafo: {
       v: 1,
       nos: [
         n("inicio1", "gatilho.inicio", 0, 160),
         n("dfds1", "sistema.dfds", 280, 160),
-        n("busca1", "leitura.dfdCenti", 576, 160, { limite: 5000 }),
-        n("cmp1", "dados.compararDfdCenti", 880, 160, { tolerancia: 0.01, objeto: true }, "DFD × Centi"),
-        n("err1", "erros.apontar", 1184, 32, { todos: true, mensagem: "{{mensagem}}", nivel: "erro" }, "Divergências"),
-        n("marcar1", "saida.marcarConferencia", 1184, 224),
+        n("sub1", "fluxo.executar", 576, 160, { fluxoModelo: "conferir-1-dfd", modo: "porItem", paralelo: 3, retomar: true, chave: "id", limite: 20000 }, "Conferir cada DFD"),
+        n("err1", "erros.apontar", 880, 288, { todos: true, mensagem: "DFD {{numero}} (planejamento {{planejamento}}): {{subfluxo.erro}}", nivel: "erro" }, "Não conferidos"),
       ],
-      conexoes: [
-        c("inicio1", "dfds1"),
-        c("dfds1", "busca1"),
-        c("busca1", "cmp1"),
-        c("cmp1", "err1", "divergentes"),
-        c("cmp1", "marcar1", "divergentes", "divergentes"),
-        c("cmp1", "marcar1", "conformes", "conformes"),
-      ],
+      conexoes: [c("inicio1", "dfds1"), c("dfds1", "sub1"), c("sub1", "err1", "falhas")],
     },
   },
   {
@@ -181,3 +214,17 @@ export const MODELOS_FLUXO: { id: string; nome: string; descricao: string; grafo
     },
   },
 ];
+
+/** O grafo do modelo com os subfluxos (`fluxoModelo`) trocados pelos ids dos fluxos já criados (`criados`: modelo → id). */
+export function grafoDoModelo(m: ModeloFluxo, criados: ReadonlyMap<string, number>): Grafo {
+  return {
+    ...m.grafo,
+    nos: m.grafo.nos.map((no) => {
+      const dep = no.config.fluxoModelo;
+      if (typeof dep !== "string") return no;
+      const { fluxoModelo: _x, ...resto } = no.config;
+      const id = criados.get(dep);
+      return { ...no, config: id ? { ...resto, fluxoId: String(id) } : resto };
+    }),
+  };
+}

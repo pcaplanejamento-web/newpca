@@ -24,8 +24,8 @@ import {
 } from "@/lib/fluxo-core";
 import { type CacheLeitura, chaveLeitura, emissaoDoServidor, lerDfdCentiPorCodigo, lerProtocoloPorCodigo } from "@/lib/fluxo-navegador";
 import { type ContextoImportacao, importarProtocolo } from "@/lib/importar-protocolo-auto";
-import { NOS_POR_CATEGORIA, REGISTRO_NOS } from "@/lib/fluxo-nos";
-import { MODELOS_FLUXO } from "@/lib/fluxo-modelos";
+import { type FluxoFilho, NOS_POR_CATEGORIA, type ProgressoHost, REGISTRO_NOS } from "@/lib/fluxo-nos";
+import { grafoDoModelo, MODELOS_FLUXO } from "@/lib/fluxo-modelos";
 import type { FluxoAutomacao } from "@/lib/fluxos";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
@@ -239,10 +239,11 @@ export function FluxosAutomacao({
             centi: (a, d, ms) => pedir(a, d, ms),
             api,
             cancelado: () => cancelar.current || interrompido.current,
-            host,
+            // Por execução: o cache compartilhado com os subfluxos, os fluxos salvos (lidos UMA vez) e a retomada deste fluxo.
+            host: { ...host, __cache: new Map<string, unknown>(), carregarFluxo: carregadorDeFluxos(), progresso: progressoDe(f.id) },
             // A saída COMPLETA de cada nó (o corpo de um laço roda várias vezes: acumula) e os itens AO VIVO.
             aoConcluir: (no, ps) => {
-              const its = Object.entries(ps).find(([k, v]) => k !== "__apontados" && k !== "erro" && v.length)?.[1] ?? [];
+              const its = Object.entries(ps).find(([k, v]) => k !== "__apontados" && k !== "__retorno" && k !== "erro" && v.length)?.[1] ?? [];
               setSaidas((m) => ({ ...m, [no]: [...(m[no] ?? []), ...its] }));
             },
             aoParcial: (no, its) => setParciais((m) => ({ ...m, [no]: [...(m[no] ?? []), ...its] })),
@@ -312,9 +313,25 @@ export function FluxosAutomacao({
   carregarRef.current = carregar;
 
   async function criar(modelo: (typeof MODELOS_FLUXO)[number] | null, nome: string) {
+    // Os modelos usados DENTRO deste: reaproveita o fluxo já criado (pelo nome do modelo) ou cria antes.
+    const criados = new Map<string, number>();
+    for (const dep of modelo?.dependencias ?? []) {
+      const md = MODELOS_FLUXO.find((x) => x.id === dep);
+      if (!md) continue;
+      const existe = (fluxos ?? []).find((f) => f.nome === md.nome);
+      if (existe) {
+        criados.set(dep, existe.id);
+        continue;
+      }
+      const rd = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: { nome: md.nome, grafo: grafoDoModelo(md, criados), descricao: md.descricao } });
+      if (!rd.ok || !rd.fluxo) return toast.error(rd.error ?? `Não consegui criar “${md.nome}”.`);
+      const novoDep = rd.fluxo;
+      criados.set(dep, novoDep.id);
+      setFluxos((fs) => [novoDep, ...(fs ?? [])]);
+    }
     const r = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: {
         nome,
-        grafo: modelo?.grafo ?? GRAFO_VAZIO_COM_INICIO,
+        grafo: modelo ? grafoDoModelo(modelo, criados) : GRAFO_VAZIO_COM_INICIO,
         descricao: modelo?.descricao,
         ...(modelo?.frequencia ? { frequencia: modelo.frequencia, ativo: modelo.ativo === true } : {}),
       },
@@ -351,6 +368,12 @@ export function FluxosAutomacao({
     },
     [pedir, importacao.regras],
   );
+  const recomecar = useCallback(async (no: string) => {
+    if (aberto == null) return;
+    await progressoDe(aberto).limpar(no);
+    toast.info("A próxima execução recomeça do primeiro item.");
+  }, [aberto]);
+  const listaFluxos = useMemo(() => (fluxos ?? []).map((f) => ({ id: f.id, nome: f.nome })), [fluxos]);
   const hostPainel = useMemo<HostPainel>(
     () => ({
       protocolos,
@@ -382,8 +405,11 @@ export function FluxosAutomacao({
         const r = await testarAnexo({ pedir: emissor.pedir, confirmar: (texto) => confirmar({ titulo: "A Centi pede confirmação", texto, confirmar: "Confirmar e anexar" }) }, al, tipo);
         return "ok" in r ? r.ok : r.erro;
       },
+      fluxos: listaFluxos,
+      fluxoAtual: aberto,
+      recomecar,
     }),
-    [protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
+    [listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
   );
   return (
     <HostPainelCtx.Provider value={hostPainel}>
@@ -995,4 +1021,43 @@ function RelatorioExecucao({ resultado: r, onIr }: { resultado: ResultadoExec; o
       )}
     </div>
   );
+}
+
+/** Os fluxos usados como subfluxo, lidos do servidor UMA vez por execução (vale a versão salva naquele momento). */
+function carregadorDeFluxos(): (id: number) => Promise<FluxoFilho> {
+  const cache = new Map<number, Promise<FluxoFilho>>();
+  return (id) => {
+    let p = cache.get(id);
+    if (!p) {
+      p = api<{ fluxo?: FluxoAutomacao; error?: string }>(`/api/admin/automacao/fluxos/${id}`).then((r) => {
+        if (!r.ok || !r.fluxo) throw new Error(r.error || `O fluxo ${id} não existe mais.`);
+        return { id: r.fluxo.id, nome: r.fluxo.nome, grafo: r.fluxo.grafo };
+      });
+      p.catch(() => cache.delete(id));
+      cache.set(id, p);
+    }
+    return p;
+  };
+}
+
+/** A retomada dos nós "Executar fluxo" de um fluxo (no servidor — vale em outro computador). */
+function progressoDe(fluxoId: number): ProgressoHost {
+  const url = (no: string) => `/api/admin/automacao/fluxos/${fluxoId}/progresso?no=${encodeURIComponent(no)}`;
+  return {
+    ler: async (no) => {
+      const r = await api<{ chaves?: string[]; error?: string }>(url(no));
+      if (!r.ok) throw new Error(r.error || "Não consegui ler de onde o fluxo parou.");
+      return r.chaves ?? [];
+    },
+    gravar: async (no, itens) => {
+      for (let i = 0; i < itens.length; i += 200) {
+        const r = await api(url(no), { method: "POST", body: { itens: itens.slice(i, i + 200) } });
+        if (!r.ok) throw new Error(r.error || "Não consegui gravar o progresso.");
+      }
+    },
+    limpar: async (no) => {
+      const r = await api(url(no), { method: "DELETE" });
+      if (!r.ok) throw new Error(r.error || "Não consegui recomeçar.");
+    },
+  };
 }

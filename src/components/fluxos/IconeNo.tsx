@@ -2,11 +2,14 @@ import {
   IconAlert,
   IconBell,
   IconBuilding,
+  IconCheck,
   IconCompare,
   IconCopy,
   IconFile,
   IconFilter,
+  IconFluxo,
   IconInbox,
+  IconLayers,
   IconLerPdf,
   IconList,
   IconMerge,
@@ -40,6 +43,9 @@ const MAPA = {
   alert: IconAlert,
   save: IconSave,
   bell: IconBell,
+  fluxo: IconFluxo,
+  layers: IconLayers,
+  check: IconCheck,
 } as const;
 
 /** O ícone de um tipo de nó (o nome vem do registro — `fluxo-nos.ts`). */
