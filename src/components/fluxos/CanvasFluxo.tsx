@@ -1,33 +1,24 @@
 "use client";
 
-import { type DragEvent, type PointerEvent as RPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, type PointerEvent as RPointerEvent, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { type DefNo, type Grafo, type NoFluxo, type PassoExec, portasDo, type Registro, SAIDA_ERRO } from "@/lib/fluxo-core";
 import { corCategoria } from "@/lib/fluxo-nos";
+import { alturaNo, caixasDoGrafo, caminhoSvg, GRADE, LARGURA_NO, PASSO_PORTA, type Ponto, posPorta, rotaOrtogonal, snap, TOPO_PORTAS } from "@/lib/fluxo-layout";
+
+export { alturaNo, LARGURA_NO };
 import { segurar } from "../segurar";
 import { IconeNo } from "./IconeNo";
 
-export const LARGURA_NO = 216;
-const TOPO_PORTAS = 52;
-const PASSO_PORTA = 24;
-const GRADE = 16;
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 1.8;
-
-export const alturaNo = (d: DefNo | undefined) => {
-  const p = portasDo(d);
-  return TOPO_PORTAS + Math.max(1, p ? Math.max(p.entradas.length, p.saidas.length) : 1) * PASSO_PORTA + 6;
-};
-const posPorta = (n: NoFluxo, d: DefNo | undefined, lado: "entrada" | "saida", porta: string) => {
-  const p = portasDo(d);
-  const lista = lado === "entrada" ? (p?.entradas ?? []) : (p?.saidas ?? []);
-  const i = Math.max(0, lista.indexOf(porta));
-  return { x: n.x + (lado === "entrada" ? 0 : LARGURA_NO), y: n.y + TOPO_PORTAS + i * PASSO_PORTA + PASSO_PORTA / 2 };
-};
-const curva = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-  const dx = Math.max(40, Math.abs(b.x - a.x) * 0.5);
-  return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
-};
-const snap = (v: number) => Math.round(v / GRADE) * GRADE;
+const curva = (a: Ponto, b: Ponto) => caminhoSvg(rotaOrtogonal(a, b, []));
+/** As setas na ponta de cada ligação (a direção do fluxo), uma por cor. */
+const CORES_SETA = [
+  ["muted", "var(--muted)"],
+  ["danger", "var(--danger)"],
+  ["ok", "var(--ok)"],
+  ["accent", "var(--accent)"],
+] as const;
 
 const COR_ESTADO: Record<PassoExec["estado"], string> = {
   fila: "var(--border)",
@@ -84,6 +75,20 @@ export function CanvasFluxo({
   const [temp, setTemp] = useState<{ a: { x: number; y: number }; b: { x: number; y: number } } | null>(null);
   const [conSel, setConSel] = useState<number | null>(null);
   const nos = useMemo(() => new Map(grafo.nos.map((n) => [n.id, n])), [grafo.nos]);
+  const idSeta = `seta${useId().replace(/:/g, "")}`;
+  // As ROTAS em ângulo reto, desviando de todos os componentes (menos os dois da própria ligação).
+  const rotas = useMemo(() => {
+    const caixas = caixasDoGrafo(grafo, registro);
+    return grafo.conexoes.map((c) => {
+      const a = nos.get(c.de);
+      const b = nos.get(c.para);
+      if (!a || !b) return null;
+      const obst = [...caixas].filter(([id]) => id !== c.de && id !== c.para).map(([, cx]) => cx);
+      const pa = posPorta(a, registro.get(a.tipo), "saida", c.saida);
+      const pb = posPorta(b, registro.get(b.tipo), "entrada", c.entrada);
+      return caminhoSvg(rotaOrtogonal(pa, pb, obst, caixas.get(c.de), caixas.get(c.para)));
+    });
+  }, [grafo, registro, nos]);
 
   const paraCanvas = useCallback(
     (cx: number, cy: number) => {
@@ -218,11 +223,16 @@ export function CanvasFluxo({
     >
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${vista.x}px, ${vista.y}px) scale(${vista.z})` }}>
         <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width="1" height="1" aria-hidden="true">
+          <defs>
+            {CORES_SETA.map(([k, cor]) => (
+              <marker key={k} id={`${idSeta}-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1 L 9 5 L 0 9 z" fill={cor} />
+              </marker>
+            ))}
+          </defs>
           {grafo.conexoes.map((c, i) => {
-            const a = nos.get(c.de);
-            const b = nos.get(c.para);
-            if (!a || !b) return null;
-            const d = curva(posPorta(a, registro.get(a.tipo), "saida", c.saida), posPorta(b, registro.get(b.tipo), "entrada", c.entrada));
+            const d = rotas[i];
+            if (!d) return null;
             const erro = c.saida === SAIDA_ERRO;
             const ativo = passos?.[c.de]?.estado === "ok" && !erro;
             const marcada = conSel === i;
@@ -248,6 +258,7 @@ export function CanvasFluxo({
                   stroke={marcada ? "var(--accent)" : erro ? "var(--danger)" : ativo ? "var(--ok)" : "var(--muted)"}
                   strokeWidth={marcada ? 3 : 2}
                   strokeDasharray={erro ? "6 4" : undefined}
+                  markerEnd={`url(#${idSeta}-${marcada ? "accent" : erro ? "danger" : ativo ? "ok" : "muted"})`}
                   className={ativo && !marcada ? "fluxo-conexao-viva" : undefined}
                 />
               </g>

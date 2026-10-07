@@ -144,6 +144,7 @@ import {
   Play as LPlay,
   GitBranch as LGitBranch,
   Workflow as LWorkflow,
+  Network as LNetwork,
   ScanText as LScanText,
   Sigma as LSigma,
   Square as LSquare,
@@ -362,3 +363,5 @@ export const IconSoma = LSigma;
 export const IconParar = LSquare;
 export const IconEnquadrar = LMaximize;
 export const IconMinus = LMinus;
+/** Organizar o diagrama (colunas na ordem do fluxo). */
+export const IconOrganizar = LNetwork;

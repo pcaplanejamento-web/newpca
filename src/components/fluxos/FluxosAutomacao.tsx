@@ -32,11 +32,12 @@ import { Button } from "../Button";
 import { Callout } from "../Callout";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
-import { IconChevronLeft, IconEnquadrar, IconFluxo, IconMinus, IconParar, IconPlay, IconPlus, IconSave, IconTrash } from "../icons";
+import { IconChevronLeft, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconSave, IconTrash } from "../icons";
 import { Modal } from "../Modal";
 import { Switch } from "../Switch";
 import { toast } from "../Toast";
-import { CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
+import { alturaNo, CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
+import { organizarGrafo } from "@/lib/fluxo-layout";
 import { IconeNo } from "./IconeNo";
 import { Ajuda } from "../Ajuda";
 import { SkeletonCartao } from "../Skeleton";
@@ -326,7 +327,7 @@ export function FluxosAutomacao({
         criados.set(dep, existe.id);
         continue;
       }
-      const rd = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: { nome: md.nome, grafo: grafoDoModelo(md, criados), descricao: md.descricao } });
+      const rd = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: { nome: md.nome, grafo: organizarGrafo(grafoDoModelo(md, criados), REGISTRO_NOS), descricao: md.descricao } });
       if (!rd.ok || !rd.fluxo) return toast.error(rd.error ?? `Não consegui criar “${md.nome}”.`);
       const novoDep = rd.fluxo;
       criados.set(dep, novoDep.id);
@@ -334,7 +335,7 @@ export function FluxosAutomacao({
     }
     const r = await api<{ fluxo?: FluxoAutomacao }>("/api/admin/automacao/fluxos", { method: "POST", body: {
         nome,
-        grafo: modelo ? grafoDoModelo(modelo, criados) : GRAFO_VAZIO_COM_INICIO,
+        grafo: modelo ? organizarGrafo(grafoDoModelo(modelo, criados), REGISTRO_NOS) : GRAFO_VAZIO_COM_INICIO,
         descricao: modelo?.descricao,
         ...(modelo?.frequencia ? { frequencia: modelo.frequencia, ativo: modelo.ativo === true } : {}),
       },
@@ -714,12 +715,13 @@ function EditorFluxo({
   }, [sel, grafo.conexoes, passos]);
 
   const noSel = grafo.nos.find((n) => n.id === sel) ?? null;
-  const enquadrar = () => {
-    if (!grafo.nos.length) return setVista({ x: 40, y: 20, z: 0.9 });
-    const xs = grafo.nos.map((n) => n.x);
-    const ys = grafo.nos.map((n) => n.y);
+  const enquadrar = (g: Grafo = grafo) => {
+    if (!g.nos.length) return setVista({ x: 40, y: 20, z: 0.9 });
+    const xs = g.nos.map((n) => n.x);
+    const ys = g.nos.map((n) => n.y);
+    const fundos = g.nos.map((n) => n.y + alturaNo(REGISTRO_NOS.get(n.tipo)));
     const w = Math.max(...xs) - Math.min(...xs) + LARGURA_NO + 80;
-    const h = Math.max(...ys) - Math.min(...ys) + 200;
+    const h = Math.max(...fundos) - Math.min(...ys) + 80;
     const larg = ref.current?.clientWidth ?? 800;
     const z = Math.min(1.2, Math.max(0.3, Math.min(larg / w, altura / h)));
     setVista({ z, x: -Math.min(...xs) * z + 40, y: -Math.min(...ys) * z + 40 });
@@ -859,13 +861,29 @@ function EditorFluxo({
               <Button size="xs" variant="icon" aria-label="Aproximar" onClick={() => setVista((v) => ({ ...v, z: Math.min(1.8, v.z * 1.2) }))}>
                 <IconPlus className="size-4" />
               </Button>
-              <Button size="xs" variant="icon" aria-label="Enquadrar tudo" title="Enquadrar tudo" onClick={enquadrar}>
+              <Button size="xs" variant="icon" aria-label="Enquadrar tudo" title="Enquadrar tudo" onClick={() => enquadrar()}>
                 <IconEnquadrar className="size-4" />
               </Button>
+              {!rodando && (
+                <Button
+                  size="xs"
+                  variant="icon"
+                  aria-label="Organizar o diagrama"
+                  title="Organizar: colunas na ordem do fluxo, ligações retas"
+                  onClick={() => {
+                    const g = organizarGrafo(grafo, REGISTRO_NOS);
+                    setGrafo(g);
+                    enquadrar(g);
+                  }}
+                >
+                  <IconOrganizar className="size-4" />
+                </Button>
+              )}
               <Ajuda titulo="Como montar">
                 <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
                   <li>Toque num bloco à esquerda: ele entra ligado ao nó marcado (ou arraste até o quadro).</li>
-                  <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e Delete para desligar.</li>
+                  <li>Arraste de uma saída (●) até uma entrada para ligar; toque na linha e Delete para desligar. A seta mostra a direção.</li>
+                  <li>“Organizar” põe os componentes em colunas na ordem do fluxo, com as ligações retas.</li>
                   <li>Laço: ligue o fim do corpo à entrada “Volta” — repete até acabar.</li>
                   <li>Toda caixa tem a saída vermelha “erro”: ligue-a a “Apontar erros” para seguir mesmo com falha.</li>
                   <li>Nos campos, use {"{{campo}}"} para pegar um dado do item.</li>

@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.33.0",
+    data: "2026-10-07",
+    titulo: "Diagramas organizados",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Botão “Organizar” no diagrama: os componentes em colunas na ordem do fluxo (da esquerda para a direita), o caminho principal em cima e a saída de erro abaixo. Os modelos já nascem organizados.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Ligações em ângulo reto, com seta mostrando a direção, que nunca passam por cima de um componente (desviam pelos corredores); a volta do Laço contorna por fora.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.32.1",
     data: "2026-10-07",
     titulo: "Automações mais limpas",
