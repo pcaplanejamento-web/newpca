@@ -4561,8 +4561,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
   do `SelectField` a seta fica rente ao fim do select (`SETA_NA_CAIXA`). Os selects invisíveis sobre um visual próprio
-  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam. O gatilho da `Selecao` (`.seletor-sistema`) leva a MESMA seta
-  e o mesmo respiro — trocar um `<select>` por ela não muda a caixa.
+  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam. O gatilho da `Selecao` (`.seletor-sistema`) leva a seta como
+  ELEMENTO (`SetaDropdown`) no MESMO lugar e com o mesmo respiro — trocar um `<select>` por ela não muda a caixa.
+- **SETA DOS DROPDOWNS (v1.66.0) — `SetaDropdown`** (`SetaDropdown.tsx`, DS): a seta de TODO gatilho de dropdown (`Selecao`,
+  `PeriodoPicker`, `SeletorPessoa`, `SeletorMultiplo suspenso`, `GatilhoFiltro`, `FilterChip`, os seletores do cabeçalho e o
+  menu de vistas do Calendário) gira suave (`--motion-duration`, parada com "reduzir movimento") e aponta para o lado OPOSTO
+  da lista aberta (onde tocar para fechar): aberta embaixo (e a folha) = para cima; aberta em cima = para baixo; fechada =
+  para baixo. O estado vem do `Dropdown` pelo contexto `EstadoDropdown` {aberto, acima} (o lado decidido uma vez por
+  abertura); fora de um `Dropdown`, parada. Os acordeões têm o giro próprio.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é

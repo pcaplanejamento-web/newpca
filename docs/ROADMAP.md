@@ -1696,6 +1696,8 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 ✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
 
+✅ **v1.66.0 — Seta dos dropdowns gira ao abrir**: em toda seleção, filtro e menu a seta gira suave e aponta para o lado oposto da lista aberta (onde tocar para fechar); fechada, volta girando (`SetaDropdown`, estado vindo do `Dropdown`).
+
 ✅ **v1.65.0 — Proteção de dados corrigida + marca d'água**: imperceptível no uso (só aparece na captura e no papel); "ocultar" só reage à janela (antes cobria a cada campo); cobertura instantânea nos atalhos Win+Shift+S / Win+PrtScn / Cmd+Shift; PrtScn some da área de transferência; marca d'água invisível na tela e legível no papel.
 
 ✅ **v1.64.0 — Listas de seleção mais completas**: alinhadas à caixa, rápidas, compactas no desktop; busca/título fixos no topo; folha que sobe de baixo no celular; digitar com o campo fechado troca a opção; 2ª linha de detalhe, aviso âmbar, cor e ações no rodapé (Visão do PCA: resumo, PCAs que usam, ausentes, Editar/Nova visão).

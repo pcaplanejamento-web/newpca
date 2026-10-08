@@ -6,6 +6,7 @@ import { opcoesDaBusca } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField } from "./Field";
 import { IconChevronDown } from "./icons";
+import { SetaDropdown } from "./SetaDropdown";
 
 /** `rotulo` = o texto mostrado (padrão: o próprio valor — ex.: o nome de um fluxo cujo valor é o id). */
 export type OpcaoMultipla = { valor: string; rotulo?: string; contagem?: number };
@@ -63,7 +64,7 @@ export function SeletorMultiplo({
           <span
             className={`flex h-11 w-full items-center gap-2 rounded-control border border-border bg-surface px-3 lg:h-[var(--h-control-sm)] ${disabled ? "opacity-60" : ""}`}
           >
-            {gatilho(<IconChevronDown className="h-4 w-4 shrink-0 text-muted" />)}
+            {gatilho(<SetaDropdown className="h-4 w-4 shrink-0 text-muted" />)}
           </span>
         }
       >

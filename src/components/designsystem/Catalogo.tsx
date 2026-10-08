@@ -119,6 +119,8 @@ import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/compa
 import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
 import { Selecao } from "@/components/Selecao";
+import { Dropdown } from "@/components/Dropdown";
+import { SetaDropdown } from "@/components/SetaDropdown";
 import { selectCls } from "@/components/formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "@/components/GruposDaPessoa";
 import { MatrizCapacidades } from "@/components/MatrizCapacidades";
@@ -3364,6 +3366,19 @@ export function Catalogo() {
             <option value="b">Substituir</option>
             <option value="c">Excluir</option>
           </Selecao>
+          {/* SetaDropdown: a seta de TODO gatilho de dropdown gira suave e aponta para o lado OPOSTO da lista aberta. */}
+          <Dropdown
+            ariaLabel="SetaDropdown — exemplo"
+            triggerClassName="h-[var(--h-control-sm)] gap-2 border border-border bg-surface px-3 text-[13px]"
+            trigger={
+              <>
+                SetaDropdown (abra e feche)
+                <SetaDropdown className="h-4 w-4 text-muted" />
+              </>
+            }
+          >
+            <p className="p-2 text-[13px] text-muted">A lista abriu embaixo: a seta aponta para cima — toque nela para fechar.</p>
+          </Dropdown>
         </div>
         <div className="mt-4">
           <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />

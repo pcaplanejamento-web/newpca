@@ -3,10 +3,11 @@
 import { type ReactNode, useId } from "react";
 import { nomeExibicao, opcoesPessoa, type Pessoa } from "@/lib/pessoa";
 import { Dropdown } from "./Dropdown";
-import { IconChevronDown, IconSpinner } from "./icons";
+import { IconSpinner } from "./icons";
 import { AvatarPessoa, PessoaTag } from "./PessoaTag";
 import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { classeQuadradoFiltro } from "./SeletorFiltro";
+import { SetaDropdown } from "./SetaDropdown";
 
 /** Opção especial no topo da lista (ex.: "Todos", "Sem responsável") — um ícone no lugar da foto. */
 export type ExtraPessoa = { valor: string; rotulo: string; icone: ReactNode };
@@ -83,7 +84,7 @@ export function SeletorPessoa({
   // Sem permissão: só o visual.
   if (!onChange) return <PessoaTag pessoa={pessoa} vazio={extra?.rotulo ?? vazio} />;
 
-  const seta = (tam: string) => (salvando ? <IconSpinner className={`${tam} shrink-0 text-accent`} /> : <IconChevronDown className={`${tam} shrink-0 text-faint`} />);
+  const seta = (tam: string) => (salvando ? <IconSpinner className={`${tam} shrink-0 text-accent`} /> : <SetaDropdown className={`${tam} shrink-0 text-faint`} />);
   const gatilho =
     variante === "filtro" ? (
       (extra?.icone ?? (pessoa ? <AvatarPessoa pessoa={pessoa} size="xs" /> : extras[0]?.icone))

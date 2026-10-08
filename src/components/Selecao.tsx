@@ -26,6 +26,7 @@ import {
   typeahead,
 } from "@/lib/selecao-core";
 import { Dropdown } from "./Dropdown";
+import { SetaDropdown } from "./SetaDropdown";
 import { ehDesktop } from "./espacamento";
 import { SearchField } from "./Field";
 import { IconCheck } from "./icons";
@@ -235,6 +236,7 @@ export function Selecao({
                 <Ponto cor="var(--warn)" />
               </span>
             )}
+            <SetaDropdown className="h-4 w-4 text-muted" />
           </>
         }
       >

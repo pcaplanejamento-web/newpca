@@ -2,6 +2,7 @@
 
 import { type ButtonHTMLAttributes, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { EstadoDropdown } from "./SetaDropdown";
 
 // Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período/SeletorPessoa).
 // O painel é renderizado em PORTAL (position: fixed no body) para NUNCA ser
@@ -73,6 +74,8 @@ export function Dropdown({
   // O lado (acima/abaixo) é decidido UMA vez ao abrir: o conteúdo que muda depois (marcar um item, a busca) nunca faz o
   // painel trocar de lado nem "pular" — ele segue PRESO ao gatilho.
   const acimaRef = useRef<boolean | null>(null);
+  // O mesmo lado, em estado: a SETA do gatilho (`SetaDropdown`) aponta para o lado oposto.
+  const [acima, setAcima] = useState(false);
 
   // Posiciona o painel (fixed) e decide abrir para BAIXO ou para CIMA conforme o
   // espaço disponível; sempre limita a altura à viewport (rola por dentro). Assim
@@ -90,7 +93,10 @@ export function Dropdown({
     const espacoAbaixo = vh - r.bottom - 8;
     const espacoAcima = r.top - 8;
     const desejada = panelRef.current?.scrollHeight ?? 0;
-    if (acimaRef.current == null) acimaRef.current = espacoAbaixo < Math.min(desejada || 320, 360) && espacoAcima > espacoAbaixo;
+    if (acimaRef.current == null) {
+      acimaRef.current = espacoAbaixo < Math.min(desejada || 320, 360) && espacoAcima > espacoAbaixo;
+      setAcima(acimaRef.current);
+    }
     let top: number;
     let maxH: number;
     if (acimaRef.current) {
@@ -195,7 +201,7 @@ export function Dropdown({
             : `inline-flex max-w-full items-center rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${triggerClassName}`
         }
       >
-        {trigger}
+        <EstadoDropdown.Provider value={{ aberto: open, acima: acima && !folha }}>{trigger}</EstadoDropdown.Provider>
       </button>
       {open &&
         createPortal(

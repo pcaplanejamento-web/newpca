@@ -74,8 +74,8 @@ function Rodape({ denso, error, hint, errId }: { denso?: boolean; error?: string
 
 const WRAP =
   "flex items-center gap-2.5 rounded-control border bg-surface-2 px-3.5 transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent/20";
-/** A seta dos selects DENTRO da moldura do campo (o respiro já é da moldura): rente ao fim do select, o texto antes dela. */
-const SETA_NA_CAIXA = "![background-position:right_center] !pr-6";
+/** A seta da seleção DENTRO da moldura do campo (o respiro já é da moldura): rente ao fim, o texto antes dela. */
+const SETA_NA_CAIXA = "!pr-0";
 const INPUT =
   "min-w-0 flex-1 bg-transparent text-[15px] text-text outline-none placeholder:text-faint";
 

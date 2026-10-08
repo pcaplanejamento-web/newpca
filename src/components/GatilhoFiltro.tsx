@@ -1,4 +1,5 @@
-import { IconArrowDown, IconArrowUp, IconChevronDown, IconFilter } from "./icons";
+import { IconArrowDown, IconArrowUp, IconFilter } from "./icons";
+import { SetaDropdown } from "./SetaDropdown";
 
 /**
  * Gatilho do filtro de CABEÇALHO de tabela — o MESMO nos três tipos (valores, datas e faixa R$):
@@ -19,7 +20,7 @@ export function GatilhoFiltro({ label, sortDir = null, marcado = false }: { labe
       {marcado ? (
         <IconFilter className="ml-auto h-3.5 w-3.5 shrink-0" aria-label="Filtrada" />
       ) : (
-        <IconChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-60" />
+        <SetaDropdown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-60" />
       )}
     </span>
   );

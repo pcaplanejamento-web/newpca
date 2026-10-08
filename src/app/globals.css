@@ -1045,10 +1045,8 @@
 /* TODO <select> do sistema com a MESMA seta, sempre no mesmo lugar: sem a aparência nativa (que muda por navegador), o
    chevron do tema (--seta-select) a 0,75rem da borda direita e o texto nunca passa por baixo dela. Fora de camada (vale
    sobre os utilitários de padding das telas). Os <select> invisíveis sobre um visual próprio (opacity-0 — SeletorCelula,
-   SeletorFiltro) não mostram nada. O GATILHO da `Selecao` (o dropdown do sistema no lugar da lista nativa) leva a mesma
-   seta e o mesmo respiro — trocar um <select> por ela não muda a caixa. */
-select:not([multiple]):not([size]),
-.seletor-sistema {
+   SeletorFiltro) não mostram nada. */
+select:not([multiple]):not([size]) {
   -webkit-appearance: none;
   appearance: none;
   background-image: var(--seta-select);
@@ -1056,5 +1054,11 @@ select:not([multiple]):not([size]),
   background-position: right 0.75rem center;
   background-size: 1rem 1rem;
   padding-right: 2.25rem;
+  text-overflow: ellipsis;
+}
+/* O GATILHO da `Selecao` (o dropdown do sistema): a seta é um ELEMENTO (`SetaDropdown` — gira ao abrir) no fim do
+   gatilho, no MESMO lugar da seta do <select> (0,75rem da borda) — trocar um <select> por ela não muda a caixa. */
+.seletor-sistema {
+  padding-right: 0.75rem;
   text-overflow: ellipsis;
 }

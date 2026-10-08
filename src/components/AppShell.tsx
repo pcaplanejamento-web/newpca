@@ -10,6 +10,7 @@ import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
 import { VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
+import { SetaDropdown } from "./SetaDropdown";
 import { CanalGrupo, type PresencaShell } from "./CanalGrupo";
 import { PresencaGrupo } from "./PresencaGrupo";
 import { ChatAoVivo } from "./ChatAoVivo";
@@ -22,7 +23,6 @@ import {
   IconBuilding,
   IconLandmark,
   IconCheck,
-  IconChevronDown,
   IconClock,
   IconClose,
   IconDatabase,
@@ -225,7 +225,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
             <IconUsers className="h-3.5 w-3.5 opacity-70" />
           )}
           <span className="max-w-[9rem] truncate">{ativo.nome}</span>
-          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+          <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
     >
@@ -312,7 +312,7 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
           {trocando ? <IconSpinner className="h-3.5 w-3.5 shrink-0" /> : <IconBox className="h-3.5 w-3.5 shrink-0 opacity-70" />}
           <span className="truncate sm:hidden">{ativo ? ativo.ano : "Todos"}</span>
           <span className="hidden max-w-[12rem] truncate sm:inline">{ativo ? ativo.nome : "Todos os PCAs"}</span>
-          <IconChevronDown className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
+          <SetaDropdown className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
         </>
       }
     >
@@ -378,7 +378,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
             <IconBuilding className="h-3.5 w-3.5 opacity-70" />
           )}
           <span className="max-w-[9rem] truncate">{ativa.nome}</span>
-          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+          <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
     >
