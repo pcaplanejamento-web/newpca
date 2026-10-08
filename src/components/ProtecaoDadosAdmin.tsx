@@ -21,7 +21,7 @@ export function CamposProtecao({ valor, papeis, onChange }: { valor: ConfigProte
   return (
     <div className="space-y-[var(--gap-block)]">
       <Switch dica="Impede selecionar, copiar, arrastar e o menu do botão direito/toque longo fora dos campos" checked={valor.selecao} onChange={(selecao) => onChange({ ...valor, selecao })} label="Bloquear seleção e cópia" />
-      <Switch dica="Na tela nada muda: a impressão sai em branco e a captura sai coberta" checked={valor.print} onChange={(print) => onChange({ ...valor, print })} label="Bloquear impressão e captura" />
+      <Switch dica="Invisível no uso: a impressão sai em branco e o PrtScn não fica na área de transferência" checked={valor.print} onChange={(print) => onChange({ ...valor, print })} label="Bloquear impressão e captura" />
       <Switch dica="Cobre o conteúdo quando a janela perde o foco (ferramentas de recorte)" checked={valor.foco} onChange={(foco) => onChange({ ...valor, foco })} label="Ocultar ao sair da janela" />
       <Switch dica="Invisível na tela: o nome, a matrícula e a hora de quem vê ficam na captura e no papel" checked={valor.marca} onChange={(marca) => onChange({ ...valor, marca })} label="Marca d'água com quem vê" />
       <div className="max-w-md space-y-1">
@@ -88,9 +88,10 @@ export function ProtecaoDadosAdmin() {
             Exportar do papel.
           </TopicoAjuda>
           <TopicoAjuda icone={<IconShield className="h-4 w-4" />} titulo="Impressão e captura">
-            Imperceptível no uso: nada aparece na tela. A impressão sai em branco, com o aviso. A captura feita com a tecla
-            Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac sai coberta; no PrtScn, a imagem copiada some da área de
-            transferência. A foto pelo celular nenhum site consegue impedir — para ela, ligue a marca d'água.
+            Invisível no uso: nada aparece nem muda na tela. A impressão sai em branco, com o aviso, e a imagem do PrtScn
+            some da área de transferência (colar não traz nada). As ferramentas que salvam a imagem em arquivo (Win+Shift+S,
+            Win+PrtScn, Cmd+Shift+3/4 no Mac) e a foto pelo celular nenhum site consegue impedir — para elas, ligue a marca
+            d'água, que identifica quem capturou.
           </TopicoAjuda>
           <TopicoAjuda icone={<IconEyeOff className="h-4 w-4" />} titulo="Ocultar ao sair da janela">
             Cobre o conteúdo enquanto a janela está sem foco (ferramentas de recorte, outra janela por cima). Volta ao tocar. É

@@ -181,7 +181,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
-  - **PROTEÇÃO DE DADOS (v1.63.0 + v1.65.0, sem migração — blob `configuracoes`, chave `protecao`):** Configurações → aba
+  - **PROTEÇÃO DE DADOS (v1.63.0 → v1.70.1, sem migração — blob `configuracoes`, chave `protecao`):** Configurações → aba
     **"Proteção de dados"** (`ProtecaoDadosAdmin` + `CamposProtecao`; `GET/PATCH /api/admin/protecao`, `exigirAdmin`, papéis
     conferidos — 422, auditoria com o diff) liga **Bloquear seleção e cópia** · **Bloquear impressão e captura** · **Ocultar
     ao sair da janela** · **Marca d'água com quem vê**, escolhe os **papéis protegidos** (o Administrador só se marcado) e
@@ -192,15 +192,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`Topo`; "Consulta pública"): o `<style>` global vem no HTML do servidor (1ª pintura e banners por portal —
     `user-select:none`, `-webkit-touch-callout:none`, campos editáveis selecionáveis — `SELETOR_CAMPO`; `@media print` em
     branco) e os ouvintes só dos bloqueios ligados (copy/cut/selectstart/contextmenu/dragstart fora de campo —
-    `[draggable="true"]` passa). **IMPERCEPTÍVEL no uso (v1.65.0) — só aparece na captura e no papel:** sem aviso na tela;
-    a impressão sai em branco com o aviso (`@media print`); a COBERTURA é posta direto no `<html>` pelo ouvinte
-    (`data-protecao-cobrir`, sem React; `html[…]::after`, z-index máximo) AO PRESSIONAR a tecla Windows (Win+Shift+S,
-    Win+PrtScn) ou Cmd+Shift no Mac e sai no 1º movimento depois de soltar (máx. 5 s); no PrtScn a imagem copiada é trocada
-    por nada na área de transferência, em silêncio. "Ocultar ao sair da janela" (o único visível): o `blur`/`focus` SÓ da
-    JANELA (`e.target === window` — na captura, o blur de cada campo também passa pela janela: era o defeito da v1.63.0) e
-    a aba oculta. **`MarcaDagua`** (DS) = SVG repetido em `OPACIDADE_MARCA.tela` (abaixo do que o olho percebe; aparece ao
-    realçar a captura) e `.papel` na impressão (`print:` + `print-color-adjust:exact`), sem capturar o toque. A foto pelo
-    celular o navegador não alcança — a marca d'água identifica. Os "Copiar" do sistema e as exportações (ação Exportar) seguem.
+    `[draggable="true"]` passa). **INVISÍVEL no uso (v1.70.1) — nada aparece nem muda na tela:** a impressão sai em branco
+    com o aviso (`@media print`) e, no PrtScn, a imagem copiada é trocada por nada na área de transferência, em silêncio; a
+    cobertura nos atalhos de captura SAIU. A cobertura (`data-protecao-cobrir`, posta direto no `<html>` — `html[…]::after`)
+    só existe em "Ocultar ao sair da janela" (o único visível): o `blur`/`focus` SÓ da JANELA (`e.target === window` — na
+    captura, o blur de cada campo também passa pela janela: era o defeito da v1.63.0) e a aba oculta. **`MarcaDagua`** (DS) =
+    SVG repetido em `OPACIDADE_MARCA.tela` (abaixo do que o olho percebe; aparece ao realçar a captura) e `.papel` na
+    impressão (`[data-marca-dagua]` + `print-color-adjust:exact`), sem capturar o toque. As ferramentas que salvam a captura em
+    arquivo e a foto pelo celular nenhum site alcança — a marca d'água identifica. Os "Copiar" do sistema e as exportações (ação Exportar) seguem.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o

@@ -23,18 +23,15 @@ function ehCampo(alvo: EventTarget | null): boolean {
   return !!el?.closest(SELETOR_CAMPO);
 }
 
-const ehMac = () => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-
 /**
- * PROTEÇÃO DE DADOS (Configurações → Proteção de dados): aplica os bloqueios do ADM em TODA a tela, IMPERCEPTÍVEL no uso
- * normal — a proteção só aparece na CAPTURA e no PAPEL. O CSS global vai no HTML do servidor (vale desde a 1ª pintura e
- * nos banners por portal) e os ouvintes só dos bloqueios ligados:
- * - impressão: o `@media print` entrega a página em branco com o aviso (sem aviso na tela);
- * - captura: a COBERTURA (`ATRIBUTO_COBRIR`, posta DIRETO no `<html>` pelo ouvinte, sem esperar o React) entra ao pressionar
- *   a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac — a imagem sai coberta — e sai no 1º movimento depois de
- *   soltar o atalho (no máximo 5 s); no PrtScn, a imagem copiada é trocada por nada na área de transferência, em silêncio.
- * A foto pelo celular nenhum site alcança — a MARCA D'ÁGUA (invisível na tela) identifica quem capturou. Os campos
- * editáveis seguem selecionáveis e os botões "Copiar" do sistema funcionam.
+ * PROTEÇÃO DE DADOS (Configurações → Proteção de dados): aplica os bloqueios do ADM em TODA a tela, INVISÍVEL no uso — nada
+ * aparece nem muda na tela. O CSS global vai no HTML do servidor (vale desde a 1ª pintura e nos banners por portal) e os
+ * ouvintes só dos bloqueios ligados:
+ * - impressão: o `@media print` entrega a página em branco com o aviso;
+ * - captura: no PrtScn, a imagem copiada é trocada por nada na área de transferência, em silêncio (colar não traz nada).
+ * As ferramentas que salvam a imagem em arquivo e a foto pelo celular nenhum site alcança — a MARCA D'ÁGUA (invisível na
+ * tela) identifica quem capturou. "Ocultar ao sair da janela" (`foco`) é a única opção que se vê: cobre a tela enquanto a
+ * janela está sem foco. Os campos editáveis seguem selecionáveis e os botões "Copiar" do sistema funcionam.
  */
 export function ProtecaoDados({ selecao, print, foco, marca, quem }: Bloqueios & { quem: string }) {
   useEffect(() => {
@@ -44,19 +41,7 @@ export function ProtecaoDados({ selecao, print, foco, marca, quem }: Bloqueios &
       alvo.addEventListener(tipo, f, true);
       tirar.push(() => alvo.removeEventListener(tipo, f, true));
     };
-    let tempo: ReturnType<typeof setTimeout> | undefined;
-    // Soltou o atalho de captura: a tela volta no 1º movimento (a ferramenta de captura já terminou).
-    let aoMexer = false;
-    const cobrir = () => {
-      clearTimeout(tempo);
-      aoMexer = false;
-      html.setAttribute(ATRIBUTO_COBRIR, "");
-    };
-    const descobrir = () => {
-      clearTimeout(tempo);
-      aoMexer = false;
-      html.removeAttribute(ATRIBUTO_COBRIR);
-    };
+    const descobrir = () => html.removeAttribute(ATRIBUTO_COBRIR);
 
     if (selecao) {
       const fora = (e: Event) => {
@@ -78,33 +63,14 @@ export function ProtecaoDados({ selecao, print, foco, marca, quem }: Bloqueios &
     }
 
     if (print) {
-      const mac = ehMac();
-      const mexeu = () => {
-        if (aoMexer) descobrir();
-      };
-      ouvir(window, "keydown", (ev) => {
-        const e = ev as KeyboardEvent;
-        const k = (e.key ?? "").toLowerCase();
-        // ANTES da captura: a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac (Cmd+Shift+3/4/5).
-        if ((!mac && k === "meta") || (mac && e.metaKey && e.shiftKey)) cobrir();
-        else if (k !== "meta" && k !== "shift") mexeu();
+      ouvir(window, "keyup", (e) => {
+        // A imagem já foi copiada pelo sistema: troca por nada, em silêncio.
+        if ((e as KeyboardEvent).key === "PrintScreen") navigator.clipboard?.writeText("").catch(() => {});
       });
-      ouvir(window, "keyup", (ev) => {
-        const e = ev as KeyboardEvent;
-        if (e.key === "PrintScreen") {
-          // A imagem já foi copiada pelo sistema: troca por nada, em silêncio.
-          navigator.clipboard?.writeText("").catch(() => {});
-        } else if ((e.key === "Meta" || e.key === "Shift") && html.hasAttribute(ATRIBUTO_COBRIR) && !aoMexer) {
-          aoMexer = true;
-          clearTimeout(tempo);
-          tempo = setTimeout(descobrir, 5000);
-        }
-      });
-      ouvir(window, "pointermove", mexeu);
-      ouvir(window, "pointerdown", mexeu);
     }
 
     if (foco) {
+      const cobrir = () => html.setAttribute(ATRIBUTO_COBRIR, "");
       // Só a JANELA (o `blur` dos campos também passa pela janela na captura — eles não contam).
       ouvir(window, "blur", (e) => {
         if (e.target === window) cobrir();

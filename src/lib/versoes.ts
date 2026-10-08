@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.70.1",
+    data: "2026-10-08",
+    titulo: "Proteção de captura invisível",
+    mudancas: [
+      { tipo: "correcao", area: "Configurações", texto: "A proteção de impressão e captura ficou invisível: a tela não pisca nem é coberta ao usar as teclas. A impressão sai em branco e a imagem do PrtScn some da área de transferência.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
     versao: "1.70.0",
     data: "2026-10-08",
     titulo: "Consulta de itens em uma linha",

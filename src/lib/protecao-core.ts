@@ -35,8 +35,8 @@ export function protecaoPublica(cfg: ConfigProtecao): Bloqueios | null {
 /** Os campos que continuam selecionáveis/editáveis com a seleção bloqueada. */
 export const SELETOR_CAMPO = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
 
-/** O atributo do `<html>` que COBRE a tela (captura, impressão, janela sem foco) — posto direto no DOM pelo ouvinte, sem
- * esperar o React: a cobertura sai no quadro seguinte ao evento. */
+/** O atributo do `<html>` que COBRE a tela enquanto a janela está sem foco ("Ocultar ao sair da janela") — posto direto no
+ * DOM pelo ouvinte, sem esperar o React. A proteção de captura/impressão é INVISÍVEL: nunca cobre a tela. */
 export const ATRIBUTO_COBRIR = "data-protecao-cobrir";
 
 /** O CSS GLOBAL dos bloqueios (vale desde a 1ª pintura e também nos banners por portal). */
@@ -58,7 +58,7 @@ export function cssProtecao(b: Bloqueios): string {
     // No PAPEL a marca d'água sai legível (a da tela é imperceptível).
     partes.push("@media print{[data-marca-dagua]{background-image:var(--marca-papel)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}");
   }
-  if (b.print || b.foco) {
+  if (b.foco) {
     partes.push(
       `html[${ATRIBUTO_COBRIR}] body{visibility:hidden!important}`,
       `html[${ATRIBUTO_COBRIR}]::after{content:"Conteúdo protegido pela administração do sistema";position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:var(--surface,#fff);color:var(--muted,#666);font:600 15px var(--font-sans,sans-serif)}`,

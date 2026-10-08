@@ -33,7 +33,7 @@ test("cssProtecao: campos seguem selecionáveis; impressão só quando ligada", 
   assert.doesNotMatch(s, new RegExp(ATRIBUTO_COBRIR));
   const p = cssProtecao({ selecao: false, print: true, foco: false, marca: false });
   assert.match(p, /@media print/);
-  assert.match(p, new RegExp(`html\\[${ATRIBUTO_COBRIR}\\]::after`));
+  assert.doesNotMatch(p, new RegExp(ATRIBUTO_COBRIR), "a captura é invisível: nunca cobre a tela");
   assert.doesNotMatch(p, /user-select/);
   const f = cssProtecao({ selecao: false, print: false, foco: true, marca: false });
   assert.match(f, new RegExp(ATRIBUTO_COBRIR));
