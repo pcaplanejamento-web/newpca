@@ -6,18 +6,21 @@ import { CODIGO_GERAL } from "./escopo-unidades-core";
 import { urlFoto } from "./pessoa";
 import { ORDEM_ORGAOS } from "./orgaos";
 import {
-  alvoVale,
+  type Alvo,
+  alvoQueVale,
+  avisoRedirecionado,
   chaveNome,
   type DadosVinculo,
-  motivoAlvoNaoVale,
   normalizarVinculo,
   type PessoaResponsavel,
   type PlanilhaResponsaveis,
+  type PlanoRealinhar,
+  planoRealinhar,
   type VinculoComPessoa,
   type VinculoResponsavel,
   vinculoConflita,
 } from "./responsaveis-planilha-core";
-import { consultaTodosVinculos, linhaVinculo } from "./responsaveis-sql";
+import { comandosRealinhar, consultaTodosVinculos, linhaVinculo } from "./responsaveis-sql";
 
 /**
  * RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA no D1 (pessoas + vínculos com unidades e órgãos). Só escopo de request.
@@ -40,6 +43,26 @@ function pessoaDaLinha({ temFoto, versao, ...p }: { id: number; nome: string; ma
   return { ...p, foto: p.usuarioId != null ? urlFoto(p.usuarioId, !!temFoto, versao) : null };
 }
 
+type Db = ReturnType<typeof getDb>;
+type ConfigAlvos = Pick<PlanilhaResponsaveis, "orgaos" | "unidades">;
+
+const consultaOrgaos = (db: Db) =>
+  db.select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome, assinaturaUnica: orgaos.assinaturaUnica, oculto: orgaos.oculto }).from(orgaos).orderBy(...ORDEM_ORGAOS);
+
+const consultaUnidades = (db: Db) =>
+  db
+    .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculto: reparticoes.oculto, orgaoProprio: reparticoes.orgaoProprio })
+    .from(reparticoes)
+    .where(ne(reparticoes.codigo, CODIGO_GERAL))
+    .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
+
+/** A configuração de órgãos e unidades (a regra do lugar que vale). */
+export async function configAlvos(): Promise<ConfigAlvos> {
+  const db = getDb();
+  const [os, us] = await Promise.all([consultaOrgaos(db), consultaUnidades(db)]);
+  return { orgaos: os, unidades: us };
+}
+
 /** A planilha inteira: as pessoas, os vínculos, os alvos possíveis (órgãos e unidades, sem a "Geral"), os cargos
  * cadastrados e os usuários ativos (para ligar). */
 export async function listarPlanilha(): Promise<PlanilhaResponsaveis> {
@@ -51,15 +74,8 @@ export async function listarPlanilha(): Promise<PlanilhaResponsaveis> {
       .leftJoin(usuarios, eq(usuarios.id, responsaveis.usuarioId))
       .orderBy(asc(responsaveis.chave), asc(responsaveis.id)),
     consultaTodosVinculos(db),
-    db
-      .select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome, assinaturaUnica: orgaos.assinaturaUnica, oculto: orgaos.oculto })
-      .from(orgaos)
-      .orderBy(...ORDEM_ORGAOS),
-    db
-      .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculto: reparticoes.oculto })
-      .from(reparticoes)
-      .where(ne(reparticoes.codigo, CODIGO_GERAL))
-      .orderBy(asc(reparticoes.ordem), asc(reparticoes.id)),
+    consultaOrgaos(db),
+    consultaUnidades(db),
     listarCargos(),
     db
       .select({
@@ -185,20 +201,54 @@ export async function alvoExiste(alvo: { orgaoId: number | null; reparticaoId: n
   return !!u && u.codigo !== CODIGO_GERAL;
 }
 
-/** O vínculo NOVO só entra onde vale pela regra do órgão (`null` = pode). Os já gravados num alvo que deixou de valer
- * continuam (o órgão pode voltar à regra) — a tela os aponta. */
-export async function motivoAlvoInvalido(alvo: { orgaoId: number | null; reparticaoId: number | null }): Promise<string | null> {
+/** ONDE o vínculo é gravado: o lugar que vale pela regra do órgão (`alvoQueVale` — a unidade de órgão com assinatura
+ * única vai ao órgão; o órgão "por unidade", à unidade própria) + o aviso quando não é o pedido; `erro` = não há um lugar
+ * único (o órgão "por unidade" sem unidade própria — escolha as unidades). */
+export async function alvoParaGravar(pedido: Alvo): Promise<{ alvo: Alvo; aviso: string | null } | { erro: string }> {
+  const conf = await configAlvos();
+  const existe = pedido.orgaoId != null ? conf.orgaos.some((o) => o.id === pedido.orgaoId) : conf.unidades.some((u) => u.id === pedido.reparticaoId);
+  if (!existe) return { erro: "Unidade ou órgão não encontrado." };
+  const alvo = alvoQueVale(pedido, conf);
+  if (!alvo) return { erro: "Este órgão tem assinatura por unidade — vincule o responsável a cada unidade." };
+  return { alvo, aviso: avisoRedirecionado(pedido, conf) };
+}
+
+/** O REALINHAMENTO dos vínculos com a configuração (a atual, ou a que vai ser gravada — `ajustar`): o plano + os
+ * comandos para entrar no MESMO lote da mudança. */
+export async function planejarRealinhamento(
+  ajustar?: (c: ConfigAlvos) => ConfigAlvos,
+  destinos?: Readonly<Record<number, readonly number[]>>,
+): Promise<{ plano: PlanoRealinhar; config: ConfigAlvos }> {
   const db = getDb();
-  const [os, us] = await Promise.all([
-    db.select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome, assinaturaUnica: orgaos.assinaturaUnica, oculto: orgaos.oculto }).from(orgaos),
-    alvo.reparticaoId != null
-      ? db
-          .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculto: reparticoes.oculto })
-          .from(reparticoes)
-          .where(eq(reparticoes.id, alvo.reparticaoId))
-      : Promise.resolve([]),
-  ]);
-  return alvoVale(alvo, { orgaos: os, unidades: us }) ? null : motivoAlvoNaoVale(alvo);
+  const [conf, vinculos] = await Promise.all([configAlvos(), db.select().from(responsaveisVinculos)]);
+  const config = ajustar ? ajustar(conf) : conf;
+  return { plano: planoRealinhar(config, vinculos.map(vinculoDaLinha), destinos), config };
+}
+
+/** Os comandos do plano (para o `db.batch` de quem muda a configuração). */
+export function comandosDoPlano(plano: PlanoRealinhar) {
+  return comandosRealinhar(getDb(), plano.passos);
+}
+
+/** Realinha AGORA (depois de uma mudança já gravada — promover, rebaixar, "também unidade", trocar a unidade de órgão).
+ * Os ambíguos e os conflitos ficam como estão (a Conferência aponta). Devolve o plano aplicado. */
+export async function realinharVinculos(): Promise<PlanoRealinhar> {
+  const { plano } = await planejarRealinhamento();
+  const cmds = comandosDoPlano(plano);
+  if (cmds.length) await getDb().batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+  return plano;
+}
+
+/** O texto do que o realinhamento fez (auditoria/aviso) — vazio quando nada mudou. */
+export function resumoRealinhamento(plano: PlanoRealinhar): string {
+  const n = (t: string) => plano.passos.filter((p) => p.tipo === t).length;
+  const partes = [
+    n("mover") && `${n("mover")} vínculo(s) movido(s)`,
+    n("copiar") && `${n("copiar")} copiado(s)`,
+    n("apagar") && `${n("apagar")} repetido(s) removido(s)`,
+    plano.conflitos.length && `${new Set(plano.conflitos.map((c) => c.id)).size} a revisar (período que se cruza)`,
+  ].filter(Boolean);
+  return partes.join(", ");
 }
 
 /** Os vínculos do MESMO alvo (a conferência do conflito). */

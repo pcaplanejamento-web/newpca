@@ -1119,6 +1119,35 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((d.prepare("SELECT COUNT(*) AS n FROM orcamento_vinculos").get() as { n: number }).n, 1, "fica só o padrão");
   });
 
+  it("0103 responsáveis no lugar que vale: unidade de órgão único → órgão (o caso do AMMT); dual por unidade → unidade própria", () => {
+    const d = new DatabaseSync(":memory:");
+    const i103 = arquivos.findIndex((f) => f.startsWith("0103"));
+    assert.ok(i103 > 0, "migração 0103 ausente");
+    for (const arq of arquivos.slice(0, i103)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla, assinatura_unica) VALUES (3, 'Mobilidade', 'AMMT', 1), (4, 'Dual', 'DUAL', 0), (5, 'Único', 'OU', 1);
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id, orgao_proprio) VALUES (30, 'AMMT', 'Mobilidade', 3, 1), (40, 'DUAL', 'Dual', 4, 1), (51, 'A', 'A', 5, 0), (52, 'B', 'B', 5, 0);
+      INSERT INTO responsaveis (id, nome, chave, matricula) VALUES (1, 'Welker', 'WELKER', '1'), (2, 'Everaldo', 'EVERALDO', '2'), (3, 'Ana', 'ANA', '3'), (4, 'Bia', 'BIA', '4');
+      INSERT INTO responsaveis_vinculos (id, responsavel_id, orgao_id, reparticao_id, tipo, funcao, inicio, fim) VALUES
+        (1, 1, 3, NULL, 'padrao', '', '2026-02-27', NULL),
+        (2, 2, NULL, 30, 'temporario', 'Presidente', '2026-08-20', '2026-09-18'),
+        (3, 2, NULL, 30, 'temporario', 'Presidente', '2026-09-19', '2026-09-28'),
+        (4, 1, NULL, 30, 'padrao', '', '2026-03-01', NULL),
+        (5, 3, 4, NULL, 'padrao', '', '2026-01-01', NULL),
+        (6, 4, NULL, 51, 'padrao', '', '2026-01-01', NULL),
+        (7, 4, NULL, 52, 'padrao', '', '2026-01-01', NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i103]), "utf8"));
+    const onde = (id: number) => d.prepare("SELECT orgao_id AS o, reparticao_id AS r FROM responsaveis_vinculos WHERE id = ?").get(id) as { o: number | null; r: number | null } | undefined;
+    assert.deepEqual({ ...onde(2) }, { o: 3, r: null }, "Everaldo vai ao órgão AMMT");
+    assert.deepEqual({ ...onde(3) }, { o: 3, r: null });
+    assert.deepEqual({ ...onde(4) }, { o: null, r: 30 }, "cruza com o padrão do Welker no órgão: fica para revisar");
+    assert.deepEqual({ ...onde(5) }, { o: null, r: 40 }, "dual por unidade: o do órgão vai à unidade própria");
+    assert.deepEqual({ ...onde(6) }, { o: 5, r: null });
+    assert.equal(onde(7), undefined, "o repetido em outra unidade do mesmo órgão sai");
+    const antes = d.prepare("SELECT id, orgao_id, reparticao_id FROM responsaveis_vinculos ORDER BY id").all();
+    d.exec(readFileSync(join(DIR, arquivos[i103]), "utf8"));
+    assert.deepEqual(d.prepare("SELECT id, orgao_id, reparticao_id FROM responsaveis_vinculos ORDER BY id").all(), antes, "idempotente");
+  });
+
   it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
     const d = new DatabaseSync(":memory:");
     const i78 = arquivos.findIndex((f) => f.startsWith("0078"));

@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { dfdProtocolos, dfds, orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { realinharVinculos } from "@/lib/responsaveis";
 import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao } from "@/lib/orgaos";
@@ -117,6 +118,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     db.delete(orgaos).where(eq(orgaos.id, id)),
   ];
   const [ins] = await db.batch(stmts as unknown as Parameters<typeof db.batch>[0]);
+  // Os responsáveis seguem a regra de assinatura da estrutura nova (o lugar que vale).
+  await realinharVinculos();
   const novoId = (ins as { id: number }[])[0]?.id ?? null;
   await registrarAuditoria({
     usuario: guard.u,

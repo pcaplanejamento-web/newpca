@@ -9,6 +9,8 @@ import { contarUnidadesDoOrgao } from "@/lib/orgaos";
 import { podeRemoverUnidadePropria, podeTornarUnidade, unidadePropriaDeOrgao } from "@/lib/orgao-unidade-ops";
 import { unidadePropriaSchema } from "@/lib/rbac-validation";
 import { unidadeTemVinculo } from "@/lib/reparticoes";
+import { realinharVinculos, resumoRealinhamento } from "@/lib/responsaveis";
+import { comandoMoverVinculos } from "@/lib/responsaveis-sql";
 
 export const dynamic = "force-dynamic";
 
@@ -41,15 +43,33 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (ehCodigoGeral(o.sigla)) return erro("A sigla 'GERAL' é reservada à unidade virtual — altere a sigla do órgão antes.", 400);
     const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${reparticoes.ordem}), -1)` }).from(reparticoes);
     await db.insert(reparticoes).values({ ...unidadePropriaDeOrgao(o, id), ordem: Number(max) + 1 });
-    await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", entidadeId: id, resumo: `Órgão "${o.nome}" passou a funcionar também como unidade`, depois: { tambemUnidade: true } });
-    return ok();
+    // Órgão "por unidade": os responsáveis dele passam à unidade própria (o lugar que vale).
+    const realinhado = resumoRealinhamento(await realinharVinculos());
+    await registrarAuditoria({
+      usuario: guard.u,
+      acao: "editar",
+      entidade: "orgao",
+      entidadeId: id,
+      resumo: `Órgão "${o.nome}" passou a funcionar também como unidade${realinhado ? ` — responsáveis realinhados: ${realinhado}` : ""}`,
+      depois: { tambemUnidade: true },
+    });
+    return ok({ realinhado });
   }
 
   // Desligar: remover a unidade própria.
   if (contagem.propriaId == null) return erro("Este órgão não funciona como unidade.", 409);
   const perm = podeRemoverUnidadePropria({ temVinculo: await unidadeTemVinculo(contagem.propriaId) });
   if (!perm.ok) return erro(perm.motivo, 409);
-  await db.delete(reparticoes).where(eq(reparticoes.id, contagem.propriaId));
-  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", entidadeId: id, resumo: `Órgão "${o.nome}" deixou de funcionar como unidade`, depois: { tambemUnidade: false } });
-  return ok();
+  // Os responsáveis da unidade própria voltam ao ÓRGÃO antes de ela sair (senão cairiam junto, em cascata).
+  await db.batch([comandoMoverVinculos(db, { reparticaoId: contagem.propriaId }, { orgaoId: id }), db.delete(reparticoes).where(eq(reparticoes.id, contagem.propriaId))]);
+  const realinhado = resumoRealinhamento(await realinharVinculos());
+  await registrarAuditoria({
+    usuario: guard.u,
+    acao: "editar",
+    entidade: "orgao",
+    entidadeId: id,
+    resumo: `Órgão "${o.nome}" deixou de funcionar como unidade${realinhado ? ` — responsáveis realinhados: ${realinhado}` : ""}`,
+    depois: { tambemUnidade: false },
+  });
+  return ok({ realinhado });
 }

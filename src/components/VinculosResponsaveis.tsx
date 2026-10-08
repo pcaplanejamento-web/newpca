@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import { hojeISO, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import {
+  type AlvosParaVincular,
   agruparPorNomeacao,
   type DadosVinculo,
   type EstadoVinculo,
@@ -20,6 +21,7 @@ import {
   type VinculoComPessoa,
 } from "@/lib/responsaveis-planilha-core";
 import { Avatar } from "./Avatar";
+import { Ajuda } from "./Ajuda";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -313,6 +315,8 @@ export type AberturaVinculo = {
   dados: DadosVinculo;
   /** A NOMEAÇÃO unificada: os vínculos dela (id + lugar) — editar vale para todos; desmarcar um lugar o remove. */
   grupo?: { id: number; alvo: string }[];
+  /** O vínculo estava fora do lugar que vale: o editor já abre no lugar certo e diz por quê. */
+  aviso?: string;
 };
 
 export const dadosVazios = (tipo: TipoVinculo): DadosVinculo => ({ tipo, funcao: "", atoTipo: null, atoNumero: "", atoLink: "", inicio: null, fim: null });
@@ -349,8 +353,8 @@ export function EditorVinculo({
   pessoas: readonly PessoaResponsavel[];
   /** Os cargos cadastrados (o do temporário e o da pessoa nova). */
   cargos: readonly string[];
-  /** Os alvos que se podem escolher (`valor` = `o<id>` | `u<id>`). */
-  alvos: OpcaoBusca[];
+  /** Os lugares que se podem escolher, separados em órgãos e unidades (`valor` = `o<id>` | `u<id>`). */
+  alvos: AlvosParaVincular;
   pessoaFixa?: boolean;
   alvoFixo?: { rotulo: string };
   ocupado: boolean;
@@ -395,7 +399,7 @@ function CorpoEditor({
   abertura: AberturaVinculo;
   pessoas: readonly PessoaResponsavel[];
   cargos: readonly string[];
-  alvos: OpcaoBusca[];
+  alvos: AlvosParaVincular;
   pessoaFixa?: boolean;
   alvoFixo?: { rotulo: string };
   ocupado: boolean;
@@ -414,9 +418,12 @@ function CorpoEditor({
   const novoParaPessoa = !abertura.id || String(abertura.responsavelId) !== pessoa || alvosEscolhidos.some((a) => !originais.includes(a));
   const exoneracao = escolhida ? motivoNaoVincular(escolhida, d, hojeISO(), novoParaPessoa) : null;
   const motivo = motivoVinculoInvalido(d) ?? exoneracao;
-  const falta = !pessoa ? "Escolha a pessoa." : alvosEscolhidos.length === 0 ? "Escolha a unidade ou o órgão." : motivo;
+  const falta = !pessoa ? "Escolha a pessoa." : alvosEscolhidos.length === 0 ? "Escolha o órgão ou a unidade." : motivo;
   const temp = d.tipo === "temporario";
-  const rotuloDe = (v: string) => alvos.find((a) => a.valor === v)?.rotulo ?? v;
+  const todosAlvos = [...alvos.orgaos, ...alvos.unidades];
+  const rotuloDe = (v: string) => todosAlvos.find((a) => a.valor === v)?.rotulo ?? v;
+  const orgaosEscolhidos = alvosEscolhidos.filter((a) => a.startsWith("o"));
+  const unidadesEscolhidas = alvosEscolhidos.filter((a) => a.startsWith("u"));
   const opcoesPessoas: OpcaoBusca[] = pessoas.filter((p) => String(p.id) === pessoa || !exonerado(p, hojeISO())).map((p) => ({
     valor: String(p.id),
     rotulo: p.nome,
@@ -482,36 +489,79 @@ function CorpoEditor({
       </section>
 
       <section className="space-y-2">
-        <span className="block text-[13px] font-semibold text-text">Onde responde</span>
+        <span className="flex items-center gap-1 text-[13px] font-semibold text-text">
+          Onde responde
+          {!(alvoFixo && !abertura.id) && (
+            <Ajuda titulo="Onde responde" rotulo="Como escolher onde a pessoa responde" compacta>
+              <p>
+                O responsável fica no lugar em que a assinatura dos DFDs é conferida: no <strong>órgão</strong> quando ele tem assinatura única (vale para
+                todas as unidades) e em cada <strong>unidade</strong> quando a assinatura é por unidade.
+              </p>
+              {alvos.fora.length > 0 && (
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {alvos.fora.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              )}
+            </Ajuda>
+          )}
+        </span>
         {alvoFixo && !abertura.id ? (
           <p className="text-sm font-semibold text-text">{alvoFixo.rotulo}</p>
-        ) : alvos.length === 0 ? (
-          <Callout kind="info">Nenhuma unidade ou órgão recebe responsáveis aqui pela regra de assinatura.</Callout>
+        ) : todosAlvos.length === 0 ? (
+          <Callout kind="info">Nenhum órgão ou unidade recebe responsáveis aqui pela regra de assinatura.</Callout>
         ) : (
           <>
-            <SeletorMultiplo
-              rotulo="Unidades e órgãos"
-              opcoes={alvos.map((a) => ({ valor: a.valor, rotulo: a.rotulo }))}
-              selecionados={alvosEscolhidos}
-              onChange={setAlvos}
-              disabled={ocupado}
-              suspenso
-              textoVazio="Escolha…"
-            />
+            {abertura.aviso && <p className="text-[12px] text-[color:var(--info)]">{abertura.aviso}</p>}
+            <div className={`grid gap-2 ${alvos.orgaos.length && alvos.unidades.length ? "sm:grid-cols-2" : ""}`}>
+              {alvos.orgaos.length > 0 && (
+                <SeletorMultiplo
+                  rotulo="Órgãos"
+                  opcoes={alvos.orgaos.map((a) => ({ valor: a.valor, rotulo: a.rotulo, detalhe: a.detalhe }))}
+                  selecionados={orgaosEscolhidos}
+                  onChange={(v) => setAlvos([...v, ...unidadesEscolhidas])}
+                  disabled={ocupado}
+                  suspenso
+                  textoVazio="Nenhum"
+                />
+              )}
+              {alvos.unidades.length > 0 && (
+                <SeletorMultiplo
+                  rotulo="Unidades"
+                  opcoes={alvos.unidades.map((a) => ({ valor: a.valor, rotulo: a.rotulo, grupo: a.grupo }))}
+                  selecionados={unidadesEscolhidas}
+                  onChange={(v) => setAlvos([...orgaosEscolhidos, ...v])}
+                  disabled={ocupado}
+                  suspenso
+                  textoVazio="Nenhuma"
+                />
+              )}
+            </div>
+            {alvosEscolhidos.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5" aria-label="Lugares escolhidos">
+                {alvosEscolhidos.map((a) => (
+                  <li key={a}>
+                    <Badge tone={a.startsWith("o") ? "violet" : "slate"}>
+                      {a.startsWith("o") ? "Órgão" : "Unidade"} · {rotuloDe(a).split(" — ")[0]}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
             {abertura.grupo && abertura.grupo.length > 1 && originais.some((a) => !alvosEscolhidos.includes(a)) && (
               <p className="text-[12px] text-[color:var(--warn)]">
                 Sai desta nomeação: {originais.filter((a) => !alvosEscolhidos.includes(a)).map(rotuloDe).join(" · ")}.
               </p>
             )}
-            {abertura.id && (abertura.grupo?.length ?? 1) <= 1 && !alvosEscolhidos.includes(abertura.alvo) && alvosEscolhidos.length > 0 && (
+            {abertura.id && (abertura.grupo?.length ?? 1) <= 1 && !alvosEscolhidos.includes(abertura.alvo) && alvosEscolhidos.length > 0 && !abertura.aviso && (
               <p className="text-[12px] text-muted">
                 Este vínculo deixa {rotuloDe(abertura.alvo)} e passa a responder em {rotuloDe(alvosEscolhidos[0])}.
               </p>
             )}
             {alvosEscolhidos.length > 1 && (
               <p className="text-[12px] text-muted">
-                A mesma nomeação vincula a pessoa a {alvosEscolhidos.length} lugares: {alvosEscolhidos.map(rotuloDe).join(" · ")}
-                {abertura.id ? " (os novos lugares viram vínculos próprios)." : "."}
+                A mesma nomeação vincula a pessoa a {alvosEscolhidos.length} lugares{abertura.id ? " (os novos lugares viram vínculos próprios)." : "."}
               </p>
             )}
           </>

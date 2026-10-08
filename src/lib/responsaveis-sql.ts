@@ -2,7 +2,7 @@ import { and, asc, eq, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { responsaveis, responsaveisVinculos } from "../db/schema.ts";
-import type { VinculoComPessoa } from "./responsaveis-planilha-core.ts";
+import type { PassoRealinhar, VinculoComPessoa } from "./responsaveis-planilha-core.ts";
 
 /**
  * RESPONSÁVEIS POR DFDs (planilha + vínculos) — os comandos como BUILDERS do Drizzle (sem getDb: testados pelo driver D1
@@ -121,4 +121,33 @@ export function comandoCopiarVinculosParaUnidade(db: Db, orgaoId: number, repart
 /** Quantos vínculos cada alvo tem (a decisão de promover/rebaixar). */
 export function consultaContaVinculos(db: Db, alvo: AlvoSql) {
   return db.select({ n: sql<number>`count(*)` }).from(responsaveisVinculos).where(condAlvo(alvo));
+}
+
+/** Os passos do REALINHAMENTO (`planoRealinhar`) como comandos — mover (o vínculo vai ao lugar que vale), copiar (o mesmo
+ * vínculo em mais uma unidade) e apagar (o igual que já existe no destino). Entram no MESMO lote da mudança. */
+export function comandosRealinhar(db: Db, passos: readonly PassoRealinhar[]) {
+  return passos.map((p) => {
+    if (p.tipo === "apagar") return db.delete(responsaveisVinculos).where(eq(responsaveisVinculos.id, p.id));
+    if (p.tipo === "mover")
+      return db.update(responsaveisVinculos).set({ orgaoId: p.para.orgaoId, reparticaoId: p.para.reparticaoId }).where(eq(responsaveisVinculos.id, p.id));
+    const origem = db
+      .select({
+        id: sql<number>`NULL`.as("id"),
+        responsavelId: responsaveisVinculos.responsavelId,
+        orgaoId: sql<number | null>`${p.para.orgaoId}`.as("orgao_id"),
+        reparticaoId: sql<number | null>`${p.para.reparticaoId}`.as("reparticao_id"),
+        tipo: responsaveisVinculos.tipo,
+        funcao: responsaveisVinculos.funcao,
+        atoTipo: responsaveisVinculos.atoTipo,
+        atoNumero: responsaveisVinculos.atoNumero,
+        atoLink: responsaveisVinculos.atoLink,
+        inicio: responsaveisVinculos.inicio,
+        fim: responsaveisVinculos.fim,
+        ordem: responsaveisVinculos.ordem,
+        criadoEm: sql<string>`CURRENT_TIMESTAMP`.as("criado_em"),
+      })
+      .from(responsaveisVinculos)
+      .where(eq(responsaveisVinculos.id, p.id));
+    return db.insert(responsaveisVinculos).select(origem);
+  });
 }

@@ -392,7 +392,8 @@ export function rotuloVinculo(v: { tipo: TipoVinculo; inicio: string | null; fim
 // A PLANILHA como a tela a recebe (`GET /api/admin/responsaveis`) + as regras das telas.
 
 export type AlvoOrgao = { id: number; sigla: string; nome: string; assinaturaUnica: boolean; oculto: boolean };
-export type AlvoUnidade = { id: number; codigo: string; nome: string; orgaoId: number | null; oculto: boolean };
+/** `orgaoProprio` = a UNIDADE PRÓPRIA de um órgão que também é unidade (dual). */
+export type AlvoUnidade = { id: number; codigo: string; nome: string; orgaoId: number | null; oculto: boolean; orgaoProprio?: boolean };
 /** Um usuário que pode ser ligado a uma pessoa (a foto como URL). */
 export type UsuarioLigavel = { id: number; nome: string; apelido: string | null; matricula: string; foto: string | null };
 export type PlanilhaResponsaveis = {
@@ -430,6 +431,168 @@ export function motivoAlvoNaoVale(alvo: { orgaoId: number | null; reparticaoId: 
   return alvo.orgaoId != null
     ? "Este órgão tem assinatura por unidade — vincule o responsável a cada unidade."
     : "O órgão desta unidade tem assinatura única — vincule o responsável ao órgão.";
+}
+
+export type Alvo = { orgaoId: number | null; reparticaoId: number | null };
+type Config = Pick<PlanilhaResponsaveis, "orgaos" | "unidades">;
+
+const mesmoAlvo = (a: Alvo, b: Alvo) => a.orgaoId === b.orgaoId && a.reparticaoId === b.reparticaoId;
+
+/** A unidade PRÓPRIA (dual) de um órgão, se houver. */
+function unidadePropria(orgaoId: number, p: Config) {
+  return p.unidades.find((u) => u.orgaoId === orgaoId && u.orgaoProprio);
+}
+
+/**
+ * O LUGAR QUE VALE para um alvo pedido — a REGRA ÚNICA do cadastro (o vínculo mora SEMPRE no alvo efetivo):
+ * unidade de órgão com assinatura única → o ÓRGÃO; órgão "por unidade" → a unidade PRÓPRIA dele (órgão que também é
+ * unidade), senão `null` (não há um lugar único — escolha as unidades); os demais → ele mesmo. Alvo inexistente → `null`.
+ */
+export function alvoQueVale(alvo: Alvo, p: Config): Alvo | null {
+  if (alvo.orgaoId != null) {
+    const o = p.orgaos.find((x) => x.id === alvo.orgaoId);
+    if (!o) return null;
+    if (o.assinaturaUnica) return { orgaoId: o.id, reparticaoId: null };
+    const propria = unidadePropria(o.id, p);
+    return propria ? { orgaoId: null, reparticaoId: propria.id } : null;
+  }
+  const u = p.unidades.find((x) => x.id === alvo.reparticaoId);
+  if (!u) return null;
+  const o = u.orgaoId != null ? p.orgaos.find((x) => x.id === u.orgaoId) : undefined;
+  return o?.assinaturaUnica ? { orgaoId: o.id, reparticaoId: null } : { orgaoId: null, reparticaoId: u.id };
+}
+
+/** O texto de por que o vínculo VAI para outro lugar ao gravar ("Gravado em AMMT (órgão) — …"); `null` = fica onde foi pedido. */
+export function avisoRedirecionado(pedido: Alvo, p: Config): string | null {
+  const vale = alvoQueVale(pedido, p);
+  if (!vale || mesmoAlvo(vale, pedido)) return null;
+  const r = rotuloAlvo(vale, p);
+  return vale.orgaoId != null
+    ? `Gravado no órgão ${r.sigla} — o órgão tem assinatura única (vale para todas as unidades).`
+    : `Gravado na unidade ${r.sigla} — o órgão tem assinatura por unidade (a unidade própria dele).`;
+}
+
+/** Um passo do realinhamento: MOVER o vínculo ao lugar que vale, COPIAR (o mesmo vínculo em mais uma unidade) ou APAGAR
+ * (já existe um IGUAL no destino). */
+export type PassoRealinhar = { tipo: "mover"; id: number; para: Alvo } | { tipo: "copiar"; id: number; para: Alvo } | { tipo: "apagar"; id: number };
+
+export type PlanoRealinhar = {
+  passos: PassoRealinhar[];
+  /** Vínculos que ficam onde estão: no destino já há um período da mesma pessoa que se CRUZA (revisar à mão). */
+  conflitos: { id: number; para: Alvo; motivo: string }[];
+  /** Órgãos "por unidade" sem unidade própria e com VÁRIAS unidades: o ADM escolhe para quais vão os vínculos do órgão. */
+  ambiguos: { orgaoId: number; unidades: number[]; vinculos: number[] }[];
+};
+
+const igualPeriodo = (a: VinculoResponsavel, b: VinculoResponsavel) =>
+  a.responsavelId === b.responsavelId && a.tipo === b.tipo && (a.inicio ?? "") === (b.inicio ?? "") && (a.fim ?? "") === (b.fim ?? "");
+
+/**
+ * O REALINHAMENTO (puro): cada vínculo fora do lugar que vale (`alvoQueVale`) vai para ele — o igual já existente lá é
+ * apagado, o que cruza com outro da mesma pessoa fica (conflito). O vínculo de órgão "por unidade" sem unidade própria vai
+ * para a única unidade dele ou para as escolhidas em `destinos[orgaoId]` (a 1ª = mover, as demais = copiar); sem escolha
+ * com várias unidades = `ambiguos`. Idempotente: com tudo no lugar, nenhum passo.
+ */
+export function planoRealinhar(p: Config, vinculos: readonly VinculoResponsavel[], destinos: Readonly<Record<number, readonly number[]>> = {}): PlanoRealinhar {
+  const plano: PlanoRealinhar = { passos: [], conflitos: [], ambiguos: [] };
+  const ordenados = [...vinculos].sort((a, b) => a.id - b.id);
+  const fora: { v: VinculoResponsavel; para: Alvo[] }[] = [];
+  // Onde cada vínculo fica (os que já estão no lugar entram primeiro; os movidos, à medida que o plano anda).
+  const lugares: VinculoResponsavel[] = [];
+  const ambiguos = new Map<number, { orgaoId: number; unidades: number[]; vinculos: number[] }>();
+  for (const v of ordenados) {
+    const vale = alvoQueVale(v, p);
+    if (vale && mesmoAlvo(vale, v)) {
+      lugares.push(v);
+      continue;
+    }
+    if (vale) {
+      fora.push({ v, para: [vale] });
+      continue;
+    }
+    // Sem lugar único: órgão "por unidade" sem unidade própria (o alvo que não existe mais fica).
+    if (v.orgaoId == null || !p.orgaos.some((o) => o.id === v.orgaoId)) continue;
+    const unidades = p.unidades.filter((u) => u.orgaoId === v.orgaoId && !u.oculto).map((u) => u.id);
+    const escolhidas = (destinos[v.orgaoId] ?? []).filter((id) => unidades.includes(id));
+    const alvos = escolhidas.length ? escolhidas : unidades.length === 1 ? unidades : [];
+    if (alvos.length) fora.push({ v, para: alvos.map((id) => ({ orgaoId: null, reparticaoId: id })) });
+    else if (unidades.length) {
+      const a = ambiguos.get(v.orgaoId) ?? { orgaoId: v.orgaoId, unidades, vinculos: [] };
+      a.vinculos.push(v.id);
+      ambiguos.set(v.orgaoId, a);
+    }
+  }
+  for (const { v, para } of fora) {
+    const livres: Alvo[] = [];
+    let igual = false;
+    for (const alvo of para) {
+      const noDestino = lugares.filter((x) => mesmoAlvo(x, alvo) && x.responsavelId === v.responsavelId && x.tipo === v.tipo);
+      if (noDestino.some((x) => igualPeriodo(x, v))) {
+        igual = true;
+        continue;
+      }
+      const cruza = vinculoConflita({ ...v, id: -1, ...alvo }, noDestino);
+      if (cruza) plano.conflitos.push({ id: v.id, para: alvo, motivo: cruza });
+      else livres.push(alvo);
+    }
+    if (livres.length) {
+      plano.passos.push({ tipo: "mover", id: v.id, para: livres[0] });
+      lugares.push({ ...v, ...livres[0] });
+      for (const alvo of livres.slice(1)) {
+        plano.passos.push({ tipo: "copiar", id: v.id, para: alvo });
+        lugares.push({ ...v, ...alvo });
+      }
+      // O que conflitou num destino mas foi a outro já está resolvido.
+      plano.conflitos = plano.conflitos.filter((c) => c.id !== v.id);
+    } else if (igual && !plano.conflitos.some((c) => c.id === v.id)) plano.passos.push({ tipo: "apagar", id: v.id });
+  }
+  plano.ambiguos = [...ambiguos.values()];
+  return plano;
+}
+
+/** Uma opção do "Onde responde": `grupo` = o órgão das unidades (o cabeçalho da lista). */
+export type OpcaoAlvo = { valor: string; rotulo: string; detalhe: string; grupo?: string };
+export type AlvosParaVincular = {
+  /** Os órgãos com assinatura ÚNICA (o vínculo vale para todas as unidades deles). */
+  orgaos: OpcaoAlvo[];
+  /** As unidades dos órgãos "por unidade", agrupadas pelo órgão (na ordem dos órgãos). */
+  unidades: OpcaoAlvo[];
+  /** Por que os demais lugares não aparecem (o "(?)"). */
+  fora: string[];
+};
+
+/** Os lugares em que se pode VINCULAR agora, separados em ÓRGÃOS e UNIDADES (só os que valem pela regra; sem os
+ * ocultos), opcionalmente só os de UM órgão. */
+export function alvosParaVincular(p: Config, orgaoId?: number): AlvosParaVincular {
+  const out: AlvosParaVincular = { orgaos: [], unidades: [], fora: [] };
+  for (const o of p.orgaos) {
+    if (o.oculto || (orgaoId != null && o.id !== orgaoId)) continue;
+    const dele = p.unidades.filter((u) => u.orgaoId === o.id && !u.oculto);
+    if (o.assinaturaUnica) {
+      const n = dele.filter((u) => !u.orgaoProprio).length;
+      out.orgaos.push({
+        valor: `o${o.id}`,
+        rotulo: `${o.sigla} — ${o.nome}`,
+        detalhe: n ? `Assinatura única · vale para ${n} unidade${n === 1 ? "" : "s"}` : "Assinatura única",
+      });
+      if (dele.length) out.fora.push(`Unidades de ${o.sigla}: o órgão tem assinatura única — escolha o órgão.`);
+    } else {
+      const grupo = `${o.sigla} — ${o.nome}`;
+      for (const u of dele)
+        out.unidades.push({
+          valor: `u${u.id}`,
+          rotulo: u.orgaoProprio ? `${u.codigo} — ${u.nome} (o próprio órgão)` : `${u.codigo} — ${u.nome}`,
+          detalhe: `Unidade · ${o.sigla}`,
+          grupo,
+        });
+      out.fora.push(
+        dele.length
+          ? `Órgão ${o.sigla}: assinatura por unidade — escolha ${dele.some((u) => u.orgaoProprio) ? "a unidade do próprio órgão ou " : ""}as unidades.`
+          : `Órgão ${o.sigla}: assinatura por unidade e sem unidades cadastradas.`,
+      );
+    }
+  }
+  return out;
 }
 
 export type EstadoVinculo = "vigente" | "agendado" | "encerrado" | "inativo";
@@ -516,17 +679,4 @@ export function alvoDoValor(valor: string): { orgaoId: number | null; reparticao
   if (!m) return null;
   const id = Number(m[2]);
   return m[1] === "o" ? { orgaoId: id, reparticaoId: null } : { orgaoId: null, reparticaoId: id };
-}
-
-/** Os alvos em que se pode VINCULAR agora (os que valem pela regra; sem os ocultos), opcionalmente só os de UM órgão. */
-export function alvosParaVincular(p: PlanilhaResponsaveis, orgaoId?: number): { valor: string; rotulo: string; detalhe: string }[] {
-  const out: { valor: string; rotulo: string; detalhe: string }[] = [];
-  for (const o of p.orgaos) {
-    if (o.oculto || (orgaoId != null && o.id !== orgaoId)) continue;
-    if (o.assinaturaUnica) out.push({ valor: `o${o.id}`, rotulo: `${o.sigla} — ${o.nome}`, detalhe: "Órgão · assinatura única (vale para todas as unidades)" });
-    else
-      for (const u of p.unidades)
-        if (u.orgaoId === o.id && !u.oculto) out.push({ valor: `u${u.id}`, rotulo: `${u.codigo} — ${u.nome}`, detalhe: `Unidade · ${o.sigla}` });
-  }
-  return out;
 }
