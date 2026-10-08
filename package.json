@@ -1,6 +1,6 @@
 {
   "name": "newpca",
-  "version": "1.71.1",
+  "version": "1.72.1",
   "private": true,
   "scripts": {
     "dev": "next dev",

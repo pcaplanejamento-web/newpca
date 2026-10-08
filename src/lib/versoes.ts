@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.72.1",
+    data: "2026-10-08",
+    titulo: "Tabelas: rolagem lateral estável e caixa de marcar do sistema",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "A rolagem lateral das tabelas não treme nem trava mais: as bordas ficam nas células, então a coluna de marcação (e as congeladas) andam junto da borda ao rolar.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A caixa de marcar das tabelas e dos filtros segue o arredondamento de Configurações → Aparência (até virar um círculo), no lugar do quadrado do navegador.", link: "/painel/aparencia" },
+      { tipo: "correcao", area: "PCA", texto: "Na coluna Local da Mesa do PCA a informação não se repete mais (\u201cIncorporado · Incorporar\u201d virou \u201cIncorporado\u201d; a substituição e a exclusão dizem o que fazem) e a célula usa o mesmo desenho das colunas de estado.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.71.1",
     data: "2026-10-08",
     titulo: "Tabelas: marcação fixa e selos no raio do sistema",

@@ -1122,3 +1122,44 @@ select:not([multiple]):not([size]) {
 .linha-topico {
   margin-block-end: var(--pad-canvas-y);
 }
+
+/* CAIXA DE MARCAR (seleção das tabelas e das listas de filtro): o desenho do sistema no lugar do quadrado nativo — o
+   arredondamento segue o do ADM (Configurações → Aparência: o raio dos chips, no máximo um círculo). O mesmo do `Checkbox`. */
+.caixa-marcar {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  vertical-align: middle;
+  border: 1.5px solid color-mix(in srgb, var(--muted) 55%, var(--surface));
+  border-radius: min(var(--radius-chip), 50%);
+  background: var(--surface) center / 0.75rem no-repeat;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration) var(--motion-ease),
+    border-color var(--motion-duration) var(--motion-ease);
+}
+.caixa-marcar:hover {
+  border-color: var(--accent);
+}
+.caixa-marcar:checked,
+.caixa-marcar:indeterminate {
+  border-color: var(--accent);
+  background-color: var(--accent);
+}
+.caixa-marcar:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+.caixa-marcar:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+.caixa-marcar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+.caixa-marcar:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

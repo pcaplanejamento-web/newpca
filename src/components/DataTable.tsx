@@ -515,8 +515,10 @@ export function DataTable<R>({
         ref={rolagemRef}
         className={`overflow-x-auto ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
-        <table ref={tabelaRef} className="w-full border-collapse text-sm" style={{ minWidth }}>
-          <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
+        {/* `border-separate` (bordas nas CÉLULAS): com `border-collapse`, as células presas (`sticky`) tremem e as bordas
+            "escorregam" ao rolar de lado — o Safari e o Chrome não prendem a borda colapsada junto da célula. */}
+        <table ref={tabelaRef} className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth }}>
+          <thead className={`bg-surface-2 [&_th]:border-b [&_th]:border-border ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
             <tr>
               {selectable && (
                 <th className={`w-10 px-3 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
@@ -529,7 +531,7 @@ export function DataTable<R>({
                       if (el) el.indeterminate = parcial;
                     }}
                     onChange={alternarTodos}
-                    className="h-4 w-4 accent-[var(--accent)]"
+                    className="caixa-marcar"
                   />
                 </th>
               )}
@@ -671,7 +673,7 @@ export function DataTable<R>({
                   {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
                   style={{ height: alturaLinha, ...(ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : {}) }}
                   // Com colunas congeladas a linha tem fundo OPACO (as células presas herdam — nada aparece por baixo).
-                  className={`group/linha border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
+                  className={`group/linha transition-colors hover:bg-surface-2 [&>td]:border-b [&>td]:border-border last:[&>td]:border-b-0 ${
                     onRowClick ? "cursor-pointer" : ""
                   } ${ativa || (marcada && selFixa) ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : selFixa ? "bg-surface" : ""}`}
                 >
@@ -682,7 +684,7 @@ export function DataTable<R>({
                         aria-label="Selecionar linha"
                         checked={marcada}
                         onChange={() => alternar(k)}
-                        className="h-4 w-4 accent-[var(--accent)]"
+                        className="caixa-marcar"
                       />
                     </td>
                   )}

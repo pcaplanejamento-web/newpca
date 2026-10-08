@@ -263,7 +263,7 @@ export function Checkbox({
     >
       <input ref={ref} id={cid} type="checkbox" checked={checked} className="peer sr-only" {...rest} />
       <span
-        className={`grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${
+        className={`grid h-5 w-5 shrink-0 place-items-center rounded-chip border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${
           checked || parcial ? "border-accent bg-accent text-white" : "border-border-2 bg-surface"
         }`}
       >
