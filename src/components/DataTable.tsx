@@ -39,6 +39,7 @@ import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
 import { RangeFilterHeader } from "./RangeFilterHeader";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 // Tabela do design system (spec §6.6 + pedidos do usuário): seleção de linhas,
 // **filtro em TODOS os cabeçalhos** — multi-select por padrão (inclusive colunas com VÁRIOS valores
@@ -754,7 +755,7 @@ export function DataTable<R>({
           {(scrollInterno || linhasSalvas) && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
               <span className="hidden sm:inline">Linhas</span>
-              <select
+              <Selecao
                 aria-label="Linhas por página"
                 value={limite}
                 onChange={(e) => {
@@ -772,7 +773,7 @@ export function DataTable<R>({
                     {n}
                   </option>
                 ))}
-              </select>
+              </Selecao>
             </label>
           )}
           {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}

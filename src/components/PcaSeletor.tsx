@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { IconBox } from "./icons";
+import { Selecao } from "./Selecao";
 
 /**
  * Seletor (dropdown) do PCA PUBLICADO na tela inicial — troca `?pca=` e limpa o filtro de unidade
@@ -15,7 +16,7 @@ export function PcaSeletor({ pcas, current }: { pcas: { id: number; nome: string
     <label className="flex items-center gap-2 rounded-control border border-border-2 bg-surface px-3 py-2 text-sm">
       <IconBox className="h-[18px] w-[18px] shrink-0 text-faint" />
       <span className="hidden shrink-0 text-muted sm:inline">PCA:</span>
-      <select
+      <Selecao
         value={current}
         onChange={(e) => {
           const params = new URLSearchParams(sp.toString());
@@ -31,7 +32,7 @@ export function PcaSeletor({ pcas, current }: { pcas: { id: number; nome: string
             {p.nome}
           </option>
         ))}
-      </select>
+      </Selecao>
     </label>
   );
 }

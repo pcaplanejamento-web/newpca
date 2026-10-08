@@ -32,6 +32,7 @@ import { Modal } from "./Modal";
 import { SkeletonCartao } from "./Skeleton";
 import { StatMini } from "./StatMini";
 import { useGravacaoCadastro } from "./useGravacaoCadastro";
+import { Selecao } from "./Selecao";
 
 type Cadastro = { unidades: UnidadeMedida[]; classificacoes: ClassificacaoItem[] };
 type Dados = Cadastro & { uso: UsoUnidade[] };
@@ -401,7 +402,7 @@ export function ComparacaoUnidades({
           <span className="flex min-w-0 flex-wrap items-center gap-1.5">
             {unidades.length > 0 && (
               <>
-                <select
+                <Selecao
                   aria-label={`Unidade cadastrada da grafia ${l.texto}`}
                   className={`${selectCls} min-h-[44px] max-w-[220px] lg:min-h-0`}
                   value={alvo?.id ?? ""}
@@ -415,7 +416,7 @@ export function ComparacaoUnidades({
                       {x.id === l.sugestaoId ? " (sugestão)" : ""}
                     </option>
                   ))}
-                </select>
+                </Selecao>
                 <Button
                   variant="secondary"
                   size="xs"

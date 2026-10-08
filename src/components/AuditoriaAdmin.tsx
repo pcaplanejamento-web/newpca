@@ -10,6 +10,7 @@ import { Historico } from "./Historico";
 import { BotaoAtualizar } from "./BotaoAtualizar";
 import { IconClock } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
+import { Selecao } from "./Selecao";
 
 const ACOES = Object.entries(ROTULO_ACAO);
 const ENTIDADES = Object.entries(ROTULO_ENTIDADE);
@@ -71,7 +72,7 @@ export function AuditoriaAdmin() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs text-muted">
           Entidade
-          <select
+          <Selecao
             className={selectCls}
             value={entidade}
             onChange={(e) => {
@@ -85,11 +86,11 @@ export function AuditoriaAdmin() {
                 {v}
               </option>
             ))}
-          </select>
+          </Selecao>
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Ação
-          <select
+          <Selecao
             className={selectCls}
             value={acao}
             onChange={(e) => {
@@ -103,7 +104,7 @@ export function AuditoriaAdmin() {
                 {v}
               </option>
             ))}
-          </select>
+          </Selecao>
         </label>
         <span className="pb-2 text-xs text-muted">
           {total} registro{total === 1 ? "" : "s"}

@@ -19,6 +19,7 @@ import { Modal } from "./Modal";
 import { OpcoesUnidades } from "./OpcoesUnidades";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { BotaoWhatsapp } from "./Telefone";
+import { Selecao } from "./Selecao";
 
 export type Status = "ativo" | "pendente" | "inativo";
 
@@ -427,7 +428,7 @@ function Corpo({
           </LinhaCampo>
           <LinhaCampo label="Cargo ou função" {...lock("cargo")}>
             {abertos.has("cargo") ? (
-              <select className={cellCls} value={r.cargo} onChange={(e) => set("cargo")(e.target.value)} aria-label="Cargo ou função">
+              <Selecao className={cellCls} value={r.cargo} onChange={(e) => set("cargo")(e.target.value)} aria-label="Cargo ou função">
                 <option value="">Nenhum</option>
                 {/* O cargo atual continua na lista mesmo que tenha saído do cadastro. */}
                 {u.cargo && !cargos.includes(u.cargo) && <option value={u.cargo}>{u.cargo} (fora da lista)</option>}
@@ -436,21 +437,21 @@ function Corpo({
                     {c}
                   </option>
                 ))}
-              </select>
+              </Selecao>
             ) : (
               <ValorCampo>{r.cargo || "—"}</ValorCampo>
             )}
           </LinhaCampo>
           <LinhaCampo label="Unidade em que trabalha" {...lock("unidade")}>
             {abertos.has("unidade") ? (
-              <select className={cellCls} value={r.unidade} onChange={(e) => set("unidade")(e.target.value)} aria-label="Unidade em que trabalha">
+              <Selecao className={cellCls} value={r.unidade} onChange={(e) => set("unidade")(e.target.value)} aria-label="Unidade em que trabalha">
                 <option value="">Nenhuma</option>
                 {/* A unidade atual continua na lista mesmo que hoje esteja oculta. */}
                 {u.reparticaoId != null && !unidades.some((x) => x.id === u.reparticaoId) && (
                   <option value={u.reparticaoId}>{u.unidade ?? `Unidade ${u.reparticaoId}`}</option>
                 )}
                 <OpcoesUnidades unidades={unidades} />
-              </select>
+              </Selecao>
             ) : (
               <ValorCampo>{(r.unidade === String(u.reparticaoId ?? "") ? unidadeNome : unidades.find((x) => String(x.id) === r.unidade)?.nome) || "—"}</ValorCampo>
             )}
@@ -537,7 +538,7 @@ function Corpo({
         <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-muted">Papel</span>
-            <select
+            <Selecao
               className={cellCls}
               value={u.papelId == null ? "" : String(u.papelId)}
               disabled={souEu || ocupado || u.status === "pendente"}
@@ -554,7 +555,7 @@ function Corpo({
                   {p.nome}
                 </option>
               ))}
-            </select>
+            </Selecao>
             <span className="mt-1 block text-[12px] leading-snug text-muted">{papel ? descricaoPapel(papel) : "Sem papel: nenhuma tela abre."}</span>
           </label>
           <div>

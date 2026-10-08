@@ -2,6 +2,7 @@
 
 import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, useEffect, useId, useRef, useState } from "react";
 import { IconCheck, IconClose, IconEye, IconEyeOff, IconLock, IconMenos, IconSearch } from "./icons";
+import { Selecao } from "./Selecao";
 
 // Campos de formulário do design system (spec do usuário — prints do login):
 // rótulo forte, superfície preenchida, ícone à esquerda, **anel de foco accent**
@@ -108,8 +109,9 @@ export function TextField({ label, icon, trailing, hint, error, denso, rotuloExt
   );
 }
 
-/** Seleção no MESMO visual do `TextField` (rótulo forte + caixa de 54px, foco accent): um `<select>` nativo — no celular
- * abre o seletor do próprio aparelho. As opções vêm como `children`. */
+/** Seleção no MESMO visual do `TextField` (rótulo forte + caixa de 54px, foco accent) — a lista aberta é a do SISTEMA
+ * (`Selecao`: o dropdown preso ao campo, com busca acima de 12 opções e 44px no toque), não a nativa do aparelho. As
+ * opções vêm como `children` (`<option>`/`<optgroup>`); `onChange(e)` recebe `e.target.value`, como no `<select>`. */
 export function SelectField({
   label,
   hint,
@@ -123,14 +125,11 @@ export function SelectField({
 }: {
   label?: string;
   hint?: ReactNode;
-  /** O problema do campo (borda + mensagem na cor de erro — como no `TextField`). */
   error?: string;
-  /** DENSO: caixa de 44px (como o `TextField denso`). */
   denso?: boolean;
-  /** Compacto (barras de ferramentas, ao lado de `Button size="sm"`): `--h-control-sm` no desktop, 44px no toque; o
-   * rótulo vira um prefixo discreto DENTRO da caixa. */
+  /** COMPACTO: na altura das barras de ferramentas (`--h-control-sm` no desktop, 44px no toque), o rótulo como prefixo dentro da caixa. */
   compacto?: boolean;
-  /** O texto da opção ESCOLHIDA em até 2 linhas DENTRO da caixa (nomes longos — ex.: a unidade — nunca ficam cortados). */
+  /** O texto da opção escolhida, À VISTA em até 2 linhas DENTRO da caixa (nomes longos — ex.: a unidade do cadastro). */
   textoEscolhido?: string;
   children: ReactNode;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
@@ -144,33 +143,27 @@ export function SelectField({
             {label}
           </label>
         )}
-        <select id={fid} className={`${INPUT} ${SETA_NA_CAIXA} h-full min-w-0 cursor-pointer !text-[13px] font-semibold disabled:cursor-default disabled:opacity-60`} {...rest}>
+        <Selecao id={fid} className={`${INPUT} ${SETA_NA_CAIXA} h-full !text-[13px] font-semibold outline-none disabled:opacity-60`} {...rest}>
           {children}
-        </select>
+        </Selecao>
       </div>
     );
   const errId = `${fid}-erro`;
   return (
     <div className="min-w-0">
       <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
-      <div className={`${WRAP} relative ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
-        {textoEscolhido && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-3.5 right-9 flex items-center text-[13px] font-medium leading-[1.15] text-text sm:text-[14px]"
-          >
-            <span className="line-clamp-2 break-words">{textoEscolhido}</span>
-          </span>
-        )}
-        <select
+      <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+        <Selecao
           id={fid}
-          className={`${INPUT} ${SETA_NA_CAIXA} h-full cursor-pointer disabled:cursor-default disabled:opacity-60 ${textoEscolhido ? "!text-transparent [&_optgroup]:text-text [&_option]:text-text" : ""}`}
+          texto={textoEscolhido}
+          linhas={textoEscolhido ? 2 : 1}
+          className={`${INPUT} ${SETA_NA_CAIXA} h-full outline-none disabled:opacity-60 ${textoEscolhido ? "!text-[13px] font-medium sm:!text-[14px]" : ""}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errId : undefined}
           {...rest}
         >
           {children}
-        </select>
+        </Selecao>
       </div>
       <Rodape denso={denso} error={error} hint={hint} errId={errId} />
     </div>

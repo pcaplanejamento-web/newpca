@@ -7,6 +7,7 @@ import { cellCls } from "./formStyles";
 import { IconSave } from "./icons";
 import { Modal } from "./Modal";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
+import { Selecao } from "./Selecao";
 
 /** Um campo do cadastro: texto (com filtro opcional) ou escolha entre opções. */
 export type CampoCadastro = {
@@ -126,13 +127,13 @@ export function BannerCadastro({
                 <LinhaCampo key={c.chave} label={c.label} span={c.span} editavel={!novo} aberto={abertos.has(c.chave)} bloqueado={false} onLock={() => alternar(c.chave)}>
                   {aberto ? (
                     c.opcoes ? (
-                      <select className={cellCls} value={v} onChange={(e) => set(e.target.value)} aria-label={c.label} disabled={ocupado}>
+                      <Selecao className={cellCls} value={v} onChange={(e) => set(e.target.value)} aria-label={c.label} disabled={ocupado}>
                         {c.opcoes.map((o) => (
                           <option key={o.valor} value={o.valor}>
                             {o.rotulo}
                           </option>
                         ))}
-                      </select>
+                      </Selecao>
                     ) : (
                       <input
                         className={`${cellCls} ${c.mono ? "font-mono" : ""}`}

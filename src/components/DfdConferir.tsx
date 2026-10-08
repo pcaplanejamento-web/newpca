@@ -35,6 +35,7 @@ import { CampoLista, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck, IconShield } from "./icons";
 import { Segmented } from "./Segmented";
+import { Selecao } from "./Selecao";
 
 type Rep = {
   id: number;
@@ -301,7 +302,7 @@ export function DfdConferir({
         <label className={labelCls} htmlFor="dfd-rep">
           {orgaoIdentNome ? "Unidade (dentro do órgão)" : "Setor / Unidade"} <span style={{ color: "var(--danger)" }}>*</span>
         </label>
-        <select
+        <Selecao
           id="dfd-rep"
           className={inputCls}
           value={repId ?? ""}
@@ -314,7 +315,7 @@ export function DfdConferir({
               {r.codigo} · {r.nome}
             </option>
           ))}
-        </select>
+        </Selecao>
         {autoMatch && (
           <Callout kind="ok" icon={<IconBuilding className="h-4 w-4" />} className="mt-2">
             Unidade identificada automaticamente pela assinatura. Confirme ou ajuste.
@@ -333,7 +334,7 @@ export function DfdConferir({
         <label className={labelCls} htmlFor="dfd-tipo">
           Tipo do DFD <span style={{ color: "var(--danger)" }}>*</span>
         </label>
-        <select
+        <Selecao
           id="dfd-tipo"
           className={inputCls}
           value={tipoSel}
@@ -346,7 +347,7 @@ export function DfdConferir({
               {TIPO_DFD_ROTULO[t]}
             </option>
           ))}
-        </select>
+        </Selecao>
       </div>
 
       {/* Cabeçalho — conteúdo EDITÁVEL (cadeado por campo, como os itens). Só aparece ao editar
@@ -401,7 +402,7 @@ export function DfdConferir({
               Previsão de entrega <Tag campo="previsao" ok={prev != null} />
             </span>
             <div className="flex flex-wrap items-center gap-2">
-              <select
+              <Selecao
                 className={inputCls}
                 style={{ width: "auto", flex: "1 1 140px" }}
                 aria-label="Definição da previsão"
@@ -414,9 +415,9 @@ export function DfdConferir({
                     {d.label}
                   </option>
                 ))}
-              </select>
+              </Selecao>
               {!periodo && (
-                <select
+                <Selecao
                   className={inputCls}
                   style={{ width: "auto", flex: "1 1 120px" }}
                   aria-label="Mês da previsão"
@@ -430,7 +431,7 @@ export function DfdConferir({
                       {m[0] + m.slice(1).toLowerCase()}
                     </option>
                   ))}
-                </select>
+                </Selecao>
               )}
               <input
                 className={inputCls}
@@ -534,7 +535,7 @@ export function DfdConferir({
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
-                      <select
+                      <Selecao
                         aria-label="Responsável que assinou"
                         className={inputCls}
                         style={{ width: "auto", flex: "1 1 220px" }}
@@ -547,7 +548,7 @@ export function DfdConferir({
                             {n}
                           </option>
                         ))}
-                      </select>
+                      </Selecao>
                       {/* DATA da assinatura: obrigatória ao ADICIONAR (nenhuma lida); ao validar, a lida (corrigível). */}
                       <input
                         type="date"

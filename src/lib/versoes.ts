@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.62.0",
+    data: "2026-10-08",
+    titulo: "Listas de seleção no desenho do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Toda lista de seleção (Visão, Linhas, Colunas, Medida, cargo, unidade, papel e as demais) abre agora no desenho do sistema, e não mais na lista do aparelho. A opção escolhida fica em destaque com o check, os grupos aparecem separados e as opções indisponíveis ficam esmaecidas, com o motivo na dica.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Sistema", texto: "Listas com mais de 12 opções ganham a busca no topo. Pelo teclado: setas, Enter e digitar a letra para saltar. No celular, as opções têm o tamanho do toque.", link: "/painel/configuracoes" },
+    ],
+  },
+  {
     versao: "1.61.0",
     data: "2026-10-07",
     titulo: "Vínculos por visão do orçamento",

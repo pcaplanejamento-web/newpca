@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 // Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período/SeletorPessoa).
@@ -13,6 +13,9 @@ import { createPortal } from "react-dom";
 // gatilho não abre (ex.: gravando) sem perder o foco. O conteúdo em função recebe
 // `fechar` e se o painel foi aberto pelo TECLADO (Enter/Espaço no gatilho). Fechar pelo `fechar` ou pelo Esc com o foco
 // DENTRO do painel devolve o foco ao gatilho (o botão focado some junto com o painel — o foco cairia no `body`).
+// `papel="listbox"` = a lista de uma SELEÇÃO (`Selecao`): o painel não tem papel próprio (a lista dentro dele tem) e o
+// gatilho perde o desenho de chip (a caixa vem toda do `triggerClassName`). `gatilho` = atributos a mais do botão
+// (teclado, foco, `role`/`aria-*`, `disabled`) — o clique segue com o Dropdown.
 export function Dropdown({
   trigger,
   children,
@@ -28,6 +31,7 @@ export function Dropdown({
   bloqueado = false,
   aberto,
   onAberto,
+  gatilho,
 }: {
   trigger: ReactNode;
   children: ReactNode | ((close: () => void, abertura: { teclado: boolean }) => ReactNode);
@@ -39,11 +43,12 @@ export function Dropdown({
   ariaLabel?: string;
   id?: string;
   title?: string;
-  papel?: "menu" | "dialog";
+  papel?: "menu" | "dialog" | "listbox";
   bloqueado?: boolean;
   /** CONTROLADO por fora (ex.: abrir a lista do chat a partir de uma bolha): o estado aberto e quem o muda. */
   aberto?: boolean;
   onAberto?: (aberto: boolean) => void;
+  gatilho?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "className" | "type" | "id">;
 }) {
   const [openInterno, setOpenInterno] = useState(false);
   const open = aberto ?? openInterno;
@@ -164,14 +169,19 @@ export function Dropdown({
         title={title}
         aria-label={ariaLabel}
         aria-expanded={open}
-        aria-haspopup={papel === "dialog" ? "dialog" : "true"}
+        aria-haspopup={papel === "menu" ? "true" : papel}
         aria-disabled={bloqueado || undefined}
+        {...gatilho}
         onClick={(e) => {
-          if (bloqueado) return;
+          if (bloqueado || gatilho?.disabled) return;
           setTeclado(e.detail === 0);
           setOpen((o) => !o);
         }}
-        className={`inline-flex max-w-full items-center rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${triggerClassName}`}
+        className={
+          papel === "listbox"
+            ? `min-w-0 text-left ${triggerClassName}`
+            : `inline-flex max-w-full items-center rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${triggerClassName}`
+        }
       >
         {trigger}
       </button>
@@ -180,6 +190,10 @@ export function Dropdown({
           // O diálogo tem nome (o do gatilho); o menu, como sempre.
           papel === "dialog" ? (
             <div role="dialog" aria-label={ariaLabel} {...painel}>
+              {conteudo}
+            </div>
+          ) : papel === "listbox" ? (
+            <div role="none" {...painel}>
               {conteudo}
             </div>
           ) : (

@@ -12,6 +12,7 @@ import { labelCls, selectCls } from "./formStyles";
 import { IconArrowRight, IconBox } from "./icons";
 import { Modal } from "./Modal";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 /** Resultado da ação sobre protocolos na Mesa do PCA (`POST /api/pca/[id]/protocolos`). */
 export type ResultadoAcaoPca = { alterados: number; falhas: { id: number; numero: string; motivo: string }[] };
@@ -119,14 +120,14 @@ export function EnviarAoPca({
                 <label className={labelCls} htmlFor="enviar-pca">
                   PCA de destino
                 </label>
-                <select id="enviar-pca" className={selectCls} value={pcaId ?? ""} onChange={(e) => setPcaId(e.target.value ? Number(e.target.value) : null)}>
+                <Selecao id="enviar-pca" className={selectCls} value={pcaId ?? ""} onChange={(e) => setPcaId(e.target.value ? Number(e.target.value) : null)}>
                   {destinos.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.nome}
                       {d.ano ? ` (${d.ano})` : ""}
                     </option>
                   ))}
-                </select>
+                </Selecao>
               </>
             )}
             <p className={`${pcaFixo ? "" : "mt-1.5 "}text-xs text-muted`}>
