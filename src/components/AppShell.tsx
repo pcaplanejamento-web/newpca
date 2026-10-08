@@ -154,7 +154,7 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
   }
 
   return (
-    <div className="rounded-card border border-border p-3">
+    <div className="rounded-card border border-border p-[var(--pad-card)]">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}

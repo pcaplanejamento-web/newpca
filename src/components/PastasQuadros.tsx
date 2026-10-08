@@ -496,7 +496,7 @@ function PainelPasta({ pasta, aberto, onFechado, onFechar, children }: { pasta: 
             </button>
           </div>
           <div
-            className="rounded-card rounded-tl-none border p-3"
+            className="rounded-card rounded-tl-none border p-[var(--pad-card)]"
             style={{ background: `color-mix(in srgb, ${pasta.cor} 14%, var(--surface-2))`, borderColor: `color-mix(in srgb, ${pasta.cor} 40%, var(--border))` }}
           >
             {children}

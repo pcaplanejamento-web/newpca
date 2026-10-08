@@ -397,7 +397,7 @@ export function ProtocoloView({
       {/* Planilha ÚNICA de DFDs (a mesma da análise, do gravado e da aba DFDs). */}
       {linhas.length === 0 ? (
         (vazio ?? (
-          <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
+          <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">
             {sobrescritos.length > 0
               ? "Os DFDs deste protocolo foram sobrescritos por outro protocolo — veja o rastro abaixo."
               : "Nenhum DFD vinculado a este protocolo."}

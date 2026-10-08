@@ -240,9 +240,9 @@ export function VinculosDaUnidade({
                   </Button>
                 }
               />
-              {aberto === "novo" && <div className="rounded-card border border-border bg-surface-2 px-3 py-3">{editor({ alvoId: unidade.id }, "novo")}</div>}
+              {aberto === "novo" && <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">{editor({ alvoId: unidade.id }, "novo")}</div>}
               {v.ligadas.length === 0 ? (
-                <p className="rounded-card border border-dashed border-border-2 px-3 py-4 text-center text-sm text-muted">
+                <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">
                   Nenhuma unidade do orçamento traz dotação a {unidade.sigla} — use “Adicionar”.
                 </p>
               ) : (
@@ -282,7 +282,7 @@ export function VinculosDaUnidade({
           <section className="space-y-2">
             <TituloSecao titulo="Sem vínculo" contagem={`${num(v.acoesSemVinculo)} ${v.acoesSemVinculo === 1 ? "ação" : "ações"}`} />
             {v.semVinculo.length === 0 ? (
-              <p className="rounded-card border border-dashed border-border-2 px-3 py-4 text-center text-sm text-muted">
+              <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">
                 Todas as ações do orçamento estão vinculadas.
               </p>
             ) : (

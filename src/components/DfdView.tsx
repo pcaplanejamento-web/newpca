@@ -567,7 +567,7 @@ export function DfdView({
           </p>
 
           {dfd.assinaturas.solicitante && (
-            <div className="mb-4 rounded-card border border-border-2 bg-surface-2 p-4">
+            <div className="mb-4 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
               <div className="mb-3 flex items-center gap-2">
                 <IconShield className="h-4 w-4" style={{ color: "var(--ok)" }} />
                 <span className="text-[13px] font-bold text-text">
@@ -629,7 +629,7 @@ export function DfdView({
               return (
                 <div
                   key={`${a.codigo}-${i}`}
-                  className="rounded-card border p-4"
+                  className="rounded-card border p-[var(--pad-card)]"
                   style={{ borderColor: cor, background: `color-mix(in srgb, ${cor} ${adobe ? 4 : 7}%, var(--surface))` }}
                 >
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold">

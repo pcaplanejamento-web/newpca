@@ -235,7 +235,7 @@ export function EventoBanner({
         <Callout kind="warn">Prazo em dia não útil: o prazo da tarefa {avisoPrazo}.</Callout>
       )}
       {e.pca ? (
-        <section className="space-y-2 rounded-card border border-border p-3" aria-label="DFD do PCA">
+        <section className="space-y-2 rounded-card border border-border p-[var(--pad-card)]" aria-label="DFD do PCA">
           <p className="flex items-center gap-1.5 text-[12px] font-semibold text-muted">
             <IconCalendar className="h-3.5 w-3.5" />
             {e.pca.pcaNome}
@@ -268,7 +268,7 @@ export function EventoBanner({
           )}
         </section>
       ) : e.externo ? null : (
-        <section className="space-y-2 rounded-card border border-border p-3" aria-label="Tarefa de origem">
+        <section className="space-y-2 rounded-card border border-border p-[var(--pad-card)]" aria-label="Tarefa de origem">
           <p className="flex items-center gap-1.5 text-[12px] font-semibold text-muted">
             <IconKanban className="h-3.5 w-3.5" />
             Tarefa{quadroNome ? ` · ${quadroNome}` : ""}

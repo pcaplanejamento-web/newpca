@@ -226,7 +226,7 @@ export function ImportarOrcamento({
                 hint={anoValido ? undefined : "Informe um ano entre 2000 e 2100."}
               />
             </div>
-            <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-card border border-border-2 bg-surface-2 px-4 py-3 text-sm">
+            <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)] text-sm">
               {destino && (
                 <div className="flex items-baseline gap-1.5">
                   <dt className="text-muted">Atual</dt>

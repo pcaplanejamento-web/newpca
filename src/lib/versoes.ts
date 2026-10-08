@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.68.0",
+    data: "2026-10-08",
+    titulo: "Respiro interno igual nos 4 lados",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Cartões, quadros e banners passaram a ter o MESMO respiro interno em cima, embaixo e nas laterais, em todas as telas (a régua da densidade do ADM).", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Os indicadores (KPIs) tinham um recuo extra à esquerda; agora o texto fica à mesma distância de todas as bordas.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.67.1",
     data: "2026-10-08",
     titulo: "Botão de ajuda (?) centralizado",

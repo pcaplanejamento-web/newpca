@@ -126,7 +126,7 @@ export function TarefasView({
       </div>
 
       {quadros.length === 0 && !podeCriar ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">Nenhum quadro de tarefas neste grupo.</p>
         </div>

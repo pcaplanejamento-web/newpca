@@ -156,7 +156,7 @@ export function GruposAdmin() {
 
   if (grupos === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={4} />
       </div>
     );

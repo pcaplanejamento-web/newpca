@@ -49,7 +49,7 @@ function OpcaoFonte({
       aria-pressed={ativo}
       disabled={disabled && !ativo}
       onClick={onClick}
-      className={`flex min-h-[44px] flex-col items-start gap-1 rounded-card border-2 p-4 text-left transition-colors disabled:opacity-50 ${
+      className={`flex min-h-[44px] flex-col items-start gap-1 rounded-card border-2 p-[var(--pad-card)] text-left transition-colors disabled:opacity-50 ${
         ativo ? "border-accent bg-accent-soft/60" : "border-border bg-surface hover:border-accent/40"
       }`}
     >

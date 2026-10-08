@@ -285,7 +285,7 @@ export function IntegracoesAdmin({ integracoes }: { integracoes: IntegracoesView
         <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Em breve</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {emBreve.map((c) => (
-            <div key={c.id} className="flex items-start justify-between gap-3 rounded-card border border-dashed border-border-2 bg-surface p-4">
+            <div key={c.id} className="flex items-start justify-between gap-3 rounded-card border border-dashed border-border-2 bg-surface p-[var(--pad-card)]">
               <div className="min-w-0">
                 <div className="font-semibold text-text">{c.nome}</div>
                 <p className="mt-0.5 text-[12.5px] text-muted">{c.descricao}</p>

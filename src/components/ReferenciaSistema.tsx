@@ -63,7 +63,7 @@ function ChipCor({ label, cor }: { label: string; cor: string }) {
 /** Card de bloco DERIVADO (valor vivo do código) com uma nota de origem. */
 function Derivado({ titulo, nota, children }: { titulo: string; nota?: string; children: ReactNode }) {
   return (
-    <div className="rounded-card border border-border bg-surface-2 p-4">
+    <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[12px] font-semibold uppercase tracking-wide text-muted">{titulo}</span>
         <Badge tone="blue">valor vigente</Badge>

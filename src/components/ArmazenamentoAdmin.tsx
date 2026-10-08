@@ -155,7 +155,7 @@ export function ArmazenamentoAdmin() {
         {erro ? (
           <Callout kind="danger">{erro}</Callout>
         ) : (
-          <div className="rounded-card border border-border p-4">
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
             <SkeletonLinhas linhas={6} />
           </div>
         )}

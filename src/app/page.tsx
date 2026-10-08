@@ -79,7 +79,7 @@ export default async function HomePage({
               </div>
             </div>
           )}
-          <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+          <div className="mx-auto flex max-w-lg flex-col items-center justify-center rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
             <div className="grid h-16 w-16 place-items-center rounded-card bg-surface-2 text-faint">
               <IconInbox className="h-8 w-8" />
             </div>

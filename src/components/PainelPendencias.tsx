@@ -298,11 +298,11 @@ function MontarPendencias({ pendencias, escopo, onFechar }: { pendencias: Protoc
     <div className="min-w-0 space-y-2">
       <Segmented<Formato> ariaLabel="Formato" value={formato} onChange={setFormato} options={formatos} />
       {vazio ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">Nada escolhido — marque ao menos um problema.</p>
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nada escolhido — marque ao menos um problema.</p>
       ) : doc ? (
         <PreviaDocumento blocos={doc.blocos} />
       ) : (
-        <pre className="whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-4 font-mono text-[12.5px] leading-relaxed text-text-2">{texto}</pre>
+        <pre className="whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-[var(--pad-card)] font-mono text-[12.5px] leading-relaxed text-text-2">{texto}</pre>
       )}
     </div>
   );
@@ -384,7 +384,7 @@ export function PainelPendencias({
       {montar && <MontarPendencias pendencias={pendencias} escopo={escopo} onFechar={() => setMontar(false)} />}
 
       {total === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">Nenhuma pendência — tudo confere.</p>
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhuma pendência — tudo confere.</p>
       ) : (
         <div className="space-y-2">
           {pendencias.capa && (

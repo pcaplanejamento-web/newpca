@@ -160,7 +160,7 @@ export function ImportarHistorico({
               )}
             </Callout>
           )}
-          <div className="rounded-card border border-border px-4 pt-3">
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
             <DataTable columns={colunas} rows={lido.itens} getKey={(l) => l.ordem} pageSize={20} minWidth={900} density="compact" resumo={(l) => `${num(l.length)} ${l.length === 1 ? "item" : "itens"}`} />
           </div>
         </div>

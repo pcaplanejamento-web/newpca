@@ -1016,7 +1016,7 @@ function EscolherNovoFluxo({
   };
   return (
     <div className={`flex min-h-0 flex-1 flex-col ${coluna ? "gap-[var(--gap-block)]" : ""}`}>
-      <div className={`flex items-center gap-2 px-[var(--pad-card)] py-2.5 max-lg:hidden ${coluna ? `${CARTAO} !py-2.5` : "border-b border-border"}`}>
+      <div className={`flex items-center gap-2 p-[var(--pad-card)] max-lg:hidden ${coluna ? CARTAO : "border-b border-border"}`}>
         <h3 className="min-w-0 flex-1 text-base font-bold text-text">Novo fluxo</h3>
         <Button variant="icon" aria-label="Fechar" onClick={onFechar}>
           <IconClose className="size-5" />
@@ -1071,7 +1071,7 @@ function EscolherNovoFluxo({
           </>
         )}
       </div>
-      <div className={`flex flex-wrap justify-end gap-2 px-[var(--pad-card)] py-2.5 ${coluna ? `${CARTAO} !py-2.5` : "border-t border-border"}`}>
+      <div className={`flex flex-wrap justify-end gap-2 p-[var(--pad-card)] ${coluna ? CARTAO : "border-t border-border"}`}>
         {existente && (
           <Button size="sm" variant="secondary" onClick={() => onAbrir(existente.id)}>
             Abrir o existente

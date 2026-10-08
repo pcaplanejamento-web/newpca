@@ -131,7 +131,7 @@ export function ReparticoesAdmin({
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={6} />
       </div>
     );
@@ -346,7 +346,7 @@ export function ReparticoesAdmin({
         ) : ctx.planilha ? (
           <PlanilhaResponsaveis ctx={ctx} orgaoId={orgaoId} exonerados={exonerados} />
         ) : (
-          <div className="rounded-card border border-border p-4">
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
             <SkeletonLinhas linhas={6} />
           </div>
         )}

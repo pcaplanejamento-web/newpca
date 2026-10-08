@@ -121,7 +121,7 @@ export function BarraSelecao({
       }
       style={fixa ? (faixa ? { left: faixa.left, width: faixa.width } : { visibility: "hidden" }) : undefined}
     >
-      <div className={`rounded-card border border-border bg-surface p-3 ${fixa ? "shadow-soft" : ""}`}>
+      <div className={`rounded-card border border-border bg-surface p-[var(--pad-card)] ${fixa ? "shadow-soft" : ""}`}>
         {/* Registro das seleções — chips removíveis (rola na horizontal, nunca estoura a tela). */}
         <div className="flex items-center gap-2">
           <ul className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-1" aria-label="Itens selecionados">

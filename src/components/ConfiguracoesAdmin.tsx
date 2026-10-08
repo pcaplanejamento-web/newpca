@@ -415,7 +415,7 @@ export function ConfiguracoesAdmin({
         </Button>
       </div>
       {pcas.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">
           Nenhum PCA cadastrado ainda.
         </p>
       ) : (

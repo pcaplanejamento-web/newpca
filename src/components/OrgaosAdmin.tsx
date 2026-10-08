@@ -149,7 +149,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={6} />
       </div>
     );
@@ -354,7 +354,7 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
         ) : ctx.planilha ? (
           <PlanilhaResponsaveis ctx={ctx} exonerados={exonerados} />
         ) : (
-          <div className="rounded-card border border-border p-4">
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
             <SkeletonLinhas linhas={6} />
           </div>
         )}

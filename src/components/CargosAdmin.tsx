@@ -184,7 +184,7 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
         </div>
       </form>
       {lista.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface-2 p-5 text-center text-sm text-muted">
+        <p className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)] text-center text-sm text-muted">
           Nenhum cargo cadastrado — enquanto a lista estiver vazia, o cadastro não pede o cargo.
         </p>
       ) : (

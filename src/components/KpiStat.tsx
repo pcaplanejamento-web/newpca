@@ -52,7 +52,7 @@ export function KpiStat({
         className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-[3px]"
         style={{ background: cor }}
       />
-      <div className="flex items-start justify-between gap-2 pl-2">
+      <div className="flex items-start justify-between gap-2">
         <span className="truncate text-[12.5px] text-muted">{label}</span>
         {delta && (
           <span
@@ -69,13 +69,13 @@ export function KpiStat({
         )}
       </div>
       <div
-        className="mt-1 min-w-0 truncate pl-2 text-[clamp(1.1rem,17cqw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
+        className="mt-1 min-w-0 truncate text-[clamp(1.1rem,17cqw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
         title={typeof value === "string" ? value : undefined}
       >
         {value}
       </div>
       {spark && spark.length > 0 && (
-        <div className="mt-3 flex h-7 items-end gap-[3px] pl-2">
+        <div className="mt-3 flex h-7 items-end gap-[3px]">
           {spark.map((h, i) => (
             <span
               key={i}
@@ -88,7 +88,7 @@ export function KpiStat({
           ))}
         </div>
       )}
-      {hint && <div className="mt-2 truncate pl-2 text-[11.5px] text-faint">{hint}</div>}
+      {hint && <div className="mt-2 truncate text-[11.5px] text-faint">{hint}</div>}
     </Raiz>
   );
 }

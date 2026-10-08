@@ -145,8 +145,8 @@ export function JanelaFlutuante({
         </button>
         <Button variant="ghost" size="sm" aria-label="Fechar" icon={<IconClose className="h-4 w-4" />} onClick={onFechar} />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-[var(--pad-card)] pb-2">{children}</div>
-      {rodape && <div className="border-t border-border px-[var(--pad-card)] py-2.5">{rodape}</div>}
+      <div className="min-h-0 flex-1 overflow-y-auto px-[var(--pad-card)] pb-[var(--pad-card)]">{children}</div>
+      {rodape && <div className="border-t border-border p-[var(--pad-card)]">{rodape}</div>}
     </section>,
     document.body,
   );

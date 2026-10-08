@@ -3514,6 +3514,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`tokenPx`, `src/components/espacamento.ts`): a altura das tabelas com rolagem interna (`DataTable`: o respiro do
   `<main>` + a altura REAL do rodapé — sem rolar a página) e o lugar da `BarraSelecao` fixa. Nada de `space-y-6`/`p-5`
   soltos para separar blocos — o `--gap-col` antigo foi unificado no `--gap-block`.
+  **RESPIRO IGUAL NOS 4 LADOS (v1.68.0):** todo cartão/quadro/banner/seção com `rounded-card` usa `p-[var(--pad-card)]` —
+  NUNCA `px-*`/`py-*` diferentes nem um recuo extra por dentro (o `KpiStat` não tem mais `pl-2`); o cabeçalho, o corpo e o
+  rodapé do `Modal`/`JanelaFlutuante` também. Estado vazio GRANDE (ícone + texto + botão) = `p-10`. Ficam de fora só as
+  linhas/itens compactos (botões de lista, chips, avisos flutuantes, painéis de `Dropdown`), já simétricos ou de altura fixa.
 - **Tema por atributo `data-theme`** (`light`/`dark`) — next-themes `attribute="data-theme"`;
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.

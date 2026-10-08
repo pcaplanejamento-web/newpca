@@ -250,7 +250,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
           )}
         </div>
         {cad.classificacoes.length === 0 ? (
-          <p className="rounded-card border border-dashed border-border-2 p-6 text-center text-sm text-muted">
+          <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">
             Nenhuma classificação cadastrada — os itens ficam "{NAO_CLASSIFICADO}" até a primeira.
           </p>
         ) : (
@@ -556,7 +556,7 @@ export function EditorClassificacao({
             uma classificação só.
           </Callout>
         )}
-        <div className="rounded-card border border-border bg-surface-2 p-3">
+        <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
           <p className="mb-1.5 text-[12px] font-semibold text-muted">Prévia</p>
           <EstadoPonto cor={rascunho.cor} rotulo={rascunho.nome.trim() || "Classificação"} />
           {!previa ? (
