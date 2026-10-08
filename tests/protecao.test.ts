@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ATRIBUTO_COBRIR, cssProtecao, svgMarcaDagua, diffProtecao, lerConfigProtecao, PROTECAO_PADRAO, protecaoDoPapel, protecaoPublica } from "../src/lib/protecao-core.ts";
+import { ATRIBUTO_COBRIR, cssProtecao, OPACIDADE_MARCA, svgMarcaDagua, diffProtecao, lerConfigProtecao, PROTECAO_PADRAO, protecaoDoPapel, protecaoPublica } from "../src/lib/protecao-core.ts";
 import { configProtecaoSchema } from "../src/lib/protecao-validation.ts";
 
 test("lerConfigProtecao: lixo = tudo desligado; ids inválidos/repetidos saem", () => {
@@ -38,7 +38,9 @@ test("cssProtecao: campos seguem selecionáveis; impressão só quando ligada", 
   const f = cssProtecao({ selecao: false, print: false, foco: true, marca: false });
   assert.match(f, new RegExp(ATRIBUTO_COBRIR));
   assert.doesNotMatch(f, /@media print/);
-  assert.equal(cssProtecao({ selecao: false, print: false, foco: false, marca: true }), "");
+  const m = cssProtecao({ selecao: false, print: false, foco: false, marca: true });
+  assert.match(m, /\[data-marca-dagua\]\{background-image:var\(--marca-papel\)/);
+  assert.equal(cssProtecao({ selecao: false, print: false, foco: false, marca: false }), "");
 });
 
 test("svgMarcaDagua: texto escapado dentro de um data-URL", () => {
@@ -47,6 +49,9 @@ test("svgMarcaDagua: texto escapado dentro de um data-URL", () => {
   const svg = decodeURIComponent(u.slice(u.indexOf(",") + 1, -2));
   assert.match(svg, /Ana &lt;b&gt;&quot;x&quot;&lt;\/b&gt; &amp; Cia/);
   assert.doesNotMatch(svg, /<b>/);
+  assert.match(svg, new RegExp(`fill-opacity="${OPACIDADE_MARCA.tela}"`));
+  assert.match(decodeURIComponent(svgMarcaDagua("x", OPACIDADE_MARCA.papel)), new RegExp(`fill-opacity="${OPACIDADE_MARCA.papel}"`));
+  assert.ok(OPACIDADE_MARCA.tela < 0.05, "na tela, abaixo do perceptível");
 });
 
 test("diffProtecao + schema", () => {

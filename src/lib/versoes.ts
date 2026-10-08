@@ -37,8 +37,8 @@ export const VERSOES: readonly Versao[] = [
     titulo: "Proteção de dados corrigida + marca d'água",
     mudancas: [
       { tipo: "correcao", area: "Sistema", texto: "“Ocultar ao sair da janela” cobria a tela toda vez que um campo perdia o foco. Agora só cobre quando a janela inteira perde o foco.", link: "/painel/configuracoes?aba=protecao" },
-      { tipo: "melhoria", area: "Sistema", texto: "A tela é coberta na hora e ANTES dos atalhos de captura: ao pressionar a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac.", link: "/painel/configuracoes?aba=protecao" },
-      { tipo: "novo", area: "Configurações", texto: "Marca d'água com o nome, a matrícula e a hora de quem vê, sobre toda a tela — identifica qualquer captura ou foto.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "melhoria", area: "Sistema", texto: "A proteção é imperceptível no uso: nada aparece na tela. A impressão sai em branco e a captura com a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac sai coberta; no PrtScn, a imagem some da área de transferência.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Configurações", texto: "Marca d'água invisível na tela com o nome, a matrícula e a hora de quem vê — fica na captura e sai legível no papel.", link: "/painel/configuracoes?aba=protecao" },
     ],
   },
   {

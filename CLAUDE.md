@@ -192,13 +192,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`Topo`; "Consulta pública"): o `<style>` global vem no HTML do servidor (1ª pintura e banners por portal —
     `user-select:none`, `-webkit-touch-callout:none`, campos editáveis selecionáveis — `SELETOR_CAMPO`; `@media print` em
     branco) e os ouvintes só dos bloqueios ligados (copy/cut/selectstart/contextmenu/dragstart fora de campo —
-    `[draggable="true"]` passa; Ctrl/Cmd+P). **COBERTURA instantânea:** o ouvinte põe `data-protecao-cobrir` direto no
-    `<html>` (sem React; `html[…]::after` cobre tudo, z-index máximo) — ANTES da captura na tecla Windows (Win+Shift+S,
-    Win+PrtScn) e em Cmd+Shift no Mac; no PrtScn limpa a área de transferência; `beforeprint`; com "ocultar", o `blur`/
-    `focus` SÓ da JANELA (`e.target === window` — na captura, o blur de cada campo também passa pela janela: era o defeito da
-    v1.63.0) e a aba oculta; volta no `focus`/toque. **`MarcaDagua`** (DS) = SVG repetido, discreto, sem capturar o toque.
-    PrtScn sozinho e a foto pelo celular o navegador não alcança — a marca d'água identifica. Os "Copiar" do sistema e as
-    exportações (ação Exportar) seguem.
+    `[draggable="true"]` passa). **IMPERCEPTÍVEL no uso (v1.65.0) — só aparece na captura e no papel:** sem aviso na tela;
+    a impressão sai em branco com o aviso (`@media print`); a COBERTURA é posta direto no `<html>` pelo ouvinte
+    (`data-protecao-cobrir`, sem React; `html[…]::after`, z-index máximo) AO PRESSIONAR a tecla Windows (Win+Shift+S,
+    Win+PrtScn) ou Cmd+Shift no Mac e sai no 1º movimento depois de soltar (máx. 5 s); no PrtScn a imagem copiada é trocada
+    por nada na área de transferência, em silêncio. "Ocultar ao sair da janela" (o único visível): o `blur`/`focus` SÓ da
+    JANELA (`e.target === window` — na captura, o blur de cada campo também passa pela janela: era o defeito da v1.63.0) e
+    a aba oculta. **`MarcaDagua`** (DS) = SVG repetido em `OPACIDADE_MARCA.tela` (abaixo do que o olho percebe; aparece ao
+    realçar a captura) e `.papel` na impressão (`print:` + `print-color-adjust:exact`), sem capturar o toque. A foto pelo
+    celular o navegador não alcança — a marca d'água identifica. Os "Copiar" do sistema e as exportações (ação Exportar) seguem.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o

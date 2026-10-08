@@ -54,10 +54,14 @@ export function cssProtecao(b: Bloqueios): string {
       '@media print{html,body{background:#fff!important}body *{visibility:hidden!important}body::before{content:"Impressão bloqueada pela administração do sistema.";visibility:visible;display:block;padding:48px;font:600 16px sans-serif;color:#000}}',
     );
   }
+  if (b.marca) {
+    // No PAPEL a marca d'água sai legível (a da tela é imperceptível).
+    partes.push("@media print{[data-marca-dagua]{background-image:var(--marca-papel)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}");
+  }
   if (b.print || b.foco) {
     partes.push(
       `html[${ATRIBUTO_COBRIR}] body{visibility:hidden!important}`,
-      `html[${ATRIBUTO_COBRIR}]::after{content:"Conteúdo protegido";position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:var(--surface,#fff);color:var(--muted,#666);font:600 15px var(--font-sans,sans-serif)}`,
+      `html[${ATRIBUTO_COBRIR}]::after{content:"Conteúdo protegido pela administração do sistema";position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:var(--surface,#fff);color:var(--muted,#666);font:600 15px var(--font-sans,sans-serif)}`,
     );
   }
   return partes.join("\n");
@@ -68,11 +72,15 @@ function escaparXml(t: string): string {
   return t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c] as string);
 }
 
-/** A MARCA D'ÁGUA (quem vê + quando) como imagem de fundo repetida — um SVG em data-URL, diagonal e discreto, legível no
- * claro e no escuro (cinza translúcido). O texto vai escapado e cortado a 120 caracteres. */
-export function svgMarcaDagua(texto: string): string {
+/** A opacidade da marca d'água: na TELA, abaixo do que o olho percebe (a captura a guarda — aparece ao realçar o
+ * contraste); no PAPEL, legível. */
+export const OPACIDADE_MARCA = { tela: 0.035, papel: 0.28 } as const;
+
+/** A MARCA D'ÁGUA (quem vê + quando) como imagem de fundo repetida — um SVG em data-URL, diagonal, em cinza translúcido
+ * (vale no claro e no escuro). O texto vai escapado e cortado a 120 caracteres. */
+export function svgMarcaDagua(texto: string, opacidade: number = OPACIDADE_MARCA.tela): string {
   const t = escaparXml(texto.replace(/\s+/g, " ").trim().slice(0, 120));
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="220"><text x="210" y="110" text-anchor="middle" transform="rotate(-24 210 110)" font-family="sans-serif" font-size="14" font-weight="600" fill="#808080" fill-opacity="0.16">${t}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="220"><text x="210" y="110" text-anchor="middle" transform="rotate(-24 210 110)" font-family="sans-serif" font-size="14" font-weight="600" fill="#808080" fill-opacity="${opacidade}">${t}</text></svg>`;
   return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
 }
 
