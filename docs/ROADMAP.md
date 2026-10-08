@@ -1696,6 +1696,8 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 ✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
 
+✅ **v1.68.1 — Margens do conteúdo proporcionais**: token `--pad-canvas-y` (metade da lateral) no topo e na base do `<main>` (painel e tela pública); medidas de altura, barra de seleção fixa e avisos flutuantes acompanham.
+
 ✅ **v1.68.0 — Respiro interno igual nos 4 lados**: todo cartão/quadro/banner (`rounded-card`) usa `p-[var(--pad-card)]` (o `KpiStat` perdeu o `pl-2`; cabeçalho e rodapé do `Modal`/`JanelaFlutuante` e do painel "Novo fluxo" também); os estados vazios grandes, `p-10`.
 
 ✅ **v1.67.1 — (?) centralizado**: o gatilho do `Ajuda` usa `justify-center` (o `inline-flex` do `Dropdown` vencia o `grid` e o ícone encostava à esquerda).

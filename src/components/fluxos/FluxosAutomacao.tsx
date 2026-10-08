@@ -916,7 +916,7 @@ function ListaFluxos({
       {/* DESKTOP: o painel ocupa a ÚLTIMA coluna e ENTRA da direita; os cartões deslizam para o lugar novo. */}
       {lateral && novo && (
         <aside
-          className="animate-aba-direita sticky top-[var(--pad-canvas)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas)*2)] shrink-0 flex-col"
+          className="animate-aba-direita sticky top-[var(--pad-canvas-y)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas-y)*2)] shrink-0 flex-col"
           style={{ width: col.largura }}
         >
           {escolha}

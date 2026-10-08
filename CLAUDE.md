@@ -3501,17 +3501,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `--sit-*` [KPIs do PCA, erro de campo, tons violet/orange do `Badge`, "Limpar" dos filtros], feedback `--ok/--warn/
   --danger/--info`, avatar via `avatarVar` em `src/lib/semantic.ts`); tintas
   saem por CSS `color-mix` com `--tint-target`/`--glow-target`.
-- **ESPAÇAMENTO por tokens — UMA régua para o sistema inteiro** (`globals.css`): **`--pad-canvas`** = a margem do conteúdo,
-  IGUAL no topo, nas laterais e na base (a mesma distância do cabeçalho, do menu e da borda do display — 16px; 12px no
-  celular), usada pelo `<main>` do `AppShell` (`p-[var(--pad-canvas)]`; no celular a base soma a navegação inferior + a
-  área segura), pelas laterais do cabeçalho, pela tela inicial pública (largura total) e pela margem dos modais;
+- **ESPAÇAMENTO por tokens — UMA régua para o sistema inteiro** (`globals.css`): **`--pad-canvas`** = a margem LATERAL do conteúdo
+  (a distância do menu e da borda do display — 16px; 12px no celular) e **`--pad-canvas-y`** (v1.68.1) = a margem do
+  conteúdo ao CABEÇALHO e à BASE do display — a METADE (8px; 6px compacto e no celular; 12px confortável): o primeiro e o
+  último componente já trazem o respiro dos próprios controles/cartões, e assim as 4 distâncias ficam PROPORCIONAIS. O
+  `<main>` do `AppShell` e o da tela pública usam `px-[var(--pad-canvas)] py-[var(--pad-canvas-y)]` (no celular a base soma
+  a navegação inferior + a área segura); as medidas de altura até o fim do display (`reservaAteORodape`, `ALTURA_NO_HTML`,
+  `useAlturaTela` pelo padding real do `<main>`, a `BarraSelecao` fixa, os avisos flutuantes, o painel "Novo fluxo") contam
+  o `--pad-canvas-y`; o `--pad-canvas` segue nas laterais do cabeçalho e na margem dos modais;
   **`--gap-block`** = o espaço ENTRE os componentes (raiz das telas `space-y-[var(--gap-block)]`, grades de cartões/KPIs
   `gap-[var(--gap-block)]`, vão entre os banners da pilha do `Modal`) — 12px; **`--pad-card`** = o respiro interno dos
   cartões/quadros/banners (`ChartCard`, `KpiStat`, `StatCard`, `StatMini`, `LinkCard`, seções dos banners e o corpo/
   cabeçalho/rodapé do `Modal`) — 14px; **`--h-header`** = a altura do cabeçalho (56px) — a faixa da marca na sidebar tem a
   MESMA altura (a borda de baixo continua a do cabeçalho) e os itens do menu alinham com a marca. A **densidade do ADM**
   (Aparência) muda todos juntos (compacta 12/8/12 · confortável 24/16/20). Medidas em JS leem o MESMO token
-  (`tokenPx`, `src/components/espacamento.ts`): a altura das tabelas com rolagem interna (`DataTable`: o respiro do
+  (`tokenPx`, `src/components/espacamento.ts`): a altura das tabelas com rolagem interna (`DataTable`: o respiro de baixo do
   `<main>` + a altura REAL do rodapé — sem rolar a página) e o lugar da `BarraSelecao` fixa. Nada de `space-y-6`/`p-5`
   soltos para separar blocos — o `--gap-col` antigo foi unificado no `--gap-block`.
   **RESPIRO IGUAL NOS 4 LADOS (v1.68.0):** todo cartão/quadro/banner/seção com `rounded-card` usa `p-[var(--pad-card)]` —

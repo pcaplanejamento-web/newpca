@@ -106,11 +106,15 @@
 
   /* Espaçamento / alturas (§5) — densidade padrão. UMA régua para o sistema inteiro (a densidade do ADM muda
      todos juntos):
-     --pad-canvas = margem do conteúdo — topo = laterais = base: a MESMA distância do cabeçalho, do menu e da
-                    borda do display (o cabeçalho usa a mesma nas laterais; 12px no celular);
+     --pad-canvas   = margem LATERAL do conteúdo: a MESMA distância do menu e da borda do display (o cabeçalho usa a
+                      mesma nas laterais; 12px no celular);
+     --pad-canvas-y = margem do conteúdo ao CABEÇALHO e à BASE do display — a METADE da lateral: o primeiro e o último
+                      componente já trazem o respiro dos próprios controles/cartões, e assim as 4 distâncias ficam
+                      PROPORCIONAIS;
      --gap-block  = espaço ENTRE os componentes (blocos da página, grades de cartões, painéis lado a lado);
      --pad-card   = respiro interno de cartões, quadros e banners. */
   --pad-canvas: 16px;
+  --pad-canvas-y: 8px;
   --gap-block: 12px;
   --pad-card: 14px;
   --cell-py: 13px;
@@ -173,6 +177,7 @@
 /* Densidade (§39.7) — attr no <html> */
 [data-density="compact"] {
   --pad-canvas: 12px;
+  --pad-canvas-y: 6px;
   --gap-block: 8px;
   --pad-card: 12px;
   --cell-py: 9px;
@@ -181,6 +186,7 @@
 }
 [data-density="comfortable"] {
   --pad-canvas: 24px;
+  --pad-canvas-y: 12px;
   --gap-block: 16px;
   --pad-card: 20px;
   --cell-py: 16px;
@@ -192,6 +198,7 @@
 @media (width < 40rem) {
   :root {
     --pad-canvas: 12px;
+    --pad-canvas-y: 6px;
   }
 }
 
@@ -776,7 +783,7 @@
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o
    DataTable da Mesa publica --rodape-tabela: no celular esse rodapé gruda sobre a navegação e, no desktop, fica
    rente ao fim do display — o aviso nunca cobre o "Importar" nem a paginação). Entre o rodapé e o que vem abaixo
-   (a navegação/o fim do display, ou a barra de seleção) cabe no máximo a margem do conteúdo (--pad-canvas) ou o
+   (a navegação/o fim do display, ou a barra de seleção) cabe no máximo a margem de baixo do conteúdo (--pad-canvas-y) ou o
    espaço entre blocos (--gap-block) — daí o `max` dos dois. Sem essa tabela o termo vale −100vh e o `max` de fora
    fica na posição de sempre. Cortes = os do Tailwind (sm 40rem · lg 64rem). */
 .avisos-flutuantes {
@@ -786,7 +793,7 @@
   right: 0.75rem;
   bottom: max(
     calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 0.5rem),
-    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
   );
   display: flex;
   flex-direction: column;
@@ -805,7 +812,7 @@
     right: 1rem;
     bottom: max(
       calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 1rem),
-      calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+      calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
     );
   }
 }

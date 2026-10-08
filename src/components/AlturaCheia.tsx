@@ -12,9 +12,9 @@ import { ehDesktop, tokenPx } from "./espacamento";
 /** Folga (px) além do respiro do `<main>` na medida da altura — arredondamento de subpixel sem rolar a página. */
 export const FOLGA = 4;
 
-/** Distância (px) do fim do bloco à borda inferior do display: o respiro do `<main>` (o token `--pad-canvas` — o
+/** Distância (px) do fim do bloco à borda inferior do display: o respiro do `<main>` (o token `--pad-canvas-y` — o
  * MESMO das classes) + a folga + o que fica FIXO abaixo (ex.: a barra de seleção da Mesa). */
-export const reservaAteORodape = (reservaInferior: number) => tokenPx("--pad-canvas", 16) + FOLGA + reservaInferior;
+export const reservaAteORodape = (reservaInferior: number) => tokenPx("--pad-canvas-y", 8) + FOLGA + reservaInferior;
 
 /** Topo do elemento NO DOCUMENTO pela cadeia de `offsetTop` — ignora `transform` (o morph das visões anima escala e
  * deslocamento ao montar: o `getBoundingClientRect` no meio da animação mediria alguns px errado e o bloco "pularia" no
@@ -64,7 +64,7 @@ export function useAlturaAteOFim(ref: RefObject<HTMLElement | null>, ativo: bool
  * `<main>` e a folga; só no desktop). A hidratação assume depois e o trecho sai do DOM. Na navegação pelo app o React não
  * roda scripts — lá o `useLayoutEffect` já mede antes de pintar. Texto FIXO (nenhum dado do usuário).
  */
-const ALTURA_NO_HTML = `(function(s){var t=s&&s.parentElement;if(!t||!matchMedia("(min-width: 64rem)").matches)return;var y=0;for(var n=t;n;n=n.offsetParent)y+=n.offsetTop;if(y<=0)return;var p=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pad-canvas"));t.style.height=Math.max(240,Math.floor(innerHeight-y-(p>=0?p:16)-${FOLGA}))+"px"})(document.currentScript)`;
+const ALTURA_NO_HTML = `(function(s){var t=s&&s.parentElement;if(!t||!matchMedia("(min-width: 64rem)").matches)return;var y=0;for(var n=t;n;n=n.offsetParent)y+=n.offsetTop;if(y<=0)return;var p=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pad-canvas-y"));t.style.height=Math.max(240,Math.floor(innerHeight-y-(p>=0?p:8)-${FOLGA}))+"px"})(document.currentScript)`;
 
 const semAssinatura = () => () => {};
 /** `true` só na renderização do SERVIDOR e na hidratação dela; em seguida (e em toda renderização no cliente), `false`. */

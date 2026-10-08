@@ -565,9 +565,9 @@ export function AppShell({
           </div>
         </header>
 
-        {/* A MESMA margem (--pad-canvas) do cabeçalho, do menu e da borda do display; no celular, a base soma a
-            navegação inferior (4rem + área segura). */}
-        <main className="flex-1 p-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas)]">
+        {/* Laterais = --pad-canvas (a do menu e da borda); topo e base = --pad-canvas-y (as 4 distâncias proporcionais);
+            no celular, a base soma a navegação inferior (4rem + área segura). */}
+        <main className="flex-1 px-[var(--pad-canvas)] py-[var(--pad-canvas-y)] pb-[calc(var(--pad-canvas-y)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas-y)]">
           {children}
         </main>
       </div>

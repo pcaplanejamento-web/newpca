@@ -14,9 +14,9 @@ export type RegistroSelecao = { key: string | number; rotulo: string };
 
 /** Chips renderizados (acima disso, um "+N" — a seleção em si segue completa). */
 const MAX_CHIPS = 80;
-/** Respiro inferior do `<main>` além da navegação (o token `--pad-canvas` — a margem do conteúdo): a barra FIXA
+/** Respiro inferior do `<main>` além da navegação (o token `--pad-canvas-y` — a margem de baixo do conteúdo): a barra FIXA
  * cobre esse respiro, então só o EXCEDENTE da altura dela ocupa lugar no fluxo. */
-const respiroMain = () => tokenPx("--pad-canvas", 16);
+const respiroMain = () => tokenPx("--pad-canvas-y", 8);
 
 /**
  * Barra de SELEÇÃO — a MESMA em toda tabela com seleção (DFDs, Protocolos e Itens da Mesa; DFDs dos
@@ -115,8 +115,8 @@ export function BarraSelecao({
       className={
         fixa
           ? // Acima da navegação inferior no celular (≈4rem + área segura); no desktop, rente ao rodapé com a MESMA
-            // margem do conteúdo (--pad-canvas) até a borda do display.
-            "fixed bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-[var(--pad-canvas)]"
+            // margem de baixo do conteúdo (--pad-canvas-y) até a borda do display.
+            "fixed bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-[var(--pad-canvas-y)]"
           : "mb-3"
       }
       style={fixa ? (faixa ? { left: faixa.left, width: faixa.width } : { visibility: "hidden" }) : undefined}

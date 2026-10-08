@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.68.1",
+    data: "2026-10-08",
+    titulo: "Margens do conteúdo proporcionais",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "O conteúdo ficou mais perto do cabeçalho e da base da tela — metade da margem lateral, que segue igual — e as quatro distâncias ficam proporcionais em todas as telas.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.68.0",
     data: "2026-10-08",
     titulo: "Respiro interno igual nos 4 lados",
