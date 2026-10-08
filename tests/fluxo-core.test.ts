@@ -567,3 +567,23 @@ test("prévia da seleção: só o trecho antes dela e só de leitura", async () 
   assert.equal(subgrafoSoLeitura(subgrafoAte(m.grafo, "err2"), REGISTRO_NOS), false);
   assert.equal(subgrafoSoLeitura({ v: 1, nos: [], conexoes: [] }, REGISTRO_NOS), false);
 });
+
+test("subgrafoAte com incluir: o próprio nó entra no trecho (a prévia do Ler do sistema)", () => {
+  const g = {
+    v: 1 as const,
+    nos: [
+      { id: "i", tipo: "gatilho.inicio", x: 0, y: 0, config: {} },
+      { id: "l", tipo: "sistema.ler", x: 0, y: 0, config: { objeto: "dfds" } },
+      { id: "t", tipo: "saida.tabela", x: 0, y: 0, config: {} },
+    ],
+    conexoes: [
+      { id: "c1", de: "i", para: "l", porta: "saida", entrada: "entrada" },
+      { id: "c2", de: "l", para: "t", porta: "saida", entrada: "entrada" },
+    ],
+  };
+  assert.deepEqual(subgrafoAte(g as never, "l").nos.map((n) => n.id), ["i"]);
+  const sub = subgrafoAte(g as never, "l", true);
+  assert.deepEqual(sub.nos.map((n) => n.id), ["i", "l"]);
+  assert.equal(sub.conexoes.length, 1);
+  assert.equal(subgrafoSoLeitura(sub, REGISTRO_NOS), true);
+});

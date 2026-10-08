@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.70.2",
+    data: "2026-10-08",
+    titulo: "Automação: os DFDs do sistema à vista no painel",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "O componente “Ler do sistema” ganhou a aba “Do sistema” no painel do fluxo: os DFDs (ou protocolos e itens) lidos aparecem já ao abrir, sem executar e sem a extensão, na mesma tabela da Mesa — tocar abre o banner.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.70.1",
     data: "2026-10-08",
     titulo: "Proteção de captura invisível",

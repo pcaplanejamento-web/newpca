@@ -53,7 +53,8 @@ export type HostPainel = {
   recomecar: (no: string) => Promise<void>;
   /** A prévia de cada seleção: roda o trecho só de leitura antes dela e lista os itens (sem executar o fluxo). */
   previas: Record<string, { carregando: boolean; erro?: string }>;
-  carregarPrevia: (grafo: Grafo, no: string) => void;
+  /** `incluir` = o próprio nó também roda (a visão de um nó que lê, ex.: Ler do sistema). */
+  carregarPrevia: (grafo: Grafo, no: string, incluir?: boolean) => void;
   /** Os órgãos cadastrados (o campo "Órgãos (ID na Centi)" escolhe entre os que têm o ID). */
   orgaos: { sigla: string; nome: string; entidadeCenti: string | null }[];
 };
@@ -186,17 +187,7 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
   const host = useHost();
   const origem = anteriores(grafo, no.id)[0];
   const itens = useMemo(() => (host && origem ? itensDoNo(grafo, origem, host) : []), [host, grafo, origem]);
-  // PRÉVIA (padrão de toda seleção): sem itens, roda sozinho o trecho só de leitura antes dela — uma vez por grafo.
-  const previa = host?.previas[no.id];
-  const podePrevia = useMemo(() => !!origem && subgrafoSoLeitura(subgrafoAte(grafo, no.id), REGISTRO_NOS), [grafo, no.id, origem]);
-  const chaveGrafo = JSON.stringify(subgrafoAte(grafo, no.id));
-  const pedida = useRef("");
-  const carregar = host?.carregarPrevia;
-  useEffect(() => {
-    if (!carregar || !podePrevia || itens.length || host?.rodando || pedida.current === chaveGrafo) return;
-    pedida.current = chaveGrafo;
-    carregar(grafo, no.id);
-  }, [carregar, podePrevia, itens.length, host?.rodando, chaveGrafo, grafo, no.id]);
+  const { previa, podePrevia, recarregar } = usePreviaDoNo(grafo, no.id, false, !!origem, itens.length > 0);
   const marcados = useMemo(() => new Set((Array.isArray(no.config.marcados) ? no.config.marcados : []).map(String)), [no.config.marcados]);
   // Os protocolos ganham o "Na Centi" (quantos documentos já foram anexados); as demais colunas são as da Mesa.
   const naCenti = useMemo<Column<Item>[]>(
@@ -248,8 +239,64 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
                 ? "Nenhum item encontrado."
                 : "Execute o fluxo para listar os itens; depois marque e execute de novo."
       }
-      acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={() => host.carregarPrevia(grafo, no.id)} disabled={host.rodando} /> : undefined}
+      acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={recarregar} disabled={host.rodando} /> : undefined}
       resumo={(ls) => `${ls.length} item(ns) · ${marcados.size} marcado(s)`}
+    />
+  );
+}
+
+/**
+ * PRÉVIA (padrão de toda visão que lista itens antes de executar): sem itens, roda sozinho o trecho SÓ DE LEITURA até o
+ * nó — uma vez por grafo. `incluir` = o próprio nó também roda (a visão de um nó que lê); sem ele, só os anteriores.
+ */
+function usePreviaDoNo(grafo: Grafo, noId: string, incluir: boolean, ligado: boolean, temItens: boolean) {
+  const host = useHost();
+  const previa = host?.previas[noId];
+  const sub = useMemo(() => subgrafoAte(grafo, noId, incluir), [grafo, noId, incluir]);
+  const podePrevia = ligado && subgrafoSoLeitura(sub, REGISTRO_NOS);
+  const chaveGrafo = JSON.stringify(sub);
+  const pedida = useRef("");
+  const carregar = host?.carregarPrevia;
+  const rodando = host?.rodando;
+  useEffect(() => {
+    if (!carregar || !podePrevia || temItens || rodando || pedida.current === chaveGrafo) return;
+    pedida.current = chaveGrafo;
+    carregar(grafo, noId, incluir);
+  }, [carregar, podePrevia, temItens, rodando, chaveGrafo, grafo, noId, incluir]);
+  return { previa, podePrevia, recarregar: () => carregar?.(grafo, noId, incluir) };
+}
+
+// ---------------------------------------------------------------- DO SISTEMA
+/** O que o "Ler do sistema" lê (DFDs, protocolos ou itens) — já ao abrir o fluxo, sem executar e sem a extensão. */
+function VistaDoSistema({ no, grafo }: PropsVisao) {
+  const host = useHost();
+  const itens = useMemo(() => (host ? itensDoNo(grafo, no, host) : []), [host, grafo, no]);
+  // A prévia lê TUDO de uma vez (no "Um por vez" ela entregaria só o primeiro, sem quem devolva pela Volta).
+  const grafoLista = useMemo(
+    () => ({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, entrega: "lista" } } : n)) }),
+    [grafo, no.id],
+  );
+  const { previa, podePrevia, recarregar } = usePreviaDoNo(grafoLista, no.id, true, true, itens.length > 0);
+  const genericas = useMemo(() => colunasGenericas(itens), [itens]);
+  if (!host) return null;
+  return (
+    <TabelaMesaFluxo
+      itens={itens}
+      chave={(it) => chaveSelecao(it, undefined)}
+      genericas={genericas}
+      gestao={host.gestao}
+      onAbrir={host.abrir}
+      vazio={
+        previa?.carregando
+          ? "Carregando do sistema…"
+          : previa?.erro
+            ? `Não consegui ler do sistema: ${previa.erro}`
+            : podePrevia
+              ? "Nada encontrado no sistema com essa busca."
+              : "Execute o fluxo para ler do sistema."
+      }
+      acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar do sistema" onClick={recarregar} disabled={host.rodando} /> : undefined}
+      resumo={(ls) => `${ls.length} item(ns) lido(s) do sistema`}
     />
   );
 }
@@ -417,6 +464,7 @@ function VistaTabela({ no }: PropsVisao) {
 
 /** As visões que cada tipo de componente traz ao painel do fluxo. */
 export const VISOES: Record<string, Visao> = {
+  "sistema.ler": { titulo: "Do sistema", Componente: VistaDoSistema },
   "entrada.selecionar": { titulo: "Seleção", Componente: VistaSelecao },
   "saida.dfdsCenti": { titulo: "DFDs", Componente: VistaDfds },
   "leitura.protocolo": { titulo: "Protocolos lidos", Componente: VistaLidos },

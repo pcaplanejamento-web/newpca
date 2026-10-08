@@ -4540,6 +4540,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`colunasItemMesa`** (`ColunasItensMesa.tsx`, a MESMA fábrica da visão Itens da `DfdsView`); outro dado = colunas genéricas.
   Tocar abre a pilha `BannersMesa` (`aberturaDoItem` → `HostPainel.abrir`, que substituiu o `abrirProtocolo`). Usada na
   Seleção, na Tabela salva e na Análise ao vivo. O `GET …/execucao-dfds` traz sigla e protocolo de cada DFD.
+  **v1.70.2 — aba "Do sistema":** `VISOES["sistema.ler"]` = `VistaDoSistema` — o que o "Ler do sistema" lê, já ao abrir
+  (prévia SÓ de leitura com o próprio nó — `subgrafoAte(g, no, incluir)` + `carregarPrevia(…, incluir)`, sempre "Tudo de uma
+  vez"), sem executar e sem a extensão; o hook `usePreviaDoNo` é o mesmo da Seleção.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

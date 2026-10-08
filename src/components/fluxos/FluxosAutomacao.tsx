@@ -553,8 +553,8 @@ export function FluxosAutomacao({
   );
   /** Roda SÓ o trecho de leitura antes de uma seleção e põe o que ele produziu nas saídas — a tabela já lista os itens. */
   const carregarPrevia = useCallback(
-    async (grafo: Grafo, no: string) => {
-      const sub = subgrafoAte(grafo, no);
+    async (grafo: Grafo, no: string, incluir = false) => {
+      const sub = subgrafoAte(grafo, no, incluir);
       if (!subgrafoSoLeitura(sub, REGISTRO_NOS) || rodandoRef.current != null) return;
       setPrevias((m) => ({ ...m, [no]: { carregando: true } }));
       const r = await executarFluxo(sub, REGISTRO_NOS, {
@@ -616,7 +616,7 @@ export function FluxosAutomacao({
       fluxoAtual: aberto,
       recomecar,
       previas,
-      carregarPrevia: (g, no) => void carregarPrevia(g, no),
+      carregarPrevia: (g, no, incluir) => void carregarPrevia(g, no, incluir),
       orgaos: importacao.orgaos as unknown as HostPainel["orgaos"],
     }),
     [importacao.orgaos, previas, carregarPrevia, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirMesa, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],

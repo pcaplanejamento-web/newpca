@@ -280,13 +280,13 @@ export function portasDo(def: DefNo | undefined): { entradas: string[]; saidas: 
 }
 
 /** Os problemas do fluxo (erros impedem executar; atenções não). */
-/** O trecho do grafo ANTES de um nó (os ancestrais pelas conexões, sem o próprio nó) — a prévia de uma seleção. */
-export function subgrafoAte(g: Grafo, noId: string): Grafo {
-  const ids = new Set<string>();
+/** O trecho do grafo ANTES de um nó (os ancestrais pelas conexões; com `incluir`, também o próprio nó) — a prévia. */
+export function subgrafoAte(g: Grafo, noId: string, incluir = false): Grafo {
+  const ids = new Set<string>(incluir ? [noId] : []);
   const fila = g.conexoes.filter((c) => c.para === noId).map((c) => c.de);
   while (fila.length) {
     const id = fila.pop() as string;
-    if (id === noId || ids.has(id)) continue;
+    if (ids.has(id) || id === noId) continue;
     ids.add(id);
     for (const c of g.conexoes) if (c.para === id) fila.push(c.de);
   }
