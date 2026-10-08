@@ -582,12 +582,13 @@ export function AutomacaoAdmin({
               {ext.copias} cópias da extensão — remova a antiga
             </Badge>
           )}
+          {/* O MESMO selo de estado do PCA (Preview/Publicado — `tamanho="linha"`): o ponto que pulsa = situação ao vivo. */}
           {!ext ? (
-            <Badge tone="amber" dot>
+            <Badge tone="amber" dot vivo tamanho="linha" className="shrink-0" title="A extensão da Centi não respondeu: instale-a (botão ao lado), abra a Centi no Chrome e entre — conferido a cada 20 s">
               Sem extensão
             </Badge>
           ) : !atualizada ? (
-            <Badge tone="amber" dot>
+            <Badge tone="amber" dot tamanho="linha" className="shrink-0">
               Extensão v{ext.versao} desatualizada
             </Badge>
           ) : logado?.ok && logado.logado ? (
@@ -595,6 +596,8 @@ export function AutomacaoAdmin({
               tone="emerald"
               dot
               vivo
+              tamanho="linha"
+              className="shrink-0"
               title={`Ao vivo: a extensão está conectada e a Centi está logada${logado.entidade ? ` na entidade ${logado.entidade}` : ""}. Conferido ao abrir, ao voltar à janela e a cada 20 s.`}
             >
               Centi logada{logado.entidade ? ` · ${logado.entidade}` : ""}
@@ -602,7 +605,7 @@ export function AutomacaoAdmin({
           ) : logado?.tela === "login" ? (
             <LoginCenti login={logado.login ?? null} entrando={entrando} onEntrar={() => void entrarAgora()} onOpcoes={() => void pedir("abrirOpcoes", null, 8000)} />
           ) : (
-            <Badge tone="amber" dot>
+            <Badge tone="amber" dot tamanho="linha" className="shrink-0">
               {logado?.erro ?? "Centi sem login"}
             </Badge>
           )}

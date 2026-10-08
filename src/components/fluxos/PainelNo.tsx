@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import {
   AJUDA_INSERIR,
   AJUDA_ORIGEM,
@@ -30,7 +30,7 @@ import { IconLock, IconTrash } from "../icons";
 import { Segmented } from "../Segmented";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
-import { CampoFluxo, CampoOrgaosCenti, CampoReparticoesCenti, RecomecarSubfluxo } from "./paineis";
+import { CampoFluxo, CampoOrgaosCenti, CampoReparticoesCenti, CampoValoresSistema, RecomecarSubfluxo } from "./paineis";
 
 /**
  * O painel do NÓ marcado: o nome, os campos do tipo (formulário DECLARATIVO do registro — novo tipo de nó não pede tela
@@ -322,7 +322,7 @@ export function CampoDoNo({
       {c.tipo === "nomeLista" ? (
         <CampoNomeLista id={id} campo={c} valor={s} onValor={onValor} variaveis={variaveis} config={config} somenteLeitura={somenteLeitura} />
       ) : (
-        <ControleCampo id={id} campo={c} s={s} onValor={onValor} caminhos={caminhos} origem={origem} somenteLeitura={somenteLeitura} />
+        <ControleCampo id={id} campo={c} s={s} onValor={onValor} caminhos={caminhos} origem={origem} config={config} somenteLeitura={somenteLeitura} />
       )}
     </div>
   );
@@ -335,6 +335,7 @@ function ControleCampo({
   onValor,
   caminhos,
   origem,
+  config,
   somenteLeitura,
 }: {
   id: string;
@@ -343,6 +344,7 @@ function ControleCampo({
   onValor: (v: unknown) => void;
   caminhos: string[];
   origem?: string;
+  config?: Record<string, unknown>;
   somenteLeitura?: boolean;
 }) {
   switch (c.tipo) {
@@ -385,7 +387,19 @@ function ControleCampo({
     case "caminho":
       return <CampoCaminho id={id} valor={s} caminhos={caminhos} onValor={onValor} somenteLeitura={somenteLeitura} />;
     default:
-      if (c.aceitaCampo === true) return <CampoComOrigem id={id} valor={s} caminhos={caminhos} origem={origem} onValor={onValor} somenteLeitura={somenteLeitura} />;
+      if (c.aceitaCampo === true)
+        return (
+          <CampoComOrigem
+            id={id}
+            valor={s}
+            caminhos={caminhos}
+            origem={origem}
+            onValor={onValor}
+            somenteLeitura={somenteLeitura}
+            // O valor fixo ESCOLHIDO entre os que existem no sistema (nunca digitado às cegas).
+            fixo={c.valoresSistema ? <CampoValoresSistema rotulo={c.rotulo} valor={campoDoValor(s) ? "" : s} onValor={onValor} config={config ?? {}} somenteLeitura={somenteLeitura} /> : undefined}
+          />
+        );
       if (c.aceitaCampo === "inserir")
         return (
           <div className="space-y-2">
@@ -520,6 +534,7 @@ function CampoComOrigem({
   origem,
   onValor,
   somenteLeitura,
+  fixo,
 }: {
   id: string;
   valor: string;
@@ -527,6 +542,8 @@ function CampoComOrigem({
   origem?: string;
   onValor: (v: unknown) => void;
   somenteLeitura?: boolean;
+  /** O controle do VALOR FIXO (sem ele, o campo de digitar). */
+  fixo?: ReactNode;
 }) {
   const campo = campoDoValor(valor);
   const opcoes = campo && !caminhos.includes(campo) ? [campo, ...caminhos] : caminhos;
@@ -539,7 +556,7 @@ function CampoComOrigem({
         disabled={somenteLeitura}
         onChange={(e) => onValor(e.target.value ? `{{${e.target.value}}}` : "")}
       >
-        <option value="">Valor fixo (digitar)</option>
+        <option value="">{fixo ? "Valor fixo (escolher)" : "Valor fixo (digitar)"}</option>
         {opcoes.map((x) => (
           <option key={x} value={x}>
             Do nó anterior: {x}
@@ -554,7 +571,7 @@ function CampoComOrigem({
           </span>
         </div>
       ) : (
-        <TextField aria-label="Valor fixo" value={valor} placeholder="Digite o valor" disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />
+        (fixo ?? <TextField aria-label="Valor fixo" value={valor} placeholder="Digite o valor" disabled={somenteLeitura} maxLength={1000} onChange={(e) => onValor(e.target.value)} />)
       )}
     </div>
   );

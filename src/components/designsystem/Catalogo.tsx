@@ -3223,7 +3223,7 @@ export function Catalogo() {
       <Secao titulo="Cartão de automação (CartaoFluxo)">
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
           <CartaoFluxo titulo="Conferir DFDs × Centi — um título longo que quebra linha" sobretitulo="A cada 2 h" selo={<Badge tone="emerald">Agendado</Badge>} metricas={[{ rotulo: "Nós", valor: "4" }, { rotulo: "Última", valor: "Concluída", cor: "var(--ok)" }, { rotulo: "Erros", valor: "0" }]} onClick={() => undefined} />
-          <CartaoFluxo titulo="Em branco" sobretitulo="Do zero" marcado metricas={[{ rotulo: "Nós", valor: "1" }, { rotulo: "Frequência", valor: "Manual" }, { rotulo: "Usa", valor: "—" }]} onClick={() => undefined} />
+          <CartaoFluxo titulo="Em branco" sobretitulo="Do zero" marcado ajuda={{ funciona: "Começa vazio: monte o diagrama.", executa: "Manualmente ou pela frequência.", resultado: "O que os componentes entregarem." }} metricas={[{ rotulo: "Nós", valor: "1" }, { rotulo: "Frequência", valor: "Manual" }, { rotulo: "Usa", valor: "—" }]} onClick={() => undefined} />
         </div>
       </Secao>
       <Secao titulo="Ajuda de uma automação (AjudaDoFluxo · ConfigFluxo)">

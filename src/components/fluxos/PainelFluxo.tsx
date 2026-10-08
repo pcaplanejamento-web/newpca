@@ -14,7 +14,7 @@ import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { CampoDoNo } from "./PainelNo";
-import { estadoDoItem, HostPainelCtx, rotuloItem, VISOES } from "./paineis";
+import { estadoDoItem, HostPainelCtx, rotuloItem, useExecutarSelecionados, VISOES } from "./paineis";
 
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
@@ -110,7 +110,7 @@ export function PainelFluxo({
                     <AjudaNo def={def} />
                   </legend>
                   {campos.map((c) => (
-                    <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} somenteLeitura={rodando} />
+                    <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} config={n.config} somenteLeitura={rodando} />
                   ))}
                 </fieldset>
               ))}
@@ -160,7 +160,7 @@ export function PainelFluxo({
           {Visao && noAberto ? (
             <Visao no={noAberto} grafo={grafo} onGrafo={onGrafo} />
           ) : (
-            <AnaliseAoVivo etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} />
+            <AnaliseAoVivo grafo={grafo} etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} />
           )}
         </div>
       </section>
@@ -171,6 +171,7 @@ export function PainelFluxo({
 /** A ANÁLISE: o andamento e cada item processado AO VIVO (o componente que processa itens um a um) e, ao terminar, os
  * apontamentos — números + tabelas exportáveis. */
 function AnaliseAoVivo({
+  grafo,
   etapas,
   passos,
   resultado,
@@ -178,6 +179,7 @@ function AnaliseAoVivo({
   atual,
   ultima,
 }: {
+  grafo: Grafo;
   etapas: NoFluxo[];
   passos: Record<string, PassoExec>;
   resultado: ResultadoExec | null;
@@ -206,6 +208,8 @@ function AnaliseAoVivo({
         : [],
     [fonte, itensFonte],
   );
+  // Marcar itens do resultado e rodar o fluxo de novo só com eles (quando o fluxo os recebe).
+  const exec = useExecutarSelecionados(grafo, rodando ? [] : itensFonte, (it) => itensFonte.indexOf(it));
   // Quantos itens entram no componente (o que os anteriores entregaram) — o andamento "n de N".
   const total = fonte ? Math.max(itensFonte.length, ...etapas.filter((n) => n.x < fonte.x).map((n) => passos[n.id]?.itens ?? 0)) : 0;
   const conta = (tons: Tone[]) => processados.filter((p) => tons.includes(p.estado.tom)).length;
@@ -290,6 +294,9 @@ function AnaliseAoVivo({
               extras={extrasVivo}
               gestao={host.gestao}
               onAbrir={host.abrir}
+              selected={exec?.selected}
+              onSelected={exec?.onSelected}
+              acoesRodape={exec?.acao}
               scrollInterno={false}
               exportar={{ nome: "Itens processados" }}
               linhasSalvas="automacao:itens-processados"

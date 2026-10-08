@@ -192,3 +192,12 @@ export function recorteTabela(linhas: Item[], colunas: ColunaEscolhida[], de?: n
   const fatia = linhas.slice(ini, Math.max(ini, fim));
   return colunas.length ? escolherColunas(fatia, colunas, false) : fatia;
 }
+
+/**
+ * Os MARCADOS de uma tabela do painel (as linhas que passam pela automação): a lista de chaves gravada no nó. Nenhuma
+ * marcada = todas seguem (o padrão — o nó entrega tudo o que leu).
+ */
+export function filtrarMarcados(itens: Item[], marcados: unknown, chave: (it: Item, i: number) => string): Item[] {
+  const m = new Set((Array.isArray(marcados) ? marcados : []).map((x) => String(x)));
+  return m.size ? itens.filter((it, i) => m.has(chave(it, i))) : itens;
+}

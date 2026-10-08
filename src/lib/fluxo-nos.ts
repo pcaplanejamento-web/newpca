@@ -38,9 +38,9 @@ import {
   TIPO_LACO,
 } from "./fluxo-core.ts";
 import { lerIdsCenti, MAX_IDS_CENTI, TIPO_DOCUMENTO_DFD } from "./automacao-centi-core.ts";
-import { BUSCAS, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, valoresProcurados } from "./fluxo-ler-sistema.ts";
+import { BUSCAS, buscaDoNo, buscaEfetiva, type FontesSistema, lerDoSistema, marcarExecutado, type ObjetoLeitura, restringirPelaEntrada, valoresProcurados } from "./fluxo-ler-sistema.ts";
 import { noSistemaTela } from "./automacao-tela-protocolo.ts";
-import { aplicarRegra, escolherColunas, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
+import { aplicarRegra, escolherColunas, filtrarMarcados, lerColunas, lerRegras, MAX_LINHAS_TABELA, operarVariavel, procurarNaTabela, recorteTabela } from "./fluxo-dados.ts";
 import { ENTIDADES_COLUNA, type EntidadeColuna, ROTULO_ENTIDADE_COLUNA, valorParaColuna } from "./mesa-colunas-core.ts";
 
 export const CATEGORIAS: { valor: CategoriaNo; rotulo: string; cor: string }[] = [
@@ -194,6 +194,9 @@ const NOS: DefNo[] = [
       const t = r.tabela as { linhas?: unknown } | undefined;
       if (!r.ok || !t) throw new Error(r.error || `Tabela “${nome}” não encontrada.`);
       const linhas = (Array.isArray(t.linhas) ? t.linhas : []).map(obj);
+      // As linhas MARCADAS na aba "Tabela" (a posição na tabela salva) valem mais que o "Da linha / Até a linha".
+      const marcadas = filtrarMarcados(linhas, c.marcados, (_it, i) => String(i));
+      if (marcadas !== linhas) return { saida: recorteTabela(marcadas, lerColunas(str(c.colunas))) };
       return { saida: recorteTabela(linhas, lerColunas(str(c.colunas)), numeroDe(c.de) ?? undefined, numeroDe(c.ate) ?? undefined) };
     },
   },
@@ -455,17 +458,20 @@ const NOS: DefNo[] = [
           { valor: "itens", rotulo: "Itens (produtos)" },
         ],
       },
-      { chave: "buscaProtocolos", rotulo: "Quais", ajuda: "Quais protocolos trazer: todos ou só os que casam com o valor procurado (pelo nº ou pelo Id).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.protocolos, quando: { campo: "objeto", valores: ["protocolos"] } },
-      { chave: "buscaDfds", rotulo: "Quais", ajuda: "Quais DFDs trazer: todos ou só os que casam com o valor procurado (pelo planejamento, pelo nº do DFD ou pelo protocolo).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.dfds, quando: { campo: "objeto", valores: ["dfds"] } },
-      { chave: "buscaItens", rotulo: "Quais", ajuda: "Quais itens trazer: todos ou só os que casam com o valor procurado (planejamento, nº do DFD, protocolo ou produto).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.itens, quando: { campo: "objeto", valores: ["itens"] } },
+      { chave: "buscaProtocolos", rotulo: "Quais", entrada: true, ajuda: "Quais protocolos trazer: todos ou só os que casam com o valor procurado (pelo nº ou pelo Id).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.protocolos, quando: { campo: "objeto", valores: ["protocolos"] } },
+      { chave: "buscaDfds", rotulo: "Quais", entrada: true, ajuda: "Quais DFDs trazer: todos ou só os que casam com o valor procurado (pelo planejamento, pelo nº do DFD ou pelo protocolo).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.dfds, quando: { campo: "objeto", valores: ["dfds"] } },
+      { chave: "buscaItens", rotulo: "Quais", entrada: true, ajuda: "Quais itens trazer: todos ou só os que casam com o valor procurado (planejamento, nº do DFD, protocolo ou produto).", tipo: "selecao", padrao: "todos", opcoes: BUSCAS.itens, quando: { campo: "objeto", valores: ["itens"] } },
       {
         chave: "valor",
         rotulo: "Valor procurado",
         tipo: "texto",
         entrada: true,
         aceitaCampo: true,
+        valoresSistema: true,
+        // Com "Quais" em Todos, o valor não é usado — o campo some.
+        visivel: (c) => buscaDoNo(c).busca !== "todos",
         ajuda:
-          "Do nó anterior: o campo de cada item que chega (ex.: o planejamento). Rodando sozinho — sem esse campo nos itens —, lê TODOS e a seleção mostra tudo. Valor fixo: vários separados por ;",
+          "Do nó anterior: o campo de cada item que chega (ex.: o planejamento). Rodando sozinho — sem esse campo nos itens —, lê TODOS e a seleção mostra tudo. Valor fixo: escolha um ou mais na lista do que existe no sistema.",
       },
       {
         chave: "entrega",
@@ -483,12 +489,15 @@ const NOS: DefNo[] = [
     iterador: true,
     executar: async (e, c, ctx, est): Promise<Portas> => {
       if (e.entrada) {
-        const objeto = (str(c.objeto, "dfds") as ObjetoLeitura) in BUSCAS ? (str(c.objeto, "dfds") as ObjetoLeitura) : "dfds";
-        const pedida = str(objeto === "protocolos" ? c.buscaProtocolos : objeto === "dfds" ? c.buscaDfds : c.buscaItens, "todos");
+        const { objeto, busca: pedida } = buscaDoNo(c);
         const valores = valoresProcurados(str(c.valor), e.entrada);
         const busca = buscaEfetiva(pedida, str(c.valor), valores);
         if (!busca) throw new Error("Informe o valor procurado (ou {{campo}} do item que chega).");
-        const lidos = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
+        // Itens de FORA (a Mesa, "Executar com os selecionados") sem valor procurado: só eles seguem. As linhas MARCADAS na
+        // aba "Do sistema" (nenhuma = todas) decidem o que passa — menos com itens de fora: a seleção de lá vale.
+        const lido = lerDoSistema(await fontesDoSistema(ctx, objeto), objeto, busca, valores);
+        const deFora = !str(c.valor) && Array.isArray(ctx.host.__entrada) ? restringirPelaEntrada(lido, ctx.host.__entrada, objeto) : lido;
+        const lidos = ctx.host.__daMesa ? deFora : filtrarMarcados(deFora, c.marcados, (it) => chaveSelecao(it, "id"));
         if (str(c.entrega, "lista") !== "umPorVez") return { saida: lidos, fim: marcarExecutado([], lidos.length) };
         est.fila = [...lidos];
         est.total = lidos.length;

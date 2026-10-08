@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.71.0",
+    data: "2026-10-08",
+    titulo: "Automação: seleção nas tabelas e cartões mais simples",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Toda tabela do painel do fluxo tem a coluna de seleção: nas que alimentam a automação (Seleção, Do sistema, Tabela salva), as marcadas são as que passam (nenhuma marcada = todas); nas de resultado, “Executar com os selecionados” roda o fluxo só com elas.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "No “Ler do sistema”, o valor procurado é escolhido numa lista com o que existe no sistema (planejamentos, DFDs, protocolos ou produtos) e só aparece quando a busca não é “Todos”.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O (?) fica no próprio cartão da automação: um toque mostra o que ela faz. O painel lateral “Novo fluxo” vai até o fim da tela, no padrão do sistema, e não mostra as automações que você já adicionou.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Arrastar um modelo do painel até a lista funciona sempre, também com a lista vazia; “Atualizar pelo modelo” fica no próprio fluxo; o selo “Sem extensão” segue o mesmo desenho do Preview do PCA.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.70.2",
     data: "2026-10-08",
     titulo: "Automação: os DFDs do sistema à vista no painel",

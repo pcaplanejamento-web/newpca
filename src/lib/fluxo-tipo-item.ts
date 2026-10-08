@@ -2,6 +2,7 @@
  * O TIPO dos itens que passam por uma automação — para mostrar a MESMA tabela da Mesa (protocolos · DFDs · itens) e abrir o
  * MESMO banner ao tocar na linha. Puro (testado em `tests/fluxo-tipo-item.test.ts`).
  */
+import type { Grafo } from "./fluxo-core.ts";
 import { tipoCurtoDfd } from "./parse-dfd-comum.ts";
 
 type Item = Record<string, unknown>;
@@ -60,4 +61,30 @@ export function dadosDfdDoItem(it: Item) {
     ...(execucao ? { execucao } : {}),
     ...(conferencia ? { conferencia: { status: conferencia, motivo: txt(it.conferenciaCentiMotivo) || null } } : {}),
   };
+}
+
+const TIPO_LIDO: Record<string, TipoItemMesa> = { protocolos: "protocolo", dfds: "dfd", itens: "item" };
+
+/**
+ * O fluxo RECEBE estes itens de fora ("Executar com os selecionados")? Olha o que o Início alimenta: o "Ler do sistema"
+ * sem valor procurado aceita itens do MESMO tipo que lê (só eles seguem); com `{{campo}}`, qualquer item; com valor fixo,
+ * nenhum. Componentes da Centi ignoram a entrada. Os demais processam os itens que chegam.
+ */
+export function aceitaItensDeFora(g: Grafo, itens: readonly Item[], categoria: (tipo: string) => string | undefined): boolean {
+  if (!itens.length) return false;
+  const inicio = g.nos.find((n) => n.tipo === "gatilho.inicio");
+  if (!inicio) return false;
+  const tipo = tipoDosItens(itens);
+  return g.conexoes
+    .filter((c) => c.de === inicio.id)
+    .map((c) => g.nos.find((n) => n.id === c.para))
+    .some((n) => {
+      if (!n || n.desativado) return false;
+      if (n.tipo === "sistema.ler") {
+        const valor = txt(n.config.valor);
+        if (!valor) return tipo === TIPO_LIDO[txt(n.config.objeto) || "dfds"];
+        return /\{\{/.test(valor);
+      }
+      return categoria(n.tipo) !== "centi";
+    });
 }

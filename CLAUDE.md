@@ -4543,6 +4543,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **v1.70.2 — aba "Do sistema":** `VISOES["sistema.ler"]` = `VistaDoSistema` — o que o "Ler do sistema" lê, já ao abrir
   (prévia SÓ de leitura com o próprio nó — `subgrafoAte(g, no, incluir)` + `carregarPrevia(…, incluir)`, sempre "Tudo de uma
   vez"), sem executar e sem a extensão; o hook `usePreviaDoNo` é o mesmo da Seleção.
+- **SELEÇÃO EM TODA TABELA DO FLUXO + CARTÕES (v1.71.0, sem migração):** tabelas que ALIMENTAM a automação (Seleção,
+  "Do sistema" do `sistema.ler`, "Ler tabela salva") gravam as linhas MARCADAS no próprio nó (`config.marcados`,
+  `useMarcadosDoNo` em `paineis.tsx`; nenhuma marcada = todas passam — `filtrarMarcados`, `fluxo-dados.ts`; vindo da Mesa —
+  `__daMesa` — a seleção de lá vale); tabelas de RESULTADO (Análise ao vivo, Salvar em tabela, Protocolos lidos) ganham
+  **"Executar com N selecionado(s)"** (`useExecutarSelecionados` → `HostPainel.executarCom(g, itens)` = `executar(f, g,
+  false, itens)`), só quando o fluxo aceita aqueles itens (`aceitaItensDeFora`, `fluxo-tipo-item.ts`: o Início alimenta um
+  `sistema.ler` sem valor do MESMO tipo, ou com `{{campo}}`, ou um nó que não é da Centi); o `sistema.ler` sem valor
+  procurado restringe a leitura aos itens de fora do mesmo tipo (`restringirPelaEntrada`). O **Valor procurado** do Ler do
+  sistema = SELEÇÃO dos valores que existem (`CampoNo.valoresSistema` → `CampoValoresSistema`, `opcoesDaBusca` — planejamento,
+  nº do DFD, protocolo/Id, produto) e só aparece com "Quais" ≠ Todos (`CampoNo.visivel`, conferido por `campoVisivel`);
+  "Quais" virou dado de entrada do painel. **Cartões:** o (?) da automação no canto do `CartaoFluxo` (`ajuda` →
+  `AjudaDoFluxo`; `ajudaDoFluxo(f)` = a do fluxo ou a do modelo de mesmo nome); a grade da lista existe SEMPRE (o vazio é um
+  filho `col-span-full`) — soltar um modelo arrastado funciona com a lista vazia; o painel "Novo fluxo" (`PainelLateral`)
+  tem a altura até o fim do display (`useAlturaTela`), um cartão só (cabeçalho, Nome, Modelos, Públicas, rodapé) e NÃO lista
+  o modelo/pública cujo nome já está na lista; "Atualizar pelo modelo" mora no editor (ícone, com confirmação; o editor
+  remonta — `versaoEditor`). Selo "Sem extensão" = o do Preview do PCA (`Badge tone="amber" dot vivo tamanho="linha"`).
+  Testes: `tests/fluxo-selecao.test.ts`.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
