@@ -9,16 +9,16 @@ import {
   conflitoDoVinculo,
   excluirVinculo,
   getPessoa,
+  alvoParaGravar,
   getVinculo,
   MSG_CARGO_FORA,
-  motivoAlvoInvalido,
 } from "@/lib/responsaveis";
 import { motivoNaoVincular, motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
 
 export const dynamic = "force-dynamic";
 
 /** Edita o vínculo (tipo, cargo do temporário, nomeação, período, a pessoa e ONDE RESPONDE — o alvo novo tem de valer
- * pela regra do órgão). O cargo fora da lista só fica quando já era o do vínculo (dado antigo). */
+ * pela regra do órgão — o pedido vai ao lugar que VALE, `aviso` quando não é o pedido). O cargo fora da lista só fica quando já era o do vínculo (dado antigo). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -29,13 +29,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const antes = await getVinculo(id);
   if (!antes) return erro("Vínculo não encontrado.", 404);
   const { orgaoId: oNovo, reparticaoId: uNovo, ...dados } = p.data;
-  const alvo =
+  const pedido =
     oNovo === undefined && uNovo === undefined ? { orgaoId: antes.orgaoId, reparticaoId: antes.reparticaoId } : { orgaoId: oNovo ?? null, reparticaoId: uNovo ?? null };
+  // SEMPRE no lugar que vale pela regra do órgão — também sem troca (o vínculo antigo no lugar errado é corrigido aqui).
+  const lugar = await alvoParaGravar(pedido);
+  if ("erro" in lugar) return erro(lugar.erro, 422);
+  const alvo = lugar.alvo;
   const mudouAlvo = alvo.orgaoId !== antes.orgaoId || alvo.reparticaoId !== antes.reparticaoId;
-  if (mudouAlvo) {
-    const invalidoAlvo = await motivoAlvoInvalido(alvo);
-    if (invalidoAlvo) return erro(invalidoAlvo, 422);
-  }
   const n = { ...dados, ...normalizarVinculo(dados) };
   const invalido = motivoVinculoInvalido(n);
   if (invalido) return erro(invalido, 422);
@@ -58,7 +58,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     antes,
     depois: { ...d, ...alvo },
   });
-  return ok();
+  return ok({ aviso: lugar.aviso });
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {

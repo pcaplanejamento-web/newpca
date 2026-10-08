@@ -42,6 +42,16 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.72.0",
+    data: "2026-10-08",
+    titulo: "Responsáveis sempre no lugar que vale",
+    mudancas: [
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "O responsável é gravado sempre onde a assinatura dos DFDs é conferida: no órgão com assinatura única e em cada unidade quando é por unidade. Os vínculos que estavam no lugar errado (ex.: na unidade própria de um órgão com assinatura única) foram levados ao órgão — a assinatura volta a conferir.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "Ligar ou desligar a assinatura única, o “Também unidade”, promover, rebaixar ou trocar a unidade de órgão leva os responsáveis junto, automaticamente (com confirmação quando há escolha).", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "“Onde responde” separado em Órgãos e Unidades (agrupadas por órgão), só com os lugares que valem pela configuração; o (?) diz por que os demais não aparecem.", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
     versao: "1.71.1",
     data: "2026-10-08",
     titulo: "Tabelas: marcação fixa e selos no raio do sistema",

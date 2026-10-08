@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { numeroInteressadoEmUso, orgaoTemVinculo } from "@/lib/orgaos";
 import { orgaoSchema } from "@/lib/rbac-validation";
+import { comandosDoPlano, planejarRealinhamento, resumoRealinhamento } from "@/lib/responsaveis";
 
 export const dynamic = "force-dynamic";
 
@@ -19,21 +20,50 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const numeroInteressado = corpo.data.numeroInteressado?.trim() || null;
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado, { orgaoId: id })))
     return erro("Este Nº do interessado já está em uso por outro órgão ou unidade.", 409);
-  await getDb()
-    .update(orgaos)
-    .set({
-      sigla: corpo.data.sigla,
-      nome: corpo.data.nome,
-      orgaoEntidade: corpo.data.orgaoEntidade ?? null,
-      numeroInteressado,
-      ...(corpo.data.entidadeCenti === undefined ? {} : { entidadeCenti: corpo.data.entidadeCenti?.trim() || null }),
-      assinaturaUnica: corpo.data.assinaturaUnica,
-      oculto: corpo.data.oculto,
-      atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
-    })
-    .where(eq(orgaos.id, id));
-  await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "orgao", entidadeId: id, resumo: `Órgão "${corpo.data.nome}" editado`, depois: { nome: corpo.data.nome, sigla: corpo.data.sigla, entidadeCenti: corpo.data.entidadeCenti ?? undefined, assinaturaUnica: corpo.data.assinaturaUnica, oculto: corpo.data.oculto } });
-  return ok();
+  // Os RESPONSÁVEIS acompanham a regra de assinatura no MESMO lote: com a regra nova, cada vínculo vai ao lugar que vale
+  // (ligar a única = as unidades → o órgão; desligar = o órgão → a unidade própria, a única unidade ou as escolhidas).
+  const { plano, config } = await planejarRealinhamento(
+    (c) => ({ ...c, orgaos: c.orgaos.map((o) => (o.id === id ? { ...o, assinaturaUnica: corpo.data.assinaturaUnica, oculto: corpo.data.oculto } : o)) }),
+    corpo.data.destinosVinculos ? { [id]: corpo.data.destinosVinculos } : {},
+  );
+  const ambiguo = plano.ambiguos.find((a) => a.orgaoId === id);
+  if (ambiguo)
+    return Response.json(
+      {
+        ok: false,
+        error: `O órgão tem ${ambiguo.vinculos.length} responsável(is) e ${ambiguo.unidades.length} unidades — escolha para quais unidades eles vão.`,
+        escolherUnidades: config.unidades.filter((u) => ambiguo.unidades.includes(u.id)).map((u) => ({ id: u.id, codigo: u.codigo, nome: u.nome })),
+        vinculos: ambiguo.vinculos.length,
+      },
+      { status: 409 },
+    );
+  const db = getDb();
+  await db.batch([
+    db
+      .update(orgaos)
+      .set({
+        sigla: corpo.data.sigla,
+        nome: corpo.data.nome,
+        orgaoEntidade: corpo.data.orgaoEntidade ?? null,
+        numeroInteressado,
+        ...(corpo.data.entidadeCenti === undefined ? {} : { entidadeCenti: corpo.data.entidadeCenti?.trim() || null }),
+        assinaturaUnica: corpo.data.assinaturaUnica,
+        oculto: corpo.data.oculto,
+        atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
+      })
+      .where(eq(orgaos.id, id)),
+    ...comandosDoPlano(plano),
+  ]);
+  const realinhado = resumoRealinhamento(plano);
+  await registrarAuditoria({
+    usuario: guard.u,
+    acao: "editar",
+    entidade: "orgao",
+    entidadeId: id,
+    resumo: `Órgão "${corpo.data.nome}" editado${realinhado ? ` — responsáveis realinhados: ${realinhado}` : ""}`,
+    depois: { nome: corpo.data.nome, sigla: corpo.data.sigla, entidadeCenti: corpo.data.entidadeCenti ?? undefined, assinaturaUnica: corpo.data.assinaturaUnica, oculto: corpo.data.oculto },
+  });
+  return ok({ realinhado });
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {

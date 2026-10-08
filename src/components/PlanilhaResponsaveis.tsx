@@ -5,8 +5,10 @@ import { resumoEstado } from "@/lib/dfd-tratamento";
 import { hojeISO } from "@/lib/reparticao-responsaveis";
 import {
   alvoDoValor,
+  alvoQueVale,
   alvosParaVincular,
   alvoVale,
+  avisoRedirecionado,
   conferenciaDaPessoa,
   estadoDoVinculo,
   exonerado,
@@ -56,7 +58,7 @@ import {
  * (`ResponsaveisDoAlvo`).
  */
 
-type Resposta = { ok?: boolean; error?: string; id?: number; planilha?: Planilha };
+type Resposta = { ok?: boolean; error?: string; id?: number; aviso?: string; planilha?: Planilha };
 
 export function usePlanilhaResponsaveis() {
   const [planilha, setPlanilha] = useState<Planilha | null>(null);
@@ -153,6 +155,7 @@ export function usePlanilhaResponsaveis() {
       ];
       setOcupado(true);
       let feitos = 0;
+      const avisos = new Set<string>();
       try {
         for (const p of passos) {
           const alvo = alvoDoValor(p.alvo);
@@ -164,17 +167,19 @@ export function usePlanilhaResponsaveis() {
           });
           const j = (await r.json().catch(() => ({}))) as Resposta;
           if (!r.ok || !j.ok) throw new Error(`${feitos ? `${feitos} alteração(ões) gravada(s); ` : ""}${nome(p.alvo)}: ${j.error ?? "não foi possível gravar o vínculo."}`);
+          if (j.aviso) avisos.add(j.aviso);
           feitos++;
         }
-        toast.success(
+        const feito =
           grupo.length === 0
             ? feitos > 1
               ? `${feitos} vínculos criados com a mesma nomeação.`
               : "Vínculo criado."
             : grupo.length > 1 || criados.length || removidos.length
               ? `Nomeação atualizada em ${ficam.length + movidos.length + criados.length} lugar(es)${removidos.length ? ` · ${removidos.length} removido(s)` : ""}.`
-              : "Vínculo atualizado.",
-        );
+              : "Vínculo atualizado.";
+        // O servidor grava no LUGAR QUE VALE pela regra de assinatura do órgão — o aviso diz quando mudou.
+        toast.success([feito, ...avisos].join(" "), avisos.size ? 9000 : undefined);
         return true;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Não foi possível concluir — tente de novo.");
@@ -481,7 +486,7 @@ function ResponsavelDetalhe({
       <Button
         size="sm"
         variant="secondary"
-        disabled={ocupado || alvos.length === 0 || !!semVinculoNovo}
+        disabled={ocupado || alvos.orgaos.length + alvos.unidades.length === 0 || !!semVinculoNovo}
         title={semVinculoNovo ?? undefined}
         icon={<IconPlus className="h-4 w-4" />}
         onClick={() => setEditor({ responsavelId: pessoa.id, alvo: "", dados: dadosVazios(tipo) })}
@@ -636,7 +641,7 @@ function ResponsavelDetalhe({
                 titulo={(v) => ({
                   texto: rotuloAlvo(v, planilha).texto,
                   detalhe: rotuloAlvo(v, planilha).orgao ? "Órgão" : "Unidade",
-                  aviso: alvoVale(v, planilha) ? undefined : `Sem efeito: ${motivoAlvoNaoVale(v)}`,
+                  aviso: alvoVale(v, planilha) ? undefined : textoRevisar(v, planilha),
                 })}
                 vazio={{ padrao: "Não é padrão em nenhuma unidade ou órgão.", temporario: "Sem períodos temporários." }}
                 cargos={planilha.cargos}
@@ -650,6 +655,7 @@ function ResponsavelDetalhe({
                     alvo: valorDoAlvo(v),
                     dados: dadosDoVinculo(v),
                     grupo: grupo.map((g) => ({ id: g.id, alvo: valorDoAlvo(g) })),
+                    ...abrirNoLugarQueVale(grupo, planilha),
                   })
                 }
                 onRemover={(v) => void acoes.removerVinculo(v)}
@@ -662,7 +668,7 @@ function ResponsavelDetalhe({
         abertura={editor}
         pessoas={planilha.pessoas}
         cargos={planilha.cargos}
-        alvos={editor?.id ? comAlvosAtuais(alvos, editor.grupo?.map((g) => g.alvo) ?? [editor.alvo], planilha) : alvos}
+        alvos={alvos}
         pessoaFixa
         ocupado={ocupado}
         onCriarPessoa={acoes.criarPessoa}
@@ -676,14 +682,20 @@ function ResponsavelDetalhe({
 /** `o<id>` | `u<id>` do lugar do vínculo. */
 const valorDoAlvo = (v: { orgaoId: number | null; reparticaoId: number | null }) => (v.orgaoId != null ? `o${v.orgaoId}` : `u${v.reparticaoId}`);
 
-/** Os lugares para escolher ao EDITAR: os que valem + os atuais (mesmo que hoje não valham mais). */
-function comAlvosAtuais(alvos: { valor: string; rotulo: string }[], atuais: string[], planilha: Planilha): { valor: string; rotulo: string }[] {
-  const faltam = atuais.filter((v) => !alvos.some((a) => a.valor === v));
-  const extras = faltam.flatMap((v) => {
-    const alvo = alvoDoValor(v);
-    return alvo ? [{ valor: v, rotulo: rotuloAlvo(alvo, planilha).texto }] : [];
-  });
-  return [...extras, ...alvos];
+/** O vínculo FORA do lugar que vale (sobrou porque cruza com outro período da mesma pessoa no destino — o realinhamento
+ * automático não o move): o que fazer. */
+function textoRevisar(v: { orgaoId: number | null; reparticaoId: number | null }, planilha: Planilha): string {
+  const vale = alvoQueVale(v, planilha);
+  return vale
+    ? `A revisar: pela regra de assinatura este vínculo vale em ${rotuloAlvo(vale, planilha).sigla} — lá já há um período desta pessoa que se cruza com ele. Ajuste as datas e salve (ele vai para lá).`
+    : `A revisar: ${motivoAlvoNaoVale(v)}`;
+}
+
+/** Ao EDITAR, a nomeação abre já no LUGAR QUE VALE (o vínculo antigo fora do lugar é corrigido ao salvar) + o aviso. */
+function abrirNoLugarQueVale(grupo: readonly { orgaoId: number | null; reparticaoId: number | null }[], planilha: Planilha): { grupo?: { id: number; alvo: string }[]; aviso?: string } {
+  const avisos = grupo.map((g) => avisoRedirecionado(g, planilha)).filter((a): a is string => !!a);
+  if (!avisos.length) return {};
+  return { aviso: `${avisos[0].replace(/^Gravado/, "Será gravado")} Salve para corrigir.` };
 }
 
 /**
@@ -718,7 +730,7 @@ export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo
           titulo={(v) => ({
             texto: v.nome,
             detalhe: v.matricula ? `Matrícula ${v.matricula}` : "Sem matrícula",
-            aviso: vale ? undefined : "Sem efeito pela regra de assinatura do órgão.",
+            aviso: vale ? undefined : textoRevisar(v, planilha),
             avatar: { nome: v.nome, foto: pessoaDe(v.responsavelId)?.foto ?? null },
             exonerado: pessoaDe(v.responsavelId)?.exoneradoEm ?? null,
           })}
@@ -734,7 +746,7 @@ export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo
         abertura={editor}
         pessoas={planilha.pessoas}
         cargos={planilha.cargos}
-        alvos={editor?.id ? comAlvosAtuais(alvosParaVincular(planilha), [editor.alvo], planilha) : []}
+        alvos={alvosParaVincular(planilha)}
         alvoFixo={{ rotulo: rotuloAlvo(a, planilha).texto }}
         ocupado={ocupado}
         onCriarPessoa={acoes.criarPessoa}

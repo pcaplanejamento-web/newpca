@@ -759,8 +759,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   unidade** (padrão `=0`, cada unidade tem os seus). A regra é **pura e única** (`alvoEfetivo`,
   `responsaveis-planilha-core.ts`) aplicada nos DOIS pontos que carregam os responsáveis (`carregarResponsaveis` servidor +
   `responsaveisPorReparticao`) → toda a conferência de assinatura (`validarAssinatura`, `DfdConferir`, `POST /api/dfd`)
-  usa os responsáveis certos. Trocar a regra NÃO apaga vínculos: só muda qual alvo vale (os que deixam de valer aparecem
-  "sem efeito" na Conferência).
+  usa os responsáveis certos. **O vínculo MORA no lugar que vale (v1.72.0, migração `0103` — dados, idempotente):**
+  `alvoQueVale` (puro) leva o pedido ao alvo efetivo — a unidade de órgão com assinatura única → o órgão; o órgão por
+  unidade → a unidade própria (dual) ou recusa —, aplicado no SERVIDOR em todo POST/PATCH de vínculo (`alvoParaGravar`,
+  devolve `aviso` quando mudou — `avisoRedirecionado`). Mudar a configuração REALINHA no mesmo lote (`planoRealinhar` →
+  `comandosRealinhar` em `responsaveis-sql.ts`: mover · copiar · apagar o igual; o que conflita fica e vira "A revisar"):
+  `PATCH` do órgão (assinatura única/ocultar — órgão por unidade com várias unidades e sem própria = 409
+  `escolherUnidades`, a tela confirma e manda `destinosVinculos`), `unidade-propria`, promover, rebaixar e a unidade que
+  muda de órgão (`realinharVinculos`). A `0103` corrigiu os gravados (ex.: o responsável na unidade própria do AMMT).
+  **"Onde responde"** (`EditorVinculo`) = DUAS escolhas — **Órgãos** (só os de assinatura única) | **Unidades** (as de
+  órgãos por unidade, AGRUPADAS por órgão — `SeletorMultiplo` com `OpcaoMultipla.grupo`/`detalhe`) —, o (?) lista por que
+  os demais não aparecem (`alvosParaVincular` → `{orgaos, unidades, fora}`).
 - **"Geral" virtual:** `codigo='GERAL'` = **todas as unidades** — **escondida do CRUD de Unidades** (GET filtra;
   PATCH/DELETE recusam), **não editável**, mas continua **concedível por grupo** em `GruposAdmin` (grupos
   autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada. Em **"Geral"**,

@@ -4125,7 +4125,7 @@ export function Catalogo() {
           abertura={vincDemo}
           pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula, cargo: v.cargo, usuarioId: null, foto: null, exoneradoEm: null }))}
           cargos={["Secretária", "Diretor", "Secretário Adjunto"]}
-          alvos={[]}
+          alvos={{ orgaos: [], unidades: [], fora: [] }}
           alvoFixo={{ rotulo: "SMS — Secretaria Municipal de Saúde · PMRV" }}
           ocupado={false}
           onCriarPessoa={async () => 99}

@@ -5,8 +5,10 @@ import {
   agruparPorNomeacao,
   alvoDoValor,
   alvoEfetivo,
+  alvoQueVale,
   alvosParaVincular,
   alvoVale,
+  avisoRedirecionado,
   cargoForaDaLista,
   chaveNomeacao,
   conferenciaDaPessoa,
@@ -22,6 +24,7 @@ import {
   ordenarPorPrioridade,
   type PlanilhaResponsaveis,
   periodoVinculo,
+  planoRealinhar,
   porAlvo,
   responsaveisDosVinculos,
   responsaveisEfetivosDasUnidades,
@@ -128,14 +131,24 @@ describe("alvo efetivo: assinatura única do órgão × por unidade", () => {
     assert.equal(alvoVale({ orgaoId: 2, reparticaoId: null }, p), false);
     assert.equal(alvoVale({ orgaoId: null, reparticaoId: 10 }, p), true);
     assert.equal(alvoVale({ orgaoId: null, reparticaoId: 12 }, p), false);
+    const todos = alvosParaVincular(p);
     assert.deepEqual(
-      alvosParaVincular(p).map((a) => a.valor),
-      ["o1", "u10", "u11"],
+      todos.orgaos.map((a) => a.valor),
+      ["o1"],
     );
     assert.deepEqual(
-      alvosParaVincular(p, 2).map((a) => a.valor),
+      todos.unidades.map((a) => [a.valor, a.grupo]),
+      [
+        ["u10", "OP — Órgão Por Unidade"],
+        ["u11", "OP — Órgão Por Unidade"],
+      ],
+    );
+    assert.equal(todos.fora.length, 2, "diz por que as unidades de OU e o órgão OP não aparecem");
+    assert.deepEqual(
+      alvosParaVincular(p, 2).unidades.map((a) => a.valor),
       ["u10", "u11"],
     );
+    assert.deepEqual(alvosParaVincular(p, 2).orgaos, []);
     assert.deepEqual(alvoDoValor("o7"), { orgaoId: 7, reparticaoId: null });
     assert.deepEqual(alvoDoValor("u9"), { orgaoId: null, reparticaoId: 9 });
     assert.equal(alvoDoValor("x1"), null);
@@ -358,5 +371,99 @@ describe("conferência: o que está mal cadastrado", () => {
     );
     const t = v({ nome: "Ana", responsavelId: 1, reparticaoId: 16, tipo: "temporario", atoTipo: "decreto", atoNumero: "1912/2026", inicio: "2026-01-01", fim: "2026-02-01" });
     assert.equal(agruparPorNomeacao([a, t]).length, 2, "padrão e temporário não se juntam");
+  });
+});
+
+describe("o vínculo mora SEMPRE no lugar que vale (alvoQueVale + planoRealinhar)", () => {
+  // AMMT (3) = órgão dual com assinatura única; DUAL (4) = órgão dual por unidade; SEM (5) = por unidade, 2 unidades.
+  const CONF = {
+    orgaos: [
+      { id: 1, sigla: "OU", nome: "Órgão Único", assinaturaUnica: true, oculto: false },
+      { id: 2, sigla: "OP", nome: "Órgão Por Unidade", assinaturaUnica: false, oculto: false },
+      { id: 3, sigla: "AMMT", nome: "Mobilidade", assinaturaUnica: true, oculto: false },
+      { id: 4, sigla: "DUAL", nome: "Dual por unidade", assinaturaUnica: false, oculto: false },
+      { id: 5, sigla: "SEM", nome: "Sem própria", assinaturaUnica: false, oculto: false },
+    ],
+    unidades: [
+      { id: 10, codigo: "U10", nome: "Unidade 10", orgaoId: 2, oculto: false },
+      { id: 12, codigo: "U12", nome: "Unidade 12", orgaoId: 1, oculto: false },
+      { id: 30, codigo: "AMMT", nome: "Mobilidade", orgaoId: 3, oculto: false, orgaoProprio: true },
+      { id: 40, codigo: "DUAL", nome: "Dual", orgaoId: 4, oculto: false, orgaoProprio: true },
+      { id: 50, codigo: "S1", nome: "S1", orgaoId: 5, oculto: false },
+      { id: 51, codigo: "S2", nome: "S2", orgaoId: 5, oculto: false },
+    ],
+  };
+  const vin = (id: number, over: Partial<VinculoComPessoa>): VinculoComPessoa => ({ ...v({ nome: "X" }), id, responsavelId: id, ordem: id, ...over });
+
+  it("alvoQueVale: unidade de órgão único → o órgão; órgão por unidade → a unidade própria (ou null)", () => {
+    assert.deepEqual(alvoQueVale({ orgaoId: null, reparticaoId: 30 }, CONF), { orgaoId: 3, reparticaoId: null }, "o caso do AMMT");
+    assert.deepEqual(alvoQueVale({ orgaoId: null, reparticaoId: 12 }, CONF), { orgaoId: 1, reparticaoId: null });
+    assert.deepEqual(alvoQueVale({ orgaoId: null, reparticaoId: 10 }, CONF), { orgaoId: null, reparticaoId: 10 });
+    assert.deepEqual(alvoQueVale({ orgaoId: 1, reparticaoId: null }, CONF), { orgaoId: 1, reparticaoId: null });
+    assert.deepEqual(alvoQueVale({ orgaoId: 4, reparticaoId: null }, CONF), { orgaoId: null, reparticaoId: 40 });
+    assert.equal(alvoQueVale({ orgaoId: 5, reparticaoId: null }, CONF), null);
+    assert.equal(alvoQueVale({ orgaoId: null, reparticaoId: 999 }, CONF), null);
+    assert.match(avisoRedirecionado({ orgaoId: null, reparticaoId: 30 }, CONF) ?? "", /órgão AMMT/);
+    assert.equal(avisoRedirecionado({ orgaoId: null, reparticaoId: 10 }, CONF), null);
+  });
+
+  it("o caso do AMMT: os temporários da unidade própria vão ao órgão (e a assinatura passa a conferir)", () => {
+    const welker = vin(1, { nome: "Welker", orgaoId: 3, reparticaoId: null, inicio: "2026-02-27" });
+    const ev1 = vin(2, { nome: "Everaldo", responsavelId: 9, orgaoId: null, reparticaoId: 30, tipo: "temporario", funcao: "Presidente", inicio: "2026-08-20", fim: "2026-09-18" });
+    const ev2 = vin(3, { nome: "Everaldo", responsavelId: 9, orgaoId: null, reparticaoId: 30, tipo: "temporario", funcao: "Presidente", inicio: "2026-09-19", fim: "2026-09-28" });
+    const plano = planoRealinhar(CONF, [welker, ev1, ev2]);
+    assert.deepEqual(plano.passos, [
+      { tipo: "mover", id: 2, para: { orgaoId: 3, reparticaoId: null } },
+      { tipo: "mover", id: 3, para: { orgaoId: 3, reparticaoId: null } },
+    ]);
+    assert.deepEqual(plano.conflitos, []);
+    const depois = [welker, { ...ev1, orgaoId: 3, reparticaoId: null }, { ...ev2, orgaoId: 3, reparticaoId: null }];
+    const r = responsaveisEfetivosDasUnidades([{ id: 30, orgaoId: 3, assinaturaUnica: true }], depois)[30];
+    const ass = { nome: "Everaldo", eCpf: "", usuario: "", local: "", data: "25/09/2026 10:00:00", ip: "", codigo: "", url: "", fonte: "certificado" as const };
+    assert.equal(validarAssinatura([ass], r, { exigeAssinatura: true }).status, "ok");
+    assert.deepEqual(planoRealinhar(CONF, depois).passos, [], "idempotente");
+  });
+
+  it("igual no destino = apagar; período que cruza = conflito (fica); órgão por unidade: própria, única unidade, ambíguo ou escolhidas", () => {
+    const noOrgao = vin(1, { orgaoId: 1, reparticaoId: null, inicio: "2026-01-01" });
+    const igual = vin(2, { responsavelId: 1, orgaoId: null, reparticaoId: 12, inicio: "2026-01-01" });
+    const cruza = vin(3, { responsavelId: 1, orgaoId: null, reparticaoId: 12, inicio: "2026-03-01" });
+    const dual = vin(4, { orgaoId: 4, reparticaoId: null });
+    const sem = vin(5, { orgaoId: 5, reparticaoId: null });
+    const plano = planoRealinhar(CONF, [noOrgao, igual, cruza, dual, sem]);
+    assert.deepEqual(plano.passos, [
+      { tipo: "apagar", id: 2 },
+      { tipo: "mover", id: 4, para: { orgaoId: null, reparticaoId: 40 } },
+    ]);
+    assert.deepEqual(
+      plano.conflitos.map((c) => c.id),
+      [3],
+    );
+    assert.deepEqual(plano.ambiguos, [{ orgaoId: 5, unidades: [50, 51], vinculos: [5] }]);
+    const escolhido = planoRealinhar(CONF, [sem], { 5: [50, 51] });
+    assert.deepEqual(escolhido.passos, [
+      { tipo: "mover", id: 5, para: { orgaoId: null, reparticaoId: 50 } },
+      { tipo: "copiar", id: 5, para: { orgaoId: null, reparticaoId: 51 } },
+    ]);
+    const uma = { ...CONF, unidades: CONF.unidades.filter((u) => u.id !== 51) };
+    assert.deepEqual(planoRealinhar(uma, [sem]).passos, [{ tipo: "mover", id: 5, para: { orgaoId: null, reparticaoId: 50 } }]);
+  });
+
+  it("os iguais repetidos em várias unidades viram UM no órgão", () => {
+    const conf = { ...CONF, unidades: [...CONF.unidades, { id: 13, codigo: "U13", nome: "U13", orgaoId: 1, oculto: false }] };
+    const a = vin(1, { responsavelId: 7, orgaoId: null, reparticaoId: 12 });
+    const b = vin(2, { responsavelId: 7, orgaoId: null, reparticaoId: 13 });
+    assert.deepEqual(planoRealinhar(conf, [a, b]).passos, [
+      { tipo: "mover", id: 1, para: { orgaoId: 1, reparticaoId: null } },
+      { tipo: "apagar", id: 2 },
+    ]);
+  });
+
+  it("Onde responde: o órgão dual de assinatura única aparece só como órgão; o dual por unidade, a unidade própria marcada", () => {
+    const a = alvosParaVincular(CONF);
+    assert.ok(a.orgaos.some((o) => o.valor === "o3"));
+    assert.ok(!a.unidades.some((u) => u.valor === "u30"));
+    assert.equal(a.unidades.find((u) => u.valor === "u40")?.rotulo, "DUAL — Dual (o próprio órgão)");
+    assert.equal(a.orgaos.find((o) => o.valor === "o1")?.detalhe, "Assinatura única · vale para 1 unidade");
   });
 });

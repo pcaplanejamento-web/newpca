@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
-import { conferenciaDoOrgao, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import { conferenciaDoOrgao, planoRealinhar, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { BannerCadastro, type CampoCadastro } from "./BannerCadastro";
@@ -122,9 +122,9 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
     setOcupado(true);
     try {
       const r = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number; realinhado?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir — tente de novo.");
-      toast.success(sucesso);
+      toast.success(j.realinhado ? `${sucesso} Responsáveis realinhados: ${j.realinhado}.` : sucesso);
       await Promise.all([carregar(), ctx.carregar()]);
       return true;
     } catch (e) {
@@ -176,7 +176,36 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
       return ok;
     }
     if (!orgao) return false;
-    return acao(`/api/admin/orgaos/${orgao.id}`, { method: "PATCH", body: JSON.stringify(corpo(orgao, { ...valoresDe(orgao), ...patch })) }, "Órgão atualizado.");
+    const novo = corpo(orgao, { ...valoresDe(orgao), ...patch });
+    // A regra de assinatura mudou: os responsáveis vão ao lugar que vale pela regra nova (o servidor faz no mesmo lote).
+    let destinosVinculos: number[] | undefined;
+    if (novo.assinaturaUnica !== orgao.assinaturaUnica && ctx.planilha) {
+      const p = ctx.planilha;
+      const plano = planoRealinhar(
+        { ...p, orgaos: p.orgaos.map((o) => (o.id === orgao.id ? { ...o, assinaturaUnica: novo.assinaturaUnica } : o)) },
+        p.vinculos,
+      );
+      const ambiguo = plano.ambiguos.find((a) => a.orgaoId === orgao.id);
+      const daqui = (id: number) => {
+        const v = p.vinculos.find((x) => x.id === id);
+        return !!v && (v.orgaoId === orgao.id || p.unidades.some((u) => u.id === v.reparticaoId && u.orgaoId === orgao.id));
+      };
+      const movidos = plano.passos.filter((x) => daqui(x.id)).length;
+      if (ambiguo || movidos) {
+        const ok = await confirmar({
+          titulo: novo.assinaturaUnica ? `Assinatura única em ${orgao.sigla}?` : `Assinatura por unidade em ${orgao.sigla}?`,
+          texto: ambiguo
+            ? `Os ${ambiguo.vinculos.length} responsável(is) do órgão passam a valer em CADA uma das ${ambiguo.unidades.length} unidades (copiados para todas). Depois, ajuste unidade a unidade se precisar.`
+            : novo.assinaturaUnica
+              ? `Os responsáveis das unidades passam para o órgão (${movidos} vínculo(s); os repetidos viram um).`
+              : `Os responsáveis do órgão passam para a unidade dele (${movidos} vínculo(s)).`,
+          confirmar: "Mudar e realinhar",
+        });
+        if (!ok) return false;
+        if (ambiguo) destinosVinculos = ambiguo.unidades;
+      }
+    }
+    return acao(`/api/admin/orgaos/${orgao.id}`, { method: "PATCH", body: JSON.stringify({ ...novo, destinosVinculos }) }, "Órgão atualizado.");
   }
 
   const ocultar = (o: Orgao) =>

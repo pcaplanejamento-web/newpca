@@ -148,6 +148,9 @@ export const orgaoSchema = z.object({
     .nullable(),
   assinaturaUnica: z.boolean().default(false),
   oculto: z.boolean().default(false),
+  /** Ao DESLIGAR a assinatura única de um órgão com várias unidades e sem unidade própria: as unidades que recebem os
+   * responsáveis do órgão (sem a escolha, 409 com a lista). */
+  destinosVinculos: z.array(z.number().int().positive()).max(500).optional(),
 });
 
 // Rebaixar um órgão a unidade de OUTRO órgão (destino obrigatório).
