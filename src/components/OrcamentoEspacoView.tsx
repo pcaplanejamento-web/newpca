@@ -78,7 +78,7 @@ export function OrcamentoEspacoView({
           >
             <IconChevronLeft className="h-4 w-4" />
           </Link>
-          <h1 className="min-w-0 truncate text-lg font-bold leading-[44px] text-text lg:leading-[var(--h-control-sm)]" title={o.nome}>
+          <h1 className="min-w-0 truncate text-[26px] font-bold leading-[44px] tracking-tight lg:text-2xl text-text lg:leading-[var(--h-control-sm)]" title={o.nome}>
             {o.nome}
           </h1>
           <Badge tone="blue" tamanho="linha" className="shrink-0 tabular-nums">

@@ -2316,7 +2316,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO: UMA linha só (v1.67.0, `AbasEspaco cabecalho`) — à esquerda voltar · nome ·
   ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview** — `vivo`, em preparação: só o ponto
   âmbar que RESPIRA e solta duas ondas — `.ponto-selo`, sem ícone; Publicado em verde com `IconCheck`, parado) — v1.69.1:
-  seta, nome, ano e status com a MESMA altura (`Badge tamanho="linha"` + o `h1` `text-lg` na mesma linha-caixa =
+  seta, nome, ano e status com a MESMA altura (`Badge tamanho="linha"` + o `h1` — v1.69.2: 24px no desktop e 26px no toque, preenchendo a linha — na mesma linha-caixa =
   `--h-control-sm` no desktop, 44px no toque); à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
   **Configuração só com o ícone** (`soIcone`); no celular o título numa linha e as abas na de baixo. A fonte não aparece mais
   no cabeçalho (só nos cards). A capa fica no card e na Configuração; `?aba=`).
