@@ -4565,7 +4565,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ELEMENTO (`SetaDropdown`) no MESMO lugar e com o mesmo respiro — trocar um `<select>` por ela não muda a caixa.
 - **SETA DOS DROPDOWNS (v1.66.0) — `SetaDropdown`** (`SetaDropdown.tsx`, DS): a seta de TODO gatilho de dropdown (`Selecao`,
   `PeriodoPicker`, `SeletorPessoa`, `SeletorMultiplo suspenso`, `GatilhoFiltro`, `FilterChip`, os seletores do cabeçalho e o
-  menu de vistas do Calendário) gira suave (`--motion-duration`, parada com "reduzir movimento") e aponta para o lado OPOSTO
+  menu de vistas do Calendário) gira suave (v1.66.1: 1,75× o `--motion-duration` = 0,35 s, ease-in-out `cubic-bezier(.65,0,.35,1)`; parada com "reduzir movimento") e aponta para o lado OPOSTO
   da lista aberta (onde tocar para fechar): aberta embaixo (e a folha) = para cima; aberta em cima = para baixo; fechada =
   para baixo. O estado vem do `Dropdown` pelo contexto `EstadoDropdown` {aberto, acima} (o lado decidido uma vez por
   abertura); fora de um `Dropdown`, parada. Os acordeões têm o giro próprio.

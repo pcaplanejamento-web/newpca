@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.66.1",
+    data: "2026-10-08",
+    titulo: "Giro da seta mais suave",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "A seta dos dropdowns gira mais devagar e de forma suave — começa e termina com calma, ao abrir e ao fechar.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.66.0",
     data: "2026-10-08",
     titulo: "Seta dos dropdowns gira ao abrir",
