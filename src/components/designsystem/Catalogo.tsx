@@ -1,5 +1,8 @@
 "use client";
 
+import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
+import { CortinaProtecao } from "@/components/ProtecaoDados";
+import { type ConfigProtecao, PROTECAO_PADRAO } from "@/lib/protecao-core";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { AcessoDaPessoa } from "@/components/AcessoDaPessoa";
@@ -444,6 +447,17 @@ function DemoAcesso() {
         {/* VerificacaoRobo: o captcha próprio (sem o Turnstile) — marcar resolve o desafio do servidor (prova de trabalho). */}
         <VerificacaoRobo onToken={() => undefined} />
       </div>
+    </div>
+  );
+}
+
+/** PROTEÇÃO DE DADOS: os campos da tela do ADM (sem gravar) e a cortina — no lugar, sem ativar os bloqueios no catálogo. */
+function DemoProtecao() {
+  const [v, setV] = useState<ConfigProtecao>({ ...PROTECAO_PADRAO, selecao: true, papeis: [3] });
+  return (
+    <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] lg:grid-cols-2">
+      <CamposProtecao valor={v} papeis={[{ id: 1, nome: "Administrador" }, { id: 2, nome: "Gestor" }, { id: 3, nome: "Membro" }]} onChange={setV} />
+      <CortinaProtecao motivo="print" inline />
     </div>
   );
 }
@@ -3314,6 +3328,10 @@ export function Catalogo() {
 
       <Secao titulo="Acesso — TelaAcesso (/login: Entrar · Criar conta · Esqueci a senha na MESMA tela + VitrineAcesso imersiva no desktop) · MarcaSistema (logo do ADM) · CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha SEMPRE — Turnstile ou a VerificacaoRobo própria —, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
         <DemoAcesso />
+      </Secao>
+
+      <Secao titulo="Proteção de dados — CamposProtecao (Configurações → Proteção de dados: seleção/cópia, impressão/captura, ocultar ao sair da janela, papéis e tela pública) · CortinaProtecao (cobre a tela na captura ou sem foco) · ProtecaoDados (aplica os bloqueios nas telas — não ativado aqui)">
+        <DemoProtecao />
       </Secao>
 
       <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (contato institucional = WhatsApp: máscara + ícone + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">

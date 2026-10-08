@@ -181,6 +181,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
+  - **PROTEÇÃO DE DADOS (v1.62.0, sem migração — blob `configuracoes`, chave `protecao`):** Configurações → aba **"Proteção
+    de dados"** (`ProtecaoDadosAdmin` + `CamposProtecao`; `GET/PATCH /api/admin/protecao`, `exigirAdmin`, papéis conferidos —
+    422, auditoria com o diff) liga **Bloquear seleção e cópia** · **Bloquear impressão e captura** · **Ocultar ao sair da
+    janela**, escolhe os **papéis protegidos** (o Administrador só se marcado) e **"Aplicar também na tela pública"**. Núcleo
+    puro **`protecao-core.ts`** (`lerConfigProtecao`, `protecaoDoPapel`, `protecaoPublica`, `cssProtecao`, `diffProtecao`;
+    testado em `tests/protecao.test.ts`) + D1 `protecao.ts` (cache 60 s, fail-safe = desligada). Aplicação = **`ProtecaoDados`**
+    (DS), montado SÓ no layout do `/painel` (pelo `usuario.papel.id`) e na tela pública `/` (`Topo`): o `<style>` global vem
+    no HTML do servidor (vale na 1ª pintura e nos banners por portal — `user-select:none`, `-webkit-touch-callout:none`, os
+    campos editáveis seguem selecionáveis — `SELETOR_CAMPO`; `@media print` em branco) e os ouvintes só dos bloqueios ligados
+    (copy/cut/selectstart/contextmenu/dragstart fora de campo — `[draggable="true"]` passa; Ctrl/Cmd+P; PrintScreen limpa a
+    área de transferência; Cmd+Shift+3/4/5 e Ctrl+Shift+S; `beforeprint`; blur/visibilidade) → a **`CortinaProtecao`**. Os
+    "Copiar" do sistema (`navigator.clipboard`/textarea) e as exportações (ação Exportar) seguem. O navegador não impede a
+    captura do sistema operacional nem a foto pelo celular — dificulta e desencoraja.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o

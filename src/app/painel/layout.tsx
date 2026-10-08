@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ConfigTabelas } from "@/components/ConfigTabelas";
+import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
 import { getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
+import { getConfigProtecao } from "@/lib/protecao";
+import { protecaoDoPapel } from "@/lib/protecao-core";
 import { contarNaoLidas } from "@/lib/notificacoes";
 import { getConfigChat, getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
 import { chatLigado } from "@/lib/chat-core";
@@ -29,12 +32,15 @@ export default async function PainelLayout({
   // O ADM exigiu uma senha nova: nenhuma tela do painel antes de criá-la.
   if (usuario.trocarSenha) redirect("/nova-senha");
 
-  const [aparencia, pcas, versao] = await Promise.all([
+  const [aparencia, pcas, versao, protecaoCfg] = await Promise.all([
     getAparencia(),
     pcasDoFiltro(),
     // A versão dos dados: o `SincronizarDados` só recarrega a tela quando ela muda (falhou = sem sincronização).
     versaoDados().catch(() => undefined),
+    getConfigProtecao(),
   ]);
+  // A PROTEÇÃO DE DADOS do ADM (seleção/cópia, impressão/captura): só nos papéis que ele escolheu.
+  const protecao = protecaoDoPapel(protecaoCfg, usuario.papel.id);
   const [contexto, pcaFiltro, notificacoes, presenca, configChat] = await Promise.all([
     getReparticaoContexto(usuario, ativo),
     getPcaFiltro(pcas),
@@ -61,6 +67,7 @@ export default async function PainelLayout({
       // `undefined` = a leitura FALHOU (o AppShell mantém o que já estava): uma falha passageira nunca desmonta o canal e o chat.
       chat={presenca === undefined || configChat === null ? undefined : presenca && chatLigado(configChat) ? configChat : null}
     >
+      {protecao && <ProtecaoDados {...protecao} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}

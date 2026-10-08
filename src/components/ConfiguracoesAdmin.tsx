@@ -22,6 +22,7 @@ import {
   IconCalendar,
   IconLayers,
   IconLinhas,
+  IconLock,
   IconMais,
   IconReferencia,
   IconSituacoes,
@@ -48,6 +49,7 @@ import { SituacoesAdmin } from "./SituacoesAdmin";
 import { FeriadosAdmin } from "./FeriadosAdmin";
 import { NotificacoesAdmin } from "./NotificacoesAdmin";
 import { PresencaAdmin } from "./PresencaAdmin";
+import { ProtecaoDadosAdmin } from "./ProtecaoDadosAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -491,6 +493,7 @@ export function ConfiguracoesAdmin({
           tabs={[
             { key: "identidade", label: "Identidade", icon: <IconImage />, dica: "Nome, subtítulo e favicon do site", content: abaIdentidade },
             { key: "papeis", label: "Papéis", icon: <IconShield />, dica: "O que cada papel pode fazer em cada tela", content: <PapeisAdmin /> },
+            { key: "protecao", label: "Proteção de dados", icon: <IconLock />, dica: "Bloquear seleção, cópia, impressão e captura por papel", content: <ProtecaoDadosAdmin /> },
             { key: "cargos", label: "Cargos e funções", icon: <IconBriefcase />, dica: "A lista de cargos dos usuários e dos responsáveis", content: <CargosAdmin /> },
             { key: "acesso", label: "Tela de acesso", icon: <IconTelaAcesso />, dica: "Os textos da tela de login e cadastro", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
             { key: "tabelas", label: "Tabelas", icon: <IconLinhas />, dica: "Quantas linhas as tabelas mostram ao abrir", content: abaTabelas },

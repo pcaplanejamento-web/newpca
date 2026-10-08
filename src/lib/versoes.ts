@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.62.0",
+    data: "2026-10-08",
+    titulo: "Proteção de dados",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Nova aba Proteção de dados: bloqueie a seleção e a cópia de texto, a impressão e a captura de tela, e oculte o conteúdo quando a janela perde o foco.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Configurações", texto: "O ADM escolhe em quais papéis os bloqueios valem (em todas as telas e banners) e se a tela pública também é bloqueada.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
     versao: "1.61.0",
     data: "2026-10-07",
     titulo: "Vínculos por visão do orçamento",
