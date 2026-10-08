@@ -2313,8 +2313,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`; grade fluida `auto-fill minmax(22rem)` com o card até 30rem, o texto proporcional ao card por container query e, com capa, uma faixa desfocada sob o texto) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
-  **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO como a tela do orçamento: UMA linha de cabeçalho — voltar · nome · ano ·
-  status · fonte; a capa fica no card e na Configuração — e as abas `AbasEspaco` com as ferramentas da aba à direita; `?aba=`).
+  **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO: UMA linha só (v1.67.0, `AbasEspaco cabecalho`) — à esquerda voltar · nome ·
+  ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview PULSA** — `vivo`, ao vivo: em preparação;
+  Publicado em verde, parado); à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
+  **Configuração só com o ícone** (`soIcone`); no celular o título numa linha e as abas na de baixo. A fonte não aparece mais
+  no cabeçalho (só nos cards). A capa fica no card e na Configuração; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
   (`preview`/`publicado`), **`capa`** (data-URL WebP 800×1000, `capaSchema` — só `data:image/(webp|jpeg|png)`), `publicado_em` e
   **`orcamento_visao_id`**. `unidades.pca_id` (FK cascade) — a planilha pertence a um PCA e a unicidade do código virou **por PCA**
@@ -2397,7 +2400,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cartões — travada com dados, 409 no servidor; `Switch` Publicar; travas com link p/ Configurações → Situações [`?aba=`]; visão
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
 - **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
-  scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha) NA LINHA DAS ABAS (`FerramentasAba`, `UnitFilter compacto`).
+  scroll) com esqueleto até chegar. O Dashboard NÃO tem mais o `UnitFilter` na linha das abas (v1.67.0 — redundante com o filtro Unidade dos `FiltrosDashboard`,
+  abaixo dos KPIs; o `?unidade=` só vale na tela pública); com a PRÉVIA ligada, a explicação fica num `Ajuda` (?) ao lado das abas.
 - **Consulta do Dashboard (tabela) — SÓ DADOS, nenhum erro apontado:** o `ItemTable` (painel e tela inicial) é o MESMO
   `DataTable` das demais telas — todas as colunas filtráveis/ordenáveis (faixa em Seq./Qtd./R$, período na data), `nowrap`,
   `density="compact"`, busca por produto/código (vários com ":"); com `origem` mostra Protocolo · Nº DFD
@@ -2566,8 +2570,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     do PCA — "· prévia") somam como PRÉVIA os DFDs ainda não incorporados: **`vinculosPrevia`** (`pca-espaco.ts`) = os DFDs
     que não estão em NENHUM PCA dos protocolos ENVIADOS a este PCA e não incorporados + dos MARCADOS na Mesa do sistema, com a
     ação sugerida pelo assunto (`acaoSugerida`) e DEPOIS dos reais na ordem — a MESMA consolidação (`consolidarPca`) dentro de
-    `itensConsolidados` (`previa: {dfds, protocolos}` → `DashboardPca.previa`/`OrcamentoDoPca.previa` → `Callout` "Prévia do
-    PCA" no `PainelPca`/`OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
+    `itensConsolidados` (`previa: {dfds, protocolos}` → `DashboardPca.previa`/`OrcamentoDoPca.previa` → o (?) "Prévia do
+    PCA" ao lado das abas do Dashboard e o `Callout` do `OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
     protocolos/DFDs da prévia (`escopoConsulta`). Nada é gravado; a tela inicial (só publicados) nunca vê a prévia; o
     Calendário (`cronogramaPcas`) segue só com o incorporado.
 - **MESA DO PCA DENTRO DA MESA DO SISTEMA (seletor de Mesa, sem migração):** o 1º item da barra da Mesa principal é o
@@ -3729,7 +3733,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Calendário por eventos — ver Tarefas FASES 5–7), **`JanelaFlutuante`** (janela ancorada ao ponto clicado, arrastável; folha no
   celular — a criação rápida do Calendário), **`AssinaturaCalendario`** (exportar/assinar `.ics`),
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
-  um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
+  um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`; `cabecalho` = o título do
+  espaço na MESMA linha, as abas à direita; as opções aceitam `icone`/`soIcone`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
   **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — ordenação no cabeçalho, colunas congeladas, %, mapa
   de calor e origem de cada número; TODAS as colunas iguais — com `edicao`, a própria planilha vira o editor: arrastar o

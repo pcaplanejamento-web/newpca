@@ -1696,6 +1696,8 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 ✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
 
+✅ **v1.67.0 — Espaço do PCA mais limpo**: título (nome · ano com calendário · Preview pulsando) na mesma linha das abas (`AbasEspaco cabecalho`), Configuração só com o ícone, sem o texto da fonte; no Dashboard a prévia virou um (?) ao lado das abas e saiu o `UnitFilter` do topo (o filtro Unidade dos `FiltrosDashboard` cobre).
+
 ✅ **v1.66.1 — Giro da seta mais suave**: a `SetaDropdown` gira em 1,75× o `--motion-duration` (0,35 s) com ease-in-out simétrico.
 
 ✅ **v1.66.0 — Seta dos dropdowns gira ao abrir**: em toda seleção, filtro e menu a seta gira suave e aponta para o lado oposto da lista aberta (onde tocar para fechar); fechada, volta girando (`SetaDropdown`, estado vindo do `Dropdown`).

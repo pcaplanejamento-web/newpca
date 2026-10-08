@@ -1,8 +1,5 @@
-import { num } from "@/lib/format";
 import type { Fatia, PontoMensal, Resumo, TopItem } from "@/lib/queries";
-import { Callout } from "./Callout";
 import { type ConsultaDashboard, DashboardPcaCliente } from "./DashboardPcaCliente";
-import { IconEye } from "./icons";
 
 export type DadosPainelPca = {
   resumo: Resumo;
@@ -12,7 +9,8 @@ export type DadosPainelPca = {
   top: TopItem[];
   /** Os itens no texto compacto (`itensParaTexto`, montado no memo do Dashboard). */
   itensTexto: string;
-  /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados que entraram. */
+  /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados que entraram — a
+   * explicação mora no (?) ao lado das abas do espaço do PCA. */
   previa?: { dfds: number; protocolos: number } | null;
 };
 
@@ -38,27 +36,18 @@ export function PainelPca({
 }) {
   const { resumo, previa } = dados;
   return (
-    <div className="space-y-[var(--gap-block)]">
-      {previa && (
-        <Callout kind="info" icon={<IconEye className="h-4 w-4" />}>
-          <b>Prévia do PCA</b> — os números incluem {num(previa.dfds)} DFD(s) de {num(previa.protocolos)} protocolo(s) ainda NÃO incorporados
-          (enviados à Mesa do PCA e marcados na Mesa do sistema), como se fossem incorporados agora. Só aparece no painel, com o PCA em
-          Preview; o que vale é o incorporado.
-        </Callout>
-      )}
-      <DashboardPcaCliente
-        resumo={resumo}
-        nome={nome}
-        hintItens={hintItens}
-        unidadeFiltrada={unidadeFiltrada}
-        porClassificacao={dados.porClassificacao}
-        porMes={dados.porMes}
-        porUnidadeMedida={dados.porUnidadeMedida}
-        itensTexto={dados.itensTexto}
-        showUnidade={!unidadeFiltrada}
-        consulta={consulta}
-        previa={!!previa}
-      />
-    </div>
+    <DashboardPcaCliente
+      resumo={resumo}
+      nome={nome}
+      hintItens={hintItens}
+      unidadeFiltrada={unidadeFiltrada}
+      porClassificacao={dados.porClassificacao}
+      porMes={dados.porMes}
+      porUnidadeMedida={dados.porUnidadeMedida}
+      itensTexto={dados.itensTexto}
+      showUnidade={!unidadeFiltrada}
+      consulta={consulta}
+      previa={!!previa}
+    />
   );
 }

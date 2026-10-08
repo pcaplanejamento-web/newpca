@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { type ComponentProps, createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Segmented } from "./Segmented";
 import { Skeleton, SkeletonLinhas } from "./Skeleton";
@@ -66,27 +66,43 @@ export function ConteudoAba({ aba, abaServidor, slot, children }: { aba: string;
 /**
  * ABAS de um ESPAÇO (PCA, Orçamento…): UMA barra (as abas à esquerda; à direita, as `FerramentasAba` da aba ativa) +
  * o conteúdo da aba no MESMO espaço, com o morph. O servidor monta SÓ a aba ativa (`?aba=`): trocar de aba navega e,
- * até ela chegar, mostra o esqueleto (voltar/avançar do navegador seguem a aba do servidor).
+ * até ela chegar, mostra o esqueleto (voltar/avançar do navegador seguem a aba do servidor). Com `cabecalho`, a barra é
+ * a linha do TÍTULO do espaço: o cabeçalho à esquerda e, à direita, as ferramentas da aba e as abas (no celular, o
+ * cabeçalho numa linha e as abas na de baixo).
  */
 export function AbasEspaco<T extends string>({
   aba: abaServidor,
   opcoes,
+  cabecalho,
   children,
 }: {
   /** A aba que o servidor montou (`children`). */
   aba: T;
-  /** `curto` = o rótulo nos telefones quando todas as abas não cabem. */
-  opcoes: { value: T; label: string; curto?: string }[];
+  /** `curto` = o rótulo nos telefones quando todas as abas não cabem; `soIcone` + `icone` = a aba só com o ícone. */
+  opcoes: ComponentProps<typeof Segmented<T>>["options"];
+  /** O título do espaço (voltar · nome · selos) — na MESMA linha das abas, à esquerda. */
+  cabecalho?: ReactNode;
   children: ReactNode;
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const { aba, trocar } = useTrocaAba(abaServidor);
+  const abas = <Segmented<T> value={aba} onChange={trocar} options={opcoes} />;
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
-        <Segmented<T> value={aba} onChange={trocar} options={opcoes} />
-        <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
-      </div>
+      {cabecalho ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-x-2">{cabecalho}</div>
+          <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
+            <div ref={setSlot} className="flex min-w-0 items-center justify-end gap-2 empty:hidden" />
+            {abas}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {abas}
+          <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
+        </div>
+      )}
       <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot}>
         {children}
       </ConteudoAba>

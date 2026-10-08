@@ -2,19 +2,19 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
+import { type FontePca, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
-import { IconChevronLeft } from "./icons";
+import { IconCalendar, IconChevronLeft, IconSettings } from "./icons";
 import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
 
 /**
- * ESPAÇO do PCA (`/painel/pca/[id]`) — enxuto como a tela do orçamento, usando a largura toda: UMA linha de cabeçalho
- * (voltar · nome · ano · status · fonte) e a barra das abas **Dashboard · Orçamento · Mesa|Importação · Configuração**
- * com as ferramentas da aba à direita (`AbasEspaco` + `FerramentasAba`; o servidor monta SÓ a aba ativa). A capa fica no
- * card e na Configuração.
+ * ESPAÇO do PCA (`/painel/pca/[id]`) — enxuto como a tela do orçamento, usando a largura toda: UMA linha (voltar · nome ·
+ * ano · status, à esquerda; as ferramentas da aba e as abas **Dashboard · Orçamento · Mesa|Importação · Configuração [ícone]**,
+ * à direita — `AbasEspaco cabecalho` + `FerramentasAba`; o servidor monta SÓ a aba ativa). O Preview PULSA (ao vivo: o PCA
+ * ainda em preparação). A capa fica no card e na Configuração.
  */
 export function PcaEspacoView({
   pca,
@@ -27,33 +27,45 @@ export function PcaEspacoView({
   children: ReactNode;
 }) {
   useOndeDetalhe(pca.nome);
+  const preview = pca.status === "preview";
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <Link
-          href="/painel/pca"
-          aria-label="Voltar para PCA"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
-        >
-          <IconChevronLeft className="h-4 w-4" />
-        </Link>
-        <h1 className="min-w-0 truncate text-lg font-bold text-text" title={pca.nome}>
-          {pca.nome}
-        </h1>
-        {pca.ano != null && <Badge tone="blue">{pca.ano}</Badge>}
-        <Badge tone={pca.status === "publicado" ? "emerald" : "amber"} dot>
-          {ROTULO_STATUS[pca.status]}
-        </Badge>
-        <span className="text-sm text-muted">{ROTULO_FONTE[pca.fonte]}</span>
-      </div>
-
       <AbasEspaco<AbaPca>
         aba={aba}
+        cabecalho={
+          <>
+            <Link
+              href="/painel/pca"
+              aria-label="Voltar para PCA"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+            >
+              <IconChevronLeft className="h-4 w-4" />
+            </Link>
+            <h1 className="min-w-0 truncate text-lg font-bold text-text" title={pca.nome}>
+              {pca.nome}
+            </h1>
+            {pca.ano != null && (
+              <Badge tone="blue" title={`PCA ${pca.ano}`} className="shrink-0 tabular-nums">
+                <IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
+                {pca.ano}
+              </Badge>
+            )}
+            <Badge
+              tone={preview ? "amber" : "emerald"}
+              dot
+              vivo={preview}
+              className="shrink-0"
+              title={preview ? "Em preparação — os números ainda podem mudar e o PCA não aparece na tela inicial" : "Publicado na tela inicial"}
+            >
+              {ROTULO_STATUS[pca.status]}
+            </Badge>
+          </>
+        }
         opcoes={[
           { value: "dashboard", label: "Dashboard" },
           { value: "orcamento", label: "Orçamento" },
           { value: "mesa", label: pca.fonte === "lista" ? "Importação" : "Mesa" },
-          { value: "configuracao", label: "Configuração" },
+          { value: "configuracao", label: "Configuração", soIcone: true, icone: <IconSettings className="h-4 w-4" aria-hidden="true" /> },
         ]}
       >
         {children}
