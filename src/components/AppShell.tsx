@@ -525,7 +525,7 @@ export function AppShell({
 
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface/85 px-[var(--pad-canvas)] backdrop-blur-md print:hidden">
+        <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
           <button
             type="button"
             aria-label="Abrir menu"

@@ -18,3 +18,14 @@ export function tokenPx(nome: `--${string}`, padrao: number): number {
 export function ehDesktop(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(min-width: 64rem)").matches;
 }
+
+/**
+ * Grava uma variável CSS na RAIZ (`<html>`) SÓ quando o valor MUDA — cada escrita na raiz invalida o estilo da página
+ * inteira; vinda de um ResizeObserver a cada quadro, travava a rolagem/arrasto da barra. Devolve se mudou.
+ */
+export function definirVarRaiz(nome: `--${string}`, valor: string): boolean {
+  const s = document.documentElement.style;
+  if (s.getPropertyValue(nome) === valor) return false;
+  s.setProperty(nome, valor);
+  return true;
+}

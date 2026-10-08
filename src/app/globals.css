@@ -304,10 +304,10 @@
   }
 }
 
-/* Barra de rolagem discreta */
-* {
-  scrollbar-width: thin;
-}
+/* BARRAS DE ROLAGEM NATIVAS em todo o sistema (v1.72.2): nada de `scrollbar-width: thin` global nem
+   `::-webkit-scrollbar` — a barra própria (custom) é desenhada e arrastada pela thread principal (o arrasto
+   travava/atrasava com a página ocupada) e a fina é difícil de pegar. A nativa é do compositor: acompanha o arrasto
+   na velocidade do ponteiro. A cor clara/escura vem do `color-scheme` do tema. Não estilize barras de rolagem. */
 
 /* Anima entrada de cards/toasts */
 @keyframes fade-in-up {
@@ -1077,24 +1077,6 @@
   animation: shimmer 1.6s infinite;
 }
 
-/* ROLAGEM FINA (a barra horizontal do quadro de Tarefas, como a do Trello): discreta e translúcida. */
-.rolagem-fina {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text) 35%, transparent) transparent;
-}
-.rolagem-fina::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
-}
-.rolagem-fina::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text) 35%, transparent);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.rolagem-fina::-webkit-scrollbar-track {
-  background: transparent;
-}
 
 /* TODO <select> do sistema com a MESMA seta, sempre no mesmo lugar: sem a aparência nativa (que muda por navegador), o
    chevron do tema (--seta-select) a 0,75rem da borda direita e o texto nunca passa por baixo dela. Fora de camada (vale

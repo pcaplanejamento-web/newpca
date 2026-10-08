@@ -3355,7 +3355,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       Configuração | **Mudar de quadros** (`TrocarQuadro` com `gatilho`); troca pela MESMA lógica do `AbasEspaco`
       (`useTrocaAba` + `ConteudoAba`, exportados).
     - Conteúdo: as listas direto sobre a foto (`QuadroKanban naMoldura reservaInferior`: 272px, espaço de 12px,
-      `.rolagem-fina`, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
+      a barra de rolagem nativa, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
       `group-data-[com-imagem]/moldura`); Lista/Calendário/Dashboard/Configuração num **`PainelMoldura`** opaco (a tabela e
       o calendário descontam a pílula no `reservaInferior`).
     - Cartão sem o nº do ticket na face (fica na dica/detalhe), `rounded-lg` com a sombra do Trello; ícone de template do pé
@@ -4613,6 +4613,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
   as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
   + o da tabela em `automacao-tela-centi`.
+- **ROLAGEM LEVE (v1.73.1) — regra firme:** as barras de rolagem são as NATIVAS do navegador (sem `scrollbar-width`,
+  `scrollbar-color` nem `::-webkit-scrollbar` — a barra própria é desenhada/arrastada pela thread principal e travava o
+  arrasto; a nativa é do compositor e segue o ponteiro; clara/escura pelo `color-scheme` do tema). Nada FIXO/STICKY sobre
+  conteúdo que rola leva `backdrop-filter` (o cabeçalho do `AppShell`, o da tela pública e a `BottomNav` são opacos —
+  `bg-surface`; o desfoque fica só em sobreposições paradas: scrim de modal, botões sobre capas). Variável CSS na RAIZ
+  escrita por medida (ResizeObserver/resize) só quando o valor MUDA — **`definirVarRaiz`** (`espacamento.ts`;
+  `--rodape-tabela`, `--reserva-rodape`; a `BarraSelecao` só re-renderiza quando a altura muda). Sem `will-change` em
+  elementos repetidos (a `SetaDropdown` não o tem — viraria uma camada por célula). A marca d'água fixa é `contain:strict`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

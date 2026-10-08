@@ -23,7 +23,7 @@ function Topo({ identidade, protecao }: { identidade?: Aparencia["identidade"]; 
   return (
     <>
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
-      <header className="sticky top-0 z-30 border-b border-border bg-surface/85 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-border bg-surface">
         <div className="flex h-[var(--h-header)] items-center gap-3 px-[var(--pad-canvas)]">
           <div className="flex items-center gap-2.5">
             {favicon ? (

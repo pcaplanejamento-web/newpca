@@ -18,7 +18,7 @@ export function SetaDropdown({ className = "" }: { className?: string }) {
     <IconChevronDown
       aria-hidden="true"
       data-seta-dropdown={girada ? "aberta" : "fechada"}
-      className={`shrink-0 transition-transform will-change-transform duration-[calc(var(--motion-duration)*1.75)] ease-[cubic-bezier(.65,0,.35,1)] ${girada ? "rotate-180" : ""} ${className}`}
+      className={`shrink-0 transition-transform duration-[calc(var(--motion-duration)*1.75)] ease-[cubic-bezier(.65,0,.35,1)] ${girada ? "rotate-180" : ""} ${className}`}
     />
   );
 }

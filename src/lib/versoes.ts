@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.73.1",
+    data: "2026-10-08",
+    titulo: "Rolagem leve: a barra acompanha o arrasto",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "As barras de rolagem (vertical e horizontal) voltaram a ser as do navegador, que seguem o arrasto na velocidade do ponteiro, sem travar \u2014 as barras desenhadas pelo sistema eram arrastadas pela página e atrasavam quando ela estava ocupada. Clara ou escura conforme o tema.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Sistema", texto: "Rolar ficou mais leve em todas as telas: o cabeçalho e a navegação do celular não desfocam mais o conteúdo que passa por baixo a cada quadro, e as medidas do rodapé das tabelas e da barra de seleção só atualizam a página quando o tamanho muda de fato.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.73.0",
     data: "2026-10-08",
     titulo: "Responsável de fora do município",

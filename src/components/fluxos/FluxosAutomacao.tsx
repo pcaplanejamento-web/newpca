@@ -1091,7 +1091,7 @@ function EscolherNovoFluxo({
           </Button>
         </div>
       )}
-      <div className={`rolagem-fina min-h-0 flex-1 space-y-4 overflow-y-auto ${coluna ? "p-[var(--pad-card)]" : ""}`}>
+      <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto ${coluna ? "p-[var(--pad-card)]" : ""}`}>
         <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? pub?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
         <section className="space-y-2">
           <TituloSecao>Modelos</TituloSecao>

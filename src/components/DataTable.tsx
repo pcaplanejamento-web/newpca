@@ -32,7 +32,7 @@ import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas
 import { useEditorEdicoes } from "./EdicoesTabela";
 import { useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
-import { ehDesktop } from "./espacamento";
+import { definirVarRaiz, ehDesktop } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
 import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { MultiSelectHeader } from "./MultiSelectHeader";
@@ -290,14 +290,13 @@ export function DataTable<R>({
   useEffect(() => {
     const el = rodapeRef.current;
     if (!scrollInterno || !el) return;
-    const raiz = document.documentElement.style;
-    const medir = () => raiz.setProperty("--rodape-tabela", `${Math.ceil(el.getBoundingClientRect().height) + FOLGA}px`);
+    const medir = () => definirVarRaiz("--rodape-tabela", `${Math.ceil(el.getBoundingClientRect().height) + FOLGA}px`);
     medir();
     const ro = new ResizeObserver(medir);
     ro.observe(el);
     return () => {
       ro.disconnect();
-      raiz.removeProperty("--rodape-tabela");
+      document.documentElement.style.removeProperty("--rodape-tabela");
     };
   }, [scrollInterno]);
 

@@ -6,7 +6,7 @@ import { textoPlanejamentos } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
-import { tokenPx } from "./espacamento";
+import { definirVarRaiz, tokenPx } from "./espacamento";
 import { IconChevronDown, IconClose } from "./icons";
 
 /** Um registro selecionado (vira um chip removível). */
@@ -89,13 +89,17 @@ export function BarraSelecao({
     const el = ref.current;
     if (!fixa || !el) return;
     const raiz = document.documentElement.style;
+    let ultimo = -1;
     const medir = () => {
       const alt = Math.ceil(el.getBoundingClientRect().height);
+      // Só age quando a altura MUDA (o observador e o "resize" disparam muito — re-renderizar a tela a cada um travava a rolagem).
+      if (alt === ultimo) return;
+      ultimo = alt;
       const px = Math.max(0, alt - respiroMain());
       setLugar(px);
       onAltura?.(px);
       // Os avisos flutuantes (canto inferior) sobem acima da barra enquanto ela existe.
-      raiz.setProperty("--reserva-rodape", `${alt}px`);
+      definirVarRaiz("--reserva-rodape", `${alt}px`);
     };
     medir();
     const ro = new ResizeObserver(medir);

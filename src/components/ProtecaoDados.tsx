@@ -13,7 +13,7 @@ export function MarcaDagua({ texto, inline = false }: { texto: string; inline?: 
       aria-hidden="true"
       data-marca-dagua=""
       style={estilo}
-      className={`pointer-events-none select-none ${inline ? "h-40 rounded-card border border-border bg-surface" : "fixed inset-0 z-[95]"}`}
+      className={`pointer-events-none select-none ${inline ? "h-40 rounded-card border border-border bg-surface" : "fixed inset-0 z-[95] [contain:strict]"}`}
     />
   );
 }
