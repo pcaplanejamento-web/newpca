@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.73.3",
+    data: "2026-10-08",
+    titulo: "Automações: a lista rola por dentro",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Os cartões das automações ficam num espaço com rolagem própria, na altura da tela — a página não rola mais; o painel \u201cNovo fluxo\u201d fica ao lado com a mesma altura e arrastar um cartão até a borda rola a lista.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.73.2",
     data: "2026-10-08",
     titulo: "Marcar todos sempre à vista",

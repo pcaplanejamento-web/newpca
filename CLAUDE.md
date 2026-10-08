@@ -4571,6 +4571,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   o modelo/pública cujo nome já está na lista; "Atualizar pelo modelo" mora no editor (ícone, com confirmação; o editor
   remonta — `versaoEditor`). Selo "Sem extensão" = o do Preview do PCA (`Badge tone="amber" dot vivo tamanho="linha"`).
   Testes: `tests/fluxo-selecao.test.ts`.
+- **LISTA DOS FLUXOS ROLA POR DENTRO (v1.73.3):** a coluna da grade dos `CartaoFluxo` (`ListaFluxos`) tem a altura até o fim do display (`useAlturaTela`, a mesma do `PainelLateral`) e `overflow-y-auto` — a página não rola; o arrasto (`useArrastoGrade` → `rolagemDe`) rola essa coluna perto das bordas.
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

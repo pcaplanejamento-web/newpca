@@ -835,6 +835,9 @@ function ListaFluxos({
   const desktop = useDesktop();
   const area = useRef<HTMLDivElement>(null);
   const grade = useRef<HTMLDivElement>(null);
+  // A grade ROLA POR DENTRO, na altura até o fim do display (a página não rola — como o painel "Novo fluxo").
+  const rolo = useRef<HTMLDivElement>(null);
+  const alturaRolo = useAlturaTela(rolo, 320);
   const col = useColunas(area);
   // No desktop o painel ocupa a ÚLTIMA coluna (com 1 coluna só, ele vira a folha do celular).
   const lateral = desktop && !!col && col.n >= 2;
@@ -930,7 +933,7 @@ function ListaFluxos({
   );
   return (
     <div ref={area} className="flex items-start" style={{ gap: col?.vao }}>
-      <div className="min-w-0 flex-1">
+      <div ref={rolo} className="-m-1 min-w-0 flex-1 overflow-y-auto overscroll-contain p-1" style={{ height: alturaRolo ?? undefined }}>
         {!fluxos || !col ? (
           <div className={GRADE_CARTOES} aria-busy="true">
             {[0, 1, 2].map((i) => (
