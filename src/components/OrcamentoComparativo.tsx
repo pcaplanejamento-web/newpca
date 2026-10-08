@@ -34,7 +34,7 @@ import {
   semVazios,
 } from "@/lib/orcamento-cruzamento";
 import { type AlvosVinculo, alvosDaUnidade, comVinculos, type DimensoesCadastro, mapaVinculos, type VinculoOrcamento, vinculosDaVisao } from "@/lib/orcamento-vinculo";
-import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
+import { aplicarVisao, atributosVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
@@ -383,11 +383,13 @@ export function OrcamentoComparativo({
               }}
             >
               <option value="">Orçamento inteiro</option>
-              {visoes.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.nome}
-                </option>
-              ))}
+              <optgroup label="Visões salvas">
+                {visoes.map((v) => (
+                  <option key={v.id} value={v.id} {...atributosVisao(v, 0)}>
+                    {v.nome}
+                  </option>
+                ))}
+              </optgroup>
             </SelectField>
           </div>
         )}

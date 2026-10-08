@@ -317,6 +317,54 @@
   animation: fade-in-up 0.35s ease-out both;
 }
 
+/* A LISTA da `Selecao`: abre rápida a partir do campo (como os menus do sistema); no celular, a FOLHA sobe de baixo sobre o
+   fundo escuro. Sem movimento com "reduzir movimento" (sistema ou o ADM). */
+@keyframes selecao-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes folha-sobe {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes fundo-folha {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-selecao-entra {
+  transform-origin: top center;
+  animation: selecao-entra 0.12s ease-out both;
+}
+.animate-folha-sobe {
+  animation: folha-sobe 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-fundo-folha {
+  animation: fundo-folha 0.2s ease-out both;
+}
+[data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha),
+[data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha) {
+    animation: none;
+  }
+}
+
 /* CARREGANDO no card (CarregandoLink): um brilho que varre o card + a barra indeterminada na borda de baixo. */
 @keyframes varrer-card {
   from {

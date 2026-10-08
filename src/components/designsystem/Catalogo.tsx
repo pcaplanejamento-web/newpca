@@ -151,6 +151,7 @@ import {
   IconLayers,
   IconLock,
   IconMail,
+  IconPencil,
   IconPlus,
   IconTrash,
   IconUndo,
@@ -3321,14 +3322,34 @@ export function Catalogo() {
         </div>
         <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
           {/* A lista aberta de TODO select do sistema é a da `Selecao`: grupos, desabilitada com a dica, busca acima de 12. */}
-          <SelectField label="Selecao — grupos e opção desabilitada" defaultValue="1">
-            <option value="">Orçamento inteiro</option>
-            <optgroup label="Visões">
-              <option value="1">PCA 27</option>
-              <option value="2" disabled title="Sem lançamentos neste orçamento">
+          <SelectField
+            compacto
+            label="Visão"
+            defaultValue="1"
+            acoes={[
+              { rotulo: "Editar esta visão", icone: <IconPencil className="h-4 w-4" />, onClick: () => toast.info("Editar esta visão") },
+              { rotulo: "Nova visão", icone: <IconPlus className="h-4 w-4" />, onClick: () => toast.info("Nova visão") },
+            ]}
+          >
+            <option value="" data-detalhe="Todos os lançamentos do orçamento do ano">
+              Orçamento inteiro
+            </option>
+            <optgroup label="Visões salvas">
+              <option value="1" data-detalhe="2 Funções · 1 Fonte · usada em 1 PCA">
+                PCA 27
+              </option>
+              <option value="2" data-detalhe="Todos os lançamentos" data-aviso="3 valor(es) da visão fora deste orçamento">
                 GERAL - SEM FILTRO
               </option>
+              <option value="3" disabled title="Sem lançamentos neste orçamento">
+                Visão vazia
+              </option>
             </optgroup>
+          </SelectField>
+          <SelectField label="Situação (com a cor)" defaultValue="a">
+            <option value="a" data-cor="var(--info)">Em análise</option>
+            <option value="b" data-cor="var(--warn)">Devolvido</option>
+            <option value="c" data-cor="var(--ok)">Concluído</option>
           </SelectField>
           <SelectField label="Selecao — com busca (mais de 12 opções)" defaultValue="">
             <option value="">Escolha o mês…</option>
