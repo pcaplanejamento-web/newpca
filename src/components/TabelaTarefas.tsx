@@ -177,7 +177,7 @@ export function TabelaTarefas({
               render: (t: TarefaResumo) => (
                 <span className="inline-flex gap-1">
                   {times(t).map((e) => (
-                    <span key={e.id} className="rounded-full px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
+                    <span key={e.id} className="rounded-chip px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
                       {e.nome}
                     </span>
                   ))}
@@ -198,7 +198,7 @@ export function TabelaTarefas({
         render: (t) => (
           <span className="inline-flex gap-1">
             {marcas(t).map((e) => (
-              <span key={e.id} className="rounded-full px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
+              <span key={e.id} className="rounded-chip px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
                 {e.nome}
               </span>
             ))}

@@ -496,7 +496,9 @@ export function DataTable<R>({
       estilo: { ...(w ? larguraFixa(w) : {}), ...(fixa ? { left: fixos[p] } : {}) } as CSSProperties,
     };
   };
-  const selFixa = nFix > 0;
+  // A coluna de MARCAÇÃO fica SEMPRE presa à esquerda ao rolar de lado (com ou sem congeladas); sem congeladas, a divisa é dela.
+  const selFixa = selectable;
+  const divisaSel = selFixa && nFix === 0 ? DIVISA : "";
   const ordenarPor = (k: string) => setSort((o) => ({ key: k, dir: o.key === k && o.dir === "asc" ? "desc" : "asc" }));
 
   return (
@@ -517,7 +519,7 @@ export function DataTable<R>({
           <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
             <tr>
               {selectable && (
-                <th className={`w-10 px-3 ${headPy} ${selFixa ? "sticky left-0 z-20 bg-surface-2" : ""}`}>
+                <th className={`w-10 px-3 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
                   <input
                     type="checkbox"
                     aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
@@ -674,7 +676,7 @@ export function DataTable<R>({
                   } ${ativa || (marcada && selFixa) ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : selFixa ? "bg-surface" : ""}`}
                 >
                   {selectable && (
-                    <td className={`w-10 px-3 ${selFixa ? "sticky left-0 z-10 bg-inherit" : ""}`}>
+                    <td className={`w-10 px-3 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
                       <input
                         type="checkbox"
                         aria-label="Selecionar linha"

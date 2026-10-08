@@ -3611,7 +3611,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   o total repetidos em cada faixa);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
-  **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
+  **coluna de MARCAÇÃO sempre presa à esquerda** (v1.71.1: `sticky left-0` em toda tabela `selectable`, com a divisa quando não há congeladas; a linha com fundo opaco); **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
   **`scrollInterno`** = no desktop a tabela OCUPA o espaço até o fim do display DESDE O PRIMEIRO QUADRO (altura TOTAL fixa,
   coluna flex: o CORPO rola por dentro com o `thead` `sticky`, o rodapé fica rente ao fim com qualquer nº de linhas; sem
   linhas, a mensagem fica no meio do espaço) — medida em `useLayoutEffect` (antes da pintura) com o topo pela cadeia de
@@ -3774,7 +3774,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
-  `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA); **`tamanho="linha"`** =
+  `Badge.tsx` (v1.71.1: o selo comum usa `rounded-chip` — o raio do ADM; os selos/contadores das células — `MaisN`, ABC, etiquetas da Lista, o botão de copiar — também) fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA); **`tamanho="linha"`** =
   o selo da linha de título (a altura do botão de voltar: `--h-control-sm` no desktop, 44px no toque; o raio
   `--radius-control` — o arredondamento dos controles definido pelo ADM em Aparência; com `vivo`, o ponto
   `.ponto-selo` — respira e solta duas ondas, parado com "reduzir movimento").

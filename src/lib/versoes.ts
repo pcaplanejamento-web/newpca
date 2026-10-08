@@ -32,6 +32,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.71.1",
+    data: "2026-10-08",
+    titulo: "Tabelas: marcação fixa e selos no raio do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Em toda tabela com a coluna de marcação, ela fica presa à esquerda ao rolar de lado — a caixa de marcar está sempre à vista.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Os selos dentro das células (Situação, Centi, Execução, PCA, Prioridade, \u201c+N\u201d, ABC e etiquetas) seguem o arredondamento definido em Configurações → Aparência.", link: "/painel/aparencia" },
+    ],
+  },
+  {
     versao: "1.71.0",
     data: "2026-10-08",
     titulo: "Automação: seleção nas tabelas e cartões mais simples",

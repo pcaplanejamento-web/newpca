@@ -6,7 +6,7 @@ import { useDadosCompletos } from "./DadosCompletos";
 
 /** Chip "+N" — os valores além dos exibidos (o MESMO onde uma célula mostra um valor e conta os demais). */
 export function MaisN({ n }: { n: number }) {
-  return <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] font-semibold tabular-nums text-muted">+{n}</span>;
+  return <span className="shrink-0 rounded-chip bg-surface-2 px-1.5 text-[11px] font-semibold tabular-nums text-muted">+{n}</span>;
 }
 
 /** Um valor da lista: texto simples ou com marca de INATIVO (riscado — ex.: nº retirado do PCA); "—" = algum sem o dado. */
