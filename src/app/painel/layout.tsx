@@ -5,6 +5,7 @@ import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
 import { getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
+import { dataHoraBR } from "@/lib/format";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { getConfigProtecao } from "@/lib/protecao";
@@ -67,7 +68,7 @@ export default async function PainelLayout({
       // `undefined` = a leitura FALHOU (o AppShell mantém o que já estava): uma falha passageira nunca desmonta o canal e o chat.
       chat={presenca === undefined || configChat === null ? undefined : presenca && chatLigado(configChat) ? configChat : null}
     >
-      {protecao && <ProtecaoDados {...protecao} />}
+      {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}

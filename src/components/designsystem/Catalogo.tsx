@@ -1,7 +1,7 @@
 "use client";
 
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
-import { CortinaProtecao } from "@/components/ProtecaoDados";
+import { MarcaDagua } from "@/components/ProtecaoDados";
 import { type ConfigProtecao, PROTECAO_PADRAO } from "@/lib/protecao-core";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
@@ -459,7 +459,7 @@ function DemoProtecao() {
   return (
     <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] lg:grid-cols-2">
       <CamposProtecao valor={v} papeis={[{ id: 1, nome: "Administrador" }, { id: 2, nome: "Gestor" }, { id: 3, nome: "Membro" }]} onChange={setV} />
-      <CortinaProtecao motivo="print" inline />
+      <MarcaDagua texto="Maria Clara Souza · matrícula 045210 · 08/10/2026 14:30" inline />
     </div>
   );
 }
@@ -3357,7 +3357,7 @@ export function Catalogo() {
         <DemoAcesso />
       </Secao>
 
-      <Secao titulo="Proteção de dados — CamposProtecao (Configurações → Proteção de dados: seleção/cópia, impressão/captura, ocultar ao sair da janela, papéis e tela pública) · CortinaProtecao (cobre a tela na captura ou sem foco) · ProtecaoDados (aplica os bloqueios nas telas — não ativado aqui)">
+      <Secao titulo="Proteção de dados — CamposProtecao (Configurações → Proteção de dados: seleção/cópia, impressão/captura, ocultar ao sair da janela, marca d'água, papéis e tela pública) · MarcaDagua (quem vê, sobre toda a tela) · ProtecaoDados (aplica os bloqueios nas telas — não ativado aqui)">
         <DemoProtecao />
       </Secao>
 

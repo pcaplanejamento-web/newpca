@@ -16,13 +16,14 @@ export type PapelProtecao = { id: number; nome: string };
 
 /** Os CAMPOS da proteção de dados (controlados) — a tela do ADM e o catálogo. */
 export function CamposProtecao({ valor, papeis, onChange }: { valor: ConfigProtecao; papeis: PapelProtecao[]; onChange: (v: ConfigProtecao) => void }) {
-  const algum = valor.selecao || valor.print || valor.foco;
+  const algum = valor.selecao || valor.print || valor.foco || valor.marca;
   const semPapel = algum && valor.papeis.length === 0;
   return (
     <div className="space-y-[var(--gap-block)]">
       <Switch dica="Impede selecionar, copiar, arrastar e o menu do botão direito/toque longo fora dos campos" checked={valor.selecao} onChange={(selecao) => onChange({ ...valor, selecao })} label="Bloquear seleção e cópia" />
       <Switch dica="Impede imprimir (Ctrl+P e menu) e cobre a tela no PrintScreen" checked={valor.print} onChange={(print) => onChange({ ...valor, print })} label="Bloquear impressão e captura" />
       <Switch dica="Cobre o conteúdo quando a janela perde o foco (ferramentas de recorte)" checked={valor.foco} onChange={(foco) => onChange({ ...valor, foco })} label="Ocultar ao sair da janela" />
+      <Switch dica="Escreve, discreto sobre a tela, o nome, a matrícula e a hora de quem vê — identifica qualquer captura" checked={valor.marca} onChange={(marca) => onChange({ ...valor, marca })} label="Marca d'água com quem vê" />
       <div className="max-w-md space-y-1">
         <SeletorMultiplo
           rotulo="Papéis protegidos"
@@ -87,12 +88,16 @@ export function ProtecaoDadosAdmin() {
             Exportar do papel.
           </TopicoAjuda>
           <TopicoAjuda icone={<IconShield className="h-4 w-4" />} titulo="Impressão e captura">
-            Bloqueia a impressão (Ctrl+P e o menu do navegador — a página sai em branco) e, na tecla PrintScreen, limpa a área de
-            transferência e cobre a tela. O navegador não consegue impedir a captura do sistema operacional nem a foto pelo
-            celular: o bloqueio dificulta e desencoraja.
+            Bloqueia a impressão (Ctrl+P e o menu do navegador — a página sai em branco). A tela é coberta ANTES da captura ao
+            pressionar a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac. A tecla PrtScn sozinha e a foto pelo
+            celular nenhum site consegue impedir — para elas, ligue a marca d'água.
           </TopicoAjuda>
           <TopicoAjuda icone={<IconEyeOff className="h-4 w-4" />} titulo="Ocultar ao sair da janela">
             Cobre o conteúdo enquanto a janela está sem foco (ferramentas de recorte, outra janela por cima). Volta ao tocar.
+          </TopicoAjuda>
+          <TopicoAjuda titulo="Marca d'água">
+            O nome, a matrícula e a data e hora de quem vê, discretos sobre toda a tela: qualquer captura ou foto mostra quem a
+            fez. Na tela pública, "Consulta pública".
           </TopicoAjuda>
           <TopicoAjuda titulo="Papéis protegidos">
             Os bloqueios valem em todas as telas e banners só para quem tem um dos papéis escolhidos — inclusive o Administrador,

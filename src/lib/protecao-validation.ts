@@ -5,6 +5,7 @@ export const configProtecaoSchema = z.strictObject({
   selecao: z.boolean(),
   print: z.boolean(),
   foco: z.boolean(),
+  marca: z.boolean().optional().default(false),
   papeis: z.array(z.number().int().positive()).max(200),
   publica: z.boolean(),
 });

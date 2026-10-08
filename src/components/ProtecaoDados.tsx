@@ -1,37 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { type Bloqueios, cssProtecao, SELETOR_CAMPO } from "@/lib/protecao-core";
-import { IconLock } from "./icons";
+import { useEffect } from "react";
+import { ATRIBUTO_COBRIR, type Bloqueios, cssProtecao, SELETOR_CAMPO, svgMarcaDagua } from "@/lib/protecao-core";
 import { toast } from "./Toast";
 
-type Motivo = "print" | "foco";
-
-const TEXTO: Record<Motivo, { titulo: string; texto: string }> = {
-  print: { titulo: "Captura bloqueada", texto: "Os dados do sistema são protegidos pela administração." },
-  foco: { titulo: "Conteúdo protegido", texto: "Toque para voltar ao sistema." },
-};
-
-/** A CORTINA que cobre a tela na tentativa de captura/impressão ou quando a janela perde o foco. `inline` = no lugar (o
- * catálogo), sem cobrir a página. */
-export function CortinaProtecao({ motivo, inline = false, onFechar }: { motivo: Motivo; inline?: boolean; onFechar?: () => void }) {
-  const t = TEXTO[motivo];
-  const corpo = (
-    <>
-      <IconLock className="h-8 w-8 text-muted" />
-      <p className="text-[15px] font-semibold text-text">{t.titulo}</p>
-      <p className="text-[13px] text-muted">{t.texto}</p>
-    </>
-  );
-  if (inline) return <div className="grid min-h-40 place-items-center content-center gap-2 rounded-card border border-border bg-surface p-[var(--pad-card)] text-center">{corpo}</div>;
+/** A MARCA D'ÁGUA de quem vê (nome · matrícula · data e hora) sobre toda a tela — não captura o toque nem o clique. `inline`
+ * = dentro do próprio quadro (o catálogo). */
+export function MarcaDagua({ texto, inline = false }: { texto: string; inline?: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onFechar}
-      className="fixed inset-0 z-[200] grid cursor-default place-items-center content-center gap-2 bg-surface p-[var(--pad-canvas)] text-center print:hidden"
-    >
-      {corpo}
-    </button>
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none select-none print:hidden ${inline ? "h-40 rounded-card border border-border bg-surface" : "fixed inset-0 z-[95]"}`}
+      style={{ backgroundImage: svgMarcaDagua(texto) }}
+    />
   );
 }
 
@@ -40,21 +21,35 @@ function ehCampo(alvo: EventTarget | null): boolean {
   return !!el?.closest(SELETOR_CAMPO);
 }
 
+const ehMac = () => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
 /**
  * PROTEÇÃO DE DADOS (Configurações → Proteção de dados): aplica os bloqueios do ADM em TODA a tela — o CSS global vai no
- * HTML do servidor (vale desde a 1ª pintura e nos banners por portal) e os ouvintes só dos bloqueios ligados. Os campos
- * editáveis seguem selecionáveis e os botões "Copiar" do sistema funcionam (área de transferência pela API, ou por um
- * campo). O navegador não impede a tecla Print do sistema nem a foto pelo celular: a captura é dificultada e desencorajada.
+ * HTML do servidor (vale desde a 1ª pintura e nos banners por portal) e os ouvintes só dos bloqueios ligados. A COBERTURA
+ * é um atributo no `<html>` posto DIRETO pelo ouvinte (`ATRIBUTO_COBRIR`, sem esperar o React) e sai ANTES dos atalhos de
+ * captura: ao pressionar a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac. A tecla PrtScn sozinha e a foto
+ * pelo celular o navegador não alcança — a MARCA D'ÁGUA identifica quem capturou. Os campos editáveis seguem selecionáveis
+ * e os botões "Copiar" do sistema funcionam.
  */
-export function ProtecaoDados({ selecao, print, foco }: Bloqueios) {
-  const [cortina, setCortina] = useState<Motivo | null>(null);
-
+export function ProtecaoDados({ selecao, print, foco, marca, quem }: Bloqueios & { quem: string }) {
   useEffect(() => {
+    const html = document.documentElement;
     const tirar: (() => void)[] = [];
     const ouvir = (alvo: EventTarget, tipo: string, f: (e: Event) => void) => {
       alvo.addEventListener(tipo, f, true);
       tirar.push(() => alvo.removeEventListener(tipo, f, true));
     };
+    let tempo: ReturnType<typeof setTimeout> | undefined;
+    const cobrir = (ms?: number) => {
+      clearTimeout(tempo);
+      html.setAttribute(ATRIBUTO_COBRIR, "");
+      if (ms) tempo = setTimeout(descobrir, ms);
+    };
+    const descobrir = () => {
+      clearTimeout(tempo);
+      html.removeAttribute(ATRIBUTO_COBRIR);
+    };
+
     if (selecao) {
       const fora = (e: Event) => {
         if (!ehCampo(e.target) && !ehCampo(document.activeElement)) e.preventDefault();
@@ -70,58 +65,67 @@ export function ProtecaoDados({ selecao, print, foco }: Bloqueios) {
       ouvir(document, "dragstart", (e) => {
         const el = e.target instanceof Element ? e.target : null;
         if (el?.closest('[draggable="true"]')) return;
-        if (el?.closest("img, a") || (window.getSelection()?.toString() ?? "") !== "" || !el) e.preventDefault();
+        if (!el || el.closest("img, a") || (window.getSelection()?.toString() ?? "") !== "") e.preventDefault();
       });
     }
-    let tempo: ReturnType<typeof setTimeout> | undefined;
-    const cobrir = (m: Motivo, ms?: number) => {
-      setCortina(m);
-      clearTimeout(tempo);
-      if (ms) tempo = setTimeout(() => setCortina((c) => (c === m ? null : c)), ms);
-    };
+
     if (print) {
-      const capturou = () => {
-        navigator.clipboard?.writeText("").catch(() => {});
-        cobrir("print", 2000);
-        toast.warning("Captura de tela bloqueada.");
-      };
+      const mac = ehMac();
       ouvir(window, "keydown", (ev) => {
         const e = ev as KeyboardEvent;
         const k = (e.key ?? "").toLowerCase();
-        const mod = e.ctrlKey || e.metaKey;
-        if (mod && k === "p") {
+        // ANTES da captura: a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac (Cmd+Shift+3/4/5).
+        if ((!mac && k === "meta") || (mac && e.metaKey && e.shiftKey)) cobrir();
+        if ((e.ctrlKey || e.metaKey) && k === "p") {
           e.preventDefault();
           e.stopPropagation();
           toast.warning("Impressão bloqueada.");
-        } else if ((e.metaKey && e.shiftKey && ["3", "4", "5"].includes(k)) || (mod && e.shiftKey && k === "s")) {
-          capturou();
         }
       });
-      ouvir(window, "keyup", (e) => {
-        if ((e as KeyboardEvent).key === "PrintScreen") capturou();
+      ouvir(window, "keyup", (ev) => {
+        const e = ev as KeyboardEvent;
+        if (e.key === "PrintScreen") {
+          navigator.clipboard?.writeText("").catch(() => {});
+          cobrir(1500);
+          toast.warning("Captura de tela bloqueada.");
+        } else if (e.key === "Meta" || e.key === "Shift") {
+          // Soltou o atalho: a captura já foi feita (coberta); devolve a tela logo depois.
+          if (html.hasAttribute(ATRIBUTO_COBRIR) && document.hasFocus()) cobrir(600);
+        }
       });
-      ouvir(window, "beforeprint", () => cobrir("print"));
-      ouvir(window, "afterprint", () => setCortina((c) => (c === "print" ? null : c)));
+      ouvir(window, "beforeprint", () => cobrir());
+      ouvir(window, "afterprint", descobrir);
     }
+
     if (foco) {
-      ouvir(window, "blur", () => cobrir("foco"));
-      ouvir(document, "visibilitychange", () => {
-        if (document.visibilityState === "hidden") cobrir("foco");
+      // Só a JANELA (o `blur` dos campos também passa pela janela na captura — eles não contam).
+      ouvir(window, "blur", (e) => {
+        if (e.target === window) cobrir();
       });
-      ouvir(window, "focus", () => setCortina((c) => (c === "foco" ? null : c)));
+      ouvir(document, "visibilitychange", () => {
+        if (document.visibilityState === "hidden") cobrir();
+      });
     }
+    if (print || foco) {
+      // A janela voltou (a ferramenta de captura fechou) ou foi tocada: devolve a tela.
+      ouvir(window, "focus", (e) => {
+        if (e.target === window) descobrir();
+      });
+      ouvir(window, "pointerdown", () => document.hasFocus() && descobrir());
+    }
+
     return () => {
-      clearTimeout(tempo);
       for (const f of tirar) f();
+      descobrir();
     };
   }, [selecao, print, foco]);
 
-  const css = cssProtecao({ selecao, print, foco });
+  const css = cssProtecao({ selecao, print, foco, marca });
   return (
     <>
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: CSS 100% estático gerado por cssProtecao (sem dados do usuário). */}
       {css && <style id="protecao-dados" dangerouslySetInnerHTML={{ __html: css }} />}
-      {cortina && <CortinaProtecao motivo={cortina} onFechar={() => setCortina(null)} />}
+      {marca && <MarcaDagua texto={quem} />}
     </>
   );
 }

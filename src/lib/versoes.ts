@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.64.0",
+    data: "2026-10-08",
+    titulo: "Proteção de dados corrigida + marca d'água",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "“Ocultar ao sair da janela” cobria a tela toda vez que um campo perdia o foco. Agora só cobre quando a janela inteira perde o foco.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "melhoria", area: "Sistema", texto: "A tela é coberta na hora e ANTES dos atalhos de captura: ao pressionar a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Configurações", texto: "Marca d'água com o nome, a matrícula e a hora de quem vê, sobre toda a tela — identifica qualquer captura ou foto.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
     versao: "1.63.0",
     data: "2026-10-08",
     titulo: "Proteção de dados",

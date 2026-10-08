@@ -1,11 +1,11 @@
-// PROTEÇÃO DE DADOS (núcleo puro, sem DOM/D1): o ADM escolhe os bloqueios (seleção/cópia nativa, impressão/captura e
-// ocultar ao sair da janela), os PAPÉIS em que valem e se a tela pública também é bloqueada. Blob `configuracoes`, chave
+// PROTEÇÃO DE DADOS (núcleo puro, sem DOM/D1): o ADM escolhe os bloqueios (seleção/cópia nativa, impressão/captura,
+// ocultar ao sair da janela e a marca d'água com quem vê), os PAPÉIS em que valem e se a tela pública também é bloqueada. Blob `configuracoes`, chave
 // `protecao` — sem migração; tudo desligado por padrão (nada muda até o ADM ligar).
 
-export type Bloqueios = { selecao: boolean; print: boolean; foco: boolean };
+export type Bloqueios = { selecao: boolean; print: boolean; foco: boolean; marca: boolean };
 export type ConfigProtecao = Bloqueios & { papeis: number[]; publica: boolean };
 
-export const PROTECAO_PADRAO: ConfigProtecao = { selecao: false, print: false, foco: false, papeis: [], publica: false };
+export const PROTECAO_PADRAO: ConfigProtecao = { selecao: false, print: false, foco: false, marca: false, papeis: [], publica: false };
 
 /** Qualquer JSON → a config válida (ids de papel inteiros positivos, sem repetir, até 200). */
 export function lerConfigProtecao(v: unknown): ConfigProtecao {
@@ -14,11 +14,11 @@ export function lerConfigProtecao(v: unknown): ConfigProtecao {
   const papeis = Array.isArray(o.papeis)
     ? [...new Set(o.papeis.filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n > 0))].slice(0, 200)
     : [];
-  return { selecao: o.selecao === true, print: o.print === true, foco: o.foco === true, papeis, publica: o.publica === true };
+  return { selecao: o.selecao === true, print: o.print === true, foco: o.foco === true, marca: o.marca === true, papeis, publica: o.publica === true };
 }
 
 function bloqueiosDe(cfg: ConfigProtecao): Bloqueios | null {
-  return cfg.selecao || cfg.print || cfg.foco ? { selecao: cfg.selecao, print: cfg.print, foco: cfg.foco } : null;
+  return cfg.selecao || cfg.print || cfg.foco || cfg.marca ? { selecao: cfg.selecao, print: cfg.print, foco: cfg.foco, marca: cfg.marca } : null;
 }
 
 /** Os bloqueios da pessoa pelo PAPEL dela (`null` = nenhum: papel fora da lista ou nada ligado). */
@@ -35,6 +35,10 @@ export function protecaoPublica(cfg: ConfigProtecao): Bloqueios | null {
 /** Os campos que continuam selecionáveis/editáveis com a seleção bloqueada. */
 export const SELETOR_CAMPO = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
 
+/** O atributo do `<html>` que COBRE a tela (captura, impressão, janela sem foco) — posto direto no DOM pelo ouvinte, sem
+ * esperar o React: a cobertura sai no quadro seguinte ao evento. */
+export const ATRIBUTO_COBRIR = "data-protecao-cobrir";
+
 /** O CSS GLOBAL dos bloqueios (vale desde a 1ª pintura e também nos banners por portal). */
 export function cssProtecao(b: Bloqueios): string {
   const partes: string[] = [];
@@ -50,13 +54,33 @@ export function cssProtecao(b: Bloqueios): string {
       '@media print{html,body{background:#fff!important}body *{visibility:hidden!important}body::before{content:"Impressão bloqueada pela administração do sistema.";visibility:visible;display:block;padding:48px;font:600 16px sans-serif;color:#000}}',
     );
   }
+  if (b.print || b.foco) {
+    partes.push(
+      `html[${ATRIBUTO_COBRIR}] body{visibility:hidden!important}`,
+      `html[${ATRIBUTO_COBRIR}]::after{content:"Conteúdo protegido";position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:var(--surface,#fff);color:var(--muted,#666);font:600 15px var(--font-sans,sans-serif)}`,
+    );
+  }
   return partes.join("\n");
+}
+
+/** Escapa o texto para dentro de um SVG. */
+function escaparXml(t: string): string {
+  return t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c] as string);
+}
+
+/** A MARCA D'ÁGUA (quem vê + quando) como imagem de fundo repetida — um SVG em data-URL, diagonal e discreto, legível no
+ * claro e no escuro (cinza translúcido). O texto vai escapado e cortado a 120 caracteres. */
+export function svgMarcaDagua(texto: string): string {
+  const t = escaparXml(texto.replace(/\s+/g, " ").trim().slice(0, 120));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="220"><text x="210" y="110" text-anchor="middle" transform="rotate(-24 210 110)" font-family="sans-serif" font-size="14" font-weight="600" fill="#808080" fill-opacity="0.16">${t}</text></svg>`;
+  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
 }
 
 const ROTULOS: Record<keyof Bloqueios | "publica", string> = {
   selecao: "bloquear seleção e cópia",
   print: "bloquear impressão e captura",
   foco: "ocultar ao sair da janela",
+  marca: "marca d'água com quem vê",
   publica: "também na tela pública",
 };
 

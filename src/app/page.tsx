@@ -6,7 +6,7 @@ import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UnitFilter } from "@/components/UnitFilter";
 import { getAparencia } from "@/lib/aparencia";
-import { num } from "@/lib/format";
+import { dataHoraBR, num } from "@/lib/format";
 import { dashboardDoPca, getPcaEspaco, listarPcasPublicados } from "@/lib/pca-espaco";
 import { getConfigProtecao } from "@/lib/protecao";
 import { type Bloqueios, protecaoPublica } from "@/lib/protecao-core";
@@ -22,7 +22,7 @@ function Topo({ identidade, protecao }: { identidade?: Aparencia["identidade"]; 
   const favicon = identidade?.favicon?.trim();
   return (
     <>
-      {protecao && <ProtecaoDados {...protecao} />}
+      {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
       <header className="sticky top-0 z-30 border-b border-border bg-surface/85 backdrop-blur-md">
         <div className="flex h-[var(--h-header)] items-center gap-3 px-[var(--pad-canvas)]">
           <div className="flex items-center gap-2.5">
