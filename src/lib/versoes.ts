@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.67.1",
+    data: "2026-10-08",
+    titulo: "Botão de ajuda (?) centralizado",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "O ícone do botão de ajuda (?) ficava encostado à esquerda, fora do fundo ao passar o mouse. Agora fica centralizado em todas as telas.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.67.0",
     data: "2026-10-08",
     titulo: "Espaço do PCA mais limpo",
