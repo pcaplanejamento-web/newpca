@@ -2,7 +2,7 @@
 
 import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, useEffect, useId, useRef, useState } from "react";
 import { IconCheck, IconClose, IconEye, IconEyeOff, IconLock, IconMenos, IconSearch } from "./icons";
-import { Selecao } from "./Selecao";
+import { type AcaoSelecao, Selecao } from "./Selecao";
 
 // Campos de formulário do design system (spec do usuário — prints do login):
 // rótulo forte, superfície preenchida, ícone à esquerda, **anel de foco accent**
@@ -120,6 +120,7 @@ export function SelectField({
   id,
   compacto = false,
   textoEscolhido,
+  acoes,
   children,
   ...rest
 }: {
@@ -131,19 +132,23 @@ export function SelectField({
   compacto?: boolean;
   /** O texto da opção escolhida, À VISTA em até 2 linhas DENTRO da caixa (nomes longos — ex.: a unidade do cadastro). */
   textoEscolhido?: string;
+  /** Botões no RODAPÉ da lista aberta (ex.: "Editar esta visão", "+ Nova visão"). */
+  acoes?: AcaoSelecao[];
   children: ReactNode;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
   const auto = useId();
   const fid = id ?? auto;
+  // A lista abre ALINHADA à caixa inteira (com o rótulo do compacto dentro), não só ao botão.
+  const caixa = useRef<HTMLDivElement>(null);
   if (compacto)
     return (
-      <div className={`${WRAP} h-11 !gap-1.5 !px-3 border-border-2 lg:h-[var(--h-control-sm)]`}>
+      <div ref={caixa} className={`${WRAP} h-11 !gap-1.5 !px-3 border-border-2 lg:h-[var(--h-control-sm)]`}>
         {label && (
           <label htmlFor={fid} className="shrink-0 text-[12px] text-muted">
             {label}
           </label>
         )}
-        <Selecao id={fid} className={`${INPUT} ${SETA_NA_CAIXA} h-full !text-[13px] font-semibold outline-none disabled:opacity-60`} {...rest}>
+        <Selecao id={fid} ancora={caixa} titulo={label} acoes={acoes} className={`${INPUT} ${SETA_NA_CAIXA} h-full !text-[13px] font-semibold outline-none disabled:opacity-60`} {...rest}>
           {children}
         </Selecao>
       </div>
@@ -152,9 +157,12 @@ export function SelectField({
   return (
     <div className="min-w-0">
       <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
-      <div className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+      <div ref={caixa} className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
         <Selecao
           id={fid}
+          ancora={caixa}
+          titulo={label}
+          acoes={acoes}
           texto={textoEscolhido}
           linhas={textoEscolhido ? 2 : 1}
           className={`${INPUT} ${SETA_NA_CAIXA} h-full outline-none disabled:opacity-60 ${textoEscolhido ? "!text-[13px] font-medium sm:!text-[14px]" : ""}`}

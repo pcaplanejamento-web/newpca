@@ -3528,7 +3528,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   FILTRO de alternar), **`Colunas`** (colunas verticais com grade, rótulos — no máximo ~8 no eixo, a margem do eixo cabe o rótulo
   em R$ — e dica no hover/foco/toque; com `onEscolher`, a coluna zerada só mostra a dica) e **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (o painel fica PRESO ao gatilho enquanto aberto — acompanha a cada quadro o gatilho e o próprio tamanho, e o lado acima/abaixo é decidido UMA vez ao abrir: marcar um item, um banner que muda de altura ou uma rolagem nunca o soltam; fecha no `pointerdown` fora — vale no toque do iOS; fechar pelo Esc ou pelo `fechar` do conteúdo (escolher, limpar, ordenar) com o foco dentro do painel o devolve ao gatilho; `className` do invólucro e `id`/`title` do
   gatilho opcionais; `papel` "menu" [padrão] | "dialog" [busca/grade — escolher pessoa ou data: `role="dialog"` com nome,
-  `aria-haspopup="dialog"`]; `"listbox"` = a lista de uma `Selecao`; `gatilho` = atributos a mais do botão — teclado, foco, `role`/`aria-*`, `disabled`; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
+  `aria-haspopup="dialog"`]; `"listbox"` = a lista de uma `Selecao`; `gatilho` = atributos a mais do botão — teclado, foco, `role`/`aria-*`, `disabled`; `ancora` = o elemento em que o painel se alinha; `folha` = sobe de baixo na largura da tela; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
   conteúdo em função recebe `fechar` e `{teclado}` = aberto por Enter/Espaço — quem usa leva o foco para dentro do painel),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), **`PeriodoPicker`** (o seletor de período — gatilho no visual do
   `SelectField compacto` com o prefixo "Período", painel `dialog` com o **`PeriodoCorpo`**: atalhos Todo o período | Hoje | Esta
@@ -3686,9 +3686,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   indica] — ícone + foco accent), **`Selecao`** (`Selecao.tsx`, v1.62.0 — o *drop-in* do `<select>`: as MESMAS props
   [`value`, `onChange(e)` com `e.target.value`, `disabled`, `id`, `aria-*`, `onBlur`, `style`, `className` = a caixa] e os
   MESMOS filhos [`<option>`/`<optgroup>`/componentes que os renderizam — `OpcoesUnidades`], mas a lista ABERTA é a do
-  sistema: o `Dropdown` (`papel="listbox"`) preso ao gatilho `role="combobox"`, a escolhida em accent com o check, grupos,
-  desabilitada esmaecida com o `title` na dica, BUSCA acima de 12 opções, 44px no toque; teclado ↑/↓/Home/End/Enter/Espaço/Esc
-  + digitar para saltar, ↑/↓ no gatilho abrem. O `<select>` nativo fica ESCONDIDO depois do gatilho — a fonte das opções e
+  sistema: o `Dropdown` (`papel="listbox"`) ALINHADO à caixa inteira (`ancora` — o `SelectField` passa a moldura, com o
+  rótulo do compacto dentro) e o gatilho `role="combobox"`, a escolhida em accent com o check, grupos com DIVISOR,
+  desabilitada esmaecida com o `title` na dica, BUSCA (e, na folha, o título) FIXA no topo acima de 12 opções, linhas de 32px
+  no desktop (`lg:pointer-fine`) e 44px no toque, entrada de 120 ms (`animate-selecao-entra`; parada com "reduzir
+  movimento"); numa tela estreita com mais de 8 opções a lista vira FOLHA que sobe de baixo (`Dropdown.folha`, sobre o
+  `--scrim`). Extras por `data-*` na `<option>`: `data-detalhe` (2ª linha), `data-aviso` (ponto âmbar + o motivo) e
+  `data-cor` (o ponto na cor — `corSegura`; também no gatilho); `acoes` = botões fixos no RODAPÉ da lista (`SelectField.acoes`
+  — ex.: "Editar esta visão"/"Nova visão" na Visão do PCA × Orçamento, `SeletorVisaoPca.onEditar` → `VisaoOrcamentoPca.editorPedido`;
+  `atributosVisao` em `orcamento-visao.ts` = resumo + PCAs que usam + ausentes). Teclado ↑/↓/Home/End/Enter/Espaço/Esc
+  + digitar para saltar; FECHADA, ↑/↓ abrem e digitar já troca a opção (v1.64.0). O `<select>` nativo fica ESCONDIDO depois do gatilho — a fonte das opções e
   do valor; escolher = o setter nativo + o `change` real. O 1º desenho já traz o texto lido dos filhos (sem piscar). Núcleo
   puro `selecao-core.ts` [`proximaHabilitada`, `typeahead`, `filtrarOpcoes`] testado. TODO select de formulário do sistema
   usa a `Selecao` — inclusive o "Linhas por página" das tabelas; ficam nativos SÓ o `SeletorCelula` [milhares de linhas] e o

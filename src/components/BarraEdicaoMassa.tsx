@@ -303,7 +303,7 @@ export function BarraEdicaoMassaProtocolos({
   /** O usuário da sessão ("(eu)", primeiro da lista). */
   usuarioId?: number | null;
   /** Situações cadastradas pelo ADM. */
-  situacoes?: { id: number; nome: string }[];
+  situacoes?: { id: number; nome: string; cor?: string }[];
   regras?: RegrasAvaliacao;
   aplicando?: boolean;
   /** O papel ALTERA o Responsável (os detalhes do papel: "não altera" tira o campo). */
@@ -375,7 +375,7 @@ export function BarraEdicaoMassaProtocolos({
             <option value="">— Situação —</option>
             <option value="0">Sem situação (limpar)</option>
             {situacoes.map((x) => (
-              <option key={x.id} value={x.id}>
+              <option key={x.id} value={x.id} data-cor={x.cor}>
                 {x.nome}
               </option>
             ))}

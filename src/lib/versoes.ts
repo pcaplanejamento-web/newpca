@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.64.0",
+    data: "2026-10-08",
+    titulo: "Listas de seleção mais completas",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "A lista abre alinhada à caixa inteira do campo, rápida, com linhas mais baixas no computador. A busca e o título ficam fixos no topo ao rolar.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Sistema", texto: "No celular, as listas grandes sobem de baixo, ocupando a largura da tela. Com o campo fechado, digitar uma letra já troca a opção.", link: "/painel/configuracoes" },
+      { tipo: "novo", area: "PCA", texto: "Na Visão do PCA × Orçamento, cada visão mostra o resumo dos filtros e em quantos PCAs é usada. O ponto âmbar marca a visão com valores fora deste orçamento, e “Editar esta visão” e “Nova visão” ficam no rodapé da lista. As visões salvas aparecem separadas do “Orçamento inteiro”.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Mesa", texto: "A Situação, na edição em massa, e a Classificação, na unidade de medida, mostram a cor de cada opção.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.63.0",
     data: "2026-10-08",
     titulo: "Proteção de dados",

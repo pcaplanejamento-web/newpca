@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import type { AlvosVinculo, VinculoOrcamento } from "@/lib/orcamento-vinculo";
-import { aplicarVisao, contarAusentes, resumoVisao, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
+import { aplicarVisao, atributosVisao, contarAusentes, resumoVisao, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "./EditorVisaoOrcamento";
@@ -58,16 +58,29 @@ export function SeletorVisaoPca({
   visaoId,
   visoes,
   podeEscolher,
+  itens,
+  onEditar,
 }: {
   pcaId: number;
   visaoId: number | null;
   visoes: VisaoOrcamento[];
   /** Configura o PCA (escolher a visão dele). */
   podeEscolher: boolean;
+  /** Os lançamentos do orçamento do ano — o ponto âmbar na visão com valores que ele não traz. */
+  itens?: LinhaVisaoOrcamento[] | null;
+  /** Editar a visão escolhida / criar uma nova (no editor da engrenagem) — as ações no rodapé da lista. */
+  onEditar?: (alvo: VisaoOrcamento | "nova") => void;
 }) {
   const { escolha, gravando, gravar } = useVisaoDoPca(pcaId, visaoId);
   const atual = visoes.find((v) => v.id === escolha) ?? null;
   const dica = atual ? `${atual.nome} — ${resumoVisao(atual.filtros)}` : "Orçamento inteiro (sem visão)";
+  const ausentes = useMemo(() => new Map(visoes.map((v) => [v.id, itens ? contarAusentes(valoresAusentes(itens, v.filtros)) : 0])), [visoes, itens]);
+  const acoes = onEditar
+    ? [
+        ...(atual ? [{ rotulo: "Editar esta visão", icone: <IconPencil className="h-4 w-4" />, onClick: () => onEditar(atual) }] : []),
+        { rotulo: "Nova visão", icone: <IconPlus className="h-4 w-4" />, onClick: () => onEditar("nova") },
+      ]
+    : undefined;
   return (
     <div className="min-w-0" title={podeEscolher ? dica : `${dica} — só quem configura o PCA troca a visão`}>
       <SelectField
@@ -76,14 +89,21 @@ export function SeletorVisaoPca({
         value={escolha ?? ""}
         disabled={!podeEscolher || gravando}
         aria-busy={gravando || undefined}
+        acoes={acoes}
         onChange={(e) => void gravar(e.target.value ? Number(e.target.value) : null)}
       >
-        <option value="">Orçamento inteiro</option>
-        {visoes.map((v) => (
-          <option key={v.id} value={v.id} title={resumoVisao(v.filtros)}>
-            {v.nome}
-          </option>
-        ))}
+        <option value="" data-detalhe="Todos os lançamentos do orçamento do ano">
+          Orçamento inteiro
+        </option>
+        {visoes.length > 0 && (
+          <optgroup label="Visões salvas">
+            {visoes.map((v) => (
+              <option key={v.id} value={v.id} {...atributosVisao(v, ausentes.get(v.id) ?? 0)}>
+                {v.nome}
+              </option>
+            ))}
+          </optgroup>
+        )}
       </SelectField>
     </div>
   );
@@ -105,6 +125,7 @@ export function VisaoOrcamentoPca({
   podeEditarVisao,
   vinculos,
   alvos,
+  editorPedido,
 }: {
   pcaId: number;
   aberto: boolean;
@@ -119,10 +140,16 @@ export function VisaoOrcamentoPca({
   /** TODOS os vínculos + os alvos — a aba Vínculos do banner da visão. */
   vinculos?: VinculoOrcamento[];
   alvos?: AlvosVinculo;
+  /** Abrir o editor DIRETO (as ações da lista da Visão na barra) — cada pedido novo (`n`) abre. */
+  editorPedido?: { alvo: VisaoOrcamento | "nova"; n: number } | null;
 }) {
   const router = useRouter();
   const { escolha, setEscolha, gravando, gravar } = useVisaoDoPca(pcaId, visaoId);
   const [editor, setEditor] = useState<VisaoOrcamento | "nova" | null>(null);
+
+  useEffect(() => {
+    if (editorPedido) setEditor(editorPedido.alvo);
+  }, [editorPedido]);
 
   // Abriu — parte do que está gravado no PCA.
   useEffect(() => {
@@ -148,11 +175,15 @@ export function VisaoOrcamentoPca({
             onChange={(e) => void gravar(e.target.value ? Number(e.target.value) : null)}
           >
             <option value="">Orçamento inteiro (sem visão)</option>
-            {visoes.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nome} — {resumoVisao(v.filtros)}
-              </option>
-            ))}
+            {visoes.length > 0 && (
+              <optgroup label="Visões salvas">
+                {visoes.map((v) => (
+                  <option key={v.id} value={v.id} {...atributosVisao(v, itens ? contarAusentes(valoresAusentes(itens, v.filtros)) : 0)}>
+                    {v.nome}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </SelectField>
           {itens ? (
             <p className="text-sm text-text-2">

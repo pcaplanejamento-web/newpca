@@ -272,11 +272,15 @@ export function PcaConfiguracao({
             aria-label="Visão do orçamento"
           >
             <option value="">Orçamento inteiro (sem visão)</option>
-            {visoes.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nome} — {v.resumo}
-              </option>
-            ))}
+            {visoes.length > 0 && (
+              <optgroup label="Visões salvas">
+                {visoes.map((v) => (
+                  <option key={v.id} value={v.id} data-detalhe={v.resumo}>
+                    {v.nome}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </Selecao>
           <p className="mt-2 text-xs text-faint">
             As visões são criadas em{" "}

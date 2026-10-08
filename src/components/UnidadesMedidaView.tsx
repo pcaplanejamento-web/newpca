@@ -609,7 +609,7 @@ export function EditorUnidadeMedida({
         >
           <option value="">Nenhuma</option>
           {classificacoes.map((c) => (
-            <option key={c.id} value={c.id}>
+            <option key={c.id} value={c.id} data-cor={c.cor}>
               {c.nome}
             </option>
           ))}

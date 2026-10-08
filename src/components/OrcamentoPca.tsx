@@ -294,6 +294,8 @@ export function OrcamentoPca({
     setEdicoesComp({ lista: comparativo.edicoes, padroes: comparativo.padroes });
   }
   const [engrenagem, setEngrenagem] = useState(false);
+  // As ações da lista da Visão (na barra) abrem o editor da engrenagem direto.
+  const [editorPedido, setEditorPedido] = useState<{ alvo: VisaoOrcamento | "nova"; n: number } | null>(null);
   const linhasVisao = useMemo(() => comparativo?.itens ?? null, [comparativo]);
   const ausentes = contarAusentes(dados.ausentes ?? []);
   // VÍNCULOS por linha (o lápis): as unidades do CUBO do orçamento do ano + a gravação da aba Vínculos.
@@ -546,7 +548,18 @@ export function OrcamentoPca({
             {(podePublicar || visoes.length > 0) && (
               <div className="flex w-full min-w-[12rem] items-center gap-2 sm:w-auto sm:max-w-sm sm:flex-1">
                 <div className="min-w-0 flex-1">
-                  <SeletorVisaoPca pcaId={dados.pcaId} visaoId={dados.visaoId ?? null} visoes={visoes} podeEscolher={podePublicar} />
+                  <SeletorVisaoPca
+                    pcaId={dados.pcaId}
+                    visaoId={dados.visaoId ?? null}
+                    visoes={visoes}
+                    podeEscolher={podePublicar}
+                    itens={linhasVisao}
+                    onEditar={
+                      podePublicar && podeConfigurarOrcamento && linhasVisao
+                        ? (alvo) => setEditorPedido((p) => ({ alvo, n: (p?.n ?? 0) + 1 }))
+                        : undefined
+                    }
+                  />
                 </div>
                 <AjudaVisoes botao="sm" />
               </div>
@@ -605,6 +618,7 @@ export function OrcamentoPca({
           vinculos={comparativo?.vinculos}
           alvos={comparativo?.alvos}
           podeEditarVisao={podeConfigurarOrcamento}
+          editorPedido={editorPedido}
         />
       )}
     </div>

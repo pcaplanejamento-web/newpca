@@ -233,3 +233,12 @@ export function adaptarVisao(filtros: FiltrosVisao, linhas: LinhaOrcamentoVisao[
   }
   return { filtros: out, trocas };
 }
+
+/** Os extras de uma visão na lista (`Selecao`): o resumo + quantos PCAs a usam (2ª linha) e o aviso dos valores ausentes. */
+export function atributosVisao(v: VisaoOrcamento, ausentes: number) {
+  const pcas = v.pcas?.length ?? 0;
+  return {
+    "data-detalhe": `${resumoVisao(v.filtros)}${pcas > 0 ? ` · usada em ${pcas} PCA${pcas === 1 ? "" : "s"}` : ""}`,
+    "data-aviso": ausentes > 0 ? `${ausentes} valor(es) da visão fora deste orçamento` : undefined,
+  };
+}

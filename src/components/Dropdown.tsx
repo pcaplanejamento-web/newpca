@@ -1,6 +1,6 @@
 "use client";
 
-import { type ButtonHTMLAttributes, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 // Popover genérico (base de FilterChip/MultiSelect/DateFilter/ColorField/Período/SeletorPessoa).
@@ -15,7 +15,9 @@ import { createPortal } from "react-dom";
 // DENTRO do painel devolve o foco ao gatilho (o botão focado some junto com o painel — o foco cairia no `body`).
 // `papel="listbox"` = a lista de uma SELEÇÃO (`Selecao`): o painel não tem papel próprio (a lista dentro dele tem) e o
 // gatilho perde o desenho de chip (a caixa vem toda do `triggerClassName`). `gatilho` = atributos a mais do botão
-// (teclado, foco, `role`/`aria-*`, `disabled`) — o clique segue com o Dropdown.
+// (teclado, foco, `role`/`aria-*`, `disabled`) — o clique segue com o Dropdown. `ancora` = o elemento em que o painel se
+// alinha (borda esquerda e largura — ex.: a CAIXA inteira de um campo com o rótulo dentro); `folha` = o painel sobe de
+// BAIXO, na largura da tela, sobre um fundo escuro (listas grandes no celular).
 export function Dropdown({
   trigger,
   children,
@@ -32,6 +34,8 @@ export function Dropdown({
   aberto,
   onAberto,
   gatilho,
+  ancora,
+  folha = false,
 }: {
   trigger: ReactNode;
   children: ReactNode | ((close: () => void, abertura: { teclado: boolean }) => ReactNode);
@@ -49,6 +53,8 @@ export function Dropdown({
   aberto?: boolean;
   onAberto?: (aberto: boolean) => void;
   gatilho?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "className" | "type" | "id">;
+  ancora?: RefObject<HTMLElement | null>;
+  folha?: boolean;
 }) {
   const [openInterno, setOpenInterno] = useState(false);
   const open = aberto ?? openInterno;
@@ -72,7 +78,7 @@ export function Dropdown({
   // espaço disponível; sempre limita a altura à viewport (rola por dentro). Assim
   // o filtro NUNCA é cortado, mesmo quando o gatilho está no rodapé da tela.
   const reposicionar = () => {
-    const el = triggerRef.current;
+    const el = ancora?.current ?? triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const vw = window.innerWidth;
@@ -152,11 +158,17 @@ export function Dropdown({
     if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
     setOpen(false);
   }
-  const painel = {
-    ref: panelRef,
-    className: `fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
-    style: { top: pos.top, left: pos.left, width: pos.w, maxWidth: "calc(100vw - 16px)", maxHeight: pos.maxH },
-  };
+  const painel = folha
+    ? {
+        ref: panelRef,
+        className: `fixed inset-x-0 bottom-0 z-[200] max-h-[80dvh] overflow-auto rounded-t-card border-t border-border bg-surface px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-soft ${panelClassName}`,
+        style: undefined,
+      }
+    : {
+        ref: panelRef,
+        className: `fixed z-[200] overflow-auto rounded-card border border-border bg-surface p-2 shadow-soft ${panelClassName}`,
+        style: { top: pos.top, left: pos.left, width: pos.w, maxWidth: "calc(100vw - 16px)", maxHeight: pos.maxH },
+      };
   // Só com o painel aberto (o conteúdo em função monta as listas só nessa hora).
   const conteudo = !open ? null : typeof children === "function" ? children(fechar, { teclado }) : children;
 
@@ -193,9 +205,13 @@ export function Dropdown({
               {conteudo}
             </div>
           ) : papel === "listbox" ? (
-            <div role="none" {...painel}>
-              {conteudo}
-            </div>
+            <>
+              {/* A FOLHA tem o fundo escuro (tocar nele fecha — é "fora" do painel). */}
+              {folha && <div aria-hidden="true" className="animate-fundo-folha fixed inset-0 z-[199] bg-[var(--scrim)]" />}
+              <div role="none" {...painel}>
+                {conteudo}
+              </div>
+            </>
           ) : (
             <div role="menu" {...painel}>
               {conteudo}

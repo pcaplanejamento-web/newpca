@@ -4,11 +4,39 @@
  */
 import { predicadoBusca } from "./tabela-filtros.ts";
 
-/** Uma opção lida do `<select>` nativo: o valor, o texto, o grupo (`optgroup`), desabilitada e a dica (`title`). */
-export type OpcaoSelecao = { valor: string; texto: string; grupo?: string; desabilitada?: boolean; dica?: string };
+/**
+ * Uma opção lida do `<select>` nativo: o valor, o texto, o grupo (`optgroup`), desabilitada e a dica (`title`) + os
+ * extras pelos atributos `data-*` da `<option>`: `detalhe` (a 2ª linha), `aviso` (o ponto âmbar com o motivo) e `cor`
+ * (o ponto na cor — ex.: a da situação).
+ */
+export type OpcaoSelecao = {
+  valor: string;
+  texto: string;
+  grupo?: string;
+  desabilitada?: boolean;
+  dica?: string;
+  detalhe?: string;
+  aviso?: string;
+  cor?: string;
+};
 
 /** Acima disso a lista ganha a BUSCA no topo. */
 export const MIN_BUSCA_SELECAO = 12;
+/** Acima disso, numa tela estreita, a lista abre como FOLHA que sobe de baixo. */
+export const MIN_FOLHA_SELECAO = 8;
+
+/** Só uma cor SEGURA vira estilo (hex, `var(--token)`, rgb/hsl) — nada de texto livre num `style`. */
+export function corSegura(cor: string | undefined): string | undefined {
+  if (!cor) return undefined;
+  const c = cor.trim();
+  return /^#[0-9a-f]{3,8}$/i.test(c) || /^var\(--[a-z0-9-]+\)$/i.test(c) || /^(rgb|hsl)a?\([\d\s.,%/]+\)$/i.test(c) ? c : undefined;
+}
+
+/** A dica da opção: o `title` e o aviso, juntos. */
+export function dicaDaOpcao(o: OpcaoSelecao): string | undefined {
+  const partes = [o.dica, o.aviso].filter(Boolean);
+  return partes.length ? partes.join(" — ") : undefined;
+}
 
 /**
  * A próxima opção HABILITADA a partir de `i` andando `passo` (1/-1); sem sair das pontas (fica na última habilitada).
@@ -47,10 +75,10 @@ export function typeahead(opcoes: readonly OpcaoSelecao[], texto: string, desde:
   return -1;
 }
 
-/** A BUSCA da lista (sem acento/caixa; vários termos com ":"), pelo texto e pelo grupo. Vazia = todas. */
+/** A BUSCA da lista (sem acento/caixa; vários termos com ":"), pelo texto, o grupo e o detalhe. Vazia = todas. */
 export function filtrarOpcoes(opcoes: readonly OpcaoSelecao[], busca: string): OpcaoSelecao[] {
   const casa = predicadoBusca(busca);
-  return casa ? opcoes.filter((o) => casa([o.texto, o.grupo])) : [...opcoes];
+  return casa ? opcoes.filter((o) => casa([o.texto, o.grupo, o.detalhe])) : [...opcoes];
 }
 
 /** Iguais em conteúdo (a leitura do select a cada render só troca o estado quando algo mudou). */
@@ -58,6 +86,15 @@ export function opcoesIguais(a: readonly OpcaoSelecao[], b: readonly OpcaoSeleca
   if (a.length !== b.length) return false;
   return a.every((o, i) => {
     const p = b[i];
-    return o.valor === p.valor && o.texto === p.texto && o.grupo === p.grupo && !!o.desabilitada === !!p.desabilitada && o.dica === p.dica;
+    return (
+      o.valor === p.valor &&
+      o.texto === p.texto &&
+      o.grupo === p.grupo &&
+      !!o.desabilitada === !!p.desabilitada &&
+      o.dica === p.dica &&
+      o.detalhe === p.detalhe &&
+      o.aviso === p.aviso &&
+      o.cor === p.cor
+    );
   });
 }
