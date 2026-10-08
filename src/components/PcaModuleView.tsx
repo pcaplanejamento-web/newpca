@@ -60,7 +60,7 @@ export function PcaModuleView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div>
+      <div className="linha-topico">
         <h1 className="text-xl font-bold text-text">PCA</h1>
         <p className="text-sm text-muted">
           {filtro

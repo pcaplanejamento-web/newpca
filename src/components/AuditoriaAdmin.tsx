@@ -59,7 +59,7 @@ export function AuditoriaAdmin() {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className="linha-topico flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-text">
             <IconClock className="h-5 w-5" /> Auditoria

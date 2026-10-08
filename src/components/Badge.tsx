@@ -36,6 +36,7 @@ export function Badge({
   dot = false,
   solid = false,
   vivo = false,
+  tamanho,
   title,
   className = "",
 }: {
@@ -44,8 +45,10 @@ export function Badge({
   dot?: boolean;
   /** `solid` = pílula PREENCHIDA (fundo no tom, texto branco) — p/ chips de MARCA (ex.: Adobe). */
   solid?: boolean;
-  /** `vivo` = o ponto PULSA (estado ao vivo — ex.: Centi logada). */
+  /** `vivo` = o ponto PULSA (estado ao vivo — ex.: Centi logada); com `tamanho="linha"`, um brilho também varre a pílula. */
   vivo?: boolean;
+  /** `linha` = o selo da LINHA DE TÍTULO: a mesma altura do nome, proporcional ao botão de voltar (`--h-control-sm` − 10px; 34px no toque). */
+  tamanho?: "linha";
   /** A explicação ao passar o mouse. */
   title?: string;
   className?: string;
@@ -59,9 +62,10 @@ export function Badge({
         background: `color-mix(in srgb, ${c} 14%, var(--surface))`,
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 28%, transparent)`,
       };
+  const medida = tamanho === "linha" ? `h-[34px] px-3 text-[13px] lg:h-[calc(var(--h-control-sm)-10px)] ${vivo ? "selo-vivo" : ""}` : "px-2.5 py-0.5 text-xs";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-semibold ${medida} ${className}`}
       style={style}
       title={title}
     >

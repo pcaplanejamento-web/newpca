@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.69.0",
+    data: "2026-10-08",
+    titulo: "Linha de título padronizada",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Nome, ano e status do PCA com a mesma altura, proporcional ao botão de voltar; o Preview ganhou ícone e um brilho ao vivo que varre o selo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "A linha do título do orçamento segue o mesmo padrão: nome e ano com a mesma altura.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Sistema", texto: "Abaixo da linha de título de cada tela, o mesmo espaço que há acima dela — padronizado em todo o sistema.", link: "/painel/configuracoes" },
+    ],
+  },
+  {
     versao: "1.68.1",
     data: "2026-10-08",
     titulo: "Margens do conteúdo proporcionais",

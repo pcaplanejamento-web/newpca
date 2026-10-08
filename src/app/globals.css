@@ -556,6 +556,31 @@
    mola e brilha por 3 s, o número desliza ao mudar, os três pontos do "digitando" saltam e o balão novo entra. */
 /* O ponto "ao vivo": o halo que pulsa. O ponto precisa ser POSICIONADO (absolute/relative pela classe de quem usa) — aqui não
    se fixa `position`, senão a regra (fora das camadas do Tailwind) venceria o `absolute` e o ponto sairia do canto da foto. */
+/* SELO AO VIVO (Badge `tamanho="linha"` + `vivo` — ex.: o Preview do PCA): uma faixa de brilho no tom da pílula a varre
+   no mesmo ritmo do pulso do ponto. Fica atrás do texto (`isolation` + z-index −1); para com "reduzir movimento". */
+.selo-vivo {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.selo-vivo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, currentColor 22%, transparent) 50%, transparent 80%);
+  translate: -100% 0;
+  animation: varrer-selo 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes varrer-selo {
+  0% {
+    translate: -100% 0;
+  }
+  60%,
+  100% {
+    translate: 100% 0;
+  }
+}
 .ponto-vivo::after {
   content: "";
   position: absolute;
@@ -759,6 +784,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ponto-vivo::after,
+  .selo-vivo::before,
   .animate-entrar-pessoa,
   .animate-brilho-novo,
   .animate-contador,
@@ -768,12 +794,14 @@
   }
 }
 [data-motion="off"] .ponto-vivo::after,
+[data-motion="off"] .selo-vivo::before,
 [data-motion="off"] .animate-entrar-pessoa,
 [data-motion="off"] .animate-brilho-novo,
 [data-motion="off"] .animate-contador,
 [data-motion="off"] .ponto-digitando,
 [data-motion="off"] .animate-balao,
 [data-motion="reduced"] .ponto-vivo::after,
+[data-motion="reduced"] .selo-vivo::before,
 [data-motion="reduced"] .ponto-digitando {
   animation: none;
 }
@@ -1068,4 +1096,10 @@ select:not([multiple]):not([size]) {
 .seletor-sistema {
   padding-right: 0.75rem;
   text-overflow: ellipsis;
+}
+
+/* LINHA DE TÍTULO (o nome da tela/espaço, com voltar, selos e abas): abaixo dela, o MESMO respiro que há acima — a margem do
+   conteúdo ao cabeçalho (--pad-canvas-y). Sem camada, vence a margem do `space-y-[var(--gap-block)]` da raiz da tela. */
+.linha-topico {
+  margin-block-end: var(--pad-canvas-y);
 }

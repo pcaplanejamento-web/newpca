@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { type FontePca, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
 import { AbasEspaco } from "./AbasEspaco";
 import { Badge } from "./Badge";
-import { IconCalendar, IconChevronLeft, IconSettings } from "./icons";
+import { IconCalendar, IconCheck, IconChevronLeft, IconPencil, IconSettings } from "./icons";
 import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
@@ -41,11 +41,11 @@ export function PcaEspacoView({
             >
               <IconChevronLeft className="h-4 w-4" />
             </Link>
-            <h1 className="min-w-0 truncate text-lg font-bold text-text" title={pca.nome}>
+            <h1 className="min-w-0 truncate text-[17px] font-bold leading-[34px] text-text lg:leading-[calc(var(--h-control-sm)-10px)]" title={pca.nome}>
               {pca.nome}
             </h1>
             {pca.ano != null && (
-              <Badge tone="blue" title={`PCA ${pca.ano}`} className="shrink-0 tabular-nums">
+              <Badge tone="blue" tamanho="linha" title={`PCA ${pca.ano}`} className="shrink-0 tabular-nums">
                 <IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
                 {pca.ano}
               </Badge>
@@ -54,9 +54,11 @@ export function PcaEspacoView({
               tone={preview ? "amber" : "emerald"}
               dot
               vivo={preview}
+              tamanho="linha"
               className="shrink-0"
               title={preview ? "Em preparação — os números ainda podem mudar e o PCA não aparece na tela inicial" : "Publicado na tela inicial"}
             >
+              {preview ? <IconPencil className="h-3.5 w-3.5" aria-hidden="true" /> : <IconCheck className="h-3.5 w-3.5" aria-hidden="true" />}
               {ROTULO_STATUS[pca.status]}
             </Badge>
           </>

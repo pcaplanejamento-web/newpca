@@ -97,7 +97,7 @@ export default async function HomePage({
     <div className="min-h-dvh bg-bg text-text">
       <Topo identidade={identidade} protecao={protecao} />
       <main className="space-y-[var(--gap-block)] px-[var(--pad-canvas)] py-[var(--pad-canvas-y)]">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="linha-topico flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-bold text-text">{pca.nome}</h1>
           <div className="flex flex-col gap-2 sm:flex-row">
             {publicados.length > 1 && (

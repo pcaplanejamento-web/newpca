@@ -507,7 +507,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-text">Avaliação</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">

@@ -11,7 +11,7 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
-import { IconChevronLeft, IconTrash } from "./icons";
+import { IconCalendar, IconChevronLeft, IconTrash } from "./icons";
 import { useOndeDetalhe } from "./CanalGrupo";
 
 export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes";
@@ -69,7 +69,7 @@ export function OrcamentoEspacoView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div className="linha-topico flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/painel/orcamento"
@@ -78,10 +78,13 @@ export function OrcamentoEspacoView({
           >
             <IconChevronLeft className="h-4 w-4" />
           </Link>
-          <h1 className="min-w-0 truncate text-lg font-bold text-text" title={o.nome}>
+          <h1 className="min-w-0 truncate text-[17px] font-bold leading-[34px] text-text lg:leading-[calc(var(--h-control-sm)-10px)]" title={o.nome}>
             {o.nome}
           </h1>
-          <Badge tone="blue">{o.ano}</Badge>
+          <Badge tone="blue" tamanho="linha" className="shrink-0 tabular-nums">
+            <IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
+            {o.ano}
+          </Badge>
         </div>
         <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
           {indicadores.map((i) => (

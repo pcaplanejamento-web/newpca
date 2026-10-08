@@ -2314,8 +2314,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`; grade fluida `auto-fill minmax(22rem)` com o card até 30rem, o texto proporcional ao card por container query e, com capa, uma faixa desfocada sob o texto) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
   **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO: UMA linha só (v1.67.0, `AbasEspaco cabecalho`) — à esquerda voltar · nome ·
-  ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview PULSA** — `vivo`, ao vivo: em preparação;
-  Publicado em verde, parado); à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
+  ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview PULSA** — `vivo`, ao vivo: em preparação,
+  com `IconPencil` e o brilho que varre a pílula; Publicado em verde com `IconCheck`, parado) — v1.69.0: nome, ano e status
+  com a MESMA altura (`Badge tamanho="linha"` + o `h1` `text-[17px]` na mesma linha-caixa), proporcional à seta de voltar; à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
   **Configuração só com o ícone** (`soIcone`); no celular o título numa linha e as abas na de baixo. A fonte não aparece mais
   no cabeçalho (só nos cards). A capa fica no card e na Configuração; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
@@ -3522,6 +3523,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   NUNCA `px-*`/`py-*` diferentes nem um recuo extra por dentro (o `KpiStat` não tem mais `pl-2`); o cabeçalho, o corpo e o
   rodapé do `Modal`/`JanelaFlutuante` também. Estado vazio GRANDE (ícone + texto + botão) = `p-10`. Ficam de fora só as
   linhas/itens compactos (botões de lista, chips, avisos flutuantes, painéis de `Dropdown`), já simétricos ou de altura fixa.
+  **LINHA DE TÍTULO (v1.69.0):** a linha do título de uma tela/espaço (nome, voltar, selos, abas — a barra do `AbasEspaco` e
+  os cabeçalhos das telas de módulo/ADM) leva a classe **`.linha-topico`** (`globals.css`, sem camada): abaixo dela o
+  respiro é `--pad-canvas-y` — o MESMO que há entre o cabeçalho do app e ela —, vencendo o `space-y-[var(--gap-block)]` da
+  raiz. Toda linha de título nova usa a classe.
 - **Tema por atributo `data-theme`** (`light`/`dark`) — next-themes `attribute="data-theme"`;
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.
@@ -3765,7 +3770,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
-  `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).
+  `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA); **`tamanho="linha"`** =
+  o selo da linha de título (`--h-control-sm` − 10px no desktop, 34px no toque; com `vivo`, a classe `.selo-vivo` — um
+  brilho que varre a pílula, parado com "reduzir movimento").
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`
   (async, `force-dynamic`) injeta o `<style>` sem flash (`src/lib/aparencia.ts` cacheado +

@@ -263,7 +263,7 @@ export function ReferenciaSistema({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div>
+      <div className="linha-topico">
         <h1 className="text-xl font-bold text-text">Referência do sistema</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
           Todas as regras e comportamentos do sistema em um só lugar (somente leitura). O que

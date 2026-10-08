@@ -105,7 +105,7 @@ export function TarefasView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-start gap-3">
+      <div className="linha-topico flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
         <h1 className="text-xl font-bold text-text">Tarefas</h1>
         <p className="text-sm text-muted">

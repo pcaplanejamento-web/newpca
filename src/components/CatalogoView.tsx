@@ -789,7 +789,7 @@ export function CatalogoView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="linha-topico flex flex-wrap items-center justify-between gap-3">
         {pasta ? (
           <div className="flex min-w-0 items-center gap-2">
             <Link

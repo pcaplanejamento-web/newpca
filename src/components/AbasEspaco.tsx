@@ -90,7 +90,7 @@ export function AbasEspaco<T extends string>({
   return (
     <>
       {cabecalho ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="linha-topico flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-x-2">{cabecalho}</div>
           <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
             <div ref={setSlot} className="flex min-w-0 items-center justify-end gap-2 empty:hidden" />
@@ -98,7 +98,7 @@ export function AbasEspaco<T extends string>({
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="linha-topico flex flex-wrap items-center gap-2">
           {abas}
           <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
         </div>
