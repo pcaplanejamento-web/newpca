@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.73.0",
+    data: "2026-10-08",
+    titulo: "Responsável de fora do município",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "No cadastro da pessoa responsável, a chave \u201cFuncionário de fora do município\u201d: ela fica sem matrícula (o campo some), a planilha mostra \u201cFora do município\u201d e a conferência deixa de apontar \u201cSem matrícula\u201d. Vale também no cadastro rápido ao vincular.", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
     versao: "1.72.1",
     data: "2026-10-08",
     titulo: "Tabelas: rolagem lateral estável e caixa de marcar do sistema",

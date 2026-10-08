@@ -118,9 +118,11 @@ describe("mensagens padrão do Zod em português", () => {
 
 describe("planilha de responsáveis (pessoa + vínculo)", () => {
   it("a pessoa exige o nome; matrícula, cargo e usuário são opcionais; o PATCH não injeta padrões", () => {
-    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "", cargo: "", usuarioId: null });
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "", cargo: "", usuarioId: null, externo: false });
     assert.equal(pessoaResponsavelSchema.safeParse({ nome: "  " }).success, false);
-    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: "Ana", cargo: "Secretário", usuarioId: 7 }), { nome: "Ana", matricula: "", cargo: "Secretário", usuarioId: 7 });
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: "Ana", cargo: "Secretário", usuarioId: 7 }), { nome: "Ana", matricula: "", cargo: "Secretário", usuarioId: 7, externo: false });
+    assert.equal(pessoaResponsavelSchema.parse({ nome: "Ana", externo: true }).externo, true);
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ externo: true }), { externo: true });
     assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", usuarioId: 0 }).success, false);
     assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", cargo: "x".repeat(81) }).success, false);
     assert.deepEqual(pessoaResponsavelPatchSchema.parse({ matricula: "12" }), { matricula: "12" });

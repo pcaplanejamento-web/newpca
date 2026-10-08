@@ -20,6 +20,7 @@ import {
   type PlanilhaResponsaveis as Planilha,
   porAlvo,
   rotuloAlvo,
+  rotuloMatricula,
   type TipoVinculo,
   usuarioSugerido,
   type VinculoComPessoa,
@@ -39,6 +40,7 @@ import { IconArquivar, IconPlus, IconSave, IconTrash, IconUserCheck, IconUserX }
 import { Modal } from "./Modal";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { SeletorPessoa } from "./SeletorPessoa";
+import { Switch } from "./Switch";
 import { toast } from "./Toast";
 import {
   type AberturaVinculo,
@@ -218,7 +220,7 @@ export function usePlanilhaResponsaveis() {
 export type CtxPlanilha = ReturnType<typeof usePlanilhaResponsaveis>;
 
 /** O que muda numa pessoa (só o que mudou vai ao servidor). */
-type PatchPessoa = { nome?: string; matricula?: string; cargo?: string; usuarioId?: number | null };
+type PatchPessoa = { nome?: string; matricula?: string; cargo?: string; usuarioId?: number | null; externo?: boolean };
 
 /** A célula "Conferência": o problema principal (+N) na cor, ou "Regular". */
 export function CelulaConferencia({ msgs }: { msgs: MensagemConferencia[] }) {
@@ -304,8 +306,15 @@ export function PlanilhaResponsaveis({ ctx, orgaoId, exonerados = false }: { ctx
       key: "matricula",
       header: "Matrícula",
       nowrap: true,
-      value: (l) => l.matricula || "—",
-      render: (l) => (l.matricula ? <span className={`font-mono text-[12px] ${exonerados ? "text-faint" : "text-text-2"}`}>{l.matricula}</span> : <span className="text-faint">—</span>),
+      value: (l) => (l.externo ? "Fora do município" : l.matricula || "—"),
+      render: (l) =>
+        l.externo ? (
+          <Badge tone="slate">Fora do município</Badge>
+        ) : l.matricula ? (
+          <span className={`font-mono text-[12px] ${exonerados ? "text-faint" : "text-text-2"}`}>{l.matricula}</span>
+        ) : (
+          <span className="text-faint">—</span>
+        ),
     },
     {
       key: "cargo",
@@ -422,7 +431,7 @@ export function AjudaResponsaveis() {
 }
 
 type CampoPessoa = "nome" | "matricula" | "cargo" | "usuario";
-type RascunhoPessoa = { nome: string; matricula: string; cargo: string; usuarioId: number | null };
+type RascunhoPessoa = { nome: string; matricula: string; cargo: string; usuarioId: number | null; externo: boolean };
 const NENHUM = "";
 
 /** O banner de UMA pessoa: nome, matrícula, cargo/função padrão e o usuário ligado por cadeado; onde responde (padrão e
@@ -443,8 +452,10 @@ function ResponsavelDetalhe({
   const { planilha, grupos, hoje, ocupado, acoes } = ctx;
   const nova = pessoa === "nova";
   const base: RascunhoPessoa =
-    nova || !pessoa ? { nome: "", matricula: "", cargo: "", usuarioId: null } : { nome: pessoa.nome, matricula: pessoa.matricula, cargo: pessoa.cargo, usuarioId: pessoa.usuarioId };
-  const chave = nova ? "nova" : pessoa ? `${pessoa.id}:${pessoa.nome}:${pessoa.matricula}:${pessoa.cargo}:${pessoa.usuarioId}` : "";
+    nova || !pessoa
+      ? { nome: "", matricula: "", cargo: "", usuarioId: null, externo: false }
+      : { nome: pessoa.nome, matricula: pessoa.matricula, cargo: pessoa.cargo, usuarioId: pessoa.usuarioId, externo: pessoa.externo };
+  const chave = nova ? "nova" : pessoa ? `${pessoa.id}:${pessoa.nome}:${pessoa.matricula}:${pessoa.cargo}:${pessoa.usuarioId}:${pessoa.externo}` : "";
   const [r, setR] = useState(base);
   const [chaveR, setChaveR] = useState(chave);
   const { abertos, alternar, setAbertos } = useCadeados<CampoPessoa>();
@@ -458,7 +469,8 @@ function ResponsavelDetalhe({
   if (!planilha) return null;
   const patch: PatchPessoa = {};
   if (r.nome.trim() !== base.nome) patch.nome = r.nome.trim();
-  if (r.matricula.trim() !== base.matricula) patch.matricula = r.matricula.trim();
+  if (!r.externo && r.matricula.trim() !== base.matricula) patch.matricula = r.matricula.trim();
+  if (r.externo !== base.externo) patch.externo = r.externo;
   if (r.cargo !== base.cargo) patch.cargo = r.cargo;
   if (r.usuarioId !== base.usuarioId) patch.usuarioId = r.usuarioId;
   const sujo = Object.keys(patch).length > 0;
@@ -470,7 +482,7 @@ function ResponsavelDetalhe({
   const ligados = new Set(planilha.pessoas.filter((p) => p.usuarioId != null && (nova || p.id !== (pessoa as PessoaResponsavel | null)?.id)).map((p) => p.usuarioId));
   const usuarios = planilha.usuarios.filter((u) => !ligados.has(u.id));
   const usuario = planilha.usuarios.find((u) => u.id === r.usuarioId) ?? null;
-  const sugerido = r.usuarioId == null ? usuarioSugerido(r.matricula, usuarios) : null;
+  const sugerido = r.usuarioId == null && !r.externo ? usuarioSugerido(r.matricula, usuarios) : null;
   const foto = usuario?.foto ?? null;
 
   async function salvar() {
@@ -509,7 +521,7 @@ function ResponsavelDetalhe({
               <Avatar nome={pessoa.nome} foto={pessoa.foto} size="lg" />
               <div className="min-w-0">
                 <p className="truncate text-[15px] font-semibold text-text">{pessoa.nome}</p>
-                <p className="truncate text-[12.5px] text-muted">{[pessoa.cargo || "Sem cargo", pessoa.matricula ? `Matrícula ${pessoa.matricula}` : ""].filter(Boolean).join(" · ")}</p>
+                <p className="truncate text-[12.5px] text-muted">{[pessoa.cargo || "Sem cargo", pessoa.externo || pessoa.matricula ? rotuloMatricula(pessoa) : ""].filter(Boolean).join(" · ")}</p>
                 {pessoa.exoneradoEm && (
                   <Badge tone="slate" className="mt-1">
                     {exonerado(pessoa, hoje) ? "Exonerado" : "Exoneração"} em {dataBR(pessoa.exoneradoEm)}
@@ -555,8 +567,23 @@ function ResponsavelDetalhe({
                   <ValorCampo>{r.nome}</ValorCampo>
                 )}
               </LinhaCampo>
-              <LinhaCampo label="Matrícula" {...lock("matricula")}>
-                {aberto("matricula") ? (
+              <div className="sm:col-span-2">
+                <Switch
+                  checked={r.externo}
+                  onChange={(externo) => {
+                    setR({ ...r, externo });
+                    if (externo) setAbertos((a) => new Set([...a].filter((c) => c !== "matricula")));
+                  }}
+                  disabled={ocupado}
+                  label="Funcionário de fora do município (sem matrícula)"
+                />
+              </div>
+              <LinhaCampo label="Matrícula" {...lock("matricula")} editavel={!nova && !r.externo}>
+                {r.externo ? (
+                  <ValorCampo>
+                    <span className="text-muted">Fora do município — sem matrícula</span>
+                  </ValorCampo>
+                ) : aberto("matricula") ? (
                   <input className={cellCls} value={r.matricula} onChange={(e) => setR({ ...r, matricula: e.target.value })} maxLength={60} inputMode="numeric" aria-label="Matrícula" />
                 ) : (
                   <ValorCampo>{r.matricula || "—"}</ValorCampo>
@@ -729,7 +756,7 @@ export function ResponsaveisDoAlvo({ ctx, alvo, nota }: { ctx: CtxPlanilha; alvo
           hoje={hoje}
           titulo={(v) => ({
             texto: v.nome,
-            detalhe: v.matricula ? `Matrícula ${v.matricula}` : "Sem matrícula",
+            detalhe: rotuloMatricula({ matricula: v.matricula, externo: pessoaDe(v.responsavelId)?.externo }),
             aviso: vale ? undefined : textoRevisar(v, planilha),
             avatar: { nome: v.nome, foto: pessoaDe(v.responsavelId)?.foto ?? null },
             exonerado: pessoaDe(v.responsavelId)?.exoneradoEm ?? null,

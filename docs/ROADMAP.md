@@ -1669,6 +1669,7 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Versões e Novidades (v1.3.0)**: o sistema é versionado (registro único de mudanças); o número aparece no fim do menu lateral e leva à página de Novidades, com o que mudou em cada versão e o botão "Ver onde mudou"; cada ADM recebe no sino a versão nova com a lista do que mudou.
 ✅ **Vínculos da linha do PCA mais legíveis** — o "N sem vínculo" mostra, com o mouse, a lista organizada por unidade do orçamento (dica flutuante); o editor separa as unidades da seleção das ações (cartão próprio, marcadas destacadas, as de outros vínculos travadas à parte); o PDF tem KPI de total e só duas tabelas (vinculadas e sem vínculo) com a linha TOTAL.
 ✅ **Editor do vínculo minimalista** — sem repetir as unidades que o banner já mostra, ações com a caixa e o total, "Incluir ações futuras" numa linha e as de outros vínculos resumidas por destino.
+✅ **v1.73.0 — Responsável de fora do município**: a pessoa marcada fica sem matrícula e a conferência não aponta "Sem matrícula".
 ✅ **v1.72.0 — Responsáveis sempre no lugar que vale**: o vínculo é gravado onde a assinatura é conferida (órgão com assinatura única / cada unidade), mudar a configuração do órgão/unidade leva os responsáveis junto (migração `0103` corrigiu os gravados) e "Onde responde" separa Órgãos | Unidades (agrupadas por órgão), só com os lugares que valem.
 ✅ **v1.70.1 — Proteção de captura invisível**: sem cobertura nos atalhos; impressão em branco, PrtScn fora da área de transferência e marca d'água invisível.
 

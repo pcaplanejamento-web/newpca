@@ -63,6 +63,8 @@ export const pessoaResponsavelSchema = z.object({
   matricula: matriculaPessoa.default(""),
   cargo: cargoPessoa.default(""),
   usuarioId: usuarioPessoa.default(null),
+  // FUNCIONÁRIO DE FORA DO MUNICÍPIO: sem matrícula (a gravação a deixa vazia).
+  externo: z.boolean().default(false),
 });
 // PATCH sem os padrões da criação (o que não vier fica como está).
 export const pessoaResponsavelPatchSchema = z.object({
@@ -70,6 +72,7 @@ export const pessoaResponsavelPatchSchema = z.object({
   matricula: matriculaPessoa.optional(),
   cargo: cargoPessoa.optional(),
   usuarioId: usuarioPessoa.optional(),
+  externo: z.boolean().optional(),
   // A EXONERAÇÃO: data "AAAA-MM-DD" válida ou null (desfazer).
   exoneradoEm: z
     .string()

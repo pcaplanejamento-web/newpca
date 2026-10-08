@@ -17,6 +17,7 @@ import {
   estadoDoVinculo,
   exonerado,
   funcaoDoVinculo,
+  matriculaParaGravar,
   motivoNaoVincular,
   motivoVinculoInvalido,
   normalizarVinculo,
@@ -29,6 +30,7 @@ import {
   responsaveisDosVinculos,
   responsaveisEfetivosDasUnidades,
   rotuloAlvo,
+  rotuloMatricula,
   separarVinculos,
   usuarioSugerido,
   type VinculoComPessoa,
@@ -59,7 +61,7 @@ function v(over: Partial<VinculoComPessoa> & { nome: string }): VinculoComPessoa
   };
 }
 
-const pessoa = (id: number, nome: string, matricula: string, cargo = "Secretário") => ({ id, nome, matricula, cargo, usuarioId: null, foto: null, exoneradoEm: null });
+const pessoa = (id: number, nome: string, matricula: string, cargo = "Secretário") => ({ id, nome, matricula, cargo, usuarioId: null, foto: null, exoneradoEm: null, externo: false });
 
 const PLANILHA = (vinculos: VinculoComPessoa[]): PlanilhaResponsaveis => ({
   pessoas: [...new Map(vinculos.map((x) => [x.responsavelId, pessoa(x.responsavelId, x.nome, x.matricula, x.cargo)])).values()],
@@ -283,6 +285,19 @@ describe("conferência: o que está mal cadastrado", () => {
       conferenciaDaPessoa(pessoa(2, "ANA", "999", ""), p, HOJE).map((m) => m.chave),
       ["resp.semCargo", "resp.duplicada", "resp.semVinculo"],
     );
+  });
+
+  it("funcionário de FORA DO MUNICÍPIO: sem matrícula não é falta; a matrícula gravada é sempre vazia", () => {
+    const enc = v({ nome: "Bia", responsavelId: 1, matricula: "", reparticaoId: 12 });
+    const p = PLANILHA([enc]);
+    const fora = { ...pessoa(1, "Bia", ""), externo: true };
+    assert.ok(!conferenciaDaPessoa(fora, p, HOJE).some((m) => m.chave === "resp.matricula"));
+    assert.ok(conferenciaDaPessoa(pessoa(1, "Bia", ""), p, HOJE).some((m) => m.chave === "resp.matricula"));
+    assert.equal(matriculaParaGravar(true, " 123 "), "");
+    assert.equal(matriculaParaGravar(false, " 123 "), "123");
+    assert.equal(rotuloMatricula(fora), "Fora do município");
+    assert.equal(rotuloMatricula(pessoa(2, "C", "77")), "Matrícula 77");
+    assert.equal(rotuloMatricula(pessoa(3, "D", "")), "Sem matrícula");
   });
 
   it("usuarioSugerido: só o usuário ÚNICO de mesma matrícula (sem zeros à esquerda)", () => {

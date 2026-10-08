@@ -20,7 +20,8 @@ import {
 export type TipoVinculo = "padrao" | "temporario";
 
 /** Uma pessoa da planilha: `cargo` = o nome do cargo cadastrado; `usuarioId`/`foto` = o usuário ligado (URL da foto);
- * `exoneradoEm` = a data da EXONERAÇÃO ("AAAA-MM-DD"; null = em exercício). */
+ * `exoneradoEm` = a data da EXONERAÇÃO ("AAAA-MM-DD"; null = em exercício); `externo` = FUNCIONÁRIO DE FORA DO MUNICÍPIO
+ * (não tem matrícula). */
 export type PessoaResponsavel = {
   id: number;
   nome: string;
@@ -29,7 +30,19 @@ export type PessoaResponsavel = {
   usuarioId: number | null;
   foto: string | null;
   exoneradoEm: string | null;
+  externo: boolean;
 };
+
+/** A matrícula que a pessoa GRAVA: o funcionário de fora do município não tem (sempre vazia). */
+export function matriculaParaGravar(externo: boolean, matricula: string): string {
+  return externo ? "" : matricula.trim();
+}
+
+/** O texto da matrícula nas telas: "Fora do município" · "Matrícula N" · "Sem matrícula". */
+export function rotuloMatricula(p: { matricula: string; externo?: boolean } | null | undefined): string {
+  if (p?.externo) return "Fora do município";
+  return p?.matricula.trim() ? `Matrícula ${p.matricula.trim()}` : "Sem matrícula";
+}
 
 /** Um vínculo pessoa → unidade OU órgão (exatamente um dos dois). */
 export type VinculoResponsavel = {
@@ -312,7 +325,8 @@ export function problemasDaPessoa(
   cargos?: readonly string[],
 ): MensagemConferencia[] {
   const out: MensagemConferencia[] = [];
-  if (!p.matricula.trim()) out.push({ status: "atencao", chave: "resp.matricula", texto: "Pessoa sem matrícula.", rotulo: "Sem matrícula" });
+  // O funcionário de FORA DO MUNICÍPIO não tem matrícula (não é falta).
+  if (!p.externo && !p.matricula.trim()) out.push({ status: "atencao", chave: "resp.matricula", texto: "Pessoa sem matrícula.", rotulo: "Sem matrícula" });
   if (!p.cargo.trim()) out.push({ status: "atencao", chave: "resp.semCargo", texto: "Pessoa sem o cargo ou a função padrão.", rotulo: "Sem cargo" });
   if (cargoForaDaLista(p.cargo, cargos))
     out.push({
@@ -327,7 +341,7 @@ export function problemasDaPessoa(
     out.push({
       status: "atencao",
       chave: "resp.duplicada",
-      texto: `Mesmo nome de outra pessoa da planilha (matrícula ${homonimos.map((o) => o.matricula || "vazia").join(", ")}) — confira se é a mesma.`,
+      texto: `Mesmo nome de outra pessoa da planilha (${homonimos.map((o) => rotuloMatricula(o).toLowerCase()).join(", ")}) — confira se é a mesma.`,
       rotulo: "Possível duplicidade",
     });
   if (vinculos.length === 0) out.push({ status: "atencao", chave: "resp.semVinculo", texto: "Pessoa sem vínculo com unidade ou órgão.", rotulo: "Sem vínculo" });

@@ -696,7 +696,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   a assinatura datada dentro dele; o padrão sem período (os antigos) segue como antes (`validarAssinatura`,
   `responsaveisVigentes`). A pessoa pode ser LIGADA a UM usuário (`motivoUsuarioInvalido` — 404/409; sugestão pela mesma
   matrícula — `usuarioSugerido`) e ganha a FOTO dele (`listarPlanilha` faz o join; `PlanilhaResponsaveis.usuarios`); base
-  para ver os protocolos no nome dele. A `0100` transformou as funções digitadas em cargos cadastrados, deu à pessoa o
+  para ver os protocolos no nome dele. **Fora do município (v1.73.0, migração `0104` — `responsaveis.externo`):** a pessoa
+  marcada não tem matrícula (`matriculaParaGravar` grava vazia; `rotuloMatricula` = "Fora do município" nas telas) e a
+  conferência não aponta `resp.matricula`; o `Switch` fica no banner da pessoa e no cadastro rápido do `EditorVinculo`. A `0100` transformou as funções digitadas em cargos cadastrados, deu à pessoa o
   cargo mais usado nos padrões dela e ligou o usuário de matrícula ÚNICA. Telas: coluna **"Cargo/função padrão"** e o
   `Avatar` no nome; banner da pessoa com cargo (`OpcoesCargo`) e usuário (`SeletorPessoa`) por cadeado; **`ListaVinculos`**
   separa **Padrão | Temporários** (`separarVinculos`, cada seção com a sua ação "Adicionar…"/"Vincular…"); o `EditorVinculo`

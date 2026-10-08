@@ -328,6 +328,8 @@ export const responsaveis = sqliteTable(
     usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
     // A EXONERAÇÃO ("AAAA-MM-DD", migração 0101): os vínculos seguem valendo; a partir dela, nenhum vínculo novo.
     exoneradoEm: text("exonerado_em"),
+    // FUNCIONÁRIO DE FORA DO MUNICÍPIO (migração 0104): não tem matrícula (gravada vazia).
+    externo: integer("externo", { mode: "boolean" }).notNull().default(false),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

@@ -12,6 +12,7 @@ import {
   chaveNome,
   type DadosVinculo,
   normalizarVinculo,
+  matriculaParaGravar,
   type PessoaResponsavel,
   type PlanilhaResponsaveis,
   type PlanoRealinhar,
@@ -35,11 +36,12 @@ const colunasPessoa = {
   cargo: responsaveis.cargo,
   usuarioId: responsaveis.usuarioId,
   exoneradoEm: responsaveis.exoneradoEm,
+  externo: responsaveis.externo,
   temFoto: sql<number>`(${usuarios.foto} IS NOT NULL AND ${usuarios.foto} <> '')`,
   versao: usuarios.atualizadoEm,
 };
 
-function pessoaDaLinha({ temFoto, versao, ...p }: { id: number; nome: string; matricula: string; cargo: string; usuarioId: number | null; exoneradoEm: string | null; temFoto: number | null; versao: string | null }): PessoaResponsavel {
+function pessoaDaLinha({ temFoto, versao, ...p }: { id: number; nome: string; matricula: string; cargo: string; usuarioId: number | null; exoneradoEm: string | null; externo: boolean; temFoto: number | null; versao: string | null }): PessoaResponsavel {
   return { ...p, foto: p.usuarioId != null ? urlFoto(p.usuarioId, !!temFoto, versao) : null };
 }
 
@@ -135,12 +137,20 @@ export async function pessoaRepetida(nome: string, matricula: string, ignorar?: 
   return p?.id ?? null;
 }
 
-export type DadosPessoa = { nome: string; matricula: string; cargo: string; usuarioId: number | null };
+/** `externo` = funcionário de fora do município (a matrícula é gravada vazia — `matriculaParaGravar`). */
+export type DadosPessoa = { nome: string; matricula: string; cargo: string; usuarioId: number | null; externo: boolean };
 
 export async function criarPessoa(d: DadosPessoa): Promise<number> {
   const [r] = await getDb()
     .insert(responsaveis)
-    .values({ nome: d.nome.trim(), matricula: d.matricula.trim(), chave: chaveNome(d.nome), cargo: d.cargo, usuarioId: d.usuarioId })
+    .values({
+      nome: d.nome.trim(),
+      matricula: matriculaParaGravar(d.externo, d.matricula),
+      chave: chaveNome(d.nome),
+      cargo: d.cargo,
+      usuarioId: d.usuarioId,
+      externo: d.externo,
+    })
     .returning({ id: responsaveis.id });
   return r.id;
 }
@@ -152,6 +162,10 @@ export async function atualizarPessoa(id: number, d: Partial<DadosPessoa & { exo
     set.chave = chaveNome(d.nome);
   }
   if (d.matricula !== undefined) set.matricula = d.matricula.trim();
+  if (d.externo !== undefined) {
+    set.externo = d.externo;
+    if (d.externo) set.matricula = "";
+  }
   if (d.cargo !== undefined) set.cargo = d.cargo;
   if (d.usuarioId !== undefined) set.usuarioId = d.usuarioId;
   if (d.exoneradoEm !== undefined) set.exoneradoEm = d.exoneradoEm;

@@ -16,6 +16,7 @@ import {
   type PessoaResponsavel,
   periodoVinculo,
   ROTULO_ESTADO_VINCULO,
+  rotuloMatricula,
   separarVinculos,
   type TipoVinculo,
   type VinculoComPessoa,
@@ -34,6 +35,7 @@ import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { Segmented } from "./Segmented";
 import { Selecao } from "./Selecao";
+import { Switch } from "./Switch";
 
 /**
  * RESPONSÁVEIS POR DFDs — as peças de tela da PLANILHA ÚNICA (pessoas vinculadas a unidades/órgãos): a célula dos
@@ -427,7 +429,7 @@ function CorpoEditor({
   const opcoesPessoas: OpcaoBusca[] = pessoas.filter((p) => String(p.id) === pessoa || !exonerado(p, hojeISO())).map((p) => ({
     valor: String(p.id),
     rotulo: p.nome,
-    detalhe: [p.matricula ? `Matrícula ${p.matricula}` : "Sem matrícula", p.cargo].filter(Boolean).join(" · "),
+    detalhe: [rotuloMatricula(p), p.cargo].filter(Boolean).join(" · "),
     icone: <Avatar nome={p.nome} foto={p.foto} size="sm" />,
   }));
 
@@ -454,12 +456,15 @@ function CorpoEditor({
         <span className="block text-[13px] font-semibold text-text">Pessoa</span>
         {pessoaFixa ? (
           <p className="text-sm font-semibold text-text">
-            {escolhida?.nome ?? "—"} <span className="font-normal text-muted">{escolhida?.matricula ? `· Matrícula ${escolhida.matricula}` : "· Sem matrícula"}</span>
+            {escolhida?.nome ?? "—"} <span className="font-normal text-muted">· {rotuloMatricula(escolhida)}</span>
           </p>
         ) : nova ? (
           <div className="space-y-2 rounded-control border border-border p-3">
             <TextField label="Nome completo" value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} maxLength={160} autoFocus denso />
-            <TextField label="Matrícula" value={nova.matricula} onChange={(e) => setNova({ ...nova, matricula: e.target.value })} maxLength={60} inputMode="numeric" denso />
+            <Switch checked={nova.externo} onChange={(externo) => setNova({ ...nova, externo })} disabled={ocupado} label="Funcionário de fora do município (sem matrícula)" />
+            {!nova.externo && (
+              <TextField label="Matrícula" value={nova.matricula} onChange={(e) => setNova({ ...nova, matricula: e.target.value })} maxLength={60} inputMode="numeric" denso />
+            )}
             <OpcoesCargo label="Cargo ou função padrão" valor={nova.cargo} cargos={cargos} onChange={(c) => setNova({ ...nova, cargo: c })} />
             <div className="flex justify-end gap-2">
               <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => setNova(null)}>
@@ -481,7 +486,7 @@ function CorpoEditor({
               vazio="Ninguém na planilha com esse nome — cadastre abaixo."
               disabled={ocupado}
             />
-            <Button size="sm" variant="secondary" disabled={ocupado} icon={<IconPlus className="h-4 w-4" />} onClick={() => setNova({ nome: "", matricula: "", cargo: "" })}>
+            <Button size="sm" variant="secondary" disabled={ocupado} icon={<IconPlus className="h-4 w-4" />} onClick={() => setNova({ nome: "", matricula: "", cargo: "", externo: false })}>
               Cadastrar pessoa nova
             </Button>
           </>
@@ -632,7 +637,8 @@ function CorpoEditor({
 }
 
 /** A pessoa cadastrada na hora (no editor do vínculo). */
-export type NovaPessoa = { nome: string; matricula: string; cargo: string };
+/** `externo` = funcionário de fora do município (sem matrícula). */
+export type NovaPessoa = { nome: string; matricula: string; cargo: string; externo: boolean };
 
 /** A escolha do cargo entre os CADASTRADOS (Configurações → Cargos e funções) — o atual fora da lista continua visível.
  * `oculto` = sem o rótulo à vista (dentro de um campo com cadeado, que já o mostra): o `<select>` da célula. */

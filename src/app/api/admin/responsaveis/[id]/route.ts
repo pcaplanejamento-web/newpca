@@ -13,10 +13,11 @@ import {
   pessoaRepetida,
   vinculosDaPessoa,
 } from "@/lib/responsaveis";
+import { matriculaParaGravar } from "@/lib/responsaveis-planilha-core";
 
 export const dynamic = "force-dynamic";
 
-/** Edita a PESSOA (nome, matrícula, cargo, usuário, exoneração) — vale em todas as unidades e órgãos em que ela está vinculada. */
+/** Edita a PESSOA (nome, matrícula, fora do município, cargo, usuário, exoneração) — vale em todas as unidades e órgãos em que ela está vinculada. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -38,21 +39,38 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const depoisDela = (await vinculosDaPessoa(id)).find((v) => v.inicio && v.inicio > exoneradoEm);
     if (depoisDela) return erro("A pessoa tem vínculo que começa depois desta data — ajuste o vínculo ou a data da exoneração.", 409);
   }
+  const externo = p.data.externo ?? antes.externo;
   const depois = {
     nome: p.data.nome ?? antes.nome,
-    matricula: p.data.matricula ?? antes.matricula,
+    // O funcionário de FORA DO MUNICÍPIO não tem matrícula.
+    matricula: matriculaParaGravar(externo, p.data.matricula ?? antes.matricula),
+    externo: externo ? "Sim" : "Não",
     cargo,
     usuarioId: p.data.usuarioId === undefined ? antes.usuarioId : p.data.usuarioId,
     exoneradoEm,
   };
   if ((await pessoaRepetida(depois.nome, depois.matricula, id)) != null)
     return erro("Já existe outra pessoa na planilha com o mesmo nome e matrícula.", 409);
-  await atualizarPessoa(id, { ...p.data, ...(p.data.cargo === undefined ? {} : { cargo }) });
+  await atualizarPessoa(id, { ...p.data, ...(p.data.cargo === undefined ? {} : { cargo }), ...(externo ? { matricula: "" } : {}) });
   const d = diffCampos(
-    { nome: antes.nome, matricula: antes.matricula, cargo: antes.cargo, usuarioId: antes.usuarioId, exoneradoEm: antes.exoneradoEm },
+    {
+      nome: antes.nome,
+      matricula: antes.matricula,
+      externo: antes.externo ? "Sim" : "Não",
+      cargo: antes.cargo,
+      usuarioId: antes.usuarioId,
+      exoneradoEm: antes.exoneradoEm,
+    },
     depois,
-    ["nome", "matricula", "cargo", "usuarioId", "exoneradoEm"],
-    { nome: "Nome", matricula: "Matrícula", cargo: "Cargo/função", usuarioId: "Usuário ligado", exoneradoEm: "Exonerado em" },
+    ["nome", "matricula", "externo", "cargo", "usuarioId", "exoneradoEm"],
+    {
+      nome: "Nome",
+      matricula: "Matrícula",
+      externo: "Fora do município",
+      cargo: "Cargo/função",
+      usuarioId: "Usuário ligado",
+      exoneradoEm: "Exonerado em",
+    },
   );
   if (d.mudou)
     await registrarAuditoria({
