@@ -587,13 +587,12 @@ function PcaEspacoDemo() {
         <span className="grid h-11 w-11 place-items-center rounded-control text-muted lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
           <Icons.IconChevronLeft className="h-4 w-4" />
         </span>
-        <span className="text-[17px] font-bold leading-[34px] text-text lg:leading-[calc(var(--h-control-sm)-10px)]">PCA 2027 (linha de título)</span>
+        <span className="text-lg font-bold leading-[44px] text-text lg:leading-[var(--h-control-sm)]">PCA 2027 (linha de título)</span>
         <Badge tone="blue" tamanho="linha" className="tabular-nums">
           <Icons.IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
           2027
         </Badge>
         <Badge tone="amber" dot vivo tamanho="linha">
-          <IconPencil className="h-3.5 w-3.5" aria-hidden="true" />
           Preview
         </Badge>
         <Badge tone="emerald" dot tamanho="linha">

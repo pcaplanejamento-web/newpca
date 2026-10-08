@@ -2314,9 +2314,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`; grade fluida `auto-fill minmax(22rem)` com o card até 30rem, o texto proporcional ao card por container query e, com capa, uma faixa desfocada sob o texto) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
   **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO: UMA linha só (v1.67.0, `AbasEspaco cabecalho`) — à esquerda voltar · nome ·
-  ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview PULSA** — `vivo`, ao vivo: em preparação,
-  com `IconPencil` e o brilho que varre a pílula; Publicado em verde com `IconCheck`, parado) — v1.69.0: nome, ano e status
-  com a MESMA altura (`Badge tamanho="linha"` + o `h1` `text-[17px]` na mesma linha-caixa), proporcional à seta de voltar; à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
+  ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview** — `vivo`, em preparação: só o ponto
+  âmbar que RESPIRA e solta duas ondas — `.ponto-selo`, sem ícone; Publicado em verde com `IconCheck`, parado) — v1.69.1:
+  seta, nome, ano e status com a MESMA altura (`Badge tamanho="linha"` + o `h1` `text-lg` na mesma linha-caixa =
+  `--h-control-sm` no desktop, 44px no toque); à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
   **Configuração só com o ícone** (`soIcone`); no celular o título numa linha e as abas na de baixo. A fonte não aparece mais
   no cabeçalho (só nos cards). A capa fica no card e na Configuração; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
@@ -3747,7 +3748,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   celular — a criação rápida do Calendário), **`AssinaturaCalendario`** (exportar/assinar `.ics`),
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
   um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`; `cabecalho` = o título do
-  espaço na MESMA linha, as abas à direita; as opções aceitam `icone`/`soIcone`) + **`FerramentasAba`** (as
+  espaço na MESMA linha, as abas à direita; as opções aceitam `icone`/`soIcone`; os blocos do conteúdo da aba com o espaço
+  padrão `--gap-block` — `ConteudoAba.className`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
   **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — ordenação no cabeçalho, colunas congeladas, %, mapa
   de calor e origem de cada número; TODAS as colunas iguais — com `edicao`, a própria planilha vira o editor: arrastar o
@@ -3771,8 +3773,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA); **`tamanho="linha"`** =
-  o selo da linha de título (`--h-control-sm` − 10px no desktop, 34px no toque; com `vivo`, a classe `.selo-vivo` — um
-  brilho que varre a pílula, parado com "reduzir movimento").
+  o selo da linha de título (a altura do botão de voltar: `--h-control-sm` no desktop, 44px no toque; com `vivo`, o ponto
+  `.ponto-selo` — respira e solta duas ondas, parado com "reduzir movimento").
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`
   (async, `force-dynamic`) injeta o `<style>` sem flash (`src/lib/aparencia.ts` cacheado +

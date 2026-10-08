@@ -45,9 +45,9 @@ export function Badge({
   dot?: boolean;
   /** `solid` = pílula PREENCHIDA (fundo no tom, texto branco) — p/ chips de MARCA (ex.: Adobe). */
   solid?: boolean;
-  /** `vivo` = o ponto PULSA (estado ao vivo — ex.: Centi logada); com `tamanho="linha"`, um brilho também varre a pílula. */
+  /** `vivo` = o ponto PULSA (estado ao vivo — ex.: Centi logada); com `tamanho="linha"`, o ponto respira e solta ondas (`.ponto-selo`). */
   vivo?: boolean;
-  /** `linha` = o selo da LINHA DE TÍTULO: a mesma altura do nome, proporcional ao botão de voltar (`--h-control-sm` − 10px; 34px no toque). */
+  /** `linha` = o selo da LINHA DE TÍTULO: a MESMA altura do botão de voltar e do nome (`--h-control-sm` no desktop; 44px no toque). */
   tamanho?: "linha";
   /** A explicação ao passar o mouse. */
   title?: string;
@@ -62,14 +62,16 @@ export function Badge({
         background: `color-mix(in srgb, ${c} 14%, var(--surface))`,
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 28%, transparent)`,
       };
-  const medida = tamanho === "linha" ? `h-[34px] px-3 text-[13px] lg:h-[calc(var(--h-control-sm)-10px)] ${vivo ? "selo-vivo" : ""}` : "px-2.5 py-0.5 text-xs";
+  const linha = tamanho === "linha";
+  const medida = linha ? "h-11 px-3.5 text-[13px] lg:h-[var(--h-control-sm)]" : "px-2.5 py-0.5 text-xs";
+  const ponto = vivo ? (linha ? "relative h-2 w-2 ponto-selo" : "relative h-1.5 w-1.5 ponto-vivo") : linha ? "h-2 w-2" : "h-1.5 w-1.5";
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full font-semibold ${medida} ${className}`}
       style={style}
       title={title}
     >
-      {dot && <span className={`h-1.5 w-1.5 rounded-full ${vivo ? "ponto-vivo relative" : ""}`} style={{ background: solid ? "#fff" : c }} />}
+      {dot && <span className={`shrink-0 rounded-full ${ponto}`} style={{ background: solid ? "#fff" : c }} />}
       {children}
     </span>
   );

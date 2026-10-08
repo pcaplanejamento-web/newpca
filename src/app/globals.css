@@ -556,29 +556,42 @@
    mola e brilha por 3 s, o número desliza ao mudar, os três pontos do "digitando" saltam e o balão novo entra. */
 /* O ponto "ao vivo": o halo que pulsa. O ponto precisa ser POSICIONADO (absolute/relative pela classe de quem usa) — aqui não
    se fixa `position`, senão a regra (fora das camadas do Tailwind) venceria o `absolute` e o ponto sairia do canto da foto. */
-/* SELO AO VIVO (Badge `tamanho="linha"` + `vivo` — ex.: o Preview do PCA): uma faixa de brilho no tom da pílula a varre
-   no mesmo ritmo do pulso do ponto. Fica atrás do texto (`isolation` + z-index −1); para com "reduzir movimento". */
-.selo-vivo {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
+/* PONTO DO SELO AO VIVO (Badge `tamanho="linha"` + `vivo` — ex.: o Preview do PCA): o ponto RESPIRA e solta DUAS ondas
+   suaves defasadas (radar contínuo). Posicionado pela classe `relative` de quem usa; para com "reduzir movimento". */
+.ponto-selo {
+  animation: respirar-ponto 2s ease-in-out infinite;
 }
-.selo-vivo::before {
+.ponto-selo::before,
+.ponto-selo::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
-  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, currentColor 22%, transparent) 50%, transparent 80%);
-  translate: -100% 0;
-  animation: varrer-selo 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  border-radius: 9999px;
+  background: inherit;
+  animation: onda-ponto 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
-@keyframes varrer-selo {
-  0% {
-    translate: -100% 0;
-  }
-  60%,
+.ponto-selo::after {
+  animation-delay: 1s;
+}
+@keyframes respirar-ponto {
+  0%,
   100% {
-    translate: 100% 0;
+    scale: 1;
+    opacity: 1;
+  }
+  50% {
+    scale: 0.82;
+    opacity: 0.75;
+  }
+}
+@keyframes onda-ponto {
+  0% {
+    opacity: 0.45;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 2.6;
   }
 }
 .ponto-vivo::after {
@@ -784,7 +797,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ponto-vivo::after,
-  .selo-vivo::before,
+  .ponto-selo,
+  .ponto-selo::before,
+  .ponto-selo::after,
   .animate-entrar-pessoa,
   .animate-brilho-novo,
   .animate-contador,
@@ -794,14 +809,18 @@
   }
 }
 [data-motion="off"] .ponto-vivo::after,
-[data-motion="off"] .selo-vivo::before,
+[data-motion="off"] .ponto-selo,
+[data-motion="off"] .ponto-selo::before,
+[data-motion="off"] .ponto-selo::after,
 [data-motion="off"] .animate-entrar-pessoa,
 [data-motion="off"] .animate-brilho-novo,
 [data-motion="off"] .animate-contador,
 [data-motion="off"] .ponto-digitando,
 [data-motion="off"] .animate-balao,
 [data-motion="reduced"] .ponto-vivo::after,
-[data-motion="reduced"] .selo-vivo::before,
+[data-motion="reduced"] .ponto-selo,
+[data-motion="reduced"] .ponto-selo::before,
+[data-motion="reduced"] .ponto-selo::after,
 [data-motion="reduced"] .ponto-digitando {
   animation: none;
 }

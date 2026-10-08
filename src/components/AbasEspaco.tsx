@@ -47,11 +47,26 @@ export function useTrocaAba<T extends string>(abaServidor: T) {
   return { aba, trocar };
 }
 
-/** O CONTEÚDO da aba (com o morph) — ou o esqueleto até a aba pedida chegar; `slot` = onde vão as `FerramentasAba`. */
-export function ConteudoAba({ aba, abaServidor, slot, children }: { aba: string; abaServidor: string; slot: HTMLElement | null; children: ReactNode }) {
+/**
+ * O CONTEÚDO da aba (com o morph) — ou o esqueleto até a aba pedida chegar; `slot` = onde vão as `FerramentasAba`;
+ * `className` = o arranjo dos blocos da aba (o `AbasEspaco` põe o espaço padrão `--gap-block` entre eles).
+ */
+export function ConteudoAba({
+  aba,
+  abaServidor,
+  slot,
+  className = "",
+  children,
+}: {
+  aba: string;
+  abaServidor: string;
+  slot: HTMLElement | null;
+  className?: string;
+  children: ReactNode;
+}) {
   return aba === abaServidor ? (
     <SlotFerramentas.Provider value={slot}>
-      <div key={aba} className="animate-cat-morph">
+      <div key={aba} className={`animate-cat-morph ${className}`}>
         {children}
       </div>
     </SlotFerramentas.Provider>
@@ -103,7 +118,7 @@ export function AbasEspaco<T extends string>({
           <div ref={setSlot} className="flex min-w-[min(100%,20rem)] flex-1 flex-wrap items-center justify-end gap-2 empty:hidden" />
         </div>
       )}
-      <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot}>
+      <ConteudoAba aba={aba} abaServidor={abaServidor} slot={slot} className="space-y-[var(--gap-block)]">
         {children}
       </ConteudoAba>
     </>
