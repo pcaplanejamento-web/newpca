@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.70.0",
+    data: "2026-10-08",
+    titulo: "Consulta de itens em uma linha",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Na Consulta de itens do Dashboard, as abas, a busca e a ajuda (?) ficam numa linha só, todas na mesma altura; a explicação saiu da tela e foi para o (?).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "As linhas das tabelas da consulta ficam na altura padrão: o produto, o assunto e o motivo em uma linha, com o texto inteiro na dica.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Os selos de ano e Preview da linha de título seguem o arredondamento dos controles definido pelo ADM em Aparência.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.69.2",
     data: "2026-10-08",
     titulo: "Nome do espaço em destaque",

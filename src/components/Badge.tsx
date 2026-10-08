@@ -47,7 +47,8 @@ export function Badge({
   solid?: boolean;
   /** `vivo` = o ponto PULSA (estado ao vivo — ex.: Centi logada); com `tamanho="linha"`, o ponto respira e solta ondas (`.ponto-selo`). */
   vivo?: boolean;
-  /** `linha` = o selo da LINHA DE TÍTULO: a MESMA altura do botão de voltar e do nome (`--h-control-sm` no desktop; 44px no toque). */
+  /** `linha` = o selo da LINHA DE TÍTULO: a MESMA altura do botão de voltar e do nome (`--h-control-sm` no desktop; 44px no
+   * toque) e o MESMO contorno dos controles — o raio `--radius-control`, que segue o ajuste do ADM (Aparência). */
   tamanho?: "linha";
   /** A explicação ao passar o mouse. */
   title?: string;
@@ -63,11 +64,11 @@ export function Badge({
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 28%, transparent)`,
       };
   const linha = tamanho === "linha";
-  const medida = linha ? "h-11 px-3.5 text-[13px] lg:h-[var(--h-control-sm)]" : "px-2.5 py-0.5 text-xs";
+  const medida = linha ? "h-11 rounded-control px-3.5 text-[13px] lg:h-[var(--h-control-sm)]" : "rounded-full px-2.5 py-0.5 text-xs";
   const ponto = vivo ? (linha ? "relative h-2 w-2 ponto-selo" : "relative h-1.5 w-1.5 ponto-vivo") : linha ? "h-2 w-2" : "h-1.5 w-1.5";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full font-semibold ${medida} ${className}`}
+      className={`inline-flex items-center gap-1.5 font-semibold ${medida} ${className}`}
       style={style}
       title={title}
     >

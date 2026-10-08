@@ -2434,7 +2434,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
   Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
-  erro/aviso. Os itens são TODOS (sem teto — vão ao `DashboardPcaCliente` como UM texto COMPACTO `{c: campos, l: tuplas}` — `itensParaTexto`/`itensDoTexto`, `itens-dash-texto.ts`, testado —, montado UMA vez por versão dentro do memo do `dashboardDoPca`, `DashboardPca.itensTexto`).
+  erro/aviso. v1.70.0: o cartão da consulta NÃO tem cabeçalho (`ChartCard` sem `title`) — UMA linha com as abas + a busca dos
+  itens (`BuscaItens` compacta; `ItemTable.busca` controlada pela `ConsultaPca`) + o (?) no fim (`ConsultaPca.fim`/
+  `ItemTable.fim`, `Ajuda botao="sm"` — a explicação que era o subtítulo), todos na altura dos controles; produto, assunto e
+  motivo numa linha (`CelulaTexto`) — linhas na altura padrão. Os itens são TODOS (sem teto — vão ao `DashboardPcaCliente` como UM texto COMPACTO `{c: campos, l: tuplas}` — `itensParaTexto`/`itensDoTexto`, `itens-dash-texto.ts`, testado —, montado UMA vez por versão dentro do memo do `dashboardDoPca`, `DashboardPca.itensTexto`).
   No PAINEL, **"Fora da soma (N)"** (só com N > 0; `ConsultaDashboard.foraDaSoma`): os DFDs vinculados/da prévia que a
   consolidação tirou — núcleo puro `foraDaSoma(linhas, consolidacao)` (`pca-core.ts`, testado: vínculos − vigentes; motivo
   `substituido`/`excluido`/`exclusao` + o outro DFD) → `DashboardPca.foraDaSoma` (`DfdForaDaSoma`, motivo por extenso; o hint
@@ -3773,7 +3776,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
   `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA); **`tamanho="linha"`** =
-  o selo da linha de título (a altura do botão de voltar: `--h-control-sm` no desktop, 44px no toque; com `vivo`, o ponto
+  o selo da linha de título (a altura do botão de voltar: `--h-control-sm` no desktop, 44px no toque; o raio
+  `--radius-control` — o arredondamento dos controles definido pelo ADM em Aparência; com `vivo`, o ponto
   `.ponto-selo` — respira e solta duas ondas, parado com "reduzir movimento").
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`

@@ -32,6 +32,7 @@ import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "@/lib/queries
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
 import { Button } from "./Button";
+import { Ajuda } from "./Ajuda";
 import { ChartCard } from "./ChartCard";
 import { ClassificacaoChart } from "./charts/ClassificacaoChart";
 import { MensalChart } from "./charts/MensalChart";
@@ -357,6 +358,18 @@ export function DashboardPcaCliente({
             : null
           : null;
 
+  // A explicação da Consulta no (?) — a linha da consulta fica só com os controles.
+  const ajudaConsulta = (
+    <Ajuda titulo="Consulta de itens" rotulo="Sobre a consulta" botao="sm">
+      <p>
+        {consulta ? "Os protocolos, DFDs e itens do PCA" : "Os itens do PCA"}
+        {ativo ? `, só o que está nos filtros do Dashboard (${num(filtrados.length)} itens)` : ""}.
+      </p>
+      <p>Busque pelo produto ou código (vários de uma vez com “:”), filtre e ordene pelo cabeçalho de cada coluna.</p>
+      {consulta && <p>Toque numa linha para ver o detalhe.</p>}
+    </Ajuda>
+  );
+
   return (
     <>
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
@@ -500,16 +513,7 @@ export function DashboardPcaCliente({
               ))}
           </div>
         ) : (
-          <ChartCard
-            title="Consulta de Itens"
-            subtitle={
-              ativo
-                ? `Só o que está no filtro (${num(filtrados.length)} itens) — clique numa linha para ver o detalhe`
-                : consulta
-                  ? "Itens e DFDs do PCA — clique numa linha para ver o detalhe"
-                  : "Busque, filtre e ordene os itens do PCA"
-            }
-          >
+          <ChartCard>
             {consultaVista ? (
               <ConsultaPca
                 protocolos={consultaVista.protocolos}
@@ -519,9 +523,10 @@ export function DashboardPcaCliente({
                 showUnidade={showUnidade}
                 aberto={aberto}
                 onAbrir={setAberto}
+                fim={ajudaConsulta}
               />
             ) : (
-              <ItemTable rows={filtrados} showUnidade={showUnidade} />
+              <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} />
             )}
           </ChartCard>
         )}
