@@ -40,6 +40,7 @@ import type { FluxoAutomacao } from "@/lib/fluxos";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
+import { createPortal } from "react-dom";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
 import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconRefresh, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
@@ -526,8 +527,10 @@ export function FluxosAutomacao({
     setAberto(criado.id);
   }
 
-  async function excluir(f: FluxoAutomacao) {
-    if (!(await confirmar({ titulo: `Excluir o fluxo “${f.nome}”?`, texto: "Não dá para desfazer.", confirmar: "Excluir", perigo: true }))) return;
+  async function excluir(f: FluxoAutomacao, zona?: "lixeira" | "painel") {
+    const devolver = zona === "painel";
+    const texto = devolver ? "Ele sai da sua lista (é excluído) e o modelo volta ao painel. Não dá para desfazer." : "Não dá para desfazer.";
+    if (!(await confirmar({ titulo: devolver ? `Devolver “${f.nome}” ao painel?` : `Excluir o fluxo “${f.nome}”?`, texto, confirmar: devolver ? "Devolver" : "Excluir", perigo: true }))) return;
     const r = await api(`/api/admin/automacao/fluxos/${f.id}`, { method: "DELETE" });
     if (!r.ok) return toast.error(r.error ?? "Não consegui excluir.");
     setFluxos((fs) => fs?.filter((x) => x.id !== f.id) ?? fs);
@@ -688,6 +691,7 @@ export function FluxosAutomacao({
           onNovo={() => setNovo(true)}
           onFecharNovo={() => setNovo(false)}
           onCriar={criar}
+          onExcluir={(f, zona) => void excluir(f, zona)}
           onOrdem={(lista) => {
             setFluxos(lista);
             salvarOrdem(lista);
@@ -821,7 +825,10 @@ function ListaFluxos({
   onFecharNovo,
   onCriar,
   onOrdem,
+  onExcluir,
 }: {
+  /** Arrastado até a LIXEIRA ou de volta ao PAINEL lateral: exclui o fluxo (confirma). */
+  onExcluir: (f: FluxoAutomacao, zona: "lixeira" | "painel") => void;
   fluxos: FluxoAutomacao[] | null;
   rodando: number | null;
   novo: boolean;
@@ -845,22 +852,25 @@ function ListaFluxos({
   const lista = fluxos ?? [];
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoGrade({
     raiz: grade,
+    // FORA da lista (o contêiner que rola): sem sombra. Um fluxo da lista pode ir à LIXEIRA ou VOLTAR ao painel (exclui);
+    // um modelo/pública solto fora da lista volta ao painel.
+    zonas: { limite: rolo, aceita: (chave, zona) => chave.startsWith("f:") && (zona === "lixeira" || zona === "painel") },
     onSoltar: (chave, d) => {
+      if (d.fora) {
+        const f = lista.find((x) => `f:${x.id}` === chave);
+        if (f && (d.fora === "lixeira" || d.fora === "painel")) onExcluir(f, d.fora);
+        return;
+      }
       const antesDe = d.antesDe ? Number(d.antesDe.slice(2)) : null;
-      // Um MODELO arrastado do painel: cria o fluxo ali (só se soltou sobre a lista).
+      // Um MODELO arrastado do painel: cria o fluxo onde a sombra estava.
       if (chave.startsWith("m:")) {
-        const ponto = soltoEm.current;
-        const r = grade.current?.getBoundingClientRect();
-        if (!r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
         const m = MODELOS_FLUXO.find((x) => x.id === chave.slice(2)) ?? null;
         return void onCriar(m, m?.nome ?? "Novo fluxo", { antesDe });
       }
       // Um PÚBLICO arrastado do painel: a cópia entra ali.
       if (chave.startsWith("p:")) {
-        const ponto = soltoEm.current;
-        const r = grade.current?.getBoundingClientRect();
         const pub = publicos.find((x) => `p:${x.id}` === chave);
-        if (!pub || !r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
+        if (!pub) return;
         return void onCriar(null, pub.nome, { antesDe, copiar: pub });
       }
       const id = Number(chave.slice(2));
@@ -871,13 +881,14 @@ function ListaFluxos({
       onOrdem([...sem.slice(0, Math.max(0, i)), f, ...sem.slice(Math.max(0, i))]);
     },
   });
-  // Onde o ponteiro estava ao soltar (o modelo só vira fluxo se cair sobre a lista).
-  const soltoEm = useRef<{ x: number; y: number } | null>(null);
-  if (arrasto) soltoEm.current = { x: arrasto.x, y: arrasto.y };
-  useDeslizar(grade, `${colunas}|${lista.map((f) => f.id).join(",")}|${arrasto?.destino.antesDe ?? ""}|${arrasto?.destino.depoisDe ?? ""}|${!!arrasto}`);
+  const fora = arrasto?.destino.fora ?? null;
+  // Um fluxo DA LISTA em arrasto: a lixeira surge e o painel aberto vira o lugar de devolver.
+  const daLista = !!arrasto?.chave.startsWith("f:") && !arrasto.pousando;
+  useDeslizar(grade, `${colunas}|${lista.map((f) => f.id).join(",")}|${arrasto?.destino.antesDe ?? ""}|${arrasto?.destino.depoisDe ?? ""}|${!!arrasto}|${!!fora}`);
 
   const estiloGrade = col ? { gridTemplateColumns: `repeat(${colunas}, ${col.largura}px)`, gap: col.vao } : undefined;
-  const sombra = arrasto && !arrasto.pousando ? <SombraGrade key="__sombra" altura={arrasto.altura} /> : null;
+  // A SOMBRA só existe com o ponteiro SOBRE a lista: é o lugar exato em que o card vai cair.
+  const sombra = arrasto && !arrasto.pousando && !fora ? <SombraGrade key="__sombra" altura={arrasto.altura} marcada /> : null;
   const itens: ReactNode[] = [];
   for (const f of lista) {
     const chave = `f:${f.id}`;
@@ -888,7 +899,8 @@ function ListaFluxos({
         data-grade-item={chave}
         role="none"
         title={f.descricao ?? undefined}
-        className={`${arrasto?.chave === chave ? "hidden" : ""} h-full touch-manipulation select-none [-webkit-touch-callout:none]`}
+        // Sobre a lista, o card sai do lugar (a sombra mostra o novo); fora dela, o lugar de origem fica esmaecido.
+        className={`${arrasto?.chave === chave ? (fora ? "opacity-30" : "hidden") : ""} h-full touch-manipulation transition-opacity select-none [-webkit-touch-callout:none]`}
         onPointerDown={(e) => iniciar(e, chave)}
         onClickCapture={(e) => {
           if (foiArrasto()) {
@@ -933,6 +945,11 @@ function ListaFluxos({
   );
   return (
     <div ref={area} className="flex items-start" style={{ gap: col?.vao }}>
+      {daLista && (
+        <p aria-live="polite" className="sr-only">
+          {fora === "lixeira" ? "Solte para excluir o fluxo" : fora === "painel" ? "Solte para devolver o fluxo ao painel" : "Arraste até a lixeira para excluir"}
+        </p>
+      )}
       <div ref={rolo} className="-m-1 min-w-0 flex-1 overflow-y-auto overscroll-contain p-1" style={{ height: alturaRolo ?? undefined }}>
         {!fluxos || !col ? (
           <div className={GRADE_CARTOES} aria-busy="true">
@@ -947,7 +964,12 @@ function ListaFluxos({
         )}
       </div>
       {/* DESKTOP: o painel ocupa a ÚLTIMA coluna e ENTRA da direita; os cartões deslizam para o lugar novo. */}
-      {lateral && novo && <PainelLateral largura={col.largura}>{escolha}</PainelLateral>}
+      {lateral && novo && (
+        <PainelLateral largura={col.largura} zona={daLista} ativa={fora === "painel"}>
+          {escolha}
+        </PainelLateral>
+      )}
+      {daLista && <LixeiraArrasto ativa={fora === "lixeira"} />}
       {!lateral && (
         <Modal open={novo} onClose={onFecharNovo} titulo="Novo fluxo">
           {escolha}
@@ -963,13 +985,51 @@ function ListaFluxos({
 }
 
 /** O painel "Novo fluxo" na última coluna: preso ao rolar e com a altura EXATA até o fim do display (rola por dentro). */
-function PainelLateral({ largura, children }: { largura: number; children: ReactNode }) {
+function PainelLateral({ largura, zona, ativa, children }: { largura: number; /** Um fluxo da lista em arrasto: o painel recebe a devolução. */ zona: boolean; ativa: boolean; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const altura = useAlturaTela(ref, 320);
   return (
-    <aside ref={ref} className="animate-aba-direita sticky top-[var(--pad-canvas-y)] flex shrink-0 flex-col" style={{ width: largura, height: altura ?? undefined }}>
+    <aside
+      ref={ref}
+      data-zona-arrasto={zona ? "painel" : undefined}
+      className="animate-aba-direita sticky top-[var(--pad-canvas-y)] flex shrink-0 flex-col"
+      style={{ width: largura, height: altura ?? undefined }}
+    >
       {children}
+      {/* DEVOLVER: com um fluxo da lista em arrasto, o painel mostra que recebe o card (e acende com ele por cima). */}
+      {zona && (
+        <div
+          aria-hidden="true"
+          className={`animate-fade-in-up pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed p-[var(--pad-card)] text-center transition-[background-color,border-color] duration-[var(--motion-duration)] ${
+            ativa ? "border-accent bg-accent/15" : "border-accent/40 bg-surface/80"
+          }`}
+        >
+          <IconFluxo className={`size-8 text-accent transition-transform duration-[var(--motion-duration)] ${ativa ? "scale-125" : ""}`} />
+          <p className="text-sm font-bold text-text">{ativa ? "Solte para devolver" : "Arraste aqui para devolver ao painel"}</p>
+          <p className="text-xs text-muted">O fluxo sai da sua lista (é excluído); o modelo volta a ficar disponível aqui.</p>
+        </div>
+      )}
     </aside>
+  );
+}
+
+/** A LIXEIRA no centro, embaixo: surge com um fluxo da lista em arrasto; com o card por cima, acende em vermelho. */
+function LixeiraArrasto({ ativa }: { ativa: boolean }) {
+  return createPortal(
+    // Centrada por flex (a animação usa `translate` — não dá para centrar com translate-x).
+    <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[299] flex justify-center lg:bottom-8">
+      <div data-zona-arrasto="lixeira" className="animate-lixeira-entra p-3">
+      <span
+        className={`flex size-16 flex-col items-center justify-center rounded-full text-white shadow-flutuante transition-[background-color,transform] duration-[var(--motion-duration)] ${
+          ativa ? "scale-[1.2] bg-[var(--danger)]" : "bg-[color-mix(in_oklab,var(--text)_70%,transparent)]"
+        }`}
+      >
+        <IconTrash className={`size-6 transition-transform duration-[var(--motion-duration)] ${ativa ? "-rotate-12 scale-110" : ""}`} />
+      </span>
+      <span className={`mt-1.5 block text-center text-xs font-semibold transition-colors ${ativa ? "text-[var(--danger)]" : "text-muted"}`}>{ativa ? "Solte para excluir" : "Excluir"}</span>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

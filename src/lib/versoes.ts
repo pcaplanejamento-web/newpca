@@ -32,6 +32,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.74.0",
+    data: "2026-10-08",
+    titulo: "Automações: lixeira e devolver ao painel",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Arraste um cartão da sua lista até a lixeira que surge no centro, embaixo, para excluí-lo \u2014 ela acende em vermelho com o cartão por cima e pede a confirmação.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Com o painel \u201cNovo fluxo\u201d aberto, arraste um cartão da sua lista de volta para ele: o fluxo sai da lista (com confirmação) e o modelo volta a ficar disponível no painel.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Ao arrastar um modelo do painel, o lugar em que ele vai cair aparece tracejado na sua lista só com o cartão sobre ela; fora da lista não há lugar marcado e, solto ali, o cartão volta voando ao painel.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.73.3",
     data: "2026-10-08",
     titulo: "Automações: a lista rola por dentro",

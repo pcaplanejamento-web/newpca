@@ -213,7 +213,9 @@ export function PastaQuadro({
 }
 
 /** Para onde o item arrastado vai: uma área (`null` = a raiz; senão, a pasta aberta) + o vizinho VISÍVEL — ou DENTRO de uma pasta. */
-type DestinoArrasto = { area: string | null; antesDe: string | null; depoisDe: string | null; dentro: string | null };
+/** `fora` = o ponteiro está FORA da grade: numa ZONA de soltura (`[data-zona-arrasto]` — lixeira, painel) ou em lugar
+ * nenhum ("fora") — sem sombra na grade. */
+type DestinoArrasto = { area: string | null; antesDe: string | null; depoisDe: string | null; dentro: string | null; fora?: string | null };
 export type ArrastoGrade = {
   chave: string;
   x: number;
@@ -231,7 +233,7 @@ const LIMIAR = 6;
 const TOQUE_MS = 400;
 const BORDA = 64;
 const VEL = 14;
-const chaveDestino = (d: DestinoArrasto) => `${d.area}|${d.antesDe}|${d.depoisDe}|${d.dentro}`;
+const chaveDestino = (d: DestinoArrasto) => `${d.area}|${d.antesDe}|${d.depoisDe}|${d.dentro}|${d.fora ?? ""}`;
 
 /** O contêiner que ROLA acima do elemento (o corpo de um modal), ou `null` = a página. */
 function rolagemDe(el: HTMLElement): HTMLElement | null {
@@ -266,8 +268,13 @@ export function useArrastoGrade({
   raiz,
   onSoltar,
   aceitaDentro,
+  zonas,
 }: {
   raiz: RefObject<HTMLElement | null>;
+  /** ZONAS fora da grade: `limite` = fora dele o ponteiro não está na grade (sem sombra); os elementos
+   * `[data-zona-arrasto="<nome>"]` sob o ponteiro viram o destino `fora`; `aceita` = soltar ali vale (o card ENCOLHE
+   * para dentro da zona); senão o card VOLTA ao lugar de origem. */
+  zonas?: { limite?: RefObject<HTMLElement | null>; aceita: (chave: string, zona: string) => boolean };
   onSoltar?: (chave: string, destino: DestinoArrasto) => void;
   /** A pasta ACEITA o item? Sobre a que recusa, soltar não pousa dentro (quem chama nega o arrasto). */
   aceitaDentro?: (chave: string, pastaId: string) => boolean;
@@ -304,6 +311,21 @@ export function useArrastoGrade({
     const soltarSelecao = toque ? () => {} : segurar("");
 
     const calcular = () => {
+      // FORA da grade: a zona sob o ponteiro (lixeira, painel) ou lugar nenhum — sem sombra.
+      if (zonas) {
+        let fora: string | null = null;
+        for (const z of document.querySelectorAll<HTMLElement>("[data-zona-arrasto]")) if (dentroDe(ultimo, z.getBoundingClientRect())) fora = z.dataset.zonaArrasto ?? null;
+        const lim = zonas.limite?.current;
+        if (!fora && lim && !dentroDe(ultimo, lim.getBoundingClientRect())) fora = "fora";
+        if (fora) {
+          const novo: DestinoArrasto = { area: null, antesDe: null, depoisDe: null, dentro: null, fora };
+          if (chaveDestino(novo) === chaveDestino(destino) && inicial) return;
+          if (fora !== destino.fora && zonas.aceita(chave, fora)) navigator.vibrate?.(10);
+          destino = novo;
+          if (!inicial) inicial = chaveDestino(novo);
+          return setArrasto({ chave, x: ultimo.x, y: ultimo.y, ...pega, destino });
+        }
+      }
       // A ÁREA: o painel da pasta aberta sob o ponteiro (só quadros entram nela), senão a raiz.
       let area: string | null = null;
       if (!ehPasta)
@@ -378,10 +400,11 @@ export function useArrastoGrade({
         ativar();
       }
       if (ev.cancelable) ev.preventDefault();
-      const r = rolo ? rolo.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
-      velY = ev.clientY < r.top + BORDA ? -VEL : ev.clientY > r.bottom - BORDA ? VEL : 0;
       moverFantasma();
       calcular();
+      // Sobre uma ZONA (lixeira, painel) a lista não rola sozinha.
+      const r = rolo ? rolo.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      velY = destino.fora && destino.fora !== "fora" ? 0 : ev.clientY < r.top + BORDA ? -VEL : ev.clientY > r.bottom - BORDA ? VEL : 0;
     };
     // O toque ATIVO não pode rolar a tela (e o menu do "segurar" do navegador não abre).
     const travarToque = (ev: TouchEvent) => {
@@ -406,6 +429,24 @@ export function useArrastoGrade({
       if (ativo) window.setTimeout(() => (arrastou.current = false), 0);
       if (!ativo || ev.type !== "pointerup") return setArrasto(null);
       const final = destino;
+      const ms0 = duracaoMotionMs();
+      // FORA da grade: na zona que aceita, o card ENCOLHE para dentro dela; senão VOLTA ao lugar de origem.
+      if (final.fora) {
+        const z = zonas?.aceita(chave, final.fora) ? document.querySelector<HTMLElement>(`[data-zona-arrasto="${CSS.escape(final.fora)}"]`) : null;
+        if (z) {
+          const r = z.getBoundingClientRect();
+          const aplicar = () => {
+            setArrasto(null);
+            onSoltar(chave, final);
+          };
+          if (ms0 <= 0) return aplicar();
+          setArrasto({ chave, x: r.left + r.width / 2 - pega.largura / 2 + pega.dx, y: r.top + r.height / 2 - pega.altura / 2 + pega.dy, ...pega, destino: final, pousando: true, entrando: true });
+          return void window.setTimeout(aplicar, ms0);
+        }
+        if (ms0 <= 0) return setArrasto(null);
+        setArrasto({ chave, x: caixa.left + pega.dx, y: caixa.top + pega.dy, ...pega, destino: final, pousando: true });
+        return void window.setTimeout(() => setArrasto(null), ms0);
+      }
       // Soltou onde estava: nada muda.
       if (!final.dentro && chaveDestino(final) === inicial) return setArrasto(null);
       // A pasta RECUSA o item: nada de pousar dentro dela (quem chama nega o arrasto).
@@ -446,8 +487,15 @@ export function useArrastoGrade({
 }
 
 /** O LUGAR onde o card vai cair: só o ESPAÇO vazio, no tamanho da célula (sem contorno nem fundo). */
-export function SombraGrade({ altura }: { altura: number }) {
-  return <div data-sombra-grade aria-hidden style={{ minHeight: altura }} />;
+export function SombraGrade({ altura, marcada = false }: { altura: number; /** Desenha o lugar (tracejado accent) — ex.: os fluxos da Automação. */ marcada?: boolean }) {
+  return (
+    <div
+      data-sombra-grade
+      aria-hidden
+      className={marcada ? "rounded-card border-2 border-dashed border-accent/50 bg-accent/5 transition-colors duration-[var(--motion-duration)]" : undefined}
+      style={{ minHeight: altura }}
+    />
+  );
 }
 
 /** A pasta ABERTA por último neste aparelho (conveniência — `localStorage`, com try/catch). */
