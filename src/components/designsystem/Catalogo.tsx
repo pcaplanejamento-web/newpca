@@ -118,6 +118,8 @@ import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
+import { Selecao } from "@/components/Selecao";
+import { selectCls } from "@/components/formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "@/components/GruposDaPessoa";
 import { MatrizCapacidades } from "@/components/MatrizCapacidades";
 import { ResumoPapel } from "@/components/ResumoPapel";
@@ -3316,6 +3318,31 @@ export function Catalogo() {
             <option value="1">SERVIÇO</option>
             <option value="2">MATERIAL DE CONSUMO</option>
           </SelectField>
+        </div>
+        <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
+          {/* A lista aberta de TODO select do sistema é a da `Selecao`: grupos, desabilitada com a dica, busca acima de 12. */}
+          <SelectField label="Selecao — grupos e opção desabilitada" defaultValue="1">
+            <option value="">Orçamento inteiro</option>
+            <optgroup label="Visões">
+              <option value="1">PCA 27</option>
+              <option value="2" disabled title="Sem lançamentos neste orçamento">
+                GERAL - SEM FILTRO
+              </option>
+            </optgroup>
+          </SelectField>
+          <SelectField label="Selecao — com busca (mais de 12 opções)" defaultValue="">
+            <option value="">Escolha o mês…</option>
+            {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </SelectField>
+          <Selecao className={selectCls} aria-label="Selecao crua (classe selectCls)" defaultValue="b">
+            <option value="a">Incorporar</option>
+            <option value="b">Substituir</option>
+            <option value="c">Excluir</option>
+          </Selecao>
         </div>
         <div className="mt-4">
           <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />

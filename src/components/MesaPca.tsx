@@ -28,6 +28,7 @@ import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 import { useOndeDetalhe } from "./CanalGrupo";
+import { Selecao } from "./Selecao";
 
 type Escopo = "todos" | "sistema" | "enviados" | "incorporados";
 
@@ -330,7 +331,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                     {(emOutroPcaPorProtocolo[p.id] ?? 0) > 0 ? ` · ${emOutroPcaPorProtocolo[p.id]} já em outro PCA (ficam de fora)` : ""}
                   </div>
                 </div>
-                <select
+                <Selecao
                   className={`${selectCls} sm:w-44`}
                   value={acoes[p.id] ?? "incorporar"}
                   onChange={(e) => setAcoes((a) => ({ ...a, [p.id]: e.target.value as AcaoDfdPca }))}
@@ -342,7 +343,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                       {ROTULO_ACAO[a]}
                     </option>
                   ))}
-                </select>
+                </Selecao>
               </li>
             ))}
           </ul>

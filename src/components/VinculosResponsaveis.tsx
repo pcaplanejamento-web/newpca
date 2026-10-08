@@ -31,6 +31,7 @@ import { Modal } from "./Modal";
 import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { Segmented } from "./Segmented";
+import { Selecao } from "./Selecao";
 
 /**
  * RESPONSÁVEIS POR DFDs — as peças de tela da PLANILHA ÚNICA (pessoas vinculadas a unidades/órgãos): a célula dos
@@ -611,9 +612,9 @@ export function OpcoesCargo({
   );
   if (oculto)
     return (
-      <select className={cellCls} value={valor} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+      <Selecao className={cellCls} value={valor} onChange={(e) => onChange(e.target.value)} aria-label={label}>
         {opcoes}
-      </select>
+      </Selecao>
     );
   return (
     <SelectField label={label} value={valor} onChange={(e) => onChange(e.target.value)} denso>

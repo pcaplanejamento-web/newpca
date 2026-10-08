@@ -32,12 +32,21 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.62.0",
+    versao: "1.63.0",
     data: "2026-10-08",
     titulo: "Proteção de dados",
     mudancas: [
       { tipo: "novo", area: "Configurações", texto: "Nova aba Proteção de dados: bloqueie a seleção e a cópia de texto, a impressão e a captura de tela, e oculte o conteúdo quando a janela perde o foco.", link: "/painel/configuracoes?aba=protecao" },
       { tipo: "novo", area: "Configurações", texto: "O ADM escolhe em quais papéis os bloqueios valem (em todas as telas e banners) e se a tela pública também é bloqueada.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
+    versao: "1.62.0",
+    data: "2026-10-08",
+    titulo: "Listas de seleção no desenho do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Toda lista de seleção (Visão, Linhas, Colunas, Medida, cargo, unidade, papel e as demais) abre agora no desenho do sistema, e não mais na lista do aparelho. A opção escolhida fica em destaque com o check, os grupos aparecem separados e as opções indisponíveis ficam esmaecidas, com o motivo na dica.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Sistema", texto: "Listas com mais de 12 opções ganham a busca no topo. Pelo teclado: setas, Enter e digitar a letra para saltar. No celular, as opções têm o tamanho do toque.", link: "/painel/configuracoes" },
     ],
   },
   {

@@ -6,6 +6,7 @@ import { parseNumberBR } from "@/lib/normalize";
 import { cellCls } from "./formStyles";
 import { IconLock, IconLockOpen } from "./icons";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 /**
  * Primitivos de CAMPO COM CADEADO (POR CAMPO) — a mesma lógica dos itens (`ItemDetalhe`),
@@ -207,14 +208,14 @@ export function CampoSelecao({
   return (
     <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
       {editando ? (
-        <select className={cellCls} value={valor} onChange={(e) => onChange(e.target.value)}>
+        <Selecao className={cellCls} value={valor} onChange={(e) => onChange(e.target.value)}>
           <option value="">— Selecione —</option>
           {opcoes.map((o) => (
             <option key={o} value={o}>
               {o}
             </option>
           ))}
-        </select>
+        </Selecao>
       ) : (
         <div className="mt-0.5 break-words text-sm font-semibold leading-snug text-text">{valor || "—"}</div>
       )}

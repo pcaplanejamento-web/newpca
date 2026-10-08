@@ -13,6 +13,7 @@ import { IconCheck, IconImage, IconLock, IconTrash } from "./icons";
 import { PcaCapa } from "./PcaCard";
 import { RecorteImagem } from "./RecorteImagem";
 import { Switch } from "./Switch";
+import { Selecao } from "./Selecao";
 
 export type ConfigPca = {
   id: number;
@@ -263,7 +264,7 @@ export function PcaConfiguracao({
         <section className={CARTAO}>
           <h2 className="mb-1 font-bold text-text">Visão do orçamento</h2>
           <p className="mb-3 text-sm text-muted">Os lançamentos do CUBO de {pca.ano ?? "—"} que contam como orçamento para o PCA (aba Orçamento).</p>
-          <select
+          <Selecao
             className={selectCls}
             value={pca.orcamentoVisaoId ?? ""}
             disabled={ro || salvando != null}
@@ -276,7 +277,7 @@ export function PcaConfiguracao({
                 {v.nome} — {v.resumo}
               </option>
             ))}
-          </select>
+          </Selecao>
           <p className="mt-2 text-xs text-faint">
             As visões são criadas em{" "}
             <Link href="/painel/orcamento" className="text-accent hover:underline">

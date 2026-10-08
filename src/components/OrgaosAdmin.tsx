@@ -19,6 +19,7 @@ import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
+import { Selecao } from "./Selecao";
 
 type Orgao = {
   id: number;
@@ -430,14 +431,14 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="min-w-0 flex-1">
                     <span className="mb-1 block text-[13px] text-muted">Rebaixar a unidade de:</span>
-                    <select className={`${selectCls} w-full`} value={destino} onChange={(e) => setDestino(e.target.value)} disabled={ocupado}>
+                    <Selecao className={`${selectCls} w-full`} value={destino} onChange={(e) => setDestino(e.target.value)} disabled={ocupado}>
                       <option value="">Escolha o órgão de destino…</option>
                       {destinos.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.sigla} — {d.nome}
                         </option>
                       ))}
-                    </select>
+                    </Selecao>
                   </label>
                   <Button size="sm" variant="secondary" disabled={!destino} loading={ocupado} icon={<IconLandmark className="h-4 w-4" />} onClick={() => void rebaixar(orgao)}>
                     Rebaixar

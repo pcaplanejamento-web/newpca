@@ -181,7 +181,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
-  - **PROTEÇÃO DE DADOS (v1.62.0, sem migração — blob `configuracoes`, chave `protecao`):** Configurações → aba **"Proteção
+  - **PROTEÇÃO DE DADOS (v1.63.0, sem migração — blob `configuracoes`, chave `protecao`):** Configurações → aba **"Proteção
     de dados"** (`ProtecaoDadosAdmin` + `CamposProtecao`; `GET/PATCH /api/admin/protecao`, `exigirAdmin`, papéis conferidos —
     422, auditoria com o diff) liga **Bloquear seleção e cópia** · **Bloquear impressão e captura** · **Ocultar ao sair da
     janela**, escolhe os **papéis protegidos** (o Administrador só se marcado) e **"Aplicar também na tela pública"**. Núcleo
@@ -3528,7 +3528,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   FILTRO de alternar), **`Colunas`** (colunas verticais com grade, rótulos — no máximo ~8 no eixo, a margem do eixo cabe o rótulo
   em R$ — e dica no hover/foco/toque; com `onEscolher`, a coluna zerada só mostra a dica) e **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (o painel fica PRESO ao gatilho enquanto aberto — acompanha a cada quadro o gatilho e o próprio tamanho, e o lado acima/abaixo é decidido UMA vez ao abrir: marcar um item, um banner que muda de altura ou uma rolagem nunca o soltam; fecha no `pointerdown` fora — vale no toque do iOS; fechar pelo Esc ou pelo `fechar` do conteúdo (escolher, limpar, ordenar) com o foco dentro do painel o devolve ao gatilho; `className` do invólucro e `id`/`title` do
   gatilho opcionais; `papel` "menu" [padrão] | "dialog" [busca/grade — escolher pessoa ou data: `role="dialog"` com nome,
-  `aria-haspopup="dialog"`]; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
+  `aria-haspopup="dialog"`]; `"listbox"` = a lista de uma `Selecao`; `gatilho` = atributos a mais do botão — teclado, foco, `role`/`aria-*`, `disabled`; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
   conteúdo em função recebe `fechar` e `{teclado}` = aberto por Enter/Espaço — quem usa leva o foco para dentro do painel),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), **`PeriodoPicker`** (o seletor de período — gatilho no visual do
   `SelectField compacto` com o prefixo "Período", painel `dialog` com o **`PeriodoCorpo`**: atalhos Todo o período | Hoje | Esta
@@ -3682,8 +3682,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`ResumoDetalhesPapel`** (as restrições: "N restrições" compacto ou por extenso), **`GruposDaPessoa`** (os grupos de uma pessoa, com as telas de cada um) e **`AcessoDaPessoa`** (o "Ver acesso": o que
   a pessoa abre e faz em cada grupo),
   `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox [`indeterminado` = a caixa PARCIAL]/**`CampoLista`** [lista em chips — várias referências da
-  renovação]/**`SelectField`** [`<select>` nativo no MESMO visual do campo — ex.: a classificação que a unidade de medida
-  indica] — ícone + foco accent), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
+  renovação]/**`SelectField`** [a **`Selecao`** no MESMO visual do campo — ex.: a classificação que a unidade de medida
+  indica] — ícone + foco accent), **`Selecao`** (`Selecao.tsx`, v1.62.0 — o *drop-in* do `<select>`: as MESMAS props
+  [`value`, `onChange(e)` com `e.target.value`, `disabled`, `id`, `aria-*`, `onBlur`, `style`, `className` = a caixa] e os
+  MESMOS filhos [`<option>`/`<optgroup>`/componentes que os renderizam — `OpcoesUnidades`], mas a lista ABERTA é a do
+  sistema: o `Dropdown` (`papel="listbox"`) preso ao gatilho `role="combobox"`, a escolhida em accent com o check, grupos,
+  desabilitada esmaecida com o `title` na dica, BUSCA acima de 12 opções, 44px no toque; teclado ↑/↓/Home/End/Enter/Espaço/Esc
+  + digitar para saltar, ↑/↓ no gatilho abrem. O `<select>` nativo fica ESCONDIDO depois do gatilho — a fonte das opções e
+  do valor; escolher = o setter nativo + o `change` real. O 1º desenho já traz o texto lido dos filhos (sem piscar). Núcleo
+  puro `selecao-core.ts` [`proximaHabilitada`, `typeahead`, `filtrarOpcoes`] testado. TODO select de formulário do sistema
+  usa a `Selecao` — inclusive o "Linhas por página" das tabelas; ficam nativos SÓ o `SeletorCelula` [milhares de linhas] e o
+  `SeletorFiltro` [o quadrado só-ícone]. O Biome sabe que ela é um controle [`noLabelWithoutControl.inputComponents`]), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
   **`CelulaClassificacao`**/**`CelulaUnidadeCadastrada`** (`EstadoCelula.tsx` — a classificação automática e a unidade
   cadastrada do item na Mesa → Itens), **`ComparacaoUnidades`**/**`EditorUnidadeMedida`** (`UnidadesMedidaView.tsx`) e
   **`ClassificacaoDosItens`**/**`EditorClassificacao`** (`ClassificacoesView.tsx` — a padronização do Catálogo; os editores
@@ -4538,7 +4547,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
   do `SelectField` a seta fica rente ao fim do select (`SETA_NA_CAIXA`). Os selects invisíveis sobre um visual próprio
-  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam.
+  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam. O gatilho da `Selecao` (`.seletor-sistema`) leva a MESMA seta
+  e o mesmo respiro — trocar um `<select>` por ela não muda a caixa.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
