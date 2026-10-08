@@ -505,7 +505,7 @@ export function DataTable<R>({
       ref={wrapRef}
       // `overflow-clip` (e não `hidden`) na rolagem interna: recorta os cantos SEM virar contêiner de rolagem — o rodapé
       // pode grudar na tela no celular (abaixo).
-      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} rounded-card border border-border bg-surface shadow-ring`}
+      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} isolate rounded-card border border-border bg-surface shadow-ring`}
       style={{ ...(densPy ? ({ "--cell-py": densPy } as CSSProperties) : {}), ...(cheia ? { height: altura } : {}) }}
       // A altura do HTML do servidor é posta pelo trecho abaixo ANTES da hidratação (ela não é do React ainda).
       suppressHydrationWarning={scrollInterno}
@@ -517,7 +517,7 @@ export function DataTable<R>({
         {/* `border-separate` (bordas nas CÉLULAS): com `border-collapse`, as células presas (`sticky`) tremem e as bordas
             "escorregam" ao rolar de lado — o Safari e o Chrome não prendem a borda colapsada junto da célula. */}
         <table ref={tabelaRef} className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth }}>
-          <thead className={`bg-surface-2 [&_th]:border-b [&_th]:border-border ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
+          <thead className={`bg-surface-2 [&_th]:border-b [&_th]:border-border ${scrollInterno ? "sticky top-0 z-30" : ""}`}>
             <tr>
               {selectable && (
                 <th className={`w-10 px-3 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>

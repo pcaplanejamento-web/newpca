@@ -32,6 +32,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.73.2",
+    data: "2026-10-08",
+    titulo: "Marcar todos sempre à vista",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Nas tabelas com marcação, a caixa do topo (marcar todos) fica fixa no cabeçalho ao rolar para baixo e para o lado \u2014 as caixas das linhas não passam mais por cima dela.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.73.1",
     data: "2026-10-08",
     titulo: "Rolagem leve: a barra acompanha o arrasto",
