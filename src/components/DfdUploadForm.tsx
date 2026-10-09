@@ -68,6 +68,8 @@ export function DfdUploadForm({
   orgaos = [],
   iniciar = 0,
   sobrescrever = null,
+  verificacao = false,
+  arquivoHost = null,
 }: {
   reparticoes: Rep[];
   reparticaoAtivaId?: number | null;
@@ -81,6 +83,11 @@ export function DfdUploadForm({
    * recarrega; `onOcupado` = a sobrescrita está em andamento (lançador/leitura/escolha/gravação) — o banner fica
    * só-leitura até terminar. Sem ele: a importação avulsa da Mesa. */
   sobrescrever?: { gravado: DfdDetalhe; onConcluido: () => void; onOcupado?: (ocupado: boolean) => void } | null;
+  /** VERIFICAÇÃO (tela "Verificação"): só analisa e aponta os erros do DFD COMO VEIO — sem comparar com o cadastrado e
+   * SEM gravar nada (não há Importar). */
+  verificacao?: boolean;
+  /** Um arquivo que já chegou do host: cada `n` NOVO abre a MESMA leitura, sem o lançador. */
+  arquivoHost?: { file: File; n: number } | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -133,6 +140,14 @@ export function DfdUploadForm({
     setResultado(null);
     setLauncher(true);
   }, [iniciar]);
+  // O arquivo que o HOST já trouxe (a Verificação): a MESMA leitura de um arquivo escolhido no lançador.
+  const arquivoVisto = useRef(arquivoHost?.n ?? 0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reage só a um arquivo NOVO do host.
+  useEffect(() => {
+    if (!arquivoHost || arquivoHost.n === arquivoVisto.current || status === "sending") return;
+    arquivoVisto.current = arquivoHost.n;
+    void handleFile(arquivoHost.file);
+  }, [arquivoHost]);
   // Sobrescrita em ANDAMENTO (do lançador até gravar/cancelar) → o banner do DFD fica só-leitura.
   const ocupado = launcher || status === "parsing" || status === "ready" || status === "sending";
   const onOcupado = sobrescrever?.onOcupado;
@@ -184,7 +199,8 @@ export function DfdUploadForm({
       }
       // Mesmo nº já cadastrado? (em qualquer unidade — a lista da Mesa é filtrada pela unidade do cabeçalho)
       let gravado: DfdDetalhe | null = sobrescrever?.gravado ?? null;
-      if (!gravado) {
+      // Verificação: o DFD como veio — sem comparar com o cadastrado.
+      if (!gravado && !verificacao) {
         const ex = (await buscarExistentes([parsed.numero])).get(parsed.numero.trim());
         if (!atual()) return;
         if (ex && !ex.acessivel) {
@@ -241,6 +257,7 @@ export function DfdUploadForm({
   }
 
   async function enviar() {
+    if (verificacao) return; // a Verificação nunca grava
     if (!preview) return;
     const resumo = sob?.resumo ?? null;
     if (
@@ -409,7 +426,7 @@ export function DfdUploadForm({
       <Modal
         open={modalAberto}
         onClose={fecharConferencia}
-        titulo={base ? `Sobrescrever — DFD ${preview?.numero ?? ""}` : `Conferir e importar — DFD ${preview?.numero ?? ""}`}
+        titulo={verificacao ? `Verificação — DFD ${preview?.numero ?? ""}` : base ? `Sobrescrever — DFD ${preview?.numero ?? ""}` : `Conferir e importar — DFD ${preview?.numero ?? ""}`}
         cabecalho={
           preview ? (
             <DfdCabecalho numero={preview.numero} tipo={preview.tipo} planejamento={preview.planejamento} sobrescrita={!!base} />
@@ -462,7 +479,9 @@ export function DfdUploadForm({
               mensagensAbertas={painel?.tipo === "mensagens"}
               onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
               aviso={
-                importDesligado
+                verificacao
+                  ? "Somente consulta — nada é gravado"
+                  : importDesligado
                   ? "Importação de DFD avulso desabilitada nas Configurações"
                   : tipoNaoPermitido
                     ? `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`
@@ -481,7 +500,7 @@ export function DfdUploadForm({
                 ) : undefined
               }
               principal={
-                base ? (
+                verificacao ? undefined : base ? (
                   <BotaoAcao texto variant="primary" rotulo="Sobrescrever DFD" icon={<IconRefresh className="h-4 w-4" />} onClick={enviar} disabled={bloqueado} />
                 ) : (
                   <BotaoAcao texto variant="primary" rotulo="Importar DFD" icon={<IconUpload className="h-4 w-4" />} onClick={enviar} disabled={bloqueado} />

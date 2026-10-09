@@ -32,6 +32,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.75.0",
+    data: "2026-10-09",
+    titulo: "Verificação de protocolos e DFDs",
+    mudancas: [
+      { tipo: "novo", area: "Verificação", texto: "Tela nova no menu Módulos: solte um protocolo (.pdf) ou um DFD (.pdf ou .xlsx) e veja todos os erros e atenções, com as mesmas regras da importação da Mesa \u2014 nada é gravado, serve só para consulta.", link: "/painel/verificacao" },
+      { tipo: "novo", area: "Verificação", texto: "As pendências encontradas viram relatório: despacho, WhatsApp, lista ou PDF, pelo indicador no rodapé do banner.", link: "/painel/verificacao" },
+      { tipo: "novo", area: "Usuários", texto: "Excluir um usuário agora o ARQUIVA: a pessoa perde o acesso e tudo fica guardado. Em \u201cArquivados\u201d, no rodapé da tabela, dá para restaurar ou excluir definitivamente.", link: "/painel/usuarios" },
+      { tipo: "correcao", area: "Acesso", texto: "No login, a área do captcha tem altura fixa: ele aparece abaixo do botão Entrar sem mover nada.", link: "/login" },
+    ],
+  },
+  {
     versao: "1.74.0",
     data: "2026-10-08",
     titulo: "Automações: lixeira e devolver ao painel",

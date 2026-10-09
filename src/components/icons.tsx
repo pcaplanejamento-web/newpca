@@ -49,6 +49,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FileSearch,
   FileText,
   Filter,
   GitCompareArrows,
@@ -166,6 +167,7 @@ export const IconTrend = TrendingUp;
 export const IconSun = Sun;
 export const IconMoon = Moon;
 export const IconSearch = Search;
+export const IconVerificacao = FileSearch;
 export const IconColunas = Columns3;
 export const IconVariavel = Variable;
 export const IconChevronLeft = ChevronLeft;

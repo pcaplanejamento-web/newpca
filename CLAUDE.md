@@ -628,6 +628,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`AtividadePessoa`** (o ícone da tela + "Mesa › Protocolo … · editando") na linha de cada pessoa do "Online agora", que
   ganhou a seção **"Nesta tela"** (mesma tela + rótulo que você); a dica de cada foto do cabeçalho diz onde a pessoa está.
 
+## Verificação (v1.75.0, sem migração)
+- Tela **`/painel/verificacao`** (`VerificacaoView`, contêiner; item "Verificação" em Módulos — `IconVerificacao`, segue a
+  permissão da Mesa `dfd`; o PDF do relatório, a ação Exportar na Mesa do sistema — `PermissaoExportar`): duas `Dropzone`
+  (protocolo .pdf | DFD .pdf/.xlsx) que entregam o arquivo aos MESMOS `ProtocoloUploadForm`/`DfdUploadForm` no modo
+  **`verificacao`** (arquivo do host: `arquivo` / `arquivoHost`): analisa o arquivo COMO VEIO (sem consultar os já
+  cadastrados — `carregarExistentes`/`buscarProcesso`/sobrescrita pulados), sem Protocolar/Importar (`protocolar`/`enviar`
+  retornam) e o rodapé diz "somente consulta". Erros, navegação e relatórios = o `PainelPendencias` de sempre. Dados da
+  página = `contextoBanners` (unidades com responsáveis, regras do ADM, órgãos, PCAs). Nada é gravado; as únicas chamadas
+  são de leitura (catálogo).
+
 ## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um

@@ -179,6 +179,7 @@ export function ProtocoloUploadForm({
   podeExcluir = true,
   iniciar = 0,
   arquivo = null,
+  verificacao = false,
   onFechado,
   onConcluido,
 }: {
@@ -201,6 +202,9 @@ export function ProtocoloUploadForm({
   iniciar?: number;
   /** Um PDF que já chegou (a Automação emitiu o protocolo na Centi): cada `n` NOVO abre a MESMA análise, sem o lançador. */
   arquivo?: { file: File; n: number } | null;
+  /** VERIFICAÇÃO (tela "Verificação"): só analisa e aponta os erros do PDF COMO VEIO — sem consultar o que já está
+   * cadastrado e SEM gravar nada (não há Protocolar). */
+  verificacao?: boolean;
   /** A análise foi FECHADA (ou a protocolação concluída e fechada) — a Automação segue para o próximo protocolo. */
   onFechado?: (erro?: string) => void;
   /** (reenvio) sobrescrita concluída — o banner do gravado recarrega. */
@@ -317,7 +321,7 @@ export function ProtocoloUploadForm({
   // protocolo de mesmo nº/Id — o que CONTINUA no processo depois de protocolar entra na conciliação da capa (análise =
   // gravado). Pela chave nº|Id da capa (o nº pode ser digitado quando a capa veio sem ele).
   const [processoSrv, setProcessoSrv] = useState<{ chave: string; dados?: ProcessoGravado | null; erro?: string } | null>(null);
-  const chaveProcesso = !reenvio && index && numero.trim() ? JSON.stringify([numero.trim(), extra.idExterno ?? null]) : "";
+  const chaveProcesso = !reenvio && !verificacao && index && numero.trim() ? JSON.stringify([numero.trim(), extra.idExterno ?? null]) : "";
   useEffect(() => {
     if (!chaveProcesso) return;
     let vivo = true;
@@ -605,6 +609,12 @@ export function ProtocoloUploadForm({
    * antiga ("Restaurar" traz, se for o caso).
    */
   async function carregarExistentes(idx0: ProtocoloIndex, doc: PdfDoc) {
+    // Verificação: o PDF como veio — nada do que está cadastrado entra (nem conflito, nem herança).
+    if (verificacao) {
+      existentesRef.current = new Map();
+      setExistentesSrv(new Map());
+      return;
+    }
     try {
       const m = await buscarExistentes(idx0.dfds.map((d) => d.numero));
       if (docRef.current !== doc) return;
@@ -1682,6 +1692,7 @@ export function ProtocoloUploadForm({
   }
 
   async function protocolar() {
+    if (verificacao) return; // a Verificação nunca grava
     if (!index) return;
     // NADA FICA PARA TRÁS: DFD do envio ainda sem análise (além do teto) é analisado ANTES de gravar qualquer coisa — a
     // protocolação segue sozinha ao terminar, se nenhum estiver com erro (senão, para e o rodapé aponta o que corrigir).
@@ -1949,6 +1960,8 @@ export function ProtocoloUploadForm({
     if (processoAtual?.erro) return `${processoAtual.erro} Feche e abra o PDF de novo.`;
     if (existentesPendentes) return "Conferindo os DFDs já cadastrados…";
     if (catPendentes > 0) return `Conferindo os itens no catálogo — ${catPendentes} DFD(s)…`;
+    // Verificação: nada é protocolado — erros e atenções ficam no indicador ao lado.
+    if (verificacao) return `${totalDfds} DFD(s) verificado(s) — somente consulta, nada é gravado`;
     if (protocolarDesligado) return "Protocolação desabilitada nas Configurações";
     if (!numero.trim()) return "Informe o número do processo para protocolar";
     if (!gateTrava.ok) return gateTrava.motivos.join(" ");
@@ -2154,7 +2167,7 @@ export function ProtocoloUploadForm({
       <Modal
         open={aberto}
         onClose={fechar}
-        titulo={reenvio ? `Reenvio — Protocolo ${numero}` : numero ? `Protocolo ${numero}` : "Novo protocolo"}
+        titulo={verificacao ? `Verificação — Protocolo ${numero}` : reenvio ? `Reenvio — Protocolo ${numero}` : numero ? `Protocolo ${numero}` : "Novo protocolo"}
         cabecalho={<ProtocoloCabecalho numero={numero || "novo"} idExterno={extra.idExterno} assunto={assunto || null} reenvio={!!reenvio} />}
         size="lg"
         fecharNoBackdrop={false}
@@ -2371,7 +2384,7 @@ export function ProtocoloUploadForm({
                 {!importando && !analise && catFalhas > 0 && (
                   <BotaoAcao rotulo="Conferir no catálogo de novo" icon={<IconRefresh className="h-4 w-4" />} onClick={reconferirCatalogo} />
                 )}
-                {reenvio ? (
+                {verificacao ? null : reenvio ? (
                   <BotaoAcao texto variant="primary" rotulo="Sobrescrever protocolo" icon={<IconRefresh className="h-4 w-4" />} onClick={protocolar} loading={importando} disabled={!podeProtocolar} />
                 ) : (
                   <BotaoAcao texto variant="primary" rotulo="Protocolar" icon={<IconUpload className="h-4 w-4" />} onClick={protocolar} loading={importando} disabled={!podeProtocolar} />

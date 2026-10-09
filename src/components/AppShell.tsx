@@ -32,6 +32,7 @@ import {
   IconPlug,
   IconRobo,
   IconSettings,
+  IconVerificacao,
   IconShield,
   IconSpinner,
   IconUser,
@@ -53,7 +54,8 @@ type NavSecao = { titulo: string; itens: NavItem[] };
 
 const SECOES: NavSecao[] = [
   // Os protocolos, DFDs e itens vivem na MESA (o antigo Dashboard e a tela Protocolos legada saíram).
-  { titulo: "Módulos", itens: NAV_MODULOS },
+  // A Verificação (consultar os erros de um protocolo/DFD sem gravar) segue a permissão da Mesa.
+  { titulo: "Módulos", itens: [...NAV_MODULOS, { href: "/painel/verificacao", label: "Verificação", Icon: IconVerificacao, aba: "dfd" }] },
   {
     titulo: "Administração",
     itens: [
