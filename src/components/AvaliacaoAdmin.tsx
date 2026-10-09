@@ -38,6 +38,7 @@ import { Switch } from "./Switch";
 import { Tabs } from "./Tabs";
 import { TipoDfdPicker } from "./TipoDfdPicker";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 // Tela do ADM para controlar TODA avaliação de Protocolos/DFDs/Itens (spec). Só
 // componentes do design-system. Recebe as regras por props (server component da rota)
@@ -283,7 +284,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           {soLeitura ? (
             <span className="text-[12px] font-medium text-muted">Sempre {impById(global).nome.toLowerCase()}</span>
           ) : (
-            <select
+            <Selecao
               aria-label={`Importância de ${ponto.rotulo}`}
               className={`${selectCls} min-w-[9rem]`}
               value={valor}
@@ -299,7 +300,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
                   {i.nome}
                 </option>
               ))}
-            </select>
+            </Selecao>
           )}
         </div>
         {/* Edição/ajuste automático são GLOBAIS (só no contexto "Todos"). */}
@@ -335,14 +336,14 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <span className={labelCls}>Aplicar a</span>
-            <select className={`${selectCls} min-w-[16rem]`} value={ctxKey} onChange={(e) => setCtxKey(e.target.value)}>
+            <Selecao className={`${selectCls} min-w-[16rem]`} value={ctxKey} onChange={(e) => setCtxKey(e.target.value)}>
               <option value="">Padrão (todos)</option>
               {opcoes.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </Selecao>
           </div>
           {ctxKey !== "" && (
             <p className="pb-2 text-[12px] text-muted">
@@ -506,7 +507,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-text">Avaliação</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">

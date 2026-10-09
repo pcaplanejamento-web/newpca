@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { filtrarNome, filtrarTelefone, formatarTelefone, matriculaValida, nomeValido, telefoneValido } from "@/lib/cadastro-core";
 import { dataBR, dataHoraBR } from "@/lib/format";
 import type { OpcaoPapel } from "@/lib/papeis";
@@ -17,7 +17,9 @@ import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
 import { IconArquivar, IconDesarquivar, IconBadgeCheck, IconCheck, IconSave, IconSenhaNova, IconShield, IconShieldCheck, IconTrash, IconUserCheck, IconUserX, IconWhatsapp } from "./icons";
 import { Modal } from "./Modal";
 import { OpcoesUnidades } from "./OpcoesUnidades";
+import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { BotaoWhatsapp } from "./Telefone";
+import { Selecao } from "./Selecao";
 
 export type Status = "ativo" | "pendente" | "inativo";
 
@@ -306,24 +308,6 @@ function Cabecalho({ u, souEu, papel }: { u: UsuarioAdmin; souEu: boolean; papel
   );
 }
 
-/** Uma seção do banner: título + o conteúdo. */
-function Secao({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="space-y-3 rounded-card border border-border p-[var(--pad-card)]">
-      <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[13.5px] font-semibold text-text">{titulo}</h3>
-        {acao}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/** O valor só-leitura de um campo com cadeado. */
-function Valor({ children }: { children: ReactNode }) {
-  return <div className="mt-0.5 min-h-[22px] break-words text-sm font-semibold leading-snug text-text">{children}</div>;
-}
-
 /** O erro de um campo destravado (abaixo da caixa). */
 function ErroCampo({ texto }: { texto?: string }) {
   return texto ? <p className="mt-1 text-[12px] font-medium text-[var(--sit-devolvido)]">{texto}</p> : null;
@@ -385,7 +369,7 @@ function Corpo({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <Secao titulo="Dados do usuário" acao={<span className="text-[12px] text-muted">Toque no cadeado para editar</span>}>
+      <SecaoBanner titulo="Dados do usuário" acao={<span className="text-[12px] text-muted">Toque no cadeado para editar</span>}>
         <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
           <LinhaCampo label="Nome completo" span {...lock("nome")}>
             {abertos.has("nome") ? (
@@ -394,7 +378,7 @@ function Corpo({
                 <ErroCampo texto={erros.nome} />
               </>
             ) : (
-              <Valor>{r.nome}</Valor>
+              <ValorCampo>{r.nome}</ValorCampo>
             )}
           </LinhaCampo>
           <LinhaCampo label="E-mail" {...lock("email")}>
@@ -411,14 +395,14 @@ function Corpo({
                 <ErroCampo texto={erros.email} />
               </>
             ) : (
-              <Valor>
+              <ValorCampo>
                 <span className="inline-flex items-center gap-1 break-all">
                   {r.email}
                   {u.emailVerificado && r.email === u.email && (
                     <IconBadgeCheck className="h-4 w-4 shrink-0 text-[var(--ok)]" aria-label="E-mail confirmado" />
                   )}
                 </span>
-              </Valor>
+              </ValorCampo>
             )}
           </LinhaCampo>
           <LinhaCampo label="Matrícula" {...lock("matricula")}>
@@ -428,7 +412,7 @@ function Corpo({
                 <ErroCampo texto={erros.matricula} />
               </>
             ) : (
-              <Valor>{r.matricula || "—"}</Valor>
+              <ValorCampo>{r.matricula || "—"}</ValorCampo>
             )}
           </LinhaCampo>
           <LinhaCampo label="Contato institucional" {...lock("telefone")}>
@@ -459,17 +443,17 @@ function Corpo({
                 <ErroCampo texto={erros.telefone} />
               </>
             ) : (
-              <Valor>
+              <ValorCampo>
                 <span className="inline-flex flex-wrap items-center gap-1.5">
                   <span className="tabular-nums">{formatarTelefone(r.telefone) || "—"}</span>
                   {r.telefone && r.whatsapp && <Badge tone="emerald">WhatsApp</Badge>}
                 </span>
-              </Valor>
+              </ValorCampo>
             )}
           </LinhaCampo>
           <LinhaCampo label="Cargo ou função" {...lock("cargo")}>
             {abertos.has("cargo") ? (
-              <select className={cellCls} value={r.cargo} onChange={(e) => set("cargo")(e.target.value)} aria-label="Cargo ou função">
+              <Selecao className={cellCls} value={r.cargo} onChange={(e) => set("cargo")(e.target.value)} aria-label="Cargo ou função">
                 <option value="">Nenhum</option>
                 {/* O cargo atual continua na lista mesmo que tenha saído do cadastro. */}
                 {u.cargo && !cargos.includes(u.cargo) && <option value={u.cargo}>{u.cargo} (fora da lista)</option>}
@@ -478,37 +462,37 @@ function Corpo({
                     {c}
                   </option>
                 ))}
-              </select>
+              </Selecao>
             ) : (
-              <Valor>{r.cargo || "—"}</Valor>
+              <ValorCampo>{r.cargo || "—"}</ValorCampo>
             )}
           </LinhaCampo>
           <LinhaCampo label="Unidade em que trabalha" {...lock("unidade")}>
             {abertos.has("unidade") ? (
-              <select className={cellCls} value={r.unidade} onChange={(e) => set("unidade")(e.target.value)} aria-label="Unidade em que trabalha">
+              <Selecao className={cellCls} value={r.unidade} onChange={(e) => set("unidade")(e.target.value)} aria-label="Unidade em que trabalha">
                 <option value="">Nenhuma</option>
                 {/* A unidade atual continua na lista mesmo que hoje esteja oculta. */}
                 {u.reparticaoId != null && !unidades.some((x) => x.id === u.reparticaoId) && (
                   <option value={u.reparticaoId}>{u.unidade ?? `Unidade ${u.reparticaoId}`}</option>
                 )}
                 <OpcoesUnidades unidades={unidades} />
-              </select>
+              </Selecao>
             ) : (
-              <Valor>{(r.unidade === String(u.reparticaoId ?? "") ? unidadeNome : unidades.find((x) => String(x.id) === r.unidade)?.nome) || "—"}</Valor>
+              <ValorCampo>{(r.unidade === String(u.reparticaoId ?? "") ? unidadeNome : unidades.find((x) => String(x.id) === r.unidade)?.nome) || "—"}</ValorCampo>
             )}
           </LinhaCampo>
           {/* Só leitura: o apelido é da pessoa (Perfil); a data é do sistema. */}
           <LinhaCampo label="Apelido (a pessoa define no Perfil)" editavel={false} aberto={false} bloqueado={false} onLock={() => {}}>
-            <Valor>{u.apelido || "—"}</Valor>
+            <ValorCampo>{u.apelido || "—"}</ValorCampo>
           </LinhaCampo>
           <LinhaCampo label="Cadastrado em" editavel={false} aberto={false} bloqueado={false} onLock={() => {}}>
-            <Valor>{u.criadoEm ? dataBR(u.criadoEm) : "—"}</Valor>
+            <ValorCampo>{u.criadoEm ? dataBR(u.criadoEm) : "—"}</ValorCampo>
           </LinhaCampo>
         </div>
-      </Secao>
+      </SecaoBanner>
 
       <div className="grid gap-[var(--gap-block)] lg:grid-cols-2">
-        <Secao titulo="Validação dos dados">
+        <SecaoBanner titulo="Validação dos dados">
           <p className="text-[13px] leading-relaxed text-text-2">
             {u.dadosValidadosEm ? (
               <>
@@ -536,9 +520,9 @@ function Corpo({
               </Button>
             )}
           </div>
-        </Secao>
+        </SecaoBanner>
 
-        <Secao titulo="Senha">
+        <SecaoBanner titulo="Senha">
           <p className="text-[13px] leading-relaxed text-text-2">
             {u.trocarSenha
               ? "Exigida: no próximo acesso, a pessoa cria uma senha nova (confirmada por código no e-mail) antes de usar o sistema."
@@ -565,10 +549,10 @@ function Corpo({
               </Button>
             )}
           </div>
-        </Secao>
+        </SecaoBanner>
       </div>
 
-      <Secao
+      <SecaoBanner
         titulo="Acesso"
         acao={
           <Button size="sm" variant="secondary" icon={<IconShield className="h-4 w-4" />} onClick={onVerAcesso}>
@@ -579,7 +563,7 @@ function Corpo({
         <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-muted">Papel</span>
-            <select
+            <Selecao
               className={cellCls}
               value={u.papelId == null ? "" : String(u.papelId)}
               disabled={souEu || ocupado || u.status === "pendente"}
@@ -596,7 +580,7 @@ function Corpo({
                   {p.nome}
                 </option>
               ))}
-            </select>
+            </Selecao>
             <span className="mt-1 block text-[12px] leading-snug text-muted">{papel ? descricaoPapel(papel) : "Sem papel: nenhuma tela abre."}</span>
           </label>
           <div>
@@ -631,14 +615,14 @@ function Corpo({
             {abertos.has("grupos") ? (
               <GruposDaPessoa grupos={grupos} selecionados={r.grupos} onChange={(ids) => set("grupos")(ids)} disabled={ocupado} />
             ) : (
-              <Valor>{nomesGrupos(r.grupos).join(", ") || "—"}</Valor>
+              <ValorCampo>{nomesGrupos(r.grupos).join(", ") || "—"}</ValorCampo>
             )}
             {r.grupos.length === 0 && papel?.chave !== "admin" && (
               <p className="mt-1 text-[12.5px] text-[color:var(--warn)]">Sem grupo, a pessoa não abre nenhuma tela nem vê dados.</p>
             )}
           </LinhaCampo>
         </div>
-      </Secao>
+      </SecaoBanner>
     </div>
   );
 }

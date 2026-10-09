@@ -1,4 +1,6 @@
 import type { DfdItemPayload, DfdMetaPayload } from "./dfd-validation";
+import type { DfdParseado } from "./parse-dfd-comum";
+import type { DfdSobrescrito } from "./protocolo";
 
 /**
  * Envio de um DFD ao servidor em LOTES de itens — roda NO NAVEGADOR. Escala a
@@ -7,8 +9,57 @@ import type { DfdItemPayload, DfdMetaPayload } from "./dfd-validation";
  * (não deixa DFD pela metade). Reusado pelo import avulso e pelo de protocolo.
  */
 
+/** O cabeçalho do envio a partir do DFD lido — a MESMA forma na protocolação automática, no avulso e na substituição. */
+export function metaDoDfd(
+  d: DfdParseado,
+  extra: Pick<DfdMetaPayload, "anoPca" | "reparticaoId" | "origem"> & Partial<Pick<DfdMetaPayload, "protocoloId" | "escolhas">>,
+): DfdMetaPayload {
+  return {
+    numero: d.numero,
+    planejamento: d.planejamento,
+    tipo: d.tipo,
+    objeto: d.objeto,
+    orgaoEntidade: d.orgaoEntidade,
+    setorRequisitante: d.setorRequisitante,
+    siglaSetor: d.siglaSetor,
+    responsavel: d.responsavel,
+    matricula: d.matricula,
+    email: d.email,
+    telefone: d.telefone,
+    numeroContrato: d.numeroContrato,
+    numeroAta: d.numeroAta,
+    numeroLicitacao: d.numeroLicitacao,
+    valorTotal: d.valorTotal,
+    nomeArquivo: d.nomeArquivo,
+    secoes: d.secoes,
+    assinaturas: d.assinaturas,
+    ...extra,
+  } as DfdMetaPayload;
+}
+
 const LOTE = 200; // itens por request no cliente (o servidor aceita até 1000)
+// …e até ~500 mil caracteres de descrição por request: descrições longas (até `MAX_TEXTO_DFD` cada) nunca fazem um
+// pedido pesado demais para o Worker.
+const LOTE_CARACTERES = 500_000;
 const TENTATIVAS = 3; // tentativas por request (só p/ falhas transitórias)
+
+/** Onde cada lote termina: até `LOTE` itens e até `LOTE_CARACTERES` de descrição — sempre ao menos 1 item. */
+function finsDosLotes(itens: DfdItemPayload[]): number[] {
+  const fins: number[] = [];
+  let inicio = 0;
+  let caracteres = 0;
+  for (let i = 0; i < itens.length; i++) {
+    const n = itens[i].descricao?.length ?? 0;
+    if (i > inicio && (i - inicio >= LOTE || caracteres + n > LOTE_CARACTERES)) {
+      fins.push(i);
+      inicio = i;
+      caracteres = 0;
+    }
+    caracteres += n;
+  }
+  fins.push(itens.length);
+  return fins;
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,14 +117,15 @@ export async function enviarDfdEmLotes(
   opcoes: { existia?: boolean } = {},
 ): Promise<{ dfdId: number }> {
   const total = itens.length;
-  const j = await postDfd({ mode: "start-dfd", ...meta, totalItens: total, rows: itens.slice(0, LOTE) });
+  const fins = finsDosLotes(itens);
+  const j = await postDfd({ mode: "start-dfd", ...meta, totalItens: total, rows: itens.slice(0, fins[0]) });
   const dfdId = Number(j.dfdId);
-  let enviados = Math.min(LOTE, total);
+  let enviados = fins[0];
   onLote?.(enviados, total);
   try {
-    for (let i = LOTE; i < total; i += LOTE) {
-      await postDfd({ mode: "append-dfd-itens", dfdId, desde: i, rows: itens.slice(i, i + LOTE) });
-      enviados = Math.min(i + LOTE, total);
+    for (const fim of fins.slice(1)) {
+      await postDfd({ mode: "append-dfd-itens", dfdId, desde: enviados, rows: itens.slice(enviados, fim) });
+      enviados = fim;
       onLote?.(enviados, total);
     }
   } catch (e) {
@@ -117,4 +169,23 @@ export async function buscarExistentes(numeros: string[]): Promise<Map<string, E
     for (const e of j.existentes ?? []) out.set(e.numero.trim(), e);
   }
   return out;
+}
+
+/** O PROCESSO já cadastrado do PDF (o protocolo de mesmo nº e os de mesmo Id): os DFDs vivos dele e o rastro — o que
+ * CONTINUA no processo depois de protocolar (a importação nunca apaga). `null` = nada cadastrado (ou sem acesso). */
+export type ProcessoGravado = {
+  dfds: { numero: string; valorTotal: number | null; totalItens: number | null }[];
+  sobrescritos: DfdSobrescrito[];
+};
+
+/** `POST /api/dfd/existentes` com o `processo`. Falha ⇒ lança (a conciliação da capa não fecha às cegas). */
+export async function buscarProcesso(numero: string, idExterno: string | null): Promise<ProcessoGravado | null> {
+  const res = await fetch("/api/dfd/existentes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ numeros: [], processo: { numero, idExterno } }),
+  });
+  const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; processo?: ProcessoGravado | null } | null;
+  if (!res.ok || !j?.ok) throw new Error(j?.error ?? "Não foi possível conferir o protocolo já cadastrado.");
+  return j.processo ?? null;
 }

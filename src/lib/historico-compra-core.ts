@@ -1,4 +1,4 @@
-import { coeficienteVariacao, nivelVariacao } from "./itens-consolidados.ts";
+import { coeficienteVariacao, desvioDaMedia, type NivelVariacao, nivelVariacao } from "./itens-consolidados.ts";
 import { norm } from "./parse-dfd-comum.ts";
 
 /**
@@ -9,8 +9,9 @@ import { norm } from "./parse-dfd-comum.ts";
  * - **Leitura do arquivo do histórico** (CSV `;` do sistema de compras, ou a mesma planilha em .xlsx): colunas achadas pelo
  *   NOME do cabeçalho (qualquer ordem), o "$$" do export volta a ser vírgula, números "10.0000"/"1.234,56", datas
  *   dd/mm/aaaa → AAAA-MM-DD, o código só com dígitos; linhas IDÊNTICAS repetidas pelo export saem (contadas).
- * - **Análise:** `produtosDoHistorico` (um por código: contratos, quantidade, menor/médio ponderado/maior/último preço) e
- *   `resumoHistorico` (os números do topo).
+ * - **Análise:** `produtosDoHistorico` (um por código: o VALOR ATUAL em cada contrato — `valorAtualNoContrato`, base +
+ *   aditivo —, o valor atual do produto = o do contrato assinado por último, e menor/médio/maior/variação ENTRE contratos)
+ *   e `resumoHistorico` (os números do topo).
  */
 
 // ---------------------------------------------------------------- Tipos de catálogo
@@ -371,6 +372,37 @@ export function parseHistoricoCompra(matriz: unknown[][]): HistoricoParseado {
 
 // ---------------------------------------------------------------- Análise
 
+/**
+ * O VALOR ATUAL de um produto DENTRO de um contrato (o contrato tem UMA data de assinatura). Os preços distintos > 0:
+ * um só = ele (linhas repetidas com o mesmo preço são o mesmo item dividido, não aditivo); dois ou mais = o MENOR
+ * somado ao MAIOR — o menor é o ADITIVO lançado sobre o preço do maior (ex.: 8,75 + aditivo 0,80 = 9,55).
+ */
+export function valorAtualNoContrato(precos: readonly (number | null)[]): { valor: number; base: number; menor: number; aditivo: number | null } | null {
+  let menor: number | null = null;
+  let maior: number | null = null;
+  for (const p of precos) {
+    if (p == null || !(p > 0)) continue;
+    if (menor == null || p < menor) menor = p;
+    if (maior == null || p > maior) maior = p;
+  }
+  if (menor == null || maior == null) return null;
+  return menor === maior ? { valor: maior, base: maior, menor, aditivo: null } : { valor: maior + menor, base: maior, menor, aditivo: menor };
+}
+
+/** O produto num contrato: o valor atual (`valorAtualNoContrato`), o MAIOR (`base`) e o MENOR preço das linhas dele,
+ * a quantidade contratada e os dados do contrato. */
+export type PrecoContrato = {
+  idContrato: string;
+  valor: number;
+  base: number;
+  menor: number;
+  aditivo: number | null;
+  quantidade: number;
+  linhas: number;
+  data: string | null;
+  credor: string | null;
+};
+
 export type ProdutoHistorico = {
   codigo: string;
   descricao: string;
@@ -380,60 +412,162 @@ export type ProdutoHistorico = {
   credores: number;
   quantidade: number;
   valorTotal: number;
+  /** Os contratos com valor atual, do assinado por ÚLTIMO ao mais antigo (empate na data: o de maior ordem primeiro). */
+  porContrato: PrecoContrato[];
+  /** Menor/maior/médio e variação = ENTRE CONTRATOS DIFERENTES, sobre o valor atual de cada um (`porContrato`). */
   menor: number | null;
   maior: number | null;
-  /** Médio PONDERADO pela quantidade (Σ qtd × preço ÷ Σ qtd) dos itens com quantidade e preço > 0; sem eles, a média simples. */
+  /** O CONTRATO do menor e do maior valor atual (empate: o assinado por último). */
+  contratoMenor: PrecoContrato | null;
+  contratoMaior: PrecoContrato | null;
   medio: number | null;
-  /** Coeficiente de variação dos preços unitários (a MESMA régua da visão Consolidada da Mesa — `FAIXAS_VARIACAO`);
-   * `null` = menos de 2 preços. */
+  /** Coeficiente de variação dos valores atuais dos contratos (a MESMA régua da visão Consolidada da Mesa —
+   * `FAIXAS_VARIACAO`); `null` = menos de 2 contratos com preço. */
   variacao: number | null;
-  /** O preço do contrato assinado por último (empate: o de maior ordem). */
-  ultimo: { valor: number; data: string | null; credor: string | null } | null;
+  /** O VALOR ATUAL do produto = o do contrato assinado por último (`porContrato[0]`). */
+  atual: PrecoContrato | null;
 };
 
-/** Um por CÓDIGO, na ordem do maior valor contratado. Linear. */
-export function produtosDoHistorico(itens: readonly CompraHistorico[], contratos: readonly ContratoHistorico[]): ProdutoHistorico[] {
-  const porContrato = new Map(contratos.map((c) => [c.idContrato, c] as const));
-  type Acc = ProdutoHistorico & { _cs: Set<string>; _cr: Set<string>; _pq: number; _q: number; _ps: number; _n: number; _ud: string; _uo: number; _pr: number[] };
+/** O que `produtosDoHistorico` lê de cada item e de cada contrato (o histórico de UM catálogo ou as compras de alguns
+ * códigos em TODOS os históricos — a comparação com os itens dos DFDs). */
+type CompraParaProduto = Pick<CompraHistorico, "ordem" | "idContrato" | "codigo" | "descricao" | "qtdContratada" | "valorContratado" | "valorUnitario">;
+type ContratoParaProduto = Pick<ContratoHistorico, "idContrato" | "dataAssinatura" | "credor">;
+
+/** Um por CÓDIGO, na ordem do maior valor contratado. Linear (+ a ordenação dos contratos de cada produto). */
+export function produtosDoHistorico(itens: readonly CompraParaProduto[], contratos: readonly ContratoParaProduto[]): ProdutoHistorico[] {
+  const contratoPorId = new Map(contratos.map((c) => [c.idContrato, c] as const));
+  type Grupo = { linhas: { preco: number | null; qtd: number }[]; ordem: number };
+  type Acc = { p: ProdutoHistorico; grupos: Map<string, Grupo>; credores: Set<string> };
   const m = new Map<string, Acc>();
   for (const it of itens) {
     let a = m.get(it.codigo);
     if (!a) {
-      a = { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, menor: null, maior: null, medio: null, variacao: null, ultimo: null, _pr: [], _cs: new Set(), _cr: new Set(), _pq: 0, _q: 0, _ps: 0, _n: 0, _ud: "", _uo: -1 };
+      a = {
+        p: { codigo: it.codigo, descricao: it.descricao, linhas: 0, contratos: 0, credores: 0, quantidade: 0, valorTotal: 0, porContrato: [], menor: null, maior: null, contratoMenor: null, contratoMaior: null, medio: null, variacao: null, atual: null },
+        grupos: new Map(),
+        credores: new Set(),
+      };
       m.set(it.codigo, a);
     }
-    const c = porContrato.get(it.idContrato);
-    a.linhas++;
-    a._cs.add(it.idContrato);
-    if (c?.credor) a._cr.add(c.credor);
+    const c = contratoPorId.get(it.idContrato);
+    a.p.linhas++;
+    if (c?.credor) a.credores.add(c.credor);
     const q = it.qtdContratada ?? 0;
-    a.quantidade += q;
-    a.valorTotal += it.valorContratado ?? (it.valorUnitario ?? 0) * q;
-    const p = it.valorUnitario;
-    if (p != null && p > 0) {
-      a.menor = a.menor == null ? p : Math.min(a.menor, p);
-      a.maior = a.maior == null ? p : Math.max(a.maior, p);
-      a._ps += p;
-      a._n++;
-      a._pr.push(p);
-      if (q > 0) {
-        a._pq += p * q;
-        a._q += q;
-      }
-      const d = c?.dataAssinatura ?? "";
-      if (d > a._ud || (d === a._ud && it.ordem > a._uo)) {
-        a._ud = d;
-        a._uo = it.ordem;
-        a.ultimo = { valor: p, data: c?.dataAssinatura ?? null, credor: c?.credor ?? null };
-      }
-    }
+    a.p.quantidade += q;
+    a.p.valorTotal += it.valorContratado ?? (it.valorUnitario ?? 0) * q;
+    const g = a.grupos.get(it.idContrato);
+    if (g) {
+      g.linhas.push({ preco: it.valorUnitario, qtd: q });
+      g.ordem = Math.max(g.ordem, it.ordem);
+    } else a.grupos.set(it.idContrato, { linhas: [{ preco: it.valorUnitario, qtd: q }], ordem: it.ordem });
   }
   const out: ProdutoHistorico[] = [];
-  for (const a of m.values()) {
-    const { _cs, _cr, _pq, _q, _ps, _n, _ud, _uo, _pr, ...p } = a;
-    out.push({ ...p, contratos: _cs.size, credores: _cr.size, medio: _q > 0 ? _pq / _q : _n > 0 ? _ps / _n : null, variacao: coeficienteVariacao(_pr) });
+  for (const { p, grupos, credores } of m.values()) {
+    const lista: (PrecoContrato & { _o: number })[] = [];
+    for (const [idContrato, g] of grupos) {
+      const v = valorAtualNoContrato(g.linhas.map((l) => l.preco));
+      if (!v) continue;
+      const c = contratoPorId.get(idContrato);
+      // A quantidade = as linhas no preço BASE (a linha do aditivo repete a quantidade do item; somá-la dobraria).
+      const quantidade = g.linhas.reduce((s, l) => s + (l.preco === v.base ? l.qtd : 0), 0);
+      lista.push({ idContrato, ...v, quantidade, linhas: g.linhas.length, data: c?.dataAssinatura ?? null, credor: c?.credor ?? null, _o: g.ordem });
+    }
+    lista.sort((x, y) => (y.data ?? "").localeCompare(x.data ?? "") || y._o - x._o);
+    const porContrato = lista.map(({ _o, ...pc }) => pc);
+    const valores = porContrato.map((pc) => pc.valor);
+    let contratoMenor: PrecoContrato | null = null;
+    let contratoMaior: PrecoContrato | null = null;
+    for (const pc of porContrato) {
+      if (!contratoMenor || pc.valor < contratoMenor.valor) contratoMenor = pc;
+      if (!contratoMaior || pc.valor > contratoMaior.valor) contratoMaior = pc;
+    }
+    out.push({
+      ...p,
+      contratos: grupos.size,
+      credores: credores.size,
+      porContrato,
+      menor: contratoMenor?.valor ?? null,
+      maior: contratoMaior?.valor ?? null,
+      contratoMenor,
+      contratoMaior,
+      medio: valores.length ? valores.reduce((s, v) => s + v, 0) / valores.length : null,
+      variacao: coeficienteVariacao(valores),
+      atual: porContrato[0] ?? null,
+    });
   }
   return out.sort((x, y) => y.valorTotal - x.valorTotal || x.codigo.localeCompare(y.codigo));
+}
+
+// ---------------------------------------------------------------- Comparação com os itens dos DFDs (a Mesa)
+
+/** Uma compra de um código num histórico + os dados do contrato dela (`consultaComprasPorCodigos`). */
+export type LinhaCompraHistorico = CompraParaProduto &
+  Pick<CompraHistorico, "sequencial"> &
+  Pick<ContratoHistorico, "dataAssinatura" | "credor" | "numeroContrato" | "modalidade">;
+/** Os contratos que o banner do produto mostra (nº, credor, modalidade, assinatura). */
+export type ContratoDoProduto = Pick<ContratoHistorico, "idContrato" | "numeroContrato" | "credor" | "modalidade" | "dataAssinatura">;
+
+/**
+ * As compras de alguns códigos em TODOS os históricos → itens + contratos para `produtosDoHistorico`. O MESMO contrato
+ * (o "Id Contrato" do sistema de compras) importado em dois históricos é UM contrato: a linha repetida (mesmo contrato,
+ * sequencial, código e preço) entra uma vez — senão a quantidade dobraria; o 1º registro do contrato vale.
+ */
+export function historicoDasLinhas(linhas: readonly LinhaCompraHistorico[]): { itens: CompraParaProduto[]; contratos: ContratoDoProduto[] } {
+  const vistas = new Set<string>();
+  const contratos = new Map<string, ContratoDoProduto>();
+  const itens: CompraParaProduto[] = [];
+  for (const l of linhas) {
+    const chave = `${l.idContrato}|${l.sequencial ?? ""}|${l.codigo}|${l.valorUnitario ?? ""}`;
+    if (vistas.has(chave)) continue;
+    vistas.add(chave);
+    itens.push({ ordem: l.ordem, idContrato: l.idContrato, codigo: l.codigo, descricao: l.descricao, qtdContratada: l.qtdContratada, valorContratado: l.valorContratado, valorUnitario: l.valorUnitario });
+    if (!contratos.has(l.idContrato))
+      contratos.set(l.idContrato, { idContrato: l.idContrato, numeroContrato: l.numeroContrato, credor: l.credor, modalidade: l.modalidade, dataAssinatura: l.dataAssinatura });
+  }
+  return { itens, contratos: [...contratos.values()] };
+}
+
+/** A REFERÊNCIA de preço de um produto (o que a Mesa compara com o valor do item): o VALOR ATUAL (o do contrato assinado
+ * por último, com o aditivo), a data dele e o médio/menor/maior ENTRE contratos. */
+export type ReferenciaHistorico = {
+  atual: number;
+  data: string | null;
+  medio: number | null;
+  menor: number | null;
+  maior: number | null;
+  contratos: number;
+};
+
+export function referenciaDoProduto(p: ProdutoHistorico): ReferenciaHistorico | null {
+  if (!p.atual) return null;
+  return { atual: p.atual.valor, data: p.atual.data, medio: p.medio, menor: p.menor, maior: p.maior, contratos: p.porContrato.length };
+}
+
+/** O valor do item × o VALOR ATUAL do histórico: o desvio (+0,32 = 32% acima) e o nível pela MESMA régua da variação
+ * (`FAIXAS_VARIACAO` sobre o desvio absoluto: até 25% dentro · até 50% atenção · acima, alerta). Sem valor ou sem
+ * referência ⇒ `null`. */
+export function compararComHistorico(valor: number | null | undefined, ref: ReferenciaHistorico | null | undefined): { desvio: number; nivel: NivelVariacao } | null {
+  const desvio = ref ? desvioDaMedia(valor, ref.atual) : null;
+  const nivel = desvio == null ? null : nivelVariacao(Math.abs(desvio));
+  return desvio == null || nivel == null ? null : { desvio, nivel };
+}
+
+/** O rótulo da comparação — o valor do filtro da coluna "Histórico" da Mesa (aponta o sentido da divergência). */
+export function rotuloComparacaoHistorico(valor: number | null | undefined, ref: ReferenciaHistorico | null | undefined): string {
+  if (!ref) return "Sem histórico";
+  const c = compararComHistorico(valor, ref);
+  if (!c) return "Item sem valor";
+  if (c.nivel === "ok") return "Dentro do histórico";
+  const lado = c.desvio > 0 ? "Acima" : "Abaixo";
+  return c.nivel === "alerta" ? `${lado} (mais de 50%)` : `${lado} (25% a 50%)`;
+}
+
+/** O ERRO apontado por extenso ("Valor unitário 32% acima do valor atual do histórico…"); dentro da régua ⇒ `null`. */
+export function textoDivergenciaHistorico(valor: number | null | undefined, ref: ReferenciaHistorico | null | undefined): string | null {
+  const c = compararComHistorico(valor, ref);
+  if (!c || c.nivel === "ok" || !ref) return null;
+  const quanto = `${Math.round(Math.abs(c.desvio) * 100)}% ${c.desvio > 0 ? "acima" : "abaixo"}`;
+  return `Valor unitário ${quanto} do valor atual do histórico de compra.`;
 }
 
 /** O rótulo da FAIXA de variação (o valor do filtro da coluna Variação — a régua `FAIXAS_VARIACAO`). */

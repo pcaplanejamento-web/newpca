@@ -1,3 +1,4 @@
+import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound } from "next/navigation";
 import { CatalogoView } from "@/components/CatalogoView";
 import { acessoPagina } from "@/lib/acesso-pagina";
@@ -15,5 +16,9 @@ export default async function PastaCatalogoPage({ params }: { params: Promise<{ 
   const [catalogos, itens, pastas] = await Promise.all([listarCatalogos(), getCatalogoItens(), listarPastasCatalogo()]);
   const pasta = Number.isInteger(id) ? pastas.find((p) => p.id === id) : undefined;
   if (!pasta) notFound();
-  return <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} pastas={pastas} pasta={pasta} />;
+  return (
+    <PermissaoExportar permitido={r.pode.exportar}>
+      <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} pastas={pastas} pasta={pasta} />
+    </PermissaoExportar>
+  );
 }

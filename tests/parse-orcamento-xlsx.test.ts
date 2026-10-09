@@ -82,8 +82,11 @@ describe("parseOrcamentoFromMatriz", () => {
     assert.equal(r.total, 5700000);
   });
 
-  it("formato antigo (sem Função/Programa/Ação/Ficha/Fonte) → colunas novas vazias", () => {
-    const a = parseOrcamentoFromMatriz(matriz, "CUBO.XLSX").itens[0];
+  it("formato antigo (sem Função/Programa/Ação/Ficha/Fonte) → lido, mas as colunas que FALTAM travam a importação", () => {
+    const r = parseOrcamentoFromMatriz(matriz, "CUBO.XLSX");
+    assert.deepEqual(r.faltam, ["Função", "Programa", "Ação", "Ficha", "Fonte"]);
+    assert.deepEqual(r.erros, [], "os dados das colunas presentes estão certos");
+    const a = r.itens[0];
     assert.equal(a.funcao, "");
     assert.equal(a.programa, "");
     assert.equal(a.acao, "");
@@ -114,6 +117,34 @@ describe("parseOrcamentoFromMatriz", () => {
     assert.equal(a.valorInicial, 5000);
     assert.equal(a.saldo, 5000);
     assert.equal(r.total, 5000);
+    assert.deepEqual(r.faltam, [], "todas as colunas obrigatórias");
+    assert.deepEqual(r.erros, []);
+  });
+
+  it("CONFERE os dados: texto obrigatório vazio, valor que não é número, ficha e código fora do padrão (com a linha)", () => {
+    const cab = ["Órgão", "Unidade", "Função", "Programa", "Ação", "Nome Elemento", "Codigo Elemento", "Ficha", "Valor emenda impositiva", "Valor Inicial", "Fonte", "Valor Suplementação", "Valor Empenho", "Saldo", "Valor Anulação"];
+    const ok = ["ORG", "1 - UN", "08", "61", "2191", "MATERIAL", "3.3.90.30.00", "0624", "0", "1.000,00", "100", "0", "0", "1.000,00", "0"];
+    const r = parseOrcamentoFromMatriz(
+      [
+        cab,
+        ok,
+        ["ORG", "1 - UN", "08", "61", "", "MATERIAL", "3.3.90.30.00", "06A4", "0", "mil reais", "100", "0", "0", "0", "0"],
+        ["ORG", "1 - UN", "08", "61", "2191", "MATERIAL", "ABC", "0625", "0", "10", "", "0", "0", "", "0"],
+      ],
+      "x.xlsx",
+    );
+    assert.deepEqual(r.faltam, []);
+    assert.deepEqual(
+      r.erros.map((e) => [e.linha, e.coluna]),
+      [
+        [3, "Ação"],
+        [3, "Valor Inicial"],
+        [3, "Ficha"],
+        [4, "Fonte"],
+        [4, "Código Elemento"],
+      ],
+    );
+    assert.match(r.erros[1].motivo, /não é um valor/);
   });
 
   it("matriz sem cabeçalho → vazio", () => {

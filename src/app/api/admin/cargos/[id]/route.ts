@@ -6,7 +6,7 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-/** Renomeia o cargo — e o das pessoas que o têm, no mesmo lote. */
+/** Renomeia o cargo — e o dos usuários e responsáveis que o têm, no mesmo lote. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -23,7 +23,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     acao: "editar",
     entidade: "cargo",
     entidadeId: id,
-    resumo: `Cargo/função "${antes.nome}" renomeado para "${p.data.nome}"${pessoas ? ` (${pessoas} pessoa(s))` : ""}`,
+    resumo: `Cargo/função "${antes.nome}" renomeado para "${p.data.nome}"${pessoas ? ` (${pessoas} cadastro(s))` : ""}`,
     antes: { nome: antes.nome },
     depois: { nome: p.data.nome },
   });

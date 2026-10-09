@@ -6,6 +6,7 @@ import { parseNumberBR } from "@/lib/normalize";
 import { cellCls } from "./formStyles";
 import { IconLock, IconLockOpen } from "./icons";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 /**
  * Primitivos de CAMPO COM CADEADO (POR CAMPO) — a mesma lógica dos itens (`ItemDetalhe`),
@@ -110,6 +111,7 @@ export function LinhaCampo({
   bloqueado,
   onLock,
   children,
+  ancora,
 }: {
   label: string;
   span?: boolean;
@@ -118,9 +120,11 @@ export function LinhaCampo({
   bloqueado: boolean;
   onLock: () => void;
   children: ReactNode;
+  /** `data-ancora` do campo (o painel de pendências leva até ele e o destaca). */
+  ancora?: string;
 }) {
   return (
-    <div className={span ? "sm:col-span-2" : ""}>
+    <div className={span ? "sm:col-span-2" : ""} data-ancora={ancora}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted">{label}</span>
         {editavel && <CadeadoBotao rotulo={label} aberto={aberto} bloqueado={bloqueado} onClick={onLock} />}
@@ -204,14 +208,14 @@ export function CampoSelecao({
   return (
     <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
       {editando ? (
-        <select className={cellCls} value={valor} onChange={(e) => onChange(e.target.value)}>
+        <Selecao className={cellCls} value={valor} onChange={(e) => onChange(e.target.value)}>
           <option value="">— Selecione —</option>
           {opcoes.map((o) => (
             <option key={o} value={o}>
               {o}
             </option>
           ))}
-        </select>
+        </Selecao>
       ) : (
         <div className="mt-0.5 break-words text-sm font-semibold leading-snug text-text">{valor || "—"}</div>
       )}
@@ -231,6 +235,7 @@ export function CampoNumero({
   span,
   moeda,
   forte,
+  ancora,
 }: {
   label: string;
   valor: number | null | undefined;
@@ -242,11 +247,12 @@ export function CampoNumero({
   span?: boolean;
   moeda?: boolean;
   forte?: boolean;
+  ancora?: string;
 }) {
   const editando = editavel && aberto && !bloqueado;
   const texto = valor == null ? "—" : moeda ? brl(valor) : num(valor);
   return (
-    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
+    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock} ancora={ancora}>
       {editando ? (
         <NumInput valor={valor} onChange={onChange} />
       ) : (

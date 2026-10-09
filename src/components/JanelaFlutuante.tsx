@@ -128,6 +128,7 @@ export function JanelaFlutuante({
       ref={ref}
       role="dialog"
       aria-modal="false"
+      data-sobre-dropdown=""
       aria-label={titulo}
       className="fixed z-[150] flex max-h-[calc(100dvh-16px)] flex-col rounded-card border border-border bg-surface shadow-soft animate-fade-in-up"
       style={{ left: pos?.x ?? -9999, top: pos?.y ?? 0, width: Math.min(largura, typeof window === "undefined" ? largura : window.innerWidth - 16) }}
@@ -144,8 +145,8 @@ export function JanelaFlutuante({
         </button>
         <Button variant="ghost" size="sm" aria-label="Fechar" icon={<IconClose className="h-4 w-4" />} onClick={onFechar} />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-[var(--pad-card)] pb-2">{children}</div>
-      {rodape && <div className="border-t border-border px-[var(--pad-card)] py-2.5">{rodape}</div>}
+      <div className="min-h-0 flex-1 overflow-y-auto px-[var(--pad-card)] pb-[var(--pad-card)]">{children}</div>
+      {rodape && <div className="border-t border-border p-[var(--pad-card)]">{rodape}</div>}
     </section>,
     document.body,
   );

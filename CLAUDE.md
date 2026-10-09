@@ -31,12 +31,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **bloqueiam** (baseline de tipos 100% limpo — um erro de tipos novo não chega ao ar). O `cf-typegen`
   roda antes (o typecheck depende do `cloudflare-env.d.ts`); o build segue com `ignoreBuildErrors`
   porque o type-check já foi feito no portão.
+- **Deploy em FILA** (`concurrency.cancel-in-progress: false`): um push novo ESPERA o deploy em andamento — nunca o
+  interrompe entre as migrações e a publicação do Worker.
+- **Dependências:** `npm audit` sem alerta crítico/alto (os 4 moderados restantes são do `drizzle-kit`, só de
+  desenvolvimento, sem correção sem quebra). No sandbox o `xlsx` vem do CDN da SheetJS, que a política de rede bloqueia:
+  atualize só o lock (`npm install <pacote>@<versão> --package-lock-only` + `npm audit fix --package-lock-only`) — o CI
+  instala tudo. O `next` fica com a versão EXATA.
 
 ## Banco de dados (D1 + Drizzle)
 - **`getDb()` (`src/lib/db.ts`) só em escopo de request** (Server Components
   `force-dynamic`, Route Handlers, Server Actions) — usa `getCloudflareContext()`.
 - **Migrações = SQL curado** em `drizzle/` (é o `out` do drizzle **e** o `migrations_dir`
   do `wrangler.jsonc`). Ao gerar com `db:generate`, confira o SQL.
+  - **Número ÚNICO por migração** (`tests/migrations.test.ts` barra a repetição — sessões em paralelo): antes do push,
+    `git fetch` + merge da `main` e use o próximo número livre. As repetições antigas `0028`/`0064` ficam (o D1 registra
+    pelo NOME inteiro — renomear aplicaria de novo).
   - **≤ 100 parâmetros vinculados por statement** (limite do D1). Ver `src/app/api/upload`
     (lotes de 7×14=98).
   - **Evite `UNION ALL` longo** em migração (o D1 rejeita "compound SELECT"); use
@@ -87,6 +96,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `SUM(LENGTH(CAST(col AS BLOB)))` (**sem migração**; `dbstat` não é confiável no D1). Rota `GET/POST
   /api/admin/armazenamento` (`exigirAdmin`): GET = snapshot; POST `{acao:"expurgar_sessoes"}` = higiene (apaga
   sessões vencidas por `expira_em < agora`). `formatBytes` em `format.ts`; ícone `IconDatabase`.
+  - **SAÚDE DOS DADOS** (seção da mesma tela — `SaudeDados`, DS; `GET /api/admin/saude-dados`, `exigirAdmin`; carregada à
+    parte, "Verificar" = `?fresco=1`): as 5 consultas SÓ DE LEITURA de **`saude-dados-sql.ts`** (binding cru, sem
+    parâmetros; listas até 200, contagens exatas — as da verificação em produção de 05/10) + a classificação PURA
+    **`saude-dados-core.ts`** (`avaliarSaude`) — **Integridade** (deve ser zero, vermelho: DFD × itens, protocolo × DFDs ×
+    itens [o centavo das abas], numeração/vínculos do PCA, rastro em dobro + Id repetido) e **Dados a tratar** (âmbar:
+    gravação incompleta, capa × somatória pela MESMA régua da Mesa — `somatorioProcesso` + `conciliacaoCapa` com as regras
+    do ADM —, itens sem valor unitário, DFD sem planejamento); cada linha leva o link da Mesa em que o protocolo está
+    (`linkProtocolo`) ou o do DFD avulso. `saudeDosDados` (`saude-dados.ts`) em `memoPorVersao`. Testes:
+    `tests/saude-dados.test.ts` (cenário a cenário no D1 sobre `node:sqlite`).
 - **Auditoria / histórico de alterações (de ponta a ponta, migrações `0026` + `0031`):** tabela **`auditoria`** APPEND-ONLY —
   **quem** (`usuario_id` + snapshot `usuario_nome`/`usuario_email`, sobrevive à exclusão via FK `set null`), **o quê**
   (`acao` criar/editar/excluir/importar/protocolar/login/…; `entidade` + `entidade_id`; diff `antes`/`depois` JSON +
@@ -111,7 +129,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `historicoProtocolo` (capa/gestão + TODAS as linhas com `protocolo_id` = P + as legadas dos DFDs que estão nele) — ambas
     SEM o e-mail do ator (`COLS_HIST`); rotas `GET /api/dfd/[id]/historico` e `GET /api/protocolo/[id]/historico` (escopo por
     unidade).
-  - **UI — componente único `Historico`** com escopos: **`protocolo`** (botão "Histórico" no rodapé do protocolo gravado →
+  - **UI — componente único `Historico`** com escopos: **`protocolo`** (botão "Histórico" (ícone) no CABEÇALHO do protocolo gravado →
     modal; eventos agrupados + filtro `Segmented` Tudo/Capa/DFDs/Itens com contagens), **`dfd`** (painel da direita do DFD),
     **`item`** (seção recolhível **"Histórico do item"** no `ItemDetalhe` de DFD gravado — `HistoricoDoItem`, carrega só ao
     abrir) e **`global`** (tela ADM **`/painel/auditoria`** — `AuditoriaAdmin` + `GET /api/admin/auditoria`, filtros
@@ -163,6 +181,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
+  - **PROTEÇÃO DE DADOS (v1.63.0 → v1.70.1, sem migração — blob `configuracoes`, chave `protecao`):** Configurações → aba
+    **"Proteção de dados"** (`ProtecaoDadosAdmin` + `CamposProtecao`; `GET/PATCH /api/admin/protecao`, `exigirAdmin`, papéis
+    conferidos — 422, auditoria com o diff) liga **Bloquear seleção e cópia** · **Bloquear impressão e captura** · **Ocultar
+    ao sair da janela** · **Marca d'água com quem vê**, escolhe os **papéis protegidos** (o Administrador só se marcado) e
+    **"Aplicar também na tela pública"**. Núcleo puro **`protecao-core.ts`** (`lerConfigProtecao`, `protecaoDoPapel`,
+    `protecaoPublica`, `cssProtecao`, `svgMarcaDagua` [texto escapado], `ATRIBUTO_COBRIR`, `diffProtecao`; testado em
+    `tests/protecao.test.ts`) + D1 `protecao.ts` (cache 60 s, fail-safe = desligada). Aplicação = **`ProtecaoDados`** (DS),
+    montado SÓ no layout do `/painel` (pelo `usuario.papel.id`; `quem` = nome · matrícula · hora) e na tela pública `/`
+    (`Topo`; "Consulta pública"): o `<style>` global vem no HTML do servidor (1ª pintura e banners por portal —
+    `user-select:none`, `-webkit-touch-callout:none`, campos editáveis selecionáveis — `SELETOR_CAMPO`; `@media print` em
+    branco) e os ouvintes só dos bloqueios ligados (copy/cut/selectstart/contextmenu/dragstart fora de campo —
+    `[draggable="true"]` passa). **INVISÍVEL no uso (v1.70.1) — nada aparece nem muda na tela:** a impressão sai em branco
+    com o aviso (`@media print`) e, no PrtScn, a imagem copiada é trocada por nada na área de transferência, em silêncio; a
+    cobertura nos atalhos de captura SAIU. A cobertura (`data-protecao-cobrir`, posta direto no `<html>` — `html[…]::after`)
+    só existe em "Ocultar ao sair da janela" (o único visível): o `blur`/`focus` SÓ da JANELA (`e.target === window` — na
+    captura, o blur de cada campo também passa pela janela: era o defeito da v1.63.0) e a aba oculta. **`MarcaDagua`** (DS) =
+    SVG repetido em `OPACIDADE_MARCA.tela` (abaixo do que o olho percebe; aparece ao realçar a captura) e `.papel` na
+    impressão (`[data-marca-dagua]` + `print-color-adjust:exact`), sem capturar o toque. As ferramentas que salvam a captura em
+    arquivo e a foto pelo celular nenhum site alcança — a marca d'água identifica. Os "Copiar" do sistema e as exportações (ação Exportar) seguem.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o
@@ -211,10 +248,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   grupos (**`GruposDaPessoa`**, DS; avisa sem grupo; auditoria `aprovar` + o e-mail de acesso liberado), **Recusar** o
   cadastro pendente (exclui; o histórico diz "recusado") e **"Ver acesso"** (**`AcessoDaPessoa`**, DS — por grupo, a
   `MatrizCapacidades` só-leitura das telas que ABREM, `capacidadesEfetivas`, e as fechadas pelo papel —
-  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar da Mesa:**
-  as 4 tabelas (Protocolos, DFDs, Itens, Consolidada) ganham o **Exportar .xlsx** no rodapé (`DataTable.exportar` — as linhas
-  filtradas e as colunas à vista da edição em uso; núcleo puro `exportar-tabela.ts`, SheetJS só no clique) para quem tem a
-  ação Exportar na Mesa em que está. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
+  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar:**
+  TODA tabela tem **XLSX** e **PDF** no rodapé (ver `DataTable.exportar`); nas telas de módulo só para quem tem a ação
+  Exportar ali — a página envolve o conteúdo em **`PermissaoExportar`** (`ExportarTabelas.tsx`; a Mesa, pela Mesa em que
+  está), o contexto vale também nos banners por portal. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
   orçamento e o catálogo que a PRÓPRIA pessoa CRIOU por importação na última hora (`?origem=desfazer` →
   `criadoPorImportacaoRecente`: o 1º registro do histórico é o "importar" dela — o reenvio/atualização de um cadastro que já
   existia nunca; builder `auditoria-sql.ts`, testado no driver D1 real) e o DFD pela metade (`gravacaoParcial`); fora disso,
@@ -296,9 +333,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **E-mail institucional = só a parte antes do "@"**: o domínio `@rioverde.go.gov.br` fica FIXO no fim do campo
     (`TextField trailing`); colar o e-mail inteiro vale (`parteLocalEmail`/`emailDaParteLocal`, `cadastro-core.ts`).
   - **CARGOS E FUNÇÕES do ADM (migração `0070`, tabela `cargos`: nome único sem caixa + ordem; semeada com os cargos já
-    informados):** Usuários → botão **"Cargos e funções"** → `Modal` com **`CargosAdmin`** (cadastrar/renomear no campo do
+    informados):** **Configurações → "Cargos e funções"** (aba própria, `?aba=cargos`) e Usuários → botão **"Cargos e funções"** → `Modal` — o MESMO **`CargosAdmin`** (cadastrar/renomear no campo do
     topo, ↑/↓ = a ordem da lista do cadastro — `AcoesCadastro` —, excluir com `useConfirmacao`; quantas pessoas usam cada um).
-    A pessoa guarda o NOME (`usuarios.cargo`): **renomear** renomeia o das pessoas no MESMO lote (`renomearCargo`);
+    A pessoa guarda o NOME (`usuarios.cargo`; também `responsaveis.cargo` e o cargo do temporário `responsaveis_vinculos.funcao`
+    — v1.56.0): **renomear** renomeia os três no MESMO lote (`renomearCargo`; o "Uso" soma usuários + responsáveis);
     **excluir** só tira da lista (as pessoas mantêm até o ADM trocar). D1 em **`cargos.ts`** (`listarCargos`,
     `cargoCadastrado` — sem caixa, devolve o nome canônico); rotas `GET/POST /api/admin/cargos`, `PATCH/DELETE
     /api/admin/cargos/[id]`, `PATCH /api/admin/cargos/ordem` (`exigirAdmin`, `cargoSchema`, auditoria `cargo`). O **cadastro**
@@ -377,6 +415,219 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     Google" (`PrefsEmail.destino`, só com o Google vinculado; `enderecoDosAvisos` no envio dos pendentes). O código de
     confirmação vai SEMPRE ao institucional.
 
+## Presença ao vivo
+- **PRESENÇA AO VIVO — quem do grupo está online (v1.6.0 + 2.0 na v1.10.0; sem migração D1; Durable Object `PresencaGrupo`):**
+  Configurações → aba **"Presença"** (`PresencaAdmin`: mostrar quem está online [DESLIGADO por padrão — nada é carregado nem
+  conectado], mostrar ausentes, permitir aparecer invisível e **"ficar ausente após N min parado"** (`inativoMin`, 0–120, 0 = só a
+  aba em segundo plano); blob `configuracoes.presenca` — `getConfigPresenca` (cache 60 s, fail-safe = desligada)/
+  `gravarConfigPresenca` em `presenca.ts`; `GET/PATCH /api/admin/presenca`, `exigirAdmin`, auditoria).
+  - **Núcleo PURO `presenca-core.ts`** (sem zod — o `worker.ts` e o DO também o usam; `tests/presenca.test.ts`):
+    `lerConfigPresenca`, `lerPrefsPresenca` (`presenca:pessoa` em `preferencias_tabela` = invisível + **STATUS** Disponível ·
+    Ocupado · Em reunião · Não perturbe + recado ≤ 80 [`limparRecado`] + `ate` ISO), `statusVigente` (passou do "até" =
+    Disponível), `ficaInvisivel`, `listaPresenca` (UM item por pessoa — `[id, "o"|"a", status?, recado?]`, o melhor estado
+    entre as abas, sem invisíveis), `vistosRecentes`/`vistoHa` (o "visto por último", 24 h), `lerMensagemAba` (`{t:"estado"}` —
+    também o formato antigo `{estado}` — e `{t:"status"}`), `lerListaMensagem` (`{estados, vistos}`), `ordenarPresenca`,
+    `opcoesAte` (30 min · 1 h · 2 h · até as 18h de Brasília).
+  - **DO `PresencaGrupo`** (`presenca-grupo-do.ts`, UM por grupo — `idFromName("g<id>")`; binding `PRESENCA_GRUPO` + migração
+    `v2-presenca` no `wrangler.jsonc`): WebSocket com HIBERNAÇÃO + auto-resposta do "ping"; tag `u<id>` e o anexo
+    `{id, estado, invisivel, ausente, status, recado, ate}` (o status inicial vem do cabeçalho `x-presenca-status`; o `{t:"status"}`
+    vale para TODAS as abas da pessoa); 1 mudança/s por aba; retransmite `{t:"presenca", p, v}` só quando MUDOU (a aba nova
+    sempre recebe); o **"visto por último" fica só na MEMÓRIA** do objeto (nada gravado; hibernou = recomeça); `/estado` = a
+    lista (só leitura, o ADM); até 10 abas por pessoa e 500 conexões por grupo. O `worker.ts` atende
+    **`/api/presenca/ao-vivo?grupo=`** antes do Next (mapa `CANAIS`): só do próprio site, UMA consulta D1 (sessão de pessoa
+    ATIVA + MEMBRO do grupo + a preferência + `json_extract` da config) — desligada ou fora do grupo = 403.
+  - **Cliente — `CanalGrupo`** (`CanalGrupo.tsx`, PROVEDOR no `AppShell`; o layout passa `presenca = {pessoas, whatsapp,
+    invisivel, inativoMin, status}` SÓ com a presença ligada e um grupo ativo — `whatsappDe` = só quem marcou o contato como
+    WhatsApp): o socket (ping 45 s, `esperaReconexao`, 4000 não reconecta), **ausente por INATIVIDADE** (pointer/teclado/roda/
+    toque passivos + um relógio de 30 s; só manda quando muda), `definirStatus` (otimista: socket + `PUT /api/perfil/presenca`,
+    volta se falhar), `enviar`/`ouvir(tipo)` (o MESMO socket servirá o chat e o "vendo agora") e um ARMAZÉM com assinatura:
+    **`usePresencaDe(id)`** (`useSyncExternalStore` — cada foto só re-renderiza quando o estado DAQUELA pessoa muda) e
+    **`useNaoPerturbe()`** (o sino não toca som nem alerta do sistema). `CanalGrupoDemo` = o canal sem servidor (catálogo).
+  - **Tela:** **`PresencaGrupo`** (DS) no cabeçalho — as fotos com o ponto que PULSA (`ponto-vivo`), em LEQUE ao passar o mouse,
+    "+N" que desliza (`animate-contador`), quem entra cresce (`animate-entrar-pessoa`) e brilha 3 s (`animate-brilho-novo`); no
+    celular o ícone com o número verde (pop + pulso) → `Modal`. Painel **"Online agora"**: **`SeloAoVivo`** (DS — radar /
+    "Reconectando…"), o SEU STATUS (chips + recado + até; "Não perturbe" avisa que silencia o sino), busca (> 8 pessoas), seções
+    **Online · Ausente · Visto recentemente** e, ao tocar numa pessoa, as ações **WhatsApp** (`BotaoWhatsapp`) e **Ver na Mesa**
+    (`/painel/mesa?responsavel=<id>` — a Mesa abre filtrada pela pessoa, só para quem vê o Responsável: `verResponsavel` de
+    `carregarMesa`; a `key` remonta a Mesa). `aria-live` anuncia quem entrou/saiu. O **ponto de presença** aparece nas fotos do
+    sistema pelo **`AvatarPessoa`** (`PessoaTag.tsx`): `PessoaTag` (também no `title`), `SeletorPessoa`, `SeletorPessoas`,
+    `MembrosQuadro`, convidados/participantes do `EventoBanner` — parado (o pulso só no cabeçalho e no painel —
+    `Avatar.pulsar`). Com a presença, a marca compacta do cabeçalho sai abaixo de 400px.
+  - **Armazenamento → "Online agora"** (`OnlineAgoraAdmin`, só com a presença ligada): "Ver quem está online" → `GET
+    /api/admin/presenca/online` (`exigirAdmin`; pergunta ao `/estado` de até 40 grupos; os invisíveis não aparecem).
+  - **Perfil → "Presença"** (`PresencaPerfil`, só com o invisível permitido): "Aparecer como invisível" → `PUT
+    /api/perfil/presenca` (`prefsPresencaSchema` parcial — o que não vier fica; 409 se o ADM não permite).
+  - **Animações** em `globals.css` (`ponto-vivo`, `entrar-pessoa`, `brilho-novo`, `contador-desliza`, e já prontas para o chat
+    `digitando`/`balao-entrar`) — todas desligadas com "reduzir movimento" (sistema e `data-motion` do ADM). Custo (plano
+    gratuito: 100 mil requisições de DO/dia; mensagens que chegam em 20:1; as que saem e a auto-resposta não contam): ~4–5
+    mil/dia para 50 pessoas × 2 abas × 8 h.
+
+## Chat ao vivo (v1.11.0; GUARDADO POR 7 DIAS desde a v1.15.0 — ver a seção própria)
+- **Regra do usuário (v1.15.0): as conversas ficam GUARDADAS por 7 DIAS** (antes eram só ao vivo) — sem auditoria do conteúdo;
+  a limpeza do cron apaga o que passou disso. Configurações → **"Presença e chat"** (`PresencaAdmin`
+  → cartão "Chat ao vivo": **Chat do grupo** e **Chat privado**, DESLIGADOS por padrão; blob `configuracoes.chat` —
+  `getConfigChat`/`gravarConfigChat` em `presenca.ts`, cache 60 s; `GET/PATCH /api/admin/chat`, `exigirAdmin`, auditoria do
+  fato). O chat vive no canal da PRESENÇA: sem ela ligada, não aparece (`AppShell.chat` só com `presenca`).
+- **Núcleo PURO `chat-core.ts`** (`tests/chat.test.ts`): `lerConfigChat`, conversas `"grupo" | p<id>` (`idDaConversa`,
+  `conversaPrivada`), `limparTextoChat` (sem controles/invisíveis, ≤ 2 quebras seguidas, ≤ 2000), `lerResposta` (a citada),
+  `lerMensagemChatAba` (`{t:"msg"|"digitando"|"lida"}`), `contarNaJanela` (30/min), `lerMensagemRecebida` (o `autor` do
+  privado só com foto interna), `juntarMensagem` (a mesma pelo id atualiza no lugar — confirmação/eco; teto 300),
+  `quantosLeram` ("lida por N"), `cartoesDoTexto` (links do sistema — protocolo/DFD/tarefa/PCA — viram cartões, sem
+  consulta; nunca o caminho dentro de link de outro site), `mencaoEmCurso`, `novoIdMensagem`, `rotuloDiaChat`/`horaChat`
+  (Brasília).
+- **Caminho:** **grupo** pelo socket do grupo — o `PresencaGrupo` valida (texto, 30/min por aba, o autor = o anexo — nunca o
+  que a aba diz, `x-chat-grupo`) e retransmite `{t:"msg", conversa:"grupo", id, de, em, texto, resp}` a TODAS as abas (a
+  própria = a confirmação; recusa = `{t:"msg-recusada", id, motivo}`); **"digitando"** (1 a cada 3 s por aba) e **"lida"** ao
+  grupo (menos a própria pessoa) ou, no privado, às abas da outra pessoa NESTE grupo. **Privado** pela rota **`POST
+  /api/chat/enviar`** (v1.14.0 — ver "Chat estilo Messenger"; `exigirUsuario`; chat privado ligado; destinatário ATIVO
+  num grupo em comum; limite `chatPrivado` 30/min por pessoa em `LIMITES_ACESSO`) → a **`CaixaNotificacoes`** do destinatário
+  (`POST /chat` — repassa às abas e devolve quantas receberam) e a de quem mandou (as outras abas dele); 0 abas =
+  `entregue:false` ("não está com o sistema aberto — não foi entregue"). Nada é gravado. No cliente o `useCaixa` do sino
+  repassa `{"t":"chat"…}` ao evento `EVENTO_CHAT_PRIVADO` (não é aviso do sino).
+- **Tela — `ChatAoVivo`** (DS; no cabeçalho, ao lado da presença): o ícone `IconChat` com as não lidas (pop) abre a LISTA
+  por **portal no body** (o cabeçalho com desfoque prenderia o fixo) — desktop ancorada à direita (360px), celular em tela
+  cheia; Esc fecha; a conversa abre numa BOLHA + janela (v1.14.0). **Lista:** "Grupo · <grupo>" + as privadas desta sessão (prévia, hora, não lidas,
+  "digitando…") + **Nova conversa** (as pessoas do grupo com o ponto de presença, online primeiro; busca acima de 8) + o aviso
+  "As conversas não são salvas". **Conversa:** balões (**`Balao`** — meus à direita na cor do sistema; dos outros com foto e
+  nome no grupo, agrupados por autor em 5 min), separador de dia, responder (citação), **@menção** com sugestão (Enter insere),
+  `TextoFormatado` (negrito, código, links), cartões dos links do sistema, ✓ enviada / ✓✓ lida ("lida por N" no grupo),
+  "enviando…", "Tentar de novo" (falha ou sem confirmação em 8 s) e "não entregue" (privado), **`Digitando`** (três pontos —
+  `ponto-digitando`), "↓ Novas mensagens" rolado para cima; Enter envia, Shift+Enter quebra. Mensagem com o painel fechado =
+  som (menos com **Não perturbe**) + `toast.acao` com **"Responder"** (o `Toast` ganhou `acao`). Abrir a conversa à vista
+  zera as não lidas e manda a "lida". Trocar de grupo apaga a conversa do grupo anterior.
+
+## Chat guardado por 7 dias + arrastar minimiza (v1.15.0)
+- **Banco (migração `0088`, aditiva):** `chat_mensagens` (id da aba = idempotente; `conversa` = a CHAVE do servidor —
+  **`chaveConversa`**: `g<grupo>` | `p<menor>-<maior>` | `c<id>`; `conversaDaChave` volta à conversa da tela de cada um) e
+  `chat_conversas` (por pessoa: a última mensagem, nome/membros da conversa em grupo e até onde LEU). Builders em
+  **`chat-sql.ts`** (testados no driver D1 real — `tests/chat-sql.test.ts`): `comandosGuardarMensagem` (a conversa na
+  lista de cada participante em INSERTs de 10 — ≤ 100 parâmetros; quem manda já leu), `comandoMarcarLidaChat` (nunca
+  volta), `consultaConversasChat`/`consultaResumoGrupo` (a última e as NÃO LIDAS), `consultaHistoricoChat` (as 200 mais
+  recentes — `MAX_HISTORICO`), `consultaLidasChat`, `consultaParticipa` e **`comandosLimparChat`** (no cron dos e-mails, a
+  cada 5 min: o que passou de `VALIDADE_CHAT_MS` = 7 dias — `DIAS_CHAT`).
+- **Tudo pela ROTA (guarda e entrega):** `POST /api/chat/enviar` agora também o chat do GRUPO (`{conversa:"grupo", grupo}` —
+  membro do grupo, `ehMembroDoGrupo`) → guarda e repassa ao objeto do grupo (`repassarNoGrupo` → `POST /repasse` do
+  `PresencaGrupo`, só alcançável pelo binding); a privada/em grupo pelas caixas (`entregarNaCaixa`, **`chat-servidor.ts`**).
+  Quem não está online vê ao entrar ("Fulano não está online agora — vai ver ao entrar"). `POST /api/chat/sinal`: a "lida"
+  é GUARDADA (o ✓✓ e as não lidas valem depois de recarregar — a hora lida = o `em` da PRÓPRIA mensagem lida, nunca volta;
+  v1.17.3) e chega TAMBÉM às outras abas/aparelhos de quem leu (a caixa dele; no grupo, o `/repasse` a todas as abas) — lá
+  as não lidas viram só as posteriores (`naoLidasDe`); a lista guardada traz `agora` e soma só as ao vivo depois dele
+  (`naoLidasAoCarregar`); a do grupo pelo `/repasse` (a todos menos quem leu); o
+  "digitando" do grupo segue pelo socket. **`GET /api/chat/conversas?grupo=`** (a lista com a última e as não lidas, ao abrir
+  o sistema e ao trocar de grupo) e **`GET /api/chat/historico?conversa=&grupo=`** (ao abrir cada conversa, uma vez —
+  `carregar`; só de quem participa). As bolhas abertas ficam no aparelho (`chat:bolhas`); a lixeira só FECHA a bolha (a
+  conversa segue na lista); saiu o "Sair" e o aviso de saída da página.
+- **Bolhas:** arrastar MINIMIZA a conversa aberta; ao soltar, o POUSO é FLIP (`estiloDaBolha`): cada bolha parte de onde está
+  (a arrastada, do ponto em que foi solta) e voa com mola até o lugar novo, em cadeia (35 ms entre elas) — sem o "pulo" de
+  volta; erguer/ímã/sumir na lixeira na própria bolha (escala com mola).
+- **Fechamento RÁPIDO (v1.15.1 → 1.16.0):** a janela sai em 60 ms FIXOS (`animate-janela-sai`: escala 0,85, sem desfoque,
+  `ease-in`) e desmonta em 70 ms; a bolha na lixeira some em 0,6× e a lixeira sai em 0,55×.
+- **Bolhas INDEPENDENTES (v1.17.0; substitui a pilha/cadeia da v1.16.0):** cada bolha tem a PRÓPRIA posição
+  (`PosicoesBolhas` = conversa | "+" → `{lado, y fração, t}`; `chat:posicoes` no aparelho, migrada do antigo `chat:posicao`
+  por `migrarPosicoes`; as das conversas fechadas são podadas ao gravar). Arrastar leva SÓ a bolha presa (inclinada pela
+  velocidade, ±14°); soltar ARREMESSA (`velocidadeArrasto` → `projetarArremesso`) e encosta na borda mais perto naquela
+  altura (`pousarBolha`); **`arrumarBolhas`** (puro, testado) dá o lugar de cada uma — a mexida por ÚLTIMO fica e as outras
+  do MESMO lado vão ao lugar livre mais perto (nunca uma sobre a outra, dentro da área livre); a sem posição nasce à
+  direita, embaixo, e é fixada no lugar em que apareceu. Pouso FLIP só da solta e das que abriram espaço. A janela abre ao
+  lado da bolha ativa. Teclado: Alt + ↑/↓ sobe/desce a bolha, Alt + ←/→ troca de lado. A bolha "+N" também se arrasta (não
+  vai à lixeira).
+  **Abrir espaço AO VIVO + ÍMÃ (v1.17.1):** durante o arrasto, **`previaArrasto`** (puro, testado — a MESMA conta da prévia,
+  do soltar e do Alt + setas) dá o lugar da presa e o das outras, que DESLIZAM para abrir espaço (`translate` com mola); uma
+  SOMBRA tracejada mostra onde ela pousa. **`imaBolha`**: a até `RAIO_IMA` (0,6 × passo) do ponto colado acima/abaixo de
+  outra bolha do mesmo lado, encaixa juntinho (vão de 10px); longe, fica onde foi solta. Ao soltar, **`posicoesAposSoltar`**
+  grava a presa e as que abriram espaço (com o `t` de antes — nada volta pulando). O `pointermove` é desenhado UMA vez por
+  quadro (rAF; a prévia só refaz quando muda o lado ou o topo); pegar uma bolha ainda pousando cancela o pouso; mudar o
+  tamanho da janela encerra o arrasto; "reduzir movimento" = sem inclinação nem voo.
+
+## Chat estável + "Ao vivo" único + lixeira (v1.14.2)
+- **Nunca desmonta:** o layout devolve `undefined` quando a leitura da presença/config do chat FALHA (`presencaDoGrupo`,
+  `getConfigChat` → `null` sem cache) e o `AppShell` mantém o último valor válido (`useUltimoValido`); o `CanalGrupo` monta
+  SEMPRE a mesma árvore (`CanalAtivo` com `ativo` — ligar/desligar troca só o contexto, nada remonta).
+- **Entrega real:** a `CaixaNotificacoes` só conta como "entregue" a aba com ping há ≤ 2 min (`SINAL_ENTREGA_MS`); o canal do
+  sino conecta UMA vez (a função por ref), reconecta sem o "pong" em 10 s e no `online`.
+- **Sinais pelas caixas:** "lida"/"digitando" da privada e da conversa em grupo vão por **`POST /api/chat/sinal`**
+  (`chatSinalSchema`; `{t:"chat-sinal", tipo, conversa, de, ate}` às caixas — valem em qualquer grupo ativo); o do grupo
+  ativo segue pelo socket do grupo.
+- **Um painel só — "Ao vivo":** o `ChatAoVivo` virou o PROVEDOR (`useChatAoVivo`: a lista, as não lidas, `pedidoLista`) em
+  volta do `PresencaGrupo`, cujo gatilho mostra a pilha + o ícone das conversas (não lidas) e o painel tem as abas
+  **Online | Conversas** (`PainelAoVivo` → `PainelOnline embutido` / `ConversasDoChat`). O `Dropdown` ganhou o modo
+  CONTROLADO (`aberto`/`onAberto`) — o "+N" das bolhas abre na aba Conversas.
+- **Bolhas:** tocar abre/minimiza; QUALQUER toque fora (ou Esc) minimiza, menos com o **alfinete** "Manter aberta"
+  (`chat:fixada` no aparelho); EXCLUIR = arrastar a bolha até a **LIXEIRA** no centro inferior (surge no arrasto —
+  `animate-lixeira-entra`; ímã que puxa a bolha, ela encolhe e some dentro). A janela cresce A PARTIR da bolha
+  (`animate-janela-cresce` com origem no centro dela) e sai encolhendo (`animate-janela-sai`, o mesmo elemento). Sombra
+  `shadow-flutuante`/`shadow-erguida` (tokens `--sombra-flutuante`/`--sombra-erguida`, claro e escuro). Fotos sempre
+  redondas: todo invólucro com anel em volta de um `Avatar` é `flex`/`inline-flex` (num bloco, a altura da linha esticava o anel).
+- **Arrasto sem o nativo (v1.14.3):** a foto do `Avatar` é `draggable={false}`; a pilha bloqueia `dragstart`, a seleção, o
+  `-webkit-user-drag` e o menu do toque longo nas imagens, e o `pointerdown` do mouse já faz `preventDefault` (antes do
+  limiar de 6px o navegador começava a arrastar a imagem).
+
+## Presença no nível profissional (v1.14.1)
+- **Cabeçalho:** a pilha é a **`PilhaFotos`** (a mesma dos membros do quadro de Tarefas) — até `MAX_FOTOS`=5 fotos (a primeira por cima — o ponto no canto não é coberto) e o círculo **"+N"** do mesmo
+  tamanho (os nomes na dica). O ponto da foto é `absolute` no `Avatar`: a regra `.ponto-vivo` do `globals.css` NÃO fixa
+  `position` (fora das camadas do Tailwind ela venceria o `absolute` e o ponto saía do canto); o mesmo cuidado com
+  `.animate-contador` (`display: inline-block` — vai no texto, não na caixa centrada).
+- **Ausente há X min:** a aba diz há quanto tempo está parada ao virar ausente (`{t:"estado", estado:"ausente", ha}` ≤ 24 h);
+  o objeto guarda `ausenteDesde` e a lista leva `d` = **`ausentesDesde`** (todas as abas ausentes → a mais recente);
+  `InfoPresenca.desde` → **`rotuloAusente`** no painel (relógio de 30 s) e na dica da foto.
+- **Carência de saída (`CARENCIA_SAIDA_MS`=12 s):** fechada a última aba, a pessoa fica na lista (memória `saindo` do
+  `PresencaGrupo`) até o ALARME do objeto; voltando antes (F5), nada muda para os outros. Depois, "visto por último".
+- **Conexão morta:** o alarme (a cada `VARREDURA_MS`=90 s só com abas conectadas) fecha a aba sem sinal há `SEM_SINAL_MS`=3
+  min (o último ping pela `getWebSocketAutoResponseTimestamp`, a conexão, a última mensagem) — marcada `morto`, fora da
+  lista. Na tela, o `CanalGrupo` fecha e reconecta quando o "pong" não chega em 10 s, fecha no `offline` ("Reconectando…") e
+  reconecta na hora no `online`.
+
+## Chat estilo Messenger + conversas em grupo (v1.14.0 — nada é salvo)
+- **Bolhas:** o ícone do cabeçalho abre a LISTA (grupo ativo, privadas, conversas em grupo, "Nova conversa", **"Nova conversa
+  em grupo"** — `NovaConversaGrupo`: 2 a 19 pessoas do grupo + nome opcional); cada conversa aberta vira uma bolha do
+  **`BolhasChat`** (DS, portal no body: foto + ponto ao vivo / mosaico da conversa em grupo — `FotoBolha` — / o ícone do
+  grupo; não lidas; até `MAX_BOLHAS`=4 + "+N"; a que chega QUICA — `animate-cabeca-entra` — no lugar do aviso flutuante).
+  ARRASTA a pilha inteira (mouse e toque, limiar 6px, ouvintes na janela, `segurar`) e ao soltar ENCOSTA na borda mais perto
+  (`encostarBolhas`/`topoDasBolhas`, mola `bolha-encosta`; posição `chat:posicao` no aparelho — `lerPosicaoBolhas`); soltar no
+  "×" (aparece embaixo, `animate-alvo-fechar`) fecha todas; o × de cada uma (mouse) fecha só ela. Tocar abre a JANELA
+  (340×480 ao lado da pilha, `animate-janela-cresce`; tela cheia abaixo de 640px; Esc minimiza) com a `ConversaChat`
+  (Minimizar · Sair da conversa em grupo · Fechar). `EVENTO_ABRIR_CHAT` aceita `{pessoa}` | `{conversa}` (+ `texto`); o
+  "Conversar" de cada pessoa do Online agora (`CanalGrupo.chatPrivado`).
+- **Conversas em grupo escolhidas (`c<id>`, `ehConversaEmGrupo`/`novaConversaEmGrupo`, `chat-core.ts`):** criadas na aba;
+  existem enquanto alguém dela está com o sistema aberto. Envio pela rota ÚNICA **`POST /api/chat/enviar`**
+  (`chatEnviarSchema` `{conversa p<id>|c<id>, para 1..19, nome?, id, texto, resp}` — substitui o `/api/chat/privado`;
+  `exigirUsuario`, chat privado ligado, limite `chatPrivado`, cada destinatário ATIVO num grupo em comum —
+  **`quemCompartilhaGrupo`** numa consulta `json_each`) → as caixas pessoais (a mensagem leva `membros` + `nome`) e as outras
+  abas de quem mandou; `{entregues, naoEntregues}` → "Não entregue a Ana". "Digitando"/"lida" pelo socket do grupo com
+  `para` (o `PresencaGrupo` entrega só às abas desses membros). `rotuloConversa` (o nome ou "Ana, Bruno e mais 2").
+
+## Vendo e editando agora (v1.12.0 — nada é salvo)
+- **`VendoAgora`** (DS; no cabeçalho dos banners — `useProtocoloGravado` [protocolo; o DFD ao lado], `useDfdGravado` e
+  `TarefaDetalhe`): registra no `CanalGrupo` o que ESTA tela está com aberto (`registrarVendo(alvo, editando)` — um registro
+  por banner; a aba manda `{t:"vendo", alvos ≤ 5, editando ⊆ alvos}` com 250 ms de espera e de novo a cada reconexão) e mostra
+  quem MAIS do grupo está com o MESMO item aberto (as fotos com o pulso, "também aqui"/"+N aqui") e, em âmbar, quem tem
+  **alteração não salva** ("Ana editando" — combine antes de salvar: o último "Salvar" vale) — `editando` = o rascunho do banner
+  (`capaSuja`/`editados`/`itensEditados`/`sujo`). Com o chat do grupo ligado (`CanalGrupo.chatGrupo`), **"Conversar sobre
+  este …"** dispara `EVENTO_ABRIR_CHAT` → o `ChatAoVivo` abre a conversa do grupo com o link do item no campo (vira o cartão).
+  O painel do chat fica ACIMA dos banners (`z-[60]`).
+- **Servidor (só na memória):** o `PresencaGrupo` guarda `vendo`/`editando` no anexo da aba (60 mudanças/min por aba) e
+  retransmite `{t:"vendo", m: [[alvo, [[id, 1 = editando | 0]]]]}` (`listaVendo` — sem invisíveis, estável; só quando muda;
+  a aba nova recebe). Núcleo puro em `presenca-core.ts`: `alvoVendoValido` (`protocolo|dfd|tarefa:<id>`), `MAX_VENDO`,
+  `lerMensagemAba` (`t:"vendo"`), `listaVendo`, `lerVendoMensagem` (testados em `tests/presenca.test.ts`).
+
+## Onde cada pessoa está (v1.13.0 — nada é salvo)
+- **ONDE:** o `CanalGrupo` manda `{t:"onde", tela, rotulo}` quando a tela muda (300 ms; de novo na reconexão) — núcleo puro
+  **`ondeDaRota(pathname, busca, detalhe)`** (`presenca-core.ts`: `TELAS_ONDE` = as abas + perfil/admin/outra, `ROTULO_TELA`,
+  "Tarefas · <quadro> · Quadro", "PCA · <pca> · Orçamento", ≤ 80); o NOME vem da página por **`useOndeDetalhe(texto)`**
+  (`QuadroTarefas`, `PcaEspacoView`, `OrcamentoEspacoView`, `MesaPca`). O `VendoAgora` ganhou **`rotulo`** ("Protocolo
+  144756/2026", "DFD 1234 (Planej. 1509)", "Tarefa #12 …") → `rotulos` na mensagem `vendo` (`lerMensagemAba`; faltando,
+  `rotuloDoAlvo`).
+- **Servidor (`PresencaGrupo`, só memória):** o anexo guarda `onde`/`rotulos`/`mexeu` (vendo + onde ≤ 60/min por aba) e, com
+  **`ConfigPresenca.atividade`** (ADM, padrão ligado — `x-presenca-atividade`; desligada não guarda nem manda), a mensagem
+  `vendo` leva **`a`** = **`listaAtividade`** ([id, tela, rótulo, [o que vê], editando] — a aba que mexeu por último, sem
+  invisíveis); o `/estado` também (ADM "Online agora" — `textoAtividade`). Cliente: `lerAtividade`.
+- **Tela:** armazém com assinatura **`criarArmazemVendo`** (valor que não mudou = mesma referência) + o contexto ESTÁVEL
+  **`useCanalEstavel`** → **`useVendoDe(alvo)`**/**`useAtividadeDe(id)`** (só a linha do item re-renderiza). **`PresencaNoItem`**
+  (DS, `PresencaNoItem.tsx`): as fotos de quem está com o item aberto (lápis âmbar = editando) no nº do protocolo da Mesa
+  (`DfdsView`), no nº do DFD da `PlanilhaDfds` (só `unica` — a chave é o id) e no rodapé do `CartaoTarefa`.
+  **`AtividadePessoa`** (o ícone da tela + "Mesa › Protocolo … · editando") na linha de cada pessoa do "Online agora", que
+  ganhou a seção **"Nesta tela"** (mesma tela + rótulo que você); a dica de cada foto do cabeçalho diz onde a pessoa está.
+
 ## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um
@@ -411,38 +662,122 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `protocolos`/`protocolo_opcoes` ficam no banco **DORMENTES** (dados preservados, sem código, fora do `schema.ts`; sem
   migração de DROP).
 - **Unidades** (`reparticoes`: codigo+nome+ordem + **numero_interessado**/**setor_requisitante** (matchers) +
-  **orgao_id** (FK→`orgaos`, migração `0022`) + **responsavel_dfd** — cadastro do ADM, nullable): lista global
-  **reordenável por botões ↑/↓** (`DataTable` com colunas `filter:"none"`; persiste em
-  `PATCH /api/admin/reparticoes/ordem`). O CRUD (`ReparticoesAdmin`, `reparticaoSchema`) vive **DENTRO de um órgão**
-  (`/painel/orgaos/[id]`): a unidade herda `orgao_id` do escopo da URL (sem seletor de órgão), e o
-  `GET /api/admin/reparticoes?orgaoId=` filtra por órgão. **Não há mais `/painel/reparticoes`** (removida). O
-  `ReorderTable` foi **removido** (DataTable + ↑/↓ é o padrão de ordenação).
-  `responsavel_dfd` guarda os **responsáveis por DFDs** como **JSON** (coluna reaproveitada, sem migração nova):
-  **N padrões** + **N temporários**. Todo responsável tem **nome, matrícula, função** e uma **nomeação** (ato:
-  `portaria`/`decreto`/`lei` + número + **link** do documento). O temporário tem, além disso, **período** início/fim.
-  No período de um temporário, **ele é o efetivo** (os padrões ficam em cinza); fora do período, o temporário fica em
-  cinza e os padrões voltam — com **estados** (Agendado/Vigente/Encerrado). Lógica pura/testável em
-  `src/lib/reparticao-responsaveis.ts` (`parseResponsaveis`/`serializeResponsaveis` tolerantes a TODOS os formatos
-  anteriores; `temporariosVigentes`/`responsaveisVigentes`/`padroesInativos`/`estadoTemporario`); UI no componente
-  `ResponsaveisEditor` (sub-campos compartilhados entre padrão e temporário). Unidade ativa por cookie
-  `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em `/api/admin/reparticoes*` e
-  `/api/reparticoes/ativo`.
-- **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD)+ordem, migração `0022`) —
-  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`, ↑/↓); **clicar
-  numa linha** (`onRowClick`) navega para `/painel/orgaos/[id]` = as Unidades daquele órgão (`ReparticoesAdmin`
-  escopado). Nav = um item **"Órgãos e Unidades"**. Rotas
-  `/api/admin/orgaos*` (CRUD + `/ordem`). Excluir um órgão **não apaga** unidades (FK `set null`). Loader
+  **orgao_id** (FK→`orgaos`, migração `0022`) — cadastro do ADM): lista **reordenável por ↑/↓** (`AcoesCadastro`;
+  persiste em `PATCH /api/admin/reparticoes/ordem`). O CRUD (`ReparticoesAdmin`, `reparticaoSchema`) vive **DENTRO de um
+  órgão** (`/painel/orgaos/[id]`): a unidade herda `orgao_id` do escopo da URL, e o `GET /api/admin/reparticoes?orgaoId=`
+  filtra por órgão. Unidade ativa por cookie `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em
+  `/api/admin/reparticoes*` e `/api/reparticoes/ativo`.
+- **EXONERAÇÃO, ENCERRADOS, PRIORIDADE e VÁRIOS LUGARES por nomeação (v1.58.0, migração `0101`, aditiva —
+  `responsaveis.exonerado_em`):** `exonerado(p, hoje)` = a data já chegou; os vínculos cadastrados CONTINUAM valendo
+  (assinatura, vigentes, conferência) e **`motivoNaoVincular`** (puro, a MESMA régua na tela e nas rotas de vínculo — 409)
+  recusa vínculo NOVO de quem já foi exonerado e qualquer vínculo que comece DEPOIS da data. `PATCH
+  /api/admin/responsaveis/[id]` `{exoneradoEm | null}` (409 se algum vínculo começa depois; auditoria). Tela: no banner da
+  pessoa "Exonerar" (data) / "Desfazer exoneração" e o selo; o botão **`BotaoExonerados`** ("Exonerados (N)", à direita do
+  `Segmented` em Órgãos e Unidades) alterna a planilha para os exonerados (linhas em cinza + coluna "Exonerado em"); o
+  `EditorVinculo` não oferece quem já está exonerado. O vínculo ENCERRADO não é mais problema da Conferência
+  (`problemasDoVinculo` sem `resp.encerrado`): coluna cinza **"Encerrados"** (`CelulaLista esmaecido`); "Responde em" só os
+  não encerrados. **Ordem:** `ordenarPorPrioridade` (a posição do cargo em Configurações → Cargos e funções, sem caixa; fora
+  da lista depois; sem cargo por último; empate pelo nome) na planilha, e `separarVinculos(lista, cargos)` nas seções dos
+  vínculos. **Criar um vínculo escolhe VÁRIOS lugares** (`SeletorMultiplo` "Unidades e órgãos"): um POST por lugar com a
+  mesma nomeação/período, para no 1º erro, um aviso só. **Editar o vínculo (v1.59.0)** troca também a pessoa e ONDE
+  RESPONDE (`PATCH …/vinculos/[id]` com `orgaoId`/`reparticaoId` opcionais — sem eles fica o de antes; o alvo novo passa
+  por `motivoAlvoInvalido` + conflito no alvo novo, vai ao fim da ordem dele e conta como vínculo NOVO para a exoneração);
+  no editor, o mesmo `SeletorMultiplo` — o próprio vínculo fica onde já respondia (senão vai ao 1º escolhido) e os demais
+  lugares são criados com a mesma nomeação. **Cargo/função FORA da lista** de Cargos e funções (`cargoForaDaLista`) é ERRO
+  na Conferência — o da pessoa (`resp.cargoFora`, também no órgão/unidade onde ela responde como padrão) e o do temporário
+  (`resp.funcaoFora`); sem lista cadastrada não confere. **NOMEAÇÕES UNIFICADAS (v1.60.0):** no banner da pessoa
+  (`ListaVinculos agrupar`), os vínculos de mesma pessoa + tipo + ato de MESMO nº (`chaveNomeacao`/`numeroAtoNormal` — sem
+  espaço/caixa/zeros à esquerda; `agruparPorNomeacao`, puro e testado) viram UM cartão (`CartaoNomeacao`: o ato, o cargo, o
+  link e editar no topo; cada lugar com o estado, o período quando difere e remover). Editar a nomeação
+  (`AberturaVinculo.grupo` → `EnvioVinculo.grupo`): os lugares que ficam recebem os mesmos dados (PATCH), os que saem vão
+  para os lugares novos (o mesmo vínculo muda de lugar) e, sem lugar novo, são removidos (confirma); os novos que sobram são
+  criados.
+- **CARGO, PERÍODO DO PADRÃO e USUÁRIO do responsável (v1.56.0, migração `0100`, aditiva — `responsaveis.cargo` +
+  `responsaveis.usuario_id` FK set null, único parcial):** o CARGO/FUNÇÃO é da PESSOA (o NOME de um cargo cadastrado —
+  `cargoParaGravar`: o cadastrado, manter o atual fora da lista ou nenhum; 422 `MSG_CARGO_FORA`) e o vínculo PADRÃO segue
+  ele (`funcao` vazia; `funcaoDoVinculo`); o TEMPORÁRIO guarda o cargo PRÓPRIO do período (`funcao`, da mesma lista). O
+  PADRÃO tem PERÍODO: início obrigatório, fim opcional (em aberto = vigente até informar); `estadoDoVinculo` (agendado/
+  encerrado/inativo/vigente), `vinculoConflita` (só se os períodos se cruzam), `motivoVinculoInvalido` e a conferência
+  (`resp.semCargo`, `resp.semInicio`, `resp.padraoEncerrado`). Na assinatura, `padraoCobre` — o padrão com período só casa
+  a assinatura datada dentro dele; o padrão sem período (os antigos) segue como antes (`validarAssinatura`,
+  `responsaveisVigentes`). A pessoa pode ser LIGADA a UM usuário (`motivoUsuarioInvalido` — 404/409; sugestão pela mesma
+  matrícula — `usuarioSugerido`) e ganha a FOTO dele (`listarPlanilha` faz o join; `PlanilhaResponsaveis.usuarios`); base
+  para ver os protocolos no nome dele. **Fora do município (v1.73.0, migração `0104` — `responsaveis.externo`):** a pessoa
+  marcada não tem matrícula (`matriculaParaGravar` grava vazia; `rotuloMatricula` = "Fora do município" nas telas) e a
+  conferência não aponta `resp.matricula`; o `Switch` fica no banner da pessoa e no cadastro rápido do `EditorVinculo`. A `0100` transformou as funções digitadas em cargos cadastrados, deu à pessoa o
+  cargo mais usado nos padrões dela e ligou o usuário de matrícula ÚNICA. Telas: coluna **"Cargo/função padrão"** e o
+  `Avatar` no nome; banner da pessoa com cargo (`OpcoesCargo`) e usuário (`SeletorPessoa`) por cadeado; **`ListaVinculos`**
+  separa **Padrão | Temporários** (`separarVinculos`, cada seção com a sua ação "Adicionar…"/"Vincular…"); o `EditorVinculo`
+  mostra o cargo da pessoa no padrão e escolhe o do temporário, com Início/Fim nos dois.
+- **RESPONSÁVEIS POR DFDs numa PLANILHA ÚNICA (v1.53.0, migração `0099`, aditiva — tabelas `responsaveis` +
+  `responsaveis_vinculos`; os JSON `reparticoes.responsavel_dfd`/`orgaos.responsavel_dfd` ficam DORMENTES):** a PESSOA é
+  cadastrada UMA vez (`responsaveis`: nome + matrícula + `chave` = `norm(nome)`, único chave + matrícula) e VINCULADA a
+  exatamente UMA unidade OU UM órgão (`responsaveis_vinculos`: tipo `padrao`|`temporario`, função, nomeação — `ato_tipo`
+  portaria/decreto/lei + número + link —, período no temporário, ordem; CHECKs no banco: um alvo só, o temporário com
+  início ≤ fim; cascade ao excluir a pessoa/unidade/órgão). A `0099` converteu TODOS os formatos já lidos (o atual, o
+  `{padrao, temporarios[ato]}`, o array de nomes, o texto solto), juntou a mesma pessoa de vários lugares numa linha,
+  completou a matrícula vazia quando o nome tem uma só e descartou só o temporário sem datas/invertido (o
+  `serializeResponsaveis` já os descartava). Núcleo PURO **`responsaveis-planilha-core.ts`** (testado):
+  `responsaveisDosVinculos` monta o MESMO `Responsaveis` de sempre (então `validarAssinatura`, `preverUnidadePorAssinatura`,
+  a conferência, `DfdConferir`, o solicitante público e a Mesa NÃO mudaram), **`alvoEfetivo`** (a regra da assinatura —
+  ver abaixo), `responsaveisEfetivosDasUnidades`, **`alvoVale`**/`motivoAlvoNaoVale` (só se vincula onde vale pela regra —
+  também no servidor, 422), `motivoVinculoInvalido`/`normalizarVinculo`/`vinculoConflita` (a mesma pessoa padrão duas
+  vezes, ou temporários que se cruzam, no MESMO alvo = 409), `estadoDoVinculo` (Vigente/Agendado/Encerrado/Inativo — o
+  padrão fica inativo com um temporário vigente), `vigentesDoAlvo`, `alvosParaVincular`, `rotuloAlvo` e a **CONFERÊNCIA**
+  (`problemasDoVinculo`/`problemasDaPessoa`/`problemasDoAlvo`/`conferenciaDaUnidade`/`conferenciaDoOrgao`/
+  `conferenciaDaPessoa`: sem responsável vigente = erro; sem matrícula, sem função, sem nomeação, temporário encerrado,
+  mesmo nome com outra matrícula, sem vínculo, vínculo sem efeito pela regra e "Unidades sem responsável (N)" = atenção).
+  Builders **`responsaveis-sql.ts`** (testados no driver D1 real dentro de `db.batch`: consulta por alvos num parâmetro
+  JSON, mover/copiar/apagar os vínculos — promover/rebaixar) e D1 **`responsaveis.ts`** (`listarPlanilha`, pessoas,
+  vínculos, `motivoAlvoInvalido`, `conflitoDoVinculo`). A LEITURA da conferência da assinatura continua por
+  `carregarResponsaveis`/`responsaveisPorReparticao` (`reparticoes.ts`), agora pelos vínculos. Rotas (`exigirAdmin`, Zod
+  `pessoaResponsavelSchema`/`vinculoResponsavelSchema`, auditoria `responsavel`): `GET`/`POST /api/admin/responsaveis`
+  (a planilha / pessoa nova — 409 se repetida), `PATCH`/`DELETE /api/admin/responsaveis/[id]` (excluir com vínculos pede
+  `?confirmar=1`), `POST /api/admin/responsaveis/vinculos` e `PATCH`/`DELETE /api/admin/responsaveis/vinculos/[id]` (a
+  pessoa e o alvo podem trocar — v1.59.0). Órgão/unidade não recebem mais `responsaveis` (o campo saiu dos schemas).
+  **Telas:** `/painel/orgaos` = `Segmented` **Órgãos | Responsáveis** (`?aba=responsaveis`) e `/painel/orgaos/[id]` =
+  **Unidades | Responsáveis** (só quem responde no órgão ou nas unidades dele) — tabelas no PADRÃO DA MESA (`DataTable
+  scrollInterno density="compact"`, filtros por coluna, XLSX/PDF, `AcoesCadastro` ↑/↓ na coluna Ordem das unidades, "Novo órgão"/"Nova
+  unidade"/"Nova pessoa" + Ajuda no rodapé) com as colunas **Responsáveis vigentes** (`CelulaResponsaveis`; "Por unidade"
+  / "Pelo órgão") e **Conferência** (`CelulaConferencia` = `EstadoResumo` ou "Regular"); a de órgãos tem **Unidades (N)**
+  (abre a tela delas). Tocar na linha abre o BANNER (`BannerCadastro`, DS: dados por cadeado, "Salvar alterações" só com
+  o que mudou, fechar com alteração confirma) com as seções **Responsáveis por DFDs** (`ResponsaveisDoAlvo` — os vínculos
+  com o estado, "Adicionar padrão/temporário" só onde vale; onde não vale, a nota de onde vêm), **Estrutura**
+  (também unidade / rebaixar / promover) e, no rodapé, Excluir/Ocultar — confirmações pelo `useConfirmacao`. A aba
+  Responsáveis = **`PlanilhaResponsaveis`** (uma linha por pessoa: nome, matrícula, onde responde, vigente hoje em,
+  conferência) + o banner da pessoa (nome/matrícula por cadeado — vale em todos os vínculos —, "Onde responde" com
+  editar/remover/"Vincular", excluir). O **`EditorVinculo`** (DS) escolhe a pessoa da planilha (`SeletorBusca` por nome ou
+  matrícula) ou cadastra na hora, o alvo (só os que valem), padrão/temporário, função, nomeação e período. Hook único
+  `usePlanilhaResponsaveis` (dados + gravações + aviso flutuante). Peças: `VinculosResponsaveis.tsx` (`CelulaResponsaveis`,
+  `ListaVinculos`, `EditorVinculo`), `SecaoBanner.tsx` (`SecaoBanner`/`ValorCampo` — também no banner do usuário).
+- **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD), migração `0022`) —
+  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`) — **SEM ordenação
+  manual (v1.56.0):** a ordem é a do **código da Centi** (`ORDEM_ORGAOS`, `orgaos.ts`: `entidade_centi` numérico, sem
+  ele por último, depois o nome — a MESMA em todo seletor; `orgaos.ordem` DORMENTE), colunas **Código Centi · Nome
+  (inteiro em até 2 linhas, `line-clamp-2`) · Também unidade (coluna própria, sem quebra — v1.58.0) · Sigla** · Órgão/Entidade · Nº interessado · Assinatura · Responsáveis vigentes · Unidades · Conferência e a EDIÇÃO DA
+  TABELA (`DataTable.edicoes`, chave `admin:orgaos:tabela` — `CHAVE_TABELA_ORGAOS`; as chaves `admin:` — `chaveDeAdmin` —
+  só o ADM grava, `recusaNaChave`); **tocar
+  numa linha** abre o banner do órgão e o botão **Unidades (N)** (na linha e no banner) leva a `/painel/orgaos/[id]` = as
+  Unidades daquele órgão (`ReparticoesAdmin` escopado). Nav = um item **"Órgãos e Unidades"**. Rotas
+  `/api/admin/orgaos*` (CRUD). **Toda unidade pertence a um órgão** (migração `0078` apagou as sem órgão, menos a "Geral"; `reparticaoSchema.orgaoId` obrigatório e conferido nas rotas — 422) e **excluir um órgão exclui as unidades dele** no mesmo lote (o órgão com DFD/protocolo, direto ou pelas unidades, segue só ocultável — 409). Loader
   `src/lib/orgaos.ts` (`listarOrgaos`). A migração `0022` é **aditiva** (só `ADD COLUMN`/`CREATE`) e **preserva o
   legado**: semeia a "Prefeitura Municipal de Rio Verde" e vincula as unidades atuais a ela (`orgao_id=1`).
 - **Assinatura ÚNICA por órgão (migração `0023`):** o órgão define se a assinatura (responsáveis por DFDs) é
-  **uma só para todas as unidades** (`orgaos.assinatura_unica=1` → responsáveis no `orgaos.responsavel_dfd`, editados
-  no `OrgaosAdmin` com o **mesmo `ResponsaveisEditor`**) ou **por unidade** (padrão `=0`, cada unidade tem os seus). A
-  resolução é **pura e única** (`responsaveisEfetivos`, `reparticao-responsaveis.ts`) aplicada nos DOIS chokepoints que
-  carregam os responsáveis (`carregarResponsaveis` servidor + `responsaveisPorReparticao` cliente, ambos com `leftJoin`
-  em `orgaos`) → toda a conferência de assinatura (`validarAssinatura`, `DfdConferir`, `POST /api/dfd`) usa os
-  responsáveis certos **sem mudança**. No `ReparticoesAdmin`, quando o órgão é "única", o editor da unidade some (nota
-  apontando o órgão). `orgaoSchema` ganhou `assinaturaUnica`+`responsaveis` (schema `responsaveisSchema` compartilhado
-  com `reparticaoSchema`). Migração aditiva; default preserva o comportamento atual.
+  **uma só para todas as unidades** (`orgaos.assinatura_unica=1` → valem os VÍNCULOS do órgão na planilha) ou **por
+  unidade** (padrão `=0`, cada unidade tem os seus). A regra é **pura e única** (`alvoEfetivo`,
+  `responsaveis-planilha-core.ts`) aplicada nos DOIS pontos que carregam os responsáveis (`carregarResponsaveis` servidor +
+  `responsaveisPorReparticao`) → toda a conferência de assinatura (`validarAssinatura`, `DfdConferir`, `POST /api/dfd`)
+  usa os responsáveis certos. **O vínculo MORA no lugar que vale (v1.72.0, migração `0103` — dados, idempotente):**
+  `alvoQueVale` (puro) leva o pedido ao alvo efetivo — a unidade de órgão com assinatura única → o órgão; o órgão por
+  unidade → a unidade própria (dual) ou recusa —, aplicado no SERVIDOR em todo POST/PATCH de vínculo (`alvoParaGravar`,
+  devolve `aviso` quando mudou — `avisoRedirecionado`). Mudar a configuração REALINHA no mesmo lote (`planoRealinhar` →
+  `comandosRealinhar` em `responsaveis-sql.ts`: mover · copiar · apagar o igual; o que conflita fica e vira "A revisar"):
+  `PATCH` do órgão (assinatura única/ocultar — órgão por unidade com várias unidades e sem própria = 409
+  `escolherUnidades`, a tela confirma e manda `destinosVinculos`), `unidade-propria`, promover, rebaixar e a unidade que
+  muda de órgão (`realinharVinculos`). A `0103` corrigiu os gravados (ex.: o responsável na unidade própria do AMMT).
+  **"Onde responde"** (`EditorVinculo`) = DUAS escolhas — **Órgãos** (só os de assinatura única) | **Unidades** (as de
+  órgãos por unidade, AGRUPADAS por órgão — `SeletorMultiplo` com `OpcaoMultipla.grupo`/`detalhe`) —, o (?) lista por que
+  os demais não aparecem (`alvosParaVincular` → `{orgaos, unidades, fora}`).
 - **"Geral" virtual:** `codigo='GERAL'` = **todas as unidades** — **escondida do CRUD de Unidades** (GET filtra;
   PATCH/DELETE recusam), **não editável**, mas continua **concedível por grupo** em `GruposAdmin` (grupos
   autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada. Em **"Geral"**,
@@ -489,19 +824,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   recém-criado é o `(SELECT MAX(id) …)` — o batch do D1 é uma transação sequencial). Nada é excluído com vínculo.
   Núcleo PURO/testável **`orgao-unidade-ops.ts`** (o MAPA dos campos que "seguem" na transformação + os predicados de
   permissão sobre os fatos apurados no servidor). Travas de contagem em `orgaos.ts` (`contarUnidadesDoOrgao`,
-  `estruturaPorOrgao`). Ações no **modal de edição** (aba "Estrutura"), não como ícones de linha (mobile-friendly).
+  `estruturaPorOrgao`). Ações na seção **Estrutura** do banner do órgão/unidade, não como ícones de linha (mobile-friendly).
+  Os VÍNCULOS dos responsáveis acompanham no MESMO lote (`vinculosNoPromover`/`vinculosNoRebaixar`, puros e testados;
+  builders `comandoMoverVinculos`/`comandoCopiarVinculosParaUnidade`/`comandoApagarVinculos`).
   - **Promover unidade→órgão (req. 1):** `POST /api/admin/reparticoes/[id]/promover` cria o órgão com a identidade da
     unidade. Sem vínculo, a unidade é **EXCLUÍDA**; **com vínculo**, ela vira a **UNIDADE PRÓPRIA** do novo órgão (dual —
-    `unidadePreservadaNoPromover`: nº do interessado sobe p/ o órgão; responsáveis ficam na unidade, herdando os do órgão
-    de origem de assinatura única se ela não tinha os seus) e `dfds.orgao_id` passa ao novo órgão. Barrado só p/ a
+    `unidadePreservadaNoPromover`: nº do interessado sobe p/ o órgão; os vínculos ficam na unidade, que recebe a CÓPIA dos
+    do órgão de origem de assinatura única se não tinha os seus; sem preservar, os vínculos dela passam ao órgão novo) e `dfds.orgao_id` passa ao novo órgão. Barrado só p/ a
     unidade própria de um órgão dual. Devolve `{id, preservada}`.
     (`ReparticoesAdmin` → Estrutura → "Promover a órgão"; ao concluir vai para `/painel/orgaos`.)
   - **Rebaixar órgão→unidade (req. 2):** `POST /api/admin/orgaos/[id]/rebaixar` `{orgaoDestino}` cria a unidade **sob o
     destino escolhido** e **EXCLUI** o órgão — com ou sem vínculo. Órgão **dual**: a unidade própria **desce** como unidade
-    comum do destino (`propriaRebaixada`, mesmo id, vínculos junto; recebe o nº do órgão e, se assinatura única, os
-    responsáveis do órgão). Órgão sem própria: cria a unidade nova (`unidadeDeOrgao`). Antes do delete, DFDs com
+    comum do destino (`propriaRebaixada`, mesmo id, vínculos junto; recebe o nº do órgão e, se assinatura única com
+    responsáveis, os vínculos do órgão no lugar dos dela). Órgão sem própria: cria a unidade nova (`unidadeDeOrgao`). Antes do delete, DFDs com
     `orgao_id`=órgão (sem unidade → ganham a unidade nova) e protocolos em nome do órgão (`orgao_id`→`NULL`, unidade
-    preenchida se vazia) são realinhados. Barrado só se o órgão tiver unidades-**FILHAS** comuns.
+    preenchida se vazia) são realinhados e os vínculos do órgão passam à unidade. Barrado só se o órgão tiver unidades-**FILHAS** comuns.
     (`OrgaosAdmin` → Estrutura → seletor de destino + "Rebaixar".)
   - **Órgão que TAMBÉM é unidade (req. 3 — dual):** `reparticoes.orgao_proprio=1` = a **unidade PRÓPRIA** que representa
     o órgão. Um órgão é dual ⟺ tem a unidade própria (**só permitido p/ órgão SEM unidades-filhas**). `POST
@@ -558,6 +895,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     ZERADO** (`valorTotal ?? 0`) — o sistema não estima nada. O total do **PCA** (`pcas.valorEstimado`, coluna mantida)
     passou a somar os `valorTotal` dos DFDs. A coluna `dfds.valor_estimado` fica **dormante** (sem código; sem migração
     de DROP).
+  - **REGRA ÚNICA, de ponta a ponta (auditoria dos totais, migrações `0085`/`0087`):** valor do DFD = Σ dos totais dos itens
+    com **4 casas** — a precisão da Centi, cujo preço unitário tem até 4 casas (36 × 80.204,5466 = 2.887.363,6776);
+    `arredondarValor`, `ROUND(…, 4)` no banco — (NULL quando ≤ 0) e nº de itens = quantos existem; a tela mostra ao centavo
+    (`brl` fixa as 4 casas antes: duas somas do mesmo valor em ordens diferentes mostram o MESMO centavo) — na LEITURA (`fecharValoresItens`, `parse-dfd-comum.ts`: o
+    item sem total com quantidade e valor unitário recebe q × vu; o "TOTAL GERAL" do documento só FECHA a tabela, não define
+    o valor), na EDIÇÃO (`editarItemDfd`: trocar quantidade/valor unitário recalcula o total do item — `totalDoItem`, a régua
+    da massa; total digitado à mão vale; `valorDosItens`), na SOBRESCRITA (`comTotal` = a soma) e no BANCO
+    (**`comandoTotaisDfd`**, `dfd-sql.ts`, no MESMO `db.batch` de toda escrita de itens — `start-dfd`/`append` com
+    `soCompleto`: a importação pela metade mantém o total DECLARADO, que o `gravacaoParcial` usa; "Salvar" e a massa sempre).
+    A `0085` acertou os gravados (item sem total → q × vu; DFDs completos → os itens) e a `0087` os passou a 4 casas (somar
+    DFDs já arredondados ao centavo dava R$ 0,01 de diferença entre as abas DFDs e Itens e contra a capa — 3 de 68 protocolos,
+    medido em produção). Assim protocolo (Σ DFDs) = DFDs = itens em TODA tela — lista e capa do protocolo, cards/Dashboard/
+    Orçamento do PCA, calendário, consulta pública.
 - **Assinatura digital (captura + conferência, migração `0018`):** o PDF traz, DEPOIS de cada DFD, uma página
   "Assinaturas Digitais (Certificado Digital)" com 1+ linhas `Assinatura digital - Nome: … e-CPF: … Usuário: …
   Data: dd/mm/aaaa hh:mm:ss … e-Assinatura: <código> - <url>`. **`extrairAssinaturas`** (`parse-dfd-comum.ts`,
@@ -669,7 +1019,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   vêm de `parseDfdFromPdfItems`; `.xlsx` = `[]`. Guardadas em `dfds.assinaturas` (JSON `Assinatura[]`). **Conferência (`validarAssinatura`,
   `reparticao-responsaveis.ts`, puro/testável):** o assinante tem de bater (nome normalizado por `norm`) com um
   **responsável padrão** OU um **temporário** cujo período cobre a **data da assinatura** (reusa `Responsaveis` de
-  `reparticao-responsaveis.ts`; o cadastro fica em `ReparticoesAdmin`/`ResponsaveisEditor`). Regras (fonte única
+  `reparticao-responsaveis.ts`; o cadastro é a planilha única de Órgãos e Unidades → Responsáveis). Regras (fonte única
   cliente+servidor): **PDF sem assinatura → bloqueia** (protocolar trava com qualquer DFD sem assinatura); `.xlsx`
   sem assinatura → permitido (informativo); **repartição sem responsável cadastrado → bloqueia**; assinante não
   autorizado → bloqueia. **Dropsigner e Adobe seguem a MESMA lógica dos demais formatos** — muda só a cor/rótulo (visual):
@@ -825,7 +1175,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **BARRA DA MESA (uma linha) + visão ÚNICA com `Segmented` + morph:** à esquerda, UM `Segmented` (`vista`) com o
     **Dashboard** primeiro — item SÓ-ÍCONE (`soIcone`, `IconDashboard`; nome acessível "Dashboard de governança") — e
     **Protocolos · DFDs · Itens** (na Mesa do PCA, sem o Dashboard e com a `ferramenta` Todos | Enviados | Incorporados
-    logo depois); à DIREITA, o botão **DADOS COMPLETOS** (`BotaoDadosCompletos`, só o ícone `IconTextoCompleto`, accent quando
+    logo depois); à DIREITA, o **REVERIFICAR TUDO** (o `BotaoAtualizar` com andamento — o ícone gira dentro de um ANEL que enche com o andamento: zera os caches das conferências, os itens e o histórico do Dashboard, recarrega a lista e reconfere TODOS os protocolos, DFDs e itens em qualquer visão; termina com o aviso do total; não grava nada), o botão **DADOS COMPLETOS** (`BotaoDadosCompletos`, só o ícone `IconTextoCompleto`, accent quando
     ligado; fora do Dashboard) e os **filtros de hierarquia** (abaixo). **Dados completos:** o provedor `DadosCompletos` (em volta
     das visões — os banners e o Dashboard ficam de fora) faz as células mostrarem TUDO dentro da própria tabela: `CelulaTexto`
     (descrição e assunto sem o corte de uma linha; na Consolidada as descrições diferentes numeradas D1, D2…), `CelulaLista`
@@ -993,7 +1343,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     Com o cadastro da **PADRONIZAÇÃO** (Catálogo → Unidades de medida | Classificações — ver a seção própria; vem na MESMA
     resposta dos itens, `padronizacao`), mais duas colunas, só quando o cadastro correspondente existe: **Classificação**
     (depois de Catálogo — a automática) e **Unid. cadastrada** (depois de Unidade — a unidade cadastrada que a do item
-    representa, ou "Não cadastrada").
+    representa, ou "Não cadastrada"). Com o **HISTÓRICO DE COMPRA** (Catálogo, tipo Histórico — mesma resposta, `historico`),
+    a coluna **Histórico** (depois de Vlr. unit.): o desvio do valor do item em relação ao valor atual do histórico (ver
+    "COMPARAÇÃO COM OS ITENS DAS MESAS").
   - **Itens NORMAL | CONSOLIDADA (sem consulta nova ao banco):** só na visão Itens, um 2º `Segmented` (`modoItens`,
     ariaLabel "Visão dos itens") ao lado do das visões — na Mesa principal E na do PCA — alterna **Normal** (um item por
     linha, a tabela acima) e **Consolidada** (a `key` do morph inclui o modo — troca com a MESMA transição). A Consolidada
@@ -1154,7 +1506,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **categoria de Protocolo** (`INCLUSÃO/EXCLUSÃO/ALTERAÇÃO NÃO ONEROSA`, **fixas** em `CATEGORIAS`;
   `classificarAssunto(assunto)` casa a palavra da capa). **Cores/estados que SEGUEM a importância:** `mensagensDfd`/
   `mensagensItem` marcam cada mensagem com a `cor` da importância do ponto (`corImportancia`) → `resumoEstado` usa
-  `message.cor` → a célula "Estado" e o painel `MensagensDfd` mostram a cor EXATA da importância; `estadoCor`/
+  `message.cor` → a célula "Estado" e o painel `PainelPendencias` mostram a cor EXATA da importância; `estadoCor`/
   `estadoItemCor`/`estadoProtocoloCor`/`estadoRotulo` recebem `regras` (opcional; sem elas = tokens de hoje) e puxam a
   cor da importância base do comportamento (severidade) ou dos **estados de ciclo** editáveis (`estadosCiclo`:
   Editado/Regularizado/Regular/Pendente — só rótulo/cor, quantidade fixa). Além da importância, o ADM controla, **por
@@ -1190,14 +1542,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (o `AvaliacaoAdmin` inclui as chaves novas no PATCH → sem clobber das irmãs).
 - **Tratamento + normalização das seções (`src/lib/normalize.ts` + `src/lib/dfd-tratamento.ts`, puros/testáveis):**
   ao conferir, `normalizarSecoesDfd` **padroniza automaticamente** PRIORIDADE (só `ALTA`/`MÉDIA`/`BAIXA` —
-  `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: uma DATA `MÊS/AAAA` **ou** recorrente `ANUAL`
-  — `ANUAL` vale **sem ano**, com ano vira `ANUAL/AAAA`; reconhece `MENSAL(MENTE)`/`ANUAL(MENTE)`/`AO LONGO DO ANO`…
-  — `normPrevisao(texto, anoPca?)`). **O ANO da previsão segue o PCA do processo** (pontos 7/8): `normPrevisao`
-  reconhece **só o MÊS por extenso** ("FEVEREIRO") e completa o ano com o `anoPca`; um ano explícito no texto tem
-  precedência (permite a edição do usuário). `normalizarSecoesDfd(dfd, regras, anoPca?)` recebe o ano do PCA (do
-  protocolo, ou do próprio DFD no avulso). O que não dá
+  `normPrioridade`) e PREVISÃO DE ENTREGA (é **um OU outro**: um MÊS DEFINIDO `MÊS/AAAA` **ou** uma definição GENÉRICA —
+  a periodicidade `ANUAL`/`SEMESTRAL`/`QUADRIMESTRAL`/`TRIMESTRAL` (`PERIODOS_PREVISAO`; sem ano vale, com ano vira
+  `SEMESTRAL/AAAA`); o recorrente `MENSAL(MENTE)`/`ANUAL(MENTE)`/`AO LONGO DO ANO`… = `ANUAL` — `normPrevisao(texto,
+  anoPca?)` → `{valor, anual (= genérica), periodo, auto}`). **O ANO É SEMPRE O DO PCA** (v1.18.0 — regra do usuário): com
+  o `anoPca`, o ano escrito no texto (de um contrato, de uma data antiga) NUNCA vale ("MARÇO/2025" num PCA 2027 =
+  `MARÇO/2027`, `auto`) e o mês numérico só vale fora de uma REFERÊNCIA (`ANTES_REFERENCIA`: CONTRATO/ATA/ARP/PREGÃO/
+  LICITAÇÃO/PROCESSO/Nº — "Contrato 12/2025" nunca vira dezembro) e com o ano do PCA; sem o PCA (avulso antes de
+  escolher), o ano do texto fica provisório. `normalizarSecoesDfd(dfd, regras, anoPca?)` recebe o ano do PCA (do
+  protocolo, ou do próprio DFD no avulso); o "Atualizar" (`revisarDfd`) corrige os gravados. O que não dá
   para padronizar fica para **tratar** à mão. O bloco **Tratamento** do `DfdConferir` edita PRIORIDADE (`Segmented`),
-  PREVISÃO (mês + ano [padrão = ano do PCA] + toggle ANUAL; `buildPrevisao`, puro) e FUNDAMENTAÇÃO LEGAL (`TextField`,
+  PREVISÃO (seletor **Definição** Mês definido · Anual · Semestral · Quadrimestral · Trimestral — `DEFINICOES_PREVISAO` —
+  + o mês + o ano TRAVADO no do PCA; `buildPrevisao(mes, ano, periodo)`, puro; a massa igual) e FUNDAMENTAÇÃO LEGAL (`TextField`,
   padrão "Lei 14.133/2021") — só componentes do DS; o texto canônico volta para `secoes[i].texto` e flui pelo envio
   normal (sem migração). A JUSTIFICATIVA e as demais seções editam-se direto na seção (cadeado por seção, ver acima). Cada DFD ganha um
   **estado** (`estadoDfd`: com erro › editado › regularizado › regular › pendente; cor por token `--danger/--info/
@@ -1216,14 +1572,21 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Escrita de DFD em LOTES (escala a milhares de itens):** `dfd.ts` decompõe em `upsertDfdCabecalho` (cabeçalho +
   apaga itens antigos + 1º lote) e `appendDfdItens` (lotes seguintes, **11×9=99** params). `POST /api/dfd` é uma
   **discriminated union em `mode`** (`start-dfd` | `append-dfd-itens`, `dfdOpSchema`) — o cliente
-  (`src/lib/importar-dfd.ts`, `enviarDfdEmLotes`) envia em lotes de 200 com **barra de progresso** (`Progress`).
+  (`src/lib/importar-dfd.ts`, `enviarDfdEmLotes`) envia em lotes de até 200 itens **e** até ~500 mil caracteres de
+  descrição (`LOTE_CARACTERES` — `finsDosLotes`: descrições longas nunca fazem um pedido pesado para o Worker) com
+  **barra de progresso** (`Progress`).
   `start-dfd` re-valida `faltasObrigatorias` (defeituoso nunca grava, 422); idempotente por `numero` (retomável).
 - **Gravação garantida (all-or-nothing por DFD):** `enviarDfdEmLotes` faz **retry** de falha transitória (rede/5xx;
   4xx não) e, se um lote falhar de vez, **apaga o DFD parcial** (`DELETE`) — não fica DFD pela metade. **Exceção: DFD que
   JÁ EXISTIA** (sobrescrita/reenvio, `opcoes.existia`) **não é apagado** (perderia também a versão anterior) — a falha diz
   "gravação INCOMPLETA (n de N itens): reenvie para completar"; o mesmo aviso quando o desfazer não passa (sem rede, ou
   recusado — `apagarDfd` confere a resposta). `appendDfdItens`
-  é **idempotente** (apaga `sequencial > desde` antes de gravar → retry não duplica). O banner de importação fica
+  é **idempotente** e regrava só a FAIXA do próprio lote (`comandoApagarFaixaItens`: `desde < sequencial ≤ desde + n` — o
+  retry não duplica e um retry ATRASADO nunca apaga um lote posterior). O **desfazer** (`?origem=desfazer`) NUNCA vira um
+  "Excluir" comum: fora do `gravacaoParcial` → 409 (nada é apagado — ex.: outra pessoa criou o DFD entre a consulta e a
+  gravação). O DFD GRAVADO pela metade (a sobrescrita que falhou num lote) é **ERRO "Gravação incompleta: N de M itens"**
+  (`gravacaoIncompleta`/`DfdConferivel.gravacaoIncompleta`, `conferencia-dfd.ts` — lido do GRAVADO, nunca do rascunho) na
+  célula, no painel e no protocolo agregado até reenviar. O banner de importação fica
   **`bloqueado`** (Modal sem X/Esc/backdrop, sem Cancelar) + `beforeunload` enquanto grava — não dá pra interromper.
 - **Segurança (escopo por repartição em TODA escrita):** `POST /api/dfd` (`start-dfd`/`append`), `PATCH`/`DELETE
   /api/dfd/[id]`, `PATCH`/`DELETE /api/protocolo/[id]` e os `GET/[id]` checam `reparticaoId == null || lista.some(...)`
@@ -1234,8 +1597,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   o `PATCH /api/protocolo/[id]`
   (`editarProtocoloSchema`) edita a **repartição + os campos de CONTEÚDO da capa** (interessado/assunto/observação/
   CPF-CNPJ/valor/local) — os **IDENTIFICADORES** (número/Id/data/ano do PCA) são IMUTÁVEIS (o schema **não** os aceita).
-  Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod;
-  Drizzle parametriza (sem SQL injection).
+  Teto de `totalItens` (100k) e `rows` (1000/lote) no Zod; **textos longos do DFD** (descrição do item, objeto, órgão,
+  setor, responsável e o texto de cada seção — na importação E na edição) até **`MAX_TEXTO_DFD` = 20 mil caracteres**
+  (`dfd-validation.ts`, v1.54.2): o leitor nunca corta, cabe numa célula do .xlsx exportado (32.767) e a linha do DFD (os
+  campos + 50 seções) fica abaixo dos 2 MB por linha do D1 — antes eram 4.000/255/10.000 e o DFD com uma descrição técnica
+  longa era recusado INTEIRO ("Grande demais: esperava que o texto tivesse <= 4000 caracteres"); a capa do protocolo segue
+  com 4.000 (`textoOpc`). Drizzle parametriza (sem SQL injection).
 - Rotas: `POST /api/dfd` (lotes), `GET`/`DELETE`/`PATCH /api/dfd/[id]`, `POST /api/pca`, `PATCH`/`DELETE /api/pca/[id]`
   (envelope+guardas). UI em `/painel/pca` = `PcaModuleView` (cards 4:5 → espaço do PCA, ver "PCA como ESPAÇO");
   a edição legada segue em `/painel/pca/edicao/[id]`.
@@ -1249,8 +1616,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   nenhum DFD fica órfão (antes a FK `set null` orfanava os que não vinham no PDF e os mantidos). Na análise, o DFD
   cadastrado num protocolo de MESMO Id é "deste processo" (`/api/dfd/existentes` devolve `protocoloIdExterno`: Substitui,
   não Move; "Manter o existente" o mantém na capa). O `POST /api/protocolo` faz o **anti-sequestro por Id E por Nº** — 403
-  se o Id ou o número já existe em unidade inacessível: `getProtocoloPorIdExterno`/`getProtocoloPorNumero`; o de mesmo Id
-  em um PCA é recusado (409). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
+  se o Id ou o número já existe em unidade inacessível — TODOS os de mesmo Id (`protocolosDeMesmoId`, a MESMA lista que o
+  `iniciarProtocolo` funde) e o de mesmo nº (`getProtocoloPorNumero`); a FUSÃO (nº novo já em outro protocolo) é recusada
+  (409) se QUALQUER um dos envolvidos — inclusive o que fica — está em um PCA, e o rastro do que fica sai para os DFDs que
+  entram nele (`comandosMesmoId` — não contam duas vezes). O **DFD** já dedupa/sobrescreve por `numero` (`upsertDfdCabecalho` onConflict em
   `dfds.numero`; `planejamento` é DADO, atualizado no overwrite).
   **Excluir em CASCATA (regra do usuário):** `excluirProtocolo` (`protocolo.ts`) apaga os **DFDs vinculados**
   (`delete dfds where protocoloId`) ANTES do protocolo, no MESMO `db.batch` — os **itens** caem por `dfd_itens.dfdId`
@@ -1288,8 +1657,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DFD ativo grava — seja qual for o botão que tirou o do PDF do envio ou a ordem dos cliques; calculado a cada render, vale
   também quando a consulta dos já cadastrados chega depois). **No REENVIO**, excluir tira o DFD do processo: o
   GRAVADO de mesmo nº entra na lista "fora do envio" do topo (Excluir — padrão — ou Manter, como o que não veio no PDF; a
-  confirmação avisa quantos gravados serão EXCLUÍDOS) — em protocolo que está em um PCA, só "Mantido" (DFD em PCA não é
-  excluído; `ComparacaoProtocolo.excluirBloqueado`). Um DFD já fora do envio por outro motivo não muda; quando outra ação o tira
+  confirmação avisa quantos gravados serão EXCLUÍDOS) — sem a ação Excluir, só "Mantido" (`ComparacaoProtocolo.excluirBloqueado`; em um PCA o
+  excluído sai do PCA, com os nºs dos itens baixados). Um DFD já fora do envio por outro motivo não muda; quando outra ação o tira
   do envio depois (Manter o existente, a escolha do duplicado, o rastro do reenvio), ele deixa de ser "Excluído" e vira
   "Descartado" — o "Restaurar excluídos" não o traz. O DFD fora do envio não entra na fila do OCR nem segura a protocolação
   (`ocrPendenteNoEnvio`); ao voltar ("Restaurar"/"Manter este"), a assinatura achatada é lida (`lerOcrAoVoltar` →
@@ -1333,8 +1702,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   aplica os itens numa passada só e o estado de cada escolha usa um índice por marca (linear, mesmo com milhares); a SEÇÃO
   é identificada pela seção PADRÃO do título (`chaveSecao` → `SECOES_PADRAO`: "PRIORIDADE" e "PRIORIDADE DA COMPRA OU DA
   CONTRATAÇÃO" são UMA escolha — manter a gravada tira a do arquivo) e as de mesmo tipo voltam num bloco só; com os itens
-  de UM lado inteiro vale o valor total DESSE lado (o "TOTAL GERAL" pode diferir da soma por arredondamento — "Manter
-  todos os gravados" volta a ser IGUAL); na mistura, a soma; o banner do DFD fica **só-leitura** enquanto a sobrescrita está em andamento
+  dos dois lados o valor do DFD é a SOMA dos itens (a regra única — "Manter todos os gravados" volta a ser IGUAL ao
+  gravado); o banner do DFD fica **só-leitura** enquanto a sobrescrita está em andamento
   (`sobrescrever.onOcupado`: lançador → leitura → escolha → gravação — sem rascunho concorrente nem base velha); só a
   leitura mais recente de arquivo vale; fechar a conferência com escolhas/edições feitas pede confirmação; na
   protocolação, a escolha só destrava depois da leitura da assinatura por OCR daquele DFD e o DFD que substitui/move um
@@ -1400,7 +1769,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **gravado destravado**; a criação manual usa inputs simples (`modo="criar"`). A **repartição** (roteamento) segue
   editável (seletor obrigatório na análise e no gravado). O **Valor da capa** é editável e **conciliado** — na análise E
   no gravado — pela fonte única **`conciliacaoCapa`** (`dfd-tratamento`, pura): capa **nula/zerada** OU **diferente** da
-  somatória (arredondada ao centavo; `valoresBatem`) ⇒ divergente; só confere com a somatória COMPLETA (análise
+  somatória EXATA (`valoresBatem`: bate quando a diferença é MENOR que 1 centavo, decidida em décimos de milésimo INTEIROS — a
+  Centi trunca a fração do centavo, e 1 centavo inteiro diverge sempre, sem depender do ponto flutuante; a somatória mostrada
+  e a que substitui a capa vão ao centavo — `somatorioProcesso` dá `exato` e `somatorio`) ⇒ divergente; só confere com a somatória COMPLETA (análise
   terminada e TODOS os DFDs lidos — um DFD ilegível somaria 0; descartados fora, mas o DFD EXISTENTE mantido por
   "Manter o existente" deste MESMO protocolo continua no processo e entra na somatória/contagem) e **NÃO depende de os
   DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse
@@ -1449,8 +1820,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `comGrupos`) **sem** trazer o JSON pesado das assinaturas para as listas. **Capa em `CapaCampos`** (exportado de `ProtocoloView`) — a MESMA grade de
   campos da capa na importação e no gravado; **identificadores** (número/Id/data) sempre só-leitura, **conteúdo** com
   cadeado por campo (`modo` `leitura`/`criar`/`cadeado`).
-  O **head** mostra **Id + Assunto** ao lado do nº. Quando há erro, um botão **"Relatório de erro"** no rodapé abre o
-  `RelatorioErros`. A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
+  O **head** mostra **Id + Assunto** ao lado do nº. O `IndicadorPendencias` do rodapé abre o painel **`PainelPendencias`** (ver "PENDÊNCIAS
+  PADRONIZADAS"). A **barra de edição em massa** fica FIXA no rodapé do banner (controle do valor em cima; seletor do
   campo + Aplicar + Limpar embaixo) — é o componente **`BarraEdicaoMassa`** (emite uma `AcaoMassa`; conteúdo aplicado por
   `aplicarMassaDfd`, puro; só oferece os campos que o ADM deixou editáveis). **Corpo do banner do protocolo = UM
   componente (`ProtocoloView`)** na análise E no gravado: mini banners + conciliação da capa (+ "Substituir pela
@@ -1466,22 +1837,46 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   aponta EXATAMENTE o erro (quais itens, qual seção) e O QUE fazer; o relatório do protocolo sai em **formato de
   DESPACHO de devolução** (`linhasRelatorioProtocolo`) pronto p/ devolver o processo — os **DFDs com a MESMA pendência
   são agrupados numa única mensagem** e cada DFD é referenciado por **número + nº de planejamento** (ex.: "DFDs 531
-  (Planej. 640), 702 (Planej. 811):"). Quando há erro, o botão
-  **"Relatório de erro"** (rodapé, alinhado à direita) abre o `RelatorioErros`. Helpers puros em `dfd-tratamento.ts`
+  (Planej. 640), 702 (Planej. 811):"). O despacho sai pelo "Copiar → Despacho" do
+  **`PainelPendencias`**. Helpers puros em `dfd-tratamento.ts`
   (`itemComErro`/`estadoItem`/`faltasCirurgicasDfd`/`linhasRelatorioDfd`/`linhasRelatorioProtocolo`/`SECOES_OBRIGATORIAS`
   [fonte única, reusada por `faltasObrigatorias`] + `ESTADO_PROTOCOLO_ROTULO`/`estadoProtocoloCor`; o estado agregado do
   protocolo vem de `avaliarProtocolo`).
-- **Painel LATERAL de MENSAGENS do DFD (`MensagensDfd`) — todas as conferências, navegáveis:** as mensagens NÃO
+- **PENDÊNCIAS PADRONIZADAS — Protocolo · DFD · Item, UM banner (`PainelPendencias`, núcleo puro `pendencias-core.ts`):**
+  a árvore ÚNICA sai das MESMAS mensagens da célula Estado (`mensagensDfd`/`mensagensItem` + `conciliacaoCapa`, níveis e cores
+  do ADM): **o DFD soma os itens** (`pendenciasDoDfd`: as mensagens agregadas de item — "Falta valor unitário em 3 de 10" —
+  viram a lista de CADA item com o problema, no status/cor da mensagem; as seções levam o TEXTO ATUAL como contexto) e **o
+  protocolo soma a capa + os DFDs** (`pendenciaDaCapa`, `contarProtocolo` = Σ `contarDfd` + a capa — testado); o item sozinho
+  = `pendenciasDoItemSolo`. **Tocar LEVA ao lugar** (`AlvoPendencia` {dfd, item, ancora} + o hook **`useDestaqueAncora`**,
+  `DestaqueAncora.ts` — rola e pulsa na cor; o MESMO no `DfdConferir`, no `ItemDetalhe` [`data-ancora` em valor unitário,
+  quantidade, `repetidos`, `catalogo`] e na capa do `ProtocoloView` [`capa`]): no protocolo abre o DFD ao lado com a âncora
+  (ou o item com o campo — `PainelDfd.item.destaque`); no DFD rola até a seção ou abre o item; no item, o campo. **Copiar**
+  (`Dropdown`): **Despacho** (o de sempre — `linhasRelatorioProtocolo`/`linhasRelatorioDfd` + "Respeitosamente"), **WhatsApp**
+  (`*negrito*` + marcadores) e **Lista simples** (hierárquica, com o lugar) — `textoPendencias`; **PDF** (`blocosPendenciasPdf`
+  → o gerador `documento-pdf`, A4: resumo, capa valor × somatória, por DFD a tabela "Onde · Pendência · Conteúdo atual" e a
+  tabela dos ITENS como estão no DFD com a célula que falta na cor; só com a ação Exportar — `usePodeExportar`). **MONTAR O
+  DOCUMENTO** (o botão "Copiar / PDF" do painel → `MontarPendencias`, `Modal` xl): ESCOLHER o que entra — Situação (erros/
+  atenções), **Problemas** (os TIPOS, `tiposDePendencia` — um por ponto, com as ocorrências: cada item conta; rótulo
+  `rotuloTipoPendencia`) e DFDs (no protocolo) — com "Todos | Nenhum" (`ListaEscolha`), e a **PRÉVIA AO VIVO** no formato
+  escolhido (`Segmented` Despacho · WhatsApp · Lista · PDF — o texto exato que vai ser copiado, ou o PDF pelo
+  **`PreviaDocumento`**, DS: os MESMOS blocos do gerador em HTML, sem gerar o PDF); `filtrarPendencias` (puro, testado: o
+  completo não muda nada; o DFD/item sem nada escolhido sai; o DFD de que algo foi tirado usa os textos escolhidos no
+  despacho, não o cirúrgico pronto). Rodapé: o que vai no documento + "Copiar texto" | "Baixar PDF" (desabilitado sem nada
+  escolhido). No celular, "Escolher | Prévia" alternam; no desktop, lado a lado. Onde: o painel da direita do DFD (`DfdPainelDireito {tipo:"mensagens"}` — análise avulso/protocolo,
+  gravado, DFD ao lado do protocolo), o painel À DIREITA do protocolo (`ModalPainel` `proto-pendencias` no gravado e na
+  análise — o `IndicadorPendencias` alterna; empilhado, um `Modal`) e o TOPO do `ItemDetalhe` (o indicador no cabeçalho do
+  item alterna). A contagem do indicador do protocolo = a soma das pendências (não mais a de DFDs). O `RelatorioErros` ficou
+  só para as diferenças do reenvio; o `MensagensDfd` saiu. Testes: `tests/pendencias-core.test.ts`.
+- **Painel LATERAL de MENSAGENS do DFD (hoje o `PainelPendencias`) — todas as conferências, navegáveis:** as mensagens NÃO
   aparecem mais soltas no corpo do banner do DFD. `mensagensDfd` (puro, `dfd-tratamento`) monta a lista COMPLETA
   (erro/atenção/**acerto**, sem exceção — só omite pontos "ignorar" do ADM), cada uma com uma **âncora** (id do
   componente: `reparticao`/`anoPca`/`justificativa`/`previsao`/`prioridade`/`fundamentacao`/`referenciaRenovacao`/
   `itens`/`valor`/`assinatura`, marcadas com `data-ancora` no `DfdConferir`/`DfdView`). `mensagensDoDfd` (`src/lib/
   conferencia-dfd.ts`) já confere a assinatura e é a **fonte única** (contador do botão + painel + célula Estado via
-  `avaliarLinhaDfd`). O rodapé do banner do DFD é o componente **`DfdRodape`** (estado + ações + mensagens + Fechar +
-  ação principal) e o painel da direita é **`DfdPainelDireito`** (mensagens / item / histórico) — os MESMOS na análise
-  (avulso e protocolo) e no gravado (DFD solto e DFD ao lado do protocolo gravado). O botão **`BotaoVerMensagens`**
-  (Ver/Ocultar mensagens + a numeração por status) fica no **RODAPÉ FIXO do banner do DFD, à esquerda do Fechar** (não
-  no corpo). Ao abrir, um **novo banner** de mensagens surge **AO LADO DIREITO** do DFD (mesma animação de lateral),
+  `avaliarLinhaDfd`). O rodapé do banner do DFD é o componente **`DfdRodape`** (UMA linha: `IndicadorPendencias` + ações só ícone + ação
+  principal; Fechar = o X do cabeçalho) e o painel da direita é **`DfdPainelDireito`** (mensagens / item / histórico) — os MESMOS na análise
+  (avulso e protocolo) e no gravado (DFD solto e DFD ao lado do protocolo gravado). O **`IndicadorPendencias`** (o estado na cor do ADM + os chips de erro/atenção) fica no **RODAPÉ FIXO do banner do DFD**, à esquerda (não
+  no corpo) — o toque alterna o painel. Ao abrir, um **novo banner** de mensagens surge **AO LADO DIREITO** do DFD (mesma animação de lateral),
   ficando **ambos manipuláveis** (o DFD NÃO é substituído): **DFD avulso / gravado solto** → o DFD é o principal e as
   mensagens são o `Modal.lateral` (2 painéis); **dentro de um protocolo** → o `Modal` ganhou um **`lateral2`** (3º painel)
   e ficam **três banners proporcionais**: protocolo | DFD | mensagens (as colunas do grid animam por fração; no mobile,
@@ -1502,10 +1897,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   catálogo NÃO pode ser alterado** (`toast.error`): Código (chave do match), Descrição (`!conf.divergDescricao`), Unidade
   (`!conf.divergUnidade`); Quantidade/Valores não têm equivalente → sempre livres; item não catalogado → tudo livre.
   Vale na **importação E no gravado** (os hosts passam `editavel`+`conformidade`). A edição recomputa o **valorTotal do
-  DFD** (Σ) via `editarItemDfd`. No **gravado**, a edição do item entra no RASCUNHO do DFD e vai ao banco no "Salvar
+  DFD** (Σ) via `editarItemDfd` — e trocar a QUANTIDADE ou o VALOR UNITÁRIO recalcula o total do ITEM (q × vu, `totalDoItem`). No **gravado**, a edição do item entra no RASCUNHO do DFD e vai ao banco no "Salvar
   alterações" do banner (`PATCH /api/dfd/[id]` `{itens}` → `reescreverDfdItens`, apaga+reinsere + recomputa total). Só
   **editor**; escopo por unidade e `valorUnitario>0` no servidor.
 - **GRAVADO = ANÁLISE (mesmos componentes, conferência, seleção e ajustes — a ÚNICA diferença é a tabela única):**
+  - **RODAPÉS EM UMA LINHA, SÓ ÍCONES (Protocolo · DFD · Item — Mesa, análise e consulta pública):** à esquerda o
+    **`IndicadorPendencias`** (o MESMO nos banners: protocolo = a soma das pendências da capa e dos DFDs → o painel de
+    pendências à direita; DFD = o estado + as mensagens → o painel; item = no cabeçalho do `ItemDetalhe`) ou a barra de progresso; à direita as ações em **`BotaoAcao`**
+    (só o ícone; Duplicados/Diferenças/Tarefas com a contagem) e a ação PRINCIPAL (Salvar alterações, Protocolar, Importar/
+    Sobrescrever DFD — ícone + texto de 640px para cima). **Reenviar protocolo** e **Sobrescrever DFD** = botões PRETOS
+    (`variant="primary"`). Nada repete o cabeçalho: sem Fechar/Cancelar (o X fecha) e sem a contagem de DFDs (está nos mini
+    banners); **Histórico e Tarefas ficam no CABEÇALHO** (ao lado do Atualizar) do protocolo e do DFD (também do DFD ao
+    lado do protocolo); o item mantém Ver DFD/Ver protocolo. **TRAVAR = DESABILITAR, NUNCA SUMIR:** gravando (`salvando`) ou
+    com a sobrescrita de um DFD em andamento (`onOcupado` do `DfdUploadForm`), as ações dos banners (Reenviar, Sobrescrever,
+    Atualizar, Tarefas) ficam À VISTA desabilitadas com o motivo na dica (`motivoTrava`; `BotaoAtualizar`/`TarefasDoVinculo`
+    `disabled`); Histórico e o relatório de pendências (só leitura) seguem ativos. Os hooks devolvem `bloqueado` (a pilha não
+    troca/fecha — gravando OU sobrescrevendo; trocar/fechar o DFD-base da sobrescrita é recusado) e `salvando` (só ele some
+    com o X/Esc do `Modal` — na sobrescrita o modal dela fica por cima).
   - **`useProtocoloGravado`** (`ProtocoloGravado.tsx` — hook que devolve os PAINÉIS do banner do protocolo já protocolado,
     composto pelo `BannersMesa`): carrega o protocolo COMPLETO (`GET /api/protocolo/[id]
     ?completo=1` → capa + DFDs com seções/assinaturas/itens + as UNIDADES deles com os responsáveis, via
@@ -1555,7 +1963,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     lote, auditoria por protocolo/DFD (itens: **antes/depois** por item). No celular a barra pode ser **recolhida** (fica
     o resumo). Enquanto um banner da pilha GRAVA, nada troca/fecha/empilha, e a recarga pós-gravação só vale se o banner
     ainda mostra o mesmo DFD/protocolo (no modo item, reencontra o item EXIBIDO).
-  - **Botão ATUALIZAR = recarregar + REVISAR** (`BotaoAtualizar`, ao lado do X dos banners de DFD, ITEM e protocolo): o
+  - **Botão ATUALIZAR = recarregar + REVISAR** (`BotaoAtualizar` — o botão CIRCULAR PADRÃO do sistema: o ícone gira dentro
+    de um anel; o mesmo da barra das Mesas e do "Recarregar"/"Verificar" de Auditoria, Armazenamento, Órgãos, Unidades e
+    Automação —, ao lado do X dos banners de DFD, ITEM e protocolo): o
     ícone GIRA (`useGiro` — ao menos uma volta; um 2º toque enquanto gira é ignorado) enquanto recarrega do banco (confirma se
     há rascunho) e REVISA o que chegou com os MESMOS tratamentos automáticos da importação — núcleo puro **`revisao-dfd.ts`**:
     `revisarDfd` (seções em TEXTO CORRIDO + a linha do órgão emissor que o cabeçalho de página deixava fora; campos do
@@ -1564,7 +1974,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     os itens: `podeRevisarItens`) e `revisarCapa` (conteúdo da capa em uma linha limpa). NUNCA mexe em identificadores,
     valores, quantidades, assinaturas nem na unidade; idempotente. O tratado entra no RASCUNHO (Salvar alterações grava só o
     que mudou, com o histórico) e o aviso flutuante diz o que foi tratado (`resumoRevisao`; no protocolo, por DFD —
-    `resumoRevisaoLote`). Só-leitura (sem permissão, unidade sem acesso, incorporado a um PCA): só recarrega e avisa o que
+    `resumoRevisaoLote`). Só-leitura (sem permissão, unidade sem acesso): só recarrega e avisa o que
     haveria a tratar. Testes: `tests/revisao-dfd.test.ts`.
   - **REENVIAR PROTOCOLO (sobrescrever com comparação)** — botão **"Reenviar protocolo"** no rodapé do protocolo gravado (`useProtocoloGravado`)
     (desabilitado com rascunho pendente) → o **MESMO `ProtocoloUploadForm`** em modo `reenvio` (`BaseReenvio` = protocolo +
@@ -1585,7 +1995,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (descarta o novo). O usuário **edita antes** (mesma conferência/edição em massa da análise). **Sobrescrever** confirma
     com o resumo, envia `start-protocolo` com `reenvio {protocoloId, resumo}` (o servidor confere escopo + identidade e
     audita "REENVIADO (sobrescrito)"), **regrava só os DFDs que mudaram** (os "igual" ficam como estão), exclui os fora do
-    PDF marcados "Excluir" (padrão) e recarrega o gravado. Garantias: o servidor grava no MESMO registro (**nº exatamente
+    PDF marcados "Excluir" (padrão — `DELETE ?origem=reenvio&protocolo=P`: só o DFD que AINDA está no protocolo; o movido
+    por outra pessoa durante a análise não é tocado, 409) e recarrega o gravado. Garantias: o servidor grava no MESMO registro (**nº exatamente
     como gravado** e **Id gravado** quando o PDF não traz — nunca apaga o Id); a comparação de assinaturas inclui formato,
     código e a **validação da equipe** (validar/desfazer é diferença); DFD **editado** na análise nunca é pulado como
     "igual"; a validação da assinatura é herdada **depois do OCR** (`herdarTratamentos(…, {assinaturas})` em partes — a
@@ -1677,7 +2088,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `activeKey`) via `PATCH /api/catalogo/itens` `{ids,tipos,modo}` — `modo` **`definir`** (SET, padrão) ou **`mesclar`**
   (UNIÃO, p/ o item existente ganhar um tipo novo sem perder os que tinha). Seletor **`TipoDfdPicker`** (chips de alternância).
 - **UI (`CatalogoView`):** um **`Segmented`** alterna **Catálogo** (cards por catálogo; abrir → `Modal` full com a tabela
-  de itens — busca + filtro por tipo, seleção/edição em massa, exportar XLSX/PDF, editar, detalhe no `lateral`) e **Lista
+  de itens — busca + filtro por tipo, seleção/edição em massa, XLSX/PDF no rodapé da tabela, editar, detalhe no `lateral`) e **Lista
   de Itens** (todos os itens numa tabela única, com coluna Catálogo; clique abre o detalhe num banner). A troca de visão
   anima por **`animate-cat-morph`** (fade+escala — "as linhas viram cards"). `Dropzone` aceita `.pdf,.xlsx`; novo
   `TextArea` no DS (descrição multi-linha). Rotas: `POST /api/catalogo` (+ `/verificar`, `/item`), `PATCH`/`DELETE /api/catalogo/[id]`,
@@ -1740,7 +2151,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **todos os dados** do item do catálogo — código, unidade, **descrição (mesmo tamanho de fonte do item importado**, p/
   comparar lado a lado) e os **tipos de DFD** (chips `Badge`) — **display-only** (os itens do DFD são só-leitura; NÃO altera o
   DFD oficial). `sugestao` passou a ser construída sempre que há entrada casada (score 1); só é `null` sem código/sem semelhante. As mensagens de catálogo entram
-  no painel `MensagensDfd` + `faltasCirurgicasDfd` (despacho). O import avulso (`DfdUploadForm`) e o DFD gravado (`DfdsView`)
+  no painel `PainelPendencias` + `faltasCirurgicasDfd` (despacho). O import avulso (`DfdUploadForm`) e o DFD gravado (`DfdsView`)
   conferem TODO o DFD (useEffect por `itens`); o protocolo confere **por DFD ao abrir** (lazy — a LISTA fica leve/escalável).
   **Portão do servidor (defesa em profundidade, só bloqueia se o ADM elevou a `fundamental`):** `POST /api/dfd` (`start-dfd` **e**
   `append-dfd-itens`, por causa dos lotes) roda `algumCatalogoFundamental` → se sim, `conferirItensNoCatalogo` + `bloqueantesCatalogo`
@@ -1768,13 +2179,46 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Novo catálogo** escolhe o TIPO (`Segmented`): Agenda (criar à mão | importar PDF/XLSX, como antes) ou **Histórico de
   compra** (só por arquivo, exige Importar) → **`ImportarHistorico`** (prévia com os números + nome + pasta → lotes com
   progresso, tudo ou nada). Abrir um histórico = **`HistoricoCompraModal`** (`GET /api/catalogo/[id]/historico`, sob
-  demanda): KPIs + **Produtos** (um por código: contratos, qtd., menor/médio PONDERADO/maior/último preço — a base da
-  comparação futura com os itens dos DFDs) · **Itens** · **Contratos**, detalhe ao lado, Exportar .xlsx (papel).
+  demanda): KPIs + **Produtos** (um por código: contratos, qtd., valor atual, menor/médio/maior — a base da comparação
+  futura com os itens dos DFDs) · **Itens** · **Contratos**, detalhe ao lado (cada contrato com o valor atual e "base +
+  aditivo"), Exportar .xlsx (papel).
+  **VALOR ATUAL (regra do usuário):** no MESMO contrato (= mesma data de assinatura), os preços distintos do produto viram
+  UM valor — `valorAtualNoContrato`: um preço = ele (linhas repetidas com o mesmo preço são o item dividido, não somam);
+  dois ou mais = o MENOR somado ao MAIOR (o menor é o ADITIVO sobre o maior — ex.: 8,75 + 0,80 = 9,55). O valor atual do
+  PRODUTO = o do contrato assinado por ÚLTIMO (`atual` = `porContrato[0]`; empate na data: o de maior ordem). Menor, maior,
+  **preço médio (média simples)** e variação são calculados SÓ ENTRE CONTRATOS DIFERENTES, sobre o valor atual de cada um.
+  Cada produto aponta o CONTRATO do menor e do maior valor (`contratoMenor`/`contratoMaior`; empate = o assinado por
+  último): colunas "Menor valor" · "Contrato (menor)" · "Maior valor" · "Contrato (maior)" (composição base + aditivo,
+  credor e assinatura na dica) e, no detalhe, os selos "Menor valor"/"Maior valor" no cartão do contrato.
+  **Visão "Por contrato"** (Produtos · **Por contrato** · Itens · Contratos): UMA linha por produto × contrato
+  (`porContrato` de cada produto) com o **Menor valor** e o **Maior valor** DENTRO do contrato (`PrecoContrato.menor` = o
+  aditivo, ou o único preço; `base` = o maior), o **Valor atual** (maior + aditivo), Situação (**Mais recente** = o valor
+  atual do produto | Anterior), Δ preço médio, Qtd. contratada (`PrecoContrato.quantidade` = só as linhas no preço BASE — a
+  linha do aditivo repete a quantidade do item), Linhas, Credor e Assinatura; tudo filtrável, exportável; tocar abre o produto.
+  **COMPARAÇÃO COM OS ITENS DAS MESAS (sem migração):** a referência de um código = o histórico de TODOS os catálogos
+  'historico' (`consultaComprasPorCodigos`, `catalogo-historico-sql.ts` — UMA consulta, os códigos num parâmetro JSON,
+  testada no driver D1 real; `historicoDasLinhas` junta o MESMO contrato importado em dois históricos — a linha repetida
+  entra uma vez) → `produtosDoHistorico` → **`referenciaDoProduto`** (`ReferenciaHistorico`: valor atual + a data, médio,
+  menor, maior, nº de contratos). **`compararComHistorico`** = o valor unitário do item × o VALOR ATUAL (`desvioDaMedia`;
+  nível pela régua da variação sobre o desvio absoluto — até 25% dentro · até 50% atenção · acima alerta);
+  `rotuloComparacaoHistorico` (Acima/Abaixo (25% a 50%)/(mais de 50%) · Dentro do histórico · Sem histórico · Item sem
+  valor) e `textoDivergenciaHistorico` (o erro por extenso). **Mesa → Itens:** `GET /api/dfd/itens` devolve `historico`
+  (`referenciasHistorico` — mapa código → referência, fail-safe; só com a visão Itens aberta) e a coluna **Histórico**
+  (depois de Vlr. unit., só quando algum código tem compra — `CelulaHistoricoCompra`: o desvio na cor, a referência na
+  dica; filtro pelo rótulo) — também na **Consolidada** (o valor unitário MÉDIO da linha × a referência do código, depois de
+  Vlr. unit. médio; o MESMO bloco do detalhe abaixo no banner da linha — `ComposicaoItem`, depois dos avisos). **Detalhe do
+  item** (`ItemDetalhe`, em toda Mesa e na análise): o bloco **Histórico de compra** (`ComparacaoHistoricoCompra`, `ProdutoHistorico.tsx` — carregado só com o item aberto por `GET
+  /api/catalogo/historico/produto?codigo=` (Visualizar numa das Mesas ou no Catálogo), guardado 5 min por código; com
+  código o bloco SEMPRE aparece e diz o estado — "Conferindo…" · "Sem histórico de compra" (nenhuma compra do código nos
+  históricos importados) · falha com "Tentar de novo"; sem código, não aparece): o rótulo + o erro, Valor do item × Valor atual, o médio e a faixa entre contratos e
+  **"Ver no histórico de compra"** → o banner do produto (**`ProdutoHistoricoDetalhe`** — o MESMO do histórico aberto pelo
+  Catálogo, sem abrir o contrato) com o valor do item em cima. Informativo: não entra no Estado nem bloqueia.
   **VARIAÇÃO DE PREÇO (a MESMA régua da Consolidada da Mesa):** `produtosDoHistorico` dá o `variacao` (o
   `coeficienteVariacao` de `itens-consolidados.ts`, agora exportado) e a tabela de Produtos abre com os de MAIOR variação
   primeiro, coluna **Variação** logo após a Descrição (`CelulaVariacao`, filtro por faixa — `rotuloVariacao`: Alta > 50% ·
   Atenção 25–50% · Homogênea · Sem comparação); KPI **"Variação alta"** (danger). Nos **Itens**, a coluna **"Δ preço médio"**
-  (`desvioDaMedia`/`desvioTexto`, cor pela mesma faixa, filtro de faixa) mostra qual contrato puxa a variação. As três
+  (`desvioDaMedia`/`desvioTexto` do valor atual do produto NO CONTRATO do item × o médio entre contratos, cor pela mesma
+  faixa, filtro de faixa) mostra qual contrato puxa a variação. As três
   tabelas são a `DataTable` padrão compacta com TODAS as colunas filtráveis (descrição em `CelulaTexto`).
 - **Leitura do export do sistema de compras** — núcleo PURO **`historico-compra-core.ts`** (testado): `lerCsv` (separador
   pelo cabeçalho, aspas, BOM), `parseHistoricoCompra` (colunas pelo NOME; "$$" = vírgula escapada; "10.0000"/"1.234,56";
@@ -1884,9 +2328,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
-  contagens sobre o véu `--veu-capa`) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
-  **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO como a tela do orçamento: UMA linha de cabeçalho — voltar · nome · ano ·
-  status · fonte; a capa fica no card e na Configuração — e as abas `AbasEspaco` com as ferramentas da aba à direita; `?aba=`).
+  contagens sobre o véu `--veu-capa`; grade fluida `auto-fill minmax(22rem)` com o card até 30rem, o texto proporcional ao card por container query e, com capa, uma faixa desfocada sob o texto) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
+  **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO: UMA linha só (v1.67.0, `AbasEspaco cabecalho`) — à esquerda voltar · nome ·
+  ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview** — `vivo`, em preparação: só o ponto
+  âmbar que RESPIRA e solta duas ondas — `.ponto-selo`, sem ícone; Publicado em verde com `IconCheck`, parado) — v1.69.1:
+  seta, nome, ano e status com a MESMA altura (`Badge tamanho="linha"` + o `h1` — v1.69.2: 24px no desktop e 26px no toque, preenchendo a linha — na mesma linha-caixa =
+  `--h-control-sm` no desktop, 44px no toque); à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
+  **Configuração só com o ícone** (`soIcone`); no celular o título numa linha e as abas na de baixo. A fonte não aparece mais
+  no cabeçalho (só nos cards). A capa fica no card e na Configuração; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
   (`preview`/`publicado`), **`capa`** (data-URL WebP 800×1000, `capaSchema` — só `data:image/(webp|jpeg|png)`), `publicado_em` e
   **`orcamento_visao_id`**. `unidades.pca_id` (FK cascade) — a planilha pertence a um PCA e a unicidade do código virou **por PCA**
@@ -1897,8 +2346,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   viraram um PCA "lista pronta" **publicado** (a tela inicial não muda) e as edições que já uniam DFDs viraram fonte `protocolo`.
 - **Núcleo PURO `pca-core.ts`** (testado): `motivosNaoEnviar` (travas: fonte protocolo · situação que permite · `ano_pca` do
   protocolo = ano do PCA · ter DFD · não estar já em um PCA), `motivosNaoIncorporar` (na Mesa deste PCA · não incorporado · DFD
-  livre — um DFD em UM PCA), `motivoNaoDevolver`, a TRAVA (`estaTravado`/`edicaoPermitidaTravado`/`CAMPOS_LIVRES_TRAVADO`/
-  `mensagemTravaPca`, ver "Mesa do PCA" abaixo), `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
+  livre — um DFD em UM PCA), `motivoNaoDevolver` (enviado ou incorporado — o incorporado segue editável, ver "Mesa do PCA" abaixo),
+  `acaoSugerida(assunto)` (EXCLUSÃO→excluir, ALTERAÇÃO→substituir, resto→
   incorporar), **`consolidarPca(linhas)`** (cronológico; 1 DFD vigente por nº de planejamento; substituir/excluir sem par
   ⇒ aviso), `previsaoDoDfd` (seção PREVISÃO → mês/ano; ANUAL espalha nos 12 meses) e **`agregarDashboard`** (as MESMAS formas de
   `queries.ts`). **Dashboard ÚNICO:** o painel e a tela inicial mostram o MESMO (tudo o que foi incorporado — os itens ATIVOS
@@ -1908,10 +2357,56 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Schemas em `pca-espaco-validation.ts`. **A capa NÃO trafega nas listas:** `PcaEspaco.capa` é a URL **`GET /api/pca/[id]/capa?v=`**
   (versão = `atualizado_em` + tamanho; cache `immutable`, como a foto do usuário); `PcaCapa` dimensiona o ano por container query
   (`cqw`) — cabe no card e na miniatura do cabeçalho.
-- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca`: KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
+- **Abas:** **Dashboard** = `PainelPca` (os MESMOS KPIs/gráficos/`ItemTable` do público — a coluna Seq. mostra o nº do item NO PCA). **Orçamento** = `OrcamentoPca` — SEM avisos no topo (a prévia vira o hint do KPI "Planejado no PCA"; sem orçamento do ano,
+  a tabela diz no vazio): a **ENGRENAGEM** (só ícone, quem Configura o PCA, no FIM da linha de controles, à direita — no
+  PCA × Orçamento depois do Relatório; no Comparativo pelo slot `OrcamentoComparativo.fim`; ponto âmbar = a visão tem
+  valores fora deste orçamento) + a coluna **VÍNCULOS por linha** (com Configurar no Orçamento, na visão Por unidade; a linha com ações do orçamento SEM
+  vínculo mostra "N sem vínculo" em âmbar — calculado na hora sobre os vínculos gravados): com o mouse, a **`DicaFlutuante`**
+  (DS — dica rica por portal, presa à tela; foco também; some ao rolar/Esc) mostra o **`ResumoSemVinculo`** (o total + a lista
+  POR unidade do orçamento, cada ação com a dotação; até 12 — `listaSemVinculo` — e "e mais N") e o toque abre UM banner,
+  **`VinculosDaUnidade`** (DS): o resumo em `StatMini` (Total · Vinculado · Sem vínculo), a seção **Unidades do orçamento** (as ligadas à
+  unidade da linha num acordeão — cada uma abre ali o editor com a unidade CADASTRADA FIXA, `EditorVinculoOrcamento
+  fixo="alvo"`, a lógica invertida da aba Vínculos — + "Adicionar"; a que tem ações sem vínculo leva o selo âmbar "N sem vínculo", com a lista na dica — abrir é vinculá-las:
+  UMA lista só, nunca a mesma unidade duas vezes); na linha "Sem vínculo", a seção **Sem vínculo** (as ações que nenhum
+  vínculo leva, por unidade do orçamento, em âmbar; tocar abre o editor) de todo o orçamento (`fixo="cubo"`, sugestão pré-escolhida); **PDF** no cabeçalho (`BotaoAcao`, com Exportar): KPIs Total ·
+  Vinculado · Sem vínculo e só DUAS tabelas — **Ações vinculadas** e **Ações sem vínculo** (Unidade do orçamento · Ação ·
+  Dotação), cada uma com a linha **TOTAL** em destaque. Núcleo puro **`vinculos-unidade.ts`** (`vinculosDaLinha`,
+  `semVinculoPorAlvo`, `listaSemVinculo`, `blocosVinculosDaLinha` — testado). O editor é MINIMALISTA: o lado fixo pela
+  tela vira um valor estático (`CampoFixo`) e, no banner da linha (`fixosNoContexto` — o acordeão e o título já dizem as
+  duas unidades), some; a lista **Ações n/m · R$** (caixa "todas"; desmarcada = esmaecida, o destino só quando vai a outro
+  vínculo), embaixo "Incluir ações futuras desta unidade" (= "as demais"; ou a nota de quem já as leva) e as de outros
+  vínculos numa linha só com cadeado ("Em outros vínculos: 2 em GGIM", a lista na dica); botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`). A gravação
+  é a da aba Vínculos (`useGravacaoVinculos`, `OrcamentoVinculosAba.tsx`) → `router.refresh` (o orçamento do PCA recalcula)
+  abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração; a MESMA
+  escolha fica À VISTA na barra do PCA × Orçamento — **`SeletorVisaoPca`**, `SelectField compacto` no vão entre a faixa e o
+  Relatório, travado sem Configurar no PCA; os dois gravam pelo hook único `useVisaoDoPca`) e,
+  com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
+  os lançamentos do orçamento do ano (os do Comparativo — sem consulta nova); o Comparativo acompanha a visão do PCA quando
+  ela muda (`visaoInicial` re-sincroniza) e o KPI Dotação diz QUAL orçamento do ano é usado (o importado por último); KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
   Saldo · Comprometido % e o **comparativo por unidade** (`orcamento-comparativo.ts` puro: faixas < 90% verde · 90–100% âmbar ·
-  > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro + Exportar .xlsx) — o CUBO do MESMO ano chega à
-  unidade pelos **Vínculos** (`orcamento_vinculos`). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
+  > 100% vermelho; lançamento sem vínculo → "Sem vínculo"; Todas/Acima/Dentro; XLSX/PDF no rodapé; CORES na tela e no PDF: o Orçamento em azul (`--accent`), o Órgão como está e TODAS as demais no tom da Diferença — `corDaDiferenca`: negativa vermelho, senão verde) — o CUBO do MESMO ano chega à
+  unidade pelos **Vínculos** (`orcamento_vinculos`). **A UNIDADE é o micro** (recebe os DFDs e o orçamento; a linha é
+  pelo ID — `reparticoes.id` —, nunca pela sigla) e **o ÓRGÃO é a soma** das unidades dele: "Ver por" **Unidade | Órgão**
+  (`comparativoPorOrgao`/`origemDoOrgao`, a origem soma igual à linha); na visão Unidade, a coluna Órgão + o selo "Oculta"
+  (duas unidades de MESMA sigla — ex.: a própria de um órgão dual — aparecem distintas). **RELATÓRIO DA COMPOSIÇÃO (PDF A4, didático):** o botão
+  "Relatório da composição (PDF)" na linha de controles do PCA × Orçamento (quem Exporta no PCA) → `GET
+  /api/pca/[id]/orcamento/relatorio` (`relatorioOrcamentoDoPca`, a MESMA base do comparativo — `baseOrcamentoPca` em
+  `pca-espaco.ts`) → núcleo PURO **`orcamento-relatorio.ts`** (`relatorioOrcamentoPca` + `blocosRelatorioOrcamento`, testado):
+  1º o PAINEL DAS DEFINIÇÕES, separado (na VISÃO o resumo por dimensão e, de cada dimensão definida, TODOS os valores
+  um por linha — os definidos [entram] e os NÃO definidos [ficam fora] com lançamentos e dotação; dimensão não definida = entram todos; `definicoes`: nos VÍNCULOS cada unidade do CUBO Vinculada / Vinculada com exclusões (o que ficou fora foi EXCLUÍDO de
+  propósito no vínculo "com as demais") / Parcial (há ação por definir) / Sem vínculo — `situacaoVinculo` —, para QUAL unidade
+  vai CADA ação (`porDestino`; tabela em SUB-LINHAS — `linhasDoCubo`: UMA linha por ação, agrupada por unidade de destino, as
+  excluídas e as não definidas, cada uma com o valor no CUBO) e as fora
+  dos vínculos separadas em excluídas (configurado) × não definidas; e as unidades com contratações com ou SEM orçamento vinculado), depois
+  como se calcula + a conta que FECHA (inteiro = retirado pela visão + atribuído às unidades + sem vínculo), o resumo por
+  unidade (o MESMO "Orçamento considerado" da tabela), PARTE 1 a visão (igual para todas as unidades — por dimensão o que
+  entra e o que fica fora), PARTE 2 cada unidade cadastrada com os vínculos (unidade do CUBO + regra + cada ação: no CUBO,
+  retirado pela visão, considerado; ações fora e o destino delas) e PARTE 3 o que NÃO foi considerado (retirado pela visão
+  por unidade do CUBO, na visão sem vínculo por ação, unidades com contratações e sem orçamento). O PDF é o gerador de
+  DOCUMENTO genérico **`documento-pdf-core.ts`** (layout PURO por blocos — título, seção, subseção, parágrafo, lista,
+  destaques, nota, tabela com SUB-LINHAS — `LinhaDoc.continua` mescla as primeiras colunas com a linha de cima, fundo por
+  grupo, repetidas com "(continuação)" na quebra de página; A4 em pé, nada cortado, cabeçalho de tabela repetido, título nunca órfão, topo + "Gerado por …
+  · Página N de M") + `documento-pdf.ts` (desenha com o pdf-lib, carregado no clique). Enxuta: os KPIs em `StatMini` e, ABAIXO deles, o **COMPARATIVO** em duas
   vistas (`Segmented` no início da linha de controles — `OrcamentoComparativo.inicio`; **PCA × Orçamento** primeiro e aberto, depois
   o Comparativo): **Comparativo** = o MESMO
   `OrcamentoComparativo` da tela do orçamento, sobre o orçamento do ANO do PCA (`orcamentoDoAno` — o importado por último,
@@ -1923,7 +2418,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cartões — travada com dados, 409 no servidor; `Switch` Publicar; travas com link p/ Configurações → Situações [`?aba=`]; visão
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
 - **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
-  scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha) NA LINHA DAS ABAS (`FerramentasAba`, `UnitFilter compacto`).
+  scroll) com esqueleto até chegar. O Dashboard NÃO tem mais o `UnitFilter` na linha das abas (v1.67.0 — redundante com o filtro Unidade dos `FiltrosDashboard`,
+  abaixo dos KPIs; o `?unidade=` só vale na tela pública); com a PRÉVIA ligada, a explicação fica num `Ajuda` (?) ao lado das abas.
 - **Consulta do Dashboard (tabela) — SÓ DADOS, nenhum erro apontado:** o `ItemTable` (painel e tela inicial) é o MESMO
   `DataTable` das demais telas — todas as colunas filtráveis/ordenáveis (faixa em Seq./Qtd./R$, período na data), `nowrap`,
   `density="compact"`, busca por produto/código (vários com ":"); com `origem` mostra Protocolo · Nº DFD
@@ -1933,15 +2429,35 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   qualquer que seja a situação).
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da TELA DO ORÇAMENTO `/painel/orcamento/[id]` →
   `OrcamentoVisoes`; as visões são GLOBAIS — a prévia do Σ usa os lançamentos do orçamento aberto): nome + por dimensão
-  (`DIMENSOES_ORCAMENTO`: Órgão, Unidade, Função, Programa, Ação, Elemento, Código, Ficha, Fonte) os valores escolhidos (`SeletorMultiplo`: "Todos" | "N
-  selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts` puro). Uma coluna
+  (**`DIMENSOES_VISAO`**: Função, Programa, Elemento, Código, Ficha, Fonte — **unidade, ações e órgão NUNCA entram na
+  visão: são dos VÍNCULOS** (`DIMENSOES_DO_VINCULO`; `coerceFiltros` e o Zod as descartam; a migração `0082` as tirou das
+  visões gravadas) — visão e vínculo nunca disputam o mesmo lançamento) os valores escolhidos (`SeletorMultiplo suspenso`:
+  "Todos" | "N selecionados", busca, marcar/limpar; facetas CONECTADAS) — OU dentro, E entre dimensões (`orcamento-visao.ts`
+  puro); `DIMENSOES_ORCAMENTO` (todas) segue como o catálogo da tabela cruzada e dos lançamentos. Uma coluna
   nova do CUBO entra acrescentando a dimensão ao catálogo (e ao parser). Rotas `POST /api/orcamento/visoes` + `PATCH/DELETE
-  /api/orcamento/visoes/[id]` (a lista vem do servidor) (auditoria `orcamento_visao`).
+  /api/orcamento/visoes/[id]` (a lista vem do servidor) (auditoria `orcamento_visao`). **SINCRONIA com o QDD e os PCAs:** a visão guarda o TEXTO dos valores, então `valoresAusentes(linhas, filtros)`
+  (`orcamento-visao.ts`, puro/testado; + `contarAusentes`/`semAusentes`) aponta o que o orçamento ATUAL não traz (QDD reenviado
+  ou texto mudado — esses valores não contam nada): na aba Visões (coluna Filtros "· N ausente(s)" + coluna **PCAs** que a
+  usam — `listarVisoesOrcamento` traz `pcas`), no editor (**`EditorVisaoOrcamento`**, DS — o MESMO na aba Visões e na
+  engrenagem do PCA: as explicações — o que a visão filtra e os PCAs que a usam — na Ajuda (?) do cabeçalho; no corpo só os
+  ausentes com "Remover ausentes" — a dimensão que esvaziaria confirma —, prévia do Σ), e no orçamento do PCA (`orcamentoDoPca.ausentes` → o ponto da engrenagem). **REIMPORTAR = SUBSTITUIR + VISÕES QUE SE
+  ADAPTAM:** a substituição (`POST /api/orcamento/[id]/substituir`) roda **`adaptarVisao(filtros, lançamentos novos)`**
+  (puro, testado) em todas as visões: o valor que o QDD novo não traz ganha o EQUIVALENTE único na mesma dimensão — o mesmo
+  CÓDIGO (antes do " - ") ou o mesmo NOME (código novo) — ACRESCENTADO (nunca tira: a visão é global e o valor ausente não
+  soma nada); ambíguo/sem equivalente = não mexe; auditoria "adaptada ao QDD novo". Excluir uma visão diz quais PCAs voltam ao orçamento
+  inteiro (confirmação e auditoria).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
   Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
-  erro/aviso. A linha abre o **`BannersConsulta`** (contêiner leve, NÃO os hooks de edição da Mesa): a MESMA pilha/ordem/larguras
+  erro/aviso. v1.70.0: o cartão da consulta NÃO tem cabeçalho (`ChartCard` sem `title`) — UMA linha com as abas + a busca dos
+  itens (`BuscaItens` compacta; `ItemTable.busca` controlada pela `ConsultaPca`) + o (?) no fim (`ConsultaPca.fim`/
+  `ItemTable.fim`, `Ajuda botao="sm"` — a explicação que era o subtítulo), todos na altura dos controles; produto, assunto e
+  motivo numa linha (`CelulaTexto`) — linhas na altura padrão. Os itens são TODOS (sem teto — vão ao `DashboardPcaCliente` como UM texto COMPACTO `{c: campos, l: tuplas}` — `itensParaTexto`/`itensDoTexto`, `itens-dash-texto.ts`, testado —, montado UMA vez por versão dentro do memo do `dashboardDoPca`, `DashboardPca.itensTexto`).
+  No PAINEL, **"Fora da soma (N)"** (só com N > 0; `ConsultaDashboard.foraDaSoma`): os DFDs vinculados/da prévia que a
+  consolidação tirou — núcleo puro `foraDaSoma(linhas, consolidacao)` (`pca-core.ts`, testado: vínculos − vigentes; motivo
+  `substituido`/`excluido`/`exclusao` + o outro DFD) → `DashboardPca.foraDaSoma` (`DfdForaDaSoma`, motivo por extenso; o hint
+  do KPI de itens diz "N fora da soma"); só leitura, exportável. A linha abre o **`BannersConsulta`** (contêiner leve, NÃO os hooks de edição da Mesa): a MESMA pilha/ordem/larguras
   do `BannersMesa` (`LARGURA` exportado) com `ProtocoloView modoCapa="consulta"`, `DfdView consulta` e `ItemDetalhe consulta`
   (campos **`CampoCongelado`** — a caixa do campo, SEM cadeado; seções idem; sem estado, pendências, catálogo,
   conciliação, sobrescritos, aviso de incorporado; das assinaturas só o bloco **"Responsável pela solicitação"**); o cabeçalho do
@@ -1952,7 +2468,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `mascararTexto` (CPF/CNPJ/e-mail/telefone/matrícula em TEXTO LIVRE — seções, capa, diff). Rotas GET **públicas**
   `/api/pca/[id]/consulta/dfd/[dfdId]`, `/consulta/protocolo/[protocoloId]` (capa sem CPF/CNPJ) e `/consulta/historico?dfd=|protocolo=`
   → `consultaDfd`/`consultaProtocolo`/`consultaHistorico` (`pca-espaco.ts`): só PCA de fonte protocolo **publicado** (ou
-  usuário logado — o painel vê o Preview) e só DFD/protocolo **incorporado** a ESTE PCA (senão 404).
+  usuário logado — o painel vê o Preview) e só DFD/protocolo **incorporado** a ESTE PCA (senão 404). O banner do protocolo
+  lista só os DFDs que CONTAM (os vigentes — `consolidarPca` com a prévia — com itens ativos; valor = gravado − inativos):
+  a MESMA conta da tabela da consulta e do Dashboard (um "excluir" ou um substituído não soma). O calendário também
+  desconta os itens retirados (`cronogramaPcas`).
   Os gráficos + a consulta são UM cliente, **`DashboardPcaCliente`** (os `itens` trafegam uma vez; `PainelPca` segue server
   com os KPIs e recebe `consulta` como DADOS `{pcaId, protocolos, dfds}`); a `ConsultaPca` é CONTROLADA (`aberto`/`onAbrir`) e
   há UM `BannersConsulta`, compartilhado com a origem dos gráficos.
@@ -1965,11 +2484,47 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`LancamentoOrcamentoPca`) e `planejado` POR ORIGEM (`PlanejadoOrcamentoPca`: um por item — `itemRowConsolidado`, o MESMO
     mapeamento do Dashboard — ou por planilha); `origemDaLinha`/`chaveUnidadeComparativo` (`orcamento-comparativo.ts`) = a
     regra do "Sem vínculo" da agregação.
-  - **Gráficos do Dashboard do PCA** (`ClassificacaoChart`/`MensalChart`/`TopItensChart`/`UnidadeChart`, prop OPCIONAL
-    `onSelecionar(recorte, rótulo)` — sem ela, iguais a antes; a legenda da pizza vira botões ≥44px): `itensDoRecorte`
+  - **Gráficos do Dashboard do PCA — FILTRO CRUZADO + EXPLORADOR (v1.7.0):** tocar numa fatia/barra/legenda FILTRA (alternar)
+    os demais gráficos, os KPIs (agora no `DashboardPcaCliente`; o "Maior item" abre o item) e a Consulta (itens filtrados +
+    os DFDs/protocolos com itens no filtro) — UM filtro por gráfico, E entre eles, cada gráfico desenhado SEM o filtro da
+    própria dimensão (todas as categorias, a escolhida em destaque). Núcleo puro em `origem-dash.ts` (`FiltrosDash`,
+    `alternarFiltro`, `filtrarItensDash`, `agregarItensDash` = a MESMA `agregarDashboard` no navegador — sem filtro valem os
+    números do servidor; testado em `tests/dashboard-graficos.test.ts`). Os filtros em chips removíveis + "Ver origem" (a
+    `OrigemDados` dos itens filtrados) + "Limpar". `ChartCard.onExpandir` → **`ExploradorGrafico`** (DS): ranking de TODAS as
+    categorias (`ranking-grafico.ts`: participação, posição com empate, "abaixo de 2%"), o cartão do detalhe com "Filtrar o
+    Dashboard", a Tabela (posição · itens · valor · %, XLSX/PDF) e o **PNG** (`exportar-grafico.ts`: layout puro + canvas,
+    só com Exportar). Paleta = tokens **`--serie-1…8`** (claro/escuro; `corSerie(i)` p/ HTML, `useChartTokens().serie` p/ o
+    Recharts) e a cor de cada classificação fixa pela ordem SEM filtro (`corDe`). Visual único: Cronograma em `Colunas`, Top
+    e Unidades em `BarrasH` (Unidades: 10 + "Outras N", Itens | Valor); só a rosca segue no Recharts. **v1.8.0:** mais dois gráficos
+    (só com dado) — **Prioridade dos DFDs** (`PrioridadeChart`: cores pela CATEGORIA — `--danger/--warn/--ok/--faint`,
+    `PRIORIDADES_DASH`; `ItemRow.prioridade` = `prioridadeDoDfd` lida UMA vez por DFD em `itensConsolidados`) e **Valor por
+    unidade** requisitante/planilha (`UnidadeRequisitanteChart`, pelo `ItemRow.codigo`) —, as dimensões `prioridade`/`unidade`
+    no `RecorteDash` (`fatiasDash`), o **cronograma em 3 leituras** (`MensalChart` `modo`/`onModo`; desde a v1.18.0: Por
+    mês = SÓ os itens com o MÊS DEFINIDO — também o `porMes` do servidor — · Acumulado · **Distribuído** = os genéricos em
+    1/12 por mês; o recorte de mês só pega os de mês definido), a **PREVISÃO** separada (v1.18.0 — dimensão `previsao` do
+    `RecorteDash`/filtro do topo "Previsão": `previsaoDoItem` = "Mês definido" · Anual · Semestral · Quadrimestral ·
+    Trimestral · "Sem previsão", pelo `ItemRow.periodo`/`anual`, `PREVISOES_DASH` com as cores por token): o quadro
+    **Definição da Previsão** (`DefinicaoPrevisaoChart`, `charts/PrevisaoChart.tsx` — `definicaoDash`: Mês definido ×
+    Genérico × Sem previsão com valor, itens e %, Σ = o valor) e **Contratações Periódicas** (`PeriodicidadeChart` —
+    `periodicosDash`), só no PCA de fonte protocolo; o ano da previsão de cada item = o do PCA (`previsaoDoDfd(secoes,
+    pca.ano)` em `itensConsolidados` e `cronogramaPcas`) — e o **Relatório (PDF)** na barra
+    dos filtros (`blocosRelatorioDashboard`, `dashboard-relatorio.ts`: KPIs, filtros e uma tabela por gráfico com % e TOTAL;
+    com Exportar). O explorador aceita a cor CSS da categoria (`corDe` → número ou cor). Antes (até a 1.6): a
+    prop `onSelecionar(recorte, rótulo)` abria a origem; a legenda da pizza vira botões ≥44px; `itensDoRecorte`
     (`origem-dash.ts`, puro: classificação/unidade de medida com "—" p/ vazio e a fatia "Outros" com todos os rótulos; mês
     com os ANUAIS do ano — 1/12 no gráfico; item pelo `id`, que `TopItem`/`TopDash` passaram a trazer). `ItemRow` ganhou
-    `ano`/`mes`/`anual`. Aviso quando a lista (teto 5.000) não traz todos os itens do KPI.
+    `ano`/`mes`/`anual`. A lista traz TODOS os itens do KPI (sem teto). **v1.9.0 (imersivo):** os FILTROS DO TOPO
+    (**`FiltrosDashboard`**, DS — um `SeletorMultiplo suspenso` por dimensão: Classificação · Mês [os anuais = a opção "Anuais
+    de AAAA"] · Prioridade · Unidade · Unidade de medida; núcleo puro `opcoesDash` [opções CONECTADAS com a contagem, a
+    escolhida zerada fica para desmarcar, "—" no fim] / `chavesDoFiltro` / `recorteDasChaves` [mês = cada mês SEM os anuais,
+    vários pelo `extras`] / `rotuloVarios`) ligam os MESMOS `FiltrosDash` do toque nos gráficos; abaixo deles, os chips, "N
+    itens · R$", Ver origem, Limpar e o Relatório. Abas **Gráficos | Consulta de itens (N)** (`Segmented` + morph; a Consulta
+    saiu de baixo dos gráficos). O gráfico de itens é o **TOP 100** (calculado no navegador sobre os itens sem o filtro de
+    item; `TopItensChart alturaMax` = a lista rola por dentro, com a posição; o explorador e o relatório usam os mesmos).
+    Animações (todas desligam com "reduzir movimento"/`data-motion`): KPIs que correm até o valor (`useContagem`) com o
+    fundo `KpiStat realce`, os cartões entrando em sequência (`.grafico-entrada` + `--atraso`), barras/colunas que crescem
+    (`.grafico-barra`/`.grafico-coluna`) e a rosca com a fatia em foco ampliada e o valor dela no CENTRO. `MensalChart.ativos`
+    = vários meses (`mesesDoRecorte`).
   - **Dashboard de governança da Mesa** (`DashboardMesa`, prop `onAbrir` → a pilha `BannersMesa`): o gráfico único (`BarrasH`
     com `acao` + `LinhaBarra.clicavel` p/ "Sem …"/"Outras N"; `Colunas.onEscolher` no Dado Data) e as linhas do desempenho →
     `graficoMetricas(…).origem(chaves)`/`protocolosDaPessoa` (`mesa-metricas.ts`, a MESMA lista de lançamentos das barras); a
@@ -1980,9 +2535,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (Visualizar o PCA), `DELETE /api/pca/[id]/planilhas/[unidadeId]` — as de escrita pelo papel no PCA (criar/Configuração =
   Configurar; excluir o PCA, a planilha e retirar itens = Excluir; importar planilhas = Importar) + auditoria `pca`.
 
-### Mesa do PCA INDEPENDENTE + incorporação com TRAVA — migração `0034`
+### Mesa do PCA INDEPENDENTE + incorporação (editável — `0077`) — migração `0034`
 - **Modelo (aditivo):** `dfd_protocolos` ganhou `pca_id` (FK `pcas` **set null** — o protocolo está na Mesa desse PCA),
-  `pca_enviado_em`/`pca_enviado_por` e **`pca_incorporado_em`** (≠ null ⇒ INCORPORADO = travado). Excluir o PCA devolve os
+  `pca_enviado_em`/`pca_enviado_por` e **`pca_incorporado_em`** (≠ null ⇒ INCORPORADO — editável, o PCA acompanha). Excluir o PCA devolve os
   protocolos à Mesa principal (`excluirPca` zera os campos no mesmo lote; `pca_dfds` cascade).
 - **Fluxo:** Mesa principal → seleção de protocolos → **"Enviar ao PCA"** (`EnviarAoPca`, na `BarraSelecao`: escolhe um PCA de
   fonte protocolo — sugerido pelo ano —, mostra Vai/Não vai por protocolo com `motivosNaoEnviar`). O enviado **SOME da Mesa
@@ -1990,44 +2545,42 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`carregarMesa(u, pcaId)` — escopo pelas unidades ACESSÍVEIS, não pela ativa do head; itens por `GET /api/dfd/itens?pca=`).
   Na Mesa do PCA (`MesaPca`): `Segmented` **Todos | Enviados | Incorporados**, coluna "PCA" (Enviado [motivos no `title`] /
   Incorporado · ação) e as ações da seleção **Incorporar** (modal com a ação por protocolo: incorporar/substituir/excluir,
-  sugerida pelo assunto; grava `pca_dfds` + a NUMERAÇÃO dos itens + `pca_incorporado_em` num lote atômico — **PERMANENTE**: não
-  há desincorporar) e **Devolver à Mesa** (só o NÃO incorporado) — a barra de seleção de protocolos do PCA tem SÓ essas duas
-  ações (sem o editor de massa). Só o incorporado conta no
+  sugerida pelo assunto; grava `pca_dfds` + a NUMERAÇÃO dos itens + `pca_incorporado_em` num lote atômico) e **Devolver à
+  Mesa** (o enviado e o incorporado — desincorpora) — junto do editor de massa. Só o incorporado conta no
   Dashboard/Orçamento do PCA. Rota única `POST /api/pca/[id]/protocolos` (`acaoProtocolosPcaSchema`, ≤ 50, Manipular no PCA — enviar também na Mesa,
   escopo por unidade, `{alterados, falhas}`, auditoria por protocolo com a ação REAL).
-- **TRAVA (profissional, servidor + tela):** protocolo INCORPORADO ⇒ protocolo, DFDs e itens **somente leitura**; só a GESTÃO
-  (`responsavelId`/`situacaoId`) passa. Servidor: `src/lib/trava-pca.ts`
-  (`travaDeProtocolos`/`travaDeDfds`, lotes ≤ 90) → **423** com `mensagemTravaPca` em `POST /api/protocolo` (start/reenvio),
-  `PATCH`/`DELETE /api/protocolo/[id]`, `POST /api/protocolo/massa` (exceto responsável/situação), `POST /api/dfd` (start-dfd:
-  DFD existente + protocolo destino; append), `PATCH`/`DELETE /api/dfd/[id]` (inclui vincular de/para travado), `POST
-  /api/dfd/massa` e `POST /api/dfd/itens/massa` (por alvo → `falhas`); `POST /api/dfd/existentes` devolve o travado como
-  `{acessivel:false}` (a importação o mostra como "Não sobrescrevível"). Tela: `useProtocoloGravado`/`useDfdGravado` dobram a
-  trava em `podeEditar`/`editavel` + `Callout` âmbar com cadeado; a `DfdsView` esconde vincular/excluir do travado.
-- **Protocolo em um PCA NÃO é excluído (regra do usuário) — ENVIADO ou INCORPORADO:** a Mesa do PCA não tem a lixeira (nem a
-  coluna de ações); o enviado sai pela **"Devolver à Mesa"** e só então pode ser excluído na Mesa principal. Regra pura
-  **`motivoNaoExcluirProtocolo`** (`pca-core`, testada) + consulta **`pcaDeProtocolos`** (`trava-pca`, lotes ≤ 90):
-  `DELETE /api/protocolo/[id]` recusa — **409** o enviado ("Na Mesa do PCA X — devolva-o à Mesa principal para excluir"),
-  **423** o incorporado (a mensagem da trava) — e o `POST /api/protocolo` recusa (409) a re-importação que SUBSTITUIRIA
-  (apagaria) um protocolo de MESMO Id e nº diferente que está em um PCA.
-- **DFD de protocolo em um PCA também NÃO é excluído (regra do usuário):** na Mesa do PCA a lixeira do DFD some (o "Vincular a
-  protocolo" segue para o enviado); `DELETE /api/dfd/[id]` recusa (409 enviado / 423 incorporado — **`motivoNaoExcluirDfd`**,
-  `pca-core`, testada); o reenvio de um protocolo em PCA mantém os gravados fora do envio. Única exceção: o DESFAZER da
-  importação que falhou no meio (`apagarDfd` → `?origem=desfazer`, a garantia tudo-ou-nada por DFD) — só a gravação NOVA
-  deste usuário que ficou PELA METADE (**`gravacaoParcial`**: criada por ele HÁ POUCO — `JANELA_DESFAZER_MIN`=60, pela criação
-  do DFD, que a sobrescrita mantém — e com menos itens gravados que o total declarado no `start-dfd`; um DFD completo ou
-  antigo nunca — um `start-dfd` forjado sobre um DFD antigo da pessoa não vira "desfazer") sai de um protocolo ENVIADO; do
-  incorporado, nunca (o
-  histórico só diz "gravação desfeita após falha" quando é esse caso). Mover o DFD para outro protocolo ("Vincular a
-  protocolo") segue permitido no ENVIADO — como o "Devolver à Mesa", é um caminho de SAÍDA do PCA; fora dele, o DFD volta a
-  poder ser excluído.
+- **PROTOCOLO INCORPORADO 100% EDITÁVEL (migração `0077`, aditiva — sem a antiga TRAVA):** o incorporado faz TUDO o que o
+  protocolo comum faz — editar capa/DFDs/itens/assinaturas, massa nas 3 visões (na Mesa do PCA também), reenviar, sobrescrever
+  DFD, "Atualizar" tratando, mover DFD, unificar/remover itens, EXCLUIR DFD e protocolo (também o só ENVIADO) e **Devolver à
+  Mesa** (desincorpora). O papel decide como sempre (Manipular/Importar/Excluir na Mesa do PCA). O PCA ACOMPANHA na hora
+  (Dashboard, Orçamento, cards, consulta pública) — **`pca-sincronia.ts`** (núcleo puro **`pca-numeracao-core.ts`**, builders em
+  `pca-itens-sql.ts`, testados no driver D1 real):
+  - **O nº do item segue o ITEM:** toda regravação (`start-dfd`/`append`, "Salvar" — `reescreverDfdItens`) guarda o RETRATO
+    do item no nº (`pca_itens.codigo/descricao/unidade/item`, `retratarNumeros`) antes de apagar; `numeracaoDaGravacao`
+    pareia as linhas novas com os nºs livres (`parearNumeros`: código+descrição+unidade+nº do item → código+descrição+unidade →
+    código+descrição → nº+código → nº+descrição; cada nº uma vez) e as linhas levam o nº (`religarNumeros`). Com a gravação
+    COMPLETA, o item novo ganha o próximo nº do PCA (`numerarItensDoDfd`) e o nº que ficou sem item é **BAIXADO**
+    (`pca_itens.baixado_em` — inativo para sempre, nunca reaproveitado; o retirado segue retirado). A massa de itens baixa o
+    nº do removido no mesmo lote.
+  - **O DFD está no PCA do protocolo INCORPORADO em que está** (`pca_dfds.protocolo_id` = por onde entrou; NULL = vínculo de
+    edição legada, nunca tocado): `sincronizarDfdNoPca` (depois de toda gravação/vínculo — estado, idempotente) põe o DFD que
+    entra (a ação dos outros DFDs do protocolo, senão a sugerida), tira o que sai (nºs baixados, o item sem nº) e troca o
+    protocolo do vínculo no mesmo PCA — a AÇÃO passa a ser a do protocolo novo (`trocarProtocoloDoVinculo`, a régua do
+    `vincularDfdAoPca`). O DFD com vínculo LEGADO em OUTRO PCA não entra por incorporação (um DFD em UM PCA). Excluir
+    DFD/protocolo e Devolver baixam os nºs no mesmo lote; `sincronizarAtivosPca` (também a cada gravação COMPLETA e troca — o
+    planejamento/ação podem ter mudado) inativa os não vigentes e REATIVA o substituído quando quem o substituía sai.
+  - **Tela:** no lugar do cadeado, o aviso informativo `avisoIncorporado` nos banners do protocolo e do DFD; as confirmações de
+    excluir/devolver dizem o impacto (`impactoSaidaPca`). Única recusa que fica: a re-importação por Id que FUNDIRIA (excluiria)
+    um protocolo em um PCA em outro já existente no nº novo (409 — devolva-o antes; `pcaDeProtocolos`, `trava-pca.ts`).
+  - **Desfazer** da importação que falhou no meio: segue a régua `gravacaoParcial` (a permissão: Importar em vez de Excluir).
 - **VISÃO DOS MARCADOS (migração `0063`, aditiva — `pcas.mesa_marcados`, default desligado):** em **PCA → Configuração**
   (`PcaConfiguracao`, `Switch` "Mostrar os marcados da Mesa do sistema"; `PATCH /api/pca/[id]` `{mesaMarcados}` +
   auditoria), a Mesa do PCA lista também os protocolos MARCADOS com o ano dele (`ano_pca`, a MESMA régua do filtro de PCA do
   cabeçalho — `filtroAnoPcaProtocolo`/`filtroAnoPcaDfd`) que ainda estão na Mesa do SISTEMA (`pca_id IS NULL`; os de OUTRO
-  PCA não entram). O SERVIDOR decide pela configuração (`anoMarcadosDoPca`, `pca-espaco.ts`): `carregarMesa(u, pcaId)` →
+  PCA não entram; o DFD AVULSO, sem protocolo, nunca — `isNotNull(dfds.protocoloId)`). O SERVIDOR decide pela configuração (`anoMarcadosDoPca`, `pca-espaco.ts`): `carregarMesa(u, pcaId)` →
   `listarProtocolosDoPca(pcaId, anoMarcados)` e `listarDfds`/`listarItensDfds(…, anoMarcados)` (`escopoMesa(pcaId, ano)` =
   `pca_id = P OR (pca_id IS NULL AND ano)`), e o `GET /api/dfd/itens?pca=` lê a mesma configuração. Na `MesaPca`
-  (`marcados`): a coluna **Local** (`localDoProtocolo`, `pca-core.ts` puro — `sistema`/`enviado`/`incorporado`, a fonte única
+  (`marcados`): a coluna **Local** (célula `EstadoPonto` com o texto único `rotuloLocal` — "Incorporado" sem repetir a ação; "· substitui"/"· exclui" só nesses casos; `localDoProtocolo`, `pca-core.ts` puro — `sistema`/`enviado`/`incorporado`, a fonte única
   da coluna, do escopo e das ações; dica com `motivosNaoEnviar`), o escopo **Todos | Na Mesa do sistema | Enviados |
   Incorporados** e, na seleção, **"Enviar a este PCA (n)"** (o `EnviarAoPca` com **`pcaFixo`** — sem o seletor de PCA);
   Incorporar/Devolver seguem só para os enviados. Os da Mesa do sistema seguem na Mesa principal, sem trava (`estaTravado`
@@ -2038,8 +2591,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     do PCA — "· prévia") somam como PRÉVIA os DFDs ainda não incorporados: **`vinculosPrevia`** (`pca-espaco.ts`) = os DFDs
     que não estão em NENHUM PCA dos protocolos ENVIADOS a este PCA e não incorporados + dos MARCADOS na Mesa do sistema, com a
     ação sugerida pelo assunto (`acaoSugerida`) e DEPOIS dos reais na ordem — a MESMA consolidação (`consolidarPca`) dentro de
-    `itensConsolidados` (`previa: {dfds, protocolos}` → `DashboardPca.previa`/`OrcamentoDoPca.previa` → `Callout` "Prévia do
-    PCA" no `PainelPca`/`OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
+    `itensConsolidados` (`previa: {dfds, protocolos}` → `DashboardPca.previa`/`OrcamentoDoPca.previa` → o (?) "Prévia do
+    PCA" ao lado das abas do Dashboard e o `Callout` do `OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
     protocolos/DFDs da prévia (`escopoConsulta`). Nada é gravado; a tela inicial (só publicados) nunca vê a prévia; o
     Calendário (`cronogramaPcas`) segue só com o incorporado.
 - **MESA DO PCA DENTRO DA MESA DO SISTEMA (seletor de Mesa, sem migração):** o 1º item da barra da Mesa principal é o
@@ -2048,8 +2601,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   espaço (**`carregarMesaDoPca`**, `mesa-dados.ts` — `carregarMesa(u, pcaId)` + a ação de cada incorporado + os DFDs em
   outro PCA): escopo, ações, trava, edições `mesa-pca:` e a visão dos marcados conforme a Configuração do PCA (ligada ou
   desligada). As mesas seguem INDEPENDENTES — é só a troca de visão; PCA inexistente/de lista = a Mesa do sistema.
-- **Entrada no espaço do PCA:** o card (`PcaCard` com `href`) mostra o véu + spinner do **`CarregandoLink`**
-  (`useLinkStatus`) enquanto o servidor monta a aba — sem `loading.tsx` (dispararia também na troca de aba). Em
+- **Entrada no espaço do PCA:** o card (`PcaCard` com `href`) mostra o **`CarregandoLink`**
+  (`useLinkStatus`: o card segue à vista — brilho que varre + barra indeterminada accent na base + um ANEL em CSS que gira [`.animate-girar` —
+  o SVG travava com a página ocupada]; só `transform`; parado com "reduzir movimento"; status e fonte em pílulas discretas,
+  a base com nome · Σ · contagens numa linha sobre um degradê curto) enquanto o servidor monta a aba — sem `loading.tsx` (dispararia também na troca de aba). Em
   `itensConsolidados` a PREVISÃO sai UMA vez por DFD (o JSON das seções lido por item estourava a CPU do Worker com
   milhares de itens), os lotes correm em paralelo e os itens trazem só as colunas usadas.
 - **`BarraSelecao` fixa por PORTAL no `body`:** `position: fixed` dentro de um ancestral com `transform` (o morph das abas do
@@ -2087,7 +2642,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `atualizarOrcamento`/`excluirOrcamento`/`inserirOrcamentoItens`); schemas Zod em `orcamento-validation.ts` (puro).
 - **Parser DEDICADO (`.xlsx`):** `parse-orcamento-xlsx(-core/-comum).ts` — detecção de colunas **pelo CABEÇALHO, por
   posição** (Órgão/Unidade/Função/Programa/Ação/Nome Elemento/Código/Ficha/Fonte + valores, em qualquer ordem; colunas
-  MESCLADAS vazias no meio são ignoradas; o CUBO ANTIGO, sem as 5 colunas novas, segue lido; `rotuloColunaOrcamento`), com a leitura
+  MESCLADAS vazias no meio são ignoradas; `rotuloColunaOrcamento`). **Planilha CONFERIDA antes de importar (nova ou reenvio):** as 15 colunas de `COLUNAS_ORCAMENTO` são OBRIGATÓRIAS (`faltam` — o CUBO antigo, sem Função/Programa/Ação/Ficha/Fonte, é recusado) e cada linha é conferida (`erros` {linha, coluna, motivo}: texto vazio, valor que não é número, Ficha só dígitos, Código com número; até `MAX_ERROS_PLANILHA`=500); o `ImportarOrcamento` mostra as colunas que faltam e a tabela dos problemas e trava o Importar ("Planilha com problemas"); o servidor recusa pelo MESMO critério (`orcamentoItemImportSchema` estrito), com a leitura
   SheetJS no navegador (`raw:false`, fora do bundle do Worker). Pula o título e o **rodapé** ("Qtd. total N"), convertendo
   os valores com **`parseValorPlanilha`** (tolerante a en-US `"5,000,000.00"` E pt-BR `"5.000.000,00"`, inteiros com
   milhar e negativos). Validado contra o CUBO real: **1.345 lançamentos, 18 órgãos, 39 unidades** (bate com o "Qtd. total"
@@ -2103,7 +2658,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   SÓ os **cards 4:5** (`OrcamentoCard` — SÓ INFORMAÇÃO, sem imagem: ano + nome; **dotação ATUALIZADA** (inicial +
   suplementação − anulação) com a barra do **% empenhado**; empenhado e saldo; rodapé órgãos · unidades · lançamentos ·
   data) numa grade compacta (2 colunas no celular → 6 no 2xl) + o card **"+"** (`OrcamentoNovoCard`, editor) que importa
-  o `.xlsx` (`Dropzone` → prévia com **Nome + Ano** obrigatório → grava → **abre a tela do orçamento novo**). O fluxo de
+  o `.xlsx` (`Dropzone` → prévia com **Nome + Ano** obrigatório → grava → **abre a tela do orçamento novo**). **UM ano = UM
+  orçamento:** no "+", um ano que já existe (`ImportarOrcamento existentes` — todos, sem o filtro do cabeçalho) vira a
+  SUBSTITUIÇÃO daquele orçamento (o fluxo do Reenviar); e `comandosSubstituirLancamentos` apaga, no MESMO lote, os demais
+  orçamentos do ano (duplicatas antigas + lançamentos) — nada residual; a resposta diz quantos e quantas visões adaptou. O fluxo de
   importação é UM contêiner, **`ImportarOrcamento`** (lançador + prévia + lotes com progresso + avisos flutuantes; cada
   valor novo de `iniciar` abre o lançador — o mecanismo da Mesa), nos dois modos: **novo** e **reenvio** (`alvo`). Os
   indicadores vêm de UMA agregação no banco (`selecionarResumos` em `orcamento.ts`: `listarOrcamentos`/`getOrcamento`, sem
@@ -2115,9 +2673,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   manda só os campos que ela usa) — as **ferramentas de cada aba ficam NA MESMA LINHA das abas, à direita**
   (`FerramentasAba`: portal para o slot da barra; o estado segue na aba). Tabelas no **padrão da Mesa** (`DataTable
   scrollInterno` + `density="compact"`: corpo rola por dentro e as **linhas por página seguem Configurações → Tabelas**).
-  **Lançamentos** (`OrcamentoLancamentos`): TODAS as colunas do CUBO (Órgão · Unidade · No sistema · Função · Programa ·
-  Ação · Elemento · Código · Ficha · Fonte + valores com filtro por faixa), vínculo de cada linha resolvido UMA vez
-  (`vinculoPorId`); na barra: busca (`SearchField compacto`, `predicadoBusca`) + **XLSX/PDF** (o que está filtrado); detalhe
+  **Lançamentos** (`OrcamentoLancamentos`): **Órgão (cadastro) · Unidade (cadastro)** (pelos Vínculos com as ações —
+  `comVinculos`, no servidor) + TODAS as colunas do CUBO (Órgão · Unidade · Função · Programa · Ação · Elemento · Código ·
+  Ficha · Fonte + valores com filtro por faixa) + **UMA COLUNA POR VISÃO salva** (Sim/Não — o lançamento entra na visão;
+  `aplicarVisao` uma vez por visão); a EDIÇÃO da tabela e as edições salvas como na Mesa (chave **`CHAVE_LANCAMENTOS`** =
+  `orcamento-lancamentos:tabela` → tela Orçamento em `telasDaChave`); XLSX/PDF no rodapé; na barra: busca
+  (`SearchField compacto`, `predicadoBusca`); detalhe
   SÓ-leitura `OrcamentoItemDetalhe`; no RODAPÉ da tabela (`acoesRodape`, como o "Importar" da Mesa; editor) o botão
   **"Reenviar planilha"** → `ImportarOrcamento alvo`: a prévia compara atual × nova (nome/ano travados), confirma e
   `substituirOrcamentoEmLotes` grava a planilha nova num orçamento TEMPORÁRIO (os mesmos lotes all-or-nothing) e só então
@@ -2184,27 +2745,63 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **Vínculos** (`OrcamentoVinculosAba` → `OrcamentoVinculos scrollInterno`): os textos
   DISTINTOS deste orçamento (o vínculo segue GLOBAL); na barra: busca + "Vincular N sugestões". **Visões**
   (`OrcamentoVisoes`): tabela das visões (filtros + lançamentos e Σ que cada uma pega DESTE orçamento) → clicar abre o
-  editor ao lado (no desktop, da ALTURA da tabela — até o fim do display: nome e ações fixos, as dimensões rolam por dentro;
-  cada dimensão é um `SeletorMultiplo` na altura padrão dos controles); na barra: "Criar visão". As visões vêm do SERVIDOR (`listarVisoesOrcamento`; salvar/excluir →
+  editor no BANNER padrão (`Modal` lg: nome, o aviso dos Vínculos, as dimensões em grade — cada uma um `SeletorMultiplo
+  suspenso` — e, no rodapé, a prévia do Σ + Cancelar/Salvar; nada estoura a página); na barra: "Criar visão". As visões vêm do SERVIDOR (`listarVisoesOrcamento`; salvar/excluir →
   `router.refresh`) — o antigo `GET /api/orcamento/visoes` foi removido. Erros em `AvisoFlutuante` (não empurram a
   tabela). `getOrcamentoItens(id)` é sempre de UM orçamento. Ícone `IconWallet`. Aba em `abas.ts` (`orcamento`) + nav em
   `AppShell`.
-- **Vínculos Órgão/Unidade do CUBO → cadastro do sistema (migração `0030`):** o CUBO traz Órgão/Unidade como TEXTO
-  próprio ("FUNDO MUNICIPAL DE EDUCACAO DE RIO V…", "2 - SECRETARIA MUNICIPAL DE EDUCAÇ…", "26 - FMACL"). Tabela
-  **`orcamento_vinculos`** (`tipo` `orgao`|`unidade` + `chave` = texto normalizado, **único** por tipo+chave; `orgao_id`/
-  `reparticao_id` FK **set null**) — **GLOBAL** (não por orçamento): o vínculo vale para todos os orçamentos, inclusive os
-  próximos anos; alvo NULL = sem vínculo. Núcleo PURO **`orcamento-vinculo.ts`** (`chaveVinculo`, `nomeSemCodigo` tira o
-  "N - " do CUBO, **`sugerirAlvo`** = nome/sigla iguais ⇒ certeza, senão Jaccard ≥ `LIMIAR_SUGESTAO` 0,6 — empate ⇒ nada,
-  ignora ocultos; `linhasVinculo` agrupa os textos distintos com nº de lançamentos + Σ dotação + contexto do órgão;
-  `mapaVinculos`/`alvoDoTexto`). Acesso em `orcamento.ts` (`listarVinculosOrcamento`, `alvosVinculoOrcamento` — órgãos +
-  unidades sem a "Geral", `definirVinculosOrcamento` = UPSERT `ON CONFLICT(tipo,chave)` em lotes de 16 linhas (80 params),
-  conferindo o alvo no tipo certo). Rota **`PUT /api/orcamento/vinculos`** (Configurar no Orçamento, `vinculosOrcamentoSchema` ≤ 200,
-  auditoria). UI: aba **"Vínculos"** da tela do orçamento → componente **`OrcamentoVinculos`** (DS,
-  catalogado): tabela filtrável Estado (Vinculado/Sugestão/Sem vínculo) · Tipo · No orçamento · **No sistema** (`select`,
-  unidades por `optgroup` de órgão, ocultos só se já vinculados; alvo ≥44px no mobile) · Lançamentos · Dotação, com
-  **"Aceitar SIGLA"** por linha e **"Vincular N sugestões"** em massa; gravação otimista (pendentes valem só sobre a base de
-  vínculos em que foram feitas). O vínculo aparece na coluna **"No sistema"** dos lançamentos e no bloco "No sistema" do
-  `OrcamentoItemDetalhe` (prop `vinculo`). Ícone `IconLink`. `lotesDeIds` agora é exportado por `reparticoes.ts`.
+- **VÍNCULOS do orçamento CRIADOS pelo usuário (migrações `0030` + `0079` + `0080` + `0081`):** a UNIDADE é o micro. Cada vínculo
+  liga um texto de Unidade do CUBO ("2 - SECRETARIA MUNICIPAL DE EDUCAÇ…") a UMA unidade cadastrada, com as AÇÕES dele — a
+  MESMA unidade do CUBO pode ter VÁRIOS vínculos (as ações divididas entre unidades cadastradas). As ações de um vínculo
+  são uma lista EXPLÍCITA ou **"as DEMAIS"** (as que nenhum outro vínculo da unidade pegou — também as que vierem nos
+  próximos orçamentos —, menos as de fora; um só por unidade do CUBO); uma ação vai a UMA unidade (nunca conta duas vezes;
+  a explícita vence as demais). A `0080` CONVERTEU os vínculos de antes sem perder nada: cada um virou "as demais" com as
+  mesmas ações de fora (os textos desvinculados saíram — não são vínculo). O ÓRGÃO não se vincula: **ver por órgão = a
+  SOMA das unidades vinculadas** — as dimensões **"Órgão (cadastro)"/"Unidade (cadastro)"** (`orgaoSistema`/`unidadeSistema`
+  em `DIMENSOES_ORCAMENTO`) que **`comVinculos`** põe em cada lançamento no servidor (página do orçamento,
+  `dadosComparativo`, o orçamento do PCA) valem nas visões, no comparativo e nos lançamentos. Tabela **`orcamento_vinculos`**
+  (`chave` = texto normalizado; `reparticao_id` FK set null; **`acoes`** JSON das explícitas, NULL = as demais;
+  **`acoes_fora`**; **único por chave + unidade cadastrada**) — **GLOBAL** (vale para todos os orçamentos). Núcleo PURO
+  **`orcamento-vinculo.ts`**: `unidadesDoOrcamento` (as unidades do CUBO com as ações), `mapaVinculos` +
+  **`unidadeDoLancamento`** (pela AÇÃO — o comparativo PCA × Orçamento usa a mesma régua), `alvosDaUnidade` (a Sigla da tabela
+  cruzada — várias unidas por "/"), `linhasVinculos` (cada vínculo com as ações e a dotação que leva neste orçamento),
+  `semVinculo` (as unidades com ações sem vínculo + a SUGESTÃO `sugerirAlvo` para as sem nenhum), **`conflitoVinculo`** (a
+  REGRA, a mesma na tela e no servidor: uma unidade cadastrada por vez, um só "as demais", lista não vazia e sem ação de
+  outro vínculo), `comVinculos`, `lerListaAcoes`. Acesso em `orcamento.ts` (`listarVinculosOrcamento`,
+  `alvosVinculoOrcamento`, `criarVinculosOrcamento`/`editarVinculoOrcamento`/`excluirVinculoOrcamento` — conferem a unidade
+  e a regra contra os gravados e o próprio pedido; a exclusão APAGA do banco e confirma pelo `RETURNING` — 409 se não saiu).
+  **Sempre limpo:** a `0081` apagou os vínculos sem unidade e o gatilho `orcamento_vinculos_unidade_excluida` (BEFORE DELETE
+  em `reparticoes`) apaga os vínculos da unidade cadastrada excluída por QUALQUER caminho — nada fica com NULL. As rotas
+  devolvem a lista GRAVADA (`{vinculos}`), aplicada na hora pela tela. Rotas **`POST /api/orcamento/vinculos`** (`{vinculos ≤ 200}` — o "Vincular
+  N sugestões" manda vários) e **`PATCH`/`DELETE /api/orcamento/vinculos/[id]`** (Configurar no Orçamento, auditoria). UI:
+  aba **"Vínculos"** → **`OrcamentoVinculos`** (DS): `Segmented` **Vínculos (N)** (unidade do orçamento · unidade e órgão do
+  cadastro · ações — "Todas as demais"/"As demais, menos N"/"k ações" · lançamentos · dotação vinculada; tocar ou o lápis
+  edita) | **Sem vínculo (M)** (as unidades com ações sem vínculo, "Aceitar SIGLA" e "Vincular" — já abre o editor com a
+  unidade e as ações que faltam); "Novo vínculo" e "Vincular N sugestões" na barra das abas; o editor
+  **`EditorVinculoOrcamento`** (DS, num `Modal`): unidade do orçamento, unidade cadastrada (por órgão; sigla repetida mostra o
+  órgão — `useRotuloUnidade`), "Incluir as demais ações" e as ações livres (`SeletorMultiplo`), a regra na hora (trava o
+  Salvar, com "Abrir o vínculo com …" — o que a regra acusa) e a prévia do que leva; Excluir. `OrcamentoVinculosAba` = o contêiner (uma gravação por vez + `router.refresh`).
+- **VÍNCULOS POR VISÃO (v1.61.0, migração `0102`, aditiva — `orcamento_vinculos.visao_id` FK cascade [NULL = o PADRÃO; os
+  gravados viraram o padrão], único `(chave, reparticao_id, IFNULL(visao_id,0))`, `orcamento_visoes.vinculos_proprios` JSON
+  das chaves):** a visão SEGUE o padrão em cada unidade do CUBO até definir a unidade por conta própria — aí valem os vínculos
+  DELA naquela unidade (inclusive nenhum). Núcleo puro (`orcamento-vinculo.ts`, testado em `tests/vinculos-por-visao.test.ts`):
+  **`vinculosDaVisao(todos, visao)`** (sem visão = o padrão — TODO leitor usa: página do orçamento, `comparativo-dados`,
+  `baseOrcamentoPca`, `OrcamentoComparativo` [refaz `comVinculos` no navegador quando a visão escolhida tem próprios]),
+  `aplicarNoEscopo` (criar/alterar pela unidade de origem/excluir com o `conflitoVinculo`), **`planoVinculos`** (por destino
+  — padrão e/ou visões —, a lista nova de cada unidade; a visão que ainda segue o padrão parte dele e, com o padrão no escopo,
+  é pulada; TUDO OU NADA com o nome da visão), `escopoEscolhido` ("esta" · "todas" · "escolher", "0" = padrão) e
+  `textoEscopo`. Gravação única **`gravarVinculosOrcamento(pedidos, escopo)`** (`orcamento.ts`; builders
+  `comandosDestinoVinculos` — apaga e reinsere a lista do destino, 14 por INSERT — e `comandoPropriasVisao`, testados no D1
+  real) e **`usarPadraoNaVisao`**; as rotas `POST/PATCH/DELETE /api/orcamento/vinculos*` aceitam `escopo` (ausente = onde o
+  vínculo está; criar = o padrão) e devolvem `{vinculos, visoes:[{id, proprias}]}` (`vinculosGravados`); `POST
+  /api/orcamento/vinculos/padrao` `{visaoId, chave}`. Excluir a visão leva os dela. Telas: **`EscopoVinculo`** (DS, em
+  `EditorVinculoOrcamento.tsx` — "Salvar em" Esta visão/Padrão · Todas · Escolher [`SeletorMultiplo`; "· própria"], selo
+  "Próprio desta visão" + "Usar o padrão") no editor do vínculo (`contexto`); aba **Vínculos** com a **Visão** na barra e a
+  coluna Origem (Padrão | Desta visão); o **banner da visão** (`EditorVisaoOrcamento`) com `Segmented` **Filtros | Vínculos**
+  (a MESMA `OrcamentoVinculos` com o contexto da visão; `FerramentasNoLugar` — a barra fica no banner); coluna **Vínculos**
+  na lista de visões; o Orçamento do PCA usa os vínculos da visão do PCA (o banner da linha pergunta onde salvar).
+  `useGravacaoVinculos(vinculos, visoes)` guarda também os `proprias` gravados (`visoesAtuais`). O (?) ÚNICO das visões =
+  **`AjudaVisoes`** (abas Visões e Vínculos, cabeçalho do banner da visão, PCA × Orçamento).
 
 ## Tarefas (quadro estilo Trello) — migração `0042`
 - **O que é:** o módulo **`tarefas`** (`ABA_KEYS`/`NAV_MODULOS`, ícone `IconKanban`; a `0042` concede a aba a quem tem a
@@ -2280,10 +2877,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Aba Calendário** (**`CalendarioTarefas`** — ver FASE 5).
   - **Aba Lista**: colunas novas Checklist/Estimativa (faixa)/Vínculo; **seleção** + `BarraSelecao` fixa +
     **`BarraEdicaoMassaTarefas`** (`BarraEdicaoMassa.tsx`, a MESMA `Moldura`) → `POST /api/tarefas/massa` (≤ 50/chamada,
-    `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); botão **XLSX** (`exportar-tarefas.ts`:
-    `linhasPlanilhaTarefas` puro/testado + SheetJS por import dinâmico).
+    `{alterados, falhas}`, um quadro por vez, auditoria por tarefa `origem:"massa"`); XLSX/PDF no rodapé da tabela
+    (`TabelaTarefas.nomeExportacao`).
   - **Mesa ⇄ Tarefas:** `/painel/mesa?abrir=protocolo:<id>|dfd:<id>` abre o banner (`DfdsView.abrirInicial`; a URL é
-    limpa); o botão **`TarefasDoVinculo`** ("Tarefas (abertas/total)") no rodapé do DFD gravado e do protocolo gravado lista
+    limpa); o botão **`TarefasDoVinculo`** (ícone + "abertas/total") no CABEÇALHO do DFD gravado e do protocolo gravado lista
     as tarefas ligadas (`GET /api/tarefas/do-vinculo`) e **"Criar tarefa"** num quadro → `/painel/tarefas/<q>?nova=tipo:id`
     (a tarefa NOVA abre já vinculada); `?tarefa=<id>` abre aquela tarefa no quadro. Sem tarefas nem quadros, o botão some.
   - **Rotas novas:** `POST /api/tarefas/[id]/checklist` + `PATCH`/`DELETE …/checklist/[itemId]`, `POST …/comentarios` +
@@ -2312,13 +2909,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     aberta, mesmos responsáveis/observadores/etiquetas/vínculo/estimativa, checklist desmarcado). BEST-EFFORT; as rotas
     devolvem `atualizar` (o quadro recarrega). `avisarSobreTarefa`/`avisarAtribuicao` (responsável NOVO na criação, edição e
     massa; menção NOVA no comentário/edição; "comentou" aos que acompanham).
-  - **Notificações (`notificacoes.ts`):** `notificar` BEST-EFFORT (nunca o próprio ator); **as de prazo são DERIVADAS NA
-    LEITURA** (`contarNaoLidas` no layout e `listarNotificacoes`: tarefas abertas em que a pessoa é responsável, nos quadros
-    dos grupos dela, prazo de 30 dias atrás até amanhã → gravadas pela `chave`, então o "lida" persiste); as lidas saem após
-    60 dias. `GET /api/notificacoes` (`?contar=1` = só o número) e `PATCH` (`{ids ≤ 90}` | `{todas:true}`).
-    **`SinoNotificacoes`** (cabeçalho do `AppShell`): contador do layout, reconta ao trocar de tela e ao voltar à janela
-    (sem polling); ao abrir carrega a lista (`ItemNotificacao`: foto do autor ou ícone do tipo, cor do semáforo nas de
-    prazo); tocar marca lida e abre a tarefa (`linkTarefa` → `?tarefa=`); "Marcar todas como lidas".
+  - **Notificações (`notificacoes.ts`):** ver a seção própria **"NOTIFICAÇÕES"** (em Integrações) — o sino, o tempo real,
+    a limpeza e o e-mail.
   - **Aba Dashboard** (1ª aba; `DashboardTarefas` por `next/dynamic`, esqueleto = `DashboardMesaEsqueleto`): KPIs (abertas
     + spark, atrasadas, vencem em até 2 dias, concluídas no mês + % no prazo, tempo médio até concluir) + Saúde dos prazos,
     **Carga por pessoa** (tocar filtra o Responsável do quadro), Tarefas por lista (âmbar acima do WIP), Abertas por
@@ -2761,7 +3353,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `useImagemCarrega` de `FundoQuadro.tsx`; sem imagem, degradê da cor do quadro) e, por cima, só **ilhas opacas**:
     - **`FaixaQuadro`** (topo translúcido com desfoque): voltar · título `TextoNoLugar ajustar` (inteiro; a dica traz grupo
       e Abertas/Atrasadas/Concluídas — os contadores e o selo do grupo saíram da tela) · favorito; à direita só ícones —
-      **`MembrosQuadro`** (fotos; tocar filtra pela pessoa), `FiltrosTarefas buscaNoPainel` (a busca dentro do painel, gatilho
+      **`MembrosQuadro`** (a MESMA **`PilhaFotos`** do cabeçalho — `PilhaFotos.tsx`, DS: fotos `sm` com a primeira por cima, o ponto ao vivo, leque e "+N"; tocar filtra pela pessoa), `FiltrosTarefas buscaNoPainel` (a busca dentro do painel, gatilho
       só ícone), as `FerramentasAba` da vista e o **`MenuQuadro`** "…" (Itens arquivados · Imagem de fundo · Automações ·
       Configurações — rola até `#secao-fundo`/`#secao-automacoes` — · Copiar link); os chips de filtro ativos numa linha
       fina abaixo, só quando há.
@@ -2769,7 +3361,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       Configuração | **Mudar de quadros** (`TrocarQuadro` com `gatilho`); troca pela MESMA lógica do `AbasEspaco`
       (`useTrocaAba` + `ConteudoAba`, exportados).
     - Conteúdo: as listas direto sobre a foto (`QuadroKanban naMoldura reservaInferior`: 272px, espaço de 12px,
-      `.rolagem-fina`, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
+      a barra de rolagem nativa, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
       `group-data-[com-imagem]/moldura`); Lista/Calendário/Dashboard/Configuração num **`PainelMoldura`** opaco (a tabela e
       o calendário descontam a pílula no `reservaInferior`).
     - Cartão sem o nº do ticket na face (fica na dica/detalhe), `rounded-lg` com a sombra do Trello; ícone de template do pé
@@ -2909,8 +3501,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - Métricas da Mesa: `GET /api/mesa/execucao?ano=` (`execucaoMesaSchema`, Visualizar a Mesa do sistema) — o histórico de execução
   (reenvios e ações) dos protocolos da Mesa em tuplas `[protocolo, pessoa, dia, tipo, n]` + as pessoas (foto + apelido).
 - Pessoas/sobrescrita (migração `0032`): `GET /api/usuarios/[id]/foto` (a foto do perfil, `exigirUsuario`, cache
-  `immutable` pela versão `?v=`), `POST /api/dfd/existentes` (`existentesDfdSchema {numeros ≤ 2000}` → os DFDs já
-  cadastrados em QUALQUER unidade; o de unidade sem acesso só `{numero, acessivel:false}`), `POST /api/dfd` `start-dfd` com
+  `immutable` pela versão `?v=`), `POST /api/dfd/existentes` (`existentesDfdSchema {numeros ≤ 2000, processo?}` → os DFDs já
+  cadastrados em QUALQUER unidade; o de unidade sem acesso só `{numero, acessivel:false}`; com `processo {numero, idExterno}`,
+  também o PROTOCOLO já cadastrado do PDF — os DFDs vivos e o rastro do de mesmo nº/Id: a RE-IMPORTAÇÃO pelo "Importar
+  protocolo" soma na conciliação os DFDs que não vieram no PDF e continuam nele, com o aviso "use Reenviar protocolo para
+  tirá-los" — análise = gravado), `POST /api/dfd` `start-dfd` com
   `origem:"sobrescrita"` + `escolhas {mantidos, editados}` (histórico) e SEM `protocoloId` = mantém o protocolo do DFD, e
   `GET /api/protocolo/[id]?completo=1` também com **`sobrescritos`** (o rastro, com o protocolo atual de cada um).
 - Padronização (migração `0038`): `/api/catalogo/unidades-medida*` e `/api/catalogo/classificacoes*` — ver "Padronização:
@@ -2927,19 +3522,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `--sit-*` [KPIs do PCA, erro de campo, tons violet/orange do `Badge`, "Limpar" dos filtros], feedback `--ok/--warn/
   --danger/--info`, avatar via `avatarVar` em `src/lib/semantic.ts`); tintas
   saem por CSS `color-mix` com `--tint-target`/`--glow-target`.
-- **ESPAÇAMENTO por tokens — UMA régua para o sistema inteiro** (`globals.css`): **`--pad-canvas`** = a margem do conteúdo,
-  IGUAL no topo, nas laterais e na base (a mesma distância do cabeçalho, do menu e da borda do display — 16px; 12px no
-  celular), usada pelo `<main>` do `AppShell` (`p-[var(--pad-canvas)]`; no celular a base soma a navegação inferior + a
-  área segura), pelas laterais do cabeçalho, pela tela inicial pública (largura total) e pela margem dos modais;
+- **ESPAÇAMENTO por tokens — UMA régua para o sistema inteiro** (`globals.css`): **`--pad-canvas`** = a margem LATERAL do conteúdo
+  (a distância do menu e da borda do display — 16px; 12px no celular) e **`--pad-canvas-y`** (v1.68.1) = a margem do
+  conteúdo ao CABEÇALHO e à BASE do display — a METADE (8px; 6px compacto e no celular; 12px confortável): o primeiro e o
+  último componente já trazem o respiro dos próprios controles/cartões, e assim as 4 distâncias ficam PROPORCIONAIS. O
+  `<main>` do `AppShell` e o da tela pública usam `px-[var(--pad-canvas)] py-[var(--pad-canvas-y)]` (no celular a base soma
+  a navegação inferior + a área segura); as medidas de altura até o fim do display (`reservaAteORodape`, `ALTURA_NO_HTML`,
+  `useAlturaTela` pelo padding real do `<main>`, a `BarraSelecao` fixa, os avisos flutuantes, o painel "Novo fluxo") contam
+  o `--pad-canvas-y`; o `--pad-canvas` segue nas laterais do cabeçalho e na margem dos modais;
   **`--gap-block`** = o espaço ENTRE os componentes (raiz das telas `space-y-[var(--gap-block)]`, grades de cartões/KPIs
   `gap-[var(--gap-block)]`, vão entre os banners da pilha do `Modal`) — 12px; **`--pad-card`** = o respiro interno dos
   cartões/quadros/banners (`ChartCard`, `KpiStat`, `StatCard`, `StatMini`, `LinkCard`, seções dos banners e o corpo/
   cabeçalho/rodapé do `Modal`) — 14px; **`--h-header`** = a altura do cabeçalho (56px) — a faixa da marca na sidebar tem a
   MESMA altura (a borda de baixo continua a do cabeçalho) e os itens do menu alinham com a marca. A **densidade do ADM**
   (Aparência) muda todos juntos (compacta 12/8/12 · confortável 24/16/20). Medidas em JS leem o MESMO token
-  (`tokenPx`, `src/components/espacamento.ts`): a altura das tabelas com rolagem interna (`DataTable`: o respiro do
+  (`tokenPx`, `src/components/espacamento.ts`): a altura das tabelas com rolagem interna (`DataTable`: o respiro de baixo do
   `<main>` + a altura REAL do rodapé — sem rolar a página) e o lugar da `BarraSelecao` fixa. Nada de `space-y-6`/`p-5`
   soltos para separar blocos — o `--gap-col` antigo foi unificado no `--gap-block`.
+  **RESPIRO IGUAL NOS 4 LADOS (v1.68.0):** todo cartão/quadro/banner/seção com `rounded-card` usa `p-[var(--pad-card)]` —
+  NUNCA `px-*`/`py-*` diferentes nem um recuo extra por dentro (o `KpiStat` não tem mais `pl-2`); o cabeçalho, o corpo e o
+  rodapé do `Modal`/`JanelaFlutuante` também. Estado vazio GRANDE (ícone + texto + botão) = `p-10`. Ficam de fora só as
+  linhas/itens compactos (botões de lista, chips, avisos flutuantes, painéis de `Dropdown`), já simétricos ou de altura fixa.
+  **LINHA DE TÍTULO (v1.69.0):** a linha do título de uma tela/espaço (nome, voltar, selos, abas — a barra do `AbasEspaco` e
+  os cabeçalhos das telas de módulo/ADM) leva a classe **`.linha-topico`** (`globals.css`, sem camada): abaixo dela o
+  respiro é `--pad-canvas-y` — o MESMO que há entre o cabeçalho do app e ela —, vencendo o `space-y-[var(--gap-block)]` da
+  raiz. Toda linha de título nova usa a classe.
 - **Tema por atributo `data-theme`** (`light`/`dark`) — next-themes `attribute="data-theme"`;
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.
@@ -2963,9 +3570,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   outra; abaixo de 400px, Dado e Medida em linhas próprias) + os gráficos em HTML por token **`BarrasH`** (rótulo | barra | valor; linhas
   clicáveis — o que o toque faz no nome acessível, `acao`, padrão "ver a origem dos dados"; com `ativa`, a linha marcada é um
   FILTRO de alternar), **`Colunas`** (colunas verticais com grade, rótulos — no máximo ~8 no eixo, a margem do eixo cabe o rótulo
-  em R$ — e dica no hover/foco/toque; com `onEscolher`, a coluna zerada só mostra a dica) e **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (fecha no `pointerdown` fora — vale no toque do iOS; fechar pelo Esc ou pelo `fechar` do conteúdo (escolher, limpar, ordenar) com o foco dentro do painel o devolve ao gatilho; `className` do invólucro e `id`/`title` do
+  em R$ — e dica no hover/foco/toque; com `onEscolher`, a coluna zerada só mostra a dica) e **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (o painel fica PRESO ao gatilho enquanto aberto — acompanha a cada quadro o gatilho e o próprio tamanho, e o lado acima/abaixo é decidido UMA vez ao abrir: marcar um item, um banner que muda de altura ou uma rolagem nunca o soltam; fecha no `pointerdown` fora — vale no toque do iOS; fechar pelo Esc ou pelo `fechar` do conteúdo (escolher, limpar, ordenar) com o foco dentro do painel o devolve ao gatilho; `className` do invólucro e `id`/`title` do
   gatilho opcionais; `papel` "menu" [padrão] | "dialog" [busca/grade — escolher pessoa ou data: `role="dialog"` com nome,
-  `aria-haspopup="dialog"`]; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
+  `aria-haspopup="dialog"`]; `"listbox"` = a lista de uma `Selecao`; `gatilho` = atributos a mais do botão — teclado, foco, `role`/`aria-*`, `disabled`; `ancora` = o elemento em que o painel se alinha; `folha` = sobe de baixo na largura da tela; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
   conteúdo em função recebe `fechar` e `{teclado}` = aberto por Enter/Espaço — quem usa leva o foco para dentro do painel),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), **`PeriodoPicker`** (o seletor de período — gatilho no visual do
   `SelectField compacto` com o prefixo "Período", painel `dialog` com o **`PeriodoCorpo`**: atalhos Todo o período | Hoje | Esta
@@ -2974,7 +3581,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   DE/ATÉ); alvos de 44px no toque; aberto pelo teclado, o foco vai à opção marcada
   e volta ao gatilho ao escolher/Esc; a conversão em datas é pura — `intervaloDoPeriodo`, `src/lib/periodo.ts`),
   `MultiSelectHeader`,
-  `Tabs` (swipe), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
+  **`Tabs`** (`horizontal` = sublinhado que desliza, faixa com esmaecimento nas bordas | `lateral` = no desktop a lista à esquerda com o fundo que desliza até a ativa; monta SÓ a aba aberta — as visitadas ficam escondidas, guardam o rascunho; o painel ENTRA pelo lado da troca — `animate-aba-direita/esquerda`; `alturaTela` = no desktop no máximo até o fim do display, descontando o respiro dos contornos em volta — a página não rola, o painel rola por dentro e a altura segue o conteúdo; `url` = a aba no parâmetro da URL; `separado` (lateral) = no desktop a lista é um cartão PRÓPRIO com a altura FIXA do display e o conteúdo outro cartão ao lado, com a altura que precisa; teclado ←/→/↑/↓/Home/End com o foco junto; `Tab.dica` = a dica; arrastar o dedo troca, menos em campos/tabelas/faixas que rolam de lado), **`AvisoFlutuante`** (o aviso PADRÃO de feedback transitório — erro de importação, leitura em andamento,
   resultado, falha de ação: PEQUENO no canto inferior do display, sem deformar nada ao redor; portal numa região única
   `#avisos-flutuantes` — `.avisos-flutuantes` em `globals.css`, acima da navegação inferior do celular, da `BarraSelecao`
   fixa via `--reserva-rodape` e do rodapé da tabela da Mesa via `--rodape-tabela`; cor/ícone pelo token de feedback, `carregando` = spinner, `onClose` + `duracao` = fecha
@@ -2993,7 +3600,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   filtros múltiplos com ":"** — `opcoesDaBusca` (opções: "168:170:174" marca EXATAMENTE esses — o termo igual vence o
   "contém"; o mesmo formato do "Copiar planejamentos") e `predicadoBusca` (buscas de LINHAS: catálogo, orçamento, membros
   do grupo, itens do painel — QUALQUER termo; sem acento/caixa, com cache); no `MultiSelectHeader` a busca segue o
-  EXCEL: os resultados começam marcados e "Aplicar"/Enter aplica SÓ os resultados marcados; no `SeletorMultiplo`, Enter
+  EXCEL: os resultados começam marcados e "Aplicar"/Enter aplica SÓ os resultados marcados; no `SeletorMultiplo` (`suspenso` = a lista num painel flutuante `Dropdown`; `textoVazio` = o rótulo sem nada marcado), Enter
   marca os encontrados); **`Column.valores`** = coluna MULTI-VALOR (a linha casa se QUALQUER valor casa — ex.:
   Estado); **`filter:"range"` + `Column.numero`** = colunas R$ com o **`RangeFilterHeader`**; coluna filtrada fica
   **MARCADA** (gatilho `GatilhoFiltro` em chip accent + sublinhado; `aria-sort`) e o rodapé mostra **"Limpar filtros (N)"**;
@@ -3005,12 +3612,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   — nunca `innerWidth < 1024`, que diverge do CSS com a fonte do navegador ampliada);
   **`edicoes`** (`EdicoesDaTabela`, opt-in) = EDIÇÃO da tabela no cabeçalho + EDIÇÕES SALVAS (colunas + ordenação + filtros;
   pessoais ou públicas; a padrão abre a tabela) — as tabelas da Mesa;
-  **`exportar`** (`{nome}`, opt-in) = o botão **Exportar** (.xlsx) no rodapé: as linhas À VISTA (filtros das colunas, na ordem,
-  todas as páginas) e as colunas visíveis da edição em uso — o número como número, os vários valores unidos, as datas em
-  dd/mm/aaaa (`linhasPlanilhaTabela`, `exportar-tabela.ts`);
+  **`exportar`** (`{nome}` | `false`; padrão LIGADO, nome "Tabela") = os botões **XLSX** e **PDF** no rodapé
+  (**`BotaoExportar`**, `ExportarTabelas.tsx`): as linhas À VISTA (filtros das colunas, na ordem, todas as páginas) e as
+  colunas visíveis da edição em uso — no .xlsx o número como número, os vários valores unidos, as datas em dd/mm/aaaa
+  (`linhasPlanilhaTabela`) e, no fim, a **linha TOTAL** (`linhaTotal`: a soma de cada coluna numérica — valores e quantidades —, "TOTAL" na 1ª coluna não somada; **`Column.total: false`** deixa em branco o que não se soma — valor unitário, médias, %, identificadores como Seq./Ticket); no **PDF** a MESMA linha TOTAL vai em DESTAQUE (`destaques`) e (`tabelaParaPdf` → `baixarTabelaPdf`, `exportar-pdf.ts` com o pdf-lib só no clique;
+  layout PURO e testado em **`exportar-pdf-core.ts`**): A4 deitado, título + "N linhas · filtros: …" no topo de cada página,
+  o cabeçalho das colunas repetido, larguras pelo conteúdo (a fonte desce de 8 a 5,5 antes de quebrar), texto QUEBRADO por
+  palavra na célula (nada truncado — a linha alta continua na página seguinte), números formatados como na tela
+  (`Column.formatarFaixa`, senão R$ nas faixas e número nas demais) e à direita, zebra, **COLORIDO como a tabela** (`PaletaPdf` lida dos tokens do tema claro — no escuro, `PALETA_PADRAO`; cabeçalho no `--accent-soft` com o título em accent, a cor de cada célula pela **`Column.corPdf`** — Estado das tabelas da Mesa/DFDs, faixas do PCA × Orçamento — e os negativos em `--danger`; `corRgb` aceita hex/rgb()/var(--token); `destaques` = linhas em negrito, ex.: o TOTAL do Comparativo), e o rodapé **"Baixado por <nome>
+  (matrícula N) em dd/mm/aaaa às hh:mm (horário de Brasília) · Página N de M"** (quem = `useQuemExporta`, o contexto
+  `ConfigTabelas` do layout do painel; na tela pública, sem o nome);
+  tabela larga demais sai em FAIXAS de colunas com as congeladas repetidas (`faixasDeColunas`); caracteres fora das
+  fontes do PDF viram o equivalente (`textoParaPdf`). Some com `false` ou fora da permissão (`PermissaoExportar`). A
+  tabela cruzada do Comparativo usa o MESMO `BotaoExportar` no rodapé (a matriz à vista; no PDF, o nome da linha, a sigla e
+  o total repetidos em cada faixa);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
-  **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
+  **tabela `border-separate border-spacing-0` com as bordas nas CÉLULAS** (v1.72.1 — com `border-collapse` as células presas tremiam e a borda escorregava ao rolar de lado); a caixa de marcar é a classe **`.caixa-marcar`** (`globals.css`: o desenho do sistema com o raio `--radius-chip`, no máximo um círculo — também no `MultiSelectHeader`; o `Checkbox` usa `rounded-chip`); **coluna de MARCAÇÃO sempre presa à esquerda** (v1.71.1: `sticky left-0` em toda tabela `selectable`, com a divisa quando não há congeladas; a linha com fundo opaco) — v1.73.2: com `scrollInterno` o `thead` é `sticky top-0 z-30` (acima das células presas do corpo, z-10) e o contêiner `isolate`: o "marcar todos" fica fixo no TOPO e à esquerda); **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
   **`scrollInterno`** = no desktop a tabela OCUPA o espaço até o fim do display DESDE O PRIMEIRO QUADRO (altura TOTAL fixa,
   coluna flex: o CORPO rola por dentro com o `thead` `sticky`, o rodapé fica rente ao fim com qualquer nº de linhas; sem
   linhas, a mensagem fica no meio do espaço) — medida em `useLayoutEffect` (antes da pintura) com o topo pela cadeia de
@@ -3026,8 +3644,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de protocolos, DFDs e itens: TODA linha na MESMA altura (`--h-control-sm`) e o cabeçalho baixo;
   **`Column.nowrap`** = sem quebra de linha, a coluna ganha a LARGURA DO CONTEÚDO (dados curtos: nº, sigla, badges,
   valores) — usado em todas as tabelas de protocolo/DFD/itens/PCA; textos longos seguem com `minWidth` + `line-clamp`),
-  `Dropzone` (importação: soltar OU clicar p/ escolher), `ResponsaveisEditor` (N padrões + N temporários; cada um com
-  matrícula/função + nomeação portaria/decreto/lei + link; período/estado), `Modal` (trava o scroll da página; `acoesCabecalho` = slot
+  `Dropzone` (importação: soltar OU clicar p/ escolher), **`ListaVinculos`**/**`EditorVinculo`**/**`CelulaResponsaveis`**
+  (`VinculosResponsaveis.tsx` — os responsáveis da planilha única: os vínculos com o estado, o editor do vínculo com a
+  pessoa da planilha ou cadastrada na hora, a célula dos vigentes), **`BannerCadastro`** (o banner de um cadastro — órgão,
+  unidade — com os dados por cadeado e só o que mudou ao salvar) + **`SecaoBanner`**/`ValorCampo`, `Modal` (trava o scroll da página; `acoesCabecalho` = slot
   de botões à esquerda do X, ex.: cadeado; **`cabecalho`** = cabeçalho FIXO rico (ReactNode) que substitui o `titulo`
   textual — ex.: `DfdCabecalho`/`ProtocoloCabecalho` com nº + badges (tipo/Id) + planejamento/assunto; + painel `lateral`
   mestre-detalhe: 2º banner ao lado, com **fechar animado** simétrico ao abrir + **`lateral2`** = 3º banner à direita
@@ -3106,8 +3726,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`ResumoDetalhesPapel`** (as restrições: "N restrições" compacto ou por extenso), **`GruposDaPessoa`** (os grupos de uma pessoa, com as telas de cada um) e **`AcessoDaPessoa`** (o "Ver acesso": o que
   a pessoa abre e faz em cada grupo),
   `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox [`indeterminado` = a caixa PARCIAL]/**`CampoLista`** [lista em chips — várias referências da
-  renovação]/**`SelectField`** [`<select>` nativo no MESMO visual do campo — ex.: a classificação que a unidade de medida
-  indica] — ícone + foco accent), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
+  renovação]/**`SelectField`** [a **`Selecao`** no MESMO visual do campo — ex.: a classificação que a unidade de medida
+  indica] — ícone + foco accent), **`Selecao`** (`Selecao.tsx`, v1.62.0 — o *drop-in* do `<select>`: as MESMAS props
+  [`value`, `onChange(e)` com `e.target.value`, `disabled`, `id`, `aria-*`, `onBlur`, `style`, `className` = a caixa] e os
+  MESMOS filhos [`<option>`/`<optgroup>`/componentes que os renderizam — `OpcoesUnidades`], mas a lista ABERTA é a do
+  sistema: o `Dropdown` (`papel="listbox"`) ALINHADO à caixa inteira (`ancora` — o `SelectField` passa a moldura, com o
+  rótulo do compacto dentro) e o gatilho `role="combobox"`, a escolhida em accent com o check, grupos com DIVISOR,
+  desabilitada esmaecida com o `title` na dica, BUSCA (e, na folha, o título) FIXA no topo acima de 12 opções, linhas de 32px
+  no desktop (`lg:pointer-fine`) e 44px no toque, entrada de 120 ms (`animate-selecao-entra`; parada com "reduzir
+  movimento"); numa tela estreita com mais de 8 opções a lista vira FOLHA que sobe de baixo (`Dropdown.folha`, sobre o
+  `--scrim`). Extras por `data-*` na `<option>`: `data-detalhe` (2ª linha), `data-aviso` (ponto âmbar + o motivo) e
+  `data-cor` (o ponto na cor — `corSegura`; também no gatilho); `acoes` = botões fixos no RODAPÉ da lista (`SelectField.acoes`
+  — ex.: "Editar esta visão"/"Nova visão" na Visão do PCA × Orçamento, `SeletorVisaoPca.onEditar` → `VisaoOrcamentoPca.editorPedido`;
+  `atributosVisao` em `orcamento-visao.ts` = resumo + PCAs que usam + ausentes). Teclado ↑/↓/Home/End/Enter/Espaço/Esc
+  + digitar para saltar; FECHADA, ↑/↓ abrem e digitar já troca a opção (v1.64.0). O `<select>` nativo fica ESCONDIDO depois do gatilho — a fonte das opções e
+  do valor; escolher = o setter nativo + o `change` real. O 1º desenho já traz o texto lido dos filhos (sem piscar). Núcleo
+  puro `selecao-core.ts` [`proximaHabilitada`, `typeahead`, `filtrarOpcoes`] testado. TODO select de formulário do sistema
+  usa a `Selecao` — inclusive o "Linhas por página" das tabelas; ficam nativos SÓ o `SeletorCelula` [milhares de linhas] e o
+  `SeletorFiltro` [o quadrado só-ícone]. O Biome sabe que ela é um controle [`noLabelWithoutControl.inputComponents`]), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
   **`CelulaClassificacao`**/**`CelulaUnidadeCadastrada`** (`EstadoCelula.tsx` — a classificação automática e a unidade
   cadastrada do item na Mesa → Itens), **`ComparacaoUnidades`**/**`EditorUnidadeMedida`** (`UnidadesMedidaView.tsx`) e
   **`ClassificacaoDosItens`**/**`EditorClassificacao`** (`ClassificacoesView.tsx` — a padronização do Catálogo; os editores
@@ -3116,25 +3752,29 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   por token), `Pager`, `LinkCard`, `LinkExterno` (ÚNICA âncora externa do app — `target=_blank rel=noopener`;
   ex.: verificar assinatura digital), `StatCard`, `StatMini` (mini banner de cabeçalho — 1 por informação, no head do
   DFD/Protocolo: total de itens/valor total/total de DFDs/somatória; `tone` destaca divergência),
-  `RelatorioErros` (banner/`Modal` com todos os erros de um DFD/Protocolo listados p/ **copiar** — `navigator.clipboard`
-  + fallback de seleção; alimentado por `linhasRelatorioDfd`/`linhasRelatorioProtocolo`, puros),
+  `RelatorioErros` (banner/`Modal` de texto copiável — hoje o relatório de DIFERENÇAS do reenvio),
   `PcaPicker` (define o **PCA do processo** — `select` dos PCAs cadastrados; adivinha o ano pela descrição e avisa;
-  obrigatório), `MensagensDfd` (painel lateral com TODAS as conferências do DFD — erro/atenção/acerto agrupadas;
-  clicar rola/destaca a âncora no banner do DFD; alimentado por `mensagensDfd` puro) + `BotaoVerMensagens` (botão +
-  numeração no rodapé), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
+  obrigatório), **`PainelPendencias`** (o banner ÚNICO de pendências de Protocolo/DFD/Item — a árvore capa › DFDs › itens,
+  tocar leva ao lugar, "Copiar / PDF" com a escolha dos problemas e a prévia; os acertos recolhidos no DFD) +
+  **`PreviaDocumento`** (a prévia em HTML dos blocos de um PDF de documento) + **`IndicadorPendencias`** (o botão ÚNICO de erros/atenção
+  dos banners — chips vermelho/âmbar; alterna o painel de pendências) + **`BotaoAcao`** (a
+  ação dos rodapés/cabeçalhos dos banners: SÓ o ícone, o nome na dica, `contagem` no canto; `texto` = a principal com o
+  rótulo a partir de 640px), `ItemDetalhe` (painel lateral com todas as infos de UM item da Seção 4 — abre ao clicar na
   linha; mesmo lugar do painel de mensagens; item REPETIDO: os iguais lado a lado + "Ver item" + "Unificar neste item"), `TipoDfdPicker` (conjunto de tipos de DFD — chips de alternância; no
   catálogo: envio/massa/item), `CatalogoItemDetalhe` (painel lateral do item do catálogo — infos + tipos editáveis),
   **`CalendarioTarefas`**/**`BarraCalendario`**/**`MiniMes`**/**`EventoBanner`**/**`EventosTarefa`**/**`EditorEvento`** (o
   Calendário por eventos — ver Tarefas FASES 5–7), **`JanelaFlutuante`** (janela ancorada ao ponto clicado, arrastável; folha no
   celular — a criação rápida do Calendário), **`AssinaturaCalendario`** (exportar/assinar `.ics`),
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
-  um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
+  um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`; `cabecalho` = o título do
+  espaço na MESMA linha, as abas à direita; as opções aceitam `icone`/`soIcone`; os blocos do conteúdo da aba com o espaço
+  padrão `--gap-block` — `ConteudoAba.className`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
   **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — ordenação no cabeçalho, colunas congeladas, %, mapa
   de calor e origem de cada número; TODAS as colunas iguais — com `edicao`, a própria planilha vira o editor: arrastar o
   nome com a coluna presa ao cursor e a SOMBRA do destino, alfinete, olho e largura pela borda; o Comparativo do orçamento),
   **`Ajuda`**/`TopicoAjuda` (o "(?)" — botão discreto que abre a explicação de uma tela num painel; tira o texto de
-  instrução da tela), **`SeletorEdicoes`**/**`SalvarEdicao`** + hook `useEdicoesTabela` (`EdicoesTabela.tsx` — as EDIÇÕES
+  instrução da tela; o ícone é centrado por `justify-center` — o gatilho do `Dropdown` é `inline-flex`, nunca `grid`), **`SeletorEdicoes`**/**`SalvarEdicao`** + hook `useEdicoesTabela` (`EdicoesTabela.tsx` — as EDIÇÕES
   SALVAS de uma tabela: pessoais ou públicas — quantas quiserem; todos veem e usam as públicas, até como a sua padrão; só o dono ou o ADM altera —, a padrão do usuário), **`useConfirmacao`** (`Confirmacao.tsx` — `cancelar` = o rótulo do "não"; a
   CONFIRMAÇÃO do sistema num `AvisoFlutuante` com Cancelar/Confirmar, no lugar do `confirm()` do navegador; o
   `AvisoFlutuante` ganhou `acoes`),
@@ -3142,7 +3782,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   acontecendo), **`EstadoCelula`** (`EstadoResumo`/`EstadoPonto`/`EstadoProcessando` — a célula "Estado" de TODA tabela),
   **`BarraEdicaoMassa`** (edição em massa — análise/protocolo gravado/Mesa; `versao` = o campo "Gravado × novo" da
   sobrescrita, na análise do protocolo), **`DfdRodape`** (rodapé fixo do banner do
-  DFD: estado + ações + mensagens + Fechar + principal), **`DfdPainelDireito`** (painel da direita do DFD: mensagens /
+  DFD em UMA linha: indicador + ações só ícone + principal), **`DfdPainelDireito`** (painel da direita do DFD: mensagens /
   item / histórico), **`ProtocoloView`** (CORPO ÚNICO do banner do protocolo — análise e gravado), `CampoCadeado`
   (+ **`CadeadoBotao`**, o cadeado reusado por campos, itens e SEÇÕES do DFD). Hook `useConformidade` (conformidade do
   DFD aberto com o catálogo, lazy). Contêineres com dados (fora do catálogo, como o `DfdsView`): `ProtocoloUploadForm`,
@@ -3151,14 +3791,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
-  `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).
+  `Badge.tsx` (v1.71.1: o selo comum usa `rounded-chip` — o raio do ADM; os selos/contadores das células — `MaisN`, ABC, etiquetas da Lista, o botão de copiar — também) fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA); **`tamanho="linha"`** =
+  o selo da linha de título (a altura do botão de voltar: `--h-control-sm` no desktop, 44px no toque; o raio
+  `--radius-control` — o arredondamento dos controles definido pelo ADM em Aparência; com `vivo`, o ponto
+  `.ponto-selo` — respira e solta duas ondas, parado com "reduzir movimento").
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`
   (async, `force-dynamic`) injeta o `<style>` sem flash (`src/lib/aparencia.ts` cacheado +
   `theme.ts` `aparenciaToCss` **anti-XSS por allowlist**). Migração `0008`. O **"Restaurar padrão"** (`DELETE
   /api/admin/aparencia`) zera SÓ as chaves VISUAIS (`CHAVES_VISUAIS`/`semChavesVisuais`) — a identidade, as tabelas e os
   blocos irmãos do MESMO registro (`avaliacao`, `integracoes`) ficam (antes o registro inteiro virava "{}").
-- **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin) reúne o **novo**
+- **Configurações do ADM (tela única):** `/painel/configuracoes` (`ConfiguracoesAdmin`, admin — `Tabs layout="lateral" separado alturaTela url="aba"`: abas com ícone e dica num cartão FIXO à esquerda (sempre a mesma altura), o conteúdo num cartão separado, cabe no display sem rolar a página, `?aba=` reabre na aba; as explicações no "(?)" — `Ajuda`; excluir PCA pela confirmação do sistema) reúne o **novo**
   + atalhos. Abas: **Identidade** (nome/subtítulo/favicon → mesmo slot `identidade` do `aparenciaSchema`, salvo via
   `PATCH /api/admin/aparencia`; favicon rasterizado p/ PNG ≤64px no cliente), **Papéis** (`PapeisAdmin` — ver "PAPÉIS"),
   **Tabelas** (as LINHAS POR PÁGINA com que as
@@ -3301,19 +3944,139 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`resend-config.ts`** (`resendDaConfig`, leitura FRESCA). `POST …/testar {alvo:"resend"}`: confere o domínio do remetente
   (`verified`; a chave "só envio" dá 401 na lista → segue) e manda um e-mail de TESTE a quem testou; enviado = verificado.
   Núcleo PURO **`email-core.ts`** (modelos com o texto ESCAPADO e link ABSOLUTO — `urlAbsoluta` só aceita caminho interno;
-  `emailDaNotificacao`/`emailCadastroPendente`/`emailAcessoLiberado`/`emailTeste`; preferências `email:notificacoes` em
-  `preferencias_tabela` — `lerPrefsEmail`/`querEmail`, padrão LIGADO só p/ atribuída, menção, convite, vence amanhã,
-  atrasada e lembrete). Envio em **`email.ts`** (BEST-EFFORT, nunca lança): `enviarEmailsPendentes` = as notificações do
-  sino com `email_enviado_em` NULL, < 3 tentativas e das últimas 48 h (`email-sql.ts`, testado no D1 real) → RESERVA
-  (compare-and-set: duas passadas nunca repetem) → envia em LOTE às pessoas ATIVAS que querem o tipo (as demais ficam
-  tratadas sem envio) → falha devolve a pendente com +1 tentativa. Gatilhos: `notificar` (depois da resposta —
-  `depoisDaResposta` agora em **`segundo-plano.ts`**), o **cron** `POST /api/integracoes/email/cron` (o `worker.ts` chama as
-  duas rotas de cron; autenticação comum **`cronAutorizado`**, `cron.ts`) que DERIVA os avisos de prazo/lembrete de 40
-  pessoas ativas por passada em rodízio (`derivarDaPessoa`) e envia os pendentes, o cadastro pendente (e-mail aos ADMs
-  ativos) e a aprovação pendente → ativo (`PATCH /api/admin/usuarios/[id]`, e-mail à pessoa). A `0065` marca o histórico
-  como tratado (nada de enviar o passado). Perfil → **"E-mail"** (só com o Resend ativo): `Switch` + os tipos, gravado pelo
-  `PUT /api/preferencias/tabela`. Setup/DNS em `docs/INTEGRACOES.md` (recebimento DESLIGADO — o MX da raiz é o e-mail do
-  domínio). Testes: `tests/resend-email.test.ts`.
+  `emailDaNotificacao`/`emailAcessoLiberado`/`emailCodigo`/`emailTeste`; as preferências moram em
+  `notificacoes-config-core.ts` — ver "NOTIFICAÇÕES"). Envio em **`email.ts`** (BEST-EFFORT, nunca lança):
+  `enviarEmailsPendentes` = as notificações do sino com `email_enviado_em` NULL, < 3 tentativas, das últimas 48 h e com a
+  reserva LIVRE (`email-sql.ts`, testado no D1 real) → RESERVA com validade (`email_reservado_em`, compare-and-set: duas
+  passadas nunca repetem) → envia em LOTE o que o ADM manda por e-mail às pessoas ATIVAS que não desligaram (as demais ficam
+  tratadas sem envio) → **só o envio CONFIRMADO marca `email_enviado_em`** (`comandoConfirmarEmails`); falha devolve a
+  pendente com +1 tentativa; a reserva não confirmada (o Worker caiu) VENCE em 10 min e volta à fila — nada se perde. O
+  aviso de quadro PRIVADO de outra pessoa não sai. Gatilhos: `notificar` (depois da resposta — `depoisDaResposta` em
+  **`segundo-plano.ts`**; só quando algum aviso tem e-mail) e o **cron** `POST /api/integracoes/email/cron` (gatilho PRÓPRIO
+  `2-59/5` — ver NOTIFICAÇÕES). O acesso liberado (`PATCH /api/admin/usuarios/[id]`) só sai com o aviso `acesso` ligado pelo
+  ADM. A `0065` marca o histórico como tratado (nada de enviar o passado). Setup/DNS em `docs/INTEGRACOES.md` (recebimento
+  DESLIGADO — o MX da raiz é o e-mail do domínio). Testes: `tests/resend-email.test.ts`.
+- **NOTIFICAÇÕES — controle central, e-mail mínimo, limpeza no banco e TEMPO REAL (migração `0083`, aditiva:
+  `notificacoes.email_reservado_em`, índices por tarefa/quadro/(pessoa, id) e o parcial dos pendentes, tabela
+  `notificacoes_dispensadas`; a migração encerra os e-mails pendentes velhos/desistidos):**
+  - **Catálogo + Configurações → Notificações (ADM):** núcleo PURO **`notificacoes-config-core.ts`** — `CATALOGO_AVISOS`
+    (cada aviso: rótulo, descrição, grupo Tarefas · Calendário · Mesa e PCA · Administração e o padrão), por aviso os canais
+    **Sino** (o aviso existe), **E-mail** e **Pode desligar** (a pessoa desliga o e-mail no Perfil). Padrão = **e-mail
+    MÍNIMO**: só atribuída, atrasada, convite, protocolo designado, cadastro pendente (não desligável) e acesso liberado (só
+    e-mail, não desligável); o resto só no sino. `resolverNotificacoes` (qualquer JSON → a config resolvida),
+    `compactarNotificacoes` (só o que difere do padrão — blob `configuracoes`, chave `notificacoes`, sem migração), `noSino`,
+    `querEmail(cfg, prefs, chave)`, `emailsDaPessoa`, `lerPrefsEmail` (`{ligado, desligados, destino}` — o formato antigo
+    `tipos` vira desligados). D1 em `notificacoes-config.ts` (cache 60 s, fail-safe = padrões); rota `GET/PATCH/DELETE
+    /api/admin/notificacoes` (`exigirAdmin`, `configNotificacoesSchema`, auditoria com o diff). Tela **`NotificacoesAdmin`**
+    (aba "Notificações": por grupo, as três chaves por aviso — desligar o sino trava o resto —, Salvar/Padrão, Ajuda).
+    **Perfil → Avisos por e-mail** lista só o que o ADM manda por e-mail (os obrigatórios travados) e grava os desligados.
+  - **Gravação (`notificacoes.ts`):** `notificar` → `gravarAvisos`: o tipo desligado no sino não é gravado, o sem e-mail
+    já nasce tratado (`NovaNotificacao.semEmail` → `email_enviado_em`), o INSERT devolve quem recebeu de fato (`returning`;
+    a chave repetida não volta) e só essas pessoas recebem o aviso AO VIVO. A massa de tarefas e as automações juntam os
+    avisos de TODAS as tarefas num `notificar` só (`avisosSobreTarefa`, `seguidoresDasTarefas` — 2 consultas para todas,
+    no lugar de um `getTarefa` por tarefa) e a massa só avisa quem PASSOU a ser responsável/da equipe (`jaResponsavelEm`/
+    `jaComEquipe`). Os DERIVADOS (prazo — agora também **"vence hoje"** —, lembrete, versão da extensão) saem de UMA
+    derivação por pessoa a cada 5 min (`INTERVALO_DERIVAR`, por isolate; o cron força), sem os DISPENSADOS, com `ORDER BY`
+    nos tetos de 200; o lembrete de evento de tarefa CONCLUÍDA não dispara. A contagem é 1 `COUNT` (falha = `null`: a tela
+    mantém o último número).
+  - **Acesso:** a lista e a contagem só trazem o aviso de quadro VISÍVEL (privado = só o dono) dos grupos em que a pessoa
+    abre Tarefas/Calendário (`acessivel`); mover a tarefa de quadro leva os avisos junto (`comandosMoverQuadro` atualiza o
+    `quadro_id`). **Link canônico** `/painel/tarefas/abrir/<id>` (`linkTarefa(id)`): acha o quadro ATUAL da tarefa (a
+    movida continua abrindo; a excluída diz que não existe) — também no "Copiar link"; o `QuadroTarefas` abre o `?tarefa=`
+    a cada chegada NOVA (o aviso de outra tarefa do MESMO quadro abre).
+  - **Limpar de verdade:** `DELETE /api/notificacoes` (`{ids}` | `{limpar:"lidas"|"todas"}`, só as da pessoa) →
+    `comandosExcluirNotificacoes` (`notificacoes-sql.ts`, testado no D1 real): apaga do banco e DISPENSA no mesmo lote os
+    derivados (a chave não volta por `DIAS_DISPENSA`=40). **Retenção** no cron (`comandosRetencaoNotificacoes`): lidas > 30
+    dias, não lidas > 90, o **teto de 200 por pessoa** (as lidas mais antigas saem antes) e as dispensas vencidas; a fila do
+    e-mail sem o que desistiu ou ficou velho (`comandoEncerrarEmailsVelhos`). A lista é PAGINADA (`?antes=<id>&filtro=
+    nao-lidas|todas&limite=20` → `{itens, naoLidas, mais}`) e a tela guarda até `MAX_AVISOS_NA_TELA`=100.
+  - **TEMPO REAL:** Durable Object **`CaixaNotificacoes`** (`src/lib/caixa-notificacoes-do.ts`, um por pessoa —
+    `idFromName("u<id>")`, WebSocket com HIBERNAÇÃO + auto-resposta do "ping"; até 10 abas; binding `CAIXA_NOTIFICACOES` +
+    `migrations new_sqlite_classes` no `wrangler.jsonc`, exportado pelo `worker.ts`). O `worker.ts` atende
+    `/api/notificacoes/ao-vivo` ANTES do Next: só do próprio site (`origemDoProprioSite`), com a sessão de uma pessoa ATIVA
+    (cookie `pca_session` → SHA-256 → `sessoes`, no binding D1 cru) → a caixa dela. `avisarAoVivo(ids)`
+    (`notificacoes-ao-vivo.ts`, depois da resposta, até `MAX_AO_VIVO`=25 por requisição) pinga as caixas a cada aviso
+    gravado, lido ou limpo — as outras abas e aparelhos acompanham. Núcleo puro `ao-vivo-core.ts` (`lerCookie`,
+    `esperaReconexao` 2 s → 60 s). Sem o canal (dev, falha), a tela confere a cada 60 s com a aba à vista.
+  - **Crons separados:** `triggers.crons` = `*/5` (Trello) e `2-59/5` (e-mails/avisos), cada um uma invocação com o próprio
+    limite de consultas (`worker.ts` → `ROTAS_CRON` por `evento.cron`). O dos e-mails roda a retenção sempre e, com o
+    Resend ativo, deriva os avisos de 4 pessoas por passada (`PESSOAS_POR_PASSADA`, ~7 consultas cada — abaixo das 50).
+  - **SINO moderno (`SinoNotificacoes`):** desktop = painel preso ao sino (`Dropdown papel="dialog"`, 400px); celular =
+    folha (`Modal`). Abas **Todas | Não lidas (N)**, filtro por tipo (`ChipsEscolha`), avisos **agrupados por dia** (Hoje ·
+    Ontem · Esta semana · Antes — o dia de Brasília) com os **repetidos juntos** ("+N", expande), **hora relativa** ("há 5
+    min", a completa na dica — núcleo puro `notificacoes-tela-core.ts`), ações no hover/foco (sempre à vista no toque):
+    **marcar lida/não lida** e **excluir**; rodapé **Marcar todas como lidas · Limpar lidas · Limpar tudo** (confirma; a tela
+    tira na hora e o banco só é limpo depois do **Desfazer** de 6 s — ou ao sair da página, `keepalive`) e **Configurar**
+    (Perfil; o ADM, Configurações → Notificações). Rolagem infinita; ↑/↓ entre os avisos, Delete exclui; o aviso ao vivo
+    MESCLA a 1ª página (`mesclarPrimeiraPagina` — as páginas carregadas ficam, o que está sendo limpo não volta). **Aviso
+    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), a **prévia flutuante** com
+    "Abrir" (6 s), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
+    altura recolhe); tudo respeita "reduzir movimento". Ícones novos `IconLidas`/`IconSemAvisos`/
+    `IconEventoAlterado`/`IconCadastro`.
+  - **Avisos novos (tipos `vence_hoje`, `evento`, `protocolo`, `pca`, `cadastro`):** **Mesa** — o responsável designado a um
+    protocolo (célula/banner e massa — na massa UM aviso por pessoa com a contagem; `avisos-mesa.ts`
+    `avisarResponsavelProtocolo`, link `linkProtocolo` = a Mesa em que o protocolo está); **PCA** — enviado, incorporado ou
+    devolvido, ao responsável (`avisarPcaProtocolos`); **Administração** — o cadastro pendente vai ao SINO dos ADMs (e ao
+    e-mail pela fila — `idsDosAdmins`); **Calendário** — evento com data/hora/local/link alterado ou CANCELADO, aos
+    convidados que não recusaram (`avisarEventoAlterado`); **Tarefas** — "vence hoje".
+  - **PACOTE 2 (migração `0084`, aditiva — `notificacoes.lida_em`, `email_ok`, `adiada_ate`, `email_apos` + índice
+    `criado_em`):**
+    - **Limpeza CONFIGURÁVEL (ADM):** `Retencao {auto, lidasDias, naoLidasDias, teto}` (`lerRetencao`, limites
+      `LIMITES_RETENCAO`; blob `notificacoesRetencao` — `getRetencao`/`gravarRetencao`); o cron só limpa com `auto` ligado;
+      "Limpar agora" (`POST /api/admin/notificacoes/limpar`, roda mesmo com o automático desligado; devolve quantos saíram).
+    - **Preferências da PESSOA** (`notificacoes-config-core.ts`): e-mail `{ligado, desligados, destino, modo
+      imediato|resumo, horaResumo, silencio}` (`lerPrefsEmail`) — **`emailAposPara`** dá o instante em que o e-mail pode sair
+      (resumo = o próximo horário de Brasília, `proximoHorario`; silêncio que vira a noite = o fim, `noSilencio`; o
+      obrigatório não espera) e `gravarAvisos` o grava em `email_apos` (a fila o respeita); o sino `PrefsPessoa`
+      `{sinoDesligados, tarefas, quadros, som, sistema}` (chave `notificacoes:pessoa`, `lerPrefsPessoa`) — **`silenciado`**:
+      o tipo desligado, a TAREFA e o QUADRO silenciados não chegam; os **`AVISOS_DIRETOS`** (atribuída, menção, convite,
+      protocolo, cadastro, comunicado) sempre chegam. `preferenciasDe(ids)` (`notificacoes.ts`, UMA consulta para todos os
+      destinatários). Rota `GET/PUT /api/notificacoes/preferencias` (pessoal; o GET traz os nomes do que está silenciado).
+    - **ADIAR** ("lembrar em 1 h · 3 h · amanhã 8 h"): `PATCH /api/notificacoes {ids, adiarAte}` (até 30 dias; as variantes do
+      PATCH são `strictObject`) → `adiada_ate` (some do sino e da contagem até lá; volta não lida) + o **alarme** da caixa
+      (`agendarAoVivo` → `POST /alarme` do `CaixaNotificacoes`, `storage.setAlarm` — o aviso volta AO VIVO na hora).
+    - **E-mail:** **RESUMO** — por pessoa, no modo resumo (ou com 3+ avisos juntos, o silêncio que acabou) UM e-mail com a
+      lista (`emailResumo`); **descadastro** em todo e-mail — link assinado (`descadastro-core.ts`: HMAC-SHA256 com a chave
+      mestra, `assinarDescadastro`/`descadastroValido` em tempo constante) + `List-Unsubscribe`/`List-Unsubscribe-Post`
+      (RFC 8058); rota PÚBLICA `GET/POST /api/notificacoes/descadastro` (o GET mostra a página com "Confirmar" — leitor de
+      links não descadastra; o POST desliga o tipo, ou todos os desligáveis com `t=todos`; o obrigatório recusa).
+      `email_ok` = saiu de fato (o pulado não conta) — o relatório de alcance.
+    - **Avisos novos:** `concluida` (tarefa concluída → quem acompanha, em `aposMovimento`), `situacao` (situação alterada
+      — banner/célula e massa — e protocolo REENVIADO → o responsável; `avisarProtocoloAtualizado`), `centi` (o lote da
+      Automação terminou/falhou/cancelado → quem iniciou, no `PATCH` da execução), `comunicado` (o ADM: `POST
+      /api/admin/notificacoes/comunicado` — todas as pessoas ativas ou as dos grupos; link só interno).
+    - **Alcance (ADM):** `GET /api/admin/notificacoes/alcance?dias=` — por tipo: avisos, pessoas, % lidos, tempo médio até ler
+      (`lida_em`), e-mails que saíram, na fila + se o tempo real está ativo.
+    - **Telas (compactas, mais ícones que texto):** **`NotificacoesAdmin`** = `Segmented` **Avisos** (cabeçalho só com
+      ícones sino · e-mail · pode desligar) · **Limpeza** · **Comunicado** · **Alcance** (`DataTable` compacta, exportável).
+      **Perfil → Notificações** = **`PreferenciasNotificacoes`** (grava sozinho em 600 ms — `usePreferenciasNotificacoes`):
+      Sino (os tipos em **`ChipsIcone`** — DS: chips de alternar com ícone, `compacto` = só o ícone —, Som, Alerta do sistema
+      — pede a permissão do navegador —, Silenciados com "voltar a avisar") e E-mail (Imediato · Resumo diário · Desligado,
+      horário, silêncio De/Até, destino, os tipos). **Sino:** ações só com ícone (`Acao`: lida/não lida, **adiar**,
+      **silenciar** — as opções abrem EM LINHA, `Pilula`, sem menu sobre menu —, excluir); filtro por tipo em `ChipsIcone`;
+      rodapé só com ícones (marcar todas, limpar lidas, limpar tudo, configurar) + "N não lidas". **Som** (`tocarSom`, Web
+      Audio, sem arquivo) e **alerta do sistema** (`alertaSistema`, a aba em segundo plano; tocar abre o aviso) conforme as
+      escolhas (lidas só quando chega um aviso, cache de 10 min). Ao vivo, uma conferência a cada 5 min cobre o aviso a
+      muitas pessoas (o comunicado — o ao vivo pinga até 25 por requisição). O visual dos tipos (ícone/cor/rótulo) é UM
+      mapa — **`VISUAL_AVISO`** (`notificacoesVisual.ts`).
+  - **Verificação no navegador (Chromium, servidor simulado) — corrigido:** as ações do aviso FLUTUAM por cima (não roubam a
+    largura do título; no toque, numa linha embaixo) e o "+N parecidos" fica embaixo do texto (a barra de ações o cobria);
+    o "Desfazer" do limpar mora no SINO (`Caixa.limpar` + `Caixa.ocultos` — sobrevive ao painel fechar; antes, fechar o
+    painel apagava na hora); o **`Dropdown`** não fecha ao tocar num AVISO FLUTUANTE (`.avisos-flutuantes` — a confirmação
+    e o "Desfazer" nascem de dentro do painel); voltar à janela/trocar de tela busca o aviso NOVO (prévia), não só o número
+    (`recontar` = `conferirNovo` com 15 s de intervalo). **Toda ação tem a DICA ao passar o mouse:** `Segmented.dica`,
+    `Switch.dica`, `title` no `GatilhoFiltro` ("Filtrar e ordenar: …"), na `Ajuda` e no `SeletorMultiplo` suspenso; no sino,
+    o aviso inteiro (título, texto, data e "Clique para abrir"), as ações, as pílulas de adiar/silenciar e o rodapé.
+  - **VER = LER + FIXAR (migração `0086`, aditiva — `notificacoes.travada`):** o aviso não lido ≥ 60% à vista no sino por
+    800 ms (aba à vista) vira VISUALIZADO sozinho, em lote (`PATCH {ids, visto:true}`, IntersectionObserver no painel; fica no
+    lugar, colorido). O **MARCADOR** de visualizada à direita de cada aviso é o `CirculoConcluir` (`rotulos` próprios): vazio =
+    não vista, verde com ✓ = vista; tocar alterna — marcar como NÃO visualizada **FIXA** o aviso (`travada`, ícone de alfinete):
+    ver de novo não o marca; o toque no marcador ou abrir o aviso destravam; "Marcar todas" deixa as fixadas. Regra única no
+    builder **`comandoMarcarLidas`** (`notificacoes-sql.ts`, modos `lida`/`nao-lida`/`visto`/`todas`, testado no D1 real).
+  - Testes: `tests/notificacoes.test.ts` (catálogo/config, prefs, validação, dia/hora relativa/repetidos/título, canal ao
+    vivo, gravação com `returning`, exclusão + dispensa e retenção no driver D1 real, mescla, resumo/silêncio/silenciar,
+    retenção do ADM, descadastro assinado, e-mail resumo, a fila com `email_apos`) + `tests/resend-email.test.ts` (reserva
+    com validade e confirmação).
 - **LOGIN COM GOOGLE (OAuth, sem migração):** cartão **"Login com Google"** em Integrações (`IntegracaoGoogle`,
   catalogado): `integracoes.google` = `{ativo, clientId, clientSecret CIFRADO write-only}` (`GoogleConfig`,
   `googleConfigurado`); o cartão mostra a URI de redirecionamento (`/api/auth/google/callback`, com Copiar) e "Testar"
@@ -3338,11 +4101,546 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `redirect_uri_mismatch`, `invalid_grant`…) e a tela diz o que fazer (`DETALHE_ERRO_GOOGLE` → `mensagemErroLogin`/
   `mensagemVinculo`; o vínculo usa os MESMOS códigos). O "Testar configuração" confere o Client ID + secret JUNTO AO GOOGLE
   (`conferirCredenciaisGoogle`: troca um código inventado — `invalid_grant` = credenciais aceitas).
+- **AUTOMAÇÃO — baixar DFDs da Centi (sem migração, só ADM):** tela **`/painel/automacao`** (`AutomacaoAdmin`; nav
+  "Automação" `IconRobo`) = Extensão e Centi (estado + instalação) · Opções da emissão (valor de referência, data; avançado:
+  modelo de assinatura, `ModuleKey`, `Guid` — no APARELHO, `localStorage` `automacao:centi`) · Baixar DFDs (Ids "1154:1155",
+  pasta pelo `showDirectoryPicker` — sem ele, Downloads —, andamento por Id). **Extensão "FINA"** do Chrome `extensao-centi/`
+  (MV3; o .zip é montado NA HORA por `GET /api/admin/automacao/extensao` — `zipDaExtensao`, `extensao-zip.ts` — com os arquivos de `extensao-centi-arquivos.ts` [GERADO por `node scripts/gerar-extensao.mjs`; o teste confere que está em dia] e a LOGO do sistema [o favicon PNG da Identidade] como ícone; botão "Baixar extensão" sempre no topo da tela; cada versão nova avisa os ADMs no SINO — `avisoVersaoExtensao`, derivado na leitura com chave por versão) = só o CANAL até a aba da Centi que TEM a
+  sessão (login da Centi é POR ABA): `centi-main.js` (mundo MAIN) guarda os cabeçalhos que a própria Centi usa em
+  `/wcf/restauth/` (`Refreshtoken`/`Company`/`Month`…, sem os `x-ts` do anti-robô F5; também no `sessionStorage` da aba) e
+  executa o pedido da tela com as TRAVAS — só a API da Centi, GET livre, POST em `restauth/operation` (e o anexo, abaixo) com
+  `TRAVAS_CENTI` forçadas —; `centi-ponte.js`/`background.js`/`sistema-ponte.js` ligam as abas; injeta-se SOZINHA (`scripting`)
+  nas abas já abertas (sem F5 nem novo login). Mensagens com o PROTOCOLO (página da Centi) e a versão (tela — vale a maior;
+  cópias antigas se calam). **A LÓGICA mora no sistema** (atualiza com o deploy, sem reinstalar): núcleo PURO
+  **`automacao-centi-core.ts`** — `pedidoEmitirDfd` (os 44 `Params` capturados), `analisarRespostaCenti` (o "Processar"
+  devolve `{File:{Key, FileName}}` → o PDF é buscado pela chave em `caminhosDoArquivo`/`linkDaResposta`; aceita também PDF
+  cru, base64 "JVBER…", gzip "H4sI…" e bytes; falha mostra o `esqueletoCenti`, sem dados/tokens), `lerIdsCenti`,
+  `lerConfigCenti` [a CENTI MUDOU a operação em 01/10/2026: o "Processar" da tela passou a mandar ModuleKey 120465 + Guid `24e3e9d0-…` + assinatura 163 — o pedido antigo, 120464, voltava "Usuário sem permissão!"; a configuração antiga guardada no aparelho — `OPERACAO_ANTIGA` — é trocada pela nova na leitura], `VERSAO_EXTENSAO_CENTI` (a MÍNIMA aceita) + `versaoAtende`. Nada entra na Mesa; na Centi, só o anexo ao protocolo indicado (abaixo);
+  nenhuma senha no sistema. **Por protocolo** (padrão; `Segmented` Por protocolo | Por Id): os protocolos do sistema numa
+  `DataTable` com seleção (as colunas **Situação** e **Responsável** da Mesa à frente — `SeletorCelula`/`SeletorPessoa` na célula, gravam na hora pelo `PATCH /api/protocolo/[id]` `origem:"celula"`, otimista com reversão; as pessoas do grupo ativo + as gravadas de fora dele — `useColunasGestao`; loader `protocolosParaAutomacao`, `automacao.ts` — todos, com a SIGLA da unidade, a data, Σ itens e Σ valor dos DFDs [toda coluna com `render` — a `DataTable` só desenha pelo `render`; o `value` é filtro/ordem], o ano do PCA [sem ano no protocolo, o dos DFDs] e, por DFD, o
+  planejamento, o ano do PCA e o ÓRGÃO — `chaveOrgaoCenti`). **Plano da saída** (puro: `planoDosProtocolos`/`planoDosIds` →
+  `ArquivoSaida {pastas, nome, partes}`): pasta do protocolo "SIGLA - PCA ano - (nº) - ano" (`nomePastaProtocolo`), PDF
+  "Planejamento P - DFD N - PCA ano - (nº) - ano" (`nomeArquivoDfd`) — o PROTOCOLO sempre no fim (`sufixoProtocolos`: "(1222,
+  2212) - 2026"; vários anos com " + "), opções no aparelho (`OpcoesSaida`): pasta "PCA ano" por cima,
+  PDFs **separados | um por protocolo | um por UNIDADE (a sigla da unidade do DFD) | um único** (unidos pelo `pdf-lib`, import dinâmico) e ordem pelo nº de
+  planejamento; DFD sem planejamento é pulado e avisado; cada PLANEJAMENTO é baixado UMA vez no lote (`repetidos`: "DFD
+  duplicado" no mesmo protocolo, "Já baixado no protocolo X" vindo de outro — avisados na análise). Sem pasta escolhida (o seletor abre em Downloads), um arquivo vai
+  direto para Downloads e vários vão num **.zip com as pastas** (`zip-armazenar.ts`, STORE puro e testado). **Entidade da
+  Centi por órgão** (extensão 1.2.0, protocolo 3: o `estado` devolve a entidade aberta — cabeçalho `Company` — e o `pedir`
+  aceita `entidade` só naquele pedido): mapa órgão → entidade no aparelho; sem ele, a aberta; falhou e "Descobrir sozinho"
+  ligado → tenta as outras (`candidatosEntidade`: as digitadas ou 0–28 — as entidades da Centi — no formato da aberta) e lembra a que deu certo.
+  **Segurança dos dados:** cada PDF é CONFERIDO antes de contar como salvo (`conferirConteudoDfd`: o texto das 2 primeiras
+  páginas — pdf.js, dinâmico — traz o planejamento E o DFD pedidos como número inteiro; sem texto = falha), a gravação na
+  pasta confere o TAMANHO gravado e o PDF unido confere o total de páginas. Tela MINIMALISTA (explicações só no (?)), em
+  largura total e SEM rolar o navegador de `lg` (1024px) para cima (`useAlturaTela`, piso 240; a Análise ao lado — 20rem, 24rem no `xl`): cabeçalho = título · (?) · `Segmented` Por protocolo |
+  Por Id · selo da extensão/Centi · Verificar · "Extensão x.y.z" · **Ajustes** (`Dropdown` dialog: Saída — formato, pasta PCA,
+  ordem, **escolher a pasta** [desligado = Downloads e o botão some], conferir —, Emissão, Entidade por órgão, Avançado);
+  corpo = a tabela `scrollInterno` (Pasta/Baixar no RODAPÉ — `acoesRodape`; tocar na linha abre o protocolo no MESMO
+  `BannersMesa` da Mesa, com `contextoBanners` exportado de `mesa-dados.ts`) | a **Análise** ao lado (cada DFD do plano por
+  pasta, com o estado: Na fila · Baixando · Salvo · Falhou · Sem planejamento, órgão · entidade). Testes:
+  `tests/automacao-centi.test.ts`.
+  **DESTINO Pasta | Protocolo da Centi (extensão 1.3.22, protocolo 26 — TRAVAS reforçadas: o POST só passa com a FORMA do Emitir DFD (`operacaoDoCorpo`: `IdComprasPlanejamento` + `DFD`=1 — nenhuma outra operação da Centi), o GET só alcança o arquivo gerado (`ARQUIVO`: getbinlink/getbin/getfile), e o serviço (`background.js`) repassa a `operacao` no estado (na 1.3.21 ela não chegava ao sistema); a OPERAÇÃO "Emitir DFD" é PEGA SOZINHA da tela da Centi: quando a própria tela manda um Processar (operation com `IdComprasPlanejamento` e `DFD`=1), a extensão guarda ModuleKey + Guid + modelo de assinatura (`operacaoDoCorpo`, peça pura; `operacaoTela` no sessionStorage; as operações que a PRÓPRIA extensão envia não contam — `proprias`) e o `estado` a devolve; o sistema ajusta a configuração pelo que MUDOU (`ajusteDaOperacao`, avisa) ao verificar a extensão e, quando a Centi recusa a operação ("Usuário sem permissão!" — `operacaoRecusada`), relê o estado, ajusta e tenta UMA vez de novo; sem operação nova, o erro diz para emitir UM DFD pela tela, o lote PARA e a descoberta de entidade não roda (permissão não é entidade); a EMISSÃO (o operation do "Emitir DFD") e o download do PDF saem pelo CLIENTE HTTP DA PRÓPRIA CENTI, o mesmo do anexo — `binarioPelaCenti` (`responseType: arraybuffer`, a entidade do órgão só no cabeçalho daquele pedido); sem o cliente, o envio da extensão; a EMISSÃO vai com os cabeçalhos da aba exatamente como a tela os mandou (sem renovar o rastreio, como na 1.2.0); a extensão NUNCA acrescenta cabeçalho que a tela não manda nem escreve nos clientes HTTP da Centi: `comTokenNovo` só ATUALIZA token/Authorization/refreshtoken que já existem [o operation da tela leva só Refreshtoken + Company + Month; as 1.3.8–1.3.17 acrescentavam token/Authorization e a emissão do DFD dava "Usuário sem permissão!"], a sessão guardada mudou de chave (`__pcaCentiSessao_v2`); o protocolo abre pelo módulo que a Centi aceitar: `load?entity=102907` [PO002] e, se vier Entity nulo, `102908` [PO011 - Tela Protocolo — o único que devolve o protocolo já em tramitação, "Em análise"]; `MODULOS_PROTOCOLO`; o documento novo leva o ModuleKey dos documentos que o protocolo já tem [sem nenhum, 102932]. Base = o código EXATO da 1.3.12, a versão validada no anexo real; a "limpeza" das 1.3.13–1.3.15 foi DESFEITA [depois dela o load do protocolo passou a voltar vazio]; da limpeza ficou só o erro do load com a mensagem da Centi e a forma da resposta, nunca os dados: (1) o load/confirmsave/save saem pelo CLIENTE HTTP DA PRÓPRIA CENTI — a instância do axios em `/restauth` que a tela usa, achada pelo FORMATO entre os módulos do webpack da página (`acharClienteCenti`); sem o cliente, o envio da extensão com a sessão capturada (com os cabeçalhos/endereço/meio do salvar aprendidos na aba e o rastreio renovado — `renovarRastreio`, `dicaCabecalhos`, `dicaTrilha`); (2) o TOKEN da Centi TROCA a cada resposta e a extensão o acompanha (`comTokenNovo`, `tokenNosClientes`); (3) o **`confirmsave` leva o OBJETO do protocolo DIRETO** (como a tela; só o `save` usa `{Token, Object}` — `corpoConfirmar`; o envelope no confirmsave era a causa dos 500 "Erro inesperado") e, com `Confirm: true`, a pergunta da Centi vai ao ADM (`useConfirmacao`) e o save só segue com o "sim" (`aceitar`); (4) o TIPO pelo `LoadObjectReference` como a tela, senão o load do tipo. A peça `__pcaCentiAnexo_p<protocolo>` leva o protocolo no nome; antes de anexar, o PDF não unido é REGRAVADO pelo pdf-lib (`regravarPdf`)):** em Ajustes → Destino, "Protocolo da Centi" pede o
+  **Id** (o "Id" do cadastro do protocolo na Centi = o "Id:" da capa) e o **nº** ("156844" ou "156844/2026" — `lerAlvoCenti`)
+  + o **tipo do documento** (`OpcoesSaida.tipoDocumento`, padrão `TIPO_DOCUMENTO_DFD`=1039); "Conferir na Centi" mostra o
+  protocolo (ação `protocolo`, só leitura) e "Testar anexo" anexa um PDF de 1 página feito no navegador ("TESTE - pode excluir - hora", com confirmação), SEM emitir DFD — separa o salvar da emissão. Cada ARQUIVO do plano (separado ou unido) vira UM documento novo, com a
+  descrição = o nome sem ".pdf" (`descricaoDoArquivo`). A gravação é a ÚNICA escrita na Centi e mora na EXTENSÃO
+  (`centi-anexo.js`, peças puras testadas por `vm`; ação `anexar` do `centi-main.js`): `load?entity=102907&key=<Id>` →
+  confere Id + nº (+ ano) → a mesma descrição já no protocolo = não anexa de novo → `montarSalvar` = o protocolo do load
+  SEM mudança (só as listas nulas viram [] — como a tela da Centi) + UM documento (State 0, `IdGed {FileName, Data}` = o
+  PDF em base64, o tipo = o REGISTRO do tipo — `load?entity=103868&key=<tipo>`, `tipoDoLoad`, como a tela da Centi manda; sem ele, o objeto de um documento desse tipo já no protocolo, senão a referência pelo Id) →
+  `confirmsave` com o objeto direto (`Confirm: true` = a pergunta vai ao ADM; só o "sim" dele grava — nunca confirma sozinha) → `save` → só vale com `Success` e o
+  documento de volta com Id real (`conferirSalvo`). O sistema nunca manda o objeto do protocolo; o protocolo é conferido
+  ANTES de emitir qualquer DFD e o ADM confirma (`useConfirmacao`) antes de começar; a 1ª recusa do anexo PARA o lote (o erro diz o passo — load/confirmsave/save).
+- **PLATAFORMA DE AUTOMAÇÕES CENTI — FUNDAÇÃO (migração `0076`, aditiva; plano em `docs` da conversa: fundação → extensão segura →
+  ao vivo → receitas → login/descoberta → gravador de receitas).** Princípios: negado por padrão · escrita só ACRESCENTA ·
+  toda escrita = AUTORIZAÇÃO DE USO ÚNICO do servidor (+ confirmação na janela da extensão, entrega 2) · ensaio antes ·
+  FREIO de emergência · tudo auditado e idempotente · nada fixo. Tabelas `automacao_execucoes` (receita + versão, quem,
+  estado preparada|rodando|pausada|concluida|falhou|cancelada, ensaio, totais recontados NO BANCO), `automacao_passos` (um
+  por alvo, único execução+chave), `automacao_autorizacoes` (só o HASH do token; consumida por DELETE … RETURNING, da
+  própria pessoa e dentro de `VALIDADE_AUTORIZACAO_S`) e `automacao_registros` (o que foi ESCRITO na Centi; único
+  capacidade + alvo + descrição → nunca repete, nem de outro computador). Núcleo PURO **`automacao-core.ts`** (capacidades
+  do motor — leitura `estado/ler/consultar/baixar`, `operar`, ESCRITA = lista FIXA `anexar`; `RECEITAS` com as previstas
+  `disponivel:false` — protocolos por repartição, relatórios, consultar, tramitar; `coerceConfigAutomacao`,
+  `receitaAtiva`, `motivoNaoEscrever`, `podeTransitar`, `estadoFinal`, `textoAlvoAnexo`), builders **`automacao-sql.ts`**
+  (testados no D1 real), D1 **`automacao-plataforma.ts`** (config no blob `configuracoes.automacao` lida SEM cache — o
+  freio vale na hora; falha ao ler = escrita pausada), Zod **`automacao-validation.ts`**. Rotas (todas `exigirAdmin`,
+  origem `centi` na auditoria, entidade `automacao`): `GET/PATCH /api/admin/automacao/config`, `GET/POST …/execucoes`,
+  `GET/PATCH …/execucoes/[id]`, `POST …/execucoes/[id]/passos` (≤ 50), `POST …/execucoes/[id]/autorizar` (freio, receita,
+  dono, não ensaio, rodando, passo pendente, não feito, limite `automacaoEscrita` 60/min), `POST
+  …/autorizacoes/consumir` (pela EXTENSÃO: Origin `chrome-extension://` ou o próprio site; mesma capacidade e mesmo alvo
+  em tempo constante; freio de novo) e `GET/POST …/registros`.
+  **ENTREGA 2 (extensão 1.4.0) — o ANEXO só pela plataforma:** a tela cria a execução `anexar-dfds` (um passo por
+  arquivo — `automacao-cliente.ts`: `iniciarExecucao`/`autorizarEscrita`/`registrarAnexo`/`concluirPasso`/
+  `cancelarExecucao`), pede a autorização de CADA escrita (já registrado = não grava de novo) e manda o token com o pedido;
+  a **`sistema-ponte.js`** (mundo isolado — scripts da página não a alcançam) CONSOME a autorização no servidor para o alvo
+  tirado do PRÓPRIO pedido (Id + nº + ano + descrição) e leva o pedido SEM o token; o **`background.js`** recusa o
+  "anexar" sem a autorização ou com outro alvo e abre a **janela de confirmação DA EXTENSÃO** (`confirmar.html`/
+  `confirmar.js`, `chrome.windows.create`; uma vez por execução + protocolo, guardado em `chrome.storage.session`;
+  recusar, fechar ou 2 min sem resposta = não grava) — XSS na página do sistema não aprova nada. A pergunta do
+  `confirmsave` da Centi segue para o ADM (o "sim" pede uma autorização nova). Gravado = `automacao_registros` + passo
+  feito; interrompido = execução cancelada; arquivo sem DFD emitido = passo falhou. Sem `localhost` no manifesto nem no
+  serviço; permissão `storage`; o gerador inclui `.html`. Testes (vm, `chrome` falso): `tests/extensao-seguranca.test.ts`.
+  **ENTREGA 3 (extensão 1.4.1) — tela AO VIVO + destino automático + pré-verificação:** o estado da Centi é conferido ao
+  abrir, ao voltar à janela e a cada 20 s com a tela à vista (fora de um lote); a extensão se anuncia sozinha ao ser
+  instalada/atualizada (sem F5) e com o id da cópia (duas cópias da MESMA versão = selo de aviso). **Freio na tela:**
+  Ajustes → Gravação na Centi (`PATCH /api/admin/automacao/config {ativa}`, pausar confirma; selo "Gravação pausada"; o
+  Anexar trava). **Histórico das execuções** (`HistoricoExecucoes`, contêiner: as últimas execuções → os passos ao lado,
+  "Cancelar execução" na que ficou rodando/pausada). **Destino "Protocolo de cada DFD"** (`DestinoSaida` `proprio`): cada
+  arquivo vai ao protocolo da Centi de onde vieram os DFDs — `alvoDoArquivo` (puro: o "Id:" da capa + o nº; arquivo que junta
+  protocolos ou protocolo sem Id = erro, nunca chuta; só no modo Por protocolo); o registro guarda o `protocoloId` e a coluna
+  **"Na Centi"** conta os anexados por protocolo. **Pré-verificação** antes de emitir: cada protocolo da Centi conferido
+  (Id + nº) e o que já está em `automacao_registros` (`GET …/registros?alvos=`, `jaAnexados`, `descricaoCanonica`) NÃO é
+  emitido de novo. **Servidor:** a autorização e o registro só saem para o MESMO alvo gravado no passo da execução
+  (`passo.alvo === textoAlvoAnexo(alvo)` — a execução declara os alvos; um pedido depois não troca de protocolo).
+  **ENTREGA 4 — as duas receitas no motor + a operação no SERVIDOR:** BAIXAR (destino pasta) também é uma execução
+  registrada — receita `emitir-dfd`, um passo `baixar` por DFD (`iniciarExecucaoLeitura`; o resultado final de cada um vai em
+  lotes de 50 por `concluirPassos`; o que o lote não chegou a emitir = "falhou"); ANEXAR já era (`anexar-dfds`). A
+  OPERAÇÃO Emitir DFD aprendida da tela da Centi vai à configuração do servidor (`PATCH …/config {operacao}`, só quando
+  muda — `chaveOp`) e a tela aplica a do servidor ao abrir (sem aviso): o que um ADM aprendeu vale para todos.
+  **GRAVADOR DE RECEITAS (extensão 1.5.0, protocolo 27):** Ajustes → "Gravar uma ação na Centi" liga o gravador NA ABA da
+  Centi (`gravador` {iniciar|parar|limpar} no `centi-main.js`, sessionStorage `__pcaGravador_v1`, até 300 passos); cada
+  pedido que a TELA da Centi faz em `/wcf/` vira só a ESTRUTURA — `estruturaDoPedido` (peça pura do `centi-anexo.js`,
+  testada: método, caminho com números trocados por `{n}`, a `entity`, os NOMES dos parâmetros e os campos do corpo com o
+  TIPO; nunca um valor, token ou dado pessoal). Parar abre o **`GravadorReceitas`** (DS: a tabela + "Copiar a gravação") —
+  a base para montar as próximas receitas (protocolos por repartição, relatórios, consultas, tramitar) sem chute. O serviço
+  só aceita as ações `pedir`/`protocolo`/`anexar`/`gravador`.
+  **LOGIN AUTOMÁTICO (extensão 1.6.0, protocolo 28):** a senha fica SÓ na extensão. **Opções da extensão**
+  (`opcoes.html`/`opcoes.js`, `options_ui`): usuário + senha + "Entrar sozinho quando a sessão cair", Salvar/Esquecer/
+  Entrar agora e a situação (pronto · pausado com o motivo · última tentativa). **Cofre** `cofre.js` (serviço via
+  `importScripts` + opções): AES-GCM 256 com chave NÃO EXTRAÍVEL no IndexedDB da extensão; o cifrado em
+  `chrome.storage.local` (`credCenti`), a situação em `loginCenti`; régua pura `podeTentarLogin` = no máximo **1 tentativa
+  a cada 5 min** (`chrome.storage.session` `loginUltima`, para todas as abas); senha recusada ou verificação pedida =
+  **PAUSA** até salvar de novo (nunca insiste — não bloqueia a conta); "Entrar agora" ignora só o intervalo. **Tela de
+  login** reconhecida no mundo ISOLADO por `centi-login.js` (peças puras: `telaDeLogin` = 1 senha visível + usuário +
+  ENTRAR; `sinaisDeBloqueio` = captcha/código/2 senhas/"senha expirada"; `erroDeLogin`; `preencherEEntrar` = setter
+  nativo + input/change + clique); a `centi-ponte.js` responde `estado` com `tela:"login"` (vale mais que a sessão
+  guardada) e só aceita `centi-login` do SERVIÇO (`sender.id` da extensão, sem `sender.tab`); espera até 15 s: ok ·
+  recusado (erro NOVO na tela) · bloqueio · sem-resposta. **Serviço:** `abaCenti` devolve o motivo (`semAba`/`login`/
+  `semSessao`); `garantirSessao` tenta entrar por trás no `estado` (a tela não espera) e espera no `entrarAgora`; "sempre
+  que cair" também sem a tela do sistema — `tabs.onUpdated` (aba da Centi carregou no login) e o alarme `login-centi`
+  (5 min; permissão `alarms`); sem aba da Centi e com o login pronto, abre uma em segundo plano (1 vez a cada 5 min). Ações
+  novas da tela: `entrarAgora` e `abrirOpcoes`. **Tela:** `LoginCenti` (selo "Centi na tela de login"/"login pausado" com o
+  motivo + "Entrar agora" + "Configurar login"); a resposta à tela traz só a situação (`login`), nunca o usuário/senha.
+  Testes: `tests/extensao-login.test.ts` (DOM falso, cofre com `crypto.subtle`, serviço com cofre falso; a senha não aparece
+  no mundo da página nem na ponte do sistema).
+  **ABA PRÓPRIA + BANNER DAS CREDENCIAIS + ANDAMENTO + INTERROMPER (extensão 1.7.0, protocolo 29):** a automação trabalha
+  SÓ numa aba que a extensão abre (`criarAba`: `tabs.create` em segundo plano no grupo azul **"Automação PCA"** — permissão
+  `tabGroups`; `abaGuardada` = o id no `storage.session` ou, depois de reabrir o Chrome, a aba do grupo pelo título); as abas
+  da Centi do usuário não são usadas. A tela abre a aba ao entrar e no Verificar (`estado {abrir:true}`); fechada pelo
+  usuário (`abaFechada`), a conferência de 20 s não reabre — Verificar ou um pedido reabrem. A aba trabalha no sistema
+  **COMPRAS** (`COMPRAS` = `/compras/`; a raiz da Centi é só o portal "Acesso aos sistemas", sem login): criada já nele e,
+  se estiver no portal ou em outro sistema, vai a ele antes de conferir a sessão (`irParaCompras`, 1.7.1). **Login = o
+  DROPDOWN do ícone** (o próprio `popup.html` ganhou o formulário — usuário, senha, "Entrar sozinho", Esquecer, "Salvar e
+  entrar"; aparece sozinho sem login salvo ou com a pausa; saíram `credenciais.*`, `opcoes.*` e o `options_ui`):
+  `abrirCredenciais` abre o dropdown por `chrome.action.openPopup()` (sem janela em foco, uma janelinha
+  `popup.html?janela=1`) SOZINHO uma vez por sessão do navegador (`credenciaisPedidas`) quando falta login ou a senha foi
+  recusada; "Configurar login" da tela abre de novo. Régua do
+  login: entrar com sucesso zera o `loginUltima` (o intervalo de 5 min vale só depois de uma falha) — F5 na aba que cai no
+  login entra de novo na hora (`conferirAba` no `tabs.onUpdated`). **Andamento:** a tela manda a ação `lote`
+  (`inicio` → `loteId`, `passo` por DFD, `fim`); o serviço guarda a `atividade` no `storage.session` (título, passo,
+  feito/total, últimos 20 passos, estado, a aba dona) e mostra no **selo do ícone** ("3/15"; OK/X/!), no **cartão
+  flutuante da aba da automação** (`centi-painel.js`, mundo isolado + Shadow DOM, injetado pelo serviço) e no **popup**
+  (`popup.html`/`popup.js`, `action.default_popup` — o `zipDaExtensao` preserva o popup ao pôr o ícone: situação da Centi,
+  andamento ao vivo por `storage.session.onChanged`, Interromper, ir para a aba e o login). **Interromper** (o
+  dropdown ou o cartão — só da aba da automação; outra aba/página = recusado): o lote vira `interrompido`, a confirmação de
+  anexo aberta vale "não", a `sistema-ponte` avisa a tela (`tipo:"interrompido"`) e os pedidos que levam o `lote`
+  (`sistema-ponte` repassa `m.lote`) são recusados com `{interrompido:true}` — os de fora do lote seguem; o pedido em curso
+  termina. Na tela (`useExtensaoCenti` → `lote`/`interrompido`), o laço para, a fila vira "Interrompido na extensão", o PDF
+  unido parcial não é salvo e a execução é cancelada. **F5 na tela:** o serviço marca o lote como `parado` quando a aba dona
+  recarrega/fecha (`donoSaiu`); a tela, ao voltar, avisa o último passo; enquanto um lote roda há o aviso de saída
+  (`beforeunload`). Testes: `tests/extensao-automacao.test.ts` + `tests/fixtures/chrome-falso.ts` (o `chrome` falso
+  compartilhado pelos testes da extensão).
+  **TAREFAS + "LER A TELA PROTOCOLO" + ABA SINALIZADA + ID FIXO (extensão 1.8.0, protocolo 30):** o manifesto tem uma
+  **`key`** fixa (id `lhdooglmnecpbocibgfobaefahliicnn` em qualquer pasta) — o `credCenti`/`loginCenti` e a chave AES do
+  IndexedDB sobrevivem a toda atualização (o `zipDaExtensao` preserva a chave). **Aba sinalizada** pela `atividade`: o
+  grupo vira "Automação PCA · 3/15" (azul rodando, verde OK, vermelho interrompido, laranja parado — `grupoDaAtividade`;
+  `abaGuardada` acha o grupo pelo COMEÇO do título) e o `centi-painel.js` põe o prefixo no TÍTULO da aba ("▶ 3/15 · …",
+  reaplicado a cada 2 s; some 10 s após o fim) e a MOLDURA com a faixa "Automação PCA executando — não feche esta aba".
+  **Seletor de TAREFA** (`SelectField compacto`, no aparelho `automacao:tarefa`): DFDs por protocolo · DFDs por Id · **Ler a
+  Tela Protocolo** (receita `protocolos-por-reparticao`, agora disponível) → **`TarefaTelaProtocolo`** (contêiner).
+  **Aprender clicando** (ação `aprender` iniciar/parar/limpar — a aba vem para a frente e o cartão mostra a instrução):
+  enquanto liga, o `centi-main.js` guarda a RESPOSTA de cada pedido da tela (XHR/fetch; nunca os da própria extensão —
+  `internos`) por `registroDoAprendiz` (`centi-anexo.js`, puro, testado): CONSULTA de leitura (`consultaPermitida`: só
+  `restauth/`, verbo de leitura, nunca salvar/excluir/tramitar/arquivo) com o pedido COMPLETO (método, caminho, corpo sem
+  campos com cara de segredo — nunca cabeçalhos) + o resumo da resposta (`acharLista`/`linhaPlana` — o padrão
+  `{Fields:[{Key,Value}]}` achatado, 200 linhas); a OPERAÇÃO só quando gerou um ARQUIVO (a emissão do PDF do protocolo —
+  ao parar, a chave ModuleKey|Guid vai ao `localStorage` da Centi e passa a valer no `pedir`, com as TRAVAS forçadas).
+  Parar → **`AprendizTelaProtocolo`** (DS: as consultas de protocolos com o nome da aba, o mapa das colunas sugerido,
+  prévia, a emissão) → Salvar = `PATCH /api/admin/automacao/config {telaProtocolo}` (`ConfigAutomacao.telaProtocolo`,
+  `coerceModeloTela` — vale para todos os ADMs; auditoria). Núcleo PURO **`automacao-tela-protocolo.ts`** (testado):
+  `modeloDoAprendiz`, `sugerirColunas`, `emissaoAprendida` (o parâmetro da operação cujo valor é um campo de uma linha),
+  `lerLinhas`/`itensDaLista`, `juntarProtocolos` (o mesmo protocolo em várias abas = uma linha), `proximaPagina` (take/skip
+  ou page), `corpoEmissao`, `nomePdfProtocolo`. **Ler protocolos** = ação `ler` (a MESMA trava de leitura no `centi-main`)
+  por consulta e página, execução registrada (passos `consultar`) e o andamento no lote; tabela com Abas · No sistema (pelo
+  "Id:" da capa ou pelo nº) · as colunas mapeadas · Exportar. **Emitir e analisar** (seleção ou tocar na linha): um por
+  vez, a operação aprendida → o PDF (`analisarRespostaCenti` + `caminhosDoArquivo`) → o **`ProtocoloUploadForm`** com
+  `arquivo` (abre a MESMA análise da importação, sem o lançador) e `onFechado(erro?)` (fechar a análise, ou o PDF que não é
+  protocolo, segue para o próximo); nada é protocolado sozinho. `arquivo-navegador.ts` (base64, gunzip, download).
+  Testes: `tests/automacao-tela-protocolo.test.ts` e os de grupo/trava em `extensao-automacao`/`automacao-centi`.
+  **TELA PROTOCOLO PELA INTERFACE (extensão 1.9.0, protocolo 31) — o fluxo padrão da tarefa:** o "Aprender" saiu da tela
+  (fica para depois — o código do aprendiz e o `AprendizTelaProtocolo` seguem). **`centi-tela.js`** (mundo ISOLADO, carregado
+  antes da `centi-ponte`, que encaminha `telaDepartamentos`/`telaEmAnalise` a ele; `ACOES_CENTI` no serviço) opera a
+  PRÓPRIA tela da PO011 como uma pessoa: acha o painel pelo título "Tela Protocolo" (senão clica na aba "PO011…" do topo ou
+  digita "PO011" na busca do menu), abre o seletor "Departamentos" (react-select: mousedown/ArrowDown, opções por
+  `role="option"`/`-option-N`), lê as repartições; para ler, tira as escolhidas (Backspace), escolhe as pedidas pelo texto
+  (sem acento/caixa — confere os chips), clica na LUPA (o 1º botão só-ícone depois do campo), abre "Em Análise (N)" e lê a
+  GRADE pelo cabeçalho "PROTOCOLO" (linhas de mesma forma; espera 2 leituras iguais; percorre as páginas pela "Próxima",
+  teto 50; total pelo rodapé "Exibindo N registro(s)"). Só LEITURA: lista negra `PROIBIDO` (Protocolar, Operações, Salvar,
+  Excluir, Novo, Tramitar…) conferida antes de CADA clique em botão/link. Tela: **`TarefaTelaProtocolo`** = 1 · Repartições
+  ("Buscar repartições" → o DROPDOWN **`SeletorMultiplo suspenso`** — busca, marcar todos, limpar; nada empurra o layout; escolha no aparelho `automacao:tela-departamentos`,
+  `departamentosEscolhidosValidos`) · 2 · Ler "Em Análise" (execução `protocolos-por-reparticao`, passo `consultar`; lote →
+  cartão/moldura da aba) → `DataTable` com seleção (Protocolo copiável · Ano · Departamento · Interessado · Solicitante ·
+  Natureza · No sistema — `noSistemaTela`, o ano tem de bater; `normalizarProtocolosTela`) + Exportar; "Tratar selecionados"
+  desabilitado (próxima entrega). Testes: `tests/automacao-tela-centi.test.ts` (DOM falso como nos prints: seletor com chips,
+  lupa, PROTOCOLAR nunca tocado, abas, grade paginada).
+  **1.9.1 — a grade lida de verdade:** o cabeçalho da grade é procurado no DOCUMENTO (a grade fica FORA do bloco dos
+  filtros): `acharCabecalho` = o menor ancestral comum dos rótulos PROTOCOLO · ANO · INTERESSADO com os três em FILHOS
+  diferentes e rótulos curtos (o "Protocolo" do menu lateral não conta; a célula com ícones de ordenar/filtrar também não);
+  linhas pela ESTRUTURA (mesma tag e nº de filhos do cabeçalho) e, sem elas, pela POSIÇÃO (`getBoundingClientRect`: o texto
+  vai à coluna sob a qual está, as linhas pela altura — grade virtualizada); o rodapé/paginação pelo bloco da grade; a aba
+  aceita "Em Análise(1)"; a aba sem número = 0; a pesquisa termina quando a contagem para de mudar; chips também pelo
+  `aria-label` "Remove …" (já escolhidas = nada a mexer). Falha → `{erro, diagnostico}` (a FORMA do DOM, ≤ 1,5 KB, sem
+  dados de sessão) → `Callout` fixo + "Copiar diagnóstico" na tarefa. A peça guarda a `versao` (a mais nova substitui a
+  que ficou na aba).
+  **EMITIR E ANALISAR + LOGIN GUARDADO NO SISTEMA (extensão 1.10.0, protocolo 32):** tocar num protocolo da tabela (ou
+  marcar vários e "Emitir e analisar") → ação **`telaEmitir`** (`centi-tela.js`, `{protocolo, ano, departamentos}`): acha a
+  linha na grade (senão pesquisa de novo e percorre as páginas), CLIQUE + DUPLO CLIQUE abrem o cadastro ("Protocolo -
+  <Id>" com Operações) — conferido pelo campo Protocolo —, **`lerCadastro`** lê TODOS os campos como a Centi mostra
+  (`{rotulo, valor}`: o rótulo = o texto mais próximo ANTES do campo que não é campo/botão, sem o "*"; código + nome do
+  interessado juntos; seletor pelo texto escolhido) e emite pelo **Operações → Emitir documentos** (a ÚNICA exceção à
+  lista negra — `clicarSo` confere o rótulo EXATO; a janela que abrir só é confirmada por Emitir/Processar/Gerar/
+  Imprimir/Visualizar/OK/Confirmar, cada botão uma vez; fecha o cadastro no fim). A **captura** mora no `centi-main.js`
+  (ação `captura` iniciar|ler|parar, chamada SÓ pela ponte — `ctx.pagina`): enquanto ligada, o operation que a PRÓPRIA tela
+  manda vai com as TRAVAS forçadas nos parâmetros que traz (`travarCorpoOperacao`, `centi-anexo.js` — `TRAVAS` agora
+  mora lá) e a resposta é guardada, assim como o PDF que ela prepara (`URL.createObjectURL` de um Blob) e o endereço que
+  abriria (`window.open` vira uma janela falsa — nada abre); `respostaComArquivo`. No sistema, **`pdfDoAchado`** +
+  **`baixarPelaExtensao`** (`arquivo-navegador.ts` — o MESMO caminho do Emitir DFD, agora compartilhado com
+  `AutomacaoAdmin.emitirUm`) dão o PDF, que abre no **`ProtocoloUploadForm arquivo`** (a análise da importação: capa, DFDs,
+  itens; `onFechado` segue a fila); `TarefaTelaProtocolo` ganhou a coluna **Documento** (Na fila · Emitindo · Em análise ·
+  Analisado · Falhou), as colunas dos dados da Centi (`dadosCentiValidos`/`rotulosDosDados`), o "No sistema" pelo **Id**
+  da Centi (`noSistemaTela` — o Id decide, senão nº + ano) e a execução `protocolos-por-reparticao` (passos `baixar`).
+  **Login guardado no sistema (opcional):** no login da extensão, "Guardar também no sistema PCA" → o serviço manda
+  usuário + senha a **`PUT /api/admin/automacao/credencial-centi`** (só com o Origin `chrome-extension://<id fixo>` —
+  `ORIGEM_EXTENSAO_CENTI`; nenhuma página imita), cifrados com a chave mestra (`INTEGRACOES_CHAVE`) nas preferências da
+  pessoa (`centi-login-cofre.ts`, chave `cofre:centi-login`); sem login no cofre (extensão reinstalada), o serviço o
+  traz de volta pelo `GET` (só a extensão recebe a senha; a tela vê só a situação) — no `onInstalled`/`onStartup`, ao abrir
+  o popup e antes de tentar entrar (1 vez a cada 10 min). "Esquecer" tira dos dois lugares; Ajustes → **Login da Centi**
+  mostra a situação e "Remover do sistema" (`DELETE`). `host_permissions` ganhou o sistema. Testes:
+  `automacao-tela-centi` (cadastro + emissão no DOM falso), `automacao-centi` (travas), `extensao-login` (restaurar/
+  guardar), `automacao-tela-protocolo`.
+  **1.10.1 — a grade da Centi é WIJMO FlexGrid** (`wj-row`/`wj-cell`): ela descobre a célula pelas COORDENADAS do evento
+  — todo clique da `centi-tela.js` é o MOUSE de verdade (`mouse`: pointerdown/mousedown/pointerup/mouseup/click NO
+  CENTRO do elemento, `getBoundingClientRect`; `duplo` = o par + `dblclick`); o protocolo é trazido à vista
+  (`scrollIntoView`) antes do duplo clique. A grade desenha só as linhas VISÍVEIS: `percorrerGrade` volta ao topo e ROLA
+  o corpo (`rolador` = o ancestral da 1ª linha com rolagem vertical) lendo a cada passo, até o fim — lê todas e acha a
+  linha pedida em listas longas. A falha ao abrir diz a célula (classe, posição) e os cadastros abertos.
+  **1.11.0 — EMISSÃO "POR CÓDIGO" + os DADOS da grade (protocolo 33):** a grade é lida pelos DADOS do controle Wijmo
+  (ação `grade` no `centi-main.js`: `host["wj-Control"]` → `getCellData` de TODAS as linhas da página — a tela desenha só
+  as visíveis — + o **Id** de cada protocolo dos dados da linha, `linhaPlana`; `mostrar` = `scrollIntoView` da linha
+  pedida antes do duplo clique); sem o controle, o DOM como antes. A tabela tem colunas FIXAS (Protocolo · Ano · **Id** ·
+  **Entrada** · Departamento · Interessado · Solicitante · Natureza · Documento · No sistema — nada é acrescentado ao
+  carregar). A captura da emissão guarda também o PEDIDO do operation da tela, os arquivos que a tela BAIXA
+  (getbinlink — a chave pode valer uma vez), o `<a download>` clicado e aceita ZIP; o operation que gerou o arquivo vira
+  "aprendido" naquela Centi (`OPERACOES`) e vai ao sistema → **`emissaoDoPedido`** (o parâmetro cujo valor é o Id) →
+  `PATCH /api/admin/automacao/config {emissaoProtocolo}` (`ConfigAutomacao.emissaoProtocolo`, `coerceEmissaoProtocolo`).
+  Dali em diante, cada protocolo é emitido **por código** (`corpoEmissaoProtocolo` + `pedir` operation com as TRAVAS,
+  como o Emitir DFD); recusado/sem modelo/sem Id → pela tela (que ensina de novo). O arquivo pode ser ZIP:
+  **`zip-ler.ts`** (puro, testado: STORE + DEFLATE) + `pdfDosBytes` (vários PDFs = unidos — `novaUniao` saiu do
+  `AutomacaoAdmin` para `arquivo-navegador.ts`); `pdfDoAchado` devolve cada tentativa (endereço → status · começo) no
+  diagnóstico (`BaixarCenti` → `DownloadCenti {status, bytes}`).
+  **Só por código (sistema, sem mudar a extensão):** com o "Emitir documentos" já aprendido, a emissão NUNCA cai para a
+  tela da Centi — a tela só é usada UMA vez para ensinar (sistema sem o modelo, ou o navegador ainda não o aprendeu:
+  `emitirPorCodigo` → `{recusada}`), a Centi RECUSOU a operação guardada (`operacaoRecusada` — mudou ou sem permissão) ou a
+  grade não trouxe o Id (o cadastro o lê) — e ensina de novo. **Modelo v2 com os CAMPOS DO PROTOCOLO** (`EmissaoProtocolo`
+  `v:2` + `campos`, `emissaoDoPedido(corpo, {id, protocolo, ano, hoje})`): além do Id, os parâmetros iguais ao nº
+  (`protocolo`), ao "nº/ano" (`protocoloAno`), ao ano (`ano` — só numa chave "ano…", nunca o exercício) e à data de hoje
+  (`hoje-dmy`/`hoje-iso`) são preenchidos com os do protocolo PEDIDO (`corpoEmissaoProtocolo(e, alvo)`) — antes iam com os
+  do protocolo que ensinou; o modelo antigo (sem `v:2`) é descartado e aprendido de novo UMA vez. A fila lê a emissão, os Ids
+  e as repartições de REFS (o aprendido no meio do lote vale já) e espera a configuração carregar antes do 1º protocolo;
+  emissão até 300 s (extensão 1.11.2: o binário também). **LOTE AUTOMÁTICO para QUALQUER quantidade:** "Emitir e ler" (os
+  marcados ou TODOS) emite cada protocolo e LÊ o PDF no navegador (`indexarProtocoloPdf` → capa + DFDs), um por vez, SEM abrir
+  janelas: `conferirLeituraProtocolo` (puro, testado) recusa o PDF de OUTRO protocolo (nº/ano/Id da capa ≠ o pedido) e marca
+  "Sem DFDs" em atenção; os DFDs já cadastrados contam (`buscarExistentes`); a coluna Documento mostra Lido/Atenção/Falhou
+  com o resumo. Falha TRANSITÓRIA (rede, 5xx, sem resposta — `falhaTransitoria`) tenta UMA vez de novo; os passos da execução
+  vão ao servidor de 50 em 50; só os últimos 8 PDFs ficam na memória (`PDFS_NA_MEMORIA`); Interromper vale. Tocar numa
+  linha abre a ANÁLISE COMPLETA (o PDF da memória ou emitido de novo). **Cadastros na Tela Protocolo (extensão 1.11.3,
+  `centi-tela.js` v6):** antes de abrir um protocolo, TODOS os cadastros abertos são fechados (`fecharCadastros` — Escape +
+  o "fechar" da janela: ×, aria-label/title Fechar/Close ou a classe close/fechar/times; nunca o × de um chip do seletor nem
+  nada da grade) e o cadastro é achado pelo campo Protocolo entre os abertos (`acharModal(doc, protocolo)`) — antes, um
+  cadastro de outro protocolo deixado aberto parava o lote ("O cadastro do protocolo não abriu"). **Sempre SÍNCRONA:** `corpoEmissaoProtocolo` manda
+  o parâmetro do modo assíncrono (`ehParamAssincrono`: Assincrono/Assync/Async) como "não" no formato capturado
+  (`valorSincrono`) — no assíncrono a Centi gera em segundo plano e a chave dá 404; o diagnóstico mostra os parâmetros ENVIADOS. **Download DIRETO, num pedido só:** a chave do `File.Key` é baixada por
+  `caminhoDoArquivo` — o MESMO endereço que a tela da Centi usa: o `URL` da resposta; o arquivo em CACHE (`File.Cache:true`
+  — o "Emitir documentos" do protocolo) = **`rest/GetBinCache/{chave}`** (no `getbinlink` ele dava 404 vazio; extensão
+  1.11.1 libera esse endereço na trava de leitura); senão `restauth/getbinlink/{chave}/{nome}` (o Emitir DFD) — UMA vez (e o
+  link, se a resposta for um); sem PDF, o erro traz o pedido (endereço → status), o esqueleto da resposta (`amostra`) e os
+  parâmetros enviados — nenhuma repetição nem endereço adivinhado.
+- **FLUXOS DE AUTOMAÇÃO — estilo N8N (v1.24.0, migração `0091`, extensão 1.15.0):** Automação → tarefa **"Fluxos
+  (automações personalizadas)"** (`FluxosAutomacao`, `src/components/fluxos/`). Tabela `automacao_fluxos` (nome, `grafo`
+  JSON, `frequencia` JSON, `ativo`, `proxima_em`, `ultima_em`, `ultima_execucao`); D1 `fluxos.ts`, Zod `fluxos-validation.ts`,
+  rotas `GET/POST /api/admin/automacao/fluxos` e `GET/PATCH/POST(fim da execução)/DELETE …/fluxos/[id]` (`exigirAdmin`,
+  auditoria `automacao`). **Núcleo PURO `fluxo-core.ts`** (testado — `tests/fluxo-core.test.ts`): `lerGrafo`,
+  `validarGrafo` (Início único, campos obrigatórios, portas, ciclo só pela porta "volta" do Laço — `temCicloSemLaco`),
+  `resolverCaminho`/`interpolar` (`{{campo}}`), `comparar` (operadores sem acento/caixa, números pt-BR), `chaveJuncao`,
+  `lerFrequencia`/`proximaExecucao` (Brasília; intervalo ≥ 5 min, diário/dias úteis, semanal, mensal) e o MOTOR
+  `executarFluxo` (por EVENTOS: o nó roda quando todas as conexões de cada porta entregaram; toda saída é sempre entregue —
+  vazia também; nó com todas as entradas vazias é PULADO, menos `rodaSemItens`; o Laço `entregaParcial` entrega "lote" OU
+  "fim"; saída implícita "erro" — ligada, o erro segue por ela; sem ela, o fluxo para e aponta o nó; tetos `MAX_PASSOS`,
+  `MAX_ITENS`, `MAX_ITERACOES_LACO`). **REGISTRO `fluxo-nos.ts`** (novo nó = uma entrada: tipo, categoria, portas, campos
+  DECLARATIVOS, `executar`): Início · Centi (Repartições, Protocolos por situação — `telaApi {situacao}`, CM002 por
+  entidade) · Sistema (DFDs, Protocolos) · Leitura (Ler protocolo — `fluxo-navegador.ts`: emissão POR CÓDIGO + leitura do
+  PDF) · Lógica (SE, Comparar A × B → iguais/diferentes/só em A/só em B, Laço até o fim, Juntar) · Dados (Filtrar, Definir
+  campos, Ordenar, Remover duplicados, Agrupar e somar) · Erros (Apontar erros → relatório) · Saída (Gravar execução nos
+  DFDs, Avisar). Modelos prontos em `fluxo-modelos.ts` (só pela API da Centi — sem cair na tela, v1.25.2; cards "Modelos prontos" na lista com "Usar este modelo" — v1.25.1; com `frequencia`/`ativo` — o POST os aceita): **Inclusão PCA — conferir na CM002 e
+  protocolar** (v1.25.0, a cada 120 min: Protocolos Em análise da repartição fixa → Laço → Ler → filtra assunto INCLUS →
+  **`sistema.naoCadastrados`** (v1.26.0: pula os protocolos já no sistema — Id da capa ou nº/ano — antes de emitir) → **`dados.desdobrar`** (um item por DFD, com o protocolo do pai) → **`dados.conferirCm002`** (v1.26.0, puro `conferirCm002`: fora da CM002, situação proibida/fora da esperada, valor com tolerância, entidade do órgão divergente — um apontamento por problema)
+  → **`saida.importarProtocolo`** (entradas entrada + apontamentos, casados por protocolo/ano). A importação headless é
+  **`importar-protocolo-auto.ts`** (`lerProtocoloCompleto` = índice + parse completo + OCR + normalização; `importarProtocolo`
+  = a régua da Mesa — pula o já cadastrado/DFD existente/PCA sem cadastro/trava do ADM/duplicado/DFD em erro; grava com
+  `origem:"automacao"` e os apontamentos na observação). A leitura fica num cache da execução (`CacheLeitura`) — o
+  importar não emite de novo; um protocolo que falha vira `leitura:"falha"` e segue. Sem a consulta aprendida (`semConsulta`), os nós `centi.cm002`/`centi.protocolos` e a `TarefaExecucaoDfds` ENSINAM sozinhos (extensão 1.15.1: `telaPlanejamentos {aprender:true}` abre a CM002 — aba ou busca do menu — e clica em Pesquisar; `telaEmAnalise` das repartições) e repetem pela API. A consulta da PO011 é `POST restauth/postdata` `{Data:{Reparticoes:[{Id,Descricao,selected}]}, ItensPerPage, Method, Page}`: o `telaApi {reparticoes}` (extensão 1.15.2, `comReparticoes`) marca `selected` só nas pedidas — a Centi já filtra (`porReparticao`) — e `semPaginacao` cobre `ItensPerPage`. **PAINEL do fluxo** (v1.30.0, `PainelFluxo.tsx`, DS): todo fluxo abre no painel PADRONIZADO — Dados de entrada (os campos `entrada: true` dos componentes, pelo mesmo `CampoDoNo`), Etapas (cada componente em ordem com estado/itens/aviso) e Análise (StatMini + DataTable dos apontamentos, exportável); o diagrama só no botão "Diagrama" (fluxo novo vazio abre nele). `lerDfdCentiPorCodigo` usa a operação do servidor e, recusada, a da extensão (`estado.operacao`) — igual ao Baixar DFDs. **SÓ API** (v1.29.0, extensão 1.16.0): a extensão NÃO opera mais telas — o `ACOES_CENTI` não tem as ações `tela*` (Departamentos/EmAnalise/Emitir/Planejamentos); repartições = `reparticoesApi` (Data.Reparticoes da consulta guardada), Tela Protocolo = `telaApi {reparticoes}`, emissão do protocolo só por código. **Emitir DFD = `GET restauth/load?entity=101026&key=<planejamento>` (`caminhoLoadPlanejamento`, ação `ler` com `entidade`) ANTES do `operation`** — a tela da Centi faz assim e sem o load a Centi responde "Usuário sem permissão!" (Baixar DFDs e `lerDfdCentiPorCodigo`; o load dá a SITUAÇÃO — `acharValor`; `pdf:false` = só o load). **Conferir DFDs × Centi** (v1.28.0: `sistema.dfds` → **`leitura.dfdCenti`** [host `lerDfdCenti` = `lerDfdCentiPorCodigo`, `fluxo-navegador.ts`: o MESMO Emitir DFD do "Baixar DFDs" — `pedidoEmitirDfd` com a config do aparelho `automacao:centi` → `parseDfdPdf`; confere o planejamento; recusa da operação PARA o fluxo] → **`dados.compararDfdCenti`** [puro `compararDfdCenti`: nº, tipo, objeto, valor com tolerância, nº de itens] → `saida.marcarConferencia`); antes (v1.27.0, migração `0092` — `dfds.conferencia_centi` convergente|divergente + `_motivo` + `_em`): `sistema.dfds` (agora com `valor`) + `centi.cm002` → `dados.conferirCm002` → **`saida.marcarConferencia`** (`marcacoesConferencia`, puro: divergente vence, motivo = as mensagens) → `POST /api/admin/automacao/conferencia-dfds` (`exigirAdmin`, ≤ 5000, auditoria); Mesa → DFDs: coluna **Centi** (`CelulaConferenciaCenti`, o motivo na dica). O `centi.protocolos` com repartição e SEM departamento nas linhas PARA com erro (nunca passa todas). Ao fim, o relatório por protocolo do Importar (`host.relatorio`) vai no `POST …/fluxos/[id]` (`relatorio`) e o servidor avisa no sino (tipo `centi`) quem executou. **Editor:** paleta (tocar = acrescenta ligado ao nó marcado;
+  arrastar = solta no quadro), `CanvasFluxo` (DS — grade, pan, zoom, portas, curvas, Delete), `PainelNo` (o formulário
+  do tipo + o seletor de "dado buscado" pelos campos da última execução + a saída numa tabela), relatório da execução.
+  **Agendador:** com a tela aberta e a extensão pronta, a cada minuto roda o fluxo ligado cuja hora chegou
+  (`navigator.locks` — uma aba por fluxo); o servidor agenda a próxima no fim. Futuro (o registro comporta): gatilho por
+  evento/webhook, HTTP genérico, e-mail, IA (Claude) no servidor, escrita na Centi com autorização.
+  **TUDO VIROU FLUXO (v1.31.0, extensão 1.17.0, PROTOCOLO 36):** a tela da Automação (`AutomacaoAdmin`) renderiza SÓ os
+  fluxos (`FluxosAutomacao`) — saíram o seletor de Tarefa, `TarefaTelaProtocolo`, `TarefaExecucaoDfds`, o `centi-tela.js`
+  e a captura de emissão do `centi-main.js` (as descrições dessas peças acima são HISTÓRICO). As funções antigas são os
+  MODELOS (`fluxo-modelos.ts`): **dfds-protocolo** (`sistema.protocolos` → `entrada.selecionar` → `saida.dfdsCenti`),
+  **dfds-ids** (`entrada.ids` → `saida.dfdsCenti`), **tela-protocolo** (`centi.protocolos` → selecionar → laço →
+  `leitura.protocolo`) e **cm002** (com o ramo "Só na Centi"). Motor do Baixar/anexar em **`automacao-dfds-motor.ts`**
+  (`ContextoEmissor`, `emitirUm`/`emitirNaEntidade`, `planoDosItens`, `executarDfds`, `anexarPelaPlataforma`/`testarAnexo`),
+  compartilhado com `lerDfdCentiPorCodigo` (sem OCR — `parseDfdPdf(f,{ocr:false})`). Nós novos: `entrada.selecionar`
+  (tabela de seleção no painel), `entrada.ids`, `saida.dfdsCenti`; campo `reparticoesCenti`; `DefNo.previa` (itens sem
+  executar) e `ContextoNo.parcial` (itens ao vivo). Painel: **`paineis.tsx`** (`HostPainelCtx` + `VISOES` por tipo de nó —
+  Seleção, DFDs, Protocolos lidos) e `PainelFluxo` (Dados de entrada + Etapas | abas das visões + **Análise ao vivo**,
+  altura pelo `useAlturaTela`, sem rolar o navegador). Colunas/gestão de protocolos em `automacao/ProtocolosAutomacao.tsx`.
+  **FLUXOS DENTRO DE FLUXOS (v1.32.0, migração `0093`):** QUALQUER fluxo salvo é um componente. Nó **`fluxo.executar`**
+  (categoria `fluxo`; campo tipo `fluxo`): `modo` porItem (cada item roda o filho, `paralelo` 1–6 por `executarEmPool`) |
+  lote (uma vez com todos); o `gatilho.inicio` do filho entrega `host.__entrada` (os itens do pai) e os campos `entrada` do
+  filho recebem os valores do item (`grafoComEntrada`); o RETORNO = o nó **`saida.retornar`** (porta `__retorno`) ou, sem
+  ele, o que os nós finais produziram (`ResultadoExec.retorno`); apontados do filho sobem com `subfluxo`; falha de um item
+  vai à porta `falhas` (o "interrompido"/operação recusada para tudo). **Retomada** (`retomar`, chave do item `chave`):
+  tabela `automacao_progresso` (fluxo de topo + caminho do nó `ids/nó` + chave; builders `fluxos-sql.ts`, testados no D1 real)
+  por `GET/POST/DELETE /api/admin/automacao/fluxos/[id]/progresso?no=` — pula os `ok`, grava a CADA item (v1.33.3), esquece tudo ao
+  concluir sem falha; `RecomecarSubfluxo` no painel do nó. **`fluxo.paralelo`** (campo `fluxos`): vários fluxos ao mesmo
+  tempo (`Promise.allSettled`, até 6). Segurança: ciclo recusado ao salvar (`cicloAoGravar` → 409, `cicloDeSubfluxos`) e na
+  execução (`host.__pilha`), profundidade ≤ `PROFUNDIDADE_MAX`=3; excluir fluxo usado por outro = 409 (`fluxosQueUsam`); o
+  filho é lido UMA vez por execução (`carregadorDeFluxos`, a versão salva) e compartilha o `host.__cache` (ex.: os DFDs do
+  `sistema.completarDfd` — um item que já é DFD passa direto; sozinho, o planejamento do campo). Modelos com
+  `dependencias` + `fluxoModelo` (`grafoDoModelo`): "Conferir DFDs × Centi" = DFDs → Executar "Conferir 1 DFD × Centi"
+  (paralelo 3, retomar).
+  **Tela (v1.32.1):** a lista mostra SÓ os fluxos salvos, em **`CartaoFluxo`** (DS, `fluxos/CartaoFluxo.tsx` — v1.38.1 — o `useArrastoGrade` mede pelo layout (`rectDeLayout`, sem o transform do FLIP) e mantém o destino com o ponteiro sobre a sombra (sem vai-e-vem). v1.37.3 — a análise ao vivo do `fluxo.executar` mostra Convergente/Divergente/Não conferido/Falhou (`estadoDoItem`) e `compararDfdCenti` dá UM divergente por DFD (mensagens unidas). v1.37.2 — `leitura.dfdCenti.falhaErro` (ligado no "Conferir 1 DFD"): a falha de COMUNICAÇÃO vira erro do subfluxo → o pai grava "falha" e a retomada refaz o DFD (o "não encontrado" segue marcando divergente); "Atualizar pelo modelo" (`criar(…, {atualizar})`) regrava o fluxo salvo e as dependências com o modelo atual. v1.37.1 — no desktop o "Novo fluxo" (`EscolherNovoFluxo coluna`) põe os cartões SOLTOS na coluna (mesma largura dos da lista; topo e rodapé em cartões próprios), a capa usa o `--accent` do tema e o editor mostra as atenções em selo âmbar. v1.37.0 — o `CartaoFluxo` é o `CartaoEspaco` de Tarefas (capa `CapaQuadro` em degradê + ícone, sem foto; nós · última · erros; modelos: nós · frequência · usa) e o FLIP (`useDeslizar`) mede `offsetLeft/Top` cancelando a animação anterior. v1.36.0 — LISTA: `useColunas` divide a largura em N colunas iguais (≥ `LARGURA_CARTAO`=15rem, a de Tarefas), o painel "Novo fluxo" ocupa a ÚLTIMA coluna (entra da direita) e `useDeslizar` (FLIP com `animate`) desliza os cartões ao reorganizar; arrastar reordena pelo `useArrastoGrade` + `CartaoPreso` + `SombraGrade` de Tarefas (ordem por pessoa em `preferencias_tabela` `automacao:ordem-fluxos`, devolvida pelo `GET …/fluxos` como `ordem`) e o modelo arrastado do painel até a lista cria o fluxo naquele lugar; o "+" alterna o painel. v1.35.0 — DIAGRAMA (`fluxo-layout.ts`): `rotasDoGrafo` = rotas SEM linha sobre linha (dobra vertical na faixa livre ±`FAIXA`=12px), `setasDaRota` (setas no meio dos trechos ≥ 64px e na chegada), `coresDasLigacoes` (ligações de um mesmo nó em cores `--serie-*`, "erro" vermelho; a porta ligada fica preenchida na cor), `dobraDaRota` + `Conexao.x` (v1.36.1: arrastar a linha por QUALQUER trecho desloca a dobra — só depois de 4px; o nó arrasta pelo corpo inteiro, as portas param antes; duplo clique volta, Organizar zera); o (?) do zoom = `Ajuda botao`. v1.34.0: LARGURA FIXA `LARGURA_CARTAO`=17rem × h-48, a grade em colunas fixas e o painel do Novo fluxo com a largura de um cartão; o `Badge` ganhou `vivo`/`title`; título
+  INTEIRO, descrição em 3 linhas, rodapé; grade `auto-rows-fr` ≥ 16rem; esqueleto `SkeletonCartao` ao carregar); **"Novo
+  fluxo"** = `Modal lado="direita"` (painel na altura toda à direita no desktop, folha no celular — prop nova do `Modal`)
+  com "Em branco" + TODOS os modelos no mesmo cartão (v1.33.2: o `lado` do `Modal` saiu — o painel desliza na própria tela; o editor do diagrama tem a altura FIXA do display pelo `useAlturaTela`, a paleta e o quadro rolam por dentro) (o que já existe: "Abrir o existente" | "Criar outro"); o "Como
+  montar" do diagrama mora no `Ajuda` (?) dos controles de zoom.
+- **AJUDA + CONFIGURAÇÕES por automação (v1.39.0, migração `0094` — `automacao_fluxos.ajuda` JSON `{funciona, executa,
+  resultado}`, `lerAjudaFluxo`/`MAX_AJUDA` em `fluxo-core.ts`):** cada modelo de `fluxo-modelos.ts` traz a `ajuda` (criar e
+  "Atualizar pelo modelo" gravam; fluxo sem ajuda mostra a do modelo de mesmo nome). No `EditorFluxo` a barra é SÓ de ícones
+  (Diagrama · Relatório com a contagem · Salvar · Executar/Parar · Configurações · Excluir) + o (?) **`AjudaDoFluxo`**; a
+  engrenagem abre o **`ConfigFluxo`** (`fluxos/ConfigFluxo.tsx`, catalogados: nome, descrição, frequência/agendar e os 3
+  textos da ajuda — controlado, o Salvar do editor grava). **`AjudaNo`** (v1.40.0, `fluxos/AjudaNo.tsx`): o (?) de cada
+  COMPONENTE (descrição, recebe, entrega, configuração) no nó do diagrama, na paleta, no `PainelNo` e nas etapas do
+  `PainelFluxo` (para o ponteiro — não arrasta o nó). O "Em branco" do Novo fluxo também se arrasta até a lista (`m:`).
+  **v1.41.0 — diagramas:** `organizarGrafo` alinha a ENTRADA do nó à saída de quem chega (índice das portas, sem `snap` —
+  linha reta) e a saída "erro" conta como a última porta (antes ×1000 jogava o nó para longe; `espalhado` reorganiza ao
+  abrir); `rotasDoGrafo` faz as ligações da MESMA porta dobrarem no mesmo ponto (`forquilha` — uma sobe, outra desce).
+  `Ajuda botao="sm"` = o (?) no tamanho dos `Button size="sm" variant="icon"`.
+  **v1.42.0 — nó = função:** o nó NÃO tem nome próprio (`NoFluxo.nome` saiu; `lerGrafo` descarta o gravado) — o título é
+  `nomeDoNo` (o rótulo do tipo) e a linha de baixo, `resumoDoNo` (os 2 primeiros campos preenchidos); teste garante que todo
+  tipo dos modelos está na paleta. **CM002 robusta (extensão 1.18.0):** `planejamentosCm002(j, conhecida)` aceita lista
+  vazia e linha sem finalidade na consulta aprendida; `comPagina` (`semPaginacao` = página `null`) — a Centi que recusa a
+  página única é lida página a página; o nó `centi.cm002` só falha se TODAS as entidades falharem.
+  **v1.43.0 — `sistema.ler` ("Ler do sistema"):** núcleo puro **`fluxo-ler-sistema.ts`** (`lerDoSistema(fontes, objeto,
+  busca, valores)`: protocolos por nº/Id · DFDs por planejamento/nº/protocolo · itens por planejamento/nº do DFD/protocolo/
+  produto; `BUSCAS`; `valoresProcurados` — vários por ";"/":" e `{{campo}}` do item que chega; `marcarExecutado`; `buscaEfetiva` — com `{{campo}}` que NENHUM item que chega preenche — o Início entrega um item sem o campo —, lê TODOS: a prévia da seleção e a execução avulsa nunca falham). Fontes
+  lidas UMA vez por execução (`fontesDoSistema`, `host.__cache`: protocolos do host, DFDs da `execucao-dfds`, itens da rota
+  ADM nova `GET /api/admin/automacao/itens-sistema` = `listarItensDfds()`). Entrega "Tudo" (porta `saida` + `fim`) ou "Um
+  por vez" (porta `item` → corpo → `volta`; `fim` = os que voltaram com `executado:true`, `totalLido`). O motor ganhou
+  **`DefNo.iterador`** (o Laço e o Ler do sistema): recebe pela entrada OU pela volta e a volta é o único ciclo permitido
+  (antes preso a `TIPO_LACO`). Modelo `dfds-de-protocolo-centi`. Testes: `tests/fluxo-ler-sistema.test.ts`.
+- **NÓS DE DADOS + COLUNAS DA MESA + COMPORTAMENTO (v1.44.0, migração `0095`, extensão 1.19.0):** núcleo PURO
+  **`fluxo-dados.ts`** (testado — `tests/fluxo-dados.test.ts`): `lerColunas`/`escolherColunas` (nó **`dados.colunas`**:
+  "caminho => nome" por linha — a CM002 com `colunas: true` traz TODAS as colunas da Centi em `centi.<coluna>`; extensão:
+  `planejamentosCm002(j, conhecida, colunas)`), `procurarNaTabela` (nó **`logica.procurar`**: entradas Itens + Tabela;
+  numa coluna — índice com a régua do "igual" — ou em TODAS as colunas; primeiro × todas → `encontrado`/`encontrados`;
+  saídas encontrados/naoEncontrados), `lerRegras`/`aplicarRegra` (nó **`dados.regra`**: "X => Y" na ordem, senão
+  valor/fixo/vazio/manter → o campo destino, padrão `valor`; porta `semRegra`) e `operarVariavel` (nó **`dados.variavel`**:
+  definir/somar/contar/acrescentar/ler/limpar em `host.__vars` — compartilhado com subfluxos). Nós **`logica.esperar`** e
+  **`logica.parar`** (marca `pararLaco` — o Laço e o "Ler do sistema" um por vez encerram ao recebê-lo na volta).
+  **Comportamento de TODO nó** (`NoFluxo.tentar {vezes ≤ 5, esperaS ≤ 300}` + `NoFluxo.guardar` — `lerTentar`/
+  `nomeVariavel`/`esperar`/`variaveis` em `fluxo-core.ts`): o motor repete o nó que falha (espera cancelável; "interrompido"
+  não repete) e guarda `{executado, itens, vezes, valor, erro?}` na variável (iterador: `executado` só ao entregar o fim);
+  seção "Comportamento" no `PainelNo`. **Colunas da Mesa:** tabelas `mesa_colunas` (entidade protocolo|dfd|item, nome,
+  `chave` única sem caixa/acento) + `mesa_colunas_valores` (PK coluna + alvo, cascade); núcleo `mesa-colunas-core.ts`,
+  builders `mesa-colunas-sql.ts` (INSERTs de 30 + DELETE por `json_each` — testados no D1 real, `tests/mesa-colunas.test.ts`),
+  D1 `mesa-colunas.ts` (`colunasDaMesa` — só os valores das linhas visíveis; teto 30 colunas por entidade); rotas
+  `GET/POST /api/admin/automacao/colunas` (POST idempotente pelo nome) e `POST/DELETE …/colunas/[id]` (≤ 500 valores, null
+  apaga; auditoria). Nó **`saida.gravarColuna`** (tabela, nome da coluna, campo do valor/id, "vazio apaga"; porta
+  `ignorados`). A Mesa (`montarMesa` → `colunasAuto` → `DfdsView`) mostra as colunas no fim das tabelas de Protocolos, DFDs
+  (`PlanilhaDfds.colunasExtras`) e Itens (`colunasDaAutomacao`, `ColunasAutomacao.tsx`). **Legado:** `DefNo.legado` tira o
+  nó da paleta e mantém os fluxos salvos (`sistema.dfds` → "Ler do sistema" nos modelos). Modelo
+  "Situação da CM002 numa coluna da Mesa".
+- **EXECUÇÃO PELA CM002 + TABELAS (v1.45.0, migração `0096` — `automacao_tabelas`: nome, `chave` única sem caixa/acento,
+  colunas/linhas JSON ≤ 5000 linhas e 1,5 MB, `total`):** modelo **`cm002`** = Ler do sistema (DFDs) → Ordenar por
+  `entidade` → `logica.procurar` (planejamento = `planejamento` da CM002 E `entidade` = `entidade` — `OpcoesProcura.extra`,
+  índice com a régua do "igual") ← `centi.cm002 {dosItens}` (lê SÓ as entidades dos DFDs que chegam, uma por órgão; `tentar`
+  2×30 s) → `saida.gravarExecucao {campoSituacao: "encontrado.situacao"}` (o TEXTO da Situação na coluna Execução — antes o
+  load do planejamento gravava o código numérico) + atenção aos ≠ "Executado" e aos fora da CM002; a CM002 × DFDs ao
+  contrário → **`saida.tabela`** "CM002 sem DFD no sistema". Nós **`saida.tabela`** (nome, colunas opcionais, substituir |
+  acrescentar → `POST /api/admin/automacao/tabelas`) e **`entrada.tabela`** ("Ler tabela salva": colunas + linhas de/até —
+  `recorteTabela`); visão "Tabela" no painel (`VistaTabela`, relê do servidor a cada execução, exportável). D1
+  `automacao-tabelas.ts`; puro `linhasParaTabela`/`recorteTabela`/`chaveTabela` (`fluxo-dados.ts`); rotas `GET` (lista |
+  `?nome=`), `POST`, `DELETE ?nome=` (`exigirAdmin`, auditoria). Teste do modelo de ponta a ponta em `tests/fluxo-dados.test.ts`. **v1.45.1:** `limparSituacao` recusa situação só de dígitos (nunca grava código) e a migração `0097` apagou os códigos antigos; o `saida.gravarExecucao` ganhou `situacaoFixa` — no modelo, os DFDs de órgão cadastrado fora da CM002 gravam “Não encontrado na CM002” (SE `entidade` não vazio → `grav2`); na interface “entidade” virou “órgão” (o código segue `entidade`).
+- **CM002 INTEIRA + ÓRGÃO NA CENTI (v1.47.0, extensão 1.21.0, protocolo 38):** a ação `cm002` tenta a consulta guardada
+  como a tela pediu e com o tamanho "todos" (`comPagina(…, null, todos)` — 100000, 0, -1, null), vale a de MAIS linhas
+  (completa quando bate `totalDaResposta`) e, senão, página a página (≤ 2000) → `{linhas, total, lidas, paginas, modo}`; o
+  `lembrarCm002` guarda a consulta que trouxe MAIS linhas (o "Mostrar: Todos" da tela). O nó `centi.cm002` avisa "órgão X:
+  N de T lidas" e PARA na leitura incompleta ou quando nenhum planejamento dos DFDs do órgão veio. Ação **`trocarOrgao
+  {entidade|null}`** = o órgão (Company) em análise FIXADO na aba (`sessionStorage`), usado por toda leitura sem órgão
+  explícito. Nó **`centi.orgao`** ("Órgão na Centi", iterador): o órgão de cada item (campo, padrão `entidade` = o ID da
+  Centi do órgão cadastrado; "Órgãos" filtra — trava) ou órgãos FIXOS (os itens em cada um); "Todos" (portas Com órgão/Sem
+  órgão) ou "Um órgão por vez" (Lote → Volta, troca o órgão na Centi a cada lote, libera no fim). Modelo `cm002`: DFDs →
+  Órgão na Centi → CM002/Procurar (sem órgão = atenção). Na Mesa a coluna Execução chama-se **Situação**; na Mesa do PCA,
+  Situação e Centi abrem ocultas (`DataTable.ocultasPadrao` = o layout padrão do sistema; a edição da tabela as mostra).
+- **AUTOMAÇÕES POR ADM + PÚBLICAS (v1.48.0, migração `0098` — `automacao_fluxos.publico` + índice `criado_por`; os
+  existentes viraram públicos):** o PAINEL é do dono (`listarFluxosDe` — os dele + os sem dono); `listarPublicos` = os
+  públicos de OUTRAS pessoas, mostrados no painel lateral "Novo fluxo" (seção "Públicas de outras pessoas", `cartaoDoPublico`;
+  "Usar"/arrastar = CÓPIA privada no meu painel — `OpcoesCriar.copiar`) e no seletor de subfluxo do `fluxo.executar`. Regras
+  puras em `fluxo-core.ts`: **`fluxoVisivel`** (dono, público ou sem dono — `GET [id]`, subfluxos) e **`fluxoEditavel`** (dono
+  ou sem dono — PATCH/POST/DELETE/progresso; outro = 404). Gravar um grafo com subfluxo PRIVADO de outra pessoa = 422
+  (`subfluxosProibidos`); tornar privado um fluxo usado por fluxos de outras pessoas = 409. `Switch` "Pública" no
+  `ConfigFluxo`, selo "Pública" no cartão. `DataTable.linhasSalvas` = as linhas por página do rodapé salvas no aparelho
+  (a tabela dos itens processados: ordem de processamento, coluna Órgão).
+- **SUBSTITUIR DFD PELA CENTI + AUTOMAÇÕES NA MESA (v1.49.0, sem migração):** `lerDfdCentiPorCodigo(…, completo)` devolve o
+  DFD lido INTEIRO (`centi.dfd`; campo "Guardar o DFD inteiro" do `leitura.dfdCenti`) e o nó **`saida.substituirDfd`**
+  (portas `substituidos`/`erros`) chama o host `substituirDfd` = **`substituirDfdPelaCenti`** (`fluxo-navegador.ts`): `GET
+  /api/dfd/[id]` → o MESMO nº de planejamento (senão erro) → `normalizarSecoesDfd` + `herdarTratamentos` (sem assinatura lida
+  — PDF sem OCR — ficam as do gravado) → `enviarDfdEmLotes(metaDoDfd(…, {origem:"sobrescrita"}), …, {existia:true})` — a
+  unidade, o protocolo e o PCA do gravado ficam; `metaDoDfd` (`importar-dfd.ts`) é o cabeçalho único do envio (também na
+  protocolação automática). Modelo **`substituir-dfds-centi`** (Início → Ler do sistema pelo `{{planejamento}}` → `entrada.selecionar` [v1.49.1: o usuário marca QUAIS DFDs serão substituídos; nenhum vem marcado]. **PRÉVIA da seleção (v1.49.2, padrão de TODA automação):** o `entrada.selecionar` sem itens roda sozinho SÓ o trecho antes dele (`subgrafoAte`) quando ele só lê (`subgrafoSoLeitura` — sem saída/erros/subfluxo), com os itens da Mesa se vieram (`HostPainel.carregarPrevia`/`previas`); "Recarregar itens" no rodapé da tabela → Órgão na
+  Centi → Buscar DFD {completo} → Substituir). **Mesa do SISTEMA (nunca a do PCA):** `AutomacoesMesa` (DS — o quadrado
+  `IconRobo` na barra, ao lado dos Dados completos) lista as automações da preferência PESSOAL `automacao:mesa` `{ids}`
+  (`automacao-mesa.ts`: `idsAutomacoesMesa`/`alternarAutomacaoMesa`; `automacoesDaMesa` em `fluxos.ts` — só as que a pessoa
+  vê, `fluxoVisivel`; `carregarMesa` só para o ADM). **v1.50.0 — SEM sair da Mesa:** o robô da barra do topo = TODOS os filtrados da visão aberta; o botão
+  "Automação" da barra de seleção (Protocolos/DFDs/Itens) = os SELECIONADOS — protocolos e itens viram os DFDs deles
+  (`dfdsDoAlvo`, puro/testado). `AutomacoesMesa` confirma (`useConfirmacao`), grava o DISPARO (`gravarDisparoMesa` +
+  o evento `EVENTO_DISPARO_MESA`) e monta a Automação ESCONDIDA pelo segundo plano (`useRodarFora` → `SegundoPlano.rodarFora`:
+  monta sem a página dona e a mantém viva até o trabalho começar; já montada, fica a que está) — **`AutomacaoViva`**
+  (a raiz da Automação na página E fora dela, `CHAVE_AUTOMACAO`; sem dados, busca `GET /api/admin/automacao/contexto` =
+  `dadosDaAutomacao`, o mesmo loader da página). O `FluxosAutomacao` lê o disparo (sem confirmar de novo) e roda com
+  `host.__entrada` + **`__daMesa`** (o `entrada.selecionar` deixa passar todos: a seleção da Mesa vale); o andamento,
+  Parar e Detalhes ficam no **painel flutuante** do canto; sem a extensão pronta, avisa. No editor, o `Switch`
+  "Disponível na Mesa" grava a preferência na hora; o `GET …/fluxos` devolve `naMesa`.
+- **CAMPOS DOS NÓS POR ESCOLHA (v1.51.0, sem migração):** `CampoDoNo` (`PainelNo.tsx` — o MESMO no diagrama e nos Dados
+  de entrada) põe o (?) em TODO campo (`RotuloCampo` + `Ajuda compacta`: a `ajuda` do campo, senão `AJUDA_TIPO_CAMPO` do
+  tipo); `caminho` = SELEÇÃO dos campos que os nós anteriores entregam (`CampoCaminho`, "Outro (digitar)…"); `aceitaCampo:
+  true` = a ORIGEM do valor ("Valor fixo" | "Do nó anterior: campo" — gravado `{{campo}}`, `campoDoValor`) e, vindo do nó
+  anterior, o valor TRAVADO com o cadeado e o nome do nó (`CampoComOrigem`); `aceitaCampo: "inserir"` = texto livre + "Inserir
+  campo" (as mensagens); tipo **`orgaosCenti`** = os órgãos com o ID na Centi em `SeletorMultiplo` (`CampoOrgaosCenti`,
+  `HostPainel.orgaos`; a `OpcaoMultipla` ganhou `rotulo`). Os campos conhecidos vêm da última execução E da prévia
+  (`HostPainel.saidas`); sem nenhum, o painel do nó oferece **"Ler os campos"** (a prévia só de leitura do trecho anterior).
+  Comportamento: Repetir (0–5) e Esperar em opções.
+  **v1.52.0 — tudo por escolha + (?) DIDÁTICO:** o (?) de cada campo (`AjudaCampo`) = **Para que serve** (a `ajuda` do campo —
+  o teste exige uma em TODO campo de nó não legado) · **Como preencher** (`AJUDA_TIPO_CAMPO` pelo tipo; `AJUDA_ORIGEM`/
+  `AJUDA_INSERIR` pela origem) · **Opções** (a lista da seleção) · obrigatório. Tipo **`nomeLista`** + `CampoNo.fonte`
+  (`tabelas` | `colunasMesa` — filtradas pela tabela da Mesa do nó | `variaveis` — `variaveisDoGrafo`): escolhe um nome que
+  existe ou "Novo nome (digitar)…" (`CampoNomeLista`; as listas da API lidas uma vez por tela). Limites, tempos, lotes,
+  paralelo e tolerâncias viraram SELEÇÃO (`opcoesNum`; o valor antigo fora das opções segue à vista). O **Comportamento** é
+  montado com os MESMOS `CampoDoNo` (`CAMPOS_COMPORTAMENTO`): Repetir · Esperar (só com repetição) · Guardar o resultado
+  (`nomeLista` de variáveis com "Não guardar" e o nome NOVO sugerido — `sugerirVariavel`) · Desativar.
+- **TABELAS DAS AUTOMAÇÕES = TABELAS DA MESA (v1.57.0, sem migração):** `fluxos/TabelaMesaFluxo.tsx` (DS) — o tipo dos itens
+  vem do núcleo puro **`fluxo-tipo-item.ts`** (`tipoDosItens`: protocolo · DFD · item, testado) e cada tipo usa o componente
+  da Mesa: protocolos = `COLUNAS_PROTOCOLOS` + `useColunasGestao`; DFDs = `PlanilhaDfds semEstado` (`dadosDfdDoItem`); itens =
+  **`colunasItemMesa`** (`ColunasItensMesa.tsx`, a MESMA fábrica da visão Itens da `DfdsView`); outro dado = colunas genéricas.
+  Tocar abre a pilha `BannersMesa` (`aberturaDoItem` → `HostPainel.abrir`, que substituiu o `abrirProtocolo`). Usada na
+  Seleção, na Tabela salva e na Análise ao vivo. O `GET …/execucao-dfds` traz sigla e protocolo de cada DFD.
+  **v1.70.2 — aba "Do sistema":** `VISOES["sistema.ler"]` = `VistaDoSistema` — o que o "Ler do sistema" lê, já ao abrir
+  (prévia SÓ de leitura com o próprio nó — `subgrafoAte(g, no, incluir)` + `carregarPrevia(…, incluir)`, sempre "Tudo de uma
+  vez"), sem executar e sem a extensão; o hook `usePreviaDoNo` é o mesmo da Seleção.
+- **SELEÇÃO EM TODA TABELA DO FLUXO + CARTÕES (v1.71.0, sem migração):** tabelas que ALIMENTAM a automação (Seleção,
+  "Do sistema" do `sistema.ler`, "Ler tabela salva") gravam as linhas MARCADAS no próprio nó (`config.marcados`,
+  `useMarcadosDoNo` em `paineis.tsx`; nenhuma marcada = todas passam — `filtrarMarcados`, `fluxo-dados.ts`; vindo da Mesa —
+  `__daMesa` — a seleção de lá vale); tabelas de RESULTADO (Análise ao vivo, Salvar em tabela, Protocolos lidos) ganham
+  **"Executar com N selecionado(s)"** (`useExecutarSelecionados` → `HostPainel.executarCom(g, itens)` = `executar(f, g,
+  false, itens)`), só quando o fluxo aceita aqueles itens (`aceitaItensDeFora`, `fluxo-tipo-item.ts`: o Início alimenta um
+  `sistema.ler` sem valor do MESMO tipo, ou com `{{campo}}`, ou um nó que não é da Centi); o `sistema.ler` sem valor
+  procurado restringe a leitura aos itens de fora do mesmo tipo (`restringirPelaEntrada`). O **Valor procurado** do Ler do
+  sistema = SELEÇÃO dos valores que existem (`CampoNo.valoresSistema` → `CampoValoresSistema`, `opcoesDaBusca` — planejamento,
+  nº do DFD, protocolo/Id, produto) e só aparece com "Quais" ≠ Todos (`CampoNo.visivel`, conferido por `campoVisivel`);
+  "Quais" virou dado de entrada do painel. **Cartões:** o (?) da automação no canto do `CartaoFluxo` (`ajuda` →
+  `AjudaDoFluxo`; `ajudaDoFluxo(f)` = a do fluxo ou a do modelo de mesmo nome); a grade da lista existe SEMPRE (o vazio é um
+  filho `col-span-full`) — soltar um modelo arrastado funciona com a lista vazia; o painel "Novo fluxo" (`PainelLateral`)
+  tem a altura até o fim do display (`useAlturaTela`), um cartão só (cabeçalho, Nome, Modelos, Públicas, rodapé) e NÃO lista
+  o modelo/pública cujo nome já está na lista; "Atualizar pelo modelo" mora no editor (ícone, com confirmação; o editor
+  remonta — `versaoEditor`). Selo "Sem extensão" = o do Preview do PCA (`Badge tone="amber" dot vivo tamanho="linha"`).
+  Testes: `tests/fluxo-selecao.test.ts`.
+- **LISTA DOS FLUXOS ROLA POR DENTRO (v1.73.3):** a coluna da grade dos `CartaoFluxo` (`ListaFluxos`) tem a altura até o fim do display (`useAlturaTela`, a mesma do `PainelLateral`) e `overflow-y-auto` — a página não rola; o arrasto (`useArrastoGrade` → `rolagemDe`) rola essa coluna perto das bordas.
+- **ZONAS DE SOLTURA no arrasto da grade (v1.74.0):** `useArrastoGrade({zonas: {limite, aceita}})` (`PastasQuadros.tsx`) — fora do `limite` o destino é `fora` (sem sombra); os elementos `[data-zona-arrasto="<nome>"]` sob o ponteiro viram `destino.fora = nome`; soltar numa zona que `aceita` ENCOLHE o card para dentro dela e chama `onSoltar`, senão o card VOLTA voando à origem. Na Automação (`ListaFluxos`): o fluxo da lista vai à **lixeira** (`LixeiraArrasto`, centro embaixo) ou volta ao **painel** "Novo fluxo" (`PainelLateral zona`) → `excluir(f, zona)` com confirmação; o modelo/pública arrastado só marca a `SombraGrade marcada` (tracejada) sobre a lista. Tarefas não usa `zonas` (igual a antes).
+- **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
+  o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
+  conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
+  curso move o nó para um estacionamento escondido; voltar o devolve com o estado inteiro; ocioso, desmonta) +
+  **`useTrabalhoSegundoPlano({id, titulo, estado rodando|fila|concluido|falhou|cancelado, feito, total, texto, rota,
+  onAbrir, onParar})`** + **`useNaTela`** (fora da página nada abre diálogo sozinho) + **`PainelSegundoPlano`**: pílula
+  MINIMIZADA no canto inferior direito (só fora da página dona; título · n/total · barra fina; "+N") que expande na lista
+  com Parar · Dispensar · **Detalhes** (volta à página e abre a execução). A altura vai em **`--reserva-flutuante`**: as
+  bolhas do chat (`BolhasChat` `tela().base`) e os avisos flutuantes ficam acima; respeita `--reserva-rodape`. Usado pela
+  Automação (`page.tsx` → `ManterVivo chave="automacao"`); os fluxos (`FluxosAutomacao`) informam o andamento e têm FILA
+  (executar com outro rodando enfileira — roda em seguida; o agendador também).
+- **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
+  faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
+  ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só
+  leitura; com situação, filtra `emAnalise`). A `TarefaTelaProtocolo` vai pela API quando a consulta guardada cobre as
+  repartições escolhidas (`apiCobreReparticoes` — as da última leitura pela tela, no aparelho `automacao:tela-api-reparticoes`;
+  com o departamento nas linhas, `soDasReparticoes` filtra) e, senão ou se falhar, lê pela tela UMA vez (que ensina a consulta).
+  Testes: `tests/tela-protocolo-api.test.ts`.
+- **EXECUÇÃO DOS DFDs pela API da CM002 (extensão 1.13.0, protocolo 34 — desde a v1.21.0 SEM a tela):** o `centi-main.js`
+  GUARDA a consulta que a própria tela da CM002 faz ao Pesquisar (`lembrarCm002` → `localStorage __pcaCm002_v1`, só método,
+  caminho e corpo; reconhecida pela FORMA — `planejamentosCm002`: Id + Situação + Finalidade/Centro de custo) e a ação **`cm002`**
+  `{entidade}` a REPETE sem paginação (`semPaginacao`: tamanho → 100000, início → 0) na entidade pedida — todas as linhas, só
+  leitura (`consultaPermitida`). A `TarefaExecucaoDfds` lê CADA entidade dos órgãos (o `entidade_centi` cadastrado, senão o mapa
+  do aparelho), grava por entidade (`POST …/execucao-dfds` com `dfdIds`) e separa as visões DFDs do sistema · Situação diferente
+  (≠ Executado) · Não encontrados na Centi · Só na Centi (planejamentos sem DFD). A leitura pela tela (`telaPlanejamentos`) abaixo
+  segue na extensão, sem uso na tela. Desde a v1.22.0: andamento FLUTUANTE no rodapé (v1.22.1 — `PainelAndamento`, portal, recolhível: a barra + um cartão por entidade — órgãos, DFDs, lidos,
+  ≠ executado, só na Centi) e o selo da execução no `DfdCabecalho` (`execucao`: UM status — a situação da Centi na cor da classe, ou Não
+  verificado — DFD gravado e DFD ao lado do protocolo); em Ajustes, o órgão com `entidade_centi` cadastrado fica fixo (`fixas`).
+- **EXECUÇÃO DOS DFDs pela CM002 (extensão 1.12.2, migração `0089` — `dfds.execucao_centi`/`execucao_centi_em`):** tarefa
+  **"Verificar execução dos DFDs (CM002)"** da Automação (`TarefaExecucaoDfds`): a ação **`telaPlanejamentos`**
+  (`centi-tela.js` v9, só leitura e o MÍNIMO de cliques) lê a tabela "Resultados" da CM002 COMO ESTÁ NA TELA (o HTML —
+  `lerTabelaCm002`: a linha de cabeçalho com ID e SITUAÇÃO e as linhas de mesma forma); só clica na aba da CM002 se a
+  tabela não estiver à vista, em Pesquisar se estiver vazia e na próxima página só enquanto faltar algum planejamento
+  pedido — nunca abre um planejamento nem mexe em filtro. **ID = nº de planejamento**. `POST
+  /api/admin/automacao/execucao-dfds` (`exigirAdmin`) → núcleo puro **`execucao-centi.ts`** (`situacoesDaGrade`,
+  `planoExecucao` — grava só o que mudou, `classeExecucao` executado/cancelado/outro) + auditoria; `GET` = os DFDs com
+  planejamento e a situação gravada. Mesa → DFDs: coluna **Execução** (`CelulaExecucao`, só quando algum DFD já foi
+  verificado). **Por ENTIDADE:** a CM002 mostra só a entidade aberta na Centi — só os DFDs do órgão ligado a ela (o mapa
+  órgão → entidade: o **ID da entidade na Centi CADASTRADO no órgão** — `orgaos.entidade_centi`, migração `0090`, campo no
+  `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
+  as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
+  + o da tabela em `automacao-tela-centi`.
+- **ROLAGEM LEVE (v1.73.1) — regra firme:** as barras de rolagem são as NATIVAS do navegador (sem `scrollbar-width`,
+  `scrollbar-color` nem `::-webkit-scrollbar` — a barra própria é desenhada/arrastada pela thread principal e travava o
+  arrasto; a nativa é do compositor e segue o ponteiro; clara/escura pelo `color-scheme` do tema). Nada FIXO/STICKY sobre
+  conteúdo que rola leva `backdrop-filter` (o cabeçalho do `AppShell`, o da tela pública e a `BottomNav` são opacos —
+  `bg-surface`; o desfoque fica só em sobreposições paradas: scrim de modal, botões sobre capas). Variável CSS na RAIZ
+  escrita por medida (ResizeObserver/resize) só quando o valor MUDA — **`definirVarRaiz`** (`espacamento.ts`;
+  `--rodape-tabela`, `--reserva-rodape`; a `BarraSelecao` só re-renderiza quando a altura muda). Sem `will-change` em
+  elementos repetidos (a `SetaDropdown` não o tem — viraria uma camada por célula). A marca d'água fixa é `contain:strict`.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
   do `SelectField` a seta fica rente ao fim do select (`SETA_NA_CAIXA`). Os selects invisíveis sobre um visual próprio
-  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam.
+  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam. O gatilho da `Selecao` (`.seletor-sistema`) leva a seta como
+  ELEMENTO (`SetaDropdown`) no MESMO lugar e com o mesmo respiro — trocar um `<select>` por ela não muda a caixa.
+- **SETA DOS DROPDOWNS (v1.66.0) — `SetaDropdown`** (`SetaDropdown.tsx`, DS): a seta de TODO gatilho de dropdown (`Selecao`,
+  `PeriodoPicker`, `SeletorPessoa`, `SeletorMultiplo suspenso`, `GatilhoFiltro`, `FilterChip`, os seletores do cabeçalho e o
+  menu de vistas do Calendário) gira suave (v1.66.1: 1,75× o `--motion-duration` = 0,35 s, ease-in-out `cubic-bezier(.65,0,.35,1)`; parada com "reduzir movimento") e aponta para o lado OPOSTO
+  da lista aberta (onde tocar para fechar): aberta embaixo (e a folha) = para cima; aberta em cima = para baixo; fechada =
+  para baixo. O estado vem do `Dropdown` pelo contexto `EstadoDropdown` {aberto, acima} (o lado decidido uma vez por
+  abertura); fora de um `Dropdown`, parada. Os acordeões têm o giro próprio.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
@@ -3370,13 +4668,40 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - Não importe nos testes módulos que puxam `getDb`/`@opennextjs/cloudflare` nem arquivos
     `.tsx` (JSX não passa pelo stripping). Para testar lógica presa a esses módulos, **extraia**
     a parte pura para um `.ts` próprio (padrão de `password.ts`).
-- **Biome** (`biome.json`): regras recomendadas. CSS fica fora (Tailwind v4). Algumas regras
-  de a11y (`noLabelWithoutControl`, interações em `div`) estão **off** como dívida técnica a
-  endereçar num passe de acessibilidade; `noNonNullAssertion`/`useExhaustiveDependencies` são
-  avisos (não alterar deps de hooks automaticamente).
+- **Biome** (`biome.json`): regras recomendadas — inclusive as de a11y (`noLabelWithoutControl`,
+  `noStaticElementInteractions`, `useKeyWithClickEvents`, religadas na v1.5.0). Padrão: ação = `<button>`; rótulo =
+  `htmlFor`; fundo DECORATIVO com clique (scrim, célula vazia) = `aria-hidden="true"` com o caminho do teclado ao lado
+  (Esc, botão); invólucro que só repassa/para eventos dos filhos = `role="none"` (o Biome não aceita "presentation");
+  exceção só com `biome-ignore` + o motivo. CSS fica fora (Tailwind v4); `noArrayIndexKey` off (listas estáticas);
+  `noNonNullAssertion`/`useExhaustiveDependencies` são avisos (não alterar deps de hooks automaticamente).
+
+## VERSÕES do sistema e NOVIDADES (sem migração)
+- **Fonte única:** `src/lib/versoes.ts` (puro, testado em `tests/versoes.test.ts`) — `VERSOES` (a mais recente PRIMEIRO; cada
+  uma: `versao` semver, `data` AAAA-MM-DD, `titulo` e `mudancas` {tipo novo|melhoria|correcao, `area`, `texto`, `link` =
+  ONDE mudou — caminho interno, com a aba}), `VERSAO_ATUAL`, `problemasDasVersoes` (ordem, números, datas, links internos —
+  o teste exige nenhum) e o `version` do `package.json` = a atual (testado).
+- **REGRA FIRME — TODA atualização publicada, de QUALQUER sessão/chat, segue o versionamento:** antes do push na `main`,
+  acrescentar a entrada NO TOPO de `VERSOES` (MAIOR = muda o jeito de trabalhar · MENOR = recurso novo · CORREÇÃO = ajuste)
+  com o que mudou e o `link` de cada mudança, e o MESMO número no `package.json`; depois publicar (push + "Deploy Cloudflare"
+  verde). Antes de começar, `git fetch` da `main`: se outra sessão publicou SEM versão, as mudanças dela entram na próxima
+  versão (nada fica fora do registro).
+- **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.5.0"; tocar abre as Novidades no
+  BANNER FLUTUANTE; o ponto accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`).
+- **Novidades = BANNER FLUTUANTE, sem página:** **`NovidadesFlutuantes`** (DS) sobre a `JanelaFlutuante` (ao lado da âncora no
+  desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**
+  (DS; `onAlternar` = recolhível pelo cabeçalho) por versão: número, título, data, selo "Atual" e cada mudança com o tipo
+  (`Badge`), a área e o botão "Ver onde mudou" (o `link`; ir fecha o banner e o sino — `onIr`).
+- **Aviso aos ADMs:** tipo **`versao`** no catálogo (`CATALOGO_AVISOS`, grupo Administração — no sino, sem e-mail por padrão;
+  o ADM liga em Configurações → Notificações) — `avisoNovaVersao` DERIVADO na leitura para cada Administrador (como a versão
+  da extensão), UM por versão (`chave` `versao-sistema:<n>`; limpo, não volta): título "Nova versão N — título", o TEXTO = o
+  que mudou (uma linha por mudança, até 4 + "e mais N"; o sino mostra até 4 linhas) e SEM link — tocar no aviso (ou no "Abrir"
+  da prévia) abre as Novidades DAQUELA versão (`versaoDoAviso`) no banner flutuante AO LADO do sino, que CONTINUA ABERTO
+  (`Dropdown` ignora o toque e o Esc com uma janela `[data-sobre-dropdown]` por cima — o Esc fecha primeiro o banner).
 
 ## Ao finalizar qualquer mudança
 1. `npm run lint`, `npm test` e `npm run typecheck` verdes (os três bloqueiam o deploy).
 2. **Commit + deploy** (push na main) e **verifique o site no ar** sem regressão.
-3. **Atualize os `.md`** relevantes (este arquivo, `docs/ROADMAP.md`, README) e a documentação
+3. **TODA atualização = versão nova** em `src/lib/versoes.ts` + `package.json` e PUBLICADA (ver "VERSÕES" — vale para
+   qualquer sessão/chat; o que outra sessão publicou sem versão entra na próxima).
+4. **Atualize os `.md`** relevantes (este arquivo, `docs/ROADMAP.md`, README) e a documentação
    do que mudou. Mudanças limpas, cirúrgicas, sem código morto.

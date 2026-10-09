@@ -146,7 +146,7 @@ function Painel({
           type="checkbox"
           checked={todosMarcados}
           onChange={alternarTodos}
-          className="h-4 w-4 accent-[var(--accent)]"
+          className="caixa-marcar"
         />
         {buscando ? `Selecionar os ${visiveis.length} encontrados` : "Selecionar todos"}
       </label>
@@ -160,7 +160,7 @@ function Painel({
               type="checkbox"
               checked={marcadas.has(o)}
               onChange={() => alternar(o)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+              className="caixa-marcar"
             />
             <span className="truncate" title={o}>{o}</span>
           </label>

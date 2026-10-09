@@ -627,7 +627,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   );
 
   if (!dados.quadros.length && !dados.pca.pcas.length)
-    return <p className="rounded-card border border-dashed border-border-2 bg-surface px-6 py-12 text-center text-sm text-muted">Nenhum quadro de tarefas ativo neste grupo.</p>;
+    return <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">Nenhum quadro de tarefas ativo neste grupo.</p>;
 
   const erroCriacao = criacao ? problemaCriacao(criacao) : null;
   return (

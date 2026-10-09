@@ -6,6 +6,9 @@ import { classificarAssunto } from "./avaliacao-core";
 import type { DetalheAuditoria } from "./auditoria-core";
 import { compararCapa } from "./comparar-protocolo";
 import { comandoAtualizarSeResponsavel, comandosMesmoId } from "./protocolo-sql";
+import { baixarNumeros, retratarNumeros } from "./pca-itens-sql";
+import { MOTIVO_NUMERO } from "./pca-numeracao-core";
+import { pcasDosDfds, sincronizarAtivosPca, sincronizarDfdNoPca } from "./pca-sincronia";
 import { limparRastroDestino } from "./rastro-sql";
 import { type DfdResumo, listarDfdsDoProtocolo } from "./dfd";
 import { filtroAnoPcaProtocolo } from "./dfd-sql";
@@ -288,6 +291,7 @@ export async function iniciarProtocolo(
         .select({ id: dfdProtocolos.id })
         .from(dfdProtocolos)
         .where(and(eq(dfdProtocolos.idExterno, p.idExterno), ne(dfdProtocolos.numero, p.numero)))
+        .orderBy(asc(dfdProtocolos.id)) // a MESMA ordem da rota (`protocolosDeMesmoId`): o 1º é o que fica sem o nº novo
     : [];
   if (mesmoId.length === 0) {
     const [row] = await upsert;
@@ -316,16 +320,26 @@ export async function getProtocoloPorNumero(numero: string): Promise<{ id: numbe
   return r ?? null;
 }
 
-/** Protocolo de mesmo `idExterno` (Id da capa) — para o anti-sequestro na protocolação. */
-export async function getProtocoloPorIdExterno(
+/** Os DFDs VIVOS dos protocolos dados (nº + totais) — a análise de uma re-importação soma os que continuam no processo. */
+export async function dfdsVivosDosProtocolos(ids: number[]): Promise<{ numero: string; valorTotal: number | null; totalItens: number | null }[]> {
+  if (ids.length === 0) return [];
+  return getDb()
+    .select({ numero: dfds.numero, valorTotal: dfds.valorTotal, totalItens: dfds.totalItens })
+    .from(dfds)
+    .where(inArray(dfds.protocoloId, ids));
+}
+
+/** TODOS os protocolos de mesmo `idExterno` (Id da capa) e nº DIFERENTE — o mesmo processo renumerado (o legado pode ter
+ * mais de um): o anti-sequestro e a recusa da fusão com PCA conferem cada um (a MESMA lista do `iniciarProtocolo`). */
+export async function protocolosDeMesmoId(
   idExterno: string,
-): Promise<{ id: number; numero: string; reparticaoId: number | null } | null> {
-  const [r] = await getDb()
+  numero: string,
+): Promise<{ id: number; numero: string; reparticaoId: number | null }[]> {
+  return getDb()
     .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, reparticaoId: dfdProtocolos.reparticaoId })
     .from(dfdProtocolos)
-    .where(eq(dfdProtocolos.idExterno, idExterno))
-    .limit(1);
-  return r ?? null;
+    .where(and(eq(dfdProtocolos.idExterno, idExterno), ne(dfdProtocolos.numero, numero)))
+    .orderBy(asc(dfdProtocolos.id));
 }
 
 /**
@@ -407,14 +421,13 @@ export async function detalheEdicaoProtocolo(
 
 /** Vincula (ou desvincula, com `null`) um DFD a um protocolo — rule 4. Vinculado a um protocolo, o DFD
  * volta a estar VIVO nele: um rastro antigo dele ali ("sobrescrito") sai no mesmo lote. */
-export async function vincularDfd(dfdId: number, protocoloId: number | null, numero: string): Promise<void> {
+export async function vincularDfd(dfdId: number, protocoloId: number | null, numero: string, ator: number | null = null): Promise<void> {
   const db = getDb();
   const vinculo = db.update(dfds).set({ protocoloId, atualizadoEm: sql`(CURRENT_TIMESTAMP)` }).where(eq(dfds.id, dfdId));
-  if (protocoloId == null) {
-    await vinculo;
-    return;
-  }
-  await db.batch([vinculo, limparRastroDestino(db, numero, protocoloId)]);
+  if (protocoloId == null) await vinculo;
+  else await db.batch([vinculo, limparRastroDestino(db, numero, protocoloId)]);
+  // O PCA acompanha: sair de um protocolo incorporado tira o DFD do PCA; entrar num incorporado o põe (com nºs novos).
+  await sincronizarDfdNoPca(dfdId, ator, "todos");
 }
 
 /** Repartição (+ nº, p/ o histórico, e o assunto — a CATEGORIA das exceções do ADM) de um protocolo — o guard de
@@ -442,11 +455,16 @@ export async function categoriaDoProtocolo(id: number | null | undefined): Promi
  * cascade; e os remove de qualquer edição de PCA via `pca_dfds.dfdId` cascade) e então o
  * protocolo. Ordem importa: apagar os DFDs ANTES (senão a FK `set null` os deixaria órfãos).
  */
-export async function excluirProtocolo(id: number): Promise<void> {
+export async function excluirProtocolo(id: number, ator: number | null = null): Promise<void> {
   const db = getDb();
+  // Protocolo em um PCA: os DFDs saem dele — os nºs dos itens guardam o retrato e são BAIXADOS (nunca reaproveitados).
+  const pcasAfetados = await pcasDosDfds({ protocoloId: id });
   const stmts = [
+    retratarNumeros(db, { protocoloId: id }),
+    ...baixarNumeros(db, { protocoloId: id }, null, MOTIVO_NUMERO.protocoloExcluido, ator),
     db.delete(dfds).where(eq(dfds.protocoloId, id)),
     db.delete(dfdProtocolos).where(eq(dfdProtocolos.id, id)),
   ];
   await db.batch(stmts as [(typeof stmts)[number], ...(typeof stmts)[number][]]);
+  for (const pca of pcasAfetados) await sincronizarAtivosPca(pca, ator);
 }

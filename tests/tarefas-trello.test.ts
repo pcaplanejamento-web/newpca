@@ -65,7 +65,7 @@ describe("tarefas — padrão Trello", () => {
     assert.equal(lembreteDaTarefa(t, "2026-03-21T08:00", "2026-03-21"), null);
     const n = lembreteDaTarefa(t, "2026-03-21T08:30", "2026-03-21");
     assert.ok(n);
-    assert.equal(n.link, "/painel/tarefas/3?tarefa=7");
+    assert.equal(n.link, "/painel/tarefas/abrir/7");
     assert.match(n.titulo, /às 09:21/);
     assert.equal(lembreteDaTarefa({ ...t, prazoHora: null, lembreteMin: 1440 }, "2026-03-20T08:00", "2026-03-20")?.chave, "lembrete-tarefa:7:2026-03-21T08:00:1440");
     assert.equal(lembreteDaTarefa({ ...t, lembreteMin: null }, "2026-03-21T09:00", "2026-03-21"), null);

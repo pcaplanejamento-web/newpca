@@ -10,9 +10,13 @@ import {
   MAX_NOME_RBAC,
   orgaoSchema,
   permissaoPatchSchema,
+  pessoaResponsavelPatchSchema,
+  pessoaResponsavelSchema,
   permissaoSchema,
   reparticaoAtivaSchema,
   reparticaoSchema,
+  vinculoResponsavelPatchSchema,
+  vinculoResponsavelSchema,
 } from "../src/lib/rbac-validation.ts";
 
 // Validação da administração de Grupos, Permissões e Unidades — em especial o PATCH, que NÃO pode injetar os
@@ -94,7 +98,10 @@ describe("sigla GERAL reservada à unidade virtual", () => {
     assert.match(u.error?.issues[0]?.message ?? "", /reservada/);
     const o = orgaoSchema.safeParse({ sigla: "Geral", nome: "Qualquer" });
     assert.equal(o.success, false);
-    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação" }).success, true);
+    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação", orgaoId: 1 }).success, true);
+    // Toda unidade pertence a um órgão.
+    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação" }).success, false);
+    assert.equal(reparticaoSchema.safeParse({ codigo: "SEMGE", nome: "Educação", orgaoId: null }).success, false);
     assert.equal(orgaoSchema.safeParse({ sigla: "PMRV", nome: "Prefeitura" }).success, true);
   });
 });
@@ -106,5 +113,48 @@ describe("mensagens padrão do Zod em português", () => {
     const msg = r.error?.issues[0]?.message ?? "";
     assert.doesNotMatch(msg, /Invalid input|expected/i);
     assert.match(msg, /inválid|esperado/i);
+  });
+});
+
+describe("planilha de responsáveis (pessoa + vínculo)", () => {
+  it("a pessoa exige o nome; matrícula, cargo e usuário são opcionais; o PATCH não injeta padrões", () => {
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "", cargo: "", usuarioId: null, externo: false });
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "  " }).success, false);
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: "Ana", cargo: "Secretário", usuarioId: 7 }), { nome: "Ana", matricula: "", cargo: "Secretário", usuarioId: 7, externo: false });
+    assert.equal(pessoaResponsavelSchema.parse({ nome: "Ana", externo: true }).externo, true);
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ externo: true }), { externo: true });
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", usuarioId: 0 }).success, false);
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", cargo: "x".repeat(81) }).success, false);
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ matricula: "12" }), { matricula: "12" });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ usuarioId: null }), { usuarioId: null });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ exoneradoEm: "2026-03-15" }), { exoneradoEm: "2026-03-15" });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ exoneradoEm: null }), { exoneradoEm: null });
+    assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "2026-02-30" }).success, false);
+    assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "15/03/2026" }).success, false);
+  });
+
+  it("editar o vínculo: onde responde é opcional e, quando vem, UM só", () => {
+    const base = { responsavelId: 1, tipo: "padrao", inicio: "2026-01-01" };
+    assert.equal(vinculoResponsavelPatchSchema.safeParse(base).success, true, "sem alvo = fica o de antes");
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: null }).success, true);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, reparticaoId: 5 }).success, true);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: 5 }).success, false);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: null, reparticaoId: null }).success, false);
+  });
+
+  it("o vínculo vai a UMA unidade OU a UM órgão", () => {
+    const base = { responsavelId: 1, tipo: "padrao" };
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, orgaoId: 2 }).success, true);
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, reparticaoId: 3 }).success, true);
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: 3 }).success, false);
+    assert.equal(vinculoResponsavelSchema.safeParse(base).success, false);
+    assert.equal(vinculoResponsavelSchema.safeParse({ ...base, tipo: "outro", orgaoId: 2 }).success, false);
+  });
+
+  it("órgão e unidade não carregam mais os responsáveis (o campo é descartado)", () => {
+    const o = orgaoSchema.parse({ sigla: "PMRV", nome: "Prefeitura", responsaveis: { padroes: [], temporarios: [] } });
+    assert.equal("responsaveis" in o, false);
+    const u = reparticaoSchema.parse({ codigo: "SMS", nome: "Saúde", orgaoId: 1, responsaveis: { padroes: [], temporarios: [] } });
+    assert.equal("responsaveis" in u, false);
   });
 });

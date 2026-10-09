@@ -73,6 +73,7 @@ import { SeletorEtiquetas } from "./SeletorEtiquetas";
 import { SeletorPessoas } from "./SeletorPessoas";
 import { toast } from "./Toast";
 import { VinculosTarefa } from "./VinculosTarefa";
+import { VendoAgora } from "./VendoAgora";
 
 /**
  * Qual detalhe está aberto: uma tarefa NOVA (na lista dada; `vinculo` = já ligada — "Criar tarefa" da Mesa; `prazo` = o
@@ -815,7 +816,7 @@ export function TarefaDetalhe({
             {!somenteLeitura && onCopiarMover && item("Mover para outro quadro…", <IconArrowRight className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "mover"), off)}
             {!somenteLeitura && onCopiarMover && !t.template && item("Criar template…", <IconModelo className="h-4 w-4 text-muted" />, () => onCopiarMover(t.id, "template"), off)}
             {item("Copiar link", <IconLink className="h-4 w-4 text-muted" />, () => {
-              const url = `${window.location.origin}${linkTarefa(quadroId, t.id)}`;
+              const url = `${window.location.origin}${linkTarefa(t.id)}`;
               navigator.clipboard?.writeText(url).then(
                 () => toast.success("Link copiado."),
                 () => toast.error("Não foi possível copiar o link."),
@@ -876,7 +877,14 @@ export function TarefaDetalhe({
         esquerda={esquerda}
         principalNoTopo={!!esquerda?.length}
         bloqueado={salvando != null}
-        acoesCabecalho={existente && menuTarefa(existente)}
+        acoesCabecalho={
+          existente && (
+            <>
+              <VendoAgora tipo="tarefa" id={existente.id} editando={sujo} rotulo={`Tarefa ${rotuloTicket(existente.ticket)} ${existente.titulo}`} />
+              {menuTarefa(existente)}
+            </>
+          )
+        }
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {existente ? <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge> : <Badge>Nova</Badge>}

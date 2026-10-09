@@ -15,6 +15,7 @@ import { IconPencil, IconPlus, IconTrash, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 type Grupo = { id: number; nome: string; permissaoId: number | null; membros: number[]; reparticoes: number[] };
 type PermOpt = { id: number; nome: string };
@@ -155,7 +156,7 @@ export function GruposAdmin() {
 
   if (grupos === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={4} />
       </div>
     );
@@ -227,7 +228,7 @@ export function GruposAdmin() {
             <label htmlFor="grupo-permissao" className="mb-2 block text-[13.5px] font-bold text-text">
               Permissão do grupo
             </label>
-            <select
+            <Selecao
               id="grupo-permissao"
               value={permissaoId ?? ""}
               onChange={(e) => setPermissaoId(e.target.value ? Number(e.target.value) : null)}
@@ -239,7 +240,7 @@ export function GruposAdmin() {
                   {p.nome}
                 </option>
               ))}
-            </select>
+            </Selecao>
             {semPermissao && (
               <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem permissão, as pessoas do grupo não veem nenhuma tela.</p>
             )}

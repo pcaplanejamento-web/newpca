@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   acaoParaGravar,
+  chaveDeAdmin,
   chavePadrao,
   type EdicaoTabela,
   edicaoInicial,
@@ -19,6 +20,13 @@ const e = (id: number, nome: string, minha: boolean, publico: boolean, chave = K
 const LISTA = [e(1, "Zeta", true, false), e(2, "Alfa", true, true), e(3, "Beta", false, true), e(4, "Privada de outro", false, false), e(5, "Outra tabela", true, false, "x")];
 
 describe("edicoes-tabela", () => {
+  it("as tabelas da ADMINISTRAÇÃO têm chave própria (só o ADM grava) e não caem nas telas de módulo", () => {
+    assert.equal(chaveDeAdmin("admin:orgaos:tabela"), true);
+    assert.equal(chaveDeAdmin("admin:orgaos"), false);
+    assert.equal(chaveDeAdmin("mesa:protocolos"), false);
+    assert.equal(telasDaChave("admin:orgaos:tabela"), null);
+  });
+
   it("o usuário vê as DELE e as PÚBLICAS dos outros, por nome, só da tabela", () => {
     const { minhas, publicas } = edicoesDaChave(LISTA, K);
     assert.deepEqual(
@@ -45,6 +53,7 @@ describe("edicoes-tabela", () => {
     assert.deepEqual(telasDaChave("mesa-pca:itens"), { telas: ["pca"], quadroId: null });
     assert.deepEqual(telasDaChave(K), { telas: ["orcamento", "pca"], quadroId: null }, "o Comparativo está no Orçamento e no PCA");
     assert.deepEqual(telasDaChave("tarefas:12:lista"), { telas: ["tarefas"], quadroId: 12 }, "a Lista segue o grupo do quadro");
+    assert.deepEqual(telasDaChave("orcamento-lancamentos:tabela"), { telas: ["orcamento"], quadroId: null }, "os Lançamentos do orçamento");
     for (const k of ["tarefas:0:lista", "tarefas:abc:lista", "tarefas:12", "calendario:ocultos", "padrao:mesa:dfds", "x", "", "design-system:demo"])
       assert.equal(telasDaChave(k), null, k);
   });

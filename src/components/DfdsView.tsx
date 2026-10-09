@@ -1,8 +1,10 @@
 "use client";
 
+import type { ColunasMesa } from "@/lib/mesa-colunas-core";
+import { colunasDaAutomacao } from "./ColunasAutomacao";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
 import type { ItemDfdRow, PcaResumo } from "@/lib/dfd";
@@ -41,10 +43,11 @@ import {
   resolverUnidades,
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
+import { type ReferenciaHistorico, rotuloComparacaoHistorico } from "@/lib/historico-compra-core";
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
-import { estaTravado, motivoNaoExcluirDfd, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
+import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
@@ -55,21 +58,25 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { colunasItemMesa } from "./ColunasItensMesa";
 import { Button } from "./Button";
 import { CelulaLista, CelulaTexto } from "./CelulaLista";
+import { BotaoAtualizar } from "./BotaoAtualizar";
 import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
+import { PermissaoExportar } from "./ExportarTabelas";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
 import { tokenPx } from "./espacamento";
 import { DashboardMesaEsqueleto } from "./DashboardMesaEsqueleto";
+import { CelulaHistoricoCompra } from "./ProdutoHistorico";
 import { CelulaCatalogo, CelulaClassificacao, CelulaUnidadeCadastrada, EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { CelulaPca, CelulaPrioridade, colunaPlanejamento, colunaTipoDfd, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -78,6 +85,11 @@ import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
+import { AutomacoesMesa } from "./AutomacoesMesa";
+import { dfdsDoAlvo, gravarDisparoMesa } from "@/lib/automacao-mesa";
+import { AutomacaoViva, CHAVE_AUTOMACAO } from "./AutomacaoViva";
+import { useRodarFora } from "./SegundoPlano";
+import { PresencaNoItem } from "./PresencaNoItem";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
  * esqueleto da MESMA grade. */
@@ -110,6 +122,9 @@ type Vista = "dashboard" | "protocolos" | "dfds" | "itens";
 /** Visão dos ITENS: Normal (um por linha) | Consolidada (um por CÓDIGO — quantidades somadas, valor médio ponderado). */
 type ModoItens = "normal" | "consolidada";
 /** DFDs conferidos por requisição (fatias — a lista abre leve e o Estado chega em seguida). */
+/** Na Mesa do PCA a Situação (CM002) e a Centi abrem ocultas — a edição da tabela as mostra. */
+const OCULTAS_NO_PCA = ["execucao", "conferenciaCenti"] as const;
+
 const FATIA_CONFERENCIA = 150;
 /** DFDs/protocolos por requisição da edição em massa (cabe folgado no limite de consultas por invocação do D1). */
 const FATIA_MASSA = 20;
@@ -205,6 +220,8 @@ export function DfdsView({
   abrirInicial = null,
   dadosCompletos = false,
   seletorMesa,
+  colunasAuto,
+  automacoes = [],
 }: {
   /** O que o PAPEL permite nas duas Mesas (a do sistema e a do PCA) — cada protocolo, DFD e item segue a Mesa em que está. */
   pode: PodeMesa;
@@ -239,6 +256,10 @@ export function DfdsView({
   dadosCompletos?: boolean;
   /** O SELETOR DE MESA (Mesa do sistema | Mesa de um PCA) — 1º item da barra, só na Mesa principal (`SeletorMesa`). */
   seletorMesa?: ReactNode;
+  /** As COLUNAS criadas pelas automações (o nó "Gravar na coluna da Mesa") — no fim de cada tabela. */
+  colunasAuto?: ColunasMesa;
+  /** As AUTOMAÇÕES que a pessoa pôs na Mesa (só na Mesa do SISTEMA — a do PCA não recebe). */
+  automacoes?: { id: number; nome: string }[];
 }) {
   const router = useRouter();
   // As edições ficam AQUI (as tabelas remontam ao trocar de visão e voltam com as edições novas).
@@ -356,9 +377,18 @@ export function DfdsView({
   // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
   const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
   const [carregandoItens, setCarregandoItens] = useState(false);
+  // REVERIFICAR TUDO (botão da barra): recarrega a lista do banco e, terminada a recarga (`listaPendente`), reconfere
+  // TODOS os protocolos, DFDs e itens — em QUALQUER visão (as conferências, normalmente lazy pela visão aberta, rodam
+  // todas). Termina quando cada protocolo e DFD tem resultado (ou falhou) e os itens chegaram.
+  const [rever, setRever] = useState(false);
+  const [listaPendente, recarregarLista] = useTransition();
+  const reverAtivo = rever && !listaPendente;
   // Catálogo → Unidades de medida | Classificações: o cadastro vem JUNTO com os itens (só com a visão Itens aberta) — a
   // unidade CADASTRADA de cada item e a classificação AUTOMÁTICA (as colunas só existem com o cadastro feito).
   const [padronizacao, setPadronizacao] = useState<Padronizacao | null>(null);
+  // Histórico de compra: a REFERÊNCIA de preço de cada código (vem junto com os itens) — a coluna "Histórico" (só com
+  // algum código comprado) aponta o item com valor divergente.
+  const [historico, setHistorico] = useState<Record<string, ReferenciaHistorico> | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao trocar a referência de `dfds`.
   useEffect(() => {
     setItens(null);
@@ -368,15 +398,18 @@ export function DfdsView({
   // Mesa principal: o MESMO PCA do cabeçalho com que a página veio (explícito — o cookie pode ter mudado noutra aba).
   const anoFiltro = pcaFiltro?.ano;
   useEffect(() => {
-    if (vista !== "itens" || itens !== null) return;
+    if ((vista !== "itens" && !reverAtivo) || itens !== null) return;
     const ac = new AbortController();
     setCarregandoItens(true);
     fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal })
-      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null }>)
+      .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null; historico?: Record<string, ReferenciaHistorico> }>)
       .then((j) => {
         if (ac.signal.aborted) return;
         setItens(j.ok ? (j.itens ?? []) : []);
-        if (j.ok) setPadronizacao(j.padronizacao ?? null);
+        if (j.ok) {
+          setPadronizacao(j.padronizacao ?? null);
+          setHistorico(j.historico && Object.keys(j.historico).length > 0 ? j.historico : null);
+        }
       })
       .catch(() => {
         if (!ac.signal.aborted) setItens([]);
@@ -385,7 +418,7 @@ export function DfdsView({
         if (!ac.signal.aborted) setCarregandoItens(false);
       });
     return () => ac.abort();
-  }, [vista, itens, pcaDaMesa, anoFiltro]);
+  }, [vista, itens, pcaDaMesa, anoFiltro, reverAtivo]);
 
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).
@@ -440,6 +473,36 @@ export function DfdsView({
   useEffect(() => {
     if (itensF) setSelItens((s) => podar(s, new Set(itensF.map((it) => it.id))));
   }, [itensF]);
+  // AUTOMAÇÕES da Mesa (só a do sistema): a visão aberta decide o alvo — protocolos, DFDs ou itens viram os DFDs deles.
+  // A barra do topo = TODOS os filtrados; a barra de seleção = os SELECIONADOS. Roda em segundo plano (sem sair da Mesa).
+  const rodarFora = useRodarFora();
+  const alvoAutomacao = (soSelecionados: boolean) => {
+    if (vista === "protocolos") {
+      const ps = soSelecionados ? protocolosF.filter((p) => selProtos.has(p.id)) : protocolosF;
+      const lista = dfdsDoAlvo(dfdsF, "protocoloId", new Set(ps.map((p) => p.id)));
+      return { lista, rotulo: `${num(ps.length)} protocolo(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"} (${num(lista.length)} DFDs)` };
+    }
+    if (vista === "itens") {
+      const its = (itensF ?? []).filter((it) => !soSelecionados || selItens.has(it.id));
+      const lista = dfdsDoAlvo(dfds, "id", new Set(its.map((it) => it.dfdId)));
+      return { lista, rotulo: `${num(its.length)} item(ns) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"} (${num(lista.length)} DFDs)` };
+    }
+    const lista = dfdsDoAlvo(dfdsF, "id", soSelecionados ? new Set([...selDfds].map(Number)) : new Set(dfdsF.map((d) => d.id)));
+    return { lista, rotulo: `${num(lista.length)} DFD(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"}` };
+  };
+  const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => {
+    const { lista } = alvoAutomacao(soSelecionados);
+    if (!lista.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre.");
+    if (!gravarDisparoMesa({ fluxoId, itens: lista })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
+    if (rodarFora) {
+      rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />);
+      toast.info("Automação iniciada em segundo plano — acompanhe no canto inferior.");
+    } else router.push("/painel/automacao");
+  };
+  const automacaoSel = (rotulo: string) =>
+    !modoPca && automacoes.length ? (
+      <AutomacoesMesa variante="selecao" automacoes={automacoes} alvo={rotulo} onEscolher={(id) => rodarAutomacao(id, true)} />
+    ) : null;
 
   // CONFERÊNCIA da lista de DFDs (a MESMA da análise, calculada no servidor sobre o DFD completo) —
   // lazy: só com a visão DFDs aberta, em fatias; cada linha mostra "Conferindo…" até chegar. Os
@@ -454,7 +517,7 @@ export function DfdsView({
   // Falha de rede/servidor na conferência: as linhas pendentes param de girar (ficam "Pendente").
   const [confFalhou, setConfFalhou] = useState(false);
   useEffect(() => {
-    if (vista !== "dfds") return;
+    if (vista !== "dfds" && !reverAtivo) return;
     setConfFalhou(false);
     if (confRef.current.ctx !== ctxConf) confRef.current = { ctx: ctxConf, m: new Map() };
     const alvo = confRef.current;
@@ -489,7 +552,7 @@ export function DfdsView({
       }
     })();
     return () => ac.abort();
-  }, [vista, dfds, ctxConf]);
+  }, [vista, dfds, ctxConf, reverAtivo]);
   const confDe = (d: DfdNaMesa): ConfLinha | undefined =>
     confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
@@ -503,7 +566,7 @@ export function DfdsView({
   const confProtoRef = useRef<{ ctx: string; m: Map<string, ConfProto>; falhos: Set<string> }>({ ctx: "", m: new Map(), falhos: new Set() });
   const [confProtoVersao, setConfProtoVersao] = useState(0);
   // Alternar entre Protocolos e Dashboard NÃO reinicia as requisições em curso (o mesmo cache serve aos dois).
-  const precisaConfProto = vista === "protocolos" || vista === "dashboard";
+  const precisaConfProto = vista === "protocolos" || vista === "dashboard" || reverAtivo;
   useEffect(() => {
     if (!precisaConfProto) return;
     if (confProtoRef.current.ctx !== ctxConf) confProtoRef.current = { ctx: ctxConf, m: new Map(), falhos: new Set() };
@@ -559,6 +622,39 @@ export function DfdsView({
   }, [precisaConfProto, protocolos, ctxConf]);
   /** Estado do protocolo: o agregado do servidor. Até chegar, "Conferindo…"; se a conferência falhou, só o
    * que a CAPA já prova (problema real) — sem problema na capa é "Não conferido", nunca "Regular". */
+  // REVERIFICAR TUDO: zera os caches das conferências (protocolos, DFDs), os itens e o histórico do Dashboard e recarrega
+  // a lista; as conferências refazem TUDO na volta. O andamento = o que já tem resultado.
+  const reverificarTudo = () => {
+    if (rever) return;
+    confRef.current = { ctx: "", m: new Map() };
+    confProtoRef.current = { ctx: "", m: new Map(), falhos: new Set() };
+    cacheExec.current = null;
+    setConfFalhou(false);
+    setItens(null);
+    setRever(true);
+    recarregarLista(() => router.refresh());
+  };
+  const andamentoRever = (() => {
+    if (!rever) return null;
+    const pm = confProtoRef.current.ctx === ctxConf ? confProtoRef.current : null;
+    const dm = confRef.current.ctx === ctxConf ? confRef.current.m : null;
+    const protoFeitos = pm ? protocolos.filter((p) => pm.m.has(chaveProto(p)) || pm.falhos.has(chaveProto(p))).length : 0;
+    const protoFalhos = pm ? protocolos.filter((p) => pm.falhos.has(chaveProto(p))).length : 0;
+    const dfdFeitos = confFalhou ? dfds.length : dm ? dfds.filter((d) => dm.has(chaveConf(d))).length : 0;
+    const itensFeitos = itens !== null && !carregandoItens ? 1 : 0;
+    const total = protocolos.length + dfds.length + 1;
+    return { feitos: protoFeitos + dfdFeitos + itensFeitos, total, protoFalhos };
+  })();
+  const reverConcluido = reverAtivo && andamentoRever != null && andamentoRever.feitos >= andamentoRever.total;
+  useEffect(() => {
+    if (!reverConcluido || !andamentoRever) return;
+    setRever(false);
+    const falhas = andamentoRever.protoFalhos + (confFalhou ? 1 : 0);
+    const texto = `Mesa reverificada: ${num(protocolos.length)} protocolo(s), ${num(dfds.length)} DFD(s) e ${num(itens?.length ?? 0)} item(ns).`;
+    if (falhas > 0) toast.warning(`${texto} Parte da conferência não respondeu — tente de novo.`);
+    else toast.success(texto);
+  }, [reverConcluido, andamentoRever, confFalhou, protocolos.length, dfds.length, itens?.length]);
+
   const estadoDoProtocolo = (p: ProtocoloNaMesa): { conf: ConfProto; pendente: boolean; naoConferido: boolean } => {
     const atual = confProtoRef.current.ctx === ctxConf ? confProtoRef.current : null;
     const k = chaveProto(p);
@@ -638,8 +734,12 @@ export function DfdsView({
 
   const atualizarListas = () => router.refresh();
 
-  async function excluirDfd(id: number, numero: string) {
-    if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos.`)) return;
+  /** O que a exclusão tira do PCA (o protocolo/DFD está INCORPORADO a ele) — a frase da confirmação; vazio fora de PCA. */
+  const saidaPca = (pcaId: number | null | undefined, incorporadoEm: string | null | undefined, itens: number) =>
+    pcaId != null && incorporadoEm ? ` ${impactoSaidaPca(pcas.find((p) => p.id === pcaId)?.nome, itens)}` : "";
+
+  async function excluirDfd(id: number, numero: string, pca = "") {
+    if (!confirm(`Excluir o DFD ${numero}? Os itens dele também são excluídos.${pca}`)) return;
     setErro(null);
     const res = await fetch(`/api/dfd/${id}`, { method: "DELETE" });
     const j = (await res.json()) as { ok?: boolean; error?: string };
@@ -650,11 +750,11 @@ export function DfdsView({
     router.refresh();
   }
 
-  async function excluirProtocolo(id: number, numero: string, totalDfds: number) {
+  async function excluirProtocolo(id: number, numero: string, totalDfds: number, pca = "") {
     const aviso =
-      totalDfds > 0
+      (totalDfds > 0
         ? `Excluir o protocolo ${numero}? Os ${totalDfds} DFD(s) vinculados e seus itens também serão excluídos.`
-        : `Excluir o protocolo ${numero}?`;
+        : `Excluir o protocolo ${numero}?`) + pca;
     if (!confirm(aviso)) return;
     setErro(null);
     const res = await fetch(`/api/protocolo/${id}`, { method: "DELETE" });
@@ -844,30 +944,30 @@ export function DfdsView({
       assinaturas: d.assinaturaGrupos,
       protocolo: d.protocoloNumero,
       prioridade: d.prioridade,
+      execucao: d.execucaoCenti,
+      conferencia: { status: d.conferenciaCenti, motivo: d.conferenciaCentiMotivo },
       ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
     };
   });
   const acoesDfd = (l: LinhaDfd) => {
     const d = dfdPorId.get(l.key);
     const noPca = d ? { pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm } : null;
-    // DFD de protocolo INCORPORADO a um PCA: travado (sem vincular/excluir — o servidor recusa também).
-    if (!d || !noPca || estaTravado(noPca)) return null;
-    // O PAPEL na Mesa em que o DFD está: vincular = Manipular; excluir = Excluir.
+    if (!d || !noPca) return null;
+    // O PAPEL na Mesa em que o DFD está: vincular = Manipular; excluir = Excluir (também em um PCA — sai dele).
     const podeDfd = podeNoRecurso(pode, noPca.pcaId);
-    const podeExcluirDfd = podeDfd.excluir && motivoNaoExcluirDfd(noPca) == null;
+    const podeExcluirDfd = podeDfd.excluir;
     if (!podeDfd.manipular && !podeExcluirDfd) return null;
     return (
       <div className="flex justify-end gap-1">
         {podeDfd.manipular && (
           <Button variant="ghost" size="xs" aria-label="Vincular a protocolo" onClick={() => abrirVincular(d)} icon={<IconLayers className="h-4 w-4" />} />
         )}
-        {/* DFD de protocolo em um PCA (enviado) não é excluído — o servidor recusa também. */}
         {podeExcluirDfd && (
           <Button
             variant="ghost"
             size="xs"
             aria-label="Excluir DFD"
-            onClick={() => excluirDfd(d.id, d.numero)}
+            onClick={() => excluirDfd(d.id, d.numero, saidaPca(noPca.pcaId, noPca.pcaIncorporadoEm, d.totalItens ?? 0))}
             icon={<IconTrash className="h-4 w-4" />}
             style={{ color: "var(--danger)" }}
           />
@@ -982,6 +1082,13 @@ export function DfdsView({
         if (pendente || naoConferido) return [pendente ? "Conferindo…" : NAO_CONFERIDO];
         return conf.resumo?.rotulos.length ? conf.resumo.rotulos : [ESTADO_PROTOCOLO_ROTULO[conf.estado]];
       },
+      // A MESMA cor da célula no PDF exportado.
+      corPdf: (r) => {
+        const { conf, pendente, naoConferido } = estadoDoProtocolo(r);
+        if (pendente) return null;
+        if (naoConferido) return "var(--muted)";
+        return conf.resumo?.rotulo ? conf.resumo.cor : estadoProtocoloCor(conf.estado, regras);
+      },
       render: (r) => {
         const { conf, pendente, naoConferido } = estadoDoProtocolo(r);
         if (pendente) return <EstadoProcessando rotulo="Conferindo…" />;
@@ -1077,9 +1184,12 @@ export function DfdsView({
       value: (r) => r.numero,
       // Copia o nº SEM o ano ("144756/2026" → "144756").
       render: (r) => (
-        <CelulaCopiavel copiar={numeroSemAno(r.numero)} rotulo="nº do protocolo">
-          <span className="font-mono text-[12px]">{r.numero}</span>
-        </CelulaCopiavel>
+        <span className="inline-flex items-center gap-1.5">
+          <CelulaCopiavel copiar={numeroSemAno(r.numero)} rotulo="nº do protocolo">
+            <span className="font-mono text-[12px]">{r.numero}</span>
+          </CelulaCopiavel>
+          <PresencaNoItem alvo={`protocolo:${r.id}`} />
+        </span>
       ),
     },
     {
@@ -1145,31 +1255,26 @@ export function DfdsView({
     },
     { key: "itens", header: "Itens", align: "center", filter: "none", nowrap: true, render: (r) => num(r.totalItens) },
     { key: "valor", header: "Valor", align: "right", filter: "range", numero: (r) => r.valorTotal, nowrap: true, render: (r) => brl(r.valorTotal) },
-    // Excluir: só na Mesa principal — protocolo em um PCA (enviado ou incorporado) NÃO é excluído (o enviado volta pela
-    // "Devolver à Mesa"); o servidor recusa também.
-    ...(modoPca
-      ? []
-      : [
-          {
-            key: "acoes",
-            header: "",
-            filter: "none" as const,
-            nowrap: true,
-            render: (r: ProtocoloNaMesa) =>
-              pode.sistema.excluir && motivoNaoExcluirProtocolo(r) == null ? (
-                <div className="flex justify-end gap-1">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    aria-label="Excluir protocolo"
-                    onClick={() => excluirProtocolo(r.id, r.numero, r.totalDfds)}
-                    icon={<IconTrash className="h-4 w-4" />}
-                    style={{ color: "var(--danger)" }}
-                  />
-                </div>
-              ) : null,
-          },
-        ]),
+    // Excluir: o papel com Excluir na Mesa em que o protocolo está — também em um PCA (os DFDs saem dele; a confirmação diz).
+    {
+      key: "acoes",
+      header: "",
+      filter: "none" as const,
+      nowrap: true,
+      render: (r: ProtocoloNaMesa) =>
+        podeNoRecurso(pode, r.pcaId).excluir ? (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-label="Excluir protocolo"
+              onClick={() => excluirProtocolo(r.id, r.numero, r.totalDfds, saidaPca(r.pcaId, r.pcaIncorporadoEm, r.totalItens))}
+              icon={<IconTrash className="h-4 w-4" />}
+              style={{ color: "var(--danger)" }}
+            />
+          </div>
+        ) : null,
+    },
   ];
 
   // Itens REPETIDOS no DFD de origem (mesmo código, descrição e unidade) — a MESMA marca "Item duplicado" (atenção) da
@@ -1244,6 +1349,7 @@ export function DfdsView({
       tipo: { valor: (r) => tipoCurtoDfd(r.dfdTipo) ?? "—" },
       prioridade: { valor: (r) => dfdPorId.get(r.dfdId)?.prioridade ?? "—" },
       catalogo: { valor: (r) => rotuloVeredictoCatalogo(veredictoLinhaCatalogo(r.catalogo, regras, tipoCurtoDfd(r.dfdTipo))) || "—" },
+      historico: { valor: (r) => rotuloComparacaoHistorico(r.valorUnitario, historico?.[normalizarCodigo(r.codigo)]) },
       descricao: { valor: (r) => r.descricao ?? "" },
       unidade: { valor: (r) => r.unidade ?? "" },
       // Só com o cadastro (senão as colunas nem existem): a sigla da unidade cadastrada e a classificação automática.
@@ -1253,7 +1359,7 @@ export function DfdsView({
       codigo: { valor: (r) => normalizarCodigo(r.codigo) || "Sem código" },
       pcaSeq: { valor: (r) => (r.pcaSequencial == null ? "" : String(r.pcaSequencial)) },
     } satisfies Record<string, Atributo>;
-  }, [repDoItem, dfdPorId, regras, unidadeDoItem, classeDoItem]);
+  }, [repDoItem, dfdPorId, regras, unidadeDoItem, classeDoItem, historico]);
 
   // Visão CONSOLIDADA (um por CÓDIGO): calculada só com ela aberta, sobre os itens JÁ filtrados pela hierarquia.
   const consolidada = vista === "itens" && modoItens === "consolidada";
@@ -1372,6 +1478,13 @@ export function DfdsView({
 
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item
   // (mesma célula da tabela de itens do banner). Clicar abre o DFD de origem já no item.
+  const ci = colunasItemMesa<ItemDfdRow>({
+    protocolo: atributoItem.protocolo.valor,
+    dfd: atributoItem.dfd.valor,
+    sigla: atributoItem.sigla.valor,
+    descricao: atributoItem.descricao.valor,
+    unidade: atributoItem.unidade.valor,
+  });
   const colsItens: Column<ItemDfdRow>[] = [
     {
       key: "estado",
@@ -1379,6 +1492,10 @@ export function DfdsView({
       nowrap: true,
       value: atributoItem.estado.valor,
       valores: atributoItem.estado.valores,
+      corPdf: (r) => {
+        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
+        return res.rotulo ? res.cor : estadoItemCor(estadoItem(r));
+      },
       render: (r) => {
         const res = resumoEstado(mensagensItem(r, repDoItem(r)));
         if (res.rotulo) return <EstadoResumo res={res} />;
@@ -1386,20 +1503,7 @@ export function DfdsView({
         return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;
       },
     },
-    {
-      key: "protocolo",
-      header: "Protocolo",
-      nowrap: true,
-      value: atributoItem.protocolo.valor,
-      render: (r) =>
-        r.protocoloNumero ? (
-          <CelulaCopiavel copiar={numeroSemAno(r.protocoloNumero)} rotulo="nº do protocolo">
-            <span className="font-mono text-[12px]">{r.protocoloNumero}</span>
-          </CelulaCopiavel>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
-    },
+    ci.protocolo,
     ...(modoPca
       ? []
       : [
@@ -1412,26 +1516,10 @@ export function DfdsView({
             render: (r: ItemDfdRow) => <CelulaPca pca={pcaDe(anoPcaDoDfd(dfdPorId.get(r.dfdId)))} />,
           },
         ]),
-    colunaPlanejamento((r: ItemDfdRow) => r.dfdPlanejamento),
-    {
-      key: "dfd",
-      header: "Nº DFD",
-      nowrap: true,
-      value: atributoItem.dfd.valor,
-      render: (r) => (
-        <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
-          <span className="font-mono text-[12px]">{r.dfdNumero}</span>
-        </CelulaCopiavel>
-      ),
-    },
-    {
-      key: "sigla",
-      header: "Sigla",
-      nowrap: true,
-      value: atributoItem.sigla.valor,
-      render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
-    },
-    colunaTipoDfd((r: ItemDfdRow) => r.dfdTipo),
+    ci.planejamento,
+    ci.dfd,
+    ci.sigla,
+    ci.tipo,
     {
       key: "prioridade",
       header: "Prioridade",
@@ -1440,18 +1528,8 @@ export function DfdsView({
       value: atributoItem.prioridade.valor,
       render: (r) => <CelulaPrioridade prioridade={dfdPorId.get(r.dfdId)?.prioridade} />,
     },
-    { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
-    {
-      key: "codigo",
-      header: "Código",
-      nowrap: true,
-      value: (r) => r.codigo ?? "",
-      render: (r) => (
-        <CelulaCopiavel copiar={r.codigo} rotulo="código do item">
-          <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>
-        </CelulaCopiavel>
-      ),
-    },
+    ci.item,
+    ci.codigo,
     // Conformidade com o CATÁLOGO (veredito do servidor, na cor do nível do ADM; o tipo do DFD de origem conta).
     {
       key: "catalogo",
@@ -1472,20 +1550,8 @@ export function DfdsView({
           },
         ]
       : []),
-    {
-      key: "descricao",
-      header: "Descrição",
-      minWidth: 260,
-      value: atributoItem.descricao.valor,
-      // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica, no banner do item e com os DADOS
-      // COMPLETOS ligados (o botão da barra).
-      render: (r) => (
-        <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
-          <CelulaTexto texto={r.descricao} />
-        </CelulaCopiavel>
-      ),
-    },
-    { key: "unidade", header: "Unidade", nowrap: true, value: atributoItem.unidade.valor, render: (r) => r.unidade ?? "—" },
+    ci.descricao,
+    ci.unidade,
     // A unidade do item COMPARADA com o cadastro (Catálogo → Unidades de medida): a sigla cadastrada ou "Não cadastrada".
     ...(unidadeDoItem
       ? [
@@ -1498,9 +1564,22 @@ export function DfdsView({
           },
         ]
       : []),
-    { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
-    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
-    { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
+    ci.qtd,
+    ci.vunit,
+    // O valor unitário × o HISTÓRICO DE COMPRA do código (o valor atual; médio e faixa na dica) — o desvio na cor da régua da
+    // variação aponta o item divergente; o filtro separa "Acima/Abaixo (mais de 50%)", "(25% a 50%)", "Dentro", "Sem histórico".
+    ...(historico
+      ? [
+          {
+            key: "historico",
+            header: "Histórico",
+            nowrap: true,
+            value: atributoItem.historico.valor,
+            render: (r: ItemDfdRow) => <CelulaHistoricoCompra valor={r.valorUnitario} referencia={historico[normalizarCodigo(r.codigo)]} />,
+          },
+        ]
+      : []),
+    ci.vtotal,
   ];
 
   // Colunas da visão CONSOLIDADA — as MESMAS da visão normal, com os dados dos itens do código JUNTOS na célula (listas
@@ -1531,6 +1610,7 @@ export function DfdsView({
       nowrap: true,
       value: (l) => infoDe(l).estado.rotulo || ESTADO_ITEM_ROTULO.regular,
       filtroExterno: filtroExterno("estado"),
+      corPdf: (l) => (infoDe(l).estado.rotulo ? infoDe(l).estado.cor : estadoItemCor("regular")),
       render: (l) => {
         const e = infoDe(l).estado;
         return e.rotulo ? <EstadoResumo res={e} /> : <EstadoPonto cor={estadoItemCor("regular")} rotulo={ESTADO_ITEM_ROTULO.regular} />;
@@ -1641,7 +1721,7 @@ export function DfdsView({
       align: "right",
       filter: "range",
       nowrap: true,
-      numero: (l) => l.valorMedio,
+      total: false, numero: (l) => l.valorMedio,
       render: (l) =>
         l.valorMedio == null ? (
           "—"
@@ -1654,6 +1734,18 @@ export function DfdsView({
           <span title="Média ponderada pela quantidade (Σ qtd × valor ÷ Σ qtd)">{brl(l.valorMedio)}</span>
         ),
     },
+    // O valor unitário MÉDIO da linha × o HISTÓRICO DE COMPRA do código (a MESMA régua e célula da visão Normal).
+    ...(historico
+      ? [
+          {
+            key: "historico",
+            header: "Histórico",
+            nowrap: true,
+            value: (l: Cons) => rotuloComparacaoHistorico(l.valorMedio, historico[normalizarCodigo(l.codigo)]),
+            render: (l: Cons) => <CelulaHistoricoCompra valor={l.valorMedio} referencia={historico[normalizarCodigo(l.codigo)]} />,
+          },
+        ]
+      : []),
     {
       key: "variacao",
       header: "Variação",
@@ -1661,7 +1753,7 @@ export function DfdsView({
       filter: "range",
       formatarFaixa: (n) => pct(n, 100),
       nowrap: true,
-      numero: (l) => (l.variacao == null ? null : Math.round(l.variacao * 1000) / 10),
+      total: false, numero: (l) => (l.variacao == null ? null : Math.round(l.variacao * 1000) / 10),
       render: (l) =>
         l.unidadesMistas ? (
           <CelulaVariacao cv={l.variacao} nota="Unidades diferentes: a maior variação dentro de uma mesma unidade." />
@@ -1787,7 +1879,7 @@ export function DfdsView({
   // sistema no servidor — o que o papel não permite volta como falha).
   const podeAqui = modoPca ? pode.pca : pode.sistema;
   // Exportar as tabelas (.xlsx — as linhas filtradas e as colunas à vista): só com a ação Exportar do papel nesta Mesa.
-  const exportarComo = (nome: string) => (podeAqui.exportar ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : undefined);
+  const exportarComo = (nome: string) => (podeAqui.exportar ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : (false as const));
   // Importar protocolo/DFD: só na Mesa do sistema (o protocolo novo entra nela).
   const podeImportar = pode.sistema.importar && !modoPca;
   const importa = podeImportar && (vista === "protocolos" || vista === "dfds");
@@ -1808,7 +1900,7 @@ export function DfdsView({
     `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${dica ? " Use “Importar” no rodapé da tabela." : ""}`;
   const tabelaProtocolos = (
     <DataTable
-      columns={(modoPca?.colunasProtocolo ? [...colsProto, ...modoPca.colunasProtocolo] : colsProto).filter((c) => !ocultasProto.has(c.key))}
+      columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key))}
       rows={protocolosF}
       getKey={(r) => r.id}
       selectable={podeAqui.manipular}
@@ -1847,7 +1939,9 @@ export function DfdsView({
       acoes={acoesDfd}
       regras={regras}
       acoesRodape={botaoImportar}
+      colunasExtras={colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key)}
       edicoes={edicoesDe("dfds")}
+      ocultasPadrao={modoPca ? OCULTAS_NO_PCA : undefined}
       exportar={exportarComo("DFDs")}
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
     />
@@ -1856,7 +1950,7 @@ export function DfdsView({
   const larguraPadronizacao = (classeDoItem ? 150 : 0) + (unidadeDoItem ? 130 : 0);
   const tabelaItens = (
     <DataTable
-      columns={modoPca?.colunasItens ? [...modoPca.colunasItens, ...colsItens] : colsItens}
+      columns={[...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)]}
       rows={itensF ?? []}
       getKey={(r) => r.id}
       // Itens: a edição em massa (Manipular) e, na Mesa do PCA, "Retirar do PCA" (Excluir).
@@ -1933,6 +2027,7 @@ export function DfdsView({
         dfds={sel.map((d) => ({ key: d.id, numero: d.numero, planejamento: d.planejamento, valor: d.valorTotal, itens: d.totalItens }))}
         onRemover={tirar(setSelDfds)}
         onLimpar={() => setSelDfds(new Set())}
+        acoes={automacaoSel(alvoAutomacao(true).rotulo)}
       >
         {progressoMassa}
         <BarraEdicaoMassa reparticoes={reparticoes} regras={regras} aplicando={!!aplicandoMassa} onAplicar={aplicarMassa} />
@@ -1951,10 +2046,13 @@ export function DfdsView({
         acoes={
           modoPca ? (
             modoPca.acoesProtocolos?.(sel, () => setSelProtos(new Set()))
-          ) : pode.pca.manipular ? (
-            // Enviar ao PCA tira da Mesa do sistema e põe na do PCA: Manipular nas duas.
-            <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />
-          ) : undefined
+          ) : (
+            <>
+              {/* Enviar ao PCA tira da Mesa do sistema e põe na do PCA: Manipular nas duas. */}
+              {pode.pca.manipular && <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />}
+              {automacaoSel(alvoAutomacao(true).rotulo)}
+            </>
+          )
         }
         resumo={
           <ResumoSelecao
@@ -1966,9 +2064,8 @@ export function DfdsView({
           />
         }
       >
-        {/* Na Mesa do PCA a seleção de protocolos só incorpora/devolve (sem edição em massa). */}
-        {!modoPca && (
-          <>
+        {/* A edição em massa vale nas duas Mesas (na do PCA, junto de Incorporar/Devolver). */}
+        <>
             {progressoMassa}
             <BarraEdicaoMassaProtocolos
               reparticoes={reparticoes}
@@ -1981,7 +2078,6 @@ export function DfdsView({
               onAplicar={aplicarMassaProtocolos}
             />
           </>
-        )}
       </BarraSelecao>
     );
   } else if ((podeAqui.manipular || (!!modoPca && podeAqui.excluir)) && vista === "itens" && !consolidada && (selItens.size > 0 || aplicandoMassa)) {
@@ -1995,10 +2091,10 @@ export function DfdsView({
         onRemover={tirar(setSelItens)}
         onLimpar={() => setSelItens(new Set())}
         resumo={<ResumoSelecao qtd={sel.length} singular="item" plural="itens" soma={sel.reduce((t, it) => t + (it.valorTotal ?? 0), 0)} />}
-        acoes={modoPca?.acoesItens?.(sel, () => setSelItens(new Set()))}
+        acoes={modoPca ? modoPca.acoesItens?.(sel, () => setSelItens(new Set())) : automacaoSel(alvoAutomacao(true).rotulo)}
       >
-        {/* Item INCORPORADO (com nº no PCA) é somente leitura — o editor de massa só vale para os não incorporados. */}
-        {podeAqui.manipular && sel.every((it) => it.pcaSequencial == null) && (
+        {/* Também o item incorporado (com nº no PCA): o nº segue o item; o removido o baixa. */}
+        {podeAqui.manipular && (
           <>
             {progressoMassa}
             <BarraEdicaoMassaItens aplicando={!!aplicandoMassa} onAplicar={aplicarMassaItens} />
@@ -2009,6 +2105,7 @@ export function DfdsView({
   }
 
   return (
+    <PermissaoExportar permitido={podeAqui.exportar}>
     <div className="space-y-[var(--gap-block)]">
       {/* Falha de uma ação da Mesa (excluir, edição em massa…) — AVISO FLUTUANTE: não empurra as tabelas. */}
       {erro && (
@@ -2049,7 +2146,19 @@ export function DfdsView({
         )}
         <div className="ml-auto flex items-center gap-2">
           {/* DADOS COMPLETOS nas tabelas (texto inteiro, todas as listas) — só onde há tabela. */}
+          {/* REVERIFICAR TUDO: recarrega e reconfere protocolos, DFDs e itens (o anel mostra o andamento). */}
+          <BotaoAtualizar
+            ativo={rever}
+            rotulo="Atualizar e reverificar toda a Mesa"
+            dica="Atualizar tudo: recarrega a Mesa e reconfere todos os protocolos, DFDs e itens"
+            progresso={reverAtivo && andamentoRever ? andamentoRever.feitos / Math.max(1, andamentoRever.total) : null}
+            detalhe={
+              !rever ? undefined : !reverAtivo || !andamentoRever ? "Recarregando a Mesa…" : `Reconferindo ${num(andamentoRever.feitos)} de ${num(andamentoRever.total)}…`
+            }
+            onClick={reverificarTudo}
+          />
           {vista !== "dashboard" && <BotaoDadosCompletos ligado={completo} onChange={alternarCompleto} />}
+          {!modoPca && <AutomacoesMesa automacoes={automacoes} alvo={alvoAutomacao(false).rotulo} onEscolher={(id) => rodarAutomacao(id, false)} />}
           {/* O quadrado mostra a FOTO da pessoa escolhida; a lista, a foto e o apelido de cada um. */}
           {/* Sem ver o Responsável (detalhes do papel), o filtro dele não existe. */}
           {pode.vis.responsavel.ver && (
@@ -2197,5 +2306,6 @@ export function DfdsView({
         </div>
       </Modal>
     </div>
+    </PermissaoExportar>
   );
 }

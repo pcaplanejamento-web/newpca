@@ -266,6 +266,7 @@ export function CampoTextoFormatado({
   // Leitura: tocar no texto edita (os LINKS do texto abrem normalmente); o lápis é o caminho do teclado.
   return (
     <div className="group/campo relative rounded-control px-2 py-1.5 transition-colors hover:bg-surface-2">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: tocar no texto é o atalho do ponteiro — o teclado edita pelo lápis ao lado, e os links do texto seguem focáveis (um botão em volta deles não pode) */}
       <div
         onClick={(e) => {
           if (!disabled && !(e.target as HTMLElement).closest("a")) setEditando(true);

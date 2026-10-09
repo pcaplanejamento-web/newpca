@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DIMENSOES_ORCAMENTO } from "./orcamento-visao.ts";
+import { DIMENSOES_VISAO } from "./orcamento-visao.ts";
 
 // Schemas de entrada do PCA como ESPAÇO e das visões do orçamento. Módulo SÓ-schema (sem getDb) →
 // testável no Node.
@@ -56,8 +56,9 @@ export const acaoItensPcaSchema = z.object({
 
 const filtros = z
   .object(
-    Object.fromEntries(DIMENSOES_ORCAMENTO.map((d) => [d.key, z.array(z.string().trim().min(1).max(300)).max(5000).optional()])) as Record<
-      (typeof DIMENSOES_ORCAMENTO)[number]["key"],
+    // Só o que a visão filtra — unidade, ações e órgão são dos Vínculos (descartados aqui, nunca gravados).
+    Object.fromEntries(DIMENSOES_VISAO.map((d) => [d.key, z.array(z.string().trim().min(1).max(300)).max(5000).optional()])) as Record<
+      (typeof DIMENSOES_VISAO)[number]["key"],
       z.ZodOptional<z.ZodArray<z.ZodString>>
     >,
   )

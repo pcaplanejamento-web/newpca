@@ -2,12 +2,12 @@
 
 import { type ReactNode, useId } from "react";
 import { nomeExibicao, opcoesPessoa, type Pessoa } from "@/lib/pessoa";
-import { Avatar } from "./Avatar";
 import { Dropdown } from "./Dropdown";
-import { IconChevronDown, IconSpinner } from "./icons";
-import { PessoaTag } from "./PessoaTag";
+import { IconSpinner } from "./icons";
+import { AvatarPessoa, PessoaTag } from "./PessoaTag";
 import { type OpcaoBusca, SeletorBusca } from "./SeletorBusca";
 import { classeQuadradoFiltro } from "./SeletorFiltro";
+import { SetaDropdown } from "./SetaDropdown";
 
 /** Opção especial no topo da lista (ex.: "Todos", "Sem responsável") — um ícone no lugar da foto. */
 export type ExtraPessoa = { valor: string; rotulo: string; icone: ReactNode };
@@ -84,10 +84,10 @@ export function SeletorPessoa({
   // Sem permissão: só o visual.
   if (!onChange) return <PessoaTag pessoa={pessoa} vazio={extra?.rotulo ?? vazio} />;
 
-  const seta = (tam: string) => (salvando ? <IconSpinner className={`${tam} shrink-0 text-accent`} /> : <IconChevronDown className={`${tam} shrink-0 text-faint`} />);
+  const seta = (tam: string) => (salvando ? <IconSpinner className={`${tam} shrink-0 text-accent`} /> : <SetaDropdown className={`${tam} shrink-0 text-faint`} />);
   const gatilho =
     variante === "filtro" ? (
-      (extra?.icone ?? (pessoa ? <Avatar nome={pessoa.nome} foto={pessoa.foto} size="xs" /> : extras[0]?.icone))
+      (extra?.icone ?? (pessoa ? <AvatarPessoa pessoa={pessoa} size="xs" /> : extras[0]?.icone))
     ) : variante === "celula" ? (
       <>
         <PessoaTag pessoa={pessoa} vazio={extra?.rotulo ?? vazio} />
@@ -95,7 +95,7 @@ export function SeletorPessoa({
       </>
     ) : (
       <>
-        {pessoa ? <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" /> : extra ? circulo(extra.icone) : null}
+        {pessoa ? <AvatarPessoa pessoa={pessoa} size="sm" /> : extra ? circulo(extra.icone) : null}
         <span className={`min-w-0 flex-1 truncate text-left ${pessoa ? "text-text" : "text-muted"}`}>{texto}</span>
         {seta("h-4 w-4")}
       </>
@@ -128,13 +128,13 @@ export function SeletorPessoa({
             valor: String(o.pessoa.id),
             rotulo: o.rotulo,
             detalhe: o.detalhe,
-            icone: <Avatar nome={o.pessoa.nome} foto={o.pessoa.foto} size="sm" />,
+            icone: <AvatarPessoa pessoa={o.pessoa} size="sm" />,
           })),
         ];
         return (
           // O painel PARA o clique (numa célula, o toque atravessaria o portal e abriria a linha) — e cobre o respiro do
           // Dropdown; o Esc (fechar + foco de volta ao gatilho) é do Dropdown.
-          <div className="-m-2 p-2" onClick={(e) => e.stopPropagation()}>
+          <div role="none" className="-m-2 p-2" onClick={(e) => e.stopPropagation()}>
             <SeletorBusca
               opcoes={opcoes}
               valor={valor}

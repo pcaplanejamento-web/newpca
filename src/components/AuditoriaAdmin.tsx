@@ -7,8 +7,10 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { selectCls } from "./formStyles";
 import { Historico } from "./Historico";
-import { IconClock, IconRefresh } from "./icons";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { IconClock } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
+import { Selecao } from "./Selecao";
 
 const ACOES = Object.entries(ROTULO_ACAO);
 const ENTIDADES = Object.entries(ROTULO_ENTIDADE);
@@ -57,22 +59,20 @@ export function AuditoriaAdmin() {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className="linha-topico flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-text">
             <IconClock className="h-5 w-5" /> Auditoria
           </h1>
           <p className="text-sm text-muted">Histórico de alterações de todo o sistema — quem, o quê e quando.</p>
         </div>
-        <Button variant="secondary" onClick={carregar} loading={carregando}>
-          <IconRefresh className="h-4 w-4" /> Recarregar
-        </Button>
+        <BotaoAtualizar ativo={carregando} rotulo="Recarregar" detalhe="Carregando o histórico…" onClick={() => void carregar()} />
       </header>
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs text-muted">
           Entidade
-          <select
+          <Selecao
             className={selectCls}
             value={entidade}
             onChange={(e) => {
@@ -86,11 +86,11 @@ export function AuditoriaAdmin() {
                 {v}
               </option>
             ))}
-          </select>
+          </Selecao>
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           Ação
-          <select
+          <Selecao
             className={selectCls}
             value={acao}
             onChange={(e) => {
@@ -104,7 +104,7 @@ export function AuditoriaAdmin() {
                 {v}
               </option>
             ))}
-          </select>
+          </Selecao>
         </label>
         <span className="pb-2 text-xs text-muted">
           {total} registro{total === 1 ? "" : "s"}

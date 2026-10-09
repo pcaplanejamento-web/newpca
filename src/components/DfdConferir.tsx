@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { type AncoraAlvo, useDestaqueAncora } from "./DestaqueAncora";
 import { type ChaveAvaliacao, comportamentoDaFalta, editavelDe, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { conferirAssinaturaDfd } from "@/lib/conferencia-dfd";
 import {
   buildPrevisao,
+  DEFINICOES_PREVISAO,
   type CampoTratavel,
   setTextoSecao,
   situacaoSecao,
@@ -29,10 +31,11 @@ import { Button } from "./Button";
 import { CampoTexto, useCadeados } from "./CampoCadeado";
 import { Callout } from "./Callout";
 import { DfdView, type DfdVisual } from "./DfdView";
-import { CampoLista, Checkbox, TextField } from "./Field";
+import { CampoLista, TextField } from "./Field";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconBuilding, IconCheck, IconShield } from "./icons";
 import { Segmented } from "./Segmented";
+import { Selecao } from "./Selecao";
 
 type Rep = {
   id: number;
@@ -60,7 +63,10 @@ const naoOp = () => {};
 
 /** O que o painel da DIREITA (lateral) do DFD mostra: as mensagens, o detalhe de um item, o histórico, as diferenças
  * (reenvio/sobrescrita) ou os DFDs duplicados do processo (protocolação). */
-export type PainelDfd = { tipo: "mensagens" } | { tipo: "item"; idx: number } | { tipo: "historico" } | { tipo: "diferencas" } | { tipo: "duplicados" };
+export type PainelDfd =
+  | { tipo: "mensagens" }
+  /** `destaque` = o campo com pendência a destacar no item (levado pelo painel de pendências). */
+  | { tipo: "item"; idx: number; destaque?: AncoraAlvo } | { tipo: "historico" } | { tipo: "diferencas" } | { tipo: "duplicados" };
 
 /** Único mapeador `DfdParseado` (+ repartição escolhida) → `DfdVisual` do `DfdView`.
  * A conferência da assinatura (solicitante) é resolvida ao vivo pela repartição
@@ -146,7 +152,7 @@ export function DfdConferir({
   /** Regras de avaliação do ADM (edição de campos por nível). */
   regras?: RegrasAvaliacao;
   /** Pedido de rolagem/destaque de uma âncora (id + cor + nonce para repetir o clique). */
-  ancoraAlvo?: { ancora: string; cor: string; nonce: number } | null;
+  ancoraAlvo?: AncoraAlvo | null;
   /** Índice do item ATIVO (detalhe aberto ao lado) — destacado na tabela de itens. */
   itemAtivo?: number | null;
   /** Tabela ÚNICA de itens (DFD já protocolado) — sem separar os itens com pendência. */
@@ -196,30 +202,9 @@ export function DfdConferir({
   };
   const foraDoHead = repId != null && reparticaoAtivaId != null && repId !== reparticaoAtivaId;
 
-  // Rolagem + DESTAQUE de uma âncora (ao clicar numa mensagem do painel lateral). O
-  // elemento com `data-ancora` correspondente entra em vista e pulsa na cor do status.
+  // Rolagem + DESTAQUE de uma âncora (ao tocar numa pendência do painel lateral) — o hook compartilhado.
   const bodyRef = useRef<HTMLDivElement>(null);
-  const destaqueRef = useRef<{ el: HTMLElement; timer: number } | null>(null);
-  useEffect(() => {
-    if (!ancoraAlvo || !bodyRef.current) return;
-    const el = bodyRef.current.querySelector<HTMLElement>(`[data-ancora="${ancoraAlvo.ancora}"]`);
-    if (!el) return;
-    if (destaqueRef.current) {
-      window.clearTimeout(destaqueRef.current.timer);
-      destaqueRef.current.el.style.boxShadow = "";
-    }
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.style.transition = "box-shadow 0.35s ease";
-    el.style.borderRadius = el.style.borderRadius || "14px";
-    el.style.boxShadow = `0 0 0 3px ${ancoraAlvo.cor}, 0 0 0 7px color-mix(in srgb, ${ancoraAlvo.cor} 22%, transparent)`;
-    const timer = window.setTimeout(() => {
-      el.style.boxShadow = "";
-    }, 2000);
-    destaqueRef.current = { el, timer };
-  }, [ancoraAlvo]);
-  useEffect(() => () => {
-    if (destaqueRef.current) window.clearTimeout(destaqueRef.current.timer);
-  }, []);
+  useDestaqueAncora(bodyRef, ancoraAlvo);
 
   const setSecao = (cfg: (typeof TRATAVEIS)[number], texto: string) =>
     onSecoesChange(setTextoSecao(dfd.secoes, cfg, texto));
@@ -262,21 +247,20 @@ export function DfdConferir({
   // Valores atuais das seções tratáveis.
   const [pCfg, vCfg, fCfg] = TRATAVEIS;
   const prio = normPrioridade(textoSecao(dfd.secoes, pCfg.kw)).valor;
-  // Previsão: o ANO segue o PCA do processo (ponto 7) — passado a `normPrevisao`, que também
-  // reconhece só o MÊS por extenso e completa o ano com o do PCA (ponto 8).
-  const prev = normPrevisao(textoSecao(dfd.secoes, vCfg.kw), anoPca).valor;
+  // Previsão: o ANO é SEMPRE o do PCA do processo (`normPrevisao` com o `anoPca` — o ano do texto não vale).
+  const prevN = normPrevisao(textoSecao(dfd.secoes, vCfg.kw), anoPca);
+  const prev = prevN.valor;
   const fund = textoSecao(dfd.secoes, fCfg.kw);
   // Seções editáveis DIRETO no documento (cadeado por seção, no `DfdView`): todas, respeitando o
   // "editável" do ADM nos pontos que o suportam (previsão/prioridade/fundamentação).
   const secaoEditavel = ({ obrig }: { titulo: string; obrig?: string }) => !obrig || editavelDe(regras, obrig as ChaveAvaliacao);
   // Mesma régua dos erros (`situacaoSecao`): fundamentação precisa citar a norma.
   const fundOk = situacaoSecao(dfd.secoes, fCfg.kw) === "ok";
-  // "ANUAL" (bare) ou "ANUAL/AAAA" → anual; senão "MÊS/AAAA" → data. Ano é opcional
-  // no anual (não deixa o mês grudar como se fosse mês quando é só "ANUAL").
-  const anual = !!prev && /^ANUAL(\/|$)/.test(prev);
-  const mesSel = prev && !anual ? (prev.split("/")[0] ?? "") : "";
-  // Ano do campo: o da previsão; sem ele, o do PCA (o usuário ainda pode editar — ponto 8).
-  const anoSel = (prev ? (prev.split("/")[1] ?? "") : "") || (anoPca != null ? String(anoPca) : "");
+  // Genérica (a periodicidade) OU mês definido.
+  const periodo = prevN.periodo ?? "";
+  const mesSel = prev && !periodo ? (prev.split("/")[0] ?? "") : "";
+  // Ano: o do PCA (travado); sem PCA definido, o da previsão (editável).
+  const anoSel = anoPca != null ? String(anoPca) : prev ? (prev.split("/")[1] ?? "") : "";
 
   const status = (campo: CampoTratavel, ok: boolean): { txt: string; cor: string } => {
     if (!ok) {
@@ -318,7 +302,7 @@ export function DfdConferir({
         <label className={labelCls} htmlFor="dfd-rep">
           {orgaoIdentNome ? "Unidade (dentro do órgão)" : "Setor / Unidade"} <span style={{ color: "var(--danger)" }}>*</span>
         </label>
-        <select
+        <Selecao
           id="dfd-rep"
           className={inputCls}
           value={repId ?? ""}
@@ -331,7 +315,7 @@ export function DfdConferir({
               {r.codigo} · {r.nome}
             </option>
           ))}
-        </select>
+        </Selecao>
         {autoMatch && (
           <Callout kind="ok" icon={<IconBuilding className="h-4 w-4" />} className="mt-2">
             Unidade identificada automaticamente pela assinatura. Confirme ou ajuste.
@@ -350,7 +334,7 @@ export function DfdConferir({
         <label className={labelCls} htmlFor="dfd-tipo">
           Tipo do DFD <span style={{ color: "var(--danger)" }}>*</span>
         </label>
-        <select
+        <Selecao
           id="dfd-tipo"
           className={inputCls}
           value={tipoSel}
@@ -363,7 +347,7 @@ export function DfdConferir({
               {TIPO_DFD_ROTULO[t]}
             </option>
           ))}
-        </select>
+        </Selecao>
       </div>
 
       {/* Cabeçalho — conteúdo EDITÁVEL (cadeado por campo, como os itens). Só aparece ao editar
@@ -418,38 +402,52 @@ export function DfdConferir({
               Previsão de entrega <Tag campo="previsao" ok={prev != null} />
             </span>
             <div className="flex flex-wrap items-center gap-2">
-              <select
+              <Selecao
                 className={inputCls}
-                style={{ width: "auto", flex: "1 1 120px" }}
-                value={mesSel}
-                disabled={anual || roPrev}
-                onChange={(e) => setSecao(vCfg, buildPrevisao(e.target.value, anoSel, false))}
+                style={{ width: "auto", flex: "1 1 140px" }}
+                aria-label="Definição da previsão"
+                value={periodo}
+                disabled={roPrev}
+                onChange={(e) => setSecao(vCfg, buildPrevisao(mesSel, anoSel, e.target.value as typeof periodo))}
               >
-                <option value="">— Mês —</option>
-                {MESES.map((m) => (
-                  <option key={m} value={m}>
-                    {m[0] + m.slice(1).toLowerCase()}
+                {DEFINICOES_PREVISAO.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
                   </option>
                 ))}
-              </select>
+              </Selecao>
+              {!periodo && (
+                <Selecao
+                  className={inputCls}
+                  style={{ width: "auto", flex: "1 1 120px" }}
+                  aria-label="Mês da previsão"
+                  value={mesSel}
+                  disabled={roPrev}
+                  onChange={(e) => setSecao(vCfg, buildPrevisao(e.target.value, anoSel, ""))}
+                >
+                  <option value="">— Mês —</option>
+                  {MESES.map((m) => (
+                    <option key={m} value={m}>
+                      {m[0] + m.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </Selecao>
+              )}
               <input
                 className={inputCls}
                 style={{ width: "84px" }}
                 inputMode="numeric"
                 placeholder="Ano"
+                aria-label="Ano da previsão"
+                title={anoPca != null ? "O ano é sempre o do PCA" : undefined}
                 maxLength={4}
                 value={anoSel}
+                readOnly={anoPca != null}
                 disabled={roPrev}
                 onChange={(e) => {
                   const ano = e.target.value.replace(/\D/g, "").slice(0, 4);
-                  setSecao(vCfg, buildPrevisao(mesSel, ano, anual));
+                  setSecao(vCfg, buildPrevisao(mesSel, ano, periodo));
                 }}
-              />
-              <Checkbox
-                label="Anual"
-                checked={anual}
-                disabled={roPrev}
-                onChange={(e) => setSecao(vCfg, buildPrevisao(mesSel, anoSel, e.target.checked))}
               />
             </div>
           </div>
@@ -503,8 +501,7 @@ export function DfdConferir({
               )}
               {/* Validada pela equipe: a DATA da assinatura pode ser informada/corrigida aqui. */}
               {resAss.origem === "equipe" && validadaEquipe && (
-                <label className="flex w-full flex-wrap items-center gap-2 text-[12.5px] text-text-2">
-                  <span className="font-medium">Data da assinatura</span>
+                <div className="flex w-full flex-wrap items-center gap-2 text-[12.5px] text-text-2">
                   {podeValidar ? (
                     <CampoDataAssinatura
                       data={validadaEquipe.data}
@@ -512,9 +509,12 @@ export function DfdConferir({
                       onData={(br) => onAssinaturasChange?.(definirDataAssinaturaEquipe(dfd.assinaturas, br))}
                     />
                   ) : (
-                    <span className="tabular-nums">{validadaEquipe.data.trim() || "—"}</span>
+                    <>
+                      <span className="font-medium">Data da assinatura</span>
+                      <span className="tabular-nums">{validadaEquipe.data.trim() || "—"}</span>
+                    </>
                   )}
-                </label>
+                </div>
               )}
             </div>
           ) : (
@@ -535,7 +535,7 @@ export function DfdConferir({
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
-                      <select
+                      <Selecao
                         aria-label="Responsável que assinou"
                         className={inputCls}
                         style={{ width: "auto", flex: "1 1 220px" }}
@@ -548,7 +548,7 @@ export function DfdConferir({
                             {n}
                           </option>
                         ))}
-                      </select>
+                      </Selecao>
                       {/* DATA da assinatura: obrigatória ao ADICIONAR (nenhuma lida); ao validar, a lida (corrigível). */}
                       <input
                         type="date"
@@ -590,7 +590,7 @@ export function DfdConferir({
           <p className="mb-3 text-xs text-muted">
             Todo DFD-R deve mencionar ao menos um nº de contrato, ARP ou licitação — pode haver VÁRIOS de cada.
             Preenchidos automaticamente pela descrição; acrescente (Enter) ou remova (×) se necessário. As pendências
-            ficam em "Ver mensagens".
+            ficam no indicador do rodapé (mensagens).
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <CampoLista
@@ -626,7 +626,7 @@ export function DfdConferir({
         </Callout>
       )}
 
-      {/* Documento completo (read-only, reflete as edições). O botão "Ver mensagens" e a
+      {/* Documento completo (read-only, reflete as edições). O indicador de pendências e a
           numeração ficam no RODAPÉ FIXO do banner (renderizados pelo pai). */}
       <div className="border-t border-border pt-4">
         <DfdView
@@ -656,11 +656,15 @@ function CampoDataAssinatura({ data, hojeIso, onData }: { data: string; hojeIso:
   const [rascunho, setRascunho] = useState(gravada);
   useEffect(() => setRascunho(gravada), [gravada]);
   const invalida = !!rascunho && rascunho !== gravada && !dataAssinaturaDeIso(rascunho, hojeIso);
+  const id = useId();
   return (
     <>
+      <label htmlFor={id} className="font-medium">
+        Data da assinatura
+      </label>
       <input
+        id={id}
         type="date"
-        aria-label="Data da assinatura"
         className={inputCls}
         style={{ width: "auto" }}
         max={hojeIso}

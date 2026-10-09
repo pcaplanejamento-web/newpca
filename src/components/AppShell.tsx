@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
+import { VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
+import { SetaDropdown } from "./SetaDropdown";
+import { CanalGrupo, type PresencaShell } from "./CanalGrupo";
+import { PresencaGrupo } from "./PresencaGrupo";
+import { ChatAoVivo } from "./ChatAoVivo";
+import type { ConfigChat } from "@/lib/chat-core";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
@@ -17,7 +23,6 @@ import {
   IconBuilding,
   IconLandmark,
   IconCheck,
-  IconChevronDown,
   IconClock,
   IconClose,
   IconDatabase,
@@ -25,6 +30,7 @@ import {
   IconMenu,
   IconPalette,
   IconPlug,
+  IconRobo,
   IconSettings,
   IconShield,
   IconSpinner,
@@ -57,6 +63,7 @@ const SECOES: NavSecao[] = [
       { href: "/painel/orgaos", label: "Órgãos e Unidades", Icon: IconLandmark, soAdmin: true },
       { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, soAdmin: true },
       { href: "/painel/integracoes", label: "Integrações", Icon: IconPlug, soAdmin: true },
+      { href: "/painel/automacao", label: "Automação", Icon: IconRobo, soAdmin: true },
       { href: "/painel/armazenamento", label: "Armazenamento", Icon: IconDatabase, soAdmin: true },
       { href: "/painel/auditoria", label: "Auditoria", Icon: IconClock, soAdmin: true },
       { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, soAdmin: true },
@@ -147,7 +154,7 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
   }
 
   return (
-    <div className="rounded-card border border-border p-3">
+    <div className="rounded-card border border-border p-[var(--pad-card)]">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}
@@ -218,7 +225,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
             <IconUsers className="h-3.5 w-3.5 opacity-70" />
           )}
           <span className="max-w-[9rem] truncate">{ativo.nome}</span>
-          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+          <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
     >
@@ -305,7 +312,7 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
           {trocando ? <IconSpinner className="h-3.5 w-3.5 shrink-0" /> : <IconBox className="h-3.5 w-3.5 shrink-0 opacity-70" />}
           <span className="truncate sm:hidden">{ativo ? ativo.ano : "Todos"}</span>
           <span className="hidden max-w-[12rem] truncate sm:inline">{ativo ? ativo.nome : "Todos os PCAs"}</span>
-          <IconChevronDown className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
+          <SetaDropdown className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
         </>
       }
     >
@@ -371,7 +378,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
             <IconBuilding className="h-3.5 w-3.5 opacity-70" />
           )}
           <span className="max-w-[9rem] truncate">{ativa.nome}</span>
-          <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+          <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
     >
@@ -397,6 +404,13 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
   );
 }
 
+/** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */
+function useUltimoValido<T>(v: T | null | undefined): T | null {
+  const ref = useRef<T | null>(v ?? null);
+  if (v !== undefined) ref.current = v;
+  return ref.current;
+}
+
 export function AppShell({
   children,
   usuario,
@@ -410,6 +424,8 @@ export function AppShell({
   identidade,
   notificacoes = 0,
   versaoDados,
+  presenca: presencaServidor,
+  chat: chatServidor,
 }: {
   children: ReactNode;
   usuario: UsuarioSessao;
@@ -426,14 +442,37 @@ export function AppShell({
   notificacoes?: number;
   /** A VERSÃO DOS DADOS do servidor (`versaoDados`) — o `SincronizarDados` só recarrega quando ela muda. */
   versaoDados?: string;
+  /** A PRESENÇA do grupo ativo (quem está online) — só quando o ADM a ligou; `null` = nada é montado; `undefined` = a
+   * leitura falhou (mantém a que já estava — o canal e as conversas nunca caem por uma falha passageira). */
+  presenca?: PresencaShell | null;
+  /** O CHAT AO VIVO (o do grupo e/ou o privado ligados pelo ADM; só com a presença) — `null` = sem o chat. */
+  chat?: ConfigChat | null;
 }) {
+  const presenca = useUltimoValido(presencaServidor);
+  const chat = useUltimoValido(chatServidor);
   const [menuAberto, setMenuAberto] = useState(false);
   const fecharMenu = () => setMenuAberto(false);
+  // Esc fecha a gaveta (o caminho do teclado; o fundo escurecido é só do ponteiro) — menos com um diálogo por cima.
+  useEffect(() => {
+    if (!menuAberto) return;
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[role='dialog']")) setMenuAberto(false);
+    };
+    document.addEventListener("keydown", tecla);
+    return () => document.removeEventListener("keydown", tecla);
+  }, [menuAberto]);
   const abasSet = new Set(abas);
   // O PCA do cabeçalho filtra a Mesa, o módulo PCA e o Orçamento — sem nenhuma dessas abas, o seletor não aparece.
   const filtraPca = abasSet.has("dfd") || abasSet.has("pca") || abasSet.has("orcamento");
 
   return (
+    <CanalGrupo
+      presenca={presenca}
+      usuarioId={usuario.id}
+      grupoId={grupoAtivoId}
+      grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null}
+      chatGrupo={!!chat?.grupo} chatPrivado={!!chat?.privado}
+    >
     <div className="min-h-dvh bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versao={versaoDados} />}
       {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
@@ -447,13 +486,14 @@ export function AppShell({
         </div>
         <div className="p-2 pt-0">
           <UserMenu usuario={usuario} />
+          <VersaoSistema />
         </div>
       </aside>
 
       {/* Drawer mobile (menu hambúrguer) — reusa a mesma navegação da sidebar */}
       {menuAberto && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
+          <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
           <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface shadow-soft">
             <div className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-border pl-4 pr-1">
               <Brand identidade={identidade} />
@@ -477,6 +517,7 @@ export function AppShell({
             </div>
             <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
               <UserMenu usuario={usuario} onNavigate={fecharMenu} />
+              <VersaoSistema onNavigate={fecharMenu} />
             </div>
           </aside>
         </div>
@@ -484,7 +525,7 @@ export function AppShell({
 
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface/85 px-[var(--pad-canvas)] backdrop-blur-md print:hidden">
+        <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
           <button
             type="button"
             aria-label="Abrir menu"
@@ -493,7 +534,8 @@ export function AppShell({
           >
             <IconMenu className="h-5 w-5" />
           </button>
-          <div className="shrink-0 lg:hidden">
+          {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
+          <div className={`shrink-0 lg:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
             <Brand compact identidade={identidade} />
           </div>
           {/* PCA do cabeçalho (filtro de todo o sistema) — à ESQUERDA; só para quem vê o que ele filtra (Mesa, PCA,
@@ -509,7 +551,13 @@ export function AppShell({
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
-            <SinoNotificacoes naoLidas={notificacoes} />
+            {/* UM componente só: quem está online + as conversas (abas no mesmo painel); as bolhas do chat flutuam. */}
+            {presenca && (
+              <ChatAoVivo config={chat}>
+                <PresencaGrupo verMesa={abasSet.has("dfd")} />
+              </ChatAoVivo>
+            )}
+            <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
               <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
@@ -517,9 +565,9 @@ export function AppShell({
           </div>
         </header>
 
-        {/* A MESMA margem (--pad-canvas) do cabeçalho, do menu e da borda do display; no celular, a base soma a
-            navegação inferior (4rem + área segura). */}
-        <main className="flex-1 p-[var(--pad-canvas)] pb-[calc(var(--pad-canvas)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas)]">
+        {/* Laterais = --pad-canvas (a do menu e da borda); topo e base = --pad-canvas-y (as 4 distâncias proporcionais);
+            no celular, a base soma a navegação inferior (4rem + área segura). */}
+        <main className="flex-1 px-[var(--pad-canvas)] py-[var(--pad-canvas-y)] pb-[calc(var(--pad-canvas-y)_+_4rem_+_env(safe-area-inset-bottom))] lg:pb-[var(--pad-canvas-y)]">
           {children}
         </main>
       </div>
@@ -527,5 +575,6 @@ export function AppShell({
       {/* Navegação inferior (mobile) */}
       <BottomNav abas={abasSet} />
     </div>
+    </CanalGrupo>
   );
 }

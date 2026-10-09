@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { dfdProtocolos, dfds } from "../db/schema.ts";
+import { dfdPassagens, dfdProtocolos, dfds } from "../db/schema.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
 
@@ -21,7 +21,19 @@ export function comandosMesmoId(db: Db, numero: string, mesmoId: number[], alvoI
   return [
     ...(alvoId == null ? [db.update(dfdProtocolos).set({ numero }).where(eq(dfdProtocolos.id, fica))] : []),
     ...(saem.length > 0
-      ? [db.update(dfds).set({ protocoloId: fica }).where(inArray(dfds.protocoloId, saem)), db.delete(dfdProtocolos).where(inArray(dfdProtocolos.id, saem))]
+      ? [
+          // O DFD que ENTRA no que fica volta a estar vivo lá: sai o rastro dele ali (senão contaria duas vezes na somatória).
+          db
+            .delete(dfdPassagens)
+            .where(
+              and(
+                eq(dfdPassagens.protocoloId, fica),
+                inArray(dfdPassagens.dfdNumero, db.select({ numero: dfds.numero }).from(dfds).where(inArray(dfds.protocoloId, saem))),
+              ),
+            ),
+          db.update(dfds).set({ protocoloId: fica }).where(inArray(dfds.protocoloId, saem)),
+          db.delete(dfdProtocolos).where(inArray(dfdProtocolos.id, saem)),
+        ]
       : []),
   ];
 }

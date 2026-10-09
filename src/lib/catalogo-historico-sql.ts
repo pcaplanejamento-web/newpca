@@ -109,3 +109,29 @@ export function consultaIndicadoresHistorico(db: Db) {
     .from(catalogoCompras)
     .groupBy(catalogoCompras.catalogoId);
 }
+
+/**
+ * As COMPRAS de um conjunto de códigos em TODOS os históricos, com os dados do contrato — a comparação dos itens dos DFDs
+ * (a Mesa) com o histórico. UMA consulta qualquer que seja o nº de códigos (os códigos num só parâmetro JSON —
+ * `json_each`, como `consultaEntradasCatalogo`); o índice `catalogo_compras_codigo_idx` atende o filtro.
+ */
+export function consultaComprasPorCodigos(db: Db, codigos: readonly string[]) {
+  return db
+    .select({
+      ordem: catalogoCompras.ordem,
+      idContrato: catalogoCompras.idContrato,
+      codigo: catalogoCompras.codigo,
+      sequencial: catalogoCompras.sequencial,
+      descricao: catalogoCompras.descricao,
+      qtdContratada: catalogoCompras.qtdContratada,
+      valorContratado: catalogoCompras.valorContratado,
+      valorUnitario: catalogoCompras.valorUnitario,
+      dataAssinatura: catalogoContratos.dataAssinatura,
+      credor: catalogoContratos.credor,
+      numeroContrato: catalogoContratos.numeroContrato,
+      modalidade: catalogoContratos.modalidade,
+    })
+    .from(catalogoCompras)
+    .leftJoin(catalogoContratos, and(eq(catalogoContratos.catalogoId, catalogoCompras.catalogoId), eq(catalogoContratos.idContrato, catalogoCompras.idContrato)))
+    .where(sql`${catalogoCompras.codigo} IN (SELECT value FROM json_each(${JSON.stringify(codigos)}))`);
+}

@@ -4,7 +4,8 @@ import { type ReactNode, useRef } from "react";
 import { AJUSTE_FUNDO_PADRAO, type AjusteFundo, cssGradiente, estiloFundo, type Gradiente } from "@/lib/imagem-fundo-core";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import { alternarValor, type FiltroTarefas } from "@/lib/tarefas-core";
-import { Avatar } from "./Avatar";
+import { AvatarPessoa } from "./PessoaTag";
+import { PilhaFotos } from "./PilhaFotos";
 import { useAlturaTela } from "./AlturaCheia";
 import { Dropdown } from "./Dropdown";
 import { useImagemCarrega } from "./FundoQuadro";
@@ -197,45 +198,27 @@ export function MenuQuadro({
   );
 }
 
-/** Até quantas fotos de membros aparecem na faixa (as demais viram "+N"). */
-const MAX_MEMBROS = 5;
-
 /**
- * Os MEMBROS do quadro na faixa (as fotos, como no Trello): tocar numa pessoa FILTRA o quadro pelas tarefas dela (e tocar
- * de novo tira) — a pessoa filtrada fica com o anel accent; "+N" lista os demais na dica.
+ * Os MEMBROS do quadro na faixa — a MESMA pilha de fotos do cabeçalho (`PilhaFotos`: a primeira por cima, o ponto de
+ * presença ao vivo, leque ao passar o mouse, "+N"): tocar numa pessoa FILTRA o quadro pelas tarefas dela (e tocar de novo
+ * tira) — a pessoa filtrada fica com o anel accent.
  */
 export function MembrosQuadro({ pessoas, filtro, onFiltro }: { pessoas: Pessoa[]; filtro: FiltroTarefas; onFiltro: (f: FiltroTarefas) => void }) {
   if (!pessoas.length) return null;
-  const vis = pessoas.slice(0, MAX_MEMBROS);
-  const resto = pessoas.slice(MAX_MEMBROS);
   return (
-    <div className="flex items-center -space-x-1.5 px-1 max-sm:hidden">
-      {vis.map((p) => {
+    <PilhaFotos
+      className="px-1 max-sm:hidden"
+      itens={pessoas.map((p) => {
         const ativo = filtro.responsaveis.includes(p.id);
-        return (
-          <button
-            key={p.id}
-            type="button"
-            aria-pressed={ativo}
-            title={`${nomeExibicao(p)} — ${ativo ? "tirar o filtro" : "ver só as tarefas dessa pessoa"}`}
-            aria-label={`Filtrar pelas tarefas de ${nomeExibicao(p)}`}
-            onClick={() => onFiltro({ ...filtro, responsaveis: alternarValor(filtro.responsaveis, p.id) })}
-            className={`relative rounded-full transition-transform hover:z-10 hover:-translate-y-0.5 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-              ativo ? "z-10 ring-2 ring-accent" : "ring-2 ring-surface"
-            }`}
-          >
-            <Avatar nome={p.nome} foto={p.foto} size="md" />
-          </button>
-        );
+        return {
+          id: p.id,
+          foto: <AvatarPessoa pessoa={p} size="sm" pulsar />,
+          titulo: `${nomeExibicao(p)} — ${ativo ? "tirar o filtro" : "ver só as tarefas dessa pessoa"}`,
+          rotulo: `Filtrar pelas tarefas de ${nomeExibicao(p)}`,
+          ativo,
+          onClick: () => onFiltro({ ...filtro, responsaveis: alternarValor(filtro.responsaveis, p.id) }),
+        };
       })}
-      {resto.length > 0 && (
-        <span
-          className="grid h-8 min-w-8 place-items-center rounded-full bg-surface-2 px-1.5 text-[11px] font-semibold text-text-2 ring-2 ring-surface"
-          title={resto.map((p) => nomeExibicao(p)).join(", ")}
-        >
-          +{resto.length}
-        </span>
-      )}
-    </div>
+    />
   );
 }

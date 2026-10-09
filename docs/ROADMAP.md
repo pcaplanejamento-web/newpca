@@ -20,11 +20,112 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Fase 2 (início público + PCA) — entregue
 ✅ **Home `/` = dashboard do PCA PÚBLICO** (todos veem, sem login) · ✅ Aba **PCA** (`/painel/pca`) para subir planilhas + unidades · ✅ Consolidação: dashboard saiu de Ferramentas para `/`; upload para a aba PCA.
 
+### Auditoria dos totais: protocolo = DFDs = itens, sobrescritas seguras — entregue
+✅ **Valor do DFD = Σ dos itens em toda parte** (leitura, edição, sobrescrita e banco — `comandoTotaisDfd` no mesmo lote;
+o TOTAL GERAL do PDF não define mais o valor; migração `0085` acertou os gravados) · ✅ Item: trocar quantidade/valor unitário
+recalcula o total · ✅ DFD gravado pela metade = erro "Gravação incompleta" · ✅ Append regrava só a faixa do lote; desfazer
+nunca vira "Excluir"; reenvio só exclui o DFD que ainda está no protocolo · ✅ PCA: troca de protocolo leva a ação, vigência
+a cada gravação completa, vínculo legado respeitado; consulta pública e calendário com a mesma conta do Dashboard; Mesa do
+PCA sem avulsos · ✅ Fusão por Id: todos os de mesmo Id conferidos, recusa com PCA, sem rastro em dobro · ✅ Re-importar um
+protocolo já cadastrado soma na conciliação os DFDs que continuam nele.
+
+### DFDs com textos longos aceitos (v1.54.2) — entregue
+✅ Descrição do item, objeto, órgão, setor, responsável e texto de cada seção até **20 mil caracteres** (`MAX_TEXTO_DFD`) na
+importação, no reenvio e na edição — antes um DFD com uma descrição acima de 4.000 era recusado inteiro ("Grande demais",
+reenvio do 122516/2026) · ✅ Os itens vão ao servidor em lotes de até 200 **e** ~500 mil caracteres (nenhum pedido pesado).
+
+### Fluxos de automação estilo N8N (v1.24.0) — entregue
+Editor visual de fluxos na Automação: blocos de busca (Centi/sistema), leitura de protocolos, lógica (SE, Comparar, Laço até
+o fim), transformação, apontar erros e saída; frequência por fluxo e modelos prontos. Próximas fases (o registro de nós já
+comporta): gatilho por evento do sistema e webhook, HTTP genérico com credenciais cifradas, e-mail/Trello, nó de IA (Claude,
+no servidor, com dados mascarados), consultas aprendidas pelo gravador como nós, escrita na Centi com autorização.
+
+### Melhorias do sistema (segurança, deploy, saúde dos dados, acessibilidade) — entregue
+✅ **Segurança (v1.4.4):** Next.js 16.3.4 → 16.3.8 (alerta crítico de RCE no `next/og`, que o sistema não usa), wrangler
+4.147, OpenNext 1.20.8: nenhum alerta crítico/alto (restam 4 moderados do `drizzle-kit`, só de desenvolvimento) · ✅ Deploy
+em FILA (um push novo espera, não interrompe) · ✅ Teste que barra número de migração repetido (sessões em paralelo) · ✅
+**Saúde dos dados (v1.5.0)** no Armazenamento (ADM): integridade dos totais (deve ser zero) e dados a tratar, com o protocolo
+de cada um · ✅ **Acessibilidade (v1.5.0):** as 3 regras do lint religadas, os 20 pontos corrigidos, Esc fecha o menu.
+Próximos (diagnóstico de 06/10): CLAUDE.md enxuto (481 KB por sessão), homologação, PNCP, CATMAT/CATSER e execução do PCA.
+
+### Verificação em produção dos totais + valor com 4 casas — entregue
+✅ Conferido no banco de produção (só leitura): 1.291 DFDs com valor = soma dos itens e nº de itens = itens gravados (0
+divergências); 0 rastro em dobro; numeração do PCA íntegra (11.618 nºs, 0 inconsistências) · ✅ Valor do DFD com **4 casas**
+(a precisão da Centi; migração `0087`): arredondar cada DFD ao centavo dava R$ 0,01 de diferença entre as abas e contra a
+capa · ✅ Capa conferida com a somatória EXATA, decidida em inteiros (fração de centavo bate; 1 centavo inteiro diverge
+sempre) · ✅ `brl` mostra o MESMO centavo para o mesmo valor somado em ordens diferentes.
+
+### Vínculos editáveis por linha no orçamento do PCA — entregue
+✅ Coluna Vínculos em cada linha do PCA × Orçamento (por unidade) → UM banner com as unidades do orçamento da linha, a unidade
+cadastrada fixa e TODAS as ações (marcadas e desmarcadas, com o destino de cada uma); linhas com ações sem vínculo em
+destaque (a dica diz quais ações); no banner, as ações sem vínculo numa seção separada e o PDF dos vínculos da unidade; a
+linha "Sem vínculo" lista o que falta vincular · ✅ Editor da visão mais limpo: as explicações foram para a Ajuda (?).
+
+### Reimportar o QDD substitui tudo e as visões se adaptam; aba Orçamento do PCA sem avisos — entregue
+✅ Importar um ano que já tem orçamento SUBSTITUI o daquele ano (lançamentos antigos e duplicatas apagados num lote) ·
+✅ As visões ganham sozinhas o equivalente dos valores renomeados/recodificados (mesmo código ou mesmo nome; nunca tiram) ·
+✅ A engrenagem fica à direita, com um ponto âmbar quando a visão tem valores fora do orçamento · ✅ Sem os avisos no topo da aba.
+
+### Orçamento do PCA sincronizado com o QDD e as visões + engrenagem da visão — entregue
+✅ Engrenagem na aba Orçamento do PCA: escolher a visão (grava na hora), editar a visão escolhida ou criar uma nova (já vira
+a do PCA) no mesmo editor da aba Visões · ✅ Sincronia: os valores da visão que o QDD atual não traz são apontados (aba
+Visões, editor com "Remover ausentes", prévia do reenvio da planilha e aviso no orçamento do PCA) · ✅ A aba Visões mostra os
+PCAs que usam cada visão; excluir diz quais voltam ao orçamento inteiro · ✅ O Comparativo do PCA acompanha a troca de visão;
+o KPI Dotação diz qual orçamento do ano é usado.
+
+### Pendências padronizadas (Protocolo · DFD · Item) — entregue
+✅ Um banner único de pendências (`PainelPendencias`) nos três níveis: o protocolo soma a capa e os DFDs, o DFD soma os
+itens; tocar numa pendência leva ao lugar (abre o DFD/item e destaca o campo); copiar em Despacho, WhatsApp ou Lista; PDF
+com o conteúdo atual de cada componente (seções, capa e a tabela dos itens com a célula que falta destacada). Antes de copiar ou baixar, escolhe-se o que entra (erros/atenções, tipos de
+problema e DFDs) e confere-se a prévia ao vivo do texto ou do PDF.
+
+### Rodapés dos banners em uma linha — entregue
+✅ Protocolo, DFD e item (Mesa, análise e consulta pública): rodapé em UMA linha com botões só de ícone (`BotaoAcao`), o
+indicador ÚNICO de erros/atenção (`IndicadorPendencias`), Reenviar protocolo e Sobrescrever DFD em preto, Histórico e
+Tarefas no cabeçalho e sem o Fechar redundante (o X fecha). Correção: durante a sobrescrita de um DFD (e ao salvar) os botões
+do protocolo e do DFD não somem mais — ficam desabilitados com o motivo na dica; Tarefas também no DFD ao lado do protocolo.
+
+### Exportação XLSX/PDF com linha TOTAL — entregue
+✅ Toda tabela exportada (XLSX e PDF) termina com a **linha TOTAL**: a soma de cada coluna de valores e quantidades
+(Valor total, Dotação, Planejado, Diferença, Qtd., Itens, DFDs, contagens); valor unitário, médias, percentuais e
+identificadores ficam em branco (`Column.total: false`). No PDF, a linha sai em destaque (negrito sobre o fundo).
+
 ### Assinatura Dropsigner "eletronicamente" (± CPF) — entregue
 ✅ Reconhecimento da variante Dropsigner cujo bloco usa **"Assinado eletronicamente por:"** (além de
 "digitalmente"/"Digitally signed by") e cujo **CPF é OPCIONAL** (blocos só com NOME + Data). Validado contra 2
 protocolos reais (WELLINGTON, Álvaro, Ricardo — 9/9 assinaturas). `ehRuido` passou a filtrar "ASSINADO
 ELETRONICAMENTE" (não vaza p/ as seções). Testes em `parse-dfd-pdf.test.ts` + `parse-dfd-comum.test.ts`.
+
+### Orçamento: vínculos CRIADOS — uma unidade do orçamento em várias unidades cadastradas — entregue
+✅ Em vez da lista com todas as unidades, o usuário CRIA os vínculos ("Novo vínculo", "Vincular" na vista "Sem vínculo" ou
+as sugestões): cada um liga a unidade do orçamento a UMA unidade cadastrada com as suas ações (lista ou "as demais"); a
+mesma unidade do orçamento pode ter vários, e cada ação vai a uma unidade só. Os vínculos de antes foram convertidos sem
+perder nada (migração `0080`). A exclusão apaga do banco (confirmada) e a tela já mostra a lista gravada; vínculos de uma
+unidade cadastrada excluída saem sozinhos (gatilho da `0081`).
+
+### Orçamento: vínculos por unidade + ações, Lançamentos com visões e edição, XLSX/PDF em toda tabela — entregue
+✅ **Vínculos:** só por UNIDADE (o de órgão saiu — migração `0079`); em cada unidade do CUBO o usuário escolhe as AÇÕES que
+entram; ver por órgão = a soma das unidades vinculadas (dimensões "Órgão (cadastro)"/"Unidade (cadastro)" nas visões, no
+comparativo e nos lançamentos; o PCA × Orçamento segue as ações). **Lançamentos:** uma coluna por visão salva, a edição da
+tabela e as edições salvas como na Mesa. **Toda tabela** do sistema baixa em **XLSX** ou **PDF** pelo rodapé (o PDF em A4
+deitado, com o cabeçalho repetido, texto quebrado sem cortes, tabela larga em faixas de colunas e, no rodapé, quem baixou,
+o dia e o horário), inclusive a tabela
+comparativa do orçamento; a permissão Exportar do papel segue valendo nas telas de módulo.
+
+### Mesas: "Atualizar tudo" reverifica protocolos, DFDs e itens — entregue
+✅ Botão circular na barra da Mesa (sistema e PCA): recarrega a lista e reconfere tudo, com o anel de andamento e o aviso
+final (falhas parciais avisadas). O mesmo botão circular (`BotaoAtualizar`) virou o PADRÃO de recarregar do sistema:
+banners de DFD/item/protocolo e o "Recarregar"/"Verificar" de Auditoria, Armazenamento, Órgãos, Unidades e Automação.
+
+### Toda unidade pertence a um órgão — entregue
+✅ A migração `0078` apagou as unidades sem órgão (menos a "Geral"; os DFDs/protocolos delas ficaram sem unidade, por
+escolha do usuário); o órgão é obrigatório no cadastro da unidade e excluir um órgão exclui as unidades dele no mesmo lote.
+
+### PCA × Orçamento: a unidade é o micro, o órgão é a soma — entregue
+✅ O comparativo do PCA separa unidades de MESMA sigla (coluna Órgão + selo "Oculta"), ganha "Ver por Unidade | Órgão"
+(o órgão = Σ das unidades, com a origem) e avisa a sigla repartida (DFDs numa unidade, CUBO vinculado a outra), com o
+link para corrigir em Orçamento → Vínculos — que passou a mostrar o órgão quando a sigla se repete. Testes em
+`tests/orcamento-comparativo.test.ts`.
 
 ### Papéis configuráveis por tela + auditoria de Grupos, Permissões e Papel — entregue
 - **Entrega 1 ✅:** correções da administração (PATCH de grupo/permissão não apaga mais pessoas, unidades e telas;
@@ -68,6 +169,14 @@ Levantamento de tudo o que se acessa e o controle, no PAPEL (vale em qualquer gr
   alinhamentos (Imprimir do Calendário = Exportar; textos do catálogo de papéis).
 - 💡 Depois: aba Orçamento do PCA (mostra o CUBO do ano inteiro), reconferir o papel nos e-mails de aviso, foto por id,
   autores dos comentários de tarefa, detalhes para Catálogo/Orçamento/Calendário.
+
+### Protocolo incorporado 100% editável (o PCA acompanha) — entregue
+✅ Sem a antiga trava: o protocolo INCORPORADO edita capa, DFDs, itens e assinaturas, massa nas 3 visões, reenvio, sobrescrita,
+mover DFD, remover/unificar itens, excluir DFD e protocolo (também o só enviado) e **Devolver à Mesa** (desincorpora). O PCA
+acompanha na hora (migração `0077`; `pca-sincronia.ts`, `pca-numeracao-core.ts`): o item editado MANTÉM o nº no PCA (retrato do
+item + pareamento por código/descrição/unidade/nº), o novo ganha o próximo nº, o removido fica com o nº BAIXADO (nunca
+reaproveitado); o DFD entra/sai do PCA com o protocolo incorporado e o substituído volta a valer quando quem o substituía sai.
+Supera as regras antigas "protocolo/DFD em um PCA não é excluído" e "a incorporação é permanente".
 
 ### Texto do DFD em parágrafos + Atualizar que revisa + Dados completos na Mesa — entregue
 ✅ **Texto corrido na importação** (`texto-corrido.ts`): o PDF gravava uma quebra por linha VISUAL nas seções; agora a
@@ -134,10 +243,16 @@ importação avisa "gravação INCOMPLETA — reenvie para completar"). Mover o 
 agrupados em **pastas** (o mesmo desenho de pasta de Tarefas); tocar na pasta abre a **tela da pasta** (só os catálogos
 dela, Lista de Itens e os números do conjunto). ✅ Dois tipos de cadastro: **Catálogo da Agenda** (o de sempre) e
 **Histórico de compra** — o export do sistema de compras (CSV/XLSX): contratos + itens comprados, com a análise por
-produto (menor/médio ponderado/maior/último preço). ✅ **Variação de preço** por produto (a régua da Consolidada:
+produto. ✅ **Valor atual**: no mesmo contrato, o menor preço é o ADITIVO somado ao maior (preço repetido não soma); o
+valor atual do produto é o do contrato assinado por último; menor/médio/maior e a variação só ENTRE contratos diferentes,
+sobre o valor atual de cada um — com o CONTRATO do menor e do maior valor à vista. ✅ Visão **Por contrato**: cada produto em cada
+contrato com o menor e o maior valor dentro dele, o valor atual e qual é o mais recente. ✅ **Variação de preço** por produto (a régua da Consolidada:
 alta > 50%), ordenada da maior para a menor, KPI "Variação alta" e o "Δ preço médio" de cada item contratado. ✅ O export repete linhas idênticas (no de 2026: 5.937 → 1.130);
-o importador as tira para não inflar o valor. 🔜 **Comparar** os itens dos DFDs com o histórico pelo código (preço
-praticado × valor estimado no DFD).
+o importador as tira para não inflar o valor. ✅ **Comparação com os itens das Mesas** pelo código (também no banner da linha Consolidada): o valor unitário do
+item × o VALOR ATUAL do histórico (a régua da variação — até 25% dentro, até 50% atenção, acima alerta); coluna
+**Histórico** na Mesa → Itens (o desvio na cor, filtro Acima/Abaixo/Dentro/Sem histórico) e o bloco **Histórico de
+compra** no detalhe do item e a coluna também na Consolidada (o médio da linha; o erro por extenso + o banner do produto no histórico). 🔜 Levar o ponto às importâncias do
+ADM (Avaliação → Item) e à visão Consolidada.
 
 ### Catálogo: cadastro de UNIDADES DE MEDIDA e CLASSIFICAÇÕES + comparação das unidades e classificação automática dos itens — entregue
 ✅ O Catálogo ganhou duas visões (Catálogo · Lista de Itens · **Unidades de medida** · **Classificações**), carregadas só
@@ -1480,6 +1595,10 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 | ✅ | **Aparência (Personalização §39)**: Design Tokens + painel do ADM (`/painel/aparencia`) — cores/raio/densidade/motion + presets, persistido no D1 e injetado sem flash |
 | ✅ | **Configurações (`/painel/configuracoes`)**: tela única do ADM — **identidade do site** (nome/subtítulo/favicon, renderizados), **cadastro de PCAs** (nome+ano, editar, marcar ativo, excluir) e **atalhos** para as telas admin |
 | ✅ | **Avaliação configurável** (aba Avaliação): níveis (fundamental/intermediário/automático/ignorar) por dado de Protocolo/DFD/Item, com exceções por tipo de DFD e categoria de protocolo |
+| ✅ | **Responsáveis por DFDs numa planilha única (v1.53.0)**: pessoas (nome + matrícula) cadastradas uma vez e vinculadas a unidades ou órgãos (padrão/temporário, função, nomeação, período) pela regra de assinatura do órgão; coluna Conferência (o que está mal cadastrado); órgãos e unidades no padrão da Mesa com banner por cadastro (migração `0099` converteu os JSON antigos) |
+| ✅ | **Responsáveis exonerados e vários lugares por nomeação (v1.58.0)**: exoneração com data (os vínculos seguem valendo, nada novo depois), botão "Exonerados" com as linhas em cinza, encerrados numa coluna cinza fora da Conferência, ordem pela prioridade do cargo, vincular a várias unidades/órgãos de uma vez; órgãos com a coluna "Também unidade" (migração `0101`) |
+| ✅ | **Responsáveis com cargo, período e usuário (v1.56.0)**: o cargo/função é da pessoa (lista de Configurações → Cargos e funções), o padrão tem início e fim (fim em aberto), o temporário tem cargo próprio; ligação ao usuário da plataforma com a foto; órgãos ordenados pelo código da Centi com edição de tabela (migração `0100`) |
+| ⏳ | **Protocolos no meu nome**: o responsável ligado a um usuário vê os protocolos/DFDs em que é o solicitante |
 | 🔜 | Mais configurações da plataforma (secretarias/listas padrão, exercícios) |
 | 💡 | Painel de auditoria e uso |
 
@@ -1506,3 +1625,113 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 > Cada item é entregue de forma incremental e aditiva (sem quebrar o que já existe),
 > com commit + deploy + verificação a cada passo.
+
+## Automação (Centi)
+✅ Tela **Automação** (ADM) + extensão do Chrome: baixa DFDs da Centi por Id do planejamento (Emitir DFD com valor de referência) direto numa pasta, usando o login já feito na Centi; só leitura (não vincula, não assina, não envia e-mail).
+✅ **Por protocolo**: selecionar um ou vários protocolos do sistema e baixar todos os DFDs, cada protocolo numa pasta "Nº do protocolo - assunto" criada sozinha; tela em largura total (Baixar DFDs | Opções + Andamento por pasta).
+✅ Saída configurável: pasta "PCA ano", protocolo "Nº - SIGLA - PCA ano", PDF "Planejamento P - DFD N - PCA ano", separados / um por protocolo / um único (unidos), ordem pelo planejamento, Downloads (.zip com as pastas) por padrão; entidade da Centi por órgão descoberta e lembrada (extensão 1.2.0).
+✅ Tela sem rolar o navegador; "Baixar extensão" sempre à mão (zip montado na hora, com a logo do sistema); nova versão da extensão avisa os ADMs no sino.
+✅ Ajustes num dropdown (escolher pasta opcional), Baixar no rodapé da tabela, Análise por DFD ao lado, protocolo abre o banner da Mesa, cada PDF conferido (planejamento + DFD no texto, tamanho gravado, páginas do unido); textos só no (?).
+✅ Nº do protocolo no fim de todo nome ("(1222, 2212) - 2026"), PDF unido por unidade e um download por planejamento (duplicados e já baixados avisados na análise).
+✅ **Destino Pasta | Protocolo da Centi** (extensão 1.3.0): o ADM informa o Id + nº do protocolo da Centi e cada PDF entra nele como documento novo (tipo 1039 por padrão, descrição = nome do arquivo); a extensão abre o protocolo, confere Id + nº, não repete a mesma descrição e para se a Centi pedir confirmação.
+✅ **Plataforma de automações (migração `0076`)**: execuções, passos, autorização de USO ÚNICO por gravação, registro do que foi gravado e freio de emergência — base para novas receitas.
+✅ **Extensão segura (1.4.0)**: o anexo só passa com a autorização consumida no servidor para o MESMO protocolo e descrição, e com a confirmação na janela da própria extensão; sem `localhost` na extensão publicada.
+✅ **Tela ao vivo (1.4.1)**: estado da Centi atualiza sozinho, freio e histórico das execuções na tela, destino "Protocolo de cada DFD" (o Id da capa), coluna "Na Centi" e pré-verificação (o já anexado não é emitido de novo); o servidor só autoriza o alvo declarado no passo.
+✅ **Receitas no motor**: baixar também vira execução registrada; a operação Emitir DFD aprendida fica no servidor (vale para todos os ADMs).
+✅ **Gravador de receitas (1.5.0)**: grava só a estrutura dos pedidos da tela da Centi (sem valores) para montar as próximas receitas.
+✅ **Login automático na Centi (1.6.0)**: usuário e senha cifrados só na extensão; entra sozinha quando a sessão cai (1 tentativa a cada 5 min, pausa se a senha for recusada ou a Centi pedir verificação); a tela mostra "Centi na tela de login" com "Entrar agora".
+✅ **Aba própria da automação (1.7.0)**: a extensão abre e usa só a aba "Automação PCA"; credenciais salvas uma vez num banner; andamento no ícone, num cartão na aba e no popup; Interromper pela extensão; F5 não perde a sessão.
+✅ **Tarefas + Ler a Tela Protocolo (1.8.0)**: seletor de TAREFA na Automação; a nova tarefa aprende a Tela Protocolo clicando (departamentos + Pesquisar + abas + emitir um PDF), lê os protocolos das repartições (só leitura, com páginas), emite o PDF de cada um e o abre na mesma análise do "Importar protocolo"; a aba da automação sinalizada (título "▶ 3/15", moldura, grupo colorido); id da extensão FIXO (o login salvo sobrevive às atualizações).
+✅ **Tela Protocolo pela interface (1.9.0)**: a extensão entra na PO011, lista as repartições (Departamentos), o ADM escolhe, ela pesquisa e lê a aba "Em Análise" (todas as páginas); o ADM marca os protocolos a tratar. Só leitura — Protocolar/Operações/Salvar/Excluir nunca são tocados.
+✅ **Leitura da grade "Em Análise" (1.9.1)**: o cabeçalho é achado no documento inteiro (menor ancestral de PROTOCOLO · ANO · INTERESSADO, em colunas diferentes) — a grade fica fora do bloco dos filtros e as células do cabeçalho têm ícones; linhas pela estrutura e, sem elas, pela POSIÇÃO na tela; aba "Em Análise(1)" sem espaço; chips pelo `aria-label` "Remove …"; falha = erro fixo na tela + "Copiar diagnóstico" (a forma do DOM).
+✅ **Emitir e analisar + login guardado no sistema (1.10.0)**: tocar num protocolo da Tela Protocolo traz TODOS os dados do cadastro na Centi e emite pelo Operações → Emitir documentos (travas forçadas: não anexa, não assina, não envia); o PDF abre na análise da importação (capa, DFDs, itens). O login da Centi pode ficar guardado, cifrado, também no sistema — volta sozinho se a extensão for reinstalada.
+✅ **Grade Wijmo da Centi (1.10.1)**: o duplo clique vai no centro da célula (a grade decide pela posição do mouse) e a leitura rola a grade para pegar as linhas que ela só desenha quando visíveis.
+✅ **Emissão por código (1.11.0)**: a 1ª emissão pela tela ensina o "Emitir documentos" da Centi; dali em diante cada protocolo é emitido direto pelo Id, como os DFDs. A grade é lida pelos dados (todas as linhas, com o Id e a data de entrada) em colunas fixas; o arquivo pode vir em ZIP.
+✅ **Só por código + download direto**: com a operação aprendida, a Centi não é mais tocada; o arquivo é baixado pela chave num pedido só, pelo MESMO endereço da tela da Centi — o documento do protocolo fica no CACHE (`File.Cache`) e sai por `rest/GetBinCache/{chave}` (extensão 1.11.1); o DFD segue pelo `getbinlink` — sem repetições. **Em qualquer estado (extensão 1.11.2):** o nº, o ano, "nº/ano" e a data de hoje do operation acompanham o protocolo pedido (modelo v2); a fila usa sempre o aprendido mais recente, espera a configuração, reaprende pela tela quando a Centi recusa a operação ou falta o Id, e aceita protocolos grandes (300 s). **Lote automático (extensão 1.11.3):** "Emitir e ler" emite e lê TODOS os protocolos da Tela Protocolo sem abrir janelas, conferindo cada PDF contra o protocolo pedido, contando os DFDs já cadastrados e guardando só os últimos PDFs na memória; a análise completa abre ao tocar na linha. Os cadastros que a Centi deixa abertos são fechados antes de cada protocolo.
+✅ **Emissão síncrona**: o protocolo é emitido com "Assíncrono = Não" (no assíncrono a Centi gerava em segundo plano e a chave devolvida dava 404).
+✅ **Automação sem rolar o navegador**: de 1024px para cima os três modos ocupam até o fim do display (tabela e Análise rolam por dentro, Análise ao lado já no `lg`); as repartições da Tela Protocolo num dropdown (`SeletorMultiplo suspenso`) — carregar não desloca mais a tela.
+⏳ **Próximas**: tratar os protocolos escolhidos (emitir/baixar e analisar), o "Aprender" guiado, receitas novas a partir de gravações (relatórios, consultas, tramitar — esta por último, com validador próprio) e CSP de scripts (exige revisar pdf.js/OCR/Turnstile antes).
+✅ **Orçamento: planilha conferida** — a nova planilha (ou o reenvio) só é importada com as 15 colunas do CUBO e todos os dados corretos; a prévia lista as colunas que faltam e cada problema por linha/coluna.
+✅ **PDFs coloridos** — os PDFs das tabelas saem com as cores da própria tabela (cabeçalho, estados, faixas, negativos, linha de total).
+✅ **Visões × Vínculos sem conflito** — unidade, ações e órgão são definidos só nos Vínculos; as visões filtram o restante (função, programa, elemento, código, ficha, fonte) e as visões antigas foram limpas (migração 0082). O editor da visão abre num banner padrão, sem estourar a página.
+✅ **PCA × Orçamento colorido pela Diferença** — na tabela e no PDF: o Orçamento em azul, o Órgão como está e as demais colunas na cor da Diferença (vermelho quando falta orçamento, verde quando sobra).
+✅ **Seletores flutuantes estáveis** — o painel de seleção (visões, filtros, pessoas, período) fica preso ao campo: marcar itens não o faz mudar de lugar; o rodapé do editor da visão tem altura fixa.
+✅ **Relatório da composição do orçamento (PDF A4)** — no PCA × Orçamento: explica, passo a passo, como se chega ao orçamento de cada unidade — a visão (igual para todas), os vínculos (unidade do CUBO e ações de cada unidade) e tudo o que ficou de fora, com a conta fechando.
+✅ **Relatório: painel das definições** — logo no início, separado: o que foi e o que NÃO foi definido na visão (por dimensão) e nos vínculos (cada unidade do CUBO vinculada, parcial ou sem vínculo, com as ações que faltam; unidades com contratações sem orçamento).
+✅ **Relatório: definidos e não definidos, um por linha** — em Definições, cada elemento de despesa, fonte (e demais dimensões filtradas) aparece listado: os definidos (entram) e os não definidos (ficam fora), com lançamentos e dotação; as ações sem vínculo também uma abaixo da outra.
+✅ **Relatório: ações distribuídas como configurado** — quando uma unidade do CUBO tem as ações divididas entre unidades cadastradas, o relatório lista para qual unidade vai cada ação; as ações excluídas de propósito no vínculo aparecem separadas das que nunca foram definidas.
+✅ **Histórico de compra no detalhe do item sempre à vista**: com código, o bloco diz o estado — conferindo, sem histórico (o código não está em nenhum histórico importado) ou falha com "Tentar de novo"; antes sumia em silêncio.
+✅ **Relatório: vínculos em linhas internas** — cada ação numa linha própria, agrupada pela unidade que a recebe (e as excluídas/não definidas à parte), com o valor de cada uma.
+✅ **Notificações profissionais** — controle central em Configurações → Notificações (por aviso: sino, e-mail e se a pessoa pode desligar; o e-mail começa só no fundamental); sino em TEMPO REAL (Durable Object por pessoa, WebSocket com hibernação); painel com Todas | Não lidas, filtro por tipo, agrupado por dia, repetidos juntos, hora relativa, marcar lida/não lida, excluir e limpar (do banco, com Desfazer — o aviso de prazo limpo não volta); prévia flutuante, sino que balança e "(N)" no título; e-mail sem perda (reserva com validade), retenção com teto por pessoa, cron dentro do limite de consultas e avisos novos (protocolo designado, PCA, cadastro no sino, vence hoje, evento alterado/cancelado).
+✅ **Notificações — pacote 2**: o ADM controla quanto tempo os avisos ficam e liga a limpeza automática (ou limpa na hora); cada pessoa escolhe no Perfil e-mail imediato, resumo diário ou desligado, horário de silêncio, os tipos do sino, som e alerta do sistema, e silencia tarefas/quadros; adiar aviso (1 h · 3 h · amanhã, volta ao vivo); descadastro em um clique em todo e-mail; avisos de tarefa concluída, situação/reenvio de protocolo, lote da Automação Centi e comunicados do ADM; relatório de alcance por tipo; telas compactas com mais ícones que texto.
+✅ **Notificações verificadas no navegador**: cada botão e dado do sino, do Perfil e da tela do ADM conferidos (54 verificações); corrigidos o "Desfazer" que apagava ao fechar o painel, o "+N" coberto pelas ações, o título que quebrava cedo e a prévia do aviso novo sem o tempo real; toda ação mostra a dica ao passar o mouse.
+✅ **Configurações revisadas**: abas num cartão próprio à esquerda, sempre da mesma altura (a do display), separado do conteúdo, com ícone e dica (no celular, a faixa de cima), o fundo que desliza até a aba aberta e o conteúdo que entra pelo lado da troca; tudo cabe no display sem rolar a página — a altura segue o conteúdo e o que é longo rola por dentro; a aba fica na URL; só a aba aberta é carregada; explicações no "(?)"; excluir PCA pela confirmação do sistema. Todas as abas conferidas no navegador (salvar Identidade/Tabelas, cadastrar/ativar/excluir PCA, listas carregadas).
+✅ **Versões e Novidades (v1.3.0)**: o sistema é versionado (registro único de mudanças); o número aparece no fim do menu lateral e leva à página de Novidades, com o que mudou em cada versão e o botão "Ver onde mudou"; cada ADM recebe no sino a versão nova com a lista do que mudou.
+✅ **Vínculos da linha do PCA mais legíveis** — o "N sem vínculo" mostra, com o mouse, a lista organizada por unidade do orçamento (dica flutuante); o editor separa as unidades da seleção das ações (cartão próprio, marcadas destacadas, as de outros vínculos travadas à parte); o PDF tem KPI de total e só duas tabelas (vinculadas e sem vínculo) com a linha TOTAL.
+✅ **Editor do vínculo minimalista** — sem repetir as unidades que o banner já mostra, ações com a caixa e o total, "Incluir ações futuras" numa linha e as de outros vínculos resumidas por destino.
+✅ **v1.73.0 — Responsável de fora do município**: a pessoa marcada fica sem matrícula e a conferência não aponta "Sem matrícula".
+✅ **v1.72.0 — Responsáveis sempre no lugar que vale**: o vínculo é gravado onde a assinatura é conferida (órgão com assinatura única / cada unidade), mudar a configuração do órgão/unidade leva os responsáveis junto (migração `0103` corrigiu os gravados) e "Onde responde" separa Órgãos | Unidades (agrupadas por órgão), só com os lugares que valem.
+✅ **v1.70.1 — Proteção de captura invisível**: sem cobertura nos atalhos; impressão em branco, PrtScn fora da área de transferência e marca d'água invisível.
+
+✅ **v1.4.0 — Sino: ver é ler, fixar não lidas e Novidades flutuantes**: o aviso visto no sino vira visualizado sozinho; o marcador fica colorido (✓) ao visualizar; marcar como não visualizada fixa o aviso; as Novidades abrem num banner ao lado do sino (ou pela versão do menu) sem fechar nada. Toda atualização, de qualquer sessão, passa a ser versionada e publicada.
+✅ **Vínculos da unidade sem repetição** — no banner da linha, a unidade do orçamento aparece uma vez (o selo "N sem vínculo" com a lista na dica); a seção "Sem vínculo" fica só na linha "Sem vínculo".
+✅ **Dashboard do PCA completo (1.4.3)** — a tabela de itens mostra TODOS os itens (sem o teto de 5.000; os itens vão ao navegador num texto JSON único) e a consulta ganha "Fora da soma (N)": os DFDs vinculados ou da prévia que a consolidação por nº de planejamento tirou (repetido, ALTERAÇÃO, EXCLUSÃO), com o motivo e o DFD que prevaleceu (`foraDaSoma`, `pca-core.ts`).
+✅ **Gráficos do PCA que se filtram e se expandem (1.7.0)** — inspirado no dashboard de referência (pcaplanejamento-web/pca), sem os defeitos dele (cores por posição, gráficos fora do tema, sem filtro cruzado): FILTRO CRUZADO (tocar numa fatia/barra filtra os outros gráficos, os KPIs e a Consulta — `filtrarItensDash`/`alternarFiltro`/`agregarItensDash`, `origem-dash.ts`), EXPLORADOR (`ExploradorGrafico`: ranking, detalhe com posição/participação, tabela com % e PNG — `ranking-grafico.ts`, `exportar-grafico.ts`), paleta `--serie-*` por tema com a cor estável por categoria e os gráficos de barras/colunas em HTML por token. 
+✅ **Novos gráficos e relatório do Dashboard (1.8.0)** — Prioridade dos DFDs (semáforo pela categoria — `PrioridadeChart`, `ItemRow.prioridade` vindo do DFD), Valor por unidade requisitante/planilha (`UnidadeRequisitanteChart`, 10 + Outras), o cronograma em 3 leituras (`cronogramaDash`: por mês · acumulado · anuais à parte, com os recortes `mes: 0`/`semAnuais`) e o relatório em PDF (`blocosRelatorioDashboard`) — tudo no filtro cruzado e no explorador.
+✅ **Dashboard do PCA imersivo (1.9.0)** — filtros do topo em menus suspensos de seleção múltipla com as opções conectadas (`FiltrosDashboard`, `opcoesDash`/`recorteDasChaves`), a Consulta de itens numa aba própria (Gráficos | Consulta de itens), o Top 100 itens por valor e as animações (KPIs que contam, cartões em sequência, barras que crescem, rosca com o valor no centro).
+✅ **Cards do PCA maiores + Dashboard mais leve (1.14.4)** — grade fluida com o card até 30rem e o texto proporcional; os itens do Dashboard num texto compacto (`itens-dash-texto.ts`) preparado uma vez por versão dos dados.
+✅ **Card do PCA renovado (1.14.5)** — carregamento integrado ao card (brilho + barra indeterminada) e capa com pílulas de vidro, ano, nome, Σ e chips.
+✅ **Card do PCA discreto + carregamento fluido (1.16.1)** — anel em CSS que gira no compositor; pílulas e textos da capa mais contidos.
+✅ **v1.6.0 — Quem do grupo está online**: o ADM liga em Configurações → Presença; o cabeçalho mostra, ao vivo, as fotos de quem do grupo ativo está com o sistema aberto (verde online, âmbar ausente) e a lista ao tocar; no Perfil, "Aparecer como invisível". Durable Object por grupo com hibernação, dentro do plano gratuito.
+✅ **v1.10.0 — Presença ao vivo 2.0**: o ponto online pulsa, as fotos abrem em leque e quem entra brilha; status (Disponível, Ocupado, Em reunião, Não perturbe — que silencia o sino) com recado e prazo; Online · Ausente · Visto recentemente com busca; ações por pessoa (WhatsApp, ver na Mesa); ausente por inatividade (ADM); o ponto de presença nas fotos de todo o sistema; Armazenamento → Online agora por grupo. Próximo: chat ao vivo (sem salvar) e "vendo agora".
+✅ **v1.11.0 — Chat ao vivo (nada é salvo)**: conversa do grupo ativo e privadas entre pessoas de um mesmo grupo, só ao vivo; digitando, enviada/lida (lida por N), responder, @menção e links do sistema em cartões; o ADM liga cada um em Configurações → Presença e chat. Próximo: "vendo/editando agora" nos protocolos e DFDs.
+✅ **v1.12.0 — Vendo e editando agora**: nos banners do protocolo, do DFD e da tarefa, as fotos de quem mais está com o item aberto e o aviso de quem tem alteração não salva; "Conversar sobre" abre o chat do grupo com o link do item. Fecha o plano de presença + chat ao vivo.
+✅ **v1.13.0 — Onde cada pessoa está**: o painel "Online agora" mostra a tela e o item de cada pessoa (seção "Nesta tela"); as tabelas da Mesa e os cartões de Tarefas mostram a foto de quem está com o item aberto.
+✅ **v1.14.0 — Chat estilo Messenger**: bolhas flutuantes arrastáveis com a foto (encostam na borda, "×" para fechar), janela da conversa ao lado e conversas em grupo escolhidas (2 a 20 pessoas) — tudo ao vivo, nada salvo.
+✅ **v1.14.1 — Presença profissional**: até 5 fotos + "+N", ponto no canto da foto (corrigido), "ausente há X min", carência de 12 s na saída (F5 não pisca) e detecção de conexão morta (3 min) com reconexão automática.
+✅ **v1.14.2 — Chat estável**: o chat não some (falha passageira não remonta), ✓✓ e "digitando" entre grupos diferentes, entrega só com conexão viva, painel único "Ao vivo" (Online | Conversas), minimizar ao tocar fora ou alfinete, lixeira para excluir, sombra e fotos redondas.
+✅ **v1.15.0 — Conversas guardadas por 7 dias**: o chat (grupo, privadas e em grupo) é guardado por 7 dias (lista com as não lidas e o histórico voltam depois de recarregar; limpeza automática); arrastar a bolha minimiza a conversa e o pouso voa com mola, sem pulo.
+✅ **v1.15.1 / v1.16.0 — Bolhas livres**: fechamento da janela em 0,06 s; reordenar as bolhas arrastando na coluna (Alt + ↑/↓), arremessar a pilha para o outro lado com inércia (Alt + ←/→), cadeia que segue a bolha arrastada e inclinação pela velocidade.
+✅ **v1.17.0 — Bolhas independentes**: cada bolha do chat no seu lugar — arrastar uma não mexe as outras; encosta na borda mais perto (arremesso ao outro lado), lugar guardado por bolha, as outras só abrem espaço.
+✅ **v1.17.1 — Bolhas abrem espaço e se encaixam**: as outras bolhas abrem espaço ao vivo durante o arrasto, sombra do pouso, ímã que cola na vizinha (longe fica longe), arrasto por quadro e sem pulo.
+✅ **v1.17.2 — Pilha de fotos única**: os membros do quadro de Tarefas usam a mesma pilha de fotos do cabeçalho (ponto ao vivo sem ser coberto, leque, "+N").
+
+✅ **v1.17.3 — Não lidas reais**: a "lida" chega às outras abas/aparelhos de quem leu (o selo zera em todos), a hora lida guardada é a da mensagem lida e a lista guardada soma só as que chegaram ao vivo depois do retrato.
+
+✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
+
+✅ **v1.70.0 — Consulta de itens em uma linha**: no Dashboard do PCA, abas + busca + (?) numa linha só (`ConsultaPca.fim`, `ItemTable.busca`/`fim`, `BuscaItens`; `ChartCard` sem título = sem cabeçalho); produto/assunto/motivo em uma linha (`CelulaTexto`); selos da linha de título com o raio `--radius-control` do ADM.
+✅ **v1.69.2 — Nome do espaço em destaque**: o nome do PCA/Orçamento na linha de título em 24px (26px no toque), preenchendo a altura da seta e dos selos.
+✅ **v1.69.1 — Linha de título com a altura da seta**: nome, ano e status do PCA/Orçamento com a mesma altura do botão de voltar; Preview sem lápis nem brilho — o ponto respira e solta ondas (`.ponto-selo`); o conteúdo das abas do espaço (`AbasEspaco`) com o espaço padrão entre os blocos (o Dashboard do PCA tinha KPIs, filtros e gráficos colados).
+✅ **v1.69.0 — Linha de título padronizada**: nome, ano e status do PCA/Orçamento com a mesma altura (`Badge tamanho="linha"`), Preview com ícone e brilho ao vivo (`.selo-vivo`) e `.linha-topico` — abaixo da linha de título o mesmo respiro de cima (`--pad-canvas-y`) em todas as telas.
+✅ **v1.68.1 — Margens do conteúdo proporcionais**: token `--pad-canvas-y` (metade da lateral) no topo e na base do `<main>` (painel e tela pública); medidas de altura, barra de seleção fixa e avisos flutuantes acompanham.
+
+✅ **v1.68.0 — Respiro interno igual nos 4 lados**: todo cartão/quadro/banner (`rounded-card`) usa `p-[var(--pad-card)]` (o `KpiStat` perdeu o `pl-2`; cabeçalho e rodapé do `Modal`/`JanelaFlutuante` e do painel "Novo fluxo" também); os estados vazios grandes, `p-10`.
+
+✅ **v1.67.1 — (?) centralizado**: o gatilho do `Ajuda` usa `justify-center` (o `inline-flex` do `Dropdown` vencia o `grid` e o ícone encostava à esquerda).
+
+✅ **v1.67.0 — Espaço do PCA mais limpo**: título (nome · ano com calendário · Preview pulsando) na mesma linha das abas (`AbasEspaco cabecalho`), Configuração só com o ícone, sem o texto da fonte; no Dashboard a prévia virou um (?) ao lado das abas e saiu o `UnitFilter` do topo (o filtro Unidade dos `FiltrosDashboard` cobre).
+
+✅ **v1.66.1 — Giro da seta mais suave**: a `SetaDropdown` gira em 1,75× o `--motion-duration` (0,35 s) com ease-in-out simétrico.
+
+✅ **v1.66.0 — Seta dos dropdowns gira ao abrir**: em toda seleção, filtro e menu a seta gira suave e aponta para o lado oposto da lista aberta (onde tocar para fechar); fechada, volta girando (`SetaDropdown`, estado vindo do `Dropdown`).
+
+✅ **v1.65.0 — Proteção de dados corrigida + marca d'água**: imperceptível no uso (só aparece na captura e no papel); "ocultar" só reage à janela (antes cobria a cada campo); cobertura instantânea nos atalhos Win+Shift+S / Win+PrtScn / Cmd+Shift; PrtScn some da área de transferência; marca d'água invisível na tela e legível no papel.
+
+✅ **v1.64.0 — Listas de seleção mais completas**: alinhadas à caixa, rápidas, compactas no desktop; busca/título fixos no topo; folha que sobe de baixo no celular; digitar com o campo fechado troca a opção; 2ª linha de detalhe, aviso âmbar, cor e ações no rodapé (Visão do PCA: resumo, PCAs que usam, ausentes, Editar/Nova visão).
+
+✅ **v1.63.0 — Proteção de dados**: Configurações → Proteção de dados bloqueia seleção/cópia, impressão/captura e oculta ao sair da janela, por papel e na tela pública.
+✅ **v1.62.0 — Listas de seleção no desenho do sistema**: todo `<select>` de formulário abre a lista do SISTEMA (`Selecao` — o dropdown preso ao campo, a escolhida com o check, grupos, desabilitadas com o motivo, busca acima de 12 opções, teclado e 44px no toque) no lugar da lista nativa do aparelho; as células da Mesa seguem nativas (milhares de linhas).
+
+✅ **v1.61.0 — Vínculos por visão do orçamento**: cada visão pode ter os seus vínculos por unidade (os de antes viram o padrão); ao salvar, “Esta visão · Todas · Escolher”; “Usar o padrão”; Vínculos no banner da visão; o PCA usa os vínculos da visão dele; (?) das visões.
+✅ **v1.60.0 — Nomeações unificadas**: no banner da pessoa, os vínculos com o mesmo ato (decreto/portaria/lei de mesmo nº) num cartão só; editar vale para todos os lugares.
+
+✅ **v1.59.0 — Editar onde o responsável responde**: no "Editar vínculo", trocar a unidade/órgão, a pessoa e os dados, e acrescentar lugares com a mesma nomeação.
+
+✅ **v1.58.0 — Responsáveis exonerados**: "Exonerar" com a data (os vínculos cadastrados continuam valendo; nenhum vínculo novo nem começando depois), botão "Exonerados" à direita com as linhas em cinza; vínculo encerrado em cinza numa coluna própria, fora da Conferência; planilha pela prioridade do cargo e depois o nome; um vínculo novo pode ir a várias unidades e órgãos com a mesma nomeação. Órgãos: "Também unidade" em coluna própria e o nome em até 2 linhas.
+
+✅ **v1.56.0 — Responsáveis com cargo, período e foto**: o cargo/função passa a ser da pessoa, escolhido entre os cargos cadastrados (nova aba Configurações → Cargos e funções); o padrão segue esse cargo e tem início e fim (sem fim = vigente até informar — a assinatura só confere dentro do período); o temporário tem o cargo próprio; padrão e temporários em seções separadas; o responsável pode ser ligado a um usuário (foto no nome). Órgãos ordenados pelo código da Centi, com a edição da tabela.
+
+✅ **v1.53.0 — Responsáveis numa planilha única**: Órgãos e Unidades → Responsáveis — cada pessoa cadastrada uma vez (nome + matrícula) e vinculada a unidades ou órgãos conforme a assinatura do órgão (única = os do órgão; por unidade = os de cada unidade); padrão ou temporário, função, nomeação com link e período; a coluna Conferência aponta quem está sem responsável vigente, sem matrícula/função/nomeação, temporário encerrado e nomes repetidos. Tabelas de órgãos e unidades no padrão da Mesa, com o banner de cada um (dados por cadeado, responsáveis, estrutura). A migração `0099` converteu os responsáveis já cadastrados, sem perder nada.
+
+✅ **v1.55.0 — Visão do orçamento à vista no PCA**: no PCA × Orçamento, o seletor “Visão” na barra da tabela (`SeletorVisaoPca`) troca a visão do orçamento do PCA na hora — a engrenagem segue para editar/criar visões.

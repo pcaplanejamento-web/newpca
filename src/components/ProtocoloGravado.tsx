@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { classificarAssunto, opcoesAssunto, type RegrasAvaliacao } from "@/lib/avaliacao-core";
-import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, conferirAssinaturaDfd, estadoDeMensagens, gravacaoIncompleta, type LinhaAvaliada, mensagensDoDfd } from "@/lib/conferencia-dfd";
 import type { DfdDetalhe } from "@/lib/dfd";
 import { type CapaEditavel, detalheParaParseado, diffCapaGravada, diffDfdGravado } from "@/lib/dfd-edicao";
 import {
@@ -12,25 +12,26 @@ import {
   editarItemDfd,
   faltasCirurgicasDfd,
   gruposAssinatura,
-  linhasRelatorioProtocolo,
   prioridadeDoDfd,
   removerItemDfd,
-  STATUS_MENSAGEM_COR,
   unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { dataBR } from "@/lib/format";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { type AlvoPendencia, pendenciaDaCapa, pendenciasDoDfd, type ProtocoloPendente } from "@/lib/pendencias-core";
 import type { DfdSobrescrito, ProtocoloDetalhe } from "@/lib/protocolo";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import type { UnidadeConferencia } from "@/lib/reparticoes";
 import { type AjusteRevisao, podeRevisarItens, resumoRevisao, resumoRevisaoLote, revisarCapa, revisarDfd } from "@/lib/revisao-dfd";
 import { BarraEdicaoMassa } from "./BarraEdicaoMassa";
 import { BarraSelecaoDfds } from "./BarraSelecao";
+import { BotaoAcao } from "./BotaoAcao";
 import { BotaoAtualizar, useGiro } from "./BotaoAtualizar";
-import { Button } from "./Button";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
-import { estaTravado, mensagemTravaPca } from "@/lib/pca-core";
+import { localDoProtocolo } from "@/lib/pca-core";
+import { avisoIncorporado } from "@/lib/pca-numeracao-core";
 import { Callout } from "./Callout";
+import type { AncoraAlvo } from "./DestaqueAncora";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
@@ -38,7 +39,8 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { DfdCabecalho } from "./DfdView";
 import { TextField } from "./Field";
 import { Historico, useHistorico } from "./Historico";
-import { IconAlert, IconClock, IconLock, IconSpinner, IconUpload } from "./icons";
+import { IconAlert, IconClock, IconSave, IconSpinner, IconUpload } from "./icons";
+import { IndicadorPendencias } from "./IndicadorPendencias";
 import type { ConteudoBanner } from "./DfdGravado";
 import { Modal, type ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
@@ -46,10 +48,12 @@ import type { LinhaDfd } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { type BaseReenvio, ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "./ProtocoloView";
-import { RelatorioErros } from "./RelatorioErros";
+import { PainelPendencias } from "./PainelPendencias";
 import { TarefasDoVinculo } from "./TarefasDoVinculo";
+import { VendoAgora } from "./VendoAgora";
 import { toast } from "./Toast";
 import { useConformidade } from "./useConformidade";
+import { ehDesktop } from "./espacamento";
 
 type Rep = {
   id: number;
@@ -127,13 +131,13 @@ export function useProtocoloGravado({
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [proto, setProto] = useState<ProtocoloDetalhe | null>(null);
-  // TRAVA do PCA: protocolo INCORPORADO ⇒ o banner inteiro (capa, DFDs, itens, reenvio) fica só-leitura.
-  const travaPca = proto && estaTravado(proto) ? mensagemTravaPca(proto.pcaNome) : null;
+  // Protocolo INCORPORADO a um PCA: tudo se edita como num protocolo comum — o PCA acompanha (o aviso diz como).
+  const avisoPca = proto && localDoProtocolo(proto) === "incorporado" ? avisoIncorporado(proto.pcaNome) : null;
   // O PAPEL na Mesa em que o protocolo está: editar = Manipular; reenviar o PDF e sobrescrever um DFD = Importar (o reenvio
   // que exclui os DFDs fora do PDF também pede Excluir).
   const podeProto = podeNoRecurso(pode, proto?.pcaId);
-  const podeEditar = podeProto.manipular && !travaPca;
-  const podeImportar = podeProto.importar && !travaPca;
+  const podeEditar = podeProto.manipular;
+  const podeImportar = podeProto.importar;
   const [orig, setOrig] = useState<Map<number, DfdDetalhe>>(new Map());
   const [ordem, setOrdem] = useState<number[]>([]);
   const [dfds, setDfds] = useState<Map<number, DfdParseado>>(new Map());
@@ -147,14 +151,17 @@ export function useProtocoloGravado({
   const [sel, setSel] = useState<Set<string | number>>(new Set());
   const [abertoId, setAbertoId] = useState<number | null>(null);
   const [painel, setPainel] = useState<PainelDfd | null>(null);
-  const [ancoraAlvo, setAncoraAlvo] = useState<{ ancora: string; cor: string; nonce: number } | null>(null);
+  const [ancoraAlvo, setAncoraAlvo] = useState<AncoraAlvo | null>(null);
   const [salvando, setSalvando] = useState(false);
   // SOBRESCRITA do DFD ao lado em andamento (lançador/leitura/escolha/gravação): o banner fica só-leitura.
   const [sobrescrevendoDfd, setSobrescrevendoDfd] = useState(false);
   const travado = salvando || sobrescrevendoDfd;
+  /** Por que as ações estão travadas (a dica dos botões que ficam À VISTA, desabilitados — nunca somem). */
+  const motivoTrava = salvando ? "Salvando as alterações…" : sobrescrevendoDfd ? "Sobrescrita do DFD em andamento — conclua ou cancele" : undefined;
   const [progresso, setProgresso] = useState<{ feito: number; total: number; label: string } | null>(null);
-  const [relatorioAberto, setRelatorioAberto] = useState(false);
-  const [incluirAtencao, setIncluirAtencao] = useState(true);
+  // PENDÊNCIAS do protocolo (o banner único — capa + DFDs + itens) e o destaque da capa ao tocar nela.
+  const [pendAbertas, setPendAbertas] = useState(false);
+  const [destaqueCapa, setDestaqueCapa] = useState<AncoraAlvo | null>(null);
   // Versão dos dados carregados: remonta o corpo/DFD após recarregar (os cadeados voltam a travar).
   const [versao, setVersao] = useState(0);
   // REENVIO do PDF (sobrescrever): contador que abre o lançador do `ProtocoloUploadForm` em modo reenvio.
@@ -272,6 +279,11 @@ export function useProtocoloGravado({
   const repConf = (id: number | null): Rep | UnidadeConferencia | null =>
     id == null ? null : (reparticoes.find((r) => r.id === id) ?? unidadesExtra.find((u) => u.id === id) ?? null);
   const editavelDfd = (id: number) => podeEditar && acessivel(orig.get(id)?.reparticaoId ?? null);
+  /** O DFD GRAVADO ficou pela metade (lido do gravado, nunca do rascunho) — erro na linha e no painel até reenviar. */
+  const incompletoDe = (id: number | null) => {
+    const o = id != null ? orig.get(id) : undefined;
+    return o ? gravacaoIncompleta(o) : null;
+  };
 
   // Conferência por LINHA — a MESMA da análise (`avaliarLinhaDfd`), com cache por objeto de DFD.
   // biome-ignore lint/correctness/useExhaustiveDependencies: as dependências INVALIDAM o cache (regras/cadastros novos ⇒ reconferir tudo).
@@ -280,10 +292,11 @@ export function useProtocoloGravado({
     const rid = repIds.get(id) ?? null;
     const editado = editados.has(id) || itensEditados.has(id);
     const anoPca = d.anoPca ?? proto?.anoPca ?? null;
-    const k = `${rid}|${anoPca}|${categoria}|${editado}`;
+    const inc = incompletoDe(id);
+    const k = `${rid}|${anoPca}|${categoria}|${editado}|${inc ? `${inc.gravados}/${inc.total}` : ""}`;
     const c = cache.get(d);
     if (c && c.k === k) return c.r;
-    const r = avaliarLinhaDfd(d, repConf(rid), { anoPca, regras, categoria, orgaos, editado });
+    const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: inc }, repConf(rid), { anoPca, regras, categoria, orgaos, editado });
     cache.set(d, { k, r });
     return r;
   };
@@ -313,8 +326,6 @@ export function useProtocoloGravado({
     ];
   });
   const linhasSel = linhas.filter((l) => sel.has(l.key));
-  const linhasErro = linhas.filter((l) => l.estado === "erro");
-  const linhasAtencao = linhas.filter((l) => l.estado === "atencao");
   const somatorio = linhas.reduce((s, l) => s + (l.valor ?? 0), 0);
   const totalItens = linhas.reduce((s, l) => s + (l.itens ?? 0), 0);
   // A capa foi emitida com os DFDs que o processo TINHA — os sobrescritos depois por outro protocolo (o rastro,
@@ -336,7 +347,9 @@ export function useProtocoloGravado({
   const anoAberto = dfdAberto ? (dfdAberto.anoPca ?? proto?.anoPca ?? null) : null;
   // No GRAVADO o ano do PCA é identificador (imutável, portão da protocolação) — fora das mensagens.
   const mensagensAberto = dfdAberto
-    ? mensagensDoDfd(dfdAberto, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade).filter((m) => m.chave !== "dfd.anoPca")
+    ? mensagensDoDfd({ ...dfdAberto, gravacaoIncompleta: incompletoDe(abertoId) }, repConf(repAbertoId), anoAberto, regras, categoria, orgaos, conformidade).filter(
+        (m) => m.chave !== "dfd.anoPca",
+      )
     : [];
   // DFD de unidade sem acesso: só-leitura, mas exibido/conferido com a unidade REAL (vinda do servidor).
   const reparticoesAberto: Rep[] = editavelAberto
@@ -354,12 +367,15 @@ export function useProtocoloGravado({
     if (itens) setItensEditados((s) => new Set(s).add(id));
   };
 
+  // Sobrescrita em andamento: o DFD aberto é a BASE dela — trocar/fechar o DFD desmontaria a sobrescrita no meio.
   function abrirDfd(id: number) {
+    if (sobrescrevendoDfd) return;
     setAbertoId(id);
     setPainel(null);
     setAncoraAlvo(null);
   }
   function fecharDfd() {
+    if (sobrescrevendoDfd) return;
     setAbertoId(null);
     setPainel(null);
     setAncoraAlvo(null);
@@ -386,7 +402,7 @@ export function useProtocoloGravado({
       const r = await carregar(id, abertoId);
       if (!r || pedidoRef.current !== id) return;
       const { protocolo, lista, rascunhos } = r;
-      const podeTratar = podeNoRecurso(pode, protocolo.pcaId).manipular && !estaTravado(protocolo);
+      const podeTratar = podeNoRecurso(pode, protocolo.pcaId).manipular;
       const cat = classificarAssunto(protocolo.assunto);
       const revCapa = revisarCapa(capaDe(protocolo));
       const porDfd: AjusteRevisao[][] = [];
@@ -518,28 +534,64 @@ export function useProtocoloGravado({
     const extras = (avaliacoes.get(id)?.mensagens ?? []).filter((m) => m.status === "erro" && ERRO_EXTRA.has(m.chave)).map((m) => m.texto);
     return [...extras, ...cirurgicas];
   };
-  const temErro = linhasErro.length > 0 || conc.divergente;
-  const temRelatorio = temErro || linhasAtencao.length > 0;
-  const relatorioLinhas = proto
-    ? linhasRelatorioProtocolo({
-        numero: proto.numero,
-        idExterno: proto.idExterno,
-        interessado: capa?.interessado ?? null,
-        assunto: capa?.assunto ?? null,
-        capaMotivo: conc.motivo,
-        dfds: [
-          ...linhasErro.map((l) => ({ numero: l.numero, planejamento: l.planejamento, tipo: dfds.get(l.key)?.tipo ?? null, faltas: faltasDoDfd(l.key) })),
-          ...(incluirAtencao
-            ? linhasAtencao.map((l) => ({
-                numero: l.numero,
-                planejamento: l.planejamento,
-                tipo: dfds.get(l.key)?.tipo ?? null,
-                faltas: (avaliacoes.get(l.key)?.mensagens ?? []).filter((m) => m.status === "atencao").map((m) => m.texto),
-              }))
-            : []),
-        ],
-      })
-    : [];
+  // A CONTAGEM do protocolo = a capa + a SOMA das pendências dos DFDs (as mesmas mensagens da célula Estado).
+  const contagem = { erros: conc.divergente && conc.bloqueia ? 1 : 0, atencoes: conc.divergente && !conc.bloqueia ? 1 : 0 };
+  for (const l of linhas) {
+    if (l.estado !== "erro" && l.estado !== "atencao") continue;
+    for (const m of l.key === abertoId ? mensagensAberto : (avaliacoes.get(l.key)?.mensagens ?? [])) {
+      if (m.status === "erro") contagem.erros++;
+      else if (m.status === "atencao") contagem.atencoes++;
+    }
+  }
+  const temRelatorio = contagem.erros + contagem.atencoes > 0;
+  // A árvore de PENDÊNCIAS (capa + a soma dos DFDs, cada DFD a soma dos itens) — montada só com o painel aberto. As
+  // mensagens são as MESMAS da célula Estado (o DFD aberto, com o catálogo já conferido).
+  const pendProto: ProtocoloPendente | null =
+    pendAbertas && proto
+      ? {
+          numero: proto.numero,
+          idExterno: proto.idExterno,
+          interessado: capa?.interessado ?? null,
+          assunto: capa?.assunto ?? null,
+          capa: pendenciaDaCapa(conc, capa?.valorCapa),
+          dfds: linhas
+            .filter((l) => l.estado === "erro" || l.estado === "atencao")
+            .flatMap((l) => {
+              const d = dfds.get(l.key);
+              if (!d) return [];
+              const aberto = l.key === abertoId;
+              return [
+                pendenciasDoDfd(
+                  { chave: l.key, numero: d.numero, planejamento: d.planejamento, tipo: d.tipo, secoes: d.secoes, itens: d.itens },
+                  aberto ? mensagensAberto : (avaliacoes.get(l.key)?.mensagens ?? []),
+                  aberto ? conformidade : undefined,
+                  l.estado === "erro" ? faltasDoDfd(l.key) : undefined,
+                ),
+              ];
+            }),
+        }
+      : null;
+  /** Tocar numa pendência: a capa pulsa no protocolo; a de um DFD abre o DFD ao lado no lugar (o item com o campo). */
+  function irParaPendencia(alvo: AlvoPendencia, cor: string) {
+    const nonce = Date.now();
+    if (!ehDesktop()) setPendAbertas(false); // no celular só um banner aparece: o destino vem à frente
+    if (alvo.dfd == null) return setDestaqueCapa({ ancora: alvo.ancora, cor, nonce });
+    const id = Number(alvo.dfd);
+    if (empilhado) {
+      setPendAbertas(false);
+      return empilhado.onVerDfd(id);
+    }
+    if (sobrescrevendoDfd && id !== abertoId) return;
+    setPendAbertas(false);
+    setAbertoId(id);
+    if (alvo.item != null) {
+      setAncoraAlvo(null);
+      setPainel({ tipo: "item", idx: alvo.item, destaque: { ancora: alvo.ancora, cor, nonce } });
+    } else {
+      setPainel({ tipo: "mensagens" });
+      setAncoraAlvo({ ancora: alvo.ancora, cor, nonce });
+    }
+  }
 
   const capaView: CapaValores | null =
     proto && capa
@@ -563,13 +615,29 @@ export function useProtocoloGravado({
       ? estadoDeMensagens(mensagensAberto, { editado: editados.has(abertoId) || itensEditados.has(abertoId) })
       : null;
 
-  const botaoAtualizar = proto && !travado ? <BotaoAtualizar girando={giro.girando} onClick={atualizar} /> : undefined;
+  const botaoAtualizar = proto ? (
+    <BotaoAtualizar
+      ativo={giro.girando}
+      rotulo="Atualizar e revisar"
+      dica={motivoTrava ?? "Atualizar: recarrega do banco e revisa os dados (trata o que for possível)"}
+      detalhe="Atualizando e revisando os dados…"
+      onClick={atualizar}
+      disabled={travado}
+    />
+  ) : undefined;
 
   /** Banner do PROTOCOLO (corpo único + seleção/edição em massa + relatório + salvar). */
   const principal: ConteudoBanner = {
     titulo: proto ? `Protocolo ${proto.numero}` : "Protocolo",
     cabecalho: proto ? <ProtocoloCabecalho numero={proto.numero} idExterno={proto.idExterno} assunto={capa?.assunto ?? proto.assunto} /> : undefined,
-    acoesCabecalho: botaoAtualizar,
+    acoesCabecalho: (
+      <>
+        {proto && <VendoAgora tipo="protocolo" id={proto.id} editando={capaSuja} rotulo={`Protocolo ${proto.numero}`} />}
+        {proto && <BotaoAcao rotulo="Histórico do protocolo" icon={<IconClock className="h-4 w-4" />} onClick={() => setHistoricoAberto(true)} />}
+        {proto && <TarefasDoVinculo tipo="protocolo" id={proto.id} disabled={travado} dica={motivoTrava} />}
+        {botaoAtualizar}
+      </>
+    ),
     rodape: (
       <div>
         {erro && (
@@ -586,52 +654,36 @@ export function useProtocoloGravado({
             <BarraEdicaoMassa reparticoes={reparticoes} anoPadrao={proto?.anoPca ?? null} regras={regras} onAplicar={aplicarMassa} />
           </BarraSelecaoDfds>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-nowrap items-center gap-2">
           {salvando && progresso ? (
-            <div className="min-w-[200px] flex-1">
+            <div className="min-w-0 flex-1">
               <Progress value={pct} label={`Salvando ${progresso.label}... ${pct}% — não feche esta janela`} />
             </div>
           ) : (
-            <span className="text-[12px]" style={{ color: sujo ? "var(--accent)" : "var(--muted)" }}>
-              {sujo
-                ? "Alterações não salvas"
-                : `${linhas.length} DFD(s) · ${linhasErro.length > 0 ? `${linhasErro.length} com erro` : linhasAtencao.length > 0 ? `${linhasAtencao.length} em atenção` : "tudo certo"}`}
-            </span>
+            <>
+              <IndicadorPendencias
+                erros={contagem.erros}
+                atencoes={contagem.atencoes}
+                alvo="ver as pendências do protocolo"
+                aberto={pendAbertas}
+                onClick={temRelatorio ? () => setPendAbertas((v) => !v) : undefined}
+              />
+              {sujo && <span className="hidden min-w-0 truncate text-[12px] text-accent md:inline">Alterações não salvas</span>}
+            </>
           )}
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {proto && !travado && (
-              <Button variant="secondary" onClick={() => setHistoricoAberto(true)} icon={<IconClock className="h-4 w-4" />}>
-                Histórico
-              </Button>
-            )}
-            {proto && !travado && <TarefasDoVinculo tipo="protocolo" id={proto.id} />}
-            {!travado && temRelatorio && (
-              <Button
-                variant="secondary"
-                onClick={() => setRelatorioAberto(true)}
-                icon={<IconAlert className="h-4 w-4" style={{ color: temErro ? "var(--danger)" : "var(--warn)" }} />}
-              >
-                {temErro ? "Relatório de erro" : "Relatório de atenção"}
-              </Button>
-            )}
-            {podeImportar && proto && !travado && (
-              <Button
-                variant="secondary"
-                onClick={() => setReenviar((n) => n + 1)}
-                disabled={sujo}
-                title={sujo ? "Salve ou descarte as alterações antes de reenviar" : "Reenviar o PDF corrigido deste protocolo: compara com o gravado e sobrescreve"}
+          <div className="ml-auto flex flex-nowrap items-center gap-1.5">
+            {podeImportar && proto && (
+              <BotaoAcao
+                variant="primary"
+                rotulo="Reenviar protocolo"
                 icon={<IconUpload className="h-4 w-4" />}
-              >
-                Reenviar protocolo
-              </Button>
+                onClick={() => setReenviar((n) => n + 1)}
+                disabled={sujo || travado}
+                dica={motivoTrava ?? (sujo ? "Salve ou descarte as alterações antes de reenviar" : "Reenviar protocolo: suba o PDF corrigido, compare com o gravado e sobrescreva")}
+              />
             )}
-            <Button variant="secondary" onClick={fechar} disabled={travado}>
-              Fechar
-            </Button>
             {podeEditar && (
-              <Button onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendoDfd}>
-                Salvar alterações
-              </Button>
+              <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<IconSave className="h-4 w-4" />} onClick={salvar} loading={salvando} disabled={!sujo || sobrescrevendoDfd} />
             )}
           </div>
         </div>
@@ -647,7 +699,8 @@ export function useProtocoloGravado({
       ) : (
         <ProtocoloView
           key={versao}
-          topo={travaPca ? <Callout kind="warn" icon={<IconLock className="h-5 w-5" />}>{travaPca}</Callout> : undefined}
+          destaque={destaqueCapa}
+          topo={avisoPca ? <Callout kind="info">{avisoPca}</Callout> : undefined}
           capa={capaView}
           modoCapa={podeEditar && !travado ? "cadeado" : "leitura"}
           assuntos={opcoesAssunto(regras, capa.assunto ?? "")}
@@ -689,7 +742,19 @@ export function useProtocoloGravado({
     id: "proto-dfd",
     aberto: !empilhado && abertoId != null && !!dfdAberto,
     titulo: `DFD ${numeroAberto}`,
-    cabecalho: dfdAberto ? <DfdCabecalho numero={dfdAberto.numero} tipo={dfdAberto.tipo} planejamento={dfdAberto.planejamento} /> : undefined,
+    cabecalho: dfdAberto ? <DfdCabecalho numero={dfdAberto.numero} tipo={dfdAberto.tipo} planejamento={dfdAberto.planejamento} execucao={abertoId != null ? (orig.get(abertoId)?.execucaoCenti ?? null) : undefined} /> : undefined,
+    acoesCabecalho: dfdAberto ? (
+      <>
+        <BotaoAcao
+          rotulo="Histórico"
+          icon={<IconClock className="h-4 w-4" />}
+          pressionado={painel?.tipo === "historico"}
+          onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}
+        />
+        {abertoId != null && <VendoAgora tipo="dfd" id={abertoId} editando={editados.has(abertoId) || itensEditados.has(abertoId)} rotulo={`DFD ${numeroAberto}${dfdAberto?.planejamento ? ` (Planej. ${dfdAberto.planejamento})` : ""}`} />}
+        {abertoId != null && <TarefasDoVinculo tipo="dfd" id={abertoId} disabled={travado} dica={motivoTrava} />}
+      </>
+    ) : undefined,
     onClose: fecharDfd,
     rodape: dfdAberto ? (
       <DfdRodape
@@ -698,25 +763,18 @@ export function useProtocoloGravado({
         mensagens={mensagensAberto}
         mensagensAbertas={painel?.tipo === "mensagens"}
         onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-        onFechar={fecharDfd}
-        bloqueado={travado}
         acoes={
-          <>
-            <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "historico" ? null : { tipo: "historico" }))}>
-              <IconClock className="h-4 w-4" /> Histórico
-            </Button>
-            {/* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */}
-            {sobrescreveAberto && !salvando && (
-              <Button
-                variant="secondary"
-                onClick={() => setSobrescreverDfd((n) => n + 1)}
-                disabled={sujo || sobrescrevendoDfd}
-                title={sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Subir o arquivo novo deste DFD: compara com o gravado e você escolhe o que sobrescrever"}
-              >
-                <IconUpload className="h-4 w-4" /> Sobrescrever DFD
-              </Button>
-            )}
-          </>
+          sobrescreveAberto ? (
+            /* Subir o arquivo NOVO deste DFD e escolher, dado a dado, o que sobrescrever (continua neste protocolo). */
+            <BotaoAcao
+              variant="primary"
+              rotulo="Sobrescrever DFD"
+              icon={<IconUpload className="h-4 w-4" />}
+              onClick={() => setSobrescreverDfd((n) => n + 1)}
+              disabled={sujo || travado}
+              dica={motivoTrava ?? (sujo ? "Salve ou descarte as alterações antes de sobrescrever" : "Sobrescrever DFD: suba o arquivo novo, compare com o gravado e escolha o que sobrescrever")}
+            />
+          ) : undefined
         }
       />
     ) : undefined,
@@ -767,7 +825,7 @@ export function useProtocoloGravado({
         dfd={dfdAberto}
         numero={numeroAberto}
         mensagens={mensagensAberto}
-        onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
+        onIrPara={(a) => setAncoraAlvo({ ...a, nonce: Date.now() })}
         conformidade={conformidade}
         regras={regras}
         editavel={editavelAberto && !travado}
@@ -782,6 +840,15 @@ export function useProtocoloGravado({
         dfdId={abertoId}
       />
     ),
+  };
+
+  /** As PENDÊNCIAS do protocolo — à direita (o mesmo banner do DFD e do item); tocar leva ao lugar. */
+  const painelPendencias: ModalPainel = {
+    id: "proto-pendencias",
+    aberto: !empilhado && pendAbertas && !!pendProto,
+    titulo: `Pendências — Protocolo ${proto?.numero ?? ""}`.trim(),
+    onClose: () => setPendAbertas(false),
+    children: pendProto ? <PainelPendencias pendencias={pendProto} escopo="protocolo" onIrPara={irParaPendencia} /> : null,
   };
 
   // Base do REENVIO: o protocolo gravado + os DFDs completos + o rastro dos sobrescritos (estável entre
@@ -838,13 +905,6 @@ export function useProtocoloGravado({
         onClose={() => setHistoricoAberto(false)}
         titulo={`Histórico — Protocolo ${proto?.numero ?? ""}`.trim()}
         size="lg"
-        rodape={
-          <div className="flex justify-end">
-            <Button variant="secondary" onClick={() => setHistoricoAberto(false)}>
-              Fechar
-            </Button>
-          </div>
-        }
       >
         <Historico
           entradas={historico.linhas ?? []}
@@ -855,29 +915,27 @@ export function useProtocoloGravado({
           vazio="Nenhuma alteração registrada neste protocolo."
         />
       </Modal>
-      <RelatorioErros
-      open={relatorioAberto}
-      onClose={() => setRelatorioAberto(false)}
-      titulo={`Relatório do protocolo ${proto?.numero ?? ""}`.trim()}
-      linhas={relatorioLinhas}
-      toggle={
-        linhasAtencao.length > 0
-          ? { label: `Incluir ${linhasAtencao.length} DFD(s) em atenção no relatório`, checked: incluirAtencao, onChange: setIncluirAtencao }
-          : undefined
-      }
-      />
+      {/* Empilhado (o protocolo à esquerda de um DFD da Mesa): as pendências num banner próprio. */}
+      {empilhado && (
+        <Modal open={pendAbertas && !!pendProto} onClose={() => setPendAbertas(false)} titulo={`Pendências — Protocolo ${proto?.numero ?? ""}`.trim()} size="lg">
+          {pendProto && <PainelPendencias pendencias={pendProto} escopo="protocolo" onIrPara={irParaPendencia} />}
+        </Modal>
+      )}
     </>
   );
 
   return {
     aberto: protocoloId != null,
+    /** A pilha não troca/fecha (gravando OU sobrescrevendo um DFD). */
     bloqueado: travado,
+    /** Gravando de fato — só então o X/Esc do banner somem (na sobrescrita o modal dela fica por cima). */
+    salvando,
     sujo,
     proto,
     principal,
     /** Painéis ao lado (DFD + direita) — só fora do modo empilhado; SEMPRE presentes (mesmo fechados, ou
      * sem DFDs/carregando), para a largura do banner não mudar quando os DFDs chegam. */
-    paineis: empilhado ? [] : [lateral, lateral2],
+    paineis: empilhado ? [] : [lateral, lateral2, painelPendencias],
     extra,
     fechar,
     podeDescartar,

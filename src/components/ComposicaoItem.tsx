@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { brl, num, numeroSemAno, pct } from "@/lib/format";
 import {
+  COR_VARIACAO,
   type ClasseAbc,
   desvioDaMedia,
   desvioTexto,
@@ -13,6 +14,7 @@ import {
   mediaDeReferencia,
   nivelVariacao,
   participacaoTexto,
+  TOM_VARIACAO,
   textoResumoConsolidado,
   varianteDescricao,
 } from "@/lib/itens-consolidados";
@@ -26,11 +28,9 @@ import { EstadoPonto } from "./EstadoCelula";
 import { IconAlert } from "./icons";
 import { Modal } from "./Modal";
 import { colunaPlanejamento, colunaTipoDfd } from "./PlanilhaDfds";
+import { ComparacaoHistoricoCompra } from "./ProdutoHistorico";
 import { StatMini } from "./StatMini";
 
-/** Cor (token) de cada nível da variação dos preços — verde OK · âmbar atenção · vermelho alerta. */
-const COR_VARIACAO = { ok: "var(--ok)", atencao: "var(--warn)", alerta: "var(--danger)" } as const;
-const TOM_VARIACAO = { ok: "ok", atencao: "warn", alerta: "danger" } as const;
 const REGUA_VARIACAO = `Até ${pct(FAIXAS_VARIACAO.atencao, 1)} = preços homogêneos · até ${pct(FAIXAS_VARIACAO.alerta, 1)} = atenção · acima = alerta.`;
 
 /** Célula "Variação" (coeficiente de variação dos valores unitários de um código): o % na cor da faixa. `nota` completa a
@@ -54,7 +54,7 @@ export function SeloAbc({ classe, participacao }: { classe: ClasseAbc | null; pa
   const estilo = classe === "A" ? "bg-accent text-white" : classe === "B" ? "bg-accent-soft text-accent" : "bg-surface-2 text-muted";
   return (
     <span
-      className={`inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-bold ${estilo}`}
+      className={`inline-grid h-5 min-w-5 place-items-center rounded-chip px-1.5 text-[11px] font-bold ${estilo}`}
       title={`Curva ABC: classe ${classe}${participacao != null ? ` — ${participacaoTexto(participacao)} do valor total` : ""}.\nA = os que somam os primeiros 80% do valor · B = até 95% · C = o resto.`}
     >
       {classe}
@@ -65,7 +65,7 @@ export function SeloAbc({ classe, participacao }: { classe: ClasseAbc | null; pa
 /** Marca da VARIANTE da descrição ("D1", "D2"…) — a MESMA na lista de descrições e na tabela das ocorrências. */
 function ChipVariante({ n, titulo }: { n: number; titulo?: string }) {
   return (
-    <span className="inline-grid h-5 min-w-7 shrink-0 place-items-center rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent" title={titulo}>
+    <span className="inline-grid h-5 min-w-7 shrink-0 place-items-center rounded-chip bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent" title={titulo}>
       D{n}
     </span>
   );
@@ -172,7 +172,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
       align: "right",
       filter: "range",
       nowrap: true,
-      numero: (it) => it.valorUnitario,
+      total: false, numero: (it) => it.valorUnitario,
       render: (it) => {
         if (it.valorUnitario == null) return "—";
         const d = l ? desvioDaMedia(it.valorUnitario, mediaDeReferencia(l, it.unidade)) : null;
@@ -297,6 +297,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
               .
             </Callout>
           )}
+          {l.codigo && <ComparacaoHistoricoCompra codigo={l.codigo} valor={l.valorMedio} />}
           {mistas && (
             <section className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
               <h3 className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">

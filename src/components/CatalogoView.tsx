@@ -8,7 +8,7 @@ import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/ca
 import type { PastaCatalogo } from "@/lib/catalogo-historico";
 import { itensIguais } from "@/lib/catalogo-conferencia";
 import { membrosDoItem } from "@/lib/catalogo-membros";
-import { exportarCatalogoPdf, exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
+import { exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import type { PodeTela } from "@/lib/papeis-core";
 import { brl, num } from "@/lib/format";
 import { COR_PADRAO_CATALOGO, corDoCatalogo, ROTULO_TIPO_CATALOGO, type TipoCatalogo } from "@/lib/historico-compra-core";
@@ -789,7 +789,7 @@ export function CatalogoView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="linha-topico flex flex-wrap items-center justify-between gap-3">
         {pasta ? (
           <div className="flex min-w-0 items-center gap-2">
             <Link
@@ -898,7 +898,7 @@ export function CatalogoView({
           {vista === "unidades" ? <UnidadesMedidaView podeEditar={pode.configurar} /> : <ClassificacoesView podeEditar={pode.configurar} />}
         </div>
       ) : catalogos.length === 0 && (pasta || pastas.length === 0) && !podeCriar ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">{pasta ? "Nenhum catálogo nesta pasta." : "Nenhum catálogo ainda."}</p>
         </div>
@@ -1116,7 +1116,7 @@ export function CatalogoView({
               </Callout>
             )}
             {identicos.length > 0 && (
-              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-4">
+              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-[13.5px] font-bold text-text">Itens idênticos ({identicos.length})</p>
@@ -1165,7 +1165,7 @@ export function CatalogoView({
               </div>
             )}
             {divergentes.length > 0 && (
-              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-4">
+              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
                 <div>
                   <p className="text-[13.5px] font-bold text-text">Conflitos a resolver ({divergentes.length})</p>
                   <p className="mt-0.5 text-xs text-muted">
@@ -1182,7 +1182,7 @@ export function CatalogoView({
                   const r = resolucaoDe(existente.id);
                   const setE = (patch: Partial<EdicaoConflito>) => setEdicoes((m) => new Map(m).set(existente.id, { ...v, ...patch }));
                   return (
-                    <div key={existente.id} className="rounded-card border border-border bg-surface p-3">
+                    <div key={existente.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="font-mono text-[13px] font-bold text-text">{item.codigoRaw ?? item.codigo}</span>
                         <Badge tone={igual ? "emerald" : "amber"}>{igual ? "iguais" : "diferentes"}</Badge>
@@ -1226,7 +1226,7 @@ export function CatalogoView({
               </div>
             )}
 
-            <div className="rounded-card border border-border px-4 pt-3">
+            <div className="rounded-card border border-border p-[var(--pad-card)]">
               <DataTable columns={colunasPreview} rows={preview.itens} getKey={(r) => r._k} pageSize={20} minWidth={720} resumo={(l) => `${l.length} ${l.length === 1 ? "item" : "itens"}`} />
             </div>
           </div>
@@ -1351,26 +1351,6 @@ export function CatalogoView({
                 Editar catálogo
               </Button>
             )}
-            {pode.exportar && (
-              <>
-                <Button variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={() => catalogoAberto && exportarCatalogoXlsx(catalogoAberto.nome, itensAberto)}>
-                  XLSX
-                </Button>
-                <Button
-                  variant="secondary"
-                  icon={<IconDownload className="h-4 w-4" />}
-                  onClick={() => {
-                    try {
-                      if (catalogoAberto) exportarCatalogoPdf(catalogoAberto.nome, itensAberto);
-                    } catch (e) {
-                      setErroImport(e instanceof Error ? e.message : "Falha ao exportar PDF.");
-                    }
-                  }}
-                >
-                  PDF
-                </Button>
-              </>
-            )}
           </div>
           {barraTipoBusca}
           <DataTable
@@ -1379,6 +1359,7 @@ export function CatalogoView({
             getKey={(r) => r.id}
             pageSize={20}
             minWidth={900}
+            exportar={catalogoAberto ? { nome: `Catálogo - ${catalogoAberto.nome}` } : undefined}
             selectable={podeEditar}
             selected={sel}
             onSelected={setSel}

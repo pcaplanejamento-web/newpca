@@ -13,18 +13,22 @@ export function Switch({
   disabled = false,
   label,
   id,
+  dica,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   label?: ReactNode;
   id?: string;
+  /** A dica ao passar o mouse (o que liga/desliga). */
+  dica?: string;
 }) {
   const auto = useId();
   const sid = id ?? auto;
   return (
     <label
       htmlFor={sid}
+      title={dica}
       className={`inline-flex select-none items-center gap-2.5 py-2.5 ${disabled ? "cursor-default opacity-60" : "cursor-pointer"}`}
     >
       <button

@@ -77,7 +77,6 @@ import {
   excluirPasta,
   quadrosDoConjunto,
 } from "../src/lib/tarefas-core.ts";
-import { linhasPlanilhaTarefas } from "../src/lib/exportar-tarefas.ts";
 import { blocosSchema, criarTarefaSchema, editarTarefaSchema, moverTarefaSchema, ordemListasSchema } from "../src/lib/tarefas-validation.ts";
 
 const T = (id: number, listaId: number, ordem: number, x: Partial<TarefaResumo> = {}): TarefaResumo => ({
@@ -250,24 +249,6 @@ describe("calendário", () => {
   });
 });
 
-describe("exportar", () => {
-  it("linhasPlanilhaTarefas: cabeçalho + uma linha por tarefa, com nomes e rótulos", () => {
-    const l = linhasPlanilhaTarefas([T(5, 1, 1, { prazo: "2026-09-01", pessoas: [7], etiquetas: [3], checklist: { feitos: 1, total: 2 }, vinculos: [{ tipo: "dfd", id: 9, rotulo: "1209" }] })], {
-      listas: [{ id: 1, nome: "A fazer", ordem: 1, limiteWip: null, concluida: false, arquivada: false }],
-      etiquetas: [{ id: 3, nome: "Licitação", cor: "#000000" }],
-      pessoas: [{ id: 7, nome: "Ana Souza", apelido: "Ana", foto: null }],
-      hoje: "2026-09-25",
-    });
-    assert.equal(l.length, 2);
-    assert.deepEqual(l[1].slice(0, 6), ["#5", "Tarefa 5", "A fazer", "Média", "Atrasada", "01/09/2026"]);
-    assert.equal(l[1][8], "Ana");
-    assert.equal(l[1][10], "Licitação");
-    assert.equal(l[1][11], "1/2");
-    assert.equal(l[1][12], "DFD 1209");
-    assert.equal(l[1][13], "");
-  });
-});
-
 describe("tarefas — fase 3: recorrência", () => {
   const hoje = "2026-09-25";
   it("lê a regra com tolerância (inválida = null)", () => {
@@ -306,13 +287,13 @@ describe("tarefas — fase 3: recorrência", () => {
 
 describe("tarefas — fase 3: notificação de prazo", () => {
   const t = { id: 5, ticket: 12, titulo: "Relatório", prazo: "2026-09-26", quadroId: 3, quadroNome: "Compras" };
-  it("vence amanhã, atrasada (até 30 dias) e nada fora disso", () => {
+  it("vence hoje, vence amanhã, atrasada (até 30 dias) e nada fora disso", () => {
     const n = notificacaoDePrazo(t, "2026-09-25");
     assert.equal(n?.tipo, "vence_amanha");
     assert.equal(n?.chave, "vence:5:2026-09-26");
-    assert.equal(n?.link, "/painel/tarefas/3?tarefa=5");
+    assert.equal(n?.link, "/painel/tarefas/abrir/5");
     assert.equal(notificacaoDePrazo(t, "2026-09-27")?.tipo, "atrasada");
-    assert.equal(notificacaoDePrazo(t, "2026-09-26"), null);
+    assert.equal(notificacaoDePrazo(t, "2026-09-26")?.tipo, "vence_hoje");
     assert.equal(notificacaoDePrazo(t, "2026-11-30"), null);
     assert.equal(notificacaoDePrazo({ ...t, prazo: null }, "2026-09-25"), null);
   });

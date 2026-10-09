@@ -32,6 +32,7 @@ import { Modal } from "./Modal";
 import { SkeletonCartao } from "./Skeleton";
 import { StatMini } from "./StatMini";
 import { useGravacaoCadastro } from "./useGravacaoCadastro";
+import { Selecao } from "./Selecao";
 
 type Cadastro = { unidades: UnidadeMedida[]; classificacoes: ClassificacaoItem[] };
 type Dados = Cadastro & { uso: UsoUnidade[] };
@@ -259,7 +260,7 @@ export function UnidadesMedidaView({ podeEditar }: { podeEditar: boolean }) {
           )}
         </div>
         {dados.unidades.length === 0 ? (
-          <p className="rounded-card border border-dashed border-border-2 p-6 text-center text-sm text-muted">
+          <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">
             Nenhuma unidade cadastrada. Cadastre as unidades padrão — ou use "Cadastrar" na comparação abaixo, que já traz a proposta a
             partir das grafias dos itens.
           </p>
@@ -401,7 +402,7 @@ export function ComparacaoUnidades({
           <span className="flex min-w-0 flex-wrap items-center gap-1.5">
             {unidades.length > 0 && (
               <>
-                <select
+                <Selecao
                   aria-label={`Unidade cadastrada da grafia ${l.texto}`}
                   className={`${selectCls} min-h-[44px] max-w-[220px] lg:min-h-0`}
                   value={alvo?.id ?? ""}
@@ -415,7 +416,7 @@ export function ComparacaoUnidades({
                       {x.id === l.sugestaoId ? " (sugestão)" : ""}
                     </option>
                   ))}
-                </select>
+                </Selecao>
                 <Button
                   variant="secondary"
                   size="xs"
@@ -482,7 +483,7 @@ export function ComparacaoUnidades({
         )}
       </div>
       {linhas.length === 0 ? (
-        <p className="rounded-card border border-dashed border-border-2 p-6 text-center text-sm text-muted">Nenhum item com unidade de medida ainda.</p>
+        <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">Nenhum item com unidade de medida ainda.</p>
       ) : (
         <DataTable
           columns={colunas}
@@ -608,7 +609,7 @@ export function EditorUnidadeMedida({
         >
           <option value="">Nenhuma</option>
           {classificacoes.map((c) => (
-            <option key={c.id} value={c.id}>
+            <option key={c.id} value={c.id} data-cor={c.cor}>
               {c.nome}
             </option>
           ))}
@@ -618,7 +619,7 @@ export function EditorUnidadeMedida({
             “{conflito.grafia}” já é uma grafia da unidade {rotuloUnidade(conflito.unidade)} — uma grafia pertence a uma unidade só.
           </Callout>
         ) : (
-          <div className="rounded-card border border-border bg-surface-2 p-3">
+          <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
             <p className="text-[12px] font-semibold text-muted">
               Grafias dos itens cobertas: {num(cobertas.length)} · {num(itensCobertos)} {itensCobertos === 1 ? "item" : "itens"}
             </p>

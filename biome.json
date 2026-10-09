@@ -11,16 +11,14 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      "a11y": {
-        "noLabelWithoutControl": "off",
-        "noStaticElementInteractions": "off",
-        "useKeyWithClickEvents": "off"
-      },
       "suspicious": {
         "noArrayIndexKey": "off"
       },
       "correctness": {
         "useExhaustiveDependencies": "warn"
+      },
+      "a11y": {
+        "noLabelWithoutControl": { "level": "error", "options": { "inputComponents": ["Selecao"] } }
       },
       "style": {
         "noNonNullAssertion": "warn"

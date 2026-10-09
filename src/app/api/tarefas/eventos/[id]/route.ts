@@ -2,7 +2,7 @@ import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { dataBR } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { atualizarEvento, avisarConvite, excluirEvento, getEvento, pessoasValidas, tarefaAcessivel } from "@/lib/tarefas";
+import { atualizarEvento, avisarConvite, avisarEventoAlterado, excluirEvento, getEvento, pessoasValidas, tarefaAcessivel } from "@/lib/tarefas";
 import { eventoParaAuditoria, participaDoEvento, rotuloTicket } from "@/lib/tarefas-core";
 import { eventoSchema } from "@/lib/tarefas-validation";
 
@@ -54,6 +54,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     x.r.tarefa,
     x.r.quadro,
   );
+  // Os convidados que seguem no evento sabem da nova data/hora/local.
+  await avisarEventoAlterado(x.u, x.evento, p.data, x.r.tarefa, x.r.quadro);
   return ok();
 }
 
@@ -70,5 +72,6 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     resumo: `Tarefa ${rotuloTicket(x.r.tarefa.ticket)}: evento "${hist.titulo}" excluído`,
     antes: hist.dados,
   });
+  await avisarEventoAlterado(x.u, x.evento, null, x.r.tarefa, x.r.quadro);
   return ok();
 }

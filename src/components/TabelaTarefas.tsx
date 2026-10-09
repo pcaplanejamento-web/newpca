@@ -44,6 +44,7 @@ export function TabelaTarefas({
   selecao,
   onSelecao,
   reservaInferior = 0,
+  nomeExportacao,
 }: {
   tarefas: TarefaResumo[];
   /** TODAS as listas (inclusive arquivadas — o nome de qualquer cartão). */
@@ -63,6 +64,8 @@ export function TabelaTarefas({
   onSelecao?: (s: Set<number>) => void;
   /** Altura reservada no fim do display (a barra de seleção fixa). */
   reservaInferior?: number;
+  /** O nome do arquivo do Exportar do rodapé (ex.: "Tarefas - Quadro X"). */
+  nomeExportacao?: string;
 }) {
   const colunas = useMemo<Column<TarefaResumo>[]>(() => {
     const lista = new Map(listas.map((l) => [l.id, l]));
@@ -81,7 +84,7 @@ export function TabelaTarefas({
         nowrap: true,
         filter: "none",
         value: (t) => String(t.ticket).padStart(9, "0"),
-        numero: (t) => t.ticket,
+        total: false, numero: (t) => t.ticket,
         render: (t) => (
           <span className="font-mono tabular-nums text-text-2">
             <CelulaCopiavel copiar={String(t.ticket)} rotulo="nº do ticket">
@@ -174,7 +177,7 @@ export function TabelaTarefas({
               render: (t: TarefaResumo) => (
                 <span className="inline-flex gap-1">
                   {times(t).map((e) => (
-                    <span key={e.id} className="rounded-full px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
+                    <span key={e.id} className="rounded-chip px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
                       {e.nome}
                     </span>
                   ))}
@@ -195,7 +198,7 @@ export function TabelaTarefas({
         render: (t) => (
           <span className="inline-flex gap-1">
             {marcas(t).map((e) => (
-              <span key={e.id} className="rounded-full px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
+              <span key={e.id} className="rounded-chip px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
                 {e.nome}
               </span>
             ))}
@@ -208,7 +211,7 @@ export function TabelaTarefas({
         nowrap: true,
         filter: "range",
         formatarFaixa: (n) => `${Math.round(n)}%`,
-        numero: (t) => (t.checklist.total ? (t.checklist.feitos / t.checklist.total) * 100 : null),
+        total: false, numero: (t) => (t.checklist.total ? (t.checklist.feitos / t.checklist.total) * 100 : null),
         value: (t) => (t.checklist.total ? `${t.checklist.feitos}/${t.checklist.total}` : ""),
         render: (t) =>
           t.checklist.total ? (
@@ -298,6 +301,7 @@ export function TabelaTarefas({
       columns={colunas}
       rows={tarefas}
       getKey={(t) => t.id}
+      exportar={nomeExportacao ? { nome: nomeExportacao } : undefined}
       onRowClick={(t) => onAbrir(t.id)}
       activeKey={ativa}
       scrollInterno

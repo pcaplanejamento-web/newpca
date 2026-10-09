@@ -13,6 +13,9 @@ export function KpiStat({
   delta,
   spark,
   hint,
+  onClick,
+  acao,
+  realce = false,
 }: {
   label: string;
   value: ReactNode;
@@ -20,18 +23,36 @@ export function KpiStat({
   delta?: { dir: "up" | "down"; value: string };
   spark?: number[];
   hint?: string;
+  /** O cartão vira BOTÃO (ex.: "Maior item" abre o item); `acao` = o que o toque faz (nome acessível). */
+  onClick?: () => void;
+  acao?: string;
+  /** Fundo levemente tingido na cor do KPI e o brilho no canto (o Dashboard do PCA). */
+  realce?: boolean;
 }) {
+  const Raiz = onClick ? "button" : "div";
   return (
-    <div
-      className="kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring [container-type:inline-size]"
-      style={{ "--kpi-accent": cor } as CSSProperties}
+    <Raiz
+      {...(onClick ? { type: "button" as const, onClick, "aria-label": `${label}: ${typeof value === "string" ? value : ""}${acao ? ` — ${acao}` : ""}` } : {})}
+      className={`kpi-card relative min-w-0 overflow-hidden rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring [container-type:inline-size] ${
+        onClick ? "transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" : ""
+      }`}
+      style={
+        {
+          "--kpi-accent": cor,
+          ...(realce
+            ? {
+                background: `radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, ${cor} 16%, transparent) 0%, transparent 55%), color-mix(in srgb, ${cor} 4%, var(--surface))`,
+              }
+            : {}),
+        } as CSSProperties
+      }
     >
       <span
         aria-hidden
         className="absolute bottom-4 left-0 top-4 w-[3px] rounded-r-[3px]"
         style={{ background: cor }}
       />
-      <div className="flex items-start justify-between gap-2 pl-2">
+      <div className="flex items-start justify-between gap-2">
         <span className="truncate text-[12.5px] text-muted">{label}</span>
         {delta && (
           <span
@@ -48,13 +69,13 @@ export function KpiStat({
         )}
       </div>
       <div
-        className="mt-1 min-w-0 truncate pl-2 text-[clamp(1.1rem,17cqw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
+        className="mt-1 min-w-0 truncate text-[clamp(1.1rem,17cqw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
         title={typeof value === "string" ? value : undefined}
       >
         {value}
       </div>
       {spark && spark.length > 0 && (
-        <div className="mt-3 flex h-7 items-end gap-[3px] pl-2">
+        <div className="mt-3 flex h-7 items-end gap-[3px]">
           {spark.map((h, i) => (
             <span
               key={i}
@@ -67,7 +88,7 @@ export function KpiStat({
           ))}
         </div>
       )}
-      {hint && <div className="mt-2 truncate pl-2 text-[11.5px] text-faint">{hint}</div>}
-    </div>
+      {hint && <div className="mt-2 truncate text-[11.5px] text-faint">{hint}</div>}
+    </Raiz>
   );
 }

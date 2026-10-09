@@ -121,6 +121,7 @@ import {
   comandosVinculos,
   comandosVinculosTarefa,
   type ChecklistNovo,
+  type NovaNotificacao,
   quadroVisivel,
   pessoaNaTarefa,
 } from "./tarefas-sql";
@@ -1704,6 +1705,27 @@ export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: nu
 
 // ─── Fase 3: avisos · recorrência · automações · modelos ─────────────────────────────────────────────────────
 
+/** Os avisos sobre UMA tarefa (sem gravar — a massa e as automações juntam os de todas e gravam UMA vez). */
+export function avisosSobreTarefa(
+  u: UsuarioSessao,
+  tipo: TipoNotificacao,
+  destinos: number[],
+  t: { id: number; ticket: number; titulo: string },
+  quadro: { id: number; nome: string },
+  titulo: string,
+): NovaNotificacao[] {
+  return destinos.map((usuarioId) => ({
+    usuarioId,
+    tipo,
+    titulo,
+    texto: `${rotuloTicket(t.ticket)} ${t.titulo} · ${quadro.nome}`,
+    link: linkTarefa(t.id),
+    tarefaId: t.id,
+    quadroId: quadro.id,
+    ...atorDe(u),
+  }));
+}
+
 /** Avisa pessoas sobre UMA tarefa (sem o próprio autor). Nunca lança. */
 export async function avisarSobreTarefa(
   u: UsuarioSessao,
@@ -1713,19 +1735,51 @@ export async function avisarSobreTarefa(
   quadro: { id: number; nome: string },
   titulo: string,
 ) {
-  await notificar(
-    destinos.map((usuarioId) => ({
-      usuarioId,
-      tipo,
-      titulo,
-      texto: `${rotuloTicket(t.ticket)} ${t.titulo} · ${quadro.nome}`,
-      link: linkTarefa(quadro.id, t.id),
-      tarefaId: t.id,
-      quadroId: quadro.id,
-      ...atorDe(u),
-    })),
-    u.id,
-  );
+  await notificar(avisosSobreTarefa(u, tipo, destinos, t, quadro, titulo), u.id);
+}
+
+/** Quem ACOMPANHA cada tarefa (responsáveis, observadores e os membros das equipes) — 2 consultas para todas. */
+export async function seguidoresDasTarefas(ids: number[]): Promise<Map<number, number[]>> {
+  const m = new Map<number, Set<number>>();
+  if (!ids.length) return new Map();
+  const db = getDb();
+  const lista = JSON.stringify(ids);
+  const [pessoas, equipes] = await Promise.all([
+    db
+      .select({ t: tarefaPessoas.tarefaId, u: tarefaPessoas.usuarioId })
+      .from(tarefaPessoas)
+      .where(sql`${tarefaPessoas.tarefaId} IN (SELECT value FROM json_each(${lista}))`),
+    db
+      .select({ t: tarefaEquipesLinks.tarefaId, u: tarefaEquipeMembros.usuarioId })
+      .from(tarefaEquipesLinks)
+      .innerJoin(tarefaEquipeMembros, eq(tarefaEquipeMembros.equipeId, tarefaEquipesLinks.equipeId))
+      .where(sql`${tarefaEquipesLinks.tarefaId} IN (SELECT value FROM json_each(${lista}))`),
+  ]);
+  for (const r of [...pessoas, ...equipes]) {
+    if (!m.has(r.t)) m.set(r.t, new Set());
+    m.get(r.t)?.add(r.u);
+  }
+  return new Map([...m].map(([k, v]) => [k, [...v]]));
+}
+
+/** As tarefas (dentre `ids`) em que a pessoa JÁ é responsável — a massa só avisa quem passou a ser. */
+export async function jaResponsavelEm(ids: number[], usuarioId: number): Promise<Set<number>> {
+  if (!ids.length) return new Set();
+  const r = await getDb()
+    .select({ t: tarefaPessoas.tarefaId })
+    .from(tarefaPessoas)
+    .where(and(eq(tarefaPessoas.usuarioId, usuarioId), eq(tarefaPessoas.papel, "responsavel"), sql`${tarefaPessoas.tarefaId} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`));
+  return new Set(r.map((x) => x.t));
+}
+
+/** As tarefas (dentre `ids`) que JÁ têm a equipe — a massa só avisa as que passaram a ter. */
+export async function jaComEquipe(ids: number[], equipeId: number): Promise<Set<number>> {
+  if (!ids.length) return new Set();
+  const r = await getDb()
+    .select({ t: tarefaEquipesLinks.tarefaId })
+    .from(tarefaEquipesLinks)
+    .where(and(eq(tarefaEquipesLinks.equipeId, equipeId), sql`${tarefaEquipesLinks.tarefaId} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`));
+  return new Set(r.map((x) => x.t));
 }
 
 /** "Tarefa atribuída a você" para os responsáveis NOVOS (os de `depois` que não estavam em `antes`). */
@@ -1760,6 +1814,39 @@ export async function avisarResposta(u: UsuarioSessao, criadorId: number | null,
   );
 }
 const dataBRCurta = (d: string) => `${d.slice(8)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+
+/**
+ * O EVENTO mudou de data/hora/local/link — ou foi CANCELADO: avisa os convidados que não recusaram (os que seguem
+ * convidados, na alteração). Só o que muda a agenda da pessoa conta (o título ou a cor, não).
+ */
+export async function avisarEventoAlterado(
+  u: UsuarioSessao,
+  antes: { id: number; titulo: string; data: string; dataFim: string | null; horaInicio: string | null; horaFim: string | null; local: string | null; linkReuniao: string | null; convidados: { usuarioId: number; resposta: string }[] },
+  depois: { titulo: string; data: string; dataFim: string | null; horaInicio: string | null; horaFim: string | null; local: string | null; linkReuniao: string | null; convidados: number[] } | null,
+  t: { id: number; ticket: number; titulo: string },
+  quadro: Quadro,
+) {
+  const mudouAgenda =
+    !depois ||
+    (["data", "dataFim", "horaInicio", "horaFim", "local", "linkReuniao"] as const).some((k) => (antes[k] ?? null) !== (depois[k] ?? null));
+  if (!mudouAgenda) return;
+  const destinos = antes.convidados.filter((c) => c.resposta !== "nao" && (!depois || depois.convidados.includes(c.usuarioId))).map((c) => c.usuarioId);
+  if (!destinos.length) return;
+  const quando = depois ? `${dataBRCurta(depois.data)}${depois.horaInicio ? ` às ${depois.horaInicio}` : ""}` : dataBRCurta(antes.data);
+  await notificar(
+    destinos.map((usuarioId) => ({
+      usuarioId,
+      tipo: "evento" as const,
+      titulo: depois ? `${nomeExibicao(u)} alterou o evento: ${depois.titulo}` : `${nomeExibicao(u)} cancelou o evento: ${antes.titulo}`,
+      texto: `${depois ? `Agora em ${quando}` : `Era em ${quando}`} · ${rotuloTicket(t.ticket)} ${t.titulo} · ${quadro.nome}`,
+      link: depois ? linkEvento(depois.data, `e${antes.id}`) : linkTarefa(t.id),
+      tarefaId: t.id,
+      quadroId: quadro.id,
+      ...atorDe(u),
+    })),
+    u.id,
+  );
+}
 
 /** As AUTOMAÇÕES do quadro (a de ação inválida some). */
 export async function listarAutomacoes(quadroId: number): Promise<Automacao[]> {
@@ -1815,16 +1902,15 @@ export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, todos: num
   if (!ids.length) return false;
   let mudou = false;
   let concluida = lista.concluida;
+  const avisos: NovaNotificacao[] = [];
   try {
     const acoes = automacoesDoEvento(await listarAutomacoes(quadro.id), { listaId: lista.id, concluida: lista.concluida });
     for (const a of acoes) {
       if (!(await acaoValida(quadro, a))) continue;
       const alvo = await tarefasPorIds(ids);
       if (a.tipo === "notificar") {
-        for (const t of alvo) {
-          const x = await getTarefa(t.id);
-          if (x) await avisarSobreTarefa(u, "automacao", [...x.envolvidos, ...x.observadores], t, quadro, `Automação: tarefa ${concluida ? "concluída" : "movida"}`);
-        }
+        const seg = await seguidoresDasTarefas(alvo.map((t) => t.id));
+        avisos.push(...alvo.flatMap((t) => avisosSobreTarefa(u, "automacao", seg.get(t.id) ?? [], t, quadro, `Automação: tarefa ${concluida ? "concluída" : "movida"}`)));
         continue;
       }
       let destinoConcluida = false;
@@ -1845,12 +1931,24 @@ export async function aposMovimento(u: UsuarioSessao, quadro: Quadro, todos: num
       );
       mudou = true;
       for (const t of alvo) await registrarAuditoria({ usuario: u, acao: "editar", entidade: "tarefa", entidadeId: t.id, origem: "automacao", resumo: `Tarefa ${rotuloTicket(t.ticket)}: automação (${a.tipo})`, depois: a });
-      if (a.tipo === "atribuir") for (const t of alvo) await avisarSobreTarefa(u, "atribuida", [a.usuarioId], t, quadro, "Uma automação atribuiu uma tarefa a você");
+      if (a.tipo === "atribuir") avisos.push(...alvo.flatMap((t) => avisosSobreTarefa(u, "atribuida", [a.usuarioId], t, quadro, "Uma automação atribuiu uma tarefa a você")));
     }
     if (concluida && (await gerarRecorrentes(u, quadro, ids)) > 0) mudou = true;
   } catch (e) {
     console.error("pós-movimento das tarefas falhou", e);
   }
+  // CONCLUÍDA: quem acompanha as tarefas (responsáveis, observadores, equipes) sabe.
+  if (concluida) {
+    try {
+      const alvo = await tarefasPorIds(ids);
+      const seg = await seguidoresDasTarefas(ids);
+      avisos.push(...alvo.flatMap((t) => avisosSobreTarefa(u, "concluida", seg.get(t.id) ?? [], t, quadro, `${nomeExibicao(u)} concluiu uma tarefa`)));
+    } catch (e) {
+      console.error("aviso de tarefa concluída falhou", e);
+    }
+  }
+  // Os avisos de TODAS as tarefas numa gravação só (o limite de consultas por requisição).
+  await notificar(avisos, u.id);
   return mudou;
 }
 

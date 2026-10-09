@@ -13,14 +13,18 @@ export type OrgaoResumo = {
   sigla: string;
   nome: string;
   orgaoEntidade: string | null;
-  ordem: number;
   /** 1 = os responsáveis do órgão valem p/ todas as unidades (assinatura única). */
   assinaturaUnica: boolean;
   /** Nº do interessado do órgão (o protocolo pode vir em nome do órgão). */
   numeroInteressado: string | null;
+  /** O ID da entidade do órgão na Centi (ex.: "02"). */
+  entidadeCenti: string | null;
   /** Ocultado (tem DFD/protocolo): não aparece para uso em documentos novos. */
   oculto: boolean;
 };
+
+/** A ORDEM dos órgãos em todo o sistema: pelo ID da entidade na Centi (numérico; sem ele, por último), depois o nome. */
+export const ORDEM_ORGAOS = [sql`${orgaos.entidadeCenti} IS NULL`, sql`CAST(${orgaos.entidadeCenti} AS INTEGER)`, asc(orgaos.nome), asc(orgaos.id)];
 
 export async function listarOrgaos(): Promise<OrgaoResumo[]> {
   return getDb()
@@ -29,13 +33,13 @@ export async function listarOrgaos(): Promise<OrgaoResumo[]> {
       sigla: orgaos.sigla,
       nome: orgaos.nome,
       orgaoEntidade: orgaos.orgaoEntidade,
-      ordem: orgaos.ordem,
       assinaturaUnica: orgaos.assinaturaUnica,
       numeroInteressado: orgaos.numeroInteressado,
+      entidadeCenti: orgaos.entidadeCenti,
       oculto: orgaos.oculto,
     })
     .from(orgaos)
-    .orderBy(asc(orgaos.ordem), asc(orgaos.id));
+    .orderBy(...ORDEM_ORGAOS);
 }
 
 /** Estrutura de UM órgão (para as travas de promover/rebaixar/dual). `propriaId` = a unidade

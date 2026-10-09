@@ -32,6 +32,15 @@
   --track: #ebeef2;
   --sb-active: #f4f6f8;
   --kpi-bar: #dee2e8;
+  /* SÉRIES dos gráficos (paleta categórica — cada categoria guarda a cor entre filtros). */
+  --serie-1: #3b82f6;
+  --serie-2: #10b981;
+  --serie-3: #f59e0b;
+  --serie-4: #a855f7;
+  --serie-5: #ef4444;
+  --serie-6: #06b6d4;
+  --serie-7: #ec4899;
+  --serie-8: #84cc16;
   /* VITRINE das telas de acesso (o painel imersivo ao lado do login) — escura nos dois temas. */
   --vitrine-bg: #0b0d24;
   --vitrine-bg-2: #1b1e4b;
@@ -42,6 +51,10 @@
   /* Sombra suave de contorno (popovers/dropdowns/cards flutuantes) */
   --shadow-soft: 0 4px 16px -4px rgba(17, 17, 12, 0.12),
     0 2px 6px -2px rgba(17, 17, 12, 0.08), 0 0 0 1px var(--border-2);
+  /* Sombra dos componentes FLUTUANTES (bolhas e janela do chat, painel "Ao vivo") — mais profunda que a dos cartões. */
+  --sombra-flutuante: 0 12px 32px -8px rgba(17, 17, 12, 0.28), 0 4px 10px -4px rgba(17, 17, 12, 0.18), 0 0 0 1px var(--border-2);
+  /* A bolha ERGUIDA (presa ao dedo durante o arrasto) — mais alta e difusa. */
+  --sombra-erguida: 0 22px 44px -10px rgba(17, 17, 12, 0.4), 0 8px 16px -6px rgba(17, 17, 12, 0.22);
   /* Scrim de modais/drawers — sempre escuro (escurece o fundo nos 2 temas) */
   --scrim: rgba(17, 17, 12, 0.45);
   /* Texto SOBRE uma cor do usuário (etiqueta sólida): `textoSobre` (color.ts) escolhe — iguais nos dois temas. */
@@ -93,11 +106,15 @@
 
   /* Espaçamento / alturas (§5) — densidade padrão. UMA régua para o sistema inteiro (a densidade do ADM muda
      todos juntos):
-     --pad-canvas = margem do conteúdo — topo = laterais = base: a MESMA distância do cabeçalho, do menu e da
-                    borda do display (o cabeçalho usa a mesma nas laterais; 12px no celular);
+     --pad-canvas   = margem LATERAL do conteúdo: a MESMA distância do menu e da borda do display (o cabeçalho usa a
+                      mesma nas laterais; 12px no celular);
+     --pad-canvas-y = margem do conteúdo ao CABEÇALHO e à BASE do display — a METADE da lateral: o primeiro e o último
+                      componente já trazem o respiro dos próprios controles/cartões, e assim as 4 distâncias ficam
+                      PROPORCIONAIS;
      --gap-block  = espaço ENTRE os componentes (blocos da página, grades de cartões, painéis lado a lado);
      --pad-card   = respiro interno de cartões, quadros e banners. */
   --pad-canvas: 16px;
+  --pad-canvas-y: 8px;
   --gap-block: 12px;
   --pad-card: 14px;
   --cell-py: 13px;
@@ -139,8 +156,18 @@
   --track: #232834;
   --sb-active: #191d27;
   --kpi-bar: #2c3340;
+  --serie-1: #60a5fa;
+  --serie-2: #34d399;
+  --serie-3: #fbbf24;
+  --serie-4: #c084fc;
+  --serie-5: #f87171;
+  --serie-6: #22d3ee;
+  --serie-7: #f472b6;
+  --serie-8: #a3e635;
   --ring: 0 0 0 1px var(--border-2);
   --shadow-soft: 0 0 0 1px var(--border-2), 0 10px 28px -8px rgba(0, 0, 0, 0.6);
+  --sombra-flutuante: 0 0 0 1px var(--border-2), 0 16px 40px -8px rgba(0, 0, 0, 0.75), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+  --sombra-erguida: 0 0 0 1px var(--border-2), 0 26px 52px -10px rgba(0, 0, 0, 0.85);
   --scrim: rgba(0, 0, 0, 0.6);
   --veu-capa: rgba(0, 0, 0, 0.78);
   --tint-target: #ffffff;
@@ -150,6 +177,7 @@
 /* Densidade (§39.7) — attr no <html> */
 [data-density="compact"] {
   --pad-canvas: 12px;
+  --pad-canvas-y: 6px;
   --gap-block: 8px;
   --pad-card: 12px;
   --cell-py: 9px;
@@ -158,6 +186,7 @@
 }
 [data-density="comfortable"] {
   --pad-canvas: 24px;
+  --pad-canvas-y: 12px;
   --gap-block: 16px;
   --pad-card: 20px;
   --cell-py: 16px;
@@ -169,6 +198,7 @@
 @media (width < 40rem) {
   :root {
     --pad-canvas: 12px;
+    --pad-canvas-y: 6px;
   }
 }
 
@@ -255,6 +285,8 @@
 
   --shadow-ring: var(--ring);
   --shadow-soft: var(--shadow-soft);
+  --shadow-flutuante: var(--sombra-flutuante);
+  --shadow-erguida: var(--sombra-erguida);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -272,10 +304,10 @@
   }
 }
 
-/* Barra de rolagem discreta */
-* {
-  scrollbar-width: thin;
-}
+/* BARRAS DE ROLAGEM NATIVAS em todo o sistema (v1.72.2): nada de `scrollbar-width: thin` global nem
+   `::-webkit-scrollbar` — a barra própria (custom) é desenhada e arrastada pela thread principal (o arrasto
+   travava/atrasava com a página ocupada) e a fina é difícil de pegar. A nativa é do compositor: acompanha o arrasto
+   na velocidade do ponteiro. A cor clara/escura vem do `color-scheme` do tema. Não estilize barras de rolagem. */
 
 /* Anima entrada de cards/toasts */
 @keyframes fade-in-up {
@@ -290,6 +322,121 @@
 }
 .animate-fade-in-up {
   animation: fade-in-up 0.35s ease-out both;
+}
+
+/* A LISTA da `Selecao`: abre rápida a partir do campo (como os menus do sistema); no celular, a FOLHA sobe de baixo sobre o
+   fundo escuro. Sem movimento com "reduzir movimento" (sistema ou o ADM). */
+@keyframes selecao-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes folha-sobe {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes fundo-folha {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-selecao-entra {
+  transform-origin: top center;
+  animation: selecao-entra 0.12s ease-out both;
+}
+.animate-folha-sobe {
+  animation: folha-sobe 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-fundo-folha {
+  animation: fundo-folha 0.2s ease-out both;
+}
+[data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha),
+[data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha) {
+    animation: none;
+  }
+}
+
+/* CARREGANDO no card (CarregandoLink): um brilho que varre o card + a barra indeterminada na borda de baixo. */
+@keyframes varrer-card {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.animate-varrer-card {
+  animation: varrer-card 1.6s linear infinite;
+  will-change: transform;
+}
+/* Anel que gira (elemento HTML — o compositor anima mesmo com a página ocupada; o SVG travava). */
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-girar {
+  animation: girar 0.8s linear infinite;
+  will-change: transform;
+}
+@keyframes barra-indeterminada {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  50% {
+    transform: translateX(0%) scaleX(0.6);
+  }
+  100% {
+    transform: translateX(100%) scaleX(0.4);
+  }
+}
+.animate-barra-indeterminada {
+  animation: barra-indeterminada 1.1s ease-in-out infinite;
+  transform-origin: left;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-varrer-card {
+    animation: none;
+    opacity: 0;
+  }
+  .animate-barra-indeterminada {
+    animation: none;
+    transform: none;
+  }
+  .animate-girar {
+    animation: none;
+  }
+}
+[data-motion="off"] .animate-girar,
+[data-motion="reduced"] .animate-girar {
+  animation: none;
+}
+[data-motion="off"] .animate-varrer-card,
+[data-motion="reduced"] .animate-varrer-card {
+  animation: none;
+  opacity: 0;
+}
+[data-motion="off"] .animate-barra-indeterminada,
+[data-motion="reduced"] .animate-barra-indeterminada {
+  animation: none;
+  transform: none;
 }
 
 /* A coluna da TabelaCruzada LEVANTA ao ser pega (cresce do tamanho real e ganha a sombra). */
@@ -341,12 +488,349 @@
   animation: none;
 }
 
+/* O SINO: o selo dá um "pop" quando o número muda; o sino balança uma vez quando chega um aviso novo. */
+@keyframes selo-pop {
+  0% {
+    scale: 0.6;
+  }
+  60% {
+    scale: 1.18;
+  }
+  100% {
+    scale: 1;
+  }
+}
+.animate-selo-pop {
+  animation: selo-pop var(--motion-duration) var(--motion-ease);
+}
+@keyframes sino-tocar {
+  15% {
+    rotate: 14deg;
+  }
+  35% {
+    rotate: -12deg;
+  }
+  55% {
+    rotate: 8deg;
+  }
+  75% {
+    rotate: -4deg;
+  }
+}
+.animate-sino-tocar {
+  animation: sino-tocar 0.7s ease-in-out;
+  transform-origin: 50% 10%;
+}
+/* Um aviso que SAI da lista (lido no filtro "Não lidas", excluído, limpo): a altura recolhe e ele some. */
+.aviso-linha {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows var(--motion-duration) var(--motion-ease),
+    opacity var(--motion-duration) var(--motion-ease);
+}
+.aviso-linha[data-saindo] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-selo-pop,
+  .animate-sino-tocar {
+    animation: none;
+  }
+  .aviso-linha {
+    transition: none;
+  }
+}
+[data-motion="off"] .animate-selo-pop,
+[data-motion="off"] .animate-sino-tocar,
+[data-motion="reduced"] .animate-sino-tocar {
+  animation: none;
+}
+[data-motion="off"] .aviso-linha {
+  transition: none;
+}
+
+/* AO VIVO (presença e chat): o ponto online PULSA (um anel que expande e some — radar), a pessoa que entra cresce com
+   mola e brilha por 3 s, o número desliza ao mudar, os três pontos do "digitando" saltam e o balão novo entra. */
+/* O ponto "ao vivo": o halo que pulsa. O ponto precisa ser POSICIONADO (absolute/relative pela classe de quem usa) — aqui não
+   se fixa `position`, senão a regra (fora das camadas do Tailwind) venceria o `absolute` e o ponto sairia do canto da foto. */
+/* PONTO DO SELO AO VIVO (Badge `tamanho="linha"` + `vivo` — ex.: o Preview do PCA): o ponto RESPIRA e solta DUAS ondas
+   suaves defasadas (radar contínuo). Posicionado pela classe `relative` de quem usa; para com "reduzir movimento". */
+.ponto-selo {
+  animation: respirar-ponto 2s ease-in-out infinite;
+}
+.ponto-selo::before,
+.ponto-selo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: onda-ponto 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.ponto-selo::after {
+  animation-delay: 1s;
+}
+@keyframes respirar-ponto {
+  0%,
+  100% {
+    scale: 1;
+    opacity: 1;
+  }
+  50% {
+    scale: 0.82;
+    opacity: 0.75;
+  }
+}
+@keyframes onda-ponto {
+  0% {
+    opacity: 0.45;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 2.6;
+  }
+}
+.ponto-vivo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: pulso-vivo 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes pulso-vivo {
+  0% {
+    opacity: 0.55;
+    scale: 1;
+  }
+  80%,
+  100% {
+    opacity: 0;
+    scale: 1.9;
+  }
+}
+@keyframes entrar-pessoa {
+  0% {
+    opacity: 0;
+    scale: 0.55;
+  }
+  60% {
+    opacity: 1;
+    scale: 1.08;
+  }
+  100% {
+    scale: 1;
+  }
+}
+.animate-entrar-pessoa {
+  animation: entrar-pessoa 0.45s var(--motion-ease) both;
+}
+@keyframes brilho-novo {
+  0%,
+  70% {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.animate-brilho-novo {
+  animation: brilho-novo 3s ease-out both;
+}
+@keyframes contador-desliza {
+  0% {
+    opacity: 0;
+    translate: 0 60%;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+.animate-contador {
+  display: inline-block;
+  animation: contador-desliza 0.3s var(--motion-ease);
+}
+@keyframes digitando {
+  0%,
+  60%,
+  100% {
+    translate: 0 0;
+    opacity: 0.45;
+  }
+  30% {
+    translate: 0 -4px;
+    opacity: 1;
+  }
+}
+.ponto-digitando {
+  animation: digitando 1.1s ease-in-out infinite;
+}
+.ponto-digitando:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.ponto-digitando:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes balao-entrar {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.97;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+.animate-balao {
+  animation: balao-entrar 0.25s var(--motion-ease) both;
+}
+/* CHAT estilo Messenger: a bolha que chega QUICA; a janela CRESCE a partir da bolha; a LIXEIRA surge e atrai a bolha;
+   ao soltar, cada bolha VOA até o lugar novo com mola, em cadeia (`estiloDaBolha`, BolhasChat — some com o motion desligado). */
+@keyframes cabeca-entra {
+  0% {
+    opacity: 0;
+    scale: 0.4;
+  }
+  55% {
+    opacity: 1;
+    scale: 1.12;
+  }
+  75% {
+    scale: 0.95;
+  }
+  100% {
+    scale: 1;
+  }
+}
+.animate-cabeca-entra {
+  animation: cabeca-entra 0.5s var(--motion-ease) both;
+}
+/* A janela da conversa CRESCE a partir da bolha (a origem é o centro dela) com uma mola curta e SAI encolhendo de volta. */
+@keyframes janela-cresce {
+  0% {
+    opacity: 0;
+    scale: 0.6;
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    scale: 1.015;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+.animate-janela-cresce {
+  animation: janela-cresce calc(var(--motion-duration) * 1.6) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+/* O FECHAMENTO é BEM RÁPIDO (~0,1 s): encolhe de volta à bolha e some. */
+@keyframes janela-sai {
+  0% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+.animate-janela-sai {
+  animation: janela-sai 60ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+/* A LIXEIRA sobe do rodapé quando o arrasto começa e desce ao terminar. */
+@keyframes lixeira-entra {
+  0% {
+    opacity: 0;
+    translate: 0 40px;
+    scale: 0.6;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+.animate-lixeira-entra {
+  animation: lixeira-entra calc(var(--motion-duration) * 1.4) cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes lixeira-sai {
+  0% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 40px;
+    scale: 0.7;
+  }
+}
+.animate-lixeira-sai {
+  animation: lixeira-sai calc(var(--motion-duration) * 0.55) ease-in both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-cabeca-entra,
+  .animate-janela-cresce,
+  .animate-janela-sai,
+  .animate-lixeira-entra,
+  .animate-lixeira-sai {
+    animation: none;
+  }
+}
+[data-motion="off"] .animate-cabeca-entra,
+[data-motion="off"] .animate-janela-cresce,
+[data-motion="off"] .animate-janela-sai,
+[data-motion="off"] .animate-lixeira-entra,
+[data-motion="off"] .animate-lixeira-sai,
+[data-motion="reduced"] .animate-cabeca-entra,
+[data-motion="reduced"] .animate-lixeira-entra {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ponto-vivo::after,
+  .ponto-selo,
+  .ponto-selo::before,
+  .ponto-selo::after,
+  .animate-entrar-pessoa,
+  .animate-brilho-novo,
+  .animate-contador,
+  .ponto-digitando,
+  .animate-balao {
+    animation: none;
+  }
+}
+[data-motion="off"] .ponto-vivo::after,
+[data-motion="off"] .ponto-selo,
+[data-motion="off"] .ponto-selo::before,
+[data-motion="off"] .ponto-selo::after,
+[data-motion="off"] .animate-entrar-pessoa,
+[data-motion="off"] .animate-brilho-novo,
+[data-motion="off"] .animate-contador,
+[data-motion="off"] .ponto-digitando,
+[data-motion="off"] .animate-balao,
+[data-motion="reduced"] .ponto-vivo::after,
+[data-motion="reduced"] .ponto-selo,
+[data-motion="reduced"] .ponto-selo::before,
+[data-motion="reduced"] .ponto-selo::after,
+[data-motion="reduced"] .ponto-digitando {
+  animation: none;
+}
+
 /* Região dos AVISOS FLUTUANTES (AvisoFlutuante + toast): canto inferior, pequena, sem deformar o layout.
    Fica ACIMA da navegação inferior do celular, da barra de seleção fixa da Mesa (a BarraSelecao publica a
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o
    DataTable da Mesa publica --rodape-tabela: no celular esse rodapé gruda sobre a navegação e, no desktop, fica
    rente ao fim do display — o aviso nunca cobre o "Importar" nem a paginação). Entre o rodapé e o que vem abaixo
-   (a navegação/o fim do display, ou a barra de seleção) cabe no máximo a margem do conteúdo (--pad-canvas) ou o
+   (a navegação/o fim do display, ou a barra de seleção) cabe no máximo a margem de baixo do conteúdo (--pad-canvas-y) ou o
    espaço entre blocos (--gap-block) — daí o `max` dos dois. Sem essa tabela o termo vale −100vh e o `max` de fora
    fica na posição de sempre. Cortes = os do Tailwind (sm 40rem · lg 64rem). */
 .avisos-flutuantes {
@@ -355,8 +839,8 @@
   left: 0.75rem;
   right: 0.75rem;
   bottom: max(
-    calc(4rem + env(safe-area-inset-bottom) + var(--reserva-rodape, 0px) + 0.5rem),
-    calc(4rem + env(safe-area-inset-bottom) + var(--reserva-rodape, 0px) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 0.5rem),
+    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
   );
   display: flex;
   flex-direction: column;
@@ -374,10 +858,61 @@
   .avisos-flutuantes {
     right: 1rem;
     bottom: max(
-      calc(var(--reserva-rodape, 0px) + 1rem),
-      calc(var(--reserva-rodape, 0px) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+      calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 1rem),
+      calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
     );
   }
+}
+
+/* GRÁFICOS: as marcas CRESCEM ao entrar (barras a partir da esquerda, colunas a partir da base), em CASCATA (`--atraso`),
+   e acompanham a mudança de valor com uma transição (filtrar redesenha sem salto). Os quadros entram subindo. */
+@keyframes grafico-crescer-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes grafico-crescer-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.grafico-barra {
+  transform-origin: left center;
+  animation: grafico-crescer-x 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--atraso, 0ms);
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.grafico-coluna {
+  transform-origin: center bottom;
+  animation: grafico-crescer-y 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--atraso, 0ms);
+  transition:
+    height 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.3s ease,
+    opacity 0.2s ease;
+}
+.grafico-entrada {
+  animation: fade-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--atraso, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .grafico-barra,
+  .grafico-coluna,
+  .grafico-entrada {
+    animation: none;
+    transition: none;
+  }
+}
+[data-motion="off"] :is(.grafico-barra, .grafico-coluna, .grafico-entrada),
+[data-motion="reduced"] :is(.grafico-barra, .grafico-coluna, .grafico-entrada) {
+  animation: none;
+  transition: none;
 }
 
 /* Transição suave entre visões (lista de itens ↔ catálogo): as linhas parecem
@@ -404,6 +939,38 @@
 }
 [data-motion="off"] .animate-cat-morph,
 [data-motion="reduced"] .animate-cat-morph {
+  animation: none;
+}
+
+/* ABAS: o painel novo ENTRA pelo lado da troca (para a direita = vem da direita). */
+@keyframes aba-direita {
+  from {
+    opacity: 0;
+    translate: 14px 0;
+  }
+}
+@keyframes aba-esquerda {
+  from {
+    opacity: 0;
+    translate: -14px 0;
+  }
+}
+.animate-aba-direita {
+  animation: aba-direita var(--motion-duration) var(--motion-ease) both;
+}
+.animate-aba-esquerda {
+  animation: aba-esquerda var(--motion-duration) var(--motion-ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-aba-direita,
+  .animate-aba-esquerda {
+    animation: none;
+  }
+}
+[data-motion="off"] .animate-aba-direita,
+[data-motion="off"] .animate-aba-esquerda,
+[data-motion="reduced"] .animate-aba-direita,
+[data-motion="reduced"] .animate-aba-esquerda {
   animation: none;
 }
 
@@ -510,24 +1077,6 @@
   animation: shimmer 1.6s infinite;
 }
 
-/* ROLAGEM FINA (a barra horizontal do quadro de Tarefas, como a do Trello): discreta e translúcida. */
-.rolagem-fina {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text) 35%, transparent) transparent;
-}
-.rolagem-fina::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
-}
-.rolagem-fina::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text) 35%, transparent);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.rolagem-fina::-webkit-scrollbar-track {
-  background: transparent;
-}
 
 /* TODO <select> do sistema com a MESMA seta, sempre no mesmo lugar: sem a aparência nativa (que muda por navegador), o
    chevron do tema (--seta-select) a 0,75rem da borda direita e o texto nunca passa por baixo dela. Fora de camada (vale
@@ -542,4 +1091,57 @@ select:not([multiple]):not([size]) {
   background-size: 1rem 1rem;
   padding-right: 2.25rem;
   text-overflow: ellipsis;
+}
+/* O GATILHO da `Selecao` (o dropdown do sistema): a seta é um ELEMENTO (`SetaDropdown` — gira ao abrir) no fim do
+   gatilho, no MESMO lugar da seta do <select> (0,75rem da borda) — trocar um <select> por ela não muda a caixa. */
+.seletor-sistema {
+  padding-right: 0.75rem;
+  text-overflow: ellipsis;
+}
+
+/* LINHA DE TÍTULO (o nome da tela/espaço, com voltar, selos e abas): abaixo dela, o MESMO respiro que há acima — a margem do
+   conteúdo ao cabeçalho (--pad-canvas-y). Sem camada, vence a margem do `space-y-[var(--gap-block)]` da raiz da tela. */
+.linha-topico {
+  margin-block-end: var(--pad-canvas-y);
+}
+
+/* CAIXA DE MARCAR (seleção das tabelas e das listas de filtro): o desenho do sistema no lugar do quadrado nativo — o
+   arredondamento segue o do ADM (Configurações → Aparência: o raio dos chips, no máximo um círculo). O mesmo do `Checkbox`. */
+.caixa-marcar {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  vertical-align: middle;
+  border: 1.5px solid color-mix(in srgb, var(--muted) 55%, var(--surface));
+  border-radius: min(var(--radius-chip), 50%);
+  background: var(--surface) center / 0.75rem no-repeat;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration) var(--motion-ease),
+    border-color var(--motion-duration) var(--motion-ease);
+}
+.caixa-marcar:hover {
+  border-color: var(--accent);
+}
+.caixa-marcar:checked,
+.caixa-marcar:indeterminate {
+  border-color: var(--accent);
+  background-color: var(--accent);
+}
+.caixa-marcar:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+.caixa-marcar:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+.caixa-marcar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+.caixa-marcar:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

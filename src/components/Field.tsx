@@ -2,6 +2,7 @@
 
 import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, useEffect, useId, useRef, useState } from "react";
 import { IconCheck, IconClose, IconEye, IconEyeOff, IconLock, IconMenos, IconSearch } from "./icons";
+import { type AcaoSelecao, Selecao } from "./Selecao";
 
 // Campos de formulário do design system (spec do usuário — prints do login):
 // rótulo forte, superfície preenchida, ícone à esquerda, **anel de foco accent**
@@ -73,8 +74,8 @@ function Rodape({ denso, error, hint, errId }: { denso?: boolean; error?: string
 
 const WRAP =
   "flex items-center gap-2.5 rounded-control border bg-surface-2 px-3.5 transition-[border-color,box-shadow,background-color] duration-[var(--motion-duration)] focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent/20";
-/** A seta dos selects DENTRO da moldura do campo (o respiro já é da moldura): rente ao fim do select, o texto antes dela. */
-const SETA_NA_CAIXA = "![background-position:right_center] !pr-6";
+/** A seta da seleção DENTRO da moldura do campo (o respiro já é da moldura): rente ao fim, o texto antes dela. */
+const SETA_NA_CAIXA = "!pr-0";
 const INPUT =
   "min-w-0 flex-1 bg-transparent text-[15px] text-text outline-none placeholder:text-faint";
 
@@ -108,8 +109,9 @@ export function TextField({ label, icon, trailing, hint, error, denso, rotuloExt
   );
 }
 
-/** Seleção no MESMO visual do `TextField` (rótulo forte + caixa de 54px, foco accent): um `<select>` nativo — no celular
- * abre o seletor do próprio aparelho. As opções vêm como `children`. */
+/** Seleção no MESMO visual do `TextField` (rótulo forte + caixa de 54px, foco accent) — a lista aberta é a do SISTEMA
+ * (`Selecao`: o dropdown preso ao campo, com busca acima de 12 opções e 44px no toque), não a nativa do aparelho. As
+ * opções vêm como `children` (`<option>`/`<optgroup>`); `onChange(e)` recebe `e.target.value`, como no `<select>`. */
 export function SelectField({
   label,
   hint,
@@ -118,59 +120,58 @@ export function SelectField({
   id,
   compacto = false,
   textoEscolhido,
+  acoes,
   children,
   ...rest
 }: {
   label?: string;
   hint?: ReactNode;
-  /** O problema do campo (borda + mensagem na cor de erro — como no `TextField`). */
   error?: string;
-  /** DENSO: caixa de 44px (como o `TextField denso`). */
   denso?: boolean;
-  /** Compacto (barras de ferramentas, ao lado de `Button size="sm"`): `--h-control-sm` no desktop, 44px no toque; o
-   * rótulo vira um prefixo discreto DENTRO da caixa. */
+  /** COMPACTO: na altura das barras de ferramentas (`--h-control-sm` no desktop, 44px no toque), o rótulo como prefixo dentro da caixa. */
   compacto?: boolean;
-  /** O texto da opção ESCOLHIDA em até 2 linhas DENTRO da caixa (nomes longos — ex.: a unidade — nunca ficam cortados). */
+  /** O texto da opção escolhida, À VISTA em até 2 linhas DENTRO da caixa (nomes longos — ex.: a unidade do cadastro). */
   textoEscolhido?: string;
+  /** Botões no RODAPÉ da lista aberta (ex.: "Editar esta visão", "+ Nova visão"). */
+  acoes?: AcaoSelecao[];
   children: ReactNode;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">) {
   const auto = useId();
   const fid = id ?? auto;
+  // A lista abre ALINHADA à caixa inteira (com o rótulo do compacto dentro), não só ao botão.
+  const caixa = useRef<HTMLDivElement>(null);
   if (compacto)
     return (
-      <div className={`${WRAP} h-11 !gap-1.5 !px-3 border-border-2 lg:h-[var(--h-control-sm)]`}>
+      <div ref={caixa} className={`${WRAP} h-11 !gap-1.5 !px-3 border-border-2 lg:h-[var(--h-control-sm)]`}>
         {label && (
           <label htmlFor={fid} className="shrink-0 text-[12px] text-muted">
             {label}
           </label>
         )}
-        <select id={fid} className={`${INPUT} ${SETA_NA_CAIXA} h-full min-w-0 cursor-pointer !text-[13px] font-semibold disabled:cursor-default disabled:opacity-60`} {...rest}>
+        <Selecao id={fid} ancora={caixa} titulo={label} acoes={acoes} className={`${INPUT} ${SETA_NA_CAIXA} h-full !text-[13px] font-semibold outline-none disabled:opacity-60`} {...rest}>
           {children}
-        </select>
+        </Selecao>
       </div>
     );
   const errId = `${fid}-erro`;
   return (
     <div className="min-w-0">
       <Rotulo label={label} fid={fid} denso={denso} error={error} errId={errId} />
-      <div className={`${WRAP} relative ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
-        {textoEscolhido && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-3.5 right-9 flex items-center text-[13px] font-medium leading-[1.15] text-text sm:text-[14px]"
-          >
-            <span className="line-clamp-2 break-words">{textoEscolhido}</span>
-          </span>
-        )}
-        <select
+      <div ref={caixa} className={`${WRAP} ${alturaCls(denso)} ${error ? "border-[var(--sit-devolvido)]" : "border-border-2"}`}>
+        <Selecao
           id={fid}
-          className={`${INPUT} ${SETA_NA_CAIXA} h-full cursor-pointer disabled:cursor-default disabled:opacity-60 ${textoEscolhido ? "!text-transparent [&_optgroup]:text-text [&_option]:text-text" : ""}`}
+          ancora={caixa}
+          titulo={label}
+          acoes={acoes}
+          texto={textoEscolhido}
+          linhas={textoEscolhido ? 2 : 1}
+          className={`${INPUT} ${SETA_NA_CAIXA} h-full outline-none disabled:opacity-60 ${textoEscolhido ? "!text-[13px] font-medium sm:!text-[14px]" : ""}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errId : undefined}
           {...rest}
         >
           {children}
-        </select>
+        </Selecao>
       </div>
       <Rodape denso={denso} error={error} hint={hint} errId={errId} />
     </div>
@@ -262,7 +263,7 @@ export function Checkbox({
     >
       <input ref={ref} id={cid} type="checkbox" checked={checked} className="peer sr-only" {...rest} />
       <span
-        className={`grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${
+        className={`grid h-5 w-5 shrink-0 place-items-center rounded-chip border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${
           checked || parcial ? "border-accent bg-accent text-white" : "border-border-2 bg-surface"
         }`}
       >

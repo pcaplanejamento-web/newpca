@@ -223,15 +223,19 @@ export type ItemRow = {
   /** Mês/ano do cronograma (a mesma chave do gráfico mensal) — a origem de cada barra. */
   ano?: number | null;
   mes?: number | null;
-  /** Previsão ANUAL (fonte protocolo): entra com 1/12 em cada mês do cronograma. */
+  /** Previsão GENÉRICA (fonte protocolo — sem mês definido): fora do cronograma mensal; no "Distribuído", 1/12 por mês. */
   anual?: boolean;
+  /** A periodicidade da previsão genérica (ANUAL/SEMESTRAL/QUADRIMESTRAL/TRIMESTRAL). */
+  periodo?: string | null;
+  /** Prioridade do DFD de origem (ALTA/MÉDIA/BAIXA; fonte protocolo — o gráfico de prioridade). */
+  prioridade?: string | null;
 };
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena
  * e pagina no CLIENTE (DataTable). Ordenado por valor desc por padrão. */
-export async function getItensTodos(unidadeId?: number, limite = 5000, pcaId?: number): Promise<ItemRow[]> {
+export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?: number): Promise<ItemRow[]> {
   const db = getDb();
-  return db
+  const q = db
     .select({
       id: itens.id,
       idProduto: itens.idProduto,
@@ -251,6 +255,6 @@ export async function getItensTodos(unidadeId?: number, limite = 5000, pcaId?: n
     .from(itens)
     .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
     .where(filtroUnidade(unidadeId, pcaId))
-    .orderBy(desc(itens.valorTotal))
-    .limit(limite);
+    .orderBy(desc(itens.valorTotal));
+  return limite == null ? q : q.limit(limite);
 }

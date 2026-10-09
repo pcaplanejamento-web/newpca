@@ -42,6 +42,12 @@ export function faltasObrigatorias(
   return avaliarDfd(d, regras, ctx).bloqueantes;
 }
 
+/** Textos LONGOS do DFD — descrição do item, objeto, órgão, setor, responsável e o texto de cada seção. O leitor nunca
+ * corta (a descrição do item pode atravessar páginas), então o teto só barra o absurdo: cabe numa célula do .xlsx
+ * exportado (32.767) e a linha do DFD (os campos + 50 seções) fica abaixo dos 2 MB por linha do D1. */
+export const MAX_TEXTO_DFD = 20_000;
+const textoLongoOpc = z.string().trim().max(MAX_TEXTO_DFD).optional().nullable();
+/** Textos da capa do protocolo (interessado, assunto, local). */
 const textoOpc = z.string().trim().max(4000).optional().nullable();
 const textoCurtoOpc = z.string().trim().max(255).optional().nullable();
 /** Referências de renovação (DFD-R): VÁRIAS por campo, separadas por "; " (`SEPARADOR_REFS`). */
@@ -50,7 +56,7 @@ const refsOpc = z.string().trim().max(1000).optional().nullable();
 const dfdItemSchema = z.object({
   item: z.number().int().optional().nullable(),
   codigo: textoCurtoOpc,
-  descricao: textoOpc,
+  descricao: textoLongoOpc,
   unidade: z.string().trim().max(100).optional().nullable(),
   quantidade: z.number().optional().nullable(),
   valorUnitario: z.number().optional().nullable(),
@@ -60,7 +66,7 @@ const dfdItemSchema = z.object({
 const dfdSecaoSchema = z.object({
   numero: z.number().int().nonnegative(),
   titulo: z.string().trim().max(300),
-  texto: z.string().max(10000),
+  texto: z.string().max(MAX_TEXTO_DFD),
 });
 
 /** Uma assinatura digital lida do PDF (ver `Assinatura` em parse-dfd-comum). */
@@ -99,11 +105,11 @@ export const dfdMetaSchema = z.object({
   numero: z.coerce.string().trim().min(1, "Número do DFD ausente no arquivo.").max(50),
   planejamento: textoCurtoOpc,
   tipo: textoCurtoOpc,
-  objeto: textoOpc,
-  orgaoEntidade: textoCurtoOpc,
-  setorRequisitante: textoOpc,
+  objeto: textoLongoOpc,
+  orgaoEntidade: textoLongoOpc,
+  setorRequisitante: textoLongoOpc,
   siglaSetor: z.string().trim().max(60).optional().nullable(),
-  responsavel: textoCurtoOpc,
+  responsavel: textoLongoOpc,
   matricula: textoCurtoOpc,
   email: textoCurtoOpc,
   telefone: textoCurtoOpc,
@@ -121,7 +127,7 @@ export const dfdMetaSchema = z.object({
   /** Canal da gravação (histórico): protocolação, reenvio do protocolo, DFD avulso ou a SOBRESCRITA de um
    * DFD por um arquivo novo (banner do DFD). Ausente ⇒ o servidor deduz (com protocolo = protocolação;
    * sem = avulso). */
-  origem: z.enum(["protocolacao", "reenvio", "avulso", "sobrescrita"]).optional(),
+  origem: z.enum(["protocolacao", "reenvio", "avulso", "sobrescrita", "automacao"]).optional(),
   /** SOBRESCRITA com escolha por dado: o que foi MANTIDO do gravado e o que foi EDITADO à mão — os primeiros
    * rótulos + as quantidades (`escolhasParaHistorico`) — só para o histórico (o DFD enviado já é o resultado
    * das escolhas). */
@@ -174,6 +180,8 @@ export const protocoloMetaSchema = z.object({
 export const startProtocoloSchema = z.object({
   mode: z.literal("start-protocolo"),
   protocolo: protocoloMetaSchema,
+  /** Protocolado por um FLUXO de automação (o histórico diz "Automação"). */
+  origem: z.literal("automacao").optional(),
   /** REENVIO (sobrescrever o protocolo gravado com o mesmo PDF corrigido): o servidor confere que é o
    * MESMO protocolo (nº e Id) e registra a sobrescrita com o resumo das diferenças na auditoria. */
   reenvio: z
@@ -238,10 +246,10 @@ export const editarDfdSchema = z
     numeroAta: refsOpc,
     numeroLicitacao: refsOpc,
     // Conteúdo do cabeçalho (cadeado por campo). Identificadores ficam de fora (imutáveis).
-    objeto: textoOpc,
-    orgaoEntidade: textoOpc,
-    setorRequisitante: textoOpc,
-    responsavel: textoOpc,
+    objeto: textoLongoOpc,
+    orgaoEntidade: textoLongoOpc,
+    setorRequisitante: textoLongoOpc,
+    responsavel: textoLongoOpc,
     matricula: textoCurtoOpc,
     email: textoCurtoOpc,
     telefone: textoCurtoOpc,
@@ -274,9 +282,14 @@ export const conferenciaProtocolosSchema = z.object({
 });
 
 /** DFDs JÁ cadastrados pelos NÚMEROS (`POST /api/dfd/existentes`) — o conflito de uma importação. */
-export const existentesDfdSchema = z.object({
-  numeros: z.array(z.string().trim().min(1).max(50)).min(1).max(2000),
-});
+export const existentesDfdSchema = z
+  .object({
+    numeros: z.array(z.string().trim().min(1).max(50)).max(2000).default([]),
+    /** O PROCESSO do PDF (nº + Id da capa): devolve os DFDs vivos e o rastro do protocolo JÁ cadastrado (mesmo nº ou
+     * mesmo Id) — a análise soma o que continua nele (a mesma somatória que o gravado vai conferir). */
+    processo: z.object({ numero: z.string().trim().min(1).max(60), idExterno: z.string().trim().max(255).nullable() }).optional(),
+  })
+  .refine((d) => d.numeros.length > 0 || d.processo != null, { message: "Informe os números ou o processo." });
 
 /** Conferência da LISTA de DFDs da Mesa (`POST /api/dfd/conferencia`) — em fatias de ids. */
 export const conferenciaDfdsSchema = z.object({

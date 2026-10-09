@@ -1,6 +1,7 @@
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloLegivel, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
+import { avisarProtocoloAtualizado, avisarResponsavelProtocolo } from "@/lib/avisos-mesa";
 import { listarDfdsCompletosDoProtocolo } from "@/lib/dfd";
 import { editarProtocoloSchema } from "@/lib/dfd-validation";
 import { getGrupoAtivoId } from "@/lib/grupos";
@@ -11,8 +12,6 @@ import { atualizarProtocolo, detalheEdicaoProtocolo, excluirProtocolo, getProtoc
 import { telaDoRecurso } from "@/lib/papeis-core";
 import { unidadesConferencia } from "@/lib/reparticoes";
 import { getSituacao } from "@/lib/situacoes";
-import { edicaoPermitidaTravado, estaTravado, mensagemTravaPca, motivoNaoExcluirProtocolo } from "@/lib/pca-core";
-import { pcaDeProtocolos } from "@/lib/trava-pca";
 import { pessoaDoGrupo } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -72,8 +71,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const motivo = motivoResponsavel(esc.vis, a.u.id, proto.responsavelId, campos.responsavelId);
     if (motivo) return erro(motivo, 403);
   }
-  // TRAVA do PCA: incorporado ⇒ só a gestão (responsável/situação) passa.
-  if (estaTravado(proto) && !edicaoPermitidaTravado(campos)) return erro(mensagemTravaPca(proto.pcaNome), 423);
   if (campos.reparticaoId != null && !acessivel(campos.reparticaoId)) {
     return erro("Sem acesso à unidade de destino.", 403);
   }
@@ -85,12 +82,21 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     ((grupoAtivo == null && !a.u.admin) || !(await pessoaDoGrupo(campos.responsavelId, grupoAtivo)))
   )
     return erro("Escolha como responsável uma pessoa ativa do seu grupo.", 422);
-  if (campos.situacaoId != null && !(await getSituacao(campos.situacaoId))) return erro("Situação não encontrada (Configurações → Situações).", 422);
+  const situacao = campos.situacaoId != null ? await getSituacao(campos.situacaoId) : null;
+  if (campos.situacaoId != null && !situacao) return erro("Situação não encontrada (Configurações → Situações).", 422);
 
   // Trocar o Responsável = trava OTIMISTA: só grava se ele ainda é o lido (duas pessoas assumindo ao mesmo tempo: a 2ª
   // não sobrescreve a 1ª).
   if (!(await atualizarProtocolo(id, campos, campos.responsavelId !== undefined ? proto.responsavelId : undefined)))
     return erro(MSG_RESPONSAVEL_MUDOU, 409);
+  // O novo RESPONSÁVEL recebe o aviso (o sino; o e-mail como o ADM configurou).
+  if (campos.responsavelId != null && campos.responsavelId !== proto.responsavelId)
+    await avisarResponsavelProtocolo(a.u, [{ responsavelId: campos.responsavelId, protocolo: { id, numero: proto.numero, assunto: campos.assunto ?? proto.assunto, pcaId: proto.pcaId } }]);
+  // A SITUAÇÃO mudou: o responsável (que segue o mesmo) sabe.
+  if (campos.situacaoId !== undefined && campos.situacaoId !== proto.situacaoId)
+    await avisarProtocoloAtualizado(a.u, [
+      { responsavelId: campos.responsavelId !== undefined ? campos.responsavelId : proto.responsavelId, protocolo: { id, numero: proto.numero, assunto: proto.assunto, pcaId: proto.pcaId }, oQue: `situação "${situacao?.nome ?? "sem situação"}"` },
+    ]);
   // Histórico: o que mudou, antes → depois, com rótulos legíveis (sigla da unidade, nomes).
   const detalhe = await detalheSeguro(() => detalheEdicaoProtocolo(proto, campos), {});
   await registrarAuditoria({
@@ -116,14 +122,11 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (!proto) return erro("Protocolo não encontrado.", 404);
   const esc = await escopoMesa();
   if (!esc || !protocoloLegivel(esc, { id, reparticaoId: proto.reparticaoId })) return erro(MSG_SEM_ACESSO_PROTOCOLO, 403);
-  // Protocolo em um PCA (enviado ou incorporado) NÃO é excluído: o enviado volta pela "Devolver à Mesa" (e então sai
-  // da Mesa principal); o incorporado é permanente (423, a trava).
-  const noPca = (await pcaDeProtocolos([id])).get(id);
-  if (noPca) return erro(motivoNaoExcluirProtocolo(noPca, noPca.nome) ?? "Protocolo em um PCA não é excluído.", noPca.pcaIncorporadoEm ? 423 : 409);
   // O PAPEL exclui na Mesa em que o protocolo está (fora de um PCA, a do sistema).
   const negado = recusa(a.acesso, telaDoRecurso(proto.pcaId), "excluir");
   if (negado) return negado;
-  await excluirProtocolo(id);
+  // Em um PCA (enviado ou incorporado) também: os DFDs saem do PCA e os nºs dos itens são baixados.
+  await excluirProtocolo(id, a.u.id);
   await registrarAuditoria({
     usuario: a.u,
     acao: "excluir",

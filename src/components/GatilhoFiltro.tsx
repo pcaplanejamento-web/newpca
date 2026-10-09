@@ -1,4 +1,5 @@
-import { IconArrowDown, IconArrowUp, IconChevronDown, IconFilter } from "./icons";
+import { IconArrowDown, IconArrowUp, IconFilter } from "./icons";
+import { SetaDropdown } from "./SetaDropdown";
 
 /**
  * Gatilho do filtro de CABEÇALHO de tabela — o MESMO nos três tipos (valores, datas e faixa R$):
@@ -8,6 +9,7 @@ import { IconArrowDown, IconArrowUp, IconChevronDown, IconFilter } from "./icons
 export function GatilhoFiltro({ label, sortDir = null, marcado = false }: { label: string; sortDir?: "asc" | "desc" | null; marcado?: boolean }) {
   return (
     <span
+      title={`${marcado ? "Filtrada — " : ""}Filtrar e ordenar: ${label}`}
       className={`flex w-full items-center gap-1.5 rounded-chip px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.05em] transition-colors duration-[var(--motion-duration)] ${
         marcado ? "bg-accent-soft text-accent" : "text-faint"
       }`}
@@ -18,7 +20,7 @@ export function GatilhoFiltro({ label, sortDir = null, marcado = false }: { labe
       {marcado ? (
         <IconFilter className="ml-auto h-3.5 w-3.5 shrink-0" aria-label="Filtrada" />
       ) : (
-        <IconChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-60" />
+        <SetaDropdown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-60" />
       )}
     </span>
   );

@@ -1,5 +1,5 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
-import { reparticoes } from "@/db/schema";
+import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -7,7 +7,6 @@ import { CODIGO_GERAL } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { contarUnidadesDoOrgao, numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
-import { parseResponsaveis, serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 
 export const dynamic = "force-dynamic";
 
@@ -30,14 +29,12 @@ export async function GET(req: Request) {
       orgaoId: reparticoes.orgaoId,
       orgaoProprio: reparticoes.orgaoProprio,
       oculto: reparticoes.oculto,
-      responsavelDfd: reparticoes.responsavelDfd,
     })
     .from(reparticoes)
     .where(orgaoId != null ? and(semGeral, eq(reparticoes.orgaoId, orgaoId)) : semGeral)
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
-  // A coluna guarda JSON; expõe como lista de nomes `responsaveis`.
-  const lista = rows.map(({ responsavelDfd, ...r }) => ({ ...r, responsaveis: parseResponsaveis(responsavelDfd) }));
-  return ok({ reparticoes: lista });
+  // Os responsáveis vêm da planilha (`GET /api/admin/responsaveis`).
+  return ok({ reparticoes: rows });
 }
 
 export async function POST(req: Request) {
@@ -46,8 +43,10 @@ export async function POST(req: Request) {
   const corpo = await parseCorpo(reparticaoSchema, req);
   if ("resp" in corpo) return corpo.resp;
   // Um órgão que já funciona como unidade (tem a "unidade própria") não recebe unidades-filhas.
-  if (corpo.data.orgaoId != null && (await contarUnidadesDoOrgao(corpo.data.orgaoId)).propriaId != null)
+  if ((await contarUnidadesDoOrgao(corpo.data.orgaoId)).propriaId != null)
     return erro("Este órgão funciona como unidade (unidade própria) — não pode ter unidades-filhas. Desligue “Também unidade” no órgão para adicionar unidades.", 409);
+  const [org] = await getDb().select({ id: orgaos.id }).from(orgaos).where(eq(orgaos.id, corpo.data.orgaoId)).limit(1);
+  if (!org) return erro("Órgão não encontrado — toda unidade pertence a um órgão.", 422);
   const numeroInteressado = corpo.data.numeroInteressado?.trim() || null;
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado)))
@@ -62,9 +61,8 @@ export async function POST(req: Request) {
       ordem: Number(max) + 1,
       numeroInteressado,
       setorRequisitante: corpo.data.setorRequisitante ?? null,
-      orgaoId: corpo.data.orgaoId ?? null,
+      orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
-      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
     })
     .returning({ id: reparticoes.id });
   await registrarAuditoria({ usuario: guard.u, acao: "criar", entidade: "reparticao", entidadeId: row?.id ?? null, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) criada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });

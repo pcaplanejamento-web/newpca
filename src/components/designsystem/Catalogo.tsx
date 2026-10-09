@@ -1,5 +1,8 @@
 "use client";
 
+import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
+import { MarcaDagua } from "@/components/ProtecaoDados";
+import { type ConfigProtecao, PROTECAO_PADRAO } from "@/lib/protecao-core";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { AcessoDaPessoa } from "@/components/AcessoDaPessoa";
@@ -17,6 +20,16 @@ import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
 import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
+import { type CampoFiltroDash, FiltrosDashboard } from "@/components/FiltrosDashboard";
+import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
+import { SeletorVisaoPca } from "@/components/VisaoOrcamentoPca";
+import { AjudaVisoes } from "@/components/AjudaVisoes";
+import { EscopoVinculo, type ValorEscopo } from "@/components/EditorVinculoOrcamento";
+import { DicaFlutuante } from "@/components/DicaFlutuante";
+import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
+import { vinculosDaLinha } from "@/lib/vinculos-unidade";
+import { unidadesDoOrcamento } from "@/lib/orcamento-vinculo";
+import type { VisaoOrcamento } from "@/lib/orcamento-visao";
 import { TabelaCruzada } from "@/components/TabelaCruzada";
 import { LAYOUT_PADRAO, type ModoCruzamento, type OrdemCruzamento } from "@/lib/orcamento-cruzamento";
 import { Ajuda, TopicoAjuda } from "@/components/Ajuda";
@@ -26,10 +39,15 @@ import { Avatar } from "@/components/Avatar";
 import { Badge, type Tone } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Callout } from "@/components/Callout";
-import { mensagemTravaPca } from "@/lib/pca-core";
+import { avisoIncorporado } from "@/lib/pca-numeracao-core";
 import { ChartCard } from "@/components/ChartCard";
 import { ClassificacaoChart } from "@/components/charts/ClassificacaoChart";
+import { ExploradorGrafico } from "@/components/ExploradorGrafico";
 import { MensalChart } from "@/components/charts/MensalChart";
+import { DefinicaoPrevisaoChart, PeriodicidadeChart } from "@/components/charts/PrevisaoChart";
+import { PrioridadeChart } from "@/components/charts/PrioridadeChart";
+import type { ModoCronograma } from "@/lib/origem-dash";
+import { UnidadeRequisitanteChart } from "@/components/charts/UnidadeRequisitanteChart";
 import { TopItensChart } from "@/components/charts/TopItensChart";
 import { UnidadeChart } from "@/components/charts/UnidadeChart";
 import { BarraSegmentada, BarrasH, Colunas } from "@/components/charts/Barras";
@@ -46,6 +64,7 @@ import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "@/components/BarraEdicaoMassa";
+import { TabelaMesaFluxo } from "@/components/fluxos/TabelaMesaFluxo";
 import { BarraSelecao, BarraSelecaoDfds, type RegistroSelecao, ResumoSelecao } from "@/components/BarraSelecao";
 import { AvisoFlutuante } from "@/components/AvisoFlutuante";
 import { PessoaTag } from "@/components/PessoaTag";
@@ -74,8 +93,17 @@ import {
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
 import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
+import { BotaoExportar } from "@/components/ExportarTabelas";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
+import { CelulaExecucao } from "@/components/CelulaExecucao";
+import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
+import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
+import { AjudaNo } from "@/components/fluxos/AjudaNo";
+import { AjudaDoFluxo } from "@/components/fluxos/ConfigFluxo";
+import type { Grafo } from "@/lib/fluxo-core";
+import { MODELOS_FLUXO } from "@/lib/fluxo-modelos";
+import { REGISTRO_NOS } from "@/lib/fluxo-nos";
 import { CelulaVariacao, ComposicaoItem, type ItemComposicao, SeloAbc } from "@/components/ComposicaoItem";
 import { consolidarItens } from "@/lib/itens-consolidados";
 import { regrasPadrao } from "@/lib/avaliacao-core";
@@ -90,6 +118,10 @@ import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
+import { Selecao } from "@/components/Selecao";
+import { Dropdown } from "@/components/Dropdown";
+import { SetaDropdown } from "@/components/SetaDropdown";
+import { selectCls } from "@/components/formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "@/components/GruposDaPessoa";
 import { MatrizCapacidades } from "@/components/MatrizCapacidades";
 import { ResumoPapel } from "@/components/ResumoPapel";
@@ -104,6 +136,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import * as Icons from "@/components/icons";
 import { IntegracaoGoogle, type ValorGoogle } from "@/components/IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "@/components/IntegracaoResend";
+import { GravadorReceitas } from "@/components/GravadorReceitas";
+import { AprendizTelaProtocolo } from "@/components/AprendizTelaProtocolo";
 import { IntegracaoTrello, type ValorTrello } from "@/components/IntegracaoTrello";
 import { IndicadorTrello, seloTrello } from "@/components/SincronizacaoTrello";
 import {
@@ -119,6 +153,7 @@ import {
   IconLayers,
   IconLock,
   IconMail,
+  IconPencil,
   IconPlus,
   IconTrash,
   IconUndo,
@@ -133,6 +168,8 @@ import { LinkCard } from "@/components/LinkCard";
 import { LinkExterno } from "@/components/LinkExterno";
 import { ItemDetalhe } from "@/components/ItemDetalhe";
 import { CatalogoCard, CoresPaleta, PastaCatalogoCard } from "@/components/CatalogoCards";
+import { CelulaHistoricoCompra, ProdutoHistoricoDetalhe } from "@/components/ProdutoHistorico";
+import { historicoDasLinhas, produtosDoHistorico, referenciaDoProduto } from "@/lib/historico-compra-core";
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
@@ -161,6 +198,11 @@ import { AutomacoesQuadro, ModelosQuadro } from "@/components/AutomacoesQuadro";
 import { DashboardTarefas } from "@/components/DashboardTarefas";
 import { RecorrenciaTarefa } from "@/components/RecorrenciaTarefa";
 import { ItemNotificacao } from "@/components/SinoNotificacoes";
+import { PresencaGrupo, SeloAoVivo } from "@/components/PresencaGrupo";
+import { CanalGrupoDemo } from "@/components/CanalGrupo";
+import { FotoBolha } from "@/components/BolhasChat";
+import { AtividadePessoa, PresencaNoItem } from "@/components/PresencaNoItem";
+import { Balao, ChatAoVivo, Digitando } from "@/components/ChatAoVivo";
 import { FiltrosTarefas } from "@/components/FiltrosTarefas";
 import { CamposPeriodo, QuadroNovoCard } from "@/components/QuadroCard";
 import { EstrelaFavorito } from "@/components/FavoritosQuadros";
@@ -202,12 +244,23 @@ import { OrcamentoVinculos } from "@/components/OrcamentoVinculos";
 import type { LinhaAuditoria } from "@/lib/auditoria";
 import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import { TipoDfdPicker } from "@/components/TipoDfdPicker";
-import { BotaoVerMensagens, MensagensDfd } from "@/components/MensagensDfd";
+import { CartaoVersao, VersaoSistema } from "@/components/Novidades";
+import { PainelSegundoPlano } from "@/components/SegundoPlano";
+import { VERSOES } from "@/lib/versoes";
+import { PainelPendencias } from "@/components/PainelPendencias";
+import { PreviaDocumento } from "@/components/PreviaDocumento";
+import { BotaoAcao } from "@/components/BotaoAcao";
+import { IndicadorPendencias } from "@/components/IndicadorPendencias";
 import { Dropzone } from "@/components/Dropzone";
-import { ResponsaveisEditor } from "@/components/ResponsaveisEditor";
-import type { Responsaveis } from "@/lib/reparticao-responsaveis";
+import { BannerCadastro } from "@/components/BannerCadastro";
+import { CelulaConferencia } from "@/components/PlanilhaResponsaveis";
+import { SecaoBanner } from "@/components/SecaoBanner";
+import { type AberturaVinculo, CelulaResponsaveis, dadosVazios, EditorVinculo, ListaVinculos } from "@/components/VinculosResponsaveis";
+import type { VinculoComPessoa } from "@/lib/responsaveis-planilha-core";
 import { duracaoMotionMs, Modal } from "@/components/Modal";
 import { MonitoramentoWorker } from "@/components/MonitoramentoWorker";
+import { SaudeDados } from "@/components/SaudeDados";
+import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
 import { MultiSelectHeader } from "@/components/MultiSelectHeader";
 import { Pager } from "@/components/Pager";
 import { PeriodoPicker } from "@/components/PeriodoPicker";
@@ -229,6 +282,48 @@ import { TokenEditor } from "./TokenEditor";
 
 // Conferência de catálogo de exemplo p/ o ItemDetalhe (divergente: descrição + unidade
 // diferentes; referência com tipos). Chave = código normalizado do item.
+/** Exemplo da SAÚDE DOS DADOS: a integridade toda certa e dois dados a tratar. */
+const SAUDE_DEMO: DadosSaude = {
+  verificadoEm: "2026-10-06T14:30:00.000Z",
+  contagens: { protocolos: 68, dfds: 1289, itens: 19466, numerosPca: 15683 },
+  verificacoes: [
+    { chave: "dfd-itens", titulo: "DFD × itens", descricao: "O valor e o nº de itens de cada DFD completo são os dos itens gravados.", grupo: "integridade", nivel: "ok", total: 0, unidade: "DFDs", linhas: [], parcial: false },
+    { chave: "abas", titulo: "Protocolo × DFDs × itens", descricao: "A soma dos DFDs de cada protocolo é a soma dos itens.", grupo: "integridade", nivel: "ok", total: 0, unidade: "protocolos", linhas: [], parcial: false },
+    { chave: "pca", titulo: "Numeração e vínculos do PCA", descricao: "Cada item incorporado tem um nº vivo.", grupo: "integridade", nivel: "ok", total: 0, unidade: "ocorrências", linhas: [], parcial: false },
+    { chave: "rastro", titulo: "Rastro e Id do protocolo", descricao: "Nenhum DFD contado em dobro e nenhum Id repetido.", grupo: "integridade", nivel: "ok", total: 0, unidade: "ocorrências", linhas: [], parcial: false },
+    { chave: "incompleta", titulo: "Gravação incompleta", descricao: "DFDs com menos itens gravados que os do documento.", grupo: "dados", nivel: "ok", total: 0, unidade: "DFDs", linhas: [], parcial: false },
+    {
+      chave: "capa",
+      titulo: "Capa × somatória",
+      descricao: "O valor da capa ausente ou diferente da soma dos DFDs — a mesma régua da Mesa.",
+      grupo: "dados",
+      nivel: "atencao",
+      total: 2,
+      unidade: "protocolos",
+      linhas: [
+        { chave: "capa:1", protocolo: "122516/2026", dfd: null, planejamento: null, problema: "Capa sem valor · somatória R$ 48.900,00", href: "/painel/mesa?abrir=protocolo:1" },
+        { chave: "capa:2", protocolo: "125900/2026", dfd: null, planejamento: null, problema: "Capa R$ 1.000,00 × somatória R$ 1.250,00", href: "/painel/mesa?abrir=protocolo:2" },
+      ],
+      parcial: false,
+    },
+    {
+      chave: "sem-valor",
+      titulo: "Itens sem valor unitário",
+      descricao: "Itens sem valor unitário (vazio, zero ou negativo) em 2 DFDs: o valor do DFD fica incompleto.",
+      grupo: "dados",
+      nivel: "atencao",
+      total: 3,
+      unidade: "itens",
+      linhas: [
+        { chave: "sem-valor:10", protocolo: "125900/2026", dfd: "1497", planejamento: "1510", problema: "2 itens sem valor unitário (de 12)", href: "/painel/mesa?abrir=protocolo:2" },
+        { chave: "sem-valor:11", protocolo: null, dfd: "1097", planejamento: "1120", problema: "1 item sem valor unitário (de 4)", href: "/painel/mesa?abrir=dfd:11" },
+      ],
+      parcial: false,
+    },
+    { chave: "sem-planejamento", titulo: "DFD sem nº de planejamento", descricao: "O nº de planejamento identifica o DFD no Centi.", grupo: "dados", nivel: "ok", total: 0, unidade: "DFDs", linhas: [], parcial: false },
+  ],
+};
+
 const DEMO_ITEM_CONFORMIDADE = new Map<string, ConferenciaItem>([
   [
     "5241937264",
@@ -285,6 +380,26 @@ function FalhaNaTelaDemo() {
   );
 }
 
+/** O canvas dos FLUXOS de automação (estilo N8N) com um modelo pronto — arraste nós, ligue saídas a entradas. */
+function CanvasFluxoDemo() {
+  const [g, setG] = useState<Grafo>(MODELOS_FLUXO[0].grafo);
+  const [sel, setSel] = useState<string | null>(null);
+  const [v, setV] = useState<Vista>({ x: 20, y: 120, z: 0.55 });
+  return (
+    <CanvasFluxo
+      grafo={g}
+      registro={REGISTRO_NOS}
+      selecionado={sel}
+      onSelecionar={setSel}
+      onMudar={setG}
+      vista={v}
+      onVista={setV}
+      altura={420}
+      passos={{ inicio1: { no: "inicio1", estado: "ok", itens: 1, vezes: 1, ms: 1 }, cm1: { no: "cm1", estado: "rodando", itens: 0, vezes: 1, ms: 0, aviso: "Entidade 2 (1 de 3)…" } }}
+    />
+  );
+}
+
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <section className="mt-6">
@@ -337,6 +452,17 @@ function DemoAcesso() {
         {/* VerificacaoRobo: o captcha próprio (sem o Turnstile) — marcar resolve o desafio do servidor (prova de trabalho). */}
         <VerificacaoRobo onToken={() => undefined} />
       </div>
+    </div>
+  );
+}
+
+/** PROTEÇÃO DE DADOS: os campos da tela do ADM (sem gravar) e a cortina — no lugar, sem ativar os bloqueios no catálogo. */
+function DemoProtecao() {
+  const [v, setV] = useState<ConfigProtecao>({ ...PROTECAO_PADRAO, selecao: true, papeis: [3] });
+  return (
+    <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] lg:grid-cols-2">
+      <CamposProtecao valor={v} papeis={[{ id: 1, nome: "Administrador" }, { id: 2, nome: "Gestor" }, { id: 3, nome: "Membro" }]} onChange={setV} />
+      <MarcaDagua texto="Maria Clara Souza · matrícula 045210 · 08/10/2026 14:30" inline />
     </div>
   );
 }
@@ -460,9 +586,24 @@ function PcaEspacoDemo() {
           Incorporado · Substituir
         </Badge>
       </div>
-      <Callout kind="warn" icon={<IconLock className="h-5 w-5" />}>
-        {mensagemTravaPca("PCA 2027")}
-      </Callout>
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        <span className="grid h-11 w-11 place-items-center rounded-control text-muted lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
+          <Icons.IconChevronLeft className="h-4 w-4" />
+        </span>
+        <span className="text-[26px] font-bold leading-[44px] tracking-tight lg:text-2xl text-text lg:leading-[var(--h-control-sm)]">PCA 2027 (linha de título)</span>
+        <Badge tone="blue" tamanho="linha" className="tabular-nums">
+          <Icons.IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
+          2027
+        </Badge>
+        <Badge tone="amber" dot vivo tamanho="linha">
+          Preview
+        </Badge>
+        <Badge tone="emerald" dot tamanho="linha">
+          <IconCheck className="h-3.5 w-3.5" aria-hidden="true" />
+          Publicado
+        </Badge>
+      </div>
+      <Callout kind="info">{avisoIncorporado("PCA 2027")}</Callout>
       <RecorteImagem
         arquivo={arquivo}
         onCancelar={() => setArquivo(null)}
@@ -498,6 +639,16 @@ function PcaEspacoDemo() {
           onChange={setSel}
         />
       </div>
+      <div className="max-w-sm">
+        <SeletorMultiplo
+          suspenso
+          rotulo="Repartições"
+          textoVazio="Nenhuma"
+          opcoes={[{ valor: "SEC. DE SAÚDE" }, { valor: "SEC. DE EDUCAÇÃO" }, { valor: "SEC. DE OBRAS" }]}
+          selecionados={sel}
+          onChange={setSel}
+        />
+      </div>
       <OrcamentoPca
         dados={{
           pcaId: 1,
@@ -507,23 +658,37 @@ function PcaEspacoDemo() {
           bruto: 1_610_000_000,
           filtrado: 1_160_000_000,
           unidades: [
-            { id: 1, sigla: "AMAE", nome: "Agência de Água" },
-            { id: 2, sigla: "FMAS", nome: "Fundo de Assistência" },
-            { id: 3, sigla: "FEMBOM", nome: "Fundo dos Bombeiros" },
+            { id: 1, sigla: "AMAE", nome: "Agência de Água", orgaoId: 1, orgaoSigla: "PMRV" },
+            { id: 2, sigla: "FMAS", nome: "Fundo de Assistência", orgaoId: 1, orgaoSigla: "PMRV" },
+            { id: 3, sigla: "FEMBOM", nome: "Fundo dos Bombeiros", orgaoId: 1, orgaoSigla: "PMRV" },
+            // A MESMA sigla em duas unidades: as contratações numa, o orçamento na outra → o alerta aponta o vínculo.
+            { id: 4, sigla: "FMMA", nome: "Fundo do Meio Ambiente", orgaoId: 2, orgaoSigla: "FMMA" },
+            { id: 5, sigla: "FMMA", nome: "Fundo Mun. do Meio Ambiente", orgaoId: 1, orgaoSigla: "PMRV", oculta: true },
+          ],
+          orgaos: [
+            { id: 1, sigla: "PMRV", nome: "Prefeitura Municipal de Rio Verde" },
+            { id: 2, sigla: "FMMA", nome: "Fundo Municipal do Meio Ambiente" },
           ],
           // Fonte LISTA: o planejado vem das planilhas (clique numa linha → Origem dos dados).
           planejado: [
             { unidadeId: 1, itens: 390, valor: 906_738.7, planilha: { id: 1, codigo: "AMAE", nome: "Planilha AMAE" } },
             { unidadeId: 2, itens: 2354, valor: 18_978_323.74, planilha: { id: 2, codigo: "FMAS", nome: "Planilha FMAS" } },
             { unidadeId: 3, itens: 569, valor: 3_701_579.8, planilha: { id: 3, codigo: "FEMBOM", nome: "Planilha FEMBOM" } },
+            { unidadeId: 4, itens: 2, valor: 87_200, planilha: { id: 4, codigo: "FMMA", nome: "Planilha FMMA" } },
           ],
           linhas: [
             { id: 1, orgao: "AGÊNCIA DE ÁGUA", unidade: "1 - AMAE", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: 1, valor: 1_390_566.98 },
             { id: 2, orgao: "FUNDO DE ASSISTÊNCIA", unidade: "2 - FMAS", nomeElemento: "SERVIÇOS DE TERCEIROS - PJ", codigoElemento: "339039", unidadeId: 2, valor: 14_441_470.23 },
             { id: 3, orgao: "FUNDO DOS BOMBEIROS", unidade: "3 - FEMBOM", nomeElemento: "EQUIPAMENTOS", codigoElemento: "449052", unidadeId: 3, valor: 4_021_478.05 },
             { id: 4, orgao: "GABINETE", unidade: "9 - GAB", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: null, valor: 120_000 },
+            { id: 5, orgao: "FUNDO DO MEIO AMBIENTE", unidade: "26 - FMMA", nomeElemento: "MATERIAL DE CONSUMO", codigoElemento: "339030", unidadeId: 5, valor: 2_812_500 },
           ],
+          // A visão tem um valor que o QDD reenviado não traz → o aviso + "Ajustar a visão" (a engrenagem).
+          visaoId: 1,
+          ausentes: [{ dimensao: "fonte", rotulo: "Fonte de recurso", valores: ["999 - FONTE EXTINTA"] }],
         }}
+        podePublicar
+        visoes={VISOES_DEMO}
       />
     </div>
   );
@@ -1025,6 +1190,89 @@ function MetricasMesaDemo() {
   );
 }
 
+const VISOES_DEMO: VisaoOrcamento[] = [
+  { id: 1, nome: "PCA", ordem: 0, filtros: { nomeElemento: ["MATERIAL DE CONSUMO", "EQUIPAMENTOS"], fonte: ["999 - FONTE EXTINTA"] }, pcas: ["PCA 2027 (2027)"], proprias: [] },
+];
+const LINHAS_VISAO_DEMO: LinhaVisaoOrcamento[] = [
+  { nomeElemento: "MATERIAL DE CONSUMO", fonte: "100 - RECURSOS ORDINÁRIOS", valorInicial: 1_390_566.98 },
+  { nomeElemento: "SERVIÇOS DE TERCEIROS - PJ", fonte: "150 - FUNDEB", valorInicial: 14_441_470.23 },
+  { nomeElemento: "EQUIPAMENTOS", fonte: "100 - RECURSOS ORDINÁRIOS", valorInicial: 4_021_478.05 },
+];
+
+/** O editor de UMA visão do orçamento (aba Visões e engrenagem do PCA): usos, valores ausentes, prévia do Σ. */
+function EditorVisaoDemo() {
+  const [aberta, setAberta] = useState<VisaoOrcamento | "nova" | null>(null);
+  const [escopo, setEscopo] = useState<ValorEscopo>({ modo: "esta", escolhidas: ["1"] });
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" variant="secondary" onClick={() => setAberta(VISOES_DEMO[0])}>
+        Editar a visão “PCA”
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setAberta("nova")}>
+        Nova visão
+      </Button>
+      <EditorVisaoOrcamento aberta={aberta} itens={LINHAS_VISAO_DEMO} podeEditar onFechar={() => setAberta(null)} onSalva={() => setAberta(null)} />
+      {/* SeletorVisaoPca — a visão do PCA na barra do PCA × Orçamento (aqui travado: sem permissão não troca). */}
+      <div className="w-full sm:w-72">
+        <SeletorVisaoPca pcaId={0} visaoId={VISOES_DEMO[0].id} visoes={VISOES_DEMO} podeEscolher={false} />
+      </div>
+      {/* AjudaVisoes — o (?) único das visões (tela do orçamento e orçamento do PCA). */}
+      <AjudaVisoes botao="sm" />
+      {/* EscopoVinculo — onde salvar um vínculo (vínculos por visão): esta visão · todas · escolher. */}
+      <div className="w-full">
+        <EscopoVinculo
+          contexto={{ visoes: [{ id: 1, nome: "PCA", proprias: ["2 - SMS"] }, { id: 2, nome: "Investimentos", proprias: [] }], visaoId: 1 }}
+          chave="2 - SMS"
+          valor={escopo}
+          onChange={setEscopo}
+          onUsarPadrao={() => undefined}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Os vínculos de UMA linha do orçamento do PCA (o lápis da linha): a lista + o editor da aba Vínculos (aqui sem gravar). */
+function VinculosDaUnidadeDemo() {
+  const [unidade, setUnidade] = useState<UnidadeDaLinha | null>(null);
+  const itens = [
+    { orgao: "FUNDO DE ASSISTÊNCIA", unidade: "2 - FMAS", acao: "2101 - MANTER O CRAS", valorInicial: 1_200_000 },
+    { orgao: "FUNDO DE ASSISTÊNCIA", unidade: "2 - FMAS", acao: "2102 - MANTER O CREAS", valorInicial: 800_000 },
+    { orgao: "GABINETE", unidade: "9 - GAB", acao: "2001 - MANTER O GABINETE", valorInicial: 120_000 },
+  ];
+  const unidades = unidadesDoOrcamento(itens);
+  const alvos = { orgaos: [{ id: 1, sigla: "PMRV", nome: "Prefeitura" }], unidades: [{ id: 2, sigla: "FMAS", nome: "Fundo de Assistência", orgaoId: 1 }] };
+  const vinculos = [{ id: 1, chave: unidades[0]?.chave ?? "", texto: "2 - FMAS", alvoId: 2, acoes: null, acoesFora: [], visaoId: null }];
+  const ok = async () => true;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" variant="secondary" onClick={() => setUnidade({ id: 2, sigla: "FMAS", nome: "Fundo de Assistência" })}>
+        Vínculos de FMAS
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setUnidade({ id: null, sigla: "Sem vínculo", nome: "" })}>
+        Linha “Sem vínculo”
+      </Button>
+      {/* DicaFlutuante + ResumoSemVinculo: o "N sem vínculo" da linha — com o mouse, a lista organizada por unidade. */}
+      <DicaFlutuante conteudo={<ResumoSemVinculo titulo="Sem vínculo" lista={vinculosDaLinha(unidades, [], null).semVinculo} />}>
+        <Button size="sm" variant="ghost">
+          3 sem vínculo (passe o mouse)
+        </Button>
+      </DicaFlutuante>
+      <VinculosDaUnidade
+        unidade={unidade}
+        unidades={unidades}
+        vinculos={vinculos}
+        alvos={alvos}
+        orcamento="CUBO 2027 (2027)"
+        onCriar={ok}
+        onEditar={ok}
+        onExcluir={ok}
+        onFechar={() => setUnidade(null)}
+      />
+    </div>
+  );
+}
+
 /** Demo das peças de gráfico em HTML por token (as do Dashboard de governança). */
 /** Clique numa fatia → ORIGEM DOS DADOS (o mesmo banner do Orçamento do PCA, dos gráficos do Dashboard e da Mesa). */
 function TabelaCruzadaDemo() {
@@ -1217,6 +1465,130 @@ function EdicoesTabelaDemo() {
       )}
       {confirmacao}
     </div>
+  );
+}
+
+function CronogramaModosDemo() {
+  const [modo, setModo] = useState<ModoCronograma>("mensal");
+  // "Distribuído": os genéricos (24 mi no ano) entram com 1/12 em cada mês.
+  const base = G_MES.map((p) => (modo === "distribuido" ? { ...p, total: p.total + 2_000_000, count: p.count + 1 } : p));
+  const dados =
+    modo === "acumulado" ? base.map((p, i) => ({ ...p, total: base.slice(0, i + 1).reduce((s, x) => s + x.total, 0) })) : base;
+  return <MensalChart data={dados} modo={modo} onModo={setModo} temGenericos />;
+}
+
+function FiltrosDashboardDemo() {
+  const [sel, setSel] = useState<Record<string, string[]>>({ classificacao: ["Serviço"] });
+  const campos: CampoFiltroDash[] = [
+    { dim: "classificacao", rotulo: "Classificação", opcoes: G_CLASS.map((f) => ({ chave: f.label, rotulo: f.label, count: f.count })) },
+    {
+      dim: "mes",
+      rotulo: "Mês",
+      opcoes: [
+        { chave: "2026-1", rotulo: "jan/26", count: 40 },
+        { chave: "2026-2", rotulo: "fev/26", count: 35 },
+        { chave: "2026-3", rotulo: "mar/26", count: 12 },
+      ],
+    },
+    {
+      dim: "prioridade",
+      rotulo: "Prioridade",
+      opcoes: [
+        { chave: "ALTA", rotulo: "Alta", count: 210 },
+        { chave: "MÉDIA", rotulo: "Média", count: 150 },
+        { chave: "BAIXA", rotulo: "Baixa", count: 80 },
+      ],
+    },
+  ].map((c) => ({ ...c, selecionados: sel[c.dim] ?? [] }));
+  return <FiltrosDashboard campos={campos} onMudar={(dim, chaves) => setSel((s) => ({ ...s, [dim]: chaves }))} />;
+}
+
+function GraficosDashboardDemo() {
+  const [classe, setClasse] = useState<string[] | undefined>();
+  const [mes, setMes] = useState<string | null>(null);
+  const [item, setItem] = useState<number | null>(null);
+  const [unid, setUnid] = useState<string[] | undefined>();
+  const [explorar, setExplorar] = useState(false);
+  const corDe = (l: string) => G_CLASS.findIndex((f) => f.label === l);
+  const alterna = <T,>(atual: T | null | undefined, novo: T, set: (v: T | undefined) => void) =>
+    set(JSON.stringify(atual) === JSON.stringify(novo) ? undefined : novo);
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
+        <ChartCard title="Classificação dos Itens" subtitle="Toque para filtrar — as outras esmaecem" onExpandir={() => setExplorar(true)}>
+          <ClassificacaoChart
+            data={G_CLASS}
+            corDe={corDe}
+            ativos={classe}
+            onSelecionar={(r) => r.dim === "classificacao" && alterna(classe, r.labels, setClasse)}
+          />
+        </ChartCard>
+        <ChartCard title="Cronograma Mensal" subtitle="Colunas por token — toque para filtrar">
+          <MensalChart data={G_MES} ativos={mes ? [mes] : []} onSelecionar={(r) => r.dim === "mes" && setMes((m) => (m === `${r.ano}-${r.mes}` ? null : `${r.ano}-${r.mes}`))} />
+        </ChartCard>
+        <ChartCard title="Top Itens por Valor" subtitle="Barras horizontais por token">
+          <TopItensChart data={G_TOP} ativo={item} onSelecionar={(r) => r.dim === "item" && setItem((i) => (i === r.id ? null : r.id))} />
+        </ChartCard>
+        <ChartCard title="Unidades de Medida" subtitle="As 10 maiores + Outras; Itens ou Valor">
+          <UnidadeChart data={G_UNID} ativos={unid} onSelecionar={(r) => r.dim === "unidadeMedida" && alterna(unid, r.labels, setUnid)} />
+        </ChartCard>
+        <ChartCard title="Prioridade dos DFDs" subtitle="Cores pela CATEGORIA (semáforo), nunca pela posição">
+          <PrioridadeChart
+            data={[
+              { label: "BAIXA", total: 9_400_000, count: 80 },
+              { label: "ALTA", total: 31_000_000, count: 210 },
+              { label: "MÉDIA", total: 18_200_000, count: 150 },
+              { label: "—", total: 1_100_000, count: 12 },
+            ]}
+            onSelecionar={() => undefined}
+          />
+        </ChartCard>
+        <ChartCard title="Valor por Unidade requisitante" subtitle="As 10 maiores + Outras N">
+          <UnidadeRequisitanteChart
+            data={["SME", "SMS", "SEINFRA", "SMA", "SEMAS", "SECULT", "SEMMA", "PGM", "SMF", "SEDUC", "GABINETE", "SMT"].map((l, i) => ({
+              label: l,
+              total: 20_000_000 / (i + 1),
+              count: 40 - i * 3,
+            }))}
+            onSelecionar={() => undefined}
+          />
+        </ChartCard>
+        <ChartCard title="Cronograma — leituras" subtitle="Por mês · Acumulado · Distribuído">
+          <CronogramaModosDemo />
+        </ChartCard>
+        <ChartCard title="Definição da Previsão" subtitle="DefinicaoPrevisaoChart — mês definido × genérico × sem previsão">
+          <DefinicaoPrevisaoChart
+            data={[
+              { label: "Mês definido", total: 62_000_000, count: 410, pct: 62 },
+              { label: "Genérico", total: 31_000_000, count: 95, pct: 31 },
+              { label: "Sem previsão", total: 7_000_000, count: 22, pct: 7 },
+            ]}
+            onSelecionar={() => undefined}
+          />
+        </ChartCard>
+        <ChartCard title="Contratações Periódicas" subtitle="PeriodicidadeChart — os genéricos por periodicidade">
+          <PeriodicidadeChart
+            data={[
+              { label: "Anual", total: 20_000_000, count: 60, pct: 64.5 },
+              { label: "Semestral", total: 7_000_000, count: 20, pct: 22.6 },
+              { label: "Quadrimestral", total: 4_000_000, count: 15, pct: 12.9 },
+            ]}
+            onSelecionar={() => undefined}
+          />
+        </ChartCard>
+      </div>
+      <ExploradorGrafico
+        aberto={explorar}
+        onClose={() => setExplorar(false)}
+        titulo="Classificação dos Itens"
+        serie={G_CLASS.map((f) => ({ chave: f.label, rotulo: f.label, valor: f.total, count: f.count }))}
+        medida="valor"
+        formatar={brl}
+        corDe={corDe}
+        ativa={classe?.length === 1 ? classe[0] : null}
+        onFiltrar={(c) => alterna(classe, [c], setClasse)}
+      />
+    </>
   );
 }
 
@@ -1428,16 +1800,56 @@ const ITENS_CONSOLIDADOS_DEMO: ItemComposicao[] = [
   { id: 4, codigo: "3300110", descricao: "CANETA ESFEROGRÁFICA AZUL", unidade: "UN", quantidade: 500, valorUnitario: 1.2, valorTotal: 600, dfdNumero: "1201", dfdPlanejamento: "1525", dfdTipo: "DFD-S", protocoloNumero: "97600/2026", sigla: "SME", item: 4 },
 ];
 
-/** BotaoAtualizar (banners gravados — o ícone GIRA enquanto recarrega e revisa) + os DADOS COMPLETOS da Mesa
+/** BotaoAtualizar (o botão circular PADRÃO de recarregar — o ícone GIRA dentro do anel; com andamento, o anel enche) + os DADOS COMPLETOS da Mesa
  * (BotaoDadosCompletos + o provedor DadosCompletos: CelulaTexto, CelulaLista e EstadoResumo inteiros na célula). */
 function AtualizarEDadosCompletosDemo() {
   const [ligado, setLigado] = useState(false);
+  const [rever, setRever] = useState<number | null>(null);
   const giro = useGiro();
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <BotaoAtualizar girando={giro.girando} onClick={() => void giro.girar(() => new Promise((r) => setTimeout(r, 1200)))} />
-        <span className="text-[12px] text-faint">BotaoAtualizar — ao lado do X dos banners de DFD, item e protocolo: recarrega e revisa (gira ao menos uma volta).</span>
+        <BotaoAtualizar
+          ativo={giro.girando}
+          rotulo="Atualizar e revisar"
+          detalhe="Atualizando e revisando os dados…"
+          onClick={() => void giro.girar(() => new Promise((r) => setTimeout(r, 1200)))}
+        />
+        <span className="text-[12px] text-faint">
+          BotaoAtualizar indeterminado (+ useGiro) — banners de DFD, item e protocolo e o "Recarregar" das telas de administração.
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <BotaoAtualizar
+          ativo={rever != null}
+          rotulo="Atualizar e reverificar toda a Mesa"
+          progresso={rever}
+          detalhe={rever == null ? undefined : `Reconferindo ${Math.round(rever * 100)}%…`}
+          onClick={() => {
+            let p = 0;
+            setRever(0);
+            const t = setInterval(() => {
+              p += 0.1;
+              if (p >= 1) {
+                clearInterval(t);
+                setRever(null);
+              } else setRever(p);
+            }, 250);
+          }}
+        />
+        <span className="text-[12px] text-faint">BotaoAtualizar com andamento — na barra das Mesas: recarrega e reconfere todos os protocolos, DFDs e itens (o anel enche com o andamento).</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <BotaoAtualizar ativo={false} rotulo="Atualizar e revisar" dica="Sobrescrita do DFD em andamento — conclua ou cancele" onClick={() => {}} disabled />
+        <span className="text-[12px] text-faint">
+          BotaoAtualizar desabilitado — TRAVAR = DESABILITAR, nunca sumir: gravando ou sobrescrevendo, as ações dos banners ficam à vista com o motivo na dica.
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <BotaoExportar nome="a tabela de demonstração" onExportar={() => {}} />
+        <span className="text-[12px] text-faint">
+          BotaoExportar — no rodapé de TODA tabela (DataTable e tabela cruzada): XLSX e PDF das linhas filtradas, com as colunas à vista.
+        </span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />
@@ -1486,6 +1898,12 @@ function ConsolidadosDemo() {
         <SeloAbc classe="C" participacao={0.01} />
         <SeloAbc classe={null} />
       </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <CelulaExecucao situacao="Executado" />
+        <CelulaExecucao situacao="Cancelado" />
+        <CelulaExecucao situacao="Em andamento" />
+        <CelulaExecucao situacao={null} />
+      </div>
       <div className="flex flex-wrap gap-2">
         {linhas.map((l) => (
           <Button key={l.chave} variant="secondary" size="sm" onClick={() => setAberta(l.chave)}>
@@ -1500,6 +1918,49 @@ function ConsolidadosDemo() {
         diferentes no mesmo código ficam em âmbar (a soma mistura unidades) e o detalhe compara POR UNIDADE (a variação e
         o desvio de cada item usam a média da unidade dele).
       </p>
+    </div>
+  );
+}
+
+// Histórico de compra de um produto: contrato 1 (2025, R$ 10,00) e contrato 2 (2026, R$ 8,75 + aditivo R$ 0,80).
+const HISTORICO_ITEM_DEMO = historicoDasLinhas(
+  [
+    { ordem: 0, idContrato: "26011", sequencial: 1, vu: 10, data: "2025-03-01", credor: "VIVEIRO BOA VISTA LTDA" },
+    { ordem: 1, idContrato: "25964", sequencial: 1, vu: 8.75, data: "2026-02-02", credor: "GRAMA GPP AGRICOLA LTDA" },
+    { ordem: 2, idContrato: "25964", sequencial: 2, vu: 0.8, data: "2026-02-02", credor: "GRAMA GPP AGRICOLA LTDA" },
+  ].map((l) => ({
+    ordem: l.ordem,
+    idContrato: l.idContrato,
+    codigo: "524184753",
+    sequencial: l.sequencial,
+    descricao: "GRAMA ESMERALDA EM PLACAS - M²",
+    qtdContratada: 1000,
+    valorContratado: 1000 * l.vu,
+    valorUnitario: l.vu,
+    dataAssinatura: l.data,
+    credor: l.credor,
+    numeroContrato: l.idContrato,
+    modalidade: "PREGÃO ELETRÔNICO",
+  })),
+);
+
+function HistoricoItemDemo() {
+  const produto = produtosDoHistorico(HISTORICO_ITEM_DEMO.itens, HISTORICO_ITEM_DEMO.contratos)[0];
+  const ref = referenciaDoProduto(produto);
+  const contratoPorId = new Map(HISTORICO_ITEM_DEMO.contratos.map((c) => [c.idContrato, c] as const));
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-4">
+        <CelulaHistoricoCompra valor={9.8} referencia={ref} />
+        <CelulaHistoricoCompra valor={12.5} referencia={ref} />
+        <CelulaHistoricoCompra valor={16} referencia={ref} />
+        <CelulaHistoricoCompra valor={4} referencia={ref} />
+        <CelulaHistoricoCompra valor={null} referencia={ref} />
+        <CelulaHistoricoCompra valor={10} referencia={null} />
+      </div>
+      <div className="max-w-md">
+        <ProdutoHistoricoDetalhe produto={produto} contratoPorId={contratoPorId} />
+      </div>
     </div>
   );
 }
@@ -2668,11 +3129,21 @@ function TarefasDemo() {
         <RecorrenciaTarefa valor={rec} onChange={setRec} prazo="2026-06-03" inicio={null} hoje="2026-06-01" />
         <div className="max-w-sm space-y-1 rounded-card border border-border p-2">
           <ItemNotificacao
-            n={{ id: 1, tipo: "mencionada", titulo: "Bruno mencionou você", texto: "#128 Conferir DFDs do protocolo · Planejamento", link: null, lida: false, criadoEm: "2026-06-01 12:00:00", ator: { id: 2, nome: "Bruno Lima", foto: null } }}
+            n={{ id: 1, tarefaId: 128, quadroId: 3, tipo: "mencionada", titulo: "Bruno mencionou você", texto: "#128 Conferir DFDs do protocolo · Planejamento", link: null, lida: false, travada: true, criadoEm: "2026-06-01 12:00:00", ator: { id: 2, nome: "Bruno Lima", foto: null } }}
+            agora={Date.parse("2026-06-01T12:05:00Z")}
+            outros={[{ id: 3, tarefaId: 128, quadroId: 3, tipo: "mencionada", titulo: "Bruno mencionou você", texto: null, link: null, lida: false, travada: false, criadoEm: "2026-06-01 11:00:00", ator: null }]}
+            onExpandir={() => {}}
+            onLida={() => {}}
+            onAdiar={() => {}}
+            onSilenciar={() => {}}
+            onExcluir={() => {}}
             onAbrir={() => {}}
           />
           <ItemNotificacao
-            n={{ id: 2, tipo: "atrasada", titulo: "Tarefa atrasada (prazo 30/05)", texto: "#129 Atualizar o catálogo · Planejamento", link: null, lida: true, criadoEm: "2026-06-01 09:00:00", ator: null }}
+            n={{ id: 2, tarefaId: 129, quadroId: 3, tipo: "atrasada", titulo: "Tarefa atrasada (prazo 30/05)", texto: "#129 Atualizar o catálogo · Planejamento", link: null, lida: true, travada: false, criadoEm: "2026-06-01 09:00:00", ator: null }}
+            agora={Date.parse("2026-06-01T12:05:00Z")}
+            onLida={() => {}}
+            onExcluir={() => {}}
             onAbrir={() => {}}
           />
         </div>
@@ -2728,26 +3199,8 @@ export function Catalogo() {
   ]);
   const [editorDemo, setEditorDemo] = useState<"dfds" | "protocolos" | "itens">("dfds");
   const [dzFile, setDzFile] = useState<string | null>(null);
-  const [respDemo, setRespDemo] = useState<Responsaveis>({
-    padroes: [
-      {
-        nome: "Ana Souza",
-        matricula: "12345",
-        funcao: "Secretária",
-        nomeacao: { tipo: "portaria", numero: "10/2025", link: "https://exemplo.gov.br/portaria-10" },
-      },
-    ],
-    temporarios: [
-      {
-        nome: "Carlos Lima",
-        matricula: "67890",
-        funcao: "Diretor",
-        nomeacao: { tipo: "decreto", numero: "5/2026", link: "" },
-        inicio: "2026-01-01",
-        fim: "2026-12-31",
-      },
-    ],
-  });
+  const [vincDemo, setVincDemo] = useState<AberturaVinculo | null>(null);
+  const [cadDemo, setCadDemo] = useState(false);
   const [pag, setPag] = useState(2);
   useEffect(() => {
     setFramed(new URLSearchParams(window.location.search).get("view") === "frame");
@@ -2755,6 +3208,31 @@ export function Catalogo() {
 
   const vitrine = (
     <>
+      <Secao titulo="Fluxos de automação (CanvasFluxo)">
+        <CanvasFluxoDemo />
+      </Secao>
+      <Secao titulo="Tabela de automação no padrão da Mesa (TabelaMesaFluxo)">
+        <TabelaMesaFluxo
+          itens={[
+            { id: 1, numero: "1209", planejamento: "1509", sigla: "SEMED", tipo: "DFD-S", totalItens: 3, valor: 1250.5, protocolo: "144756/2026" },
+            { id: 2, numero: "1210", planejamento: "1510", sigla: "SMS", tipo: "DFD-O", totalItens: 1, valor: 300, protocolo: "144757/2026" },
+          ]}
+          chave={(it) => Number(it.id)}
+          genericas={[]}
+          gestao={{ pessoas: [], outras: [], situacoes: [], usuarioId: 0 }}
+          scrollInterno={false}
+        />
+      </Secao>
+      <Secao titulo="Cartão de automação (CartaoFluxo)">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
+          <CartaoFluxo titulo="Conferir DFDs × Centi — um título longo que quebra linha" sobretitulo="A cada 2 h" selo={<Badge tone="emerald">Agendado</Badge>} metricas={[{ rotulo: "Nós", valor: "4" }, { rotulo: "Última", valor: "Concluída", cor: "var(--ok)" }, { rotulo: "Erros", valor: "0" }]} onClick={() => undefined} />
+          <CartaoFluxo titulo="Em branco" sobretitulo="Do zero" marcado ajuda={{ funciona: "Começa vazio: monte o diagrama.", executa: "Manualmente ou pela frequência.", resultado: "O que os componentes entregarem." }} metricas={[{ rotulo: "Nós", valor: "1" }, { rotulo: "Frequência", valor: "Manual" }, { rotulo: "Usa", valor: "—" }]} onClick={() => undefined} />
+        </div>
+      </Secao>
+      <Secao titulo="Ajuda de uma automação (AjudaDoFluxo · ConfigFluxo)">
+        <AjudaDoFluxo titulo="Conferir DFDs × Centi" ajuda={{ funciona: "Busca cada DFD na Centi e compara.", executa: "Manual ou agendada, com a extensão pronta.", resultado: "Convergente ou Divergente na Mesa." }} />
+        {REGISTRO_NOS.get("gatilho.inicio") && <AjudaNo def={REGISTRO_NOS.get("gatilho.inicio") as NonNullable<ReturnType<typeof REGISTRO_NOS.get>>} />}
+      </Secao>
       <Secao titulo="Cores — neutros">
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 lg:grid-cols-11">
           {NEUTROS.map(([n, t]) => (
@@ -2795,6 +3273,19 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="Trabalhos em segundo plano (SegundoPlano · ManterVivo · useTrabalhoSegundoPlano · PainelSegundoPlano)">
+        <DemoSegundoPlano />
+      </Secao>
+
+      <Secao titulo="Versão do sistema (VersaoSistema — fim do menu) · Novidades (CartaoVersao)">
+        <div className="space-y-3">
+          <div className="w-64 rounded-card border border-border bg-surface p-2">
+            <VersaoSistema />
+          </div>
+          <CartaoVersao v={VERSOES[0]} atual destaque />
+        </div>
+      </Secao>
+
       <Secao titulo="Botões">
         <div className="flex flex-wrap items-center gap-3">
           <Button icon={<IconPlus className="h-[18px] w-[18px]" />}>Novo Protocolo</Button>
@@ -2824,7 +3315,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Atualizar e revisar (BotaoAtualizar + useGiro) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
+      <Secao titulo="Atualizar — o botão circular padrão (BotaoAtualizar + useGiro) · Exportar (BotaoExportar) · Dados completos da Mesa (BotaoDadosCompletos + DadosCompletos + CelulaTexto)">
         <AtualizarEDadosCompletosDemo />
       </Secao>
 
@@ -2851,6 +3342,64 @@ export function Catalogo() {
             <option value="2">MATERIAL DE CONSUMO</option>
           </SelectField>
         </div>
+        <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
+          {/* A lista aberta de TODO select do sistema é a da `Selecao`: grupos, desabilitada com a dica, busca acima de 12. */}
+          <SelectField
+            compacto
+            label="Visão"
+            defaultValue="1"
+            acoes={[
+              { rotulo: "Editar esta visão", icone: <IconPencil className="h-4 w-4" />, onClick: () => toast.info("Editar esta visão") },
+              { rotulo: "Nova visão", icone: <IconPlus className="h-4 w-4" />, onClick: () => toast.info("Nova visão") },
+            ]}
+          >
+            <option value="" data-detalhe="Todos os lançamentos do orçamento do ano">
+              Orçamento inteiro
+            </option>
+            <optgroup label="Visões salvas">
+              <option value="1" data-detalhe="2 Funções · 1 Fonte · usada em 1 PCA">
+                PCA 27
+              </option>
+              <option value="2" data-detalhe="Todos os lançamentos" data-aviso="3 valor(es) da visão fora deste orçamento">
+                GERAL - SEM FILTRO
+              </option>
+              <option value="3" disabled title="Sem lançamentos neste orçamento">
+                Visão vazia
+              </option>
+            </optgroup>
+          </SelectField>
+          <SelectField label="Situação (com a cor)" defaultValue="a">
+            <option value="a" data-cor="var(--info)">Em análise</option>
+            <option value="b" data-cor="var(--warn)">Devolvido</option>
+            <option value="c" data-cor="var(--ok)">Concluído</option>
+          </SelectField>
+          <SelectField label="Selecao — com busca (mais de 12 opções)" defaultValue="">
+            <option value="">Escolha o mês…</option>
+            {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </SelectField>
+          <Selecao className={selectCls} aria-label="Selecao crua (classe selectCls)" defaultValue="b">
+            <option value="a">Incorporar</option>
+            <option value="b">Substituir</option>
+            <option value="c">Excluir</option>
+          </Selecao>
+          {/* SetaDropdown: a seta de TODO gatilho de dropdown gira suave e aponta para o lado OPOSTO da lista aberta. */}
+          <Dropdown
+            ariaLabel="SetaDropdown — exemplo"
+            triggerClassName="h-[var(--h-control-sm)] gap-2 border border-border bg-surface px-3 text-[13px]"
+            trigger={
+              <>
+                SetaDropdown (abra e feche)
+                <SetaDropdown className="h-4 w-4 text-muted" />
+              </>
+            }
+          >
+            <p className="p-2 text-[13px] text-muted">A lista abriu embaixo: a seta aponta para cima — toque nela para fechar.</p>
+          </Dropdown>
+        </div>
         <div className="mt-4">
           <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />
         </div>
@@ -2862,6 +3411,10 @@ export function Catalogo() {
 
       <Secao titulo="Acesso — TelaAcesso (/login: Entrar · Criar conta · Esqueci a senha na MESMA tela + VitrineAcesso imersiva no desktop) · MarcaSistema (logo do ADM) · CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha SEMPRE — Turnstile ou a VerificacaoRobo própria —, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
         <DemoAcesso />
+      </Secao>
+
+      <Secao titulo="Proteção de dados — CamposProtecao (Configurações → Proteção de dados: seleção/cópia, impressão/captura, ocultar ao sair da janela, marca d'água, papéis e tela pública) · MarcaDagua (quem vê, sobre toda a tela) · ProtecaoDados (aplica os bloqueios nas telas — não ativado aqui)">
+        <DemoProtecao />
       </Secao>
 
       <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (contato institucional = WhatsApp: máscara + ícone + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">
@@ -2936,21 +3489,12 @@ export function Catalogo() {
         />
       </Secao>
 
-      <Secao titulo="Gráficos (Recharts, eixos por token)">
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] lg:grid-cols-2">
-          <ChartCard title="Classificação dos Itens" subtitle="Distribuição do valor por categoria">
-            <ClassificacaoChart data={G_CLASS} />
-          </ChartCard>
-          <ChartCard title="Cronograma Mensal" subtitle="Valor planejado por mês desejado">
-            <MensalChart data={G_MES} />
-          </ChartCard>
-          <ChartCard title="Top Itens por Valor" subtitle="Maiores contratações planejadas">
-            <TopItensChart data={G_TOP} />
-          </ChartCard>
-          <ChartCard title="Unidades de Medida" subtitle="Itens por unidade de medida">
-            <UnidadeChart data={G_UNID} />
-          </ChartCard>
-        </div>
+      <Secao titulo="Gráficos do Dashboard do PCA (paleta --serie-*, filtro cruzado e explorador)">
+        <GraficosDashboardDemo />
+      </Secao>
+
+      <Secao titulo="FiltrosDashboard (menus suspensos por dimensão — opções conectadas com a contagem)">
+        <FiltrosDashboardDemo />
       </Secao>
 
       <Secao titulo="OrigemDados (clique numa linha/fatia/barra → de onde vêm os dados)">
@@ -2961,6 +3505,12 @@ export function Catalogo() {
 
       <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
+      </Secao>
+      <Secao titulo="EditorVisaoOrcamento (uma visão do orçamento: nome + dimensões em listas suspensas + prévia do Σ; avisa os PCAs que a usam e os valores que o orçamento atual não traz, com “Remover ausentes”) + VisaoOrcamentoPca (a engrenagem da aba Orçamento do PCA — no OrcamentoPca acima) + SeletorVisaoPca (a visão na barra do PCA × Orçamento; travado sem permissão) + AjudaVisoes (o (?) das visões) + EscopoVinculo (onde salvar um vínculo: esta visão · todas · escolher)">
+        <EditorVisaoDemo />
+      </Secao>
+      <Secao titulo="VinculosDaUnidade (o lápis da linha do PCA × Orçamento: os vínculos que trazem orçamento à unidade — ou, na linha Sem vínculo, as unidades do orçamento a vincular — editados no mesmo editor da aba Vínculos)">
+        <VinculosDaUnidadeDemo />
       </Secao>
       <Secao titulo="Edições salvas de tabela — SeletorEdicoes (lápis · edição em uso · estrela da padrão · excluir; quem configura a tela também exclui a pública de outra pessoa) + SalvarEdicao (só para mim ou pública — publicar exige Configurar) + confirmação em card flutuante (useConfirmacao)">
         <EdicoesTabelaDemo />
@@ -2981,14 +3531,122 @@ export function Catalogo() {
         <DashboardMesaEsqueleto metricas />
       </Secao>
 
-      <Secao titulo="Avatares">
+      <Secao titulo="Avatares (com `presenca`: o ponto verde = online, âmbar = ausente)">
         <div className="flex flex-wrap items-center gap-3">
           {["Jhone Prado", "Maria Silva", "Naty Costa", "Cris Souza", "Thamires Lima"].map((n) => (
             <div key={n} className="flex items-center gap-2">
-              <Avatar nome={n} size="lg" />
+              <Avatar nome={n} size="lg" presenca={n === "Maria Silva" ? "online" : n === "Naty Costa" ? "ausente" : undefined} />
               <span className="text-[13px] text-text-2">{n}</span>
             </div>
           ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="PresencaGrupo + CanalGrupo + SeloAoVivo + PilhaFotos (a pilha de fotos ÚNICA — a do cabeçalho e a dos membros do quadro de Tarefas; quem do grupo está online, AO VIVO no cabeçalho: as fotos com o ponto que PULSA, em leque ao passar o mouse, “+N” que desliza e o brilho em quem acabou de entrar; tocar abre “Online agora” — o seu status, Online · Ausente · Visto recentemente e as ações de cada pessoa. O ponto de presença aparece também nas fotos do sistema — PessoaTag, seletores, membros do quadro. Só existe com Configurações → Presença ligada)">
+        <CanalGrupoDemo
+          valor={{
+            usuarioId: PESSOAS_DEMO[0].id,
+            grupoId: 1,
+            grupoNome: "Planejamento",
+            pessoas: PESSOAS_DEMO,
+            whatsapp: { 4: "64999990000" },
+            invisivel: false,
+            chatGrupo: true,
+            chatPrivado: true,
+            vendo: new Map([["protocolo:12", [{ id: 4, editando: true }]]]),
+            atividade: new Map([[4, { tela: "dfd", rotulo: "Mesa", vendo: ["Protocolo 144756/2026"], editando: true }]]),
+            aoVivo: true,
+            meuStatus: { status: "disponivel", recado: "", ate: null },
+            vistos: new Map(),
+            estados: new Map([
+              [4, { estado: "online", status: "reuniao", recado: "volto às 15h" }],
+              [7, { estado: "ausente", status: "disponivel", recado: "" }],
+            ]),
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-6">
+            <ChatAoVivo config={{ grupo: true, privado: true }}>
+              <PresencaGrupo verMesa />
+            </ChatAoVivo>
+            <SeloAoVivo aoVivo />
+            <SeloAoVivo aoVivo={false} />
+            <PessoaTag pessoa={PESSOAS_DEMO[1]} />
+          </div>
+        </CanalGrupoDemo>
+      </Secao>
+
+      <Secao titulo="PresencaNoItem + AtividadePessoa (ONDE cada pessoa está: na linha do protocolo/DFD/cartão, as fotos de quem está com o item aberto — lápis âmbar = editando; e a linha “Mesa › Protocolo … · editando” do painel Online agora)">
+        <CanalGrupoDemo
+          valor={{
+            usuarioId: PESSOAS_DEMO[0].id,
+            grupoId: 1,
+            grupoNome: "Planejamento",
+            pessoas: PESSOAS_DEMO,
+            whatsapp: {},
+            invisivel: false,
+            chatGrupo: false,
+            chatPrivado: false,
+            vendo: new Map([["protocolo:12", [{ id: 4, editando: true }, { id: 7, editando: false }]]]),
+            aoVivo: true,
+            meuStatus: { status: "disponivel", recado: "", ate: null },
+            vistos: new Map(),
+            estados: new Map(),
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-6">
+            <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
+              144756/2026 <PresencaNoItem alvo="protocolo:12" />
+            </span>
+            <AtividadePessoa atividade={{ tela: "dfd", rotulo: "Mesa", vendo: ["Protocolo 144756/2026"], editando: true }} />
+            <AtividadePessoa atividade={{ tela: "tarefas", rotulo: "Tarefas · Compras · Quadro", vendo: [], editando: false }} />
+          </div>
+        </CanalGrupoDemo>
+      </Secao>
+
+      <Secao titulo="BolhasChat — FotoBolha (o CHAT estilo Messenger: cada conversa aberta vira uma BOLHA flutuante arrastável — encosta na borda, arrastar ao “×” fecha —; tocar abre a janela da conversa ao lado. A foto da pessoa com o ponto ao vivo, o mosaico da conversa em grupo ou o ícone do grupo ativo)">
+        <div className="flex flex-wrap items-center gap-4">
+          <FotoBolha b={{ rotulo: "Carlão", fotos: [{ nome: PESSOAS_DEMO[1].nome, foto: PESSOAS_DEMO[1].foto }], presenca: "online" }} />
+          <FotoBolha b={{ rotulo: "Compras", fotos: PESSOAS_DEMO.slice(1, 4).map((p) => ({ nome: p.nome, foto: p.foto })) }} />
+          <FotoBolha b={{ rotulo: "Grupo · Planejamento", fotos: [], grupoAtivo: true }} />
+        </div>
+      </Secao>
+
+      <Secao titulo="ChatAoVivo — Balao + Digitando (o CHAT AO VIVO do grupo e privado: nada é salvo — os balões, meus à direita na cor do sistema, com a resposta citada, os cartões dos links do sistema, ✓ enviada / ✓✓ lida e “Tentar de novo”; os três pontos do “digitando…”)">
+        <div className="max-w-sm space-y-1 rounded-card border border-border bg-surface p-3">
+          <Balao
+            m={{ id: "demo000001", conversa: "grupo", de: 4, em: Date.now(), texto: "Bom dia! Conferi o **protocolo** /painel/mesa?abrir=protocolo:12", resp: null, minha: false }}
+            autor={PESSOAS_DEMO[1]}
+            grupo
+            seguida={false}
+            leram={0}
+            privado={false}
+            nomeDe={() => "Carlão"}
+            onResponder={() => {}}
+            onTentar={() => {}}
+          />
+          <Balao
+            m={{ id: "demo000002", conversa: "grupo", de: 1, em: Date.now(), texto: "Valeu @Carlão, vou ajustar.", resp: { id: "demo000001", de: 4, trecho: "Bom dia! Conferi o protocolo" }, minha: true, envio: "enviada" }}
+            autor={PESSOAS_DEMO[0]}
+            grupo
+            seguida={false}
+            leram={2}
+            privado={false}
+            nomeDe={() => "Carlão"}
+            onResponder={() => {}}
+            onTentar={() => {}}
+          />
+          <Balao
+            m={{ id: "demo000003", conversa: "p7", de: 1, em: Date.now(), texto: "Está aí?", resp: null, minha: true, envio: "nao-entregue", motivo: "Thamires não está com o sistema aberto — a mensagem não foi entregue (nada é guardado)." }}
+            autor={PESSOAS_DEMO[0]}
+            grupo={false}
+            seguida={false}
+            leram={0}
+            privado
+            nomeDe={() => "Thamires"}
+            onResponder={() => {}}
+            onTentar={() => {}}
+          />
+          <Digitando />
         </div>
       </Secao>
 
@@ -3229,6 +3887,13 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="SaudeDados — a saúde dos dados no Armazenamento (integridade dos totais e dados a tratar; tocar na linha abre a Mesa)">
+        <SaudeDados saude={SAUDE_DEMO} verificando={false} onVerificar={() => toast.info("Verificar")} onAbrir={(href) => toast.info(`Abrir ${href}`)} />
+        <div className="mt-3">
+          <SaudeDados saude={null} erro="Não foi possível verificar os dados agora. Tente de novo." verificando={false} onVerificar={() => toast.info("Tentar de novo")} />
+        </div>
+      </Secao>
+
       <Secao titulo="Referência do sistema (aba read-only)">
         <p className="mb-3 text-sm text-muted">
           A aba <code>/painel/configuracoes</code> → &quot;Referência&quot; lista TODAS as lógicas do sistema
@@ -3426,10 +4091,68 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Responsáveis (N padrões + N temporários; nomeação portaria/decreto/lei + link, matrícula/função)">
-        <div className="max-w-lg">
-          <ResponsaveisEditor valor={respDemo} onChange={setRespDemo} />
+      <Secao titulo="Responsáveis por DFDs (planilha única: a pessoa com o cargo e a foto do usuário + os vínculos — padrão e temporários separados, nomeação, período)">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <CelulaResponsaveis nomes={["Carlos Lima"]} temporario />
+              <CelulaResponsaveis nomes={[]} temporario={false} nota="Pelo órgão (PMRV)" />
+              <CelulaConferencia msgs={[]} />
+              <CelulaConferencia msgs={[{ status: "erro", chave: "resp.semVigente", texto: "Sem responsável vigente.", rotulo: "Sem responsável" }]} />
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setVincDemo({ responsavelId: null, alvo: "u1", dados: dadosVazios("padrao") })}>
+              Abrir o editor do vínculo
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setCadDemo(true)}>
+              Abrir o banner de cadastro
+            </Button>
+          </div>
+          <ListaVinculos
+            vinculos={VINCULOS_DEMO}
+            irmaos={() => VINCULOS_DEMO}
+            hoje="2026-06-15"
+            titulo={(v) => ({ texto: v.nome, detalhe: `Matrícula ${v.matricula}`, avatar: { nome: v.nome, foto: null } })}
+            vazio={{ padrao: "Nenhum responsável padrão.", temporario: "Sem períodos temporários." }}
+            acoes={{
+              padrao: (
+                <Button size="sm" variant="secondary" onClick={() => toast.info("Adicionar padrão")}>
+                  Adicionar padrão
+                </Button>
+              ),
+            }}
+            onEditar={() => toast.info("Editar o vínculo")}
+            onRemover={() => toast.info("Remover o vínculo")}
+          />
         </div>
+        <EditorVinculo
+          abertura={vincDemo}
+          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula, cargo: v.cargo, usuarioId: null, foto: null, exoneradoEm: null, externo: false }))}
+          cargos={["Secretária", "Diretor", "Secretário Adjunto"]}
+          alvos={{ orgaos: [], unidades: [], fora: [] }}
+          alvoFixo={{ rotulo: "SMS — Secretaria Municipal de Saúde · PMRV" }}
+          ocupado={false}
+          onCriarPessoa={async () => 99}
+          onSalvar={async () => true}
+          onFechar={() => setVincDemo(null)}
+        />
+        <BannerCadastro
+          aberto={cadDemo}
+          novo={false}
+          titulo="SMS — Secretaria Municipal de Saúde"
+          campos={[
+            { chave: "codigo", label: "Sigla", mono: true, obrigatorio: true },
+            { chave: "nome", label: "Nome", span: true, obrigatorio: true },
+          ]}
+          inicial={{ codigo: "SMS", nome: "Secretaria Municipal de Saúde" }}
+          ocupado={false}
+          onSalvar={async () => true}
+          onFechar={() => setCadDemo(false)}
+          confirmarDescarte={async () => true}
+        >
+          <SecaoBanner titulo="Outra seção">
+            <p className="text-[13px] text-muted">As demais seções do cadastro (responsáveis, estrutura…).</p>
+          </SecaoBanner>
+        </BannerCadastro>
       </Secao>
 
       <Secao titulo="Tabela (seleção + filtro no cabeçalho + clique na linha + Exportar .xlsx — as linhas filtradas e as colunas à vista)">
@@ -3686,7 +4409,27 @@ export function Catalogo() {
         </p>
       </Secao>
 
-      <Secao titulo="DfdRodape (rodapé fixo do banner do DFD — estado + mensagens + ações)">
+      <Secao titulo="BotaoAcao (ação dos rodapés/cabeçalhos dos banners — só o ícone, nome na dica; contagem; principal com texto)">
+        <div className="flex flex-wrap items-center gap-3">
+          <BotaoAcao rotulo="Histórico" icon={<Icons.IconClock className="h-4 w-4" />} onClick={() => toast("Histórico")} />
+          <BotaoAcao rotulo="Comparar os duplicados" icon={<Icons.IconCompare className="h-4 w-4" />} contagem={2} onClick={() => toast("Duplicados")} />
+          <BotaoAcao rotulo="Tarefas" icon={<Icons.IconKanban className="h-4 w-4" />} contagem="1/3" onClick={() => toast("Tarefas")} />
+          <BotaoAcao rotulo="Mensagens" icon={<Icons.IconLayers className="h-4 w-4" />} pressionado onClick={() => toast("Painel aberto")} />
+          <BotaoAcao variant="primary" rotulo="Reenviar protocolo" icon={<Icons.IconUpload className="h-4 w-4" />} onClick={() => toast("Reenviar")} />
+          <BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => toast("Salvar")} />
+        </div>
+      </Secao>
+
+      <Secao titulo="IndicadorPendencias (o botão ÚNICO de erros/atenção — relatório do protocolo, mensagens do DFD)">
+        <div className="flex flex-wrap items-center gap-3">
+          <IndicadorPendencias erros={2} atencoes={1} alvo="ver o relatório de erro" onClick={() => toast("Relatório")} />
+          <IndicadorPendencias erros={0} atencoes={3} alvo="ver o relatório de atenção" onClick={() => toast("Relatório")} />
+          <IndicadorPendencias erros={0} atencoes={0} rotulo="Editado" cor="var(--info)" alvo="ver as mensagens" aberto onClick={() => toast("Mensagens")} />
+          <IndicadorPendencias erros={0} atencoes={0} alvo="nada a ver" />
+        </div>
+      </Secao>
+
+      <Secao titulo="DfdRodape (rodapé do banner do DFD — UMA linha: indicador + ações só ícone + principal)">
         <DfdRodape
           estado="atencao"
           mensagens={[
@@ -3695,13 +4438,13 @@ export function Catalogo() {
           ]}
           mensagensAbertas={false}
           onToggleMensagens={() => toast("Abrir/ocultar mensagens")}
-          onFechar={() => toast("Fechar")}
           acoes={
-            <Button variant="secondary" onClick={() => toast("Histórico")}>
-              <Icons.IconClock className="h-4 w-4" /> Histórico
-            </Button>
+            <>
+              <BotaoAcao rotulo="Ver protocolo" icon={<Icons.IconLayers className="h-4 w-4" />} onClick={() => toast("Ver protocolo")} />
+              <BotaoAcao variant="primary" rotulo="Sobrescrever DFD" icon={<Icons.IconUpload className="h-4 w-4" />} onClick={() => toast("Sobrescrever")} />
+            </>
           }
-          principal={<Button onClick={() => toast("Salvar alterações")}>Salvar alterações</Button>}
+          principal={<BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => toast("Salvar alterações")} />}
         />
       </Secao>
 
@@ -3721,13 +4464,12 @@ export function Catalogo() {
           <div className="mt-4 border-t border-border pt-3">
             <RodapePainelItem onVerDfd={() => toast("Voltar ao DFD")} onVerProtocolo={() => toast("Ver protocolo")} />
           </div>
-          {/* Banner SÓ do item (visão Itens da Mesa): + Fechar e Salvar alterações. */}
+          {/* Banner SÓ do item (visão Itens da Mesa): + Salvar alterações (o X do cabeçalho fecha). */}
           <div className="mt-3 border-t border-border pt-3">
             <RodapePainelItem
               onVerDfd={() => toast("O DFD entra pela direita")}
               onVerProtocolo={() => toast("O DFD e depois o protocolo entram pela direita")}
-              onFechar={() => toast("Fechar")}
-              principal={<Button onClick={() => toast("Salvar alterações")}>Salvar alterações</Button>}
+              principal={<BotaoAcao texto variant="primary" rotulo="Salvar alterações" icon={<Icons.IconSave className="h-4 w-4" />} onClick={() => toast("Salvar alterações")} />}
             />
           </div>
         </div>
@@ -3757,32 +4499,69 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="MensagensDfd (painel lateral de erro/atenção/acerto — clique navega no DFD)">
-        {/* BotaoVerMensagens — vai no rodapé fixo do banner do DFD, à esquerda do Fechar. */}
-        <div className="mb-4 flex justify-end border-b border-border pb-4">
-          <BotaoVerMensagens
-            mensagens={[
-              { chave: "a", status: "erro", texto: "", ancora: "" },
-              { chave: "b", status: "erro", texto: "", ancora: "" },
-              { chave: "c", status: "atencao", texto: "", ancora: "" },
-              { chave: "d", status: "acerto", texto: "", ancora: "" },
-              { chave: "e", status: "acerto", texto: "", ancora: "" },
-            ]}
-            onToggle={() => toast("Abrir/ocultar o painel de mensagens")}
+      <Secao titulo="PainelPendencias (o banner ÚNICO de pendências — Protocolo, DFD e Item: tocar leva ao lugar; copiar em Despacho/WhatsApp/Lista; PDF)">
+        <div className="max-w-md">
+          <PainelPendencias
+            escopo="protocolo"
+            pendencias={{
+              numero: "144756/2026",
+              idExterno: "40123",
+              interessado: "SEMED",
+              assunto: "INCLUSÃO",
+              capa: {
+                chave: "protocolo.valorCapa",
+                status: "erro",
+                texto: "Valor da capa (R$ 10,00) diferente da somatória dos DFDs (R$ 60,00) — corrigir a capa.",
+                onde: "Capa do processo",
+                contexto: "Valor da capa: R$ 10,00 · Somatória dos DFDs: R$ 60,00",
+                alvo: { ancora: "capa" },
+              },
+              dfds: [
+                {
+                  chave: 1,
+                  numero: "1586",
+                  planejamento: "1702",
+                  tipo: "DFD-R — Renovação",
+                  status: "erro",
+                  pendencias: [
+                    { chave: "dfd.prioridade", status: "erro", texto: "Prioridade da compra/contratação (Seção 6) fora do padrão — trate no bloco Tratamento ou destrave a seção.", onde: "Prioridade da compra/contratação (Seção 6)", contexto: "URGENTÍSSIMA", alvo: { dfd: 1, ancora: "prioridade" } },
+                    { chave: "dfd.referenciaRenovacao", status: "atencao", texto: "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação.", onde: "Referências da renovação", alvo: { dfd: 1, ancora: "referenciaRenovacao" } },
+                  ],
+                  resumoItens: [{ chave: "item.valorUnitario", status: "erro", texto: "Falta valor unitário em 1 de 12 itens (Seção 4).", onde: "Itens (Seção 4)", alvo: { dfd: 1, ancora: "itens" } }],
+                  itens: [
+                    {
+                      idx: 2,
+                      item: 3,
+                      codigo: "5241937264",
+                      descricao: "GUINDASTE HIDRÁULICO AUTOPROPELIDO",
+                      unidade: "DIAS",
+                      quantidade: 20,
+                      valorUnitario: null,
+                      status: "erro",
+                      problemas: [{ chave: "item.valorUnitario", status: "erro", texto: "Sem valor unitário", onde: "Valor unitário", alvo: { dfd: 1, item: 2, ancora: "valorUnitario" } }],
+                    },
+                  ],
+                },
+              ],
+            }}
+            onIrPara={(a) => toast(`Ir para: ${a.ancora}${a.item != null ? ` (item ${a.item + 1})` : ""}`)}
           />
         </div>
-        <div className="max-w-md">
-          <MensagensDfd
-            numero="1586"
-            tipo="DFD-R — Renovação"
-            mensagens={[
-              { chave: "dfd.reparticao", status: "erro", texto: "Repartição/Setor requisitante não vinculado.", ancora: "reparticao" },
-              { chave: "item.valorUnitario", status: "erro", texto: "Falta valor unitário em 3 de 12 itens (Seção 4).", ancora: "itens" },
-              { chave: "dfd.referenciaRenovacao", status: "atencao", texto: "DFD de renovação (DFD-R) sem referência de contrato, ARP ou licitação.", ancora: "referenciaRenovacao" },
-              { chave: "dfd.previsao", status: "acerto", texto: "Previsão de entrega/execução (Seção 5) preenchida.", ancora: "previsao" },
-              { chave: "dfd.assinatura", status: "acerto", texto: "Assinatura digital conferida.", ancora: "assinatura" },
+      </Secao>
+
+      <Secao titulo="PreviaDocumento (a prévia em HTML dos blocos de um PDF — o MESMO conteúdo do gerador A4, antes de baixar)">
+        <div className="max-w-2xl">
+          <PreviaDocumento
+            blocos={[
+              { tipo: "titulo", texto: "Pendências do protocolo 144756/2026" },
+              { tipo: "destaques", itens: [{ rotulo: "Erros", valor: "3", cor: "var(--danger)" }, { rotulo: "Atenções", valor: "1", cor: "var(--warn)" }] },
+              { tipo: "secao", texto: "DFD 1586 (Planej. 1702) — DFD-R" },
+              {
+                tipo: "tabela",
+                colunas: [{ titulo: "Onde", peso: 2 }, { titulo: "Pendência", peso: 4 }, { titulo: "Conteúdo atual", peso: 3 }],
+                linhas: [{ celulas: ["Prioridade (Seção 6)", "Fora do padrão", "URGENTÍSSIMA"], cores: [null, "var(--danger)", "@muted"] }],
+              },
             ]}
-            onIrPara={(m) => toast(`Rolar até: ${m.ancora}`)}
           />
         </div>
       </Secao>
@@ -3842,6 +4621,10 @@ export function Catalogo() {
         <div className="mt-4">
           <CoresPaletaDemo />
         </div>
+      </Secao>
+
+      <Secao titulo="Histórico de compra × item do DFD — CelulaHistoricoCompra (a coluna “Histórico” da Mesa → Itens: o desvio do valor do item em relação ao VALOR ATUAL do histórico, na cor da régua da variação; a referência na dica) + ProdutoHistoricoDetalhe (o banner do produto no histórico — o MESMO do Catálogo e da comparação no detalhe do item, ComparacaoHistoricoCompra, que o abre com o valor do item em cima)">
+        <HistoricoItemDemo />
       </Secao>
 
       <Secao titulo="CatalogoItemDetalhe (painel lateral do item do catálogo — tipos editáveis)">
@@ -3922,21 +4705,44 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="OrcamentoVinculos (Órgão/Unidade do CUBO → órgão/unidade cadastrado; sugestão automática)">
+      <Secao titulo="OrcamentoVinculos + EditorVinculoOrcamento (vínculos CRIADOS: a unidade do CUBO → uma ou mais unidades cadastradas, cada uma com as suas ações)">
         <OrcamentoVinculos
           podeEditar
-          onVincular={() => {}}
+          onCriar={async () => true}
+          onEditar={async () => true}
+          onExcluir={async () => true}
           alvos={{
             orgaos: [{ id: 1, sigla: "PMRV", nome: "Prefeitura Municipal de Rio Verde" }],
             unidades: [
               { id: 15, sigla: "SME", nome: "Secretaria Municipal de Educação", orgaoId: 1 },
               { id: 16, sigla: "SMS", nome: "Secretaria Municipal de Saúde", orgaoId: 1 },
+              { id: 17, sigla: "VISA", nome: "Vigilância Sanitária", orgaoId: 1 },
             ],
           }}
-          linhas={[
-            { tipo: "orgao", chave: "PREFEITURA", texto: "PREFEITURA MUNICIPAL DE RIO VERDE", contexto: "", lancamentos: 120, valorInicial: 98000000, alvoId: 1, sugestaoId: null },
-            { tipo: "unidade", chave: "2 - SME", texto: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO", contexto: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE", lancamentos: 48, valorInicial: 25000000, alvoId: null, sugestaoId: 15 },
-            { tipo: "unidade", chave: "26 - FMACL", texto: "26 - FMACL", contexto: "FD. MUN. DE ASS. SOCIAL", lancamentos: 9, valorInicial: 1200000, alvoId: null, sugestaoId: null },
+          unidades={[
+            {
+              chave: "2 - SMS",
+              texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE",
+              contexto: "FUNDO MUNICIPAL DE SAUDE",
+              lancamentos: 60,
+              valorInicial: 40000000,
+              acoes: [
+                { chave: "2001 ATENCAO BASICA", texto: "2001 ATENÇÃO BÁSICA", lancamentos: 40, valorInicial: 30000000 },
+                { chave: "2002 VIGILANCIA", texto: "2002 VIGILÂNCIA", lancamentos: 20, valorInicial: 10000000 },
+              ],
+            },
+            {
+              chave: "2 - SME",
+              texto: "2 - SECRETARIA MUNICIPAL DE EDUCAÇÃO",
+              contexto: "FUNDO MUNICIPAL DE EDUCACAO DE RIO VERDE",
+              lancamentos: 48,
+              valorInicial: 25000000,
+              acoes: [{ chave: "2010 ENSINO", texto: "2010 ENSINO", lancamentos: 48, valorInicial: 25000000 }],
+            },
+          ]}
+          vinculos={[
+            { id: 1, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 16, acoes: null, acoesFora: [], visaoId: null },
+            { id: 2, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 17, acoes: ["2002 VIGILANCIA"], acoesFora: [], visaoId: null },
           ]}
         />
       </Secao>
@@ -3987,6 +4793,12 @@ export function Catalogo() {
       </Secao>
       <Secao titulo="IntegracaoResend (Integrações → E-mail/Resend: chave write-only, remetente do domínio verificado, endereço do sistema; testar confere o domínio e envia um e-mail de teste)">
         <IntegracaoResendDemo />
+      </Secao>
+      <Secao titulo="GravadorReceitas (Automação → Gravador: a ESTRUTURA dos pedidos que a tela da Centi fez — método, caminho, parâmetros e os campos com o tipo, nunca valores; Copiar a gravação)">
+        <GravadorReceitasDemo />
+      </Secao>
+      <Secao titulo="AprendizTelaProtocolo (Automação → Ler a Tela Protocolo: as consultas aprendidas clicando — a aba de cada uma, o mapa das colunas, a prévia e se a emissão do PDF foi aprendida; Salvar grava o modelo para todos)">
+        <AprendizTelaProtocoloDemo />
       </Secao>
       <Secao titulo="IntegracaoGoogle (Integrações → Login com Google: Client ID, Client secret write-only e a URI de redirecionamento a cadastrar no Google; e-mail novo vira cadastro pendente)">
         <IntegracaoGoogleDemo />
@@ -4092,6 +4904,56 @@ function IntegracaoGoogleDemo() {
 }
 
 /** Demonstração do cartão do Resend (domínio já verificado). */
+function GravadorReceitasDemo() {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
+        Ver uma gravação
+      </Button>
+      {aberto && (
+        <GravadorReceitas
+          onFechar={() => setAberto(false)}
+          passos={[
+            { metodo: "POST", caminho: "restauth/load", entidade: "102908", parametros: ["entity", "key"], corpo: null },
+            { metodo: "POST", caminho: "restauth/operation", entidade: null, parametros: [], corpo: { ModuleKey: "número", Guid: "texto", Params: [{ Key: "texto", Value: "texto" }] } },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+function AprendizTelaProtocoloDemo() {
+  const [aberto, setAberto] = useState(false);
+  const linha = (id: number, aba: string) => ({ Id: String(id), Processo: `${156800 + id}/2026`, Data: "01/10/2026", DepartamentoOrigem: "SEPLAN", DepartamentoDestino: aba });
+  const consulta = (situacao: string, n: number) => ({
+    tipo: "consulta" as const,
+    metodo: "POST",
+    caminho: "restauth/list?entity=102908",
+    corpo: { Situacao: situacao, Take: 100, Skip: 0 },
+    resposta: { lista: ["Entities"], total: n, linhas: Array.from({ length: n }, (_, i) => linha(i + 1, "PLANEJAMENTO")) },
+  });
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
+        Ver o que foi aprendido
+      </Button>
+      {aberto && (
+        <AprendizTelaProtocolo
+          onFechar={() => setAberto(false)}
+          onSalvar={() => setAberto(false)}
+          pedidos={[
+            consulta("ARECEBER", 3),
+            consulta("EMANALISE", 2),
+            { tipo: "operacao", metodo: "POST", caminho: "restauth/operation", corpo: { ModuleKey: 9001, Guid: "24e3e9d0-0000-4000-8000-000000000001", Params: [{ Key: "IdProtocolo", Value: "2" }] } },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
 function IntegracaoResendDemo() {
   const [v, setV] = useState<ValorResend>({ ativo: true, apiKey: "", remetente: "Plataforma PCA <avisos@governarv.com.br>", urlSistema: "https://governarv.com.br" });
   return (
@@ -4118,3 +4980,28 @@ function IntegracaoTrelloDemo() {
     />
   );
 }
+
+/** O painel minimizado no canto inferior direito (ligue para ver; tocar expande). */
+function DemoSegundoPlano() {
+  const [ligado, setLigado] = useState(false);
+  return (
+    <div className="space-y-2">
+      <Switch checked={ligado} onChange={setLigado} label="Mostrar o painel de exemplo" />
+      {ligado && (
+        <PainelSegundoPlano
+          naTela={new Set()}
+          onDispensar={() => setLigado(false)}
+          trabalhos={[
+            { id: "a", chave: "demo", titulo: "Conferir DFDs × Centi", estado: "rodando", feito: 3, total: 8, texto: "Conferir 1 DFD × Centi: 42 de 300", rota: "/design-system" },
+            { id: "b", chave: "demo", titulo: "Execução dos DFDs na CM002", estado: "concluido", feito: 6, total: 6, rota: "/design-system" },
+          ]}
+        />
+      )}
+    </div>
+  );
+}
+
+const VINCULOS_DEMO: VinculoComPessoa[] = [
+  { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", cargo: "Secretária", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: "2025-01-01", fim: null, ordem: 0 },
+  { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", cargo: "Diretor", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "Secretário Adjunto", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
+];

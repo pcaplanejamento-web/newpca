@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { num } from "@/lib/format";
 
 // Gráficos de BARRAS em HTML (por token — sem biblioteca de gráficos): marcas finas, ponta arredondada de 4px,
@@ -20,12 +20,15 @@ export function BarraSegmentada({
   max,
   altura = 10,
   trilho = false,
+  atraso,
 }: {
   segmentos: Segmento[];
   /** Valor que corresponde à largura TOTAL (padrão: a soma — barra cheia). */
   max?: number;
   altura?: number;
   trilho?: boolean;
+  /** Atraso da entrada (ms) — as barras de uma lista crescem em cascata. */
+  atraso?: number;
 }) {
   const visiveis = segmentos.filter((s) => s.valor > 0);
   const soma = visiveis.reduce((t, s) => t + s.valor, 0);
@@ -33,7 +36,10 @@ export function BarraSegmentada({
   return (
     <div aria-hidden className={`flex w-full ${trilho ? "overflow-hidden rounded-[4px] bg-track" : ""}`} style={{ height: altura }}>
       {soma > 0 && (
-        <div className="flex h-full overflow-hidden rounded-r-[4px]" style={{ width: `${(soma / base) * 100}%`, minWidth: 4 }}>
+        <div
+          className="grafico-barra flex h-full overflow-hidden rounded-r-[4px]"
+          style={{ width: `${(soma / base) * 100}%`, minWidth: 4, "--atraso": `${atraso ?? 0}ms` } as CSSProperties}
+        >
           {visiveis.map((s, i) => (
             <span
               key={s.chave}
@@ -94,11 +100,11 @@ export function BarrasH({
   const grade = "grid w-full grid-cols-[minmax(0,40%)_minmax(2.5rem,1fr)_auto] items-center gap-x-2.5";
   return (
     <ul aria-label={ariaLabel} className="space-y-0.5">
-      {linhas.map((l) => {
+      {linhas.map((l, i) => {
         const conteudo = (
           <>
             <span className={`min-w-0 truncate text-left text-[12.5px] ${l.apagada ? "text-muted" : "text-text-2"}`}>{l.rotulo}</span>
-            <BarraSegmentada segmentos={l.segmentos} max={escala} />
+            <BarraSegmentada segmentos={l.segmentos} max={escala} atraso={Math.min(i, 24) * 22} />
             <span className="whitespace-nowrap text-right text-[12.5px] tabular-nums">
               <span className={`font-semibold ${l.apagada ? "text-muted" : "text-text"}`}>{l.valor}</span>
               {l.detalhe != null && <span className="ml-1.5 text-[11.5px] text-muted">{l.detalhe}</span>}
@@ -210,8 +216,15 @@ export function Colunas({
                 className="group flex h-full w-full items-end justify-center focus-visible:outline-none"
               >
                 <span
-                  className="relative w-full max-w-6 rounded-t-[4px] transition-opacity group-hover:opacity-80 group-focus-visible:opacity-80"
-                  style={{ height: `${(c.valor / teto) * 100}%`, minHeight: c.valor > 0 ? 2 : 0, background: c.cor ?? cor }}
+                  className="grafico-coluna relative w-full max-w-6 rounded-t-[4px] group-hover:opacity-80 group-focus-visible:opacity-80"
+                  style={
+                    {
+                      height: `${(c.valor / teto) * 100}%`,
+                      minHeight: c.valor > 0 ? 2 : 0,
+                      background: c.cor ?? cor,
+                      "--atraso": `${Math.min(i, 30) * 18}ms`,
+                    } as CSSProperties
+                  }
                 >
                   {rotular && c.valor > 0 && (
                     <span className="absolute bottom-full left-1/2 mb-0.5 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold text-text-2 tabular-nums">

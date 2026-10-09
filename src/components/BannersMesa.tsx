@@ -184,7 +184,8 @@ export function BannersMesa({
     onAbrirProtocolo: abrirOutroProtocolo,
   });
 
-  const bloqueado = dfd.bloqueado || proto.bloqueado;
+  // X/Esc somem só GRAVANDO; na sobrescrita de um DFD o modal dela fica por cima (a pilha segue travada — `gravando`).
+  const bloqueado = dfd.salvando || proto.salvando;
   const painelProto: ModalPainel = { id: "protocolo", aberto: protoId != null, largura: LARGURA.protocolo, onClose: proto.fechar, ...proto.principal };
 
   let modal = null;

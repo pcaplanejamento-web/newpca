@@ -258,6 +258,8 @@ export function comandosMoverQuadro(
     ...d.equipes.map((e) => db.insert(tarefaEquipesLinks).values({ tarefaId: d.id, equipeId: e })),
     db.delete(tarefaCampoValores).where(eq(tarefaCampoValores.tarefaId, d.id)),
     ...comandosValoresCampos(db, d.id, d.campos),
+    // Os avisos da tarefa seguem com ela: o sino passa a conferir o acesso pelo quadro NOVO (privado = só o dono).
+    db.update(notificacoes).set({ quadroId: d.quadroId }).where(eq(notificacoes.tarefaId, d.id)),
     db.select({ id: tarefas.id, ticket: tarefas.ticket }).from(tarefas).where(eq(tarefas.id, d.id)),
   ] as const;
 }
@@ -625,9 +627,13 @@ export type NovaNotificacao = {
   atorNome?: string | null;
   /** Dedup (as DERIVADAS de prazo): repetida = ignorada. */
   chave?: string | null;
+  /** O ADM não manda este aviso por e-mail (ou a pessoa desligou): já nasce TRATADO (não entra na fila de envio). */
+  semEmail?: boolean;
+  /** O e-mail só sai depois deste instante (o resumo diário, o silêncio da pessoa). */
+  emailApos?: string | null;
 };
-/** Linhas por INSERT (10 colunas × 9 = 90 parâmetros — abaixo do limite de 100 do D1). */
-const NOTIF_POR_INSERT = 9;
+/** Linhas por INSERT (12 colunas × 8 = 96 parâmetros — abaixo do limite de 100 do D1). */
+const NOTIF_POR_INSERT = 8;
 
 /** GRAVA notificações (em lotes de 9 linhas por comando); a de `chave` repetida para a mesma pessoa é ignorada. */
 export function comandosNotificacoes(db: Db, linhas: NovaNotificacao[]) {
@@ -648,9 +654,13 @@ export function comandosNotificacoes(db: Db, linhas: NovaNotificacao[]) {
             atorId: n.atorId ?? null,
             atorNome: n.atorNome ?? null,
             chave: n.chave ?? null,
+            emailEnviadoEm: n.semEmail ? new Date().toISOString().slice(0, 19).replace("T", " ") : null,
+            emailApos: n.semEmail ? null : (n.emailApos ?? null),
           })),
         )
-        .onConflictDoNothing(),
+        .onConflictDoNothing()
+        // Quem recebeu de fato (a chave repetida não volta) — o aviso AO VIVO só para elas.
+        .returning({ usuarioId: notificacoes.usuarioId }),
     );
   return cmds;
 }

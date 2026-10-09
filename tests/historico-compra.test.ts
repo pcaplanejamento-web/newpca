@@ -13,6 +13,12 @@ import {
   produtosDoHistorico,
   resumoHistorico,
   rotuloVariacao,
+  compararComHistorico,
+  historicoDasLinhas,
+  referenciaDoProduto,
+  rotuloComparacaoHistorico,
+  textoDivergenciaHistorico,
+  valorAtualNoContrato,
   textoHistorico,
   tipoCatalogo,
 } from "../src/lib/historico-compra-core.ts";
@@ -166,7 +172,13 @@ describe("histórico de compra — análise por produto", () => {
       ["14158863", "114161324"],
     );
   });
-  it("menor, maior, médio PONDERADO pela quantidade e o último preço (pela data do contrato)", () => {
+  it("valor atual no contrato: um preço = ele (linhas iguais não somam); dois = o menor (aditivo) somado ao maior", () => {
+    assert.deepEqual(valorAtualNoContrato([30.49, 30.49]), { valor: 30.49, base: 30.49, menor: 30.49, aditivo: null });
+    assert.deepEqual(valorAtualNoContrato([8.75, 0.8]), { valor: 9.55, base: 8.75, menor: 0.8, aditivo: 0.8 });
+    assert.deepEqual(valorAtualNoContrato([0.8, null, 8.75, 0]), { valor: 9.55, base: 8.75, menor: 0.8, aditivo: 0.8 });
+    assert.equal(valorAtualNoContrato([null, 0]), null);
+  });
+  it("menor, maior e médio ENTRE contratos (valor atual de cada um) e o valor atual = o do contrato assinado por último", () => {
     const b = p[0];
     assert.equal(b.linhas, 3);
     assert.equal(b.contratos, 2);
@@ -174,12 +186,53 @@ describe("histórico de compra — análise por produto", () => {
     assert.equal(b.quantidade, 50);
     assert.equal(b.menor, 30.49);
     assert.equal(b.maior, 34.49);
-    assert.ok(Math.abs((b.medio ?? 0) - (30.49 * 20 + 34.49 * 30) / 50) < 1e-9);
-    assert.deepEqual(b.ultimo, { valor: 34.49, data: "2026-08-10", credor: "MERCADO BOM PRECO LTDA." });
+    assert.ok(Math.abs((b.medio ?? 0) - (30.49 + 34.49) / 2) < 1e-9, "média simples dos contratos, não das linhas");
+    assert.deepEqual(b.atual, { idContrato: b.porContrato[0].idContrato, valor: 34.49, base: 34.49, menor: 34.49, aditivo: null, quantidade: 30, linhas: 1, data: "2026-08-10", credor: "MERCADO BOM PRECO LTDA." });
+    assert.deepEqual(
+      b.porContrato.map((x) => x.data),
+      ["2026-08-10", "2026-02-23"],
+    );
     assert.ok(Math.abs(b.valorTotal - (304.9 * 2 + 1034.7)) < 1e-6);
   });
-  it("variação dos preços (a régua da Consolidada) e o rótulo do filtro", () => {
-    assert.ok(Math.abs((p[0].variacao ?? 0) - 0.07256) < 1e-3, "30,49 · 30,49 · 34,49");
+  it("aditivo: o contrato mais recente com aditivo é o valor atual (base + aditivo) e entra assim na média", () => {
+    const base = r.itens[0];
+    const itens = [
+      { ...base, ordem: 0, codigo: "9", idContrato: r.contratos[0].idContrato, valorUnitario: 10 },
+      { ...base, ordem: 1, codigo: "9", idContrato: r.contratos[1].idContrato, valorUnitario: 8.75 },
+      { ...base, ordem: 2, codigo: "9", idContrato: r.contratos[1].idContrato, valorUnitario: 0.8 },
+    ];
+    const [x] = produtosDoHistorico(itens, r.contratos);
+    assert.ok(Math.abs((x.atual?.valor ?? 0) - 9.55) < 1e-9);
+    assert.equal(x.atual?.aditivo, 0.8);
+    assert.deepEqual([x.atual?.menor, x.atual?.base, x.atual?.linhas], [0.8, 8.75, 2], "menor e maior DENTRO do contrato");
+    assert.equal(x.menor, 9.55);
+    assert.equal(x.maior, 10);
+    assert.equal(x.contratoMenor?.idContrato, r.contratos[1].idContrato, "o contrato do menor valor (com o aditivo)");
+    assert.equal(x.contratoMaior?.idContrato, r.contratos[0].idContrato, "o contrato do maior valor");
+    assert.ok(Math.abs((x.medio ?? 0) - 9.775) < 1e-9);
+  });
+  it("quantidade no contrato: só as linhas no preço base (a do aditivo repete a quantidade); linhas iguais somam", () => {
+    const base = r.itens[0];
+    const c = r.contratos[0].idContrato;
+    const [x] = produtosDoHistorico(
+      [
+        { ...base, ordem: 0, codigo: "7", idContrato: c, valorUnitario: 8.75, qtdContratada: 115000 },
+        { ...base, ordem: 1, codigo: "7", idContrato: c, valorUnitario: 0.8, qtdContratada: 102160 },
+      ],
+      r.contratos,
+    );
+    assert.equal(x.atual?.quantidade, 115000);
+    const [y] = produtosDoHistorico(
+      [
+        { ...base, ordem: 0, codigo: "8", idContrato: c, valorUnitario: 30.49, qtdContratada: 10 },
+        { ...base, ordem: 1, codigo: "8", idContrato: c, valorUnitario: 30.49, qtdContratada: 8 },
+      ],
+      r.contratos,
+    );
+    assert.deepEqual([y.atual?.quantidade, y.atual?.valor], [18, 30.49]);
+  });
+  it("variação entre contratos (a régua da Consolidada) e o rótulo do filtro", () => {
+    assert.ok(Math.abs((p[0].variacao ?? 0) - 0.08705) < 1e-3, "30,49 × 34,49 — um preço por contrato");
     assert.equal(p[1].variacao, null, "1 preço = sem comparação");
     assert.equal(rotuloVariacao(0.6), "Alta (acima de 50%)");
     assert.equal(rotuloVariacao(0.3), "Atenção (25% a 50%)");
@@ -228,5 +281,72 @@ describe("catálogo — tipos, cores e validação", () => {
     assert.ok(patchCatalogoSchema.safeParse({ pastaId: null }).success, "tirar da pasta");
     assert.ok(patchCatalogoSchema.safeParse({ cor: null }).success, "voltar à cor do tipo");
     assert.ok(!patchCatalogoSchema.safeParse({}).success);
+  });
+});
+
+describe("histórico de compra × itens dos DFDs (a Mesa)", () => {
+  const linha = (o: { ordem: number; idContrato: string; seq: number; vu: number; data: string; qtd?: number }) => ({
+    ordem: o.ordem,
+    idContrato: o.idContrato,
+    codigo: "524184753",
+    sequencial: o.seq,
+    descricao: "GRAMA ESMERALDA",
+    qtdContratada: o.qtd ?? 100,
+    valorContratado: (o.qtd ?? 100) * o.vu,
+    valorUnitario: o.vu,
+    dataAssinatura: o.data,
+    credor: "CREDOR",
+    numeroContrato: o.idContrato,
+    modalidade: "PREGÃO",
+  });
+  // Contrato 1 (antigo, R$ 10) e contrato 2 (mais recente: 8,75 + aditivo 0,80) — o 2 importado em DOIS históricos.
+  const linhas = [
+    linha({ ordem: 0, idContrato: "1", seq: 1, vu: 10, data: "2025-03-01" }),
+    linha({ ordem: 1, idContrato: "2", seq: 1, vu: 8.75, data: "2026-02-02" }),
+    linha({ ordem: 2, idContrato: "2", seq: 2, vu: 0.8, data: "2026-02-02" }),
+    linha({ ordem: 7, idContrato: "2", seq: 1, vu: 8.75, data: "2026-02-02" }),
+    linha({ ordem: 8, idContrato: "2", seq: 2, vu: 0.8, data: "2026-02-02" }),
+  ];
+
+  it("o mesmo contrato em dois históricos entra uma vez (a quantidade não dobra)", () => {
+    const h = historicoDasLinhas(linhas);
+    assert.equal(h.itens.length, 3);
+    assert.deepEqual(
+      h.contratos.map((c) => c.idContrato),
+      ["1", "2"],
+    );
+    const [p] = produtosDoHistorico(h.itens, h.contratos);
+    assert.equal(p.atual?.quantidade, 100);
+  });
+  it("a referência: valor atual (o contrato mais recente, com o aditivo), médio, menor e maior entre contratos", () => {
+    const h = historicoDasLinhas(linhas);
+    const ref = referenciaDoProduto(produtosDoHistorico(h.itens, h.contratos)[0]);
+    assert.ok(ref);
+    assert.ok(Math.abs(ref.atual - 9.55) < 1e-9);
+    assert.equal(ref.data, "2026-02-02");
+    assert.equal(ref.contratos, 2);
+    assert.ok(Math.abs((ref.medio ?? 0) - 9.775) < 1e-9);
+    assert.ok(Math.abs((ref.menor ?? 0) - 9.55) < 1e-9);
+    assert.equal(ref.maior, 10);
+  });
+  it("compara o valor do item com o valor atual pela régua da variação e aponta o erro", () => {
+    const ref = { atual: 10, data: null, medio: 10, menor: 10, maior: 10, contratos: 1 };
+    assert.deepEqual(compararComHistorico(11, ref), { desvio: 0.10000000000000009, nivel: "ok" });
+    assert.equal(compararComHistorico(13, ref)?.nivel, "atencao");
+    assert.equal(compararComHistorico(16, ref)?.nivel, "alerta");
+    assert.equal(compararComHistorico(4, ref)?.nivel, "alerta");
+    assert.equal(compararComHistorico(null, ref), null);
+    assert.equal(compararComHistorico(0, ref), null);
+    assert.equal(compararComHistorico(10, null), null);
+    assert.equal(rotuloComparacaoHistorico(11, ref), "Dentro do histórico");
+    assert.equal(rotuloComparacaoHistorico(13, ref), "Acima (25% a 50%)");
+    assert.equal(rotuloComparacaoHistorico(16, ref), "Acima (mais de 50%)");
+    assert.equal(rotuloComparacaoHistorico(7, ref), "Abaixo (25% a 50%)");
+    assert.equal(rotuloComparacaoHistorico(4, ref), "Abaixo (mais de 50%)");
+    assert.equal(rotuloComparacaoHistorico(null, ref), "Item sem valor");
+    assert.equal(rotuloComparacaoHistorico(10, undefined), "Sem histórico");
+    assert.equal(textoDivergenciaHistorico(11, ref), null);
+    assert.equal(textoDivergenciaHistorico(13.2, ref), "Valor unitário 32% acima do valor atual do histórico de compra.");
+    assert.equal(textoDivergenciaHistorico(4, ref), "Valor unitário 60% abaixo do valor atual do histórico de compra.");
   });
 });

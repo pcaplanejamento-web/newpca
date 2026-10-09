@@ -16,7 +16,7 @@ export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResu
     <Link
       href={href}
       aria-label={`Abrir ${o.nome}`}
-      className="group flex aspect-[4/5] w-full flex-col rounded-card border border-border bg-surface p-3 text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:p-4"
+      className="group flex aspect-[4/5] w-full flex-col rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-colors duration-[var(--motion-duration)] hover:border-accent/50 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25 sm:p-4"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">Orçamento</span>

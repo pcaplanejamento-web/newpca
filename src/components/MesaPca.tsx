@@ -15,7 +15,8 @@ import {
 } from "@/lib/pca-core";
 import type { ItemDfdRow } from "@/lib/dfd";
 import type { ProtocoloNaMesa } from "@/lib/mesa-redacao";
-import { Badge } from "./Badge";
+import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
+import { EstadoPonto } from "./EstadoCelula";
 import { Button } from "./Button";
 import type { Column } from "./DataTable";
 import { DfdsView } from "./DfdsView";
@@ -26,6 +27,8 @@ import { useListasMesa } from "./MesaSistema";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
+import { useOndeDetalhe } from "./CanalGrupo";
+import { Selecao } from "./Selecao";
 
 type Escopo = "todos" | "sistema" | "enviados" | "incorporados";
 
@@ -49,9 +52,9 @@ const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: 
  * Aba MESA do PCA (fonte protocolo) — INDEPENDENTE da Mesa principal: só os protocolos ENVIADOS a este PCA
  * (Mesa principal → barra de seleção → "Enviar ao PCA"), com a MESMA Mesa (Protocolos · DFDs · Itens, Estado,
  * Situação na célula, banners). Escopo **Todos | Enviados | Incorporados**; a seleção de protocolos só tem
- * **Incorporar** (PERMANENTE: os DFDs e os itens passam a compor o PCA com a ação por protocolo, cada item ganha
- * o SEQUENCIAL único do PCA e protocolo/DFDs/itens ficam TRAVADOS) e **Devolver à Mesa** (só o não
- * incorporado). Na visão Itens, a coluna **Seq. PCA** e a ação **Retirar do PCA** (o nº fica inativo).
+ * **Incorporar** (os DFDs e os itens passam a compor o PCA com a ação por protocolo e cada item ganha o SEQUENCIAL
+ * único do PCA — o incorporado segue EDITÁVEL: o PCA acompanha) e **Devolver à Mesa** (o enviado e também o incorporado:
+ * desincorpora, os nºs dos itens ficam baixados). Na visão Itens, a coluna **Seq. PCA** e a ação **Retirar do PCA**.
  * Com a visão dos **MARCADOS** (Configuração do PCA), a lista traz também os protocolos marcados com o ano do PCA ainda na
  * Mesa do SISTEMA — só uma visão: seguem na Mesa principal, editáveis, e a seleção os envia ("Enviar a este PCA"). A coluna
  * **Local** diz onde cada um está (`localDoProtocolo`).
@@ -60,6 +63,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
   const { protocolos, dfds } = useListasMesa(listas);
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
+  useOndeDetalhe(pca.nome);
   const [incorporar, setIncorporar] = useState<ProtocoloNaMesa[] | null>(null);
   const [acoes, setAcoes] = useState<Record<number, AcaoDfdPca>>({});
   const [gravando, setGravando] = useState(false);
@@ -92,39 +96,37 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     return dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId));
   }, [dfds, protos, escopoEf]);
 
+  /** O texto ÚNICO de onde o protocolo está (a célula, o filtro e a ordem usam o mesmo): a ação do incorporado só aparece
+   * quando NÃO é a incorporação simples — "Incorporado · Incorporar" repetia a mesma informação. */
+  const rotuloLocal = (r: ProtocoloNaMesa) => {
+    const local = localDoProtocolo(r);
+    if (local === "sistema") return "Mesa do sistema";
+    if (local === "enviado") return "Enviado";
+    const a = acaoPorProtocolo[r.id];
+    return a === "substituir" ? "Incorporado · substitui" : a === "excluir" ? "Incorporado · exclui" : "Incorporado";
+  };
   const colunaPca: Column<ProtocoloNaMesa> = {
     key: "pca",
     header: marcados ? "Local" : "PCA",
     nowrap: true,
-    value: (r) => ({ sistema: "Mesa do sistema", enviado: "Enviado", incorporado: "Incorporado" })[localDoProtocolo(r)],
+    value: rotuloLocal,
+    // O MESMO desenho das células de estado da Mesa (ponto + texto na cor — `EstadoPonto`), sem selo próprio.
     render: (r) => {
       const local = localDoProtocolo(r);
       if (local === "sistema") {
         const m = motivosEnv(r);
         return (
-          <span title={`Na Mesa do sistema (marcado com ${pca.ano ?? "o ano"}) — ${m.length ? m.join(" · ") : "pronto para enviar a este PCA"}`}>
-            <Badge tone="slate">Mesa do sistema</Badge>
-          </span>
+          <EstadoPonto
+            cor="var(--muted)"
+            rotulo={rotuloLocal(r)}
+            title={`Na Mesa do sistema (marcado com ${pca.ano ?? "o ano"}) — ${m.length ? m.join(" · ") : "pronto para enviar a este PCA"}`}
+          />
         );
       }
-      if (local === "incorporado") {
-        const a = acaoPorProtocolo[r.id];
-        return (
-          <span title="Protocolo, DFDs e itens travados enquanto incorporado">
-            <Badge tone="blue" dot>
-              Incorporado{a ? ` · ${ROTULO_ACAO[a]}` : ""}
-            </Badge>
-          </span>
-        );
-      }
+      if (local === "incorporado")
+        return <EstadoPonto cor="var(--ok)" rotulo={rotuloLocal(r)} title="Incorporado — as alterações no protocolo, nos DFDs e nos itens entram no PCA na hora" />;
       const m = motivosInc(r);
-      return (
-        <span title={m.length ? m.join("\n") : "Pronto para incorporar"}>
-          <Badge tone={m.length ? "slate" : "amber"} dot>
-            {marcados ? "Mesa do PCA · Enviado" : "Enviado"}
-          </Badge>
-        </span>
-      );
+      return <EstadoPonto cor={m.length ? "var(--muted)" : "var(--warn)"} rotulo={rotuloLocal(r)} title={m.length ? m.join("\n") : "Enviado a este PCA — pronto para incorporar"} />;
     },
   };
 
@@ -202,7 +204,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     key: "pcaSeq",
     header: "Seq. PCA",
     nowrap: true,
-    numero: (it) => it.pcaSequencial,
+    total: false, numero: (it) => it.pcaSequencial,
     value: (it) => (it.pcaSequencial == null ? "" : String(it.pcaSequencial)),
     render: (it) =>
       it.pcaSequencial == null ? (
@@ -218,7 +220,12 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
 
   function devolver(sel: ProtocoloNaMesa[], limpar: () => void) {
     const alvo = sel.filter((p) => motivoNaoDevolver(p, pca.id) == null);
-    if (!alvo.length || !confirm(`Devolver ${alvo.length} protocolo(s) à Mesa principal?`)) return;
+    const inc = alvo.filter(incorporado);
+    // O incorporado DESINCORPORA: os DFDs saem do PCA e os itens perdem o nº (a confirmação diz quantos).
+    const aviso = inc.length
+      ? ` ${inc.length} incorporado(s): ${impactoSaidaPca(pca.nome, inc.reduce((t, p) => t + p.totalItens, 0))}`
+      : "";
+    if (!alvo.length || !confirm(`Devolver ${alvo.length} protocolo(s) à Mesa principal?${aviso}`)) return;
     void executar({ acao: "devolver", ids: alvo.map((p) => p.id) }, (r) => `${num(r.alterados)} protocolo(s) devolvido(s) à Mesa principal.`, limpar);
   }
 
@@ -253,21 +260,21 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
             ? (sel, limpar) => {
                 const noSistema = mesa.pode.sistema.manipular ? sel.filter((p) => localDoProtocolo(p) === "sistema") : [];
                 const n = sel.filter((p) => localDoProtocolo(p) === "enviado").length;
+                const devolviveis = sel.filter((p) => localDoProtocolo(p) !== "sistema").length;
                 const pcaFixo = mesa.pcas?.find((x) => x.id === pca.id);
-                if (n === 0 && noSistema.length === 0)
-                  return <span className="text-xs text-muted">Incorporados não voltam — a incorporação é permanente.</span>;
+                if (devolviveis === 0 && noSistema.length === 0) return null;
                 return (
                   <div className="flex flex-wrap gap-2">
                     {noSistema.length > 0 && pcaFixo && <EnviarAoPca selecionados={noSistema} pcas={[pcaFixo]} pcaFixo={pcaFixo} onConcluido={limpar} />}
                     {n > 0 && (
-                      <>
-                        <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
-                          Incorporar ({n})
-                        </Button>
-                        <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} loading={gravando}>
-                          Devolver à Mesa ({n})
-                        </Button>
-                      </>
+                      <Button icon={<IconCheck className="h-4 w-4" />} onClick={() => abrirIncorporar(sel)} disabled={gravando}>
+                        Incorporar ({n})
+                      </Button>
+                    )}
+                    {devolviveis > 0 && (
+                      <Button variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={() => devolver(sel, limpar)} loading={gravando}>
+                        Devolver à Mesa ({devolviveis})
+                      </Button>
                     )}
                   </div>
                 );
@@ -308,9 +315,9 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
         <div className="space-y-3">
           <p className="text-sm text-muted">
             Os DFDs (e os itens) de cada protocolo passam a compor o PCA com a ação escolhida: <b>Incorporar</b> (DFD novo),{" "}
-            <b>Substituir</b> (troca o DFD de mesmo nº de planejamento) ou <b>Excluir</b> (retira o DFD de mesmo planejamento). A incorporação é{" "}
-            <b>permanente</b>: cada item ganha um <b>nº sequencial único no PCA</b> e o protocolo, os DFDs e os itens ficam{" "}
-            <b>somente leitura</b> (a situação e o responsável seguem editáveis).
+            <b>Substituir</b> (troca o DFD de mesmo nº de planejamento) ou <b>Excluir</b> (retira o DFD de mesmo planejamento). Cada item
+            ganha um <b>nº sequencial único no PCA</b>; o protocolo segue <b>editável</b> e o PCA acompanha (o item editado mantém o nº, o
+            novo ganha o próximo e o removido fica com o nº inativo). "Devolver à Mesa" desincorpora.
           </p>
           <ul className="divide-y divide-border rounded-card border border-border">
             {(incorporar ?? []).map((p) => (
@@ -318,11 +325,11 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                 <div className="min-w-0">
                   <div className="font-semibold text-text">Protocolo {p.numero}</div>
                   <div className="truncate text-xs text-muted">
-                    {p.assunto ?? "Sem assunto"} · {num(totalDfds(p))} DFD(s) · {brl(p.valorTotal)}
+                    {p.assunto ?? "Sem assunto"} · {num(p.totalDfds)} DFD(s) · {brl(p.valorTotal)}
                     {(emOutroPcaPorProtocolo[p.id] ?? 0) > 0 ? ` · ${emOutroPcaPorProtocolo[p.id]} já em outro PCA (ficam de fora)` : ""}
                   </div>
                 </div>
-                <select
+                <Selecao
                   className={`${selectCls} sm:w-44`}
                   value={acoes[p.id] ?? "incorporar"}
                   onChange={(e) => setAcoes((a) => ({ ...a, [p.id]: e.target.value as AcaoDfdPca }))}
@@ -334,7 +341,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                       {ROTULO_ACAO[a]}
                     </option>
                   ))}
-                </select>
+                </Selecao>
               </li>
             ))}
           </ul>

@@ -16,6 +16,7 @@ import {
   rotuloTicket,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
+import { AvatarPessoa } from "./PessoaTag";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
@@ -177,7 +178,7 @@ export function EventoBanner({
               const p = porId.get(id);
               return (
                 <li key={id} className="flex min-w-0 items-center gap-1.5 text-[13px]" title={p?.nome}>
-                  <Avatar nome={p?.nome ?? "?"} foto={p?.foto} size="xs" />
+                  {p ? <AvatarPessoa pessoa={p} size="xs" /> : <Avatar nome="?" size="xs" />}
                   <span className="max-w-[12rem] truncate text-text">
                     {p ? nomeExibicao(p) : `Pessoa #${id}`}
                     {id === usuarioId ? " (eu)" : ""}
@@ -200,7 +201,7 @@ export function EventoBanner({
               const p = porId.get(c.usuarioId);
               return (
                 <li key={c.usuarioId} className="flex items-center gap-2 text-[13px]">
-                  <Avatar nome={p?.nome ?? "?"} foto={p?.foto} size="xs" />
+                  {p ? <AvatarPessoa pessoa={p} size="xs" /> : <Avatar nome="?" size="xs" />}
                   <span className="min-w-0 flex-1 truncate text-text" title={p?.nome}>
                     {p ? nomeExibicao(p) : `Pessoa #${c.usuarioId}`}
                     {c.usuarioId === usuarioId ? " (eu)" : ""}
@@ -234,7 +235,7 @@ export function EventoBanner({
         <Callout kind="warn">Prazo em dia não útil: o prazo da tarefa {avisoPrazo}.</Callout>
       )}
       {e.pca ? (
-        <section className="space-y-2 rounded-card border border-border p-3" aria-label="DFD do PCA">
+        <section className="space-y-2 rounded-card border border-border p-[var(--pad-card)]" aria-label="DFD do PCA">
           <p className="flex items-center gap-1.5 text-[12px] font-semibold text-muted">
             <IconCalendar className="h-3.5 w-3.5" />
             {e.pca.pcaNome}
@@ -267,7 +268,7 @@ export function EventoBanner({
           )}
         </section>
       ) : e.externo ? null : (
-        <section className="space-y-2 rounded-card border border-border p-3" aria-label="Tarefa de origem">
+        <section className="space-y-2 rounded-card border border-border p-[var(--pad-card)]" aria-label="Tarefa de origem">
           <p className="flex items-center gap-1.5 text-[12px] font-semibold text-muted">
             <IconKanban className="h-3.5 w-3.5" />
             Tarefa{quadroNome ? ` · ${quadroNome}` : ""}

@@ -318,8 +318,6 @@ export const massaTarefasSchema = z.object({
 });
 export type AcaoMassaTarefas = z.infer<typeof massaTarefasSchema>["acao"];
 
-/** Marcar notificações como LIDAS: as pedidas ou todas. */
-export const notificacoesPatchSchema = z.union([z.object({ ids: z.array(id).min(1).max(90) }), z.object({ todas: z.literal(true) })]);
 
 const nomeModelo = z.string().trim().min(1, "Dê um nome ao modelo.").max(80, "Nome com até 80 caracteres.");
 /** Salvar um MODELO de quadro (retrato das listas/etiquetas do quadro). Os de TAREFA viraram cartões-TEMPLATE (`0055`). */

@@ -2,15 +2,14 @@
 
 import type { ReactNode } from "react";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
-import { type EstadoDfd, estadoCor, estadoRotulo, type MensagemDfd } from "@/lib/dfd-tratamento";
-import { Button } from "./Button";
-import { BotaoVerMensagens } from "./MensagensDfd";
+import { contarMensagens, type EstadoDfd, estadoCor, estadoRotulo, type MensagemDfd } from "@/lib/dfd-tratamento";
+import { IndicadorPendencias } from "./IndicadorPendencias";
 
 /**
- * RODAPÉ FIXO do banner de um DFD — o MESMO na análise (DFD ao lado do protocolo / avulso) e no
- * DFD gravado (solto ou ao lado do protocolo gravado). Esquerda: o ESTADO do DFD (cor/rótulo do
- * ADM). Direita: ações do contexto (`acoes` — ex.: manter/restaurar, histórico, ver protocolo),
- * "Ver mensagens" + numeração, Fechar e a ação PRINCIPAL (`principal` — ex.: Salvar alterações).
+ * RODAPÉ FIXO do banner de um DFD — o MESMO na análise (DFD ao lado do protocolo / avulso) e no DFD gravado (solto ou
+ * ao lado do protocolo gravado), em UMA linha: à esquerda o `IndicadorPendencias` (o ESTADO do DFD na cor do ADM + as
+ * contagens de erro/atenção — alterna o painel de MENSAGENS); à direita as ações do contexto (`acoes` — `BotaoAcao`, só
+ * ícone) e a ação PRINCIPAL (`principal` — ex.: Salvar alterações). Fechar = o X do cabeçalho.
  */
 export function DfdRodape({
   estado = null,
@@ -18,9 +17,7 @@ export function DfdRodape({
   mensagens,
   mensagensAbertas,
   onToggleMensagens,
-  onFechar,
-  rotuloFechar = "Fechar",
-  bloqueado = false,
+  aviso,
   acoes,
   principal,
 }: {
@@ -29,32 +26,30 @@ export function DfdRodape({
   mensagens: MensagemDfd[];
   mensagensAbertas: boolean;
   onToggleMensagens: () => void;
-  onFechar?: () => void;
-  /** Rótulo do botão de fechar (ex.: "Cancelar" na importação avulsa). */
-  rotuloFechar?: string;
-  /** Gravação em andamento: desabilita o Fechar. */
-  bloqueado?: boolean;
+  /** Um aviso curto do contexto (ex.: por que a importação está travada) — uma linha, o texto inteiro na dica. */
+  aviso?: string | null;
   acoes?: ReactNode;
   principal?: ReactNode;
 }) {
+  const cont = contarMensagens(mensagens);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      {estado ? (
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: estadoCor(estado, regras) }}>
-          <span className="h-2 w-2 rounded-full" style={{ background: estadoCor(estado, regras) }} />
-          {estadoRotulo(estado, regras)}
+    <div className="flex flex-nowrap items-center gap-2">
+      <IndicadorPendencias
+        erros={cont.erro}
+        atencoes={cont.atencao}
+        rotulo={estado ? estadoRotulo(estado, regras) : undefined}
+        cor={estado ? estadoCor(estado, regras) : undefined}
+        alvo={mensagensAbertas ? "ocultar as mensagens" : "ver as mensagens"}
+        aberto={mensagensAbertas}
+        onClick={onToggleMensagens}
+      />
+      {aviso ? (
+        <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "var(--danger)" }} title={aviso}>
+          {aviso}
         </span>
-      ) : (
-        <span />
-      )}
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      ) : null}
+      <div className="ml-auto flex min-w-0 flex-nowrap items-center justify-end gap-1.5 -my-1.5 overflow-x-auto py-1.5 pr-1.5 pl-1">
         {acoes}
-        <BotaoVerMensagens mensagens={mensagens} aberto={mensagensAbertas} onToggle={onToggleMensagens} />
-        {onFechar && (
-          <Button variant="secondary" onClick={onFechar} disabled={bloqueado}>
-            {rotuloFechar}
-          </Button>
-        )}
         {principal}
       </div>
     </div>

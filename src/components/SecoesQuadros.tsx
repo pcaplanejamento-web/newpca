@@ -67,6 +67,7 @@ export function GradeQuadros({
       {quadros.map((q) => (
         <div
           key={q.id}
+          role="none"
           className={`relative [-webkit-touch-callout:none] ${negado === q.id ? "animate-negar-arrasto" : ""}`}
           onPointerDown={(e) => iniciar(e, q.id)}
           onDragStart={(e) => e.preventDefault()}

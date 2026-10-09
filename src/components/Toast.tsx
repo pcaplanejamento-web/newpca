@@ -27,6 +27,8 @@ export const toast = Object.assign(
     error: (m: string, d?: number) => emit(m, "danger", d),
     /** Sucesso com **Desfazer** (o botão chama `onDesfazer` e fecha o aviso) — mover, redimensionar, excluir… */
     desfazer: (m: string, onDesfazer: () => void, d = 7000) => emit(m, "success", d, { rotulo: "Desfazer", onClick: onDesfazer }),
+    /** Informação com UMA ação (ex.: a mensagem nova do chat com "Responder"). */
+    acao: (m: string, rotulo: string, onClick: () => void, d = 6000) => emit(m, "info", d, { rotulo, onClick }),
   },
 );
 

@@ -7,9 +7,8 @@ import {
   type DiffCampo,
   type DiffItemDfd,
   diffItem,
-  parearItens,
 } from "./comparar-protocolo.ts";
-import { type DfdItemParseado, type DfdParseado, type DfdSecao, listaRefs, SEPARADOR_REFS, tipoCurtoDfd } from "./parse-dfd-comum.ts";
+import { type DfdItemParseado, type DfdParseado, type DfdSecao, listaRefs, SEPARADOR_REFS, tipoCurtoDfd, valorDosItens } from "./parse-dfd-comum.ts";
 
 /**
  * SOBRESCRITA de um DFD com ESCOLHA POR DADO — núcleo PURO/testável (sem getDb/JSX). Quando um DFD
@@ -165,21 +164,10 @@ export function estadoEscolha(e: EntradaEscolha, trabalho: DfdParseado, gravado:
   return "editado";
 }
 
-/** Os itens são EXATAMENTE os de `fonte` (o mesmo pareamento da comparação, sem nenhuma diferença)? */
-function mesmosItens(itens: DfdItemParseado[], fonte: DfdItemParseado[]): boolean {
-  if (itens.length !== fonte.length) return false;
-  const { pares, novos, removidos } = parearItens(fonte, itens);
-  return novos.length === 0 && removidos.length === 0 && pares.every(([i, j]) => igualItem(fonte[i], itens[j]));
-}
-
-/** O valor do DFD depois das escolhas dos itens: com os itens de UM lado inteiro, o valor total DESSE lado (o "TOTAL
- * GERAL" do documento pode diferir da soma por arredondamento — "Manter todos os gravados" devolve o valor gravado e o
- * DFD volta a ser IGUAL); com a mistura dos dois, a soma dos itens (nunca estimado). */
-function comTotal(d: DfdParseado, itens: DfdItemParseado[], lados: DfdParseado[]): DfdParseado {
-  const lado = lados.find((l) => mesmosItens(itens, l.itens));
-  if (lado) return { ...d, itens, valorTotal: lado.valorTotal };
-  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
+/** O valor do DFD depois das escolhas dos itens = a SOMA dos itens (a regra única — `valorDosItens`): "manter todos os
+ * gravados" devolve exatamente o valor gravado, "usar todos os novos" o do arquivo, a mistura a soma — nunca estimado. */
+function comTotal(d: DfdParseado, itens: DfdItemParseado[]): DfdParseado {
+  return { ...d, itens, valorTotal: valorDosItens(itens) };
 }
 
 /** O item do `lado` escolhido para uma chave de item (com a marca de origem) — `null` = esse lado não tem. */
@@ -218,7 +206,7 @@ function trocarItens(
   escolhas.forEach((c, k) => {
     if (c.item && !colocado.has(k)) out.push(c.item); // o par não estava no trabalho → entra (a ordem vem abaixo)
   });
-  return comTotal(trabalho, ordenarPorItem(out), [gravado, novo]);
+  return comTotal(trabalho, ordenarPorItem(out));
 }
 
 /** APLICA uma escolha: copia o valor do `lado` escolhido para o DFD de trabalho (sobrepõe uma edição à mão

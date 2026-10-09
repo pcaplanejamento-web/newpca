@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia } from "./CelulaExecucao";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
 import {
   ASSINATURA_ROTULO,
@@ -19,6 +20,7 @@ import { CelulaCopiavel } from "./BotaoCopiar";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
+import { PresencaNoItem } from "./PresencaNoItem";
 
 /** Tom do Badge por tipo de assinatura: Centi=verde, Dropsigner=azul, Adobe=vermelho, Foxit=âmbar (OCR). */
 const ASSINATURA_TONE: Record<GrupoAssinatura, Tone> = { centi: "emerald", dropsigner: "blue", adobe: "red", foxit: "amber", manual: "blue" };
@@ -64,6 +66,10 @@ export type LinhaDfd = {
   pca?: PcaDaLinha | null;
   /** Prioridade da seção do DFD (ALTA/MÉDIA/BAIXA; `null` = ausente/fora do padrão; ausente = sem a coluna). */
   prioridade?: string | null;
+  /** Situação do planejamento na Centi (CM002); undefined = a tela não traz a coluna. */
+  execucao?: string | null;
+  /** Conferência com a CM002: convergente | divergente (+ o motivo); undefined = a tela não traz a coluna. */
+  conferencia?: { status: string | null; motivo: string | null };
 };
 
 /** O PCA de uma linha (protocolo, DFD ou item): o ano + o nome do PCA cadastrado (a dica). */
@@ -138,7 +144,9 @@ export function PlanilhaDfds({
   vazio,
   acaoDescartados,
   edicoes,
+  ocultasPadrao,
   exportar,
+  colunasExtras = [],
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -169,14 +177,20 @@ export function PlanilhaDfds({
   acaoDescartados?: ReactNode;
   /** EDIÇÕES SALVAS da tabela principal (ex.: a Mesa) — repassadas ao `DataTable`. */
   edicoes?: EdicoesDaTabela;
+  /** Colunas ocultas no padrão (a edição da tabela as mostra) — ex.: Situação e Centi na Mesa do PCA. */
+  ocultasPadrao?: readonly string[];
   /** Exportar a planilha em .xlsx (a tabela principal — só com a ação Exportar do papel). */
-  exportar?: { nome: string };
+  exportar?: { nome: string } | false;
+  /** Colunas a mais no fim (antes das ações) — ex.: as criadas pelas automações na Mesa. */
+  colunasExtras?: Column<LinhaDfd>[];
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
   // PCA e Prioridade: a coluna aparece quando a tela as informa (mesmo que vazias em alguma linha).
   const temPca = linhas.some((l) => l.pca !== undefined);
   const temPrioridade = linhas.some((l) => l.prioridade !== undefined);
+  const temExecucao = linhas.some((l) => l.execucao != null);
+  const temConferencia = linhas.some((l) => l.conferencia?.status);
 
   const colEstado: Column<LinhaDfd>[] = semEstado
     ? []
@@ -200,6 +214,8 @@ export function PlanilhaDfds({
             : r.resumo?.rotulos?.length
               ? r.resumo.rotulos
               : [r.resumo?.rotulo || estadoRotulo(r.estado, regras)],
+      // A MESMA cor da célula no PDF exportado.
+      corPdf: (r) => (r.processando ? null : r.estadoMotivo ? "var(--danger)" : r.resumo?.rotulo ? r.resumo.cor : estadoCor(r.estado, regras)),
       render: (r) => {
         // Em processamento: spinner + O QUE está acontecendo (feedback real da análise/conferência).
         if (r.processando) return <EstadoProcessando rotulo={PROCESSANDO_ROTULO[r.processando]} fila={r.processando === "fila"} />;
@@ -234,9 +250,13 @@ export function PlanilhaDfds({
       nowrap: true,
       value: (r) => r.numero,
       render: (r) => (
-        <CelulaCopiavel copiar={r.numero} rotulo="nº do DFD">
-          <span className="font-mono text-[12px]">{r.numero}</span>
-        </CelulaCopiavel>
+        <span className="inline-flex items-center gap-1.5">
+          <CelulaCopiavel copiar={r.numero} rotulo="nº do DFD">
+            <span className="font-mono text-[12px]">{r.numero}</span>
+          </CelulaCopiavel>
+          {/* Gravado (a chave é o id do DFD): quem do grupo está com ele aberto agora. */}
+          {unica && !semEstado && <PresencaNoItem alvo={`dfd:${r.key}`} />}
+        </span>
       ),
     },
     {
@@ -264,6 +284,30 @@ export function PlanilhaDfds({
             nowrap: true,
             value: (r: LinhaDfd) => r.prioridade ?? "—",
             render: (r: LinhaDfd) => <CelulaPrioridade prioridade={r.prioridade} />,
+          },
+        ]
+      : []),
+    ...(temExecucao
+      ? [
+          {
+            key: "execucao",
+            header: "Situação",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: LinhaDfd) => r.execucao ?? "Não verificado",
+            render: (r: LinhaDfd) => <CelulaExecucao situacao={r.execucao} />,
+          },
+        ]
+      : []),
+    ...(temConferencia
+      ? [
+          {
+            key: "conferenciaCenti",
+            header: "Centi",
+            align: "center" as const,
+            nowrap: true,
+            value: (r: LinhaDfd) => rotuloConferencia(r.conferencia?.status),
+            render: (r: LinhaDfd) => <CelulaConferenciaCenti status={r.conferencia?.status} motivo={r.conferencia?.motivo} />,
           },
         ]
       : []),
@@ -340,6 +384,7 @@ export function PlanilhaDfds({
       numero: (r) => r.valor,
       render: (r) => (r.valor == null ? <span className="text-faint">…</span> : brl(r.valor)),
     },
+    ...colunasExtras,
     ...(acoes
       ? [{ key: "acoes", header: "", filter: "none" as const, nowrap: true, render: (r: LinhaDfd) => acoes(r) }]
       : []),
@@ -374,7 +419,7 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

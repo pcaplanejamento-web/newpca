@@ -2,7 +2,7 @@ import { escopoMesa, protocoloLegivel } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto } from "@/lib/avaliacao-core";
-import { avaliarLinhaDfd, avaliarProtocolo } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, avaliarProtocolo, gravacaoIncompleta } from "@/lib/conferencia-dfd";
 import { type DfdDetalhe, listarDfdsCompletosDosProtocolos } from "@/lib/dfd";
 import { conferenciaProtocolosSchema } from "@/lib/dfd-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     const doProtocolo = (porProtocolo.get(pr.id) ?? []).map((d) => ({
       numero: d.numero,
       planejamento: d.planejamento,
-      mensagens: avaliarLinhaDfd(d, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
+      mensagens: avaliarLinhaDfd({ ...d, gravacaoIncompleta: gravacaoIncompleta(d) }, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
         anoPca: d.anoPca ?? pr.anoPca,
         regras,
         categoria,

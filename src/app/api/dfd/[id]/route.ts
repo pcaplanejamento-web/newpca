@@ -11,11 +11,10 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { redigirDfdDetalhe } from "@/lib/mesa-redacao";
 import { type Assinatura, juntarRefs, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { telaDoRecurso } from "@/lib/papeis-core";
-import { gravacaoParcial, motivoNaoExcluirDfd } from "@/lib/pca-core";
+import { gravacaoParcial } from "@/lib/pca-core";
 import { categoriaDoProtocolo, getProtocoloReparticao, vincularDfd } from "@/lib/protocolo";
 import { bloqueiaAssinatura, carimbarValidacao, pdfExigeAssinatura, validarAssinatura } from "@/lib/reparticao-responsaveis";
 import { carregarResponsaveis, unidadesConferencia } from "@/lib/reparticoes";
-import { pcaDeProtocolos, respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
 
 export const dynamic = "force-dynamic";
 
@@ -64,21 +63,25 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
       criadoEm: dfd.criadoEm,
       agora: Date.now(),
     });
+  // O desfazer NUNCA vira um "Excluir" comum: fora da gravação nova e pela metade da própria pessoa (ex.: outra pessoa
+  // criou o DFD entre a consulta e a gravação; o último lote gravou mas a resposta se perdeu), nada é apagado.
+  if (origem === "desfazer" && !desfeita)
+    return erro("A gravação não foi desfeita: este DFD não é uma gravação sua, recente e pela metade — reenvie para completar.", 409);
+  // O REENVIO só exclui o DFD que AINDA está no protocolo reenviado (a lista da tela pode ter ficado velha: outra pessoa o
+  // moveu para outro protocolo durante a análise).
+  if (origem === "reenvio") {
+    const pid = Number(new URL(req.url).searchParams.get("protocolo"));
+    if (!Number.isInteger(pid) || pid <= 0 || dfd.protocoloId !== pid)
+      return erro(`O DFD ${dfd.numero} não está mais neste protocolo — não foi excluído.`, 409);
+  }
   // O PAPEL, na Mesa em que o DFD está: o desfazer é da IMPORTAÇÃO; o reenvio importa E exclui; o resto, Excluir.
   const tela = telaDoRecurso(dfd.pcaId);
   const negado = desfeita
     ? recusa(a.acesso, tela, "importar")
     : (recusa(a.acesso, tela, "excluir") ?? (origem === "reenvio" ? recusa(a.acesso, tela, "importar") : null));
   if (negado) return negado;
-  // DFD de protocolo em um PCA (enviado ou incorporado) NÃO é excluído — salvo esse desfazer num protocolo enviado:
-  // 423 incorporado, 409 enviado.
-  const noPca = (await pcaDeProtocolos([dfd.protocoloId])).get(dfd.protocoloId ?? 0);
-  if (noPca) {
-    const motivo = motivoNaoExcluirDfd(noPca, noPca.nome, desfeita);
-    if (motivo) return erro(motivo, noPca.pcaIncorporadoEm ? 423 : 409);
-  }
-  const r = await excluirDfd(id);
-  if (!r.ok) return erro(r.erro, 409);
+  // DFD de protocolo em um PCA (enviado ou incorporado) também é excluído: sai do PCA e os nºs dos itens são baixados.
+  await excluirDfd(id, a.u.id);
   const reenvio = origem === "reenvio";
   await registrarAuditoria({
     usuario: a.u,
@@ -116,10 +119,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // O PAPEL manipula na Mesa em que o DFD está (a do sistema ou a do PCA).
   const negado = recusa(a.acesso, telaDoRecurso(dfd.pcaId), "manipular");
   if (negado) return negado;
-  // TRAVA do PCA: DFD de protocolo INCORPORADO (ou vínculo PARA um protocolo incorporado) não se edita.
-  const travas = await travaDeProtocolos([dfd.protocoloId, p.data.protocoloId]);
-  const trava = [...travas.values()][0];
-  if (trava) return respostaTravado(trava);
   // Itens validados ANTES de qualquer escrita (o banner envia campos + itens juntos: nada é gravado
   // pela metade). Mesma régua do import: ao menos um item e — quando o ADM mantém o valor unitário
   // BLOQUEANTE (padrão) — todo item com valor unitário (> 0).
@@ -145,7 +144,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (negadoDestino) return negadoDestino;
       destino = proto;
     }
-    await vincularDfd(id, p.data.protocoloId, dfd.numero);
+    await vincularDfd(id, p.data.protocoloId, dfd.numero, a.u.id);
     // Histórico nos DOIS protocolos (o de onde saiu e o para onde foi) — cada um mostra o seu lado.
     if (p.data.protocoloId !== dfd.protocoloId) {
       const alvo = { numero: dfd.numero, planejamento: dfd.planejamento };
@@ -243,7 +242,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   // Editar ITENS (banner do item destravado): reescreve `dfd_itens` + recomputa o
   // `valorTotal` do cabeçalho. Escopo por unidade já garantido acima. Mesma regra do
   // import: todo item precisa de valor unitário (> 0).
-  if (p.data.itens !== undefined) await reescreverDfdItens(id, p.data.itens);
+  if (p.data.itens !== undefined) await reescreverDfdItens(id, p.data.itens, a.u.id);
 
   // HISTÓRICO: UMA linha com TUDO o que mudou (cabeçalho, seções, assinaturas e itens — a MESMA régua da
   // comparação do reenvio), com o protocolo do DFD como origem.

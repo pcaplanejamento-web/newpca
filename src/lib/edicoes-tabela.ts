@@ -2,7 +2,7 @@ import { and, eq, like, or } from "drizzle-orm";
 import { edicoesTabela, usuarios } from "@/db/schema";
 import { type Acesso, motivoNoQuadro, motivoRecusa } from "./acesso";
 import { getDb } from "./db";
-import { type EdicaoTabela, telasDaChave } from "./edicoes-tabela-core";
+import { chaveDeAdmin, type EdicaoTabela, telasDaChave } from "./edicoes-tabela-core";
 import type { AcaoPapel } from "./papeis-core";
 import { nomeExibicao } from "./pessoa";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
@@ -58,9 +58,10 @@ export async function getEdicaoTabela(id: number) {
 /**
  * O MOTIVO de recusar a AÇÃO na tabela da chave (`null` = pode): a tela dela no grupo ativo (a Mesa do sistema, a do PCA,
  * o Orçamento ou o PCA — basta uma) ou, na Lista de um quadro de tarefas, o papel no GRUPO DO QUADRO. Chave de outra
- * tabela (422) ou quadro que a pessoa não vê (404) também recusam.
+ * tabela (422) ou quadro que a pessoa não vê (404) também recusam. As tabelas da Administração (`chaveDeAdmin`): só o ADM.
  */
 export async function recusaNaChave(acesso: Acesso, chave: string, acao: AcaoPapel): Promise<{ msg: string; status: number } | null> {
+  if (chaveDeAdmin(chave)) return acesso.u.admin ? null : { msg: "Somente administradores.", status: 403 };
   const t = telasDaChave(chave);
   if (!t) return { msg: "Tabela desconhecida.", status: 422 };
   if (t.quadroId != null) {

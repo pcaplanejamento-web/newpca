@@ -24,7 +24,7 @@ import {
   textoPlanejamentos,
   veredictoLinhaCatalogo,
 } from "../src/lib/dfd-tratamento.ts";
-import { tipoCurtoDfd } from "../src/lib/parse-dfd-comum.ts";
+import { fecharValoresItens, tipoCurtoDfd, valorDosItens } from "../src/lib/parse-dfd-comum.ts";
 
 const item = (over: Record<string, unknown> = {}) => ({
   item: 1,
@@ -100,6 +100,47 @@ describe("editarItemDfd (edição de item + recomputo do total)", () => {
     editarItemDfd(dfd, 0, { valorTotal: 999 } as Partial<(typeof dfd.itens)[number]>);
     assert.equal(dfd.itens[0].valorTotal, 100);
     assert.equal(dfd.valorTotal, 150);
+  });
+  it("trocar QUANTIDADE ou VALOR UNITÁRIO recalcula o total do item (q × vu, 4 casas); o total digitado à mão vale", () => {
+    type It = { item: number; quantidade: number | null; valorUnitario: number | null; valorTotal: number | null };
+    const d: { itens: It[]; valorTotal: number | null } = {
+      itens: [
+        { item: 1, quantidade: 10, valorUnitario: 5, valorTotal: 50 },
+        { item: 2, quantidade: 1, valorUnitario: 7, valorTotal: 7 },
+      ],
+      valorTotal: 57,
+    };
+    const q = editarItemDfd(d, 0, { quantidade: 20 });
+    assert.equal(q.itens[0].valorTotal, 100);
+    assert.equal(q.valorTotal, 107);
+    assert.equal(editarItemDfd(d, 0, { valorUnitario: 1.333 }).itens[0].valorTotal, 13.33);
+    const centi = editarItemDfd(d, 0, { quantidade: 36, valorUnitario: 80204.5466 });
+    assert.equal(centi.itens[0].valorTotal, 2887363.6776, "preço com 4 casas (Centi): o total guarda a fração do centavo");
+    assert.equal(centi.valorTotal, 2887370.6776);
+    const aMao: Partial<It> = { quantidade: 20, valorTotal: 90 };
+    assert.equal(editarItemDfd(d, 0, aMao).itens[0].valorTotal, 90, "total à mão");
+    assert.equal(editarItemDfd(d, 0, { quantidade: null }).itens[0].valorTotal, 50, "sem quantidade: mantém o atual");
+  });
+});
+
+describe("valor do DFD = a soma dos itens (leitura)", () => {
+  it("valorDosItens: soma com 4 casas (sem ruído de ponto flutuante), NULL quando ≤ 0", () => {
+    assert.equal(valorDosItens([{ valorTotal: 10.0049 }, { valorTotal: 20.0011 }]), 30.006);
+    assert.equal(valorDosItens([{ valorTotal: 0.1 }, { valorTotal: 0.2 }]), 0.3);
+    assert.equal(valorDosItens([{ valorTotal: null }, { valorTotal: 0 }]), null);
+    assert.equal(valorDosItens([]), null);
+  });
+  it("fecharValoresItens: item sem total (com q e vu) recebe q × vu; o DFD = a soma — o TOTAL GERAL não entra", () => {
+    const r = fecharValoresItens([
+      { quantidade: 3, valorUnitario: 33.333, valorTotal: null },
+      { quantidade: 1, valorUnitario: 10, valorTotal: 10 },
+      { quantidade: null, valorUnitario: 5, valorTotal: null },
+    ]);
+    assert.deepEqual(
+      r.itens.map((i) => i.valorTotal),
+      [99.999, 10, null],
+    );
+    assert.equal(r.valorTotal, 109.999);
   });
 });
 

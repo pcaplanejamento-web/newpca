@@ -102,13 +102,14 @@ export function parseIntBR(v: unknown): number | null {
 }
 
 /**
- * Dois valores monetários "batem" (tolerância de 1 centavo p/ ruído de ponto
- * flutuante). `null` de qualquer lado nunca bate — usado para conferir o Valor da
- * capa do protocolo contra a somatória dos valores dos DFDs.
+ * Dois valores monetários "batem" quando a diferença é MENOR que 1 centavo — decidida em décimos de milésimo
+ * INTEIROS (sem o ruído do ponto flutuante: 0,54 × 0,55 nunca bate; 0,54 × 0,5452 — a Centi trunca a fração do
+ * centavo — bate). `null` de qualquer lado nunca bate — usado para conferir o Valor da capa do protocolo contra a
+ * somatória EXATA dos DFDs.
  */
 export function valoresBatem(a: number | null | undefined, b: number | null | undefined): boolean {
   if (a == null || b == null) return false;
-  return Math.abs(a - b) < 0.01;
+  return Math.abs(Math.round(a * 1e4) - Math.round(b * 1e4)) < 100;
 }
 
 export type DataParts = { iso: string; mes: number; ano: number } | null;
@@ -367,50 +368,62 @@ export const MESES = [
 ];
 const MESES_SEM = MESES.map(stripAccents); // sem acento p/ casar
 
+/** Previsão GENÉRICA (sem mês definido): a periodicidade da contratação ao longo do ano do PCA. */
+export const PERIODOS_PREVISAO = ["ANUAL", "SEMESTRAL", "QUADRIMESTRAL", "TRIMESTRAL"] as const;
+export type PeriodoPrevisao = (typeof PERIODOS_PREVISAO)[number];
+
+// Da mais específica para a mais genérica (o "recorrente" = ANUAL, como sempre foi).
+const RE_PERIODOS: [PeriodoPrevisao, RegExp][] = [
+  ["SEMESTRAL", /\bSEMESTR/],
+  ["QUADRIMESTRAL", /\bQUADRIMESTR/],
+  ["TRIMESTRAL", /\bTRIMESTR/],
+  ["ANUAL", /\b(MENSAL(?:MENTE)?|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL(?:MENTE)?|TODO O ANO)\b|POR\s+\d+\s+MES|\b(12|DOZE)\s+MESES\b/],
+];
+// Um nº de REFERÊNCIA ("CONTRATO 12/2025", "ATA Nº 3/2026") nunca é data.
+const ANTES_REFERENCIA = /\b(?:CONTRATOS?|ATAS?|ARPS?|PREGAO|PREGOES|LICITACAO|LICITACOES|PROCESSOS?|N[O°º.]?|NUMERO)\s*[:.]?\s*$/;
+
 /**
- * PREVISÃO DE ENTREGA/EXECUÇÃO — é **um OU outro**: uma DATA (`MÊS/AAAA`, ex.:
- * `FEVEREIRO/2027`) OU recorrente `ANUAL` (opcionalmente `ANUAL/AAAA`). Reconhece as
- * várias escritas de cada forma:
- *  - DATA: `dd/mm/aaaa`, `mm/aaaa`, `MÊS DE AAAA`, `A PARTIR DE MÊS DE AAAA` e **só o MÊS
- *    por extenso** (ex.: `FEVEREIRO`, sem ano) — nesse caso o ANO vem do `anoPca` (o ano
- *    do PCA do processo; o usuário ainda pode editar). Sem `anoPca` e sem ano no texto, o
- *    mês fica reconhecido mas sem ano → `null` (a definir).
- *  - ANUAL: `ANUAL`, `ANUALMENTE`, `MENSAL(MENTE)`, `AO LONGO/DECORRER/DURANTE do ano`,
- *    `TODO O ANO`, `POR N MESES`, `12 MESES` (o ano inteiro) — com ou sem ano. Bare "ANUAL" (sem ano) é VÁLIDO.
- * O ano do texto tem precedência; sem ele, usa-se o `anoPca` (regra: a previsão do DFD
- * segue o ano do PCA do processo). O que não casar nenhuma das duas → null (tratar à mão).
- * Recorrente vence a data. `auto=true` = reconheceu mas a escrita não era canônica.
+ * PREVISÃO DE ENTREGA/EXECUÇÃO — é **um OU outro**: um MÊS DEFINIDO (`MÊS/AAAA`, ex.: `FEVEREIRO/2027`) OU uma
+ * definição GENÉRICA — a periodicidade `ANUAL`/`SEMESTRAL`/`QUADRIMESTRAL`/`TRIMESTRAL` (opcionalmente `/AAAA`).
+ *  - MÊS: o nome por extenso (`FEVEREIRO`, `A PARTIR DE MAIO DE 2027`) ou `dd/mm/aaaa`/`mm/aaaa` — o numérico logo depois
+ *    de CONTRATO/ATA/ARP/PREGÃO/LICITAÇÃO/PROCESSO/Nº é REFERÊNCIA, nunca data; com o PCA, só vale o do ano dele.
+ *  - GENÉRICA: `SEMESTRAL`, `QUADRIMESTRAL`, `TRIMESTRAL` e o recorrente (`ANUAL`, `MENSAL(MENTE)`, `AO LONGO/DECORRER/
+ *    DURANTE do ano`, `TODO O ANO`, `POR N MESES`, `12 MESES`) = `ANUAL`. Bare "ANUAL" (sem ano) é VÁLIDO.
+ * **O ANO É SEMPRE O DO PCA** (`anoPca` — o ano de execução do plano): o ano escrito no texto (de um contrato, de uma
+ * data antiga…) nunca vale — "MARÇO/2025" num PCA 2027 vira `MARÇO/2027`. Sem o PCA (DFD avulso antes de escolher o
+ * PCA), o ano do texto fica provisório. A genérica vence o mês. `anual` = genérica (qualquer periodicidade);
+ * `auto=true` = reconheceu mas a escrita não era a canônica.
  */
 export function normPrevisao(
   texto: string | null | undefined,
   anoPca?: number | null,
-): { valor: string | null; anual: boolean; auto: boolean } {
+): { valor: string | null; anual: boolean; periodo: PeriodoPrevisao | null; auto: boolean } {
+  const nada = { valor: null, anual: false, periodo: null, auto: false };
   const raw = String(texto ?? "").trim();
-  if (!raw) return { valor: null, anual: false, auto: false };
+  if (!raw) return nada;
   const s = stripAccents(cleanUpper(raw));
-  const anoTexto = s.match(/\b(20\d{2})\b/)?.[1] ?? null;
-  // Ano efetivo: o do texto tem precedência; sem ele, o do PCA (previsão segue o PCA).
   const anoPcaStr = anoPca != null && anoPca >= 2000 && anoPca <= 2100 ? String(anoPca) : null;
-  const ano = anoTexto ?? anoPcaStr;
-  const recorrente =
-    /\b(MENSAL(?:MENTE)?|DECORRER|AO LONGO|LONGO DE|DURANTE|ANUAL(?:MENTE)?|TODO O ANO)\b|POR\s+\d+\s+MES|\b(12|DOZE)\s+MESES\b/.test(s);
-  if (recorrente) {
-    // "Anual" é válido mesmo sem ano; com ano (do texto ou do PCA) vira `ANUAL/AAAA`.
-    const valor = ano ? `ANUAL/${ano}` : "ANUAL";
-    return { valor, anual: true, auto: cleanUpper(raw) !== valor };
+  // Datas numéricas que NÃO são referência (o nº de um contrato não é data).
+  const datas = [...s.matchAll(/\b(?:(\d{1,2})\/)?(\d{1,2})\/(20\d{2})\b/g)].filter(
+    (m) => !ANTES_REFERENCIA.test(s.slice(0, m.index)) && (!anoPcaStr || m[3] === anoPcaStr),
+  );
+  // Sem o PCA: o ano provisório do texto — a 1ª data que não é referência, senão um "20xx" solto fora de uma referência.
+  const anoTexto = anoPcaStr
+    ? null
+    : (datas[0]?.[3] ?? [...s.matchAll(/\b(20\d{2})\b/g)].find((m) => !/\d[./-]$/.test(s.slice(0, m.index)) && !ANTES_REFERENCIA.test(s.slice(0, m.index)))?.[1] ?? null);
+  const ano = anoPcaStr ?? anoTexto;
+  const periodo = RE_PERIODOS.find(([, re]) => re.test(s))?.[0] ?? null;
+  if (periodo) {
+    const valor = ano ? `${periodo}/${ano}` : periodo;
+    return { valor, anual: true, periodo, auto: cleanUpper(raw) !== valor };
   }
-  // Mês — reconhecido MESMO sem ano no texto (o ano pode vir do PCA / edição do usuário).
+  // Mês — o nome por extenso primeiro; o numérico só fora de uma referência.
   let mes: number | null = null;
-  const dmy = s.match(/\b(\d{1,2})\/(\d{1,2})\/20\d{2}\b/);
-  const my = s.match(/\b(\d{1,2})\/20\d{2}\b/);
-  if (dmy) mes = Number(dmy[2]);
-  else if (my) mes = Number(my[1]);
-  else {
-    const idx = MESES_SEM.findIndex((m) => new RegExp(`\\b${m}\\b`).test(s));
-    if (idx >= 0) mes = idx + 1;
-  }
-  if (mes == null || mes < 1 || mes > 12) return { valor: null, anual: false, auto: false };
-  if (!ano) return { valor: null, anual: false, auto: false }; // mês reconhecido, mas ano a definir
+  const idx = MESES_SEM.findIndex((m) => new RegExp(`\\b${m}\\b`).test(s));
+  if (idx >= 0) mes = idx + 1;
+  else if (datas[0]) mes = Number(datas[0][2]);
+  if (mes == null || mes < 1 || mes > 12) return nada;
+  if (!ano) return nada; // mês reconhecido, mas ano a definir
   const valor = `${MESES[mes - 1]}/${ano}`;
-  return { valor, anual: false, auto: cleanUpper(raw) !== valor };
+  return { valor, anual: false, periodo: null, auto: cleanUpper(raw) !== valor };
 }

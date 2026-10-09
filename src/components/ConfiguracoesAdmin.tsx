@@ -8,12 +8,25 @@ import type { PcaResumo } from "@/lib/dfd";
 import { dataBR, num } from "@/lib/format";
 import { type Aparencia, LINHAS_TABELA, type LinhasTabela } from "@/lib/theme";
 import { AvaliacaoAdmin } from "./AvaliacaoAdmin";
+import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
-import { Callout } from "./Callout";
+import { CargosAdmin } from "./CargosAdmin";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import {
+  IconAvaliacao,
+  IconBell,
+  IconBriefcase,
+  IconCalendar,
+  IconLayers,
+  IconLinhas,
+  IconLock,
+  IconMais,
+  IconReferencia,
+  IconSituacoes,
+  IconTelaAcesso,
   IconLandmark,
   IconCheck,
   IconDatabase,
@@ -34,6 +47,9 @@ import { ReferenciaSistema } from "./ReferenciaSistema";
 import { Segmented } from "./Segmented";
 import { SituacoesAdmin } from "./SituacoesAdmin";
 import { FeriadosAdmin } from "./FeriadosAdmin";
+import { NotificacoesAdmin } from "./NotificacoesAdmin";
+import { PresencaAdmin } from "./PresencaAdmin";
+import { ProtecaoDadosAdmin } from "./ProtecaoDadosAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -90,6 +106,7 @@ export function ConfiguracoesAdmin({
   regras: RegrasAvaliacao;
 }) {
   const router = useRouter();
+  const { confirmar, confirmacao } = useConfirmacao();
 
   // ---- Tabelas: linhas por página iniciais ----
   const [linhas, setLinhas] = useState<LinhasTabela>(linhasTabela);
@@ -219,7 +236,7 @@ export function ConfiguracoesAdmin({
   }
 
   async function excluirPca(p: PcaResumo) {
-    if (!confirm(`Excluir o PCA "${p.nome}"? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirmar({ titulo: `Excluir o PCA "${p.nome}"?`, texto: "Esta ação não pode ser desfeita.", confirmar: "Excluir", perigo: true }))) return;
     try {
       const res = await fetch(`/api/admin/pcas/${p.id}`, { method: "DELETE" });
       const j = (await res.json()) as { ok?: boolean; error?: string };
@@ -260,19 +277,23 @@ export function ConfiguracoesAdmin({
         acoes(
           <>
             {!p.ativo && (
-              <Button variant="ghost" onClick={() => marcarAtivo(p)} icon={<IconCheck className="h-4 w-4" />}>
+              <Button variant="ghost" size="xs" onClick={() => marcarAtivo(p)} icon={<IconCheck className="h-4 w-4" />} title="Marcar como o PCA vigente">
                 Ativar
               </Button>
             )}
             <Button
               variant="ghost"
+              size="xs"
               aria-label="Editar PCA"
+              title="Editar o nome e o ano"
               onClick={() => abrirEditarPca(p)}
               icon={<IconPencil className="h-4 w-4" />}
             />
             <Button
               variant="ghost"
+              size="xs"
               aria-label="Excluir PCA"
+              title="Excluir o PCA"
               onClick={() => excluirPca(p)}
               icon={<IconTrash className="h-4 w-4" />}
               style={{ color: "var(--danger)" }}
@@ -284,10 +305,12 @@ export function ConfiguracoesAdmin({
 
   const abaIdentidade = (
     <div className="max-w-xl space-y-[var(--gap-block)]">
-      <Callout kind="info">
-        O nome, o subtítulo e o favicon valem para toda a plataforma — barra lateral, aba do
-        navegador e a tela pública.
-      </Callout>
+      <div className="flex items-center gap-2">
+        <h2 className="text-[15px] font-bold text-text">Identidade do site</h2>
+        <Ajuda titulo="Identidade">
+          <p>O nome, o subtítulo e o favicon valem para toda a plataforma — barra lateral, aba do navegador e a tela pública.</p>
+        </Ajuda>
+      </div>
       <TextField
         label="Nome do site"
         value={nome}
@@ -343,7 +366,7 @@ export function ConfiguracoesAdmin({
         </p>
       </div>
       <div className="flex justify-end">
-        <Button onClick={salvarIdentidade} loading={salvandoId}>
+        <Button size="sm" onClick={salvarIdentidade} loading={salvandoId} title="Salvar o nome, o subtítulo e o favicon">
           Salvar identidade
         </Button>
       </div>
@@ -352,12 +375,16 @@ export function ConfiguracoesAdmin({
 
   const abaTabelas = (
     <div className="max-w-xl space-y-[var(--gap-block)]">
-      <Callout kind="info">
-        Quantas linhas as tabelas da Mesa (protocolos, DFDs e itens — também na Mesa de cada PCA) mostram ao abrir. Cada
-        pessoa ainda pode trocar no seletor "Linhas" do rodapé da tabela.
-      </Callout>
+      <div className="flex items-center gap-2">
+        <h2 className="text-[15px] font-bold text-text">Linhas por página ao abrir</h2>
+        <Ajuda titulo="Tabelas">
+          <p>
+            Quantas linhas as tabelas da Mesa (protocolos, DFDs e itens — também na Mesa de cada PCA) mostram ao abrir. Cada
+            pessoa ainda pode trocar no seletor "Linhas" do rodapé da tabela.
+          </p>
+        </Ajuda>
+      </div>
       <div>
-        <p className="mb-1.5 text-sm font-medium text-text-2">Linhas por página ao abrir</p>
         <Segmented<string>
           value={String(linhas)}
           onChange={(v) => setLinhas(Number(v) as LinhasTabela)}
@@ -366,7 +393,7 @@ export function ConfiguracoesAdmin({
         />
       </div>
       <div className="flex justify-end">
-        <Button onClick={salvarTabelas} loading={salvandoLinhas} disabled={linhas === linhasTabela}>
+        <Button size="sm" onClick={salvarTabelas} loading={salvandoLinhas} disabled={linhas === linhasTabela} title="Salvar as linhas por página">
           Salvar
         </Button>
       </div>
@@ -375,16 +402,20 @@ export function ConfiguracoesAdmin({
 
   const abaPcas = (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">
-          Cadastre os PCAs por nome e ano. Marque um como o <strong className="text-text-2">vigente</strong>.
-        </p>
-        <Button onClick={abrirNovoPca} icon={<IconPlus className="h-4 w-4" />}>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-[15px] font-bold text-text">PCAs</h2>
+        <Ajuda titulo="PCAs">
+          <p>
+            Cadastre os PCAs por nome e ano e marque um como o <strong>vigente</strong> (o que abre por padrão). A capa, a fonte e
+            a publicação ficam na Configuração de cada PCA.
+          </p>
+        </Ajuda>
+        <Button className="ml-auto" size="sm" onClick={abrirNovoPca} icon={<IconPlus className="h-4 w-4" />} title="Cadastrar um PCA">
           Novo PCA
         </Button>
       </div>
       {pcas.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">
           Nenhum PCA cadastrado ainda.
         </p>
       ) : (
@@ -435,7 +466,7 @@ export function ConfiguracoesAdmin({
       <LinkCard
         href="/painel/integracoes"
         titulo="Integrações"
-        descricao="APIs externas: captcha e monitoramento (Cloudflare); Google e e-mail em breve."
+        descricao="Captcha, monitoramento, login com Google, e-mail (Resend) e Trello."
         icon={<IconPlug className="h-5 w-5" />}
       />
       <LinkCard
@@ -449,31 +480,37 @@ export function ConfiguracoesAdmin({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div>
-        <h1 className="text-xl font-bold text-text">Configurações</h1>
-        <p className="mt-1 text-sm text-muted">
-          Identidade do site, papéis, tabelas, PCAs, situações do protocolo, avaliação e atalhos de administração.
-        </p>
-      </div>
+      {confirmacao}
+      <h1 className="linha-topico text-xl font-bold text-text">Configurações</h1>
 
-      <div className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+      <div>
         <Tabs
           inicial={abaInicial}
+          layout="lateral"
+          separado
+          alturaTela
+          url="aba"
           tabs={[
-            { key: "identidade", label: "Identidade", content: abaIdentidade },
-            { key: "papeis", label: "Papéis", content: <PapeisAdmin /> },
-            { key: "acesso", label: "Tela de acesso", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
-            { key: "tabelas", label: "Tabelas", content: abaTabelas },
-            { key: "pcas", label: "PCAs", content: abaPcas },
-            { key: "situacoes", label: "Situações", content: <SituacoesAdmin /> },
-            { key: "feriados", label: "Feriados", content: <FeriadosAdmin /> },
-            { key: "avaliacao", label: "Avaliação", content: <AvaliacaoAdmin regras={regras} /> },
+            { key: "identidade", label: "Identidade", icon: <IconImage />, dica: "Nome, subtítulo e favicon do site", content: abaIdentidade },
+            { key: "papeis", label: "Papéis", icon: <IconShield />, dica: "O que cada papel pode fazer em cada tela", content: <PapeisAdmin /> },
+            { key: "protecao", label: "Proteção de dados", icon: <IconLock />, dica: "Bloquear seleção, cópia, impressão e captura por papel", content: <ProtecaoDadosAdmin /> },
+            { key: "cargos", label: "Cargos e funções", icon: <IconBriefcase />, dica: "A lista de cargos dos usuários e dos responsáveis", content: <CargosAdmin /> },
+            { key: "acesso", label: "Tela de acesso", icon: <IconTelaAcesso />, dica: "Os textos da tela de login e cadastro", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
+            { key: "tabelas", label: "Tabelas", icon: <IconLinhas />, dica: "Quantas linhas as tabelas mostram ao abrir", content: abaTabelas },
+            { key: "pcas", label: "PCAs", icon: <IconLayers />, dica: "Os PCAs cadastrados e o vigente", content: abaPcas },
+            { key: "situacoes", label: "Situações", icon: <IconSituacoes />, dica: "As situações do protocolo (nome, cor, ordem)", content: <SituacoesAdmin /> },
+            { key: "feriados", label: "Feriados", icon: <IconCalendar />, dica: "Feriados e pontos facultativos do Calendário", content: <FeriadosAdmin /> },
+            { key: "presenca", label: "Presença e chat", icon: <IconUsers />, dica: "Quem do grupo está online e o chat ao vivo", content: <PresencaAdmin /> },
+            { key: "notificacoes", label: "Notificações", icon: <IconBell />, dica: "Avisos, e-mail, limpeza, comunicado e alcance", content: <NotificacoesAdmin /> },
+            { key: "avaliacao", label: "Avaliação", icon: <IconAvaliacao />, dica: "O rigor de cada conferência de Protocolo, DFD e Item", content: <AvaliacaoAdmin regras={regras} /> },
             {
               key: "referencia",
               label: "Referência",
+              icon: <IconReferencia />,
+              dica: "Como o sistema está configurado (consulta)",
               content: <ReferenciaSistema regras={regras} pcas={pcas} identidade={identidade} />,
             },
-            { key: "mais", label: "Mais", content: abaMais },
+            { key: "mais", label: "Mais", icon: <IconMais />, dica: "Aparência, órgãos, grupos, permissões, usuários, integrações", content: abaMais },
           ]}
         />
       </div>

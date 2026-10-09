@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { type ConferenciaItem, ROTULO_FALTA_CATALOGO, rotulosDivergencia } from "@/lib/catalogo-conferencia";
 import {
@@ -8,20 +8,24 @@ import {
   ESTADO_ITEM_ROTULO,
   estadoItem,
   estadoItemCor,
-  faltasDoItem,
+  mensagensItem,
   motivoNaoUnificar,
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
+import { pendenciasDoItemSolo } from "@/lib/pendencias-core";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { CampoCongelado, CampoNumero, CampoTexto } from "./CampoCadeado";
-import { Callout } from "./Callout";
+import { type AncoraAlvo, useDestaqueAncora } from "./DestaqueAncora";
 import type { DfdVisualItem } from "./DfdView";
 import { HistoricoDoItem } from "./Historico";
-import { IconAlert, IconArrowRight, IconMerge, IconTrash } from "./icons";
+import { IndicadorPendencias } from "./IndicadorPendencias";
+import { IconArrowRight, IconMerge, IconTrash } from "./icons";
+import { PainelPendencias } from "./PainelPendencias";
+import { ComparacaoHistoricoCompra } from "./ProdutoHistorico";
 import { toast } from "./Toast";
 
 /** Campos do item que têm cadeado próprio. */
@@ -32,7 +36,8 @@ const MAX_REPETIDOS_LISTA = 20;
 /**
  * Painel LATERAL de detalhe de UM item da Seção 4 do DFD — abre à direita ao clicar
  * numa linha da tabela de itens (mestre-detalhe), no MESMO lugar do painel de mensagens.
- * Mostra todas as infos do item + estado + CONFORMIDADE com o catálogo. Quando `editavel`,
+ * Mostra todas as infos do item + estado + CONFORMIDADE com o catálogo + a comparação do valor com o HISTÓRICO DE
+ * COMPRA (`ComparacaoHistoricoCompra`, com o banner do produto). Quando `editavel`,
  * cada campo tem um **cadeado próprio**: destravar para editar; um campo **igual ao catálogo**
  * (Código/Descrição/Unidade não divergentes) fica **bloqueado** (erro ao tentar). No DFD GRAVADO
  * (`historicoDfdId`), a seção recolhível "Histórico do item" mostra o que mudou nele. Item REPETIDO
@@ -54,6 +59,9 @@ export function ItemDetalhe({
   onUnificar,
   historicoDfdId = null,
   consulta = null,
+  destaque = null,
+  dfdRef = null,
+  idx = 0,
 }: {
   item: DfdVisualItem;
   /** Conformidade dos itens com o catálogo (veredito por código). Ausente = sem o bloco. */
@@ -80,9 +88,20 @@ export function ItemDetalhe({
   /** CONSULTA (Dashboard do PCA, público): campos CONGELADOS, sem estado/faltas/catálogo; o histórico vem da
    * rota PÚBLICA (`urlHistorico` — só protocolos incorporados, sem autor). */
   consulta?: { urlHistorico: string } | null;
+  /** Leva ao campo com pendência e o destaca (o painel de pendências — valor unitário, quantidade, repetidos, catálogo). */
+  destaque?: AncoraAlvo | null;
+  /** O DFD de origem (nº + planejamento) — título da cópia e do PDF das pendências do item. */
+  dfdRef?: { numero: string; planejamento: string | null } | null;
+  /** Índice do item no DFD (a chave do alvo das pendências). */
+  idx?: number;
 }) {
+  const raizRef = useRef<HTMLDivElement>(null);
+  useDestaqueAncora(raizRef, destaque);
+  // Tocar numa pendência do PRÓPRIO item: rola e destaca o campo aqui mesmo.
+  const [destaqueLocal, setDestaqueLocal] = useState<AncoraAlvo | null>(null);
+  useDestaqueAncora(raizRef, destaqueLocal);
+  const [verPend, setVerPend] = useState(true);
   const est = estadoItem(item);
-  const faltas = faltasDoItem(item);
   const repetido = repetidos.length > 0;
   // Repetido sem erro = ATENÇÃO (âmbar) — nunca bloqueia; erro (valor/quantidade) segue na frente.
   const cor = est === "regular" && repetido ? corRepetido : estadoItemCor(est);
@@ -96,6 +115,19 @@ export function ItemDetalhe({
   const corCat = veredicto ? corVeredictoCatalogo(veredicto.nivel) : "";
   // Rótulos ESPECÍFICOS (descrição/unidade/tipo diferentes) — aponta ONDE está o erro.
   const divergencias = conf ? rotulosDivergencia(conf) : [];
+
+  // As PENDÊNCIAS do item (a MESMA régua da célula Estado + o catálogo) — o banner único, como no DFD e no protocolo.
+  const problemas = [
+    ...mensagensItem(item, repetido ? { iguais: repetidos.slice(0, 10).map((r) => r.item.item ?? r.idx + 1), total: repetidos.length, cor: corRepetido } : null),
+    ...(veredicto && veredicto.nivel !== "conforme"
+      ? divergencias.map((t) => ({ chave: `item.catalogo:${t}`, status: veredicto.nivel === "erro" ? ("erro" as const) : ("atencao" as const), texto: t, cor: corCat }))
+      : []),
+  ];
+  const pendDfd = pendenciasDoItemSolo({ chave: dfdRef?.numero ?? "", numero: dfdRef?.numero ?? "", planejamento: dfdRef?.planejamento ?? null, tipo }, item, idx, problemas);
+  const contPend = {
+    erros: problemas.filter((m) => m.status === "erro").length,
+    atencoes: problemas.filter((m) => m.status === "atencao").length,
+  };
 
   // Cadeado por campo. Um campo IGUAL ao catálogo não pode ser alterado (bloqueado).
   const [abertos, setAbertos] = useState<Set<CampoK>>(new Set());
@@ -142,20 +174,27 @@ export function ItemDetalhe({
     );
 
   return (
-    <div className="space-y-[var(--gap-block)]">
-      {/* Cabeçalho: nº do item + estado */}
+    <div ref={raizRef} className="space-y-[var(--gap-block)]">
+      {/* Cabeçalho: nº do item + o indicador ÚNICO de pendências (o mesmo do DFD e do protocolo) */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-base font-bold text-text">Item {item.item ?? "—"}</span>
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: cor }}>
-          <span className="h-2 w-2 rounded-full" style={{ background: cor }} />
-          {rotuloEstado}
-        </span>
+        <IndicadorPendencias
+          erros={contPend.erros}
+          atencoes={contPend.atencoes}
+          rotulo={rotuloEstado}
+          cor={cor}
+          alvo="ver as pendências do item"
+          aberto={verPend}
+          onClick={problemas.length ? () => setVerPend((v) => !v) : undefined}
+        />
       </div>
 
-      {faltas.length > 0 && (
-        <Callout kind="danger" icon={<IconAlert className="h-4 w-4" />}>
-          Falta {faltas.join(" e ")} — {editavelUI ? "destrave o campo para corrigir." : "corrija na tabela da Seção 4."}
-        </Callout>
+      {verPend && problemas.length > 0 && (
+        <PainelPendencias
+          pendencias={{ numero: dfdRef?.numero ?? "", capa: null, dfds: [pendDfd] }}
+          escopo="item"
+          onIrPara={(alvo, c) => setDestaqueLocal({ ancora: alvo.ancora, cor: c, nonce: Date.now() })}
+        />
       )}
 
       {/* Campos do item — cada um com cadeado próprio quando editável */}
@@ -170,14 +209,14 @@ export function ItemDetalhe({
           {...props("descricao")}
           onChange={(v) => onChange?.({ descricao: v || null })}
         />
-        <CampoNumero label="Quantidade" valor={item.quantidade} {...props("quantidade")} onChange={(v) => onChange?.({ quantidade: v })} />
-        <CampoNumero label="Valor unitário" valor={item.valorUnitario} moeda {...props("valorUnitario")} onChange={(v) => onChange?.({ valorUnitario: v })} />
+        <CampoNumero label="Quantidade" ancora="quantidade" valor={item.quantidade} {...props("quantidade")} onChange={(v) => onChange?.({ quantidade: v })} />
+        <CampoNumero label="Valor unitário" ancora="valorUnitario" valor={item.valorUnitario} moeda {...props("valorUnitario")} onChange={(v) => onChange?.({ valorUnitario: v })} />
         <CampoNumero label="Valor total" valor={item.valorTotal} moeda span forte {...props("valorTotal")} onChange={(v) => onChange?.({ valorTotal: v })} />
       </dl>
 
       {/* Item REPETIDO (mesmo código, descrição e unidade): os iguais lado a lado + tratamento. Não bloqueia. */}
       {repetido && (
-        <section className="rounded-card border p-4" style={{ borderColor: `color-mix(in srgb, ${corRepetido} 35%, var(--border))` }} data-ancora="repetidos">
+        <section className="rounded-card border p-[var(--pad-card)]" style={{ borderColor: `color-mix(in srgb, ${corRepetido} 35%, var(--border))` }} data-ancora="repetidos">
           <div className="mb-1 flex items-center justify-between gap-2">
             <h4 className="text-[13px] font-bold text-text">Item repetido</h4>
             <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: corRepetido }}>
@@ -262,7 +301,7 @@ export function ItemDetalhe({
             </ul>
           )}
           {conf?.sugestao && (
-            <div className="mt-2 rounded-card border border-border-2 bg-surface-2 p-3">
+            <div className="mt-2 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
               <div className="mb-2 text-xs font-semibold text-muted">
                 {conf.sugestao.score >= 1
                   ? "Item do catálogo (referência)"
@@ -298,6 +337,9 @@ export function ItemDetalhe({
           )}
         </section>
       )}
+
+      {/* O valor do item × o HISTÓRICO DE COMPRA do código (valor atual, médio, menor–maior) + o banner do produto. */}
+      <ComparacaoHistoricoCompra codigo={item.codigo} valor={item.valorUnitario} />
 
       {/* Histórico do item (DFD gravado): o que mudou nele, por qual canal e por qual protocolo. */}
       {historicoDfdId != null && <HistoricoDoItem url={`/api/dfd/${historicoDfdId}/historico`} item={{ item: item.item ?? null, codigo: item.codigo ?? null }} />}

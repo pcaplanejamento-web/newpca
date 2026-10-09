@@ -1,12 +1,14 @@
 import { escopoMesa } from "@/lib/acesso-mesa";
 import { exigirSessao, recusa } from "@/lib/api-auth";
 import { conformidadeDosItens } from "@/lib/catalogo";
+import { referenciasHistorico } from "@/lib/catalogo-historico";
 import { type ItemDfdRow, listarItensDfds } from "@/lib/dfd";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
 import { erro, ok } from "@/lib/http";
 import { redigirItens } from "@/lib/mesa-redacao";
 import { anoMarcadosDoPca } from "@/lib/pca-espaco";
 import { listarPadronizacao } from "@/lib/padronizacao";
+import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,8 @@ export const dynamic = "force-dynamic";
 // ACESSÍVEIS ao usuário (não só a ativa) — com a visão dos MARCADOS do PCA, também os do ano dele na Mesa do sistema.
 // Cada item vem com a CONFORMIDADE com o catálogo (veredito compacto — a coluna "Catálogo"), numa consulta só, e a
 // resposta traz o cadastro da PADRONIZAÇÃO (Catálogo → Unidades de medida | Classificações): as colunas "Classificação" e
-// "Unid. cadastrada" — carregado só com a visão Itens aberta.
+// "Unid. cadastrada" — e a REFERÊNCIA do HISTÓRICO DE COMPRA de cada código (o valor atual + médio/menor/maior entre
+// contratos — a coluna "Histórico", que aponta o item com valor divergente), carregados só com a visão Itens aberta.
 export async function GET(req: Request) {
   const g = await exigirSessao();
   if ("erro" in g) return g.erro;
@@ -42,14 +45,18 @@ export async function GET(req: Request) {
   }
   // As LINHAS da pessoa ("só os meus", detalhe do papel): só os itens dos DFDs dela.
   itens = redigirItens(itens, esc.meus);
-  // Auxiliares: uma falha na conferência do catálogo ou no cadastro da padronização nunca derruba a lista (a coluna fica
-  // "—"; as da padronização só não aparecem).
-  const [catalogo, padronizacao] = await Promise.all([
+  // Auxiliares: uma falha na conferência do catálogo, no cadastro da padronização ou no histórico de compra nunca derruba
+  // a lista (a coluna fica "—"; as da padronização e a do histórico só não aparecem).
+  const [catalogo, padronizacao, historico] = await Promise.all([
     conformidadeDosItens(itens).catch(() => itens.map(() => null)),
     listarPadronizacao().catch((e) => {
       console.error("[itens] padronização indisponível:", e);
       return null;
     }),
+    referenciasHistorico(itens.map((it) => normalizarCodigo(it.codigo))).catch((e) => {
+      console.error("[itens] histórico de compra indisponível:", e);
+      return {};
+    }),
   ]);
-  return ok({ itens: itens.map((it, i) => ({ ...it, catalogo: catalogo[i] })), padronizacao });
+  return ok({ itens: itens.map((it, i) => ({ ...it, catalogo: catalogo[i] })), padronizacao, historico });
 }

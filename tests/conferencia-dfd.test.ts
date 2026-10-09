@@ -7,6 +7,7 @@ import {
   somatorioProcesso,
   type DfdConferivel,
   estadoDeMensagens,
+  gravacaoIncompleta,
   mensagensDoDfd,
   type RepConferencia,
 } from "../src/lib/conferencia-dfd.ts";
@@ -58,6 +59,18 @@ const rep: RepConferencia = {
 };
 
 describe("avaliarLinhaDfd — conferência ÚNICA por linha (análise = gravado)", () => {
+  it("DFD GRAVADO pela metade (N de M itens) → ERRO 'Gravação incompleta' na linha e no painel; completo → nada", () => {
+    const d = dfd();
+    const inc = gravacaoIncompleta({ itens: d.itens, totalItens: d.itens.length + 2 });
+    assert.deepEqual(inc, { gravados: d.itens.length, total: d.itens.length + 2 });
+    assert.equal(gravacaoIncompleta({ itens: d.itens, totalItens: d.itens.length }), null);
+    assert.equal(gravacaoIncompleta({ itens: d.itens, totalItens: null }), null);
+    const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: inc }, rep);
+    assert.equal(r.estado, "erro");
+    assert.equal(r.resumo?.rotulo, "Gravação incompleta");
+    assert.match(mensagensDoDfd({ ...d, gravacaoIncompleta: inc }, rep, null)[0].texto, /^Gravação incompleta: \d+ de \d+ itens/);
+  });
+
   it("DFD completo e assinado pelo responsável → regular, validação auto, sem resumo", () => {
     const r = avaliarLinhaDfd(dfd(), rep);
     assert.equal(r.estado, "regular");
@@ -163,6 +176,20 @@ describe("conciliacaoCapa — valor da capa × somatória dos DFDs", () => {
     assert.equal(c.somatorio, 0.3);
   });
 
+  it("compara a capa com a somatória EXATA: fração de centavo bate; 1 centavo inteiro diverge — sempre igual (casos reais)", () => {
+    // 103648/2026: itens com preço de 4 casas somam 196.129.771,5452; a Centi pôs 196.129.771,54 na capa.
+    const fracao = conciliacaoCapa({ valorCapa: 196129771.54, somatorio: 196129771.5452, totalDfds: 65 });
+    assert.equal(fracao.divergente, false);
+    assert.equal(fracao.somatorio, 196129771.55, "a somatória mostrada/substituída vai ao centavo");
+    assert.equal(conciliacaoCapa({ valorCapa: 161611662.5, somatorio: 161611662.4988, totalDfds: 9 }).divergente, false);
+    // 1 centavo inteiro: diverge nos dois casos (antes, o ponto flutuante fazia um "bater" e o outro não).
+    assert.equal(conciliacaoCapa({ valorCapa: 196129771.54, somatorio: 196129771.55, totalDfds: 65 }).divergente, true);
+    assert.equal(conciliacaoCapa({ valorCapa: 161611662.5, somatorio: 161611662.49, totalDfds: 9 }).divergente, true);
+    const proc = somatorioProcesso({ valorTotal: 196129771.5452, totalDfds: 65 });
+    assert.equal(avaliarProtocolo({ valorCapa: 196129771.54, valorTotal: 196129771.5452, totalDfds: 65 }, [], regrasPadrao()).estado, "regular");
+    assert.equal(proc.somatorio, 196129771.55);
+  });
+
   it("'avisa' aponta sem bloquear; o estado do protocolo usa a MESMA régua", () => {
     const regras = { ...regrasPadrao(), pontos: { "protocolo.valorCapa": "intermediario" as const } };
     const c = conciliacaoCapa({ valorCapa: 1, somatorio: 2, totalDfds: 1 }, regras);
@@ -224,8 +251,8 @@ describe("avaliarProtocolo — o protocolo ACUMULA os problemas dos DFDs e itens
     assert.equal(soRastro.estado, "regular");
   });
   it("somatorioProcesso (fonte única da massa 'valor da capa = somatória'): vivos + rastro, ao centavo", () => {
-    assert.deepEqual(somatorioProcesso({ valorTotal: 200.004, totalDfds: 2, sobrescritos: 1, valorSobrescritos: 100 }), { somatorio: 300, dfds: 3 });
-    assert.deepEqual(somatorioProcesso({ valorTotal: 0, totalDfds: 0 }), { somatorio: 0, dfds: 0 });
+    assert.deepEqual(somatorioProcesso({ valorTotal: 200.004, totalDfds: 2, sobrescritos: 1, valorSobrescritos: 100 }), { somatorio: 300, exato: 300.004, dfds: 3 });
+    assert.deepEqual(somatorioProcesso({ valorTotal: 0, totalDfds: 0 }), { somatorio: 0, exato: 0, dfds: 0 });
   });
 });
 
@@ -242,7 +269,7 @@ describe("aplicarMassaDfd + buildPrevisao — edição em massa (fonte única)",
     const p = aplicarMassaDfd(base, { campo: "prioridade", valor: "ALTA" });
     assert.equal(textoSecao(p.secoes, "PRIORIDADE"), "ALTA");
     assert.equal(textoSecao(p.secoes, "JUSTIFICATIVA"), "x");
-    const v = aplicarMassaDfd(p, { campo: "previsao", valor: buildPrevisao("MARÇO", "2027", false) });
+    const v = aplicarMassaDfd(p, { campo: "previsao", valor: buildPrevisao("MARÇO", "2027", "") });
     assert.equal(textoSecao(v.secoes, "PREVISAO DE ENTREGA"), "MARÇO/2027");
     const f = aplicarMassaDfd(v, { campo: "fundamentacao", valor: "Lei 14.133/2021" });
     assert.equal(textoSecao(f.secoes, "FUNDAMENTACAO LEGAL"), "Lei 14.133/2021");
@@ -253,10 +280,12 @@ describe("aplicarMassaDfd + buildPrevisao — edição em massa (fonte única)",
     assert.equal(aplicarMassaDfd(base, { campo: "reparticao", reparticaoId: 3 }), base);
   });
 
-  it("buildPrevisao: ANUAL (com/sem ano) OU MÊS/AAAA (exige os dois)", () => {
-    assert.equal(buildPrevisao("", "", true), "ANUAL");
-    assert.equal(buildPrevisao("", "2027", true), "ANUAL/2027");
-    assert.equal(buildPrevisao("MAIO", "2027", false), "MAIO/2027");
-    assert.equal(buildPrevisao("MAIO", "", false), "");
+  it("buildPrevisao: GENÉRICA (a periodicidade, com/sem ano) OU MÊS/AAAA (exige os dois)", () => {
+    assert.equal(buildPrevisao("", "", "ANUAL"), "ANUAL");
+    assert.equal(buildPrevisao("", "2027", "ANUAL"), "ANUAL/2027");
+    assert.equal(buildPrevisao("MAIO", "2027", "SEMESTRAL"), "SEMESTRAL/2027");
+    assert.equal(buildPrevisao("", "2027", "QUADRIMESTRAL"), "QUADRIMESTRAL/2027");
+    assert.equal(buildPrevisao("MAIO", "2027", ""), "MAIO/2027");
+    assert.equal(buildPrevisao("MAIO", "", ""), "");
   });
 });

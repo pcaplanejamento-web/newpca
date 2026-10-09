@@ -1,4 +1,5 @@
 import { enviarEmailDireto } from "@/lib/email";
+import { getConfigNotificacoes } from "@/lib/notificacoes-config";
 import { emailAcessoLiberado } from "@/lib/email-core";
 import { depoisDaResposta } from "@/lib/segundo-plano";
 import { and, eq, ne, sql } from "drizzle-orm";
@@ -159,9 +160,10 @@ export async function PATCH(
       throw e;
     }
   }
-  // Acesso LIBERADO (pendente → ativo): a pessoa recebe o aviso por e-mail (com o Resend ativo; depois da resposta).
+  // Acesso LIBERADO (pendente → ativo): a pessoa recebe o aviso por e-mail (com o Resend ativo e o aviso ligado pelo ADM em
+  // Configurações → Notificações; depois da resposta).
   const aprovou = antes.status === "pendente" && status === "ativo";
-  if (aprovou) {
+  if (aprovou && (await getConfigNotificacoes()).acesso.email) {
     const destino = email ?? antes.email;
     const quem = nome ?? antes.nome;
     depoisDaResposta(enviarEmailDireto([destino], (ctx) => emailAcessoLiberado({ nome: quem }, ctx)), "email");

@@ -7,6 +7,7 @@ import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import { COR_ESTADO_PRAZO, estadoPrazo, ROTULO_ESTADO_PRAZO, ROTULO_VINCULO, rotuloData, rotuloTicket, type TipoVinculo } from "@/lib/tarefas-core";
 import { dataIsoBrasilia } from "@/lib/format";
 import { Badge } from "./Badge";
+import { BotaoAcao } from "./BotaoAcao";
 import { Button } from "./Button";
 import { SelectField } from "./Field";
 import { IconKanban, IconPlus } from "./icons";
@@ -27,11 +28,22 @@ type TarefaLigada = {
 type QuadroOpcao = { id: number; nome: string; cor: string; grupoNome: string };
 
 /**
- * TAREFAS de um protocolo/DFD (no rodapé dos banners da Mesa): o botão "Tarefas (N)" abre as tarefas LIGADAS a ele (nos
+ * TAREFAS de um protocolo/DFD (no cabeçalho dos banners da Mesa): o botão "Tarefas" (ícone + "abertas/total") abre as tarefas LIGADAS a ele (nos
  * quadros que o usuário vê — tocar leva ao cartão no quadro) e "Criar tarefa" num quadro escolhido (abre a tarefa NOVA
  * já vinculada). Sem tarefas nem quadros, o botão não aparece.
  */
-export function TarefasDoVinculo({ tipo, id }: { tipo: TipoVinculo; id: number }) {
+export function TarefasDoVinculo({
+  tipo,
+  id,
+  disabled = false,
+  dica,
+}: {
+  tipo: TipoVinculo;
+  id: number;
+  /** Travado (o banner grava ou sobrescreve): o botão fica À VISTA, sem abrir (criar tarefa navega). */
+  disabled?: boolean;
+  dica?: string;
+}) {
   const router = useRouter();
   const [dados, setDados] = useState<{ tarefas: TarefaLigada[]; quadros: QuadroOpcao[] } | null>(null);
   const [aberto, setAberto] = useState(false);
@@ -57,10 +69,15 @@ export function TarefasDoVinculo({ tipo, id }: { tipo: TipoVinculo; id: number }
   const abertas = dados.tarefas.filter((t) => !t.arquivada && !t.concluidaEm).length;
   return (
     <>
-      <Button variant="secondary" icon={<IconKanban className="h-4 w-4" />} onClick={() => setAberto(true)}>
-        Tarefas{dados.tarefas.length ? ` (${abertas}/${dados.tarefas.length})` : ""}
-      </Button>
-      <Modal open={aberto} onClose={() => setAberto(false)} titulo={`Tarefas do ${ROTULO_VINCULO[tipo]}`} size="md">
+      <BotaoAcao
+        rotulo="Tarefas"
+        icon={<IconKanban className="h-4 w-4" />}
+        contagem={dados.tarefas.length ? `${abertas}/${dados.tarefas.length}` : null}
+        onClick={() => setAberto(true)}
+        disabled={disabled}
+        dica={disabled ? dica : undefined}
+      />
+      <Modal open={aberto && !disabled} onClose={() => setAberto(false)} titulo={`Tarefas do ${ROTULO_VINCULO[tipo]}`} size="md">
         <div className="space-y-4">
           {dados.tarefas.length === 0 ? (
             <p className="text-[13px] text-muted">Nenhuma tarefa ligada a este {ROTULO_VINCULO[tipo]} ainda.</p>

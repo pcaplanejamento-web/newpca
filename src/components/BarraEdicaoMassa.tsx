@@ -2,10 +2,10 @@
 
 import { type ReactNode, useState } from "react";
 import { type ChaveAvaliacao, editavelDe, opcoesAssunto, type RegrasAvaliacao, regrasPadrao, TIPO_DFD_ROTULO, TIPOS_DFD } from "@/lib/avaliacao-core";
-import { type AcaoMassa, buildPrevisao, type CampoMassa } from "@/lib/dfd-tratamento";
+import { type AcaoMassa, buildPrevisao, type CampoMassa, DEFINICOES_PREVISAO } from "@/lib/dfd-tratamento";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import type { AcaoMassaItem, CampoMassaItem } from "@/lib/massa-itens";
-import { MESES, type Prioridade, parseNumberBR } from "@/lib/normalize";
+import { MESES, type PeriodoPrevisao, type Prioridade, parseNumberBR } from "@/lib/normalize";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import type { Lado } from "@/lib/sobrescrita-dfd";
 import { type EtiquetaTarefa, type ListaTarefas, PRIORIDADES as PRIORIDADES_TAREFA, type Prioridade as PrioridadeTarefa, ROTULO_PRIORIDADE } from "@/lib/tarefas-core";
@@ -16,6 +16,7 @@ import { inputCls } from "./formStyles";
 import { IconUserX } from "./icons";
 import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
+import { Selecao } from "./Selecao";
 
 type Rep = { id: number; codigo: string; nome: string; oculto?: boolean | null };
 /** Responsável em massa: "0" = LIMPAR (sem responsável). */
@@ -66,7 +67,7 @@ const Nota = ({ children }: { children: ReactNode }) => <p className="text-[12.5
 /** Seletor de UNIDADE (as ocultas não aparecem para uso novo). */
 function SeletorUnidade({ value, onChange, reparticoes }: { value: number | null; onChange: (id: number | null) => void; reparticoes: Rep[] }) {
   return (
-    <select
+    <Selecao
       aria-label="Unidade"
       className={inputCls}
       style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }}
@@ -81,7 +82,7 @@ function SeletorUnidade({ value, onChange, reparticoes }: { value: number | null
             {r.codigo} · {r.nome}
           </option>
         ))}
-    </select>
+    </Selecao>
   );
 }
 
@@ -134,11 +135,12 @@ export function BarraEdicaoMassa({
   const [prio, setPrio] = useState<Prioridade | "">("");
   const [mes, setMes] = useState("");
   const [ano, setAno] = useState(anoPadrao != null ? String(anoPadrao) : "");
-  const [anual, setAnual] = useState(false);
+  const [periodo, setPeriodo] = useState<PeriodoPrevisao | "">("");
   const [fund, setFund] = useState("Lei 14.133/2021");
   if (campos.length === 0) return <Nota>Os campos editáveis em massa estão travados nas Configurações → Avaliação.</Nota>;
 
-  const previsao = buildPrevisao(mes, ano, anual);
+  // O ano é SEMPRE o do PCA (travado); sem PCA definido, o digitado.
+  const previsao = buildPrevisao(mes, anoPadrao != null ? String(anoPadrao) : ano, periodo);
   const acao: AcaoMassa | null =
     campo === "versao"
       ? null
@@ -196,7 +198,7 @@ export function BarraEdicaoMassa({
           )}
           {campo === "reparticao" && <SeletorUnidade value={rep} onChange={setRep} reparticoes={reparticoes} />}
           {campo === "tipo" && (
-            <select
+            <Selecao
               aria-label="Tipo do DFD"
               className={inputCls}
               style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }}
@@ -209,7 +211,7 @@ export function BarraEdicaoMassa({
                   {TIPO_DFD_ROTULO[t]}
                 </option>
               ))}
-            </select>
+            </Selecao>
           )}
           {campo === "prioridade" && (
             <Segmented<Prioridade | "">
@@ -224,32 +226,47 @@ export function BarraEdicaoMassa({
           )}
           {campo === "previsao" && (
             <>
-              <select
-                aria-label="Mês"
+              <Selecao
+                aria-label="Definição da previsão"
                 className={inputCls}
-                style={{ width: "auto", flex: "0 1 140px" }}
-                value={mes}
-                disabled={anual}
-                onChange={(e) => setMes(e.target.value)}
+                style={{ width: "auto", flex: "0 1 160px" }}
+                value={periodo}
+                onChange={(e) => setPeriodo(e.target.value as PeriodoPrevisao | "")}
               >
-                <option value="">— Mês —</option>
-                {MESES.map((m) => (
-                  <option key={m} value={m}>
-                    {m[0] + m.slice(1).toLowerCase()}
+                {DEFINICOES_PREVISAO.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
                   </option>
                 ))}
-              </select>
+              </Selecao>
+              {!periodo && (
+                <Selecao
+                  aria-label="Mês"
+                  className={inputCls}
+                  style={{ width: "auto", flex: "0 1 140px" }}
+                  value={mes}
+                  onChange={(e) => setMes(e.target.value)}
+                >
+                  <option value="">— Mês —</option>
+                  {MESES.map((m) => (
+                    <option key={m} value={m}>
+                      {m[0] + m.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </Selecao>
+              )}
               <input
                 aria-label="Ano"
+                title={anoPadrao != null ? "O ano é sempre o do PCA" : undefined}
                 className={inputCls}
                 style={{ width: 84 }}
                 inputMode="numeric"
                 maxLength={4}
                 placeholder="Ano"
-                value={ano}
+                value={anoPadrao != null ? String(anoPadrao) : ano}
+                readOnly={anoPadrao != null}
                 onChange={(e) => setAno(e.target.value.replace(/\D/g, "").slice(0, 4))}
               />
-              <Checkbox label="Anual" checked={anual} onChange={(e) => setAnual(e.target.checked)} />
             </>
           )}
           {campo === "fundamentacao" && (
@@ -286,7 +303,7 @@ export function BarraEdicaoMassaProtocolos({
   /** O usuário da sessão ("(eu)", primeiro da lista). */
   usuarioId?: number | null;
   /** Situações cadastradas pelo ADM. */
-  situacoes?: { id: number; nome: string }[];
+  situacoes?: { id: number; nome: string; cor?: string }[];
   regras?: RegrasAvaliacao;
   aplicando?: boolean;
   /** O papel ALTERA o Responsável (os detalhes do papel: "não altera" tira o campo). */
@@ -348,7 +365,7 @@ export function BarraEdicaoMassaProtocolos({
             onChange={setPessoa}
           />
         ) : campo === "situacao" ? (
-          <select
+          <Selecao
             aria-label="Situação"
             className={inputCls}
             style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }}
@@ -358,15 +375,15 @@ export function BarraEdicaoMassaProtocolos({
             <option value="">— Situação —</option>
             <option value="0">Sem situação (limpar)</option>
             {situacoes.map((x) => (
-              <option key={x.id} value={x.id}>
+              <option key={x.id} value={x.id} data-cor={x.cor}>
                 {x.nome}
               </option>
             ))}
-          </select>
+          </Selecao>
         ) : campo === "reparticao" ? (
           <SeletorUnidade value={rep} onChange={setRep} reparticoes={reparticoes} />
         ) : campo === "assunto" ? (
-          <select
+          <Selecao
             aria-label="Assunto"
             className={inputCls}
             style={{ width: "auto", minWidth: 220, flex: "1 1 220px" }}
@@ -379,7 +396,7 @@ export function BarraEdicaoMassaProtocolos({
                 {a}
               </option>
             ))}
-          </select>
+          </Selecao>
         ) : (
           <Nota>Substitui o valor da capa de cada protocolo pela somatória dos seus DFDs (os que já conferem ficam como estão).</Nota>
         )
@@ -534,14 +551,14 @@ export function BarraEdicaoMassaTarefas({
     />
   );
   const sel = (rotulo: string, valor: string, set: (v: string) => void, opcoes: { v: string; r: string }[]) => (
-    <select aria-label={rotulo} className={inputCls} style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }} value={valor} onChange={(e) => set(e.target.value)}>
+    <Selecao aria-label={rotulo} className={inputCls} style={{ width: "auto", minWidth: 200, flex: "1 1 200px" }} value={valor} onChange={(e) => set(e.target.value)}>
       <option value="">— {rotulo} —</option>
       {opcoes.map((o) => (
         <option key={o.v} value={o.v}>
           {o.r}
         </option>
       ))}
-    </select>
+    </Selecao>
   );
 
   return (

@@ -3,83 +3,122 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
-import { type AlvoVinculo, chaveVinculo, linhasVinculo, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { type AlvosVinculo, type EscopoVinculos, unidadesDoOrcamento, type VinculoOrcamento, type VisaoVinculos, vinculosDaVisao } from "@/lib/orcamento-vinculo";
 import { AvisoFlutuante } from "./AvisoFlutuante";
-import { type VinculoAlterado, OrcamentoVinculos } from "./OrcamentoVinculos";
-
-const SEM_PENDENTES: ReadonlyMap<string, VinculoAlterado> = new Map();
+import type { DadosVinculo } from "./EditorVinculoOrcamento";
+import { OrcamentoVinculos } from "./OrcamentoVinculos";
+import { toast } from "./Toast";
 
 /**
- * Aba VÍNCULOS da tela do orçamento: os Órgãos/Unidades DISTINTOS dos lançamentos DESTE orçamento, cada um ligado
- * a um órgão/unidade do cadastro (`OrcamentoVinculos`). O vínculo é GLOBAL (pelo texto normalizado) — vale para
- * todos os orçamentos. Gravação OTIMISTA: as pendentes valem só sobre a base de vínculos em que foram feitas —
- * quando a página recarrega os vínculos gravados (nova base), somem sozinhas.
+ * A GRAVAÇÃO dos vínculos (a aba Vínculos, o banner da visão e o banner da linha do orçamento do PCA): uma por vez; cada
+ * resposta traz a lista GRAVADA no banco — os vínculos (o padrão e os das visões) e as unidades PRÓPRIAS de cada visão —,
+ * aplicada na hora (`atuais`/`visoesAtuais` — valem até a página trazer os dados de novo); o erro fica para o editor.
+ * Toda gravação leva o ESCOPO (onde salvar: o padrão e/ou as visões).
  */
-export function OrcamentoVinculosAba({
-  itens,
-  vinculos,
-  alvos,
-  podeEditar,
-}: {
-  itens: Pick<OrcamentoItemRow, "orgao" | "unidade" | "valorInicial">[];
-  vinculos: VinculoOrcamento[];
-  alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
-  podeEditar: boolean;
-}) {
+export function useGravacaoVinculos(vinculos: VinculoOrcamento[], visoes: VisaoVinculos[] = SEM_VISOES) {
   const router = useRouter();
-  const [pend, setPend] = useState<{ base: VinculoOrcamento[]; m: Map<string, VinculoAlterado> }>(() => ({ base: vinculos, m: new Map() }));
-  const pendentes = pend.base === vinculos ? pend.m : SEM_PENDENTES;
-  const alterarPendentes = (fn: (m: Map<string, VinculoAlterado>) => void) =>
-    setPend((p) => {
-      const m = new Map(p.base === vinculos ? p.m : SEM_PENDENTES);
-      fn(m);
-      return { base: vinculos, m };
-    });
+  // A lista que o servidor devolveu na última gravação (sobre a base `vinculos` em que foi feita).
+  const [gravados, setGravados] = useState<{ base: VinculoOrcamento[]; lista: VinculoOrcamento[]; proprias: Map<number, string[]> } | null>(null);
+  const valido = gravados && gravados.base === vinculos ? gravados : null;
+  const atuais = valido ? valido.lista : vinculos;
+  const visoesAtuais = useMemo(
+    () => (valido ? visoes.map((v) => ({ ...v, proprias: valido.proprias.get(v.id) ?? v.proprias })) : visoes),
+    [valido, visoes],
+  );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const efetivos = useMemo(() => {
-    if (pendentes.size === 0) return vinculos;
-    const m = new Map(vinculos.map((v) => [`${v.tipo}|${v.chave}`, v]));
-    for (const [k, p] of pendentes) m.set(k, { tipo: p.tipo, chave: k.slice(p.tipo.length + 1), texto: p.texto, alvoId: p.alvoId });
-    return [...m.values()];
-  }, [vinculos, pendentes]);
-  const linhas = useMemo(() => linhasVinculo(itens, efetivos, alvos), [itens, efetivos, alvos]);
-
-  async function salvar(lista: VinculoAlterado[]) {
-    const chaves = lista.map((v) => `${v.tipo}|${chaveVinculo(v.texto)}`);
+  async function gravar(url: string, metodo: "POST" | "PATCH" | "DELETE", corpo: unknown, sucesso: string): Promise<boolean> {
+    if (salvando) return false;
     setErro(null);
-    alterarPendentes((m) => {
-      for (let i = 0; i < lista.length; i++) m.set(chaves[i], lista[i]);
-    });
     setSalvando(true);
     try {
-      for (let i = 0; i < lista.length; i += 200) {
-        const resp = await fetch("/api/orcamento/vinculos", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vinculos: lista.slice(i, i + 200) }),
-        });
-        const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-        if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível gravar o vínculo.");
-      }
+      const resp = await fetch(url, {
+        method: metodo,
+        headers: corpo ? { "Content-Type": "application/json" } : undefined,
+        body: corpo ? JSON.stringify(corpo) : undefined,
+      });
+      const j = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        vinculos?: VinculoOrcamento[];
+        visoes?: { id: number; proprias: string[] }[];
+      };
+      if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível gravar o vínculo.");
+      if (j.vinculos) setGravados({ base: vinculos, lista: j.vinculos, proprias: new Map((j.visoes ?? []).map((v) => [v.id, v.proprias])) });
+      toast.success(sucesso);
       router.refresh();
+      return true;
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível gravar o vínculo.");
-      alterarPendentes((m) => {
-        for (const k of chaves) m.delete(k);
-      });
+      return false;
     } finally {
       setSalvando(false);
     }
   }
 
+  return {
+    atuais,
+    visoesAtuais,
+    salvando,
+    erro,
+    limparErro: () => setErro(null),
+    criar: (lista: DadosVinculo[], escopo?: EscopoVinculos) =>
+      gravar("/api/orcamento/vinculos", "POST", { vinculos: lista, escopo }, lista.length === 1 ? "Vínculo criado." : `${lista.length} vínculos criados.`),
+    editar: (id: number, d: DadosVinculo, escopo?: EscopoVinculos) =>
+      gravar(`/api/orcamento/vinculos/${id}`, "PATCH", { alvoId: d.alvoId, acoes: d.acoes, acoesFora: d.acoesFora, escopo }, "Vínculo salvo."),
+    excluir: (id: number, escopo?: EscopoVinculos) => gravar(`/api/orcamento/vinculos/${id}`, "DELETE", { escopo }, "Vínculo excluído."),
+    usarPadrao: (visaoId: number, chave: string) => gravar("/api/orcamento/vinculos/padrao", "POST", { visaoId, chave }, "A visão voltou a seguir o padrão nesta unidade."),
+  };
+}
+
+const SEM_VISOES: VisaoVinculos[] = [];
+
+/**
+ * Aba VÍNCULOS da tela do orçamento: as UNIDADES dos lançamentos DESTE orçamento e os VÍNCULOS criados para elas
+ * (`OrcamentoVinculos`) — criar (`POST /api/orcamento/vinculos`, vários de uma vez nas sugestões), editar e excluir
+ * (`PATCH`/`DELETE …/[id]`) — pelo `useGravacaoVinculos`. O vínculo é GLOBAL (pelo texto normalizado) — vale para todos
+ * os orçamentos. A VISÃO da barra escolhe quais vínculos aparecem e editam (o padrão ou os de uma visão); o erro fica no
+ * editor aberto (ou num aviso flutuante).
+ */
+export function OrcamentoVinculosAba({
+  itens,
+  vinculos,
+  visoes,
+  alvos,
+  podeEditar,
+}: {
+  itens: Pick<OrcamentoItemRow, "orgao" | "unidade" | "acao" | "valorInicial">[];
+  vinculos: VinculoOrcamento[];
+  visoes: VisaoVinculos[];
+  alvos: AlvosVinculo;
+  podeEditar: boolean;
+}) {
+  const unidades = useMemo(() => unidadesDoOrcamento(itens), [itens]);
+  const g = useGravacaoVinculos(vinculos, visoes);
+  const [visaoId, setVisaoId] = useState<number | null>(null);
+  const visao = g.visoesAtuais.find((v) => v.id === visaoId) ?? null;
+  const efetivos = useMemo(() => vinculosDaVisao(g.atuais, visao), [g.atuais, visao]);
   return (
     <>
-      <OrcamentoVinculos linhas={linhas} alvos={alvos} podeEditar={podeEditar} salvando={salvando} scrollInterno onVincular={salvar} />
-      {erro && (
-        <AvisoFlutuante kind="danger" titulo="Não foi possível vincular" onClose={() => setErro(null)}>
-          {erro}
+      <OrcamentoVinculos
+        unidades={unidades}
+        vinculos={efetivos}
+        alvos={alvos}
+        podeEditar={podeEditar}
+        salvando={g.salvando}
+        erro={g.erro}
+        scrollInterno
+        contexto={{ visoes: g.visoesAtuais, visaoId: visao?.id ?? null }}
+        onVisao={setVisaoId}
+        onCriar={g.criar}
+        onEditar={g.editar}
+        onExcluir={g.excluir}
+        onUsarPadrao={visao ? (chave) => g.usarPadrao(visao.id, chave) : undefined}
+      />
+      {g.erro && (
+        <AvisoFlutuante kind="danger" titulo="Não foi possível gravar o vínculo" onClose={g.limparErro}>
+          {g.erro}
         </AvisoFlutuante>
       )}
     </>

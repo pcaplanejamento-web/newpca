@@ -313,15 +313,14 @@ describe("sobrescrita com escolha — seção padrão, total do lado inteiro e e
     assert.equal(estadoEscolha(secoes[0], w, g, n), "gravado");
   });
 
-  it("com os itens de UM lado inteiro, vale o valor total DESSE lado (o TOTAL GERAL pode diferir da soma)", () => {
+  it("o valor do DFD é SEMPRE a soma dos itens (o TOTAL GERAL do arquivo não entra) — manter todos os gravados = igual", () => {
     const g = { ...dfd({ itens: [item(1, "111", 1, 10), item(2, "222", 2, 10.005)] }), valorTotal: 30.01 };
-    const n = marcarItensNovos({ ...dfd({ itens: [item(1, "111", 1, 10), item(2, "222", 3, 10)] }), valorTotal: 40.02 });
+    const n = marcarItensNovos({ ...dfd({ itens: [item(1, "111", 1, 10), item(2, "222", 3, 10)] }), valorTotal: 40 });
     const entradas = entradasEscolha(comparacaoEscolha(g, n));
     const tudoG = escolherTudo("gravado", n, g, n);
     assert.equal(tudoG.valorTotal, 30.01);
     assert.equal(compararDfd({ ...g, reparticaoId: null, anoPca: null }, { ...semMarcas(tudoG), reparticaoId: null, anoPca: null }).situacao, "igual");
-    // "Usar todos os novos" no estado inicial não troca o TOTAL GERAL do arquivo pela soma.
-    assert.equal(escolherTudo("novo", n, g, n).valorTotal, 40.02);
+    assert.equal(escolherTudo("novo", n, g, n).valorTotal, 40);
     // Mistura (um item de cada lado): a soma dos itens.
     const e2 = entradas.find((e) => e.tipo === "item");
     assert.ok(e2);

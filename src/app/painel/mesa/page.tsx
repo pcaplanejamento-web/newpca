@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 /** As opções do seletor de Mesa: os PCAs de fonte Protocolos (os únicos com Mesa). */
 const opcoesMesa = (pcas: PcaResumo[]) => pcas.filter((p) => p.fonte === "protocolo").map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
 
-export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string }> }) {
+export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string; responsavel?: string }> }) {
   const sp = await searchParams;
   // `?pca=<id>` = a MESA DAQUELE PCA (a mesma da aba do espaço), escolhida no seletor da barra; PCA inexistente ou de
   // lista = a Mesa do sistema. Cada uma com o seu portão: a Mesa do PCA exige VISUALIZAR o PCA; a do sistema, a Mesa.
@@ -37,9 +37,13 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   const m = await carregarMesa(r.acesso.u);
   const alvo = lerVinculo(sp.abrir);
   const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
+  // `?responsavel=<id>` (o "Ver na Mesa" da presença): abre filtrada pela pessoa — só para quem vê o Responsável.
+  const resp = Number(sp.responsavel);
+  const filtroInicial = m.verResponsavel && Number.isInteger(resp) && resp > 0 ? { ...m.filtroInicial, responsavel: resp } : m.filtroInicial;
   return (
     <MesaSistema
-      key="sistema"
+      // O filtro pela pessoa vindo da URL remonta a Mesa (o filtro é o estado inicial dela).
+      key={`sistema:${filtroInicial === m.filtroInicial ? "" : resp}`}
       // As Mesas dos PCAs só para quem visualiza o PCA (senão a opção levaria a "Acesso restrito").
       seletorMesa={<SeletorMesa pcas={m.pode.pca.visualizar ? opcoesMesa(m.pcas) : []} atual={null} />}
       pode={m.pode}
@@ -53,11 +57,13 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
       outrasPessoas={m.outrasPessoas}
       situacoes={m.situacoes}
       usuarioId={m.usuarioId}
-      filtroInicial={m.filtroInicial}
+      filtroInicial={filtroInicial}
       pcaFiltro={m.pcaFiltro}
       edicoes={m.edicoes}
       abrirInicial={abrirInicial}
       dadosCompletos={m.dadosCompletos}
+      colunasAuto={m.colunasAuto}
+      automacoes={m.automacoes}
     />
   );
 }

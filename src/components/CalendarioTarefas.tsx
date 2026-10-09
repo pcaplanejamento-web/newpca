@@ -44,7 +44,6 @@ import {
   IconCalendar,
   IconCheck,
   IconChecklist,
-  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconCirculo,
@@ -60,6 +59,7 @@ import {
 import { JanelaFlutuante } from "./JanelaFlutuante";
 import { Modal } from "./Modal";
 import { segurar } from "./segurar";
+import { SetaDropdown } from "./SetaDropdown";
 import { Switch } from "./Switch";
 
 export type MesCalendario = { ano: number; mes: number };
@@ -890,6 +890,7 @@ export function CalendarioTarefas({
           {dias.map((d, i) => (
             <div
               key={`t${d}`}
+              aria-hidden="true"
               data-dia={d}
               onClick={(ev) => ev.target === ev.currentTarget && onCriar?.({ data: d, hora: null, horaFim: null, ancora: retangulo(ev.currentTarget) })}
               style={{ gridColumn: i + 2, gridRow: "1 / -1" }}
@@ -1078,6 +1079,7 @@ export function CalendarioTarefas({
                 {sem.map((d, i) => (
                   <div
                     key={`f${d}`}
+                    aria-hidden="true"
                     data-dia={d}
                     onClick={(ev) => ev.target === ev.currentTarget && onCriar?.({ data: d, hora: null, horaFim: null, ancora: retangulo(ev.currentTarget) })}
                     style={{ gridColumn: i + off, gridRow: "1 / -1" }}
@@ -1300,7 +1302,7 @@ export function CalendarioTarefas({
       trigger={
         <>
           {ROTULO_VISTA[vista]}
-          <IconChevronDown className="h-4 w-4 text-muted" />
+          <SetaDropdown className="h-4 w-4 text-muted" />
         </>
       }
     >

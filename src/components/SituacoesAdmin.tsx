@@ -116,7 +116,7 @@ export function SituacoesAdmin() {
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={3} />
       </div>
     );
@@ -163,7 +163,7 @@ export function SituacoesAdmin() {
         </Button>
       </div>
       {lista.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">
           Nenhuma situação cadastrada — a coluna Situação da Mesa fica vazia até você cadastrar a primeira.
         </p>
       ) : (
@@ -189,7 +189,7 @@ export function SituacoesAdmin() {
         <div className="space-y-[var(--gap-block)]">
           <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Em análise" maxLength={60} />
           <ColorField label="Cor" value={cor} onChange={setCor} />
-          <div className="rounded-card border border-border bg-surface-2 p-3">
+          <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
             <p className="mb-1.5 text-[12px] font-semibold text-muted">Prévia</p>
             <EstadoPonto rotulo={nome.trim() || "Situação"} cor={cor} />
           </div>

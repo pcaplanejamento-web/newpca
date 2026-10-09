@@ -1,22 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
-import {
-  hojeISO,
-  RESPONSAVEIS_VAZIO,
-  type Responsaveis,
-  responsaveisVigentes,
-} from "@/lib/reparticao-responsaveis";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import { AcoesCadastro } from "./AcoesCadastro";
+import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
+import { BannerCadastro, type CampoCadastro } from "./BannerCadastro";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
+import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
-import { TextField } from "./Field";
-import { IconArrowDown, IconArrowUp, IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconPencil, IconPlus, IconRefresh, IconTrash } from "./icons";
-import { Modal } from "./Modal";
-import { ResponsaveisEditor } from "./ResponsaveisEditor";
+import { IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
+import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
+import { SecaoBanner } from "./SecaoBanner";
+import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
+import { toast } from "./Toast";
+import { CelulaResponsaveis } from "./VinculosResponsaveis";
 
 type Rep = {
   id: number;
@@ -29,393 +30,396 @@ type Rep = {
   /** 1 = unidade PRÓPRIA do órgão (o órgão funciona também como unidade). */
   orgaoProprio: boolean;
   oculto: boolean;
-  responsaveis: Responsaveis;
 };
 
+export type AbaUnidades = "unidades" | "responsaveis";
+
+const CAMPOS: CampoCadastro[] = [
+  { chave: "codigo", label: "Sigla (código)", placeholder: "Ex.: AMAE", max: 30, obrigatorio: true, mono: true },
+  { chave: "numeroInteressado", label: "Nº do interessado (protocolo em nome da unidade)", placeholder: "Ex.: 1008171", max: 60, mono: true, inputMode: "numeric", dica: "Único no sistema (órgãos e unidades)." },
+  { chave: "nome", label: "Nome da unidade", max: 160, obrigatorio: true, span: true },
+  { chave: "setorRequisitante", label: "Setor Requisitante (padrão do DFD)", placeholder: "Ex.: SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL", max: 200, span: true },
+];
+
+const valoresDe = (u: Rep | null): Record<string, string> => ({
+  codigo: u?.codigo ?? "",
+  nome: u?.nome ?? "",
+  numeroInteressado: u?.numeroInteressado ?? "",
+  setorRequisitante: u?.setorRequisitante ?? "",
+});
+
 /**
- * CRUD das UNIDADES de UM órgão — a tela vive DENTRO de `/painel/orgaos/[id]`.
- * O órgão vem do escopo (URL), então a unidade herda `orgaoId` sem um seletor: toda
- * unidade já nasce dentro do seu órgão. Ordenação por botões ↑/↓ (persistida).
+ * As UNIDADES de UM órgão (`/painel/orgaos/[id]`) — abas **Unidades | Responsáveis** (a planilha, só quem responde neste
+ * órgão ou nas unidades dele). Tabela padrão da Mesa; tocar na linha abre o BANNER da unidade (dados por cadeado,
+ * responsáveis — ou "pelo órgão" quando a assinatura é única —, promover a órgão, ocultar, excluir).
  */
 export function ReparticoesAdmin({
   orgaoId,
+  orgaoSigla,
   orgaoNome,
   assinaturaUnica,
+  abaInicial,
 }: {
   orgaoId: number;
+  orgaoSigla: string;
   orgaoNome: string;
   /** O órgão está em "assinatura única": os responsáveis vêm do órgão, não da unidade. */
   assinaturaUnica: boolean;
+  abaInicial: AbaUnidades;
 }) {
   const router = useRouter();
+  const ctx = usePlanilhaResponsaveis();
+  const [aba, setAba] = useState<AbaUnidades>(abaInicial);
+  const [exonerados, setExonerados] = useState(false);
   const [lista, setLista] = useState<Rep[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [editando, setEditando] = useState<Rep | "novo" | null>(null);
-  const [codigo, setCodigo] = useState("");
-  const [nome, setNome] = useState("");
-  const [numeroInteressado, setNumeroInteressado] = useState("");
-  const [setorRequisitante, setSetorRequisitante] = useState("");
-  const [formOculto, setFormOculto] = useState(false); // preservado no PATCH (togglado pela ação da linha)
-  const [responsaveis, setResponsaveis] = useState<Responsaveis>(RESPONSAVEIS_VAZIO);
-  const [salvando, setSalvando] = useState(false);
-  const [recarregando, setRecarregando] = useState(false);
-  const [estruturando, setEstruturando] = useState(false); // promover/estrutura em andamento
-  const hoje = hojeISO();
+  const [aberto, setAberto] = useState<number | "novo" | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const { confirmar, confirmacao } = useConfirmacao();
 
   const carregar = useCallback(async () => {
-    setErro(null);
     try {
       const r = await fetch(`/api/admin/reparticoes?orgaoId=${orgaoId}`);
-      const j = (await r.json()) as { ok?: boolean; error?: string; reparticoes?: Rep[] };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; reparticoes?: Rep[] };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar as unidades.");
       setLista(j.reparticoes ?? []);
+      setErro(null);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao carregar.");
-      setLista([]);
+      setErro(e instanceof Error ? e.message : "Erro ao carregar as unidades.");
+      setLista((l) => l ?? []);
     }
   }, [orgaoId]);
 
   useEffect(() => {
-    carregar();
+    void carregar();
   }, [carregar]);
 
-  async function recarregar() {
-    setRecarregando(true);
-    await carregar();
-    setRecarregando(false);
-  }
-
-  function abrirNovo() {
-    setEditando("novo");
-    setCodigo("");
-    setNome("");
-    setNumeroInteressado("");
-    setSetorRequisitante("");
-    setFormOculto(false);
-    setResponsaveis(RESPONSAVEIS_VAZIO);
-  }
-  function abrirEdicao(r: Rep) {
-    setEditando(r);
-    setCodigo(r.codigo);
-    setNome(r.nome);
-    setNumeroInteressado(r.numeroInteressado ?? "");
-    setSetorRequisitante(r.setorRequisitante ?? "");
-    setFormOculto(r.oculto);
-    setResponsaveis(r.responsaveis);
-  }
-
-  /** Ponto 8: ocultar/reexibir uma unidade (não apaga; some do uso em documentos novos). */
-  async function toggleOculto(r: Rep) {
-    setErro(null);
-    const resp = await fetch(`/api/admin/reparticoes/${r.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        codigo: r.codigo,
-        nome: r.nome,
-        numeroInteressado: r.numeroInteressado,
-        setorRequisitante: r.setorRequisitante,
-        orgaoId: r.orgaoId,
-        oculto: !r.oculto,
-        responsaveis: r.responsaveis,
-      }),
-    });
-    if (!resp.ok) {
-      const j = (await resp.json().catch(() => ({}))) as { error?: string };
-      setErro(j.error ?? "Não foi possível atualizar.");
-      return;
-    }
-    await carregar();
-  }
-
-  async function salvar(e: FormEvent) {
-    e.preventDefault();
-    setSalvando(true);
-    setErro(null);
+  function trocarAba(a: AbaUnidades) {
+    setAba(a);
     try {
-      const novo = editando === "novo";
-      const r = await fetch(novo ? "/api/admin/reparticoes" : `/api/admin/reparticoes/${(editando as Rep).id}`, {
-        method: novo ? "POST" : "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          codigo,
-          nome,
-          numeroInteressado: numeroInteressado.trim() || null,
-          setorRequisitante: setorRequisitante.trim() || null,
-          orgaoId, // a unidade pertence ao órgão desta tela
-          oculto: formOculto,
-          responsaveis,
-        }),
-      });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
-      if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
-      setEditando(null);
-      await carregar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao salvar.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  async function excluir(r: Rep) {
-    if (!confirm(`Excluir a unidade "${r.nome}"?`)) return;
-    const resp = await fetch(`/api/admin/reparticoes/${r.id}`, { method: "DELETE" });
-    if (!resp.ok) {
-      const j = (await resp.json().catch(() => ({}))) as { error?: string };
-      setErro(j.error ?? "Não foi possível excluir.");
-      return;
-    }
-    await carregar();
-  }
-
-  /** Requisito 1: PROMOVER esta unidade a órgão (ela deixa este órgão e vira um órgão novo). */
-  async function promover(r: Rep) {
-    if (
-      !confirm(
-        `Promover a unidade "${r.nome}" a órgão? Ela deixa de ser unidade de “${orgaoNome}” e passa a ser um órgão próprio. Se tiver DFDs, protocolos ou itens vinculados, eles são preservados: a unidade continua existindo como a unidade própria do novo órgão.`,
-      )
-    )
-      return;
-    setEstruturando(true);
-    setErro(null);
-    try {
-      const resp = await fetch(`/api/admin/reparticoes/${r.id}/promover`, { method: "POST" });
-      const j = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível promover.");
-      setEditando(null);
-      router.push("/painel/orgaos"); // o novo órgão aparece na lista de órgãos
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível promover.");
-    } finally {
-      setEstruturando(false);
-    }
-  }
-
-  async function persistirOrdem(ids: number[]) {
-    setErro(null);
-    try {
-      const r = await fetch("/api/admin/reparticoes/ordem", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
-      });
-      if (!r.ok) throw new Error();
+      const url = new URL(window.location.href);
+      if (a === "unidades") url.searchParams.delete("aba");
+      else url.searchParams.set("aba", a);
+      window.history.replaceState(window.history.state, "", url);
     } catch {
-      setErro("Não foi possível salvar a nova ordem.");
-      await carregar();
+      /* sem a URL, a aba vale só nesta visita */
     }
   }
 
-  /** Move a unidade uma posição p/ cima/baixo e persiste a nova ordem. */
-  function mover(id: number, dir: -1 | 1) {
-    if (!lista) return;
-    const idx = lista.findIndex((x) => x.id === id);
-    const alvo = idx + dir;
-    if (idx < 0 || alvo < 0 || alvo >= lista.length) return;
-    const nova = [...lista];
-    [nova[idx], nova[alvo]] = [nova[alvo], nova[idx]];
-    setLista(nova);
-    persistirOrdem(nova.map((x) => x.id));
+  async function acao(url: string, init: RequestInit, sucesso: string): Promise<boolean> {
+    setOcupado(true);
+    try {
+      const r = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir — tente de novo.");
+      toast.success(sucesso);
+      await Promise.all([carregar(), ctx.carregar()]);
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível concluir — tente de novo.");
+      return false;
+    } finally {
+      setOcupado(false);
+    }
   }
+
+  const conf = useMemo(() => {
+    const m = new Map<number, ReturnType<typeof conferenciaDaUnidade>>();
+    if (ctx.planilha) for (const u of lista ?? []) m.set(u.id, conferenciaDaUnidade(u, assinaturaUnica, ctx.grupos, ctx.hoje, ctx.planilha.cargos));
+    return m;
+  }, [lista, assinaturaUnica, ctx.planilha, ctx.grupos, ctx.hoje]);
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={6} />
       </div>
     );
   }
 
-  const posDe = new Map(lista.map((r, i) => [r.id, i]));
-  // O órgão é DUAL (funciona também como unidade) quando tem a sua unidade própria. Nesse
-  // caso não recebe unidades-filhas (a própria é a única).
-  const ehDual = lista.some((r) => r.orgaoProprio);
-  const emEdicao = editando && editando !== "novo" ? (editando as Rep) : null;
+  const unidade = typeof aberto === "number" ? (lista.find((u) => u.id === aberto) ?? null) : null;
+  const posDe = new Map(lista.map((u, i) => [u.id, i]));
+  // DUAL: o órgão funciona também como unidade (a própria) — não recebe unidades-filhas.
+  const ehDual = lista.some((u) => u.orgaoProprio);
+  const doOrgao = vigentesDoAlvo(ctx.grupos.get(`o${orgaoId}`) ?? [], ctx.hoje);
 
+  const corpo = (u: Rep | null, v: Record<string, string>, extra: { oculto?: boolean } = {}) => ({
+    codigo: v.codigo,
+    nome: v.nome,
+    numeroInteressado: v.numeroInteressado || null,
+    setorRequisitante: v.setorRequisitante || null,
+    orgaoId, // a unidade pertence ao órgão desta tela
+    oculto: extra.oculto ?? u?.oculto ?? false,
+  });
+
+  async function salvar(patch: Record<string, string>): Promise<boolean> {
+    if (aberto === "novo") {
+      const ok = await acao("/api/admin/reparticoes", { method: "POST", body: JSON.stringify(corpo(null, patch)) }, "Unidade cadastrada.");
+      if (ok) setAberto(null);
+      return ok;
+    }
+    if (!unidade) return false;
+    return acao(`/api/admin/reparticoes/${unidade.id}`, { method: "PATCH", body: JSON.stringify(corpo(unidade, { ...valoresDe(unidade), ...patch })) }, "Unidade atualizada.");
+  }
+
+  const ocultar = (u: Rep) =>
+    acao(`/api/admin/reparticoes/${u.id}`, { method: "PATCH", body: JSON.stringify(corpo(u, valoresDe(u), { oculto: !u.oculto })) }, u.oculto ? "Unidade reexibida." : "Unidade ocultada.");
+
+  async function excluir(u: Rep) {
+    if (u.orgaoProprio) {
+      toast.error("A unidade própria sai pelo órgão: “Deixar de ser unidade”.");
+      return;
+    }
+    const ok = await confirmar({
+      titulo: `Excluir a unidade ${u.codigo}?`,
+      texto: "Unidade com DFD ou protocolo não se exclui — oculte-a. Os responsáveis vinculados a ela saem junto (as pessoas ficam na planilha).",
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (ok && (await acao(`/api/admin/reparticoes/${u.id}`, { method: "DELETE" }, "Unidade excluída."))) setAberto(null);
+  }
+
+  async function promover(u: Rep) {
+    const ok = await confirmar({
+      titulo: `Promover ${u.codigo} a órgão?`,
+      texto: `Ela deixa de ser unidade de ${orgaoSigla} e vira um órgão próprio. Com DFDs, protocolos ou itens, continua existindo como a unidade própria do órgão novo; os responsáveis seguem junto.`,
+      confirmar: "Promover",
+    });
+    if (ok && (await acao(`/api/admin/reparticoes/${u.id}/promover`, { method: "POST" }, "Unidade promovida a órgão."))) router.push("/painel/orgaos");
+  }
+
+  function mover(id: number, dir: -1 | 1) {
+    if (!lista) return;
+    const i = lista.findIndex((x) => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= lista.length) return;
+    const nova = [...lista];
+    [nova[i], nova[j]] = [nova[j], nova[i]];
+    setLista(nova);
+    void fetch("/api/admin/reparticoes/ordem", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: nova.map((x) => x.id) }) }).then((r) => {
+      if (!r.ok) {
+        toast.error("Não foi possível salvar a nova ordem.");
+        void carregar();
+      }
+    });
+  }
+
+  const vigentes = (u: Rep) => (assinaturaUnica ? null : vigentesDoAlvo(ctx.grupos.get(`u${u.id}`) ?? [], ctx.hoje));
   const colunas: Column<Rep>[] = [
-    { key: "pos", header: "#", filter: "none", minWidth: 40, render: (r) => <span className="tabular-nums text-faint">{(posDe.get(r.id) ?? 0) + 1}</span> },
-    { key: "codigo", header: "Sigla", filter: "none", minWidth: 90, render: (r) => <Badge tone="violet">{r.codigo}</Badge> },
+    { key: "pos", header: "#", filter: "none", nowrap: true, total: false, numero: (u) => (posDe.get(u.id) ?? 0) + 1, render: (u) => <span className="tabular-nums text-faint">{(posDe.get(u.id) ?? 0) + 1}</span> },
+    { key: "codigo", header: "Sigla", nowrap: true, value: (u) => u.codigo, render: (u) => <Badge tone="violet">{u.codigo}</Badge> },
     {
       key: "nome",
       header: "Nome da unidade",
-      filter: "none",
+      align: "left",
       minWidth: 220,
-      render: (r) => (
+      value: (u) => u.nome,
+      render: (u) => (
         <span className="inline-flex items-center gap-2">
-          <span className={`font-medium ${r.oculto ? "text-faint" : "text-text"}`}>{r.nome}</span>
-          {r.orgaoProprio && <Badge tone="cyan">Próprio órgão</Badge>}
-          {r.oculto && <Badge tone="slate">Oculta</Badge>}
+          <span className={`font-medium ${u.oculto ? "text-faint" : "text-text"}`}>{u.nome}</span>
+          {u.orgaoProprio && <Badge tone="cyan">Próprio órgão</Badge>}
+          {u.oculto && <Badge tone="slate">Oculta</Badge>}
         </span>
       ),
     },
     {
       key: "numeroInteressado",
       header: "Nº interessado",
-      filter: "none",
-      minWidth: 110,
-      render: (r) =>
-        r.numeroInteressado ? (
-          <span className="font-mono text-[12px] text-text-2">{r.numeroInteressado}</span>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
+      nowrap: true,
+      value: (u) => u.numeroInteressado ?? "—",
+      render: (u) => (u.numeroInteressado ? <span className="font-mono text-[12px] text-text-2">{u.numeroInteressado}</span> : <span className="text-faint">—</span>),
     },
     {
       key: "setorRequisitante",
       header: "Setor Requisitante",
-      filter: "none",
       minWidth: 180,
-      render: (r) =>
-        r.setorRequisitante ? (
-          <span className="line-clamp-1 text-[12px] text-text-2" title={r.setorRequisitante}>{r.setorRequisitante}</span>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
+      value: (u) => u.setorRequisitante ?? "—",
+      render: (u) =>
+        u.setorRequisitante ? <span className="line-clamp-1 text-[12px] text-text-2" title={u.setorRequisitante}>{u.setorRequisitante}</span> : <span className="text-faint">—</span>,
     },
     {
-      key: "responsavel",
-      header: "Responsável (DFDs)",
-      filter: "none",
-      minWidth: 170,
-      render: (r) => {
-        const vigs = responsaveisVigentes(r.responsaveis, hoje);
-        if (vigs.length === 0) return <span className="text-faint">—</span>;
-        const nomes = vigs.map((v) => v.resp.nome).join(", ");
-        const temp = vigs.some((v) => v.tipo === "temporario");
-        return (
-          <span className="line-clamp-1 text-text-2" title={nomes}>
-            {nomes}
-            {temp && (
-              <span className="ml-1.5 text-[10px] font-semibold uppercase" style={{ color: "var(--info)" }}>
-                temp.
-              </span>
-            )}
+      key: "responsaveis",
+      header: "Responsáveis vigentes",
+      nowrap: true,
+      value: (u) => vigentes(u)?.nomes.join(", ") || (assinaturaUnica ? "Pelo órgão" : "—"),
+      valores: (u) => vigentes(u)?.nomes ?? ["Pelo órgão"],
+      render: (u) => {
+        const v = vigentes(u);
+        return v ? (
+          <CelulaResponsaveis nomes={v.nomes} temporario={v.temporario} />
+        ) : (
+          <span title={doOrgao.nomes.join(", ") || "O órgão está sem responsável vigente"}>
+            <CelulaResponsaveis nomes={[]} temporario={false} nota={`Pelo órgão (${orgaoSigla})`} />
           </span>
         );
       },
     },
     {
+      key: "conf",
+      header: "Conferência",
+      nowrap: true,
+      value: (u) => rotulosConferencia(conf.get(u.id) ?? [])[0],
+      valores: (u) => rotulosConferencia(conf.get(u.id) ?? []),
+      render: (u) => (ctx.planilha ? <CelulaConferencia msgs={conf.get(u.id) ?? []} /> : <span className="text-faint">…</span>),
+    },
+    {
       key: "acoes",
-      header: "Ações",
+      header: "Ordem",
       filter: "none",
-      align: "right",
-      minWidth: 150,
-      render: (r) => {
-        const idx = posDe.get(r.id) ?? 0;
-        return (
-          <div className="flex justify-end gap-1">
-            <Button variant="ghost" onClick={() => mover(r.id, -1)} disabled={idx === 0} aria-label="Mover para cima" icon={<IconArrowUp className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => mover(r.id, 1)} disabled={idx === lista.length - 1} aria-label="Mover para baixo" icon={<IconArrowDown className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => toggleOculto(r)} aria-label={r.oculto ? "Reexibir" : "Ocultar"} icon={r.oculto ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />} />
-            <Button variant="ghost" onClick={() => abrirEdicao(r)} aria-label="Editar" icon={<IconPencil className="h-4 w-4" />} />
-            {!r.orgaoProprio && (
-              <Button variant="ghost" onClick={() => excluir(r)} aria-label="Excluir" style={{ color: "var(--danger)" }} icon={<IconTrash className="h-4 w-4" />} />
-            )}
-          </div>
-        );
-      },
+      nowrap: true,
+      render: (u) => (
+        <span role="none" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <AcoesCadastro
+            nome={u.codigo}
+            primeira={(posDe.get(u.id) ?? 0) === 0}
+            ultima={(posDe.get(u.id) ?? 0) === lista.length - 1}
+            disabled={ocupado}
+            onMover={(d) => mover(u.id, d)}
+            onEditar={() => setAberto(u.id)}
+            onExcluir={() => void excluir(u)}
+          />
+        </span>
+      ),
     },
   ];
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div>
-        <Button variant="ghost" onClick={() => router.push("/painel/orgaos")} icon={<IconChevronLeft className="h-4 w-4" />}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="ghost" onClick={() => router.push("/painel/orgaos")} icon={<IconChevronLeft className="h-4 w-4" />} aria-label="Voltar aos órgãos">
           Órgãos
         </Button>
+        <Badge tone="violet">{orgaoSigla}</Badge>
+        <h1 className="min-w-0 truncate text-[15px] font-bold text-text">{orgaoNome}</h1>
+        {assinaturaUnica && <Badge tone="blue">Assinatura única</Badge>}
+        <Segmented<AbaUnidades>
+          className="sm:ml-auto"
+          ariaLabel="Unidades ou responsáveis"
+          value={aba}
+          onChange={trocarAba}
+          options={[
+            { value: "unidades", label: `Unidades (${lista.length})`, icone: <IconLayers className="h-4 w-4" /> },
+            { value: "responsaveis", label: "Responsáveis", icone: <IconUsers className="h-4 w-4" />, dica: "Quem responde neste órgão ou nas unidades dele" },
+          ]}
+        />
+        {aba === "responsaveis" && <BotaoExonerados ctx={ctx} ativo={exonerados} onAlternar={() => setExonerados((x) => !x)} />}
       </div>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-bold text-text">{orgaoNome}</h1>
-          <p className="text-sm text-muted">Unidades deste órgão. Use ↑/↓ para ordenar (salvo automaticamente).</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
-            Recarregar
-          </Button>
-          <Button
-            onClick={abrirNovo}
-            disabled={ehDual}
-            title={ehDual ? "Este órgão funciona como unidade (unidade própria) e não recebe unidades-filhas." : undefined}
-            icon={<IconPlus className="h-[18px] w-[18px]" />}
-          >
-            Nova unidade
-          </Button>
-        </div>
-      </div>
-
       {erro && <Callout kind="danger">{erro}</Callout>}
+      {ctx.erro && <Callout kind="warn">{ctx.erro}</Callout>}
 
-      {ehDual && (
-        <Callout kind="info">
-          Este órgão <strong>também funciona como unidade</strong> (a “Próprio órgão” abaixo). Ele não recebe
-          unidades-filhas — ajuste o setor requisitante e os responsáveis dela normalmente. Para desfazer, use
-          “Deixar de ser unidade” no órgão.
-        </Callout>
-      )}
-
-      {lista.length === 0 ? (
-        <Callout kind="info">Nenhuma unidade neste órgão ainda. Clique em “Nova unidade” para cadastrar.</Callout>
-      ) : (
-        <DataTable columns={colunas} rows={lista} getKey={(r) => r.id} minWidth={900} />
-      )}
-
-      <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? `Nova unidade · ${orgaoNome}` : "Editar unidade"}>
-        <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
-          <TextField label="Sigla (código)" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Ex.: AMAE" required />
-          <TextField label="Nome da unidade" value={nome} onChange={(e) => setNome(e.target.value)} required />
-          <TextField
-            label="Número do interessado (identifica a unidade pelo Interessado do protocolo)"
-            value={numeroInteressado}
-            onChange={(e) => setNumeroInteressado(e.target.value)}
-            placeholder="Ex.: 1008171"
-          />
-          <TextField
-            label="Setor Requisitante (padrão para identificar o DFD)"
-            value={setorRequisitante}
-            onChange={(e) => setSetorRequisitante(e.target.value)}
-            placeholder="Ex.: SMIR - SECRETARIA MUNICIPAL DE INFRAESTRUTURA RURAL"
-          />
-          <div>
-            <span className="mb-2 block text-[13px] font-semibold text-text">Responsáveis por DFDs</span>
-            {assinaturaUnica ? (
-              <Callout kind="info">
-                Este órgão usa <strong>assinatura única</strong>: os responsáveis são definidos no órgão “{orgaoNome}” e
-                valem para todas as unidades. Ajuste-os na tela de Órgãos.
-              </Callout>
-            ) : (
-              <ResponsaveisEditor valor={responsaveis} onChange={setResponsaveis} />
-            )}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setEditando(null)}>
-              Cancelar
-            </Button>
-            <Button type="submit" loading={salvando}>
-              Salvar
-            </Button>
-          </div>
-        </form>
-        {emEdicao && (
-          <div className="mt-4 space-y-2 border-t border-border pt-4">
-            <span className="block text-[13px] font-semibold text-text">Estrutura</span>
-            {emEdicao.orgaoProprio ? (
-              <Callout kind="info">
-                Esta é a <strong>unidade própria</strong> do órgão “{orgaoNome}” (o órgão também funciona como
-                unidade). Para removê-la, use “Deixar de ser unidade” na tela de órgãos.
-              </Callout>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[13px] text-muted">Promover a unidade a um órgão próprio (ela sai deste órgão).</p>
-                <Button variant="secondary" onClick={() => promover(emEdicao)} loading={estruturando} icon={<IconLandmark className="h-4 w-4" />}>
-                  Promover a órgão
+      <div key={aba} className="animate-cat-morph">
+        {aba === "unidades" ? (
+          <DataTable
+            columns={colunas}
+            rows={lista}
+            getKey={(u) => u.id}
+            onRowClick={(u) => setAberto(u.id)}
+            activeKey={typeof aberto === "number" ? aberto : null}
+            scrollInterno
+            density="compact"
+            exportar={{ nome: `Unidades ${orgaoSigla}` }}
+            vazio={ehDual ? "O órgão funciona como unidade." : "Nenhuma unidade neste órgão — use “Nova unidade”."}
+            acoesRodape={
+              <>
+                <Button
+                  size="sm"
+                  disabled={ehDual}
+                  title={ehDual ? "Este órgão funciona como unidade (unidade própria) e não recebe unidades-filhas." : undefined}
+                  icon={<IconPlus className="h-4 w-4" />}
+                  onClick={() => setAberto("novo")}
+                >
+                  Nova unidade
                 </Button>
-              </div>
-            )}
+                <Ajuda titulo="Unidades">
+                  <p>Toque numa linha para abrir a unidade: os dados (cadeado), os responsáveis, promover a órgão, ocultar e excluir.</p>
+                  <TopicoAjuda titulo="Responsáveis">
+                    {assinaturaUnica
+                      ? `O órgão ${orgaoSigla} tem assinatura única: valem os responsáveis do órgão para todas as unidades.`
+                      : "Cada unidade tem os seus responsáveis (escolhidos da planilha única)."}
+                  </TopicoAjuda>
+                  {ehDual && <TopicoAjuda titulo="Próprio órgão">O órgão funciona também como unidade (a “Próprio órgão”) e não recebe unidades-filhas.</TopicoAjuda>}
+                  <TopicoAjuda titulo="Ordem">↑/↓ ordenam a lista (salvo na hora).</TopicoAjuda>
+                </Ajuda>
+              </>
+            }
+          />
+        ) : ctx.planilha ? (
+          <PlanilhaResponsaveis ctx={ctx} orgaoId={orgaoId} exonerados={exonerados} />
+        ) : (
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
+            <SkeletonLinhas linhas={6} />
           </div>
         )}
-      </Modal>
+      </div>
+
+      <BannerCadastro
+        aberto={aberto != null}
+        novo={aberto === "novo"}
+        titulo={aberto === "novo" ? `Nova unidade · ${orgaoSigla}` : (unidade?.nome ?? "Unidade")}
+        cabecalho={
+          unidade ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Badge tone="violet">{unidade.codigo}</Badge>
+              <span className="truncate text-[15px] font-semibold text-text">{unidade.nome}</span>
+              <span className="text-[12px] text-muted">· {orgaoSigla}</span>
+              {unidade.orgaoProprio && <Badge tone="cyan">Próprio órgão</Badge>}
+              {unidade.oculto && <Badge tone="slate">Oculta</Badge>}
+            </div>
+          ) : undefined
+        }
+        campos={CAMPOS}
+        inicial={valoresDe(unidade)}
+        ocupado={ocupado}
+        onSalvar={salvar}
+        onFechar={() => setAberto(null)}
+        confirmarDescarte={() => confirmar({ titulo: "Descartar as alterações?", texto: "Os dados alterados não foram salvos.", confirmar: "Descartar", perigo: true })}
+        rodapeEsquerda={
+          unidade ? (
+            <div className="flex flex-wrap gap-2">
+              {!unidade.orgaoProprio && (
+                <Button size="sm" variant="danger" disabled={ocupado} icon={<IconTrash className="h-4 w-4" />} onClick={() => void excluir(unidade)}>
+                  Excluir
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={ocupado}
+                icon={unidade.oculto ? <IconEye className="h-4 w-4" /> : <IconEyeOff className="h-4 w-4" />}
+                onClick={() => void ocultar(unidade)}
+              >
+                {unidade.oculto ? "Reexibir" : "Ocultar"}
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
+        {unidade && (
+          <>
+            <SecaoBanner titulo="Responsáveis por DFDs">
+              <ResponsaveisDoAlvo
+                ctx={ctx}
+                alvo={{ reparticaoId: unidade.id }}
+                nota={`O órgão ${orgaoSigla} tem assinatura única: valem os responsáveis do órgão${doOrgao.nomes.length ? ` (hoje: ${doOrgao.nomes.join(", ")})` : " — e ele está sem responsável vigente"}.`}
+              />
+            </SecaoBanner>
+            <SecaoBanner titulo="Estrutura">
+              {unidade.orgaoProprio ? (
+                <p className="text-[13px] text-muted">Esta é a unidade própria do órgão. Para removê-la, use “Deixar de ser unidade” no órgão.</p>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[13px] text-muted">Promover a unidade a um órgão próprio (ela sai deste órgão).</p>
+                  <Button size="sm" variant="secondary" loading={ocupado} icon={<IconLandmark className="h-4 w-4" />} onClick={() => void promover(unidade)}>
+                    Promover a órgão
+                  </Button>
+                </div>
+              )}
+            </SecaoBanner>
+          </>
+        )}
+      </BannerCadastro>
+      {confirmacao}
+      {ctx.confirmacao}
     </div>
   );
 }

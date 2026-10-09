@@ -1,7 +1,7 @@
 "use client";
 
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
-import { Avatar } from "./Avatar";
+import { AvatarPessoa } from "./PessoaTag";
 import { IconCheck } from "./icons";
 
 /**
@@ -47,7 +47,7 @@ export function SeletorPessoas({
               ativa ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
             } ${doGrupo ? "" : "opacity-60"}`}
           >
-            <Avatar nome={p.nome} foto={p.foto} size="xs" />
+            <AvatarPessoa pessoa={p} size="xs" />
             <span className="max-w-[10rem] truncate">
               {nomeExibicao(p)}
               {p.id === usuarioId ? " (eu)" : ""}

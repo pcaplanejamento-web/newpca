@@ -12,7 +12,6 @@ import {
   editarItemDfd,
   normalizarSecoesDfd,
   removerItemDfd,
-  STATUS_MENSAGEM_COR,
   unificarItensDfd,
 } from "@/lib/dfd-tratamento";
 import { num } from "@/lib/format";
@@ -25,13 +24,13 @@ import { preverUnidadeDoDfd } from "@/lib/reparticao-match";
 import type { Responsaveis } from "@/lib/reparticao-responsaveis";
 import { escolhasParaHistorico, marcarItensNovos, semMarcas } from "@/lib/sobrescrita-dfd";
 import { AvisoFlutuante } from "./AvisoFlutuante";
-import { Button } from "./Button";
+import { BotaoAcao } from "./BotaoAcao";
 import { DfdConferir, type PainelDfd } from "./DfdConferir";
 import { DfdPainelDireito, RodapePainelItem, tituloPainelDfd } from "./DfdPainelDireito";
 import { DfdRodape } from "./DfdRodape";
 import { DfdCabecalho } from "./DfdView";
 import { Dropzone } from "./Dropzone";
-import { IconRefresh, IconUpload } from "./icons";
+import { IconMerge, IconRefresh, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { type PcaOpcao, PcaPicker } from "./PcaPicker";
 import { Progress } from "./Progress";
@@ -432,7 +431,7 @@ export function DfdUploadForm({
                     dfd={preview}
                     numero={preview.numero}
                     mensagens={mensagens}
-                    onIrPara={(m) => setAncoraAlvo({ ancora: m.ancora, cor: STATUS_MENSAGEM_COR[m.status], nonce: Date.now() })}
+                    onIrPara={(a) => setAncoraAlvo({ ...a, nonce: Date.now() })}
                     conformidade={conformidade}
                     regras={regras}
                     editavel={status !== "sending"}
@@ -462,34 +461,30 @@ export function DfdUploadForm({
               mensagens={mensagens}
               mensagensAbertas={painel?.tipo === "mensagens"}
               onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
-              onFechar={fecharConferencia}
-              rotuloFechar="Cancelar"
+              aviso={
+                importDesligado
+                  ? "Importação de DFD avulso desabilitada nas Configurações"
+                  : tipoNaoPermitido
+                    ? `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`
+                    : null
+              }
               acoes={
-                <>
-                  {/* SOBRESCRITA: as diferenças com a ESCOLHA por dado (manter o gravado × usar o novo). */}
-                  {base && (
-                    <Button variant="secondary" onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}>
-                      Diferenças ({num(totalDif)})
-                    </Button>
-                  )}
-                  {(importDesligado || tipoNaoPermitido) && (
-                    <span className="text-[12px]" style={{ color: "var(--danger)" }}>
-                      {importDesligado
-                        ? "Importação de DFD avulso desabilitada nas Configurações"
-                        : `Tipo ${ctxAv.dfdTipo ?? "sem tipo"} não permitido para protocolar`}
-                    </span>
-                  )}
-                </>
+                /* SOBRESCRITA: as diferenças com a ESCOLHA por dado (manter o gravado × usar o novo). */
+                base ? (
+                  <BotaoAcao
+                    rotulo="Diferenças do gravado"
+                    icon={<IconMerge className="h-4 w-4" />}
+                    contagem={totalDif}
+                    pressionado={painel?.tipo === "diferencas"}
+                    onClick={() => setPainel((p) => (p?.tipo === "diferencas" ? null : { tipo: "diferencas" }))}
+                  />
+                ) : undefined
               }
               principal={
                 base ? (
-                  <Button onClick={enviar} disabled={bloqueado} icon={<IconRefresh className="h-[18px] w-[18px]" />}>
-                    Sobrescrever DFD
-                  </Button>
+                  <BotaoAcao texto variant="primary" rotulo="Sobrescrever DFD" icon={<IconRefresh className="h-4 w-4" />} onClick={enviar} disabled={bloqueado} />
                 ) : (
-                  <Button onClick={enviar} disabled={bloqueado} icon={<IconUpload className="h-[18px] w-[18px]" />}>
-                    Importar DFD
-                  </Button>
+                  <BotaoAcao texto variant="primary" rotulo="Importar DFD" icon={<IconUpload className="h-4 w-4" />} onClick={enviar} disabled={bloqueado} />
                 )
               }
             />

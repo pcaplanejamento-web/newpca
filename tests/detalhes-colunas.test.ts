@@ -9,7 +9,7 @@ import { CATALOGO_COLUNAS_MESA, TABELAS_MESA } from "../src/lib/papeis-detalhes-
 
 const COMP = join(process.cwd(), "src", "components");
 const fonte = (arq: string) => readFileSync(join(COMP, arq), "utf8");
-const FONTES = ["DfdsView.tsx", "PlanilhaDfds.tsx", "MesaPca.tsx"].map(fonte).join("\n");
+const FONTES = ["DfdsView.tsx", "PlanilhaDfds.tsx", "MesaPca.tsx", "ColunasItensMesa.tsx"].map(fonte).join("\n");
 const CHAVES = new Set([...FONTES.matchAll(/\bkey: "([A-Za-z]+)"/g)].map((m) => m[1]));
 
 describe("detalhes do papel — colunas das Mesas", () => {

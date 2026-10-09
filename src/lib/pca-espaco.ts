@@ -1,3 +1,4 @@
+import { itensParaTexto } from "./itens-dash-texto";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
   dfdItens,
@@ -5,7 +6,9 @@ import {
   dfds,
   orcamentoItens,
   orcamentos,
+  orcamentoVinculos,
   orcamentoVisoes,
+  orgaos,
   pcaDfds,
   pcaItens,
   pcas,
@@ -18,9 +21,11 @@ import type { LinhaHistorico } from "./auditoria-core";
 import { TIPO_DFD_ROTULO, TIPOS_DFD } from "./avaliacao-core";
 import { getDb } from "./db";
 import { getDfd } from "./dfd";
+import { prioridadeDoDfd } from "./dfd-tratamento";
 import { normUnidadeMedida } from "./normalize";
-import { aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento } from "./orcamento-visao";
-import { alvoDoTexto, mapaVinculos } from "./orcamento-vinculo";
+import { type RelatorioOrcamento, relatorioOrcamentoPca } from "./orcamento-relatorio";
+import { type AusentesVisao, aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento, valoresAusentes } from "./orcamento-visao";
+import { comVinculos, lerProprias, mapaVinculos, unidadeDoLancamento, vinculosDaVisao } from "./orcamento-vinculo";
 import { listarVinculosOrcamento } from "./orcamento";
 import { tipoCurtoDfd } from "./parse-dfd-comum";
 import {
@@ -31,6 +36,7 @@ import {
   coerceFonte,
   coerceStatus,
   consolidarPca,
+  foraDaSoma,
   type FontePca,
   type ItemDashboard,
   type LinhaVinculo,
@@ -40,7 +46,15 @@ import {
 } from "./pca-core";
 import { filtroAnoPcaDfd } from "./dfd-sql";
 import { consultaDfdsEmOutroPca } from "./pca-dfds-sql";
-import { gravarSequencialNosItens, numerarItensDoProtocolo } from "./pca-itens-sql";
+import {
+  baixarNumeros,
+  desvincularProtocoloDoPca,
+  gravarSequencialNosItens,
+  numerarItensDoProtocolo,
+  retratarNumeros,
+} from "./pca-itens-sql";
+import { MOTIVO_NUMERO } from "./pca-numeracao-core";
+import { sincronizarAtivosPca } from "./pca-sincronia";
 import { type DfdConsulta, dfdPublico, historicoPublico, mascararTexto } from "./pca-publico-core";
 import { getProtocolo } from "./protocolo";
 import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "./queries";
@@ -142,6 +156,9 @@ export type VinculoDfd = LinhaVinculo & {
   valorTotal: number;
   totalItens: number;
   reparticaoId: number | null;
+  /** Nº do DFD e do protocolo de origem (o "fora da soma" do Dashboard). */
+  numero: string;
+  protocoloNumero: string | null;
 };
 
 async function vinculos(pcaIds?: number[]): Promise<VinculoDfd[]> {
@@ -157,6 +174,8 @@ async function vinculos(pcaIds?: number[]): Promise<VinculoDfd[]> {
       reparticaoId: dfds.reparticaoId,
       protocoloId: dfds.protocoloId,
       protocoladoEm: dfdProtocolos.criadoEm,
+      numero: dfds.numero,
+      protocoloNumero: dfdProtocolos.numero,
     })
     .from(pcaDfds)
     .innerJoin(dfds, eq(pcaDfds.dfdId, dfds.id))
@@ -172,6 +191,8 @@ async function vinculos(pcaIds?: number[]): Promise<VinculoDfd[]> {
     valorTotal: Number(r.valorTotal ?? 0),
     totalItens: Number(r.totalItens ?? 0),
     reparticaoId: r.reparticaoId,
+    numero: r.numero,
+    protocoloNumero: r.protocoloNumero,
   }));
 }
 
@@ -197,6 +218,8 @@ async function vinculosPrevia(pca: PcaEspaco): Promise<VinculoDfd[]> {
       protocoloId: dfds.protocoloId,
       assunto: dfdProtocolos.assunto,
       protocoladoEm: dfdProtocolos.criadoEm,
+      numero: dfds.numero,
+      protocoloNumero: dfdProtocolos.numero,
     })
     .from(dfds)
     .innerJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
@@ -220,6 +243,8 @@ async function vinculosPrevia(pca: PcaEspaco): Promise<VinculoDfd[]> {
     valorTotal: Number(r.valorTotal ?? 0),
     totalItens: Number(r.totalItens ?? 0),
     reparticaoId: r.reparticaoId,
+    numero: r.numero,
+    protocoloNumero: r.protocoloNumero,
   }));
 }
 
@@ -358,18 +383,30 @@ export async function enviarProtocolo(pcaId: number, protocoloId: number, usuari
     .where(and(eq(dfdProtocolos.id, protocoloId), isNull(dfdProtocolos.pcaId)));
 }
 
-/** DEVOLVE o protocolo à Mesa principal. Só o enviado a ESTE PCA e NÃO incorporado. */
-export async function devolverProtocolo(pcaId: number, protocoloId: number): Promise<void> {
-  await getDb()
+/**
+ * DEVOLVE o protocolo à Mesa principal — o ENVIADO e também o INCORPORADO (desincorpora): os DFDs dele saem do PCA (os
+ * vínculos e os nºs dos itens — BAIXADOS, nunca reaproveitados; incorporar de novo dá nºs novos), num lote atômico.
+ */
+export async function devolverProtocolo(pcaId: number, protocoloId: number, usuarioId: number | null): Promise<void> {
+  const db = getDb();
+  const volta = db
     .update(dfdProtocolos)
-    .set({ pcaId: null, pcaEnviadoEm: null, pcaEnviadoPor: null })
-    .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId), isNull(dfdProtocolos.pcaIncorporadoEm)));
+    .set({ pcaId: null, pcaEnviadoEm: null, pcaEnviadoPor: null, pcaIncorporadoEm: null })
+    .where(and(eq(dfdProtocolos.id, protocoloId), eq(dfdProtocolos.pcaId, pcaId)));
+  await db.batch([
+    retratarNumeros(db, { protocoloId }),
+    ...baixarNumeros(db, { protocoloId }, pcaId, MOTIVO_NUMERO.protocoloDevolvido, usuarioId),
+    desvincularProtocoloDoPca(db, protocoloId, pcaId),
+    volta,
+  ]);
+  await sincronizarAtivosPca(pcaId, usuarioId);
 }
 
 /**
  * INCORPORA o protocolo ao PCA (PERMANENTE) num lote ATÔMICO: vincula os DFDs dele (`pca_dfds`, com a ação de cada
- * um), NUMERA os itens com o sequencial único do PCA (`pca_itens` + o próprio item — `pca-itens-sql.ts`) e marca a
- * incorporação (protocolo/DFDs/itens TRAVADOS). Depois, inativa os números dos DFDs que deixaram de ser vigentes.
+ * um, pelo protocolo — `pca_dfds.protocolo_id`), NUMERA os itens com o sequencial único do PCA (`pca_itens` + o próprio
+ * item — `pca-itens-sql.ts`) e marca a incorporação. O incorporado segue EDITÁVEL: o PCA acompanha (`pca-sincronia.ts`).
+ * Depois, inativa os números dos DFDs que deixaram de ser vigentes.
  */
 export async function incorporarProtocolo(
   pcaId: number,
@@ -378,14 +415,18 @@ export async function incorporarProtocolo(
   usuarioId: number | null,
 ): Promise<void> {
   const db = getDb();
-  // 5 parâmetros por linha → 18 linhas por statement (90 < 100 do D1).
+  // 5 parâmetros por linha (+ o protocolo, um só) → 18 linhas por statement (91 < 100 do D1).
   const stmts = [];
   for (let i = 0; i < entradas.length; i += 18) {
     stmts.push(
       db
         .insert(pcaDfds)
-        .values(entradas.slice(i, i + 18).map((e) => ({ pcaId, dfdId: e.dfdId, acao: e.acao, vinculadoPor: usuarioId, vinculadoEm: sql`(CURRENT_TIMESTAMP)` })))
-        .onConflictDoUpdate({ target: [pcaDfds.pcaId, pcaDfds.dfdId], set: { acao: sql`excluded.acao` } }),
+        .values(
+          entradas
+            .slice(i, i + 18)
+            .map((e) => ({ pcaId, dfdId: e.dfdId, acao: e.acao, vinculadoPor: usuarioId, vinculadoEm: sql`(CURRENT_TIMESTAMP)`, protocoloId })),
+        )
+        .onConflictDoUpdate({ target: [pcaDfds.pcaId, pcaDfds.dfdId], set: { acao: sql`excluded.acao`, protocoloId } }),
     );
   }
   const marca = db
@@ -399,25 +440,6 @@ export async function incorporarProtocolo(
     marca,
   ] as unknown as [typeof marca, ...(typeof marca)[]]);
   await sincronizarAtivosPca(pcaId, usuarioId);
-}
-
-/** Inativa os números dos itens cujo DFD deixou de ser VIGENTE no PCA (substituído/excluído por outro protocolo). */
-async function sincronizarAtivosPca(pcaId: number, usuarioId: number | null): Promise<void> {
-  const db = getDb();
-  const [vs, numerados] = await Promise.all([
-    vinculosDoPca(pcaId),
-    db
-      .selectDistinct({ dfdId: pcaItens.dfdId })
-      .from(pcaItens)
-      .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.ativo, true))),
-  ]);
-  const vig = new Set(consolidarPca(vs).vigentes);
-  const fora = numerados.map((r) => r.dfdId).filter((id): id is number => id != null && !vig.has(id));
-  for (const lote of lotesDeIds(fora))
-    await db
-      .update(pcaItens)
-      .set({ ativo: false, inativadoEm: sql`(CURRENT_TIMESTAMP)`, inativadoPor: usuarioId, motivo: "DFD substituído/excluído no PCA" })
-      .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.ativo, true), inArray(pcaItens.dfdId, lote)));
 }
 
 /** Itens numerados do PCA entre os `dfd_itens.id` dados — com a unidade do DFD (escopo) e o estado do número. */
@@ -442,7 +464,7 @@ export async function retirarItensDoPca(pcaId: number, dfdItemIds: number[], usu
   for (const lote of lotesDeIds(dfdItemIds))
     await getDb()
       .update(pcaItens)
-      .set({ ativo: false, inativadoEm: sql`(CURRENT_TIMESTAMP)`, inativadoPor: usuarioId, motivo: "Retirado do PCA" })
+      .set({ ativo: false, inativadoEm: sql`(CURRENT_TIMESTAMP)`, inativadoPor: usuarioId, motivo: MOTIVO_NUMERO.retirado })
       .where(and(eq(pcaItens.pcaId, pcaId), eq(pcaItens.ativo, true), inArray(pcaItens.dfdItemId, lote)));
 }
 
@@ -480,7 +502,8 @@ export type DashboardPca = {
   porMes: PontoMensal[];
   porUnidadeMedida: Fatia[];
   top: TopItem[];
-  itens: ItemRow[];
+  /** TODOS os itens num texto COMPACTO (`itensParaTexto`) — montado UMA vez por versão dos dados, dentro do memo. */
+  itensTexto: string;
   /** Filtro por unidade (planilha na lista; unidade requisitante no protocolo). */
   unidades: { id: number; codigo: string; municipio: string }[];
   unidadeId?: number;
@@ -493,6 +516,23 @@ export type DashboardPca = {
   protocolosLista: ProtocoloDoPca[];
   /** PRÉVIA ligada (`previaAtiva`): os DFDs/protocolos ainda NÃO incorporados que entraram nos números; `null` = só o incorporado. */
   previa: { dfds: number; protocolos: number } | null;
+  /** DFDs vinculados (e da prévia) que a consolidação deixou FORA da soma, com o motivo (só fonte protocolo). */
+  foraDaSoma: DfdForaDaSoma[];
+};
+
+/** Um DFD fora da soma do PCA — a consolidação por nº de planejamento (`foraDaSoma`, `pca-core.ts`). */
+export type DfdForaDaSoma = {
+  id: number;
+  protocoloId: number | null;
+  numero: string;
+  planejamento: string | null;
+  protocoloNumero: string | null;
+  itens: number;
+  valor: number;
+  /** O motivo por extenso, com o DFD que ficou/retirou. */
+  motivo: string;
+  /** Ainda não incorporado (entrou pela prévia). */
+  previa: boolean;
 };
 
 const vazioDash = (): DashboardPca => ({
@@ -501,13 +541,14 @@ const vazioDash = (): DashboardPca => ({
   porMes: [],
   porUnidadeMedida: [],
   top: [],
-  itens: [],
+  itensTexto: itensParaTexto([]),
   unidades: [],
   protocolos: 0,
   dfds: 0,
   dfdsLista: [],
   protocolosLista: [],
   previa: null,
+  foraDaSoma: [],
 });
 
 /**
@@ -532,7 +573,6 @@ export async function itensConsolidados(pca: PcaEspaco) {
       planejamento: string | null;
       tipo: string | null;
       secoes: string | null;
-      anoPca: number | null;
       reparticaoId: number | null;
       sigla: string | null;
       protocoloId: number | null;
@@ -545,6 +585,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
   // Os lotes em PARALELO (cada um: os DFDs + os itens com SÓ as colunas usadas); a PREVISÃO sai UMA vez por DFD (o JSON
   // das seções pode ser grande — lido por item, milhares de itens estouravam a CPU do Worker).
   const previsaoPorDfd = new Map<number, ReturnType<typeof previsaoDoDfd>>();
+  const prioridadePorDfd = new Map<number, string | null>();
   const lotes = await Promise.all(
     lotesDeIds(cons.vigentes).map((lote) =>
       Promise.all([
@@ -555,7 +596,6 @@ export async function itensConsolidados(pca: PcaEspaco) {
           planejamento: dfds.planejamento,
           tipo: dfds.tipo,
           secoes: dfds.secoes,
-          anoPca: dfds.anoPca,
           reparticaoId: dfds.reparticaoId,
           sigla: reparticoes.codigo,
           protocoloId: dfds.protocoloId,
@@ -595,7 +635,9 @@ export async function itensConsolidados(pca: PcaEspaco) {
       } catch {
         secoes = [];
       }
-      previsaoPorDfd.set(d.id, previsaoDoDfd(secoes, d.anoPca ?? pca.ano));
+      // O ano da previsão é SEMPRE o do PCA em que o item está (nunca o do texto, de um contrato…).
+      previsaoPorDfd.set(d.id, previsaoDoDfd(secoes, pca.ano));
+      prioridadePorDfd.set(d.id, prioridadeDoDfd(secoes.map((x) => ({ numero: 0, titulo: x.titulo ?? "", texto: x.texto ?? "" }))));
     }
   for (const [, its] of lotes)
     for (const it of its) {
@@ -630,6 +672,8 @@ export async function itensConsolidados(pca: PcaEspaco) {
     meta,
     vinculos: vs,
     consolidacao: cons,
+    previaIds: new Set(previa.map((v) => v.dfdId)),
+    prioridadePorDfd,
     protocolos: protocolos.size,
     previa: previa.length ? { dfds: previaVig.length, protocolos: new Set(previaVig.map((v) => v.protocoloId)).size } : null,
   };
@@ -638,9 +682,10 @@ export async function itensConsolidados(pca: PcaEspaco) {
 type Consolidados = Awaited<ReturnType<typeof itensConsolidados>>;
 
 /** Item consolidado → a linha da tabela de itens (Dashboard e origem do Orçamento), com a ORIGEM (protocolo/DFD/mês). */
-function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados["meta"]): ItemRow {
+function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados["meta"], prioridades?: Map<number, string | null>): ItemRow {
   const p = i.previsao;
   const anual = !!p && "anual" in p;
+  const periodo = p && "anual" in p ? p.periodo : null;
   return {
     id: i.id,
     idProduto: i.codigoProduto,
@@ -661,6 +706,8 @@ function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados
     ano: p?.ano ?? null,
     mes: p && !("anual" in p) ? p.mes : null,
     anual,
+    ...(periodo ? { periodo } : {}),
+    prioridade: prioridades?.get(i.dfdId) ?? null,
   };
 }
 
@@ -683,9 +730,9 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
       getPorMes(unidadeId, pca.id),
       getPorUnidadeMedida(unidadeId, pca.id),
       getTopItens(unidadeId, 10, pca.id),
-      getItensTodos(unidadeId, 5000, pca.id),
+      getItensTodos(unidadeId, undefined, pca.id),
     ]);
-    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itens, unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [], protocolosLista: [], previa: null };
+    return { resumo, porClassificacao, porMes, porUnidadeMedida, top, itensTexto: itensParaTexto(itens), unidades: us, unidadeId, protocolos: 0, dfds: 0, dfdsLista: [], protocolosLista: [], previa: null, foraDaSoma: [] };
   }
   const c = await itensConsolidados(pca);
   const reps = new Map<number, string>();
@@ -696,8 +743,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
   const itens: ItemRow[] = lista
     .slice()
     .sort((a, b) => b.valorTotal - a.valorTotal)
-    .slice(0, 5000)
-    .map((i) => itemRowConsolidado(i, c.meta));
+    .map((i) => itemRowConsolidado(i, c.meta, c.prioridadePorDfd));
   // DFDs vigentes (dos itens ATIVOS, no filtro de unidade) — a visão "DFDs" da consulta.
   const porDfd = new Map<number, DfdDoPca>();
   for (const i of lista) {
@@ -733,7 +779,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
   }
   return {
     ...ag,
-    itens,
+    itensTexto: itensParaTexto(itens),
     dfdsLista,
     protocolosLista: [...porProto.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
     unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
@@ -741,7 +787,40 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
     protocolos: c.protocolos,
     dfds: new Set(lista.map((i) => i.dfdId)).size,
     previa: c.previa,
+    foraDaSoma: dfdsForaDaSoma(c, unidadeId),
   };
+}
+
+/** Os DFDs fora da soma (no filtro de unidade), com o motivo por extenso — os mais recentes primeiro. */
+function dfdsForaDaSoma(c: Consolidados, unidadeId: number | undefined): DfdForaDaSoma[] {
+  const porId = new Map(c.vinculos.map((v) => [v.dfdId, v]));
+  const ref = (id: number | null) => {
+    const v = id == null ? null : porId.get(id);
+    return v ? `DFD ${v.numero}${v.protocoloNumero ? ` (protocolo ${v.protocoloNumero})` : ""}` : "outro DFD";
+  };
+  const texto = (f: ReturnType<typeof foraDaSoma>[number]) =>
+    f.motivo === "substituido"
+      ? `Mesmo nº de planejamento — prevaleceu o ${ref(f.outro)}`
+      : f.motivo === "excluido"
+        ? `Retirado pela exclusão do ${ref(f.outro)}`
+        : f.outro != null
+          ? `Exclusão — retirou o ${ref(f.outro)}`
+          : "Exclusão sem DFD correspondente no PCA";
+  return foraDaSoma(c.vinculos, c.consolidacao)
+    .map((f) => ({ f, v: porId.get(f.dfdId) }))
+    .filter((x): x is { f: ReturnType<typeof foraDaSoma>[number]; v: VinculoDfd } => !!x.v && (unidadeId == null || x.v.reparticaoId === unidadeId))
+    .map(({ f, v }) => ({
+      id: v.dfdId,
+      protocoloId: v.protocoloId,
+      numero: v.numero,
+      planejamento: v.planejamento,
+      protocoloNumero: v.protocoloNumero,
+      itens: v.totalItens,
+      valor: v.valorTotal,
+      motivo: texto(f),
+      previa: c.previaIds.has(v.dfdId),
+    }))
+    .reverse();
 }
 
 // ---------------------------------------------------------------------------
@@ -774,7 +853,7 @@ async function pcaConsultavel(pcaId: number, logado: boolean): Promise<PcaEspaco
  * O que a consulta do PCA pode abrir: os protocolos INCORPORADOS e — com a PRÉVIA ligada (só em Preview, logo só para quem
  * está logado) — também os protocolos/DFDs da prévia (os mesmos que entram nos números do Dashboard/Orçamento).
  */
-async function escopoConsulta(pca: PcaEspaco): Promise<{ protocolos: Set<number>; previaDfds: Set<number> }> {
+async function escopoConsulta(pca: PcaEspaco): Promise<{ protocolos: Set<number>; previaDfds: Set<number>; previa: VinculoDfd[] }> {
   const [rows, previa] = await Promise.all([
     getDb()
       .select({ id: dfdProtocolos.id })
@@ -784,7 +863,7 @@ async function escopoConsulta(pca: PcaEspaco): Promise<{ protocolos: Set<number>
   ]);
   const protocolos = new Set(rows.map((r) => r.id));
   for (const v of previa) if (v.protocoloId != null) protocolos.add(v.protocoloId);
-  return { protocolos, previaDfds: new Set(previa.map((v) => v.dfdId)) };
+  return { protocolos, previaDfds: new Set(previa.map((v) => v.dfdId)), previa };
 }
 
 /** O DFD está no PCA (vínculo) por um protocolo INCORPORADO? */
@@ -824,13 +903,11 @@ export async function consultaProtocolo(pcaId: number, protocoloId: number, loga
   if (!pca) return null;
   const esc = await escopoConsulta(pca);
   if (!esc.protocolos.has(protocoloId)) return null;
-  const [p, vinc, inativos] = await Promise.all([
-    getProtocolo(protocoloId),
-    getDb().select({ dfdId: pcaDfds.dfdId }).from(pcaDfds).where(eq(pcaDfds.pcaId, pcaId)),
-    inativosPorDfd(),
-  ]);
+  const [p, vs, inativos] = await Promise.all([getProtocolo(protocoloId), vinculosDoPca(pcaId), inativosPorDfd()]);
   if (!p) return null;
-  const noPca = new Set([...vinc.map((v) => v.dfdId), ...esc.previaDfds]);
+  // Só os DFDs que CONTAM no PCA — os VIGENTES (a MESMA consolidação do Dashboard e dos cards: um "excluir" ou um DFD
+  // substituído não soma) com itens ativos; o valor = os itens ativos (o gravado − os inativos).
+  const vigentes = new Set(consolidarPca([...vs, ...esc.previa]).vigentes);
   return {
     id: p.id,
     numero: p.numero,
@@ -844,7 +921,7 @@ export async function consultaProtocolo(pcaId: number, protocoloId: number, loga
     anoPca: p.anoPca,
     unidade: p.reparticaoCodigo ? `${p.reparticaoCodigo}${p.reparticaoNome ? ` · ${p.reparticaoNome}` : ""}` : null,
     dfds: p.dfds
-      .filter((d) => noPca.has(d.id))
+      .filter((d) => vigentes.has(d.id))
       .map((d) => {
         const fora = inativos.get(`${pcaId}:${d.id}`) ?? { n: 0, valor: 0 };
         return {
@@ -858,7 +935,8 @@ export async function consultaProtocolo(pcaId: number, protocoloId: number, loga
           itens: (d.totalItens ?? 0) - fora.n,
           valor: (d.valorTotal ?? 0) - fora.valor,
         };
-      }),
+      })
+      .filter((d) => d.itens > 0),
   };
 }
 
@@ -883,13 +961,24 @@ export async function consultaHistorico(
 // Orçamento do PCA
 // ---------------------------------------------------------------------------
 
-function paraVisao(r: { id: number; nome: string; filtros: string; ordem: number }): VisaoOrcamento {
-  return { id: r.id, nome: r.nome, ordem: r.ordem, filtros: coerceFiltros(r.filtros) };
+function paraVisao(r: { id: number; nome: string; filtros: string; ordem: number; vinculosProprios: string }): VisaoOrcamento {
+  return { id: r.id, nome: r.nome, ordem: r.ordem, filtros: coerceFiltros(r.filtros), proprias: lerProprias(r.vinculosProprios) };
 }
 
+/** As visões salvas + os PCAs que usam cada uma (a visão é GLOBAL — alterar uma muda o orçamento de todos eles). */
 export async function listarVisoesOrcamento(): Promise<VisaoOrcamento[]> {
-  const rows = await getDb().select().from(orcamentoVisoes).orderBy(asc(orcamentoVisoes.ordem), asc(orcamentoVisoes.id));
-  return rows.map(paraVisao);
+  const db = getDb();
+  const [rows, usos] = await Promise.all([
+    db.select().from(orcamentoVisoes).orderBy(asc(orcamentoVisoes.ordem), asc(orcamentoVisoes.id)),
+    db
+      .select({ visao: pcas.orcamentoVisaoId, nome: pcas.nome, ano: pcas.ano })
+      .from(pcas)
+      .where(isNotNull(pcas.orcamentoVisaoId))
+      .orderBy(asc(pcas.nome)),
+  ]);
+  const porVisao = new Map<number, string[]>();
+  for (const u of usos) if (u.visao != null) porVisao.set(u.visao, [...(porVisao.get(u.visao) ?? []), u.ano ? `${u.nome} (${u.ano})` : u.nome]);
+  return rows.map((r) => ({ ...paraVisao(r), pcas: porVisao.get(r.id) ?? [] }));
 }
 
 export async function getVisaoOrcamento(id: number): Promise<VisaoOrcamento | null> {
@@ -914,8 +1003,10 @@ export async function atualizarVisaoOrcamento(id: number, nome: string, filtros:
     .where(eq(orcamentoVisoes.id, id));
 }
 
+/** Exclui a visão e os vínculos PRÓPRIOS dela (também pela FK cascade). */
 export async function excluirVisaoOrcamento(id: number): Promise<void> {
-  await getDb().delete(orcamentoVisoes).where(eq(orcamentoVisoes.id, id));
+  const db = getDb();
+  await db.batch([db.delete(orcamentoVinculos).where(eq(orcamentoVinculos.visaoId, id)), db.delete(orcamentoVisoes).where(eq(orcamentoVisoes.id, id))]);
 }
 
 export type LancamentoOrcamentoPca = {
@@ -944,9 +1035,13 @@ export type OrcamentoDoPca = {
   linhas: LancamentoOrcamentoPca[];
   /** Planejado do PCA POR ORIGEM: um por item (fonte protocolo) ou por planilha (fonte lista). */
   planejado: PlanejadoOrcamentoPca[];
-  unidades: { id: number; sigla: string; nome: string }[];
+  /** As UNIDADES (o micro) com o órgão de cada uma — a linha do comparativo é a unidade; o órgão, a soma delas. */
+  unidades: { id: number; sigla: string; nome: string; orgaoId: number | null; orgaoSigla: string | null; oculta: boolean }[];
+  orgaos: { id: number; sigla: string; nome: string }[];
   /** PRÉVIA ligada: os DFDs/protocolos ainda NÃO incorporados que entraram no planejado; `null` = só o incorporado. */
   previa: { dfds: number; protocolos: number } | null;
+  /** Os valores da visão que o orçamento ATUAL não traz (ex.: depois de reenviar o QDD) — vazio = visão em dia. */
+  ausentes: AusentesVisao;
 };
 
 /** Orçamento (CUBO do MESMO ano) filtrado pela visão do PCA + o planejado por unidade. */
@@ -968,36 +1063,61 @@ export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnTy
   return memoPorVersao(`orc:${chavePca(pca)}:${orc?.id ?? ""}`, () => calcularOrcamentoDoPca(pca, orc));
 }
 
-async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
+/** O que o orçamento do PCA lê do banco: a visão, as unidades (com o órgão), os órgãos, os vínculos e os lançamentos do CUBO
+ * (todas as dimensões — senão o filtro da visão não casa). A MESMA base do comparativo e do relatório da composição. */
+async function baseOrcamentoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>) {
   const db = getDb();
-  const [visao, reps, vincs] = await Promise.all([
+  const [visao, repsBrutas, orgs, todosVinculos] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
-    db.select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(ne(sql`UPPER(${reparticoes.codigo})`, "GERAL")),
+    db
+      .select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculta: reparticoes.oculto })
+      .from(reparticoes)
+      .where(ne(sql`UPPER(${reparticoes.codigo})`, "GERAL")),
+    db.select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome }).from(orgaos),
     listarVinculosOrcamento(),
   ]);
+  // Os vínculos que VALEM na visão do PCA (os próprios dela; nas demais unidades, o padrão).
+  const vincs = vinculosDaVisao(todosVinculos, visao);
+  const orgaoLista = orgs.map((o) => ({ id: o.id, sigla: (o.sigla ?? "").trim() || o.nome, nome: o.nome }));
+  const siglaOrgao = new Map(orgaoLista.map((o) => [o.id, o.sigla]));
+  const reps = repsBrutas.map((r) => ({
+    ...r,
+    orgaoSigla: r.orgaoId != null ? (siglaOrgao.get(r.orgaoId) ?? null) : null,
+    oculta: r.oculta === true,
+  }));
+  const itens = orc
+    ? await db
+        .select({
+          id: orcamentoItens.id,
+          orgao: orcamentoItens.orgao,
+          unidade: orcamentoItens.unidade,
+          funcao: orcamentoItens.funcao,
+          programa: orcamentoItens.programa,
+          acao: orcamentoItens.acao,
+          nomeElemento: orcamentoItens.nomeElemento,
+          codigoElemento: orcamentoItens.codigoElemento,
+          ficha: orcamentoItens.ficha,
+          fonte: orcamentoItens.fonte,
+          valor: orcamentoItens.valorInicial,
+        })
+        .from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, orc.id))
+    : [];
+  return { visao, reps, orgaoLista, vincs, itens };
+}
+
+async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>): Promise<OrcamentoDoPca> {
+  const { visao, reps, orgaoLista, vincs, itens } = await baseOrcamentoPca(pca, orc);
   let bruto = 0;
   let filtrado = 0;
   let linhas: OrcamentoDoPca["linhas"] = [];
+  let ausentes: AusentesVisao = [];
   if (orc) {
-    const itens = await db
-      // Todas as DIMENSÕES da visão (inclui Função/Programa/Ação/Ficha/Fonte do CUBO novo) — senão o filtro não casa.
-      .select({
-        id: orcamentoItens.id,
-        orgao: orcamentoItens.orgao,
-        unidade: orcamentoItens.unidade,
-        funcao: orcamentoItens.funcao,
-        programa: orcamentoItens.programa,
-        acao: orcamentoItens.acao,
-        nomeElemento: orcamentoItens.nomeElemento,
-        codigoElemento: orcamentoItens.codigoElemento,
-        ficha: orcamentoItens.ficha,
-        fonte: orcamentoItens.fonte,
-        valor: orcamentoItens.valorInicial,
-      })
-      .from(orcamentoItens)
-      .where(eq(orcamentoItens.orcamentoId, orc.id));
     bruto = itens.reduce((s, i) => s + Number(i.valor ?? 0), 0);
-    const f = aplicarVisao(itens, visao?.filtros);
+    ausentes = valoresAusentes(itens, visao?.filtros);
+    // A visão filtra só o que NÃO é do vínculo (função, programa, elemento, código, ficha, fonte); a unidade de cada
+    // lançamento vem SÓ do vínculo pela ação (`unidadeDoLancamento`) — os dois nunca disputam o mesmo lançamento.
+    const f = aplicarVisao(comVinculos(itens, vincs, { orgaos: orgaoLista, unidades: reps }), visao?.filtros);
     filtrado = f.reduce((s, i) => s + Number(i.valor ?? 0), 0);
     const mapa = mapaVinculos(vincs);
     linhas = f.map((i) => ({
@@ -1006,7 +1126,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
       unidade: i.unidade,
       nomeElemento: i.nomeElemento,
       codigoElemento: i.codigoElemento,
-      unidadeId: alvoDoTexto(mapa, "unidade", i.unidade),
+      unidadeId: unidadeDoLancamento(mapa, i.unidade, i.acao),
       valor: Number(i.valor ?? 0),
     }));
   }
@@ -1024,10 +1144,29 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     }));
   } else {
     const c = await itensConsolidados(pca);
-    planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta) }));
+    planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta, c.prioridadePorDfd) }));
     previa = c.previa;
   }
-  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, previa };
+  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa, ausentes };
+}
+
+/**
+ * O RELATÓRIO DA COMPOSIÇÃO do orçamento do PCA (PCA × Orçamento → "Relatório"): a mesma base do comparativo + as
+ * contratações por unidade, calculado pelo núcleo puro `relatorioOrcamentoPca`. Sem ano/orçamento ⇒ `null`.
+ */
+export async function relatorioOrcamentoDoPca(pca: PcaEspaco): Promise<RelatorioOrcamento | null> {
+  const orc = await orcamentoDoAno(pca.ano);
+  if (!orc) return null;
+  const [base, resumo] = await Promise.all([baseOrcamentoPca(pca, orc), orcamentoDoPca(pca, orc)]);
+  return relatorioOrcamentoPca({
+    pca: { nome: pca.nome, ano: pca.ano },
+    orcamento: { nome: orc.nome, ano: orc.ano },
+    visao: base.visao ? { nome: base.visao.nome, filtros: base.visao.filtros } : null,
+    lancamentos: base.itens.map((i) => ({ ...i, valor: Number(i.valor ?? 0) })),
+    vinculos: base.vincs,
+    unidades: base.reps.map((r) => ({ id: r.id, sigla: r.sigla, nome: r.nome, orgaoSigla: r.orgaoSigla })),
+    planejado: resumo.planejado.map((p) => ({ unidadeId: p.unidadeId, valor: p.valor })),
+  });
 }
 
 /** DFDs (id + protocolo) dos protocolos dados. */
@@ -1054,13 +1193,13 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
       (p): p is typeof p & { ano: number } => coerceFonte(p.fonte) === "protocolo" && p.ano != null && p.ano >= a0 && p.ano <= a1,
     );
     if (!lista.length) return { pcas: [], dfds: [] };
-    const vs = await vinculos(lista.map((p) => p.id));
+    const [vs, inativos] = await Promise.all([vinculos(lista.map((p) => p.id)), inativosPorDfd()]);
     const out: DfdPrevisao[] = [];
     for (const p of lista) {
       const vig = consolidarPca(vs.filter((v) => v.pcaId === p.id)).vigentes;
       for (const lote of lotesDeIds(vig)) {
         const ds = await db
-          .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, secoes: dfds.secoes, anoPca: dfds.anoPca, valor: dfds.valorTotal, sigla: reparticoes.codigo })
+          .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, secoes: dfds.secoes, valor: dfds.valorTotal, sigla: reparticoes.codigo })
           .from(dfds)
           .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
           .where(inArray(dfds.id, lote));
@@ -1071,7 +1210,7 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
           } catch {
             secoes = [];
           }
-          const pv = previsaoDoDfd(secoes, d.anoPca ?? p.ano);
+          const pv = previsaoDoDfd(secoes, p.ano);
           if (!pv) continue;
           out.push({
             pcaId: p.id,
@@ -1081,7 +1220,8 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
             planejamento: d.planejamento,
             objeto: d.objeto,
             sigla: d.sigla,
-            valor: Number(d.valor ?? 0),
+            // O valor que CONTA no PCA: sem os itens retirados (o mesmo do card e do Dashboard).
+            valor: Number(d.valor ?? 0) - (inativos.get(`${p.id}:${d.id}`)?.valor ?? 0),
             ano: pv.ano,
             mes: "mes" in pv ? pv.mes : null,
             anual: "anual" in pv,

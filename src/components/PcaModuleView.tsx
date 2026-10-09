@@ -60,7 +60,7 @@ export function PcaModuleView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div>
+      <div className="linha-topico">
         <h1 className="text-xl font-bold text-text">PCA</h1>
         <p className="text-sm text-muted">
           {filtro
@@ -70,12 +70,12 @@ export function PcaModuleView({
       </div>
 
       {pcas.length === 0 && !podeCriar ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-[var(--gap-block)] min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] gap-[var(--gap-block)]">
           {pcas.map((p) => (
             <PcaCard key={p.id} pca={p} href={`/painel/pca/${p.id}`} />
           ))}

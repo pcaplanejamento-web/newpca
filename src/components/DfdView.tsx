@@ -25,6 +25,7 @@ import { type Assinatura, buracosSequencia, listaRefs, tipoCurtoDfd } from "@/li
 import { type Nomeacao, type Solicitante, TIPOS_ATO } from "@/lib/reparticao-responsaveis";
 import { Badge } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { CelulaExecucao } from "./CelulaExecucao";
 import { AutoTextarea, CadeadoBotao, CampoCongelado } from "./CampoCadeado";
 import { type Column, DataTable } from "./DataTable";
 import { CelulaCatalogo, EstadoPonto, EstadoResumo } from "./EstadoCelula";
@@ -153,7 +154,7 @@ const COLS: Column<ItemK>[] = [
     align: "right",
     nowrap: true,
     filter: "range",
-    numero: (r) => r.valorUnitario,
+    total: false, numero: (r) => r.valorUnitario,
     render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—"),
   },
   {
@@ -184,17 +185,30 @@ export function ItemCabecalho({ item, ...dfd }: { item: number | null | undefine
   );
 }
 
+/** O selo da execução na Centi no cabeçalho do DFD: Executado (verde) · Não executado (a situação, vermelho) · Não verificado. */
+function SeloExecucao({ situacao }: { situacao: string | null }) {
+  const dica = situacao ? `Situação na Centi (CM002): ${situacao}` : "Execução na Centi ainda não verificada (Automação → CM002)";
+  return (
+    <span className="shrink-0" title={dica}>
+      {situacao ? <CelulaExecucao situacao={situacao} /> : <Badge>Não verificado</Badge>}
+    </span>
+  );
+}
+
 export function DfdCabecalho({
   numero,
   tipo,
   planejamento,
   sobrescrita = false,
+  execucao,
 }: {
   numero: string;
   tipo: string | null;
   planejamento: string | null;
   /** Banner da SOBRESCRITA (arquivo novo × DFD gravado) — selo "Sobrescrita" ao lado do nº. */
   sobrescrita?: boolean;
+  /** Situação do planejamento na Centi (CM002) — o selo Executado / Não executado. */
+  execucao?: string | null;
 }) {
   const cod = tipoCurtoDfd(tipo);
   return (
@@ -210,6 +224,7 @@ export function DfdCabecalho({
           {cod}
         </span>
       )}
+      {execucao !== undefined && <SeloExecucao situacao={execucao} />}
       {planejamento && (
         <span className="truncate text-[12.5px] text-muted">
           Planejamento <span className="font-semibold text-text-2">{planejamento}</span>
@@ -552,7 +567,7 @@ export function DfdView({
           </p>
 
           {dfd.assinaturas.solicitante && (
-            <div className="mb-4 rounded-card border border-border-2 bg-surface-2 p-4">
+            <div className="mb-4 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
               <div className="mb-3 flex items-center gap-2">
                 <IconShield className="h-4 w-4" style={{ color: "var(--ok)" }} />
                 <span className="text-[13px] font-bold text-text">
@@ -614,7 +629,7 @@ export function DfdView({
               return (
                 <div
                   key={`${a.codigo}-${i}`}
-                  className="rounded-card border p-4"
+                  className="rounded-card border p-[var(--pad-card)]"
                   style={{ borderColor: cor, background: `color-mix(in srgb, ${cor} ${adobe ? 4 : 7}%, var(--surface))` }}
                 >
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold">

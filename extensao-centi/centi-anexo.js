@@ -1,0 +1,616 @@
+// Peças PURAS do ANEXO de PDFs num protocolo da Centi (testadas: tests/automacao-centi.test.ts). Roda na página da Centi
+// ANTES do centi-main.js, que as usa: a ÚNICA gravação permitida é acrescentar UM documento novo ao protocolo que a própria
+// Centi acabou de devolver (load) — o resto do protocolo vai exatamente como veio (o que a tela da Centi faz no Salvar).
+// O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
+// reaproveitada pela nova.
+(() => {
+  const NOME = "__pcaCentiAnexo_p38";
+  if (globalThis[NOME]) return;
+  // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
+  // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
+  const MODULO_PROTOCOLO = 102907;
+  const MODULOS_PROTOCOLO = [102907, 102908];
+  const MODULO_DOCUMENTO = 102932;
+  const MODULO_TIPO = 103868;
+  const TIPO = "ORM.ObjectsJSON.Transports.ObjectDataJSON, ORM";
+  // Listas que o load devolve nulas e a tela da Centi manda vazias no Salvar.
+  const LISTAS = ["AtesteControleInterno", "LinksDownloads", "EtapasFluxo"];
+  const MAX_PDF_B64 = 80 * 1024 * 1024;
+
+  const campos = (o) => (o && Array.isArray(o.Fields) ? o.Fields : []);
+  const valor = (o, k) => campos(o).find((f) => f.Key === k)?.Value;
+  const idDe = (v) => (v && typeof v === "object" ? valor(v, "Id") : v);
+  const texto = (v) => String(v ?? "").trim();
+  const mesmaDescricao = (a, b) => texto(a).replace(/\s+/g, " ").toUpperCase() === texto(b).replace(/\s+/g, " ").toUpperCase();
+  // Caractere de controle (quebra de linha, tab…) — não entra em descrição nem em nome de arquivo.
+  const temControle = (t) => [...t].some((c) => c.charCodeAt(0) < 32);
+  const dois = (n) => String(n).padStart(2, "0");
+  const dataCenti = (d) => `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()} ${dois(d.getHours())}:${dois(d.getMinutes())}:${dois(d.getSeconds())}`;
+
+  /** Valida o pedido do sistema (só dígitos nos códigos; o PDF em base64 começando por "%PDF"). Devolve o erro ou null. */
+  function validarPedido(d) {
+    if (!/^\d{1,12}$/.test(String(d?.id ?? ""))) return "Id do protocolo inválido.";
+    if (!/^\d{1,12}$/.test(String(d?.numero ?? ""))) return "Nº do protocolo inválido.";
+    if (d.ano != null && !/^\d{4}$/.test(String(d.ano))) return "Ano do protocolo inválido.";
+    if (!/^\d{1,9}$/.test(String(d?.tipo ?? ""))) return "Tipo do documento inválido.";
+    const desc = texto(d.descricao);
+    if (!desc || desc.length > 250 || temControle(desc)) return "Descrição inválida.";
+    const arq = texto(d.arquivo);
+    if (!/\.pdf$/i.test(arq) || arq.length > 250 || temControle(arq) || /[/\\]/.test(arq)) return "Nome do arquivo inválido.";
+    const pdf = String(d.pdf ?? "");
+    if (!pdf.startsWith("JVBER") || pdf.length > MAX_PDF_B64 || !/^[A-Za-z0-9+/]+=*$/.test(pdf)) return "O arquivo não é um PDF.";
+    return null;
+  }
+
+  /** O protocolo que a Centi devolveu no load: confere o Id e o NÚMERO (e o ano, quando informado) — nunca anexa noutro. */
+  function conferirProtocolo(retorno, d) {
+    const e = retorno?.Entity;
+    if (!e || !MODULOS_PROTOCOLO.includes(e.ModuleKey) || !Array.isArray(e.Fields)) {
+      // O que a Centi respondeu (a mensagem dela e a FORMA da resposta — nunca os dados), para o erro dizer o motivo.
+      const msg = mensagens(retorno?.Message);
+      const forma = retorno && typeof retorno === "object" ? Object.keys(retorno).slice(0, 8).join(", ") : typeof retorno;
+      const mod = e && typeof e === "object" ? ` · módulo ${e.ModuleKey ?? "?"}` : "";
+      return { erro: `A Centi não devolveu o protocolo${msg ? `: ${msg}` : " — confira o Id"} (resposta: ${forma || "vazia"}${mod}).` };
+    }
+    if (texto(valor(e, "Id")) !== String(d.id)) return { erro: `A Centi não achou o protocolo de Id ${d.id}.` };
+    const numero = texto(valor(e, "NrProtocolo"));
+    const ano = texto(valor(e, "AnoReferencia"));
+    if (numero !== String(d.numero)) return { erro: `O Id ${d.id} é do protocolo ${numero || "?"}${ano ? `/${ano}` : ""}, não do ${d.numero}.` };
+    if (d.ano != null && ano !== String(d.ano)) return { erro: `O protocolo ${numero} é de ${ano || "?"}, não de ${d.ano}.` };
+    if (!Array.isArray(valor(e, "Documentos"))) return { erro: "A Centi não devolveu os documentos do protocolo." };
+    return { entidade: e };
+  }
+
+  /** O resumo do protocolo (o "Conferir" da tela). */
+  function resumoProtocolo(e) {
+    const docs = valor(e, "Documentos") ?? [];
+    return {
+      id: texto(valor(e, "Id")),
+      numero: texto(valor(e, "NrProtocolo")),
+      ano: texto(valor(e, "AnoReferencia")),
+      assunto: texto(valor(valor(e, "IdAssunto"), "Display")),
+      interessado: texto(valor(valor(e, "IdPessoa"), "Display")),
+      descricao: texto(valor(e, "Descricao")),
+      documentos: docs.length,
+      descricoes: docs.map((x) => texto(valor(x, "Descricao"))),
+    };
+  }
+
+  /** O documento já anexado com a MESMA descrição (não anexa duas vezes). */
+  function jaAnexado(e, descricao) {
+    const doc = (valor(e, "Documentos") ?? []).find((x) => mesmaDescricao(valor(x, "Descricao"), descricao));
+    return doc ? { sequencial: texto(valor(doc, "Sequencial")), documento: texto(valor(doc, "Id")) } : null;
+  }
+
+  /** O TIPO do documento como a tela da Centi o manda: o registro do tipo (load do módulo de tipos, State 3) — só quando é
+   * mesmo o tipo pedido. */
+  function tipoDoLoad(retorno, tipo) {
+    const t = retorno?.Entity;
+    return t && t.ModuleKey === MODULO_TIPO && Array.isArray(t.Fields) && texto(valor(t, "Id")) === String(tipo) ? t : null;
+  }
+
+  /** O corpo do confirmsave/save: o protocolo do load SEM MUDANÇA + UM documento novo no fim (o formato da tela da Centi).
+   * O tipo: o registro do tipo (`tipoDoLoad` — o que a tela manda); sem ele, o objeto que a Centi já devolve num documento
+   * desse tipo; senão, a referência pelo Id. */
+  function montarSalvar(e, d, agora, guid, tipoCarregado = null) {
+    const docs = valor(e, "Documentos");
+    const igual = docs.find((x) => String(idDe(valor(x, "IdPessoaDocumentoTipo"))) === String(d.tipo));
+    const tipo =
+      tipoCarregado ??
+      (igual
+        ? valor(igual, "IdPessoaDocumentoTipo")
+        : { $type: TIPO, Type: 0, State: 10, ModuleKey: 0, Guid: null, Fields: [{ Key: "Id", Value: Number(d.tipo) }], DynamicAttributes: null });
+    const quando = dataCenti(agora);
+    const f = (Key, Value) => ({ Key, Value });
+    const novo = {
+      Type: 0,
+      State: 0,
+      // O módulo do documento = o de um documento que o protocolo já tem (o mesmo módulo de onde veio); sem nenhum, o padrão.
+      ModuleKey: docs.find((x) => Number.isInteger(x?.ModuleKey) && x.ModuleKey > 0)?.ModuleKey ?? MODULO_DOCUMENTO,
+      Guid: guid,
+      Fields: [
+        f("IdProtocolo", "0"),
+        f("IdPessoaDocumentoTipo", tipo),
+        f("Sequencial", "0"),
+        f("Descricao", texto(d.descricao)),
+        f("IdGed", { Fields: [f("Id", 0), f("FileName", texto(d.arquivo)), f("Data", String(d.pdf))] }),
+        f("IdGedOriginal", "0"),
+        f("IdVinculo", ""),
+        f("Documento", ""),
+        f("Data", quando),
+        f("IdReparticao", "0"),
+        f("DescricaoCompletaReparticao", ""),
+        f("TipoAndamento", "0"),
+        f("IdUsuario", "0"),
+        f("NomeUsuario", ""),
+        f("IdProtocoloRegularidade", "0"),
+        f("AvaliacaoRegularidade", ""),
+        f("ObservacaoAvaliacao", ""),
+        f("IdConceito", "0"),
+        f("Status", "0"),
+        f("DataRevogacao", quando),
+        f("DocumentoExterno", "1"),
+        f("ConfereOriginal", "0"),
+        f("IdUsuarioConfereOriginal", "0"),
+        f("NomeUsuarioConfereOriginal", ""),
+        f("DataConfereOriginal", quando),
+        f("ObservacaoConfereOriginal", ""),
+        f("QuantidadePaginas", "0"),
+        f("DocumentoSigiloso", "0"),
+        f("IdUsuarioSigilo", "0"),
+        f("Reassinar", "0"),
+        f("Assinaturas", []),
+        f("UsuariosSigilosos", []),
+        f("Id", "0"),
+        f("IdUsuarioCadastro", "0"),
+        f("IdUsuarioAlteracao", "0"),
+        f("DataCadastro", ""),
+        f("LastUpdate", ""),
+      ],
+      DynamicAttributes: [],
+    };
+    const Fields = e.Fields.map((c) =>
+      c.Key === "Documentos" ? { Key: c.Key, Value: [...docs, novo] } : LISTAS.includes(c.Key) && c.Value == null ? { Key: c.Key, Value: [] } : c,
+    );
+    return { Token: "", Object: { ...e, Fields } };
+  }
+
+  /** O corpo do CONFIRMSAVE = o OBJETO do protocolo DIRETO (a tela da Centi chama `confirmsave(initialValues)`); só o
+   * `save` leva o envelope `{Token, Object}`. O envelope no confirmsave chegava ao servidor como um objeto vazio (500). */
+  function corpoConfirmar(salvar) {
+    return salvar.Object;
+  }
+
+  /** O texto das mensagens da Centi (lista de textos ou de objetos). */
+  function mensagens(m) {
+    const lista = Array.isArray(m) ? m : m == null ? [] : [m];
+    return lista
+      .map((x) => (typeof x === "string" ? x : x && typeof x === "object" ? (x.Message ?? x.Text ?? x.Mensagem ?? x.Description ?? "") : ""))
+      .map(texto)
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  /** A resposta do save: só vale com Success e o documento novo de volta com Id real. */
+  function conferirSalvo(r, d) {
+    if (r?.Success !== true) return { erro: `A Centi não gravou${mensagens(r?.Message) ? `: ${mensagens(r.Message)}` : "."}` };
+    const doc = (valor(r.Entity, "Documentos") ?? []).filter((x) => mesmaDescricao(valor(x, "Descricao"), d.descricao)).pop();
+    const id = texto(valor(doc, "Id"));
+    if (!doc || !id || id === "0") return { erro: "A Centi respondeu, mas o documento não voltou no protocolo — confira na Centi." };
+    return { sequencial: texto(valor(doc, "Sequencial")), documento: id };
+  }
+
+  /** A dica do erro do salvar, pelos NOMES dos cabeçalhos (nunca os valores): os que a tela da Centi mandou no salvar e o
+   * anexo não mandou (os anti-robô "x-ts…" a extensão não reproduz); sem o salvar da tela aprendido, como ensiná-lo. */
+  function dicaCabecalhos(nomesTela, nomesEnviados, _protocoloAberto) {
+    if (!Array.isArray(nomesTela) || !nomesTela.length) return "";
+    const enviados = new Set((nomesEnviados ?? []).map((n) => String(n).toLowerCase()));
+    const fixos = /^(content-type|content-length|accept)$/i;
+    const faltam = nomesTela.map((n) => String(n).toLowerCase()).filter((n) => !fixos.test(n) && !enviados.has(n));
+    const robo = faltam.filter((n) => n.startsWith("x-ts"));
+    const outros = faltam.filter((n) => !n.startsWith("x-ts"));
+    if (outros.length) return `Cabeçalhos do salvar da Centi que faltaram: ${outros.join(", ")}.`;
+    if (robo.length) return "O salvar da Centi exige a verificação anti-robô da própria tela — anexe por ela.";
+    return "Os cabeçalhos são os mesmos da tela da Centi.";
+  }
+
+  /** A trilha da tela da Centi antes do salvar dela (só "MÉTODO caminho"; números longos encurtados) e o endereço usado
+   * pelo anexo — o passo que a tela faz e o anexo não aparece aqui. Sem trilha: como aprendê-la. */
+  function dicaTrilha(trilha, usado) {
+    if (!Array.isArray(trilha) || !trilha.length) return "";
+    const curto = (t) => String(t).replace(/\d{7,}/g, (n) => `${n.slice(0, 3)}…`).slice(0, 90);
+    return `Passos da tela antes de salvar: ${trilha.slice(-8).map(curto).join(" › ")}. Anexo: ${curto(usado)}.`;
+  }
+
+  /** Os cabeçalhos de RASTREIO (trace-*, x-ai-trace…) vão NOVOS em cada pedido, como a tela os gera: um identificador
+   * repetido de um pedido antigo faz o salvar da Centi falhar ("Erro inesperado"). No valor, cada GUID vira um GUID novo,
+   * cada carimbo de tempo em ms vira o de agora e cada sequência hexadecimal/alfanumérica longa vira outra do mesmo
+   * tamanho. Os demais cabeçalhos (sessão, entidade, mês…) ficam como estão. */
+  const RASTREIO = /^(x-ai-trace|x-trace|trace-|x-request-id|request-id|x-correlation-id|correlation-id)/i;
+  function renovarRastreio(cab, guid, agora, aleatorio) {
+    const novoDe = (amostra) => {
+      const hex = /^[0-9a-f]+$/i.test(amostra);
+      const alfabeto = hex ? "0123456789abcdef" : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      let r = "";
+      for (let i = 0; i < amostra.length; i++) r += alfabeto[Math.floor(aleatorio() * alfabeto.length)];
+      return amostra === amostra.toUpperCase() && hex ? r.toUpperCase() : r;
+    };
+    const r = {};
+    for (const [k, v] of Object.entries(cab ?? {})) {
+      if (!RASTREIO.test(k)) {
+        r[k] = v;
+        continue;
+      }
+      r[k] = String(v ?? "")
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, () => guid())
+        .replace(/(?<![0-9a-z])1\d{12}(?![0-9a-z])/gi, () => String(agora))
+        .replace(/(?<![0-9a-z-])[0-9a-z]{16,}(?![0-9a-z-])/gi, (m) => novoDe(m));
+    }
+    return r;
+  }
+
+  /** Os cabeçalhos com o TOKEN que a Centi devolveu na resposta (ela troca a cada resposta e a tela usa o novo):
+   * token, Authorization "Bearer <token>" e refreshtoken — no nome que já existe (sem caixa), senão acrescentados. Sem
+   * token novo, os mesmos cabeçalhos. */
+  function comTokenNovo(cab, token, refresh) {
+    if (!token && !refresh) return cab;
+    // Só ATUALIZA o cabeçalho que a tela da Centi já manda (pelo nome, sem caixa) — NUNCA acrescenta um: a tela não manda
+    // "token"/"Authorization" no operation (só Refreshtoken + Company + Month), e acrescentá-los fazia a Centi responder
+    // "Usuário sem permissão!" na emissão do DFD (1.3.8 a 1.3.17).
+    const novo = { ...cab };
+    let mudou = false;
+    const por = (re, valor) => {
+      const k = Object.keys(novo).find((n) => re.test(n));
+      if (k && novo[k] !== valor) {
+        novo[k] = valor;
+        mudou = true;
+      }
+    };
+    if (token) {
+      por(/^token$/i, token);
+      por(/^authorization$/i, `Bearer ${token}`);
+    }
+    if (refresh) por(/^refreshtoken$/i, refresh);
+    return mudou ? novo : cab;
+  }
+
+  /** A OPERAÇÃO "Emitir DFD" que a própria tela da Centi mandou (o corpo do operation, como texto ou objeto): só o que a
+   * identifica — ModuleKey, Guid e o modelo de assinatura (IdPlanejamentoAssinaturaDFD). Outro operation → null. Nunca
+   * guarda o planejamento nem os demais valores. */
+  function operacaoDoCorpo(corpo) {
+    let c = corpo;
+    if (typeof c === "string") {
+      try {
+        c = JSON.parse(c);
+      } catch {
+        return null;
+      }
+    }
+    if (!c || typeof c !== "object" || !Number.isInteger(c.ModuleKey) || c.ModuleKey <= 0 || !Array.isArray(c.Params)) return null;
+    const guid = String(c.Guid ?? "").toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(guid)) return null;
+    const p = (k) => c.Params.find((x) => x && x.Key === k);
+    if (!p("IdComprasPlanejamento") || String(p("DFD")?.Value ?? "") !== "1") return null;
+    const assinatura = String(p("IdPlanejamentoAssinaturaDFD")?.Value ?? "").replace(/\D/g, "");
+    return { moduleKey: c.ModuleKey, guid, assinatura };
+  }
+
+  // GRAVADOR de receitas: a ESTRUTURA de um pedido que a tela da Centi fez — método, caminho, os NOMES dos parâmetros e dos
+  // campos do corpo com o TIPO de cada um. Nunca um valor (nem token, senha, nome ou número): só a forma.
+  const TIPOS = (v) => (v === null ? "nulo" : Array.isArray(v) ? "lista" : typeof v === "number" ? "número" : typeof v === "boolean" ? "sim/não" : typeof v === "string" ? "texto" : "objeto");
+  function forma(v, prof) {
+    if (prof > 4) return "…";
+    if (Array.isArray(v)) return v.length ? [forma(v[0], prof + 1)] : [];
+    if (v && typeof v === "object") {
+      const o = {};
+      for (const k of Object.keys(v).slice(0, 60)) o[k] = forma(v[k], prof + 1);
+      return o;
+    }
+    return TIPOS(v);
+  }
+  function estruturaDoPedido(url, metodo, corpo) {
+    let u;
+    try {
+      u = new URL(String(url), "https://rioverde.centi.com.br");
+    } catch {
+      return null;
+    }
+    const i = u.pathname.indexOf("/wcf/");
+    if (i < 0) return null;
+    const caminho = u.pathname.slice(i + 5).replace(/\/\d+(?=\/|$)/g, "/{n}");
+    const entidade = u.searchParams.get("entity");
+    let c = corpo;
+    if (typeof c === "string") {
+      try {
+        c = JSON.parse(c);
+      } catch {
+        c = c ? "texto (não JSON)" : undefined;
+      }
+    } else if (c != null && typeof c === "object" && !Array.isArray(c) && Object.getPrototypeOf(c) !== Object.prototype) c = "binário/formulário";
+    return {
+      metodo: String(metodo || "GET").toUpperCase(),
+      caminho,
+      entidade: entidade && /^\d{1,9}$/.test(entidade) ? entidade : null,
+      parametros: [...new Set([...u.searchParams.keys()])].slice(0, 30),
+      corpo: c === undefined ? null : typeof c === "string" ? c : forma(c, 0),
+    };
+  }
+
+  // APRENDER CLICANDO (a Tela Protocolo e outras LEITURAS): o pedido COMPLETO que a tela fez — método, caminho e corpo —
+  // para o sistema repetir depois. Só LEITURA (verbo de consulta da API) e a operação que GEROU UM ARQUIVO (um relatório);
+  // salvar/excluir/tramitar nunca. Cabeçalhos nunca entram (a sessão vai neles); campos com cara de segredo saem do corpo.
+  const VERBO_ESCRITA = /(save|delete|remove|exclu|insert|update|upload|send|tramit|assin|sign|cancel|import|exec|commit|aprov|approv|confirm|logout|login)/i;
+  const VERBO_LEITURA = /^(load\w*|list\w*|get\w*|search\w*|query\w*|find\w*|filter\w*|grid\w*|pesquis\w*|consult\w*|count\w*|page\w*|select\w*|lookup\w*|combo\w*|tree\w*|view\w*)$/i;
+  const SEGREDO = /token|senha|password|passwd|authorization|refresh|cookie|secret/i;
+  const VERBO_ARQUIVO = /^(getbinlink|getbincache|getbin|getfile)$/i;
+  /** O caminho da API ("restauth/list?…" | "rest/…") e o verbo (1º trecho); fora da API = null. */
+  function caminhoDaApi(url) {
+    let u;
+    try {
+      u = new URL(String(url), "https://rioverde.centi.com.br/wcf/");
+    } catch {
+      return null;
+    }
+    const m = /\/(restauth|rest)\/([^/?#]+)/i.exec(u.pathname);
+    if (!m) return null;
+    for (const k of [...u.searchParams.keys()]) if (SEGREDO.test(k)) u.searchParams.delete(k);
+    const i = u.pathname.indexOf(`/${m[1]}/`);
+    return { caminho: `${u.pathname.slice(i + 1)}${u.search}`, api: m[1].toLowerCase(), verbo: m[2] };
+  }
+  /** Uma CONSULTA que a extensão pode repetir: só a API restauth, verbo de leitura, nunca de escrita. */
+  function consultaPermitida(caminho, metodo) {
+    if (!/^(GET|POST)$/.test(String(metodo || ""))) return false;
+    const c = caminhoDaApi(caminho);
+    return !!c && c.api === "restauth" && VERBO_LEITURA.test(c.verbo) && !VERBO_ESCRITA.test(c.verbo) && !VERBO_ARQUIVO.test(c.verbo);
+  }
+  /** O corpo sem nada com cara de segredo (as chaves), até 16 KB; outro formato = undefined (o pedido não é aprendido). */
+  function semSegredos(v, prof = 0) {
+    if (prof > 12) return null;
+    if (Array.isArray(v)) return v.slice(0, 500).map((x) => semSegredos(x, prof + 1));
+    if (v && typeof v === "object") {
+      const o = {};
+      for (const [k, x] of Object.entries(v)) if (!SEGREDO.test(k)) o[k] = semSegredos(x, prof + 1);
+      return o;
+    }
+    return v;
+  }
+  function corpoJson(corpo) {
+    if (corpo == null || corpo === "") return null;
+    let c = corpo;
+    if (typeof c === "string") {
+      try {
+        c = JSON.parse(c);
+      } catch {
+        return undefined;
+      }
+    }
+    if (typeof c !== "object" || (!Array.isArray(c) && Object.getPrototypeOf(c) !== Object.prototype)) return undefined;
+    const limpo = semSegredos(c);
+    return JSON.stringify(limpo).length <= 16384 ? limpo : undefined;
+  }
+  /** Uma linha da resposta em "chave → texto" (o padrão {Fields:[{Key,Value}]} da Centi achatado), até 60 campos. */
+  function linhaPlana(o) {
+    const r = {};
+    const ir = (v, pre, prof) => {
+      if (Object.keys(r).length >= 60 || prof > 3 || v == null) return;
+      if (Array.isArray(v)) return;
+      if (typeof v === "object") {
+        if (Array.isArray(v.Fields))
+          for (const f of v.Fields) if (f && typeof f.Key === "string" && !SEGREDO.test(f.Key)) ir(f.Value, pre ? `${pre}.${f.Key}` : f.Key, prof + 1);
+        for (const [k, x] of Object.entries(v)) if (k !== "Fields" && !SEGREDO.test(k)) ir(x, pre ? `${pre}.${k}` : k, prof + 1);
+        return;
+      }
+      if (pre) r[pre] = String(v).slice(0, 200);
+    };
+    ir(o, "", 0);
+    return r;
+  }
+  /** A maior LISTA de objetos da resposta (o caminho até ela — "@Chave" = um campo do padrão Fields). */
+  function acharLista(j) {
+    let melhor = null;
+    const ir = (v, caminho, prof) => {
+      if (v == null || typeof v !== "object" || prof > 5) return;
+      if (Array.isArray(v)) {
+        if (v.length && v.every((x) => x && typeof x === "object" && !Array.isArray(x)) && (!melhor || v.length > melhor.itens.length)) melhor = { caminho, itens: v };
+        return;
+      }
+      if (Array.isArray(v.Fields)) for (const f of v.Fields) if (f && typeof f.Key === "string") ir(f.Value, [...caminho, `@${f.Key}`], prof + 1);
+      for (const [k, x] of Object.entries(v)) if (k !== "Fields") ir(x, [...caminho, k], prof + 1);
+    };
+    ir(j, [], 0);
+    return melhor;
+  }
+  /** O RESUMO da resposta de uma consulta: onde está a lista, quantas linhas e as primeiras 200, achatadas. */
+  function resumoResposta(j) {
+    const l = acharLista(j);
+    if (!l) return null;
+    return { lista: l.caminho, total: l.itens.length, linhas: l.itens.slice(0, 200).map(linhaPlana) };
+  }
+  /** O que o APRENDIZ guarda de um pedido da tela (ou null — não é leitura, ou é grande demais). */
+  function registroDoAprendiz(url, metodo, corpo, status, tipo, texto) {
+    const c = caminhoDaApi(url);
+    if (!c || Number(status) >= 400) return null;
+    const m = String(metodo || "GET").toUpperCase();
+    if (VERBO_ARQUIVO.test(c.verbo)) return m === "GET" ? { tipo: "arquivo", metodo: m, caminho: c.caminho } : null;
+    let j = null;
+    if (typeof texto === "string" && /^\s*[[{]/.test(texto) && texto.length <= 8 * 1024 * 1024) {
+      try {
+        j = JSON.parse(texto);
+      } catch {}
+    }
+    const b = corpoJson(corpo);
+    if (b === undefined) return null;
+    if (/^operation$/i.test(c.verbo)) {
+      const arquivo = /pdf|octet/i.test(String(tipo || "")) || (j && JSON.stringify(j).search(/"Key"\s*:\s*"[0-9a-f-]{20,}"/i) >= 0);
+      if (!arquivo || !b || !Number.isInteger(b.ModuleKey) || !Array.isArray(b.Params)) return null;
+      return { tipo: "operacao", metodo: m, caminho: c.caminho, corpo: b };
+    }
+    if (!consultaPermitida(c.caminho, m) || !j) return null;
+    const resposta = resumoResposta(j);
+    return resposta ? { tipo: "consulta", metodo: m, caminho: c.caminho, corpo: b, resposta } : null;
+  }
+  // As TRAVAS de toda operação de emissão: não anexa ao protocolo, não assina, não envia e-mail, não guarda, não roda em
+  // segundo plano.
+  const TRAVAS = Object.freeze({ AnexarAoProtocolo: "0", AssinarDocumento: "0", Sign: "0", SendMail: "0", StorageReport: "0", Background: "0" });
+
+  /** A operação aprendida (o relatório que gerou um arquivo) — a chave que libera repeti-la nesta aba. */
+  const chaveOperacao = (c) => (c && Number.isInteger(c.ModuleKey) ? `${c.ModuleKey}|${String(c.Guid ?? "").toLowerCase()}` : null);
+
+  // CM002 - PLANEJAMENTO pela API (só leitura): a lista que a própria tela pede ao Pesquisar. Reconhecida pela FORMA — os
+  // itens trazem um Id, a Situação e a Finalidade/Centro de custo —; o sistema a repete SEM paginação (todas as linhas).
+  const ULTIMO = (k) => String(k).split(".").pop();
+  function campoTexto(linhas, re) {
+    const chaves = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((k) => re.test(ULTIMO(k)) || re.test(k));
+    // A de TEXTO (a Situação por extenso) vence o código numérico.
+    const texto = (k) => linhas.filter((l) => l[k] != null && l[k] !== "" && !/^-?\d+$/.test(String(l[k]))).length;
+    return chaves.sort((a, b) => texto(b) - texto(a) || a.length - b.length)[0] ?? null;
+  }
+  /** Os planejamentos da resposta da CM002 ([{id, situacao, finalidade, centroCusto}]) — ou null (não é a lista da CM002). */
+  function planejamentosCm002(j, conhecida = false, colunas = false) {
+    const l = acharLista(j);
+    // A consulta já aprendida que volta SEM linhas (entidade sem planejamentos) é uma lista vazia, não "outra forma".
+    if (!l) return conhecida && temListaVazia(j) ? [] : null;
+    const linhas = l.itens.map(linhaPlana);
+    const amostra = linhas.slice(0, 50);
+    const kId = [...new Set(amostra.flatMap((x) => Object.keys(x)))].filter((k) => /^id$/i.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0];
+    const kSit = campoTexto(amostra, /situa/i);
+    const kFin = campoTexto(amostra, /finalidade/i);
+    const kCc = campoTexto(amostra, /centro.?custo/i);
+    // Na consulta já aprendida basta Id + Situação (finalidade/centro de custo podem vir vazios).
+    if (!kId || !kSit || (!conhecida && !kFin && !kCc)) return null;
+    return linhas
+      .map((x) => ({
+        id: String(x[kId] ?? "").replace(/\D/g, "").replace(/^0+/, ""),
+        situacao: String(x[kSit] ?? "").trim().slice(0, 40),
+        finalidade: kFin ? String(x[kFin] ?? "").trim().slice(0, 200) : "",
+        centroCusto: kCc && kCc !== kFin ? String(x[kCc] ?? "").trim().slice(0, 200) : "",
+        // TODAS as colunas da linha (o nó "Escolher colunas" do fluxo escolhe as que analisa).
+        ...(colunas ? { centi: x } : {}),
+      }))
+      .filter((x) => x.id);
+  }
+  /** Os protocolos da resposta da TELA PROTOCOLO (PO011) — {linhas, situacao} — ou null (não é a lista da tela). Cada
+   * linha no formato da leitura pela tela: protocolo, ano, id, entrada, departamento, interessado, solicitante, natureza
+   * e a situação (vazia quando a lista não traz — a consulta já é a da aba). */
+  function protocolosTela(j) {
+    const l = acharLista(j);
+    if (!l) return null;
+    const linhas = l.itens.map(linhaPlana);
+    const amostra = linhas.slice(0, 50);
+    const chaves = [...new Set(amostra.flatMap((x) => Object.keys(x)))];
+    const curta = (re) => chaves.filter((k) => re.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0] ?? null;
+    const kId = curta(/^id$/i);
+    const kProt = chaves
+      .filter((k) => /^(protocolo|numero|numeroprotocolo|nrprotocolo|numprotocolo|codigo)$/i.test(ULTIMO(k)))
+      .filter((k) => amostra.some((x) => /^\d{1,12}$/.test(String(x[k] ?? "").trim())))
+      .sort((a, b) => a.length - b.length)[0];
+    const kAno = curta(/^(ano|exercicio)$/i);
+    const kInt = campoTexto(amostra, /interessad/i);
+    if (!kProt || !kAno || !kInt) return null;
+    const kSit = campoTexto(amostra, /situa|status|fase/i);
+    const kSol = campoTexto(amostra, /solicitant/i);
+    const kNat = campoTexto(amostra, /natureza|assunto/i);
+    const kDep = campoTexto(amostra, /departamento|setor/i);
+    const kEnt = chaves.filter((k) => /entrada|dt|data/i.test(ULTIMO(k))).sort((a, b) => a.length - b.length)[0] ?? null;
+    const t = (x, k) => (k ? String(x[k] ?? "").replace(/\s+/g, " ").trim().slice(0, 200) : "");
+    return {
+      situacao: !!kSit,
+      linhas: linhas
+        .map((x) => ({
+          protocolo: t(x, kProt).replace(/\D/g, "").replace(/^0+(?=\d)/, ""),
+          ano: t(x, kAno).replace(/\D/g, ""),
+          id: kId ? t(x, kId).replace(/\D/g, "") : "",
+          entrada: t(x, kEnt).slice(0, 40),
+          departamento: t(x, kDep),
+          interessado: t(x, kInt),
+          solicitante: t(x, kSol),
+          natureza: t(x, kNat),
+          situacao: t(x, kSit).slice(0, 60),
+        }))
+        .filter((x) => x.protocolo),
+    };
+  }
+  /** "Em análise" (sem acento/caixa). */
+  const emAnalise = (s) => /ANALISE/.test(String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase());
+  const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|itensperpage|itemsperpage|itensporpagina|registros|quantidade|qtd|maxresults|count)$/i;
+  const RE_INICIO = /^(skip|page|pagina|start|offset|first|pageindex|currentpage)$/i;
+  /** Alguma lista vazia na resposta (a lista de linhas que veio sem nenhuma). */
+  function temListaVazia(j) {
+    const ir = (v, prof) => v != null && typeof v === "object" && prof <= 5 && (Array.isArray(v) ? !v.length : Object.values(v).some((x) => ir(x, prof + 1)));
+    return ir(j, 0);
+  }
+  /** O pedido da lista numa PÁGINA: `pagina` null = sem paginação (tamanho → 100000, início → o primeiro); senão a página
+   * `pagina` (0, 1, 2…) no tamanho ORIGINAL da consulta — o início vira o nº da página (page/pagina, 1 em diante quando a
+   * consulta contava de 1) ou o deslocamento (skip/offset/start = página × tamanho). Devolve também o `tamanho` original. */
+  function comPagina(caminho, corpo, pagina, todos = 100000) {
+    let tamanho = 0;
+    const achar = (v, prof) => {
+      if (prof > 6 || v == null || typeof v !== "object") return;
+      for (const [k, x] of Object.entries(v)) {
+        if (typeof x === "number" && RE_TAMANHO.test(k) && !tamanho) tamanho = x;
+        else achar(x, prof + 1);
+      }
+    };
+    achar(corpo, 0);
+    let c = String(caminho);
+    let u = null;
+    try {
+      u = new URL(c, "https://x/");
+      for (const [k, v] of u.searchParams) if (!tamanho && /^\d+$/.test(v) && RE_TAMANHO.test(k)) tamanho = Number(v);
+    } catch {}
+    const inicio = (k, x) => {
+      const base1 = /page|pagina/i.test(k) && !/index/i.test(k) && x >= 1;
+      if (pagina == null) return base1 ? 1 : 0;
+      if (/page|pagina/i.test(k)) return pagina + (base1 ? 1 : 0);
+      return pagina * tamanho;
+    };
+    const ir = (v, prof) => {
+      if (prof > 6 || v == null || typeof v !== "object") return v;
+      if (Array.isArray(v)) return v.map((x) => ir(x, prof + 1));
+      const o = {};
+      for (const [k, x] of Object.entries(v)) {
+        if ((typeof x === "number" || (x === null && pagina == null)) && RE_TAMANHO.test(k)) o[k] = pagina == null ? todos : x;
+        else if (typeof x === "number" && RE_INICIO.test(k)) o[k] = inicio(k, x);
+        else o[k] = ir(x, prof + 1);
+      }
+      return o;
+    };
+    if (u) {
+      for (const k of [...u.searchParams.keys()]) {
+        const v = u.searchParams.get(k);
+        if (!/^-?\d+$/.test(v ?? "")) continue;
+        if (RE_TAMANHO.test(k) && pagina == null) u.searchParams.set(k, String(todos ?? ""));
+        else if (RE_INICIO.test(k)) u.searchParams.set(k, String(inicio(k, Number(v))));
+      }
+      c = `${u.pathname.replace(/^\//, "")}${u.search}`;
+    }
+    return { caminho: c, corpo: ir(corpo, 0), tamanho };
+  }
+  /** O pedido da lista SEM paginação: tamanho da página → 100000, início → o primeiro (no corpo e na URL). */
+  /** O TOTAL de linhas que a resposta informa (TotalItems/Total/RecordCount…) — o maior encontrado fora das listas — ou null. */
+  function totalDaResposta(j) {
+    let t = null;
+    const ir = (v, prof) => {
+      if (v == null || typeof v !== "object" || Array.isArray(v) || prof > 4) return;
+      for (const [k, x] of Object.entries(v)) {
+        if (typeof x === "number" && Number.isInteger(x) && x >= 0 && RE_TOTAL.test(k)) t = Math.max(t ?? 0, x);
+        else ir(x, prof + 1);
+      }
+    };
+    ir(j, 0);
+    return t;
+  }
+  const RE_TOTAL = /^(total|totalitems|totalitens|totalcount|totalrecords|totalregistros|totalrows|totallinhas|recordcount|recordstotal|quantidadetotal|qtdtotal|count)$/i;
+  function semPaginacao(caminho, corpo) {
+    const p = comPagina(caminho, corpo, null);
+    return { caminho: p.caminho, corpo: p.corpo };
+  }
+
+  /** A consulta da PO011 só nas repartições pedidas: marca `selected` em Data.Reparticoes pela Descricao (sem acento/
+   * caixa; uma contém a outra) e desmarca as demais. Sem a lista no corpo → `null` (a consulta não filtra por repartição). */
+  function comReparticoes(corpo, nomes) {
+    const lista = corpo?.Data?.Reparticoes;
+    if (!Array.isArray(lista) || !Array.isArray(nomes) || !nomes.length) return null;
+    const n = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+    const alvos = nomes.map(n).filter(Boolean);
+    const casa = (d) => alvos.find((a) => d && (d === a || d.includes(a) || a.includes(d)));
+    const achadas = [];
+    const usados = new Set();
+    const nova = lista.map((r) => {
+      const a = casa(n(r?.Descricao));
+      if (a) {
+        achadas.push(String(r.Descricao));
+        usados.add(a);
+      }
+      return { ...r, selected: !!a };
+    });
+    return { corpo: { ...corpo, Data: { ...corpo.Data, Reparticoes: nova } }, achadas, faltam: nomes.filter((_x, i) => !usados.has(alvos[i])) };
+  }
+
+  globalThis[NOME] = Object.freeze({
+    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, comPagina, protocolosTela, emAnalise,
+    caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
+    comTokenNovo,
+    operacaoDoCorpo,
+    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
+})();

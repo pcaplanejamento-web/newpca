@@ -6,12 +6,13 @@ import type { ConferenciaItem } from "@/lib/catalogo-conferencia";
 import type { ComparacaoDfd } from "@/lib/comparar-protocolo";
 import { indiceAposRemover, mapaItensDuplicados, type MensagemDfd, outrosDoGrupo } from "@/lib/dfd-tratamento";
 import { type DfdParseado, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
-import { Button } from "./Button";
+import { pendenciasDoDfd } from "@/lib/pendencias-core";
+import { BotaoAcao } from "./BotaoAcao";
 import { ComparacaoDfdView, type EscolhaSobrescritaProps } from "./ComparacaoReenvio";
 import type { PainelDfd } from "./DfdConferir";
 import { Historico, useHistorico } from "./Historico";
 import { ItemDetalhe } from "./ItemDetalhe";
-import { MensagensDfd } from "./MensagensDfd";
+import { PainelPendencias } from "./PainelPendencias";
 import { IconFile, IconLayers } from "./icons";
 
 /** Título do painel da direita do DFD (mensagens / item / histórico / diferenças / duplicados). */
@@ -24,46 +25,30 @@ export function tituloPainelDfd(painel: PainelDfd | null, dfd: DfdParseado | nul
 }
 
 /**
- * Rodapé de um banner de ITEM — o do painel da direita do DFD e o do banner SÓ do item (lista "Itens" da
- * Mesa): "Ver DFD" (no painel da direita fecha o item e volta ao DFD — no celular só um painel aparece
- * por vez; no banner do item, o DFD surge à ESQUERDA dele), "Ver protocolo" (sobe ao processo de origem,
- * à esquerda do DFD — Protocolo | DFD | Item) e, no banner do item, Fechar + a ação principal.
+ * Rodapé de um banner de ITEM — o do painel da direita do DFD e o do banner SÓ do item (lista "Itens" da Mesa), em UMA
+ * linha e só com ícones: "Ver DFD" (no painel da direita fecha o item e volta ao DFD — no celular só um painel aparece
+ * por vez; no banner do item, o DFD surge à ESQUERDA dele), "Ver protocolo" (sobe ao processo de origem, à esquerda do
+ * DFD — Protocolo | DFD | Item) e a ação principal. Fechar = o X do cabeçalho.
  */
 export function RodapePainelItem({
   onVerDfd,
   onVerProtocolo,
-  onFechar,
   principal,
   bloqueado = false,
 }: {
   onVerDfd?: () => void;
   onVerProtocolo?: () => void;
-  onFechar?: () => void;
   principal?: ReactNode;
   bloqueado?: boolean;
 }) {
+  if (!onVerDfd && !onVerProtocolo && !principal) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {onVerDfd && (
-        <Button variant="secondary" onClick={onVerDfd} disabled={bloqueado}>
-          <IconFile className="h-4 w-4" /> Ver DFD
-        </Button>
-      )}
+    <div className="flex flex-nowrap items-center gap-1.5">
+      {onVerDfd && <BotaoAcao rotulo="Ver DFD" icon={<IconFile className="h-4 w-4" />} onClick={onVerDfd} disabled={bloqueado} />}
       {onVerProtocolo && (
-        <Button variant="secondary" onClick={onVerProtocolo} disabled={bloqueado}>
-          <IconLayers className="h-4 w-4" /> Ver protocolo
-        </Button>
+        <BotaoAcao rotulo="Ver protocolo" icon={<IconLayers className="h-4 w-4" />} onClick={onVerProtocolo} disabled={bloqueado} />
       )}
-      {(onFechar || principal) && (
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {onFechar && (
-            <Button variant="secondary" onClick={onFechar} disabled={bloqueado}>
-              Fechar
-            </Button>
-          )}
-          {principal}
-        </div>
-      )}
+      {principal && <div className="ml-auto flex items-center">{principal}</div>}
     </div>
   );
 }
@@ -115,7 +100,8 @@ export function DfdPainelDireito({
   dfd: DfdParseado | null;
   numero: string;
   mensagens: MensagemDfd[];
-  onIrPara: (m: MensagemDfd) => void;
+  /** Leva à âncora do DFD (rola e destaca na cor da pendência). As de ITEM abrem o item com o campo destacado. */
+  onIrPara: (a: { ancora: string; cor: string }) => void;
   conformidade?: Map<string, ConferenciaItem>;
   regras?: RegrasAvaliacao;
   editavel?: boolean;
@@ -141,6 +127,19 @@ export function DfdPainelDireito({
   const verHistorico = painel?.tipo === "historico" && dfdId != null;
   const historico = useHistorico(verHistorico ? `/api/dfd/${dfdId}/historico` : null);
   const repetidos = useRepetidosDoItem(dfd, painel?.tipo === "item" ? painel.idx : null, regras, categoria);
+  // As PENDÊNCIAS do DFD (a soma dos itens) — montadas só com o painel de pendências aberto.
+  const verPendencias = painel == null || painel.tipo === "mensagens";
+  const pendencias = useMemo(
+    () =>
+      verPendencias && dfd
+        ? {
+            numero,
+            capa: null,
+            dfds: [pendenciasDoDfd({ chave: numero, numero, planejamento: dfd.planejamento, tipo: dfd.tipo, secoes: dfd.secoes, itens: dfd.itens }, mensagens, conformidade)],
+          }
+        : null,
+    [verPendencias, dfd, numero, mensagens, conformidade],
+  );
 
   if (painel?.tipo === "diferencas") return <ComparacaoDfdView comparacao={comparacao} herdados={herdados} escolha={escolha} />;
   if (painel?.tipo === "duplicados") return <>{duplicados}</>;
@@ -181,8 +180,23 @@ export function DfdPainelDireito({
             : undefined
         }
         historicoDfdId={dfdId}
+        destaque={painel.destaque}
+        dfdRef={{ numero, planejamento: dfd?.planejamento ?? null }}
+        idx={idx}
       />
     );
   }
-  return <MensagensDfd mensagens={mensagens} numero={numero} tipo={dfd?.tipo} onIrPara={onIrPara} />;
+  if (!pendencias) return null;
+  return (
+    <PainelPendencias
+      pendencias={pendencias}
+      escopo="dfd"
+      acertos={mensagens.filter((m) => m.status === "acerto")}
+      onIrPara={(alvo, cor) =>
+        alvo.item != null && onPainel
+          ? onPainel({ tipo: "item", idx: alvo.item, destaque: { ancora: alvo.ancora, cor, nonce: Date.now() } })
+          : onIrPara({ ancora: alvo.ancora, cor })
+      }
+    />
+  );
 }

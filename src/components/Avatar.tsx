@@ -20,19 +20,43 @@ const DIM = {
   md: "h-8 w-8 text-xs",
   lg: "h-[34px] w-[34px] text-[13px]",
   xl: "h-20 w-20 text-xl",
+  /** A bolha do chat (estilo Messenger). */
+  bolha: "h-12 w-12 text-[15px] lg:h-14 lg:w-14 lg:text-base",
 } as const;
+
+/** O ponto de PRESENÇA no canto da foto (online = verde, ausente = âmbar), com o anel da superfície. */
+const PONTO = { online: "bg-[var(--ok)]", ausente: "bg-[var(--warn)]" } as const;
+const PONTO_DIM: Record<keyof typeof DIM, string> = { xs: "h-2 w-2", sm: "h-2.5 w-2.5", md: "h-2.5 w-2.5", lg: "h-3 w-3", xl: "h-5 w-5", bolha: "h-3.5 w-3.5" };
 
 export function Avatar({
   nome,
   foto,
   size = "md",
   className = "",
+  presenca,
+  pulsar = false,
 }: {
   nome: string;
   foto?: string | null;
   size?: keyof typeof DIM;
   className?: string;
+  /** Mostra o ponto de presença (quem está online). */
+  presenca?: keyof typeof PONTO;
+  /** O ponto PULSA (o "ao vivo" — no cabeçalho e no painel; nas tabelas fica parado). */
+  pulsar?: boolean;
 }) {
+  if (presenca) {
+    return (
+      <span className={`relative inline-flex shrink-0 ${className}`}>
+        <Avatar nome={nome} foto={foto} size={size} />
+        <span aria-hidden="true" className={`absolute right-0 bottom-0 rounded-full ring-2 ring-surface ${PONTO_DIM[size]} ${PONTO[presenca]} ${pulsar ? "ponto-vivo" : ""}`} />
+      </span>
+    );
+  }
+  return <AvatarBase nome={nome} foto={foto} size={size} className={className} />;
+}
+
+function AvatarBase({ nome, foto, size, className }: { nome: string; foto?: string | null; size: keyof typeof DIM; className: string }) {
   // A foto que FALHOU ao carregar (cai nas iniciais); outra foto (nova URL) volta a ser tentada.
   const [falhou, setFalhou] = useState<string | null>(null);
 
@@ -45,6 +69,7 @@ export function Avatar({
         title={nome}
         loading="lazy"
         decoding="async"
+        draggable={false}
         onError={() => setFalhou(foto)}
         className={`${DIM[size]} shrink-0 rounded-full object-cover ${className}`}
       />

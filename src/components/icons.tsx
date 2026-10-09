@@ -3,7 +3,23 @@
 import type { SVGProps } from "react";
 import {
   Activity,
+  MessagesSquare,
+  Reply,
+  BookOpen,
+  LogIn,
+  Rows3,
+  Tags,
+  AlarmClock,
+  BellOff,
+  Eraser,
+  Megaphone,
+  Sparkles,
+  Volume2,
+  MonitorSmartphone,
+  CalendarClock,
+  CheckCheck,
   BadgeCheck,
+  Bot,
   Briefcase,
   IdCard,
   Phone,
@@ -67,6 +83,8 @@ import {
   RefreshCw,
   Save,
   Search,
+  Columns3,
+  Variable,
   Settings,
   Shield,
   Star,
@@ -124,6 +142,16 @@ import {
   UnfoldHorizontal,
   WrapText,
   Ban,
+  Maximize2,
+  Play as LPlay,
+  GitBranch as LGitBranch,
+  Workflow as LWorkflow,
+  Network as LNetwork,
+  ScanText as LScanText,
+  Sigma as LSigma,
+  Square as LSquare,
+  Maximize as LMaximize,
+  Minus as LMinus,
 } from "lucide-react";
 
 export const IconUpload = Upload;
@@ -138,6 +166,8 @@ export const IconTrend = TrendingUp;
 export const IconSun = Sun;
 export const IconMoon = Moon;
 export const IconSearch = Search;
+export const IconColunas = Columns3;
+export const IconVariavel = Variable;
 export const IconChevronLeft = ChevronLeft;
 export const IconChevronRight = ChevronRight;
 export const IconSort = ArrowUpDown;
@@ -197,6 +227,7 @@ export const IconFixar = Pin;
 export const IconDesafixar = PinOff;
 export const IconCalendar = Calendar;
 export const IconGrip = GripVertical;
+export const IconRobo = Bot;
 export const IconPasta = Folder;
 export const IconPastaAberta = FolderOpen;
 export const IconAjuda = CircleHelp;
@@ -229,6 +260,8 @@ export const IconZoom = ZoomIn;
 /** Recolher / expandir uma lista do quadro (como no Trello). */
 export const IconRecolher = FoldHorizontal;
 export const IconExpandir = UnfoldHorizontal;
+/** Abrir o gráfico em tela cheia (o explorador do Dashboard). */
+export const IconAmpliar = Maximize2;
 /** Dados COMPLETOS nas células (texto inteiro, todas as linhas) — o alternador da Mesa. */
 export const IconTextoCompleto = WrapText;
 /** "Nenhum" (sem fundo — o padrão do sistema). */
@@ -302,3 +335,37 @@ export function IconTrello(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+// O SINO de notificações: marcar todas como lidas, sem avisos, evento alterado e cadastro.
+export const IconLidas = CheckCheck;
+export const IconSemAvisos = BellOff;
+export const IconEventoAlterado = CalendarClock;
+export const IconCadastro = UserPlus;
+export const IconMegafone = Megaphone;
+/** Novidades / versão do sistema. */
+export const IconNovidades = Sparkles;
+export const IconAdiar = AlarmClock;
+export const IconLimpar = Eraser;
+export const IconSom = Volume2;
+export const IconAlertaSistema = MonitorSmartphone;
+// As abas de CONFIGURAÇÕES.
+export const IconTelaAcesso = LogIn;
+export const IconLinhas = Rows3;
+export const IconSituacoes = Tags;
+export const IconAvaliacao = ListChecks;
+export const IconReferencia = BookOpen;
+// O CHAT AO VIVO: o ícone do cabeçalho, enviar e responder.
+export const IconChat = MessagesSquare;
+export const IconResponder = Reply;
+
+// Fluxos de automação (nós)
+export const IconPlay = LPlay;
+export const IconRamo = LGitBranch;
+export const IconFluxo = LWorkflow;
+export const IconLerPdf = LScanText;
+export const IconSoma = LSigma;
+export const IconParar = LSquare;
+export const IconEnquadrar = LMaximize;
+export const IconMinus = LMinus;
+/** Organizar o diagrama (colunas na ordem do fluxo). */
+export const IconOrganizar = LNetwork;

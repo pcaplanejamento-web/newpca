@@ -21,10 +21,8 @@ describe("origem dos gráficos (itensDoRecorte)", () => {
     assert.deepEqual(ids(itensDoRecorte(I, { dim: "unidadeMedida", labels: ["—"] })), [2]);
     assert.deepEqual(ids(itensDoRecorte(I, { dim: "unidadeMedida", labels: ["UN"] })), [1, 4, 5]);
   });
-  it("mês: o ANUAL do mesmo ano entra (1/12 em cada mês) e é contado; outro ano e sem data ficam fora", () => {
-    const r = itensDoRecorte(I, { dim: "mes", ano: 2026, mes: 3 });
-    assert.deepEqual(ids(r), [1, 3]);
-    assert.equal(r.anuais, 1);
+  it("mês: só os itens com o MÊS definido (o genérico, outro ano e sem data ficam fora)", () => {
+    assert.deepEqual(ids(itensDoRecorte(I, { dim: "mes", ano: 2026, mes: 3 })), [1]);
     assert.deepEqual(ids(itensDoRecorte(I, { dim: "mes", ano: 2027, mes: 3 })), [4]);
   });
   it("item: só aquele item", () => {

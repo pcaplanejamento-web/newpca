@@ -5,6 +5,8 @@ import type { UsuarioSessao } from "./auth";
 import { listarDfds, listarPcas } from "./dfd";
 import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
+import { automacoesDaMesa } from "./fluxos";
+import { colunasDaMesa } from "./mesa-colunas";
 import { idDoFiltro } from "./escopo-unidades-core";
 import { unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
@@ -38,7 +40,7 @@ import { listarPessoasDoGrupo, mesaResponsavelGravado, pessoasPorIds } from "./u
  * RESPONSÁVEIS (conferência da assinatura) e os campos de MATCH, as regras do ADM, os órgãos, os PCAs e o que o PAPEL
  * permite nas duas Mesas (cada protocolo segue a sua).
  */
-async function contextoBanners(u: UsuarioSessao | null) {
+export async function contextoBanners(u: UsuarioSessao | null) {
   // O acesso já foi lido pela página (memorizado na requisição): o GRUPO ATIVO dele evita reler os grupos da pessoa.
   const acesso = await getAcesso();
   // As unidades ACESSÍVEIS (com a "Geral" no grupo ou o ADM, todas — os banners conferem e editam o de qualquer uma).
@@ -108,9 +110,12 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
   const outrasPessoas = await pessoasPorIds(
     [...protocolos.flatMap((p) => [p.responsavelId, p.distribuidorId]), u?.id].filter((id): id is number => id != null && !doGrupo.has(id)),
   );
+  // As COLUNAS criadas pelas automações (os valores só das linhas que a pessoa vê).
+  const colunasAuto = await colunasDaMesa({ protocolos: new Set(protocolos.map((p) => p.id)), dfds: new Set(dfds.map((d) => d.id)) });
   return {
     dfds,
     protocolos,
+    colunasAuto,
     reparticoes: ctx.reparticoes,
     // Em "Geral" não há unidade ativa específica — Geral comporta qualquer unidade.
     reparticaoAtivaId: repId || null,
@@ -124,6 +129,8 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
     pode: ctx.pode,
     /** Filtro com que a Mesa ABRE (preferência do Perfil; na Mesa do PCA — ou sem ver o Responsável —, todos). */
     filtroInicial: pcaId || !vis.responsavel.ver ? FILTRO_MESA_TODOS : filtroInicialMesa(pref, u?.id ?? null),
+    /** O papel vê o Responsável (o filtro pela pessoa na URL só vale assim). */
+    verResponsavel: vis.responsavel.ver,
     /** O PCA do cabeçalho que está filtrando a Mesa principal (`null` = todos). */
     pcaFiltro,
     /** Mesa do PCA: o ano dos MARCADOS ainda na Mesa do sistema que ela também mostra (`null` = visão desligada). */
@@ -139,8 +146,12 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
  * num ÚNICO texto (`listas` — `mesa-listas.ts`): o React não serializa milhares de linhas valor a valor (CPU do Worker).
  */
 export async function carregarMesa(u: UsuarioSessao | null) {
-  const { dfds, protocolos, ...resto } = await montarMesa(u);
-  return { ...resto, listas: listasParaTexto({ protocolos, dfds }, Date.now()) };
+  // As AUTOMAÇÕES que a pessoa pôs na Mesa (só a Mesa do SISTEMA; a Automação é do Administrador).
+  const [{ dfds, protocolos, ...resto }, automacoes] = await Promise.all([
+    montarMesa(u),
+    u?.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
+  ]);
+  return { ...resto, automacoes, listas: listasParaTexto({ protocolos, dfds }, Date.now()) };
 }
 
 /**
@@ -183,6 +194,7 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     usuarioId: m.usuarioId,
     edicoes: m.edicoes,
     dadosCompletos: m.dadosCompletos,
+    colunasAuto: m.colunasAuto,
   };
 }
 

@@ -51,3 +51,43 @@ describe("enviarDfdEmLotes — tudo-ou-nada por DFD", () => {
     assert.ok(!chamadas.some((c) => c.startsWith("DELETE")));
   });
 });
+
+describe("enviarDfdEmLotes — lotes pelo tamanho", () => {
+  // `fetch` que grava tudo: registra o modo, o início e quantas linhas cada pedido levou.
+  function gravar(): { mode: string; desde?: number; n: number }[] {
+    const pedidos: { mode: string; desde?: number; n: number }[] = [];
+    globalThis.fetch = (async (_url: string | URL, init?: RequestInit) => {
+      const c = JSON.parse(String(init?.body));
+      pedidos.push({ mode: c.mode, desde: c.desde, n: c.rows.length });
+      return new Response(JSON.stringify({ ok: true, dfdId: 7 }), { status: 200 });
+    }) as typeof fetch;
+    return pedidos;
+  }
+  const comDescricao = (qtd: number, tamanho: number) =>
+    Array.from({ length: qtd }, (_, i) => ({ item: i + 1, descricao: "X".repeat(tamanho) })) as unknown as Parameters<
+      typeof enviarDfdEmLotes
+    >[1];
+
+  it("descrições longas: o lote fecha antes de passar de ~500 mil caracteres (nenhum pedido pesado)", async () => {
+    const pedidos = gravar();
+    const progresso: number[] = [];
+    await enviarDfdEmLotes(meta, comDescricao(30, 20_000), (enviados) => progresso.push(enviados));
+    assert.deepEqual(pedidos, [
+      { mode: "start-dfd", desde: undefined, n: 25 },
+      { mode: "append-dfd-itens", desde: 25, n: 5 },
+    ]);
+    assert.deepEqual(progresso, [25, 30]);
+  });
+  it("descrições curtas: segue em lotes de 200 itens", async () => {
+    const pedidos = gravar();
+    await enviarDfdEmLotes(meta, comDescricao(450, 40));
+    assert.deepEqual(
+      pedidos.map((p) => [p.desde ?? 0, p.n]),
+      [
+        [0, 200],
+        [200, 200],
+        [400, 50],
+      ],
+    );
+  });
+});

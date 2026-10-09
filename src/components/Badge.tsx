@@ -35,6 +35,9 @@ export function Badge({
   tone = "slate",
   dot = false,
   solid = false,
+  vivo = false,
+  tamanho,
+  title,
   className = "",
 }: {
   children: ReactNode;
@@ -42,6 +45,13 @@ export function Badge({
   dot?: boolean;
   /** `solid` = pílula PREENCHIDA (fundo no tom, texto branco) — p/ chips de MARCA (ex.: Adobe). */
   solid?: boolean;
+  /** `vivo` = o ponto PULSA (estado ao vivo — ex.: Centi logada); com `tamanho="linha"`, o ponto respira e solta ondas (`.ponto-selo`). */
+  vivo?: boolean;
+  /** `linha` = o selo da LINHA DE TÍTULO: a MESMA altura do botão de voltar e do nome (`--h-control-sm` no desktop; 44px no
+   * toque) e o MESMO contorno dos controles — o raio `--radius-control`, que segue o ajuste do ADM (Aparência). */
+  tamanho?: "linha";
+  /** A explicação ao passar o mouse. */
+  title?: string;
   className?: string;
 }) {
   const c = TONE_VAR[tone];
@@ -53,12 +63,16 @@ export function Badge({
         background: `color-mix(in srgb, ${c} 14%, var(--surface))`,
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 28%, transparent)`,
       };
+  const linha = tamanho === "linha";
+  const medida = linha ? "h-11 rounded-control px-3.5 text-[13px] lg:h-[var(--h-control-sm)]" : "rounded-chip px-2.5 py-0.5 text-xs";
+  const ponto = vivo ? (linha ? "relative h-2 w-2 ponto-selo" : "relative h-1.5 w-1.5 ponto-vivo") : linha ? "h-2 w-2" : "h-1.5 w-1.5";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${className}`}
+      className={`inline-flex items-center gap-1.5 font-semibold ${medida} ${className}`}
       style={style}
+      title={title}
     >
-      {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: solid ? "#fff" : c }} />}
+      {dot && <span className={`shrink-0 rounded-full ${ponto}`} style={{ background: solid ? "#fff" : c }} />}
       {children}
     </span>
   );

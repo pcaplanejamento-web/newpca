@@ -279,11 +279,12 @@ export const orgaos = sqliteTable(
     sigla: text("sigla").notNull(),
     orgaoEntidade: text("orgao_entidade"), // padrão do "Órgão/Entidade" do DFD → órgão (match)
     ordem: integer("ordem").notNull().default(0),
-    // Assinatura ÚNICA: 1 = os responsáveis do órgão valem p/ TODAS as unidades (guardados aqui);
-    // 0 = cada unidade tem os seus (`reparticoes.responsavel_dfd`). Ver `responsaveisEfetivos`.
+    // Assinatura ÚNICA: 1 = os responsáveis do órgão (os vínculos dele) valem p/ TODAS as unidades;
+    // 0 = cada unidade tem os seus (vínculos da planilha `responsaveis_vinculos`). Ver `alvoEfetivo`.
     assinaturaUnica: integer("assinatura_unica", { mode: "boolean" }).notNull().default(false),
-    responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs do órgão (JSON), quando assinatura única
+    responsavelDfd: text("responsavel_dfd"), // DORMENTE desde a 0099 (a planilha `responsaveis` + vínculos)
     numeroInteressado: text("numero_interessado"), // Interessado do protocolo → órgão (único GLOBAL com unidades)
+    entidadeCenti: text("entidade_centi"), // ID da entidade na Centi ("02", "03"…) — a Automação usa direto (migração 0090)
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultado (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -304,12 +305,67 @@ export const reparticoes = sqliteTable(
     // 1 = unidade "própria" do órgão (o órgão funciona TAMBÉM como unidade). Só uma por órgão,
     // só quando o órgão não tem unidades-filhas comuns. Ver `orgao-unidade-ops.ts`.
     orgaoProprio: integer("orgao_proprio", { mode: "boolean" }).notNull().default(false),
-    responsavelDfd: text("responsavel_dfd"), // responsáveis por DFDs: JSON array de nomes (parseResponsaveis)
+    responsavelDfd: text("responsavel_dfd"), // DORMENTE desde a 0099 (a planilha `responsaveis` + vínculos)
     oculto: integer("oculto", { mode: "boolean" }).notNull().default(false), // ocultada (tem DFD/protocolo) — some do uso futuro
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [index("reparticoes_ordem_idx").on(t.ordem), index("reparticoes_orgao_idx").on(t.orgaoId)],
+);
+
+/**
+ * RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA de pessoas (migração 0099): cada pessoa UMA vez (nome + matrícula; `chave` =
+ * o nome sem acento/caixa — `norm`). Os VÍNCULOS ligam a pessoa a uma UNIDADE ou a um ÓRGÃO (exatamente um) como padrão
+ * ou temporário e guardam a nomeação (ato), o período e, no temporário, o cargo do período (o padrão segue o da pessoa). Ver `responsaveis-planilha-core.ts`.
+ */
+export const responsaveis = sqliteTable(
+  "responsaveis",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    matricula: text("matricula").notNull().default(""),
+    chave: text("chave").notNull(),
+    // O CARGO/FUNÇÃO da pessoa (migração 0100) — o NOME de um cargo cadastrado (`cargos`); o vínculo padrão segue ele.
+    cargo: text("cargo").notNull().default(""),
+    // O USUÁRIO da plataforma (opcional, um usuário em UMA pessoa) — dá a foto.
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    // A EXONERAÇÃO ("AAAA-MM-DD", migração 0101): os vínculos seguem valendo; a partir dela, nenhum vínculo novo.
+    exoneradoEm: text("exonerado_em"),
+    // FUNCIONÁRIO DE FORA DO MUNICÍPIO (migração 0104): não tem matrícula (gravada vazia).
+    externo: integer("externo", { mode: "boolean" }).notNull().default(false),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("responsaveis_chave_matricula_uq").on(t.chave, t.matricula),
+    uniqueIndex("responsaveis_usuario_uq").on(t.usuarioId).where(sql`${t.usuarioId} IS NOT NULL`),
+  ],
+);
+
+export const responsaveisVinculos = sqliteTable(
+  "responsaveis_vinculos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    responsavelId: integer("responsavel_id")
+      .notNull()
+      .references(() => responsaveis.id, { onDelete: "cascade" }),
+    orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "cascade" }),
+    reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "cascade" }),
+    tipo: text("tipo").notNull(), // padrao | temporario
+    funcao: text("funcao").notNull().default(""), // o cargo do TEMPORÁRIO (o padrão segue o da pessoa — vazio)
+    atoTipo: text("ato_tipo"), // portaria | decreto | lei
+    atoNumero: text("ato_numero").notNull().default(""),
+    atoLink: text("ato_link").notNull().default(""),
+    inicio: text("inicio"), // AAAA-MM-DD (o temporário exige as duas; o padrão, o início — fim vazio = em aberto)
+    fim: text("fim"),
+    ordem: integer("ordem").notNull().default(0),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    index("responsaveis_vinculos_orgao_idx").on(t.orgaoId),
+    index("responsaveis_vinculos_reparticao_idx").on(t.reparticaoId),
+    index("responsaveis_vinculos_responsavel_idx").on(t.responsavelId),
+  ],
 );
 
 export const grupoReparticoes = sqliteTable(
@@ -441,6 +497,13 @@ export const dfds = sqliteTable(
     assinaturas: text("assinaturas"), // JSON: Assinatura[] (assinaturas digitais do DFD)
     nomeArquivo: text("nome_arquivo"),
     totalItens: integer("total_itens").default(0),
+    // Situação do planejamento na Centi (CM002), lida pela Automação "Verificar execução" (migração `0089`).
+    execucaoCenti: text("execucao_centi"),
+    execucaoCentiEm: text("execucao_centi_em"),
+    // Conferência com a CM002 (migração `0092`): convergente | divergente + o motivo.
+    conferenciaCenti: text("conferencia_centi"),
+    conferenciaCentiMotivo: text("conferencia_centi_motivo"),
+    conferenciaCentiEm: text("conferencia_centi_em"),
     criadoPor: integer("criado_por").references(() => usuarios.id, {
       onDelete: "set null",
     }),
@@ -555,14 +618,19 @@ export const pcaDfds = sqliteTable(
     substituiDfdId: integer("substitui_dfd_id"),
     vinculadoPor: integer("vinculado_por").references(() => usuarios.id, { onDelete: "set null" }),
     vinculadoEm: text("vinculado_em"),
+    // Migração `0077`: o protocolo INCORPORADO por onde o DFD entrou no PCA (NULL = vínculo de edição legada — a sincronia
+    // do PCA nunca o toca). O DFD que sai desse protocolo sai do PCA; o que entra num protocolo incorporado, entra. Sem FK:
+    // o DFD que muda de protocolo (mesmo com o de origem excluído no lote) é ressincronizado por este id.
+    protocoloId: integer("protocolo_id"),
   },
-  (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] }), index("pca_dfds_dfd_idx").on(t.dfdId)],
+  (t) => [primaryKey({ columns: [t.pcaId, t.dfdId] }), index("pca_dfds_dfd_idx").on(t.dfdId), index("pca_dfds_protocolo_idx").on(t.protocoloId)],
 );
 
 /**
- * SEQUENCIAL do ITEM no PCA (migração `0035`): ao INCORPORAR um protocolo (permanente), cada item ganha um número
- * ÚNICO dentro do PCA (`pca_id` + `sequencial`). Retirar o item do PCA — ou o DFD deixar de ser vigente
- * (substituído/excluído) — só INATIVA o número (`ativo=0`); ele nunca é reaproveitado.
+ * SEQUENCIAL do ITEM no PCA (migração `0035`): ao INCORPORAR um protocolo, cada item ganha um número ÚNICO dentro do PCA
+ * (`pca_id` + `sequencial`). Retirar o item do PCA — ou o DFD deixar de ser vigente (substituído/excluído) — só INATIVA o
+ * número (`ativo=0`); o item editado no protocolo incorporado MANTÉM o número, o removido o BAIXA (`0077`). Nunca é
+ * reaproveitado.
  */
 export const pcaItens = sqliteTable(
   "pca_itens",
@@ -580,8 +648,19 @@ export const pcaItens = sqliteTable(
     inativadoPor: integer("inativado_por").references(() => usuarios.id, { onDelete: "set null" }),
     motivo: text("motivo"),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    // Migração `0077`: o RETRATO do item (reencontra o nº depois que a regravação apagou o item — `pca-numeracao-core`) e
+    // a BAIXA (o nº perdeu o item de vez: item removido, DFD/protocolo saiu do PCA — inativo para sempre).
+    codigo: text("codigo"),
+    descricao: text("descricao"),
+    unidade: text("unidade"),
+    item: integer("item"),
+    baixadoEm: text("baixado_em"),
   },
-  (t) => [uniqueIndex("pca_itens_pca_seq_uq").on(t.pcaId, t.sequencial), index("pca_itens_item_idx").on(t.dfdItemId)],
+  (t) => [
+    uniqueIndex("pca_itens_pca_seq_uq").on(t.pcaId, t.sequencial),
+    index("pca_itens_item_idx").on(t.dfdItemId),
+    index("pca_itens_dfd_idx").on(t.dfdId),
+  ],
 );
 
 /**
@@ -839,9 +918,20 @@ export const orcamentoVinculos = sqliteTable(
     texto: text("texto").notNull(), // texto original do CUBO (exibição)
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "set null" }),
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "set null" }),
+    // As AÇÕES do vínculo (JSON das chaves; NULL = as DEMAIS — as que nenhum outro vínculo da unidade pegou) — 0080.
+    acoes: text("acoes"),
+    // As ações que ficam de FORA de um vínculo "com as demais" (JSON; NULL = nenhuma) — migração 0079.
+    acoesFora: text("acoes_fora"),
+    // A VISÃO dona do vínculo (NULL = o PADRÃO) — migração 0102.
+    visaoId: integer("visao_id").references(() => orcamentoVisoes.id, { onDelete: "cascade" }),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [uniqueIndex("orcamento_vinculos_tipo_chave_uq").on(t.tipo, t.chave)],
+  // Uma unidade do CUBO pode ter VÁRIOS vínculos (um por unidade cadastrada) — 0080; um por visão (IFNULL(visao_id,0)) — 0102.
+  (t) => [
+    uniqueIndex("orcamento_vinculos_chave_rep_uq").on(t.chave, t.reparticaoId, sql`IFNULL(${t.visaoId}, 0)`),
+    index("orcamento_vinculos_chave_idx").on(t.chave),
+    index("orcamento_vinculos_visao_idx").on(t.visaoId),
+  ],
 );
 
 export type Unidade = typeof unidades.$inferSelect;
@@ -923,6 +1013,8 @@ export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),
   filtros: text("filtros").notNull().default("{}"),
+  // As unidades do CUBO (chaves) com vínculos PRÓPRIOS nesta visão (JSON) — migração 0102.
+  vinculosProprios: text("vinculos_proprios").notNull().default("[]"),
   ordem: integer("ordem").notNull().default(0),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -1304,12 +1396,83 @@ export const notificacoes = sqliteTable(
     /** Quando o E-MAIL desta notificação foi tratado (enviado ou pulado — migração `0065`); NULL = pendente. */
     emailEnviadoEm: text("email_enviado_em"),
     emailTentativas: integer("email_tentativas").notNull().default(0),
+    /** A RESERVA do envio (migração `0083`): vale 10 min — o envio não confirmado volta à fila. */
+    emailReservadoEm: text("email_reservado_em"),
+    /** Quando foi LIDA (migração `0084` — o relatório de alcance). */
+    lidaEm: text("lida_em"),
+    /** TRAVADA como não lida pela pessoa (migração `0086`): ver não a marca como lida. */
+    travada: integer("travada", { mode: "boolean" }).notNull().default(false),
+    /** O e-mail SAIU de fato (o pulado — a pessoa não quer — fica 0). */
+    emailOk: integer("email_ok", { mode: "boolean" }).notNull().default(false),
+    /** ADIADA pela pessoa: some do sino até este instante (UTC "AAAA-MM-DD HH:MM:SS"). */
+    adiadaAte: text("adiada_ate"),
+    /** O e-mail só sai DEPOIS deste instante (o resumo diário, o horário de silêncio). */
+    emailApos: text("email_apos"),
   },
   (t) => [
     index("notificacoes_usuario_idx").on(t.usuarioId, t.lida, t.id),
     uniqueIndex("notificacoes_chave_uq").on(t.usuarioId, t.chave),
     index("notificacoes_email_idx").on(t.emailEnviadoEm, t.id),
+    index("notificacoes_tarefa_idx").on(t.tarefaId),
+    index("notificacoes_quadro_idx").on(t.quadroId),
+    index("notificacoes_usuario_id_idx").on(t.usuarioId, t.id),
+    index("notificacoes_criado_idx").on(t.criadoEm),
   ],
+);
+
+/** As MENSAGENS do chat ao vivo, GUARDADAS POR 7 DIAS (migração `0088`). `conversa` = a chave do servidor: `g<grupo>`
+ * (o chat do grupo) | `p<menor>-<maior>` (privada) | `c<id>` (conversa em grupo escolhida). `id` = o da aba (idempotente). */
+export const chatMensagens = sqliteTable(
+  "chat_mensagens",
+  {
+    id: text("id").primaryKey(),
+    conversa: text("conversa").notNull(),
+    de: integer("de")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    texto: text("texto").notNull(),
+    /** A resposta citada (JSON `{id, de, trecho}`). */
+    resp: text("resp"),
+    /** Quando (ms). */
+    em: integer("em").notNull(),
+  },
+  (t) => [index("chat_mensagens_conversa_idx").on(t.conversa, t.em), index("chat_mensagens_em_idx").on(t.em)],
+);
+
+/** Por PESSOA, as conversas do chat dela (migração `0088`): a última mensagem, o nome/membros da conversa em grupo e até onde
+ * LEU (o ✓✓ dos outros e as não lidas). */
+export const chatConversas = sqliteTable(
+  "chat_conversas",
+  {
+    conversa: text("conversa").notNull(),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    nome: text("nome"),
+    /** Os membros da conversa em grupo (JSON `number[]`). */
+    membros: text("membros"),
+    ultimaEm: integer("ultima_em").notNull(),
+    lidaAte: text("lida_ate"),
+    lidaEm: integer("lida_em"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conversa, t.usuarioId] }),
+    index("chat_conversas_usuario_idx").on(t.usuarioId, t.ultimaEm),
+    index("chat_conversas_ultima_idx").on(t.ultimaEm),
+  ],
+);
+
+/** Os avisos DERIVADOS (prazo, lembrete) que a pessoa LIMPOU (migração `0083`): não voltam até `ate`. */
+export const notificacoesDispensadas = sqliteTable(
+  "notificacoes_dispensadas",
+  {
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    chave: text("chave").notNull(),
+    ate: text("ate").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.chave] }), index("notificacoes_dispensadas_ate_idx").on(t.ate)],
 );
 
 /** Os CONVIDADOS de um evento e a RESPOSTA de cada um (migração `0048`). */
@@ -1487,4 +1650,179 @@ export const trelloFila = sqliteTable(
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
   (t) => [uniqueIndex("trello_fila_alvo_uq").on(t.direcao, t.tipo, t.alvo), index("trello_fila_proxima_idx").on(t.proximaEm)],
+);
+
+/* ── Automação Centi — fundação (migração 0076) ─────────────────────────────────────────────────────────────────── */
+
+/** Uma execução de uma RECEITA da Automação (emitir DFDs, anexar ao protocolo…): o histórico da tela. */
+export const automacaoExecucoes = sqliteTable(
+  "automacao_execucoes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    receita: text("receita").notNull(),
+    receitaVersao: integer("receita_versao").notNull().default(1),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNome: text("usuario_nome"),
+    /** preparada | rodando | pausada | concluida | falhou | cancelada */
+    estado: text("estado").notNull().default("preparada"),
+    ensaio: integer("ensaio", { mode: "boolean" }).notNull().default(false),
+    entrada: text("entrada").notNull().default("{}"),
+    total: integer("total").notNull().default(0),
+    feitos: integer("feitos").notNull().default(0),
+    falhas: integer("falhas").notNull().default(0),
+    erro: text("erro"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("automacao_execucoes_criado_idx").on(t.criadoEm)],
+);
+
+/** Os passos de uma execução (um por alvo) com o resultado — a retomada parte do primeiro não concluído. */
+export const automacaoPassos = sqliteTable(
+  "automacao_passos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    execucaoId: integer("execucao_id")
+      .notNull()
+      .references(() => automacaoExecucoes.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull().default(0),
+    chave: text("chave").notNull(),
+    capacidade: text("capacidade").notNull(),
+    alvo: text("alvo"),
+    /** fila | executando | ok | falhou | pulado */
+    estado: text("estado").notNull().default("fila"),
+    resultado: text("resultado"),
+    erro: text("erro"),
+    inicio: text("inicio"),
+    fim: text("fim"),
+  },
+  (t) => [uniqueIndex("automacao_passos_chave_uq").on(t.execucaoId, t.chave)],
+);
+
+/** A permissão de USO ÚNICO para UMA escrita na Centi (só o HASH do token). */
+export const automacaoAutorizacoes = sqliteTable(
+  "automacao_autorizacoes",
+  {
+    id: text("id").primaryKey(),
+    execucaoId: integer("execucao_id")
+      .notNull()
+      .references(() => automacaoExecucoes.id, { onDelete: "cascade" }),
+    passoChave: text("passo_chave").notNull(),
+    capacidade: text("capacidade").notNull(),
+    alvoHash: text("alvo_hash").notNull(),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    expiraEm: integer("expira_em").notNull(),
+  },
+  (t) => [index("automacao_autorizacoes_expira_idx").on(t.expiraEm)],
+);
+
+/** O que foi ESCRITO na Centi — o mesmo alvo + descrição nunca é gravado duas vezes. */
+export const automacaoRegistros = sqliteTable(
+  "automacao_registros",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    capacidade: text("capacidade").notNull(),
+    centiAlvo: text("centi_alvo").notNull(),
+    descricao: text("descricao").notNull(),
+    centiDocumento: text("centi_documento"),
+    protocoloId: integer("protocolo_id").references(() => dfdProtocolos.id, { onDelete: "set null" }),
+    execucaoId: integer("execucao_id").references(() => automacaoExecucoes.id, { onDelete: "set null" }),
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNome: text("usuario_nome"),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [
+    uniqueIndex("automacao_registros_alvo_uq").on(t.capacidade, t.centiAlvo, t.descricao),
+    index("automacao_registros_protocolo_idx").on(t.protocoloId),
+  ],
+);
+
+/**
+ * FLUXOS DE AUTOMAÇÃO (estilo N8N, migração `0091`): nós ligados entre si (`grafo` JSON — `fluxo-core.ts`), a FREQUÊNCIA
+ * (`frequencia` JSON) e o resumo da última execução. O motor roda no navegador (a Centi só responde pela extensão).
+ */
+export const automacaoFluxos = sqliteTable(
+  "automacao_fluxos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    descricao: text("descricao"),
+    /** A ajuda (?) — JSON `{funciona, executa, resultado}` (`lerAjudaFluxo`). */
+    ajuda: text("ajuda"),
+    grafo: text("grafo").notNull().default('{"nos":[],"conexoes":[]}'),
+    frequencia: text("frequencia").notNull().default('{"tipo":"manual"}'),
+    ativo: integer("ativo", { mode: "boolean" }).notNull().default(false),
+    proximaEm: text("proxima_em"),
+    ultimaEm: text("ultima_em"),
+    /** O resumo da última execução (estado, nós, itens, erros) — JSON. */
+    ultimaExecucao: text("ultima_execucao"),
+    /** PÚBLICO = os outros ADMs o veem no painel lateral (e o usam); privado = só no painel do dono. */
+    publico: integer("publico", { mode: "boolean" }).notNull().default(false),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("automacao_fluxos_proxima_idx").on(t.proximaEm), index("automacao_fluxos_criado_por_idx").on(t.criadoPor)],
+);
+
+/** RETOMADA dos subfluxos: o que um nó "Executar fluxo" já concluiu (ok) ou tentou (falha) — por fluxo de topo + nó. */
+export const automacaoProgresso = sqliteTable(
+  "automacao_progresso",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    fluxoId: integer("fluxo_id")
+      .notNull()
+      .references(() => automacaoFluxos.id, { onDelete: "cascade" }),
+    no: text("no").notNull(),
+    chave: text("chave").notNull(),
+    estado: text("estado").notNull(),
+    em: text("em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("automacao_progresso_uq").on(t.fluxoId, t.no, t.chave)],
+);
+
+/** COLUNAS DA MESA criadas pelas automações (protocolo | dfd | item) — `chave` = o nome sem caixa/acento (único por entidade). */
+export const mesaColunas = sqliteTable(
+  "mesa_colunas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    entidade: text("entidade").notNull(),
+    nome: text("nome").notNull(),
+    chave: text("chave").notNull(),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [uniqueIndex("mesa_colunas_uq").on(t.entidade, t.chave)],
+);
+
+/** O valor de uma coluna da Mesa por registro (o id do protocolo, DFD ou item). */
+export const mesaColunasValores = sqliteTable(
+  "mesa_colunas_valores",
+  {
+    colunaId: integer("coluna_id")
+      .notNull()
+      .references(() => mesaColunas.id, { onDelete: "cascade" }),
+    alvoId: integer("alvo_id").notNull(),
+    valor: text("valor").notNull(),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [primaryKey({ columns: [t.colunaId, t.alvoId] })],
+);
+
+/** TABELAS das automações (o nó "Salvar em tabela"): as linhas em JSON (≤ 5000), as colunas na ordem; `chave` = o nome sem caixa/acento. */
+export const automacaoTabelas = sqliteTable(
+  "automacao_tabelas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    chave: text("chave").notNull(),
+    colunas: text("colunas").notNull().default("[]"),
+    linhas: text("linhas").notNull().default("[]"),
+    total: integer("total").notNull().default(0),
+    atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    atualizadoPor: integer("atualizado_por").references(() => usuarios.id, { onDelete: "set null" }),
+  },
+  (t) => [uniqueIndex("automacao_tabelas_chave_uq").on(t.chave)],
 );

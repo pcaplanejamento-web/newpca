@@ -1,3 +1,4 @@
+import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { MesaPca } from "@/components/MesaPca";
@@ -7,7 +8,8 @@ import { PainelPca } from "@/components/PainelPca";
 import { PcaConfiguracao } from "@/components/PcaConfiguracao";
 import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
-import { UnitFilter } from "@/components/UnitFilter";
+import { Ajuda } from "@/components/Ajuda";
+import { podeTela } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { UsuarioSessao } from "@/lib/auth";
 import type { PodeTela } from "@/lib/papeis-core";
@@ -36,7 +38,7 @@ export default async function PcaEspacoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ aba?: string; unidade?: string }>;
+  searchParams: Promise<{ aba?: string }>;
 }) {
   const r = await acessoPagina("pca");
   if (r.bloqueio) return r.bloqueio;
@@ -47,12 +49,11 @@ export default async function PcaEspacoPage({
   const pca = Number.isInteger(id) && id > 0 ? await getPcaEspaco(id) : null;
   if (!pca) notFound();
   const aba: AbaPca = ABAS.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : "dashboard";
-  const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
 
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
-  if (aba === "dashboard") conteudo = await abaDashboard(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
-  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode);
+  if (aba === "dashboard") conteudo = await abaDashboard(pca);
+  else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, pode);
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
@@ -73,14 +74,17 @@ export default async function PcaEspacoPage({
       pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status }}
       aba={aba}
     >
-      {conteudo}
+      <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
     </PcaEspacoView>
   );
 }
 
-/** Aba DASHBOARD: os MESMOS KPIs/gráficos do público (tudo o que foi incorporado) + o filtro por unidade. */
-async function abaDashboard(pca: PcaEspaco, unidade?: number) {
-  const dash = await dashboardDoPca(pca, unidade);
+/**
+ * Aba DASHBOARD: os MESMOS KPIs/gráficos do público (tudo o que foi incorporado) — o filtro por unidade é o do próprio
+ * Dashboard (abaixo dos KPIs). Com a PRÉVIA ligada, a explicação fica no (?) ao lado das abas.
+ */
+async function abaDashboard(pca: PcaEspaco) {
+  const dash = await dashboardDoPca(pca);
   if (dash.resumo.count === 0)
     return (
       <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
@@ -90,21 +94,29 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
       </p>
     );
   return (
-    <div className="space-y-[var(--gap-block)]">
-      {dash.unidades.length > 1 && (
+    <>
+      {dash.previa && (
         <FerramentasAba>
-          <div className="w-full sm:w-80">
-            <UnitFilter compacto unidades={dash.unidades} current={dash.unidadeId} />
-          </div>
+          <Ajuda titulo="Prévia do PCA" rotulo="Sobre a prévia">
+            <p>
+              Os números incluem {num(dash.previa.dfds)} DFD(s) de {num(dash.previa.protocolos)} protocolo(s) ainda NÃO incorporados
+              (enviados à Mesa do PCA e marcados na Mesa do sistema), como se fossem incorporados agora.
+            </p>
+            <p>Só aparece no painel, com o PCA em Preview; o que vale é o incorporado.</p>
+          </Ajuda>
         </FerramentasAba>
       )}
       <PainelPca
+        nome={pca.nome}
         dados={dash}
-        unidadeFiltrada={dash.unidadeId != null}
-        hintItens={pca.fonte === "protocolo" ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs` : undefined}
-        consulta={pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dash.protocolosLista, dfds: dash.dfdsLista } : undefined}
+        hintItens={
+          pca.fonte === "protocolo"
+            ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs${dash.foraDaSoma.length ? ` · ${num(dash.foraDaSoma.length)} fora da soma` : ""}`
+            : undefined
+        }
+        consulta={pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dash.protocolosLista, dfds: dash.dfdsLista, foraDaSoma: dash.foraDaSoma } : undefined}
       />
-    </div>
+    </>
   );
 }
 
@@ -112,9 +124,14 @@ async function abaDashboard(pca: PcaEspaco, unidade?: number) {
  * Aba ORÇAMENTO: os KPIs (dotação do CUBO do ANO do PCA × planejado) e, abaixo, o COMPARATIVO — a MESMA tabela cruzada da
  * tela do orçamento (na visão da Configuração do PCA, trocável) e o PCA × Orçamento por unidade. Um só orçamento do ano.
  */
-async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela) {
+async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela, podeConfigurarOrcamento: boolean) {
   const ref = await orcamentoDoAno(pca.ano);
-  const [orc, comp] = await Promise.all([orcamentoDoPca(pca, ref), ref ? dadosComparativo(ref.id, usuarioId) : null]);
+  // As visões vêm com o comparativo; sem orçamento do ano, só a lista (a engrenagem ainda escolhe a visão).
+  const [orc, comp, visoesSemOrc] = await Promise.all([
+    orcamentoDoPca(pca, ref),
+    ref ? dadosComparativo(ref.id, usuarioId) : null,
+    ref || !pode.configurar ? null : listarVisoesOrcamento(),
+  ]);
   return (
     <OrcamentoPca
       dados={{
@@ -127,11 +144,16 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: Pode
         linhas: orc.linhas,
         planejado: orc.planejado,
         previa: orc.previa,
+        visaoId: orc.visao?.id ?? null,
+        ausentes: orc.ausentes,
         unidades: orc.unidades,
+        orgaos: orc.orgaos,
       }}
       comparativo={ref && comp ? { titulo: `${ref.nome} ${ref.ano}`, visaoInicial: pca.orcamentoVisaoId, ...comp } : null}
       podeExportar={pode.exportar}
       podePublicar={pode.configurar}
+      visoes={comp?.visoes ?? visoesSemOrc ?? []}
+      podeConfigurarOrcamento={podeConfigurarOrcamento}
     />
   );
 }

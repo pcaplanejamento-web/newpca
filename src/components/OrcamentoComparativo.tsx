@@ -3,7 +3,8 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { alternarOculta, comLargura, comOrdem, ordemDasColunas } from "@/lib/colunas-layout";
 import { exportarCruzamentoXlsx } from "@/lib/exportar-orcamento";
-import { brl, num } from "@/lib/format";
+import { nomeArquivoPdf } from "@/lib/exportar-pdf-core";
+import { brl, dataIsoBrasilia, num } from "@/lib/format";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 import {
@@ -32,22 +33,24 @@ import {
   permissoesLinhas,
   semVazios,
 } from "@/lib/orcamento-cruzamento";
-import { type AlvoVinculo, mapaVinculos, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
-import { aplicarVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
+import { type AlvosVinculo, alvosDaUnidade, comVinculos, type DimensoesCadastro, mapaVinculos, type VinculoOrcamento, vinculosDaVisao } from "@/lib/orcamento-vinculo";
+import { aplicarVisao, atributosVisao, DIMENSOES_ORCAMENTO, type DimensaoOrcamento, type VisaoOrcamento, valorDimensao } from "@/lib/orcamento-visao";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { FerramentasAba } from "./AbasEspaco";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { type Column, DataTable } from "./DataTable";
+import { useQuemExporta } from "./ConfigTabelas";
 import { useEditorEdicoes } from "./EdicoesTabela";
+import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { Checkbox, SearchField, SelectField } from "./Field";
 import { IconDownload, IconPencil, IconSave, IconTrocar } from "./icons";
 import { OrigemDados } from "./OrigemDados";
 import { Segmented } from "./Segmented";
 import { TabelaCruzada } from "./TabelaCruzada";
+import { toast } from "./Toast";
 
 const rotuloDim = (d: DimensaoOrcamento) => DIMENSOES_ORCAMENTO.find((x) => x.key === d)?.rotulo ?? d;
-const TIPO_VINCULO: Partial<Record<DimensaoOrcamento, "orgao" | "unidade">> = { orgao: "orgao", unidade: "unidade" };
 
 const MODOS: { value: ModoCruzamento; label: string }[] = [
   { value: "valor", label: "R$" },
@@ -75,15 +78,17 @@ export function OrcamentoComparativo({
   padroes,
   visaoInicial = null,
   inicio,
+  fim,
   onMudarEdicoes,
   podeExportar = true,
   podePublicar = false,
 }: {
   titulo: string;
-  itens: OrcamentoItemRow[];
+  /** Os lançamentos com a Unidade/Órgão do CADASTRO (`comVinculos`). */
+  itens: (OrcamentoItemRow & DimensoesCadastro)[];
   visoes: VisaoOrcamento[];
   vinculos: VinculoOrcamento[];
-  alvos: { orgaos: AlvoVinculo[]; unidades: AlvoVinculo[] };
+  alvos: AlvosVinculo;
   /** As edições salvas que o usuário vê (as dele e as públicas) de todos os pares de colunas. */
   edicoes: EdicaoTabela[];
   /** As preferências de edição PADRÃO do usuário (`padrao:<chave>`). */
@@ -92,6 +97,8 @@ export function OrcamentoComparativo({
   visaoInicial?: number | null;
   /** Controles do HOST no início da linha dos seletores (ex.: a troca de visão da aba Orçamento do PCA). */
   inicio?: ReactNode;
+  /** Controles do HOST no FIM da linha, à direita (ex.: a engrenagem da visão do orçamento do PCA). */
+  fim?: ReactNode;
   /** Quem guarda as edições FORA (a tabela remonta ao trocar de vista e volta com as edições novas). */
   onMudarEdicoes?: (lista: EdicaoTabela[], padroes: Record<string, unknown>) => void;
   /** O papel exporta nesta tela (o XLSX da tabela cruzada). */
@@ -103,13 +110,25 @@ export function OrcamentoComparativo({
   const [dimColuna, setDimColuna] = useState<DimensaoOrcamento>("nomeElemento");
   const [medida, setMedida] = useState<MedidaOrcamento>("inicial");
   const [visaoId, setVisaoId] = useState<number | null>(visaoInicial);
+  // A visão do HOST mudou (ex.: a engrenagem do PCA trocou a visão) — a tabela acompanha.
+  const [visaoHost, setVisaoHost] = useState(visaoInicial);
+  if (visaoHost !== visaoInicial) {
+    setVisaoHost(visaoInicial);
+    setVisaoId(visaoInicial);
+  }
   const [modo, setModo] = useState<ModoCruzamento>("valor");
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<{ linha: string | null; coluna: string | null } | null>(null);
   const [ordemVista, setOrdemVista] = useState<OrdemCruzamento | null>(null); // ordenação só da vista (fora da edição)
 
   const visao = visoes.find((v) => v.id === visaoId) ?? null;
-  const base = useMemo(() => (visao ? aplicarVisao(itens, visao.filtros) : itens), [itens, visao]);
+  // Os vínculos que VALEM na visão (os próprios dela; nas demais unidades, o padrão) — a Unidade/Órgão do cadastro e a
+  // Sigla seguem a visão. Os itens chegam com o padrão: só refaz quando a visão tem vínculos próprios.
+  const efetivos = useMemo(() => vinculosDaVisao(vinculos, visao), [vinculos, visao]);
+  const base = useMemo(() => {
+    const comVisao = visao?.proprias.length ? comVinculos(itens, efetivos, alvos) : itens;
+    return visao ? aplicarVisao(comVisao, visao.filtros) : comVisao;
+  }, [itens, visao, efetivos, alvos]);
 
   // As duas colunas LIGADAS: a das linhas (com dados) e a das colunas (a permitida — senão a 1ª permitida).
   const permLinhas = useMemo(() => permissoesLinhas(base), [base]);
@@ -142,14 +161,18 @@ export function OrcamentoComparativo({
     return layout.zerados ? semVazios(c) : c;
   }, [base, linha, coluna, medida, layout.zerados]);
 
-  // A sigla do CADASTRO (Vínculos) ao lado de Órgão/Unidade — a chave do vínculo é a MESMA do agrupamento.
-  const tipo = TIPO_VINCULO[linha];
+  // A sigla do CADASTRO (Vínculos) ao lado da Unidade do CUBO — a chave do vínculo é a MESMA do agrupamento.
   const siglaDe = useMemo(() => {
-    if (!tipo) return null;
-    const mapa = mapaVinculos(vinculos);
-    const porId = new Map((tipo === "orgao" ? alvos.orgaos : alvos.unidades).map((a) => [a.id, a.sigla]));
-    return (k: string) => porId.get(mapa.get(`${tipo}|${k}`) ?? -1) ?? "";
-  }, [tipo, vinculos, alvos]);
+    if (linha !== "unidade") return null;
+    const mapa = mapaVinculos(efetivos);
+    const porId = new Map(alvos.unidades.map((a) => [a.id, a.sigla]));
+    // Uma unidade do CUBO pode ter VÁRIOS vínculos: as siglas de todos.
+    return (k: string) =>
+      alvosDaUnidade(mapa, k)
+        .map((id) => porId.get(id) ?? "")
+        .filter(Boolean)
+        .join(" / ");
+  }, [linha, efetivos, alvos]);
 
   const casa = useMemo(() => predicadoBusca(busca), [busca]);
   const linhasDe = (c: Cruzamento) => {
@@ -216,10 +239,40 @@ export function OrcamentoComparativo({
 
   const m = medidaOrcamento(medida);
   const comSigla = siglaDe != null && !layout.ocultas.includes(COL_EXTRA);
-  const exportar = () => {
-    if (!cruz || !coluna) return;
+  // EXPORTAR (rodapé): a matriz À VISTA (linhas da busca, na ordem; colunas visíveis) em .xlsx ou .pdf — no PDF as
+  // colunas de valores vão em faixas com o nome da linha, a sigla e o total repetidos.
+  const exportarNaTela = usePodeExportar();
+  const quemExporta = useQuemExporta();
+  const podeBaixar = podeExportar && exportarNaTela;
+  const [exportando, setExportando] = useState<FormatoExportacao | null>(null);
+  const exportar = async (formato: FormatoExportacao) => {
+    if (!cruz || !coluna || exportando) return;
     const extra = comSigla && siglaDe ? { rotulo: "Sigla", de: siglaDe } : undefined;
-    exportarCruzamentoXlsx(`${titulo} - ${rotuloDim(linha)} x ${rotuloDim(coluna)}`, matrizCruzamento(cruz, linhasDe(cruz), rotuloDim(linha), extra), extra != null);
+    const nome = `${titulo} - ${rotuloDim(linha)} x ${rotuloDim(coluna)}`;
+    const matriz = matrizCruzamento(cruz, linhasDe(cruz), rotuloDim(linha), extra);
+    setExportando(formato);
+    try {
+      if (formato === "xlsx") exportarCruzamentoXlsx(nome, matriz, extra != null);
+      else {
+        const { baixarTabelaPdf } = await import("@/lib/exportar-pdf");
+        const [cab, ...corpo] = matriz;
+        const numeros = extra ? 2 : 1;
+        await baixarTabelaPdf(nomeArquivoPdf(nome, dataIsoBrasilia(new Date().toISOString())), {
+          titulo: nome,
+          subtitulo: `${m.rotulo} (R$) · ${num(linhas.length)} ${linhas.length === 1 ? "linha" : "linhas"} × ${num(nVisiveis)} ${nVisiveis === 1 ? "coluna" : "colunas"}`,
+          cabecalho: cab.map(String),
+          linhas: corpo.map((l) => l.map((v) => (typeof v === "number" ? brl(v) : v))),
+          alinhar: cab.map((_, j) => (j < numeros ? "left" : "right")),
+          // A linha TOTAL em destaque (como na tabela); negativos em vermelho.
+          destaques: [corpo.length - 1],
+          cores: corpo.map((l) => l.map((v) => (typeof v === "number" && v < 0 ? "var(--danger)" : null))),
+        }, { fixas: numeros + 1, usuario: quemExporta });
+      }
+    } catch {
+      toast.error("Não foi possível exportar — tente de novo.");
+    } finally {
+      setExportando(null);
+    }
   };
 
   // ORIGEM do número clicado: os lançamentos do recorte (a MESMA chave do cruzamento — a soma bate).
@@ -237,9 +290,9 @@ export function OrcamentoComparativo({
         .filter(Boolean)
         .join(" × ") || "Total geral"
     : "";
-  const colunasRecorte: Column<OrcamentoItemRow>[] = [
-    ...DIMENSOES_ORCAMENTO.filter((d) => ["orgao", "unidade", "nomeElemento", "codigoElemento", "ficha", "fonte"].includes(d.key)).map(
-      (d): Column<OrcamentoItemRow> => ({
+  const colunasRecorte: Column<OrcamentoItemRow & DimensoesCadastro>[] = [
+    ...DIMENSOES_ORCAMENTO.filter((d) => ["unidadeSistema", "orgao", "unidade", "acao", "nomeElemento", "codigoElemento", "ficha", "fonte"].includes(d.key)).map(
+      (d): Column<OrcamentoItemRow & DimensoesCadastro> => ({
         key: d.key,
         header: d.rotulo,
         minWidth: d.key === "codigoElemento" || d.key === "ficha" ? undefined : 180,
@@ -283,11 +336,6 @@ export function OrcamentoComparativo({
             aria-label="Buscar nas linhas"
           />
         </div>
-        {podeExportar && (
-          <Button size="sm" variant="secondary" icon={<IconDownload className="h-4 w-4" />} onClick={exportar} disabled={!cruz || nVisiveis === 0}>
-            XLSX
-          </Button>
-        )}
       </FerramentasAba>
 
       <div className="mb-[var(--gap-block)] flex flex-wrap items-center gap-2">
@@ -335,11 +383,13 @@ export function OrcamentoComparativo({
               }}
             >
               <option value="">Orçamento inteiro</option>
-              {visoes.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.nome}
-                </option>
-              ))}
+              <optgroup label="Visões salvas">
+                {visoes.map((v) => (
+                  <option key={v.id} value={v.id} {...atributosVisao(v, 0)}>
+                    {v.nome}
+                  </option>
+                ))}
+              </optgroup>
             </SelectField>
           </div>
         )}
@@ -363,6 +413,7 @@ export function OrcamentoComparativo({
               abre nela) e exclui as suas. Cada par de colunas tem as suas edições.
             </TopicoAjuda>
           </Ajuda>
+          {fim}
         </div>
       </div>
 
@@ -393,7 +444,12 @@ export function OrcamentoComparativo({
                 ? "Nenhuma linha para esta busca."
                 : "Nenhum lançamento para comparar."
         }
-        acoesRodape={editor.rodape({
+        acoesRodape={
+          <>
+            {podeBaixar && !editando && (
+              <BotaoExportar nome="a tabela comparativa" disabled={!cruz || nVisiveis === 0} carregando={exportando} onExportar={(f) => void exportar(f)} />
+            )}
+            {editor.rodape({
           onEditar: editar,
           disabled: !cruzBase,
           extras: (
@@ -408,6 +464,8 @@ export function OrcamentoComparativo({
           onMostrarTodas: () => mudar((l) => ({ ...l, ocultas: [] })),
           semOcultas: layout.ocultas.length === 0,
         })}
+          </>
+        }
         resumo={
           cruz && coluna
             ? `${num(linhas.length)} ${linhas.length === 1 ? "linha" : "linhas"} × ${num(nVisiveis)} ${nVisiveis === 1 ? "coluna" : "colunas"} · ${m.rotulo} ${brl(cruz.total)}`

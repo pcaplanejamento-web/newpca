@@ -41,3 +41,5 @@ worker-configuration.d.ts
 /playwright-report/
 /test-results/
 /tests/e2e/.tmp/
+
+# gerado no deploy (scripts/publish.sh)

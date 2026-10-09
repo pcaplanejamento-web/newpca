@@ -1,0 +1,117 @@
+// A ABA PRÓPRIA da automação, o ANDAMENTO (selo/cartão/popup) e o INTERROMPER pela extensão (serviço em vm, `chrome` falso).
+import assert from "node:assert/strict";
+import test from "node:test";
+import { COMPRAS, INICIO_CENTI, pausa, servicoFalso, TELA } from "./fixtures/chrome-falso.ts";
+
+const POPUP = { url: "chrome-extension://ext/popup.html" };
+
+test("aba própria: abre UMA vez no grupo 'Automação PCA' e a reaproveita; as abas da Centi do usuário não são usadas", async () => {
+  const s = servicoFalso({ abas: [{ id: 5, url: `${INICIO_CENTI}minha` }] });
+  const [a, b] = (await Promise.all([s.pedir({ acao: "estado", dados: { abrir: true } }), s.pedir({ acao: "estado", dados: { abrir: true } })])) as {
+    ok: boolean;
+  }[];
+  assert.equal(a.ok && b.ok, true);
+  const criadas = s.abas.filter((x) => x.id > 100);
+  assert.equal(criadas.length, 1);
+  assert.equal(s.grupos.find((g) => g.id === criadas[0].groupId)?.title, "Automação PCA");
+  assert.equal(criadas[0].url, COMPRAS);
+  assert.ok(s.enviados.every((e) => e.tabId !== 5));
+  await s.pedir({ acao: "pedir", dados: {} });
+  assert.equal(s.abas.filter((x) => x.id > 100).length, 1);
+  assert.ok(s.enviados.some((e) => e.tabId === criadas[0].id && e.m.acao === "pedir"));
+});
+
+test("aba própria: fechada pelo usuário, a conferência a cada 20 s não reabre; Verificar e os pedidos reabrem", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS }], sessao: { abaAutomacao: 1 } });
+  s.fecharAba(1);
+  await pausa(5);
+  const r = (await s.pedir({ acao: "estado" })) as { ok: boolean; motivo: string };
+  assert.equal(r.ok, false);
+  assert.equal(r.motivo, "semAba");
+  assert.equal(s.abas.length, 0);
+  const v = (await s.pedir({ acao: "estado", dados: { abrir: true } })) as { ok: boolean };
+  assert.equal(v.ok, true);
+  assert.equal(s.abas.length, 1);
+});
+
+test("aba própria: depois de reabrir o Chrome, é achada pelo grupo 'Automação PCA'", async () => {
+  const s = servicoFalso({ abas: [{ id: 8, url: COMPRAS, groupId: 3 }, { id: 9, url: COMPRAS }], grupos: [{ id: 3, title: "Automação PCA" }] });
+  const r = (await s.pedir({ acao: "estado" })) as { ok: boolean };
+  assert.equal(r.ok, true);
+  assert.equal(s.abas.length, 2);
+  assert.equal(s.sessao.abaAutomacao, 8);
+});
+
+test("andamento: o selo do ícone conta os DFDs e o cartão da aba recebe o passo", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS }], sessao: { abaAutomacao: 1 } });
+  const ini = (await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Baixar DFDs da Centi", total: 15 } })) as { loteId: string };
+  await s.pedir({ acao: "lote", dados: { fase: "passo", loteId: ini.loteId, texto: "Emitindo planejamento 7", feito: 3, total: 15 } });
+  assert.equal(s.selos.at(-1), "3/15");
+  const painel = s.enviados.filter((e) => e.m.alvo === "painel").at(-1)?.m.atividade as { passo: string };
+  assert.equal(painel.passo, "Emitindo planejamento 7");
+  await s.pedir({ acao: "lote", dados: { fase: "fim", loteId: ini.loteId, resumo: "Lote terminado." } });
+  assert.equal(s.selos.at(-1), "OK");
+});
+
+test("aba sinalizada: o GRUPO leva o andamento no título e a cor do estado; reabrir o Chrome ainda acha o grupo", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS, groupId: 3 }], grupos: [{ id: 3, title: "Automação PCA", color: "blue" }] });
+  const ini = (await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Ler a Tela Protocolo", total: 4 } })) as { loteId: string };
+  await s.pedir({ acao: "lote", dados: { fase: "passo", loteId: ini.loteId, texto: "A Receber", feito: 1, total: 4 } });
+  assert.deepEqual(s.grupos[0], { id: 3, title: "Automação PCA · 1/4", color: "blue" });
+  await s.pedir({ tipo: "interromper" }, POPUP);
+  assert.deepEqual(s.grupos[0], { id: 3, title: "Automação PCA · X", color: "red" });
+  // Outra sessão do navegador: o título com o andamento não impede achar a aba pelo grupo.
+  const t = servicoFalso({ abas: [{ id: 8, url: COMPRAS, groupId: 3 }], grupos: [{ id: 3, title: "Automação PCA · 2/9" }] });
+  await t.pedir({ acao: "estado" });
+  assert.equal(t.sessao.abaAutomacao, 8);
+});
+
+test("interromper: pelo popup, os pedidos DO LOTE param (os de fora dele seguem) até um lote novo", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS }], sessao: { abaAutomacao: 1 } });
+  const ini = (await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Anexar", total: 2 } })) as { loteId: string };
+  await s.pedir({ tipo: "interromper" }, POPUP);
+  assert.equal(s.selos.at(-1), "X");
+  const r = (await s.pedir({ acao: "pedir", dados: {}, lote: ini.loteId })) as { ok: boolean; interrompido: boolean };
+  assert.equal(r.ok, false);
+  assert.equal(r.interrompido, true);
+  assert.ok(!s.enviados.some((e) => e.m.acao === "pedir"));
+  const fora = (await s.pedir({ acao: "protocolo", dados: {} })) as { ok: boolean };
+  assert.equal(fora.ok, true);
+  const novo = (await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Anexar", total: 1 } })) as { loteId: string };
+  const ok = (await s.pedir({ acao: "pedir", dados: {}, lote: novo.loteId })) as { ok: boolean };
+  assert.equal(ok.ok, true);
+});
+
+test("interromper: só o popup, o banner e o cartão da ABA DA AUTOMAÇÃO podem; outra aba da Centi ou uma página de fora não", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS }, { id: 2, url: COMPRAS }], sessao: { abaAutomacao: 1 } });
+  await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Anexar", total: 2 } });
+  await s.pedir({ tipo: "interromper" }, { url: INICIO_CENTI, tab: { id: 2 } });
+  await s.pedir({ tipo: "interromper" }, { url: "https://exemplo.com/", tab: { id: 3 } });
+  assert.equal((s.sessao.atividade as { estado: string }).estado, "rodando");
+  await s.pedir({ tipo: "interromper" }, { url: INICIO_CENTI, tab: { id: 1 } });
+  assert.equal((s.sessao.atividade as { estado: string }).estado, "interrompido");
+});
+
+test("F5 na tela do sistema: o lote que ela dirigia é marcado como parado (a extensão não segue sozinha)", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: COMPRAS }, { id: 50, url: TELA }], sessao: { abaAutomacao: 1 } });
+  await s.pedir({ acao: "lote", dados: { fase: "inicio", titulo: "Baixar", total: 4 } });
+  // Um "loading" sem navegação não para o lote (mudava no meio de um fluxo)…
+  s.atualizarAba(50, { status: "loading" });
+  await pausa(10);
+  assert.equal((s.sessao.atividade as { estado: string }).estado, "rodando");
+  // …o F5 / fechar avisa pela ponte (pagehide → "saiu").
+  await s.pedir({ acao: "saiu" });
+  await pausa(10);
+  const a = s.sessao.atividade as { estado: string; passo: string };
+  assert.equal(a.estado, "parado");
+  assert.match(a.passo, /recarregada/);
+  const e = (await s.pedir({ acao: "estado" })) as { atividade: { estado: string } };
+  assert.equal(e.atividade.estado, "parado");
+});
+
+test("aba própria no PORTAL da Centi (a raiz, sem login): vai ao Compras antes de conferir a sessão", async () => {
+  const s = servicoFalso({ abas: [{ id: 1, url: INICIO_CENTI }], sessao: { abaAutomacao: 1 } });
+  const r = (await s.pedir({ acao: "estado" })) as { ok: boolean };
+  assert.equal(r.ok, true);
+  assert.equal(s.abas[0].url, COMPRAS);
+});

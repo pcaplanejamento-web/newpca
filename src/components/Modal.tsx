@@ -87,7 +87,7 @@ function Painel({
       aria-label={titulo}
       className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-soft sm:rounded-2xl ${className}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-[var(--pad-card)] py-3">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border p-[var(--pad-card)]">
         {cabecalho ? (
           <div className="min-w-0 flex-1">{cabecalho}</div>
         ) : (
@@ -103,7 +103,7 @@ function Painel({
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-[var(--pad-card)]">{children}</div>
-      {rodape && <div className="shrink-0 border-t border-border bg-surface px-[var(--pad-card)] py-2.5">{rodape}</div>}
+      {rodape && <div className="shrink-0 border-t border-border bg-surface p-[var(--pad-card)]">{rodape}</div>}
     </div>
   );
 }
@@ -272,6 +272,7 @@ export function Modal({
 
   const scrim = (
     <div
+      aria-hidden="true"
       className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm"
       onClick={fecharNoBackdrop && !bloqueado ? onClose : undefined}
     />
@@ -280,7 +281,9 @@ export function Modal({
   // Modo simples (1 banner) — comportamento original, inalterado.
   if (pilha.length === 0) {
     return createPortal(
-      <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-[var(--pad-canvas)]">
+      <div
+        className={`fixed inset-0 z-50 flex items-end justify-center p-0 sm:p-[var(--pad-canvas)] sm:items-center`}
+      >
         {scrim}
         <Painel
           titulo={titulo}

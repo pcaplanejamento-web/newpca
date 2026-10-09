@@ -425,7 +425,7 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "normalizacao",
     titulo: "Padroniza prioridade e previsão automaticamente",
     descricao:
-      "Ao conferir, a PRIORIDADE é reduzida a ALTA/MÉDIA/BAIXA e a PREVISÃO DE ENTREGA vira uma DATA (MÊS/AAAA) OU recorrente (ANUAL, com ou sem ano). O que não dá para padronizar fica para tratar à mão.",
+      "Ao conferir, a PRIORIDADE é reduzida a ALTA/MÉDIA/BAIXA e a PREVISÃO DE ENTREGA vira um MÊS DEFINIDO (MÊS/AAAA) OU uma definição GENÉRICA — ANUAL, SEMESTRAL, QUADRIMESTRAL ou TRIMESTRAL. O ANO é SEMPRE o do PCA (o ano escrito no texto, de um contrato ou de uma data antiga, não vale; o nº de um contrato/ata/processo nunca vira data). O que não dá para padronizar fica para tratar à mão.",
     fonte: "normPrioridade / normPrevisao (normalize)",
   },
   {
@@ -454,7 +454,7 @@ export const LOGICAS: LogicaRef[] = [
       "Textos limpos no cabeçalho do DFD, na descrição/unidade dos itens e na capa do protocolo.",
       "A padronização automática do ADM (prioridade, previsão, sinônimos) e as referências da renovação lidas do texto (DFD-R sem nenhuma).",
       "Nunca mexe em identificadores (nº, planejamento, ano do PCA), valores, quantidades, assinaturas nem na unidade; revisar de novo não muda nada.",
-      "Só-leitura (sem permissão, unidade sem acesso, incorporado a um PCA): só recarrega e avisa o que haveria a tratar.",
+      "Só-leitura (sem permissão, unidade sem acesso): só recarrega e avisa o que haveria a tratar.",
     ],
     fonte: "revisarDfd / revisarCapa (revisao-dfd) + BotaoAtualizar (useDfdGravado / useProtocoloGravado)",
   },
@@ -463,8 +463,8 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "normalizacao",
     titulo: "Valor do DFD = somatória dos itens",
     descricao:
-      "O valor de cada item é quantidade × valor unitário (arredondado a 2 casas); o valor do DFD é a soma dos itens. Números em pt-BR e datas são normalizados na importação da planilha PCA.",
-    fonte: "parse-dfd-core / normalize",
+      "O valor de cada item é quantidade × valor unitário (com 4 casas, a precisão da Centi — o item sem total lido recebe essa conta; trocar a quantidade ou o valor unitário recalcula); o valor do DFD é a soma dos itens com 4 casas em TODA parte (a tela mostra ao centavo; a capa bate quando a diferença é menor que 1 centavo): na leitura (o TOTAL GERAL do documento só fecha a tabela), na edição, na sobrescrita e no banco, que fecha os totais pelos itens gravados no mesmo lote. O DFD gravado pela metade aparece como erro \"Gravação incompleta\". Números em pt-BR e datas são normalizados na importação da planilha PCA.",
+    fonte: "parse-dfd-comum (fecharValoresItens/totalDoItem/valorDosItens) / dfd-sql (comandoTotaisDfd) / conferencia-dfd",
   },
   {
     id: "norm-unidades-medida",
@@ -533,11 +533,11 @@ export const LOGICAS: LogicaRef[] = [
   {
     id: "ass-responsaveis",
     dominio: "assinatura",
-    titulo: "Responsáveis por DFDs: padrões e temporários",
+    titulo: "Responsáveis por DFDs: planilha única, padrões e temporários",
     descricao:
-      "Cada repartição tem N responsáveis padrões e N temporários. No período de um temporário, ele é o efetivo (os padrões ficam em cinza); fora do período, volta aos padrões — com estados Agendado/Vigente/Encerrado. Cada responsável tem nome, matrícula, função e uma nomeação (ato + número + link).",
-    fonte: "ResponsaveisEditor / reparticao-responsaveis",
-    configuravelEm: { rotulo: "Unidades", href: "/painel/orgaos" },
+      "As pessoas ficam numa PLANILHA ÚNICA (nome + matrícula, cadastradas uma vez) e são VINCULADAS a unidades ou órgãos: no órgão de assinatura única, os vínculos do órgão valem para todas as unidades; no órgão por unidade, cada unidade tem os seus. Cada vínculo é padrão ou temporário, com função e nomeação (ato + número + link). No período de um temporário, ele é o efetivo (os padrões ficam inativos); fora do período, volta aos padrões — estados Agendado/Vigente/Encerrado. A coluna Conferência aponta o que está mal cadastrado.",
+    fonte: "responsaveis-planilha-core / PlanilhaResponsaveis / reparticao-responsaveis",
+    configuravelEm: { rotulo: "Órgãos e Unidades → Responsáveis", href: "/painel/orgaos?aba=responsaveis" },
   },
 
   // ---- PCA ----
@@ -563,22 +563,23 @@ export const LOGICAS: LogicaRef[] = [
     dominio: "pca",
     titulo: "Ano do PCA obrigatório e herdado",
     descricao:
-      "O ano do PCA é adivinhado pela descrição e confirmado no seletor. Não se protocola nem se importa DFD avulso sem o PCA definido (nível padrão). No protocolo, todos os DFDs herdam o ano do PCA do processo.",
+      "O ano do PCA é adivinhado pela descrição e confirmado no seletor. Não se protocola nem se importa DFD avulso sem o PCA definido (nível padrão). No protocolo, todos os DFDs herdam o ano do PCA do processo — e o ANO da previsão de entrega e do cronograma do Dashboard é SEMPRE esse (nunca o de um contrato ou de outro texto).",
     fonte: "anoPcaDoTexto / PcaPicker",
     configuravelEm: { rotulo: "Avaliação (dfd.anoPca / protocolo.anoPca)" },
   },
   {
-    id: "pca-protocolo-nao-exclui",
+    id: "pca-incorporado-editavel",
     dominio: "pca",
-    titulo: "Protocolo em um PCA não é excluído",
+    titulo: "Protocolo incorporado editável (o PCA acompanha)",
     descricao:
-      "Um protocolo ENVIADO à Mesa de um PCA ou INCORPORADO a ele não pode ser excluído: a Mesa do PCA não tem a lixeira e o servidor recusa. O enviado sai do PCA por 'Devolver à Mesa' (e então pode ser excluído na Mesa principal); o incorporado é permanente.",
+      "O protocolo INCORPORADO a um PCA se edita como qualquer outro — capa, DFDs, itens, assinaturas, massa, reenvio, sobrescrita, mover DFD, excluir DFD e protocolo e Devolver à Mesa (desincorpora) — e o PCA acompanha na hora (Dashboard, Orçamento, consulta pública).",
     detalhes: [
-      "A re-importação de um protocolo de mesmo Id (número diferente) que está em um PCA também é recusada.",
-      "Os DFDs de um protocolo em um PCA também não são excluídos (no reenvio, os gravados fora do envio ficam mantidos) — só o desfazer automático da importação que falhou no meio remove a gravação NOVA do próprio usuário que ficou pela metade (menos itens que o declarado).",
-      "Mover o DFD para outro protocolo ('Vincular a protocolo') segue permitido no protocolo enviado — como 'Devolver à Mesa', é um caminho de saída do PCA.",
+      "O item editado MANTÉM o nº no PCA: antes de regravar, o nº guarda o retrato do item e a linha nova o reencontra (código + descrição + unidade + nº do item, depois chaves mais fracas).",
+      "O item novo ganha o próximo nº do PCA; o removido fica com o nº baixado — inativo para sempre, nunca reaproveitado; o retirado do PCA segue retirado.",
+      "O DFD está no PCA do protocolo incorporado em que está: entra (com a ação do protocolo) quando chega a ele, sai (nºs baixados) quando o deixa ou é excluído; o substituído volta a valer quando quem o substituía sai.",
+      "Única recusa: a re-importação por Id que fundiria um protocolo em um PCA em outro já existente no nº novo — devolva-o antes.",
     ],
-    fonte: "motivoNaoExcluirProtocolo / motivoNaoExcluirDfd / gravacaoParcial (pca-core) · pcaDeProtocolos (trava-pca)",
+    fonte: "pca-sincronia (numeracaoDaGravacao / sincronizarDfdNoPca / sincronizarAtivosPca) · pca-numeracao-core · pca-itens-sql",
   },
 
   // ---- Acesso & RBAC ----

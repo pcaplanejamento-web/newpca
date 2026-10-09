@@ -46,7 +46,7 @@ export function mensagemStatusResend(status: number, corpo: string): string {
   return motivo ? `Resend: ${motivo}` : `Resend respondeu ${status}.`;
 }
 
-export type EmailResend = { from: string; to: string[]; subject: string; html: string; text: string; reply_to?: string };
+export type EmailResend = { from: string; to: string[]; subject: string; html: string; text: string; reply_to?: string; headers?: Record<string, string> };
 export type DominioResend = { id: string; name: string; status: string; region?: string };
 
 export type ClienteResend = ReturnType<typeof clienteResend>;

@@ -365,7 +365,7 @@ export function lembreteDaTarefa(
     chave: `lembrete-tarefa:${t.id}:${inicioDoEvento(e)}:${t.lembreteMin}`,
     titulo: `Prazo ${quando.toLowerCase()}${e.diaInteiro ? "" : ` às ${t.prazoHora}`}: ${rotuloTicket(t.ticket)} ${t.titulo}`,
     texto: "Lembrete do prazo da tarefa",
-    link: linkTarefa(t.quadroId, t.id),
+    link: linkTarefa(t.id),
   };
 }
 

@@ -11,7 +11,7 @@ import {
   type ResumoEstado,
   resumoEstado,
 } from "./dfd-tratamento.ts";
-import { type Assinatura, type DfdItemParseado, refDfd } from "./parse-dfd-comum.ts";
+import { type Assinatura, arredondarValor, type DfdItemParseado, refDfd } from "./parse-dfd-comum.ts";
 import { casarOrgao, type OrgaoMatch, orgaoDivergeDaUnidade } from "./reparticao-match.ts";
 import {
   pdfExigeAssinatura,
@@ -44,7 +44,27 @@ export type DfdConferivel = {
   assinaturas: Assinatura[];
   nomeArquivo: string | null;
   orgaoEntidade: string | null;
+  /** DFD GRAVADO pela metade (uma gravação em lotes que falhou no meio — `gravacaoIncompleta`): ERRO até reenviar. Só o
+   * DFD gravado o tem (calculado do gravado, nunca do rascunho); a análise de um arquivo nunca. */
+  gravacaoIncompleta?: { gravados: number; total: number } | null;
 };
+
+/** O DFD GRAVADO ficou pela metade? Menos itens do que o total declarado na gravação (a sobrescrita que falhou num lote
+ * posterior mantém o que gravou — a importação completa fecha o total pelos itens). `null` = completo. Puro. */
+export function gravacaoIncompleta(d: { itens: readonly unknown[]; totalItens: number | null | undefined }): { gravados: number; total: number } | null {
+  return d.totalItens != null && d.itens.length < d.totalItens ? { gravados: d.itens.length, total: d.totalItens } : null;
+}
+
+/** A mensagem (ERRO, fixa — integridade da gravação, não é ponto configurável) do DFD gravado pela metade. */
+export function mensagemGravacaoIncompleta(g: { gravados: number; total: number }): MensagemDfd {
+  return {
+    status: "erro",
+    chave: "dfd.gravacaoIncompleta",
+    texto: `Gravação incompleta: ${g.gravados} de ${g.total} itens gravados — reenvie o DFD (ou o protocolo) para completar.`,
+    ancora: "itens",
+    rotulo: "Gravação incompleta",
+  };
+}
 
 /** Confere a assinatura do DFD contra os responsáveis da unidade (PDF exige assinatura; .xlsx não). */
 export function conferirAssinaturaDfd(d: Pick<DfdConferivel, "assinaturas" | "nomeArquivo">, rep: RepConferencia | null): ResultadoAssinatura {
@@ -69,7 +89,7 @@ function mensagensComAssinatura(
     orgaos.length > 0 && rep?.orgaoId != null && orgaoDivergeDaUnidade(d.orgaoEntidade, rep.orgaoId, orgaos);
   // Órgão não identificado (Órgão/Entidade não casa nenhum órgão cadastrado).
   const orgaoNaoIdentificado = orgaos.length > 0 && casarOrgao(d.orgaoEntidade, orgaos) == null;
-  return mensagensDfd(
+  const msgs = mensagensDfd(
     {
       planejamento: d.planejamento,
       itens: d.itens,
@@ -90,6 +110,7 @@ function mensagensComAssinatura(
     regras,
     { categoria, orgaoNaoIdentificado, orgaoUnidadeDivergente, conformidade },
   );
+  return d.gravacaoIncompleta ? [mensagemGravacaoIncompleta(d.gravacaoIncompleta), ...msgs] : msgs;
 }
 
 /**
@@ -195,14 +216,16 @@ type ProblemaDfd = { status: "erro" | "atencao" | "acerto"; chave: string; texto
 
 /**
  * A SOMATÓRIA do processo para a conciliação da capa: os DFDs VIVOS + o RASTRO dos sobrescritos por outro
- * protocolo (o valor DA ÉPOCA — a capa foi emitida com eles), arredondada ao centavo, e quantos DFDs o
- * processo teve. Fonte única: o estado agregado, a massa "valor da capa = somatória" e os banners. Puro.
+ * protocolo (o valor DA ÉPOCA — a capa foi emitida com eles) — `exato` (4 casas: o que se COMPARA com a capa) e `somatorio`
+ * (ao centavo: o que se mostra e o que substitui a capa) — e quantos DFDs o processo teve. Fonte única: o estado agregado, a massa "valor da capa = somatória" e os banners. Puro.
  */
 export function somatorioProcesso(p: { valorTotal: number; totalDfds: number; sobrescritos?: number; valorSobrescritos?: number }): {
   somatorio: number;
+  exato: number;
   dfds: number;
 } {
-  return { somatorio: Math.round((p.valorTotal + (p.valorSobrescritos ?? 0)) * 100) / 100, dfds: p.totalDfds + (p.sobrescritos ?? 0) };
+  const exato = arredondarValor(p.valorTotal + (p.valorSobrescritos ?? 0));
+  return { somatorio: Math.round(exato * 100) / 100, exato, dfds: p.totalDfds + (p.sobrescritos ?? 0) };
 }
 
 /**
@@ -231,7 +254,7 @@ export function avaliarProtocolo(
   type Msg = { status: "erro" | "atencao"; chave: string; texto: string; rotulo: string; cor?: string; n: number; capa?: boolean };
   const msgs: Msg[] = [];
   const proc = somatorioProcesso(capa);
-  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio: proc.somatorio, totalDfds: proc.dfds }, regras, { categoria: capa.categoria ?? null });
+  const conc = conciliacaoCapa({ valorCapa: capa.valorCapa, somatorio: proc.exato, totalDfds: proc.dfds }, regras, { categoria: capa.categoria ?? null });
   if (conc.divergente && conc.motivo)
     msgs.push({ status: conc.bloqueia ? "erro" : "atencao", chave: "protocolo.valorCapa", texto: conc.motivo, rotulo: conc.zerada ? "Capa sem valor" : "Capa ≠ somatória", n: 0, capa: true });
   if (proc.dfds === 0)

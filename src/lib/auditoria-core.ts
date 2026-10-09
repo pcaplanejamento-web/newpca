@@ -29,6 +29,7 @@ export type EntidadeAuditoria =
   | "permissao"
   | "orgao"
   | "reparticao"
+  | "responsavel"
   | "usuario"
   | "configuracao"
   | "planilha"
@@ -53,7 +54,8 @@ export type EntidadeAuditoria =
   | "agenda_externa"
   | "edicao_tabela"
   | "papel"
-  | "sessao";
+  | "sessao"
+  | "automacao";
 
 /** Verbo (no passado) de cada ação — para a linha do histórico. */
 export const ROTULO_ACAO: Record<AcaoAuditoria, string> = {
@@ -81,6 +83,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   permissao: "Permissão",
   orgao: "Órgão",
   reparticao: "Unidade",
+  responsavel: "Responsável por DFDs",
   usuario: "Usuário",
   configuracao: "Configuração",
   planilha: "Planilha (PCA)",
@@ -106,6 +109,7 @@ export const ROTULO_ENTIDADE: Record<EntidadeAuditoria, string> = {
   edicao_tabela: "Edição de tabela",
   papel: "Papel",
   sessao: "Sessão",
+  automacao: "Automação Centi",
 };
 
 /** Ator do log — só id/nome/email (aceita `null` para sistema/anônimo). */
@@ -160,6 +164,7 @@ export type OrigemAuditoria =
   | "automacao" // ação de uma automação do quadro de tarefas
   | "recorrencia" // próxima ocorrência de uma tarefa recorrente
   | "trello" // sincronização com o Trello (o que veio de lá e os conflitos resolvidos)
+  | "centi" // a Automação Centi (execuções, escritas na Centi, freio de emergência)
   | "exclusao";
 
 export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
@@ -175,6 +180,7 @@ export const ROTULO_ORIGEM: Record<OrigemAuditoria, string> = {
   recorrencia: "Recorrência",
   trello: "Sincronização com o Trello",
   exclusao: "Exclusão",
+  centi: "Automação Centi",
 };
 
 /**

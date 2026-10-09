@@ -4,17 +4,13 @@ import {
   acaoSugerida,
   agregarDashboard,
   consolidarPca,
+  foraDaSoma,
   type ItemDashboard,
   type LinhaVinculo,
-  edicaoPermitidaTravado,
-  estaTravado,
   gravacaoParcial,
   localDoProtocolo,
   previaAtiva,
-  mensagemTravaPca,
   motivoNaoDevolver,
-  motivoNaoExcluirDfd,
-  motivoNaoExcluirProtocolo,
   motivosNaoEnviar,
   motivosNaoIncorporar,
   previsaoDoDfd,
@@ -44,28 +40,10 @@ describe("pca-core — incorporar, devolver e trava", () => {
     assert.match(motivosNaoIncorporar({ ...inc, dfdsEmOutroPca: 2 }).join(), /outro PCA/);
     assert.deepEqual(motivosNaoIncorporar({ ...inc, dfdsEmOutroPca: 1 }), []);
   });
-  it("devolver só o não incorporado deste PCA", () => {
-    assert.equal(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: null }, 5), null);
-    assert.match(motivoNaoDevolver({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, 5) ?? "", /permanente/);
-    assert.match(motivoNaoDevolver({ pcaId: 6, pcaIncorporadoEm: null }, 5) ?? "", /não está/);
-  });
-  it("protocolo em um PCA (enviado ou incorporado) NÃO é excluído; fora de PCA, pode", () => {
-    assert.equal(motivoNaoExcluirProtocolo({ pcaId: null, pcaIncorporadoEm: null }), null);
-    assert.equal(motivoNaoExcluirProtocolo({ pcaId: undefined, pcaIncorporadoEm: undefined }), null);
-    const enviado = motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: null }, "PCA 2027") ?? "";
-    assert.match(enviado, /Mesa do PCA 2027/);
-    assert.match(enviado, /devolva-o à Mesa principal/);
-    assert.equal(motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: "2027-01-01" }, "PCA 2027"), mensagemTravaPca("PCA 2027"));
-    assert.match(motivoNaoExcluirProtocolo({ pcaId: 5, pcaIncorporadoEm: null }) ?? "", /Mesa do PCA —/); // sem nome: "PCA"
-  });
-  it("DFD de protocolo em um PCA NÃO é excluído — salvo o DESFAZER da gravação pela metade (enviado)", () => {
-    const enviado = { pcaId: 5, pcaIncorporadoEm: null };
-    assert.equal(motivoNaoExcluirDfd({ pcaId: null, pcaIncorporadoEm: null }), null);
-    assert.match(motivoNaoExcluirDfd(enviado, "PCA 2027") ?? "", /DFD em um PCA não é excluído/);
-    assert.match(motivoNaoExcluirDfd(enviado, "PCA 2027", false) ?? "", /devolva o protocolo à Mesa principal/);
-    assert.equal(motivoNaoExcluirDfd(enviado, "PCA 2027", true), null);
-    // Incorporado: nunca (a trava), nem o desfazer.
-    assert.equal(motivoNaoExcluirDfd({ pcaId: 5, pcaIncorporadoEm: "2026-09-01" }, "PCA 2027", true), mensagemTravaPca("PCA 2027"));
+  it("devolver vale para o enviado E o incorporado deste PCA (desincorpora)", () => {
+    assert.equal(motivoNaoDevolver({ pcaId: 5 }, 5), null);
+    assert.match(motivoNaoDevolver({ pcaId: 6 }, 5) ?? "", /não está/);
+    assert.match(motivoNaoDevolver({ pcaId: null }, 5) ?? "", /não está/);
   });
   it("gravacaoParcial: o DFD criado HÁ POUCO pelo PRÓPRIO usuário com menos itens gravados que o declarado", () => {
     const agora = Date.parse("2026-09-30T14:30:00Z");
@@ -82,16 +60,6 @@ describe("pca-core — incorporar, devolver e trava", () => {
     assert.equal(gravacaoParcial({ ...g, usuarioId: 8 }), false); // de outro usuário
     assert.equal(gravacaoParcial({ ...g, criadoPor: null }), false);
     assert.equal(gravacaoParcial({ ...g, totalItens: null, itensGravados: 0 }), false);
-  });
-  it("travado: só a gestão passa", () => {
-    assert.equal(edicaoPermitidaTravado({ situacaoId: 3, origem: "celula" }), true);
-    assert.equal(edicaoPermitidaTravado({ responsavelId: null }), true);
-    assert.equal(edicaoPermitidaTravado({ situacaoId: 3, assunto: "X" }), false);
-    assert.equal(edicaoPermitidaTravado({ valorCapa: 10, assunto: undefined }), false);
-    assert.match(mensagemTravaPca("PCA 2027"), /Incorporado ao PCA 2027/);
-    assert.equal(estaTravado({ pcaId: 1, pcaIncorporadoEm: "2027-01-01" }), true);
-    assert.equal(estaTravado({ pcaId: null, pcaIncorporadoEm: "2027-01-01" }), false);
-    assert.equal(estaTravado({ pcaId: 1, pcaIncorporadoEm: null }), false);
   });
 });
 
@@ -126,16 +94,40 @@ describe("pca-core — consolidação", () => {
   it("sem planejamento: cada DFD se representa", () => {
     assert.equal(consolidarPca([L(1, null, "incorporar", "a"), L(2, "", "incorporar", "a")]).vigentes.length, 2);
   });
+  it("fora da soma = vínculos − vigentes, cada um com o motivo", () => {
+    const ls = [
+      L(1, "640", "incorporar", "a"),
+      L(2, "811", "incorporar", "a"),
+      L(3, "640", "substituir", "b"),
+      L(4, "811", "excluir", "c"),
+      L(5, "999", "excluir", "c"),
+      L(6, "777", "incorporar", "a"),
+      L(7, "777", "incorporar", "b"),
+    ];
+    const c = consolidarPca(ls);
+    const f = foraDaSoma(ls, c);
+    assert.equal(f.length, ls.length - c.vigentes.length);
+    assert.deepEqual(f, [
+      { dfdId: 1, motivo: "substituido", outro: 3 },
+      { dfdId: 2, motivo: "excluido", outro: 4 },
+      { dfdId: 4, motivo: "exclusao", outro: 2 },
+      { dfdId: 5, motivo: "exclusao", outro: null },
+      { dfdId: 6, motivo: "substituido", outro: 7 },
+    ]);
+    assert.deepEqual(foraDaSoma([L(1, "1", "incorporar", "a")], consolidarPca([L(1, "1", "incorporar", "a")])), []);
+  });
 });
 
 describe("pca-core — previsão e dashboard", () => {
-  it("mês/ano, anual e ausente", () => {
+  it("mês/ano, genérica (a periodicidade) e ausente — o ano é SEMPRE o do PCA", () => {
     assert.deepEqual(previsaoDoDfd([{ titulo: "5 - PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "Março de 2027" }], 2027), { ano: 2027, mes: 3 });
-    assert.deepEqual(previsaoDoDfd([{ titulo: "PREVISÃO DE ENTREGA", texto: "ANUAL" }], 2027), { ano: 2027, anual: true });
+    assert.deepEqual(previsaoDoDfd([{ titulo: "5 - PREVISÃO DE ENTREGA/EXECUÇÃO", texto: "Março de 2025" }], 2027), { ano: 2027, mes: 3 });
+    assert.deepEqual(previsaoDoDfd([{ titulo: "PREVISÃO DE ENTREGA", texto: "ANUAL" }], 2027), { ano: 2027, anual: true, periodo: "ANUAL" });
+    assert.deepEqual(previsaoDoDfd([{ titulo: "PREVISÃO DE ENTREGA", texto: "Semestral (contrato 12/2025)" }], 2027), { ano: 2027, anual: true, periodo: "SEMESTRAL" });
     assert.equal(previsaoDoDfd([], 2027), null);
     assert.equal(previsaoDoDfd(null, 2027), null);
   });
-  it("agrega resumo, fatias, cronograma (anual espalhado) e top", () => {
+  it("agrega resumo, fatias, cronograma (só os de mês definido) e top", () => {
     const it0 = (id: number, v: number, extra: Partial<ItemDashboard> = {}): ItemDashboard => ({ id, codigoProduto: null, sequencial: id, nome: `I${id}`, unidadeMedida: "UN", quantidade: 1, valorUnitario: v, valorTotal: v, classificacao: "DFD-S", previsao: null, unidade: "SEMED", origem: null, ...extra });
     const d = agregarDashboard([
       it0(1, 1200, { previsao: { ano: 2027, anual: true } }),
@@ -145,8 +137,7 @@ describe("pca-core — previsão e dashboard", () => {
     assert.equal(d.resumo.count, 2);
     assert.equal(d.resumo.maiorNome, "I1");
     assert.equal(d.resumo.numUnidades, 2);
-    assert.equal(d.porMes.length, 12);
-    assert.equal(d.porMes.find((p) => p.mes === 2)?.total, 400);
+    assert.deepEqual(d.porMes, [{ ano: 2027, mes: 2, total: 300, count: 1 }]); // o genérico tem o quadro próprio
     assert.equal(d.top[0].valor, 1200);
     assert.deepEqual(d.porUnidadeMedida.map((f) => f.label).sort(), ["CX", "UN"]);
     assert.equal(agregarDashboard([]).resumo.ticket, 0);
@@ -158,8 +149,6 @@ describe("localDoProtocolo (coluna Local da Mesa do PCA)", () => {
     assert.equal(localDoProtocolo({ pcaId: null, pcaIncorporadoEm: null }), "sistema");
     assert.equal(localDoProtocolo({ pcaId: 3, pcaIncorporadoEm: null }), "enviado");
     assert.equal(localDoProtocolo({ pcaId: 3, pcaIncorporadoEm: "2026-09-01" }), "incorporado");
-    // O mesmo critério da trava: só o incorporado a um PCA fica travado.
-    assert.equal(estaTravado({ pcaId: null, pcaIncorporadoEm: null }), false);
   });
 });
 

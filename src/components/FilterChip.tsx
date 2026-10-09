@@ -1,6 +1,6 @@
 "use client";
 
-import { IconChevronDown } from "./icons";
+import { SetaDropdown } from "./SetaDropdown";
 
 // Chip de filtro (spec §6.5): altura --h-control-sm, superfície + borda, chevron.
 // Estado ativo usa o accent suave. Por token; foco visível.
@@ -24,7 +24,7 @@ export function FilterChip({
       }`}
     >
       {label}
-      <IconChevronDown className="h-3.5 w-3.5 opacity-60" />
+      <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
     </button>
   );
 }

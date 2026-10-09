@@ -16,17 +16,20 @@ import {
   TIPOS_DFD,
 } from "./avaliacao-core.ts";
 import { juntarParaCopiar } from "./format.ts";
-import { normPrevisao, normPrioridade, normUnidadeMedida, type Prioridade, valoresBatem } from "./normalize.ts";
+import { normPrevisao, normPrioridade, normUnidadeMedida, type PeriodoPrevisao, type Prioridade, valoresBatem } from "./normalize.ts";
 import { type ConferenciaCompacta, type ConferenciaItem, type FaltaCatalogoItem, piorFalta, ROTULO_FALTA_CATALOGO } from "./catalogo-conferencia.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 import {
   type DfdItemParseado,
   type DfdParseado,
   type DfdSecao,
+  arredondarValor,
   listaRefs,
   norm,
   refDfd,
   tipoCurtoDfd,
+  totalDoItem,
+  valorDosItens,
 } from "./parse-dfd-comum.ts";
 
 /**
@@ -72,14 +75,23 @@ export function setTextoSecao(
 }
 
 /**
- * Texto canônico da PREVISÃO a partir do editor (mês/ano/anual). É **um OU outro**: ANUAL (com ano
- * opcional → `ANUAL/AAAA`, senão só `ANUAL`) OU uma DATA `MÊS/AAAA` (exige mês E ano). Vazio = ainda a
- * preencher. Puro — usado pelo bloco Tratamento e pela edição em massa.
+ * Texto canônico da PREVISÃO a partir do editor (mês/ano/periodicidade). É **um OU outro**: GENÉRICA — a periodicidade
+ * `ANUAL`/`SEMESTRAL`/`QUADRIMESTRAL`/`TRIMESTRAL` (com ano opcional → `SEMESTRAL/AAAA`) — OU um MÊS DEFINIDO `MÊS/AAAA`
+ * (exige mês E ano). `periodo` vazio = mês definido. Vazio = ainda a preencher. Puro — o bloco Tratamento e a massa.
  */
-export function buildPrevisao(mes: string, ano: string, anual: boolean): string {
-  if (anual) return ano ? `ANUAL/${ano}` : "ANUAL";
+export function buildPrevisao(mes: string, ano: string, periodo: PeriodoPrevisao | ""): string {
+  if (periodo) return ano ? `${periodo}/${ano}` : periodo;
   return mes && ano ? `${mes}/${ano}` : "";
 }
+
+/** As DEFINIÇÕES da previsão no editor (Tratamento e massa): o mês definido ou uma periodicidade. */
+export const DEFINICOES_PREVISAO: { value: PeriodoPrevisao | ""; label: string }[] = [
+  { value: "", label: "Mês definido" },
+  { value: "ANUAL", label: "Anual" },
+  { value: "SEMESTRAL", label: "Semestral" },
+  { value: "QUADRIMESTRAL", label: "Quadrimestral" },
+  { value: "TRIMESTRAL", label: "Trimestral" },
+];
 
 // ---- Edição EM MASSA — fonte única (análise do protocolo, protocolo gravado e lista de DFDs) ----
 export type CampoMassa = "reparticao" | "tipo" | "prioridade" | "previsao" | "fundamentacao";
@@ -277,20 +289,22 @@ const reais = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDi
  * Concilia o VALOR DA CAPA com a SOMATÓRIA dos DFDs (valor do DFD = Σ itens). Só confere quando há DFDs
  * e a somatória está COMPLETA (`completo` — na análise, todos os DFDs lidos; padrão `true` no gravado);
  * **não depende de os DFDs estarem sem erro** (antes a divergência sumia enquanto houvesse DFD com
- * erro). A somatória é arredondada ao centavo. Respeita `protocolo.valorCapa` do ADM (+ categoria). Puro.
+ * erro). A capa é comparada com a somatória EXATA (diferença menor que 1 centavo bate — `valoresBatem`); a somatória
+ * mostrada e a que substitui a capa vão ao centavo. Respeita `protocolo.valorCapa` do ADM (+ categoria). Puro.
  */
 export function conciliacaoCapa(
   p: { valorCapa: number | null | undefined; somatorio: number; totalDfds: number; completo?: boolean },
   regras: RegrasAvaliacao = regrasPadrao(),
   ctx?: { categoria?: string | null },
 ): ConciliacaoCapa {
-  const somatorio = Math.round((p.somatorio || 0) * 100) / 100;
+  const exato = p.somatorio || 0;
+  const somatorio = Math.round(exato * 100) / 100;
   const inativa: ConciliacaoCapa = { ativa: false, divergente: false, zerada: false, bloqueia: false, somatorio, motivo: null };
   if (p.totalDfds <= 0 || p.completo === false) return inativa;
   const comp = comportamentoNo(regras, "protocolo.valorCapa", { categoria: ctx?.categoria ?? null });
   if (comp === "ignora") return inativa;
   const zerada = p.valorCapa == null || p.valorCapa <= 0;
-  const divergente = zerada || !valoresBatem(p.valorCapa, somatorio);
+  const divergente = zerada || !valoresBatem(p.valorCapa, exato);
   const motivo = !divergente
     ? null
     : zerada
@@ -348,16 +362,21 @@ export function estadoItemCor(e: EstadoItem, regras?: RegrasAvaliacao): string {
 }
 
 /**
- * Edita UM item (índice `idx`) de um DFD e recomputa o `valorTotal` do DFD (Σ dos itens).
+ * Edita UM item (índice `idx`) de um DFD e recomputa o `valorTotal` do DFD (Σ dos itens). Trocar a QUANTIDADE ou o VALOR
+ * UNITÁRIO recalcula o total do item (q × vu — `totalDoItem`, a régua da edição em massa); o total digitado à mão vale.
  * Puro/genérico — reusado na edição do item na importação (avulso/protocolo) e no gravado.
  */
 export function editarItemDfd<
-  I extends { valorTotal: number | null },
+  I extends { valorTotal: number | null; quantidade?: number | null; valorUnitario?: number | null },
   T extends { itens: I[]; valorTotal: number | null },
 >(d: T, idx: number, patch: Partial<I>): T {
-  const itens = d.itens.map((it, i) => (i === idx ? { ...it, ...patch } : it));
-  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
+  const recalcula = ("quantidade" in patch || "valorUnitario" in patch) && !("valorTotal" in patch);
+  const itens = d.itens.map((it, i) => {
+    if (i !== idx) return it;
+    const novo = { ...it, ...patch };
+    return recalcula ? { ...novo, valorTotal: totalDoItem(novo.quantidade, novo.valorUnitario, novo.valorTotal) } : novo;
+  });
+  return { ...d, itens, valorTotal: valorDosItens(itens) };
 }
 
 // ---- Detecção de DUPLICATAS (DFDs num protocolo / itens num DFD) ----
@@ -421,8 +440,7 @@ export function removerItemDfd<
   T extends { itens: I[]; valorTotal: number | null },
 >(d: T, idx: number): T {
   const itens = d.itens.filter((_, i) => i !== idx);
-  const soma = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  return { ...d, itens, valorTotal: soma > 0 ? Math.round(soma * 100) / 100 : null };
+  return { ...d, itens, valorTotal: valorDosItens(itens) };
 }
 
 /**
@@ -519,10 +537,9 @@ export function unificarItensDfd<
   const quantidade = Math.round(grupo.reduce((s, it) => s + (it.quantidade as number), 0) * 1e6) / 1e6;
   const totais = grupo.every((it) => it.valorTotal != null && Number.isFinite(it.valorTotal));
   const soma = totais ? grupo.reduce((s, it) => s + (it.valorTotal as number), 0) : quantidade * (alvo.valorUnitario as number);
-  const valorTotal = Math.round(soma * 100) / 100;
+  const valorTotal = arredondarValor(soma);
   const itens = d.itens.flatMap((it, i) => (tira.has(i) ? [] : i === manter ? [{ ...it, quantidade, valorTotal }] : [it]));
-  const total = itens.reduce((s, it) => s + (it.valorTotal ?? 0), 0);
-  return { ...d, itens, valorTotal: total > 0 ? Math.round(total * 100) / 100 : null };
+  return { ...d, itens, valorTotal: valorDosItens(itens) };
 }
 
 /** Índice de um item depois de REMOVER outros da lista (os removidos antes dele o deslocam). Puro. */

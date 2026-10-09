@@ -2,7 +2,7 @@ import { dfdsLegiveisNaMesa, escopoMesa } from "@/lib/acesso-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { classificarAssunto } from "@/lib/avaliacao-core";
-import { avaliarLinhaDfd } from "@/lib/conferencia-dfd";
+import { avaliarLinhaDfd, gravacaoIncompleta } from "@/lib/conferencia-dfd";
 import { listarDfdsCompletosPorIds } from "@/lib/dfd";
 import { conferenciaDfdsSchema } from "@/lib/dfd-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -29,7 +29,8 @@ export async function POST(req: Request) {
   const dfds = await dfdsLegiveisNaMesa(esc, todos);
   const unidades = new Map((await unidadesConferencia(dfds.map((d) => d.reparticaoId))).map((u) => [u.id, u]));
   const linhas = dfds.map((d) => {
-    const r = avaliarLinhaDfd(d, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
+    // O DFD GRAVADO pela metade (gravação em lotes que falhou no meio) é ERRO até reenviar.
+    const r = avaliarLinhaDfd({ ...d, gravacaoIncompleta: gravacaoIncompleta(d) }, d.reparticaoId != null ? (unidades.get(d.reparticaoId) ?? null) : null, {
       anoPca: d.anoPca ?? d.protocoloAnoPca,
       regras,
       categoria: classificarAssunto(d.protocoloAssunto),

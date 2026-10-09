@@ -149,7 +149,7 @@ export function ComparacaoDuplicados({
       ) : atual.descartado ? (
         <Callout kind="info" icon={<IconCompare className="h-5 w-5" />}>
           {atual.excluido
-            ? 'Este DFD foi excluído do protocolo (fora da protocolação e da somatória). Para trazê-lo de volta, use "Restaurar" no rodapé ou "Manter este" aqui em cima.'
+            ? 'Este DFD foi excluído do protocolo (fora da protocolação e da somatória). Para trazê-lo de volta, use "Restaurar ao envio" no rodapé ou "Manter este" aqui em cima.'
             : outros.some((o) => !o.descartado)
               ? 'Este DFD foi descartado — segue o duplicado escolhido. Para trocar, use "Manter este" aqui em cima.'
               : 'Este DFD está descartado (fora da protocolação e da somatória). Para trazê-lo de volta, use "Manter este" aqui em cima.'}
@@ -161,7 +161,7 @@ export function ComparacaoDuplicados({
       )}
 
       {/* O DFD aberto */}
-      <section className="rounded-card border border-accent/40 bg-accent-soft p-3">
+      <section className="rounded-card border border-accent/40 bg-accent-soft p-[var(--pad-card)]">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[13.5px] font-bold text-text">
@@ -188,7 +188,7 @@ export function ComparacaoDuplicados({
         const aberto = abertos.has(o.key);
         const total = o.comparacao?.total;
         return (
-          <section key={o.key} className="rounded-card border border-border bg-surface p-3 shadow-ring">
+          <section key={o.key} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[13.5px] font-bold text-text">{o.rotulo}</span>
               <Badge tone="amber">{o.motivo}</Badge>

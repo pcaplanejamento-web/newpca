@@ -6,23 +6,26 @@ import { z } from "zod";
  * LEITURA (importar/visualizar): não há schema de edição de item.
  */
 
-// Uma linha (lançamento) vinda do parser da planilha.
+// Uma linha (lançamento) vinda do parser da planilha — a MESMA conferência da tela (`COLUNAS_ORCAMENTO`): todos os textos
+// do CUBO preenchidos, Ficha só com dígitos, Código com número e valores numéricos finitos.
+const obrigatorio = (rotulo: string, max: number) => z.string().trim().min(1, `${rotulo} vazio.`).max(max);
+const valor = z.number().finite().default(0);
 export const orcamentoItemImportSchema = z.object({
-  orgao: z.string().trim().max(300).default(""),
-  unidade: z.string().trim().max(300).default(""),
-  nomeElemento: z.string().trim().max(500).default(""),
-  codigoElemento: z.string().trim().max(60).default(""),
-  funcao: z.string().trim().max(300).default(""),
-  programa: z.string().trim().max(300).default(""),
-  acao: z.string().trim().max(300).default(""),
-  ficha: z.string().trim().max(60).default(""),
-  fonte: z.string().trim().max(500).default(""),
-  valorEmendaImpositiva: z.number().default(0),
-  valorInicial: z.number().default(0),
-  valorSuplementacao: z.number().default(0),
-  valorEmpenho: z.number().default(0),
-  saldo: z.number().default(0),
-  valorAnulacao: z.number().default(0),
+  orgao: obrigatorio("Órgão", 300),
+  unidade: obrigatorio("Unidade", 300),
+  nomeElemento: obrigatorio("Nome Elemento", 500),
+  codigoElemento: obrigatorio("Código Elemento", 60).regex(/\d/, "Código Elemento sem número."),
+  funcao: obrigatorio("Função", 300),
+  programa: obrigatorio("Programa", 300),
+  acao: obrigatorio("Ação", 300),
+  ficha: obrigatorio("Ficha", 60).regex(/^\d+$/, "Ficha fora do padrão."),
+  fonte: obrigatorio("Fonte", 500),
+  valorEmendaImpositiva: valor,
+  valorInicial: valor,
+  valorSuplementacao: valor,
+  valorEmpenho: valor,
+  saldo: valor,
+  valorAnulacao: valor,
   sequencial: z.number().int().nullable().default(null),
 });
 export type OrcamentoItemImport = z.infer<typeof orcamentoItemImportSchema>;
@@ -64,19 +67,28 @@ export type PatchOrcamentoPayload = z.infer<typeof patchOrcamentoSchema>;
 
 // VÍNCULOS do texto de Órgão/Unidade do CUBO com o cadastro (`alvoId` null = desvincular).
 // Até 200 por requisição (o upsert vai em lotes de 16 linhas × 6 params = 96 < 100 do D1).
-export const vinculosOrcamentoSchema = z.object({
+// VÍNCULOS do orçamento: a unidade do CUBO (texto) → uma unidade cadastrada, com as AÇÕES (lista explícita) ou
+// `acoes: null` = as DEMAIS (menos as `acoesFora`). O órgão não se vincula (é a soma das unidades).
+const acoesLista = z.array(z.string().trim().min(1).max(300)).max(1000);
+const vinculoCampos = {
+  alvoId: z.number().int().positive(),
+  acoes: acoesLista.nullable(),
+  acoesFora: acoesLista.default([]),
+};
+// ONDE gravar (vínculos por visão): no padrão e/ou nas visões escolhidas. Ausente = o do próprio vínculo (criar = o padrão).
+const escopoVinculos = z.object({ padrao: z.boolean(), visoes: z.array(z.number().int().positive()).max(200) }).optional();
+export const criarVinculosOrcamentoSchema = z.object({
   vinculos: z
-    .array(
-      z.object({
-        tipo: z.enum(["orgao", "unidade"]),
-        texto: z.string().trim().min(1).max(300),
-        alvoId: z.number().int().positive().nullable(),
-      }),
-    )
+    .array(z.object({ texto: z.string().trim().min(1).max(300), ...vinculoCampos }))
     .min(1)
     .max(200),
+  escopo: escopoVinculos,
 });
-export type VinculosOrcamentoPayload = z.infer<typeof vinculosOrcamentoSchema>;
+export const editarVinculoOrcamentoSchema = z.object({ ...vinculoCampos, escopo: escopoVinculos });
+// O corpo do DELETE é opcional (sem ele, exclui onde o vínculo está).
+export const excluirVinculoOrcamentoSchema = z.union([z.null(), z.object({ escopo: escopoVinculos })]).transform((v) => v ?? {});
+// A visão volta a seguir o PADRÃO numa unidade do CUBO.
+export const padraoVinculoSchema = z.object({ visaoId: z.number().int().positive(), chave: z.string().trim().min(1).max(300) });
 
 // SUBSTITUIR os lançamentos de um orçamento pelos de outro (o CUBO reenviado, gravado num orçamento temporário).
 export const substituirOrcamentoSchema = z.object({ origemId: z.number().int().positive() });

@@ -1,7 +1,8 @@
 import { exigirSessao, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { aplicarMassaTarefas, aposMovimento, avisarSobreTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, membrosDasEquipes, pessoasValidas, quadroAcessivel, tarefasPorIds } from "@/lib/tarefas";
+import { notificar } from "@/lib/notificacoes";
+import { aplicarMassaTarefas, aposMovimento, avisosSobreTarefa, equipesDoQuadro, etiquetasDoQuadro, getLista, jaComEquipe, jaResponsavelEm, membrosDasEquipes, pessoasValidas, quadroAcessivel, tarefasPorIds } from "@/lib/tarefas";
 import { rotuloTicket } from "@/lib/tarefas-core";
 import { type AcaoMassaTarefas, massaTarefasSchema } from "@/lib/tarefas-validation";
 
@@ -50,6 +51,14 @@ export async function POST(req: Request) {
     return erro("Só pessoas do quadro podem ser responsáveis.", 422);
   if (acao.campo === "etiqueta" && !(await etiquetasDoQuadro(quadro.id, [acao.etiquetaId])).length) return erro("Etiqueta inválida.", 422);
   if (acao.campo === "equipe" && !(await equipesDoQuadro(quadro.id, [acao.equipeId])).length) return erro("Equipe inválida.", 422);
+  // Quem JÁ era responsável / as tarefas que JÁ tinham a equipe: só os NOVOS são avisados.
+  const idsQuadro = doQuadro.map((t) => t.id);
+  const jaTinham =
+    acao.campo === "responsavel" && acao.modo === "adicionar"
+      ? await jaResponsavelEm(idsQuadro, acao.usuarioId)
+      : acao.campo === "equipe" && acao.modo === "adicionar"
+        ? await jaComEquipe(idsQuadro, acao.equipeId)
+        : new Set<number>();
   if (doQuadro.length) {
     await aplicarMassaTarefas(
       doQuadro.map((t) => t.id),
@@ -72,11 +81,19 @@ export async function POST(req: Request) {
     const entraram = doQuadro.filter((t) => t.listaId !== destino.id).map((t) => t.id);
     atualizar = await aposMovimento(a.u, quadro, entraram, destino);
   }
+  // Os avisos de TODAS as tarefas numa gravação só (o limite de consultas por requisição).
+  const novas = doQuadro.filter((t) => !jaTinham.has(t.id));
   if (acao.campo === "responsavel" && acao.modo === "adicionar")
-    for (const t of doQuadro) await avisarSobreTarefa(a.u, "atribuida", [acao.usuarioId], t, quadro, "Tarefa atribuída a você");
-  if (acao.campo === "equipe" && acao.modo === "adicionar") {
+    await notificar(
+      novas.flatMap((t) => avisosSobreTarefa(a.u, "atribuida", [acao.usuarioId], t, quadro, "Tarefa atribuída a você")),
+      a.u.id,
+    );
+  if (acao.campo === "equipe" && acao.modo === "adicionar" && novas.length) {
     const membros = await membrosDasEquipes([acao.equipeId]);
-    for (const t of doQuadro) await avisarSobreTarefa(a.u, "atribuida", membros, t, quadro, "Tarefa atribuída à sua equipe");
+    await notificar(
+      novas.flatMap((t) => avisosSobreTarefa(a.u, "atribuida", membros, t, quadro, "Tarefa atribuída à sua equipe")),
+      a.u.id,
+    );
   }
   return ok({ alterados: doQuadro.length, falhas, atualizar });
 }

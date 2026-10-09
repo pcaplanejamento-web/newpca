@@ -370,7 +370,7 @@ export function ComparacaoProtocolo({
 }) {
   const excluir = removidos.filter((r) => r.excluir).length;
   return (
-    <section className="rounded-card border p-4" style={tinta("var(--info)")}>
+    <section className="rounded-card border p-[var(--pad-card)]" style={tinta("var(--info)")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-bold text-text">
           <IconClipboard className="h-4 w-4" style={{ color: "var(--info)" }} /> Reenvio — comparação com o protocolo gravado
@@ -386,7 +386,7 @@ export function ComparacaoProtocolo({
         <StatMini label="Fora do envio" value={num(removidos.length)} tone={excluir > 0 ? "danger" : "default"} />
       </div>
       <p className="mt-3 text-[12px] text-muted">
-        Só é regravado o que mudou (os DFDs "sem diferença" ficam como estão). Abra um DFD e use "Diferenças" para ver campo a campo;
+        Só é regravado o que mudou (os DFDs "sem diferença" ficam como estão). Abra um DFD e use "Diferenças do gravado" (rodapé) para ver campo a campo;
         edite o que precisar antes de sobrescrever.
       </p>
 

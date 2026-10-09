@@ -1,12 +1,12 @@
-import { MESES, normPrevisao, stripAccents } from "./normalize.ts";
+import { MESES, normPrevisao, type PeriodoPrevisao, stripAccents } from "./normalize.ts";
 import { norm } from "./parse-dfd-comum.ts";
 
 /**
  * PCA como ESPAÇO — núcleo PURO (sem `getDb`/JSX → testável). O PCA tem uma FONTE (`lista` =
  * planilhas importadas | `protocolo` = DFDs vinculados a partir dos protocolos), um STATUS
  * (`preview`/`publicado`) e, na fonte protocolo, o que se vincula é o **DFD** (o protocolo é o
- * veículo): o protocolo é ENVIADO à Mesa do PCA e INCORPORADO (permanente) — cada DFD vinculado tem uma
- * AÇÃO e cada item incorporado ganha um SEQUENCIAL único no PCA. O Dashboard é o MESMO para todos (o
+ * veículo): o protocolo é ENVIADO à Mesa do PCA e INCORPORADO — cada DFD vinculado tem uma AÇÃO e cada item
+ * incorporado ganha um SEQUENCIAL único no PCA. O incorporado segue editável (o PCA acompanha — `pca-sincronia.ts`). O Dashboard é o MESMO para todos (o
  * STATUS só decide se o PCA aparece na tela inicial).
  */
 
@@ -91,22 +91,11 @@ export function motivosNaoIncorporar(f: FatosIncorporacao): string[] {
   return m;
 }
 
-/** Devolver à Mesa principal só vale para o protocolo ENVIADO a este PCA e NÃO incorporado (a incorporação é permanente). */
-export function motivoNaoDevolver(p: { pcaId: number | null; pcaIncorporadoEm: string | null }, pcaId: number): string | null {
-  if (p.pcaId !== pcaId) return "O protocolo não está na Mesa deste PCA";
-  if (p.pcaIncorporadoEm) return "Incorporado — a incorporação é permanente";
-  return null;
+/** Devolver à Mesa principal vale para o protocolo da Mesa deste PCA — ENVIADO ou INCORPORADO (desincorpora: os DFDs saem
+ * do PCA e os nºs dos itens são baixados). */
+export function motivoNaoDevolver(p: { pcaId: number | null }, pcaId: number): string | null {
+  return p.pcaId !== pcaId ? "O protocolo não está na Mesa deste PCA" : null;
 }
-
-// ---------------------------------------------------------------------------
-// Trava de edição (protocolo INCORPORADO)
-// ---------------------------------------------------------------------------
-
-/**
- * O protocolo INCORPORADO a um PCA (permanente) trava protocolo, DFDs e itens. Só a GESTÃO passa
- * (responsável e situação).
- */
-export const CAMPOS_LIVRES_TRAVADO = ["responsavelId", "situacaoId"] as const;
 
 /**
  * A PRÉVIA do PCA está ligada? — a visão dos MARCADOS (Configuração do PCA) SÓ vale num PCA de fonte protocolo, com ano e
@@ -123,36 +112,6 @@ export type LocalProtocolo = "sistema" | "enviado" | "incorporado";
 export function localDoProtocolo(p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined }): LocalProtocolo {
   if (p.pcaId == null) return "sistema";
   return p.pcaIncorporadoEm ? "incorporado" : "enviado";
-}
-
-/** O protocolo está TRAVADO? (incorporado a um PCA que existe — a fonte única da trava, servidor e tela). */
-export function estaTravado(p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined }): boolean {
-  return p.pcaId != null && !!p.pcaIncorporadoEm;
-}
-
-/** A edição do protocolo (as chaves enviadas no PATCH, fora o canal `origem`) é permitida mesmo travado? */
-export function edicaoPermitidaTravado(campos: Record<string, unknown>): boolean {
-  const livres = new Set<string>([...CAMPOS_LIVRES_TRAVADO, "origem"]);
-  return Object.keys(campos).every((k) => campos[k] === undefined || livres.has(k));
-}
-
-/** A mensagem única da trava (servidor e tela). */
-export function mensagemTravaPca(nomePca: string | null | undefined): string {
-  return `Incorporado ao ${nomePca?.trim() || "PCA"} — somente leitura (a incorporação é permanente).`;
-}
-
-/**
- * Protocolo que está em um PCA — ENVIADO à Mesa do PCA ou INCORPORADO — NÃO é excluído (regra do usuário): nem pela
- * lixeira nem pela re-importação que substitui o de mesmo Id. O enviado sai do PCA por "Devolver à Mesa" (e então pode
- * ser excluído na Mesa principal); o incorporado é permanente. Devolve o motivo, ou `null` = pode excluir.
- */
-export function motivoNaoExcluirProtocolo(
-  p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined },
-  nomePca?: string | null,
-): string | null {
-  if (p.pcaId == null) return null;
-  if (p.pcaIncorporadoEm) return mensagemTravaPca(nomePca);
-  return `Na Mesa do ${nomePca?.trim() || "PCA"} — protocolo em um PCA não é excluído (devolva-o à Mesa principal para excluir).`;
 }
 
 /** A janela do DESFAZER (min): a importação que acabou de falhar criou o DFD agora há pouco. */
@@ -184,23 +143,6 @@ export function gravacaoParcial(g: {
   const criado = instanteDoBanco(g.criadoEm);
   // Uma folga de 1 min para o relógio do servidor; depois da janela, não se desfaz mais.
   return criado != null && g.agora - criado >= -60_000 && g.agora - criado <= JANELA_DESFAZER_MIN * 60_000;
-}
-
-/**
- * DFD de um protocolo que está em um PCA — ENVIADO ou INCORPORADO — NÃO é excluído (regra do usuário; a mesma do
- * protocolo). Única exceção: DESFAZER a gravação da importação que falhou no meio (`apagarDfd`, tudo-ou-nada por DFD) —
- * `pelaMetade` (`gravacaoParcial`) sai de um protocolo ENVIADO (senão ficaria incompleto); do incorporado, nunca.
- * Devolve o motivo, ou `null` = pode excluir.
- */
-export function motivoNaoExcluirDfd(
-  p: { pcaId: number | null | undefined; pcaIncorporadoEm: string | null | undefined },
-  nomePca?: string | null,
-  pelaMetade = false,
-): string | null {
-  if (p.pcaId == null) return null;
-  if (p.pcaIncorporadoEm) return mensagemTravaPca(nomePca);
-  if (pelaMetade) return null;
-  return `DFD de protocolo na Mesa do ${nomePca?.trim() || "PCA"} — DFD em um PCA não é excluído (devolva o protocolo à Mesa principal para excluir).`;
 }
 
 // ---------------------------------------------------------------------------
@@ -265,27 +207,52 @@ export function consolidarPca(linhas: LinhaVinculo[]): Consolidacao {
   return { vigentes: [...atual.values()], retirados, avisos };
 }
 
+/** Por que um DFD vinculado NÃO entra na soma do PCA (a consolidação): `substituido` = outro DFD de mesmo planejamento
+ * (repetido ou ALTERAÇÃO) ficou no lugar; `excluido` = um DFD de EXCLUSÃO o retirou; `exclusao` = é o próprio DFD de
+ * EXCLUSÃO (nunca soma) — `outro` = o DFD que ele retirou (`null` = sem DFD correspondente). */
+export type ForaDaSoma = { dfdId: number; motivo: "substituido" | "excluido" | "exclusao"; outro: number | null };
+
+/** Os DFDs dos vínculos que ficaram FORA da soma (vínculos − vigentes), cada um com o motivo — na ordem dos vínculos. */
+export function foraDaSoma(linhas: LinhaVinculo[], c: Consolidacao): ForaDaSoma[] {
+  const vig = new Set(c.vigentes);
+  const acao = new Map(linhas.map((l) => [l.dfdId, l.acao]));
+  const retirouQuem = new Map<number, number>();
+  for (const [sai, por] of c.retirados) retirouQuem.set(por, sai);
+  const out: ForaDaSoma[] = [];
+  for (const l of linhas) {
+    if (vig.has(l.dfdId)) continue;
+    if (l.acao === "excluir") {
+      out.push({ dfdId: l.dfdId, motivo: "exclusao", outro: retirouQuem.get(l.dfdId) ?? null });
+      continue;
+    }
+    const por = c.retirados.get(l.dfdId) ?? null;
+    out.push({ dfdId: l.dfdId, motivo: por != null && acao.get(por) === "excluir" ? "excluido" : "substituido", outro: por });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Previsão → mês do cronograma
 // ---------------------------------------------------------------------------
 
 type SecaoLike = { titulo?: string | null; texto?: string | null };
 
+/** A previsão de um DFD no cronograma: um MÊS definido ou GENÉRICA (a periodicidade — ausente = ANUAL). */
+export type PrevisaoDfd = { ano: number; mes: number } | { ano: number; anual: true; periodo?: PeriodoPrevisao };
+
 /**
- * Mês/ano da PREVISÃO DE ENTREGA do DFD (seção 5) para o cronograma: `{ano, mes}` ou
- * `{ano, anual:true}` (recorrente — distribuído pelos 12 meses) ou `null` (sem previsão).
+ * A PREVISÃO DE ENTREGA do DFD (seção 5) no cronograma: `{ano, mes}` (mês definido) ou `{ano, anual:true, periodo}`
+ * (genérica — anual/semestral/quadrimestral/trimestral) ou `null` (sem previsão). **O ano é SEMPRE o `anoPca`** (o do
+ * PCA em que o DFD está — `normPrevisao` ignora o ano escrito no texto).
  */
-export function previsaoDoDfd(
-  secoes: SecaoLike[] | null | undefined,
-  anoPca: number | null,
-): { ano: number; mes: number } | { ano: number; anual: true } | null {
+export function previsaoDoDfd(secoes: SecaoLike[] | null | undefined, anoPca: number | null): PrevisaoDfd | null {
   const s = (secoes ?? []).find((x) => norm(x.titulo).includes("PREVISAO DE ENTREGA"));
   if (!s) return null;
-  const { valor, anual } = normPrevisao(s.texto, anoPca);
+  const { valor, periodo } = normPrevisao(s.texto, anoPca);
   if (!valor) return null;
-  const ano = Number(valor.match(/(20\d{2})/)?.[1] ?? anoPca ?? Number.NaN);
+  const ano = anoPca ?? Number(valor.match(/(20\d{2})/)?.[1] ?? Number.NaN);
   if (!Number.isFinite(ano)) return null;
-  if (anual) return { ano, anual: true };
+  if (periodo) return { ano, anual: true, periodo };
   const nomeMes = stripAccents(valor.split("/")[0] ?? "");
   const mes = MESES.findIndex((m) => stripAccents(m) === nomeMes) + 1;
   return mes >= 1 ? { ano, mes } : null;
@@ -306,8 +273,8 @@ export type ItemDashboard = {
   valorUnitario: number | null;
   valorTotal: number;
   classificacao: string;
-  /** Previsão (mês/ano; `anual` = distribuir nos 12 meses). */
-  previsao: { ano: number; mes: number } | { ano: number; anual: true } | null;
+  /** Previsão (mês definido, ou GENÉRICA — `anual` + a periodicidade). */
+  previsao: PrevisaoDfd | null;
   /** Sigla da unidade (requisitante). */
   unidade: string | null;
   /** Rótulo complementar (ex.: "DFD 123"). */
@@ -362,9 +329,9 @@ export function agregarDashboard(itens: ItemDashboard[], topN = 10) {
     total += i.valorTotal;
     if (!maior || i.valorTotal > maior.valorTotal) maior = i;
     if (i.unidade) unidades.add(i.unidade);
+    // O cronograma mensal = SÓ os itens com MÊS definido (os genéricos têm gráfico próprio — `origem-dash.ts`).
     const p = i.previsao;
-    if (p && "anual" in p) for (let m = 1; m <= 12; m++) soma(p.ano, m, i.valorTotal / 12, 1 / 12);
-    else if (p) soma(p.ano, p.mes, i.valorTotal, 1);
+    if (p && !("anual" in p)) soma(p.ano, p.mes, i.valorTotal, 1);
   }
   const count = itens.length;
   const resumo: ResumoDash = {

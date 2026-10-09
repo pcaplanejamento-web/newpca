@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { brl, dataBR, dec, num, numeroSemAno } from "@/lib/format";
 import type { ItemRow } from "@/lib/queries";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { CelulaTexto } from "./CelulaLista";
 import { type Column, DataTable } from "./DataTable";
 import { SearchField } from "./Field";
 
@@ -13,7 +14,9 @@ import { SearchField } from "./Field";
  * colunas filtráveis/ordenáveis (facetas conectadas; faixa nas colunas numéricas/R$; período na data), sem quebra
  * nos dados curtos, linha compacta e busca por produto/código (vários de uma vez com ":"). Com `origem` (painel, PCA
  * de fonte protocolo) mostra o Protocolo/DFD de cada item e a linha abre o banner do item (`onRowClick`/`ativo`).
- * Só dados — nenhum estado/erro de protocolo, DFD ou item é apontado aqui.
+ * Só dados — nenhum estado/erro de protocolo, DFD ou item é apontado aqui. Linhas na altura padrão (o produto em UMA
+ * linha, inteiro na dica). A busca fica numa barra de UMA linha (`fim` = ao lado, ex.: o (?)); com `busca`, quem usa a
+ * controla e a põe na barra dele (a Consulta do PCA: abas + busca + (?) na mesma linha).
  */
 export function ItemTable({
   rows,
@@ -21,6 +24,8 @@ export function ItemTable({
   origem = false,
   onRowClick,
   ativo = null,
+  busca,
+  fim,
 }: {
   rows: ItemRow[];
   showUnidade: boolean;
@@ -29,8 +34,13 @@ export function ItemTable({
   onRowClick?: (r: ItemRow) => void;
   /** Item cujo banner está aberto (linha destacada). */
   ativo?: number | null;
+  /** Busca CONTROLADA por quem usa (que a desenha na barra dela) — sem ela, a tabela traz a própria barra. */
+  busca?: string;
+  /** Na barra da própria tabela, depois da busca (ex.: o (?)). */
+  fim?: ReactNode;
 }) {
-  const [q, setQ] = useState("");
+  const [qLocal, setQ] = useState("");
+  const q = busca ?? qLocal;
 
   const filtradas = useMemo(() => {
     const casa = predicadoBusca(q); // vários produtos de uma vez com ":"
@@ -45,7 +55,7 @@ export function ItemTable({
         nowrap: true,
         filter: "range",
         formatarFaixa: num,
-        numero: (r) => r.sequencial,
+        total: false, numero: (r) => r.sequencial,
         render: (r) => <span className="tabular-nums text-faint">{r.sequencial ?? "—"}</span>,
       },
     ];
@@ -97,8 +107,8 @@ export function ItemTable({
         value: (r) => r.nomeProduto ?? "",
         render: (r) => (
           <CelulaCopiavel copiar={r.nomeProduto} rotulo="descrição do item">
-            <span className="line-clamp-2 font-medium text-text" title={r.nomeProduto ?? ""}>
-              {r.nomeProduto ?? "—"}
+            <span className="font-medium text-text">
+              <CelulaTexto texto={r.nomeProduto} />
             </span>
           </CelulaCopiavel>
         ),
@@ -142,7 +152,7 @@ export function ItemTable({
         align: "right",
         nowrap: true,
         filter: "range",
-        numero: (r) => r.valorReferencia,
+        total: false, numero: (r) => r.valorReferencia,
         render: (r) => <span className="tabular-nums text-text-2">{r.valorReferencia != null ? brl(r.valorReferencia) : "—"}</span>,
       },
       {
@@ -167,10 +177,13 @@ export function ItemTable({
   }, [showUnidade, origem]);
 
   return (
-    <div>
-      <div className="mb-4 w-full sm:max-w-sm">
-        <SearchField value={q} onChange={(e) => setQ(e.target.value)} onClear={() => setQ("")} placeholder="Buscar produto ou código… (vários com :)" />
-      </div>
+    <div className="space-y-[var(--gap-block)]">
+      {busca == null && (
+        <div className="flex items-center gap-2">
+          <BuscaItens valor={q} onMudar={setQ} />
+          {fim && <div className="ml-auto flex shrink-0 items-center gap-2">{fim}</div>}
+        </div>
+      )}
       <DataTable
         columns={colunas}
         rows={filtradas}
@@ -182,6 +195,15 @@ export function ItemTable({
         activeKey={ativo}
         resumo={(l) => `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(l.reduce((s, r) => s + (r.valorTotal ?? 0), 0))}`}
       />
+    </div>
+  );
+}
+
+/** A busca dos itens (produto ou código; vários com ":") — compacta, na altura das barras. */
+export function BuscaItens({ valor, onMudar }: { valor: string; onMudar: (v: string) => void }) {
+  return (
+    <div className="min-w-[min(100%,12rem)] flex-1 sm:max-w-xs">
+      <SearchField compacto value={valor} onChange={(e) => onMudar(e.target.value)} onClear={() => onMudar("")} placeholder="Buscar produto ou código" aria-label="Buscar produto ou código (vários com :)" />
     </div>
   );
 }

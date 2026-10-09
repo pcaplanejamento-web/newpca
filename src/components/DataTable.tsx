@@ -12,8 +12,9 @@ import {
   ordemDasColunas,
 } from "@/lib/colunas-layout";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
-import { baixarPlanilhaXlsx, linhasPlanilhaTabela, nomeArquivoPlanilha } from "@/lib/exportar-tabela";
-import { dataIsoBrasilia } from "@/lib/format";
+import { baixarPlanilhaXlsx, type ColunaPlanilha, linhasPlanilhaTabela, nomeArquivoPlanilha, tabelaParaPdf } from "@/lib/exportar-tabela";
+import { nomeArquivoPdf } from "@/lib/exportar-pdf-core";
+import { brl, dataIsoBrasilia, num } from "@/lib/format";
 import { LINHAS_TABELA } from "@/lib/theme";
 import {
   aplicarFiltros,
@@ -29,15 +30,16 @@ import {
 import { DateFilterHeader } from "./DateFilterHeader";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
 import { useEditorEdicoes } from "./EdicoesTabela";
-import { useLinhasTabela } from "./ConfigTabelas";
+import { useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
-import { Button } from "./Button";
-import { ehDesktop } from "./espacamento";
-import { IconDownload, IconFilter, IconLock } from "./icons";
+import { definirVarRaiz, ehDesktop } from "./espacamento";
+import { IconFilter, IconLock } from "./icons";
+import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
 import { RangeFilterHeader } from "./RangeFilterHeader";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 // Tabela do design system (spec §6.6 + pedidos do usuário): seleção de linhas,
 // **filtro em TODOS os cabeçalhos** — multi-select por padrão (inclusive colunas com VÁRIOS valores
@@ -76,6 +78,10 @@ export type Column<R> = {
   filtroExterno?: { opcoes: string[]; valor: string[]; onChange: (v: string[] | null) => void };
   /** Formato dos números no filtro de FAIXA (padrão = R$) — ex.: quantidades e percentuais. */
   formatarFaixa?: (n: number) => string;
+  /** A COR do texto da célula no PDF exportado (CSS — a mesma da tela, ex.: a do Estado); sem ela, negativo = vermelho. */
+  corPdf?: (row: R) => string | null | undefined;
+  /** `false` = esta coluna numérica NÃO é somada na linha TOTAL da exportação (valor unitário, média, %, identificador). */
+  total?: false;
 };
 
 type Key = string | number;
@@ -116,6 +122,7 @@ export function DataTable<R>({
   activeKey = null,
   fillHeight = false,
   scrollInterno = false,
+  linhasSalvas,
   density,
   reservaInferior = 0,
   acoesRodape,
@@ -123,6 +130,7 @@ export function DataTable<R>({
   edicoes,
   exportar,
   ocultas,
+  ocultasPadrao,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -153,6 +161,8 @@ export function DataTable<R>({
    * mobile rola normal (paginado). Opt-in (não afeta as demais tabelas). Exclui o `fillHeight`.
    */
   scrollInterno?: boolean;
+  /** As LINHAS POR PÁGINA escolhidas no rodapé ficam salvas NESTE aparelho com esta chave (vale também sem `scrollInterno`). */
+  linhasSalvas?: string;
   /**
    * Densidade da linha (LOCAL, sem afetar as outras tabelas): `compact` = a das tabelas de PROTOCOLOS, DFDs e ITENS —
    * TODA linha com a MESMA altura (a dos controles, `--h-control-sm`) e o cabeçalho baixo; `comfortable` = mais alta;
@@ -175,23 +185,30 @@ export function DataTable<R>({
    */
   edicoes?: EdicoesDaTabela;
   /**
-   * EXPORTAR (opt-in — ex.: as tabelas da Mesa, só com a ação Exportar do papel): o botão no rodapé baixa um .xlsx com as
-   * linhas À VISTA (os filtros das colunas, na ordem, todas as páginas) e as colunas visíveis da edição em uso
-   * (`linhasPlanilhaTabela`); `nome` = o nome do arquivo e da aba.
+   * EXPORTAR — TODA tabela tem o "Exportar" no rodapé (.xlsx ou .pdf) com as linhas À VISTA (os filtros das colunas, na
+   * ordem, todas as páginas) e as colunas visíveis da edição em uso; `nome` = o nome do arquivo (padrão "Tabela"). Some
+   * com `false` ou quando a tela não deixa o papel exportar (`PermissaoExportar`).
    */
-  exportar?: { nome: string };
+  exportar?: { nome: string } | false;
   /**
    * As colunas que o PAPEL não vê (os DETALHES do papel — as chaves das `Column`): somem da tabela, dos filtros, da
    * ordenação, da exportação e da edição, e o layout de uma edição salva (inclusive a pública de outra pessoa) chega SEM
    * elas — nunca se filtra nem se ordena por uma coluna que não se vê.
    */
   ocultas?: ReadonlySet<string>;
+  /** Colunas OCULTAS no padrão do sistema (a tabela abre sem elas; a edição da tabela as mostra de volta). */
+  ocultasPadrao?: readonly string[];
 }) {
   // A chave ESTÁVEL das ocultas (o Set pode ser recriado a cada render do dono).
   const chaveOcultas = ocultas?.size ? [...ocultas].sort().join("|") : "";
   const semCols = useMemo(() => new Set(chaveOcultas ? chaveOcultas.split("|") : []), [chaveOcultas]);
   const columns = useMemo(() => (semCols.size ? todasColunas.filter((c) => !semCols.has(c.key)) : todasColunas), [todasColunas, semCols]);
   const coerceLayout = useCallback((v: unknown) => coerceLayoutTabela(v, semCols), [semCols]);
+  const chavePadrao = ocultasPadrao?.join("|") ?? "";
+  const layoutPadrao = useMemo(
+    () => (chavePadrao ? { ...LAYOUT_TABELA_PADRAO, ocultas: chavePadrao.split("|") } : LAYOUT_TABELA_PADRAO),
+    [chavePadrao],
+  );
   // A edição em uso (a padrão do usuário ao abrir) dá o layout das colunas e o ESTADO INICIAL da ordenação e dos filtros;
   // trocar de edição os aplica. Salvar leva a ordenação e os filtros do momento.
   const editor = useEditorEdicoes<LayoutTabela>({
@@ -202,7 +219,7 @@ export function DataTable<R>({
     podePublicar: edicoes?.podePublicar ?? false,
     coerce: coerceLayout,
     igual: layoutTabelaIgual,
-    padrao: LAYOUT_TABELA_PADRAO,
+    padrao: layoutPadrao,
     paraSalvar: (l: LayoutTabela): LayoutTabela => ({ ...l, ordem: sort.key ? { key: sort.key, dir: sort.dir } : null, filtros: filters }),
     aoEscolher: (l: LayoutTabela) => {
       setFilters(l.filtros);
@@ -216,6 +233,14 @@ export function DataTable<R>({
   // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
   const linhasAdm = useLinhasTabela();
   const [limite, setLimite] = useState<number>(linhasAdm);
+  // As linhas por página salvas no aparelho (lidas depois da montagem — o HTML do servidor não as conhece).
+  useEffect(() => {
+    if (!linhasSalvas) return;
+    try {
+      const n = Number(localStorage.getItem(`tabela-linhas:${linhasSalvas}`));
+      if ((LINHAS_TABELA as readonly number[]).includes(n)) setLimite(n);
+    } catch {}
+  }, [linhasSalvas]);
 
   // fillHeight: mede as linhas que cabem até o fim da viewport (recalcula no resize).
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -265,19 +290,18 @@ export function DataTable<R>({
   useEffect(() => {
     const el = rodapeRef.current;
     if (!scrollInterno || !el) return;
-    const raiz = document.documentElement.style;
-    const medir = () => raiz.setProperty("--rodape-tabela", `${Math.ceil(el.getBoundingClientRect().height) + FOLGA}px`);
+    const medir = () => definirVarRaiz("--rodape-tabela", `${Math.ceil(el.getBoundingClientRect().height) + FOLGA}px`);
     medir();
     const ro = new ResizeObserver(medir);
     ro.observe(el);
     return () => {
       ro.disconnect();
-      raiz.removeProperty("--rodape-tabela");
+      document.documentElement.style.removeProperty("--rodape-tabela");
     };
   }, [scrollInterno]);
 
   // Linhas por página efetivas: scrollInterno (seletor) › fillHeight (medido) › pageSize.
-  const tamPagina = scrollInterno ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
+  const tamPagina = scrollInterno || linhasSalvas ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
 
   // Valores de cada coluna extraídos UMA vez por linha (filtro/faceta/ordenação leem daqui).
   const dados = useMemo<ColunaDados[]>(
@@ -377,25 +401,45 @@ export function DataTable<R>({
     return { fixadas: o.fixadas.filter(vis), livres: o.livres.filter(vis) };
   }, [chaves, lay.fixadas, lay.ordemManual, fora, editando]);
   // EXPORTAR: as colunas VISÍVEIS (fora as ocultas, na ordem da edição em uso) e as linhas à vista (todas as páginas).
-  const [exportando, setExportando] = useState(false);
-  async function exportarPlanilha() {
-    if (!exportar || exportando) return;
+  const [exportando, setExportando] = useState<FormatoExportacao | null>(null);
+  const podeExportar = usePodeExportar();
+  const quemExporta = useQuemExporta();
+  const nomeExportar = exportar === false || !podeExportar ? null : (exportar?.nome ?? "Tabela");
+  async function exportarTabela(formato: FormatoExportacao) {
+    if (!nomeExportar || exportando) return;
     const o = ordemDasColunas(chaves, lay.fixadas, lay.ordemManual);
-    const cols = [...o.fixadas, ...o.livres]
+    const cols: ColunaPlanilha<R>[] = [...o.fixadas, ...o.livres]
       .filter((k) => !fora.has(k))
       .map((k) => columns[indice.get(k) as number])
-      .filter((c): c is Column<R> => !!c);
-    const linhas = linhasPlanilhaTabela(
-      cols.map((c) => ({ cabecalho: c.header, data: c.filter === "date", valor: c.value, valores: c.valores, numero: c.numero })),
-      ordenadas,
-    );
-    setExportando(true);
+      .filter((c): c is Column<R> => !!c)
+      .map((c) => ({
+        cabecalho: c.header,
+        data: c.filter === "date",
+        valor: c.value,
+        valores: c.valores,
+        numero: c.numero,
+        formatar: c.formatarFaixa ?? (c.filter === "range" ? brl : num),
+        cor: c.corPdf,
+        total: c.total,
+      }));
+    const hoje = dataIsoBrasilia(new Date().toISOString());
+    setExportando(formato);
     try {
-      await baixarPlanilhaXlsx(nomeArquivoPlanilha(exportar.nome, dataIsoBrasilia(new Date().toISOString())), exportar.nome, linhas);
+      if (formato === "xlsx") await baixarPlanilhaXlsx(nomeArquivoPlanilha(nomeExportar, hoje), nomeExportar, linhasPlanilhaTabela(cols, ordenadas));
+      else {
+        const { baixarTabelaPdf } = await import("@/lib/exportar-pdf");
+        const filtros = ativos.map((c) => c.header).join(", ");
+        await baixarTabelaPdf(nomeArquivoPdf(nomeExportar, hoje), {
+          titulo: nomeExportar,
+          subtitulo: `${num(ordenadas.length)} ${ordenadas.length === 1 ? "linha" : "linhas"}${filtros ? ` · filtros: ${filtros}` : ""}`,
+          ...tabelaParaPdf(cols, ordenadas),
+        // Tabela larga: as colunas CONGELADAS (ou a 1ª) se repetem em cada faixa de colunas do PDF.
+        }, { fixas: Math.max(1, o.fixadas.filter((k) => !fora.has(k)).length), usuario: quemExporta });
+      }
     } catch {
       toast.error("Não foi possível exportar — tente de novo.");
     } finally {
-      setExportando(false);
+      setExportando(null);
     }
   }
   const rolagemRef = useRef<HTMLDivElement>(null);
@@ -451,7 +495,9 @@ export function DataTable<R>({
       estilo: { ...(w ? larguraFixa(w) : {}), ...(fixa ? { left: fixos[p] } : {}) } as CSSProperties,
     };
   };
-  const selFixa = nFix > 0;
+  // A coluna de MARCAÇÃO fica SEMPRE presa à esquerda ao rolar de lado (com ou sem congeladas); sem congeladas, a divisa é dela.
+  const selFixa = selectable;
+  const divisaSel = selFixa && nFix === 0 ? DIVISA : "";
   const ordenarPor = (k: string) => setSort((o) => ({ key: k, dir: o.key === k && o.dir === "asc" ? "desc" : "asc" }));
 
   return (
@@ -459,7 +505,7 @@ export function DataTable<R>({
       ref={wrapRef}
       // `overflow-clip` (e não `hidden`) na rolagem interna: recorta os cantos SEM virar contêiner de rolagem — o rodapé
       // pode grudar na tela no celular (abaixo).
-      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} rounded-card border border-border bg-surface shadow-ring`}
+      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} isolate rounded-card border border-border bg-surface shadow-ring`}
       style={{ ...(densPy ? ({ "--cell-py": densPy } as CSSProperties) : {}), ...(cheia ? { height: altura } : {}) }}
       // A altura do HTML do servidor é posta pelo trecho abaixo ANTES da hidratação (ela não é do React ainda).
       suppressHydrationWarning={scrollInterno}
@@ -468,11 +514,13 @@ export function DataTable<R>({
         ref={rolagemRef}
         className={`overflow-x-auto ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
-        <table ref={tabelaRef} className="w-full border-collapse text-sm" style={{ minWidth }}>
-          <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
+        {/* `border-separate` (bordas nas CÉLULAS): com `border-collapse`, as células presas (`sticky`) tremem e as bordas
+            "escorregam" ao rolar de lado — o Safari e o Chrome não prendem a borda colapsada junto da célula. */}
+        <table ref={tabelaRef} className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth }}>
+          <thead className={`bg-surface-2 [&_th]:border-b [&_th]:border-border ${scrollInterno ? "sticky top-0 z-30" : ""}`}>
             <tr>
               {selectable && (
-                <th className={`w-10 px-3 ${headPy} ${selFixa ? "sticky left-0 z-20 bg-surface-2" : ""}`}>
+                <th className={`w-10 px-3 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
                   <input
                     type="checkbox"
                     aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
@@ -482,7 +530,7 @@ export function DataTable<R>({
                       if (el) el.indeterminate = parcial;
                     }}
                     onChange={alternarTodos}
-                    className="h-4 w-4 accent-[var(--accent)]"
+                    className="caixa-marcar"
                   />
                 </th>
               )}
@@ -624,18 +672,18 @@ export function DataTable<R>({
                   {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
                   style={{ height: alturaLinha, ...(ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : {}) }}
                   // Com colunas congeladas a linha tem fundo OPACO (as células presas herdam — nada aparece por baixo).
-                  className={`group/linha border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
+                  className={`group/linha transition-colors hover:bg-surface-2 [&>td]:border-b [&>td]:border-border last:[&>td]:border-b-0 ${
                     onRowClick ? "cursor-pointer" : ""
                   } ${ativa || (marcada && selFixa) ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : selFixa ? "bg-surface" : ""}`}
                 >
                   {selectable && (
-                    <td className={`w-10 px-3 ${selFixa ? "sticky left-0 z-10 bg-inherit" : ""}`}>
+                    <td className={`w-10 px-3 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
                       <input
                         type="checkbox"
                         aria-label="Selecionar linha"
                         checked={marcada}
                         onChange={() => alternar(k)}
-                        className="h-4 w-4 accent-[var(--accent)]"
+                        className="caixa-marcar"
                       />
                     </td>
                   )}
@@ -703,30 +751,23 @@ export function DataTable<R>({
               onMostrarTodas: () => editor.mudar((x) => ({ ...x, ocultas: [] })),
               semOcultas: lay.ocultas.length === 0,
             })}
-          {exportar && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => void exportarPlanilha()}
-              loading={exportando}
-              disabled={ordenadas.length === 0}
-              icon={<IconDownload className="h-4 w-4" />}
-              aria-label={`Exportar ${exportar.nome} (.xlsx)`}
-              title="Exportar as linhas filtradas, com as colunas à vista (.xlsx)"
-            >
-              <span className="hidden sm:inline">Exportar</span>
-            </Button>
+          {nomeExportar && (
+            <BotaoExportar nome={nomeExportar} disabled={ordenadas.length === 0} carregando={exportando} onExportar={(f) => void exportarTabela(f)} />
           )}
           {acoesRodape}
-          {scrollInterno && (
+          {(scrollInterno || linhasSalvas) && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
               <span className="hidden sm:inline">Linhas</span>
-              <select
+              <Selecao
                 aria-label="Linhas por página"
                 value={limite}
                 onChange={(e) => {
                   setLimite(Number(e.target.value));
                   setPage(1);
+                  if (linhasSalvas)
+                    try {
+                      localStorage.setItem(`tabela-linhas:${linhasSalvas}`, e.target.value);
+                    } catch {}
                 }}
                 className="min-h-11 rounded-[8px] border border-border bg-surface px-2 py-1 text-[12px] text-text-2 focus:border-accent focus:outline-none lg:min-h-0"
               >
@@ -735,7 +776,7 @@ export function DataTable<R>({
                     {n}
                   </option>
                 ))}
-              </select>
+              </Selecao>
             </label>
           )}
           {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}

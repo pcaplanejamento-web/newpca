@@ -1,6 +1,7 @@
 import { escopoMesa, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { exigirAcesso, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria } from "@/lib/auditoria";
+import { avisarProtocoloAtualizado } from "@/lib/avisos-mesa";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
 import { assuntoCadastrado, classificarAssunto, comportamentoNo, protocolarHabilitado } from "@/lib/avaliacao-core";
 import { startProtocoloSchema } from "@/lib/dfd-validation";
@@ -9,8 +10,8 @@ import { erro, ok, parseCorpo } from "@/lib/http";
 import { padraoAoProtocolar } from "@/lib/mesa-visao-core";
 import { identidadeReenvio } from "@/lib/comparar-protocolo";
 import { telaDoRecurso } from "@/lib/papeis-core";
-import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorIdExterno, getProtocoloPorNumero, iniciarProtocolo } from "@/lib/protocolo";
-import { pcaDeProtocolos, respostaTravado, travaDeProtocolos } from "@/lib/trava-pca";
+import { detalheEdicaoProtocolo, getProtocolo, getProtocoloPorNumero, iniciarProtocolo, protocolosDeMesmoId } from "@/lib/protocolo";
+import { pcaDeProtocolos } from "@/lib/trava-pca";
 import { responsavelPadraoDe } from "@/lib/usuarios";
 
 export const dynamic = "force-dynamic";
@@ -73,25 +74,28 @@ export async function POST(req: Request) {
   // está — num PCA, a Mesa do PCA; o protocolo novo entra na Mesa do sistema.
   const negado = recusa(a.acesso, telaDoRecurso((gravado ?? mesmoNumero)?.pcaId), "importar");
   if (negado) return negado;
-  // Anti-sequestro por Id: protocolar sobrescreve o protocolo de MESMO `idExterno` — mas não
-  // se ele estiver numa unidade INACESSÍVEL (não deixa sequestrar/apagar via re-import).
-  const mesmoId = protocolo.idExterno ? await getProtocoloPorIdExterno(protocolo.idExterno) : null;
-  if (mesmoId && mesmoId.numero !== protocolo.numero && !acessivel(mesmoId.reparticaoId)) {
-    return erro("Já existe um protocolo com esse Id em outra unidade, sem acesso.", 403);
+  // Anti-sequestro por Id: protocolar sobrescreve o protocolo de MESMO `idExterno` — mas não se ele estiver numa unidade
+  // INACESSÍVEL ou fora das linhas da pessoa (não deixa sequestrar/apagar via re-import). TODOS os de mesmo Id e nº
+  // diferente (o legado pode ter mais de um) — a MESMA lista que o `iniciarProtocolo` funde.
+  const mesmosId = protocolo.idExterno ? await protocolosDeMesmoId(protocolo.idExterno, protocolo.numero) : [];
+  for (const m of mesmosId) {
+    if (!acessivel(m.reparticaoId)) return erro("Já existe um protocolo com esse Id em outra unidade, sem acesso.", 403);
+    if (!protocoloNasLinhas(esc, m.id)) return erro("Já existe um protocolo com esse Id — fale com o Responsável por ele.", 403);
   }
-  if (mesmoId && mesmoId.numero !== protocolo.numero && !protocoloNasLinhas(esc, mesmoId.id)) {
-    return erro("Já existe um protocolo com esse Id — fale com o Responsável por ele.", 403);
-  }
-  // TRAVA do PCA: um protocolo INCORPORADO (o reenviado, o de mesmo nº ou o de mesmo Id) não é sobrescrito.
-  const travas = await travaDeProtocolos([gravado?.id, mesmoNumero?.id, mesmoId?.id]);
-  const trava = [...travas.values()][0];
-  if (trava) return respostaTravado(trava);
-  // O de MESMO Id e nº DIFERENTE é o mesmo processo RENUMERADO (ou, com outro protocolo já no nº novo, sai para ele) — um
-  // protocolo em um PCA não muda assim (enviado: devolva à Mesa principal antes; incorporado: a trava acima).
-  const renumerado = mesmoId && mesmoId.numero !== protocolo.numero ? mesmoId : null;
-  if (renumerado) {
-    const noPca = (await pcaDeProtocolos([renumerado.id])).get(renumerado.id);
-    if (noPca) return erro(`O protocolo ${renumerado.numero} tem o mesmo Id e está no ${noPca.nome} — devolva-o à Mesa principal antes de importar de novo.`, 409);
+  // O de MESMO Id e nº DIFERENTE é o mesmo processo RENUMERADO: o MESMO registro (segue no PCA em que está). Com o nº novo
+  // já em outro protocolo (ou mais de um de mesmo Id), é uma FUSÃO: os DFDs dos demais passam ao que fica e eles saem —
+  // nenhum dos envolvidos pode estar em um PCA (os DFDs movidos ficariam fora da sincronia do PCA): devolva-o antes.
+  const renumerado = mesmosId[0] ?? null;
+  const fica = mesmoNumero ? { id: mesmoNumero.id, numero: protocolo.numero } : renumerado;
+  const saem = mesmosId.filter((m) => m.id !== fica?.id);
+  if (fica && saem.length > 0) {
+    const noPca = await pcaDeProtocolos([fica.id, ...saem.map((m) => m.id)]);
+    const preso = [fica, ...saem].find((m) => noPca.has(m.id));
+    if (preso)
+      return erro(
+        `O protocolo ${preso.numero} (o mesmo processo, de mesmo Id) está no ${noPca.get(preso.id)?.nome} — devolva-o à Mesa principal antes de importar de novo.`,
+        409,
+      );
   }
 
   // Responsável: o PADRÃO de quem protocola (Perfil → Protocolação), se ainda for do grupo e o NÍVEL do papel permitir
@@ -108,11 +112,13 @@ export async function POST(req: Request) {
     entidadeId: r.id,
     resumo: reenvio
       ? `Protocolo ${r.numero} REENVIADO (sobrescrito): ${reenvio.resumo}`.slice(0, 500)
-      : `Protocolo ${r.numero} protocolado${renumerado ? ` (mesmo Id do ${renumerado.numero} — renumerado)` : ""}`,
+      : `Protocolo ${r.numero} protocolado${p.data.origem === "automacao" ? " pela automação" : ""}${renumerado ? ` (mesmo Id do ${renumerado.numero} — renumerado)` : ""}`,
     depois: reenvio ? null : { numero: r.numero, assunto: protocolo.assunto, reparticaoId: protocolo.reparticaoId, anoPca: protocolo.anoPca },
     protocoloId: r.id,
-    origem: reenvio ? "reenvio" : "protocolacao",
+    origem: reenvio ? "reenvio" : (p.data.origem ?? "protocolacao"),
     detalhe,
   });
+  // REENVIADO: o responsável do protocolo sabe (o próprio autor do reenvio, não).
+  if (reenvio && gravado) await avisarProtocoloAtualizado(a.u, [{ responsavelId: gravado.responsavelId, protocolo: { id: r.id, numero: r.numero, assunto: protocolo.assunto, pcaId: gravado.pcaId }, oQue: "reenviado" }]);
   return ok({ protocoloId: r.id, numero: r.numero });
 }

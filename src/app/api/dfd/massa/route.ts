@@ -15,8 +15,6 @@ import { categoriaDoProtocolo } from "@/lib/protocolo";
 import { carregarResponsaveis } from "@/lib/reparticoes";
 
 import { telaDoRecurso } from "@/lib/papeis-core";
-import { mensagemTravaPca } from "@/lib/pca-core";
-import { travaDeDfds } from "@/lib/trava-pca";
 export const dynamic = "force-dynamic";
 
 const CHAVE_CAMPO: Record<CampoMassa, ChaveAvaliacao> = {
@@ -57,7 +55,7 @@ export async function POST(req: Request) {
   const respDestino = acao.campo === "reparticao" ? await carregarResponsaveis(acao.reparticaoId) : null;
 
   const dfds = await listarCamposMassa(ids);
-  const [travas, pcaDe] = await Promise.all([travaDeDfds(dfds.map((d) => d.id)), pcaDosProtocolos(dfds.map((d) => d.protocoloId))]);
+  const pcaDe = await pcaDosProtocolos(dfds.map((d) => d.protocoloId));
   // Siglas das unidades (histórico) — UMA consulta para o lote inteiro (≤ 50 DFDs + o destino).
   const rotulo = acao.campo === "reparticao" ? await rotulosUnidades([acao.reparticaoId, ...dfds.map((d) => d.reparticaoId)]) : null;
   let alterados = 0;
@@ -80,11 +78,6 @@ export async function POST(req: Request) {
       const semPapel = motivoRecusa(a.acesso, telaDoRecurso(d.protocoloId != null ? pcaDe.get(d.protocoloId) : null), "manipular");
       if (semPapel) {
         falhas.push({ id: d.id, numero: d.numero, motivo: semPapel });
-        continue;
-      }
-      const trava = travas.get(d.id);
-      if (trava) {
-        falhas.push({ id: d.id, numero: d.numero, motivo: mensagemTravaPca(trava.nome) });
         continue;
       }
       if (acao.campo === "reparticao") {

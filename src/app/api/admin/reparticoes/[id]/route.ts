@@ -1,13 +1,13 @@
 import { eq, sql } from "drizzle-orm";
-import { reparticoes } from "@/db/schema";
+import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { realinharVinculos } from "@/lib/responsaveis";
 import { getDb } from "@/lib/db";
 import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { numeroInteressadoEmUso } from "@/lib/orgaos";
 import { reparticaoSchema } from "@/lib/rbac-validation";
-import { serializeResponsaveis } from "@/lib/reparticao-responsaveis";
 import { unidadeTemVinculo } from "@/lib/reparticoes";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (await ehGeral(id)) return erro("A unidade 'Geral' é virtual e não pode ser editada.", 400);
   const corpo = await parseCorpo(reparticaoSchema, req);
   if ("resp" in corpo) return corpo.resp;
+  const [org] = await getDb().select({ id: orgaos.id }).from(orgaos).where(eq(orgaos.id, corpo.data.orgaoId)).limit(1);
+  if (!org) return erro("Órgão não encontrado — toda unidade pertence a um órgão.", 422);
   const numeroInteressado = corpo.data.numeroInteressado?.trim() || null;
   // Ponto 3: Nº do interessado é ÚNICO GLOBAL (órgãos + unidades).
   if (numeroInteressado && (await numeroInteressadoEmUso(numeroInteressado, { reparticaoId: id })))
@@ -37,12 +39,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       nome: corpo.data.nome,
       numeroInteressado,
       setorRequisitante: corpo.data.setorRequisitante ?? null,
-      orgaoId: corpo.data.orgaoId ?? null,
+      orgaoId: corpo.data.orgaoId,
       oculto: corpo.data.oculto,
-      responsavelDfd: serializeResponsaveis(corpo.data.responsaveis),
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));
+  // A unidade pode ter mudado de órgão: os responsáveis dela seguem a regra de assinatura do órgão (o lugar que vale).
+  await realinharVinculos();
   await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });
   return ok();
 }

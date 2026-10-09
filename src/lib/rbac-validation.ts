@@ -50,32 +50,62 @@ export const grupoAtivoSchema = z.object({ grupoId: z.number().int().positive("G
 /** Unidade ativa do cabeçalho (cookie). */
 export const reparticaoAtivaSchema = z.object({ reparticaoId: z.number().int().positive("Unidade inválida.") });
 
-// Nomeação (ato) de um responsável: portaria/decreto/lei + número + link (todos opcionais).
-const nomeacaoSchema = z.object({
-  tipo: z.enum(["portaria", "decreto", "lei"]).nullable().default(null),
-  numero: z.string().trim().max(120).default(""),
-  link: z.string().trim().max(500).default(""),
+// RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA (migração 0099): a PESSOA (nome + matrícula) e o VÍNCULO dela com uma
+// unidade OU um órgão (padrão | temporário + nomeação + período; o temporário com o cargo do período). As regras do vínculo moram no núcleo puro
+// (`motivoVinculoInvalido`, `responsaveis-planilha-core.ts`) — a MESMA na tela e na rota.
+// A PESSOA guarda também o CARGO/FUNÇÃO (o nome de um cargo cadastrado — conferido na rota) e o USUÁRIO ligado (opcional).
+const nomePessoa = z.string().trim().min(1, "Informe o nome.").max(160);
+const matriculaPessoa = z.string().trim().max(60);
+const cargoPessoa = z.string().trim().max(80);
+const usuarioPessoa = z.number().int().positive().nullable();
+export const pessoaResponsavelSchema = z.object({
+  nome: nomePessoa,
+  matricula: matriculaPessoa.default(""),
+  cargo: cargoPessoa.default(""),
+  usuarioId: usuarioPessoa.default(null),
+  // FUNCIONÁRIO DE FORA DO MUNICÍPIO: sem matrícula (a gravação a deixa vazia).
+  externo: z.boolean().default(false),
 });
-const responsavelSchema = z.object({
-  nome: z.string().trim().max(160),
-  matricula: z.string().trim().max(60).default(""),
-  funcao: z.string().trim().max(120).default(""),
-  nomeacao: nomeacaoSchema.default({ tipo: null, numero: "", link: "" }),
-});
-const responsavelTemporarioSchema = responsavelSchema.extend({
-  inicio: z.string().trim().max(10).default(""), // "YYYY-MM-DD"
-  fim: z.string().trim().max(10).default(""),
+// PATCH sem os padrões da criação (o que não vier fica como está).
+export const pessoaResponsavelPatchSchema = z.object({
+  nome: nomePessoa.optional(),
+  matricula: matriculaPessoa.optional(),
+  cargo: cargoPessoa.optional(),
+  usuarioId: usuarioPessoa.optional(),
+  externo: z.boolean().optional(),
+  // A EXONERAÇÃO: data "AAAA-MM-DD" válida ou null (desfazer).
+  exoneradoEm: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
+    .refine((d) => !Number.isNaN(Date.parse(`${d}T12:00:00Z`)) && new Date(`${d}T12:00:00Z`).toISOString().startsWith(d), "Data inválida.")
+    .nullable()
+    .optional(),
 });
 
-// Responsáveis por DFDs (N padrões + N temporários) — mesmo shape na unidade E no órgão
-// (assinatura única). Fonte única do schema.
-const responsaveisSchema = z
-  .object({
-    padroes: z.array(responsavelSchema).max(30).default([]),
-    temporarios: z.array(responsavelTemporarioSchema).max(30).default([]),
+const dadosVinculoSchema = z.object({
+  tipo: z.enum(["padrao", "temporario"]),
+  funcao: z.string().trim().max(80).default(""), // o cargo do temporário (conferido na rota)
+  atoTipo: z.enum(["portaria", "decreto", "lei"]).nullable().default(null),
+  atoNumero: z.string().trim().max(120).default(""),
+  atoLink: z.string().trim().max(500).default(""),
+  inicio: z.string().trim().max(10).nullable().default(null), // "YYYY-MM-DD"
+  fim: z.string().trim().max(10).nullable().default(null),
+});
+export const vinculoResponsavelSchema = dadosVinculoSchema
+  .extend({
+    responsavelId: z.number().int().positive(),
+    orgaoId: z.number().int().positive().nullable().default(null),
+    reparticaoId: z.number().int().positive().nullable().default(null),
   })
-  .optional()
-  .default({ padroes: [], temporarios: [] });
+  .refine((v) => (v.orgaoId == null) !== (v.reparticaoId == null), "Escolha UMA unidade ou UM órgão.");
+// Editar: os dados, a pessoa e — opcional — o ALVO (onde responde): sem ele, fica o de antes; com ele, UM só.
+export const vinculoResponsavelPatchSchema = dadosVinculoSchema
+  .extend({
+    responsavelId: z.number().int().positive(),
+    orgaoId: z.number().int().positive().nullable().optional(),
+    reparticaoId: z.number().int().positive().nullable().optional(),
+  })
+  .refine((v) => (v.orgaoId === undefined && v.reparticaoId === undefined) || (v.orgaoId == null) !== (v.reparticaoId == null), "Escolha UMA unidade ou UM órgão.");
 
 export const reparticaoSchema = z.object({
   codigo: z
@@ -89,9 +119,9 @@ export const reparticaoSchema = z.object({
   // protocolo), padrão do Setor Requisitante do DFD e o órgão dono da unidade.
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
   setorRequisitante: z.string().trim().max(200).optional().nullable(),
-  orgaoId: z.number().int().positive().optional().nullable(),
+  // Toda unidade pertence a um ÓRGÃO (obrigatório).
+  orgaoId: z.number({ error: "Escolha o órgão da unidade." }).int().positive(),
   oculto: z.boolean().default(false),
-  responsaveis: responsaveisSchema,
 });
 
 export const reordenarSchema = z.object({
@@ -99,7 +129,7 @@ export const reordenarSchema = z.object({
 });
 
 // Órgão = entidade organizacional acima da unidade. `orgaoEntidade` é o padrão que casa o
-// campo "Órgão/Entidade" do DFD. `assinaturaUnica` = os `responsaveis` do órgão valem p/ TODAS
+// campo "Órgão/Entidade" do DFD. `assinaturaUnica` = os responsáveis VINCULADOS ao órgão valem p/ TODAS
 // as unidades (senão cada unidade tem os seus). Tudo opcional (cadastro do ADM).
 export const orgaoSchema = z.object({
   // A sigla do órgão vira o código da unidade ao rebaixá-lo ou ao ligar "também unidade" — "GERAL" é reservado.
@@ -112,9 +142,18 @@ export const orgaoSchema = z.object({
   nome: z.string().trim().min(1, "Informe o nome do órgão.").max(160),
   orgaoEntidade: z.string().trim().max(200).optional().nullable(),
   numeroInteressado: z.string().trim().max(60).optional().nullable(),
+  /** O ID da entidade do órgão na Centi (só dígitos, ex.: "02"); vazio = não informado. Ausente = não muda. */
+  entidadeCenti: z
+    .string()
+    .trim()
+    .regex(/^\d{0,4}$/, "O ID da entidade na Centi é só o número (ex.: 02).")
+    .optional()
+    .nullable(),
   assinaturaUnica: z.boolean().default(false),
   oculto: z.boolean().default(false),
-  responsaveis: responsaveisSchema,
+  /** Ao DESLIGAR a assinatura única de um órgão com várias unidades e sem unidade própria: as unidades que recebem os
+   * responsáveis do órgão (sem a escolha, 409 com a lista). */
+  destinosVinculos: z.array(z.number().int().positive()).max(500).optional(),
 });
 
 // Rebaixar um órgão a unidade de OUTRO órgão (destino obrigatório).

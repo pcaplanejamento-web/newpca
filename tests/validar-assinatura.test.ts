@@ -10,8 +10,6 @@ import {
   dataAssinaturaValida,
   definirDataAssinaturaEquipe,
   desfazerValidacaoEquipe,
-  novoResponsavel,
-  novoTemporario,
   pdfExigeAssinatura,
   type Responsaveis,
   RESPONSAVEIS_VAZIO,
@@ -33,15 +31,12 @@ function mkAdobe(nome: string, data = "01/09/2026 14:58:52 -03:00"): Assinatura 
   return { nome, eCpf: "***.516.261-**", usuario: "", local: "", data, ip: "", codigo: "", url: "", fonte: "adobe" };
 }
 
-const padrao = (nome: string): Responsaveis => ({ padroes: [novoResponsavel(nome)], temporarios: [] });
+const pessoa = (nome: string) => ({ nome, matricula: "", funcao: "", nomeacao: { tipo: null, numero: "", link: "" } });
+const padrao = (nome: string): Responsaveis => ({ padroes: [pessoa(nome)], temporarios: [] });
 
 function comTemporario(nome: string, inicio: string, fim: string): Responsaveis {
-  const t = novoTemporario();
-  t.nome = nome;
-  t.inicio = inicio;
-  t.fim = fim;
-  t.nomeacao = { tipo: "portaria", numero: "123/2026", link: "" };
-  return { padroes: [novoResponsavel("OUTRO TITULAR")], temporarios: [t] };
+  const t = { ...pessoa(nome), inicio, fim, nomeacao: { tipo: "portaria" as const, numero: "123/2026", link: "" } };
+  return { padroes: [pessoa("OUTRO TITULAR")], temporarios: [t] };
 }
 
 describe("dataAssinaturaISO", () => {
@@ -102,6 +97,16 @@ describe("validarAssinatura", () => {
   it("assinante que não é responsável → erro", () => {
     const r = validarAssinatura([mkAss("FULANO QUALQUER")], padrao("ISAAC PIRES CABRAL"), { exigeAssinatura: true });
     assert.equal(r.status, "erro");
+  });
+
+  it("PADRÃO com período: só a assinatura com a data dentro dele casa (fim vazio = em aberto)", () => {
+    const comPeriodo = (inicio: string, fim?: string): Responsaveis => ({ padroes: [{ ...pessoa("ISAAC PIRES CABRAL"), inicio, ...(fim ? { fim } : {}) }], temporarios: [] });
+    const v = (data: string, r: Responsaveis) => validarAssinatura([mkAss("Isaac Pires Cabral", data)], r, { exigeAssinatura: true }).status;
+    assert.equal(v("31/08/2026 16:20:00", comPeriodo("2026-01-01")), "ok", "desde o início, sem fim");
+    assert.equal(v("31/12/2025 16:20:00", comPeriodo("2026-01-01")), "erro", "antes do início");
+    assert.equal(v("31/08/2026 16:20:00", comPeriodo("2026-01-01", "2026-06-30")), "erro", "depois do fim");
+    assert.equal(v("30/06/2026 23:59:00", comPeriodo("2026-01-01", "2026-06-30")), "ok", "no último dia");
+    assert.equal(v("31/08/2026 16:20:00", padrao("ISAAC PIRES CABRAL")), "ok", "padrão antigo, sem período = igual a antes");
   });
 
   it("solicitanteDeResultado traz o período e o ato do temporário", () => {

@@ -12,6 +12,9 @@ export default async function OrcamentoPage() {
   const r = await acessoPagina("orcamento");
   if (r.bloqueio) return r.bloqueio;
   const filtro = await getPcaFiltro();
-  const orcamentos = await listarOrcamentos(filtro?.ano ?? null);
-  return <OrcamentoView orcamentos={orcamentos} podeImportar={r.pode.importar} filtro={filtro ? `${filtro.nome} (${filtro.ano})` : null} />;
+  const todos = await listarOrcamentos();
+  const orcamentos = filtro ? todos.filter((o) => o.ano === filtro.ano) : todos;
+  return (
+    <OrcamentoView orcamentos={orcamentos} existentes={todos} podeImportar={r.pode.importar} filtro={filtro ? `${filtro.nome} (${filtro.ano})` : null} />
+  );
 }

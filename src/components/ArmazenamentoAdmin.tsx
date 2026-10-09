@@ -1,16 +1,22 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { Armazenamento, TabelaArmazenamento } from "@/lib/armazenamento";
 import type { MonitoramentoArmazenamento, UsoOficial } from "@/lib/cf-analytics";
+import type { SaudeDados as DadosSaude } from "@/lib/saude-dados-core";
 import { formatBytes, num, pct } from "@/lib/format";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { type Column, DataTable } from "./DataTable";
-import { IconDatabase, IconImage, IconLayers, IconRefresh, IconTrash } from "./icons";
+import { BotaoAtualizar } from "./BotaoAtualizar";
+import { IconDatabase, IconImage, IconLayers, IconTrash } from "./icons";
 import { KpiStat } from "./KpiStat";
 import { MonitoramentoWorker } from "./MonitoramentoWorker";
+import { OnlineAgoraAdmin } from "./OnlineAgoraAdmin";
+import { useCanalGrupo } from "./CanalGrupo";
+import { SaudeDados } from "./SaudeDados";
 import { SkeletonLinhas } from "./Skeleton";
 import { StatCard } from "./StatCard";
 import { toast } from "./Toast";
@@ -25,6 +31,8 @@ type Dados = Armazenamento & { oficial: UsoOficial; monitoramento: Monitoramento
 // Tela de armazenamento do ADM: raio-x do banco (D1). Busca o snapshot no mount
 // (introspecção só roda ao abrir a tela); só componentes do design-system.
 export function ArmazenamentoAdmin() {
+  // A presença ligada (o canal do grupo existe) = a seção "Online agora".
+  const presencaAtiva = useCanalGrupo() != null;
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregando, setRecarregando] = useState(false);
@@ -56,6 +64,43 @@ export function ArmazenamentoAdmin() {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Saúde dos dados: carregada à parte (a tela não espera por ela); "Verificar" refaz a leitura no banco.
+  const router = useRouter();
+  const [saude, setSaude] = useState<DadosSaude | null>(null);
+  const [erroSaude, setErroSaude] = useState<string | null>(null);
+  const [verificando, setVerificando] = useState(false);
+  const verificarSaude = useCallback(async (fresco: boolean) => {
+    setVerificando(true);
+    setErroSaude(null);
+    let msg = "Não foi possível verificar os dados agora. Tente de novo.";
+    try {
+      const r = await fetch(`/api/admin/saude-dados${fresco ? "?fresco=1" : ""}`);
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; saude?: DadosSaude };
+      if (r.ok && j.ok && j.saude) {
+        setSaude(j.saude);
+        return;
+      }
+      if (j.error) msg = j.error;
+    } catch {
+      // sem rede: a mensagem padrão
+    } finally {
+      setVerificando(false);
+    }
+    setErroSaude(msg);
+  }, []);
+  useEffect(() => {
+    void verificarSaude(false);
+  }, [verificarSaude]);
+  const secaoSaude = (
+    <SaudeDados
+      saude={saude}
+      erro={erroSaude}
+      verificando={verificando}
+      onVerificar={() => void verificarSaude(true)}
+      onAbrir={(href) => router.push(href)}
+    />
+  );
 
   async function recarregar() {
     setRecarregando(true);
@@ -89,7 +134,7 @@ export function ArmazenamentoAdmin() {
   }
 
   const cabecalho = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <h1 className="flex items-center gap-2 text-xl font-bold text-text">
           <IconDatabase className="h-5 w-5 text-accent" />
@@ -99,9 +144,7 @@ export function ArmazenamentoAdmin() {
           Uso do banco de dados (D1) e do Worker: tamanho por tabela, consumo diário, monitoramento e manutenção.
         </p>
       </div>
-      <Button variant="secondary" onClick={recarregar} loading={recarregando} icon={<IconRefresh className="h-4 w-4" />}>
-        Recarregar
-      </Button>
+      <BotaoAtualizar ativo={recarregando} rotulo="Recarregar" detalhe="Recarregando o armazenamento e o monitoramento…" onClick={() => void recarregar()} />
     </div>
   );
 
@@ -112,10 +155,11 @@ export function ArmazenamentoAdmin() {
         {erro ? (
           <Callout kind="danger">{erro}</Callout>
         ) : (
-          <div className="rounded-card border border-border p-4">
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
             <SkeletonLinhas linhas={6} />
           </div>
         )}
+        {secaoSaude}
       </div>
     );
   }
@@ -244,6 +288,17 @@ export function ArmazenamentoAdmin() {
         </h2>
         <MonitoramentoWorker monitoramento={dados.monitoramento} hojeUtc={new Date().toISOString().slice(0, 10)} />
       </section>
+
+      {/* Quem está online agora em cada grupo (com a presença ligada) */}
+      {presencaAtiva && (
+        <section className="space-y-2">
+          <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-faint">Online agora</h2>
+          <OnlineAgoraAdmin />
+        </section>
+      )}
+
+      {/* Saúde dos dados — integridade dos totais e dados a tratar */}
+      {secaoSaude}
 
       {/* Tabelas */}
       <section className="space-y-2">

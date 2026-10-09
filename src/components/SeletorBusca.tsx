@@ -100,6 +100,7 @@ export function SeletorBusca({
         {visiveis.map((o, i) => {
           const escolhida = o.valor === valor;
           return (
+            // biome-ignore lint/a11y/useKeyWithClickEvents: a opção nunca recebe o foco — o teclado é do campo de busca (aria-activedescendant: ↑/↓ movem, Enter escolhe)
             <div
               key={o.valor}
               id={`${id}-op-${i}`}

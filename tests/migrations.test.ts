@@ -35,6 +35,20 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.ok(arquivos.length >= 8);
   });
 
+  it("cada número de migração é usado UMA vez (sessões em paralelo não colidem)", () => {
+    // O D1 registra a migração pelo NOME inteiro: as duas repetições antigas já aplicadas ficam (renomear as aplicaria de
+    // novo). Uma repetição nova falha aqui, antes do deploy — renumere a sua para o próximo número livre.
+    const JA_REPETIDOS = new Set(["0028", "0064"]);
+    const porNumero = new Map<string, string[]>();
+    for (const arq of arquivos) {
+      const numero = arq.slice(0, 4);
+      assert.match(numero, /^\d{4}$/, `${arq}: o nome deve começar com 4 dígitos`);
+      porNumero.set(numero, [...(porNumero.get(numero) ?? []), arq]);
+    }
+    const repetidos = [...porNumero].filter(([n, lista]) => lista.length > 1 && !JA_REPETIDOS.has(n));
+    assert.deepEqual(repetidos, [], `número de migração repetido: ${repetidos.map(([, l]) => l.join(" × ")).join("; ")}`);
+  });
+
   it("cria todas as tabelas do domínio", () => {
     const tabelas = nomes(db, "SELECT name FROM sqlite_master WHERE type='table'");
     for (const t of [
@@ -264,7 +278,7 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(restantes.n, 0, "excluir o orçamento deveria apagar os lançamentos (cascade)");
   });
 
-  it("0030 cria orcamento_vinculos (único por tipo+chave; excluir o alvo zera o vínculo)", () => {
+  it("0030 cria orcamento_vinculos (excluir o alvo zera o vínculo; a unicidade é a da 0080)", () => {
     const cols = nomes(db, "SELECT name FROM pragma_table_info('orcamento_vinculos')");
     for (const c of ["tipo", "chave", "texto", "orgao_id", "reparticao_id"]) {
       assert.ok(cols.includes(c), `coluna ausente em orcamento_vinculos: ${c}`);
@@ -272,10 +286,6 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     db.exec("PRAGMA foreign_keys = ON");
     db.exec("INSERT INTO orgaos (id, nome, sigla) VALUES (981, 'Fundo X', 'FX')");
     db.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, orgao_id) VALUES ('orgao', 'FUNDO X', 'Fundo X', 981)");
-    assert.throws(
-      () => db.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto) VALUES ('orgao', 'FUNDO X', 'outro')"),
-      "o mesmo texto (tipo+chave) deveria ser único",
-    );
     db.exec("DELETE FROM orgaos WHERE id = 981");
     const v = db.prepare("SELECT orgao_id FROM orcamento_vinculos WHERE chave = 'FUNDO X'").get() as { orgao_id: number | null };
     assert.equal(v.orgao_id, null, "excluir o órgão deveria zerar o vínculo (set null)");
@@ -823,6 +833,26 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal((a.prepare("SELECT detalhes AS d FROM papeis WHERE nome = 'Novo'").get() as { d: string }).d, "{}");
   });
 
+  it("0076 automação: execuções, passos, autorização de uso único e registros sem repetir", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec("PRAGMA foreign_keys = ON");
+    a.exec("INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (9761, 'A B', 'a9761@x', 'h')");
+    a.exec("INSERT INTO automacao_execucoes (id, receita, usuario_id) VALUES (1, 'anexar-dfds', 9761)");
+    const e = a.prepare("SELECT estado, ensaio, entrada, total FROM automacao_execucoes WHERE id = 1").get() as Record<string, unknown>;
+    assert.deepEqual({ ...e }, { estado: "preparada", ensaio: 0, entrada: "{}", total: 0 });
+    a.exec("INSERT INTO automacao_passos (execucao_id, chave, capacidade) VALUES (1, 'p1', 'anexar')");
+    assert.throws(() => a.exec("INSERT INTO automacao_passos (execucao_id, chave, capacidade) VALUES (1, 'p1', 'anexar')"), "um passo por chave");
+    a.exec("INSERT INTO automacao_autorizacoes (id, execucao_id, passo_chave, capacidade, alvo_hash, usuario_id, expira_em) VALUES ('h', 1, 'p1', 'anexar', 'x', 9761, 10)");
+    assert.equal(a.prepare("DELETE FROM automacao_autorizacoes WHERE id = 'h' AND expira_em > 5 RETURNING id").all().length, 1);
+    assert.equal(a.prepare("DELETE FROM automacao_autorizacoes WHERE id = 'h' AND expira_em > 5 RETURNING id").all().length, 0, "uso único");
+    a.exec("INSERT INTO automacao_registros (capacidade, centi_alvo, descricao, execucao_id) VALUES ('anexar', '2332778', 'PGM - PCA', 1)");
+    assert.throws(() => a.exec("INSERT INTO automacao_registros (capacidade, centi_alvo, descricao) VALUES ('anexar', '2332778', 'PGM - PCA')"), "nunca grava duas vezes");
+    a.exec("DELETE FROM automacao_execucoes WHERE id = 1");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM automacao_passos").get() as { n: number }).n, 0, "os passos caem com a execução");
+    assert.equal((a.prepare("SELECT COUNT(*) AS n FROM automacao_registros").get() as { n: number }).n, 1, "o registro da escrita fica");
+  });
+
   it("0075 catálogo: os catálogos atuais viram 'agenda' (sem pasta, cor do tipo); pastas e histórico de compra nascem vazios", () => {
     const a = new DatabaseSync(":memory:");
     for (const arq of arquivos.filter((f) => f < "0075")) a.exec(readFileSync(join(DIR, arq), "utf8"));
@@ -913,6 +943,284 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.equal(papel(9702), 9700, "papel criado pelo ADM não é tocado");
     assert.equal(papel(9703), id("admin"), "sem papel ganha o do role");
     assert.equal(papel(9704), id("membro"));
+  });
+
+  it("0077 protocolo incorporado editável: vínculo pelo protocolo, retrato do item no nº e órfãos baixados", () => {
+    const d = new DatabaseSync(":memory:");
+    const i77 = arquivos.findIndex((f) => f.startsWith("0077"));
+    assert.ok(i77 > 0, "migração 0077 ausente");
+    for (const arq of arquivos.slice(0, i77)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO pcas (id, nome, ano, fonte) VALUES (1, 'PCA 2027', 2027, 'protocolo'), (2, 'Edição legada', 2027, 'protocolo');
+      INSERT INTO dfd_protocolos (id, numero, pca_id, pca_incorporado_em) VALUES (10, 'P-10', 1, '2027-01-01'), (20, 'P-20', 1, NULL), (30, 'P-30', NULL, NULL);
+      INSERT INTO dfds (id, numero, protocolo_id) VALUES (100, 'D100', 10), (200, 'D200', 20), (300, 'D300', 30);
+      INSERT INTO dfd_itens (id, dfd_id, item, codigo, descricao, unidade, sequencial) VALUES (1, 100, 1, '111', 'CADEIRA', 'UN', 1);
+      INSERT INTO pca_dfds (pca_id, dfd_id, acao) VALUES (1, 100, 'incorporar'), (1, 200, 'incorporar'), (2, 300, 'incorporar');
+      INSERT INTO pca_itens (id, pca_id, sequencial, dfd_item_id, dfd_id, protocolo_id) VALUES (1, 1, 1, 1, 100, 10), (2, 1, 2, NULL, 100, 10);`);
+    d.exec(readFileSync(join(DIR, arquivos[i77]), "utf8"));
+    for (const arq of arquivos.slice(i77 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const via = (dfd: number) => (d.prepare("SELECT protocolo_id AS p FROM pca_dfds WHERE dfd_id = ?").get(dfd) as { p: number | null }).p;
+    assert.equal(via(100), 10, "incorporado: o vínculo é do protocolo");
+    assert.equal(via(200), null, "enviado (não incorporado): fica como vínculo legado");
+    assert.equal(via(300), null, "edição legada: sem protocolo");
+    assert.deepEqual({ ...(d.prepare("SELECT codigo, descricao, unidade, item, baixado_em AS b FROM pca_itens WHERE id = 1").get() as object) }, {
+      codigo: "111",
+      descricao: "CADEIRA",
+      unidade: "UN",
+      item: 1,
+      b: null,
+    });
+    const orfao = d.prepare("SELECT ativo AS a, baixado_em AS b, motivo AS m FROM pca_itens WHERE id = 2").get() as { a: number; b: string | null; m: string };
+    assert.equal(orfao.a, 0);
+    assert.ok(orfao.b, "o nº sem item é baixado");
+    assert.equal(orfao.m, "Item removido do DFD");
+    const idx = nomes(d, "SELECT name FROM sqlite_master WHERE type='index'");
+    for (const i of ["pca_dfds_protocolo_idx", "pca_itens_dfd_idx"]) assert.ok(idx.includes(i), `índice ausente: ${i}`);
+  });
+
+  it("0085/0087 totais do DFD = os itens: completo recalculado (4 casas), parcial intocado, item sem total ganha q × vu", () => {
+    const d = new DatabaseSync(":memory:");
+    const i85 = arquivos.findIndex((f) => f.startsWith("0085"));
+    assert.ok(i85 > 0, "migração 0085 ausente");
+    for (const arq of arquivos.slice(0, i85)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO dfds (id, numero, total_itens, valor_total) VALUES (1, 'D1', 3, 1000), (2, 'D2', 5, 900), (3, 'D3', 1, 10);
+      INSERT INTO dfd_itens (dfd_id, sequencial, quantidade, valor_unitario, valor_total) VALUES
+        (1, 1, 2, 100, 200), (1, 2, 3, 33.333, NULL), (1, 3, 1, 50.0049, 50.0049),
+        (2, 1, 1, 100, 100), (2, 2, 1, 200, 200),
+        (3, 1, NULL, NULL, NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i85]), "utf8"));
+    d.exec(readFileSync(join(DIR, arquivos[i85]), "utf8")); // idempotente
+    const t = (id: number) => ({ ...(d.prepare("SELECT total_itens AS n, valor_total AS v FROM dfds WHERE id = ?").get(id) as object) });
+    assert.equal((d.prepare("SELECT valor_total AS v FROM dfd_itens WHERE dfd_id = 1 AND sequencial = 2").get() as { v: number }).v, 100);
+    assert.deepEqual(t(1), { n: 3, v: 350 }, "0085: 200 + 100 (q × vu) + 50,0049 → 350,00 (o TOTAL GERAL 1.000 sai)");
+    const i87 = arquivos.findIndex((f) => f.startsWith("0087"));
+    assert.ok(i87 > i85, "migração 0087 ausente");
+    for (const arq of arquivos.slice(i85 + 1)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(readFileSync(join(DIR, arquivos[i87]), "utf8")); // idempotente
+    assert.deepEqual(t(1), { n: 3, v: 350.0049 }, "0087: a soma com 4 casas (a fração do centavo não se perde)");
+    assert.deepEqual(t(2), { n: 5, v: 900 }, "2 de 5 itens: o parcial fica (a conferência acusa)");
+    assert.deepEqual(t(3), { n: 1, v: null }, "sem valor: NULL, nunca estimado");
+  });
+
+  it("0099 responsáveis: os JSON (todos os formatos) viram a planilha + vínculos, a pessoa repetida vira UMA, idempotente", () => {
+    const d = new DatabaseSync(":memory:");
+    const i99 = arquivos.findIndex((f) => f.startsWith("0099"));
+    assert.ok(i99 > 0, "migração 0099 ausente");
+    for (const arq of arquivos.slice(0, i99)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const novo = JSON.stringify({
+      padroes: [{ nome: " José Ávila ", matricula: "123", funcao: "Secretário", nomeacao: { tipo: "portaria", numero: "10/2025", link: "https://x/p10" } }, { nome: "" }],
+      temporarios: [
+        { nome: "Bia Lima", matricula: "", funcao: "Diretora", nomeacao: { tipo: "decreto", numero: "5", link: "" }, inicio: "2026-01-01", fim: "2026-03-31" },
+        { nome: "Sem Data", inicio: "", fim: "" },
+        { nome: "Invertido", inicio: "2026-05-01", fim: "2026-04-01" },
+      ],
+    });
+    d.exec(`INSERT INTO orgaos (id, nome, sigla, assinatura_unica, responsavel_dfd) VALUES
+        (800, 'Órgão Único', 'OU', 1, '${JSON.stringify({ padroes: [{ nome: "JOSE AVILA", matricula: "123", funcao: "Prefeito" }], temporarios: [] })}'),
+        (801, 'Órgão Por Unidade', 'OP', 0, 'Texto Solto');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id, responsavel_dfd) VALUES
+        (810, 'U1', 'Unidade 1', 801, '${novo}'),
+        (811, 'U2', 'Unidade 2', 801, '${JSON.stringify({ padrao: "Carlos", temporarios: [{ nome: "Dani", inicio: "2026-02-01", fim: "2026-02-28", ato: "Portaria 9" }] })}'),
+        (812, 'U3', 'Unidade 3', 801, '["", "Eva", "Fábio"]'),
+        (813, 'U4', 'Unidade 4', 801, NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i99]), "utf8"));
+    d.exec(readFileSync(join(DIR, arquivos[i99]), "utf8")); // idempotente
+    const pessoas = d.prepare("SELECT nome, matricula, chave FROM responsaveis ORDER BY chave").all() as { nome: string; matricula: string; chave: string }[];
+    assert.deepEqual(
+      pessoas.map((p) => `${p.chave}|${p.matricula}`),
+      ["BIA LIMA|", "CARLOS|", "DANI|", "EVA|", "JOSE AVILA|123", "TEXTO SOLTO|"],
+      "José da unidade e do órgão = UMA pessoa; sem nome, sem data e invertido ficam de fora",
+    );
+    const v = d
+      .prepare(
+        `SELECT p.chave AS c, v.orgao_id AS o, v.reparticao_id AS r, v.tipo AS t, v.funcao AS f, v.ato_tipo AS a, v.ato_numero AS n, v.ato_link AS l, v.inicio AS i, v.fim AS fim
+         FROM responsaveis_vinculos v JOIN responsaveis p ON p.id = v.responsavel_id ORDER BY v.orgao_id IS NULL, v.orgao_id, v.reparticao_id, v.tipo, p.chave`,
+      )
+      .all() as Record<string, unknown>[];
+    assert.deepEqual(
+      v.map((x) => [x.c, x.o, x.r, x.t, x.f, x.a, x.n, x.l, x.i, x.fim]),
+      [
+        ["JOSE AVILA", 800, null, "padrao", "Prefeito", null, "", "", null, null],
+        ["TEXTO SOLTO", 801, null, "padrao", "", null, "", "", null, null],
+        ["JOSE AVILA", null, 810, "padrao", "Secretário", "portaria", "10/2025", "https://x/p10", null, null],
+        ["BIA LIMA", null, 810, "temporario", "Diretora", "decreto", "5", "", "2026-01-01", "2026-03-31"],
+        ["CARLOS", null, 811, "padrao", "", null, "", "", null, null],
+        ["DANI", null, 811, "temporario", "", null, "Portaria 9", "", "2026-02-01", "2026-02-28"],
+        ["EVA", null, 812, "padrao", "", null, "", "", null, null],
+      ],
+    );
+    d.exec("PRAGMA foreign_keys = ON");
+    d.exec("DELETE FROM reparticoes WHERE id = 810");
+    assert.equal((d.prepare("SELECT COUNT(*) AS n FROM responsaveis_vinculos WHERE reparticao_id = 810").get() as { n: number }).n, 0, "cascade");
+    assert.throws(() => d.exec("INSERT INTO responsaveis_vinculos (responsavel_id, orgao_id, reparticao_id, tipo) VALUES (1, 800, 811, 'padrao')"), /CHECK/);
+    assert.throws(() => d.exec("INSERT INTO responsaveis_vinculos (responsavel_id, orgao_id, tipo) VALUES (1, 800, 'temporario')"), /CHECK/);
+  });
+
+  it("0100 responsáveis: as funções viram cargos, o cargo é da PESSOA (pelo padrão), o usuário liga pela matrícula única", () => {
+    const d = new DatabaseSync(":memory:");
+    const i100 = arquivos.findIndex((f) => f.startsWith("0100"));
+    assert.ok(i100 > 0, "migração 0100 ausente");
+    for (const arq of arquivos.slice(0, i100)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (901, 'Órgão', 'OG');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (911, 'U1', 'Unidade 1', 901), (912, 'U2', 'Unidade 2', 901);
+      INSERT INTO cargos (nome, ordem) VALUES ('Secretário', 0);
+      INSERT INTO usuarios (id, nome, email, senha_hash, matricula) VALUES (951, 'Ana', 'a@x', 'h', '000123'), (952, 'B1', 'b1@x', 'h', '77');
+      INSERT INTO responsaveis (id, nome, chave, matricula) VALUES (921, 'Ana', 'ANA', '123'), (922, 'Bia', 'BIA', '77'), (923, 'Caio', 'CAIO', '077');
+      INSERT INTO responsaveis_vinculos (responsavel_id, reparticao_id, tipo, funcao) VALUES
+        (921, 911, 'padrao', ' secretário '), (921, 912, 'padrao', 'Secretário'), (922, 911, 'padrao', 'Diretora');
+      INSERT INTO responsaveis_vinculos (responsavel_id, reparticao_id, tipo, funcao, inicio, fim) VALUES
+        (923, 912, 'temporario', 'diretora', '2026-01-01', '2026-01-31');`);
+    d.exec(readFileSync(join(DIR, arquivos[i100]), "utf8"));
+    const cargos = (d.prepare("SELECT nome FROM cargos ORDER BY ordem").all() as { nome: string }[]).map((c) => c.nome);
+    assert.deepEqual(cargos, ["Secretário", "Diretora"], "a função nova vira cargo; a repetida (sem caixa) não");
+    const p = d.prepare("SELECT id, cargo, usuario_id AS u FROM responsaveis ORDER BY id").all() as { id: number; cargo: string; u: number | null }[];
+    assert.deepEqual(
+      p.map((x) => [x.id, x.cargo, x.u]),
+      [
+        [921, "Secretário", 951],
+        [922, "Diretora", null],
+        [923, "", null],
+      ],
+      "cargo pelo padrão (grafia do cadastro; o temporário não dá cargo à pessoa); matrícula de 2 pessoas não liga",
+    );
+    const v = d.prepare("SELECT tipo, funcao FROM responsaveis_vinculos ORDER BY id").all() as { tipo: string; funcao: string }[];
+    assert.deepEqual(
+      v.map((x) => `${x.tipo}:${x.funcao}`),
+      ["padrao:", "padrao:", "padrao:", "temporario:Diretora"],
+    );
+    assert.throws(() => d.exec("UPDATE responsaveis SET usuario_id = 951 WHERE id = 922"), /UNIQUE/, "um usuário em UMA pessoa");
+  });
+
+  it("0101 responsáveis: a data da exoneração (NULL = em exercício)", () => {
+    const d = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f <= "0101~")) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    const cols = (d.prepare("PRAGMA table_info(responsaveis)").all() as { name: string }[]).map((c) => c.name);
+    assert.ok(cols.includes("exonerado_em"));
+    d.exec("INSERT INTO responsaveis (id, nome, chave, matricula) VALUES (1, 'Ana', 'ANA', '1')");
+    assert.equal((d.prepare("SELECT exonerado_em AS e FROM responsaveis").get() as { e: string | null }).e, null);
+  });
+
+  it("0102 vínculos por visão: os gravados viram o PADRÃO; a mesma unidade em visões diferentes; excluir a visão leva os dela", () => {
+    const d = new DatabaseSync(":memory:");
+    const i102 = arquivos.findIndex((f) => f.startsWith("0102"));
+    assert.ok(i102 > 0, "migração 0102 ausente");
+    for (const arq of arquivos.slice(0, i102)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (900, 'Órgão X', 'OX');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (901, 'SMS', 'Saúde', 900);
+      INSERT INTO orcamento_visoes (id, nome) VALUES (7, 'PCA');
+      INSERT INTO orcamento_vinculos (id, tipo, chave, texto, reparticao_id) VALUES (1, 'unidade', 'SAUDE', 'Saúde', 901);`);
+    d.exec(readFileSync(join(DIR, arquivos[i102]), "utf8"));
+    d.exec("PRAGMA foreign_keys = ON");
+    assert.equal((d.prepare("SELECT visao_id AS v FROM orcamento_vinculos WHERE id = 1").get() as { v: number | null }).v, null);
+    assert.equal((d.prepare("SELECT vinculos_proprios AS p FROM orcamento_visoes WHERE id = 7").get() as { p: string }).p, "[]");
+    d.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, visao_id) VALUES ('unidade', 'SAUDE', 'Saúde', 901, 7)");
+    assert.throws(() => d.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id) VALUES ('unidade', 'SAUDE', 'Saúde', 901)"), /UNIQUE/);
+    assert.throws(() => d.exec("INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, visao_id) VALUES ('unidade', 'SAUDE', 'Saúde', 901, 7)"), /UNIQUE/);
+    d.exec("DELETE FROM orcamento_visoes WHERE id = 7");
+    assert.equal((d.prepare("SELECT COUNT(*) AS n FROM orcamento_vinculos").get() as { n: number }).n, 1, "fica só o padrão");
+  });
+
+  it("0103 responsáveis no lugar que vale: unidade de órgão único → órgão (o caso do AMMT); dual por unidade → unidade própria", () => {
+    const d = new DatabaseSync(":memory:");
+    const i103 = arquivos.findIndex((f) => f.startsWith("0103"));
+    assert.ok(i103 > 0, "migração 0103 ausente");
+    for (const arq of arquivos.slice(0, i103)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla, assinatura_unica) VALUES (3, 'Mobilidade', 'AMMT', 1), (4, 'Dual', 'DUAL', 0), (5, 'Único', 'OU', 1);
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id, orgao_proprio) VALUES (30, 'AMMT', 'Mobilidade', 3, 1), (40, 'DUAL', 'Dual', 4, 1), (51, 'A', 'A', 5, 0), (52, 'B', 'B', 5, 0);
+      INSERT INTO responsaveis (id, nome, chave, matricula) VALUES (1, 'Welker', 'WELKER', '1'), (2, 'Everaldo', 'EVERALDO', '2'), (3, 'Ana', 'ANA', '3'), (4, 'Bia', 'BIA', '4');
+      INSERT INTO responsaveis_vinculos (id, responsavel_id, orgao_id, reparticao_id, tipo, funcao, inicio, fim) VALUES
+        (1, 1, 3, NULL, 'padrao', '', '2026-02-27', NULL),
+        (2, 2, NULL, 30, 'temporario', 'Presidente', '2026-08-20', '2026-09-18'),
+        (3, 2, NULL, 30, 'temporario', 'Presidente', '2026-09-19', '2026-09-28'),
+        (4, 1, NULL, 30, 'padrao', '', '2026-03-01', NULL),
+        (5, 3, 4, NULL, 'padrao', '', '2026-01-01', NULL),
+        (6, 4, NULL, 51, 'padrao', '', '2026-01-01', NULL),
+        (7, 4, NULL, 52, 'padrao', '', '2026-01-01', NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i103]), "utf8"));
+    const onde = (id: number) => d.prepare("SELECT orgao_id AS o, reparticao_id AS r FROM responsaveis_vinculos WHERE id = ?").get(id) as { o: number | null; r: number | null } | undefined;
+    assert.deepEqual({ ...onde(2) }, { o: 3, r: null }, "Everaldo vai ao órgão AMMT");
+    assert.deepEqual({ ...onde(3) }, { o: 3, r: null });
+    assert.deepEqual({ ...onde(4) }, { o: null, r: 30 }, "cruza com o padrão do Welker no órgão: fica para revisar");
+    assert.deepEqual({ ...onde(5) }, { o: null, r: 40 }, "dual por unidade: o do órgão vai à unidade própria");
+    assert.deepEqual({ ...onde(6) }, { o: 5, r: null });
+    assert.equal(onde(7), undefined, "o repetido em outra unidade do mesmo órgão sai");
+    const antes = d.prepare("SELECT id, orgao_id, reparticao_id FROM responsaveis_vinculos ORDER BY id").all();
+    d.exec(readFileSync(join(DIR, arquivos[i103]), "utf8"));
+    assert.deepEqual(d.prepare("SELECT id, orgao_id, reparticao_id FROM responsaveis_vinculos ORDER BY id").all(), antes, "idempotente");
+  });
+
+  it("0078 toda unidade tem órgão: apaga as sem órgão (menos a Geral) e solta os vínculos", () => {
+    const d = new DatabaseSync(":memory:");
+    const i78 = arquivos.findIndex((f) => f.startsWith("0078"));
+    assert.ok(i78 > 0, "migração 0078 ausente");
+    for (const arq of arquivos.slice(0, i78)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (900, 'Órgão X', 'OX');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (901, 'COM', 'Com órgão', 900), (902, 'SEM', 'Sem órgão', NULL);
+      INSERT INTO dfds (id, numero, reparticao_id) VALUES (9001, 'D9001', 902);`);
+    d.exec(readFileSync(join(DIR, arquivos[i78]), "utf8"));
+    const ids = (d.prepare("SELECT id, codigo FROM reparticoes ORDER BY id").all() as { id: number; codigo: string }[]).map((r) => r.codigo);
+    assert.ok(ids.includes("COM"));
+    assert.ok(!ids.includes("SEM"), "a unidade sem órgão sai");
+    assert.ok(ids.some((c) => c.toUpperCase() === "GERAL"), "a Geral fica");
+    assert.equal((d.prepare("SELECT reparticao_id AS r FROM dfds WHERE id = 9001").get() as { r: number | null }).r, null);
+  });
+
+  it("0079 vínculos do orçamento: só por unidade (o de órgão sai) + as ações de fora", () => {
+    const d = new DatabaseSync(":memory:");
+    const i79 = arquivos.findIndex((f) => f.startsWith("0079"));
+    assert.ok(i79 > 0, "migração 0079 ausente");
+    for (const arq of arquivos.slice(0, i79)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orcamento_vinculos (tipo, chave, texto) VALUES ('orgao', 'A', 'A'), ('unidade', 'B', 'B');`);
+    d.exec(readFileSync(join(DIR, arquivos[i79]), "utf8"));
+    const linhas = d.prepare("SELECT tipo, chave, acoes_fora AS f FROM orcamento_vinculos").all() as { tipo: string; chave: string; f: string | null }[];
+    assert.deepEqual(linhas.map((l) => [l.tipo, l.chave, l.f]), [["unidade", "B", null]]);
+  });
+
+  it("0080 vínculos criados: uma unidade do CUBO em várias cadastradas, os de hoje viram 'as demais' sem perder as de fora", () => {
+    const d = new DatabaseSync(":memory:");
+    const i80 = arquivos.findIndex((f) => f.startsWith("0080"));
+    assert.ok(i80 > 0, "migração 0080 ausente");
+    for (const arq of arquivos.slice(0, i80)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (950, 'Órgão', 'OR');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (951, 'U1', 'Um', 950), (952, 'U2', 'Dois', 950);
+      INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, acoes_fora) VALUES
+        ('unidade', 'B', 'B', 951, '["Z"]'), ('unidade', 'C', 'C', NULL, NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i80]), "utf8"));
+    const linhas = d.prepare("SELECT chave, reparticao_id AS r, acoes AS a, acoes_fora AS f FROM orcamento_vinculos").all() as { chave: string; r: number; a: string | null; f: string | null }[];
+    assert.deepEqual(linhas.map((l) => [l.chave, l.r, l.a, l.f]), [["B", 951, null, '["Z"]']], "o vínculo segue igual; o texto sem unidade sai");
+    d.exec(`INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id, acoes) VALUES ('unidade', 'B', 'B', 952, '["Z"]')`);
+    assert.throws(() => d.exec(`INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id) VALUES ('unidade', 'B', 'B', 952)`), "a mesma unidade cadastrada duas vezes");
+  });
+
+  it("0081 vínculos limpos: sem unidade saem; excluir a unidade cadastrada apaga os vínculos dela", () => {
+    const d = new DatabaseSync(":memory:");
+    const i81 = arquivos.findIndex((f) => f.startsWith("0081"));
+    assert.ok(i81 > 0, "migração 0081 ausente");
+    for (const arq of arquivos.slice(0, i81)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec("PRAGMA foreign_keys = ON");
+    d.exec(`INSERT INTO orgaos (id, nome, sigla) VALUES (960, 'Órgão', 'OR');
+      INSERT INTO reparticoes (id, codigo, nome, orgao_id) VALUES (961, 'U1', 'Um', 960), (962, 'U2', 'Dois', 960);
+      INSERT INTO orcamento_vinculos (tipo, chave, texto, reparticao_id) VALUES ('unidade', 'A', 'A', 961), ('unidade', 'A', 'A', 962), ('unidade', 'B', 'B', NULL);`);
+    d.exec(readFileSync(join(DIR, arquivos[i81]), "utf8"));
+    const resto = () => (d.prepare("SELECT reparticao_id AS r FROM orcamento_vinculos ORDER BY id").all() as { r: number | null }[]).map((x) => x.r);
+    assert.deepEqual(resto(), [961, 962], "o sem unidade saiu");
+    d.exec("DELETE FROM reparticoes WHERE id = 961");
+    assert.deepEqual(resto(), [962], "o vínculo da unidade excluída saiu (não ficou NULL)");
+  });
+
+  it("0082 visões sem as dimensões do vínculo: unidade/ação/órgão saem dos filtros, o resto fica", () => {
+    const d = new DatabaseSync(":memory:");
+    const i82 = arquivos.findIndex((f) => f.startsWith("0082"));
+    assert.ok(i82 > 0, "migração 0082 ausente");
+    for (const arq of arquivos.slice(0, i82)) d.exec(readFileSync(join(DIR, arq), "utf8"));
+    d.exec(`INSERT INTO orcamento_visoes (id, nome, filtros) VALUES
+      (1, 'Mista', '{"unidade":["SEMED"],"acao":["2191"],"fonte":["100"],"orgaoSistema":["FME"]}'),
+      (2, 'Só fonte', '{"fonte":["150"]}'),
+      (3, 'Quebrada', 'lixo');`);
+    d.exec(readFileSync(join(DIR, arquivos[i82]), "utf8"));
+    const f = (id: number) => (d.prepare("SELECT filtros FROM orcamento_visoes WHERE id = ?").get(id) as { filtros: string }).filtros;
+    assert.deepEqual(JSON.parse(f(1)), { fonte: ["100"] });
+    assert.deepEqual(JSON.parse(f(2)), { fonte: ["150"] });
+    assert.equal(f(3), "{}");
   });
 
   it("índice único de e-mail existe", () => {

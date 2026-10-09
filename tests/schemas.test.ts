@@ -24,6 +24,7 @@ import {
   cadastrarPcaSchema,
   dfdOpSchema,
   editarDfdSchema,
+  MAX_TEXTO_DFD,
   editarPcaSchema,
   faltasObrigatorias,
   gerarPcaSchema,
@@ -130,6 +131,26 @@ describe("dfd-validation", () => {
     );
     assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "", rows: [{ item: 1 }] }).success, false);
     assert.equal(dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1", rows: [] }).success, false);
+  });
+
+  it("textos longos do DFD (descrição do item, objeto, órgão, setor, responsável, seção): até MAX_TEXTO_DFD", () => {
+    const longo = "A".repeat(MAX_TEXTO_DFD);
+    const demais = "A".repeat(MAX_TEXTO_DFD + 1);
+    const start = (extra: object, item: object = {}) =>
+      dfdOpSchema.safeParse({ mode: "start-dfd", numero: "1235", rows: [{ item: 1, valorUnitario: 2, ...item }], ...extra })
+        .success;
+    assert.equal(start({}, { descricao: "A".repeat(4001) }), true); // o caso real: passava dos 4.000 de antes
+    assert.equal(start({}, { descricao: longo }), true);
+    assert.equal(start({}, { descricao: demais }), false);
+    assert.equal(start({ objeto: longo, orgaoEntidade: longo, setorRequisitante: longo, responsavel: longo }), true);
+    assert.equal(start({ objeto: demais }), false);
+    assert.equal(start({ secoes: [{ numero: 3, titulo: "JUSTIFICATIVA", texto: longo }] }), true);
+    assert.equal(start({ secoes: [{ numero: 3, titulo: "JUSTIFICATIVA", texto: demais }] }), false);
+    const append = dfdOpSchema.safeParse({ mode: "append-dfd-itens", dfdId: 7, desde: 200, rows: [{ item: 201, descricao: longo }] });
+    assert.equal(append.success, true);
+    // A edição do DFD gravado (Salvar alterações) usa os MESMOS tetos.
+    assert.equal(editarDfdSchema.safeParse({ objeto: longo, itens: [{ item: 1, descricao: longo }] }).success, true);
+    assert.equal(editarDfdSchema.safeParse({ itens: [{ item: 1, descricao: demais }] }).success, false);
   });
 
   it("assinatura ADICIONADA pela equipe (manual): só data real dd/mm/aaaa, não futura (ou nenhuma)", () => {

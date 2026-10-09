@@ -169,7 +169,7 @@ describe("tarefas — criar/mover/vínculos (builders no db.batch do D1)", () =>
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM tarefa_etiquetas WHERE quadro_id = ?").get(id) as { n: number }).n, 1);
   });
 
-  it("notificações: lotes de 9 linhas; a chave repetida da mesma pessoa é ignorada", async () => {
+  it("notificações: lotes de 8 linhas; a chave repetida da mesma pessoa é ignorada", async () => {
     const linhas = Array.from({ length: 20 }, (_, i) => ({ usuarioId: 9501, tipo: "atribuida" as const, titulo: `N${i}` }));
     const cmds = comandosNotificacoes(orm, [...linhas, { usuarioId: 9502, tipo: "atrasada", titulo: "A", chave: "k" }]);
     assert.equal(cmds.length, 3);
