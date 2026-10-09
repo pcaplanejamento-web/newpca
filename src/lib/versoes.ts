@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.78.1",
+    data: "2026-10-09",
+    titulo: "Linhas vazias só até a visão da tabela",
+    mudancas: [
+      { tipo: "correcao", area: "Tabelas", texto: "As linhas vazias completam a tabela só até o limite da visão (nunca além das linhas por página); com o conteúdo maior que a visão, nenhuma é acrescentada.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.78.0",
     data: "2026-10-09",
     titulo: "Tabelas: marcar antes de abrir e linhas intercaladas",

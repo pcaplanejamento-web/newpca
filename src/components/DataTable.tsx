@@ -345,8 +345,6 @@ export function DataTable<R>({
   const pages = tamPagina ? Math.max(1, Math.ceil(total / tamPagina)) : 1;
   const pg = Math.min(page, pages);
   const visiveis = tamPagina ? ordenadas.slice((pg - 1) * tamPagina, pg * tamPagina) : ordenadas;
-  // Linhas VAZIAS que completam a página (com dados; teto de 60 — o DOM continua leve com 200 por página).
-  const preencher = tamPagina && visiveis.length > 0 ? Math.min(tamPagina - visiveis.length, 60) : 0;
   // Altura da linha vazia fora da densidade compacta (a de uma linha de texto com o respiro da célula).
   const alturaVazia = "calc(1.5rem + 2 * var(--cell-py, 10px))";
 
@@ -454,6 +452,41 @@ export function DataTable<R>({
   }
   const rolagemRef = useRef<HTMLDivElement>(null);
   const tabelaRef = useRef<HTMLTableElement>(null);
+  // Linhas VAZIAS: completam só até o LIMITE DA VISÃO da tabela (a área que rola, ou até o fim do display) — nunca além
+  // das linhas por página; o conteúdo que já passa da visão não ganha nenhuma.
+  const [cabem, setCabem] = useState(0);
+  useLayoutEffect(() => {
+    const tab = tabelaRef.current;
+    const rolo = rolagemRef.current;
+    if (!tab || !rolo || !tamPagina || visiveis.length === 0) {
+      setCabem(0);
+      return;
+    }
+    const calc = () => {
+      const linha = tab.querySelector("tbody tr")?.getBoundingClientRect().height || 0;
+      const cab = tab.querySelector("thead")?.getBoundingClientRect().height || 0;
+      if (linha < 8) return;
+      let espaco: number;
+      if (cheia) espaco = rolo.clientHeight - cab;
+      else {
+        const corpo = tab.querySelector("tbody");
+        if (!corpo) return;
+        const rod = rodapeRef.current?.getBoundingClientRect().height || 0;
+        espaco = window.innerHeight - corpo.getBoundingClientRect().top - rod - reservaAteORodape(reservaInferior);
+      }
+      const n = Math.max(0, Math.floor(espaco / linha));
+      setCabem((v) => (v === n ? v : n));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    const ro = new ResizeObserver(calc);
+    ro.observe(rolo);
+    return () => {
+      window.removeEventListener("resize", calc);
+      ro.disconnect();
+    };
+  }, [cheia, tamPagina, visiveis.length, reservaInferior]);
+  const preencher = tamPagina && visiveis.length > 0 ? Math.max(0, Math.min(tamPagina, cabem, 200) - visiveis.length) : 0;
   const { arrasto, vista, fantasma, iniciar, mover, congelar } = useArrastoColunas({
     raiz: wrapRef,
     rolagem: rolagemRef,

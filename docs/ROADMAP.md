@@ -1740,3 +1740,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - **v1.77.0 — Verificação nos grupos:** tela própria liberada pelo grupo (migração `0107`); cartões dos grupos no padrão do sistema; Novidades filtradas pelas telas do grupo.
 - **v1.77.1 — Verificação:** seletor Protocolo | DFD à direita; banners só para visualizar.
 - **v1.78.0 — Tabelas:** 1º clique marca (accent), 2º abre o banner; cor das linhas intercaladas na Aparência; página sempre cheia com linhas vazias.
+- **v1.78.1 — Tabelas:** linhas vazias só até o limite da visão (nunca além das linhas por página).
