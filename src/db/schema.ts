@@ -141,6 +141,9 @@ export const usuarios = sqliteTable(
     dadosValidadosPor: text("dados_validados_por"),
     // TROCA DE SENHA OBRIGATÓRIA (o ADM exige): a pessoa cria uma senha nova antes de usar o sistema.
     trocarSenha: integer("trocar_senha", { mode: "boolean" }).notNull().default(false),
+    // ARQUIVADO (migração `0076`): "Excluir" arquiva — inativo, fora da lista, restaurável (quando + o NOME de quem).
+    arquivadoEm: text("arquivado_em"),
+    arquivadoPor: text("arquivado_por"),
   },
   (t) => [
     uniqueIndex("usuarios_email_uq").on(t.email),

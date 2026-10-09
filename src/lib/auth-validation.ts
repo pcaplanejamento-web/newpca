@@ -135,6 +135,8 @@ export const adminUsuarioSchema = z.object({
   validar: z.boolean().optional(),
   // Exigir que a pessoa crie uma senha NOVA antes de usar o sistema (false = dispensa).
   trocarSenha: z.boolean().optional(),
+  // RESTAURAR a conta arquivada (volta ativa, com tudo o que tinha) — sozinho, sem outros campos.
+  restaurar: z.literal(true).optional(),
 });
 
 /** Um CARGO/FUNÇÃO cadastrado pelo ADM (Usuários → Cargos e funções). */

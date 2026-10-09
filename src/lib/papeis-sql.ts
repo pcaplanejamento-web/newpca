@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { papeis, sessoes, usuarios } from "../db/schema.ts";
@@ -71,6 +71,8 @@ export function comandoCadastroPrimeiro(db: Db, d: DadosCadastro) {
       dadosValidadosEm: sql<string | null>`NULL`.as("dados_validados_em"),
       dadosValidadosPor: sql<string | null>`NULL`.as("dados_validados_por"),
       trocarSenha: sql<boolean>`0`.as("trocar_senha"),
+      arquivadoEm: sql<string | null>`NULL`.as("arquivado_em"),
+      arquivadoPor: sql<string | null>`NULL`.as("arquivado_por"),
     })
     .from(papeis)
     .where(and(eq(papeis.chave, "admin"), sql`NOT EXISTS (SELECT 1 FROM ${usuarios})`));
@@ -130,7 +132,29 @@ export function comandoEncerrarSessoesSeInativo(db: Db, usuarioId: number) {
     .where(and(eq(sessoes.usuarioId, usuarioId), sql`(SELECT ${usuarios.status} FROM ${usuarios} WHERE ${usuarios.id} = ${usuarioId}) <> 'ativo'`));
 }
 
-/** Exclui a pessoa — o último Administrador ATIVO nunca (trava no comando). Nenhuma linha = recusado. */
+/**
+ * ARQUIVA a pessoa (o "Excluir" da tela): inativa, carimba quem/quando e TUDO fica (grupos, papel, foto, responsabilidades)
+ * para restaurar — o último Administrador ATIVO nunca (trava no comando). Nenhuma linha = recusado (ou já arquivada).
+ * As sessões saem no mesmo lote (`comandoEncerrarSessoesSeInativo`).
+ */
+export function comandoArquivarUsuario(db: Db, usuarioId: number, por: string) {
+  return db
+    .update(usuarios)
+    .set({ status: "inativo", arquivadoEm: sql`(CURRENT_TIMESTAMP)`, arquivadoPor: por, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(and(eq(usuarios.id, usuarioId), isNull(usuarios.arquivadoEm), sql`(NOT ${ehAdminSql} OR ${outroAdminAtivo(usuarioId)})`))
+    .returning({ id: usuarios.id });
+}
+
+/** RESTAURA a pessoa arquivada: volta ATIVA, com os grupos, o papel e tudo o que tinha. Nenhuma linha = não estava arquivada. */
+export function comandoRestaurarUsuario(db: Db, usuarioId: number) {
+  return db
+    .update(usuarios)
+    .set({ status: "ativo", arquivadoEm: null, arquivadoPor: null, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .where(and(eq(usuarios.id, usuarioId), isNotNull(usuarios.arquivadoEm)))
+    .returning({ id: usuarios.id });
+}
+
+/** Exclui a pessoa DE VEZ (o pendente recusado ou o arquivado) — o último Administrador ATIVO nunca (trava no comando). */
 export function comandoExcluirUsuario(db: Db, usuarioId: number) {
   return db
     .delete(usuarios)

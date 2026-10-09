@@ -363,6 +363,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       (`trocarSenha`; recusado sem o Resend — 409 — e para o próprio ADM; "Dispensar"). Seção **Acesso**: o papel do banco
       (com a confirmação), os **grupos** por cadeado (`GruposDaPessoa`), **Aprovar** (o modal com papel + grupos) / **Recusar**
       (pendente), Desativar/Reativar e **"Ver acesso"** (`AcessoDaPessoa`); Excluir no rodapé. Auditoria registra os fatos ("dados validados", "senha nova exigida").
+    - **ARQUIVAR em vez de excluir (migração `0076`, aditiva — `usuarios.arquivado_em`/`arquivado_por` [o NOME]):** o
+      "Excluir" do banner virou **Arquivar** (`DELETE /api/admin/usuarios/[id]` → `comandoArquivarUsuario`: inativo +
+      carimbo, sessões encerradas no mesmo lote, trava do último ADM ativo; tudo fica — grupos, papel, foto,
+      responsabilidades). A tabela tem **"Arquivados (N)"** no rodapé; no arquivado o banner mostra **Restaurar** (`PATCH`
+      `{restaurar:true}` → `comandoRestaurarUsuario`, volta ATIVO) e **Excluir definitivamente** (o mesmo `DELETE`, só para o
+      arquivado — e o pendente recusado). Auditoria: "arquivado (restaurável)", "restaurado", "excluído definitivamente".
     - **Troca de senha OBRIGATÓRIA:** `UsuarioSessao.trocarSenha` → o layout do `/painel` redireciona a **`/nova-senha`**
       (fora do painel: `NovaSenhaObrigatoria` = senha nova + captcha → código no e-mail → `POST /api/perfil/senha`; "Sair");
       `/api/perfil/senha` e `/api/auth/senha` zeram a exigência.

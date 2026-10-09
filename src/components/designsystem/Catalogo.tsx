@@ -361,6 +361,8 @@ const USUARIO_DEMO: UsuarioAdmin = {
   dadosValidadosEm: null,
   dadosValidadosPor: null,
   trocarSenha: false,
+  arquivadoEm: null,
+  arquivadoPor: null,
   criadoEm: "2026-09-01T12:00:00Z",
   atualizadoEm: "2026-09-01T12:00:00Z",
 };
@@ -407,6 +409,7 @@ function DemoUsuario() {
         onRecusar={() => undefined}
         onVerAcesso={() => undefined}
         onExcluir={() => setAberto(false)}
+        onRestaurar={() => setAberto(false)}
       />
     </div>
   );

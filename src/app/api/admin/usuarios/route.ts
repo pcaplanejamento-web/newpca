@@ -34,6 +34,8 @@ export async function GET() {
         dadosValidadosEm: usuarios.dadosValidadosEm,
         dadosValidadosPor: usuarios.dadosValidadosPor,
         trocarSenha: usuarios.trocarSenha,
+        arquivadoEm: usuarios.arquivadoEm,
+        arquivadoPor: usuarios.arquivadoPor,
         atualizadoEm: usuarios.atualizadoEm,
         reparticaoId: usuarios.reparticaoId,
         unidade: reparticoes.nome,

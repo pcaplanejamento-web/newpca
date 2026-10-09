@@ -17,7 +17,7 @@ import { type Column, DataTable } from "./DataTable";
 import { SelectField } from "./Field";
 import { labelCls } from "./formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
-import { IconAlert, IconBriefcase, IconCheck, IconSenhaNova, IconShieldCheck } from "./icons";
+import { IconAlert, IconArquivar, IconBriefcase, IconCheck, IconSenhaNova, IconShieldCheck } from "./icons";
 import { Modal } from "./Modal";
 import { SkeletonLinhas } from "./Skeleton";
 import { BotaoWhatsapp } from "./Telefone";
@@ -53,6 +53,8 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [erroAp, setErroAp] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [abertoId, setAbertoId] = useState<number | null>(null);
+  // A lista mostra os ATIVOS (e pendentes/inativos) ou só os ARQUIVADOS (restauráveis).
+  const [verArquivados, setVerArquivados] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
 
@@ -168,14 +170,30 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
     await patch(u.id, { status: novo }, novo === "inativo" ? `${u.nome} foi desativado(a).` : `${u.nome} foi reativado(a).`);
   }
 
+  /** "Excluir" ARQUIVA (restaurável); no arquivado, exclui DE VEZ. */
   async function excluir(u: U) {
-    const ok = await confirmar({
-      titulo: `Excluir ${u.nome}?`,
-      texto: "A conta é apagada e a pessoa sai de todos os grupos. O histórico mantém o nome de quem fez cada alteração. Não dá para desfazer — para só tirar o acesso, prefira Desativar.",
-      confirmar: "Excluir",
-      perigo: true,
-    });
-    if (ok && (await acao(u.id, { method: "DELETE" }, `${u.nome} foi excluído(a).`))) setAbertoId(null);
+    const definitivo = !!u.arquivadoEm;
+    const ok = await confirmar(
+      definitivo
+        ? {
+            titulo: `Excluir ${u.nome} definitivamente?`,
+            texto: "A conta é apagada de vez: grupos, papel e responsabilidades se perdem. O histórico mantém o nome. Não dá para desfazer.",
+            confirmar: "Excluir definitivamente",
+            perigo: true,
+          }
+        : {
+            titulo: `Arquivar ${u.nome}?`,
+            texto: "A pessoa perde o acesso na hora e sai da lista. Tudo fica guardado (grupos, papel, foto, responsabilidades): restaure quando quiser em “Arquivados”.",
+            confirmar: "Arquivar",
+            perigo: true,
+          },
+    );
+    if (ok && (await acao(u.id, { method: "DELETE" }, definitivo ? `${u.nome} foi excluído(a) definitivamente.` : `${u.nome} foi arquivado(a).`)))
+      setAbertoId(null);
+  }
+
+  async function restaurar(u: U) {
+    if (await patch(u.id, { restaurar: true }, `${u.nome} foi restaurado(a) e já pode entrar.`)) setAbertoId(null);
   }
 
   if (lista === null) {
@@ -187,6 +205,8 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
   }
 
   const pendentes = lista.filter((u) => u.status === "pendente").length;
+  const arquivados = lista.filter((u) => u.arquivadoEm).length;
+  const visiveis = lista.filter((u) => !!u.arquivadoEm === verArquivados);
 
   const colunas: Column<U>[] = [
     {
@@ -314,15 +334,24 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
 
       <DataTable
         columns={colunas}
-        rows={lista}
+        rows={visiveis}
         getKey={(u) => u.id}
         onRowClick={(u) => setAbertoId(u.id)}
         activeKey={abertoId}
         scrollInterno
         density="compact"
-        vazio="Nenhum usuário cadastrado."
+        vazio={verArquivados ? "Nenhum usuário arquivado." : "Nenhum usuário cadastrado."}
         acoesRodape={
           <>
+            <Button
+              variant={verArquivados ? "accent" : "secondary"}
+              size="sm"
+              onClick={() => setVerArquivados((v) => !v)}
+              icon={<IconArquivar className="h-4 w-4" />}
+              aria-pressed={verArquivados}
+            >
+              {verArquivados ? "Voltar aos usuários" : `Arquivados (${arquivados})`}
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => setVerCargos(true)} icon={<IconBriefcase className="h-4 w-4" />}>
               Cargos e funções
             </Button>
@@ -366,6 +395,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
         onRecusar={() => aberto && void recusar(aberto)}
         onVerAcesso={() => aberto && setVerAcesso(aberto)}
         onExcluir={() => aberto && void excluir(aberto)}
+        onRestaurar={() => aberto && void restaurar(aberto)}
       />
       {/* Aprovar: libera a entrada com o papel e os grupos (numa gravação só) */}
       <Modal

@@ -73,3 +73,7 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
 3. `/painel/usuarios` lista e aprova (com papel e grupos)/gerencia; "Ver acesso" mostra o que cada pessoa abre; quem não é
    Administrador vê "acesso restrito".
 4. "Sair" volta ao login.
+
+## Arquivar usuário (migração `0076`)
+
+O "Excluir" do ADM ARQUIVA a conta (inativa, fora da lista, com todos os dados). Usuários → "Arquivados (N)" → abrir → **Restaurar** (volta ativa) ou **Excluir definitivamente**. O cadastro pendente segue sendo recusado (apagado).

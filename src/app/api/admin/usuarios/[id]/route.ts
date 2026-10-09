@@ -12,7 +12,9 @@ import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { todosOsGruposComAbas } from "@/lib/acesso";
 import { papelPorId } from "@/lib/papeis";
-import { comandoEncerrarSessoesSeInativo, comandoExcluirUsuario, comandoTrocarPapel, comandoTrocarStatus } from "@/lib/papeis-sql";
+import { comandoEncerrarSessoesSeInativo, comandoArquivarUsuario,
+  comandoExcluirUsuario,
+  comandoRestaurarUsuario, comandoTrocarPapel, comandoTrocarStatus } from "@/lib/papeis-sql";
 import { comandosGruposDoUsuario, idsInexistentes } from "@/lib/rbac-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 import { cargoCadastrado } from "@/lib/cargos";
@@ -33,7 +35,16 @@ export async function PATCH(
 
   const corpo = await parseCorpo(adminUsuarioSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, email, matricula, cargo, reparticaoId, papelId, grupos, status, telefone, telefoneWhatsapp, validar, trocarSenha } = corpo.data;
+  const { nome, email, matricula, cargo, reparticaoId, papelId, grupos, status, telefone, telefoneWhatsapp, validar, trocarSenha, restaurar } = corpo.data;
+
+  // RESTAURAR o arquivado: volta ativo com tudo o que tinha (grupos, papel, foto, responsabilidades).
+  if (restaurar) {
+    const [r] = await getDb().select({ nome: usuarios.nome }).from(usuarios).where(eq(usuarios.id, id)).limit(1);
+    if (!r) return erro("Usuário não encontrado.", 404);
+    if ((await comandoRestaurarUsuario(getDb(), id)).length === 0) return erro("Este usuário não está arquivado — recarregue a tela.", 409);
+    await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "usuario", entidadeId: id, resumo: `Usuário ${r.nome} restaurado (estava arquivado)`, depois: { status: "ativo" } });
+    return ok();
+  }
 
   // O papel novo tem de existir (a tela pode estar velha); a chave diz se é o Administrador.
   const papelNovo = papelId !== undefined ? await papelPorId(papelId) : null;
@@ -211,11 +222,28 @@ export async function DELETE(
   if (!id) return erro("ID inválido.");
   if (id === guard.u.id) return erro("Você não pode excluir a si mesmo.");
   const db = getDb();
-  const [alvo] = await db.select({ nome: usuarios.nome, email: usuarios.email, status: usuarios.status }).from(usuarios).where(eq(usuarios.id, id)).limit(1);
+  const [alvo] = await db
+    .select({ nome: usuarios.nome, email: usuarios.email, status: usuarios.status, arquivadoEm: usuarios.arquivadoEm })
+    .from(usuarios)
+    .where(eq(usuarios.id, id))
+    .limit(1);
   if (!alvo) return erro("Usuário não encontrado.", 404);
-  if ((await comandoExcluirUsuario(db, id)).length === 0) return erro("Não é possível excluir o último Administrador ativo.", 409);
-  // Excluir um cadastro PENDENTE é RECUSÁ-LO (a tela diz "Recusar"): o histórico registra assim.
-  const resumo = alvo.status === "pendente" ? `Cadastro de ${alvo.nome} recusado (excluído)` : `Usuário ${alvo.nome} excluído`;
-  await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "usuario", entidadeId: id, resumo, antes: { nome: alvo.nome, email: alvo.email } });
+  // O PENDENTE é RECUSADO (apagado) e o ARQUIVADO pode ser excluído DE VEZ; os demais são ARQUIVADOS (restauráveis).
+  if (alvo.status === "pendente" || alvo.arquivadoEm) {
+    if ((await comandoExcluirUsuario(db, id)).length === 0) return erro("Não é possível excluir o último Administrador ativo.", 409);
+    const resumo = alvo.status === "pendente" ? `Cadastro de ${alvo.nome} recusado (excluído)` : `Usuário ${alvo.nome} excluído definitivamente (estava arquivado)`;
+    await registrarAuditoria({ usuario: guard.u, acao: "excluir", entidade: "usuario", entidadeId: id, resumo, antes: { nome: alvo.nome, email: alvo.email } });
+    return ok();
+  }
+  const [arquivou] = await db.batch([comandoArquivarUsuario(db, id, guard.u.nome), comandoEncerrarSessoesSeInativo(db, id)]);
+  if (arquivou.length === 0) return erro("Não é possível arquivar o último Administrador ativo.", 409);
+  await registrarAuditoria({
+    usuario: guard.u,
+    acao: "excluir",
+    entidade: "usuario",
+    entidadeId: id,
+    resumo: `Usuário ${alvo.nome} arquivado (restaurável)`,
+    antes: { nome: alvo.nome, email: alvo.email, status: alvo.status },
+  });
   return ok();
 }
