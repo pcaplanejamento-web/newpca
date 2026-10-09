@@ -124,6 +124,14 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       excluir: "Excluir tarefas pelo Calendário.",
     },
   },
+  verificacao: {
+    na: "na Verificação",
+    a: "à Verificação",
+    acoes: {
+      visualizar: "Abrir a Verificação e conferir um protocolo ou DFD (nada é gravado).",
+      exportar: "Baixar o relatório das pendências em PDF.",
+    },
+  },
 };
 
 export const rotuloTela = (tela: Tela): string => ABAS.find((a) => a.key === tela)?.label ?? tela;
@@ -244,6 +252,7 @@ export const CAPACIDADES_MEMBRO: Capacidades = coerceCapacidades({
   orcamento: ["visualizar", "exportar"],
   tarefas: ["visualizar", "manipular", "exportar"],
   calendario: ["visualizar", "manipular", "importar", "exportar"],
+  verificacao: ["visualizar", "exportar"],
 });
 
 export const PAPEIS_SISTEMA: readonly PapelSistema[] = [

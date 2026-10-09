@@ -151,7 +151,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     DELETE: recurso("catalogo", "excluir", "recusa(", "o desfazer da própria importação (última hora) = Importar"),
   },
   "catalogo/[id]/historico": { GET: tela("catalogo", "visualizar", "o histórico de compra de um catálogo") },
-  "catalogo/historico/produto": { GET: tela(["dfd", "pca", "catalogo"], "visualizar", "o histórico de compra de um produto — a comparação com o item") },
+  "catalogo/historico/produto": { GET: tela(["dfd", "pca", "catalogo", "verificacao"], "visualizar", "o histórico de compra de um produto — a comparação com o item") },
   "catalogo/pastas": { POST: tela("catalogo", "manipular") },
   "catalogo/pastas/[id]": { PATCH: tela("catalogo", "manipular"), DELETE: tela("catalogo", "manipular", "só a pasta sai — os catálogos ficam") },
   "catalogo/classificacoes/[id]": { PATCH: tela("catalogo", "configurar"), DELETE: tela("catalogo", "configurar") },
@@ -159,7 +159,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "catalogo/classificacoes/ordem": { PATCH: tela("catalogo", "configurar") },
   "catalogo/classificacoes": { GET: tela("catalogo", "visualizar"), POST: tela("catalogo", "configurar") },
   "catalogo/compartilhar": { POST: tela("catalogo", "importar") },
-  "catalogo/conferir": { POST: tela(["dfd", "pca", "catalogo"], "visualizar", "a conformidade dos itens de um DFD") },
+  "catalogo/conferir": { POST: tela(["dfd", "pca", "catalogo", "verificacao"], "visualizar", "a conformidade dos itens de um DFD") },
   "catalogo/item/[id]": {
     PATCH: tela("catalogo", "manipular"),
     DELETE: recurso("catalogo", "excluir", "recusa(", "tirar de um catálogo = Manipular; excluir o item = Excluir"),

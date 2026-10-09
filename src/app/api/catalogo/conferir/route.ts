@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * de `avaliarDfd`/`mensagensDfd` (níveis do ADM decidem se avisa ou bloqueia). Só usuário.
  */
 export async function POST(req: Request) {
-  const a = await exigirAcesso(["dfd", "pca", "catalogo"], "visualizar");
+  const a = await exigirAcesso(["dfd", "pca", "catalogo", "verificacao"], "visualizar");
   if ("erro" in a) return a.erro;
 
   const p = await parseCorpo(conferirCatalogoSchema, req);

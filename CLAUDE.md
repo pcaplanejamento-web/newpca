@@ -629,8 +629,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   ganhou a seção **"Nesta tela"** (mesma tela + rótulo que você); a dica de cada foto do cabeçalho diz onde a pessoa está.
 
 ## Verificação (v1.75.0, sem migração)
-- Tela **`/painel/verificacao`** (`VerificacaoView`, contêiner; item "Verificação" em Módulos — `IconVerificacao`, segue a
-  permissão da Mesa `dfd`; o PDF do relatório, a ação Exportar na Mesa do sistema — `PermissaoExportar`): duas `Dropzone`
+- Tela **`/painel/verificacao`** (`VerificacaoView`, contêiner; item "Verificação" em Módulos — `IconVerificacao`, tela PRÓPRIA do grupo
+  `verificacao` (Visualizar/Exportar no papel); o PDF do relatório, a ação Exportar nela — `PermissaoExportar`): duas `Dropzone`
   (protocolo .pdf | DFD .pdf/.xlsx) que entregam o arquivo aos MESMOS `ProtocoloUploadForm`/`DfdUploadForm` no modo
   **`verificacao`** (arquivo do host: `arquivo` / `arquivoHost`): analisa o arquivo COMO VEIO (sem consultar os já
   cadastrados — `carregarExistentes`/`buscarProcesso`/sobrescrita pulados), sem Protocolar/Importar (`protocolar`/`enviar`
@@ -659,7 +659,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de
   ids, NULL = todos; a `0106` copiou as telas da permissão que cada grupo usava; a tabela `permissoes` e a coluna
   `grupos.permissao_id` ficam DORMENTES — o Armazenamento a marca "legado"):** a tela Permissões SAIU (`/painel/permissoes`
-  redireciona a Grupos; rotas `/api/admin/permissoes*` removidas). No banner do grupo (`GruposAdmin`, `Modal` com o
+  redireciona a Grupos; rotas `/api/admin/permissoes*` removidas). Os cartões dos grupos = `CartaoEspaco` (capa com os ícones das telas; Pessoas · Unidades · PCAs; excluir no canto; tocar edita). No banner do grupo (`GruposAdmin`, `Modal` com o
   **Salvar fixo no rodapé** — `Button form=` —, sem Cancelar: o X fecha): nome · **Telas do grupo** (caixas de `ABAS`; as da
   Administração são só do ADM) · **PCAs do grupo** (`Switch` "Todos os PCAs (também os que forem criados)" ou a lista
   marcada) · unidades · pessoas. Zod `grupoCreateSchema`/`grupoPatchSchema` (`abas`, `pcas` null|ids), `motivoIdsInvalidos`
@@ -671,7 +671,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
   `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
 - **Telas** (`grupos.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
-  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas` · `calendario`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
+  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas` · `calendario` · `verificacao`** (a Verificação — tela própria desde a v1.77.0, migração `0107` deu a tela aos grupos com a Mesa e Visualizar/Exportar aos papéis que a viam), na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
   ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +
   rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas` (o **Calendário** é um módulo como os outros, com permissão PRÓPRIA — migração `0046`).
   **Tudo na Mesa:** o antigo **Dashboard** (`/painel`) e a tela **Protocolos** legada (`/painel/protocolos`,
@@ -4711,6 +4711,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   versão (nada fica fora do registro).
 - **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.5.0"; tocar abre as Novidades no
   BANNER FLUTUANTE; o ponto accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`).
+- **Novidades filtradas pelo acesso (v1.77.0):** `AcessoNovidades` (provedor no `AppShell`, telas do grupo ativo + admin) → as Novidades mostram só `mudancasVisiveis` (versão sem mudança para a pessoa some; a atual fica).
 - **Novidades = BANNER FLUTUANTE, sem página:** **`NovidadesFlutuantes`** (DS) sobre a `JanelaFlutuante` (ao lado da âncora no
   desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**
   (DS; `onAlternar` = recolhível pelo cabeçalho) por versão: número, título, data, selo "Atual" e cada mudança com o tipo

@@ -1737,3 +1737,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **v1.55.0 — Visão do orçamento à vista no PCA**: no PCA × Orçamento, o seletor “Visão” na barra da tabela (`SeletorVisaoPca`) troca a visão do orçamento do PCA na hora — a engrenagem segue para editar/criar visões.
 
 - **v1.76.0 — Grupos:** telas e PCAs escolhidos no próprio grupo (a tela Permissões saiu); aviso de nova versão a todos, só com o que muda nas telas do grupo.
+- **v1.77.0 — Verificação nos grupos:** tela própria liberada pelo grupo (migração `0107`); cartões dos grupos no padrão do sistema; Novidades filtradas pelas telas do grupo.

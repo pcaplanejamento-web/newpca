@@ -823,7 +823,7 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     for (const arq of arquivos.filter((f) => f < "0106")) a.exec(readFileSync(join(DIR, arq), "utf8"));
     a.exec(`INSERT INTO permissoes (id, nome, abas) VALUES (9801, 'Consulta', '["dfd","pca"]')`);
     a.exec("INSERT INTO grupos (id, nome, permissao_id) VALUES (9802, 'Com', 9801), (9803, 'Sem', NULL)");
-    for (const arq of arquivos.filter((f) => f >= "0106")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    for (const arq of arquivos.filter((f) => f.startsWith("0106"))) a.exec(readFileSync(join(DIR, arq), "utf8"));
     const linhas = a.prepare("SELECT id, abas, pcas FROM grupos WHERE id IN (9802, 9803) ORDER BY id").all() as Record<string, unknown>[];
     assert.deepEqual(
       linhas.map((l) => ({ ...l })),
@@ -832,6 +832,18 @@ describe("migrações D1 (drizzle/*.sql)", () => {
         { id: 9803, abas: "[]", pcas: null },
       ],
     );
+  });
+
+  it("0107 Verificação: grupos com a Mesa ganham a tela; papéis que veem a Mesa ganham Visualizar (+ Exportar)", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0107")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec(`INSERT INTO grupos (id, nome, abas) VALUES (9811, 'Mesa', '["dfd"]'), (9812, 'PCA', '["pca"]')`);
+    a.exec(`INSERT INTO papeis (id, nome, capacidades) VALUES (9813, 'Exp', '{"dfd":["visualizar","exportar"]}'), (9814, 'Ver', '{"dfd":["visualizar"]}'), (9815, 'Sem', '{"pca":["visualizar"]}')`);
+    for (const arq of arquivos.filter((f) => f >= "0107")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    const g = a.prepare("SELECT abas FROM grupos WHERE id IN (9811, 9812) ORDER BY id").all() as { abas: string }[];
+    assert.deepEqual(g.map((x) => JSON.parse(x.abas)), [["dfd", "verificacao"], ["pca"]]);
+    const p = a.prepare("SELECT capacidades AS c FROM papeis WHERE id IN (9813, 9814, 9815) ORDER BY id").all() as { c: string }[];
+    assert.deepEqual(p.map((x) => JSON.parse(x.c).verificacao ?? null), [["visualizar", "exportar"], ["visualizar"], null]);
   });
 
   it("0074 detalhes do papel: coluna com padrão '{}' (sem restrições) em todos os papéis + índices de criado_por", () => {

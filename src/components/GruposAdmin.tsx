@@ -11,8 +11,10 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { Checkbox, SearchField, TextField } from "./Field";
-import { IconPencil, IconPlus, IconSave, IconTrash, IconUsers } from "./icons";
+import { IconPlus, IconSave, IconTrash, IconUsers } from "./icons";
 import { Modal } from "./Modal";
+import { NAV_MODULOS } from "./navModulos";
+import { CartaoEspaco } from "./QuadroCard";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { Switch } from "./Switch";
@@ -27,7 +29,6 @@ type RepOpt = { id: number; codigo: string; nome: string; oculto: boolean };
 const COLLATOR = new Intl.Collator("pt-BR", { sensitivity: "base" });
 const ehGeral = (r: RepOpt) => ehCodigoGeral(r.codigo);
 /** As telas do grupo por nome, na ordem do menu. */
-const nomesTelas = (abas: readonly string[]) => ABAS.filter((a) => abas.includes(a.key)).map((a) => a.label);
 /** O formulário do banner (o Salvar fica no rodapé fixo do banner, fora do form). */
 const FORM_ID = "form-grupo";
 
@@ -169,9 +170,6 @@ export function GruposAdmin() {
     );
   }
 
-  const unidadesDoCard = (g: Grupo) =>
-    geral && g.reparticoes.includes(geral.id) ? "todas as unidades" : `${g.reparticoes.length} unidade(s)`;
-  const textoPcas = (g: Grupo) => (g.pcas == null ? "todos os PCAs" : `${g.pcas.length} PCA(s)`);
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -192,39 +190,54 @@ export function GruposAdmin() {
           Nenhum grupo criado ainda.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {grupos.map((g) => (
-            <div key={g.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
-              <div className="flex items-center gap-2.5">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">
-                  <IconUsers className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="truncate font-bold text-text">{g.nome}</h3>
-                  <p className={`truncate text-[12px] ${g.abas.length === 0 ? "text-[var(--warn)]" : "text-muted"}`} title={nomesTelas(g.abas).join(", ")}>
-                    {g.abas.length === 0 ? "Nenhuma tela" : nomesTelas(g.abas).join(" · ")}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-3 text-[12px] text-faint">
-                {g.membros.length} pessoa(s) · {unidadesDoCard(g)} · {textoPcas(g)}
-              </p>
-              <div className="mt-3 flex justify-end gap-1.5">
-                <Button variant="ghost" onClick={() => abrirEdicao(g)} icon={<IconPencil className="h-3.5 w-3.5" />}>
-                  Editar
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => excluir(g)}
-                  loading={excluindo === g.id}
-                  style={{ color: "var(--danger)" }}
-                  icon={<IconTrash className="h-3.5 w-3.5" />}
-                >
-                  Excluir
-                </Button>
-              </div>
-            </div>
-          ))}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-[var(--gap-block)]">
+          {grupos.map((g) => {
+            const telas = NAV_MODULOS.filter((m) => g.abas.includes(m.aba));
+            return (
+              <CartaoEspaco
+                key={g.id}
+                ariaLabel={`Editar o grupo ${g.nome}`}
+                onClick={() => abrirEdicao(g)}
+                sobretitulo={`Grupo · ${telas.length} tela(s)`}
+                selo={telas.length === 0 ? <Badge tone="amber">Sem telas</Badge> : undefined}
+                nome={g.nome}
+                capa={
+                  <div className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-lg bg-accent-soft" title={telas.map((t) => t.label).join(", ") || "Nenhuma tela"}>
+                    {telas.length ? (
+                      <div className="flex max-w-[70%] flex-wrap justify-center gap-1.5">
+                        {telas.map((t) => (
+                          <span key={t.aba} className="grid h-8 w-8 place-items-center rounded-control bg-surface text-accent shadow-ring">
+                            <t.Icon className="h-4 w-4" />
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <IconUsers className="h-8 w-8 text-accent/60" />
+                    )}
+                  </div>
+                }
+                metricas={[
+                  { rotulo: "Pessoas", valor: String(g.membros.length) },
+                  { rotulo: "Unidades", valor: geral && g.reparticoes.includes(geral.id) ? "Todas" : String(g.reparticoes.length) },
+                  { rotulo: "PCAs", valor: g.pcas == null ? "Todos" : String(g.pcas.length) },
+                ]}
+                canto={
+                  <span className="absolute top-3.5 right-3.5">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => excluir(g)}
+                      loading={excluindo === g.id}
+                      aria-label={`Excluir o grupo ${g.nome}`}
+                      title="Excluir o grupo"
+                      style={{ color: "var(--danger)" }}
+                      icon={<IconTrash className="h-3.5 w-3.5" />}
+                    />
+                  </span>
+                }
+              />
+            );
+          })}
         </div>
       )}
 

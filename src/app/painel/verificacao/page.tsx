@@ -5,14 +5,14 @@ import { contextoBanners } from "@/lib/mesa-dados";
 
 export const dynamic = "force-dynamic";
 
-// VERIFICAÇÃO: conferir um protocolo ou DFD sem gravar nada. Segue a permissão da Mesa (as mesmas regras e unidades);
-// o relatório em PDF, a ação Exportar na Mesa.
+// VERIFICAÇÃO: conferir um protocolo ou DFD sem gravar nada. Tela própria do grupo (as regras e unidades da Mesa); o
+// relatório em PDF, a ação Exportar na Verificação.
 export default async function VerificacaoPage() {
-  const r = await acessoPagina("dfd");
+  const r = await acessoPagina("verificacao");
   if (r.bloqueio) return r.bloqueio;
   const c = await contextoBanners(r.acesso.u);
   return (
-    <PermissaoExportar permitido={c.pode.sistema.exportar}>
+    <PermissaoExportar permitido={r.pode.exportar}>
       <VerificacaoView reparticoes={c.reparticoes} pcas={c.pcas} regras={c.regras} orgaos={c.orgaos} />
     </PermissaoExportar>
   );

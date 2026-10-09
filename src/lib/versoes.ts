@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.77.0",
+    data: "2026-10-09",
+    titulo: "Verificação nos grupos e Novidades pelo acesso",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "A Verificação virou uma tela própria do grupo: o ADM a libera em “Telas do grupo” (quem já abria a Mesa continua com ela).", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Grupos", texto: "Cartões dos grupos no padrão do sistema: as telas liberadas em ícones, pessoas, unidades e PCAs; tocar abre a edição.", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Novidades", texto: "As Novidades do menu mostram só as mudanças das telas que o seu grupo abre.", link: "/painel/verificacao" },
+    ],
+  },
+  {
     versao: "1.76.0",
     data: "2026-10-09",
     titulo: "Grupos: telas e PCAs no próprio grupo",
@@ -1415,9 +1425,6 @@ const PREFIXOS_ADMIN = [
   "/painel/auditoria",
   "/painel/aparencia",
 ] as const;
-/** Telas fora do menu de módulos que seguem um módulo (a Verificação segue a Mesa). */
-const TELA_EXTRA: Record<string, string> = { "/painel/verificacao": "dfd" };
-
 const naRota = (link: string, prefixo: string) => link === prefixo || link.startsWith(`${prefixo}/`) || link.startsWith(`${prefixo}?`);
 
 /** A TELA de uma mudança pelo link: a chave do módulo (Mesa, PCA…), "admin" (Administração) ou `null` = de todos (login,
@@ -1425,8 +1432,6 @@ const naRota = (link: string, prefixo: string) => link === prefixo || link.start
 export function telaDaMudanca(link: string | undefined): string | null {
   if (!link) return null;
   if (PREFIXOS_ADMIN.some((p) => naRota(link, p))) return "admin";
-  const extra = Object.keys(TELA_EXTRA).find((p) => naRota(link, p));
-  if (extra) return TELA_EXTRA[extra];
   return ABAS.find((a) => naRota(link, a.href))?.key ?? null;
 }
 

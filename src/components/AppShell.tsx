@@ -8,7 +8,7 @@ import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
 import { type Identidade, MarcaSistema } from "./MarcaSistema";
 import { NAV_MODULOS } from "./navModulos";
-import { VersaoSistema } from "./Novidades";
+import { AcessoNovidades, VersaoSistema } from "./Novidades";
 import { SincronizarDados } from "./SincronizarDados";
 import { SetaDropdown } from "./SetaDropdown";
 import { CanalGrupo, type PresencaShell } from "./CanalGrupo";
@@ -32,7 +32,6 @@ import {
   IconPlug,
   IconRobo,
   IconSettings,
-  IconVerificacao,
   IconSpinner,
   IconUser,
   IconUsers,
@@ -54,7 +53,7 @@ type NavSecao = { titulo: string; itens: NavItem[] };
 const SECOES: NavSecao[] = [
   // Os protocolos, DFDs e itens vivem na MESA (o antigo Dashboard e a tela Protocolos legada saíram).
   // A Verificação (consultar os erros de um protocolo/DFD sem gravar) segue a tela Mesa do grupo.
-  { titulo: "Módulos", itens: [...NAV_MODULOS, { href: "/painel/verificacao", label: "Verificação", Icon: IconVerificacao, aba: "dfd" }] },
+  { titulo: "Módulos", itens: NAV_MODULOS },
   {
     titulo: "Administração",
     itens: [
@@ -473,6 +472,8 @@ export function AppShell({
       grupoNome={grupos.find((g) => g.id === grupoAtivoId)?.nome ?? null}
       chatGrupo={!!chat?.grupo} chatPrivado={!!chat?.privado}
     >
+    {/* As Novidades mostram só as mudanças das telas que o grupo abre (o ADM vê tudo). */}
+    <AcessoNovidades telas={abas} admin={usuario.admin}>
     <div className="min-h-dvh bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versao={versaoDados} />}
       {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
@@ -575,6 +576,7 @@ export function AppShell({
       {/* Navegação inferior (mobile) */}
       <BottomNav abas={abasSet} />
     </div>
+    </AcessoNovidades>
     </CanalGrupo>
   );
 }

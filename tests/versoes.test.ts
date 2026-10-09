@@ -63,7 +63,7 @@ describe("versões do sistema", () => {
   it("cada pessoa só recebe o que mudou nas telas que o grupo dela abre (o ADM, tudo)", () => {
     assert.equal(telaDaMudanca("/painel/mesa?abrir=dfd:1"), "dfd");
     assert.equal(telaDaMudanca("/painel/pca/3?aba=orcamento"), "pca");
-    assert.equal(telaDaMudanca("/painel/verificacao"), "dfd");
+    assert.equal(telaDaMudanca("/painel/verificacao"), "verificacao");
     assert.equal(telaDaMudanca("/painel/usuarios"), "admin");
     assert.equal(telaDaMudanca("/painel/configuracoes?aba=papeis"), "admin");
     assert.equal(telaDaMudanca("/login"), null);
