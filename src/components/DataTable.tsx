@@ -230,6 +230,12 @@ export function DataTable<R>({
   const [filters, setFilters] = useState<Record<string, FiltroValor>>((): Record<string, FiltroValor> => editor.salvo.filtros);
   const [sort, setSort] = useState<OrdemAtual>((): OrdemAtual => editor.salvo.ordem ?? { key: null, dir: "asc" });
   const [page, setPage] = useState(1);
+  // MARCAÇÃO da linha (sem selecionar): o 1º clique marca; o 2º clique NA linha marcada abre (`onRowClick`). A linha
+  // aberta ao lado (`activeKey`) já chega marcada.
+  const [marcadaK, setMarcadaK] = useState<Key | null>(null);
+  useEffect(() => {
+    if (activeKey != null) setMarcadaK(activeKey);
+  }, [activeKey]);
   // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
   const linhasAdm = useLinhasTabela();
   const [limite, setLimite] = useState<number>(linhasAdm);
@@ -339,6 +345,10 @@ export function DataTable<R>({
   const pages = tamPagina ? Math.max(1, Math.ceil(total / tamPagina)) : 1;
   const pg = Math.min(page, pages);
   const visiveis = tamPagina ? ordenadas.slice((pg - 1) * tamPagina, pg * tamPagina) : ordenadas;
+  // Linhas VAZIAS que completam a página (com dados; teto de 60 — o DOM continua leve com 200 por página).
+  const preencher = tamPagina && visiveis.length > 0 ? Math.min(tamPagina - visiveis.length, 60) : 0;
+  // Altura da linha vazia fora da densidade compacta (a de uma linha de texto com o respiro da célula).
+  const alturaVazia = "calc(1.5rem + 2 * var(--cell-py, 10px))";
 
   const sel = selected ?? new Set<Key>();
   // "Selecionar todos" = TODAS as linhas que passam nos filtros (todas as páginas), não só a página.
@@ -645,36 +655,40 @@ export function DataTable<R>({
             </tr>
           </thead>
           <tbody>
-            {visiveis.map((r) => {
+            {visiveis.map((r, i) => {
               const k = getKey(r);
               const marcada = sel.has(k);
-              const ativa = activeKey != null && k === activeKey;
+              const ativa = k === marcadaK || (activeKey != null && k === activeKey);
               return (
                 <tr
                   key={k}
-                  onClick={
-                    onRowClick
-                      ? (e) => {
-                          if ((e.target as HTMLElement).closest("input,select,button,a,label")) return;
-                          onRowClick(r);
-                        }
-                      : undefined
-                  }
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("input,select,textarea,button,a,label")) return;
+                    // 1º clique MARCA; o 2º, na linha já marcada, ABRE.
+                    if (ativa && onRowClick) onRowClick(r);
+                    else setMarcadaK(k);
+                  }}
                   onKeyDown={
                     onRowClick
                       ? (e) => {
                           // Enter num controle DENTRO da célula (dropdown, botão…) é dele — não abre a linha.
                           if (e.key !== "Enter" || (e.target as HTMLElement).closest("input,select,textarea,button,a,label")) return;
+                          setMarcadaK(k);
                           onRowClick(r);
                         }
                       : undefined
                   }
-                  {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
+                  {...(onRowClick ? { role: "button", tabIndex: 0, "aria-pressed": ativa } : {})}
                   style={{ height: alturaLinha, ...(ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : {}) }}
-                  // Com colunas congeladas a linha tem fundo OPACO (as células presas herdam — nada aparece por baixo).
-                  className={`group/linha transition-colors hover:bg-surface-2 [&>td]:border-b [&>td]:border-border last:[&>td]:border-b-0 ${
-                    onRowClick ? "cursor-pointer" : ""
-                  } ${ativa || (marcada && selFixa) ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : selFixa ? "bg-surface" : ""}`}
+                  // Fundo sempre OPACO (as células presas herdam): marcada = accent; selecionada = accent suave; senão as
+                  // linhas INTERCALADAS (`--zebra`, a cor da Aparência).
+                  className={`group/linha cursor-pointer transition-colors [&>td]:border-b [&>td]:border-border ${
+                    ativa
+                      ? "bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))]"
+                      : marcada
+                        ? "bg-accent-soft hover:bg-surface-2"
+                        : `${i % 2 ? "bg-zebra" : "bg-surface"} hover:bg-surface-2`
+                  }`}
                 >
                   {selectable && (
                     <td className={`w-10 px-3 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
@@ -705,6 +719,16 @@ export function DataTable<R>({
                 </tr>
               );
             })}
+            {/* A página SEMPRE cheia: linhas VAZIAS completam as que faltam (sem seleção, sem clique, fora da leitura). */}
+            {Array.from({ length: preencher }, (_, n) => (
+              <tr
+                key={`vazia-${n}`}
+                style={{ height: alturaLinha ?? alturaVazia }}
+                className={`[&>td]:border-b [&>td]:border-border ${(visiveis.length + n) % 2 ? "bg-zebra" : "bg-surface"}`}
+              >
+                <td colSpan={exibidas.length + (selectable ? 1 : 0)} />
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

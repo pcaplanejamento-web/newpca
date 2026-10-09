@@ -7,7 +7,7 @@ import type { TextosAcesso } from "./acesso-core.ts";
 /** Tokens de cor que o ADM pode editar (allowlist). Chave = nome do CSS var. */
 export const TOKENS_COR = [
   "bg", "surface", "surface-2", "text", "text-2", "muted", "faint",
-  "border", "border-2", "accent", "accent-soft", "track", "sb-active", "kpi-bar",
+  "border", "border-2", "accent", "accent-soft", "track", "sb-active", "kpi-bar", "zebra",
 ] as const;
 export type TokenCor = (typeof TOKENS_COR)[number];
 
@@ -18,13 +18,13 @@ export const DEFAULT_CORES: { light: Record<TokenCor, string>; dark: Record<Toke
     bg: "#ffffff", surface: "#ffffff", "surface-2": "#f4f6f8", text: "#0f1626",
     "text-2": "#2d3644", muted: "#586173", faint: "#8a93a3", border: "#ebeef2",
     "border-2": "#dee2e8", accent: "#4f46e5", "accent-soft": "#eef1ff",
-    track: "#ebeef2", "sb-active": "#f4f6f8", "kpi-bar": "#dee2e8",
+    track: "#ebeef2", "sb-active": "#f4f6f8", "kpi-bar": "#dee2e8", zebra: "#f8f9fb",
   },
   dark: {
     bg: "#0a0c11", surface: "#141821", "surface-2": "#1a1f2a", text: "#f4f6f9",
     "text-2": "#cbd2dd", muted: "#98a1b2", faint: "#6d7585", border: "#232834",
     "border-2": "#2c3340", accent: "#818cf8", "accent-soft": "#20233c",
-    track: "#232834", "sb-active": "#191d27", "kpi-bar": "#2c3340",
+    track: "#232834", "sb-active": "#191d27", "kpi-bar": "#2c3340", zebra: "#171b25",
   },
 };
 

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.78.0",
+    data: "2026-10-09",
+    titulo: "Tabelas: marcar antes de abrir e linhas intercaladas",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "Um clique marca a linha na cor de destaque; o segundo clique na linha marcada abre o banner (Enter abre direto).", link: "/painel/mesa" },
+      { tipo: "novo", area: "Aparência", texto: "Cor das linhas intercaladas de todas as tabelas, no claro e no escuro.", link: "/painel/aparencia" },
+      { tipo: "melhoria", area: "Tabelas", texto: "A página da tabela fica sempre cheia: linhas vazias completam as que faltam, sem seleção nem clique.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.77.1",
     data: "2026-10-09",
     titulo: "Verificação só para visualizar",

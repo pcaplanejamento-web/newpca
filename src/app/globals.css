@@ -32,6 +32,7 @@
   --track: #ebeef2;
   --sb-active: #f4f6f8;
   --kpi-bar: #dee2e8;
+  --zebra: #f8f9fb;
   /* SÉRIES dos gráficos (paleta categórica — cada categoria guarda a cor entre filtros). */
   --serie-1: #3b82f6;
   --serie-2: #10b981;
@@ -156,6 +157,7 @@
   --track: #232834;
   --sb-active: #191d27;
   --kpi-bar: #2c3340;
+  --zebra: #171b25;
   --serie-1: #60a5fa;
   --serie-2: #34d399;
   --serie-3: #fbbf24;
@@ -275,6 +277,7 @@
   --color-track: var(--track);
   --color-sb-active: var(--sb-active);
   --color-kpi-bar: var(--kpi-bar);
+  --color-zebra: var(--zebra);
 
   --radius-canvas: var(--radius-canvas);
   --radius-card: var(--radius-card);

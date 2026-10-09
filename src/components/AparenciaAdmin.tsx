@@ -28,6 +28,7 @@ const ROTULO: Record<string, string> = {
   track: "Trilho",
   "sb-active": "Sidebar ativo",
   "kpi-bar": "Barra do KPI",
+  zebra: "Linhas intercaladas (tabelas)",
 };
 
 const PRESETS: { nome: string; light: Record<string, string>; dark: Record<string, string> }[] = [
