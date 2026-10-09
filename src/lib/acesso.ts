@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { grupos, permissoes, usuarioGrupos } from "@/db/schema";
+import { grupos, usuarioGrupos } from "@/db/schema";
 import { abasConhecidas } from "./abas";
 import type { AtorPasta } from "./tarefas-core";
 import { type VisaoMesa, visaoMesa } from "./mesa-visao-core";
@@ -21,8 +21,8 @@ import {
 } from "./papeis-core";
 
 /**
- * ACESSO EFETIVO de quem está logado: o GRUPO (a permissão dele) libera as telas e o PAPEL diz o que se faz nelas —
- * `podeNaTela` do núcleo puro. Uma consulta para os grupos + as permissões (antes eram três: grupos, grupo ativo e
+ * ACESSO EFETIVO de quem está logado: o GRUPO (as telas dele) libera as telas e o PAPEL diz o que se faz nelas —
+ * `podeNaTela` do núcleo puro. Uma consulta para os grupos com as telas (antes eram três: grupos, grupo ativo e
  * abas), memorizada POR REQUISIÇÃO (`cache` do React): o layout, a página e as rotas leem o mesmo.
  *
  * O grupo ATIVO (cookie `pca_grupo`, validado contra os grupos da pessoa) decide as telas das páginas e das listas; um
@@ -32,7 +32,8 @@ import {
 
 const COOKIE_GRUPO = "pca_grupo";
 
-export type GrupoAcesso = { id: number; nome: string; permissaoId: number | null; abas: Tela[] };
+/** O grupo com as TELAS que abre e os PCAs que acessa (`pcas` null = todos). */
+export type GrupoAcesso = { id: number; nome: string; abas: Tela[]; pcas: number[] | null };
 
 export type Acesso = {
   u: UsuarioSessao;
@@ -41,6 +42,17 @@ export type Acesso = {
   /** As telas que a pessoa ABRE no grupo ativo, na ordem da navegação (ADM = todas). */
   telas: Tela[];
 };
+
+/** Os PCAs do grupo: `null` = todos (coluna vazia ou inválida também — nunca tira o acesso por um JSON quebrado). */
+export function lerPcasGrupo(json: string | null): number[] | null {
+  if (json == null) return null;
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? [...new Set(v.filter((x): x is number => Number.isInteger(x) && x > 0))] : null;
+  } catch {
+    return null;
+  }
+}
 
 function lerAbas(json: string | null): Tela[] {
   try {
@@ -53,23 +65,21 @@ function lerAbas(json: string | null): Tela[] {
 /** Os grupos da pessoa com as telas que cada um libera (ordenados pelo nome). */
 export async function gruposComAbas(usuarioId: number): Promise<GrupoAcesso[]> {
   const linhas = await getDb()
-    .select({ id: grupos.id, nome: grupos.nome, permissaoId: grupos.permissaoId, abas: permissoes.abas })
+    .select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas })
     .from(usuarioGrupos)
     .innerJoin(grupos, eq(usuarioGrupos.grupoId, grupos.id))
-    .leftJoin(permissoes, eq(permissoes.id, grupos.permissaoId))
     .where(eq(usuarioGrupos.usuarioId, usuarioId))
     .orderBy(grupos.nome);
-  return linhas.map((g) => ({ id: g.id, nome: g.nome, permissaoId: g.permissaoId, abas: lerAbas(g.abas) }));
+  return linhas.map((g) => ({ id: g.id, nome: g.nome, abas: lerAbas(g.abas), pcas: lerPcasGrupo(g.pcas) }));
 }
 
 /** TODOS os grupos com as telas que cada um libera (Usuários: escolher os grupos da pessoa e o "Ver acesso"). */
 export async function todosOsGruposComAbas(): Promise<GrupoAcesso[]> {
   const linhas = await getDb()
-    .select({ id: grupos.id, nome: grupos.nome, permissaoId: grupos.permissaoId, abas: permissoes.abas })
+    .select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas })
     .from(grupos)
-    .leftJoin(permissoes, eq(permissoes.id, grupos.permissaoId))
     .orderBy(grupos.nome);
-  return linhas.map((g) => ({ id: g.id, nome: g.nome, permissaoId: g.permissaoId, abas: lerAbas(g.abas) }));
+  return linhas.map((g) => ({ id: g.id, nome: g.nome, abas: lerAbas(g.abas), pcas: lerPcasGrupo(g.pcas) }));
 }
 
 /** O acesso de uma pessoa num grupo ativo escolhido (sem cookie — o feed .ics, o cron). */
@@ -104,6 +114,19 @@ export function motivoRecusa(a: Acesso, tela: Tela, acao: AcaoPapel, grupoId?: n
   const pode = podeTela(a, tela, grupoId);
   if (pode[acao]) return null;
   return pode.visualizar ? mensagemSemPermissao(tela, acao) : mensagemTelaFechada(tela);
+}
+
+/** Os PCAs que a pessoa acessa no grupo ATIVO — `null` = todos (o ADM, ou o grupo sem restrição). */
+export function pcasDoAcesso(a: Acesso | null): Set<number> | null {
+  if (!a || a.u.admin) return null;
+  const lista = a.grupoAtivo?.pcas;
+  return lista == null ? null : new Set(lista);
+}
+
+/** O PCA está entre os que a pessoa acessa no grupo ativo? */
+export function podePca(a: Acesso | null, pcaId: number): boolean {
+  const s = pcasDoAcesso(a);
+  return s == null || s.has(pcaId);
 }
 
 /** As ações que a tela CALENDÁRIO também libera nas tarefas de um quadro (a tarefa e os eventos se mexem por ela). */

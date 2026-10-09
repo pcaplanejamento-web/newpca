@@ -48,7 +48,7 @@ export const CATALOGO_AVISOS: readonly ItemCatalogoAviso[] = [
   { chave: "pca", rotulo: "Protocolo no PCA", descricao: "Um protocolo da pessoa foi enviado, incorporado ou devolvido no PCA.", grupo: "Mesa e PCA", padrao: c(true, false) },
   { chave: "centi", rotulo: "Automação Centi", descricao: "Terminou (ou falhou) um lote da Automação que a pessoa iniciou.", grupo: "Administração", padrao: c(true, false) },
   { chave: "comunicado", rotulo: "Comunicado", descricao: "Um aviso enviado pelo administrador a todos ou a um grupo.", grupo: "Administração", padrao: c(true, false, true) },
-  { chave: "versao", rotulo: "Nova versão do sistema", descricao: "Aos administradores: o que mudou em cada versão nova, com o caminho até onde mudou.", grupo: "Administração", padrao: c(true, false) },
+  { chave: "versao", rotulo: "Nova versão do sistema", descricao: "A cada pessoa: o que mudou nas telas que o grupo dela abre (o administrador recebe tudo), com o caminho até onde mudou.", grupo: "Administração", padrao: c(true, false) },
   { chave: "cadastro", rotulo: "Cadastro aguardando aprovação", descricao: "Aos administradores: uma pessoa pediu acesso.", grupo: "Administração", padrao: c(true, true, false) },
   { chave: "acesso", rotulo: "Acesso liberado", descricao: "À pessoa: o administrador aprovou o cadastro.", grupo: "Administração", padrao: c(false, true, false), soEmail: true },
 ];

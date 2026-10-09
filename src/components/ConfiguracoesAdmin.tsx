@@ -448,14 +448,8 @@ export function ConfiguracoesAdmin({
       <LinkCard
         href="/painel/grupos"
         titulo="Grupos"
-        descricao="Grupos de acesso e suas unidades."
+        descricao="Grupos de acesso: telas, PCAs, unidades e pessoas."
         icon={<IconUsers className="h-5 w-5" />}
-      />
-      <LinkCard
-        href="/painel/permissoes"
-        titulo="Permissões"
-        descricao="Telas que cada grupo abre (o papel diz o que a pessoa faz nelas)."
-        icon={<IconShield className="h-5 w-5" />}
       />
       <LinkCard
         href="/painel/usuarios"
@@ -510,7 +504,7 @@ export function ConfiguracoesAdmin({
               dica: "Como o sistema está configurado (consulta)",
               content: <ReferenciaSistema regras={regras} pcas={pcas} identidade={identidade} />,
             },
-            { key: "mais", label: "Mais", icon: <IconMais />, dica: "Aparência, órgãos, grupos, permissões, usuários, integrações", content: abaMais },
+            { key: "mais", label: "Mais", icon: <IconMais />, dica: "Aparência, órgãos, grupos, usuários, integrações", content: abaMais },
           ]}
         />
       </div>

@@ -52,12 +52,12 @@ describe("grupos: builders no db.batch do D1", () => {
     for (const id of USUARIOS) ins.run(id, `p${id}@rv.go.gov.br`, `Pessoa ${id}`);
     const insU = db.prepare("INSERT INTO reparticoes (id, codigo, nome) VALUES (?, ?, ?)");
     for (const id of UNIDADES) insU.run(id, `U${id}`, `Unidade ${id}`);
-    db.exec("INSERT INTO permissoes (id, nome, abas) VALUES (300, 'Consulta', '[\"dfd\"]')");
+    db.exec("INSERT INTO pcas (id, nome, ano) VALUES (300, 'PCA 2027', 2027)");
   });
 
   beforeEach(() => {
     db.exec("DELETE FROM grupos WHERE id >= 700");
-    db.exec("INSERT INTO grupos (id, nome, permissao_id) VALUES (700, 'Compras', 300), (701, 'Outro', NULL)");
+    db.exec("INSERT INTO grupos (id, nome, abas, pcas) VALUES (700, 'Compras', '[\"dfd\"]', '[300]'), (701, 'Outro', '[]', NULL)");
     db.exec("INSERT INTO usuario_grupos (usuario_id, grupo_id) VALUES (1000, 700), (1001, 700), (1002, 701)");
     db.exec("INSERT INTO grupo_reparticoes (grupo_id, reparticao_id) VALUES (700, 500), (701, 501)");
   });
@@ -117,13 +117,13 @@ describe("grupos: builders no db.batch do D1", () => {
     const pedidos = [...USUARIOS, 5, 999_999];
     assert.deepEqual(await idsInexistentes(orm, "usuarios", pedidos), [5, 999_999]);
     assert.deepEqual(await idsInexistentes(orm, "reparticoes", [500, 544, 545]), [545]);
-    assert.deepEqual(await idsInexistentes(orm, "permissoes", []), []);
+    assert.deepEqual(await idsInexistentes(orm, "pcas", []), []);
   });
 
-  it("motivoIdsInvalidos: permissão, pessoa e unidade — nulo quando tudo existe", async () => {
-    assert.equal(await motivoIdsInvalidos(orm, { permissaoId: 300, membros: [1000], reparticoes: [500] }), null);
-    assert.equal(await motivoIdsInvalidos(orm, { permissaoId: null }), null);
-    assert.match((await motivoIdsInvalidos(orm, { permissaoId: 301 })) ?? "", /permissão escolhida não existe/);
+  it("motivoIdsInvalidos: PCA, pessoa e unidade — nulo quando tudo existe", async () => {
+    assert.equal(await motivoIdsInvalidos(orm, { pcas: [300], membros: [1000], reparticoes: [500] }), null);
+    assert.equal(await motivoIdsInvalidos(orm, { pcas: null }), null);
+    assert.match((await motivoIdsInvalidos(orm, { pcas: [300, 301] })) ?? "", /PCA\(s\) não encontrado\(s\): 301/);
     assert.match((await motivoIdsInvalidos(orm, { membros: [1000, 42] })) ?? "", /Pessoa\(s\) não encontrada\(s\): 42/);
     assert.match((await motivoIdsInvalidos(orm, { reparticoes: [7777] })) ?? "", /Unidade\(s\) não encontrada\(s\): 7777/);
   });

@@ -1,13 +1,6 @@
-import { AcessoRestrito } from "@/components/AcessoRestrito";
-import { PermissoesAdmin } from "@/components/PermissoesAdmin";
-import { getUsuarioAtual } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function PermissoesPage() {
-  const atual = await getUsuarioAtual();
-  if (!atual?.admin) {
-    return <AcessoRestrito mensagem="Somente administradores podem gerenciar permissões." />;
-  }
-  return <PermissoesAdmin />;
+// A tela Permissões saiu: as telas de cada grupo se escolhem no próprio grupo (o link antigo leva aos Grupos).
+export default function PermissoesPage() {
+  redirect("/painel/grupos");
 }

@@ -4,7 +4,7 @@ import type * as schema from "../db/schema.ts";
 import {
   grupoReparticoes,
   grupos,
-  permissoes,
+  pcas,
   reparticoes,
   tarefaModelos,
   tarefaPastas,
@@ -65,11 +65,11 @@ export function comandosUnidades(db: Db, grupoId: number, reparticaoIds: readonl
 const TABELAS = {
   usuarios: { tabela: usuarios, id: usuarios.id },
   reparticoes: { tabela: reparticoes, id: reparticoes.id },
-  permissoes: { tabela: permissoes, id: permissoes.id },
+  pcas: { tabela: pcas, id: pcas.id },
   grupos: { tabela: grupos, id: grupos.id },
 } as const;
 
-/** Os ids que NÃO existem (pessoas, unidades, permissão ou grupos) — a rota recusa antes de gravar, com a lista. */
+/** Os ids que NÃO existem (pessoas, unidades, PCAs ou grupos) — a rota recusa antes de gravar, com a lista. */
 export async function idsInexistentes(db: Db, qual: keyof typeof TABELAS, ids: readonly number[]): Promise<number[]> {
   const unicos = [...new Set(ids)];
   if (unicos.length === 0) return [];
@@ -81,18 +81,18 @@ export async function idsInexistentes(db: Db, qual: keyof typeof TABELAS, ids: r
   return unicos.filter((x) => !achados.has(x));
 }
 
-/** Por que o grupo não pode ser gravado (id de pessoa, unidade ou permissão que não existe) — `null` = ok. A rota
+/** Por que o grupo não pode ser gravado (id de pessoa, unidade ou PCA que não existe) — `null` = ok. A rota
  * recusa (422) ANTES de gravar qualquer coisa. */
 export async function motivoIdsInvalidos(
   db: Db,
-  dados: { permissaoId?: number | null; membros?: readonly number[]; reparticoes?: readonly number[] },
+  dados: { pcas?: readonly number[] | null; membros?: readonly number[]; reparticoes?: readonly number[] },
 ): Promise<string | null> {
-  const [semPermissao, semPessoa, semUnidade] = await Promise.all([
-    dados.permissaoId != null ? idsInexistentes(db, "permissoes", [dados.permissaoId]) : Promise.resolve([]),
+  const [semPca, semPessoa, semUnidade] = await Promise.all([
+    idsInexistentes(db, "pcas", dados.pcas ?? []),
     idsInexistentes(db, "usuarios", dados.membros ?? []),
     idsInexistentes(db, "reparticoes", dados.reparticoes ?? []),
   ]);
-  if (semPermissao.length) return "A permissão escolhida não existe mais — recarregue a tela.";
+  if (semPca.length) return `PCA(s) não encontrado(s): ${semPca.join(", ")} — recarregue a tela.`;
   if (semPessoa.length) return `Pessoa(s) não encontrada(s): ${semPessoa.join(", ")} — recarregue a tela.`;
   if (semUnidade.length) return `Unidade(s) não encontrada(s): ${semUnidade.join(", ")} — recarregue a tela.`;
   return null;

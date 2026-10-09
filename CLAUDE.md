@@ -248,7 +248,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   grupos (**`GruposDaPessoa`**, DS; avisa sem grupo; auditoria `aprovar` + o e-mail de acesso liberado), **Recusar** o
   cadastro pendente (exclui; o histórico diz "recusado") e **"Ver acesso"** (**`AcessoDaPessoa`**, DS — por grupo, a
   `MatrizCapacidades` só-leitura das telas que ABREM, `capacidadesEfetivas`, e as fechadas pelo papel —
-  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar:**
+  `telasFechadasPeloPapel`). **Exportar:**
   TODA tabela tem **XLSX** e **PDF** no rodapé (ver `DataTable.exportar`); nas telas de módulo só para quem tem a ação
   Exportar ali — a página envolve o conteúdo em **`PermissaoExportar`** (`ExportarTabelas.tsx`; a Mesa, pela Mesa em que
   está), o contexto vale também nos banners por portal. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
@@ -638,13 +638,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   página = `contextoBanners` (unidades com responsáveis, regras do ADM, órgãos, PCAs). Nada é gravado; as únicas chamadas
   são de leitura (catálogo).
 
-## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
+## Grupos, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um
 > **Órgão** (entidade nova, acima). NÃO confundir com a **Planilha (PCA)** (tabela `unidades`, arquivo
 > importado) nem com a **Unidade de medida** do item (`itens.unidade_medida`) — três conceitos distintos.
-- **Administração (Grupos/Permissões/Usuários):** PATCH com schemas PRÓPRIOS, sem os padrões da criação
-  (`grupoPatchSchema`/`permissaoPatchSchema` — o `.partial()` apagava pessoas/unidades/telas num PATCH só com o nome);
+- **Administração (Grupos/Usuários):** PATCH com schemas PRÓPRIOS, sem os padrões da criação
+  (`grupoPatchSchema` — o `.partial()` apagava pessoas/unidades/telas num PATCH só com o nome);
   gravar o grupo = UM lote (**`rbac-sql.ts`**: `comandosMembros`/`comandosUnidades` em INSERTs de ≤ 40, ids conferidos antes
   — `motivoIdsInvalidos` → 422; inexistente = 404); **excluir grupo** mostra o IMPACTO (`GET /api/admin/grupos/[id]` →
   `impactoDoGrupo`: quadros de tarefas, pastas e modelos que somem em CASCATA) e exige `?confirmar=1` (409 sem ele); a sigla
@@ -652,11 +652,25 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   sistema (`useConfirmacao`), erro dentro do modal, avisos flutuantes; trocar papel/desativar/excluir usuário confirmam.
   Mensagens padrão do Zod em pt-BR (`zod-config.ts`, importado pelo `http.ts`).
 - **Grupos** (`grupos`): um usuário pertence a vários (`usuario_grupos`); escolhe o **grupo
-  ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo tem **1 permissão** e acessa um conjunto
-  de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`, `/painel/permissoes`,
+  ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo guarda as **TELAS** que abre e os **PCAs** que acessa (abaixo) e
+  acessa um conjunto de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
-- **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
+- **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de
+  ids, NULL = todos; a `0106` copiou as telas da permissão que cada grupo usava; a tabela `permissoes` e a coluna
+  `grupos.permissao_id` ficam DORMENTES — o Armazenamento a marca "legado"):** a tela Permissões SAIU (`/painel/permissoes`
+  redireciona a Grupos; rotas `/api/admin/permissoes*` removidas). No banner do grupo (`GruposAdmin`, `Modal` com o
+  **Salvar fixo no rodapé** — `Button form=` —, sem Cancelar: o X fecha): nome · **Telas do grupo** (caixas de `ABAS`; as da
+  Administração são só do ADM) · **PCAs do grupo** (`Switch` "Todos os PCAs (também os que forem criados)" ou a lista
+  marcada) · unidades · pessoas. Zod `grupoCreateSchema`/`grupoPatchSchema` (`abas`, `pcas` null|ids), `motivoIdsInvalidos`
+  confere os PCAs (422), auditoria com "telas: … → …" e "PCAs: … → …". Acesso (`acesso.ts`): `GrupoAcesso {abas, pcas}`
+  (`lerPcasGrupo` — JSON inválido = todos), **`pcasDoAcesso(a)`** (o grupo ATIVO; ADM = null) e **`podePca(a, id)`**. Onde
+  vale: cards do módulo PCA, espaço `/painel/pca/[id]` e Mesa do PCA (`?pca=`) → `AcessoRestrito`; o seletor de Mesa; o
+  PCA do cabeçalho (`pcasDoFiltro` filtra — o cookie de um PCA fora some); o "Enviar ao PCA" da Mesa (`DfdsView.pcasAcesso`,
+  de `contextoBanners`); o cronograma do Calendário (`cronogramaPcas(de, ate, permitidos)`); e as rotas
+  `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
+  `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
+- **Telas** (`grupos.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
   **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas` · `calendario`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
   ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +
   rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas` (o **Calendário** é um módulo como os outros, com permissão PRÓPRIA — migração `0046`).
@@ -666,7 +680,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   antigo `/painel/protocolos` redireciona à Mesa (como `/painel/dfds`). Ninguém perde acesso: a migração **`0036`**
   (aditiva, idempotente — espelho da `0015`) dá a Mesa (`dfd`) a toda permissão que tinha `protocolos`; as chaves antigas
   (`dashboard`/`protocolos`) ficam no JSON e **`abasConhecidas`** as descarta na LEITURA (`abasPermitidas` e `GET
-  /api/admin/permissoes`) — o ADM salva a permissão sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). A permissão é
+  /api/admin/grupos`) — o ADM salva o grupo sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). A tela do grupo é
   PORTÃO REAL: as páginas (`acessoPagina`) e as rotas (`exigirAcesso`/`recusa*` — ver "Guardas") conferem a tela aberta pelo
   grupo **e** o que o PAPEL permite nela; pela URL, a tela fechada mostra o `AcessoRestrito`. As tabelas
   `protocolos`/`protocolo_opcoes` ficam no banco **DORMENTES** (dados preservados, sem código, fora do `schema.ts`; sem
@@ -4701,8 +4715,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**
   (DS; `onAlternar` = recolhível pelo cabeçalho) por versão: número, título, data, selo "Atual" e cada mudança com o tipo
   (`Badge`), a área e o botão "Ver onde mudou" (o `link`; ir fecha o banner e o sino — `onIr`).
-- **Aviso aos ADMs:** tipo **`versao`** no catálogo (`CATALOGO_AVISOS`, grupo Administração — no sino, sem e-mail por padrão;
-  o ADM liga em Configurações → Notificações) — `avisoNovaVersao` DERIVADO na leitura para cada Administrador (como a versão
+- **Aviso de nova versão (a TODOS, pelas telas do grupo — v1.76.0):** tipo **`versao`** no catálogo (`CATALOGO_AVISOS`, grupo
+  Administração — no sino, sem e-mail por padrão; o ADM liga em Configurações → Notificações) — `avisoNovaVersao` DERIVADO na
+  leitura para CADA pessoa com SÓ as mudanças das telas que os grupos dela abrem (`mudancasVisiveis` + `telaDaMudanca`,
+  `versoes.ts`, puro e testado: o link da mudança → o módulo de `ABAS`, a Verificação = Mesa, as rotas da Administração = só
+  o ADM, as demais — login, perfil, tela pública — de todos; nada para a pessoa = sem aviso); o ADM recebe tudo (e a versão
   da extensão), UM por versão (`chave` `versao-sistema:<n>`; limpo, não volta): título "Nova versão N — título", o TEXTO = o
   que mudou (uma linha por mudança, até 4 + "e mais N"; o sino mostra até 4 linhas) e SEM link — tocar no aviso (ou no "Abrir"
   da prévia) abre as Novidades DAQUELA versão (`versaoDoAviso`) no banner flutuante AO LADO do sino, que CONTINUA ABERTO

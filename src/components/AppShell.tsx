@@ -33,7 +33,6 @@ import {
   IconRobo,
   IconSettings,
   IconVerificacao,
-  IconShield,
   IconSpinner,
   IconUser,
   IconUsers,
@@ -47,14 +46,14 @@ type NavItem = {
   Icon: typeof IconSettings;
   /** Só o papel Administrador (a Administração). */
   soAdmin?: boolean;
-  /** Chave de aba gerenciável por permissão (só nos módulos). */
+  /** Chave de aba que o GRUPO libera (só nos módulos). */
   aba?: string;
 };
 type NavSecao = { titulo: string; itens: NavItem[] };
 
 const SECOES: NavSecao[] = [
   // Os protocolos, DFDs e itens vivem na MESA (o antigo Dashboard e a tela Protocolos legada saíram).
-  // A Verificação (consultar os erros de um protocolo/DFD sem gravar) segue a permissão da Mesa.
+  // A Verificação (consultar os erros de um protocolo/DFD sem gravar) segue a tela Mesa do grupo.
   { titulo: "Módulos", itens: [...NAV_MODULOS, { href: "/painel/verificacao", label: "Verificação", Icon: IconVerificacao, aba: "dfd" }] },
   {
     titulo: "Administração",
@@ -63,7 +62,6 @@ const SECOES: NavSecao[] = [
       { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, soAdmin: true },
       { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, soAdmin: true },
       { href: "/painel/orgaos", label: "Órgãos e Unidades", Icon: IconLandmark, soAdmin: true },
-      { href: "/painel/permissoes", label: "Permissões", Icon: IconShield, soAdmin: true },
       { href: "/painel/integracoes", label: "Integrações", Icon: IconPlug, soAdmin: true },
       { href: "/painel/automacao", label: "Automação", Icon: IconRobo, soAdmin: true },
       { href: "/painel/armazenamento", label: "Armazenamento", Icon: IconDatabase, soAdmin: true },

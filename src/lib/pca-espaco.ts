@@ -1184,13 +1184,15 @@ export async function dfdsDosProtocolos(protocoloIds: number[]): Promise<{ id: n
  * os DFDs VIGENTES (consolidados — o mesmo critério do Dashboard) com a PREVISÃO DE ENTREGA (seção 5; `previsaoDoDfd`).
  * Sem previsão, o DFD fica de fora. Falha = lista vazia (o calendário segue sem o PCA).
  */
-export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: { id: number; nome: string; ano: number }[]; dfds: DfdPrevisao[] }> {
+export async function cronogramaPcas(de: string, ate: string, permitidos: Set<number> | null = null): Promise<{ pcas: { id: number; nome: string; ano: number }[]; dfds: DfdPrevisao[] }> {
   try {
     const db = getDb();
     const a0 = Number(de.slice(0, 4));
     const a1 = Number(ate.slice(0, 4));
     const lista = (await db.select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano, fonte: pcas.fonte }).from(pcas)).filter(
-      (p): p is typeof p & { ano: number } => coerceFonte(p.fonte) === "protocolo" && p.ano != null && p.ano >= a0 && p.ano <= a1,
+      // `permitidos` = os PCAs do grupo da pessoa (null = todos).
+      (p): p is typeof p & { ano: number } =>
+        coerceFonte(p.fonte) === "protocolo" && p.ano != null && p.ano >= a0 && p.ano <= a1 && (!permitidos || permitidos.has(p.id)),
     );
     if (!lista.length) return { pcas: [], dfds: [] };
     const [vs, inativos] = await Promise.all([vinculos(lista.map((p) => p.id)), inativosPorDfd()]);

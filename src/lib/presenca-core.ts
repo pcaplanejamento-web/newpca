@@ -341,7 +341,6 @@ const ADMIN: Record<string, string> = {
   configuracoes: "Configurações",
   usuarios: "Usuários",
   grupos: "Grupos",
-  permissoes: "Permissões",
   orgaos: "Órgãos e Unidades",
   armazenamento: "Armazenamento",
   auditoria: "Auditoria",

@@ -9,7 +9,8 @@ import { PcaConfiguracao } from "@/components/PcaConfiguracao";
 import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { Ajuda } from "@/components/Ajuda";
-import { podeTela } from "@/lib/acesso";
+import { podePca, podeTela } from "@/lib/acesso";
+import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { UsuarioSessao } from "@/lib/auth";
 import type { PodeTela } from "@/lib/papeis-core";
@@ -48,6 +49,7 @@ export default async function PcaEspacoPage({
   const sp = await searchParams;
   const pca = Number.isInteger(id) && id > 0 ? await getPcaEspaco(id) : null;
   if (!pca) notFound();
+  if (!podePca(acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
   const aba: AbaPca = ABAS.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : "dashboard";
 
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).

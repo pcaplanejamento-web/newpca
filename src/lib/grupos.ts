@@ -16,20 +16,20 @@ import {
 
 /**
  * RBAC por grupo. Um usuário pode estar em vários grupos e escolhe o ativo no
- * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais telas — o que se faz
+ * cabeçalho (cookie `pca_grupo`). O grupo ativo define as TELAS (quais telas — o que se faz
  * nelas é do PAPEL: `acesso.ts`) e as UNIDADES acessíveis (`grupo_reparticoes`) — que escopam
  * os dados da Mesa e do PCA. O Administrador abre todas as telas e acessa todas as unidades.
  */
 const COOKIE_GRUPO = "pca_grupo";
 const COOKIE_REP = "pca_reparticao";
 
-export type GrupoResumo = { id: number; nome: string; permissaoId: number | null };
+export type GrupoResumo = { id: number; nome: string };
 export type ReparticaoResumo = { id: number; codigo: string; nome: string };
 
 /** Grupos aos quais o usuário pertence (ordenados por nome). */
 export async function gruposDoUsuario(usuarioId: number): Promise<GrupoResumo[]> {
   return getDb()
-    .select({ id: grupos.id, nome: grupos.nome, permissaoId: grupos.permissaoId })
+    .select({ id: grupos.id, nome: grupos.nome })
     .from(usuarioGrupos)
     .innerJoin(grupos, eq(usuarioGrupos.grupoId, grupos.id))
     .where(eq(usuarioGrupos.usuarioId, usuarioId))

@@ -1,12 +1,15 @@
 /**
  * VERSÕES do sistema — o registro de mudanças (changelog) é a FONTE ÚNICA da versão exibida no menu, da página de
- * Novidades e do aviso aos Administradores. Puro (sem DOM/banco) e testado.
+ * Novidades e do aviso no sino. Puro (sem DOM/banco) e testado.
  *
  * Como publicar uma versão nova: acrescente uma entrada NO TOPO de `VERSOES` (a versão maior que a anterior — semver:
  * MAIOR quando muda o jeito de trabalhar, MENOR para recurso novo, CORREÇÃO para ajuste), cada mudança com o `link` de
- * ONDE ela está, e ponha o mesmo número no `package.json`. O deploy faz o resto: o menu mostra o número e cada ADM
- * recebe UM aviso no sino com o que mudou (tocar abre as Novidades num banner flutuante — sem sair da tela).
+ * ONDE ela está, e ponha o mesmo número no `package.json`. O deploy faz o resto: o menu mostra o número e cada pessoa
+ * recebe UM aviso no sino com o que mudou NAS TELAS QUE O GRUPO DELA ABRE (o ADM, tudo — `mudancasVisiveis`; tocar abre
+ * as Novidades num banner flutuante — sem sair da tela).
  */
+
+import { ABAS } from "./abas.ts";
 
 export type TipoMudanca = "novo" | "melhoria" | "correcao";
 
@@ -31,6 +34,17 @@ export type Versao = {
 
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
+  {
+    versao: "1.76.0",
+    data: "2026-10-09",
+    titulo: "Grupos: telas e PCAs no próprio grupo",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "As telas que cada grupo abre agora se escolhem no próprio grupo. A tela Permissões saiu; cada grupo herdou as telas da permissão que usava.", link: "/painel/grupos" },
+      { tipo: "novo", area: "Grupos", texto: "Cada grupo escolhe os PCAs que acessa: todos (também os que forem criados) ou só os marcados. Fora deles, o PCA some da lista, do cabeçalho, da Mesa e do Calendário.", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Grupos", texto: "No banner de editar o grupo, o Salvar fica fixo no rodapé; o Cancelar saiu (o X fecha).", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Notificações", texto: "O aviso de nova versão chega a todos, só com o que mudou nas telas que o grupo de cada pessoa abre.", link: "/painel/perfil" },
+    ],
+  },
   {
     versao: "1.75.0",
     data: "2026-10-09",
@@ -1389,16 +1403,56 @@ export function textoMudancas(v: Versao): string {
   return linhas.join("\n");
 }
 
-/** O aviso no sino de cada Administrador: UM por versão (a `chave`), com o que mudou. Sem link: o sino abre as Novidades
- * daquela versão num banner flutuante (de lá, cada mudança leva ao lugar dela). */
-export const avisoNovaVersao = (usuarioId: number, v: Versao = VERSOES[0]) => ({
-  usuarioId,
-  tipo: "versao" as const,
-  titulo: `Nova versão ${v.versao} — ${v.titulo}`,
-  texto: textoMudancas(v),
-  link: null,
-  chave: `versao-sistema:${v.versao}`,
-});
+/** As telas da ADMINISTRAÇÃO (só o ADM as abre — a mudança nelas só chega ao ADM). */
+const PREFIXOS_ADMIN = [
+  "/painel/configuracoes",
+  "/painel/usuarios",
+  "/painel/grupos",
+  "/painel/orgaos",
+  "/painel/integracoes",
+  "/painel/automacao",
+  "/painel/armazenamento",
+  "/painel/auditoria",
+  "/painel/aparencia",
+] as const;
+/** Telas fora do menu de módulos que seguem um módulo (a Verificação segue a Mesa). */
+const TELA_EXTRA: Record<string, string> = { "/painel/verificacao": "dfd" };
+
+const naRota = (link: string, prefixo: string) => link === prefixo || link.startsWith(`${prefixo}/`) || link.startsWith(`${prefixo}?`);
+
+/** A TELA de uma mudança pelo link: a chave do módulo (Mesa, PCA…), "admin" (Administração) ou `null` = de todos (login,
+ * perfil, tela pública…). */
+export function telaDaMudanca(link: string | undefined): string | null {
+  if (!link) return null;
+  if (PREFIXOS_ADMIN.some((p) => naRota(link, p))) return "admin";
+  const extra = Object.keys(TELA_EXTRA).find((p) => naRota(link, p));
+  if (extra) return TELA_EXTRA[extra];
+  return ABAS.find((a) => naRota(link, a.href))?.key ?? null;
+}
+
+/** A versão só com as mudanças das telas que a pessoa abre (`telas` = as dos grupos dela; `admin` = todas). */
+export function mudancasVisiveis(v: Versao, telas: ReadonlySet<string>, admin: boolean): Versao {
+  if (admin) return v;
+  return { ...v, mudancas: v.mudancas.filter((m) => {
+    const t = telaDaMudanca(m.link);
+    return t == null || (t !== "admin" && telas.has(t));
+  }) };
+}
+
+/** O aviso no sino: UM por versão (a `chave`), com o que mudou NAS TELAS QUE A PESSOA ABRE (`mudancasVisiveis`) — sem
+ * nenhuma mudança para ela, nenhum aviso (`null`). Sem link: o sino abre as Novidades daquela versão num banner flutuante
+ * (de lá, cada mudança leva ao lugar dela). */
+export function avisoNovaVersao(usuarioId: number, v: Versao = VERSOES[0]) {
+  if (v.mudancas.length === 0) return null;
+  return {
+    usuarioId,
+    tipo: "versao" as const,
+    titulo: `Nova versão ${v.versao} — ${v.titulo}`,
+    texto: textoMudancas(v),
+    link: null,
+    chave: `versao-sistema:${v.versao}`,
+  };
+}
 
 /** A versão de um aviso "versao" (pelo título que `avisoNovaVersao` escreve); desconhecida = a atual. */
 export function versaoDoAviso(titulo: string): string {

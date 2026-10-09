@@ -358,7 +358,7 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
             <Ajuda titulo="Usuários e papéis">
               <p>Toque numa linha para ver TODOS os dados da pessoa: o cadeado libera a edição de cada dado.</p>
               <p>
-                O GRUPO (com a permissão dele) decide QUAIS telas a pessoa abre e as unidades que ela vê; o PAPEL decide o que ela faz
+                O GRUPO decide QUAIS telas a pessoa abre e as unidades que ela vê; o PAPEL decide o que ela faz
                 nelas. Os papéis se criam e se editam em Configurações → Papéis.
               </p>
               {papeis.map((p) => (

@@ -207,6 +207,7 @@ export function DfdsView({
   reparticoes,
   reparticaoAtivaId,
   pcas = [],
+  pcasAcesso = null,
   regras = regrasPadrao(),
   orgaos = [],
   pessoas = [],
@@ -230,6 +231,8 @@ export function DfdsView({
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
   pcas?: PcaResumo[];
+  /** Os PCAs do GRUPO ATIVO (Grupos → PCAs do grupo; null = todos) — os destinos do "Enviar ao PCA". */
+  pcasAcesso?: number[] | null;
   regras?: RegrasAvaliacao;
   orgaos?: Orgao[];
   /** PESSOAS DO GRUPO ativo — as únicas designáveis como Responsável (célula, massa e o filtro do topo). */
@@ -2049,7 +2052,7 @@ export function DfdsView({
           ) : (
             <>
               {/* Enviar ao PCA tira da Mesa do sistema e põe na do PCA: Manipular nas duas. */}
-              {pode.pca.manipular && <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />}
+              {pode.pca.manipular && <EnviarAoPca selecionados={sel} pcas={pcasAcesso ? pcas.filter((p) => pcasAcesso.includes(p.id)) : pcas} onConcluido={() => setSelProtos(new Set())} />}
               {automacaoSel(alvoAutomacao(true).rotulo)}
             </>
           )

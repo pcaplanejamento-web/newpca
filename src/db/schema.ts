@@ -225,25 +225,18 @@ export const configuracoes = sqliteTable("configuracoes", {
 });
 
 /**
- * RBAC por GRUPO. Uma `permissao` define quais abas ficam disponíveis (JSON de
- * keys). Um `grupo` aponta para uma permissão; membros do grupo compartilham a
- * permissão E as unidades acessíveis (`grupo_reparticoes`). Um usuário pode
- * estar em vários grupos (`usuario_grupos`) e escolhe o ativo no cabeçalho.
- * (As tabelas `protocolos`/`protocolo_opcoes` do antigo módulo Protocolos ficam
- * no banco, DORMENTES — sem código; os protocolos vivem em `dfd_protocolos`.)
+ * RBAC por GRUPO (migração `0106`): o grupo guarda as TELAS que abre (`abas`, JSON de keys de aba) e os PCAs que acessa
+ * (`pcas`, JSON de ids; NULL = todos); membros do grupo compartilham as telas, os PCAs E as unidades acessíveis
+ * (`grupo_reparticoes`). Um usuário pode estar em vários grupos (`usuario_grupos`) e escolhe o ativo no cabeçalho. A
+ * antiga tabela `permissoes` e a coluna `grupos.permissao_id` ficam no banco DORMENTES (sem código).
+ * (As tabelas `protocolos`/`protocolo_opcoes` do antigo módulo Protocolos também ficam DORMENTES — os protocolos vivem
+ * em `dfd_protocolos`.)
  */
-export const permissoes = sqliteTable("permissoes", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  nome: text("nome").notNull(),
-  abas: text("abas").notNull().default("[]"), // JSON: string[] de keys de aba
-  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
-});
-
 export const grupos = sqliteTable("grupos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),
-  permissaoId: integer("permissao_id").references(() => permissoes.id, { onDelete: "set null" }),
+  abas: text("abas").notNull().default("[]"), // JSON: string[] de keys de aba (as telas que o grupo abre)
+  pcas: text("pcas"), // JSON: number[] de ids de PCA; NULL = todos os PCAs
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });
@@ -942,7 +935,6 @@ export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
 export type Configuracao = typeof configuracoes.$inferSelect;
-export type Permissao = typeof permissoes.$inferSelect;
 export type Grupo = typeof grupos.$inferSelect;
 export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;
 export type Reparticao = typeof reparticoes.$inferSelect;

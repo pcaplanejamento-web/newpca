@@ -4,7 +4,7 @@ import { ABA_KEYS } from "@/lib/abas";
 import { rotuloTela } from "@/lib/papeis-core";
 import { Checkbox } from "./Field";
 
-/** Um grupo que se escolhe para a pessoa — com as telas que a permissão dele libera. */
+/** Um grupo que se escolhe para a pessoa — com as telas que ele libera. */
 export type GrupoOpcao = { id: number; nome: string; abas: readonly string[] };
 
 /** As telas que o grupo libera, na ordem da navegação ("Mesa, PCA"). */

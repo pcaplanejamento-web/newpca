@@ -2,7 +2,7 @@ import { ABA_KEYS, ABAS, type AbaKey } from "./abas.ts";
 import { VISAO_TUDO, type VisaoMesa } from "./mesa-visao-core.ts";
 
 /**
- * PAPÉIS — o que a pessoa FAZ em cada tela. Módulo PURO (cliente e servidor; testado): o GRUPO (com a permissão dele)
+ * PAPÉIS — o que a pessoa FAZ em cada tela. Módulo PURO (cliente e servidor; testado): o GRUPO (as telas dele)
  * decide QUAIS telas a pessoa abre; o PAPEL decide as AÇÕES dentro de cada uma. Acesso efetivo a uma tela = o grupo
  * libera **e** o papel pode Visualizar; o papel Administrador (fixo) pode tudo, em todas as telas (regra firme).
  *

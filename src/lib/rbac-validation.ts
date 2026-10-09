@@ -2,45 +2,40 @@ import { z } from "zod";
 import { ABA_KEYS } from "./abas.ts";
 import { ehCodigoGeral } from "./escopo-unidades-core.ts";
 
-// Validação das telas de Grupos e Permissões (RBAC). As abas são o conjunto
-// fechado de `ABA_KEYS` (lib/abas.ts).
+// Validação da tela de Grupos (RBAC): o grupo guarda as TELAS que abre (o conjunto fechado de `ABA_KEYS`,
+// lib/abas.ts), os PCAs que acessa (`null` = todos), as pessoas e as unidades.
 
-/** Limite do nome de um grupo/permissão (o campo da tela usa o mesmo `maxLength`). */
+/** Limite do nome de um grupo (o campo da tela usa o mesmo `maxLength`). */
 export const MAX_NOME_RBAC = 60;
 
-const nomePermissao = z.string().trim().min(1, "Informe o nome da permissão.").max(MAX_NOME_RBAC, `Use até ${MAX_NOME_RBAC} caracteres.`);
 const nomeGrupo = z.string().trim().min(1, "Informe o nome do grupo.").max(MAX_NOME_RBAC, `Use até ${MAX_NOME_RBAC} caracteres.`);
-const abasSchema = z.array(z.enum(ABA_KEYS)).max(ABA_KEYS.length * 2);
-/** Ids de pessoas/unidades: sem repetir (um id repetido derrubaria o lote pela chave primária). */
+/** As telas do grupo: sem repetir. */
+const abasSchema = z
+  .array(z.enum(ABA_KEYS))
+  .max(ABA_KEYS.length * 2)
+  .transform((a) => [...new Set(a)]);
+/** Ids de pessoas/unidades/PCAs: sem repetir (um id repetido derrubaria o lote pela chave primária). */
 const idsSchema = z
   .array(z.number().int().positive())
   .max(5000)
   .transform((ids) => [...new Set(ids)]);
-
-export const permissaoSchema = z.object({
-  nome: nomePermissao,
-  abas: abasSchema.default([]),
-});
-
-// PATCH explícito, SEM defaults: um campo ausente fica como está (o `.partial()` do schema de criação mantinha o
-// `.default([])` — um PATCH só com o nome APAGAVA as abas).
-export const permissaoPatchSchema = z.object({
-  nome: nomePermissao.optional(),
-  abas: abasSchema.optional(),
-});
+/** Os PCAs do grupo: `null` = todos; a lista = só esses. */
+const pcasSchema = idsSchema.nullable();
 
 export const grupoCreateSchema = z.object({
   nome: nomeGrupo,
-  permissaoId: z.number().int().positive().nullable().optional(),
+  abas: abasSchema.default([]),
+  pcas: pcasSchema.default(null),
   membros: idsSchema.default([]),
   reparticoes: idsSchema.default([]),
 });
 
 // PATCH explícito, SEM defaults: um campo ausente fica como está (o `.partial()` mantinha o `.default([])` — um PATCH só
-// com o nome APAGAVA os membros e as unidades do grupo).
+// com o nome APAGAVA os membros, as unidades e as telas do grupo).
 export const grupoPatchSchema = z.object({
   nome: nomeGrupo.optional(),
-  permissaoId: z.number().int().positive().nullable().optional(),
+  abas: abasSchema.optional(),
+  pcas: pcasSchema.optional(),
   membros: idsSchema.optional(),
   reparticoes: idsSchema.optional(),
 });
@@ -166,7 +161,6 @@ export const unidadePropriaSchema = z.object({
   ativar: z.boolean(),
 });
 
-export type PermissaoInput = z.infer<typeof permissaoSchema>;
 export type GrupoInput = z.infer<typeof grupoCreateSchema>;
 export type ReparticaoInput = z.infer<typeof reparticaoSchema>;
 export type OrgaoInput = z.infer<typeof orgaoSchema>;

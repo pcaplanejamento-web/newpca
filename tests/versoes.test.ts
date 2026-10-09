@@ -6,7 +6,9 @@ import {
   avisoNovaVersao,
   compararVersoes,
   linkInterno,
+  mudancasVisiveis,
   problemasDasVersoes,
+  telaDaMudanca,
   textoMudancas,
   versaoDoAviso,
   VERSAO_ATUAL,
@@ -44,8 +46,9 @@ describe("versões do sistema", () => {
     assert.equal(linkInterno("/painel/configuracoes?aba=pcas"), true);
   });
 
-  it("o aviso do ADM traz o que mudou, abre as Novidades da versão e é UM por versão", () => {
+  it("o aviso traz o que mudou, abre as Novidades da versão e é UM por versão", () => {
     const a = avisoNovaVersao(7);
+    assert.ok(a);
     assert.equal(a.tipo, "versao");
     assert.equal(a.chave, `versao-sistema:${VERSAO_ATUAL}`);
     assert.equal(a.link, null); // o sino abre as Novidades num banner — não há página
@@ -55,6 +58,31 @@ describe("versões do sistema", () => {
     for (const m of VERSOES[0].mudancas.slice(0, 4)) assert.ok(a.texto.includes(m.texto));
     const muitas: Versao = { versao: "9.0.0", data: "2026-10-05", titulo: "T", mudancas: Array.from({ length: 6 }, (_, i) => ({ tipo: "novo" as const, area: "A", texto: `m${i}` })) };
     assert.match(textoMudancas(muitas), /e mais 2 mudanças$/);
+  });
+
+  it("cada pessoa só recebe o que mudou nas telas que o grupo dela abre (o ADM, tudo)", () => {
+    assert.equal(telaDaMudanca("/painel/mesa?abrir=dfd:1"), "dfd");
+    assert.equal(telaDaMudanca("/painel/pca/3?aba=orcamento"), "pca");
+    assert.equal(telaDaMudanca("/painel/verificacao"), "dfd");
+    assert.equal(telaDaMudanca("/painel/usuarios"), "admin");
+    assert.equal(telaDaMudanca("/painel/configuracoes?aba=papeis"), "admin");
+    assert.equal(telaDaMudanca("/login"), null);
+    assert.equal(telaDaMudanca(undefined), null);
+    const v: Versao = {
+      versao: "9.1.0",
+      data: "2026-10-09",
+      titulo: "T",
+      mudancas: [
+        { tipo: "novo", area: "Mesa", texto: "mesa", link: "/painel/mesa" },
+        { tipo: "novo", area: "PCA", texto: "pca", link: "/painel/pca" },
+        { tipo: "novo", area: "Usuários", texto: "adm", link: "/painel/usuarios" },
+        { tipo: "correcao", area: "Acesso", texto: "todos", link: "/login" },
+      ],
+    };
+    assert.deepEqual(mudancasVisiveis(v, new Set(["dfd"]), false).mudancas.map((m) => m.texto), ["mesa", "todos"]);
+    assert.deepEqual(mudancasVisiveis(v, new Set(), true).mudancas.length, 4);
+    const soAdm: Versao = { ...v, mudancas: [v.mudancas[2]] };
+    assert.equal(avisoNovaVersao(1, mudancasVisiveis(soAdm, new Set(["dfd", "pca"]), false)), null); // nada para ela = sem aviso
   });
 
   it("o aviso está no catálogo: no sino, sem e-mail por padrão", () => {

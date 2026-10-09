@@ -1,4 +1,4 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { dfdNasLinhas, escopoMesa } from "@/lib/acesso-mesa";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -17,6 +17,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ("erro" in a) return a.erro;
   const pcaId = intId((await ctx.params).id);
   if (!pcaId) return erro("ID inválido.");
+  const semPca = await recusaPca(pcaId);
+  if (semPca) return semPca;
   const pca = await getPcaEspaco(pcaId);
   if (!pca) return erro("PCA não encontrado.", 404);
   const p = await parseCorpo(acaoItensPcaSchema, req);

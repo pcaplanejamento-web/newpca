@@ -818,6 +818,22 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     assert.deepEqual({ ...r }, { t: null, w: 0, v: null, s: 0 });
   });
 
+  it("0106 telas no grupo: copia as telas da permissão que o grupo usava; sem permissão = nenhuma; PCAs = todos (NULL)", () => {
+    const a = new DatabaseSync(":memory:");
+    for (const arq of arquivos.filter((f) => f < "0106")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    a.exec(`INSERT INTO permissoes (id, nome, abas) VALUES (9801, 'Consulta', '["dfd","pca"]')`);
+    a.exec("INSERT INTO grupos (id, nome, permissao_id) VALUES (9802, 'Com', 9801), (9803, 'Sem', NULL)");
+    for (const arq of arquivos.filter((f) => f >= "0106")) a.exec(readFileSync(join(DIR, arq), "utf8"));
+    const linhas = a.prepare("SELECT id, abas, pcas FROM grupos WHERE id IN (9802, 9803) ORDER BY id").all() as Record<string, unknown>[];
+    assert.deepEqual(
+      linhas.map((l) => ({ ...l })),
+      [
+        { id: 9802, abas: '["dfd","pca"]', pcas: null },
+        { id: 9803, abas: "[]", pcas: null },
+      ],
+    );
+  });
+
   it("0074 detalhes do papel: coluna com padrão '{}' (sem restrições) em todos os papéis + índices de criado_por", () => {
     const a = new DatabaseSync(":memory:");
     for (const arq of arquivos.filter((f) => f < "0074")) a.exec(readFileSync(join(DIR, arq), "utf8"));

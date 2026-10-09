@@ -1,6 +1,8 @@
 import { MesaPca } from "@/components/MesaPca";
 import { MesaSistema } from "@/components/MesaSistema";
 import { SeletorMesa } from "@/components/SeletorMesa";
+import { AcessoRestrito } from "@/components/AcessoRestrito";
+import { pcasDoAcesso, podePca } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { PcaResumo } from "@/lib/dfd";
 import { carregarMesa, carregarMesaDoPca } from "@/lib/mesa-dados";
@@ -15,8 +17,9 @@ export const dynamic = "force-dynamic";
 // seguem independentes). `?abrir=protocolo:<id>|dfd:<id>` abre o banner direto (o link do vínculo de uma tarefa); o
 // acesso é conferido pela rota do banner, como no clique.
 
-/** As opções do seletor de Mesa: os PCAs de fonte Protocolos (os únicos com Mesa). */
-const opcoesMesa = (pcas: PcaResumo[]) => pcas.filter((p) => p.fonte === "protocolo").map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
+/** As opções do seletor de Mesa: os PCAs de fonte Protocolos (os únicos com Mesa) que o GRUPO acessa. */
+const opcoesMesa = (pcas: PcaResumo[], permitidos: Set<number> | null) =>
+  pcas.filter((p) => p.fonte === "protocolo" && (!permitidos || permitidos.has(p.id))).map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
 
 export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string; responsavel?: string }> }) {
   const sp = await searchParams;
@@ -27,9 +30,10 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   if (pca && pca.fonte === "protocolo") {
     const rp = await acessoPagina("pca");
     if (rp.bloqueio) return rp.bloqueio;
+    if (!podePca(rp.acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
     const mp = await carregarMesaDoPca(rp.acesso.u, pca);
     return (
-      <MesaPca key={pca.id} {...mp} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas)} atual={pca.id} sistema={mp.pode.sistema.visualizar} />} />
+      <MesaPca key={pca.id} {...mp} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas, pcasDoAcesso(rp.acesso))} atual={pca.id} sistema={mp.pode.sistema.visualizar} />} />
     );
   }
   const r = await acessoPagina("dfd");
@@ -45,12 +49,13 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
       // O filtro pela pessoa vindo da URL remonta a Mesa (o filtro é o estado inicial dela).
       key={`sistema:${filtroInicial === m.filtroInicial ? "" : resp}`}
       // As Mesas dos PCAs só para quem visualiza o PCA (senão a opção levaria a "Acesso restrito").
-      seletorMesa={<SeletorMesa pcas={m.pode.pca.visualizar ? opcoesMesa(m.pcas) : []} atual={null} />}
+      seletorMesa={<SeletorMesa pcas={m.pode.pca.visualizar ? opcoesMesa(m.pcas, pcasDoAcesso(r.acesso)) : []} atual={null} />}
       pode={m.pode}
       listas={m.listas}
       reparticoes={m.reparticoes}
       reparticaoAtivaId={m.reparticaoAtivaId}
       pcas={m.pcas}
+      pcasAcesso={m.pcasAcesso}
       regras={m.regras}
       orgaos={m.orgaos}
       pessoas={m.pessoas}

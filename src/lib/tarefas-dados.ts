@@ -1,4 +1,4 @@
-import { type Acesso, atorPasta, getAcesso, podeNoQuadro, podeTela } from "./acesso";
+import { type Acesso, atorPasta, getAcesso, pcasDoAcesso, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { estadoTrello } from "./trello-vincular";
 import { carregarEdicoes } from "./edicoes-tabela";
@@ -112,7 +112,7 @@ export async function carregarCalendario(a: Acesso, mesPedido?: string, anual = 
     contadoresDosQuadros(ids, hoje, semanaDe(hoje, inicio)[6]),
     tarefasAbertasLeves(ids),
     assinaturaDaPessoa(u.id),
-    podeTela(a, "pca").visualizar ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
+    podeTela(a, "pca").visualizar ? cronogramaPcas(de, ate, pcasDoAcesso(a)) : Promise.resolve({ pcas: [], dfds: [] }),
     listasDosQuadros(ids),
     listarEquipes(ids),
   ]);

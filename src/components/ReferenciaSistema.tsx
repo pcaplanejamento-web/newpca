@@ -217,7 +217,7 @@ export function ReferenciaSistema({
     }
     if (d === "acesso") {
       return (
-        <Derivado titulo="Telas, ações dos papéis e status" nota="Os papéis e as ações de cada um se ajustam na aba Papéis; as telas de cada grupo, em Permissões.">
+        <Derivado titulo="Telas, ações dos papéis e status" nota="Os papéis e as ações de cada um se ajustam na aba Papéis; as telas de cada grupo, em Grupos.">
           <p className="mb-1 text-[12px] font-semibold text-muted">O que cada ação cobre em cada tela</p>
           <div className="mb-3 space-y-2">
             {ABAS.map((a) => (

@@ -6,10 +6,10 @@ import { LEMBRETE_MAX_MIN, lembreteDaTarefa, lembreteDevido, notificacaoDeLembre
 import { getDb } from "./db";
 import { enviarPendentesDepois } from "./email";
 import { dataIsoBrasilia } from "./format";
-import { podeNaTela } from "./papeis-core";
+import { podeNaTela, telasAbertas } from "./papeis-core";
 import { nomeExibicao, urlFoto } from "./pessoa";
 import { avisoVersaoExtensao } from "./automacao-centi-core";
-import { avisoNovaVersao } from "./versoes";
+import { avisoNovaVersao, mudancasVisiveis, VERSOES } from "./versoes";
 import { lerRecorrenciaEvento, notificacaoDePrazo, notificacaoDePrazoItem, ocorrenciasDoEvento, somarDias, type TipoNotificacao, TIPOS_NOTIFICACAO } from "./tarefas-core";
 import { comandosNotificacoes, pessoaNaTarefa, quadroVisivel, type NovaNotificacao } from "./tarefas-sql";
 import { agendarAoVivo, avisarAoVivo } from "./notificacoes-ao-vivo";
@@ -302,9 +302,19 @@ async function derivarLembretes(u: UsuarioSessao, grupoIds: number[] | null): Pr
   }
 }
 
-/** NOVA VERSÃO do sistema (com o que mudou) e da extensão da Automação (Centi): um aviso por versão a cada
- * Administrador (a chave dedup — limpo, não volta). */
-const versaoDerivar = (u: UsuarioSessao): NovaNotificacao[] => (u.admin ? [avisoNovaVersao(u.id), avisoVersaoExtensao(u.id)] : []);
+/** NOVA VERSÃO do sistema: a cada pessoa, um aviso por versão com SÓ o que mudou nas telas que os GRUPOS dela abrem (o
+ * ADM, tudo; nada nelas = nenhum aviso). A nova versão da extensão da Automação (Centi), só ao ADM. A chave dedup — limpo,
+ * não volta. */
+async function versaoDerivar(u: UsuarioSessao): Promise<NovaNotificacao[]> {
+  if (u.admin) {
+    const sistema = avisoNovaVersao(u.id);
+    return [...(sistema ? [sistema] : []), avisoVersaoExtensao(u.id)];
+  }
+  const grupos = await gruposComAbas(u.id);
+  const telas = new Set<string>(grupos.flatMap((g) => telasAbertas({ admin: false, capacidades: u.papel.capacidades, abas: g.abas })));
+  const aviso = avisoNovaVersao(u.id, mudancasVisiveis(VERSOES[0], telas, false));
+  return aviso ? [aviso] : [];
+}
 
 /** No máximo uma derivação por pessoa a cada tanto (por isolate do Worker) — a contagem do sino não refaz o trabalho. */
 const INTERVALO_DERIVAR = 5 * 60_000;
@@ -320,9 +330,14 @@ async function derivar(u: UsuarioSessao, grupoIds: number[] | null, forcar = fal
   derivadoEm.set(u.id, agora);
   if (derivadoEm.size > 2000) derivadoEm.clear();
   try {
-    const [prazos, lembretes, dispensadas] = await Promise.all([derivarPrazos(u, grupoIds), derivarLembretes(u, grupoIds), consultaDispensadas(getDb(), u.id)]);
+    const [prazos, lembretes, versao, dispensadas] = await Promise.all([
+      derivarPrazos(u, grupoIds),
+      derivarLembretes(u, grupoIds),
+      versaoDerivar(u),
+      consultaDispensadas(getDb(), u.id),
+    ]);
     const fora = new Set(dispensadas.map((d) => d.chave));
-    await gravarAvisos([...prazos, ...lembretes, ...versaoDerivar(u)].filter((n) => !n.chave || !fora.has(n.chave)));
+    await gravarAvisos([...prazos, ...lembretes, ...versao].filter((n) => !n.chave || !fora.has(n.chave)));
   } catch (e) {
     console.error("derivar falhou", e);
   }

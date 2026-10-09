@@ -1,4 +1,4 @@
-// Abas de módulo que uma PERMISSÃO pode liberar (gate de navegação). Módulo puro (sem deps de servidor) — usado no
+// Abas de módulo que um GRUPO pode liberar (gate de navegação). Módulo puro (sem deps de servidor) — usado no
 // cliente (navegação, telas de RBAC) e no servidor. A ORDEM é a da navegação: a 1ª liberada é a porta de entrada do
 // painel (`/painel` → a Mesa, onde ficam os protocolos, os DFDs e os itens).
 export const ABA_KEYS = ["dfd", "pca", "catalogo", "orcamento", "tarefas", "calendario"] as const;

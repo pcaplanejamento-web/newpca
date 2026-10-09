@@ -1,5 +1,7 @@
-import { asc, eq } from "drizzle-orm";
-import { grupoReparticoes, grupos, permissoes, reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
+import { asc, desc, eq } from "drizzle-orm";
+import { grupoReparticoes, grupos, pcas, reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
+import { abasConhecidas } from "@/lib/abas";
+import { lerPcasGrupo } from "@/lib/acesso";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -13,9 +15,10 @@ export async function GET() {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
   const db = getDb();
-  const [lista, perms, users, reps, vincUsu, vincRep] = await Promise.all([
-    db.select({ id: grupos.id, nome: grupos.nome, permissaoId: grupos.permissaoId }).from(grupos).orderBy(grupos.nome),
-    db.select({ id: permissoes.id, nome: permissoes.nome }).from(permissoes).orderBy(permissoes.nome),
+  const [lista, listaPcas, users, reps, vincUsu, vincRep] = await Promise.all([
+    db.select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas }).from(grupos).orderBy(grupos.nome),
+    // Os PCAs que o grupo pode escolher (o mais recente primeiro).
+    db.select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano }).from(pcas).orderBy(desc(pcas.ano), desc(pcas.id)),
     // Status: a tela marca quem está pendente/inativo (não conta como acesso ativo).
     db.select({ id: usuarios.id, nome: usuarios.nome, email: usuarios.email, status: usuarios.status }).from(usuarios).orderBy(usuarios.nome),
     // Oculta: a unidade não aparece nos documentos novos (o selo avisa); a "Geral" (código GERAL) = todas as unidades.
@@ -40,14 +43,26 @@ export async function GET() {
   }
   return ok({
     grupos: lista.map((g) => ({
-      ...g,
+      id: g.id,
+      nome: g.nome,
+      abas: lerAbasGrupo(g.abas),
+      pcas: lerPcasGrupo(g.pcas),
       membros: membrosPorGrupo.get(g.id) ?? [],
       reparticoes: repsPorGrupo.get(g.id) ?? [],
     })),
-    permissoes: perms,
+    pcas: listaPcas,
     usuarios: users,
     reparticoes: reps,
   });
+}
+
+/** As telas gravadas no grupo (as chaves antigas `dashboard`/`protocolos` saem na leitura). */
+function lerAbasGrupo(json: string): string[] {
+  try {
+    return abasConhecidas(JSON.parse(json));
+  } catch {
+    return [];
+  }
 }
 
 export async function POST(req: Request) {
@@ -55,11 +70,11 @@ export async function POST(req: Request) {
   if ("erro" in guard) return guard.erro;
   const corpo = await parseCorpo(grupoCreateSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, permissaoId, membros, reparticoes: reps } = corpo.data;
+  const { nome, abas, pcas: pcasGrupo, membros, reparticoes: reps } = corpo.data;
   const db = getDb();
   const invalido = await motivoIdsInvalidos(db, corpo.data);
   if (invalido) return erro(invalido, 422);
-  const [row] = await db.insert(grupos).values({ nome, permissaoId: permissaoId ?? null }).returning({ id: grupos.id });
+  const [row] = await db.insert(grupos).values({ nome, abas: JSON.stringify(abas), pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo) }).returning({ id: grupos.id });
   const grupoId = row.id;
   // Pessoas + unidades num LOTE (tudo ou nada); se falhar, o grupo recém-criado sai (nada fica pela metade).
   const comandos = [...comandosMembros(db, grupoId, membros), ...comandosUnidades(db, grupoId, reps)];
@@ -75,8 +90,8 @@ export async function POST(req: Request) {
     acao: "criar",
     entidade: "grupo",
     entidadeId: grupoId,
-    resumo: `Grupo "${nome}" criado (${membros.length} pessoa(s), ${reps.length} unidade(s))`,
-    depois: { nome, permissaoId: permissaoId ?? null, membros, reparticoes: reps },
+    resumo: `Grupo "${nome}" criado (${abas.length} tela(s), ${pcasGrupo == null ? "todos os PCAs" : `${pcasGrupo.length} PCA(s)`}, ${membros.length} pessoa(s), ${reps.length} unidade(s))`,
+    depois: { nome, abas, pcas: pcasGrupo, membros, reparticoes: reps },
   });
   return ok({ id: grupoId });
 }

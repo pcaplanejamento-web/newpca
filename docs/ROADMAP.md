@@ -1735,3 +1735,5 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **v1.53.0 — Responsáveis numa planilha única**: Órgãos e Unidades → Responsáveis — cada pessoa cadastrada uma vez (nome + matrícula) e vinculada a unidades ou órgãos conforme a assinatura do órgão (única = os do órgão; por unidade = os de cada unidade); padrão ou temporário, função, nomeação com link e período; a coluna Conferência aponta quem está sem responsável vigente, sem matrícula/função/nomeação, temporário encerrado e nomes repetidos. Tabelas de órgãos e unidades no padrão da Mesa, com o banner de cada um (dados por cadeado, responsáveis, estrutura). A migração `0099` converteu os responsáveis já cadastrados, sem perder nada.
 
 ✅ **v1.55.0 — Visão do orçamento à vista no PCA**: no PCA × Orçamento, o seletor “Visão” na barra da tabela (`SeletorVisaoPca`) troca a visão do orçamento do PCA na hora — a engrenagem segue para editar/criar visões.
+
+- **v1.76.0 — Grupos:** telas e PCAs escolhidos no próprio grupo (a tela Permissões saiu); aviso de nova versão a todos, só com o que muda nas telas do grupo.
