@@ -74,6 +74,6 @@ Autenticação **própria** (não Auth.js), 100% **Web Crypto** (confiável no C
    Administrador vê "acesso restrito".
 4. "Sair" volta ao login.
 
-## Arquivar usuário (migração `0076`)
+## Arquivar usuário (migração `0105`)
 
 O "Excluir" do ADM ARQUIVA a conta (inativa, fora da lista, com todos os dados). Usuários → "Arquivados (N)" → abrir → **Restaurar** (volta ativa) ou **Excluir definitivamente**. O cadastro pendente segue sendo recusado (apagado).
