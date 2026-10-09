@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.77.1",
+    data: "2026-10-09",
+    titulo: "Verificação só para visualizar",
+    mudancas: [
+      { tipo: "melhoria", area: "Verificação", texto: "Protocolo ou DFD agora se escolhe num seletor à direita do título.", link: "/painel/verificacao" },
+      { tipo: "correcao", area: "Verificação", texto: "Os banners da verificação são só de visualização: nada se edita, exclui ou seleciona.", link: "/painel/verificacao" },
+    ],
+  },
+  {
     versao: "1.77.0",
     data: "2026-10-09",
     titulo: "Verificação nos grupos e Novidades pelo acesso",

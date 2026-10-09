@@ -6,6 +6,7 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { Dropzone } from "./Dropzone";
 import { IconClipboard, IconFile, IconVerificacao } from "./icons";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
+import { Segmented } from "./Segmented";
 
 type PropsProtocolo = ComponentProps<typeof ProtocoloUploadForm>;
 type Arquivo = { file: File; n: number } | null;
@@ -24,6 +25,7 @@ export function VerificacaoView({
 }: Pick<PropsProtocolo, "reparticoes" | "pcas" | "regras" | "orgaos">) {
   const [protocolo, setProtocolo] = useState<Arquivo>(null);
   const [dfd, setDfd] = useState<Arquivo>(null);
+  const [tipo, setTipo] = useState<"protocolo" | "dfd">("protocolo");
   const comum = { reparticoes, pcas, regras, orgaos };
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -34,29 +36,43 @@ export function VerificacaoView({
         </h1>
         <Ajuda titulo="Verificação">
           <p>Solte um protocolo ou um DFD para ver todos os erros e atenções, como na importação da Mesa.</p>
-          <p>Nada é gravado: a tela serve só para consulta. O arquivo é analisado como veio, sem comparar com o que já está cadastrado.</p>
+          <p>Escolha à direita se vai verificar um protocolo ou um DFD.</p>
+          <p>Nada é gravado e nada se edita: o banner serve só para visualizar. O arquivo é analisado como veio, sem comparar com o que já está cadastrado.</p>
           <p>
             No rodapé do banner, o indicador de pendências abre a lista completa: tocar numa pendência leva ao lugar dela, e
             "Copiar / PDF" monta o relatório (despacho, WhatsApp, lista ou PDF).
           </p>
         </Ajuda>
+        <Segmented
+          className="ml-auto"
+          ariaLabel="O que verificar"
+          value={tipo}
+          onChange={setTipo}
+          options={[
+            { value: "protocolo", label: "Protocolo", icone: <IconClipboard className="h-4 w-4" /> },
+            { value: "dfd", label: "DFD", icone: <IconFile className="h-4 w-4" /> },
+          ]}
+        />
       </div>
-      <div className="grid gap-[var(--gap-block)] sm:grid-cols-2">
+      {tipo === "protocolo" ? (
         <Dropzone
+          key="protocolo"
           accept=".pdf"
           onFile={(file) => setProtocolo((a) => ({ file, n: (a?.n ?? 0) + 1 }))}
           titulo="Verificar protocolo (.pdf)"
           icon={<IconClipboard className="h-7 w-7" />}
           dica="Capa, cada DFD e os itens são conferidos pelas regras do sistema."
         />
+      ) : (
         <Dropzone
+          key="dfd"
           accept=".xlsx,.xls,.pdf"
           onFile={(file) => setDfd((a) => ({ file, n: (a?.n ?? 0) + 1 }))}
           titulo="Verificar DFD (.pdf ou .xlsx)"
           icon={<IconFile className="h-7 w-7" />}
           dica="Um DFD avulso: seções, itens, assinatura e catálogo."
         />
-      </div>
+      )}
       <ProtocoloUploadForm {...comum} verificacao arquivo={protocolo} />
       <DfdUploadForm {...comum} verificacao arquivoHost={dfd} />
     </div>

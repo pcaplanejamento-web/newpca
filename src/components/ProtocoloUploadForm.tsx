@@ -1410,7 +1410,7 @@ export function ProtocoloUploadForm({
   const sobrescreveAberto = abertoIdx >= 0 && !descartados.has(abertoIdx) && sobrescreve(abertoIdx);
   // SÓ LEITURA na análise: gravando, fora do envio (excluído/descartado/mantido o existente) ou de unidade SEM ACESSO (o
   // servidor recusaria regravá-lo) — editar aí não teria efeito ou viraria erro.
-  const soLeituraAberto = importando || descartados.has(abertoIdx) || (numeroAberto != null && classificar(numeroAberto) === "semAcesso");
+  const soLeituraAberto = verificacao || importando || descartados.has(abertoIdx) || (numeroAberto != null && classificar(numeroAberto) === "semAcesso");
 
   // ---- DUPLICADOS do DFD aberto: a comparação lado a lado (aberto × cada duplicado, a régua do reenvio) e a
   // ESCOLHA de qual fica. O duplicado ainda não lido (além do teto da análise) é lido ao abrir a comparação.
@@ -2196,7 +2196,7 @@ export function ProtocoloUploadForm({
                       mensagensAbertas={painel?.tipo === "mensagens"}
                       onToggleMensagens={() => setPainel((p) => (p?.tipo === "mensagens" ? null : { tipo: "mensagens" }))}
                       acoes={
-                        <>
+                        verificacao ? undefined : <>
                           {/* Excluir ESTE DFD do protocolo (fora do envio: não é gravado nem soma; "Restaurar" desfaz). */}
                           {!descartados.has(abertoIdx) && (
                             <BotaoAcao
@@ -2322,7 +2322,7 @@ export function ProtocoloUploadForm({
                 {erro}
               </Callout>
             )}
-            {sel.size > 0 && !importando && (
+            {sel.size > 0 && !importando && !verificacao && (
               <BarraSelecaoDfds
                 dfds={linhasSel.map((l) => ({ key: l.key, numero: l.numero, planejamento: l.planejamento, valor: l.valor, itens: l.itens }))}
                 onRemover={(k) => setSel((s) => new Set([...s].filter((x) => x !== k)))}
@@ -2409,8 +2409,8 @@ export function ProtocoloUploadForm({
             valorCapa: extra.valorCapa,
             localReparticao: extra.localReparticao,
           }}
-          modoCapa={origemPdf ? "cadeado" : "criar"}
-          numeroEditavel={origemPdf && index?.protocolo.numero == null}
+          modoCapa={verificacao ? "leitura" : origemPdf ? "cadeado" : "criar"}
+          numeroEditavel={!verificacao && origemPdf && index?.protocolo.numero == null}
           assuntos={opcoesAssunto(regras, assunto)}
           onCapaChange={(c, v) => {
             if (c === "numero") setNumero(v);
@@ -2421,9 +2421,9 @@ export function ProtocoloUploadForm({
             else if (c === "localReparticao") setExtra((x) => ({ ...x, localReparticao: v || null }));
             else setExtra((x) => ({ ...x, documento: v || null }));
           }}
-          onValorCapaChange={(v) => setExtra((x) => ({ ...x, valorCapa: v }))}
-          unidade={{ id: protoRepId, opcoes: reparticoes, onChange: setProtoRepId, rotulo: "Unidade do protocolo (pelo Interessado)", obrigatoria: true }}
-          pca={<PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />}
+          onValorCapaChange={verificacao ? undefined : (v) => setExtra((x) => ({ ...x, valorCapa: v }))}
+          unidade={{ id: protoRepId, opcoes: reparticoes, onChange: verificacao ? undefined : setProtoRepId, rotulo: "Unidade do protocolo (pelo Interessado)", obrigatoria: true }}
+          pca={<PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} disabled={verificacao} />}
           totais={{
             dfds: totalVivos,
             itens: itensDfds,
@@ -2432,9 +2432,9 @@ export function ProtocoloUploadForm({
             sobrescritos: rastroMantido.length > 0 ? { qtd: rastroMantido.length, valor: valorRastro } : undefined,
           }}
           conciliacao={conc}
-          onSubstituir={() => setExtra((x) => ({ ...x, valorCapa: conc.somatorio }))}
+          onSubstituir={verificacao ? undefined : () => setExtra((x) => ({ ...x, valorCapa: conc.somatorio }))}
           linhas={linhasDfd}
-          selecionavel
+          selecionavel={!verificacao}
           selected={sel}
           onSelected={setSel}
           onVerDfd={abrir}
@@ -2443,7 +2443,7 @@ export function ProtocoloUploadForm({
           regras={regras}
           sobrescritos={rastroMantido}
           acaoDescartados={
-            excluidosDoProtocolo.size > 0 && !importando ? (
+            excluidosDoProtocolo.size > 0 && !importando && !verificacao ? (
               <Button size="sm" variant="secondary" icon={<IconUndo className="h-4 w-4" />} onClick={restaurarExcluidos}>
                 Restaurar excluídos ({num(excluidosDoProtocolo.size)})
               </Button>

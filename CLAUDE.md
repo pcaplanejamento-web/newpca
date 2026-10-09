@@ -636,7 +636,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadastrados — `carregarExistentes`/`buscarProcesso`/sobrescrita pulados), sem Protocolar/Importar (`protocolar`/`enviar`
   retornam) e o rodapé diz "somente consulta". Erros, navegação e relatórios = o `PainelPendencias` de sempre. Dados da
   página = `contextoBanners` (unidades com responsáveis, regras do ADM, órgãos, PCAs). Nada é gravado; as únicas chamadas
-  são de leitura (catálogo).
+  são de leitura (catálogo). v1.77.1: o `Segmented` Protocolo | DFD à direita do título escolhe a `Dropzone`; com `verificacao` os banners são SÓ LEITURA (capa `leitura`, DFD `readOnly`, item sem editar, sem seleção/massa, sem excluir/restaurar/manter, PCA e unidade travados).
 
 ## Grupos, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o

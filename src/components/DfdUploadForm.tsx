@@ -451,7 +451,7 @@ export function DfdUploadForm({
                     onIrPara={(a) => setAncoraAlvo({ ...a, nonce: Date.now() })}
                     conformidade={conformidade}
                     regras={regras}
-                    editavel={status !== "sending"}
+                    editavel={!verificacao && status !== "sending"}
                     onEditarItem={(i, patch) => setPreview((p) => (p ? editarItemDfd(p, i, patch) : p))}
                     onRemoverItem={(i) => {
                       setPainel(null);
@@ -520,7 +520,7 @@ export function DfdUploadForm({
                   PCA <strong className="text-text">{anoPca}</strong> — o do protocolo {base.protocoloNumero ?? ""} (o DFD continua nele).
                 </p>
               ) : (
-                <PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} />
+                <PcaPicker pcas={pcas} value={anoPca} detectado={anoPcaDetectado} onChange={setAnoPca} disabled={verificacao} />
               )}
             </section>
             <DfdConferir
@@ -536,7 +536,7 @@ export function DfdUploadForm({
               orgaos={orgaos}
               conformidade={conformidade}
               ancoraAlvo={ancoraAlvo}
-              readOnly={status === "sending"}
+              readOnly={verificacao || status === "sending"}
               itemAtivo={painel?.tipo === "item" ? painel.idx : null}
               onItemClick={(idx) => setPainel({ tipo: "item", idx })}
               onRepChange={(id) => {
