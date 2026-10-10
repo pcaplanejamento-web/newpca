@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.79.0",
+    data: "2026-10-10",
+    titulo: "Biblioteca de componentes só para o ADM",
+    mudancas: [
+      { tipo: "melhoria", area: "Administração", texto: "A biblioteca de componentes saiu da área pública e fica em Administração → Componentes, só para administradores.", link: "/painel/design-system" },
+    ],
+  },
+  {
     versao: "1.78.1",
     data: "2026-10-09",
     titulo: "Linhas vazias só até a visão da tabela",
@@ -1451,6 +1459,7 @@ const PREFIXOS_ADMIN = [
   "/painel/armazenamento",
   "/painel/auditoria",
   "/painel/aparencia",
+  "/painel/design-system",
 ] as const;
 const naRota = (link: string, prefixo: string) => link === prefixo || link.startsWith(`${prefixo}/`) || link.startsWith(`${prefixo}?`);
 

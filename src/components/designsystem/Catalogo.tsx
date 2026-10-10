@@ -558,7 +558,7 @@ function PcaEspacoDemo() {
           (infraestrutura, sem UI, no AppShell): as telas voltam do cache e só recarregam quando a versão dos dados muda. */}
       <div className="flex flex-wrap items-center gap-3">
         <SeletorMesa pcas={[{ id: 2, nome: "PCA 2027", ano: 2027 }]} atual={mesaDemo} onEscolher={setMesaDemo} />
-        <Link href="/design-system" className="relative rounded-card border border-border px-4 py-2 text-sm font-semibold text-text">
+        <Link href="/painel/design-system" className="relative rounded-card border border-border px-4 py-2 text-sm font-semibold text-text">
           Link com CarregandoLink
           <CarregandoLink />
         </Link>
@@ -4881,7 +4881,7 @@ export function Catalogo() {
             <div className="max-w-full rounded-[28px] border-4 border-border-2 bg-bg p-2 shadow-soft">
               <iframe
                 title="Pré-visualização responsiva"
-                src="/design-system?view=frame"
+                src="/painel/design-system?view=frame"
                 className="block rounded-[18px] border border-border bg-bg"
                 style={{ width: larguraDevice, height: 760, maxWidth: "100%" }}
               />
@@ -4992,8 +4992,8 @@ function DemoSegundoPlano() {
           naTela={new Set()}
           onDispensar={() => setLigado(false)}
           trabalhos={[
-            { id: "a", chave: "demo", titulo: "Conferir DFDs × Centi", estado: "rodando", feito: 3, total: 8, texto: "Conferir 1 DFD × Centi: 42 de 300", rota: "/design-system" },
-            { id: "b", chave: "demo", titulo: "Execução dos DFDs na CM002", estado: "concluido", feito: 6, total: 6, rota: "/design-system" },
+            { id: "a", chave: "demo", titulo: "Conferir DFDs × Centi", estado: "rodando", feito: 3, total: 8, texto: "Conferir 1 DFD × Centi: 42 de 300", rota: "/painel/design-system" },
+            { id: "b", chave: "demo", titulo: "Execução dos DFDs na CM002", estado: "concluido", feito: 6, total: 6, rota: "/painel/design-system" },
           ]}
         />
       )}

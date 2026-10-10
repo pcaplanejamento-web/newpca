@@ -321,7 +321,7 @@ export function AparenciaAdmin({ inicial }: { inicial: Aparencia }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">Personalize a identidade visual — vale para toda a plataforma.</p>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" icon={<IconLayers className="h-4 w-4" />} href="/design-system">
+          <Button variant="ghost" icon={<IconLayers className="h-4 w-4" />} href="/painel/design-system">
             Ver biblioteca
           </Button>
           <Button variant="secondary" onClick={restaurar} disabled={salvando}>

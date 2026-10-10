@@ -1741,3 +1741,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - **v1.77.1 — Verificação:** seletor Protocolo | DFD à direita; banners só para visualizar.
 - **v1.78.0 — Tabelas:** 1º clique marca (accent), 2º abre o banner; cor das linhas intercaladas na Aparência; página sempre cheia com linhas vazias.
 - **v1.78.1 — Tabelas:** linhas vazias só até o limite da visão (nunca além das linhas por página).
+- **v1.79.0 — Biblioteca de componentes:** só o ADM (Administração → Componentes, `/painel/design-system`); a única tela pública é a consulta do PCA.

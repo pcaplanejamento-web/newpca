@@ -1,13 +1,6 @@
-import type { Metadata } from "next";
-import { Catalogo } from "@/components/designsystem/Catalogo";
+import { redirect } from "next/navigation";
 
-// Biblioteca de componentes pública (spec §39.25) — validação do design system e
-// do Theme Playground. Sem dados sensíveis; a persistência do tema (ADM) fica em
-// /painel/aparencia.
-export const metadata: Metadata = {
-  title: "Design System — Plataforma PCA",
-};
-
-export default function DesignSystemPage() {
-  return <Catalogo />;
+// Endereço antigo: a biblioteca mora no painel do ADM (o layout do /painel pede o login).
+export default function DesignSystemAntigo() {
+  redirect("/painel/design-system");
 }

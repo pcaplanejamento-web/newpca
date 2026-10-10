@@ -28,6 +28,7 @@ import {
   IconDatabase,
   IconLogout,
   IconMenu,
+  IconLayers,
   IconPalette,
   IconPlug,
   IconRobo,
@@ -66,6 +67,7 @@ const SECOES: NavSecao[] = [
       { href: "/painel/armazenamento", label: "Armazenamento", Icon: IconDatabase, soAdmin: true },
       { href: "/painel/auditoria", label: "Auditoria", Icon: IconClock, soAdmin: true },
       { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, soAdmin: true },
+      { href: "/painel/design-system", label: "Componentes", Icon: IconLayers, soAdmin: true },
     ],
   },
 ];

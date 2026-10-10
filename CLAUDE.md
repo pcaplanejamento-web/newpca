@@ -3536,7 +3536,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   UNIDADES DE MEDIDA e CLASSIFICAÇÕES de item".
 
 ## UI — Design System por tokens (`/design-system` é a FONTE ÚNICA)
-- **REGRA FIRME:** todo componente vive na biblioteca **`/design-system`** (rota pública,
+- **REGRA FIRME:** todo componente vive na biblioteca **`/painel/design-system`** (v1.79.0: SÓ o ADM — Administração →
+  Componentes; o antigo `/design-system` redireciona; a ÚNICA tela pública sem login é a consulta do PCA em `/`;
   `src/components/designsystem/Catalogo.tsx`). Ao criar QUALQUER componente (inclui botões e
   ícones), **adicione-o ao catálogo**; as telas só podem **usar componentes do design-system**
   — nada de UI ad-hoc/inline. Ícones = **lucide-react** reexportados como `Icon*` em `icons.tsx`.
@@ -4682,7 +4683,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `servidor`/`conexao` pedem a tela de novo (`router.refresh()` + `reset()` numa transição). Toda falha vai a `POST
   /api/erros` (os Logs do Worker).
 - **Verificação (sandbox):** dev server local é lentíssimo → verificar no **site publicado** via
-  Browser pane, claro/escuro + mobile (360/390/768); `/design-system` é a superfície de validação.
+  Browser pane, claro/escuro + mobile (360/390/768); `/painel/design-system` (ADM) é a superfície de validação.
 
 ## Testes e qualidade
 - **`node:test` + type stripping nativo** (`--experimental-strip-types`), sem dependências
