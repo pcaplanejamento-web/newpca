@@ -17,6 +17,7 @@ import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
 import { IconArquivar, IconDesarquivar, IconBadgeCheck, IconCheck, IconSave, IconSenhaNova, IconShield, IconShieldCheck, IconTrash, IconUserCheck, IconUserX, IconWhatsapp } from "./icons";
 import { Modal } from "./Modal";
 import { OpcoesUnidades } from "./OpcoesUnidades";
+import { HistoricoAcessos } from "./HistoricoAcessos";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { BotaoWhatsapp } from "./Telefone";
 import { Selecao } from "./Selecao";
@@ -50,6 +51,8 @@ export type UsuarioAdmin = {
   arquivadoPor: string | null;
   criadoEm: string | null;
   atualizadoEm: string | null;
+  /** O último acesso (login ou atividade da sessão). */
+  ultimoAcessoEm?: string | null;
 };
 
 /** O que a tela manda ao `PATCH /api/admin/usuarios/[id]` — só o que MUDOU. */
@@ -622,6 +625,10 @@ function Corpo({
             )}
           </LinhaCampo>
         </div>
+      </SecaoBanner>
+
+      <SecaoBanner titulo="Histórico de acesso">
+        <HistoricoAcessos url={`/api/admin/usuarios/${u.id}/acessos`} nomeExportacao={`Acessos - ${u.nome}`} />
       </SecaoBanner>
     </div>
   );

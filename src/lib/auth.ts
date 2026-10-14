@@ -182,8 +182,14 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
     await getDb().delete(sessoes).where(eq(sessoes.id, sessaoId)).catch(() => {});
     return null;
   }
-  if (renovarAtividade(visto, agora, cfg.inatividadeMin))
-    await getDb().update(sessoes).set({ vistoEm: new Date(agora).toISOString() }).where(eq(sessoes.id, sessaoId)).catch(() => {});
+  if (renovarAtividade(visto, agora, cfg.inatividadeMin)) {
+    const db = getDb();
+    const iso = new Date(agora).toISOString();
+    // A atividade da sessão e o ÚLTIMO ACESSO da pessoa (o histórico de acesso) no mesmo lote.
+    await db
+      .batch([db.update(sessoes).set({ vistoEm: iso }).where(eq(sessoes.id, sessaoId)), db.update(usuarios).set({ ultimoAcessoEm: iso }).where(eq(usuarios.id, row.id))])
+      .catch(() => {});
+  }
   return sessaoDaLinha(row);
 });
 

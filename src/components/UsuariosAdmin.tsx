@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { haQuanto } from "@/lib/acessos-core";
 import { formatarTelefone } from "@/lib/cadastro-core";
+import { dataHoraBR } from "@/lib/format";
 import type { OpcaoPapel } from "@/lib/papeis";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
 import { AcessoDaPessoa } from "./AcessoDaPessoa";
@@ -290,6 +292,21 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
           )}
         </span>
       ),
+    },
+    {
+      key: "ultimoAcesso",
+      header: "Último acesso",
+      nowrap: true,
+      filter: "date",
+      value: (u) => u.ultimoAcessoEm ?? "",
+      render: (u) =>
+        u.ultimoAcessoEm ? (
+          <span className="tabular-nums" title={haQuanto(u.ultimoAcessoEm, Date.now())}>
+            {dataHoraBR(u.ultimoAcessoEm)}
+          </span>
+        ) : (
+          <span className="text-faint">Nunca</span>
+        ),
     },
     {
       key: "dados",

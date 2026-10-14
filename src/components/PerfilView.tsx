@@ -1,5 +1,6 @@
 "use client";
 
+import { HistoricoAcessos } from "./HistoricoAcessos";
 import { useRouter } from "next/navigation";
 import { problemaSenha } from "@/lib/cadastro-core";
 import { type FormEvent, useRef, useState } from "react";
@@ -35,6 +36,7 @@ import {
   IconTrash,
   IconUser,
   IconUserX,
+  IconClock,
 } from "./icons";
 import { ResumoDetalhesPapel } from "./ResumoDetalhesPapel";
 import { ResumoPapel } from "./ResumoPapel";
@@ -537,6 +539,11 @@ export function PerfilView({
               </p>
             </SecaoPerfil>
           )}
+
+          {/* HISTÓRICO DE ACESSO: cada login (data/hora, dispositivo, canal, IP) + o último acesso */}
+          <SecaoPerfil icone={<IconClock className="h-4 w-4" />} titulo="Histórico de acesso" descricao="Cada entrada na sua conta. Não reconhece um acesso? Troque a senha e avise o administrador.">
+            <HistoricoAcessos url="/api/perfil/acessos" nomeExportacao="Meu histórico de acesso" />
+          </SecaoPerfil>
         </div>
 
         {/* Coluna das PREFERÊNCIAS: o acesso, e-mail, Mesa e protocolação */}

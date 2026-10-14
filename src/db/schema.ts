@@ -144,6 +144,8 @@ export const usuarios = sqliteTable(
     // ARQUIVADO (migração `0105`): "Excluir" arquiva — inativo, fora da lista, restaurável (quando + o NOME de quem).
     arquivadoEm: text("arquivado_em"),
     arquivadoPor: text("arquivado_por"),
+    /** O ÚLTIMO ACESSO (ISO) — o login e a atividade da sessão (no máximo a cada poucos minutos). */
+    ultimoAcessoEm: text("ultimo_acesso_em"),
   },
   (t) => [
     uniqueIndex("usuarios_email_uq").on(t.email),
@@ -938,6 +940,25 @@ export type NovoItem = typeof itens.$inferInsert;
 export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
+
+/** HISTÓRICO DE ACESSO (migração `0111`): cada login — quando, o dispositivo, o canal e o IP (até 50 por pessoa). */
+export const acessos = sqliteTable(
+  "acessos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    em: text("em").notNull(),
+    canal: text("canal").notNull(),
+    navegador: text("navegador").notNull(),
+    ip: text("ip"),
+    /** O identificador CURTO do aparelho (o começo do hash — distingue os aparelhos sem revelar o cookie). */
+    aparelho: text("aparelho").notNull(),
+    novo: integer("novo", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [index("acessos_usuario_idx").on(t.usuarioId, t.id)],
+);
 export type Configuracao = typeof configuracoes.$inferSelect;
 export type Grupo = typeof grupos.$inferSelect;
 export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;

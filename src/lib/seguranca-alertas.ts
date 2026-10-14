@@ -1,12 +1,14 @@
 import { and, eq } from "drizzle-orm";
+import { comandosRegistrarAcesso, consultaAcessos } from "./acessos-sql";
 import { cookies } from "next/headers";
-import { preferenciasTabela } from "@/db/schema";
+import { preferenciasTabela, usuarios } from "@/db/schema";
 import { getDb } from "./db";
 import { idsDosAdmins } from "./email";
 import { notificar } from "./notificacoes";
 import { sha256Hex, toHex } from "./password";
 import { salvarPreferenciaTabela } from "./preferencias-tabela";
 import { getConfigSeguranca } from "./seguranca";
+import type { AcessoRegistro } from "./acessos-core";
 import { avaliarAparelho, lerAparelhos, resumoNavegador } from "./seguranca-core";
 
 // ALERTAS DE LOGIN SUSPEITO (Configurações → Segurança): aparelho novo e conta bloqueada por senhas erradas. BEST-EFFORT —
@@ -39,9 +41,14 @@ export async function aposEntrar(req: Request, u: Pessoa, canal: "senha" | "Goog
     }
     const { novo, lista } = avaliarAparelho(lerAparelhos(atual), hash);
     await salvarPreferenciaTabela(u.id, CHAVE_APARELHOS, { ids: lista });
+    // O HISTÓRICO DE ACESSO (Perfil e o banner do usuário): sempre, com ou sem alerta.
+    const navegador = resumoNavegador(req.headers.get("user-agent"));
+    const ip = req.headers.get("cf-connecting-ip");
+    const db = getDb();
+    await db.batch(comandosRegistrarAcesso(db, { usuarioId: u.id, em: new Date().toISOString(), canal: canal === "Google" ? "google" : "senha", navegador, ip, aparelho: hash.slice(0, 6), novo }));
     if (!novo || !cfg.alertaAparelho) return;
     const quando = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    const onde = `${resumoNavegador(req.headers.get("user-agent"))} · IP ${req.headers.get("cf-connecting-ip") ?? "desconhecido"}`;
+    const onde = `${navegador} · IP ${ip ?? "desconhecido"}`;
     const admins = (await idsDosAdmins()).filter((id) => id !== u.id);
     await notificar([
       ...admins.map((usuarioId) => ({
@@ -83,4 +90,14 @@ export async function alertarBloqueio(req: Request, u: Pessoa): Promise<void> {
   } catch (e) {
     console.error("[seguranca] alerta de bloqueio falhou:", (e as Error).message);
   }
+}
+
+/** O histórico de acesso de uma pessoa + o último acesso (o Perfil e o banner do usuário). */
+export async function historicoDeAcesso(usuarioId: number): Promise<{ ultimoAcesso: string | null; acessos: AcessoRegistro[] }> {
+  const db = getDb();
+  const [lista, [u]] = await Promise.all([
+    consultaAcessos(db, usuarioId),
+    db.select({ ultimo: usuarios.ultimoAcessoEm }).from(usuarios).where(eq(usuarios.id, usuarioId)).limit(1),
+  ]);
+  return { ultimoAcesso: u?.ultimo ?? null, acessos: lista };
 }

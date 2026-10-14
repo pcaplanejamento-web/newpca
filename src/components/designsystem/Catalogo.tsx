@@ -2,6 +2,7 @@
 
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
+import { TabelaAcessos } from "@/components/HistoricoAcessos";
 import { type ConfigSeguranca, SEGURANCA_PADRAO } from "@/lib/seguranca-core";
 import { MarcaDagua } from "@/components/ProtecaoDados";
 import { type ConfigProtecao, PROTECAO_PADRAO } from "@/lib/protecao-core";
@@ -3427,6 +3428,19 @@ export function Catalogo() {
 
       <Secao titulo="Segurança do acesso — CamposSeguranca (Configurações → Segurança: encerrar a sessão inativa, alertas de aparelho novo e de conta bloqueada)">
         <DemoSeguranca />
+      </Secao>
+
+      <Secao titulo="Histórico de acesso — TabelaAcessos / HistoricoAcessos (Perfil e banner do usuário: último acesso, logins, aparelhos e cada entrada com data/hora, dispositivo, canal e IP)">
+        <TabelaAcessos
+          dados={{
+            ultimoAcesso: "2026-10-14T13:20:00.000Z",
+            acessos: [
+              { id: 3, em: "2026-10-14T11:05:00.000Z", canal: "senha", navegador: "Chrome no Windows", ip: "177.10.20.30", aparelho: "a1b2c3", novo: false },
+              { id: 2, em: "2026-10-13T19:40:00.000Z", canal: "google", navegador: "Safari no iOS", ip: "189.40.1.2", aparelho: "f0e9d8", novo: true },
+              { id: 1, em: "2026-10-10T08:02:00.000Z", canal: "senha", navegador: "Chrome no Windows", ip: "177.10.20.30", aparelho: "a1b2c3", novo: false },
+            ],
+          }}
+        />
       </Secao>
 
       <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (contato institucional = WhatsApp: máscara + ícone + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">

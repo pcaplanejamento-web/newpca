@@ -192,6 +192,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     15 min. A rota genérica de preferências RECUSA as chaves reservadas `cofre:`/`seguranca:`. Revisão das rotas públicas
     (v1.92.0): o "Esqueci a senha" sem sessão responde igual com o reenvio cedo (não enumera) e a consulta pública mascara
     objeto/setor/responsável do DFD (`dfdPublico`).
+  - **HISTÓRICO DE ACESSO (v1.93.0, migração `0111`, aditiva — tabela `acessos` + `usuarios.ultimo_acesso_em`, a ÚLTIMA
+    coluna do schema de `usuarios`: o `insert().select()` do cadastro atômico, `papeis-sql.ts`, lista todas na ordem):** cada
+    login (senha e Google — `aposEntrar`) grava data/hora, o navegador (`resumoNavegador`), o canal, o IP e o aparelho (6
+    primeiros do hash do cookie `pca_aparelho`, + "Novo") — builders **`acessos-sql.ts`** (`comandosRegistrarAcesso`: grava,
+    poda além de `MAX_ACESSOS`=50 por pessoa e marca o último acesso, num lote; testados no D1 real — `tests/acessos.test.ts`).
+    O ÚLTIMO ACESSO também anda com a atividade da sessão (`getUsuarioAtual`, no mesmo lote do `visto_em`). Núcleo puro
+    `acessos-core.ts` (`rotuloDispositivo`, `haQuanto`, `aparelhosDistintos`). Rotas `GET /api/perfil/acessos` (a própria
+    pessoa) e `GET /api/admin/usuarios/[id]/acessos` (ADM) → `historicoDeAcesso`. Tela: **`HistoricoAcessos`/`TabelaAcessos`**
+    (DS — `StatMini` Último acesso · Logins · Aparelhos + a `DataTable` compacta exportável) no Perfil ("Histórico de
+    acesso") e no banner do usuário; coluna **"Último acesso"** em Usuários.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).

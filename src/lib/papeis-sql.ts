@@ -73,6 +73,7 @@ export function comandoCadastroPrimeiro(db: Db, d: DadosCadastro) {
       trocarSenha: sql<boolean>`0`.as("trocar_senha"),
       arquivadoEm: sql<string | null>`NULL`.as("arquivado_em"),
       arquivadoPor: sql<string | null>`NULL`.as("arquivado_por"),
+      ultimoAcessoEm: sql<string | null>`NULL`.as("ultimo_acesso_em"),
     })
     .from(papeis)
     .where(and(eq(papeis.chave, "admin"), sql`NOT EXISTS (SELECT 1 FROM ${usuarios})`));

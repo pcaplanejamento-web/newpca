@@ -125,6 +125,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "admin/situacoes": { GET: ADMIN, POST: ADMIN },
   "admin/usuarios/[id]": { PATCH: ADMIN, DELETE: ADMIN },
   "admin/usuarios": { GET: ADMIN },
+  "admin/usuarios/[id]/acessos": { GET: ADMIN },
 
   // ── Acesso (sem sessão) ─────────────────────────────────────────────────────────────────────────────────
   "auth/cadastro": { POST: publica("criar a conta (código do e-mail)") },
@@ -240,6 +241,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "grupos/ativo": { POST: pessoal("o grupo ativo do cabeçalho (entre os da pessoa)") },
   "reparticoes/ativo": { POST: pessoal("a unidade ativa do cabeçalho (entre as do grupo)") },
   "pca/filtro": { POST: pessoal("o PCA do cabeçalho") },
+  "perfil/acessos": { GET: pessoal() },
   "perfil/google": { DELETE: pessoal() },
   "perfil/preferencias": { PATCH: pessoal() },
   "perfil/presenca": { PUT: pessoal("aparecer invisível e o status na presença do grupo") },

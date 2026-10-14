@@ -47,6 +47,7 @@ export async function GET() {
         papelId: sql<number | null>`${papelDoUsuarioSql}`,
         status: usuarios.status,
         criadoEm: usuarios.criadoEm,
+        ultimoAcessoEm: usuarios.ultimoAcessoEm,
       })
       .from(usuarios)
       .leftJoin(reparticoes, eq(reparticoes.id, usuarios.reparticaoId))

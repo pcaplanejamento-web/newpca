@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.93.0",
+    data: "2026-10-14",
+    titulo: "Histórico de acesso",
+    mudancas: [
+      { tipo: "novo", area: "Perfil", texto: "Histórico de acesso: o último acesso e cada entrada na sua conta com data, hora, dispositivo, canal (senha ou Google) e IP — exportável.", link: "/painel/perfil" },
+      { tipo: "novo", area: "Usuários", texto: "Coluna \"Último acesso\" na lista e o histórico de acesso de cada pessoa no banner do usuário.", link: "/painel/usuarios" },
+    ],
+  },
+  {
     versao: "1.92.0",
     data: "2026-10-14",
     titulo: "Segurança: sessão inativa e alertas de login",
