@@ -80,7 +80,7 @@ import { VendoAgora } from "./VendoAgora";
  * dia do calendário) ou uma existente.
  */
 export type AberturaTarefa =
-  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; prazo?: string; titulo?: string }
+  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; vinculos?: Vinculo[]; prazo?: string; titulo?: string }
   | { tipo: "editar"; id: number; focoTitulo?: boolean };
 
 type Rascunho = {
@@ -284,7 +284,7 @@ export function TarefaDetalhe({
           observadores: [],
           equipes: [],
           etiquetas: [],
-          vinculos: aberto.tipo === "nova" && aberto.vinculo ? [aberto.vinculo] : [],
+          vinculos: aberto.tipo !== "nova" ? [] : aberto.vinculos?.length ? aberto.vinculos : aberto.vinculo ? [aberto.vinculo] : [],
           descricao: "",
           recorrencia: null,
           checklists: [],
@@ -896,8 +896,23 @@ export function TarefaDetalhe({
         }
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {existente && !existente.template && !existente.arquivada && (
+              <CirculoConcluir concluida={concluida} tamanho="md" rotulo={concluida ? "Reabrir a tarefa" : "Concluir a tarefa"} disabled={!pode || somenteLeitura} onAlternar={() => salvar(!concluida)} />
+            )}
             {existente ? <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge> : <Badge>Nova</Badge>}
-            <h2 className="min-w-0 truncate text-base font-semibold text-text">{nova ? "Nova tarefa" : existente?.titulo}</h2>
+            {/* O TÍTULO é editado no próprio cabeçalho (sem campo repetido no corpo). */}
+            {somenteLeitura ? (
+              <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text">{existente?.titulo}</h2>
+            ) : (
+              <div className="min-w-[12rem] flex-1">
+                <TituloNoLugar
+                  valor={r.titulo}
+                  focar={nova || (aberto.tipo === "editar" && !!aberto.focoTitulo)}
+                  cursorNoFim={aberto.tipo === "editar" && !!aberto.focoTitulo}
+                  onChange={setTitulo}
+                />
+              </div>
+            )}
             {existente?.arquivada && <Badge>Arquivada</Badge>}
             {existente?.template && <Badge tone="violet">Template</Badge>}
             {concluida && (
@@ -998,20 +1013,6 @@ export function TarefaDetalhe({
         // Só-leitura (o papel só VÊ): o fieldset desabilita TODOS os controles de dentro (os links seguem abrindo).
         <fieldset disabled={somenteLeitura} className="m-0 min-w-0 space-y-4 border-0 p-0">
           {somenteLeitura && <p className="text-[12px] text-muted">Somente leitura — seu papel não permite editar as tarefas deste quadro.</p>}
-          {/* CÍRCULO de concluir + TÍTULO no lugar (como no Trello). */}
-          <div className="flex items-start gap-2">
-            {existente && !existente.template && !existente.arquivada && (
-              <span className="mt-1.5">
-                <CirculoConcluir concluida={concluida} tamanho="md" rotulo={concluida ? "Reabrir a tarefa" : "Concluir a tarefa"} disabled={!pode} onAlternar={() => salvar(!concluida)} />
-              </span>
-            )}
-            <TituloNoLugar
-              valor={r.titulo}
-              focar={nova || (aberto.tipo === "editar" && !!aberto.focoTitulo)}
-              cursorNoFim={aberto.tipo === "editar" && !!aberto.focoTitulo}
-              onChange={setTitulo}
-            />
-          </div>
           {formatoTitulo && (
             <p className="flex flex-wrap items-center gap-2 pl-1 text-[12px] text-muted">
               {r.tituloManual ? "Título escrito à mão — os campos não o mudam." : "Título automático — segue os campos da tarefa."}
@@ -1180,7 +1181,7 @@ function TituloNoLugar({ valor, focar, cursorNoFim, onChange }: { valor: string;
       }}
       onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
       onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
-      className="min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-1.5 text-[17px] font-bold leading-snug text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
+      className="min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-1 text-base font-semibold leading-snug text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
     />
   );
 }

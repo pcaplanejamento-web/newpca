@@ -3509,7 +3509,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`listaParaAlvo` → `QuadroTarefas.listaInicial`). **Excluir a lista com as tarefas** (e excluir uma tarefa) apaga também os
   vínculos de OUTRAS tarefas que apontavam para elas (`tarefa_vinculos` tipo `tarefa`, sem FK no alvo) no mesmo lote.
   **SEM SAIR DA MESA (v1.81.0):** o `TarefasDoVinculo` abre o `TarefaDetalhe` COMPLETO por cima da Mesa — nova (contexto do
-  quadro por `GET /api/tarefas/quadros/[id]` → `contextoQuadro`, `tarefas-dados.ts`; título sugerido "Protocolo X: " —
+  quadro por `GET /api/tarefas/quadros/[id]` → `contextoQuadro`, `tarefas-dados.ts`; título sugerido "Protocolo X: " — e os vínculos do alvo + DFD/protocolo ACIMA dele (`alvosRelacionados`, `do-vinculo` → `vinculos`); o título é editado no CABEÇALHO do `TarefaDetalhe` —
   `AberturaTarefa.titulo`; lista pedida › atribuída › 1ª) ou a ligada (`?contexto=1`); Abertas | Todas, concluir pelo
   `CirculoConcluir` (o mesmo PATCH); criada, segue ABERTA para editar (`TarefaDetalhe.onCriada` → reabre como editar — v1.81.1; nada leva à tela de Tarefas); o `do-vinculo` devolve `rotulo` e `usuarioId`.
   **v1.82.0:** a LINHA **Adicionar** (`MenuAdicionarCartao`, agora uma fileira de botões, não um menu) fica FIXA no rodapé

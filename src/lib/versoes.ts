@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.82.1",
+    data: "2026-10-14",
+    titulo: "Tarefa com os números da Mesa e título no cabeçalho",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "A tarefa criada sobre um item já fica vinculada também ao DFD e ao protocolo dele; sobre um DFD, também ao protocolo.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tarefas", texto: "O título da tarefa é editado direto no cabeçalho do banner (sem o campo repetido abaixo).", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.82.0",
     data: "2026-10-14",
     titulo: "Tarefas com a sigla da unidade e Emitir DFDs da lista",

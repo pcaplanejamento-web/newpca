@@ -1742,6 +1742,19 @@ export async function responsavelDoAlvo(tipo: TipoVinculo, id: number): Promise<
   return r?.r ?? null;
 }
 
+/** Os alvos ACIMA do alvo na Mesa — o item → o DFD e o protocolo dele; o DFD → o protocolo — para a tarefa nova já
+ * levar os números de todos (o próprio alvo primeiro). */
+export async function alvosRelacionados(tipo: TipoVinculo, id: number): Promise<{ tipo: TipoVinculo; id: number }[]> {
+  const lista: { tipo: TipoVinculo; id: number }[] = [{ tipo, id }];
+  if (tipo !== "dfd" && tipo !== "item") return lista;
+  const dfdId = tipo === "dfd" ? id : itemDoVinculo(id).dfdId;
+  const [d] = await getDb().select({ id: dfds.id, p: dfds.protocoloId }).from(dfds).where(eq(dfds.id, dfdId));
+  if (!d) return lista;
+  if (tipo === "item") lista.push({ tipo: "dfd", id: d.id });
+  if (d.p != null) lista.push({ tipo: "protocolo", id: d.p });
+  return lista;
+}
+
 /** Uma lista ATRIBUÍDA sugerida ao criar a tarefa sobre um alvo da Mesa. */
 export type ListaSugerida = { id: number; nome: string; quadroId: number; responsavelId: number; motivo: "responsavel" | "sua" };
 

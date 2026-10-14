@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { ContextoQuadro, ContextoTarefa } from "@/lib/tarefas-dados";
-import { COR_ESTADO_PRAZO, estadoPrazo, ROTULO_ESTADO_PRAZO, ROTULO_VINCULO, rotuloData, rotuloTicket, type TipoVinculo } from "@/lib/tarefas-core";
+import { COR_ESTADO_PRAZO, estadoPrazo, ROTULO_ESTADO_PRAZO, ROTULO_VINCULO, rotuloData, rotuloTicket, type TipoVinculo, type VinculoTarefa as Vinculo } from "@/lib/tarefas-core";
 import { dataIsoBrasilia } from "@/lib/format";
 import { Badge } from "./Badge";
 import { BotaoAcao } from "./BotaoAcao";
@@ -31,7 +31,7 @@ type TarefaLigada = {
 type QuadroOpcao = { id: number; nome: string; cor: string; grupoNome: string };
 /** Uma lista ATRIBUÍDA sugerida (ao responsável do protocolo ou à pessoa). */
 type ListaOpcao = { id: number; nome: string; quadroId: number; motivo: "responsavel" | "sua" };
-type Dados = { tarefas: TarefaLigada[]; quadros: QuadroOpcao[]; listas?: ListaOpcao[]; rotulo?: string | null; sigla?: string | null; usuarioId?: number };
+type Dados = { tarefas: TarefaLigada[]; quadros: QuadroOpcao[]; listas?: ListaOpcao[]; rotulo?: string | null; sigla?: string | null; vinculos?: Vinculo[]; usuarioId?: number };
 
 /** O banner da tarefa aberto AQUI (sem sair da Mesa): nova (no quadro/lista) ou uma ligada. */
 type Aberta = { tipo: "nova"; ctx: ContextoQuadro; listaId: number } | { tipo: "editar"; ctx: ContextoTarefa };
@@ -241,7 +241,7 @@ export function TarefasDoVinculo({
       </Modal>
       {ctx && (
         <TarefaDetalhe
-          aberto={tarefa.tipo === "nova" ? { tipo: "nova", listaId: tarefa.listaId, titulo: `${alvo}: `, vinculo: { tipo, id, rotulo: dados.rotulo ?? null, sigla: dados.sigla ?? null } } : { tipo: "editar", id: tarefa.ctx.tarefa.id }}
+          aberto={tarefa.tipo === "nova" ? { tipo: "nova", listaId: tarefa.listaId, titulo: `${alvo}: `, vinculos: dados.vinculos?.length ? dados.vinculos : [{ tipo, id, rotulo: dados.rotulo ?? null, sigla: dados.sigla ?? null }] } : { tipo: "editar", id: tarefa.ctx.tarefa.id }}
           quadroId={ctx.quadro.id}
           tarefas={tarefa.tipo === "editar" ? [tarefa.ctx.tarefa] : []}
           listas={ctx.listas.filter((l) => !l.arquivada)}
