@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.89.0",
+    data: "2026-10-14",
+    titulo: "Relatório da composição por unidade",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "O Relatório da composição do orçamento do PCA pode sair de todas as unidades ou só das escolhidas — num arquivo só ou um PDF para cada unidade.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Sistema", texto: "Tocar de novo no número da versão, com as Novidades abertas, fecha o banner.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.88.1",
     data: "2026-10-14",
     titulo: "Card do orçamento renovado",

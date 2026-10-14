@@ -80,7 +80,7 @@ export function JanelaFlutuante({
     };
     const fora = (e: PointerEvent) => {
       const t = e.target as HTMLElement;
-      if (ref.current?.contains(t) || t.closest("[role='dialog'], [role='menu']")) return;
+      if (ref.current?.contains(t) || t.closest("[role='dialog'], [role='menu'], [data-alterna-janela]")) return;
       fechar.current();
     };
     window.addEventListener("keydown", tecla);

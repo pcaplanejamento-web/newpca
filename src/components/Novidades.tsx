@@ -195,10 +195,14 @@ export function VersaoSistema({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <button
         type="button"
+        // O botão ALTERNA: aberto, o toque fecha (a janela ignora o toque fora vindo dele — `data-alterna-janela`).
+        data-alterna-janela=""
         onClick={(e) => {
+          if (ancora) return setAncora(null);
           const r = e.currentTarget.getBoundingClientRect();
           setAncora({ x: r.x, y: r.y, w: r.width, h: r.height });
         }}
+        aria-expanded={ancora != null}
         aria-haspopup="dialog"
         title={nova ? `Versão ${VERSAO_ATUAL} — veja o que mudou` : `Versão ${VERSAO_ATUAL} — novidades`}
         className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control px-2 text-[12px] text-faint transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8"

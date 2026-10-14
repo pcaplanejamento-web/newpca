@@ -39,3 +39,21 @@ test("exibição: vínculos expandidos vai no papel e não conta como restriçã
   assert.equal(m.compactarDetalhes(m.coerceDetalhes({})).exibicao, undefined);
   assert.equal(m.contarRestricoes(d), 0);
 });
+
+test("relatório da composição: recorte por unidade", async () => {
+  const { recortarRelatorio } = await import("../src/lib/orcamento-relatorio.ts");
+  const u = (id: number, sigla: string, cubo: string, orc: number) => ({ id, sigla, nome: sigla, orgao: null, orcamento: orc, lancamentos: 1, noCubo: orc, planejado: 0, vinculos: [{ unidadeCubo: cubo, regra: "", acoes: [], fora: [] }] });
+  const s = { lancamentos: 0, valor: 0 };
+  const r = {
+    pca: { nome: "P", ano: 2027 }, orcamento: { nome: "O", ano: 2027 }, visaoNome: null,
+    totais: { cubo: s, foraDaVisao: s, naVisao: s, nasUnidades: { lancamentos: 2, valor: 30 }, semVinculo: s },
+    dimensoes: [], retiradoPorUnidadeCubo: [{ unidadeCubo: "A", lancamentos: 1, valor: 1 }, { unidadeCubo: "B", lancamentos: 1, valor: 1 }],
+    unidades: [u(1, "X", "A", 10), u(2, "Y", "B", 20)], semVinculo: [], semOrcamento: [], planejadoSemUnidade: 5,
+    definicoes: { unidadesCubo: [], unidadesComContratacao: [] },
+  };
+  const x = recortarRelatorio(r, [2]);
+  assert.deepEqual(x.recorte, ["Y"]);
+  assert.equal(x.totais.nasUnidades.valor, 20);
+  assert.deepEqual(x.retiradoPorUnidadeCubo.map((a) => a.unidadeCubo), ["B"]);
+  assert.equal(recortarRelatorio(r, [99]), r);
+});

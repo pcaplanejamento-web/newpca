@@ -2,7 +2,7 @@
 
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
-import { blocosRelatorioOrcamento, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
+import { blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
 import {
   comparativoPorOrgao,
   comparativoPorUnidade,
@@ -36,7 +36,11 @@ import { IconFile, IconLink, IconSettings } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
+import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
+import { SeletorMultiplo } from "./SeletorMultiplo";
+import { SkeletonLinhas } from "./Skeleton";
+import { Switch } from "./Switch";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
@@ -215,32 +219,122 @@ function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; abe
  * (`blocosRelatorioOrcamento` → `baixarDocumentoPdf`). O código do PDF só é carregado no clique.
  */
 function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
+  const [aberto, setAberto] = useState(false);
+  const [rel, setRel] = useState<RelatorioOrcamento | null>(null);
+  const [carregando, setCarregando] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [modo, setModo] = useState<"todas" | "escolher">("todas");
+  const [escolhidas, setEscolhidas] = useState<string[]>([]);
+  const [separados, setSeparados] = useState(false);
   const quem = useQuemExporta();
-  async function gerar() {
-    if (gerando) return;
-    setGerando(true);
+
+  async function abrir() {
+    setAberto(true);
+    setCarregando(true);
     try {
       const r = await fetch(`/api/pca/${pcaId}/orcamento/relatorio`);
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; relatorio?: RelatorioOrcamento };
       if (!r.ok || !j.ok || !j.relatorio) throw new Error(j.error ?? "Não foi possível montar o relatório.");
-      const rel = j.relatorio;
+      setRel(j.relatorio);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível montar o relatório.");
+      setAberto(false);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  const opcoes = useMemo(
+    () => (rel?.unidades ?? []).map((u) => ({ valor: String(u.id), rotulo: `${u.sigla} — ${u.nome}`, detalhe: `${u.orgao ?? "Sem órgão"} · ${brl(u.orcamento)}` })),
+    [rel],
+  );
+  const ids = modo === "todas" ? [] : escolhidas.map(Number);
+  const qtd = modo === "todas" ? 1 : separados ? ids.length : ids.length ? 1 : 0;
+
+  async function gerar() {
+    if (!rel || gerando || !qtd) return;
+    setGerando(true);
+    try {
       const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
-      const titulo = `Composição do orçamento por unidade · ${rel.pca.nome}`;
-      await baixarDocumentoPdf(nomeArquivoPdf(`Composição do orçamento - ${rel.pca.nome}`, dataIsoBrasilia(new Date().toISOString())), {
-        titulo,
-        blocos: blocosRelatorioOrcamento(rel),
-      }, { usuario: quem });
+      const dia = dataIsoBrasilia(new Date().toISOString());
+      const lotes = modo === "todas" ? [rel] : separados ? ids.map((id) => recortarRelatorio(rel, [id])) : [recortarRelatorio(rel, ids)];
+      for (const [i, r] of lotes.entries()) {
+        const sufixo = r.recorte ? ` - ${r.recorte.length > 3 ? `${r.recorte.length} unidades` : r.recorte.join(", ")}` : "";
+        if (lotes.length > 1) toast.progresso("Gerando os relatórios", i, lotes.length, r.recorte?.join(", "));
+        await baixarDocumentoPdf(
+          nomeArquivoPdf(`Composição do orçamento - ${r.pca.nome}${sufixo}`, dia),
+          { titulo: `Composição do orçamento por unidade · ${r.pca.nome}${sufixo}`, blocos: blocosRelatorioOrcamento(r) },
+          { usuario: quem },
+        );
+      }
+      toast.success(lotes.length > 1 ? `${lotes.length} relatórios gerados.` : "Relatório gerado.");
+      setAberto(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível gerar o relatório.");
     } finally {
       setGerando(false);
     }
   }
+
   return (
-    <Button size="sm" variant="secondary" icon={<IconFile className="h-4 w-4" />} loading={gerando} onClick={gerar}>
-      Relatório da composição (PDF)
-    </Button>
+    <>
+      <Button size="sm" variant="secondary" icon={<IconFile className="h-4 w-4" />} loading={carregando} onClick={abrir}>
+        Relatório da composição (PDF)
+      </Button>
+      <Modal
+        open={aberto}
+        onClose={() => !gerando && setAberto(false)}
+        titulo="Relatório da composição do orçamento"
+        size="md"
+        bloqueado={gerando}
+        rodape={
+          <div className="flex w-full items-center justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setAberto(false)} disabled={gerando}>
+              Cancelar
+            </Button>
+            <Button size="sm" icon={<IconFile className="h-4 w-4" />} loading={gerando} disabled={!rel || !qtd} onClick={gerar}>
+              {qtd > 1 ? `Gerar ${qtd} PDFs` : "Gerar PDF"}
+            </Button>
+          </div>
+        }
+      >
+        {!rel ? (
+          <SkeletonLinhas />
+        ) : (
+          <div className="space-y-[var(--gap-block)]">
+            <Segmented<"todas" | "escolher">
+              value={modo}
+              onChange={setModo}
+              ariaLabel="Unidades do relatório"
+              options={[
+                { value: "todas", label: `Todas as unidades (${rel.unidades.length})` },
+                { value: "escolher", label: "Escolher unidades" },
+              ]}
+            />
+            {modo === "todas" ? (
+              <p className="text-[13px] text-muted">O relatório completo: a visão, todas as unidades com vínculo e o que fica de fora do orçamento.</p>
+            ) : (
+              <>
+                <SeletorMultiplo rotulo="Unidades" opcoes={opcoes} selecionados={escolhidas} onChange={setEscolhidas} textoVazio="Nenhuma" suspenso />
+                <Switch
+                  checked={separados}
+                  onChange={setSeparados}
+                  label="Um PDF para cada unidade"
+                  dica="Ligado: um arquivo por unidade escolhida. Desligado: um arquivo só com as escolhidas."
+                />
+                <p className="text-[13px] text-muted">
+                  {ids.length
+                    ? separados
+                      ? `${ids.length} arquivo(s), um por unidade.`
+                      : `Um arquivo com ${ids.length} unidade(s).`
+                    : "Escolha ao menos uma unidade."}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
+    </>
   );
 }
 
