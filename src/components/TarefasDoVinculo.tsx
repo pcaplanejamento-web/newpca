@@ -144,10 +144,10 @@ export function TarefasDoVinculo({
           {dados.quadros.length > 0 && (
             <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
               <div className="min-w-[12rem] flex-1">
-                <SelectField label="Criar tarefa no quadro" value={quadro} onChange={(e) => setQuadro(e.target.value)}>
+                <SelectField label={`Criar tarefa no quadro${new Set(dados.quadros.map((q) => q.grupoNome)).size === 1 ? ` — grupo ${dados.quadros[0].grupoNome}` : ""}`} value={quadro} onChange={(e) => setQuadro(e.target.value)}>
                   {dados.quadros.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.nome} — {q.grupoNome}
+                    <option key={q.id} value={q.id} data-detalhe={`Grupo: ${q.grupoNome}`}>
+                      {q.nome}
                     </option>
                   ))}
                 </SelectField>

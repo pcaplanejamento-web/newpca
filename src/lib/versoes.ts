@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.80.1",
+    data: "2026-10-14",
+    titulo: "Criar tarefa: só os quadros do grupo ativo",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "O \"Criar tarefa\" de um protocolo, DFD ou item lista só os quadros do grupo escolhido no cabeçalho, com o grupo informado no seletor.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.80.0",
     data: "2026-10-14",
     titulo: "Tarefas: lista com pessoa, tarefa sobre o item e exclusão limpa",

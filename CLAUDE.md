@@ -3505,7 +3505,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   por descrição/código/nº/planejamento; o botão **Tarefas** no cabeçalho do banner do item (`useDfdGravado` modo item).
   **Listas sugeridas:** `GET /api/tarefas/do-vinculo` devolve `listas` = as ATRIBUÍDAS ao responsável do protocolo do alvo
   (`responsavelDoAlvo`) e à pessoa (`listasSugeridas`; o do responsável primeiro) — `TarefasDoVinculo` as mostra ("Listas
-  atribuídas", tocar cria nela: `?nova=tipo:id&lista=L`) e o quadro escolhido abre a tarefa na lista pedida ou na atribuída
+  atribuídas", tocar cria nela: `?nova=tipo:id&lista=L`) e só os quadros do GRUPO ATIVO do cabeçalho (o grupo no seletor — v1.80.1); o quadro escolhido abre a tarefa na lista pedida ou na atribuída
   (`listaParaAlvo` → `QuadroTarefas.listaInicial`). **Excluir a lista com as tarefas** (e excluir uma tarefa) apaga também os
   vínculos de OUTRAS tarefas que apontavam para elas (`tarefa_vinculos` tipo `tarefa`, sem FK no alvo) no mesmo lote.
   Evento de calendário SEM tarefa ainda não existe (`tarefa_eventos.tarefa_id` é obrigatório) — previsto no ROADMAP.

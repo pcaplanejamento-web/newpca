@@ -1,4 +1,5 @@
 import { gruposDeTarefas } from "@/lib/acesso";
+import { getGrupoAtivoId } from "@/lib/grupos";
 import { exigirSessao, intId } from "@/lib/api-auth";
 import { erro, ok } from "@/lib/http";
 import { listarQuadros, listasSugeridas, tarefasDoVinculo } from "@/lib/tarefas";
@@ -20,7 +21,9 @@ export async function GET(req: Request) {
     tarefasDoVinculo(a.u, gruposDeTarefas(a.acesso, "visualizar", true), tipo, id),
     listarQuadros(gruposDeTarefas(a.acesso, "manipular"), dataIsoBrasilia(new Date().toISOString()), a.u.id),
   ]);
-  const ativos = quadros.filter((q) => !q.arquivado);
+  // Só os quadros do GRUPO ATIVO do cabeçalho (sem grupo ativo — o ADM sem grupo — todos).
+  const grupo = await getGrupoAtivoId(a.u);
+  const ativos = quadros.filter((q) => !q.arquivado && (grupo == null || q.grupoId === grupo));
   const listas = await listasSugeridas(a.u, ativos.map((q) => q.id), tipo, id);
   return ok({ tarefas, quadros: ativos.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, grupoNome: q.grupoNome })), listas });
 }
