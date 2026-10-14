@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.90.1",
+    data: "2026-10-14",
+    titulo: "KPIs do orçamento do PCA completas",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "As KPIs do Orçamento do PCA mostram os valores completos e os detalhes: a visão, a dotação bruta e o retirado, o que está sem vínculo, as contratações e o planejado sem orçamento, as unidades com saldo e com déficit e quantas estão dentro, em atenção ou acima.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.90.0",
     data: "2026-10-14",
     titulo: "Quantidade fracionada e ajuda nas avaliações",

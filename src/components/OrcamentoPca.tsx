@@ -41,6 +41,7 @@ import { Segmented } from "./Segmented";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 import { SkeletonLinhas } from "./Skeleton";
 import { Switch } from "./Switch";
+import { KpiStat } from "./KpiStat";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
@@ -426,6 +427,29 @@ export function OrcamentoPca({
     [nivel, porUnidade, dados.orgaos],
   );
   const t = totaisComparativo(porUnidade);
+  // Os detalhes das KPIs, sobre as MESMAS linhas do comparativo (a soma bate com a tabela).
+  const ind = useMemo(() => {
+    const comUnidade = porUnidade.filter((l) => l.unidadeId != null);
+    const semVinculo = porUnidade.filter((l) => l.unidadeId == null).reduce((s, l) => s + l.orcamento, 0);
+    const faixas = { ok: 0, atencao: 0, acima: 0 };
+    for (const l of comUnidade) {
+      if (l.orcamento <= 0 && l.planejado <= 0) continue;
+      if (linhaAcima(l)) faixas.acima++;
+      else if (l.faixa === "atencao") faixas.atencao++;
+      else if (l.faixa === "ok") faixas.ok++;
+    }
+    const deficits = comUnidade.filter((l) => l.diferenca < 0);
+    return {
+      semVinculo,
+      contratacoes: porUnidade.reduce((s, l) => s + l.contratacoes, 0),
+      unidadesComPlanejado: porUnidade.filter((l) => l.planejado > 0).length,
+      planejadoSemOrcamento: porUnidade.filter((l) => !(l.orcamento > 0)).reduce((s, l) => s + l.planejado, 0),
+      comSaldo: comUnidade.filter((l) => l.orcamento > 0 && l.diferenca >= 0).length,
+      comDeficit: deficits.length,
+      somaDeficits: deficits.reduce((s, l) => s + l.diferenca, 0),
+      faixas,
+    };
+  }, [porUnidade]);
   const acima = linhas.filter(linhaAcima);
   const vis = filtro === "todas" ? linhas : filtro === "acima" ? acima : linhas.filter((l) => !linhaAcima(l));
 
@@ -592,19 +616,61 @@ export function OrcamentoPca({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
-        <StatMini
-          label={`Dotação ${dados.ano}${dados.visaoNome ? ` · ${dados.visaoNome}` : ""}`}
-          value={brlCompact(dados.filtrado)}
-          hint={`${dados.orcamento ? `${dados.orcamento.nome} · ` : ""}${dados.visaoNome ? `bruta ${brlCompact(dados.bruto)}` : "orçamento inteiro"}`}
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
+        <KpiStat
+          realce
+          completo
+          label={`Dotação ${dados.ano}`}
+          value={brl(dados.filtrado)}
+          hint={dados.orcamento ? dados.orcamento.nome : "Sem orçamento importado para o ano"}
+          detalhes={[
+            { rotulo: "Visão", valor: dados.visaoNome ?? "Orçamento inteiro" },
+            ...(dados.visaoNome ? [{ rotulo: "Dotação bruta", valor: brl(dados.bruto) }, { rotulo: "Retirado pela visão", valor: brl(dados.bruto - dados.filtrado) }] : []),
+            { rotulo: "Sem vínculo", valor: brl(ind.semVinculo), cor: ind.semVinculo > 0 ? "var(--warn)" : undefined },
+          ]}
         />
-        <StatMini label="Planejado no PCA" value={brlCompact(t.planejado)} tone="accent" hint={dados.previa ? `itens ativos · prévia: ${num(dados.previa.dfds)} DFD(s) não incorporados` : "itens ativos"} />
-        <StatMini label="Saldo" value={brlCompact(t.saldo)} tone={t.saldo < 0 ? "danger" : "ok"} hint="dotação − planejado" />
-        <StatMini
+        <KpiStat
+          realce
+          completo
+          label="Planejado no PCA"
+          value={brl(t.planejado)}
+          cor="var(--sit-finalizado)"
+          hint={dados.previa ? `Inclui a prévia: ${num(dados.previa.dfds)} DFD(s) ainda não incorporados` : "Itens ativos dos DFDs incorporados"}
+          detalhes={[
+            { rotulo: "Contratações", valor: num(ind.contratacoes) },
+            { rotulo: "Unidades com contratações", valor: num(ind.unidadesComPlanejado) },
+            { rotulo: "Sem orçamento vinculado", valor: brl(ind.planejadoSemOrcamento), cor: ind.planejadoSemOrcamento > 0 ? "var(--danger)" : undefined },
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
+          label={t.saldo < 0 ? "Déficit" : "Saldo"}
+          value={<span style={{ color: t.saldo < 0 ? "var(--danger)" : "var(--ok)" }}>{brl(t.saldo)}</span>}
+          cor={t.saldo < 0 ? "var(--danger)" : "var(--ok)"}
+          hint="Dotação − planejado no PCA"
+          detalhes={[
+            { rotulo: "Unidades com saldo", valor: num(ind.comSaldo) },
+            { rotulo: "Unidades com déficit", valor: num(ind.comDeficit), cor: ind.comDeficit > 0 ? "var(--danger)" : undefined },
+            { rotulo: "Soma dos déficits", valor: brl(ind.somaDeficits), cor: ind.somaDeficits < 0 ? "var(--danger)" : undefined },
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
           label="Comprometido"
-          value={comprometido == null ? "—" : `${Math.round(comprometido * 100)}%`}
-          tone={comprometido == null ? "default" : comprometido > 1 ? "danger" : comprometido >= 0.9 ? "warn" : "ok"}
-          hint="planejado ÷ dotação"
+          value={
+            <span style={{ color: comprometido == null ? undefined : comprometido > 1 ? "var(--danger)" : comprometido >= 0.9 ? "var(--warn)" : "var(--ok)" }}>
+              {comprometido == null ? "—" : `${(comprometido * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}
+            </span>
+          }
+          cor={comprometido == null ? "var(--muted)" : comprometido > 1 ? "var(--danger)" : comprometido >= 0.9 ? "var(--warn)" : "var(--ok)"}
+          hint="Planejado ÷ dotação"
+          detalhes={[
+            { rotulo: "Dentro (até 90%)", valor: num(ind.faixas.ok), cor: "var(--ok)" },
+            { rotulo: "Atenção (90% a 100%)", valor: num(ind.faixas.atencao), cor: ind.faixas.atencao ? "var(--warn)" : undefined },
+            { rotulo: "Acima ou sem orçamento", valor: num(ind.faixas.acima), cor: ind.faixas.acima ? "var(--danger)" : undefined },
+          ]}
         />
       </div>
 
