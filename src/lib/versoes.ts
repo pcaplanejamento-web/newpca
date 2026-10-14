@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.82.2",
+    data: "2026-10-14",
+    titulo: "Números da Mesa no cartão da tarefa",
+    mudancas: [{ tipo: "melhoria", area: "Tarefas", texto: "O cartão da tarefa mostra em selos os números do protocolo, do DFD e do item vinculados.", link: "/painel/tarefas" }],
+  },
+  {
     versao: "1.82.1",
     data: "2026-10-14",
     titulo: "Tarefa com os números da Mesa e título no cabeçalho",

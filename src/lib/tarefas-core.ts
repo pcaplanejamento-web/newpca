@@ -126,6 +126,18 @@ export type VinculoTarefa = {
   sigla?: string | null;
 };
 
+const ORDEM_MESA: Partial<Record<TipoVinculo, number>> = { protocolo: 0, dfd: 1, item: 2 };
+/** Os NÚMEROS da Mesa a que a tarefa se liga (protocolo › DFD › item, sem repetir) — os selos do cartão. O alvo excluído
+ * (sem rótulo) fica de fora. */
+export function numerosMesa(vinculos: readonly VinculoTarefa[]): { chave: string; tipo: TipoVinculo; texto: string }[] {
+  const vistos = new Set<string>();
+  return vinculos
+    .filter((v) => ORDEM_MESA[v.tipo] != null && v.rotulo)
+    .sort((x, y) => (ORDEM_MESA[x.tipo] ?? 0) - (ORDEM_MESA[y.tipo] ?? 0))
+    .map((v) => ({ chave: `${v.tipo}:${v.id}`, tipo: v.tipo, texto: v.tipo === "protocolo" ? `Prot. ${v.rotulo}` : v.tipo === "dfd" ? `DFD ${v.rotulo}` : `Item ${itemDoVinculo(v.id).item}` }))
+    .filter((n) => !vistos.has(n.chave) && vistos.add(n.chave) != null);
+}
+
 /** As SIGLAS das unidades dos protocolos/DFDs/itens a que a tarefa se liga (sem repetir, em ordem alfabética). */
 export const siglasDaTarefa = (t: { vinculos?: Pick<VinculoTarefa, "sigla">[] }): string[] =>
   [...new Set((t.vinculos ?? []).map((v) => v.sigla?.trim()).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, "pt-BR"));

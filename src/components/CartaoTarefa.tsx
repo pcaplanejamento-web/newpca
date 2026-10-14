@@ -13,6 +13,8 @@ import {
   ROTULO_PRIORIDADE,
   rotuloData,
   rotuloRecorrencia,
+  numerosMesa,
+  type VinculoTarefa,
   rotuloDoVinculo,
   siglasDaTarefa,
   rotuloTicket,
@@ -132,6 +134,7 @@ export function CartaoTarefa({
       : estado === "atrasada" || estado === "hoje" || estado === "vence"
         ? { background: `color-mix(in srgb, ${corPrazo} 16%, var(--surface))`, color: corPrazo }
         : undefined;
+  const outros = t.vinculos.filter((v) => v.tipo !== "protocolo" && v.tipo !== "dfd" && v.tipo !== "item");
   const checkCompleto = t.checklist.total > 0 && t.checklist.feitos === t.checklist.total;
   return (
     <article
@@ -279,10 +282,11 @@ export function CartaoTarefa({
             {sg}
           </span>
         ))}
-        {t.vinculos.length > 0 && (
-          <span className="pointer-events-none inline-flex items-center gap-0.5 text-accent tabular-nums" title={t.vinculos.map(rotuloDoVinculo).join("\n")}>
-            <IconLink className="h-3.5 w-3.5" aria-label={`${t.vinculos.length} vínculo(s)`} />
-            {t.vinculos.length > 1 && t.vinculos.length}
+        <ChipsVinculosMesa vinculos={t.vinculos} />
+        {outros.length > 0 && (
+          <span className="pointer-events-none inline-flex items-center gap-0.5 text-accent tabular-nums" title={outros.map(rotuloDoVinculo).join("\n")}>
+            <IconLink className="h-3.5 w-3.5" aria-label={`${outros.length} vínculo(s)`} />
+            {outros.length > 1 && outros.length}
           </span>
         )}
         {resp.length > 0 && (
@@ -321,3 +325,18 @@ export function CartaoTarefa({
 /** Os botões redondos que aparecem sobre o cartão com o mouse (editar, duplicar). */
 const botaoFlutuante =
   "grid h-7 w-7 place-items-center rounded-full bg-surface text-text-2 shadow-ring transition-colors hover:bg-surface-2 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+
+/** Os NÚMEROS da Mesa (protocolo · DFD · item) a que a tarefa se liga, em selos no cartão. */
+export function ChipsVinculosMesa({ vinculos }: { vinculos: readonly VinculoTarefa[] }) {
+  const ns = numerosMesa(vinculos);
+  if (!ns.length) return null;
+  return (
+    <>
+      {ns.map((n) => (
+        <span key={n.chave} className="pointer-events-none inline-flex items-center rounded-chip bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent" title={n.texto}>
+          {n.texto}
+        </span>
+      ))}
+    </>
+  );
+}

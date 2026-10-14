@@ -313,3 +313,15 @@ describe("tarefas — padrão Trello", () => {
     assert.equal(rotuloDoVinculo({ tipo: "dfd", id: 9, rotulo: null }), "DFD #9 (excluído)");
   });
 });
+
+it("numerosMesa: protocolo › DFD › item, sem excluídos", async () => {
+  const { numerosMesa, idVinculoItem } = await import("../src/lib/tarefas-core.ts");
+  const r = numerosMesa([
+    { tipo: "item", id: idVinculoItem(5, 3), rotulo: "3 · DFD 1234" },
+    { tipo: "protocolo", id: 9, rotulo: "162275/2026" },
+    { tipo: "dfd", id: 5, rotulo: "1234" },
+    { tipo: "dfd", id: 6, rotulo: null },
+    { tipo: "pca", id: 1, rotulo: "PCA" },
+  ]);
+  assert.deepEqual(r.map((n) => n.texto), ["Prot. 162275/2026", "DFD 1234", "Item 3"]);
+});
