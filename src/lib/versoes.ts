@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.85.1",
+    data: "2026-10-14",
+    titulo: "Caixas de marcar não deslocam mais os banners",
+    mudancas: [{ tipo: "correcao", area: "Sistema", texto: "Marcar uma caixa (ex.: as ações de um vínculo do orçamento) não faz mais o banner pular e mostrar um espaço em branco — vale em todas as caixas de marcar.", link: "/painel/pca" }],
+  },
+  {
     versao: "1.85.0",
     data: "2026-10-14",
     titulo: "Configurações do orçamento em modo consulta",

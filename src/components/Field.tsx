@@ -259,7 +259,7 @@ export function Checkbox({
   return (
     <label
       htmlFor={cid}
-      className={`inline-flex select-none items-center gap-2.5 ${rest.disabled ? "cursor-default opacity-60" : "cursor-pointer"} ${alvo ? "min-h-11 min-w-11 shrink-0 justify-center lg:min-h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)]" : ""}`}
+      className={`relative inline-flex select-none items-center gap-2.5 ${rest.disabled ? "cursor-default opacity-60" : "cursor-pointer"} ${alvo ? "min-h-11 min-w-11 shrink-0 justify-center lg:min-h-[var(--h-control-sm)] lg:min-w-[var(--h-control-sm)]" : ""}`}
     >
       <input ref={ref} id={cid} type="checkbox" checked={checked} className="peer sr-only" {...rest} />
       <span
