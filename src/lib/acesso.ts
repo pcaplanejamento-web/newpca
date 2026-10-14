@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { grupos, usuarioGrupos } from "@/db/schema";
 import { abasConhecidas } from "./abas";
+import { getModulos } from "./modulos";
+import { lerModulosGrupo, type Modulo, telasDoGrupo } from "./modulos-core";
 import type { AtorPasta } from "./tarefas-core";
 import { type VisaoMesa, visaoMesa } from "./mesa-visao-core";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
@@ -34,7 +36,7 @@ import {
 const COOKIE_GRUPO = "pca_grupo";
 
 /** O grupo com as TELAS que abre e os PCAs que acessa (`pcas` null = todos). */
-export type GrupoAcesso = { id: number; nome: string; abas: Tela[]; pcas: number[] | null };
+export type GrupoAcesso = { id: number; nome: string; abas: Tela[]; pcas: number[] | null; chat: boolean };
 
 export type Acesso = {
   u: UsuarioSessao;
@@ -63,24 +65,37 @@ function lerAbas(json: string | null): Tela[] {
   }
 }
 
+const COLUNAS_GRUPO = { id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat };
+
+/** As TELAS do grupo vêm dos MÓDULOS dele (o grupo antigo, das telas avulsas — `telasDoGrupo`). */
+function paraAcesso(linhas: { id: number; nome: string; abas: string; pcas: string | null; modulos: string | null; chat: boolean }[], modulos: Modulo[]): GrupoAcesso[] {
+  return linhas.map((g) => ({
+    id: g.id,
+    nome: g.nome,
+    abas: telasDoGrupo(modulos, lerModulosGrupo(g.modulos), lerAbas(g.abas)),
+    pcas: lerPcasGrupo(g.pcas),
+    chat: g.chat,
+  }));
+}
+
 /** Os grupos da pessoa com as telas que cada um libera (ordenados pelo nome). */
 export async function gruposComAbas(usuarioId: number): Promise<GrupoAcesso[]> {
   const linhas = await getDb()
-    .select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas })
+    .select(COLUNAS_GRUPO)
     .from(usuarioGrupos)
     .innerJoin(grupos, eq(usuarioGrupos.grupoId, grupos.id))
     .where(eq(usuarioGrupos.usuarioId, usuarioId))
     .orderBy(grupos.nome);
-  return linhas.map((g) => ({ id: g.id, nome: g.nome, abas: lerAbas(g.abas), pcas: lerPcasGrupo(g.pcas) }));
+  return paraAcesso(linhas, await getModulos());
 }
 
 /** TODOS os grupos com as telas que cada um libera (Usuários: escolher os grupos da pessoa e o "Ver acesso"). */
 export async function todosOsGruposComAbas(): Promise<GrupoAcesso[]> {
   const linhas = await getDb()
-    .select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas })
+    .select(COLUNAS_GRUPO)
     .from(grupos)
     .orderBy(grupos.nome);
-  return linhas.map((g) => ({ id: g.id, nome: g.nome, abas: lerAbas(g.abas), pcas: lerPcasGrupo(g.pcas) }));
+  return paraAcesso(linhas, await getModulos());
 }
 
 /** O acesso de uma pessoa num grupo ativo escolhido (sem cookie — o feed .ics, o cron). */

@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.91.0",
+    data: "2026-10-14",
+    titulo: "Módulos configuráveis, chat por grupo e quem vê os online",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Nova aba Módulos: o ADM cria os módulos do menu, dá nome, ordena e define as telas de cada um. O menu mostra uma seção por módulo.", link: "/painel/configuracoes?aba=modulos" },
+      { tipo: "melhoria", area: "Grupos", texto: "O grupo passa a liberar módulos (as telas vêm deles) e ganhou a chave “Chat liberado”.", link: "/painel/grupos" },
+      { tipo: "novo", area: "Configurações", texto: "Em Papéis → Detalhes → Presença, o ADM define se o papel vê quem está online.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
     versao: "1.90.3",
     data: "2026-10-14",
     titulo: "KPIs do orçamento do PCA: detalhes completos e baixas",

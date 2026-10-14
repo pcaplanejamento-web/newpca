@@ -24,7 +24,7 @@ describe("PATCH de grupo não injeta padrões", () => {
   it("grupo: só o nome — telas, PCAs, pessoas e unidades ficam de fora (como estão)", () => {
     const r = grupoPatchSchema.parse({ nome: "Compras" });
     assert.deepEqual(r, { nome: "Compras" });
-    for (const k of ["membros", "reparticoes", "abas", "pcas"]) assert.equal(k in r, false);
+    for (const k of ["membros", "reparticoes", "modulos", "chat", "pcas"]) assert.equal(k in r, false);
   });
 
   it("grupo: lista vazia explícita esvazia (e é diferente de ausente); PCAs null = todos", () => {
@@ -33,13 +33,13 @@ describe("PATCH de grupo não injeta padrões", () => {
     assert.deepEqual(grupoPatchSchema.parse({ pcas: [] }), { pcas: [] });
   });
 
-  it("telas: só as conhecidas, sem repetir", () => {
-    assert.equal(grupoPatchSchema.safeParse({ abas: ["dfd", "nao-existe"] }).success, false);
-    assert.deepEqual(grupoPatchSchema.parse({ abas: ["pca", "dfd", "pca"] }), { abas: ["pca", "dfd"] });
+  it("módulos: sem repetir (a rota confere que existem); chat opcional", () => {
+    assert.deepEqual(grupoPatchSchema.parse({ modulos: ["apoio", "pca", "apoio"] }), { modulos: ["apoio", "pca"] });
+    assert.deepEqual(grupoPatchSchema.parse({ chat: false }), { chat: false });
   });
 
-  it("criação com os padrões: sem telas, todos os PCAs, sem pessoas/unidades", () => {
-    assert.deepEqual(grupoCreateSchema.parse({ nome: "Novo" }), { nome: "Novo", abas: [], pcas: null, membros: [], reparticoes: [] });
+  it("criação com os padrões: sem módulos, chat liberado, todos os PCAs, sem pessoas/unidades", () => {
+    assert.deepEqual(grupoCreateSchema.parse({ nome: "Novo" }), { nome: "Novo", modulos: [], chat: true, pcas: null, membros: [], reparticoes: [] });
   });
 });
 

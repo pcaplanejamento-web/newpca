@@ -5,19 +5,18 @@ import { usePathname } from "next/navigation";
 import { IconUser } from "./icons";
 import { NAV_MODULOS } from "./navModulos";
 
-type ItemNav = { href: string; label: string; Icon: typeof IconUser; /** Aba de módulo exigida (permissão). */ aba?: string };
+const PERFIL = { href: "/painel/perfil", label: "Perfil", Icon: IconUser };
+const POR_ABA = new Map(NAV_MODULOS.map((m) => [m.aba as string, m]));
 
-// Os módulos (Mesa, PCA, Catálogo, Orçamento, Tarefas, Calendário — a MESMA fonte da sidebar) + o Perfil, sempre visível.
-const ITENS: ItemNav[] = [...NAV_MODULOS, { href: "/painel/perfil", label: "Perfil", Icon: IconUser }];
-
-/** Barra de navegação inferior (mobile). No desktop usa-se a sidebar. Mostra só as abas que o grupo ativo
- * pode ver (a MESMA permissão da sidebar — o admin vê todas); o Perfil é sempre visível. */
-export function BottomNav({ abas }: { abas: Set<string> }) {
+/** Barra de navegação inferior (mobile). No desktop usa-se a sidebar. As MESMAS telas do menu, na ordem dos MÓDULOS
+ * (Configurações → Módulos) — o servidor já filtrou as abertas; o Perfil é sempre visível. */
+export function BottomNav({ telas }: { telas: readonly string[] }) {
   const pathname = usePathname();
+  const itens = [...telas.flatMap((t) => POR_ABA.get(t) ?? []), PERFIL];
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
       <div className="mx-auto flex max-w-md items-stretch justify-around">
-        {ITENS.filter((i) => !i.aba || abas.has(i.aba)).map(({ href, label, Icon }) => {
+        {itens.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link

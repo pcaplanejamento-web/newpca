@@ -56,6 +56,10 @@ function PresencaCartao() {
             No cabeçalho, as fotos das pessoas do grupo ativo que estão com o sistema aberto, ao vivo (ponto verde). Tocar abre a
             lista. Cada pessoa vê só o próprio grupo.
           </TopicoAjuda>
+          <TopicoAjuda titulo="Por papel e por grupo">
+            Em Papéis → Detalhes → Presença, o ADM escolhe quais papéis veem quem está online (quem não vê segue aparecendo para
+            os outros e usando o chat). Em Grupos, “Chat liberado” decide se o chat vale em cada grupo.
+          </TopicoAjuda>
           <TopicoAjuda titulo="Mostrar ausentes">
             Quem está com o sistema aberto em outra aba ou janela — ou parado há alguns minutos — aparece com o ponto âmbar.
           </TopicoAjuda>

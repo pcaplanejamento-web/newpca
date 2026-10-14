@@ -237,6 +237,8 @@ export const grupos = sqliteTable("grupos", {
   nome: text("nome").notNull(),
   abas: text("abas").notNull().default("[]"), // JSON: string[] de keys de aba (as telas que o grupo abre)
   pcas: text("pcas"), // JSON: number[] de ids de PCA; NULL = todos os PCAs
+  modulos: text("modulos"), // JSON: string[] de ids de MÓDULO (migração `0109`); NULL = as telas avulsas de `abas`
+  chat: integer("chat", { mode: "boolean" }).notNull().default(true), // o chat ao vivo liberado no grupo
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });

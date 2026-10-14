@@ -44,40 +44,35 @@ type NavItem = {
   href: string;
   label: string;
   Icon: typeof IconSettings;
-  /** Só o papel Administrador (a Administração). */
-  soAdmin?: boolean;
-  /** Chave de aba que o GRUPO libera (só nos módulos). */
-  aba?: string;
 };
-type NavSecao = { titulo: string; itens: NavItem[] };
+type NavSecao = { chave: string; titulo: string; itens: NavItem[] };
 
-const SECOES: NavSecao[] = [
-  // Os protocolos, DFDs e itens vivem na MESA (o antigo Dashboard e a tela Protocolos legada saíram).
-  // A Verificação (consultar os erros de um protocolo/DFD sem gravar) segue a tela Mesa do grupo.
-  { titulo: "Módulos", itens: NAV_MODULOS },
-  {
+/** Uma seção do menu por MÓDULO (Configurações → Módulos) — o servidor já filtrou as telas abertas. */
+export type SecaoModulo = { id: string; nome: string; telas: string[] };
+
+/** A Administração — só o papel Administrador. */
+const ADMINISTRACAO: NavSecao = {
+    chave: "_admin",
     titulo: "Administração",
     itens: [
-      { href: "/painel/configuracoes", label: "Configurações", Icon: IconSettings, soAdmin: true },
-      { href: "/painel/usuarios", label: "Usuários", Icon: IconUser, soAdmin: true },
-      { href: "/painel/grupos", label: "Grupos", Icon: IconUsers, soAdmin: true },
-      { href: "/painel/orgaos", label: "Órgãos e Unidades", Icon: IconLandmark, soAdmin: true },
-      { href: "/painel/integracoes", label: "Integrações", Icon: IconPlug, soAdmin: true },
-      { href: "/painel/automacao", label: "Automação", Icon: IconRobo, soAdmin: true },
-      { href: "/painel/armazenamento", label: "Armazenamento", Icon: IconDatabase, soAdmin: true },
-      { href: "/painel/auditoria", label: "Auditoria", Icon: IconClock, soAdmin: true },
-      { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette, soAdmin: true },
-      { href: "/painel/design-system", label: "Componentes", Icon: IconLayers, soAdmin: true },
+      { href: "/painel/configuracoes", label: "Configurações", Icon: IconSettings },
+      { href: "/painel/usuarios", label: "Usuários", Icon: IconUser },
+      { href: "/painel/grupos", label: "Grupos", Icon: IconUsers },
+      { href: "/painel/orgaos", label: "Órgãos e Unidades", Icon: IconLandmark },
+      { href: "/painel/integracoes", label: "Integrações", Icon: IconPlug },
+      { href: "/painel/automacao", label: "Automação", Icon: IconRobo },
+      { href: "/painel/armazenamento", label: "Armazenamento", Icon: IconDatabase },
+      { href: "/painel/auditoria", label: "Auditoria", Icon: IconClock },
+      { href: "/painel/aparencia", label: "Aparência", Icon: IconPalette },
+      { href: "/painel/design-system", label: "Componentes", Icon: IconLayers },
     ],
-  },
-];
+};
 
-/** Seções/itens visíveis: as telas EFETIVAS (o grupo ativo libera e o papel visualiza) + a Administração (só o ADM). */
-function secoesVisiveis(admin: boolean, abas: Set<string>): NavSecao[] {
-  return SECOES.map((s) => ({
-    ...s,
-    itens: s.itens.filter((i) => (!i.soAdmin || admin) && (!i.aba || abas.has(i.aba))),
-  })).filter((s) => s.itens.length > 0);
+/** As seções visíveis: os MÓDULOS (as telas efetivas, agrupadas pelo ADM) + a Administração (só o ADM). */
+function secoesVisiveis(admin: boolean, modulos: readonly SecaoModulo[]): NavSecao[] {
+  const porAba = new Map(NAV_MODULOS.map((m) => [m.aba as string, m]));
+  const secoes: NavSecao[] = modulos.map((m) => ({ chave: m.id, titulo: m.nome, itens: m.telas.flatMap((t) => porAba.get(t) ?? []) }));
+  return [...secoes, ...(admin ? [ADMINISTRACAO] : [])].filter((s) => s.itens.length > 0);
 }
 
 function itemAtivo(pathname: string, item: NavItem): boolean {
@@ -94,18 +89,18 @@ function Brand({ compact = false, identidade }: { compact?: boolean; identidade?
 
 function NavLinks({
   admin,
-  abas,
+  modulos,
   onNavigate,
 }: {
   admin: boolean;
-  abas: Set<string>;
+  modulos: readonly SecaoModulo[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   return (
     <div className="flex flex-col gap-4">
-      {secoesVisiveis(admin, abas).map((secao) => (
-        <div key={secao.titulo}>
+      {secoesVisiveis(admin, modulos).map((secao) => (
+        <div key={secao.chave}>
           <p className="mb-1.5 px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
             {secao.titulo}
           </p>
@@ -418,6 +413,7 @@ export function AppShell({
   grupos,
   grupoAtivoId,
   abas,
+  modulos,
   reparticoes,
   reparticaoAtivaId,
   pcas = [],
@@ -433,6 +429,8 @@ export function AppShell({
   grupos: GrupoNav[];
   grupoAtivoId: number | null;
   abas: string[];
+  /** As seções do menu (os módulos com as telas abertas). */
+  modulos: SecaoModulo[];
   reparticoes: ReparticaoNav[];
   reparticaoAtivaId: number | null;
   /** PCAs do seletor do cabeçalho (filtro global) e o escolhido (`null` = todos). */
@@ -485,7 +483,7 @@ export function AppShell({
           <Brand identidade={identidade} />
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-4">
-          <NavLinks admin={usuario.admin} abas={abasSet} />
+          <NavLinks admin={usuario.admin} modulos={modulos} />
         </div>
         <div className="p-2 pt-0">
           <UserMenu usuario={usuario} />
@@ -516,7 +514,7 @@ export function AppShell({
               </div>
             )}
             <div className="flex-1 overflow-y-auto px-2 py-4">
-              <NavLinks admin={usuario.admin} abas={abasSet} onNavigate={fecharMenu} />
+              <NavLinks admin={usuario.admin} modulos={modulos} onNavigate={fecharMenu} />
             </div>
             <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
               <UserMenu usuario={usuario} onNavigate={fecharMenu} />
@@ -555,9 +553,9 @@ export function AppShell({
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
             {/* UM componente só: quem está online + as conversas (abas no mesmo painel); as bolhas do chat flutuam. */}
-            {presenca && (
+            {presenca && (presenca.ver || chat) && (
               <ChatAoVivo config={chat}>
-                <PresencaGrupo verMesa={abasSet.has("dfd")} />
+                <PresencaGrupo verMesa={abasSet.has("dfd")} verOnline={presenca.ver} />
               </ChatAoVivo>
             )}
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
@@ -576,7 +574,7 @@ export function AppShell({
       </div>
 
       {/* Navegação inferior (mobile) */}
-      <BottomNav abas={abasSet} />
+      <BottomNav telas={modulos.flatMap((m) => m.telas)} />
     </div>
     </AcessoNovidades>
     </CanalGrupo>

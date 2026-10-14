@@ -42,6 +42,7 @@ import {
 } from "./icons";
 import { LinkCard } from "./LinkCard";
 import { Modal } from "./Modal";
+import { ModulosAdmin } from "./ModulosAdmin";
 import { PapeisAdmin } from "./PapeisAdmin";
 import { ReferenciaSistema } from "./ReferenciaSistema";
 import { Segmented } from "./Segmented";
@@ -486,6 +487,7 @@ export function ConfiguracoesAdmin({
           url="aba"
           tabs={[
             { key: "identidade", label: "Identidade", icon: <IconImage />, dica: "Nome, subtítulo e favicon do site", content: abaIdentidade },
+            { key: "modulos", label: "Módulos", icon: <IconLayers />, dica: "Os módulos do menu e as telas de cada um (os grupos liberam módulos)", content: <ModulosAdmin /> },
             { key: "papeis", label: "Papéis", icon: <IconShield />, dica: "O que cada papel pode fazer em cada tela", content: <PapeisAdmin /> },
             { key: "protecao", label: "Proteção de dados", icon: <IconLock />, dica: "Bloquear seleção, cópia, impressão e captura por papel", content: <ProtecaoDadosAdmin /> },
             { key: "cargos", label: "Cargos e funções", icon: <IconBriefcase />, dica: "A lista de cargos dos usuários e dos responsáveis", content: <CargosAdmin /> },

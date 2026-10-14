@@ -27,6 +27,8 @@ export const EVENTO_CHAT_PRIVADO = "pca:chat-privado";
 /** O que o layout passa quando o ADM ligou a presença (desligada = `null`: nada é montado nem conectado). */
 export type PresencaShell = {
   pessoas: Pessoa[];
+  /** O papel vê quem está online (sem ele, o servidor manda a lista vazia e o cabeçalho mostra só as conversas). */
+  ver: boolean;
   /** id → telefone (só de quem marcou o contato como WhatsApp). */
   whatsapp: Record<number, string>;
   invisivel: boolean;
@@ -211,7 +213,7 @@ export function CanalGrupo({
   );
 }
 
-const PRESENCA_VAZIA: PresencaShell = { pessoas: [], whatsapp: {}, invisivel: false, inativoMin: 0, status: { status: "disponivel", recado: "", ate: null } };
+const PRESENCA_VAZIA: PresencaShell = { pessoas: [], ver: false, whatsapp: {}, invisivel: false, inativoMin: 0, status: { status: "disponivel", recado: "", ate: null } };
 
 function CanalAtivo({
   presenca: presencaOuNada,

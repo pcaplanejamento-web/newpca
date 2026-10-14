@@ -24,6 +24,9 @@ type Anexo = ConexaoPresenca & {
   ultima: number;
   chatGrupo?: boolean;
   chatPrivado?: boolean;
+  /** O PAPEL não vê quem está online (Papéis → Detalhes → Presença): a aba recebe as listas VAZIAS — ela segue aparecendo
+   * para os outros e conversando. */
+  cego?: boolean;
   janela?: { inicio: number; n: number };
   dig?: number;
   /** O que a aba está vendo (os banners abertos) e onde tem alteração não salva. */
@@ -123,6 +126,7 @@ export class PresencaGrupo {
       chatGrupo: req.headers.get("x-chat-grupo") === "1",
       chatPrivado: req.headers.get("x-chat-privado") === "1",
       atividade: req.headers.get("x-presenca-atividade") === "1",
+      cego: req.headers.get("x-presenca-ver") === "0",
     };
     anexo.desde = Date.now();
     servidor.serializeAttachment(anexo);
@@ -200,9 +204,10 @@ export class PresencaGrupo {
     const mudou = msg !== this.ultima;
     this.ultima = msg;
     for (const ws of abertas) {
-      if (!mudou && ws !== nova) continue;
+      const cego = (ws.deserializeAttachment() as Anexo | null)?.cego === true;
+      if (cego ? ws !== nova : !mudou && ws !== nova) continue;
       try {
-        ws.send(msg);
+        ws.send(cego ? VAZIO_PRESENCA : msg);
       } catch {
         /* aba que caiu: o fechamento a tira */
       }
@@ -308,10 +313,13 @@ export class PresencaGrupo {
     const msg = JSON.stringify(atividade ? { t: "vendo", m: listaVendo(anexos), a: listaAtividade(anexos) } : { t: "vendo", m: listaVendo(anexos) });
     const mudou = msg !== this.ultimoVendo;
     this.ultimoVendo = msg;
-    if (mudou) enviarA(this.state.getWebSockets().filter((o) => o !== saindo), JSON.parse(msg));
-    else if (nova) enviarA([nova], JSON.parse(msg));
+    const vendem = (ws: WebSocket) => (ws.deserializeAttachment() as Anexo | null)?.cego !== true;
+    if (mudou) enviarA(this.state.getWebSockets().filter((o) => o !== saindo && vendem(o)), JSON.parse(msg));
+    else if (nova && vendem(nova)) enviarA([nova], JSON.parse(msg));
   }
 }
+
+const VAZIO_PRESENCA = JSON.stringify({ t: "presenca", p: [], v: [], d: [] });
 
 function fechar(ws: WebSocket, code: number, motivo: string) {
   try {

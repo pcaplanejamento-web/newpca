@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
   if (doGrupo) {
     const grupo = p.data.grupo;
-    if (!grupo || !(await ehMembroDoGrupo(a.u.id, grupo))) return erro("Você não é membro deste grupo.", 403);
+    if (!grupo || !(await ehMembroDoGrupo(a.u.id, grupo))) return erro("Você não é membro deste grupo, ou o chat está bloqueado nele.", 403);
     const chave = chaveConversa("grupo", a.u.id, grupo) as string;
     const db = getDb();
     await db.batch(comandosGuardarMensagem(db, { id, chave, de: a.u.id, texto, resp: respTexto, em, participantes: [a.u.id] }) as never);
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   if (!para.length || (privada != null && (para.length !== 1 || para[0] !== privada)) || (privada == null && !ehConversaEmGrupo(conversa)))
     return erro("Conversa inválida.", 422);
   const podem = await quemCompartilhaGrupo(a.u.id, para);
-  if (para.some((x) => !podem.has(x))) return erro("Você só conversa com pessoas ativas dos seus grupos.", 403);
+  if (para.some((x) => !podem.has(x))) return erro("Você só conversa com pessoas ativas dos seus grupos com o chat liberado.", 403);
   const chave = chaveConversa(conversa as Conversa, a.u.id, null);
   if (!chave) return erro("Conversa inválida.", 422);
   const membros = privada == null ? [a.u.id, ...para] : null;

@@ -1,30 +1,30 @@
 import { z } from "zod";
-import { ABA_KEYS } from "./abas.ts";
 import { ehCodigoGeral } from "./escopo-unidades-core.ts";
 
-// Validação da tela de Grupos (RBAC): o grupo guarda as TELAS que abre (o conjunto fechado de `ABA_KEYS`,
-// lib/abas.ts), os PCAs que acessa (`null` = todos), as pessoas e as unidades.
+// Validação da tela de Grupos (RBAC): o grupo guarda os MÓDULOS que libera (as telas vêm deles — Configurações →
+// Módulos), se o chat é liberado, os PCAs que acessa (`null` = todos), as pessoas e as unidades.
 
 /** Limite do nome de um grupo (o campo da tela usa o mesmo `maxLength`). */
 export const MAX_NOME_RBAC = 60;
 
 const nomeGrupo = z.string().trim().min(1, "Informe o nome do grupo.").max(MAX_NOME_RBAC, `Use até ${MAX_NOME_RBAC} caracteres.`);
-/** As telas do grupo: sem repetir. */
-const abasSchema = z
-  .array(z.enum(ABA_KEYS))
-  .max(ABA_KEYS.length * 2)
-  .transform((a) => [...new Set(a)]);
 /** Ids de pessoas/unidades/PCAs: sem repetir (um id repetido derrubaria o lote pela chave primária). */
 const idsSchema = z
   .array(z.number().int().positive())
   .max(5000)
   .transform((ids) => [...new Set(ids)]);
+/** Os MÓDULOS do grupo (ids de Configurações → Módulos; a rota confere que existem). */
+const modulosSchema = z
+  .array(z.string().trim().min(1).max(40))
+  .max(24)
+  .transform((a) => [...new Set(a)]);
 /** Os PCAs do grupo: `null` = todos; a lista = só esses. */
 const pcasSchema = idsSchema.nullable();
 
 export const grupoCreateSchema = z.object({
   nome: nomeGrupo,
-  abas: abasSchema.default([]),
+  modulos: modulosSchema.default([]),
+  chat: z.boolean().default(true),
   pcas: pcasSchema.default(null),
   membros: idsSchema.default([]),
   reparticoes: idsSchema.default([]),
@@ -34,7 +34,8 @@ export const grupoCreateSchema = z.object({
 // com o nome APAGAVA os membros, as unidades e as telas do grupo).
 export const grupoPatchSchema = z.object({
   nome: nomeGrupo.optional(),
-  abas: abasSchema.optional(),
+  modulos: modulosSchema.optional(),
+  chat: z.boolean().optional(),
   pcas: pcasSchema.optional(),
   membros: idsSchema.optional(),
   reparticoes: idsSchema.optional(),

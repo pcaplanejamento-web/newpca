@@ -184,6 +184,26 @@ export function DetalhesPapelEditor({ valor, original, onChange }: { valor: Deta
         </div>
       </section>
 
+      <section aria-labelledby="det-presenca" className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
+        <h4 id="det-presenca" className="text-[14px] font-bold text-text">
+          Presença
+        </h4>
+        <div className="divide-y divide-border">
+          <Linha
+            titulo="Ver quem está online"
+            ajuda="As fotos de quem está online no cabeçalho, o painel “Online agora” e o ponto de presença nas fotos. Desligado, a pessoa segue aparecendo para os outros e usando o chat. Vale só com a presença ligada em Configurações → Presença; o Administrador sempre vê."
+            alterado={v.presenca.verOnline !== o.presenca.verOnline}
+          >
+            <Switch
+              checked={v.presenca.verOnline}
+              disabled={so}
+              onChange={(verOnline) => onChange?.({ ...v, presenca: { verOnline } })}
+              label={v.presenca.verOnline ? "Permitido" : "Não"}
+            />
+          </Linha>
+        </div>
+      </section>
+
       <SecaoComponentes valor={v} original={o} onChange={onChange} />
 
       {m.linhas === "meus" && (m.responsavel.alterar === "grupo" || !m.responsavel.ver) && (

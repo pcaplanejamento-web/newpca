@@ -670,6 +670,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de `contextoBanners`); o cronograma do Calendário (`cronogramaPcas(de, ate, permitidos)`); e as rotas
   `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
   `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
+- **MÓDULOS + CHAT POR GRUPO + QUEM VÊ OS ONLINE (v1.91.0, migração `0109`, aditiva — `grupos.modulos` JSON de ids [NULL =
+  grupo antigo, pelas telas avulsas de `abas`] + `grupos.chat` [1 = liberado]):** Configurações → aba **"Módulos"**
+  (`ModulosAdmin`: nome, ↑/↓, as telas em `ChipsIcone` — uma tela em UM módulo; aviso das telas sem módulo; `GET/PATCH
+  /api/admin/modulos`, `exigirAdmin`, auditoria) no blob `configuracoes.modulos` (sem migração; `getModulos` cache 60 s + por
+  requisição). Núcleo PURO **`modulos-core.ts`** (testado): `lerModulos` (inválido = `MODULOS_PADRAO`, um módulo "Módulos" com
+  todas — o menu de antes), `telasDoGrupo` (pelos módulos; o antigo pelas avulsas que têm módulo), `modulosDasTelas` (os que o
+  antigo ganharia sem abrir nada a mais), `secoesDosModulos` (o menu: uma seção por módulo, só as abertas; o ADM vê "Outras
+  telas"), `motivoModulosInvalidos`. O ACESSO (`acesso.ts` `paraAcesso`) calcula `GrupoAcesso.abas` pelos módulos — mudar um
+  módulo muda todos os grupos que o usam; `abas` segue gravado como retrato. Menu: o layout manda `modulos` (as seções) ao
+  `AppShell` (`secoesVisiveis`) e a `BottomNav` (`telas` na ordem dos módulos). Grupos (`GruposAdmin`): **Módulos do grupo**
+  (o antigo só passa a módulos quando o ADM mexe neles — `modsTocados`; o que ganha/perde à vista — `MudancaTelas`) e
+  **"Chat liberado"** (`Switch`). Chat bloqueado no grupo: o layout não monta o chat (`ativo.chat`), o `worker.ts` manda
+  `x-chat-grupo`/`x-chat-privado` = 0 e as rotas do chat recusam (`ehMembroDoGrupo` exige `grupos.chat = 1`;
+  `quemCompartilhaGrupo` só por grupo com chat). **Papéis → Detalhes → Presença → "Ver quem está online"**
+  (`DetalhesPapel.presenca.verOnline`, padrão sim; o ADM sempre vê): desligado, o `worker.ts` manda `x-presenca-ver: 0` e o
+  `PresencaGrupo` (DO) entrega à aba a lista VAZIA (`cego` — nem presença nem "vendo"); no cabeçalho, só as conversas
+  (`PresencaGrupo verOnline={false}`; sem chat, nada é montado). A pessoa segue aparecendo para os outros.
 - **Telas** (`grupos.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
   **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas` · `calendario` · `verificacao`** (a Verificação — tela própria desde a v1.77.0, migração `0107` deu a tela aos grupos com a Mesa e Visualizar/Exportar aos papéis que a viam), na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
   ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +

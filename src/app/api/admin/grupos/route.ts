@@ -1,6 +1,8 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { grupoReparticoes, grupos, pcas, reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
 import { abasConhecidas } from "@/lib/abas";
+import { getModulosFresco } from "@/lib/modulos";
+import { lerModulosGrupo, motivoModulosInvalidos, telasDoGrupo, telasDosModulos } from "@/lib/modulos-core";
 import { lerPcasGrupo } from "@/lib/acesso";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -15,8 +17,8 @@ export async function GET() {
   const guard = await exigirAdmin();
   if ("erro" in guard) return guard.erro;
   const db = getDb();
-  const [lista, listaPcas, users, reps, vincUsu, vincRep] = await Promise.all([
-    db.select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas }).from(grupos).orderBy(grupos.nome),
+  const [lista, listaPcas, users, reps, vincUsu, vincRep, modulos] = await Promise.all([
+    db.select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat }).from(grupos).orderBy(grupos.nome),
     // Os PCAs que o grupo pode escolher (o mais recente primeiro).
     db.select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano }).from(pcas).orderBy(desc(pcas.ano), desc(pcas.id)),
     // Status: a tela marca quem está pendente/inativo (não conta como acesso ativo).
@@ -28,6 +30,7 @@ export async function GET() {
       .orderBy(asc(reparticoes.ordem), asc(reparticoes.id)),
     db.select({ grupoId: usuarioGrupos.grupoId, usuarioId: usuarioGrupos.usuarioId }).from(usuarioGrupos),
     db.select({ grupoId: grupoReparticoes.grupoId, reparticaoId: grupoReparticoes.reparticaoId }).from(grupoReparticoes),
+    getModulosFresco(),
   ]);
   const membrosPorGrupo = new Map<number, number[]>();
   for (const v of vincUsu) {
@@ -42,14 +45,24 @@ export async function GET() {
     repsPorGrupo.set(v.grupoId, arr);
   }
   return ok({
-    grupos: lista.map((g) => ({
+    grupos: lista.map((g) => {
+      const avulsas = lerAbasGrupo(g.abas);
+      const mods = lerModulosGrupo(g.modulos);
+      return {
       id: g.id,
       nome: g.nome,
-      abas: lerAbasGrupo(g.abas),
+      /** `null` = grupo antigo (telas avulsas em `avulsas`, até o ADM escolher os módulos). */
+      modulos: mods,
+      avulsas,
+      /** As telas que o grupo ABRE hoje (dos módulos). */
+      abas: telasDoGrupo(modulos, mods, avulsas),
+      chat: g.chat,
       pcas: lerPcasGrupo(g.pcas),
       membros: membrosPorGrupo.get(g.id) ?? [],
       reparticoes: repsPorGrupo.get(g.id) ?? [],
-    })),
+      };
+    }),
+    modulos,
     pcas: listaPcas,
     usuarios: users,
     reparticoes: reps,
@@ -57,7 +70,7 @@ export async function GET() {
 }
 
 /** As telas gravadas no grupo (as chaves antigas `dashboard`/`protocolos` saem na leitura). */
-function lerAbasGrupo(json: string): string[] {
+function lerAbasGrupo(json: string) {
   try {
     return abasConhecidas(JSON.parse(json));
   } catch {
@@ -70,11 +83,16 @@ export async function POST(req: Request) {
   if ("erro" in guard) return guard.erro;
   const corpo = await parseCorpo(grupoCreateSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, abas, pcas: pcasGrupo, membros, reparticoes: reps } = corpo.data;
+  const { nome, modulos: mods, chat, pcas: pcasGrupo, membros, reparticoes: reps } = corpo.data;
   const db = getDb();
-  const invalido = await motivoIdsInvalidos(db, corpo.data);
+  const modulos = await getModulosFresco();
+  const invalido = motivoModulosInvalidos(mods, modulos) ?? (await motivoIdsInvalidos(db, corpo.data));
   if (invalido) return erro(invalido, 422);
-  const [row] = await db.insert(grupos).values({ nome, abas: JSON.stringify(abas), pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo) }).returning({ id: grupos.id });
+  const abas = telasDosModulos(modulos, mods);
+  const [row] = await db
+    .insert(grupos)
+    .values({ nome, modulos: JSON.stringify(mods), abas: JSON.stringify(abas), chat, pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo) })
+    .returning({ id: grupos.id });
   const grupoId = row.id;
   // Pessoas + unidades num LOTE (tudo ou nada); se falhar, o grupo recém-criado sai (nada fica pela metade).
   const comandos = [...comandosMembros(db, grupoId, membros), ...comandosUnidades(db, grupoId, reps)];
@@ -90,8 +108,8 @@ export async function POST(req: Request) {
     acao: "criar",
     entidade: "grupo",
     entidadeId: grupoId,
-    resumo: `Grupo "${nome}" criado (${abas.length} tela(s), ${pcasGrupo == null ? "todos os PCAs" : `${pcasGrupo.length} PCA(s)`}, ${membros.length} pessoa(s), ${reps.length} unidade(s))`,
-    depois: { nome, abas, pcas: pcasGrupo, membros, reparticoes: reps },
+    resumo: `Grupo "${nome}" criado (${mods.length} módulo(s), ${abas.length} tela(s), chat ${chat ? "liberado" : "bloqueado"}, ${pcasGrupo == null ? "todos os PCAs" : `${pcasGrupo.length} PCA(s)`}, ${membros.length} pessoa(s), ${reps.length} unidade(s))`,
+    depois: { nome, modulos: mods, abas, chat, pcas: pcasGrupo, membros, reparticoes: reps },
   });
   return ok({ id: grupoId });
 }

@@ -9,6 +9,8 @@ import { getAparencia } from "@/lib/aparencia";
 import { dataHoraBR } from "@/lib/format";
 import { getReparticaoContexto } from "@/lib/grupos";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
+import { getModulos } from "@/lib/modulos";
+import { secoesDosModulos } from "@/lib/modulos-core";
 import { getConfigProtecao } from "@/lib/protecao";
 import { protecaoDoPapel } from "@/lib/protecao-core";
 import { contarNaoLidas } from "@/lib/notificacoes";
@@ -34,12 +36,13 @@ export default async function PainelLayout({
   // O ADM exigiu uma senha nova: nenhuma tela do painel antes de criá-la.
   if (usuario.trocarSenha) redirect("/nova-senha");
 
-  const [aparencia, pcas, versao, protecaoCfg] = await Promise.all([
+  const [aparencia, pcas, versao, protecaoCfg, modulos] = await Promise.all([
     getAparencia(),
     pcasDoFiltro(),
     // A versão dos dados: o `SincronizarDados` só recarrega a tela quando ela muda (falhou = sem sincronização).
     versaoDados().catch(() => undefined),
     getConfigProtecao(),
+    getModulos(),
   ]);
   // A PROTEÇÃO DE DADOS do ADM (seleção/cópia, impressão/captura): só nos papéis que ele escolheu.
   const protecao = protecaoDoPapel(protecaoCfg, usuario.papel.id);
@@ -47,7 +50,8 @@ export default async function PainelLayout({
     getReparticaoContexto(usuario, ativo),
     getPcaFiltro(pcas),
     contarNaoLidas(usuario, grupos),
-    presencaDoGrupo(usuario.id, ativo?.id ?? null),
+    // O PAPEL vê quem está online? (Papéis → Detalhes → Presença; o ADM sempre vê.)
+    presencaDoGrupo(usuario.id, ativo?.id ?? null, usuario.admin || usuario.papel.detalhes.presenca.verOnline),
     getConfigChat(),
   ]);
 
@@ -57,6 +61,8 @@ export default async function PainelLayout({
       grupos={grupos.map((g) => ({ id: g.id, nome: g.nome }))}
       grupoAtivoId={ativo?.id ?? null}
       abas={acesso.telas}
+      // O menu: uma seção por MÓDULO (Configurações → Módulos), só as telas abertas; o ADM vê também as telas sem módulo.
+      modulos={secoesDosModulos(modulos, new Set(acesso.telas), usuario.admin)}
       reparticoes={contexto.lista}
       reparticaoAtivaId={contexto.ativa?.id ?? null}
       pcas={pcas}
@@ -67,7 +73,8 @@ export default async function PainelLayout({
       presenca={presenca}
       // O chat ao vivo vive no canal da presença: sem ela, sem o chat.
       // `undefined` = a leitura FALHOU (o AppShell mantém o que já estava): uma falha passageira nunca desmonta o canal e o chat.
-      chat={presenca === undefined || configChat === null ? undefined : presenca && chatLigado(configChat) ? configChat : null}
+      // O GRUPO ativo também libera (ou não) o chat — Grupos → "Chat liberado".
+      chat={presenca === undefined || configChat === null ? undefined : presenca && ativo?.chat && chatLigado(configChat) ? configChat : null}
     >
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
@@ -84,7 +91,7 @@ export default async function PainelLayout({
 /** A PRESENÇA do grupo ativo (quem está online): só com o ADM tendo ligado e um grupo ativo — o diretório (foto + apelido)
  * vai uma vez; o canal manda só ids. Desligada = `null` (nada é montado); a leitura FALHOU = `undefined` (a tela mantém a
  * presença que já tinha — nunca derruba o canal nem as conversas por uma falha passageira). */
-async function presencaDoGrupo(usuarioId: number, grupoId: number | null) {
+async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: boolean) {
   if (grupoId == null) return null;
   const cfg = await getConfigPresenca();
   if (!cfg.ativo) return null;
@@ -92,6 +99,7 @@ async function presencaDoGrupo(usuarioId: number, grupoId: number | null) {
     const [pessoas, prefs] = await Promise.all([listarPessoasDoGrupo(grupoId), prefsPresencaDe(usuarioId)]);
     return {
       pessoas,
+      ver,
       whatsapp: await whatsappDe(pessoas.map((p) => p.id)),
       invisivel: ficaInvisivel(cfg, prefs),
       inativoMin: cfg.inativoMin,

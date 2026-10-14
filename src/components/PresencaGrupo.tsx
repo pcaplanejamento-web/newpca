@@ -91,7 +91,15 @@ type Linha = { pessoa: Pessoa; info: InfoPresenca | null; voce: boolean; visto: 
  * Tocar abre "Online agora": o seu status, a busca, Online · Ausente · Visto recentemente e, ao tocar numa pessoa, as ações
  * (WhatsApp, ver na Mesa). Só existe com a presença ligada pelo ADM.
  */
-export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a ação "Ver na Mesa"). */ verMesa?: boolean }) {
+export function PresencaGrupo({
+  verMesa = false,
+  verOnline = true,
+}: {
+  /** A pessoa abre a Mesa (a ação "Ver na Mesa"). */
+  verMesa?: boolean;
+  /** O PAPEL vê quem está online (Papéis → Detalhes → Presença)? Sem ele, só as CONVERSAS (o servidor nem manda a lista). */
+  verOnline?: boolean;
+}) {
   const c = useCanalGrupo();
   const chatV = useChatAoVivo();
   const [folha, setFolha] = useState(false);
@@ -123,7 +131,7 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
     outros.map((l) => l.pessoa.id),
     nomes,
   );
-  if (!c) return null;
+  if (!c || (!verOnline && !chatV)) return null;
 
   const online = outros.filter((l) => l.info?.estado === "online").length;
   const ausentes = outros.length - online;
@@ -131,7 +139,9 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
     ? "Quem está online — conectando"
     : `Quem está online${c.grupoNome ? ` em ${c.grupoNome}` : ""} — ${outros.length ? `${online} online${ausentes ? `, ${ausentes} ausente${ausentes === 1 ? "" : "s"}` : ""}` : "só você"}`;
   const naoLidas = chatV?.naoLidas ?? 0;
-  const rotuloGatilho = `${rotulo}${chatV ? ` — conversas${naoLidas ? `: ${naoLidas} mensage${naoLidas === 1 ? "m" : "ns"} não lida${naoLidas === 1 ? "" : "s"}` : ""}` : ""}`;
+  const rotuloGatilho = !verOnline
+    ? `Conversas${naoLidas ? `: ${naoLidas} mensage${naoLidas === 1 ? "m" : "ns"} não lida${naoLidas === 1 ? "" : "s"}` : ""}`
+    : `${rotulo}${chatV ? ` — conversas${naoLidas ? `: ${naoLidas} mensage${naoLidas === 1 ? "m" : "ns"} não lida${naoLidas === 1 ? "" : "s"}` : ""}` : ""}`;
   const fotos = outros.slice(0, MAX_FOTOS);
   const gatilho =
     "relative items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
@@ -154,7 +164,7 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
           triggerClassName={`${gatilho} group/pilha inline-flex h-[var(--h-control-sm)] min-w-[var(--h-control-sm)] gap-1.5 px-1.5`}
           trigger={
             <>
-              {fotos.length ? (
+              {!verOnline ? null : fotos.length ? (
                 <PilhaFotos
                   max={MAX_FOTOS}
                   itens={outros.map(({ pessoa, info }) => {
@@ -170,20 +180,20 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
             ) : (
               <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} />
             )}
-              {chatV && <IconeConversas naoLidas={naoLidas} />}
+              {chatV && <IconeConversas naoLidas={naoLidas} so={!verOnline} />}
             </>
           }
         >
-          {(fechar) => <PainelAoVivo linhas={linhas} verMesa={verMesa} aba={aba} onAba={setAba} onFechar={fechar} />}
+          {(fechar) => <PainelAoVivo linhas={linhas} verMesa={verMesa} verOnline={verOnline} aba={aba} onAba={setAba} onFechar={fechar} />}
         </Dropdown>
       </div>
       <button type="button" aria-label={rotuloGatilho} title={rotuloGatilho} aria-haspopup="dialog" onClick={() => setFolha(true)} className={`${gatilho} inline-flex h-11 w-11 lg:hidden`}>
-        <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} />
+        {verOnline ? <IconUsers className={`h-5 w-5 ${c.aoVivo ? "" : "opacity-50"}`} /> : <IconChat className="h-5 w-5" />}
         {naoLidas > 0 ? (
           <span key={`c${naoLidas}`} className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white">
             {naoLidas > 99 ? "99+" : naoLidas}
           </span>
-        ) : online > 0 && (
+        ) : verOnline && online > 0 && (
           <span key={online} className="animate-selo-pop absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--ok)] px-1 text-[10px] font-bold leading-none text-white">
             <span aria-hidden="true" className="ponto-vivo absolute inset-0 -z-10 rounded-full bg-[var(--ok)]" />
             {online > 99 ? "99+" : online}
@@ -191,7 +201,7 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
         )}
       </button>
       <Modal open={folha} onClose={() => setFolha(false)} titulo={`Ao vivo${c.grupoNome ? ` · ${c.grupoNome}` : ""}`} size="md">
-        {folha && <PainelAoVivo linhas={linhas} verMesa={verMesa} aba={aba} onAba={setAba} onFechar={() => setFolha(false)} celular />}
+        {folha && <PainelAoVivo linhas={linhas} verMesa={verMesa} verOnline={verOnline} aba={aba} onAba={setAba} onFechar={() => setFolha(false)} celular />}
       </Modal>
     </>
   );
@@ -200,9 +210,9 @@ export function PresencaGrupo({ verMesa = false }: { /** A pessoa abre a Mesa (a
 type AbaAoVivo = "online" | "conversas";
 
 /** O ícone das CONVERSAS no gatilho "Ao vivo" (com as não lidas — pop). */
-function IconeConversas({ naoLidas }: { naoLidas: number }) {
+function IconeConversas({ naoLidas, so = false }: { naoLidas: number; /** Sem a pilha de fotos ao lado (sem divisória). */ so?: boolean }) {
   return (
-    <span className="relative ml-1 inline-flex h-7 w-7 items-center justify-center border-l border-border pl-1.5 text-muted">
+    <span className={`relative inline-flex h-7 w-7 items-center justify-center text-muted ${so ? "" : "ml-1 border-l border-border pl-1.5"}`}>
       <IconChat className="h-[18px] w-[18px]" />
       {naoLidas > 0 && (
         <span key={naoLidas} className="animate-selo-pop absolute -top-1 -right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white">
@@ -217,6 +227,7 @@ function IconeConversas({ naoLidas }: { naoLidas: number }) {
 function PainelAoVivo({
   linhas,
   verMesa,
+  verOnline,
   aba,
   onAba,
   onFechar,
@@ -224,6 +235,7 @@ function PainelAoVivo({
 }: {
   linhas: Linha[];
   verMesa: boolean;
+  verOnline: boolean;
   aba: AbaAoVivo;
   onAba: (a: AbaAoVivo) => void;
   onFechar: () => void;
@@ -234,7 +246,7 @@ function PainelAoVivo({
   if (!c) return null;
   const online = linhas.filter((l) => !l.voce && l.info?.estado === "online").length;
   const n = chatV?.naoLidas ?? 0;
-  const atual = chatV ? aba : "online";
+  const atual = !verOnline ? "conversas" : chatV ? aba : "online";
   return (
     <div className={`flex flex-col ${celular ? "min-h-[60dvh]" : "h-[min(72vh,560px)]"}`}>
       <div className={`flex shrink-0 flex-col gap-2 border-b border-border px-3 ${celular ? "pb-2.5" : "py-2.5"}`}>
@@ -245,7 +257,7 @@ function PainelAoVivo({
             <SeloAoVivo aoVivo={c.aoVivo} />
           </div>
         )}
-        {chatV && (
+        {chatV && verOnline && (
           <Segmented
             value={atual}
             onChange={onAba}

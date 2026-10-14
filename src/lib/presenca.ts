@@ -96,13 +96,15 @@ export async function gravarConfigChat(cfg: ConfigChat, usuarioId: number): Prom
 export async function quemCompartilhaGrupo(eu: number, ids: readonly number[]): Promise<Set<number>> {
   if (!ids.length) return new Set();
   const linhas = await getDb().all<{ id: number }>(
-    sql`SELECT DISTINCT y.usuario_id AS id FROM usuario_grupos x JOIN usuario_grupos y ON y.grupo_id = x.grupo_id JOIN usuarios u ON u.id = y.usuario_id AND u.status = 'ativo' WHERE x.usuario_id = ${eu} AND y.usuario_id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`,
+    sql`SELECT DISTINCT y.usuario_id AS id FROM usuario_grupos x JOIN grupos gr ON gr.id = x.grupo_id AND gr.chat = 1 JOIN usuario_grupos y ON y.grupo_id = x.grupo_id JOIN usuarios u ON u.id = y.usuario_id AND u.status = 'ativo' WHERE x.usuario_id = ${eu} AND y.usuario_id IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`,
   );
   return new Set(linhas.map((l) => Number(l.id)));
 }
 
-/** A pessoa é MEMBRO do grupo (o chat do grupo só entre os membros — como a presença). */
+/** A pessoa é MEMBRO do grupo e o grupo LIBERA o chat (Grupos → "Chat liberado") — o chat do grupo só entre os membros. */
 export async function ehMembroDoGrupo(usuarioId: number, grupoId: number): Promise<boolean> {
-  const [r] = await getDb().all<{ ok: number }>(sql`SELECT 1 AS ok FROM usuario_grupos WHERE usuario_id = ${usuarioId} AND grupo_id = ${grupoId} LIMIT 1`);
+  const [r] = await getDb().all<{ ok: number }>(
+    sql`SELECT 1 AS ok FROM usuario_grupos ug JOIN grupos g ON g.id = ug.grupo_id AND g.chat = 1 WHERE ug.usuario_id = ${usuarioId} AND ug.grupo_id = ${grupoId} LIMIT 1`,
+  );
   return !!r;
 }

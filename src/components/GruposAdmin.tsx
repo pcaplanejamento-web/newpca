@@ -1,8 +1,9 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { ABAS } from "@/lib/abas";
+import type { AbaKey } from "@/lib/abas";
 import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
+import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
@@ -19,7 +20,19 @@ import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { Switch } from "./Switch";
 
-type Grupo = { id: number; nome: string; abas: string[]; pcas: number[] | null; membros: number[]; reparticoes: number[] };
+type Grupo = {
+  id: number;
+  nome: string;
+  /** Os MÓDULOS que o grupo libera; `null` = grupo antigo (telas avulsas em `avulsas` até o ADM escolher). */
+  modulos: string[] | null;
+  avulsas: AbaKey[];
+  /** As telas que o grupo ABRE hoje. */
+  abas: AbaKey[];
+  chat: boolean;
+  pcas: number[] | null;
+  membros: number[];
+  reparticoes: number[];
+};
 type PcaOpt = { id: number; nome: string; ano: number | null };
 type Status = "ativo" | "pendente" | "inativo";
 type UserOpt = { id: number; nome: string; email: string; status: Status };
@@ -28,7 +41,6 @@ type RepOpt = { id: number; codigo: string; nome: string; oculto: boolean };
 /** Ordem alfabética do português (acentos e caixa no lugar certo — a do banco põe "Á" depois do "Z"). */
 const COLLATOR = new Intl.Collator("pt-BR", { sensitivity: "base" });
 const ehGeral = (r: RepOpt) => ehCodigoGeral(r.codigo);
-/** As telas do grupo por nome, na ordem do menu. */
 /** O formulário do banner (o Salvar fica no rodapé fixo do banner, fora do form). */
 const FORM_ID = "form-grupo";
 
@@ -41,12 +53,16 @@ export function GruposAdmin() {
   const [pcasDisp, setPcasDisp] = useState<PcaOpt[]>([]);
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [repsDisp, setRepsDisp] = useState<RepOpt[]>([]);
+  const [modulosDisp, setModulosDisp] = useState<Modulo[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
 
   const [editando, setEditando] = useState<Grupo | "novo" | null>(null);
   const [nome, setNome] = useState("");
-  const [abas, setAbas] = useState<Set<string>>(new Set());
+  const [mods, setMods] = useState<Set<string>>(new Set());
+  // O grupo ANTIGO (telas avulsas) só passa a módulos quando o ADM mexe nos módulos — salvar só o nome não muda o acesso.
+  const [modsTocados, setModsTocados] = useState(false);
+  const [chat, setChat] = useState(true);
   // null = TODOS os PCAs (sem restrição); o conjunto = só esses.
   const [pcasSel, setPcasSel] = useState<Set<number> | null>(null);
   const [membros, setMembros] = useState<Set<number>>(new Set());
@@ -60,9 +76,10 @@ export function GruposAdmin() {
     setErro(null);
     try {
       const r = await fetch("/api/admin/grupos");
-      const j = await lerJson<{ grupos?: Grupo[]; pcas?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
+      const j = await lerJson<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
       setGrupos([...(j.grupos ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
+      setModulosDisp(j.modulos ?? []);
       setPcasDisp(j.pcas ?? []);
       setUsers([...(j.usuarios ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setRepsDisp(j.reparticoes ?? []);
@@ -81,8 +98,10 @@ export function GruposAdmin() {
   function abrirNovo() {
     setEditando("novo");
     setNome("");
-    // Nenhuma tela pré-escolhida (o ADM escolhe de propósito); os PCAs começam em "todos".
-    setAbas(new Set());
+    // Nenhum módulo pré-escolhido (o ADM escolhe de propósito); o chat liberado e os PCAs em "todos".
+    setMods(new Set());
+    setModsTocados(true);
+    setChat(true);
     setPcasSel(null);
     setMembros(new Set());
     setReps(new Set());
@@ -92,7 +111,10 @@ export function GruposAdmin() {
   function abrirEdicao(g: Grupo) {
     setEditando(g);
     setNome(g.nome);
-    setAbas(new Set(g.abas));
+    // O grupo antigo começa com os módulos cujas telas ele já abre TODAS (nunca abre a mais).
+    setMods(new Set(g.modulos ?? modulosDasTelas(modulosDisp, g.avulsas)));
+    setModsTocados(g.modulos != null);
+    setChat(g.chat);
     setPcasSel(g.pcas == null ? null : new Set(g.pcas));
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
@@ -121,7 +143,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, abas: [...abas], pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps] }),
+        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps] }),
       });
       const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -175,8 +197,8 @@ export function GruposAdmin() {
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          O grupo reúne pessoas, as TELAS que elas abrem (o papel diz o que fazem nelas), os PCAs e as UNIDADES (de quais
-          unidades veem os dados).
+          O grupo reúne pessoas, os MÓDULOS que elas abrem (o papel diz o que fazem nas telas), o chat, os PCAs e as
+          UNIDADES (de quais unidades veem os dados).
         </p>
         <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
           Novo grupo
@@ -193,13 +215,14 @@ export function GruposAdmin() {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-[var(--gap-block)]">
           {grupos.map((g) => {
             const telas = NAV_MODULOS.filter((m) => g.abas.includes(m.aba));
+            const nMods = g.modulos?.length;
             return (
               <CartaoEspaco
                 key={g.id}
                 ariaLabel={`Editar o grupo ${g.nome}`}
                 onClick={() => abrirEdicao(g)}
-                sobretitulo={`Grupo · ${telas.length} tela(s)`}
-                selo={telas.length === 0 ? <Badge tone="amber">Sem telas</Badge> : undefined}
+                sobretitulo={`Grupo · ${nMods == null ? "telas avulsas" : `${nMods} módulo(s)`} · ${telas.length} tela(s)`}
+                selo={telas.length === 0 ? <Badge tone="amber">Sem telas</Badge> : !g.chat ? <Badge tone="slate">Chat bloqueado</Badge> : undefined}
                 nome={g.nome}
                 capa={
                   <div className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-lg bg-accent-soft" title={telas.map((t) => t.label).join(", ") || "Nenhuma tela"}>
@@ -259,20 +282,29 @@ export function GruposAdmin() {
           {erroModal && <Callout kind="danger">{erroModal}</Callout>}
           <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={MAX_NOME_RBAC} required />
           <fieldset>
-            <legend className="mb-2 block text-[13.5px] font-bold text-text">Telas do grupo · {abas.size} selecionada(s)</legend>
+            <legend className="mb-2 block text-[13.5px] font-bold text-text">Módulos do grupo · {mods.size} selecionado(s)</legend>
             <div className="grid gap-1 rounded-control border border-border p-2 sm:grid-cols-2">
-              {ABAS.map((a) => (
-                <div key={a.key} className="rounded-control p-1.5 hover:bg-surface-2">
-                  <Checkbox label={a.label} checked={abas.has(a.key)} onChange={() => alternar(setAbas, a.key)} />
+              {modulosDisp.map((m) => (
+                <div key={m.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                  <Checkbox
+                    checked={mods.has(m.id)}
+                    onChange={() => {
+                      setModsTocados(true);
+                      alternar(setMods, m.id);
+                    }}
+                    label={
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium text-text">{m.nome}</span>
+                        <span className="block text-[11.5px] text-muted">{m.telas.map(rotuloAba).join(", ") || "Sem telas"}</span>
+                      </span>
+                    }
+                  />
                 </div>
               ))}
             </div>
-            {abas.size === 0 ? (
-              <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem nenhuma tela, as pessoas do grupo não veem os módulos.</p>
-            ) : (
-              <p className="mt-1.5 text-[12px] text-muted">O papel de cada pessoa diz o que ela faz nessas telas. As telas da Administração são só do ADM.</p>
-            )}
+            <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
           </fieldset>
+          <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
           <fieldset>
             <legend className="mb-2 block text-[13.5px] font-bold text-text">
               PCAs do grupo · {pcasSel == null ? "todos" : `${pcasSel.size} selecionado(s)`}
@@ -378,4 +410,24 @@ export function GruposAdmin() {
       {confirmacao}
     </div>
   );
+}
+
+/** O que o grupo passa a abrir com os módulos escolhidos — o grupo ANTIGO (telas avulsas) mostra o que ganha e o que perde. */
+function MudancaTelas({ grupo, tocados, telas }: { grupo: Grupo | null; tocados: boolean; telas: AbaKey[] }) {
+  const lista = (l: readonly AbaKey[]) => l.map(rotuloAba).join(", ");
+  if (grupo && grupo.modulos == null) {
+    if (!tocados)
+      return <p className="mt-1.5 text-[12px] text-[var(--warn)]">Grupo com telas avulsas ({lista(grupo.avulsas) || "nenhuma"}) — escolha os módulos para passar a usá-los.</p>;
+    const ganha = telas.filter((t) => !grupo.avulsas.includes(t));
+    const perde = grupo.avulsas.filter((t) => !telas.includes(t));
+    if (ganha.length || perde.length)
+      return (
+        <p className="mt-1.5 text-[12px] text-[var(--warn)]">
+          {ganha.length ? `Passa a abrir: ${lista(ganha)}. ` : ""}
+          {perde.length ? `Deixa de abrir: ${lista(perde)}.` : ""}
+        </p>
+      );
+  }
+  if (!telas.length) return <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem nenhum módulo, as pessoas do grupo não veem as telas.</p>;
+  return <p className="mt-1.5 text-[12px] text-muted">Abre: {lista(telas)}. O papel de cada pessoa diz o que ela faz nelas; os módulos ficam em Configurações → Módulos.</p>;
 }
