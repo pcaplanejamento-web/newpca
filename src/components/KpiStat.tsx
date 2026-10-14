@@ -18,6 +18,7 @@ export function KpiStat({
   realce = false,
   completo = false,
   detalhes,
+  emLinha = false,
 }: {
   label: string;
   value: ReactNode;
@@ -35,6 +36,8 @@ export function KpiStat({
   completo?: boolean;
   /** Linhas "rótulo — valor" abaixo do número (o detalhe do KPI); o valor desce de linha quando não cabe, nunca é cortado. */
   detalhes?: { rotulo: string; valor: ReactNode; cor?: string }[];
+  /** Detalhes numa linha só (rótulo valor · rótulo valor), sem a divisória — o cartão fica baixo. */
+  emLinha?: boolean;
 }) {
   const Raiz = onClick ? "button" : "div";
   return (
@@ -96,7 +99,19 @@ export function KpiStat({
         </div>
       )}
       {hint && <div className={`mt-1.5 text-[12px] text-faint ${completo ? "break-words" : "truncate"}`}>{hint}</div>}
-      {detalhes && detalhes.length > 0 && (
+      {detalhes && detalhes.length > 0 && emLinha && (
+        <dl className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
+          {detalhes.map((d) => (
+            <div key={d.rotulo} className="flex items-baseline gap-1">
+              <dt className="text-muted">{d.rotulo}</dt>
+              <dd className="font-medium tabular-nums text-text-2" style={d.cor ? { color: d.cor } : undefined}>
+                {d.valor}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {detalhes && detalhes.length > 0 && !emLinha && (
         <dl className="mt-3 space-y-1 border-t border-border/70 pt-2.5 text-[12px]">
           {detalhes.map((d) => (
             <div key={d.rotulo} className="flex flex-wrap items-baseline justify-between gap-x-3">

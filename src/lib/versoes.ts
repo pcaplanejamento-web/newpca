@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.90.2",
+    data: "2026-10-14",
+    titulo: "KPIs do orçamento do PCA mais compactas",
+    mudancas: [{ tipo: "melhoria", area: "PCA", texto: "As KPIs do Orçamento do PCA ficaram mais baixas: o valor completo e os detalhes essenciais numa linha só.", link: "/painel/pca" }],
+  },
+  {
     versao: "1.90.1",
     data: "2026-10-14",
     titulo: "KPIs do orçamento do PCA completas",
