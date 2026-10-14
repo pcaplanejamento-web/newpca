@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.87.1",
+    data: "2026-10-14",
+    titulo: "Barra de progresso ao trocar a visão",
+    mudancas: [{ tipo: "melhoria", area: "PCA", texto: "Trocar a visão do orçamento mostra a barra de progresso com a porcentagem e a etapa no aviso do canto inferior.", link: "/painel/pca" }],
+  },
+  {
     versao: "1.87.0",
     data: "2026-10-14",
     titulo: "Vínculos: abrir expandidos e progresso da gravação",

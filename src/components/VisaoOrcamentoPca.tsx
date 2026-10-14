@@ -39,7 +39,7 @@ export function useVisaoDoPca(pcaId: number, visaoId: number | null) {
     if (gravando) return;
     setSalvando(true);
     setEscolha(id);
-    toast.carregando("Aplicando a visão do orçamento…");
+    toast.progresso("Aplicando a visão do orçamento", 0, 3, "Enviando ao servidor…");
     try {
       const r = await fetch(`/api/pca/${pcaId}`, {
         method: "PATCH",
@@ -48,6 +48,7 @@ export function useVisaoDoPca(pcaId: number, visaoId: number | null) {
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar a visão do PCA.");
+      toast.progresso("Aplicando a visão do orçamento", 2, 3, "Visão salva — recalculando os valores…");
       aviso.current = msg;
       iniciar(() => router.refresh());
     } catch (e) {
