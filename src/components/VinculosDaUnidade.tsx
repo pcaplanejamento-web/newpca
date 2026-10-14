@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { brl, dataIsoBrasilia, num } from "@/lib/format";
 import type { AlvosVinculo, EscopoVinculos, UnidadeOrcamento, VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { blocosVinculosDaLinha, listaSemVinculo, type SemVinculoUnidade, vinculosDaLinha } from "@/lib/vinculos-unidade";
@@ -13,6 +13,7 @@ import { usePodeExportar } from "./ExportarTabelas";
 import { IconChevronDown, IconFile, IconPlus } from "./icons";
 import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
+import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
 /** A unidade da LINHA do comparativo: a cadastrada (`id`) ou a linha "Sem vínculo" (`id` null). */
@@ -95,6 +96,15 @@ function ItemAcordeao({
 }
 
 /** Cabeçalho de uma seção do banner: título + contagem + ação opcional à direita. */
+const CHAVE_EXPANDIDOS = "orcamento:vinculos-expandidos";
+function lerExpandidos(): boolean {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem(CHAVE_EXPANDIDOS) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function TituloSecao({ titulo, contagem, acao }: { titulo: string; contagem: string; acao?: ReactNode }) {
   return (
     <div className="flex min-h-11 items-center justify-between gap-2 lg:min-h-[var(--h-control-sm)]">
@@ -151,7 +161,11 @@ export function VinculosDaUnidade({
   contexto?: ContextoVisao;
   onUsarPadrao?: (chave: string) => Promise<boolean>;
 }) {
-  const [aberto, setAberto] = useState<string | null>(null);
+  // Vários abertos ao mesmo tempo; "Abrir expandidos" (preferência DESTE aparelho) já abre todos ao entrar no banner.
+  const [expandidos, setExpandidos] = useState(lerExpandidos);
+  const [abertos, setAbertos] = useState<Set<string>>(() => new Set());
+  const aberto = (k: string) => abertos.has(k);
+  const setAberto = (_k: null) => setAbertos(new Set());
   const [gerando, setGerando] = useState(false);
   const podeExportar = usePodeExportar();
   const quem = useQuemExporta();
@@ -167,7 +181,27 @@ export function VinculosDaUnidade({
     const ok = inicial.id != null ? await onEditar(inicial.id, d, escopo) : await onCriar([d], escopo);
     if (ok) setAberto(null);
   };
-  const alternar = (k: string) => setAberto((a) => (a === k ? null : k));
+  const alternar = (k: string) =>
+    setAbertos((a) => {
+      const n = new Set(a);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  const chaveDaUnidade = unidade ? `${unidade.id ?? "sem"}` : null;
+  // Ao abrir o banner (outra unidade), começa como a preferência manda: todos abertos ou todos fechados.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: só quando o banner troca de unidade.
+  useEffect(() => {
+    if (!chaveDaUnidade) return;
+    setAbertos(expandidos ? new Set([...v.ligadas.map((l) => `v:${l.vinculo.id}`), ...v.semVinculo.map((p) => `s:${p.unidade.chave}`)]) : new Set());
+  }, [chaveDaUnidade]);
+  const mudarExpandidos = (sim: boolean) => {
+    setExpandidos(sim);
+    try {
+      localStorage.setItem(CHAVE_EXPANDIDOS, sim ? "1" : "0");
+    } catch {}
+    setAbertos(sim ? new Set([...v.ligadas.map((l) => `v:${l.vinculo.id}`), ...v.semVinculo.map((p) => `s:${p.unidade.chave}`)]) : new Set());
+  };
   const editor = (inicial: AberturaVinculo, k: string) => (
     <EditorVinculoOrcamento
       key={k}
@@ -219,7 +253,15 @@ export function VinculosDaUnidade({
     >
       {unidade && (
         <div className="space-y-[var(--gap-block)]">
-          {unidade.id != null && unidade.nome && <p className="text-sm text-muted">{unidade.nome}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {unidade.id != null && unidade.nome ? <p className="text-sm text-muted">{unidade.nome}</p> : <span />}
+            <Switch
+              checked={expandidos}
+              onChange={mudarExpandidos}
+              label={<span className="text-[13px] text-text-2">Abrir expandidos</span>}
+              dica="Os vínculos já aparecem abertos ao abrir este banner (vale neste aparelho)"
+            />
+          </div>
           <div className={`grid grid-cols-1 gap-[var(--gap-block)] ${unidade.id != null ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             <StatMini label="Total" value={brl(v.valorVinculado + v.valorSemVinculo)} hint={orcamento} />
             {unidade.id != null && (
@@ -246,7 +288,7 @@ export function VinculosDaUnidade({
                   )
                 }
               />
-              {aberto === "novo" && <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">{editor({ alvoId: unidade.id }, "novo")}</div>}
+              {aberto("novo") && <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">{editor({ alvoId: unidade.id }, "novo")}</div>}
               {v.ligadas.length === 0 ? (
                 <p className="rounded-card border border-dashed border-border-2 p-[var(--pad-card)] text-center text-sm text-muted">
                   Nenhuma unidade do orçamento traz dotação a {unidade.sigla} — use “Adicionar”.
@@ -260,7 +302,7 @@ export function VinculosDaUnidade({
                     return (
                       <ItemAcordeao
                         key={k}
-                        aberto={aberto === k}
+                        aberto={aberto(k)}
                         onAlternar={() => alternar(k)}
                         disabled={salvando}
                         titulo={l.unidade.texto}
@@ -299,7 +341,7 @@ export function VinculosDaUnidade({
                   return (
                     <ItemAcordeao
                       key={k}
-                      aberto={aberto === k}
+                      aberto={aberto(k)}
                       onAlternar={() => alternar(k)}
                       disabled={salvando}
                       titulo={p.unidade.texto}

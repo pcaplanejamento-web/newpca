@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { OrcamentoItemRow } from "@/lib/orcamento";
 import { type AlvosVinculo, type EscopoVinculos, unidadesDoOrcamento, type VinculoOrcamento, type VisaoVinculos, vinculosDaVisao } from "@/lib/orcamento-vinculo";
 import { AvisoFlutuante } from "./AvisoFlutuante";
@@ -25,13 +25,25 @@ export function useGravacaoVinculos(vinculos: VinculoOrcamento[], visoes: VisaoV
     () => (valido ? visoes.map((v) => ({ ...v, proprias: valido.proprias.get(v.id) ?? v.proprias })) : visoes),
     [valido, visoes],
   );
-  const [salvando, setSalvando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // O recálculo da tela (router.refresh) é a 3ª etapa: o aviso só fecha quando os números novos chegaram.
+  const [recalculando, iniciar] = useTransition();
+  const fim = useRef<string | null>(null);
+  const salvando = enviando || recalculando;
+  useEffect(() => {
+    if (!recalculando && fim.current) {
+      toast.success(fim.current);
+      fim.current = null;
+    }
+  }, [recalculando]);
 
   async function gravar(url: string, metodo: "POST" | "PATCH" | "DELETE", corpo: unknown, sucesso: string): Promise<boolean> {
     if (salvando) return false;
     setErro(null);
-    setSalvando(true);
+    setEnviando(true);
+    const titulo = metodo === "DELETE" ? "Excluindo o vínculo" : "Gravando o vínculo";
+    toast.progresso(titulo, 0, 3, "Enviando ao servidor…");
     try {
       const resp = await fetch(url, {
         method: metodo,
@@ -46,14 +58,16 @@ export function useGravacaoVinculos(vinculos: VinculoOrcamento[], visoes: VisaoV
       };
       if (!resp.ok || !j.ok) throw new Error(j.error ?? "Não foi possível gravar o vínculo.");
       if (j.vinculos) setGravados({ base: vinculos, lista: j.vinculos, proprias: new Map((j.visoes ?? []).map((v) => [v.id, v.proprias])) });
-      toast.success(sucesso);
-      router.refresh();
+      toast.progresso(titulo, 2, 3, "Gravado — recalculando os valores…");
+      fim.current = sucesso;
+      iniciar(() => router.refresh());
       return true;
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível gravar o vínculo.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível gravar o vínculo.");
       return false;
     } finally {
-      setSalvando(false);
+      setEnviando(false);
     }
   }
 

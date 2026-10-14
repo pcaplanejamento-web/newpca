@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.87.0",
+    data: "2026-10-14",
+    titulo: "Vínculos: abrir expandidos e progresso da gravação",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Banner dos vínculos da linha: \"Abrir expandidos\" deixa todos os vínculos já abertos ao entrar (preferência deste aparelho); vários podem ficar abertos ao mesmo tempo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Gravar ou excluir um vínculo mostra a barra de progresso com a porcentagem e a etapa (enviando, gravado, recalculando) no aviso do canto inferior.", link: "/painel/orcamento" },
+    ],
+  },
+  {
     versao: "1.86.1",
     data: "2026-10-14",
     titulo: "Filtros da visão em consulta",

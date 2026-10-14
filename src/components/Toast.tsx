@@ -8,13 +8,13 @@ import { Button } from "./Button";
 // Toast — API imperativa (`toast.success("Salvo")`) sobre o AVISO FLUTUANTE padrão (canto inferior,
 // pequeno, sem deformar o layout). Monte <Toaster/> uma vez (no RootLayout).
 type Variant = "info" | "success" | "warning" | "danger";
-type ToastItem = { id: number; msg: string; variant: Variant; duration: number; acao?: { rotulo: string; onClick: () => void }; carregando?: boolean };
+type ToastItem = { id: number; msg: string; variant: Variant; duration: number; acao?: { rotulo: string; onClick: () => void }; carregando?: boolean; progresso?: number; etapa?: string };
 
 let listeners: ((t: ToastItem) => void)[] = [];
 let seq = 0;
 
-function emit(msg: string, variant: Variant, duration = 4000, acao?: ToastItem["acao"], carregando = false) {
-  const t: ToastItem = { id: ++seq, msg, variant, duration, acao, carregando };
+function emit(msg: string, variant: Variant, duration = 4000, acao?: ToastItem["acao"], carregando = false, progresso?: number, etapa?: string) {
+  const t: ToastItem = { id: ++seq, msg, variant, duration, acao, carregando, progresso, etapa };
   for (const l of listeners) l(t);
 }
 
@@ -31,6 +31,9 @@ export const toast = Object.assign(
     acao: (m: string, rotulo: string, onClick: () => void, d = 6000) => emit(m, "info", d, { rotulo, onClick }),
     /** CARREGANDO: o spinner no aviso flutuante até o próximo toast (sucesso/erro) o substituir. */
     carregando: (m: string) => emit(m, "info", 0, undefined, true),
+    /** PROGRESSO por ETAPAS reais (ex.: 1 de 3 — enviar, gravar, recalcular): a barra com a % e a etapa em curso. */
+    progresso: (m: string, feito: number, total: number, etapa?: string) =>
+      emit(m, "info", 0, undefined, true, total > 0 ? Math.max(0, Math.min(100, Math.round((feito / total) * 100))) : 0, etapa),
   },
 );
 
@@ -73,6 +76,24 @@ export function Toaster() {
       }
     >
       <span className="text-text">{item.msg}</span>
+      {item.progresso != null && (
+        <span className="mt-2 block min-w-[14rem]">
+          <span className="flex items-baseline justify-between gap-3 text-[12px]">
+            <span className="truncate text-muted">{item.etapa}</span>
+            <span className="font-semibold tabular-nums text-accent">{item.progresso}%</span>
+          </span>
+          <span
+            className="mt-1 block h-1.5 overflow-hidden rounded-full bg-surface-2"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={item.progresso}
+            aria-label={item.msg}
+          >
+            <span className="block h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${item.progresso}%` }} />
+          </span>
+        </span>
+      )}
     </AvisoFlutuante>
   );
 }
