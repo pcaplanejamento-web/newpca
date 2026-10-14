@@ -6,6 +6,8 @@ import { DfdUploadForm } from "./DfdUploadForm";
 import { Dropzone } from "./Dropzone";
 import { IconClipboard, IconFile, IconVerificacao } from "./icons";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
+import { vistaPermitida } from "@/lib/papeis-componentes-core";
+import { useComponente } from "./ComponentesPapel";
 import { Segmented } from "./Segmented";
 
 type PropsProtocolo = ComponentProps<typeof ProtocoloUploadForm>;
@@ -25,7 +27,9 @@ export function VerificacaoView({
 }: Pick<PropsProtocolo, "reparticoes" | "pcas" | "regras" | "orgaos">) {
   const [protocolo, setProtocolo] = useState<Arquivo>(null);
   const [dfd, setDfd] = useState<Arquivo>(null);
-  const [tipo, setTipo] = useState<"protocolo" | "dfd">("protocolo");
+  const [tipoPedido, setTipo] = useState<"protocolo" | "dfd">("protocolo");
+  const libera = useComponente();
+  const tipo = vistaPermitida<"protocolo" | "dfd">(tipoPedido, ["protocolo", "dfd"], (v) => libera(`verificacao.${v}`));
   const comum = { reparticoes, pcas, regras, orgaos };
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -49,9 +53,9 @@ export function VerificacaoView({
           value={tipo}
           onChange={setTipo}
           options={[
-            { value: "protocolo", label: "Protocolo", icone: <IconClipboard className="h-4 w-4" /> },
-            { value: "dfd", label: "DFD", icone: <IconFile className="h-4 w-4" /> },
-          ]}
+            { value: "protocolo" as const, label: "Protocolo", icone: <IconClipboard className="h-4 w-4" /> },
+            { value: "dfd" as const, label: "DFD", icone: <IconFile className="h-4 w-4" /> },
+          ].filter((o) => libera(`verificacao.${o.value}`))}
         />
       </div>
       {tipo === "protocolo" ? (

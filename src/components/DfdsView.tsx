@@ -2,6 +2,7 @@
 
 import type { ColunasMesa } from "@/lib/mesa-colunas-core";
 import { colunasDaAutomacao } from "./ColunasAutomacao";
+import { useComponente } from "./ComponentesPapel";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -47,6 +48,7 @@ import { type ReferenciaHistorico, rotuloComparacaoHistorico } from "@/lib/histo
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
+import { vistaPermitida } from "@/lib/papeis-componentes-core";
 import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
@@ -372,8 +374,14 @@ export function DfdsView({
   useEffect(() => setSelProtos((s) => podar(s, new Set(protocolosF.map((p) => p.id)))), [protocolosF]);
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
-  const [vista, setVista] = useState<Vista>("protocolos");
-  const [modoItens, setModoItens] = useState<ModoItens>("normal");
+  // Os COMPONENTES que o papel retira (Configurações → Papéis → Componentes): as visões e as ações de cada tabela.
+  const libera = useComponente();
+  const veVista = (v: Vista) =>
+    v === "itens" ? libera("dfd.itens") || libera("dfd.consolidada") : v === "dashboard" ? !modoPca && libera("dfd.dashboard") : libera(`dfd.${v}`);
+  const [vistaPedida, setVista] = useState<Vista>("protocolos");
+  const vista = vistaPermitida<Vista>(vistaPedida, ["protocolos", "dfds", "itens", "dashboard"], veVista);
+  const [modoPedido, setModoItens] = useState<ModoItens>("normal");
+  const modoItens: ModoItens = !libera("dfd.consolidada") ? "normal" : !libera("dfd.itens") ? "consolidada" : modoPedido;
   // Itens (lista plana): carregada SOB DEMANDA na 1ª vez que a visão Itens abre (não pesa o load
   // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
   const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
@@ -948,7 +956,7 @@ export function DfdsView({
     if (!d || !noPca) return null;
     // O PAPEL na Mesa em que o DFD está: vincular = Manipular; excluir = Excluir (também em um PCA — sai dele).
     const podeDfd = podeNoRecurso(pode, noPca.pcaId);
-    const podeExcluirDfd = podeDfd.excluir;
+    const podeExcluirDfd = podeDfd.excluir && libera("dfd.dfds", "excluir");
     if (!podeDfd.manipular && !podeExcluirDfd) return null;
     return (
       <div className="flex justify-end gap-1">
@@ -1255,7 +1263,7 @@ export function DfdsView({
       filter: "none" as const,
       nowrap: true,
       render: (r: ProtocoloNaMesa) =>
-        podeNoRecurso(pode, r.pcaId).excluir ? (
+        podeNoRecurso(pode, r.pcaId).excluir && libera("dfd.protocolos", "excluir") ? (
           <div className="flex justify-end gap-1">
             <Button
               variant="ghost"
@@ -1872,10 +1880,11 @@ export function DfdsView({
   // sistema no servidor — o que o papel não permite volta como falha).
   const podeAqui = modoPca ? pode.pca : pode.sistema;
   // Exportar as tabelas (.xlsx — as linhas filtradas e as colunas à vista): só com a ação Exportar do papel nesta Mesa.
-  const exportarComo = (nome: string) => (podeAqui.exportar ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : (false as const));
+  const exportarComo = (nome: string, comp: string) =>
+    podeAqui.exportar && libera(`dfd.${comp}`, "exportar") ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : (false as const);
   // Importar protocolo/DFD: só na Mesa do sistema (o protocolo novo entra nela).
   const podeImportar = pode.sistema.importar && !modoPca;
-  const importa = podeImportar && (vista === "protocolos" || vista === "dfds");
+  const importa = podeImportar && (vista === "protocolos" || vista === "dfds") && libera(`dfd.${vista}`, "importar");
   const oQueImporta = vista === "protocolos" ? "protocolo" : "DFD";
   const rotuloImportar = `Importar ${oQueImporta}`;
   // No celular o rótulo encolhe para "Importar" (o rodapé gruda na tela — cabe numa linha); o nome acessível é o inteiro.
@@ -1907,7 +1916,7 @@ export function DfdsView({
       density="compact"
       acoesRodape={botaoImportar}
       edicoes={edicoesDe("protocolos")}
-      exportar={exportarComo("Protocolos")}
+      exportar={exportarComo("Protocolos", "protocolos")}
       vazio={filtrado && protocolos.length > 0 ? semResultado : semDados("protocolo")}
       resumo={(linhas) =>
         modoPca?.rodapeProtocolos
@@ -1935,7 +1944,7 @@ export function DfdsView({
       colunasExtras={colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key)}
       edicoes={edicoesDe("dfds")}
       ocultasPadrao={modoPca ? OCULTAS_NO_PCA : undefined}
-      exportar={exportarComo("DFDs")}
+      exportar={exportarComo("DFDs", "dfds")}
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
     />
   );
@@ -1957,7 +1966,7 @@ export function DfdsView({
       minWidth={(modoPca ? 1280 : 1460) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("itens")}
-      exportar={exportarComo("Itens")}
+      exportar={exportarComo("Itens", "itens")}
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
     />
@@ -1977,7 +1986,7 @@ export function DfdsView({
       minWidth={(modoPca ? 1640 : 1720) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("consolidada")}
-      exportar={exportarComo("Itens consolidados")}
+      exportar={exportarComo("Itens consolidados", "consolidada")}
       vazio={
         carregandoItens || itensF === null
           ? "Carregando itens…"
@@ -2118,15 +2127,15 @@ export function DfdsView({
           onChange={setVista}
           ariaLabel="Visões da Mesa"
           options={[
-            ...(modoPca ? [] : [{ value: "dashboard" as const, label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }]),
-            { value: "protocolos", label: "Protocolos" },
-            { value: "dfds", label: "DFDs" },
-            { value: "itens", label: "Itens" },
+            ...(veVista("dashboard") ? [{ value: "dashboard" as const, label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }] : []),
+            ...(veVista("protocolos") ? [{ value: "protocolos" as const, label: "Protocolos" }] : []),
+            ...(veVista("dfds") ? [{ value: "dfds" as const, label: "DFDs" }] : []),
+            ...(veVista("itens") ? [{ value: "itens" as const, label: "Itens" }] : []),
           ]}
         />
         {modoPca?.ferramenta}
         {/* Só na visão Itens: Normal (um por linha) | Consolidada (um por código). */}
-        {vista === "itens" && (
+        {vista === "itens" && libera("dfd.itens") && libera("dfd.consolidada") && (
           <Segmented<ModoItens>
             value={modoItens}
             onChange={setModoItens}

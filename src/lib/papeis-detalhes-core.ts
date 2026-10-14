@@ -9,6 +9,9 @@
  * detalhes (`{}` no banco) segue igual. O banco guarda o COMPACTO (`compactarDetalhes` — só o que difere do padrão).
  */
 
+import { type AcaoPapel, ROTULO_ACAO, rotuloTela } from "./papeis-catalogo.ts";
+import { acoesDoComponente, CATALOGO_COMPONENTES, type ComponentesRetirados, coerceComponentes, resumoComponentes } from "./papeis-componentes-core.ts";
+
 // ---------------------------------------------------------------------------------------------------------------
 // Vocabulário.
 // ---------------------------------------------------------------------------------------------------------------
@@ -223,6 +226,8 @@ export type DetalhesPapel = {
   mesa: DetalhesMesa;
   historico: Record<TelaHistorico, NivelHistorico>;
   edicoes: Record<TelaEdicoes, EdicoesTela>;
+  /** As ações RETIRADAS por componente das telas (`papeis-componentes-core.ts`). */
+  componentes: ComponentesRetirados;
 };
 
 const todas = <K extends string>(chaves: readonly K[], v: boolean) => Object.fromEntries(chaves.map((k) => [k, v])) as Record<K, boolean>;
@@ -242,6 +247,7 @@ export function detalhesPadrao(): DetalhesPapel {
     },
     historico: { dfd: "completo", pca: "completo", tarefas: "completo" },
     edicoes: { dfd: todas(OPERACOES_EDICAO, true), pca: todas(OPERACOES_EDICAO, true), orcamento: todas(OPERACOES_EDICAO, true), tarefas: todas(OPERACOES_EDICAO, true) },
+    componentes: {},
   };
 }
 export const DETALHES_PADRAO: DetalhesPapel = detalhesPadrao();
@@ -305,7 +311,7 @@ export function coerceDetalhes(bruto: unknown): DetalhesPapel {
     const personalizar = bool(et.personalizar, true);
     edicoes[t] = { personalizar, publicar: personalizar && bool(et.publicar, true), moderar: personalizar && bool(et.moderar, true) };
   }
-  return { mesa, historico, edicoes };
+  return { mesa, historico, edicoes, componentes: coerceComponentes(o.componentes) };
 }
 
 /** A coluna está oculta nos detalhes (só as ocultáveis da lista — as de controle próprio seguem o controle). */
@@ -351,6 +357,7 @@ export function compactarDetalhes(bruto: DetalhesPapel): Record<string, unknown>
     if (Object.keys(et).length) ed[t] = et;
   }
   if (Object.keys(ed).length) out.edicoes = ed;
+  if (Object.keys(d.componentes).length) out.componentes = d.componentes;
   return out;
 }
 
@@ -367,7 +374,7 @@ export function detalhesDoJson(json: string | null | undefined): DetalhesPapel {
 // Cada detalhe como uma LINHA (rótulo + valor + quanto libera) — a comparação, o resumo e a auditoria saem daqui.
 // ---------------------------------------------------------------------------------------------------------------
 
-export type GrupoDetalhe = "Mesa" | "Mesa do PCA" | "Orçamento" | "Tarefas";
+export type GrupoDetalhe = "Mesa" | "Mesa do PCA" | "Orçamento" | "Tarefas" | "Componentes";
 
 type ItemDetalhe = {
   id: string;
@@ -450,9 +457,23 @@ function itensDetalhe(): ItemDetalhe[] {
         valor: (d) => simNao(d.edicoes[t][op], "Permitido", "Não"),
         nivel: (d) => +d.edicoes[t][op],
       });
+  for (const x of CATALOGO_COMPONENTES)
+    for (const a of acoesDoComponente(x))
+      out.push({
+        id: `componentes.${x.chave}.${a}`,
+        grupo: "Componentes",
+        rotulo: `${x.rotulo} (${rotuloTela(x.tela)}): ${ROTULO_ACAO[a as AcaoPapel]}`,
+        valor: (d) => simNao(!d.componentes[x.chave]?.includes(a), "Permitido", "Não"),
+        nivel: (d) => +!d.componentes[x.chave]?.includes(a),
+      });
   return out;
 }
-const ITENS_DETALHE = itensDetalhe();
+// Montado na 1ª leitura (os catálogos importados podem ainda não estar prontos na carga do módulo — ciclo de imports).
+let itensCache: ItemDetalhe[] | null = null;
+const itens = () => {
+  itensCache ??= itensDetalhe();
+  return itensCache;
+};
 
 export type DiffDetalhe = { id: string; grupo: GrupoDetalhe; rotulo: string; antes: string; depois: string; restringe: boolean };
 
@@ -460,7 +481,7 @@ export type DiffDetalhe = { id: string; grupo: GrupoDetalhe; rotulo: string; ant
 export function diffDetalhes(antes: unknown, depois: unknown): DiffDetalhe[] {
   const a = coerceDetalhes(antes);
   const b = coerceDetalhes(depois);
-  return ITENS_DETALHE.filter((i) => i.valor(a) !== i.valor(b)).map((i) => ({
+  return itens().filter((i) => i.valor(a) !== i.valor(b)).map((i) => ({
     id: i.id,
     grupo: i.grupo,
     rotulo: i.rotulo,
@@ -488,8 +509,8 @@ export function resumoDetalhes(bruto: unknown): LinhaResumoDetalhe[] {
   const d = coerceDetalhes(bruto);
   const p = DETALHES_PADRAO;
   const out: LinhaResumoDetalhe[] = [];
-  for (const i of ITENS_DETALHE) {
-    if (i.id.startsWith("mesa.colunas.")) continue;
+  for (const i of itens()) {
+    if (i.id.startsWith("mesa.colunas.") || i.id.startsWith("componentes.")) continue;
     if (i.valor(d) !== i.valor(p)) out.push({ grupo: i.grupo, rotulo: i.rotulo, valor: i.valor(d) });
   }
   for (const t of TABELAS_MESA) {
@@ -501,6 +522,7 @@ export function resumoDetalhes(bruto: unknown): LinhaResumoDetalhe[] {
         valor: ocultas.map((k) => CATALOGO_COLUNAS_MESA[t].find((c) => c.chave === k)?.rotulo ?? k).join(", "),
       });
   }
+  for (const l of resumoComponentes(d.componentes, rotuloTela, (a) => ROTULO_ACAO[a])) out.push({ grupo: "Componentes", rotulo: l.rotulo, valor: l.valor });
   return out;
 }
 

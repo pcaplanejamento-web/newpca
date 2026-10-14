@@ -9,7 +9,7 @@ import { PcaConfiguracao } from "@/components/PcaConfiguracao";
 import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { Ajuda } from "@/components/Ajuda";
-import { podePca, podeTela } from "@/lib/acesso";
+import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { UsuarioSessao } from "@/lib/auth";
@@ -50,7 +50,9 @@ export default async function PcaEspacoPage({
   const pca = Number.isInteger(id) && id > 0 ? await getPcaEspaco(id) : null;
   if (!pca) notFound();
   if (!podePca(acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
-  const aba: AbaPca = ABAS.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : "dashboard";
+  // As abas que o papel vê (Detalhes do papel → Componentes); a pedida fora delas cai na 1ª permitida.
+  const permitidas = ABAS.filter((a) => componenteLibera(acesso, a === "mesa" && pca.fonte === "lista" ? "pca.importacao" : `pca.${a}`));
+  const aba: AbaPca = permitidas.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : (permitidas[0] ?? "dashboard");
 
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
@@ -75,6 +77,7 @@ export default async function PcaEspacoPage({
     <PcaEspacoView
       pca={{ nome: pca.nome, ano: pca.ano, fonte: pca.fonte, status: pca.status }}
       aba={aba}
+      permitidas={permitidas}
     >
       <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
     </PcaEspacoView>

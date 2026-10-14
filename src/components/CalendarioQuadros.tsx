@@ -50,6 +50,7 @@ import {
 import type { ContextoTarefa } from "@/lib/tarefas-dados";
 import { AssinaturaCalendario } from "./AssinaturaCalendario";
 import { GerirAgendasExternas, useAgendasExternas } from "./AgendasExternas";
+import { useComponente } from "./ComponentesPapel";
 import { BarraCalendario, type ConjuntoExterno, type ConjuntoPca, type GrupoConjuntos } from "./BarraCalendario";
 import { BuscaCalendario, type ResultadoBusca } from "./BuscaCalendario";
 import { Button } from "./Button";
@@ -219,6 +220,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
   const feriadosVisiveis = ocultos.feriados ? undefined : feriadosPeriodo;
   /** As AGENDAS EXTERNAS (.ics assinados) — carregadas depois da tela, no intervalo à vista. */
   const externas = useAgendasExternas(de, ate);
+  const libera = useComponente();
   const [gerirExternas, setGerirExternas] = useState(false);
   const filtrando = filtroDeTarefaAtivo(filtro);
 
@@ -663,7 +665,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
           setTarefaSolta(id);
         }}
         // Exportar (.ics, imprimir) e assinar = Exportar no Calendário.
-        configuracoes={dados.podeCalendario.exportar ? <AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} /> : undefined}
+        configuracoes={dados.podeCalendario.exportar && libera("calendario.assinatura") && libera("calendario.assinatura", "exportar") ? <AssinaturaCalendario ativa={dados.assinatura} onExportar={exportar} nEventos={visiveis.length} /> : undefined}
         rotuloLateral={nOcultos ? `Filtros e conjuntos (${nOcultos} ocultos)` : "Filtros e conjuntos"}
         lateral={(nav) => (
           <div className="space-y-[var(--gap-block)]">
@@ -699,7 +701,7 @@ export function CalendarioQuadros({ dados, usuarioId, eventoInicial }: { dados: 
               grupos={grupos}
               pcas={pcasConjuntos}
               externos={externosConjuntos}
-              onGerirExternos={dados.podeCalendario.importar ? () => setGerirExternas(true) : undefined}
+              onGerirExternos={dados.podeCalendario.importar && libera("calendario.agendas") && libera("calendario.agendas", "importar") ? () => setGerirExternas(true) : undefined}
               porTipo={porTipo}
               feriadosNoPeriodo={feriadosPeriodo.size}
               ocultos={ocultos}

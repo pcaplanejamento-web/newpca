@@ -89,6 +89,7 @@ const LOTE_MASSA = 50;
  */
 export function QuadroTarefas({
   aba,
+  permitidas,
   quadro,
   listas: listasDoServidor,
   tarefas: doServidor,
@@ -114,6 +115,8 @@ export function QuadroTarefas({
   tarefaInicial = null,
 }: DadosQuadro & {
   aba: AbaQuadro;
+  /** As abas que o papel vê (Detalhes do papel → Componentes); ausente = todas. */
+  permitidas?: readonly AbaQuadro[];
   usuarioId: number;
   /** Os EVENTOS cadastrados das tarefas deste quadro (só com a aba Calendário aberta). */
   eventos?: EventoTarefa[];
@@ -613,13 +616,13 @@ export function QuadroTarefas({
           <PilulaVistas<AbaQuadro>
             valor={abaAtual}
             onTrocar={trocarAba}
-            opcoes={[
+            opcoes={([
               { value: "quadro", label: "Quadro", icone: <IconKanban className="h-4 w-4" /> },
               { value: "lista", label: "Lista", icone: <IconList className="h-4 w-4" /> },
               { value: "calendario", label: "Calendário", icone: <IconCalendar className="h-4 w-4" /> },
               { value: "dashboard", label: "Dashboard", icone: <IconDashboard className="h-4 w-4" /> },
               { value: "configuracao", label: "Configuração", icone: <IconSettings className="h-4 w-4" /> },
-            ]}
+            ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
             extra={
               <TrocarQuadro
                 quadro={quadro}

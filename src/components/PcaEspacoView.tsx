@@ -19,11 +19,14 @@ export type AbaPca = "dashboard" | "orcamento" | "mesa" | "configuracao";
 export function PcaEspacoView({
   pca,
   aba,
+  permitidas,
   children,
 }: {
   pca: { nome: string; ano: number | null; fonte: FontePca; status: StatusPca };
   /** A aba que o servidor montou (`children`). */
   aba: AbaPca;
+  /** As abas que o papel vê (Detalhes do papel → Componentes); ausente = todas. */
+  permitidas?: readonly AbaPca[];
   children: ReactNode;
 }) {
   useOndeDetalhe(pca.nome);
@@ -63,12 +66,12 @@ export function PcaEspacoView({
             </Badge>
           </>
         }
-        opcoes={[
+        opcoes={([
           { value: "dashboard", label: "Dashboard" },
           { value: "orcamento", label: "Orçamento" },
           { value: "mesa", label: pca.fonte === "lista" ? "Importação" : "Mesa" },
           { value: "configuracao", label: "Configuração", soIcone: true, icone: <IconSettings className="h-4 w-4" aria-hidden="true" /> },
-        ]}
+        ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >
         {children}
       </AbasEspaco>

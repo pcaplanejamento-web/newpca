@@ -1,3 +1,4 @@
+import { retirado } from "./papeis-componentes-core";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
@@ -178,6 +179,11 @@ export function atorPasta(a: Acesso): AtorPasta {
 /** O que o papel permite nas DUAS Mesas (a do sistema e a do PCA), no grupo ativo — cada recurso segue a sua. */
 export function podeMesa(a: Acesso): PodeMesa {
   return { sistema: podeTela(a, "dfd"), pca: podeTela(a, "pca"), vis: visaoDoAcesso(a) };
+}
+
+/** O componente da tela deixa a ação? (o Administrador sempre — regra firme). Junte com `podeTela` para o efetivo. */
+export function componenteLibera(a: Acesso, chave: string, acao: AcaoPapel = "visualizar"): boolean {
+  return !retirado(a.u.papel.detalhes.componentes, chave, acao, a.u.admin);
 }
 
 /** Os DETALHES do papel resolvidos para as Mesas (o Administrador = tudo, regra firme). */

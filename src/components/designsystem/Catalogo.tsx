@@ -1407,7 +1407,7 @@ function PapeisDemo() {
       </div>
       <p className="text-[12.5px] text-muted">
         DetalhesPapelEditor (a aba &quot;Detalhes&quot; do papel — as restrições DENTRO das telas; as linhas que mudaram em relação ao
-        gravado ficam marcadas; sem <code>onChange</code>, só leitura):
+        gravado ficam marcadas; sem <code>onChange</code>, só leitura; a seção Componentes retira ações por aba/visão — aplicadas pelo provedor <code>ComponentesPapel</code> + <code>useComponente</code>):
       </p>
       <DetalhesPapelEditor valor={det} original={DETALHES_DEMO} onChange={setDet} />
       <div className="grid gap-[var(--gap-block)] md:grid-cols-2">

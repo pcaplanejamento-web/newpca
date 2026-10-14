@@ -1,7 +1,7 @@
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound, redirect } from "next/navigation";
 import { type AbaQuadro, QuadroTarefas } from "@/components/QuadroTarefas";
-import { getAcesso } from "@/lib/acesso";
+import { componenteLibera, getAcesso } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { eventosDosQuadros, listaParaAlvo, quadroAcessivel, rotulosVinculos } from "@/lib/tarefas";
 import { lerVinculo, mascararPrivados } from "@/lib/tarefas-core";
@@ -34,7 +34,8 @@ export default async function QuadroTarefasPage({
   const dados = await carregarQuadro(r.acesso, id);
   if (!dados) notFound();
   const sp = await searchParams;
-  const aba: AbaQuadro = ABAS.includes(sp.aba as AbaQuadro) ? (sp.aba as AbaQuadro) : "quadro";
+  const permitidas = ABAS.filter((a) => a === "quadro" || componenteLibera(acesso as NonNullable<typeof acesso>, `tarefas.${a}`));
+  const aba: AbaQuadro = permitidas.includes(sp.aba as AbaQuadro) ? (sp.aba as AbaQuadro) : "quadro";
   // Criar tarefa (`?nova=`/`?prazo=`) só com Manipular — sem ela, a chegada só abre o quadro.
   const nova = dados.pode.manipular ? lerVinculo(sp.nova) : null;
   const novaInicial = nova ? { ...nova, rotulo: null, ...(await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) } : null;
@@ -48,7 +49,7 @@ export default async function QuadroTarefasPage({
   const eventos = mascararPrivados(eventosDb, u.id, new Map(dados.tarefas.map((t) => [t.id, t.envolvidos])));
   return (
     <PermissaoExportar permitido={r.pode.exportar}>
-      <QuadroTarefas {...dados} aba={aba} eventos={eventos} calendario={calendario} usuarioId={u.id} novaInicial={novaInicial} listaInicial={listaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />
+      <QuadroTarefas {...dados} aba={aba} permitidas={permitidas} eventos={eventos} calendario={calendario} usuarioId={u.id} novaInicial={novaInicial} listaInicial={listaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />
     </PermissaoExportar>
   );
 }

@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.84.0",
+    data: "2026-10-14",
+    titulo: "Papéis com controle por componente",
+    mudancas: [
+      { tipo: "novo", area: "Papéis", texto: "Detalhes do papel → Componentes: em cada tela, escolha por aba/visão/tabela o que o papel vê, manipula, importa, exporta, exclui ou configura.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "melhoria", area: "Papéis", texto: "(?) explicativo em cada tela, ação, componente e detalhe do editor de papéis.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
     versao: "1.83.4",
     data: "2026-10-14",
     titulo: "Cabeçalho da tarefa compacto",

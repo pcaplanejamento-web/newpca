@@ -8,6 +8,7 @@ import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/ca
 import type { PastaCatalogo } from "@/lib/catalogo-historico";
 import { itensIguais } from "@/lib/catalogo-conferencia";
 import { membrosDoItem } from "@/lib/catalogo-membros";
+import { vistaPermitida } from "@/lib/papeis-componentes-core";
 import { exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import type { PodeTela } from "@/lib/papeis-core";
 import { brl, num } from "@/lib/format";
@@ -33,6 +34,7 @@ import { SearchField, SelectField, TextArea, TextField } from "./Field";
 import { IconAlert, IconChevronLeft, IconCompra, IconDownload, IconInbox, IconPasta, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
+import { useComponente } from "./ComponentesPapel";
 import { Segmented } from "./Segmented";
 import { SkeletonCartao } from "./Skeleton";
 import { TipoDfdPicker } from "./TipoDfdPicker";
@@ -148,7 +150,10 @@ export function CatalogoView({
   const nAgenda = catalogos.filter((c) => c.tipo === "agenda").length;
   const nHistorico = catalogos.length - nAgenda;
 
-  const [vista, setVista] = useState<Vista>("catalogo");
+  const [vistaPedida, setVista] = useState<Vista>("catalogo");
+  const libera = useComponente();
+  const CHAVE_VISTA: Record<Vista, string> = { catalogo: "catalogo.catalogos", lista: "catalogo.lista", unidades: "catalogo.unidades", classificacoes: "catalogo.classificacoes" };
+  const vista = vistaPermitida<Vista>(vistaPedida, ["catalogo", "lista", "unidades", "classificacoes"], (v) => libera(CHAVE_VISTA[v]));
   // Unidades de medida | Classificações: as visões da PADRONIZAÇÃO (sem os controles de catálogo — exportar modelo, importar).
   const padronizacao = vista === "unidades" || vista === "classificacoes";
   const [abertoId, setAbertoId] = useState<number | null>(null);
@@ -779,7 +784,7 @@ export function CatalogoView({
             }
           : undefined
       }
-      onExportar={pode.exportar && c.tipo === "agenda" ? () => exportarCatalogoXlsx(c.nome, itensPorCatalogo.get(c.id) ?? []) : undefined}
+      onExportar={pode.exportar && libera("catalogo.catalogos", "exportar") && c.tipo === "agenda" ? () => exportarCatalogoXlsx(c.nome, itensPorCatalogo.get(c.id) ?? []) : undefined}
       onExcluir={pode.excluir ? () => excluir(c) : undefined}
     />
   );
@@ -863,8 +868,8 @@ export function CatalogoView({
             onChange={trocarVista}
             ariaLabel="Visões do catálogo"
             options={[
-              { value: "catalogo", label: "Catálogo" },
-              { value: "lista", label: "Lista de Itens", curto: "Itens" },
+              { value: "catalogo" as const, label: "Catálogo" },
+              { value: "lista" as const, label: "Lista de Itens", curto: "Itens" },
               // A padronização é GLOBAL — fica fora da tela da pasta.
               ...(pasta
                 ? []
@@ -872,7 +877,7 @@ export function CatalogoView({
                     { value: "unidades" as const, label: "Unidades de medida", curto: "Unid. medida" },
                     { value: "classificacoes" as const, label: "Classificações", curto: "Classif." },
                   ]),
-            ]}
+            ].filter((o) => libera(CHAVE_VISTA[o.value]))}
           />
         </div>
       </div>

@@ -6,6 +6,7 @@ import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
 import { OrcamentoLancamentos } from "@/components/OrcamentoLancamentos";
 import { OrcamentoVinculosAba } from "@/components/OrcamentoVinculosAba";
 import { OrcamentoVisoes } from "@/components/OrcamentoVisoes";
+import { componenteLibera } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { dadosComparativo } from "@/lib/comparativo-dados";
 import { alvosVinculoOrcamento, getOrcamento, getOrcamentoItens, listarVinculosOrcamento } from "@/lib/orcamento";
@@ -35,7 +36,8 @@ export default async function OrcamentoEspacoPage({
   const sp = await searchParams;
   const orcamento = Number.isInteger(id) && id > 0 ? await getOrcamento(id) : null;
   if (!orcamento) notFound();
-  const aba: AbaOrcamento = ABAS.includes(sp.aba as AbaOrcamento) ? (sp.aba as AbaOrcamento) : "lancamentos";
+  const permitidas = ABAS.filter((a) => componenteLibera(acesso, `orcamento.${a}`));
+  const aba: AbaOrcamento = permitidas.includes(sp.aba as AbaOrcamento) ? (sp.aba as AbaOrcamento) : (permitidas[0] ?? "lancamentos");
   let conteudo: ReactNode;
   if (aba === "visoes") {
     const [brutos, visoes, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVisoesOrcamento(), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
@@ -82,7 +84,7 @@ export default async function OrcamentoEspacoPage({
   }
 
   return (
-    <OrcamentoEspacoView orcamento={orcamento} aba={aba} podeExcluir={pode.excluir}>
+    <OrcamentoEspacoView orcamento={orcamento} aba={aba} permitidas={permitidas} podeExcluir={pode.excluir}>
       <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
     </OrcamentoEspacoView>
   );

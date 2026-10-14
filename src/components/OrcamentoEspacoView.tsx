@@ -25,11 +25,14 @@ export type AbaOrcamento = "lancamentos" | "comparativo" | "vinculos" | "visoes"
 export function OrcamentoEspacoView({
   orcamento: o,
   aba,
+  permitidas,
   podeExcluir,
   children,
 }: {
   orcamento: OrcamentoResumo;
   aba: AbaOrcamento;
+  /** As abas que o papel vê (Detalhes do papel → Componentes); ausente = todas. */
+  permitidas?: readonly AbaOrcamento[];
   /** O papel exclui orçamentos (a lixeira do cabeçalho). */
   podeExcluir: boolean;
   children: ReactNode;
@@ -110,12 +113,12 @@ export function OrcamentoEspacoView({
 
       <AbasEspaco<AbaOrcamento>
         aba={aba}
-        opcoes={[
+        opcoes={([
           { value: "lancamentos", label: "Lançamentos" },
           { value: "comparativo", label: "Comparativo" },
           { value: "vinculos", label: "Vínculos" },
           { value: "visoes", label: "Visões" },
-        ]}
+        ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >
         {children}
       </AbasEspaco>

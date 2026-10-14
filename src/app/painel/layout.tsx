@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { ComponentesPapel } from "@/components/ComponentesPapel";
 import { ConfigTabelas } from "@/components/ConfigTabelas";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
@@ -72,7 +73,9 @@ export default async function PainelLayout({
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
-        <SegundoPlano>{children}</SegundoPlano>
+        <ComponentesPapel retirados={usuario.admin ? {} : usuario.papel.detalhes.componentes}>
+          <SegundoPlano>{children}</SegundoPlano>
+        </ComponentesPapel>
       </ConfigTabelas>
     </AppShell>
   );

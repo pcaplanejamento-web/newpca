@@ -12,6 +12,9 @@ import {
   ROTULO_LINHAS,
   ROTULO_NIVEL_RESPONSAVEL,
 } from "@/lib/papeis-detalhes-core";
+import { CATALOGO_PAPEIS, ROTULO_ACAO, rotuloTela, type Tela } from "@/lib/papeis-catalogo";
+import { acoesDoComponente, alternarAcaoComponente, componentesDaTela } from "@/lib/papeis-componentes-core";
+import { Ajuda } from "./Ajuda";
 import { Callout } from "./Callout";
 import { SelectField } from "./Field";
 import { IconInfo } from "./icons";
@@ -25,9 +28,12 @@ function Linha({ titulo, ajuda, alterado, children }: { titulo: string; ajuda: R
       className={`flex flex-col gap-2 border-l-2 py-2.5 pl-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${alterado ? "border-accent" : "border-transparent"}`}
     >
       <div className="min-w-0">
-        <p className="text-[13.5px] font-medium text-text">
+        <p className="flex items-center gap-1 text-[13.5px] font-medium text-text">
           {titulo}
           {alterado && <span className="sr-only"> (alterado)</span>}
+          <Ajuda titulo={titulo} rotulo="Ajuda" compacta>
+            {ajuda}
+          </Ajuda>
         </p>
         <p className="text-[12.5px] leading-snug text-muted">{ajuda}</p>
       </div>
@@ -157,6 +163,8 @@ export function DetalhesPapelEditor({ valor, original, onChange }: { valor: Deta
         </div>
       </section>
 
+      <SecaoComponentes valor={v} original={o} onChange={onChange} />
+
       {m.linhas === "meus" && (m.responsavel.alterar === "grupo" || !m.responsavel.ver) && (
         <Callout kind="info" icon={<IconInfo className="h-4 w-4" />}>
           {m.responsavel.ver
@@ -165,5 +173,88 @@ export function DetalhesPapelEditor({ valor, original, onChange }: { valor: Deta
         </Callout>
       )}
     </div>
+  );
+}
+
+/**
+ * COMPONENTES — o controle MINUCIOSO dentro de cada tela: por aba/visão/tabela, quais ações o papel mantém (Visualizar ·
+ * Manipular · Importar · Exportar · Excluir · Configurar). Só RETIRA: vale junto com a matriz Telas × Ações. Retirar
+ * Visualizar retira tudo do componente. Cada tela, componente e ação com o (?) explicativo.
+ */
+function SecaoComponentes({ valor, original, onChange }: { valor: DetalhesPapel; original: DetalhesPapel; onChange?: (d: DetalhesPapel) => void }) {
+  const r = valor.componentes;
+  const telas = Object.keys(CATALOGO_PAPEIS).filter((t) => componentesDaTela(t as Tela).length) as Tela[];
+  const total = Object.values(r).reduce((n, l) => n + l.length, 0);
+  return (
+    <section aria-labelledby="det-componentes" className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
+      <div className="flex items-center gap-1">
+        <h4 id="det-componentes" className="text-[14px] font-bold text-text">
+          Componentes {total > 0 && <span className="text-[12.5px] font-medium text-muted">· {total} retirada(s)</span>}
+        </h4>
+        <Ajuda titulo="Componentes das telas" rotulo="Ajuda" compacta>
+          <p>Escolha, dentro de cada tela, o que o papel vê e faz em cada aba, visão ou tabela.</p>
+          <p className="mt-1">Ação marcada (destacada) = mantida; desmarcada = retirada. Vale só onde a matriz “Telas e ações” já libera a ação.</p>
+          <p className="mt-1">Retirar “Visualizar” esconde o componente e retira todas as ações dele. O Administrador nunca é restringido.</p>
+        </Ajuda>
+      </div>
+      <p className="mb-2 text-[12.5px] text-muted">Toque numa ação para retirar ou devolver. O (?) explica cada item.</p>
+      <div className="space-y-3">
+        {telas.map((t) => (
+          <div key={t}>
+            <p className="flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-muted">
+              {rotuloTela(t)}
+              <Ajuda titulo={rotuloTela(t)} rotulo="Ajuda" compacta>
+                {Object.entries(CATALOGO_PAPEIS[t].acoes).map(([a, d]) => (
+                  <p key={a} className="mt-1">
+                    <strong>{ROTULO_ACAO[a as keyof typeof ROTULO_ACAO]}:</strong> {d}
+                  </p>
+                ))}
+              </Ajuda>
+            </p>
+            <div className="divide-y divide-border">
+              {componentesDaTela(t).map((x) => {
+                const ret = new Set(r[x.chave] ?? []);
+                const alterado = (original.componentes[x.chave] ?? []).join() !== (r[x.chave] ?? []).join();
+                return (
+                  <div key={x.chave} className={`flex flex-col gap-2 border-l-2 py-2 pl-3 sm:flex-row sm:items-center sm:justify-between ${alterado ? "border-accent" : "border-transparent"}`}>
+                    <p className="flex min-w-0 items-center gap-1 text-[13.5px] font-medium text-text">
+                      <span className={ret.has("visualizar") ? "text-muted line-through" : ""}>{x.rotulo}</span>
+                      <Ajuda titulo={x.rotulo} rotulo="Ajuda" compacta>
+                        <p>{x.descricao}</p>
+                        {acoesDoComponente(x).map((a) => (
+                          <p key={a} className="mt-1">
+                            <strong>{ROTULO_ACAO[a]}:</strong> {x.acoes[a]}
+                          </p>
+                        ))}
+                      </Ajuda>
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {acoesDoComponente(x).map((a) => {
+                        const mantida = !ret.has(a);
+                        return (
+                          <button
+                            key={a}
+                            type="button"
+                            disabled={!onChange}
+                            aria-pressed={mantida}
+                            title={`${x.rotulo} — ${ROTULO_ACAO[a]}: ${mantida ? "mantida (toque para retirar)" : "retirada (toque para devolver)"}. ${x.acoes[a]}`}
+                            onClick={() => onChange?.(coerceDetalhes({ ...valor, componentes: alternarAcaoComponente(r, x.chave, a, !mantida) }))}
+                            className={`min-h-8 rounded-chip px-2 text-[12px] font-semibold any-pointer-coarse:min-h-11 disabled:cursor-default ${
+                              mantida ? "bg-accent text-[var(--sobre-escuro)]" : "bg-surface-2 text-muted line-through"
+                            }`}
+                          >
+                            {ROTULO_ACAO[a]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
