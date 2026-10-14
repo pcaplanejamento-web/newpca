@@ -176,14 +176,17 @@ function Painel({
               onChange={() => alternar(o)}
               className="caixa-marcar"
             />
-            {detalhe?.(o) ? (
-              <span className="flex min-w-0 flex-col" title={`${o} — ${detalhe(o)}`}>
-                <span className="truncate">{o}</span>
-                <span className="truncate text-[11px] text-faint">{detalhe(o)}</span>
-              </span>
-            ) : (
-              <span className="truncate" title={o}>{o}</span>
-            )}
+            {(() => {
+              const [principal, segunda] = partesOpcao(o, detalhe);
+              return segunda ? (
+                <span className="flex min-w-0 flex-col" title={`${principal} — ${segunda}`}>
+                  <span className="truncate">{principal}</span>
+                  <span className="truncate text-[11px] text-faint">{segunda}</span>
+                </span>
+              ) : (
+                <span className="truncate" title={o}>{o}</span>
+              );
+            })()}
           </label>
         ))}
         {visiveis.length === 0 && (
@@ -212,4 +215,13 @@ function Painel({
       </div>
     </div>
   );
+}
+
+/** A opção em duas linhas: com `detalhe`, o valor + o nome; o valor já "SIGLA — Nome" também se divide (o mesmo desenho). */
+function partesOpcao(o: string, detalhe?: (opcao: string) => string | undefined): [string, string | undefined] {
+  const d = detalhe?.(o);
+  if (d) return [o, d];
+  if (!detalhe) return [o, undefined];
+  const i = o.indexOf(" — ");
+  return i > 0 ? [o.slice(0, i), o.slice(i + 3)] : [o, undefined];
 }

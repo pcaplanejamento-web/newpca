@@ -4722,7 +4722,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   escrita por medida (ResizeObserver/resize) só quando o valor MUDA — **`definirVarRaiz`** (`espacamento.ts`;
   `--rodape-tabela`, `--reserva-rodape`; a `BarraSelecao` só re-renderiza quando a altura muda). Sem `will-change` em
   elementos repetidos (a `SetaDropdown` não o tem — viraria uma camada por célula). A marca d'água fixa é `contain:strict`.
-- **COLUNAS DE UNIDADE/SIGLA (v1.94.0):** o `DataTable` passa `detalhe` ao `MultiSelectHeader` nas colunas cujo título é de unidade/sigla (`colunaDeUnidade`, `ConfigTabelas.tsx`; nunca unidade de medida) — a 2ª linha = o NOME (`nomesDasSiglas`, layout do painel → `ConfigTabelas.nomesUnidades` → `useNomesUnidades`) e a busca acha pelos dois.
+- **COLUNAS DE UNIDADE/SIGLA (v1.94.0):** o `DataTable` passa `detalhe` ao `MultiSelectHeader` nas colunas cujo título é de unidade/sigla (`colunaDeUnidade`, `ConfigTabelas.tsx`; nunca unidade de medida) — a 2ª linha = o NOME (`nomesDasSiglas`, layout do painel → `ConfigTabelas.nomesUnidades` → `useNomesUnidades`) e a busca acha pelos dois; a opção que já vem "SIGLA — Nome" é dividida no MESMO desenho (`partesOpcao`).
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.94.1",
+    data: "2026-10-14",
+    titulo: "Filtro de unidade igual em todas as tabelas",
+    mudancas: [
+      { tipo: "correcao", area: "Orçamento", texto: "O filtro da coluna Unidade do PCA × Orçamento usa o mesmo desenho das demais tabelas: a sigla e o nome embaixo.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.94.0",
     data: "2026-10-14",
     titulo: "Unidades com o nome em todas as tabelas",

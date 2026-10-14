@@ -241,7 +241,6 @@ export function DataTable<R>({
   const linhasAdm = useLinhasTabela();
   // Colunas de unidade/sigla: o filtro mostra e busca também pelo NOME de cada sigla.
   const nomesUnidades = useNomesUnidades();
-  const temNomes = Object.keys(nomesUnidades).length > 0;
   const detalheUnidade = useCallback((o: string) => nomesUnidades[o], [nomesUnidades]);
   const [limite, setLimite] = useState<number>(linhasAdm);
   // As linhas por página salvas no aparelho (lidas depois da montagem — o HTML do servidor não as conhece).
@@ -602,7 +601,7 @@ export function DataTable<R>({
                   opcoes.length > 0 || marcado ? (
                     <MultiSelectHeader
                       label={c.header}
-                      detalhe={temNomes && colunaDeUnidade(c.header) ? detalheUnidade : undefined}
+                      detalhe={colunaDeUnidade(c.header) ? detalheUnidade : undefined}
                       options={opcoes}
                       value={externo.valor}
                       onApply={(v) => {
@@ -642,7 +641,7 @@ export function DataTable<R>({
                 ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
                   <MultiSelectHeader
                     label={c.header}
-                    detalhe={temNomes && colunaDeUnidade(c.header) ? detalheUnidade : undefined}
+                    detalhe={colunaDeUnidade(c.header) ? detalheUnidade : undefined}
                     options={opcoes}
                     value={(filters[c.key] as string[] | undefined) ?? []}
                     onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}
