@@ -899,12 +899,12 @@ export function TarefaDetalhe({
             {existente && !existente.template && !existente.arquivada && (
               <CirculoConcluir concluida={concluida} tamanho="md" rotulo={concluida ? "Reabrir a tarefa" : "Concluir a tarefa"} disabled={!pode || somenteLeitura} onAlternar={() => salvar(!concluida)} />
             )}
-            {existente ? <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge> : <Badge>Nova</Badge>}
+            {existente ? <Badge tone="blue" tamanho="linha">{rotuloTicket(existente.ticket)}</Badge> : <Badge tamanho="linha">Nova</Badge>}
             {/* O TÍTULO é editado no próprio cabeçalho (sem campo repetido no corpo). */}
             {somenteLeitura ? (
               <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text">{existente?.titulo}</h2>
             ) : (
-              <div className="min-w-[12rem] flex-1">
+              <div className="flex min-w-[12rem] flex-1 items-center">
                 <TituloNoLugar
                   valor={r.titulo}
                   focar={nova || (aberto.tipo === "editar" && !!aberto.focoTitulo)}
@@ -1181,7 +1181,7 @@ function TituloNoLugar({ valor, focar, cursorNoFim, onChange }: { valor: string;
       }}
       onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
       onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
-      className="min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-1 text-base font-semibold leading-snug text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
+      className="block min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-[calc((44px-1.375em)/2)] text-[15px] font-semibold leading-[1.375] lg:min-h-[var(--h-control-sm)] lg:py-[calc((var(--h-control-sm)-1.375em)/2-1px)] text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
     />
   );
 }
