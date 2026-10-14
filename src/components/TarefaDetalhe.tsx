@@ -276,7 +276,8 @@ export function TarefaDetalhe({
           prazoHora: "",
           lembreteMin: null,
           estimativa: "",
-          pessoas: [],
+          // A lista ATRIBUÍDA a uma pessoa: a tarefa nova nela já nasce com a pessoa como responsável.
+          pessoas: ((r) => (r != null ? [r] : []))(aberto.tipo === "nova" ? listas.find((l) => l.id === aberto.listaId)?.responsavelId : null),
           observadores: [],
           equipes: [],
           etiquetas: [],

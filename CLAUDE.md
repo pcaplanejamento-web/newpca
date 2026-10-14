@@ -3496,6 +3496,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     **`EditorConjunto`** (nome, cor, o `Switch` "Pasta privada" na criação — travado ligado para quem não é editor — e só os
     quadros que podem entrar; avisa "sai da pasta X"/"vira privado"). O painel do "Mudar de quadros" tem as MESMAS pastas,
     regras e edição (`GET /api/tarefas/quadros` devolve `conjuntos` = `{lista, ordem}` + `ator`).
+- **LISTA COM PESSOA + TAREFA SOBRE O ITEM + EXCLUSÃO LIMPA (v1.80.0, migração `0108`, aditiva — `tarefa_listas.responsavel_id`
+  FK set null):** o menu da lista → **"Atribuir a uma pessoa…"** (`PessoaLista`, `MenuLista.tsx`; Configurar; `PATCH
+  /api/tarefas/listas/[id]` `{responsavelId|null}` — pessoa do grupo do quadro, `pessoasValidas` → 422); a foto no cabeçalho
+  da coluna (`ColunaTarefas.responsavel`) e a tarefa NOVA na lista já nasce com a pessoa como responsável (`TarefaDetalhe`,
+  rascunho). Vínculo **`item`** em `TIPOS_VINCULO` = o DFD + o Nº DO ITEM (`idVinculoItem`/`itemDoVinculo`, `dfdId × 1.000.000 +
+  nº` — estável: o id da linha muda a cada regravação); rótulo "N · DFD X", leva ao DFD na Mesa, acesso = o do DFD, busca
+  por descrição/código/nº/planejamento; o botão **Tarefas** no cabeçalho do banner do item (`useDfdGravado` modo item).
+  **Listas sugeridas:** `GET /api/tarefas/do-vinculo` devolve `listas` = as ATRIBUÍDAS ao responsável do protocolo do alvo
+  (`responsavelDoAlvo`) e à pessoa (`listasSugeridas`; o do responsável primeiro) — `TarefasDoVinculo` as mostra ("Listas
+  atribuídas", tocar cria nela: `?nova=tipo:id&lista=L`) e o quadro escolhido abre a tarefa na lista pedida ou na atribuída
+  (`listaParaAlvo` → `QuadroTarefas.listaInicial`). **Excluir a lista com as tarefas** (e excluir uma tarefa) apaga também os
+  vínculos de OUTRAS tarefas que apontavam para elas (`tarefa_vinculos` tipo `tarefa`, sem FK no alvo) no mesmo lote.
+  Evento de calendário SEM tarefa ainda não existe (`tarefa_eventos.tarefa_id` é obrigatório) — previsto no ROADMAP.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
   Integrações); a seguir, o relatório de produtividade por grupo.
 

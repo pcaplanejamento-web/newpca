@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { type AbaQuadro, QuadroTarefas } from "@/components/QuadroTarefas";
 import { getAcesso } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
-import { eventosDosQuadros, quadroAcessivel, rotulosVinculos } from "@/lib/tarefas";
+import { eventosDosQuadros, listaParaAlvo, quadroAcessivel, rotulosVinculos } from "@/lib/tarefas";
 import { lerVinculo, mascararPrivados } from "@/lib/tarefas-core";
 import { carregarQuadro, preferenciasCalendario } from "@/lib/tarefas-dados";
 
@@ -13,14 +13,14 @@ const ABAS: AbaQuadro[] = ["dashboard", "quadro", "lista", "calendario", "config
 
 // ESPAÇO DO QUADRO de tarefas: Dashboard · Quadro (kanban) · Lista (tabela) · Calendário · Configuração. As abas usam os MESMOS dados
 // (listas, cartões, etiquetas, pessoas do grupo) — uma carga só; o filtro e as alterações seguem de uma aba para a outra.
-// `?nova=protocolo:12` ("Criar tarefa" da Mesa) abre uma tarefa NOVA já vinculada; `?prazo=AAAA-MM-DD` (o calendário de
+// `?nova=protocolo:12` ("Criar tarefa" da Mesa; `&lista=` a lista) abre uma tarefa NOVA já vinculada — na lista ATRIBUÍDA; `?prazo=AAAA-MM-DD` (o calendário de
 // todos os quadros), uma tarefa NOVA com esse prazo; `?tarefa=<id>` abre aquela tarefa.
 export default async function QuadroTarefasPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ aba?: string; nova?: string; tarefa?: string; prazo?: string }>;
+  searchParams: Promise<{ aba?: string; nova?: string; tarefa?: string; prazo?: string; lista?: string }>;
 }) {
   const acesso = await getAcesso();
   if (!acesso) redirect("/login");
@@ -38,6 +38,9 @@ export default async function QuadroTarefasPage({
   // Criar tarefa (`?nova=`/`?prazo=`) só com Manipular — sem ela, a chegada só abre o quadro.
   const nova = dados.pode.manipular ? lerVinculo(sp.nova) : null;
   const novaInicial = nova ? { ...nova, rotulo: null, ...(await rotulosVinculos([nova])).get(`${nova.tipo}:${nova.id}`) } : null;
+  // A LISTA da tarefa nova sobre um alvo: a pedida (`?lista=`), senão a ATRIBUÍDA ao responsável do protocolo ou à pessoa.
+  const ativa = (l: number | null) => (l != null && dados.listas.some((x) => x.id === l && !x.arquivada) ? l : null);
+  const listaInicial = nova ? (ativa(Number(sp.lista) || null) ?? ativa(await listaParaAlvo(u, dados.quadro.id, nova.tipo, nova.id))) : null;
   const tarefaInicial = dados.tarefas.find((t) => String(t.id) === sp.tarefa)?.id ?? null;
   const prazoInicial = dados.pode.manipular && /^\d{4}-\d{2}-\d{2}$/.test(sp.prazo ?? "") && !Number.isNaN(Date.parse(`${sp.prazo}T00:00:00Z`)) ? (sp.prazo ?? null) : null;
   // Os eventos cadastrados, as opções da pessoa e os feriados só com a aba Calendário aberta (as demais abas não os usam).
@@ -45,7 +48,7 @@ export default async function QuadroTarefasPage({
   const eventos = mascararPrivados(eventosDb, u.id, new Map(dados.tarefas.map((t) => [t.id, t.envolvidos])));
   return (
     <PermissaoExportar permitido={r.pode.exportar}>
-      <QuadroTarefas {...dados} aba={aba} eventos={eventos} calendario={calendario} usuarioId={u.id} novaInicial={novaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />
+      <QuadroTarefas {...dados} aba={aba} eventos={eventos} calendario={calendario} usuarioId={u.id} novaInicial={novaInicial} listaInicial={listaInicial} prazoInicial={prazoInicial} tarefaInicial={tarefaInicial} />
     </PermissaoExportar>
   );
 }

@@ -99,9 +99,17 @@ export function equipesDasLinhas(linhas: { tarefaId: number; equipeId: number; u
 }
 
 /** A que parte do sistema a tarefa se liga — também a OUTRA TAREFA (o vínculo entre tarefas vale nos dois sentidos). */
-export const TIPOS_VINCULO = ["protocolo", "dfd", "pca", "orcamento", "tarefa"] as const;
+export const TIPOS_VINCULO = ["protocolo", "dfd", "item", "pca", "orcamento", "tarefa"] as const;
 export type TipoVinculo = (typeof TIPOS_VINCULO)[number];
-export const ROTULO_VINCULO: Record<TipoVinculo, string> = { protocolo: "Protocolo", dfd: "DFD", pca: "PCA", orcamento: "Orçamento", tarefa: "Tarefa" };
+export const ROTULO_VINCULO: Record<TipoVinculo, string> = { protocolo: "Protocolo", dfd: "DFD", item: "Item", pca: "PCA", orcamento: "Orçamento", tarefa: "Tarefa" };
+
+/**
+ * O ITEM de DFD no vínculo = o DFD + o Nº DO ITEM (`dfdId × 1.000.000 + nº`) — estável: o id da linha do item muda a cada
+ * regravação do DFD (apaga e reinsere), o nº do item não.
+ */
+export const BASE_VINCULO_ITEM = 1_000_000;
+export const idVinculoItem = (dfdId: number, item: number) => dfdId * BASE_VINCULO_ITEM + item;
+export const itemDoVinculo = (alvo: number) => ({ dfdId: Math.floor(alvo / BASE_VINCULO_ITEM), item: alvo % BASE_VINCULO_ITEM });
 /**
  * O vínculo (`rotulo` = o nº/nome do alvo, resolvido no servidor; ausente = o alvo foi excluído). Na TAREFA vinculada:
  * `quadroId` (o link), `detalhe` (quadro › lista), `prazo` e `concluida`.
@@ -135,12 +143,14 @@ export function vinculosPorTarefa(linhas: { tarefaId: number; tipo: string; alvo
 
 export const ehTipoVinculo = (v: unknown): v is TipoVinculo => typeof v === "string" && (TIPOS_VINCULO as readonly string[]).includes(v);
 
-/** Para onde o vínculo leva: protocolo/DFD abrem o banner na Mesa (`?abrir=`); PCA e orçamento, o espaço deles; a
+/** Para onde o vínculo leva: protocolo/DFD abrem o banner na Mesa (`?abrir=`; o item, o DFD dele); PCA e orçamento, o espaço deles; a
  * tarefa, o quadro dela com a tarefa aberta. */
 export function hrefVinculo(v: { tipo: TipoVinculo; id: number; quadroId?: number | null }): string {
   if (v.tipo === "tarefa") return v.quadroId ? `/painel/tarefas/${v.quadroId}?tarefa=${v.id}` : "/painel/tarefas";
   if (v.tipo === "pca") return `/painel/pca/${v.id}`;
   if (v.tipo === "orcamento") return `/painel/orcamento/${v.id}`;
+  // O item abre o DFD dele na Mesa.
+  if (v.tipo === "item") return `/painel/mesa?abrir=dfd:${itemDoVinculo(v.id).dfdId}`;
   return `/painel/mesa?abrir=${v.tipo}:${v.id}`;
 }
 
@@ -183,7 +193,8 @@ export function mencoesDoTexto(texto: string, pessoas: { id: number; nome: strin
   return [...ids];
 }
 
-export type ListaTarefas = { id: number; nome: string; ordem: number; limiteWip: number | null; concluida: boolean; arquivada: boolean };
+/** `responsavelId` = a pessoa atribuída à lista (a tarefa nova nela nasce com ela como responsável). */
+export type ListaTarefas = { id: number; nome: string; ordem: number; limiteWip: number | null; concluida: boolean; arquivada: boolean; responsavelId?: number | null };
 export type EtiquetaTarefa = { id: number; nome: string; cor: string };
 
 export const rotuloTicket = (n: number) => `#${n}`;

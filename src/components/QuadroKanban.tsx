@@ -10,6 +10,7 @@ import { CartaoTarefa } from "./CartaoTarefa";
 import { Dropdown } from "./Dropdown";
 import { type ModoCopia, SeletorTemplates } from "./CopiarMoverTarefa";
 import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconExpandir, IconGrip, IconMais, IconRecolher, IconModelo, IconPencil, IconPlus } from "./icons";
+import { AvatarPessoa } from "./PessoaTag";
 import { TextoNoLugar } from "./TextoNoLugar";
 import { toast } from "./Toast";
 import { useSetLocal } from "./useSetLocal";
@@ -183,6 +184,7 @@ export function QuadroKanban({
     return (
       <ColunaTarefas
         lista={l}
+        responsavel={l.responsavelId != null ? mPessoas.get(l.responsavelId) : undefined}
         qtd={cartoes.filter((c) => !c.template).length}
         total={totais?.get(l.id)}
         recolhida={!presa && recolhidas.has(l.id)}
@@ -390,6 +392,7 @@ export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<bool
  */
 export function ColunaTarefas({
   lista: l,
+  responsavel,
   qtd,
   onNova,
   extra,
@@ -403,6 +406,8 @@ export function ColunaTarefas({
   children,
 }: {
   lista: ListaTarefas;
+  /** A pessoa ATRIBUÍDA à lista (a foto no cabeçalho). */
+  responsavel?: Pessoa;
   qtd: number;
   onNova?: () => void;
   extra?: ReactNode;
@@ -457,6 +462,11 @@ export function ColunaTarefas({
         <h2 className="min-w-0 flex-1">
           <TextoNoLugar valor={l.nome} onSalvar={onRenomear} ariaLabel="Nome da lista" className="text-[14px] font-semibold text-text" />
         </h2>
+        {responsavel && (
+          <span className="flex shrink-0" title={`Lista atribuída a ${responsavel.apelido || responsavel.nome}: a tarefa nova nela já nasce com essa pessoa como responsável`}>
+            <AvatarPessoa pessoa={responsavel} />
+          </span>
+        )}
         <span
           className="shrink-0 rounded-full px-1.5 py-px text-[12px] font-semibold tabular-nums"
           title={

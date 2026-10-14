@@ -26,6 +26,7 @@ import { ItemDetalhe } from "./ItemDetalhe";
 import type { ModalPainel } from "./Modal";
 import type { PcaOpcao } from "./PcaPicker";
 import { TarefasDoVinculo } from "./TarefasDoVinculo";
+import { idVinculoItem } from "@/lib/tarefas-core";
 import { VendoAgora } from "./VendoAgora";
 import { toast } from "./Toast";
 import { useConformidade } from "./useConformidade";
@@ -507,7 +508,16 @@ export function useDfdGravado({
       cabecalho: dfd ? (
         <ItemCabecalho item={it ? (it.item ?? (itemIdx ?? 0) + 1) : null} numero={dfd.numero} tipo={dfd.tipo} planejamento={dfd.planejamento} />
       ) : undefined,
-      acoesCabecalho: botaoAtualizar,
+      // Tarefas do ITEM (o DFD + o nº do item — estável entre regravações) + Atualizar.
+      acoesCabecalho:
+        dfdId != null && it ? (
+          <>
+            <TarefasDoVinculo tipo="item" id={idVinculoItem(dfdId, it.item ?? (itemIdx ?? 0) + 1)} disabled={travado} dica={motivoTrava} />
+            {botaoAtualizar}
+          </>
+        ) : (
+          botaoAtualizar
+        ),
       rodape: dfd ? (
         <div>
           {erroCallout}

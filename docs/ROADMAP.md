@@ -1343,6 +1343,12 @@ etiqueta.
 opções, caixa de marcar; "mostrar no cartão"), preenchidos no detalhe, com colunas na Lista/.xlsx e filtros no painel, e o
 TÍTULO AUTOMÁTICO pelo formato do quadro (`{Categoria} - {Tipo} - {Nº protocolo}` — campo vazio some com o separador; o
 título escrito à mão prevalece). Copiar, template, mover e recorrência levam os valores.
+✅ **Tarefas — lista com pessoa, tarefa sobre o item e exclusão limpa (v1.80.0, migração `0108`):** a lista pode ser
+atribuída a uma pessoa (a tarefa nova nela nasce com ela como responsável); o ITEM do DFD vira vínculo (botão Tarefas no
+banner do item); o "Criar tarefa" da Mesa mostra as listas atribuídas ao responsável do protocolo e à pessoa; excluir a
+lista com as tarefas limpa também os vínculos que apontavam para elas. **Próximo:** evento de calendário SEM tarefa
+(compromisso do grupo/pessoa — hoje todo evento pertence a uma tarefa).
+
 ✅ **Tarefas no padrão Trello — F8 (migração `0057`):** VÁRIOS vínculos por tarefa — protocolos, DFDs, PCAs, orçamentos e
 OUTRAS TAREFAS (a ligação entre tarefas aparece nos dois lados, com quadro › lista, prazo e conclusão); o vínculo único
 antigo foi migrado.

@@ -50,7 +50,7 @@ import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
 import { IconArquivar, IconCalendar, IconLock, IconChevronLeft, IconDashboard, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
-import { CopiarMoverLista, ExcluirLista, LimiteLista, ListasDoMes, MenuLista, type ModoLista } from "./MenuLista";
+import { CopiarMoverLista, ExcluirLista, LimiteLista, ListasDoMes, MenuLista, type ModoLista, PessoaLista } from "./MenuLista";
 import { FundoQuadro } from "./FundoQuadro";
 import { Modal } from "./Modal";
 import { useConfirmacao } from "./Confirmacao";
@@ -107,6 +107,7 @@ export function QuadroTarefas({
   eventos = [],
   calendario,
   novaInicial = null,
+  listaInicial = null,
   prazoInicial = null,
   tarefaInicial = null,
 }: DadosQuadro & {
@@ -117,6 +118,8 @@ export function QuadroTarefas({
   /** As OPÇÕES da pessoa e os FERIADOS cadastrados (só com a aba Calendário aberta). */
   calendario?: { opcoes: OpcoesCalendario; feriados: FeriadoCadastro[] };
   novaInicial?: VinculoTarefa | null;
+  /** A lista da tarefa nova da chegada (a atribuída/pedida); `null` = a 1ª ativa. */
+  listaInicial?: number | null;
   prazoInicial?: string | null;
   tarefaInicial?: number | null;
 }) {
@@ -164,6 +167,7 @@ export function QuadroTarefas({
   const [copiaLista, setCopiaLista] = useState<{ modo: ModoLista; listaId: number } | null>(null);
   const [excluindoLista, setExcluindoLista] = useState<number | null>(null);
   const [limiteLista, setLimiteLista] = useState<number | null>(null);
+  const [pessoaLista, setPessoaLista] = useState<number | null>(null);
   const [verFundo, setVerFundo] = useState(false);
   const [listasDoMes, setListasDoMes] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -213,7 +217,7 @@ export function QuadroTarefas({
     if (chegada === chegadaVista.current) return;
     chegadaVista.current = chegada;
     if (tarefaInicial) setAberto({ tipo: "editar", id: tarefaInicial });
-    else if (novaInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, vinculo: novaInicial });
+    else if (novaInicial && ativas[0]) setAberto({ tipo: "nova", listaId: listaInicial ?? ativas[0].id, vinculo: novaInicial });
     else if (prazoInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, prazo: prazoInicial });
     else return;
     router.replace(`${pathname}?aba=${aba}`, { scroll: false });
@@ -711,6 +715,7 @@ export function QuadroTarefas({
                   onArquivarLista={() => arquivarLista(l)}
                   onExcluirLista={() => setExcluindoLista(l.id)}
                   onLimite={() => setLimiteLista(l.id)}
+                  onPessoa={() => setPessoaLista(l.id)}
                   onConcluidas={() => alternarConcluidas(l)}
                 />
                     )
@@ -860,6 +865,16 @@ export function QuadroTarefas({
         onFechar={() => setExcluindoLista(null)}
         onFeito={() => {
           setExcluindoLista(null);
+          router.refresh();
+        }}
+      />
+      <PessoaLista
+        lista={listas.find((x) => x.id === pessoaLista) ?? null}
+        pessoas={doGrupo}
+        usuarioId={usuarioId}
+        onFechar={() => setPessoaLista(null)}
+        onFeito={() => {
+          setPessoaLista(null);
           router.refresh();
         }}
       />

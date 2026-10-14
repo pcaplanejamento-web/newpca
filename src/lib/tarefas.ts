@@ -25,6 +25,7 @@ import {
   tarefaQuadros,
   tarefaVinculos,
   tarefas,
+  dfdItens,
 } from "@/db/schema";
 import { type Acesso, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
@@ -88,6 +89,8 @@ import {
   type VinculoTarefa,
   chaveVinculo,
   vinculosPorTarefa,
+  idVinculoItem,
+  itemDoVinculo,
   listaDeTemplates,
   mapearEtiquetas,
   mapearPorNome,
@@ -256,6 +259,7 @@ export function listasDoQuadro(quadroId: number): Promise<ListaTarefas[]> {
       limiteWip: tarefaListas.limiteWip,
       concluida: tarefaListas.concluida,
       arquivada: tarefaListas.arquivada,
+      responsavelId: tarefaListas.responsavelId,
     })
     .from(tarefaListas)
     .where(eq(tarefaListas.quadroId, quadroId))
@@ -461,9 +465,11 @@ export async function rotulosVinculos(vinculos: { tipo: TipoVinculo; id: number 
   const ids = (tipo: TipoVinculo) => [...new Set(vinculos.filter((v) => v.tipo === tipo).map((v) => v.id))];
   const em = async <T extends { id: number; r: string }>(lista: number[], ler: (l: number[]) => Promise<T[]>) =>
     (await Promise.all(lotesDeIds(lista).map(ler))).flat();
-  const [ps, ds, pc, oc, ts] = await Promise.all([
+  const dfdsDosItens = [...new Set(ids("item").map((a) => itemDoVinculo(a).dfdId))];
+  const [ps, ds, di, pc, oc, ts] = await Promise.all([
     em(ids("protocolo"), (l) => db.select({ id: dfdProtocolos.id, r: dfdProtocolos.numero }).from(dfdProtocolos).where(inArray(dfdProtocolos.id, l))),
     em(ids("dfd"), (l) => db.select({ id: dfds.id, r: dfds.numero }).from(dfds).where(inArray(dfds.id, l))),
+    em(dfdsDosItens, (l) => db.select({ id: dfds.id, r: dfds.numero }).from(dfds).where(inArray(dfds.id, l))),
     em(ids("pca"), (l) => db.select({ id: pcas.id, r: pcas.nome }).from(pcas).where(inArray(pcas.id, l))),
     em(ids("orcamento"), (l) =>
       db
@@ -489,6 +495,12 @@ export async function rotulosVinculos(vinculos: { tipo: TipoVinculo; id: number 
   ]);
   const m = new Map<string, Partial<VinculoTarefa>>();
   for (const [tipo, linhas] of [["protocolo", ps], ["dfd", ds], ["pca", pc], ["orcamento", oc]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r });
+  const numDfd = new Map(di.map((x) => [x.id, x.r]));
+  for (const a of ids("item")) {
+    const { dfdId, item } = itemDoVinculo(a);
+    const n = numDfd.get(dfdId);
+    if (n != null) m.set(`item:${a}`, { rotulo: `${item} · DFD ${n}` });
+  }
   for (const x of ts) m.set(`tarefa:${x.id}`, { rotulo: x.r, detalhe: x.detalhe, quadroId: x.quadroId, prazo: x.prazo, concluida: x.concluidaEm != null });
   return m;
 }
@@ -833,7 +845,7 @@ export async function criarLista(quadroId: number, d: { nome: string; limiteWip?
   return l.id;
 }
 
-export async function atualizarLista(id: number, d: { nome?: string; limiteWip?: number | null; concluida?: boolean; arquivada?: boolean }) {
+export async function atualizarLista(id: number, d: { nome?: string; limiteWip?: number | null; concluida?: boolean; arquivada?: boolean; responsavelId?: number | null }) {
   await getDb().update(tarefaListas).set(d).where(eq(tarefaListas.id, id));
 }
 
@@ -855,7 +867,15 @@ export async function idsNaLista(id: number): Promise<number[]> {
 export async function excluirLista(id: number, destino?: { id: number; concluida: boolean }) {
   const db = getDb();
   const apagar = db.delete(tarefaListas).where(eq(tarefaListas.id, id));
-  if (!destino) return void (await apagar);
+  if (!destino) {
+    // As tarefas saem junto (cascade) — antes, os vínculos de OUTRAS tarefas que apontam para elas (sem FK no alvo), no
+    // MESMO lote: nada fica no banco.
+    await db.batch([
+      db.delete(tarefaVinculos).where(and(eq(tarefaVinculos.tipo, "tarefa"), inArray(tarefaVinculos.alvoId, db.select({ id: tarefas.id }).from(tarefas).where(eq(tarefas.listaId, id))))),
+      apagar,
+    ]);
+    return;
+  }
   await db.batch([...comandosEsvaziarLista(db, id, destino.id, destino.concluida), apagar] as unknown as Parameters<typeof db.batch>[0]);
 }
 
@@ -1217,7 +1237,9 @@ export async function ultimoDaLista(listaId: number, exceto: number): Promise<nu
 }
 
 export async function excluirTarefa(id: number) {
-  await getDb().delete(tarefas).where(eq(tarefas.id, id));
+  const db = getDb();
+  // Os vínculos de OUTRAS tarefas que apontam para esta saem junto (o alvo não tem FK).
+  await db.batch([db.delete(tarefaVinculos).where(and(eq(tarefaVinculos.tipo, "tarefa"), eq(tarefaVinculos.alvoId, id))), db.delete(tarefas).where(eq(tarefas.id, id))]);
 }
 
 // ─── Conteúdo do cartão (fase 2): checklist · comentários ────────────────────────────────────────────
@@ -1626,6 +1648,25 @@ export async function buscarVinculos(
       .limit(LIMITE);
     return linhas.map((l) => ({ id: l.id, rotulo: l.numero, detalhe: [l.idExterno ? `Id ${l.idExterno}` : "", l.assunto ?? ""].filter(Boolean).join(" · ") }));
   }
+  if (tipo === "item") {
+    const ls = await db
+      .select({ dfdId: dfds.id, numero: dfds.numero, item: dfdItens.item, sequencial: dfdItens.sequencial, codigo: dfdItens.codigo, descricao: dfdItens.descricao })
+      .from(dfdItens)
+      .innerJoin(dfds, eq(dfds.id, dfdItens.dfdId))
+      .where(
+        and(
+          or(like(dfdItens.descricao, termo), like(dfdItens.codigo, termo), like(dfds.numero, termo), like(dfds.planejamento, termo)),
+          escopo(dfds.reparticaoId),
+          soMeus ? condMeuDfd(db, u.id) : undefined,
+        ),
+      )
+      .orderBy(desc(dfds.id), asc(dfdItens.sequencial))
+      .limit(LIMITE);
+    return ls.map((l) => {
+      const n = l.item ?? l.sequencial ?? 0;
+      return { id: idVinculoItem(l.dfdId, n), rotulo: `${n} · DFD ${l.numero}`, detalhe: [l.codigo ?? "", (l.descricao ?? "").slice(0, 120)].filter(Boolean).join(" · ") };
+    });
+  }
   const linhas = await db
     .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto })
     .from(dfds)
@@ -1677,6 +1718,49 @@ export async function tarefasDoVinculo(u: UsuarioSessao, grupoIds: number[] | nu
     .limit(200);
 }
 
+/** O RESPONSÁVEL (na Mesa) pelo protocolo do alvo — o protocolo, o do DFD ou o do DFD do item; senão `null`. */
+export async function responsavelDoAlvo(tipo: TipoVinculo, id: number): Promise<number | null> {
+  const db = getDb();
+  const dfdId = tipo === "dfd" ? id : tipo === "item" ? itemDoVinculo(id).dfdId : null;
+  if (tipo !== "protocolo" && dfdId == null) return null;
+  const [r] =
+    tipo === "protocolo"
+      ? await db.select({ r: dfdProtocolos.responsavelId }).from(dfdProtocolos).where(eq(dfdProtocolos.id, id))
+      : await db
+          .select({ r: dfdProtocolos.responsavelId })
+          .from(dfds)
+          .innerJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
+          .where(eq(dfds.id, dfdId ?? 0));
+  return r?.r ?? null;
+}
+
+/** Uma lista ATRIBUÍDA sugerida ao criar a tarefa sobre um alvo da Mesa. */
+export type ListaSugerida = { id: number; nome: string; quadroId: number; responsavelId: number; motivo: "responsavel" | "sua" };
+
+/**
+ * As LISTAS ATRIBUÍDAS (ativas, nos quadros dados) à pessoa RESPONSÁVEL pelo protocolo do alvo e à própria pessoa — o
+ * "Criar tarefa" da Mesa já mostra onde a tarefa vai. O responsável do protocolo primeiro.
+ */
+export async function listasSugeridas(u: UsuarioSessao, quadroIds: number[], tipo: TipoVinculo, id: number): Promise<ListaSugerida[]> {
+  if (!quadroIds.length) return [];
+  const resp = await responsavelDoAlvo(tipo, id);
+  const pessoas = [...new Set([resp, u.id].filter((x): x is number => x != null))];
+  const ls = await getDb()
+    .select({ id: tarefaListas.id, nome: tarefaListas.nome, quadroId: tarefaListas.quadroId, responsavelId: tarefaListas.responsavelId })
+    .from(tarefaListas)
+    .where(and(inArray(tarefaListas.quadroId, quadroIds.slice(0, 90)), eq(tarefaListas.arquivada, false), inArray(tarefaListas.responsavelId, pessoas)))
+    .orderBy(asc(tarefaListas.quadroId), asc(tarefaListas.ordem))
+    .limit(50);
+  return ls
+    .map((l) => ({ ...l, responsavelId: l.responsavelId ?? 0, motivo: (l.responsavelId === resp ? "responsavel" : "sua") as ListaSugerida["motivo"] }))
+    .sort((a, b) => (a.motivo === b.motivo ? 0 : a.motivo === "responsavel" ? -1 : 1));
+}
+
+/** A lista ONDE a tarefa nova sobre o alvo nasce neste quadro: a atribuída ao responsável do protocolo, senão à pessoa. */
+export async function listaParaAlvo(u: UsuarioSessao, quadroId: number, tipo: TipoVinculo, id: number): Promise<number | null> {
+  return (await listasSugeridas(u, [quadroId], tipo, id))[0]?.id ?? null;
+}
+
 /**
  * O alvo do vínculo existe e a pessoa o VÊ: a tarefa, pelo papel no grupo DO QUADRO dela (Tarefas ou Calendário); o PCA e o
  * orçamento, a tela deles aberta; o protocolo e o DFD, uma das Mesas aberta + a unidade no escopo dela.
@@ -1694,6 +1778,8 @@ export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: nu
     return (await db.select({ id: t.id }).from(t).where(eq(t.id, v.id))).length > 0;
   }
   if (!podeTela(a, "dfd").visualizar && !podeTela(a, "pca").visualizar) return false;
+  // O item: o DFD dele acessível (o nº do item não é conferido — o DFD regravado sem ele mostra "(excluído)" na tarefa).
+  if (v.tipo === "item") return vinculoAcessivel(a, { tipo: "dfd", id: itemDoVinculo(v.id).dfdId });
   const t = v.tipo === "protocolo" ? dfdProtocolos : dfds;
   // As LINHAS da pessoa ("só os meus"): o protocolo/DFD tem de ser dela.
   const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";

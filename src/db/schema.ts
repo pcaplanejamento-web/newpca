@@ -1080,9 +1080,11 @@ export const tarefaListas = sqliteTable(
     /** Lista de CONCLUÍDAS: o cartão que entra ganha `concluida_em`; o que sai perde. */
     concluida: integer("concluida", { mode: "boolean" }).notNull().default(false),
     arquivada: integer("arquivada", { mode: "boolean" }).notNull().default(false),
+    /** A pessoa ATRIBUÍDA à lista (migração `0108`): a tarefa nova nela já nasce com ela como responsável. */
+    responsavelId: integer("responsavel_id").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [index("tarefa_listas_quadro_idx").on(t.quadroId, t.ordem)],
+  (t) => [index("tarefa_listas_quadro_idx").on(t.quadroId, t.ordem), index("tarefa_listas_responsavel_idx").on(t.responsavelId)],
 );
 
 export const tarefas = sqliteTable(

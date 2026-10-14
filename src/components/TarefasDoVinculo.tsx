@@ -26,11 +26,15 @@ type TarefaLigada = {
   listaNome: string;
 };
 type QuadroOpcao = { id: number; nome: string; cor: string; grupoNome: string };
+/** Uma lista ATRIBUÍDA sugerida (ao responsável do protocolo ou à pessoa). */
+type ListaOpcao = { id: number; nome: string; quadroId: number; motivo: "responsavel" | "sua" };
+type Dados = { tarefas: TarefaLigada[]; quadros: QuadroOpcao[]; listas?: ListaOpcao[] };
 
 /**
- * TAREFAS de um protocolo/DFD (no cabeçalho dos banners da Mesa): o botão "Tarefas" (ícone + "abertas/total") abre as tarefas LIGADAS a ele (nos
- * quadros que o usuário vê — tocar leva ao cartão no quadro) e "Criar tarefa" num quadro escolhido (abre a tarefa NOVA
- * já vinculada). Sem tarefas nem quadros, o botão não aparece.
+ * TAREFAS de um protocolo/DFD/item (no cabeçalho dos banners da Mesa): o botão "Tarefas" (ícone + "abertas/total") abre as
+ * tarefas LIGADAS a ele (nos quadros que o usuário vê — tocar leva ao cartão no quadro), as LISTAS ATRIBUÍDAS ao
+ * responsável do protocolo e à pessoa (tocar cria a tarefa NOVA, já vinculada, nelas) e "Criar tarefa" num quadro
+ * escolhido (na lista atribuída dele, se houver). Sem tarefas nem quadros, o botão não aparece.
  */
 export function TarefasDoVinculo({
   tipo,
@@ -45,18 +49,18 @@ export function TarefasDoVinculo({
   dica?: string;
 }) {
   const router = useRouter();
-  const [dados, setDados] = useState<{ tarefas: TarefaLigada[]; quadros: QuadroOpcao[] } | null>(null);
+  const [dados, setDados] = useState<Dados | null>(null);
   const [aberto, setAberto] = useState(false);
   const [quadro, setQuadro] = useState("");
 
   useEffect(() => {
     let vivo = true;
     setDados(null);
-    chamar<{ tarefas: TarefaLigada[]; quadros: QuadroOpcao[] }>(`/api/tarefas/do-vinculo?tipo=${tipo}&id=${id}`)
+    chamar<Dados>(`/api/tarefas/do-vinculo?tipo=${tipo}&id=${id}`)
       .then((j) => {
         if (!vivo) return;
         setDados(j);
-        setQuadro(String(j.quadros[0]?.id ?? ""));
+        setQuadro(String(j.listas?.[0]?.quadroId ?? j.quadros[0]?.id ?? ""));
       })
       .catch(() => vivo && setDados({ tarefas: [], quadros: [] }));
     return () => {
@@ -109,6 +113,33 @@ export function TarefasDoVinculo({
                 );
               })}
             </ul>
+          )}
+          {!!dados.listas?.length && (
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <p className="text-[12px] font-semibold text-muted">Listas atribuídas</p>
+              <ul className="divide-y divide-border rounded-card border border-border">
+                {dados.listas.map((l) => {
+                  const q = dados.quadros.find((x) => x.id === l.quadroId);
+                  return (
+                    <li key={l.id}>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/painel/tarefas/${l.quadroId}?nova=${tipo}:${id}&lista=${l.id}`)}
+                        className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-surface-2"
+                        title={`Criar a tarefa na lista "${l.nome}"`}
+                      >
+                        <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: q?.cor }} />
+                        <span className="min-w-0 flex-1 truncate text-text">
+                          {q?.nome} › <strong className="font-semibold">{l.nome}</strong>
+                        </span>
+                        <Badge tone={l.motivo === "responsavel" ? "blue" : undefined}>{l.motivo === "responsavel" ? "Do responsável" : "Sua"}</Badge>
+                        <IconPlus className="h-4 w-4 shrink-0 text-muted" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
           {dados.quadros.length > 0 && (
             <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">

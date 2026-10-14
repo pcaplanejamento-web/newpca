@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.80.0",
+    data: "2026-10-14",
+    titulo: "Tarefas: lista com pessoa, tarefa sobre o item e exclusão limpa",
+    mudancas: [
+      { tipo: "novo", area: "Tarefas", texto: "A lista pode ser atribuída a uma pessoa (menu da lista): a foto fica no cabeçalho e a tarefa nova nela já nasce com a pessoa como responsável.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Mesa", texto: "Tarefas também sobre um ITEM: o botão Tarefas no banner do item cria a tarefa já vinculada a ele (e o item pode ser vinculado a qualquer tarefa).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Ao criar a tarefa sobre um protocolo, DFD ou item, aparecem as listas atribuídas ao responsável do protocolo e a você — a tarefa já abre na lista certa.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Excluir a lista com as tarefas limpa o banco por inteiro — também os vínculos de outras tarefas que apontavam para elas.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.79.0",
     data: "2026-10-10",
     titulo: "Biblioteca de componentes só para o ADM",
