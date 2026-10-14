@@ -7,6 +7,7 @@ import {
   type MensagemDfd,
   SECOES_OBRIGATORIAS,
   ROTULO_CURTO,
+  quantidadeFracionada,
   semQuantidade,
   semValorUnitario,
   STATUS_MENSAGEM_COR,
@@ -85,6 +86,7 @@ export type Contagem = { erros: number; atencoes: number };
 const CHAVES_ITEM = new Set([
   "item.valorUnitario",
   "item.quantidade",
+  "item.quantidadeFracionada",
   "item.duplicado",
   "item.naoCatalogado",
   "item.divergenteCatalogo",
@@ -99,6 +101,7 @@ const FALTA_DA_CHAVE: Record<string, FaltaCatalogoItem> = {
 const ANCORA_ITEM: Record<string, string> = {
   "item.valorUnitario": "valorUnitario",
   "item.quantidade": "quantidade",
+  "item.quantidadeFracionada": "quantidade",
   "item.duplicado": "repetidos",
   "item.naoCatalogado": "catalogo",
   "item.divergenteCatalogo": "catalogo",
@@ -132,7 +135,9 @@ function textoNoItem(chave: string, it: DfdItemParseado, iguais: (number | null)
     case "item.valorUnitario":
       return "Sem valor unitário";
     case "item.quantidade":
-      return "Sem quantidade";
+      return it.quantidade == null ? "Sem quantidade" : "Quantidade zerada";
+    case "item.quantidadeFracionada":
+      return `Quantidade menor que 1 (${String(it.quantidade).replace(".", ",")})`;
     case "item.duplicado":
       return `Repetido — igual ao item ${iguais.map((n) => n ?? "—").join(", ")}`;
     case "item.naoCatalogado":
@@ -185,6 +190,7 @@ export function pendenciasDoDfd(
       let iguais: (number | null)[] = [];
       if (m.chave === "item.valorUnitario") tem = semValorUnitario(it.valorUnitario);
       else if (m.chave === "item.quantidade") tem = semQuantidade(it.quantidade);
+      else if (m.chave === "item.quantidadeFracionada") tem = quantidadeFracionada(it.quantidade);
       else if (m.chave === "item.duplicado") {
         const g = dups?.get(idx);
         tem = !!g;
@@ -522,7 +528,7 @@ export function blocosPendenciasPdf(p: ProtocoloPendente, escopo: "protocolo" | 
         tipo: "tabela",
         colunas: COLUNAS_ITENS,
         linhas: d.itens.map((it) => {
-          const q = tem(it, "item.quantidade");
+          const q = tem(it, "item.quantidade") ?? tem(it, "item.quantidadeFracionada");
           const v = tem(it, "item.valorUnitario");
           const cat = it.problemas.find((x) => x.alvo.ancora === "catalogo" || x.alvo.ancora === "repetidos");
           return {

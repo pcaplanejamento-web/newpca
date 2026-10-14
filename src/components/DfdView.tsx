@@ -93,7 +93,7 @@ export type DfdVisual = {
 };
 
 /** Linha da tabela de itens: o item + o índice + (item REPETIDO) o Nº dos outros iguais e a cor da importância. */
-type ItemK = DfdVisualItem & { _k: number; _rep?: RepeticaoItem & { cor: string } };
+type ItemK = DfdVisualItem & { _k: number; _rep?: RepeticaoItem & { cor: string }; _regras?: RegrasAvaliacao };
 
 // Colunas da tabela de itens (Seção 4) — com ESTADO por item e filtro/ordenação em
 // todas (via `value`), igual às demais tabelas do sistema.
@@ -102,15 +102,15 @@ const COLS: Column<ItemK>[] = [
     key: "estado",
     header: "Estado",
     nowrap: true,
-    value: (r) => resumoEstado(mensagensItem(r, r._rep)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
+    value: (r) => resumoEstado(mensagensItem(r, r._rep, r._regras)).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
     // Filtro: TODAS as faltas do item (inclusive as ocultas no "+N") — "Item duplicado" junta os repetidos.
     valores: (r) => {
-      const res = resumoEstado(mensagensItem(r, r._rep));
+      const res = resumoEstado(mensagensItem(r, r._rep, r._regras));
       return res.rotulos.length ? res.rotulos : [ESTADO_ITEM_ROTULO[estadoItem(r)]];
     },
     render: (r) => {
       // Aponta a falta ESPECÍFICA (valor/quantidade = erro; repetido = atenção) + "+N" + tooltip; senão "Regular".
-      const res = resumoEstado(mensagensItem(r, r._rep));
+      const res = resumoEstado(mensagensItem(r, r._rep, r._regras));
       if (res.rotulo) return <EstadoResumo res={res} />;
       const e = estadoItem(r);
       return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;
@@ -299,7 +299,7 @@ export function DfdView({
     const cor = corImportancia(regras, nivelDe(regras, "item.duplicado", ctxDup));
     return dfd.itens.map((it, i) => {
       const rep = reps?.get(i);
-      return rep ? { ...it, _k: i, _rep: { ...rep, cor } } : { ...it, _k: i };
+      return rep ? { ...it, _k: i, _rep: { ...rep, cor }, _regras: regras } : { ...it, _k: i, _regras: regras };
     });
   }, [dfd.itens, regras, dfdTipo, categoria, consulta]);
   // Coluna "Catálogo" (conformidade por item) — só quando o veredito foi carregado. A

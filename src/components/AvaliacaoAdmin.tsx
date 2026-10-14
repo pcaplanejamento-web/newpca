@@ -26,6 +26,7 @@ import {
   TIPO_DFD_ROTULO,
   TIPOS_DFD,
 } from "@/lib/avaliacao-core";
+import { Ajuda } from "./Ajuda";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ColorField } from "./ColorField";
@@ -277,6 +278,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           <div className="min-w-[12rem] flex-1">
             <div className="flex items-center gap-2">
               <span className="text-[13.5px] font-semibold text-text">{ponto.rotulo}</span>
+              {ajudaPonto(ponto)}
               {chipImportancia(efetivo)}
             </div>
             <p className="mt-0.5 text-[12px] text-muted">{ponto.descricao}</p>
@@ -305,12 +307,16 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </div>
         {/* Edição/ajuste automático são GLOBAIS (só no contexto "Todos"). */}
         {ehGlobal && ponto.suportaEdicao && (
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-1">
             <Switch
               label="Editável pelo usuário na análise"
               checked={editavelAtual}
               onChange={(v) => setEditavel(ponto.chave, v)}
             />
+            <Ajuda titulo="Editável pelo usuário na análise" compacta>
+              <p>Ligado: na análise (importação/protocolação) e no DFD gravado, quem tem a ação Manipular pode corrigir este campo — o cadeado do campo destrava.</p>
+              <p>Desligado: o campo fica travado para todos (o Administrador também), e a falta só se corrige na origem (Centi) e reimportando.</p>
+            </Ajuda>
           </div>
         )}
         {ehGlobal && ponto.suportaAuto && impById(efetivo).comportamento === "automatico" && editorSinonimos(ponto.chave)}
@@ -357,6 +363,43 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
     );
   }
 
+  /** O "(?)" de cada ponto: o que confere, onde aparece, o que cada comportamento faz e como corrigir. */
+  function ajudaPonto(ponto: PontoAvaliacao) {
+    const onde =
+      ponto.sujeito === "item"
+        ? "No Estado do ITEM (Mesa → Itens, tabela de itens do DFD, detalhe do item), agregado no DFD e no protocolo, no painel de pendências e no despacho de devolução."
+        : ponto.sujeito === "dfd"
+          ? "No Estado do DFD (Mesa → DFDs, análise da importação/protocolação), agregado no protocolo, no painel de pendências e no despacho de devolução."
+          : "Na capa e no Estado do protocolo (Mesa → Protocolos, análise da protocolação), no painel de pendências e no despacho.";
+    return (
+      <Ajuda titulo={ponto.rotulo} compacta>
+        <p>
+          <strong>O que confere:</strong> {ponto.descricao}
+        </p>
+        <p>
+          <strong>Onde aparece:</strong> {onde}
+        </p>
+        {ponto.ajuda && (
+          <p>
+            <strong>Como funciona:</strong> {ponto.ajuda}
+          </p>
+        )}
+        <p>
+          <strong>Comportamentos aceitos:</strong>
+        </p>
+        <ul className="list-disc pl-4">
+          {ponto.comportamentosPermitidos.map((c) => (
+            <li key={c}>{DESC_COMPORTAMENTO[c]}</li>
+          ))}
+        </ul>
+        <p>
+          Padrão: <strong>{DESC_COMPORTAMENTO[ponto.comportamentoPadrao]}</strong> As exceções por tipo de DFD e por categoria do protocolo valem acima
+          do padrão (aba do contexto).
+        </p>
+      </Ajuda>
+    );
+  }
+
   // Painel "Importâncias" (CRUD) + estados de ciclo.
   function painelImportancias(): ReactNode {
     return (
@@ -394,7 +437,11 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </Button>
 
         <div className="rounded-control border border-border bg-surface-2 p-3">
-          <p className="mb-2 text-[12px] font-semibold text-muted">
+          <p className="mb-2 flex items-start gap-1 text-[12px] font-semibold text-muted">
+            <Ajuda titulo="Estados de ciclo" compacta>
+              <p>Os estados de um DFD SEM erro nem atenção: Editado (alterado na análise), Regularizado (tratado automaticamente), Regular (nada a tratar) e Pendente (ainda não conferido).</p>
+              <p>Aqui se muda só o nome e a cor que aparecem na célula Estado; a regra que decide cada um é fixa.</p>
+            </Ajuda>
             Estados de ciclo — rótulo e cor. O ciclo é fixo (Editado/Regularizado/Regular/Pendente); a severidade
             (erro/atenção) segue a cor da importância.
           </p>
@@ -430,7 +477,13 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-text">Assuntos permitidos</h2>
+            <h2 className="flex items-center gap-1 text-sm font-bold text-text">
+              Assuntos permitidos
+              <Ajuda titulo="Assuntos permitidos" compacta>
+                <p>A lista dos assuntos que podem ser protocolados. O assunto da capa precisa CONTER um destes termos (sem diferenciar acento e maiúsculas).</p>
+                <p>Só vale com a trava “Exigir assunto cadastrado para protocolar” ligada; lista vazia com a trava ligada impede qualquer protocolação.</p>
+              </Ajuda>
+            </h2>
             <Button
               variant="secondary"
               onClick={() => setAssuntos((l) => [...l, { id: `as-${Date.now().toString(36)}`, termo: "" }])}
@@ -475,7 +528,18 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </section>
 
         <section className="space-y-1">
-          <h2 className="text-sm font-bold text-text">Travas (barram o protocolo inteiro)</h2>
+          <h2 className="flex items-center gap-1 text-sm font-bold text-text">
+            Travas (barram o protocolo inteiro)
+            <Ajuda titulo="Travas da protocolação" compacta>
+              <p>
+                <strong>Exigir assunto cadastrado:</strong> o botão Protocolar trava quando o assunto da capa não está na lista de assuntos permitidos. O servidor confere de novo ao gravar.
+              </p>
+              <p>
+                <strong>Exigir tipo permitido:</strong> trava quando algum DFD do envio tem um tipo (DFD-S/R/O/E) fora dos marcados — vale também na importação de DFD avulso.
+              </p>
+              <p>Desligadas, nada muda: valem só as importâncias dos pontos.</p>
+            </Ajuda>
+          </h2>
           <Switch
             checked={!!gate.exigirAssunto}
             onChange={(v) => setG({ exigirAssunto: v })}
@@ -489,7 +553,18 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </section>
 
         <section className="space-y-1">
-          <h2 className="text-sm font-bold text-text">Botões</h2>
+          <h2 className="flex items-center gap-1 text-sm font-bold text-text">
+            Botões
+            <Ajuda titulo="Botões de importação" compacta>
+              <p>
+                <strong>Protocolação habilitada:</strong> desligada, ninguém protocola (o botão fica desabilitado com o motivo e o servidor recusa).
+              </p>
+              <p>
+                <strong>Importação de DFD avulso:</strong> desligada, a Mesa não importa DFD fora de um protocolo.
+              </p>
+              <p>Use para suspender as entradas temporariamente (ex.: fechamento do PCA).</p>
+            </Ajuda>
+          </h2>
           <Switch
             checked={gate.protocolarHabilitado ?? true}
             onChange={(v) => setG({ protocolarHabilitado: v })}

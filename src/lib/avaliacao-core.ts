@@ -85,6 +85,7 @@ export type ChaveAvaliacao =
   | "dfd.referenciaRenovacao"
   | "item.valorUnitario"
   | "item.quantidade"
+  | "item.quantidadeFracionada"
   | "item.naoCatalogado"
   | "item.divergenteCatalogo"
   | "item.tipoIncompativel"
@@ -107,6 +108,8 @@ export type PontoAvaliacao = {
   /** A FALTA do ponto (vazio/fora do padrão que o ajuste automático NÃO corrigiu) segue a lógica padrão
    * dos ERROS mesmo no comportamento "automático" — o automático só corrige, nunca rebaixa a falta. */
   faltaEhErro?: boolean;
+  /** Explicação extra do "(?)" na tela de Avaliação: onde aparece e como corrigir. */
+  ajuda?: string;
 };
 
 const BASE = ["bloqueia", "avisa", "ignora"] as Comportamento[];
@@ -137,7 +140,8 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "dfd.referenciaRenovacao", sujeito: "dfd", rotulo: "Referência de renovação (DFD-R)", descricao: "DFD-R com contrato, ARP ou licitação.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", suportaEdicao: true, editavelPadrao: true },
   // ---- ITEM ----
   { chave: "item.valorUnitario", sujeito: "item", rotulo: "Valor unitário", descricao: "Todo item com valor unitário maior que zero.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
-  { chave: "item.quantidade", sujeito: "item", rotulo: "Quantidade", descricao: "Todo item com quantidade informada. (O item sempre marca em vermelho quando falta; o nível decide se bloqueia.)", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
+  { chave: "item.quantidade", sujeito: "item", rotulo: "Quantidade", descricao: "Todo item com quantidade maior que zero. Quantidade vazia aponta “Item sem quantidade”; zero ou negativa, “Quantidade zerada” (o valor total do item fica R$ 0,00). O item sempre marca em vermelho; o nível decide se bloqueia.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", ajuda: "Confere cada item da tabela da Seção 4. A quantidade é lida do DFD; corrija no detalhe do item (cadeado da Quantidade), pela edição em massa dos itens ou reimportando o DFD corrigido no Centi." },
+  { chave: "item.quantidadeFracionada", sujeito: "item", rotulo: "Quantidade menor que 1", descricao: "Item com quantidade maior que zero e MENOR que 1 (ex.: 0,001) — em geral um erro de digitação ou de unidade de medida (litro × mililitro, caixa × unidade). Não vale para quantidade zero (é “Quantidade”).", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", ajuda: "Aponta “Quantidade fracionada” no item, no DFD e no protocolo. Pode ser legítimo (frações de uma unidade grande); por isso o padrão é só ATENÇÃO. Coloque numa importância que bloqueia para impedir a importação, ou em Ignorar para desligar." },
   // Conformidade com o CATÁLOGO (referência de padronização). Só vale quando há catálogo
   // cadastrado; padrão "avisa", não bloqueia (o ADM eleva para bloquear).
   { chave: "item.naoCatalogado", sujeito: "item", rotulo: "Item não catalogado", descricao: "Item cujo código não existe no catálogo de produtos (a referência de padronização). Só vale quando há catálogo cadastrado.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },

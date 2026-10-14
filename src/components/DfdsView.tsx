@@ -1331,7 +1331,7 @@ export function DfdsView({
   // bate com o da Normal com os mesmos filtros.
   type Atributo = { valor: (r: ItemDfdRow) => string; valores?: (r: ItemDfdRow) => string[] };
   const atributoItem = useMemo(() => {
-    const estado = (r: ItemDfdRow) => resumoEstado(mensagensItem(r, repDoItem(r)));
+    const estado = (r: ItemDfdRow) => resumoEstado(mensagensItem(r, repDoItem(r), regras));
     return {
       estado: {
         valor: (r) => estado(r).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
@@ -1426,7 +1426,7 @@ export function DfdsView({
     const peso = { erro: 3, atencao: 2, conforme: 1 } as const;
     return new Map(
       (consolidados ?? []).map((l) => {
-        const e = estadoConsolidado(l.itens.map((it) => mensagensItem(it, repDoItem(it))));
+        const e = estadoConsolidado(l.itens.map((it) => mensagensItem(it, repDoItem(it), regras)));
         let pior: { it: ItemDfdRow; peso: number; rotulo: string } | null = null;
         for (const it of l.itens) {
           const v = veredictoLinhaCatalogo(it.catalogo, regras, tipoCurtoDfd(it.dfdTipo));
@@ -1494,11 +1494,11 @@ export function DfdsView({
       value: atributoItem.estado.valor,
       valores: atributoItem.estado.valores,
       corPdf: (r) => {
-        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
+        const res = resumoEstado(mensagensItem(r, repDoItem(r), regras));
         return res.rotulo ? res.cor : estadoItemCor(estadoItem(r));
       },
       render: (r) => {
-        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
+        const res = resumoEstado(mensagensItem(r, repDoItem(r), regras));
         if (res.rotulo) return <EstadoResumo res={res} />;
         const e = estadoItem(r);
         return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;

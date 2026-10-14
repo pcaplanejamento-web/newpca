@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.90.0",
+    data: "2026-10-14",
+    titulo: "Quantidade fracionada e ajuda nas avaliações",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Novo ponto de avaliação “Quantidade menor que 1” (item com quantidade entre 0 e 1, ex.: 0,001): aponta “Quantidade fracionada” no item, no DFD e no protocolo — atenção por padrão, configurável (bloqueia/avisa/ignora).", link: "/painel/configuracoes?aba=avaliacao" },
+      { tipo: "melhoria", area: "Configurações", texto: "Cada ponto de Avaliação tem o (?) com o que confere, onde aparece, como funciona e o que cada comportamento faz; também “Editável”, estados de ciclo, assuntos, travas e botões da protocolação.", link: "/painel/configuracoes?aba=avaliacao" },
+    ],
+  },
+  {
     versao: "1.89.3",
     data: "2026-10-14",
     titulo: "Quantidade zerada apontada na Mesa",

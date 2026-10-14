@@ -118,7 +118,7 @@ export function ItemDetalhe({
 
   // As PENDÊNCIAS do item (a MESMA régua da célula Estado + o catálogo) — o banner único, como no DFD e no protocolo.
   const problemas = [
-    ...mensagensItem(item, repetido ? { iguais: repetidos.slice(0, 10).map((r) => r.item.item ?? r.idx + 1), total: repetidos.length, cor: corRepetido } : null),
+    ...mensagensItem(item, repetido ? { iguais: repetidos.slice(0, 10).map((r) => r.item.item ?? r.idx + 1), total: repetidos.length, cor: corRepetido } : null, regras),
     ...(veredicto && veredicto.nivel !== "conforme"
       ? divergencias.map((t) => ({ chave: `item.catalogo:${t}`, status: veredicto.nivel === "erro" ? ("erro" as const) : ("atencao" as const), texto: t, cor: corCat }))
       : []),

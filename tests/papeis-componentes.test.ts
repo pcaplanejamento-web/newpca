@@ -66,3 +66,17 @@ test("quantidade zerada é erro apontado na Mesa", async () => {
   assert.equal(resumoEstado(mensagensItem(it(null))).rotulo, "Item sem quantidade");
   assert.equal(resumoEstado(mensagensItem(it(2))).rotulo, "");
 });
+
+test("quantidade menor que 1 segue a importância do ADM", async () => {
+  const { mensagensItem, resumoEstado } = await import("../src/lib/dfd-tratamento.ts");
+  const { regrasPadrao } = await import("../src/lib/avaliacao-core.ts");
+  const it = { item: 1, codigo: "1", descricao: "X", unidade: "UN", quantidade: 0.001, valorUnitario: 5, valorTotal: 0.005 } as never;
+  const r = resumoEstado(mensagensItem(it));
+  assert.equal(r.rotulo, "Quantidade fracionada");
+  assert.ok(mensagensItem(it).every((m) => m.status === "atencao"));
+  const ign = { ...regrasPadrao(), pontos: { "item.quantidadeFracionada": "ignorar" } } as never;
+  assert.equal(resumoEstado(mensagensItem(it, null, ign)).rotulo, "");
+  const blq = { ...regrasPadrao(), pontos: { "item.quantidadeFracionada": "fundamental" } } as never;
+  assert.equal(mensagensItem(it, null, blq)[0].status, "erro");
+  assert.equal(resumoEstado(mensagensItem({ ...(it as object), quantidade: 1 } as never)).rotulo, "");
+});
