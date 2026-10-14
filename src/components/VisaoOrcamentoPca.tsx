@@ -64,7 +64,7 @@ export function SeletorVisaoPca({
   pcaId: number;
   visaoId: number | null;
   visoes: VisaoOrcamento[];
-  /** Configura o PCA (escolher a visão dele). */
+  /** Pode trocar a visão do PCA (quem visualiza o PCA — escolher como ver não é configurar). */
   podeEscolher: boolean;
   /** Os lançamentos do orçamento do ano — o ponto âmbar na visão com valores que ele não traz. */
   itens?: LinhaVisaoOrcamento[] | null;
@@ -82,7 +82,7 @@ export function SeletorVisaoPca({
       ]
     : undefined;
   return (
-    <div className="min-w-0" title={podeEscolher ? dica : `${dica} — só quem configura o PCA troca a visão`}>
+    <div className="min-w-0" title={podeEscolher ? dica : `${dica} — sem acesso ao PCA para trocar a visão`}>
       <SelectField
         compacto
         label="Visão"

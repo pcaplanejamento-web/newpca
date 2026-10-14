@@ -545,14 +545,14 @@ export function OrcamentoPca({
                 { value: "dentro", label: `Dentro (${linhas.length - acima.length})` },
               ]}
             />
-            {(podePublicar || visoes.length > 0) && (
+            {visoes.length > 0 && (
               <div className="flex w-full min-w-[12rem] items-center gap-2 sm:w-auto sm:max-w-sm sm:flex-1">
                 <div className="min-w-0 flex-1">
                   <SeletorVisaoPca
                     pcaId={dados.pcaId}
                     visaoId={dados.visaoId ?? null}
                     visoes={visoes}
-                    podeEscolher={podePublicar}
+                    podeEscolher
                     itens={linhasVisao}
                     onEditar={
                       podePublicar && podeConfigurarOrcamento && linhasVisao

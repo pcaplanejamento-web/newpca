@@ -13,7 +13,13 @@ export const dynamic = "force-dynamic";
  * (Preview/Publicado — publicado aparece na tela inicial), CAPA do card e a VISÃO do orçamento.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirAcesso("pca", "configurar");
+  // Trocar SÓ a visão do orçamento é escolher como ver o PCA, não configurá-lo: basta Visualizar o PCA.
+  const bruto = (await req
+    .clone()
+    .json()
+    .catch(() => null)) as Record<string, unknown> | null;
+  const soVisao = !!bruto && typeof bruto === "object" && Object.keys(bruto).length === 1 && "orcamentoVisaoId" in bruto;
+  const a = await exigirAcesso("pca", soVisao ? "visualizar" : "configurar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
