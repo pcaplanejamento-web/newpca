@@ -1,6 +1,8 @@
 "use client";
 
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
+import { CamposSeguranca } from "@/components/SegurancaAdmin";
+import { type ConfigSeguranca, SEGURANCA_PADRAO } from "@/lib/seguranca-core";
 import { MarcaDagua } from "@/components/ProtecaoDados";
 import { type ConfigProtecao, PROTECAO_PADRAO } from "@/lib/protecao-core";
 import Link from "next/link";
@@ -465,6 +467,12 @@ function DemoProtecao() {
       <MarcaDagua texto="Maria Clara Souza · matrícula 045210 · 08/10/2026 14:30" inline />
     </div>
   );
+}
+
+/** SEGURANÇA DO ACESSO: os campos da tela do ADM (sem gravar). */
+function DemoSeguranca() {
+  const [v, setV] = useState<ConfigSeguranca>({ ...SEGURANCA_PADRAO, inatividadeMin: 60 });
+  return <CamposSeguranca valor={v} onChange={setV} />;
 }
 
 /** USUÁRIOS: matrícula (6 posições no fundo), telefone (+ WhatsApp e o "(?)"), o botão de conversa e o BANNER do usuário. */
@@ -3415,6 +3423,10 @@ export function Catalogo() {
 
       <Secao titulo="Proteção de dados — CamposProtecao (Configurações → Proteção de dados: seleção/cópia, impressão/captura, ocultar ao sair da janela, marca d'água, papéis e tela pública) · MarcaDagua (quem vê, sobre toda a tela) · ProtecaoDados (aplica os bloqueios nas telas — não ativado aqui)">
         <DemoProtecao />
+      </Secao>
+
+      <Secao titulo="Segurança do acesso — CamposSeguranca (Configurações → Segurança: encerrar a sessão inativa, alertas de aparelho novo e de conta bloqueada)">
+        <DemoSeguranca />
       </Secao>
 
       <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (contato institucional = WhatsApp: máscara + ícone + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">

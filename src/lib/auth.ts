@@ -6,6 +6,8 @@ import { type Capacidades, coerceCapacidades } from "./papeis-core";
 import { type DetalhesPapel, detalhesDoJson } from "./papeis-detalhes-core";
 import { hashSenha, sha256Hex, toHex, verificarSenha } from "./password";
 import { urlFoto } from "./pessoa";
+import { getConfigSeguranca } from "./seguranca";
+import { renovarAtividade, sessaoInativa } from "./seguranca-core";
 import { papeis, sessoes, usuarios } from "@/db/schema";
 
 /**
@@ -155,8 +157,9 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
   const token = jar.get(COOKIE)?.value;
   if (!token) return null;
   const tokenHash = await sha256Hex(token);
-  const [row] = await getDb()
-    .select(colunasSessao)
+  const [[linha], cfg] = await Promise.all([
+    getDb()
+    .select({ ...colunasSessao, sessaoId: sessoes.id, vistoEm: sessoes.vistoEm, criadoEmSessao: sessoes.criadoEm })
     .from(sessoes)
     .innerJoin(usuarios, eq(sessoes.usuarioId, usuarios.id))
     .leftJoin(papeis, eq(papeis.id, papelDoUsuarioSql))
@@ -166,8 +169,21 @@ export const getUsuarioAtual = cache(async (): Promise<UsuarioSessao | null> => 
         gt(sessoes.expiraEm, new Date().toISOString()),
       ),
     )
-    .limit(1);
-  if (row?.status !== "ativo") return null;
+    .limit(1),
+    getConfigSeguranca(),
+  ]);
+  if (linha?.status !== "ativo") return null;
+  const { sessaoId, vistoEm, criadoEmSessao, ...row } = linha;
+  // INATIVIDADE (Configurações → Segurança): parada além do limite = encerrada. A atividade é gravada no máximo a cada
+  // poucos minutos (best-effort — nunca derruba a requisição).
+  const agora = Date.now();
+  const visto = vistoEm ?? criadoEmSessao;
+  if (sessaoInativa(visto, agora, cfg.inatividadeMin)) {
+    await getDb().delete(sessoes).where(eq(sessoes.id, sessaoId)).catch(() => {});
+    return null;
+  }
+  if (renovarAtividade(visto, agora, cfg.inatividadeMin))
+    await getDb().update(sessoes).set({ vistoEm: new Date(agora).toISOString() }).where(eq(sessoes.id, sessaoId)).catch(() => {});
   return sessaoDaLinha(row);
 });
 

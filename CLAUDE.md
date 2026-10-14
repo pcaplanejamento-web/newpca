@@ -178,6 +178,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     código (`matriculaEmUso`, sem os zeros à esquerda: "0123" = "123") e garantida no BANCO por gatilhos (`matricula_duplicada`
     no INSERT e no UPDATE da matrícula; as repetidas antigas ficam) → 409. O ADM também não troca para uma matrícula em uso;
     a tela do ADM manda só o que MUDOU (dado antigo fora do padrão segue valendo).
+  - **SEGURANÇA DO ACESSO (v1.92.0, migração `0110`, aditiva — `sessoes.visto_em`; blob `configuracoes.seguranca`):**
+    Configurações → aba **"Segurança"** (`SegurancaAdmin` + `CamposSeguranca`; `GET/PATCH /api/admin/seguranca`,
+    `exigirAdmin`, auditoria). Núcleo puro **`seguranca-core.ts`** (testado — `tests/seguranca.test.ts`): `inatividadeMin`
+    (`OPCOES_INATIVIDADE` 0/15/30/60/120/240/480; 0 = não encerra, o padrão), `sessaoInativa`/`renovarAtividade` (a atividade
+    gravada no máximo a cada 1/4 do limite, ≤ 5 min) — aplicados no **`getUsuarioAtual`** (parada além do limite = a sessão é
+    apagada e a pessoa volta ao login; atividade = qualquer pedido ao servidor com a sessão). D1 `seguranca.ts` (cache 60 s,
+    fail-safe = padrão). **Alertas de login suspeito** (`seguranca-alertas.ts`, best-effort, aviso tipo **`seguranca`** —
+    "Login suspeito" no catálogo, sino + e-mail por padrão, aviso direto): `aposEntrar` (login por senha e Google) — o aparelho
+    = cookie httpOnly `pca_aparelho` (2 anos), o HASH guardado em `preferencias_tabela` `seguranca:aparelhos` (até 10;
+    `avaliarAparelho` — o 1º não alerta) → aparelho novo avisa os ADMs e a própria pessoa (navegador · IP · hora,
+    `resumoNavegador`); `alertarBloqueio` — a conta acabou de ser bloqueada (8 senhas erradas) → os ADMs, um por janela de
+    15 min. A rota genérica de preferências RECUSA as chaves reservadas `cofre:`/`seguranca:`. Revisão das rotas públicas
+    (v1.92.0): o "Esqueci a senha" sem sessão responde igual com o reenvio cedo (não enumera) e a consulta pública mascara
+    objeto/setor/responsável do DFD (`dfdPublico`).
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).

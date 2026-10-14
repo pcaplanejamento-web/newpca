@@ -25,7 +25,7 @@ describe("notificações — configuração do ADM (o e-mail no mínimo)", () =>
   it("o padrão manda por e-mail SÓ o fundamental", () => {
     const cfg = resolverNotificacoes(undefined);
     const porEmail = CATALOGO_AVISOS.filter((i) => cfg[i.chave].email).map((i) => i.chave);
-    assert.deepEqual(porEmail.sort(), ["acesso", "atrasada", "atribuida", "cadastro", "convite", "protocolo"].sort());
+    assert.deepEqual(porEmail.sort(), ["acesso", "atrasada", "atribuida", "cadastro", "convite", "protocolo", "seguranca"].sort());
     // Tudo existe no sino (menos o só-e-mail).
     assert.equal(noSino(cfg, "comentario"), true);
     assert.equal(noSino(cfg, "acesso"), false);

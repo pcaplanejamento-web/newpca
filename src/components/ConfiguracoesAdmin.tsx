@@ -36,6 +36,7 @@ import {
   IconPlug,
   IconPlus,
   IconShield,
+  IconShieldCheck,
   IconTrash,
   IconUser,
   IconUsers,
@@ -51,6 +52,7 @@ import { FeriadosAdmin } from "./FeriadosAdmin";
 import { NotificacoesAdmin } from "./NotificacoesAdmin";
 import { PresencaAdmin } from "./PresencaAdmin";
 import { ProtecaoDadosAdmin } from "./ProtecaoDadosAdmin";
+import { SegurancaAdmin } from "./SegurancaAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -490,6 +492,7 @@ export function ConfiguracoesAdmin({
             { key: "modulos", label: "Módulos", icon: <IconLayers />, dica: "Os módulos do menu e as telas de cada um (os grupos liberam módulos)", content: <ModulosAdmin /> },
             { key: "papeis", label: "Papéis", icon: <IconShield />, dica: "O que cada papel pode fazer em cada tela", content: <PapeisAdmin /> },
             { key: "protecao", label: "Proteção de dados", icon: <IconLock />, dica: "Bloquear seleção, cópia, impressão e captura por papel", content: <ProtecaoDadosAdmin /> },
+            { key: "seguranca", label: "Segurança", icon: <IconShieldCheck />, dica: "Sessões inativas e alertas de login suspeito", content: <SegurancaAdmin /> },
             { key: "cargos", label: "Cargos e funções", icon: <IconBriefcase />, dica: "A lista de cargos dos usuários e dos responsáveis", content: <CargosAdmin /> },
             { key: "acesso", label: "Tela de acesso", icon: <IconTelaAcesso />, dica: "Os textos da tela de login e cadastro", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
             { key: "tabelas", label: "Tabelas", icon: <IconLinhas />, dica: "Quantas linhas as tabelas mostram ao abrir", content: abaTabelas },

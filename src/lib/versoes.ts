@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.92.0",
+    data: "2026-10-14",
+    titulo: "Segurança: sessão inativa e alertas de login",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Aba Segurança: o administrador escolhe depois de quanto tempo parada a sessão é encerrada (15 min a 8 h, ou não encerra).", link: "/painel/configuracoes?aba=seguranca" },
+      { tipo: "novo", area: "Notificações", texto: "Alerta de login suspeito no sino dos administradores: entrada por um aparelho novo (também avisa a própria pessoa) e conta bloqueada por senhas erradas.", link: "/painel/configuracoes?aba=seguranca" },
+      { tipo: "correcao", area: "Acesso", texto: "\"Esqueci a senha\" não revela mais se um e-mail tem conta ao pedir o código duas vezes.", link: "/login?modo=senha" },
+      { tipo: "correcao", area: "Consulta pública", texto: "Objeto, setor e responsável dos DFDs na consulta pública passam pela máscara de dados pessoais (CPF, e-mail, telefone).", link: "/" },
+    ],
+  },
+  {
     versao: "1.91.1",
     data: "2026-10-14",
     titulo: "Correções da auditoria",

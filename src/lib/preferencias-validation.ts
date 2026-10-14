@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 /** Chave de uma preferência de tabela: letras, números e `:_-` (ex.: `orcamento-comparativo:unidade:fonte`). */
-const chave = z.string().regex(/^[A-Za-z0-9:_-]{1,120}$/, "Chave inválida.");
+const chave = z
+  .string()
+  .regex(/^[A-Za-z0-9:_-]{1,120}$/, "Chave inválida.")
+  // As chaves RESERVADAS (o cofre do login da Centi, os aparelhos conhecidos) só o servidor grava — pela rota genérica, não.
+  .refine((c) => !/^(cofre|seguranca):/.test(c), "Chave reservada.");
 /** Teto do JSON salvo (larguras/colunas de uma tabela cabem folgado). */
 export const MAX_PREFERENCIA = 32_000;
 

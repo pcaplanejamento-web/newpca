@@ -202,6 +202,8 @@ export const sessoes = sqliteTable(
       .references(() => usuarios.id, { onDelete: "cascade" }),
     expiraEm: text("expira_em").notNull(),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    /** A última atividade (ISO) — o ADM pode encerrar a sessão parada (Configurações → Segurança). */
+    vistoEm: text("visto_em"),
   },
   (t) => [
     uniqueIndex("sessoes_token_uq").on(t.tokenHash),

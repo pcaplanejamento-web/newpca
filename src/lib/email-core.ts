@@ -80,6 +80,7 @@ export function layoutEmail(
 
 /** O assunto/rótulo curto de cada tipo de aviso. */
 export const ROTULO_TIPO_EMAIL: Record<TipoNotificacao, string> = {
+  seguranca: "Alerta de segurança",
   atribuida: "Tarefa atribuída a você",
   mencionada: "Você foi mencionado",
   comentario: "Novo comentário",

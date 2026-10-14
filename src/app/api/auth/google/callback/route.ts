@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { usuarios } from "@/db/schema";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { aposEntrar } from "@/lib/seguranca-alertas";
 import { criarSessao, definirCookieSessao, getUsuarioAtual } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import {
@@ -83,6 +84,7 @@ export async function GET(req: Request) {
       if (decisao.vincular) await db.update(usuarios).set({ googleSub: sub, googleEmail: email }).where(eq(usuarios.id, u.id));
       if (u.status !== "ativo") return ir(`/login?erro=${u.status === "pendente" ? "pendente" : "inativo"}`, email);
       await definirCookieSessao(await criarSessao(u.id));
+      await aposEntrar(req, u, "Google");
       await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema com o Google (${email})` });
       return ir("/painel", email);
     }
