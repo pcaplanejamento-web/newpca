@@ -342,7 +342,7 @@ export function OrcamentoVinculos({
           pageSize={scrollInterno ? undefined : 20}
           density="compact"
           minWidth={1100}
-          onRowClick={podeEditar ? (l) => setAberto(abertura(l.vinculo)) : undefined}
+          onRowClick={(l) => setAberto(abertura(l.vinculo))}
           activeKey={aberto?.id ?? null}
           exportar={{ nome: "Vínculos do orçamento" }}
           vazio={busca ? "Nenhum vínculo para esta busca." : "Nenhum vínculo neste orçamento — use “Novo vínculo” ou a vista “Sem vínculo”."}
@@ -363,7 +363,7 @@ export function OrcamentoVinculos({
           resumo={(ps) => `${num(ps.length)} ${ps.length === 1 ? "unidade" : "unidades"} · Dotação sem vínculo ${brl(ps.reduce((s, p) => s + p.valorInicial, 0))}`}
         />
       )}
-      <Modal open={aberto != null} onClose={fechar} titulo={aberto?.id != null ? "Editar vínculo" : "Novo vínculo"} size="lg" bloqueado={salvando}>
+      <Modal open={aberto != null} onClose={fechar} titulo={!podeEditar ? "Vínculo (consulta)" : aberto?.id != null ? "Editar vínculo" : "Novo vínculo"} size="lg" bloqueado={salvando}>
         {aberto && (
           <EditorVinculoOrcamento
             key={`${aberto.id ?? "novo"}:${aberto.chave ?? ""}:${visaoAberta ?? ""}`}
@@ -371,6 +371,7 @@ export function OrcamentoVinculos({
             vinculos={vinculos}
             alvos={alvos}
             inicial={aberto}
+            somenteLeitura={!podeEditar}
             salvando={salvando}
             erro={erro}
             onSalvar={(d, escopo) => void salvar(d, escopo)}

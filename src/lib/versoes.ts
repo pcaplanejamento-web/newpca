@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.85.0",
+    data: "2026-10-14",
+    titulo: "Configurações do orçamento em modo consulta",
+    mudancas: [
+      { tipo: "melhoria", area: "Orçamento", texto: "Aba Vínculos: quem não configura o Orçamento abre cada vínculo para ver as ações e os destinos, sem poder alterar.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "PCA", texto: "PCA × Orçamento: a coluna Vínculos, o banner da linha e a engrenagem da visão abrem para todos em modo consulta; só quem configura altera.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.84.1",
     data: "2026-10-14",
     titulo: "Visão do orçamento sem exigir Configurar",

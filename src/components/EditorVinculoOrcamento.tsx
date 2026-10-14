@@ -144,6 +144,7 @@ export function EditorVinculoOrcamento({
   fixosNoContexto = false,
   contexto,
   onUsarPadrao,
+  somenteLeitura = false,
 }: {
   unidades: UnidadeOrcamento[];
   vinculos: VinculoOrcamento[];
@@ -166,7 +167,10 @@ export function EditorVinculoOrcamento({
   contexto?: ContextoVisao;
   /** A visão aberta volta a seguir o padrão nesta unidade. */
   onUsarPadrao?: (chave: string) => void;
+  /** CONSULTA: mostra o que está configurado (unidades, ações, destinos) sem permitir mudar nada. */
+  somenteLeitura?: boolean;
 }) {
+  const trava = salvando || somenteLeitura;
   const rotulo = useRotuloUnidade(alvos);
   const [valorEscopo, setValorEscopo] = useState<ValorEscopo>(() => ({ modo: "esta", escolhidas: [String(contexto?.visaoId ?? PADRAO_ESCOLHA)] }));
   const comEscopo = !!contexto && contexto.visoes.length > 0;
@@ -239,7 +243,7 @@ export function EditorVinculoOrcamento({
               <SelectField
                 label="Unidade do orçamento"
                 value={chave}
-                disabled={salvando}
+                disabled={trava}
                 onChange={(e) => {
                   const k = e.target.value;
                   setChave(k);
@@ -263,7 +267,7 @@ export function EditorVinculoOrcamento({
             (fixo === "alvo" ? (
               <CampoFixo rotulo="Unidade cadastrada" valor={rotulo.deId(alvoId) || "—"} />
             ) : (
-              <SelectField label="Unidade cadastrada" value={alvoId ?? ""} disabled={salvando} onChange={(e) => setAlvoId(e.target.value ? Number(e.target.value) : null)}>
+              <SelectField label="Unidade cadastrada" value={alvoId ?? ""} disabled={trava} onChange={(e) => setAlvoId(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">Escolha…</option>
                 {grupos.map((g) => (
                   <optgroup key={g.rotulo} label={g.rotulo}>
@@ -285,7 +289,7 @@ export function EditorVinculoOrcamento({
             <Checkbox
               checked={disponiveis.length > 0 && leva.length === disponiveis.length}
               indeterminado={leva.length > 0}
-              disabled={salvando || disponiveis.length === 0}
+              disabled={trava || disponiveis.length === 0}
               onChange={(e) => setMarcadas(new Set(e.target.checked ? disponiveis.map((x) => x.chave) : []))}
               label={
                 <span className="text-[13px] font-semibold text-text">
@@ -306,7 +310,7 @@ export function EditorVinculoOrcamento({
                     <span className="min-w-0 flex-1">
                       <Checkbox
                         checked={marcada}
-                        disabled={salvando}
+                        disabled={trava}
                         onChange={(e) => marcar(a.chave, e.target.checked)}
                         label={<span className={`text-[13px] ${marcada ? "text-text" : "text-muted"}`}>{a.texto}</span>}
                       />
@@ -326,7 +330,7 @@ export function EditorVinculoOrcamento({
             ) : (
               <Checkbox
                 checked={demais}
-                disabled={salvando}
+                disabled={trava}
                 onChange={(e) => setDemais(e.target.checked)}
                 label={<span className="text-[12.5px] text-text-2">Incluir ações futuras desta unidade</span>}
               />
@@ -340,17 +344,17 @@ export function EditorVinculoOrcamento({
           </div>
         </section>
       )}
-      {comEscopo && contexto && unidade && (
+      {comEscopo && !somenteLeitura && contexto && unidade && (
         <EscopoVinculo
           contexto={contexto}
           chave={unidade.chave}
           valor={valorEscopo}
           onChange={setValorEscopo}
           onUsarPadrao={onUsarPadrao ? () => onUsarPadrao(unidade.chave) : undefined}
-          disabled={salvando}
+          disabled={trava}
         />
       )}
-      {(motivo || erro) && (
+      {(erro || (motivo && !somenteLeitura)) && (
         <Callout kind={erro ? "danger" : "warn"}>
           <span className="block">{erro ?? motivo}</span>
           {!erro && onAbrirVinculo && conflitante && (
@@ -361,7 +365,7 @@ export function EditorVinculoOrcamento({
         </Callout>
       )}
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-        {onExcluir && (
+        {onExcluir && !somenteLeitura && (
           <Button
             size="sm"
             variant="ghost"
@@ -373,9 +377,10 @@ export function EditorVinculoOrcamento({
             disabled={salvando || semDestino}
           />
         )}
-        <Button size="sm" variant="ghost" disabled={salvando} onClick={onFechar}>
-          Cancelar
+        <Button size="sm" variant={somenteLeitura ? "secondary" : "ghost"} disabled={salvando} onClick={onFechar}>
+          {somenteLeitura ? "Fechar" : "Cancelar"}
         </Button>
+        {!somenteLeitura && (
         <Button
           size="sm"
           loading={salvando}
@@ -385,6 +390,7 @@ export function EditorVinculoOrcamento({
         >
           {inicial.id != null ? "Salvar vínculo" : "Criar vínculo"}
         </Button>
+        )}
       </div>
     </div>
   );

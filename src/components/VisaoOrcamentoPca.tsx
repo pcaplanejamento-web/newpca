@@ -9,7 +9,8 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "./EditorVisaoOrcamento";
 import { SelectField } from "./Field";
-import { IconPencil, IconPlus } from "./icons";
+import { IconEye,
+  IconPencil, IconPlus } from "./icons";
 import { Modal } from "./Modal";
 import { toast } from "./Toast";
 
@@ -203,6 +204,11 @@ export function VisaoOrcamentoPca({
               {num(ausentes)} valor(es) da visão não existem no orçamento atual e não contam nada — edite a visão e use “Remover
               ausentes”.
             </Callout>
+          )}
+          {!podeEditarVisao && itens && visao && (
+            <Button size="sm" variant="secondary" icon={<IconEye className="h-4 w-4" />} onClick={() => setEditor(visao)}>
+              Ver o que esta visão define
+            </Button>
           )}
           {podeEditarVisao && itens && (
             <div className="flex flex-wrap gap-2">

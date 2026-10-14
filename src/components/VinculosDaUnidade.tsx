@@ -127,6 +127,7 @@ export function VinculosDaUnidade({
   onEditar,
   onExcluir,
   onFechar,
+  somenteLeitura = false,
   contexto,
   onUsarPadrao,
 }: {
@@ -144,6 +145,8 @@ export function VinculosDaUnidade({
   onEditar: (id: number, dados: DadosVinculo, escopo?: EscopoVinculos) => Promise<boolean>;
   onExcluir: (id: number, escopo?: EscopoVinculos) => Promise<boolean>;
   onFechar: () => void;
+  /** CONSULTA: abre os vínculos para ver o que está configurado, sem Adicionar/Salvar/Excluir. */
+  somenteLeitura?: boolean;
   /** Vínculos por visão: `vinculos` = os que valem na visão aberta; o editor pergunta onde salvar. */
   contexto?: ContextoVisao;
   onUsarPadrao?: (chave: string) => Promise<boolean>;
@@ -180,6 +183,7 @@ export function VinculosDaUnidade({
       onExcluir={inicial.id != null ? (escopo) => void onExcluir(inicial.id as number, escopo).then((ok) => ok && setAberto(null)) : undefined}
       onFechar={() => setAberto(null)}
       contexto={contexto}
+      somenteLeitura={somenteLeitura}
       onUsarPadrao={onUsarPadrao ? (chave) => void onUsarPadrao(chave).then((ok) => ok && setAberto(null)) : undefined}
     />
   );
@@ -235,9 +239,11 @@ export function VinculosDaUnidade({
                 titulo="Unidades do orçamento"
                 contagem={num(v.ligadas.length)}
                 acao={
-                  <Button size="sm" variant="ghost" icon={<IconPlus className="h-4 w-4" />} disabled={salvando} onClick={() => alternar("novo")}>
-                    Adicionar
-                  </Button>
+                  somenteLeitura ? undefined : (
+                    <Button size="sm" variant="ghost" icon={<IconPlus className="h-4 w-4" />} disabled={salvando} onClick={() => alternar("novo")}>
+                      Adicionar
+                    </Button>
+                  )
                 }
               />
               {aberto === "novo" && <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">{editor({ alvoId: unidade.id }, "novo")}</div>}

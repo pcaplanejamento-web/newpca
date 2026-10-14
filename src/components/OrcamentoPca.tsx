@@ -305,7 +305,8 @@ export function OrcamentoPca({
   const visaoPca = gravacao.visoesAtuais.find((v) => v.id === dados.visaoId) ?? null;
   const efetivos = useMemo(() => vinculosDaVisao(gravacao.atuais, visaoPca), [gravacao.atuais, visaoPca]);
   const [vinculosDe, setVinculosDe] = useState<UnidadeDaLinha | null>(null);
-  const editaVinculos = podeConfigurarOrcamento && comparativo != null;
+  // Os vínculos aparecem para TODOS (consulta); só quem Configura o Orçamento altera.
+  const editaVinculos = comparativo != null;
   // Ações do orçamento SEM vínculo (como na aba Vínculos): por unidade cadastrada — as das unidades do orçamento ligadas a
   // ela — e de todo o orçamento (a linha "Sem vínculo"). Recalculadas na hora a cada gravação (a lista já gravada).
   const semVinculoPorLinha = useMemo(() => {
@@ -483,7 +484,7 @@ export function OrcamentoPca({
   const comprometido = t.comprometido;
   // A engrenagem fica no FIM da linha de controles (à direita); o ponto âmbar = a visão tem valores que este orçamento não traz.
   const tituloVisao = ausentes > 0 ? `Visão do orçamento do PCA — ${num(ausentes)} valor(es) da visão fora deste orçamento` : "Visão do orçamento do PCA";
-  const botaoVisao = podePublicar && (
+  const botaoVisao = (
     <span className="relative inline-flex">
       <Button size="sm" variant="icon" aria-label={tituloVisao} title={tituloVisao} icon={<IconSettings className="h-4 w-4" />} onClick={() => setEngrenagem(true)} />
       {ausentes > 0 && <span aria-hidden className="pointer-events-none absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />}
@@ -601,13 +602,14 @@ export function OrcamentoPca({
           onCriar={gravacao.criar}
           onEditar={gravacao.editar}
           onExcluir={gravacao.excluir}
+          somenteLeitura={!podeConfigurarOrcamento}
           onFechar={() => {
             setVinculosDe(null);
             gravacao.limparErro();
           }}
         />
       )}
-      {podePublicar && (
+      {(
         <VisaoOrcamentoPca
           pcaId={dados.pcaId}
           aberto={engrenagem}
