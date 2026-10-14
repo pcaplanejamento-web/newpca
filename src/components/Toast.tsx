@@ -8,13 +8,13 @@ import { Button } from "./Button";
 // Toast — API imperativa (`toast.success("Salvo")`) sobre o AVISO FLUTUANTE padrão (canto inferior,
 // pequeno, sem deformar o layout). Monte <Toaster/> uma vez (no RootLayout).
 type Variant = "info" | "success" | "warning" | "danger";
-type ToastItem = { id: number; msg: string; variant: Variant; duration: number; acao?: { rotulo: string; onClick: () => void } };
+type ToastItem = { id: number; msg: string; variant: Variant; duration: number; acao?: { rotulo: string; onClick: () => void }; carregando?: boolean };
 
 let listeners: ((t: ToastItem) => void)[] = [];
 let seq = 0;
 
-function emit(msg: string, variant: Variant, duration = 4000, acao?: ToastItem["acao"]) {
-  const t: ToastItem = { id: ++seq, msg, variant, duration, acao };
+function emit(msg: string, variant: Variant, duration = 4000, acao?: ToastItem["acao"], carregando = false) {
+  const t: ToastItem = { id: ++seq, msg, variant, duration, acao, carregando };
   for (const l of listeners) l(t);
 }
 
@@ -29,6 +29,8 @@ export const toast = Object.assign(
     desfazer: (m: string, onDesfazer: () => void, d = 7000) => emit(m, "success", d, { rotulo: "Desfazer", onClick: onDesfazer }),
     /** Informação com UMA ação (ex.: a mensagem nova do chat com "Responder"). */
     acao: (m: string, rotulo: string, onClick: () => void, d = 6000) => emit(m, "info", d, { rotulo, onClick }),
+    /** CARREGANDO: o spinner no aviso flutuante até o próximo toast (sucesso/erro) o substituir. */
+    carregando: (m: string) => emit(m, "info", 0, undefined, true),
   },
 );
 
@@ -52,6 +54,7 @@ export function Toaster() {
     <AvisoFlutuante
       key={item.id}
       kind={KIND[item.variant]}
+      carregando={item.carregando}
       duracao={item.duration > 0 ? item.duration : undefined}
       onClose={() => setItem((cur) => (cur?.id === item.id ? null : cur))}
       acoes={

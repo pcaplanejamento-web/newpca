@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { brl, num } from "@/lib/format";
 import type { AlvosVinculo, VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { aplicarVisao, atributosVisao, contarAusentes, resumoVisao, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
@@ -21,14 +21,25 @@ import { toast } from "./Toast";
 export function useVisaoDoPca(pcaId: number, visaoId: number | null) {
   const router = useRouter();
   const [escolha, setEscolha] = useState<number | null>(visaoId);
-  const [gravando, setGravando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  // O recálculo da tela (router.refresh) também conta: o aviso "carregando" só sai quando os números novos chegaram.
+  const [recarregando, iniciar] = useTransition();
+  const aviso = useRef<string | null>(null);
+  const gravando = salvando || recarregando;
+  useEffect(() => {
+    if (!recarregando && aviso.current) {
+      toast.success(aviso.current);
+      aviso.current = null;
+    }
+  }, [recarregando]);
   // A tela recarregou com outra visão gravada (aqui ou pela engrenagem) — ela vale.
   useEffect(() => setEscolha(visaoId), [visaoId]);
 
   async function gravar(id: number | null, msg = "Visão do orçamento do PCA salva.") {
     if (gravando) return;
-    setGravando(true);
+    setSalvando(true);
     setEscolha(id);
+    toast.carregando("Aplicando a visão do orçamento…");
     try {
       const r = await fetch(`/api/pca/${pcaId}`, {
         method: "PATCH",
@@ -37,13 +48,13 @@ export function useVisaoDoPca(pcaId: number, visaoId: number | null) {
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível salvar a visão do PCA.");
-      toast.success(msg);
-      router.refresh();
+      aviso.current = msg;
+      iniciar(() => router.refresh());
     } catch (e) {
       setEscolha(visaoId);
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar a visão do PCA.");
     } finally {
-      setGravando(false);
+      setSalvando(false);
     }
   }
   return { escolha, setEscolha, gravando, gravar };
