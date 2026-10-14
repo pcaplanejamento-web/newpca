@@ -336,12 +336,15 @@ export type EstadoItem = "erro" | "regular";
 /** Valor unitário AUSENTE — vazio, zero, negativo ou não numérico (NaN viraria `null` no JSON e o servidor
  * recusaria): a MESMA régua em toda conferência, no cliente e no servidor. */
 export const semValorUnitario = (v: number | null | undefined): boolean => v == null || !Number.isFinite(v) || v <= 0;
+/** Quantidade AUSENTE = vazia, zero, negativa ou não numérica — a MESMA régua no cliente e no servidor (um item com
+ * quantidade 0 tem valor total zerado: nada a contratar). */
+export const semQuantidade = (v: number | null | undefined): boolean => v == null || !Number.isFinite(v) || v <= 0;
 
 /** Faltas de um item da Seção 4 (o que impede o DFD de ser importado). */
 export function faltasDoItem(it: DfdItemParseado): string[] {
   const faltas: string[] = [];
   if (semValorUnitario(it.valorUnitario)) faltas.push("valor unitário");
-  if (it.quantidade == null) faltas.push("quantidade");
+  if (semQuantidade(it.quantidade)) faltas.push("quantidade");
   return faltas;
 }
 
@@ -511,7 +514,7 @@ export function repetidosDoDfd(itens: (ItemDup & { item?: number | null })[]): M
  * motivo (a tela mostra). Puro. */
 export function motivoNaoUnificar(itens: { quantidade: number | null; valorUnitario: number | null }[]): string | null {
   if (itens.length < 2) return "Não há item repetido para unificar.";
-  if (itens.some((it) => it.quantidade == null || !Number.isFinite(it.quantidade) || it.quantidade <= 0))
+  if (itens.some((it) => semQuantidade(it.quantidade)))
     return "Há item sem quantidade — informe a quantidade antes de unificar.";
   if (itens.some((it) => semValorUnitario(it.valorUnitario))) return "Há item sem valor unitário — informe o valor antes de unificar.";
   const vu = itens[0].valorUnitario as number;
@@ -740,7 +743,7 @@ export function avaliarDfd(
   add("item.valorUnitario", semVU, "valor unitário em todos os itens");
   // `=== null` (não `== null`): só conta quando a quantidade foi realmente informada
   // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
-  add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
+  add("item.quantidade", d.itens.some((i) => semQuantidade(i.quantidade)), "quantidade em todos os itens");
   // Item REPETIDO nunca bloqueia (só aponta — o ponto não aceita "bloqueia"): confira e trate no detalhe do item.
   add("item.duplicado", itensDuplicados(d.itens).length > 0, "itens repetidos (mesmo código, descrição e unidade)");
   add("dfd.planejamento", !temPlanejamento(d.planejamento), "número de planejamento");
@@ -889,7 +892,7 @@ export function mensagensDfd(
   add("item.valorUnitario", "itens", total > 0 && semVU === 0,
     total === 0 ? "Nenhum item na tabela (Seção 4)." : `Falta valor unitário em ${semVU} de ${total} ${plural(total)} (Seção 4).`,
     `Valor unitário informado nos ${total} ${plural(total)} (Seção 4).`);
-  const semQtd = d.itens.filter((i) => i.quantidade === null).length;
+  const semQtd = d.itens.filter((i) => semQuantidade(i.quantidade)).length;
   add("item.quantidade", "itens", semQtd === 0,
     `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4).`, "Quantidade informada em todos os itens (Seção 4).");
   // Itens REPETIDOS (mesmo código, descrição e unidade) — só APONTA, nunca bloqueia: a tabela de itens marca cada um
@@ -1053,7 +1056,7 @@ export function mensagensItem(
 ): { status: StatusMensagem; chave: string; texto: string; cor?: string }[] {
   const out: { status: StatusMensagem; chave: string; texto: string; cor?: string }[] = [];
   if (semValorUnitario(it.valorUnitario)) out.push({ status: "erro", chave: "item.valorUnitario", texto: "Item sem valor unitário." });
-  if (it.quantidade == null) out.push({ status: "erro", chave: "item.quantidade", texto: "Item sem quantidade." });
+  if (semQuantidade(it.quantidade)) out.push({ status: "erro", chave: "item.quantidade", texto: "Item sem quantidade (vazia ou zero)." });
   // Repetido = ATENÇÃO (nunca erro): confira no detalhe do item e remova/unifique o que for duplicado.
   if (repetido && repetido.total > 0) {
     const mais = repetido.total - repetido.iguais.length;
@@ -1146,7 +1149,7 @@ export function faltasCirurgicasDfd(
   const nums = (its: DfdItemParseado[]) =>
     its.map((i) => i.item).filter((n): n is number => n != null);
   const semVU = d.itens.filter((i) => semValorUnitario(i.valorUnitario));
-  const semQtd = d.itens.filter((i) => i.quantidade == null);
+  const semQtd = d.itens.filter((i) => semQuantidade(i.quantidade));
   if (ativo("item.valorUnitario") && semVU.length > 0)
     linhas.push(`Informar o VALOR UNITÁRIO ${semVU.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semVU))} (Seção 4).`);
   const repetidos = ativo("item.duplicado") ? gruposItensRepetidos(d.itens) : [];

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.89.2",
+    data: "2026-10-14",
+    titulo: "Item com quantidade zero é erro",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Item com quantidade zerada (ou negativa) passa a ser erro “Item sem quantidade (vazia ou zero)” — na célula Estado, nas pendências, no despacho e na importação, como já era o valor unitário. Antes só a quantidade vazia era apontada e o item com total R$ 0,00 passava como regular.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.89.1",
     data: "2026-10-14",
     titulo: "KPIs do Dashboard do PCA completas",

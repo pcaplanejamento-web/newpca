@@ -7,6 +7,7 @@ import {
   type MensagemDfd,
   SECOES_OBRIGATORIAS,
   ROTULO_CURTO,
+  semQuantidade,
   semValorUnitario,
   STATUS_MENSAGEM_COR,
   textoSecao,
@@ -183,7 +184,7 @@ export function pendenciasDoDfd(
       let tem = false;
       let iguais: (number | null)[] = [];
       if (m.chave === "item.valorUnitario") tem = semValorUnitario(it.valorUnitario);
-      else if (m.chave === "item.quantidade") tem = it.quantidade == null;
+      else if (m.chave === "item.quantidade") tem = semQuantidade(it.quantidade);
       else if (m.chave === "item.duplicado") {
         const g = dups?.get(idx);
         tem = !!g;

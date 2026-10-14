@@ -1478,6 +1478,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     com milhares de iguais:** `mapaItensDuplicados` dá a cada índice o GRUPO compartilhado; as listas mostram até
     `MAX_IGUAIS` (10) + "+N" (`outrosDoGrupo`; `repetidosDoDfd`/`repetidosPorDfd` → `RepeticaoItem {iguais, total}`). Após
     "Unificar", o campo numérico destravado acompanha o valor novo (`NumInput` ressincroniza quando o valor muda de fora).
+  - **Quantidade AUSENTE = `semQuantidade`** (vazia, zero, negativa ou não numérica — v1.89.2; antes só a vazia era erro e o item de total R$ 0,00 passava como regular).
   - **Valor unitário AUSENTE = `semValorUnitario`** (vazio, zero, negativo ou NÃO numérico — NaN viraria `null` no JSON):
     a MESMA régua no cliente e no servidor.
   - **Conferência por LINHA única (`avaliarLinhaDfd`, `src/lib/conferencia-dfd.ts`, puro):** o ESTADO de cada DFD nas
