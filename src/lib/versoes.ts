@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.88.1",
+    data: "2026-10-14",
+    titulo: "Card do orçamento renovado",
+    mudancas: [
+      { tipo: "melhoria", area: "Orçamento", texto: "O card mostra a dotação abreviada e completa, a composição (inicial, suplementação, anulação, emenda), a execução com o % e os valores completos, e órgãos, unidades, programas, ações e lançamentos — sem cortar texto.", link: "/painel/orcamento" },
+    ],
+  },
+  {
     versao: "1.88.0",
     data: "2026-10-14",
     titulo: "Vínculos expandidos definidos no papel",

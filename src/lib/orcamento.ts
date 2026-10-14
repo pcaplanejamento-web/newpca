@@ -42,6 +42,10 @@ export type OrcamentoResumo = {
   saldo: number;
   orgaos: number;
   unidades: number;
+  /** Σ emenda impositiva e quantos programas/ações distintos (a abrangência no card). */
+  emenda: number;
+  programas: number;
+  acoes: number;
 };
 
 /** Resumo com os INDICADORES (Σ por orçamento, numa agregação só) — base da lista e do cabeçalho do orçamento. */
@@ -56,6 +60,9 @@ function selecionarResumos() {
       saldo: sql<number>`COALESCE(SUM(${orcamentoItens.saldo}), 0)`.as("a_saldo"),
       orgaos: sql<number>`COUNT(DISTINCT ${orcamentoItens.orgao})`.as("a_orgaos"),
       unidades: sql<number>`COUNT(DISTINCT ${orcamentoItens.unidade})`.as("a_unidades"),
+      emenda: sql<number>`COALESCE(SUM(${orcamentoItens.valorEmendaImpositiva}), 0)`.as("a_emenda"),
+      programas: sql<number>`COUNT(DISTINCT NULLIF(${orcamentoItens.programa}, ''))`.as("a_programas"),
+      acoes: sql<number>`COUNT(DISTINCT NULLIF(${orcamentoItens.acao}, ''))`.as("a_acoes"),
     })
     .from(orcamentoItens)
     .groupBy(orcamentoItens.orcamentoId)
@@ -74,6 +81,9 @@ function selecionarResumos() {
       saldo: sql<number>`COALESCE(${agg.saldo}, 0)`,
       orgaos: sql<number>`COALESCE(${agg.orgaos}, 0)`,
       unidades: sql<number>`COALESCE(${agg.unidades}, 0)`,
+      emenda: sql<number>`COALESCE(${agg.emenda}, 0)`,
+      programas: sql<number>`COALESCE(${agg.programas}, 0)`,
+      acoes: sql<number>`COALESCE(${agg.acoes}, 0)`,
     })
     .from(orcamentos)
     .leftJoin(agg, eq(agg.orcamentoId, orcamentos.id));

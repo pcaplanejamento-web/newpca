@@ -4650,8 +4650,8 @@ export function Catalogo() {
         <PadronizacaoDemo />
       </Secao>
 
-      <Secao titulo="OrcamentoCard + OrcamentoNovoCard (card 4:5 do orçamento — só informação: dotação atualizada, % empenhado, saldo, abrangência)">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <Secao titulo="OrcamentoCard + OrcamentoNovoCard (card do orçamento — valores completos e abreviados, composição da dotação, execução e abrangência)">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-4">
           <OrcamentoCard
             href="/painel/orcamento"
             orcamento={{
@@ -4667,6 +4667,9 @@ export function Catalogo() {
               saldo: 1_423_650_000,
               orgaos: 18,
               unidades: 39,
+              emenda: 12_500_000,
+              programas: 41,
+              acoes: 242,
             }}
           />
           <OrcamentoNovoCard onClick={() => {}} />
