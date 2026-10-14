@@ -44,7 +44,7 @@ export function MultiSelectHeader({
       ariaLabel={`Filtrar ${label}`}
       triggerClassName="w-full gap-1.5 px-1 py-2"
       panelClassName="p-0"
-      width={280}
+      width={detalhe ? 340 : 280}
       trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={filtrado} />}
     >
       {(close) => (
@@ -168,7 +168,7 @@ function Painel({
         {visiveis.map((o) => (
           <label
             key={o}
-            className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-[13px] text-text-2 hover:bg-surface-2"
+            className="flex cursor-pointer items-start gap-2.5 px-3 py-1.5 [&>input]:mt-0.5 text-[13px] text-text-2 hover:bg-surface-2"
           >
             <input
               type="checkbox"
@@ -179,12 +179,12 @@ function Painel({
             {(() => {
               const [principal, segunda] = partesOpcao(o, detalhe);
               return segunda ? (
-                <span className="flex min-w-0 flex-col" title={`${principal} — ${segunda}`}>
-                  <span className="truncate">{principal}</span>
-                  <span className="truncate text-[11px] text-faint">{segunda}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="break-words">{principal}</span>
+                  <span className="break-words text-[11px] leading-snug text-faint">{segunda}</span>
                 </span>
               ) : (
-                <span className="truncate" title={o}>{o}</span>
+                <span className="min-w-0 break-words">{o}</span>
               );
             })()}
           </label>

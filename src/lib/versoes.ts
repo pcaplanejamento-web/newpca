@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.94.2",
+    data: "2026-10-14",
+    titulo: "Filtros sem texto cortado",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "As opções dos filtros das colunas mostram o texto inteiro, quebrando a linha — sigla e nome da unidade completos.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.94.1",
     data: "2026-10-14",
     titulo: "Filtro de unidade igual em todas as tabelas",
