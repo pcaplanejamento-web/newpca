@@ -73,7 +73,7 @@ export function FiltroLista({
       className="inline-flex shrink-0"
       ariaLabel={`Filtrar a lista ${nome}`}
       title={n ? `Filtro da lista: ${n} ativo(s)` : "Filtrar a lista"}
-      triggerClassName={`${botaoPe} ${n ? "text-accent" : ""}`}
+      triggerClassName={`relative h-11 w-11 shrink-0 justify-center !rounded-control text-text-2 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)] ${n ? "!text-accent" : ""}`}
       trigger={
         <>
           <IconFilter className="h-4 w-4" aria-hidden />

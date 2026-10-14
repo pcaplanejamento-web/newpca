@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.83.1",
+    data: "2026-10-14",
+    titulo: "Listas do quadro mais largas",
+    mudancas: [{ tipo: "melhoria", area: "Tarefas", texto: "As listas do quadro ficaram mais largas (20rem): títulos e o pé da lista sem quebras; o botão do filtro da lista foi corrigido.", link: "/painel/tarefas" }],
+  },
+  {
     versao: "1.83.0",
     data: "2026-10-14",
     titulo: "Lista com filtro e PDF; cartão reorganizado",

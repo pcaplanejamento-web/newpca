@@ -371,7 +371,7 @@ export function NovaLista({ onCriar }: { onCriar: (nome: string) => Promise<bool
     }
   };
   return (
-    <div ref={caixa} data-lista="nova" className="w-[min(85vw,17rem)] shrink-0 snap-center lg:w-[17rem]">
+    <div ref={caixa} data-lista="nova" className="w-[min(88vw,20rem)] shrink-0 snap-center lg:w-[20rem]">
       {aberta ? (
         <div className="space-y-2 rounded-xl bg-[var(--lista-quadro)] p-2 shadow-[var(--sombra-cartao)]">
           <input
@@ -476,7 +476,7 @@ export function ColunaTarefas({
     <section
       data-lista={l.id}
       aria-label={`Lista ${l.nome}`}
-      className={`group/lista flex w-[min(85vw,17rem)] shrink-0 snap-center flex-col rounded-xl bg-[var(--lista-quadro)] shadow-[var(--sombra-cartao)] lg:max-h-full lg:w-[17rem] ${oculto ? "hidden" : ""}`}
+      className={`group/lista flex w-[min(88vw,20rem)] shrink-0 snap-center flex-col rounded-xl bg-[var(--lista-quadro)] shadow-[var(--sombra-cartao)] lg:max-h-full lg:w-[20rem] ${oculto ? "hidden" : ""}`}
     >
       <header
         onPointerDown={(e) => {
@@ -538,7 +538,7 @@ export function ColunaTarefas({
       </div>
       {(onNova || extra) && (
         <div className="flex items-center gap-1 px-2 pt-1 pb-2">
-          {onNova ? <Button variant="ghost" size="sm" className="min-w-0 flex-1 !justify-start text-text-2" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar um cartão em ${l.nome}`} onClick={onNova}>
+          {onNova ? <Button variant="ghost" size="sm" className="min-w-0 flex-1 !justify-start whitespace-nowrap text-text-2" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar um cartão em ${l.nome}`} onClick={onNova}>
             Adicionar um cartão
           </Button> : <span className="flex-1" />}
           {extra}

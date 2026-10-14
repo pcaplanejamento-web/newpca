@@ -3384,7 +3384,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     - **`PilulaVistas`** (flutuante, opaca, no rodapé — `RESERVA_PILULA`): Quadro · Lista · Calendário · Dashboard ·
       Configuração | **Mudar de quadros** (`TrocarQuadro` com `gatilho`); troca pela MESMA lógica do `AbasEspaco`
       (`useTrocaAba` + `ConteudoAba`, exportados).
-    - Conteúdo: as listas direto sobre a foto (`QuadroKanban naMoldura reservaInferior`: 272px, espaço de 12px,
+    - Conteúdo: as listas direto sobre a foto (`QuadroKanban naMoldura reservaInferior`: 320px, espaço de 12px,
       a barra de rolagem nativa, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
       `group-data-[com-imagem]/moldura`); Lista/Calendário/Dashboard/Configuração num **`PainelMoldura`** opaco (a tabela e
       o calendário descontam a pílula no `reservaInferior`).
