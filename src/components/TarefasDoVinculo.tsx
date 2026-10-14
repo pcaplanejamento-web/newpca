@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { ContextoQuadro, ContextoTarefa } from "@/lib/tarefas-dados";
@@ -11,7 +10,7 @@ import { BotaoAcao } from "./BotaoAcao";
 import { Button } from "./Button";
 import { CirculoConcluir } from "./CirculoConcluir";
 import { SelectField } from "./Field";
-import { IconArrowRight, IconKanban, IconPlus } from "./icons";
+import { IconKanban, IconPlus } from "./icons";
 import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { TarefaDetalhe } from "./TarefaDetalhe";
@@ -40,7 +39,7 @@ type Aberta = { tipo: "nova"; ctx: ContextoQuadro; listaId: number } | { tipo: "
 /**
  * TAREFAS de um protocolo/DFD/item (no cabeçalho dos banners da Mesa) — tudo SEM SAIR DA MESA: o botão "Tarefas" (ícone +
  * "abertas/total") lista as tarefas LIGADAS (Abertas | Todas; concluir/reabrir no círculo; tocar abre a tarefa completa
- * aqui, por cima; o ícone leva ao quadro), as LISTAS ATRIBUÍDAS ao responsável do protocolo e à pessoa e "Criar tarefa" num
+ * aqui, por cima — nada leva à tela de Tarefas), as LISTAS ATRIBUÍDAS ao responsável do protocolo e à pessoa e "Criar tarefa" num
  * quadro do grupo ativo — o banner COMPLETO da tarefa (título sugerido, lista, pessoas, datas, etiquetas, checklists,
  * campos…) abre aqui, já vinculado. Sem tarefas nem quadros, o botão não aparece.
  */
@@ -184,14 +183,6 @@ export function TarefasDoVinculo({
                         </span>
                       ) : null}
                     </button>
-                    <Link
-                      href={`/painel/tarefas/${t.quadroId}?tarefa=${t.id}`}
-                      title="Abrir no quadro"
-                      aria-label={`Abrir ${rotuloTicket(t.ticket)} no quadro`}
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-2 lg:h-8 lg:w-8"
-                    >
-                      <IconArrowRight className="h-4 w-4" />
-                    </Link>
                   </li>
                 );
               })}
@@ -264,6 +255,7 @@ export function TarefasDoVinculo({
           podeExcluir={ctx.pode.excluir}
           somenteLeitura={!ctx.pode.manipular}
           onFechar={() => setTarefa(null)}
+          onCriada={(novaId) => void abrir(novaId)}
           onSalvo={() => {
             void recarregar(true);
             if (tarefa.tipo === "editar")

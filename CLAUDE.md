@@ -3511,7 +3511,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **SEM SAIR DA MESA (v1.81.0):** o `TarefasDoVinculo` abre o `TarefaDetalhe` COMPLETO por cima da Mesa — nova (contexto do
   quadro por `GET /api/tarefas/quadros/[id]` → `contextoQuadro`, `tarefas-dados.ts`; título sugerido "Protocolo X: " —
   `AberturaTarefa.titulo`; lista pedida › atribuída › 1ª) ou a ligada (`?contexto=1`); Abertas | Todas, concluir pelo
-  `CirculoConcluir` (o mesmo PATCH) e o atalho ao quadro; o `do-vinculo` devolve `rotulo` e `usuarioId`.
+  `CirculoConcluir` (o mesmo PATCH); criada, segue ABERTA para editar (`TarefaDetalhe.onCriada` → reabre como editar — v1.81.1; nada leva à tela de Tarefas); o `do-vinculo` devolve `rotulo` e `usuarioId`.
   Evento de calendário SEM tarefa ainda não existe (`tarefa_eventos.tarefa_id` é obrigatório) — previsto no ROADMAP.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
   Integrações); a seguir, o relatório de produtividade por grupo.

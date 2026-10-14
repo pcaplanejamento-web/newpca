@@ -158,6 +158,7 @@ export function TarefaDetalhe({
   onDuplicar,
   onFechar,
   onSalvo,
+  onCriada,
   esquerda,
 }: {
   aberto: AberturaTarefa | null;
@@ -189,6 +190,8 @@ export function TarefaDetalhe({
   onFechar: () => void;
   /** Algo foi gravado — o quadro recarrega (contagens do cartão). */
   onSalvo: () => void;
+  /** A tarefa NOVA foi criada (o id): o host a reabre para editar (sem ele, o banner fecha). */
+  onCriada?: (id: number) => void;
   /** Painéis À ESQUERDA do banner (ex.: o evento do Calendário que abriu a tarefa) — o banner da tarefa fica por cima no
    * celular e o Esc volta a eles. */
   esquerda?: ModalPainel[];
@@ -381,8 +384,10 @@ export function TarefaDetalhe({
     if (!pode) return;
     setSalvando("salvar");
     try {
+      let criada: number | null = null;
       if (nova) {
-        await chamar("/api/tarefas", "POST", {
+        criada = (
+          await chamar<{ id: number }>("/api/tarefas", "POST", {
           quadroId,
           listaId: r.listaId,
           titulo: r.titulo.trim(),
@@ -404,7 +409,8 @@ export function TarefaDetalhe({
           blocos: blocosParaGravar(r.blocos),
           campos: Object.entries(r.campos).map(([c, v]) => ({ campoId: Number(c), valor: v })),
           tituloManual: r.tituloManual,
-        });
+          })
+        ).id;
         toast.success("Tarefa criada.");
       } else if (existente) {
         const d: Record<string, unknown> = {};
@@ -435,7 +441,9 @@ export function TarefaDetalhe({
         toast.success(concluir == null ? "Tarefa salva." : concluir ? "Tarefa concluída." : "Tarefa reaberta.");
       }
       onSalvo();
-      onFechar();
+      // Criada FORA do quadro (a Mesa): segue aberta para editar ali mesmo.
+      if (criada != null && onCriada) onCriada(criada);
+      else onFechar();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

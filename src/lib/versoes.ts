@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.81.1",
+    data: "2026-10-14",
+    titulo: "Tarefa da Mesa segue aberta depois de criada",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Editar uma tarefa pelo botão Tarefas não leva mais à tela de Tarefas; depois de criada, a tarefa continua aberta na Mesa para editar.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.81.0",
     data: "2026-10-14",
     titulo: "Tarefas da Mesa sem sair da Mesa",
