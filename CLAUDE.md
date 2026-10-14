@@ -3508,6 +3508,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   atribuídas", tocar cria nela: `?nova=tipo:id&lista=L`) e só os quadros do GRUPO ATIVO do cabeçalho (o grupo no seletor — v1.80.1); o quadro escolhido abre a tarefa na lista pedida ou na atribuída
   (`listaParaAlvo` → `QuadroTarefas.listaInicial`). **Excluir a lista com as tarefas** (e excluir uma tarefa) apaga também os
   vínculos de OUTRAS tarefas que apontavam para elas (`tarefa_vinculos` tipo `tarefa`, sem FK no alvo) no mesmo lote.
+  **SEM SAIR DA MESA (v1.81.0):** o `TarefasDoVinculo` abre o `TarefaDetalhe` COMPLETO por cima da Mesa — nova (contexto do
+  quadro por `GET /api/tarefas/quadros/[id]` → `contextoQuadro`, `tarefas-dados.ts`; título sugerido "Protocolo X: " —
+  `AberturaTarefa.titulo`; lista pedida › atribuída › 1ª) ou a ligada (`?contexto=1`); Abertas | Todas, concluir pelo
+  `CirculoConcluir` (o mesmo PATCH) e o atalho ao quadro; o `do-vinculo` devolve `rotulo` e `usuarioId`.
   Evento de calendário SEM tarefa ainda não existe (`tarefa_eventos.tarefa_id` é obrigatório) — previsto no ROADMAP.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
   Integrações); a seguir, o relatório de produtividade por grupo.

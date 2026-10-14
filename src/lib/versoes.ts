@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.81.0",
+    data: "2026-10-14",
+    titulo: "Tarefas da Mesa sem sair da Mesa",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Criar tarefa num protocolo, DFD ou item abre a tarefa COMPLETA ali mesmo (lista, pessoas, datas, etiquetas, checklists, campos), já vinculada e com o título sugerido.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "As tarefas ligadas abrem e se editam por cima da Mesa; concluir/reabrir pelo círculo; filtro Abertas | Todas e atalho para o quadro.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.80.1",
     data: "2026-10-14",
     titulo: "Criar tarefa: só os quadros do grupo ativo",

@@ -2,7 +2,7 @@ import { gruposDeTarefas } from "@/lib/acesso";
 import { getGrupoAtivoId } from "@/lib/grupos";
 import { exigirSessao, intId } from "@/lib/api-auth";
 import { erro, ok } from "@/lib/http";
-import { listarQuadros, listasSugeridas, tarefasDoVinculo } from "@/lib/tarefas";
+import { listarQuadros, listasSugeridas, rotulosVinculos, tarefasDoVinculo } from "@/lib/tarefas";
 import { ehTipoVinculo } from "@/lib/tarefas-core";
 import { dataIsoBrasilia } from "@/lib/format";
 
@@ -24,6 +24,7 @@ export async function GET(req: Request) {
   // Só os quadros do GRUPO ATIVO do cabeçalho (sem grupo ativo — o ADM sem grupo — todos).
   const grupo = await getGrupoAtivoId(a.u);
   const ativos = quadros.filter((q) => !q.arquivado && (grupo == null || q.grupoId === grupo));
-  const listas = await listasSugeridas(a.u, ativos.map((q) => q.id), tipo, id);
-  return ok({ tarefas, quadros: ativos.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, grupoNome: q.grupoNome })), listas });
+  const [listas, rotulos] = await Promise.all([listasSugeridas(a.u, ativos.map((q) => q.id), tipo, id), rotulosVinculos([{ tipo, id }])]);
+  const rotulo = rotulos.get(`${tipo}:${id}`)?.rotulo ?? null;
+  return ok({ tarefas, quadros: ativos.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, grupoNome: q.grupoNome })), listas, rotulo, usuarioId: a.u.id });
 }

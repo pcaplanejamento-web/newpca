@@ -182,6 +182,36 @@ export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
 export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTarefa>>>;
 
 /**
+ * O CONTEXTO de um QUADRO para criar/editar tarefas FORA dele (o "Criar tarefa" da Mesa): listas, etiquetas, pessoas,
+ * equipes, campos e o papel — sem os cartões. `null` = sem acesso ou sem ver as tarefas do quadro.
+ */
+export async function contextoQuadro(u: UsuarioSessao, quadroId: number) {
+  const q = await quadroAcessivel(u, quadroId);
+  if (!q) return null;
+  const acesso = await getAcesso();
+  const pode = acesso ? podeNoQuadro(acesso, q.grupoId, true) : PODE_NADA;
+  if (!pode.visualizar) return null;
+  const [listas, etiquetas, membros, equipes, campos] = await Promise.all([
+    listasDoQuadro(q.id),
+    etiquetasDoQuadroTodas(q.id),
+    pessoasDoQuadro(q),
+    listarEquipes([q.id]),
+    listarCampos([q.id]),
+  ]);
+  return {
+    quadro: { id: q.id, nome: q.nome, cor: q.cor, formatoTitulo: q.formatoTitulo },
+    listas,
+    etiquetas,
+    equipes,
+    campos,
+    membros: membros.map((p) => p.id),
+    pessoas: membros,
+    pode,
+  };
+}
+export type ContextoQuadro = NonNullable<Awaited<ReturnType<typeof contextoQuadro>>>;
+
+/**
  * O ESPAÇO de um quadro (`/painel/tarefas/[id]`) — tudo o que as abas usam, numa carga: listas, cartões (resumo),
  * etiquetas, as PESSOAS do grupo do quadro (+ as designadas que hoje estão fora dele — seguem visíveis) e as edições
  * salvas da aba Lista, as AUTOMAÇÕES e os MODELOS de quadro do grupo dele. `null` = sem acesso

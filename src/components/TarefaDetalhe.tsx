@@ -80,7 +80,7 @@ import { VendoAgora } from "./VendoAgora";
  * dia do calendário) ou uma existente.
  */
 export type AberturaTarefa =
-  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; prazo?: string }
+  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; prazo?: string; titulo?: string }
   | { tipo: "editar"; id: number; focoTitulo?: boolean };
 
 type Rascunho = {
@@ -268,7 +268,7 @@ export function TarefaDetalhe({
           tituloManual: !!existente.tituloManual,
         }
       : {
-          titulo: "",
+          titulo: aberto.tipo === "nova" ? (aberto.titulo ?? "") : "",
           listaId: aberto.tipo === "nova" ? aberto.listaId : (listas[0]?.id ?? 0),
           prioridade: "media",
           inicio: "",

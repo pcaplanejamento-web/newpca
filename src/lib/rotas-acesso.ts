@@ -313,7 +313,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     GET: recurso("tarefas", "visualizar", "gruposDeTarefas(", "os quadros dos grupos em que o papel vê Tarefas"),
     POST: tela("tarefas", "configurar", "criar o quadro no grupo ativo (copiar templates: Visualizar no quadro de origem)"),
   },
-  "tarefas/quadros/[id]": { PATCH: recurso("tarefas", "configurar", QUADRO, "o privado: só o dono o torna privado/público"), DELETE: recurso("tarefas", "excluir", QUADRO) },
+  "tarefas/quadros/[id]": { GET: recurso("tarefas", "visualizar", QUADRO, "o contexto para criar a tarefa na Mesa"), PATCH: recurso("tarefas", "configurar", QUADRO, "o privado: só o dono o torna privado/público"), DELETE: recurso("tarefas", "excluir", QUADRO) },
   "tarefas/quadros/[id]/automacoes": { POST: recurso("tarefas", "configurar", QUADRO) },
   "tarefas/quadros/[id]/campos": { POST: recurso("tarefas", "configurar", "quadroDoEditor("), PATCH: recurso("tarefas", "configurar", "quadroDoEditor(") },
   "tarefas/quadros/[id]/equipes": { POST: recurso("tarefas", "configurar", QUADRO) },

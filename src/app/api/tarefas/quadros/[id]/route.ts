@@ -3,11 +3,25 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { resolverImagemFundo } from "@/lib/imagem-fundo";
 import { atualizarQuadro, excluirQuadro, quadroAcessivel, soltarSeIncompativel, tornarQuadroPrivado } from "@/lib/tarefas";
+import { contextoQuadro } from "@/lib/tarefas-dados";
 import { editarQuadroSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+/** O CONTEXTO do quadro (listas, etiquetas, pessoas, equipes, campos, papel) — criar/editar tarefa FORA dele (a Mesa). */
+export async function GET(_req: Request, ctx: Ctx) {
+  const a = await exigirSessao();
+  if ("erro" in a) return a.erro;
+  const id = intId((await ctx.params).id);
+  const q = id ? await quadroAcessivel(a.u, id) : null;
+  if (!id || !q) return erro("Quadro não encontrado.", 404);
+  const negado = recusaNoQuadro(a.acesso, q, "visualizar");
+  if (negado) return negado;
+  const c = await contextoQuadro(a.u, id);
+  return c ? ok({ contexto: c }) : erro("Quadro não encontrado.", 404);
+}
 
 /** Edita o quadro (nome, cor, descrição, arquivado, formato do título, IMAGEM DE FUNDO — o link resolvido para o da imagem). */
 export async function PATCH(req: Request, ctx: Ctx) {
