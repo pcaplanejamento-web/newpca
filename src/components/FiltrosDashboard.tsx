@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { SeletorMultiplo } from "./SeletorMultiplo";
 
 /** Uma opção do filtro: a chave (o que o filtro guarda), o texto e quantos itens. */
-export type OpcaoFiltroDash = { chave: string; rotulo: string; count: number };
+export type OpcaoFiltroDash = { chave: string; rotulo: string; count: number; detalhe?: string };
 export type CampoFiltroDash = { dim: string; rotulo: string; opcoes: OpcaoFiltroDash[]; selecionados: string[] };
 
 /**
@@ -34,7 +34,7 @@ export function FiltrosDashboard({
             suspenso
             rotulo={c.rotulo}
             textoVazio="Todos"
-            opcoes={c.opcoes.map((o) => ({ valor: o.rotulo, contagem: o.count }))}
+            opcoes={c.opcoes.map((o) => ({ valor: o.rotulo, contagem: o.count, detalhe: o.detalhe }))}
             selecionados={c.selecionados.map((k) => rotuloDe.get(k) ?? k)}
             onChange={(vs) => onMudar(c.dim, vs.map((v) => porRotulo.get(v) ?? v))}
           />

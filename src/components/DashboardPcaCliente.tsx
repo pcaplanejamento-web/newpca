@@ -131,6 +131,7 @@ export function DashboardPcaCliente({
   unidadeFiltrada = false,
   consulta,
   previa = false,
+  nomesUnidades,
   nome,
 }: {
   resumo: Resumo;
@@ -145,6 +146,8 @@ export function DashboardPcaCliente({
   consulta?: ConsultaDashboard;
   /** PRÉVIA ligada: a lista inclui os DFDs ainda não incorporados (a fonte da origem diz). */
   previa?: boolean;
+  /** O NOME de cada unidade pela sigla (o filtro Unidade mostra e busca pelos dois). */
+  nomesUnidades?: Record<string, string>;
   /** O nome do PCA (o título do relatório em PDF). */
   nome?: string;
 }) {
@@ -159,7 +162,7 @@ export function DashboardPcaCliente({
   const podeExportar = usePodeExportar();
   const quem = useQuemExporta();
   const ativo = temFiltro(filtros);
-  const rotuloUnidade = consulta ? "Unidade requisitante" : "Planilha";
+  const rotuloUnidade = consulta ? "Unidade" : "Planilha";
 
   // Cada gráfico SEM o filtro da própria dimensão; sem filtro nenhum, os números do servidor.
   const dados = useMemo(() => {
@@ -261,10 +264,10 @@ export function DashboardPcaCliente({
       DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades : d.dim === "previsao" ? temPrevisao : true)).map((d) => ({
         dim: d.dim,
         rotulo: d.dim === "unidade" ? rotuloUnidade : d.rotulo,
-        opcoes: opcoesDash(itens, filtros, d.dim).map((o) => ({ ...o, rotulo: rotuloOpcao(d.dim, o.chave) })),
+        opcoes: opcoesDash(itens, filtros, d.dim).map((o) => ({ ...o, rotulo: rotuloOpcao(d.dim, o.chave), detalhe: d.dim === "unidade" ? nomesUnidades?.[o.chave] : undefined })),
         selecionados: chavesDoFiltro(filtros, d.dim),
       })),
-    [itens, filtros, temPrioridade, temUnidades, temPrevisao, rotuloUnidade],
+    [itens, filtros, temPrioridade, temUnidades, temPrevisao, rotuloUnidade, nomesUnidades],
   );
   function mudarTopo(dim: string, chaves: string[]) {
     const d = dim as DimTopo;

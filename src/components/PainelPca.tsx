@@ -12,6 +12,8 @@ export type DadosPainelPca = {
   /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados que entraram — a
    * explicação mora no (?) ao lado das abas do espaço do PCA. */
   previa?: { dfds: number; protocolos: number } | null;
+  /** O nome de cada unidade pela sigla (o filtro Unidade). */
+  nomesUnidades?: Record<string, string>;
 };
 
 /**
@@ -48,6 +50,7 @@ export function PainelPca({
       showUnidade={!unidadeFiltrada}
       consulta={consulta}
       previa={!!previa}
+      nomesUnidades={dados.nomesUnidades}
     />
   );
 }

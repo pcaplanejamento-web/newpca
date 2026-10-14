@@ -518,6 +518,8 @@ export type DashboardPca = {
   previa: { dfds: number; protocolos: number } | null;
   /** DFDs vinculados (e da prévia) que a consolidação deixou FORA da soma, com o motivo (só fonte protocolo). */
   foraDaSoma: DfdForaDaSoma[];
+  /** O nome de cada unidade pela sigla (o filtro Unidade do Dashboard). */
+  nomesUnidades?: Record<string, string>;
 };
 
 /** Um DFD fora da soma do PCA — a consolidação por nº de planejamento (`foraDaSoma`, `pca-core.ts`). */
@@ -781,6 +783,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
     ...ag,
     itensTexto: itensParaTexto(itens),
     dfdsLista,
+    nomesUnidades: await nomesDasUnidades([...reps.keys()]),
     protocolosLista: [...porProto.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
     unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
     unidadeId,
@@ -1236,4 +1239,14 @@ export async function cronogramaPcas(de: string, ate: string, permitidos: Set<nu
     console.error("cronograma do PCA falhou", e);
     return { pcas: [], dfds: [] };
   }
+}
+
+/** Sigla → nome das unidades (o filtro Unidade do Dashboard mostra e busca pelos dois). */
+async function nomesDasUnidades(ids: number[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const lote of lotesDeIds(ids)) {
+    const linhas = await getDb().select({ codigo: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(inArray(reparticoes.id, lote));
+    for (const l of linhas) if (l.codigo && l.nome && l.nome !== l.codigo) out[l.codigo] = l.nome;
+  }
+  return out;
 }

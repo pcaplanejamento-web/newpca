@@ -108,8 +108,12 @@ function CorpoSelecao({
   const [busca, setBusca] = useState("");
   const sel = useMemo(() => new Set(selecionados), [selecionados]);
   const filtradas = useMemo(() => {
+    // A busca acha pelo texto E pelo detalhe (ex.: a sigla ou o nome da unidade).
     const casam = new Set(opcoesDaBusca(opcoes.map((o) => o.rotulo ?? o.valor), busca));
-    return casam.size === opcoes.length ? opcoes : opcoes.filter((o) => casam.has(o.rotulo ?? o.valor));
+    const temDetalhe = opcoes.some((o) => o.detalhe);
+    const pelosDetalhes = temDetalhe && busca.trim() ? new Set(opcoesDaBusca(opcoes.map((o) => o.detalhe ?? ""), busca)) : null;
+    const passa = (o: OpcaoMultipla) => casam.has(o.rotulo ?? o.valor) || (!!o.detalhe && !!pelosDetalhes?.has(o.detalhe));
+    return casam.size === opcoes.length ? opcoes : opcoes.filter(passa);
   }, [opcoes, busca]);
   const marcarFiltradas = () => onChange([...new Set([...selecionados, ...filtradas.map((o) => o.valor)])]);
   // Selecionados que sumiram das opções (facetas) continuam valendo — listados no topo.
