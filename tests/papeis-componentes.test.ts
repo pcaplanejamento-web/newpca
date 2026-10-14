@@ -57,3 +57,12 @@ test("relatório da composição: recorte por unidade", async () => {
   assert.deepEqual(x.retiradoPorUnidadeCubo.map((a) => a.unidadeCubo), ["B"]);
   assert.equal(recortarRelatorio(r, [99]), r);
 });
+
+test("quantidade zerada é erro apontado na Mesa", async () => {
+  const { mensagensItem, resumoEstado } = await import("../src/lib/dfd-tratamento.ts");
+  const it = (quantidade: number | null) => ({ item: 1, codigo: "1", descricao: "X", unidade: "UN", quantidade, valorUnitario: 5, valorTotal: 0 }) as never;
+  assert.equal(resumoEstado(mensagensItem(it(0))).rotulo, "Quantidade zerada");
+  assert.equal(resumoEstado(mensagensItem(it(-1))).rotulo, "Quantidade zerada");
+  assert.equal(resumoEstado(mensagensItem(it(null))).rotulo, "Item sem quantidade");
+  assert.equal(resumoEstado(mensagensItem(it(2))).rotulo, "");
+});

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.89.3",
+    data: "2026-10-14",
+    titulo: "Quantidade zerada apontada na Mesa",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "A Mesa aponta “Quantidade zerada” (erro) no Estado do item, do DFD e do protocolo — separado de “Item sem quantidade” —, com o filtro da coluna Estado para achar todos.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.89.2",
     data: "2026-10-14",
     titulo: "Item com quantidade zero é erro",

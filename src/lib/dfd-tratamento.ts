@@ -893,8 +893,13 @@ export function mensagensDfd(
     total === 0 ? "Nenhum item na tabela (Seção 4)." : `Falta valor unitário em ${semVU} de ${total} ${plural(total)} (Seção 4).`,
     `Valor unitário informado nos ${total} ${plural(total)} (Seção 4).`);
   const semQtd = d.itens.filter((i) => semQuantidade(i.quantidade)).length;
+  const zeradas = d.itens.filter((i) => i.quantidade != null && semQuantidade(i.quantidade)).length;
   add("item.quantidade", "itens", semQtd === 0,
-    `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4).`, "Quantidade informada em todos os itens (Seção 4).");
+    zeradas === semQtd
+      ? `Quantidade zerada em ${semQtd} ${plural(semQtd)} (Seção 4).`
+      : `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4)${zeradas ? `, ${zeradas} com quantidade zerada` : ""}.`,
+    "Quantidade informada em todos os itens (Seção 4).",
+    zeradas === semQtd ? "Quantidade zerada" : undefined);
   // Itens REPETIDOS (mesmo código, descrição e unidade) — só APONTA, nunca bloqueia: a tabela de itens marca cada um
   // ("Item duplicado") e o detalhe do item mostra os repetidos lado a lado para remover ou unificar.
   const repetidos = gruposItensRepetidos(d.itens);
@@ -1053,10 +1058,15 @@ export function mensagensItem(
   it: DfdItemParseado,
   /** Item REPETIDO: Nº de outros itens com o mesmo código, descrição e unidade (+ o total e a cor da importância do ADM). */
   repetido?: (RepeticaoItem & { cor?: string }) | null,
-): { status: StatusMensagem; chave: string; texto: string; cor?: string }[] {
-  const out: { status: StatusMensagem; chave: string; texto: string; cor?: string }[] = [];
+): { status: StatusMensagem; chave: string; texto: string; cor?: string; rotulo?: string }[] {
+  const out: { status: StatusMensagem; chave: string; texto: string; cor?: string; rotulo?: string }[] = [];
   if (semValorUnitario(it.valorUnitario)) out.push({ status: "erro", chave: "item.valorUnitario", texto: "Item sem valor unitário." });
-  if (semQuantidade(it.quantidade)) out.push({ status: "erro", chave: "item.quantidade", texto: "Item sem quantidade (vazia ou zero)." });
+  if (semQuantidade(it.quantidade))
+    out.push(
+      it.quantidade == null
+        ? { status: "erro", chave: "item.quantidade", texto: "Item sem quantidade." }
+        : { status: "erro", chave: "item.quantidade", texto: `Quantidade zerada (${it.quantidade}) — o valor total do item fica R$ 0,00.`, rotulo: "Quantidade zerada" },
+    );
   // Repetido = ATENÇÃO (nunca erro): confira no detalhe do item e remova/unifique o que for duplicado.
   if (repetido && repetido.total > 0) {
     const mais = repetido.total - repetido.iguais.length;
