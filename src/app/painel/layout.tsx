@@ -73,7 +73,7 @@ export default async function PainelLayout({
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
-        <ComponentesPapel retirados={usuario.admin ? {} : usuario.papel.detalhes.componentes}>
+        <ComponentesPapel retirados={usuario.admin ? {} : usuario.papel.detalhes.componentes} exibicao={usuario.papel.detalhes.exibicao}>
           <SegundoPlano>{children}</SegundoPlano>
         </ComponentesPapel>
       </ConfigTabelas>

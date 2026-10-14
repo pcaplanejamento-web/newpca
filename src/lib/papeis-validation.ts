@@ -38,6 +38,8 @@ export const detalhesPapelSchema = z
       .optional(),
     /** As ações RETIRADAS por componente das telas (o núcleo descarta o que não está no catálogo). */
     componentes: z.record(z.string().max(60), z.array(z.enum(ACOES_PAPEL)).max(ACOES_PAPEL.length)).optional(),
+    /** Como as telas ABREM para o papel (não restringe). */
+    exibicao: z.object({ vinculosExpandidos: z.boolean().optional() }).optional(),
   })
   .transform(coerceDetalhes);
 

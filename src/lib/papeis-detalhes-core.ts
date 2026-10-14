@@ -228,6 +228,8 @@ export type DetalhesPapel = {
   edicoes: Record<TelaEdicoes, EdicoesTela>;
   /** As ações RETIRADAS por componente das telas (`papeis-componentes-core.ts`). */
   componentes: ComponentesRetirados;
+  /** PREFERÊNCIAS de exibição definidas pelo ADM (não restringem; só como a tela abre). */
+  exibicao: { vinculosExpandidos: boolean };
 };
 
 const todas = <K extends string>(chaves: readonly K[], v: boolean) => Object.fromEntries(chaves.map((k) => [k, v])) as Record<K, boolean>;
@@ -248,6 +250,7 @@ export function detalhesPadrao(): DetalhesPapel {
     historico: { dfd: "completo", pca: "completo", tarefas: "completo" },
     edicoes: { dfd: todas(OPERACOES_EDICAO, true), pca: todas(OPERACOES_EDICAO, true), orcamento: todas(OPERACOES_EDICAO, true), tarefas: todas(OPERACOES_EDICAO, true) },
     componentes: {},
+    exibicao: { vinculosExpandidos: false },
   };
 }
 export const DETALHES_PADRAO: DetalhesPapel = detalhesPadrao();
@@ -311,7 +314,7 @@ export function coerceDetalhes(bruto: unknown): DetalhesPapel {
     const personalizar = bool(et.personalizar, true);
     edicoes[t] = { personalizar, publicar: personalizar && bool(et.publicar, true), moderar: personalizar && bool(et.moderar, true) };
   }
-  return { mesa, historico, edicoes, componentes: coerceComponentes(o.componentes) };
+  return { mesa, historico, edicoes, componentes: coerceComponentes(o.componentes), exibicao: { vinculosExpandidos: bool(obj(o.exibicao).vinculosExpandidos, false) } };
 }
 
 /** A coluna está oculta nos detalhes (só as ocultáveis da lista — as de controle próprio seguem o controle). */
@@ -358,6 +361,7 @@ export function compactarDetalhes(bruto: DetalhesPapel): Record<string, unknown>
   }
   if (Object.keys(ed).length) out.edicoes = ed;
   if (Object.keys(d.componentes).length) out.componentes = d.componentes;
+  if (d.exibicao.vinculosExpandidos) out.exibicao = { vinculosExpandidos: true };
   return out;
 }
 
@@ -457,6 +461,13 @@ function itensDetalhe(): ItemDetalhe[] {
         valor: (d) => simNao(d.edicoes[t][op], "Permitido", "Não"),
         nivel: (d) => +d.edicoes[t][op],
       });
+  out.push({
+    id: "exibicao.vinculosExpandidos",
+    grupo: "Orçamento",
+    rotulo: "Vínculos abertos ao abrir o banner",
+    valor: (d) => simNao(d.exibicao.vinculosExpandidos, "Expandidos", "Recolhidos"),
+    nivel: () => 1,
+  });
   for (const x of CATALOGO_COMPONENTES)
     for (const a of acoesDoComponente(x))
       out.push({
@@ -510,7 +521,7 @@ export function resumoDetalhes(bruto: unknown): LinhaResumoDetalhe[] {
   const p = DETALHES_PADRAO;
   const out: LinhaResumoDetalhe[] = [];
   for (const i of itens()) {
-    if (i.id.startsWith("mesa.colunas.") || i.id.startsWith("componentes.")) continue;
+    if (i.id.startsWith("mesa.colunas.") || i.id.startsWith("componentes.") || i.id.startsWith("exibicao.")) continue;
     if (i.valor(d) !== i.valor(p)) out.push({ grupo: i.grupo, rotulo: i.rotulo, valor: i.valor(d) });
   }
   for (const t of TABELAS_MESA) {

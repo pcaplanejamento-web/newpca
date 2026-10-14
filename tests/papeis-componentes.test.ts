@@ -30,3 +30,12 @@ test("detalhes: compacta, diff e resumo com componentes", () => {
   assert.ok(diffDetalhes({}, d).length > 0);
   assert.ok(resumoDetalhes(d).length > 0);
 });
+
+test("exibição: vínculos expandidos vai no papel e não conta como restrição", async () => {
+  const m = await import("../src/lib/papeis-detalhes-core.ts");
+  const d = m.coerceDetalhes({ exibicao: { vinculosExpandidos: true } });
+  assert.equal(d.exibicao.vinculosExpandidos, true);
+  assert.deepEqual(m.compactarDetalhes(d).exibicao, { vinculosExpandidos: true });
+  assert.equal(m.compactarDetalhes(m.coerceDetalhes({})).exibicao, undefined);
+  assert.equal(m.contarRestricoes(d), 0);
+});

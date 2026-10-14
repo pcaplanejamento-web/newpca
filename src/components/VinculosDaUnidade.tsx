@@ -6,6 +6,7 @@ import type { AlvosVinculo, EscopoVinculos, UnidadeOrcamento, VinculoOrcamento }
 import { blocosVinculosDaLinha, listaSemVinculo, type SemVinculoUnidade, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import { Badge } from "./Badge";
 import { BotaoAcao } from "./BotaoAcao";
+import { useExibicaoPapel } from "./ComponentesPapel";
 import { Button } from "./Button";
 import { useQuemExporta } from "./ConfigTabelas";
 import { type AberturaVinculo, type ContextoVisao, type DadosVinculo, EditorVinculoOrcamento } from "./EditorVinculoOrcamento";
@@ -13,7 +14,6 @@ import { usePodeExportar } from "./ExportarTabelas";
 import { IconChevronDown, IconFile, IconPlus } from "./icons";
 import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
-import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
 /** A unidade da LINHA do comparativo: a cadastrada (`id`) ou a linha "Sem vínculo" (`id` null). */
@@ -96,15 +96,6 @@ function ItemAcordeao({
 }
 
 /** Cabeçalho de uma seção do banner: título + contagem + ação opcional à direita. */
-const CHAVE_EXPANDIDOS = "orcamento:vinculos-expandidos";
-function lerExpandidos(): boolean {
-  try {
-    return typeof localStorage !== "undefined" && localStorage.getItem(CHAVE_EXPANDIDOS) === "1";
-  } catch {
-    return false;
-  }
-}
-
 function TituloSecao({ titulo, contagem, acao }: { titulo: string; contagem: string; acao?: ReactNode }) {
   return (
     <div className="flex min-h-11 items-center justify-between gap-2 lg:min-h-[var(--h-control-sm)]">
@@ -161,8 +152,8 @@ export function VinculosDaUnidade({
   contexto?: ContextoVisao;
   onUsarPadrao?: (chave: string) => Promise<boolean>;
 }) {
-  // Vários abertos ao mesmo tempo; "Abrir expandidos" (preferência DESTE aparelho) já abre todos ao entrar no banner.
-  const [expandidos, setExpandidos] = useState(lerExpandidos);
+  // Vários abertos ao mesmo tempo; o PAPEL (Configurações → Papéis → Detalhes) decide se já abrem todos ao entrar no banner.
+  const { vinculosExpandidos: expandidos } = useExibicaoPapel();
   const [abertos, setAbertos] = useState<Set<string>>(() => new Set());
   const aberto = (k: string) => abertos.has(k);
   const setAberto = (_k: null) => setAbertos(new Set());
@@ -195,13 +186,7 @@ export function VinculosDaUnidade({
     if (!chaveDaUnidade) return;
     setAbertos(expandidos ? new Set([...v.ligadas.map((l) => `v:${l.vinculo.id}`), ...v.semVinculo.map((p) => `s:${p.unidade.chave}`)]) : new Set());
   }, [chaveDaUnidade]);
-  const mudarExpandidos = (sim: boolean) => {
-    setExpandidos(sim);
-    try {
-      localStorage.setItem(CHAVE_EXPANDIDOS, sim ? "1" : "0");
-    } catch {}
-    setAbertos(sim ? new Set([...v.ligadas.map((l) => `v:${l.vinculo.id}`), ...v.semVinculo.map((p) => `s:${p.unidade.chave}`)]) : new Set());
-  };
+
   const editor = (inicial: AberturaVinculo, k: string) => (
     <EditorVinculoOrcamento
       key={k}
@@ -255,12 +240,6 @@ export function VinculosDaUnidade({
         <div className="space-y-[var(--gap-block)]">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {unidade.id != null && unidade.nome ? <p className="text-sm text-muted">{unidade.nome}</p> : <span />}
-            <Switch
-              checked={expandidos}
-              onChange={mudarExpandidos}
-              label={<span className="text-[13px] text-text-2">Abrir expandidos</span>}
-              dica="Os vínculos já aparecem abertos ao abrir este banner (vale neste aparelho)"
-            />
           </div>
           <div className={`grid grid-cols-1 gap-[var(--gap-block)] ${unidade.id != null ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             <StatMini label="Total" value={brl(v.valorVinculado + v.valorSemVinculo)} hint={orcamento} />

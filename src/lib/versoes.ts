@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.88.0",
+    data: "2026-10-14",
+    titulo: "Vínculos expandidos definidos no papel",
+    mudancas: [
+      { tipo: "melhoria", area: "Configurações", texto: "Em Papéis → Detalhes → Exibição, o ADM define se os vínculos já abrem expandidos no banner do Orçamento do PCA (saiu a chave do banner).", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
     versao: "1.87.1",
     data: "2026-10-14",
     titulo: "Barra de progresso ao trocar a visão",

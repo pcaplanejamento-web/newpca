@@ -163,6 +163,27 @@ export function DetalhesPapelEditor({ valor, original, onChange }: { valor: Deta
         </div>
       </section>
 
+      <section aria-labelledby="det-exibicao" className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
+        <h4 id="det-exibicao" className="text-[14px] font-bold text-text">
+          Exibição
+        </h4>
+        <p className="mb-1 text-[12.5px] text-muted">Como as telas abrem para este papel. Não retira acesso.</p>
+        <div className="divide-y divide-border">
+          <Linha
+            titulo="Vínculos abertos ao abrir o banner"
+            ajuda="No Orçamento do PCA, o banner de vínculos da linha já abre com cada unidade expandida. Vale também para o Administrador."
+            alterado={v.exibicao.vinculosExpandidos !== o.exibicao.vinculosExpandidos}
+          >
+            <Switch
+              checked={v.exibicao.vinculosExpandidos}
+              disabled={so}
+              onChange={(vinculosExpandidos) => onChange?.({ ...v, exibicao: { vinculosExpandidos } })}
+              label={v.exibicao.vinculosExpandidos ? "Expandidos" : "Recolhidos"}
+            />
+          </Linha>
+        </div>
+      </section>
+
       <SecaoComponentes valor={v} original={o} onChange={onChange} />
 
       {m.linhas === "meus" && (m.responsavel.alterar === "grupo" || !m.responsavel.ver) && (
