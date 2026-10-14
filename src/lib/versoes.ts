@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.86.1",
+    data: "2026-10-14",
+    titulo: "Filtros da visão em consulta",
+    mudancas: [{ tipo: "melhoria", area: "Orçamento", texto: "Na visão em consulta, cada filtro abre e mostra os valores que entram (com a dotação e os lançamentos) e os que ficam de fora — sem poder alterar.", link: "/painel/pca" }],
+  },
+  {
     versao: "1.86.0",
     data: "2026-10-14",
     titulo: "Ver as configurações da visão",

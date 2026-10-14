@@ -13,7 +13,9 @@ import {
   semAusentes,
   type VisaoOrcamento,
   valoresAusentes,
+  valorDimensao,
 } from "@/lib/orcamento-visao";
+import { norm } from "@/lib/parse-dfd-comum";
 import { type AlvosVinculo, unidadesDoOrcamento, type VinculoOrcamento, type VisaoVinculos, vinculosDaVisao } from "@/lib/orcamento-vinculo";
 import { FerramentasNoLugar } from "./AbasEspaco";
 import { AjudaVisoes } from "./AjudaVisoes";
@@ -22,6 +24,7 @@ import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { TextField } from "./Field";
+import { IconChevronDown } from "./icons";
 import { Modal } from "./Modal";
 import { OrcamentoVinculos } from "./OrcamentoVinculos";
 import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
@@ -227,6 +230,9 @@ export function EditorVisaoOrcamento({
                   </div>
                 </Callout>
               )}
+              {!podeEditar ? (
+                <FiltrosConsulta itens={itens} filtros={filtros} />
+              ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {DIMENSOES_VISAO.map((d) => (
                   <SeletorMultiplo
@@ -240,6 +246,7 @@ export function EditorVisaoOrcamento({
                   />
                 ))}
               </div>
+              )}
             </>
           )}
         </div>
@@ -251,5 +258,91 @@ export function EditorVisaoOrcamento({
       )}
       {confirmacao}
     </>
+  );
+}
+
+/**
+ * Os FILTROS de uma visão em CONSULTA: uma linha recolhível por dimensão — "Todos" ou "N de M" — que abre os valores
+ * escolhidos com os lançamentos e a dotação de cada um NO ORÇAMENTO aberto (os que ele não traz aparecem como ausentes)
+ * e, recolhidos, os que ficam de fora. Nada se altera.
+ */
+function FiltrosConsulta({ itens, filtros }: { itens: LinhaVisaoOrcamento[]; filtros: FiltrosVisao }) {
+  const porDim = useMemo(() => {
+    const m = new Map<DimensaoVisao, Map<string, { valor: string; n: number; total: number }>>();
+    for (const d of DIMENSOES_VISAO) {
+      const vals = new Map<string, { valor: string; n: number; total: number }>();
+      for (const l of itens) {
+        const v = valorDimensao(l, d.key);
+        const k = norm(v);
+        const x = vals.get(k) ?? { valor: v, n: 0, total: 0 };
+        x.n += 1;
+        x.total += l.valorInicial;
+        vals.set(k, x);
+      }
+      m.set(d.key, vals);
+    }
+    return m;
+  }, [itens]);
+  return (
+    <ul className="divide-y divide-border overflow-hidden rounded-card border border-border">
+      {DIMENSOES_VISAO.map((d) => {
+        const todos = porDim.get(d.key) ?? new Map();
+        const escolhidos = filtros[d.key] ?? [];
+        const marcados = new Set(escolhidos.map((v) => norm(v)));
+        const dentro = escolhidos.map((v) => todos.get(norm(v)) ?? { valor: v, n: 0, total: 0 });
+        const fora = [...todos.entries()].filter(([k]) => !marcados.has(k)).map(([, x]) => x);
+        const resumo = escolhidos.length === 0 ? `Todos (${num(todos.size)})` : `${num(escolhidos.length)} de ${num(todos.size)}`;
+        return (
+          <li key={d.key}>
+            <details className="group">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-[var(--pad-card)] py-2 hover:bg-surface-2 lg:min-h-[var(--h-control-sm)]">
+                <span className="text-[13.5px] font-semibold text-text">{d.rotulo}</span>
+                <span className="flex items-center gap-2 text-[13px]">
+                  <span className={escolhidos.length ? "font-semibold text-accent" : "text-muted"}>{resumo}</span>
+                  <IconChevronDown className="h-4 w-4 text-muted transition-transform duration-[var(--motion-duration)] group-open:rotate-180" aria-hidden />
+                </span>
+              </summary>
+              <div className="space-y-2 border-t border-border bg-surface-2 px-[var(--pad-card)] py-2 text-[13px]">
+                {escolhidos.length === 0 ? (
+                  <p className="text-muted">Sem filtro nesta dimensão: todos os valores entram.</p>
+                ) : (
+                  <>
+                    <p className="text-[11.5px] font-semibold uppercase tracking-wide text-muted">Entram</p>
+                    <ul className="space-y-1">
+                      {dentro.map((x) => (
+                        <li key={x.valor} className="flex items-start justify-between gap-3">
+                          <span className={x.n ? "text-text" : "text-warn"}>
+                            {x.valor}
+                            {!x.n && " (ausente neste orçamento)"}
+                          </span>
+                          <span className="shrink-0 text-right tabular-nums text-text-2">
+                            {brl(x.total)} <span className="text-muted">· {num(x.n)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {fora.length > 0 && (
+                      <details>
+                        <summary className="cursor-pointer text-[12.5px] text-muted">Ficam de fora ({num(fora.length)})</summary>
+                        <ul className="mt-1 space-y-1">
+                          {fora.map((x) => (
+                            <li key={x.valor} className="flex items-start justify-between gap-3 text-muted">
+                              <span>{x.valor}</span>
+                              <span className="shrink-0 tabular-nums">
+                                {brl(x.total)} · {num(x.n)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </>
+                )}
+              </div>
+            </details>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
