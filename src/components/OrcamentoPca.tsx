@@ -446,6 +446,7 @@ export function OrcamentoPca({
       planejadoSemOrcamento: porUnidade.filter((l) => !(l.orcamento > 0)).reduce((s, l) => s + l.planejado, 0),
       comSaldo: comUnidade.filter((l) => l.orcamento > 0 && l.diferenca >= 0).length,
       comDeficit: deficits.length,
+      somaDeficits: deficits.reduce((s, l) => s + l.diferenca, 0),
       faixas,
     };
   }, [porUnidade]);
@@ -623,8 +624,9 @@ export function OrcamentoPca({
           label={`Dotação ${dados.ano}${dados.visaoNome ? ` · visão ${dados.visaoNome}` : ""}`}
           value={brl(dados.filtrado)}
           detalhes={[
-            ...(dados.visaoNome ? [{ rotulo: "Bruta", valor: brl(dados.bruto) }] : []),
-            ...(ind.semVinculo > 0 ? [{ rotulo: "Sem vínculo", valor: brl(ind.semVinculo), cor: "var(--warn)" }] : []),
+            ...(dados.visaoNome ? [{ rotulo: "Dotação bruta", valor: brl(dados.bruto) }, { rotulo: "Retirado pela visão", valor: brl(dados.bruto - dados.filtrado) }] : []),
+            { rotulo: "Sem vínculo", valor: brl(ind.semVinculo), cor: ind.semVinculo > 0 ? "var(--warn)" : undefined },
+            { rotulo: "Orçamento", valor: dados.orcamento?.nome ?? "—" },
           ]}
         />
         <KpiStat
@@ -635,9 +637,10 @@ export function OrcamentoPca({
           value={brl(t.planejado)}
           cor="var(--sit-finalizado)"
           detalhes={[
-            { rotulo: "Itens", valor: num(ind.contratacoes) },
-            { rotulo: "Unidades", valor: num(ind.unidadesComPlanejado) },
-            ...(ind.planejadoSemOrcamento > 0 ? [{ rotulo: "Sem orçamento", valor: brl(ind.planejadoSemOrcamento), cor: "var(--danger)" }] : []),
+            { rotulo: "Contratações", valor: num(ind.contratacoes) },
+            { rotulo: "Unidades com contratações", valor: num(ind.unidadesComPlanejado) },
+            { rotulo: "Sem orçamento vinculado", valor: brl(ind.planejadoSemOrcamento), cor: ind.planejadoSemOrcamento > 0 ? "var(--danger)" : undefined },
+            ...(dados.previa ? [{ rotulo: "Prévia (DFDs)", valor: num(dados.previa.dfds) }] : []),
           ]}
         />
         <KpiStat
@@ -648,8 +651,9 @@ export function OrcamentoPca({
           value={<span style={{ color: t.saldo < 0 ? "var(--danger)" : "var(--ok)" }}>{brl(t.saldo)}</span>}
           cor={t.saldo < 0 ? "var(--danger)" : "var(--ok)"}
           detalhes={[
-            { rotulo: "Com saldo", valor: num(ind.comSaldo) },
-            { rotulo: "Com déficit", valor: num(ind.comDeficit), cor: ind.comDeficit > 0 ? "var(--danger)" : undefined },
+            { rotulo: "Unidades com saldo", valor: num(ind.comSaldo) },
+            { rotulo: "Unidades com déficit", valor: num(ind.comDeficit), cor: ind.comDeficit > 0 ? "var(--danger)" : undefined },
+            { rotulo: "Soma dos déficits", valor: brl(ind.somaDeficits), cor: ind.somaDeficits < 0 ? "var(--danger)" : undefined },
           ]}
         />
         <KpiStat
@@ -664,9 +668,9 @@ export function OrcamentoPca({
           }
           cor={comprometido == null ? "var(--muted)" : comprometido > 1 ? "var(--danger)" : comprometido >= 0.9 ? "var(--warn)" : "var(--ok)"}
           detalhes={[
-            { rotulo: "Dentro", valor: num(ind.faixas.ok), cor: "var(--ok)" },
-            { rotulo: "Atenção", valor: num(ind.faixas.atencao), cor: ind.faixas.atencao ? "var(--warn)" : undefined },
-            { rotulo: "Acima", valor: num(ind.faixas.acima), cor: ind.faixas.acima ? "var(--danger)" : undefined },
+            { rotulo: "Dentro (até 90%)", valor: num(ind.faixas.ok), cor: "var(--ok)" },
+            { rotulo: "Atenção (90% a 100%)", valor: num(ind.faixas.atencao), cor: ind.faixas.atencao ? "var(--warn)" : undefined },
+            { rotulo: "Acima ou sem orçamento", valor: num(ind.faixas.acima), cor: ind.faixas.acima ? "var(--danger)" : undefined },
           ]}
         />
       </div>
