@@ -110,7 +110,7 @@ export function recortarRelatorio(r: RelatorioOrcamento, ids: readonly number[])
   const unidades = r.unidades.filter((u) => quer.has(u.id));
   if (!unidades.length) return r;
   const cubos = new Set(unidades.flatMap((u) => u.vinculos.map((v) => v.unidadeCubo)));
-  const siglas = new Set(unidades.map((u) => u.sigla));
+  const idsUn = new Set(unidades.map((u) => u.id));
   const nasUnidades = unidades.reduce((s, u) => ({ lancamentos: s.lancamentos + u.lancamentos, valor: s.valor + u.orcamento }), soma());
   const semVinculo = r.semVinculo.filter((s) => cubos.has(s.unidadeCubo));
   return {
@@ -127,7 +127,7 @@ export function recortarRelatorio(r: RelatorioOrcamento, ids: readonly number[])
     planejadoSemUnidade: 0,
     definicoes: {
       unidadesCubo: r.definicoes.unidadesCubo.filter((u) => cubos.has(u.unidadeCubo)),
-      unidadesComContratacao: r.definicoes.unidadesComContratacao.filter((u) => siglas.has(u.sigla)),
+      unidadesComContratacao: r.definicoes.unidadesComContratacao.filter((u) => idsUn.has(u.id)),
     },
     recorte: unidades.map((u) => u.sigla),
   };
@@ -147,7 +147,7 @@ export type DefinicoesRelatorio = {
     valorSemVinculo: number;
   }[];
   /** As unidades cadastradas com contratações no PCA: com ou sem vínculo. */
-  unidadesComContratacao: { sigla: string; nome: string; comVinculo: boolean; planejado: number }[];
+  unidadesComContratacao: { id: number; sigla: string; nome: string; comVinculo: boolean; planejado: number }[];
 };
 
 /** A situação de uma unidade do CUBO nos vínculos. */
@@ -340,7 +340,7 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
         .sort((a, b) => colator.compare(a.unidadeCubo, b.unidadeCubo)),
       unidadesComContratacao: e.unidades
         .filter((u) => (planejadoPor.get(u.id) ?? 0) > 0)
-        .map((u) => ({ sigla: u.sigla, nome: u.nome, comVinculo: comVinculo.has(u.id), planejado: planejadoPor.get(u.id) ?? 0 }))
+        .map((u) => ({ id: u.id, sigla: u.sigla, nome: u.nome, comVinculo: comVinculo.has(u.id), planejado: planejadoPor.get(u.id) ?? 0 }))
         .sort((a, b) => Number(a.comVinculo) - Number(b.comVinculo) || colator.compare(a.sigla, b.sigla)),
     },
   };

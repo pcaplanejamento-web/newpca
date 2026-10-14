@@ -743,9 +743,8 @@ export function avaliarDfd(
   // Ordem preserva a de `faltasObrigatorias` (valor unitário → repartição → seções).
   const semVU = d.itens.length === 0 || d.itens.some((i) => semValorUnitario(i.valorUnitario));
   add("item.valorUnitario", semVU, "valor unitário em todos os itens");
-  // `=== null` (não `== null`): só conta quando a quantidade foi realmente informada
-  // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
-  add("item.quantidade", d.itens.some((i) => semQuantidade(i.quantidade)), "quantidade em todos os itens");
+  // Só conta quando a quantidade veio (`undefined` = o chamador nem carrega a quantidade — sem falso positivo).
+  add("item.quantidade", d.itens.some((i) => i.quantidade !== undefined && semQuantidade(i.quantidade)), "quantidade em todos os itens");
   add("item.quantidadeFracionada", d.itens.some((i) => quantidadeFracionada(i.quantidade)), "quantidade de no mínimo 1 em todos os itens");
   // Item REPETIDO nunca bloqueia (só aponta — o ponto não aceita "bloqueia"): confira e trate no detalhe do item.
   add("item.duplicado", itensDuplicados(d.itens).length > 0, "itens repetidos (mesmo código, descrição e unidade)");

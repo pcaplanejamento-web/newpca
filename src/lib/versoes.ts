@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.91.1",
+    data: "2026-10-14",
+    titulo: "Correções da auditoria",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Item sem a quantidade carregada não é mais apontado como \"sem quantidade\" por engano.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Mesa", texto: "Importação em lotes: a quantidade ausente ou fracionada também é barrada nos lotes seguintes quando a Avaliação manda bloquear.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Orçamento", texto: "Relatório da composição por unidade: as unidades com contratações são escolhidas pelo cadastro, não pela sigla (siglas repetidas entre órgãos).", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.91.0",
     data: "2026-10-14",
     titulo: "Módulos configuráveis, chat por grupo e quem vê os online",
