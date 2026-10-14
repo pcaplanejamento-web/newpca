@@ -2,13 +2,14 @@
 
 import { Fragment, type ReactNode, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Pessoa } from "@/lib/pessoa";
-import { type CampoTarefa, cartoesDaLista, type EtiquetaTarefa, excedeWip, type ListaTarefas, type TarefaResumo } from "@/lib/tarefas-core";
+import { type CampoTarefa, cartoesDaLista, type EtiquetaTarefa, excedeWip, FILTRO_TAREFAS_PADRAO, filtrarTarefas, type ListaTarefas, type TarefaResumo } from "@/lib/tarefas-core";
 import { AlturaNoHtml, useAlturaAteOFim } from "./AlturaCheia";
 import { CartaoPreso, SombraCartao, SombraLista, useArrastoCartoes, useArrastoListas } from "./ArrastoCartoes";
 import { Button } from "./Button";
 import { CartaoTarefa } from "./CartaoTarefa";
 import { Dropdown } from "./Dropdown";
 import { type ModoCopia, SeletorTemplates } from "./CopiarMoverTarefa";
+import { FILTRO_LISTA_VAZIO, type FiltroDaLista, FiltroLista, PdfLista, contarFiltroLista } from "./FiltroLista";
 import { IconArquivar, IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconClose, IconCopy, IconExpandir, IconGrip, IconMais, IconRecolher, IconModelo, IconPencil, IconPlus } from "./icons";
 import { AvatarPessoa } from "./PessoaTag";
 import { TextoNoLugar } from "./TextoNoLugar";
@@ -100,7 +101,20 @@ export function QuadroKanban({
   const presaL = arrastoL.arrasto ? listas.find((l) => l.id === arrastoL.arrasto?.id) : undefined;
   const mEtiquetas = useMemo(() => new Map(etiquetas.map((e) => [e.id, e])), [etiquetas]);
   const mPessoas = useMemo(() => new Map(pessoas.map((p) => [p.id, p])), [pessoas]);
-  const porLista = useMemo(() => new Map(listas.map((l) => [l.id, cartoesDaLista(tarefas, l.id)])), [listas, tarefas]);
+  // O FILTRO de cada lista (o funil no pé da coluna) — só na tela, por lista.
+  const [filtrosLista, setFiltrosLista] = useState<Map<number, FiltroDaLista>>(new Map());
+  const naLista = (id: number) => filtrosLista.get(id) ?? FILTRO_LISTA_VAZIO;
+  const brutos = useMemo(() => new Map(listas.map((l) => [l.id, cartoesDaLista(tarefas, l.id)])), [listas, tarefas]);
+  const porLista = useMemo(
+    () =>
+      new Map(
+        [...brutos].map(([id, cs]) => {
+          const f = filtrosLista.get(id);
+          return [id, f && contarFiltroLista(f) ? filtrarTarefas(cs, { ...FILTRO_TAREFAS_PADRAO, ...f }, { usuarioId: null, hoje }) : cs];
+        }),
+      ),
+    [brutos, filtrosLista, hoje],
+  );
   const preso = arrasto ? tarefas.find((t) => t.id === arrasto.id) : undefined;
   // A coluna à vista no celular (uma por vez, com encaixe): a mais próxima da borda esquerda da área rolável.
   const [atual, setAtual] = useState(0);
@@ -186,7 +200,6 @@ export function QuadroKanban({
         lista={l}
         responsavel={l.responsavelId != null ? mPessoas.get(l.responsavelId) : undefined}
         qtd={cartoes.filter((c) => !c.template).length}
-        total={totais?.get(l.id)}
         recolhida={!presa && recolhidas.has(l.id)}
         onRecolher={presa || !chaveRecolhidas ? undefined : () => alternarRecolhida(l.id)}
         oculto={!presa && arrastoL.arrasto?.id === l.id}
@@ -194,7 +207,22 @@ export function QuadroKanban({
         onRenomear={presa || !onRenomearLista ? undefined : (nome) => onRenomearLista(l.id, nome)}
         onNova={somenteLeitura ? undefined : () => !presa && onNova(l.id)}
         menu={presa ? undefined : menuLista?.(l)}
-        extra={!presa && onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
+        total={contarFiltroLista(naLista(l.id)) ? (brutos.get(l.id) ?? []).filter((c) => !c.template).length : totais?.get(l.id)}
+        extra={
+          !presa && (
+            <>
+              <FiltroLista
+                nome={l.nome}
+                tarefas={brutos.get(l.id) ?? []}
+                pessoas={mPessoas}
+                filtro={naLista(l.id)}
+                onChange={(f) => setFiltrosLista((m) => new Map(m).set(l.id, f))}
+              />
+              <PdfLista nome={l.nome} tarefas={cartoes} pessoas={mPessoas} hoje={hoje} />
+              {onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
+            </>
+          )
+        }
       >
         {cartoes.map((t, pos) => {
           const sombra = arrasto && destinoAqui >= 0 && t.id !== arrasto.id && j++ === destinoAqui;
@@ -508,11 +536,11 @@ export function ColunaTarefas({
       <div data-cartoes className="flex min-h-2 flex-1 flex-col gap-2 overflow-y-auto px-2 pt-0.5 pb-1">
         {children}
       </div>
-      {onNova && (
+      {(onNova || extra) && (
         <div className="flex items-center gap-1 px-2 pt-1 pb-2">
-          <Button variant="ghost" size="sm" className="min-w-0 flex-1 !justify-start text-text-2" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar um cartão em ${l.nome}`} onClick={onNova}>
+          {onNova ? <Button variant="ghost" size="sm" className="min-w-0 flex-1 !justify-start text-text-2" icon={<IconPlus className="h-4 w-4" />} aria-label={`Adicionar um cartão em ${l.nome}`} onClick={onNova}>
             Adicionar um cartão
-          </Button>
+          </Button> : <span className="flex-1" />}
           {extra}
         </div>
       )}

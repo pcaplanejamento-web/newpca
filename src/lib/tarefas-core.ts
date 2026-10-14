@@ -129,7 +129,7 @@ export type VinculoTarefa = {
 const ORDEM_MESA: Partial<Record<TipoVinculo, number>> = { protocolo: 0, dfd: 1, item: 2 };
 /** Os NÚMEROS da Mesa a que a tarefa se liga (protocolo › DFD › item, sem repetir) — os selos do cartão. O alvo excluído
  * (sem rótulo) fica de fora. */
-export function numerosMesa(vinculos: readonly VinculoTarefa[]): { chave: string; tipo: TipoVinculo; texto: string }[] {
+export function numerosMesa(vinculos: readonly Pick<VinculoTarefa, "tipo" | "id" | "rotulo">[]): { chave: string; tipo: TipoVinculo; texto: string }[] {
   const vistos = new Set<string>();
   return vinculos
     .filter((v) => ORDEM_MESA[v.tipo] != null && v.rotulo)
@@ -379,11 +379,13 @@ export type FiltroTarefas = {
   campos: Record<number, string[]>;
   /** As SIGLAS das unidades dos vínculos (protocolo/DFD/item) e/ou "sem" (tarefa sem unidade). */
   siglas: string[];
+  /** Os NÚMEROS da Mesa (chaves "protocolo:9" · "dfd:5" · "item:…") — o filtro da lista. */
+  mesa: string[];
   busca: string;
 };
 /** O valor do filtro de sigla para a tarefa SEM unidade nos vínculos. */
 export const SEM_SIGLA = "sem";
-export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", campos: {}, siglas: [], busca: "" };
+export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", campos: {}, siglas: [], mesa: [], busca: "" };
 /** Quantos filtros estão ligados (cada valor conta; a busca conta 1) — o número do botão "Filtrar". */
 export const contarFiltros = (f: FiltroTarefas) =>
   f.responsaveis.length +
@@ -391,6 +393,7 @@ export const contarFiltros = (f: FiltroTarefas) =>
   f.prioridades.length +
   f.etiquetas.length +
   f.siglas.length +
+  (f.mesa?.length ?? 0) +
   Object.values(f.campos).reduce((n, v) => n + v.length, 0) +
   (f.status !== "todas" ? 1 : 0) +
   (f.busca.trim() ? 1 : 0);
@@ -415,7 +418,7 @@ export const alternarValor = <V>(lista: V[], v: V): V[] => (lista.includes(v) ? 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
 export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket"> & {
   template?: boolean;
-  vinculos?: Pick<VinculoTarefa, "sigla">[];
+  vinculos?: (Pick<VinculoTarefa, "sigla"> & Partial<Pick<VinculoTarefa, "tipo" | "id">>)[];
   campos?: Record<number, string>;
 };
 
@@ -452,6 +455,7 @@ export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: Filtr
       const sg = siglasDaTarefa(t);
       if (!f.siglas.some((x) => (x === SEM_SIGLA ? sg.length === 0 : sg.includes(x)))) return false;
     }
+    if (f.mesa?.length && !(t.vinculos ?? []).some((v) => f.mesa.includes(`${v.tipo}:${v.id}`))) return false;
     for (const [id, vals] of Object.entries(f.campos)) if (vals.length && !vals.includes(t.campos?.[Number(id)] ?? "")) return false;
     return !casa || casa([t.titulo, rotuloTicket(t.ticket), String(t.ticket)]);
   });
@@ -2018,3 +2022,21 @@ export const temOculto = (o: OcultosCalendario) => o.tarefas.length + o.quadros.
 export const eventoVisivel = (e: Pick<EventoCalendario, "tarefaId" | "quadroId" | "tipo" | "pca" | "externo">, o: OcultosCalendario) =>
   !o.tipos.includes(e.tipo) &&
   (e.pca ? !o.pcas.includes(e.pca.pcaId) : e.externo ? !o.externos.includes(e.externo.agendaId) : !o.quadros.includes(e.quadroId) && !o.tarefas.includes(e.tarefaId));
+
+/** As OPÇÕES do filtro de UMA lista, tiradas dos cartões dela: as pessoas envolvidas, as siglas e os números da Mesa. */
+export function opcoesFiltroLista(tarefas: readonly Pick<TarefaResumo, "envolvidos" | "vinculos">[]) {
+  const pessoas = new Set<number>();
+  const siglas = new Set<string>();
+  const mesa = new Map<string, { chave: string; tipo: TipoVinculo; texto: string }>();
+  for (const t of tarefas) {
+    for (const p of t.envolvidos) pessoas.add(p);
+    for (const sg of siglasDaTarefa(t)) siglas.add(sg);
+    for (const n of numerosMesa(t.vinculos)) mesa.set(n.chave, n);
+  }
+  const ordem: Partial<Record<TipoVinculo, number>> = { protocolo: 0, dfd: 1, item: 2 };
+  return {
+    pessoas: [...pessoas],
+    siglas: [...siglas].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    mesa: [...mesa.values()].sort((a, b) => (ordem[a.tipo] ?? 0) - (ordem[b.tipo] ?? 0) || a.texto.localeCompare(b.texto, "pt-BR", { numeric: true })),
+  };
+}

@@ -217,6 +217,23 @@ export function CartaoTarefa({
           <ChipsCamposCartao campos={campos} valores={t.campos} />
         </span>
       )}
+      {/* A UNIDADE e os NÚMEROS da Mesa numa linha própria (quebra se não couber) — os ícones e as fotos ficam embaixo. */}
+      {(siglasDaTarefa(t).length > 0 || numerosMesa(t.vinculos).length > 0 || outros.length > 0) && (
+        <div className="pointer-events-none mt-2 flex flex-wrap items-center gap-1">
+        {siglasDaTarefa(t).map((sg) => (
+          <span key={sg} className="inline-flex h-5 items-center rounded-chip bg-surface-2 px-1.5 text-[11px] font-semibold text-text-2" title={`Unidade ${sg}`}>
+            {sg}
+          </span>
+        ))}
+        <ChipsVinculosMesa vinculos={t.vinculos} />
+        {outros.length > 0 && (
+          <span className="inline-flex items-center gap-0.5 text-[12px] text-accent tabular-nums" title={outros.map(rotuloDoVinculo).join("\n")}>
+            <IconLink className="h-3.5 w-3.5" aria-label={`${outros.length} vínculo(s)`} />
+            {outros.length > 1 && outros.length}
+          </span>
+        )}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12px] text-muted empty:hidden">
         {t.prazo && (
           <span
@@ -277,18 +294,6 @@ export function CartaoTarefa({
             {t.links}
           </span>
         )}
-        {siglasDaTarefa(t).map((sg) => (
-          <span key={sg} className="pointer-events-none rounded-chip bg-surface-2 px-1.5 text-[11px] font-semibold text-text-2" title={`Unidade ${sg}`}>
-            {sg}
-          </span>
-        ))}
-        <ChipsVinculosMesa vinculos={t.vinculos} />
-        {outros.length > 0 && (
-          <span className="pointer-events-none inline-flex items-center gap-0.5 text-accent tabular-nums" title={outros.map(rotuloDoVinculo).join("\n")}>
-            <IconLink className="h-3.5 w-3.5" aria-label={`${outros.length} vínculo(s)`} />
-            {outros.length > 1 && outros.length}
-          </span>
-        )}
         {resp.length > 0 && (
           <span className="pointer-events-none ml-auto flex -space-x-1.5" title={resp.map((p) => nomeExibicao(p)).join(", ")}>
             {resp.slice(0, MAX_AVATARES).map((p) => (
@@ -333,7 +338,7 @@ export function ChipsVinculosMesa({ vinculos }: { vinculos: readonly VinculoTare
   return (
     <>
       {ns.map((n) => (
-        <span key={n.chave} className="pointer-events-none inline-flex items-center rounded-chip bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent" title={n.texto}>
+        <span key={n.chave} className="inline-flex h-5 items-center rounded-chip bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent" title={n.texto}>
           {n.texto}
         </span>
       ))}

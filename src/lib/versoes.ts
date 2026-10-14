@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.83.0",
+    data: "2026-10-14",
+    titulo: "Lista com filtro e PDF; cartão reorganizado",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "O cartão mostra a unidade e os números do protocolo/DFD/item numa linha própria; ícones e fotos embaixo.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "Filtro em cada lista do quadro por membros, unidade e protocolo/DFD/item (o funil no pé da lista).", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "PDF da lista: o ícone no pé da lista baixa os cartões à vista.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.82.2",
     data: "2026-10-14",
     titulo: "Números da Mesa no cartão da tarefa",

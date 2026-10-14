@@ -325,3 +325,16 @@ it("numerosMesa: protocolo › DFD › item, sem excluídos", async () => {
   ]);
   assert.deepEqual(r.map((n) => n.texto), ["Prot. 162275/2026", "DFD 1234", "Item 3"]);
 });
+
+it("filtro da lista: membros, sigla e números da Mesa", async () => {
+  const { filtrarTarefas, opcoesFiltroLista, FILTRO_TAREFAS_PADRAO } = await import("../src/lib/tarefas-core.ts");
+  const base = { prioridade: "media" as const, etiquetas: [], prazo: null, concluidaEm: null, titulo: "x" };
+  const a = { ...base, ticket: 1, envolvidos: [7], vinculos: [{ tipo: "protocolo" as const, id: 9, rotulo: "1/2026", sigla: "PROCON" }] };
+  const b = { ...base, ticket: 2, envolvidos: [8], vinculos: [{ tipo: "dfd" as const, id: 5, rotulo: "12", sigla: "SEMED" }] };
+  const op = opcoesFiltroLista([a, b]);
+  assert.deepEqual(op.siglas, ["PROCON", "SEMED"]);
+  assert.deepEqual(op.mesa.map((m) => m.chave), ["protocolo:9", "dfd:5"]);
+  const ctx = { usuarioId: null, hoje: "2026-10-14" };
+  assert.deepEqual(filtrarTarefas([a, b], { ...FILTRO_TAREFAS_PADRAO, mesa: ["dfd:5"] }, ctx).map((t) => t.ticket), [2]);
+  assert.deepEqual(filtrarTarefas([a, b], { ...FILTRO_TAREFAS_PADRAO, responsaveis: [7], siglas: ["PROCON"] }, ctx).map((t) => t.ticket), [1]);
+});
