@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.93.1",
+    data: "2026-10-14",
+    titulo: "Filtros do Dashboard do PCA numa linha",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Os filtros do Dashboard ficam numa única linha, com a explicação no (?) e o PDF num botão só com o ícone.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.93.0",
     data: "2026-10-14",
     titulo: "Histórico de acesso",

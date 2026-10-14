@@ -470,10 +470,32 @@ export function DashboardPcaCliente({
         aria-label="Filtros do Dashboard"
         className={`space-y-2 rounded-card border p-[var(--pad-card)] transition-colors ${ativo ? "border-accent/30 bg-accent-soft/40" : "border-border bg-surface"}`}
       >
-        <FiltrosDashboard campos={campos} onMudar={mudarTopo} />
+        <FiltrosDashboard
+          campos={campos}
+          onMudar={mudarTopo}
+          fim={
+            <>
+              <Ajuda titulo="Filtros do Dashboard" botao="sm">
+                Escolha nos menus ou toque numa fatia/barra — os gráficos, os indicadores e a consulta seguem. Vários valores num
+                filtro valem como "qualquer um"; filtros diferentes se somam.
+              </Ajuda>
+              {podeExportar && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={relatorio}
+                  loading={gerando}
+                  aria-label="Baixar o relatório em PDF"
+                  title="Baixar o relatório (PDF): os indicadores e uma tabela por gráfico, com os filtros aplicados"
+                  icon={<IconDownload className="h-4 w-4" />}
+                />
+              )}
+            </>
+          }
+        />
+        {ativo && (
         <div className="flex min-h-9 flex-wrap items-center gap-2" aria-live="polite">
-          <IconFilter className={`h-4 w-4 shrink-0 ${ativo ? "text-accent" : "text-faint"}`} aria-hidden />
-          {!ativo && <span className="text-xs text-muted">Escolha nos menus ou toque numa fatia/barra — os gráficos, os indicadores e a consulta seguem.</span>}
+          <IconFilter className="h-4 w-4 shrink-0 text-accent" aria-hidden />
           {chips.map(([dim, f]) => (
             <span key={dim} className="inline-flex max-w-full animate-fade-in-up items-center gap-1 rounded-chip border border-accent/30 bg-surface pl-2.5 text-xs text-text">
               <span className="text-muted">{TITULO_CHIP[dim]}:</span>
@@ -496,8 +518,7 @@ export function DashboardPcaCliente({
             </span>
           ))}
           <span className="ml-auto flex items-center gap-1.5">
-            {ativo && (
-              <>
+            <>
                 <span className="text-xs text-muted tabular-nums">
                   {num(filtrados.length)} itens · {brlCompact(valorFiltrado)}
                 </span>
@@ -508,15 +529,9 @@ export function DashboardPcaCliente({
                   Limpar
                 </Button>
               </>
-            )}
-            {podeExportar && (
-              <Button size="sm" variant="ghost" onClick={relatorio} loading={gerando} title="Os indicadores e uma tabela por gráfico, com os filtros aplicados">
-                <IconDownload className="h-4 w-4" />
-                <span className="hidden sm:inline">Relatório (PDF)</span>
-              </Button>
-            )}
           </span>
         </div>
+        )}
       </section>
 
       <Segmented
