@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ComponentesPapel } from "@/components/ComponentesPapel";
 import { ConfigTabelas } from "@/components/ConfigTabelas";
+import { nomesDasSiglas } from "@/lib/reparticoes";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
 import { getAcesso } from "@/lib/acesso";
@@ -36,13 +37,14 @@ export default async function PainelLayout({
   // O ADM exigiu uma senha nova: nenhuma tela do painel antes de criá-la.
   if (usuario.trocarSenha) redirect("/nova-senha");
 
-  const [aparencia, pcas, versao, protecaoCfg, modulos] = await Promise.all([
+  const [aparencia, pcas, versao, protecaoCfg, modulos, nomesSiglas] = await Promise.all([
     getAparencia(),
     pcasDoFiltro(),
     // A versão dos dados: o `SincronizarDados` só recarrega a tela quando ela muda (falhou = sem sincronização).
     versaoDados().catch(() => undefined),
     getConfigProtecao(),
     getModulos(),
+    nomesDasSiglas().catch(() => ({})),
   ]);
   // A PROTEÇÃO DE DADOS do ADM (seleção/cópia, impressão/captura): só nos papéis que ele escolheu.
   const protecao = protecaoDoPapel(protecaoCfg, usuario.papel.id);
@@ -78,7 +80,7 @@ export default async function PainelLayout({
     >
       {protecao && <ProtecaoDados {...protecao} quem={`${usuario.nome}${usuario.matricula ? ` · matrícula ${usuario.matricula}` : ""} · ${dataHoraBR(new Date().toISOString())}`} />}
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
-      <ConfigTabelas linhas={linhasTabela(aparencia)} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
+      <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
         <ComponentesPapel retirados={usuario.admin ? {} : usuario.papel.detalhes.componentes} exibicao={usuario.papel.detalhes.exibicao}>
           <SegundoPlano>{children}</SegundoPlano>

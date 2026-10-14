@@ -30,7 +30,7 @@ import {
 import { DateFilterHeader } from "./DateFilterHeader";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
 import { useEditorEdicoes } from "./EdicoesTabela";
-import { useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
+import { colunaDeUnidade, useLinhasTabela, useNomesUnidades, useQuemExporta } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
 import { definirVarRaiz, ehDesktop } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
@@ -239,6 +239,10 @@ export function DataTable<R>({
   }, [activeKey]);
   // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
   const linhasAdm = useLinhasTabela();
+  // Colunas de unidade/sigla: o filtro mostra e busca também pelo NOME de cada sigla.
+  const nomesUnidades = useNomesUnidades();
+  const temNomes = Object.keys(nomesUnidades).length > 0;
+  const detalheUnidade = useCallback((o: string) => nomesUnidades[o], [nomesUnidades]);
   const [limite, setLimite] = useState<number>(linhasAdm);
   // As linhas por página salvas no aparelho (lidas depois da montagem — o HTML do servidor não as conhece).
   useEffect(() => {
@@ -598,6 +602,7 @@ export function DataTable<R>({
                   opcoes.length > 0 || marcado ? (
                     <MultiSelectHeader
                       label={c.header}
+                      detalhe={temNomes && colunaDeUnidade(c.header) ? detalheUnidade : undefined}
                       options={opcoes}
                       value={externo.valor}
                       onApply={(v) => {
@@ -637,6 +642,7 @@ export function DataTable<R>({
                 ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
                   <MultiSelectHeader
                     label={c.header}
+                    detalhe={temNomes && colunaDeUnidade(c.header) ? detalheUnidade : undefined}
                     options={opcoes}
                     value={(filters[c.key] as string[] | undefined) ?? []}
                     onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}

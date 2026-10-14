@@ -22,6 +22,7 @@ export function MultiSelectHeader({
   sortDir = null,
   align = "start",
   marcado,
+  detalhe,
 }: {
   label: string;
   options: string[];
@@ -32,6 +33,8 @@ export function MultiSelectHeader({
   align?: "start" | "end";
   /** Coluna filtrada (tópico marcado). Padrão: há seleção que não cobre todas as opções. */
   marcado?: boolean;
+  /** A 2ª linha de cada opção (ex.: o NOME da sigla da unidade) — a busca acha pelos dois. */
+  detalhe?: (opcao: string) => string | undefined;
 }) {
   const filtrado = marcado ?? (value.length > 0 && !options.every((o) => value.includes(o)));
 
@@ -49,6 +52,7 @@ export function MultiSelectHeader({
           label={label}
           options={options}
           value={value}
+          detalhe={detalhe}
           onApply={(s) => {
             onApply(s);
             close();
@@ -64,6 +68,7 @@ export function MultiSelectHeader({
 function Painel({
   options,
   value,
+  detalhe,
   onApply,
   onCancel,
   onSort,
@@ -71,6 +76,7 @@ function Painel({
   label: string;
   options: string[];
   value: string[];
+  detalhe?: (opcao: string) => string | undefined;
   onApply: (sel: string[]) => void;
   onCancel: () => void;
   onSort?: (dir: "asc" | "desc") => void;
@@ -82,7 +88,15 @@ function Painel({
     return new Set(value.filter((v) => ofertadas.has(v)));
   });
   const [q, setQ] = useState("");
-  const visiveis = useMemo(() => opcoesDaBusca(options, q), [q, options]);
+  const visiveis = useMemo(() => {
+    const achados = opcoesDaBusca(options, q);
+    if (!detalhe || !q.trim()) return achados;
+    // Também pelo detalhe (o nome da unidade): "saúde" acha a sigla FMS.
+    const comDetalhe = options.filter((o) => detalhe(o));
+    const peloNome = new Set(opcoesDaBusca(comDetalhe.map((o) => detalhe(o) ?? ""), q));
+    const ja = new Set(achados);
+    return options.filter((o) => ja.has(o) || peloNome.has(detalhe(o) ?? ""));
+  }, [q, options, detalhe]);
   const buscando = q.trim() !== "";
   // Seleção DA BUSCA, guardada com o termo: mudou a busca ⇒ os novos resultados começam todos marcados.
   const [selBusca, setSelBusca] = useState<{ q: string; set: Set<string> } | null>(null);
@@ -162,7 +176,14 @@ function Painel({
               onChange={() => alternar(o)}
               className="caixa-marcar"
             />
-            <span className="truncate" title={o}>{o}</span>
+            {detalhe?.(o) ? (
+              <span className="flex min-w-0 flex-col" title={`${o} — ${detalhe(o)}`}>
+                <span className="truncate">{o}</span>
+                <span className="truncate text-[11px] text-faint">{detalhe(o)}</span>
+              </span>
+            ) : (
+              <span className="truncate" title={o}>{o}</span>
+            )}
           </label>
         ))}
         {visiveis.length === 0 && (

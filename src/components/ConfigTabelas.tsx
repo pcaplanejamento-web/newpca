@@ -5,6 +5,7 @@ import { LINHAS_TABELA_PADRAO, type LinhasTabela } from "@/lib/theme";
 
 const LinhasTabelaCtx = createContext<LinhasTabela>(LINHAS_TABELA_PADRAO);
 const QuemCtx = createContext<string | null>(null);
+const NomesCtx = createContext<Record<string, string>>({});
 
 /**
  * Configuração das TABELAS definida pelo ADM (Configurações → Tabelas) para toda a área logada: as LINHAS POR PÁGINA com
@@ -12,10 +13,23 @@ const QuemCtx = createContext<string | null>(null);
  * — e QUEM está logado (o rodapé do PDF exportado diz quem baixou). Módulo leve (só o contexto): o layout o usa sem
  * carregar a tabela nas telas que não têm uma.
  */
-export function ConfigTabelas({ linhas, quem = null, children }: { linhas: LinhasTabela; quem?: string | null; children: ReactNode }) {
+export function ConfigTabelas({
+  linhas,
+  quem = null,
+  nomesUnidades = {},
+  children,
+}: {
+  linhas: LinhasTabela;
+  quem?: string | null;
+  /** SIGLA → NOME das unidades e órgãos: o filtro das colunas de unidade/sigla mostra e busca pelos dois. */
+  nomesUnidades?: Record<string, string>;
+  children: ReactNode;
+}) {
   return (
     <LinhasTabelaCtx.Provider value={linhas}>
-      <QuemCtx.Provider value={quem}>{children}</QuemCtx.Provider>
+      <QuemCtx.Provider value={quem}>
+        <NomesCtx.Provider value={nomesUnidades}>{children}</NomesCtx.Provider>
+      </QuemCtx.Provider>
     </LinhasTabelaCtx.Provider>
   );
 }
@@ -25,3 +39,9 @@ export const useQuemExporta = () => useContext(QuemCtx);
 
 /** As linhas por página iniciais das tabelas (a escolha do ADM). */
 export const useLinhasTabela = () => useContext(LinhasTabelaCtx);
+
+/** SIGLA → NOME das unidades e órgãos (sem provedor, vazio). */
+export const useNomesUnidades = () => useContext(NomesCtx);
+
+/** Coluna de UNIDADE/SIGLA (o filtro ganha o nome de cada uma) — pelo título, nunca a unidade de MEDIDA. */
+export const colunaDeUnidade = (titulo: string) => /sigla|unidade|reparti/i.test(titulo) && !/medida|unid\.|cadastrada|planilha/i.test(titulo);
