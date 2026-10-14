@@ -31,7 +31,7 @@ type TarefaLigada = {
 type QuadroOpcao = { id: number; nome: string; cor: string; grupoNome: string };
 /** Uma lista ATRIBUÍDA sugerida (ao responsável do protocolo ou à pessoa). */
 type ListaOpcao = { id: number; nome: string; quadroId: number; motivo: "responsavel" | "sua" };
-type Dados = { tarefas: TarefaLigada[]; quadros: QuadroOpcao[]; listas?: ListaOpcao[]; rotulo?: string | null; usuarioId?: number };
+type Dados = { tarefas: TarefaLigada[]; quadros: QuadroOpcao[]; listas?: ListaOpcao[]; rotulo?: string | null; sigla?: string | null; usuarioId?: number };
 
 /** O banner da tarefa aberto AQUI (sem sair da Mesa): nova (no quadro/lista) ou uma ligada. */
 type Aberta = { tipo: "nova"; ctx: ContextoQuadro; listaId: number } | { tipo: "editar"; ctx: ContextoTarefa };
@@ -81,7 +81,8 @@ export function TarefasDoVinculo({
   const hoje = dataIsoBrasilia(new Date().toISOString());
   const abertas = dados.tarefas.filter((t) => !t.arquivada && !t.concluidaEm);
   const lista = ver === "abertas" ? abertas : dados.tarefas;
-  const alvo = `${ROTULO_VINCULO[tipo]} ${dados.rotulo ?? `#${id}`}`;
+  // A tarefa leva a SIGLA da unidade do protocolo/DFD/item no título sugerido ("SEMED · Protocolo 123/2026: ").
+  const alvo = `${dados.sigla ? `${dados.sigla} · ` : ""}${ROTULO_VINCULO[tipo]} ${dados.rotulo ?? `#${id}`}`;
 
   /** Abre a tarefa NOVA aqui: o contexto do quadro (listas, pessoas…) + a lista pedida, senão a atribuída, senão a 1ª. */
   const criar = async (quadroId: number, listaId?: number) => {
@@ -240,7 +241,7 @@ export function TarefasDoVinculo({
       </Modal>
       {ctx && (
         <TarefaDetalhe
-          aberto={tarefa.tipo === "nova" ? { tipo: "nova", listaId: tarefa.listaId, titulo: `${alvo}: `, vinculo: { tipo, id, rotulo: dados.rotulo ?? null } } : { tipo: "editar", id: tarefa.ctx.tarefa.id }}
+          aberto={tarefa.tipo === "nova" ? { tipo: "nova", listaId: tarefa.listaId, titulo: `${alvo}: `, vinculo: { tipo, id, rotulo: dados.rotulo ?? null, sigla: dados.sigla ?? null } } : { tipo: "editar", id: tarefa.ctx.tarefa.id }}
           quadroId={ctx.quadro.id}
           tarefas={tarefa.tipo === "editar" ? [tarefa.ctx.tarefa] : []}
           listas={ctx.listas.filter((l) => !l.arquivada)}

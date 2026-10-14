@@ -1,9 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import type { Item } from "@/lib/fluxo-core";
+import { gravarDisparoMesa } from "@/lib/automacao-mesa";
+import { AutomacaoViva, CHAVE_AUTOMACAO } from "./AutomacaoViva";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropdown } from "./Dropdown";
 import { IconRobo } from "./icons";
 import { classeQuadradoFiltro } from "./SeletorFiltro";
+import { useRodarFora } from "./SegundoPlano";
+import { toast } from "./Toast";
 
 /**
  * AUTOMAÇÕES da Mesa do sistema: a lista das automações que a pessoa marcou como "Disponível na Mesa"; escolher uma
@@ -16,12 +22,15 @@ export function AutomacoesMesa({
   alvo,
   onEscolher,
   variante = "barra",
+  rotulo = "Automação",
 }: {
   automacoes: { id: number; nome: string }[];
   /** Com o quê roda: "3 protocolos selecionados (12 DFDs)" / "40 DFDs filtrados". */
   alvo: string;
   onEscolher: (id: number) => void;
   variante?: "barra" | "selecao";
+  /** O texto do botão na variante `selecao` (ex.: "Emitir DFDs" na lista de tarefas). */
+  rotulo?: string;
 }) {
   const { confirmar, confirmacao } = useConfirmacao();
   if (!automacoes.length) return null;
@@ -45,7 +54,7 @@ export function AutomacoesMesa({
           ) : (
             <>
               <IconRobo className="h-4 w-4" />
-              Automação
+              {rotulo}
             </>
           )
         }
@@ -75,4 +84,21 @@ export function AutomacoesMesa({
       {confirmacao}
     </>
   );
+}
+
+/**
+ * RODA uma automação com os DFDs dados, em SEGUNDO PLANO (o andamento no canto inferior; sem o provedor, vai à tela da
+ * Automação) — a MESMA saída da Mesa e da lista de tarefas.
+ */
+export function useRodarAutomacao() {
+  const rodarFora = useRodarFora();
+  const router = useRouter();
+  return (fluxoId: number, itens: Item[]) => {
+    if (!itens.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre.");
+    if (!gravarDisparoMesa({ fluxoId, itens })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
+    if (rodarFora) {
+      rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />);
+      toast.info("Automação iniciada em segundo plano — acompanhe no canto inferior.");
+    } else router.push("/painel/automacao");
+  };
 }

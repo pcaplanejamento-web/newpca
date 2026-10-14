@@ -14,6 +14,7 @@ import {
   rotuloData,
   rotuloRecorrencia,
   rotuloDoVinculo,
+  siglasDaTarefa,
   rotuloTicket,
   type TarefaResumo,
   type CampoTarefa,
@@ -273,6 +274,11 @@ export function CartaoTarefa({
             {t.links}
           </span>
         )}
+        {siglasDaTarefa(t).map((sg) => (
+          <span key={sg} className="pointer-events-none rounded-chip bg-surface-2 px-1.5 text-[11px] font-semibold text-text-2" title={`Unidade ${sg}`}>
+            {sg}
+          </span>
+        ))}
         {t.vinculos.length > 0 && (
           <span className="pointer-events-none inline-flex items-center gap-0.5 text-accent tabular-nums" title={t.vinculos.map(rotuloDoVinculo).join("\n")}>
             <IconLink className="h-3.5 w-3.5" aria-label={`${t.vinculos.length} vínculo(s)`} />

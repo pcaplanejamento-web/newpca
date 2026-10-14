@@ -131,7 +131,7 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 
 /**
  * DETALHE de uma tarefa (criar e editar) num banner — a distribuição do TRELLO: o CÍRCULO de concluir + o TÍTULO no
- * lugar, a lista, a fileira **+ Adicionar** (`MenuAdicionarCartao`), a FAIXA DE METADADOS (Membros · Etiquetas · Datas ·
+ * lugar, a lista, a LINHA **Adicionar** FIXA acima do rodapé (`MenuAdicionarCartao` — cada componente disponível), a FAIXA DE METADADOS (Membros · Etiquetas · Datas ·
  * Prioridade · Estimativa — aparecem quando têm dado ou foram acrescentadas; tocar abre o editor logo abaixo), a
  * DESCRIÇÃO formatada (lida formatada, editada no lugar) e os BLOCOS do corpo (Checklists · Notas · Links · Eventos ·
  * Vínculo — alça e ↑/↓ reordenam). "Salvar" manda SÓ o que mudou; o CHECKLIST da tarefa gravada grava na hora (otimista,
@@ -909,6 +909,19 @@ export function TarefaDetalhe({
           </div>
         }
         rodape={
+          <div className="space-y-2">
+          {!somenteLeitura && (
+            <MenuAdicionarCartao
+              metadados={TIPOS_METADADO.filter((t) => !metaVisiveis.includes(t))}
+              blocos={blocosDisponiveis(r.blocos)}
+              disabled={carregando}
+              onMetadado={(t) => {
+                setMetaExtras((m) => [...m, t]);
+                setMetaEditando(t);
+              }}
+              onBloco={(t) => setBlocos((l) => adicionarBloco(l, t))}
+            />
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {existente && !somenteLeitura && (
               <Button
@@ -960,6 +973,7 @@ export function TarefaDetalhe({
                 </Button>
               )}
             </div>
+          </div>
           </div>
         }
       >
@@ -1023,16 +1037,6 @@ export function TarefaDetalhe({
               ))}
               {!listaAtual && <option value={r.listaId}>Lista arquivada</option>}
             </SelectField>
-            <MenuAdicionarCartao
-              metadados={TIPOS_METADADO.filter((t) => !metaVisiveis.includes(t))}
-              blocos={blocosDisponiveis(r.blocos)}
-              disabled={carregando}
-              onMetadado={(t) => {
-                setMetaExtras((m) => [...m, t]);
-                setMetaEditando(t);
-              }}
-              onBloco={(t) => setBlocos((l) => adicionarBloco(l, t))}
-            />
             {!nova && r.listaId !== inicial.listaId && <p className="w-full text-[12px] text-muted">Ao salvar, a tarefa vai para o fim desta lista.</p>}
           </div>
           {metaVisiveis.length > 0 && (

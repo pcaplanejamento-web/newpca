@@ -172,8 +172,9 @@ export function DataTable<R>({
   /** Altura (px) RESERVADA no fim do display para algo fixo abaixo da tabela (ex.: a barra de
    * seleção da Mesa) — `scrollInterno`/`fillHeight` descontam, então nada fica por baixo dela. */
   reservaInferior?: number;
-  /** Ações no RODAPÉ da tabela, à esquerda do seletor de linhas (ex.: "Importar protocolo" da Mesa). */
-  acoesRodape?: ReactNode;
+  /** Ações no RODAPÉ da tabela, à esquerda do seletor de linhas (ex.: "Importar protocolo" da Mesa). Em função, recebe as
+   * linhas À VISTA (os filtros das colunas, na ordem) — ex.: "Emitir DFDs" das tarefas filtradas. */
+  acoesRodape?: ReactNode | ((linhas: R[]) => ReactNode);
   /** Mensagem do corpo quando NÃO há linhas (sem dados) — com linhas escondidas pelos filtros das colunas,
    * vale a mensagem padrão dos filtros. */
   vazio?: ReactNode;
@@ -811,7 +812,7 @@ export function DataTable<R>({
           {nomeExportar && (
             <BotaoExportar nome={nomeExportar} disabled={ordenadas.length === 0} carregando={exportando} onExportar={(f) => void exportarTabela(f)} />
           )}
-          {acoesRodape}
+          {typeof acoesRodape === "function" ? acoesRodape(ordenadas) : acoesRodape}
           {(scrollInterno || linhasSalvas) && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
               <span className="hidden sm:inline">Linhas</span>

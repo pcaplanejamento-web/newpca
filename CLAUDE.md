@@ -3512,6 +3512,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   quadro por `GET /api/tarefas/quadros/[id]` → `contextoQuadro`, `tarefas-dados.ts`; título sugerido "Protocolo X: " —
   `AberturaTarefa.titulo`; lista pedida › atribuída › 1ª) ou a ligada (`?contexto=1`); Abertas | Todas, concluir pelo
   `CirculoConcluir` (o mesmo PATCH); criada, segue ABERTA para editar (`TarefaDetalhe.onCriada` → reabre como editar — v1.81.1; nada leva à tela de Tarefas); o `do-vinculo` devolve `rotulo` e `usuarioId`.
+  **v1.82.0:** a LINHA **Adicionar** (`MenuAdicionarCartao`, agora uma fileira de botões, não um menu) fica FIXA no rodapé
+  do `TarefaDetalhe`, acima das ações; a **SIGLA** da unidade vem do vínculo (`VinculoTarefa.sigla`, resolvida em
+  `rotulosVinculos` pela unidade do protocolo/DFD/DFD do item) → `siglasDaTarefa` no cartão, na coluna **Unidade** da Lista
+  e no título sugerido do `TarefasDoVinculo`; filtro **`FiltroTarefas.siglas`** (+ `SEM_SIGLA`) no painel Filtrar
+  (`FiltrosTarefas.siglas`) e nos chips. **Emitir DFDs** (só ADM): `DataTable.acoesRodape` aceita função das linhas à vista
+  → `EmitirDfdsTarefas` (`TabelaTarefas`) → `POST /api/tarefas/dfds` (`exigirAdmin`: protocolo = os DFDs dele, DFD, item =
+  o DFD) → `useRodarAutomacao` (`AutomacoesMesa.tsx`, a MESMA saída da Mesa, em segundo plano), com as automações
+  "Disponível na Mesa" (`carregarQuadro.automacoesMesa`).
   Evento de calendário SEM tarefa ainda não existe (`tarefa_eventos.tarefa_id` é obrigatório) — previsto no ROADMAP.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
   Integrações); a seguir, o relatório de produtividade por grupo.

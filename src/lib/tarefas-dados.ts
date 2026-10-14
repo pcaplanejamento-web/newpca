@@ -2,6 +2,7 @@ import { type Acesso, atorPasta, getAcesso, pcasDoAcesso, podeNoQuadro, podeTela
 import type { UsuarioSessao } from "./auth";
 import { estadoTrello } from "./trello-vincular";
 import { carregarEdicoes } from "./edicoes-tabela";
+import { automacoesDaMesa } from "./fluxos";
 import { dataIsoBrasilia } from "./format";
 import { PODE_NADA, PODE_TUDO } from "./papeis-core";
 import {
@@ -221,7 +222,7 @@ export async function carregarQuadro(a: Acesso, id: number) {
   const u = a.u;
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
-  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos, trello] = await Promise.all([
+  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos, trello, automacoesMesa] = await Promise.all([
     dadosQuadro(id),
     pessoasDoQuadro(quadro),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
@@ -231,6 +232,8 @@ export async function carregarQuadro(a: Acesso, id: number) {
     favoritosDaPessoa(u.id),
     listarCampos([id]),
     estadoTrello(id).catch(() => null),
+    // As AUTOMAÇÕES da Mesa (só o ADM) — o "Emitir DFDs" da lista de tarefas.
+    u.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
   const fora = [...new Set([...dados.tarefas.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
@@ -244,6 +247,7 @@ export async function carregarQuadro(a: Acesso, id: number) {
     campos,
     edicoes,
     automacoes,
+    automacoesMesa,
     favoritos,
     trello,
     modelosQuadro: modelosQuadro.map((m) => ({ id: m.id, nome: m.nome, criadoPor: m.criadoPor, listas: m.conteudo.listas.map((l) => l.nome) })),

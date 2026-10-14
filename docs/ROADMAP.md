@@ -1346,7 +1346,7 @@ título escrito à mão prevalece). Copiar, template, mover e recorrência levam
 ✅ **Tarefas — lista com pessoa, tarefa sobre o item e exclusão limpa (v1.80.0, migração `0108`):** a lista pode ser
 atribuída a uma pessoa (a tarefa nova nela nasce com ela como responsável); o ITEM do DFD vira vínculo (botão Tarefas no
 banner do item); o "Criar tarefa" da Mesa mostra as listas atribuídas ao responsável do protocolo e à pessoa; excluir a
-lista com as tarefas limpa também os vínculos que apontavam para elas. **Próximo:** evento de calendário SEM tarefa
+lista com as tarefas limpa também os vínculos que apontavam para elas. v1.82.0: linha Adicionar fixa no rodapé da tarefa, SIGLA da unidade (cartão, Lista, filtro) e Emitir DFDs das tarefas filtradas (ADM). **Próximo:** evento de calendário SEM tarefa
 (compromisso do grupo/pessoa — hoje todo evento pertence a uma tarefa).
 
 ✅ **Tarefas no padrão Trello — F8 (migração `0057`):** VÁRIOS vínculos por tarefa — protocolos, DFDs, PCAs, orçamentos e

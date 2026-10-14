@@ -15,6 +15,7 @@ import {
   type OrdenacaoLista,
   ROTULO_ORDENACAO,
   FILTRO_TAREFAS_PADRAO,
+  siglasDaTarefa,
   type FiltroTarefas,
   filtrarTarefas,
   contarFiltros,
@@ -98,6 +99,7 @@ export function QuadroTarefas({
   pessoas,
   edicoes,
   automacoes,
+  automacoesMesa,
   favoritos,
   trello,
   modelosQuadro,
@@ -182,6 +184,8 @@ export function QuadroTarefas({
   useEffect(() => setSel(new Set()), [aba, mostrar]);
 
   const ativas = useMemo(() => listas.filter((l) => !l.arquivada), [listas]);
+  /** As SIGLAS das unidades dos vínculos das tarefas (as opções do filtro "Unidade"). */
+  const siglasDoQuadro = useMemo(() => [...new Set(tarefas.flatMap(siglasDaTarefa))].sort((a, b) => a.localeCompare(b, "pt-BR")), [tarefas]);
   const doGrupo = useMemo(() => {
     const m = new Set(membros);
     return pessoas.filter((p) => m.has(p.id));
@@ -581,7 +585,7 @@ export function QuadroTarefas({
               <>
                 <MembrosQuadro pessoas={doGrupo} filtro={filtro} onFiltro={setFiltro} />
                 {abaAtual !== "configuracao" && (
-                  <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} buscaNoPainel />
+                  <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} siglas={siglasDoQuadro} usuarioId={usuarioId} buscaNoPainel />
                 )}
                 <div ref={setSlot} className="flex items-center gap-1 empty:hidden" />
                 {trello && <IndicadorTrello ligacao={trello} onAbrir={() => irConfiguracao("trello")} />}
@@ -737,6 +741,7 @@ export function QuadroTarefas({
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
             edicoes={edicoesLista}
             nomeExportacao={`Tarefas - ${quadro.nome}`}
+            automacoes={automacoesMesa}
             selecao={podeManipular ? sel : undefined}
             onSelecao={podeManipular ? setSel : undefined}
             reservaInferior={RESERVA_PILULA + 12 + (alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0)}

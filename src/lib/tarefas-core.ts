@@ -114,7 +114,21 @@ export const itemDoVinculo = (alvo: number) => ({ dfdId: Math.floor(alvo / BASE_
  * O vínculo (`rotulo` = o nº/nome do alvo, resolvido no servidor; ausente = o alvo foi excluído). Na TAREFA vinculada:
  * `quadroId` (o link), `detalhe` (quadro › lista), `prazo` e `concluida`.
  */
-export type VinculoTarefa = { tipo: TipoVinculo; id: number; rotulo?: string | null; detalhe?: string | null; quadroId?: number | null; prazo?: string | null; concluida?: boolean };
+export type VinculoTarefa = {
+  tipo: TipoVinculo;
+  id: number;
+  rotulo?: string | null;
+  detalhe?: string | null;
+  quadroId?: number | null;
+  prazo?: string | null;
+  concluida?: boolean;
+  /** A SIGLA da unidade do protocolo/DFD/item vinculado (resolvida no servidor; sem unidade = ausente). */
+  sigla?: string | null;
+};
+
+/** As SIGLAS das unidades dos protocolos/DFDs/itens a que a tarefa se liga (sem repetir, em ordem alfabética). */
+export const siglasDaTarefa = (t: { vinculos?: Pick<VinculoTarefa, "sigla">[] }): string[] =>
+  [...new Set((t.vinculos ?? []).map((v) => v.sigla?.trim()).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, "pt-BR"));
 /** Teto de vínculos por tarefa. */
 export const MAX_VINCULOS = 20;
 export const chaveVinculo = (v: { tipo: string; id: number }) => `${v.tipo}:${v.id}`;
@@ -351,15 +365,20 @@ export type FiltroTarefas = {
   status: StatusFiltro;
   /** Os campos personalizados do tipo LISTA: id do campo → as opções escolhidas. */
   campos: Record<number, string[]>;
+  /** As SIGLAS das unidades dos vínculos (protocolo/DFD/item) e/ou "sem" (tarefa sem unidade). */
+  siglas: string[];
   busca: string;
 };
-export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", campos: {}, busca: "" };
+/** O valor do filtro de sigla para a tarefa SEM unidade nos vínculos. */
+export const SEM_SIGLA = "sem";
+export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", campos: {}, siglas: [], busca: "" };
 /** Quantos filtros estão ligados (cada valor conta; a busca conta 1) — o número do botão "Filtrar". */
 export const contarFiltros = (f: FiltroTarefas) =>
   f.responsaveis.length +
   f.prazos.length +
   f.prioridades.length +
   f.etiquetas.length +
+  f.siglas.length +
   Object.values(f.campos).reduce((n, v) => n + v.length, 0) +
   (f.status !== "todas" ? 1 : 0) +
   (f.busca.trim() ? 1 : 0);
@@ -384,6 +403,7 @@ export const alternarValor = <V>(lista: V[], v: V): V[] => (lista.includes(v) ? 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
 export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket"> & {
   template?: boolean;
+  vinculos?: Pick<VinculoTarefa, "sigla">[];
   campos?: Record<number, string>;
 };
 
@@ -416,6 +436,10 @@ export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: Filtr
     if (f.status === "abertas" && t.concluidaEm != null) return false;
     if (f.status === "concluidas" && t.concluidaEm == null) return false;
     if (f.prazos.length && !f.prazos.some((p) => casaPrazo(t, p, ctx.hoje))) return false;
+    if (f.siglas.length) {
+      const sg = siglasDaTarefa(t);
+      if (!f.siglas.some((x) => (x === SEM_SIGLA ? sg.length === 0 : sg.includes(x)))) return false;
+    }
     for (const [id, vals] of Object.entries(f.campos)) if (vals.length && !vals.includes(t.campos?.[Number(id)] ?? "")) return false;
     return !casa || casa([t.titulo, rotuloTicket(t.ticket), String(t.ticket)]);
   });

@@ -25,6 +25,6 @@ export async function GET(req: Request) {
   const grupo = await getGrupoAtivoId(a.u);
   const ativos = quadros.filter((q) => !q.arquivado && (grupo == null || q.grupoId === grupo));
   const [listas, rotulos] = await Promise.all([listasSugeridas(a.u, ativos.map((q) => q.id), tipo, id), rotulosVinculos([{ tipo, id }])]);
-  const rotulo = rotulos.get(`${tipo}:${id}`)?.rotulo ?? null;
-  return ok({ tarefas, quadros: ativos.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, grupoNome: q.grupoNome })), listas, rotulo, usuarioId: a.u.id });
+  const r = rotulos.get(`${tipo}:${id}`);
+  return ok({ tarefas, quadros: ativos.map((q) => ({ id: q.id, nome: q.nome, cor: q.cor, grupoNome: q.grupoNome })), listas, rotulo: r?.rotulo ?? null, sigla: r?.sigla ?? null, usuarioId: a.u.id });
 }

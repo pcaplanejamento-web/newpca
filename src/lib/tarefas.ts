@@ -26,6 +26,7 @@ import {
   tarefaVinculos,
   tarefas,
   dfdItens,
+  reparticoes,
 } from "@/db/schema";
 import { type Acesso, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
@@ -467,9 +468,15 @@ export async function rotulosVinculos(vinculos: { tipo: TipoVinculo; id: number 
     (await Promise.all(lotesDeIds(lista).map(ler))).flat();
   const dfdsDosItens = [...new Set(ids("item").map((a) => itemDoVinculo(a).dfdId))];
   const [ps, ds, di, pc, oc, ts] = await Promise.all([
-    em(ids("protocolo"), (l) => db.select({ id: dfdProtocolos.id, r: dfdProtocolos.numero }).from(dfdProtocolos).where(inArray(dfdProtocolos.id, l))),
-    em(ids("dfd"), (l) => db.select({ id: dfds.id, r: dfds.numero }).from(dfds).where(inArray(dfds.id, l))),
-    em(dfdsDosItens, (l) => db.select({ id: dfds.id, r: dfds.numero }).from(dfds).where(inArray(dfds.id, l))),
+    em(ids("protocolo"), (l) =>
+      db
+        .select({ id: dfdProtocolos.id, r: dfdProtocolos.numero, sigla: reparticoes.codigo })
+        .from(dfdProtocolos)
+        .leftJoin(reparticoes, eq(reparticoes.id, dfdProtocolos.reparticaoId))
+        .where(inArray(dfdProtocolos.id, l)),
+    ),
+    em(ids("dfd"), (l) => db.select({ id: dfds.id, r: dfds.numero, sigla: reparticoes.codigo }).from(dfds).leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId)).where(inArray(dfds.id, l))),
+    em(dfdsDosItens, (l) => db.select({ id: dfds.id, r: dfds.numero, sigla: reparticoes.codigo }).from(dfds).leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId)).where(inArray(dfds.id, l))),
     em(ids("pca"), (l) => db.select({ id: pcas.id, r: pcas.nome }).from(pcas).where(inArray(pcas.id, l))),
     em(ids("orcamento"), (l) =>
       db
@@ -494,12 +501,13 @@ export async function rotulosVinculos(vinculos: { tipo: TipoVinculo; id: number 
     ),
   ]);
   const m = new Map<string, Partial<VinculoTarefa>>();
-  for (const [tipo, linhas] of [["protocolo", ps], ["dfd", ds], ["pca", pc], ["orcamento", oc]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r });
-  const numDfd = new Map(di.map((x) => [x.id, x.r]));
+  for (const [tipo, linhas] of [["protocolo", ps], ["dfd", ds]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r, sigla: x.sigla });
+  for (const [tipo, linhas] of [["pca", pc], ["orcamento", oc]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r });
+  const dfdDoItem = new Map(di.map((x) => [x.id, x]));
   for (const a of ids("item")) {
     const { dfdId, item } = itemDoVinculo(a);
-    const n = numDfd.get(dfdId);
-    if (n != null) m.set(`item:${a}`, { rotulo: `${item} · DFD ${n}` });
+    const d = dfdDoItem.get(dfdId);
+    if (d) m.set(`item:${a}`, { rotulo: `${item} · DFD ${d.r}`, sigla: d.sigla });
   }
   for (const x of ts) m.set(`tarefa:${x.id}`, { rotulo: x.r, detalhe: x.detalhe, quadroId: x.quadroId, prazo: x.prazo, concluida: x.concluidaEm != null });
   return m;

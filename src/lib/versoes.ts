@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.82.0",
+    data: "2026-10-14",
+    titulo: "Tarefas com a sigla da unidade e Emitir DFDs da lista",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "No banner da tarefa, todos os componentes que dá para adicionar ficam numa linha fixa acima do rodapé (rola de lado no celular).", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "A tarefa ligada a protocolo, DFD ou item leva a SIGLA da unidade: no cartão, na coluna Unidade da Lista e no título sugerido ao criar pela Mesa.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "Filtrar por unidade (sigla, ou sem unidade) no painel Filtrar; o responsável já filtrava.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "Emitir DFDs (ADM): no rodapé da aba Lista, roda a automação com os DFDs das tarefas À VISTA — os filtros valem.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.81.1",
     data: "2026-10-14",
     titulo: "Tarefa da Mesa segue aberta depois de criada",

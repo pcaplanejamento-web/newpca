@@ -85,10 +85,8 @@ import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
-import { AutomacoesMesa } from "./AutomacoesMesa";
-import { dfdsDoAlvo, gravarDisparoMesa } from "@/lib/automacao-mesa";
-import { AutomacaoViva, CHAVE_AUTOMACAO } from "./AutomacaoViva";
-import { useRodarFora } from "./SegundoPlano";
+import { AutomacoesMesa, useRodarAutomacao } from "./AutomacoesMesa";
+import { dfdsDoAlvo } from "@/lib/automacao-mesa";
 import { PresencaNoItem } from "./PresencaNoItem";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
@@ -478,7 +476,7 @@ export function DfdsView({
   }, [itensF]);
   // AUTOMAÇÕES da Mesa (só a do sistema): a visão aberta decide o alvo — protocolos, DFDs ou itens viram os DFDs deles.
   // A barra do topo = TODOS os filtrados; a barra de seleção = os SELECIONADOS. Roda em segundo plano (sem sair da Mesa).
-  const rodarFora = useRodarFora();
+  const rodar = useRodarAutomacao();
   const alvoAutomacao = (soSelecionados: boolean) => {
     if (vista === "protocolos") {
       const ps = soSelecionados ? protocolosF.filter((p) => selProtos.has(p.id)) : protocolosF;
@@ -493,15 +491,7 @@ export function DfdsView({
     const lista = dfdsDoAlvo(dfdsF, "id", soSelecionados ? new Set([...selDfds].map(Number)) : new Set(dfdsF.map((d) => d.id)));
     return { lista, rotulo: `${num(lista.length)} DFD(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"}` };
   };
-  const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => {
-    const { lista } = alvoAutomacao(soSelecionados);
-    if (!lista.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre.");
-    if (!gravarDisparoMesa({ fluxoId, itens: lista })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
-    if (rodarFora) {
-      rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />);
-      toast.info("Automação iniciada em segundo plano — acompanhe no canto inferior.");
-    } else router.push("/painel/automacao");
-  };
+  const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => rodar(fluxoId, alvoAutomacao(soSelecionados).lista);
   const automacaoSel = (rotulo: string) =>
     !modoPca && automacoes.length ? (
       <AutomacoesMesa variante="selecao" automacoes={automacoes} alvo={rotulo} onEscolher={(id) => rodarAutomacao(id, true)} />

@@ -285,6 +285,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "tarefas/campos/[id]": { PATCH: recurso("tarefas", "configurar", "campoDoEditor("), DELETE: recurso("tarefas", "configurar", "campoDoEditor(") },
   "tarefas/checklists/[id]": { PATCH: recurso(AGENDA, "manipular", "checklistAcessivel("), DELETE: recurso(AGENDA, "manipular", "checklistAcessivel(") },
   "tarefas/destinos": { GET: recurso(AGENDA, "manipular", "gruposDeTarefas(", "os quadros em que se copia/move uma tarefa") },
+  "tarefas/dfds": { POST: ADMIN },
   "tarefas/do-vinculo": { GET: recurso(AGENDA, "visualizar", "gruposDeTarefas(", "as tarefas do alvo; os quadros para criar = Manipular") },
   "tarefas/equipes/[id]": { PATCH: recurso("tarefas", "configurar", "equipeDoEditor("), DELETE: recurso("tarefas", "configurar", "equipeDoEditor(") },
   "tarefas/etiquetas/[id]": { PATCH: recurso("tarefas", "configurar", "etiquetaDoEditor("), DELETE: recurso("tarefas", "configurar", "etiquetaDoEditor(") },
