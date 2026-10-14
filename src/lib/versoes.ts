@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.86.0",
+    data: "2026-10-14",
+    titulo: "Ver as configurações da visão",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Olho ao lado da Visão no PCA × Orçamento: abre os filtros e os vínculos da visão em uso só para consulta, sem poder alterar.", link: "/painel/pca" },
+      { tipo: "novo", area: "Papéis", texto: "Componente \"Configurações da visão\" no PCA: o ADM decide, por papel, quem vê o olho.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
     versao: "1.85.2",
     data: "2026-10-14",
     titulo: "Carregando ao trocar a visão",

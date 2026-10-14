@@ -27,6 +27,8 @@ import type { AberturaMesa } from "./BannersMesa";
 import { AjudaVisoes } from "./AjudaVisoes";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { useComponente } from "./ComponentesPapel";
+import { EditorVisaoOrcamento } from "./EditorVisaoOrcamento";
 import { Callout } from "./Callout";
 import { useQuemExporta } from "./ConfigTabelas";
 import { type Column, DataTable } from "./DataTable";
@@ -296,6 +298,9 @@ export function OrcamentoPca({
   const [engrenagem, setEngrenagem] = useState(false);
   // As ações da lista da Visão (na barra) abrem o editor da engrenagem direto.
   const [editorPedido, setEditorPedido] = useState<{ alvo: VisaoOrcamento | "nova"; n: number } | null>(null);
+  const libera = useComponente();
+  // A visão aberta SÓ PARA CONSULTA (o olho ao lado da Visão): filtros e vínculos travados.
+  const [visaoVista, setVisaoVista] = useState<VisaoOrcamento | null>(null);
   const linhasVisao = useMemo(() => comparativo?.itens ?? null, [comparativo]);
   const ausentes = contarAusentes(dados.ausentes ?? []);
   // VÍNCULOS por linha (o lápis): as unidades do CUBO do orçamento do ano + a gravação da aba Vínculos.
@@ -555,6 +560,7 @@ export function OrcamentoPca({
                     visoes={visoes}
                     podeEscolher
                     itens={linhasVisao}
+                    onVer={linhasVisao && libera("pca.visaoDetalhes") ? setVisaoVista : undefined}
                     onEditar={
                       podePublicar && podeConfigurarOrcamento && linhasVisao
                         ? (alvo) => setEditorPedido((p) => ({ alvo, n: (p?.n ?? 0) + 1 }))
@@ -607,6 +613,18 @@ export function OrcamentoPca({
             setVinculosDe(null);
             gravacao.limparErro();
           }}
+        />
+      )}
+      {linhasVisao && (
+        <EditorVisaoOrcamento
+          aberta={visaoVista}
+          itens={linhasVisao}
+          podeEditar={false}
+          vinculos={comparativo?.vinculos}
+          alvos={comparativo?.alvos}
+          visoes={gravacao.visoesAtuais}
+          onFechar={() => setVisaoVista(null)}
+          onSalva={() => setVisaoVista(null)}
         />
       )}
       {(

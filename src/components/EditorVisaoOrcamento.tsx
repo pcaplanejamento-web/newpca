@@ -145,7 +145,7 @@ export function EditorVisaoOrcamento({
         onClose={onFechar}
         bloqueado={salvando || g.salvando}
         size={parte === "vinculos" ? "xl" : "lg"}
-        titulo={aberta === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : "Visão"}
+        titulo={aberta === "nova" ? "Nova visão" : podeEditar ? "Editar visão" : `Visão "${aberta?.nome ?? ""}" (consulta)`}
         acoesCabecalho={<AjudaVisoes usos={aberta && aberta !== "nova" ? usos : undefined} />}
         rodape={
           // Altura FIXA: a prévia numa linha própria (truncada) e os botões abaixo — marcar um item não muda o banner.

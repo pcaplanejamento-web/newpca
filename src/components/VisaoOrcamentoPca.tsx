@@ -72,6 +72,7 @@ export function SeletorVisaoPca({
   podeEscolher,
   itens,
   onEditar,
+  onVer,
 }: {
   pcaId: number;
   visaoId: number | null;
@@ -82,6 +83,8 @@ export function SeletorVisaoPca({
   itens?: LinhaVisaoOrcamento[] | null;
   /** Editar a visão escolhida / criar uma nova (no editor da engrenagem) — as ações no rodapé da lista. */
   onEditar?: (alvo: VisaoOrcamento | "nova") => void;
+  /** Ver as configurações da visão em uso (filtros e vínculos), só leitura — o olho ao lado; ausente = sem o olho. */
+  onVer?: (v: VisaoOrcamento) => void;
 }) {
   const { escolha, gravando, gravar } = useVisaoDoPca(pcaId, visaoId);
   const atual = visoes.find((v) => v.id === escolha) ?? null;
@@ -94,7 +97,8 @@ export function SeletorVisaoPca({
       ]
     : undefined;
   return (
-    <div className="min-w-0" title={podeEscolher ? dica : `${dica} — sem acesso ao PCA para trocar a visão`}>
+    <div className="flex min-w-0 items-center gap-1.5" title={podeEscolher ? dica : `${dica} — sem acesso ao PCA para trocar a visão`}>
+      <div className="min-w-0 flex-1">
       <SelectField
         compacto
         label="Visão"
@@ -117,6 +121,18 @@ export function SeletorVisaoPca({
           </optgroup>
         )}
       </SelectField>
+      </div>
+      {onVer && (
+        <Button
+          size="sm"
+          variant="icon"
+          icon={<IconEye className="h-4 w-4" />}
+          disabled={!atual || gravando}
+          aria-label={atual ? `Ver as configurações da visão ${atual.nome}` : "Ver as configurações da visão"}
+          title={atual ? `Ver as configurações da visão "${atual.nome}" (só consulta)` : "Orçamento inteiro — sem filtros nem vínculos próprios"}
+          onClick={() => atual && onVer(atual)}
+        />
+      )}
     </div>
   );
 }
