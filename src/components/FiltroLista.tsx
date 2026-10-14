@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import { dataIsoBrasilia } from "@/lib/format";
+import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
+import { blocosPdfTarefas, type ConteudoPdfTarefa } from "@/lib/tarefas-pdf";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
   alternarValor,
+  type CampoTarefa,
   type FiltroTarefas,
   numerosMesa,
   opcoesFiltroLista,
@@ -137,8 +140,21 @@ export function FiltroLista({
   );
 }
 
-/** O PDF da LISTA (o ícone no pé da coluna): os cartões À VISTA (com o filtro da lista e o do quadro), uma linha cada. */
-export function PdfLista({ nome, quadro, tarefas, pessoas, hoje }: { nome: string; quadro?: string; tarefas: TarefaResumo[]; pessoas: Map<number, Pessoa>; hoje: string }) {
+/** O PDF da LISTA (o ícone no pé da coluna): os cartões À VISTA (com o filtro da lista e o do quadro) com TODO o conteúdo
+ * de cada um — dados, descrição, notas, links, checklists, eventos e comentários (lidos de cada tarefa, 4 por vez). */
+export function PdfLista({
+  nome,
+  tarefas,
+  pessoas,
+  etiquetas,
+  campos,
+}: {
+  nome: string;
+  tarefas: TarefaResumo[];
+  pessoas: Map<number, Pessoa>;
+  etiquetas: Map<number, { nome: string }>;
+  campos?: CampoTarefa[];
+}) {
   const pode = usePodeExportar();
   const quem = useQuemExporta();
   const [gerando, setGerando] = useState(false);
@@ -151,27 +167,23 @@ export function PdfLista({ nome, quadro, tarefas, pessoas, hoje }: { nome: strin
     }
     setGerando(true);
     try {
-      const { baixarTabelaPdf } = await import("@/lib/exportar-pdf");
-      const { nomeArquivoPdf } = await import("@/lib/exportar-pdf-core");
-      const titulo = quadro ? `${quadro} — ${nome}` : nome;
-      await baixarTabelaPdf(
-        nomeArquivoPdf(titulo, dataIsoBrasilia(new Date().toISOString())),
-        {
-          titulo,
-          subtitulo: `${lista.length} ${lista.length === 1 ? "cartão" : "cartões"}`,
-          cabecalho: ["Ticket", "Título", "Membros", "Unidade", "Protocolo · DFD · Item", "Prazo", "Prioridade", "Situação"],
-          linhas: lista.map((t) => [
-            rotuloTicket(t.ticket),
-            t.titulo,
-            t.envolvidos.map((id) => (pessoas.get(id) ? nomeExibicao(pessoas.get(id) as Pessoa) : `#${id}`)).join(", "),
-            siglasDaTarefa(t).join(", "),
-            numerosMesa(t.vinculos).map((m) => m.texto).join(", "),
-            rotuloData(t.prazo, "", t.prazoHora),
-            ROTULO_PRIORIDADE[t.prioridade],
-            t.concluidaEm ? "Concluída" : "Aberta",
-          ]),
-          alinhar: ["center", "left", "left", "center", "left", "center", "center", "center"],
-        },
+      const conteudos = new Map<number, ConteudoPdfTarefa | null>();
+      for (let i = 0; i < lista.length; i += 4)
+        await Promise.all(
+          lista.slice(i, i + 4).map(async (t) => {
+            const j = await chamar<ConteudoPdfTarefa & { tarefa: { descricao?: string | null; blocos?: unknown } }>(`/api/tarefas/${t.id}`).catch(() => null);
+            conteudos.set(t.id, j ? { ...j, descricao: j.tarefa.descricao, blocos: j.tarefa.blocos } : null);
+          }),
+        );
+      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
+      const blocos = blocosPdfTarefas(lista, conteudos, {
+        pessoa: (id) => (pessoas.get(id) ? nomeExibicao(pessoas.get(id) as Pessoa) : `#${id}`),
+        etiqueta: (id) => etiquetas.get(id)?.nome ?? `#${id}`,
+        campos,
+      });
+      await baixarDocumentoPdf(
+        nomeArquivoPdf(nome, dataIsoBrasilia(new Date().toISOString())),
+        { titulo: `${nome} — ${lista.length} ${lista.length === 1 ? "tarefa" : "tarefas"}`, blocos },
         { usuario: quem },
       );
     } catch {
@@ -181,7 +193,7 @@ export function PdfLista({ nome, quadro, tarefas, pessoas, hoje }: { nome: strin
     }
   };
   return (
-    <button type="button" onClick={gerar} disabled={gerando} aria-label={`Baixar o PDF da lista ${nome}`} title="Baixar o PDF da lista" className={`${botaoPe} disabled:opacity-50`}>
+    <button type="button" onClick={gerar} disabled={gerando} aria-label={`Baixar o PDF da lista ${nome}`} title={gerando ? "Gerando o PDF…" : "Baixar o PDF da lista (todo o conteúdo das tarefas)"} className={`${botaoPe} disabled:opacity-50`}>
       <IconFile className={`h-4 w-4 ${gerando ? "animate-pulse" : ""}`} aria-hidden />
     </button>
   );

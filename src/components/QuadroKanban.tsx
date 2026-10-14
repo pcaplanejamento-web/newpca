@@ -218,7 +218,7 @@ export function QuadroKanban({
                 filtro={naLista(l.id)}
                 onChange={(f) => setFiltrosLista((m) => new Map(m).set(l.id, f))}
               />
-              <PdfLista nome={l.nome} tarefas={cartoes} pessoas={mPessoas} hoje={hoje} />
+              <PdfLista nome={l.nome} tarefas={cartoes} pessoas={mPessoas} etiquetas={mEtiquetas} campos={campos} />
               {onDoTemplate && <SeletorTemplates templates={templates} etiquetas={mEtiquetas} lista={l.nome} onEscolher={(id) => onDoTemplate(id, l.id)} />}
             </>
           )
