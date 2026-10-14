@@ -175,6 +175,33 @@ export function DashboardPcaCliente({
     return m;
   }, [filtrados]);
 
+  // Os detalhes das KPIs (sobre os itens à vista — os filtros do Dashboard valem).
+  const ext = useMemo(() => {
+    const valores = filtrados.map((i) => i.valorTotal ?? 0).filter((v) => v > 0).sort((a, b) => a - b);
+    const meio = valores.length >> 1;
+    const mediana = !valores.length ? 0 : valores.length % 2 ? valores[meio] : (valores[meio - 1] + valores[meio]) / 2;
+    const media = valores.length ? valores.reduce((s, v) => s + v, 0) / valores.length : 0;
+    const dfds = new Set<number>();
+    const protocolos = new Set<string>();
+    const classes = new Set<string>();
+    for (const i of filtrados) {
+      if (i.dfdId != null) dfds.add(i.dfdId);
+      if (i.protocoloNumero) protocolos.add(i.protocoloNumero);
+      if (i.classificacao) classes.add(i.classificacao);
+    }
+    return {
+      comValor: valores.length,
+      mediana,
+      menor: valores[0] ?? 0,
+      acimaMedia: valores.filter((v) => v > media).length,
+      dfds: dfds.size,
+      protocolos: protocolos.size,
+      classes: classes.size,
+    };
+  }, [filtrados]);
+  const pctTexto = (parte: number, total: number) =>
+    `${(total > 0 ? (parte / total) * 100 : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
   const kTotal = useContagem(resumoVisto.total);
   const kCount = useContagem(resumoVisto.count);
   const kTicket = useContagem(resumoVisto.ticket);
@@ -373,21 +400,60 @@ export function DashboardPcaCliente({
   return (
     <>
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
-        <KpiStat realce label="Total Planejado" value={brlCompact(kTotal)} hint={`em ${num(resumoVisto.count)} itens`} />
         <KpiStat
           realce
-          label="Qtd. de Itens"
+          completo
+          label="Total planejado"
+          value={brl(kTotal)}
+          hint={ativo ? "Nos filtros do Dashboard" : "Soma de todos os itens do PCA"}
+          detalhes={[
+            { rotulo: "Itens com valor", valor: `${num(ext.comValor)} de ${num(filtrados.length)}` },
+            ...(ext.dfds ? [{ rotulo: "Média por DFD", valor: brl(resumoVisto.total / ext.dfds) }] : []),
+            { rotulo: "Classificações", valor: num(ext.classes) },
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
+          label="Itens planejados"
           value={num(Math.round(kCount))}
           cor="var(--sit-finalizado)"
-          hint={ativo ? "itens no filtro" : (hintItens ?? (unidadeFiltrada ? "itens na unidade" : `${num(resumoVisto.numUnidades)} unidade(s)`))}
+          hint={ativo ? "Itens nos filtros do Dashboard" : (hintItens ?? (unidadeFiltrada ? "Itens da unidade" : "Itens de todas as unidades"))}
+          detalhes={[
+            ...(ext.protocolos ? [{ rotulo: "Protocolos", valor: num(ext.protocolos) }] : []),
+            ...(ext.dfds ? [{ rotulo: "DFDs", valor: num(ext.dfds) }] : []),
+            { rotulo: rotuloUnidade === "Planilha" ? "Planilhas" : "Unidades requisitantes", valor: num(resumoVisto.numUnidades) },
+          ]}
         />
-        <KpiStat realce label="Ticket Médio" value={brl(kTicket)} cor="var(--sit-em-analise)" hint="por item" />
         <KpiStat
           realce
-          label="Maior Item"
-          value={brlCompact(kMaior)}
+          completo
+          label="Valor médio por item"
+          value={brl(kTicket)}
+          cor="var(--sit-em-analise)"
+          hint="Total planejado ÷ quantidade de itens"
+          detalhes={[
+            { rotulo: "Mediana", valor: brl(ext.mediana) },
+            { rotulo: "Menor valor", valor: brl(ext.menor) },
+            { rotulo: "Itens acima da média", valor: num(ext.acimaMedia) },
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
+          label="Maior item"
+          value={brl(kMaior)}
           cor="var(--sit-devolvido)"
           hint={resumoVisto.maiorNome ?? "—"}
+          detalhes={
+            maior
+              ? [
+                  { rotulo: "Participação no total", valor: pctTexto(resumoVisto.maiorValor, resumoVisto.total) },
+                  ...(maior.quantidade != null ? [{ rotulo: "Quantidade", valor: `${num(maior.quantidade)} ${maior.unidadeMedida ?? ""}`.trim() }] : []),
+                  ...(maior.dfdNumero ? [{ rotulo: "DFD", valor: maior.dfdNumero }] : maior.classificacao ? [{ rotulo: "Classificação", valor: maior.classificacao }] : []),
+                ]
+              : undefined
+          }
           onClick={
             maior
               ? () =>

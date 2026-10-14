@@ -16,6 +16,8 @@ export function KpiStat({
   onClick,
   acao,
   realce = false,
+  completo = false,
+  detalhes,
 }: {
   label: string;
   value: ReactNode;
@@ -28,6 +30,11 @@ export function KpiStat({
   acao?: string;
   /** Fundo levemente tingido na cor do KPI e o brilho no canto (o Dashboard do PCA). */
   realce?: boolean;
+  /** Valor COMPLETO (sem abreviar): a fonte encolhe com a largura do cartão para caber inteiro numa linha; a dica quebra
+   * em vez de cortar. */
+  completo?: boolean;
+  /** Linhas "rótulo — valor" abaixo do número (o detalhe do KPI); o valor desce de linha quando não cabe, nunca é cortado. */
+  detalhes?: { rotulo: string; valor: ReactNode; cor?: string }[];
 }) {
   const Raiz = onClick ? "button" : "div";
   return (
@@ -69,7 +76,7 @@ export function KpiStat({
         )}
       </div>
       <div
-        className="mt-1 min-w-0 truncate text-[clamp(1.1rem,17cqw,2.05rem)] font-bold leading-[1.05] tracking-[-0.03em] text-text tabular-nums"
+        className={`mt-1 min-w-0 font-bold ${completo ? "whitespace-nowrap text-[clamp(0.95rem,7.6cqw,1.9rem)]" : "truncate text-[clamp(1.1rem,17cqw,2.05rem)]"} leading-[1.05] tracking-[-0.03em] text-text tabular-nums`}
         title={typeof value === "string" ? value : undefined}
       >
         {value}
@@ -88,7 +95,19 @@ export function KpiStat({
           ))}
         </div>
       )}
-      {hint && <div className="mt-2 truncate text-[11.5px] text-faint">{hint}</div>}
+      {hint && <div className={`mt-1.5 text-[12px] text-faint ${completo ? "break-words" : "truncate"}`}>{hint}</div>}
+      {detalhes && detalhes.length > 0 && (
+        <dl className="mt-3 space-y-1 border-t border-border/70 pt-2.5 text-[12px]">
+          {detalhes.map((d) => (
+            <div key={d.rotulo} className="flex flex-wrap items-baseline justify-between gap-x-3">
+              <dt className="text-muted">{d.rotulo}</dt>
+              <dd className="font-medium tabular-nums text-text-2" style={d.cor ? { color: d.cor } : undefined}>
+                {d.valor}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </Raiz>
   );
 }

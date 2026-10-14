@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.89.1",
+    data: "2026-10-14",
+    titulo: "KPIs do Dashboard do PCA completas",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "As KPIs do Dashboard mostram os valores completos (sem abreviar) e mais detalhes: itens com valor, média por DFD, classificações, protocolos, DFDs, unidades, mediana, menor valor, itens acima da média e a participação do maior item.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.89.0",
     data: "2026-10-14",
     titulo: "Relatório da composição por unidade",
