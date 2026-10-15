@@ -18,6 +18,7 @@ import type { ConfigChat } from "@/lib/chat-core";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { TrilhaCabecalho } from "./TrilhaCabecalho";
+import { GatilhoPesquisa, PesquisaSistema } from "./PesquisaSistema";
 import { toast } from "./Toast";
 import {
   IconAlternarNivel,
@@ -536,6 +537,9 @@ export function AppShell({
             <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
               <Brand identidade={identidade} />
             </div>
+            <div className="shrink-0 px-2 pt-3">
+              <GatilhoPesquisa />
+            </div>
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-4">
               <NavLinks admin={usuario.admin} modulos={modulos} />
             </div>
@@ -584,6 +588,9 @@ export function AppShell({
               </div>
             )}
             <div className="flex-1 overflow-y-auto px-2 py-4">
+              <div className="mb-3" onClickCapture={fecharMenu} role="none">
+                <GatilhoPesquisa />
+              </div>
               <NavLinks admin={usuario.admin} modulos={modulos} onNavigate={fecharMenu} />
             </div>
             <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
@@ -645,6 +652,10 @@ export function AppShell({
         </main>
       </div>
 
+      <PesquisaSistema
+        telas={secoesVisiveis(usuario.admin, modulos).flatMap((sc) => sc.itens.map((i) => ({ ...i, secao: sc.titulo })))}
+        pcas={pcas}
+      />
       {/* Navegação inferior (mobile) */}
       <BottomNav telas={modulos.flatMap((m) => m.telas)} />
     </div>

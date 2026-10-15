@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.100.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa do sistema no menu lateral",
+    mudancas: [
+      { tipo: "novo", area: "Menu", texto: "Pesquisa rápida fixa logo abaixo da logo (Ctrl+K / ⌘K): abre um banner que pesquisa telas, PCAs, protocolos, DFDs e tarefas, com recentes e dicas de prefixo (dfd:, item:, tarefa:…).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "A pesquisa saiu do cabeçalho — a trilha ficou só com a navegação.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.99.0",
     data: "2026-10-15",
     titulo: "Trilha completa e paleta Ctrl+K",

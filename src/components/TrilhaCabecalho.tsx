@@ -5,8 +5,7 @@ import { type ComponentType, type SVGProps, useEffect, useMemo, useState } from 
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { SearchField } from "./Field";
-import { IconAlternarNivel, IconCheck, IconChevronRight, IconClock, IconFilter, IconSearch } from "./icons";
-import { Modal } from "./Modal";
+import { IconAlternarNivel, IconCheck, IconChevronRight, IconClock, IconFilter } from "./icons";
 import { useTrilhaTela } from "./trilha-store";
 
 type Icone = ComponentType<SVGProps<SVGSVGElement>>;
@@ -81,13 +80,13 @@ const classeOpcao = (marcado: boolean, foco: boolean) =>
 
 /**
  * A lista de um nível: os RECENTES no topo (os já visitados, deste navegador), busca acima de 8 opções (sem acento/caixa)
- * e o teclado ↑/↓/Enter. A mesma lista na paleta do Ctrl+K.
+ * e o teclado ↑/↓/Enter. 
  */
-function ListaNivel({ opcoes, fechar, sempreBusca = false }: { opcoes: Opcao[]; fechar: () => void; sempreBusca?: boolean }) {
+function ListaNivel({ opcoes, fechar }: { opcoes: Opcao[]; fechar: () => void }) {
   const [busca, setBusca] = useState("");
   const [foco, setFoco] = useState(0);
   const [recentes] = useState(lerRecentes);
-  const comBusca = sempreBusca || opcoes.length > 8;
+  const comBusca = opcoes.length > 8;
   const lista = useMemo(() => {
     const casa = predicadoBusca(busca);
     if (casa) return opcoes.filter((o) => casa([o.rotulo, o.detalhe]));
@@ -178,8 +177,8 @@ function Nivel({ rotulo, aria, icone: Ic, forte, opcoes, className = "", largura
 
 /**
  * TRILHA do cabeçalho (o padrão do Cloudflare): Seção ⌃⌄ › Tela ⌃⌄ › Espaço/PCA ⌃⌄ › Aba ⌃⌄ › os banners abertos.
- * No celular fica só a Tela ⌃⌄. Com muitos níveis, os do MEIO saem primeiro (o último fica sempre inteiro). Ctrl+K (ou
- * ⌘K) abre a PALETA: todas as telas e os PCAs, com busca e os recentes.
+ * No celular fica só a Tela ⌃⌄. Com muitos níveis, os do MEIO saem primeiro (o último fica sempre inteiro). A pesquisa
+ * do sistema (Ctrl+K) mora no menu lateral — `PesquisaSistema`.
  */
 export function TrilhaCabecalho({
   secoes,
@@ -194,18 +193,6 @@ export function TrilhaCabecalho({
   const router = useRouter();
   const sp = useSearchParams();
   const tela = useTrilhaTela();
-  const [paleta, setPaleta] = useState(false);
-
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaleta((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", k);
-    return () => window.removeEventListener("keydown", k);
-  }, []);
 
   let secao: SecaoTrilha | undefined;
   let item: ItemTrilha | undefined;
@@ -225,14 +212,7 @@ export function TrilhaCabecalho({
     marcado: pathname.startsWith(`/painel/pca/${p.id}`),
     ir: () => router.push(`/painel/pca/${p.id}`),
   }));
-  const todas: Opcao[] = [...secoes.flatMap(opcoesTela), ...opcoesPca.map((o) => ({ ...o, rotulo: `PCA · ${o.rotulo}` }))];
-
-  const paletaModal = (
-    <Modal open={paleta} onClose={() => setPaleta(false)} titulo="Ir para…" size="md">
-      {paleta && <ListaNivel opcoes={todas} fechar={() => setPaleta(false)} sempreBusca />}
-    </Modal>
-  );
-  if (!secao || !item) return paletaModal;
+  if (!secao || !item) return null;
 
   const pcaId = /^\/painel\/pca\/(\d+)/.exec(pathname)?.[1];
   const pca = pcaId ? pcas.find((p) => p.id === Number(pcaId)) : undefined;
@@ -310,18 +290,7 @@ export function TrilhaCabecalho({
             PCA {filtro.ano}
           </span>
         )}
-        <button
-          type="button"
-          onClick={() => setPaleta(true)}
-          title="Ir para… (Ctrl+K)"
-          aria-label="Ir para outra tela (Ctrl+K)"
-          className="ml-1 hidden h-[var(--h-control-sm)] shrink-0 items-center gap-1 rounded-control px-2 text-[12px] text-faint hover:bg-surface-2 hover:text-text-2 lg:inline-flex"
-        >
-          <IconSearch className="h-3.5 w-3.5" aria-hidden="true" />
-          <kbd className="font-sans">Ctrl K</kbd>
-        </button>
       </nav>
-      {paletaModal}
     </>
   );
 }
