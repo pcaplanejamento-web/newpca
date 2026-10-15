@@ -378,7 +378,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
       align="start"
       ariaLabel={`Unidade ativa: ${ativa.nome}`}
       triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
-      width={300}
+      width={340}
       trigger={
         <>
           {trocando ? (
@@ -391,26 +391,70 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
         </>
       }
     >
-      {(close) => (
-        <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
-          {reparticoes.map((r) => (
+      {(close) => <ListaUnidades reparticoes={reparticoes} ativaId={ativa.id} onEscolher={(id) => trocar(id, close)} />}
+    </Dropdown>
+  );
+}
+
+/** A lista do seletor de unidade — o desenho do filtro de unidades das tabelas: busca no topo, a SIGLA em cima e o
+ *  NOME por extenso embaixo (menor), a escolhida em accent com o check. A busca acha pela sigla ou pelo nome. */
+function ListaUnidades({
+  reparticoes,
+  ativaId,
+  onEscolher,
+}: {
+  reparticoes: ReparticaoNav[];
+  ativaId: number;
+  onEscolher: (id: number) => void;
+}) {
+  const [q, setQ] = useState("");
+  const termo = semAcento(q.trim());
+  const visiveis = termo ? reparticoes.filter((r) => semAcento(`${r.codigo} ${r.nome}`).includes(termo)) : reparticoes;
+  return (
+    <div className="flex max-h-[min(70vh,440px)] w-full flex-col">
+      {reparticoes.length > 8 && (
+        <div className="border-b border-border p-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && visiveis.length === 1) onEscolher(visiveis[0].id);
+            }}
+            aria-label="Buscar unidade por sigla ou nome"
+            placeholder="Buscar sigla ou nome"
+            className="h-11 w-full rounded-control border border-border-2 bg-surface px-2.5 text-[13px] text-text outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:h-[var(--h-control-sm)]"
+          />
+        </div>
+      )}
+      <div className="min-h-0 flex-1 overflow-y-auto p-1">
+        {visiveis.map((r) => {
+          const ativa = r.id === ativaId;
+          const mesmo = semAcento(r.codigo) === semAcento(r.nome);
+          return (
             <button
               key={r.id}
               type="button"
-              onClick={() => trocar(r.id, close)}
-              className={`flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] lg:min-h-0 ${
-                r.id === ativa.id ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
+              onClick={() => onEscolher(r.id)}
+              className={`flex min-h-11 w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left lg:min-h-0 ${
+                ativa ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-surface-2"
               }`}
             >
-              <span className="shrink-0 font-mono text-[10.5px] text-faint">{r.codigo}</span>
-              <span className="min-w-0 flex-1 break-words">{r.nome}</span>
-              {r.id === ativa.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className={`break-words text-[13px] ${ativa ? "font-semibold" : "font-medium text-text"}`}>{r.codigo}</span>
+                {!mesmo && <span className={`break-words text-[11px] leading-snug ${ativa ? "text-accent/80" : "text-faint"}`}>{r.nome}</span>}
+              </span>
+              {ativa && <IconCheck className="h-4 w-4 shrink-0" />}
             </button>
-          ))}
-        </div>
-      )}
-    </Dropdown>
+          );
+        })}
+        {visiveis.length === 0 && <div className="px-3 py-4 text-center text-[12px] text-faint">Nenhuma unidade encontrada</div>}
+      </div>
+    </div>
   );
+}
+
+function semAcento(t: string): string {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 /** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */

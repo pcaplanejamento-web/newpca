@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.5",
+    data: "2026-10-15",
+    titulo: "Seletor de unidade organizado e imagens protegidas",
+    mudancas: [
+      { tipo: "melhoria", area: "Cabeçalho", texto: "O seletor de unidade segue o desenho do filtro de unidades das tabelas: a sigla em cima, o nome por extenso embaixo e uma busca por sigla ou nome.", link: "/painel" },
+      { tipo: "melhoria", area: "Segurança", texto: "As imagens do sistema — a logo, as fotos e as capas — não podem mais ser arrastadas nem copiadas pelo botão direito ou pelo toque longo.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.107.4",
     data: "2026-10-15",
     titulo: "Menu abre sem a seleção encolher",

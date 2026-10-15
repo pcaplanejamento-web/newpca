@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/Toast";
+import { ProtegerImagens } from "@/components/ProtegerImagens";
 import { getAparencia } from "@/lib/aparencia";
 import { aparenciaToCss } from "@/lib/theme";
 import { SCRIPT_MENU } from "@/lib/menu-lateral";
@@ -73,6 +74,7 @@ export default async function RootLayout({
         <ThemeProvider>
           {children}
           <Toaster />
+          <ProtegerImagens />
         </ThemeProvider>
       </body>
     </html>

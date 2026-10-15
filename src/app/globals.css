@@ -1226,3 +1226,7 @@ html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:fo
 }
 [data-motion="off"] :is(.menu-vaga, .menu-lateral, .menu-lateral *),
 [data-motion="reduced"] :is(.menu-vaga, .menu-lateral, .menu-lateral *) { transition-duration: 0ms !important; }
+
+/* IMAGENS PROTEGIDAS (logo, fotos, capas): não se arrastam, não se selecionam e o toque longo não oferece salvar/copiar.
+   O dragstart/contextmenu é barrado em ProtegerImagens (layout raiz). */
+img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
