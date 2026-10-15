@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.96.5",
+    data: "2026-10-15",
+    titulo: "Card do orçamento com valor real",
+    mudancas: [
+      { tipo: "melhoria", area: "Orçamento", texto: "O card mostra a dotação atualizada com o valor completo (sem abreviar) e o ano em destaque no canto superior direito.", link: "/painel/orcamento" },
+    ],
+  },
+  {
     versao: "1.96.4",
     data: "2026-10-15",
     titulo: "Filtro de sigla num componente só",

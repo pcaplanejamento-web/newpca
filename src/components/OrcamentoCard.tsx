@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { brl, brlCompact, dataBR, num } from "@/lib/format";
+import { brl, dataBR, num } from "@/lib/format";
 import type { OrcamentoResumo } from "@/lib/orcamento";
 import { dotacaoAtualizada, pctEmpenhado } from "@/lib/orcamento-indicadores";
-import { Badge } from "./Badge";
 import { IconPlus, IconWallet } from "./icons";
 
 /** Uma linha "rótulo ........ valor completo" — o valor nunca é cortado: sem espaço, desce para a linha de baixo. */
@@ -29,8 +28,8 @@ function Numero({ valor, rotulo }: { valor: number; rotulo: string }) {
 }
 
 /**
- * Card do ORÇAMENTO (tela `/painel/orcamento`) — só INFORMAÇÃO: o nome inteiro; a dotação ATUALIZADA abreviada em
- * destaque com o valor COMPLETO embaixo; a barra da execução (empenhado × saldo); a COMPOSIÇÃO da dotação (inicial +
+ * Card do ORÇAMENTO (tela `/painel/orcamento`) — só INFORMAÇÃO: o nome inteiro; o ano em destaque no canto; a dotação ATUALIZADA
+ * com o valor COMPLETO; a barra da execução (empenhado × saldo); a COMPOSIÇÃO da dotação (inicial +
  * suplementação − anulação, e a emenda impositiva) e a execução com os valores completos; a abrangência (órgãos,
  * unidades, programas, ações, lançamentos) e a data da importação. Nenhum texto é cortado: o que não cabe, quebra.
  */
@@ -49,18 +48,17 @@ export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResu
           <IconWallet className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">Orçamento</span>
-            <Badge tone="blue">{o.ano}</Badge>
-          </div>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">Orçamento</span>
           <h3 className="mt-0.5 break-words text-[15px] font-semibold leading-snug text-text group-hover:text-accent">{o.nome}</h3>
         </div>
+        <span className="shrink-0 rounded-control bg-accent px-2.5 py-1.5 text-[15px] font-bold leading-none tabular-nums tracking-tight text-white shadow-soft">
+          {o.ano}
+        </span>
       </div>
 
       <div>
         <p className="text-[12px] text-muted">Dotação atualizada</p>
-        <p className="text-2xl font-bold tabular-nums tracking-tight text-text">{brlCompact(atualizada)}</p>
-        <p className="text-[12px] tabular-nums text-text-2">{brl(atualizada)}</p>
+        <p className="break-words text-xl font-bold tabular-nums tracking-tight text-text">{brl(atualizada)}</p>
       </div>
 
       <div>
