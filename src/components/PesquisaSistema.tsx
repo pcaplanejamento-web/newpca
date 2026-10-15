@@ -168,18 +168,31 @@ function numeroExato(rotulo: string, termo: string): boolean {
 
 /** O trecho que casou, em destaque (sem acento/caixa). */
 function Destaque({ texto, termo }: { texto: string; termo: string }): ReactNode {
-  const t = termo.trim();
-  if (!t) return texto;
-  const tira = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  const i = tira(texto).indexOf(tira(t));
-  if (i < 0) return texto;
-  return (
-    <>
-      {texto.slice(0, i)}
-      <mark className="bg-transparent font-semibold text-accent">{texto.slice(i, i + t.length)}</mark>
-      {texto.slice(i + t.length)}
-    </>
-  );
+  // TODOS os termos, em todas as ocorrências, sem acento/caixa ("manutencao" marca "MANUTENÇÃO"; "65" marca o Id 2289654).
+  const tira = (x: string) => x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const termos = tira(termo).split(/\s+/).filter((t) => t.length > 0);
+  if (!termos.length) return texto;
+  const base = tira(texto);
+  if (base.length !== texto.length) return texto; // texto com caractere decomposto: sem marcar (nunca marca o lugar errado)
+  const marca = new Array<boolean>(texto.length).fill(false);
+  for (const t of termos) for (let i = base.indexOf(t); i >= 0; i = base.indexOf(t, i + 1)) marca.fill(true, i, i + t.length);
+  const partes: ReactNode[] = [];
+  let i = 0;
+  while (i < texto.length) {
+    let j = i;
+    while (j < texto.length && marca[j] === marca[i]) j++;
+    partes.push(
+      marca[i] ? (
+        <mark key={i} className="bg-transparent font-semibold text-accent">
+          {texto.slice(i, j)}
+        </mark>
+      ) : (
+        texto.slice(i, j)
+      ),
+    );
+    i = j;
+  }
+  return <>{partes}</>;
 }
 
 /** O campo "Pesquisa rápida… Ctrl K" do menu lateral (fixo abaixo da logo) — abre o banner. Recolhido, só a lupa. */
@@ -585,7 +598,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
               <span aria-hidden="true" className="mr-2 text-faint">
                 —
               </span>
-              {r.detalhe}
+              {grupo === "dica" ? r.detalhe : <Destaque texto={r.detalhe} termo={termo} />}
             </span>
           )}
           {ativo && grupo !== "recentes" && !favoritavel(r, grupo) && <IconArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted" aria-hidden="true" />}
@@ -746,7 +759,16 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           </button>
         </div>
         <div className="border-b border-border px-3 pt-2 pb-0.5">
-          <ChipsEscolha rolar ariaLabel="Pesquisar em" opcoes={filtros} valor={tipo ?? ""} onEscolher={escolherFiltro} />
+          {termo.length >= 2 && !tipo && !contas && !falhou ? (
+            // Pesquisando em "Tudo": o esqueleto dos filtros até saber quais têm resultado.
+            <div className="flex gap-1.5 overflow-hidden pb-3" aria-hidden="true">
+              {[64, 108, 76, 92, 120].map((w) => (
+                <div key={w} style={{ width: w }} className="h-11 shrink-0 animate-pulse rounded-control bg-surface-2 lg:h-8" />
+              ))}
+            </div>
+          ) : (
+            <ChipsEscolha rolar ariaLabel="Pesquisar em" opcoes={filtros} valor={tipo ?? ""} onEscolher={escolherFiltro} />
+          )}
         </div>
         <div className="flex min-h-0 flex-1">
           <div ref={lista} id={idLista} role="listbox" aria-label="Resultados" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2">
@@ -779,7 +801,15 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           {/* Painel FIXO da direita (desktop): em cima a prévia do item em foco, embaixo os FAVORITOS. */}
           <aside className="hidden w-72 shrink-0 flex-col border-l border-border bg-surface-2/50 lg:flex">
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4" aria-live="polite">
-              {emFoco && emFoco.grupo !== "dica" ? (
+              {carregando && !remotos.length ? (
+                // Pesquisando: o esqueleto da prévia no lugar do item.
+                <div className="space-y-3" aria-hidden="true">
+                  <div className="h-10 w-10 animate-pulse rounded-control bg-surface-2" />
+                  <div className="h-3 w-20 animate-pulse rounded-chip bg-surface-2" />
+                  <div className="h-4 w-48 animate-pulse rounded-chip bg-surface-2" />
+                  <div className="h-3 w-36 animate-pulse rounded-chip bg-surface-2" />
+                </div>
+              ) : emFoco && emFoco.grupo !== "dica" ? (
                 <>
                   <div className="flex items-start justify-between gap-2">
                     <span className="grid h-10 w-10 place-items-center rounded-control bg-surface text-muted shadow-ring">
@@ -800,8 +830,14 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
                   <p className="text-[11.5px] font-semibold tracking-wide text-faint uppercase">
                     {emFoco.r.tipo === "acao" ? "Ação" : emFoco.r.tipo === "aba" ? "Aba" : emFoco.r.tipo === "tela" ? "Tela" : (ROTULO_VINCULO[emFoco.r.tipo as TipoVinculo] ?? tituloPesquisa(emFoco.r.tipo))}
                   </p>
-                  <p className="text-[15px] leading-snug font-semibold break-words text-text">{[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")}</p>
-                  {emFoco.r.detalhe && <p className="text-[13px] leading-snug break-words text-muted">{emFoco.r.detalhe}</p>}
+                  <p className="text-[15px] leading-snug font-semibold break-words text-text">
+                    <Destaque texto={[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")} termo={termo} />
+                  </p>
+                  {emFoco.r.detalhe && (
+                    <p className="text-[13px] leading-snug break-words text-muted">
+                      <Destaque texto={emFoco.r.detalhe} termo={termo} />
+                    </p>
+                  )}
                   <p className="mt-auto flex items-center gap-1.5 text-[12px] text-faint">
                     <kbd className="rounded-chip border border-border bg-surface px-1.5 font-sans">↵</kbd>
                     {emFoco.r.acao ? "executar" : "abrir"}
