@@ -1,6 +1,8 @@
 "use client";
 
 import { useLinkStatus } from "next/link";
+import type { ComponentType } from "react";
+import { IconSpinner } from "./icons";
 
 /**
  * Carregamento DENTRO do card de um link (`useLinkStatus`): o card continua à vista — um leve escurecimento, um BRILHO
@@ -27,4 +29,13 @@ export function CarregandoLink({ rotulo = "Abrindo…" }: { rotulo?: string }) {
       </span>
     </span>
   );
+}
+
+/**
+ * O ÍCONE de um item de navegação (menu lateral, barra inferior) que vira o spinner enquanto a tela pedida carrega — o
+ * toque tem resposta na hora, sem esperar o servidor. Deve ficar DENTRO do `<Link>` (lê o `useLinkStatus`).
+ */
+export function IconeNavegacao({ Icon, className, strokeWidth }: { Icon: ComponentType<{ className?: string; strokeWidth?: number }>; className?: string; strokeWidth?: number }) {
+  const { pending } = useLinkStatus();
+  return pending ? <IconSpinner className={className} aria-label="Carregando" /> : <Icon className={className} strokeWidth={strokeWidth} />;
 }

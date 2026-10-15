@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.2",
+    data: "2026-10-15",
+    titulo: "Seletores do cabeçalho sem cortes e navegação mais rápida",
+    mudancas: [
+      { tipo: "correcao", area: "Cabeçalho", texto: "Os seletores de grupo, unidade e PCA mostram os nomes inteiros, sem abreviar — na lista e no botão.", link: "/painel" },
+      { tipo: "melhoria", area: "Menu", texto: "Ao tocar numa tela do menu, o ícone mostra que ela está carregando; a logo leva direto à sua tela inicial, sem redirecionamento.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.107.1",
     data: "2026-10-15",
     titulo: "Proteção da pesquisa contra abuso",

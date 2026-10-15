@@ -74,7 +74,7 @@ import { PessoaTag } from "@/components/PessoaTag";
 import { SeletorCelula } from "@/components/SeletorCelula";
 import { SeletorFiltro } from "@/components/SeletorFiltro";
 import { SeletorMesa } from "@/components/SeletorMesa";
-import { CarregandoLink } from "@/components/CarregandoLink";
+import { CarregandoLink, IconeNavegacao } from "@/components/CarregandoLink";
 import { GatilhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
@@ -571,6 +571,11 @@ function PcaEspacoDemo() {
         <Link href="/painel/design-system" className="relative rounded-card border border-border px-4 py-2 text-sm font-semibold text-text">
           Link com CarregandoLink
           <CarregandoLink />
+        </Link>
+        {/* IconeNavegacao: o ícone do item do menu que vira spinner enquanto a tela pedida carrega. */}
+        <Link href="/painel/design-system" className="flex items-center gap-2 rounded-chip px-3 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
+          <IconeNavegacao Icon={Icons.IconSettings} className="h-[17px] w-[17px]" strokeWidth={1.8} />
+          Item do menu
         </Link>
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

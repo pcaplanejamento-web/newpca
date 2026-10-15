@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { IconeNavegacao } from "./CarregandoLink";
 import { usePathname } from "next/navigation";
 import { IconUser } from "./icons";
 import { NAV_MODULOS } from "./navModulos";
@@ -26,7 +27,7 @@ export function BottomNav({ telas }: { telas: readonly string[] }) {
                 active ? "text-accent" : "text-faint hover:text-text-2"
               }`}
             >
-              <Icon className="h-[22px] w-[22px] shrink-0" />
+              <IconeNavegacao Icon={Icon} className="h-[22px] w-[22px] shrink-0" />
               <span className="max-w-full truncate">{label}</span>
             </Link>
           );

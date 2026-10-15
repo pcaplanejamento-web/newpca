@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { rotaInicial } from "@/lib/abas";
+import { IconeNavegacao } from "./CarregandoLink";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
@@ -84,9 +86,10 @@ function itemAtivo(pathname: string, item: NavItem): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-function Brand({ compact = false, identidade }: { compact?: boolean; identidade?: Identidade }) {
+function Brand({ compact = false, identidade, inicio }: { compact?: boolean; identidade?: Identidade; inicio: string }) {
+  // Direto à tela inicial da pessoa (a 1ª que ela abre) — sem passar pelo redirecionamento do `/painel`.
   return (
-    <Link href="/painel" className="flex min-w-0 items-center">
+    <Link href={inicio} className="flex min-w-0 items-center">
       <MarcaSistema identidade={identidade} compacta={compact} />
     </Link>
   );
@@ -126,10 +129,7 @@ function NavLinks({
                       : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
                   }`}
                 >
-                  <Icon
-                    className={`h-[17px] w-[17px] shrink-0 ${active ? "text-accent" : ""}`}
-                    strokeWidth={1.8}
-                  />
+                  <IconeNavegacao Icon={Icon} className={`h-[17px] w-[17px] shrink-0 ${active ? "text-accent" : ""}`} strokeWidth={1.8} />
                   <span className="menu-esconde min-w-0 truncate">{item.label}</span>
                 </Link>
               );
@@ -220,7 +220,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
       align="start"
       ariaLabel={`Grupo ativo: ${ativo.nome}`}
       triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 disabled:opacity-60 lg:h-[var(--h-control-sm)]"
-      width={220}
+      width={280}
       trigger={
         <>
           {trocando ? (
@@ -228,7 +228,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
           ) : (
             <IconUsers className="h-3.5 w-3.5 opacity-70" />
           )}
-          <span className="max-w-[9rem] truncate">{ativo.nome}</span>
+          <span className="max-w-[9rem] truncate sm:max-w-none sm:whitespace-nowrap" title={ativo.nome}>{ativo.nome}</span>
           <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
@@ -245,7 +245,7 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
               }`}
             >
               <IconUsers className="h-4 w-4 shrink-0 opacity-70" />
-              <span className="min-w-0 truncate">{g.nome}</span>
+              <span className="min-w-0 flex-1 break-words">{g.nome}</span>
               {g.id === ativo.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
             </button>
           ))}
@@ -313,12 +313,12 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
       triggerClassName={`gap-1 rounded-chip border px-2 h-11 min-w-11 justify-center text-[13px] font-medium sm:gap-1.5 sm:px-3 lg:h-[var(--h-control-sm)] ${
         ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
       }`}
-      width={260}
+      width={300}
       trigger={
         <>
           {trocando ? <IconSpinner className="h-3.5 w-3.5 shrink-0" /> : <IconBox className="h-3.5 w-3.5 shrink-0 opacity-70" />}
           <span className="truncate sm:hidden">{rotulo ? `PCA ${rotulo.ano}` : "Todos"}</span>
-          <span className="hidden max-w-[12rem] truncate sm:inline">{rotulo ? rotulo.nome : "Todos os PCAs"}</span>
+          <span className="hidden whitespace-nowrap sm:inline">{rotulo ? rotulo.nome : "Todos os PCAs"}</span>
           <IconAlternarNivel className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
         </>
       }
@@ -328,14 +328,14 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
           {varios && (
             <button type="button" onClick={() => trocar(null, close)} className={opcao(ativo == null)}>
               <IconBox className="h-4 w-4 shrink-0 opacity-70" />
-              <span className="min-w-0 truncate">Todos os PCAs</span>
+              <span className="min-w-0 flex-1 break-words">Todos os PCAs</span>
               {ativo == null && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
             </button>
           )}
           {pcas.map((p) => (
             <button key={p.id} type="button" onClick={() => trocar(p.id, close)} className={opcao(p.id === ativo?.id)}>
               <span className="shrink-0 font-mono text-[10.5px] text-faint">{p.ano}</span>
-              <span className="min-w-0 truncate">{p.nome}</span>
+              <span className="min-w-0 flex-1 break-words">{p.nome}</span>
               {p.id === ativo?.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
             </button>
           ))}
@@ -378,7 +378,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
       align="start"
       ariaLabel={`Unidade ativa: ${ativa.nome}`}
       triggerClassName="gap-1.5 rounded-chip border border-border-2 bg-surface px-3 h-11 text-[13px] font-medium text-text-2 hover:bg-surface-2 lg:h-[var(--h-control-sm)]"
-      width={260}
+      width={300}
       trigger={
         <>
           {trocando ? (
@@ -386,7 +386,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
           ) : (
             <IconBuilding className="h-3.5 w-3.5 opacity-70" />
           )}
-          <span className="max-w-[9rem] truncate">{ativa.nome}</span>
+          <span className="max-w-[9rem] truncate sm:max-w-none sm:whitespace-nowrap" title={ativa.nome}>{ativa.nome}</span>
           <SetaDropdown className="h-3.5 w-3.5 opacity-60" />
         </>
       }
@@ -403,7 +403,7 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
               }`}
             >
               <span className="shrink-0 font-mono text-[10.5px] text-faint">{r.codigo}</span>
-              <span className="min-w-0 truncate">{r.nome}</span>
+              <span className="min-w-0 flex-1 break-words">{r.nome}</span>
               {r.id === ativa.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
             </button>
           ))}
@@ -516,6 +516,7 @@ export function AppShell({
     return () => document.removeEventListener("keydown", tecla);
   }, [menuAberto]);
   const abasSet = new Set(abas);
+  const inicio = rotaInicial(abasSet);
   // O PCA do cabeçalho filtra a Mesa, o módulo PCA e o Orçamento — sem nenhuma dessas abas, o seletor não aparece.
   const filtraPca = abasSet.has("dfd") || abasSet.has("pca") || abasSet.has("orcamento");
 
@@ -543,7 +544,7 @@ export function AppShell({
           <div className="flex h-full w-full min-w-0 flex-col">
             {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
             <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
-              <Brand identidade={identidade} />
+              <Brand identidade={identidade} inicio={inicio} />
             </div>
             {/* Alinhada ao conteúdo: em cima o respiro do conteúdo (--pad-canvas-y) e embaixo o vão entre componentes
                 (--gap-block) — o 1º módulo começa na mesma altura do 1º componente das telas. */}
@@ -581,7 +582,7 @@ export function AppShell({
           <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
           <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface shadow-soft">
             <div className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-border pl-4 pr-1">
-              <Brand identidade={identidade} />
+              <Brand identidade={identidade} inicio={inicio} />
               <button
                 type="button"
                 aria-label="Fechar menu"
@@ -624,7 +625,7 @@ export function AppShell({
           </button>
           {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
           <div className={`shrink-0 sm:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
-            <Brand compact identidade={identidade} />
+            <Brand compact identidade={identidade} inicio={inicio} />
           </div>
           {/* Trilha (Seção › Tela ⌃⌄ › PCA ⌃⌄) — à esquerda, no desktop. */}
           <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} pcaFiltroId={pcaFiltroId} />
