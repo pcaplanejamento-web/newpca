@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.4",
+    data: "2026-10-15",
+    titulo: "Menu abre sem a seleção encolher",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir o menu, a seleção não encolhe mais antes de esticar (no Windows, a barra de rolagem aparecia de repente); o menu segue rolando pela roda do mouse e pelo toque.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.107.3",
     data: "2026-10-15",
     titulo: "Menu recolhido sem cortes no Windows",
