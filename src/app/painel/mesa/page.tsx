@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { MesaSistema } from "@/components/MesaSistema";
 import { SeletorMesa } from "@/components/SeletorMesa";
-import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { pcasDoAcesso } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { PcaResumo } from "@/lib/dfd";
