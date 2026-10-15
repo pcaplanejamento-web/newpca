@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ehTipoPesquisa, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa } from "../src/lib/pesquisa-core.ts";
+import { ehTipoPesquisa, padroesLike, pontuar, type PortaoPesquisa, TIPOS_PADRAO, TIPOS_PESQUISA, tipoPermitido, tituloPesquisa } from "../src/lib/pesquisa-core.ts";
+import { DatabaseSync } from "node:sqlite";
 
 test("pesquisa: tipos únicos, prefixos e atalhos sem repetir", () => {
   const tipos = TIPOS_PESQUISA.map((t) => t.tipo);
@@ -18,4 +19,52 @@ test("pesquisa: validação e títulos", () => {
   assert.ok(!ehTipoPesquisa("x; drop"));
   assert.equal(tituloPesquisa("historico"), "Histórico de compra");
   assert.deepEqual(TIPOS_PADRAO, TIPOS_PESQUISA.map((t) => t.tipo));
+});
+
+
+test("pesquisa: padrões — um por termo, sem curinga do usuário, sem acento", () => {
+  assert.deepEqual(padroesLike("  "), []);
+  assert.deepEqual(padroesLike("50%_x"), ["%50%", "%x%"]);
+  assert.equal(padroesLike("a b c d e f g").length, 5);
+  assert.equal(padroesLike("saúde")[0], "%saúde%"); // com acento: exato
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE t (v TEXT); INSERT INTO t VALUES ('SERVIÇO DE MANUTENÇÃO'), ('CADEIRA'), ('OUTRA COISA')");
+  const acha = (q: string) =>
+    (db.prepare(`SELECT v FROM t WHERE ${padroesLike(q).map(() => "v LIKE ?").join(" AND ")}`).all(...padroesLike(q)) as { v: string }[]).map((r) => r.v);
+  assert.deepEqual(acha("manutencao"), ["SERVIÇO DE MANUTENÇÃO"]);
+  assert.deepEqual(acha("servico manutencao"), ["SERVIÇO DE MANUTENÇÃO"]);
+  assert.deepEqual(acha("servico cadeira"), []); // todos os termos
+  assert.deepEqual(acha("cadeira"), ["CADEIRA"]);
+});
+
+test("pesquisa: ordem — palavra exata › começa › contém", () => {
+  assert.ok(pontuar("Protocolo 1234", "1234") > pontuar("Protocolo 12345", "1234"));
+  assert.ok(pontuar("Protocolo 12345", "1234") > pontuar("Protocolo 991234", "1234"));
+  assert.ok(pontuar("MANUTENÇÃO predial", "manutencao") > 0);
+});
+
+// A REGRA DE SEGURANÇA por perfil: o tipo de fora do acesso nunca é consultado.
+const perfil = (telas: string[], comps: string[] = [], admin = false): PortaoPesquisa => ({
+  admin,
+  ve: (t) => admin || telas.includes(t),
+  libera: (c) => admin || !comps.length || comps.includes(c),
+});
+test("pesquisa: portão por perfil", () => {
+  const todos = ["protocolo", "dfd", "item", "tarefa", "evento", "orcamento", "lancamento", "catalogo", "historico", "usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"] as const;
+  const permitidos = (p: PortaoPesquisa) => todos.filter((t) => tipoPermitido(p, t));
+  // sem Mesa do sistema, com PCA e a aba Mesa do PCA: vê a Mesa (só a do PCA — o SQL restringe)
+  assert.deepEqual(permitidos(perfil(["pca"], ["pca.mesa"])), ["protocolo", "dfd", "item"]);
+  // PCA sem a aba Mesa: nenhum protocolo/DFD/item
+  assert.deepEqual(permitidos(perfil(["pca"], ["pca.dashboard"])), []);
+  // orçamento sem a aba Lançamentos: só o orçamento
+  assert.deepEqual(permitidos(perfil(["orcamento"], ["orcamento.comparativo"])), ["orcamento"]);
+  // catálogo só com o histórico
+  assert.deepEqual(permitidos(perfil(["catalogo"], ["catalogo.historico"])), ["historico"]);
+  // tarefas pelo calendário também (os eventos e as tarefas dos quadros)
+  assert.deepEqual(permitidos(perfil(["calendario"])), ["tarefa", "evento"]);
+  // ninguém além do ADM pesquisa a administração
+  const semAdmin = permitidos(perfil(["dfd", "pca", "tarefas", "calendario", "orcamento", "catalogo"]));
+  for (const t of ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"]) assert.ok(!semAdmin.includes(t as (typeof todos)[number]));
+  assert.deepEqual(permitidos(perfil([], [], true)), [...todos]);
+  assert.deepEqual(permitidos(perfil([])), []);
 });

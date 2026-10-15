@@ -30,3 +30,64 @@ export const TIPOS_PADRAO: TipoPesquisa[] = TIPOS_PESQUISA.map((t) => t.tipo);
 
 /** Um resultado do servidor: o link já é o da tela/aba em que a pessoa pode abri-lo. */
 export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; href: string };
+
+/**
+ * Os padrões do `LIKE` da pesquisa: UM por termo (todos têm de casar — "secretaria saúde 2027"), até 5 termos. Sem
+ * acento/caixa: o termo SEM acento (ex.: "manutencao") vira um padrão em que as vogais e o "c" valem qualquer letra
+ * ("manut_n__o" acha "MANUTENÇÃO"); o `%`/`_` digitados saem (nunca viram curinga do usuário).
+ */
+export function padroesLike(q: string): string[] {
+  return q
+    .toLowerCase()
+    .replace(/[%_\\]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((t) => `%${/^[\x20-\x7e]+$/.test(t) && t.length >= 4 ? t.replace(/[aeiouc]/g, "_") : t}%`);
+}
+
+const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+/**
+ * A ORDEM dos resultados de um grupo: o número/código EXATO primeiro, depois o que COMEÇA com o termo, depois o que o
+ * contém (sem acento/caixa) e, por fim, o que só casou pelo padrão (as letras trocadas). Estável dentro de cada nível.
+ */
+export function pontuar(texto: string, q: string): number {
+  const t = semAcento(texto);
+  const termos = semAcento(q).split(/\s+/).filter(Boolean);
+  if (!termos.length) return 0;
+  const palavras = t.split(/[^a-z0-9]+/).filter(Boolean);
+  let p = 0;
+  for (const termo of termos) {
+    if (palavras.includes(termo)) p += 3;
+    else if (palavras.some((w) => w.startsWith(termo))) p += 2;
+    else if (t.includes(termo)) p += 1;
+  }
+  return p;
+}
+
+/** O que a pessoa pode pesquisar (a régua das rotas — testada por perfil). `ve` = a tela abre; `libera` = a aba/visão. */
+export type PortaoPesquisa = { admin: boolean; ve: (tela: string) => boolean; libera: (componente: string) => boolean };
+
+export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
+  switch (tipo) {
+    case "protocolo":
+    case "dfd":
+    case "item":
+      return p.ve("dfd") || (p.ve("pca") && p.libera("pca.mesa"));
+    case "tarefa":
+      return p.ve("tarefas") || p.ve("calendario");
+    case "evento":
+      return p.ve("calendario");
+    case "orcamento":
+      return p.ve("orcamento");
+    case "lancamento":
+      return p.ve("orcamento") && p.libera("orcamento.lancamentos");
+    case "catalogo":
+      return p.ve("catalogo") && p.libera("catalogo.catalogos");
+    case "historico":
+      return p.ve("catalogo") && p.libera("catalogo.historico");
+    default:
+      return p.admin; // usuário, órgão, unidade, grupo, cadastro, automação
+  }
+}

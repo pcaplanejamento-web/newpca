@@ -19,7 +19,8 @@ import { type Acesso, componenteLibera, podeTela } from "./acesso";
 import { linkEvento } from "./calendario-core";
 import { getDb } from "./db";
 import { dataIsoBrasilia, dataBR } from "./format";
-import type { ResultadoPesquisa, TipoPesquisa } from "./pesquisa-core";
+import { padroesLike, type ResultadoPesquisa, type TipoPesquisa } from "./pesquisa-core";
+import { casaTermos } from "./pesquisa-sql";
 import { buscarNoCalendario } from "./tarefas";
 import { quadrosDoCalendario } from "./tarefas-dados";
 
@@ -30,7 +31,7 @@ import { quadrosDoCalendario } from "./tarefas-dados";
  */
 export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, limite: number): Promise<ResultadoPesquisa[] | null> {
   const db = getDb();
-  const termo = `%${q.trim().replace(/[%_]/g, "")}%`;
+  const padroes = padroesLike(q);
   const LIM = Math.min(50, limite);
   const admin = a.u.admin;
   const enc = encodeURIComponent;
@@ -51,17 +52,7 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       .from(orcamentoItens)
       .innerJoin(orcamentos, eq(orcamentos.id, orcamentoItens.orcamentoId))
       .where(
-        or(
-          like(orcamentoItens.ficha, termo),
-          like(orcamentoItens.acao, termo),
-          like(orcamentoItens.nomeElemento, termo),
-          like(orcamentoItens.codigoElemento, termo),
-          like(orcamentoItens.unidade, termo),
-          like(orcamentoItens.orgao, termo),
-          like(orcamentoItens.funcao, termo),
-          like(orcamentoItens.programa, termo),
-          like(orcamentoItens.fonte, termo),
-        ),
+        casaTermos([orcamentoItens.ficha, orcamentoItens.acao, orcamentoItens.nomeElemento, orcamentoItens.codigoElemento, orcamentoItens.unidade, orcamentoItens.orgao, orcamentoItens.funcao, orcamentoItens.programa, orcamentoItens.fonte], padroes),
       )
       .orderBy(desc(orcamentos.ano), orcamentoItens.sequencial)
       .limit(LIM);
@@ -79,7 +70,7 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       .select({ id: catalogoItens.id, catalogoId: catalogoItens.catalogoId, codigo: catalogoItens.codigo, descricao: catalogoItens.descricao, catalogo: catalogos.nome })
       .from(catalogoItens)
       .innerJoin(catalogos, eq(catalogos.id, catalogoItens.catalogoId))
-      .where(or(like(catalogoItens.codigo, termo), like(catalogoItens.descricao, termo)))
+      .where(casaTermos([catalogoItens.codigo, catalogoItens.descricao], padroes))
       .orderBy(desc(catalogoItens.id))
       .limit(LIM);
     return ls.map((l) => ({
@@ -103,7 +94,7 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       })
       .from(catalogoCompras)
       .innerJoin(catalogos, eq(catalogos.id, catalogoCompras.catalogoId))
-      .where(or(like(catalogoCompras.codigo, termo), like(catalogoCompras.descricao, termo), like(catalogoCompras.idContrato, termo), like(catalogoCompras.processo, termo)))
+      .where(casaTermos([catalogoCompras.codigo, catalogoCompras.descricao, catalogoCompras.idContrato, catalogoCompras.processo], padroes))
       .orderBy(desc(catalogoCompras.id))
       .limit(LIM);
     return ls.map((l) => ({
@@ -134,7 +125,7 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
     const ls = await db
       .select({ id: usuarios.id, nome: usuarios.nome, apelido: usuarios.apelido, email: usuarios.email, matricula: usuarios.matricula, status: usuarios.status })
       .from(usuarios)
-      .where(or(like(usuarios.nome, termo), like(usuarios.apelido, termo), like(usuarios.email, termo), like(usuarios.matricula, termo)))
+      .where(casaTermos([usuarios.nome, usuarios.apelido, usuarios.email, usuarios.matricula], padroes))
       .orderBy(usuarios.nome)
       .limit(LIM);
     return ls.map((l) => ({
@@ -148,7 +139,7 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
     const ls = await db
       .select({ id: orgaos.id, nome: orgaos.nome, sigla: orgaos.sigla })
       .from(orgaos)
-      .where(or(like(orgaos.nome, termo), like(orgaos.sigla, termo), like(orgaos.entidadeCenti, termo)))
+      .where(casaTermos([orgaos.nome, orgaos.sigla, orgaos.entidadeCenti], padroes))
       .orderBy(orgaos.nome)
       .limit(LIM);
     return ls.map((l) => ({ id: l.id, rotulo: `${l.sigla} · ${l.nome}`, detalhe: "Órgão", href: `/painel/orgaos?abrir=${l.id}` }));
@@ -158,29 +149,29 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       .select({ id: reparticoes.id, nome: reparticoes.nome, codigo: reparticoes.codigo, orgaoId: reparticoes.orgaoId, orgao: orgaos.sigla })
       .from(reparticoes)
       .innerJoin(orgaos, eq(orgaos.id, reparticoes.orgaoId))
-      .where(and(sql`${reparticoes.codigo} <> 'GERAL'`, or(like(reparticoes.nome, termo), like(reparticoes.codigo, termo))))
+      .where(and(sql`${reparticoes.codigo} <> 'GERAL'`, casaTermos([reparticoes.nome, reparticoes.codigo], padroes)))
       .orderBy(reparticoes.nome)
       .limit(LIM);
     return ls.map((l) => ({ id: l.id, rotulo: `${l.codigo} · ${l.nome}`, detalhe: `Unidade · ${l.orgao}`, href: `/painel/orgaos/${l.orgaoId}?abrir=${l.id}` }));
   }
   if (tipo === "grupo") {
-    const ls = await db.select({ id: grupos.id, nome: grupos.nome }).from(grupos).where(like(grupos.nome, termo)).orderBy(grupos.nome).limit(LIM);
+    const ls = await db.select({ id: grupos.id, nome: grupos.nome }).from(grupos).where(casaTermos([grupos.nome], padroes)).orderBy(grupos.nome).limit(LIM);
     return ls.map((l) => ({ id: l.id, rotulo: l.nome, detalhe: "Grupo de acesso", href: `/painel/grupos?abrir=${l.id}` }));
   }
   if (tipo === "cadastro") {
     // Os cadastros das abas de Configurações: o link leva à aba (o cadastro está na lista dela).
     const [ps, cs, ss, fs] = await Promise.all([
-      db.select({ id: papeis.id, nome: papeis.nome }).from(papeis).where(like(papeis.nome, termo)).limit(LIM),
-      db.select({ id: cargos.id, nome: cargos.nome }).from(cargos).where(like(cargos.nome, termo)).limit(LIM),
-      db.select({ id: protocoloSituacoes.id, nome: protocoloSituacoes.nome }).from(protocoloSituacoes).where(like(protocoloSituacoes.nome, termo)).limit(LIM),
-      db.select({ id: feriados.id, nome: feriados.nome, data: feriados.data }).from(feriados).where(like(feriados.nome, termo)).limit(LIM),
+      db.select({ id: papeis.id, nome: papeis.nome }).from(papeis).where(casaTermos([papeis.nome], padroes)).limit(LIM),
+      db.select({ id: cargos.id, nome: cargos.nome }).from(cargos).where(casaTermos([cargos.nome], padroes)).limit(LIM),
+      db.select({ id: protocoloSituacoes.id, nome: protocoloSituacoes.nome }).from(protocoloSituacoes).where(casaTermos([protocoloSituacoes.nome], padroes)).limit(LIM),
+      db.select({ id: feriados.id, nome: feriados.nome, data: feriados.data }).from(feriados).where(casaTermos([feriados.nome], padroes)).limit(LIM),
     ]);
     const cfg = (aba: string) => `/painel/configuracoes?aba=${aba}`;
     return [
-      ...ps.map((l) => ({ id: l.id, rotulo: l.nome, detalhe: "Papel · Configurações", href: cfg("papeis") })),
-      ...cs.map((l) => ({ id: 100_000 + l.id, rotulo: l.nome, detalhe: "Cargo ou função · Configurações", href: cfg("cargos") })),
-      ...ss.map((l) => ({ id: 200_000 + l.id, rotulo: l.nome, detalhe: "Situação do protocolo · Configurações", href: cfg("situacoes") })),
-      ...fs.map((l) => ({ id: 300_000 + l.id, rotulo: l.nome, detalhe: `Feriado ${dataBR(l.data)} · Configurações`, href: cfg("feriados") })),
+      ...ps.map((l) => ({ id: l.id, rotulo: l.nome, detalhe: "Papel · Configurações", href: `${cfg("papeis")}&abrir=${l.id}` })),
+      ...cs.map((l) => ({ id: 100_000 + l.id, rotulo: l.nome, detalhe: "Cargo ou função · Configurações", href: `${cfg("cargos")}&abrir=${l.id}` })),
+      ...ss.map((l) => ({ id: 200_000 + l.id, rotulo: l.nome, detalhe: "Situação do protocolo · Configurações", href: `${cfg("situacoes")}&abrir=${l.id}` })),
+      ...fs.map((l) => ({ id: 300_000 + l.id, rotulo: l.nome, detalhe: `Feriado ${dataBR(l.data)} · Configurações`, href: `${cfg("feriados")}&abrir=${l.id}` })),
     ].slice(0, LIM);
   }
   if (tipo === "fluxo") {
@@ -188,7 +179,7 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
     const ls = await db
       .select({ id: automacaoFluxos.id, nome: automacaoFluxos.nome, descricao: automacaoFluxos.descricao })
       .from(automacaoFluxos)
-      .where(and(or(eq(automacaoFluxos.criadoPor, a.u.id), isNull(automacaoFluxos.criadoPor)), or(like(automacaoFluxos.nome, termo), like(automacaoFluxos.descricao, termo))))
+      .where(and(or(eq(automacaoFluxos.criadoPor, a.u.id), isNull(automacaoFluxos.criadoPor)), casaTermos([automacaoFluxos.nome, automacaoFluxos.descricao], padroes)))
       .orderBy(automacaoFluxos.nome)
       .limit(LIM);
     return ls.map((l) => ({ id: l.id, rotulo: l.nome, detalhe: (l.descricao ?? "Automação").slice(0, 120), href: `/painel/automacao?abrir=${l.id}` }));

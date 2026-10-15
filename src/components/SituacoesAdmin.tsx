@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { SituacaoComUso } from "@/lib/situacoes";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { ColorField } from "./ColorField";
@@ -48,7 +49,12 @@ export function SituacoesAdmin() {
     setEditando(s);
     setNome(s === "nova" ? "" : s.nome);
     setCor(s === "nova" ? COR_PADRAO : s.cor);
-  }
+  }  // A PESQUISA DO SISTEMA abre o registro (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const x = lista?.find((y) => y.id === Number(v));
+    if (x) abrir(x);
+  }, lista != null);
+
 
   async function salvar() {
     if (!editando) return;

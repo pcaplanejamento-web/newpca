@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PapelCadastro } from "@/lib/papeis";
 import { type Capacidades, diffCapacidades, MAX_DESCRICAO_PAPEL, MAX_NOME_PAPEL, MODELOS_PAPEL, retiraAlgo, textoDiffCapacidades } from "@/lib/papeis-core";
 import { compactarDetalhes, contarRestricoes, type DetalhesPapel, detalhesPadrao, diffDetalhes, restringeAlgo, textoDiffDetalhes } from "@/lib/papeis-detalhes-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -95,6 +96,11 @@ export function PapeisAdmin() {
     p.chave === "admin"
       ? setConsulta(p)
       : abrir({ id: p.id, nome: p.nome, descricao: p.descricao ?? "", capacidades: p.capacidades, detalhes: p.detalhes, padraoCadastro: p.padraoCadastro });
+  // A PESQUISA DO SISTEMA abre o registro (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const x = lista?.find((y) => y.id === Number(v));
+    if (x) editar(x);
+  }, lista != null);
   // O Administrador não tem detalhes (ignora): a cópia dele começa sem restrições.
   const duplicar = (p: PapelCadastro) =>
     abrir({

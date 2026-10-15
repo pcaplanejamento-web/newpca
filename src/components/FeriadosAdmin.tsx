@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { type FeriadoCadastro, feriadosNacionais, ROTULO_TIPO_FERIADO, TIPOS_FERIADO, type TipoFeriado } from "@/lib/calendario-core";
 import { dataBR, dataIsoBrasilia } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
@@ -29,6 +30,11 @@ export function FeriadosAdmin() {
   const [lista, setLista] = useState<FeriadoCadastro[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [r, setR] = useState<Rascunho | null>(null);
+  // A PESQUISA DO SISTEMA abre o registro (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const x = lista?.find((y) => y.id === Number(v));
+    if (x) setR({ ...x });
+  }, lista != null);
   const [salvando, setSalvando] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
   const ano = Number(dataIsoBrasilia(new Date().toISOString()).slice(0, 4));

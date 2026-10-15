@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import type { CargoComUso } from "@/lib/cargos";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
@@ -28,6 +29,11 @@ export function CargosAdmin({ onMudou }: { onMudou?: () => void }) {
   const [lista, setLista] = useState<CargoComUso[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [nome, setNome] = useState("");
+  // A PESQUISA DO SISTEMA abre o registro (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const x = lista?.find((y) => y.id === Number(v));
+    if (x) { setEditando(x); setNome(x.nome); };
+  }, lista != null);
   const [editando, setEditando] = useState<CargoComUso | null>(null);
   const [salvando, setSalvando] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();

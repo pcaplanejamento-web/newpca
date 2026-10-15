@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.105.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa mais inteligente",
+    mudancas: [
+      { tipo: "melhoria", area: "Pesquisa", texto: "Vários termos de uma vez (\"secretaria saúde 2027\" exige todos) e sem precisar de acento: \"manutencao\" acha \"MANUTENÇÃO\". O resultado exato vem primeiro.", link: "/painel" },
+      { tipo: "novo", area: "Pesquisa", texto: "Filtros rápidos no banner (Protocolos, DFDs, Itens, Tarefas, Calendário, Orçamento, Catálogo…), só das telas que você abre.", link: "/painel" },
+      { tipo: "novo", area: "Pesquisa", texto: "Tarefas achadas também pela descrição, pelos comentários e pelos itens dos checklists; ajustes das Configurações e Integrações pelo nome (\"turnstile\", \"senha\", \"marca d'água\"); papéis, cargos, situações e feriados abrem já no registro.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Mais rápida: os tipos mais usados aparecem primeiro e as outras telas chegam em seguida.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.104.0",
     data: "2026-10-15",
     titulo: "Pesquisa em todas as telas",

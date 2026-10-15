@@ -28,6 +28,8 @@ import {
   dfdItens,
   reparticoes,
 } from "@/db/schema";
+import { padroesLike } from "./pesquisa-core";
+import { casaTermos } from "./pesquisa-sql";
 import { type Acesso, componenteLibera, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { registrarAuditoria } from "./auditoria";
@@ -1597,7 +1599,7 @@ export async function buscarVinculos(
   gruposTarefas: number[] | null,
 ): Promise<{ id: number; rotulo: string; detalhe: string }[]> {
   const db = getDb();
-  const termo = `%${q.trim().replace(/[%_]/g, "")}%`;
+  const padroes = padroesLike(q);
   const LIMITE = 50;
   if (tipo === "tarefa") {
     // As tarefas (não templates) dos quadros ATIVOS dos grupos em que a pessoa vê as tarefas — o ADM, todos; `q` casa o
@@ -1616,7 +1618,20 @@ export async function buscarVinculos(
           eq(tarefaQuadros.arquivado, false),
           grupoIds ? inArray(tarefaQuadros.grupoId, grupoIds.slice(0, 90)) : undefined,
           quadroVisivel(u.id),
-          ticket != null ? or(eq(tarefas.ticket, ticket), like(tarefas.titulo, termo)) : like(tarefas.titulo, termo),
+          // Título, descrição, um COMENTÁRIO ou um item de CHECKLIST (cada termo em algum deles); o nº do ticket direto.
+          or(
+            ticket != null ? eq(tarefas.ticket, ticket) : undefined,
+            and(
+              ...padroes.map((p) =>
+                or(
+                  like(tarefas.titulo, p),
+                  like(tarefas.descricao, p),
+                  sql`EXISTS (SELECT 1 FROM ${tarefaComentarios} WHERE ${tarefaComentarios.tarefaId} = ${tarefas.id} AND ${tarefaComentarios.texto} LIKE ${p})`,
+                  sql`EXISTS (SELECT 1 FROM ${tarefaChecklist} WHERE ${tarefaChecklist.tarefaId} = ${tarefas.id} AND ${tarefaChecklist.texto} LIKE ${p})`,
+                ),
+              ),
+            ),
+          ),
         ),
       )
       .orderBy(tarefas.arquivada, desc(tarefas.id))
@@ -1628,7 +1643,7 @@ export async function buscarVinculos(
     const linhas = await db
       .select({ id: t.id, nome: t.nome, ano: t.ano })
       .from(t)
-      .where(or(like(t.nome, termo), like(sql`CAST(${t.ano} AS TEXT)`, termo)))
+      .where(or(casaTermos([t.nome], padroes), like(sql`CAST(${t.ano} AS TEXT)`, `%${q.trim().replace(/[%_]/g, "")}%`)))
       .orderBy(desc(t.id))
       .limit(LIMITE);
     // O MESMO rótulo que `rotulosVinculos` dá ao vínculo gravado (orçamento = nome + ano).
@@ -1648,7 +1663,7 @@ export async function buscarVinculos(
       .from(dfdProtocolos)
       .where(
         and(
-          or(like(dfdProtocolos.numero, termo), like(dfdProtocolos.idExterno, termo), like(dfdProtocolos.assunto, termo)),
+          casaTermos([dfdProtocolos.numero, dfdProtocolos.idExterno, dfdProtocolos.assunto], padroes),
           escopo(dfdProtocolos.reparticaoId),
           soMeus ? condMeuProtocolo(u.id) : undefined,
         ),
@@ -1664,7 +1679,7 @@ export async function buscarVinculos(
       .innerJoin(dfds, eq(dfds.id, dfdItens.dfdId))
       .where(
         and(
-          or(like(dfdItens.descricao, termo), like(dfdItens.codigo, termo), like(dfds.numero, termo), like(dfds.planejamento, termo)),
+          casaTermos([dfdItens.descricao, dfdItens.codigo, dfds.numero, dfds.planejamento], padroes),
           escopo(dfds.reparticaoId),
           soMeus ? condMeuDfd(db, u.id) : undefined,
         ),
@@ -1681,7 +1696,7 @@ export async function buscarVinculos(
     .from(dfds)
     .where(
       and(
-        or(like(dfds.numero, termo), like(dfds.planejamento, termo), like(dfds.objeto, termo)),
+        casaTermos([dfds.numero, dfds.planejamento, dfds.objeto], padroes),
         escopo(dfds.reparticaoId),
         soMeus ? condMeuDfd(db, u.id) : undefined,
       ),
@@ -2548,7 +2563,7 @@ export async function importarVinculos(quadroId: number, pares: { de: number; pa
 export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q: string, limite: number): Promise<ResultadoPesquisa[]> {
   const db = getDb();
   const u = a.u;
-  const termo = `%${q.trim().replace(/[%_]/g, "")}%`;
+  const padroes = padroesLike(q);
   const { escopo: esc } = await unidadesDaSessao(u);
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
@@ -2576,7 +2591,7 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
       .from(dfdProtocolos)
       .where(
         and(
-          or(like(dfdProtocolos.numero, termo), like(dfdProtocolos.idExterno, termo), like(dfdProtocolos.assunto, termo), like(dfdProtocolos.interessado, termo)),
+          casaTermos([dfdProtocolos.numero, dfdProtocolos.idExterno, dfdProtocolos.assunto, dfdProtocolos.interessado], padroes),
           escopo(dfdProtocolos.reparticaoId),
           soMeus ? condMeuProtocolo(u.id) : undefined,
           naMesa,
@@ -2598,7 +2613,7 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
       .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
       .where(
         and(
-          or(like(dfds.numero, termo), like(dfds.planejamento, termo), like(dfds.objeto, termo), like(dfdProtocolos.numero, termo), like(dfdProtocolos.idExterno, termo)),
+          casaTermos([dfds.numero, dfds.planejamento, dfds.objeto, dfdProtocolos.numero, dfdProtocolos.idExterno], padroes),
           escopo(dfds.reparticaoId),
           soMeus ? condMeuDfd(db, u.id) : undefined,
           naMesa,
@@ -2629,7 +2644,7 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
     .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
     .where(
       and(
-        or(like(dfdItens.descricao, termo), like(dfdItens.codigo, termo)),
+        casaTermos([dfdItens.descricao, dfdItens.codigo], padroes),
         escopo(dfds.reparticaoId),
         soMeus ? condMeuDfd(db, u.id) : undefined,
         naMesa,

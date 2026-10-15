@@ -4,7 +4,7 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { TIPOS_PESQUISA, tituloPesquisa, type TipoPesquisa } from "@/lib/pesquisa-core";
+import { TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoPesquisa } from "@/lib/pesquisa-core";
 import { alternarFavorito, type FavoritoPesquisa, lerFavoritos, MAX_FAVORITOS, moverFavorito } from "@/lib/pesquisa-favoritos-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { hrefVinculo, linkTarefa, ROTULO_VINCULO, type TipoVinculo } from "@/lib/tarefas-core";
@@ -28,6 +28,7 @@ import {
   IconUsers,
   IconWallet,
 } from "./icons";
+import { ChipsEscolha } from "./ChipsEscolha";
 import { toast } from "./Toast";
 import { gravarTemaPessoal, lerTemaPessoal } from "./TemaPessoal";
 
@@ -36,10 +37,12 @@ export type TelaPesquisa = { href: string; label: string; secao: string; Icon: I
 export type PcaPesquisa = { id: number; nome: string; ano: number };
 
 /** Um resultado: o rótulo, o contexto (à direita do travessão), para onde leva — ou a AÇÃO que executa. */
-type Resultado = { chave: string; rotulo: string; caminho?: string[]; detalhe?: string; href?: string; tipo: string; acao?: () => void };
+type Resultado = { chave: string; rotulo: string; caminho?: string[]; detalhe?: string; href?: string; tipo: string; acao?: () => void; palavras?: string };
 type Grupo = { tipo: string; titulo: string; itens: Resultado[]; total?: number; carregando?: boolean; erro?: boolean };
 
 const RECENTES = "pesquisa:recentes";
+/** A 1ª fase da pesquisa sem prefixo (os tipos mais usados). */
+const FASE_1: TipoPesquisa[] = ["protocolo", "dfd", "item", "tarefa"];
 const MAX_RECENTES = 6;
 /** Fora do banner: abrir o banner e alternar o menu lateral (a AÇÃO "Recolher o menu"). */
 export const EVENTO_ABRIR_PESQUISA = "pesquisa-sistema:abrir";
@@ -92,6 +95,31 @@ const ABAS_TELAS: Record<string, { param: string; abas: [string, string][] }> = 
   },
   "/painel/orgaos": { param: "aba", abas: [["orgaos", "Órgãos"], ["responsaveis", "Responsáveis"]] },
 };
+/**
+ * As PALAVRAS de cada tela/aba (o que se ajusta nelas): "turnstile" acha Integrações; "senha" acha Segurança. A chave é o
+ * `href` da tela ou "href?valor" da aba.
+ */
+const PALAVRAS: Record<string, string> = {
+  "/painel/integracoes": "turnstile captcha google login resend email e-mail trello cloudflare monitoramento métricas",
+  "/painel/armazenamento": "banco dados tamanho saúde sessões expurgar online worker",
+  "/painel/auditoria": "histórico alterações registro log quem mudou",
+  "/painel/automacao": "centi extensão fluxos robô baixar dfds cm002",
+  "/painel/usuarios": "pessoas aprovar cadastro matrícula whatsapp arquivados",
+  "/painel/grupos": "permissões telas módulos pcas chat",
+  "/painel/configuracoes?identidade": "nome logo favicon subtítulo",
+  "/painel/configuracoes?modulos": "menu telas seções",
+  "/painel/configuracoes?papeis": "permissão ações visualizar manipular importar exportar excluir configurar detalhes",
+  "/painel/configuracoes?protecao": "cópia impressão captura marca d'água",
+  "/painel/configuracoes?seguranca": "inatividade sessão login suspeito senha",
+  "/painel/configuracoes?acesso": "login vitrine textos manchete",
+  "/painel/configuracoes?tabelas": "linhas por página",
+  "/painel/configuracoes?situacoes": "situação protocolo cores",
+  "/painel/configuracoes?feriados": "calendário ponto facultativo",
+  "/painel/configuracoes?presenca": "online chat invisível ausente",
+  "/painel/configuracoes?notificacoes": "avisos sino e-mail limpeza comunicado alcance",
+  "/painel/configuracoes?avaliacao": "importância bloqueia avisa automático regras protocolação assuntos tipos",
+};
+
 const ABAS_PERFIL: [string, string][] = [
   ["conta", "Conta"], ["seguranca", "Segurança"], ["acessos", "Histórico de acesso"], ["aparencia", "Aparência"],
   ["notificacoes", "Notificações"], ["trabalho", "Trabalho"], ["acesso", "Meu acesso"],
@@ -255,27 +283,33 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     setCarregando(true);
     setFalhou(false);
     const t = setTimeout(async () => {
+      // Sem prefixo, em DUAS fases: os mais usados primeiro (aparecem logo) e depois os demais — cada pedido fica leve.
+      const fases = tiposServidor ? [tiposServidor] : [FASE_1, TIPOS_PADRAO.filter((x) => !FASE_1.includes(x))];
+      const juntos: Grupo[] = [];
+      setRemotos([]);
       try {
-        const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}${tiposServidor ? `&tipos=${tiposServidor.join(",")}` : ""}&limite=${tipo ? 30 : 5}`);
-        const j = (await r.json()) as { ok?: boolean; grupos?: { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] }[] };
-        if (!r.ok || !j.ok) throw new Error();
-        if (!vivo) return;
-        setRemotos(
-          (j.grupos ?? []).map((g) => ({
-            tipo: g.tipo,
-            titulo: tituloPesquisa(g.tipo),
-            total: g.total,
-            itens: g.opcoes
-              .map<Resultado>((o) => ({
-                chave: `${g.tipo}:${o.id}`,
-                rotulo: o.rotulo,
-                detalhe: o.detalhe || undefined,
-                href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo as TipoVinculo, id: o.id })),
-                tipo: g.tipo,
-              }))
-              .sort((a, b) => Number(numeroExato(b.rotulo, termo)) - Number(numeroExato(a.rotulo, termo))),
-          })),
-        );
+        for (const fase of fases) {
+          const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${fase.join(",")}&limite=${tipo ? 30 : 5}`);
+          const j = (await r.json()) as { ok?: boolean; grupos?: { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] }[] };
+          if (!r.ok || !j.ok) throw new Error();
+          if (!vivo) return;
+          for (const g of j.grupos ?? [])
+            juntos.push({
+              tipo: g.tipo,
+              titulo: tituloPesquisa(g.tipo),
+              total: g.total,
+              itens: g.opcoes
+                .map<Resultado>((o) => ({
+                  chave: `${g.tipo}:${o.id}`,
+                  rotulo: o.rotulo,
+                  detalhe: o.detalhe || undefined,
+                  href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo as TipoVinculo, id: o.id })),
+                  tipo: g.tipo,
+                }))
+                .sort((a, b) => Number(numeroExato(b.rotulo, termo)) - Number(numeroExato(a.rotulo, termo))),
+            });
+          setRemotos([...juntos]);
+        }
       } catch {
         if (vivo) setFalhou(true);
       } finally {
@@ -328,7 +362,16 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const abas = useMemo<Resultado[]>(() => {
     const porTela = telas.flatMap((t) => {
       const def = ABAS_TELAS[t.href];
-      return def ? def.abas.map<Resultado>(([v, r]) => ({ chave: `aba:${t.href}:${v}`, rotulo: r, caminho: [t.secao, t.label].filter(Boolean), href: `${t.href}?${def.param}=${v}`, tipo: "aba" })) : [];
+      return def
+        ? def.abas.map<Resultado>(([v, r]) => ({
+            chave: `aba:${t.href}:${v}`,
+            rotulo: r,
+            caminho: [t.secao, t.label].filter(Boolean),
+            href: `${t.href}?${def.param}=${v}`,
+            tipo: "aba",
+            palavras: PALAVRAS[`${t.href}?${v}`],
+          }))
+        : [];
     });
     const perfil = ABAS_PERFIL.map<Resultado>(([v, r]) => ({ chave: `aba:perfil:${v}`, rotulo: r, caminho: ["Conta", "Perfil"], href: `/painel/perfil?aba=${v}`, tipo: "aba" }));
     const dosPcas = telas.some((t) => t.href === "/painel/pca")
@@ -353,9 +396,9 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       {
         tipo: "tela",
         titulo: "Telas",
-        itens: quer("tela") ? telas.filter((t) => casa([t.label, t.secao])).map((t) => ({ chave: `tela:${t.href}`, rotulo: t.label, caminho: t.secao ? [t.secao] : undefined, href: t.href, tipo: "tela" })) : [],
+        itens: quer("tela") ? telas.filter((t) => casa([t.label, t.secao, PALAVRAS[t.href] ?? ""])).map((t) => ({ chave: `tela:${t.href}`, rotulo: t.label, caminho: t.secao ? [t.secao] : undefined, href: t.href, tipo: "tela" })) : [],
       },
-      { tipo: "aba", titulo: "Abas", itens: quer("aba") ? abas.filter((a) => casa([a.rotulo, ...(a.caminho ?? []), `${(a.caminho ?? []).join(" ")} ${a.rotulo}`])).slice(0, tipo ? 60 : 8) : [] },
+      { tipo: "aba", titulo: "Abas", itens: quer("aba") ? abas.filter((a) => casa([a.rotulo, ...(a.caminho ?? []), `${(a.caminho ?? []).join(" ")} ${a.rotulo}`, a.palavras ?? ""])).slice(0, tipo ? 60 : 8) : [] },
       {
         tipo: "pca",
         titulo: "PCAs",
@@ -368,9 +411,12 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       },
     ];
     // Enquanto o servidor responde, cada grupo dele mostra o esqueleto.
-    const doServidor: Grupo[] = carregando
-      ? (tiposServidor ?? ["protocolo", "dfd", "item"]).map((t) => ({ tipo: t, titulo: tituloPesquisa(t), itens: [], carregando: true }))
-      : remotos;
+    // Na 2ª fase, os grupos que já chegaram ficam e um esqueleto só diz que segue procurando nas outras telas.
+    const doServidor: Grupo[] = !carregando
+      ? remotos
+      : remotos.length
+        ? [...remotos, { tipo: "mais", titulo: "Procurando nas outras telas…", itens: [], carregando: true }]
+        : (tiposServidor ?? FASE_1).map((t) => ({ tipo: t, titulo: tituloPesquisa(t), itens: [], carregando: true }));
     return [...locais, ...doServidor].filter((g) => g.itens.length || g.carregando);
   }, [texto, termo, tipo, largo, favoritos, recentes, acoes, telas, abas, pcas, pcaFiltroId, remotos, carregando, tiposServidor]);
 
@@ -587,6 +633,25 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const vazio = !semTexto && !carregando && !falhou && grupos.length === 0 && dicas.length === 0;
   const EmFocoIcone = emFoco ? (ICONE_TIPO[emFoco.r.tipo] ?? IconLayers) : IconSearch;
 
+  // Os FILTROS RÁPIDOS: só das telas que a pessoa abre (a rota confere de novo); tocar restringe a pesquisa ao tipo.
+  const abre = (h: string) => telas.some((t) => t.href === h);
+  const filtros: { value: string; label: string }[] = [
+    { value: "", label: "Tudo" },
+    ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
+    ...(abre("/painel/tarefas") ? [{ value: "tarefa", label: "Tarefas" }] : []),
+    ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
+    ...(abre("/painel/orcamento") ? [{ value: "lancamento", label: "Orçamento" }] : []),
+    ...(abre("/painel/catalogo") ? [{ value: "catalogo", label: "Catálogo" }, { value: "historico", label: "Histórico" }] : []),
+    ...(abre("/painel/usuarios") ? [{ value: "usuario", label: "Usuários" }, { value: "cadastro", label: "Cadastros" }, { value: "fluxo", label: "Automações" }] : []),
+    { value: "tela", label: "Telas" },
+  ];
+  const escolherFiltro = (v: string) => {
+    const d = DICAS.find((x) => x.tipo === v);
+    setTexto(d ? `${d.prefixo} ${termo}` : termo);
+    setFoco(0);
+    campo.current?.focus();
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-stretch justify-center sm:items-start sm:px-[var(--pad-canvas)] sm:pt-[8vh] print:hidden">
       <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)]" onClick={fechar} />
@@ -611,13 +676,16 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
             aria-controls={idLista}
             aria-activedescendant={itens.length ? `${idLista}-${focoValido}` : undefined}
             aria-autocomplete="list"
-            placeholder="Pesquise telas, abas, protocolos, DFDs, tarefas e PCAs…"
+            placeholder="Pesquise em todo o sistema — telas, Mesa, orçamento, catálogo, tarefas…"
             aria-label="Pesquisar no sistema"
             className="h-14 min-w-0 flex-1 bg-transparent text-[16px] text-text outline-none placeholder:text-faint sm:text-[15px]"
           />
           <button type="button" onClick={fechar} className="shrink-0 rounded-chip border border-border px-1.5 py-0.5 text-[12px] text-muted hover:bg-surface-2">
             Esc
           </button>
+        </div>
+        <div className="border-b border-border px-3 py-2">
+          <ChipsEscolha rolar ariaLabel="Pesquisar em" opcoes={filtros} valor={tipo ?? ""} onEscolher={escolherFiltro} />
         </div>
         <div className="flex min-h-0 flex-1">
           <div ref={lista} id={idLista} role="listbox" aria-label="Resultados" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2">
