@@ -157,12 +157,12 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
   }
 
   return (
-    <div className="menu-cartao flex w-[calc(15rem-1px)] max-w-none shrink-0 items-stretch gap-1 overflow-hidden rounded-card border border-border p-0.5 max-lg:w-auto">
+    <div className="menu-cartao flex w-full shrink-0 items-stretch overflow-hidden rounded-card border border-border p-0.5 max-lg:w-auto">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}
         title="Meu perfil"
-        className="flex min-w-[38px] flex-1 items-center gap-2 rounded-control p-[3px] pr-1.5 transition-colors hover:bg-surface-2"
+        className="flex min-w-[37px] flex-1 items-center gap-2 overflow-hidden rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2"
       >
         <Avatar nome={usuario.nome} foto={usuario.foto} />
         <div className="menu-esconde min-w-0">
@@ -179,7 +179,7 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
         disabled={saindo}
         title="Sair"
         aria-label="Sair"
-        className="menu-esconde grid w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)] disabled:opacity-60"
+        className="menu-esconde menu-sair ml-1 grid w-11 shrink-0 place-items-center overflow-hidden rounded-control text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)] disabled:opacity-60"
       >
         {saindo ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconLogout className="h-[18px] w-[18px]" />}
       </button>
@@ -568,7 +568,7 @@ export function AppShell({
           onPointerLeave={() => setSemPeek(false)}
           className="menu-lateral absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-surface"
         >
-          <div className="flex h-full w-[calc(16rem-1px)] shrink-0 flex-col">
+          <div className="flex h-full w-full min-w-0 flex-col">
             {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
             <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
               <Brand identidade={identidade} inicio={inicio} />

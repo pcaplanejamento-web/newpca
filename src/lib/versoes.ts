@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.8",
+    data: "2026-10-15",
+    titulo: "Menu recolhido alinhado",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Com o menu recolhido, as seleções e a foto do usuário ficam centralizadas no trilho, sem cortes nem deformação; ícones e foto não mudam de lugar ao abrir e fechar.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.107.7",
     data: "2026-10-15",
     titulo: "Logo e usuário estáveis no menu recolhido",
