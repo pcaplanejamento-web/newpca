@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.11",
+    data: "2026-10-15",
+    titulo: "Cartões suaves ao fechar o menu e foto sem achatar",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Fechar o menu lateral agora faz a mesma animação suave de abrir, ao contrário: os cartões do PCA (e semelhantes) deslizam e mudam de tamanho sem saltar.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Menu", texto: "A foto do usuário não achata mais com o menu recolhido.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.107.10",
     data: "2026-10-15",
     titulo: "Cartões e usuário estáveis no menu",

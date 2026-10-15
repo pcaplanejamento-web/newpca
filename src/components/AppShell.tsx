@@ -164,7 +164,7 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
         title="Meu perfil"
         className="flex min-w-[37px] flex-1 items-center gap-2 overflow-hidden rounded-control p-[2.5px] pr-1.5 transition-colors hover:bg-surface-2"
       >
-        <Avatar nome={usuario.nome} foto={usuario.foto} />
+        <Avatar nome={usuario.nome} foto={usuario.foto} className="max-w-none" />
         <div className="menu-esconde min-w-0">
           {/* O APELIDO (nome de exibição) — o nome completo no title. */}
           <div className="truncate text-sm font-semibold text-text" title={usuario.nome}>
@@ -466,28 +466,38 @@ function deslizarGrades() {
   if (m === "off" || m === "reduced") return;
   const itens = Array.from(document.querySelectorAll<HTMLElement>('main [class*="auto-fill"] > *'));
   if (!itens.length) return;
-  const caixa = (e: HTMLElement) => ({ x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight });
-  const pos = new Map(itens.map((e) => [e, caixa(e)]));
+  // A posição DENTRO da grade (não na página): a coluna inteira anda com o menu — isso não é salto.
+  const naGrade = (e: HTMLElement) => {
+    const g = e.parentElement as HTMLElement;
+    const base = e.offsetParent === g ? { x: 0, y: 0 } : { x: g.offsetLeft, y: g.offsetTop };
+    return { x: e.offsetLeft - base.x, y: e.offsetTop - base.y, w: e.offsetWidth };
+  };
+  const antes = new Map(itens.map((e) => [e, { grade: naGrade(e), visual: e.getBoundingClientRect() }]));
   const fim = performance.now() + 340;
   const passo = () => {
     for (const e of itens) {
-      const a = pos.get(e);
+      const a = antes.get(e);
       if (!a) continue;
-      const n = caixa(e);
-      // Mudou de coluna/linha (ou a coluna mudou de largura de uma vez): sai da posição E do tamanho antigos.
-      if (Math.abs(n.x - a.x) > 24 || Math.abs(n.y - a.y) > 24 || Math.abs(n.w - a.w) > 16) {
+      const g = naGrade(e);
+      // SALTO = trocou de coluna/linha ou a largura mudou de uma vez (a grade ganhou/perdeu uma coluna). O que só
+      // estica/encolhe com o menu acompanha sozinho.
+      const salto = Math.abs(g.x - a.grade.x) > 40 || Math.abs(g.y - a.grade.y) > 40 || Math.abs(g.w - a.grade.w) > a.grade.w * 0.12;
+      if (salto) {
+        for (const an of e.getAnimations()) an.cancel();
+        const novo = e.getBoundingClientRect();
+        const v = a.visual;
         e.style.transformOrigin = "0 0";
         e.animate(
           [
-            { transform: `translate(${a.x - n.x}px, ${a.y - n.y}px) scale(${a.w / n.w || 1}, ${a.h / n.h || 1})` },
+            { transform: `translate(${v.left - novo.left}px, ${v.top - novo.top}px) scale(${v.width / novo.width || 1}, ${v.height / novo.height || 1})` },
             { transform: "none" },
           ],
-          { duration: 300, easing: "cubic-bezier(.32,.72,0,1)" },
+          { duration: Math.max(120, fim - performance.now()), easing: "cubic-bezier(.32,.72,0,1)" },
         ).onfinish = () => {
           e.style.transformOrigin = "";
         };
       }
-      pos.set(e, n);
+      antes.set(e, { grade: g, visual: e.getBoundingClientRect() });
     }
     if (performance.now() < fim) requestAnimationFrame(passo);
   };
