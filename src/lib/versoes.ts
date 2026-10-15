@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.96.0",
+    data: "2026-10-15",
+    titulo: "Perfil reorganizado em abas",
+    mudancas: [
+      { tipo: "melhoria", area: "Perfil", texto: "O Perfil ficou em abas: Conta, Segurança, Aparência, Notificações, Trabalho e Meu acesso — cada assunto no seu lugar, sem cartão dentro de cartão.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.95.0",
     data: "2026-10-15",
     titulo: "Modos escuros e horário do tema",

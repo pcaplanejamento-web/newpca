@@ -44,6 +44,7 @@ import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
 import { PreferenciasNotificacoes } from "./PreferenciasNotificacoes";
+import { Tabs } from "./Tabs";
 import { AparenciaPessoal } from "./AparenciaPessoal";
 import { IconPalette } from "./icons";
 import { Switch } from "./Switch";
@@ -62,6 +63,8 @@ function Aviso({ msg }: { msg: Msg }) {
 }
 
 const cardCls = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
+/** Seção DENTRO de uma aba: separada da anterior por uma linha (sem cartão dentro do cartão). */
+const secaoCls = "border-t border-border pt-5 first:border-t-0 first:pt-0";
 
 /** Uma SEÇÃO do Perfil: ícone + título + descrição, o conteúdo e (opcional) a ação à direita no rodapé. Um `<form>`
  * quando há `onSubmit`. */
@@ -84,8 +87,8 @@ function SecaoPerfil({
 }) {
   const conteudo = (
     <>
-      <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">{icone}</span>
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 text-muted">{icone}</span>
         <div className="min-w-0">
           <h3 className="text-[15px] font-bold text-text">{titulo}</h3>
           {descricao && <p className="mt-0.5 text-[12.5px] leading-snug text-muted">{descricao}</p>}
@@ -93,15 +96,15 @@ function SecaoPerfil({
       </div>
       <div className="mt-4">{children}</div>
       <Aviso msg={msg ?? null} />
-      {acao && <div className="mt-4 flex justify-end border-t border-border pt-3">{acao}</div>}
+      {acao && <div className="mt-4 flex justify-end">{acao}</div>}
     </>
   );
   return onSubmit ? (
-    <form onSubmit={onSubmit} className={cardCls}>
+    <form onSubmit={onSubmit} className={secaoCls}>
       {conteudo}
     </form>
   ) : (
-    <section className={cardCls}>{conteudo}</section>
+    <section className={secaoCls}>{conteudo}</section>
   );
 }
 /** Responsável padrão: "" = nenhum (definir na Mesa). */
@@ -448,11 +451,20 @@ export function PerfilView({
         </Button>
       </section>
 
-      <div className="grid items-start gap-[var(--gap-block)] lg:grid-cols-2">
-        {/* Coluna da CONTA: identificação, senha e Google */}
-        <div className="space-y-[var(--gap-block)]">
-          {perfilDados}
-
+      <Tabs
+        layout="lateral"
+        separado
+        url="aba"
+        inicial={retornoGoogle || semSenha ? "seguranca" : "conta"}
+        tabs={[
+          { key: "conta", label: "Conta", icon: <IconUser className="h-4 w-4" />, dica: "Seus dados e o apelido", content: <div className="space-y-5">{perfilDados}</div> },
+          {
+            key: "seguranca",
+            label: "Segurança",
+            icon: <IconKey className="h-4 w-4" />,
+            dica: semSenha ? "Crie sua senha — é obrigatória" : "Senha, conta Google e acessos",
+            content: (
+              <div className="space-y-5">
           {/* Senha: trocar (ou CRIAR, para quem só entrava pelo Google) — confirmada pelo código enviado ao e-mail */}
           <SecaoPerfil
             icone={<IconKey className="h-4 w-4" />}
@@ -503,7 +515,6 @@ export function PerfilView({
               </div>
             )}
           </SecaoPerfil>
-
           {/* Conta Google: vinculada = entrar com um clique ("Continuar com Google"), mesmo com outro e-mail */}
           {contaGoogle && (
             <SecaoPerfil
@@ -541,46 +552,31 @@ export function PerfilView({
               </p>
             </SecaoPerfil>
           )}
-
           {/* HISTÓRICO DE ACESSO: cada login (data/hora, dispositivo, canal, IP) + o último acesso */}
           <SecaoPerfil icone={<IconClock className="h-4 w-4" />} titulo="Histórico de acesso" descricao="Cada entrada na sua conta. Não reconhece um acesso? Troque a senha e avise o administrador.">
             <HistoricoAcessos url="/api/perfil/acessos" nomeExportacao="Meu histórico de acesso" />
           </SecaoPerfil>
-        </div>
-
-        {/* Coluna das PREFERÊNCIAS: o acesso, e-mail, Mesa e protocolação */}
-        <div className="space-y-[var(--gap-block)]">
-          {seuAcesso && (
-            <SecaoPerfil
-              icone={<IconShield className="h-4 w-4" />}
-              titulo="Seu acesso"
-              descricao={
-                <>
-                  {seuAcesso.grupo ? `No grupo ${seuAcesso.grupo}: ` : ""}as telas que você abre e o que pode fazer em cada uma. O grupo
-                  decide as telas; o papel ({usuario.papel.nome}), as ações.
-                </>
-              }
-            >
-              <ResumoPapel capacidades={seuAcesso.capacidades} vazio="Nenhuma tela liberada." />
-              {seuAcesso.detalhes != null && contarRestricoes(seuAcesso.detalhes) > 0 && (
-                <div className="mt-4 border-t border-border pt-3">
-                  <p className="mb-2 text-[12.5px] text-muted">Restrições do papel dentro dessas telas:</p>
-                  <ResumoDetalhesPapel detalhes={seuAcesso.detalhes} />
-                </div>
-              )}
-            </SecaoPerfil>
-          )}
-          {/* APARÊNCIA: o modo claro/escuro e a tonalidade do escuro — neste navegador, grava na hora. */}
-          <SecaoPerfil icone={<IconPalette className="h-4 w-4" />} titulo="Aparência" descricao="Grava sozinho a cada mudança.">
-            <AparenciaPessoal />
-          </SecaoPerfil>
-          {presenca && <PresencaPerfil inicial={presenca.invisivel} />}
-
+              </div>
+            ),
+          },
+          { key: "aparencia", label: "Aparência", icon: <IconPalette className="h-4 w-4" />, dica: "Modo claro/escuro e tonalidade", content: (
+            <div className="space-y-5">
+              <SecaoPerfil icone={<IconPalette className="h-4 w-4" />} titulo="Aparência" descricao="Como o sistema aparece para você neste navegador. Grava sozinho.">
+                <AparenciaPessoal />
+              </SecaoPerfil>
+            </div>
+          ) },
+          { key: "notificacoes", label: "Notificações", icon: <IconBell className="h-4 w-4" />, dica: "Sino e e-mail", content: (
+            <div className="space-y-5">
           {/* NOTIFICAÇÕES: o sino (tipos, som, alerta do sistema, silenciados) e o e-mail (imediato · resumo · desligado). */}
           <SecaoPerfil icone={<IconBell className="h-4 w-4" />} titulo="Notificações" descricao="Grava sozinho a cada mudança.">
             <PreferenciasNotificacoes googleEmail={identidade.googleEmail} />
           </SecaoPerfil>
-
+            </div>
+          ) },
+          ...(mesaResponsavel != null || protocolacao || presenca
+            ? [{ key: "trabalho", label: "Trabalho", icon: <IconBriefcase className="h-4 w-4" />, dica: "Mesa, protocolação e presença", content: (
+              <div className="space-y-5">
           {/* Mesa: com que RESPONSÁVEL ela abre — só os do usuário (o padrão), geral ou os sem responsável. */}
           {mesaResponsavel != null && (
             <SecaoPerfil
@@ -614,7 +610,6 @@ export function PerfilView({
               </p>
             </SecaoPerfil>
           )}
-
           {/* Protocolação (editores): responsável padrão escolhido automaticamente ao protocolar */}
           {protocolacao && (
             <SecaoPerfil
@@ -655,8 +650,38 @@ export function PerfilView({
               )}
             </SecaoPerfil>
           )}
-        </div>
-      </div>
+                {presenca && <PresencaPerfil inicial={presenca.invisivel} />}
+              </div>
+            ) }]
+            : []),
+          ...(seuAcesso
+            ? [{ key: "acesso", label: "Meu acesso", icon: <IconShield className="h-4 w-4" />, dica: "O que você abre e faz", content: (
+              <div className="space-y-5">
+          {seuAcesso && (
+            <SecaoPerfil
+              icone={<IconShield className="h-4 w-4" />}
+              titulo="Seu acesso"
+              descricao={
+                <>
+                  {seuAcesso.grupo ? `No grupo ${seuAcesso.grupo}: ` : ""}as telas que você abre e o que pode fazer em cada uma. O grupo
+                  decide as telas; o papel ({usuario.papel.nome}), as ações.
+                </>
+              }
+            >
+              <ResumoPapel capacidades={seuAcesso.capacidades} vazio="Nenhuma tela liberada." />
+              {seuAcesso.detalhes != null && contarRestricoes(seuAcesso.detalhes) > 0 && (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="mb-2 text-[12.5px] text-muted">Restrições do papel dentro dessas telas:</p>
+                  <ResumoDetalhesPapel detalhes={seuAcesso.detalhes} />
+                </div>
+              )}
+            </SecaoPerfil>
+          )}
+              </div>
+            ) }]
+            : []),
+        ]}
+      />
     </div>
   );
 }
