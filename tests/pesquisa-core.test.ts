@@ -5,7 +5,7 @@ import { ehTipoPesquisa, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa } from "..
 test("pesquisa: tipos únicos, prefixos e atalhos sem repetir", () => {
   const tipos = TIPOS_PESQUISA.map((t) => t.tipo);
   assert.equal(new Set(tipos).size, tipos.length);
-  const atalhos = TIPOS_PESQUISA.flatMap((t) => [t.prefixo, t.curto]);
+  const atalhos: string[] = TIPOS_PESQUISA.flatMap((t) => [t.prefixo, t.curto]);
   assert.equal(new Set(atalhos).size, atalhos.length);
   for (const t of TIPOS_PESQUISA) assert.ok(t.prefixo.endsWith(":") && t.curto.endsWith(":"));
   // os atalhos locais da tela (pca, tela, aba) não colidem
