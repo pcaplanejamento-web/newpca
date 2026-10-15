@@ -203,6 +203,7 @@ export function ItemDetalhe({
         <CampoTexto label="Unidade" valor={item.unidade ?? ""} {...props("unidade")} onChange={(v) => onChange?.({ unidade: v || null })} />
         <CampoTexto
           label="Descrição"
+          ancora="descricao"
           valor={item.descricao ?? ""}
           span
           multi

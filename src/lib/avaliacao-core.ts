@@ -86,6 +86,7 @@ export type ChaveAvaliacao =
   | "item.valorUnitario"
   | "item.quantidade"
   | "item.quantidadeFracionada"
+  | "item.palavras"
   | "item.naoCatalogado"
   | "item.divergenteCatalogo"
   | "item.tipoIncompativel"
@@ -142,6 +143,8 @@ export const CATALOGO_AVALIACAO: PontoAvaliacao[] = [
   { chave: "item.valorUnitario", sujeito: "item", rotulo: "Valor unitário", descricao: "Todo item com valor unitário maior que zero.", comportamentosPermitidos: BASE, comportamentoPadrao: "bloqueia" },
   { chave: "item.quantidade", sujeito: "item", rotulo: "Quantidade", descricao: "Todo item com quantidade maior que zero. Quantidade vazia aponta “Item sem quantidade”; zero ou negativa, “Quantidade zerada” (o valor total do item fica R$ 0,00). O item sempre marca em vermelho; o nível decide se bloqueia.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", ajuda: "Confere cada item da tabela da Seção 4. A quantidade é lida do DFD; corrija no detalhe do item (cadeado da Quantidade), pela edição em massa dos itens ou reimportando o DFD corrigido no Centi." },
   { chave: "item.quantidadeFracionada", sujeito: "item", rotulo: "Quantidade menor que 1", descricao: "Item com quantidade maior que zero e MENOR que 1 (ex.: 0,001) — em geral um erro de digitação ou de unidade de medida (litro × mililitro, caixa × unidade). Não vale para quantidade zero (é “Quantidade”).", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa", ajuda: "Aponta “Quantidade fracionada” no item, no DFD e no protocolo. Pode ser legítimo (frações de uma unidade grande); por isso o padrão é só ATENÇÃO. Coloque numa importância que bloqueia para impedir a importação, ou em Ignorar para desligar." },
+  // PALAVRAS no item: desligado por padrão (Ignorar). Ligado, cada CONJUNTO de palavras tem a SUA importância.
+  { chave: "item.palavras", sujeito: "item", rotulo: "Palavras no item", descricao: "Aponta o item cuja descrição contém uma das palavras (ou expressões) cadastradas em “Palavras apontadas”, logo abaixo. Cada conjunto de palavras pode ter a sua importância; sem importância própria, vale a deste ponto. Em Ignorar, nada é conferido.", comportamentosPermitidos: BASE, comportamentoPadrao: "ignora", ajuda: "Compara a palavra INTEIRA, sem acento e sem diferença de maiúsculas (ex.: “CARRO” não acha “CARROCERIA”; “ar condicionado” acha “AR-CONDICIONADO”). Aponta “Palavra apontada” no item, no DFD e no protocolo. Para impedir a importação, use uma importância que bloqueia no conjunto ou no ponto." },
   // Conformidade com o CATÁLOGO (referência de padronização). Só vale quando há catálogo
   // cadastrado; padrão "avisa", não bloqueia (o ADM eleva para bloquear).
   { chave: "item.naoCatalogado", sujeito: "item", rotulo: "Item não catalogado", descricao: "Item cujo código não existe no catálogo de produtos (a referência de padronização). Só vale quando há catálogo cadastrado.", comportamentosPermitidos: BASE, comportamentoPadrao: "avisa" },
@@ -208,7 +211,14 @@ export type RegrasAvaliacao = {
   tiposProtocolo?: string[];
   /** Trava de protocolação + botões (ausente = sem trava, botões ligados). */
   gate?: GateProtocolacao;
+  /** Conjuntos de PALAVRAS apontadas no item (`item.palavras`) — cada um com a sua importância (ausente = a do ponto). */
+  palavrasItem?: GrupoPalavras[];
 };
+
+/** Um conjunto de palavras/expressões que o ADM manda apontar na descrição do item. */
+export type GrupoPalavras = { id: string; termos: string[]; nivel?: Nivel };
+/** Limites da régua das palavras (a MESMA na tela e no Zod). */
+export const LIMITES_PALAVRAS = { grupos: 50, termos: 200, termo: 80 } as const;
 
 /** Regras "vazias" = tudo no padrão do catálogo (comportamento atual). */
 export function regrasPadrao(): RegrasAvaliacao {
@@ -411,6 +421,7 @@ export function coerceRegras(bruto: unknown): RegrasAvaliacao {
   if (Array.isArray(obj.tiposProtocolo)) out.tiposProtocolo = obj.tiposProtocolo as string[];
   if (obj.gate && typeof obj.gate === "object") out.gate = obj.gate as GateProtocolacao;
   const comp = new Map(importanciasDe(out).map((i) => [i.id, i.comportamento]));
+  if (Array.isArray(obj.palavrasItem)) out.palavrasItem = coerceGruposPalavras(obj.palavrasItem, comp);
   const validos = (m: unknown): Partial<Record<ChaveAvaliacao, Nivel>> => {
     const r: Partial<Record<ChaveAvaliacao, Nivel>> = {};
     for (const [k, id] of Object.entries(rec(m))) {
@@ -428,6 +439,78 @@ export function coerceRegras(bruto: unknown): RegrasAvaliacao {
   out.pontos = validos(obj.pontos);
   out.exProtocolo = porContexto(obj.exProtocolo);
   out.exDfd = porContexto(obj.exDfd);
+  return out;
+}
+
+// ---- Palavras apontadas no item (`item.palavras`) — puro/testável ----
+
+/** Uma palavra/expressão em forma de COMPARAÇÃO: sem acento/caixa, só letras e números, separadas por um espaço. */
+export function chavePalavra(v: unknown): string {
+  return norm(v).replace(/[^A-Z0-9]+/g, " ").trim();
+}
+
+/** Os termos de um texto digitado: separados por ";" (a lógica padrão do sistema), sem vazios nem repetidos. */
+export function termosDoTexto(texto: string): string[] {
+  const vistos = new Set<string>();
+  const out: string[] = [];
+  for (const bruto of texto.split(";")) {
+    const t = bruto.replace(/\s+/g, " ").trim().slice(0, LIMITES_PALAVRAS.termo);
+    const k = chavePalavra(t);
+    if (!k || vistos.has(k)) continue;
+    vistos.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
+/** Normaliza os conjuntos gravados: termos válidos e únicos, importância só se existir e for permitida no ponto. */
+function coerceGruposPalavras(bruto: unknown[], comp: Map<string, Comportamento>): GrupoPalavras[] {
+  const permitidos = POR_CHAVE.get("item.palavras")?.comportamentosPermitidos ?? [];
+  const out: GrupoPalavras[] = [];
+  for (const g of bruto.slice(0, LIMITES_PALAVRAS.grupos)) {
+    if (!g || typeof g !== "object") continue;
+    const o = g as Record<string, unknown>;
+    const termos = termosDoTexto((Array.isArray(o.termos) ? o.termos : []).filter((t): t is string => typeof t === "string").join(";")).slice(0, LIMITES_PALAVRAS.termos);
+    if (!termos.length) continue;
+    const id = typeof o.id === "string" && o.id ? o.id : `g${out.length + 1}`;
+    const c = typeof o.nivel === "string" ? comp.get(o.nivel) : undefined;
+    out.push(c && permitidos.includes(c) ? { id, termos, nivel: o.nivel as string } : { id, termos });
+  }
+  return out;
+}
+
+/** Uma ocorrência: o conjunto que casou, os termos achados e a importância efetiva. */
+export type PalavrasEncontradas = { grupo: string; termos: string[]; nivel: Nivel; comportamento: Comportamento };
+
+const _cacheGrupos = new WeakMap<RegrasAvaliacao, { id: string; nivel?: Nivel; termos: { t: string; k: string }[] }[]>();
+function gruposCompilados(regras: RegrasAvaliacao) {
+  let g = _cacheGrupos.get(regras);
+  if (!g) {
+    g = (regras.palavrasItem ?? []).map((x) => ({ id: x.id, nivel: x.nivel, termos: x.termos.map((t) => ({ t, k: ` ${chavePalavra(t)} ` })) }));
+    _cacheGrupos.set(regras, g);
+  }
+  return g;
+}
+
+/** Os conjuntos de palavras que a descrição do item contém (palavra INTEIRA, sem acento/caixa). Ponto em Ignorar ou
+ * conjunto em Ignorar = nada. Puro (as regras compiladas ficam em cache pela identidade das regras). */
+export function palavrasNoItem(
+  descricao: string | null | undefined,
+  regras: RegrasAvaliacao,
+  ctx?: { dfdTipo?: string | null; categoria?: string | null },
+): PalavrasEncontradas[] {
+  if (!regras.palavrasItem?.length || !descricao) return [];
+  const base = nivelDe(regras, "item.palavras", ctx);
+  if (comportamentoDe(regras, base) === "ignora") return [];
+  const texto = ` ${chavePalavra(descricao)} `;
+  const out: PalavrasEncontradas[] = [];
+  for (const g of gruposCompilados(regras)) {
+    const nivel = g.nivel ?? base;
+    const comportamento = comportamentoDe(regras, nivel);
+    if (comportamento === "ignora") continue;
+    const termos = g.termos.filter((x) => x.k.length > 2 && texto.includes(x.k)).map((x) => x.t);
+    if (termos.length) out.push({ grupo: g.id, termos, nivel, comportamento });
+  }
   return out;
 }
 

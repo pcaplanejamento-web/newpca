@@ -1923,6 +1923,7 @@ export function ProtocoloUploadForm({
             mensagensDe(l.key),
             l.key === abertoIdx ? conformidade : confDe(l.key, d).conf,
             despacho,
+            regras,
           );
         }),
       }

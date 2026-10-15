@@ -9,6 +9,8 @@ import {
   type ChaveAvaliacao,
   type Comportamento,
   type GateProtocolacao,
+  type GrupoPalavras,
+  LIMITES_PALAVRAS,
   type EstadoCicloCfg,
   type EstadoCicloId,
   ESTADOS_CICLO_ORDEM,
@@ -30,7 +32,7 @@ import { Ajuda } from "./Ajuda";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ColorField } from "./ColorField";
-import { TextField } from "./Field";
+import { CampoLista, TextField } from "./Field";
 import { labelCls, selectCls } from "./formStyles";
 import { IconArrowDown, IconArrowUp, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
@@ -76,6 +78,8 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   const [assuntos, setAssuntos] = useState<AssuntoPermitido[]>(regras.assuntos ?? []);
   const [tiposProtocolo, setTiposProtocolo] = useState<string[]>(regras.tiposProtocolo ?? []);
   const [gate, setGate] = useState<GateProtocolacao>(regras.gate ?? {});
+  // Conjuntos de palavras apontadas no item (`item.palavras`), cada um com a sua importância.
+  const [palavrasItem, setPalavrasItem] = useState<GrupoPalavras[]>(regras.palavrasItem ?? []);
   const [editImp, setEditImp] = useState<Importancia | null>(null);
   const [salvando, setSalvando] = useState(false);
   // Contexto ativo por painel (Todos = ""). Estado no topo (evita componente aninhado).
@@ -157,6 +161,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           .filter(([, v]) => Object.keys(v).length > 0),
       ) as ExMap;
     setPontos((p) => limpa(p));
+    setPalavrasItem((l) => l.map((g) => (g.nivel === imp.id ? { id: g.id, termos: g.termos } : g)));
     setExProtocolo((m) => limpaEx(m));
     setExDfd((m) => limpaEx(m));
   }
@@ -164,7 +169,9 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   async function salvar() {
     setSalvando(true);
     try {
-      const body: RegrasAvaliacao = { pontos, exProtocolo, exDfd, editaveis, sinonimos, importancias, estadosCiclo, assuntos, tiposProtocolo, gate };
+      // Conjunto sem palavras não é gravado (o servidor exige ao menos uma).
+      const grupos = palavrasItem.filter((g) => g.termos.length > 0);
+      const body: RegrasAvaliacao = { pontos, exProtocolo, exDfd, editaveis, sinonimos, importancias, estadosCiclo, assuntos, tiposProtocolo, gate, palavrasItem: grupos };
       const res = await fetch("/api/admin/avaliacao", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -194,6 +201,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
       setSinonimos({});
       setImportancias(IMPORTANCIAS_PADRAO.map((i) => ({ ...i })));
       setEstadosCiclo({ ...ESTADOS_CICLO_PADRAO });
+      setPalavrasItem([]);
       toast.success("Regras restauradas ao padrão.");
     } catch {
       toast.error("Erro ao restaurar.");
@@ -262,6 +270,66 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
     );
   }
 
+  // Editor dos CONJUNTOS de palavras apontadas no item: as palavras (separadas por ";") + a importância de cada conjunto.
+  function editorPalavras(ponto: PontoAvaliacao, nivelPonto: Nivel): ReactNode {
+    const opcoes = opcoesDoPonto(ponto);
+    const muda = (id: string, patch: Partial<GrupoPalavras>) => setPalavrasItem((l) => l.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+    return (
+      <div className="mt-3 space-y-2 rounded-control border border-border bg-surface-2 p-3">
+        <div className="flex items-center gap-1">
+          <p className="text-[12px] font-semibold text-muted">Palavras apontadas</p>
+          <Ajuda titulo="Palavras apontadas" compacta>
+            <p>Cada CONJUNTO reúne palavras ou expressões. Cole ou digite várias de uma vez separadas por “;” — ex.: “PNEU; CÂMARA DE AR; RECAPAGEM”.</p>
+            <p>O item é apontado quando a DESCRIÇÃO contém uma delas (palavra inteira, sem acento e sem diferença de maiúsculas).</p>
+            <p>A importância de cada conjunto decide o rigor (bloqueia, avisa ou ignora); “Padrão do ponto” usa a importância escolhida acima. Com o ponto em Ignorar, nada é conferido.</p>
+          </Ajuda>
+        </div>
+        {palavrasItem.length === 0 && <p className="text-[12.5px] text-faint">Nenhum conjunto cadastrado.</p>}
+        {palavrasItem.map((g, i) => (
+          <div key={g.id} className="grid grid-cols-1 items-start gap-2 rounded-control border border-border bg-surface p-2 sm:grid-cols-[1fr_12rem_auto]">
+            <CampoLista
+              valores={g.termos}
+              onChange={(termos) => muda(g.id, { termos: termos.slice(0, LIMITES_PALAVRAS.termos) })}
+              placeholder="Palavras separadas por ;"
+              maxItem={LIMITES_PALAVRAS.termo}
+              id={`palavras-${g.id}`}
+            />
+            <Selecao
+              aria-label={`Importância do conjunto ${i + 1}`}
+              className={selectCls}
+              value={g.nivel ?? ""}
+              onChange={(e) => muda(g.id, { nivel: e.target.value || undefined })}
+            >
+              <option value="">Padrão do ponto ({impById(nivelPonto).nome})</option>
+              {opcoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
+                </option>
+              ))}
+            </Selecao>
+            <Button
+              variant="icon"
+              aria-label={`Remover o conjunto ${i + 1}`}
+              onClick={() => setPalavrasItem((l) => l.filter((x) => x.id !== g.id))}
+            >
+              <IconTrash className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+        {palavrasItem.length < LIMITES_PALAVRAS.grupos && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<IconPlus className="h-4 w-4" />}
+            onClick={() => setPalavrasItem((l) => [...l, { id: `pal-${Date.now().toString(36)}`, termos: [] }])}
+          >
+            Adicionar conjunto
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   // Card de um ponto (importância + edição + ajuste automático). Sem hooks (não é componente).
   function cardPonto(ponto: PontoAvaliacao, ctx: Ctx): ReactNode {
     const global = pontos[ponto.chave] ?? importanciaPadraoDe(ponto.chave);
@@ -320,6 +388,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           </div>
         )}
         {ehGlobal && ponto.suportaAuto && impById(efetivo).comportamento === "automatico" && editorSinonimos(ponto.chave)}
+        {ehGlobal && ponto.chave === "item.palavras" && editorPalavras(ponto, global)}
       </div>
     );
   }

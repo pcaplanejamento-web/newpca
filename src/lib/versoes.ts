@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.108.0",
+    data: "2026-10-15",
+    titulo: "Palavras apontadas no item",
+    mudancas: [
+      { tipo: "novo", area: "Avaliação", texto: "Novo ponto “Palavras no item”: o ADM cadastra conjuntos de palavras (separadas por “;”), cada um com a sua importância, e o item cuja descrição contém uma delas é apontado. Desligado por padrão.", link: "/painel/configuracoes?aba=avaliacao" },
+      { tipo: "melhoria", area: "Mesa", texto: "O item com palavra apontada aparece no Estado, nas pendências (leva à descrição do item), no despacho e, se o ADM escolher bloquear, trava a importação.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.107.11",
     data: "2026-10-15",
     titulo: "Cartões suaves ao fechar o menu e foto sem achatar",

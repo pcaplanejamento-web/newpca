@@ -146,6 +146,7 @@ export function CampoTexto({
   span,
   mono,
   multi,
+  ancora,
 }: {
   label: string;
   valor: string;
@@ -157,10 +158,12 @@ export function CampoTexto({
   span?: boolean;
   mono?: boolean;
   multi?: boolean;
+  /** `data-ancora` do campo (o painel de pendências leva até ele e o destaca). */
+  ancora?: string;
 }) {
   const editando = editavel && aberto && !bloqueado;
   return (
-    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock}>
+    <LinhaCampo label={label} span={span} editavel={editavel} aberto={aberto} bloqueado={bloqueado} onLock={onLock} ancora={ancora}>
       {editando ? (
         multi ? (
           <AutoTextarea value={valor} onChange={onChange} mono={mono} />

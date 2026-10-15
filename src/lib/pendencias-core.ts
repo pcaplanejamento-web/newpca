@@ -13,6 +13,7 @@ import {
   STATUS_MENSAGEM_COR,
   textoSecao,
 } from "./dfd-tratamento.ts";
+import { corImportancia, palavrasNoItem, type RegrasAvaliacao } from "./avaliacao-core.ts";
 import { brl, num } from "./format.ts";
 import { normalizarCodigo } from "./parse-catalogo-comum.ts";
 import { type DfdItemParseado, type DfdSecao, refDfd, tipoCurtoDfd } from "./parse-dfd-comum.ts";
@@ -87,6 +88,7 @@ const CHAVES_ITEM = new Set([
   "item.valorUnitario",
   "item.quantidade",
   "item.quantidadeFracionada",
+  "item.palavras",
   "item.duplicado",
   "item.naoCatalogado",
   "item.divergenteCatalogo",
@@ -102,6 +104,7 @@ const ANCORA_ITEM: Record<string, string> = {
   "item.valorUnitario": "valorUnitario",
   "item.quantidade": "quantidade",
   "item.quantidadeFracionada": "quantidade",
+  "item.palavras": "descricao",
   "item.duplicado": "repetidos",
   "item.naoCatalogado": "catalogo",
   "item.divergenteCatalogo": "catalogo",
@@ -121,6 +124,7 @@ const ONDE: Record<string, string> = {
   valorUnitario: "Valor unitário",
   quantidade: "Quantidade",
   repetidos: "Item repetido",
+  descricao: "Descrição",
   catalogo: "Catálogo",
 };
 for (const s of SECOES_OBRIGATORIAS) ONDE[s.chave.replace(/^dfd\./, "")] = s.rotulo;
@@ -161,6 +165,8 @@ export function pendenciasDoDfd(
   mensagens: Pick<MensagemDfd, "chave" | "status" | "texto" | "ancora" | "cor">[],
   conformidade?: Map<string, ConferenciaItem>,
   despacho?: string[],
+  /** As regras do ADM — só para as PALAVRAS apontadas (cada conjunto com a sua importância). */
+  regras?: RegrasAvaliacao,
 ): DfdPendente {
   const pendencias: Pendencia[] = [];
   const resumoItens: Pendencia[] = [];
@@ -188,7 +194,19 @@ export function pendenciasDoDfd(
     dfd.itens.forEach((it, idx) => {
       let tem = false;
       let iguais: (number | null)[] = [];
-      if (m.chave === "item.valorUnitario") tem = semValorUnitario(it.valorUnitario);
+      let proprio: { status: StatusPendencia; cor: string; texto: string } | null = null;
+      if (m.chave === "item.palavras") {
+        const achadas = regras ? palavrasNoItem(it.descricao, regras) : [];
+        tem = achadas.length > 0;
+        if (tem) {
+          const p = achadas.find((x) => x.comportamento === "bloqueia") ?? achadas[0];
+          proprio = {
+            status: p.comportamento === "bloqueia" ? "erro" : "atencao",
+            cor: corImportancia(regras as RegrasAvaliacao, p.nivel),
+            texto: `Contém ${[...new Set(achadas.flatMap((x) => x.termos))].map((t) => `“${t}”`).join(", ")}`,
+          };
+        }
+      } else if (m.chave === "item.valorUnitario") tem = semValorUnitario(it.valorUnitario);
       else if (m.chave === "item.quantidade") tem = semQuantidade(it.quantidade);
       else if (m.chave === "item.quantidadeFracionada") tem = quantidadeFracionada(it.quantidade);
       else if (m.chave === "item.duplicado") {
@@ -198,11 +216,13 @@ export function pendenciasDoDfd(
       } else if (falta) tem = !!conformidade?.get(normalizarCodigo(it.codigo ?? null))?.faltas.includes(falta);
       if (!tem) return;
       const ancora = ANCORA_ITEM[m.chave];
-      const p: Pendencia = { ...base, texto: textoNoItem(m.chave, it, iguais), onde: ondeDaAncora(ancora), alvo: { dfd: dfd.chave, item: idx, ancora } };
+      const p: Pendencia = proprio
+        ? { chave: m.chave, status: proprio.status, cor: proprio.cor, texto: proprio.texto, onde: ondeDaAncora(ancora), alvo: { dfd: dfd.chave, item: idx, ancora } }
+        : { ...base, texto: textoNoItem(m.chave, it, iguais), onde: ondeDaAncora(ancora), alvo: { dfd: dfd.chave, item: idx, ancora } };
       const atual = porItem.get(idx);
       if (atual) {
         atual.problemas.push(p);
-        atual.status = pior(atual.status, status);
+        atual.status = pior(atual.status, p.status);
       } else
         porItem.set(idx, {
           idx,
@@ -212,7 +232,7 @@ export function pendenciasDoDfd(
           unidade: it.unidade,
           quantidade: it.quantidade,
           valorUnitario: it.valorUnitario,
-          status,
+          status: p.status,
           problemas: [p],
         });
     });

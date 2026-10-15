@@ -135,10 +135,10 @@ export function DfdPainelDireito({
         ? {
             numero,
             capa: null,
-            dfds: [pendenciasDoDfd({ chave: numero, numero, planejamento: dfd.planejamento, tipo: dfd.tipo, secoes: dfd.secoes, itens: dfd.itens }, mensagens, conformidade)],
+            dfds: [pendenciasDoDfd({ chave: numero, numero, planejamento: dfd.planejamento, tipo: dfd.tipo, secoes: dfd.secoes, itens: dfd.itens }, mensagens, conformidade, undefined, regras)],
           }
         : null,
-    [verPendencias, dfd, numero, mensagens, conformidade],
+    [verPendencias, dfd, numero, mensagens, conformidade, regras],
   );
 
   if (painel?.tipo === "diferencas") return <ComparacaoDfdView comparacao={comparacao} herdados={herdados} escolha={escolha} />;

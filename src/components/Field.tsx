@@ -392,6 +392,13 @@ export function CampoLista({
               if (/[;,]/.test(v)) acrescentar(v);
               else setTexto(v);
             }}
+            // Colar uma LISTA ("a; b; c") acrescenta todas — sem o corte do tamanho do campo.
+            onPaste={(e) => {
+              const colado = e.clipboardData.getData("text");
+              if (!/[;,\n]/.test(colado)) return;
+              e.preventDefault();
+              acrescentar(`${texto}${colado.replace(/\r?\n/g, ";")}`);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
