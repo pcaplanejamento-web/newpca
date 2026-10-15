@@ -35,7 +35,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.23.0";
+export const VERSAO_EXTENSAO_CENTI = "1.24.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -216,13 +216,12 @@ export function chaveOrgaoCenti(orgaoId: number | null, orgaoEntidade: string | 
   return t ? `t:${t}` : null;
 }
 
-/** As opções da SAÍDA: a pasta "PCA <ano>" por cima, os PDFs separados / um por protocolo / um por unidade / um único, e a ordem dos DFDs
- * pelo nº de planejamento. */
+/** As opções da SAÍDA: a pasta "PCA <ano>" por cima e os PDFs separados / um por protocolo / um por unidade / um único. A
+ * ORDEM dos DFDs é a dos itens que chegam (a da tabela de Seleção — ordenação e filtros); nada reordena por conta própria. */
 export type FormatoSaida = "separados" | "protocolo" | "unidade" | "unico";
 export type OpcoesSaida = {
   pastaPca: boolean;
   formato: FormatoSaida;
-  ordenarPlanejamento: boolean;
   /** Escolher a pasta de destino (desligado = Downloads; o botão "Escolher pasta" some). */
   escolherPasta: boolean;
   /** Conferir o CONTEÚDO de cada PDF (o nº de planejamento e o do DFD no texto) antes de salvar. */
@@ -238,7 +237,6 @@ export const TIPO_DOCUMENTO_DFD = "1039";
 export const OPCOES_SAIDA_PADRAO: OpcoesSaida = {
   pastaPca: true,
   formato: "separados",
-  ordenarPlanejamento: true,
   escolherPasta: false,
   conferir: true,
   destino: "pasta",
@@ -251,7 +249,6 @@ export function lerOpcoesSaida(v: unknown): OpcoesSaida {
   return {
     pastaPca: typeof o.pastaPca === "boolean" ? o.pastaPca : p.pastaPca,
     formato: o.formato === "separados" || o.formato === "protocolo" || o.formato === "unidade" || o.formato === "unico" ? o.formato : p.formato,
-    ordenarPlanejamento: typeof o.ordenarPlanejamento === "boolean" ? o.ordenarPlanejamento : p.ordenarPlanejamento,
     escolherPasta: typeof o.escolherPasta === "boolean" ? o.escolherPasta : p.escolherPasta,
     conferir: typeof o.conferir === "boolean" ? o.conferir : p.conferir,
     destino: o.destino === "protocolo" || o.destino === "proprio" ? o.destino : "pasta",
@@ -373,7 +370,7 @@ export type DfdRepetido = { chave: string; id: string; dfd: string; grupo: strin
 /** Monta os ARQUIVOS da saída a partir dos DFDs (já sem repetidos), no formato escolhido. `protoPasta` = separados vão na
  * pasta do protocolo (Por protocolo) ou na raiz (Por Id). */
 function montarArquivos(itens: Item[], op: OpcoesSaida, protoPasta: boolean): ArquivoSaida[] {
-  const ordenar = (xs: Item[]) => (op.ordenarPlanejamento ? [...xs].sort((a, b) => Number(a.t.id) - Number(b.t.id)) : xs);
+  // A ordem é a dos itens que chegam (a tabela de Seleção); os grupos seguem a ordem do 1º item de cada um.
   const raiz = (ano: number | null) => (op.pastaPca ? [pastaPca(ano)] : []);
   const protos = (xs: Item[]) => sufixoProtocolos(xs.map((i) => i.protocolo).filter((x): x is string => !!x));
   const umAno = (xs: Item[]) => {
@@ -386,7 +383,7 @@ function montarArquivos(itens: Item[], op: OpcoesSaida, protoPasta: boolean): Ar
     return [...m.values()];
   };
   if (op.formato === "separados")
-    return ordenar(itens).map((i) => ({
+    return itens.map((i) => ({
       pastas: [...raiz(i.ano), ...(protoPasta && i.pastaProto ? [i.pastaProto] : [])],
       nome: nomeArquivoDfd(i.t.id, i.dfd, i.protocolo),
       partes: [i.t],
@@ -395,17 +392,17 @@ function montarArquivos(itens: Item[], op: OpcoesSaida, protoPasta: boolean): Ar
     return agrupar((i) => i.pastaProto ?? `#${i.t.chave}`).map((g) => ({
       pastas: raiz(g[0].ano),
       nome: `${g[0].pastaProto ?? juntar([`Planejamento ${g[0].t.id}`, protos(g)])}.pdf`,
-      partes: ordenar(g).map((i) => i.t),
+      partes: g.map((i) => i.t),
     }));
   if (op.formato === "unidade")
     return agrupar((i) => `${i.dfd?.sigla ?? ""}|${i.ano ?? ""}`).map((g) => ({
       pastas: raiz(g[0].ano),
       nome: `${juntar([g[0].dfd?.sigla ?? "Sem unidade", g[0].ano && `PCA ${g[0].ano}`, protos(g)]) || "DFDs"}.pdf`,
-      partes: ordenar(g).map((i) => i.t),
+      partes: g.map((i) => i.t),
     }));
   if (!itens.length) return [];
   const ano = umAno(itens);
-  return [{ pastas: op.pastaPca && ano !== undefined ? [pastaPca(ano)] : [], nome: `${juntar(["DFDs", ano && `PCA ${ano}`, protos(itens)]) || "DFDs"}.pdf`, partes: ordenar(itens).map((i) => i.t) }];
+  return [{ pastas: op.pastaPca && ano !== undefined ? [pastaPca(ano)] : [], nome: `${juntar(["DFDs", ano && `PCA ${ano}`, protos(itens)]) || "DFDs"}.pdf`, partes: itens.map((i) => i.t) }];
 }
 
 /** O PLANO da saída a partir dos protocolos escolhidos: DFD sem planejamento é pulado (`semPlanejamento` — a Centi não o

@@ -62,6 +62,7 @@ import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
 import { type HostPainel, HostPainelCtx, type ProtocoloCenti } from "./paineis";
+import { ProblemasFluxo } from "./ProblemasFluxo";
 import { ProtocoloUploadForm } from "../ProtocoloUploadForm";
 import { CartaoPreso } from "../ArrastoCartoes";
 import { tokenPx } from "../espacamento";
@@ -1250,6 +1251,14 @@ function EditorFluxo({
     JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo || publico !== fluxo.publico || descricao.trim() !== (fluxo.descricao ?? "") || JSON.stringify(ajuda) !== JSON.stringify(ajudaBase);
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
+  const nomeDoComponente = (id: string) => {
+    const n = grafo.nos.find((x) => x.id === id);
+    return n ? nomeDoNo(n, REGISTRO_NOS) : null;
+  };
+  const irAoComponente = (id: string) => {
+    setModo("diagrama");
+    setSel(id);
+  };
   const atencoes = problemas.filter((p) => p.nivel !== "erro");
   const ref = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(ref, 320) ?? 560;
@@ -1360,9 +1369,9 @@ function EditorFluxo({
           onChange={(e) => setNome(e.target.value)}
           className="min-w-0 flex-1 rounded-control bg-transparent px-2 py-1 text-base font-semibold text-text outline-none hover:bg-[var(--accent-soft)] focus:bg-surface focus:shadow-ring"
         />
-        {erros.length > 0 && <Badge tone="red" title={erros.map((p) => p.texto).join("\n")}>{erros.length} problema(s)</Badge>}
-        {/* As ATENÇÕES não impedem executar, mas ficam à vista (a lista inteira na dica). */}
-        {atencoes.length > 0 && <Badge tone="amber" title={atencoes.map((p) => p.texto).join("\n")}>{atencoes.length} atenção(ões)</Badge>}
+        {/* Os PROBLEMAS (impedem executar) e as ATENÇÕES: tocar abre a lista e leva ao componente. */}
+        <ProblemasFluxo itens={erros} nivel="erro" nomeDo={nomeDoComponente} onIr={irAoComponente} />
+        <ProblemasFluxo itens={atencoes} nivel="atencao" nomeDo={nomeDoComponente} onIr={irAoComponente} />
         <Button
           size="sm"
           variant="icon"

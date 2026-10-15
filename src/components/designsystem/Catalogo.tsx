@@ -102,6 +102,7 @@ import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos
 import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
+import { ProblemasFluxo } from "@/components/fluxos/ProblemasFluxo";
 import { AjudaNo } from "@/components/fluxos/AjudaNo";
 import { AjudaDoFluxo } from "@/components/fluxos/ConfigFluxo";
 import type { Grafo } from "@/lib/fluxo-core";
@@ -3237,6 +3238,20 @@ export function Catalogo() {
           gestao={{ pessoas: [], outras: [], situacoes: [], usuarioId: 0 }}
           scrollInterno={false}
         />
+      </Secao>
+      <Secao titulo="Problemas do fluxo (ProblemasFluxo)">
+        <div className="flex flex-wrap gap-2">
+          <ProblemasFluxo
+            itens={[
+              { no: "n1", nivel: "erro", texto: "Informe “Id do protocolo (Centi)”." },
+              { nivel: "erro", texto: "O fluxo precisa de um Início." },
+            ]}
+            nivel="erro"
+            nomeDo={() => "Baixar/anexar DFDs"}
+            onIr={() => undefined}
+          />
+          <ProblemasFluxo itens={[{ no: "n2", nivel: "atencao", texto: "Componente sem ligação." }]} nivel="atencao" nomeDo={() => "Filtrar"} onIr={() => undefined} />
+        </div>
       </Secao>
       <Secao titulo="Cartão de automação (CartaoFluxo)">
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">

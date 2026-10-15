@@ -35,6 +35,43 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.109.0",
+    data: "2026-10-15",
+    titulo: "Automação: ordem da tabela, permissão no banner da extensão e correções",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Os DFDs seguem na SEQUÊNCIA da tabela de Seleção — a ordenação e os filtros que você fez, só os marcados (ou os à vista, sem marcação). Saiu o “Ordenar pelo planejamento”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "A permissão para gravar na Centi aparece no banner flutuante da extensão (o painel do ícone), nunca numa tela própria. Tocar fora não recusa: o pedido fica no ícone (selo “?”) até você responder.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "“Autorização inválida, já usada ou vencida”: uma cópia antiga da extensão, que ficava na página depois de atualizar, gastava a autorização antes da nova. A cópia antiga agora fica em silêncio. Atualize a extensão para a 1.24.0.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O selo “N problema(s)” abre a lista com cada problema e o componente dele — tocar leva ao componente no diagrama.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "A aba Análise do Baixar/anexar DFDs mostra cada DFD processado (concluído, falhou, pulado) ao vivo e no fim — antes ficava em 0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.108.0",
     data: "2026-10-15",
     titulo: "Baixar/anexar DFDs: testar o protocolo e achar só pelo Id",

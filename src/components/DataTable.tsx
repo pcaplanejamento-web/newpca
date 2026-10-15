@@ -117,6 +117,7 @@ export function DataTable<R>({
   pageSize,
   footer,
   resumo,
+  onOrdenadas,
   minWidth = 720,
   onRowClick,
   activeKey = null,
@@ -142,6 +143,9 @@ export function DataTable<R>({
   footer?: ReactNode;
   /** Resumo (ex.: somatórios) calculado sobre as linhas FILTRADAS/ordenadas. */
   resumo?: (linhas: R[]) => ReactNode;
+  /** As linhas na ORDEM e com os FILTROS da tabela (todas as páginas), a cada mudança — ex.: a Seleção da automação
+   * segue a sequência da tabela. Quem usa compara antes de gravar (a lista pode chegar igual). */
+  onOrdenadas?: (linhas: R[]) => void;
   minWidth?: number;
   /** Clique na LINHA (abre o item). Ignora cliques em controles (input/select/button/a/label). */
   onRowClick?: (row: R) => void;
@@ -343,6 +347,11 @@ export function DataTable<R>({
     const chaves = rows.map((r) => (col.numero ? col.numero(r) : col.value?.(r)));
     return ordenarIndices(facetas.passam, chaves, sort.dir).map((i) => rows[i]);
   }, [facetas, sort, columns, rows]);
+  const onOrdenadasRef = useRef(onOrdenadas);
+  onOrdenadasRef.current = onOrdenadas;
+  useEffect(() => {
+    onOrdenadasRef.current?.(ordenadas);
+  }, [ordenadas]);
 
   const total = ordenadas.length;
   const pages = tamPagina ? Math.max(1, Math.ceil(total / tamPagina)) : 1;

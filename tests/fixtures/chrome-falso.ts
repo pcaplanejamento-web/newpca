@@ -58,16 +58,25 @@ export function servicoFalso(o: OpcoesFalso = {}) {
         selos.push(text);
       },
       setBadgeBackgroundColor: async () => {},
+      // O dropdown do ícone. Com um pedido de permissão pendente: responde como o painel (sender = o popup); a resposta
+      // `null` simula "sem janela em foco" — o serviço cai na janelinha, que é fechada (= recusa).
       openPopup: async () => {
-        janelas.push("dropdown");
+        const c = sessao.confirmacao as { pedido?: string } | undefined;
+        if (!c?.pedido) return void janelas.push("dropdown");
+        if (o.confirmacao === null) throw new Error("sem janela em foco");
+        janelas.push("confirmar:dropdown");
+        setTimeout(() => {
+          for (const f of [...ouvintes]) f({ tipo: "confirmacao", pedido: c.pedido, sim: o.confirmacao !== false }, { url: "chrome-extension://ext/popup.html" });
+        }, 0);
       },
     },
     windows: {
       onRemoved: { addListener: (f: (id: number) => void) => janelasFechadas.push(f), removeListener() {} },
       create: async ({ url }: { url: string }) => {
         janelas.push(url);
-        if (url.includes("confirmar.html")) {
-          const pedido = new URL(url).searchParams.get("pedido");
+        if (url.includes("confirmar=1")) {
+          janelas.push("confirmar:janela");
+          const pedido = (sessao.confirmacao as { pedido?: string } | undefined)?.pedido;
           setTimeout(() => {
             if (o.confirmacao === null) for (const f of [...janelasFechadas]) f(7);
             else for (const f of [...ouvintes]) f({ tipo: "confirmacao", pedido, sim: o.confirmacao !== false }, { url });

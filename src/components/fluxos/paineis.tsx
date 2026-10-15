@@ -249,6 +249,16 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
   const itens = useMemo(() => (host && origem ? itensDoNo(grafo, origem, host) : []), [host, grafo, origem]);
   const { previa, podePrevia, recarregar } = usePreviaDoNo(grafo, no.id, false, !!origem, itens.length > 0);
   const { marcados, definir } = useMarcadosDoNo(no, grafo, onGrafo);
+  // A SEQUÊNCIA da tabela (ordenação + filtros) é a ordem em que os itens seguem no fluxo — gravada no nó só quando muda
+  // (a ordem natural sem filtro não grava nada: abrir a tela não "suja" o fluxo).
+  const gravarOrdem = (chaves: string[], filtrada: boolean) => {
+    if (!itens.length) return;
+    const natural = !filtrada && chaves.every((k, i) => k === chaveSelecao(itens[i], no.config.chave));
+    const ordem = natural ? undefined : chaves;
+    const atual = Array.isArray(no.config.ordem) ? no.config.ordem.map(String) : undefined;
+    if ((atual?.join("\u0000") ?? null) === (ordem?.join("\u0000") ?? null) && (no.config.filtrada === true) === (!natural && filtrada)) return;
+    onGrafo({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, ordem, filtrada: !natural && filtrada ? true : undefined } } : n)) });
+  };
   // Os protocolos ganham o "Na Centi" (quantos documentos já foram anexados); as demais colunas são as da Mesa.
   const naCenti = useMemo<Column<Item>[]>(
     () =>
@@ -298,7 +308,8 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
                 : "Execute o fluxo para listar os itens; depois marque e execute de novo."
       }
       acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={recarregar} disabled={host.rodando} /> : undefined}
-      resumo={(ls) => `${ls.length} item(ns) · ${marcados.size} marcado(s)`}
+      onOrdem={gravarOrdem}
+      resumo={(ls) => `${ls.length} item(ns) · ${marcados.size} marcado(s) · seguem na ordem da tabela`}
     />
   );
 }
@@ -657,6 +668,14 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     if (it.substituido === true) return { rotulo: "Substituído", tom: "emerald", texto: `${s(it.itensGravados) || "0"} item(ns) gravado(s) com os dados da Centi` };
     return null;
   }
+  if (tipo === "saida.dfdsCenti") {
+    const e = s(it.estado);
+    if (e === "ok") return { rotulo: "Concluído", tom: "emerald", texto: s(it.erro) };
+    if (e === "falha") return { rotulo: "Falhou", tom: "red", texto: s(it.erro) };
+    if (e === "pulado" || e === "repetido") return { rotulo: e === "pulado" ? "Pulado" : "Repetido", tom: "amber", texto: s(it.erro) };
+    if (e === "baixando") return { rotulo: "Emitindo", tom: "blue", texto: s(it.erro) };
+    return { rotulo: "Na fila", tom: "slate", texto: s(it.erro) };
+  }
   if (tipo === "fluxo.executar") {
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
@@ -669,6 +688,8 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
 
 /** O nome curto de um item (protocolo, DFD/planejamento ou o id). */
 export function rotuloItem(it: Item): string {
+  // Uma linha do Baixar/anexar DFDs: o `id` é o nº de planejamento e o `dfd`, o nº do DFD.
+  if ("estado" in it && "dfd" in it && "grupo" in it) return `Planej. ${s(it.id) || "—"}${s(it.dfd) ? ` · DFD ${s(it.dfd)}` : ""}`;
   if (it.protocolo && it.ano && !it.planejamento) return `Protocolo ${s(it.protocolo).split("/")[0]}/${s(it.ano)}`;
   if (it.numero || it.planejamento) return `DFD ${s(it.numero) || "—"} · Planej. ${s(it.planejamento) || "—"}`;
   return s(it.id ?? it.nome ?? it.reparticao) || "—";

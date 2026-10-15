@@ -1469,7 +1469,6 @@ const NOS: DefNo[] = [
       },
       { chave: "pastaPca", rotulo: "Pasta “PCA ano”", ajuda: "Ligado: cria uma pasta “PCA ano” por cima das pastas dos protocolos.", tipo: "booleano", entrada: true, padrao: true, quando: { campo: "destino", valores: ["pasta"] } },
       { chave: "escolherPasta", rotulo: "Escolher a pasta de destino", ajuda: "Ligado: você escolhe a pasta do computador antes de salvar. Desligado: vai para Downloads.", tipo: "booleano", entrada: true, padrao: false, quando: { campo: "destino", valores: ["pasta"] } },
-      { chave: "ordenarPlanejamento", rotulo: "Ordenar pelo planejamento", ajuda: "Ligado: os DFDs saem na ordem do nº de planejamento.", tipo: "booleano", entrada: true, padrao: true },
       { chave: "conferir", rotulo: "Conferir o conteúdo de cada PDF", ajuda: "Ligado: abre cada PDF e confere se é mesmo o DFD pedido antes de contar como salvo.", tipo: "booleano", entrada: true, padrao: true },
     ],
     executar: async (e, c, ctx) => {
@@ -1713,10 +1712,27 @@ function protocolosDoSistema(c: Record<string, unknown>, host: Record<string, un
 /** A chave de um item no "Selecionar itens" (o campo escolhido, como texto). */
 export const chaveSelecao = (it: Item, campo: unknown) => str(resolverCaminho(it, str(campo, "id") || "id"));
 /** Os itens MARCADOS no painel (`config.marcados`); sem marcação, todos ou nenhum. */
+/**
+ * Os itens que SEGUEM da seleção, NA ORDEM DA TABELA: `config.ordem` = as chaves das linhas como a tabela as mostra
+ * (ordenação + filtros das colunas; ausente = a ordem natural) e `config.filtrada` = havia filtro. Marcados → só eles, na
+ * ordem da tabela (marcado que o filtro esconde vai depois, na ordem natural); nada marcado + "todos" → as linhas À VISTA
+ * (com filtro) ou todas, na ordem da tabela. Item que a ordem gravada não conhece (dado novo) fica no fim, na ordem natural.
+ */
 export function selecionados(itens: Item[], c: Record<string, unknown>): Item[] {
   const m = new Set((Array.isArray(c.marcados) ? c.marcados : []).map((x) => str(x)));
-  if (!m.size) return c.semMarcar === "todos" ? itens : [];
-  return itens.filter((it) => m.has(chaveSelecao(it, c.chave)));
+  const ordem = Array.isArray(c.ordem) ? c.ordem.map((x) => str(x)) : [];
+  const pos = new Map(ordem.map((k, i) => [k, i]));
+  const chave = (it: Item) => chaveSelecao(it, c.chave);
+  const naOrdem = (xs: Item[]) =>
+    pos.size
+      ? xs
+          .map((it, i) => ({ it, p: pos.get(chave(it)) ?? ordem.length + i }))
+          .sort((a, b) => a.p - b.p)
+          .map((x) => x.it)
+      : xs;
+  if (m.size) return naOrdem(itens.filter((it) => m.has(chave(it))));
+  if (c.semMarcar !== "todos") return [];
+  return naOrdem(c.filtrada === true && pos.size ? itens.filter((it) => pos.has(chave(it))) : itens);
 }
 
 const chaveProto = (it: Item) => `${str(it.protocolo ?? it.numero).split("/")[0].trim()}/${str(it.ano).trim()}`;

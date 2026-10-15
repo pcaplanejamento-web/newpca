@@ -190,11 +190,19 @@ function AnaliseAoVivo({
 }) {
   const host = useContext(HostPainelCtx);
   // O componente que processa item a item (o de agora; senão o último que processou).
+  // O Baixar/anexar DFDs não entrega parciais: o andamento dele são as linhas dos DFDs (`host.dfds`, ao vivo e no fim).
+  const noDfds = etapas.find((n) => n.tipo === "saida.dfdsCenti") ?? null;
   const fonte = useMemo(() => {
     const comItens = etapas.filter((n) => host?.parciais[n.id]?.length);
-    return (atual && host?.parciais[atual.id]?.length ? atual : comItens[comItens.length - 1]) ?? null;
-  }, [etapas, atual, host]);
-  const itensFonte = fonte ? (host?.saidas[fonte.id] ?? host?.parciais[fonte.id] ?? []) : [];
+    if (atual && host?.parciais[atual.id]?.length) return atual;
+    if (noDfds && host?.dfds?.length && (atual?.id === noDfds.id || !comItens.length)) return noDfds;
+    return comItens[comItens.length - 1] ?? null;
+  }, [etapas, atual, host, noDfds]);
+  const itensFonte: Item[] = fonte
+    ? fonte === noDfds && host?.dfds?.length
+      ? (host.dfds as unknown as Item[])
+      : (host?.saidas[fonte.id] ?? host?.parciais[fonte.id] ?? [])
+    : [];
   const processados = useMemo<Processado[]>(
     () =>
       fonte

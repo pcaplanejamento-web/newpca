@@ -42,7 +42,18 @@
     return { acao, dados: semToken, autorizado: c.autorizado };
   }
 
-  window.addEventListener("message", (e) => {
+  // Cópia ÓRFÃ (a extensão foi atualizada/recarregada e esta ponte ficou na página): o `chrome.runtime` dela morre. Ela
+  // NUNCA responde nem consome autorização — antes, a órfã gastava o token de uso único primeiro e a cópia nova recebia
+  // "Autorização inválida, já usada ou vencida".
+  const viva = () => {
+    try {
+      return !!chrome.runtime?.id;
+    } catch {
+      return false;
+    }
+  };
+  window.addEventListener("message", function ouvir(e) {
+    if (!viva()) return window.removeEventListener("message", ouvir);
     if (e.source !== window || e.origin !== origem) return;
     const m = e.data;
     if (m?.fonte !== "pca-automacao") return;

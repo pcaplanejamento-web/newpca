@@ -125,7 +125,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.20.0"), false);
   assert.equal(versaoAtende("1.21.0"), false);
   assert.equal(versaoAtende("1.22.0"), false);
-  assert.equal(versaoAtende("1.23.0"), true);
+  assert.equal(versaoAtende("1.23.0"), false);
+  assert.equal(versaoAtende("1.24.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -153,10 +154,11 @@ test("pastas, nomes e plano por protocolo", async () => {
   const sep = planoDosProtocolos(protos, op);
   assert.deepEqual(
     sep.arquivos.map((a) => a.nome),
+    // A ordem é a dos itens que chegam (a tabela de Seleção) — nada reordena pelo planejamento.
     [
+      "Planejamento 900 - DFD 531 - PCA 2027 - (10) - 2026.pdf",
       "Planejamento 640 - DFD 533 - PCA 2027 - (10) - 2026.pdf",
       "Planejamento 811 - DFD 700 - PCA 2027 - (11) - 2026.pdf",
-      "Planejamento 900 - DFD 531 - PCA 2027 - (10) - 2026.pdf",
     ],
   );
   assert.equal(sep.arquivos[0].pastas.join("/"), "PCA 2027/SMS - PCA 2027 - (10) - 2026");
@@ -170,24 +172,24 @@ test("pastas, nomes e plano por protocolo", async () => {
     ],
   );
   assert.equal(sep.total, 3);
-  const porProto = planoDosProtocolos(protos, { ...op, pastaPca: false, formato: "protocolo", ordenarPlanejamento: false });
+  const porProto = planoDosProtocolos(protos, { ...op, pastaPca: false, formato: "protocolo" });
   assert.deepEqual(porProto.arquivos.map((a) => [a.pastas.length, a.nome, a.partes.map((t) => t.id).join(",")]), [
     [0, "SMS - PCA 2027 - (10) - 2026.pdf", "900,640"],
     [0, "SMS - PCA 2027 - (11) - 2026.pdf", "811"],
   ]);
   const porUnidade = planoDosProtocolos(protos, { ...op, formato: "unidade" });
   assert.deepEqual(porUnidade.arquivos.map((a) => [a.pastas.join("/"), a.nome, a.partes.map((t) => t.id).join(",")]), [
-    ["PCA 2027", "SMS - PCA 2027 - (10) - 2026.pdf", "640,900"],
+    ["PCA 2027", "SMS - PCA 2027 - (10) - 2026.pdf", "900,640"],
     ["PCA 2027", "SME - PCA 2027 - (11) - 2026.pdf", "811"],
   ]);
   const unico = planoDosProtocolos(protos, { ...op, formato: "unico" });
   assert.deepEqual(unico.arquivos.map((a) => [a.pastas.join("/"), a.nome, a.partes.map((t) => t.id).join(",")]), [
-    ["PCA 2027", "DFDs - PCA 2027 - (10, 11) - 2026.pdf", "640,811,900"],
+    ["PCA 2027", "DFDs - PCA 2027 - (10, 11) - 2026.pdf", "900,640,811"],
   ]);
   const ids = planoDosIds(["811", "5"], protos, op);
   assert.deepEqual(ids.map((a) => [a.pastas.join("/"), a.nome, a.partes[0].orgao]), [
-    ["PCA sem ano", "Planejamento 5.pdf", null],
     ["PCA 2027", "Planejamento 811 - DFD 700 - PCA 2027 - (11) - 2026.pdf", "o:3"],
+    ["PCA sem ano", "Planejamento 5.pdf", null],
   ]);
   assert.deepEqual(candidatosEntidade("02: 03,x y", null), ["02", "03", "x", "y"]);
   assert.equal(candidatosEntidade("", "02")[0], "00");

@@ -4251,6 +4251,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Usar o nº". O **nº é opcional** (`lerAlvoCenti(id, nº, soId)` → `numero: ""`): a ação `protocolo` da extensão confere só o
   Id (`conferirProtocolo` sem nº) e o motor (`executarDfds`, `testarAnexo`) preenche nº/ano com os da Centi ANTES do anexo —
   o `anexar` segue exigindo Id + nº.
+- **ORDEM DA TABELA + PERMISSÃO NO DROPDOWN + CÓPIA ÓRFÃ (v1.109.0, extensão 1.24.0):** saiu o "Ordenar pelo planejamento"
+  (`OpcoesSaida` sem ele; `montarArquivos` segue a ordem dos itens que chegam). A **Seleção** grava a SEQUÊNCIA da tabela no
+  nó (`DataTable.onOrdenadas` → `TabelaMesaFluxo.onOrdem` → `config.ordem` + `config.filtrada`, só quando difere da ordem
+  natural) e **`selecionados`** devolve os marcados nessa ordem (nada marcado + "todos" = as linhas à vista com filtro). A
+  **permissão de escrita** (`confirmarEscrita`, `background.js`) sai no DROPDOWN do ícone (`popup.html` → `#confirmacao`,
+  lido de `storage.session.confirmacao`; sem janela em foco, o mesmo painel numa janelinha `popup.html?janela=1&confirmar=1`)
+  — `confirmar.html` saiu; fechar o dropdown não recusa (selo "?", prazo 2 min). A **`sistema-ponte`** ÓRFÃ (extensão
+  atualizada sem F5 — `chrome.runtime.id` morto) se cala: antes gastava o token de uso único e a nova recebia "já usada".
+  No editor, **`ProblemasFluxo`** (o selo de problemas/atenções abre a lista e leva ao componente) e a Análise usa as linhas
+  do Baixar/anexar (`host.dfds`, `estadoDoItem("saida.dfdsCenti")`).
 - **PLATAFORMA DE AUTOMAÇÕES CENTI — FUNDAÇÃO (migração `0076`, aditiva; plano em `docs` da conversa: fundação → extensão segura →
   ao vivo → receitas → login/descoberta → gravador de receitas).** Princípios: negado por padrão · escrita só ACRESCENTA ·
   toda escrita = AUTORIZAÇÃO DE USO ÚNICO do servidor (+ confirmação na janela da extensão, entrega 2) · ensaio antes ·
