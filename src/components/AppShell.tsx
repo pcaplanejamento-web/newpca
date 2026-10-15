@@ -18,7 +18,7 @@ import type { ConfigChat } from "@/lib/chat-core";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { TrilhaCabecalho } from "./TrilhaCabecalho";
-import { GatilhoPesquisa, PesquisaSistema } from "./PesquisaSistema";
+import { EVENTO_ALTERNAR_MENU, GatilhoPesquisa, PesquisaSistema } from "./PesquisaSistema";
 import { toast } from "./Toast";
 import {
   IconAlternarNivel,
@@ -497,6 +497,14 @@ export function AppShell({
     setRecolhido(novo);
     setSemPeek(novo);
   }
+  // A ação "Recolher ou expandir o menu" da pesquisa do sistema.
+  const alternarRef = useRef(alternarMenu);
+  alternarRef.current = alternarMenu;
+  useEffect(() => {
+    const f = () => alternarRef.current();
+    window.addEventListener(EVENTO_ALTERNAR_MENU, f);
+    return () => window.removeEventListener(EVENTO_ALTERNAR_MENU, f);
+  }, []);
   const fecharMenu = () => setMenuAberto(false);
   // Esc fecha a gaveta (o caminho do teclado; o fundo escurecido é só do ponteiro) — menos com um diálogo por cima.
   useEffect(() => {
@@ -655,6 +663,7 @@ export function AppShell({
       <PesquisaSistema
         telas={secoesVisiveis(usuario.admin, modulos).flatMap((sc) => sc.itens.map((i) => ({ ...i, secao: sc.titulo })))}
         pcas={pcas}
+        pcaFiltroId={pcaFiltroId}
       />
       {/* Navegação inferior (mobile) */}
       <BottomNav telas={modulos.flatMap((m) => m.telas)} />

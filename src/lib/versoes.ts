@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.101.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa do sistema completa (com as abas)",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "Pesquisa as ABAS de cada tela (Mesa, Configurações, Órgãos, Perfil e cada PCA) — ex.: “aba: segurança” ou “PCA 2027 orçamento”.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Pesquisa", texto: "Resultados por grupo com “Ver todos”, termo em destaque, número exato primeiro, ações rápidas (tema, menu, perfil, sair) e prévia do item ao lado.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Atalhos de prefixo (p:, d:, t:, i:…) com Tab, recentes removíveis, esqueleto por grupo, aviso de falha com “Tentar de novo”, tela cheia no celular e leitura por leitor de tela.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A Mesa abre direto numa visão pelo endereço (?vista=dfds, itens, dashboard).", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
     versao: "1.100.0",
     data: "2026-10-15",
     titulo: "Pesquisa do sistema no menu lateral",

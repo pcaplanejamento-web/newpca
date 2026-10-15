@@ -4,7 +4,7 @@ import type { ColunasMesa } from "@/lib/mesa-colunas-core";
 import { colunasDaAutomacao } from "./ColunasAutomacao";
 import { useComponente } from "./ComponentesPapel";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
@@ -378,7 +378,9 @@ export function DfdsView({
   const libera = useComponente();
   const veVista = (v: Vista) =>
     v === "itens" ? libera("dfd.itens") || libera("dfd.consolidada") : v === "dashboard" ? !modoPca && libera("dfd.dashboard") : libera(`dfd.${v}`);
-  const [vistaPedida, setVista] = useState<Vista>("protocolos");
+  // `?vista=` (a pesquisa do sistema leva direto à visão): dashboard · protocolos · dfds · itens.
+  const vistaUrl = useSearchParams().get("vista");
+  const [vistaPedida, setVista] = useState<Vista>(vistaUrl === "dashboard" || vistaUrl === "dfds" || vistaUrl === "itens" ? vistaUrl : "protocolos");
   const vista = vistaPermitida<Vista>(vistaPedida, ["protocolos", "dfds", "itens", "dashboard"], veVista);
   const [modoPedido, setModoItens] = useState<ModoItens>("normal");
   const modoItens: ModoItens = !libera("dfd.consolidada") ? "normal" : !libera("dfd.itens") ? "consolidada" : modoPedido;
