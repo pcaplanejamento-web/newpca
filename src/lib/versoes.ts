@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.9",
+    data: "2026-10-15",
+    titulo: "Cartões deslizam ao abrir e fechar o menu",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir e fechar o menu lateral, os cartões (PCA, Orçamento, Catálogo, Tarefas, Automação) deslizam até o lugar novo em vez de pular de linha ou coluna.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.107.8",
     data: "2026-10-15",
     titulo: "Menu recolhido alinhado",

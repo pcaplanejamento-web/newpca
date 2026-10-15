@@ -458,6 +458,35 @@ function semAcento(t: string): string {
 }
 
 /** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */
+/** Durante a animação do menu, as grades de cartões (auto-fill) mudam de colunas no meio do caminho: o cartão que
+ *  SALTA de lugar (nova coluna/linha) desliza da posição antiga até a nova (FLIP), em vez de pular. Só nesses 340 ms. */
+function deslizarGrades() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const m = document.documentElement.dataset.motion;
+  if (m === "off" || m === "reduced") return;
+  const itens = Array.from(document.querySelectorAll<HTMLElement>('main [class*="auto-fill"] > *'));
+  if (!itens.length) return;
+  const pos = new Map(itens.map((e) => [e, { x: e.offsetLeft, y: e.offsetTop }]));
+  const fim = performance.now() + 340;
+  const passo = () => {
+    for (const e of itens) {
+      const a = pos.get(e);
+      if (!a) continue;
+      const x = e.offsetLeft;
+      const y = e.offsetTop;
+      if (Math.abs(x - a.x) > 40 || Math.abs(y - a.y) > 40) {
+        e.animate([{ transform: `translate(${a.x - x}px, ${a.y - y}px)` }, { transform: "none" }], {
+          duration: 300,
+          easing: "cubic-bezier(.32,.72,0,1)",
+        });
+      }
+      pos.set(e, { x, y });
+    }
+    if (performance.now() < fim) requestAnimationFrame(passo);
+  };
+  requestAnimationFrame(passo);
+}
+
 function useUltimoValido<T>(v: T | null | undefined): T | null {
   const ref = useRef<T | null>(v ?? null);
   if (v !== undefined) ref.current = v;
@@ -516,6 +545,7 @@ export function AppShell({
     const novo = !recolhido;
     // A vaga do menu anima a largura (CSS) e o conteúdo à direita estica/encolhe junto, na mesma curva.
     document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
+    deslizarGrades();
     try {
       localStorage.setItem(CHAVE_MENU, novo ? "1" : "0");
     } catch {
