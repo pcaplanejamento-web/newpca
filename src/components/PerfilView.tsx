@@ -44,6 +44,8 @@ import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
 import { PreferenciasNotificacoes } from "./PreferenciasNotificacoes";
+import { AparenciaPessoal } from "./AparenciaPessoal";
+import { IconPalette } from "./icons";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
 
@@ -568,6 +570,10 @@ export function PerfilView({
               )}
             </SecaoPerfil>
           )}
+          {/* APARÊNCIA: o modo claro/escuro e a tonalidade do escuro — neste navegador, grava na hora. */}
+          <SecaoPerfil icone={<IconPalette className="h-4 w-4" />} titulo="Aparência" descricao="Grava sozinho a cada mudança.">
+            <AparenciaPessoal />
+          </SecaoPerfil>
           {presenca && <PresencaPerfil inicial={presenca.invisivel} />}
 
           {/* NOTIFICAÇÕES: o sino (tipos, som, alerta do sistema, silenciados) e o e-mail (imediato · resumo · desligado). */}

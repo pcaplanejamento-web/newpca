@@ -14,6 +14,7 @@ import {
   Eraser,
   Megaphone,
   Sparkles,
+  SunMoon,
   Volume2,
   MonitorSmartphone,
   CalendarClock,
@@ -371,3 +372,6 @@ export const IconEnquadrar = LMaximize;
 export const IconMinus = LMinus;
 /** Organizar o diagrama (colunas na ordem do fluxo). */
 export const IconOrganizar = LNetwork;
+export const IconTemaSite = Sparkles;
+export const IconTemaSistema = MonitorSmartphone;
+export const IconTemaHorario = SunMoon;

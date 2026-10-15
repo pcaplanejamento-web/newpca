@@ -176,6 +176,35 @@
   --glow-target: var(--surface);
 }
 
+/* Tonalidades do ESCURO escolhidas pela pessoa (Perfil → Aparência; `data-escuro` no <html>). Carvão = o escuro acima/do ADM.
+   Dois atributos = vencem as cores escuras do ADM, que são de UM atributo. */
+[data-theme="dark"][data-escuro="azul"] {
+  --lista-quadro: #0d1526;
+  --bg: #0b1220;
+  --surface: #111a2e;
+  --surface-2: #16213a;
+  --border: #1e2a44;
+  --border-2: #27365a;
+  --track: #1e2a44;
+  --sb-active: #141e33;
+  --kpi-bar: #27365a;
+  --zebra: #131d33;
+  --accent-soft: #1c2550;
+}
+[data-theme="dark"][data-escuro="preto"] {
+  --lista-quadro: #050505;
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #141414;
+  --border: #1f1f1f;
+  --border-2: #2a2a2a;
+  --track: #1f1f1f;
+  --sb-active: #121212;
+  --kpi-bar: #2a2a2a;
+  --zebra: #0f0f0f;
+  --accent-soft: #1a1b2e;
+}
+
 /* Densidade (§39.7) — attr no <html> */
 [data-density="compact"] {
   --pad-canvas: 12px;

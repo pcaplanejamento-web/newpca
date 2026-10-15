@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.95.0",
+    data: "2026-10-15",
+    titulo: "Modos escuros e horário do tema",
+    mudancas: [
+      { tipo: "novo", area: "Perfil", texto: "Aparência no Perfil: padrão do site, claro, escuro, seguir o sistema, pelo horário do dia ou horário personalizado.", link: "/painel/perfil" },
+      { tipo: "novo", area: "Perfil", texto: "Tonalidade do modo escuro: Carvão, Azul-marinho ou Preto (OLED), aplicada sem piscar ao abrir.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.94.2",
     data: "2026-10-14",
     titulo: "Filtros sem texto cortado",

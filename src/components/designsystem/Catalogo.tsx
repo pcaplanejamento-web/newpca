@@ -136,6 +136,7 @@ import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AparenciaPessoal } from "@/components/AparenciaPessoal";
 import * as Icons from "@/components/icons";
 import { IntegracaoGoogle, type ValorGoogle } from "@/components/IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "@/components/IntegracaoResend";
@@ -3813,6 +3814,12 @@ export function Catalogo() {
             <span className="text-[13px] text-text-2">Alternador de tema</span>
             <ThemeToggle />
           </div>
+        </div>
+        <div className="mt-4 rounded-card border border-border bg-surface p-4">
+          <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            AparenciaPessoal (Perfil → Aparência: modo claro/escuro e tonalidade do escuro — grava neste navegador)
+          </span>
+          <AparenciaPessoal />
         </div>
         <div className="mt-4">
           <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
