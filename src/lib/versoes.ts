@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.97.2",
+    data: "2026-10-15",
+    titulo: "Menu recolhido: foto e animação sem trancos",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "A foto do usuário aparece com o menu recolhido.", link: "/painel/perfil" },
+      { tipo: "correcao", area: "Menu", texto: "Ao recolher e abrir o menu, a tela não se redesenha a cada quadro: muda de largura uma vez e desliza. Grades, tabelas e gráficos, como os cards do PCA, não pulam mais.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.97.1",
     data: "2026-10-15",
     titulo: "Menu recolhido: separadores e animação",

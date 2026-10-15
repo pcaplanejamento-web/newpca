@@ -154,12 +154,12 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
   }
 
   return (
-    <div className="menu-cartao flex items-stretch gap-1 rounded-card border border-border p-0.5">
+    <div className="menu-cartao flex items-stretch gap-1 overflow-hidden rounded-card border border-border p-0.5">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}
         title="Meu perfil"
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-control p-[3px] pr-1.5 transition-colors hover:bg-surface-2"
+        className="flex min-w-[38px] flex-1 items-center gap-2 rounded-control p-[3px] pr-1.5 transition-colors hover:bg-surface-2"
       >
         <Avatar nome={usuario.nome} foto={usuario.foto} />
         <div className="menu-esconde min-w-0">
@@ -406,6 +406,12 @@ function ReparticaoSelect({ reparticoes, ativaId }: { reparticoes: ReparticaoNav
 }
 
 /** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */
+/** Movimento desligado (sistema ou o ADM em Aparência). */
+function semMovimento() {
+  const m = document.documentElement.dataset.motion;
+  return m === "off" || m === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function useUltimoValido<T>(v: T | null | undefined): T | null {
   const ref = useRef<T | null>(v ?? null);
   if (v !== undefined) ref.current = v;
@@ -460,9 +466,21 @@ export function AppShell({
   // Logo depois de recolher, o ponteiro ainda está em cima: não reabre por cima até sair e voltar.
   const [semPeek, setSemPeek] = useState(false);
   useEffect(() => setRecolhido(document.documentElement.hasAttribute(ATRIBUTO_MENU)), []);
+  const colunaRef = useRef<HTMLDivElement>(null);
   function alternarMenu() {
     const novo = !recolhido;
+    // A coluna do conteúdo muda de largura UMA vez (nada reflui a cada quadro — grades, tabelas e gráficos não pulam) e
+    // DESLIZA até o lugar novo por transform (FLIP), na mesma curva do menu.
+    const coluna = colunaRef.current;
+    const antes = coluna?.getBoundingClientRect().left ?? 0;
     document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
+    const desloca = coluna ? antes - coluna.getBoundingClientRect().left : 0;
+    if (coluna && desloca && !semMovimento()) {
+      coluna.animate([{ transform: `translateX(${desloca}px)` }, { transform: "none" }], {
+        duration: 300,
+        easing: "cubic-bezier(.32,.72,0,1)",
+      });
+    }
     try {
       localStorage.setItem(CHAVE_MENU, novo ? "1" : "0");
     } catch {
@@ -495,7 +513,7 @@ export function AppShell({
     >
     {/* As Novidades mostram só as mudanças das telas que o grupo abre (o ADM vê tudo). */}
     <AcessoNovidades telas={abas} admin={usuario.admin}>
-    <div className="min-h-dvh bg-bg text-text lg:flex">
+    <div className="min-h-dvh bg-bg text-text lg:flex lg:overflow-x-clip">
       {versaoDados != null && <SincronizarDados versao={versaoDados} />}
       {/* Sidebar desktop — a VAGA (sticky, altura do display) anima a largura e empurra o conteúdo; o menu dentro dela é
           absoluto: recolhido vira o trilho de ícones e, ao passar o mouse, abre POR CIMA do conteúdo (sem empurrar). O
@@ -570,7 +588,7 @@ export function AppShell({
       )}
 
       {/* Coluna principal */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div ref={colunaRef} className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
           <button
             type="button"
