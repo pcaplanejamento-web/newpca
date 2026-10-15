@@ -19,8 +19,10 @@ import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { toast } from "./Toast";
 import {
+  IconAlternarNivel,
   IconBox,
   IconBuilding,
+  IconChevronRight,
   IconLandmark,
   IconCheck,
   IconClock,
@@ -252,6 +254,103 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
   );
 }
 
+/**
+ * TRILHA do cabeçalho (padrão do Cloudflare): Seção › Tela ⌃⌄ [› PCA ⌃⌄]. A seção é o módulo do menu; a tela troca
+ * entre as telas da MESMA seção; dentro do espaço de um PCA, o último nível troca de PCA (o filtro do cabeçalho segue).
+ */
+function TrilhaCabecalho({ secoes, pcas }: { secoes: NavSecao[]; pcas: PcaNav[] }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  let secao: NavSecao | undefined;
+  let item: NavItem | undefined;
+  for (const s of secoes) {
+    const i = s.itens.filter((x) => itemAtivo(pathname, x)).sort((a, b) => b.href.length - a.href.length)[0];
+    if (i && (!item || i.href.length > item.href.length)) {
+      secao = s;
+      item = i;
+    }
+  }
+  if (!secao || !item) return null;
+  const pcaId = /^\/painel\/pca\/(\d+)/.exec(pathname)?.[1];
+  const pca = pcaId ? pcas.find((p) => p.id === Number(pcaId)) : undefined;
+  const opcao = (marcado: boolean) =>
+    `flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] lg:min-h-0 ${
+      marcado ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
+    }`;
+  const nivel = "gap-1.5 rounded-control px-2 h-[var(--h-control-sm)] text-[13px] hover:bg-surface-2";
+  const Sep = () => <IconChevronRight aria-hidden className="h-3.5 w-3.5 shrink-0 text-faint" />;
+  const ItemIcon = item.Icon;
+  return (
+    <nav aria-label="Onde você está" className="hidden min-w-0 items-center gap-1 lg:flex">
+      <span className="shrink-0 truncate px-1 text-[13px] text-muted">{secao.titulo}</span>
+      <Sep />
+      <Dropdown
+        align="start"
+        ariaLabel={`Tela: ${item.label} — trocar de tela em ${secao.titulo}`}
+        triggerClassName={`${nivel} font-semibold text-text`}
+        width={240}
+        trigger={
+          <>
+            <ItemIcon className="h-4 w-4 shrink-0 text-muted" />
+            <span className="max-w-[12rem] truncate">{item.label}</span>
+            <IconAlternarNivel className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          </>
+        }
+      >
+        {(close) => (
+          <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
+            {secao.itens.map((x) => (
+              <Link key={x.href} href={x.href} onClick={close} className={opcao(x.href === item.href)}>
+                <x.Icon className="h-4 w-4 shrink-0 opacity-70" />
+                <span className="min-w-0 truncate">{x.label}</span>
+                {x.href === item.href && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+              </Link>
+            ))}
+          </div>
+        )}
+      </Dropdown>
+      {pca && pcas.length > 0 && (
+        <>
+          <Sep />
+          <Dropdown
+            align="start"
+            ariaLabel={`PCA: ${pca.nome} — trocar de PCA`}
+            triggerClassName={`${nivel} min-w-0 text-text-2`}
+            width={260}
+            trigger={
+              <>
+                <span className="shrink-0 font-mono text-[11px] text-faint">{pca.ano}</span>
+                <span className="max-w-[14rem] truncate">{pca.nome}</span>
+                <IconAlternarNivel className="h-3.5 w-3.5 shrink-0 opacity-60" />
+              </>
+            }
+          >
+            {(close) => (
+              <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
+                {pcas.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={opcao(p.id === pca.id)}
+                    onClick={() => {
+                      close();
+                      if (p.id !== pca.id) router.push(`/painel/pca/${p.id}${window.location.search}`);
+                    }}
+                  >
+                    <span className="shrink-0 font-mono text-[10.5px] text-faint">{p.ano}</span>
+                    <span className="min-w-0 truncate">{p.nome}</span>
+                    {p.id === pca.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Dropdown>
+        </>
+      )}
+    </nav>
+  );
+}
+
 type PcaNav = { id: number; nome: string; ano: number };
 
 /**
@@ -274,6 +373,9 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
   }
   if (pcas.length === 0) return null;
   const ativo = pcas.find((p) => p.id === sel) ?? null;
+  // "Todos os PCAs" só faz sentido com MAIS de um PCA; com um só, o gatilho mostra ele.
+  const varios = pcas.length > 1;
+  const rotulo = ativo ?? (varios ? null : pcas[0]);
 
   async function trocar(id: number | null, close: () => void) {
     close();
@@ -302,7 +404,7 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
     }`;
   return (
     <Dropdown
-      align="start"
+      align="end"
       ariaLabel={`PCA do cabeçalho: ${ativo ? `${ativo.nome} (${ativo.ano})` : "todos os PCAs"} — filtra todo o sistema`}
       triggerClassName={`gap-1 rounded-chip border px-2 h-11 min-w-11 justify-center text-[13px] font-medium sm:gap-1.5 sm:px-3 lg:h-[var(--h-control-sm)] ${
         ativo ? "border-accent/50 bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
@@ -311,19 +413,21 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
       trigger={
         <>
           {trocando ? <IconSpinner className="h-3.5 w-3.5 shrink-0" /> : <IconBox className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-          <span className="truncate sm:hidden">{ativo ? ativo.ano : "Todos"}</span>
-          <span className="hidden max-w-[12rem] truncate sm:inline">{ativo ? ativo.nome : "Todos os PCAs"}</span>
-          <SetaDropdown className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
+          <span className="truncate sm:hidden">{rotulo ? rotulo.ano : "Todos"}</span>
+          <span className="hidden max-w-[12rem] truncate sm:inline">{rotulo ? rotulo.nome : "Todos os PCAs"}</span>
+          <IconAlternarNivel className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
         </>
       }
     >
       {(close) => (
         <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
-          <button type="button" onClick={() => trocar(null, close)} className={opcao(ativo == null)}>
-            <IconBox className="h-4 w-4 shrink-0 opacity-70" />
-            <span className="min-w-0 truncate">Todos os PCAs</span>
-            {ativo == null && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
-          </button>
+          {varios && (
+            <button type="button" onClick={() => trocar(null, close)} className={opcao(ativo == null)}>
+              <IconBox className="h-4 w-4 shrink-0 opacity-70" />
+              <span className="min-w-0 truncate">Todos os PCAs</span>
+              {ativo == null && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
+            </button>
+          )}
           {pcas.map((p) => (
             <button key={p.id} type="button" onClick={() => trocar(p.id, close)} className={opcao(p.id === ativo?.id)}>
               <span className="shrink-0 font-mono text-[10.5px] text-faint">{p.ano}</span>
@@ -602,15 +706,17 @@ export function AppShell({
           <div className={`shrink-0 lg:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
             <Brand compact identidade={identidade} />
           </div>
-          {/* PCA do cabeçalho (filtro de todo o sistema) — à ESQUERDA; só para quem vê o que ele filtra (Mesa, PCA,
-              Orçamento). É o único item que ENCOLHE numa tela estreita (o rótulo trunca) — os demais mantêm os 44px. */}
-          {filtraPca && (
-            <div className="min-w-0">
-              <PcaSelect pcas={pcas} ativoId={pcaFiltroId} />
-            </div>
-          )}
+          {/* Trilha (Seção › Tela ⌃⌄ › PCA ⌃⌄) — à esquerda, no desktop. */}
+          <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} />
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            {/* PCA do cabeçalho (filtro de todo o sistema) — à DIREITA; só para quem vê o que ele filtra (Mesa, PCA,
+                Orçamento). É o único item que ENCOLHE numa tela estreita (o rótulo trunca). */}
+            {filtraPca && (
+              <div className="min-w-0">
+                <PcaSelect pcas={pcas} ativoId={pcaFiltroId} />
+              </div>
+            )}
             <div className="hidden items-center gap-1.5 sm:flex">
               <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
               <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />

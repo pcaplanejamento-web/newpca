@@ -2,6 +2,7 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  ChevronsUpDown,
   Activity,
   MessagesSquare,
   Reply,
@@ -175,6 +176,8 @@ export const IconColunas = Columns3;
 export const IconVariavel = Variable;
 export const IconChevronLeft = ChevronLeft;
 export const IconChevronRight = ChevronRight;
+/** Trocar dentro do nível (o ⌃⌄ da trilha do cabeçalho). */
+export const IconAlternarNivel = ChevronsUpDown;
 export const IconSort = ArrowUpDown;
 export const IconInbox = Inbox;
 export const IconCheck = Check;

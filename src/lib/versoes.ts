@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.98.0",
+    data: "2026-10-15",
+    titulo: "Trilha de navegação no cabeçalho",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "Trilha no padrão do Cloudflare: seção › tela (troca de tela pelo ⌃⌄) e, no espaço de um PCA, o PCA (troca de PCA pelo ⌃⌄).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "O seletor de PCA foi para a direita do cabeçalho; “Todos os PCAs” só aparece com mais de um PCA.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.97.2",
     data: "2026-10-15",
     titulo: "Menu recolhido: foto e animação sem trancos",
