@@ -140,3 +140,70 @@ export function entidadePrevista(
   if (fixa) return formato(fixa, aberta);
   return (orgao ? mapa[orgao] : undefined) ?? aberta ?? null;
 }
+
+// ---------------------------------------------------------------- CONFERÊNCIA NO PROTOCOLO (o que foi anexado e o que falta)
+/** Um documento do protocolo como a Centi o devolve. */
+export type DocCenti = { descricao: string; sequencial: string; id: string };
+/** A situação de um arquivo do plano no protocolo da Centi: `anexado` (está lá) · `falta` (não está) · `ausente` (o sistema
+ * o REGISTROU como anexado, mas a Centi não o tem — envie de novo) · `semProtocolo` (o protocolo não abriu). */
+export type SituacaoAnexo = "anexado" | "falta" | "ausente" | "semProtocolo";
+export type LinhaConferencia = {
+  nome: string;
+  descricao: string;
+  dfds: number;
+  protocolo: string;
+  situacao: SituacaoAnexo;
+  /** O documento da Centi de mesma descrição. */
+  documento: DocCenti | null;
+  registrado: boolean;
+  erro?: string;
+};
+
+const canonica = (t: string) => t.trim().replace(/\s+/g, " ").toUpperCase();
+
+/** O documento da Centi de cada descrição (canônica — sem caixa/espaços repetidos; o último de mesma descrição). */
+export function docsPorDescricao(docs: readonly DocCenti[]): Map<string, DocCenti> {
+  const m = new Map<string, DocCenti>();
+  for (const d of docs) if (d.descricao) m.set(canonica(d.descricao), d);
+  return m;
+}
+
+/**
+ * Confere cada arquivo do plano no protocolo da Centi (a VERDADE) e no registro do sistema. `arquivos` = nome, descrição,
+ * quantos DFDs e o Id do protocolo da Centi; `docs` = os documentos de cada protocolo (ou o erro de abrir); `registros` =
+ * as chaves "Id|DESCRIÇÃO" que o sistema registrou como anexadas.
+ */
+export function conferenciaAnexos(
+  arquivos: readonly { nome: string; descricao: string; dfds: number; protocolo: string; alvoId: string | null; erro?: string }[],
+  docs: ReadonlyMap<string, readonly DocCenti[] | { erro: string }>,
+  registros: ReadonlySet<string>,
+): LinhaConferencia[] {
+  const indices = new Map<string, Map<string, DocCenti>>();
+  return arquivos.map((a) => {
+    const base = { nome: a.nome, descricao: a.descricao, dfds: a.dfds, protocolo: a.protocolo, documento: null, registrado: false };
+    if (!a.alvoId) return { ...base, situacao: "semProtocolo", erro: a.erro ?? "Sem o protocolo da Centi." };
+    const registrado = registros.has(`${a.alvoId}|${canonica(a.descricao)}`);
+    const lista = docs.get(a.alvoId);
+    if (!lista || !Array.isArray(lista)) return { ...base, registrado, situacao: "semProtocolo", erro: lista && "erro" in lista ? lista.erro : "O protocolo não foi aberto." };
+    let idx = indices.get(a.alvoId);
+    if (!idx) {
+      idx = docsPorDescricao(lista);
+      indices.set(a.alvoId, idx);
+    }
+    const doc = idx.get(canonica(a.descricao)) ?? null;
+    return { ...base, registrado, documento: doc, situacao: doc ? "anexado" : registrado ? "ausente" : "falta" };
+  });
+}
+
+/** O resumo da conferência: quantos arquivos e quantos DFDs em cada situação. */
+export function resumoConferencia(linhas: readonly LinhaConferencia[]) {
+  const r = { arquivos: linhas.length, anexados: 0, faltam: 0, ausentes: 0, semProtocolo: 0, dfdsFaltando: 0 };
+  for (const l of linhas) {
+    if (l.situacao === "anexado") r.anexados++;
+    else if (l.situacao === "falta") r.faltam++;
+    else if (l.situacao === "ausente") r.ausentes++;
+    else r.semProtocolo++;
+    if (l.situacao === "falta" || l.situacao === "ausente") r.dfdsFaltando += l.dfds;
+  }
+  return r;
+}

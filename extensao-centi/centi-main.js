@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 40;
+  const PROTOCOLO = 41;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -621,6 +621,24 @@
     return A.tipoDoLoad({ Entity: lista.find((o) => o?.ModuleKey === A.MODULO_TIPO) ?? lista[0] }, d.tipo);
   }
 
+  // Os documentos que o último SALVAR devolveu, por protocolo (nesta aba) — o próximo anexo só segue se o protocolo aberto
+  // ainda os trouxer (senão o salvar os apagaria).
+  const SALVOS = "__pcaUltimosSalvos_v1";
+  function ultimosSalvos() {
+    try {
+      return JSON.parse(sessionStorage.getItem(SALVOS) || "{}") || {};
+    } catch {
+      return {};
+    }
+  }
+  function guardarSalvos(id, ids) {
+    try {
+      const m = ultimosSalvos();
+      m[id] = ids.slice(-2000);
+      sessionStorage.setItem(SALVOS, JSON.stringify(m));
+    } catch {}
+  }
+
   // Abre o protocolo como a TELA o abre (o load aprendido) e, sem ele, pelos módulos fixos (102907, senão 102908 — o da
   // Tela Protocolo): só segue ao próximo quando a Centi não devolveu o protocolo; Id/número que não conferem param na hora.
   async function abrirProtocolo(d) {
@@ -681,6 +699,9 @@
     const e = await abrirProtocolo(d);
     const ja = A.jaAnexado(e, d.descricao);
     if (ja) return { ok: true, jaAnexado: true, ...ja };
+    // NUNCA APAGAR: o protocolo aberto tem de trazer os documentos que o último salvar devolveu nesta aba.
+    const desatualizado = A.faltamGravados(e, ultimosSalvos()[String(d.id)]);
+    if (desatualizado) return { ok: false, erro: desatualizado };
     if (porReferencia) tipo = await tipoPorReferencia(d).catch(() => null);
     const origemTipo = tipo ? (porReferencia ? "referência da tela" : "load") : "sem o registro do tipo";
     const corpo = A.montarSalvar(e, d, new Date(), crypto.randomUUID(), tipo);
@@ -692,8 +713,18 @@
     }
     // Como a tela: a Centi pedindo confirmação → a pergunta vai ao ADM; só com o "sim" dele (`aceitar`) segue ao save.
     if (conf.Confirm === true && d.aceitar !== true) return { ok: false, confirmar: A.mensagens(conf.Message) || "A Centi pede confirmação para salvar." };
-    const salvo = A.conferirSalvo(await apiCenti("POST", "restauth/save", corpo, "save", true, urlsSalvar.save || "restauth/save"), d);
-    return salvo.erro ? { ok: false, erro: salvo.erro } : { ok: true, ...salvo };
+    const resposta = await apiCenti("POST", "restauth/save", corpo, "save", true, urlsSalvar.save || "restauth/save");
+    const salvo = A.conferirSalvo(resposta, d, e);
+    if (salvo.erro) return { ok: false, erro: salvo.erro };
+    guardarSalvos(String(d.id), A.idsDocumentos(resposta.Entity));
+    // Confere de VERDADE: o protocolo aberto de novo tem de trazer o documento novo.
+    let depois = null;
+    try {
+      depois = await abrirProtocolo(d);
+    } catch {}
+    if (depois && !A.idsDocumentos(depois).includes(String(salvo.documento)))
+      return { ok: false, erro: `A Centi respondeu que gravou (documento ${salvo.sequencial || "?"}), mas o protocolo aberto de novo não traz o documento — confira na Centi antes de reenviar.` };
+    return { ok: true, ...salvo };
   }
 
   // Só LEITURA: repete uma CONSULTA aprendida (a Tela Protocolo) — a trava confere o verbo (nunca salvar/excluir/tramitar).

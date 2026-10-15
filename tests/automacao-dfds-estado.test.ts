@@ -6,7 +6,7 @@ import { afterEach, before, describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import { type ArquivoSaida, lerConfigCenti, lerOpcoesSaida, type TarefaCenti } from "../src/lib/automacao-centi-core.ts";
-import { andamentoDfds, contagemDfds, entidadePrevista, type LinhaDfd, textoContagem, visualEstadoDfd } from "../src/lib/automacao-dfds-estado.ts";
+import { andamentoDfds, conferenciaAnexos, contagemDfds, entidadePrevista, type LinhaDfd, resumoConferencia, textoContagem, visualEstadoDfd } from "../src/lib/automacao-dfds-estado.ts";
 import { type DepsExecucao, executarDfds } from "../src/lib/automacao-dfds-motor.ts";
 import { comandoAtualizarPasso, comandoRecontar, comandosPassos, comandosReconciliarExecucoes, limiteAbandono, MSG_ABANDONO } from "../src/lib/automacao-sql.ts";
 import { d1Sobre } from "./fixtures/d1-sqlite.ts";
@@ -57,7 +57,7 @@ describe("estados e contagem dos DFDs (a barra, o painel e o ícone)", () => {
 type Chamada = { url: string; metodo: string; corpo: unknown };
 const fetchOriginal = globalThis.fetch;
 
-function servidorFalso() {
+function servidorFalso(registros: { centiAlvo: string; descricao: string }[] = []) {
   const chamadas: Chamada[] = [];
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     const corpo = init?.body ? JSON.parse(String(init.body)) : null;
@@ -65,7 +65,7 @@ function servidorFalso() {
     const resp = (j: unknown) => new Response(JSON.stringify(j), { status: 200, headers: { "content-type": "application/json" } });
     if (String(url).endsWith("/execucoes") && init?.method === "POST") return resp({ ok: true, id: 7 });
     if (String(url).includes("/autorizar")) return resp({ ok: true, token: "t" });
-    if (String(url).includes("/registros") && (init?.method ?? "GET") === "GET") return resp({ ok: true, registros: [] });
+    if (String(url).includes("/registros") && (init?.method ?? "GET") === "GET") return resp({ ok: true, registros: registros.map((r) => ({ centiDocumento: "77", criadoEm: null, usuarioNome: "A", ...r })) });
     return resp({ ok: true });
   }) as typeof fetch;
   return chamadas;
@@ -176,6 +176,22 @@ describe("executarDfds — o passo REAL de cada linha e a execução sempre fina
     assert.deepEqual({ ok: fim.ok, ja: fim.ja }, { ok: 0, ja: 1 });
   });
 
+  it("a CENTI decide o 'já estava': registrado no sistema mas ausente no protocolo = enviado de novo (sem o jaFeito)", async () => {
+    const chamadas = servidorFalso([{ centiAlvo: "9", descricao: "PLANEJAMENTO 101" }, { centiAlvo: "9", descricao: "PLANEJAMENTO 102" }]);
+    const p = plano(2);
+    const docs = [{ descricao: "Planejamento 102", sequencial: "61", id: "5001" }];
+    const m = montar({ pedirExt: (acao) => (acao === "protocolo" ? { ok: true, protocolo: { id: "9", numero: "156844", ano: "2026", assunto: "", descricao: "", documentos: 1, docs } } : undefined) });
+    for (const a of p) for (const t of a.partes) m.linhas.set(t.chave, { ...t, estado: "fila" });
+    const fim = await executarDfds(p, saida, alvo, m.d);
+    assert.equal(m.linhas.get("k1")?.estado, "ok", "registrado mas ausente na Centi: anexado de novo");
+    assert.equal(m.linhas.get("k2")?.estado, "ja");
+    assert.match(m.linhas.get("k2")?.erro ?? "", /Já está no protocolo da Centi \(documento 61\)/);
+    assert.deepEqual({ ok: fim.ok, ja: fim.ja }, { ok: 1, ja: 1 });
+    const aut = chamadas.filter((c) => c.url.includes("/autorizar"));
+    assert.equal(aut.length, 1);
+    assert.equal((aut[0].corpo as { ausenteNaCenti?: boolean }).ausenteNaCenti, true, "o registro não impede reenviar o que a Centi não tem");
+  });
+
   it("interromper: as linhas em curso/na fila viram 'interrompido' e a execução é CANCELADA", async () => {
     const chamadas = servidorFalso();
     const p = plano(3);
@@ -265,5 +281,27 @@ describe("reconciliação: execução ABANDONADA vira 'falhou' (nunca 'rodando' 
     db.exec("INSERT INTO automacao_passos (execucao_id, ordem, chave, capacidade) VALUES (2, 1, 'b', 'anexar')");
     await orm.batch([comandoAtualizarPasso(orm, 2, "b", { estado: "executando" })] as never);
     assert.equal((db.prepare("SELECT estado FROM automacao_passos WHERE execucao_id = 2 AND chave = 'b'").get() as { estado: string }).estado, "executando");
+  });
+});
+
+describe("conferência no protocolo (o que foi anexado e o que falta)", () => {
+  it("a Centi é a verdade: anexado · falta · registrado mas ausente · sem protocolo", () => {
+    const docs = new Map<string, { descricao: string; sequencial: string; id: string }[] | { erro: string }>([
+      ["9", [{ descricao: "PMRV - PCA 2027 - (1)  - 2026", sequencial: "61", id: "5001" }]],
+      ["8", { erro: "Não abriu." }],
+    ]);
+    const arq = (nome: string, alvoId: string | null, dfds = 2) => ({ nome: `${nome}.pdf`, descricao: nome, dfds, protocolo: "156844/2026", alvoId });
+    const linhas = conferenciaAnexos(
+      [arq("pmrv - pca 2027 - (1) - 2026", "9"), arq("FME - PCA 2027 - (2) - 2026", "9", 4), arq("FMS - PCA 2027 - (3) - 2026", "9", 3), arq("X", "8"), arq("Y", null)],
+      docs,
+      new Set(["9|FMS - PCA 2027 - (3) - 2026"]),
+    );
+    assert.deepEqual(
+      linhas.map((l) => l.situacao),
+      ["anexado", "falta", "ausente", "semProtocolo", "semProtocolo"],
+    );
+    assert.equal(linhas[0].documento?.sequencial, "61");
+    assert.equal(linhas[3].erro, "Não abriu.");
+    assert.deepEqual(resumoConferencia(linhas), { arquivos: 5, anexados: 1, faltam: 1, ausentes: 1, semProtocolo: 2, dfdsFaltando: 7 });
   });
 });

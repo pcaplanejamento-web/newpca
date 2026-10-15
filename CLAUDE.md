@@ -4261,6 +4261,19 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   atualizada sem F5 — `chrome.runtime.id` morto) se cala: antes gastava o token de uso único e a nova recebia "já usada".
   No editor, **`ProblemasFluxo`** (o selo de problemas/atenções abre a lista e leva ao componente) e a Análise usa as linhas
   do Baixar/anexar (`host.dfds`, `estadoDoItem("saida.dfdsCenti")`).
+- **CONFERIR NO PROTOCOLO + A CENTI DECIDE O "JÁ ESTAVA" + NUNCA APAGAR (v1.111.0, extensão 1.25.0, protocolo 41):** o
+  `resumoProtocolo` devolve `docs [{descricao, sequencial, id}]`. **Pré-verificação** (`executarDfds`): com os documentos da
+  Centi, ELES decidem — presente = `ja` ("Já está no protocolo da Centi (documento N)"); ausente = envia, mesmo registrado no
+  sistema (`PassoAnexo.ausenteNaCenti` → o `autorizar` ignora o `jaFeito`; a extensão segue conferindo o load ao gravar);
+  sem `docs` (extensão antiga), o registro como antes. `comandoRegistrarEscrita` = upsert que só atualiza quando o documento
+  MUDA (`setWhere … IS NOT excluded`). **Conferir no protocolo** (`ConferenciaAnexos`, DS; contêiner `ConferenciaNoProtocolo`
+  em `paineis.tsx`, aba DFDs com destino na Centi): abre cada protocolo do plano (só leitura) + `jaAnexados` → núcleo puro
+  `conferenciaAnexos`/`resumoConferencia` (`automacao-dfds-estado.ts`: anexado · falta · registrado mas ausente · sem
+  protocolo) e **"Enviar os que faltam"** → `HostPainel.enviarArquivos` (confirma; roda o fluxo com
+  `config.somenteArquivos` — o `baixarDfds` filtra o plano). **NUNCA APAGAR** (extensão): `faltamGravados` recusa o protocolo
+  aberto que não traz os documentos que o último salvar devolveu nesta aba (`__pcaUltimosSalvos_v1`, sessionStorage) — o
+  salvar mandaria a lista sem eles; `conferirSalvo(r, d, antes)` = erro se algum documento sumiu e o nº é o do documento NOVO
+  (o que não estava); depois do save, o protocolo é aberto de novo e tem de trazer o documento.
 - **ESTADO REAL DE CADA DFD + EXECUÇÃO SEMPRE FINALIZADA (v1.110.0, sem migração):** núcleo puro
   **`automacao-dfds-estado.ts`** (testado — `tests/automacao-dfds-estado.test.ts`): `EstadoDfd` = em curso `emitindo` ·
   `conferindo` · `unindo` · `aguardando` (a pergunta da Centi) · `anexando` | fim `ok` · `ja` (já estava no protocolo —

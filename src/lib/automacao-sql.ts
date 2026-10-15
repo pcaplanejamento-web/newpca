@@ -134,5 +134,15 @@ export function comandoRegistrarEscrita(
     usuarioNome: string;
   },
 ) {
-  return db.insert(automacaoRegistros).values(r).onConflictDoNothing().returning({ id: automacaoRegistros.id });
+  // Reenviado (a Centi não tinha o documento): o registro passa a apontar o documento novo.
+  return db
+    .insert(automacaoRegistros)
+    .values(r)
+    .onConflictDoUpdate({
+      target: [automacaoRegistros.capacidade, automacaoRegistros.centiAlvo, automacaoRegistros.descricao],
+      set: { centiDocumento: r.centiDocumento, execucaoId: r.execucaoId, protocoloId: r.protocoloId, usuarioId: r.usuarioId, usuarioNome: r.usuarioNome },
+      // A mesma escrita de novo (o mesmo documento) não muda nada nem volta como nova.
+      setWhere: sql`${automacaoRegistros.centiDocumento} IS NOT excluded.centi_documento`,
+    })
+    .returning({ id: automacaoRegistros.id });
 }

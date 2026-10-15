@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p40";
+  const NOME = "__pcaCentiAnexo_p41";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -149,7 +149,25 @@
       descricao: texto(valor(e, "Descricao")),
       documentos: docs.length,
       descricoes: docs.map((x) => texto(valor(x, "Descricao"))),
+      // Cada documento (a conferência do que foi anexado e do que falta): descrição, nº (Sequencial) e Id.
+      docs: docs.map((x) => ({ descricao: texto(valor(x, "Descricao")), sequencial: texto(valor(x, "Sequencial")), id: texto(valor(x, "Id")) })),
     };
+  }
+
+  /** Os Ids (reais, ≠ 0) dos documentos do protocolo. */
+  function idsDocumentos(e) {
+    return (valor(e, "Documentos") ?? []).map((x) => texto(valor(x, "Id"))).filter((id) => id && id !== "0");
+  }
+
+  /** NUNCA APAGAR: o protocolo aberto tem de trazer TODOS os documentos que o último salvar devolveu (`ids`). Um protocolo
+   * devolvido sem eles (desatualizado) seria salvo SEM eles — a Centi os apagaria. Devolve o erro ou null. */
+  function faltamGravados(e, ids) {
+    if (!Array.isArray(ids) || !ids.length) return null;
+    const tem = new Set(idsDocumentos(e));
+    const faltam = ids.filter((id) => !tem.has(String(id)));
+    return faltam.length
+      ? `A Centi devolveu o protocolo SEM ${faltam.length} documento(s) que já estão nele (desatualizado) — não anexei, para não apagar nada. Recarregue a aba da Centi (F5) e confira o protocolo.`
+      : null;
   }
 
   /** O documento já anexado com a MESMA descrição (não anexa duas vezes). */
@@ -248,9 +266,17 @@
   }
 
   /** A resposta do save: só vale com Success e o documento novo de volta com Id real. */
-  function conferirSalvo(r, d) {
+  function conferirSalvo(r, d, antes = null) {
     if (r?.Success !== true) return { erro: `A Centi não gravou${mensagens(r?.Message) ? `: ${mensagens(r.Message)}` : "."}` };
-    const doc = (valor(r.Entity, "Documentos") ?? []).filter((x) => mesmaDescricao(valor(x, "Descricao"), d.descricao)).pop();
+    // Nenhum documento que estava no protocolo pode ter sumido no salvar.
+    if (antes) {
+      const sumiu = faltamGravados(r.Entity, idsDocumentos(antes));
+      if (sumiu) return { erro: "A Centi respondeu ao salvar SEM documentos que estavam no protocolo — confira o protocolo na Centi AGORA (não reenvie)." };
+    }
+    // O documento NOVO = o de mesma descrição que não estava no protocolo aberto (senão, o último de mesma descrição).
+    const velhos = new Set(antes ? idsDocumentos(antes) : []);
+    const iguais = (valor(r.Entity, "Documentos") ?? []).filter((x) => mesmaDescricao(valor(x, "Descricao"), d.descricao));
+    const doc = iguais.filter((x) => !velhos.has(texto(valor(x, "Id")))).pop() ?? iguais.pop();
     const id = texto(valor(doc, "Id"));
     if (!doc || !id || id === "0") return { erro: "A Centi respondeu, mas o documento não voltou no protocolo — confira na Centi." };
     return { sequencial: texto(valor(doc, "Sequencial")), documento: id };
@@ -688,5 +714,5 @@
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,
-    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

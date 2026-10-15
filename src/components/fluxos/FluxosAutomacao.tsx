@@ -69,7 +69,7 @@ import { tokenPx } from "../espacamento";
 import { duracaoMotionMs } from "../Modal";
 import { SombraGrade, useArrastoGrade } from "../PastasQuadros";
 import type { GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
-import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, testarAnexo } from "@/lib/automacao-dfds-motor";
+import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, previaDfds, testarAnexo } from "@/lib/automacao-dfds-motor";
 
 type Pedir = (acao: string, dados: unknown, ms: number) => Promise<Record<string, unknown> & { ok?: boolean; erro?: string; loteId?: string; interrompido?: boolean }>;
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
@@ -273,7 +273,11 @@ export function FluxosAutomacao({
       baixarDfds: async (itens: Item[], config: Record<string, unknown>) => {
         const { saida, alvo, erroAlvo } = opcoesDoNo(config);
         if (erroAlvo) return { linhas: [], erro: erroAlvo };
-        const plano = planoDosItens(itens, saida, protocolos);
+        const todo = planoDosItens(itens, saida, protocolos);
+        // "Enviar os que faltam": só os arquivos pedidos (a conferência no protocolo).
+        const so = Array.isArray(config.somenteArquivos) ? new Set(config.somenteArquivos.map(String)) : null;
+        const plano = so ? { arquivos: todo.arquivos.filter((a) => so.has(a.nome)), previa: [] as LinhaDfd[] } : todo;
+        if (so) plano.previa = previaDfds(plano.arquivos);
         if (!plano.arquivos.length) return { linhas: plano.previa as unknown as Item[], erro: "Nenhum DFD com nº de planejamento para emitir." };
         if (saida.destino === "pasta" && saida.escolherPasta && podePasta && !pastaRef.current) return { linhas: [], erro: "Escolha a pasta de destino (na aba DFDs do painel)." };
         let linhas = plano.previa;
@@ -645,6 +649,20 @@ export function FluxosAutomacao({
       executarCom: (g, itens) => {
         const f = fluxos?.find((x) => x.id === aberto);
         if (f) void executar(f, g, false, itens);
+      },
+      enviarArquivos: (g, noId, nomes) => {
+        const f = fluxos?.find((x) => x.id === aberto);
+        if (!f || !nomes.length) return;
+        void confirmar({
+          titulo: `Enviar ${nomes.length} arquivo(s) que faltam no protocolo?`,
+          texto: "O fluxo roda de novo emitindo e anexando SÓ os arquivos que não estão no protocolo da Centi. Cada anexo pede a sua confirmação na extensão, como sempre.",
+          confirmar: "Enviar os que faltam",
+        }).then((sim) => {
+          if (!sim) return;
+          // Só nesta execução: o "Baixar/anexar DFDs" limitado a estes arquivos (o fluxo salvo não muda).
+          const grafo = { ...g, nos: g.nos.map((n) => (n.id === noId ? { ...n, config: { ...n.config, somenteArquivos: nomes } } : n)) };
+          void executar(f, grafo);
+        });
       },
       orgaos: importacao.orgaos as unknown as HostPainel["orgaos"],
     }),

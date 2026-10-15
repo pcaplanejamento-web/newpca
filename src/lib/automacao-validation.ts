@@ -62,7 +62,7 @@ export const alvoAnexoSchema = z.object({
   descricao: z.string().trim().min(1).max(250),
 });
 
-export const autorizarSchema = z.object({ chave, capacidade: z.enum(CAPACIDADES_ESCRITA), alvo: alvoAnexoSchema });
+export const autorizarSchema = z.object({ chave, capacidade: z.enum(CAPACIDADES_ESCRITA), alvo: alvoAnexoSchema, ausenteNaCenti: z.boolean().optional() });
 
 export const consumirSchema = z.object({ token: z.string().regex(/^[0-9a-f]{64}$/), capacidade: z.enum(CAPACIDADES_ESCRITA), alvo: alvoAnexoSchema });
 

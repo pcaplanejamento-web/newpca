@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.111.0",
+    data: "2026-10-15",
+    titulo: "Automação: conferir no protocolo o que foi anexado e enviar o que falta",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Baixar/anexar DFDs: “Conferir no protocolo” abre o protocolo da Centi só para ler e mostra, arquivo a arquivo, o que já está anexado (com o nº do documento), o que falta e o que o sistema registrou mas a Centi não tem. “Enviar os que faltam” emite e anexa só esses.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "“Já estava” só quando o documento está de fato no protocolo da Centi: antes bastava o registro do sistema (de uma execução anterior) para o arquivo ser pulado. Registrado mas ausente na Centi agora é enviado de novo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O anexo nunca apaga documentos: o protocolo devolvido sem documentos já gravados (desatualizado) é recusado, o salvar que perde documentos vira erro e, depois de gravar, o protocolo é aberto de novo para confirmar o documento. O nº mostrado é o do documento NOVO. Atualize a extensão para a 1.25.0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.110.0",
     data: "2026-10-15",
     titulo: "Automação: o estado de cada DFD mostra o que acontece de fato",

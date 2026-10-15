@@ -43,7 +43,7 @@ import {
   cancelarAoSair,
 } from "./automacao-cliente.ts";
 import { descricaoCanonica } from "./automacao-core.ts";
-import { andamentoDfds, contagemDfds, type EstadoDfd, entidadePrevista, type LinhaDfd } from "./automacao-dfds-estado.ts";
+import { andamentoDfds, contagemDfds, type DocCenti, docsPorDescricao, type EstadoDfd, entidadePrevista, type LinhaDfd } from "./automacao-dfds-estado.ts";
 import { ZipArmazenar } from "./zip-armazenar.ts";
 
 export { andamentoDfds, contagemDfds, type EstadoDfd, type LinhaDfd };
@@ -58,7 +58,7 @@ export type RespostaExt = {
   status?: number;
   interrompido?: boolean;
   operacao?: unknown;
-  protocolo?: { id?: string; numero: string; ano: string; assunto: string; interessado?: string; descricao: string; documentos: number };
+  protocolo?: { id?: string; numero: string; ano: string; assunto: string; interessado?: string; descricao: string; documentos: number; docs?: DocCenti[] };
   jaAnexado?: boolean;
   sequencial?: string;
   documento?: string;
@@ -390,9 +390,12 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
     const porId = new Map<string, AlvoCenti>();
     for (const x of alvos.values()) porId.set(x.alvo.id, x.alvo);
     const recusados = new Map<string, string>();
+    // Os documentos de cada protocolo NA CENTI (a verdade do "já anexado" — o registro do sistema só vale sem eles).
+    const naCenti = new Map<string, Map<string, DocCenti>>();
     for (const [id, al] of porId) {
       if (d.interrompido()) break;
       const r = await d.pedir("protocolo", al, 60_000);
+      if (r.ok && r.protocolo && Array.isArray(r.protocolo.docs)) naCenti.set(id, docsPorDescricao(r.protocolo.docs));
       if (!(r.ok && r.protocolo)) recusados.set(id, r.erro ?? "Não consegui abrir o protocolo na Centi.");
       // Só pelo Id: o nº e o ano vêm da Centi (o anexo segue conferindo Id + nº). O objeto é o mesmo dos arquivos.
       else if (!al.numero) Object.assign(al, { numero: r.protocolo.numero, ano: r.protocolo.ano || null });
@@ -413,11 +416,20 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
       }
       const descricao = descricaoDoArquivo(a.nome);
       const feito = ja?.get(`${x.alvo.id}|${descricaoCanonica(descricao)}`);
-      if (feito) {
-        marcarArquivo(a, { estado: "ja", erro: `Já anexado antes${feito.documento ? ` (documento ${feito.documento})` : ""}${feito.quem ? ` por ${feito.quem}` : ""} — não emitido de novo.` });
+      const docs = naCenti.get(x.alvo.id);
+      if (docs) {
+        // A CENTI decide: está lá = não emite de novo; não está = envia (mesmo que o sistema o tenha registrado antes).
+        const doc = docs.get(descricaoCanonica(descricao));
+        if (doc) {
+          marcarArquivo(a, { estado: "ja", erro: `Já está no protocolo da Centi (documento ${doc.sequencial || doc.id || "?"}) — não emitido de novo.` });
+          continue;
+        }
+      } else if (feito) {
+        marcarArquivo(a, { estado: "ja", erro: `Registrado no sistema como anexado${feito.documento ? ` (documento ${feito.documento})` : ""}${feito.quem ? ` por ${feito.quem}` : ""} — não emitido de novo (confira no protocolo).` });
         continue;
       }
-      destinos.set(a, { passo: { chave: `arquivo-${++i}`, alvo: { ...x.alvo, descricao } }, protocoloId: x.protocoloId });
+      const ausenteNaCenti = !!(docs && feito);
+      destinos.set(a, { passo: { chave: `arquivo-${++i}`, alvo: { ...x.alvo, descricao }, ...(ausenteNaCenti ? { ausenteNaCenti } : {}) }, protocoloId: x.protocoloId });
     }
     fila = plano.filter((a) => destinos.has(a));
     if (!fila.length) return fim(false, !!erroProtocolos, erroProtocolos);

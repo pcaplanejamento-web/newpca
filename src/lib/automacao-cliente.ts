@@ -29,7 +29,9 @@ async function chamar(url: string, metodo: "POST" | "PATCH", corpo: unknown, esp
 const BASE = "/api/admin/automacao/execucoes";
 
 /** Um passo de escrita "anexar": a chave (única na execução) e o alvo exato. */
-export type PassoAnexo = { chave: string; alvo: AlvoAnexo };
+/** `ausenteNaCenti` = o sistema registrou o anexo, mas o protocolo da Centi NÃO o tem — o registro não impede reenviar
+ * (a extensão segue conferindo o protocolo na hora de gravar). */
+export type PassoAnexo = { chave: string; alvo: AlvoAnexo; ausenteNaCenti?: boolean };
 
 /** Cria a execução da receita com os passos e a põe RODANDO. */
 export async function iniciarExecucao(
@@ -76,7 +78,7 @@ export async function autorizarEscrita(
   execucaoId: number,
   passo: PassoAnexo,
 ): Promise<{ token: string } | { jaFeito: true; centiDocumento: string | null } | { erro: string }> {
-  const r = await chamar(`${BASE}/${execucaoId}/autorizar`, "POST", { chave: passo.chave, capacidade: "anexar", alvo: passo.alvo });
+  const r = await chamar(`${BASE}/${execucaoId}/autorizar`, "POST", { chave: passo.chave, capacidade: "anexar", alvo: passo.alvo, ...(passo.ausenteNaCenti ? { ausenteNaCenti: true } : {}) });
   if (!r.ok) return { erro: r.erro };
   if (r.jaFeito) return { jaFeito: true, centiDocumento: typeof r.centiDocumento === "string" ? r.centiDocumento : null };
   return typeof r.token === "string" ? { token: r.token } : { erro: "O sistema não devolveu a autorização." };

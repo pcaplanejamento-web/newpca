@@ -126,7 +126,7 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.21.0"), false);
   assert.equal(versaoAtende("1.22.0"), false);
   assert.equal(versaoAtende("1.23.0"), false);
-  assert.equal(versaoAtende("1.24.0"), true);
+  assert.equal(versaoAtende("1.25.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -396,6 +396,24 @@ test("anexo: não repete a mesma descrição e só confirma com o documento de v
   assert.match(A.conferirSalvo({ Success: true, Entity: protocoloCenti([]).Entity }, PEDIDO).erro, /não voltou/);
   const zero = protocoloCenti([{ ...docCenti("0", PEDIDO.descricao, null), Fields: [{ Key: "Descricao", Value: PEDIDO.descricao }, { Key: "Id", Value: "0" }] }]);
   assert.match(A.conferirSalvo({ Success: true, Entity: zero.Entity }, PEDIDO).erro, /não voltou/);
+});
+
+test("anexo: NUNCA apaga — protocolo desatualizado é recusado e o salvar que perde documentos é erro", async () => {
+  const A = await pecasAnexo();
+  const antes = protocoloCenti([docCenti("1", "A", null), docCenti("2", "B", null)]);
+  assert.deepEqual(A.idsDocumentos(antes.Entity), ["545231", "545232"]);
+  // O último salvar devolveu 545231, 545232 e 545233: um load sem o 545233 está desatualizado.
+  assert.match(A.faltamGravados(antes.Entity, ["545231", "545232", "545233"]), /SEM 1 documento/);
+  assert.equal(A.faltamGravados(antes.Entity, ["545231"]), null);
+  assert.equal(A.faltamGravados(antes.Entity, undefined), null);
+  // O salvar que devolve o protocolo SEM um documento que estava nele = erro (nunca "anexado").
+  const perdeu = protocoloCenti([docCenti("2", "B", null), docCenti("3", PEDIDO.descricao, null)]);
+  assert.match(A.conferirSalvo({ Success: true, Entity: perdeu.Entity }, PEDIDO, antes.Entity).erro, /SEM documentos/);
+  // O documento NOVO = o que não estava (o nº dele, não o de um antigo de mesma descrição).
+  const repetido = protocoloCenti([docCenti("1", PEDIDO.descricao, null)]);
+  const salvo = protocoloCenti([docCenti("1", PEDIDO.descricao, null), docCenti("7", PEDIDO.descricao, null)]);
+  assert.deepEqual(A.conferirSalvo({ Success: true, Entity: salvo.Entity }, PEDIDO, repetido.Entity), { sequencial: "7", documento: "545237" });
+  assert.deepEqual(A.resumoProtocolo(salvo.Entity).docs[1], { descricao: PEDIDO.descricao, sequencial: "7", id: "545237" });
 });
 
 test("anexo: o tipo vai como a tela da Centi manda (o registro do tipo carregado)", async () => {

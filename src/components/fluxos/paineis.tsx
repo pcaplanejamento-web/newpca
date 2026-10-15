@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { AlvoCenti, ProtocoloAutomacao } from "@/lib/automacao-centi-core";
-import { type EstadoDfd, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
+import { type AlvoCenti, type ArquivoSaida, alvoDoArquivo, descricaoDoArquivo, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { jaAnexados } from "@/lib/automacao-cliente";
+import { conferenciaAnexos, type DocCenti, type EstadoDfd, type LinhaConferencia, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, type Grafo, type Item, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
@@ -18,6 +19,7 @@ import { IconAlert, IconCheck, IconPastaAberta, IconPlay, IconSearch } from "../
 import { SeletorMultiplo } from "../SeletorMultiplo";
 import { type AberturaItem, aceitaItensDeFora } from "@/lib/fluxo-tipo-item";
 import { AnaliseDfds, type GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
+import { ConferenciaAnexos } from "./ConferenciaAnexos";
 import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 
 /*
@@ -58,6 +60,8 @@ export type HostPainel = {
   previas: Record<string, { carregando: boolean; erro?: string; itens?: Item[] }>;
   /** Executa o fluxo aberto (o grafo da tela) SÓ com estes itens — os selecionados numa tabela de resultado. */
   executarCom: (grafo: Grafo, itens: Item[]) => void;
+  /** Executa o fluxo aberto com o "Baixar/anexar DFDs" (`no`) limitado a ESTES arquivos (os que faltam no protocolo). */
+  enviarArquivos: (grafo: Grafo, no: string, nomes: string[]) => void;
   /** `incluir` = o próprio nó também roda (a visão de um nó que lê, ex.: Ler do sistema). */
   carregarPrevia: (grafo: Grafo, no: string, incluir?: boolean) => void;
   /** Os órgãos cadastrados (o campo "Órgãos (ID na Centi)" escolhe entre os que têm o ID). */
@@ -417,7 +421,7 @@ function colunasGenericas(itens: Item[]): Column<Item>[] {
 
 // ---------------------------------------------------------------- TESTAR O PROTOCOLO (Baixar/anexar → Protocolo indicado)
 /** O protocolo que a Centi devolveu no "Testar protocolo". */
-export type ProtocoloCenti = { id?: string; numero: string; ano: string; assunto: string; interessado?: string; descricao: string; documentos: number };
+export type ProtocoloCenti = { id?: string; numero: string; ano: string; assunto: string; interessado?: string; descricao: string; documentos: number; docs?: DocCenti[] };
 
 /**
  * "Testar protocolo" do componente Baixar/anexar DFDs (destino Protocolo indicado): abre o protocolo na Centi SÓ PARA LER
@@ -484,11 +488,12 @@ function VistaDfds({ no, grafo }: PropsVisao) {
     setChecagem({ carregando: true });
     setChecagem({ texto: await host.testarAnexo(alvo, saida.tipoDocumento) });
   };
-  const previa = useMemo(() => {
-    if (!host) return [];
+  const plano = useMemo(() => {
+    if (!host) return null;
     const itens = anteriores(grafo, no.id).flatMap((n) => itensDoNo(grafo, n, host));
-    return planoDosItens(itens, saida, host.protocolos).previa;
+    return planoDosItens(itens, saida, host.protocolos);
   }, [host, grafo, no.id, saida]);
+  const previa = plano?.previa ?? [];
   if (!host) return null;
   const destino = saida.destino === "pasta" ? null : saida.destino === "proprio" ? "protocolo de cada DFD" : alvo ? (alvo.numero ? `Protocolo ${alvo.numero}${alvo.ano ? `/${alvo.ano}` : ""}` : `Protocolo de Id ${alvo.id}`) : "protocolo da Centi";
   return (
@@ -508,11 +513,69 @@ function VistaDfds({ no, grafo }: PropsVisao) {
           {checagem?.texto && <span className="min-w-0 flex-1 text-xs text-muted">{checagem.texto}</span>}
         </div>
       )}
+      {saida.destino !== "pasta" && <ConferenciaNoProtocolo arquivos={plano?.arquivos ?? []} no={no} grafo={grafo} />}
       <AnaliseDfds linhas={host.dfds ?? previa} rodando={host.rodando} destino={destino} />
     </div>
   );
 }
 
+/**
+ * "Conferir no protocolo": abre cada protocolo da Centi do plano (só leitura) e confere, arquivo a arquivo, o que JÁ está
+ * anexado (com o nº do documento), o que falta e o que o sistema registrou mas a Centi não tem — e "Enviar os que faltam"
+ * executa o fluxo só com eles. A Centi é a verdade.
+ */
+function ConferenciaNoProtocolo({ arquivos, no, grafo }: { arquivos: ArquivoSaida[]; no: NoFluxo; grafo: Grafo }) {
+  const host = useHost();
+  const { saida, alvo, erroAlvo } = opcoesDoNo(no.config);
+  const [estado, setEstado] = useState<{ carregando?: boolean; linhas?: LinhaConferencia[]; erro?: string } | null>(null);
+  if (!host) return null;
+  const conferir = async () => {
+    if (!arquivos.length) return setEstado({ erro: "Nenhum arquivo no plano — carregue a seleção (ou execute o fluxo) antes de conferir." });
+    setEstado({ carregando: true });
+    // O protocolo da Centi de cada arquivo (o indicado, ou o de onde vieram os DFDs).
+    const lista = arquivos.map((a) => {
+      const x = saida.destino === "proprio" ? alvoDoArquivo(a, host.protocolos) : alvo ? { alvo } : { erro: erroAlvo ?? "Informe o Id do protocolo." };
+      return { a, alvo: "alvo" in x ? x.alvo : null, erro: "erro" in x ? x.erro : undefined };
+    });
+    const docs = new Map<string, DocCenti[] | { erro: string }>();
+    const numeros = new Map<string, string>();
+    for (const x of lista) {
+      if (!x.alvo || docs.has(x.alvo.id)) continue;
+      const r = await host.conferirAlvo(x.alvo);
+      if ("erro" in r) docs.set(x.alvo.id, { erro: r.erro });
+      else if (!Array.isArray(r.protocolo.docs)) docs.set(x.alvo.id, { erro: "Atualize a extensão (1.25.0) para conferir os documentos do protocolo." });
+      else {
+        docs.set(x.alvo.id, r.protocolo.docs);
+        numeros.set(x.alvo.id, `${r.protocolo.numero}${r.protocolo.ano ? `/${r.protocolo.ano}` : ""}`);
+      }
+    }
+    const reg = await jaAnexados([...docs.keys()]);
+    const registros = new Set(reg ? [...reg.keys()] : []);
+    const linhas = conferenciaAnexos(
+      lista.map((x) => ({
+        nome: x.a.nome,
+        descricao: descricaoDoArquivo(x.a.nome),
+        dfds: x.a.partes.length,
+        protocolo: x.alvo ? (numeros.get(x.alvo.id) ?? x.alvo.numero ?? x.alvo.id) : "",
+        alvoId: x.alvo?.id ?? null,
+        erro: x.erro,
+      })),
+      docs,
+      registros,
+    );
+    setEstado({ linhas, erro: reg ? undefined : "Não consegui ler o registro do sistema — a coluna “No sistema” pode estar incompleta." });
+  };
+  return (
+    <ConferenciaAnexos
+      linhas={estado?.linhas ?? null}
+      carregando={!!estado?.carregando}
+      erro={estado?.erro}
+      desabilitado={host.rodando}
+      onConferir={() => void conferir()}
+      onEnviar={(nomes) => host.enviarArquivos(grafo, no.id, nomes)}
+    />
+  );
+}
 // ---------------------------------------------------------------- PROTOCOLOS LIDOS (Ler protocolo)
 const DOC: Record<string, { rotulo: string; tom: Tone }> = {
   ok: { rotulo: "Lido", tom: "emerald" },
