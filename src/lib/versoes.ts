@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.97.1",
+    data: "2026-10-15",
+    titulo: "Menu recolhido: separadores e animação",
+    mudancas: [
+      { tipo: "melhoria", area: "Menu", texto: "Com o menu recolhido, o nome de cada módulo vira uma linha curta que separa os grupos de ícones. Ao abrir e recolher, os textos acompanham a largura com reticências e entram deslizando, numa curva mais suave.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.97.0",
     data: "2026-10-15",
     titulo: "Menu lateral recolhível",

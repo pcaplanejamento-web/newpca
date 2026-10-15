@@ -103,9 +103,11 @@ function NavLinks({
     <div className="flex flex-col gap-4">
       {secoesVisiveis(admin, modulos).map((secao) => (
         <div key={secao.chave}>
-          <p className="menu-esconde mb-1.5 whitespace-nowrap px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
-            {secao.titulo}
-          </p>
+          {/* Recolhido, o título vira uma linha curta centrada no trilho (o separador do módulo). */}
+          <div className="relative mb-1.5">
+            <p className="menu-esconde truncate px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">{secao.titulo}</p>
+            <span aria-hidden="true" className="menu-linha pointer-events-none absolute left-[10px] top-1/2 h-px w-6 bg-border-2" />
+          </div>
           <nav className="flex flex-col gap-0.5">
             {secao.itens.map((item) => {
               const active = itemAtivo(pathname, item);
@@ -125,7 +127,7 @@ function NavLinks({
                     className={`h-[17px] w-[17px] shrink-0 ${active ? "text-accent" : ""}`}
                     strokeWidth={1.8}
                   />
-                  <span className="menu-esconde">{item.label}</span>
+                  <span className="menu-esconde min-w-0 truncate">{item.label}</span>
                 </Link>
               );
             })}
@@ -504,7 +506,7 @@ export function AppShell({
           onPointerLeave={() => setSemPeek(false)}
           className="menu-lateral absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-surface"
         >
-          <div className="flex h-full w-64 shrink-0 flex-col">
+          <div className="flex h-full w-full min-w-0 flex-col">
             {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
             <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
               <Brand identidade={identidade} />
