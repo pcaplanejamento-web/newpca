@@ -3,7 +3,9 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { campoVisivel, type Grafo, type Item, type NoFluxo, nomeDoNo, type PassoExec, type ResultadoExec } from "@/lib/fluxo-core";
 import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
+import { contagemDfds } from "@/lib/automacao-dfds-estado";
 import { dataHoraBR } from "@/lib/format";
+import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
 import { useAlturaTela } from "../AlturaCheia";
 import { Badge, type Tone } from "../Badge";
 import { type Column, DataTable } from "../DataTable";
@@ -13,6 +15,7 @@ import { StatMini } from "../StatMini";
 import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
+import { useEstimativa } from "./useEstimativa";
 import { CampoDoNo } from "./PainelNo";
 import { estadoDoItem, HostPainelCtx, rotuloItem, TesteProtocoloCenti, useExecutarSelecionados, VISOES } from "./paineis";
 
@@ -83,6 +86,17 @@ export function PainelFluxo({
   }, [rodando, visoes]);
 
   const feitas = etapas.filter((n) => ["ok", "erro", "ignorado"].includes(passos[n.id]?.estado ?? "")).length;
+  // O progresso REAL: cada etapa pesa o trabalho que faz (o Baixar/anexar = os DFDs) e a em curso conta pela fração medida.
+  const dfds = host?.dfds ? contagemDfds(host.dfds) : null;
+  const medida = (n: NoFluxo) => (n.tipo === "saida.dfdsCenti" && dfds && dfds.total ? { feito: dfds.concluidas, total: dfds.total } : null);
+  const fracao = progressoFluxo(
+    etapas.map((n) => {
+      const m = medida(n);
+      return { estado: passos[n.id]?.estado, fracao: m ? m.feito / m.total : null, peso: m ? m.total : 1 };
+    }),
+  );
+  const restante = useEstimativa(fracao, rodando);
+  const terminou = !rodando && etapas.length > 0 && feitas === etapas.length;
   const atual = etapas.find((n) => passos[n.id]?.estado === "rodando");
   const noAberto = visoes.find((n) => n.id === abaValida);
   const Visao = noAberto ? VISOES[noAberto.tipo].Componente : null;
@@ -123,31 +137,41 @@ export function PainelFluxo({
             <h3 id="fluxo-etapas" className="text-sm font-semibold text-text">
               Etapas
             </h3>
-            <span className="text-xs tabular-nums text-muted">
+            <span className="text-xs tabular-nums text-muted" aria-live="polite">
+              {rodando || terminou ? `${textoPct(fracao, terminou)} · ` : ""}
               {feitas}/{etapas.length}
             </span>
           </div>
-          {rodando && <Progress value={(feitas / Math.max(1, etapas.length)) * 100} />}
+          {(rodando || terminou) && <Progress value={terminou ? 100 : fracao * 100} />}
+          {rodando && <p className="mt-1 text-xs tabular-nums text-muted">{restante == null ? "Calculando o tempo restante…" : `Termina em ${textoDuracao(restante)}`}</p>}
           <ol className="mt-2 space-y-1.5">
             {etapas.map((n) => {
               const def = REGISTRO_NOS.get(n.tipo);
               const p = passos[n.id];
               const e = p ? ESTADO[p.estado] : null;
               const vivos = host?.parciais[n.id]?.length ?? 0;
+              const m = medida(n);
               return (
-                <li key={n.id} className="flex items-start gap-2">
+                <li key={n.id} className={`flex items-start gap-2 rounded-md ${p?.estado === "rodando" ? "-mx-1 bg-[color-mix(in_oklab,var(--accent)_8%,transparent)] px-1 py-0.5" : ""}`}>
                   <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-white" style={{ background: def ? corCategoria(def.categoria) : "var(--muted)" }}>
                     <IconeNo nome={def?.icone ?? "alert"} className="size-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-[13px] text-text">{def?.rotulo ?? n.tipo}</span>
-                      {p && p.estado !== "fila" && <span className="text-xs tabular-nums text-muted">{p.estado === "rodando" && vivos ? vivos : p.itens}</span>}
+                      {p?.estado === "rodando" && m ? (
+                        <span className="text-xs tabular-nums text-muted">
+                          {m.feito}/{m.total}
+                        </span>
+                      ) : (
+                        p && p.estado !== "fila" && <span className="text-xs tabular-nums text-muted">{p.estado === "rodando" && vivos ? vivos : p.itens}</span>
+                      )}
                       {e && <Badge tone={e.tom}>{e.rotulo}</Badge>}
                       {def && <AjudaNo def={def} />}
                     </div>
                     {p?.estado === "erro" && <p className="text-xs text-[var(--danger)]">{p.erro}</p>}
-                    {p?.estado === "rodando" && p.aviso && <p className="truncate text-xs text-muted">{p.aviso}</p>}
+                    {p?.estado === "rodando" && m && <div className="mt-1"><Progress value={(m.feito / m.total) * 100} /></div>}
+                    {p?.estado === "rodando" && (dfds?.atual ? <p className="truncate text-xs text-muted">Agora: Planej. {dfds.atual.id}{dfds.atual.dfd ? ` · DFD ${dfds.atual.dfd}` : ""}</p> : p.aviso && <p className="truncate text-xs text-muted">{p.aviso}</p>)}
                   </div>
                 </li>
               );

@@ -682,8 +682,11 @@ export function FluxosAutomacao({
           resultado={exec?.id === fluxo.id ? resultado : null}
           onVoltar={() => {
             setAberto(null);
-            setPassos({});
-            setResultado(null);
+            // Em execução, as etapas seguem (voltar ao fluxo mostra o andamento real, não "0/3").
+            if (rodando !== fluxo.id) {
+              setPassos({});
+              setResultado(null);
+            }
           }}
           onSalvo={(f) => setFluxos((fs) => fs?.map((x) => (x.id === f.id ? f : x)) ?? fs)}
           onExecutar={(g) => void executar(fluxo, g)}

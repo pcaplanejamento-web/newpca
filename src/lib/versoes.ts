@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.112.0",
+    data: "2026-10-15",
+    titulo: "Automação: andamento ao vivo com % e tempo restante",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Etapas acompanham a execução em tempo real: a % de conclusão pelo trabalho real (cada DFD conta), o tempo estimado para terminar pelo ritmo dos últimos minutos, a etapa em curso destacada com “n de N” e o DFD que está sendo tratado agora.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Análise dos DFDs: cada protocolo/unidade recolhe sozinho quando termina (com “Concluído” ou as falhas), a lista rola suave até o que está em curso e você pode abrir/fechar qualquer grupo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Voltar à lista e abrir de novo o fluxo em execução não zera mais as etapas (“0/3”) — o andamento continua à vista.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.111.0",
     data: "2026-10-15",
     titulo: "Automação: conferir no protocolo o que foi anexado e enviar o que falta",

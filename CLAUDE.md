@@ -4261,6 +4261,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   atualizada sem F5 — `chrome.runtime.id` morto) se cala: antes gastava o token de uso único e a nova recebia "já usada".
   No editor, **`ProblemasFluxo`** (o selo de problemas/atenções abre a lista e leva ao componente) e a Análise usa as linhas
   do Baixar/anexar (`host.dfds`, `estadoDoItem("saida.dfdsCenti")`).
+- **ANDAMENTO AO VIVO (v1.112.0, sem migração):** núcleo puro **`fluxo-progresso.ts`** (testado): `progressoFluxo` = a % pelo
+  TRABALHO de cada etapa (peso = itens; o Baixar/anexar pesa os DFDs — `contagemDfds`), `registrarAmostra`/`tempoRestanteMs`
+  (o ritmo das amostras dos últimos 2 min — `JANELA_RITMO_MS`; sem 5 s e 0,5% de avanço = "Calculando…"), `textoDuracao`,
+  `textoPct` (nunca 100% antes do fim); hook **`useEstimativa`** (`fluxos/`). Etapas do `PainelFluxo`: % · n/N · "Termina em ≈
+  X" · a etapa em curso destacada com a barra própria e "Agora: Planej. …". `AnaliseDfds`: % + tempo restante; cada grupo
+  (pasta) é um botão que abre/fecha — concluído RECOLHE sozinho (a escolha da pessoa vale mais), o em curso destacado e a lista
+  rola suave (só ela; "reduzir movimento" = sem deslizar) até ele. Voltar do editor com a execução em curso não zera as etapas.
 - **CONFERIR NO PROTOCOLO + A CENTI DECIDE O "JÁ ESTAVA" + NUNCA APAGAR (v1.111.0, extensão 1.25.0, protocolo 41):** o
   `resumoProtocolo` devolve `docs [{descricao, sequencial, id}]`. **Pré-verificação** (`executarDfds`): com os documentos da
   Centi, ELES decidem — presente = `ja` ("Já está no protocolo da Centi (documento N)"); ausente = envia, mesmo registrado no
