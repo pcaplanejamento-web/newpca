@@ -1214,6 +1214,10 @@ html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:f
   opacity: 1; transform: none; transition-delay: 80ms, 0ms;
 }
 html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-cartao { border-color: transparent; }
+/* No Windows a barra de rolagem é FIXA (~17px) e cortava os botões no trilho de 60px: recolhido, ela some (a roda/toque
+   seguem rolando); aberto, volta a nativa. */
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-rolagem { scrollbar-width: none; }
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-rolagem::-webkit-scrollbar { display: none; }
 html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:focus-visible)) {
   width: 16rem; box-shadow: var(--sombra-flutuante); transition-delay: 100ms;
 }

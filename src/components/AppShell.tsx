@@ -551,7 +551,7 @@ export function AppShell({
             <div className="shrink-0 px-2 pt-[var(--pad-canvas-y)] pb-[var(--gap-block)]">
               <GatilhoPesquisa />
             </div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-0 pb-4">
+            <div className="menu-rolagem flex-1 overflow-y-auto overflow-x-hidden px-2 pt-0 pb-4">
               <NavLinks admin={usuario.admin} modulos={modulos} />
             </div>
             <div className="p-2 pt-0">

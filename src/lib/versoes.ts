@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.3",
+    data: "2026-10-15",
+    titulo: "Menu recolhido sem cortes no Windows",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Com o menu recolhido, os botões não ficam mais cortados no Windows: a barra de rolagem some no trilho (a rolagem continua) e volta ao abrir o menu.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.107.2",
     data: "2026-10-15",
     titulo: "Seletores do cabeçalho sem cortes e navegação mais rápida",
