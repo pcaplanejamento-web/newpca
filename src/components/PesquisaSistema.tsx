@@ -48,9 +48,9 @@ const ICONE_TIPO: Record<string, Icone> = {
 
 /** As DICAS — o prefixo (ou o atalho) restringe a pesquisa a um tipo; Tab completa. */
 const DICAS: { prefixo: string; curto: string; tipo: TipoVinculo | "tela" | "aba"; texto: string }[] = [
-  { prefixo: "protocolo:", curto: "p:", tipo: "protocolo", texto: "Protocolos (nº, Id, assunto)" },
-  { prefixo: "dfd:", curto: "d:", tipo: "dfd", texto: "DFDs (nº, planejamento, objeto)" },
-  { prefixo: "item:", curto: "i:", tipo: "item", texto: "Itens dos DFDs (descrição, código)" },
+  { prefixo: "protocolo:", curto: "p:", tipo: "protocolo", texto: "Protocolos (nº, Id, assunto, interessado)" },
+  { prefixo: "dfd:", curto: "d:", tipo: "dfd", texto: "DFDs (nº, planejamento, objeto, protocolo)" },
+  { prefixo: "item:", curto: "i:", tipo: "item", texto: "Itens (código, descrição)" },
   { prefixo: "tarefa:", curto: "t:", tipo: "tarefa", texto: "Tarefas (título, nº do ticket)" },
   { prefixo: "pca:", curto: "pc:", tipo: "pca", texto: "PCAs" },
   { prefixo: "orcamento:", curto: "o:", tipo: "orcamento", texto: "Orçamentos" },
@@ -205,7 +205,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
 
   const { tipo, termo } = lerConsulta(texto);
   const tiposServidor: TipoVinculo[] =
-    tipo === "tela" || tipo === "aba" || tipo === "pca" ? [] : tipo ? [tipo] : ["protocolo", "dfd", "tarefa", "orcamento"];
+    tipo === "tela" || tipo === "aba" || tipo === "pca" ? [] : tipo ? [tipo] : ["protocolo", "dfd", "item", "tarefa", "orcamento"];
 
   // Servidor: um pedido 250 ms depois da última tecla; a resposta antiga não sobrescreve a nova.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tiposServidor` sai de `tipo`; `tentativa` refaz após falha.
@@ -222,7 +222,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     const t = setTimeout(async () => {
       try {
         const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${tiposServidor.join(",")}&limite=${tipo ? 30 : 5}`);
-        const j = (await r.json()) as { ok?: boolean; grupos?: { tipo: TipoVinculo; total: number; opcoes: { id: number; rotulo: string; detalhe: string }[] }[] };
+        const j = (await r.json()) as { ok?: boolean; grupos?: { tipo: TipoVinculo; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] }[] };
         if (!r.ok || !j.ok) throw new Error();
         if (!vivo) return;
         setRemotos(
@@ -235,7 +235,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
                 chave: `${g.tipo}:${o.id}`,
                 rotulo: o.rotulo,
                 detalhe: o.detalhe || undefined,
-                href: g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo, id: o.id }),
+                href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo, id: o.id })),
                 tipo: g.tipo,
               }))
               .sort((a, b) => Number(numeroExato(b.rotulo, termo)) - Number(numeroExato(a.rotulo, termo))),

@@ -25,6 +25,8 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   // `?pca=<id>` = a MESA DAQUELE PCA (a mesma da aba do espaço), escolhida no seletor da barra; PCA inexistente ou de
   // lista = a Mesa do sistema. Cada uma com o seu portão: a Mesa do PCA exige VISUALIZAR o PCA; a do sistema, a Mesa.
+  const alvo = lerVinculo(sp.abrir);
+  const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
   const idPca = Number(sp.pca);
   const pca = Number.isInteger(idPca) && idPca > 0 ? await getPcaEspaco(idPca) : null;
   if (pca && pca.fonte === "protocolo") {
@@ -33,14 +35,12 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
     if (!podePca(rp.acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
     const mp = await carregarMesaDoPca(rp.acesso.u, pca);
     return (
-      <MesaPca key={pca.id} {...mp} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas, pcasDoAcesso(rp.acesso))} atual={pca.id} sistema={mp.pode.sistema.visualizar} />} />
+      <MesaPca key={pca.id} {...mp} abrirInicial={abrirInicial} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas, pcasDoAcesso(rp.acesso))} atual={pca.id} sistema={mp.pode.sistema.visualizar} />} />
     );
   }
   const r = await acessoPagina("dfd");
   if (r.bloqueio) return r.bloqueio;
   const m = await carregarMesa(r.acesso.u);
-  const alvo = lerVinculo(sp.abrir);
-  const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
   // `?responsavel=<id>` (o "Ver na Mesa" da presença): abre filtrada pela pessoa — só para quem vê o Responsável.
   const resp = Number(sp.responsavel);
   const filtroInicial = m.verResponsavel && Number.isInteger(resp) && resp > 0 ? { ...m.filtroInicial, responsavel: resp } : m.filtroInicial;

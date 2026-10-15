@@ -297,7 +297,11 @@ export function DfdsView({
   const [aberto, setAberto] = useState<AberturaMesa | null>(abrirInicial);
   // O `?abrir=` já foi usado: sai da URL (recarregar não reabre o banner), sem nova renderização.
   useEffect(() => {
-    if (abrirInicial) window.history.replaceState(window.history.state, "", window.location.pathname);
+    if (!abrirInicial) return;
+    // Só o `abrir` sai: o `?pca=` (a Mesa daquele PCA) fica.
+    const u = new URL(window.location.href);
+    u.searchParams.delete("abrir");
+    window.history.replaceState(window.history.state, "", u.pathname + u.search);
   }, [abrirInicial]);
   const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string; protocoloId: number | null } | null>(null);
   const [vincSel, setVincSel] = useState<number | null>(null);

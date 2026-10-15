@@ -2536,3 +2536,113 @@ export async function importarVinculos(quadroId: number, pares: { de: number; pa
   }
   return validos.length;
 }
+
+/** Um resultado da PESQUISA DO SISTEMA com o link que a pessoa PODE abrir. */
+export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; href: string };
+
+/**
+ * A PESQUISA DO SISTEMA de protocolos, DFDs e itens: casa nº/Id/assunto/interessado do protocolo, nº/planejamento/objeto
+ * do DFD (e o protocolo dele) e código/descrição do item — no escopo de unidades e nas LINHAS da pessoa. Cada linha só sai
+ * quando a pessoa ABRE a Mesa em que ela está: num PCA, Visualizar o PCA e o PCA no grupo (`/painel/mesa?pca=`); fora,
+ * Visualizar a Mesa do sistema. O link já leva a essa Mesa.
+ */
+export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q: string, limite: number): Promise<ResultadoPesquisa[]> {
+  const db = getDb();
+  const u = a.u;
+  const termo = `%${q.trim().replace(/[%_]/g, "")}%`;
+  const { escopo: esc } = await unidadesDaSessao(u);
+  const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
+    esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
+  const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";
+  const veSistema = podeTela(a, "dfd").visualizar;
+  const vePca = podeTela(a, "pca").visualizar;
+  const permitidos = (() => {
+    if (u.admin) return null;
+    const l = a.grupoAtivo?.pcas;
+    return l == null ? null : new Set(l);
+  })();
+  if (!veSistema && !vePca) return [];
+  // Só as Mesas que a pessoa abre — já no SQL (o limite vale sobre o que ela vê).
+  const naMesa = and(
+    veSistema ? undefined : sql`${dfdProtocolos.pcaId} IS NOT NULL`,
+    vePca ? (permitidos ? or(sql`${dfdProtocolos.pcaId} IS NULL`, inArray(dfdProtocolos.pcaId, [...permitidos, 0].slice(0, 90))) : undefined) : sql`${dfdProtocolos.pcaId} IS NULL`,
+  );
+  const link = (pcaId: number | null, alvo: string) => (pcaId ? `/painel/mesa?pca=${pcaId}&abrir=${alvo}` : `/painel/mesa?abrir=${alvo}`);
+  const LIM = Math.min(50, limite);
+  if (tipo === "protocolo") {
+    const ls = await db
+      .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto, pcaId: dfdProtocolos.pcaId })
+      .from(dfdProtocolos)
+      .where(
+        and(
+          or(like(dfdProtocolos.numero, termo), like(dfdProtocolos.idExterno, termo), like(dfdProtocolos.assunto, termo), like(dfdProtocolos.interessado, termo)),
+          escopo(dfdProtocolos.reparticaoId),
+          soMeus ? condMeuProtocolo(u.id) : undefined,
+          naMesa,
+        ),
+      )
+      .orderBy(desc(dfdProtocolos.id))
+      .limit(LIM);
+    return ls.map((l) => ({
+      id: l.id,
+      rotulo: `Protocolo ${l.numero}`,
+      detalhe: [l.idExterno ? `Id ${l.idExterno}` : "", l.assunto ?? ""].filter(Boolean).join(" · "),
+      href: link(l.pcaId, `protocolo:${l.id}`),
+    }));
+  }
+  if (tipo === "dfd") {
+    const ls = await db
+      .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, protocolo: dfdProtocolos.numero, pcaId: dfdProtocolos.pcaId })
+      .from(dfds)
+      .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
+      .where(
+        and(
+          or(like(dfds.numero, termo), like(dfds.planejamento, termo), like(dfds.objeto, termo), like(dfdProtocolos.numero, termo), like(dfdProtocolos.idExterno, termo)),
+          escopo(dfds.reparticaoId),
+          soMeus ? condMeuDfd(db, u.id) : undefined,
+          naMesa,
+        ),
+      )
+      .orderBy(desc(dfds.id))
+      .limit(LIM);
+    return ls.map((l) => ({
+      id: l.id,
+      rotulo: `DFD ${l.numero}${l.planejamento ? ` · Planej. ${l.planejamento}` : ""}`,
+      detalhe: [l.protocolo ? `Protocolo ${l.protocolo}` : "", l.objeto ?? ""].filter(Boolean).join(" · "),
+      href: link(l.pcaId, `dfd:${l.id}`),
+    }));
+  }
+  const ls = await db
+    .select({
+      dfdId: dfds.id,
+      numero: dfds.numero,
+      planejamento: dfds.planejamento,
+      item: dfdItens.item,
+      sequencial: dfdItens.sequencial,
+      codigo: dfdItens.codigo,
+      descricao: dfdItens.descricao,
+      pcaId: dfdProtocolos.pcaId,
+    })
+    .from(dfdItens)
+    .innerJoin(dfds, eq(dfds.id, dfdItens.dfdId))
+    .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
+    .where(
+      and(
+        or(like(dfdItens.descricao, termo), like(dfdItens.codigo, termo)),
+        escopo(dfds.reparticaoId),
+        soMeus ? condMeuDfd(db, u.id) : undefined,
+        naMesa,
+      ),
+    )
+    .orderBy(desc(dfds.id), asc(dfdItens.sequencial))
+    .limit(LIM);
+  return ls.map((l) => {
+    const n = l.item ?? l.sequencial ?? 0;
+    return {
+      id: idVinculoItem(l.dfdId, n),
+      rotulo: `${l.codigo ? `${l.codigo} · ` : ""}${(l.descricao ?? "").slice(0, 90)}`,
+      detalhe: `Item ${n} · DFD ${l.numero}${l.planejamento ? ` · Planej. ${l.planejamento}` : ""}`,
+      href: link(l.pcaId, `dfd:${l.dfdId}`),
+    };
+  });
+}

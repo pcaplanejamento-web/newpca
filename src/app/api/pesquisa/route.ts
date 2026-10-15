@@ -1,13 +1,13 @@
-import { gruposDeTarefas, podeTela } from "@/lib/acesso";
+import { gruposDeTarefas, podePca, podeTela } from "@/lib/acesso";
 import { exigirSessao } from "@/lib/api-auth";
 import { ok } from "@/lib/http";
-import { buscarVinculos } from "@/lib/tarefas";
+import { buscarVinculos, pesquisarMesa } from "@/lib/tarefas";
 import { ehTipoVinculo, type TipoVinculo } from "@/lib/tarefas-core";
 
 export const dynamic = "force-dynamic";
 
 /** Sem `tipos`, a pesquisa geral do banner. */
-const PADRAO: TipoVinculo[] = ["protocolo", "dfd", "tarefa", "orcamento"];
+const PADRAO: TipoVinculo[] = ["protocolo", "dfd", "item", "tarefa", "orcamento"];
 
 /**
  * A PESQUISA DO SISTEMA (o banner do menu, Ctrl+K): `?q=&tipos=protocolo,dfd` — os mesmos resultados da busca dos
@@ -26,7 +26,13 @@ export async function GET(req: Request) {
   if (q.length < 2) return ok({ grupos: [] });
   const grupos = await Promise.all(
     tipos.filter(visivel).map(async (tipo) => {
-      const opcoes = await buscarVinculos(a.u, tipo, q, gruposDeTarefas(a.acesso, "visualizar", true));
+      // Protocolo, DFD e item: só os da Mesa que a pessoa abre, já com o link dessa Mesa.
+      if (tipo === "protocolo" || tipo === "dfd" || tipo === "item") {
+        const opcoes = await pesquisarMesa(a.acesso, tipo, q, 50);
+        return { tipo, total: opcoes.length, opcoes: opcoes.slice(0, limite) };
+      }
+      const todas = await buscarVinculos(a.u, tipo, q, gruposDeTarefas(a.acesso, "visualizar", true));
+      const opcoes = tipo === "pca" ? todas.filter((o) => podePca(a.acesso, o.id)) : todas;
       return { tipo, total: opcoes.length, opcoes: opcoes.slice(0, limite) };
     }),
   );

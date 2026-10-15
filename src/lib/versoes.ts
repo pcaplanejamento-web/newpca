@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.102.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa só mostra o que você pode abrir",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Pesquisa",
+        texto: "Protocolos, DFDs e itens só aparecem quando você abre a Mesa em que estão; os que estão num PCA abrem na Mesa daquele PCA (antes levavam a \"Acesso restrito\").",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "Pesquise por nº de planejamento, Id ou nº do protocolo, interessado, nº do DFD, código e descrição do item.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.101.1",
     data: "2026-10-15",
     titulo: "Pesquisa mostra o caminho de cada tela e aba",
