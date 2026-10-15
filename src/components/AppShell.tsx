@@ -109,7 +109,7 @@ function NavLinks({
           {/* Recolhido, o título vira uma linha curta centrada no trilho (o separador do módulo). */}
           <div className="relative mb-1.5">
             <p className="menu-esconde truncate px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">{secao.titulo}</p>
-            <span aria-hidden="true" className="menu-linha pointer-events-none absolute left-[10px] top-1/2 h-px w-6 bg-border-2" />
+            <span aria-hidden="true" className="menu-linha pointer-events-none absolute left-[10px] top-0 h-px w-6 bg-border-2" />
           </div>
           <nav className="flex flex-col gap-0.5">
             {secao.itens.map((item) => {
@@ -545,11 +545,12 @@ export function AppShell({
             <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
               <Brand identidade={identidade} />
             </div>
-            {/* Na MESMA linha do título das telas: o respiro de cima = o do conteúdo (--pad-canvas-y). */}
-            <div className="shrink-0 px-2 py-[var(--pad-canvas-y)]">
+            {/* Alinhada ao conteúdo: em cima o respiro do conteúdo (--pad-canvas-y) e embaixo o vão entre componentes
+                (--gap-block) — o 1º módulo começa na mesma altura do 1º componente das telas. */}
+            <div className="shrink-0 px-2 pt-[var(--pad-canvas-y)] pb-[var(--gap-block)]">
               <GatilhoPesquisa />
             </div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-2 pb-4">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-0 pb-4">
               <NavLinks admin={usuario.admin} modulos={modulos} />
             </div>
             <div className="p-2 pt-0">
