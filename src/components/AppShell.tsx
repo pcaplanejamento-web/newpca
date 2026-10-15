@@ -157,7 +157,7 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
   }
 
   return (
-    <div className="menu-cartao flex items-stretch gap-1 overflow-hidden rounded-card border border-border p-0.5">
+    <div className="menu-cartao flex w-[calc(15rem-1px)] max-w-none shrink-0 items-stretch gap-1 overflow-hidden rounded-card border border-border p-0.5 max-lg:w-auto">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}
@@ -545,10 +545,11 @@ export function AppShell({
             <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
               <Brand identidade={identidade} />
             </div>
-            <div className="shrink-0 px-2 pt-3">
+            {/* Na MESMA linha do título das telas: o respiro de cima = o do conteúdo (--pad-canvas-y). */}
+            <div className="shrink-0 px-2 py-[var(--pad-canvas-y)]">
               <GatilhoPesquisa />
             </div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-4">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-2 pb-4">
               <NavLinks admin={usuario.admin} modulos={modulos} />
             </div>
             <div className="p-2 pt-0">
