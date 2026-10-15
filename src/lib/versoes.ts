@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.6",
+    data: "2026-10-15",
+    titulo: "Menu lateral com transição suave",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir e fechar o menu lateral, o conteúdo à direita estica e encolhe numa animação suave, sem pular de lugar.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.107.5",
     data: "2026-10-15",
     titulo: "Seletor de unidade organizado e imagens protegidas",

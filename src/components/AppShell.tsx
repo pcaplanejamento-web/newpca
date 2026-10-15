@@ -458,12 +458,6 @@ function semAcento(t: string): string {
 }
 
 /** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */
-/** Movimento desligado (sistema ou o ADM em Aparência). */
-function semMovimento() {
-  const m = document.documentElement.dataset.motion;
-  return m === "off" || m === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 function useUltimoValido<T>(v: T | null | undefined): T | null {
   const ref = useRef<T | null>(v ?? null);
   if (v !== undefined) ref.current = v;
@@ -518,21 +512,10 @@ export function AppShell({
   // Logo depois de recolher, o ponteiro ainda está em cima: não reabre por cima até sair e voltar.
   const [semPeek, setSemPeek] = useState(false);
   useEffect(() => setRecolhido(document.documentElement.hasAttribute(ATRIBUTO_MENU)), []);
-  const colunaRef = useRef<HTMLDivElement>(null);
   function alternarMenu() {
     const novo = !recolhido;
-    // A coluna do conteúdo muda de largura UMA vez (nada reflui a cada quadro — grades, tabelas e gráficos não pulam) e
-    // DESLIZA até o lugar novo por transform (FLIP), na mesma curva do menu.
-    const coluna = colunaRef.current;
-    const antes = coluna?.getBoundingClientRect().left ?? 0;
+    // A vaga do menu anima a largura (CSS) e o conteúdo à direita estica/encolhe junto, na mesma curva.
     document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
-    const desloca = coluna ? antes - coluna.getBoundingClientRect().left : 0;
-    if (coluna && desloca && !semMovimento()) {
-      coluna.animate([{ transform: `translateX(${desloca}px)` }, { transform: "none" }], {
-        duration: 300,
-        easing: "cubic-bezier(.32,.72,0,1)",
-      });
-    }
     try {
       localStorage.setItem(CHAVE_MENU, novo ? "1" : "0");
     } catch {
@@ -657,7 +640,7 @@ export function AppShell({
       )}
 
       {/* Coluna principal */}
-      <div ref={colunaRef} className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
           <button
             type="button"
