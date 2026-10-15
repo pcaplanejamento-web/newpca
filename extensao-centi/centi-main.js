@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 38;
+  const PROTOCOLO = 39;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -184,6 +184,16 @@
   // corpo, sem segredos) para o sistema repeti-la sem paginação, sem mexer na tela. No localStorage da Centi.
   const CM002 = "__pcaCm002_v1";
   const TELA = "__pcaTelaProtocolo_v1";
+  // Como a TELA abre um protocolo (o load aprendido — ver `loadDoProtocolo`).
+  const LOAD_PROTOCOLO = "__pcaLoadProtocolo_v1";
+  function loadAprendido() {
+    try {
+      const g = JSON.parse(localStorage.getItem(LOAD_PROTOCOLO) || "null");
+      return g && typeof g === "object" ? g : null;
+    } catch {
+      return null;
+    }
+  }
   function lembrarCm002(url, metodo, corpo, status, texto) {
     try {
       if (internos > 0 || Number(status) >= 400 || typeof texto !== "string" || !/^\s*[[{]/.test(texto)) return;
@@ -195,6 +205,11 @@
       let b = null;
       if (typeof corpo === "string" && corpo) b = JSON.parse(corpo);
       else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
+      const lp = A.loadDoProtocolo(url, m, b, j);
+      if (lp) {
+        localStorage.setItem(LOAD_PROTOCOLO, JSON.stringify({ ...lp, em: new Date().toISOString() }));
+        return;
+      }
       const forma = JSON.stringify({ metodo: m, caminho: c.caminho, corpo: b });
       const pl = A.planejamentosCm002(j);
       if (pl) {
@@ -606,18 +621,32 @@
     return A.tipoDoLoad({ Entity: lista.find((o) => o?.ModuleKey === A.MODULO_TIPO) ?? lista[0] }, d.tipo);
   }
 
-  // Abre o protocolo pelo módulo que a Centi aceitar (102907, senão 102908 — o da Tela Protocolo): só segue ao próximo
-  // quando a Centi não devolveu o protocolo; Id/número que não conferem param na hora.
+  // Abre o protocolo como a TELA o abre (o load aprendido) e, sem ele, pelos módulos fixos (102907, senão 102908 — o da
+  // Tela Protocolo): só segue ao próximo quando a Centi não devolveu o protocolo; Id/número que não conferem param na hora.
   async function abrirProtocolo(d) {
-    let ultimo = null;
-    for (const modulo of A.MODULOS_PROTOCOLO) {
-      const r = await apiCenti("GET", `restauth/load?entity=${modulo}&key=${d.id}`, null, "load do protocolo");
-      const c = A.conferirProtocolo(r, d);
+    const modelo = loadAprendido();
+    const doModelo = A.pedidoDoLoad(modelo, d.id);
+    const tentativas = [
+      ...(doModelo ? [{ rotulo: `como a tela abre (módulo ${modelo.modulo})`, ...doModelo }] : []),
+      ...A.MODULOS_PROTOCOLO.map((m) => ({ rotulo: `módulo ${m}`, metodo: "GET", caminho: `restauth/load?entity=${m}&key=${d.id}`, corpo: null })),
+    ];
+    const aceitos = doModelo ? [...A.MODULOS_PROTOCOLO, modelo.modulo] : A.MODULOS_PROTOCOLO;
+    const respostas = [];
+    for (const t of tentativas) {
+      let r;
+      try {
+        r = await apiCenti(t.metodo, t.caminho, t.corpo, "load do protocolo");
+      } catch (e) {
+        respostas.push(`${t.rotulo}: ${e?.message || "falhou"}`);
+        continue;
+      }
+      const c = A.conferirProtocolo(r, d, aceitos);
       if (!c.erro) return c.entidade;
-      ultimo = c.erro;
-      if (r?.Entity) break;
+      // A Centi devolveu um protocolo e ele não confere (outro Id/nº/ano): para na hora — nunca tenta outro caminho.
+      if (r?.Entity && aceitos.includes(r.Entity.ModuleKey) && Array.isArray(r.Entity.Fields)) throw new Error(c.erro);
+      respostas.push(`${t.rotulo}: ${A.descreverResposta(r)}`);
     }
-    throw new Error(ultimo);
+    throw new Error(A.erroSemProtocolo(d, !!doModelo, respostas));
   }
 
   // Só LEITURA: o resumo do protocolo (o "Conferir" da tela).

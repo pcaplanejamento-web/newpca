@@ -313,7 +313,7 @@ export async function executarDfds(
   saida: OpcoesSaida,
   alvo: AlvoCenti | null,
   d: DepsExecucao,
-): Promise<{ ok: number; falhas: number; interrompido: boolean; parou: boolean }> {
+): Promise<{ ok: number; falhas: number; interrompido: boolean; parou: boolean; erro?: string }> {
   const anexando = saida.destino !== "pasta";
   const proprio = saida.destino === "proprio";
   const tipo = saida.tipoDocumento;
@@ -348,12 +348,14 @@ export async function executarDfds(
       const r = await d.pedir("protocolo", al, 60_000);
       if (!(r.ok && r.protocolo)) recusados.set(id, r.erro ?? "Não consegui abrir o protocolo na Centi.");
     }
+    const erroProtocolos = recusados.size && recusados.size === porId.size ? [...new Set(recusados.values())].join(" ") : undefined;
     const ja = await jaAnexados([...porId.keys()]);
     let i = 0;
     for (const [a, x] of alvos) {
       const motivo = recusados.get(x.alvo.id);
       if (motivo) {
-        marcarArquivo(a, { estado: "falha", erro: motivo });
+        // Nada mais segue: o motivo vai UMA vez (o erro do componente) e a linha fica com a nota curta; senão, o motivo.
+        marcarArquivo(a, { estado: "falha", erro: recusados.size === porId.size ? `Não emitido — o protocolo ${x.alvo.numero} não abriu na Centi.` : motivo });
         continue;
       }
       const descricao = descricaoDoArquivo(a.nome);
@@ -365,7 +367,7 @@ export async function executarDfds(
       destinos.set(a, { passo: { chave: `arquivo-${++i}`, alvo: { ...x.alvo, descricao } }, protocoloId: x.protocoloId });
     }
     fila = plano.filter((a) => destinos.has(a));
-    if (!fila.length) return { ...fim(), interrompido: false, parou: false };
+    if (!fila.length) return { ...fim(), interrompido: false, parou: !!erroProtocolos, erro: erroProtocolos };
     const ex = await iniciarExecucao("anexar-dfds", [...destinos.values()].map((x) => x.passo), { destino: saida.destino, protocolos: porId.size, arquivos: fila.length, tipo });
     if ("erro" in ex) {
       for (const a of fila) marcarArquivo(a, { estado: "falha", erro: ex.erro });

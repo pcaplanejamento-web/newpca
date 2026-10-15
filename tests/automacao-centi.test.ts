@@ -123,7 +123,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.18.0"), false);
   assert.equal(versaoAtende("1.19.0"), false);
   assert.equal(versaoAtende("1.20.0"), false);
-  assert.equal(versaoAtende("1.21.0"), true);
+  assert.equal(versaoAtende("1.21.0"), false);
+  assert.equal(versaoAtende("1.22.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -302,11 +303,12 @@ const docCenti = (seq: string, desc: string, tipo: unknown) => ({
 async function pecasAnexo() {
   const { readFileSync } = await import("node:fs");
   const vm = await import("node:vm");
-  const ctx: Record<string, Record<string, (...a: unknown[]) => unknown>> = {};
+  // O URL da página (o vm não traz o do navegador).
+  const ctx: Record<string, unknown> = { URL };
   vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
   // O nome da peça leva o MESMO protocolo do centi-main.js (uma cópia antiga na aba nunca é reaproveitada).
   const p = readFileSync("extensao-centi/centi-main.js", "utf8").match(/const PROTOCOLO = (\d+);/)?.[1];
-  const pecas = ctx[`__pcaCentiAnexo_p${p}`];
+  const pecas = ctx[`__pcaCentiAnexo_p${p}`] as Record<string, (...a: unknown[]) => unknown>;
   assert.ok(pecas, "centi-anexo.js e centi-main.js com o mesmo protocolo");
   // O resultado volta por JSON (outro "realm" do vm): compara-se como dado puro.
   return Object.fromEntries(Object.entries(pecas).map(([k, f]) => [k, (...a: unknown[]): J => (typeof f === "function" ? JSON.parse(JSON.stringify(f(...a) ?? null)) : f)]));
@@ -479,6 +481,36 @@ test("anexo: o protocolo da Tela Protocolo (módulo 102908) é aceito e o docume
   assert.equal(docs.length, 2);
   assert.equal(docs[1].ModuleKey, 102999);
   assert.ok(A.conferirProtocolo({ Entity: { ...e, ModuleKey: 5 } }, { id: "2332778", numero: "156844" }).erro);
+});
+
+test("anexo: aprende como a TELA abre o protocolo (o módulo novo) e diz o que fazer quando nada abre", async () => {
+  const A = await pecasAnexo();
+  const e = {
+    $type: "ORM", ModuleKey: 104321, Fields: [{ Key: "Id", Value: 2332778 }, { Key: "NrProtocolo", Value: "156844" }, { Key: "AnoReferencia", Value: "2026" }, { Key: "Documentos", Value: [] }],
+  };
+  const url = "https://rioverde.centi.com.br/wcf/restauth/load?entity=104321&key=2332778";
+  const m = A.loadDoProtocolo(url, "GET", null, { Entity: e });
+  assert.deepEqual(m, { metodo: "GET", caminho: "restauth/load?entity=104321&key={id}", corpo: null, modulo: 104321 });
+  assert.deepEqual(A.pedidoDoLoad(m, "2400001"), { metodo: "GET", caminho: "restauth/load?entity=104321&key=2400001", corpo: null });
+  // Pelo corpo (POST), sem segredos.
+  const p = A.loadDoProtocolo("restauth/loadprotocolo", "POST", { Key: 2332778, token: "x" }, { Entity: e });
+  assert.deepEqual(p.corpo, { Key: "{id:n}" });
+  assert.equal(JSON.stringify(A.pedidoDoLoad(p, "7").corpo), '{"Key":7}');
+  // Não é modelo: outra resposta, verbo de escrita, sem o Id no pedido, Id inválido.
+  assert.equal(A.loadDoProtocolo(url, "GET", null, { Entity: { ...e, Fields: [{ Key: "Id", Value: 1 }] } }), null);
+  assert.equal(A.loadDoProtocolo("restauth/save?key=2332778", "POST", null, { Entity: e }), null);
+  assert.equal(A.loadDoProtocolo("restauth/load?entity=104321", "GET", null, { Entity: e }), null);
+  assert.equal(A.pedidoDoLoad(m, "12a"), null);
+  // O módulo aprendido é aceito só quando passado; Id/nº seguem conferidos.
+  const pedido = { id: "2332778", numero: "156844", ano: "2026" };
+  assert.ok(A.conferirProtocolo({ Entity: e }, pedido).erro);
+  assert.equal(A.conferirProtocolo({ Entity: e }, pedido, [102907, 102908, 104321]).erro, undefined);
+  assert.match(A.conferirProtocolo({ Entity: e }, { ...pedido, numero: "1" }, [104321]).erro, /não do 1/);
+  // Nada abriu: o que cada caminho respondeu + o que fazer.
+  const vazio = { $type: "x", Entity: null, Message: [] };
+  assert.equal(A.descreverResposta(vazio), "protocolo vazio");
+  const erro = A.erroSemProtocolo(pedido, false, [`módulo 102907: ${A.descreverResposta(vazio)}`]);
+  assert.match(erro, /não abriu o protocolo 156844\/2026 \(Id 2332778\) — módulo 102907: protocolo vazio\. Abra esse protocolo UMA vez/);
 });
 
 test("emissão: o Emitir DFD e o download saem pelo cliente HTTP da própria Centi (o caminho do anexo), com o envio da extensão só de reserva", async () => {

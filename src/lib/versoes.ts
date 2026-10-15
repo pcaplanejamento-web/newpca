@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.12",
+    data: "2026-10-15",
+    titulo: "Anexo na Centi: abre o protocolo como a tela da Centi",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "O anexo de DFDs num protocolo da Centi parava em \u201cA Centi n\u00e3o devolveu o protocolo\u201d: a Centi deixou de abrir o protocolo pelo caminho que a extens\u00e3o usava. A extens\u00e3o 1.22.0 aprende sozinha como a pr\u00f3pria tela da Centi abre o protocolo \u2014 basta abrir o protocolo UMA vez na Tela Protocolo da Centi com a extens\u00e3o ativa. Baixe a extens\u00e3o nova.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Quando o protocolo n\u00e3o abre, a automa\u00e7\u00e3o para com UM aviso que diz o que cada caminho respondeu e o que fazer \u2014 sem repetir o mesmo erro em cada DFD.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.107.11",
     data: "2026-10-15",
     titulo: "Cartões suaves ao fechar o menu e foto sem achatar",

@@ -282,7 +282,7 @@ export function FluxosAutomacao({
           setDfds(linhas);
         };
         setDfds(linhas);
-        await executarDfds(plano.arquivos, saida, alvo, {
+        const fim = await executarDfds(plano.arquivos, saida, alvo, {
           ...emissor,
           lote,
           interrompido: () => interrompido.current || cancelar.current,
@@ -294,7 +294,7 @@ export function FluxosAutomacao({
           marcarVarias: aplicar,
         });
         if (saida.destino !== "pasta") void carregarNaCenti();
-        return { linhas: linhas as unknown as Item[] };
+        return { linhas: linhas as unknown as Item[], erro: fim.erro };
       },
       importarProtocolo: async (it: Item, apontamentos: string[]) => {
         const lido = leituras.current.get(chaveLeitura(it.protocolo ?? it.numero, it.ano));
