@@ -5,6 +5,8 @@ import {
   catalogoCompras,
   catalogoItens,
   catalogos,
+  dfdProtocolos,
+  dfds,
   feriados,
   grupos,
   orcamentoItens,
@@ -186,3 +188,25 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
   }
   return null;
 }
+
+/**
+ * Em que MESA o protocolo/DFD está HOJE: o PCA dele (`pca_id` do protocolo — o DFD pelo protocolo de origem) ou `null`
+ * = a Mesa do sistema; `undefined` = não existe. Toda chegada com `?abrir=` passa por aqui (favorito, recente, vínculo de
+ * tarefa, aviso, cartão do chat) — o link antigo nunca leva à Mesa errada.
+ */
+export async function mesaDoAlvo(abrir: string | undefined): Promise<number | null | undefined> {
+  const m = /^(protocolo|dfd):(\d{1,12})$/.exec(abrir ?? "");
+  if (!m) return undefined;
+  const id = Number(m[2]);
+  const db = getDb();
+  if (m[1] === "protocolo") {
+    const [p] = await db.select({ pcaId: dfdProtocolos.pcaId }).from(dfdProtocolos).where(eq(dfdProtocolos.id, id)).limit(1);
+    return p ? p.pcaId : undefined;
+  }
+  const [d] = await db.select({ pcaId: dfdProtocolos.pcaId }).from(dfds).leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId)).where(eq(dfds.id, id)).limit(1);
+  return d ? d.pcaId : undefined;
+}
+
+/** O link da Mesa em que o alvo está (a mesma régua da pesquisa). */
+export const linkDaMesa = (pcaId: number | null, abrir: string) =>
+  pcaId ? `/painel/pca/${pcaId}?aba=mesa&abrir=${encodeURIComponent(abrir)}` : `/painel/mesa?abrir=${encodeURIComponent(abrir)}`;

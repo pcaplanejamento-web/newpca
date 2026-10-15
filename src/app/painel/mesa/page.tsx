@@ -6,6 +6,7 @@ import { acessoPagina } from "@/lib/acesso-pagina";
 import type { PcaResumo } from "@/lib/dfd";
 import { carregarMesa } from "@/lib/mesa-dados";
 import { getPcaEspaco } from "@/lib/pca-espaco";
+import { linkDaMesa, mesaDoAlvo } from "@/lib/pesquisa";
 import { lerVinculo } from "@/lib/tarefas-core";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,12 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   const idPca = Number(sp.pca);
   const pca = Number.isInteger(idPca) && idPca > 0 ? await getPcaEspaco(idPca) : null;
   if (pca && pca.fonte === "protocolo") redirect(`/painel/pca/${pca.id}?aba=mesa${sp.abrir ? `&abrir=${encodeURIComponent(sp.abrir)}` : ""}`);
+  // O alvo do `?abrir=` está na Mesa de um PCA (link antigo, favorito, vínculo): vai à aba Mesa DAQUELE PCA — que tem o
+  // próprio portão de acesso. Nunca abre (nem tenta abrir) o protocolo na Mesa errada.
+  if (sp.abrir && !sp.pca) {
+    const pcaAlvo = await mesaDoAlvo(sp.abrir);
+    if (pcaAlvo) redirect(linkDaMesa(pcaAlvo, sp.abrir));
+  }
   const r = await acessoPagina("dfd");
   if (r.bloqueio) return r.bloqueio;
   const m = await carregarMesa(r.acesso.u);

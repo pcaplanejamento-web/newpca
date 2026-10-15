@@ -460,7 +460,24 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
 
   const semTexto = !texto.trim();
   const baixo = texto.trim().toLowerCase();
-  const dicas = semTexto ? DICAS : texto.includes(":") ? [] : DICAS.filter((d) => d.prefixo.startsWith(baixo) || d.curto.startsWith(baixo));
+  // Os FILTROS RÁPIDOS: só das telas que a pessoa abre (a rota confere de novo); tocar restringe a pesquisa ao tipo.
+  const abre = (h: string) => telas.some((t) => t.href === h);
+  const todosFiltros: { value: string; label: string }[] = [
+    ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
+    ...(abre("/painel/tarefas") || abre("/painel/calendario") ? [{ value: "tarefa", label: "Tarefas" }] : []),
+    ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
+    ...(abre("/painel/orcamento") ? [{ value: "orcamento", label: "Orçamentos" }, { value: "lancamento", label: "Lançamentos" }] : []),
+    ...(abre("/painel/catalogo") ? [{ value: "catalogo", label: "Catálogo" }, { value: "historico", label: "Histórico" }] : []),
+    ...(abre("/painel/usuarios")
+      ? ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
+      : []),
+    ...(abre("/painel/pca") ? [{ value: "pca", label: "PCAs" }] : []),
+    { value: "tela", label: "Telas" },
+  ];
+  // As DICAS só dos tipos que a pessoa pode pesquisar (os mesmos dos filtros) + as abas.
+  const tiposAcessiveis = new Set<string>([...todosFiltros.map((f) => f.value), "aba"]);
+  const dicasAcesso = DICAS.filter((d) => tiposAcessiveis.has(d.tipo));
+  const dicas = semTexto ? dicasAcesso : texto.includes(":") ? [] : dicasAcesso.filter((d) => d.prefixo.startsWith(baixo) || d.curto.startsWith(baixo));
   const itens: { r: Resultado; grupo: string }[] = [
     ...grupos.flatMap((g) => g.itens.map((r) => ({ r, grupo: g.tipo }))),
     ...dicas.map((d) => ({ r: { chave: `dica:${d.prefixo}`, rotulo: d.prefixo, detalhe: `${d.texto} · atalho ${d.curto}`, tipo: d.tipo }, grupo: "dica" })),
@@ -671,20 +688,6 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const vazio = !semTexto && !carregando && !falhou && grupos.length === 0 && dicas.length === 0;
   const EmFocoIcone = emFoco ? (ICONE_TIPO[emFoco.r.tipo] ?? IconLayers) : IconSearch;
 
-  // Os FILTROS RÁPIDOS: só das telas que a pessoa abre (a rota confere de novo); tocar restringe a pesquisa ao tipo.
-  const abre = (h: string) => telas.some((t) => t.href === h);
-  const todosFiltros: { value: string; label: string }[] = [
-    ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
-    ...(abre("/painel/tarefas") || abre("/painel/calendario") ? [{ value: "tarefa", label: "Tarefas" }] : []),
-    ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
-    ...(abre("/painel/orcamento") ? [{ value: "orcamento", label: "Orçamentos" }, { value: "lancamento", label: "Lançamentos" }] : []),
-    ...(abre("/painel/catalogo") ? [{ value: "catalogo", label: "Catálogo" }, { value: "historico", label: "Histórico" }] : []),
-    ...(abre("/painel/usuarios")
-      ? ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
-      : []),
-    { value: "pca", label: "PCAs" },
-    { value: "tela", label: "Telas" },
-  ];
   // Sem pesquisa: todos os filtros da pessoa. Com pesquisa: só os que têm resultado (e o escolhido), com a contagem.
   const contas = relevantes?.termo === termo ? relevantes.contas : null;
   const filtros = [

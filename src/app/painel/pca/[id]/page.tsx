@@ -1,4 +1,6 @@
 import { lerVinculo } from "@/lib/tarefas-core";
+import { linkDaMesa, mesaDoAlvo } from "@/lib/pesquisa";
+import { redirect } from "next/navigation";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -50,6 +52,12 @@ export default async function PcaEspacoPage({
   const sp = await searchParams;
   const pca = Number.isInteger(id) && id > 0 ? await getPcaEspaco(id) : null;
   if (!pca) notFound();
+  // O alvo do `?abrir=` está em OUTRA Mesa (outro PCA ou a do sistema): vai até ela — a pesquisa e os links nunca
+  // deixam a pessoa na Mesa errada.
+  if (sp.abrir) {
+    const pcaAlvo = await mesaDoAlvo(sp.abrir);
+    if (pcaAlvo !== undefined && pcaAlvo !== pca.id) redirect(linkDaMesa(pcaAlvo, sp.abrir));
+  }
   if (!podePca(acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
   // As abas que o papel vê (Detalhes do papel → Componentes); a pedida fora delas cai na 1ª permitida.
   const permitidas = ABAS.filter((a) => componenteLibera(acesso, a === "mesa" && pca.fonte === "lista" ? "pca.importacao" : `pca.${a}`));

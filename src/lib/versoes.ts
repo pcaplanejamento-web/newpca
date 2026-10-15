@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.106.2",
+    data: "2026-10-15",
+    titulo: "Pesquisa sempre na Mesa certa",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Protocolo ou DFD aberto por qualquer link — favorito, recente, tarefa, aviso — vai à Mesa em que está HOJE: a do PCA, ou a do sistema. Um link antigo nunca mais cai em \"Acesso restrito\" quando o item está num PCA que você abre.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Pesquisa", texto: "As dicas e os filtros da pesquisa mostram só o que você tem acesso.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.106.1",
     data: "2026-10-15",
     titulo: "Pesquisa mostra onde casou",
