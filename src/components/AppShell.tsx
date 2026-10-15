@@ -568,7 +568,7 @@ export function AppShell({
           onPointerLeave={() => setSemPeek(false)}
           className="menu-lateral absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-surface"
         >
-          <div className="flex h-full w-full min-w-0 flex-col">
+          <div className="flex h-full w-[calc(16rem-1px)] shrink-0 flex-col">
             {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
             <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
               <Brand identidade={identidade} inicio={inicio} />

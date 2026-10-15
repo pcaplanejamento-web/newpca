@@ -1202,7 +1202,7 @@ select:not([multiple]):not([size]) {
   transition: opacity 200ms ease 80ms, transform 300ms var(--menu-curva);
 }
 .menu-lateral .menu-linha { opacity: 0; transform: scaleX(.4); transition: opacity 160ms ease, transform 300ms var(--menu-curva); }
-.menu-lateral .menu-cartao { transition: border-color 200ms ease; }
+.menu-lateral .menu-cartao { transition: border-color 200ms ease, width 300ms var(--menu-curva); }
 .menu-lateral .menu-alternar { transition: transform 300ms var(--menu-curva); }
 html[data-menu-recolhido] .menu-vaga, html[data-menu-recolhido] .menu-lateral { width: 3.75rem; }
 html[data-menu-recolhido] .menu-lateral .menu-alternar { transform: rotate(180deg); }
@@ -1212,7 +1212,7 @@ html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:f
 html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-linha {
   opacity: 1; transform: none; transition-delay: 80ms, 0ms;
 }
-html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-cartao { border-color: transparent; }
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-cartao { border-color: transparent; width: calc(3.75rem - 1rem - 1px); }
 /* No Windows a barra de rolagem é FIXA (~17px): no trilho de 60px cortava os botões e, ao abrir o menu, aparecia de uma
    vez — a seleção encolhia e depois esticava. A lista do menu rola pela roda/toque/teclado, sem a barra. */
 .menu-lateral .menu-rolagem { scrollbar-width: none; }
