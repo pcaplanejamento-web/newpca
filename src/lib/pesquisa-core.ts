@@ -31,6 +31,23 @@ export const TIPOS_PADRAO: TipoPesquisa[] = TIPOS_PESQUISA.map((t) => t.tipo);
 /** Um resultado do servidor: o link já é o da tela/aba em que a pessoa pode abri-lo. */
 export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; href: string };
 
+/** Uma linha do ÍNDICE LOCAL da pesquisa (protocolos e DFDs que a pessoa vê): o resultado + os campos em que se procura. */
+export type LinhaIndice = ResultadoPesquisa & { campos: string[]; numeros: string[] };
+
+/** Teto de linhas por tipo no índice local; acima dele o tipo segue pelo servidor (o índice estaria incompleto). */
+export const MAX_INDICE = 5000;
+
+const padraoRegex = (p: string) => new RegExp(`^${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`, "is");
+
+/**
+ * A MESMA régua do `casaTermos` (SQL) no navegador: todo termo tem de casar; o termo numérico só nos campos de número.
+ * Devolve o predicado (os padrões compilados uma vez para a lista inteira).
+ */
+export function casaLocal(q: string): (l: Pick<LinhaIndice, "campos" | "numeros">) => boolean {
+  const ps = padroesLike(q).map((p) => ({ re: padraoRegex(p), num: ehTermoNumero(p) }));
+  return (l) => ps.every(({ re, num }) => (num ? l.numeros : l.campos).some((c) => re.test(c)));
+}
+
 /**
  * Os padrões do `LIKE` da pesquisa: UM por termo (todos têm de casar — "secretaria saúde 2027"), até 5 termos. Sem
  * acento só onde o português o põe ao digitar sem ele — "c" antes de a/o/u (ç), "ao" (ão) e "oe" (õe): "manutencao" acha

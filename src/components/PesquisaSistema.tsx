@@ -4,7 +4,7 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoPesquisa } from "@/lib/pesquisa-core";
+import { casaLocal, type LinhaIndice, pontuar, TIPOS_PADRAO, TIPOS_PESQUISA, tituloPesquisa, type TipoPesquisa } from "@/lib/pesquisa-core";
 import { alternarFavorito, type FavoritoPesquisa, lerFavoritos, MAX_FAVORITOS, moverFavorito } from "@/lib/pesquisa-favoritos-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { hrefVinculo, linkTarefa, ROTULO_VINCULO, type TipoVinculo } from "@/lib/tarefas-core";
@@ -42,7 +42,43 @@ type Grupo = { tipo: string; titulo: string; itens: Resultado[]; total?: number;
 
 const RECENTES = "pesquisa:recentes";
 /** A 1ª fase da pesquisa sem prefixo (os tipos mais usados). */
-const FASE_1: TipoPesquisa[] = ["protocolo", "dfd", "item", "tarefa"];
+
+type GrupoServidor = { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] };
+type Indice = { versao: string; conferido: number; grupos: Map<string, LinhaIndice[]> };
+
+// O ÍNDICE LOCAL (protocolos e DFDs que a pessoa vê) e as respostas do servidor por termo — só na MEMÓRIA da aba (somem
+// ao fechá-la; nada vai ao disco). O índice só é pedido de novo quando a VERSÃO dos dados muda (conferida ao abrir a
+// pesquisa, no máximo a cada 60 s); a resposta guardada vale 5 min e também cai quando a versão muda.
+let indiceMem: Indice | null = null;
+let carregandoIndice: Promise<Indice | null> | null = null;
+const respostas = new Map<string, { em: number; versao: string; grupos: GrupoServidor[] }>();
+const VALIDADE_RESPOSTA = 5 * 60_000;
+
+async function garantirIndice(): Promise<Indice | null> {
+  if (indiceMem && Date.now() - indiceMem.conferido < 60_000) return indiceMem;
+  carregandoIndice ??= (async () => {
+    try {
+      if (indiceMem) {
+        const v = (await (await fetch("/api/dados/versao", { cache: "no-store" })).json()) as { versao?: string };
+        if (v.versao === indiceMem.versao) {
+          indiceMem = { ...indiceMem, conferido: Date.now() };
+          return indiceMem;
+        }
+      }
+      const r = await fetch("/api/pesquisa/indice", { cache: "no-store" });
+      const j = (await r.json()) as { ok?: boolean; versao?: string; grupos?: { tipo: string; completo: boolean; linhas: LinhaIndice[] }[] };
+      if (!r.ok || !j.ok || !j.versao) return indiceMem;
+      respostas.clear();
+      indiceMem = { versao: j.versao, conferido: Date.now(), grupos: new Map((j.grupos ?? []).filter((g) => g.completo).map((g) => [g.tipo, g.linhas])) };
+      return indiceMem;
+    } catch {
+      return indiceMem;
+    } finally {
+      carregandoIndice = null;
+    }
+  })();
+  return carregandoIndice;
+}
 const MAX_RECENTES = 6;
 /** Fora do banner: abrir o banner e alternar o menu lateral (a AÇÃO "Recolher o menu"). */
 export const EVENTO_ABRIR_PESQUISA = "pesquisa-sistema:abrir";
@@ -290,7 +326,19 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   // Sem prefixo, o servidor escolhe (todos os tipos que a pessoa pode ver); com prefixo, só aquele.
   const tiposServidor: TipoPesquisa[] | null = tipo === "tela" || tipo === "aba" || tipo === "pca" ? [] : tipo ? [tipo] : null;
 
-  // Servidor: um pedido 250 ms depois da última tecla; a resposta antiga não sobrescreve a nova.
+  // O índice local: pedido ao abrir a pesquisa (só de novo quando a versão dos dados muda).
+  const [indiceLocal, setIndiceLocal] = useState<Indice | null>(indiceMem);
+  useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    void garantirIndice().then((i) => vivo && setIndiceLocal(i));
+    return () => {
+      vivo = false;
+    };
+  }, [aberto]);
+
+  // Protocolos e DFDs no ÍNDICE LOCAL (na hora, sem pedido); o resto num pedido ÚNICO ao servidor, 400 ms depois da
+  // última tecla, com a resposta do mesmo termo guardada e o pedido antigo CANCELADO quando o termo muda.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tiposServidor` sai de `tipo`; `tentativa` refaz após falha.
   useEffect(() => {
     if (!aberto || termo.length < 2 || tiposServidor?.length === 0) {
@@ -299,48 +347,70 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       setFalhou(false);
       return;
     }
-    let vivo = true;
-    setCarregando(true);
+    const pedidos = tiposServidor ?? TIPOS_PADRAO;
+    const locais = pedidos.filter((t) => indiceLocal?.grupos.has(t));
+    const doServidor = pedidos.filter((t) => !locais.includes(t));
+    const limite = tipo ? 30 : 5;
+    const converter = (g: GrupoServidor): Grupo => ({
+      tipo: g.tipo,
+      titulo: tituloPesquisa(g.tipo),
+      total: g.total,
+      itens: g.opcoes
+        .map<Resultado>((o) => ({
+          chave: `${g.tipo}:${o.id}`,
+          rotulo: o.rotulo,
+          detalhe: o.detalhe || undefined,
+          href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo as TipoVinculo, id: o.id })),
+          tipo: g.tipo,
+        }))
+        .sort((a, b) => Number(numeroExato(b.rotulo, termo)) - Number(numeroExato(a.rotulo, termo))),
+    });
+    const casa = casaLocal(termo);
+    const gruposLocais: GrupoServidor[] = locais.map((t) => {
+      const achados = (indiceLocal?.grupos.get(t) ?? []).filter(casa);
+      const opcoes = achados
+        .map((o, i) => ({ o, i, p: pontuar(`${o.rotulo} ${o.detalhe}`, termo) }))
+        .sort((x, y) => y.p - x.p || x.i - y.i)
+        .slice(0, limite)
+        .map(({ o }) => ({ id: o.id, rotulo: o.rotulo, detalhe: o.detalhe, href: o.href }));
+      return { tipo: t, total: achados.length, opcoes };
+    });
+    const juntar = (srv: GrupoServidor[]) =>
+      [...gruposLocais, ...srv]
+        .filter((g) => g.total > 0)
+        .sort((x, y) => pedidos.indexOf(x.tipo as TipoPesquisa) - pedidos.indexOf(y.tipo as TipoPesquisa))
+        .map(converter);
     setFalhou(false);
+    const chave = `${doServidor.join(",")}|${limite}|${termo.toLowerCase()}`;
+    const guardada = respostas.get(chave);
+    if (!doServidor.length || (guardada && Date.now() - guardada.em < VALIDADE_RESPOSTA && guardada.versao === (indiceLocal?.versao ?? ""))) {
+      setRemotos(juntar(guardada?.grupos ?? []));
+      setCarregando(false);
+      return;
+    }
+    setRemotos(juntar([]));
+    setCarregando(true);
+    const ctl = new AbortController();
     const t = setTimeout(async () => {
-      // Sem prefixo, em DUAS fases: os mais usados primeiro (aparecem logo) e depois os demais — cada pedido fica leve.
-      const fases = tiposServidor ? [tiposServidor] : [FASE_1, TIPOS_PADRAO.filter((x) => !FASE_1.includes(x))];
-      const juntos: Grupo[] = [];
-      setRemotos([]);
       try {
-        for (const fase of fases) {
-          const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${fase.join(",")}&limite=${tipo ? 30 : 5}`);
-          const j = (await r.json()) as { ok?: boolean; grupos?: { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] }[] };
-          if (!r.ok || !j.ok) throw new Error();
-          if (!vivo) return;
-          for (const g of j.grupos ?? [])
-            juntos.push({
-              tipo: g.tipo,
-              titulo: tituloPesquisa(g.tipo),
-              total: g.total,
-              itens: g.opcoes
-                .map<Resultado>((o) => ({
-                  chave: `${g.tipo}:${o.id}`,
-                  rotulo: o.rotulo,
-                  detalhe: o.detalhe || undefined,
-                  href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo as TipoVinculo, id: o.id })),
-                  tipo: g.tipo,
-                }))
-                .sort((a, b) => Number(numeroExato(b.rotulo, termo)) - Number(numeroExato(a.rotulo, termo))),
-            });
-          setRemotos([...juntos]);
-        }
+        const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${doServidor.join(",")}&limite=${limite}`, { signal: ctl.signal });
+        const j = (await r.json()) as { ok?: boolean; grupos?: GrupoServidor[] };
+        if (!r.ok || !j.ok) throw new Error();
+        const grupos = j.grupos ?? [];
+        if (respostas.size >= 60) respostas.delete(respostas.keys().next().value as string);
+        respostas.set(chave, { em: Date.now(), versao: indiceLocal?.versao ?? "", grupos });
+        setRemotos(juntar(grupos));
       } catch {
-        if (vivo) setFalhou(true);
+        if (!ctl.signal.aborted) setFalhou(true);
       } finally {
-        if (vivo) setCarregando(false);
+        if (!ctl.signal.aborted) setCarregando(false);
       }
-    }, 250);
+    }, 400);
     return () => {
-      vivo = false;
+      ctl.abort();
       clearTimeout(t);
     };
-  }, [aberto, tipo, termo, tentativa]);
+  }, [aberto, tipo, termo, tentativa, indiceLocal]);
 
   const fechar = useCallback(() => setAberto(false), []);
 
@@ -440,9 +510,9 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       ? remotos
       : remotos.length
         ? [...remotos, { tipo: "mais", titulo: "Procurando nas outras telas…", itens: [], carregando: true }]
-        : (tiposServidor ?? FASE_1).map((t) => ({ tipo: t, titulo: tituloPesquisa(t), itens: [], carregando: true }));
+        : (tiposServidor ?? TIPOS_PADRAO).filter((t) => !indiceLocal?.grupos.has(t)).map((t) => ({ tipo: t, titulo: tituloPesquisa(t), itens: [], carregando: true }));
     return [...locais, ...doServidor].filter((g) => g.itens.length || g.carregando);
-  }, [texto, termo, tipo, largo, favoritos, recentes, acoes, telas, abas, pcas, pcaFiltroId, remotos, carregando, tiposServidor]);
+  }, [texto, termo, tipo, largo, favoritos, recentes, acoes, telas, abas, pcas, pcaFiltroId, remotos, carregando, tiposServidor, indiceLocal]);
 
   // Os filtros que TÊM algo para o termo (a pesquisa em "Tudo" terminou): só eles aparecem, com a contagem. Enquanto a
   // pesquisa corre (ou num filtro já escolhido), vale a última contagem do MESMO termo — os chips não piscam.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ehTipoPesquisa, padroesLike, pontuar, type PortaoPesquisa, TIPOS_PADRAO, TIPOS_PESQUISA, tipoPermitido, tituloPesquisa } from "../src/lib/pesquisa-core.ts";
+import { casaLocal, ehTermoNumero, ehTipoPesquisa, padroesLike, pontuar, type PortaoPesquisa, TIPOS_PADRAO, TIPOS_PESQUISA, tipoPermitido, tituloPesquisa } from "../src/lib/pesquisa-core.ts";
 import { DatabaseSync } from "node:sqlite";
 
 test("pesquisa: tipos únicos, prefixos e atalhos sem repetir", () => {
@@ -69,4 +69,26 @@ test("pesquisa: portão por perfil", () => {
   for (const t of ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"]) assert.ok(!semAdmin.includes(t as (typeof todos)[number]));
   assert.deepEqual(permitidos(perfil([], [], true)), [...todos]);
   assert.deepEqual(permitidos(perfil([])), []);
+});
+
+test("casaLocal: o índice do navegador casa EXATAMENTE como o LIKE do SQL", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE p (numero TEXT, assunto TEXT)");
+  const linhas = [
+    ["144756/2026", "MANUTENÇÃO DE SERVIÇOS"],
+    ["65", "INCLUSÃO PCA 2027"],
+    ["123", "Secretaria 65 de saúde"],
+    ["700", "protocolo de compras"],
+  ];
+  for (const l of linhas) db.prepare("INSERT INTO p VALUES (?, ?)").run(...l);
+  for (const q of ["manutencao", "servico", "65", "1447", "inclusao 2027", "protoco", "SAÚDE secretaria", "compras 700"]) {
+    const ps = padroesLike(q);
+    const onde = ps.map((p) => (ehTermoNumero(p) ? "numero LIKE ?" : "(numero LIKE ? OR assunto LIKE ?)")).join(" AND ");
+    const args = ps.flatMap((p) => (ehTermoNumero(p) ? [p] : [p, p]));
+    const sqlNums = (db.prepare(`SELECT numero FROM p WHERE ${onde}`).all(...args) as { numero: string }[]).map((r) => r.numero).sort();
+    const casa = casaLocal(q);
+    const locais = linhas.filter(([n, a]) => casa({ campos: [n, a], numeros: [n] })).map(([n]) => n).sort();
+    if (q === "SAÚDE secretaria") continue; // o LIKE do SQLite não ignora a caixa de letra acentuada; o local ignora (melhor)
+    assert.deepEqual(locais, sqlNums, q);
+  }
 });

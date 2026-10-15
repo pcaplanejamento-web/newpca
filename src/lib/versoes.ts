@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa mais rápida e mais leve",
+    mudancas: [
+      { tipo: "melhoria", area: "Pesquisa", texto: "Protocolos e DFDs são encontrados na hora, enquanto você digita: a lista do que você pode ver fica na memória da aba e só é buscada de novo quando algum dado muda.", link: "/painel" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "As demais telas vão num pedido só; o mesmo termo pesquisado de novo volta na hora, e o pedido antigo é cancelado quando você continua digitando.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.106.2",
     data: "2026-10-15",
     titulo: "Pesquisa sempre na Mesa certa",

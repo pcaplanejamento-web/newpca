@@ -28,7 +28,7 @@ import {
   dfdItens,
   reparticoes,
 } from "@/db/schema";
-import { padroesLike } from "./pesquisa-core";
+import { type LinhaIndice, MAX_INDICE, padroesLike } from "./pesquisa-core";
 import { casaTermos } from "./pesquisa-sql";
 import { type Acesso, componenteLibera, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
@@ -2561,9 +2561,21 @@ export async function importarVinculos(quadroId: number, pares: { de: number; pa
  * Visualizar a Mesa do sistema. O link já leva a essa Mesa.
  */
 export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q: string, limite: number): Promise<ResultadoPesquisa[]> {
+  return pesquisarNaMesa(a, tipo, q, limite);
+}
+
+/**
+ * O ÍNDICE LOCAL da pesquisa: TODOS os protocolos/DFDs que a pessoa vê (o MESMO portão da pesquisa — escopo, linhas e
+ * Mesas), até `MAX_INDICE`, com os campos em que se procura. O navegador procura neles sem novo pedido.
+ */
+export async function indiceMesa(a: Acesso, tipo: "protocolo" | "dfd"): Promise<LinhaIndice[]> {
+  return (await pesquisarNaMesa(a, tipo, "", MAX_INDICE, true)) as LinhaIndice[];
+}
+
+async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q: string, limite: number, indice = false): Promise<ResultadoPesquisa[]> {
   const db = getDb();
   const u = a.u;
-  const padroes = padroesLike(q);
+  const padroes = indice ? [] : padroesLike(q);
   const { escopo: esc } = await unidadesDaSessao(u);
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
@@ -2584,10 +2596,11 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
     vePca ? (permitidos ? or(sql`${dfdProtocolos.pcaId} IS NULL`, inArray(dfdProtocolos.pcaId, [...permitidos, 0].slice(0, 90))) : undefined) : sql`${dfdProtocolos.pcaId} IS NULL`,
   );
   const link = (pcaId: number | null, alvo: string) => (pcaId ? `/painel/pca/${pcaId}?aba=mesa&abrir=${alvo}` : `/painel/mesa?abrir=${alvo}`);
-  const LIM = Math.min(50, limite);
+  const LIM = indice ? MAX_INDICE : Math.min(50, limite);
+  const corte = (t: string | null | undefined, n = 160) => (t ?? "").slice(0, n);
   if (tipo === "protocolo") {
     const ls = await db
-      .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto, pcaId: dfdProtocolos.pcaId })
+      .select({ id: dfdProtocolos.id, numero: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, assunto: dfdProtocolos.assunto, interessado: dfdProtocolos.interessado, pcaId: dfdProtocolos.pcaId })
       .from(dfdProtocolos)
       .where(
         and(
@@ -2604,11 +2617,15 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
       rotulo: `Protocolo ${l.numero}`,
       detalhe: [l.idExterno ? `Id ${l.idExterno}` : "", l.assunto ?? ""].filter(Boolean).join(" · "),
       href: link(l.pcaId, `protocolo:${l.id}`),
+      ...(indice && {
+        campos: [l.numero, l.idExterno ?? "", corte(l.assunto), corte(l.interessado)],
+        numeros: [l.numero, l.idExterno ?? ""],
+      }),
     }));
   }
   if (tipo === "dfd") {
     const ls = await db
-      .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, protocolo: dfdProtocolos.numero, pcaId: dfdProtocolos.pcaId })
+      .select({ id: dfds.id, numero: dfds.numero, planejamento: dfds.planejamento, objeto: dfds.objeto, protocolo: dfdProtocolos.numero, idExterno: dfdProtocolos.idExterno, pcaId: dfdProtocolos.pcaId })
       .from(dfds)
       .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
       .where(
@@ -2624,8 +2641,12 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
     return ls.map((l) => ({
       id: l.id,
       rotulo: `DFD ${l.numero}${l.planejamento ? ` · Planej. ${l.planejamento}` : ""}`,
-      detalhe: [l.protocolo ? `Protocolo ${l.protocolo}` : "", l.objeto ?? ""].filter(Boolean).join(" · "),
+      detalhe: [l.protocolo ? `Protocolo ${l.protocolo}` : "", indice ? corte(l.objeto, 120) : (l.objeto ?? "")].filter(Boolean).join(" · "),
       href: link(l.pcaId, `dfd:${l.id}`),
+      ...(indice && {
+        campos: [l.numero, l.planejamento ?? "", corte(l.objeto), l.protocolo ?? "", l.idExterno ?? ""],
+        numeros: [l.numero, l.planejamento ?? ""],
+      }),
     }));
   }
   const ls = await db
