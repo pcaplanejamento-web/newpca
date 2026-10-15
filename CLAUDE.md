@@ -1520,7 +1520,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     `MAX_IGUAIS` (10) + "+N" (`outrosDoGrupo`; `repetidosDoDfd`/`repetidosPorDfd` → `RepeticaoItem {iguais, total}`). Após
     "Unificar", o campo numérico destravado acompanha o valor novo (`NumInput` ressincroniza quando o valor muda de fora).
   - **Quantidade FRACIONADA (`item.quantidadeFracionada`, v1.90.0)** = 0 < q < 1 (`quantidadeFracionada`): ponto próprio da Avaliação (padrão atenção), rótulo “Quantidade fracionada”; `mensagensItem(it, repetido, regras)` segue o nível do ADM. Todo ponto da Avaliação tem o (?) (`PontoAvaliacao.ajuda`).
-  - **PALAVRAS NO ITEM (`item.palavras`, v1.108.0, sem migração — `RegrasAvaliacao.palavrasItem` no blob `avaliacao`):** desligado por padrão (Ignorar). O ADM cadastra CONJUNTOS de palavras/expressões (`GrupoPalavras {id, termos, nivel?}` — `CampoLista`, várias de uma vez separadas por ";"; colar uma lista acrescenta todas) na aba Item da Avaliação (`editorPalavras`), cada um com a SUA importância (sem ela, a do ponto; `ignorar` desliga só o conjunto). Núcleo puro em `avaliacao-core.ts`: `termosDoTexto`, `chavePalavra` (sem acento/caixa/pontuação), `palavrasNoItem` (palavra INTEIRA na descrição; cache pelas regras), `coerceGruposPalavras` (importância desconhecida/não permitida cai na do ponto; conjunto vazio sai), `LIMITES_PALAVRAS` (50 conjuntos · 200 termos · 80 caracteres — a mesma régua no Zod `grupoPalavrasSchema`). Entra em `mensagensItem` (uma mensagem por conjunto, rótulo "Palavra apontada"), `mensagensDfd`/`avaliarDfd` (o pior conjunto decide — bloqueia a importação se algum bloqueia), `faltasCirurgicasDfd` (despacho), `pendenciasDoDfd` (`regras` — cada item com o status do conjunto dele, âncora `descricao` no `ItemDetalhe`) e no portão dos lotes do `POST /api/dfd`. Testes: `tests/palavras-item.test.ts`.
+  - **PALAVRAS NO ITEM (`item.palavras`, v1.114.0, sem migração — `RegrasAvaliacao.palavrasItem` no blob `avaliacao`):** desligado por padrão (Ignorar). O ADM cadastra CONJUNTOS de palavras/expressões (`GrupoPalavras {id, termos, nivel?}` — `CampoLista`, várias de uma vez separadas por ";"; colar uma lista acrescenta todas) na aba Item da Avaliação (`editorPalavras`), cada um com a SUA importância (sem ela, a do ponto; `ignorar` desliga só o conjunto). Núcleo puro em `avaliacao-core.ts`: `termosDoTexto`, `chavePalavra` (sem acento/caixa/pontuação), `palavrasNoItem` (palavra INTEIRA na descrição; cache pelas regras), `coerceGruposPalavras` (importância desconhecida/não permitida cai na do ponto; conjunto vazio sai), `LIMITES_PALAVRAS` (50 conjuntos · 200 termos · 80 caracteres — a mesma régua no Zod `grupoPalavrasSchema`). Entra em `mensagensItem` (uma mensagem por conjunto, rótulo "Palavra apontada"), `mensagensDfd`/`avaliarDfd` (o pior conjunto decide — bloqueia a importação se algum bloqueia), `faltasCirurgicasDfd` (despacho), `pendenciasDoDfd` (`regras` — cada item com o status do conjunto dele, âncora `descricao` no `ItemDetalhe`) e no portão dos lotes do `POST /api/dfd`. Testes: `tests/palavras-item.test.ts`.
   - **Quantidade AUSENTE = `semQuantidade`** (vazia, zero, negativa ou não numérica — v1.89.2; antes só a vazia era erro e o item de total R$ 0,00 passava como regular).
   - **Valor unitário AUSENTE = `semValorUnitario`** (vazio, zero, negativo ou NÃO numérico — NaN viraria `null` no JSON):
     a MESMA régua no cliente e no servidor.
@@ -4245,6 +4245,67 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `confirmsave` com o objeto direto (`Confirm: true` = a pergunta vai ao ADM; só o "sim" dele grava — nunca confirma sozinha) → `save` → só vale com `Success` e o
   documento de volta com Id real (`conferirSalvo`). O sistema nunca manda o objeto do protocolo; o protocolo é conferido
   ANTES de emitir qualquer DFD e o ADM confirma (`useConfirmacao`) antes de começar; a 1ª recusa do anexo PARA o lote (o erro diz o passo — load/confirmsave/save).
+- **LOAD DO PROTOCOLO APRENDIDO DA TELA (v1.107.12, extensão 1.22.0, protocolo 39):** a Centi deixou de devolver o protocolo pelos módulos fixos (`load?entity=102907|102908` → `Entity` nulo, sem mensagem) e a pré-verificação recusava todos os arquivos. Agora o gancho que observa as respostas da TELA (`lembrarCm002`, só pedidos da tela) guarda em `localStorage` `__pcaLoadProtocolo_v1` o modelo do pedido que trouxe um protocolo — peça pura **`loadDoProtocolo`** (`centi-anexo.js`: resposta com `Entity.Fields` Id + NrProtocolo + Documentos, só consulta de LEITURA, o Id trocado por `{id}` no caminho e `{id}`/`{id:n}` no corpo, sem segredos) — e `abrirProtocolo` tenta PRIMEIRO esse modelo (`pedidoDoLoad`), depois 102907/102908; o módulo aprendido entra nos aceitos de `conferirProtocolo(r, d, aceitos)` (Id/nº/ano seguem conferidos; protocolo que não confere para na hora). Sem nada que abra: `erroSemProtocolo` (o que cada caminho respondeu — `descreverResposta` — + "abra o protocolo UMA vez na Tela Protocolo"). No motor (`executarDfds`), com TODOS os protocolos recusados a execução devolve `erro` (UM erro do componente; as linhas ficam "Não emitido — o protocolo N não abriu na Centi").
+- **TESTAR PROTOCOLO + SÓ PELO ID (v1.108.0, extensão 1.23.0, protocolo 40):** nos Dados de entrada do "Baixar/anexar DFDs"
+  (destino Protocolo indicado) e na aba DFDs, **`TesteProtocoloCenti`** (`paineis.tsx`) abre o protocolo na Centi SÓ PARA LER
+  (`host.conferirAlvo` → `{protocolo}|{erro}`) e mostra nº, assunto, interessado e documentos; com o nº em branco oferece
+  "Usar o nº". O **nº é opcional** (`lerAlvoCenti(id, nº, soId)` → `numero: ""`): a ação `protocolo` da extensão confere só o
+  Id (`conferirProtocolo` sem nº) e o motor (`executarDfds`, `testarAnexo`) preenche nº/ano com os da Centi ANTES do anexo —
+  o `anexar` segue exigindo Id + nº.
+- **ORDEM DA TABELA + PERMISSÃO NO DROPDOWN + CÓPIA ÓRFÃ (v1.109.0, extensão 1.24.0):** saiu o "Ordenar pelo planejamento"
+  (`OpcoesSaida` sem ele; `montarArquivos` segue a ordem dos itens que chegam). A **Seleção** grava a SEQUÊNCIA da tabela no
+  nó (`DataTable.onOrdenadas` → `TabelaMesaFluxo.onOrdem` → `config.ordem` + `config.filtrada`, só quando difere da ordem
+  natural) e **`selecionados`** devolve os marcados nessa ordem (nada marcado + "todos" = as linhas à vista com filtro). A
+  **permissão de escrita** (`confirmarEscrita`, `background.js`) sai no DROPDOWN do ícone (`popup.html` → `#confirmacao`,
+  lido de `storage.session.confirmacao`; sem janela em foco, o mesmo painel numa janelinha `popup.html?janela=1&confirmar=1`)
+  — `confirmar.html` saiu; fechar o dropdown não recusa (selo "?", prazo 2 min). A **`sistema-ponte`** ÓRFÃ (extensão
+  atualizada sem F5 — `chrome.runtime.id` morto) se cala: antes gastava o token de uso único e a nova recebia "já usada".
+  No editor, **`ProblemasFluxo`** (o selo de problemas/atenções abre a lista e leva ao componente) e a Análise usa as linhas
+  do Baixar/anexar (`host.dfds`, `estadoDoItem("saida.dfdsCenti")`).
+- **CONFERÊNCIA FINAL + CONTINUAR + NOVA TENTATIVA (v1.113.0, sem migração):** no fim do `executarDfds` (anexo, extensão com
+  `docs`, sem interrupção/exceção) o motor abre de novo cada protocolo e confere cada arquivo dado como ok/já: ausente = linha
+  `falha` "Não confirmado na Centi"; `FimExecucao.confirmados {ok,total}` → aviso "Conferido na Centi: N de N". O
+  `ConferenciaNoProtocolo` confere SOZINHO quando uma execução termina (o "Enviar os que faltam" = continuar de onde parou).
+  `falhaPassageira` (rede/tempo/5xx) dá UMA nova tentativa na emissão e no anexo (a extensão confere o protocolo antes de
+  gravar — nunca duplica). O resumo no sino ao terminar já existia (aviso `centi` no `PATCH` da execução).
+- **ANDAMENTO AO VIVO (v1.112.0, sem migração):** núcleo puro **`fluxo-progresso.ts`** (testado): `progressoFluxo` = a % pelo
+  TRABALHO de cada etapa (peso = itens; o Baixar/anexar pesa os DFDs — `contagemDfds`), `registrarAmostra`/`tempoRestanteMs`
+  (o ritmo das amostras dos últimos 2 min — `JANELA_RITMO_MS`; sem 5 s e 0,5% de avanço = "Calculando…"), `textoDuracao`,
+  `textoPct` (nunca 100% antes do fim); hook **`useEstimativa`** (`fluxos/`). Etapas do `PainelFluxo`: % · n/N · "Termina em ≈
+  X" · a etapa em curso destacada com a barra própria e "Agora: Planej. …". `AnaliseDfds`: % + tempo restante; cada grupo
+  (pasta) é um botão que abre/fecha — concluído RECOLHE sozinho (a escolha da pessoa vale mais), o em curso destacado e a lista
+  rola suave (só ela; "reduzir movimento" = sem deslizar) até ele. Voltar do editor com a execução em curso não zera as etapas.
+- **CONFERIR NO PROTOCOLO + A CENTI DECIDE O "JÁ ESTAVA" + NUNCA APAGAR (v1.111.0, extensão 1.25.0, protocolo 41):** o
+  `resumoProtocolo` devolve `docs [{descricao, sequencial, id}]`. **Pré-verificação** (`executarDfds`): com os documentos da
+  Centi, ELES decidem — presente = `ja` ("Já está no protocolo da Centi (documento N)"); ausente = envia, mesmo registrado no
+  sistema (`PassoAnexo.ausenteNaCenti` → o `autorizar` ignora o `jaFeito`; a extensão segue conferindo o load ao gravar);
+  sem `docs` (extensão antiga), o registro como antes. `comandoRegistrarEscrita` = upsert que só atualiza quando o documento
+  MUDA (`setWhere … IS NOT excluded`). **Conferir no protocolo** (`ConferenciaAnexos`, DS; contêiner `ConferenciaNoProtocolo`
+  em `paineis.tsx`, aba DFDs com destino na Centi): abre cada protocolo do plano (só leitura) + `jaAnexados` → núcleo puro
+  `conferenciaAnexos`/`resumoConferencia` (`automacao-dfds-estado.ts`: anexado · falta · registrado mas ausente · sem
+  protocolo) e **"Enviar os que faltam"** → `HostPainel.enviarArquivos` (confirma; roda o fluxo com
+  `config.somenteArquivos` — o `baixarDfds` filtra o plano). **NUNCA APAGAR** (extensão): `faltamGravados` recusa o protocolo
+  aberto que não traz os documentos que o último salvar devolveu nesta aba (`__pcaUltimosSalvos_v1`, sessionStorage) — o
+  salvar mandaria a lista sem eles; `conferirSalvo(r, d, antes)` = erro se algum documento sumiu e o nº é o do documento NOVO
+  (o que não estava); depois do save, o protocolo é aberto de novo e tem de trazer o documento.
+- **ESTADO REAL DE CADA DFD + EXECUÇÃO SEMPRE FINALIZADA (v1.110.0, sem migração):** núcleo puro
+  **`automacao-dfds-estado.ts`** (testado — `tests/automacao-dfds-estado.test.ts`): `EstadoDfd` = em curso `emitindo` ·
+  `conferindo` · `unindo` · `aguardando` (a pergunta da Centi) · `anexando` | fim `ok` · `ja` (já estava no protocolo —
+  NÃO conta como anexado) · `falha` · `interrompido` | fora da conta `pulado` · `repetido`; **`contagemDfds`** = a conta ÚNICA
+  (total = concluídas + em curso + fila) da barra da Análise (`textoContagem`), do painel de segundo plano
+  (`andamentoDfds(linhas, anexar)`), da análise ao vivo (`visualEstadoDfd` em `estadoDoItem`) e do ícone da extensão (o
+  `lote` manda `feito` = concluídos, também ao FIM de cada DFD); `entidadePrevista` (cadastrada › mapa › aberta) já na fila,
+  com "?" até a emissão confirmar. O motor (`executarDfds`, imports com `.ts` — testável com a extensão e o servidor falsos)
+  marca as fases pelos callbacks `fase` de `emitirConferido`/`anexarPelaPlataforma`, roda o laço em `try/finally` (exceção =
+  as linhas em curso/fila viram `falha` com o motivo) e SEMPRE finaliza no servidor (anexar: cada arquivo não reportado
+  `falhou` com o motivo da linha; interrompido = `cancelada`; baixar: os resultados vão de 25 em 25 e, no fim, todos).
+  **Sinal de vida:** a cada `SINAL_EXECUCAO_MS` (4 min) o passo em curso vai como `executando` (`sinalPasso`; o builder só
+  troca passo pendente — nunca volta um concluído) e `pagehide` cancela a execução com `keepalive` (`cancelarAoSair`). O
+  cliente tenta UMA vez de novo a falha transitória (rede/5xx/429). **Reconciliação:** `comandosReconciliarExecucoes`
+  (`automacao-sql.ts`, D1 real) — `rodando`/`pausada` sem atividade há `MINUTOS_ABANDONO`=30 min → `falhou` com
+  `MSG_ABANDONO`, passos pendentes também, totais recontados; roda no cron dos e-mails e ao listar as execuções. O registro
+  que falha depois do anexo gravado deixa a nota "o anexo vale; não reenvie" (`notaDoAnexo` = o mesmo texto da linha e do
+  servidor). `consumir` só aceita a origem da extensão PCA (`ORIGEM_EXTENSAO_CENTI`) ou o próprio site.
 - **PLATAFORMA DE AUTOMAÇÕES CENTI — FUNDAÇÃO (migração `0076`, aditiva; plano em `docs` da conversa: fundação → extensão segura →
   ao vivo → receitas → login/descoberta → gravador de receitas).** Princípios: negado por padrão · escrita só ACRESCENTA ·
   toda escrita = AUTORIZAÇÃO DE USO ÚNICO do servidor (+ confirmação na janela da extensão, entrega 2) · ensaio antes ·

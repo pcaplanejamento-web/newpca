@@ -15,6 +15,33 @@
   const ESTADO = { rodando: "Em andamento", concluido: "Concluído", interrompido: "Interrompido", parado: "Parou" };
   const quando = (ms) => new Date(ms).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
+  // A PERMISSÃO de gravar na Centi (o serviço pede; só este painel da extensão responde — a página do sistema não o alcança).
+  let pedidoAtual = null;
+  function mostrarConfirmacao(c) {
+    const valida = !!c && typeof c.pedido === "string" && (!c.ate || c.ate > Date.now());
+    pedidoAtual = valida ? c.pedido : null;
+    $("confirmacao").hidden = !valida;
+    if (!valida) return;
+    $("confProtocolo").textContent = `${c.numero ?? ""}${c.ano ? `/${c.ano}` : ""}`;
+    $("confId").textContent = c.id ?? "";
+    $("confDescricao").textContent = c.descricao ?? "";
+    $("confExecucao").textContent = `nº ${c.execucao ?? ""}`;
+    $("confPrazo").textContent = c.ate ? `Sem resposta até ${new Date(c.ate).toLocaleTimeString("pt-BR", { timeStyle: "short" })}, não grava.` : "";
+    $("confSim").disabled = false;
+    $("confNao").disabled = false;
+    $("confNao").focus();
+  }
+  async function responderConfirmacao(sim) {
+    if (!pedidoAtual) return;
+    $("confSim").disabled = true;
+    $("confNao").disabled = true;
+    await chrome.runtime.sendMessage({ tipo: "confirmacao", pedido: pedidoAtual, sim }).catch(() => {});
+    mostrarConfirmacao(null);
+    if (janela && new URLSearchParams(location.search).has("confirmar")) window.close();
+  }
+  $("confSim").addEventListener("click", () => responderConfirmacao(true));
+  $("confNao").addEventListener("click", () => responderConfirmacao(false));
+
   function mostrarAtividade(a) {
     $("atividade").hidden = !a;
     $("parar").hidden = a?.estado !== "rodando";
@@ -145,7 +172,15 @@
   // Ao vivo: o andamento muda no armazenamento da sessão da extensão.
   chrome.storage.session.onChanged.addListener((m) => {
     if (m.atividade) mostrarAtividade(m.atividade.newValue ?? null);
+    if (m.confirmacao) mostrarConfirmacao(m.confirmacao.newValue ?? null);
   });
   carregar();
-  mostrarLogin();
+  chrome.storage.session
+    .get("confirmacao")
+    .then((x) => {
+      mostrarConfirmacao(x.confirmacao ?? null);
+      // A permissão em primeiro lugar: o login só aparece sozinho sem pedido pendente.
+      if (!pedidoAtual) mostrarLogin();
+    })
+    .catch(() => mostrarLogin());
 })();

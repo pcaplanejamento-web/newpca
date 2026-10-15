@@ -20,7 +20,11 @@ function serviço(respostaJanela: boolean | null) {
     get enviados() {
       return anexos();
     },
-    janelas: () => s.janelas.filter((u) => u.includes("confirmar.html")).length,
+    janelas: () => s.janelas.filter((u) => u.startsWith("confirmar:")).length,
+    todas: () => s.janelas,
+    get sessao() {
+      return s.sessao;
+    },
   };
 }
 
@@ -49,6 +53,8 @@ test("background: recusar ou fechar a janela de confirmação não grava", async
     assert.equal(r.ok, false);
     assert.match(r.erro, /não confirmado/);
     assert.equal(s.enviados.length, 0);
+    // O pedido de permissão sai do ícone depois da resposta.
+    assert.equal(s.sessao?.confirmacao, undefined);
   }
 });
 
@@ -59,6 +65,8 @@ test("background: confirmado grava, e a janela abre UMA vez por execução e pro
   assert.equal(r1.ok && r2.ok, true);
   assert.equal(s.enviados.length, 2);
   assert.equal(s.janelas(), 1);
+  // A permissão sai no DROPDOWN do ícone (o banner flutuante da extensão), nunca numa página própria.
+  assert.ok(s.todas().includes("confirmar:dropdown"));
   await s.pedir({ acao: "anexar", dados: DADOS, autorizado: { ...AUT, execucaoId: 6 } });
   assert.equal(s.janelas(), 2);
 });
@@ -68,7 +76,7 @@ test("extensão: sem localhost em produção (só o site do sistema fala com ela
   assert.ok(!fonte("manifest.json").includes("localhost"));
 });
 
-function ponte(respostaServidor: { status: number; corpo: unknown }) {
+function ponte(respostaServidor: { status: number; corpo: unknown }, orfa = false) {
   const ouvintes: ((e: unknown) => void)[] = [];
   const postados: unknown[] = [];
   const enviados: unknown[] = [];
@@ -76,10 +84,13 @@ function ponte(respostaServidor: { status: number; corpo: unknown }) {
   const window: Record<string, unknown> = {
     location: { origin: "https://governarv.com.br" },
     addEventListener: (t: string, f: (e: unknown) => void) => (t === "message" ? ouvintes.push(f) : 0),
+    removeEventListener: (t: string, f: (e: unknown) => void) => (t === "message" && ouvintes.includes(f) ? ouvintes.splice(ouvintes.indexOf(f), 1) : 0),
     postMessage: (m: unknown) => postados.push(m),
   };
   const chrome = {
     runtime: {
+      // A cópia ÓRFÃ (extensão atualizada sem recarregar a página) perde o id do runtime.
+      id: orfa ? undefined : "ext",
       getManifest: () => ({ version: "1.4.0" }),
       sendMessage: (m: unknown, f: (r: unknown) => void) => {
         enviados.push(m);
@@ -116,6 +127,14 @@ test("ponte do sistema: consome a autorização para o alvo do PRÓPRIO pedido e
   const m = p.enviados[0] as { dados: Record<string, unknown>; autorizado: { execucaoId: number } };
   assert.equal("autorizacao" in m.dados, false);
   assert.equal(m.autorizado.execucaoId, 5);
+});
+
+test("ponte do sistema: a cópia ÓRFÃ (extensão atualizada) nunca consome a autorização nem responde", async () => {
+  const p = ponte({ status: 200, corpo: { ok: true, execucaoId: 5, chave: "arquivo-1" } }, true);
+  await p.enviar({ ...DADOS, autorizacao: { token: "a".repeat(64) } });
+  assert.equal(p.pedidos.length, 0);
+  assert.equal(p.enviados.length, 0);
+  assert.equal(p.postados.filter((x) => (x as { resposta?: unknown }).resposta).length, 0);
 });
 
 test("ponte do sistema: autorização recusada pelo servidor não chega à extensão", async () => {

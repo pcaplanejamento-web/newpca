@@ -1,4 +1,5 @@
 import { exigirAdmin } from "@/lib/api-auth";
+import { ORIGEM_EXTENSAO_CENTI } from "@/lib/automacao-centi-core";
 import { motivoNaoEscrever, textoAlvoAnexo } from "@/lib/automacao-core";
 import { consumirAutorizacao, getConfigAutomacao, getExecucao } from "@/lib/automacao-plataforma";
 import { consumirSchema } from "@/lib/automacao-validation";
@@ -11,7 +12,8 @@ export const dynamic = "force-dynamic";
 /**
  * CONSUMIDA PELA EXTENSÃO (o serviço dela, com o cookie da sessão), logo antes de gravar na Centi: a autorização vale
  * UMA vez, só para quem a pediu, dentro da validade, para a MESMA capacidade e o MESMO alvo — e o freio é conferido de
- * novo. O pedido vem da extensão (Origin chrome-extension://…) ou do próprio site; de outro site, nunca.
+ * novo. O pedido vem da extensão PCA (o id FIXO — `ORIGEM_EXTENSAO_CENTI`) ou do próprio site; de outro site ou de outra
+ * extensão, nunca.
  */
 export async function POST(req: Request) {
   const origem = req.headers.get("origin") ?? "";
@@ -22,7 +24,7 @@ export async function POST(req: Request) {
       return false;
     }
   })();
-  if (origem && !proprio && !/^chrome-extension:\/\/[a-p]{32}$/.test(origem)) return erro("Origem não permitida.", 403);
+  if (origem && !proprio && origem !== ORIGEM_EXTENSAO_CENTI) return erro("Origem não permitida.", 403);
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
   const p = consumirSchema.safeParse(await req.json().catch(() => null));

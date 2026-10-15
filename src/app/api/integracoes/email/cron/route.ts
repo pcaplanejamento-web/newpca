@@ -3,6 +3,7 @@ import { papeis, usuarios } from "@/db/schema";
 import { colunasSessao, papelDoUsuarioSql, sessaoDaLinha } from "@/lib/auth";
 import { VALIDADE_CHAT_MS } from "@/lib/chat-core";
 import { comandosLimparChat } from "@/lib/chat-sql";
+import { reconciliarExecucoes } from "@/lib/automacao-plataforma";
 import { cronAutorizado } from "@/lib/cron";
 import { getDb } from "@/lib/db";
 import { enviarEmailsPendentes } from "@/lib/email";
@@ -37,6 +38,8 @@ export async function POST(req: Request) {
   await db
     .batch(retencao.auto ? [...comandosRetencaoNotificacoes(db, retencao), comandoEncerrarEmailsVelhos(db)] : [comandoEncerrarEmailsVelhos(db)])
     .catch((e) => console.error("[cron] retenção das notificações:", (e as Error).message));
+  // As execuções da Automação ABANDONADAS (a página fechou no meio) viram "falhou" — o histórico nunca fica "rodando".
+  await reconciliarExecucoes();
   // O CHAT guardado por 7 dias: o que passou disso sai (sempre).
   await db.batch(comandosLimparChat(db, Date.now() - VALIDADE_CHAT_MS) as never).catch((e) => console.error("[cron] limpeza do chat:", (e as Error).message));
   if ("erro" in (await resendDaConfig())) return ok({ ativo: false });

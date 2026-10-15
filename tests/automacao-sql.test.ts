@@ -60,5 +60,9 @@ describe("automação: passos, autorização de uso único e registros", () => {
     const r = { capacidade: "anexar", centiAlvo: "2332778", descricao: "PGM", centiDocumento: "5454711", protocoloId: null, execucaoId: 10, usuarioId: 1, usuarioNome: "A" };
     assert.equal((await comandoRegistrarEscrita(orm, r)).length, 1);
     assert.equal((await comandoRegistrarEscrita(orm, r)).length, 0);
+    // Reenviado (a Centi não tinha o documento): o registro passa a apontar o documento novo.
+    assert.equal((await comandoRegistrarEscrita(orm, { ...r, centiDocumento: "5454999" })).length, 1);
+    const linhas = db.prepare("SELECT centi_documento AS d FROM automacao_registros WHERE centi_alvo = '2332778'").all() as { d: string }[];
+    assert.deepEqual(linhas.map((x) => x.d), ["5454999"]);
   });
 });

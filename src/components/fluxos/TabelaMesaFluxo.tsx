@@ -44,6 +44,7 @@ export function TabelaMesaFluxo({
   onRowClick,
   scrollInterno = true,
   linhasSalvas,
+  onOrdem,
 }: {
   itens: Item[];
   /** A chave de cada linha (a mesma da seleção). */
@@ -68,6 +69,8 @@ export function TabelaMesaFluxo({
   scrollInterno?: boolean;
   /** As linhas por página guardadas no aparelho (a chave). */
   linhasSalvas?: string;
+  /** A SEQUÊNCIA da tabela: as chaves das linhas na ordem mostrada (ordenação + filtros) e se há filtro (menos linhas). */
+  onOrdem?: (chaves: string[], filtrada: boolean) => void;
 }) {
   const tipo: TipoItemMesa | null = useMemo(() => tipoDosItens(itens), [itens]);
   const colGestao = useColunasGestao(gestao);
@@ -75,7 +78,8 @@ export function TabelaMesaFluxo({
     const a = aberturaDoItem(it);
     if (a) onAbrir(a);
   } : undefined;
-  const comum = { selectable: !!onSelected, selected, onSelected, acoesRodape, vazio, exportar, density: "compact", scrollInterno, linhasSalvas } as const;
+  const ordenadas = onOrdem ? (ls: Item[]) => onOrdem(ls.map((it) => String(chave(it))), ls.length < itens.length) : undefined;
+  const comum = { selectable: !!onSelected, selected, onSelected, acoesRodape, vazio, exportar, density: "compact", scrollInterno, linhasSalvas, onOrdenadas: ordenadas } as const;
 
   // DFDs: a PLANILHA DE DFDs da Mesa (a chave da linha = a posição; a seleção traduz para a chave do item).
   const dfds = useMemo(() => (tipo === "dfd" ? itens.map((it, i): LinhaDfd => ({ ...dadosDfdDoItem(it), key: i, estado: "regular" })) : []), [tipo, itens]);
@@ -95,6 +99,7 @@ export function TabelaMesaFluxo({
         acoesRodape={acoesRodape}
         vazio={vazio}
         exportar={exportar}
+        onOrdenadas={onOrdem && ((ls) => onOrdem(ls.map((r) => String(chaves[r.key])), ls.length < itens.length))}
       />
     );
   }

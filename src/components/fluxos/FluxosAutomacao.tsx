@@ -61,14 +61,15 @@ import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
 import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
-import { type HostPainel, HostPainelCtx } from "./paineis";
+import { type HostPainel, HostPainelCtx, type ProtocoloCenti } from "./paineis";
+import { ProblemasFluxo } from "./ProblemasFluxo";
 import { ProtocoloUploadForm } from "../ProtocoloUploadForm";
 import { CartaoPreso } from "../ArrastoCartoes";
 import { tokenPx } from "../espacamento";
 import { duracaoMotionMs } from "../Modal";
 import { SombraGrade, useArrastoGrade } from "../PastasQuadros";
 import type { GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
-import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, testarAnexo } from "@/lib/automacao-dfds-motor";
+import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, previaDfds, testarAnexo } from "@/lib/automacao-dfds-motor";
 
 type Pedir = (acao: string, dados: unknown, ms: number) => Promise<Record<string, unknown> & { ok?: boolean; erro?: string; loteId?: string; interrompido?: boolean }>;
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
@@ -147,12 +148,14 @@ export function FluxosAutomacao({
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
   const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[] }[]>([]);
   const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
+  /** O destino do Baixar/anexar em curso é um protocolo da Centi (o rótulo "Anexado" × "Salvo"). */
+  const [dfdsAnexar, setDfdsAnexar] = useState(false);
   const [naFila, setNaFila] = useState(0);
   const rodandoRef = useRef<number | null>(null);
   useEffect(() => onRodando(rodando != null || naFila > 0), [rodando, naFila, onRodando]);
   // O andamento vai ao painel de SEGUNDO PLANO (minimizado fora desta tela; "Detalhes" volta ao fluxo).
   const emCurso = rodando != null;
-  const andDfds = dfds?.length ? andamentoDfds(dfds) : null;
+  const andDfds = dfds?.length ? andamentoDfds(dfds, dfdsAnexar) : null;
   useTrabalhoSegundoPlano(
     exec
       ? {
@@ -270,7 +273,11 @@ export function FluxosAutomacao({
       baixarDfds: async (itens: Item[], config: Record<string, unknown>) => {
         const { saida, alvo, erroAlvo } = opcoesDoNo(config);
         if (erroAlvo) return { linhas: [], erro: erroAlvo };
-        const plano = planoDosItens(itens, saida, protocolos);
+        const todo = planoDosItens(itens, saida, protocolos);
+        // "Enviar os que faltam": só os arquivos pedidos (a conferência no protocolo).
+        const so = Array.isArray(config.somenteArquivos) ? new Set(config.somenteArquivos.map(String)) : null;
+        const plano = so ? { arquivos: todo.arquivos.filter((a) => so.has(a.nome)), previa: [] as LinhaDfd[] } : todo;
+        if (so) plano.previa = previaDfds(plano.arquivos);
         if (!plano.arquivos.length) return { linhas: plano.previa as unknown as Item[], erro: "Nenhum DFD com nº de planejamento para emitir." };
         if (saida.destino === "pasta" && saida.escolherPasta && podePasta && !pastaRef.current) return { linhas: [], erro: "Escolha a pasta de destino (na aba DFDs do painel)." };
         let linhas = plano.previa;
@@ -282,7 +289,8 @@ export function FluxosAutomacao({
           setDfds(linhas);
         };
         setDfds(linhas);
-        await executarDfds(plano.arquivos, saida, alvo, {
+        setDfdsAnexar(saida.destino !== "pasta");
+        const fim = await executarDfds(plano.arquivos, saida, alvo, {
           ...emissor,
           lote,
           interrompido: () => interrompido.current || cancelar.current,
@@ -293,8 +301,12 @@ export function FluxosAutomacao({
           marcar: (chave, l) => aplicar((x) => (x.chave === chave ? l : null)),
           marcarVarias: aplicar,
         });
-        if (saida.destino !== "pasta") void carregarNaCenti();
-        return { linhas: linhas as unknown as Item[] };
+        if (saida.destino !== "pasta") {
+          void carregarNaCenti();
+          const cf = fim.confirmados;
+          if (cf) (cf.ok === cf.total ? toast.success : toast.warning)(`Conferido na Centi: ${cf.ok} de ${cf.total} arquivo(s) no protocolo.${cf.ok < cf.total ? " Use “Enviar os que faltam”." : ""}`, 10000);
+        }
+        return { linhas: linhas as unknown as Item[], erro: fim.erro };
       },
       importarProtocolo: async (it: Item, apontamentos: string[]) => {
         const lido = leituras.current.get(chaveLeitura(it.protocolo ?? it.numero, it.ano));
@@ -626,10 +638,8 @@ export function FluxosAutomacao({
       rodando: rodando != null,
       reparticoes: { ...reps, buscar: () => void buscarReparticoes() },
       conferirAlvo: async (al) => {
-        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: { numero: string; ano: string; assunto: string; descricao: string; documentos: number } };
-        return r.ok && r.protocolo
-          ? `${r.protocolo.numero}/${r.protocolo.ano} · ${r.protocolo.assunto || r.protocolo.descricao} · ${r.protocolo.documentos} documento(s)`
-          : (r.erro ?? "Não consegui abrir o protocolo na Centi.");
+        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: ProtocoloCenti };
+        return r.ok && r.protocolo ? { protocolo: r.protocolo } : { erro: r.erro ?? "Não consegui abrir o protocolo na Centi." };
       },
       testarAnexo: async (al, tipo) => {
         const r = await testarAnexo({ pedir: emissor.pedir, confirmar: (texto) => confirmar({ titulo: "A Centi pede confirmação", texto, confirmar: "Confirmar e anexar" }) }, al, tipo);
@@ -643,6 +653,20 @@ export function FluxosAutomacao({
       executarCom: (g, itens) => {
         const f = fluxos?.find((x) => x.id === aberto);
         if (f) void executar(f, g, false, itens);
+      },
+      enviarArquivos: (g, noId, nomes) => {
+        const f = fluxos?.find((x) => x.id === aberto);
+        if (!f || !nomes.length) return;
+        void confirmar({
+          titulo: `Enviar ${nomes.length} arquivo(s) que faltam no protocolo?`,
+          texto: "O fluxo roda de novo emitindo e anexando SÓ os arquivos que não estão no protocolo da Centi. Cada anexo pede a sua confirmação na extensão, como sempre.",
+          confirmar: "Enviar os que faltam",
+        }).then((sim) => {
+          if (!sim) return;
+          // Só nesta execução: o "Baixar/anexar DFDs" limitado a estes arquivos (o fluxo salvo não muda).
+          const grafo = { ...g, nos: g.nos.map((n) => (n.id === noId ? { ...n, config: { ...n.config, somenteArquivos: nomes } } : n)) };
+          void executar(f, grafo);
+        });
       },
       orgaos: importacao.orgaos as unknown as HostPainel["orgaos"],
     }),
@@ -662,8 +686,11 @@ export function FluxosAutomacao({
           resultado={exec?.id === fluxo.id ? resultado : null}
           onVoltar={() => {
             setAberto(null);
-            setPassos({});
-            setResultado(null);
+            // Em execução, as etapas seguem (voltar ao fluxo mostra o andamento real, não "0/3").
+            if (rodando !== fluxo.id) {
+              setPassos({});
+              setResultado(null);
+            }
           }}
           onSalvo={(f) => setFluxos((fs) => fs?.map((x) => (x.id === f.id ? f : x)) ?? fs)}
           onExecutar={(g) => void executar(fluxo, g)}
@@ -1252,6 +1279,14 @@ function EditorFluxo({
     JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo || publico !== fluxo.publico || descricao.trim() !== (fluxo.descricao ?? "") || JSON.stringify(ajuda) !== JSON.stringify(ajudaBase);
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
+  const nomeDoComponente = (id: string) => {
+    const n = grafo.nos.find((x) => x.id === id);
+    return n ? nomeDoNo(n, REGISTRO_NOS) : null;
+  };
+  const irAoComponente = (id: string) => {
+    setModo("diagrama");
+    setSel(id);
+  };
   const atencoes = problemas.filter((p) => p.nivel !== "erro");
   const ref = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(ref, 320) ?? 560;
@@ -1362,9 +1397,9 @@ function EditorFluxo({
           onChange={(e) => setNome(e.target.value)}
           className="min-w-0 flex-1 rounded-control bg-transparent px-2 py-1 text-base font-semibold text-text outline-none hover:bg-[var(--accent-soft)] focus:bg-surface focus:shadow-ring"
         />
-        {erros.length > 0 && <Badge tone="red" title={erros.map((p) => p.texto).join("\n")}>{erros.length} problema(s)</Badge>}
-        {/* As ATENÇÕES não impedem executar, mas ficam à vista (a lista inteira na dica). */}
-        {atencoes.length > 0 && <Badge tone="amber" title={atencoes.map((p) => p.texto).join("\n")}>{atencoes.length} atenção(ões)</Badge>}
+        {/* Os PROBLEMAS (impedem executar) e as ATENÇÕES: tocar abre a lista e leva ao componente. */}
+        <ProblemasFluxo itens={erros} nivel="erro" nomeDo={nomeDoComponente} onIr={irAoComponente} />
+        <ProblemasFluxo itens={atencoes} nivel="atencao" nomeDo={nomeDoComponente} onIr={irAoComponente} />
         <Button
           size="sm"
           variant="icon"

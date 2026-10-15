@@ -1,7 +1,7 @@
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { receitaAtiva, receitaPorId } from "@/lib/automacao-core";
-import { criarExecucao, getConfigAutomacao, listarExecucoes } from "@/lib/automacao-plataforma";
+import { criarExecucao, getConfigAutomacao, listarExecucoes, reconciliarExecucoes } from "@/lib/automacao-plataforma";
 import { criarExecucaoSchema } from "@/lib/automacao-validation";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { nomeExibicao } from "@/lib/pessoa";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
+  await reconciliarExecucoes();
   return ok({ execucoes: await listarExecucoes() });
 }
 

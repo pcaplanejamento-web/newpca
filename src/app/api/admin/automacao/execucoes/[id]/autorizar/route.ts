@@ -36,7 +36,9 @@ export async function POST(req: Request, ctx: Ctx) {
   if (passo.alvo !== textoAlvoAnexo(p.data.alvo)) return erro("O alvo não é o deste passo da execução.", 422);
   if (passo.estado === "ok") return erro("Este passo já foi feito.", 409);
   const descricao = textoAlvoAnexo(p.data.alvo).split("|")[4];
-  const feito = await escritaRegistrada(p.data.capacidade, p.data.alvo.id, descricao);
+  // O registro evita repetir; quando a CENTI (conferida antes) não tem o documento, ele não impede reenviar — a extensão
+  // ainda confere o protocolo na hora de gravar (nunca duplica).
+  const feito = p.data.ausenteNaCenti ? null : await escritaRegistrada(p.data.capacidade, p.data.alvo.id, descricao);
   if (feito) return ok({ jaFeito: true, centiDocumento: feito.centiDocumento });
   const esperar = await contarTentativa("automacaoEscrita", String(g.u.id));
   if (esperar > 0) return respostaLimite(esperar);

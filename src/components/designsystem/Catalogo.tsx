@@ -102,6 +102,8 @@ import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos
 import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
+import { ProblemasFluxo } from "@/components/fluxos/ProblemasFluxo";
+import { ConferenciaAnexos } from "@/components/fluxos/ConferenciaAnexos";
 import { AjudaNo } from "@/components/fluxos/AjudaNo";
 import { AjudaDoFluxo } from "@/components/fluxos/ConfigFluxo";
 import type { Grafo } from "@/lib/fluxo-core";
@@ -3236,6 +3238,31 @@ export function Catalogo() {
           genericas={[]}
           gestao={{ pessoas: [], outras: [], situacoes: [], usuarioId: 0 }}
           scrollInterno={false}
+        />
+      </Secao>
+      <Secao titulo="Problemas do fluxo (ProblemasFluxo)">
+        <div className="flex flex-wrap gap-2">
+          <ProblemasFluxo
+            itens={[
+              { no: "n1", nivel: "erro", texto: "Informe “Id do protocolo (Centi)”." },
+              { nivel: "erro", texto: "O fluxo precisa de um Início." },
+            ]}
+            nivel="erro"
+            nomeDo={() => "Baixar/anexar DFDs"}
+            onIr={() => undefined}
+          />
+          <ProblemasFluxo itens={[{ no: "n2", nivel: "atencao", texto: "Componente sem ligação." }]} nivel="atencao" nomeDo={() => "Filtrar"} onIr={() => undefined} />
+        </div>
+      </Secao>
+      <Secao titulo="Conferência no protocolo da Centi (ConferenciaAnexos)">
+        <ConferenciaAnexos
+          linhas={[
+            { nome: "PMRV - PCA 2027 - (1222) - 2026.pdf", descricao: "PMRV - PCA 2027 - (1222) - 2026", dfds: 2, protocolo: "156844/2026", situacao: "anexado", documento: { descricao: "PMRV - PCA 2027 - (1222) - 2026", sequencial: "61", id: "5454711" }, registrado: true },
+            { nome: "FME - PCA 2027 - (1223) - 2026.pdf", descricao: "FME - PCA 2027 - (1223) - 2026", dfds: 6, protocolo: "156844/2026", situacao: "falta", documento: null, registrado: false },
+            { nome: "FMS - PCA 2027 - (1224) - 2026.pdf", descricao: "FMS - PCA 2027 - (1224) - 2026", dfds: 3, protocolo: "156844/2026", situacao: "ausente", documento: null, registrado: true },
+          ]}
+          onConferir={() => undefined}
+          onEnviar={() => undefined}
         />
       </Secao>
       <Secao titulo="Cartão de automação (CartaoFluxo)">

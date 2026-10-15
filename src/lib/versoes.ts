@@ -35,12 +35,183 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.108.0",
+    versao: "1.114.0",
     data: "2026-10-15",
     titulo: "Palavras apontadas no item",
     mudancas: [
       { tipo: "novo", area: "Avaliação", texto: "Novo ponto “Palavras no item”: o ADM cadastra conjuntos de palavras (separadas por “;”), cada um com a sua importância, e o item cuja descrição contém uma delas é apontado. Desligado por padrão.", link: "/painel/configuracoes?aba=avaliacao" },
       { tipo: "melhoria", area: "Mesa", texto: "O item com palavra apontada aparece no Estado, nas pendências (leva à descrição do item), no despacho e, se o ADM escolher bloquear, trava a importação.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.113.0",
+    data: "2026-10-15",
+    titulo: "Automação: conferência final na Centi e continuar de onde parou",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Ao terminar um anexo, o sistema abre o protocolo na Centi e confere cada arquivo: “Conferido na Centi: N de N”. O que não estiver lá vira falha “Não confirmado” — nada é dado como anexado sem a prova da Centi.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Continuar de onde parou: ao fim de cada execução a conferência no protocolo roda sozinha e mostra “Enviar os que faltam” — interrompida, com falha ou com a página fechada, basta enviar o que falta.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Falha passageira (rede, tempo esgotado, servidor indisponível) na emissão ou no anexo ganha UMA nova tentativa sozinha antes de virar “Falhou” — sem risco de duplicar: a extensão confere o protocolo antes de gravar.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.112.0",
+    data: "2026-10-15",
+    titulo: "Automação: andamento ao vivo com % e tempo restante",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Etapas acompanham a execução em tempo real: a % de conclusão pelo trabalho real (cada DFD conta), o tempo estimado para terminar pelo ritmo dos últimos minutos, a etapa em curso destacada com “n de N” e o DFD que está sendo tratado agora.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Análise dos DFDs: cada protocolo/unidade recolhe sozinho quando termina (com “Concluído” ou as falhas), a lista rola suave até o que está em curso e você pode abrir/fechar qualquer grupo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Voltar à lista e abrir de novo o fluxo em execução não zera mais as etapas (“0/3”) — o andamento continua à vista.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.111.0",
+    data: "2026-10-15",
+    titulo: "Automação: conferir no protocolo o que foi anexado e enviar o que falta",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Baixar/anexar DFDs: “Conferir no protocolo” abre o protocolo da Centi só para ler e mostra, arquivo a arquivo, o que já está anexado (com o nº do documento), o que falta e o que o sistema registrou mas a Centi não tem. “Enviar os que faltam” emite e anexa só esses.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "“Já estava” só quando o documento está de fato no protocolo da Centi: antes bastava o registro do sistema (de uma execução anterior) para o arquivo ser pulado. Registrado mas ausente na Centi agora é enviado de novo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O anexo nunca apaga documentos: o protocolo devolvido sem documentos já gravados (desatualizado) é recusado, o salvar que perde documentos vira erro e, depois de gravar, o protocolo é aberto de novo para confirmar o documento. O nº mostrado é o do documento NOVO. Atualize a extensão para a 1.25.0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.110.0",
+    data: "2026-10-15",
+    titulo: "Automação: o estado de cada DFD mostra o que acontece de fato",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Cada DFD do Baixar/anexar mostra o passo real: Emitindo na Centi · Conferindo o PDF · No PDF unido · Anexando na Centi · Aguardando sua confirmação — e o fim real: Anexado/Salvo · Já estava · Falhou · Interrompido. A entidade da Centi aparece já na fila (prevista, com “?”) e a emissão confirma a real.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Os números batem em todo lugar: a barra (“12 anexado(s) · 4 já estava(m) · 1 falhou — 17 de 46”), o painel do canto e o ícone da extensão contam os DFDs CONCLUÍDOS — o “já estava no protocolo” não é mais contado como anexado e o 1º DFD não aparece feito antes de terminar.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O histórico das execuções nunca fica “Rodando” para sempre: fechar a página cancela a execução, uma falha no meio a encerra com o motivo e a parada há mais de 30 minutos (sem sinal de vida) vira “Falhou”. O que não foi emitido aparece com o motivo, e uma falha de rede no registro tenta de novo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Segurança: a autorização de gravar na Centi só é aceita da extensão da Plataforma PCA (ou do próprio sistema) — nenhuma outra extensão a usa.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.109.0",
+    data: "2026-10-15",
+    titulo: "Automação: ordem da tabela, permissão no banner da extensão e correções",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Os DFDs seguem na SEQUÊNCIA da tabela de Seleção — a ordenação e os filtros que você fez, só os marcados (ou os à vista, sem marcação). Saiu o “Ordenar pelo planejamento”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "A permissão para gravar na Centi aparece no banner flutuante da extensão (o painel do ícone), nunca numa tela própria. Tocar fora não recusa: o pedido fica no ícone (selo “?”) até você responder.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "“Autorização inválida, já usada ou vencida”: uma cópia antiga da extensão, que ficava na página depois de atualizar, gastava a autorização antes da nova. A cópia antiga agora fica em silêncio. Atualize a extensão para a 1.24.0.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O selo “N problema(s)” abre a lista com cada problema e o componente dele — tocar leva ao componente no diagrama.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "A aba Análise do Baixar/anexar DFDs mostra cada DFD processado (concluído, falhou, pulado) ao vivo e no fim — antes ficava em 0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.108.0",
+    data: "2026-10-15",
+    titulo: "Baixar/anexar DFDs: testar o protocolo e achar só pelo Id",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "“Testar protocolo” nos Dados de entrada do Baixar/anexar DFDs: abre o protocolo na Centi só para ler e mostra o número, o assunto, o interessado e os documentos — ou o motivo de não ter achado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "O nº do protocolo ficou opcional: em branco, o protocolo é achado só pelo Id e o número vem da Centi (o anexo continua conferindo Id + nº). Atualize a extensão para a 1.23.0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.107.12",
+    data: "2026-10-15",
+    titulo: "Anexo na Centi: abre o protocolo como a tela da Centi",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "O anexo de DFDs num protocolo da Centi parava em \u201cA Centi n\u00e3o devolveu o protocolo\u201d: a Centi deixou de abrir o protocolo pelo caminho que a extens\u00e3o usava. A extens\u00e3o 1.22.0 aprende sozinha como a pr\u00f3pria tela da Centi abre o protocolo \u2014 basta abrir o protocolo UMA vez na Tela Protocolo da Centi com a extens\u00e3o ativa. Baixe a extens\u00e3o nova.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Quando o protocolo n\u00e3o abre, a automa\u00e7\u00e3o para com UM aviso que diz o que cada caminho respondeu e o que fazer \u2014 sem repetir o mesmo erro em cada DFD.", link: "/painel/automacao" },
     ],
   },
   {

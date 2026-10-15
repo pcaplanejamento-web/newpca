@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p38";
+  const NOME = "__pcaCentiAnexo_p41";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -43,9 +43,9 @@
   }
 
   /** O protocolo que a Centi devolveu no load: confere o Id e o NÚMERO (e o ano, quando informado) — nunca anexa noutro. */
-  function conferirProtocolo(retorno, d) {
+  function conferirProtocolo(retorno, d, aceitos = MODULOS_PROTOCOLO) {
     const e = retorno?.Entity;
-    if (!e || !MODULOS_PROTOCOLO.includes(e.ModuleKey) || !Array.isArray(e.Fields)) {
+    if (!e || !aceitos.includes(e.ModuleKey) || !Array.isArray(e.Fields)) {
       // O que a Centi respondeu (a mensagem dela e a FORMA da resposta — nunca os dados), para o erro dizer o motivo.
       const msg = mensagens(retorno?.Message);
       const forma = retorno && typeof retorno === "object" ? Object.keys(retorno).slice(0, 8).join(", ") : typeof retorno;
@@ -55,10 +55,86 @@
     if (texto(valor(e, "Id")) !== String(d.id)) return { erro: `A Centi não achou o protocolo de Id ${d.id}.` };
     const numero = texto(valor(e, "NrProtocolo"));
     const ano = texto(valor(e, "AnoReferencia"));
+    // Só pelo Id (a conferência "Testar protocolo"): sem o nº, vale o Id — o nº e o ano vêm da Centi.
+    if (!texto(d.numero)) {
+      if (!Array.isArray(valor(e, "Documentos"))) return { erro: "A Centi não devolveu os documentos do protocolo." };
+      return { entidade: e };
+    }
     if (numero !== String(d.numero)) return { erro: `O Id ${d.id} é do protocolo ${numero || "?"}${ano ? `/${ano}` : ""}, não do ${d.numero}.` };
     if (d.ano != null && ano !== String(d.ano)) return { erro: `O protocolo ${numero} é de ${ano || "?"}, não de ${d.ano}.` };
     if (!Array.isArray(valor(e, "Documentos"))) return { erro: "A Centi não devolveu os documentos do protocolo." };
     return { entidade: e };
+  }
+
+  /** O que a Centi respondeu a um load do protocolo, em poucas palavras (nunca os dados). */
+  function descreverResposta(r) {
+    const msg = mensagens(r?.Message);
+    if (r && typeof r === "object" && "Entity" in r && !r.Entity) return `protocolo vazio${msg ? ` (${msg})` : ""}`;
+    if (r?.Entity && typeof r.Entity === "object") return `outro registro (módulo ${r.Entity.ModuleKey ?? "?"})`;
+    return msg || "resposta sem o protocolo";
+  }
+  /** O erro de quando NENHUM caminho abriu o protocolo: o que cada um respondeu + o que fazer. */
+  function erroSemProtocolo(d, aprendido, respostas) {
+    const quem = texto(d.numero) ? `${d.numero}${d.ano ? `/${d.ano}` : ""} (Id ${d.id})` : `de Id ${d.id}`;
+    const porque = respostas.length ? ` — ${respostas.join("; ")}` : "";
+    const fazer = aprendido
+      ? "Confira o Id e o número; se estiverem certos, abra esse protocolo de novo na Centi (Tela Protocolo, duplo clique) com a extensão ativa para ela reaprender."
+      : "Abra esse protocolo UMA vez na Centi (Tela Protocolo, duplo clique no protocolo) com a extensão ativa: ela aprende como a tela o abre. Depois, execute de novo.";
+    return `A Centi não abriu o protocolo ${quem}${porque}. ${fazer}`;
+  }
+  // O LOAD DO PROTOCOLO como a TELA o faz (a Centi muda o módulo — os fixos 102907/102908 passaram a voltar vazios): a
+  // resposta da tela que traz um protocolo (Id + NrProtocolo + Documentos) vira um MODELO do pedido, com o Id trocado por
+  // {id}. Só consulta de LEITURA; sem o Id no pedido, não é modelo.
+  const MARCA_ID = "{id}";
+  const MARCA_NUM = "{id:n}";
+  const trocarId = (t, id) => String(t).replace(new RegExp(`(^|[^0-9])${id}(?![0-9])`, "g"), `$1${MARCA_ID}`);
+  // No corpo, o valor IGUAL ao Id vira a marca (o número guarda que era número); o resto fica como veio.
+  const marcarNoCorpo = (v, id) =>
+    Array.isArray(v)
+      ? v.map((x) => marcarNoCorpo(x, id))
+      : v && typeof v === "object"
+        ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, marcarNoCorpo(x, id)]))
+        : typeof v === "number" && String(v) === id
+          ? MARCA_NUM
+          : typeof v === "string" && v.trim() === id
+            ? MARCA_ID
+            : v;
+  const preencherCorpo = (v, id) =>
+    Array.isArray(v)
+      ? v.map((x) => preencherCorpo(x, id))
+      : v && typeof v === "object"
+        ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, preencherCorpo(x, id)]))
+        : v === MARCA_NUM
+          ? Number(id)
+          : v === MARCA_ID
+            ? String(id)
+            : v;
+  function loadDoProtocolo(url, metodo, corpo, j) {
+    const m = String(metodo || "GET").toUpperCase();
+    const c = caminhoDaApi(url);
+    if (!c || !consultaPermitida(c.caminho, m)) return null;
+    const e = j?.Entity;
+    if (!e || !Array.isArray(e.Fields) || !Number.isInteger(e.ModuleKey)) return null;
+    const id = texto(valor(e, "Id"));
+    if (!/^\d{1,12}$/.test(id) || !texto(valor(e, "NrProtocolo")) || !Array.isArray(valor(e, "Documentos"))) return null;
+    const caminho = trocarId(c.caminho, id);
+    let b = null;
+    if (m === "POST" && corpo != null) {
+      const limpo = semSegredos(corpo);
+      if (limpo === undefined) return null;
+      b = marcarNoCorpo(limpo, id);
+    }
+    if (!caminho.includes(MARCA_ID) && !/\{id(:n)?\}/.test(JSON.stringify(b ?? ""))) return null;
+    return { metodo: m, caminho, corpo: b, modulo: e.ModuleKey };
+  }
+  /** O pedido do modelo aprendido para um Id (só dígitos; o modelo tem de seguir sendo uma consulta de leitura). */
+  function pedidoDoLoad(modelo, id) {
+    if (!modelo || !/^\d{1,12}$/.test(String(id)) || !Number.isInteger(modelo.modulo)) return null;
+    const m = String(modelo.metodo || "").toUpperCase();
+    const caminho = String(modelo.caminho || "").split(MARCA_ID).join(String(id));
+    if (!consultaPermitida(caminho, m)) return null;
+    const corpo = modelo.corpo == null ? null : preencherCorpo(modelo.corpo, String(id));
+    return { metodo: m, caminho, corpo };
   }
 
   /** O resumo do protocolo (o "Conferir" da tela). */
@@ -73,7 +149,25 @@
       descricao: texto(valor(e, "Descricao")),
       documentos: docs.length,
       descricoes: docs.map((x) => texto(valor(x, "Descricao"))),
+      // Cada documento (a conferência do que foi anexado e do que falta): descrição, nº (Sequencial) e Id.
+      docs: docs.map((x) => ({ descricao: texto(valor(x, "Descricao")), sequencial: texto(valor(x, "Sequencial")), id: texto(valor(x, "Id")) })),
     };
+  }
+
+  /** Os Ids (reais, ≠ 0) dos documentos do protocolo. */
+  function idsDocumentos(e) {
+    return (valor(e, "Documentos") ?? []).map((x) => texto(valor(x, "Id"))).filter((id) => id && id !== "0");
+  }
+
+  /** NUNCA APAGAR: o protocolo aberto tem de trazer TODOS os documentos que o último salvar devolveu (`ids`). Um protocolo
+   * devolvido sem eles (desatualizado) seria salvo SEM eles — a Centi os apagaria. Devolve o erro ou null. */
+  function faltamGravados(e, ids) {
+    if (!Array.isArray(ids) || !ids.length) return null;
+    const tem = new Set(idsDocumentos(e));
+    const faltam = ids.filter((id) => !tem.has(String(id)));
+    return faltam.length
+      ? `A Centi devolveu o protocolo SEM ${faltam.length} documento(s) que já estão nele (desatualizado) — não anexei, para não apagar nada. Recarregue a aba da Centi (F5) e confira o protocolo.`
+      : null;
   }
 
   /** O documento já anexado com a MESMA descrição (não anexa duas vezes). */
@@ -172,9 +266,17 @@
   }
 
   /** A resposta do save: só vale com Success e o documento novo de volta com Id real. */
-  function conferirSalvo(r, d) {
+  function conferirSalvo(r, d, antes = null) {
     if (r?.Success !== true) return { erro: `A Centi não gravou${mensagens(r?.Message) ? `: ${mensagens(r.Message)}` : "."}` };
-    const doc = (valor(r.Entity, "Documentos") ?? []).filter((x) => mesmaDescricao(valor(x, "Descricao"), d.descricao)).pop();
+    // Nenhum documento que estava no protocolo pode ter sumido no salvar.
+    if (antes) {
+      const sumiu = faltamGravados(r.Entity, idsDocumentos(antes));
+      if (sumiu) return { erro: "A Centi respondeu ao salvar SEM documentos que estavam no protocolo — confira o protocolo na Centi AGORA (não reenvie)." };
+    }
+    // O documento NOVO = o de mesma descrição que não estava no protocolo aberto (senão, o último de mesma descrição).
+    const velhos = new Set(antes ? idsDocumentos(antes) : []);
+    const iguais = (valor(r.Entity, "Documentos") ?? []).filter((x) => mesmaDescricao(valor(x, "Descricao"), d.descricao));
+    const doc = iguais.filter((x) => !velhos.has(texto(valor(x, "Id")))).pop() ?? iguais.pop();
     const id = texto(valor(doc, "Id"));
     if (!doc || !id || id === "0") return { erro: "A Centi respondeu, mas o documento não voltou no protocolo — confira na Centi." };
     return { sequencial: texto(valor(doc, "Sequencial")), documento: id };
@@ -612,5 +714,5 @@
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,
-    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, resumoProtocolo, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
+    renovarRastreio, estruturaDoPedido, validarPedido, conferirProtocolo, descreverResposta, erroSemProtocolo, loadDoProtocolo, pedidoDoLoad, resumoProtocolo, idsDocumentos, faltamGravados, jaAnexado, montarSalvar, corpoConfirmar, mensagens, conferirSalvo, tipoDoLoad, dicaCabecalhos, dicaTrilha, MODULO_PROTOCOLO, MODULOS_PROTOCOLO, MODULO_TIPO });
 })();

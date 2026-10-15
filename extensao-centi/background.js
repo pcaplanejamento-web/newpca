@@ -8,7 +8,6 @@ const INICIO_CENTI = "https://rioverde.centi.com.br/";
 const COMPRAS = "https://rioverde.centi.com.br/compras/";
 const SISTEMA = ["https://governarv.com.br/painel/automacao*", "https://www.governarv.com.br/painel/automacao*"];
 const ORIGENS = ["https://governarv.com.br", "https://www.governarv.com.br"];
-const CONFIRMAR = chrome.runtime.getURL("confirmar.html");
 const POPUP = chrome.runtime.getURL("popup.html");
 const TITULO_GRUPO = "Automação PCA";
 const ACOES_CENTI = ["pedir", "protocolo", "anexar", "gravador", "aprender", "ler", "cm002", "telaApi", "reparticoesApi", "trocarOrgao"];
@@ -390,14 +389,29 @@ async function donoSaiu(tabId) {
 }
 
 // ---------------------------------------------------------------- A CONFIRMAÇÃO DA ESCRITA
-// A confirmação na janela DA EXTENSÃO (a página do sistema não a desenha nem a aprova). Uma vez por execução e
-// protocolo; recusar, fechar a janela, interromper ou não responder em 2 min = não grava.
+// A confirmação no BANNER FLUTUANTE DA EXTENSÃO — o dropdown do ícone (a página do sistema não o desenha nem o aprova).
+// Sem como abrir o dropdown (nenhuma janela em foco), o MESMO painel numa janelinha compacta. Uma vez por execução e
+// protocolo; recusar, fechar a janelinha, interromper ou não responder em 2 min = não grava. Fechar o dropdown (tocar
+// fora) NÃO recusa: o pedido fica no ícone (selo "?") até a resposta ou o prazo.
+async function abrirConfirmacao() {
+  try {
+    await chrome.action.openPopup();
+    return null;
+  } catch {}
+  const w = await chrome.windows.create({ url: `${POPUP}?janela=1&confirmar=1`, type: "popup", width: 380, height: 420, focused: true });
+  return w.id;
+}
+
 async function confirmarEscrita(a) {
   const chave = `${a.execucaoId}|${a.id}`;
   const confirmadas = (await sessao.ler("confirmadas")) ?? [];
   if (confirmadas.includes(chave)) return true;
   const pedido = crypto.randomUUID();
-  const url = `${CONFIRMAR}?${new URLSearchParams({ pedido, execucao: String(a.execucaoId), id: a.id, numero: a.numero, ano: a.ano ?? "", descricao: a.descricao })}`;
+  await sessao.gravar("confirmacao", { pedido, execucao: String(a.execucaoId), id: a.id, numero: a.numero, ano: a.ano ?? "", descricao: a.descricao, ate: Date.now() + 120000 });
+  try {
+    await chrome.action?.setBadgeText({ text: "?" });
+    await chrome.action?.setBadgeBackgroundColor({ color: "#d97706" });
+  } catch {}
   const sim = await new Promise((ok) => {
     let janela = null;
     let feito = false;
@@ -412,7 +426,7 @@ async function confirmarEscrita(a) {
       ok(v);
     };
     const ouvir = (m, sender) => {
-      if (sender.url?.startsWith(CONFIRMAR) && m?.tipo === "confirmacao" && m.pedido === pedido) fim(m.sim === true);
+      if (sender.url?.startsWith(POPUP) && m?.tipo === "confirmacao" && m.pedido === pedido) fim(m.sim === true);
     };
     const fechou = (id) => {
       if (id === janela) {
@@ -424,14 +438,15 @@ async function confirmarEscrita(a) {
     cancelarConfirmacao = () => fim(false);
     chrome.runtime.onMessage.addListener(ouvir);
     chrome.windows.onRemoved.addListener(fechou);
-    chrome.windows
-      .create({ url, type: "popup", width: 480, height: 460, focused: true })
-      .then((w) => {
-        janela = w.id;
-        if (feito) chrome.windows.remove(w.id).catch(() => {});
+    abrirConfirmacao()
+      .then((id) => {
+        janela = id;
+        if (feito && id != null) chrome.windows.remove(id).catch(() => {});
       })
       .catch(() => fim(false));
   });
+  await sessao.tirar("confirmacao");
+  await mostrarAtividade(await lerAtividade()).catch(() => {});
   if (sim) await sessao.gravar("confirmadas", [...confirmadas, chave].slice(-50));
   return sim;
 }

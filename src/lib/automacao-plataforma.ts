@@ -11,6 +11,8 @@ import {
   comandoRecontar,
   comandoRegistrarEscrita,
   comandosPassos,
+  comandosReconciliarExecucoes,
+  limiteAbandono,
   type PassoNovo,
 } from "./automacao-sql.ts";
 import { lotesDeIds } from "./reparticoes";
@@ -93,6 +95,13 @@ export async function getExecucao(id: number): Promise<{ execucao: ExecucaoResum
     .where(eq(automacaoPassos.execucaoId, id))
     .orderBy(automacaoPassos.ordem);
   return { execucao, passos };
+}
+
+/** Encerra as execuções ABANDONADAS (sem sinal de vida há mais de `MINUTOS_ABANDONO`) — no cron e ao abrir o histórico.
+ * Best-effort: nunca lança. */
+export async function reconciliarExecucoes(agoraMs = Date.now()) {
+  const db = getDb();
+  await db.batch(comandosReconciliarExecucoes(db, limiteAbandono(agoraMs)) as never).catch((e) => console.error("[automacao] reconciliar:", (e as Error).message));
 }
 
 /** As últimas execuções (o histórico da tela). */

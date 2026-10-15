@@ -64,3 +64,21 @@ test("aceitaItensDeFora: o Início alimenta quem aceita os itens", () => {
   assert.equal(aceitaItensDeFora(g({}, "dados.filtrar"), itens, cat), true);
   assert.equal(aceitaItensDeFora(g({ objeto: "dfds" }), [], cat), false);
 });
+
+test("Seleção: os itens seguem na SEQUÊNCIA da tabela (ordenação + filtros), não na ordem natural", async () => {
+  const { selecionados } = await import("../src/lib/fluxo-nos.ts");
+  const itens = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
+  const ids = (xs: Record<string, unknown>[]) => xs.map((x) => x.id);
+  // Sem ordem gravada: a ordem natural (como antes).
+  assert.deepEqual(ids(selecionados(itens, { marcados: ["3", "1"] })), [1, 3]);
+  // Marcados na ordem da tabela ordenada (decrescente).
+  assert.deepEqual(ids(selecionados(itens, { marcados: ["1", "3"], ordem: ["4", "3", "2", "1"] })), [3, 1]);
+  // Nada marcado + "todos": a tabela filtrada (só as linhas à vista), na ordem dela.
+  assert.deepEqual(ids(selecionados(itens, { semMarcar: "todos", ordem: ["4", "2"], filtrada: true })), [4, 2]);
+  // Sem filtro: todos, na ordem da tabela; item novo (que a ordem não conhece) no fim.
+  assert.deepEqual(ids(selecionados([...itens, { id: 5 }], { semMarcar: "todos", ordem: ["2", "1", "4", "3"] })), [2, 1, 4, 3, 5]);
+  // Marcado que o filtro esconde segue, depois dos à vista.
+  assert.deepEqual(ids(selecionados(itens, { marcados: ["1", "4"], ordem: ["4", "2"], filtrada: true })), [4, 1]);
+  // Nada marcado + "nenhum": nada segue.
+  assert.deepEqual(selecionados(itens, { ordem: ["4"], filtrada: true }), []);
+});
