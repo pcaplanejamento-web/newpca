@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.96.4",
+    data: "2026-10-15",
+    titulo: "Filtro de sigla num componente só",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "Unidade, órgão e sigla usam o mesmo filtro com o nome embaixo, mais leve: cada opção é calculada uma vez.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.96.3",
     data: "2026-10-15",
     titulo: "Filtro de órgão com o nome",

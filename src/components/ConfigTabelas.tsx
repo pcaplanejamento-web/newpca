@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useCallback, useContext } from "react";
 import { LINHAS_TABELA_PADRAO, type LinhasTabela } from "@/lib/theme";
 
 const LinhasTabelaCtx = createContext<LinhasTabela>(LINHAS_TABELA_PADRAO);
@@ -40,8 +40,13 @@ export const useQuemExporta = () => useContext(QuemCtx);
 /** As linhas por página iniciais das tabelas (a escolha do ADM). */
 export const useLinhasTabela = () => useContext(LinhasTabelaCtx);
 
-/** SIGLA → NOME das unidades e órgãos (sem provedor, vazio). */
-export const useNomesUnidades = () => useContext(NomesCtx);
+const COLUNA_SIGLA = /sigla|unidade|reparti|[óo]rg[ãa]o/i;
+const NAO_SIGLA = /medida|unid\.|cadastrada|planilha/i;
 
-/** Coluna de UNIDADE/ÓRGÃO/SIGLA (o filtro ganha o nome de cada uma) — pelo título, nunca a unidade de MEDIDA. */
-export const colunaDeUnidade = (titulo: string) => /sigla|unidade|reparti|[óo]rg[ãa]o/i.test(titulo) && !/medida|unid\.|cadastrada|planilha/i.test(titulo);
+/** O ÚNICO ponto das colunas de UNIDADE/ÓRGÃO/SIGLA: pelo título da coluna, a função que dá o NOME de cada sigla (a 2ª
+ * linha do filtro, que também busca por ele) — `undefined` nas demais colunas (nunca a unidade de MEDIDA). */
+export function useDetalheSigla() {
+  const nomes = useContext(NomesCtx);
+  const detalhe = useCallback((o: string) => nomes[o], [nomes]);
+  return useCallback((titulo: string) => (COLUNA_SIGLA.test(titulo) && !NAO_SIGLA.test(titulo) ? detalhe : undefined), [detalhe]);
+}

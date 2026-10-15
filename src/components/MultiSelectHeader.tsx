@@ -88,15 +88,17 @@ function Painel({
     return new Set(value.filter((v) => ofertadas.has(v)));
   });
   const [q, setQ] = useState("");
+  // As duas linhas de cada opção, calculadas UMA vez por lista (sigla + nome).
+  const partes = useMemo(() => new Map(options.map((o) => [o, partesOpcao(o, detalhe)] as const)), [options, detalhe]);
   const visiveis = useMemo(() => {
     const achados = opcoesDaBusca(options, q);
     if (!detalhe || !q.trim()) return achados;
-    // Também pelo detalhe (o nome da unidade): "saúde" acha a sigla FMS.
-    const comDetalhe = options.filter((o) => detalhe(o));
-    const peloNome = new Set(opcoesDaBusca(comDetalhe.map((o) => detalhe(o) ?? ""), q));
+    // Também pelo nome (a 2ª linha): "saúde" acha a sigla FMS.
+    const segundas = options.map((o) => partes.get(o)?.[1] ?? "");
+    const peloNome = new Set(opcoesDaBusca(segundas.filter(Boolean), q));
     const ja = new Set(achados);
-    return options.filter((o) => ja.has(o) || peloNome.has(detalhe(o) ?? ""));
-  }, [q, options, detalhe]);
+    return options.filter((o, i) => ja.has(o) || (segundas[i] !== "" && peloNome.has(segundas[i])));
+  }, [q, options, detalhe, partes]);
   const buscando = q.trim() !== "";
   // Seleção DA BUSCA, guardada com o termo: mudou a busca ⇒ os novos resultados começam todos marcados.
   const [selBusca, setSelBusca] = useState<{ q: string; set: Set<string> } | null>(null);
@@ -177,7 +179,7 @@ function Painel({
               className="caixa-marcar"
             />
             {(() => {
-              const [principal, segunda] = partesOpcao(o, detalhe);
+              const [principal, segunda] = partes.get(o) ?? [o, undefined];
               return segunda ? (
                 <span className="flex min-w-0 flex-col">
                   <span className="break-words">{principal}</span>
