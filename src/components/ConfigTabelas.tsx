@@ -43,5 +43,5 @@ export const useLinhasTabela = () => useContext(LinhasTabelaCtx);
 /** SIGLA → NOME das unidades e órgãos (sem provedor, vazio). */
 export const useNomesUnidades = () => useContext(NomesCtx);
 
-/** Coluna de UNIDADE/SIGLA (o filtro ganha o nome de cada uma) — pelo título, nunca a unidade de MEDIDA. */
-export const colunaDeUnidade = (titulo: string) => /sigla|unidade|reparti/i.test(titulo) && !/medida|unid\.|cadastrada|planilha/i.test(titulo);
+/** Coluna de UNIDADE/ÓRGÃO/SIGLA (o filtro ganha o nome de cada uma) — pelo título, nunca a unidade de MEDIDA. */
+export const colunaDeUnidade = (titulo: string) => /sigla|unidade|reparti|[óo]rg[ãa]o/i.test(titulo) && !/medida|unid\.|cadastrada|planilha/i.test(titulo);

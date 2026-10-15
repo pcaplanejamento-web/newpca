@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.96.3",
+    data: "2026-10-15",
+    titulo: "Filtro de órgão com o nome",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "O filtro das colunas de órgão de todas as tabelas mostra o nome de cada sigla e busca pela sigla ou pelo nome — o mesmo modelo das unidades.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.96.2",
     data: "2026-10-15",
     titulo: "Presença só pelo ADM",
