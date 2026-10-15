@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.96.6",
+    data: "2026-10-15",
+    titulo: "Sair só com o ícone no menu",
+    mudancas: [
+      { tipo: "melhoria", area: "Menu", texto: "No cartão do usuário do menu lateral, o Sair virou um ícone à direita do acesso ao perfil.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.96.5",
     data: "2026-10-15",
     titulo: "Card do orçamento com valor real",

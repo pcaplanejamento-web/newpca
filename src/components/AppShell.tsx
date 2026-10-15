@@ -150,12 +150,12 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
   }
 
   return (
-    <div className="rounded-card border border-border p-[var(--pad-card)]">
+    <div className="flex items-stretch gap-1 rounded-card border border-border p-1.5">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}
         title="Meu perfil"
-        className="-m-1 flex items-center gap-2 rounded-control p-1 transition-colors hover:bg-surface-2"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-control p-1.5 transition-colors hover:bg-surface-2"
       >
         <Avatar nome={usuario.nome} foto={usuario.foto} />
         <div className="min-w-0">
@@ -163,17 +163,18 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
           <div className="truncate text-sm font-semibold text-text" title={usuario.nome}>
             {nomeExibicao(usuario)}
           </div>
-          <div className="text-[11px] text-muted">{usuario.papel.nome}</div>
+          <div className="truncate text-[11px] text-muted">{usuario.papel.nome}</div>
         </div>
       </Link>
       <button
         type="button"
         onClick={sair}
         disabled={saindo}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-control border border-border-2 px-3 py-2 text-xs font-semibold text-text-2 transition-colors hover:bg-surface-2 disabled:opacity-60"
+        title="Sair"
+        aria-label="Sair"
+        className="grid w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)] disabled:opacity-60"
       >
-        {saindo ? <IconSpinner className="h-4 w-4" /> : <IconLogout className="h-4 w-4" />}
-        Sair
+        {saindo ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconLogout className="h-[18px] w-[18px]" />}
       </button>
     </div>
   );
