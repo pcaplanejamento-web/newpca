@@ -4261,6 +4261,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   atualizada sem F5 — `chrome.runtime.id` morto) se cala: antes gastava o token de uso único e a nova recebia "já usada".
   No editor, **`ProblemasFluxo`** (o selo de problemas/atenções abre a lista e leva ao componente) e a Análise usa as linhas
   do Baixar/anexar (`host.dfds`, `estadoDoItem("saida.dfdsCenti")`).
+- **ESTADO REAL DE CADA DFD + EXECUÇÃO SEMPRE FINALIZADA (v1.110.0, sem migração):** núcleo puro
+  **`automacao-dfds-estado.ts`** (testado — `tests/automacao-dfds-estado.test.ts`): `EstadoDfd` = em curso `emitindo` ·
+  `conferindo` · `unindo` · `aguardando` (a pergunta da Centi) · `anexando` | fim `ok` · `ja` (já estava no protocolo —
+  NÃO conta como anexado) · `falha` · `interrompido` | fora da conta `pulado` · `repetido`; **`contagemDfds`** = a conta ÚNICA
+  (total = concluídas + em curso + fila) da barra da Análise (`textoContagem`), do painel de segundo plano
+  (`andamentoDfds(linhas, anexar)`), da análise ao vivo (`visualEstadoDfd` em `estadoDoItem`) e do ícone da extensão (o
+  `lote` manda `feito` = concluídos, também ao FIM de cada DFD); `entidadePrevista` (cadastrada › mapa › aberta) já na fila,
+  com "?" até a emissão confirmar. O motor (`executarDfds`, imports com `.ts` — testável com a extensão e o servidor falsos)
+  marca as fases pelos callbacks `fase` de `emitirConferido`/`anexarPelaPlataforma`, roda o laço em `try/finally` (exceção =
+  as linhas em curso/fila viram `falha` com o motivo) e SEMPRE finaliza no servidor (anexar: cada arquivo não reportado
+  `falhou` com o motivo da linha; interrompido = `cancelada`; baixar: os resultados vão de 25 em 25 e, no fim, todos).
+  **Sinal de vida:** a cada `SINAL_EXECUCAO_MS` (4 min) o passo em curso vai como `executando` (`sinalPasso`; o builder só
+  troca passo pendente — nunca volta um concluído) e `pagehide` cancela a execução com `keepalive` (`cancelarAoSair`). O
+  cliente tenta UMA vez de novo a falha transitória (rede/5xx/429). **Reconciliação:** `comandosReconciliarExecucoes`
+  (`automacao-sql.ts`, D1 real) — `rodando`/`pausada` sem atividade há `MINUTOS_ABANDONO`=30 min → `falhou` com
+  `MSG_ABANDONO`, passos pendentes também, totais recontados; roda no cron dos e-mails e ao listar as execuções. O registro
+  que falha depois do anexo gravado deixa a nota "o anexo vale; não reenvie" (`notaDoAnexo` = o mesmo texto da linha e do
+  servidor). `consumir` só aceita a origem da extensão PCA (`ORIGEM_EXTENSAO_CENTI`) ou o próprio site.
 - **PLATAFORMA DE AUTOMAÇÕES CENTI — FUNDAÇÃO (migração `0076`, aditiva; plano em `docs` da conversa: fundação → extensão segura →
   ao vivo → receitas → login/descoberta → gravador de receitas).** Princípios: negado por padrão · escrita só ACRESCENTA ·
   toda escrita = AUTORIZAÇÃO DE USO ÚNICO do servidor (+ confirmação na janela da extensão, entrega 2) · ensaio antes ·

@@ -3,12 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { ProtocoloAutomacao } from "@/lib/automacao-centi-core";
-import type { EstadoDfd, LinhaDfd } from "@/lib/automacao-dfds-motor";
+import { contagemDfds, emCursoDfd, type LinhaDfd, textoContagem, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
 import { brl, dataHoraBR, numeroSemAno } from "@/lib/format";
 import { type Pessoa, rotuloOpcaoPessoa } from "@/lib/pessoa";
 import { CelulaCopiavel } from "../BotaoCopiar";
 import type { Column } from "../DataTable";
-import { EstadoPonto } from "../EstadoCelula";
+import { EstadoPonto, EstadoProcessando } from "../EstadoCelula";
 import { IconPasta, IconUserX } from "../icons";
 import { Progress } from "../Progress";
 import { type OpcaoCelula, SeletorCelula } from "../SeletorCelula";
@@ -20,10 +20,7 @@ import { toast } from "../Toast";
  * Mesa — Situação e Responsável na célula) e a ANÁLISE de cada DFD (prévia, andamento ao vivo e resultado).
  */
 
-type Estado = EstadoDfd;
 type Linha = LinhaDfd;
-const COR: Record<Estado, string> = { fila: "var(--muted)", baixando: "var(--info)", ok: "var(--ok)", falha: "var(--danger)", pulado: "var(--warn)", repetido: "var(--warn)" };
-const ROTULO: Record<Estado, string> = { fila: "Na fila", baixando: "Baixando…", ok: "Salvo", falha: "Falhou", pulado: "Sem planejamento", repetido: "Não baixado" };
 
 const semPlan = (p: ProtocoloAutomacao) => p.dfds.filter((d) => !/[1-9]/.test(d.planejamento ?? "")).length;
 const texto1 = (v: string | null) => (
@@ -97,18 +94,16 @@ export const COLUNAS_PROTOCOLOS: Column<ProtocoloAutomacao>[] = [
 ];
 
 
-/** A ANÁLISE ao lado: cada DFD do que vai ser baixado (por pasta), com o estado — antes, durante e depois. */
+/** A ANÁLISE ao lado: cada DFD do que vai ser baixado (por pasta), com o passo REAL — antes, durante e depois. A barra e
+ * os números vêm da contagem ÚNICA (`contagemDfds`) — os mesmos do painel de segundo plano e do ícone da extensão. */
 export function AnaliseDfds({ linhas, rodando, destino }: { linhas: Linha[]; rodando: boolean; destino: string | null }) {
-  const rotuloOk = destino ? "Anexado" : ROTULO.ok;
+  const anexar = !!destino;
   const grupos = useMemo(() => {
     const m = new Map<string, Linha[]>();
     for (const l of linhas) m.set(l.grupo, [...(m.get(l.grupo) ?? []), l]);
     return [...m.entries()];
   }, [linhas]);
-  const validas = linhas.filter((l) => l.estado !== "pulado" && l.estado !== "repetido");
-  const feitos = validas.filter((l) => l.estado === "ok" || l.estado === "falha").length;
-  const ok = validas.filter((l) => l.estado === "ok").length;
-  const falhas = validas.length - ok - validas.filter((l) => l.estado === "fila" || l.estado === "baixando").length;
+  const c = contagemDfds(linhas);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
@@ -116,48 +111,53 @@ export function AnaliseDfds({ linhas, rodando, destino }: { linhas: Linha[]; rod
           DFDs{destino ? ` · ${destino}` : ""}
         </h3>
         <span className="text-sm tabular-nums text-muted">
-          {validas.length} DFD(s){falhas ? ` · ${falhas} falha(s)` : ""}
+          {c.total} DFD(s){c.falhas ? ` · ${c.falhas} falha(s)` : ""}
         </span>
       </div>
-      {(rodando || feitos > 0) && (
-        <Progress value={validas.length ? (feitos / validas.length) * 100 : 0} label={`${ok} ${destino ? "anexado(s)" : "salvo(s)"} de ${validas.length}`} />
-      )}
+      {(rodando || c.concluidas > 0) && <Progress value={c.total ? (c.concluidas / c.total) * 100 : 0} label={textoContagem(c, anexar)} />}
       {linhas.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted">Nada escolhido.</p>
       ) : (
         <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          {grupos.map(([g, ls]) => (
-            <li key={g} className="space-y-1">
-              {g && (
-                <div className="flex items-center gap-2 text-sm">
-                  <IconPasta className="h-4 w-4 shrink-0 text-muted" />
-                  <span className="min-w-0 flex-1 truncate font-semibold text-text" title={g}>
-                    {g}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-muted">
-                    {ls.filter((l) => l.estado === "ok").length}/{ls.filter((l) => l.estado !== "pulado" && l.estado !== "repetido").length}
-                  </span>
-                </div>
-              )}
-              {ls.map((l) => (
-                <div key={l.chave} className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm ${g ? "pl-6" : ""}`}>
-                  <span className="font-medium tabular-nums text-text">{l.id ? `Planej. ${l.id}` : "—"}</span>
-                  {l.dfd && <span className="tabular-nums text-muted">DFD {l.dfd}</span>}
-                  {l.orgaoNome && (
-                    <span className="min-w-0 max-w-40 truncate text-xs text-muted" title={l.orgaoNome}>
-                      {l.orgaoNome}
-                      {l.entidade ? ` · ${l.entidade}` : ""}
+          {grupos.map(([g, ls]) => {
+            const cg = contagemDfds(ls);
+            return (
+              <li key={g} className="space-y-1">
+                {g && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <IconPasta className="h-4 w-4 shrink-0 text-muted" />
+                    <span className="min-w-0 flex-1 truncate font-semibold text-text" title={g}>
+                      {g}
                     </span>
-                  )}
-                  <span className="ml-auto">
-                    <EstadoPonto cor={COR[l.estado]} rotulo={l.estado === "ok" ? rotuloOk : ROTULO[l.estado]} />
-                  </span>
-                  {l.erro && <span className="w-full text-xs text-muted">{l.erro}</span>}
-                  {l.amostra && <code className="w-full break-all rounded bg-surface-2 p-2 text-[12px] text-text-2">{l.amostra}</code>}
-                </div>
-              ))}
-            </li>
-          ))}
+                    <span className="shrink-0 tabular-nums text-muted" title="Concluídos (anexados/salvos, já estavam, falharam) de todos">
+                      {cg.concluidas}/{cg.total}
+                    </span>
+                  </div>
+                )}
+                {ls.map((l) => {
+                  const v = visualEstadoDfd(l.estado, anexar);
+                  return (
+                    <div key={l.chave} className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm ${g ? "pl-6" : ""}`}>
+                      <span className="font-medium tabular-nums text-text">{l.id ? `Planej. ${l.id}` : "—"}</span>
+                      {l.dfd && <span className="tabular-nums text-muted">DFD {l.dfd}</span>}
+                      {(l.orgaoNome || l.entidade) && (
+                        <span
+                          className="min-w-0 max-w-48 truncate text-xs text-muted"
+                          title={`${l.orgaoNome ?? ""}${l.entidade ? ` · entidade ${l.entidade}${l.entidadePrevista ? " (prevista — a emissão confirma)" : ""}` : ""}`}
+                        >
+                          {l.orgaoNome}
+                          {l.entidade ? `${l.orgaoNome ? " · " : ""}${l.entidade}${l.entidadePrevista ? "?" : ""}` : ""}
+                        </span>
+                      )}
+                      <span className="ml-auto">{emCursoDfd(l.estado) ? <EstadoProcessando rotulo={v.rotulo} /> : <EstadoPonto cor={v.cor} rotulo={v.rotulo} />}</span>
+                      {l.erro && <span className="w-full text-xs text-muted">{l.erro}</span>}
+                      {l.amostra && <code className="w-full break-all rounded bg-surface-2 p-2 text-[12px] text-text-2">{l.amostra}</code>}
+                    </div>
+                  );
+                })}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

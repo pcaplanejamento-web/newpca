@@ -148,12 +148,14 @@ export function FluxosAutomacao({
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
   const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[] }[]>([]);
   const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
+  /** O destino do Baixar/anexar em curso é um protocolo da Centi (o rótulo "Anexado" × "Salvo"). */
+  const [dfdsAnexar, setDfdsAnexar] = useState(false);
   const [naFila, setNaFila] = useState(0);
   const rodandoRef = useRef<number | null>(null);
   useEffect(() => onRodando(rodando != null || naFila > 0), [rodando, naFila, onRodando]);
   // O andamento vai ao painel de SEGUNDO PLANO (minimizado fora desta tela; "Detalhes" volta ao fluxo).
   const emCurso = rodando != null;
-  const andDfds = dfds?.length ? andamentoDfds(dfds) : null;
+  const andDfds = dfds?.length ? andamentoDfds(dfds, dfdsAnexar) : null;
   useTrabalhoSegundoPlano(
     exec
       ? {
@@ -283,6 +285,7 @@ export function FluxosAutomacao({
           setDfds(linhas);
         };
         setDfds(linhas);
+        setDfdsAnexar(saida.destino !== "pasta");
         const fim = await executarDfds(plano.arquivos, saida, alvo, {
           ...emissor,
           lote,

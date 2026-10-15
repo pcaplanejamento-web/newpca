@@ -192,6 +192,7 @@ function AnaliseAoVivo({
   // O componente que processa item a item (o de agora; senão o último que processou).
   // O Baixar/anexar DFDs não entrega parciais: o andamento dele são as linhas dos DFDs (`host.dfds`, ao vivo e no fim).
   const noDfds = etapas.find((n) => n.tipo === "saida.dfdsCenti") ?? null;
+  const anexarDfds = !!noDfds && String(noDfds.config?.destino ?? "pasta") !== "pasta";
   const fonte = useMemo(() => {
     const comItens = etapas.filter((n) => host?.parciais[n.id]?.length);
     if (atual && host?.parciais[atual.id]?.length) return atual;
@@ -212,10 +213,10 @@ function AnaliseAoVivo({
               chave: String(i),
               item: rotuloItem(it),
               orgao: s(it.orgaoNome) || s(it.orgao) || (s(it.entidade) ? `Centi ${s(it.entidade)}` : ""),
-              estado: estadoDoItem(fonte.tipo, it) ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" },
+              estado: estadoDoItem(fonte.tipo, fonte === noDfds ? { ...it, anexar: anexarDfds } : it) ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" },
             }))
         : [],
-    [fonte, itensFonte],
+    [fonte, itensFonte, noDfds, anexarDfds],
   );
   // Marcar itens do resultado e rodar o fluxo de novo só com eles (quando o fluxo os recebe).
   const exec = useExecutarSelecionados(grafo, rodando ? [] : itensFonte, (it) => itensFonte.indexOf(it));

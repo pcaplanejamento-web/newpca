@@ -4,15 +4,26 @@ import { type AlvoAnexo, textoAlvoAnexo } from "./automacao-core.ts";
 
 type Resp = { ok: true; [k: string]: unknown } | { ok: false; erro: string };
 
-async function chamar(url: string, metodo: "POST" | "PATCH", corpo: unknown): Promise<Resp> {
+type RespInterna = Resp & { transitoria?: boolean };
+
+async function chamarUmaVez(url: string, metodo: "POST" | "PATCH", corpo: unknown): Promise<RespInterna> {
   try {
     const r = await fetch(url, { method: metodo, headers: { "content-type": "application/json" }, body: JSON.stringify(corpo) });
     const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
     if (r.ok && j?.ok) return j as Resp;
-    return { ok: false, erro: j?.error ?? `Falha no sistema (erro ${r.status}).` };
+    return { ok: false, erro: j?.error ?? `Falha no sistema (erro ${r.status}).`, transitoria: r.status >= 500 || r.status === 429 };
   } catch {
-    return { ok: false, erro: "Sem conexão com o sistema." };
+    return { ok: false, erro: "Sem conexão com o sistema.", transitoria: true };
   }
+}
+
+/** Uma chamada ao sistema; a falha TRANSITÓRIA (rede, 5xx, 429) tenta UMA vez de novo — o registro de um passo não se perde
+ * por um soluço da rede (a recusa do servidor, 4xx, não se repete). */
+async function chamar(url: string, metodo: "POST" | "PATCH", corpo: unknown, esperaMs = 1500): Promise<Resp> {
+  const r = await chamarUmaVez(url, metodo, corpo);
+  if (r.ok || !r.transitoria) return r;
+  await new Promise((ok) => setTimeout(ok, esperaMs));
+  return chamarUmaVez(url, metodo, corpo);
 }
 
 const BASE = "/api/admin/automacao/execucoes";
@@ -88,6 +99,26 @@ export async function concluirPasso(execucaoId: number, chave: string, estado: "
 /** Encerra a execução interrompida (os passos que sobraram não rodam mais). */
 export async function cancelarExecucao(execucaoId: number) {
   await chamar(`${BASE}/${execucaoId}`, "PATCH", { estado: "cancelada" });
+}
+
+/** SINAL DE VIDA: o passo em curso ("executando") — a execução que dá sinal nunca é tomada como abandonada pelo servidor. */
+export async function sinalPasso(execucaoId: number, chave: string) {
+  await chamarUmaVez(`${BASE}/${execucaoId}/passos`, "POST", { passos: [{ chave: chave.slice(0, 120), estado: "executando" }] });
+}
+
+/** Fechar/recarregar a página no meio da execução a CANCELA (keepalive — o pedido sai mesmo com a página indo embora).
+ * Devolve quem solta o ouvinte (ao terminar normalmente). */
+export function cancelarAoSair(execucaoId: number): () => void {
+  if (typeof window === "undefined") return () => {};
+  const sair = () => {
+    try {
+      void fetch(`${BASE}/${execucaoId}`, { method: "PATCH", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify({ estado: "cancelada" }) });
+    } catch {
+      /* a reconciliação do servidor encerra a que ficar para trás */
+    }
+  };
+  window.addEventListener("pagehide", sair);
+  return () => window.removeEventListener("pagehide", sair);
 }
 
 /** O que JÁ foi anexado nos protocolos da Centi indicados (chave Id + descrição canônica) — o que está aqui não é emitido de novo. */

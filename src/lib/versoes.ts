@@ -35,6 +35,37 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.110.0",
+    data: "2026-10-15",
+    titulo: "Automação: o estado de cada DFD mostra o que acontece de fato",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Cada DFD do Baixar/anexar mostra o passo real: Emitindo na Centi · Conferindo o PDF · No PDF unido · Anexando na Centi · Aguardando sua confirmação — e o fim real: Anexado/Salvo · Já estava · Falhou · Interrompido. A entidade da Centi aparece já na fila (prevista, com “?”) e a emissão confirma a real.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Os números batem em todo lugar: a barra (“12 anexado(s) · 4 já estava(m) · 1 falhou — 17 de 46”), o painel do canto e o ícone da extensão contam os DFDs CONCLUÍDOS — o “já estava no protocolo” não é mais contado como anexado e o 1º DFD não aparece feito antes de terminar.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O histórico das execuções nunca fica “Rodando” para sempre: fechar a página cancela a execução, uma falha no meio a encerra com o motivo e a parada há mais de 30 minutos (sem sinal de vida) vira “Falhou”. O que não foi emitido aparece com o motivo, e uma falha de rede no registro tenta de novo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Segurança: a autorização de gravar na Centi só é aceita da extensão da Plataforma PCA (ou do próprio sistema) — nenhuma outra extensão a usa.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.109.0",
     data: "2026-10-15",
     titulo: "Automação: ordem da tabela, permissão no banner da extensão e correções",

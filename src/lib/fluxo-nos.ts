@@ -1477,10 +1477,15 @@ const NOS: DefNo[] = [
       if (!so(e).length) throw new Error("Nada a baixar — marque os protocolos (ou informe os nºs de planejamento).");
       const r = await baixar(so(e), c);
       if (r.erro) throw new Error(r.erro);
-      const falhas = r.linhas.filter((l) => l.estado === "falha");
+      // Falhou = erro; interrompido = atenção (não foi tentado até o fim).
+      const falhas = r.linhas.filter((l) => l.estado === "falha" || l.estado === "interrompido");
       return {
         saida: r.linhas,
-        __apontados: falhas.map((l) => ({ mensagem: `Planej. ${str(l.id) || "—"}${l.dfd ? ` · DFD ${str(l.dfd)}` : ""}: ${str(l.erro, "falhou")}`, nivel: "erro", item: { ...l, planejamento: l.id, numero: l.dfd } })),
+        __apontados: falhas.map((l) => ({
+          mensagem: `Planej. ${str(l.id) || "—"}${l.dfd ? ` · DFD ${str(l.dfd)}` : ""}: ${str(l.erro, "falhou")}`,
+          nivel: l.estado === "falha" ? "erro" : "atencao",
+          item: { ...l, planejamento: l.id, numero: l.dfd },
+        })),
       };
     },
   },

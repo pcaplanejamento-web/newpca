@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AlvoCenti, ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { type EstadoDfd, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, type Grafo, type Item, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
@@ -669,12 +670,9 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     return null;
   }
   if (tipo === "saida.dfdsCenti") {
-    const e = s(it.estado);
-    if (e === "ok") return { rotulo: "Concluído", tom: "emerald", texto: s(it.erro) };
-    if (e === "falha") return { rotulo: "Falhou", tom: "red", texto: s(it.erro) };
-    if (e === "pulado" || e === "repetido") return { rotulo: e === "pulado" ? "Pulado" : "Repetido", tom: "amber", texto: s(it.erro) };
-    if (e === "baixando") return { rotulo: "Emitindo", tom: "blue", texto: s(it.erro) };
-    return { rotulo: "Na fila", tom: "slate", texto: s(it.erro) };
+    // O passo REAL da linha (a mesma régua da Análise): emitindo, conferindo, anexando, aguardando, anexado, já estava…
+    const v = visualEstadoDfd((s(it.estado) || "fila") as EstadoDfd, it.anexar === true);
+    return { rotulo: v.rotulo, tom: v.tom, texto: s(it.erro) };
   }
   if (tipo === "fluxo.executar") {
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
