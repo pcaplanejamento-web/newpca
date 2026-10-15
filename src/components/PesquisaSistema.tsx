@@ -684,7 +684,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
             Esc
           </button>
         </div>
-        <div className="border-b border-border px-3 py-2">
+        <div className="border-b border-border px-3 pt-2 pb-0.5">
           <ChipsEscolha rolar ariaLabel="Pesquisar em" opcoes={filtros} valor={tipo ?? ""} onEscolher={escolherFiltro} />
         </div>
         <div className="flex min-h-0 flex-1">

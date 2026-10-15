@@ -35,6 +35,12 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.105.1",
+    data: "2026-10-15",
+    titulo: "Filtros da pesquisa sem a barra por cima",
+    mudancas: [{ tipo: "correcao", area: "Pesquisa", texto: "A barra de rolagem dos filtros rápidos fica abaixo dos chips, nunca sobre eles.", link: "/painel" }],
+  },
+  {
     versao: "1.105.0",
     data: "2026-10-15",
     titulo: "Pesquisa mais inteligente",

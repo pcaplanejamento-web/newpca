@@ -16,11 +16,11 @@ export function ChipsEscolha<T extends string>({
   valor?: T | null;
   onEscolher: (v: T) => void;
   ariaLabel: string;
-  /** Numa linha só, rolando de lado (barras estreitas — ex.: os filtros da pesquisa), em vez de quebrar. */
+  /** Numa linha só, rolando de lado (barras estreitas — ex.: os filtros da pesquisa), em vez de quebrar; o respiro de baixo deixa a barra de rolagem ABAIXO dos chips (nunca sobre eles). */
   rolar?: boolean;
 }) {
   return (
-    <fieldset aria-label={ariaLabel} className={`flex min-w-0 gap-1.5 ${rolar ? "flex-nowrap overflow-x-auto" : "flex-wrap"}`}>
+    <fieldset aria-label={ariaLabel} className={`flex min-w-0 gap-1.5 ${rolar ? "flex-nowrap overflow-x-auto pb-3" : "flex-wrap"}`}>
       {opcoes.map((o) => {
         const ativo = o.value === valor;
         return (
