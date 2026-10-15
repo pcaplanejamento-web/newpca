@@ -13,7 +13,7 @@ import { BotaoAtualizar } from "../BotaoAtualizar";
 import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
 import { SelectField } from "../Field";
-import { IconPastaAberta, IconPlay } from "../icons";
+import { IconAlert, IconCheck, IconPastaAberta, IconPlay, IconSearch } from "../icons";
 import { SeletorMultiplo } from "../SeletorMultiplo";
 import { type AberturaItem, aceitaItensDeFora } from "@/lib/fluxo-tipo-item";
 import { AnaliseDfds, type GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
@@ -45,7 +45,8 @@ export type HostPainel = {
   /** As repartições da Tela Protocolo da Centi (pela API; null = ainda não buscadas). */
   reparticoes: { lista: string[] | null; buscando: boolean; buscar: () => void };
   /** Abre o protocolo indicado na Centi (só leitura) e confere Id + nº; e o TESTE do anexo (sem emitir DFD). */
-  conferirAlvo: (alvo: AlvoCenti) => Promise<string>;
+  /** "Testar protocolo": abre o protocolo na Centi (só leitura) — pelo Id + nº, ou só pelo Id (nº vazio). */
+  conferirAlvo: (alvo: AlvoCenti) => Promise<{ protocolo: ProtocoloCenti } | { erro: string }>;
   testarAnexo: (alvo: AlvoCenti, tipo: string) => Promise<string>;
   /** Os fluxos salvos (o seletor do "Executar fluxo") e o aberto agora (não pode usar a si mesmo). */
   fluxos: { id: number; nome: string }[];
@@ -402,15 +403,74 @@ function colunasGenericas(itens: Item[]): Column<Item>[] {
     .map((c) => ({ key: c, header: c, nowrap: true, value: (it: Item) => s(it[c]), render: (it: Item) => <span className="block max-w-[18rem] truncate">{s(it[c]) || "—"}</span> }));
 }
 
+// ---------------------------------------------------------------- TESTAR O PROTOCOLO (Baixar/anexar → Protocolo indicado)
+/** O protocolo que a Centi devolveu no "Testar protocolo". */
+export type ProtocoloCenti = { id?: string; numero: string; ano: string; assunto: string; interessado?: string; descricao: string; documentos: number };
+
+/**
+ * "Testar protocolo" do componente Baixar/anexar DFDs (destino Protocolo indicado): abre o protocolo na Centi SÓ PARA LER
+ * e mostra o que achou — o nº, o assunto, o interessado e os documentos. Com o nº em branco, acha só pelo Id e oferece
+ * preencher o nº com o da Centi (`onNumero`). Nos Dados de entrada e na aba DFDs.
+ */
+export function TesteProtocoloCenti({ no, onNumero, desabilitado }: { no: NoFluxo; onNumero?: (numero: string) => void; desabilitado?: boolean }) {
+  const host = useHost();
+  const { saida, alvo, erroAlvo } = opcoesDoNo(no.config);
+  const chave = `${alvo?.id ?? ""}|${alvo?.numero ?? ""}`;
+  const [r, setR] = useState<{ chave: string; carregando?: boolean; protocolo?: ProtocoloCenti; erro?: string } | null>(null);
+  if (!host || saida.destino !== "protocolo") return null;
+  const testar = async () => {
+    if (!alvo) return setR({ chave, erro: erroAlvo ?? "Informe o Id do protocolo." });
+    setR({ chave, carregando: true });
+    const x = await host.conferirAlvo(alvo);
+    setR({ chave, ...x });
+  };
+  const atual = r?.chave === chave ? r : null;
+  const p = atual?.protocolo;
+  const nr = p ? `${p.numero}${p.ano ? `/${p.ano}` : ""}` : "";
+  return (
+    <div className="space-y-2">
+      <Button size="sm" variant="secondary" onClick={() => void testar()} loading={!!atual?.carregando} disabled={desabilitado || host.rodando} title="Abre o protocolo na Centi só para ler — nada é gravado">
+        <IconSearch className="h-4 w-4" />
+        Testar protocolo
+      </Button>
+      {p && (
+        <div role="status" className="flex items-start gap-2 rounded-control border border-[color-mix(in_oklab,var(--ok)_35%,transparent)] bg-[color-mix(in_oklab,var(--ok)_8%,transparent)] p-2 text-xs text-text">
+          <IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ok)]" />
+          <div className="min-w-0 space-y-0.5">
+            <p className="font-semibold">
+              Achou o protocolo {nr}
+              {p.id ? ` (Id ${p.id})` : ""}
+            </p>
+            {(p.assunto || p.descricao) && <p className="truncate text-muted" title={p.assunto || p.descricao}>{p.assunto || p.descricao}</p>}
+            {p.interessado && <p className="truncate text-muted" title={p.interessado}>{p.interessado}</p>}
+            <p className="text-muted">{p.documentos} documento(s)</p>
+            {onNumero && !alvo?.numero && p.numero && (
+              <Button size="xs" variant="secondary" onClick={() => onNumero(nr)} disabled={desabilitado || host.rodando} className="mt-1">
+                Usar o nº {nr}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {atual?.erro && (
+        <div role="alert" className="flex items-start gap-2 rounded-control border border-[color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] p-2 text-xs text-text">
+          <IconAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" />
+          <p className="min-w-0 break-words">{atual.erro}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- DFDs (Baixar/anexar)
 function VistaDfds({ no, grafo }: PropsVisao) {
   const host = useHost();
   const { saida, alvo, erroAlvo } = opcoesDoNo(no.config);
-  const [checagem, setChecagem] = useState<{ carregando?: "conferir" | "testar"; texto?: string } | null>(null);
-  const checar = async (tipo: "conferir" | "testar") => {
-    if (!host || !alvo) return setChecagem({ texto: erroAlvo ?? "Informe o protocolo." });
-    setChecagem({ carregando: tipo });
-    setChecagem({ texto: tipo === "conferir" ? await host.conferirAlvo(alvo) : await host.testarAnexo(alvo, saida.tipoDocumento) });
+  const [checagem, setChecagem] = useState<{ carregando?: boolean; texto?: string } | null>(null);
+  const testarAnexo = async () => {
+    if (!host || !alvo) return setChecagem({ texto: erroAlvo ?? "Informe o Id do protocolo." });
+    setChecagem({ carregando: true });
+    setChecagem({ texto: await host.testarAnexo(alvo, saida.tipoDocumento) });
   };
   const previa = useMemo(() => {
     if (!host) return [];
@@ -418,7 +478,7 @@ function VistaDfds({ no, grafo }: PropsVisao) {
     return planoDosItens(itens, saida, host.protocolos).previa;
   }, [host, grafo, no.id, saida]);
   if (!host) return null;
-  const destino = saida.destino === "pasta" ? null : saida.destino === "proprio" ? "protocolo de cada DFD" : alvo ? `Protocolo ${alvo.numero}${alvo.ano ? `/${alvo.ano}` : ""}` : "protocolo da Centi";
+  const destino = saida.destino === "pasta" ? null : saida.destino === "proprio" ? "protocolo de cada DFD" : alvo ? (alvo.numero ? `Protocolo ${alvo.numero}${alvo.ano ? `/${alvo.ano}` : ""}` : `Protocolo de Id ${alvo.id}`) : "protocolo da Centi";
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       {saida.destino === "pasta" && saida.escolherPasta && host.pasta.pode && (
@@ -428,11 +488,9 @@ function VistaDfds({ no, grafo }: PropsVisao) {
         </Button>
       )}
       {saida.destino === "protocolo" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => void checar("conferir")} loading={checagem?.carregando === "conferir"} disabled={host.rodando}>
-            Conferir na Centi
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => void checar("testar")} loading={checagem?.carregando === "testar"} disabled={host.rodando} title="Anexa um PDF de teste (sem emitir DFD) — exclua-o depois na Centi">
+        <div className="flex flex-wrap items-start gap-2">
+          <TesteProtocoloCenti no={no} />
+          <Button size="sm" variant="secondary" onClick={() => void testarAnexo()} loading={!!checagem?.carregando} disabled={host.rodando} title="Anexa um PDF de teste (sem emitir DFD) — exclua-o depois na Centi">
             Testar anexo
           </Button>
           {checagem?.texto && <span className="min-w-0 flex-1 text-xs text-muted">{checagem.texto}</span>}

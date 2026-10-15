@@ -124,7 +124,8 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.19.0"), false);
   assert.equal(versaoAtende("1.20.0"), false);
   assert.equal(versaoAtende("1.21.0"), false);
-  assert.equal(versaoAtende("1.22.0"), true);
+  assert.equal(versaoAtende("1.22.0"), false);
+  assert.equal(versaoAtende("1.23.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -247,6 +248,10 @@ test("lerAlvoCenti / descricaoDoArquivo / opções de destino", async () => {
   assert.deepEqual(lerAlvoCenti(" 2.332.778 ", "156844/2026"), { alvo: { id: "2332778", numero: "156844", ano: "2026" } });
   assert.deepEqual(lerAlvoCenti("2332778", "0156844"), { alvo: { id: "2332778", numero: "156844", ano: null } });
   assert.ok("erro" in lerAlvoCenti("", "156844"));
+  // Só pelo Id: o nº opcional (vem da Centi); sem `soId`, segue obrigatório.
+  assert.deepEqual(lerAlvoCenti("2332778", " ", true), { alvo: { id: "2332778", numero: "", ano: null } });
+  assert.ok("erro" in lerAlvoCenti("2332778", ""));
+  assert.ok("erro" in lerAlvoCenti("", "", true));
   assert.ok("erro" in lerAlvoCenti("2332778", "15/68"));
   assert.equal(descricaoDoArquivo("DFDs - PCA 2027 - (1, 2) - 2026.PDF"), "DFDs - PCA 2027 - (1, 2) - 2026");
   const o = lerOpcoesSaida({ destino: "protocolo", tipoDocumento: "x" });
@@ -332,6 +337,9 @@ test("anexo: confere Id, número e ano do protocolo antes de qualquer gravação
   assert.match(A.conferirProtocolo(r, { ...PEDIDO, numero: "156845" }).erro, /é do protocolo 156844\/2026, não do 156845/);
   assert.match(A.conferirProtocolo(r, { ...PEDIDO, ano: "2025" }).erro, /de 2026, não de 2025/);
   assert.match(A.conferirProtocolo(r, { ...PEDIDO, id: "1" }).erro, /Id 1/);
+  // Só pelo Id: vale o Id (o nº vem da Centi); Id diferente segue recusado.
+  assert.ok(A.conferirProtocolo(r, { ...PEDIDO, numero: "", ano: null }).entidade);
+  assert.match(A.conferirProtocolo(r, { ...PEDIDO, id: "1", numero: "" }).erro, /Id 1/);
   assert.match(A.conferirProtocolo({ Entity: { ModuleKey: 1, Fields: [] } }, PEDIDO).erro, /não devolveu/);
   const res = A.resumoProtocolo(r.Entity);
   assert.equal(res.assunto, "INCLUSÃO - PCA");

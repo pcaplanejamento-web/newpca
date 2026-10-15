@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 39;
+  const PROTOCOLO = 40;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -653,9 +653,13 @@
   async function protocolo(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
-    const erro = A.validarPedido({ ...d, tipo: "1", descricao: "x", arquivo: "x.pdf", pdf: "JVBER" });
+    // O nº é OPCIONAL na conferência: sem ele, o protocolo é achado só pelo Id (o nº e o ano vêm da Centi). O anexo segue
+    // exigindo Id + nº (validarPedido no anexar).
+    const soId = !String(d?.numero ?? "").trim();
+    const alvo = soId ? { id: d?.id, numero: "", ano: null } : d;
+    const erro = A.validarPedido({ ...alvo, numero: soId ? "1" : alvo.numero, tipo: "1", descricao: "x", arquivo: "x.pdf", pdf: "JVBER" });
     if (erro) return { ok: false, erro };
-    return { ok: true, protocolo: A.resumoProtocolo(await abrirProtocolo(d)) };
+    return { ok: true, protocolo: A.resumoProtocolo(await abrirProtocolo(alvo)) };
   }
 
   // A ÚNICA gravação: UM documento novo no protocolo conferido. Já anexado (mesma descrição) → não anexa de novo. A Centi

@@ -61,7 +61,7 @@ import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
 import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
-import { type HostPainel, HostPainelCtx } from "./paineis";
+import { type HostPainel, HostPainelCtx, type ProtocoloCenti } from "./paineis";
 import { ProtocoloUploadForm } from "../ProtocoloUploadForm";
 import { CartaoPreso } from "../ArrastoCartoes";
 import { tokenPx } from "../espacamento";
@@ -626,10 +626,8 @@ export function FluxosAutomacao({
       rodando: rodando != null,
       reparticoes: { ...reps, buscar: () => void buscarReparticoes() },
       conferirAlvo: async (al) => {
-        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: { numero: string; ano: string; assunto: string; descricao: string; documentos: number } };
-        return r.ok && r.protocolo
-          ? `${r.protocolo.numero}/${r.protocolo.ano} · ${r.protocolo.assunto || r.protocolo.descricao} · ${r.protocolo.documentos} documento(s)`
-          : (r.erro ?? "Não consegui abrir o protocolo na Centi.");
+        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: ProtocoloCenti };
+        return r.ok && r.protocolo ? { protocolo: r.protocolo } : { erro: r.erro ?? "Não consegui abrir o protocolo na Centi." };
       },
       testarAnexo: async (al, tipo) => {
         const r = await testarAnexo({ pedir: emissor.pedir, confirmar: (texto) => confirmar({ titulo: "A Centi pede confirmação", texto, confirmar: "Confirmar e anexar" }) }, al, tipo);

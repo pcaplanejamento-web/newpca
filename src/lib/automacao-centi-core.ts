@@ -35,7 +35,7 @@ export const CONFIG_CENTI_PADRAO: ConfigCenti = {
  * canal; a lógica mora aqui e atualiza com o sistema — só uma mudança no canal pede reinstalar). */
 /** A ORIGEM da extensão (o id é FIXO — a `key` do manifesto): só ela recebe o login da Centi guardado no sistema. */
 export const ORIGEM_EXTENSAO_CENTI = "chrome-extension://lhdooglmnecpbocibgfobaefahliicnn";
-export const VERSAO_EXTENSAO_CENTI = "1.22.0";
+export const VERSAO_EXTENSAO_CENTI = "1.23.0";
 
 /** O aviso no sino de cada Administrador quando sai uma versão nova da extensão (UMA vez por versão — `chave`). */
 export const avisoVersaoExtensao = (usuarioId: number) => ({
@@ -290,10 +290,12 @@ export function alvoDoArquivo(
   return "alvo" in lido ? { alvo: lido.alvo, protocoloId: p.id } : { erro: `Protocolo ${p.numero}: ${lido.erro}` };
 }
 
-/** Lê o que o ADM digitou → o alvo válido ou o motivo. */
-export function lerAlvoCenti(id: string, numero: string): { alvo: AlvoCenti } | { erro: string } {
+/** Lê o que o ADM digitou → o alvo válido ou o motivo. `soId` = o nº é OPCIONAL (vazio = achar o protocolo só pelo Id;
+ * o nº e o ano vêm da Centi — `numero: ""`). */
+export function lerAlvoCenti(id: string, numero: string, soId = false): { alvo: AlvoCenti } | { erro: string } {
   const i = id.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
   if (!i || i === "0" || i.length > 12) return { erro: "Informe o Id do protocolo (o “Id” do cadastro do protocolo na Centi)." };
+  if (soId && !numero.trim()) return { alvo: { id: i, numero: "", ano: null } };
   const m = numero.trim().match(/^0*(\d{1,12})\s*(?:\/\s*(\d{4}))?$/);
   if (!m) return { erro: "Informe o nº do protocolo (ex.: 156844 ou 156844/2026)." };
   return { alvo: { id: i, numero: m[1], ano: m[2] ?? null } };

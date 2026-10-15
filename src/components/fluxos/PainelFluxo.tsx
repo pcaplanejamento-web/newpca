@@ -14,7 +14,7 @@ import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { CampoDoNo } from "./PainelNo";
-import { estadoDoItem, HostPainelCtx, rotuloItem, useExecutarSelecionados, VISOES } from "./paineis";
+import { estadoDoItem, HostPainelCtx, rotuloItem, TesteProtocoloCenti, useExecutarSelecionados, VISOES } from "./paineis";
 
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
@@ -112,6 +112,7 @@ export function PainelFluxo({
                   {campos.map((c) => (
                     <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} config={n.config} somenteLeitura={rodando} />
                   ))}
+                  {n.tipo === "saida.dfdsCenti" && <TesteProtocoloCenti no={n} onNumero={(v) => mudar(n, "alvoNumero", v)} desabilitado={rodando} />}
                 </fieldset>
               ))}
             </div>

@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.108.0",
+    data: "2026-10-15",
+    titulo: "Baixar/anexar DFDs: testar o protocolo e achar só pelo Id",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "“Testar protocolo” nos Dados de entrada do Baixar/anexar DFDs: abre o protocolo na Centi só para ler e mostra o número, o assunto, o interessado e os documentos — ou o motivo de não ter achado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "O nº do protocolo ficou opcional: em branco, o protocolo é achado só pelo Id e o número vem da Centi (o anexo continua conferindo Id + nº). Atualize a extensão para a 1.23.0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.107.12",
     data: "2026-10-15",
     titulo: "Anexo na Centi: abre o protocolo como a tela da Centi",

@@ -1452,7 +1452,7 @@ const NOS: DefNo[] = [
         padrao: "pasta",
       },
       { chave: "alvoId", rotulo: "Id do protocolo (Centi)", ajuda: "O Id do protocolo na Centi que recebe os PDFs (o “Id:” da capa do protocolo).", tipo: "texto", entrada: true, obrigatorio: true, quando: { campo: "destino", valores: ["protocolo"] } },
-      { chave: "alvoNumero", rotulo: "Nº do protocolo", tipo: "texto", entrada: true, obrigatorio: true, ajuda: "O número do protocolo na Centi, para conferir que é o protocolo certo (ex.: 156844/2026).", quando: { campo: "destino", valores: ["protocolo"] } },
+      { chave: "alvoNumero", rotulo: "Nº do protocolo", tipo: "texto", entrada: true, ajuda: "Opcional. Com o número (ex.: 156844/2026), a Centi confere que o Id é desse protocolo. Em branco, o protocolo é achado só pelo Id e o número vem da Centi — use “Testar protocolo” para ver qual é.", quando: { campo: "destino", valores: ["protocolo"] } },
       { chave: "tipoDocumento", rotulo: "Tipo do documento", ajuda: "O código do tipo de documento na Centi com que os PDFs são anexados (o padrão é o do DFD).", tipo: "texto", entrada: true, padrao: TIPO_DOCUMENTO_DFD, quando: { campo: "destino", valores: ["protocolo", "proprio"] } },
       {
         chave: "formato",

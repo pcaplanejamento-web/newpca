@@ -54,7 +54,7 @@ export type RespostaExt = {
   status?: number;
   interrompido?: boolean;
   operacao?: unknown;
-  protocolo?: { numero: string; ano: string; assunto: string; descricao: string; documentos: number };
+  protocolo?: { id?: string; numero: string; ano: string; assunto: string; interessado?: string; descricao: string; documentos: number };
   jaAnexado?: boolean;
   sequencial?: string;
   documento?: string;
@@ -193,7 +193,7 @@ async function emitirNaEntidade(c: ContextoEmissor, t: TarefaCenti, conferir: bo
 export function opcoesDoNo(c: Record<string, unknown>): { saida: OpcoesSaida; alvo: AlvoCenti | null; erroAlvo?: string } {
   const saida = lerOpcoesSaida({ ...c, tipoDocumento: typeof c.tipoDocumento === "string" ? c.tipoDocumento : undefined });
   if (saida.destino !== "protocolo") return { saida, alvo: null };
-  const a = lerAlvoCenti(String(c.alvoId ?? ""), String(c.alvoNumero ?? ""));
+  const a = lerAlvoCenti(String(c.alvoId ?? ""), String(c.alvoNumero ?? ""), true);
   return "alvo" in a ? { saida, alvo: a.alvo } : { saida, alvo: null, erroAlvo: a.erro };
 }
 
@@ -268,8 +268,15 @@ export async function anexarPelaPlataforma(
 
 /** TESTE do anexo SEM emitir DFD: um PDF de 1 página ("TESTE - pode excluir - hora") no protocolo indicado — separa o
  * salvar da emissão. */
-export async function testarAnexo(d: { pedir: Pedir; confirmar: (texto: string) => Promise<boolean> }, alvo: AlvoCenti, tipo: string): Promise<{ ok: string } | { erro: string }> {
+export async function testarAnexo(d: { pedir: Pedir; confirmar: (texto: string) => Promise<boolean> }, indicado: AlvoCenti, tipo: string): Promise<{ ok: string } | { erro: string }> {
+  let alvo = indicado;
   try {
+    if (!alvo.numero) {
+      // Só pelo Id: o nº e o ano vêm da Centi antes do anexo (que confere Id + nº).
+      const r = await d.pedir("protocolo", alvo, 60_000);
+      if (!(r.ok && r.protocolo)) return { erro: r.erro ?? "Não consegui abrir o protocolo na Centi." };
+      alvo = { ...alvo, numero: r.protocolo.numero, ano: r.protocolo.ano || null };
+    }
     const { PDFDocument, StandardFonts } = await import("pdf-lib");
     const doc = await PDFDocument.create();
     const pg = doc.addPage([595, 842]);
@@ -347,6 +354,8 @@ export async function executarDfds(
     for (const [id, al] of porId) {
       const r = await d.pedir("protocolo", al, 60_000);
       if (!(r.ok && r.protocolo)) recusados.set(id, r.erro ?? "Não consegui abrir o protocolo na Centi.");
+      // Só pelo Id: o nº e o ano vêm da Centi (o anexo segue conferindo Id + nº). O objeto é o mesmo dos arquivos.
+      else if (!al.numero) Object.assign(al, { numero: r.protocolo.numero, ano: r.protocolo.ano || null });
     }
     const erroProtocolos = recusados.size && recusados.size === porId.size ? [...new Set(recusados.values())].join(" ") : undefined;
     const ja = await jaAnexados([...porId.keys()]);

@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p39";
+  const NOME = "__pcaCentiAnexo_p40";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -55,6 +55,11 @@
     if (texto(valor(e, "Id")) !== String(d.id)) return { erro: `A Centi não achou o protocolo de Id ${d.id}.` };
     const numero = texto(valor(e, "NrProtocolo"));
     const ano = texto(valor(e, "AnoReferencia"));
+    // Só pelo Id (a conferência "Testar protocolo"): sem o nº, vale o Id — o nº e o ano vêm da Centi.
+    if (!texto(d.numero)) {
+      if (!Array.isArray(valor(e, "Documentos"))) return { erro: "A Centi não devolveu os documentos do protocolo." };
+      return { entidade: e };
+    }
     if (numero !== String(d.numero)) return { erro: `O Id ${d.id} é do protocolo ${numero || "?"}${ano ? `/${ano}` : ""}, não do ${d.numero}.` };
     if (d.ano != null && ano !== String(d.ano)) return { erro: `O protocolo ${numero} é de ${ano || "?"}, não de ${d.ano}.` };
     if (!Array.isArray(valor(e, "Documentos"))) return { erro: "A Centi não devolveu os documentos do protocolo." };
@@ -70,7 +75,7 @@
   }
   /** O erro de quando NENHUM caminho abriu o protocolo: o que cada um respondeu + o que fazer. */
   function erroSemProtocolo(d, aprendido, respostas) {
-    const quem = `${d.numero}${d.ano ? `/${d.ano}` : ""} (Id ${d.id})`;
+    const quem = texto(d.numero) ? `${d.numero}${d.ano ? `/${d.ano}` : ""} (Id ${d.id})` : `de Id ${d.id}`;
     const porque = respostas.length ? ` — ${respostas.join("; ")}` : "";
     const fazer = aprendido
       ? "Confira o Id e o número; se estiverem certos, abra esse protocolo de novo na Centi (Tela Protocolo, duplo clique) com a extensão ativa para ela reaprender."
