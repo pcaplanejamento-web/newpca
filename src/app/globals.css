@@ -1177,3 +1177,26 @@ select:not([multiple]):not([size]) {
   opacity: 0.5;
   cursor: default;
 }
+
+/* ── MENU LATERAL recolhível (AppShell). A VAGA anima a largura (empurra o conteúdo); o menu é absoluto dentro dela:
+   recolhido = trilho de 60px; com o mouse (ou o foco do teclado) abre POR CIMA, sem empurrar. ── */
+.menu-vaga { width: 16rem; transition: width 260ms cubic-bezier(.2,.8,.2,1); }
+.menu-lateral { width: 16rem; transition: width 260ms cubic-bezier(.2,.8,.2,1), box-shadow 260ms ease; }
+.menu-lateral .menu-esconde, .menu-lateral [data-marca-texto] { transition: opacity 180ms ease 60ms; }
+.menu-lateral .menu-cartao { transition: border-color 200ms ease; }
+.menu-lateral .menu-alternar { transition: transform 260ms cubic-bezier(.2,.8,.2,1); }
+html[data-menu-recolhido] .menu-vaga { width: 3.75rem; }
+html[data-menu-recolhido] .menu-lateral { width: 3.75rem; }
+html[data-menu-recolhido] .menu-lateral .menu-alternar { transform: rotate(180deg); }
+html[data-menu-recolhido] .menu-lateral:not(:hover, :has(:focus-visible)) :is(.menu-esconde, [data-marca-texto]) { opacity: 0; transition-delay: 0ms; transition-duration: 120ms; }
+html[data-menu-recolhido] .menu-lateral:not(:hover, :has(:focus-visible)) .menu-cartao { border-color: transparent; }
+html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:focus-visible)) {
+  width: 16rem; box-shadow: var(--sombra-flutuante); transition-delay: 120ms;
+}
+html[data-menu-recolhido] .menu-lateral[data-sem-peek] :is(.menu-esconde, [data-marca-texto]) { opacity: 0; }
+html[data-menu-recolhido] .menu-lateral[data-sem-peek] .menu-cartao { border-color: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  .menu-vaga, .menu-lateral, .menu-lateral * { transition-duration: 0ms !important; transition-delay: 0ms !important; }
+}
+[data-motion="off"] :is(.menu-vaga, .menu-lateral, .menu-lateral *),
+[data-motion="reduced"] :is(.menu-vaga, .menu-lateral, .menu-lateral *) { transition-duration: 0ms !important; }

@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.97.0",
+    data: "2026-10-15",
+    titulo: "Menu lateral recolhível",
+    mudancas: [
+      { tipo: "novo", area: "Menu", texto: "O botão no rodapé do menu lateral recolhe o menu para uma faixa só com os ícones, e o conteúdo ganha a largura. Com o mouse sobre a faixa, o menu abre por cima do conteúdo, sem empurrá-lo. A escolha fica lembrada neste navegador.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.96.6",
     data: "2026-10-15",
     titulo: "Sair só com o ícone no menu",

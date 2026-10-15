@@ -182,7 +182,7 @@ const marcarVista = () => {
 
 /** O NÚMERO DA VERSÃO no fim do menu lateral: abre as Novidades no banner flutuante; o ponto marca a versão ainda não
  * vista neste aparelho. */
-export function VersaoSistema({ onNavigate }: { onNavigate?: () => void }) {
+export function VersaoSistema({ onNavigate, className = "justify-center" }: { onNavigate?: () => void; className?: string }) {
   const [nova, setNova] = useState(false);
   const [ancora, setAncora] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   useEffect(() => {
@@ -205,7 +205,7 @@ export function VersaoSistema({ onNavigate }: { onNavigate?: () => void }) {
         aria-expanded={ancora != null}
         aria-haspopup="dialog"
         title={nova ? `Versão ${VERSAO_ATUAL} — veja o que mudou` : `Versão ${VERSAO_ATUAL} — novidades`}
-        className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control px-2 text-[12px] text-faint transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8"
+        className={`flex min-h-11 w-full items-center gap-1.5 rounded-control px-2 text-[12px] text-faint transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8 ${className}`}
       >
         <IconNovidades className={`h-3.5 w-3.5 ${nova ? "text-accent" : ""}`} />
         <span className="font-mono">v{VERSAO_ATUAL}</span>

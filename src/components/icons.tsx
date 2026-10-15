@@ -72,6 +72,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  PanelLeftClose,
   Minus,
   Merge,
   Moon,
@@ -158,6 +159,7 @@ import {
 
 export const IconUpload = Upload;
 export const IconMenu = Menu;
+export const IconRecolherMenu = PanelLeftClose;
 export const IconClose = X;
 export const IconBuilding = Building2;
 export const IconLandmark = Landmark;

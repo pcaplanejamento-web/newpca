@@ -31,6 +31,7 @@ import {
   IconLayers,
   IconPalette,
   IconPlug,
+  IconRecolherMenu,
   IconRobo,
   IconSettings,
   IconSpinner,
@@ -39,6 +40,7 @@ import {
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
 import { nomeExibicao } from "@/lib/pessoa";
+import { ATRIBUTO_MENU, CHAVE_MENU } from "@/lib/menu-lateral";
 
 type NavItem = {
   href: string;
@@ -101,7 +103,7 @@ function NavLinks({
     <div className="flex flex-col gap-4">
       {secoesVisiveis(admin, modulos).map((secao) => (
         <div key={secao.chave}>
-          <p className="mb-1.5 px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
+          <p className="menu-esconde mb-1.5 whitespace-nowrap px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">
             {secao.titulo}
           </p>
           <nav className="flex flex-col gap-0.5">
@@ -113,17 +115,17 @@ function NavLinks({
                   key={item.href}
                   href={item.href}
                   onClick={onNavigate}
-                  className={`flex items-center gap-[11px] rounded-chip border px-2 py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
+                  className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
                     active
                       ? "border-border-2 bg-sb-active font-semibold text-text"
                       : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
                   }`}
                 >
                   <Icon
-                    className={`h-[17px] w-[17px] ${active ? "text-accent" : ""}`}
+                    className={`h-[17px] w-[17px] shrink-0 ${active ? "text-accent" : ""}`}
                     strokeWidth={1.8}
                   />
-                  {item.label}
+                  <span className="menu-esconde">{item.label}</span>
                 </Link>
               );
             })}
@@ -150,15 +152,15 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
   }
 
   return (
-    <div className="flex items-stretch gap-1 rounded-card border border-border p-1.5">
+    <div className="menu-cartao flex items-stretch gap-1 rounded-card border border-border p-0.5">
       <Link
         href="/painel/perfil"
         onClick={onNavigate}
         title="Meu perfil"
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-control p-1.5 transition-colors hover:bg-surface-2"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-control p-[3px] pr-1.5 transition-colors hover:bg-surface-2"
       >
         <Avatar nome={usuario.nome} foto={usuario.foto} />
-        <div className="min-w-0">
+        <div className="menu-esconde min-w-0">
           {/* O APELIDO (nome de exibição) — o nome completo no title. */}
           <div className="truncate text-sm font-semibold text-text" title={usuario.nome}>
             {nomeExibicao(usuario)}
@@ -172,7 +174,7 @@ function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?
         disabled={saindo}
         title="Sair"
         aria-label="Sair"
-        className="grid w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)] disabled:opacity-60"
+        className="menu-esconde grid w-11 shrink-0 place-items-center rounded-control text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)] disabled:opacity-60"
       >
         {saindo ? <IconSpinner className="h-[18px] w-[18px]" /> : <IconLogout className="h-[18px] w-[18px]" />}
       </button>
@@ -451,6 +453,22 @@ export function AppShell({
   const presenca = useUltimoValido(presencaServidor);
   const chat = useUltimoValido(chatServidor);
   const [menuAberto, setMenuAberto] = useState(false);
+  // Menu lateral recolhido (o atributo do <html> já veio do script antes da pintura; aqui só o espelho para a tela).
+  const [recolhido, setRecolhido] = useState(false);
+  // Logo depois de recolher, o ponteiro ainda está em cima: não reabre por cima até sair e voltar.
+  const [semPeek, setSemPeek] = useState(false);
+  useEffect(() => setRecolhido(document.documentElement.hasAttribute(ATRIBUTO_MENU)), []);
+  function alternarMenu() {
+    const novo = !recolhido;
+    document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
+    try {
+      localStorage.setItem(CHAVE_MENU, novo ? "1" : "0");
+    } catch {
+      /* sem armazenamento: vale nesta visita */
+    }
+    setRecolhido(novo);
+    setSemPeek(novo);
+  }
   const fecharMenu = () => setMenuAberto(false);
   // Esc fecha a gaveta (o caminho do teclado; o fundo escurecido é só do ponteiro) — menos com um diálogo por cima.
   useEffect(() => {
@@ -477,20 +495,44 @@ export function AppShell({
     <AcessoNovidades telas={abas} admin={usuario.admin}>
     <div className="min-h-dvh bg-bg text-text lg:flex">
       {versaoDados != null && <SincronizarDados versao={versaoDados} />}
-      {/* Sidebar desktop — fixa (sticky), altura do display, com scroll interno na navegação */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface lg:flex lg:sticky lg:top-0 lg:h-dvh print:!hidden">
-        {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
-        <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-4">
-          <Brand identidade={identidade} />
-        </div>
-        <div className="flex-1 overflow-y-auto px-2 py-4">
-          <NavLinks admin={usuario.admin} modulos={modulos} />
-        </div>
-        <div className="p-2 pt-0">
-          <UserMenu usuario={usuario} />
-          <VersaoSistema />
-        </div>
-      </aside>
+      {/* Sidebar desktop — a VAGA (sticky, altura do display) anima a largura e empurra o conteúdo; o menu dentro dela é
+          absoluto: recolhido vira o trilho de ícones e, ao passar o mouse, abre POR CIMA do conteúdo (sem empurrar). O
+          conteúdo tem largura fixa — nada reflui na animação, só é cortado. Regras em globals.css (.menu-vaga). */}
+      <div className="menu-vaga relative z-40 hidden shrink-0 lg:sticky lg:top-0 lg:block lg:h-dvh print:!hidden">
+        <aside
+          data-sem-peek={semPeek ? "" : undefined}
+          onPointerLeave={() => setSemPeek(false)}
+          className="menu-lateral absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-surface"
+        >
+          <div className="flex h-full w-64 shrink-0 flex-col">
+            {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
+            <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
+              <Brand identidade={identidade} />
+            </div>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-4">
+              <NavLinks admin={usuario.admin} modulos={modulos} />
+            </div>
+            <div className="p-2 pt-0">
+              <UserMenu usuario={usuario} />
+              <div className="mt-0.5 flex items-center">
+                <button
+                  type="button"
+                  onClick={alternarMenu}
+                  aria-pressed={recolhido}
+                  aria-label={recolhido ? "Expandir o menu" : "Recolher o menu"}
+                  title={recolhido ? "Expandir o menu" : "Recolher o menu"}
+                  className="grid h-8 w-11 shrink-0 place-items-center rounded-control text-faint transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  <IconRecolherMenu className="menu-alternar h-[18px] w-[18px]" strokeWidth={1.8} />
+                </button>
+                <div className="menu-esconde min-w-0 flex-1">
+                  <VersaoSistema className="justify-start" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
 
       {/* Drawer mobile (menu hambúrguer) — reusa a mesma navegação da sidebar */}
       {menuAberto && (

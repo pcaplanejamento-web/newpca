@@ -39,7 +39,7 @@ export function MarcaSistema({
         </span>
       )}
       {!compacta && (
-        <span className="min-w-0 leading-tight">
+        <span data-marca-texto="" className="min-w-0 leading-tight">
           <span className={`block truncate font-semibold ${lg ? "text-[17px]" : "text-[14px]"} ${claro ? "text-[var(--vitrine-texto)]" : "text-text"}`}>
             {nome}
           </span>
