@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.96.2",
+    data: "2026-10-15",
+    titulo: "Presença só pelo ADM",
+    mudancas: [
+      { tipo: "melhoria", area: "Perfil", texto: "A opção de aparecer invisível saiu do Perfil: a presença é definida só pelas configurações do administrador.", link: "/painel/perfil" },
+      { tipo: "melhoria", area: "Configurações", texto: "Presença sem a chave “Permitir aparecer invisível”; quem tinha ficado invisível volta a aparecer.", link: "/painel/configuracoes?aba=presenca" },
+    ],
+  },
+  {
     versao: "1.96.1",
     data: "2026-10-15",
     titulo: "Perfil sem rolar a página",

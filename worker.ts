@@ -7,7 +7,7 @@
 import handler from "./.open-next/worker.js";
 import { lerCookie, origemDoProprioSite } from "./src/lib/ao-vivo-core";
 import { lerConfigChat } from "./src/lib/chat-core";
-import { CHAVE_PREF_PRESENCA, ficaInvisivel, lerConfigPresenca, lerPrefsPresenca } from "./src/lib/presenca-core";
+import { CHAVE_PREF_PRESENCA, lerConfigPresenca, lerPrefsPresenca } from "./src/lib/presenca-core";
 
 export { CaixaNotificacoes } from "./src/lib/caixa-notificacoes-do";
 export { PresencaGrupo } from "./src/lib/presenca-grupo-do";
@@ -79,7 +79,7 @@ async function presenca(req: Request, env: Env): Promise<Response> {
   if (!cfg.ativo) return new Response("Presença desligada.", { status: 403 });
   const headers = new Headers(req.headers);
   headers.set("x-presenca-usuario", String(linha.id));
-  headers.set("x-presenca-invisivel", ficaInvisivel(cfg, lerPrefsPresenca(linha.prefs)) ? "1" : "0");
+  headers.set("x-presenca-invisivel", "0");
   headers.set("x-presenca-ausente", cfg.ausente ? "1" : "0");
   headers.set("x-presenca-atividade", cfg.atividade ? "1" : "0");
   // O CHAT ao vivo (o ADM liga o do grupo e o privado — Configurações → Chat).

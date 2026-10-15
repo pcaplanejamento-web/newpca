@@ -17,7 +17,7 @@ export async function PUT(req: Request) {
   if ("resp" in p) return p.resp;
   const cfg = await getConfigPresenca({ fresco: true });
   if (!cfg.ativo) return erro("A presença está desligada pelo administrador.", 409);
-  if (p.data.invisivel && !cfg.invisivel) return erro("O administrador não permite aparecer invisível.", 409);
+  if (p.data.invisivel && !cfg.invisivel) return erro("A presença é definida pelo administrador — não dá para aparecer invisível.", 409);
   const atual = await prefsPresencaDe(a.u.id);
   const nova = lerPrefsPresenca({ ...atual, ...p.data });
   await salvarPreferenciaTabela(a.u.id, CHAVE_PREF_PRESENCA, nova);

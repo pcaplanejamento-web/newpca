@@ -8,7 +8,7 @@ import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Button } from "./Button";
 import { ErroCarga } from "./ErroCarga";
 import { TextField } from "./Field";
-import { IconChat, IconEyeOff, IconSave, IconUsers } from "./icons";
+import { IconChat, IconSave, IconUsers } from "./icons";
 import { SkeletonLinhas } from "./Skeleton";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
@@ -71,15 +71,11 @@ function PresencaCartao() {
             No painel "Online agora", a tela em que cada pessoa está e o que ela tem aberto ("Mesa › Protocolo 144756/2026 ·
             editando"); nas tabelas da Mesa e nos cartões de Tarefas, a foto de quem está com o item aberto. Nada é gravado.
           </TopicoAjuda>
-          <TopicoAjuda icone={<IconEyeOff className="h-4 w-4" />} titulo="Permitir aparecer invisível">
-            No Perfil, a pessoa pode escolher não aparecer para os outros (ela continua vendo quem está online).
-          </TopicoAjuda>
           <TopicoAjuda titulo="Custo">Desligada, nada é carregado. Ligada, cada aba mantém um canal leve, dentro do plano gratuito.</TopicoAjuda>
         </Ajuda>
       </div>
       <Switch dica="Mostra no cabeçalho, ao vivo, quem do grupo está com o sistema aberto" checked={c.ativo} onChange={(ativo) => setC({ ...c, ativo })} label="Mostrar quem do grupo está online" />
       <Switch dica="Quem está com o sistema em segundo plano aparece com o ponto âmbar" checked={c.ausente} disabled={!c.ativo} onChange={(ausente) => setC({ ...c, ausente })} label="Mostrar ausentes" />
-      <Switch dica="No Perfil, cada pessoa pode escolher não aparecer" checked={c.invisivel} disabled={!c.ativo} onChange={(invisivel) => setC({ ...c, invisivel })} label="Permitir aparecer invisível" />
       <Switch dica="Mostra a tela em que cada pessoa está e o item que ela tem aberto" checked={c.atividade} disabled={!c.ativo} onChange={(atividade) => setC({ ...c, atividade })} label="Mostrar onde cada pessoa está e o que está fazendo" />
       <div className="max-w-xs">
         <TextField

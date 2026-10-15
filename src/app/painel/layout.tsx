@@ -17,7 +17,6 @@ import { protecaoDoPapel } from "@/lib/protecao-core";
 import { contarNaoLidas } from "@/lib/notificacoes";
 import { getConfigChat, getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
 import { chatLigado } from "@/lib/chat-core";
-import { ficaInvisivel } from "@/lib/presenca-core";
 import { linhasTabela } from "@/lib/theme";
 import { listarPessoasDoGrupo } from "@/lib/usuarios";
 import { versaoDados } from "@/lib/versao-dados";
@@ -103,7 +102,7 @@ async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: b
       pessoas,
       ver,
       whatsapp: await whatsappDe(pessoas.map((p) => p.id)),
-      invisivel: ficaInvisivel(cfg, prefs),
+      invisivel: false,
       inativoMin: cfg.inativoMin,
       status: { status: prefs.status, recado: prefs.recado, ate: prefs.ate },
     };
