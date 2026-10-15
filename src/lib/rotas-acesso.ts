@@ -333,6 +333,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     GET: recurso("tarefas", "visualizar", "quadroDoEditor(", "o estado da ligação"),
     POST: recurso("tarefas", "configurar", "quadroDoEditor(", "ligar/sincronizar: o privado, só o dono", "podeLigarTrello("),
   },
+  "pesquisa/favoritos": { GET: pessoal("os favoritos da pesquisa da própria pessoa"), PUT: pessoal("os favoritos da pesquisa da própria pessoa") },
   pesquisa: { GET: recurso(["dfd", "pca", "orcamento", "tarefas"], "visualizar", "podeTela(", "a pesquisa do sistema: as telas do alvo (tarefas: os quadros que o papel vê)") },
   "tarefas/vinculos": { GET: recurso(["dfd", "pca", "orcamento", "tarefas"], "visualizar", "podeTela(", "a busca na tela do alvo (tarefas: os quadros que o papel vê)") },
 

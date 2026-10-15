@@ -4,6 +4,7 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { alternarFavorito, type FavoritoPesquisa, lerFavoritos, MAX_FAVORITOS, moverFavorito } from "@/lib/pesquisa-favoritos-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { hrefVinculo, linkTarefa, ROTULO_VINCULO, type TipoVinculo } from "@/lib/tarefas-core";
 import {
@@ -12,12 +13,14 @@ import {
   IconClipboard,
   IconClock,
   IconClose,
+  IconEstrela,
   IconKanban,
   IconLayers,
   IconSearch,
   IconSettings,
   IconWallet,
 } from "./icons";
+import { toast } from "./Toast";
 import { gravarTemaPessoal, lerTemaPessoal } from "./TemaPessoal";
 
 type Icone = ComponentType<SVGProps<SVGSVGElement>>;
@@ -170,6 +173,11 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const [carregando, setCarregando] = useState(false);
   const [falhou, setFalhou] = useState(false);
   const [tentativa, setTentativa] = useState(0);
+  // FAVORITOS (na conta da pessoa): a lista à vista + a última confirmada pelo servidor (para voltar se falhar).
+  const [favoritos, setFavoritos] = useState<FavoritoPesquisa[]>([]);
+  const gravados = useRef<FavoritoPesquisa[]>([]);
+  const filaFav = useRef<Promise<void>>(Promise.resolve());
+  const [largo, setLargo] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
   const lista = useRef<HTMLDivElement>(null);
 
@@ -192,6 +200,19 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   useEffect(() => {
     if (!aberto) return;
     setRecentes(lerRecentes());
+    void (async () => {
+      try {
+        const r = await fetch("/api/pesquisa/favoritos");
+        const j = (await r.json()) as { ok?: boolean; itens?: unknown };
+        if (r.ok && j.ok) {
+          const l = lerFavoritos(j.itens);
+          gravados.current = l;
+          setFavoritos(l);
+        }
+      } catch {
+        /* sem rede: segue com os já carregados */
+      }
+    })();
     setTexto("");
     setFoco(0);
     setRemotos([]);
@@ -306,6 +327,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     const casa = predicadoBusca(termo);
     if (!texto.trim()) {
       const g: Grupo[] = [];
+      if (!largo && favoritos.length) g.push({ tipo: "favoritos", titulo: "Favoritos", itens: favoritos });
       if (recentes.length) g.push({ tipo: "recentes", titulo: "Recentes", itens: recentes });
       g.push({ tipo: "acao", titulo: "Ações rápidas", itens: acoes });
       return g;
@@ -336,7 +358,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       ? tiposServidor.map((t) => ({ tipo: t, titulo: `${ROTULO_VINCULO[t]}s`, itens: [], carregando: true }))
       : remotos;
     return [...locais, ...doServidor].filter((g) => g.itens.length || g.carregando);
-  }, [texto, termo, tipo, recentes, acoes, telas, abas, pcas, pcaFiltroId, remotos, carregando, tiposServidor]);
+  }, [texto, termo, tipo, largo, favoritos, recentes, acoes, telas, abas, pcas, pcaFiltroId, remotos, carregando, tiposServidor]);
 
   const semTexto = !texto.trim();
   const baixo = texto.trim().toLowerCase();
@@ -351,6 +373,50 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   useEffect(() => {
     lista.current?.querySelector(`[data-indice="${focoValido}"]`)?.scrollIntoView({ block: "nearest" });
   }, [focoValido]);
+
+  // Desktop (lg): os favoritos ficam no painel da direita; abaixo dele, como um grupo da lista.
+  useEffect(() => {
+    const m = window.matchMedia("(min-width: 64rem)");
+    const ver = () => setLargo(m.matches);
+    ver();
+    m.addEventListener("change", ver);
+    return () => m.removeEventListener("change", ver);
+  }, []);
+
+  /** Grava a lista (otimista, uma gravação por vez; a que falha volta à última confirmada). */
+  function salvarFavoritos(nova: FavoritoPesquisa[]) {
+    setFavoritos(nova);
+    filaFav.current = filaFav.current.then(async () => {
+      try {
+        const r = await fetch("/api/pesquisa/favoritos", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ itens: nova }) });
+        const j = (await r.json()) as { ok?: boolean; itens?: unknown };
+        if (!r.ok || !j.ok) throw new Error();
+        gravados.current = lerFavoritos(j.itens);
+      } catch {
+        setFavoritos(gravados.current);
+        toast.error("Não foi possível salvar os favoritos. Tente de novo.");
+      }
+    });
+  }
+
+  const ehFavorito = (chave: string) => favoritos.some((f) => f.chave === chave);
+  const favoritavel = (r: Resultado, grupo: string) => grupo !== "dica" && !!r.href && !r.acao;
+
+  function alternar(r: Resultado) {
+    if (!r.href) return;
+    const { lista, cheio } = alternarFavorito(favoritos, { chave: r.chave, rotulo: r.rotulo, caminho: r.caminho, detalhe: r.detalhe, href: r.href, tipo: r.tipo });
+    if (cheio) {
+      toast.error(`Até ${MAX_FAVORITOS} favoritos — tire um para incluir outro.`);
+      return;
+    }
+    salvarFavoritos(lista);
+  }
+
+  function abrirFavorito(f: FavoritoPesquisa) {
+    gravarRecentes([f, ...lerRecentes().filter((x) => x.chave !== f.chave)]);
+    setAberto(false);
+    router.push(f.href);
+  }
 
   function escolher(i: number) {
     const it = itens[i];
@@ -404,7 +470,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const linha = (r: Resultado, grupo: string) => {
     indice += 1;
     const i = indice;
-    const Ic = grupo === "recentes" ? IconClock : grupo === "dica" ? (ICONE_TIPO[r.tipo] ?? IconSearch) : (ICONE_TIPO[r.tipo] ?? IconLayers);
+    const Ic = grupo === "recentes" ? IconClock : grupo === "favoritos" ? IconEstrela : grupo === "dica" ? (ICONE_TIPO[r.tipo] ?? IconSearch) : (ICONE_TIPO[r.tipo] ?? IconLayers);
     const ativo = i === focoValido;
     return (
       // biome-ignore lint/a11y/useFocusableInteractive: combobox — o foco fica no campo e a opção ativa vem por aria-activedescendant.
@@ -415,7 +481,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           data-indice={i}
           onMouseMove={() => setFoco(i)}
           onClick={() => escolher(i)}
-          className={`flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2 text-left ${ativo ? "bg-surface-2" : ""} ${grupo === "recentes" ? "pr-10" : ""}`}
+          className={`flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2 text-left ${ativo ? "bg-surface-2" : ""} ${grupo === "recentes" ? "pr-20" : favoritavel(r, grupo) ? "pr-11" : ""}`}
         >
           <Ic className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
           <span className={`min-w-0 truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
@@ -437,8 +503,23 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
               {r.detalhe}
             </span>
           )}
-          {ativo && grupo !== "recentes" && <IconArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted" aria-hidden="true" />}
+          {ativo && grupo !== "recentes" && !favoritavel(r, grupo) && <IconArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted" aria-hidden="true" />}
         </button>
+        {favoritavel(r, grupo) && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => alternar(r)}
+            aria-pressed={ehFavorito(r.chave)}
+            aria-label={ehFavorito(r.chave) ? `Tirar ${r.rotulo} dos favoritos` : `Favoritar ${r.rotulo}`}
+            title={ehFavorito(r.chave) ? "Tirar dos favoritos" : "Favoritar"}
+            className={`absolute top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-control transition-opacity hover:bg-surface ${grupo === "recentes" ? "right-10" : "right-1.5"} ${
+              ehFavorito(r.chave) ? "text-[var(--warn)]" : `text-faint hover:text-text pointer-coarse:opacity-100 ${ativo ? "opacity-100" : "opacity-0 group-hover/linha:opacity-100"}`
+            }`}
+          >
+            <IconEstrela className="h-4 w-4" fill={ehFavorito(r.chave) ? "currentColor" : "none"} />
+          </button>
+        )}
         {grupo === "recentes" && (
           <button
             type="button"
@@ -500,7 +581,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         aria-modal="true"
         aria-label="Pesquisa no sistema"
         onKeyDown={teclado}
-        className="relative flex h-dvh w-full animate-fade-in-up flex-col overflow-hidden bg-surface shadow-flutuante sm:h-auto sm:max-h-[80vh] sm:max-w-3xl sm:rounded-card sm:border sm:border-border"
+        className="relative flex h-dvh w-full animate-fade-in-up flex-col overflow-hidden bg-surface shadow-flutuante sm:h-[min(80vh,640px)] sm:max-w-3xl sm:rounded-card sm:border sm:border-border"
       >
         <div className="flex items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top)]">
           <IconSearch className="h-5 w-5 shrink-0 text-muted" aria-hidden="true" />
@@ -552,23 +633,83 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
               </div>
             )}
           </div>
-          {/* Prévia do item em foco (desktop). */}
-          {emFoco && emFoco.grupo !== "dica" && (
-            <aside className="hidden w-64 shrink-0 flex-col gap-3 border-l border-border bg-surface-2/50 p-4 lg:flex" aria-hidden="true">
-              <span className="grid h-10 w-10 place-items-center rounded-control bg-surface text-muted shadow-ring">
-                <EmFocoIcone className="h-5 w-5" />
-              </span>
-              <p className="text-[11.5px] font-semibold tracking-wide text-faint uppercase">
-                {emFoco.r.tipo === "acao" ? "Ação" : emFoco.r.tipo === "aba" ? "Aba" : emFoco.r.tipo === "tela" ? "Tela" : (ROTULO_VINCULO[emFoco.r.tipo as TipoVinculo] ?? "Item")}
+          {/* Painel FIXO da direita (desktop): em cima a prévia do item em foco, embaixo os FAVORITOS. */}
+          <aside className="hidden w-72 shrink-0 flex-col border-l border-border bg-surface-2/50 lg:flex">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4" aria-live="polite">
+              {emFoco && emFoco.grupo !== "dica" ? (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="grid h-10 w-10 place-items-center rounded-control bg-surface text-muted shadow-ring">
+                      <EmFocoIcone className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    {favoritavel(emFoco.r, emFoco.grupo) && (
+                      <button
+                        type="button"
+                        onClick={() => alternar(emFoco.r)}
+                        aria-pressed={ehFavorito(emFoco.r.chave)}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-control border border-border bg-surface px-2.5 text-[12.5px] transition-colors hover:border-border-2 ${ehFavorito(emFoco.r.chave) ? "text-[var(--warn)]" : "text-text-2"}`}
+                      >
+                        <IconEstrela className="h-3.5 w-3.5" fill={ehFavorito(emFoco.r.chave) ? "currentColor" : "none"} aria-hidden="true" />
+                        {ehFavorito(emFoco.r.chave) ? "Favorito" : "Favoritar"}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11.5px] font-semibold tracking-wide text-faint uppercase">
+                    {emFoco.r.tipo === "acao" ? "Ação" : emFoco.r.tipo === "aba" ? "Aba" : emFoco.r.tipo === "tela" ? "Tela" : (ROTULO_VINCULO[emFoco.r.tipo as TipoVinculo] ?? "Item")}
+                  </p>
+                  <p className="text-[15px] leading-snug font-semibold break-words text-text">{[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")}</p>
+                  {emFoco.r.detalhe && <p className="text-[13px] leading-snug break-words text-muted">{emFoco.r.detalhe}</p>}
+                  <p className="mt-auto flex items-center gap-1.5 text-[12px] text-faint">
+                    <kbd className="rounded-chip border border-border bg-surface px-1.5 font-sans">↵</kbd>
+                    {emFoco.r.acao ? "executar" : "abrir"}
+                  </p>
+                </>
+              ) : (
+                <p className="m-auto text-center text-[13px] text-faint">Escolha um resultado para ver os detalhes.</p>
+              )}
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col border-t border-border">
+              <p className="flex shrink-0 items-center gap-1.5 px-4 pt-3 pb-1.5 text-[12px] font-semibold text-muted">
+                <IconEstrela className="h-3.5 w-3.5" aria-hidden="true" />
+                Favoritos
+                <span className="ml-auto font-normal text-faint">
+                  {favoritos.length}/{MAX_FAVORITOS}
+                </span>
               </p>
-              <p className="text-[15px] leading-snug font-semibold break-words text-text">{[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")}</p>
-              {emFoco.r.detalhe && <p className="text-[13px] leading-snug break-words text-muted">{emFoco.r.detalhe}</p>}
-              <p className="mt-auto flex items-center gap-1.5 text-[12px] text-faint">
-                <kbd className="rounded-chip border border-border bg-surface px-1.5 font-sans">↵</kbd>
-                {emFoco.r.acao ? "executar" : "abrir"}
-              </p>
-            </aside>
-          )}
+              <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+                {favoritos.length === 0 && (
+                  <li className="px-2 py-3 text-[12.5px] leading-snug text-faint">Toque na estrela de um resultado para guardá-lo aqui. Vale em todos os seus aparelhos.</li>
+                )}
+                {favoritos.map((f, i) => {
+                  const Ic = ICONE_TIPO[f.tipo] ?? IconLayers;
+                  return (
+                    <li key={f.chave} className="group/fav relative">
+                      <button
+                        type="button"
+                        onClick={() => abrirFavorito(f)}
+                        title={[...(f.caminho ?? []), f.rotulo].join(" › ")}
+                        className="flex min-h-9 w-full items-center gap-2 rounded-control px-2 py-1.5 pr-24 text-left hover:bg-surface"
+                      >
+                        <Ic className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-text">{f.rotulo}</span>
+                      </button>
+                      <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center opacity-0 transition-opacity group-hover/fav:opacity-100 focus-within:opacity-100">
+                        <button type="button" disabled={i === 0} onClick={() => salvarFavoritos(moverFavorito(favoritos, f.chave, -1))} aria-label={`Subir ${f.rotulo}`} title="Subir" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text disabled:opacity-30">
+                          ↑
+                        </button>
+                        <button type="button" disabled={i === favoritos.length - 1} onClick={() => salvarFavoritos(moverFavorito(favoritos, f.chave, 1))} aria-label={`Descer ${f.rotulo}`} title="Descer" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text disabled:opacity-30">
+                          ↓
+                        </button>
+                        <button type="button" onClick={() => salvarFavoritos(favoritos.filter((x) => x.chave !== f.chave))} aria-label={`Tirar ${f.rotulo} dos favoritos`} title="Tirar dos favoritos" className="grid h-7 w-7 place-items-center rounded-control text-faint hover:bg-surface hover:text-text">
+                          <IconClose className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </aside>
         </div>
         <div className="hidden items-center gap-4 border-t border-border bg-surface-2 px-4 py-2.5 text-[12.5px] text-muted sm:flex">
           <span className="flex items-center gap-1.5">

@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.103.0",
+    data: "2026-10-15",
+    titulo: "Favoritos na pesquisa",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Pesquisa",
+        texto: "Favorite telas, abas, PCAs, protocolos, DFDs e itens pela estrela; eles ficam no painel da direita da pesquisa (no celular, no topo) e valem em todos os seus aparelhos.",
+        link: "/painel/mesa",
+      },
+      { tipo: "melhoria", area: "Pesquisa", texto: "O painel da direita fica fixo e dividido: em cima os detalhes do resultado, embaixo os favoritos.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.102.1",
     data: "2026-10-15",
     titulo: "Menu lateral alinhado",
