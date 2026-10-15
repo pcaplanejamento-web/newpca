@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.101.1",
+    data: "2026-10-15",
+    titulo: "Pesquisa mostra o caminho de cada tela e aba",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "Cada resultado mostra a sequência até ele (ex.: PCA › 2025 · PCA Teste › Orçamento), e o trecho buscado aparece só em negrito.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.101.0",
     data: "2026-10-15",
     titulo: "Pesquisa do sistema completa (com as abas)",

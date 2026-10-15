@@ -25,7 +25,7 @@ export type TelaPesquisa = { href: string; label: string; secao: string; Icon: I
 export type PcaPesquisa = { id: number; nome: string; ano: number };
 
 /** Um resultado: o rótulo, o contexto (à direita do travessão), para onde leva — ou a AÇÃO que executa. */
-type Resultado = { chave: string; rotulo: string; detalhe?: string; href?: string; tipo: string; acao?: () => void };
+type Resultado = { chave: string; rotulo: string; caminho?: string[]; detalhe?: string; href?: string; tipo: string; acao?: () => void };
 type Grupo = { tipo: string; titulo: string; itens: Resultado[]; total?: number; carregando?: boolean; erro?: boolean };
 
 const RECENTES = "pesquisa:recentes";
@@ -124,7 +124,7 @@ function Destaque({ texto, termo }: { texto: string; termo: string }): ReactNode
   return (
     <>
       {texto.slice(0, i)}
-      <mark className="rounded-[3px] bg-accent-soft px-0.5 text-accent">{texto.slice(i, i + t.length)}</mark>
+      <mark className="bg-transparent font-semibold text-accent">{texto.slice(i, i + t.length)}</mark>
       {texto.slice(i + t.length)}
     </>
   );
@@ -293,11 +293,11 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   const abas = useMemo<Resultado[]>(() => {
     const porTela = telas.flatMap((t) => {
       const def = ABAS_TELAS[t.href];
-      return def ? def.abas.map<Resultado>(([v, r]) => ({ chave: `aba:${t.href}:${v}`, rotulo: r, detalhe: `${t.label} · aba`, href: `${t.href}?${def.param}=${v}`, tipo: "aba" })) : [];
+      return def ? def.abas.map<Resultado>(([v, r]) => ({ chave: `aba:${t.href}:${v}`, rotulo: r, caminho: [t.secao, t.label].filter(Boolean), href: `${t.href}?${def.param}=${v}`, tipo: "aba" })) : [];
     });
-    const perfil = ABAS_PERFIL.map<Resultado>(([v, r]) => ({ chave: `aba:perfil:${v}`, rotulo: r, detalhe: "Perfil · aba", href: `/painel/perfil?aba=${v}`, tipo: "aba" }));
+    const perfil = ABAS_PERFIL.map<Resultado>(([v, r]) => ({ chave: `aba:perfil:${v}`, rotulo: r, caminho: ["Conta", "Perfil"], href: `/painel/perfil?aba=${v}`, tipo: "aba" }));
     const dosPcas = telas.some((t) => t.href === "/painel/pca")
-      ? pcas.flatMap((p) => ABAS_PCA.map<Resultado>(([v, r]) => ({ chave: `aba:pca:${p.id}:${v}`, rotulo: r, detalhe: `PCA ${p.ano} · ${p.nome}`, href: `/painel/pca/${p.id}?aba=${v}`, tipo: "aba" })))
+      ? pcas.flatMap((p) => ABAS_PCA.map<Resultado>(([v, r]) => ({ chave: `aba:pca:${p.id}:${v}`, rotulo: r, caminho: ["PCA", `${p.ano} · ${p.nome}`], href: `/painel/pca/${p.id}?aba=${v}`, tipo: "aba" })))
       : [];
     return [...porTela, ...perfil, ...dosPcas];
   }, [telas, pcas]);
@@ -317,9 +317,9 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       {
         tipo: "tela",
         titulo: "Telas",
-        itens: quer("tela") ? telas.filter((t) => casa([t.label, t.secao])).map((t) => ({ chave: `tela:${t.href}`, rotulo: t.label, detalhe: t.secao, href: t.href, tipo: "tela" })) : [],
+        itens: quer("tela") ? telas.filter((t) => casa([t.label, t.secao])).map((t) => ({ chave: `tela:${t.href}`, rotulo: t.label, caminho: t.secao ? [t.secao] : undefined, href: t.href, tipo: "tela" })) : [],
       },
-      { tipo: "aba", titulo: "Abas", itens: quer("aba") ? abas.filter((a) => casa([a.rotulo, a.detalhe, `${a.detalhe} ${a.rotulo}`])).slice(0, tipo ? 60 : 8) : [] },
+      { tipo: "aba", titulo: "Abas", itens: quer("aba") ? abas.filter((a) => casa([a.rotulo, ...(a.caminho ?? []), `${(a.caminho ?? []).join(" ")} ${a.rotulo}`])).slice(0, tipo ? 60 : 8) : [] },
       {
         tipo: "pca",
         titulo: "PCAs",
@@ -327,7 +327,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           ? pcas
               .filter((p) => casa([p.nome, String(p.ano)]))
               .sort((a, b) => Number(b.id === pcaFiltroId) - Number(a.id === pcaFiltroId))
-              .map((p) => ({ chave: `pca:${p.id}`, rotulo: p.nome, detalhe: `PCA ${p.ano}${p.id === pcaFiltroId ? " · o do cabeçalho" : ""}`, href: `/painel/pca/${p.id}`, tipo: "pca" }))
+              .map((p) => ({ chave: `pca:${p.id}`, rotulo: p.nome, caminho: ["PCA", String(p.ano)], detalhe: p.id === pcaFiltroId ? "selecionado no topo" : undefined, href: `/painel/pca/${p.id}`, tipo: "pca" }))
           : [],
       },
     ];
@@ -419,6 +419,14 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         >
           <Ic className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
           <span className={`min-w-0 truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
+            {r.caminho?.map((c) => (
+              <span key={c} className="text-muted">
+                {c}
+                <span aria-hidden="true" className="mx-1.5 text-faint">
+                  ›
+                </span>
+              </span>
+            ))}
             {grupo === "dica" ? r.rotulo : <Destaque texto={r.rotulo} termo={termo} />}
           </span>
           {r.detalhe && (
@@ -553,7 +561,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
               <p className="text-[11.5px] font-semibold tracking-wide text-faint uppercase">
                 {emFoco.r.tipo === "acao" ? "Ação" : emFoco.r.tipo === "aba" ? "Aba" : emFoco.r.tipo === "tela" ? "Tela" : (ROTULO_VINCULO[emFoco.r.tipo as TipoVinculo] ?? "Item")}
               </p>
-              <p className="text-[15px] leading-snug font-semibold break-words text-text">{emFoco.r.rotulo}</p>
+              <p className="text-[15px] leading-snug font-semibold break-words text-text">{[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")}</p>
               {emFoco.r.detalhe && <p className="text-[13px] leading-snug break-words text-muted">{emFoco.r.detalhe}</p>}
               <p className="mt-auto flex items-center gap-1.5 text-[12px] text-faint">
                 <kbd className="rounded-chip border border-border bg-surface px-1.5 font-sans">↵</kbd>
