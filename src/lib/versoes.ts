@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.10",
+    data: "2026-10-15",
+    titulo: "Cartões e usuário estáveis no menu",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir e fechar o menu, os cartões mudam de tamanho e de lugar numa transição suave (sem saltar), e o cartão do usuário encolhe mantendo a borda, com a foto centralizada.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.107.9",
     data: "2026-10-15",
     titulo: "Cartões deslizam ao abrir e fechar o menu",

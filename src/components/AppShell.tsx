@@ -466,21 +466,28 @@ function deslizarGrades() {
   if (m === "off" || m === "reduced") return;
   const itens = Array.from(document.querySelectorAll<HTMLElement>('main [class*="auto-fill"] > *'));
   if (!itens.length) return;
-  const pos = new Map(itens.map((e) => [e, { x: e.offsetLeft, y: e.offsetTop }]));
+  const caixa = (e: HTMLElement) => ({ x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight });
+  const pos = new Map(itens.map((e) => [e, caixa(e)]));
   const fim = performance.now() + 340;
   const passo = () => {
     for (const e of itens) {
       const a = pos.get(e);
       if (!a) continue;
-      const x = e.offsetLeft;
-      const y = e.offsetTop;
-      if (Math.abs(x - a.x) > 40 || Math.abs(y - a.y) > 40) {
-        e.animate([{ transform: `translate(${a.x - x}px, ${a.y - y}px)` }, { transform: "none" }], {
-          duration: 300,
-          easing: "cubic-bezier(.32,.72,0,1)",
-        });
+      const n = caixa(e);
+      // Mudou de coluna/linha (ou a coluna mudou de largura de uma vez): sai da posição E do tamanho antigos.
+      if (Math.abs(n.x - a.x) > 24 || Math.abs(n.y - a.y) > 24 || Math.abs(n.w - a.w) > 16) {
+        e.style.transformOrigin = "0 0";
+        e.animate(
+          [
+            { transform: `translate(${a.x - n.x}px, ${a.y - n.y}px) scale(${a.w / n.w || 1}, ${a.h / n.h || 1})` },
+            { transform: "none" },
+          ],
+          { duration: 300, easing: "cubic-bezier(.32,.72,0,1)" },
+        ).onfinish = () => {
+          e.style.transformOrigin = "";
+        };
       }
-      pos.set(e, { x, y });
+      pos.set(e, n);
     }
     if (performance.now() < fim) requestAnimationFrame(passo);
   };
