@@ -6,6 +6,7 @@ import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -120,7 +121,12 @@ export function GruposAdmin() {
     setReps(new Set(g.reparticoes));
     setBusca("");
     setErroModal(null);
-  }
+  }  // A PESQUISA DO SISTEMA abre o banner do grupo (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const g = grupos?.find((x) => x.id === Number(v));
+    if (g) abrirEdicao(g);
+  }, grupos != null);
+
   const alternar = <T,>(set: (f: (s: Set<T>) => Set<T>) => void, id: T) =>
     set((s) => {
       const n = new Set(s);

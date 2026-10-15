@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.104.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa em todas as telas",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa agora acha também os lançamentos do orçamento (ficha, ação, elemento, unidade), os itens do catálogo, o histórico de compra e os eventos do calendário — e abre o registro na tela e aba certas.", link: "/painel/orcamento" },
+      { tipo: "novo", area: "Pesquisa", texto: "Para o administrador: usuários, órgãos, unidades, grupos, papéis, cargos, situações, feriados e automações, cada um abrindo o banner na própria tela.", link: "/painel/usuarios" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Só aparece o que a pessoa pode abrir: cada tipo exige a tela (e a aba) em que o dado está. Novos atalhos: l: lançamentos, c: catálogo, h: histórico, e: calendário, u: usuários, au: automações.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.103.3",
     data: "2026-10-15",
     titulo: "Pesquisa respeita a Mesa de cada item",

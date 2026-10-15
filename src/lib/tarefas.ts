@@ -38,6 +38,7 @@ import { condMeuDfd, condMeuProtocolo } from "./linhas-sql";
 import { visaoMesa } from "./mesa-visao-core";
 import { lotesDeIds } from "./reparticoes";
 import { linkEvento } from "./calendario-core";
+import type { ResultadoPesquisa } from "./pesquisa-core";
 import { atorDe, notificar } from "./notificacoes";
 import { nomeExibicao, type Pessoa } from "./pessoa";
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
@@ -2537,8 +2538,6 @@ export async function importarVinculos(quadroId: number, pares: { de: number; pa
   return validos.length;
 }
 
-/** Um resultado da PESQUISA DO SISTEMA com o link que a pessoa PODE abrir. */
-export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; href: string };
 
 /**
  * A PESQUISA DO SISTEMA de protocolos, DFDs e itens: casa nº/Id/assunto/interessado do protocolo, nº/planejamento/objeto

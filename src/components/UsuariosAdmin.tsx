@@ -6,6 +6,7 @@ import { formatarTelefone } from "@/lib/cadastro-core";
 import { dataHoraBR } from "@/lib/format";
 import type { OpcaoPapel } from "@/lib/papeis";
 import type { UnidadeTrabalho } from "@/lib/reparticoes";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcessoDaPessoa } from "./AcessoDaPessoa";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
@@ -55,6 +56,13 @@ export function UsuariosAdmin({ meuId }: { meuId: number }) {
   const [erroAp, setErroAp] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [abertoId, setAbertoId] = useState<number | null>(null);
+  // A PESQUISA DO SISTEMA abre o banner do usuário (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const u = lista?.find((x) => x.id === Number(v));
+    if (!u) return;
+    if (u.arquivadoEm) setVerArquivados(true);
+    setAbertoId(u.id);
+  }, lista != null);
   // A lista mostra os ATIVOS (e pendentes/inativos) ou só os ARQUIVADOS (restauráveis).
   const [verArquivados, setVerArquivados] = useState(false);
   const [ocupado, setOcupado] = useState(false);

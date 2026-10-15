@@ -17,6 +17,7 @@ import { criarCatalogoVazio, enviarCatalogoEmLotes } from "@/lib/importar-catalo
 import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
 import { parseCatalogoXlsx } from "@/lib/parse-catalogo-xlsx";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Badge } from "./Badge";
 import { CatalogoCard, CoresPaleta, type DadosPasta, EditorPastaCatalogo, type NumerosAgenda, PastaCatalogoCard } from "./CatalogoCards";
 import { useConfirmacao } from "./Confirmacao";
@@ -186,6 +187,16 @@ export function CatalogoView({
   const [novoTipo, setNovoTipo] = useState<TipoCatalogo>("agenda");
   const [arquivoHistorico, setArquivoHistorico] = useState<File | null>(null);
   const [historicoAberto, setHistoricoAberto] = useState<CatalogoResumo | null>(null);
+  // A PESQUISA DO SISTEMA abre um item do catálogo (`?abrir=catalogo:<id>:<código>`) ou um histórico (`historico:<id>`).
+  useAbrirDaUrl((v) => {
+    const [tipo, id, codigo] = v.split(":");
+    const c = todosCatalogos.find((x) => x.id === Number(id));
+    if (!c) return;
+    if (tipo === "historico") return setHistoricoAberto(c);
+    setAbertoId(c.id);
+    const it = codigo ? itens.find((x) => x.codigo === codigo) : undefined;
+    if (it) setPainelItem(it);
+  });
   // Edição do catálogo: cor + pasta (além de nome e tipos padrão).
   const [editCor, setEditCor] = useState<string | null>(null);
   const [editPasta, setEditPasta] = useState<number | null>(null);

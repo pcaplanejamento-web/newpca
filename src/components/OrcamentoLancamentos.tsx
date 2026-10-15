@@ -8,6 +8,7 @@ import { type DimensoesCadastro, SEM_VINCULO_ORC } from "@/lib/orcamento-vinculo
 import { aplicarVisao, type VisaoOrcamento } from "@/lib/orcamento-visao";
 import type { PodeTela } from "@/lib/papeis-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { FerramentasAba } from "./AbasEspaco";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -81,6 +82,8 @@ export function OrcamentoLancamentos({
 }) {
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<Lancamento | null>(null);
+  // A PESQUISA DO SISTEMA abre um lançamento (`?abrir=<id>`).
+  useAbrirDaUrl((v) => setAberto(itens.find((r) => r.id === Number(v)) ?? null));
   const [reenviar, setReenviar] = useState(0); // cada valor novo abre o lançador do reenvio
   // As edições salvas guardadas aqui: a tabela que remonta volta com as novas.
   const [eds, setEds] = useState<{ lista: EdicaoTabela[]; padroes: Record<string, unknown> }>({ lista: edicoes.lista, padroes: edicoes.padroes });

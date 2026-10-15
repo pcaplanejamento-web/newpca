@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { conferenciaDoOrgao, planoRealinhar, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { BannerCadastro, type CampoCadastro } from "./BannerCadastro";
@@ -81,6 +82,10 @@ export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; ed
   const [lista, setLista] = useState<Orgao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<number | "novo" | null>(null);
+  // A PESQUISA DO SISTEMA abre o banner do órgão (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    if (lista?.some((o) => o.id === Number(v))) setAberto(Number(v));
+  }, lista != null);
   const [ocupado, setOcupado] = useState(false);
   const [destino, setDestino] = useState("");
   const { confirmar, confirmacao } = useConfirmacao();

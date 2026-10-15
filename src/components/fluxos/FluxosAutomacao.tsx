@@ -49,6 +49,7 @@ import { Modal } from "../Modal";
 import { useNaTela, useTrabalhoSegundoPlano } from "../SegundoPlano";
 import { Switch } from "../Switch";
 import { toast } from "../Toast";
+import { useAbrirDaUrl } from "../AbrirDaUrl";
 import { alturaNo, CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
 import { organizarGrafo } from "@/lib/fluxo-layout";
 import { AjudaNo } from "./AjudaNo";
@@ -131,6 +132,10 @@ export function FluxosAutomacao({
   const [publicos, setPublicos] = useState<FluxoAutomacao[]>([]);
   const [naMesa, setNaMesa] = useState<number[]>([]);
   const [aberto, setAberto] = useState<number | null>(null);
+  // A PESQUISA DO SISTEMA abre o editor da automação (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    if (fluxos?.some((f) => f.id === Number(v))) setAberto(Number(v));
+  }, fluxos != null);
   const [rodando, setRodando] = useState<number | null>(null);
   const [passos, setPassos] = useState<Record<string, PassoExec>>({});
   const [resultado, setResultado] = useState<ResultadoExec | null>(null);

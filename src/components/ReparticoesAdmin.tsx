@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -74,6 +75,10 @@ export function ReparticoesAdmin({
   const [lista, setLista] = useState<Rep[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<number | "novo" | null>(null);
+  // A PESQUISA DO SISTEMA abre o banner da unidade (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    if (lista?.some((u) => u.id === Number(v))) setAberto(Number(v));
+  }, lista != null);
   const [ocupado, setOcupado] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
 

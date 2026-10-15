@@ -4,20 +4,28 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { TIPOS_PESQUISA, tituloPesquisa, type TipoPesquisa } from "@/lib/pesquisa-core";
 import { alternarFavorito, type FavoritoPesquisa, lerFavoritos, MAX_FAVORITOS, moverFavorito } from "@/lib/pesquisa-favoritos-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { hrefVinculo, linkTarefa, ROTULO_VINCULO, type TipoVinculo } from "@/lib/tarefas-core";
 import {
   IconArrowRight,
   IconBox,
+  IconBuilding,
+  IconCalendar,
+  IconDatabase,
   IconClipboard,
   IconClock,
   IconClose,
   IconEstrela,
   IconKanban,
   IconLayers,
+  IconRobo,
   IconSearch,
   IconSettings,
+  IconShield,
+  IconUser,
+  IconUsers,
   IconWallet,
 } from "./icons";
 import { toast } from "./Toast";
@@ -47,16 +55,22 @@ const ICONE_TIPO: Record<string, Icone> = {
   pca: IconBox,
   orcamento: IconWallet,
   tarefa: IconKanban,
+  evento: IconCalendar,
+  lancamento: IconWallet,
+  catalogo: IconDatabase,
+  historico: IconDatabase,
+  usuario: IconUser,
+  orgao: IconBuilding,
+  unidade: IconBuilding,
+  grupo: IconUsers,
+  cadastro: IconShield,
+  fluxo: IconRobo,
 };
 
 /** As DICAS — o prefixo (ou o atalho) restringe a pesquisa a um tipo; Tab completa. */
-const DICAS: { prefixo: string; curto: string; tipo: TipoVinculo | "tela" | "aba"; texto: string }[] = [
-  { prefixo: "protocolo:", curto: "p:", tipo: "protocolo", texto: "Protocolos (nº, Id, assunto, interessado)" },
-  { prefixo: "dfd:", curto: "d:", tipo: "dfd", texto: "DFDs (nº, planejamento, objeto, protocolo)" },
-  { prefixo: "item:", curto: "i:", tipo: "item", texto: "Itens (código, descrição)" },
-  { prefixo: "tarefa:", curto: "t:", tipo: "tarefa", texto: "Tarefas (título, nº do ticket)" },
+const DICAS: { prefixo: string; curto: string; tipo: TipoPesquisa | "pca" | "tela" | "aba"; texto: string }[] = [
+  ...TIPOS_PESQUISA.map((t) => ({ prefixo: t.prefixo, curto: t.curto, tipo: t.tipo, texto: t.texto })),
   { prefixo: "pca:", curto: "pc:", tipo: "pca", texto: "PCAs" },
-  { prefixo: "orcamento:", curto: "o:", tipo: "orcamento", texto: "Orçamentos" },
   { prefixo: "tela:", curto: "te:", tipo: "tela", texto: "Telas do sistema" },
   { prefixo: "aba:", curto: "a:", tipo: "aba", texto: "Abas de cada tela" },
 ];
@@ -225,13 +239,13 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
   }, [aberto]);
 
   const { tipo, termo } = lerConsulta(texto);
-  const tiposServidor: TipoVinculo[] =
-    tipo === "tela" || tipo === "aba" || tipo === "pca" ? [] : tipo ? [tipo] : ["protocolo", "dfd", "item", "tarefa", "orcamento"];
+  // Sem prefixo, o servidor escolhe (todos os tipos que a pessoa pode ver); com prefixo, só aquele.
+  const tiposServidor: TipoPesquisa[] | null = tipo === "tela" || tipo === "aba" || tipo === "pca" ? [] : tipo ? [tipo] : null;
 
   // Servidor: um pedido 250 ms depois da última tecla; a resposta antiga não sobrescreve a nova.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tiposServidor` sai de `tipo`; `tentativa` refaz após falha.
   useEffect(() => {
-    if (!aberto || termo.length < 2 || !tiposServidor.length) {
+    if (!aberto || termo.length < 2 || tiposServidor?.length === 0) {
       setRemotos([]);
       setCarregando(false);
       setFalhou(false);
@@ -242,21 +256,21 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     setFalhou(false);
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}&tipos=${tiposServidor.join(",")}&limite=${tipo ? 30 : 5}`);
-        const j = (await r.json()) as { ok?: boolean; grupos?: { tipo: TipoVinculo; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] }[] };
+        const r = await fetch(`/api/pesquisa?q=${encodeURIComponent(termo)}${tiposServidor ? `&tipos=${tiposServidor.join(",")}` : ""}&limite=${tipo ? 30 : 5}`);
+        const j = (await r.json()) as { ok?: boolean; grupos?: { tipo: string; total: number; opcoes: { id: number; rotulo: string; detalhe: string; href?: string }[] }[] };
         if (!r.ok || !j.ok) throw new Error();
         if (!vivo) return;
         setRemotos(
           (j.grupos ?? []).map((g) => ({
             tipo: g.tipo,
-            titulo: `${ROTULO_VINCULO[g.tipo]}s`,
+            titulo: tituloPesquisa(g.tipo),
             total: g.total,
             itens: g.opcoes
               .map<Resultado>((o) => ({
                 chave: `${g.tipo}:${o.id}`,
                 rotulo: o.rotulo,
                 detalhe: o.detalhe || undefined,
-                href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo, id: o.id })),
+                href: o.href ?? (g.tipo === "tarefa" ? linkTarefa(o.id) : hrefVinculo({ tipo: g.tipo as TipoVinculo, id: o.id })),
                 tipo: g.tipo,
               }))
               .sort((a, b) => Number(numeroExato(b.rotulo, termo)) - Number(numeroExato(a.rotulo, termo))),
@@ -355,7 +369,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     ];
     // Enquanto o servidor responde, cada grupo dele mostra o esqueleto.
     const doServidor: Grupo[] = carregando
-      ? tiposServidor.map((t) => ({ tipo: t, titulo: `${ROTULO_VINCULO[t]}s`, itens: [], carregando: true }))
+      ? (tiposServidor ?? ["protocolo", "dfd", "item"]).map((t) => ({ tipo: t, titulo: tituloPesquisa(t), itens: [], carregando: true }))
       : remotos;
     return [...locais, ...doServidor].filter((g) => g.itens.length || g.carregando);
   }, [texto, termo, tipo, largo, favoritos, recentes, acoes, telas, abas, pcas, pcaFiltroId, remotos, carregando, tiposServidor]);
@@ -655,7 +669,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
                     )}
                   </div>
                   <p className="text-[11.5px] font-semibold tracking-wide text-faint uppercase">
-                    {emFoco.r.tipo === "acao" ? "Ação" : emFoco.r.tipo === "aba" ? "Aba" : emFoco.r.tipo === "tela" ? "Tela" : (ROTULO_VINCULO[emFoco.r.tipo as TipoVinculo] ?? "Item")}
+                    {emFoco.r.tipo === "acao" ? "Ação" : emFoco.r.tipo === "aba" ? "Aba" : emFoco.r.tipo === "tela" ? "Tela" : (ROTULO_VINCULO[emFoco.r.tipo as TipoVinculo] ?? tituloPesquisa(emFoco.r.tipo))}
                   </p>
                   <p className="text-[15px] leading-snug font-semibold break-words text-text">{[...(emFoco.r.caminho ?? []), emFoco.r.rotulo].join(" › ")}</p>
                   {emFoco.r.detalhe && <p className="text-[13px] leading-snug break-words text-muted">{emFoco.r.detalhe}</p>}
