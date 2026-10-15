@@ -17,12 +17,12 @@ import { ChatAoVivo } from "./ChatAoVivo";
 import type { ConfigChat } from "@/lib/chat-core";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
+import { TrilhaCabecalho } from "./TrilhaCabecalho";
 import { toast } from "./Toast";
 import {
   IconAlternarNivel,
   IconBox,
   IconBuilding,
-  IconChevronRight,
   IconLandmark,
   IconCheck,
   IconClock,
@@ -254,103 +254,6 @@ function GrupoSelect({ grupos, ativoId }: { grupos: GrupoNav[]; ativoId: number 
   );
 }
 
-/**
- * TRILHA do cabeçalho (padrão do Cloudflare): Seção › Tela ⌃⌄ [› PCA ⌃⌄]. A seção é o módulo do menu; a tela troca
- * entre as telas da MESMA seção; dentro do espaço de um PCA, o último nível troca de PCA (o filtro do cabeçalho segue).
- */
-function TrilhaCabecalho({ secoes, pcas }: { secoes: NavSecao[]; pcas: PcaNav[] }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  let secao: NavSecao | undefined;
-  let item: NavItem | undefined;
-  for (const s of secoes) {
-    const i = s.itens.filter((x) => itemAtivo(pathname, x)).sort((a, b) => b.href.length - a.href.length)[0];
-    if (i && (!item || i.href.length > item.href.length)) {
-      secao = s;
-      item = i;
-    }
-  }
-  if (!secao || !item) return null;
-  const pcaId = /^\/painel\/pca\/(\d+)/.exec(pathname)?.[1];
-  const pca = pcaId ? pcas.find((p) => p.id === Number(pcaId)) : undefined;
-  const opcao = (marcado: boolean) =>
-    `flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] lg:min-h-0 ${
-      marcado ? "bg-accent-soft font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
-    }`;
-  const nivel = "gap-1.5 rounded-control px-2 h-[var(--h-control-sm)] text-[13px] hover:bg-surface-2";
-  const Sep = () => <IconChevronRight aria-hidden className="h-3.5 w-3.5 shrink-0 text-faint" />;
-  const ItemIcon = item.Icon;
-  return (
-    <nav aria-label="Onde você está" className="hidden min-w-0 items-center gap-1 lg:flex">
-      <span className="shrink-0 truncate px-1 text-[13px] text-muted">{secao.titulo}</span>
-      <Sep />
-      <Dropdown
-        align="start"
-        ariaLabel={`Tela: ${item.label} — trocar de tela em ${secao.titulo}`}
-        triggerClassName={`${nivel} font-semibold text-text`}
-        width={240}
-        trigger={
-          <>
-            <ItemIcon className="h-4 w-4 shrink-0 text-muted" />
-            <span className="max-w-[12rem] truncate">{item.label}</span>
-            <IconAlternarNivel className="h-3.5 w-3.5 shrink-0 opacity-60" />
-          </>
-        }
-      >
-        {(close) => (
-          <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
-            {secao.itens.map((x) => (
-              <Link key={x.href} href={x.href} onClick={close} className={opcao(x.href === item.href)}>
-                <x.Icon className="h-4 w-4 shrink-0 opacity-70" />
-                <span className="min-w-0 truncate">{x.label}</span>
-                {x.href === item.href && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
-              </Link>
-            ))}
-          </div>
-        )}
-      </Dropdown>
-      {pca && pcas.length > 0 && (
-        <>
-          <Sep />
-          <Dropdown
-            align="start"
-            ariaLabel={`PCA: ${pca.nome} — trocar de PCA`}
-            triggerClassName={`${nivel} min-w-0 text-text-2`}
-            width={260}
-            trigger={
-              <>
-                <span className="shrink-0 font-mono text-[11px] text-faint">{pca.ano}</span>
-                <span className="max-w-[14rem] truncate">{pca.nome}</span>
-                <IconAlternarNivel className="h-3.5 w-3.5 shrink-0 opacity-60" />
-              </>
-            }
-          >
-            {(close) => (
-              <div className="max-h-[min(60vh,380px)] overflow-y-auto p-1">
-                {pcas.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={opcao(p.id === pca.id)}
-                    onClick={() => {
-                      close();
-                      if (p.id !== pca.id) router.push(`/painel/pca/${p.id}${window.location.search}`);
-                    }}
-                  >
-                    <span className="shrink-0 font-mono text-[10.5px] text-faint">{p.ano}</span>
-                    <span className="min-w-0 truncate">{p.nome}</span>
-                    {p.id === pca.id && <IconCheck className="ml-auto h-4 w-4 shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </Dropdown>
-        </>
-      )}
-    </nav>
-  );
-}
-
 type PcaNav = { id: number; nome: string; ano: number };
 
 /**
@@ -413,7 +316,7 @@ function PcaSelect({ pcas, ativoId }: { pcas: PcaNav[]; ativoId: number | null }
       trigger={
         <>
           {trocando ? <IconSpinner className="h-3.5 w-3.5 shrink-0" /> : <IconBox className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-          <span className="truncate sm:hidden">{rotulo ? rotulo.ano : "Todos"}</span>
+          <span className="truncate sm:hidden">{rotulo ? `PCA ${rotulo.ano}` : "Todos"}</span>
           <span className="hidden max-w-[12rem] truncate sm:inline">{rotulo ? rotulo.nome : "Todos os PCAs"}</span>
           <IconAlternarNivel className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" />
         </>
@@ -703,11 +606,11 @@ export function AppShell({
             <IconMenu className="h-5 w-5" />
           </button>
           {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
-          <div className={`shrink-0 lg:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
+          <div className={`shrink-0 sm:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
             <Brand compact identidade={identidade} />
           </div>
           {/* Trilha (Seção › Tela ⌃⌄ › PCA ⌃⌄) — à esquerda, no desktop. */}
-          <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} />
+          <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} pcaFiltroId={pcaFiltroId} />
 
           <div className="ml-auto flex min-w-0 items-center gap-1.5">
             {/* PCA do cabeçalho (filtro de todo o sistema) — à DIREITA; só para quem vê o que ele filtra (Mesa, PCA,

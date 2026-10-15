@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.99.0",
+    data: "2026-10-15",
+    titulo: "Trilha completa e paleta Ctrl+K",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "A trilha mostra o espaço, a aba (troca pelo ⌃⌄) e o protocolo/DFD/tarefa aberto; a seção também troca pelo ⌃⌄.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Cabeçalho", texto: "Ctrl+K (⌘K) abre a paleta “Ir para…”: todas as telas e PCAs, com busca e os recentes.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Busca e recentes nas listas da trilha, selo do PCA que filtra a tela, trilha no celular e níveis do meio que somem primeiro.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.98.0",
     data: "2026-10-15",
     titulo: "Trilha de navegação no cabeçalho",

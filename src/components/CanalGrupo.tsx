@@ -1,5 +1,6 @@
 "use client";
 
+import { useDetalheTrilha } from "./trilha-store";
 import { usePathname, useSearchParams } from "next/navigation";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { esperaReconexao } from "@/lib/ao-vivo-core";
@@ -171,6 +172,7 @@ export function useAtividadeDe(id: number | null | undefined): Atividade | undef
 /** A página dá o nome do "onde" (o quadro, o PCA, o orçamento) — ex.: `useOndeDetalhe(quadro.nome)`. */
 export function useOndeDetalhe(texto: string | null | undefined) {
   const definir = useContext(Ctx)?.definirDetalheOnde;
+  useDetalheTrilha(texto);
   useEffect(() => (definir && texto ? definir(texto) : undefined), [definir, texto]);
 }
 
