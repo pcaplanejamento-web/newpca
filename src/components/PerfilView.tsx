@@ -435,6 +435,36 @@ export function PerfilView({
               </Badge>
             )}
           </div>
+          {contaGoogle && (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[12.5px] text-muted sm:justify-start">
+              <IconGoogle className="h-3.5 w-3.5" />
+              {contaGoogle.email ? (
+                <>
+                  <span>
+                    Conta Google: <strong className="break-all font-semibold text-text-2">{contaGoogle.email}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={desvincularGoogle}
+                    disabled={desvinculando || contaGoogle.soGoogle}
+                    title={contaGoogle.soGoogle ? "Crie uma senha antes: sua conta entra só pelo Google." : "Deixar de entrar com esta conta Google"}
+                    className="inline-flex min-h-11 items-center font-semibold text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-0"
+                  >
+                    {desvinculando ? "Desvinculando…" : "Desvincular"}
+                  </button>
+                </>
+              ) : (
+                <a
+                  href="/api/auth/google?vincular=1"
+                  title="Vinculada, você entra com um clique em “Continuar com Google”"
+                  className="inline-flex min-h-11 items-center font-semibold text-accent hover:underline lg:min-h-0"
+                >
+                  Vincular conta Google
+                </a>
+              )}
+              {msgGoogle && <span className={msgGoogle.tipo === "erro" ? "text-[var(--danger)]" : "text-[var(--ok)]"}>{msgGoogle.texto}</span>}
+            </div>
+          )}
           {foto && (
             <button
               type="button"
@@ -454,6 +484,7 @@ export function PerfilView({
       <Tabs
         layout="lateral"
         separado
+        alturaTela
         url="aba"
         inicial={retornoGoogle || semSenha ? "seguranca" : "conta"}
         tabs={[
@@ -462,7 +493,7 @@ export function PerfilView({
             key: "seguranca",
             label: "Segurança",
             icon: <IconKey className="h-4 w-4" />,
-            dica: semSenha ? "Crie sua senha — é obrigatória" : "Senha, conta Google e acessos",
+            dica: semSenha ? "Crie sua senha — é obrigatória" : "Senha",
             content: (
               <div className="space-y-5">
           {/* Senha: trocar (ou CRIAR, para quem só entrava pelo Google) — confirmada pelo código enviado ao e-mail */}
@@ -515,49 +546,20 @@ export function PerfilView({
               </div>
             )}
           </SecaoPerfil>
-          {/* Conta Google: vinculada = entrar com um clique ("Continuar com Google"), mesmo com outro e-mail */}
-          {contaGoogle && (
-            <SecaoPerfil
-              icone={<IconGoogle className="h-4 w-4" />}
-              titulo="Conta Google"
-              descricao="Vinculada, você entra com um clique em “Continuar com Google” — mesmo que o e-mail dela seja outro."
-              msg={msgGoogle}
-              acao={
-                contaGoogle.email ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={desvincularGoogle}
-                    loading={desvinculando}
-                    disabled={contaGoogle.soGoogle}
-                    title={contaGoogle.soGoogle ? "Crie uma senha antes: sua conta entra só pelo Google." : undefined}
-                  >
-                    Desvincular
-                  </Button>
-                ) : (
-                  <Button variant="secondary" size="sm" href="/api/auth/google?vincular=1" icon={<IconGoogle className="h-4 w-4" />}>
-                    Vincular conta Google
-                  </Button>
-                )
-              }
-            >
-              <p className="text-sm text-text-2">
-                {contaGoogle.email ? (
-                  <>
-                    Vinculada a <strong className="break-all text-text">{contaGoogle.email}</strong>.
-                  </>
-                ) : (
-                  "Nenhuma conta vinculada."
-                )}
-              </p>
-            </SecaoPerfil>
-          )}
+              </div>
+            ),
+          },
+          {
+            key: "acessos",
+            label: "Histórico de acesso",
+            icon: <IconClock className="h-4 w-4" />,
+            dica: "Cada entrada na sua conta",
+            content: <div className="space-y-5">
           {/* HISTÓRICO DE ACESSO: cada login (data/hora, dispositivo, canal, IP) + o último acesso */}
           <SecaoPerfil icone={<IconClock className="h-4 w-4" />} titulo="Histórico de acesso" descricao="Cada entrada na sua conta. Não reconhece um acesso? Troque a senha e avise o administrador.">
             <HistoricoAcessos url="/api/perfil/acessos" nomeExportacao="Meu histórico de acesso" />
           </SecaoPerfil>
-              </div>
-            ),
+            </div>,
           },
           { key: "aparencia", label: "Aparência", icon: <IconPalette className="h-4 w-4" />, dica: "Modo claro/escuro e tonalidade", content: (
             <div className="space-y-5">

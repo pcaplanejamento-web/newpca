@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.96.1",
+    data: "2026-10-15",
+    titulo: "Perfil sem rolar a página",
+    mudancas: [
+      { tipo: "melhoria", area: "Perfil", texto: "A conta Google fica no cabeçalho do Perfil (vincular/desvincular), o histórico de acesso ganhou aba própria e o conteúdo das abas rola por dentro, sem rolar a página.", link: "/painel/perfil" },
+    ],
+  },
+  {
     versao: "1.96.0",
     data: "2026-10-15",
     titulo: "Perfil reorganizado em abas",
