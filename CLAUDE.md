@@ -4261,6 +4261,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   atualizada sem F5 — `chrome.runtime.id` morto) se cala: antes gastava o token de uso único e a nova recebia "já usada".
   No editor, **`ProblemasFluxo`** (o selo de problemas/atenções abre a lista e leva ao componente) e a Análise usa as linhas
   do Baixar/anexar (`host.dfds`, `estadoDoItem("saida.dfdsCenti")`).
+- **CONFERÊNCIA FINAL + CONTINUAR + NOVA TENTATIVA (v1.113.0, sem migração):** no fim do `executarDfds` (anexo, extensão com
+  `docs`, sem interrupção/exceção) o motor abre de novo cada protocolo e confere cada arquivo dado como ok/já: ausente = linha
+  `falha` "Não confirmado na Centi"; `FimExecucao.confirmados {ok,total}` → aviso "Conferido na Centi: N de N". O
+  `ConferenciaNoProtocolo` confere SOZINHO quando uma execução termina (o "Enviar os que faltam" = continuar de onde parou).
+  `falhaPassageira` (rede/tempo/5xx) dá UMA nova tentativa na emissão e no anexo (a extensão confere o protocolo antes de
+  gravar — nunca duplica). O resumo no sino ao terminar já existia (aviso `centi` no `PATCH` da execução).
 - **ANDAMENTO AO VIVO (v1.112.0, sem migração):** núcleo puro **`fluxo-progresso.ts`** (testado): `progressoFluxo` = a % pelo
   TRABALHO de cada etapa (peso = itens; o Baixar/anexar pesa os DFDs — `contagemDfds`), `registrarAmostra`/`tempoRestanteMs`
   (o ritmo das amostras dos últimos 2 min — `JANELA_RITMO_MS`; sem 5 s e 0,5% de avanço = "Calculando…"), `textoDuracao`,

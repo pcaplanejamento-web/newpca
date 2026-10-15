@@ -317,7 +317,12 @@ export type DepsExecucao = ContextoEmissor & {
  * ficou parada muito além disso (a página fechou). */
 export const SINAL_EXECUCAO_MS = 4 * 60_000;
 
-export type FimExecucao = { ok: number; ja: number; falhas: number; interrompido: boolean; parou: boolean; erro?: string };
+/** `confirmados` = a conferência FINAL na Centi (arquivos achados no protocolo / arquivos anexados) — null sem conferir. */
+export type FimExecucao = { ok: number; ja: number; falhas: number; interrompido: boolean; parou: boolean; erro?: string; confirmados?: { ok: number; total: number } | null };
+
+/** Falha PASSAGEIRA (rede, tempo, servidor) — vale UMA nova tentativa; a extensão confere o protocolo antes de gravar, então
+ * repetir nunca duplica. */
+export const falhaPassageira = (erro: string | undefined) => !!erro && /tempo|timeout|time out|rede|network|sem resposta|failed to fetch|desconect|\b5\d\d\b|indispon/i.test(erro);
 
 /**
  * Executa o plano (os arquivos): emite cada DFD, une quando o arquivo junta vários, e leva ao destino. Cada execução é
@@ -375,8 +380,11 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
   let erroGeral: string | undefined;
   const fim = (interrompido: boolean, parou: boolean, erro?: string): FimExecucao => {
     const v = [...resultados.values()];
-    return { ok: v.filter((x) => x.estado === "ok").length, ja: v.filter((x) => x.estado === "ja").length, falhas: v.filter((x) => x.estado === "falhou").length, interrompido, parou, erro };
+    return { ok: v.filter((x) => x.estado === "ok").length, ja: v.filter((x) => x.estado === "ja").length, falhas: v.filter((x) => x.estado === "falhou").length, interrompido, parou, erro, confirmados };
   };
+  let confirmados: FimExecucao["confirmados"] = null;
+  let porIdFinal = new Map<string, AlvoCenti>();
+  let naCentiSuportado = false;
   if (anexando) {
     // Cada arquivo tem o SEU protocolo da Centi (o indicado, ou o de onde vieram os DFDs). Antes de emitir: cada protocolo
     // é conferido na Centi (Id + nº) e o já anexado não é emitido de novo (pré-verificação).
@@ -392,10 +400,14 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
     const recusados = new Map<string, string>();
     // Os documentos de cada protocolo NA CENTI (a verdade do "já anexado" — o registro do sistema só vale sem eles).
     const naCenti = new Map<string, Map<string, DocCenti>>();
+    porIdFinal = porId;
     for (const [id, al] of porId) {
       if (d.interrompido()) break;
       const r = await d.pedir("protocolo", al, 60_000);
-      if (r.ok && r.protocolo && Array.isArray(r.protocolo.docs)) naCenti.set(id, docsPorDescricao(r.protocolo.docs));
+      if (r.ok && r.protocolo && Array.isArray(r.protocolo.docs)) {
+        naCenti.set(id, docsPorDescricao(r.protocolo.docs));
+        naCentiSuportado = true;
+      }
       if (!(r.ok && r.protocolo)) recusados.set(id, r.erro ?? "Não consegui abrir o protocolo na Centi.");
       // Só pelo Id: o nº e o ano vêm da Centi (o anexo segue conferindo Id + nº). O objeto é o mesmo dos arquivos.
       else if (!al.numero) Object.assign(al, { numero: r.protocolo.numero, ano: r.protocolo.ano || null });
@@ -482,7 +494,13 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
         andamento(e === "aguardando" ? "Aguardando sua confirmação" : `Anexando ${a.nome}`);
       };
       const pdf = unido ? bytes : await regravarPdf(bytes).catch(() => bytes);
-      const r = await anexarPelaPlataforma(d, idExec, dest.passo, dest.protocoloId, { ...dest.passo.alvo, tipo, arquivo: a.nome, pdf: paraBase64(pdf) }, fase);
+      const dados = { ...dest.passo.alvo, tipo, arquivo: a.nome, pdf: paraBase64(pdf) };
+      let r = await anexarPelaPlataforma(d, idExec, dest.passo, dest.protocoloId, dados, fase);
+      // Falha passageira: UMA nova tentativa (a extensão confere o protocolo antes — nunca duplica).
+      if (!r.ok && falhaPassageira(r.erro) && !d.interrompido()) {
+        andamento(`Tentando de novo: ${a.nome}`);
+        r = await anexarPelaPlataforma(d, idExec, dest.passo, dest.protocoloId, dados, fase);
+      }
       reportados.add(dest.passo.chave);
       if (!r.ok) throw new Error(r.erro ?? "A Centi não gravou.");
       const nota = notaDoAnexo(r) + (r.registro ? ` O registro no sistema falhou (${r.registro}) — o anexo vale; não reenvie.` : "");
@@ -510,7 +528,8 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
         if (!anexando) passoAtual = t.chave;
         andamento(`${anexando ? "Emitindo e anexando" : "Emitindo"} planejamento ${t.id}${t.dfd ? ` · DFD ${t.dfd}` : ""}`);
         const fase: Fase = (e) => d.marcar(t.chave, { estado: e, erro: undefined, amostra: undefined });
-        const r = await emitirNaEntidade(d, t, saida.conferir, semSaida, d.atual, fase);
+        let r = await emitirNaEntidade(d, t, saida.conferir, semSaida, d.atual, fase);
+        if (!r.pdf && !r.ambiente && !r.recusada && falhaPassageira(r.erro) && !d.interrompido()) r = await emitirNaEntidade(d, t, saida.conferir, semSaida, d.atual, fase);
         if (!r.pdf) {
           const erro = r.erro ?? "Falha ao emitir.";
           // AMBIENTE (extensão/aba/sessão) ou OPERAÇÃO recusada: os demais falhariam igual — para (o que veio fica).
@@ -568,6 +587,28 @@ export async function executarDfds(plano: ArquivoSaida[], saida: OpcoesSaida, al
   } finally {
     clearInterval(sinal);
     soltarSaida();
+  }
+  // CONFERÊNCIA FINAL na Centi: cada arquivo dado como anexado/já estava tem de estar no protocolo (a resposta do salvar não
+  // basta). O que não estiver vira falha "não confirmado" — o "Enviar os que faltam" o reenvia.
+  if (anexando && naCentiSuportado && !d.interrompido() && !erroGeral) {
+    andamento("Conferindo na Centi o que foi anexado");
+    const docsFinais = new Map<string, Map<string, DocCenti>>();
+    for (const [id, al] of porIdFinal) {
+      const r = await d.pedir("protocolo", al, 60_000).catch(() => ({ ok: false }) as RespostaExt);
+      if (r.ok && r.protocolo && Array.isArray(r.protocolo.docs)) docsFinais.set(id, docsPorDescricao(r.protocolo.docs));
+    }
+    let ok = 0;
+    let total = 0;
+    for (const [a, x] of destinos) {
+      const estados = a.partes.map((t) => resultados.get(t.chave)?.estado);
+      if (!estados.length || !estados.every((e) => e === "ok" || e === "ja")) continue;
+      const idx = docsFinais.get(x.passo.alvo.id);
+      if (!idx) continue;
+      total++;
+      if (idx.has(descricaoCanonica(x.passo.alvo.descricao))) ok++;
+      else marcarArquivo(a, { estado: "falha", erro: "Não confirmado na Centi: o documento não está no protocolo — use “Enviar os que faltam”." });
+    }
+    if (total) confirmados = { ok, total };
   }
   const interrompido = d.interrompido();
   if (interrompido) marcarVarias((x) => (x.estado === "fila" || emCursoLinha(x) ? { estado: "interrompido", erro: "Interrompido na extensão." } : null));

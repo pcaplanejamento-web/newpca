@@ -528,6 +528,14 @@ function ConferenciaNoProtocolo({ arquivos, no, grafo }: { arquivos: ArquivoSaid
   const host = useHost();
   const { saida, alvo, erroAlvo } = opcoesDoNo(no.config);
   const [estado, setEstado] = useState<{ carregando?: boolean; linhas?: LinhaConferencia[]; erro?: string } | null>(null);
+  // Ao TERMINAR uma execução com DFDs: confere sozinho (o que foi anexado e o que falta, para continuar de onde parou).
+  const rodandoAntes = useRef(false);
+  const conferirRef = useRef<() => Promise<void>>(async () => {});
+  const rodando = !!host?.rodando;
+  useEffect(() => {
+    if (rodandoAntes.current && !rodando && host?.dfds?.length) void conferirRef.current();
+    rodandoAntes.current = rodando;
+  }, [rodando, host?.dfds]);
   if (!host) return null;
   const conferir = async () => {
     if (!arquivos.length) return setEstado({ erro: "Nenhum arquivo no plano — carregue a seleção (ou execute o fluxo) antes de conferir." });
@@ -565,6 +573,7 @@ function ConferenciaNoProtocolo({ arquivos, no, grafo }: { arquivos: ArquivoSaid
     );
     setEstado({ linhas, erro: reg ? undefined : "Não consegui ler o registro do sistema — a coluna “No sistema” pode estar incompleta." });
   };
+  conferirRef.current = conferir;
   return (
     <ConferenciaAnexos
       linhas={estado?.linhas ?? null}

@@ -35,6 +35,31 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.113.0",
+    data: "2026-10-15",
+    titulo: "Automação: conferência final na Centi e continuar de onde parou",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Ao terminar um anexo, o sistema abre o protocolo na Centi e confere cada arquivo: “Conferido na Centi: N de N”. O que não estiver lá vira falha “Não confirmado” — nada é dado como anexado sem a prova da Centi.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Continuar de onde parou: ao fim de cada execução a conferência no protocolo roda sozinha e mostra “Enviar os que faltam” — interrompida, com falha ou com a página fechada, basta enviar o que falta.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Falha passageira (rede, tempo esgotado, servidor indisponível) na emissão ou no anexo ganha UMA nova tentativa sozinha antes de virar “Falhou” — sem risco de duplicar: a extensão confere o protocolo antes de gravar.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
     versao: "1.112.0",
     data: "2026-10-15",
     titulo: "Automação: andamento ao vivo com % e tempo restante",

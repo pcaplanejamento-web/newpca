@@ -180,7 +180,17 @@ describe("executarDfds — o passo REAL de cada linha e a execução sempre fina
     const chamadas = servidorFalso([{ centiAlvo: "9", descricao: "PLANEJAMENTO 101" }, { centiAlvo: "9", descricao: "PLANEJAMENTO 102" }]);
     const p = plano(2);
     const docs = [{ descricao: "Planejamento 102", sequencial: "61", id: "5001" }];
-    const m = montar({ pedirExt: (acao) => (acao === "protocolo" ? { ok: true, protocolo: { id: "9", numero: "156844", ano: "2026", assunto: "", descricao: "", documentos: 1, docs } } : undefined) });
+    // A Centi falsa: o anexo acrescenta o documento (a conferência final o acha).
+    const m = montar({
+      pedirExt: (acao, dados) => {
+        if (acao === "protocolo") return { ok: true, protocolo: { id: "9", numero: "156844", ano: "2026", assunto: "", descricao: "", documentos: docs.length, docs: [...docs] } };
+        if (acao === "anexar") {
+          docs.push({ descricao: (dados as { descricao: string }).descricao, sequencial: String(61 + docs.length), id: String(5001 + docs.length) });
+          return { ok: true, sequencial: "62", documento: "5002" };
+        }
+        return undefined;
+      },
+    });
     for (const a of p) for (const t of a.partes) m.linhas.set(t.chave, { ...t, estado: "fila" });
     const fim = await executarDfds(p, saida, alvo, m.d);
     assert.equal(m.linhas.get("k1")?.estado, "ok", "registrado mas ausente na Centi: anexado de novo");
@@ -190,6 +200,29 @@ describe("executarDfds — o passo REAL de cada linha e a execução sempre fina
     const aut = chamadas.filter((c) => c.url.includes("/autorizar"));
     assert.equal(aut.length, 1);
     assert.equal((aut[0].corpo as { ausenteNaCenti?: boolean }).ausenteNaCenti, true, "o registro não impede reenviar o que a Centi não tem");
+    assert.deepEqual(fim.confirmados, { ok: 1, total: 1 }, "conferência final: o anexado agora está no protocolo (o já estava foi conferido antes)");
+  });
+
+  it("conferência final: o 'anexado' que NÃO está no protocolo vira falha (não confirmado)", async () => {
+    servidorFalso();
+    const p = plano(1);
+    const m = montar({ pedirExt: (acao) => (acao === "protocolo" ? { ok: true, protocolo: { id: "9", numero: "156844", ano: "2026", assunto: "", descricao: "", documentos: 0, docs: [] } } : undefined) });
+    for (const a of p) for (const t of a.partes) m.linhas.set(t.chave, { ...t, estado: "fila" });
+    const fim = await executarDfds(p, saida, alvo, m.d);
+    assert.equal(m.linhas.get("k1")?.estado, "falha");
+    assert.match(m.linhas.get("k1")?.erro ?? "", /Não confirmado na Centi/);
+    assert.deepEqual(fim.confirmados, { ok: 0, total: 1 });
+  });
+
+  it("falha passageira no anexo: UMA nova tentativa", async () => {
+    servidorFalso();
+    const p = plano(1);
+    let n = 0;
+    const m = montar({ pedirExt: (acao) => (acao === "anexar" ? (++n === 1 ? { ok: false, erro: "Tempo esgotado na extensão." } : { ok: true, sequencial: "5" }) : undefined) });
+    for (const a of p) for (const t of a.partes) m.linhas.set(t.chave, { ...t, estado: "fila" });
+    await executarDfds(p, saida, alvo, m.d);
+    assert.equal(n, 2);
+    assert.equal(m.linhas.get("k1")?.estado, "ok");
   });
 
   it("interromper: as linhas em curso/na fila viram 'interrompido' e a execução é CANCELADA", async () => {

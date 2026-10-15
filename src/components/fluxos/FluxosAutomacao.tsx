@@ -301,7 +301,11 @@ export function FluxosAutomacao({
           marcar: (chave, l) => aplicar((x) => (x.chave === chave ? l : null)),
           marcarVarias: aplicar,
         });
-        if (saida.destino !== "pasta") void carregarNaCenti();
+        if (saida.destino !== "pasta") {
+          void carregarNaCenti();
+          const cf = fim.confirmados;
+          if (cf) (cf.ok === cf.total ? toast.success : toast.warning)(`Conferido na Centi: ${cf.ok} de ${cf.total} arquivo(s) no protocolo.${cf.ok < cf.total ? " Use “Enviar os que faltam”." : ""}`, 10000);
+        }
         return { linhas: linhas as unknown as Item[], erro: fim.erro };
       },
       importarProtocolo: async (it: Item, apontamentos: string[]) => {
