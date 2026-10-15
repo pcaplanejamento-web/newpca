@@ -33,18 +33,25 @@ export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; h
 
 /**
  * Os padrões do `LIKE` da pesquisa: UM por termo (todos têm de casar — "secretaria saúde 2027"), até 5 termos. Sem
- * acento/caixa: o termo SEM acento (ex.: "manutencao") vira um padrão em que as vogais e o "c" valem qualquer letra
- * ("manut_n__o" acha "MANUTENÇÃO"); o `%`/`_` digitados saem (nunca viram curinga do usuário).
+ * acento só onde o português o põe ao digitar sem ele — "c" antes de a/o/u (ç), "ao" (ão) e "oe" (õe): "manutencao" acha
+ * "MANUTENÇÃO", "servico" acha "SERVIÇO"; nada além disso vira curinga (o termo segue preciso). O `%`/`_` digitados saem.
  */
 export function padroesLike(q: string): string[] {
+  return termosPesquisa(q).map((t) => `%${/^[\x20-\x7e]+$/.test(t) ? t.replace(/c(?=[aou])/g, "_").replace(/a(?=o)/g, "_").replace(/o(?=e)/g, "_") : t}%`);
+}
+
+/** Os termos digitados (minúsculos, sem curinga, até 5). */
+export function termosPesquisa(q: string): string[] {
   return q
     .toLowerCase()
     .replace(/[%_\\]/g, " ")
     .split(/\s+/)
     .filter(Boolean)
-    .slice(0, 5)
-    .map((t) => `%${/^[\x20-\x7e]+$/.test(t) && t.length >= 4 ? t.replace(/[aeiouc]/g, "_") : t}%`);
+    .slice(0, 5);
 }
+
+/** O termo é um NÚMERO (nº, Id, código, "144756/2026"): casa só nos campos de número, nunca no texto livre. */
+export const ehTermoNumero = (padrao: string) => /^%[\d./-]+%$/.test(padrao);
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 

@@ -2591,7 +2591,7 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
       .from(dfdProtocolos)
       .where(
         and(
-          casaTermos([dfdProtocolos.numero, dfdProtocolos.idExterno, dfdProtocolos.assunto, dfdProtocolos.interessado], padroes),
+          casaTermos([dfdProtocolos.numero, dfdProtocolos.idExterno, dfdProtocolos.assunto, dfdProtocolos.interessado], padroes, [dfdProtocolos.numero, dfdProtocolos.idExterno]),
           escopo(dfdProtocolos.reparticaoId),
           soMeus ? condMeuProtocolo(u.id) : undefined,
           naMesa,
@@ -2613,7 +2613,7 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
       .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
       .where(
         and(
-          casaTermos([dfds.numero, dfds.planejamento, dfds.objeto, dfdProtocolos.numero, dfdProtocolos.idExterno], padroes),
+          casaTermos([dfds.numero, dfds.planejamento, dfds.objeto, dfdProtocolos.numero, dfdProtocolos.idExterno], padroes, [dfds.numero, dfds.planejamento]),
           escopo(dfds.reparticaoId),
           soMeus ? condMeuDfd(db, u.id) : undefined,
           naMesa,
@@ -2644,7 +2644,7 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
     .leftJoin(dfdProtocolos, eq(dfdProtocolos.id, dfds.protocoloId))
     .where(
       and(
-        casaTermos([dfdItens.descricao, dfdItens.codigo], padroes),
+        casaTermos([dfdItens.descricao, dfdItens.codigo], padroes, [dfdItens.codigo]),
         escopo(dfds.reparticaoId),
         soMeus ? condMeuDfd(db, u.id) : undefined,
         naMesa,

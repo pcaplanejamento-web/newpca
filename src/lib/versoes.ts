@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.106.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa precisa e filtros que se adaptam",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Busca precisa: um número (\"65\") procura só nos números — nº, Id, planejamento e código —, nunca no texto livre; sem acento só onde o português o põe (ç, ão, õe), sem trazer resultados soltos.", link: "/painel" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "O filtro escolhido vira um bloco sólido no campo: apagar no começo tira o filtro inteiro, nunca uma parte; o × também volta a \"Tudo\".", link: "/painel" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Com a pesquisa iniciada, só aparecem os filtros que têm resultado, com a contagem de cada um, entrando com uma animação suave.", link: "/painel" },
+    ],
+  },
+  {
     versao: "1.105.1",
     data: "2026-10-15",
     titulo: "Filtros da pesquisa sem a barra por cima",

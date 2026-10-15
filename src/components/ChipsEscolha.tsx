@@ -12,7 +12,7 @@ export function ChipsEscolha<T extends string>({
   ariaLabel,
   rolar = false,
 }: {
-  opcoes: { value: T; label: string }[];
+  opcoes: { value: T; label: string; conta?: number }[];
   valor?: T | null;
   onEscolher: (v: T) => void;
   ariaLabel: string;
@@ -29,11 +29,12 @@ export function ChipsEscolha<T extends string>({
             type="button"
             aria-pressed={valor == null ? undefined : ativo}
             onClick={() => onEscolher(o.value)}
-            className={`min-h-11 shrink-0 whitespace-nowrap rounded-control border px-3 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8 ${
+            className={`min-h-11 shrink-0 whitespace-nowrap ${rolar ? "animate-chip-entra" : ""} rounded-control border px-3 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8 ${
               ativo ? "border-accent bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
             }`}
           >
             {o.label}
+            {o.conta != null && <span className={`ml-1.5 tabular-nums ${ativo ? "text-accent" : "text-muted"}`}>{o.conta >= 50 ? "50+" : o.conta}</span>}
           </button>
         );
       })}

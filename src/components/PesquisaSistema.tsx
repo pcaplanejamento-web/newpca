@@ -144,6 +144,13 @@ function gravarRecentes(lista: Resultado[]) {
 }
 
 /** Lê "dfd: 1234" ou "d: 1234" → o tipo e o termo. */
+/** O prefixo no começo do texto (a dica e quantos caracteres ocupa) — `null` sem prefixo. */
+function prefixoDe(texto: string): { d: (typeof DICAS)[number]; tamanho: number } | null {
+  const baixo = texto.trimStart().toLowerCase();
+  const d = DICAS.find((x) => baixo.startsWith(x.prefixo)) ?? DICAS.find((x) => baixo.startsWith(x.curto));
+  return d ? { d, tamanho: baixo.startsWith(d.prefixo) ? d.prefixo.length : d.curto.length } : null;
+}
+
 function lerConsulta(texto: string): { tipo: (typeof DICAS)[number]["tipo"] | null; termo: string } {
   const t = texto.trimStart();
   const baixo = t.toLowerCase();
@@ -324,6 +331,10 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
 
   const fechar = useCallback(() => setAberto(false), []);
 
+  /** O PREFIXO digitado ("protocolo:"/"p:") é um bloco SÓLIDO: aparece como um chip e sai inteiro. */
+  const prefixo = prefixoDe(texto);
+  const resto = prefixo ? texto.trimStart().slice(prefixo.tamanho).replace(/^\s/, "") : texto;
+
   const acoes = useMemo<Resultado[]>(
     () => [
       {
@@ -419,6 +430,20 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
         : (tiposServidor ?? FASE_1).map((t) => ({ tipo: t, titulo: tituloPesquisa(t), itens: [], carregando: true }));
     return [...locais, ...doServidor].filter((g) => g.itens.length || g.carregando);
   }, [texto, termo, tipo, largo, favoritos, recentes, acoes, telas, abas, pcas, pcaFiltroId, remotos, carregando, tiposServidor]);
+
+  // Os filtros que TÊM algo para o termo (a pesquisa em "Tudo" terminou): só eles aparecem, com a contagem. Enquanto a
+  // pesquisa corre (ou num filtro já escolhido), vale a última contagem do MESMO termo — os chips não piscam.
+  const [relevantes, setRelevantes] = useState<{ termo: string; contas: Map<string, number> } | null>(null);
+  useEffect(() => {
+    if (termo.length < 2) return setRelevantes(null);
+    if (tipo || carregando || falhou) return;
+    const contas = new Map<string, number>();
+    for (const g of grupos) {
+      const chave = g.tipo === "aba" ? "tela" : g.tipo;
+      contas.set(chave, (contas.get(chave) ?? 0) + (g.total ?? g.itens.length));
+    }
+    setRelevantes({ termo, contas });
+  }, [grupos, termo, tipo, carregando, falhou]);
 
   const semTexto = !texto.trim();
   const baixo = texto.trim().toLowerCase();
@@ -544,7 +569,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
           className={`flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2 text-left ${ativo ? "bg-surface-2" : ""} ${grupo === "recentes" ? "pr-20" : favoritavel(r, grupo) ? "pr-11" : ""}`}
         >
           <Ic className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-          <span className={`min-w-0 truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
+          <span className={`min-w-0 max-w-[62%] shrink-0 truncate text-[14px] text-text ${grupo === "dica" ? "font-mono" : ""}`}>
             {r.caminho?.map((c) => (
               <span key={c} className="text-muted">
                 {c}
@@ -635,19 +660,27 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
 
   // Os FILTROS RÁPIDOS: só das telas que a pessoa abre (a rota confere de novo); tocar restringe a pesquisa ao tipo.
   const abre = (h: string) => telas.some((t) => t.href === h);
-  const filtros: { value: string; label: string }[] = [
-    { value: "", label: "Tudo" },
+  const todosFiltros: { value: string; label: string }[] = [
     ...(abre("/painel/mesa") || abre("/painel/pca") ? [{ value: "protocolo", label: "Protocolos" }, { value: "dfd", label: "DFDs" }, { value: "item", label: "Itens" }] : []),
-    ...(abre("/painel/tarefas") ? [{ value: "tarefa", label: "Tarefas" }] : []),
+    ...(abre("/painel/tarefas") || abre("/painel/calendario") ? [{ value: "tarefa", label: "Tarefas" }] : []),
     ...(abre("/painel/calendario") ? [{ value: "evento", label: "Calendário" }] : []),
-    ...(abre("/painel/orcamento") ? [{ value: "lancamento", label: "Orçamento" }] : []),
+    ...(abre("/painel/orcamento") ? [{ value: "orcamento", label: "Orçamentos" }, { value: "lancamento", label: "Lançamentos" }] : []),
     ...(abre("/painel/catalogo") ? [{ value: "catalogo", label: "Catálogo" }, { value: "historico", label: "Histórico" }] : []),
-    ...(abre("/painel/usuarios") ? [{ value: "usuario", label: "Usuários" }, { value: "cadastro", label: "Cadastros" }, { value: "fluxo", label: "Automações" }] : []),
+    ...(abre("/painel/usuarios")
+      ? ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
+      : []),
+    { value: "pca", label: "PCAs" },
     { value: "tela", label: "Telas" },
+  ];
+  // Sem pesquisa: todos os filtros da pessoa. Com pesquisa: só os que têm resultado (e o escolhido), com a contagem.
+  const contas = relevantes?.termo === termo ? relevantes.contas : null;
+  const filtros = [
+    { value: "", label: "Tudo" },
+    ...(contas ? todosFiltros.filter((f) => contas.has(f.value) || f.value === tipo).map((f) => ({ ...f, conta: contas.get(f.value) })) : todosFiltros),
   ];
   const escolherFiltro = (v: string) => {
     const d = DICAS.find((x) => x.tipo === v);
-    setTexto(d ? `${d.prefixo} ${termo}` : termo);
+    setTexto(d && v ? `${d.prefixo} ${termo}` : termo);
     setFoco(0);
     campo.current?.focus();
   };
@@ -664,19 +697,47 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
       >
         <div className="flex items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top)]">
           <IconSearch className="h-5 w-5 shrink-0 text-muted" aria-hidden="true" />
+          {prefixo && (
+            <span className="inline-flex shrink-0 animate-chip-entra items-center gap-1 rounded-control border border-accent bg-accent-soft py-0.5 pr-1 pl-2 text-[13px] font-medium text-accent">
+              {filtros.find((f) => f.value === prefixo.d.tipo)?.label ?? prefixo.d.prefixo.replace(":", "")}
+              <button
+                type="button"
+                aria-label="Pesquisar em tudo"
+                title="Pesquisar em tudo"
+                onClick={() => {
+                  setTexto(resto);
+                  campo.current?.focus();
+                }}
+                className="grid h-6 w-6 place-items-center rounded-chip hover:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] pointer-coarse:h-9 pointer-coarse:w-9"
+              >
+                <IconClose className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          )}
           <input
             ref={campo}
-            value={texto}
+            value={resto}
             onChange={(e) => {
-              setTexto(e.target.value);
+              const v = e.target.value;
+              // Com o prefixo, o campo é só o termo; sem ele, digitar um prefixo ("p:") vira o chip.
+              const novo = prefixo ? null : prefixoDe(v);
+              setTexto(prefixo ? `${prefixo.d.prefixo} ${v}` : novo ? `${novo.d.prefixo} ${v.trimStart().slice(novo.tamanho).trimStart()}` : v);
               setFoco(0);
+            }}
+            onKeyDown={(e) => {
+              // Apagar no começo do campo tira o prefixo INTEIRO (nunca uma parte dele).
+              const el = e.currentTarget;
+              if (prefixo && e.key === "Backspace" && el.selectionStart === 0 && el.selectionEnd === 0) {
+                e.preventDefault();
+                setTexto(resto);
+              }
             }}
             role="combobox"
             aria-expanded="true"
             aria-controls={idLista}
             aria-activedescendant={itens.length ? `${idLista}-${focoValido}` : undefined}
             aria-autocomplete="list"
-            placeholder="Pesquise em todo o sistema — telas, Mesa, orçamento, catálogo, tarefas…"
+            placeholder={prefixo ? "Digite o que procura…" : "Pesquise em todo o sistema — telas, Mesa, orçamento, catálogo, tarefas…"}
             aria-label="Pesquisar no sistema"
             className="h-14 min-w-0 flex-1 bg-transparent text-[16px] text-text outline-none placeholder:text-faint sm:text-[15px]"
           />

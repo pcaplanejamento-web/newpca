@@ -384,6 +384,20 @@
     opacity: 1;
   }
 }
+/* Um CHIP que entra (os filtros da pesquisa que passam a valer): cresce do lugar, sem empurrar com tranco. */
+@keyframes chip-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-chip-entra {
+  animation: chip-entra 0.18s ease-out both;
+}
 .animate-selecao-entra {
   transform-origin: top center;
   animation: selecao-entra 0.12s ease-out both;
@@ -394,12 +408,12 @@
 .animate-fundo-folha {
   animation: fundo-folha 0.2s ease-out both;
 }
-[data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha),
-[data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha) {
+[data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra),
+[data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra) {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha) {
+  :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra) {
     animation: none;
   }
 }

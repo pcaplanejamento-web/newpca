@@ -35,6 +35,8 @@ test("pesquisa: padrões — um por termo, sem curinga do usuário, sem acento",
   assert.deepEqual(acha("servico manutencao"), ["SERVIÇO DE MANUTENÇÃO"]);
   assert.deepEqual(acha("servico cadeira"), []); // todos os termos
   assert.deepEqual(acha("cadeira"), ["CADEIRA"]);
+  assert.deepEqual(acha("protoco"), []); // sem curinga além dos acentos do português
+  assert.equal(padroesLike("servico")[0], "%servi_o%");
 });
 
 test("pesquisa: ordem — palavra exata › começa › contém", () => {
