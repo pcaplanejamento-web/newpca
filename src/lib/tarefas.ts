@@ -2543,7 +2543,7 @@ export type ResultadoPesquisa = { id: number; rotulo: string; detalhe: string; h
 /**
  * A PESQUISA DO SISTEMA de protocolos, DFDs e itens: casa nº/Id/assunto/interessado do protocolo, nº/planejamento/objeto
  * do DFD (e o protocolo dele) e código/descrição do item — no escopo de unidades e nas LINHAS da pessoa. Cada linha só sai
- * quando a pessoa ABRE a Mesa em que ela está: num PCA, Visualizar o PCA e o PCA no grupo (`/painel/mesa?pca=`); fora,
+ * quando a pessoa ABRE a Mesa em que ela está: num PCA, Visualizar o PCA e o PCA no grupo (a aba Mesa do espaço do PCA); fora,
  * Visualizar a Mesa do sistema. O link já leva a essa Mesa.
  */
 export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q: string, limite: number): Promise<ResultadoPesquisa[]> {
@@ -2567,7 +2567,7 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
     veSistema ? undefined : sql`${dfdProtocolos.pcaId} IS NOT NULL`,
     vePca ? (permitidos ? or(sql`${dfdProtocolos.pcaId} IS NULL`, inArray(dfdProtocolos.pcaId, [...permitidos, 0].slice(0, 90))) : undefined) : sql`${dfdProtocolos.pcaId} IS NULL`,
   );
-  const link = (pcaId: number | null, alvo: string) => (pcaId ? `/painel/mesa?pca=${pcaId}&abrir=${alvo}` : `/painel/mesa?abrir=${alvo}`);
+  const link = (pcaId: number | null, alvo: string) => (pcaId ? `/painel/pca/${pcaId}?aba=mesa&abrir=${alvo}` : `/painel/mesa?abrir=${alvo}`);
   const LIM = Math.min(50, limite);
   if (tipo === "protocolo") {
     const ls = await db

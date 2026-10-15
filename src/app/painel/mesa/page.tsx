@@ -1,11 +1,11 @@
-import { MesaPca } from "@/components/MesaPca";
+import { redirect } from "next/navigation";
 import { MesaSistema } from "@/components/MesaSistema";
 import { SeletorMesa } from "@/components/SeletorMesa";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
-import { pcasDoAcesso, podePca } from "@/lib/acesso";
+import { pcasDoAcesso } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { PcaResumo } from "@/lib/dfd";
-import { carregarMesa, carregarMesaDoPca } from "@/lib/mesa-dados";
+import { carregarMesa } from "@/lib/mesa-dados";
 import { getPcaEspaco } from "@/lib/pca-espaco";
 import { lerVinculo } from "@/lib/tarefas-core";
 
@@ -27,17 +27,11 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   // lista = a Mesa do sistema. Cada uma com o seu portão: a Mesa do PCA exige VISUALIZAR o PCA; a do sistema, a Mesa.
   const alvo = lerVinculo(sp.abrir);
   const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
+  // `?pca=<id>` = a Mesa daquele PCA, que é a aba MESA do espaço do PCA: leva para lá (a mesma tela, a mesma trilha),
+  // com o banner pedido (`?abrir=`).
   const idPca = Number(sp.pca);
   const pca = Number.isInteger(idPca) && idPca > 0 ? await getPcaEspaco(idPca) : null;
-  if (pca && pca.fonte === "protocolo") {
-    const rp = await acessoPagina("pca");
-    if (rp.bloqueio) return rp.bloqueio;
-    if (!podePca(rp.acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
-    const mp = await carregarMesaDoPca(rp.acesso.u, pca);
-    return (
-      <MesaPca key={pca.id} {...mp} abrirInicial={abrirInicial} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas, pcasDoAcesso(rp.acesso))} atual={pca.id} sistema={mp.pode.sistema.visualizar} />} />
-    );
-  }
+  if (pca && pca.fonte === "protocolo") redirect(`/painel/pca/${pca.id}?aba=mesa${sp.abrir ? `&abrir=${encodeURIComponent(sp.abrir)}` : ""}`);
   const r = await acessoPagina("dfd");
   if (r.bloqueio) return r.bloqueio;
   const m = await carregarMesa(r.acesso.u);

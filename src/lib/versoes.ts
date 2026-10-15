@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.103.2",
+    data: "2026-10-15",
+    titulo: "Pesquisa leva à aba Mesa do PCA",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Protocolo, DFD ou item que está num PCA abre na aba Mesa do espaço daquele PCA, com o banner aberto e a trilha do cabeçalho completa (PCA › PCA › Mesa).", link: "/painel/pca" },
+      { tipo: "correcao", area: "Mesa", texto: "Escolher um PCA no seletor de Mesa leva à aba Mesa do espaço do PCA, em vez de uma tela à parte.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.103.1",
     data: "2026-10-15",
     titulo: "Menu alinhado ao conteúdo",

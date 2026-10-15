@@ -1,3 +1,4 @@
+import { lerVinculo } from "@/lib/tarefas-core";
 import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -39,7 +40,7 @@ export default async function PcaEspacoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ aba?: string }>;
+  searchParams: Promise<{ aba?: string; abrir?: string }>;
 }) {
   const r = await acessoPagina("pca");
   if (r.bloqueio) return r.bloqueio;
@@ -58,7 +59,7 @@ export default async function PcaEspacoPage({
   let conteudo: ReactNode;
   if (aba === "dashboard") conteudo = await abaDashboard(pca);
   else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
-  else if (aba === "mesa") conteudo = await abaMesa(pca, u, pode);
+  else if (aba === "mesa") conteudo = await abaMesa(pca, u, pode, sp.abrir);
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
@@ -164,10 +165,13 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: Pode
 }
 
 /** Aba MESA (fonte protocolo — só os protocolos ENVIADOS a este PCA) | IMPORTAÇÃO (fonte lista). */
-async function abaMesa(pca: PcaEspaco, u: UsuarioSessao, pode: PodeTela) {
+async function abaMesa(pca: PcaEspaco, u: UsuarioSessao, pode: PodeTela, abrir?: string) {
   if (pca.fonte === "lista") {
     const planilhas = await getUnidades(undefined, pca.id);
     return <PlanilhasPca pcaId={pca.id} planilhas={planilhas} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
   }
-  return <MesaPca {...await carregarMesaDoPca(u, pca)} />;
+  // `?abrir=protocolo:<id>|dfd:<id>` (a pesquisa do sistema, o link de uma tarefa) abre o banner direto.
+  const alvo = lerVinculo(abrir);
+  const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
+  return <MesaPca {...await carregarMesaDoPca(u, pca)} abrirInicial={abrirInicial} />;
 }
