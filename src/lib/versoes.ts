@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.103.3",
+    data: "2026-10-15",
+    titulo: "Pesquisa respeita a Mesa de cada item",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Protocolos, DFDs e itens só aparecem para quem abre a Mesa em que estão: os da Mesa do sistema exigem a Mesa; os de um PCA exigem o PCA no grupo e a aba Mesa liberada no papel.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.103.2",
     data: "2026-10-15",
     titulo: "Pesquisa leva à aba Mesa do PCA",

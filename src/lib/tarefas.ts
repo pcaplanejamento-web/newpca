@@ -28,7 +28,7 @@ import {
   dfdItens,
   reparticoes,
 } from "@/db/schema";
-import { type Acesso, podeNoQuadro, podeTela } from "./acesso";
+import { type Acesso, componenteLibera, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
@@ -2555,7 +2555,9 @@ export async function pesquisarMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
   const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";
   const veSistema = podeTela(a, "dfd").visualizar;
-  const vePca = podeTela(a, "pca").visualizar;
+  // REGRA DE SEGURANÇA: cada Mesa só com o seu portão — a do sistema pela tela Mesa; a de um PCA pela tela PCA + a aba
+  // Mesa liberada no papel + o PCA no grupo. O que está numa Mesa que a pessoa não abre nunca sai daqui (nem o link).
+  const vePca = podeTela(a, "pca").visualizar && componenteLibera(a, "pca.mesa");
   const permitidos = (() => {
     if (u.admin) return null;
     const l = a.grupoAtivo?.pcas;
