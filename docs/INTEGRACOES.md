@@ -133,6 +133,33 @@ Segurança: fluxo Authorization Code + **PKCE** + **state** (cookie httpOnly de 
 (host fixo `oauth2.googleapis.com`) e o `id_token` é validado (emissor, público = o Client ID, validade, e-mail
 verificado). Erros voltam como `/login?erro=…` (o motivo técnico só no log do Worker).
 
+## Limite de pedidos da pesquisa (WAF da Cloudflare)
+
+Barra o abuso da pesquisa do sistema ANTES do Worker rodar (o pedido bloqueado não conta nas 100 mil requisições/dia nem
+gasta CPU/D1). O uso normal já é leve: protocolos e DFDs são procurados no navegador (índice local) e o resto vai num pedido
+só por termo — a regra só pega robô ou script.
+
+1. Painel da Cloudflare → o domínio **governarv.com.br** → **Security** → **Security rules** (em contas antigas:
+   **WAF** → **Rate limiting rules**) → **Create rule** → **Rate limiting rule**.
+2. **Rule name:** `Limite da pesquisa`.
+3. **If incoming requests match…** → **Edit expression** e cole:
+   ```
+   (http.request.uri.path eq "/api/pesquisa") or (http.request.uri.path eq "/api/pesquisa/indice")
+   ```
+4. **With the same characteristics:** `IP`.
+5. **When rate exceeds:** **Requests** `60` · **Period** `10 seconds` (no plano gratuito o período é fixo em 10 s).
+6. **Then take action:** `Block` · **For duration** `10 seconds` (fixo no gratuito) · resposta padrão (429).
+7. **Deploy**.
+
+Por que 60 a cada 10 s: os computadores da Prefeitura saem pela MESMA internet (o mesmo IP público) — o limite é de todas
+as pessoas juntas daquele prédio. Uma pessoa digitando gera no máximo ~2 pedidos por segundo; 60 em 10 s comporta várias
+pesquisando ao mesmo tempo e ainda barra um script. Se aparecer "Não foi possível pesquisar" em horário de pico, suba para
+100; para conferir, **Security** → **Events** (filtro pela regra) mostra cada bloqueio com o IP.
+
+**Plano gratuito = 1 regra de limite.** Se já houver uma (ex.: o login), junte as rotas na MESMA expressão com `or` — o
+limite passa a valer para a soma delas. Quando bloqueado, a tela da pesquisa mostra o erro com "Tentar de novo"; nada
+quebra no resto do sistema.
+
 ## Notas técnicas
 - Config não-secreta (flags, site key) fica no blob `configuracoes` id=1 (chave `integracoes`, sem migração).
 - Segredo do Turnstile: cifrado em `src/lib/cripto.ts` (AES-GCM), wrapper `src/lib/integracoes-segredos.ts`.

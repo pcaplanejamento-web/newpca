@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.107.1",
+    data: "2026-10-15",
+    titulo: "Proteção da pesquisa contra abuso",
+    mudancas: [
+      { tipo: "melhoria", area: "Integrações", texto: "Guia para o ADM ligar, no painel da Cloudflare, o limite de pedidos da pesquisa: robôs e scripts são barrados antes de gastar o sistema.", link: "/painel/integracoes" },
+    ],
+  },
+  {
     versao: "1.107.0",
     data: "2026-10-15",
     titulo: "Pesquisa mais rápida e mais leve",
