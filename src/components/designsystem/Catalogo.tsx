@@ -1871,7 +1871,7 @@ function AtualizarEDadosCompletosDemo() {
       </div>
       <div className="flex flex-col gap-1">
         <RecorteMesa filtros={{ protocolos: { situacao: 1, pca: 1 }, itens: { codigo: 1 } }} atual="dfds" onRemover={() => {}} onLimpar={() => {}} />
-        <span className="text-[12px] text-faint">RecorteMesa — Mesa conectada: os filtros das outras visões que recortam a visão aberta.</span>
+        <span className="text-[12px] text-faint">RecorteMesa — o Recorte da Mesa dentro do menu de filtros (funil) do rodapé da tabela: as outras visões que recortam a aberta.</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />

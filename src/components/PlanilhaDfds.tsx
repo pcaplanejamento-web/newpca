@@ -148,6 +148,7 @@ export function PlanilhaDfds({
   exportar,
   colunasExtras = [],
   conexao,
+  filtrosRodape,
   onOrdenadas,
 }: {
   linhas: LinhaDfd[];
@@ -189,6 +190,8 @@ export function PlanilhaDfds({
   colunasExtras?: Column<LinhaDfd>[];
   /** MESA CONECTADA — repassada à tabela principal (ver `ConexaoTabela`). */
   conexao?: ConexaoTabela<LinhaDfd>;
+  /** O Recorte da Mesa no menu de filtros do rodapé (ver `DataTable.filtrosRodape`). */
+  filtrosRodape?: { n: number; conteudo: ReactNode };
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -425,7 +428,7 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, onOrdenadas, conexao } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, onOrdenadas, conexao, filtrosRodape } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

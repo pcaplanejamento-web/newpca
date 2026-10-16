@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.117.0",
+    data: "2026-10-16",
+    titulo: "Filtros e recorte da Mesa no rodapé da tabela",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Os filtros feitos e o Recorte da Mesa ficam no rodapé da tabela, num menu (funil com o número): abra para ver cada filtro, limpar um só ou todos.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tabelas", texto: "Botões do rodapé simplificados em ícones (filtros e importar), com o nome na dica.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.116.0",
     data: "2026-10-16",
     titulo: "Mesa conectada: Protocolos, DFDs e Itens com os mesmos filtros",

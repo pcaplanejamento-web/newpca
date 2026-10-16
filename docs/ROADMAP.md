@@ -12,6 +12,7 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
 ### Mesa conectada (v1.116.0) — entregue
+- v1.117.0: filtros e recorte no menu (funil) do rodapé da tabela; botões do rodapé só ícone.
 Protocolos, DFDs e Itens compartilham o recorte: os filtros e a ordem de cada visão ficam ao trocar de visão e o que passa
 numa recorta as outras nos dois sentidos (`mesa-recorte.ts`); faixa "Recorte da Mesa" com ✕ e "Limpar recorte".
 

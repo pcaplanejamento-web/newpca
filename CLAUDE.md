@@ -1291,8 +1291,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     outras nos dois sentidos pela hierarquia — núcleo puro **`mesa-recorte.ts`** (`recorteMesa`, testado): protocolos →
     DFDs/itens deles; DFDs → protocolos que os contêm e itens deles; itens (Normal e os filtros de atributo da Consolidada)
     → DFDs e protocolos. A restrição vai por ids de protocolo/DFD (estáveis) e cada visão calcula o que passa SEM a restrição
-    das outras (nunca há ciclo). A ordem escolhida vale nas outras visões quando a coluna existe lá. Faixa **`RecorteMesa`**
-    (DS) acima da tabela: um chip por OUTRA visão com filtros (✕ tira) + "Limpar recorte" (zera as três e remonta a tabela).
+    das outras (nunca há ciclo). A ordem escolhida vale nas outras visões quando a coluna existe lá. Menu de filtros do RODAPÉ (v1.117.0: `DataTable.filtrosRodape` + o funil `FiltrosAtivos` — cada coluna filtrada com ✕, "Limpar"; o Importar só ícone) com o **`RecorteMesa`**
+    (DS) dentro dele: uma linha por OUTRA visão com filtros (✕ tira) + "Limpar recorte" (zera as três e remonta a tabela).
   - **Gestão do protocolo (migração `0031`, aditiva):** **Situação** = SÓ as cadastradas pelo ADM em **Configurações →
     Situações** (`SituacoesAdmin`: nome + cor + ordem ↑/↓; excluir deixa os protocolos dela SEM situação, avisando quantos;
     tabela `protocolo_situacoes`, `src/lib/situacoes.ts`, rotas `/api/admin/situacoes*` com `exigirAdmin` + auditoria

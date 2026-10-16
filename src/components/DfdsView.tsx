@@ -68,7 +68,7 @@ import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
 import { PermissaoExportar } from "./ExportarTabelas";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
 import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
-import { RecorteMesa } from "./RecorteMesa";
+import { RecorteMesa, visoesNoRecorte } from "./RecorteMesa";
 import { mesmoConjunto, type PassamRecorte, recorteMesa, SEM_RECORTE, type VisaoRecorte } from "@/lib/mesa-recorte";
 import type { FiltroValor } from "@/lib/tabela-filtros";
 import { DfdUploadForm } from "./DfdUploadForm";
@@ -1967,24 +1967,39 @@ export function DfdsView({
   const importa = podeImportar && (vista === "protocolos" || vista === "dfds") && libera(`dfd.${vista}`, "importar");
   const oQueImporta = vista === "protocolos" ? "protocolo" : "DFD";
   const rotuloImportar = `Importar ${oQueImporta}`;
-  // No celular o rótulo encolhe para "Importar" (o rodapé gruda na tela — cabe numa linha); o nome acessível é o inteiro.
+  // Só o ícone (o nome na dica e no nome acessível).
   const botaoImportar = importa ? (
     <Button
       size="sm"
+      variant="icon"
       aria-label={rotuloImportar}
+      title={rotuloImportar}
       onClick={() => (vista === "protocolos" ? setAbrirProto : setAbrirDfd)((n) => n + 1)}
       icon={<IconUpload className="h-4 w-4" />}
-    >
-      Importar<span className="hidden sm:inline"> {oQueImporta}</span>
-    </Button>
+    />
   ) : null;
+  // O RECORTE DA MESA (os filtros das OUTRAS visões) vai ao menu de filtros do RODAPÉ da tabela aberta.
+  const filtrosRecorte = {
+    protocolos: estadoVisoes.protocolos?.filtros,
+    dfds: estadoVisoes.dfds?.filtros,
+    itens: { ...estadoVisoes.itens?.filtros, ...filtrosItem },
+  };
+  const visaoRecorte = vista === "protocolos" || vista === "dfds" || vista === "itens" ? vista : null;
+  const nRecorte = visoesNoRecorte(filtrosRecorte, visaoRecorte).reduce((n, x) => n + x.n, 0);
+  const filtrosRodape = nRecorte
+    ? {
+        n: nRecorte,
+        conteudo: <RecorteMesa filtros={filtrosRecorte} atual={visaoRecorte} onRemover={limparRecorte} onLimpar={() => limparRecorte()} />,
+      }
+    : undefined;
   const semDados = (oQue: string, dica = importa) =>
-    `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${dica ? " Use “Importar” no rodapé da tabela." : ""}`;
+    `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${dica ? " Use o ícone de importar no rodapé da tabela." : ""}`;
   const tabelaProtocolos = (
     <DataTable
       columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key))}
       rows={protocolosR}
       getKey={(r) => r.id}
+      filtrosRodape={filtrosRodape}
       conexao={{ base: protocolosF, filtros: estadoVisoes.protocolos?.filtros, ordem: ordemMesa, onMudar: conexaoDe.protocolos }}
       selectable={podeAqui.manipular}
       selected={selProtos}
@@ -2011,6 +2026,7 @@ export function DfdsView({
   const tabelaDfds = (
     <PlanilhaDfds
       linhas={linhasDfdR}
+      filtrosRodape={filtrosRodape}
       conexao={{ base: linhasDfdTab, filtros: estadoVisoes.dfds?.filtros, ordem: ordemMesa, onMudar: conexaoDe.dfds }}
       unica
       scrollInterno
@@ -2037,6 +2053,7 @@ export function DfdsView({
       columns={[...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)]}
       rows={itensR ?? []}
       getKey={(r) => r.id}
+      filtrosRodape={filtrosRodape}
       conexao={{ base: itensF ?? [], filtros: estadoVisoes.itens?.filtros, ordem: ordemMesa, onMudar: conexaoDe.itens }}
       // Itens: a edição em massa (Manipular) e, na Mesa do PCA, "Retirar do PCA" (Excluir).
       selectable={podeAqui.manipular || (!!modoPca && podeAqui.excluir)}
@@ -2069,12 +2086,13 @@ export function DfdsView({
       minWidth={(modoPca ? 1640 : 1720) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("consolidada")}
+      filtrosRodape={filtrosRodape}
       exportar={exportarComo("Itens consolidados", "consolidada")}
       vazio={
         carregandoItens || itensF === null
           ? "Carregando itens…"
           : Object.keys(filtrosItem).length > 0
-            ? "Nenhum item com os filtros das colunas — ajuste-os ou use “Limpar filtros”."
+            ? "Nenhum item com os filtros das colunas — ajuste-os ou use o filtro (funil) do rodapé."
             : filtrado && (itens?.length ?? 0) > 0
               ? semResultado
               : semDados("item", false)
@@ -2280,18 +2298,6 @@ export function DfdsView({
 
       {/* MESMO espaço para as visões — a `key` remonta e replaya o morph (fade+escala); Normal ↔ Consolidada também. As
           tabelas mostram os DADOS COMPLETOS (texto inteiro, todas as listas) quando o botão da barra está ligado. */}
-      {vista !== "dashboard" && (
-        <RecorteMesa
-          filtros={{
-            protocolos: estadoVisoes.protocolos?.filtros,
-            dfds: estadoVisoes.dfds?.filtros,
-            itens: { ...estadoVisoes.itens?.filtros, ...filtrosItem },
-          }}
-          atual={vista === "protocolos" || vista === "dfds" || vista === "itens" ? vista : null}
-          onRemover={limparRecorte}
-          onLimpar={() => limparRecorte()}
-        />
-      )}
       <DadosCompletos value={completo}>
         <div key={`${vista === "itens" ? `itens-${modoItens}` : vista}-${versaoRecorte}`} className="animate-cat-morph">
           {vista === "dashboard" && dash ? (
