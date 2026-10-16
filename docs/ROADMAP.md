@@ -14,7 +14,7 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Mesa conectada (v1.116.0) — entregue
 - v1.117.0: filtros e recorte no menu (funil) do rodapé da tabela; botões do rodapé só ícone.
 - v1.119.0: Protocolos, DFDs e Itens numa TABELA ÚNICA (o mesmo `DataTable`; muda colunas e linhas).
-- v1.121.0: interface enxuta com uma unidade no cabeçalho (colunas/filtros/opções de unidade saem; "Geral" mostra tudo).
+- v1.122.0: interface enxuta com uma unidade no cabeçalho (colunas/filtros/opções de unidade saem; "Geral" mostra tudo).
 - v1.120.0: troca de visão em transição + fade só de opacidade; itens pré-carregados ao passar o ponteiro.
 Protocolos, DFDs e Itens compartilham o recorte: os filtros e a ordem de cada visão ficam ao trocar de visão e o que passa
 numa recorta as outras nos dois sentidos (`mesa-recorte.ts`); faixa "Recorte da Mesa" com ✕ e "Limpar recorte".
@@ -1758,3 +1758,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - **v1.79.0 — Biblioteca de componentes:** só o ADM (Administração → Componentes, `/painel/design-system`); a única tela pública é a consulta do PCA.
 - **v1.115.0 — Grupos:** o grupo escolhe entre as unidades escolhidas e a unidade de cadastro de cada pessoa (migração 0112).
 - **v1.118.0 — Filtro da unidade:** PCA, Orçamento, Catálogo, Tarefas, Calendário e Automação obedecem à unidade do cabeçalho; o ADM configura em Configurações → Filtro da unidade.
+- v1.121.0: papéis controlam o escopo da Mesa do PCA, aparecer online e ver novidades.

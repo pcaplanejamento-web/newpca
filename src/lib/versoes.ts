@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.121.0",
+    versao: "1.122.0",
     data: "2026-10-16",
     titulo: "Telas mais simples com uma unidade no cabeçalho",
     mudancas: [
@@ -43,6 +43,16 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "PCA", texto: "Orçamento do PCA sem “Por órgão” e sem a coluna Órgão; consulta dos protocolos sem a coluna Unidade quando só há uma unidade.", link: "/painel/pca" },
       { tipo: "melhoria", area: "Orçamento", texto: "Comparativo abre pela Ação e não cruza dimensões de um valor só; Lançamentos sem as colunas de órgão/unidade repetidas.", link: "/painel/orcamento" },
       { tipo: "melhoria", area: "Tarefas", texto: "Lista sem a coluna Unidade e o painel Filtrar sem a seção da unidade quando só há uma.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.121.0",
+    data: "2026-10-16",
+    titulo: "Papéis controlam presença, novidades e o escopo da Mesa do PCA",
+    mudancas: [
+      { tipo: "novo", area: "Papéis", texto: "Componente “Escopo da Mesa do PCA”: sem ele, o seletor Todos | Enviados | Incorporados some e a Mesa do PCA mostra todos.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "novo", area: "Papéis", texto: "Detalhe “Aparecer online para os outros”: só o papel decide quem é visto no “Online agora”.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "novo", area: "Papéis", texto: "Detalhe “Ver as novidades”: sem ele, a versão do menu e o aviso de nova versão não aparecem.", link: "/painel/configuracoes?aba=papeis" },
     ],
   },
   {
