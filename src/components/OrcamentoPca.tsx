@@ -780,7 +780,11 @@ export function OrcamentoPca({
             exportar={{ nome: `PCA × Orçamento ${dados.ano ?? ""} - por ${nivel === "orgao" ? "órgão" : nivel === "grupo" ? "grupo" : "unidade"}` }}
             onRowClick={setAberta}
             activeKey={aberta?.chave ?? null}
-            onOrdenadas={setVisiveis}
+            onOrdenadas={(ls) =>
+              setVisiveis((ant) =>
+                ant.length === ls.length && ant.every((l, i) => l.chave === ls[i].chave) ? ant : ls,
+              )
+            }
             vazio={dados.orcamento ? "Nada a comparar nesta visão." : `Nenhum orçamento de ${dados.ano} importado — importe o CUBO em Orçamento para comparar.`}
             resumo={(ls) =>
               `${ls.length} ${nivel === "orgao" ? "órgão(s)" : nivel === "grupo" ? "linha(s)" : "unidade(s)"} · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`

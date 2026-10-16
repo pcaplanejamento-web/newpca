@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.125.3",
+    data: "2026-10-16",
+    titulo: "Correção do Orçamento do PCA",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "A aba Orçamento do PCA voltou a abrir (a tela entrava em laço ao informar as linhas filtradas).",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.125.2",
     data: "2026-10-16",
     titulo: "Relatório da composição pelas linhas filtradas",
