@@ -3687,7 +3687,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro; o padrão `md` mede 44px no celular e
   `--h-control` no desktop; SÓ ÍCONE (sem texto) = QUADRADO em qualquer tamanho; **`size="sm"`** = compacto p/ rodapés de
   tabela — `--h-control-sm` no desktop, 44px no celular; **`size="xs"`** = AÇÃO DE LINHA de tabela compacta — cabe na linha no
-  desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4; o número proporcional à LARGURA do próprio cartão — container query, teto de 2.05rem —: cabe inteiro no celular e na grade de 5 com o menu), `Segmented` (o trilho inteiro na altura padrão — anel
+  desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4; v1.123.0: a dica e os detalhes NUNCA passam de 2 linhas — o texto inteiro no `title`, o cartão não estica; o número proporcional à LARGURA do próprio cartão — container query, teto de 2.05rem —: cabe inteiro no celular e na grade de 5 com o menu), `Segmented` (o trilho inteiro na altura padrão — anel
   INTERNO em vez de borda; no celular itens de 38px com a área de toque cobrindo o trilho = 44px; item **`soIcone`** = só o
   ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa; **`curto`** = o rótulo abaixo de `sm` quando o
   inteiro não cabe — o nome acessível é sempre o texto À VISTA (quem usa comando de voz diz o que lê) — ex.: as visões do

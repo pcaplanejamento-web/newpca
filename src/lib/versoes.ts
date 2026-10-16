@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.123.0",
+    data: "2026-10-16",
+    titulo: "KPIs sempre compactos",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "O KPI “Maior item” não estica mais os cartões com a descrição inteira: a dica de todo KPI fica em até 2 linhas e o texto completo aparece ao passar o mouse.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.122.0",
     data: "2026-10-16",
     titulo: "Telas mais simples com uma unidade no cabeçalho",

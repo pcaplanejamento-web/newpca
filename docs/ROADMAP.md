@@ -14,6 +14,7 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ### Mesa conectada (v1.116.0) — entregue
 - v1.117.0: filtros e recorte no menu (funil) do rodapé da tabela; botões do rodapé só ícone.
 - v1.119.0: Protocolos, DFDs e Itens numa TABELA ÚNICA (o mesmo `DataTable`; muda colunas e linhas).
+- v1.123.0: KPIs com dica e detalhes limitados a 2 linhas (o "Maior item" não estica mais os cartões).
 - v1.122.0: interface enxuta com uma unidade no cabeçalho (colunas/filtros/opções de unidade saem; "Geral" mostra tudo).
 - v1.120.0: troca de visão em transição + fade só de opacidade; itens pré-carregados ao passar o ponteiro.
 Protocolos, DFDs e Itens compartilham o recorte: os filtros e a ordem de cada visão ficam ao trocar de visão e o que passa
