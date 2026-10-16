@@ -98,13 +98,23 @@ export function KpiStat({
           ))}
         </div>
       )}
-      {hint && <div className={`mt-1.5 text-[12px] text-faint ${completo ? "break-words" : "truncate"}`}>{hint}</div>}
+      {/* A dica NUNCA estica o cartão (uma descrição de item tem milhares de caracteres): no máximo 2 linhas; o texto
+          inteiro fica na dica do mouse. */}
+      {hint && (
+        <div className={`mt-1.5 text-[12px] text-faint ${completo ? "line-clamp-2 break-words" : "truncate"}`} title={hint}>
+          {hint}
+        </div>
+      )}
       {detalhes && detalhes.length > 0 && emLinha && (
         <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-0.5 text-[12px] [@container(min-width:26rem)]:grid-cols-2">
           {detalhes.map((d) => (
             <div key={d.rotulo} className="flex flex-wrap items-baseline justify-between gap-x-2">
               <dt className="text-muted">{d.rotulo}</dt>
-              <dd className="font-medium tabular-nums text-text-2" style={d.cor ? { color: d.cor } : undefined}>
+              <dd
+                className="line-clamp-2 min-w-0 break-words font-medium tabular-nums text-text-2"
+                style={d.cor ? { color: d.cor } : undefined}
+                title={typeof d.valor === "string" ? d.valor : undefined}
+              >
                 {d.valor}
               </dd>
             </div>
@@ -116,7 +126,11 @@ export function KpiStat({
           {detalhes.map((d) => (
             <div key={d.rotulo} className="flex flex-wrap items-baseline justify-between gap-x-3">
               <dt className="text-muted">{d.rotulo}</dt>
-              <dd className="font-medium tabular-nums text-text-2" style={d.cor ? { color: d.cor } : undefined}>
+              <dd
+                className="line-clamp-2 min-w-0 break-words font-medium tabular-nums text-text-2"
+                style={d.cor ? { color: d.cor } : undefined}
+                title={typeof d.valor === "string" ? d.valor : undefined}
+              >
                 {d.valor}
               </dd>
             </div>

@@ -1,6 +1,7 @@
 import { exigirAcesso, intId } from "@/lib/api-auth";
 import { getCatalogo } from "@/lib/catalogo";
 import { getHistorico } from "@/lib/catalogo-historico";
+import { unidadeDoCatalogo } from "@/lib/escopo-cabecalho";
 import { erro, ok } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -14,5 +15,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const cat = await getCatalogo(id);
   if (!cat) return erro("Catálogo não encontrado.", 404);
   if (cat.tipo !== "historico") return erro("Este catálogo não é um histórico de compra.", 422);
-  return ok(await getHistorico(id));
+  // A unidade do CABEÇALHO (Catálogo no modo "usados"): só as compras dos códigos que ela usa.
+  return ok(await getHistorico(id, await unidadeDoCatalogo()));
 }

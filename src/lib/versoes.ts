@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.115.0",
+    versao: "1.125.0",
     data: "2026-10-16",
     titulo: "Orçamento do PCA: grupos, elementos e vínculos; XLSX com escolha de colunas",
     mudancas: [
@@ -44,6 +44,100 @@ export const VERSOES: readonly Versao[] = [
       { tipo: "melhoria", area: "PCA › Orçamento", texto: "A coluna Vínculos ganhou filtro (Vinculada · Com ações sem vínculo · Sem vínculo · Sem orçamento), e a tabela tem seleção com o “Relatório dos vínculos” das linhas marcadas (ou das filtradas).", link: "/painel/pca" },
       { tipo: "melhoria", area: "Tabelas", texto: "O XLSX abre a escolha das colunas antes de baixar: as do PDF vêm marcadas, e a sua escolha fica lembrada neste aparelho.", link: "/painel/mesa" },
       { tipo: "melhoria", area: "Automação", texto: "As automações em andamento mostram a % e o tempo que falta no painel de segundo plano.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.124.0",
+    data: "2026-10-16",
+    titulo: "Cartões sem esticar com texto longo",
+    mudancas: [
+      { tipo: "correcao", area: "Orçamento", texto: "O nome do orçamento no cartão fica em até 2 linhas e o valor em uma — o nome inteiro aparece ao passar o mouse; os cartões vizinhos não esticam mais.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Sistema", texto: "Título e subtítulo dos gráficos e o título dos avisos flutuantes limitados a 2 linhas, com o texto inteiro ao passar o mouse.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.123.0",
+    data: "2026-10-16",
+    titulo: "KPIs sempre compactos",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "O KPI “Maior item” não estica mais os cartões com a descrição inteira: a dica de todo KPI fica em até 2 linhas e o texto completo aparece ao passar o mouse.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.122.0",
+    data: "2026-10-16",
+    titulo: "Telas mais simples com uma unidade no cabeçalho",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Com uma unidade escolhida no cabeçalho, as colunas Unidade e Sigla saem das tabelas e o Dashboard não oferece mais “Dado = Unidade”. Em “Geral”, tudo volta.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "PCA", texto: "Orçamento do PCA sem “Por órgão” e sem a coluna Órgão; consulta dos protocolos sem a coluna Unidade quando só há uma unidade.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Comparativo abre pela Ação e não cruza dimensões de um valor só; Lançamentos sem as colunas de órgão/unidade repetidas.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Lista sem a coluna Unidade e o painel Filtrar sem a seção da unidade quando só há uma.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.121.0",
+    data: "2026-10-16",
+    titulo: "Papéis controlam presença, novidades e o escopo da Mesa do PCA",
+    mudancas: [
+      { tipo: "novo", area: "Papéis", texto: "Componente “Escopo da Mesa do PCA”: sem ele, o seletor Todos | Enviados | Incorporados some e a Mesa do PCA mostra todos.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "novo", area: "Papéis", texto: "Detalhe “Aparecer online para os outros”: só o papel decide quem é visto no “Online agora”.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "novo", area: "Papéis", texto: "Detalhe “Ver as novidades”: sem ele, a versão do menu e o aviso de nova versão não aparecem.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
+    versao: "1.120.0",
+    data: "2026-10-16",
+    titulo: "Troca de visão da Mesa mais rápida e suave",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Trocar entre Protocolos, DFDs e Itens responde na hora: a tabela atual esmaece e a nova acende num fade curto, sem tremer o cabeçalho.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Os itens começam a carregar quando o mouse passa pelas visões — a aba Itens abre pronta.", link: "/painel/mesa?vista=itens" },
+    ],
+  },
+  {
+    versao: "1.119.0",
+    data: "2026-10-16",
+    titulo: "Mesa com uma tabela só",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Protocolos, DFDs e Itens usam a MESMA tabela: trocar de visão muda só as colunas e as linhas — a moldura, o rodapé e os filtros não somem.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.118.0",
+    data: "2026-10-16",
+    titulo: "Todas as telas obedecem à unidade do cabeçalho",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Aba \"Filtro da unidade\": o ADM escolhe quais telas obedecem à unidade do cabeçalho e as regras do catálogo, do orçamento e das tarefas sem vínculo.", link: "/painel/configuracoes?aba=escopo" },
+      { tipo: "melhoria", area: "PCA", texto: "Com uma unidade escolhida, cards, Dashboard, Orçamento e Mesa do PCA mostram só os dados dela.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Cards, lançamentos, comparativo e visões só com os lançamentos que os vínculos levam à unidade.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Catálogo", texto: "Só os itens e históricos usados nos DFDs da unidade (ou o catálogo inteiro, conforme o ADM).", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Quadros e calendário só com as tarefas vinculadas à unidade.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Calendário", texto: "Eventos e tarefas só da unidade escolhida.", link: "/painel/calendario" },
+    ],
+  },
+  {
+    versao: "1.117.0",
+    data: "2026-10-16",
+    titulo: "Filtros e recorte da Mesa no rodapé da tabela",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Os filtros feitos e o Recorte da Mesa ficam no rodapé da tabela, num menu (funil com o número): abra para ver cada filtro, limpar um só ou todos.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tabelas", texto: "Botões do rodapé simplificados em ícones (filtros e importar), com o nome na dica.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.116.0",
+    data: "2026-10-16",
+    titulo: "Mesa conectada: Protocolos, DFDs e Itens com os mesmos filtros",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Os filtros de Protocolos, DFDs e Itens agora se conectam: filtrar protocolos mostra só os DFDs e itens deles; filtrar itens (ex.: um código) leva aos DFDs e protocolos que os têm. Os filtros e a ordem de cada visão continuam ao trocar de visão.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A faixa “Recorte da Mesa” acima da tabela mostra o que vem das outras visões; o ✕ tira os filtros de uma delas e “Limpar recorte” zera tudo.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.115.0",
+    data: "2026-10-16",
+    titulo: "Grupo pela unidade de cadastro",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "O grupo escolhe de onde vêm as unidades: \u201cUnidades escolhidas\u201d (como antes) ou \u201cUnidade de cadastro de cada pessoa\u201d — cada membro vê só a unidade em que trabalha. Quem está sem unidade de cadastro é apontado no editor do grupo.", link: "/painel/grupos" },
     ],
   },
   {

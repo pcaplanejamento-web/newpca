@@ -230,8 +230,10 @@ export type DetalhesPapel = {
   componentes: ComponentesRetirados;
   /** PREFERÊNCIAS de exibição definidas pelo ADM (não restringem; só como a tela abre). */
   exibicao: { vinculosExpandidos: boolean };
-  /** PRESENÇA: ver quem está online (o próprio canal segue — a pessoa aparece para os outros e conversa). */
-  presenca: { verOnline: boolean };
+  /** PRESENÇA: `verOnline` = vê quem está online; `visivel` = aparece online para os outros (fora = invisível). */
+  presenca: { verOnline: boolean; visivel: boolean };
+  /** NOVIDADES do sistema: a versão no menu, o banner das Novidades e o aviso de nova versão no sino. */
+  novidades: { ver: boolean };
 };
 
 const todas = <K extends string>(chaves: readonly K[], v: boolean) => Object.fromEntries(chaves.map((k) => [k, v])) as Record<K, boolean>;
@@ -253,7 +255,8 @@ export function detalhesPadrao(): DetalhesPapel {
     edicoes: { dfd: todas(OPERACOES_EDICAO, true), pca: todas(OPERACOES_EDICAO, true), orcamento: todas(OPERACOES_EDICAO, true), tarefas: todas(OPERACOES_EDICAO, true) },
     componentes: {},
     exibicao: { vinculosExpandidos: false },
-    presenca: { verOnline: true },
+    presenca: { verOnline: true, visivel: true },
+    novidades: { ver: true },
   };
 }
 export const DETALHES_PADRAO: DetalhesPapel = detalhesPadrao();
@@ -317,7 +320,7 @@ export function coerceDetalhes(bruto: unknown): DetalhesPapel {
     const personalizar = bool(et.personalizar, true);
     edicoes[t] = { personalizar, publicar: personalizar && bool(et.publicar, true), moderar: personalizar && bool(et.moderar, true) };
   }
-  return { mesa, historico, edicoes, componentes: coerceComponentes(o.componentes), exibicao: { vinculosExpandidos: bool(obj(o.exibicao).vinculosExpandidos, false) }, presenca: { verOnline: bool(obj(o.presenca).verOnline, true) } };
+  return { mesa, historico, edicoes, componentes: coerceComponentes(o.componentes), exibicao: { vinculosExpandidos: bool(obj(o.exibicao).vinculosExpandidos, false) }, presenca: { verOnline: bool(obj(o.presenca).verOnline, true), visivel: bool(obj(o.presenca).visivel, true) }, novidades: { ver: bool(obj(o.novidades).ver, true) } };
 }
 
 /** A coluna está oculta nos detalhes (só as ocultáveis da lista — as de controle próprio seguem o controle). */
@@ -365,7 +368,9 @@ export function compactarDetalhes(bruto: DetalhesPapel): Record<string, unknown>
   if (Object.keys(ed).length) out.edicoes = ed;
   if (Object.keys(d.componentes).length) out.componentes = d.componentes;
   if (d.exibicao.vinculosExpandidos) out.exibicao = { vinculosExpandidos: true };
-  if (!d.presenca.verOnline) out.presenca = { verOnline: false };
+  if (!d.presenca.verOnline || !d.presenca.visivel)
+    out.presenca = { ...(d.presenca.verOnline ? {} : { verOnline: false }), ...(d.presenca.visivel ? {} : { visivel: false }) };
+  if (!d.novidades.ver) out.novidades = { ver: false };
   return out;
 }
 
@@ -382,7 +387,7 @@ export function detalhesDoJson(json: string | null | undefined): DetalhesPapel {
 // Cada detalhe como uma LINHA (rótulo + valor + quanto libera) — a comparação, o resumo e a auditoria saem daqui.
 // ---------------------------------------------------------------------------------------------------------------
 
-export type GrupoDetalhe = "Mesa" | "Mesa do PCA" | "Orçamento" | "Tarefas" | "Presença" | "Componentes";
+export type GrupoDetalhe = "Mesa" | "Mesa do PCA" | "Orçamento" | "Tarefas" | "Presença" | "Novidades" | "Componentes";
 
 type ItemDetalhe = {
   id: string;
@@ -478,6 +483,20 @@ function itensDetalhe(): ItemDetalhe[] {
     rotulo: "Ver quem está online",
     valor: (d) => simNao(d.presenca.verOnline, "Permitido", "Não"),
     nivel: (d) => +d.presenca.verOnline,
+  });
+  out.push({
+    id: "presenca.visivel",
+    grupo: "Presença",
+    rotulo: "Aparecer online para os outros",
+    valor: (d) => simNao(d.presenca.visivel, "Aparece", "Invisível"),
+    nivel: (d) => +d.presenca.visivel,
+  });
+  out.push({
+    id: "novidades.ver",
+    grupo: "Novidades",
+    rotulo: "Ver as novidades do sistema",
+    valor: (d) => simNao(d.novidades.ver, "Permitido", "Não"),
+    nivel: (d) => +d.novidades.ver,
   });
   for (const x of CATALOGO_COMPONENTES)
     for (const a of acoesDoComponente(x))

@@ -74,6 +74,9 @@ export const CATALOGO_COMPONENTES: readonly InfoComponente[] = [
     visualizar: "Abrir a Mesa do PCA.",
     exportar: "Baixar as tabelas da Mesa do PCA.",
   }),
+  c("pca", "escopoMesa", "Escopo da Mesa do PCA", "O seletor Todos | Na Mesa do sistema | Enviados | Incorporados da Mesa do PCA.", {
+    visualizar: "Ver e usar o seletor (sem ele, a Mesa do PCA mostra todos).",
+  }),
   c("pca", "importacao", "Importação (planilhas)", "A aba Importação do PCA de lista (as planilhas).", {
     visualizar: "Abrir a Importação.",
     importar: "Importar planilhas.",

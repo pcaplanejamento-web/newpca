@@ -1,3 +1,4 @@
+import { unidadeDoModulo } from "@/lib/escopo-cabecalho";
 import { lerVinculo } from "@/lib/tarefas-core";
 import { linkDaMesa, mesaDoAlvo } from "@/lib/pesquisa";
 import { redirect } from "next/navigation";
@@ -98,7 +99,7 @@ export default async function PcaEspacoPage({
  * Dashboard (abaixo dos KPIs). Com a PRÉVIA ligada, a explicação fica no (?) ao lado das abas.
  */
 async function abaDashboard(pca: PcaEspaco) {
-  const dash = await dashboardDoPca(pca);
+  const dash = await dashboardDoPca(pca, undefined, (await unidadeDoModulo("pca")).id);
   if (dash.resumo.count === 0)
     return (
       <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
@@ -139,11 +140,12 @@ async function abaDashboard(pca: PcaEspaco) {
  * tela do orçamento (na visão da Configuração do PCA, trocável) e o PCA × Orçamento por unidade. Um só orçamento do ano.
  */
 async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela, podeConfigurarOrcamento: boolean) {
-  const ref = await orcamentoDoAno(pca.ano);
+  const [ref, rep] = await Promise.all([orcamentoDoAno(pca.ano), unidadeDoModulo("pca")]);
+  const repOrc = rep.id === null ? null : { id: rep.id, semVinculo: rep.cfg.orcamentoSemVinculo };
   // As visões vêm com o comparativo; sem orçamento do ano, só a lista (a engrenagem ainda escolhe a visão).
   const [orc, comp, visoesSemOrc] = await Promise.all([
-    orcamentoDoPca(pca, ref),
-    ref ? dadosComparativo(ref.id, usuarioId) : null,
+    orcamentoDoPca(pca, ref, repOrc),
+    ref ? dadosComparativo(ref.id, usuarioId, repOrc) : null,
     ref || !pode.configurar ? null : listarVisoesOrcamento(),
   ]);
   return (

@@ -1,3 +1,5 @@
+import { unidadeDoModulo } from "./escopo-cabecalho";
+import { tarefaNaUnidade } from "./escopo-cabecalho-core";
 import { type Acesso, atorPasta, getAcesso, pcasDoAcesso, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { estadoTrello } from "./trello-vincular";
@@ -27,13 +29,14 @@ import {
   tarefaAcessivel,
   tarefasAbertasLeves,
   tarefasDoCalendario,
+  unidadesDasTarefas,
 } from "./tarefas";
 import { assinaturaDaPessoa } from "./calendario-assinatura";
 import { CHAVE_OPCOES_CALENDARIO, intervaloCalendario, lerOpcoesCalendario } from "./calendario-core";
 import { listarFeriados } from "./feriados";
 import { cronogramaPcas } from "./pca-espaco";
 import { listarPreferenciasTabela } from "./preferencias-tabela";
-import { mascararPrivados } from "./tarefas-core";
+import { mascararPrivados, unidadesDaTarefa } from "./tarefas-core";
 import { CHAVE_CONJUNTOS_TAREFAS, CHAVE_FAVORITOS_TAREFAS, CHAVE_OCULTOS_CALENDARIO, favoritosPrimeiro, lerFavoritos, lerOrdemGrade, lerMes, pastasDosQuadros, lerOcultos, type PastasQuadros, prefixoEdicoesTarefas, semanaDe } from "./tarefas-core";
 
 /** O prefixo das preferências do calendário (o que fica oculto + as opções da pessoa). */
@@ -106,7 +109,7 @@ export async function carregarCalendario(a: Acesso, mesPedido?: string, anual = 
   const { de, ate } = intervaloCalendario(mes, inicio, anual);
   const quadros = (await listarQuadros(escopoAtivo(a), hoje, u.id)).filter((q) => !q.arquivado);
   const ids = quadros.map((q) => q.id);
-  const [tarefas, eventos, etiquetas, contadores, abertas, assinatura, pca, listas, equipes] = await Promise.all([
+  const [tarefasTodas, eventosTodos, etiquetas, contadores, abertasTodas, assinatura, pca, listas, equipes, rep] = await Promise.all([
     tarefasDoCalendario(ids, de, ate),
     eventosDosQuadros(ids, de, ate),
     etiquetasDosQuadros(ids),
@@ -116,7 +119,14 @@ export async function carregarCalendario(a: Acesso, mesPedido?: string, anual = 
     podeTela(a, "pca").visualizar ? cronogramaPcas(de, ate, pcasDoAcesso(a)) : Promise.resolve({ pcas: [], dfds: [] }),
     listasDosQuadros(ids),
     listarEquipes(ids),
+    unidadeDoModulo("calendario", u),
   ]);
+  // A unidade do CABEÇALHO (Configurações → Filtro da unidade): só as tarefas (e os eventos delas) ligadas a ela.
+  const unidades = rep.id === null || rep.id === false ? null : await unidadesDasTarefas(ids);
+  const naUnidade = (tid: number) => rep.id === null || (rep.id !== false && tarefaNaUnidade(unidades?.get(tid) ?? [], rep.id, rep.cfg.tarefasSemVinculo));
+  const tarefas = tarefasTodas.filter((t) => naUnidade(t.id));
+  const eventos = eventosTodos.filter((e) => naUnidade(e.tarefaId));
+  const abertas = abertasTodas.filter((t) => naUnidade(t.id));
   // As PESSOAS do grupo ativo (convidar, "pesquisar pessoas") + as das tarefas e dos convites (nomes e fotos).
   const membros = grupoAtivo != null ? await listarPessoasDoGrupo(grupoAtivo) : [];
   const conhecidas = new Set(membros.map((p) => p.id));
@@ -235,12 +245,17 @@ export async function carregarQuadro(a: Acesso, id: number) {
     // As AUTOMAÇÕES da Mesa (só o ADM) — o "Emitir DFDs" da lista de tarefas.
     u.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
   ]);
+  // A unidade do CABEÇALHO (Configurações → Filtro da unidade): só as tarefas ligadas a ela.
+  const rep = await unidadeDoModulo("tarefas", u);
+  const tarefasDaUnidade =
+    rep.id === null ? dados.tarefas : rep.id === false ? [] : dados.tarefas.filter((t) => tarefaNaUnidade(unidadesDaTarefa(t), rep.id as number, rep.cfg.tarefasSemVinculo));
   const noGrupo = new Set(membros.map((p) => p.id));
-  const fora = [...new Set([...dados.tarefas.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
+  const fora = [...new Set([...tarefasDaUnidade.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
   const extras = fora.length ? await pessoasPorIds(fora) : [];
   return {
     quadro,
     ...dados,
+    tarefas: tarefasDaUnidade,
     membros: membros.map((p) => p.id),
     pessoas: [...membros, ...extras],
     equipes,

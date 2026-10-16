@@ -677,7 +677,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Mensagens padrão do Zod em pt-BR (`zod-config.ts`, importado pelo `http.ts`).
 - **Grupos** (`grupos`): um usuário pertence a vários (`usuario_grupos`); escolhe o **grupo
   ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo guarda as **TELAS** que abre e os **PCAs** que acessa (abaixo) e
-  acessa um conjunto de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`,
+  acessa um conjunto de **repartições** (`grupo_reparticoes`). **Modo das unidades (v1.125.0, migração `0112` —
+  `grupos.modo_unidades`):** `lista` (padrão = as escolhidas) | `cadastro` = cada membro acessa SÓ a unidade do PRÓPRIO
+  cadastro (`usuarios.reparticao_id`; sem ela = escopo nenhuma; a "Geral" nunca vale por cadastro) — ponto único
+  `reparticoesDoMembro` (`grupos.ts`; núcleo puro `unidadesDoMembro` em `escopo-unidades-core.ts`) dentro do
+  `getReparticaoContexto`: cabeçalho, escopo da Mesa e as rotas herdam. No `GruposAdmin`, o `Segmented` "Unidades escolhidas |
+  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. Telas admin: `/painel/grupos`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de
@@ -708,7 +713,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **"Chat liberado"** (`Switch`). Chat bloqueado no grupo: o layout não monta o chat (`ativo.chat`), o `worker.ts` manda
   `x-chat-grupo`/`x-chat-privado` = 0 e as rotas do chat recusam (`ehMembroDoGrupo` exige `grupos.chat = 1`;
   `quemCompartilhaGrupo` só por grupo com chat). **Papéis → Detalhes → Presença → "Ver quem está online"**
-  (`DetalhesPapel.presenca.verOnline`, padrão sim; o ADM sempre vê): desligado, o `worker.ts` manda `x-presenca-ver: 0` e o
+  (`DetalhesPapel.presenca.verOnline`, padrão sim; o ADM sempre vê) e **"Aparecer online para os outros"** (`presenca.visivel`, v1.121.0 — a ÚNICA regra de invisível: o `worker.ts` manda `x-presenca-invisivel` pelo papel); **Novidades → "Ver as novidades"** (`novidades.ver`: sem ele, o `VersaoSistema` do menu some e o aviso `versao` não é derivado); componente **`pca.escopoMesa`** (sem ele, o `MesaPca` não mostra o seletor de escopo e fica em "todos"): desligado, o `worker.ts` manda `x-presenca-ver: 0` e o
   `PresencaGrupo` (DO) entrega à aba a lista VAZIA (`cego` — nem presença nem "vendo"); no cabeçalho, só as conversas
   (`PresencaGrupo verOnline={false}`; sem chat, nada é montado). A pessoa segue aparecendo para os outros.
 - **Telas** (`grupos.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
@@ -924,6 +929,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `unidade` (planilha) recebe `reparticao_id` da unidade ativa no
   import (`/api/upload`; Geral → NULL, e re-import em Geral preserva a atual); `/painel/pca` lista via
   `getUnidades(rep?.id)`. O dashboard público (`/`) **não** é escopado.
+- **FILTRO DA UNIDADE DO CABEÇALHO em TODAS as telas (v1.118.0, sem migração — blob `configuracoes.escopoCabecalho`):**
+  Configurações → aba **"Filtro da unidade"** (`EscopoCabecalhoAdmin` + `CamposEscopo`; `GET/PATCH
+  /api/admin/escopo-cabecalho`, `exigirAdmin`, auditoria). Núcleo puro **`escopo-cabecalho-core.ts`** (`lerConfigEscopo`,
+  `filtroDoModulo`, `tarefaNaUnidade`, `lancamentoNaUnidade` — testado) + D1 **`escopo-cabecalho.ts`** (`getConfigEscopo`
+  cache 60 s, fail-safe = padrão; ponto ÚNICO **`unidadeDoModulo(modulo)`** e `unidadeDoCatalogo()`). Módulos (todos ligados
+  por padrão; a Mesa sempre): **PCA** (`listarPcasCards`/`dashboardDoPca`/`orcamentoDoPca` com `rep`; Mesa do PCA e `GET
+  /api/dfd/itens?pca=`), **Orçamento** (`lancamentosDaUnidade`/`resumosNaUnidade` — a aba Vínculos fica inteira; opção
+  "sem vínculo"), **Catálogo** (`usados` = `codigosDaUnidade`, subconsulta dos códigos dos DFDs da unidade | `todos`;
+  itens, histórico, padronização), **Tarefas/Calendário** (pelas UNIDADES dos vínculos — `unidadesDasTarefas`,
+  `VinculoTarefa.reparticaoId`; opção "sem vínculo") e **Automação** (os protocolos). "Geral" = sem filtro; o memo leva o
+  id da unidade na chave.
+- **INTERFACE ENXUTA com UMA unidade (v1.122.0, sem migração):** contexto **`UnidadeUnica`** (`UnidadeUnica.tsx`, layout do
+  painel: a unidade ativa ≠ "Geral" + os módulos do Filtro da unidade) → `useUnidadeUnica(modulo?)` (null em Geral ou no
+  módulo que não obedece) e `useSemUnidade(valores, modulo?)` (+ `todasDaUnidade`: TODAS as linhas da sigla ativa — uma
+  sem unidade ou de outra mantém a coluna). Saem: Mesa — colunas Unidade/Sigla (Protocolos, DFDs [`PlanilhaDfds.semSigla`],
+  Itens, Consolidada, `ComposicaoItem`) e "Dado = Unidade" do Dashboard; PCA — "Por órgão"/coluna Órgão do `OrcamentoPca`,
+  Unidade da `ConsultaPca`; Orçamento — Comparativo sem dimensões de um valor só (abre pela Ação), Lançamentos sem
+  Órgão/Unidade de valor único; Tarefas — coluna Unidade e seção do Filtrar. Ficam os campos que MOVEM de unidade.
 - **PCA do CABEÇALHO — filtro GLOBAL (sem migração):** um dropdown à ESQUERDA do head (`PcaSelect`, no `AppShell`; no
   celular mostra só o ano) escolhe o PCA — cookie **`pca_filtro`** (como a unidade/grupo: `src/lib/pca-filtro.ts` —
   `pcasDoFiltro` = os PCAs cadastrados COM ano, `getPcaFiltro`, `definirPcaFiltro`; rota **`POST /api/pca/filtro`**
@@ -1247,8 +1270,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (todos os valores, sem o "+N") e `EstadoResumo` (todos os problemas); a linha cresce. A escolha é PREFERÊNCIA do usuário
     (`preferencias_tabela`, chave `PREF_DADOS_COMPLETOS` = `mesa:dados-completos` → `{ligado:true}`; desligar apaga a linha),
     carregada no servidor por `carregarMesa` (`dadosCompletos` — a Mesa já ABRE assim, sem piscar; a principal e a do PCA);
-    gravada na hora pelo `PUT`/`DELETE /api/preferencias/tabela` (sem rede, vale na sessão). Alternam as visões no **MESMO espaço**, com transição
-    `animate-cat-morph` (`<div key={vista}>` remonta e replaya). **Importação NA TABELA:** o botão **"Importar protocolo"**
+    gravada na hora pelo `PUT`/`DELETE /api/preferencias/tabela` (sem rede, vale na sessão). Alternam as visões numa TABELA ÚNICA (v1.119.0): as quatro (Protocolos, DFDs — `propsPlanilhaDfds` —, Itens e
+    Consolidada) são o MESMO `DataTable` na mesma posição (a instância não muda) e a prop **`DataTable.visao`** reinicia
+    filtros/ordem/página pelos da visão nova (o `useEditorEdicoes` descarta a edição em curso ao trocar de chave); só as
+    linhas acendem (`.linhas-entra`, opacidade 160 ms — v1.120.0); o botão muda na hora (`vistaBotao`) e a tabela nova vem
+    numa transição (`useTransition` → `DataTable.trocando` esmaece o corpo atual); passar o ponteiro/foco nas visões
+    pré-carrega os itens (`preItens`). **Importação NA TABELA:** o botão **"Importar protocolo"**
     (visão Protocolos) / **"Importar DFD"** (visão DFDs) fica no **RODAPÉ da tabela, à esquerda do seletor de linhas**
     (`DataTable.acoesRodape`, `Button size="sm"`; no celular o rótulo encolhe para "Importar" — o nome acessível segue
     inteiro); os DOIS formulários (`ProtocoloUploadForm`/`DfdUploadForm`) ficam montados FORA da tabela, em QUALQUER visão
@@ -1280,6 +1307,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     inválido não derruba a lista) → `DfdResumo.prioridade`; o item herda a do DFD (junção no cliente por `dfdId`); os banners
     do protocolo (análise e gravado) mostram a MESMA coluna (`prioridadeDoDfd(secoes)`). No celular os filtros (só ícone)
     cabem na linha das visões (descem juntos quando não cabem); todos os alvos da barra têm ≥ 44px.
+  - **MESA CONECTADA (v1.116.0, sem migração):** os filtros de coluna e a ordem de Protocolos · DFDs · Itens SOBREVIVEM à
+    troca de visão (guardados no `DfdsView` — `estadoVisoes`/`ordemMesa`; `DataTable.conexao` = `ConexaoTabela`: começa neles
+    e informa os filtros, a ordem e as chaves da BASE que passam nos PRÓPRIOS filtros) e o que passa numa visão RECORTA as
+    outras nos dois sentidos pela hierarquia — núcleo puro **`mesa-recorte.ts`** (`recorteMesa`, testado): protocolos →
+    DFDs/itens deles; DFDs → protocolos que os contêm e itens deles; itens (Normal e os filtros de atributo da Consolidada)
+    → DFDs e protocolos. A restrição vai por ids de protocolo/DFD (estáveis) e cada visão calcula o que passa SEM a restrição
+    das outras (nunca há ciclo). A ordem escolhida vale nas outras visões quando a coluna existe lá. Menu de filtros do RODAPÉ (v1.117.0: `DataTable.filtrosRodape` + o funil `FiltrosAtivos` — cada coluna filtrada com ✕, "Limpar"; o Importar só ícone) com o **`RecorteMesa`**
+    (DS) dentro dele: uma linha por OUTRA visão com filtros (✕ tira) + "Limpar recorte" (zera as três e remonta a tabela).
   - **Gestão do protocolo (migração `0031`, aditiva):** **Situação** = SÓ as cadastradas pelo ADM em **Configurações →
     Situações** (`SituacoesAdmin`: nome + cor + ordem ↑/↓; excluir deixa os protocolos dela SEM situação, avisando quantos;
     tabela `protocolo_situacoes`, `src/lib/situacoes.ts`, rotas `/api/admin/situacoes*` com `exigirAdmin` + auditoria
@@ -2495,7 +2530,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (ver "CONSULTA PÚBLICA" abaixo — a mesma no painel e na tela inicial).
 - **Situações (Configurações → Situações):** só nome + cor + ordem — NÃO interferem no PCA (o protocolo vai à Mesa do PCA
   qualquer que seja a situação).
-- **PCA × Orçamento — grupos, elementos e vínculos (v1.115.0, sem migração):** "Ver por **Unidade | Grupo | Órgão**" — o
+- **PCA × Orçamento — grupos, elementos e vínculos (v1.125.0, sem migração):** "Ver por **Unidade | Grupo | Órgão**" — o
   GRUPO ORÇAMENTÁRIO (unidades que compartilham o orçamento, ex.: Secretaria + Fundo de Cultura; blob
   `configuracoes.orcamentoGrupos`, `orcamento-grupos-dados.ts`; núcleo puro `orcamento-grupos.ts`: `lerGruposOrcamento`,
   `motivoGruposInvalidos` — uma unidade em um grupo, ≥ 2 —, `refsDosGrupos` = as unidades com o grupo no lugar do órgão,
@@ -3662,7 +3697,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Componentes** (`src/components/`): `Button` (§6.8, primário=`bg-text` neutro; o padrão `md` mede 44px no celular e
   `--h-control` no desktop; SÓ ÍCONE (sem texto) = QUADRADO em qualquer tamanho; **`size="sm"`** = compacto p/ rodapés de
   tabela — `--h-control-sm` no desktop, 44px no celular; **`size="xs"`** = AÇÃO DE LINHA de tabela compacta — cabe na linha no
-  desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4; o número proporcional à LARGURA do próprio cartão — container query, teto de 2.05rem —: cabe inteiro no celular e na grade de 5 com o menu), `Segmented` (o trilho inteiro na altura padrão — anel
+  desktop, 44px no celular, quadrado quando só ícone), `KpiStat` (§6.4; v1.123.0: a dica e os detalhes NUNCA passam de 2 linhas — v1.124.0: o mesmo no nome do `OrcamentoCard`, no título/subtítulo do `ChartCard` e no título do `AvisoFlutuante` — o texto inteiro no `title`, o cartão não estica; o número proporcional à LARGURA do próprio cartão — container query, teto de 2.05rem —: cabe inteiro no celular e na grade de 5 com o menu), `Segmented` (o trilho inteiro na altura padrão — anel
   INTERNO em vez de borda; no celular itens de 38px com a área de toque cobrindo o trilho = 44px; item **`soIcone`** = só o
   ícone, o rótulo vira o nome acessível/dica — ex.: o Dashboard da Mesa; **`curto`** = o rótulo abaixo de `sm` quando o
   inteiro não cabe — o nome acessível é sempre o texto À VISTA (quem usa comando de voz diz o que lê) — ex.: as visões do
@@ -3718,7 +3753,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   pessoais ou públicas; a padrão abre a tabela) — as tabelas da Mesa;
   **`exportar`** (`{nome}` | `false`; padrão LIGADO, nome "Tabela") = os botões **XLSX** e **PDF** no rodapé (o XLSX abre antes a
   escolha das colunas — `EscolherColunasXlsx`: as do PDF marcadas, a escolha no aparelho `exportar:colunas:<nome>` —
-  `colunasXlsxIniciais`; v1.115.0)
+  `colunasXlsxIniciais`; v1.125.0)
   (**`BotaoExportar`**, `ExportarTabelas.tsx`): as linhas À VISTA (filtros das colunas, na ordem, todas as páginas) e as
   colunas visíveis da edição em uso — no .xlsx o número como número, os vários valores unidos, as datas em dd/mm/aaaa
   (`linhasPlanilhaTabela`) e, no fim, a **linha TOTAL** (`linhaTotal`: a soma de cada coluna numérica — valores e quantidades —, "TOTAL" na 1ª coluna não somada; **`Column.total: false`** deixa em branco o que não se soma — valor unitário, médias, %, identificadores como Seq./Ticket); no **PDF** a MESMA linha TOTAL vai em DESTAQUE (`destaques`) e (`tabelaParaPdf` → `baixarTabelaPdf`, `exportar-pdf.ts` com o pdf-lib só no clique;
@@ -4746,7 +4781,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Testes: `tests/fluxo-selecao.test.ts`.
 - **LISTA DOS FLUXOS ROLA POR DENTRO (v1.73.3):** a coluna da grade dos `CartaoFluxo` (`ListaFluxos`) tem a altura até o fim do display (`useAlturaTela`, a mesma do `PainelLateral`) e `overflow-y-auto` — a página não rola; o arrasto (`useArrastoGrade` → `rolagemDe`) rola essa coluna perto das bordas.
 - **ZONAS DE SOLTURA no arrasto da grade (v1.74.0):** `useArrastoGrade({zonas: {limite, aceita}})` (`PastasQuadros.tsx`) — fora do `limite` o destino é `fora` (sem sombra); os elementos `[data-zona-arrasto="<nome>"]` sob o ponteiro viram `destino.fora = nome`; soltar numa zona que `aceita` ENCOLHE o card para dentro dela e chama `onSoltar`, senão o card VOLTA voando à origem. Na Automação (`ListaFluxos`): o fluxo da lista vai à **lixeira** (`LixeiraArrasto`, centro embaixo) ou volta ao **painel** "Novo fluxo" (`PainelLateral zona`) → `excluir(f, zona)` com confirmação; o modelo/pública arrastado só marca a `SombraGrade marcada` (tracejada) sobre a lista. Tarefas não usa `zonas` (igual a antes).
-- **% no segundo plano (v1.115.0):** `Trabalho.fracao`/`restanteMs` — a pílula e a lista mostram "37% · ≈ 4 min" (o
+- **% no segundo plano (v1.125.0):** `Trabalho.fracao`/`restanteMs` — a pílula e a lista mostram "37% · ≈ 4 min" (o
   `FluxosAutomacao` usa `progressoFluxo` + `useEstimativa`).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o

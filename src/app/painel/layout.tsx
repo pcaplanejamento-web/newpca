@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ComponentesPapel } from "@/components/ComponentesPapel";
 import { ConfigTabelas } from "@/components/ConfigTabelas";
+import { UnidadeUnica } from "@/components/UnidadeUnica";
+import { getConfigEscopo } from "@/lib/escopo-cabecalho";
 import { nomesDasSiglas } from "@/lib/reparticoes";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
@@ -47,13 +49,14 @@ export default async function PainelLayout({
   ]);
   // A PROTEÇÃO DE DADOS do ADM (seleção/cópia, impressão/captura): só nos papéis que ele escolheu.
   const protecao = protecaoDoPapel(protecaoCfg, usuario.papel.id);
-  const [contexto, pcaFiltro, notificacoes, presenca, configChat] = await Promise.all([
+  const [contexto, pcaFiltro, notificacoes, presenca, configChat, escopoCab] = await Promise.all([
     getReparticaoContexto(usuario, ativo),
     getPcaFiltro(pcas),
     contarNaoLidas(usuario, grupos),
     // O PAPEL vê quem está online? (Papéis → Detalhes → Presença; o ADM sempre vê.)
-    presencaDoGrupo(usuario.id, ativo?.id ?? null, usuario.admin || usuario.papel.detalhes.presenca.verOnline),
+    presencaDoGrupo(usuario.id, ativo?.id ?? null, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
     getConfigChat(),
+    getConfigEscopo(),
   ]);
 
   return (
@@ -82,7 +85,16 @@ export default async function PainelLayout({
       <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
         <ComponentesPapel retirados={usuario.admin ? {} : usuario.papel.detalhes.componentes} exibicao={usuario.papel.detalhes.exibicao}>
-          <SegundoPlano>{children}</SegundoPlano>
+          <UnidadeUnica
+            modulos={escopoCab.modulos}
+            unidade={
+              contexto.ativa && contexto.ativa.codigo !== "GERAL"
+                ? { id: contexto.ativa.id, sigla: contexto.ativa.codigo, nome: contexto.ativa.nome }
+                : null
+            }
+          >
+            <SegundoPlano>{children}</SegundoPlano>
+          </UnidadeUnica>
         </ComponentesPapel>
       </ConfigTabelas>
     </AppShell>
@@ -92,7 +104,7 @@ export default async function PainelLayout({
 /** A PRESENÇA do grupo ativo (quem está online): só com o ADM tendo ligado e um grupo ativo — o diretório (foto + apelido)
  * vai uma vez; o canal manda só ids. Desligada = `null` (nada é montado); a leitura FALHOU = `undefined` (a tela mantém a
  * presença que já tinha — nunca derruba o canal nem as conversas por uma falha passageira). */
-async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: boolean) {
+async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: boolean, visivel: boolean) {
   if (grupoId == null) return null;
   const cfg = await getConfigPresenca();
   if (!cfg.ativo) return null;
@@ -102,7 +114,7 @@ async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: b
       pessoas,
       ver,
       whatsapp: await whatsappDe(pessoas.map((p) => p.id)),
-      invisivel: false,
+      invisivel: !visivel,
       inativoMin: cfg.inativoMin,
       status: { status: prefs.status, recado: prefs.recado, ate: prefs.ate },
     };

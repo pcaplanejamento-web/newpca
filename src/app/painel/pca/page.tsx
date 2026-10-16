@@ -1,6 +1,7 @@
 import { PcaModuleView } from "@/components/PcaModuleView";
 import { pcasDoAcesso } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
+import { unidadeDoModulo } from "@/lib/escopo-cabecalho";
 import { listarPcasCards } from "@/lib/pca-espaco";
 import { getPcaFiltro } from "@/lib/pca-filtro";
 
@@ -11,7 +12,9 @@ export const dynamic = "force-dynamic";
 export default async function PcaPage() {
   const r = await acessoPagina("pca");
   if (r.bloqueio) return r.bloqueio;
-  const [todos, filtro] = await Promise.all([listarPcasCards(), getPcaFiltro()]);
+  // A unidade do CABEÇALHO: os totais dos cards só dela (Configurações → Filtro da unidade).
+  const rep = await unidadeDoModulo("pca");
+  const [todos, filtro] = await Promise.all([listarPcasCards(rep.id), getPcaFiltro()]);
   // Só os PCAs do GRUPO ATIVO (Grupos → PCAs do grupo; o ADM, todos).
   const permitidos = pcasDoAcesso(r.acesso);
   const pcas = permitidos ? todos.filter((p) => permitidos.has(p.id)) : todos;

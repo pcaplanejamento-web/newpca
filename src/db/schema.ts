@@ -243,6 +243,9 @@ export const grupos = sqliteTable("grupos", {
   pcas: text("pcas"), // JSON: number[] de ids de PCA; NULL = todos os PCAs
   modulos: text("modulos"), // JSON: string[] de ids de MÓDULO (migração `0109`); NULL = as telas avulsas de `abas`
   chat: integer("chat", { mode: "boolean" }).notNull().default(true), // o chat ao vivo liberado no grupo
+  /** De onde vêm as unidades dos membros: `lista` = as escolhidas (`grupo_reparticoes`) · `cadastro` = a unidade de
+   * cadastro de cada pessoa (`usuarios.reparticao_id`) — migração 0112. */
+  modoUnidades: text("modo_unidades", { enum: ["lista", "cadastro"] }).notNull().default("lista"),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });

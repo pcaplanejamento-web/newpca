@@ -197,8 +197,40 @@ export function DetalhesPapelEditor({ valor, original, onChange }: { valor: Deta
             <Switch
               checked={v.presenca.verOnline}
               disabled={so}
-              onChange={(verOnline) => onChange?.({ ...v, presenca: { verOnline } })}
+              onChange={(verOnline) => onChange?.({ ...v, presenca: { ...v.presenca, verOnline } })}
               label={v.presenca.verOnline ? "Permitido" : "Não"}
+            />
+          </Linha>
+          <Linha
+            titulo="Aparecer online para os outros"
+            ajuda="Desligado, a pessoa fica INVISÍVEL: não aparece nas fotos do cabeçalho, no “Online agora”, no “vendo agora” nem no ponto de presença dos outros. É a única regra de quem é visto — ninguém escolhe ficar invisível por conta própria. O Administrador sempre aparece."
+            alterado={v.presenca.visivel !== o.presenca.visivel}
+          >
+            <Switch
+              checked={v.presenca.visivel}
+              disabled={so}
+              onChange={(visivel) => onChange?.({ ...v, presenca: { ...v.presenca, visivel } })}
+              label={v.presenca.visivel ? "Aparece" : "Invisível"}
+            />
+          </Linha>
+        </div>
+      </section>
+
+      <section aria-labelledby="det-novidades" className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
+        <h4 id="det-novidades" className="text-[14px] font-bold text-text">
+          Novidades
+        </h4>
+        <div className="divide-y divide-border">
+          <Linha
+            titulo="Ver as novidades do sistema"
+            ajuda="A versão no fim do menu (que abre as Novidades) e o aviso de nova versão no sino. Desligado, nada disso é carregado para a pessoa. O Administrador sempre vê."
+            alterado={v.novidades.ver !== o.novidades.ver}
+          >
+            <Switch
+              checked={v.novidades.ver}
+              disabled={so}
+              onChange={(ver) => onChange?.({ ...v, novidades: { ver } })}
+              label={v.novidades.ver ? "Permitido" : "Não"}
             />
           </Linha>
         </div>

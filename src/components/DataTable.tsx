@@ -33,7 +33,8 @@ import { useEditorEdicoes } from "./EdicoesTabela";
 import { useDetalheSigla, useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
 import { definirVarRaiz, ehDesktop } from "./espacamento";
-import { IconFilter, IconLock } from "./icons";
+import { Dropdown } from "./Dropdown";
+import { IconClose, IconFilter, IconLock } from "./icons";
 import { BotaoExportar, EscolherColunasXlsx, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
@@ -74,7 +75,7 @@ export type Column<R> = {
   travado?: string;
   /** Filtro (multi-seleção) CONTROLADO DE FORA: as opções, a seleção e a mudança vêm de quem usa a tabela — a coluna não
    * filtra as linhas por dentro (ex.: a visão Consolidada dos itens filtra os ITENS antes de agrupar). Marca o tópico e
-   * conta no "Limpar filtros" como os demais. */
+   * conta no menu de filtros do rodapé como os demais. */
   filtroExterno?: { opcoes: string[]; valor: string[]; onChange: (v: string[] | null) => void };
   /** Formato dos números no filtro de FAIXA (padrão = R$) — ex.: quantidades e percentuais. */
   formatarFaixa?: (n: number) => string;
@@ -99,6 +100,31 @@ export type EdicoesDaTabela = {
 };
 
 type OrdemAtual = { key: string | null; dir: "asc" | "desc" };
+
+/** MESA CONECTADA (opt-in): a tabela começa nos filtros/ordem que o DONO guarda (sobrevivem à troca de visão) e informa,
+ * a cada mudança, os filtros, a ordem e as chaves das linhas da BASE (sem a restrição das outras visões) que passam nos
+ * PRÓPRIOS filtros — `null` = nenhum filtro próprio. */
+export type ConexaoTabela<R> = {
+  base: R[];
+  filtros?: Record<string, FiltroValor>;
+  ordem?: { key: string; dir: "asc" | "desc" } | null;
+  onMudar: (e: { filtros: Record<string, FiltroValor>; ordem: { key: string; dir: "asc" | "desc" } | null; passam: Key[] | null }) => void;
+};
+
+/** Os valores de cada coluna extraídos UMA vez por linha (filtro/faceta/ordenação leem daqui). */
+function extrairDados<R>(columns: Column<R>[], rows: R[]): ColunaDados[] {
+  return columns.map((c): ColunaDados => {
+    const tipo = c.filter ?? "values";
+    if (c.filtroExterno) return { tipo: "none" }; // filtrado FORA da tabela
+    if (tipo === "values") {
+      const vals = rows.map((r) => (c.valores ? c.valores(r) : c.value ? [c.value(r)] : []));
+      return { tipo, vals, ordem: c.filterOptions };
+    }
+    if (tipo === "date") return { tipo, vals: rows.map((r) => c.value?.(r) ?? "") };
+    if (tipo === "range") return { tipo, vals: rows.map((r) => c.numero?.(r) ?? null) };
+    return { tipo: "none" };
+  });
+}
 const SEM_EDICOES: EdicaoTabela[] = [];
 const SEM_PADROES: Record<string, unknown> = {};
 const larguraFixa = (px: number): CSSProperties => ({ width: px, minWidth: px, maxWidth: px });
@@ -132,6 +158,10 @@ export function DataTable<R>({
   exportar,
   ocultas,
   ocultasPadrao,
+  conexao,
+  filtrosRodape,
+  visao,
+  trocando = false,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -203,6 +233,14 @@ export function DataTable<R>({
   ocultas?: ReadonlySet<string>;
   /** Colunas OCULTAS no padrão do sistema (a tabela abre sem elas; a edição da tabela as mostra de volta). */
   ocultasPadrao?: readonly string[];
+  /** MESA CONECTADA — ver `ConexaoTabela`. */
+  conexao?: ConexaoTabela<R>;
+  /** Filtros que vêm de FORA da tabela (ex.: o Recorte da Mesa): entram no menu de filtros do rodapé (`n` soma no selo). */
+  filtrosRodape?: { n: number; conteudo: ReactNode };
+  /** A VISÃO da tabela única (ex.: a Mesa): ao mudar, filtros/ordem/página recomeçam pelos da visão nova, sem remontar. */
+  visao?: string;
+  /** A troca de visão está sendo desenhada (transição): o corpo atual esmaece até a visão nova chegar. */
+  trocando?: boolean;
 }) {
   // A chave ESTÁVEL das ocultas (o Set pode ser recriado a cada render do dono).
   const chaveOcultas = ocultas?.size ? [...ocultas].sort().join("|") : "";
@@ -232,9 +270,23 @@ export function DataTable<R>({
       setPage(1);
     },
   });
-  const [filters, setFilters] = useState<Record<string, FiltroValor>>((): Record<string, FiltroValor> => editor.salvo.filtros);
-  const [sort, setSort] = useState<OrdemAtual>((): OrdemAtual => editor.salvo.ordem ?? { key: null, dir: "asc" });
+  const [filters, setFilters] = useState<Record<string, FiltroValor>>((): Record<string, FiltroValor> => conexao?.filtros ?? editor.salvo.filtros);
+  const [sort, setSort] = useState<OrdemAtual>((): OrdemAtual => {
+    const o = conexao?.ordem;
+    if (o && todasColunas.some((c) => c.key === o.key)) return o;
+    return editor.salvo.ordem ?? { key: null, dir: "asc" };
+  });
   const [page, setPage] = useState(1);
+  // TABELA ÚNICA com várias visões (a Mesa: Protocolos · DFDs · Itens): trocar a `visao` não remonta — reinicia aqui os
+  // filtros, a ordem e a página pelos da visão nova (a conexão dela, senão a edição em uso).
+  const [visaoAtual, setVisaoAtual] = useState(visao);
+  if (visaoAtual !== visao) {
+    setVisaoAtual(visao);
+    setFilters(conexao?.filtros ?? editor.salvo.filtros);
+    const o = conexao?.ordem;
+    setSort(o && todasColunas.some((c) => c.key === o.key) ? o : (editor.salvo.ordem ?? { key: null, dir: "asc" }));
+    setPage(1);
+  }
   // MARCAÇÃO da linha (sem selecionar): o 1º clique marca; o 2º clique NA linha marcada abre (`onRowClick`). A linha
   // aberta ao lado (`activeKey`) já chega marcada.
   const [marcadaK, setMarcadaK] = useState<Key | null>(null);
@@ -317,21 +369,7 @@ export function DataTable<R>({
   const tamPagina = scrollInterno || linhasSalvas ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
 
   // Valores de cada coluna extraídos UMA vez por linha (filtro/faceta/ordenação leem daqui).
-  const dados = useMemo<ColunaDados[]>(
-    () =>
-      columns.map((c): ColunaDados => {
-        const tipo = c.filter ?? "values";
-        if (c.filtroExterno) return { tipo: "none" }; // filtrado FORA da tabela
-        if (tipo === "values") {
-          const vals = rows.map((r) => (c.valores ? c.valores(r) : c.value ? [c.value(r)] : []));
-          return { tipo, vals, ordem: c.filterOptions };
-        }
-        if (tipo === "date") return { tipo, vals: rows.map((r) => c.value?.(r) ?? "") };
-        if (tipo === "range") return { tipo, vals: rows.map((r) => c.numero?.(r) ?? null) };
-        return { tipo: "none" };
-      }),
-    [columns, rows],
-  );
+  const dados = useMemo<ColunaDados[]>(() => extrairDados(columns, rows), [columns, rows]);
 
   // Filtros CONECTADOS: passa em todos + faceta de cada coluna (opções/faixa/anos) numa passada. Coluna
   // TRAVADA (hierarquia acima da tabela) não filtra.
@@ -365,10 +403,30 @@ export function DataTable<R>({
   const marcadas = selectable ? ordenadas.reduce((n, r) => (sel.has(getKey(r)) ? n + 1 : n), 0) : 0;
   const todos = total > 0 && marcadas === total;
   const parcial = marcadas > 0 && !todos;
-  // Colunas com filtro ATIVO (tópico marcado) — e o "Limpar filtros" do rodapé.
+  // Colunas com filtro ATIVO (tópico marcado) — e o menu de filtros do rodapé.
   const ativos = columns.filter((c) =>
     c.filtroExterno ? c.filtroExterno.valor.length > 0 : !c.travado && filtroAtivo(c.filter ?? "values", filters[c.key]),
   );
+
+  // MESA CONECTADA: as linhas da BASE que passam nos filtros PRÓPRIOS (sem a restrição das outras visões — nunca há ciclo).
+  const baseConexao = conexao?.base;
+  const getKeyRef = useRef(getKey);
+  getKeyRef.current = getKey;
+  const colunasRef = useRef(columns);
+  colunasRef.current = columns;
+  // As colunas costumam chegar como um array NOVO a cada render: o recálculo segue as CHAVES delas.
+  const sigColunas = columns.map((c) => c.key).join("|");
+  const passamBase = useMemo(() => {
+    const columns = colunasRef.current;
+    if (!baseConexao || !sigColunas) return null;
+    const vals = columns.map((c) => (c.travado || c.filtroExterno ? undefined : filters[c.key]));
+    if (!columns.some((c, i) => vals[i] !== undefined && filtroAtivo(c.filter ?? "values", vals[i]))) return null;
+    return aplicarFiltros(baseConexao.length, extrairDados(columns, baseConexao), vals).passam.map((i) => getKeyRef.current(baseConexao[i]));
+  }, [baseConexao, sigColunas, filters]);
+  const onMudarConexao = conexao?.onMudar;
+  useEffect(() => {
+    onMudarConexao?.({ filtros: filters, ordem: sort.key ? { key: sort.key, dir: sort.dir } : null, passam: passamBase });
+  }, [onMudarConexao, filters, sort, passamBase]);
 
   /** Grava (ou remove, com `null`) o filtro de uma coluna e volta à 1ª página. */
   function aplicarFiltro(key: string, v: FiltroValor | null) {
@@ -716,7 +774,7 @@ export function DataTable<R>({
               })}
             </tr>
           </thead>
-          <tbody>
+          <tbody key={visao} className={visao ? `linhas-entra transition-opacity duration-150 ${trocando ? "opacity-55" : ""}` : undefined}>
             {visiveis.map((r, i) => {
               const k = getKey(r);
               const marcada = sel.has(k);
@@ -814,19 +872,26 @@ export function DataTable<R>({
           {resumo ? resumo(ordenadas) : (footer ?? `${total} registro${total === 1 ? "" : "s"}`)}
         </span>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 sm:gap-x-3">
-          {ativos.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
+          {ativos.length + (filtrosRodape?.n ?? 0) > 0 && (
+            <FiltrosAtivos
+              colunas={ativos.map((c) => ({ key: c.key, header: c.header }))}
+              extra={filtrosRodape}
+              onLimparColuna={(k) => {
+                const c = ativos.find((x) => x.key === k);
+                if (c?.filtroExterno) c.filtroExterno.onChange(null);
+                else
+                  setFilters((f) => {
+                    const { [k]: _, ...resto } = f;
+                    return resto;
+                  });
+                setPage(1);
+              }}
+              onLimpar={() => {
                 setFilters({});
                 for (const c of ativos) c.filtroExterno?.onChange(null);
                 setPage(1);
               }}
-              title={`Filtros ativos: ${ativos.map((c) => c.header).join(", ")}`}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-chip px-2 text-[12px] font-semibold text-accent hover:bg-accent-soft lg:min-h-8"
-            >
-              <IconFilter className="h-3.5 w-3.5" /> Limpar filtros ({ativos.length})
-            </button>
+            />
           )}
           {edicoes &&
             editor.rodape({
@@ -891,5 +956,71 @@ export function DataTable<R>({
         />
       )}
     </div>
+  );
+}
+
+/** O menu de FILTROS do rodapé: o funil com o número de filtros e, ao abrir, cada coluna filtrada (✕ limpa só ela),
+ * "Limpar" (todas) e os filtros de fora da tabela (`extra` — o Recorte da Mesa). */
+function FiltrosAtivos({
+  colunas,
+  extra,
+  onLimparColuna,
+  onLimpar,
+}: {
+  colunas: { key: string; header: ReactNode }[];
+  extra?: { n: number; conteudo: ReactNode };
+  onLimparColuna: (key: string) => void;
+  onLimpar: () => void;
+}) {
+  const total = colunas.length + (extra?.n ?? 0);
+  const rotulo = `Filtros ativos (${total})`;
+  const texto = (h: ReactNode) => (typeof h === "string" ? h : "Coluna");
+  return (
+    <Dropdown
+      papel="dialog"
+      align="end"
+      width={300}
+      ariaLabel={rotulo}
+      title={rotulo}
+      triggerClassName="relative h-11 w-11 shrink-0 justify-center rounded-control border border-accent/40 bg-accent-soft text-accent transition-colors hover:bg-accent/15 lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]"
+      trigger={
+        <>
+          <IconFilter className="h-4 w-4" />
+          <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white tabular-nums">
+            {total}
+          </span>
+        </>
+      }
+    >
+      <div className="space-y-3 p-1">
+        {colunas.length > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Nesta tabela</p>
+              <button type="button" onClick={onLimpar} className="min-h-11 rounded px-1.5 text-[12px] font-medium text-accent hover:underline lg:min-h-7">
+                Limpar
+              </button>
+            </div>
+            <ul className="space-y-0.5">
+              {colunas.map((c) => (
+                <li key={c.key} className="flex items-center justify-between gap-2 rounded-chip px-1.5 text-[13px] hover:bg-surface-2">
+                  <span className="min-w-0 truncate">{c.header}</span>
+                  <button
+                    type="button"
+                    onClick={() => onLimparColuna(c.key)}
+                    title={`Limpar o filtro de ${texto(c.header)}`}
+                    aria-label={`Limpar o filtro de ${texto(c.header)}`}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-3 hover:text-text lg:h-7 lg:w-7"
+                  >
+                    <IconClose className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {extra && extra.n > 0 && extra.conteudo}
+      </div>
+    </Dropdown>
   );
 }

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
-import { catalogoItens, catalogos } from "@/db/schema";
+import { catalogoItens, catalogos, dfdItens, dfds } from "@/db/schema";
 import { comandosApagarHistorico, consultaIndicadoresHistorico } from "./catalogo-historico-sql";
 import { type CatalogoRef, type ConferenciaCompacta, type ConferenciaItem, conferirItem } from "./catalogo-conferencia";
 import { consultaEntradasCatalogo } from "./catalogo-sql";
@@ -109,7 +109,14 @@ export type CatalogoItemRow = {
 
 /** Itens na ordem do arquivo (`sequencial`). Sem `catalogoId` = de TODOS os catálogos
  * (a tela carrega tudo e agrupa no cliente, como o dashboard). */
-export async function getCatalogoItens(catalogoId?: number): Promise<CatalogoItemRow[]> {
+/** Os códigos que a UNIDADE usa: os dos itens dos DFDs dela (subconsulta — sem lista de IN). */
+export const codigosDaUnidade = (rep: number) =>
+  sql`SELECT ${dfdItens.codigo} FROM ${dfdItens} INNER JOIN ${dfds} ON ${dfds.id} = ${dfdItens.dfdId} WHERE ${dfds.reparticaoId} = ${rep} AND ${dfdItens.codigo} IS NOT NULL`;
+
+/** `rep` = a unidade do CABEÇALHO no modo "usados" (Configurações → Filtro da unidade): só os itens cujo código aparece
+ * nos DFDs dela (`false` = nenhum; `null` = todos). */
+export async function getCatalogoItens(catalogoId?: number, rep: number | false | null = null): Promise<CatalogoItemRow[]> {
+  if (rep === false) return [];
   const db = getDb();
   const cols = {
     id: catalogoItens.id,
@@ -127,11 +134,12 @@ export async function getCatalogoItens(catalogoId?: number): Promise<CatalogoIte
       ? await db
           .select(cols)
           .from(catalogoItens)
-          .where(eq(catalogoItens.catalogoId, catalogoId))
+          .where(and(eq(catalogoItens.catalogoId, catalogoId), rep ? sql`${catalogoItens.codigo} IN (${codigosDaUnidade(rep)})` : undefined))
           .orderBy(asc(catalogoItens.sequencial), asc(catalogoItens.id))
       : await db
           .select(cols)
           .from(catalogoItens)
+          .where(rep ? sql`${catalogoItens.codigo} IN (${codigosDaUnidade(rep)})` : undefined)
           .orderBy(asc(catalogoItens.catalogoId), asc(catalogoItens.sequencial), asc(catalogoItens.id));
   return linhas.map((l) => ({ ...l, tipos: parseTipos(l.tipos), catalogosExtra: parseIds(l.catalogosExtra) }));
 }

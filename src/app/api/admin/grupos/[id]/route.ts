@@ -14,12 +14,15 @@ import { grupoPatchSchema } from "@/lib/rbac-validation";
 
 export const dynamic = "force-dynamic";
 
+/** O modo das unidades por extenso (histórico). */
+const ROTULO_MODO = { lista: "escolhidas", cadastro: "de cadastro de cada pessoa" } as const;
+
 type Db = ReturnType<typeof getDb>;
 
 /** O grupo como está (nome, telas, PCAs, pessoas e unidades) — `null` = não existe. */
 async function lerGrupo(db: Db, id: number, modulos: Modulo[]) {
   const [l] = await db
-    .select({ nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat })
+    .select({ nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat, modoUnidades: grupos.modoUnidades })
     .from(grupos)
     .where(eq(grupos.id, id))
     .limit(1);
@@ -32,7 +35,7 @@ async function lerGrupo(db: Db, id: number, modulos: Modulo[]) {
   }
   const mods = lerModulosGrupo(l.modulos);
   // `abas` = as telas que o grupo ABRE hoje (dos módulos; o grupo antigo, das avulsas).
-  const g = { nome: l.nome, modulos: mods, abas: telasDoGrupo(modulos, mods, abas), chat: l.chat, pcas: lerPcasGrupo(l.pcas) };
+  const g = { nome: l.nome, modulos: mods, abas: telasDoGrupo(modulos, mods, abas), chat: l.chat, modoUnidades: l.modoUnidades, pcas: lerPcasGrupo(l.pcas) };
   const [membros, reps] = await Promise.all([
     db.select({ id: usuarioGrupos.usuarioId }).from(usuarioGrupos).where(eq(usuarioGrupos.grupoId, id)),
     db.select({ id: grupoReparticoes.reparticaoId }).from(grupoReparticoes).where(eq(grupoReparticoes.grupoId, id)),
@@ -73,7 +76,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!id) return erro("ID inválido.");
   const corpo = await parseCorpo(grupoPatchSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, modulos: mods, chat, pcas: pcasGrupo, membros, reparticoes: reps } = corpo.data;
+  const { nome, modulos: mods, chat, pcas: pcasGrupo, membros, reparticoes: reps, modoUnidades } = corpo.data;
   const db = getDb();
   const modulos = await getModulosFresco();
   const antes = await lerGrupo(db, id, modulos);
@@ -91,6 +94,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         ...(nome !== undefined ? { nome } : {}),
         ...(mods !== undefined ? { modulos: JSON.stringify(mods), abas: JSON.stringify(abas) } : {}),
         ...(chat !== undefined ? { chat } : {}),
+        ...(modoUnidades !== undefined ? { modoUnidades } : {}),
         ...(pcasGrupo !== undefined ? { pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo) } : {}),
         atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
       })
@@ -117,6 +121,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     pcasGrupo !== undefined && !mesmaLista(pcasGrupo, antes.pcas) ? `PCAs: ${textoPcas(antes.pcas)} → ${textoPcas(pcasGrupo)}` : null,
     membros !== undefined ? trocaIds(antes.membros, membros, "pessoas") : null,
     reps !== undefined ? trocaIds(antes.reparticoes, reps, "unidades") : null,
+    modoUnidades !== undefined && modoUnidades !== antes.modoUnidades
+      ? `unidades: ${ROTULO_MODO[antes.modoUnidades]} → ${ROTULO_MODO[modoUnidades]}`
+      : null,
   ].filter((x): x is string => !!x);
   await registrarAuditoria({
     usuario: guard.u,
@@ -133,6 +140,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       pcas: pcasGrupo === undefined ? antes.pcas : pcasGrupo,
       membros: membros ?? antes.membros,
       reparticoes: reps ?? antes.reparticoes,
+      modoUnidades: modoUnidades ?? antes.modoUnidades,
     },
   });
   return ok();

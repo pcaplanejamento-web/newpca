@@ -2,6 +2,8 @@
 
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
+import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
+import { CONFIG_ESCOPO_PADRAO, type ConfigEscopo } from "@/lib/escopo-cabecalho-core";
 import { TabelaAcessos } from "@/components/HistoricoAcessos";
 import { type ConfigSeguranca, SEGURANCA_PADRAO } from "@/lib/seguranca-core";
 import { MarcaDagua } from "@/components/ProtecaoDados";
@@ -100,6 +102,7 @@ import { BotaoExportar, EscolherColunasXlsx } from "@/components/ExportarTabelas
 import { GruposOrcamento } from "@/components/GruposOrcamento";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
+import { RecorteMesa } from "@/components/RecorteMesa";
 import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
@@ -472,6 +475,12 @@ function DemoProtecao() {
       <MarcaDagua texto="Maria Clara Souza · matrícula 045210 · 08/10/2026 14:30" inline />
     </div>
   );
+}
+
+/** FILTRO DA UNIDADE: os campos da tela do ADM (sem gravar). */
+function DemoEscopo() {
+  const [v, setV] = useState<ConfigEscopo>(CONFIG_ESCOPO_PADRAO);
+  return <CamposEscopo valor={v} onChange={setV} />;
 }
 
 /** SEGURANÇA DO ACESSO: os campos da tela do ADM (sem gravar). */
@@ -1870,6 +1879,10 @@ function AtualizarEDadosCompletosDemo() {
         <span className="text-[12px] text-faint">
           BotaoExportar — no rodapé de TODA tabela (DataTable e tabela cruzada): XLSX e PDF das linhas filtradas, com as colunas à vista.
         </span>
+      </div>
+      <div className="flex flex-col gap-1">
+        <RecorteMesa filtros={{ protocolos: { situacao: 1, pca: 1 }, itens: { codigo: 1 } }} atual="dfds" onRemover={() => {}} onLimpar={() => {}} />
+        <span className="text-[12px] text-faint">RecorteMesa — o Recorte da Mesa dentro do menu de filtros (funil) do rodapé da tabela: as outras visões que recortam a aberta.</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" variant="secondary" onClick={() => setColunasXlsx(true)}>
@@ -3502,6 +3515,10 @@ export function Catalogo() {
         <DemoSeguranca />
       </Secao>
 
+      <Secao titulo="Filtro da unidade — CamposEscopo (Configurações → Filtro da unidade: quais telas obedecem à unidade do cabeçalho)">
+        <DemoEscopo />
+      </Secao>
+
       <Secao titulo="Histórico de acesso — TabelaAcessos / HistoricoAcessos (Perfil e banner do usuário: último acesso, logins, aparelhos e cada entrada com data/hora, dispositivo, canal e IP)">
         <TabelaAcessos
           dados={{
@@ -3522,6 +3539,7 @@ export function Catalogo() {
         <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 lg:grid-cols-4">
           <KpiStat label="Total de protocolos" value="122" delta={{ dir: "up", value: "8" }} spark={[30, 45, 40, 55, 60, 80, 95]} hint="esta semana" />
           <KpiStat label="Em análise" value="41" cor="var(--sit-em-analise)" delta={{ dir: "up", value: "5" }} spark={[20, 30, 25, 35, 45, 60, 70]} hint="aguardando" />
+          <KpiStat realce completo label="Maior item (texto longo)" value="R$ 9.600.000,00" cor="var(--sit-devolvido)" hint={"GRAMADO SINTÉTICO FORNECIMENTO E A INSTALAÇÃO DE GRAMA SINTÉTICA COM DOIS TONS DE VERDE ".repeat(20)} detalhes={[{ rotulo: "Participação no total", valor: "21,3%" }]} />
           <KpiStat label="Finalizados" value="63" cor="var(--sit-finalizado)" delta={{ dir: "up", value: "11" }} spark={[35, 40, 50, 55, 65, 75, 90]} hint="no mês" />
           <KpiStat label="Devolvidos" value="12" cor="var(--sit-devolvido)" delta={{ dir: "down", value: "2" }} spark={[60, 50, 45, 40, 30, 25, 20]} hint="vs. mês anterior" />
         </div>

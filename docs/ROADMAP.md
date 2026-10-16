@@ -11,6 +11,16 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Mesa conectada (v1.116.0) — entregue
+- v1.117.0: filtros e recorte no menu (funil) do rodapé da tabela; botões do rodapé só ícone.
+- v1.119.0: Protocolos, DFDs e Itens numa TABELA ÚNICA (o mesmo `DataTable`; muda colunas e linhas).
+- v1.124.0: cartão de orçamento, gráficos e avisos com texto limitado a 2 linhas (nada estica a grade).
+- v1.123.0: KPIs com dica e detalhes limitados a 2 linhas (o "Maior item" não estica mais os cartões).
+- v1.122.0: interface enxuta com uma unidade no cabeçalho (colunas/filtros/opções de unidade saem; "Geral" mostra tudo).
+- v1.120.0: troca de visão em transição + fade só de opacidade; itens pré-carregados ao passar o ponteiro.
+Protocolos, DFDs e Itens compartilham o recorte: os filtros e a ordem de cada visão ficam ao trocar de visão e o que passa
+numa recorta as outras nos dois sentidos (`mesa-recorte.ts`); faixa "Recorte da Mesa" com ✕ e "Limpar recorte".
+
 ### Fase 1 (padrão de design + navegação) — entregue
 ✅ **Design responsivo** (sidebar no desktop ↔ bottom-nav no mobile; tabela ↔ cards; botão ↔ FAB; modal ↔ bottom-sheet) · ✅ Navegação em 2 seções (Ferramentas / Administração) gated por papel · ✅ **Dashboard** (visão geral de protocolos: StatCards + recentes) · ✅ **Protocolos** (ambos depois substituídos pela **Mesa** — ver "Tudo na Mesa") — tabela única com **edição inline** (adicionar linha → editar células, como na planilha; dropdowns Natureza/Responsável/Situação/Distribuição, filtros por Natureza/Situação/Responsável/Período, paginação; tabela no desktop, cards editáveis no mobile) · ✅ **Ferramentas** (Dashboard do PCA + Importar + Tabelas dinâmicas) · 🔨 Abas Atividades/Pendências/Equipes/Permissões/Auditoria visíveis ("em construção").
 
@@ -1748,3 +1758,6 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - **v1.78.0 — Tabelas:** 1º clique marca (accent), 2º abre o banner; cor das linhas intercaladas na Aparência; página sempre cheia com linhas vazias.
 - **v1.78.1 — Tabelas:** linhas vazias só até o limite da visão (nunca além das linhas por página).
 - **v1.79.0 — Biblioteca de componentes:** só o ADM (Administração → Componentes, `/painel/design-system`); a única tela pública é a consulta do PCA.
+- **v1.115.0 — Grupos:** o grupo escolhe entre as unidades escolhidas e a unidade de cadastro de cada pessoa (migração 0112).
+- **v1.118.0 — Filtro da unidade:** PCA, Orçamento, Catálogo, Tarefas, Calendário e Automação obedecem à unidade do cabeçalho; o ADM configura em Configurações → Filtro da unidade.
+- v1.121.0: papéis controlam o escopo da Mesa do PCA, aparecer online e ver novidades.

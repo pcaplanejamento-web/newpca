@@ -41,7 +41,8 @@ export const detalhesPapelSchema = z
     /** Como as telas ABREM para o papel (não restringe). */
     exibicao: z.object({ vinculosExpandidos: z.boolean().optional() }).optional(),
     /** Ver quem está online (a presença do grupo). */
-    presenca: z.object({ verOnline: z.boolean().optional() }).optional(),
+    presenca: z.object({ verOnline: z.boolean().optional(), visivel: z.boolean().optional() }).optional(),
+    novidades: z.object({ ver: z.boolean().optional() }).optional(),
   })
   .transform(coerceDetalhes);
 

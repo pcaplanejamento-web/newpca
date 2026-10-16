@@ -1,5 +1,6 @@
 "use client";
 
+import { useUnidadeUnica } from "./UnidadeUnica";
 import { useMemo, useState } from "react";
 import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
 import { brl, num } from "@/lib/format";
@@ -100,6 +101,9 @@ export function OrcamentoLancamentos({
       : itens;
   }, [itens, busca]);
 
+  // UMA unidade no cabeçalho: Órgão/Unidade (do cadastro e do CUBO) com um valor só repetiriam a mesma coisa — saem.
+  const unica = useUnidadeUnica("orcamento") != null;
+
   const colCadastro = (key: "unidadeSistema" | "orgaoSistema", header: string): Column<Lancamento> => ({
     key,
     header,
@@ -161,7 +165,7 @@ export function OrcamentoLancamentos({
         </div>
       </FerramentasAba>
       <DataTable
-        columns={colunas}
+        columns={unica ? colunas.filter((c) => !UNIDADE_LANC.includes(c.key) || distintos(itens, c.key) > 1) : colunas}
         rows={filtrados}
         getKey={(r) => r.id}
         scrollInterno
@@ -207,4 +211,15 @@ export function OrcamentoLancamentos({
       {pode.importar && <ImportarOrcamento iniciar={reenviar} alvo={orcamento} />}
     </>
   );
+}
+
+const UNIDADE_LANC = ["orgaoSistema", "unidadeSistema", "orgao", "unidade"];
+/** Quantos valores distintos a coluna tem (para no 2º). */
+function distintos(itens: readonly Record<string, unknown>[], key: string): number {
+  const vistos = new Set<unknown>();
+  for (const r of itens) {
+    vistos.add(r[key]);
+    if (vistos.size > 1) return 2;
+  }
+  return vistos.size;
 }

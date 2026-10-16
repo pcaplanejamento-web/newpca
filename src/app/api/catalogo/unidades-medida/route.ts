@@ -1,7 +1,6 @@
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { idDoFiltro } from "@/lib/escopo-unidades-core";
-import { unidadesDaSessao } from "@/lib/grupos";
+import { unidadeDoModulo } from "@/lib/escopo-cabecalho";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { criarUnidadeMedida, listarClassificacoes, listarUnidadesMedida, prepararUnidade, usoDasUnidades } from "@/lib/padronizacao";
 import { unidadeMedidaSchema } from "@/lib/padronizacao-validation";
@@ -18,7 +17,7 @@ export async function GET(req: Request) {
   if ("erro" in g) return g.erro;
   const comUso = new URL(req.url).searchParams.get("uso") !== "0";
   // O uso nos DFDs segue a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = só o catálogo).
-  const rep = comUso ? idDoFiltro((await unidadesDaSessao(g.u)).filtro) : null;
+  const rep = comUso ? (await unidadeDoModulo("catalogo", g.u)).id : null;
   const [unidades, classificacoes, uso] = await Promise.all([
     listarUnidadesMedida(),
     listarClassificacoes(),

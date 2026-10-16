@@ -82,6 +82,7 @@ export async function protocolosParaAutomacao(): Promise<ProtocoloAutomacao[]> {
         assunto: p.assunto ?? null,
         interessado: p.interessado ?? null,
         sigla: (p.reparticaoId != null ? siglaUnidade.get(p.reparticaoId) : null) ?? maisFrequente(g?.siglas ?? []),
+        reparticaoId: p.reparticaoId ?? null,
         anoPca: p.anoPca ?? (Number(maisFrequente(g?.anos ?? [])) || null),
         pca: p.pcaId != null ? (nomePca.get(p.pcaId) ?? null) : null,
         criadoEm: p.criadoEm ?? null,

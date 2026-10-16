@@ -642,7 +642,7 @@ export function AppShell({
                   <IconRecolherMenu className="menu-alternar h-[18px] w-[18px]" strokeWidth={1.8} />
                 </button>
                 <div className="menu-esconde min-w-0 flex-1">
-                  <VersaoSistema className="justify-start" />
+                  {(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema className="justify-start" />}
                 </div>
               </div>
             </div>
@@ -680,7 +680,7 @@ export function AppShell({
             </div>
             <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
               <UserMenu usuario={usuario} onNavigate={fecharMenu} />
-              <VersaoSistema onNavigate={fecharMenu} />
+              {(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema onNavigate={fecharMenu} />}
             </div>
           </aside>
         </div>

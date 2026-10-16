@@ -310,6 +310,7 @@ async function versaoDerivar(u: UsuarioSessao): Promise<NovaNotificacao[]> {
     const sistema = avisoNovaVersao(u.id);
     return [...(sistema ? [sistema] : []), avisoVersaoExtensao(u.id)];
   }
+  if (!u.papel.detalhes.novidades.ver) return [];
   const grupos = await gruposComAbas(u.id);
   const telas = new Set<string>(grupos.flatMap((g) => telasAbertas({ admin: false, capacidades: u.papel.capacidades, abas: g.abas })));
   const aviso = avisoNovaVersao(u.id, mudancasVisiveis(VERSOES[0], telas, false));

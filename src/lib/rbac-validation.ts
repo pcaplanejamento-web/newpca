@@ -28,6 +28,7 @@ export const grupoCreateSchema = z.object({
   pcas: pcasSchema.default(null),
   membros: idsSchema.default([]),
   reparticoes: idsSchema.default([]),
+  modoUnidades: z.enum(["lista", "cadastro"]).default("lista"),
 });
 
 // PATCH explícito, SEM defaults: um campo ausente fica como está (o `.partial()` mantinha o `.default([])` — um PATCH só
@@ -39,6 +40,7 @@ export const grupoPatchSchema = z.object({
   pcas: pcasSchema.optional(),
   membros: idsSchema.optional(),
   reparticoes: idsSchema.optional(),
+  modoUnidades: z.enum(["lista", "cadastro"]).optional(),
 });
 
 /** Grupo ativo do cabeçalho (cookie). */

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSemUnidade } from "./UnidadeUnica";
 import type { ReactNode } from "react";
 import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia } from "./CelulaExecucao";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
@@ -17,7 +18,7 @@ import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
-import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
+import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
 import { PresencaNoItem } from "./PresencaNoItem";
@@ -125,30 +126,8 @@ export function CelulaPrioridade({ prioridade }: { prioridade: string | null | u
  * (`unica`) é UMA tabela só (o filtro da coluna Estado separa). Rodapé = só os agregados das
  * linhas (nº · itens · valor). Colunas opcionais (Situação/Protocolo/ações) só aparecem quando há dado.
  */
-export function PlanilhaDfds({
-  linhas,
-  selecionavel = false,
-  selected,
-  onSelected,
-  onRowClick,
-  ativa = null,
-  acoes,
-  compacta = false,
-  fillHeight = false,
-  scrollInterno = false,
-  unica = false,
-  regras,
-  reservaInferior = 0,
-  semEstado = false,
-  acoesRodape,
-  vazio,
-  acaoDescartados,
-  edicoes,
-  ocultasPadrao,
-  exportar,
-  colunasExtras = [],
-  onOrdenadas,
-}: {
+/** Props da planilha de DFDs (as da `PlanilhaDfds`). */
+export type PropsPlanilhaDfds = {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
   selected?: Set<string | number>;
@@ -186,7 +165,38 @@ export function PlanilhaDfds({
   onOrdenadas?: (linhas: LinhaDfd[]) => void;
   /** Colunas a mais no fim (antes das ações) — ex.: as criadas pelas automações na Mesa. */
   colunasExtras?: Column<LinhaDfd>[];
-}) {
+  /** MESA CONECTADA — repassada à tabela principal (ver `ConexaoTabela`). */
+  conexao?: ConexaoTabela<LinhaDfd>;
+  /** O Recorte da Mesa no menu de filtros do rodapé (ver `DataTable.filtrosRodape`). */
+  filtrosRodape?: { n: number; conteudo: ReactNode };
+  /** Sem a coluna Sigla (UMA unidade no cabeçalho e todos os DFDs dela — `useSemUnidade`). */
+  semSigla?: boolean;
+};
+
+/** As props do `DataTable` da planilha de DFDs — a Mesa usa direto, na TABELA ÚNICA das visões (sem trocar de componente). */
+export function propsPlanilhaDfds({
+  linhas,
+  selecionavel = false,
+  selected,
+  onSelected,
+  onRowClick,
+  ativa = null,
+  acoes,
+  unica = false,
+  regras,
+  reservaInferior = 0,
+  semEstado = false,
+  acoesRodape,
+  vazio,
+  edicoes,
+  ocultasPadrao,
+  exportar,
+  colunasExtras = [],
+  conexao,
+  filtrosRodape,
+  onOrdenadas,
+  semSigla = false,
+}: PropsPlanilhaDfds) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
   // PCA e Prioridade: a coluna aparece quando a tela as informa (mesmo que vazias em alguma linha).
@@ -408,7 +418,7 @@ export function PlanilhaDfds({
   const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0);
   // Densidade COMPACTA em todo lugar: a MESMA altura de linha das tabelas de protocolos e itens.
   const comum = {
-    columns: cols,
+    columns: semSigla ? cols.filter((c) => c.key !== "sigla") : cols,
     getKey: (r: LinhaDfd) => r.key,
     selectable: selecionavel,
     selected,
@@ -422,7 +432,15 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, onOrdenadas } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, onOrdenadas, conexao, filtrosRodape } as const;
+  return { principal, comum, erro, atencao, descartado, ok };
+}
+
+export function PlanilhaDfds(props: PropsPlanilhaDfds) {
+  const { linhas, compacta = false, fillHeight = false, scrollInterno = false, unica = false, semEstado = false, acaoDescartados } = props;
+  // Com UMA unidade no cabeçalho e todos os DFDs dela, a Sigla repetiria o mesmo valor — sai.
+  const semSigla = useSemUnidade(() => props.linhas.map((l) => l.sigla));
+  const { principal, comum, erro, atencao, descartado, ok } = propsPlanilhaDfds({ ...props, semSigla: props.semSigla ?? semSigla });
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

@@ -16,6 +16,21 @@ export function ehCodigoGeral(codigo: string | null | undefined): boolean {
 
 export type UnidadeRef = { id: number; codigo: string };
 
+/** De onde vêm as unidades de um GRUPO: as escolhidas pelo ADM (padrão) ou a unidade de cadastro de cada membro. */
+export const MODOS_UNIDADES = ["lista", "cadastro"] as const;
+export type ModoUnidades = (typeof MODOS_UNIDADES)[number];
+
+export function lerModoUnidades(v: unknown): ModoUnidades {
+  return v === "cadastro" ? "cadastro" : "lista";
+}
+
+/** As unidades EFETIVAS de um membro: no modo `cadastro`, só a unidade de cadastro dele (sem ela, nenhuma — e a "Geral"
+ * nunca vale); no modo `lista`, as do grupo. */
+export function unidadesDoMembro<T extends UnidadeRef>(modo: ModoUnidades, doGrupo: readonly T[], cadastro: T | null): T[] {
+  if (modo !== "cadastro") return [...doGrupo];
+  return cadastro && !ehCodigoGeral(cadastro.codigo) ? [cadastro] : [];
+}
+
 export type EscopoUnidades = { tipo: "todas" } | { tipo: "unidades"; ids: readonly number[] } | { tipo: "nenhuma" };
 
 export const ESCOPO_TODAS: EscopoUnidades = Object.freeze({ tipo: "todas" });

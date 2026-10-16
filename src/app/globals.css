@@ -988,6 +988,28 @@
   animation: none;
 }
 
+/* TABELA ÚNICA da Mesa: as linhas da visão nova ACENDEM (só opacidade — roda no compositor, sem repintar a tabela nem
+   mexer no cabeçalho preso). */
+@keyframes linhas-entra {
+  from {
+    opacity: 0;
+  }
+}
+.linhas-entra {
+  animation: linhas-entra 0.16s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .linhas-entra {
+    animation: none;
+    transition: none;
+  }
+}
+[data-motion="off"] .linhas-entra,
+[data-motion="reduced"] .linhas-entra {
+  animation: none;
+  transition: none;
+}
+
 /* ABAS: o painel novo ENTRA pelo lado da troca (para a direita = vem da direita). */
 @keyframes aba-direita {
   from {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSemUnidade } from "./UnidadeUnica";
 import { type ReactNode, useMemo, useState } from "react";
 import { brl, num, numeroSemAno } from "@/lib/format";
 import type { DfdDoPca, DfdForaDaSoma, ProtocoloDoPca } from "@/lib/pca-espaco";
@@ -96,6 +97,8 @@ export function ConsultaPca({
 }) {
   const [visao, setVisao] = useState<Visao>("itens");
   const [busca, setBusca] = useState("");
+  // UMA unidade no cabeçalho e todos os protocolos dela: a coluna Unidade sai.
+  const semSigla = useSemUnidade(() => protocolos.map((p) => p.sigla), "pca");
 
   const linhas = useMemo<LinhaDfd[]>(
     () =>
@@ -156,7 +159,7 @@ export function ConsultaPca({
           <PlanilhaDfds linhas={linhas} semEstado onRowClick={(id) => setAberto({ tipo: "dfd", id })} ativa={aberto?.tipo === "dfd" ? aberto.id : null} />
         ) : (
           <DataTable
-            columns={COLS_PROTOCOLO}
+            columns={semSigla ? COLS_PROTOCOLO.filter((c) => c.key !== "sigla") : COLS_PROTOCOLO}
             rows={protocolos}
             getKey={(p) => p.id}
             pageSize={20}

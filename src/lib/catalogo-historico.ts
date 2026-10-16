@@ -1,8 +1,9 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { catalogoCompras, catalogoContratos, catalogoPastas } from "@/db/schema";
 import { comandosCatalogosDaPasta, comandosCompras, comandosContratos, comandosExcluirPasta, consultaComprasPorCodigos } from "./catalogo-historico-sql";
 import type { CompraHistoricoImport, ContratoHistoricoImport } from "./catalogo-validation";
 import { getDb } from "./db";
+import { codigosDaUnidade } from "./catalogo";
 import {
   type CompraHistorico,
   type ContratoHistorico,
@@ -34,7 +35,9 @@ export async function gravarComprasHistorico(catalogoId: number, rows: readonly 
 }
 
 /** O histórico inteiro de UM catálogo (contratos + itens na ordem do arquivo) — carregado ao abrir. */
-export async function getHistorico(catalogoId: number): Promise<{ contratos: ContratoHistorico[]; itens: CompraHistorico[] }> {
+/** `rep` = a unidade do CABEÇALHO no modo "usados": só as compras dos códigos que ela usa (e os contratos delas). */
+export async function getHistorico(catalogoId: number, rep: number | false | null = null): Promise<{ contratos: ContratoHistorico[]; itens: CompraHistorico[] }> {
+  if (rep === false) return { contratos: [], itens: [] };
   const db = getDb();
   const [contratos, itens] = await Promise.all([
     db
@@ -81,10 +84,12 @@ export async function getHistorico(catalogoId: number): Promise<{ contratos: Con
         saldoLiquidar: catalogoCompras.saldoLiquidar,
       })
       .from(catalogoCompras)
-      .where(eq(catalogoCompras.catalogoId, catalogoId))
+      .where(and(eq(catalogoCompras.catalogoId, catalogoId), rep ? sql`${catalogoCompras.codigo} IN (${codigosDaUnidade(rep)})` : undefined))
       .orderBy(asc(catalogoCompras.ordem)),
   ]);
-  return { contratos, itens };
+  if (!rep) return { contratos, itens };
+  const usados = new Set(itens.map((i) => i.idContrato));
+  return { contratos: contratos.filter((c) => usados.has(c.idContrato)), itens };
 }
 
 // ---------------------------------------------------------------- Comparação com os itens dos DFDs
