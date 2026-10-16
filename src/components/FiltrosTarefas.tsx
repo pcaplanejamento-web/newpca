@@ -1,5 +1,6 @@
 "use client";
 
+import { useUnidadeUnica } from "./UnidadeUnica";
 import { type ReactNode, useState } from "react";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
@@ -154,6 +155,8 @@ function PainelFiltro({
   semStatus: boolean;
 }) {
   const [maisPessoas, setMaisPessoas] = useState(false);
+  // UMA unidade no cabeçalho: a seção da unidade sai (com uma sigla só, não há o que escolher).
+  const unica = useUnidadeUnica("tarefas") != null;
   const [maisEtiquetas, setMaisEtiquetas] = useState(false);
   const eu = pessoas.find((p) => p.id === usuarioId);
   const outras = pessoas.filter((p) => p.id !== usuarioId);
@@ -228,7 +231,7 @@ function PainelFiltro({
           </Opcao>
         ))}
       </Secao>
-      {siglas.length > 0 && (
+      {siglas.length > 0 && !(unica && siglas.length <= 1) && (
         <Secao titulo="Unidade (sigla)">
           <Opcao marcado={filtro.siglas.includes(SEM_SIGLA)} onAlternar={() => set({ siglas: alternarValor(filtro.siglas, SEM_SIGLA) })}>
             Sem unidade

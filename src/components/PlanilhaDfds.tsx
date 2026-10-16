@@ -1,5 +1,6 @@
 "use client";
 
+import { useSemUnidade } from "./UnidadeUnica";
 import type { ReactNode } from "react";
 import { CelulaConferenciaCenti, CelulaExecucao, rotuloConferencia } from "./CelulaExecucao";
 import type { RegrasAvaliacao } from "@/lib/avaliacao-core";
@@ -168,6 +169,8 @@ export type PropsPlanilhaDfds = {
   conexao?: ConexaoTabela<LinhaDfd>;
   /** O Recorte da Mesa no menu de filtros do rodapé (ver `DataTable.filtrosRodape`). */
   filtrosRodape?: { n: number; conteudo: ReactNode };
+  /** Sem a coluna Sigla (UMA unidade no cabeçalho e todos os DFDs dela — `useSemUnidade`). */
+  semSigla?: boolean;
 };
 
 /** As props do `DataTable` da planilha de DFDs — a Mesa usa direto, na TABELA ÚNICA das visões (sem trocar de componente). */
@@ -192,6 +195,7 @@ export function propsPlanilhaDfds({
   conexao,
   filtrosRodape,
   onOrdenadas,
+  semSigla = false,
 }: PropsPlanilhaDfds) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -414,7 +418,7 @@ export function propsPlanilhaDfds({
   const mw = (temProtocolo ? 1060 : 840) + (temPca ? 70 : 0) + (temPrioridade ? 90 : 0);
   // Densidade COMPACTA em todo lugar: a MESMA altura de linha das tabelas de protocolos e itens.
   const comum = {
-    columns: cols,
+    columns: semSigla ? cols.filter((c) => c.key !== "sigla") : cols,
     getKey: (r: LinhaDfd) => r.key,
     selectable: selecionavel,
     selected,
@@ -434,7 +438,9 @@ export function propsPlanilhaDfds({
 
 export function PlanilhaDfds(props: PropsPlanilhaDfds) {
   const { linhas, compacta = false, fillHeight = false, scrollInterno = false, unica = false, semEstado = false, acaoDescartados } = props;
-  const { principal, comum, erro, atencao, descartado, ok } = propsPlanilhaDfds(props);
+  // Com UMA unidade no cabeçalho e todos os DFDs dela, a Sigla repetiria o mesmo valor — sai.
+  const semSigla = useSemUnidade(() => props.linhas.map((l) => l.sigla));
+  const { principal, comum, erro, atencao, descartado, ok } = propsPlanilhaDfds({ ...props, semSigla: props.semSigla ?? semSigla });
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

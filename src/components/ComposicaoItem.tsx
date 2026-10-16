@@ -1,5 +1,6 @@
 "use client";
 
+import { useSemUnidade } from "./UnidadeUnica";
 import { useMemo } from "react";
 import { brl, num, numeroSemAno, pct } from "@/lib/format";
 import {
@@ -118,6 +119,8 @@ export function ComposicaoItem<T extends ItemComposicao>({
     for (const it of l.itens) if (!porDfd.has(it.dfdNumero)) porDfd.set(it.dfdNumero, refDfd(it.dfdNumero, it.dfdPlanejamento));
     return { dfds: [...porDfd.values()], protocolos: distintos(l.itens, (it) => it.protocoloNumero) };
   }, [l]);
+  // UMA unidade no cabeçalho e todas as ocorrências dela: a coluna Sigla sai.
+  const semSigla = useSemUnidade(() => (l ? l.itens.map((it) => it.sigla) : []));
   const precos = l ? l.itens.length - l.semValor : 0;
   const nivel = l ? nivelVariacao(l.variacao) : null;
   const mistas = !!l?.unidadesMistas;
@@ -344,7 +347,7 @@ export function ComposicaoItem<T extends ItemComposicao>({
           )}
 
           <DataTable
-            columns={colunas}
+            columns={semSigla ? colunas.filter((c) => c.key !== "sigla") : colunas}
             rows={l.itens}
             getKey={(it) => it.id}
             onRowClick={onAbrirItem}

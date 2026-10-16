@@ -3,6 +3,7 @@
 import type { ColunasMesa } from "@/lib/mesa-colunas-core";
 import { colunasDaAutomacao } from "./ColunasAutomacao";
 import { useComponente } from "./ComponentesPapel";
+import { useSemUnidade } from "./UnidadeUnica";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -381,6 +382,10 @@ export function DfdsView({
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
   // Os COMPONENTES que o papel retira (Configurações → Papéis → Componentes): as visões e as ações de cada tabela.
   const libera = useComponente();
+  // UMA unidade no cabeçalho e TODA a Mesa dela: as colunas Unidade/Sigla repetiriam o mesmo valor — saem.
+  const semUnidade = useSemUnidade(() => [...protocolos.map((p) => p.reparticaoCodigo), ...dfds.map((d) => d.reparticaoCodigo)]);
+  // (no Dashboard, "Dado = Unidade" daria UMA barra só — também sai)
+  const semColUnidade = <T,>(cols: Column<T>[]) => (semUnidade ? cols.filter((c) => c.key !== "reparticao" && c.key !== "sigla") : cols);
   const veVista = (v: Vista) =>
     v === "itens" ? libera("dfd.itens") || libera("dfd.consolidada") : v === "dashboard" ? !modoPca && libera("dfd.dashboard") : libera(`dfd.${v}`);
   // `?vista=` (a pesquisa do sistema leva direto à visão): dashboard · protocolos · dfds · itens.
@@ -2011,7 +2016,7 @@ export function DfdsView({
     <DataTable
       visao={visaoTabela}
       trocando={trocando}
-      columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key))}
+      columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key) && !(semUnidade && c.key === "reparticao"))}
       rows={protocolosR}
       getKey={(r) => r.id}
       filtrosRodape={filtrosRodape}
@@ -2045,6 +2050,7 @@ export function DfdsView({
       rows={linhasDfdR}
       scrollInterno
       {...propsPlanilhaDfds({
+        semSigla: semUnidade,
         linhas: linhasDfdR,
         filtrosRodape: filtrosRodape,
         conexao: { base: linhasDfdTab, filtros: estadoVisoes.dfds?.filtros, ordem: ordemMesa, onMudar: conexaoDe.dfds },
@@ -2073,7 +2079,7 @@ export function DfdsView({
     <DataTable
       visao={visaoTabela}
       trocando={trocando}
-      columns={[...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)]}
+      columns={semColUnidade([...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)])}
       rows={itensR ?? []}
       getKey={(r) => r.id}
       filtrosRodape={filtrosRodape}
@@ -2101,7 +2107,7 @@ export function DfdsView({
     <DataTable
       visao={visaoTabela}
       trocando={trocando}
-      columns={colsConsolidados}
+      columns={semColUnidade(colsConsolidados)}
       rows={consolidados ?? []}
       getKey={(l) => l.chave}
       onRowClick={(l) => setComposicao(l.chave)}
@@ -2336,7 +2342,7 @@ export function DfdsView({
               situacoes={situacoes}
               regras={regras}
               responsavel={filtro.responsavel}
-              permitido={metricasPermitidas(pode.vis)}
+              permitido={semDadoUnidade(metricasPermitidas(pode.vis), semUnidade)}
               onAbrir={setAberto}
               metricas={{
                 filtro: filtroMetricas,
@@ -2438,4 +2444,9 @@ export function DfdsView({
     </div>
     </PermissaoExportar>
   );
+}
+
+/** Com a Mesa de UMA unidade, o Dashboard não oferece "Dado = Unidade" (seria uma barra só). */
+function semDadoUnidade<T extends { dados: readonly string[] }>(p: T, sem: boolean): T {
+  return sem ? { ...p, dados: p.dados.filter((d) => d !== "unidade") } : p;
 }

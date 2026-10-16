@@ -1,5 +1,6 @@
 "use client";
 
+import { useUnidadeUnica } from "./UnidadeUnica";
 import { type ReactNode, useMemo, useState } from "react";
 import { alternarOculta, comLargura, comOrdem, ordemDasColunas } from "@/lib/colunas-layout";
 import { exportarCruzamentoXlsx } from "@/lib/exportar-orcamento";
@@ -131,9 +132,19 @@ export function OrcamentoComparativo({
   }, [itens, visao, efetivos, alvos]);
 
   // As duas colunas LIGADAS: a das linhas (com dados) e a das colunas (a permitida — senão a 1ª permitida).
-  const permLinhas = useMemo(() => permissoesLinhas(base), [base]);
-  const linha = permLinhas[dimLinha].permitida ? dimLinha : (DIMENSOES_ORCAMENTO.find((d) => permLinhas[d.key].permitida)?.key ?? dimLinha);
-  const permColunas = useMemo(() => permissoesColunas(base, linha), [base, linha]);
+  // UMA unidade no cabeçalho: a dimensão com um valor só (Órgão/Unidade do cadastro, a unidade do CUBO dela) daria UMA
+  // linha ou coluna — fica de fora, e as linhas abrem pela Ação.
+  const unica = useUnidadeUnica("orcamento") != null;
+  const permLinhas = useMemo(() => (unica ? semValorUnico(permissoesLinhas(base)) : permissoesLinhas(base)), [base, unica]);
+  const linha = permLinhas[dimLinha].permitida
+    ? dimLinha
+    : unica && permLinhas.acao.permitida
+      ? "acao"
+      : (DIMENSOES_ORCAMENTO.find((d) => permLinhas[d.key].permitida)?.key ?? dimLinha);
+  const permColunas = useMemo(
+    () => (unica ? semValorUnico(permissoesColunas(base, linha)) : permissoesColunas(base, linha)),
+    [base, linha, unica],
+  );
   const coluna = colunaPermitida(permColunas, dimColuna);
   const podeTrocar = useMemo(() => coluna != null && permissoesColunas(base, coluna)[linha].permitida, [base, coluna, linha]);
 
@@ -500,4 +511,12 @@ export function OrcamentoComparativo({
       {editor.camadas}
     </>
   );
+}
+
+/** A dimensão com um valor só não se cruza (com a unidade única do cabeçalho, é a própria unidade). */
+function semValorUnico<K extends string>(p: Record<K, { permitida: boolean; motivo: string | null; valores: number }>) {
+  const out = { ...p };
+  for (const k of Object.keys(out) as K[])
+    if (out[k].permitida && out[k].valores <= 1) out[k] = { ...out[k], permitida: false, motivo: "um valor só — a unidade escolhida no cabeçalho" };
+  return out;
 }

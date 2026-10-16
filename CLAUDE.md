@@ -940,6 +940,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   itens, histórico, padronização), **Tarefas/Calendário** (pelas UNIDADES dos vínculos — `unidadesDasTarefas`,
   `VinculoTarefa.reparticaoId`; opção "sem vínculo") e **Automação** (os protocolos). "Geral" = sem filtro; o memo leva o
   id da unidade na chave.
+- **INTERFACE ENXUTA com UMA unidade (v1.121.0, sem migração):** contexto **`UnidadeUnica`** (`UnidadeUnica.tsx`, layout do
+  painel: a unidade ativa ≠ "Geral" + os módulos do Filtro da unidade) → `useUnidadeUnica(modulo?)` (null em Geral ou no
+  módulo que não obedece) e `useSemUnidade(valores, modulo?)` (+ `todasDaUnidade`: TODAS as linhas da sigla ativa — uma
+  sem unidade ou de outra mantém a coluna). Saem: Mesa — colunas Unidade/Sigla (Protocolos, DFDs [`PlanilhaDfds.semSigla`],
+  Itens, Consolidada, `ComposicaoItem`) e "Dado = Unidade" do Dashboard; PCA — "Por órgão"/coluna Órgão do `OrcamentoPca`,
+  Unidade da `ConsultaPca`; Orçamento — Comparativo sem dimensões de um valor só (abre pela Ação), Lançamentos sem
+  Órgão/Unidade de valor único; Tarefas — coluna Unidade e seção do Filtrar. Ficam os campos que MOVEM de unidade.
 - **PCA do CABEÇALHO — filtro GLOBAL (sem migração):** um dropdown à ESQUERDA do head (`PcaSelect`, no `AppShell`; no
   celular mostra só o ano) escolhe o PCA — cookie **`pca_filtro`** (como a unidade/grupo: `src/lib/pca-filtro.ts` —
   `pcasDoFiltro` = os PCAs cadastrados COM ano, `getPcaFiltro`, `definirPcaFiltro`; rota **`POST /api/pca/filtro`**

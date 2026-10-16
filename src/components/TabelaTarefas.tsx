@@ -1,5 +1,6 @@
 "use client";
 
+import { useUnidadeUnica } from "./UnidadeUnica";
 import { useMemo } from "react";
 import { dataBR, dataIsoBrasilia, num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
@@ -74,6 +75,9 @@ export function TabelaTarefas({
   /** As AUTOMAÇÕES da Mesa (só o ADM): "Emitir DFDs" no rodapé, com os DFDs das tarefas À VISTA (os filtros valem). */
   automacoes?: { id: number; nome: string }[];
 }) {
+  // UMA unidade no cabeçalho e nenhuma tarefa ligada a OUTRA: a coluna Unidade sai.
+  const unidadeCab = useUnidadeUnica("tarefas");
+  const semUnidade = unidadeCab != null && tarefas.every((t) => siglasDaTarefa(t).every((sg) => sg === unidadeCab.sigla));
   const colunas = useMemo<Column<TarefaResumo>[]>(() => {
     const lista = new Map(listas.map((l) => [l.id, l]));
     const pessoa = new Map(pessoas.map((p) => [p.id, p]));
@@ -316,7 +320,7 @@ export function TabelaTarefas({
 
   return (
     <DataTable
-      columns={colunas}
+      columns={semUnidade ? colunas.filter((c) => c.key !== "unidade") : colunas}
       rows={tarefas}
       getKey={(t) => t.id}
       exportar={nomeExportacao ? { nome: nomeExportacao } : undefined}

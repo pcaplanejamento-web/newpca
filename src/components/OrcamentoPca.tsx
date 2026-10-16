@@ -1,5 +1,6 @@
 "use client";
 
+import { useUnidadeUnica } from "./UnidadeUnica";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
 import { blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
@@ -416,9 +417,12 @@ export function OrcamentoPca({
   }, [unidadesCubo, efetivos]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
-  const [nivel, setNivel] = useState<Nivel>("unidade");
+  const [nivelEscolhido, setNivel] = useState<Nivel>("unidade");
   const [aberta, setAberta] = useState<LinhaTabela | null>(null);
   const porUnidade = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
+  // UMA unidade no cabeçalho: "Por órgão" e a coluna Órgão repetiriam a mesma linha — saem.
+  const unica = useUnidadeUnica("pca") != null && porUnidade.filter((l) => l.unidadeId != null).length <= 1;
+  const nivel: Nivel = unica ? "unidade" : nivelEscolhido;
   const linhas = useMemo<LinhaTabela[]>(
     () =>
       nivel === "orgao"
@@ -505,7 +509,7 @@ export function OrcamentoPca({
 
   const cols: Column<LinhaTabela>[] = [
     colNome,
-    colLado,
+    ...(unica ? [] : [colLado]),
     // Cores (tela e PDF): o ORÇAMENTO em azul; as demais no tom da Diferença; o Órgão como está.
     {
       key: "contratacoes",
@@ -690,7 +694,7 @@ export function OrcamentoPca({
         <>
           <div className="flex flex-wrap items-center gap-2">
             {trocaVista}
-            <Segmented<Nivel>
+            {!unica && <Segmented<Nivel>
               value={nivel}
               onChange={(n) => {
                 setNivel(n);
@@ -701,7 +705,7 @@ export function OrcamentoPca({
                 { value: "unidade", label: "Por unidade", curto: "Unidade" },
                 { value: "orgao", label: "Por órgão", curto: "Órgão" },
               ]}
-            />
+            />}
             <Segmented<Filtro>
               value={filtro}
               onChange={setFiltro}

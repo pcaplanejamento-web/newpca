@@ -35,6 +35,17 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.121.0",
+    data: "2026-10-16",
+    titulo: "Telas mais simples com uma unidade no cabeçalho",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Com uma unidade escolhida no cabeçalho, as colunas Unidade e Sigla saem das tabelas e o Dashboard não oferece mais “Dado = Unidade”. Em “Geral”, tudo volta.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "PCA", texto: "Orçamento do PCA sem “Por órgão” e sem a coluna Órgão; consulta dos protocolos sem a coluna Unidade quando só há uma unidade.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Comparativo abre pela Ação e não cruza dimensões de um valor só; Lançamentos sem as colunas de órgão/unidade repetidas.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Lista sem a coluna Unidade e o painel Filtrar sem a seção da unidade quando só há uma.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.120.0",
     data: "2026-10-16",
     titulo: "Troca de visão da Mesa mais rápida e suave",
