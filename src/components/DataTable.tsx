@@ -160,6 +160,7 @@ export function DataTable<R>({
   ocultasPadrao,
   conexao,
   filtrosRodape,
+  visao,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -235,6 +236,8 @@ export function DataTable<R>({
   conexao?: ConexaoTabela<R>;
   /** Filtros que vêm de FORA da tabela (ex.: o Recorte da Mesa): entram no menu de filtros do rodapé (`n` soma no selo). */
   filtrosRodape?: { n: number; conteudo: ReactNode };
+  /** A VISÃO da tabela única (ex.: a Mesa): ao mudar, filtros/ordem/página recomeçam pelos da visão nova, sem remontar. */
+  visao?: string;
 }) {
   // A chave ESTÁVEL das ocultas (o Set pode ser recriado a cada render do dono).
   const chaveOcultas = ocultas?.size ? [...ocultas].sort().join("|") : "";
@@ -271,6 +274,16 @@ export function DataTable<R>({
     return editor.salvo.ordem ?? { key: null, dir: "asc" };
   });
   const [page, setPage] = useState(1);
+  // TABELA ÚNICA com várias visões (a Mesa: Protocolos · DFDs · Itens): trocar a `visao` não remonta — reinicia aqui os
+  // filtros, a ordem e a página pelos da visão nova (a conexão dela, senão a edição em uso).
+  const [visaoAtual, setVisaoAtual] = useState(visao);
+  if (visaoAtual !== visao) {
+    setVisaoAtual(visao);
+    setFilters(conexao?.filtros ?? editor.salvo.filtros);
+    const o = conexao?.ordem;
+    setSort(o && todasColunas.some((c) => c.key === o.key) ? o : (editor.salvo.ordem ?? { key: null, dir: "asc" }));
+    setPage(1);
+  }
   // MARCAÇÃO da linha (sem selecionar): o 1º clique marca; o 2º clique NA linha marcada abre (`onRowClick`). A linha
   // aberta ao lado (`activeKey`) já chega marcada.
   const [marcadaK, setMarcadaK] = useState<Key | null>(null);
@@ -743,7 +756,7 @@ export function DataTable<R>({
               })}
             </tr>
           </thead>
-          <tbody>
+          <tbody key={visao} className={visao ? "animate-cat-morph" : undefined}>
             {visiveis.map((r, i) => {
               const k = getKey(r);
               const marcada = sel.has(k);

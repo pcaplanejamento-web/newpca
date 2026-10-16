@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.119.0",
+    data: "2026-10-16",
+    titulo: "Mesa com uma tabela só",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Protocolos, DFDs e Itens usam a MESMA tabela: trocar de visão muda só as colunas e as linhas — a moldura, o rodapé e os filtros não somem.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.118.0",
     data: "2026-10-16",
     titulo: "Todas as telas obedecem à unidade do cabeçalho",

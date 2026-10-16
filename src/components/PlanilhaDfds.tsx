@@ -125,32 +125,8 @@ export function CelulaPrioridade({ prioridade }: { prioridade: string | null | u
  * (`unica`) é UMA tabela só (o filtro da coluna Estado separa). Rodapé = só os agregados das
  * linhas (nº · itens · valor). Colunas opcionais (Situação/Protocolo/ações) só aparecem quando há dado.
  */
-export function PlanilhaDfds({
-  linhas,
-  selecionavel = false,
-  selected,
-  onSelected,
-  onRowClick,
-  ativa = null,
-  acoes,
-  compacta = false,
-  fillHeight = false,
-  scrollInterno = false,
-  unica = false,
-  regras,
-  reservaInferior = 0,
-  semEstado = false,
-  acoesRodape,
-  vazio,
-  acaoDescartados,
-  edicoes,
-  ocultasPadrao,
-  exportar,
-  colunasExtras = [],
-  conexao,
-  filtrosRodape,
-  onOrdenadas,
-}: {
+/** Props da planilha de DFDs (as da `PlanilhaDfds`). */
+export type PropsPlanilhaDfds = {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
   selected?: Set<string | number>;
@@ -192,7 +168,31 @@ export function PlanilhaDfds({
   conexao?: ConexaoTabela<LinhaDfd>;
   /** O Recorte da Mesa no menu de filtros do rodapé (ver `DataTable.filtrosRodape`). */
   filtrosRodape?: { n: number; conteudo: ReactNode };
-}) {
+};
+
+/** As props do `DataTable` da planilha de DFDs — a Mesa usa direto, na TABELA ÚNICA das visões (sem trocar de componente). */
+export function propsPlanilhaDfds({
+  linhas,
+  selecionavel = false,
+  selected,
+  onSelected,
+  onRowClick,
+  ativa = null,
+  acoes,
+  unica = false,
+  regras,
+  reservaInferior = 0,
+  semEstado = false,
+  acoesRodape,
+  vazio,
+  edicoes,
+  ocultasPadrao,
+  exportar,
+  colunasExtras = [],
+  conexao,
+  filtrosRodape,
+  onOrdenadas,
+}: PropsPlanilhaDfds) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
   // PCA e Prioridade: a coluna aparece quando a tela as informa (mesmo que vazias em alguma linha).
@@ -429,6 +429,12 @@ export function PlanilhaDfds({
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
   const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, onOrdenadas, conexao, filtrosRodape } as const;
+  return { principal, comum, erro, atencao, descartado, ok };
+}
+
+export function PlanilhaDfds(props: PropsPlanilhaDfds) {
+  const { linhas, compacta = false, fillHeight = false, scrollInterno = false, unica = false, semEstado = false, acaoDescartados } = props;
+  const { principal, comum, erro, atencao, descartado, ok } = propsPlanilhaDfds(props);
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

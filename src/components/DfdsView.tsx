@@ -81,7 +81,7 @@ import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, propsPlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -1994,8 +1994,12 @@ export function DfdsView({
     : undefined;
   const semDados = (oQue: string, dica = importa) =>
     `Nenhum ${oQue} ${pcaFiltro ? `do ${pcaFiltro.nome} (o PCA do cabeçalho)` : "nesta visão"}.${dica ? " Use o ícone de importar no rodapé da tabela." : ""}`;
+  // TABELA ÚNICA: as quatro visões são o MESMO `DataTable` na mesma posição (React mantém a instância) — trocar de visão
+  // muda só as colunas e as linhas; `visao` reinicia filtros/ordem/página pelos da visão nova.
+  const visaoTabela = `${vista === "itens" ? `itens-${modoItens}` : vista}-${versaoRecorte}`;
   const tabelaProtocolos = (
     <DataTable
+      visao={visaoTabela}
       columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key))}
       rows={protocolosR}
       getKey={(r) => r.id}
@@ -2024,32 +2028,38 @@ export function DfdsView({
     />
   );
   const tabelaDfds = (
-    <PlanilhaDfds
-      linhas={linhasDfdR}
-      filtrosRodape={filtrosRodape}
-      conexao={{ base: linhasDfdTab, filtros: estadoVisoes.dfds?.filtros, ordem: ordemMesa, onMudar: conexaoDe.dfds }}
-      unica
+    <DataTable
+      visao={visaoTabela}
+      rows={linhasDfdR}
       scrollInterno
-      reservaInferior={reserva}
-      selecionavel={podeAqui.manipular}
-      selected={selDfds}
-      onSelected={setSelDfds}
-      onRowClick={(id) => setAberto({ tipo: "dfd", id })}
-      ativa={aberto?.tipo === "dfd" ? aberto.id : null}
-      acoes={acoesDfd}
-      regras={regras}
-      acoesRodape={botaoImportar}
-      colunasExtras={colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key)}
-      edicoes={edicoesDe("dfds")}
-      ocultasPadrao={modoPca ? OCULTAS_NO_PCA : undefined}
-      exportar={exportarComo("DFDs", "dfds")}
-      vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
+      {...propsPlanilhaDfds({
+        linhas: linhasDfdR,
+        filtrosRodape: filtrosRodape,
+        conexao: { base: linhasDfdTab, filtros: estadoVisoes.dfds?.filtros, ordem: ordemMesa, onMudar: conexaoDe.dfds },
+        unica: true,
+        scrollInterno: true,
+        reservaInferior: reserva,
+        selecionavel: podeAqui.manipular,
+        selected: selDfds,
+        onSelected: setSelDfds,
+        onRowClick: (id) => setAberto({ tipo: "dfd", id }),
+        ativa: aberto?.tipo === "dfd" ? aberto.id : null,
+        acoes: acoesDfd,
+        regras: regras,
+        acoesRodape: botaoImportar,
+        colunasExtras: colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key),
+        edicoes: edicoesDe("dfds"),
+        ocultasPadrao: modoPca ? OCULTAS_NO_PCA : undefined,
+        exportar: exportarComo("DFDs", "dfds"),
+        vazio: filtrado && dfds.length > 0 ? semResultado : semDados("DFD"),
+      }).principal}
     />
   );
   // As colunas da padronização (só com o cadastro) alargam as tabelas de itens.
   const larguraPadronizacao = (classeDoItem ? 150 : 0) + (unidadeDoItem ? 130 : 0);
   const tabelaItens = (
     <DataTable
+      visao={visaoTabela}
       columns={[...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)]}
       rows={itensR ?? []}
       getKey={(r) => r.id}
@@ -2076,6 +2086,7 @@ export function DfdsView({
   // total da visão Normal com os mesmos filtros de dado.
   const tabelaConsolidada = (
     <DataTable
+      visao={visaoTabela}
       columns={colsConsolidados}
       rows={consolidados ?? []}
       getKey={(l) => l.chave}
@@ -2299,7 +2310,7 @@ export function DfdsView({
       {/* MESMO espaço para as visões — a `key` remonta e replaya o morph (fade+escala); Normal ↔ Consolidada também. As
           tabelas mostram os DADOS COMPLETOS (texto inteiro, todas as listas) quando o botão da barra está ligado. */}
       <DadosCompletos value={completo}>
-        <div key={`${vista === "itens" ? `itens-${modoItens}` : vista}-${versaoRecorte}`} className="animate-cat-morph">
+        <div key={vista === "dashboard" ? "dashboard" : "tabela"} className="animate-cat-morph">
           {vista === "dashboard" && dash ? (
             <DashboardMesa
               protocolos={dash.protocolos}

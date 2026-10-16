@@ -1263,8 +1263,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (todos os valores, sem o "+N") e `EstadoResumo` (todos os problemas); a linha cresce. A escolha é PREFERÊNCIA do usuário
     (`preferencias_tabela`, chave `PREF_DADOS_COMPLETOS` = `mesa:dados-completos` → `{ligado:true}`; desligar apaga a linha),
     carregada no servidor por `carregarMesa` (`dadosCompletos` — a Mesa já ABRE assim, sem piscar; a principal e a do PCA);
-    gravada na hora pelo `PUT`/`DELETE /api/preferencias/tabela` (sem rede, vale na sessão). Alternam as visões no **MESMO espaço**, com transição
-    `animate-cat-morph` (`<div key={vista}>` remonta e replaya). **Importação NA TABELA:** o botão **"Importar protocolo"**
+    gravada na hora pelo `PUT`/`DELETE /api/preferencias/tabela` (sem rede, vale na sessão). Alternam as visões numa TABELA ÚNICA (v1.119.0): as quatro (Protocolos, DFDs — `propsPlanilhaDfds` —, Itens e
+    Consolidada) são o MESMO `DataTable` na mesma posição (a instância não muda) e a prop **`DataTable.visao`** reinicia
+    filtros/ordem/página pelos da visão nova (o `useEditorEdicoes` descarta a edição em curso ao trocar de chave); só as
+    linhas fazem o `animate-cat-morph` (`<tbody key={visao}>`). **Importação NA TABELA:** o botão **"Importar protocolo"**
     (visão Protocolos) / **"Importar DFD"** (visão DFDs) fica no **RODAPÉ da tabela, à esquerda do seletor de linhas**
     (`DataTable.acoesRodape`, `Button size="sm"`; no celular o rótulo encolhe para "Importar" — o nome acessível segue
     inteiro); os DOIS formulários (`ProtocoloUploadForm`/`DfdUploadForm`) ficam montados FORA da tabela, em QUALQUER visão

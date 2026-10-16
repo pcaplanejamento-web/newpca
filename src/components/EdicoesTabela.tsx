@@ -323,6 +323,12 @@ export function useEditorEdicoes<L>({
   const ed = useEdicoesTabela(chave, edicoes, padroes, onMudar);
   const salvo = useMemo(() => coerce(ed.atual?.valor), [ed.atual, coerce]);
   const [rascunho, setRascunho] = useState<L | null>(null);
+  // Outra tabela no MESMO componente (a Mesa troca de visão sem remontar): a edição em curso não passa para ela.
+  const [chaveEd, setChaveEd] = useState(chave);
+  if (chaveEd !== chave) {
+    setChaveEd(chave);
+    setRascunho(null);
+  }
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
