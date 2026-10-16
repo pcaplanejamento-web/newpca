@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.124.0",
+    data: "2026-10-16",
+    titulo: "Cartões sem esticar com texto longo",
+    mudancas: [
+      { tipo: "correcao", area: "Orçamento", texto: "O nome do orçamento no cartão fica em até 2 linhas e o valor em uma — o nome inteiro aparece ao passar o mouse; os cartões vizinhos não esticam mais.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Sistema", texto: "Título e subtítulo dos gráficos e o título dos avisos flutuantes limitados a 2 linhas, com o texto inteiro ao passar o mouse.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.123.0",
     data: "2026-10-16",
     titulo: "KPIs sempre compactos",

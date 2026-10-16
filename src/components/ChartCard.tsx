@@ -18,8 +18,12 @@ export function ChartCard({ title, subtitle, children, className, action, onExpa
       {(title || action || onExpandir) && (
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-text">{title}</h3>
-            {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
+            <h3 className="line-clamp-2 text-sm font-semibold text-text">{title}</h3>
+            {subtitle ? (
+              <p className="mt-0.5 line-clamp-2 text-xs text-muted" title={typeof subtitle === "string" ? subtitle : undefined}>
+                {subtitle}
+              </p>
+            ) : null}
           </div>
           {(action || onExpandir) && (
             <div className="flex shrink-0 items-center gap-1">

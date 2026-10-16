@@ -49,7 +49,9 @@ export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResu
         </span>
         <div className="min-w-0 flex-1">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">Orçamento</span>
-          <h3 className="mt-0.5 break-words text-[15px] font-semibold leading-snug text-text group-hover:text-accent">{o.nome}</h3>
+          <h3 className="mt-0.5 line-clamp-2 break-words text-[15px] font-semibold leading-snug text-text group-hover:text-accent" title={o.nome}>
+            {o.nome}
+          </h3>
         </div>
         <span className="shrink-0 rounded-control bg-accent px-2.5 py-1.5 text-[15px] font-bold leading-none tabular-nums tracking-tight text-white shadow-soft">
           {o.ano}
@@ -58,7 +60,9 @@ export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResu
 
       <div>
         <p className="text-[12px] text-muted">Dotação atualizada</p>
-        <p className="break-words text-xl font-bold tabular-nums tracking-tight text-text">{brl(atualizada)}</p>
+        <p className="truncate text-xl font-bold tabular-nums tracking-tight text-text" title={brl(atualizada)}>
+          {brl(atualizada)}
+        </p>
       </div>
 
       <div>

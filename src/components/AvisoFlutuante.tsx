@@ -80,7 +80,7 @@ export function AvisoFlutuante({
       </span>
       <div className="min-w-0 flex-1 break-words">
         {titulo && (
-          <p className="font-semibold" style={{ color: cor }}>
+          <p className="line-clamp-2 font-semibold" style={{ color: cor }} title={typeof titulo === "string" ? titulo : undefined}>
             {titulo}
           </p>
         )}
