@@ -161,6 +161,7 @@ export function DataTable<R>({
   conexao,
   filtrosRodape,
   visao,
+  trocando = false,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -238,6 +239,8 @@ export function DataTable<R>({
   filtrosRodape?: { n: number; conteudo: ReactNode };
   /** A VISÃO da tabela única (ex.: a Mesa): ao mudar, filtros/ordem/página recomeçam pelos da visão nova, sem remontar. */
   visao?: string;
+  /** A troca de visão está sendo desenhada (transição): o corpo atual esmaece até a visão nova chegar. */
+  trocando?: boolean;
 }) {
   // A chave ESTÁVEL das ocultas (o Set pode ser recriado a cada render do dono).
   const chaveOcultas = ocultas?.size ? [...ocultas].sort().join("|") : "";
@@ -756,7 +759,7 @@ export function DataTable<R>({
               })}
             </tr>
           </thead>
-          <tbody key={visao} className={visao ? "animate-cat-morph" : undefined}>
+          <tbody key={visao} className={visao ? `linhas-entra transition-opacity duration-150 ${trocando ? "opacity-55" : ""}` : undefined}>
             {visiveis.map((r, i) => {
               const k = getKey(r);
               const marcada = sel.has(k);

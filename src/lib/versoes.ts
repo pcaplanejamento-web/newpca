@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.120.0",
+    data: "2026-10-16",
+    titulo: "Troca de visão da Mesa mais rápida e suave",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Trocar entre Protocolos, DFDs e Itens responde na hora: a tabela atual esmaece e a nova acende num fade curto, sem tremer o cabeçalho.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Os itens começam a carregar quando o mouse passa pelas visões — a aba Itens abre pronta.", link: "/painel/mesa?vista=itens" },
+    ],
+  },
+  {
     versao: "1.119.0",
     data: "2026-10-16",
     titulo: "Mesa com uma tabela só",

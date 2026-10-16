@@ -387,6 +387,16 @@ export function DfdsView({
   const vistaUrl = useSearchParams().get("vista");
   const [vistaPedida, setVista] = useState<Vista>(vistaUrl === "dashboard" || vistaUrl === "dfds" || vistaUrl === "itens" ? vistaUrl : "protocolos");
   const vista = vistaPermitida<Vista>(vistaPedida, ["protocolos", "dfds", "itens", "dashboard"], veVista);
+  // TROCA DE VISÃO LEVE: o botão muda na hora (`vistaBotao`) e a tabela nova é desenhada numa transição — o clique nunca
+  // espera as linhas; enquanto desenha, o corpo atual esmaece (`trocando`) e o novo acende num fade curto.
+  const [vistaBotao, setVistaBotao] = useState<Vista>(vistaPedida);
+  const [trocando, trocarVista] = useTransition();
+  const escolherVista = (v: Vista) => {
+    setVistaBotao(v);
+    trocarVista(() => setVista(v));
+  };
+  // Itens PRÉ-CARREGADOS: o ponteiro/foco sobre as visões já busca a lista (a 1ª abertura de Itens vem pronta).
+  const [preItens, setPreItens] = useState(false);
   const [modoPedido, setModoItens] = useState<ModoItens>("normal");
   const modoItens: ModoItens = !libera("dfd.consolidada") ? "normal" : !libera("dfd.itens") ? "consolidada" : modoPedido;
   // Itens (lista plana): carregada SOB DEMANDA na 1ª vez que a visão Itens abre (não pesa o load
@@ -414,7 +424,7 @@ export function DfdsView({
   // Mesa principal: o MESMO PCA do cabeçalho com que a página veio (explícito — o cookie pode ter mudado noutra aba).
   const anoFiltro = pcaFiltro?.ano;
   useEffect(() => {
-    if ((vista !== "itens" && !reverAtivo) || itens !== null) return;
+    if ((vista !== "itens" && !reverAtivo && !preItens) || itens !== null) return;
     const ac = new AbortController();
     setCarregandoItens(true);
     fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal })
@@ -434,7 +444,7 @@ export function DfdsView({
         if (!ac.signal.aborted) setCarregandoItens(false);
       });
     return () => ac.abort();
-  }, [vista, itens, pcaDaMesa, anoFiltro, reverAtivo]);
+  }, [vista, itens, pcaDaMesa, anoFiltro, reverAtivo, preItens]);
 
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).
@@ -2000,6 +2010,7 @@ export function DfdsView({
   const tabelaProtocolos = (
     <DataTable
       visao={visaoTabela}
+      trocando={trocando}
       columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key))}
       rows={protocolosR}
       getKey={(r) => r.id}
@@ -2030,6 +2041,7 @@ export function DfdsView({
   const tabelaDfds = (
     <DataTable
       visao={visaoTabela}
+      trocando={trocando}
       rows={linhasDfdR}
       scrollInterno
       {...propsPlanilhaDfds({
@@ -2060,6 +2072,7 @@ export function DfdsView({
   const tabelaItens = (
     <DataTable
       visao={visaoTabela}
+      trocando={trocando}
       columns={[...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)]}
       rows={itensR ?? []}
       getKey={(r) => r.id}
@@ -2087,6 +2100,7 @@ export function DfdsView({
   const tabelaConsolidada = (
     <DataTable
       visao={visaoTabela}
+      trocando={trocando}
       columns={colsConsolidados}
       rows={consolidados ?? []}
       getKey={(l) => l.chave}
@@ -2234,9 +2248,10 @@ export function DfdsView({
           protocolos. */}
       <div className="flex flex-wrap items-center gap-2">
         {seletorMesa}
+        <span role="none" className="contents" onPointerEnter={() => setPreItens(true)} onFocus={() => setPreItens(true)}>
         <Segmented<Vista>
-          value={vista}
-          onChange={setVista}
+          value={vistaPermitida<Vista>(vistaBotao, ["protocolos", "dfds", "itens", "dashboard"], veVista)}
+          onChange={escolherVista}
           ariaLabel="Visões da Mesa"
           options={[
             ...(veVista("dashboard") ? [{ value: "dashboard" as const, label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }] : []),
@@ -2245,6 +2260,7 @@ export function DfdsView({
             ...(veVista("itens") ? [{ value: "itens" as const, label: "Itens" }] : []),
           ]}
         />
+        </span>
         {modoPca?.ferramenta}
         {/* Só na visão Itens: Normal (um por linha) | Consolidada (um por código). */}
         {vista === "itens" && libera("dfd.itens") && libera("dfd.consolidada") && (

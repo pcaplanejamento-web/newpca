@@ -1266,7 +1266,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     gravada na hora pelo `PUT`/`DELETE /api/preferencias/tabela` (sem rede, vale na sessão). Alternam as visões numa TABELA ÚNICA (v1.119.0): as quatro (Protocolos, DFDs — `propsPlanilhaDfds` —, Itens e
     Consolidada) são o MESMO `DataTable` na mesma posição (a instância não muda) e a prop **`DataTable.visao`** reinicia
     filtros/ordem/página pelos da visão nova (o `useEditorEdicoes` descarta a edição em curso ao trocar de chave); só as
-    linhas fazem o `animate-cat-morph` (`<tbody key={visao}>`). **Importação NA TABELA:** o botão **"Importar protocolo"**
+    linhas acendem (`.linhas-entra`, opacidade 160 ms — v1.120.0); o botão muda na hora (`vistaBotao`) e a tabela nova vem
+    numa transição (`useTransition` → `DataTable.trocando` esmaece o corpo atual); passar o ponteiro/foco nas visões
+    pré-carrega os itens (`preItens`). **Importação NA TABELA:** o botão **"Importar protocolo"**
     (visão Protocolos) / **"Importar DFD"** (visão DFDs) fica no **RODAPÉ da tabela, à esquerda do seletor de linhas**
     (`DataTable.acoesRodape`, `Button size="sm"`; no celular o rótulo encolhe para "Importar" — o nome acessível segue
     inteiro); os DOIS formulários (`ProtocoloUploadForm`/`DfdUploadForm`) ficam montados FORA da tabela, em QUALQUER visão
