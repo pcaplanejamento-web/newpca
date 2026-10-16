@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.114.2",
+    data: "2026-10-16",
+    titulo: "Matrícula com até 7 números",
+    mudancas: [
+      { tipo: "correcao", area: "Cadastro", texto: "A matrícula aceita até 7 números (antes, exatamente 6), no cadastro e na edição do usuário pelo ADM.", link: "/login?modo=cadastro" },
+    ],
+  },
+  {
     versao: "1.114.1",
     data: "2026-10-16",
     titulo: "Fim do alerta repetido de aparelho novo",

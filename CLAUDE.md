@@ -171,7 +171,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (zera ao entrar), código 10/h por IP e 6/h por e-mail, cadastro 10/h por IP, senha 20/15 min por IP, desafio 60/10 min
     por IP → **429** `{esperarS}` + `Retry-After`. Higiene no cron dos e-mails (`limparSegurancaVencida`).
   - **Só dados permitidos** (a MESMA régua na tela — filtro ao digitar — e no Zod — `cadastro-core.ts`): nome só letras/
-    espaço/apóstrofo/hífen (nome e sobrenome), **matrícula = EXATAMENTE 6 dígitos** (`DIGITOS_MATRICULA`; não só zeros — a antiga fora do padrão segue valendo até o ADM trocar), **telefone** só dígitos (DDD + 8 fixo / 9 celular começando com 9 — `telefoneValido`), usuário do e-mail `[a-z0-9._-]` sem "..",
+    espaço/apóstrofo/hífen (nome e sobrenome), **matrícula = ATÉ 7 dígitos** (v1.114.2; antes exatamente 6) (`DIGITOS_MATRICULA`; não só zeros — a antiga fora do padrão segue valendo até o ADM trocar), **telefone** só dígitos (DDD + 8 fixo / 9 celular começando com 9 — `telefoneValido`), usuário do e-mail `[a-z0-9._-]` sem "..",
     senha nova 8–128 com **letras e números**, nenhum caractere de controle/invisível (cargo, apelido), nome de cargo com
     letras/números e `( ) / , . - º ª`.
   - **Sem duplicidade:** e-mail (índice único) e **MATRÍCULA** — conferida antes de enviar o código e antes de gastar o

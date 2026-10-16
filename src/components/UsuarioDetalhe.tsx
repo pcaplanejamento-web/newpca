@@ -118,7 +118,7 @@ function problemas(p: PatchUsuario): Partial<Record<Campo, string>> {
   const e: Partial<Record<Campo, string>> = {};
   if (p.nome !== undefined && !nomeValido(p.nome)) e.nome = "Nome e sobrenome, só com letras.";
   if (p.email !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) e.email = "E-mail inválido.";
-  if (p.matricula && !matriculaValida(p.matricula)) e.matricula = "Exatamente 6 números.";
+  if (p.matricula && !matriculaValida(p.matricula)) e.matricula = "Até 7 números.";
   if (p.telefone && !telefoneValido(p.telefone)) e.telefone = "Com DDD: 10 ou 11 dígitos.";
   return e;
 }

@@ -75,7 +75,7 @@ export function CadastroForm({
     if (!nomeCompleto(nome)) p.nome = "Informe o nome completo (nome e sobrenome).";
     else if (!nomeValido(nome)) p.nome = "O nome aceita só letras, espaços, apóstrofo e hífen.";
     if (!matricula) p.matricula = "Informe a matrícula.";
-    else if (!matriculaValida(matricula)) p.matricula = "A matrícula tem exatamente 6 números.";
+    else if (!matriculaValida(matricula)) p.matricula = "A matrícula tem até 7 números.";
     if (!telefone) p.telefone = "Informe o seu WhatsApp com DDD.";
     else if (!telefoneValido(telefone)) p.telefone = "Número com DDD: 11 dígitos no celular.";
     if (cargos.length > 0 && !cargo) p.cargo = "Selecione o seu cargo ou função.";
@@ -222,7 +222,7 @@ export function CadastroForm({
           rotuloExtra={
             <Ajuda titulo="A matrícula" rotulo="Ajuda da matrícula" compacta>
               <p>
-                É a sua <strong className="text-text">matrícula funcional</strong> na Prefeitura: tem <strong className="text-text">exatamente 6 números</strong> —
+                É a sua <strong className="text-text">matrícula funcional</strong> na Prefeitura: tem <strong className="text-text">até 7 números</strong> —
                 com os zeros à esquerda, se houver (ex.: 012345).
               </p>
               <p>Ela identifica você no sistema e não pode repetir: cada matrícula pertence a uma só conta. Está no contracheque e no crachá.</p>

@@ -7,7 +7,7 @@ import { IconIdCard } from "./icons";
 
 /** O avanço de cada posição: 1 caractere monoespaçado + o espaçamento entre letras (o MESMO do `<input>`). */
 const ESPACO = "0.5em";
-/** As 6 posições (1ª a 6ª). */
+/** As 7 posições (1ª a 7ª). */
 const POSICOES = Array.from({ length: DIGITOS_MATRICULA }, (_, i) => i);
 
 /**

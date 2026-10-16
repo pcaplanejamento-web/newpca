@@ -30,7 +30,7 @@ const nomeSchema = z
   .refine(nomeCompleto, "Informe o nome completo (nome e sobrenome).")
   .refine(nomeValido, "O nome aceita só letras, espaços, apóstrofo e hífen.");
 /** MATRÍCULA: só dígitos (1 a 15). */
-const matriculaSchema = z.string().trim().min(1, "Informe a matrícula.").refine(matriculaValida, "A matrícula tem exatamente 6 números.");
+const matriculaSchema = z.string().trim().min(1, "Informe a matrícula.").refine(matriculaValida, "A matrícula tem até 7 números.");
 /** TELEFONE de contato institucional: só os dígitos (DDD + número — a máscara da tela sai). */
 const telefoneSchema = z
   .string()
