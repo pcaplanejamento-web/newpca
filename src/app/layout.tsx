@@ -4,8 +4,11 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/Toast";
+import { ProtegerImagens } from "@/components/ProtegerImagens";
 import { getAparencia } from "@/lib/aparencia";
 import { aparenciaToCss } from "@/lib/theme";
+import { SCRIPT_MENU } from "@/lib/menu-lateral";
+import { SCRIPT_TEMA } from "@/lib/tema-pessoal-core";
 
 // Dinâmico: lê a aparência do ADM (cacheada, fail-safe) para injetar os tokens
 // no HTML inicial, sem flash.
@@ -58,6 +61,12 @@ export default async function RootLayout({
             hidratação, causando o flash branco→preto. Roda antes do ThemeProvider. */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: shim de 1 linha com conteúdo 100% estático (sem dados do usuário). */}
         <script dangerouslySetInnerHTML={{ __html: "globalThis.__name||=(f)=>f;" }} />
+        {/* O tema da PESSOA (modo + tonalidade do escuro) — antes do script do next-themes, que lê o que este grava. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho 100% estático (SCRIPT_TEMA), sem dados do usuário. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        {/* O menu lateral recolhido (preferência deste navegador) — antes da 1ª pintura. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trecho 100% estático (SCRIPT_MENU), sem dados do usuário. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_MENU }} />
         {tokensCss && (
           // biome-ignore lint/security/noDangerouslySetInnerHtml: CSS gerado por aparenciaToCss (allowlist de tokens + valores só hex/número validados; anti-XSS).
           <style id="theme-tokens" dangerouslySetInnerHTML={{ __html: tokensCss }} />
@@ -65,6 +74,7 @@ export default async function RootLayout({
         <ThemeProvider>
           {children}
           <Toaster />
+          <ProtegerImagens />
         </ThemeProvider>
       </body>
     </html>

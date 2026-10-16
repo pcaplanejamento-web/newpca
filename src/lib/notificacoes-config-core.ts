@@ -48,7 +48,8 @@ export const CATALOGO_AVISOS: readonly ItemCatalogoAviso[] = [
   { chave: "pca", rotulo: "Protocolo no PCA", descricao: "Um protocolo da pessoa foi enviado, incorporado ou devolvido no PCA.", grupo: "Mesa e PCA", padrao: c(true, false) },
   { chave: "centi", rotulo: "Automação Centi", descricao: "Terminou (ou falhou) um lote da Automação que a pessoa iniciou.", grupo: "Administração", padrao: c(true, false) },
   { chave: "comunicado", rotulo: "Comunicado", descricao: "Um aviso enviado pelo administrador a todos ou a um grupo.", grupo: "Administração", padrao: c(true, false, true) },
-  { chave: "versao", rotulo: "Nova versão do sistema", descricao: "Aos administradores: o que mudou em cada versão nova, com o caminho até onde mudou.", grupo: "Administração", padrao: c(true, false) },
+  { chave: "versao", rotulo: "Nova versão do sistema", descricao: "A cada pessoa: o que mudou nas telas que o grupo dela abre (o administrador recebe tudo), com o caminho até onde mudou.", grupo: "Administração", padrao: c(true, false) },
+  { chave: "seguranca", rotulo: "Login suspeito", descricao: "Aos administradores (e à pessoa): login de um aparelho novo ou conta bloqueada por senhas erradas.", grupo: "Administração", padrao: c(true, true, false) },
   { chave: "cadastro", rotulo: "Cadastro aguardando aprovação", descricao: "Aos administradores: uma pessoa pediu acesso.", grupo: "Administração", padrao: c(true, true, false) },
   { chave: "acesso", rotulo: "Acesso liberado", descricao: "À pessoa: o administrador aprovou o cadastro.", grupo: "Administração", padrao: c(false, true, false), soEmail: true },
 ];
@@ -158,7 +159,7 @@ export function emailAposPara(prefs: PrefsEmail, agora: number, obrigatorio = fa
 
 export const CHAVE_PREF_PESSOA = "notificacoes:pessoa";
 /** Os avisos que nem o silenciar nem a pessoa tiram do sino (falam DIRETO com ela). */
-export const AVISOS_DIRETOS: readonly ChaveAviso[] = ["atribuida", "mencionada", "convite", "protocolo", "cadastro", "comunicado"];
+export const AVISOS_DIRETOS: readonly ChaveAviso[] = ["atribuida", "mencionada", "convite", "protocolo", "cadastro", "comunicado", "seguranca"];
 /**
  * O que a pessoa escolheu para o SINO: os tipos que ela não quer (só os não diretos), as TAREFAS e os QUADROS silenciados
  * (nada além dos diretos chega deles) e os alertas do APARELHO — som e a notificação do sistema.

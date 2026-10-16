@@ -1,20 +1,26 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { AlvoCenti, ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { type AlvoCenti, type ArquivoSaida, alvoDoArquivo, descricaoDoArquivo, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
+import { jaAnexados } from "@/lib/automacao-cliente";
+import { conferenciaAnexos, type DocCenti, type EstadoDfd, type LinhaConferencia, visualEstadoDfd } from "@/lib/automacao-dfds-estado";
 import { type LinhaDfd, opcoesDoNo, planoDosItens } from "@/lib/automacao-dfds-motor";
 import { noSistemaTela } from "@/lib/automacao-tela-protocolo";
 import { caminhosDosItens, type Grafo, type Item, type NoFluxo, subgrafoAte, subgrafoSoLeitura } from "@/lib/fluxo-core";
 import { dataHoraBR } from "@/lib/format";
+import { buscaDoNo, type FontesSistema, opcoesDaBusca } from "@/lib/fluxo-ler-sistema";
 import { chaveSelecao, REGISTRO_NOS, selecionados } from "@/lib/fluxo-nos";
 import { Badge, type Tone } from "../Badge";
 import { BotaoAtualizar } from "../BotaoAtualizar";
 import { Button } from "../Button";
 import { type Column, DataTable } from "../DataTable";
 import { SelectField } from "../Field";
-import { IconPastaAberta } from "../icons";
+import { IconAlert, IconCheck, IconPastaAberta, IconPlay, IconSearch } from "../icons";
 import { SeletorMultiplo } from "../SeletorMultiplo";
-import { AnaliseDfds, COLUNAS_PROTOCOLOS, type GestaoAutomacao, useColunasGestao } from "../automacao/ProtocolosAutomacao";
+import { type AberturaItem, aceitaItensDeFora } from "@/lib/fluxo-tipo-item";
+import { AnaliseDfds, type GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
+import { ConferenciaAnexos } from "./ConferenciaAnexos";
+import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 
 /*
  * As VISÕES do painel de um fluxo que um COMPONENTE traz (além do formulário de entrada): a tabela de seleção, a análise
@@ -27,7 +33,8 @@ export type HostPainel = {
   gestao: GestaoAutomacao;
   /** Quantos documentos o sistema registrou como anexados na Centi, por protocolo. */
   naCenti: Map<number, number>;
-  abrirProtocolo: (id: number) => void;
+  /** Abre o protocolo/DFD/item na pilha de banners da Mesa. */
+  abrir: (a: AberturaItem) => void;
   /** A saída COMPLETA de cada nó na última execução (a 1ª porta com itens). */
   saidas: Record<string, Item[]>;
   /** Os itens processados AO VIVO por cada nó (antes de ele terminar). */
@@ -41,7 +48,8 @@ export type HostPainel = {
   /** As repartições da Tela Protocolo da Centi (pela API; null = ainda não buscadas). */
   reparticoes: { lista: string[] | null; buscando: boolean; buscar: () => void };
   /** Abre o protocolo indicado na Centi (só leitura) e confere Id + nº; e o TESTE do anexo (sem emitir DFD). */
-  conferirAlvo: (alvo: AlvoCenti) => Promise<string>;
+  /** "Testar protocolo": abre o protocolo na Centi (só leitura) — pelo Id + nº, ou só pelo Id (nº vazio). */
+  conferirAlvo: (alvo: AlvoCenti) => Promise<{ protocolo: ProtocoloCenti } | { erro: string }>;
   testarAnexo: (alvo: AlvoCenti, tipo: string) => Promise<string>;
   /** Os fluxos salvos (o seletor do "Executar fluxo") e o aberto agora (não pode usar a si mesmo). */
   fluxos: { id: number; nome: string }[];
@@ -49,8 +57,13 @@ export type HostPainel = {
   /** Esquece o progresso de um nó "Executar fluxo" (a próxima execução recomeça do zero). */
   recomecar: (no: string) => Promise<void>;
   /** A prévia de cada seleção: roda o trecho só de leitura antes dela e lista os itens (sem executar o fluxo). */
-  previas: Record<string, { carregando: boolean; erro?: string }>;
-  carregarPrevia: (grafo: Grafo, no: string) => void;
+  previas: Record<string, { carregando: boolean; erro?: string; itens?: Item[] }>;
+  /** Executa o fluxo aberto (o grafo da tela) SÓ com estes itens — os selecionados numa tabela de resultado. */
+  executarCom: (grafo: Grafo, itens: Item[]) => void;
+  /** Executa o fluxo aberto com o "Baixar/anexar DFDs" (`no`) limitado a ESTES arquivos (os que faltam no protocolo). */
+  enviarArquivos: (grafo: Grafo, no: string, nomes: string[]) => void;
+  /** `incluir` = o próprio nó também roda (a visão de um nó que lê, ex.: Ler do sistema). */
+  carregarPrevia: (grafo: Grafo, no: string, incluir?: boolean) => void;
   /** Os órgãos cadastrados (o campo "Órgãos (ID na Centi)" escolhe entre os que têm o ID). */
   orgaos: { sigla: string; nome: string; entidadeCenti: string | null }[];
 };
@@ -95,6 +108,62 @@ export function CampoReparticoesCenti({ rotulo, valor, onValor, somenteLeitura }
         )}
       </div>
     </div>
+  );
+}
+
+/** As fontes do sistema já lidas (DFDs e itens: UMA vez por tela — as opções do valor procurado). */
+const cacheFontes = new Map<string, Promise<Item[]>>();
+function fonteDaApi(url: string, campo: "dfds" | "itens"): Promise<Item[]> {
+  let p = cacheFontes.get(url);
+  if (!p) {
+    p = fetch(url)
+      .then((r) => r.json() as Promise<Record<string, unknown>>)
+      .then((j) => (Array.isArray(j[campo]) ? (j[campo] as Item[]) : Promise.reject(new Error(String(j.error ?? "falhou")))))
+      .catch((e: unknown) => {
+        cacheFontes.delete(url);
+        throw e;
+      });
+    cacheFontes.set(url, p);
+  }
+  return p;
+}
+
+/**
+ * O VALOR FIXO do "Ler do sistema" ESCOLHIDO entre os que existem no sistema para a busca do nó (planejamentos, nºs de
+ * DFD, protocolos, produtos…) — escolha múltipla com busca; o valor do campo é "a; b".
+ */
+export function CampoValoresSistema({ rotulo, valor, onValor, config, somenteLeitura }: { rotulo: string; valor: string; onValor: (v: string) => void; config: Record<string, unknown>; somenteLeitura?: boolean }) {
+  const host = useHost();
+  const { objeto, busca } = buscaDoNo(config);
+  const [fontes, setFontes] = useState<FontesSistema | "erro" | null>(null);
+  const protocolos = host?.protocolos;
+  useEffect(() => {
+    let vivo = true;
+    const precisa = busca === "protocolo" || objeto === "protocolos" ? null : objeto;
+    Promise.all([
+      precisa === "dfds" ? fonteDaApi("/api/admin/automacao/execucao-dfds", "dfds") : Promise.resolve([]),
+      precisa === "itens" ? fonteDaApi("/api/admin/automacao/itens-sistema", "itens") : Promise.resolve([]),
+    ])
+      .then(([dfds, itens]) => vivo && setFontes({ protocolos: (protocolos ?? []) as unknown as Item[], dfds, itens }))
+      .catch(() => vivo && setFontes("erro"));
+    return () => {
+      vivo = false;
+    };
+  }, [objeto, busca, protocolos]);
+  const escolhidos = valor.split(/[;\n]/).map((x) => x.trim()).filter(Boolean);
+  const lista = fontes && fontes !== "erro" ? opcoesDaBusca(fontes, objeto, busca) : [];
+  const conhecidos = new Set(lista.map((o) => o.valor));
+  const opcoes = [...lista, ...escolhidos.filter((e) => !conhecidos.has(e)).map((e) => ({ valor: e, rotulo: `${e} (não encontrado)` }))];
+  return (
+    <SeletorMultiplo
+      suspenso
+      rotulo={rotulo}
+      textoVazio={fontes === "erro" ? "Não consegui ler" : fontes ? `Escolha (${lista.length})` : "Carregando…"}
+      opcoes={opcoes}
+      selecionados={escolhidos}
+      onChange={(v) => onValor(v.join("; "))}
+      disabled={somenteLeitura || !opcoes.length}
+    />
   );
 }
 
@@ -183,57 +252,55 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
   const host = useHost();
   const origem = anteriores(grafo, no.id)[0];
   const itens = useMemo(() => (host && origem ? itensDoNo(grafo, origem, host) : []), [host, grafo, origem]);
-  // PRÉVIA (padrão de toda seleção): sem itens, roda sozinho o trecho só de leitura antes dela — uma vez por grafo.
-  const previa = host?.previas[no.id];
-  const podePrevia = useMemo(() => !!origem && subgrafoSoLeitura(subgrafoAte(grafo, no.id), REGISTRO_NOS), [grafo, no.id, origem]);
-  const chaveGrafo = JSON.stringify(subgrafoAte(grafo, no.id));
-  const pedida = useRef("");
-  const carregar = host?.carregarPrevia;
-  useEffect(() => {
-    if (!carregar || !podePrevia || itens.length || host?.rodando || pedida.current === chaveGrafo) return;
-    pedida.current = chaveGrafo;
-    carregar(grafo, no.id);
-  }, [carregar, podePrevia, itens.length, host?.rodando, chaveGrafo, grafo, no.id]);
-  const marcados = useMemo(() => new Set((Array.isArray(no.config.marcados) ? no.config.marcados : []).map(String)), [no.config.marcados]);
-  const ehProtocolo = origem?.tipo === "sistema.protocolos" && no.config.dfds !== true && itens.some((it) => Array.isArray(it.dfds));
-  const gestao = useColunasGestao(host?.gestao ?? { pessoas: [], outras: [], situacoes: [], usuarioId: 0 });
-  const colunas = useMemo<Column<Item>[]>(() => {
-    if (ehProtocolo) {
-      const naCenti: Column<ProtocoloAutomacao> = {
-        key: "naCenti",
-        header: "Na Centi",
-        nowrap: true,
-        value: (p) => (host?.naCenti.get(p.id) ? `${host.naCenti.get(p.id)} anexado(s)` : "—"),
-        render: (p) => {
-          const n = host?.naCenti.get(p.id) ?? 0;
-          return n ? (
-            <Badge tone="emerald" dot>
-              {n} anexado(s)
-            </Badge>
-          ) : (
-            <span className="text-faint">—</span>
-          );
-        },
-      };
-      return [...gestao, ...COLUNAS_PROTOCOLOS, naCenti] as unknown as Column<Item>[];
-    }
-    return caminhosDosItens(itens.slice(0, 50), 14)
-      .filter((c) => !c.includes("."))
-      .map((c) => ({ key: c, header: c, nowrap: true, value: (it: Item) => s(it[c]), render: (it: Item) => <span className="block max-w-[18rem] truncate">{s(it[c]) || "—"}</span> }));
-  }, [ehProtocolo, gestao, host, itens]);
-  const definir = (sel: Set<string | number>) =>
-    onGrafo({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, marcados: [...sel].map(String) } } : n)) });
+  const { previa, podePrevia, recarregar } = usePreviaDoNo(grafo, no.id, false, !!origem, itens.length > 0);
+  const { marcados, definir } = useMarcadosDoNo(no, grafo, onGrafo);
+  // A SEQUÊNCIA da tabela (ordenação + filtros) é a ordem em que os itens seguem no fluxo — gravada no nó só quando muda
+  // (a ordem natural sem filtro não grava nada: abrir a tela não "suja" o fluxo).
+  const gravarOrdem = (chaves: string[], filtrada: boolean) => {
+    if (!itens.length) return;
+    const natural = !filtrada && chaves.every((k, i) => k === chaveSelecao(itens[i], no.config.chave));
+    const ordem = natural ? undefined : chaves;
+    const atual = Array.isArray(no.config.ordem) ? no.config.ordem.map(String) : undefined;
+    if ((atual?.join("\u0000") ?? null) === (ordem?.join("\u0000") ?? null) && (no.config.filtrada === true) === (!natural && filtrada)) return;
+    onGrafo({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, ordem, filtrada: !natural && filtrada ? true : undefined } } : n)) });
+  };
+  // Os protocolos ganham o "Na Centi" (quantos documentos já foram anexados); as demais colunas são as da Mesa.
+  const naCenti = useMemo<Column<Item>[]>(
+    () =>
+      itens.some((it) => Array.isArray(it.dfds))
+        ? [
+            {
+              key: "naCenti",
+              header: "Na Centi",
+              nowrap: true,
+              value: (p) => (host?.naCenti.get(Number(p.id)) ? `${host.naCenti.get(Number(p.id))} anexado(s)` : "—"),
+              render: (p) => {
+                const n = host?.naCenti.get(Number(p.id)) ?? 0;
+                return n ? (
+                  <Badge tone="emerald" dot>
+                    {n} anexado(s)
+                  </Badge>
+                ) : (
+                  <span className="text-faint">—</span>
+                );
+              },
+            },
+          ]
+        : [],
+    [host, itens],
+  );
+  const genericas = useMemo(() => colunasGenericas(itens), [itens]);
+  if (!host) return null;
   return (
-    <DataTable
-      columns={colunas}
-      rows={itens}
-      getKey={(it) => chaveSelecao(it, no.config.chave)}
-      selectable
+    <TabelaMesaFluxo
+      itens={itens}
+      chave={(it) => chaveSelecao(it, no.config.chave)}
+      genericas={genericas}
+      extras={naCenti}
+      gestao={host.gestao}
+      onAbrir={host.abrir}
       selected={marcados}
       onSelected={definir}
-      onRowClick={ehProtocolo && host ? (it) => host.abrirProtocolo(Number(it.id)) : undefined}
-      density="compact"
-      scrollInterno
       vazio={
         !origem
           ? "Ligue um componente à entrada desta seleção."
@@ -245,13 +312,169 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
                 ? "Nenhum item encontrado."
                 : "Execute o fluxo para listar os itens; depois marque e execute de novo."
       }
-      acoesRodape={
-        podePrevia && host ? (
-          <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={() => host.carregarPrevia(grafo, no.id)} disabled={host.rodando} />
-        ) : undefined
-      }
-      resumo={(ls) => `${ls.length} item(ns) · ${marcados.size} marcado(s)`}
+      acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar itens" onClick={recarregar} disabled={host.rodando} /> : undefined}
+      onOrdem={gravarOrdem}
+      resumo={(ls) => `${ls.length} item(ns) · ${marcados.size} marcado(s) · seguem na ordem da tabela`}
     />
+  );
+}
+
+/**
+ * PRÉVIA (padrão de toda visão que lista itens antes de executar): sem itens, roda sozinho o trecho SÓ DE LEITURA até o
+ * nó — uma vez por grafo. `incluir` = o próprio nó também roda (a visão de um nó que lê); sem ele, só os anteriores.
+ */
+function usePreviaDoNo(grafo: Grafo, noId: string, incluir: boolean, ligado: boolean, temItens: boolean) {
+  const host = useHost();
+  const previa = host?.previas[noId];
+  const sub = useMemo(() => subgrafoAte(grafo, noId, incluir), [grafo, noId, incluir]);
+  const podePrevia = ligado && subgrafoSoLeitura(sub, REGISTRO_NOS);
+  const chaveGrafo = JSON.stringify(sub);
+  const pedida = useRef("");
+  const carregar = host?.carregarPrevia;
+  const rodando = host?.rodando;
+  useEffect(() => {
+    if (!carregar || !podePrevia || temItens || rodando || pedida.current === chaveGrafo) return;
+    pedida.current = chaveGrafo;
+    carregar(grafo, noId, incluir);
+  }, [carregar, podePrevia, temItens, rodando, chaveGrafo, grafo, noId, incluir]);
+  return { previa, podePrevia, recarregar: () => carregar?.(grafo, noId, incluir) };
+}
+
+/** As linhas MARCADAS de uma visão que ENTREGA itens — gravadas no nó (`marcados`): só elas passam pela automação. */
+function useMarcadosDoNo(no: NoFluxo, grafo: Grafo, onGrafo: (g: Grafo) => void) {
+  const marcados = useMemo(() => new Set((Array.isArray(no.config.marcados) ? no.config.marcados : []).map(String)), [no.config.marcados]);
+  const definir = (sel: Set<string | number>) =>
+    onGrafo({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, marcados: sel.size ? [...sel].map(String) : undefined } } : n)) });
+  return { marcados, definir };
+}
+
+/**
+ * A seleção numa tabela de RESULTADO: marque e "Executar com os selecionados" — o fluxo roda de novo SÓ com eles (o Início
+ * os entrega, como os da Mesa). Só aparece quando o fluxo recebe esses itens (`aceitaItensDeFora`); a seleção zera quando
+ * os itens mudam (nova execução).
+ */
+export function useExecutarSelecionados(grafo: Grafo, itens: Item[], chave: (it: Item) => string | number) {
+  const host = useHost();
+  const [sel, setSel] = useState<Set<string | number>>(new Set());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: os itens novos (outra execução) zeram a seleção
+  useEffect(() => setSel((v) => (v.size ? new Set() : v)), [itens]);
+  const aceita = useMemo(() => aceitaItensDeFora(grafo, itens, (t) => REGISTRO_NOS.get(t)?.categoria), [grafo, itens]);
+  if (!host || !aceita) return null;
+  const escolhidos = itens.filter((it) => sel.has(chave(it)));
+  return {
+    selected: sel,
+    onSelected: host.rodando ? undefined : setSel,
+    acao: (
+      <Button size="sm" disabled={!escolhidos.length || host.rodando} onClick={() => host.executarCom(grafo, escolhidos)} title="Executa o fluxo de novo só com as linhas marcadas">
+        <IconPlay className="h-4 w-4" aria-hidden="true" />
+        Executar com {escolhidos.length ? `${escolhidos.length} ` : "os "}selecionado{escolhidos.length === 1 ? "" : "s"}
+      </Button>
+    ),
+  };
+}
+
+// ---------------------------------------------------------------- DO SISTEMA
+/** O que o "Ler do sistema" lê (DFDs, protocolos ou itens) — já ao abrir o fluxo, sem executar e sem a extensão. */
+function VistaDoSistema({ no, grafo, onGrafo }: PropsVisao) {
+  const host = useHost();
+  // A prévia lê TUDO de uma vez (no "Um por vez" ela entregaria só o primeiro, sem quem devolva pela Volta) e SEM as
+  // marcações — a tabela mostra tudo o que o nó lê; as marcadas decidem o que passa.
+  const grafoLista = useMemo(
+    () => ({ ...grafo, nos: grafo.nos.map((n) => (n.id === no.id ? { ...n, config: { ...n.config, entrega: "lista", marcados: undefined } } : n)) }),
+    [grafo, no.id],
+  );
+  const itens = host?.previas[no.id]?.itens ?? [];
+  const { previa, podePrevia, recarregar } = usePreviaDoNo(grafoLista, no.id, true, true, !!host?.previas[no.id]?.itens);
+  const { marcados, definir } = useMarcadosDoNo(no, grafo, onGrafo);
+  const genericas = useMemo(() => colunasGenericas(itens), [itens]);
+  if (!host) return null;
+  return (
+    <TabelaMesaFluxo
+      itens={itens}
+      chave={(it) => chaveSelecao(it, "id")}
+      genericas={genericas}
+      gestao={host.gestao}
+      onAbrir={host.abrir}
+      selected={marcados}
+      onSelected={host.rodando ? undefined : definir}
+      vazio={
+        previa?.carregando
+          ? "Carregando do sistema…"
+          : previa?.erro
+            ? `Não consegui ler do sistema: ${previa.erro}`
+            : podePrevia
+              ? "Nada encontrado no sistema com essa busca."
+              : "Execute o fluxo para ler do sistema."
+      }
+      acoesRodape={podePrevia ? <BotaoAtualizar ativo={!!previa?.carregando} rotulo="Recarregar do sistema" onClick={recarregar} disabled={host.rodando} /> : undefined}
+      resumo={(ls) => `${ls.length} item(ns) · ${marcados.size ? `${marcados.size} marcado(s) — só eles passam` : "nenhum marcado — todos passam"}`}
+    />
+  );
+}
+
+/** As colunas dos itens que NÃO são da Mesa (repartições, linhas da CM002…): os campos do 1º nível, como vêm. */
+function colunasGenericas(itens: Item[]): Column<Item>[] {
+  return caminhosDosItens(itens.slice(0, 50), 14)
+    .filter((c) => !c.includes("."))
+    .map((c) => ({ key: c, header: c, nowrap: true, value: (it: Item) => s(it[c]), render: (it: Item) => <span className="block max-w-[18rem] truncate">{s(it[c]) || "—"}</span> }));
+}
+
+// ---------------------------------------------------------------- TESTAR O PROTOCOLO (Baixar/anexar → Protocolo indicado)
+/** O protocolo que a Centi devolveu no "Testar protocolo". */
+export type ProtocoloCenti = { id?: string; numero: string; ano: string; assunto: string; interessado?: string; descricao: string; documentos: number; docs?: DocCenti[] };
+
+/**
+ * "Testar protocolo" do componente Baixar/anexar DFDs (destino Protocolo indicado): abre o protocolo na Centi SÓ PARA LER
+ * e mostra o que achou — o nº, o assunto, o interessado e os documentos. Com o nº em branco, acha só pelo Id e oferece
+ * preencher o nº com o da Centi (`onNumero`). Nos Dados de entrada e na aba DFDs.
+ */
+export function TesteProtocoloCenti({ no, onNumero, desabilitado }: { no: NoFluxo; onNumero?: (numero: string) => void; desabilitado?: boolean }) {
+  const host = useHost();
+  const { saida, alvo, erroAlvo } = opcoesDoNo(no.config);
+  const chave = `${alvo?.id ?? ""}|${alvo?.numero ?? ""}`;
+  const [r, setR] = useState<{ chave: string; carregando?: boolean; protocolo?: ProtocoloCenti; erro?: string } | null>(null);
+  if (!host || saida.destino !== "protocolo") return null;
+  const testar = async () => {
+    if (!alvo) return setR({ chave, erro: erroAlvo ?? "Informe o Id do protocolo." });
+    setR({ chave, carregando: true });
+    const x = await host.conferirAlvo(alvo);
+    setR({ chave, ...x });
+  };
+  const atual = r?.chave === chave ? r : null;
+  const p = atual?.protocolo;
+  const nr = p ? `${p.numero}${p.ano ? `/${p.ano}` : ""}` : "";
+  return (
+    <div className="space-y-2">
+      <Button size="sm" variant="secondary" onClick={() => void testar()} loading={!!atual?.carregando} disabled={desabilitado || host.rodando} title="Abre o protocolo na Centi só para ler — nada é gravado">
+        <IconSearch className="h-4 w-4" />
+        Testar protocolo
+      </Button>
+      {p && (
+        <div role="status" className="flex items-start gap-2 rounded-control border border-[color-mix(in_oklab,var(--ok)_35%,transparent)] bg-[color-mix(in_oklab,var(--ok)_8%,transparent)] p-2 text-xs text-text">
+          <IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ok)]" />
+          <div className="min-w-0 space-y-0.5">
+            <p className="font-semibold">
+              Achou o protocolo {nr}
+              {p.id ? ` (Id ${p.id})` : ""}
+            </p>
+            {(p.assunto || p.descricao) && <p className="truncate text-muted" title={p.assunto || p.descricao}>{p.assunto || p.descricao}</p>}
+            {p.interessado && <p className="truncate text-muted" title={p.interessado}>{p.interessado}</p>}
+            <p className="text-muted">{p.documentos} documento(s)</p>
+            {onNumero && !alvo?.numero && p.numero && (
+              <Button size="xs" variant="secondary" onClick={() => onNumero(nr)} disabled={desabilitado || host.rodando} className="mt-1">
+                Usar o nº {nr}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {atual?.erro && (
+        <div role="alert" className="flex items-start gap-2 rounded-control border border-[color-mix(in_oklab,var(--danger)_35%,transparent)] bg-[color-mix(in_oklab,var(--danger)_8%,transparent)] p-2 text-xs text-text">
+          <IconAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" />
+          <p className="min-w-0 break-words">{atual.erro}</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -259,19 +482,20 @@ function VistaSelecao({ no, grafo, onGrafo }: PropsVisao) {
 function VistaDfds({ no, grafo }: PropsVisao) {
   const host = useHost();
   const { saida, alvo, erroAlvo } = opcoesDoNo(no.config);
-  const [checagem, setChecagem] = useState<{ carregando?: "conferir" | "testar"; texto?: string } | null>(null);
-  const checar = async (tipo: "conferir" | "testar") => {
-    if (!host || !alvo) return setChecagem({ texto: erroAlvo ?? "Informe o protocolo." });
-    setChecagem({ carregando: tipo });
-    setChecagem({ texto: tipo === "conferir" ? await host.conferirAlvo(alvo) : await host.testarAnexo(alvo, saida.tipoDocumento) });
+  const [checagem, setChecagem] = useState<{ carregando?: boolean; texto?: string } | null>(null);
+  const testarAnexo = async () => {
+    if (!host || !alvo) return setChecagem({ texto: erroAlvo ?? "Informe o Id do protocolo." });
+    setChecagem({ carregando: true });
+    setChecagem({ texto: await host.testarAnexo(alvo, saida.tipoDocumento) });
   };
-  const previa = useMemo(() => {
-    if (!host) return [];
+  const plano = useMemo(() => {
+    if (!host) return null;
     const itens = anteriores(grafo, no.id).flatMap((n) => itensDoNo(grafo, n, host));
-    return planoDosItens(itens, saida, host.protocolos).previa;
+    return planoDosItens(itens, saida, host.protocolos);
   }, [host, grafo, no.id, saida]);
+  const previa = plano?.previa ?? [];
   if (!host) return null;
-  const destino = saida.destino === "pasta" ? null : saida.destino === "proprio" ? "protocolo de cada DFD" : alvo ? `Protocolo ${alvo.numero}${alvo.ano ? `/${alvo.ano}` : ""}` : "protocolo da Centi";
+  const destino = saida.destino === "pasta" ? null : saida.destino === "proprio" ? "protocolo de cada DFD" : alvo ? (alvo.numero ? `Protocolo ${alvo.numero}${alvo.ano ? `/${alvo.ano}` : ""}` : `Protocolo de Id ${alvo.id}`) : "protocolo da Centi";
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       {saida.destino === "pasta" && saida.escolherPasta && host.pasta.pode && (
@@ -281,28 +505,93 @@ function VistaDfds({ no, grafo }: PropsVisao) {
         </Button>
       )}
       {saida.destino === "protocolo" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => void checar("conferir")} loading={checagem?.carregando === "conferir"} disabled={host.rodando}>
-            Conferir na Centi
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => void checar("testar")} loading={checagem?.carregando === "testar"} disabled={host.rodando} title="Anexa um PDF de teste (sem emitir DFD) — exclua-o depois na Centi">
+        <div className="flex flex-wrap items-start gap-2">
+          <TesteProtocoloCenti no={no} />
+          <Button size="sm" variant="secondary" onClick={() => void testarAnexo()} loading={!!checagem?.carregando} disabled={host.rodando} title="Anexa um PDF de teste (sem emitir DFD) — exclua-o depois na Centi">
             Testar anexo
           </Button>
           {checagem?.texto && <span className="min-w-0 flex-1 text-xs text-muted">{checagem.texto}</span>}
         </div>
       )}
+      {saida.destino !== "pasta" && <ConferenciaNoProtocolo arquivos={plano?.arquivos ?? []} no={no} grafo={grafo} />}
       <AnaliseDfds linhas={host.dfds ?? previa} rodando={host.rodando} destino={destino} />
     </div>
   );
 }
 
+/**
+ * "Conferir no protocolo": abre cada protocolo da Centi do plano (só leitura) e confere, arquivo a arquivo, o que JÁ está
+ * anexado (com o nº do documento), o que falta e o que o sistema registrou mas a Centi não tem — e "Enviar os que faltam"
+ * executa o fluxo só com eles. A Centi é a verdade.
+ */
+function ConferenciaNoProtocolo({ arquivos, no, grafo }: { arquivos: ArquivoSaida[]; no: NoFluxo; grafo: Grafo }) {
+  const host = useHost();
+  const { saida, alvo, erroAlvo } = opcoesDoNo(no.config);
+  const [estado, setEstado] = useState<{ carregando?: boolean; linhas?: LinhaConferencia[]; erro?: string } | null>(null);
+  // Ao TERMINAR uma execução com DFDs: confere sozinho (o que foi anexado e o que falta, para continuar de onde parou).
+  const rodandoAntes = useRef(false);
+  const conferirRef = useRef<() => Promise<void>>(async () => {});
+  const rodando = !!host?.rodando;
+  useEffect(() => {
+    if (rodandoAntes.current && !rodando && host?.dfds?.length) void conferirRef.current();
+    rodandoAntes.current = rodando;
+  }, [rodando, host?.dfds]);
+  if (!host) return null;
+  const conferir = async () => {
+    if (!arquivos.length) return setEstado({ erro: "Nenhum arquivo no plano — carregue a seleção (ou execute o fluxo) antes de conferir." });
+    setEstado({ carregando: true });
+    // O protocolo da Centi de cada arquivo (o indicado, ou o de onde vieram os DFDs).
+    const lista = arquivos.map((a) => {
+      const x = saida.destino === "proprio" ? alvoDoArquivo(a, host.protocolos) : alvo ? { alvo } : { erro: erroAlvo ?? "Informe o Id do protocolo." };
+      return { a, alvo: "alvo" in x ? x.alvo : null, erro: "erro" in x ? x.erro : undefined };
+    });
+    const docs = new Map<string, DocCenti[] | { erro: string }>();
+    const numeros = new Map<string, string>();
+    for (const x of lista) {
+      if (!x.alvo || docs.has(x.alvo.id)) continue;
+      const r = await host.conferirAlvo(x.alvo);
+      if ("erro" in r) docs.set(x.alvo.id, { erro: r.erro });
+      else if (!Array.isArray(r.protocolo.docs)) docs.set(x.alvo.id, { erro: "Atualize a extensão (1.25.0) para conferir os documentos do protocolo." });
+      else {
+        docs.set(x.alvo.id, r.protocolo.docs);
+        numeros.set(x.alvo.id, `${r.protocolo.numero}${r.protocolo.ano ? `/${r.protocolo.ano}` : ""}`);
+      }
+    }
+    const reg = await jaAnexados([...docs.keys()]);
+    const registros = new Set(reg ? [...reg.keys()] : []);
+    const linhas = conferenciaAnexos(
+      lista.map((x) => ({
+        nome: x.a.nome,
+        descricao: descricaoDoArquivo(x.a.nome),
+        dfds: x.a.partes.length,
+        protocolo: x.alvo ? (numeros.get(x.alvo.id) ?? x.alvo.numero ?? x.alvo.id) : "",
+        alvoId: x.alvo?.id ?? null,
+        erro: x.erro,
+      })),
+      docs,
+      registros,
+    );
+    setEstado({ linhas, erro: reg ? undefined : "Não consegui ler o registro do sistema — a coluna “No sistema” pode estar incompleta." });
+  };
+  conferirRef.current = conferir;
+  return (
+    <ConferenciaAnexos
+      linhas={estado?.linhas ?? null}
+      carregando={!!estado?.carregando}
+      erro={estado?.erro}
+      desabilitado={host.rodando}
+      onConferir={() => void conferir()}
+      onEnviar={(nomes) => host.enviarArquivos(grafo, no.id, nomes)}
+    />
+  );
+}
 // ---------------------------------------------------------------- PROTOCOLOS LIDOS (Ler protocolo)
 const DOC: Record<string, { rotulo: string; tom: Tone }> = {
   ok: { rotulo: "Lido", tom: "emerald" },
   atencao: { rotulo: "Atenção", tom: "amber" },
   falha: { rotulo: "Falhou", tom: "red" },
 };
-function VistaLidos({ no }: PropsVisao) {
+function VistaLidos({ no, grafo }: PropsVisao) {
   const host = useHost();
   const itens = host ? (host.saidas[no.id] ?? host.parciais[no.id] ?? []) : [];
   const casar = useMemo(() => noSistemaTela(host?.protocolos ?? []), [host?.protocolos]);
@@ -344,11 +633,17 @@ function VistaLidos({ no }: PropsVisao) {
       },
     ];
   }, [casar]);
+  const chaveLido = (it: Item) => `${s(it.protocolo)}/${s(it.ano)}`;
+  const exec = useExecutarSelecionados(grafo, itens, chaveLido);
   return (
     <DataTable
       columns={colunas}
       rows={itens}
-      getKey={(it) => `${s(it.protocolo)}/${s(it.ano)}`}
+      getKey={chaveLido}
+      selectable={!!exec?.onSelected}
+      selected={exec?.selected}
+      onSelected={exec?.onSelected}
+      acoesRodape={exec?.acao}
       onRowClick={host && !host.rodando ? (it) => host.abrirAnalise(it) : undefined}
       density="compact"
       scrollInterno
@@ -363,7 +658,7 @@ function VistaLidos({ no }: PropsVisao) {
 const celula = (v: unknown) => (v && typeof v === "object" ? JSON.stringify(v) : s(v));
 
 /** A TABELA salva (nó "Salvar em tabela" / "Ler tabela salva"): as linhas gravadas, todas as colunas, filtráveis e exportáveis. */
-function VistaTabela({ no }: PropsVisao) {
+function VistaTabela({ no, grafo, onGrafo }: PropsVisao) {
   const host = useHost();
   const nome = s(no.config.nome).trim();
   const execucao = host?.saidas[no.id];
@@ -393,23 +688,36 @@ function VistaTabela({ no }: PropsVisao) {
       })),
     [tabela, linhas],
   );
+  // "Ler tabela salva" ENTREGA as linhas: as marcadas (pela posição) são as que passam. "Salvar em tabela" é RESULTADO:
+  // as marcadas podem rodar o fluxo de novo.
+  const entrega = no.tipo === "entrada.tabela";
+  const chaveLinha = (it: Item) => String(linhas.indexOf(it));
+  const { marcados, definir } = useMarcadosDoNo(no, grafo, onGrafo);
+  const exec = useExecutarSelecionados(grafo, entrega ? [] : linhas, chaveLinha);
   if (!nome) return <p className="text-sm text-muted">Informe o nome da tabela no componente.</p>;
+  if (!host) return null;
   return (
-    <DataTable
-      columns={colunas}
-      rows={linhas}
-      getKey={(it) => linhas.indexOf(it)}
-      density="compact"
-      scrollInterno
+    <TabelaMesaFluxo
+      itens={linhas}
+      chave={chaveLinha}
+      genericas={colunas}
+      gestao={host.gestao}
+      onAbrir={host.abrir}
+      selected={entrega ? marcados : exec?.selected}
+      onSelected={entrega ? (host.rodando ? undefined : definir) : exec?.onSelected}
+      acoesRodape={entrega ? undefined : exec?.acao}
       exportar={{ nome }}
       vazio={tabela === "erro" ? "Não consegui ler a tabela — tente de novo." : tabela ? "A tabela está vazia." : "Tabela ainda não gravada — execute o fluxo."}
-      resumo={(ls) => `${ls.length} linha(s) · “${nome}”${tabela && tabela !== "erro" && tabela.atualizadoEm ? ` · gravada em ${dataHoraBR(tabela.atualizadoEm)}` : ""}`}
+      resumo={(ls) =>
+        `${ls.length} linha(s) · “${nome}”${tabela && tabela !== "erro" && tabela.atualizadoEm ? ` · gravada em ${dataHoraBR(tabela.atualizadoEm)}` : ""}${entrega ? ` · ${marcados.size ? `${marcados.size} marcada(s) — só elas passam` : "nenhuma marcada — as linhas do recorte passam"}` : ""}`
+      }
     />
   );
 }
 
 /** As visões que cada tipo de componente traz ao painel do fluxo. */
 export const VISOES: Record<string, Visao> = {
+  "sistema.ler": { titulo: "Do sistema", Componente: VistaDoSistema },
   "entrada.selecionar": { titulo: "Seleção", Componente: VistaSelecao },
   "saida.dfdsCenti": { titulo: "DFDs", Componente: VistaDfds },
   "leitura.protocolo": { titulo: "Protocolos lidos", Componente: VistaLidos },
@@ -428,6 +736,16 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
     const d = DOC[s(it.leitura)];
     return d ? { rotulo: d.rotulo, tom: d.tom, texto: s(it.leituraTexto) } : null;
   }
+  if (tipo === "saida.substituirDfd") {
+    if (s(it.erro)) return { rotulo: "Falhou", tom: "red", texto: s(it.erro) };
+    if (it.substituido === true) return { rotulo: "Substituído", tom: "emerald", texto: `${s(it.itensGravados) || "0"} item(ns) gravado(s) com os dados da Centi` };
+    return null;
+  }
+  if (tipo === "saida.dfdsCenti") {
+    // O passo REAL da linha (a mesma régua da Análise): emitindo, conferindo, anexando, aguardando, anexado, já estava…
+    const v = visualEstadoDfd((s(it.estado) || "fila") as EstadoDfd, it.anexar === true);
+    return { rotulo: v.rotulo, tom: v.tom, texto: s(it.erro) };
+  }
   if (tipo === "fluxo.executar") {
     const sub = it.subfluxo && typeof it.subfluxo === "object" ? (it.subfluxo as Item) : null;
     if (sub?.estado === "falhou") return { rotulo: "Falhou", tom: "red", texto: s(sub.erro) };
@@ -440,6 +758,8 @@ export function estadoDoItem(tipo: string, it: Item): { rotulo: string; tom: Ton
 
 /** O nome curto de um item (protocolo, DFD/planejamento ou o id). */
 export function rotuloItem(it: Item): string {
+  // Uma linha do Baixar/anexar DFDs: o `id` é o nº de planejamento e o `dfd`, o nº do DFD.
+  if ("estado" in it && "dfd" in it && "grupo" in it) return `Planej. ${s(it.id) || "—"}${s(it.dfd) ? ` · DFD ${s(it.dfd)}` : ""}`;
   if (it.protocolo && it.ano && !it.planejamento) return `Protocolo ${s(it.protocolo).split("/")[0]}/${s(it.ano)}`;
   if (it.numero || it.planejamento) return `DFD ${s(it.numero) || "—"} · Planej. ${s(it.planejamento) || "—"}`;
   return s(it.id ?? it.nome ?? it.reparticao) || "—";

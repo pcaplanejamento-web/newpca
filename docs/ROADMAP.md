@@ -11,6 +11,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Mesa conectada (v1.116.0) — entregue
+Protocolos, DFDs e Itens compartilham o recorte: os filtros e a ordem de cada visão ficam ao trocar de visão e o que passa
+numa recorta as outras nos dois sentidos (`mesa-recorte.ts`); faixa "Recorte da Mesa" com ✕ e "Limpar recorte".
+
 ### Fase 1 (padrão de design + navegação) — entregue
 ✅ **Design responsivo** (sidebar no desktop ↔ bottom-nav no mobile; tabela ↔ cards; botão ↔ FAB; modal ↔ bottom-sheet) · ✅ Navegação em 2 seções (Ferramentas / Administração) gated por papel · ✅ **Dashboard** (visão geral de protocolos: StatCards + recentes) · ✅ **Protocolos** (ambos depois substituídos pela **Mesa** — ver "Tudo na Mesa") — tabela única com **edição inline** (adicionar linha → editar células, como na planilha; dropdowns Natureza/Responsável/Situação/Distribuição, filtros por Natureza/Situação/Responsável/Período, paginação; tabela no desktop, cards editáveis no mobile) · ✅ **Ferramentas** (Dashboard do PCA + Importar + Tabelas dinâmicas) · 🔨 Abas Atividades/Pendências/Equipes/Permissões/Auditoria visíveis ("em construção").
 
@@ -1343,6 +1347,12 @@ etiqueta.
 opções, caixa de marcar; "mostrar no cartão"), preenchidos no detalhe, com colunas na Lista/.xlsx e filtros no painel, e o
 TÍTULO AUTOMÁTICO pelo formato do quadro (`{Categoria} - {Tipo} - {Nº protocolo}` — campo vazio some com o separador; o
 título escrito à mão prevalece). Copiar, template, mover e recorrência levam os valores.
+✅ **Tarefas — lista com pessoa, tarefa sobre o item e exclusão limpa (v1.80.0, migração `0108`):** a lista pode ser
+atribuída a uma pessoa (a tarefa nova nela nasce com ela como responsável); o ITEM do DFD vira vínculo (botão Tarefas no
+banner do item); o "Criar tarefa" da Mesa mostra as listas atribuídas ao responsável do protocolo e à pessoa; excluir a
+lista com as tarefas limpa também os vínculos que apontavam para elas. v1.82.0: linha Adicionar fixa no rodapé da tarefa, SIGLA da unidade (cartão, Lista, filtro) e Emitir DFDs das tarefas filtradas (ADM). **Próximo:** evento de calendário SEM tarefa
+(compromisso do grupo/pessoa — hoje todo evento pertence a uma tarefa).
+
 ✅ **Tarefas no padrão Trello — F8 (migração `0057`):** VÁRIOS vínculos por tarefa — protocolos, DFDs, PCAs, orçamentos e
 OUTRAS TAREFAS (a ligação entre tarefas aparece nos dois lados, com quadro › lista, prazo e conclusão); o vínculo único
 antigo foi migrado.
@@ -1596,6 +1606,9 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 | ✅ | **Configurações (`/painel/configuracoes`)**: tela única do ADM — **identidade do site** (nome/subtítulo/favicon, renderizados), **cadastro de PCAs** (nome+ano, editar, marcar ativo, excluir) e **atalhos** para as telas admin |
 | ✅ | **Avaliação configurável** (aba Avaliação): níveis (fundamental/intermediário/automático/ignorar) por dado de Protocolo/DFD/Item, com exceções por tipo de DFD e categoria de protocolo |
 | ✅ | **Responsáveis por DFDs numa planilha única (v1.53.0)**: pessoas (nome + matrícula) cadastradas uma vez e vinculadas a unidades ou órgãos (padrão/temporário, função, nomeação, período) pela regra de assinatura do órgão; coluna Conferência (o que está mal cadastrado); órgãos e unidades no padrão da Mesa com banner por cadastro (migração `0099` converteu os JSON antigos) |
+| ✅ | **Responsáveis exonerados e vários lugares por nomeação (v1.58.0)**: exoneração com data (os vínculos seguem valendo, nada novo depois), botão "Exonerados" com as linhas em cinza, encerrados numa coluna cinza fora da Conferência, ordem pela prioridade do cargo, vincular a várias unidades/órgãos de uma vez; órgãos com a coluna "Também unidade" (migração `0101`) |
+| ✅ | **Responsáveis com cargo, período e usuário (v1.56.0)**: o cargo/função é da pessoa (lista de Configurações → Cargos e funções), o padrão tem início e fim (fim em aberto), o temporário tem cargo próprio; ligação ao usuário da plataforma com a foto; órgãos ordenados pelo código da Centi com edição de tabela (migração `0100`) |
+| ⏳ | **Protocolos no meu nome**: o responsável ligado a um usuário vê os protocolos/DFDs em que é o solicitante |
 | 🔜 | Mais configurações da plataforma (secretarias/listas padrão, exercícios) |
 | 💡 | Painel de auditoria e uso |
 
@@ -1666,6 +1679,10 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 ✅ **Versões e Novidades (v1.3.0)**: o sistema é versionado (registro único de mudanças); o número aparece no fim do menu lateral e leva à página de Novidades, com o que mudou em cada versão e o botão "Ver onde mudou"; cada ADM recebe no sino a versão nova com a lista do que mudou.
 ✅ **Vínculos da linha do PCA mais legíveis** — o "N sem vínculo" mostra, com o mouse, a lista organizada por unidade do orçamento (dica flutuante); o editor separa as unidades da seleção das ações (cartão próprio, marcadas destacadas, as de outros vínculos travadas à parte); o PDF tem KPI de total e só duas tabelas (vinculadas e sem vínculo) com a linha TOTAL.
 ✅ **Editor do vínculo minimalista** — sem repetir as unidades que o banner já mostra, ações com a caixa e o total, "Incluir ações futuras" numa linha e as de outros vínculos resumidas por destino.
+✅ **v1.73.0 — Responsável de fora do município**: a pessoa marcada fica sem matrícula e a conferência não aponta "Sem matrícula".
+✅ **v1.72.0 — Responsáveis sempre no lugar que vale**: o vínculo é gravado onde a assinatura é conferida (órgão com assinatura única / cada unidade), mudar a configuração do órgão/unidade leva os responsáveis junto (migração `0103` corrigiu os gravados) e "Onde responde" separa Órgãos | Unidades (agrupadas por órgão), só com os lugares que valem.
+✅ **v1.70.1 — Proteção de captura invisível**: sem cobertura nos atalhos; impressão em branco, PrtScn fora da área de transferência e marca d'água invisível.
+
 ✅ **v1.4.0 — Sino: ver é ler, fixar não lidas e Novidades flutuantes**: o aviso visto no sino vira visualizado sozinho; o marcador fica colorido (✓) ao visualizar; marcar como não visualizada fixa o aviso; as Novidades abrem num banner ao lado do sino (ou pela versão do menu) sem fechar nada. Toda atualização, de qualquer sessão, passa a ser versionada e publicada.
 ✅ **Vínculos da unidade sem repetição** — no banner da linha, a unidade do orçamento aparece uma vez (o selo "N sem vínculo" com a lista na dica); a seção "Sem vínculo" fica só na linha "Sem vínculo".
 ✅ **Dashboard do PCA completo (1.4.3)** — a tabela de itens mostra TODOS os itens (sem o teto de 5.000; os itens vão ao navegador num texto JSON único) e a consulta ganha "Fora da soma (N)": os DFDs vinculados ou da prévia que a consolidação por nº de planejamento tirou (repetido, ALTERAÇÃO, EXCLUSÃO), com o motivo e o DFD que prevaleceu (`foraDaSoma`, `pca-core.ts`).
@@ -1693,4 +1710,46 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 
 ✅ **v1.18.0 — Ano do PCA na previsão + periodicidade no Dashboard**: o ano da previsão de entrega é SEMPRE o do PCA (o do texto/contrato não vale; nº de contrato/ata/processo nunca vira data); previsão genérica anual/semestral/quadrimestral/trimestral no Tratamento e na massa (ano travado); no Dashboard do PCA, o Cronograma Mensal só com os itens de mês definido (+ leitura "Distribuído"), os quadros "Definição da Previsão" (mês definido × genérico × sem previsão) e "Contratações Periódicas" e o filtro "Previsão".
 
+✅ **v1.70.0 — Consulta de itens em uma linha**: no Dashboard do PCA, abas + busca + (?) numa linha só (`ConsultaPca.fim`, `ItemTable.busca`/`fim`, `BuscaItens`; `ChartCard` sem título = sem cabeçalho); produto/assunto/motivo em uma linha (`CelulaTexto`); selos da linha de título com o raio `--radius-control` do ADM.
+✅ **v1.69.2 — Nome do espaço em destaque**: o nome do PCA/Orçamento na linha de título em 24px (26px no toque), preenchendo a altura da seta e dos selos.
+✅ **v1.69.1 — Linha de título com a altura da seta**: nome, ano e status do PCA/Orçamento com a mesma altura do botão de voltar; Preview sem lápis nem brilho — o ponto respira e solta ondas (`.ponto-selo`); o conteúdo das abas do espaço (`AbasEspaco`) com o espaço padrão entre os blocos (o Dashboard do PCA tinha KPIs, filtros e gráficos colados).
+✅ **v1.69.0 — Linha de título padronizada**: nome, ano e status do PCA/Orçamento com a mesma altura (`Badge tamanho="linha"`), Preview com ícone e brilho ao vivo (`.selo-vivo`) e `.linha-topico` — abaixo da linha de título o mesmo respiro de cima (`--pad-canvas-y`) em todas as telas.
+✅ **v1.68.1 — Margens do conteúdo proporcionais**: token `--pad-canvas-y` (metade da lateral) no topo e na base do `<main>` (painel e tela pública); medidas de altura, barra de seleção fixa e avisos flutuantes acompanham.
+
+✅ **v1.68.0 — Respiro interno igual nos 4 lados**: todo cartão/quadro/banner (`rounded-card`) usa `p-[var(--pad-card)]` (o `KpiStat` perdeu o `pl-2`; cabeçalho e rodapé do `Modal`/`JanelaFlutuante` e do painel "Novo fluxo" também); os estados vazios grandes, `p-10`.
+
+✅ **v1.67.1 — (?) centralizado**: o gatilho do `Ajuda` usa `justify-center` (o `inline-flex` do `Dropdown` vencia o `grid` e o ícone encostava à esquerda).
+
+✅ **v1.67.0 — Espaço do PCA mais limpo**: título (nome · ano com calendário · Preview pulsando) na mesma linha das abas (`AbasEspaco cabecalho`), Configuração só com o ícone, sem o texto da fonte; no Dashboard a prévia virou um (?) ao lado das abas e saiu o `UnitFilter` do topo (o filtro Unidade dos `FiltrosDashboard` cobre).
+
+✅ **v1.66.1 — Giro da seta mais suave**: a `SetaDropdown` gira em 1,75× o `--motion-duration` (0,35 s) com ease-in-out simétrico.
+
+✅ **v1.66.0 — Seta dos dropdowns gira ao abrir**: em toda seleção, filtro e menu a seta gira suave e aponta para o lado oposto da lista aberta (onde tocar para fechar); fechada, volta girando (`SetaDropdown`, estado vindo do `Dropdown`).
+
+✅ **v1.65.0 — Proteção de dados corrigida + marca d'água**: imperceptível no uso (só aparece na captura e no papel); "ocultar" só reage à janela (antes cobria a cada campo); cobertura instantânea nos atalhos Win+Shift+S / Win+PrtScn / Cmd+Shift; PrtScn some da área de transferência; marca d'água invisível na tela e legível no papel.
+
+✅ **v1.64.0 — Listas de seleção mais completas**: alinhadas à caixa, rápidas, compactas no desktop; busca/título fixos no topo; folha que sobe de baixo no celular; digitar com o campo fechado troca a opção; 2ª linha de detalhe, aviso âmbar, cor e ações no rodapé (Visão do PCA: resumo, PCAs que usam, ausentes, Editar/Nova visão).
+
+✅ **v1.63.0 — Proteção de dados**: Configurações → Proteção de dados bloqueia seleção/cópia, impressão/captura e oculta ao sair da janela, por papel e na tela pública.
+✅ **v1.62.0 — Listas de seleção no desenho do sistema**: todo `<select>` de formulário abre a lista do SISTEMA (`Selecao` — o dropdown preso ao campo, a escolhida com o check, grupos, desabilitadas com o motivo, busca acima de 12 opções, teclado e 44px no toque) no lugar da lista nativa do aparelho; as células da Mesa seguem nativas (milhares de linhas).
+
+✅ **v1.61.0 — Vínculos por visão do orçamento**: cada visão pode ter os seus vínculos por unidade (os de antes viram o padrão); ao salvar, “Esta visão · Todas · Escolher”; “Usar o padrão”; Vínculos no banner da visão; o PCA usa os vínculos da visão dele; (?) das visões.
+✅ **v1.60.0 — Nomeações unificadas**: no banner da pessoa, os vínculos com o mesmo ato (decreto/portaria/lei de mesmo nº) num cartão só; editar vale para todos os lugares.
+
+✅ **v1.59.0 — Editar onde o responsável responde**: no "Editar vínculo", trocar a unidade/órgão, a pessoa e os dados, e acrescentar lugares com a mesma nomeação.
+
+✅ **v1.58.0 — Responsáveis exonerados**: "Exonerar" com a data (os vínculos cadastrados continuam valendo; nenhum vínculo novo nem começando depois), botão "Exonerados" à direita com as linhas em cinza; vínculo encerrado em cinza numa coluna própria, fora da Conferência; planilha pela prioridade do cargo e depois o nome; um vínculo novo pode ir a várias unidades e órgãos com a mesma nomeação. Órgãos: "Também unidade" em coluna própria e o nome em até 2 linhas.
+
+✅ **v1.56.0 — Responsáveis com cargo, período e foto**: o cargo/função passa a ser da pessoa, escolhido entre os cargos cadastrados (nova aba Configurações → Cargos e funções); o padrão segue esse cargo e tem início e fim (sem fim = vigente até informar — a assinatura só confere dentro do período); o temporário tem o cargo próprio; padrão e temporários em seções separadas; o responsável pode ser ligado a um usuário (foto no nome). Órgãos ordenados pelo código da Centi, com a edição da tabela.
+
 ✅ **v1.53.0 — Responsáveis numa planilha única**: Órgãos e Unidades → Responsáveis — cada pessoa cadastrada uma vez (nome + matrícula) e vinculada a unidades ou órgãos conforme a assinatura do órgão (única = os do órgão; por unidade = os de cada unidade); padrão ou temporário, função, nomeação com link e período; a coluna Conferência aponta quem está sem responsável vigente, sem matrícula/função/nomeação, temporário encerrado e nomes repetidos. Tabelas de órgãos e unidades no padrão da Mesa, com o banner de cada um (dados por cadeado, responsáveis, estrutura). A migração `0099` converteu os responsáveis já cadastrados, sem perder nada.
+
+✅ **v1.55.0 — Visão do orçamento à vista no PCA**: no PCA × Orçamento, o seletor “Visão” na barra da tabela (`SeletorVisaoPca`) troca a visão do orçamento do PCA na hora — a engrenagem segue para editar/criar visões.
+
+- **v1.76.0 — Grupos:** telas e PCAs escolhidos no próprio grupo (a tela Permissões saiu); aviso de nova versão a todos, só com o que muda nas telas do grupo.
+- **v1.77.0 — Verificação nos grupos:** tela própria liberada pelo grupo (migração `0107`); cartões dos grupos no padrão do sistema; Novidades filtradas pelas telas do grupo.
+- **v1.77.1 — Verificação:** seletor Protocolo | DFD à direita; banners só para visualizar.
+- **v1.78.0 — Tabelas:** 1º clique marca (accent), 2º abre o banner; cor das linhas intercaladas na Aparência; página sempre cheia com linhas vazias.
+- **v1.78.1 — Tabelas:** linhas vazias só até o limite da visão (nunca além das linhas por página).
+- **v1.79.0 — Biblioteca de componentes:** só o ADM (Administração → Componentes, `/painel/design-system`); a única tela pública é a consulta do PCA.
+- **v1.115.0 — Grupos:** o grupo escolhe entre as unidades escolhidas e a unidade de cadastro de cada pessoa (migração 0112).

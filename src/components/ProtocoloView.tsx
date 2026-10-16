@@ -15,6 +15,7 @@ import { inputCls, labelCls, selectCls } from "./formStyles";
 import { IconAlert } from "./icons";
 import { type LinhaDfd, PlanilhaDfds, TabelaSobrescritos } from "./PlanilhaDfds";
 import { StatMini } from "./StatMini";
+import { Selecao } from "./Selecao";
 
 /** Campos da CAPA do protocolo (a MESMA grade na importação e no gravado).
  * - **modo `"criar"`** (protocolo manual): campos de texto viram inputs simples.
@@ -106,14 +107,14 @@ export function CapaCampos({
             <label className={labelCls} htmlFor="capa-assunto">
               Assunto
             </label>
-            <select id="capa-assunto" className={selectCls} value={assunto} onChange={set("assunto")}>
+            <Selecao id="capa-assunto" className={selectCls} value={assunto} onChange={set("assunto")}>
               <option value="">— Selecione o assunto —</option>
               {assuntos.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
               ))}
-            </select>
+            </Selecao>
           </div>
         ) : (
           <TextField label="Assunto" value={assunto} onChange={set("assunto")} />
@@ -364,7 +365,7 @@ export function ProtocoloView({
                 <label className={labelCls} htmlFor="proto-unidade">
                   {unidade.rotulo ?? "Unidade"} {unidade.obrigatoria && <span style={{ color: "var(--danger)" }}>*</span>}
                 </label>
-                <select
+                <Selecao
                   id="proto-unidade"
                   className={inputCls}
                   value={unidade.id ?? ""}
@@ -378,7 +379,7 @@ export function ProtocoloView({
                         {r.codigo} · {r.nome}
                       </option>
                     ))}
-                </select>
+                </Selecao>
               </>
             ) : (
               <TextField
@@ -396,7 +397,7 @@ export function ProtocoloView({
       {/* Planilha ÚNICA de DFDs (a mesma da análise, do gravado e da aba DFDs). */}
       {linhas.length === 0 ? (
         (vazio ?? (
-          <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
+          <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">
             {sobrescritos.length > 0
               ? "Os DFDs deste protocolo foram sobrescritos por outro protocolo — veja o rastro abaixo."
               : "Nenhum DFD vinculado a este protocolo."}

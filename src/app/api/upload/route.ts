@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { exigirAcesso } from "@/lib/api-auth";
+import { exigirAcesso, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { itens, unidades } from "@/db/schema";
@@ -61,6 +61,8 @@ export async function POST(req: Request) {
         parsed.data;
       const pca = await getPcaEspaco(pcaId);
       if (!pca) return bad("PCA não encontrado.", 404);
+      const semPca = await recusaPca(pcaId);
+      if (semPca) return semPca;
       if (pca.fonte !== "lista") return bad("Este PCA é de protocolos — a planilha só entra num PCA de lista pronta.", 409);
 
       // Unidade ativa no head vira dona da planilha importada. Em "Geral" (repId=null)

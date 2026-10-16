@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { grupoReparticoes, grupos, reparticoes, usuarioGrupos } from "@/db/schema";
+import { grupoReparticoes, grupos, reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 import {
@@ -11,25 +11,27 @@ import {
   FILTRO_NENHUMA,
   type FiltroLista,
   filtroDeLista,
+  type ModoUnidades,
   unidadeNoEscopo,
+  unidadesDoMembro,
 } from "./escopo-unidades-core";
 
 /**
  * RBAC por grupo. Um usuário pode estar em vários grupos e escolhe o ativo no
- * cabeçalho (cookie `pca_grupo`). O grupo ativo define a PERMISSÃO (quais telas — o que se faz
+ * cabeçalho (cookie `pca_grupo`). O grupo ativo define as TELAS (quais telas — o que se faz
  * nelas é do PAPEL: `acesso.ts`) e as UNIDADES acessíveis (`grupo_reparticoes`) — que escopam
  * os dados da Mesa e do PCA. O Administrador abre todas as telas e acessa todas as unidades.
  */
 const COOKIE_GRUPO = "pca_grupo";
 const COOKIE_REP = "pca_reparticao";
 
-export type GrupoResumo = { id: number; nome: string; permissaoId: number | null };
+export type GrupoResumo = { id: number; nome: string; modoUnidades?: ModoUnidades };
 export type ReparticaoResumo = { id: number; codigo: string; nome: string };
 
 /** Grupos aos quais o usuário pertence (ordenados por nome). */
 export async function gruposDoUsuario(usuarioId: number): Promise<GrupoResumo[]> {
   return getDb()
-    .select({ id: grupos.id, nome: grupos.nome, permissaoId: grupos.permissaoId })
+    .select({ id: grupos.id, nome: grupos.nome, modoUnidades: grupos.modoUnidades })
     .from(usuarioGrupos)
     .innerJoin(grupos, eq(usuarioGrupos.grupoId, grupos.id))
     .where(eq(usuarioGrupos.usuarioId, usuarioId))
@@ -73,6 +75,28 @@ export async function reparticoesDoGrupo(grupoId: number): Promise<ReparticaoRes
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
 }
 
+/** A unidade de CADASTRO da pessoa (`usuarios.reparticao_id`) — o grupo no modo `cadastro`. */
+export async function unidadeDeCadastro(usuarioId: number): Promise<ReparticaoResumo | null> {
+  const [r] = await getDb()
+    .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome })
+    .from(usuarios)
+    .innerJoin(reparticoes, eq(usuarios.reparticaoId, reparticoes.id))
+    .where(eq(usuarios.id, usuarioId))
+    .limit(1);
+  return r ?? null;
+}
+
+/** As unidades de um MEMBRO no grupo: as escolhidas (modo `lista`) ou a unidade de cadastro dele (modo `cadastro`). */
+export async function reparticoesDoMembro(grupo: GrupoResumo, usuarioId: number): Promise<ReparticaoResumo[]> {
+  let modo = grupo.modoUnidades;
+  if (!modo) {
+    const [g] = await getDb().select({ m: grupos.modoUnidades }).from(grupos).where(eq(grupos.id, grupo.id)).limit(1);
+    modo = g?.m ?? "lista";
+  }
+  if (modo === "cadastro") return unidadesDoMembro(modo, [], await unidadeDeCadastro(usuarioId));
+  return reparticoesDoGrupo(grupo.id);
+}
+
 /** Todas as repartições (ordenadas) — o ADM vê todas no head. Memorizada POR REQUISIÇÃO (`cache` do React): o
  * cabeçalho, o escopo e os banners da Mesa leem a mesma lista uma vez só. Quem usa só lê (não altere a lista). */
 export const listarReparticoes = cache(async (): Promise<ReparticaoResumo[]> => {
@@ -97,8 +121,8 @@ export async function getReparticaoContexto(
     lista = await listarReparticoes();
   } else {
     const grupo = grupoAtivo === undefined ? await getGrupoAtivo(u) : grupoAtivo;
-    if (!grupo) return { lista: [], ativa: null };
-    lista = await reparticoesDoGrupo(grupo.id);
+    if (!grupo || !u) return { lista: [], ativa: null };
+    lista = await reparticoesDoMembro(grupo, u.id);
   }
   if (lista.length === 0) return { lista, ativa: null };
   const jar = await cookies();

@@ -1,4 +1,4 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { erro } from "@/lib/http";
 import { capaDoPca } from "@/lib/pca-espaco";
 import { decodificarFoto } from "@/lib/pessoa";
@@ -14,6 +14,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const semPca = await recusaPca(id);
+  if (semPca) return semPca;
   const img = decodificarFoto(await capaDoPca(id));
   if (!img) return erro("Sem capa.", 404);
   return new Response(img.bytes, {

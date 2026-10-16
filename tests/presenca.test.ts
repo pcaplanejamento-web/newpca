@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   CONFIG_PRESENCA_PADRAO,
-  ficaInvisivel,
   limparRecado,
   lerConfigPresenca,
   lerListaMensagem,
@@ -25,7 +24,7 @@ describe("presença: configuração e preferência", () => {
   it("padrão desligado; qualquer JSON vira válido; inativo dentro dos limites", () => {
     assert.deepEqual(lerConfigPresenca(undefined), CONFIG_PRESENCA_PADRAO);
     assert.equal(CONFIG_PRESENCA_PADRAO.ativo, false);
-    assert.deepEqual(lerConfigPresenca({ ativo: true, ausente: "x", lixo: 1 }), { ativo: true, ausente: true, invisivel: true, inativoMin: 5, atividade: true });
+    assert.deepEqual(lerConfigPresenca({ ativo: true, ausente: "x", lixo: 1 }), { ativo: true, ausente: true, invisivel: false, inativoMin: 5, atividade: true });
     assert.equal(lerConfigPresenca({ inativoMin: 0 }).inativoMin, 0);
     assert.equal(lerConfigPresenca({ inativoMin: 999 }).inativoMin, 5);
     assert.deepEqual(lerConfigPresenca("texto"), CONFIG_PRESENCA_PADRAO);
@@ -49,10 +48,6 @@ describe("presença: configuração e preferência", () => {
     assert.deepEqual(statusVigente({ status: "ocupado", recado: "r", ate: "2026-10-06T14:00:00Z" }, agora), { status: "disponivel", recado: "" });
     assert.deepEqual(statusVigente({ status: "ocupado", recado: "r", ate: "2026-10-06T16:00:00Z" }, agora), { status: "ocupado", recado: "r" });
     assert.deepEqual(statusVigente({ status: "reuniao", recado: "", ate: null }, agora), { status: "reuniao", recado: "" });
-  });
-  it("invisível só quando o ADM permite", () => {
-    assert.equal(ficaInvisivel(CFG, { invisivel: true }), true);
-    assert.equal(ficaInvisivel({ ...CFG, invisivel: false }, { invisivel: true }), false);
   });
   it("schemas estritos", () => {
     assert.equal(configPresencaSchema.safeParse(CFG).success, true);

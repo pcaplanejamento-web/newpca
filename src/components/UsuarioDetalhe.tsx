@@ -14,11 +14,13 @@ import { LinhaCampo, useCadeados } from "./CampoCadeado";
 import { CampoMatricula } from "./CampoMatricula";
 import { cellCls } from "./formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
-import { IconBadgeCheck, IconCheck, IconSave, IconSenhaNova, IconShield, IconShieldCheck, IconTrash, IconUserCheck, IconUserX, IconWhatsapp } from "./icons";
+import { IconArquivar, IconDesarquivar, IconBadgeCheck, IconCheck, IconSave, IconSenhaNova, IconShield, IconShieldCheck, IconTrash, IconUserCheck, IconUserX, IconWhatsapp } from "./icons";
 import { Modal } from "./Modal";
 import { OpcoesUnidades } from "./OpcoesUnidades";
+import { HistoricoAcessos } from "./HistoricoAcessos";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { BotaoWhatsapp } from "./Telefone";
+import { Selecao } from "./Selecao";
 
 export type Status = "ativo" | "pendente" | "inativo";
 
@@ -44,8 +46,13 @@ export type UsuarioAdmin = {
   dadosValidadosEm: string | null;
   dadosValidadosPor: string | null;
   trocarSenha: boolean;
+  /** ARQUIVADO (o "Excluir" da tela): quando e o NOME de quem — restaurável; `null` = não arquivado. */
+  arquivadoEm: string | null;
+  arquivadoPor: string | null;
   criadoEm: string | null;
   atualizadoEm: string | null;
+  /** O último acesso (login ou atividade da sessão). */
+  ultimoAcessoEm?: string | null;
 };
 
 /** O que a tela manda ao `PATCH /api/admin/usuarios/[id]` — só o que MUDOU. */
@@ -62,6 +69,7 @@ export type PatchUsuario = {
   status?: Status;
   validar?: boolean;
   trocarSenha?: boolean;
+  restaurar?: true;
 };
 
 export const STATUS_TONE: Record<Status, Tone> = { ativo: "emerald", pendente: "amber", inativo: "slate" };
@@ -110,7 +118,7 @@ function problemas(p: PatchUsuario): Partial<Record<Campo, string>> {
   const e: Partial<Record<Campo, string>> = {};
   if (p.nome !== undefined && !nomeValido(p.nome)) e.nome = "Nome e sobrenome, só com letras.";
   if (p.email !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) e.email = "E-mail inválido.";
-  if (p.matricula && !matriculaValida(p.matricula)) e.matricula = "Exatamente 6 números.";
+  if (p.matricula && !matriculaValida(p.matricula)) e.matricula = "Até 7 números.";
   if (p.telefone && !telefoneValido(p.telefone)) e.telefone = "Com DDD: 10 ou 11 dígitos.";
   return e;
 }
@@ -141,6 +149,7 @@ export function UsuarioDetalhe({
   onRecusar,
   onVerAcesso,
   onExcluir,
+  onRestaurar,
 }: {
   usuario: UsuarioAdmin | null;
   aberto: boolean;
@@ -164,7 +173,10 @@ export function UsuarioDetalhe({
   onAprovar: () => void;
   onRecusar: () => void;
   onVerAcesso: () => void;
+  /** Arquivar (ativo/inativo) ou, no arquivado, excluir DE VEZ — quem usa confirma. */
   onExcluir: () => void;
+  /** Restaurar o arquivado (volta ativo com tudo o que tinha). */
+  onRestaurar: () => void;
 }) {
   const [r, setR] = useState<Rascunho | null>(() => (u ? doUsuario(u) : null));
   const { abertos, alternar, setAbertos } = useCadeados<Campo>();
@@ -212,15 +224,26 @@ export function UsuarioDetalhe({
       rodape={
         u && (
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            {/* O pendente é RECUSADO (na seção Acesso); os demais, excluídos. */}
+            {/* O pendente é RECUSADO (na seção Acesso); os demais são ARQUIVADOS; o arquivado sai de vez ou é restaurado. */}
             {!souEu && u.status !== "pendente" ? (
-              <Button size="sm" variant="danger" disabled={ocupado} icon={<IconTrash className="h-4 w-4" />} onClick={onExcluir}>
-                Excluir
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={ocupado}
+                icon={u.arquivadoEm ? <IconTrash className="h-4 w-4" /> : <IconArquivar className="h-4 w-4" />}
+                onClick={onExcluir}
+              >
+                {u.arquivadoEm ? "Excluir definitivamente" : "Arquivar"}
               </Button>
             ) : (
               <span />
             )}
             <div className="flex gap-2">
+              {u.arquivadoEm && (
+                <Button size="sm" variant="accent" disabled={ocupado} icon={<IconDesarquivar className="h-4 w-4" />} onClick={onRestaurar}>
+                  Restaurar
+                </Button>
+              )}
               <Button size="sm" variant="secondary" disabled={ocupado} onClick={() => void fechar()}>
                 Fechar
               </Button>
@@ -272,7 +295,13 @@ function Cabecalho({ u, souEu, papel }: { u: UsuarioAdmin; souEu: boolean; papel
           {u.nome} {souEu && <span className="font-normal text-faint">(você)</span>}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          <Badge tone={STATUS_TONE[u.status]}>{STATUS_LABEL[u.status]}</Badge>
+          {u.arquivadoEm ? (
+            <span title={`Arquivado por ${u.arquivadoPor ?? "—"} em ${dataHoraBR(u.arquivadoEm)}`}>
+              <Badge tone="slate">Arquivado</Badge>
+            </span>
+          ) : (
+            <Badge tone={STATUS_TONE[u.status]}>{STATUS_LABEL[u.status]}</Badge>
+          )}
           {papel ? <Badge tone="slate">{papel}</Badge> : <Badge tone="amber">Sem papel</Badge>}
           {u.dadosValidadosEm && <Badge tone="emerald">Dados validados</Badge>}
           {u.trocarSenha && <Badge tone="amber">Senha nova exigida</Badge>}
@@ -427,7 +456,7 @@ function Corpo({
           </LinhaCampo>
           <LinhaCampo label="Cargo ou função" {...lock("cargo")}>
             {abertos.has("cargo") ? (
-              <select className={cellCls} value={r.cargo} onChange={(e) => set("cargo")(e.target.value)} aria-label="Cargo ou função">
+              <Selecao className={cellCls} value={r.cargo} onChange={(e) => set("cargo")(e.target.value)} aria-label="Cargo ou função">
                 <option value="">Nenhum</option>
                 {/* O cargo atual continua na lista mesmo que tenha saído do cadastro. */}
                 {u.cargo && !cargos.includes(u.cargo) && <option value={u.cargo}>{u.cargo} (fora da lista)</option>}
@@ -436,21 +465,21 @@ function Corpo({
                     {c}
                   </option>
                 ))}
-              </select>
+              </Selecao>
             ) : (
               <ValorCampo>{r.cargo || "—"}</ValorCampo>
             )}
           </LinhaCampo>
           <LinhaCampo label="Unidade em que trabalha" {...lock("unidade")}>
             {abertos.has("unidade") ? (
-              <select className={cellCls} value={r.unidade} onChange={(e) => set("unidade")(e.target.value)} aria-label="Unidade em que trabalha">
+              <Selecao className={cellCls} value={r.unidade} onChange={(e) => set("unidade")(e.target.value)} aria-label="Unidade em que trabalha">
                 <option value="">Nenhuma</option>
                 {/* A unidade atual continua na lista mesmo que hoje esteja oculta. */}
                 {u.reparticaoId != null && !unidades.some((x) => x.id === u.reparticaoId) && (
                   <option value={u.reparticaoId}>{u.unidade ?? `Unidade ${u.reparticaoId}`}</option>
                 )}
                 <OpcoesUnidades unidades={unidades} />
-              </select>
+              </Selecao>
             ) : (
               <ValorCampo>{(r.unidade === String(u.reparticaoId ?? "") ? unidadeNome : unidades.find((x) => String(x.id) === r.unidade)?.nome) || "—"}</ValorCampo>
             )}
@@ -537,7 +566,7 @@ function Corpo({
         <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-muted">Papel</span>
-            <select
+            <Selecao
               className={cellCls}
               value={u.papelId == null ? "" : String(u.papelId)}
               disabled={souEu || ocupado || u.status === "pendente"}
@@ -554,7 +583,7 @@ function Corpo({
                   {p.nome}
                 </option>
               ))}
-            </select>
+            </Selecao>
             <span className="mt-1 block text-[12px] leading-snug text-muted">{papel ? descricaoPapel(papel) : "Sem papel: nenhuma tela abre."}</span>
           </label>
           <div>
@@ -596,6 +625,10 @@ function Corpo({
             )}
           </LinhaCampo>
         </div>
+      </SecaoBanner>
+
+      <SecaoBanner titulo="Histórico de acesso">
+        <HistoricoAcessos url={`/api/admin/usuarios/${u.id}/acessos`} nomeExportacao={`Acessos - ${u.nome}`} />
       </SecaoBanner>
     </div>
   );

@@ -99,6 +99,16 @@ describe("validarAssinatura", () => {
     assert.equal(r.status, "erro");
   });
 
+  it("PADRÃO com período: só a assinatura com a data dentro dele casa (fim vazio = em aberto)", () => {
+    const comPeriodo = (inicio: string, fim?: string): Responsaveis => ({ padroes: [{ ...pessoa("ISAAC PIRES CABRAL"), inicio, ...(fim ? { fim } : {}) }], temporarios: [] });
+    const v = (data: string, r: Responsaveis) => validarAssinatura([mkAss("Isaac Pires Cabral", data)], r, { exigeAssinatura: true }).status;
+    assert.equal(v("31/08/2026 16:20:00", comPeriodo("2026-01-01")), "ok", "desde o início, sem fim");
+    assert.equal(v("31/12/2025 16:20:00", comPeriodo("2026-01-01")), "erro", "antes do início");
+    assert.equal(v("31/08/2026 16:20:00", comPeriodo("2026-01-01", "2026-06-30")), "erro", "depois do fim");
+    assert.equal(v("30/06/2026 23:59:00", comPeriodo("2026-01-01", "2026-06-30")), "ok", "no último dia");
+    assert.equal(v("31/08/2026 16:20:00", padrao("ISAAC PIRES CABRAL")), "ok", "padrão antigo, sem período = igual a antes");
+  });
+
   it("solicitanteDeResultado traz o período e o ato do temporário", () => {
     const r = validarAssinatura([mkAss("MARIA SOUSA", "15/08/2026 10:00:00")], comTemporario("MARIA SOUSA", "2026-08-01", "2026-08-31"), {
       exigeAssinatura: true,

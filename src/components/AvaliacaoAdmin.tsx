@@ -9,6 +9,8 @@ import {
   type ChaveAvaliacao,
   type Comportamento,
   type GateProtocolacao,
+  type GrupoPalavras,
+  LIMITES_PALAVRAS,
   type EstadoCicloCfg,
   type EstadoCicloId,
   ESTADOS_CICLO_ORDEM,
@@ -26,10 +28,11 @@ import {
   TIPO_DFD_ROTULO,
   TIPOS_DFD,
 } from "@/lib/avaliacao-core";
+import { Ajuda } from "./Ajuda";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { ColorField } from "./ColorField";
-import { TextField } from "./Field";
+import { CampoLista, TextField } from "./Field";
 import { labelCls, selectCls } from "./formStyles";
 import { IconArrowDown, IconArrowUp, IconPencil, IconPlus, IconTrash } from "./icons";
 import { Modal } from "./Modal";
@@ -38,6 +41,7 @@ import { Switch } from "./Switch";
 import { Tabs } from "./Tabs";
 import { TipoDfdPicker } from "./TipoDfdPicker";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 // Tela do ADM para controlar TODA avaliação de Protocolos/DFDs/Itens (spec). Só
 // componentes do design-system. Recebe as regras por props (server component da rota)
@@ -74,6 +78,8 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   const [assuntos, setAssuntos] = useState<AssuntoPermitido[]>(regras.assuntos ?? []);
   const [tiposProtocolo, setTiposProtocolo] = useState<string[]>(regras.tiposProtocolo ?? []);
   const [gate, setGate] = useState<GateProtocolacao>(regras.gate ?? {});
+  // Conjuntos de palavras apontadas no item (`item.palavras`), cada um com a sua importância.
+  const [palavrasItem, setPalavrasItem] = useState<GrupoPalavras[]>(regras.palavrasItem ?? []);
   const [editImp, setEditImp] = useState<Importancia | null>(null);
   const [salvando, setSalvando] = useState(false);
   // Contexto ativo por painel (Todos = ""). Estado no topo (evita componente aninhado).
@@ -155,6 +161,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           .filter(([, v]) => Object.keys(v).length > 0),
       ) as ExMap;
     setPontos((p) => limpa(p));
+    setPalavrasItem((l) => l.map((g) => (g.nivel === imp.id ? { id: g.id, termos: g.termos } : g)));
     setExProtocolo((m) => limpaEx(m));
     setExDfd((m) => limpaEx(m));
   }
@@ -162,7 +169,9 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
   async function salvar() {
     setSalvando(true);
     try {
-      const body: RegrasAvaliacao = { pontos, exProtocolo, exDfd, editaveis, sinonimos, importancias, estadosCiclo, assuntos, tiposProtocolo, gate };
+      // Conjunto sem palavras não é gravado (o servidor exige ao menos uma).
+      const grupos = palavrasItem.filter((g) => g.termos.length > 0);
+      const body: RegrasAvaliacao = { pontos, exProtocolo, exDfd, editaveis, sinonimos, importancias, estadosCiclo, assuntos, tiposProtocolo, gate, palavrasItem: grupos };
       const res = await fetch("/api/admin/avaliacao", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -192,6 +201,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
       setSinonimos({});
       setImportancias(IMPORTANCIAS_PADRAO.map((i) => ({ ...i })));
       setEstadosCiclo({ ...ESTADOS_CICLO_PADRAO });
+      setPalavrasItem([]);
       toast.success("Regras restauradas ao padrão.");
     } catch {
       toast.error("Erro ao restaurar.");
@@ -260,6 +270,66 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
     );
   }
 
+  // Editor dos CONJUNTOS de palavras apontadas no item: as palavras (separadas por ";") + a importância de cada conjunto.
+  function editorPalavras(ponto: PontoAvaliacao, nivelPonto: Nivel): ReactNode {
+    const opcoes = opcoesDoPonto(ponto);
+    const muda = (id: string, patch: Partial<GrupoPalavras>) => setPalavrasItem((l) => l.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+    return (
+      <div className="mt-3 space-y-2 rounded-control border border-border bg-surface-2 p-3">
+        <div className="flex items-center gap-1">
+          <p className="text-[12px] font-semibold text-muted">Palavras apontadas</p>
+          <Ajuda titulo="Palavras apontadas" compacta>
+            <p>Cada CONJUNTO reúne palavras ou expressões. Cole ou digite várias de uma vez separadas por “;” — ex.: “PNEU; CÂMARA DE AR; RECAPAGEM”.</p>
+            <p>O item é apontado quando a DESCRIÇÃO contém uma delas (palavra inteira, sem acento e sem diferença de maiúsculas).</p>
+            <p>A importância de cada conjunto decide o rigor (bloqueia, avisa ou ignora); “Padrão do ponto” usa a importância escolhida acima. Com o ponto em Ignorar, nada é conferido.</p>
+          </Ajuda>
+        </div>
+        {palavrasItem.length === 0 && <p className="text-[12.5px] text-faint">Nenhum conjunto cadastrado.</p>}
+        {palavrasItem.map((g, i) => (
+          <div key={g.id} className="grid grid-cols-1 items-start gap-2 rounded-control border border-border bg-surface p-2 sm:grid-cols-[1fr_12rem_auto]">
+            <CampoLista
+              valores={g.termos}
+              onChange={(termos) => muda(g.id, { termos: termos.slice(0, LIMITES_PALAVRAS.termos) })}
+              placeholder="Palavras separadas por ;"
+              maxItem={LIMITES_PALAVRAS.termo}
+              id={`palavras-${g.id}`}
+            />
+            <Selecao
+              aria-label={`Importância do conjunto ${i + 1}`}
+              className={selectCls}
+              value={g.nivel ?? ""}
+              onChange={(e) => muda(g.id, { nivel: e.target.value || undefined })}
+            >
+              <option value="">Padrão do ponto ({impById(nivelPonto).nome})</option>
+              {opcoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
+                </option>
+              ))}
+            </Selecao>
+            <Button
+              variant="icon"
+              aria-label={`Remover o conjunto ${i + 1}`}
+              onClick={() => setPalavrasItem((l) => l.filter((x) => x.id !== g.id))}
+            >
+              <IconTrash className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+        {palavrasItem.length < LIMITES_PALAVRAS.grupos && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<IconPlus className="h-4 w-4" />}
+            onClick={() => setPalavrasItem((l) => [...l, { id: `pal-${Date.now().toString(36)}`, termos: [] }])}
+          >
+            Adicionar conjunto
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   // Card de um ponto (importância + edição + ajuste automático). Sem hooks (não é componente).
   function cardPonto(ponto: PontoAvaliacao, ctx: Ctx): ReactNode {
     const global = pontos[ponto.chave] ?? importanciaPadraoDe(ponto.chave);
@@ -276,6 +346,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           <div className="min-w-[12rem] flex-1">
             <div className="flex items-center gap-2">
               <span className="text-[13.5px] font-semibold text-text">{ponto.rotulo}</span>
+              {ajudaPonto(ponto)}
               {chipImportancia(efetivo)}
             </div>
             <p className="mt-0.5 text-[12px] text-muted">{ponto.descricao}</p>
@@ -283,7 +354,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
           {soLeitura ? (
             <span className="text-[12px] font-medium text-muted">Sempre {impById(global).nome.toLowerCase()}</span>
           ) : (
-            <select
+            <Selecao
               aria-label={`Importância de ${ponto.rotulo}`}
               className={`${selectCls} min-w-[9rem]`}
               value={valor}
@@ -299,20 +370,25 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
                   {i.nome}
                 </option>
               ))}
-            </select>
+            </Selecao>
           )}
         </div>
         {/* Edição/ajuste automático são GLOBAIS (só no contexto "Todos"). */}
         {ehGlobal && ponto.suportaEdicao && (
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-1">
             <Switch
               label="Editável pelo usuário na análise"
               checked={editavelAtual}
               onChange={(v) => setEditavel(ponto.chave, v)}
             />
+            <Ajuda titulo="Editável pelo usuário na análise" compacta>
+              <p>Ligado: na análise (importação/protocolação) e no DFD gravado, quem tem a ação Manipular pode corrigir este campo — o cadeado do campo destrava.</p>
+              <p>Desligado: o campo fica travado para todos (o Administrador também), e a falta só se corrige na origem (Centi) e reimportando.</p>
+            </Ajuda>
           </div>
         )}
         {ehGlobal && ponto.suportaAuto && impById(efetivo).comportamento === "automatico" && editorSinonimos(ponto.chave)}
+        {ehGlobal && ponto.chave === "item.palavras" && editorPalavras(ponto, global)}
       </div>
     );
   }
@@ -335,14 +411,14 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <span className={labelCls}>Aplicar a</span>
-            <select className={`${selectCls} min-w-[16rem]`} value={ctxKey} onChange={(e) => setCtxKey(e.target.value)}>
+            <Selecao className={`${selectCls} min-w-[16rem]`} value={ctxKey} onChange={(e) => setCtxKey(e.target.value)}>
               <option value="">Padrão (todos)</option>
               {opcoes.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </Selecao>
           </div>
           {ctxKey !== "" && (
             <p className="pb-2 text-[12px] text-muted">
@@ -353,6 +429,43 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </div>
         <div className="space-y-2">{lista.map((p) => cardPonto(p, ctx))}</div>
       </div>
+    );
+  }
+
+  /** O "(?)" de cada ponto: o que confere, onde aparece, o que cada comportamento faz e como corrigir. */
+  function ajudaPonto(ponto: PontoAvaliacao) {
+    const onde =
+      ponto.sujeito === "item"
+        ? "No Estado do ITEM (Mesa → Itens, tabela de itens do DFD, detalhe do item), agregado no DFD e no protocolo, no painel de pendências e no despacho de devolução."
+        : ponto.sujeito === "dfd"
+          ? "No Estado do DFD (Mesa → DFDs, análise da importação/protocolação), agregado no protocolo, no painel de pendências e no despacho de devolução."
+          : "Na capa e no Estado do protocolo (Mesa → Protocolos, análise da protocolação), no painel de pendências e no despacho.";
+    return (
+      <Ajuda titulo={ponto.rotulo} compacta>
+        <p>
+          <strong>O que confere:</strong> {ponto.descricao}
+        </p>
+        <p>
+          <strong>Onde aparece:</strong> {onde}
+        </p>
+        {ponto.ajuda && (
+          <p>
+            <strong>Como funciona:</strong> {ponto.ajuda}
+          </p>
+        )}
+        <p>
+          <strong>Comportamentos aceitos:</strong>
+        </p>
+        <ul className="list-disc pl-4">
+          {ponto.comportamentosPermitidos.map((c) => (
+            <li key={c}>{DESC_COMPORTAMENTO[c]}</li>
+          ))}
+        </ul>
+        <p>
+          Padrão: <strong>{DESC_COMPORTAMENTO[ponto.comportamentoPadrao]}</strong> As exceções por tipo de DFD e por categoria do protocolo valem acima
+          do padrão (aba do contexto).
+        </p>
+      </Ajuda>
     );
   }
 
@@ -393,7 +506,11 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </Button>
 
         <div className="rounded-control border border-border bg-surface-2 p-3">
-          <p className="mb-2 text-[12px] font-semibold text-muted">
+          <p className="mb-2 flex items-start gap-1 text-[12px] font-semibold text-muted">
+            <Ajuda titulo="Estados de ciclo" compacta>
+              <p>Os estados de um DFD SEM erro nem atenção: Editado (alterado na análise), Regularizado (tratado automaticamente), Regular (nada a tratar) e Pendente (ainda não conferido).</p>
+              <p>Aqui se muda só o nome e a cor que aparecem na célula Estado; a regra que decide cada um é fixa.</p>
+            </Ajuda>
             Estados de ciclo — rótulo e cor. O ciclo é fixo (Editado/Regularizado/Regular/Pendente); a severidade
             (erro/atenção) segue a cor da importância.
           </p>
@@ -429,7 +546,13 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-text">Assuntos permitidos</h2>
+            <h2 className="flex items-center gap-1 text-sm font-bold text-text">
+              Assuntos permitidos
+              <Ajuda titulo="Assuntos permitidos" compacta>
+                <p>A lista dos assuntos que podem ser protocolados. O assunto da capa precisa CONTER um destes termos (sem diferenciar acento e maiúsculas).</p>
+                <p>Só vale com a trava “Exigir assunto cadastrado para protocolar” ligada; lista vazia com a trava ligada impede qualquer protocolação.</p>
+              </Ajuda>
+            </h2>
             <Button
               variant="secondary"
               onClick={() => setAssuntos((l) => [...l, { id: `as-${Date.now().toString(36)}`, termo: "" }])}
@@ -474,7 +597,18 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </section>
 
         <section className="space-y-1">
-          <h2 className="text-sm font-bold text-text">Travas (barram o protocolo inteiro)</h2>
+          <h2 className="flex items-center gap-1 text-sm font-bold text-text">
+            Travas (barram o protocolo inteiro)
+            <Ajuda titulo="Travas da protocolação" compacta>
+              <p>
+                <strong>Exigir assunto cadastrado:</strong> o botão Protocolar trava quando o assunto da capa não está na lista de assuntos permitidos. O servidor confere de novo ao gravar.
+              </p>
+              <p>
+                <strong>Exigir tipo permitido:</strong> trava quando algum DFD do envio tem um tipo (DFD-S/R/O/E) fora dos marcados — vale também na importação de DFD avulso.
+              </p>
+              <p>Desligadas, nada muda: valem só as importâncias dos pontos.</p>
+            </Ajuda>
+          </h2>
           <Switch
             checked={!!gate.exigirAssunto}
             onChange={(v) => setG({ exigirAssunto: v })}
@@ -488,7 +622,18 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
         </section>
 
         <section className="space-y-1">
-          <h2 className="text-sm font-bold text-text">Botões</h2>
+          <h2 className="flex items-center gap-1 text-sm font-bold text-text">
+            Botões
+            <Ajuda titulo="Botões de importação" compacta>
+              <p>
+                <strong>Protocolação habilitada:</strong> desligada, ninguém protocola (o botão fica desabilitado com o motivo e o servidor recusa).
+              </p>
+              <p>
+                <strong>Importação de DFD avulso:</strong> desligada, a Mesa não importa DFD fora de um protocolo.
+              </p>
+              <p>Use para suspender as entradas temporariamente (ex.: fechamento do PCA).</p>
+            </Ajuda>
+          </h2>
           <Switch
             checked={gate.protocolarHabilitado ?? true}
             onChange={(v) => setG({ protocolarHabilitado: v })}
@@ -506,7 +651,7 @@ export function AvaliacaoAdmin({ regras }: { regras: RegrasAvaliacao }) {
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="linha-topico flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-text">Avaliação</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">

@@ -6,6 +6,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { criarSessao, definirCookieSessao, verificarSenha } from "@/lib/auth";
 import { loginSchema } from "@/lib/auth-validation";
 import { erro, parseCorpo } from "@/lib/http";
+import { alertarBloqueio, aposEntrar } from "@/lib/seguranca-alertas";
 import { contarTentativa, esperaDe, ipDe, respostaLimite, verificarCaptcha, zerarTentativas } from "@/lib/seguranca-acesso";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,8 @@ export async function POST(req: Request) {
     const ok = await verificarSenha(senha, u?.senhaHash ?? HASH_ISCA);
     if (!u || !ok) {
       await contarTentativa("loginEmail", email);
+      // Acabou de bloquear a conta (a próxima tentativa passaria do máximo) → aviso aos ADMs.
+      if (u && (await esperaDe("loginEmail", email)) > 0) await alertarBloqueio(req, u);
       return NextResponse.json(
         { ok: false, error: "E-mail ou senha incorretos." },
         { status: 401 },
@@ -68,6 +71,7 @@ export async function POST(req: Request) {
     await zerarTentativas("loginEmail", email);
     const token = await criarSessao(u.id);
     await definirCookieSessao(token);
+    await aposEntrar(req, u, "senha");
     await registrarAuditoria({ usuario: { id: u.id, nome: u.nome, email: u.email }, acao: "login", entidade: "usuario", entidadeId: u.id, resumo: `${u.nome} entrou no sistema` });
     return NextResponse.json({
       ok: true,

@@ -5,6 +5,7 @@ import {
   type Comportamento,
   ESTADOS_CICLO_ORDEM,
   IMPORTANCIAS_PADRAO,
+  LIMITES_PALAVRAS,
   TIPOS_DFD,
 } from "./avaliacao-core.ts";
 
@@ -118,6 +119,13 @@ const tiposProtocoloSchema = z
     });
   });
 
+// ---- Palavras apontadas no item (`item.palavras`): conjuntos de termos, cada um com a sua importância ----
+const grupoPalavrasSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  termos: z.array(z.string().trim().min(1).max(LIMITES_PALAVRAS.termo)).min(1, "Informe ao menos uma palavra.").max(LIMITES_PALAVRAS.termos),
+  nivel: z.string().trim().min(1).max(40).optional(),
+});
+
 /** Config completa de avaliação (corpo do PATCH). Todos os blocos são opcionais. */
 export const avaliacaoSchema = z
   .object({
@@ -131,6 +139,7 @@ export const avaliacaoSchema = z
     assuntos: z.array(assuntoSchema).max(200).optional(),
     tiposProtocolo: tiposProtocoloSchema.optional(),
     gate: gateSchema.optional(),
+    palavrasItem: z.array(grupoPalavrasSchema).max(LIMITES_PALAVRAS.grupos).optional(),
   })
   .superRefine((cfg, ctx) => {
     // Comportamento efetivo por id (bases + customizadas do próprio payload).
@@ -153,6 +162,9 @@ export const avaliacaoSchema = z
     checa(cfg.pontos ?? {}, ["pontos"]);
     for (const [cat, mapa] of Object.entries(cfg.exProtocolo ?? {})) checa(mapa, ["exProtocolo", cat]);
     for (const [tipo, mapa] of Object.entries(cfg.exDfd ?? {})) checa(mapa, ["exDfd", tipo]);
+    (cfg.palavrasItem ?? []).forEach((g, i) => {
+      if (g.nivel) checa({ "item.palavras": g.nivel }, ["palavrasItem", i, "nivel"]);
+    });
   });
 
 export type AvaliacaoInput = z.infer<typeof avaliacaoSchema>;

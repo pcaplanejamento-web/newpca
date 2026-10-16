@@ -50,6 +50,8 @@ export async function POST(req: Request) {
     } else if (!conta || conta.status === "inativo") return pronto; // sem revelar: nada é enviado
 
     const r = await emitirCodigo(email, finalidade);
+    // Sem sessão no "Esqueci a senha", a resposta é a MESMA exista ou não a conta (o 429 revelaria a conta).
+    if ("esperarS" in r && finalidade === "senha" && !sessao) return pronto;
     if ("esperarS" in r) return NextResponse.json({ ok: false, error: `Aguarde ${r.esperarS} s para pedir outro código.`, esperarS: r.esperarS }, { status: 429 });
     const enviado = await enviarEmailDireto([email], (ctx) => emailCodigo({ codigo: r.codigo, finalidade, validadeMin: VALIDADE_CODIGO_MIN }, ctx));
     if (!enviado) {

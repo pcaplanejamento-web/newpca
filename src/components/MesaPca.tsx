@@ -16,7 +16,7 @@ import {
 import type { ItemDfdRow } from "@/lib/dfd";
 import type { ProtocoloNaMesa } from "@/lib/mesa-redacao";
 import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
-import { Badge } from "./Badge";
+import { EstadoPonto } from "./EstadoCelula";
 import { Button } from "./Button";
 import type { Column } from "./DataTable";
 import { DfdsView } from "./DfdsView";
@@ -28,6 +28,7 @@ import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 import { useOndeDetalhe } from "./CanalGrupo";
+import { Selecao } from "./Selecao";
 
 type Escopo = "todos" | "sistema" | "enviados" | "incorporados";
 
@@ -95,39 +96,37 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     return dfds.filter((d) => d.protocoloId != null && ids.has(d.protocoloId));
   }, [dfds, protos, escopoEf]);
 
+  /** O texto ÚNICO de onde o protocolo está (a célula, o filtro e a ordem usam o mesmo): a ação do incorporado só aparece
+   * quando NÃO é a incorporação simples — "Incorporado · Incorporar" repetia a mesma informação. */
+  const rotuloLocal = (r: ProtocoloNaMesa) => {
+    const local = localDoProtocolo(r);
+    if (local === "sistema") return "Mesa do sistema";
+    if (local === "enviado") return "Enviado";
+    const a = acaoPorProtocolo[r.id];
+    return a === "substituir" ? "Incorporado · substitui" : a === "excluir" ? "Incorporado · exclui" : "Incorporado";
+  };
   const colunaPca: Column<ProtocoloNaMesa> = {
     key: "pca",
     header: marcados ? "Local" : "PCA",
     nowrap: true,
-    value: (r) => ({ sistema: "Mesa do sistema", enviado: "Enviado", incorporado: "Incorporado" })[localDoProtocolo(r)],
+    value: rotuloLocal,
+    // O MESMO desenho das células de estado da Mesa (ponto + texto na cor — `EstadoPonto`), sem selo próprio.
     render: (r) => {
       const local = localDoProtocolo(r);
       if (local === "sistema") {
         const m = motivosEnv(r);
         return (
-          <span title={`Na Mesa do sistema (marcado com ${pca.ano ?? "o ano"}) — ${m.length ? m.join(" · ") : "pronto para enviar a este PCA"}`}>
-            <Badge tone="slate">Mesa do sistema</Badge>
-          </span>
+          <EstadoPonto
+            cor="var(--muted)"
+            rotulo={rotuloLocal(r)}
+            title={`Na Mesa do sistema (marcado com ${pca.ano ?? "o ano"}) — ${m.length ? m.join(" · ") : "pronto para enviar a este PCA"}`}
+          />
         );
       }
-      if (local === "incorporado") {
-        const a = acaoPorProtocolo[r.id];
-        return (
-          <span title="Incorporado — as alterações no protocolo, nos DFDs e nos itens entram no PCA na hora">
-            <Badge tone="blue" dot>
-              Incorporado{a ? ` · ${ROTULO_ACAO[a]}` : ""}
-            </Badge>
-          </span>
-        );
-      }
+      if (local === "incorporado")
+        return <EstadoPonto cor="var(--ok)" rotulo={rotuloLocal(r)} title="Incorporado — as alterações no protocolo, nos DFDs e nos itens entram no PCA na hora" />;
       const m = motivosInc(r);
-      return (
-        <span title={m.length ? m.join("\n") : "Pronto para incorporar"}>
-          <Badge tone={m.length ? "slate" : "amber"} dot>
-            {marcados ? "Mesa do PCA · Enviado" : "Enviado"}
-          </Badge>
-        </span>
-      );
+      return <EstadoPonto cor={m.length ? "var(--muted)" : "var(--warn)"} rotulo={rotuloLocal(r)} title={m.length ? m.join("\n") : "Enviado a este PCA — pronto para incorporar"} />;
     },
   };
 
@@ -330,7 +329,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                     {(emOutroPcaPorProtocolo[p.id] ?? 0) > 0 ? ` · ${emOutroPcaPorProtocolo[p.id]} já em outro PCA (ficam de fora)` : ""}
                   </div>
                 </div>
-                <select
+                <Selecao
                   className={`${selectCls} sm:w-44`}
                   value={acoes[p.id] ?? "incorporar"}
                   onChange={(e) => setAcoes((a) => ({ ...a, [p.id]: e.target.value as AcaoDfdPca }))}
@@ -342,7 +341,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
                       {ROTULO_ACAO[a]}
                     </option>
                   ))}
-                </select>
+                </Selecao>
               </li>
             ))}
           </ul>

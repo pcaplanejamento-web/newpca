@@ -96,7 +96,42 @@ export type RelatorioOrcamento = {
   planejadoSemUnidade: number;
   /** O que foi e o que NÃO foi DEFINIDO — o painel do início do relatório. */
   definicoes: DefinicoesRelatorio;
+  /** Relatório de PARTE das unidades (`recortarRelatorio`): as unidades escolhidas — os totais do topo seguem do orçamento inteiro. */
+  recorte?: string[];
 };
+
+/**
+ * RECORTE do relatório para as unidades cadastradas escolhidas: só elas na tabela e na parte 2; nas Definições e na
+ * parte 3, só as unidades do CUBO que os vínculos delas usam. Os totais do orçamento inteiro e a visão ficam (contexto);
+ * "Atribuído às unidades" passa a ser o das escolhidas. Ids desconhecidos são ignorados; nenhum válido = o relatório inteiro.
+ */
+export function recortarRelatorio(r: RelatorioOrcamento, ids: readonly number[]): RelatorioOrcamento {
+  const quer = new Set(ids);
+  const unidades = r.unidades.filter((u) => quer.has(u.id));
+  if (!unidades.length) return r;
+  const cubos = new Set(unidades.flatMap((u) => u.vinculos.map((v) => v.unidadeCubo)));
+  const idsUn = new Set(unidades.map((u) => u.id));
+  const nasUnidades = unidades.reduce((s, u) => ({ lancamentos: s.lancamentos + u.lancamentos, valor: s.valor + u.orcamento }), soma());
+  const semVinculo = r.semVinculo.filter((s) => cubos.has(s.unidadeCubo));
+  return {
+    ...r,
+    totais: {
+      ...r.totais,
+      nasUnidades,
+      semVinculo: semVinculo.reduce((s, x) => ({ lancamentos: s.lancamentos + x.acoes.reduce((n, a) => n + a.lancamentos, 0), valor: s.valor + x.naVisao }), soma()),
+    },
+    retiradoPorUnidadeCubo: r.retiradoPorUnidadeCubo.filter((x) => cubos.has(x.unidadeCubo)),
+    unidades,
+    semVinculo,
+    semOrcamento: [],
+    planejadoSemUnidade: 0,
+    definicoes: {
+      unidadesCubo: r.definicoes.unidadesCubo.filter((u) => cubos.has(u.unidadeCubo)),
+      unidadesComContratacao: r.definicoes.unidadesComContratacao.filter((u) => idsUn.has(u.id)),
+    },
+    recorte: unidades.map((u) => u.sigla),
+  };
+}
 
 /** As DEFINIÇÕES dos vínculos (a cobertura por unidade do CUBO) — as da visão estão em `dimensoes`. */
 export type DefinicoesRelatorio = {
@@ -112,7 +147,7 @@ export type DefinicoesRelatorio = {
     valorSemVinculo: number;
   }[];
   /** As unidades cadastradas com contratações no PCA: com ou sem vínculo. */
-  unidadesComContratacao: { sigla: string; nome: string; comVinculo: boolean; planejado: number }[];
+  unidadesComContratacao: { id: number; sigla: string; nome: string; comVinculo: boolean; planejado: number }[];
 };
 
 /** A situação de uma unidade do CUBO nos vínculos. */
@@ -305,7 +340,7 @@ export function relatorioOrcamentoPca(e: EntradaRelatorio): RelatorioOrcamento {
         .sort((a, b) => colator.compare(a.unidadeCubo, b.unidadeCubo)),
       unidadesComContratacao: e.unidades
         .filter((u) => (planejadoPor.get(u.id) ?? 0) > 0)
-        .map((u) => ({ sigla: u.sigla, nome: u.nome, comVinculo: comVinculo.has(u.id), planejado: planejadoPor.get(u.id) ?? 0 }))
+        .map((u) => ({ id: u.id, sigla: u.sigla, nome: u.nome, comVinculo: comVinculo.has(u.id), planejado: planejadoPor.get(u.id) ?? 0 }))
         .sort((a, b) => Number(a.comVinculo) - Number(b.comVinculo) || colator.compare(a.sigla, b.sigla)),
     },
   };
@@ -369,6 +404,13 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
     texto: `PCA: ${r.pca.nome}${r.pca.ano && !r.pca.nome.includes(String(r.pca.ano)) ? ` (${r.pca.ano})` : ""}  ·  Orçamento: ${r.orcamento.nome}${r.orcamento.nome.includes(String(r.orcamento.ano)) ? "" : ` (${r.orcamento.ano})`}  ·  Visão: ${r.visaoNome ?? "nenhuma (orçamento inteiro)"}`,
   });
 
+  if (r.recorte)
+    b.push({
+      tipo: "nota",
+      cor: AZUL,
+      texto: `Relatório de ${r.recorte.length === 1 ? "uma unidade" : `${r.recorte.length} unidades`}: ${r.recorte.join(", ")}. Os totais do orçamento inteiro e a visão aparecem como contexto; tabelas, vínculos e o que fica de fora referem-se só a ${r.recorte.length === 1 ? "ela" : "elas"}.`,
+    });
+
   // ---------------------------------------------------------------- Como ler
   blocosDefinicoes(b, r);
   b.push({ tipo: "secao", texto: "Como o valor de cada unidade é calculado" });
@@ -394,7 +436,7 @@ export function blocosRelatorioOrcamento(r: RelatorioOrcamento): BlocoDoc[] {
       { rotulo: "Na visão, sem vínculo", valor: brl(t.semVinculo.valor), detalhe: qtd(t.semVinculo.lancamentos, "lançamento", "lançamentos"), cor: t.semVinculo.valor ? FORA : undefined },
     ],
   });
-  b.push({
+  if (!r.recorte) b.push({
     tipo: "nota",
     cor: AZUL,
     texto: `A conta fecha: ${brl(t.cubo.valor)} (orçamento inteiro) = ${brl(t.foraDaVisao.valor)} (retirado pela visão) + ${brl(t.nasUnidades.valor)} (atribuído às unidades) + ${brl(t.semVinculo.valor)} (na visão, sem vínculo).`,

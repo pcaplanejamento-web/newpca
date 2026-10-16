@@ -103,7 +103,7 @@ export function PcaCompilacaoView({ pca }: { pca: PcaDetalhe }) {
       </div>
 
       {pca.grupos.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">
           Esta edição não tem DFDs.
         </p>
       ) : (

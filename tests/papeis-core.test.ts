@@ -200,7 +200,8 @@ describe("edição da matriz com as implicações", () => {
   it("coluna: em todas as telas em que se aplica (com Visualizar); desligar Visualizar fecha tudo", () => {
     const c = alternarColuna({}, "configurar", true);
     assert.equal(c.calendario, undefined);
-    for (const t of ABA_KEYS.filter((x) => x !== "calendario")) assert.deepEqual(c[t], ["visualizar", "configurar"], t);
+    assert.equal(c.verificacao, undefined);
+    for (const t of ABA_KEYS.filter((x) => x !== "calendario" && x !== "verificacao")) assert.deepEqual(c[t], ["visualizar", "configurar"], t);
     assert.deepEqual(alternarColuna(capacidadesTudo(), "visualizar", false), {});
   });
 

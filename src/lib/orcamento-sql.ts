@@ -1,7 +1,8 @@
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
-import { orcamentoItens, orcamentos } from "../db/schema.ts";
+import { orcamentoItens, orcamentos, orcamentoVinculos, orcamentoVisoes } from "../db/schema.ts";
+import type { DestinoVinculos } from "./orcamento-vinculo.ts";
 
 type Db = DrizzleD1Database<typeof schema>;
 
@@ -31,4 +32,33 @@ export function comandosSubstituirLancamentos(db: Db, alvoId: number, origemId: 
     db.delete(orcamentos).where(inArray(orcamentos.id, outrosDoAno)),
     db.delete(orcamentos).where(eq(orcamentos.id, origemId)),
   ] as const;
+}
+
+/**
+ * VÍNCULOS POR VISÃO — a lista INTEIRA de uma unidade do CUBO num destino (o padrão = `visaoId` null, ou uma visão):
+ * apaga as linhas do destino e insere as novas (7 parâmetros por linha → 14 por INSERT = 98). Num `db.batch`, com o
+ * `comandoPropriasVisao` das visões que passam a definir a unidade.
+ */
+export function comandosDestinoVinculos(db: Db, d: DestinoVinculos) {
+  const onde = and(eq(orcamentoVinculos.chave, d.chave), d.visaoId == null ? isNull(orcamentoVinculos.visaoId) : eq(orcamentoVinculos.visaoId, d.visaoId));
+  const linhas = d.lista.map((v) => ({
+    tipo: "unidade" as const,
+    chave: d.chave,
+    texto: v.texto,
+    reparticaoId: v.alvoId,
+    acoes: v.acoes == null ? null : JSON.stringify(v.acoes),
+    acoesFora: v.acoes == null && v.acoesFora.length ? JSON.stringify(v.acoesFora) : null,
+    visaoId: d.visaoId,
+  }));
+  const inserts = [];
+  for (let i = 0; i < linhas.length; i += 14) inserts.push(db.insert(orcamentoVinculos).values(linhas.slice(i, i + 14)));
+  return [db.delete(orcamentoVinculos).where(onde), ...inserts];
+}
+
+/** As unidades do CUBO (chaves) com vínculos PRÓPRIOS na visão. */
+export function comandoPropriasVisao(db: Db, visaoId: number, proprias: string[]) {
+  return db
+    .update(orcamentoVisoes)
+    .set({ vinculosProprios: JSON.stringify([...new Set(proprias)]) })
+    .where(eq(orcamentoVisoes.id, visaoId));
 }

@@ -105,7 +105,7 @@ export function TarefasView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-start gap-3">
+      <div className="linha-topico flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
         <h1 className="text-xl font-bold text-text">Tarefas</h1>
         <p className="text-sm text-muted">
@@ -126,7 +126,7 @@ export function TarefasView({
       </div>
 
       {quadros.length === 0 && !podeCriar ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">Nenhum quadro de tarefas neste grupo.</p>
         </div>

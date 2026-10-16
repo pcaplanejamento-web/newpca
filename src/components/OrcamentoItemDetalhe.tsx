@@ -42,7 +42,7 @@ export function OrcamentoItemDetalhe({
       </dl>
 
       {vinculo && (
-        <div className="rounded-card border border-border p-3">
+        <div className="rounded-card border border-border p-[var(--pad-card)]">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">No sistema</p>
           <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
             <Campo label="Órgão" valor={vinculo.orgao ?? "Sem vínculo"} />
@@ -51,7 +51,7 @@ export function OrcamentoItemDetalhe({
         </div>
       )}
 
-      <div className="rounded-card border border-border bg-surface-2 p-3">
+      <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Valores</p>
         <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
           <Valor label="Valor inicial (dotação)" v={item.valorInicial} forte />

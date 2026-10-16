@@ -1,30 +1,52 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
+import type { AbaKey } from "@/lib/abas";
+import { ehCodigoGeral, type ModoUnidades } from "@/lib/escopo-unidades-core";
+import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
+import { Ajuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { Checkbox, SearchField, TextField } from "./Field";
-import { selectCls } from "./formStyles";
-import { IconPencil, IconPlus, IconTrash, IconUsers } from "./icons";
+import { IconPlus, IconSave, IconTrash, IconUsers } from "./icons";
 import { Modal } from "./Modal";
+import { NAV_MODULOS } from "./navModulos";
+import { CartaoEspaco } from "./QuadroCard";
+import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
+import { Switch } from "./Switch";
 
-type Grupo = { id: number; nome: string; permissaoId: number | null; membros: number[]; reparticoes: number[] };
-type PermOpt = { id: number; nome: string };
+type Grupo = {
+  id: number;
+  nome: string;
+  /** Os MÓDULOS que o grupo libera; `null` = grupo antigo (telas avulsas em `avulsas` até o ADM escolher). */
+  modulos: string[] | null;
+  avulsas: AbaKey[];
+  /** As telas que o grupo ABRE hoje. */
+  abas: AbaKey[];
+  chat: boolean;
+  modoUnidades: ModoUnidades;
+  pcas: number[] | null;
+  membros: number[];
+  reparticoes: number[];
+};
+type PcaOpt = { id: number; nome: string; ano: number | null };
 type Status = "ativo" | "pendente" | "inativo";
-type UserOpt = { id: number; nome: string; email: string; status: Status };
+type UserOpt = { id: number; nome: string; email: string; status: Status; reparticaoId: number | null };
 type RepOpt = { id: number; codigo: string; nome: string; oculto: boolean };
 
 /** Ordem alfabética do português (acentos e caixa no lugar certo — a do banco põe "Á" depois do "Z"). */
 const COLLATOR = new Intl.Collator("pt-BR", { sensitivity: "base" });
 const ehGeral = (r: RepOpt) => ehCodigoGeral(r.codigo);
+/** O formulário do banner (o Salvar fica no rodapé fixo do banner, fora do form). */
+const FORM_ID = "form-grupo";
 
 async function lerJson<T>(r: Response): Promise<T & { ok?: boolean; error?: string }> {
   return (await r.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
@@ -32,17 +54,24 @@ async function lerJson<T>(r: Response): Promise<T & { ok?: boolean; error?: stri
 
 export function GruposAdmin() {
   const [grupos, setGrupos] = useState<Grupo[] | null>(null);
-  const [perms, setPerms] = useState<PermOpt[]>([]);
+  const [pcasDisp, setPcasDisp] = useState<PcaOpt[]>([]);
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [repsDisp, setRepsDisp] = useState<RepOpt[]>([]);
+  const [modulosDisp, setModulosDisp] = useState<Modulo[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
 
   const [editando, setEditando] = useState<Grupo | "novo" | null>(null);
   const [nome, setNome] = useState("");
-  const [permissaoId, setPermissaoId] = useState<number | null>(null);
+  const [mods, setMods] = useState<Set<string>>(new Set());
+  // O grupo ANTIGO (telas avulsas) só passa a módulos quando o ADM mexe nos módulos — salvar só o nome não muda o acesso.
+  const [modsTocados, setModsTocados] = useState(false);
+  const [chat, setChat] = useState(true);
+  // null = TODOS os PCAs (sem restrição); o conjunto = só esses.
+  const [pcasSel, setPcasSel] = useState<Set<number> | null>(null);
   const [membros, setMembros] = useState<Set<number>>(new Set());
   const [reps, setReps] = useState<Set<number>>(new Set());
+  const [modo, setModo] = useState<ModoUnidades>("lista");
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
@@ -52,10 +81,11 @@ export function GruposAdmin() {
     setErro(null);
     try {
       const r = await fetch("/api/admin/grupos");
-      const j = await lerJson<{ grupos?: Grupo[]; permissoes?: PermOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
+      const j = await lerJson<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
       setGrupos([...(j.grupos ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
-      setPerms([...(j.permissoes ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
+      setModulosDisp(j.modulos ?? []);
+      setPcasDisp(j.pcas ?? []);
       setUsers([...(j.usuarios ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setRepsDisp(j.reparticoes ?? []);
     } catch (e) {
@@ -68,29 +98,42 @@ export function GruposAdmin() {
     carregar();
   }, [carregar]);
 
-  const nomePermissao = (id: number | null) => perms.find((p) => p.id === id)?.nome ?? "Sem permissão";
   const geral = useMemo(() => repsDisp.find(ehGeral) ?? null, [repsDisp]);
 
   function abrirNovo() {
     setEditando("novo");
     setNome("");
-    // Nada pré-escolhido: a permissão decide as telas do grupo — o ADM escolhe de propósito.
-    setPermissaoId(null);
+    // Nenhum módulo pré-escolhido (o ADM escolhe de propósito); o chat liberado e os PCAs em "todos".
+    setMods(new Set());
+    setModsTocados(true);
+    setChat(true);
+    setPcasSel(null);
     setMembros(new Set());
     setReps(new Set());
+    setModo("lista");
     setBusca("");
     setErroModal(null);
   }
   function abrirEdicao(g: Grupo) {
     setEditando(g);
     setNome(g.nome);
-    setPermissaoId(g.permissaoId);
+    // O grupo antigo começa com os módulos cujas telas ele já abre TODAS (nunca abre a mais).
+    setMods(new Set(g.modulos ?? modulosDasTelas(modulosDisp, g.avulsas)));
+    setModsTocados(g.modulos != null);
+    setChat(g.chat);
+    setPcasSel(g.pcas == null ? null : new Set(g.pcas));
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
+    setModo(g.modoUnidades ?? "lista");
     setBusca("");
     setErroModal(null);
-  }
-  const alternar = (set: (f: (s: Set<number>) => Set<number>) => void, id: number) =>
+  }  // A PESQUISA DO SISTEMA abre o banner do grupo (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const g = grupos?.find((x) => x.id === Number(v));
+    if (g) abrirEdicao(g);
+  }, grupos != null);
+
+  const alternar = <T,>(set: (f: (s: Set<T>) => Set<T>) => void, id: T) =>
     set((s) => {
       const n = new Set(s);
       if (n.has(id)) n.delete(id);
@@ -112,7 +155,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, permissaoId, membros: [...membros], reparticoes: [...reps] }),
+        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps], modoUnidades: modo }),
       });
       const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -155,21 +198,22 @@ export function GruposAdmin() {
 
   if (grupos === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={4} />
       </div>
     );
   }
 
-  const unidadesDoCard = (g: Grupo) =>
-    geral && g.reparticoes.includes(geral.id) ? "todas as unidades" : `${g.reparticoes.length} unidade(s)`;
-  const semPermissao = permissaoId == null;
+
+  // No modo "unidade de cadastro": quem do grupo não tem a unidade de cadastro (não verá dado nenhum).
+  const semUnidade = modo === "cadastro" ? users.filter((u) => membros.has(u.id) && u.reparticaoId == null) : [];
 
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          O grupo reúne pessoas, a PERMISSÃO (quais telas elas acessam) e as UNIDADES (de quais unidades veem os dados).
+          O grupo reúne pessoas, os MÓDULOS que elas abrem (o papel diz o que fazem nas telas), o chat, os PCAs e as
+          UNIDADES (de quais unidades veem os dados).
         </p>
         <Button onClick={abrirNovo} icon={<IconPlus className="h-[18px] w-[18px]" />}>
           Novo grupo
@@ -183,72 +227,176 @@ export function GruposAdmin() {
           Nenhum grupo criado ainda.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {grupos.map((g) => (
-            <div key={g.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
-              <div className="flex items-center gap-2.5">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">
-                  <IconUsers className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="truncate font-bold text-text">{g.nome}</h3>
-                  <p className={`truncate text-[12px] ${g.permissaoId == null ? "text-[var(--warn)]" : "text-muted"}`}>
-                    {nomePermissao(g.permissaoId)}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-3 text-[12px] text-faint">
-                {g.membros.length} pessoa(s) · {unidadesDoCard(g)}
-              </p>
-              <div className="mt-3 flex justify-end gap-1.5">
-                <Button variant="ghost" onClick={() => abrirEdicao(g)} icon={<IconPencil className="h-3.5 w-3.5" />}>
-                  Editar
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => excluir(g)}
-                  loading={excluindo === g.id}
-                  style={{ color: "var(--danger)" }}
-                  icon={<IconTrash className="h-3.5 w-3.5" />}
-                >
-                  Excluir
-                </Button>
-              </div>
-            </div>
-          ))}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-[var(--gap-block)]">
+          {grupos.map((g) => {
+            const telas = NAV_MODULOS.filter((m) => g.abas.includes(m.aba));
+            const nMods = g.modulos?.length;
+            return (
+              <CartaoEspaco
+                key={g.id}
+                ariaLabel={`Editar o grupo ${g.nome}`}
+                onClick={() => abrirEdicao(g)}
+                sobretitulo={`Grupo · ${nMods == null ? "telas avulsas" : `${nMods} módulo(s)`} · ${telas.length} tela(s)`}
+                selo={telas.length === 0 ? <Badge tone="amber">Sem telas</Badge> : !g.chat ? <Badge tone="slate">Chat bloqueado</Badge> : undefined}
+                nome={g.nome}
+                capa={
+                  <div className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-lg bg-accent-soft" title={telas.map((t) => t.label).join(", ") || "Nenhuma tela"}>
+                    {telas.length ? (
+                      <div className="flex max-w-[70%] flex-wrap justify-center gap-1.5">
+                        {telas.map((t) => (
+                          <span key={t.aba} className="grid h-8 w-8 place-items-center rounded-control bg-surface text-accent shadow-ring">
+                            <t.Icon className="h-4 w-4" />
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <IconUsers className="h-8 w-8 text-accent/60" />
+                    )}
+                  </div>
+                }
+                metricas={[
+                  { rotulo: "Pessoas", valor: String(g.membros.length) },
+                  { rotulo: "Unidades", valor: g.modoUnidades === "cadastro" ? "De cadastro" : geral && g.reparticoes.includes(geral.id) ? "Todas" : String(g.reparticoes.length) },
+                  { rotulo: "PCAs", valor: g.pcas == null ? "Todos" : String(g.pcas.length) },
+                ]}
+                canto={
+                  <span className="absolute top-3.5 right-3.5">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => excluir(g)}
+                      loading={excluindo === g.id}
+                      aria-label={`Excluir o grupo ${g.nome}`}
+                      title="Excluir o grupo"
+                      style={{ color: "var(--danger)" }}
+                      icon={<IconTrash className="h-3.5 w-3.5" />}
+                    />
+                  </span>
+                }
+              />
+            );
+          })}
         </div>
       )}
 
-      <Modal open={!!editando} onClose={() => setEditando(null)} titulo={editando === "novo" ? "Novo grupo" : "Editar grupo"} size="lg">
-        <form onSubmit={salvar} className="space-y-[var(--gap-block)]">
+      <Modal
+        open={!!editando}
+        onClose={() => setEditando(null)}
+        titulo={editando === "novo" ? "Novo grupo" : "Editar grupo"}
+        size="lg"
+        bloqueado={salvando}
+        rodape={
+          <div className="flex justify-end">
+            <Button type="submit" form={FORM_ID} loading={salvando} icon={<IconSave className="h-4 w-4" />}>
+              Salvar
+            </Button>
+          </div>
+        }
+      >
+        <form id={FORM_ID} onSubmit={salvar} className="space-y-[var(--gap-block)]">
           {erroModal && <Callout kind="danger">{erroModal}</Callout>}
           <TextField label="Nome do grupo" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={MAX_NOME_RBAC} required />
-          <div>
-            <label htmlFor="grupo-permissao" className="mb-2 block text-[13.5px] font-bold text-text">
-              Permissão do grupo
-            </label>
-            <select
-              id="grupo-permissao"
-              value={permissaoId ?? ""}
-              onChange={(e) => setPermissaoId(e.target.value ? Number(e.target.value) : null)}
-              className={`${selectCls} w-full`}
-            >
-              <option value="">Sem permissão</option>
-              {perms.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                </option>
+          <fieldset>
+            <legend className="mb-2 block text-[13.5px] font-bold text-text">Módulos do grupo · {mods.size} selecionado(s)</legend>
+            <div className="grid gap-1 rounded-control border border-border p-2 sm:grid-cols-2">
+              {modulosDisp.map((m) => (
+                <div key={m.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                  <Checkbox
+                    checked={mods.has(m.id)}
+                    onChange={() => {
+                      setModsTocados(true);
+                      alternar(setMods, m.id);
+                    }}
+                    label={
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium text-text">{m.nome}</span>
+                        <span className="block text-[11.5px] text-muted">{m.telas.map(rotuloAba).join(", ") || "Sem telas"}</span>
+                      </span>
+                    }
+                  />
+                </div>
               ))}
-            </select>
-            {semPermissao && (
-              <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem permissão, as pessoas do grupo não veem nenhuma tela.</p>
+            </div>
+            <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
+          </fieldset>
+          <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
+          <fieldset>
+            <legend className="mb-2 block text-[13.5px] font-bold text-text">
+              PCAs do grupo · {pcasSel == null ? "todos" : `${pcasSel.size} selecionado(s)`}
+            </legend>
+            <Switch
+              checked={pcasSel == null}
+              onChange={(todos) => setPcasSel(todos ? null : new Set(pcasDisp.map((p) => p.id)))}
+              label="Todos os PCAs (também os que forem criados)"
+            />
+            {pcasSel != null &&
+              (pcasDisp.length === 0 ? (
+                <p className="mt-2 rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">Nenhum PCA cadastrado.</p>
+              ) : (
+                <div className="mt-2 max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
+                  {pcasDisp.map((p) => (
+                    <div key={p.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                      <Checkbox
+                        checked={pcasSel.has(p.id)}
+                        onChange={() => setPcasSel((s) => {
+                          const n = new Set(s ?? []);
+                          if (n.has(p.id)) n.delete(p.id);
+                          else n.add(p.id);
+                          return n;
+                        })}
+                        label={
+                          <span className="flex items-center gap-2">
+                            {p.ano != null && <span className="font-mono text-[10.5px] text-faint">{p.ano}</span>}
+                            <span className="min-w-0 truncate text-[13px] text-text">{p.nome}</span>
+                          </span>
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            {pcasSel != null && pcasSel.size === 0 && (
+              <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA.</p>
             )}
-          </div>
+          </fieldset>
           <div>
-            <span className="mb-2 block text-[13.5px] font-bold text-text">
-              Unidades do grupo · {reps.size} selecionada(s)
-            </span>
-            {repsDisp.length === 0 ? (
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="text-[13.5px] font-bold text-text">
+                Unidades do grupo{modo === "lista" ? ` · ${reps.size} selecionada(s)` : ""}
+              </span>
+              <Ajuda titulo="Unidades do grupo" compacta>
+                <p>
+                  <b>Unidades escolhidas</b>: todas as pessoas do grupo veem os dados das unidades marcadas (a "Geral" = todas).
+                </p>
+                <p className="mt-2">
+                  <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só a unidade em que trabalha (o cadastro dela em
+                  Usuários). Quem não tem unidade de cadastro não vê dado nenhum. As unidades escolhidas ficam guardadas para
+                  quando voltar ao outro modo.
+                </p>
+              </Ajuda>
+            </div>
+            <Segmented
+              ariaLabel="De onde vêm as unidades"
+              value={modo}
+              onChange={setModo}
+              className="mb-2"
+              options={[
+                { value: "lista", label: "Unidades escolhidas", curto: "Escolhidas" },
+                { value: "cadastro", label: "Unidade de cadastro de cada pessoa", curto: "De cadastro" },
+              ]}
+            />
+            {modo === "cadastro" ? (
+              semUnidade.length > 0 ? (
+                <Callout kind="warn">
+                  {semUnidade.length} pessoa(s) do grupo sem unidade de cadastro não verão dado nenhum:{" "}
+                  {semUnidade.map((u) => u.nome).join(", ")}. Defina a unidade em Usuários.
+                </Callout>
+              ) : (
+                <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-muted">
+                  Cada pessoa verá os dados da unidade do próprio cadastro.
+                </p>
+              )
+            ) : repsDisp.length === 0 ? (
               <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">
                 Nenhuma unidade cadastrada. Cadastre em Órgãos e Unidades.
               </p>
@@ -305,17 +453,29 @@ export function GruposAdmin() {
               )}
             </div>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setEditando(null)}>
-              Cancelar
-            </Button>
-            <Button type="submit" loading={salvando}>
-              Salvar
-            </Button>
-          </div>
         </form>
       </Modal>
       {confirmacao}
     </div>
   );
+}
+
+/** O que o grupo passa a abrir com os módulos escolhidos — o grupo ANTIGO (telas avulsas) mostra o que ganha e o que perde. */
+function MudancaTelas({ grupo, tocados, telas }: { grupo: Grupo | null; tocados: boolean; telas: AbaKey[] }) {
+  const lista = (l: readonly AbaKey[]) => l.map(rotuloAba).join(", ");
+  if (grupo && grupo.modulos == null) {
+    if (!tocados)
+      return <p className="mt-1.5 text-[12px] text-[var(--warn)]">Grupo com telas avulsas ({lista(grupo.avulsas) || "nenhuma"}) — escolha os módulos para passar a usá-los.</p>;
+    const ganha = telas.filter((t) => !grupo.avulsas.includes(t));
+    const perde = grupo.avulsas.filter((t) => !telas.includes(t));
+    if (ganha.length || perde.length)
+      return (
+        <p className="mt-1.5 text-[12px] text-[var(--warn)]">
+          {ganha.length ? `Passa a abrir: ${lista(ganha)}. ` : ""}
+          {perde.length ? `Deixa de abrir: ${lista(perde)}.` : ""}
+        </p>
+      );
+  }
+  if (!telas.length) return <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem nenhum módulo, as pessoas do grupo não veem as telas.</p>;
+  return <p className="mt-1.5 text-[12px] text-muted">Abre: {lista(telas)}. O papel de cada pessoa diz o que ela faz nelas; os módulos ficam em Configurações → Módulos.</p>;
 }

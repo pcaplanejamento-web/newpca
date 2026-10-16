@@ -1,7 +1,7 @@
 import { exigirSessao, intId, recusaNoQuadro } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
-import { aposMovimento, atualizarLista, cartoesNaLista, excluirLista, getLista, idsNaLista, quadroAcessivel } from "@/lib/tarefas";
+import { aposMovimento, atualizarLista, cartoesNaLista, excluirLista, getLista, idsNaLista, pessoasValidas, quadroAcessivel } from "@/lib/tarefas";
 import { editarListaSchema } from "@/lib/tarefas-validation";
 
 export const dynamic = "force-dynamic";
@@ -34,12 +34,14 @@ export async function GET(_req: Request, ctx: Ctx) {
   return ok({ cartoes: await cartoesNaLista(l.id) });
 }
 
-/** Edita a lista (nome, limite WIP, "de concluídas", arquivada). */
+/** Edita a lista (nome, limite WIP, "de concluídas", arquivada, a pessoa ATRIBUÍDA — do grupo do quadro). */
 export async function PATCH(req: Request, ctx: Ctx) {
   const r = await listaDoEditor(ctx, "configurar");
   if ("resp" in r) return r.resp;
   const p = await parseCorpo(editarListaSchema, req);
   if ("resp" in p) return p.resp;
+  const resp = p.data.responsavelId;
+  if (resp != null && !(await pessoasValidas(r.q, [resp], r.l.responsavelId != null ? [r.l.responsavelId] : []))) return erro("A pessoa não é do grupo do quadro.", 422);
   await atualizarLista(r.l.id, p.data);
   await registrarAuditoria({ usuario: r.u, acao: "editar", entidade: "tarefa_lista", entidadeId: r.l.id, resumo: `Lista "${r.l.nome}" editada`, antes: r.l, depois: p.data });
   return ok();

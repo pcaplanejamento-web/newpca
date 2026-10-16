@@ -1,5 +1,6 @@
 "use client";
 
+import { useDetalheTrilha } from "./trilha-store";
 import { usePathname, useSearchParams } from "next/navigation";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { esperaReconexao } from "@/lib/ao-vivo-core";
@@ -27,6 +28,8 @@ export const EVENTO_CHAT_PRIVADO = "pca:chat-privado";
 /** O que o layout passa quando o ADM ligou a presença (desligada = `null`: nada é montado nem conectado). */
 export type PresencaShell = {
   pessoas: Pessoa[];
+  /** O papel vê quem está online (sem ele, o servidor manda a lista vazia e o cabeçalho mostra só as conversas). */
+  ver: boolean;
   /** id → telefone (só de quem marcou o contato como WhatsApp). */
   whatsapp: Record<number, string>;
   invisivel: boolean;
@@ -169,6 +172,7 @@ export function useAtividadeDe(id: number | null | undefined): Atividade | undef
 /** A página dá o nome do "onde" (o quadro, o PCA, o orçamento) — ex.: `useOndeDetalhe(quadro.nome)`. */
 export function useOndeDetalhe(texto: string | null | undefined) {
   const definir = useContext(Ctx)?.definirDetalheOnde;
+  useDetalheTrilha(texto);
   useEffect(() => (definir && texto ? definir(texto) : undefined), [definir, texto]);
 }
 
@@ -211,7 +215,7 @@ export function CanalGrupo({
   );
 }
 
-const PRESENCA_VAZIA: PresencaShell = { pessoas: [], whatsapp: {}, invisivel: false, inativoMin: 0, status: { status: "disponivel", recado: "", ate: null } };
+const PRESENCA_VAZIA: PresencaShell = { pessoas: [], ver: false, whatsapp: {}, invisivel: false, inativoMin: 0, status: { status: "disponivel", recado: "", ate: null } };
 
 function CanalAtivo({
   presenca: presencaOuNada,

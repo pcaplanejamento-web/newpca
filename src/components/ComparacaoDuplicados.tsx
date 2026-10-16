@@ -161,7 +161,7 @@ export function ComparacaoDuplicados({
       )}
 
       {/* O DFD aberto */}
-      <section className="rounded-card border border-accent/40 bg-accent-soft p-3">
+      <section className="rounded-card border border-accent/40 bg-accent-soft p-[var(--pad-card)]">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[13.5px] font-bold text-text">
@@ -188,7 +188,7 @@ export function ComparacaoDuplicados({
         const aberto = abertos.has(o.key);
         const total = o.comparacao?.total;
         return (
-          <section key={o.key} className="rounded-card border border-border bg-surface p-3 shadow-ring">
+          <section key={o.key} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[13.5px] font-bold text-text">{o.rotulo}</span>
               <Badge tone="amber">{o.motivo}</Badge>

@@ -1,11 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { dataVersao, linkInterno, ROTULO_MUDANCA, type TipoMudanca, type Versao, VERSAO_ATUAL, VERSOES } from "@/lib/versoes";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { dataVersao, linkInterno, mudancasVisiveis, ROTULO_MUDANCA, type TipoMudanca, type Versao, VERSAO_ATUAL, VERSOES } from "@/lib/versoes";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { IconChevronDown, IconChevronRight, IconNovidades } from "./icons";
 import { JanelaFlutuante } from "./JanelaFlutuante";
+
+/** O acesso de quem vê as Novidades: as telas que os grupos abrem e se é ADM. Sem provedor = tudo (catálogo). */
+const AcessoCtx = createContext<{ telas: readonly string[]; admin: boolean } | null>(null);
+
+export function AcessoNovidades({ telas, admin, children }: { telas: readonly string[]; admin: boolean; children: ReactNode }) {
+  const valor = useMemo(() => ({ telas, admin }), [telas, admin]);
+  return <AcessoCtx.Provider value={valor}>{children}</AcessoCtx.Provider>;
+}
+
+/** As versões só com as mudanças das telas que a pessoa abre (as que ficam vazias somem; a atual sempre aparece). */
+function useVersoesVisiveis(): readonly Versao[] {
+  const a = useContext(AcessoCtx);
+  return useMemo(() => {
+    if (!a || a.admin) return VERSOES;
+    const telas = new Set(a.telas);
+    return VERSOES.map((v) => mudancasVisiveis(v, telas, false)).filter((v) => v.mudancas.length > 0 || v.versao === VERSAO_ATUAL);
+  }, [a]);
+}
 
 const TOM_MUDANCA: Record<TipoMudanca, Tone> = { novo: "blue", melhoria: "emerald", correcao: "amber" };
 
@@ -62,7 +80,8 @@ export function CartaoVersao({
       ) : (
         <header className="flex items-center gap-2">{cabecalho}</header>
       )}
-      {aberto && (
+      {aberto && v.mudancas.length === 0 && <p className="mt-2 text-[13px] text-muted">Sem mudanças nas telas do seu grupo.</p>}
+      {aberto && v.mudancas.length > 0 && (
         <ul className="mt-2 animate-fade-in-up divide-y divide-border">
           {v.mudancas.map((m) => (
             <li key={`${m.area}:${m.texto}`} className="flex items-center gap-2.5 py-2">
@@ -107,6 +126,7 @@ export function NovidadesFlutuantes({
   onIr?: () => void;
 }) {
   const [abertas, setAbertas] = useState<Set<string>>(new Set());
+  const versoes = useVersoesVisiveis();
   const corpo = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!versao) return;
@@ -123,7 +143,7 @@ export function NovidadesFlutuantes({
           <IconNovidades className="h-4 w-4 text-accent" /> Novidades
           <span className="ml-auto font-mono text-[12px] font-normal text-muted">atual v{VERSAO_ATUAL}</span>
         </p>
-        {VERSOES.map((v) => (
+        {versoes.map((v) => (
           <CartaoVersao
             key={v.versao}
             v={v}
@@ -162,7 +182,7 @@ const marcarVista = () => {
 
 /** O NÚMERO DA VERSÃO no fim do menu lateral: abre as Novidades no banner flutuante; o ponto marca a versão ainda não
  * vista neste aparelho. */
-export function VersaoSistema({ onNavigate }: { onNavigate?: () => void }) {
+export function VersaoSistema({ onNavigate, className = "justify-center" }: { onNavigate?: () => void; className?: string }) {
   const [nova, setNova] = useState(false);
   const [ancora, setAncora] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   useEffect(() => {
@@ -175,13 +195,17 @@ export function VersaoSistema({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <button
         type="button"
+        // O botão ALTERNA: aberto, o toque fecha (a janela ignora o toque fora vindo dele — `data-alterna-janela`).
+        data-alterna-janela=""
         onClick={(e) => {
+          if (ancora) return setAncora(null);
           const r = e.currentTarget.getBoundingClientRect();
           setAncora({ x: r.x, y: r.y, w: r.width, h: r.height });
         }}
+        aria-expanded={ancora != null}
         aria-haspopup="dialog"
         title={nova ? `Versão ${VERSAO_ATUAL} — veja o que mudou` : `Versão ${VERSAO_ATUAL} — novidades`}
-        className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control px-2 text-[12px] text-faint transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8"
+        className={`flex min-h-11 w-full items-center gap-1.5 rounded-control px-2 text-[12px] text-faint transition-colors hover:bg-surface-2 hover:text-text-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8 ${className}`}
       >
         <IconNovidades className={`h-3.5 w-3.5 ${nova ? "text-accent" : ""}`} />
         <span className="font-mono">v{VERSAO_ATUAL}</span>

@@ -77,13 +77,13 @@ export function RelatorioErros({
           <span>Copie e encaminhe para quem for corrigir o documento.</span>
         </div>
         {toggle && (
-          <div className="rounded-card border border-border bg-surface-2 p-3">
+          <div className="rounded-card border border-border bg-surface-2 p-[var(--pad-card)]">
             <Checkbox label={toggle.label} checked={toggle.checked} onChange={(e) => toggle.onChange(e.target.checked)} />
           </div>
         )}
         <pre
           id="relatorio-erros-texto"
-          className="max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-4 font-mono text-[12.5px] leading-relaxed text-text-2"
+          className="max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-card border border-border bg-surface-2 p-[var(--pad-card)] font-mono text-[12.5px] leading-relaxed text-text-2"
         >
           {texto}
         </pre>

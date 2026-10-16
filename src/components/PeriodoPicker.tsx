@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ATALHOS_PERIODO, MESES_PERIODO, PERIODO_TODO, type Periodo, rotuloPeriodo } from "@/lib/periodo";
 import { Dropdown } from "./Dropdown";
-import { IconChevronDown } from "./icons";
+import { SetaDropdown } from "./SetaDropdown";
 
 // Seletor de período (spec do usuário): atalhos + ano + grade de meses + intervalo (DE/ATÉ) + Limpar. O CORPO
 // (`PeriodoCorpo`) é reutilizável — é o MESMO do filtro de datas das tabelas (DateFilterHeader, que soma a ordenação) e
@@ -170,7 +170,7 @@ export function PeriodoPicker({
         <>
           <span className="shrink-0 text-[12px] text-muted">{rotulo}</span>
           <span className="min-w-0 truncate text-[13px] font-semibold text-text">{texto}</span>
-          <IconChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted" />
+          <SetaDropdown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted" />
         </>
       }
     >

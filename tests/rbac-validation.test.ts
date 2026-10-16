@@ -9,47 +9,37 @@ import {
   grupoPatchSchema,
   MAX_NOME_RBAC,
   orgaoSchema,
-  permissaoPatchSchema,
   pessoaResponsavelPatchSchema,
   pessoaResponsavelSchema,
-  permissaoSchema,
   reparticaoAtivaSchema,
   reparticaoSchema,
+  vinculoResponsavelPatchSchema,
   vinculoResponsavelSchema,
 } from "../src/lib/rbac-validation.ts";
 
-// Validação da administração de Grupos, Permissões e Unidades — em especial o PATCH, que NÃO pode injetar os
-// valores padrão da criação (o `.partial()` mantinha o `.default([])`: um PATCH só com o nome apagava as pessoas e
-// as unidades do grupo, e as telas da permissão).
+// Validação da administração de Grupos e Unidades — em especial o PATCH, que NÃO pode injetar os valores padrão da
+// criação (o `.partial()` mantinha o `.default([])`: um PATCH só com o nome apagava as pessoas, as unidades e as telas).
 
-describe("PATCH de grupo e permissão não injeta padrões", () => {
-  it("grupo: só o nome — pessoas, unidades e permissão ficam de fora (como estão)", () => {
+describe("PATCH de grupo não injeta padrões", () => {
+  it("grupo: só o nome — telas, PCAs, pessoas e unidades ficam de fora (como estão)", () => {
     const r = grupoPatchSchema.parse({ nome: "Compras" });
     assert.deepEqual(r, { nome: "Compras" });
-    assert.equal("membros" in r, false);
-    assert.equal("reparticoes" in r, false);
-    assert.equal("permissaoId" in r, false);
+    for (const k of ["membros", "reparticoes", "modulos", "chat", "pcas"]) assert.equal(k in r, false);
   });
 
-  it("grupo: lista vazia explícita esvazia (e é diferente de ausente)", () => {
+  it("grupo: lista vazia explícita esvazia (e é diferente de ausente); PCAs null = todos", () => {
     assert.deepEqual(grupoPatchSchema.parse({ membros: [] }), { membros: [] });
-    assert.deepEqual(grupoPatchSchema.parse({ permissaoId: null }), { permissaoId: null });
+    assert.deepEqual(grupoPatchSchema.parse({ pcas: null }), { pcas: null });
+    assert.deepEqual(grupoPatchSchema.parse({ pcas: [] }), { pcas: [] });
   });
 
-  it("permissão: só o nome — as telas ficam de fora", () => {
-    const r = permissaoPatchSchema.parse({ nome: "Consulta" });
-    assert.deepEqual(r, { nome: "Consulta" });
-    assert.equal("abas" in r, false);
+  it("módulos: sem repetir (a rota confere que existem); chat opcional", () => {
+    assert.deepEqual(grupoPatchSchema.parse({ modulos: ["apoio", "pca", "apoio"] }), { modulos: ["apoio", "pca"] });
+    assert.deepEqual(grupoPatchSchema.parse({ chat: false }), { chat: false });
   });
 
-  it("permissão: telas desconhecidas são recusadas", () => {
-    assert.equal(permissaoPatchSchema.safeParse({ abas: ["dfd", "nao-existe"] }).success, false);
-    assert.deepEqual(permissaoPatchSchema.parse({ abas: ["pca", "dfd"] }), { abas: ["pca", "dfd"] });
-  });
-
-  it("criação continua com os padrões (grupo sem pessoas/unidades, permissão sem telas)", () => {
-    assert.deepEqual(grupoCreateSchema.parse({ nome: "Novo" }), { nome: "Novo", membros: [], reparticoes: [] });
-    assert.deepEqual(permissaoSchema.parse({ nome: "Nova" }), { nome: "Nova", abas: [] });
+  it("criação com os padrões: sem módulos, chat liberado, todos os PCAs, sem pessoas/unidades", () => {
+    assert.deepEqual(grupoCreateSchema.parse({ nome: "Novo" }), { nome: "Novo", modulos: [], chat: true, pcas: null, membros: [], reparticoes: [], modoUnidades: "lista" });
   });
 });
 
@@ -62,17 +52,17 @@ describe("ids e nomes", () => {
   it("ids inválidos são recusados", () => {
     assert.equal(grupoPatchSchema.safeParse({ membros: [0] }).success, false);
     assert.equal(grupoPatchSchema.safeParse({ membros: [1.5] }).success, false);
-    assert.equal(grupoPatchSchema.safeParse({ permissaoId: -1 }).success, false);
+    assert.equal(grupoPatchSchema.safeParse({ pcas: [-1] }).success, false);
   });
 
   it("nome: obrigatório, sem espaços nas pontas e até o limite", () => {
     assert.equal(grupoCreateSchema.parse({ nome: "  Planejamento  " }).nome, "Planejamento");
     assert.equal(grupoCreateSchema.safeParse({ nome: "   " }).success, false);
     const longo = "x".repeat(MAX_NOME_RBAC + 1);
-    const r = permissaoSchema.safeParse({ nome: longo });
+    const r = grupoCreateSchema.safeParse({ nome: longo });
     assert.equal(r.success, false);
     assert.match(r.error?.issues[0]?.message ?? "", /Use até 60 caracteres/);
-    assert.equal(permissaoSchema.safeParse({ nome: "x".repeat(MAX_NOME_RBAC) }).success, true);
+    assert.equal(grupoCreateSchema.safeParse({ nome: "x".repeat(MAX_NOME_RBAC) }).success, true);
   });
 
   it("grupo e unidade ativos do cabeçalho: número inteiro positivo", () => {
@@ -116,10 +106,29 @@ describe("mensagens padrão do Zod em português", () => {
 });
 
 describe("planilha de responsáveis (pessoa + vínculo)", () => {
-  it("a pessoa exige o nome; a matrícula é opcional; o PATCH não injeta padrões", () => {
-    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "" });
+  it("a pessoa exige o nome; matrícula, cargo e usuário são opcionais; o PATCH não injeta padrões", () => {
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: " Ana " }), { nome: "Ana", matricula: "", cargo: "", usuarioId: null, externo: false });
     assert.equal(pessoaResponsavelSchema.safeParse({ nome: "  " }).success, false);
+    assert.deepEqual(pessoaResponsavelSchema.parse({ nome: "Ana", cargo: "Secretário", usuarioId: 7 }), { nome: "Ana", matricula: "", cargo: "Secretário", usuarioId: 7, externo: false });
+    assert.equal(pessoaResponsavelSchema.parse({ nome: "Ana", externo: true }).externo, true);
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ externo: true }), { externo: true });
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", usuarioId: 0 }).success, false);
+    assert.equal(pessoaResponsavelSchema.safeParse({ nome: "Ana", cargo: "x".repeat(81) }).success, false);
     assert.deepEqual(pessoaResponsavelPatchSchema.parse({ matricula: "12" }), { matricula: "12" });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ usuarioId: null }), { usuarioId: null });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ exoneradoEm: "2026-03-15" }), { exoneradoEm: "2026-03-15" });
+    assert.deepEqual(pessoaResponsavelPatchSchema.parse({ exoneradoEm: null }), { exoneradoEm: null });
+    assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "2026-02-30" }).success, false);
+    assert.equal(pessoaResponsavelPatchSchema.safeParse({ exoneradoEm: "15/03/2026" }).success, false);
+  });
+
+  it("editar o vínculo: onde responde é opcional e, quando vem, UM só", () => {
+    const base = { responsavelId: 1, tipo: "padrao", inicio: "2026-01-01" };
+    assert.equal(vinculoResponsavelPatchSchema.safeParse(base).success, true, "sem alvo = fica o de antes");
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: null }).success, true);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, reparticaoId: 5 }).success, true);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: 2, reparticaoId: 5 }).success, false);
+    assert.equal(vinculoResponsavelPatchSchema.safeParse({ ...base, orgaoId: null, reparticaoId: null }).success, false);
   });
 
   it("o vínculo vai a UMA unidade OU a UM órgão", () => {

@@ -31,12 +31,34 @@
   button.principal { background: var(--botao); color: var(--botao-texto); border-color: var(--botao); }
   button.parar { background: var(--erro); border-color: var(--erro); color: #fff; }
   button:disabled { opacity: .5; cursor: default; }
+  .confirmar { border-color: var(--alerta); box-shadow: 0 0 0 1px var(--alerta) inset; }
+  .confirmar h2 { margin: 0 0 2px; font-size: 14px; }
+  .confirmar dl { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .confirmar dt { color: var(--suave); }
+  .confirmar dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .confirmar .aviso { color: var(--alerta); font-size: 12px; margin: 0 0 8px; }
   .nota { margin: 8px 0 0; font-size: 11px; color: var(--suave); }
 </style>
 </head>
 <body>
   <h1>Automação PCA</h1>
   <div class="linha"><span id="ponto" class="p"></span><span id="centi">Conferindo a Centi…</span></div>
+  <section id="confirmacao" class="caixa confirmar" hidden aria-labelledby="confTitulo">
+    <h2 id="confTitulo">Anexar ao protocolo da Centi?</h2>
+    <div class="s">O sistema PCA pediu para gravar na Centi. Confira antes de permitir.</div>
+    <dl>
+      <dt>Protocolo</dt><dd id="confProtocolo"></dd>
+      <dt>Id na Centi</dt><dd id="confId"></dd>
+      <dt>Documento</dt><dd id="confDescricao"></dd>
+      <dt>Execução</dt><dd id="confExecucao"></dd>
+    </dl>
+    <p class="aviso">Cada PDF entra como um documento NOVO; nada do protocolo é alterado. Vale para os documentos desta execução neste protocolo.</p>
+    <div class="dupla">
+      <button id="confNao" type="button">Recusar</button>
+      <button id="confSim" class="principal" type="button">Permitir</button>
+    </div>
+    <p class="nota" id="confPrazo"></p>
+  </section>
   <div id="atividade" class="caixa" hidden>
     <div class="titulo" id="titulo"></div>
     <div class="s" id="passo"></div>

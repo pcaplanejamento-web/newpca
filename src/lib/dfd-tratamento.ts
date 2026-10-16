@@ -9,6 +9,7 @@ import {
   estadoCicloCfg,
   nivelDaFalta,
   nivelDe,
+  palavrasNoItem,
   type RegrasAvaliacao,
   regrasPadrao,
   sinonimosDe,
@@ -336,12 +337,17 @@ export type EstadoItem = "erro" | "regular";
 /** Valor unitário AUSENTE — vazio, zero, negativo ou não numérico (NaN viraria `null` no JSON e o servidor
  * recusaria): a MESMA régua em toda conferência, no cliente e no servidor. */
 export const semValorUnitario = (v: number | null | undefined): boolean => v == null || !Number.isFinite(v) || v <= 0;
+/** Quantidade AUSENTE = vazia, zero, negativa ou não numérica — a MESMA régua no cliente e no servidor (um item com
+ * quantidade 0 tem valor total zerado: nada a contratar). */
+export const semQuantidade = (v: number | null | undefined): boolean => v == null || !Number.isFinite(v) || v <= 0;
+/** Quantidade FRACIONADA = maior que zero e menor que 1 (ex.: 0,001) — ponto próprio (`item.quantidadeFracionada`). */
+export const quantidadeFracionada = (v: number | null | undefined): boolean => v != null && Number.isFinite(v) && v > 0 && v < 1;
 
 /** Faltas de um item da Seção 4 (o que impede o DFD de ser importado). */
 export function faltasDoItem(it: DfdItemParseado): string[] {
   const faltas: string[] = [];
   if (semValorUnitario(it.valorUnitario)) faltas.push("valor unitário");
-  if (it.quantidade == null) faltas.push("quantidade");
+  if (semQuantidade(it.quantidade)) faltas.push("quantidade");
   return faltas;
 }
 
@@ -511,7 +517,7 @@ export function repetidosDoDfd(itens: (ItemDup & { item?: number | null })[]): M
  * motivo (a tela mostra). Puro. */
 export function motivoNaoUnificar(itens: { quantidade: number | null; valorUnitario: number | null }[]): string | null {
   if (itens.length < 2) return "Não há item repetido para unificar.";
-  if (itens.some((it) => it.quantidade == null || !Number.isFinite(it.quantidade) || it.quantidade <= 0))
+  if (itens.some((it) => semQuantidade(it.quantidade)))
     return "Há item sem quantidade — informe a quantidade antes de unificar.";
   if (itens.some((it) => semValorUnitario(it.valorUnitario))) return "Há item sem valor unitário — informe o valor antes de unificar.";
   const vu = itens[0].valorUnitario as number;
@@ -738,9 +744,13 @@ export function avaliarDfd(
   // Ordem preserva a de `faltasObrigatorias` (valor unitário → repartição → seções).
   const semVU = d.itens.length === 0 || d.itens.some((i) => semValorUnitario(i.valorUnitario));
   add("item.valorUnitario", semVU, "valor unitário em todos os itens");
-  // `=== null` (não `== null`): só conta quando a quantidade foi realmente informada
-  // como ausente — evita falso-positivo quando o chamador nem carrega a quantidade.
-  add("item.quantidade", d.itens.some((i) => i.quantidade === null), "quantidade em todos os itens");
+  // Só conta quando a quantidade veio (`undefined` = o chamador nem carrega a quantidade — sem falso positivo).
+  add("item.quantidade", d.itens.some((i) => i.quantidade !== undefined && semQuantidade(i.quantidade)), "quantidade em todos os itens");
+  add("item.quantidadeFracionada", d.itens.some((i) => quantidadeFracionada(i.quantidade)), "quantidade de no mínimo 1 em todos os itens");
+  // Palavras apontadas: cada CONJUNTO com a sua importância — o pior comportamento achado decide.
+  const palavras = d.itens.flatMap((i) => palavrasNoItem(i.descricao, regras, c));
+  if (palavras.some((p) => p.comportamento === "bloqueia")) bloqueantes.push("itens sem as palavras apontadas pelo ADM");
+  else if (palavras.length) atencoes.push("itens sem as palavras apontadas pelo ADM");
   // Item REPETIDO nunca bloqueia (só aponta — o ponto não aceita "bloqueia"): confira e trate no detalhe do item.
   add("item.duplicado", itensDuplicados(d.itens).length > 0, "itens repetidos (mesmo código, descrição e unidade)");
   add("dfd.planejamento", !temPlanejamento(d.planejamento), "número de planejamento");
@@ -889,9 +899,32 @@ export function mensagensDfd(
   add("item.valorUnitario", "itens", total > 0 && semVU === 0,
     total === 0 ? "Nenhum item na tabela (Seção 4)." : `Falta valor unitário em ${semVU} de ${total} ${plural(total)} (Seção 4).`,
     `Valor unitário informado nos ${total} ${plural(total)} (Seção 4).`);
-  const semQtd = d.itens.filter((i) => i.quantidade === null).length;
+  const semQtd = d.itens.filter((i) => semQuantidade(i.quantidade)).length;
+  const zeradas = d.itens.filter((i) => i.quantidade != null && semQuantidade(i.quantidade)).length;
   add("item.quantidade", "itens", semQtd === 0,
-    `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4).`, "Quantidade informada em todos os itens (Seção 4).");
+    zeradas === semQtd
+      ? `Quantidade zerada em ${semQtd} ${plural(semQtd)} (Seção 4).`
+      : `Falta quantidade em ${semQtd} ${plural(semQtd)} (Seção 4)${zeradas ? `, ${zeradas} com quantidade zerada` : ""}.`,
+    "Quantidade informada em todos os itens (Seção 4).",
+    zeradas === semQtd ? "Quantidade zerada" : undefined);
+  const fracionadas = d.itens.filter((i) => quantidadeFracionada(i.quantidade)).length;
+  add("item.quantidadeFracionada", "itens", fracionadas === 0,
+    `Quantidade menor que 1 em ${fracionadas} ${plural(fracionadas)} (Seção 4) — confira a quantidade e a unidade de medida.`,
+    "Quantidade de no mínimo 1 em todos os itens (Seção 4).");
+  // Palavras apontadas (cada conjunto com a sua importância): só APONTA, na cor do pior conjunto achado.
+  const comPalavras = d.itens.map((i) => palavrasNoItem(i.descricao, regras, c)).filter((x) => x.length);
+  if (comPalavras.length) {
+    const todas = comPalavras.flat();
+    const pior = todas.find((p) => p.comportamento === "bloqueia") ?? todas[0];
+    const termos = [...new Set(todas.flatMap((p) => p.termos))];
+    out.push({
+      chave: "item.palavras",
+      status: pior.comportamento === "bloqueia" ? "erro" : "atencao",
+      texto: `Palavra apontada em ${comPalavras.length} ${plural(comPalavras.length)} (Seção 4): ${termos.slice(0, 8).map((t) => `“${t}”`).join(", ")}${termos.length > 8 ? ` e mais ${termos.length - 8}` : ""}.`,
+      ancora: "itens",
+      cor: corImportancia(regras, pior.nivel),
+    });
+  }
   // Itens REPETIDOS (mesmo código, descrição e unidade) — só APONTA, nunca bloqueia: a tabela de itens marca cada um
   // ("Item duplicado") e o detalhe do item mostra os repetidos lado a lado para remover ou unificar.
   const repetidos = gruposItensRepetidos(d.itens);
@@ -977,6 +1010,8 @@ export function contarMensagens(msgs: MensagemDfd[]): Record<StatusMensagem, num
 export const ROTULO_CURTO: Record<string, string> = {
   "item.valorUnitario": "Item sem valor",
   "item.quantidade": "Item sem quantidade",
+  "item.quantidadeFracionada": "Quantidade fracionada",
+  "item.palavras": "Palavra apontada",
   "dfd.planejamento": "Sem planejamento",
   "dfd.reparticao": "Sem unidade",
   "dfd.tipo": "Sem tipo",
@@ -1050,10 +1085,39 @@ export function mensagensItem(
   it: DfdItemParseado,
   /** Item REPETIDO: Nº de outros itens com o mesmo código, descrição e unidade (+ o total e a cor da importância do ADM). */
   repetido?: (RepeticaoItem & { cor?: string }) | null,
-): { status: StatusMensagem; chave: string; texto: string; cor?: string }[] {
-  const out: { status: StatusMensagem; chave: string; texto: string; cor?: string }[] = [];
+  /** As regras do ADM — decidem o nível dos pontos configuráveis do item (hoje: quantidade menor que 1). */
+  regras?: RegrasAvaliacao,
+): { status: StatusMensagem; chave: string; texto: string; cor?: string; rotulo?: string }[] {
+  const out: { status: StatusMensagem; chave: string; texto: string; cor?: string; rotulo?: string }[] = [];
   if (semValorUnitario(it.valorUnitario)) out.push({ status: "erro", chave: "item.valorUnitario", texto: "Item sem valor unitário." });
-  if (it.quantidade == null) out.push({ status: "erro", chave: "item.quantidade", texto: "Item sem quantidade." });
+  if (semQuantidade(it.quantidade))
+    out.push(
+      it.quantidade == null
+        ? { status: "erro", chave: "item.quantidade", texto: "Item sem quantidade." }
+        : { status: "erro", chave: "item.quantidade", texto: `Quantidade zerada (${it.quantidade}) — o valor total do item fica R$ 0,00.`, rotulo: "Quantidade zerada" },
+    );
+  if (quantidadeFracionada(it.quantidade)) {
+    const r = regras ?? regrasPadrao();
+    const id = nivelDe(r, "item.quantidadeFracionada");
+    const comp = comportamentoDe(r, id);
+    if (comp !== "ignora")
+      out.push({
+        status: comp === "bloqueia" ? "erro" : "atencao",
+        chave: "item.quantidadeFracionada",
+        texto: `Quantidade menor que 1 (${String(it.quantidade).replace(".", ",")}) — confira a quantidade e a unidade de medida.`,
+        cor: corImportancia(r, id),
+      });
+  }
+  // Palavras apontadas: uma mensagem por CONJUNTO achado, na importância dele.
+  if (regras?.palavrasItem?.length)
+    for (const p of palavrasNoItem(it.descricao, regras))
+      out.push({
+        status: p.comportamento === "bloqueia" ? "erro" : "atencao",
+        chave: "item.palavras",
+        texto: `Contém ${p.termos.map((t) => `“${t}”`).join(", ")} — palavra apontada pelo ADM.`,
+        cor: corImportancia(regras, p.nivel),
+        rotulo: "Palavra apontada",
+      });
   // Repetido = ATENÇÃO (nunca erro): confira no detalhe do item e remova/unifique o que for duplicado.
   if (repetido && repetido.total > 0) {
     const mais = repetido.total - repetido.iguais.length;
@@ -1146,7 +1210,7 @@ export function faltasCirurgicasDfd(
   const nums = (its: DfdItemParseado[]) =>
     its.map((i) => i.item).filter((n): n is number => n != null);
   const semVU = d.itens.filter((i) => semValorUnitario(i.valorUnitario));
-  const semQtd = d.itens.filter((i) => i.quantidade == null);
+  const semQtd = d.itens.filter((i) => semQuantidade(i.quantidade));
   if (ativo("item.valorUnitario") && semVU.length > 0)
     linhas.push(`Informar o VALOR UNITÁRIO ${semVU.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semVU))} (Seção 4).`);
   const repetidos = ativo("item.duplicado") ? gruposItensRepetidos(d.itens) : [];
@@ -1154,6 +1218,12 @@ export function faltasCirurgicasDfd(
     linhas.push(`Conferir os itens REPETIDOS ${listaGruposItens(repetidos)} (mesmo código, descrição e unidade — Seção 4): remover ou unificar o que estiver duplicado.`);
   if (ativo("item.quantidade") && semQtd.length > 0)
     linhas.push(`Informar a QUANTIDADE ${semQtd.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(semQtd))} (Seção 4).`);
+  const fracionadas = d.itens.filter((i) => quantidadeFracionada(i.quantidade));
+  if (ativo("item.quantidadeFracionada") && fracionadas.length > 0)
+    linhas.push(`Conferir a QUANTIDADE (menor que 1) ${fracionadas.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(fracionadas))} e a unidade de medida (Seção 4).`);
+  const comPalavras = d.itens.filter((i) => palavrasNoItem(i.descricao, regras, c).length);
+  if (comPalavras.length > 0)
+    linhas.push(`Revisar a DESCRIÇÃO ${comPalavras.length === 1 ? "do item" : "dos itens"} ${listaItens(nums(comPalavras))} — contém palavra apontada (Seção 4).`);
   if (ativo("dfd.planejamento") && !temPlanejamento(d.planejamento))
     linhas.push("Informar o NÚMERO DE PLANEJAMENTO do DFD (corrigir no Centi e reenviar o DFD).");
   if (ativo("dfd.reparticao") && d.reparticaoId == null)

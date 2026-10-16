@@ -32,6 +32,7 @@ import type { Fatia, ItemRow, PontoMensal, Resumo, TopItem } from "@/lib/queries
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
 import { Button } from "./Button";
+import { Ajuda } from "./Ajuda";
 import { ChartCard } from "./ChartCard";
 import { ClassificacaoChart } from "./charts/ClassificacaoChart";
 import { MensalChart } from "./charts/MensalChart";
@@ -130,6 +131,7 @@ export function DashboardPcaCliente({
   unidadeFiltrada = false,
   consulta,
   previa = false,
+  nomesUnidades,
   nome,
 }: {
   resumo: Resumo;
@@ -144,6 +146,8 @@ export function DashboardPcaCliente({
   consulta?: ConsultaDashboard;
   /** PRÉVIA ligada: a lista inclui os DFDs ainda não incorporados (a fonte da origem diz). */
   previa?: boolean;
+  /** O NOME de cada unidade pela sigla (o filtro Unidade mostra e busca pelos dois). */
+  nomesUnidades?: Record<string, string>;
   /** O nome do PCA (o título do relatório em PDF). */
   nome?: string;
 }) {
@@ -158,7 +162,7 @@ export function DashboardPcaCliente({
   const podeExportar = usePodeExportar();
   const quem = useQuemExporta();
   const ativo = temFiltro(filtros);
-  const rotuloUnidade = consulta ? "Unidade requisitante" : "Planilha";
+  const rotuloUnidade = consulta ? "Unidade" : "Planilha";
 
   // Cada gráfico SEM o filtro da própria dimensão; sem filtro nenhum, os números do servidor.
   const dados = useMemo(() => {
@@ -173,6 +177,33 @@ export function DashboardPcaCliente({
     for (const i of filtrados) if (!m || (i.valorTotal ?? 0) > (m.valorTotal ?? 0)) m = i;
     return m;
   }, [filtrados]);
+
+  // Os detalhes das KPIs (sobre os itens à vista — os filtros do Dashboard valem).
+  const ext = useMemo(() => {
+    const valores = filtrados.map((i) => i.valorTotal ?? 0).filter((v) => v > 0).sort((a, b) => a - b);
+    const meio = valores.length >> 1;
+    const mediana = !valores.length ? 0 : valores.length % 2 ? valores[meio] : (valores[meio - 1] + valores[meio]) / 2;
+    const media = valores.length ? valores.reduce((s, v) => s + v, 0) / valores.length : 0;
+    const dfds = new Set<number>();
+    const protocolos = new Set<string>();
+    const classes = new Set<string>();
+    for (const i of filtrados) {
+      if (i.dfdId != null) dfds.add(i.dfdId);
+      if (i.protocoloNumero) protocolos.add(i.protocoloNumero);
+      if (i.classificacao) classes.add(i.classificacao);
+    }
+    return {
+      comValor: valores.length,
+      mediana,
+      menor: valores[0] ?? 0,
+      acimaMedia: valores.filter((v) => v > media).length,
+      dfds: dfds.size,
+      protocolos: protocolos.size,
+      classes: classes.size,
+    };
+  }, [filtrados]);
+  const pctTexto = (parte: number, total: number) =>
+    `${(total > 0 ? (parte / total) * 100 : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
   const kTotal = useContagem(resumoVisto.total);
   const kCount = useContagem(resumoVisto.count);
@@ -233,10 +264,10 @@ export function DashboardPcaCliente({
       DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades : d.dim === "previsao" ? temPrevisao : true)).map((d) => ({
         dim: d.dim,
         rotulo: d.dim === "unidade" ? rotuloUnidade : d.rotulo,
-        opcoes: opcoesDash(itens, filtros, d.dim).map((o) => ({ ...o, rotulo: rotuloOpcao(d.dim, o.chave) })),
+        opcoes: opcoesDash(itens, filtros, d.dim).map((o) => ({ ...o, rotulo: rotuloOpcao(d.dim, o.chave), detalhe: d.dim === "unidade" ? nomesUnidades?.[o.chave] : undefined })),
         selecionados: chavesDoFiltro(filtros, d.dim),
       })),
-    [itens, filtros, temPrioridade, temUnidades, temPrevisao, rotuloUnidade],
+    [itens, filtros, temPrioridade, temUnidades, temPrevisao, rotuloUnidade, nomesUnidades],
   );
   function mudarTopo(dim: string, chaves: string[]) {
     const d = dim as DimTopo;
@@ -357,24 +388,75 @@ export function DashboardPcaCliente({
             : null
           : null;
 
+  // A explicação da Consulta no (?) — a linha da consulta fica só com os controles.
+  const ajudaConsulta = (
+    <Ajuda titulo="Consulta de itens" rotulo="Sobre a consulta" botao="sm">
+      <p>
+        {consulta ? "Os protocolos, DFDs e itens do PCA" : "Os itens do PCA"}
+        {ativo ? `, só o que está nos filtros do Dashboard (${num(filtrados.length)} itens)` : ""}.
+      </p>
+      <p>Busque pelo produto ou código (vários de uma vez com “:”), filtre e ordene pelo cabeçalho de cada coluna.</p>
+      {consulta && <p>Toque numa linha para ver o detalhe.</p>}
+    </Ajuda>
+  );
+
   return (
     <>
       <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
-        <KpiStat realce label="Total Planejado" value={brlCompact(kTotal)} hint={`em ${num(resumoVisto.count)} itens`} />
         <KpiStat
           realce
-          label="Qtd. de Itens"
+          completo
+          label="Total planejado"
+          value={brl(kTotal)}
+          hint={ativo ? "Nos filtros do Dashboard" : "Soma de todos os itens do PCA"}
+          detalhes={[
+            { rotulo: "Itens com valor", valor: `${num(ext.comValor)} de ${num(filtrados.length)}` },
+            ...(ext.dfds ? [{ rotulo: "Média por DFD", valor: brl(resumoVisto.total / ext.dfds) }] : []),
+            { rotulo: "Classificações", valor: num(ext.classes) },
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
+          label="Itens planejados"
           value={num(Math.round(kCount))}
           cor="var(--sit-finalizado)"
-          hint={ativo ? "itens no filtro" : (hintItens ?? (unidadeFiltrada ? "itens na unidade" : `${num(resumoVisto.numUnidades)} unidade(s)`))}
+          hint={ativo ? "Itens nos filtros do Dashboard" : (hintItens ?? (unidadeFiltrada ? "Itens da unidade" : "Itens de todas as unidades"))}
+          detalhes={[
+            ...(ext.protocolos ? [{ rotulo: "Protocolos", valor: num(ext.protocolos) }] : []),
+            ...(ext.dfds ? [{ rotulo: "DFDs", valor: num(ext.dfds) }] : []),
+            { rotulo: rotuloUnidade === "Planilha" ? "Planilhas" : "Unidades requisitantes", valor: num(resumoVisto.numUnidades) },
+          ]}
         />
-        <KpiStat realce label="Ticket Médio" value={brl(kTicket)} cor="var(--sit-em-analise)" hint="por item" />
         <KpiStat
           realce
-          label="Maior Item"
-          value={brlCompact(kMaior)}
+          completo
+          label="Valor médio por item"
+          value={brl(kTicket)}
+          cor="var(--sit-em-analise)"
+          hint="Total planejado ÷ quantidade de itens"
+          detalhes={[
+            { rotulo: "Mediana", valor: brl(ext.mediana) },
+            { rotulo: "Menor valor", valor: brl(ext.menor) },
+            { rotulo: "Itens acima da média", valor: num(ext.acimaMedia) },
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
+          label="Maior item"
+          value={brl(kMaior)}
           cor="var(--sit-devolvido)"
           hint={resumoVisto.maiorNome ?? "—"}
+          detalhes={
+            maior
+              ? [
+                  { rotulo: "Participação no total", valor: pctTexto(resumoVisto.maiorValor, resumoVisto.total) },
+                  ...(maior.quantidade != null ? [{ rotulo: "Quantidade", valor: `${num(maior.quantidade)} ${maior.unidadeMedida ?? ""}`.trim() }] : []),
+                  ...(maior.dfdNumero ? [{ rotulo: "DFD", valor: maior.dfdNumero }] : maior.classificacao ? [{ rotulo: "Classificação", valor: maior.classificacao }] : []),
+                ]
+              : undefined
+          }
           onClick={
             maior
               ? () =>
@@ -391,10 +473,32 @@ export function DashboardPcaCliente({
         aria-label="Filtros do Dashboard"
         className={`space-y-2 rounded-card border p-[var(--pad-card)] transition-colors ${ativo ? "border-accent/30 bg-accent-soft/40" : "border-border bg-surface"}`}
       >
-        <FiltrosDashboard campos={campos} onMudar={mudarTopo} />
+        <FiltrosDashboard
+          campos={campos}
+          onMudar={mudarTopo}
+          fim={
+            <>
+              <Ajuda titulo="Filtros do Dashboard" botao="sm">
+                Escolha nos menus ou toque numa fatia/barra — os gráficos, os indicadores e a consulta seguem. Vários valores num
+                filtro valem como "qualquer um"; filtros diferentes se somam.
+              </Ajuda>
+              {podeExportar && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={relatorio}
+                  loading={gerando}
+                  aria-label="Baixar o relatório em PDF"
+                  title="Baixar o relatório (PDF): os indicadores e uma tabela por gráfico, com os filtros aplicados"
+                  icon={<IconDownload className="h-4 w-4" />}
+                />
+              )}
+            </>
+          }
+        />
+        {ativo && (
         <div className="flex min-h-9 flex-wrap items-center gap-2" aria-live="polite">
-          <IconFilter className={`h-4 w-4 shrink-0 ${ativo ? "text-accent" : "text-faint"}`} aria-hidden />
-          {!ativo && <span className="text-xs text-muted">Escolha nos menus ou toque numa fatia/barra — os gráficos, os indicadores e a consulta seguem.</span>}
+          <IconFilter className="h-4 w-4 shrink-0 text-accent" aria-hidden />
           {chips.map(([dim, f]) => (
             <span key={dim} className="inline-flex max-w-full animate-fade-in-up items-center gap-1 rounded-chip border border-accent/30 bg-surface pl-2.5 text-xs text-text">
               <span className="text-muted">{TITULO_CHIP[dim]}:</span>
@@ -417,8 +521,7 @@ export function DashboardPcaCliente({
             </span>
           ))}
           <span className="ml-auto flex items-center gap-1.5">
-            {ativo && (
-              <>
+            <>
                 <span className="text-xs text-muted tabular-nums">
                   {num(filtrados.length)} itens · {brlCompact(valorFiltrado)}
                 </span>
@@ -429,15 +532,9 @@ export function DashboardPcaCliente({
                   Limpar
                 </Button>
               </>
-            )}
-            {podeExportar && (
-              <Button size="sm" variant="ghost" onClick={relatorio} loading={gerando} title="Os indicadores e uma tabela por gráfico, com os filtros aplicados">
-                <IconDownload className="h-4 w-4" />
-                <span className="hidden sm:inline">Relatório (PDF)</span>
-              </Button>
-            )}
           </span>
         </div>
+        )}
       </section>
 
       <Segmented
@@ -500,16 +597,7 @@ export function DashboardPcaCliente({
               ))}
           </div>
         ) : (
-          <ChartCard
-            title="Consulta de Itens"
-            subtitle={
-              ativo
-                ? `Só o que está no filtro (${num(filtrados.length)} itens) — clique numa linha para ver o detalhe`
-                : consulta
-                  ? "Itens e DFDs do PCA — clique numa linha para ver o detalhe"
-                  : "Busque, filtre e ordene os itens do PCA"
-            }
-          >
+          <ChartCard>
             {consultaVista ? (
               <ConsultaPca
                 protocolos={consultaVista.protocolos}
@@ -519,9 +607,10 @@ export function DashboardPcaCliente({
                 showUnidade={showUnidade}
                 aberto={aberto}
                 onAbrir={setAberto}
+                fim={ajudaConsulta}
               />
             ) : (
-              <ItemTable rows={filtrados} showUnidade={showUnidade} />
+              <ItemTable rows={filtrados} showUnidade={showUnidade} fim={ajudaConsulta} />
             )}
           </ChartCard>
         )}

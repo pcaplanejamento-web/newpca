@@ -301,7 +301,7 @@ export function EventosTarefa({
     }
   };
   const form = editando && (
-    <div className="space-y-3 rounded-card border border-accent/40 bg-surface p-3">
+    <div className="space-y-3 rounded-card border border-accent/40 bg-surface p-[var(--pad-card)]">
       <EditorEvento valor={editando.r} onChange={(r) => setEditando({ ...editando, r })} disabled={ocupado} pessoas={pessoas} usuarioId={usuarioId} />
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => setEditando(null)}>

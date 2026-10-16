@@ -148,6 +148,7 @@ export function PlanilhaDfds({
   exportar,
   colunasExtras = [],
   conexao,
+  onOrdenadas,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -182,6 +183,8 @@ export function PlanilhaDfds({
   ocultasPadrao?: readonly string[];
   /** Exportar a planilha em .xlsx (a tabela principal — só com a ação Exportar do papel). */
   exportar?: { nome: string } | false;
+  /** As linhas na ordem e com os filtros da tabela PRINCIPAL (a Seleção da automação segue essa sequência). */
+  onOrdenadas?: (linhas: LinhaDfd[]) => void;
   /** Colunas a mais no fim (antes das ações) — ex.: as criadas pelas automações na Mesa. */
   colunasExtras?: Column<LinhaDfd>[];
   /** MESA CONECTADA — repassada à tabela principal (ver `ConexaoTabela`). */
@@ -422,7 +425,7 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, conexao } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, onOrdenadas, conexao } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

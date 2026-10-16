@@ -11,15 +11,18 @@ import { AvaliacaoAdmin } from "./AvaliacaoAdmin";
 import { Ajuda } from "./Ajuda";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { CargosAdmin } from "./CargosAdmin";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { TextField } from "./Field";
 import {
   IconAvaliacao,
   IconBell,
+  IconBriefcase,
   IconCalendar,
   IconLayers,
   IconLinhas,
+  IconLock,
   IconMais,
   IconReferencia,
   IconSituacoes,
@@ -33,12 +36,14 @@ import {
   IconPlug,
   IconPlus,
   IconShield,
+  IconShieldCheck,
   IconTrash,
   IconUser,
   IconUsers,
 } from "./icons";
 import { LinkCard } from "./LinkCard";
 import { Modal } from "./Modal";
+import { ModulosAdmin } from "./ModulosAdmin";
 import { PapeisAdmin } from "./PapeisAdmin";
 import { ReferenciaSistema } from "./ReferenciaSistema";
 import { Segmented } from "./Segmented";
@@ -46,6 +51,8 @@ import { SituacoesAdmin } from "./SituacoesAdmin";
 import { FeriadosAdmin } from "./FeriadosAdmin";
 import { NotificacoesAdmin } from "./NotificacoesAdmin";
 import { PresencaAdmin } from "./PresencaAdmin";
+import { ProtecaoDadosAdmin } from "./ProtecaoDadosAdmin";
+import { SegurancaAdmin } from "./SegurancaAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
 
@@ -411,7 +418,7 @@ export function ConfiguracoesAdmin({
         </Button>
       </div>
       {pcas.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">
           Nenhum PCA cadastrado ainda.
         </p>
       ) : (
@@ -444,14 +451,8 @@ export function ConfiguracoesAdmin({
       <LinkCard
         href="/painel/grupos"
         titulo="Grupos"
-        descricao="Grupos de acesso e suas unidades."
+        descricao="Grupos de acesso: telas, PCAs, unidades e pessoas."
         icon={<IconUsers className="h-5 w-5" />}
-      />
-      <LinkCard
-        href="/painel/permissoes"
-        titulo="Permissões"
-        descricao="Telas que cada grupo abre (o papel diz o que a pessoa faz nelas)."
-        icon={<IconShield className="h-5 w-5" />}
       />
       <LinkCard
         href="/painel/usuarios"
@@ -477,7 +478,7 @@ export function ConfiguracoesAdmin({
   return (
     <div className="space-y-[var(--gap-block)]">
       {confirmacao}
-      <h1 className="text-xl font-bold text-text">Configurações</h1>
+      <h1 className="linha-topico text-xl font-bold text-text">Configurações</h1>
 
       <div>
         <Tabs
@@ -488,7 +489,11 @@ export function ConfiguracoesAdmin({
           url="aba"
           tabs={[
             { key: "identidade", label: "Identidade", icon: <IconImage />, dica: "Nome, subtítulo e favicon do site", content: abaIdentidade },
+            { key: "modulos", label: "Módulos", icon: <IconLayers />, dica: "Os módulos do menu e as telas de cada um (os grupos liberam módulos)", content: <ModulosAdmin /> },
             { key: "papeis", label: "Papéis", icon: <IconShield />, dica: "O que cada papel pode fazer em cada tela", content: <PapeisAdmin /> },
+            { key: "protecao", label: "Proteção de dados", icon: <IconLock />, dica: "Bloquear seleção, cópia, impressão e captura por papel", content: <ProtecaoDadosAdmin /> },
+            { key: "seguranca", label: "Segurança", icon: <IconShieldCheck />, dica: "Sessões inativas e alertas de login suspeito", content: <SegurancaAdmin /> },
+            { key: "cargos", label: "Cargos e funções", icon: <IconBriefcase />, dica: "A lista de cargos dos usuários e dos responsáveis", content: <CargosAdmin /> },
             { key: "acesso", label: "Tela de acesso", icon: <IconTelaAcesso />, dica: "Os textos da tela de login e cadastro", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
             { key: "tabelas", label: "Tabelas", icon: <IconLinhas />, dica: "Quantas linhas as tabelas mostram ao abrir", content: abaTabelas },
             { key: "pcas", label: "PCAs", icon: <IconLayers />, dica: "Os PCAs cadastrados e o vigente", content: abaPcas },
@@ -504,7 +509,7 @@ export function ConfiguracoesAdmin({
               dica: "Como o sistema está configurado (consulta)",
               content: <ReferenciaSistema regras={regras} pcas={pcas} identidade={identidade} />,
             },
-            { key: "mais", label: "Mais", icon: <IconMais />, dica: "Aparência, órgãos, grupos, permissões, usuários, integrações", content: abaMais },
+            { key: "mais", label: "Mais", icon: <IconMais />, dica: "Aparência, órgãos, grupos, usuários, integrações", content: abaMais },
           ]}
         />
       </div>

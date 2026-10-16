@@ -44,7 +44,6 @@ import {
   IconCalendar,
   IconCheck,
   IconChecklist,
-  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconCirculo,
@@ -60,6 +59,7 @@ import {
 import { JanelaFlutuante } from "./JanelaFlutuante";
 import { Modal } from "./Modal";
 import { segurar } from "./segurar";
+import { SetaDropdown } from "./SetaDropdown";
 import { Switch } from "./Switch";
 
 export type MesCalendario = { ano: number; mes: number };
@@ -1302,7 +1302,7 @@ export function CalendarioTarefas({
       trigger={
         <>
           {ROTULO_VISTA[vista]}
-          <IconChevronDown className="h-4 w-4 text-muted" />
+          <SetaDropdown className="h-4 w-4 text-muted" />
         </>
       }
     >

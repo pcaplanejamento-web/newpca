@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { unidades } from "@/db/schema";
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
 import { erro, ok } from "@/lib/http";
@@ -15,6 +15,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string;
   const pcaId = intId(prm.id);
   const unidadeId = intId(prm.unidadeId);
   if (!pcaId || !unidadeId) return erro("ID inválido.");
+  const semPca = await recusaPca(pcaId);
+  if (semPca) return semPca;
   const db = getDb();
   const [u] = await db
     .select({ id: unidades.id, codigo: unidades.codigo })

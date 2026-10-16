@@ -566,6 +566,7 @@ export function useProtocoloGravado({
                   aberto ? mensagensAberto : (avaliacoes.get(l.key)?.mensagens ?? []),
                   aberto ? conformidade : undefined,
                   l.estado === "erro" ? faltasDoDfd(l.key) : undefined,
+                  regras,
                 ),
               ];
             }),

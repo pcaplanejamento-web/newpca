@@ -54,7 +54,7 @@ export function SeloAbc({ classe, participacao }: { classe: ClasseAbc | null; pa
   const estilo = classe === "A" ? "bg-accent text-white" : classe === "B" ? "bg-accent-soft text-accent" : "bg-surface-2 text-muted";
   return (
     <span
-      className={`inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-bold ${estilo}`}
+      className={`inline-grid h-5 min-w-5 place-items-center rounded-chip px-1.5 text-[11px] font-bold ${estilo}`}
       title={`Curva ABC: classe ${classe}${participacao != null ? ` — ${participacaoTexto(participacao)} do valor total` : ""}.\nA = os que somam os primeiros 80% do valor · B = até 95% · C = o resto.`}
     >
       {classe}
@@ -65,7 +65,7 @@ export function SeloAbc({ classe, participacao }: { classe: ClasseAbc | null; pa
 /** Marca da VARIANTE da descrição ("D1", "D2"…) — a MESMA na lista de descrições e na tabela das ocorrências. */
 function ChipVariante({ n, titulo }: { n: number; titulo?: string }) {
   return (
-    <span className="inline-grid h-5 min-w-7 shrink-0 place-items-center rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent" title={titulo}>
+    <span className="inline-grid h-5 min-w-7 shrink-0 place-items-center rounded-chip bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent" title={titulo}>
       D{n}
     </span>
   );

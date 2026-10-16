@@ -7,7 +7,7 @@
 export const DOMINIO_INSTITUCIONAL = "rioverde.go.gov.br";
 
 /** Tamanhos máximos dos campos do cadastro. */
-export const LIMITES_CADASTRO = { nome: 120, matricula: 6, usuarioEmail: 64, senhaMin: 8, senhaMax: 128, telefone: 11 } as const;
+export const LIMITES_CADASTRO = { nome: 120, matricula: 7, usuarioEmail: 64, senhaMin: 8, senhaMax: 128, telefone: 11 } as const;
 
 /** A parte antes do "@": letras minúsculas sem acento, números, ".", "_" e "-" — começa e termina em letra/número e
  * nunca tem ".." (o padrão das caixas institucionais). */
@@ -53,12 +53,12 @@ export function filtrarMatricula(v: string): string {
   return v.replace(/\D/g, "").slice(0, LIMITES_CADASTRO.matricula);
 }
 
-/** A MATRÍCULA funcional da Prefeitura tem EXATAMENTE 6 números (zeros à esquerda contam) — e não só zeros. */
-export const DIGITOS_MATRICULA = 6;
+/** A MATRÍCULA funcional da Prefeitura tem ATÉ 7 números (zeros à esquerda contam) — e não só zeros. */
+export const DIGITOS_MATRICULA = 7;
 
-/** A matrícula é aceita: exatamente 6 dígitos, não só zeros. */
+/** A matrícula é aceita: de 1 a 7 dígitos, não só zeros. */
 export function matriculaValida(m: string): boolean {
-  return /^\d{6}$/.test(m) && /[1-9]/.test(m);
+  return /^\d{1,7}$/.test(m) && /[1-9]/.test(m);
 }
 
 /** A CHAVE de comparação da matrícula (sem espaços nem os zeros à esquerda): "00123" e "123" são a MESMA — a régua do

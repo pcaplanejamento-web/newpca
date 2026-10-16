@@ -1,7 +1,8 @@
-import { type Acesso, atorPasta, getAcesso, podeNoQuadro, podeTela } from "./acesso";
+import { type Acesso, atorPasta, getAcesso, pcasDoAcesso, podeNoQuadro, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { estadoTrello } from "./trello-vincular";
 import { carregarEdicoes } from "./edicoes-tabela";
+import { automacoesDaMesa } from "./fluxos";
 import { dataIsoBrasilia } from "./format";
 import { PODE_NADA, PODE_TUDO } from "./papeis-core";
 import {
@@ -112,7 +113,7 @@ export async function carregarCalendario(a: Acesso, mesPedido?: string, anual = 
     contadoresDosQuadros(ids, hoje, semanaDe(hoje, inicio)[6]),
     tarefasAbertasLeves(ids),
     assinaturaDaPessoa(u.id),
-    podeTela(a, "pca").visualizar ? cronogramaPcas(de, ate) : Promise.resolve({ pcas: [], dfds: [] }),
+    podeTela(a, "pca").visualizar ? cronogramaPcas(de, ate, pcasDoAcesso(a)) : Promise.resolve({ pcas: [], dfds: [] }),
     listasDosQuadros(ids),
     listarEquipes(ids),
   ]);
@@ -182,6 +183,36 @@ export async function contextoTarefa(u: UsuarioSessao, tarefaId: number) {
 export type ContextoTarefa = NonNullable<Awaited<ReturnType<typeof contextoTarefa>>>;
 
 /**
+ * O CONTEXTO de um QUADRO para criar/editar tarefas FORA dele (o "Criar tarefa" da Mesa): listas, etiquetas, pessoas,
+ * equipes, campos e o papel — sem os cartões. `null` = sem acesso ou sem ver as tarefas do quadro.
+ */
+export async function contextoQuadro(u: UsuarioSessao, quadroId: number) {
+  const q = await quadroAcessivel(u, quadroId);
+  if (!q) return null;
+  const acesso = await getAcesso();
+  const pode = acesso ? podeNoQuadro(acesso, q.grupoId, true) : PODE_NADA;
+  if (!pode.visualizar) return null;
+  const [listas, etiquetas, membros, equipes, campos] = await Promise.all([
+    listasDoQuadro(q.id),
+    etiquetasDoQuadroTodas(q.id),
+    pessoasDoQuadro(q),
+    listarEquipes([q.id]),
+    listarCampos([q.id]),
+  ]);
+  return {
+    quadro: { id: q.id, nome: q.nome, cor: q.cor, formatoTitulo: q.formatoTitulo },
+    listas,
+    etiquetas,
+    equipes,
+    campos,
+    membros: membros.map((p) => p.id),
+    pessoas: membros,
+    pode,
+  };
+}
+export type ContextoQuadro = NonNullable<Awaited<ReturnType<typeof contextoQuadro>>>;
+
+/**
  * O ESPAÇO de um quadro (`/painel/tarefas/[id]`) — tudo o que as abas usam, numa carga: listas, cartões (resumo),
  * etiquetas, as PESSOAS do grupo do quadro (+ as designadas que hoje estão fora dele — seguem visíveis) e as edições
  * salvas da aba Lista, as AUTOMAÇÕES e os MODELOS de quadro do grupo dele. `null` = sem acesso
@@ -191,7 +222,7 @@ export async function carregarQuadro(a: Acesso, id: number) {
   const u = a.u;
   const quadro = await quadroAcessivel(u, id);
   if (!quadro) return null;
-  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos, trello] = await Promise.all([
+  const [dados, membros, edicoes, automacoes, modelosQuadro, equipes, favoritos, campos, trello, automacoesMesa] = await Promise.all([
     dadosQuadro(id),
     pessoasDoQuadro(quadro),
     carregarEdicoes(u.id, prefixoEdicoesTarefas(id)),
@@ -201,6 +232,8 @@ export async function carregarQuadro(a: Acesso, id: number) {
     favoritosDaPessoa(u.id),
     listarCampos([id]),
     estadoTrello(id).catch(() => null),
+    // As AUTOMAÇÕES da Mesa (só o ADM) — o "Emitir DFDs" da lista de tarefas.
+    u.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
   ]);
   const noGrupo = new Set(membros.map((p) => p.id));
   const fora = [...new Set([...dados.tarefas.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
@@ -214,6 +247,7 @@ export async function carregarQuadro(a: Acesso, id: number) {
     campos,
     edicoes,
     automacoes,
+    automacoesMesa,
     favoritos,
     trello,
     modelosQuadro: modelosQuadro.map((m) => ({ id: m.id, nome: m.nome, criadoPor: m.criadoPor, listas: m.conteudo.listas.map((l) => l.nome) })),

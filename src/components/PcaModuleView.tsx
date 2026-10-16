@@ -60,7 +60,7 @@ export function PcaModuleView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div>
+      <div className="linha-topico">
         <h1 className="text-xl font-bold text-text">PCA</h1>
         <p className="text-sm text-muted">
           {filtro
@@ -70,7 +70,7 @@ export function PcaModuleView({
       </div>
 
       {pcas.length === 0 && !podeCriar ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
         </div>

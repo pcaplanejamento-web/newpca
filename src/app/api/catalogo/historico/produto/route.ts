@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * item). Quem vê uma das Mesas ou o Catálogo.
  */
 export async function GET(req: Request) {
-  const a = await exigirAcesso(["dfd", "pca", "catalogo"], "visualizar");
+  const a = await exigirAcesso(["dfd", "pca", "catalogo", "verificacao"], "visualizar");
   if ("erro" in a) return a.erro;
   const codigo = normalizarCodigo(new URL(req.url).searchParams.get("codigo"));
   if (!codigo || codigo.length > 60) return erro("Código inválido.");

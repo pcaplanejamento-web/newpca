@@ -2,8 +2,9 @@
 
 import type { ColunasMesa } from "@/lib/mesa-colunas-core";
 import { colunasDaAutomacao } from "./ColunasAutomacao";
+import { useComponente } from "./ComponentesPapel";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
@@ -47,6 +48,7 @@ import { type ReferenciaHistorico, rotuloComparacaoHistorico } from "@/lib/histo
 import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { aplicarFiltros, type ColunaDados } from "@/lib/tabela-filtros";
 import { type PodeMesa, podeNoRecurso } from "@/lib/papeis-core";
+import { vistaPermitida } from "@/lib/papeis-componentes-core";
 import { impactoSaidaPca } from "@/lib/pca-numeracao-core";
 import type { AcaoMassaProtocolo } from "@/lib/dfd-validation";
 import { type AcaoMassaItem, descreverAcaoItem, fatiarItensPorDfd, resumirFalhas, resumirFalhasItens } from "@/lib/massa-itens";
@@ -58,6 +60,7 @@ import { AvisoFlutuante } from "./AvisoFlutuante";
 import { type AberturaMesa, BannersMesa } from "./BannersMesa";
 import { BarraSelecao, BarraSelecaoDfds, ResumoSelecao } from "./BarraSelecao";
 import { CelulaCopiavel } from "./BotaoCopiar";
+import { colunasItemMesa } from "./ColunasItensMesa";
 import { Button } from "./Button";
 import { CelulaLista, CelulaTexto } from "./CelulaLista";
 import { BotaoAtualizar } from "./BotaoAtualizar";
@@ -78,7 +81,7 @@ import { labelCls } from "./formStyles";
 import { IconAlert, IconDashboard, IconFilter, IconLayers, IconTrash, IconUpload, IconUsers, IconUserX } from "./icons";
 import { Modal } from "./Modal";
 import { PessoaTag } from "./PessoaTag";
-import { CelulaPca, CelulaPrioridade, colunaPlanejamento, colunaTipoDfd, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
+import { CelulaPca, CelulaPrioridade, type LinhaDfd, type PcaDaLinha, PlanilhaDfds } from "./PlanilhaDfds";
 import { Progress } from "./Progress";
 import { ProtocoloUploadForm } from "./ProtocoloUploadForm";
 import { Segmented } from "./Segmented";
@@ -87,10 +90,8 @@ import { SeletorCelula } from "./SeletorCelula";
 import { SeletorFiltro } from "./SeletorFiltro";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { toast } from "./Toast";
-import { AutomacoesMesa } from "./AutomacoesMesa";
-import { dfdsDoAlvo, gravarDisparoMesa } from "@/lib/automacao-mesa";
-import { AutomacaoViva, CHAVE_AUTOMACAO } from "./AutomacaoViva";
-import { useRodarFora } from "./SegundoPlano";
+import { AutomacoesMesa, useRodarAutomacao } from "./AutomacoesMesa";
+import { dfdsDoAlvo } from "@/lib/automacao-mesa";
 import { PresencaNoItem } from "./PresencaNoItem";
 
 /** O Dashboard de governança só é baixado quando o ícone dele é aberto (fora do carregamento da Mesa); até lá, o
@@ -209,6 +210,7 @@ export function DfdsView({
   reparticoes,
   reparticaoAtivaId,
   pcas = [],
+  pcasAcesso = null,
   regras = regrasPadrao(),
   orgaos = [],
   pessoas = [],
@@ -232,6 +234,8 @@ export function DfdsView({
   reparticoes: Rep[];
   reparticaoAtivaId: number | null;
   pcas?: PcaResumo[];
+  /** Os PCAs do GRUPO ATIVO (Grupos → PCAs do grupo; null = todos) — os destinos do "Enviar ao PCA". */
+  pcasAcesso?: number[] | null;
   regras?: RegrasAvaliacao;
   orgaos?: Orgao[];
   /** PESSOAS DO GRUPO ativo — as únicas designáveis como Responsável (célula, massa e o filtro do topo). */
@@ -296,7 +300,11 @@ export function DfdsView({
   const [aberto, setAberto] = useState<AberturaMesa | null>(abrirInicial);
   // O `?abrir=` já foi usado: sai da URL (recarregar não reabre o banner), sem nova renderização.
   useEffect(() => {
-    if (abrirInicial) window.history.replaceState(window.history.state, "", window.location.pathname);
+    if (!abrirInicial) return;
+    // Só o `abrir` sai: o `?pca=` (a Mesa daquele PCA) fica.
+    const u = new URL(window.location.href);
+    u.searchParams.delete("abrir");
+    window.history.replaceState(window.history.state, "", u.pathname + u.search);
   }, [abrirInicial]);
   const [vincAlvo, setVincAlvo] = useState<{ id: number; numero: string; protocoloId: number | null } | null>(null);
   const [vincSel, setVincSel] = useState<number | null>(null);
@@ -371,8 +379,16 @@ export function DfdsView({
   // nunca atinge uma linha escondida pelo filtro).
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
-  const [vista, setVista] = useState<Vista>("protocolos");
-  const [modoItens, setModoItens] = useState<ModoItens>("normal");
+  // Os COMPONENTES que o papel retira (Configurações → Papéis → Componentes): as visões e as ações de cada tabela.
+  const libera = useComponente();
+  const veVista = (v: Vista) =>
+    v === "itens" ? libera("dfd.itens") || libera("dfd.consolidada") : v === "dashboard" ? !modoPca && libera("dfd.dashboard") : libera(`dfd.${v}`);
+  // `?vista=` (a pesquisa do sistema leva direto à visão): dashboard · protocolos · dfds · itens.
+  const vistaUrl = useSearchParams().get("vista");
+  const [vistaPedida, setVista] = useState<Vista>(vistaUrl === "dashboard" || vistaUrl === "dfds" || vistaUrl === "itens" ? vistaUrl : "protocolos");
+  const vista = vistaPermitida<Vista>(vistaPedida, ["protocolos", "dfds", "itens", "dashboard"], veVista);
+  const [modoPedido, setModoItens] = useState<ModoItens>("normal");
+  const modoItens: ModoItens = !libera("dfd.consolidada") ? "normal" : !libera("dfd.itens") ? "consolidada" : modoPedido;
   // Itens (lista plana): carregada SOB DEMANDA na 1ª vez que a visão Itens abre (não pesa o load
   // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
   const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
@@ -538,7 +554,7 @@ export function DfdsView({
   }, [itensR]);
   // AUTOMAÇÕES da Mesa (só a do sistema): a visão aberta decide o alvo — protocolos, DFDs ou itens viram os DFDs deles.
   // A barra do topo = TODOS os filtrados; a barra de seleção = os SELECIONADOS. Roda em segundo plano (sem sair da Mesa).
-  const rodarFora = useRodarFora();
+  const rodar = useRodarAutomacao();
   const alvoAutomacao = (soSelecionados: boolean) => {
     if (vista === "protocolos") {
       const ps = soSelecionados ? protocolosF.filter((p) => selProtos.has(p.id)) : protocolosF;
@@ -553,15 +569,7 @@ export function DfdsView({
     const lista = dfdsDoAlvo(dfdsF, "id", soSelecionados ? new Set([...selDfds].map(Number)) : new Set(dfdsF.map((d) => d.id)));
     return { lista, rotulo: `${num(lista.length)} DFD(s) ${soSelecionados ? "selecionado(s)" : "filtrado(s)"}` };
   };
-  const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => {
-    const { lista } = alvoAutomacao(soSelecionados);
-    if (!lista.length) return void toast.warning("Nenhum DFD para a automação — selecione ou filtre.");
-    if (!gravarDisparoMesa({ fluxoId, itens: lista })) return void toast.error("O navegador não deixou levar os DFDs à automação.");
-    if (rodarFora) {
-      rodarFora(CHAVE_AUTOMACAO, <AutomacaoViva />);
-      toast.info("Automação iniciada em segundo plano — acompanhe no canto inferior.");
-    } else router.push("/painel/automacao");
-  };
+  const rodarAutomacao = (fluxoId: number, soSelecionados: boolean) => rodar(fluxoId, alvoAutomacao(soSelecionados).lista);
   const automacaoSel = (rotulo: string) =>
     !modoPca && automacoes.length ? (
       <AutomacoesMesa variante="selecao" automacoes={automacoes} alvo={rotulo} onEscolher={(id) => rodarAutomacao(id, true)} />
@@ -1021,7 +1029,7 @@ export function DfdsView({
     if (!d || !noPca) return null;
     // O PAPEL na Mesa em que o DFD está: vincular = Manipular; excluir = Excluir (também em um PCA — sai dele).
     const podeDfd = podeNoRecurso(pode, noPca.pcaId);
-    const podeExcluirDfd = podeDfd.excluir;
+    const podeExcluirDfd = podeDfd.excluir && libera("dfd.dfds", "excluir");
     if (!podeDfd.manipular && !podeExcluirDfd) return null;
     return (
       <div className="flex justify-end gap-1">
@@ -1328,7 +1336,7 @@ export function DfdsView({
       filter: "none" as const,
       nowrap: true,
       render: (r: ProtocoloNaMesa) =>
-        podeNoRecurso(pode, r.pcaId).excluir ? (
+        podeNoRecurso(pode, r.pcaId).excluir && libera("dfd.protocolos", "excluir") ? (
           <div className="flex justify-end gap-1">
             <Button
               variant="ghost"
@@ -1396,7 +1404,7 @@ export function DfdsView({
   // bate com o da Normal com os mesmos filtros.
   type Atributo = { valor: (r: ItemDfdRow) => string; valores?: (r: ItemDfdRow) => string[] };
   const atributoItem = useMemo(() => {
-    const estado = (r: ItemDfdRow) => resumoEstado(mensagensItem(r, repDoItem(r)));
+    const estado = (r: ItemDfdRow) => resumoEstado(mensagensItem(r, repDoItem(r), regras));
     return {
       estado: {
         valor: (r) => estado(r).rotulo || ESTADO_ITEM_ROTULO[estadoItem(r)],
@@ -1498,7 +1506,7 @@ export function DfdsView({
     const peso = { erro: 3, atencao: 2, conforme: 1 } as const;
     return new Map(
       (consolidados ?? []).map((l) => {
-        const e = estadoConsolidado(l.itens.map((it) => mensagensItem(it, repDoItem(it))));
+        const e = estadoConsolidado(l.itens.map((it) => mensagensItem(it, repDoItem(it), regras)));
         let pior: { it: ItemDfdRow; peso: number; rotulo: string } | null = null;
         for (const it of l.itens) {
           const v = veredictoLinhaCatalogo(it.catalogo, regras, tipoCurtoDfd(it.dfdTipo));
@@ -1551,6 +1559,13 @@ export function DfdsView({
 
   // Colunas da visão "Itens" (lista PLANA de todos os itens dos DFDs em escopo) — com o ESTADO do item
   // (mesma célula da tabela de itens do banner). Clicar abre o DFD de origem já no item.
+  const ci = colunasItemMesa<ItemDfdRow>({
+    protocolo: atributoItem.protocolo.valor,
+    dfd: atributoItem.dfd.valor,
+    sigla: atributoItem.sigla.valor,
+    descricao: atributoItem.descricao.valor,
+    unidade: atributoItem.unidade.valor,
+  });
   const colsItens: Column<ItemDfdRow>[] = [
     {
       key: "estado",
@@ -1559,30 +1574,17 @@ export function DfdsView({
       value: atributoItem.estado.valor,
       valores: atributoItem.estado.valores,
       corPdf: (r) => {
-        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
+        const res = resumoEstado(mensagensItem(r, repDoItem(r), regras));
         return res.rotulo ? res.cor : estadoItemCor(estadoItem(r));
       },
       render: (r) => {
-        const res = resumoEstado(mensagensItem(r, repDoItem(r)));
+        const res = resumoEstado(mensagensItem(r, repDoItem(r), regras));
         if (res.rotulo) return <EstadoResumo res={res} />;
         const e = estadoItem(r);
         return <EstadoPonto cor={estadoItemCor(e)} rotulo={ESTADO_ITEM_ROTULO[e]} />;
       },
     },
-    {
-      key: "protocolo",
-      header: "Protocolo",
-      nowrap: true,
-      value: atributoItem.protocolo.valor,
-      render: (r) =>
-        r.protocoloNumero ? (
-          <CelulaCopiavel copiar={numeroSemAno(r.protocoloNumero)} rotulo="nº do protocolo">
-            <span className="font-mono text-[12px]">{r.protocoloNumero}</span>
-          </CelulaCopiavel>
-        ) : (
-          <span className="text-faint">—</span>
-        ),
-    },
+    ci.protocolo,
     ...(modoPca
       ? []
       : [
@@ -1595,26 +1597,10 @@ export function DfdsView({
             render: (r: ItemDfdRow) => <CelulaPca pca={pcaDe(anoPcaDoDfd(dfdPorId.get(r.dfdId)))} />,
           },
         ]),
-    colunaPlanejamento((r: ItemDfdRow) => r.dfdPlanejamento),
-    {
-      key: "dfd",
-      header: "Nº DFD",
-      nowrap: true,
-      value: atributoItem.dfd.valor,
-      render: (r) => (
-        <CelulaCopiavel copiar={r.dfdNumero} rotulo="nº do DFD">
-          <span className="font-mono text-[12px]">{r.dfdNumero}</span>
-        </CelulaCopiavel>
-      ),
-    },
-    {
-      key: "sigla",
-      header: "Sigla",
-      nowrap: true,
-      value: atributoItem.sigla.valor,
-      render: (r) => (r.sigla ? <span className="font-mono text-[12px] font-semibold text-accent">{r.sigla}</span> : <span className="text-faint">—</span>),
-    },
-    colunaTipoDfd((r: ItemDfdRow) => r.dfdTipo),
+    ci.planejamento,
+    ci.dfd,
+    ci.sigla,
+    ci.tipo,
     {
       key: "prioridade",
       header: "Prioridade",
@@ -1623,18 +1609,8 @@ export function DfdsView({
       value: atributoItem.prioridade.valor,
       render: (r) => <CelulaPrioridade prioridade={dfdPorId.get(r.dfdId)?.prioridade} />,
     },
-    { key: "item", header: "Item", align: "center", nowrap: true, value: (r) => String(r.item ?? ""), render: (r) => r.item ?? "—" },
-    {
-      key: "codigo",
-      header: "Código",
-      nowrap: true,
-      value: (r) => r.codigo ?? "",
-      render: (r) => (
-        <CelulaCopiavel copiar={r.codigo} rotulo="código do item">
-          <span className="font-mono text-[12px]">{r.codigo ?? "—"}</span>
-        </CelulaCopiavel>
-      ),
-    },
+    ci.item,
+    ci.codigo,
     // Conformidade com o CATÁLOGO (veredito do servidor, na cor do nível do ADM; o tipo do DFD de origem conta).
     {
       key: "catalogo",
@@ -1655,20 +1631,8 @@ export function DfdsView({
           },
         ]
       : []),
-    {
-      key: "descricao",
-      header: "Descrição",
-      minWidth: 260,
-      value: atributoItem.descricao.valor,
-      // Uma linha só (a linha da tabela tem altura fixa); o texto inteiro na dica, no banner do item e com os DADOS
-      // COMPLETOS ligados (o botão da barra).
-      render: (r) => (
-        <CelulaCopiavel copiar={r.descricao} rotulo="descrição do item">
-          <CelulaTexto texto={r.descricao} />
-        </CelulaCopiavel>
-      ),
-    },
-    { key: "unidade", header: "Unidade", nowrap: true, value: atributoItem.unidade.valor, render: (r) => r.unidade ?? "—" },
+    ci.descricao,
+    ci.unidade,
     // A unidade do item COMPARADA com o cadastro (Catálogo → Unidades de medida): a sigla cadastrada ou "Não cadastrada".
     ...(unidadeDoItem
       ? [
@@ -1681,8 +1645,8 @@ export function DfdsView({
           },
         ]
       : []),
-    { key: "qtd", header: "Qtd.", align: "center", nowrap: true, value: (r) => String(r.quantidade ?? ""), render: (r) => (r.quantidade != null ? num(r.quantidade) : "—") },
-    { key: "vunit", header: "Vlr. unit.", align: "right", filter: "range", nowrap: true, total: false, numero: (r) => r.valorUnitario, render: (r) => (r.valorUnitario != null ? brl(r.valorUnitario) : "—") },
+    ci.qtd,
+    ci.vunit,
     // O valor unitário × o HISTÓRICO DE COMPRA do código (o valor atual; médio e faixa na dica) — o desvio na cor da régua da
     // variação aponta o item divergente; o filtro separa "Acima/Abaixo (mais de 50%)", "(25% a 50%)", "Dentro", "Sem histórico".
     ...(historico
@@ -1696,7 +1660,7 @@ export function DfdsView({
           },
         ]
       : []),
-    { key: "vtotal", header: "Vlr. total", align: "right", filter: "range", nowrap: true, numero: (r) => r.valorTotal, render: (r) => (r.valorTotal != null ? brl(r.valorTotal) : "—") },
+    ci.vtotal,
   ];
 
   // Colunas da visão CONSOLIDADA — as MESMAS da visão normal, com os dados dos itens do código JUNTOS na célula (listas
@@ -1996,10 +1960,11 @@ export function DfdsView({
   // sistema no servidor — o que o papel não permite volta como falha).
   const podeAqui = modoPca ? pode.pca : pode.sistema;
   // Exportar as tabelas (.xlsx — as linhas filtradas e as colunas à vista): só com a ação Exportar do papel nesta Mesa.
-  const exportarComo = (nome: string) => (podeAqui.exportar ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : (false as const));
+  const exportarComo = (nome: string, comp: string) =>
+    podeAqui.exportar && libera(`dfd.${comp}`, "exportar") ? { nome: `${modoPca ? "Mesa do PCA" : "Mesa"} - ${nome}` } : (false as const);
   // Importar protocolo/DFD: só na Mesa do sistema (o protocolo novo entra nela).
   const podeImportar = pode.sistema.importar && !modoPca;
-  const importa = podeImportar && (vista === "protocolos" || vista === "dfds");
+  const importa = podeImportar && (vista === "protocolos" || vista === "dfds") && libera(`dfd.${vista}`, "importar");
   const oQueImporta = vista === "protocolos" ? "protocolo" : "DFD";
   const rotuloImportar = `Importar ${oQueImporta}`;
   // No celular o rótulo encolhe para "Importar" (o rodapé gruda na tela — cabe numa linha); o nome acessível é o inteiro.
@@ -2032,7 +1997,7 @@ export function DfdsView({
       density="compact"
       acoesRodape={botaoImportar}
       edicoes={edicoesDe("protocolos")}
-      exportar={exportarComo("Protocolos")}
+      exportar={exportarComo("Protocolos", "protocolos")}
       vazio={filtrado && protocolos.length > 0 ? semResultado : semDados("protocolo")}
       resumo={(linhas) =>
         modoPca?.rodapeProtocolos
@@ -2061,7 +2026,7 @@ export function DfdsView({
       colunasExtras={colunasDaAutomacao<LinhaDfd>(colunasAuto, "dfd", (r) => r.key)}
       edicoes={edicoesDe("dfds")}
       ocultasPadrao={modoPca ? OCULTAS_NO_PCA : undefined}
-      exportar={exportarComo("DFDs")}
+      exportar={exportarComo("DFDs", "dfds")}
       vazio={filtrado && dfds.length > 0 ? semResultado : semDados("DFD")}
     />
   );
@@ -2084,7 +2049,7 @@ export function DfdsView({
       minWidth={(modoPca ? 1280 : 1460) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("itens")}
-      exportar={exportarComo("Itens")}
+      exportar={exportarComo("Itens", "itens")}
       vazio={carregandoItens || itensF === null ? "Carregando itens…" : filtrado && (itens?.length ?? 0) > 0 ? semResultado : semDados("item", false)}
       resumo={(linhas) => `${num(linhas.length)} ${linhas.length === 1 ? "item" : "itens"} · ${brl(linhas.reduce((s, i) => s + (i.valorTotal ?? 0), 0))}`}
     />
@@ -2104,7 +2069,7 @@ export function DfdsView({
       minWidth={(modoPca ? 1640 : 1720) + larguraPadronizacao}
       density="compact"
       edicoes={edicoesDe("consolidada")}
-      exportar={exportarComo("Itens consolidados")}
+      exportar={exportarComo("Itens consolidados", "consolidada")}
       vazio={
         carregandoItens || itensF === null
           ? "Carregando itens…"
@@ -2169,7 +2134,7 @@ export function DfdsView({
           ) : (
             <>
               {/* Enviar ao PCA tira da Mesa do sistema e põe na do PCA: Manipular nas duas. */}
-              {pode.pca.manipular && <EnviarAoPca selecionados={sel} pcas={pcas} onConcluido={() => setSelProtos(new Set())} />}
+              {pode.pca.manipular && <EnviarAoPca selecionados={sel} pcas={pcasAcesso ? pcas.filter((p) => pcasAcesso.includes(p.id)) : pcas} onConcluido={() => setSelProtos(new Set())} />}
               {automacaoSel(alvoAutomacao(true).rotulo)}
             </>
           )
@@ -2245,15 +2210,15 @@ export function DfdsView({
           onChange={setVista}
           ariaLabel="Visões da Mesa"
           options={[
-            ...(modoPca ? [] : [{ value: "dashboard" as const, label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }]),
-            { value: "protocolos", label: "Protocolos" },
-            { value: "dfds", label: "DFDs" },
-            { value: "itens", label: "Itens" },
+            ...(veVista("dashboard") ? [{ value: "dashboard" as const, label: "Dashboard de governança", icone: <IconDashboard className="h-4 w-4" />, soIcone: true }] : []),
+            ...(veVista("protocolos") ? [{ value: "protocolos" as const, label: "Protocolos" }] : []),
+            ...(veVista("dfds") ? [{ value: "dfds" as const, label: "DFDs" }] : []),
+            ...(veVista("itens") ? [{ value: "itens" as const, label: "Itens" }] : []),
           ]}
         />
         {modoPca?.ferramenta}
         {/* Só na visão Itens: Normal (um por linha) | Consolidada (um por código). */}
-        {vista === "itens" && (
+        {vista === "itens" && libera("dfd.itens") && libera("dfd.consolidada") && (
           <Segmented<ModoItens>
             value={modoItens}
             onChange={setModoItens}

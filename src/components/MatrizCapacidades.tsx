@@ -18,6 +18,7 @@ import {
   rotuloTela,
   type Tela,
 } from "@/lib/papeis-core";
+import { Ajuda } from "./Ajuda";
 import { Checkbox } from "./Field";
 import { Switch } from "./Switch";
 
@@ -61,7 +62,12 @@ export function MatrizCapacidades({
               {ACOES_PAPEL.map((a) => (
                 <th key={a} scope="col" className="px-2 py-2 text-center font-semibold text-text-2" title={DESCRICAO_ACAO[a]}>
                   <div className="flex flex-col items-center gap-1">
-                    <span>{ROTULO_ACAO[a]}</span>
+                    <span className="flex items-center gap-0.5">
+                      {ROTULO_ACAO[a]}
+                      <Ajuda titulo={ROTULO_ACAO[a]} rotulo="Ajuda" compacta>
+                        {DESCRICAO_ACAO[a]}
+                      </Ajuda>
+                    </span>
                     {!leitura && (
                       <Checkbox
                         alvo
@@ -89,6 +95,13 @@ export function MatrizCapacidades({
                       />
                     )}
                     <span>{rotuloTela(t)}</span>
+                    <Ajuda titulo={rotuloTela(t)} rotulo="Ajuda" compacta>
+                      {Object.entries(CATALOGO_PAPEIS[t].acoes).map(([a, d]) => (
+                        <p key={a} className="mt-1">
+                          <strong>{ROTULO_ACAO[a as AcaoPapel]}:</strong> {d}
+                        </p>
+                      ))}
+                    </Ajuda>
                   </div>
                 </th>
                 {ACOES_PAPEL.map((a) => {
@@ -129,7 +142,16 @@ export function MatrizCapacidades({
         {telas.map((t) => (
           <section key={t} className="rounded-card border border-border bg-surface p-[var(--pad-card)]" aria-label={rotuloTela(t)}>
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-[14px] font-bold text-text">{rotuloTela(t)}</h4>
+              <h4 className="flex items-center gap-1 text-[14px] font-bold text-text">
+                {rotuloTela(t)}
+                <Ajuda titulo={rotuloTela(t)} rotulo="Ajuda" compacta>
+                      {Object.entries(CATALOGO_PAPEIS[t].acoes).map(([a, d]) => (
+                        <p key={a} className="mt-1">
+                          <strong>{ROTULO_ACAO[a as AcaoPapel]}:</strong> {d}
+                        </p>
+                      ))}
+                    </Ajuda>
+              </h4>
               {!leitura && (
                 <Checkbox
                   alvo

@@ -1,5 +1,6 @@
 "use client";
 
+import { useNivelAberto } from "./trilha-store";
 import { useEffect } from "react";
 import { nomeExibicao } from "@/lib/pessoa";
 import { Avatar } from "./Avatar";
@@ -22,6 +23,7 @@ export function VendoAgora({ tipo, id, editando = false, rotulo = "" }: { tipo: 
   const canal = useCanalGrupo();
   const alvo = id != null ? `${tipo}:${id}` : null;
   const registrar = canal?.registrarVendo;
+  useNivelAberto(tipo, id, rotulo);
   useEffect(() => {
     if (!registrar || !alvo) return;
     return registrar(alvo, editando, rotulo);

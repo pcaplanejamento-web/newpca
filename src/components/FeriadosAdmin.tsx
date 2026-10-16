@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { type FeriadoCadastro, feriadosNacionais, ROTULO_TIPO_FERIADO, TIPOS_FERIADO, type TipoFeriado } from "@/lib/calendario-core";
 import { dataBR, dataIsoBrasilia } from "@/lib/format";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
@@ -29,6 +30,11 @@ export function FeriadosAdmin() {
   const [lista, setLista] = useState<FeriadoCadastro[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [r, setR] = useState<Rascunho | null>(null);
+  // A PESQUISA DO SISTEMA abre o registro (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    const x = lista?.find((y) => y.id === Number(v));
+    if (x) setR({ ...x });
+  }, lista != null);
   const [salvando, setSalvando] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
   const ano = Number(dataIsoBrasilia(new Date().toISOString()).slice(0, 4));
@@ -109,11 +115,11 @@ export function FeriadosAdmin() {
         </Button>
       </div>
       {lista.length === 0 ? (
-        <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">Nenhum feriado cadastrado — o calendário usa só os nacionais.</p>
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhum feriado cadastrado — o calendário usa só os nacionais.</p>
       ) : (
         <DataTable columns={cols} rows={lista} getKey={(f) => f.id} pageSize={20} density="compact" resumo={(l) => `${l.length} feriado${l.length === 1 ? "" : "s"}`} />
       )}
-      <details className="rounded-card border border-border bg-surface p-3">
+      <details className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
         <summary className="min-h-11 cursor-pointer content-center text-[13px] font-semibold text-text-2 lg:min-h-0">Nacionais de {ano} (calculados)</summary>
         <ul className="mt-2 grid gap-1 text-[13px] sm:grid-cols-2">
           {nacionais.map((f) => (

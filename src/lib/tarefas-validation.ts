@@ -108,7 +108,8 @@ export const listaSchema = z.object({
 export const criarListaSchema = listaSchema.extend({ aposId: id.optional() });
 /** ORDENAR os cartões de uma lista por um critério (renumera a lista). */
 export const ordenarListaSchema = z.object({ por: z.enum(ORDENACOES_LISTA) });
-export const editarListaSchema = listaSchema.partial().extend({ arquivada: z.boolean().optional() });
+/** Editar a lista; `responsavelId` = a pessoa ATRIBUÍDA à lista (do grupo do quadro — conferida na rota; `null` tira). */
+export const editarListaSchema = listaSchema.partial().extend({ arquivada: z.boolean().optional(), responsavelId: id.nullable().optional() });
 /** A ordem NOVA das listas do quadro (todas, sem repetir). */
 export const ordemListasSchema = z.object({ ids: z.array(id).min(1).max(100) }).refine((v) => new Set(v.ids).size === v.ids.length, "Lista repetida.");
 

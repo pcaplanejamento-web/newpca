@@ -2,7 +2,7 @@
 
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
-import { blocosRelatorioOrcamento, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
+import { blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
 import {
   comparativoPorOrgao,
   comparativoPorUnidade,
@@ -19,13 +19,16 @@ import {
   totaisComparativo,
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
-import { unidadesDoOrcamento, type VinculoOrcamento } from "@/lib/orcamento-vinculo";
+import { unidadesDoOrcamento, type VinculoOrcamento, vinculosDaVisao } from "@/lib/orcamento-vinculo";
 import { semVinculoPorAlvo, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
+import { AjudaVisoes } from "./AjudaVisoes";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import { useComponente } from "./ComponentesPapel";
+import { EditorVisaoOrcamento } from "./EditorVisaoOrcamento";
 import { Callout } from "./Callout";
 import { useQuemExporta } from "./ConfigTabelas";
 import { type Column, DataTable } from "./DataTable";
@@ -33,13 +36,18 @@ import { IconFile, IconLink, IconSettings } from "./icons";
 import { ItemTable } from "./ItemTable";
 import { OrcamentoComparativo } from "./OrcamentoComparativo";
 import { OrigemDados } from "./OrigemDados";
+import { Modal } from "./Modal";
 import { Segmented } from "./Segmented";
+import { SeletorMultiplo } from "./SeletorMultiplo";
+import { SkeletonLinhas } from "./Skeleton";
+import { Switch } from "./Switch";
+import { KpiStat } from "./KpiStat";
 import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
 import { DicaFlutuante } from "./DicaFlutuante";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
-import { VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
+import { SeletorVisaoPca, VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 
 type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
@@ -212,32 +220,122 @@ function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; abe
  * (`blocosRelatorioOrcamento` → `baixarDocumentoPdf`). O código do PDF só é carregado no clique.
  */
 function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
+  const [aberto, setAberto] = useState(false);
+  const [rel, setRel] = useState<RelatorioOrcamento | null>(null);
+  const [carregando, setCarregando] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [modo, setModo] = useState<"todas" | "escolher">("todas");
+  const [escolhidas, setEscolhidas] = useState<string[]>([]);
+  const [separados, setSeparados] = useState(false);
   const quem = useQuemExporta();
-  async function gerar() {
-    if (gerando) return;
-    setGerando(true);
+
+  async function abrir() {
+    setAberto(true);
+    setCarregando(true);
     try {
       const r = await fetch(`/api/pca/${pcaId}/orcamento/relatorio`);
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; relatorio?: RelatorioOrcamento };
       if (!r.ok || !j.ok || !j.relatorio) throw new Error(j.error ?? "Não foi possível montar o relatório.");
-      const rel = j.relatorio;
+      setRel(j.relatorio);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível montar o relatório.");
+      setAberto(false);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  const opcoes = useMemo(
+    () => (rel?.unidades ?? []).map((u) => ({ valor: String(u.id), rotulo: `${u.sigla} — ${u.nome}`, detalhe: `${u.orgao ?? "Sem órgão"} · ${brl(u.orcamento)}` })),
+    [rel],
+  );
+  const ids = modo === "todas" ? [] : escolhidas.map(Number);
+  const qtd = modo === "todas" ? 1 : separados ? ids.length : ids.length ? 1 : 0;
+
+  async function gerar() {
+    if (!rel || gerando || !qtd) return;
+    setGerando(true);
+    try {
       const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
-      const titulo = `Composição do orçamento por unidade · ${rel.pca.nome}`;
-      await baixarDocumentoPdf(nomeArquivoPdf(`Composição do orçamento - ${rel.pca.nome}`, dataIsoBrasilia(new Date().toISOString())), {
-        titulo,
-        blocos: blocosRelatorioOrcamento(rel),
-      }, { usuario: quem });
+      const dia = dataIsoBrasilia(new Date().toISOString());
+      const lotes = modo === "todas" ? [rel] : separados ? ids.map((id) => recortarRelatorio(rel, [id])) : [recortarRelatorio(rel, ids)];
+      for (const [i, r] of lotes.entries()) {
+        const sufixo = r.recorte ? ` - ${r.recorte.length > 3 ? `${r.recorte.length} unidades` : r.recorte.join(", ")}` : "";
+        if (lotes.length > 1) toast.progresso("Gerando os relatórios", i, lotes.length, r.recorte?.join(", "));
+        await baixarDocumentoPdf(
+          nomeArquivoPdf(`Composição do orçamento - ${r.pca.nome}${sufixo}`, dia),
+          { titulo: `Composição do orçamento por unidade · ${r.pca.nome}${sufixo}`, blocos: blocosRelatorioOrcamento(r) },
+          { usuario: quem },
+        );
+      }
+      toast.success(lotes.length > 1 ? `${lotes.length} relatórios gerados.` : "Relatório gerado.");
+      setAberto(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível gerar o relatório.");
     } finally {
       setGerando(false);
     }
   }
+
   return (
-    <Button size="sm" variant="secondary" icon={<IconFile className="h-4 w-4" />} loading={gerando} onClick={gerar}>
-      Relatório da composição (PDF)
-    </Button>
+    <>
+      <Button size="sm" variant="secondary" icon={<IconFile className="h-4 w-4" />} loading={carregando} onClick={abrir}>
+        Relatório da composição (PDF)
+      </Button>
+      <Modal
+        open={aberto}
+        onClose={() => !gerando && setAberto(false)}
+        titulo="Relatório da composição do orçamento"
+        size="md"
+        bloqueado={gerando}
+        rodape={
+          <div className="flex w-full items-center justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setAberto(false)} disabled={gerando}>
+              Cancelar
+            </Button>
+            <Button size="sm" icon={<IconFile className="h-4 w-4" />} loading={gerando} disabled={!rel || !qtd} onClick={gerar}>
+              {qtd > 1 ? `Gerar ${qtd} PDFs` : "Gerar PDF"}
+            </Button>
+          </div>
+        }
+      >
+        {!rel ? (
+          <SkeletonLinhas />
+        ) : (
+          <div className="space-y-[var(--gap-block)]">
+            <Segmented<"todas" | "escolher">
+              value={modo}
+              onChange={setModo}
+              ariaLabel="Unidades do relatório"
+              options={[
+                { value: "todas", label: `Todas as unidades (${rel.unidades.length})` },
+                { value: "escolher", label: "Escolher unidades" },
+              ]}
+            />
+            {modo === "todas" ? (
+              <p className="text-[13px] text-muted">O relatório completo: a visão, todas as unidades com vínculo e o que fica de fora do orçamento.</p>
+            ) : (
+              <>
+                <SeletorMultiplo rotulo="Unidades" opcoes={opcoes} selecionados={escolhidas} onChange={setEscolhidas} textoVazio="Nenhuma" suspenso />
+                <Switch
+                  checked={separados}
+                  onChange={setSeparados}
+                  label="Um PDF para cada unidade"
+                  dica="Ligado: um arquivo por unidade escolhida. Desligado: um arquivo só com as escolhidas."
+                />
+                <p className="text-[13px] text-muted">
+                  {ids.length
+                    ? separados
+                      ? `${ids.length} arquivo(s), um por unidade.`
+                      : `Um arquivo com ${ids.length} unidade(s).`
+                    : "Escolha ao menos uma unidade."}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
+    </>
   );
 }
 
@@ -293,20 +391,29 @@ export function OrcamentoPca({
     setEdicoesComp({ lista: comparativo.edicoes, padroes: comparativo.padroes });
   }
   const [engrenagem, setEngrenagem] = useState(false);
+  // As ações da lista da Visão (na barra) abrem o editor da engrenagem direto.
+  const [editorPedido, setEditorPedido] = useState<{ alvo: VisaoOrcamento | "nova"; n: number } | null>(null);
+  const libera = useComponente();
+  // A visão aberta SÓ PARA CONSULTA (o olho ao lado da Visão): filtros e vínculos travados.
+  const [visaoVista, setVisaoVista] = useState<VisaoOrcamento | null>(null);
   const linhasVisao = useMemo(() => comparativo?.itens ?? null, [comparativo]);
   const ausentes = contarAusentes(dados.ausentes ?? []);
   // VÍNCULOS por linha (o lápis): as unidades do CUBO do orçamento do ano + a gravação da aba Vínculos.
   const unidadesCubo = useMemo(() => (comparativo ? unidadesDoOrcamento(comparativo.itens) : []), [comparativo]);
-  const gravacao = useGravacaoVinculos(comparativo?.vinculos ?? SEM_VINCULOS);
+  const gravacao = useGravacaoVinculos(comparativo?.vinculos ?? SEM_VINCULOS, visoes);
+  // Os vínculos que VALEM na visão do PCA (os próprios dela; nas demais unidades, o padrão) — editar pergunta onde salvar.
+  const visaoPca = gravacao.visoesAtuais.find((v) => v.id === dados.visaoId) ?? null;
+  const efetivos = useMemo(() => vinculosDaVisao(gravacao.atuais, visaoPca), [gravacao.atuais, visaoPca]);
   const [vinculosDe, setVinculosDe] = useState<UnidadeDaLinha | null>(null);
-  const editaVinculos = podeConfigurarOrcamento && comparativo != null;
+  // Os vínculos aparecem para TODOS (consulta); só quem Configura o Orçamento altera.
+  const editaVinculos = comparativo != null;
   // Ações do orçamento SEM vínculo (como na aba Vínculos): por unidade cadastrada — as das unidades do orçamento ligadas a
   // ela — e de todo o orçamento (a linha "Sem vínculo"). Recalculadas na hora a cada gravação (a lista já gravada).
   const semVinculoPorLinha = useMemo(() => {
-    const porAlvo = semVinculoPorAlvo(unidadesCubo, gravacao.atuais);
-    const todas = vinculosDaLinha(unidadesCubo, gravacao.atuais, null).semVinculo;
+    const porAlvo = semVinculoPorAlvo(unidadesCubo, efetivos);
+    const todas = vinculosDaLinha(unidadesCubo, efetivos, null).semVinculo;
     return { porAlvo, todas };
-  }, [unidadesCubo, gravacao.atuais]);
+  }, [unidadesCubo, efetivos]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivel, setNivel] = useState<Nivel>("unidade");
@@ -320,6 +427,29 @@ export function OrcamentoPca({
     [nivel, porUnidade, dados.orgaos],
   );
   const t = totaisComparativo(porUnidade);
+  // Os detalhes das KPIs, sobre as MESMAS linhas do comparativo (a soma bate com a tabela).
+  const ind = useMemo(() => {
+    const comUnidade = porUnidade.filter((l) => l.unidadeId != null);
+    const semVinculo = porUnidade.filter((l) => l.unidadeId == null).reduce((s, l) => s + l.orcamento, 0);
+    const faixas = { ok: 0, atencao: 0, acima: 0 };
+    for (const l of comUnidade) {
+      if (l.orcamento <= 0 && l.planejado <= 0) continue;
+      if (linhaAcima(l)) faixas.acima++;
+      else if (l.faixa === "atencao") faixas.atencao++;
+      else if (l.faixa === "ok") faixas.ok++;
+    }
+    const deficits = comUnidade.filter((l) => l.diferenca < 0);
+    return {
+      semVinculo,
+      contratacoes: porUnidade.reduce((s, l) => s + l.contratacoes, 0),
+      unidadesComPlanejado: porUnidade.filter((l) => l.planejado > 0).length,
+      planejadoSemOrcamento: porUnidade.filter((l) => !(l.orcamento > 0)).reduce((s, l) => s + l.planejado, 0),
+      comSaldo: comUnidade.filter((l) => l.orcamento > 0 && l.diferenca >= 0).length,
+      comDeficit: deficits.length,
+      somaDeficits: deficits.reduce((s, l) => s + l.diferenca, 0),
+      faixas,
+    };
+  }, [porUnidade]);
   const acima = linhas.filter(linhaAcima);
   const vis = filtro === "todas" ? linhas : filtro === "acima" ? acima : linhas.filter((l) => !linhaAcima(l));
 
@@ -477,7 +607,7 @@ export function OrcamentoPca({
   const comprometido = t.comprometido;
   // A engrenagem fica no FIM da linha de controles (à direita); o ponto âmbar = a visão tem valores que este orçamento não traz.
   const tituloVisao = ausentes > 0 ? `Visão do orçamento do PCA — ${num(ausentes)} valor(es) da visão fora deste orçamento` : "Visão do orçamento do PCA";
-  const botaoVisao = podePublicar && (
+  const botaoVisao = (
     <span className="relative inline-flex">
       <Button size="sm" variant="icon" aria-label={tituloVisao} title={tituloVisao} icon={<IconSettings className="h-4 w-4" />} onClick={() => setEngrenagem(true)} />
       {ausentes > 0 && <span aria-hidden className="pointer-events-none absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: "var(--warn)" }} />}
@@ -486,19 +616,62 @@ export function OrcamentoPca({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="grid grid-cols-2 gap-[var(--gap-block)] lg:grid-cols-4">
-        <StatMini
-          label={`Dotação ${dados.ano}${dados.visaoNome ? ` · ${dados.visaoNome}` : ""}`}
-          value={brlCompact(dados.filtrado)}
-          hint={`${dados.orcamento ? `${dados.orcamento.nome} · ` : ""}${dados.visaoNome ? `bruta ${brlCompact(dados.bruto)}` : "orçamento inteiro"}`}
+      <div className="grid grid-cols-1 gap-[var(--gap-block)] sm:grid-cols-2 xl:grid-cols-4">
+        <KpiStat
+          realce
+          completo
+          emLinha
+          label={`Dotação ${dados.ano}${dados.visaoNome ? ` · visão ${dados.visaoNome}` : ""}`}
+          value={brl(dados.filtrado)}
+          detalhes={[
+            ...(dados.visaoNome ? [{ rotulo: "Dotação bruta", valor: brl(dados.bruto) }, { rotulo: "Retirado pela visão", valor: brl(dados.bruto - dados.filtrado) }] : []),
+            { rotulo: "Sem vínculo", valor: brl(ind.semVinculo), cor: ind.semVinculo > 0 ? "var(--warn)" : undefined },
+            { rotulo: "Orçamento", valor: dados.orcamento?.nome ?? "—" },
+          ]}
         />
-        <StatMini label="Planejado no PCA" value={brlCompact(t.planejado)} tone="accent" hint={dados.previa ? `itens ativos · prévia: ${num(dados.previa.dfds)} DFD(s) não incorporados` : "itens ativos"} />
-        <StatMini label="Saldo" value={brlCompact(t.saldo)} tone={t.saldo < 0 ? "danger" : "ok"} hint="dotação − planejado" />
-        <StatMini
+        <KpiStat
+          realce
+          completo
+          emLinha
+          label="Planejado no PCA"
+          value={brl(t.planejado)}
+          cor="var(--sit-finalizado)"
+          detalhes={[
+            { rotulo: "Contratações", valor: num(ind.contratacoes) },
+            { rotulo: "Unidades com contratações", valor: num(ind.unidadesComPlanejado) },
+            { rotulo: "Sem orçamento vinculado", valor: brl(ind.planejadoSemOrcamento), cor: ind.planejadoSemOrcamento > 0 ? "var(--danger)" : undefined },
+            ...(dados.previa ? [{ rotulo: "Prévia (DFDs)", valor: num(dados.previa.dfds) }] : []),
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
+          emLinha
+          label={t.saldo < 0 ? "Déficit" : "Saldo"}
+          value={<span style={{ color: t.saldo < 0 ? "var(--danger)" : "var(--ok)" }}>{brl(t.saldo)}</span>}
+          cor={t.saldo < 0 ? "var(--danger)" : "var(--ok)"}
+          detalhes={[
+            { rotulo: "Unidades com saldo", valor: num(ind.comSaldo) },
+            { rotulo: "Unidades com déficit", valor: num(ind.comDeficit), cor: ind.comDeficit > 0 ? "var(--danger)" : undefined },
+            { rotulo: "Soma dos déficits", valor: brl(ind.somaDeficits), cor: ind.somaDeficits < 0 ? "var(--danger)" : undefined },
+          ]}
+        />
+        <KpiStat
+          realce
+          completo
+          emLinha
           label="Comprometido"
-          value={comprometido == null ? "—" : `${Math.round(comprometido * 100)}%`}
-          tone={comprometido == null ? "default" : comprometido > 1 ? "danger" : comprometido >= 0.9 ? "warn" : "ok"}
-          hint="planejado ÷ dotação"
+          value={
+            <span style={{ color: comprometido == null ? undefined : comprometido > 1 ? "var(--danger)" : comprometido >= 0.9 ? "var(--warn)" : "var(--ok)" }}>
+              {comprometido == null ? "—" : `${(comprometido * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}
+            </span>
+          }
+          cor={comprometido == null ? "var(--muted)" : comprometido > 1 ? "var(--danger)" : comprometido >= 0.9 ? "var(--warn)" : "var(--ok)"}
+          detalhes={[
+            { rotulo: "Dentro (até 90%)", valor: num(ind.faixas.ok), cor: "var(--ok)" },
+            { rotulo: "Atenção (90% a 100%)", valor: num(ind.faixas.atencao), cor: ind.faixas.atencao ? "var(--warn)" : undefined },
+            { rotulo: "Acima ou sem orçamento", valor: num(ind.faixas.acima), cor: ind.faixas.acima ? "var(--danger)" : undefined },
+          ]}
         />
       </div>
 
@@ -539,6 +712,26 @@ export function OrcamentoPca({
                 { value: "dentro", label: `Dentro (${linhas.length - acima.length})` },
               ]}
             />
+            {visoes.length > 0 && (
+              <div className="flex w-full min-w-[12rem] items-center gap-2 sm:w-auto sm:max-w-sm sm:flex-1">
+                <div className="min-w-0 flex-1">
+                  <SeletorVisaoPca
+                    pcaId={dados.pcaId}
+                    visaoId={dados.visaoId ?? null}
+                    visoes={visoes}
+                    podeEscolher
+                    itens={linhasVisao}
+                    onVer={linhasVisao && libera("pca.visaoDetalhes") ? setVisaoVista : undefined}
+                    onEditar={
+                      podePublicar && podeConfigurarOrcamento && linhasVisao
+                        ? (alvo) => setEditorPedido((p) => ({ alvo, n: (p?.n ?? 0) + 1 }))
+                        : undefined
+                    }
+                  />
+                </div>
+                <AjudaVisoes botao="sm" />
+              </div>
+            )}
             <div className="flex items-center gap-2 lg:ml-auto">
               {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
               {botaoVisao}
@@ -566,21 +759,36 @@ export function OrcamentoPca({
         <VinculosDaUnidade
           unidade={vinculosDe}
           unidades={unidadesCubo}
-          vinculos={gravacao.atuais}
+          vinculos={efetivos}
           alvos={comparativo.alvos}
+          contexto={{ visoes: gravacao.visoesAtuais, visaoId: visaoPca?.id ?? null }}
+          onUsarPadrao={visaoPca ? (chave) => gravacao.usarPadrao(visaoPca.id, chave) : undefined}
           orcamento={dados.orcamento ? `${dados.orcamento.nome} (${dados.orcamento.ano})` : String(dados.ano ?? "")}
           salvando={gravacao.salvando}
           erro={gravacao.erro}
           onCriar={gravacao.criar}
           onEditar={gravacao.editar}
           onExcluir={gravacao.excluir}
+          somenteLeitura={!podeConfigurarOrcamento}
           onFechar={() => {
             setVinculosDe(null);
             gravacao.limparErro();
           }}
         />
       )}
-      {podePublicar && (
+      {linhasVisao && (
+        <EditorVisaoOrcamento
+          aberta={visaoVista}
+          itens={linhasVisao}
+          podeEditar={false}
+          vinculos={comparativo?.vinculos}
+          alvos={comparativo?.alvos}
+          visoes={gravacao.visoesAtuais}
+          onFechar={() => setVisaoVista(null)}
+          onSalva={() => setVisaoVista(null)}
+        />
+      )}
+      {(
         <VisaoOrcamentoPca
           pcaId={dados.pcaId}
           aberto={engrenagem}
@@ -588,7 +796,10 @@ export function OrcamentoPca({
           visaoId={dados.visaoId ?? null}
           visoes={visoes}
           itens={linhasVisao}
+          vinculos={comparativo?.vinculos}
+          alvos={comparativo?.alvos}
           podeEditarVisao={podeConfigurarOrcamento}
+          editorPedido={editorPedido}
         />
       )}
     </div>

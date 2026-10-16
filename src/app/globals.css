@@ -32,6 +32,7 @@
   --track: #ebeef2;
   --sb-active: #f4f6f8;
   --kpi-bar: #dee2e8;
+  --zebra: #f8f9fb;
   /* SÉRIES dos gráficos (paleta categórica — cada categoria guarda a cor entre filtros). */
   --serie-1: #3b82f6;
   --serie-2: #10b981;
@@ -106,11 +107,15 @@
 
   /* Espaçamento / alturas (§5) — densidade padrão. UMA régua para o sistema inteiro (a densidade do ADM muda
      todos juntos):
-     --pad-canvas = margem do conteúdo — topo = laterais = base: a MESMA distância do cabeçalho, do menu e da
-                    borda do display (o cabeçalho usa a mesma nas laterais; 12px no celular);
+     --pad-canvas   = margem LATERAL do conteúdo: a MESMA distância do menu e da borda do display (o cabeçalho usa a
+                      mesma nas laterais; 12px no celular);
+     --pad-canvas-y = margem do conteúdo ao CABEÇALHO e à BASE do display — a METADE da lateral: o primeiro e o último
+                      componente já trazem o respiro dos próprios controles/cartões, e assim as 4 distâncias ficam
+                      PROPORCIONAIS;
      --gap-block  = espaço ENTRE os componentes (blocos da página, grades de cartões, painéis lado a lado);
      --pad-card   = respiro interno de cartões, quadros e banners. */
   --pad-canvas: 16px;
+  --pad-canvas-y: 8px;
   --gap-block: 12px;
   --pad-card: 14px;
   --cell-py: 13px;
@@ -152,6 +157,7 @@
   --track: #232834;
   --sb-active: #191d27;
   --kpi-bar: #2c3340;
+  --zebra: #171b25;
   --serie-1: #60a5fa;
   --serie-2: #34d399;
   --serie-3: #fbbf24;
@@ -170,9 +176,39 @@
   --glow-target: var(--surface);
 }
 
+/* Tonalidades do ESCURO escolhidas pela pessoa (Perfil → Aparência; `data-escuro` no <html>). Carvão = o escuro acima/do ADM.
+   Dois atributos = vencem as cores escuras do ADM, que são de UM atributo. */
+[data-theme="dark"][data-escuro="azul"] {
+  --lista-quadro: #0d1526;
+  --bg: #0b1220;
+  --surface: #111a2e;
+  --surface-2: #16213a;
+  --border: #1e2a44;
+  --border-2: #27365a;
+  --track: #1e2a44;
+  --sb-active: #141e33;
+  --kpi-bar: #27365a;
+  --zebra: #131d33;
+  --accent-soft: #1c2550;
+}
+[data-theme="dark"][data-escuro="preto"] {
+  --lista-quadro: #050505;
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #141414;
+  --border: #1f1f1f;
+  --border-2: #2a2a2a;
+  --track: #1f1f1f;
+  --sb-active: #121212;
+  --kpi-bar: #2a2a2a;
+  --zebra: #0f0f0f;
+  --accent-soft: #1a1b2e;
+}
+
 /* Densidade (§39.7) — attr no <html> */
 [data-density="compact"] {
   --pad-canvas: 12px;
+  --pad-canvas-y: 6px;
   --gap-block: 8px;
   --pad-card: 12px;
   --cell-py: 9px;
@@ -181,6 +217,7 @@
 }
 [data-density="comfortable"] {
   --pad-canvas: 24px;
+  --pad-canvas-y: 12px;
   --gap-block: 16px;
   --pad-card: 20px;
   --cell-py: 16px;
@@ -192,6 +229,7 @@
 @media (width < 40rem) {
   :root {
     --pad-canvas: 12px;
+    --pad-canvas-y: 6px;
   }
 }
 
@@ -268,6 +306,7 @@
   --color-track: var(--track);
   --color-sb-active: var(--sb-active);
   --color-kpi-bar: var(--kpi-bar);
+  --color-zebra: var(--zebra);
 
   --radius-canvas: var(--radius-canvas);
   --radius-card: var(--radius-card);
@@ -297,10 +336,10 @@
   }
 }
 
-/* Barra de rolagem discreta */
-* {
-  scrollbar-width: thin;
-}
+/* BARRAS DE ROLAGEM NATIVAS em todo o sistema (v1.72.2): nada de `scrollbar-width: thin` global nem
+   `::-webkit-scrollbar` — a barra própria (custom) é desenhada e arrastada pela thread principal (o arrasto
+   travava/atrasava com a página ocupada) e a fina é difícil de pegar. A nativa é do compositor: acompanha o arrasto
+   na velocidade do ponteiro. A cor clara/escura vem do `color-scheme` do tema. Não estilize barras de rolagem. */
 
 /* Anima entrada de cards/toasts */
 @keyframes fade-in-up {
@@ -315,6 +354,68 @@
 }
 .animate-fade-in-up {
   animation: fade-in-up 0.35s ease-out both;
+}
+
+/* A LISTA da `Selecao`: abre rápida a partir do campo (como os menus do sistema); no celular, a FOLHA sobe de baixo sobre o
+   fundo escuro. Sem movimento com "reduzir movimento" (sistema ou o ADM). */
+@keyframes selecao-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes folha-sobe {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes fundo-folha {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* Um CHIP que entra (os filtros da pesquisa que passam a valer): cresce do lugar, sem empurrar com tranco. */
+@keyframes chip-entra {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-chip-entra {
+  animation: chip-entra 0.18s ease-out both;
+}
+.animate-selecao-entra {
+  transform-origin: top center;
+  animation: selecao-entra 0.12s ease-out both;
+}
+.animate-folha-sobe {
+  animation: folha-sobe 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-fundo-folha {
+  animation: fundo-folha 0.2s ease-out both;
+}
+[data-motion="off"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra),
+[data-motion="reduced"] :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.animate-selecao-entra, .animate-folha-sobe, .animate-fundo-folha, .animate-chip-entra) {
+    animation: none;
+  }
 }
 
 /* CARREGANDO no card (CarregandoLink): um brilho que varre o card + a barra indeterminada na borda de baixo. */
@@ -501,6 +602,44 @@
    mola e brilha por 3 s, o número desliza ao mudar, os três pontos do "digitando" saltam e o balão novo entra. */
 /* O ponto "ao vivo": o halo que pulsa. O ponto precisa ser POSICIONADO (absolute/relative pela classe de quem usa) — aqui não
    se fixa `position`, senão a regra (fora das camadas do Tailwind) venceria o `absolute` e o ponto sairia do canto da foto. */
+/* PONTO DO SELO AO VIVO (Badge `tamanho="linha"` + `vivo` — ex.: o Preview do PCA): o ponto RESPIRA e solta DUAS ondas
+   suaves defasadas (radar contínuo). Posicionado pela classe `relative` de quem usa; para com "reduzir movimento". */
+.ponto-selo {
+  animation: respirar-ponto 2s ease-in-out infinite;
+}
+.ponto-selo::before,
+.ponto-selo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: onda-ponto 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.ponto-selo::after {
+  animation-delay: 1s;
+}
+@keyframes respirar-ponto {
+  0%,
+  100% {
+    scale: 1;
+    opacity: 1;
+  }
+  50% {
+    scale: 0.82;
+    opacity: 0.75;
+  }
+}
+@keyframes onda-ponto {
+  0% {
+    opacity: 0.45;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 2.6;
+  }
+}
 .ponto-vivo::after {
   content: "";
   position: absolute;
@@ -704,6 +843,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ponto-vivo::after,
+  .ponto-selo,
+  .ponto-selo::before,
+  .ponto-selo::after,
   .animate-entrar-pessoa,
   .animate-brilho-novo,
   .animate-contador,
@@ -713,12 +855,18 @@
   }
 }
 [data-motion="off"] .ponto-vivo::after,
+[data-motion="off"] .ponto-selo,
+[data-motion="off"] .ponto-selo::before,
+[data-motion="off"] .ponto-selo::after,
 [data-motion="off"] .animate-entrar-pessoa,
 [data-motion="off"] .animate-brilho-novo,
 [data-motion="off"] .animate-contador,
 [data-motion="off"] .ponto-digitando,
 [data-motion="off"] .animate-balao,
 [data-motion="reduced"] .ponto-vivo::after,
+[data-motion="reduced"] .ponto-selo,
+[data-motion="reduced"] .ponto-selo::before,
+[data-motion="reduced"] .ponto-selo::after,
 [data-motion="reduced"] .ponto-digitando {
   animation: none;
 }
@@ -728,7 +876,7 @@
    própria altura em --reserva-rodape enquanto está montada) e do RODAPÉ da tabela com rolagem interna (o
    DataTable da Mesa publica --rodape-tabela: no celular esse rodapé gruda sobre a navegação e, no desktop, fica
    rente ao fim do display — o aviso nunca cobre o "Importar" nem a paginação). Entre o rodapé e o que vem abaixo
-   (a navegação/o fim do display, ou a barra de seleção) cabe no máximo a margem do conteúdo (--pad-canvas) ou o
+   (a navegação/o fim do display, ou a barra de seleção) cabe no máximo a margem de baixo do conteúdo (--pad-canvas-y) ou o
    espaço entre blocos (--gap-block) — daí o `max` dos dois. Sem essa tabela o termo vale −100vh e o `max` de fora
    fica na posição de sempre. Cortes = os do Tailwind (sm 40rem · lg 64rem). */
 .avisos-flutuantes {
@@ -738,7 +886,7 @@
   right: 0.75rem;
   bottom: max(
     calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 0.5rem),
-    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+    calc(4rem + env(safe-area-inset-bottom) + calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
   );
   display: flex;
   flex-direction: column;
@@ -757,7 +905,7 @@
     right: 1rem;
     bottom: max(
       calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + 1rem),
-      calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
+      calc(calc(var(--reserva-rodape, 0px) + var(--reserva-flutuante, 0px)) + max(var(--pad-canvas-y), var(--gap-block)) + var(--rodape-tabela, -100vh) + 0.5rem)
     );
   }
 }
@@ -975,24 +1123,6 @@
   animation: shimmer 1.6s infinite;
 }
 
-/* ROLAGEM FINA (a barra horizontal do quadro de Tarefas, como a do Trello): discreta e translúcida. */
-.rolagem-fina {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text) 35%, transparent) transparent;
-}
-.rolagem-fina::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
-}
-.rolagem-fina::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text) 35%, transparent);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.rolagem-fina::-webkit-scrollbar-track {
-  background: transparent;
-}
 
 /* TODO <select> do sistema com a MESMA seta, sempre no mesmo lugar: sem a aparência nativa (que muda por navegador), o
    chevron do tema (--seta-select) a 0,75rem da borda direita e o texto nunca passa por baixo dela. Fora de camada (vale
@@ -1008,3 +1138,95 @@ select:not([multiple]):not([size]) {
   padding-right: 2.25rem;
   text-overflow: ellipsis;
 }
+/* O GATILHO da `Selecao` (o dropdown do sistema): a seta é um ELEMENTO (`SetaDropdown` — gira ao abrir) no fim do
+   gatilho, no MESMO lugar da seta do <select> (0,75rem da borda) — trocar um <select> por ela não muda a caixa. */
+.seletor-sistema {
+  padding-right: 0.75rem;
+  text-overflow: ellipsis;
+}
+
+/* LINHA DE TÍTULO (o nome da tela/espaço, com voltar, selos e abas): abaixo dela, o MESMO respiro que há acima — a margem do
+   conteúdo ao cabeçalho (--pad-canvas-y). Sem camada, vence a margem do `space-y-[var(--gap-block)]` da raiz da tela. */
+.linha-topico {
+  margin-block-end: var(--pad-canvas-y);
+}
+
+/* CAIXA DE MARCAR (seleção das tabelas e das listas de filtro): o desenho do sistema no lugar do quadrado nativo — o
+   arredondamento segue o do ADM (Configurações → Aparência: o raio dos chips, no máximo um círculo). O mesmo do `Checkbox`. */
+.caixa-marcar {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  vertical-align: middle;
+  border: 1.5px solid color-mix(in srgb, var(--muted) 55%, var(--surface));
+  border-radius: min(var(--radius-chip), 50%);
+  background: var(--surface) center / 0.75rem no-repeat;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration) var(--motion-ease),
+    border-color var(--motion-duration) var(--motion-ease);
+}
+.caixa-marcar:hover {
+  border-color: var(--accent);
+}
+.caixa-marcar:checked,
+.caixa-marcar:indeterminate {
+  border-color: var(--accent);
+  background-color: var(--accent);
+}
+.caixa-marcar:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+.caixa-marcar:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+.caixa-marcar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+.caixa-marcar:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── MENU LATERAL recolhível (AppShell). A VAGA anima a largura e o conteúdo estica/encolhe junto (mesma curva); o menu é absoluto dentro dela:
+   recolhido = trilho de 60px; com o mouse (ou o foco do teclado) abre POR CIMA, sem empurrar. Os ícones ficam parados
+   (alinhados à esquerda, centrados no trilho); os rótulos acompanham a largura com reticências e entram deslizando. ── */
+.menu-vaga { width: 16rem; transition: width 300ms cubic-bezier(.32,.72,0,1); }
+.menu-lateral { --menu-curva: cubic-bezier(.32,.72,0,1); }
+.menu-lateral { width: 16rem; transition: width 300ms var(--menu-curva), box-shadow 300ms ease; }
+.menu-lateral .menu-esconde, .menu-lateral [data-marca-texto] {
+  transition: opacity 200ms ease 80ms, transform 300ms var(--menu-curva);
+}
+.menu-lateral .menu-linha { opacity: 0; transform: scaleX(.4); transition: opacity 160ms ease, transform 300ms var(--menu-curva); }
+.menu-lateral .menu-cartao { transition: border-color 200ms ease; }
+.menu-lateral .menu-sair { transition: opacity 200ms ease 80ms, width 300ms var(--menu-curva), margin 300ms var(--menu-curva); }
+.menu-lateral .menu-alternar { transition: transform 300ms var(--menu-curva); }
+html[data-menu-recolhido] .menu-vaga, html[data-menu-recolhido] .menu-lateral { width: 3.75rem; }
+html[data-menu-recolhido] .menu-lateral .menu-alternar { transform: rotate(180deg); }
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) :is(.menu-esconde, [data-marca-texto]) {
+  opacity: 0; transform: translateX(-6px); transition-delay: 0ms; transition-duration: 120ms, 300ms;
+}
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-linha {
+  opacity: 1; transform: none; transition-delay: 80ms, 0ms;
+}
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-sair { width: 0; margin-left: 0; }
+/* No Windows a barra de rolagem é FIXA (~17px): no trilho de 60px cortava os botões e, ao abrir o menu, aparecia de uma
+   vez — a seleção encolhia e depois esticava. A lista do menu rola pela roda/toque/teclado, sem a barra. */
+.menu-lateral .menu-rolagem { scrollbar-width: none; }
+.menu-lateral .menu-rolagem::-webkit-scrollbar { display: none; }
+html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:focus-visible)) {
+  width: 16rem; box-shadow: var(--sombra-flutuante); transition-delay: 100ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-vaga, .menu-lateral, .menu-lateral * { transition-duration: 0ms !important; transition-delay: 0ms !important; }
+}
+[data-motion="off"] :is(.menu-vaga, .menu-lateral, .menu-lateral *),
+[data-motion="reduced"] :is(.menu-vaga, .menu-lateral, .menu-lateral *) { transition-duration: 0ms !important; }
+
+/* IMAGENS PROTEGIDAS (logo, fotos, capas): não se arrastam, não se selecionam e o toque longo não oferece salvar/copiar.
+   O dragstart/contextmenu é barrado em ProtegerImagens (layout raiz). */
+img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }

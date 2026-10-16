@@ -76,7 +76,7 @@ export function VerificacaoRobo({ onToken, automatico = false }: { onToken: (t: 
           onChange={() => void verificar()}
         />
         <span
-          className={`grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${
+          className={`grid h-5 w-5 shrink-0 place-items-center rounded-chip border transition-colors duration-[var(--motion-duration)] peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 ${
             marcado ? "border-[var(--ok)] bg-[var(--ok)] text-white" : "border-border-2 bg-surface"
           }`}
         >

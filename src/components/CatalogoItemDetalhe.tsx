@@ -103,7 +103,7 @@ export function CatalogoItemDetalhe({
 
       {/* Catálogos em que o item está (o MESMO item pode estar compartilhado em vários). */}
       {catalogos && catalogos.length > 0 && (
-        <section className="rounded-card border border-border-2 bg-surface-2 p-3">
+        <section className="rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
           <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
             <IconLayers className="h-3.5 w-3.5" />
             {catalogos.length > 1 ? `Compartilhado em ${catalogos.length} catálogos` : "Catálogo"}

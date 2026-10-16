@@ -1,48 +1,46 @@
 import { z } from "zod";
-import { ABA_KEYS } from "./abas.ts";
 import { ehCodigoGeral } from "./escopo-unidades-core.ts";
 
-// Validação das telas de Grupos e Permissões (RBAC). As abas são o conjunto
-// fechado de `ABA_KEYS` (lib/abas.ts).
+// Validação da tela de Grupos (RBAC): o grupo guarda os MÓDULOS que libera (as telas vêm deles — Configurações →
+// Módulos), se o chat é liberado, os PCAs que acessa (`null` = todos), as pessoas e as unidades.
 
-/** Limite do nome de um grupo/permissão (o campo da tela usa o mesmo `maxLength`). */
+/** Limite do nome de um grupo (o campo da tela usa o mesmo `maxLength`). */
 export const MAX_NOME_RBAC = 60;
 
-const nomePermissao = z.string().trim().min(1, "Informe o nome da permissão.").max(MAX_NOME_RBAC, `Use até ${MAX_NOME_RBAC} caracteres.`);
 const nomeGrupo = z.string().trim().min(1, "Informe o nome do grupo.").max(MAX_NOME_RBAC, `Use até ${MAX_NOME_RBAC} caracteres.`);
-const abasSchema = z.array(z.enum(ABA_KEYS)).max(ABA_KEYS.length * 2);
-/** Ids de pessoas/unidades: sem repetir (um id repetido derrubaria o lote pela chave primária). */
+/** Ids de pessoas/unidades/PCAs: sem repetir (um id repetido derrubaria o lote pela chave primária). */
 const idsSchema = z
   .array(z.number().int().positive())
   .max(5000)
   .transform((ids) => [...new Set(ids)]);
-
-export const permissaoSchema = z.object({
-  nome: nomePermissao,
-  abas: abasSchema.default([]),
-});
-
-// PATCH explícito, SEM defaults: um campo ausente fica como está (o `.partial()` do schema de criação mantinha o
-// `.default([])` — um PATCH só com o nome APAGAVA as abas).
-export const permissaoPatchSchema = z.object({
-  nome: nomePermissao.optional(),
-  abas: abasSchema.optional(),
-});
+/** Os MÓDULOS do grupo (ids de Configurações → Módulos; a rota confere que existem). */
+const modulosSchema = z
+  .array(z.string().trim().min(1).max(40))
+  .max(24)
+  .transform((a) => [...new Set(a)]);
+/** Os PCAs do grupo: `null` = todos; a lista = só esses. */
+const pcasSchema = idsSchema.nullable();
 
 export const grupoCreateSchema = z.object({
   nome: nomeGrupo,
-  permissaoId: z.number().int().positive().nullable().optional(),
+  modulos: modulosSchema.default([]),
+  chat: z.boolean().default(true),
+  pcas: pcasSchema.default(null),
   membros: idsSchema.default([]),
   reparticoes: idsSchema.default([]),
+  modoUnidades: z.enum(["lista", "cadastro"]).default("lista"),
 });
 
 // PATCH explícito, SEM defaults: um campo ausente fica como está (o `.partial()` mantinha o `.default([])` — um PATCH só
-// com o nome APAGAVA os membros e as unidades do grupo).
+// com o nome APAGAVA os membros, as unidades e as telas do grupo).
 export const grupoPatchSchema = z.object({
   nome: nomeGrupo.optional(),
-  permissaoId: z.number().int().positive().nullable().optional(),
+  modulos: modulosSchema.optional(),
+  chat: z.boolean().optional(),
+  pcas: pcasSchema.optional(),
   membros: idsSchema.optional(),
   reparticoes: idsSchema.optional(),
+  modoUnidades: z.enum(["lista", "cadastro"]).optional(),
 });
 
 /** Grupo ativo do cabeçalho (cookie). */
@@ -51,17 +49,40 @@ export const grupoAtivoSchema = z.object({ grupoId: z.number().int().positive("G
 export const reparticaoAtivaSchema = z.object({ reparticaoId: z.number().int().positive("Unidade inválida.") });
 
 // RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA (migração 0099): a PESSOA (nome + matrícula) e o VÍNCULO dela com uma
-// unidade OU um órgão (padrão | temporário + função + nomeação + período). As regras do vínculo moram no núcleo puro
+// unidade OU um órgão (padrão | temporário + nomeação + período; o temporário com o cargo do período). As regras do vínculo moram no núcleo puro
 // (`motivoVinculoInvalido`, `responsaveis-planilha-core.ts`) — a MESMA na tela e na rota.
+// A PESSOA guarda também o CARGO/FUNÇÃO (o nome de um cargo cadastrado — conferido na rota) e o USUÁRIO ligado (opcional).
+const nomePessoa = z.string().trim().min(1, "Informe o nome.").max(160);
+const matriculaPessoa = z.string().trim().max(60);
+const cargoPessoa = z.string().trim().max(80);
+const usuarioPessoa = z.number().int().positive().nullable();
 export const pessoaResponsavelSchema = z.object({
-  nome: z.string().trim().min(1, "Informe o nome.").max(160),
-  matricula: z.string().trim().max(60).default(""),
+  nome: nomePessoa,
+  matricula: matriculaPessoa.default(""),
+  cargo: cargoPessoa.default(""),
+  usuarioId: usuarioPessoa.default(null),
+  // FUNCIONÁRIO DE FORA DO MUNICÍPIO: sem matrícula (a gravação a deixa vazia).
+  externo: z.boolean().default(false),
 });
-export const pessoaResponsavelPatchSchema = pessoaResponsavelSchema.partial();
+// PATCH sem os padrões da criação (o que não vier fica como está).
+export const pessoaResponsavelPatchSchema = z.object({
+  nome: nomePessoa.optional(),
+  matricula: matriculaPessoa.optional(),
+  cargo: cargoPessoa.optional(),
+  usuarioId: usuarioPessoa.optional(),
+  externo: z.boolean().optional(),
+  // A EXONERAÇÃO: data "AAAA-MM-DD" válida ou null (desfazer).
+  exoneradoEm: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
+    .refine((d) => !Number.isNaN(Date.parse(`${d}T12:00:00Z`)) && new Date(`${d}T12:00:00Z`).toISOString().startsWith(d), "Data inválida.")
+    .nullable()
+    .optional(),
+});
 
 const dadosVinculoSchema = z.object({
   tipo: z.enum(["padrao", "temporario"]),
-  funcao: z.string().trim().max(120).default(""),
+  funcao: z.string().trim().max(80).default(""), // o cargo do temporário (conferido na rota)
   atoTipo: z.enum(["portaria", "decreto", "lei"]).nullable().default(null),
   atoNumero: z.string().trim().max(120).default(""),
   atoLink: z.string().trim().max(500).default(""),
@@ -75,7 +96,14 @@ export const vinculoResponsavelSchema = dadosVinculoSchema
     reparticaoId: z.number().int().positive().nullable().default(null),
   })
   .refine((v) => (v.orgaoId == null) !== (v.reparticaoId == null), "Escolha UMA unidade ou UM órgão.");
-export const vinculoResponsavelPatchSchema = dadosVinculoSchema.extend({ responsavelId: z.number().int().positive() });
+// Editar: os dados, a pessoa e — opcional — o ALVO (onde responde): sem ele, fica o de antes; com ele, UM só.
+export const vinculoResponsavelPatchSchema = dadosVinculoSchema
+  .extend({
+    responsavelId: z.number().int().positive(),
+    orgaoId: z.number().int().positive().nullable().optional(),
+    reparticaoId: z.number().int().positive().nullable().optional(),
+  })
+  .refine((v) => (v.orgaoId === undefined && v.reparticaoId === undefined) || (v.orgaoId == null) !== (v.reparticaoId == null), "Escolha UMA unidade ou UM órgão.");
 
 export const reparticaoSchema = z.object({
   codigo: z
@@ -121,6 +149,9 @@ export const orgaoSchema = z.object({
     .nullable(),
   assinaturaUnica: z.boolean().default(false),
   oculto: z.boolean().default(false),
+  /** Ao DESLIGAR a assinatura única de um órgão com várias unidades e sem unidade própria: as unidades que recebem os
+   * responsáveis do órgão (sem a escolha, 409 com a lista). */
+  destinosVinculos: z.array(z.number().int().positive()).max(500).optional(),
 });
 
 // Rebaixar um órgão a unidade de OUTRO órgão (destino obrigatório).
@@ -133,7 +164,6 @@ export const unidadePropriaSchema = z.object({
   ativar: z.boolean(),
 });
 
-export type PermissaoInput = z.infer<typeof permissaoSchema>;
 export type GrupoInput = z.infer<typeof grupoCreateSchema>;
 export type ReparticaoInput = z.infer<typeof reparticaoSchema>;
 export type OrgaoInput = z.infer<typeof orgaoSchema>;

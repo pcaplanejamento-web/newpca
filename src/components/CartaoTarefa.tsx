@@ -13,7 +13,10 @@ import {
   ROTULO_PRIORIDADE,
   rotuloData,
   rotuloRecorrencia,
+  numerosMesa,
+  type VinculoTarefa,
   rotuloDoVinculo,
+  siglasDaTarefa,
   rotuloTicket,
   type TarefaResumo,
   type CampoTarefa,
@@ -131,6 +134,7 @@ export function CartaoTarefa({
       : estado === "atrasada" || estado === "hoje" || estado === "vence"
         ? { background: `color-mix(in srgb, ${corPrazo} 16%, var(--surface))`, color: corPrazo }
         : undefined;
+  const outros = t.vinculos.filter((v) => v.tipo !== "protocolo" && v.tipo !== "dfd" && v.tipo !== "item");
   const checkCompleto = t.checklist.total > 0 && t.checklist.feitos === t.checklist.total;
   return (
     <article
@@ -213,7 +217,8 @@ export function CartaoTarefa({
           <ChipsCamposCartao campos={campos} valores={t.campos} />
         </span>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12px] text-muted empty:hidden">
+      {/* UMA linha no rodapé: os ícones, a unidade e os números da Mesa (encolhem com "…") e as fotos à direita. */}
+      <div className="mt-2 flex min-w-0 flex-nowrap items-center gap-x-2 text-[12px] text-muted empty:hidden">
         {t.prazo && (
           <span
             className="pointer-events-none inline-flex items-center gap-1 rounded-[4px] py-0.5 font-medium tabular-nums"
@@ -273,14 +278,24 @@ export function CartaoTarefa({
             {t.links}
           </span>
         )}
-        {t.vinculos.length > 0 && (
-          <span className="pointer-events-none inline-flex items-center gap-0.5 text-accent tabular-nums" title={t.vinculos.map(rotuloDoVinculo).join("\n")}>
-            <IconLink className="h-3.5 w-3.5" aria-label={`${t.vinculos.length} vínculo(s)`} />
-            {t.vinculos.length > 1 && t.vinculos.length}
+        {(siglasDaTarefa(t).length > 0 || numerosMesa(t.vinculos).length > 0 || outros.length > 0) && (
+          <span className="pointer-events-none flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+        {siglasDaTarefa(t).map((sg) => (
+          <span key={sg} className="h-5 min-w-0 shrink truncate rounded-chip bg-surface-2 px-1.5 leading-5 text-[11px] font-semibold text-text-2" title={`Unidade ${sg}`}>
+            {sg}
+          </span>
+        ))}
+        <ChipsVinculosMesa vinculos={t.vinculos} />
+        {outros.length > 0 && (
+          <span className="inline-flex items-center gap-0.5 text-[12px] text-accent tabular-nums" title={outros.map(rotuloDoVinculo).join("\n")}>
+            <IconLink className="h-3.5 w-3.5" aria-label={`${outros.length} vínculo(s)`} />
+            {outros.length > 1 && outros.length}
+          </span>
+        )}
           </span>
         )}
         {resp.length > 0 && (
-          <span className="pointer-events-none ml-auto flex -space-x-1.5" title={resp.map((p) => nomeExibicao(p)).join(", ")}>
+          <span className="pointer-events-none ml-auto shrink-0 flex -space-x-1.5" title={resp.map((p) => nomeExibicao(p)).join(", ")}>
             {resp.slice(0, MAX_AVATARES).map((p) => (
               <Avatar key={p.id} nome={p.nome} foto={p.foto} size="xs" className="ring-2 ring-surface" />
             ))}
@@ -315,3 +330,18 @@ export function CartaoTarefa({
 /** Os botões redondos que aparecem sobre o cartão com o mouse (editar, duplicar). */
 const botaoFlutuante =
   "grid h-7 w-7 place-items-center rounded-full bg-surface text-text-2 shadow-ring transition-colors hover:bg-surface-2 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+
+/** Os NÚMEROS da Mesa (protocolo · DFD · item) a que a tarefa se liga, em selos no cartão. */
+export function ChipsVinculosMesa({ vinculos }: { vinculos: readonly VinculoTarefa[] }) {
+  const ns = numerosMesa(vinculos);
+  if (!ns.length) return null;
+  return (
+    <>
+      {ns.map((n) => (
+        <span key={n.chave} className="h-5 min-w-0 shrink truncate rounded-chip bg-accent-soft px-1.5 leading-5 text-[11px] font-semibold tabular-nums text-accent" title={n.texto}>
+          {n.texto}
+        </span>
+      ))}
+    </>
+  );
+}

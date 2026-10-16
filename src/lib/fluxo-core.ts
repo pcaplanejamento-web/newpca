@@ -105,6 +105,10 @@ export type CampoNo = {
   aceitaCampo?: boolean | "inserir";
   /** `nomeLista`: de onde vêm os nomes JÁ existentes para escolher (ou digitar um novo). */
   fonte?: FonteNomes;
+  /** Regra de visibilidade além do `quando` (ex.: o valor procurado só quando a busca não é "Todos"). */
+  visivel?: (config: Record<string, unknown>) => boolean;
+  /** O VALOR FIXO é escolhido entre os valores que existem no sistema (os DFDs, protocolos ou itens da busca do nó). */
+  valoresSistema?: boolean;
 };
 /** As listas de nomes do `nomeLista`: as tabelas salvas, as colunas da Mesa (da tabela escolhida no nó) e as variáveis do fluxo. */
 export type FonteNomes = "tabelas" | "colunasMesa" | "variaveis";
@@ -280,13 +284,13 @@ export function portasDo(def: DefNo | undefined): { entradas: string[]; saidas: 
 }
 
 /** Os problemas do fluxo (erros impedem executar; atenções não). */
-/** O trecho do grafo ANTES de um nó (os ancestrais pelas conexões, sem o próprio nó) — a prévia de uma seleção. */
-export function subgrafoAte(g: Grafo, noId: string): Grafo {
-  const ids = new Set<string>();
+/** O trecho do grafo ANTES de um nó (os ancestrais pelas conexões; com `incluir`, também o próprio nó) — a prévia. */
+export function subgrafoAte(g: Grafo, noId: string, incluir = false): Grafo {
+  const ids = new Set<string>(incluir ? [noId] : []);
   const fila = g.conexoes.filter((c) => c.para === noId).map((c) => c.de);
   while (fila.length) {
     const id = fila.pop() as string;
-    if (id === noId || ids.has(id)) continue;
+    if (ids.has(id) || id === noId) continue;
     ids.add(id);
     for (const c of g.conexoes) if (c.para === id) fila.push(c.de);
   }
@@ -335,6 +339,7 @@ export function validarGrafo(g: Grafo, reg: Registro): ProblemaGrafo[] {
 const vazio = (v: unknown) => v == null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && !v.length);
 
 export function campoVisivel(c: CampoNo, config: Record<string, unknown>, campos?: readonly CampoNo[]): boolean {
+  if (c.visivel && !c.visivel(config)) return false;
   if (!c.quando) return true;
   const quem = c.quando.campo;
   // Sem valor escolhido, vale o PADRÃO do campo de que depende (ex.: "Como executar" = uma vez por item).

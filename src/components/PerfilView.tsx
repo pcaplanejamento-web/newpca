@@ -1,5 +1,6 @@
 "use client";
 
+import { HistoricoAcessos } from "./HistoricoAcessos";
 import { useRouter } from "next/navigation";
 import { problemaSenha } from "@/lib/cadastro-core";
 import { type FormEvent, useRef, useState } from "react";
@@ -24,7 +25,6 @@ import {
   IconCamera,
   IconCheck,
   IconClipboard,
-  IconEyeOff,
   IconGoogle,
   IconInfo,
   IconKey,
@@ -35,6 +35,7 @@ import {
   IconTrash,
   IconUser,
   IconUserX,
+  IconClock,
 } from "./icons";
 import { ResumoDetalhesPapel } from "./ResumoDetalhesPapel";
 import { ResumoPapel } from "./ResumoPapel";
@@ -42,8 +43,9 @@ import { Segmented } from "./Segmented";
 import { type ExtraPessoa, SeletorPessoa } from "./SeletorPessoa";
 import { redimensionarImagem } from "@/lib/imagem-cliente";
 import { PreferenciasNotificacoes } from "./PreferenciasNotificacoes";
-import { Switch } from "./Switch";
-import { toast } from "./Toast";
+import { Tabs } from "./Tabs";
+import { AparenciaPessoal } from "./AparenciaPessoal";
+import { IconPalette } from "./icons";
 
 type Msg = { tipo: "ok" | "erro"; texto: string } | null;
 
@@ -58,6 +60,8 @@ function Aviso({ msg }: { msg: Msg }) {
 }
 
 const cardCls = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
+/** Seção DENTRO de uma aba: separada da anterior por uma linha (sem cartão dentro do cartão). */
+const secaoCls = "border-t border-border pt-5 first:border-t-0 first:pt-0";
 
 /** Uma SEÇÃO do Perfil: ícone + título + descrição, o conteúdo e (opcional) a ação à direita no rodapé. Um `<form>`
  * quando há `onSubmit`. */
@@ -80,8 +84,8 @@ function SecaoPerfil({
 }) {
   const conteudo = (
     <>
-      <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-control bg-accent-soft text-accent">{icone}</span>
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 text-muted">{icone}</span>
         <div className="min-w-0">
           <h3 className="text-[15px] font-bold text-text">{titulo}</h3>
           {descricao && <p className="mt-0.5 text-[12.5px] leading-snug text-muted">{descricao}</p>}
@@ -89,15 +93,15 @@ function SecaoPerfil({
       </div>
       <div className="mt-4">{children}</div>
       <Aviso msg={msg ?? null} />
-      {acao && <div className="mt-4 flex justify-end border-t border-border pt-3">{acao}</div>}
+      {acao && <div className="mt-4 flex justify-end">{acao}</div>}
     </>
   );
   return onSubmit ? (
-    <form onSubmit={onSubmit} className={cardCls}>
+    <form onSubmit={onSubmit} className={secaoCls}>
       {conteudo}
     </form>
   ) : (
-    <section className={cardCls}>{conteudo}</section>
+    <section className={secaoCls}>{conteudo}</section>
   );
 }
 /** Responsável padrão: "" = nenhum (definir na Mesa). */
@@ -125,7 +129,6 @@ export function PerfilView({
   seuAcesso = null,
   contaGoogle = null,
   retornoGoogle = null,
-  presenca = null,
 }: {
   usuario: UsuarioSessao;
   identidade: IdentidadePerfil;
@@ -150,8 +153,6 @@ export function PerfilView({
   contaGoogle?: { email: string | null; soGoogle: boolean } | null;
   /** O retorno do vínculo (`?google=` na volta do Google). */
   retornoGoogle?: { ok: boolean; texto: string } | null;
-  /** A PRESENÇA ligada pelo ADM com a opção de aparecer invisível (`null` = sem o card). */
-  presenca?: { invisivel: boolean } | null;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -428,6 +429,36 @@ export function PerfilView({
               </Badge>
             )}
           </div>
+          {contaGoogle && (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[12.5px] text-muted sm:justify-start">
+              <IconGoogle className="h-3.5 w-3.5" />
+              {contaGoogle.email ? (
+                <>
+                  <span>
+                    Conta Google: <strong className="break-all font-semibold text-text-2">{contaGoogle.email}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={desvincularGoogle}
+                    disabled={desvinculando || contaGoogle.soGoogle}
+                    title={contaGoogle.soGoogle ? "Crie uma senha antes: sua conta entra só pelo Google." : "Deixar de entrar com esta conta Google"}
+                    className="inline-flex min-h-11 items-center font-semibold text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-0"
+                  >
+                    {desvinculando ? "Desvinculando…" : "Desvincular"}
+                  </button>
+                </>
+              ) : (
+                <a
+                  href="/api/auth/google?vincular=1"
+                  title="Vinculada, você entra com um clique em “Continuar com Google”"
+                  className="inline-flex min-h-11 items-center font-semibold text-accent hover:underline lg:min-h-0"
+                >
+                  Vincular conta Google
+                </a>
+              )}
+              {msgGoogle && <span className={msgGoogle.tipo === "erro" ? "text-[var(--danger)]" : "text-[var(--ok)]"}>{msgGoogle.texto}</span>}
+            </div>
+          )}
           {foto && (
             <button
               type="button"
@@ -444,11 +475,21 @@ export function PerfilView({
         </Button>
       </section>
 
-      <div className="grid items-start gap-[var(--gap-block)] lg:grid-cols-2">
-        {/* Coluna da CONTA: identificação, senha e Google */}
-        <div className="space-y-[var(--gap-block)]">
-          {perfilDados}
-
+      <Tabs
+        layout="lateral"
+        separado
+        alturaTela
+        url="aba"
+        inicial={retornoGoogle || semSenha ? "seguranca" : "conta"}
+        tabs={[
+          { key: "conta", label: "Conta", icon: <IconUser className="h-4 w-4" />, dica: "Seus dados e o apelido", content: <div className="space-y-5">{perfilDados}</div> },
+          {
+            key: "seguranca",
+            label: "Segurança",
+            icon: <IconKey className="h-4 w-4" />,
+            dica: semSenha ? "Crie sua senha — é obrigatória" : "Senha",
+            content: (
+              <div className="space-y-5">
           {/* Senha: trocar (ou CRIAR, para quem só entrava pelo Google) — confirmada pelo código enviado ao e-mail */}
           <SecaoPerfil
             icone={<IconKey className="h-4 w-4" />}
@@ -499,75 +540,39 @@ export function PerfilView({
               </div>
             )}
           </SecaoPerfil>
-
-          {/* Conta Google: vinculada = entrar com um clique ("Continuar com Google"), mesmo com outro e-mail */}
-          {contaGoogle && (
-            <SecaoPerfil
-              icone={<IconGoogle className="h-4 w-4" />}
-              titulo="Conta Google"
-              descricao="Vinculada, você entra com um clique em “Continuar com Google” — mesmo que o e-mail dela seja outro."
-              msg={msgGoogle}
-              acao={
-                contaGoogle.email ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={desvincularGoogle}
-                    loading={desvinculando}
-                    disabled={contaGoogle.soGoogle}
-                    title={contaGoogle.soGoogle ? "Crie uma senha antes: sua conta entra só pelo Google." : undefined}
-                  >
-                    Desvincular
-                  </Button>
-                ) : (
-                  <Button variant="secondary" size="sm" href="/api/auth/google?vincular=1" icon={<IconGoogle className="h-4 w-4" />}>
-                    Vincular conta Google
-                  </Button>
-                )
-              }
-            >
-              <p className="text-sm text-text-2">
-                {contaGoogle.email ? (
-                  <>
-                    Vinculada a <strong className="break-all text-text">{contaGoogle.email}</strong>.
-                  </>
-                ) : (
-                  "Nenhuma conta vinculada."
-                )}
-              </p>
-            </SecaoPerfil>
-          )}
-        </div>
-
-        {/* Coluna das PREFERÊNCIAS: o acesso, e-mail, Mesa e protocolação */}
-        <div className="space-y-[var(--gap-block)]">
-          {seuAcesso && (
-            <SecaoPerfil
-              icone={<IconShield className="h-4 w-4" />}
-              titulo="Seu acesso"
-              descricao={
-                <>
-                  {seuAcesso.grupo ? `No grupo ${seuAcesso.grupo}: ` : ""}as telas que você abre e o que pode fazer em cada uma. O grupo
-                  decide as telas; o papel ({usuario.papel.nome}), as ações.
-                </>
-              }
-            >
-              <ResumoPapel capacidades={seuAcesso.capacidades} vazio="Nenhuma tela liberada." />
-              {seuAcesso.detalhes != null && contarRestricoes(seuAcesso.detalhes) > 0 && (
-                <div className="mt-4 border-t border-border pt-3">
-                  <p className="mb-2 text-[12.5px] text-muted">Restrições do papel dentro dessas telas:</p>
-                  <ResumoDetalhesPapel detalhes={seuAcesso.detalhes} />
-                </div>
-              )}
-            </SecaoPerfil>
-          )}
-          {presenca && <PresencaPerfil inicial={presenca.invisivel} />}
-
+              </div>
+            ),
+          },
+          {
+            key: "acessos",
+            label: "Histórico de acesso",
+            icon: <IconClock className="h-4 w-4" />,
+            dica: "Cada entrada na sua conta",
+            content: <div className="space-y-5">
+          {/* HISTÓRICO DE ACESSO: cada login (data/hora, dispositivo, canal, IP) + o último acesso */}
+          <SecaoPerfil icone={<IconClock className="h-4 w-4" />} titulo="Histórico de acesso" descricao="Cada entrada na sua conta. Não reconhece um acesso? Troque a senha e avise o administrador.">
+            <HistoricoAcessos url="/api/perfil/acessos" nomeExportacao="Meu histórico de acesso" />
+          </SecaoPerfil>
+            </div>,
+          },
+          { key: "aparencia", label: "Aparência", icon: <IconPalette className="h-4 w-4" />, dica: "Modo claro/escuro e tonalidade", content: (
+            <div className="space-y-5">
+              <SecaoPerfil icone={<IconPalette className="h-4 w-4" />} titulo="Aparência" descricao="Como o sistema aparece para você neste navegador. Grava sozinho.">
+                <AparenciaPessoal />
+              </SecaoPerfil>
+            </div>
+          ) },
+          { key: "notificacoes", label: "Notificações", icon: <IconBell className="h-4 w-4" />, dica: "Sino e e-mail", content: (
+            <div className="space-y-5">
           {/* NOTIFICAÇÕES: o sino (tipos, som, alerta do sistema, silenciados) e o e-mail (imediato · resumo · desligado). */}
           <SecaoPerfil icone={<IconBell className="h-4 w-4" />} titulo="Notificações" descricao="Grava sozinho a cada mudança.">
             <PreferenciasNotificacoes googleEmail={identidade.googleEmail} />
           </SecaoPerfil>
-
+            </div>
+          ) },
+          ...(mesaResponsavel != null || protocolacao
+            ? [{ key: "trabalho", label: "Trabalho", icon: <IconBriefcase className="h-4 w-4" />, dica: "Mesa e protocolação", content: (
+              <div className="space-y-5">
           {/* Mesa: com que RESPONSÁVEL ela abre — só os do usuário (o padrão), geral ou os sem responsável. */}
           {mesaResponsavel != null && (
             <SecaoPerfil
@@ -601,7 +606,6 @@ export function PerfilView({
               </p>
             </SecaoPerfil>
           )}
-
           {/* Protocolação (editores): responsável padrão escolhido automaticamente ao protocolar */}
           {protocolacao && (
             <SecaoPerfil
@@ -642,36 +646,39 @@ export function PerfilView({
               )}
             </SecaoPerfil>
           )}
-        </div>
-      </div>
+              </div>
+            ) }]
+            : []),
+          ...(seuAcesso
+            ? [{ key: "acesso", label: "Meu acesso", icon: <IconShield className="h-4 w-4" />, dica: "O que você abre e faz", content: (
+              <div className="space-y-5">
+          {seuAcesso && (
+            <SecaoPerfil
+              icone={<IconShield className="h-4 w-4" />}
+              titulo="Seu acesso"
+              descricao={
+                <>
+                  {seuAcesso.grupo ? `No grupo ${seuAcesso.grupo}: ` : ""}as telas que você abre e o que pode fazer em cada uma. O grupo
+                  decide as telas; o papel ({usuario.papel.nome}), as ações.
+                </>
+              }
+            >
+              <ResumoPapel capacidades={seuAcesso.capacidades} vazio="Nenhuma tela liberada." />
+              {seuAcesso.detalhes != null && contarRestricoes(seuAcesso.detalhes) > 0 && (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="mb-2 text-[12.5px] text-muted">Restrições do papel dentro dessas telas:</p>
+                  <ResumoDetalhesPapel detalhes={seuAcesso.detalhes} />
+                </div>
+              )}
+            </SecaoPerfil>
+          )}
+              </div>
+            ) }]
+            : []),
+        ]}
+      />
     </div>
   );
 }
 
 /** PRESENÇA: aparecer INVISÍVEL para o grupo (você continua vendo quem está online) — grava na hora. */
-function PresencaPerfil({ inicial }: { inicial: boolean }) {
-  const router = useRouter();
-  const [invisivel, setInvisivel] = useState(inicial);
-  const [gravando, setGravando] = useState(false);
-  const mudar = async (v: boolean) => {
-    setInvisivel(v);
-    setGravando(true);
-    try {
-      const r = await fetch("/api/perfil/presenca", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invisivel: v }) });
-      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-      if (!r.ok || !j?.ok) throw new Error(j?.error ?? "Não foi possível salvar.");
-      toast.success(v ? "Você está invisível para o grupo." : "Você aparece online para o grupo.");
-      router.refresh();
-    } catch (e) {
-      setInvisivel(!v);
-      toast.error((e as Error).message);
-    } finally {
-      setGravando(false);
-    }
-  };
-  return (
-    <SecaoPerfil icone={<IconEyeOff className="h-4 w-4" />} titulo="Presença" descricao="Quem do seu grupo está online aparece no cabeçalho. Invisível, você continua vendo os outros.">
-      <Switch checked={invisivel} disabled={gravando} onChange={mudar} label="Aparecer como invisível" dica="Os outros não veem que você está online" />
-    </SecaoPerfil>
-  );
-}

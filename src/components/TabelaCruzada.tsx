@@ -25,6 +25,7 @@ import { useLinhasTabela } from "./ConfigTabelas";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
 import { IconArrowDown, IconArrowUp } from "./icons";
 import { Pager } from "./Pager";
+import { Selecao } from "./Selecao";
 
 export type EixoTabelaCruzada = { chave: string; rotulo: string; total: number };
 export type LinhaTabelaCruzada = EixoTabelaCruzada & { valores: number[]; extra?: string };
@@ -430,7 +431,7 @@ export function TabelaCruzada({
           {acoesRodape}
           <label className="flex items-center gap-1.5">
             <span className="hidden sm:inline">Linhas</span>
-            <select
+            <Selecao
               aria-label="Linhas por página"
               value={limite}
               onChange={(e) => {
@@ -444,7 +445,7 @@ export function TabelaCruzada({
                   {n}
                 </option>
               ))}
-            </select>
+            </Selecao>
           </label>
           {pages > 1 && <Pager page={pg} pages={pages} onChange={setPage} />}
         </div>

@@ -2,6 +2,7 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  ChevronsUpDown,
   Activity,
   MessagesSquare,
   Reply,
@@ -14,6 +15,7 @@ import {
   Eraser,
   Megaphone,
   Sparkles,
+  SunMoon,
   Volume2,
   MonitorSmartphone,
   CalendarClock,
@@ -49,6 +51,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FileSearch,
   FileText,
   Filter,
   GitCompareArrows,
@@ -70,6 +73,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  PanelLeftClose,
   Minus,
   Merge,
   Moon,
@@ -156,6 +160,7 @@ import {
 
 export const IconUpload = Upload;
 export const IconMenu = Menu;
+export const IconRecolherMenu = PanelLeftClose;
 export const IconClose = X;
 export const IconBuilding = Building2;
 export const IconLandmark = Landmark;
@@ -166,10 +171,13 @@ export const IconTrend = TrendingUp;
 export const IconSun = Sun;
 export const IconMoon = Moon;
 export const IconSearch = Search;
+export const IconVerificacao = FileSearch;
 export const IconColunas = Columns3;
 export const IconVariavel = Variable;
 export const IconChevronLeft = ChevronLeft;
 export const IconChevronRight = ChevronRight;
+/** Trocar dentro do nível (o ⌃⌄ da trilha do cabeçalho). */
+export const IconAlternarNivel = ChevronsUpDown;
 export const IconSort = ArrowUpDown;
 export const IconInbox = Inbox;
 export const IconCheck = Check;
@@ -369,3 +377,6 @@ export const IconEnquadrar = LMaximize;
 export const IconMinus = LMinus;
 /** Organizar o diagrama (colunas na ordem do fluxo). */
 export const IconOrganizar = LNetwork;
+export const IconTemaSite = Sparkles;
+export const IconTemaSistema = MonitorSmartphone;
+export const IconTemaHorario = SunMoon;

@@ -151,7 +151,7 @@ export function PlanilhasPca({
       <section className="space-y-3">
         <h2 className="text-base font-bold text-text">Planilhas deste PCA ({planilhas.length})</h2>
         {planilhas.length === 0 ? (
-          <p className="rounded-card border border-border bg-surface p-6 text-center text-sm text-muted">Nenhuma planilha importada ainda.</p>
+          <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhuma planilha importada ainda.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {planilhas.map((p) => (

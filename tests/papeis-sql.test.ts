@@ -6,6 +6,7 @@ import { beforeEach, describe, it } from "node:test";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/db/schema.ts";
 import {
+  comandoArquivarUsuario,
   comandoAtualizarPapel,
   comandoCadastroPendente,
   comandoCadastroPrimeiro,
@@ -13,6 +14,7 @@ import {
   comandoExcluirPapel,
   comandoExcluirUsuario,
   comandoMarcarPadrao,
+  comandoRestaurarUsuario,
   comandosCriarPapel,
   comandoTrocarPapel,
   comandoTrocarStatus,
@@ -190,6 +192,22 @@ describe("papéis: comandos no driver D1", () => {
       assert.equal((await comandoExcluirUsuario(orm, 2)).length, 1);
       novoUsuario(3, "admin");
       assert.equal((await comandoExcluirUsuario(orm, 1)).length, 1);
+    });
+
+    it("arquivar: inativa e guarda quem; o último Administrador ativo nunca; restaurar volta ativo", async () => {
+      novoUsuario(1, "admin");
+      novoUsuario(2, "membro");
+      const linha = (id: number) =>
+        db.prepare("SELECT status, arquivado_em AS em, arquivado_por AS por FROM usuarios WHERE id = ?").get(id) as { status: string; em: string | null; por: string | null };
+      assert.deepEqual(await comandoArquivarUsuario(orm, 1, "ADM"), []);
+      assert.equal((await comandoArquivarUsuario(orm, 2, "Ana")).length, 1);
+      assert.equal(linha(2).status, "inativo");
+      assert.equal(linha(2).por, "Ana");
+      assert.ok(linha(2).em);
+      assert.deepEqual(await comandoArquivarUsuario(orm, 2, "Ana"), []); // já arquivado
+      assert.equal((await comandoRestaurarUsuario(orm, 2)).length, 1);
+      assert.deepEqual({ ...linha(2) }, { status: "ativo", em: null, por: null });
+      assert.deepEqual(await comandoRestaurarUsuario(orm, 2), []); // não arquivado
     });
 
     it("papel do sistema pela chave", async () => {

@@ -75,13 +75,20 @@ const vinculoCampos = {
   acoes: acoesLista.nullable(),
   acoesFora: acoesLista.default([]),
 };
+// ONDE gravar (vínculos por visão): no padrão e/ou nas visões escolhidas. Ausente = o do próprio vínculo (criar = o padrão).
+const escopoVinculos = z.object({ padrao: z.boolean(), visoes: z.array(z.number().int().positive()).max(200) }).optional();
 export const criarVinculosOrcamentoSchema = z.object({
   vinculos: z
     .array(z.object({ texto: z.string().trim().min(1).max(300), ...vinculoCampos }))
     .min(1)
     .max(200),
+  escopo: escopoVinculos,
 });
-export const editarVinculoOrcamentoSchema = z.object(vinculoCampos);
+export const editarVinculoOrcamentoSchema = z.object({ ...vinculoCampos, escopo: escopoVinculos });
+// O corpo do DELETE é opcional (sem ele, exclui onde o vínculo está).
+export const excluirVinculoOrcamentoSchema = z.union([z.null(), z.object({ escopo: escopoVinculos })]).transform((v) => v ?? {});
+// A visão volta a seguir o PADRÃO numa unidade do CUBO.
+export const padraoVinculoSchema = z.object({ visaoId: z.number().int().positive(), chave: z.string().trim().min(1).max(300) });
 
 // SUBSTITUIR os lançamentos de um orçamento pelos de outro (o CUBO reenviado, gravado num orçamento temporário).
 export const substituirOrcamentoSchema = z.object({ origemId: z.number().int().positive() });

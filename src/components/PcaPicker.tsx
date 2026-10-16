@@ -3,6 +3,7 @@
 import { Callout } from "./Callout";
 import { inputCls, labelCls } from "./formStyles";
 import { IconAlert, IconCheck } from "./icons";
+import { Selecao } from "./Selecao";
 
 /** PCA disponível para escolha (registrado em Configurações). */
 export type PcaOpcao = { id: number; nome: string; ano: number | null };
@@ -36,7 +37,7 @@ export function PcaPicker({
       <label className={labelCls} htmlFor="pca-picker">
         PCA do processo (ano) <span style={{ color: "var(--danger)" }}>*</span>
       </label>
-      <select
+      <Selecao
         id="pca-picker"
         className={inputCls}
         value={value ?? ""}
@@ -50,7 +51,7 @@ export function PcaPicker({
             {p.ano != null ? ` · ${p.ano}` : ""}
           </option>
         ))}
-      </select>
+      </Selecao>
 
       {opcoes.length === 0 ? (
         <Callout kind="warn" icon={<IconAlert className="h-4 w-4" />} className="mt-2">

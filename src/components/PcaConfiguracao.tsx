@@ -13,6 +13,7 @@ import { IconCheck, IconImage, IconLock, IconTrash } from "./icons";
 import { PcaCapa } from "./PcaCard";
 import { RecorteImagem } from "./RecorteImagem";
 import { Switch } from "./Switch";
+import { Selecao } from "./Selecao";
 
 export type ConfigPca = {
   id: number;
@@ -48,7 +49,7 @@ function OpcaoFonte({
       aria-pressed={ativo}
       disabled={disabled && !ativo}
       onClick={onClick}
-      className={`flex min-h-[44px] flex-col items-start gap-1 rounded-card border-2 p-4 text-left transition-colors disabled:opacity-50 ${
+      className={`flex min-h-[44px] flex-col items-start gap-1 rounded-card border-2 p-[var(--pad-card)] text-left transition-colors disabled:opacity-50 ${
         ativo ? "border-accent bg-accent-soft/60" : "border-border bg-surface hover:border-accent/40"
       }`}
     >
@@ -263,7 +264,7 @@ export function PcaConfiguracao({
         <section className={CARTAO}>
           <h2 className="mb-1 font-bold text-text">Visão do orçamento</h2>
           <p className="mb-3 text-sm text-muted">Os lançamentos do CUBO de {pca.ano ?? "—"} que contam como orçamento para o PCA (aba Orçamento).</p>
-          <select
+          <Selecao
             className={selectCls}
             value={pca.orcamentoVisaoId ?? ""}
             disabled={ro || salvando != null}
@@ -271,12 +272,16 @@ export function PcaConfiguracao({
             aria-label="Visão do orçamento"
           >
             <option value="">Orçamento inteiro (sem visão)</option>
-            {visoes.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nome} — {v.resumo}
-              </option>
-            ))}
-          </select>
+            {visoes.length > 0 && (
+              <optgroup label="Visões salvas">
+                {visoes.map((v) => (
+                  <option key={v.id} value={v.id} data-detalhe={v.resumo}>
+                    {v.nome}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </Selecao>
           <p className="mt-2 text-xs text-faint">
             As visões são criadas em{" "}
             <Link href="/painel/orcamento" className="text-accent hover:underline">

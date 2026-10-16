@@ -4,8 +4,11 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { brl, num } from "@/lib/format";
 import { aplicarVisao, contarAusentes, resumoVisao, type VisaoOrcamento, valoresAusentes } from "@/lib/orcamento-visao";
+import type { AlvosVinculo, VinculoOrcamento } from "@/lib/orcamento-vinculo";
 import { FerramentasAba } from "./AbasEspaco";
+import { AjudaVisoes } from "./AjudaVisoes";
 import { AvisoFlutuante } from "./AvisoFlutuante";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
@@ -19,7 +22,20 @@ import { IconPlus, IconTrash } from "./icons";
  * dimensão da visão — `DIMENSOES_VISAO`; unidade, ações e órgão são dos Vínculos —, opções CONECTADAS + prévia do Σ). "Criar visão" fica na barra das abas (`FerramentasAba`). As
  * visões vêm do servidor; salvar/excluir recarrega a página.
  */
-export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: LinhaVisaoOrcamento[]; visoes: VisaoOrcamento[]; podeEditar: boolean }) {
+export function OrcamentoVisoes({
+  itens,
+  visoes,
+  vinculos,
+  alvos,
+  podeEditar,
+}: {
+  itens: LinhaVisaoOrcamento[];
+  visoes: VisaoOrcamento[];
+  /** TODOS os vínculos (o padrão e os das visões) + os alvos — a aba Vínculos do banner da visão. */
+  vinculos: VinculoOrcamento[];
+  alvos: AlvosVinculo;
+  podeEditar: boolean;
+}) {
   const router = useRouter();
   const [editando, setEditando] = useState<VisaoOrcamento | "nova" | null>(null);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
@@ -75,6 +91,20 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: LinhaVis
       },
     },
     {
+      key: "vinculos",
+      header: "Vínculos",
+      nowrap: true,
+      value: (v) => (v.proprias.length ? "Próprios" : "Padrão"),
+      render: (v) =>
+        v.proprias.length ? (
+          <span title="Unidades do orçamento com vínculos próprios nesta visão (as demais seguem o padrão)">
+            <Badge tone="violet">{`${num(v.proprias.length)} ${v.proprias.length === 1 ? "própria" : "próprias"}`}</Badge>
+          </span>
+        ) : (
+          <span className="text-text-2">Padrão</span>
+        ),
+    },
+    {
       key: "pcas",
       header: "PCAs",
       align: "left",
@@ -126,13 +156,14 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: LinhaVis
 
   return (
     <>
-      {podeEditar && (
-        <FerramentasAba>
+      <FerramentasAba>
+        {podeEditar && (
           <Button size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => abrir("nova")}>
             Criar visão
           </Button>
-        </FerramentasAba>
-      )}
+        )}
+        <AjudaVisoes botao="sm" />
+      </FerramentasAba>
       <DataTable
         columns={colunas}
         rows={visoes}
@@ -149,6 +180,9 @@ export function OrcamentoVisoes({ itens, visoes, podeEditar }: { itens: LinhaVis
         aberta={editando}
         itens={itens}
         podeEditar={podeEditar}
+        vinculos={vinculos}
+        alvos={alvos}
+        visoes={visoes}
         onFechar={() => setEditando(null)}
         onSalva={(r) => {
           setAviso({ kind: "ok", texto: r.nova ? "Visão criada." : "Visão atualizada." });

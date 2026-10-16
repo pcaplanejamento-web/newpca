@@ -1,14 +1,16 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useMemo, useState } from "react";
 import { num } from "@/lib/format";
 import { opcoesDaBusca } from "@/lib/tabela-filtros";
 import { Dropdown } from "./Dropdown";
 import { Checkbox, SearchField } from "./Field";
 import { IconChevronDown } from "./icons";
+import { SetaDropdown } from "./SetaDropdown";
 
-/** `rotulo` = o texto mostrado (padrão: o próprio valor — ex.: o nome de um fluxo cujo valor é o id). */
-export type OpcaoMultipla = { valor: string; rotulo?: string; contagem?: number };
+/** `rotulo` = o texto mostrado (padrão: o próprio valor — ex.: o nome de um fluxo cujo valor é o id); `detalhe` = a 2ª
+ * linha; `grupo` = o cabeçalho da lista (as opções de mesmo grupo vêm juntas — ex.: as unidades de cada órgão). */
+export type OpcaoMultipla = { valor: string; rotulo?: string; contagem?: number; detalhe?: string; grupo?: string };
 
 /** Máximo de opções renderizadas de uma vez (a busca restringe o resto) — leve com milhares. */
 const MAX_VISIVEIS = 300;
@@ -63,7 +65,7 @@ export function SeletorMultiplo({
           <span
             className={`flex h-11 w-full items-center gap-2 rounded-control border border-border bg-surface px-3 lg:h-[var(--h-control-sm)] ${disabled ? "opacity-60" : ""}`}
           >
-            {gatilho(<IconChevronDown className="h-4 w-4 shrink-0 text-muted" />)}
+            {gatilho(<SetaDropdown className="h-4 w-4 shrink-0 text-muted" />)}
           </span>
         }
       >
@@ -106,8 +108,12 @@ function CorpoSelecao({
   const [busca, setBusca] = useState("");
   const sel = useMemo(() => new Set(selecionados), [selecionados]);
   const filtradas = useMemo(() => {
+    // A busca acha pelo texto E pelo detalhe (ex.: a sigla ou o nome da unidade).
     const casam = new Set(opcoesDaBusca(opcoes.map((o) => o.rotulo ?? o.valor), busca));
-    return casam.size === opcoes.length ? opcoes : opcoes.filter((o) => casam.has(o.rotulo ?? o.valor));
+    const temDetalhe = opcoes.some((o) => o.detalhe);
+    const pelosDetalhes = temDetalhe && busca.trim() ? new Set(opcoesDaBusca(opcoes.map((o) => o.detalhe ?? ""), busca)) : null;
+    const passa = (o: OpcaoMultipla) => casam.has(o.rotulo ?? o.valor) || (!!o.detalhe && !!pelosDetalhes?.has(o.detalhe));
+    return casam.size === opcoes.length ? opcoes : opcoes.filter(passa);
   }, [opcoes, busca]);
   const marcarFiltradas = () => onChange([...new Set([...selecionados, ...filtradas.map((o) => o.valor)])]);
   // Selecionados que sumiram das opções (facetas) continuam valendo — listados no topo.
@@ -154,11 +160,32 @@ function CorpoSelecao({
             <span className="text-xs text-faint">fora do filtro</span>
           </li>
         ))}
-        {filtradas.slice(0, MAX_VISIVEIS).map((o) => (
-          <li key={o.valor} className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
-            <Checkbox checked={sel.has(o.valor)} onChange={() => alternar(o.valor)} label={o.rotulo ?? o.valor} disabled={disabled} />
-            {o.contagem != null && <span className="shrink-0 text-xs tabular-nums text-faint">{num(o.contagem)}</span>}
-          </li>
+        {filtradas.slice(0, MAX_VISIVEIS).map((o, i, l) => (
+          <Fragment key={o.valor}>
+            {o.grupo && o.grupo !== l[i - 1]?.grupo && (
+              <li className={`truncate pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wide text-faint ${i > 0 ? "mt-1 border-t border-border" : ""}`} title={o.grupo}>
+                {o.grupo}
+              </li>
+            )}
+            <li className="flex min-h-11 items-center justify-between gap-2 text-sm lg:min-h-7">
+              <Checkbox
+                checked={sel.has(o.valor)}
+                onChange={() => alternar(o.valor)}
+                label={
+                  o.detalhe ? (
+                    <span className="flex min-w-0 flex-col py-0.5">
+                      <span>{o.rotulo ?? o.valor}</span>
+                      <span className="text-[11px] text-faint">{o.detalhe}</span>
+                    </span>
+                  ) : (
+                    (o.rotulo ?? o.valor)
+                  )
+                }
+                disabled={disabled}
+              />
+              {o.contagem != null && <span className="shrink-0 text-xs tabular-nums text-faint">{num(o.contagem)}</span>}
+            </li>
+          </Fragment>
         ))}
         {filtradas.length > MAX_VISIVEIS && (
           <li className="py-1 text-xs text-faint">+{num(filtradas.length - MAX_VISIVEIS)} — refine a busca para ver os demais.</li>

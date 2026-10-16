@@ -57,16 +57,17 @@ describe("campos do cadastro: só dados permitidos", () => {
     assert.equal(filtrarNome("  João1 <b>Silva</b>"), "João bSilvab");
     assert.equal(filtrarNome("Ana   Maria"), "Ana Maria");
   });
-  it("matrícula: exatamente 6 dígitos, não só zeros; a chave ignora os zeros à esquerda", () => {
+  it("matrícula: até 7 dígitos, não só zeros; a chave ignora os zeros à esquerda", () => {
     assert.ok(matriculaValida("012345"));
-    assert.ok(!matriculaValida("12345"));
-    assert.ok(!matriculaValida("1234567"));
+    assert.ok(matriculaValida("12345"));
+    assert.ok(matriculaValida("1234567"));
+    assert.ok(!matriculaValida("12345678"));
     assert.ok(!matriculaValida("000000"));
     assert.ok(!matriculaValida("12-34"));
-    assert.ok(!matriculaValida("0000"));
+    assert.ok(!matriculaValida("0000000"));
     assert.ok(!matriculaValida("1234567890123456"));
     assert.equal(filtrarMatricula("12.345-6 a"), "123456");
-    assert.equal(filtrarMatricula("1234567"), "123456");
+    assert.equal(filtrarMatricula("12345678"), "1234567");
     assert.equal(chaveMatricula(" 000123 "), "123");
   });
   it("e-mail institucional: usuário no padrão (letras, números, . _ -), sem '..' e o domínio certo", () => {
@@ -96,7 +97,7 @@ describe("campos do cadastro: só dados permitidos", () => {
     const base = { nome: "Ana Souza", matricula: "123456", telefone: "(64) 99999-0000", reparticaoId: 1, email: "ana.souza@rioverde.go.gov.br", senha: "abc12345" };
     assert.ok(cadastroSchema.safeParse(base).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, matricula: "M-12" }).success);
-    assert.ok(!cadastroSchema.safeParse({ ...base, matricula: "12345" }).success);
+    assert.ok(!cadastroSchema.safeParse({ ...base, matricula: "12345678" }).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, telefone: "" }).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, telefone: "(64) 8999-00001" }).success);
     assert.ok(!cadastroSchema.safeParse({ ...base, nome: "Ana Souza 2" }).success);

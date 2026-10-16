@@ -12,6 +12,7 @@ import { Dropdown } from "./Dropdown";
 import { Checkbox } from "./Field";
 import { IconArrowDown, IconArrowUp, IconCheck, IconChecklist, IconClock, IconMais, IconPencil, IconPlus, IconTrash } from "./icons";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 /** O que o item aceita mudar além de texto/marca: o PRAZO e o RESPONSÁVEL próprios. */
 export type PatchItem = { prazo?: string | null; responsavelId?: number | null };
@@ -642,7 +643,7 @@ function MenuItem({
           </label>
           <label className="block text-[12px] font-semibold text-text-2">
             Responsável
-            <select
+            <Selecao
               value={i.responsavelId ?? ""}
               onChange={(e) => onEditar({ responsavelId: e.target.value ? Number(e.target.value) : null })}
               className="mt-1 h-11 w-full rounded-control border border-border-2 bg-surface px-2 text-[13px] text-text lg:h-9"
@@ -653,7 +654,7 @@ function MenuItem({
                   {nomeExibicao(p)}
                 </option>
               ))}
-            </select>
+            </Selecao>
           </label>
           <div className="space-y-0.5 border-t border-border pt-2">
             {onConverter && (

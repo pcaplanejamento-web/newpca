@@ -26,7 +26,7 @@ export function TopItensChart({
   const rows = data.filter((d) => d.valor > 0);
   if (!rows.length) return <ChartEmpty />;
   return (
-    <div className={alturaMax ? "rolagem-fina -mr-1 overflow-y-auto pr-1" : undefined} style={alturaMax ? { maxHeight: alturaMax } : undefined}>
+    <div className={alturaMax ? "-mr-1 overflow-y-auto pr-1" : undefined} style={alturaMax ? { maxHeight: alturaMax } : undefined}>
     <BarrasH
       ariaLabel="Maiores itens por valor"
       ativa={onSelecionar ? (ativo ?? null) : undefined}

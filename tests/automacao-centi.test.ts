@@ -123,7 +123,10 @@ test("analisarRespostaCenti: PDF cru, base64, chave do arquivo, sessão e esquel
   assert.equal(versaoAtende("1.18.0"), false);
   assert.equal(versaoAtende("1.19.0"), false);
   assert.equal(versaoAtende("1.20.0"), false);
-  assert.equal(versaoAtende("1.21.0"), true);
+  assert.equal(versaoAtende("1.21.0"), false);
+  assert.equal(versaoAtende("1.22.0"), false);
+  assert.equal(versaoAtende("1.23.0"), false);
+  assert.equal(versaoAtende("1.25.0"), true);
 });
 
 test("pastas, nomes e plano por protocolo", async () => {
@@ -151,10 +154,11 @@ test("pastas, nomes e plano por protocolo", async () => {
   const sep = planoDosProtocolos(protos, op);
   assert.deepEqual(
     sep.arquivos.map((a) => a.nome),
+    // A ordem é a dos itens que chegam (a tabela de Seleção) — nada reordena pelo planejamento.
     [
+      "Planejamento 900 - DFD 531 - PCA 2027 - (10) - 2026.pdf",
       "Planejamento 640 - DFD 533 - PCA 2027 - (10) - 2026.pdf",
       "Planejamento 811 - DFD 700 - PCA 2027 - (11) - 2026.pdf",
-      "Planejamento 900 - DFD 531 - PCA 2027 - (10) - 2026.pdf",
     ],
   );
   assert.equal(sep.arquivos[0].pastas.join("/"), "PCA 2027/SMS - PCA 2027 - (10) - 2026");
@@ -168,24 +172,24 @@ test("pastas, nomes e plano por protocolo", async () => {
     ],
   );
   assert.equal(sep.total, 3);
-  const porProto = planoDosProtocolos(protos, { ...op, pastaPca: false, formato: "protocolo", ordenarPlanejamento: false });
+  const porProto = planoDosProtocolos(protos, { ...op, pastaPca: false, formato: "protocolo" });
   assert.deepEqual(porProto.arquivos.map((a) => [a.pastas.length, a.nome, a.partes.map((t) => t.id).join(",")]), [
     [0, "SMS - PCA 2027 - (10) - 2026.pdf", "900,640"],
     [0, "SMS - PCA 2027 - (11) - 2026.pdf", "811"],
   ]);
   const porUnidade = planoDosProtocolos(protos, { ...op, formato: "unidade" });
   assert.deepEqual(porUnidade.arquivos.map((a) => [a.pastas.join("/"), a.nome, a.partes.map((t) => t.id).join(",")]), [
-    ["PCA 2027", "SMS - PCA 2027 - (10) - 2026.pdf", "640,900"],
+    ["PCA 2027", "SMS - PCA 2027 - (10) - 2026.pdf", "900,640"],
     ["PCA 2027", "SME - PCA 2027 - (11) - 2026.pdf", "811"],
   ]);
   const unico = planoDosProtocolos(protos, { ...op, formato: "unico" });
   assert.deepEqual(unico.arquivos.map((a) => [a.pastas.join("/"), a.nome, a.partes.map((t) => t.id).join(",")]), [
-    ["PCA 2027", "DFDs - PCA 2027 - (10, 11) - 2026.pdf", "640,811,900"],
+    ["PCA 2027", "DFDs - PCA 2027 - (10, 11) - 2026.pdf", "900,640,811"],
   ]);
   const ids = planoDosIds(["811", "5"], protos, op);
   assert.deepEqual(ids.map((a) => [a.pastas.join("/"), a.nome, a.partes[0].orgao]), [
-    ["PCA sem ano", "Planejamento 5.pdf", null],
     ["PCA 2027", "Planejamento 811 - DFD 700 - PCA 2027 - (11) - 2026.pdf", "o:3"],
+    ["PCA sem ano", "Planejamento 5.pdf", null],
   ]);
   assert.deepEqual(candidatosEntidade("02: 03,x y", null), ["02", "03", "x", "y"]);
   assert.equal(candidatosEntidade("", "02")[0], "00");
@@ -246,6 +250,10 @@ test("lerAlvoCenti / descricaoDoArquivo / opções de destino", async () => {
   assert.deepEqual(lerAlvoCenti(" 2.332.778 ", "156844/2026"), { alvo: { id: "2332778", numero: "156844", ano: "2026" } });
   assert.deepEqual(lerAlvoCenti("2332778", "0156844"), { alvo: { id: "2332778", numero: "156844", ano: null } });
   assert.ok("erro" in lerAlvoCenti("", "156844"));
+  // Só pelo Id: o nº opcional (vem da Centi); sem `soId`, segue obrigatório.
+  assert.deepEqual(lerAlvoCenti("2332778", " ", true), { alvo: { id: "2332778", numero: "", ano: null } });
+  assert.ok("erro" in lerAlvoCenti("2332778", ""));
+  assert.ok("erro" in lerAlvoCenti("", "", true));
   assert.ok("erro" in lerAlvoCenti("2332778", "15/68"));
   assert.equal(descricaoDoArquivo("DFDs - PCA 2027 - (1, 2) - 2026.PDF"), "DFDs - PCA 2027 - (1, 2) - 2026");
   const o = lerOpcoesSaida({ destino: "protocolo", tipoDocumento: "x" });
@@ -302,11 +310,12 @@ const docCenti = (seq: string, desc: string, tipo: unknown) => ({
 async function pecasAnexo() {
   const { readFileSync } = await import("node:fs");
   const vm = await import("node:vm");
-  const ctx: Record<string, Record<string, (...a: unknown[]) => unknown>> = {};
+  // O URL da página (o vm não traz o do navegador).
+  const ctx: Record<string, unknown> = { URL };
   vm.runInNewContext(readFileSync("extensao-centi/centi-anexo.js", "utf8"), ctx);
   // O nome da peça leva o MESMO protocolo do centi-main.js (uma cópia antiga na aba nunca é reaproveitada).
   const p = readFileSync("extensao-centi/centi-main.js", "utf8").match(/const PROTOCOLO = (\d+);/)?.[1];
-  const pecas = ctx[`__pcaCentiAnexo_p${p}`];
+  const pecas = ctx[`__pcaCentiAnexo_p${p}`] as Record<string, (...a: unknown[]) => unknown>;
   assert.ok(pecas, "centi-anexo.js e centi-main.js com o mesmo protocolo");
   // O resultado volta por JSON (outro "realm" do vm): compara-se como dado puro.
   return Object.fromEntries(Object.entries(pecas).map(([k, f]) => [k, (...a: unknown[]): J => (typeof f === "function" ? JSON.parse(JSON.stringify(f(...a) ?? null)) : f)]));
@@ -330,6 +339,9 @@ test("anexo: confere Id, número e ano do protocolo antes de qualquer gravação
   assert.match(A.conferirProtocolo(r, { ...PEDIDO, numero: "156845" }).erro, /é do protocolo 156844\/2026, não do 156845/);
   assert.match(A.conferirProtocolo(r, { ...PEDIDO, ano: "2025" }).erro, /de 2026, não de 2025/);
   assert.match(A.conferirProtocolo(r, { ...PEDIDO, id: "1" }).erro, /Id 1/);
+  // Só pelo Id: vale o Id (o nº vem da Centi); Id diferente segue recusado.
+  assert.ok(A.conferirProtocolo(r, { ...PEDIDO, numero: "", ano: null }).entidade);
+  assert.match(A.conferirProtocolo(r, { ...PEDIDO, id: "1", numero: "" }).erro, /Id 1/);
   assert.match(A.conferirProtocolo({ Entity: { ModuleKey: 1, Fields: [] } }, PEDIDO).erro, /não devolveu/);
   const res = A.resumoProtocolo(r.Entity);
   assert.equal(res.assunto, "INCLUSÃO - PCA");
@@ -384,6 +396,24 @@ test("anexo: não repete a mesma descrição e só confirma com o documento de v
   assert.match(A.conferirSalvo({ Success: true, Entity: protocoloCenti([]).Entity }, PEDIDO).erro, /não voltou/);
   const zero = protocoloCenti([{ ...docCenti("0", PEDIDO.descricao, null), Fields: [{ Key: "Descricao", Value: PEDIDO.descricao }, { Key: "Id", Value: "0" }] }]);
   assert.match(A.conferirSalvo({ Success: true, Entity: zero.Entity }, PEDIDO).erro, /não voltou/);
+});
+
+test("anexo: NUNCA apaga — protocolo desatualizado é recusado e o salvar que perde documentos é erro", async () => {
+  const A = await pecasAnexo();
+  const antes = protocoloCenti([docCenti("1", "A", null), docCenti("2", "B", null)]);
+  assert.deepEqual(A.idsDocumentos(antes.Entity), ["545231", "545232"]);
+  // O último salvar devolveu 545231, 545232 e 545233: um load sem o 545233 está desatualizado.
+  assert.match(A.faltamGravados(antes.Entity, ["545231", "545232", "545233"]), /SEM 1 documento/);
+  assert.equal(A.faltamGravados(antes.Entity, ["545231"]), null);
+  assert.equal(A.faltamGravados(antes.Entity, undefined), null);
+  // O salvar que devolve o protocolo SEM um documento que estava nele = erro (nunca "anexado").
+  const perdeu = protocoloCenti([docCenti("2", "B", null), docCenti("3", PEDIDO.descricao, null)]);
+  assert.match(A.conferirSalvo({ Success: true, Entity: perdeu.Entity }, PEDIDO, antes.Entity).erro, /SEM documentos/);
+  // O documento NOVO = o que não estava (o nº dele, não o de um antigo de mesma descrição).
+  const repetido = protocoloCenti([docCenti("1", PEDIDO.descricao, null)]);
+  const salvo = protocoloCenti([docCenti("1", PEDIDO.descricao, null), docCenti("7", PEDIDO.descricao, null)]);
+  assert.deepEqual(A.conferirSalvo({ Success: true, Entity: salvo.Entity }, PEDIDO, repetido.Entity), { sequencial: "7", documento: "545237" });
+  assert.deepEqual(A.resumoProtocolo(salvo.Entity).docs[1], { descricao: PEDIDO.descricao, sequencial: "7", id: "545237" });
 });
 
 test("anexo: o tipo vai como a tela da Centi manda (o registro do tipo carregado)", async () => {
@@ -479,6 +509,36 @@ test("anexo: o protocolo da Tela Protocolo (módulo 102908) é aceito e o docume
   assert.equal(docs.length, 2);
   assert.equal(docs[1].ModuleKey, 102999);
   assert.ok(A.conferirProtocolo({ Entity: { ...e, ModuleKey: 5 } }, { id: "2332778", numero: "156844" }).erro);
+});
+
+test("anexo: aprende como a TELA abre o protocolo (o módulo novo) e diz o que fazer quando nada abre", async () => {
+  const A = await pecasAnexo();
+  const e = {
+    $type: "ORM", ModuleKey: 104321, Fields: [{ Key: "Id", Value: 2332778 }, { Key: "NrProtocolo", Value: "156844" }, { Key: "AnoReferencia", Value: "2026" }, { Key: "Documentos", Value: [] }],
+  };
+  const url = "https://rioverde.centi.com.br/wcf/restauth/load?entity=104321&key=2332778";
+  const m = A.loadDoProtocolo(url, "GET", null, { Entity: e });
+  assert.deepEqual(m, { metodo: "GET", caminho: "restauth/load?entity=104321&key={id}", corpo: null, modulo: 104321 });
+  assert.deepEqual(A.pedidoDoLoad(m, "2400001"), { metodo: "GET", caminho: "restauth/load?entity=104321&key=2400001", corpo: null });
+  // Pelo corpo (POST), sem segredos.
+  const p = A.loadDoProtocolo("restauth/loadprotocolo", "POST", { Key: 2332778, token: "x" }, { Entity: e });
+  assert.deepEqual(p.corpo, { Key: "{id:n}" });
+  assert.equal(JSON.stringify(A.pedidoDoLoad(p, "7").corpo), '{"Key":7}');
+  // Não é modelo: outra resposta, verbo de escrita, sem o Id no pedido, Id inválido.
+  assert.equal(A.loadDoProtocolo(url, "GET", null, { Entity: { ...e, Fields: [{ Key: "Id", Value: 1 }] } }), null);
+  assert.equal(A.loadDoProtocolo("restauth/save?key=2332778", "POST", null, { Entity: e }), null);
+  assert.equal(A.loadDoProtocolo("restauth/load?entity=104321", "GET", null, { Entity: e }), null);
+  assert.equal(A.pedidoDoLoad(m, "12a"), null);
+  // O módulo aprendido é aceito só quando passado; Id/nº seguem conferidos.
+  const pedido = { id: "2332778", numero: "156844", ano: "2026" };
+  assert.ok(A.conferirProtocolo({ Entity: e }, pedido).erro);
+  assert.equal(A.conferirProtocolo({ Entity: e }, pedido, [102907, 102908, 104321]).erro, undefined);
+  assert.match(A.conferirProtocolo({ Entity: e }, { ...pedido, numero: "1" }, [104321]).erro, /não do 1/);
+  // Nada abriu: o que cada caminho respondeu + o que fazer.
+  const vazio = { $type: "x", Entity: null, Message: [] };
+  assert.equal(A.descreverResposta(vazio), "protocolo vazio");
+  const erro = A.erroSemProtocolo(pedido, false, [`módulo 102907: ${A.descreverResposta(vazio)}`]);
+  assert.match(erro, /não abriu o protocolo 156844\/2026 \(Id 2332778\) — módulo 102907: protocolo vazio\. Abra esse protocolo UMA vez/);
 });
 
 test("emissão: o Emitir DFD e o download saem pelo cliente HTTP da própria Centi (o caminho do anexo), com o envio da extensão só de reserva", async () => {

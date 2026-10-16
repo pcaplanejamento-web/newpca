@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import { IconBuilding } from "./icons";
+import { Selecao } from "./Selecao";
 
 type U = { id: number; codigo: string; municipio: string };
 
@@ -35,7 +36,7 @@ export function UnitFilter({
     >
       <IconBuilding className="h-[18px] w-[18px] shrink-0 text-faint" />
       <span className="hidden shrink-0 text-muted sm:inline">Unidade:</span>
-      <select
+      <Selecao
         value={current ?? ""}
         onChange={onChange}
         className="min-w-0 flex-1 bg-transparent font-medium text-text outline-none"
@@ -46,7 +47,7 @@ export function UnitFilter({
             {u.municipio ? `${u.municipio} — ${u.codigo}` : u.codigo}
           </option>
         ))}
-      </select>
+      </Selecao>
     </label>
   );
 }

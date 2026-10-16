@@ -6,13 +6,14 @@ import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
 import { OrcamentoLancamentos } from "@/components/OrcamentoLancamentos";
 import { OrcamentoVinculosAba } from "@/components/OrcamentoVinculosAba";
 import { OrcamentoVisoes } from "@/components/OrcamentoVisoes";
+import { componenteLibera } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { dadosComparativo } from "@/lib/comparativo-dados";
 import { alvosVinculoOrcamento, getOrcamento, getOrcamentoItens, listarVinculosOrcamento } from "@/lib/orcamento";
 import { DIMENSOES_ORCAMENTO, type LinhaOrcamentoVisao } from "@/lib/orcamento-visao";
 import { listarVisoesOrcamento } from "@/lib/pca-espaco";
 import { carregarEdicoes } from "@/lib/edicoes-tabela";
-import { comVinculos } from "@/lib/orcamento-vinculo";
+import { comVinculos, vinculosDaVisao } from "@/lib/orcamento-vinculo";
 import { CHAVE_LANCAMENTOS } from "@/lib/edicoes-tabela-core";
 
 export const dynamic = "force-dynamic";
@@ -35,26 +36,28 @@ export default async function OrcamentoEspacoPage({
   const sp = await searchParams;
   const orcamento = Number.isInteger(id) && id > 0 ? await getOrcamento(id) : null;
   if (!orcamento) notFound();
-  const aba: AbaOrcamento = ABAS.includes(sp.aba as AbaOrcamento) ? (sp.aba as AbaOrcamento) : "lancamentos";
+  const permitidas = ABAS.filter((a) => componenteLibera(acesso, `orcamento.${a}`));
+  const aba: AbaOrcamento = permitidas.includes(sp.aba as AbaOrcamento) ? (sp.aba as AbaOrcamento) : (permitidas[0] ?? "lancamentos");
   let conteudo: ReactNode;
   if (aba === "visoes") {
     const [brutos, visoes, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVisoesOrcamento(), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
     // Só as dimensões da visão (com a Unidade/Órgão do CADASTRO) + a dotação (a prévia do Σ).
-    const itens = comVinculos(brutos, vinculos, alvos);
+    const itens = comVinculos(brutos, vinculosDaVisao(vinculos, null), alvos);
     const linhas = itens.map((i) => {
       const l: LinhaOrcamentoVisao & { valorInicial: number } = { valorInicial: i.valorInicial };
       for (const d of DIMENSOES_ORCAMENTO) l[d.key] = i[d.key];
       return l;
     });
-    conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} podeEditar={pode.configurar} />;
+    conteudo = <OrcamentoVisoes itens={linhas} visoes={visoes} vinculos={vinculos} alvos={alvos} podeEditar={pode.configurar} />;
   } else if (aba === "comparativo") {
     conteudo = (
       <OrcamentoComparativo titulo={`${orcamento.nome} ${orcamento.ano}`} {...await dadosComparativo(id, acesso.u.id)} podeExportar={pode.exportar} podePublicar={pode.configurar} />
     );
   } else if (aba === "vinculos") {
-    const [itens, vinculos, alvos] = await Promise.all([getOrcamentoItens(id), listarVinculosOrcamento(), alvosVinculoOrcamento()]);
+    const [itens, vinculos, alvos, visoes] = await Promise.all([getOrcamentoItens(id), listarVinculosOrcamento(), alvosVinculoOrcamento(), listarVisoesOrcamento()]);
     conteudo = (
       <OrcamentoVinculosAba
+        visoes={visoes}
         itens={itens.map((i) => ({ orgao: i.orgao, unidade: i.unidade, acao: i.acao, valorInicial: i.valorInicial }))}
         vinculos={vinculos}
         alvos={alvos}
@@ -73,7 +76,7 @@ export default async function OrcamentoEspacoPage({
       <OrcamentoLancamentos
         orcamento={orcamento}
         pode={pode}
-        itens={comVinculos(itens, vinculos, alvos)}
+        itens={comVinculos(itens, vinculosDaVisao(vinculos, null), alvos)}
         visoes={visoes}
         edicoes={{ chave: CHAVE_LANCAMENTOS, lista: ed.lista, padroes: ed.padroes, podePublicar: pode.configurar }}
       />
@@ -81,7 +84,7 @@ export default async function OrcamentoEspacoPage({
   }
 
   return (
-    <OrcamentoEspacoView orcamento={orcamento} aba={aba} podeExcluir={pode.excluir}>
+    <OrcamentoEspacoView orcamento={orcamento} aba={aba} permitidas={permitidas} podeExcluir={pode.excluir}>
       <PermissaoExportar permitido={pode.exportar}>{conteudo}</PermissaoExportar>
     </OrcamentoEspacoView>
   );

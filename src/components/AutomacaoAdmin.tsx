@@ -528,14 +528,13 @@ export function AutomacaoAdmin({
 
   const atualizada = !!ext && versaoAtende(ext.versao);
   const pronto = atualizada && !!logado?.ok && !!logado.logado;
-  const abrirProtocolo = useCallback((id: number) => setAberto({ tipo: "protocolo", id }), []);
   const importacao = useMemo(
     () => ({ reparticoes: banners.reparticoes, regras: banners.regras, orgaos: banners.orgaos, pcas: banners.pcas }) as unknown as ContextoImportacao,
     [banners],
   );
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="linha-topico flex flex-wrap items-center gap-2">
         <IconRobo className="h-5 w-5 text-muted" />
         <h1 className="text-lg font-bold text-text">Automação</h1>
         <Ajuda titulo="Automação — fluxos com a Centi">
@@ -583,12 +582,13 @@ export function AutomacaoAdmin({
               {ext.copias} cópias da extensão — remova a antiga
             </Badge>
           )}
+          {/* O MESMO selo de estado do PCA (Preview/Publicado — `tamanho="linha"`): o ponto que pulsa = situação ao vivo. */}
           {!ext ? (
-            <Badge tone="amber" dot>
+            <Badge tone="amber" dot vivo tamanho="linha" className="shrink-0" title="A extensão da Centi não respondeu: instale-a (botão ao lado), abra a Centi no Chrome e entre — conferido a cada 20 s">
               Sem extensão
             </Badge>
           ) : !atualizada ? (
-            <Badge tone="amber" dot>
+            <Badge tone="amber" dot tamanho="linha" className="shrink-0">
               Extensão v{ext.versao} desatualizada
             </Badge>
           ) : logado?.ok && logado.logado ? (
@@ -596,6 +596,8 @@ export function AutomacaoAdmin({
               tone="emerald"
               dot
               vivo
+              tamanho="linha"
+              className="shrink-0"
               title={`Ao vivo: a extensão está conectada e a Centi está logada${logado.entidade ? ` na entidade ${logado.entidade}` : ""}. Conferido ao abrir, ao voltar à janela e a cada 20 s.`}
             >
               Centi logada{logado.entidade ? ` · ${logado.entidade}` : ""}
@@ -603,7 +605,7 @@ export function AutomacaoAdmin({
           ) : logado?.tela === "login" ? (
             <LoginCenti login={logado.login ?? null} entrando={entrando} onEntrar={() => void entrarAgora()} onOpcoes={() => void pedir("abrirOpcoes", null, 8000)} />
           ) : (
-            <Badge tone="amber" dot>
+            <Badge tone="amber" dot tamanho="linha" className="shrink-0">
               {logado?.erro ?? "Centi sem login"}
             </Badge>
           )}
@@ -679,7 +681,7 @@ export function AutomacaoAdmin({
         protocolos={protocolos}
         gestao={gestao}
         importacao={importacao}
-        onAbrirProtocolo={abrirProtocolo}
+        onAbrirMesa={setAberto}
         onRodando={setRodando}
         novo={novoFluxo}
         onEditor={setNoEditor}

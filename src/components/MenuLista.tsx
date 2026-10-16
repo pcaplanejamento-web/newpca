@@ -11,7 +11,9 @@ import { Dropdown } from "./Dropdown";
 import { SelectField, TextField } from "./Field";
 import { Callout } from "./Callout";
 import { Segmented } from "./Segmented";
-import { IconArquivar, IconArrowRight, IconCheck, IconCopy, IconMais, IconPlus, IconSort, IconTrash } from "./icons";
+import { IconArquivar, IconArrowRight, IconCheck, IconCopy, IconMais, IconPlus, IconSort, IconTrash, IconUser } from "./icons";
+import type { Pessoa } from "@/lib/pessoa";
+import { SeletorPessoa } from "./SeletorPessoa";
 import { CamposPeriodo, type PeriodoQuadro } from "./QuadroCard";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
@@ -42,6 +44,7 @@ export function MenuLista({
   onExcluirLista,
   onLimite,
   onConcluidas,
+  onPessoa,
 }: {
   lista: ListaTarefas;
   /** As OUTRAS listas ativas do quadro (destino de "mover todos os cartões"). */
@@ -63,6 +66,8 @@ export function MenuLista({
   onLimite?: () => void;
   /** Liga/desliga "lista de concluídas". */
   onConcluidas?: () => void;
+  /** Abre a atribuição da lista a uma pessoa (`PessoaLista`). */
+  onPessoa?: () => void;
 }) {
   const [secao, setSecao] = useState<null | "ordenar" | "mover">(null);
   return (
@@ -121,6 +126,7 @@ export function MenuLista({
             {(pode.configurar || pode.excluir) && (
               <>
                 {pode.manipular && <div className="my-1 border-t border-border" />}
+                {pode.configurar && onPessoa && item(lista.responsavelId != null ? "Pessoa atribuída…" : "Atribuir a uma pessoa…", <IconUser className="h-4 w-4 text-muted" />, onPessoa)}
                 {pode.configurar && onLimite && item(lista.limiteWip != null ? `Limite de cartões (${lista.limiteWip})…` : "Limite de cartões…", <IconSort className="h-4 w-4 text-muted" />, onLimite)}
                 {pode.configurar &&
                   onConcluidas &&
@@ -365,7 +371,7 @@ export function ExcluirLista({
             onChange={setModo}
             options={[
               ...(outras.length ? [{ value: "mover" as const, label: "Mover para outra lista" }] : []),
-              { value: "excluir" as const, label: "Excluir tudo junto" },
+              { value: "excluir" as const, label: "Excluir as tarefas junto" },
             ]}
           />
           {mover ? (
@@ -388,6 +394,62 @@ export function ExcluirLista({
 /**
  * O LIMITE de cartões (WIP) de uma lista: passando dele, a contagem da lista fica em âmbar. Vazio = sem limite.
  */
+/**
+ * ATRIBUIR a lista a uma PESSOA do quadro: a tarefa nova criada nela já nasce com a pessoa como responsável e o "Criar
+ * tarefa" da Mesa sugere as listas da pessoa. "Sem pessoa" tira a atribuição.
+ */
+export function PessoaLista({ lista, pessoas, usuarioId, onFechar, onFeito }: { lista: ListaTarefas | null; pessoas: Pessoa[]; usuarioId: number; onFechar: () => void; onFeito: () => void }) {
+  const [valor, setValor] = useState("");
+  const [gravando, setGravando] = useState(false);
+  useEffect(() => setValor(lista?.responsavelId == null ? "" : String(lista.responsavelId)), [lista]);
+  if (!lista) return null;
+  const salvar = async () => {
+    if (gravando) return;
+    setGravando(true);
+    try {
+      await chamar(`/api/tarefas/listas/${lista.id}`, "PATCH", { responsavelId: valor ? Number(valor) : null });
+      toast.success(valor ? "Lista atribuída." : "Atribuição retirada.");
+      onFeito();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGravando(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={() => !gravando && onFechar()}
+      titulo={`Pessoa da lista — ${lista.nome}`}
+      size="md"
+      bloqueado={gravando}
+      rodape={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" disabled={gravando} onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button loading={gravando} onClick={salvar}>
+            Salvar
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-2">
+        <SeletorPessoa
+          variante="campo"
+          rotulo="Pessoa atribuída"
+          pessoas={pessoas}
+          usuarioId={usuarioId}
+          valor={valor}
+          onChange={setValor}
+          extras={[{ valor: "", rotulo: "Sem pessoa", icone: <IconUser className="h-4 w-4 text-faint" /> }]}
+        />
+        <p className="text-[12.5px] text-muted">A tarefa nova criada nesta lista já nasce com a pessoa como responsável.</p>
+      </div>
+    </Modal>
+  );
+}
+
 export function LimiteLista({ lista, onFechar, onFeito }: { lista: ListaTarefas | null; onFechar: () => void; onFeito: () => void }) {
   const [valor, setValor] = useState("");
   const [gravando, setGravando] = useState(false);

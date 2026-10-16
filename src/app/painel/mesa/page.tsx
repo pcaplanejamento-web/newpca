@@ -1,10 +1,12 @@
-import { MesaPca } from "@/components/MesaPca";
+import { redirect } from "next/navigation";
 import { MesaSistema } from "@/components/MesaSistema";
 import { SeletorMesa } from "@/components/SeletorMesa";
+import { pcasDoAcesso } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { PcaResumo } from "@/lib/dfd";
-import { carregarMesa, carregarMesaDoPca } from "@/lib/mesa-dados";
+import { carregarMesa } from "@/lib/mesa-dados";
 import { getPcaEspaco } from "@/lib/pca-espaco";
+import { linkDaMesa, mesaDoAlvo } from "@/lib/pesquisa";
 import { lerVinculo } from "@/lib/tarefas-core";
 
 export const dynamic = "force-dynamic";
@@ -15,28 +17,30 @@ export const dynamic = "force-dynamic";
 // seguem independentes). `?abrir=protocolo:<id>|dfd:<id>` abre o banner direto (o link do vínculo de uma tarefa); o
 // acesso é conferido pela rota do banner, como no clique.
 
-/** As opções do seletor de Mesa: os PCAs de fonte Protocolos (os únicos com Mesa). */
-const opcoesMesa = (pcas: PcaResumo[]) => pcas.filter((p) => p.fonte === "protocolo").map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
+/** As opções do seletor de Mesa: os PCAs de fonte Protocolos (os únicos com Mesa) que o GRUPO acessa. */
+const opcoesMesa = (pcas: PcaResumo[], permitidos: Set<number> | null) =>
+  pcas.filter((p) => p.fonte === "protocolo" && (!permitidos || permitidos.has(p.id))).map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
 
 export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string; responsavel?: string }> }) {
   const sp = await searchParams;
   // `?pca=<id>` = a MESA DAQUELE PCA (a mesma da aba do espaço), escolhida no seletor da barra; PCA inexistente ou de
   // lista = a Mesa do sistema. Cada uma com o seu portão: a Mesa do PCA exige VISUALIZAR o PCA; a do sistema, a Mesa.
+  const alvo = lerVinculo(sp.abrir);
+  const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
+  // `?pca=<id>` = a Mesa daquele PCA, que é a aba MESA do espaço do PCA: leva para lá (a mesma tela, a mesma trilha),
+  // com o banner pedido (`?abrir=`).
   const idPca = Number(sp.pca);
   const pca = Number.isInteger(idPca) && idPca > 0 ? await getPcaEspaco(idPca) : null;
-  if (pca && pca.fonte === "protocolo") {
-    const rp = await acessoPagina("pca");
-    if (rp.bloqueio) return rp.bloqueio;
-    const mp = await carregarMesaDoPca(rp.acesso.u, pca);
-    return (
-      <MesaPca key={pca.id} {...mp} seletorMesa={<SeletorMesa pcas={opcoesMesa(mp.pcas)} atual={pca.id} sistema={mp.pode.sistema.visualizar} />} />
-    );
+  if (pca && pca.fonte === "protocolo") redirect(`/painel/pca/${pca.id}?aba=mesa${sp.abrir ? `&abrir=${encodeURIComponent(sp.abrir)}` : ""}`);
+  // O alvo do `?abrir=` está na Mesa de um PCA (link antigo, favorito, vínculo): vai à aba Mesa DAQUELE PCA — que tem o
+  // próprio portão de acesso. Nunca abre (nem tenta abrir) o protocolo na Mesa errada.
+  if (sp.abrir && !sp.pca) {
+    const pcaAlvo = await mesaDoAlvo(sp.abrir);
+    if (pcaAlvo) redirect(linkDaMesa(pcaAlvo, sp.abrir));
   }
   const r = await acessoPagina("dfd");
   if (r.bloqueio) return r.bloqueio;
   const m = await carregarMesa(r.acesso.u);
-  const alvo = lerVinculo(sp.abrir);
-  const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;
   // `?responsavel=<id>` (o "Ver na Mesa" da presença): abre filtrada pela pessoa — só para quem vê o Responsável.
   const resp = Number(sp.responsavel);
   const filtroInicial = m.verResponsavel && Number.isInteger(resp) && resp > 0 ? { ...m.filtroInicial, responsavel: resp } : m.filtroInicial;
@@ -45,12 +49,13 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
       // O filtro pela pessoa vindo da URL remonta a Mesa (o filtro é o estado inicial dela).
       key={`sistema:${filtroInicial === m.filtroInicial ? "" : resp}`}
       // As Mesas dos PCAs só para quem visualiza o PCA (senão a opção levaria a "Acesso restrito").
-      seletorMesa={<SeletorMesa pcas={m.pode.pca.visualizar ? opcoesMesa(m.pcas) : []} atual={null} />}
+      seletorMesa={<SeletorMesa pcas={m.pode.pca.visualizar ? opcoesMesa(m.pcas, pcasDoAcesso(r.acesso)) : []} atual={null} />}
       pode={m.pode}
       listas={m.listas}
       reparticoes={m.reparticoes}
       reparticaoAtivaId={m.reparticaoAtivaId}
       pcas={m.pcas}
+      pcasAcesso={m.pcasAcesso}
       regras={m.regras}
       orgaos={m.orgaos}
       pessoas={m.pessoas}

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { dataBR, dataIsoBrasilia, num } from "@/lib/format";
 import { nomeExibicao, type Pessoa } from "@/lib/pessoa";
 import {
+  siglasDaTarefa,
   type CampoTarefa,
   COR_ESTADO_PRAZO,
   COR_PRIORIDADE,
@@ -20,7 +21,10 @@ import {
   rotuloTicket,
   type TarefaResumo,
 } from "@/lib/tarefas-core";
+import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
+import { AutomacoesMesa, useRodarAutomacao } from "./AutomacoesMesa";
 import { Avatar } from "./Avatar";
+import { toast } from "./Toast";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { CelulaLista } from "./CelulaLista";
 import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
@@ -45,6 +49,7 @@ export function TabelaTarefas({
   onSelecao,
   reservaInferior = 0,
   nomeExportacao,
+  automacoes = [],
 }: {
   tarefas: TarefaResumo[];
   /** TODAS as listas (inclusive arquivadas — o nome de qualquer cartão). */
@@ -66,6 +71,8 @@ export function TabelaTarefas({
   reservaInferior?: number;
   /** O nome do arquivo do Exportar do rodapé (ex.: "Tarefas - Quadro X"). */
   nomeExportacao?: string;
+  /** As AUTOMAÇÕES da Mesa (só o ADM): "Emitir DFDs" no rodapé, com os DFDs das tarefas À VISTA (os filtros valem). */
+  automacoes?: { id: number; nome: string }[];
 }) {
   const colunas = useMemo<Column<TarefaResumo>[]>(() => {
     const lista = new Map(listas.map((l) => [l.id, l]));
@@ -137,6 +144,17 @@ export function TabelaTarefas({
       { key: "prazo", header: "Prazo", nowrap: true, filter: "date", value: (t) => t.prazo ?? "", render: (t) => (t.prazo ? `${dataBR(t.prazo)}${t.prazoHora ? ` ${t.prazoHora}` : ""}` : dataBR(t.prazo)) },
       { key: "inicio", header: "Início", nowrap: true, filter: "date", value: (t) => t.inicio ?? "", render: (t) => dataBR(t.inicio) },
       {
+        key: "unidade",
+        header: "Unidade",
+        nowrap: true,
+        value: (t) => siglasDaTarefa(t).join(" · ") || "—",
+        valores: (t) => {
+          const sg = siglasDaTarefa(t);
+          return sg.length ? sg : ["—"];
+        },
+        render: (t) => <CelulaLista valores={siglasDaTarefa(t)} max={2} />,
+      },
+      {
         key: "responsaveis",
         header: "Responsáveis",
         nowrap: true,
@@ -177,7 +195,7 @@ export function TabelaTarefas({
               render: (t: TarefaResumo) => (
                 <span className="inline-flex gap-1">
                   {times(t).map((e) => (
-                    <span key={e.id} className="rounded-full px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
+                    <span key={e.id} className="rounded-chip px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
                       {e.nome}
                     </span>
                   ))}
@@ -198,7 +216,7 @@ export function TabelaTarefas({
         render: (t) => (
           <span className="inline-flex gap-1">
             {marcas(t).map((e) => (
-              <span key={e.id} className="rounded-full px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
+              <span key={e.id} className="rounded-chip px-2 py-px text-[11px] font-semibold" style={{ color: e.cor, background: `color-mix(in srgb, ${e.cor} 14%, var(--surface))` }}>
                 {e.nome}
               </span>
             ))}
@@ -317,6 +335,37 @@ export function TabelaTarefas({
           {num(linhas.length)} {linhas.length === 1 ? "tarefa" : "tarefas"}
         </span>
       )}
+      acoesRodape={automacoes.length ? (linhas) => <EmitirDfdsTarefas tarefas={linhas} automacoes={automacoes} /> : undefined}
+    />
+  );
+}
+
+/** Os vínculos que levam a DFDs (o protocolo = todos os DFDs dele; o DFD; o item = o DFD dele). */
+const TIPOS_DFD = new Set(["protocolo", "dfd", "item"]);
+
+/**
+ * EMITIR DFDs das tarefas À VISTA (os filtros da tabela e do quadro valem): escolhe a automação (só o ADM — as marcadas
+ * "Disponível na Mesa"), resolve os DFDs dos vínculos no servidor e a roda em segundo plano — a MESMA saída da Mesa.
+ */
+function EmitirDfdsTarefas({ tarefas, automacoes }: { tarefas: TarefaResumo[]; automacoes: { id: number; nome: string }[] }) {
+  const rodar = useRodarAutomacao();
+  const vinculos = [...new Map(tarefas.flatMap((t) => t.vinculos.filter((v) => TIPOS_DFD.has(v.tipo)).map((v) => [`${v.tipo}:${v.id}`, { tipo: v.tipo, id: v.id }] as const))).values()];
+  const comDfd = tarefas.filter((t) => t.vinculos.some((v) => TIPOS_DFD.has(v.tipo))).length;
+  if (!comDfd) return null;
+  return (
+    <AutomacoesMesa
+      variante="selecao"
+      rotulo="Emitir DFDs"
+      automacoes={automacoes}
+      alvo={`${num(comDfd)} tarefa(s) à vista com DFD`}
+      onEscolher={async (fluxoId) => {
+        try {
+          const { dfds } = await chamar<{ dfds: { id: number; numero: string; planejamento: string }[] }>("/api/tarefas/dfds", "POST", { vinculos });
+          rodar(fluxoId, dfds);
+        } catch (e) {
+          toast.error((e as Error).message);
+        }
+      }}
     />
   );
 }

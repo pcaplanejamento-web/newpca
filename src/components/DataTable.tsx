@@ -30,15 +30,16 @@ import {
 import { DateFilterHeader } from "./DateFilterHeader";
 import { CabecalhoEdicao, ColunaPresa, useArrastoColunas } from "./EdicaoColunas";
 import { useEditorEdicoes } from "./EdicoesTabela";
-import { useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
+import { useDetalheSigla, useLinhasTabela, useQuemExporta } from "./ConfigTabelas";
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
-import { ehDesktop } from "./espacamento";
+import { definirVarRaiz, ehDesktop } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
 import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
 import { RangeFilterHeader } from "./RangeFilterHeader";
 import { toast } from "./Toast";
+import { Selecao } from "./Selecao";
 
 // Tabela do design system (spec §6.6 + pedidos do usuário): seleção de linhas,
 // **filtro em TODOS os cabeçalhos** — multi-select por padrão (inclusive colunas com VÁRIOS valores
@@ -141,6 +142,7 @@ export function DataTable<R>({
   pageSize,
   footer,
   resumo,
+  onOrdenadas,
   minWidth = 720,
   onRowClick,
   activeKey = null,
@@ -167,6 +169,9 @@ export function DataTable<R>({
   footer?: ReactNode;
   /** Resumo (ex.: somatórios) calculado sobre as linhas FILTRADAS/ordenadas. */
   resumo?: (linhas: R[]) => ReactNode;
+  /** As linhas na ORDEM e com os FILTROS da tabela (todas as páginas), a cada mudança — ex.: a Seleção da automação
+   * segue a sequência da tabela. Quem usa compara antes de gravar (a lista pode chegar igual). */
+  onOrdenadas?: (linhas: R[]) => void;
   minWidth?: number;
   /** Clique na LINHA (abre o item). Ignora cliques em controles (input/select/button/a/label). */
   onRowClick?: (row: R) => void;
@@ -197,8 +202,9 @@ export function DataTable<R>({
   /** Altura (px) RESERVADA no fim do display para algo fixo abaixo da tabela (ex.: a barra de
    * seleção da Mesa) — `scrollInterno`/`fillHeight` descontam, então nada fica por baixo dela. */
   reservaInferior?: number;
-  /** Ações no RODAPÉ da tabela, à esquerda do seletor de linhas (ex.: "Importar protocolo" da Mesa). */
-  acoesRodape?: ReactNode;
+  /** Ações no RODAPÉ da tabela, à esquerda do seletor de linhas (ex.: "Importar protocolo" da Mesa). Em função, recebe as
+   * linhas À VISTA (os filtros das colunas, na ordem) — ex.: "Emitir DFDs" das tarefas filtradas. */
+  acoesRodape?: ReactNode | ((linhas: R[]) => ReactNode);
   /** Mensagem do corpo quando NÃO há linhas (sem dados) — com linhas escondidas pelos filtros das colunas,
    * vale a mensagem padrão dos filtros. */
   vazio?: ReactNode;
@@ -261,8 +267,16 @@ export function DataTable<R>({
     return editor.salvo.ordem ?? { key: null, dir: "asc" };
   });
   const [page, setPage] = useState(1);
+  // MARCAÇÃO da linha (sem selecionar): o 1º clique marca; o 2º clique NA linha marcada abre (`onRowClick`). A linha
+  // aberta ao lado (`activeKey`) já chega marcada.
+  const [marcadaK, setMarcadaK] = useState<Key | null>(null);
+  useEffect(() => {
+    if (activeKey != null) setMarcadaK(activeKey);
+  }, [activeKey]);
   // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
   const linhasAdm = useLinhasTabela();
+  // Colunas de unidade/sigla: o filtro mostra e busca também pelo NOME de cada sigla.
+  const detalheSigla = useDetalheSigla();
   const [limite, setLimite] = useState<number>(linhasAdm);
   // As linhas por página salvas no aparelho (lidas depois da montagem — o HTML do servidor não as conhece).
   useEffect(() => {
@@ -321,14 +335,13 @@ export function DataTable<R>({
   useEffect(() => {
     const el = rodapeRef.current;
     if (!scrollInterno || !el) return;
-    const raiz = document.documentElement.style;
-    const medir = () => raiz.setProperty("--rodape-tabela", `${Math.ceil(el.getBoundingClientRect().height) + FOLGA}px`);
+    const medir = () => definirVarRaiz("--rodape-tabela", `${Math.ceil(el.getBoundingClientRect().height) + FOLGA}px`);
     medir();
     const ro = new ResizeObserver(medir);
     ro.observe(el);
     return () => {
       ro.disconnect();
-      raiz.removeProperty("--rodape-tabela");
+      document.documentElement.style.removeProperty("--rodape-tabela");
     };
   }, [scrollInterno]);
 
@@ -352,11 +365,18 @@ export function DataTable<R>({
     const chaves = rows.map((r) => (col.numero ? col.numero(r) : col.value?.(r)));
     return ordenarIndices(facetas.passam, chaves, sort.dir).map((i) => rows[i]);
   }, [facetas, sort, columns, rows]);
+  const onOrdenadasRef = useRef(onOrdenadas);
+  onOrdenadasRef.current = onOrdenadas;
+  useEffect(() => {
+    onOrdenadasRef.current?.(ordenadas);
+  }, [ordenadas]);
 
   const total = ordenadas.length;
   const pages = tamPagina ? Math.max(1, Math.ceil(total / tamPagina)) : 1;
   const pg = Math.min(page, pages);
   const visiveis = tamPagina ? ordenadas.slice((pg - 1) * tamPagina, pg * tamPagina) : ordenadas;
+  // Altura da linha vazia fora da densidade compacta (a de uma linha de texto com o respiro da célula).
+  const alturaVazia = "calc(1.5rem + 2 * var(--cell-py, 10px))";
 
   const sel = selected ?? new Set<Key>();
   // "Selecionar todos" = TODAS as linhas que passam nos filtros (todas as páginas), não só a página.
@@ -482,6 +502,41 @@ export function DataTable<R>({
   }
   const rolagemRef = useRef<HTMLDivElement>(null);
   const tabelaRef = useRef<HTMLTableElement>(null);
+  // Linhas VAZIAS: completam só até o LIMITE DA VISÃO da tabela (a área que rola, ou até o fim do display) — nunca além
+  // das linhas por página; o conteúdo que já passa da visão não ganha nenhuma.
+  const [cabem, setCabem] = useState(0);
+  useLayoutEffect(() => {
+    const tab = tabelaRef.current;
+    const rolo = rolagemRef.current;
+    if (!tab || !rolo || !tamPagina || visiveis.length === 0) {
+      setCabem(0);
+      return;
+    }
+    const calc = () => {
+      const linha = tab.querySelector("tbody tr")?.getBoundingClientRect().height || 0;
+      const cab = tab.querySelector("thead")?.getBoundingClientRect().height || 0;
+      if (linha < 8) return;
+      let espaco: number;
+      if (cheia) espaco = rolo.clientHeight - cab;
+      else {
+        const corpo = tab.querySelector("tbody");
+        if (!corpo) return;
+        const rod = rodapeRef.current?.getBoundingClientRect().height || 0;
+        espaco = window.innerHeight - corpo.getBoundingClientRect().top - rod - reservaAteORodape(reservaInferior);
+      }
+      const n = Math.max(0, Math.floor(espaco / linha));
+      setCabem((v) => (v === n ? v : n));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    const ro = new ResizeObserver(calc);
+    ro.observe(rolo);
+    return () => {
+      window.removeEventListener("resize", calc);
+      ro.disconnect();
+    };
+  }, [cheia, tamPagina, visiveis.length, reservaInferior]);
+  const preencher = tamPagina && visiveis.length > 0 ? Math.max(0, Math.min(tamPagina, cabem, 200) - visiveis.length) : 0;
   const { arrasto, vista, fantasma, iniciar, mover, congelar } = useArrastoColunas({
     raiz: wrapRef,
     rolagem: rolagemRef,
@@ -533,7 +588,9 @@ export function DataTable<R>({
       estilo: { ...(w ? larguraFixa(w) : {}), ...(fixa ? { left: fixos[p] } : {}) } as CSSProperties,
     };
   };
-  const selFixa = nFix > 0;
+  // A coluna de MARCAÇÃO fica SEMPRE presa à esquerda ao rolar de lado (com ou sem congeladas); sem congeladas, a divisa é dela.
+  const selFixa = selectable;
+  const divisaSel = selFixa && nFix === 0 ? DIVISA : "";
   const ordenarPor = (k: string) => setSort((o) => ({ key: k, dir: o.key === k && o.dir === "asc" ? "desc" : "asc" }));
 
   return (
@@ -541,7 +598,7 @@ export function DataTable<R>({
       ref={wrapRef}
       // `overflow-clip` (e não `hidden`) na rolagem interna: recorta os cantos SEM virar contêiner de rolagem — o rodapé
       // pode grudar na tela no celular (abaixo).
-      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} rounded-card border border-border bg-surface shadow-ring`}
+      className={`${scrollInterno ? "flex flex-col overflow-clip" : "overflow-hidden"} isolate rounded-card border border-border bg-surface shadow-ring`}
       style={{ ...(densPy ? ({ "--cell-py": densPy } as CSSProperties) : {}), ...(cheia ? { height: altura } : {}) }}
       // A altura do HTML do servidor é posta pelo trecho abaixo ANTES da hidratação (ela não é do React ainda).
       suppressHydrationWarning={scrollInterno}
@@ -550,11 +607,13 @@ export function DataTable<R>({
         ref={rolagemRef}
         className={`overflow-x-auto ${scrollInterno ? `overflow-y-auto ${visiveis.length > 0 ? "lg:min-h-0 lg:flex-1" : "lg:flex-none"}` : ""}`}
       >
-        <table ref={tabelaRef} className="w-full border-collapse text-sm" style={{ minWidth }}>
-          <thead className={`border-b border-border bg-surface-2 ${scrollInterno ? "sticky top-0 z-10" : ""}`}>
+        {/* `border-separate` (bordas nas CÉLULAS): com `border-collapse`, as células presas (`sticky`) tremem e as bordas
+            "escorregam" ao rolar de lado — o Safari e o Chrome não prendem a borda colapsada junto da célula. */}
+        <table ref={tabelaRef} className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth }}>
+          <thead className={`bg-surface-2 [&_th]:border-b [&_th]:border-border ${scrollInterno ? "sticky top-0 z-30" : ""}`}>
             <tr>
               {selectable && (
-                <th className={`w-10 px-3 ${headPy} ${selFixa ? "sticky left-0 z-20 bg-surface-2" : ""}`}>
+                <th className={`w-10 px-3 ${headPy} ${selFixa ? `sticky left-0 z-20 bg-surface-2 ${divisaSel}` : ""}`}>
                   <input
                     type="checkbox"
                     aria-label={todos ? `Desmarcar todos (${total})` : `Selecionar todos (${total})`}
@@ -564,7 +623,7 @@ export function DataTable<R>({
                       if (el) el.indeterminate = parcial;
                     }}
                     onChange={alternarTodos}
-                    className="h-4 w-4 accent-[var(--accent)]"
+                    className="caixa-marcar"
                   />
                 </th>
               )}
@@ -588,6 +647,7 @@ export function DataTable<R>({
                   opcoes.length > 0 || marcado ? (
                     <MultiSelectHeader
                       label={c.header}
+                      detalhe={detalheSigla(c.header)}
                       options={opcoes}
                       value={externo.valor}
                       onApply={(v) => {
@@ -627,6 +687,7 @@ export function DataTable<R>({
                 ) : tipo === "values" && (opcoes.length > 0 || marcado) ? (
                   <MultiSelectHeader
                     label={c.header}
+                    detalhe={detalheSigla(c.header)}
                     options={opcoes}
                     value={(filters[c.key] as string[] | undefined) ?? []}
                     onApply={(v) => aplicarFiltro(c.key, normalizarSelecao(v, opcoes))}
@@ -679,45 +740,49 @@ export function DataTable<R>({
             </tr>
           </thead>
           <tbody>
-            {visiveis.map((r) => {
+            {visiveis.map((r, i) => {
               const k = getKey(r);
               const marcada = sel.has(k);
-              const ativa = activeKey != null && k === activeKey;
+              const ativa = k === marcadaK || (activeKey != null && k === activeKey);
               return (
                 <tr
                   key={k}
-                  onClick={
-                    onRowClick
-                      ? (e) => {
-                          if ((e.target as HTMLElement).closest("input,select,button,a,label")) return;
-                          onRowClick(r);
-                        }
-                      : undefined
-                  }
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("input,select,textarea,button,a,label")) return;
+                    // 1º clique MARCA; o 2º, na linha já marcada, ABRE.
+                    if (ativa && onRowClick) onRowClick(r);
+                    else setMarcadaK(k);
+                  }}
                   onKeyDown={
                     onRowClick
                       ? (e) => {
                           // Enter num controle DENTRO da célula (dropdown, botão…) é dele — não abre a linha.
                           if (e.key !== "Enter" || (e.target as HTMLElement).closest("input,select,textarea,button,a,label")) return;
+                          setMarcadaK(k);
                           onRowClick(r);
                         }
                       : undefined
                   }
-                  {...(onRowClick ? { role: "button", tabIndex: 0 } : {})}
+                  {...(onRowClick ? { role: "button", tabIndex: 0, "aria-pressed": ativa } : {})}
                   style={{ height: alturaLinha, ...(ativa ? { boxShadow: "inset 3px 0 0 var(--accent)" } : {}) }}
-                  // Com colunas congeladas a linha tem fundo OPACO (as células presas herdam — nada aparece por baixo).
-                  className={`group/linha border-b border-border transition-colors last:border-0 hover:bg-surface-2 ${
-                    onRowClick ? "cursor-pointer" : ""
-                  } ${ativa || (marcada && selFixa) ? "bg-accent-soft" : marcada ? "bg-accent-soft/60" : selFixa ? "bg-surface" : ""}`}
+                  // Fundo sempre OPACO (as células presas herdam): marcada = accent; selecionada = accent suave; senão as
+                  // linhas INTERCALADAS (`--zebra`, a cor da Aparência).
+                  className={`group/linha cursor-pointer transition-colors [&>td]:border-b [&>td]:border-border ${
+                    ativa
+                      ? "bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))]"
+                      : marcada
+                        ? "bg-accent-soft hover:bg-surface-2"
+                        : `${i % 2 ? "bg-zebra" : "bg-surface"} hover:bg-surface-2`
+                  }`}
                 >
                   {selectable && (
-                    <td className={`w-10 px-3 ${selFixa ? "sticky left-0 z-10 bg-inherit" : ""}`}>
+                    <td className={`w-10 px-3 ${selFixa ? `sticky left-0 z-10 bg-inherit ${divisaSel}` : ""}`}>
                       <input
                         type="checkbox"
                         aria-label="Selecionar linha"
                         checked={marcada}
                         onChange={() => alternar(k)}
-                        className="h-4 w-4 accent-[var(--accent)]"
+                        className="caixa-marcar"
                       />
                     </td>
                   )}
@@ -739,6 +804,16 @@ export function DataTable<R>({
                 </tr>
               );
             })}
+            {/* A página SEMPRE cheia: linhas VAZIAS completam as que faltam (sem seleção, sem clique, fora da leitura). */}
+            {Array.from({ length: preencher }, (_, n) => (
+              <tr
+                key={`vazia-${n}`}
+                style={{ height: alturaLinha ?? alturaVazia }}
+                className={`[&>td]:border-b [&>td]:border-border ${(visiveis.length + n) % 2 ? "bg-zebra" : "bg-surface"}`}
+              >
+                <td colSpan={exibidas.length + (selectable ? 1 : 0)} />
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -788,11 +863,11 @@ export function DataTable<R>({
           {nomeExportar && (
             <BotaoExportar nome={nomeExportar} disabled={ordenadas.length === 0} carregando={exportando} onExportar={(f) => void exportarTabela(f)} />
           )}
-          {acoesRodape}
+          {typeof acoesRodape === "function" ? acoesRodape(ordenadas) : acoesRodape}
           {(scrollInterno || linhasSalvas) && (
             <label className="flex items-center gap-1.5 text-[12px] text-muted">
               <span className="hidden sm:inline">Linhas</span>
-              <select
+              <Selecao
                 aria-label="Linhas por página"
                 value={limite}
                 onChange={(e) => {
@@ -810,7 +885,7 @@ export function DataTable<R>({
                     {n}
                   </option>
                 ))}
-              </select>
+              </Selecao>
             </label>
           )}
           {tamPagina && <Pager page={pg} pages={pages} onChange={setPage} />}

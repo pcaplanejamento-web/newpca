@@ -4,6 +4,7 @@ import {
   IconAtribuir,
   IconAutomacao,
   IconCadastro,
+  IconLock,
   IconCalendar,
   IconCheck,
   IconClipboard,
@@ -37,6 +38,7 @@ export const VISUAL_AVISO: Record<TipoNotificacao | "acesso", { Icone: Component
   centi: { Icone: IconRobo, cor: "var(--accent)", rotulo: "Centi" },
   comunicado: { Icone: IconMegafone, cor: "var(--accent)", rotulo: "Comunicados" },
   versao: { Icone: IconNovidades, cor: "var(--accent)", rotulo: "Versões" },
+  seguranca: { Icone: IconLock, cor: "var(--danger)", rotulo: "Segurança" },
   cadastro: { Icone: IconCadastro, cor: "var(--accent)", rotulo: "Cadastros" },
   acesso: { Icone: IconCadastro, cor: "var(--ok)", rotulo: "Acesso liberado" },
 };

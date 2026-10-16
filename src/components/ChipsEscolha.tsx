@@ -10,14 +10,17 @@ export function ChipsEscolha<T extends string>({
   valor = null,
   onEscolher,
   ariaLabel,
+  rolar = false,
 }: {
-  opcoes: { value: T; label: string }[];
+  opcoes: { value: T; label: string; conta?: number }[];
   valor?: T | null;
   onEscolher: (v: T) => void;
   ariaLabel: string;
+  /** Numa linha só, rolando de lado (barras estreitas — ex.: os filtros da pesquisa), em vez de quebrar; o respiro de baixo deixa a barra de rolagem ABAIXO dos chips (nunca sobre eles). */
+  rolar?: boolean;
 }) {
   return (
-    <fieldset aria-label={ariaLabel} className="flex min-w-0 flex-wrap gap-1.5">
+    <fieldset aria-label={ariaLabel} className={`flex min-w-0 gap-1.5 ${rolar ? "flex-nowrap overflow-x-auto pb-3" : "flex-wrap"}`}>
       {opcoes.map((o) => {
         const ativo = o.value === valor;
         return (
@@ -26,11 +29,12 @@ export function ChipsEscolha<T extends string>({
             type="button"
             aria-pressed={valor == null ? undefined : ativo}
             onClick={() => onEscolher(o.value)}
-            className={`min-h-11 rounded-control border px-3 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8 ${
+            className={`min-h-11 shrink-0 whitespace-nowrap ${rolar ? "animate-chip-entra" : ""} rounded-control border px-3 text-[13px] font-medium transition-colors duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-h-8 ${
               ativo ? "border-accent bg-accent-soft text-accent" : "border-border-2 bg-surface text-text-2 hover:bg-surface-2"
             }`}
           >
             {o.label}
+            {o.conta != null && <span className={`ml-1.5 tabular-nums ${ativo ? "text-accent" : "text-muted"}`}>{o.conta >= 50 ? "50+" : o.conta}</span>}
           </button>
         );
       })}

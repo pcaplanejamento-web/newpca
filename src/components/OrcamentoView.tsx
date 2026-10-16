@@ -8,7 +8,7 @@ import { ImportarOrcamento } from "./ImportarOrcamento";
 import { OrcamentoCard, OrcamentoNovoCard } from "./OrcamentoCard";
 
 /**
- * Módulo ORÇAMENTO (relatório CUBO) — a LISTA: um card 4:5 por orçamento importado (`OrcamentoCard`: ano, nome,
+ * Módulo ORÇAMENTO (relatório CUBO) — a LISTA: um card por orçamento importado (`OrcamentoCard`: ano, nome,
  * indicadores) + o card "+" (quem importa) que abre a importação (`ImportarOrcamento`: `.xlsx` lido no cliente + o ANO). Clicar
  * num card abre a TELA DO ORÇAMENTO (`/painel/orcamento/[id]`: Lançamentos · Vínculos · Visões); ao importar, a
  * tela do orçamento novo abre sozinha. 100% design-system.
@@ -32,7 +32,7 @@ export function OrcamentoView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div>
+      <div className="linha-topico">
         <h1 className="text-xl font-bold text-text">Orçamento</h1>
         <p className="text-sm text-muted">
           {orcamentos.length} {orcamentos.length === 1 ? "orçamento" : "orçamentos"} · {num(totalLancamentos)}{" "}
@@ -42,12 +42,12 @@ export function OrcamentoView({
       </div>
 
       {orcamentos.length === 0 && !podeImportar ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">{filtro ? `Nenhum orçamento do ano do ${filtro}.` : "Nenhum orçamento ainda."}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-[var(--gap-block)]">
           {orcamentos.map((o) => (
             <OrcamentoCard key={o.id} orcamento={o} href={`/painel/orcamento/${o.id}`} />
           ))}

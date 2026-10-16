@@ -99,14 +99,48 @@ export function equipesDasLinhas(linhas: { tarefaId: number; equipeId: number; u
 }
 
 /** A que parte do sistema a tarefa se liga — também a OUTRA TAREFA (o vínculo entre tarefas vale nos dois sentidos). */
-export const TIPOS_VINCULO = ["protocolo", "dfd", "pca", "orcamento", "tarefa"] as const;
+export const TIPOS_VINCULO = ["protocolo", "dfd", "item", "pca", "orcamento", "tarefa"] as const;
 export type TipoVinculo = (typeof TIPOS_VINCULO)[number];
-export const ROTULO_VINCULO: Record<TipoVinculo, string> = { protocolo: "Protocolo", dfd: "DFD", pca: "PCA", orcamento: "Orçamento", tarefa: "Tarefa" };
+export const ROTULO_VINCULO: Record<TipoVinculo, string> = { protocolo: "Protocolo", dfd: "DFD", item: "Item", pca: "PCA", orcamento: "Orçamento", tarefa: "Tarefa" };
+
+/**
+ * O ITEM de DFD no vínculo = o DFD + o Nº DO ITEM (`dfdId × 1.000.000 + nº`) — estável: o id da linha do item muda a cada
+ * regravação do DFD (apaga e reinsere), o nº do item não.
+ */
+export const BASE_VINCULO_ITEM = 1_000_000;
+export const idVinculoItem = (dfdId: number, item: number) => dfdId * BASE_VINCULO_ITEM + item;
+export const itemDoVinculo = (alvo: number) => ({ dfdId: Math.floor(alvo / BASE_VINCULO_ITEM), item: alvo % BASE_VINCULO_ITEM });
 /**
  * O vínculo (`rotulo` = o nº/nome do alvo, resolvido no servidor; ausente = o alvo foi excluído). Na TAREFA vinculada:
  * `quadroId` (o link), `detalhe` (quadro › lista), `prazo` e `concluida`.
  */
-export type VinculoTarefa = { tipo: TipoVinculo; id: number; rotulo?: string | null; detalhe?: string | null; quadroId?: number | null; prazo?: string | null; concluida?: boolean };
+export type VinculoTarefa = {
+  tipo: TipoVinculo;
+  id: number;
+  rotulo?: string | null;
+  detalhe?: string | null;
+  quadroId?: number | null;
+  prazo?: string | null;
+  concluida?: boolean;
+  /** A SIGLA da unidade do protocolo/DFD/item vinculado (resolvida no servidor; sem unidade = ausente). */
+  sigla?: string | null;
+};
+
+const ORDEM_MESA: Partial<Record<TipoVinculo, number>> = { protocolo: 0, dfd: 1, item: 2 };
+/** Os NÚMEROS da Mesa a que a tarefa se liga (protocolo › DFD › item, sem repetir) — os selos do cartão. O alvo excluído
+ * (sem rótulo) fica de fora. */
+export function numerosMesa(vinculos: readonly Pick<VinculoTarefa, "tipo" | "id" | "rotulo">[]): { chave: string; tipo: TipoVinculo; texto: string }[] {
+  const vistos = new Set<string>();
+  return vinculos
+    .filter((v) => ORDEM_MESA[v.tipo] != null && v.rotulo)
+    .sort((x, y) => (ORDEM_MESA[x.tipo] ?? 0) - (ORDEM_MESA[y.tipo] ?? 0))
+    .map((v) => ({ chave: `${v.tipo}:${v.id}`, tipo: v.tipo, texto: v.tipo === "protocolo" ? `Prot. ${v.rotulo}` : v.tipo === "dfd" ? `DFD ${v.rotulo}` : `Item ${itemDoVinculo(v.id).item}` }))
+    .filter((n) => !vistos.has(n.chave) && vistos.add(n.chave) != null);
+}
+
+/** As SIGLAS das unidades dos protocolos/DFDs/itens a que a tarefa se liga (sem repetir, em ordem alfabética). */
+export const siglasDaTarefa = (t: { vinculos?: Pick<VinculoTarefa, "sigla">[] }): string[] =>
+  [...new Set((t.vinculos ?? []).map((v) => v.sigla?.trim()).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, "pt-BR"));
 /** Teto de vínculos por tarefa. */
 export const MAX_VINCULOS = 20;
 export const chaveVinculo = (v: { tipo: string; id: number }) => `${v.tipo}:${v.id}`;
@@ -135,12 +169,14 @@ export function vinculosPorTarefa(linhas: { tarefaId: number; tipo: string; alvo
 
 export const ehTipoVinculo = (v: unknown): v is TipoVinculo => typeof v === "string" && (TIPOS_VINCULO as readonly string[]).includes(v);
 
-/** Para onde o vínculo leva: protocolo/DFD abrem o banner na Mesa (`?abrir=`); PCA e orçamento, o espaço deles; a
+/** Para onde o vínculo leva: protocolo/DFD abrem o banner na Mesa (`?abrir=`; o item, o DFD dele); PCA e orçamento, o espaço deles; a
  * tarefa, o quadro dela com a tarefa aberta. */
 export function hrefVinculo(v: { tipo: TipoVinculo; id: number; quadroId?: number | null }): string {
   if (v.tipo === "tarefa") return v.quadroId ? `/painel/tarefas/${v.quadroId}?tarefa=${v.id}` : "/painel/tarefas";
   if (v.tipo === "pca") return `/painel/pca/${v.id}`;
   if (v.tipo === "orcamento") return `/painel/orcamento/${v.id}`;
+  // O item abre o DFD dele na Mesa.
+  if (v.tipo === "item") return `/painel/mesa?abrir=dfd:${itemDoVinculo(v.id).dfdId}`;
   return `/painel/mesa?abrir=${v.tipo}:${v.id}`;
 }
 
@@ -183,7 +219,8 @@ export function mencoesDoTexto(texto: string, pessoas: { id: number; nome: strin
   return [...ids];
 }
 
-export type ListaTarefas = { id: number; nome: string; ordem: number; limiteWip: number | null; concluida: boolean; arquivada: boolean };
+/** `responsavelId` = a pessoa atribuída à lista (a tarefa nova nela nasce com ela como responsável). */
+export type ListaTarefas = { id: number; nome: string; ordem: number; limiteWip: number | null; concluida: boolean; arquivada: boolean; responsavelId?: number | null };
 export type EtiquetaTarefa = { id: number; nome: string; cor: string };
 
 export const rotuloTicket = (n: number) => `#${n}`;
@@ -340,15 +377,23 @@ export type FiltroTarefas = {
   status: StatusFiltro;
   /** Os campos personalizados do tipo LISTA: id do campo → as opções escolhidas. */
   campos: Record<number, string[]>;
+  /** As SIGLAS das unidades dos vínculos (protocolo/DFD/item) e/ou "sem" (tarefa sem unidade). */
+  siglas: string[];
+  /** Os NÚMEROS da Mesa (chaves "protocolo:9" · "dfd:5" · "item:…") — o filtro da lista. */
+  mesa: string[];
   busca: string;
 };
-export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", campos: {}, busca: "" };
+/** O valor do filtro de sigla para a tarefa SEM unidade nos vínculos. */
+export const SEM_SIGLA = "sem";
+export const FILTRO_TAREFAS_PADRAO: FiltroTarefas = { responsaveis: [], prazos: [], prioridades: [], etiquetas: [], status: "todas", campos: {}, siglas: [], mesa: [], busca: "" };
 /** Quantos filtros estão ligados (cada valor conta; a busca conta 1) — o número do botão "Filtrar". */
 export const contarFiltros = (f: FiltroTarefas) =>
   f.responsaveis.length +
   f.prazos.length +
   f.prioridades.length +
   f.etiquetas.length +
+  f.siglas.length +
+  (f.mesa?.length ?? 0) +
   Object.values(f.campos).reduce((n, v) => n + v.length, 0) +
   (f.status !== "todas" ? 1 : 0) +
   (f.busca.trim() ? 1 : 0);
@@ -373,6 +418,7 @@ export const alternarValor = <V>(lista: V[], v: V): V[] => (lista.includes(v) ? 
 /** O que o filtro olha num cartão (o do quadro e o do calendário de todos os quadros). */
 export type TarefaFiltravel = Pick<TarefaResumo, "envolvidos" | "prioridade" | "etiquetas" | "prazo" | "concluidaEm" | "titulo" | "ticket"> & {
   template?: boolean;
+  vinculos?: (Pick<VinculoTarefa, "sigla"> & Partial<Pick<VinculoTarefa, "tipo" | "id">>)[];
   campos?: Record<number, string>;
 };
 
@@ -405,6 +451,11 @@ export function filtrarTarefas<T extends TarefaFiltravel>(tarefas: T[], f: Filtr
     if (f.status === "abertas" && t.concluidaEm != null) return false;
     if (f.status === "concluidas" && t.concluidaEm == null) return false;
     if (f.prazos.length && !f.prazos.some((p) => casaPrazo(t, p, ctx.hoje))) return false;
+    if (f.siglas.length) {
+      const sg = siglasDaTarefa(t);
+      if (!f.siglas.some((x) => (x === SEM_SIGLA ? sg.length === 0 : sg.includes(x)))) return false;
+    }
+    if (f.mesa?.length && !(t.vinculos ?? []).some((v) => f.mesa.includes(`${v.tipo}:${v.id}`))) return false;
     for (const [id, vals] of Object.entries(f.campos)) if (vals.length && !vals.includes(t.campos?.[Number(id)] ?? "")) return false;
     return !casa || casa([t.titulo, rotuloTicket(t.ticket), String(t.ticket)]);
   });
@@ -866,6 +917,7 @@ export const TIPOS_NOTIFICACAO = [
   "centi",
   "comunicado",
   "versao",
+  "seguranca",
 ] as const;
 export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
 
@@ -1971,3 +2023,21 @@ export const temOculto = (o: OcultosCalendario) => o.tarefas.length + o.quadros.
 export const eventoVisivel = (e: Pick<EventoCalendario, "tarefaId" | "quadroId" | "tipo" | "pca" | "externo">, o: OcultosCalendario) =>
   !o.tipos.includes(e.tipo) &&
   (e.pca ? !o.pcas.includes(e.pca.pcaId) : e.externo ? !o.externos.includes(e.externo.agendaId) : !o.quadros.includes(e.quadroId) && !o.tarefas.includes(e.tarefaId));
+
+/** As OPÇÕES do filtro de UMA lista, tiradas dos cartões dela: as pessoas envolvidas, as siglas e os números da Mesa. */
+export function opcoesFiltroLista(tarefas: readonly Pick<TarefaResumo, "envolvidos" | "vinculos">[]) {
+  const pessoas = new Set<number>();
+  const siglas = new Set<string>();
+  const mesa = new Map<string, { chave: string; tipo: TipoVinculo; texto: string }>();
+  for (const t of tarefas) {
+    for (const p of t.envolvidos) pessoas.add(p);
+    for (const sg of siglasDaTarefa(t)) siglas.add(sg);
+    for (const n of numerosMesa(t.vinculos)) mesa.set(n.chave, n);
+  }
+  const ordem: Partial<Record<TipoVinculo, number>> = { protocolo: 0, dfd: 1, item: 2 };
+  return {
+    pessoas: [...pessoas],
+    siglas: [...siglas].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    mesa: [...mesa.values()].sort((a, b) => (ordem[a.tipo] ?? 0) - (ordem[b.tipo] ?? 0) || a.texto.localeCompare(b.texto, "pt-BR", { numeric: true })),
+  };
+}

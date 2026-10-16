@@ -2,12 +2,23 @@ import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { vinculoResponsavelPatchSchema } from "@/lib/rbac-validation";
-import { atualizarVinculo, conflitoDoVinculo, excluirVinculo, getPessoa, getVinculo } from "@/lib/responsaveis";
-import { motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
+import { hojeISO } from "@/lib/reparticao-responsaveis";
+import {
+  atualizarVinculo,
+  cargoParaGravar,
+  conflitoDoVinculo,
+  excluirVinculo,
+  getPessoa,
+  alvoParaGravar,
+  getVinculo,
+  MSG_CARGO_FORA,
+} from "@/lib/responsaveis";
+import { motivoNaoVincular, motivoVinculoInvalido, normalizarVinculo, rotuloVinculo } from "@/lib/responsaveis-planilha-core";
 
 export const dynamic = "force-dynamic";
 
-/** Edita o vínculo (tipo, função, nomeação, período — ou troca a pessoa). O alvo não muda (remova e vincule de novo). */
+/** Edita o vínculo (tipo, cargo do temporário, nomeação, período, a pessoa e ONDE RESPONDE — o alvo novo tem de valer
+ * pela regra do órgão — o pedido vai ao lugar que VALE, `aviso` quando não é o pedido). O cargo fora da lista só fica quando já era o do vínculo (dado antigo). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAdmin();
   if ("erro" in g) return g.erro;
@@ -17,24 +28,37 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("resp" in p) return p.resp;
   const antes = await getVinculo(id);
   if (!antes) return erro("Vínculo não encontrado.", 404);
-  const d = { ...p.data, ...normalizarVinculo(p.data) };
-  const invalido = motivoVinculoInvalido(d);
+  const { orgaoId: oNovo, reparticaoId: uNovo, ...dados } = p.data;
+  const pedido =
+    oNovo === undefined && uNovo === undefined ? { orgaoId: antes.orgaoId, reparticaoId: antes.reparticaoId } : { orgaoId: oNovo ?? null, reparticaoId: uNovo ?? null };
+  // SEMPRE no lugar que vale pela regra do órgão — também sem troca (o vínculo antigo no lugar errado é corrigido aqui).
+  const lugar = await alvoParaGravar(pedido);
+  if ("erro" in lugar) return erro(lugar.erro, 422);
+  const alvo = lugar.alvo;
+  const mudouAlvo = alvo.orgaoId !== antes.orgaoId || alvo.reparticaoId !== antes.reparticaoId;
+  const n = { ...dados, ...normalizarVinculo(dados) };
+  const invalido = motivoVinculoInvalido(n);
   if (invalido) return erro(invalido, 422);
+  const funcao = await cargoParaGravar(n.funcao, antes.funcao);
+  if (funcao == null) return erro(MSG_CARGO_FORA, 422);
+  const d = { ...n, funcao };
   const pessoa = await getPessoa(d.responsavelId);
   if (!pessoa) return erro("Pessoa não encontrada na planilha.", 422);
-  const conflito = await conflitoDoVinculo({ ...d, id, orgaoId: antes.orgaoId, reparticaoId: antes.reparticaoId });
+  const exonerada = motivoNaoVincular(pessoa, d, hojeISO(), d.responsavelId !== antes.responsavelId || mudouAlvo);
+  if (exonerada) return erro(exonerada, 409);
+  const conflito = await conflitoDoVinculo({ ...d, id, ...alvo });
   if (conflito) return erro(conflito, 409);
-  await atualizarVinculo(id, d);
+  await atualizarVinculo(id, d, mudouAlvo ? alvo : undefined);
   await registrarAuditoria({
     usuario: g.u,
     acao: "editar",
     entidade: "responsavel",
     entidadeId: d.responsavelId,
-    resumo: `Vínculo de ${pessoa.nome} editado — ${rotuloVinculo(d)}`,
+    resumo: `Vínculo de ${pessoa.nome} editado — ${rotuloVinculo(d)}${mudouAlvo ? " (onde responde alterado)" : ""}`,
     antes,
-    depois: d,
+    depois: { ...d, ...alvo },
   });
-  return ok();
+  return ok({ aviso: lugar.aviso });
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {

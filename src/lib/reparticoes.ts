@@ -155,3 +155,14 @@ export async function unidadeDeTrabalhoValida(id: number): Promise<boolean> {
     .limit(1);
   return !!r;
 }
+
+/** SIGLA → NOME de todas as unidades e órgãos (o filtro das colunas de unidade/sigla nas tabelas). Leve: só 2 colunas. */
+export async function nomesDasSiglas(): Promise<Record<string, string>> {
+  const [us, os] = await Promise.all([
+    getDb().select({ c: reparticoes.codigo, n: reparticoes.nome }).from(reparticoes),
+    getDb().select({ c: orgaos.sigla, n: orgaos.nome }).from(orgaos),
+  ]);
+  const out: Record<string, string> = {};
+  for (const l of [...os, ...us]) if (l.c && l.n && l.c !== l.n && l.c !== "GERAL") out[l.c] = l.n;
+  return out;
+}

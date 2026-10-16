@@ -80,7 +80,7 @@ import { VendoAgora } from "./VendoAgora";
  * dia do calendário) ou uma existente.
  */
 export type AberturaTarefa =
-  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; prazo?: string }
+  | { tipo: "nova"; listaId: number; vinculo?: Vinculo | null; vinculos?: Vinculo[]; prazo?: string; titulo?: string }
   | { tipo: "editar"; id: number; focoTitulo?: boolean };
 
 type Rascunho = {
@@ -131,7 +131,7 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 
 /**
  * DETALHE de uma tarefa (criar e editar) num banner — a distribuição do TRELLO: o CÍRCULO de concluir + o TÍTULO no
- * lugar, a lista, a fileira **+ Adicionar** (`MenuAdicionarCartao`), a FAIXA DE METADADOS (Membros · Etiquetas · Datas ·
+ * lugar, a lista, a LINHA **Adicionar** FIXA acima do rodapé (`MenuAdicionarCartao` — cada componente disponível), a FAIXA DE METADADOS (Membros · Etiquetas · Datas ·
  * Prioridade · Estimativa — aparecem quando têm dado ou foram acrescentadas; tocar abre o editor logo abaixo), a
  * DESCRIÇÃO formatada (lida formatada, editada no lugar) e os BLOCOS do corpo (Checklists · Notas · Links · Eventos ·
  * Vínculo — alça e ↑/↓ reordenam). "Salvar" manda SÓ o que mudou; o CHECKLIST da tarefa gravada grava na hora (otimista,
@@ -158,6 +158,7 @@ export function TarefaDetalhe({
   onDuplicar,
   onFechar,
   onSalvo,
+  onCriada,
   esquerda,
 }: {
   aberto: AberturaTarefa | null;
@@ -189,6 +190,8 @@ export function TarefaDetalhe({
   onFechar: () => void;
   /** Algo foi gravado — o quadro recarrega (contagens do cartão). */
   onSalvo: () => void;
+  /** A tarefa NOVA foi criada (o id): o host a reabre para editar (sem ele, o banner fecha). */
+  onCriada?: (id: number) => void;
   /** Painéis À ESQUERDA do banner (ex.: o evento do Calendário que abriu a tarefa) — o banner da tarefa fica por cima no
    * celular e o Esc volta a eles. */
   esquerda?: ModalPainel[];
@@ -268,7 +271,7 @@ export function TarefaDetalhe({
           tituloManual: !!existente.tituloManual,
         }
       : {
-          titulo: "",
+          titulo: aberto.tipo === "nova" ? (aberto.titulo ?? "") : "",
           listaId: aberto.tipo === "nova" ? aberto.listaId : (listas[0]?.id ?? 0),
           prioridade: "media",
           inicio: "",
@@ -276,11 +279,12 @@ export function TarefaDetalhe({
           prazoHora: "",
           lembreteMin: null,
           estimativa: "",
-          pessoas: [],
+          // A lista ATRIBUÍDA a uma pessoa: a tarefa nova nela já nasce com a pessoa como responsável.
+          pessoas: ((r) => (r != null ? [r] : []))(aberto.tipo === "nova" ? listas.find((l) => l.id === aberto.listaId)?.responsavelId : null),
           observadores: [],
           equipes: [],
           etiquetas: [],
-          vinculos: aberto.tipo === "nova" && aberto.vinculo ? [aberto.vinculo] : [],
+          vinculos: aberto.tipo !== "nova" ? [] : aberto.vinculos?.length ? aberto.vinculos : aberto.vinculo ? [aberto.vinculo] : [],
           descricao: "",
           recorrencia: null,
           checklists: [],
@@ -380,8 +384,10 @@ export function TarefaDetalhe({
     if (!pode) return;
     setSalvando("salvar");
     try {
+      let criada: number | null = null;
       if (nova) {
-        await chamar("/api/tarefas", "POST", {
+        criada = (
+          await chamar<{ id: number }>("/api/tarefas", "POST", {
           quadroId,
           listaId: r.listaId,
           titulo: r.titulo.trim(),
@@ -403,7 +409,8 @@ export function TarefaDetalhe({
           blocos: blocosParaGravar(r.blocos),
           campos: Object.entries(r.campos).map(([c, v]) => ({ campoId: Number(c), valor: v })),
           tituloManual: r.tituloManual,
-        });
+          })
+        ).id;
         toast.success("Tarefa criada.");
       } else if (existente) {
         const d: Record<string, unknown> = {};
@@ -434,7 +441,9 @@ export function TarefaDetalhe({
         toast.success(concluir == null ? "Tarefa salva." : concluir ? "Tarefa concluída." : "Tarefa reaberta.");
       }
       onSalvo();
-      onFechar();
+      // Criada FORA do quadro (a Mesa): segue aberta para editar ali mesmo.
+      if (criada != null && onCriada) onCriada(criada);
+      else onFechar();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -887,8 +896,23 @@ export function TarefaDetalhe({
         }
         cabecalho={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {existente ? <Badge tone="blue">{rotuloTicket(existente.ticket)}</Badge> : <Badge>Nova</Badge>}
-            <h2 className="min-w-0 truncate text-base font-semibold text-text">{nova ? "Nova tarefa" : existente?.titulo}</h2>
+            {existente && !existente.template && !existente.arquivada && (
+              <CirculoConcluir concluida={concluida} tamanho="md" rotulo={concluida ? "Reabrir a tarefa" : "Concluir a tarefa"} disabled={!pode || somenteLeitura} onAlternar={() => salvar(!concluida)} />
+            )}
+            {existente ? <Badge tone="blue" tamanho="linha">{rotuloTicket(existente.ticket)}</Badge> : <Badge tamanho="linha">Nova</Badge>}
+            {/* O TÍTULO é editado no próprio cabeçalho (sem campo repetido no corpo). */}
+            {somenteLeitura ? (
+              <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text">{existente?.titulo}</h2>
+            ) : (
+              <div className="flex min-w-[12rem] flex-1 items-center">
+                <TituloNoLugar
+                  valor={r.titulo}
+                  focar={nova || (aberto.tipo === "editar" && !!aberto.focoTitulo)}
+                  cursorNoFim={aberto.tipo === "editar" && !!aberto.focoTitulo}
+                  onChange={setTitulo}
+                />
+              </div>
+            )}
             {existente?.arquivada && <Badge>Arquivada</Badge>}
             {existente?.template && <Badge tone="violet">Template</Badge>}
             {concluida && (
@@ -900,6 +924,19 @@ export function TarefaDetalhe({
           </div>
         }
         rodape={
+          <div className="space-y-2">
+          {!somenteLeitura && (
+            <MenuAdicionarCartao
+              metadados={TIPOS_METADADO.filter((t) => !metaVisiveis.includes(t))}
+              blocos={blocosDisponiveis(r.blocos)}
+              disabled={carregando}
+              onMetadado={(t) => {
+                setMetaExtras((m) => [...m, t]);
+                setMetaEditando(t);
+              }}
+              onBloco={(t) => setBlocos((l) => adicionarBloco(l, t))}
+            />
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {existente && !somenteLeitura && (
               <Button
@@ -952,6 +989,7 @@ export function TarefaDetalhe({
               )}
             </div>
           </div>
+          </div>
         }
       >
         {!desk && existente && (
@@ -975,20 +1013,6 @@ export function TarefaDetalhe({
         // Só-leitura (o papel só VÊ): o fieldset desabilita TODOS os controles de dentro (os links seguem abrindo).
         <fieldset disabled={somenteLeitura} className="m-0 min-w-0 space-y-4 border-0 p-0">
           {somenteLeitura && <p className="text-[12px] text-muted">Somente leitura — seu papel não permite editar as tarefas deste quadro.</p>}
-          {/* CÍRCULO de concluir + TÍTULO no lugar (como no Trello). */}
-          <div className="flex items-start gap-2">
-            {existente && !existente.template && !existente.arquivada && (
-              <span className="mt-1.5">
-                <CirculoConcluir concluida={concluida} tamanho="md" rotulo={concluida ? "Reabrir a tarefa" : "Concluir a tarefa"} disabled={!pode} onAlternar={() => salvar(!concluida)} />
-              </span>
-            )}
-            <TituloNoLugar
-              valor={r.titulo}
-              focar={nova || (aberto.tipo === "editar" && !!aberto.focoTitulo)}
-              cursorNoFim={aberto.tipo === "editar" && !!aberto.focoTitulo}
-              onChange={setTitulo}
-            />
-          </div>
           {formatoTitulo && (
             <p className="flex flex-wrap items-center gap-2 pl-1 text-[12px] text-muted">
               {r.tituloManual ? "Título escrito à mão — os campos não o mudam." : "Título automático — segue os campos da tarefa."}
@@ -1014,16 +1038,6 @@ export function TarefaDetalhe({
               ))}
               {!listaAtual && <option value={r.listaId}>Lista arquivada</option>}
             </SelectField>
-            <MenuAdicionarCartao
-              metadados={TIPOS_METADADO.filter((t) => !metaVisiveis.includes(t))}
-              blocos={blocosDisponiveis(r.blocos)}
-              disabled={carregando}
-              onMetadado={(t) => {
-                setMetaExtras((m) => [...m, t]);
-                setMetaEditando(t);
-              }}
-              onBloco={(t) => setBlocos((l) => adicionarBloco(l, t))}
-            />
             {!nova && r.listaId !== inicial.listaId && <p className="w-full text-[12px] text-muted">Ao salvar, a tarefa vai para o fim desta lista.</p>}
           </div>
           {metaVisiveis.length > 0 && (
@@ -1167,7 +1181,7 @@ function TituloNoLugar({ valor, focar, cursorNoFim, onChange }: { valor: string;
       }}
       onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
       onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
-      className="min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-1.5 text-[17px] font-bold leading-snug text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
+      className="block min-h-11 w-full min-w-0 flex-1 resize-none overflow-hidden rounded-control border border-transparent bg-transparent px-2 py-[calc((44px-1.375em)/2)] text-[15px] font-semibold leading-[1.375] lg:min-h-[var(--h-control-sm)] lg:py-[calc((var(--h-control-sm)-1.375em)/2-1px)] text-text outline-none transition-[border-color,box-shadow] duration-[var(--motion-duration)] placeholder:text-faint hover:bg-surface-2 focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20"
     />
   );
 }

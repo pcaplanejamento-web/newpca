@@ -4,6 +4,7 @@
  * entrega em LISTA ou UM POR VEZ (iterador com a porta "volta", como o Laço).
  */
 import { interpolar, type Item } from "./fluxo-core.ts";
+import { type TipoItemMesa, tipoDosItens } from "./fluxo-tipo-item.ts";
 
 export type ObjetoLeitura = "protocolos" | "dfds" | "itens";
 /** Por onde o recorte é feito ("todos" = Geral). */
@@ -78,3 +79,52 @@ export function lerDoSistema(f: FontesSistema, objeto: ObjetoLeitura, busca: str
 /** A porta "fim": os itens marcados `executado` (o fim do laço) — sem nenhum, um marcador só. */
 export const marcarExecutado = (itens: Item[], total: number): Item[] =>
   (itens.length ? itens : [{}]).map((it) => ({ ...it, executado: true, totalLido: total }));
+
+/** O TIPO de item que cada leitura entrega (a régua da tabela da Mesa). */
+export const TIPO_DO_OBJETO: Record<ObjetoLeitura, TipoItemMesa> = { protocolos: "protocolo", dfds: "dfd", itens: "item" };
+
+/** A busca ESCOLHIDA no nó (o campo "Quais" do objeto). */
+export function buscaDoNo(c: Record<string, unknown>): { objeto: ObjetoLeitura; busca: string } {
+  const objeto = (String(c.objeto ?? "dfds") as ObjetoLeitura) in BUSCAS ? (String(c.objeto ?? "dfds") as ObjetoLeitura) : "dfds";
+  const v = objeto === "protocolos" ? c.buscaProtocolos : objeto === "dfds" ? c.buscaDfds : c.buscaItens;
+  return { objeto, busca: String(v ?? "") || "todos" };
+}
+
+/**
+ * Os itens que chegam DE FORA (a Mesa, ou "Executar com os selecionados") restringem a leitura sem valor procurado: se
+ * são do MESMO tipo que o nó lê, só eles seguem (pelo id). De outro tipo, ou sem itens de fora, nada muda.
+ */
+export function restringirPelaEntrada(lidos: Item[], entrada: unknown, objeto: ObjetoLeitura): Item[] {
+  const itens = Array.isArray(entrada) ? (entrada as Item[]) : [];
+  if (!itens.length || tipoDosItens(itens) !== TIPO_DO_OBJETO[objeto]) return lidos;
+  const ids = new Set(itens.map((it) => String(it.id)));
+  return lidos.filter((it) => ids.has(String(it.id)));
+}
+
+/** As OPÇÕES do valor procurado: os valores que existem no sistema para a busca escolhida (sem repetir, com um rótulo). */
+export function opcoesDaBusca(f: FontesSistema, objeto: ObjetoLeitura, busca: string): { valor: string; rotulo: string }[] {
+  const m = new Map<string, string>();
+  const por = (v: unknown, rotulo: string) => {
+    const k = String(v ?? "").trim();
+    if (k && !m.has(k)) m.set(k, rotulo);
+  };
+  const t = (v: unknown) => String(v ?? "").trim();
+  if (busca === "protocolo" || (objeto === "protocolos" && busca !== "todos")) {
+    for (const p of f.protocolos) {
+      if (busca === "id") por(p.idExterno, `Id ${t(p.idExterno)} · Protocolo ${t(p.numero)}`);
+      else por(p.numero, `Protocolo ${t(p.numero)}${t(p.assunto) ? ` · ${t(p.assunto)}` : ""}`);
+    }
+  } else if (objeto === "dfds") {
+    for (const d of f.dfds) {
+      if (busca === "numero") por(d.numero, `DFD ${t(d.numero)} · Planej. ${t(d.planejamento) || "—"}${t(d.sigla) ? ` · ${t(d.sigla)}` : ""}`);
+      else por(d.planejamento, `Planej. ${t(d.planejamento)} · DFD ${t(d.numero)}${t(d.sigla) ? ` · ${t(d.sigla)}` : ""}`);
+    }
+  } else if (objeto === "itens") {
+    for (const i of f.itens) {
+      if (busca === "produto") por(i.codigo, `${t(i.codigo)} · ${t(i.descricao).slice(0, 80)}`);
+      else if (busca === "dfd") por(i.dfdNumero, `DFD ${t(i.dfdNumero)} · Planej. ${t(i.dfdPlanejamento) || "—"}`);
+      else por(i.dfdPlanejamento, `Planej. ${t(i.dfdPlanejamento)} · DFD ${t(i.dfdNumero)}`);
+    }
+  }
+  return [...m.entries()].map(([valor, rotulo]) => ({ valor, rotulo }));
+}

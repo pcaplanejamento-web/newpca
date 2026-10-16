@@ -2,6 +2,7 @@
 
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import type { ReactNode } from "react";
+import { TemaPessoal } from "./TemaPessoal";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
+      <TemaPessoal />
       {children}
     </NextThemesProvider>
   );

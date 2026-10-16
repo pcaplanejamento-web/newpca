@@ -118,7 +118,7 @@ export function ItemDetalhe({
 
   // As PENDÊNCIAS do item (a MESMA régua da célula Estado + o catálogo) — o banner único, como no DFD e no protocolo.
   const problemas = [
-    ...mensagensItem(item, repetido ? { iguais: repetidos.slice(0, 10).map((r) => r.item.item ?? r.idx + 1), total: repetidos.length, cor: corRepetido } : null),
+    ...mensagensItem(item, repetido ? { iguais: repetidos.slice(0, 10).map((r) => r.item.item ?? r.idx + 1), total: repetidos.length, cor: corRepetido } : null, regras),
     ...(veredicto && veredicto.nivel !== "conforme"
       ? divergencias.map((t) => ({ chave: `item.catalogo:${t}`, status: veredicto.nivel === "erro" ? ("erro" as const) : ("atencao" as const), texto: t, cor: corCat }))
       : []),
@@ -203,6 +203,7 @@ export function ItemDetalhe({
         <CampoTexto label="Unidade" valor={item.unidade ?? ""} {...props("unidade")} onChange={(v) => onChange?.({ unidade: v || null })} />
         <CampoTexto
           label="Descrição"
+          ancora="descricao"
           valor={item.descricao ?? ""}
           span
           multi
@@ -216,7 +217,7 @@ export function ItemDetalhe({
 
       {/* Item REPETIDO (mesmo código, descrição e unidade): os iguais lado a lado + tratamento. Não bloqueia. */}
       {repetido && (
-        <section className="rounded-card border p-4" style={{ borderColor: `color-mix(in srgb, ${corRepetido} 35%, var(--border))` }} data-ancora="repetidos">
+        <section className="rounded-card border p-[var(--pad-card)]" style={{ borderColor: `color-mix(in srgb, ${corRepetido} 35%, var(--border))` }} data-ancora="repetidos">
           <div className="mb-1 flex items-center justify-between gap-2">
             <h4 className="text-[13px] font-bold text-text">Item repetido</h4>
             <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: corRepetido }}>
@@ -301,7 +302,7 @@ export function ItemDetalhe({
             </ul>
           )}
           {conf?.sugestao && (
-            <div className="mt-2 rounded-card border border-border-2 bg-surface-2 p-3">
+            <div className="mt-2 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
               <div className="mb-2 text-xs font-semibold text-muted">
                 {conf.sugestao.score >= 1
                   ? "Item do catálogo (referência)"

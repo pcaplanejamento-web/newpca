@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
 import { automacaoAutorizacoes, automacaoExecucoes, automacaoPassos, automacaoRegistros } from "../db/schema.ts";
@@ -36,10 +36,39 @@ export function comandoAtualizarPasso(
 ) {
   const inicio = p.estado === "executando" ? sql`CURRENT_TIMESTAMP` : sql`${automacaoPassos.inicio}`;
   const fim = p.estado === "ok" || p.estado === "falhou" || p.estado === "pulado" ? sql`CURRENT_TIMESTAMP` : sql`NULL`;
+  // "executando" é o SINAL DE VIDA: nunca faz um passo já concluído voltar atrás.
+  const pendente = p.estado === "executando" ? inArray(automacaoPassos.estado, ["fila", "executando"]) : undefined;
   return db
     .update(automacaoPassos)
     .set({ estado: p.estado, resultado: p.resultado ?? null, erro: p.erro ?? null, inicio, fim })
-    .where(and(eq(automacaoPassos.execucaoId, execucaoId), eq(automacaoPassos.chave, chave)));
+    .where(and(eq(automacaoPassos.execucaoId, execucaoId), eq(automacaoPassos.chave, chave), pendente));
+}
+
+/** Sem atividade por tanto tempo (sinal de vida a cada ~4 min), a execução foi ABANDONADA (a página fechou). */
+export const MINUTOS_ABANDONO = 30;
+export const MSG_ABANDONO = "Interrompida — sem atividade (a página foi fechada ou perdeu a conexão).";
+
+/** O limite no formato do CURRENT_TIMESTAMP do SQLite ("AAAA-MM-DD HH:MM:SS", UTC). */
+export function limiteAbandono(agoraMs: number, minutos = MINUTOS_ABANDONO): string {
+  return new Date(agoraMs - minutos * 60_000).toISOString().slice(0, 19).replace("T", " ");
+}
+
+/** RECONCILIAÇÃO: as execuções rodando/pausadas paradas desde antes do `limite` viram "falhou" — os passos pendentes
+ * levam o motivo e os totais são recontados no MESMO lote (o histórico nunca fica "rodando" para sempre). */
+export function comandosReconciliarExecucoes(db: Db, limite: string) {
+  const vencidas = sql`(SELECT ${automacaoExecucoes.id} FROM ${automacaoExecucoes} WHERE ${automacaoExecucoes.estado} IN ('rodando', 'pausada') AND ${automacaoExecucoes.atualizadoEm} < ${limite})`;
+  const conta = (estado: string) =>
+    sql<number>`(SELECT COUNT(*) FROM ${automacaoPassos} WHERE ${automacaoPassos.execucaoId} = ${automacaoExecucoes.id} AND ${automacaoPassos.estado} = ${estado})`;
+  return [
+    db
+      .update(automacaoPassos)
+      .set({ estado: "falhou", erro: MSG_ABANDONO, fim: sql`CURRENT_TIMESTAMP` })
+      .where(and(inArray(automacaoPassos.estado, ["fila", "executando"]), sql`${automacaoPassos.execucaoId} IN ${vencidas}`)),
+    db
+      .update(automacaoExecucoes)
+      .set({ estado: "falhou", erro: MSG_ABANDONO, feitos: conta("ok"), falhas: conta("falhou"), atualizadoEm: sql`CURRENT_TIMESTAMP` })
+      .where(and(inArray(automacaoExecucoes.estado, ["rodando", "pausada"]), sql`${automacaoExecucoes.atualizadoEm} < ${limite}`)),
+  ];
 }
 
 /** Os totais da execução recontados NO BANCO (nunca desalinham com os passos). */
@@ -105,5 +134,15 @@ export function comandoRegistrarEscrita(
     usuarioNome: string;
   },
 ) {
-  return db.insert(automacaoRegistros).values(r).onConflictDoNothing().returning({ id: automacaoRegistros.id });
+  // Reenviado (a Centi não tinha o documento): o registro passa a apontar o documento novo.
+  return db
+    .insert(automacaoRegistros)
+    .values(r)
+    .onConflictDoUpdate({
+      target: [automacaoRegistros.capacidade, automacaoRegistros.centiAlvo, automacaoRegistros.descricao],
+      set: { centiDocumento: r.centiDocumento, execucaoId: r.execucaoId, protocoloId: r.protocoloId, usuarioId: r.usuarioId, usuarioNome: r.usuarioNome },
+      // A mesma escrita de novo (o mesmo documento) não muda nada nem volta como nova.
+      setWhere: sql`${automacaoRegistros.centiDocumento} IS NOT excluded.centi_documento`,
+    })
+    .returning({ id: automacaoRegistros.id });
 }

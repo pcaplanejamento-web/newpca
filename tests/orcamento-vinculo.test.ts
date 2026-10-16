@@ -76,7 +76,7 @@ describe("orcamento-vinculo — vínculos CRIADOS (uma unidade do CUBO → vári
     { orgao: null, unidade: "  ", acao: "X", valorInicial: 5 },
   ];
   const k = chaveVinculo(SAUDE);
-  const v = (id: number, alvoId: number, acoes: string[] | null, acoesFora: string[] = []): VinculoOrcamento => ({ id, chave: k, texto: SAUDE, alvoId, acoes, acoesFora });
+  const v = (id: number, alvoId: number, acoes: string[] | null, acoesFora: string[] = []): VinculoOrcamento => ({ id, chave: k, texto: SAUDE, alvoId, acoes, acoesFora, visaoId: null });
   // As DEMAIS → SMS (menos o hospital); a vigilância → outra unidade (explícita vence as demais).
   const vinc = [v(1, 16, null, [chaveVinculo("2003 Hospital")]), v(2, 15, [chaveVinculo("2002 Vigilância")])];
   const unidades = unidadesDoOrcamento(lanc);
@@ -152,7 +152,7 @@ describe("schemas dos vínculos", () => {
     assert.equal(criarVinculosOrcamentoSchema.safeParse({ vinculos: muitos }).success, false);
   });
   it("editar: a unidade e as ações", () => {
-    assert.equal(editarVinculoOrcamentoSchema.safeParse({ alvoId: 3, acoes: null, acoesFora: ["X"] }).success, true);
+    assert.equal(editarVinculoOrcamentoSchema.safeParse({ alvoId: 3, acoes: null, acoesFora: ["X"], visaoId: null }).success, true);
     assert.equal(editarVinculoOrcamentoSchema.safeParse({ acoes: null }).success, false);
   });
 });

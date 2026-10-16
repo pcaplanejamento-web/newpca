@@ -1,4 +1,4 @@
-import { getAcesso, podeMesa } from "./acesso";
+import { getAcesso, pcasDoAcesso, podeMesa } from "./acesso";
 import { escopoMesa } from "./acesso-mesa";
 import { getRegrasAvaliacao } from "./avaliacao";
 import type { UsuarioSessao } from "./auth";
@@ -63,7 +63,18 @@ export async function contextoBanners(u: UsuarioSessao | null) {
     orgaoProprio: matchMap[r.id]?.orgaoProprio ?? false,
     oculto: matchMap[r.id]?.oculto ?? false,
   }));
-  return { un, reparticoes, pcas, regras, orgaos, pode: acesso ? podeMesa(acesso) : PODE_MESA_NADA, grupoAtivoId: acesso?.grupoAtivo?.id ?? null };
+  // Os PCAs do GRUPO ATIVO (null = todos): os destinos do "Enviar ao PCA".
+  const permitidos = pcasDoAcesso(acesso);
+  return {
+    un,
+    reparticoes,
+    pcas,
+    pcasAcesso: permitidos ? [...permitidos] : null,
+    regras,
+    orgaos,
+    pode: acesso ? podeMesa(acesso) : PODE_MESA_NADA,
+    grupoAtivoId: acesso?.grupoAtivo?.id ?? null,
+  };
 }
 
 /** O prefixo das chaves das edições salvas das tabelas da Mesa (a principal e a do PCA têm as suas). */
@@ -120,6 +131,7 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
     // Em "Geral" não há unidade ativa específica — Geral comporta qualquer unidade.
     reparticaoAtivaId: repId || null,
     pcas: ctx.pcas,
+    pcasAcesso: ctx.pcasAcesso,
     regras: ctx.regras,
     orgaos: ctx.orgaos,
     pessoas: designaveis,

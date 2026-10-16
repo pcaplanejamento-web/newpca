@@ -34,6 +34,8 @@ export async function GET() {
         dadosValidadosEm: usuarios.dadosValidadosEm,
         dadosValidadosPor: usuarios.dadosValidadosPor,
         trocarSenha: usuarios.trocarSenha,
+        arquivadoEm: usuarios.arquivadoEm,
+        arquivadoPor: usuarios.arquivadoPor,
         atualizadoEm: usuarios.atualizadoEm,
         reparticaoId: usuarios.reparticaoId,
         unidade: reparticoes.nome,
@@ -45,6 +47,7 @@ export async function GET() {
         papelId: sql<number | null>`${papelDoUsuarioSql}`,
         status: usuarios.status,
         criadoEm: usuarios.criadoEm,
+        ultimoAcessoEm: usuarios.ultimoAcessoEm,
       })
       .from(usuarios)
       .leftJoin(reparticoes, eq(reparticoes.id, usuarios.reparticaoId))

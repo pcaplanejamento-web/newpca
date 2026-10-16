@@ -135,7 +135,7 @@ export function SaudeDados({
 
       {erro && <ErroCarga msg={erro} kind={saude ? "warn" : "danger"} onTentar={onVerificar} />}
       {!saude && !erro && (
-        <div className="rounded-card border border-border p-4">
+        <div className="rounded-card border border-border p-[var(--pad-card)]">
           <SkeletonLinhas linhas={4} />
         </div>
       )}

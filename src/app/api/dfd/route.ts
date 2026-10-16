@@ -2,11 +2,11 @@ import { exigirAcesso, recusa } from "@/lib/api-auth";
 import { detalheSeguro, registrarAuditoria, rotulosUnidades } from "@/lib/auditoria";
 import { type DetalheAuditoria, ROTULO_ORIGEM } from "@/lib/auditoria-core";
 import { getRegrasAvaliacao } from "@/lib/avaliacao";
-import { classificarAssunto, comportamentoNo, importarDfdHabilitado, tipoPermitido } from "@/lib/avaliacao-core";
+import { classificarAssunto, comportamentoNo, importarDfdHabilitado, palavrasNoItem, tipoPermitido } from "@/lib/avaliacao-core";
 import { conferirItensNoCatalogo } from "@/lib/catalogo";
 import { compararDfd, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { appendDfdItens, getDfd, getDfdReparticao, getReparticaoDfdNumero, upsertDfdCabecalho } from "@/lib/dfd";
-import { algumCatalogoFundamental, bloqueantesCatalogo, semValorUnitario } from "@/lib/dfd-tratamento";
+import { algumCatalogoFundamental, bloqueantesCatalogo, quantidadeFracionada, semQuantidade, semValorUnitario } from "@/lib/dfd-tratamento";
 import { dfdOpSchema, faltasObrigatorias, type StartDfdPayload } from "@/lib/dfd-validation";
 import { dfdNasLinhas, escopoMesa, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -57,6 +57,12 @@ export async function POST(req: Request) {
     const ctxLote = { dfdTipo: tipoCurtoDfd(dfd.tipo), categoria: await categoriaDoProtocolo(dfd.protocoloId) };
     if (comportamentoNo(regrasLote, "item.valorUnitario", ctxLote) === "bloqueia" && d.rows.some((r) => semValorUnitario(r.valorUnitario)))
       return erro("Todos os itens precisam de valor unitário.", 422);
+    if (comportamentoNo(regrasLote, "item.quantidade", ctxLote) === "bloqueia" && d.rows.some((r) => semQuantidade(r.quantidade)))
+      return erro("Todos os itens precisam de quantidade.", 422);
+    if (comportamentoNo(regrasLote, "item.quantidadeFracionada", ctxLote) === "bloqueia" && d.rows.some((r) => quantidadeFracionada(r.quantidade)))
+      return erro("Todos os itens precisam de quantidade de no mínimo 1.", 422);
+    if (d.rows.some((r) => palavrasNoItem(r.descricao, regrasLote, ctxLote).some((p) => p.comportamento === "bloqueia")))
+      return erro("Há itens com palavras apontadas pelo ADM que impedem a importação.", 422);
     // Portão do catálogo nos LOTES seguintes (o `start-dfd` só viu os primeiros itens): só
     // consulta/bloqueia quando o ADM elevou algum ponto item.* a "fundamental".
     if (algumCatalogoFundamental(regrasLote, ctxLote)) {

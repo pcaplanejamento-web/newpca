@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { conferenciaDoOrgao, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import type { EdicaoTabela } from "@/lib/edicoes-tabela-core";
+import { conferenciaDoOrgao, planoRealinhar, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
-import { AcoesCadastro } from "./AcoesCadastro";
 import { Badge } from "./Badge";
 import { BannerCadastro, type CampoCadastro } from "./BannerCadastro";
 import { Button } from "./Button";
@@ -13,19 +14,19 @@ import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { selectCls } from "./formStyles";
 import { IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
-import { CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
+import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { CelulaResponsaveis } from "./VinculosResponsaveis";
+import { Selecao } from "./Selecao";
 
 type Orgao = {
   id: number;
   sigla: string;
   nome: string;
   orgaoEntidade: string | null;
-  ordem: number;
   assinaturaUnica: boolean;
   numeroInteressado: string | null;
   /** O ID da entidade do órgão na Centi (ex.: "02"). */
@@ -36,6 +37,9 @@ type Orgao = {
   /** Tem unidades-filhas comuns (impede rebaixar e virar dual). */
   temUnidades: boolean;
 };
+
+/** A chave das edições salvas da tabela de órgãos (tabela da Administração — só o ADM). */
+export const CHAVE_TABELA_ORGAOS = "admin:orgaos:tabela";
 
 export type AbaOrgaos = "orgaos" | "responsaveis";
 
@@ -71,16 +75,23 @@ const valoresDe = (o: Orgao | null): Record<string, string> => ({
  * unidades (abre a tela delas) e a CONFERÊNCIA (o que está mal cadastrado). Tocar na linha abre o BANNER do órgão (dados
  * por cadeado, responsáveis, estrutura, ocultar, excluir). Responsáveis = a planilha única de pessoas.
  */
-export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
+export function OrgaosAdmin({ abaInicial, edicoes }: { abaInicial: AbaOrgaos; edicoes: { lista: EdicaoTabela[]; padroes: Record<string, unknown> } }) {
   const router = useRouter();
   const ctx = usePlanilhaResponsaveis();
   const [aba, setAba] = useState<AbaOrgaos>(abaInicial);
   const [lista, setLista] = useState<Orgao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<number | "novo" | null>(null);
+  // A PESQUISA DO SISTEMA abre o banner do órgão (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    if (lista?.some((o) => o.id === Number(v))) setAberto(Number(v));
+  }, lista != null);
   const [ocupado, setOcupado] = useState(false);
   const [destino, setDestino] = useState("");
   const { confirmar, confirmacao } = useConfirmacao();
+  // As EDIÇÕES SALVAS da tabela (guardadas aqui: trocar de aba remonta a tabela, que volta com as edições novas).
+  const [ed, setEd] = useState(edicoes);
+  const [exonerados, setExonerados] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -116,9 +127,9 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
     setOcupado(true);
     try {
       const r = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number; realinhado?: string };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Não foi possível concluir — tente de novo.");
-      toast.success(sucesso);
+      toast.success(j.realinhado ? `${sucesso} Responsáveis realinhados: ${j.realinhado}.` : sucesso);
       await Promise.all([carregar(), ctx.carregar()]);
       return true;
     } catch (e) {
@@ -137,20 +148,19 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
 
   const conf = useMemo(() => {
     const m = new Map<number, ReturnType<typeof conferenciaDoOrgao>>();
-    if (ctx.planilha) for (const o of lista ?? []) m.set(o.id, conferenciaDoOrgao(o, unidadesDe.get(o.id) ?? [], ctx.grupos, ctx.hoje));
+    if (ctx.planilha) for (const o of lista ?? []) m.set(o.id, conferenciaDoOrgao(o, unidadesDe.get(o.id) ?? [], ctx.grupos, ctx.hoje, ctx.planilha.cargos));
     return m;
   }, [lista, unidadesDe, ctx.planilha, ctx.grupos, ctx.hoje]);
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={6} />
       </div>
     );
   }
 
   const orgao = typeof aberto === "number" ? (lista.find((o) => o.id === aberto) ?? null) : null;
-  const posDe = new Map(lista.map((o, i) => [o.id, i]));
 
   function corpo(o: Orgao | null, v: Record<string, string>, extra: { oculto?: boolean } = {}) {
     return {
@@ -171,7 +181,36 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
       return ok;
     }
     if (!orgao) return false;
-    return acao(`/api/admin/orgaos/${orgao.id}`, { method: "PATCH", body: JSON.stringify(corpo(orgao, { ...valoresDe(orgao), ...patch })) }, "Órgão atualizado.");
+    const novo = corpo(orgao, { ...valoresDe(orgao), ...patch });
+    // A regra de assinatura mudou: os responsáveis vão ao lugar que vale pela regra nova (o servidor faz no mesmo lote).
+    let destinosVinculos: number[] | undefined;
+    if (novo.assinaturaUnica !== orgao.assinaturaUnica && ctx.planilha) {
+      const p = ctx.planilha;
+      const plano = planoRealinhar(
+        { ...p, orgaos: p.orgaos.map((o) => (o.id === orgao.id ? { ...o, assinaturaUnica: novo.assinaturaUnica } : o)) },
+        p.vinculos,
+      );
+      const ambiguo = plano.ambiguos.find((a) => a.orgaoId === orgao.id);
+      const daqui = (id: number) => {
+        const v = p.vinculos.find((x) => x.id === id);
+        return !!v && (v.orgaoId === orgao.id || p.unidades.some((u) => u.id === v.reparticaoId && u.orgaoId === orgao.id));
+      };
+      const movidos = plano.passos.filter((x) => daqui(x.id)).length;
+      if (ambiguo || movidos) {
+        const ok = await confirmar({
+          titulo: novo.assinaturaUnica ? `Assinatura única em ${orgao.sigla}?` : `Assinatura por unidade em ${orgao.sigla}?`,
+          texto: ambiguo
+            ? `Os ${ambiguo.vinculos.length} responsável(is) do órgão passam a valer em CADA uma das ${ambiguo.unidades.length} unidades (copiados para todas). Depois, ajuste unidade a unidade se precisar.`
+            : novo.assinaturaUnica
+              ? `Os responsáveis das unidades passam para o órgão (${movidos} vínculo(s); os repetidos viram um).`
+              : `Os responsáveis do órgão passam para a unidade dele (${movidos} vínculo(s)).`,
+          confirmar: "Mudar e realinhar",
+        });
+        if (!ok) return false;
+        if (ambiguo) destinosVinculos = ambiguo.unidades;
+      }
+    }
+    return acao(`/api/admin/orgaos/${orgao.id}`, { method: "PATCH", body: JSON.stringify({ ...novo, destinosVinculos }) }, "Órgão atualizado.");
   }
 
   const ocultar = (o: Orgao) =>
@@ -212,40 +251,38 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
     }
   }
 
-  function mover(id: number, dir: -1 | 1) {
-    if (!lista) return;
-    const i = lista.findIndex((x) => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= lista.length) return;
-    const nova = [...lista];
-    [nova[i], nova[j]] = [nova[j], nova[i]];
-    setLista(nova);
-    void fetch("/api/admin/orgaos/ordem", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: nova.map((x) => x.id) }) }).then((r) => {
-      if (!r.ok) {
-        toast.error("Não foi possível salvar a nova ordem.");
-        void carregar();
-      }
-    });
-  }
-
   const vigentes = (o: Orgao) => (o.assinaturaUnica ? vigentesDoAlvo(ctx.grupos.get(`o${o.id}`) ?? [], ctx.hoje) : null);
   const colunas: Column<Orgao>[] = [
-    { key: "pos", header: "#", filter: "none", nowrap: true, numero: (o) => (posDe.get(o.id) ?? 0) + 1, total: false, render: (o) => <span className="tabular-nums text-faint">{(posDe.get(o.id) ?? 0) + 1}</span> },
-    { key: "sigla", header: "Sigla", nowrap: true, value: (o) => o.sigla, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
+    {
+      key: "entidadeCenti",
+      header: "Código Centi",
+      nowrap: true,
+      // A ordem natural ("2" antes de "10"; sem código, por último) = a do servidor.
+      value: (o) => o.entidadeCenti ?? "—",
+      render: (o) => <Mono v={o.entidadeCenti} />,
+    },
     {
       key: "nome",
       header: "Nome do órgão",
       align: "left",
-      minWidth: 220,
+      minWidth: 280,
       value: (o) => o.nome,
+      // O nome inteiro em no máximo DUAS linhas (o completo na dica).
       render: (o) => (
-        <span className="inline-flex items-center gap-2">
-          <span className={`font-medium ${o.oculto ? "text-faint" : "text-text"}`}>{o.nome}</span>
-          {o.tambemUnidade && <Badge tone="cyan">Também unidade</Badge>}
+        <span className="flex items-center gap-2" title={o.nome}>
+          <span className={`line-clamp-2 font-medium ${o.oculto ? "text-faint" : "text-text"}`}>{o.nome}</span>
           {o.oculto && <Badge tone="slate">Oculto</Badge>}
         </span>
       ),
     },
+    {
+      key: "tambemUnidade",
+      header: "Também unidade",
+      nowrap: true,
+      value: (o) => (o.tambemUnidade ? "Sim" : "Não"),
+      render: (o) => (o.tambemUnidade ? <Badge tone="cyan">Também unidade</Badge> : <span className="text-faint">—</span>),
+    },
+    { key: "sigla", header: "Sigla", nowrap: true, value: (o) => o.sigla, render: (o) => <Badge tone="violet">{o.sigla}</Badge> },
     {
       key: "orgaoEntidade",
       header: "Órgão/Entidade (DFD)",
@@ -254,7 +291,6 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
       render: (o) => (o.orgaoEntidade ? <span className="line-clamp-1 text-[12px] text-text-2" title={o.orgaoEntidade}>{o.orgaoEntidade}</span> : <span className="text-faint">—</span>),
     },
     { key: "numeroInteressado", header: "Nº interessado", nowrap: true, value: (o) => o.numeroInteressado ?? "—", render: (o) => <Mono v={o.numeroInteressado} /> },
-    { key: "entidadeCenti", header: "Centi", nowrap: true, value: (o) => o.entidadeCenti ?? "—", render: (o) => <Mono v={o.entidadeCenti} /> },
     {
       key: "assinatura",
       header: "Assinatura",
@@ -298,40 +334,24 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
       valores: (o) => rotulosConferencia(conf.get(o.id) ?? []),
       render: (o) => (ctx.planilha ? <CelulaConferencia msgs={conf.get(o.id) ?? []} /> : <span className="text-faint">…</span>),
     },
-    {
-      key: "acoes",
-      header: "Ordem",
-      filter: "none",
-      nowrap: true,
-      render: (o) => (
-        <span role="none" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <AcoesCadastro
-            nome={o.sigla}
-            primeira={(posDe.get(o.id) ?? 0) === 0}
-            ultima={(posDe.get(o.id) ?? 0) === lista.length - 1}
-            disabled={ocupado}
-            onMover={(d) => mover(o.id, d)}
-            onEditar={() => setAberto(o.id)}
-            onExcluir={() => void excluir(o)}
-          />
-        </span>
-      ),
-    },
   ];
 
   const destinos = orgao ? lista.filter((o) => o.id !== orgao.id && !o.tambemUnidade) : [];
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <Segmented<AbaOrgaos>
-        ariaLabel="Órgãos ou responsáveis"
-        value={aba}
-        onChange={trocarAba}
-        options={[
-          { value: "orgaos", label: `Órgãos (${lista.length})`, icone: <IconLandmark className="h-4 w-4" /> },
-          { value: "responsaveis", label: `Responsáveis (${ctx.planilha?.pessoas.length ?? "…"})`, icone: <IconUsers className="h-4 w-4" />, dica: "A planilha única dos responsáveis por DFDs" },
-        ]}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented<AbaOrgaos>
+          ariaLabel="Órgãos ou responsáveis"
+          value={aba}
+          onChange={trocarAba}
+          options={[
+            { value: "orgaos", label: `Órgãos (${lista.length})`, icone: <IconLandmark className="h-4 w-4" /> },
+            { value: "responsaveis", label: `Responsáveis (${ctx.planilha?.pessoas.length ?? "…"})`, icone: <IconUsers className="h-4 w-4" />, dica: "A planilha única dos responsáveis por DFDs" },
+          ]}
+        />
+        {aba === "responsaveis" && <BotaoExonerados ctx={ctx} ativo={exonerados} onAlternar={() => setExonerados((x) => !x)} className="ml-auto" />}
+      </div>
       {erro && <Callout kind="danger">{erro}</Callout>}
       {ctx.erro && <Callout kind="warn">{ctx.erro}</Callout>}
 
@@ -346,6 +366,7 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
             scrollInterno
             density="compact"
             exportar={{ nome: "Órgãos" }}
+            edicoes={{ chave: CHAVE_TABELA_ORGAOS, lista: ed.lista, padroes: ed.padroes, podePublicar: true, onMudar: (lista, padroes) => setEd({ lista, padroes }) }}
             vazio="Nenhum órgão cadastrado — use “Novo órgão”."
             acoesRodape={
               <>
@@ -358,16 +379,16 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
                   <TopicoAjuda titulo="Assinatura">
                     Única = os responsáveis do órgão valem para todas as unidades. Por unidade = cada unidade tem os seus.
                   </TopicoAjuda>
-                  <TopicoAjuda titulo="Conferência">Sem responsável vigente, nomeação ou função faltando, temporário encerrado, unidades sem responsável.</TopicoAjuda>
-                  <TopicoAjuda titulo="Ordem">↑/↓ ordenam a lista (salvo na hora).</TopicoAjuda>
+                  <TopicoAjuda titulo="Conferência">Sem responsável vigente, nomeação ou função faltando, unidades sem responsável. Vínculo encerrado não é problema (fica em cinza na coluna Encerrados dos responsáveis).</TopicoAjuda>
+                  <TopicoAjuda titulo="Ordem">Pelo código da entidade na Centi (sem código, por último). O lápis no rodapé edita a tabela: ordenar, ocultar, arrastar e congelar colunas — e salvar a edição.</TopicoAjuda>
                 </Ajuda>
               </>
             }
           />
         ) : ctx.planilha ? (
-          <PlanilhaResponsaveis ctx={ctx} />
+          <PlanilhaResponsaveis ctx={ctx} exonerados={exonerados} />
         ) : (
-          <div className="rounded-card border border-border p-4">
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
             <SkeletonLinhas linhas={6} />
           </div>
         )}
@@ -444,14 +465,14 @@ export function OrgaosAdmin({ abaInicial }: { abaInicial: AbaOrgaos }) {
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="min-w-0 flex-1">
                     <span className="mb-1 block text-[13px] text-muted">Rebaixar a unidade de:</span>
-                    <select className={`${selectCls} w-full`} value={destino} onChange={(e) => setDestino(e.target.value)} disabled={ocupado}>
+                    <Selecao className={`${selectCls} w-full`} value={destino} onChange={(e) => setDestino(e.target.value)} disabled={ocupado}>
                       <option value="">Escolha o órgão de destino…</option>
                       {destinos.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.sigla} — {d.nome}
                         </option>
                       ))}
-                    </select>
+                    </Selecao>
                   </label>
                   <Button size="sm" variant="secondary" disabled={!destino} loading={ocupado} icon={<IconLandmark className="h-4 w-4" />} onClick={() => void rebaixar(orgao)}>
                     Rebaixar

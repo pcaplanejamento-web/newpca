@@ -16,9 +16,9 @@ const L = [
 const k = chaveVinculo;
 const V: VinculoOrcamento[] = [
   // SEMED: TRANSPORTE vai à unidade 2 (explícita); as demais à 1, menos MERENDA (fica sem vínculo).
-  { id: 1, chave: k("2 - SEMED"), texto: "2 - SEMED", alvoId: 1, acoes: null, acoesFora: [k("2003 - MERENDA")] },
-  { id: 2, chave: k("2 - SEMED"), texto: "2 - SEMED", alvoId: 2, acoes: [k("2002 - TRANSPORTE"), k("2099 - SEM LANCAMENTO")], acoesFora: [] },
-  { id: 3, chave: k("5 - SEMUS"), texto: "5 - SEMUS", alvoId: 3, acoes: null, acoesFora: [] },
+  { id: 1, chave: k("2 - SEMED"), texto: "2 - SEMED", alvoId: 1, acoes: null, acoesFora: [k("2003 - MERENDA")], visaoId: null },
+  { id: 2, chave: k("2 - SEMED"), texto: "2 - SEMED", alvoId: 2, acoes: [k("2002 - TRANSPORTE"), k("2099 - SEM LANCAMENTO")], acoesFora: [], visaoId: null },
+  { id: 3, chave: k("5 - SEMUS"), texto: "5 - SEMUS", alvoId: 3, acoes: null, acoesFora: [], visaoId: null },
 ];
 const U = [
   { id: 1, sigla: "SEMED", nome: "Educação", orgaoSigla: "PMRV" },

@@ -1,12 +1,15 @@
 /**
  * VERSÕES do sistema — o registro de mudanças (changelog) é a FONTE ÚNICA da versão exibida no menu, da página de
- * Novidades e do aviso aos Administradores. Puro (sem DOM/banco) e testado.
+ * Novidades e do aviso no sino. Puro (sem DOM/banco) e testado.
  *
  * Como publicar uma versão nova: acrescente uma entrada NO TOPO de `VERSOES` (a versão maior que a anterior — semver:
  * MAIOR quando muda o jeito de trabalhar, MENOR para recurso novo, CORREÇÃO para ajuste), cada mudança com o `link` de
- * ONDE ela está, e ponha o mesmo número no `package.json`. O deploy faz o resto: o menu mostra o número e cada ADM
- * recebe UM aviso no sino com o que mudou (tocar abre as Novidades num banner flutuante — sem sair da tela).
+ * ONDE ela está, e ponha o mesmo número no `package.json`. O deploy faz o resto: o menu mostra o número e cada pessoa
+ * recebe UM aviso no sino com o que mudou NAS TELAS QUE O GRUPO DELA ABRE (o ADM, tudo — `mudancasVisiveis`; tocar abre
+ * as Novidades num banner flutuante — sem sair da tela).
  */
+
+import { ABAS } from "./abas.ts";
 
 export type TipoMudanca = "novo" | "melhoria" | "correcao";
 
@@ -31,6 +34,1278 @@ export type Versao = {
 
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
+  {
+    versao: "1.116.0",
+    data: "2026-10-16",
+    titulo: "Mesa conectada: Protocolos, DFDs e Itens com os mesmos filtros",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Os filtros de Protocolos, DFDs e Itens agora se conectam: filtrar protocolos mostra só os DFDs e itens deles; filtrar itens (ex.: um código) leva aos DFDs e protocolos que os têm. Os filtros e a ordem de cada visão continuam ao trocar de visão.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A faixa “Recorte da Mesa” acima da tabela mostra o que vem das outras visões; o ✕ tira os filtros de uma delas e “Limpar recorte” zera tudo.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.115.0",
+    data: "2026-10-16",
+    titulo: "Grupo pela unidade de cadastro",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "O grupo escolhe de onde vêm as unidades: \u201cUnidades escolhidas\u201d (como antes) ou \u201cUnidade de cadastro de cada pessoa\u201d — cada membro vê só a unidade em que trabalha. Quem está sem unidade de cadastro é apontado no editor do grupo.", link: "/painel/grupos" },
+    ],
+  },
+  {
+    versao: "1.114.2",
+    data: "2026-10-16",
+    titulo: "Matrícula com até 7 números",
+    mudancas: [
+      { tipo: "correcao", area: "Cadastro", texto: "A matrícula aceita até 7 números (antes, exatamente 6), no cadastro e na edição do usuário pelo ADM.", link: "/login?modo=cadastro" },
+    ],
+  },
+  {
+    versao: "1.114.1",
+    data: "2026-10-16",
+    titulo: "Fim do alerta repetido de aparelho novo",
+    mudancas: [
+      { tipo: "correcao", area: "Segurança", texto: "O alerta “Login de um aparelho novo” / “Novo acesso à sua conta” não aparece mais quando o mesmo navegador entra do mesmo IP já visto no seu histórico de acesso (o cookie do aparelho pode se perder).", link: "/painel/perfil?aba=acessos" },
+    ],
+  },
+  {
+    versao: "1.114.0",
+    data: "2026-10-15",
+    titulo: "Palavras apontadas no item",
+    mudancas: [
+      { tipo: "novo", area: "Avaliação", texto: "Novo ponto “Palavras no item”: o ADM cadastra conjuntos de palavras (separadas por “;”), cada um com a sua importância, e o item cuja descrição contém uma delas é apontado. Desligado por padrão.", link: "/painel/configuracoes?aba=avaliacao" },
+      { tipo: "melhoria", area: "Mesa", texto: "O item com palavra apontada aparece no Estado, nas pendências (leva à descrição do item), no despacho e, se o ADM escolher bloquear, trava a importação.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.113.0",
+    data: "2026-10-15",
+    titulo: "Automação: conferência final na Centi e continuar de onde parou",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Ao terminar um anexo, o sistema abre o protocolo na Centi e confere cada arquivo: “Conferido na Centi: N de N”. O que não estiver lá vira falha “Não confirmado” — nada é dado como anexado sem a prova da Centi.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Continuar de onde parou: ao fim de cada execução a conferência no protocolo roda sozinha e mostra “Enviar os que faltam” — interrompida, com falha ou com a página fechada, basta enviar o que falta.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Falha passageira (rede, tempo esgotado, servidor indisponível) na emissão ou no anexo ganha UMA nova tentativa sozinha antes de virar “Falhou” — sem risco de duplicar: a extensão confere o protocolo antes de gravar.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.112.0",
+    data: "2026-10-15",
+    titulo: "Automação: andamento ao vivo com % e tempo restante",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Etapas acompanham a execução em tempo real: a % de conclusão pelo trabalho real (cada DFD conta), o tempo estimado para terminar pelo ritmo dos últimos minutos, a etapa em curso destacada com “n de N” e o DFD que está sendo tratado agora.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Análise dos DFDs: cada protocolo/unidade recolhe sozinho quando termina (com “Concluído” ou as falhas), a lista rola suave até o que está em curso e você pode abrir/fechar qualquer grupo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Voltar à lista e abrir de novo o fluxo em execução não zera mais as etapas (“0/3”) — o andamento continua à vista.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.111.0",
+    data: "2026-10-15",
+    titulo: "Automação: conferir no protocolo o que foi anexado e enviar o que falta",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "Baixar/anexar DFDs: “Conferir no protocolo” abre o protocolo da Centi só para ler e mostra, arquivo a arquivo, o que já está anexado (com o nº do documento), o que falta e o que o sistema registrou mas a Centi não tem. “Enviar os que faltam” emite e anexa só esses.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "“Já estava” só quando o documento está de fato no protocolo da Centi: antes bastava o registro do sistema (de uma execução anterior) para o arquivo ser pulado. Registrado mas ausente na Centi agora é enviado de novo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O anexo nunca apaga documentos: o protocolo devolvido sem documentos já gravados (desatualizado) é recusado, o salvar que perde documentos vira erro e, depois de gravar, o protocolo é aberto de novo para confirmar o documento. O nº mostrado é o do documento NOVO. Atualize a extensão para a 1.25.0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.110.0",
+    data: "2026-10-15",
+    titulo: "Automação: o estado de cada DFD mostra o que acontece de fato",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Cada DFD do Baixar/anexar mostra o passo real: Emitindo na Centi · Conferindo o PDF · No PDF unido · Anexando na Centi · Aguardando sua confirmação — e o fim real: Anexado/Salvo · Já estava · Falhou · Interrompido. A entidade da Centi aparece já na fila (prevista, com “?”) e a emissão confirma a real.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Os números batem em todo lugar: a barra (“12 anexado(s) · 4 já estava(m) · 1 falhou — 17 de 46”), o painel do canto e o ícone da extensão contam os DFDs CONCLUÍDOS — o “já estava no protocolo” não é mais contado como anexado e o 1º DFD não aparece feito antes de terminar.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O histórico das execuções nunca fica “Rodando” para sempre: fechar a página cancela a execução, uma falha no meio a encerra com o motivo e a parada há mais de 30 minutos (sem sinal de vida) vira “Falhou”. O que não foi emitido aparece com o motivo, e uma falha de rede no registro tenta de novo.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "Segurança: a autorização de gravar na Centi só é aceita da extensão da Plataforma PCA (ou do próprio sistema) — nenhuma outra extensão a usa.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.109.0",
+    data: "2026-10-15",
+    titulo: "Automação: ordem da tabela, permissão no banner da extensão e correções",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "Os DFDs seguem na SEQUÊNCIA da tabela de Seleção — a ordenação e os filtros que você fez, só os marcados (ou os à vista, sem marcação). Saiu o “Ordenar pelo planejamento”.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "A permissão para gravar na Centi aparece no banner flutuante da extensão (o painel do ícone), nunca numa tela própria. Tocar fora não recusa: o pedido fica no ícone (selo “?”) até você responder.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "“Autorização inválida, já usada ou vencida”: uma cópia antiga da extensão, que ficava na página depois de atualizar, gastava a autorização antes da nova. A cópia antiga agora fica em silêncio. Atualize a extensão para a 1.24.0.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "O selo “N problema(s)” abre a lista com cada problema e o componente dele — tocar leva ao componente no diagrama.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "correcao",
+        area: "Automação",
+        texto: "A aba Análise do Baixar/anexar DFDs mostra cada DFD processado (concluído, falhou, pulado) ao vivo e no fim — antes ficava em 0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.108.0",
+    data: "2026-10-15",
+    titulo: "Baixar/anexar DFDs: testar o protocolo e achar só pelo Id",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Automação",
+        texto: "“Testar protocolo” nos Dados de entrada do Baixar/anexar DFDs: abre o protocolo na Centi só para ler e mostra o número, o assunto, o interessado e os documentos — ou o motivo de não ter achado.",
+        link: "/painel/automacao",
+      },
+      {
+        tipo: "melhoria",
+        area: "Automação",
+        texto: "O nº do protocolo ficou opcional: em branco, o protocolo é achado só pelo Id e o número vem da Centi (o anexo continua conferindo Id + nº). Atualize a extensão para a 1.23.0.",
+        link: "/painel/automacao",
+      },
+    ],
+  },
+  {
+    versao: "1.107.12",
+    data: "2026-10-15",
+    titulo: "Anexo na Centi: abre o protocolo como a tela da Centi",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "O anexo de DFDs num protocolo da Centi parava em \u201cA Centi n\u00e3o devolveu o protocolo\u201d: a Centi deixou de abrir o protocolo pelo caminho que a extens\u00e3o usava. A extens\u00e3o 1.22.0 aprende sozinha como a pr\u00f3pria tela da Centi abre o protocolo \u2014 basta abrir o protocolo UMA vez na Tela Protocolo da Centi com a extens\u00e3o ativa. Baixe a extens\u00e3o nova.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Quando o protocolo n\u00e3o abre, a automa\u00e7\u00e3o para com UM aviso que diz o que cada caminho respondeu e o que fazer \u2014 sem repetir o mesmo erro em cada DFD.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.107.11",
+    data: "2026-10-15",
+    titulo: "Cartões suaves ao fechar o menu e foto sem achatar",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Fechar o menu lateral agora faz a mesma animação suave de abrir, ao contrário: os cartões do PCA (e semelhantes) deslizam e mudam de tamanho sem saltar.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Menu", texto: "A foto do usuário não achata mais com o menu recolhido.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.107.10",
+    data: "2026-10-15",
+    titulo: "Cartões e usuário estáveis no menu",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir e fechar o menu, os cartões mudam de tamanho e de lugar numa transição suave (sem saltar), e o cartão do usuário encolhe mantendo a borda, com a foto centralizada.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.107.9",
+    data: "2026-10-15",
+    titulo: "Cartões deslizam ao abrir e fechar o menu",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir e fechar o menu lateral, os cartões (PCA, Orçamento, Catálogo, Tarefas, Automação) deslizam até o lugar novo em vez de pular de linha ou coluna.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.107.8",
+    data: "2026-10-15",
+    titulo: "Menu recolhido alinhado",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Com o menu recolhido, as seleções e a foto do usuário ficam centralizadas no trilho, sem cortes nem deformação; ícones e foto não mudam de lugar ao abrir e fechar.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.107.7",
+    data: "2026-10-15",
+    titulo: "Logo e usuário estáveis no menu recolhido",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "A logo não muda mais de lugar ao abrir e fechar o menu, e o cartão do usuário aparece inteiro com o menu recolhido.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.107.6",
+    data: "2026-10-15",
+    titulo: "Menu lateral com transição suave",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir e fechar o menu lateral, o conteúdo à direita estica e encolhe numa animação suave, sem pular de lugar.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.107.5",
+    data: "2026-10-15",
+    titulo: "Seletor de unidade organizado e imagens protegidas",
+    mudancas: [
+      { tipo: "melhoria", area: "Cabeçalho", texto: "O seletor de unidade segue o desenho do filtro de unidades das tabelas: a sigla em cima, o nome por extenso embaixo e uma busca por sigla ou nome.", link: "/painel" },
+      { tipo: "melhoria", area: "Segurança", texto: "As imagens do sistema — a logo, as fotos e as capas — não podem mais ser arrastadas nem copiadas pelo botão direito ou pelo toque longo.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.107.4",
+    data: "2026-10-15",
+    titulo: "Menu abre sem a seleção encolher",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Ao abrir o menu, a seleção não encolhe mais antes de esticar (no Windows, a barra de rolagem aparecia de repente); o menu segue rolando pela roda do mouse e pelo toque.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.107.3",
+    data: "2026-10-15",
+    titulo: "Menu recolhido sem cortes no Windows",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "Com o menu recolhido, os botões não ficam mais cortados no Windows: a barra de rolagem some no trilho (a rolagem continua) e volta ao abrir o menu.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.107.2",
+    data: "2026-10-15",
+    titulo: "Seletores do cabeçalho sem cortes e navegação mais rápida",
+    mudancas: [
+      { tipo: "correcao", area: "Cabeçalho", texto: "Os seletores de grupo, unidade e PCA mostram os nomes inteiros, sem abreviar — na lista e no botão.", link: "/painel" },
+      { tipo: "melhoria", area: "Menu", texto: "Ao tocar numa tela do menu, o ícone mostra que ela está carregando; a logo leva direto à sua tela inicial, sem redirecionamento.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.107.1",
+    data: "2026-10-15",
+    titulo: "Proteção da pesquisa contra abuso",
+    mudancas: [
+      { tipo: "melhoria", area: "Integrações", texto: "Guia para o ADM ligar, no painel da Cloudflare, o limite de pedidos da pesquisa: robôs e scripts são barrados antes de gastar o sistema.", link: "/painel/integracoes" },
+    ],
+  },
+  {
+    versao: "1.107.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa mais rápida e mais leve",
+    mudancas: [
+      { tipo: "melhoria", area: "Pesquisa", texto: "Protocolos e DFDs são encontrados na hora, enquanto você digita: a lista do que você pode ver fica na memória da aba e só é buscada de novo quando algum dado muda.", link: "/painel" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "As demais telas vão num pedido só; o mesmo termo pesquisado de novo volta na hora, e o pedido antigo é cancelado quando você continua digitando.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.106.2",
+    data: "2026-10-15",
+    titulo: "Pesquisa sempre na Mesa certa",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Protocolo ou DFD aberto por qualquer link — favorito, recente, tarefa, aviso — vai à Mesa em que está HOJE: a do PCA, ou a do sistema. Um link antigo nunca mais cai em \"Acesso restrito\" quando o item está num PCA que você abre.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Pesquisa", texto: "As dicas e os filtros da pesquisa mostram só o que você tem acesso.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.106.1",
+    data: "2026-10-15",
+    titulo: "Pesquisa mostra onde casou",
+    mudancas: [
+      { tipo: "melhoria", area: "Pesquisa", texto: "O trecho pesquisado fica marcado em todo o resultado — no nome, no detalhe (Id, assunto, protocolo) e na prévia —, com todos os termos e sem depender de acento.", link: "/painel" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Enquanto pesquisa, o banner mostra o esqueleto nos filtros, na lista e na prévia.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.106.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa precisa e filtros que se adaptam",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Busca precisa: um número (\"65\") procura só nos números — nº, Id, planejamento e código —, nunca no texto livre; sem acento só onde o português o põe (ç, ão, õe), sem trazer resultados soltos.", link: "/painel" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "O filtro escolhido vira um bloco sólido no campo: apagar no começo tira o filtro inteiro, nunca uma parte; o × também volta a \"Tudo\".", link: "/painel" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Com a pesquisa iniciada, só aparecem os filtros que têm resultado, com a contagem de cada um, entrando com uma animação suave.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.105.1",
+    data: "2026-10-15",
+    titulo: "Filtros da pesquisa sem a barra por cima",
+    mudancas: [{ tipo: "correcao", area: "Pesquisa", texto: "A barra de rolagem dos filtros rápidos fica abaixo dos chips, nunca sobre eles.", link: "/painel" }],
+  },
+  {
+    versao: "1.105.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa mais inteligente",
+    mudancas: [
+      { tipo: "melhoria", area: "Pesquisa", texto: "Vários termos de uma vez (\"secretaria saúde 2027\" exige todos) e sem precisar de acento: \"manutencao\" acha \"MANUTENÇÃO\". O resultado exato vem primeiro.", link: "/painel" },
+      { tipo: "novo", area: "Pesquisa", texto: "Filtros rápidos no banner (Protocolos, DFDs, Itens, Tarefas, Calendário, Orçamento, Catálogo…), só das telas que você abre.", link: "/painel" },
+      { tipo: "novo", area: "Pesquisa", texto: "Tarefas achadas também pela descrição, pelos comentários e pelos itens dos checklists; ajustes das Configurações e Integrações pelo nome (\"turnstile\", \"senha\", \"marca d'água\"); papéis, cargos, situações e feriados abrem já no registro.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Mais rápida: os tipos mais usados aparecem primeiro e as outras telas chegam em seguida.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.104.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa em todas as telas",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "A pesquisa agora acha também os lançamentos do orçamento (ficha, ação, elemento, unidade), os itens do catálogo, o histórico de compra e os eventos do calendário — e abre o registro na tela e aba certas.", link: "/painel/orcamento" },
+      { tipo: "novo", area: "Pesquisa", texto: "Para o administrador: usuários, órgãos, unidades, grupos, papéis, cargos, situações, feriados e automações, cada um abrindo o banner na própria tela.", link: "/painel/usuarios" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Só aparece o que a pessoa pode abrir: cada tipo exige a tela (e a aba) em que o dado está. Novos atalhos: l: lançamentos, c: catálogo, h: histórico, e: calendário, u: usuários, au: automações.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.103.3",
+    data: "2026-10-15",
+    titulo: "Pesquisa respeita a Mesa de cada item",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Protocolos, DFDs e itens só aparecem para quem abre a Mesa em que estão: os da Mesa do sistema exigem a Mesa; os de um PCA exigem o PCA no grupo e a aba Mesa liberada no papel.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.103.2",
+    data: "2026-10-15",
+    titulo: "Pesquisa leva à aba Mesa do PCA",
+    mudancas: [
+      { tipo: "correcao", area: "Pesquisa", texto: "Protocolo, DFD ou item que está num PCA abre na aba Mesa do espaço daquele PCA, com o banner aberto e a trilha do cabeçalho completa (PCA › PCA › Mesa).", link: "/painel/pca" },
+      { tipo: "correcao", area: "Mesa", texto: "Escolher um PCA no seletor de Mesa leva à aba Mesa do espaço do PCA, em vez de uma tela à parte.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.103.1",
+    data: "2026-10-15",
+    titulo: "Menu alinhado ao conteúdo",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "O primeiro módulo do menu (e a linha dele com o menu recolhido) começa na mesma altura do primeiro componente das telas, com o espaço padrão em volta da pesquisa.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.103.0",
+    data: "2026-10-15",
+    titulo: "Favoritos na pesquisa",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Pesquisa",
+        texto: "Favorite telas, abas, PCAs, protocolos, DFDs e itens pela estrela; eles ficam no painel da direita da pesquisa (no celular, no topo) e valem em todos os seus aparelhos.",
+        link: "/painel/mesa",
+      },
+      { tipo: "melhoria", area: "Pesquisa", texto: "O painel da direita fica fixo e dividido: em cima os detalhes do resultado, embaixo os favoritos.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.102.1",
+    data: "2026-10-15",
+    titulo: "Menu lateral alinhado",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "A foto do usuário fica no mesmo lugar com o menu recolhido.", link: "/painel/perfil" },
+      { tipo: "correcao", area: "Pesquisa", texto: "O campo de pesquisa do menu ficou na mesma linha do título das telas, com o mesmo respiro em cima e embaixo.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.102.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa só mostra o que você pode abrir",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Pesquisa",
+        texto: "Protocolos, DFDs e itens só aparecem quando você abre a Mesa em que estão; os que estão num PCA abrem na Mesa daquele PCA (antes levavam a \"Acesso restrito\").",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "Pesquise por nº de planejamento, Id ou nº do protocolo, interessado, nº do DFD, código e descrição do item.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
+    versao: "1.101.1",
+    data: "2026-10-15",
+    titulo: "Pesquisa mostra o caminho de cada tela e aba",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Pesquisa",
+        texto: "Cada resultado mostra a sequência até ele (ex.: PCA › 2025 · PCA Teste › Orçamento), e o trecho buscado aparece só em negrito.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
+    versao: "1.101.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa do sistema completa (com as abas)",
+    mudancas: [
+      { tipo: "novo", area: "Pesquisa", texto: "Pesquisa as ABAS de cada tela (Mesa, Configurações, Órgãos, Perfil e cada PCA) — ex.: “aba: segurança” ou “PCA 2027 orçamento”.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Pesquisa", texto: "Resultados por grupo com “Ver todos”, termo em destaque, número exato primeiro, ações rápidas (tema, menu, perfil, sair) e prévia do item ao lado.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Pesquisa", texto: "Atalhos de prefixo (p:, d:, t:, i:…) com Tab, recentes removíveis, esqueleto por grupo, aviso de falha com “Tentar de novo”, tela cheia no celular e leitura por leitor de tela.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A Mesa abre direto numa visão pelo endereço (?vista=dfds, itens, dashboard).", link: "/painel/mesa?vista=dfds" },
+    ],
+  },
+  {
+    versao: "1.100.0",
+    data: "2026-10-15",
+    titulo: "Pesquisa do sistema no menu lateral",
+    mudancas: [
+      { tipo: "novo", area: "Menu", texto: "Pesquisa rápida fixa logo abaixo da logo (Ctrl+K / ⌘K): abre um banner que pesquisa telas, PCAs, protocolos, DFDs e tarefas, com recentes e dicas de prefixo (dfd:, item:, tarefa:…).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "A pesquisa saiu do cabeçalho — a trilha ficou só com a navegação.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.99.0",
+    data: "2026-10-15",
+    titulo: "Trilha completa e paleta Ctrl+K",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "A trilha mostra o espaço, a aba (troca pelo ⌃⌄) e o protocolo/DFD/tarefa aberto; a seção também troca pelo ⌃⌄.", link: "/painel/mesa" },
+      { tipo: "novo", area: "Cabeçalho", texto: "Ctrl+K (⌘K) abre a paleta “Ir para…”: todas as telas e PCAs, com busca e os recentes.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Busca e recentes nas listas da trilha, selo do PCA que filtra a tela, trilha no celular e níveis do meio que somem primeiro.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.98.0",
+    data: "2026-10-15",
+    titulo: "Trilha de navegação no cabeçalho",
+    mudancas: [
+      { tipo: "novo", area: "Cabeçalho", texto: "Trilha no padrão do Cloudflare: seção › tela (troca de tela pelo ⌃⌄) e, no espaço de um PCA, o PCA (troca de PCA pelo ⌃⌄).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "O seletor de PCA foi para a direita do cabeçalho; “Todos os PCAs” só aparece com mais de um PCA.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.97.2",
+    data: "2026-10-15",
+    titulo: "Menu recolhido: foto e animação sem trancos",
+    mudancas: [
+      { tipo: "correcao", area: "Menu", texto: "A foto do usuário aparece com o menu recolhido.", link: "/painel/perfil" },
+      { tipo: "correcao", area: "Menu", texto: "Ao recolher e abrir o menu, a tela não se redesenha a cada quadro: muda de largura uma vez e desliza. Grades, tabelas e gráficos, como os cards do PCA, não pulam mais.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.97.1",
+    data: "2026-10-15",
+    titulo: "Menu recolhido: separadores e animação",
+    mudancas: [
+      { tipo: "melhoria", area: "Menu", texto: "Com o menu recolhido, o nome de cada módulo vira uma linha curta que separa os grupos de ícones. Ao abrir e recolher, os textos acompanham a largura com reticências e entram deslizando, numa curva mais suave.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.97.0",
+    data: "2026-10-15",
+    titulo: "Menu lateral recolhível",
+    mudancas: [
+      { tipo: "novo", area: "Menu", texto: "O botão no rodapé do menu lateral recolhe o menu para uma faixa só com os ícones, e o conteúdo ganha a largura. Com o mouse sobre a faixa, o menu abre por cima do conteúdo, sem empurrá-lo. A escolha fica lembrada neste navegador.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.96.6",
+    data: "2026-10-15",
+    titulo: "Sair só com o ícone no menu",
+    mudancas: [
+      { tipo: "melhoria", area: "Menu", texto: "No cartão do usuário do menu lateral, o Sair virou um ícone à direita do acesso ao perfil.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.96.5",
+    data: "2026-10-15",
+    titulo: "Card do orçamento com valor real",
+    mudancas: [
+      { tipo: "melhoria", area: "Orçamento", texto: "O card mostra a dotação atualizada com o valor completo (sem abreviar) e o ano em destaque no canto superior direito.", link: "/painel/orcamento" },
+    ],
+  },
+  {
+    versao: "1.96.4",
+    data: "2026-10-15",
+    titulo: "Filtro de sigla num componente só",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "Unidade, órgão e sigla usam o mesmo filtro com o nome embaixo, mais leve: cada opção é calculada uma vez.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.96.3",
+    data: "2026-10-15",
+    titulo: "Filtro de órgão com o nome",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "O filtro das colunas de órgão de todas as tabelas mostra o nome de cada sigla e busca pela sigla ou pelo nome — o mesmo modelo das unidades.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.96.2",
+    data: "2026-10-15",
+    titulo: "Presença só pelo ADM",
+    mudancas: [
+      { tipo: "melhoria", area: "Perfil", texto: "A opção de aparecer invisível saiu do Perfil: a presença é definida só pelas configurações do administrador.", link: "/painel/perfil" },
+      { tipo: "melhoria", area: "Configurações", texto: "Presença sem a chave “Permitir aparecer invisível”; quem tinha ficado invisível volta a aparecer.", link: "/painel/configuracoes?aba=presenca" },
+    ],
+  },
+  {
+    versao: "1.96.1",
+    data: "2026-10-15",
+    titulo: "Perfil sem rolar a página",
+    mudancas: [
+      { tipo: "melhoria", area: "Perfil", texto: "A conta Google fica no cabeçalho do Perfil (vincular/desvincular), o histórico de acesso ganhou aba própria e o conteúdo das abas rola por dentro, sem rolar a página.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.96.0",
+    data: "2026-10-15",
+    titulo: "Perfil reorganizado em abas",
+    mudancas: [
+      { tipo: "melhoria", area: "Perfil", texto: "O Perfil ficou em abas: Conta, Segurança, Aparência, Notificações, Trabalho e Meu acesso — cada assunto no seu lugar, sem cartão dentro de cartão.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.95.0",
+    data: "2026-10-15",
+    titulo: "Modos escuros e horário do tema",
+    mudancas: [
+      { tipo: "novo", area: "Perfil", texto: "Aparência no Perfil: padrão do site, claro, escuro, seguir o sistema, pelo horário do dia ou horário personalizado.", link: "/painel/perfil" },
+      { tipo: "novo", area: "Perfil", texto: "Tonalidade do modo escuro: Carvão, Azul-marinho ou Preto (OLED), aplicada sem piscar ao abrir.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.94.2",
+    data: "2026-10-14",
+    titulo: "Filtros sem texto cortado",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "As opções dos filtros das colunas mostram o texto inteiro, quebrando a linha — sigla e nome da unidade completos.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.94.1",
+    data: "2026-10-14",
+    titulo: "Filtro de unidade igual em todas as tabelas",
+    mudancas: [
+      { tipo: "correcao", area: "Orçamento", texto: "O filtro da coluna Unidade do PCA × Orçamento usa o mesmo desenho das demais tabelas: a sigla e o nome embaixo.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.94.0",
+    data: "2026-10-14",
+    titulo: "Unidades com o nome em todas as tabelas",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "O filtro das colunas de unidade e sigla de todas as tabelas mostra o nome de cada sigla e busca pela sigla ou pelo nome.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.93.2",
+    data: "2026-10-14",
+    titulo: "Filtro Unidade com o nome",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "O filtro Unidade do Dashboard mostra o nome de cada sigla e busca pela sigla ou pelo nome.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.93.1",
+    data: "2026-10-14",
+    titulo: "Filtros do Dashboard do PCA numa linha",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Os filtros do Dashboard ficam numa única linha, com a explicação no (?) e o PDF num botão só com o ícone.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.93.0",
+    data: "2026-10-14",
+    titulo: "Histórico de acesso",
+    mudancas: [
+      { tipo: "novo", area: "Perfil", texto: "Histórico de acesso: o último acesso e cada entrada na sua conta com data, hora, dispositivo, canal (senha ou Google) e IP — exportável.", link: "/painel/perfil" },
+      { tipo: "novo", area: "Usuários", texto: "Coluna \"Último acesso\" na lista e o histórico de acesso de cada pessoa no banner do usuário.", link: "/painel/usuarios" },
+    ],
+  },
+  {
+    versao: "1.92.0",
+    data: "2026-10-14",
+    titulo: "Segurança: sessão inativa e alertas de login",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Aba Segurança: o administrador escolhe depois de quanto tempo parada a sessão é encerrada (15 min a 8 h, ou não encerra).", link: "/painel/configuracoes?aba=seguranca" },
+      { tipo: "novo", area: "Notificações", texto: "Alerta de login suspeito no sino dos administradores: entrada por um aparelho novo (também avisa a própria pessoa) e conta bloqueada por senhas erradas.", link: "/painel/configuracoes?aba=seguranca" },
+      { tipo: "correcao", area: "Acesso", texto: "\"Esqueci a senha\" não revela mais se um e-mail tem conta ao pedir o código duas vezes.", link: "/login?modo=senha" },
+      { tipo: "correcao", area: "Consulta pública", texto: "Objeto, setor e responsável dos DFDs na consulta pública passam pela máscara de dados pessoais (CPF, e-mail, telefone).", link: "/" },
+    ],
+  },
+  {
+    versao: "1.91.1",
+    data: "2026-10-14",
+    titulo: "Correções da auditoria",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Item sem a quantidade carregada não é mais apontado como \"sem quantidade\" por engano.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Mesa", texto: "Importação em lotes: a quantidade ausente ou fracionada também é barrada nos lotes seguintes quando a Avaliação manda bloquear.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Orçamento", texto: "Relatório da composição por unidade: as unidades com contratações são escolhidas pelo cadastro, não pela sigla (siglas repetidas entre órgãos).", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.91.0",
+    data: "2026-10-14",
+    titulo: "Módulos configuráveis, chat por grupo e quem vê os online",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Nova aba Módulos: o ADM cria os módulos do menu, dá nome, ordena e define as telas de cada um. O menu mostra uma seção por módulo.", link: "/painel/configuracoes?aba=modulos" },
+      { tipo: "melhoria", area: "Grupos", texto: "O grupo passa a liberar módulos (as telas vêm deles) e ganhou a chave “Chat liberado”.", link: "/painel/grupos" },
+      { tipo: "novo", area: "Configurações", texto: "Em Papéis → Detalhes → Presença, o ADM define se o papel vê quem está online.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
+    versao: "1.90.3",
+    data: "2026-10-14",
+    titulo: "KPIs do orçamento do PCA: detalhes completos e baixas",
+    mudancas: [{ tipo: "melhoria", area: "PCA", texto: "As KPIs do Orçamento do PCA voltaram com todos os detalhes, em duas colunas e sem a divisória — mais baixas.", link: "/painel/pca" }],
+  },
+  {
+    versao: "1.90.2",
+    data: "2026-10-14",
+    titulo: "KPIs do orçamento do PCA mais compactas",
+    mudancas: [{ tipo: "melhoria", area: "PCA", texto: "As KPIs do Orçamento do PCA ficaram mais baixas: o valor completo e todos os detalhes em duas colunas, sem a divisória.", link: "/painel/pca" }],
+  },
+  {
+    versao: "1.90.1",
+    data: "2026-10-14",
+    titulo: "KPIs do orçamento do PCA completas",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "As KPIs do Orçamento do PCA mostram os valores completos e os detalhes: a visão, a dotação bruta e o retirado, o que está sem vínculo, as contratações e o planejado sem orçamento, as unidades com saldo e com déficit e quantas estão dentro, em atenção ou acima.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.90.0",
+    data: "2026-10-14",
+    titulo: "Quantidade fracionada e ajuda nas avaliações",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Novo ponto de avaliação “Quantidade menor que 1” (item com quantidade entre 0 e 1, ex.: 0,001): aponta “Quantidade fracionada” no item, no DFD e no protocolo — atenção por padrão, configurável (bloqueia/avisa/ignora).", link: "/painel/configuracoes?aba=avaliacao" },
+      { tipo: "melhoria", area: "Configurações", texto: "Cada ponto de Avaliação tem o (?) com o que confere, onde aparece, como funciona e o que cada comportamento faz; também “Editável”, estados de ciclo, assuntos, travas e botões da protocolação.", link: "/painel/configuracoes?aba=avaliacao" },
+    ],
+  },
+  {
+    versao: "1.89.3",
+    data: "2026-10-14",
+    titulo: "Quantidade zerada apontada na Mesa",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "A Mesa aponta “Quantidade zerada” (erro) no Estado do item, do DFD e do protocolo — separado de “Item sem quantidade” —, com o filtro da coluna Estado para achar todos.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.89.2",
+    data: "2026-10-14",
+    titulo: "Item com quantidade zero é erro",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Item com quantidade zerada (ou negativa) passa a ser erro “Item sem quantidade (vazia ou zero)” — na célula Estado, nas pendências, no despacho e na importação, como já era o valor unitário. Antes só a quantidade vazia era apontada e o item com total R$ 0,00 passava como regular.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.89.1",
+    data: "2026-10-14",
+    titulo: "KPIs do Dashboard do PCA completas",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "As KPIs do Dashboard mostram os valores completos (sem abreviar) e mais detalhes: itens com valor, média por DFD, classificações, protocolos, DFDs, unidades, mediana, menor valor, itens acima da média e a participação do maior item.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.89.0",
+    data: "2026-10-14",
+    titulo: "Relatório da composição por unidade",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "O Relatório da composição do orçamento do PCA pode sair de todas as unidades ou só das escolhidas — num arquivo só ou um PDF para cada unidade.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Sistema", texto: "Tocar de novo no número da versão, com as Novidades abertas, fecha o banner.", link: "/painel" },
+    ],
+  },
+  {
+    versao: "1.88.1",
+    data: "2026-10-14",
+    titulo: "Card do orçamento renovado",
+    mudancas: [
+      { tipo: "melhoria", area: "Orçamento", texto: "O card mostra a dotação abreviada e completa, a composição (inicial, suplementação, anulação, emenda), a execução com o % e os valores completos, e órgãos, unidades, programas, ações e lançamentos — sem cortar texto.", link: "/painel/orcamento" },
+    ],
+  },
+  {
+    versao: "1.88.0",
+    data: "2026-10-14",
+    titulo: "Vínculos expandidos definidos no papel",
+    mudancas: [
+      { tipo: "melhoria", area: "Configurações", texto: "Em Papéis → Detalhes → Exibição, o ADM define se os vínculos já abrem expandidos no banner do Orçamento do PCA (saiu a chave do banner).", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
+    versao: "1.87.1",
+    data: "2026-10-14",
+    titulo: "Barra de progresso ao trocar a visão",
+    mudancas: [{ tipo: "melhoria", area: "PCA", texto: "Trocar a visão do orçamento mostra a barra de progresso com a porcentagem e a etapa no aviso do canto inferior.", link: "/painel/pca" }],
+  },
+  {
+    versao: "1.87.0",
+    data: "2026-10-14",
+    titulo: "Vínculos: abrir expandidos e progresso da gravação",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Banner dos vínculos da linha: \"Abrir expandidos\" deixa todos os vínculos já abertos ao entrar (preferência deste aparelho); vários podem ficar abertos ao mesmo tempo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Gravar ou excluir um vínculo mostra a barra de progresso com a porcentagem e a etapa (enviando, gravado, recalculando) no aviso do canto inferior.", link: "/painel/orcamento" },
+    ],
+  },
+  {
+    versao: "1.86.1",
+    data: "2026-10-14",
+    titulo: "Filtros da visão em consulta",
+    mudancas: [{ tipo: "melhoria", area: "Orçamento", texto: "Na visão em consulta, cada filtro abre e mostra os valores que entram (com a dotação e os lançamentos) e os que ficam de fora — sem poder alterar.", link: "/painel/pca" }],
+  },
+  {
+    versao: "1.86.0",
+    data: "2026-10-14",
+    titulo: "Ver as configurações da visão",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "Olho ao lado da Visão no PCA × Orçamento: abre os filtros e os vínculos da visão em uso só para consulta, sem poder alterar.", link: "/painel/pca" },
+      { tipo: "novo", area: "Papéis", texto: "Componente \"Configurações da visão\" no PCA: o ADM decide, por papel, quem vê o olho.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
+    versao: "1.85.2",
+    data: "2026-10-14",
+    titulo: "Carregando ao trocar a visão",
+    mudancas: [{ tipo: "melhoria", area: "PCA", texto: "Trocar a visão do orçamento no PCA mostra o aviso \"Aplicando a visão…\" com o carregando no canto inferior até os números novos chegarem.", link: "/painel/pca" }],
+  },
+  {
+    versao: "1.85.1",
+    data: "2026-10-14",
+    titulo: "Caixas de marcar não deslocam mais os banners",
+    mudancas: [{ tipo: "correcao", area: "Sistema", texto: "Marcar uma caixa (ex.: as ações de um vínculo do orçamento) não faz mais o banner pular e mostrar um espaço em branco — vale em todas as caixas de marcar.", link: "/painel/pca" }],
+  },
+  {
+    versao: "1.85.0",
+    data: "2026-10-14",
+    titulo: "Configurações do orçamento em modo consulta",
+    mudancas: [
+      { tipo: "melhoria", area: "Orçamento", texto: "Aba Vínculos: quem não configura o Orçamento abre cada vínculo para ver as ações e os destinos, sem poder alterar.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "PCA", texto: "PCA × Orçamento: a coluna Vínculos, o banner da linha e a engrenagem da visão abrem para todos em modo consulta; só quem configura altera.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.84.1",
+    data: "2026-10-14",
+    titulo: "Visão do orçamento sem exigir Configurar",
+    mudancas: [{ tipo: "melhoria", area: "PCA", texto: "Trocar a visão do orçamento no PCA × Orçamento passou a valer para quem visualiza o PCA — não é mais tratado como configuração.", link: "/painel/pca" }],
+  },
+  {
+    versao: "1.84.0",
+    data: "2026-10-14",
+    titulo: "Papéis com controle por componente",
+    mudancas: [
+      { tipo: "novo", area: "Papéis", texto: "Detalhes do papel → Componentes: em cada tela, escolha por aba/visão/tabela o que o papel vê, manipula, importa, exporta, exclui ou configura.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "melhoria", area: "Papéis", texto: "(?) explicativo em cada tela, ação, componente e detalhe do editor de papéis.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
+    versao: "1.83.4",
+    data: "2026-10-14",
+    titulo: "Cabeçalho da tarefa compacto",
+    mudancas: [{ tipo: "melhoria", area: "Tarefas", texto: "O cabeçalho do banner da tarefa ficou compacto: círculo, ticket e título alinhados na mesma altura.", link: "/painel/tarefas" }],
+  },
+  {
+    versao: "1.83.3",
+    data: "2026-10-14",
+    titulo: "Rodapé do cartão em uma linha",
+    mudancas: [{ tipo: "melhoria", area: "Tarefas", texto: "O rodapé do cartão junta ícones, unidade, números da Mesa e fotos numa única linha.", link: "/painel/tarefas" }],
+  },
+  {
+    versao: "1.83.2",
+    data: "2026-10-14",
+    titulo: "PDF da lista com todo o conteúdo das tarefas",
+    mudancas: [{ tipo: "melhoria", area: "Tarefas", texto: "O PDF da lista traz cada tarefa completa: dados, descrição, notas, links, checklists com os itens, eventos e comentários.", link: "/painel/tarefas" }],
+  },
+  {
+    versao: "1.83.1",
+    data: "2026-10-14",
+    titulo: "Listas do quadro mais largas",
+    mudancas: [{ tipo: "melhoria", area: "Tarefas", texto: "As listas do quadro ficaram mais largas (20rem): títulos e o pé da lista sem quebras; o botão do filtro da lista foi corrigido.", link: "/painel/tarefas" }],
+  },
+  {
+    versao: "1.83.0",
+    data: "2026-10-14",
+    titulo: "Lista com filtro e PDF; cartão reorganizado",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "O cartão mostra a unidade e os números do protocolo/DFD/item numa linha própria; ícones e fotos embaixo.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "Filtro em cada lista do quadro por membros, unidade e protocolo/DFD/item (o funil no pé da lista).", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "PDF da lista: o ícone no pé da lista baixa os cartões à vista.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.82.2",
+    data: "2026-10-14",
+    titulo: "Números da Mesa no cartão da tarefa",
+    mudancas: [{ tipo: "melhoria", area: "Tarefas", texto: "O cartão da tarefa mostra em selos os números do protocolo, do DFD e do item vinculados.", link: "/painel/tarefas" }],
+  },
+  {
+    versao: "1.82.1",
+    data: "2026-10-14",
+    titulo: "Tarefa com os números da Mesa e título no cabeçalho",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "A tarefa criada sobre um item já fica vinculada também ao DFD e ao protocolo dele; sobre um DFD, também ao protocolo.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tarefas", texto: "O título da tarefa é editado direto no cabeçalho do banner (sem o campo repetido abaixo).", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.82.0",
+    data: "2026-10-14",
+    titulo: "Tarefas com a sigla da unidade e Emitir DFDs da lista",
+    mudancas: [
+      { tipo: "melhoria", area: "Tarefas", texto: "No banner da tarefa, todos os componentes que dá para adicionar ficam numa linha fixa acima do rodapé (rola de lado no celular).", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "A tarefa ligada a protocolo, DFD ou item leva a SIGLA da unidade: no cartão, na coluna Unidade da Lista e no título sugerido ao criar pela Mesa.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "Filtrar por unidade (sigla, ou sem unidade) no painel Filtrar; o responsável já filtrava.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Tarefas", texto: "Emitir DFDs (ADM): no rodapé da aba Lista, roda a automação com os DFDs das tarefas À VISTA — os filtros valem.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.81.1",
+    data: "2026-10-14",
+    titulo: "Tarefa da Mesa segue aberta depois de criada",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Editar uma tarefa pelo botão Tarefas não leva mais à tela de Tarefas; depois de criada, a tarefa continua aberta na Mesa para editar.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.81.0",
+    data: "2026-10-14",
+    titulo: "Tarefas da Mesa sem sair da Mesa",
+    mudancas: [
+      { tipo: "novo", area: "Mesa", texto: "Criar tarefa num protocolo, DFD ou item abre a tarefa COMPLETA ali mesmo (lista, pessoas, datas, etiquetas, checklists, campos), já vinculada e com o título sugerido.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "As tarefas ligadas abrem e se editam por cima da Mesa; concluir/reabrir pelo círculo; filtro Abertas | Todas e atalho para o quadro.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.80.1",
+    data: "2026-10-14",
+    titulo: "Criar tarefa: só os quadros do grupo ativo",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "O \"Criar tarefa\" de um protocolo, DFD ou item lista só os quadros do grupo escolhido no cabeçalho, com o grupo informado no seletor.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.80.0",
+    data: "2026-10-14",
+    titulo: "Tarefas: lista com pessoa, tarefa sobre o item e exclusão limpa",
+    mudancas: [
+      { tipo: "novo", area: "Tarefas", texto: "A lista pode ser atribuída a uma pessoa (menu da lista): a foto fica no cabeçalho e a tarefa nova nela já nasce com a pessoa como responsável.", link: "/painel/tarefas" },
+      { tipo: "novo", area: "Mesa", texto: "Tarefas também sobre um ITEM: o botão Tarefas no banner do item cria a tarefa já vinculada a ele (e o item pode ser vinculado a qualquer tarefa).", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Ao criar a tarefa sobre um protocolo, DFD ou item, aparecem as listas atribuídas ao responsável do protocolo e a você — a tarefa já abre na lista certa.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Excluir a lista com as tarefas limpa o banco por inteiro — também os vínculos de outras tarefas que apontavam para elas.", link: "/painel/tarefas" },
+    ],
+  },
+  {
+    versao: "1.79.0",
+    data: "2026-10-10",
+    titulo: "Biblioteca de componentes só para o ADM",
+    mudancas: [
+      { tipo: "melhoria", area: "Administração", texto: "A biblioteca de componentes saiu da área pública e fica em Administração → Componentes, só para administradores.", link: "/painel/design-system" },
+    ],
+  },
+  {
+    versao: "1.78.1",
+    data: "2026-10-09",
+    titulo: "Linhas vazias só até a visão da tabela",
+    mudancas: [
+      { tipo: "correcao", area: "Tabelas", texto: "As linhas vazias completam a tabela só até o limite da visão (nunca além das linhas por página); com o conteúdo maior que a visão, nenhuma é acrescentada.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.78.0",
+    data: "2026-10-09",
+    titulo: "Tabelas: marcar antes de abrir e linhas intercaladas",
+    mudancas: [
+      { tipo: "melhoria", area: "Tabelas", texto: "Um clique marca a linha na cor de destaque; o segundo clique na linha marcada abre o banner (Enter abre direto).", link: "/painel/mesa" },
+      { tipo: "novo", area: "Aparência", texto: "Cor das linhas intercaladas de todas as tabelas, no claro e no escuro.", link: "/painel/aparencia" },
+      { tipo: "melhoria", area: "Tabelas", texto: "A página da tabela fica sempre cheia: linhas vazias completam as que faltam, sem seleção nem clique.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.77.1",
+    data: "2026-10-09",
+    titulo: "Verificação só para visualizar",
+    mudancas: [
+      { tipo: "melhoria", area: "Verificação", texto: "Protocolo ou DFD agora se escolhe num seletor à direita do título.", link: "/painel/verificacao" },
+      { tipo: "correcao", area: "Verificação", texto: "Os banners da verificação são só de visualização: nada se edita, exclui ou seleciona.", link: "/painel/verificacao" },
+    ],
+  },
+  {
+    versao: "1.77.0",
+    data: "2026-10-09",
+    titulo: "Verificação nos grupos e Novidades pelo acesso",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "A Verificação virou uma tela própria do grupo: o ADM a libera em “Telas do grupo” (quem já abria a Mesa continua com ela).", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Grupos", texto: "Cartões dos grupos no padrão do sistema: as telas liberadas em ícones, pessoas, unidades e PCAs; tocar abre a edição.", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Novidades", texto: "As Novidades do menu mostram só as mudanças das telas que o seu grupo abre.", link: "/painel/verificacao" },
+    ],
+  },
+  {
+    versao: "1.76.0",
+    data: "2026-10-09",
+    titulo: "Grupos: telas e PCAs no próprio grupo",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "As telas que cada grupo abre agora se escolhem no próprio grupo. A tela Permissões saiu; cada grupo herdou as telas da permissão que usava.", link: "/painel/grupos" },
+      { tipo: "novo", area: "Grupos", texto: "Cada grupo escolhe os PCAs que acessa: todos (também os que forem criados) ou só os marcados. Fora deles, o PCA some da lista, do cabeçalho, da Mesa e do Calendário.", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Grupos", texto: "No banner de editar o grupo, o Salvar fica fixo no rodapé; o Cancelar saiu (o X fecha).", link: "/painel/grupos" },
+      { tipo: "melhoria", area: "Notificações", texto: "O aviso de nova versão chega a todos, só com o que mudou nas telas que o grupo de cada pessoa abre.", link: "/painel/perfil" },
+    ],
+  },
+  {
+    versao: "1.75.0",
+    data: "2026-10-09",
+    titulo: "Verificação de protocolos e DFDs",
+    mudancas: [
+      { tipo: "novo", area: "Verificação", texto: "Tela nova no menu Módulos: solte um protocolo (.pdf) ou um DFD (.pdf ou .xlsx) e veja todos os erros e atenções, com as mesmas regras da importação da Mesa \u2014 nada é gravado, serve só para consulta.", link: "/painel/verificacao" },
+      { tipo: "novo", area: "Verificação", texto: "As pendências encontradas viram relatório: despacho, WhatsApp, lista ou PDF, pelo indicador no rodapé do banner.", link: "/painel/verificacao" },
+      { tipo: "novo", area: "Usuários", texto: "Excluir um usuário agora o ARQUIVA: a pessoa perde o acesso e tudo fica guardado. Em \u201cArquivados\u201d, no rodapé da tabela, dá para restaurar ou excluir definitivamente.", link: "/painel/usuarios" },
+      { tipo: "correcao", area: "Acesso", texto: "No login, a área do captcha tem altura fixa: ele aparece abaixo do botão Entrar sem mover nada.", link: "/login" },
+    ],
+  },
+  {
+    versao: "1.74.0",
+    data: "2026-10-08",
+    titulo: "Automações: lixeira e devolver ao painel",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Arraste um cartão da sua lista até a lixeira que surge no centro, embaixo, para excluí-lo \u2014 ela acende em vermelho com o cartão por cima e pede a confirmação.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Com o painel \u201cNovo fluxo\u201d aberto, arraste um cartão da sua lista de volta para ele: o fluxo sai da lista (com confirmação) e o modelo volta a ficar disponível no painel.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Ao arrastar um modelo do painel, o lugar em que ele vai cair aparece tracejado na sua lista só com o cartão sobre ela; fora da lista não há lugar marcado e, solto ali, o cartão volta voando ao painel.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.73.3",
+    data: "2026-10-08",
+    titulo: "Automações: a lista rola por dentro",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "Os cartões das automações ficam num espaço com rolagem própria, na altura da tela — a página não rola mais; o painel \u201cNovo fluxo\u201d fica ao lado com a mesma altura e arrastar um cartão até a borda rola a lista.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.73.2",
+    data: "2026-10-08",
+    titulo: "Marcar todos sempre à vista",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Nas tabelas com marcação, a caixa do topo (marcar todos) fica fixa no cabeçalho ao rolar para baixo e para o lado \u2014 as caixas das linhas não passam mais por cima dela.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.73.1",
+    data: "2026-10-08",
+    titulo: "Rolagem leve: a barra acompanha o arrasto",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "As barras de rolagem (vertical e horizontal) voltaram a ser as do navegador, que seguem o arrasto na velocidade do ponteiro, sem travar \u2014 as barras desenhadas pelo sistema eram arrastadas pela página e atrasavam quando ela estava ocupada. Clara ou escura conforme o tema.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Sistema", texto: "Rolar ficou mais leve em todas as telas: o cabeçalho e a navegação do celular não desfocam mais o conteúdo que passa por baixo a cada quadro, e as medidas do rodapé das tabelas e da barra de seleção só atualizam a página quando o tamanho muda de fato.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.73.0",
+    data: "2026-10-08",
+    titulo: "Responsável de fora do município",
+    mudancas: [
+      { tipo: "novo", area: "Órgãos e Unidades", texto: "No cadastro da pessoa responsável, a chave \u201cFuncionário de fora do município\u201d: ela fica sem matrícula (o campo some), a planilha mostra \u201cFora do município\u201d e a conferência deixa de apontar \u201cSem matrícula\u201d. Vale também no cadastro rápido ao vincular.", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
+    versao: "1.72.1",
+    data: "2026-10-08",
+    titulo: "Tabelas: rolagem lateral estável e caixa de marcar do sistema",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "A rolagem lateral das tabelas não treme nem trava mais: as bordas ficam nas células, então a coluna de marcação (e as congeladas) andam junto da borda ao rolar.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "A caixa de marcar das tabelas e dos filtros segue o arredondamento de Configurações → Aparência (até virar um círculo), no lugar do quadrado do navegador.", link: "/painel/aparencia" },
+      { tipo: "correcao", area: "PCA", texto: "Na coluna Local da Mesa do PCA a informação não se repete mais (\u201cIncorporado · Incorporar\u201d virou \u201cIncorporado\u201d; a substituição e a exclusão dizem o que fazem) e a célula usa o mesmo desenho das colunas de estado.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.72.0",
+    data: "2026-10-08",
+    titulo: "Responsáveis sempre no lugar que vale",
+    mudancas: [
+      { tipo: "correcao", area: "Órgãos e Unidades", texto: "O responsável é gravado sempre onde a assinatura dos DFDs é conferida: no órgão com assinatura única e em cada unidade quando é por unidade. Os vínculos que estavam no lugar errado (ex.: na unidade própria de um órgão com assinatura única) foram levados ao órgão — a assinatura volta a conferir.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "Ligar ou desligar a assinatura única, o “Também unidade”, promover, rebaixar ou trocar a unidade de órgão leva os responsáveis junto, automaticamente (com confirmação quando há escolha).", link: "/painel/orgaos" },
+      { tipo: "melhoria", area: "Órgãos e Unidades", texto: "“Onde responde” separado em Órgãos e Unidades (agrupadas por órgão), só com os lugares que valem pela configuração; o (?) diz por que os demais não aparecem.", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
+    versao: "1.71.1",
+    data: "2026-10-08",
+    titulo: "Tabelas: marcação fixa e selos no raio do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Em toda tabela com a coluna de marcação, ela fica presa à esquerda ao rolar de lado — a caixa de marcar está sempre à vista.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Os selos dentro das células (Situação, Centi, Execução, PCA, Prioridade, \u201c+N\u201d, ABC e etiquetas) seguem o arredondamento definido em Configurações → Aparência.", link: "/painel/aparencia" },
+    ],
+  },
+  {
+    versao: "1.71.0",
+    data: "2026-10-08",
+    titulo: "Automação: seleção nas tabelas e cartões mais simples",
+    mudancas: [
+      { tipo: "novo", area: "Automação", texto: "Toda tabela do painel do fluxo tem a coluna de seleção: nas que alimentam a automação (Seleção, Do sistema, Tabela salva), as marcadas são as que passam (nenhuma marcada = todas); nas de resultado, “Executar com os selecionados” roda o fluxo só com elas.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "No “Ler do sistema”, o valor procurado é escolhido numa lista com o que existe no sistema (planejamentos, DFDs, protocolos ou produtos) e só aparece quando a busca não é “Todos”.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "O (?) fica no próprio cartão da automação: um toque mostra o que ela faz. O painel lateral “Novo fluxo” vai até o fim da tela, no padrão do sistema, e não mostra as automações que você já adicionou.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "Arrastar um modelo do painel até a lista funciona sempre, também com a lista vazia; “Atualizar pelo modelo” fica no próprio fluxo; o selo “Sem extensão” segue o mesmo desenho do Preview do PCA.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.70.2",
+    data: "2026-10-08",
+    titulo: "Automação: os DFDs do sistema à vista no painel",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "O componente “Ler do sistema” ganhou a aba “Do sistema” no painel do fluxo: os DFDs (ou protocolos e itens) lidos aparecem já ao abrir, sem executar e sem a extensão, na mesma tabela da Mesa — tocar abre o banner.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.70.1",
+    data: "2026-10-08",
+    titulo: "Proteção de captura invisível",
+    mudancas: [
+      { tipo: "correcao", area: "Configurações", texto: "A proteção de impressão e captura ficou invisível: a tela não pisca nem é coberta ao usar as teclas. A impressão sai em branco e a imagem do PrtScn some da área de transferência.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
+    versao: "1.70.0",
+    data: "2026-10-08",
+    titulo: "Consulta de itens em uma linha",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Na Consulta de itens do Dashboard, as abas, a busca e a ajuda (?) ficam numa linha só, todas na mesma altura; a explicação saiu da tela e foi para o (?).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "As linhas das tabelas da consulta ficam na altura padrão: o produto, o assunto e o motivo em uma linha, com o texto inteiro na dica.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Os selos de ano e Preview da linha de título seguem o arredondamento dos controles definido pelo ADM em Aparência.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.69.2",
+    data: "2026-10-08",
+    titulo: "Nome do espaço em destaque",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "O nome do PCA (e do orçamento) ficou maior, preenchendo a altura da linha de título, junto da seta e dos selos.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.69.1",
+    data: "2026-10-08",
+    titulo: "Linha de título com a altura da seta",
+    mudancas: [
+      { tipo: "correcao", area: "PCA", texto: "Nome, ano e status do PCA com a mesma altura do botão de voltar; o mesmo no Orçamento.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "O selo Preview ficou mais limpo: sem o lápis e sem o brilho — o ponto respira e solta ondas suaves.", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "No Dashboard do PCA, os indicadores, os filtros e os gráficos voltaram a ter o espaço padrão entre si.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.69.0",
+    data: "2026-10-08",
+    titulo: "Linha de título padronizada",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Nome, ano e status do PCA com a mesma altura, proporcional ao botão de voltar; o Preview ganhou ícone e um brilho ao vivo que varre o selo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "A linha do título do orçamento segue o mesmo padrão: nome e ano com a mesma altura.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Sistema", texto: "Abaixo da linha de título de cada tela, o mesmo espaço que há acima dela — padronizado em todo o sistema.", link: "/painel/configuracoes" },
+    ],
+  },
+  {
+    versao: "1.68.1",
+    data: "2026-10-08",
+    titulo: "Margens do conteúdo proporcionais",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "O conteúdo ficou mais perto do cabeçalho e da base da tela — metade da margem lateral, que segue igual — e as quatro distâncias ficam proporcionais em todas as telas.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.68.0",
+    data: "2026-10-08",
+    titulo: "Respiro interno igual nos 4 lados",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Cartões, quadros e banners passaram a ter o MESMO respiro interno em cima, embaixo e nas laterais, em todas as telas (a régua da densidade do ADM).", link: "/painel/pca" },
+      { tipo: "correcao", area: "PCA", texto: "Os indicadores (KPIs) tinham um recuo extra à esquerda; agora o texto fica à mesma distância de todas as bordas.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.67.1",
+    data: "2026-10-08",
+    titulo: "Botão de ajuda (?) centralizado",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "O ícone do botão de ajuda (?) ficava encostado à esquerda, fora do fundo ao passar o mouse. Agora fica centralizado em todas as telas.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.67.0",
+    data: "2026-10-08",
+    titulo: "Espaço do PCA mais limpo",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA", texto: "Nome, ano e situação do PCA na mesma linha das abas; a aba Configuração virou só o ícone da engrenagem.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Ano com o ícone do calendário e o selo Preview com o ponto pulsando (ao vivo); o texto da fonte (Protocolos) saiu do cabeçalho.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Dashboard: o aviso da prévia virou o (?) ao lado das abas e saiu o filtro de unidade do topo — o filtro Unidade abaixo dos KPIs faz o mesmo.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.66.1",
+    data: "2026-10-08",
+    titulo: "Giro da seta mais suave",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "A seta dos dropdowns gira mais devagar e de forma suave — começa e termina com calma, ao abrir e ao fechar.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.66.0",
+    data: "2026-10-08",
+    titulo: "Seta dos dropdowns gira ao abrir",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Em toda lista de seleção, filtro e menu, a seta gira suave ao abrir e aponta para o lado oposto da lista — mostra onde tocar para fechar. Ao fechar, volta girando.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.65.0",
+    data: "2026-10-08",
+    titulo: "Proteção de dados corrigida + marca d'água",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "“Ocultar ao sair da janela” cobria a tela toda vez que um campo perdia o foco. Agora só cobre quando a janela inteira perde o foco.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "melhoria", area: "Sistema", texto: "A proteção é imperceptível no uso: nada aparece na tela. A impressão sai em branco e a captura com a tecla Windows (Win+Shift+S, Win+PrtScn) ou Cmd+Shift no Mac sai coberta; no PrtScn, a imagem some da área de transferência.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Configurações", texto: "Marca d'água invisível na tela com o nome, a matrícula e a hora de quem vê — fica na captura e sai legível no papel.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
+    versao: "1.64.0",
+    data: "2026-10-08",
+    titulo: "Listas de seleção mais completas",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "A lista abre alinhada à caixa inteira do campo, rápida, com linhas mais baixas no computador. A busca e o título ficam fixos no topo ao rolar.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Sistema", texto: "No celular, as listas grandes sobem de baixo, ocupando a largura da tela. Com o campo fechado, digitar uma letra já troca a opção.", link: "/painel/configuracoes" },
+      { tipo: "novo", area: "PCA", texto: "Na Visão do PCA × Orçamento, cada visão mostra o resumo dos filtros e em quantos PCAs é usada. O ponto âmbar marca a visão com valores fora deste orçamento, e “Editar esta visão” e “Nova visão” ficam no rodapé da lista. As visões salvas aparecem separadas do “Orçamento inteiro”.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Mesa", texto: "A Situação, na edição em massa, e a Classificação, na unidade de medida, mostram a cor de cada opção.", link: "/painel/mesa" },
+    ],
+  },
+  {
+    versao: "1.63.0",
+    data: "2026-10-08",
+    titulo: "Proteção de dados",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Nova aba Proteção de dados: bloqueie a seleção e a cópia de texto, a impressão e a captura de tela, e oculte o conteúdo quando a janela perde o foco.", link: "/painel/configuracoes?aba=protecao" },
+      { tipo: "novo", area: "Configurações", texto: "O ADM escolhe em quais papéis os bloqueios valem (em todas as telas e banners) e se a tela pública também é bloqueada.", link: "/painel/configuracoes?aba=protecao" },
+    ],
+  },
+  {
+    versao: "1.62.0",
+    data: "2026-10-08",
+    titulo: "Listas de seleção no desenho do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Toda lista de seleção (Visão, Linhas, Colunas, Medida, cargo, unidade, papel e as demais) abre agora no desenho do sistema, e não mais na lista do aparelho. A opção escolhida fica em destaque com o check, os grupos aparecem separados e as opções indisponíveis ficam esmaecidas, com o motivo na dica.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Sistema", texto: "Listas com mais de 12 opções ganham a busca no topo. Pelo teclado: setas, Enter e digitar a letra para saltar. No celular, as opções têm o tamanho do toque.", link: "/painel/configuracoes" },
+    ],
+  },
+  {
+    versao: "1.61.0",
+    data: "2026-10-07",
+    titulo: "Vínculos por visão do orçamento",
+    mudancas: [
+      { tipo: "novo", area: "Orçamento", texto: "Cada visão pode ter os seus vínculos por unidade do orçamento. Os vínculos de antes viram o padrão, e a visão segue o padrão até ganhar os seus. Na aba Vínculos, escolha a visão na barra.", link: "/painel/orcamento" },
+      { tipo: "novo", area: "Orçamento", texto: "Ao salvar um vínculo, escolha onde ele vale: só esta visão, todas, ou as visões que você marcar. “Usar o padrão” devolve a unidade ao padrão na visão.", link: "/painel/orcamento" },
+      { tipo: "novo", area: "Orçamento", texto: "O banner da visão ganhou a parte Vínculos, ao lado dos filtros, e a lista de visões mostra quais têm vínculos próprios.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "PCA", texto: "O Orçamento do PCA usa os vínculos da visão do PCA: KPIs, PCA × Orçamento, Comparativo e relatório. O vínculo de cada linha também pergunta onde salvar.", link: "/painel/pca" },
+      { tipo: "novo", area: "Orçamento", texto: "Um (?) explica as visões, nas abas Visões e Vínculos, no banner da visão e no PCA × Orçamento.", link: "/painel/orcamento" },
+    ],
+  },
+  {
+    versao: "1.60.0",
+    data: "2026-10-07",
+    titulo: "Nomeações unificadas nos Responsáveis",
+    mudancas: [
+      { tipo: "novo", area: "Responsáveis", texto: "No banner da pessoa, os vínculos com o mesmo ato (decreto, portaria ou lei de mesmo número) aparecem num cartão só, com todos os lugares em que ela responde.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "Editar a nomeação vale para todos os lugares de uma vez: os dados ficam iguais em todos, lugares novos entram e o lugar desmarcado sai (com confirmação).", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
+    versao: "1.59.0",
+    data: "2026-10-07",
+    titulo: "Editar onde o responsável responde; cargo fora da lista é erro",
+    mudancas: [
+      { tipo: "melhoria", area: "Responsáveis", texto: "Cargo ou função fora da lista de Cargos e funções (da pessoa ou do temporário) agora é ERRO na Conferência — também no órgão e na unidade em que a pessoa responde.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "Ao editar um vínculo, dá para trocar onde ele responde (unidade ou órgão), a pessoa e os dados — e escolher mais lugares, que viram vínculos novos com a mesma nomeação.", link: "/painel/orgaos?aba=responsaveis" },
+    ],
+  },
+  {
+    versao: "1.58.0",
+    data: "2026-10-07",
+    titulo: "Responsáveis exonerados, vários lugares por nomeação e ordem por cargo",
+    mudancas: [
+      { tipo: "novo", area: "Responsáveis", texto: "Exonerar um responsável com a data: os vínculos cadastrados continuam valendo, mas ele não recebe vínculos novos nem um vínculo que comece depois da exoneração. Os exonerados ficam no botão “Exonerados”, à direita, com as linhas em cinza.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "Ao vincular, escolha várias unidades e órgãos de uma vez — todos recebem a mesma nomeação e o mesmo período.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Responsáveis", texto: "Vínculo encerrado não é mais erro nem atenção: aparece em cinza na nova coluna “Encerrados”.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Responsáveis", texto: "A planilha abre pela prioridade do cargo (a ordem de Configurações → Cargos e funções) e depois pelo nome; os vínculos de cada lugar seguem a mesma ordem.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "melhoria", area: "Órgãos", texto: "“Também unidade” virou uma coluna própria e o nome do órgão aparece inteiro em até duas linhas.", link: "/painel/orgaos" },
+    ],
+  },
+  {
+    versao: "1.57.0",
+    data: "2026-10-07",
+    titulo: "Tabelas das automações iguais às da Mesa",
+    mudancas: [
+      { tipo: "melhoria", area: "Automação", texto: "As tabelas das automações (Seleção, Análise ao vivo e Tabela salva) usam as MESMAS tabelas da Mesa: protocolos, DFDs e itens com as mesmas colunas, filtros e exportação.", link: "/painel/automacao" },
+      { tipo: "novo", area: "Automação", texto: "Tocar numa linha abre o protocolo, o DFD ou o item na mesma pilha de banners da Mesa, sem sair da automação.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.56.0",
+    data: "2026-10-07",
+    titulo: "Responsáveis com cargo, período e foto; órgãos pelo código da Centi",
+    mudancas: [
+      { tipo: "novo", area: "Responsáveis", texto: "O cargo ou função é da PESSOA, escolhido entre os cargos cadastrados (nova coluna “Cargo/função padrão”); o vínculo padrão segue o cargo dela e o temporário tem o cargo próprio do período. As funções digitadas antes viraram cargos cadastrados.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "O padrão agora tem data inicial e final — sem data final, vale até ser informada; a assinatura do DFD só confere dentro do período (o padrão antigo, sem datas, segue igual). Padrão e temporários aparecem em seções separadas.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Responsáveis", texto: "O responsável pode ser ligado a um usuário da plataforma (sugerido pela mesma matrícula) e ganha a foto dele no nome.", link: "/painel/orgaos?aba=responsaveis" },
+      { tipo: "novo", area: "Configurações", texto: "Aba “Cargos e funções”: a lista usada no cadastro dos usuários e dos responsáveis — renomear um cargo renomeia em todos.", link: "/painel/configuracoes?aba=cargos" },
+      { tipo: "melhoria", area: "Órgãos", texto: "Órgãos ordenados pelo código da Centi (sem ordenação manual), com as colunas Código Centi · Nome · Sigla à frente e a edição da tabela (ocultar, arrastar, congelar e salvar edições).", link: "/painel/orgaos" },
+    ],
+  },
+  {
+    versao: "1.55.1",
+    data: "2026-10-07",
+    titulo: "Substituir DFDs pela Centi: estado real e leitura completa",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "Na análise do “Substituir DFDs pelos dados da Centi”, cada DFD mostra Substituído (com os itens gravados) ou Falhou (com o motivo) — não fica mais em “Processado”, e o Ok conta os substituídos.", link: "/painel/automacao" },
+      { tipo: "correcao", area: "Automação", texto: "O PDF baixado da Centi para substituir um DFD é lido como na importação, inclusive a assinatura achatada por OCR.", link: "/painel/automacao" },
+    ],
+  },
+  {
+    versao: "1.55.0",
+    data: "2026-10-07",
+    titulo: "Visão do orçamento à vista no PCA",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "PCA × Orçamento: o seletor “Visão” na barra da tabela — escolher a visão do orçamento do PCA na hora, sem abrir a engrenagem (quem não configura o PCA vê a visão em uso, travada).", link: "/painel/pca" },
+    ],
+  },
   {
     versao: "1.54.2",
     data: "2026-10-07",
@@ -1071,16 +2346,52 @@ export function textoMudancas(v: Versao): string {
   return linhas.join("\n");
 }
 
-/** O aviso no sino de cada Administrador: UM por versão (a `chave`), com o que mudou. Sem link: o sino abre as Novidades
- * daquela versão num banner flutuante (de lá, cada mudança leva ao lugar dela). */
-export const avisoNovaVersao = (usuarioId: number, v: Versao = VERSOES[0]) => ({
-  usuarioId,
-  tipo: "versao" as const,
-  titulo: `Nova versão ${v.versao} — ${v.titulo}`,
-  texto: textoMudancas(v),
-  link: null,
-  chave: `versao-sistema:${v.versao}`,
-});
+/** As telas da ADMINISTRAÇÃO (só o ADM as abre — a mudança nelas só chega ao ADM). */
+const PREFIXOS_ADMIN = [
+  "/painel/configuracoes",
+  "/painel/usuarios",
+  "/painel/grupos",
+  "/painel/orgaos",
+  "/painel/integracoes",
+  "/painel/automacao",
+  "/painel/armazenamento",
+  "/painel/auditoria",
+  "/painel/aparencia",
+  "/painel/design-system",
+] as const;
+const naRota = (link: string, prefixo: string) => link === prefixo || link.startsWith(`${prefixo}/`) || link.startsWith(`${prefixo}?`);
+
+/** A TELA de uma mudança pelo link: a chave do módulo (Mesa, PCA…), "admin" (Administração) ou `null` = de todos (login,
+ * perfil, tela pública…). */
+export function telaDaMudanca(link: string | undefined): string | null {
+  if (!link) return null;
+  if (PREFIXOS_ADMIN.some((p) => naRota(link, p))) return "admin";
+  return ABAS.find((a) => naRota(link, a.href))?.key ?? null;
+}
+
+/** A versão só com as mudanças das telas que a pessoa abre (`telas` = as dos grupos dela; `admin` = todas). */
+export function mudancasVisiveis(v: Versao, telas: ReadonlySet<string>, admin: boolean): Versao {
+  if (admin) return v;
+  return { ...v, mudancas: v.mudancas.filter((m) => {
+    const t = telaDaMudanca(m.link);
+    return t == null || (t !== "admin" && telas.has(t));
+  }) };
+}
+
+/** O aviso no sino: UM por versão (a `chave`), com o que mudou NAS TELAS QUE A PESSOA ABRE (`mudancasVisiveis`) — sem
+ * nenhuma mudança para ela, nenhum aviso (`null`). Sem link: o sino abre as Novidades daquela versão num banner flutuante
+ * (de lá, cada mudança leva ao lugar dela). */
+export function avisoNovaVersao(usuarioId: number, v: Versao = VERSOES[0]) {
+  if (v.mudancas.length === 0) return null;
+  return {
+    usuarioId,
+    tipo: "versao" as const,
+    titulo: `Nova versão ${v.versao} — ${v.titulo}`,
+    texto: textoMudancas(v),
+    link: null,
+    chave: `versao-sistema:${v.versao}`,
+  };
+}
 
 /** A versão de um aviso "versao" (pelo título que `avisoNovaVersao` escreve); desconhecida = a atual. */
 export function versaoDoAviso(titulo: string): string {

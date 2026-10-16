@@ -142,7 +142,7 @@ export function Historico({
     return (
       <ul className="space-y-2">
         {doItem.map(({ linha, alteracao, item: dif }) => (
-          <li key={linha.id} className="rounded-card border border-border bg-surface p-3 shadow-ring">
+          <li key={linha.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
             <Meta l={linha} escopo="item" protocoloId={null} anonimo={anonimo} />
             <div className="mt-2 space-y-1.5">
               {dif ? (
@@ -254,7 +254,7 @@ function CartaoEvento({
   const ordem = unica ? linhas : [...linhas.filter((l) => l.entidade === "protocolo"), ...linhas.filter((l) => l.entidade !== "protocolo")];
   const vis = todas ? ordem : ordem.slice(0, VISIVEIS);
   return (
-    <li className="rounded-card border border-border bg-surface p-3 shadow-ring">
+    <li className="rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
       <Meta l={linhas[0]} escopo={escopo} protocoloId={protocoloId} anonimo={anonimo} />
       {!unica && <p className="mt-1.5 text-[12px] font-semibold text-muted">{num(linhas.length)} alterações neste evento</p>}
       <ul className="mt-1 divide-y divide-border">

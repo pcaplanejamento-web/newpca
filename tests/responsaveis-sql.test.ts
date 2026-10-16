@@ -11,6 +11,7 @@ import {
   comandoApagarVinculos,
   comandoCopiarVinculosParaUnidade,
   comandoMoverVinculos,
+  comandosRealinhar,
   consultaContaVinculos,
   consultaVinculosDosAlvos,
   linhaVinculo,
@@ -97,6 +98,23 @@ describe("responsáveis — vínculos (builders no db.batch do D1)", () => {
     assert.deepEqual(vinculos(), [
       { p: 1, o: null, r: 510, t: "padrao" },
       { p: 2, o: null, r: 510, t: "temporario" },
+    ]);
+  });
+
+  it("REALINHAR (mover · copiar · apagar) no MESMO lote da mudança", async () => {
+    // 3 = Bia em U1 (padrão) → vai ao órgão A; copia para U2; o 1 (Ana no órgão A) sai como repetido.
+    await orm.batch([
+      orm.update(orgaos).set({ sigla: "OA2" }).where(eq(orgaos.id, 500)),
+      ...comandosRealinhar(orm, [
+        { tipo: "copiar", id: 3, para: { orgaoId: null, reparticaoId: 511 } },
+        { tipo: "mover", id: 3, para: { orgaoId: 500, reparticaoId: null } },
+        { tipo: "apagar", id: 1 },
+      ]),
+    ] as never);
+    assert.deepEqual(vinculos(), [
+      { p: 2, o: 500, r: null, t: "temporario" },
+      { p: 2, o: 500, r: null, t: "padrao" },
+      { p: 2, o: null, r: 511, t: "padrao" },
     ]);
   });
 });

@@ -141,6 +141,11 @@ export const usuarios = sqliteTable(
     dadosValidadosPor: text("dados_validados_por"),
     // TROCA DE SENHA OBRIGATÓRIA (o ADM exige): a pessoa cria uma senha nova antes de usar o sistema.
     trocarSenha: integer("trocar_senha", { mode: "boolean" }).notNull().default(false),
+    // ARQUIVADO (migração `0105`): "Excluir" arquiva — inativo, fora da lista, restaurável (quando + o NOME de quem).
+    arquivadoEm: text("arquivado_em"),
+    arquivadoPor: text("arquivado_por"),
+    /** O ÚLTIMO ACESSO (ISO) — o login e a atividade da sessão (no máximo a cada poucos minutos). */
+    ultimoAcessoEm: text("ultimo_acesso_em"),
   },
   (t) => [
     uniqueIndex("usuarios_email_uq").on(t.email),
@@ -199,6 +204,8 @@ export const sessoes = sqliteTable(
       .references(() => usuarios.id, { onDelete: "cascade" }),
     expiraEm: text("expira_em").notNull(),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    /** A última atividade (ISO) — o ADM pode encerrar a sessão parada (Configurações → Segurança). */
+    vistoEm: text("visto_em"),
   },
   (t) => [
     uniqueIndex("sessoes_token_uq").on(t.tokenHash),
@@ -222,25 +229,23 @@ export const configuracoes = sqliteTable("configuracoes", {
 });
 
 /**
- * RBAC por GRUPO. Uma `permissao` define quais abas ficam disponíveis (JSON de
- * keys). Um `grupo` aponta para uma permissão; membros do grupo compartilham a
- * permissão E as unidades acessíveis (`grupo_reparticoes`). Um usuário pode
- * estar em vários grupos (`usuario_grupos`) e escolhe o ativo no cabeçalho.
- * (As tabelas `protocolos`/`protocolo_opcoes` do antigo módulo Protocolos ficam
- * no banco, DORMENTES — sem código; os protocolos vivem em `dfd_protocolos`.)
+ * RBAC por GRUPO (migração `0106`): o grupo guarda as TELAS que abre (`abas`, JSON de keys de aba) e os PCAs que acessa
+ * (`pcas`, JSON de ids; NULL = todos); membros do grupo compartilham as telas, os PCAs E as unidades acessíveis
+ * (`grupo_reparticoes`). Um usuário pode estar em vários grupos (`usuario_grupos`) e escolhe o ativo no cabeçalho. A
+ * antiga tabela `permissoes` e a coluna `grupos.permissao_id` ficam no banco DORMENTES (sem código).
+ * (As tabelas `protocolos`/`protocolo_opcoes` do antigo módulo Protocolos também ficam DORMENTES — os protocolos vivem
+ * em `dfd_protocolos`.)
  */
-export const permissoes = sqliteTable("permissoes", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  nome: text("nome").notNull(),
-  abas: text("abas").notNull().default("[]"), // JSON: string[] de keys de aba
-  criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
-  atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
-});
-
 export const grupos = sqliteTable("grupos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),
-  permissaoId: integer("permissao_id").references(() => permissoes.id, { onDelete: "set null" }),
+  abas: text("abas").notNull().default("[]"), // JSON: string[] de keys de aba (as telas que o grupo abre)
+  pcas: text("pcas"), // JSON: number[] de ids de PCA; NULL = todos os PCAs
+  modulos: text("modulos"), // JSON: string[] de ids de MÓDULO (migração `0109`); NULL = as telas avulsas de `abas`
+  chat: integer("chat", { mode: "boolean" }).notNull().default(true), // o chat ao vivo liberado no grupo
+  /** De onde vêm as unidades dos membros: `lista` = as escolhidas (`grupo_reparticoes`) · `cadastro` = a unidade de
+   * cadastro de cada pessoa (`usuarios.reparticao_id`) — migração 0112. */
+  modoUnidades: text("modo_unidades", { enum: ["lista", "cadastro"] }).notNull().default("lista"),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });
@@ -313,7 +318,7 @@ export const reparticoes = sqliteTable(
 /**
  * RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA de pessoas (migração 0099): cada pessoa UMA vez (nome + matrícula; `chave` =
  * o nome sem acento/caixa — `norm`). Os VÍNCULOS ligam a pessoa a uma UNIDADE ou a um ÓRGÃO (exatamente um) como padrão
- * ou temporário e guardam a função, a nomeação (ato) e o período. Ver `responsaveis-planilha-core.ts`.
+ * ou temporário e guardam a nomeação (ato), o período e, no temporário, o cargo do período (o padrão segue o da pessoa). Ver `responsaveis-planilha-core.ts`.
  */
 export const responsaveis = sqliteTable(
   "responsaveis",
@@ -322,10 +327,21 @@ export const responsaveis = sqliteTable(
     nome: text("nome").notNull(),
     matricula: text("matricula").notNull().default(""),
     chave: text("chave").notNull(),
+    // O CARGO/FUNÇÃO da pessoa (migração 0100) — o NOME de um cargo cadastrado (`cargos`); o vínculo padrão segue ele.
+    cargo: text("cargo").notNull().default(""),
+    // O USUÁRIO da plataforma (opcional, um usuário em UMA pessoa) — dá a foto.
+    usuarioId: integer("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    // A EXONERAÇÃO ("AAAA-MM-DD", migração 0101): os vínculos seguem valendo; a partir dela, nenhum vínculo novo.
+    exoneradoEm: text("exonerado_em"),
+    // FUNCIONÁRIO DE FORA DO MUNICÍPIO (migração 0104): não tem matrícula (gravada vazia).
+    externo: integer("externo", { mode: "boolean" }).notNull().default(false),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [uniqueIndex("responsaveis_chave_matricula_uq").on(t.chave, t.matricula)],
+  (t) => [
+    uniqueIndex("responsaveis_chave_matricula_uq").on(t.chave, t.matricula),
+    uniqueIndex("responsaveis_usuario_uq").on(t.usuarioId).where(sql`${t.usuarioId} IS NOT NULL`),
+  ],
 );
 
 export const responsaveisVinculos = sqliteTable(
@@ -338,11 +354,11 @@ export const responsaveisVinculos = sqliteTable(
     orgaoId: integer("orgao_id").references(() => orgaos.id, { onDelete: "cascade" }),
     reparticaoId: integer("reparticao_id").references(() => reparticoes.id, { onDelete: "cascade" }),
     tipo: text("tipo").notNull(), // padrao | temporario
-    funcao: text("funcao").notNull().default(""),
+    funcao: text("funcao").notNull().default(""), // o cargo do TEMPORÁRIO (o padrão segue o da pessoa — vazio)
     atoTipo: text("ato_tipo"), // portaria | decreto | lei
     atoNumero: text("ato_numero").notNull().default(""),
     atoLink: text("ato_link").notNull().default(""),
-    inicio: text("inicio"), // temporário: AAAA-MM-DD
+    inicio: text("inicio"), // AAAA-MM-DD (o temporário exige as duas; o padrão, o início — fim vazio = em aberto)
     fim: text("fim"),
     ordem: integer("ordem").notNull().default(0),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -908,10 +924,16 @@ export const orcamentoVinculos = sqliteTable(
     acoes: text("acoes"),
     // As ações que ficam de FORA de um vínculo "com as demais" (JSON; NULL = nenhuma) — migração 0079.
     acoesFora: text("acoes_fora"),
+    // A VISÃO dona do vínculo (NULL = o PADRÃO) — migração 0102.
+    visaoId: integer("visao_id").references(() => orcamentoVisoes.id, { onDelete: "cascade" }),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  // Uma unidade do CUBO pode ter VÁRIOS vínculos (um por unidade cadastrada) — migração 0080.
-  (t) => [uniqueIndex("orcamento_vinculos_chave_rep_uq").on(t.chave, t.reparticaoId), index("orcamento_vinculos_chave_idx").on(t.chave)],
+  // Uma unidade do CUBO pode ter VÁRIOS vínculos (um por unidade cadastrada) — 0080; um por visão (IFNULL(visao_id,0)) — 0102.
+  (t) => [
+    uniqueIndex("orcamento_vinculos_chave_rep_uq").on(t.chave, t.reparticaoId, sql`IFNULL(${t.visaoId}, 0)`),
+    index("orcamento_vinculos_chave_idx").on(t.chave),
+    index("orcamento_vinculos_visao_idx").on(t.visaoId),
+  ],
 );
 
 export type Unidade = typeof unidades.$inferSelect;
@@ -921,8 +943,26 @@ export type NovoItem = typeof itens.$inferInsert;
 export type Usuario = typeof usuarios.$inferSelect;
 export type NovoUsuario = typeof usuarios.$inferInsert;
 export type Sessao = typeof sessoes.$inferSelect;
+
+/** HISTÓRICO DE ACESSO (migração `0111`): cada login — quando, o dispositivo, o canal e o IP (até 50 por pessoa). */
+export const acessos = sqliteTable(
+  "acessos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    em: text("em").notNull(),
+    canal: text("canal").notNull(),
+    navegador: text("navegador").notNull(),
+    ip: text("ip"),
+    /** O identificador CURTO do aparelho (o começo do hash — distingue os aparelhos sem revelar o cookie). */
+    aparelho: text("aparelho").notNull(),
+    novo: integer("novo", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [index("acessos_usuario_idx").on(t.usuarioId, t.id)],
+);
 export type Configuracao = typeof configuracoes.$inferSelect;
-export type Permissao = typeof permissoes.$inferSelect;
 export type Grupo = typeof grupos.$inferSelect;
 export type UsuarioGrupo = typeof usuarioGrupos.$inferSelect;
 export type Reparticao = typeof reparticoes.$inferSelect;
@@ -993,6 +1033,8 @@ export const orcamentoVisoes = sqliteTable("orcamento_visoes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nome: text("nome").notNull(),
   filtros: text("filtros").notNull().default("{}"),
+  // As unidades do CUBO (chaves) com vínculos PRÓPRIOS nesta visão (JSON) — migração 0102.
+  vinculosProprios: text("vinculos_proprios").notNull().default("[]"),
   ordem: integer("ordem").notNull().default(0),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
@@ -1066,9 +1108,11 @@ export const tarefaListas = sqliteTable(
     /** Lista de CONCLUÍDAS: o cartão que entra ganha `concluida_em`; o que sai perde. */
     concluida: integer("concluida", { mode: "boolean" }).notNull().default(false),
     arquivada: integer("arquivada", { mode: "boolean" }).notNull().default(false),
+    /** A pessoa ATRIBUÍDA à lista (migração `0108`): a tarefa nova nela já nasce com ela como responsável. */
+    responsavelId: integer("responsavel_id").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (t) => [index("tarefa_listas_quadro_idx").on(t.quadroId, t.ordem)],
+  (t) => [index("tarefa_listas_quadro_idx").on(t.quadroId, t.ordem), index("tarefa_listas_responsavel_idx").on(t.responsavelId)],
 );
 
 export const tarefas = sqliteTable(

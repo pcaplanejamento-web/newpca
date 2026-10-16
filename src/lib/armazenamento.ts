@@ -76,7 +76,7 @@ const DOMINIOS: Record<string, string> = {
 };
 
 // Sobras de módulos removidos (Tabelas `0005`; o antigo módulo Protocolos; os anexos das tarefas, `0045`) — dormentes, só sinalizadas.
-const LEGADO = new Set(["tabelas", "colunas", "coluna_opcoes", "linhas", "protocolos", "protocolo_opcoes", "tarefa_anexos"]);
+const LEGADO = new Set(["tabelas", "colunas", "coluna_opcoes", "linhas", "protocolos", "protocolo_opcoes", "tarefa_anexos", "permissoes"]);
 
 // Colunas notoriamente grandes (base64/JSON) — destaque só-leitura na tela.
 const COLUNAS_PESADAS: { tabela: string; coluna: string; rotulo: string }[] = [

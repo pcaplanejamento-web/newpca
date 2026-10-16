@@ -1,4 +1,4 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { erro, ok } from "@/lib/http";
 import { getPcaEspaco, relatorioOrcamentoDoPca } from "@/lib/pca-espaco";
 
@@ -14,6 +14,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const semPca = await recusaPca(id);
+  if (semPca) return semPca;
   const pca = await getPcaEspaco(id);
   if (!pca) return erro("PCA não encontrado.", 404);
   const relatorio = await relatorioOrcamentoDoPca(pca);

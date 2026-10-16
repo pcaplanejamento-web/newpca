@@ -6,7 +6,7 @@ import { textoPlanejamentos } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
 import { BotaoCopiar } from "./BotaoCopiar";
 import { Button } from "./Button";
-import { tokenPx } from "./espacamento";
+import { definirVarRaiz, tokenPx } from "./espacamento";
 import { IconChevronDown, IconClose } from "./icons";
 
 /** Um registro selecionado (vira um chip removível). */
@@ -14,9 +14,9 @@ export type RegistroSelecao = { key: string | number; rotulo: string };
 
 /** Chips renderizados (acima disso, um "+N" — a seleção em si segue completa). */
 const MAX_CHIPS = 80;
-/** Respiro inferior do `<main>` além da navegação (o token `--pad-canvas` — a margem do conteúdo): a barra FIXA
+/** Respiro inferior do `<main>` além da navegação (o token `--pad-canvas-y` — a margem de baixo do conteúdo): a barra FIXA
  * cobre esse respiro, então só o EXCEDENTE da altura dela ocupa lugar no fluxo. */
-const respiroMain = () => tokenPx("--pad-canvas", 16);
+const respiroMain = () => tokenPx("--pad-canvas-y", 8);
 
 /**
  * Barra de SELEÇÃO — a MESMA em toda tabela com seleção (DFDs, Protocolos e Itens da Mesa; DFDs dos
@@ -89,13 +89,17 @@ export function BarraSelecao({
     const el = ref.current;
     if (!fixa || !el) return;
     const raiz = document.documentElement.style;
+    let ultimo = -1;
     const medir = () => {
       const alt = Math.ceil(el.getBoundingClientRect().height);
+      // Só age quando a altura MUDA (o observador e o "resize" disparam muito — re-renderizar a tela a cada um travava a rolagem).
+      if (alt === ultimo) return;
+      ultimo = alt;
       const px = Math.max(0, alt - respiroMain());
       setLugar(px);
       onAltura?.(px);
       // Os avisos flutuantes (canto inferior) sobem acima da barra enquanto ela existe.
-      raiz.setProperty("--reserva-rodape", `${alt}px`);
+      definirVarRaiz("--reserva-rodape", `${alt}px`);
     };
     medir();
     const ro = new ResizeObserver(medir);
@@ -115,13 +119,13 @@ export function BarraSelecao({
       className={
         fixa
           ? // Acima da navegação inferior no celular (≈4rem + área segura); no desktop, rente ao rodapé com a MESMA
-            // margem do conteúdo (--pad-canvas) até a borda do display.
-            "fixed bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-[var(--pad-canvas)]"
+            // margem de baixo do conteúdo (--pad-canvas-y) até a borda do display.
+            "fixed bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-30 animate-fade-in-up pb-2 lg:bottom-0 lg:pb-[var(--pad-canvas-y)]"
           : "mb-3"
       }
       style={fixa ? (faixa ? { left: faixa.left, width: faixa.width } : { visibility: "hidden" }) : undefined}
     >
-      <div className={`rounded-card border border-border bg-surface p-3 ${fixa ? "shadow-soft" : ""}`}>
+      <div className={`rounded-card border border-border bg-surface p-[var(--pad-card)] ${fixa ? "shadow-soft" : ""}`}>
         {/* Registro das seleções — chips removíveis (rola na horizontal, nunca estoura a tela). */}
         <div className="flex items-center gap-2">
           <ul className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-1" aria-label="Itens selecionados">

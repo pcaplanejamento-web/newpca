@@ -19,7 +19,7 @@ export type ConfigPresenca = {
 };
 
 export const LIMITES_INATIVO = [0, 120] as const;
-export const CONFIG_PRESENCA_PADRAO: ConfigPresenca = { ativo: false, ausente: true, invisivel: true, inativoMin: 5, atividade: true };
+export const CONFIG_PRESENCA_PADRAO: ConfigPresenca = { ativo: false, ausente: true, invisivel: false, inativoMin: 5, atividade: true };
 
 /** Qualquer JSON → uma config válida (o que faltar = o padrão). */
 export function lerConfigPresenca(v: unknown): ConfigPresenca {
@@ -27,7 +27,7 @@ export function lerConfigPresenca(v: unknown): ConfigPresenca {
   const b = (k: "ativo" | "ausente" | "invisivel" | "atividade") => (typeof o[k] === "boolean" ? (o[k] as boolean) : CONFIG_PRESENCA_PADRAO[k]);
   const n = Number(o.inativoMin);
   const inativoMin = Number.isInteger(n) && n >= LIMITES_INATIVO[0] && n <= LIMITES_INATIVO[1] ? n : CONFIG_PRESENCA_PADRAO.inativoMin;
-  return { ativo: b("ativo"), ausente: b("ausente"), invisivel: b("invisivel"), inativoMin, atividade: b("atividade") };
+  return { ativo: b("ativo"), ausente: b("ausente"), invisivel: false, inativoMin, atividade: b("atividade") };
 }
 
 /** O STATUS que a pessoa escolhe (o "Não perturbe" também silencia o som e o alerta do sino). */
@@ -73,7 +73,6 @@ export function statusVigente(p: { status: StatusPresenca; recado?: string; ate?
 }
 
 /** Invisível de fato: a pessoa escolheu E o ADM permite. */
-export const ficaInvisivel = (cfg: ConfigPresenca, prefs: { invisivel: boolean }) => cfg.invisivel && prefs.invisivel;
 
 export type EstadoPresenca = "online" | "ausente";
 
@@ -341,7 +340,6 @@ const ADMIN: Record<string, string> = {
   configuracoes: "Configurações",
   usuarios: "Usuários",
   grupos: "Grupos",
-  permissoes: "Permissões",
   orgaos: "Órgãos e Unidades",
   armazenamento: "Armazenamento",
   auditoria: "Auditoria",

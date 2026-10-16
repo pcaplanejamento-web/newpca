@@ -1,5 +1,11 @@
 "use client";
 
+import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
+import { CamposSeguranca } from "@/components/SegurancaAdmin";
+import { TabelaAcessos } from "@/components/HistoricoAcessos";
+import { type ConfigSeguranca, SEGURANCA_PADRAO } from "@/lib/seguranca-core";
+import { MarcaDagua } from "@/components/ProtecaoDados";
+import { type ConfigProtecao, PROTECAO_PADRAO } from "@/lib/protecao-core";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { AcessoDaPessoa } from "@/components/AcessoDaPessoa";
@@ -19,6 +25,9 @@ import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
 import { type CampoFiltroDash, FiltrosDashboard } from "@/components/FiltrosDashboard";
 import { EditorVisaoOrcamento, type LinhaVisaoOrcamento } from "@/components/EditorVisaoOrcamento";
+import { SeletorVisaoPca } from "@/components/VisaoOrcamentoPca";
+import { AjudaVisoes } from "@/components/AjudaVisoes";
+import { EscopoVinculo, type ValorEscopo } from "@/components/EditorVinculoOrcamento";
 import { DicaFlutuante } from "@/components/DicaFlutuante";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "@/components/VinculosDaUnidade";
 import { vinculosDaLinha } from "@/lib/vinculos-unidade";
@@ -58,13 +67,14 @@ import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "@/components/BarraEdicaoMassa";
+import { TabelaMesaFluxo } from "@/components/fluxos/TabelaMesaFluxo";
 import { BarraSelecao, BarraSelecaoDfds, type RegistroSelecao, ResumoSelecao } from "@/components/BarraSelecao";
 import { AvisoFlutuante } from "@/components/AvisoFlutuante";
 import { PessoaTag } from "@/components/PessoaTag";
 import { SeletorCelula } from "@/components/SeletorCelula";
 import { SeletorFiltro } from "@/components/SeletorFiltro";
 import { SeletorMesa } from "@/components/SeletorMesa";
-import { CarregandoLink } from "@/components/CarregandoLink";
+import { CarregandoLink, IconeNavegacao } from "@/components/CarregandoLink";
 import { GatilhoFiltro } from "@/components/GatilhoFiltro";
 import { RangeFilterHeader } from "@/components/RangeFilterHeader";
 import { DfdPainelDireito, RodapePainelItem } from "@/components/DfdPainelDireito";
@@ -89,9 +99,12 @@ import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
 import { BotaoExportar } from "@/components/ExportarTabelas";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
+import { RecorteMesa } from "@/components/RecorteMesa";
 import { CelulaExecucao } from "@/components/CelulaExecucao";
 import { CanvasFluxo, type Vista } from "@/components/fluxos/CanvasFluxo";
 import { CartaoFluxo } from "@/components/fluxos/CartaoFluxo";
+import { ProblemasFluxo } from "@/components/fluxos/ProblemasFluxo";
+import { ConferenciaAnexos } from "@/components/fluxos/ConferenciaAnexos";
 import { AjudaNo } from "@/components/fluxos/AjudaNo";
 import { AjudaDoFluxo } from "@/components/fluxos/ConfigFluxo";
 import type { Grafo } from "@/lib/fluxo-core";
@@ -111,6 +124,10 @@ import { marcarItensNovos } from "@/lib/sobrescrita-dfd";
 import { compararDfd, compararDuplicados, type DfdComparavel } from "@/lib/comparar-protocolo";
 import { brl, dataIsoBrasilia, juntarParaCopiar, num, numeroSemAno } from "@/lib/format";
 import { CampoLista, Checkbox, PasswordField, SearchField, SelectField, TextArea, TextField } from "@/components/Field";
+import { Selecao } from "@/components/Selecao";
+import { Dropdown } from "@/components/Dropdown";
+import { SetaDropdown } from "@/components/SetaDropdown";
+import { selectCls } from "@/components/formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "@/components/GruposDaPessoa";
 import { MatrizCapacidades } from "@/components/MatrizCapacidades";
 import { ResumoPapel } from "@/components/ResumoPapel";
@@ -122,6 +139,7 @@ import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AparenciaPessoal } from "@/components/AparenciaPessoal";
 import * as Icons from "@/components/icons";
 import { IntegracaoGoogle, type ValorGoogle } from "@/components/IntegracaoGoogle";
 import { IntegracaoResend, type ValorResend } from "@/components/IntegracaoResend";
@@ -142,6 +160,7 @@ import {
   IconLayers,
   IconLock,
   IconMail,
+  IconPencil,
   IconPlus,
   IconTrash,
   IconUndo,
@@ -444,6 +463,23 @@ function DemoAcesso() {
   );
 }
 
+/** PROTEÇÃO DE DADOS: os campos da tela do ADM (sem gravar) e a cortina — no lugar, sem ativar os bloqueios no catálogo. */
+function DemoProtecao() {
+  const [v, setV] = useState<ConfigProtecao>({ ...PROTECAO_PADRAO, selecao: true, papeis: [3] });
+  return (
+    <div className="grid grid-cols-1 items-start gap-[var(--gap-block)] lg:grid-cols-2">
+      <CamposProtecao valor={v} papeis={[{ id: 1, nome: "Administrador" }, { id: 2, nome: "Gestor" }, { id: 3, nome: "Membro" }]} onChange={setV} />
+      <MarcaDagua texto="Maria Clara Souza · matrícula 045210 · 08/10/2026 14:30" inline />
+    </div>
+  );
+}
+
+/** SEGURANÇA DO ACESSO: os campos da tela do ADM (sem gravar). */
+function DemoSeguranca() {
+  const [v, setV] = useState<ConfigSeguranca>({ ...SEGURANCA_PADRAO, inatividadeMin: 60 });
+  return <CamposSeguranca valor={v} onChange={setV} />;
+}
+
 /** USUÁRIOS: matrícula (6 posições no fundo), telefone (+ WhatsApp e o "(?)"), o botão de conversa e o BANNER do usuário. */
 const USUARIO_DEMO: UsuarioAdmin = {
   id: 2,
@@ -464,6 +500,8 @@ const USUARIO_DEMO: UsuarioAdmin = {
   dadosValidadosEm: null,
   dadosValidadosPor: null,
   trocarSenha: false,
+  arquivadoEm: null,
+  arquivadoPor: null,
   criadoEm: "2026-09-01T12:00:00Z",
   atualizadoEm: "2026-09-01T12:00:00Z",
 };
@@ -510,6 +548,7 @@ function DemoUsuario() {
         onRecusar={() => undefined}
         onVerAcesso={() => undefined}
         onExcluir={() => setAberto(false)}
+        onRestaurar={() => setAberto(false)}
       />
     </div>
   );
@@ -532,9 +571,14 @@ function PcaEspacoDemo() {
           (infraestrutura, sem UI, no AppShell): as telas voltam do cache e só recarregam quando a versão dos dados muda. */}
       <div className="flex flex-wrap items-center gap-3">
         <SeletorMesa pcas={[{ id: 2, nome: "PCA 2027", ano: 2027 }]} atual={mesaDemo} onEscolher={setMesaDemo} />
-        <Link href="/design-system" className="relative rounded-card border border-border px-4 py-2 text-sm font-semibold text-text">
+        <Link href="/painel/design-system" className="relative rounded-card border border-border px-4 py-2 text-sm font-semibold text-text">
           Link com CarregandoLink
           <CarregandoLink />
+        </Link>
+        {/* IconeNavegacao: o ícone do item do menu que vira spinner enquanto a tela pedida carrega. */}
+        <Link href="/painel/design-system" className="flex items-center gap-2 rounded-chip px-3 py-2 text-sm font-medium text-text-2 hover:bg-surface-2">
+          <IconeNavegacao Icon={Icons.IconSettings} className="h-[17px] w-[17px]" strokeWidth={1.8} />
+          Item do menu
         </Link>
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -558,6 +602,23 @@ function PcaEspacoDemo() {
         </Badge>
         <Badge tone="blue" dot>
           Incorporado · Substituir
+        </Badge>
+      </div>
+      <div className="linha-topico flex flex-wrap items-center gap-2">
+        <span className="grid h-11 w-11 place-items-center rounded-control text-muted lg:h-[var(--h-control-sm)] lg:w-[var(--h-control-sm)]">
+          <Icons.IconChevronLeft className="h-4 w-4" />
+        </span>
+        <span className="text-[26px] font-bold leading-[44px] tracking-tight lg:text-2xl text-text lg:leading-[var(--h-control-sm)]">PCA 2027 (linha de título)</span>
+        <Badge tone="blue" tamanho="linha" className="tabular-nums">
+          <Icons.IconCalendar className="h-3.5 w-3.5" aria-hidden="true" />
+          2027
+        </Badge>
+        <Badge tone="amber" dot vivo tamanho="linha">
+          Preview
+        </Badge>
+        <Badge tone="emerald" dot tamanho="linha">
+          <IconCheck className="h-3.5 w-3.5" aria-hidden="true" />
+          Publicado
         </Badge>
       </div>
       <Callout kind="info">{avisoIncorporado("PCA 2027")}</Callout>
@@ -1148,7 +1209,7 @@ function MetricasMesaDemo() {
 }
 
 const VISOES_DEMO: VisaoOrcamento[] = [
-  { id: 1, nome: "PCA", ordem: 0, filtros: { nomeElemento: ["MATERIAL DE CONSUMO", "EQUIPAMENTOS"], fonte: ["999 - FONTE EXTINTA"] }, pcas: ["PCA 2027 (2027)"] },
+  { id: 1, nome: "PCA", ordem: 0, filtros: { nomeElemento: ["MATERIAL DE CONSUMO", "EQUIPAMENTOS"], fonte: ["999 - FONTE EXTINTA"] }, pcas: ["PCA 2027 (2027)"], proprias: [] },
 ];
 const LINHAS_VISAO_DEMO: LinhaVisaoOrcamento[] = [
   { nomeElemento: "MATERIAL DE CONSUMO", fonte: "100 - RECURSOS ORDINÁRIOS", valorInicial: 1_390_566.98 },
@@ -1159,6 +1220,7 @@ const LINHAS_VISAO_DEMO: LinhaVisaoOrcamento[] = [
 /** O editor de UMA visão do orçamento (aba Visões e engrenagem do PCA): usos, valores ausentes, prévia do Σ. */
 function EditorVisaoDemo() {
   const [aberta, setAberta] = useState<VisaoOrcamento | "nova" | null>(null);
+  const [escopo, setEscopo] = useState<ValorEscopo>({ modo: "esta", escolhidas: ["1"] });
   return (
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="secondary" onClick={() => setAberta(VISOES_DEMO[0])}>
@@ -1168,6 +1230,22 @@ function EditorVisaoDemo() {
         Nova visão
       </Button>
       <EditorVisaoOrcamento aberta={aberta} itens={LINHAS_VISAO_DEMO} podeEditar onFechar={() => setAberta(null)} onSalva={() => setAberta(null)} />
+      {/* SeletorVisaoPca — a visão do PCA na barra do PCA × Orçamento (aqui travado: sem permissão não troca). */}
+      <div className="w-full sm:w-72">
+        <SeletorVisaoPca pcaId={0} visaoId={VISOES_DEMO[0].id} visoes={VISOES_DEMO} podeEscolher={false} />
+      </div>
+      {/* AjudaVisoes — o (?) único das visões (tela do orçamento e orçamento do PCA). */}
+      <AjudaVisoes botao="sm" />
+      {/* EscopoVinculo — onde salvar um vínculo (vínculos por visão): esta visão · todas · escolher. */}
+      <div className="w-full">
+        <EscopoVinculo
+          contexto={{ visoes: [{ id: 1, nome: "PCA", proprias: ["2 - SMS"] }, { id: 2, nome: "Investimentos", proprias: [] }], visaoId: 1 }}
+          chave="2 - SMS"
+          valor={escopo}
+          onChange={setEscopo}
+          onUsarPadrao={() => undefined}
+        />
+      </div>
     </div>
   );
 }
@@ -1182,7 +1260,7 @@ function VinculosDaUnidadeDemo() {
   ];
   const unidades = unidadesDoOrcamento(itens);
   const alvos = { orgaos: [{ id: 1, sigla: "PMRV", nome: "Prefeitura" }], unidades: [{ id: 2, sigla: "FMAS", nome: "Fundo de Assistência", orgaoId: 1 }] };
-  const vinculos = [{ id: 1, chave: unidades[0]?.chave ?? "", texto: "2 - FMAS", alvoId: 2, acoes: null, acoesFora: [] }];
+  const vinculos = [{ id: 1, chave: unidades[0]?.chave ?? "", texto: "2 - FMAS", alvoId: 2, acoes: null, acoesFora: [], visaoId: null }];
   const ok = async () => true;
   return (
     <div className="flex flex-wrap gap-2">
@@ -1347,7 +1425,7 @@ function PapeisDemo() {
       </div>
       <p className="text-[12.5px] text-muted">
         DetalhesPapelEditor (a aba &quot;Detalhes&quot; do papel — as restrições DENTRO das telas; as linhas que mudaram em relação ao
-        gravado ficam marcadas; sem <code>onChange</code>, só leitura):
+        gravado ficam marcadas; sem <code>onChange</code>, só leitura; a seção Componentes retira ações por aba/visão — aplicadas pelo provedor <code>ComponentesPapel</code> + <code>useComponente</code>):
       </p>
       <DetalhesPapelEditor valor={det} original={DETALHES_DEMO} onChange={setDet} />
       <div className="grid gap-[var(--gap-block)] md:grid-cols-2">
@@ -1790,6 +1868,10 @@ function AtualizarEDadosCompletosDemo() {
         <span className="text-[12px] text-faint">
           BotaoExportar — no rodapé de TODA tabela (DataTable e tabela cruzada): XLSX e PDF das linhas filtradas, com as colunas à vista.
         </span>
+      </div>
+      <div className="flex flex-col gap-1">
+        <RecorteMesa filtros={{ protocolos: { situacao: 1, pca: 1 }, itens: { codigo: 1 } }} atual="dfds" onRemover={() => {}} onLimpar={() => {}} />
+        <span className="text-[12px] text-faint">RecorteMesa — Mesa conectada: os filtros das outras visões que recortam a visão aberta.</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />
@@ -3151,10 +3233,47 @@ export function Catalogo() {
       <Secao titulo="Fluxos de automação (CanvasFluxo)">
         <CanvasFluxoDemo />
       </Secao>
+      <Secao titulo="Tabela de automação no padrão da Mesa (TabelaMesaFluxo)">
+        <TabelaMesaFluxo
+          itens={[
+            { id: 1, numero: "1209", planejamento: "1509", sigla: "SEMED", tipo: "DFD-S", totalItens: 3, valor: 1250.5, protocolo: "144756/2026" },
+            { id: 2, numero: "1210", planejamento: "1510", sigla: "SMS", tipo: "DFD-O", totalItens: 1, valor: 300, protocolo: "144757/2026" },
+          ]}
+          chave={(it) => Number(it.id)}
+          genericas={[]}
+          gestao={{ pessoas: [], outras: [], situacoes: [], usuarioId: 0 }}
+          scrollInterno={false}
+        />
+      </Secao>
+      <Secao titulo="Problemas do fluxo (ProblemasFluxo)">
+        <div className="flex flex-wrap gap-2">
+          <ProblemasFluxo
+            itens={[
+              { no: "n1", nivel: "erro", texto: "Informe “Id do protocolo (Centi)”." },
+              { nivel: "erro", texto: "O fluxo precisa de um Início." },
+            ]}
+            nivel="erro"
+            nomeDo={() => "Baixar/anexar DFDs"}
+            onIr={() => undefined}
+          />
+          <ProblemasFluxo itens={[{ no: "n2", nivel: "atencao", texto: "Componente sem ligação." }]} nivel="atencao" nomeDo={() => "Filtrar"} onIr={() => undefined} />
+        </div>
+      </Secao>
+      <Secao titulo="Conferência no protocolo da Centi (ConferenciaAnexos)">
+        <ConferenciaAnexos
+          linhas={[
+            { nome: "PMRV - PCA 2027 - (1222) - 2026.pdf", descricao: "PMRV - PCA 2027 - (1222) - 2026", dfds: 2, protocolo: "156844/2026", situacao: "anexado", documento: { descricao: "PMRV - PCA 2027 - (1222) - 2026", sequencial: "61", id: "5454711" }, registrado: true },
+            { nome: "FME - PCA 2027 - (1223) - 2026.pdf", descricao: "FME - PCA 2027 - (1223) - 2026", dfds: 6, protocolo: "156844/2026", situacao: "falta", documento: null, registrado: false },
+            { nome: "FMS - PCA 2027 - (1224) - 2026.pdf", descricao: "FMS - PCA 2027 - (1224) - 2026", dfds: 3, protocolo: "156844/2026", situacao: "ausente", documento: null, registrado: true },
+          ]}
+          onConferir={() => undefined}
+          onEnviar={() => undefined}
+        />
+      </Secao>
       <Secao titulo="Cartão de automação (CartaoFluxo)">
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
           <CartaoFluxo titulo="Conferir DFDs × Centi — um título longo que quebra linha" sobretitulo="A cada 2 h" selo={<Badge tone="emerald">Agendado</Badge>} metricas={[{ rotulo: "Nós", valor: "4" }, { rotulo: "Última", valor: "Concluída", cor: "var(--ok)" }, { rotulo: "Erros", valor: "0" }]} onClick={() => undefined} />
-          <CartaoFluxo titulo="Em branco" sobretitulo="Do zero" marcado metricas={[{ rotulo: "Nós", valor: "1" }, { rotulo: "Frequência", valor: "Manual" }, { rotulo: "Usa", valor: "—" }]} onClick={() => undefined} />
+          <CartaoFluxo titulo="Em branco" sobretitulo="Do zero" marcado ajuda={{ funciona: "Começa vazio: monte o diagrama.", executa: "Manualmente ou pela frequência.", resultado: "O que os componentes entregarem." }} metricas={[{ rotulo: "Nós", valor: "1" }, { rotulo: "Frequência", valor: "Manual" }, { rotulo: "Usa", valor: "—" }]} onClick={() => undefined} />
         </div>
       </Secao>
       <Secao titulo="Ajuda de uma automação (AjudaDoFluxo · ConfigFluxo)">
@@ -3270,6 +3389,64 @@ export function Catalogo() {
             <option value="2">MATERIAL DE CONSUMO</option>
           </SelectField>
         </div>
+        <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
+          {/* A lista aberta de TODO select do sistema é a da `Selecao`: grupos, desabilitada com a dica, busca acima de 12. */}
+          <SelectField
+            compacto
+            label="Visão"
+            defaultValue="1"
+            acoes={[
+              { rotulo: "Editar esta visão", icone: <IconPencil className="h-4 w-4" />, onClick: () => toast.info("Editar esta visão") },
+              { rotulo: "Nova visão", icone: <IconPlus className="h-4 w-4" />, onClick: () => toast.info("Nova visão") },
+            ]}
+          >
+            <option value="" data-detalhe="Todos os lançamentos do orçamento do ano">
+              Orçamento inteiro
+            </option>
+            <optgroup label="Visões salvas">
+              <option value="1" data-detalhe="2 Funções · 1 Fonte · usada em 1 PCA">
+                PCA 27
+              </option>
+              <option value="2" data-detalhe="Todos os lançamentos" data-aviso="3 valor(es) da visão fora deste orçamento">
+                GERAL - SEM FILTRO
+              </option>
+              <option value="3" disabled title="Sem lançamentos neste orçamento">
+                Visão vazia
+              </option>
+            </optgroup>
+          </SelectField>
+          <SelectField label="Situação (com a cor)" defaultValue="a">
+            <option value="a" data-cor="var(--info)">Em análise</option>
+            <option value="b" data-cor="var(--warn)">Devolvido</option>
+            <option value="c" data-cor="var(--ok)">Concluído</option>
+          </SelectField>
+          <SelectField label="Selecao — com busca (mais de 12 opções)" defaultValue="">
+            <option value="">Escolha o mês…</option>
+            {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </SelectField>
+          <Selecao className={selectCls} aria-label="Selecao crua (classe selectCls)" defaultValue="b">
+            <option value="a">Incorporar</option>
+            <option value="b">Substituir</option>
+            <option value="c">Excluir</option>
+          </Selecao>
+          {/* SetaDropdown: a seta de TODO gatilho de dropdown gira suave e aponta para o lado OPOSTO da lista aberta. */}
+          <Dropdown
+            ariaLabel="SetaDropdown — exemplo"
+            triggerClassName="h-[var(--h-control-sm)] gap-2 border border-border bg-surface px-3 text-[13px]"
+            trigger={
+              <>
+                SetaDropdown (abra e feche)
+                <SetaDropdown className="h-4 w-4 text-muted" />
+              </>
+            }
+          >
+            <p className="p-2 text-[13px] text-muted">A lista abriu embaixo: a seta aponta para cima — toque nela para fechar.</p>
+          </Dropdown>
+        </div>
         <div className="mt-4">
           <Checkbox label="Manter-me conectado" checked={check} onChange={(e) => setCheck(e.target.checked)} />
         </div>
@@ -3281,6 +3458,27 @@ export function Catalogo() {
 
       <Secao titulo="Acesso — TelaAcesso (/login: Entrar · Criar conta · Esqueci a senha na MESMA tela + VitrineAcesso imersiva no desktop) · MarcaSistema (logo do ADM) · CartaoAuth (login · cadastro · Esqueci a senha) + confirmação por CÓDIGO de 6 dígitos no e-mail (EtapaCodigo · CampoCodigo; captcha SEMPRE — Turnstile ou a VerificacaoRobo própria —, reenvio cronometrado) + SelectField com erro e OpcoesUnidades">
         <DemoAcesso />
+      </Secao>
+
+      <Secao titulo="Proteção de dados — CamposProtecao (Configurações → Proteção de dados: seleção/cópia, impressão/captura, ocultar ao sair da janela, marca d'água, papéis e tela pública) · MarcaDagua (quem vê, sobre toda a tela) · ProtecaoDados (aplica os bloqueios nas telas — não ativado aqui)">
+        <DemoProtecao />
+      </Secao>
+
+      <Secao titulo="Segurança do acesso — CamposSeguranca (Configurações → Segurança: encerrar a sessão inativa, alertas de aparelho novo e de conta bloqueada)">
+        <DemoSeguranca />
+      </Secao>
+
+      <Secao titulo="Histórico de acesso — TabelaAcessos / HistoricoAcessos (Perfil e banner do usuário: último acesso, logins, aparelhos e cada entrada com data/hora, dispositivo, canal e IP)">
+        <TabelaAcessos
+          dados={{
+            ultimoAcesso: "2026-10-14T13:20:00.000Z",
+            acessos: [
+              { id: 3, em: "2026-10-14T11:05:00.000Z", canal: "senha", navegador: "Chrome no Windows", ip: "177.10.20.30", aparelho: "a1b2c3", novo: false },
+              { id: 2, em: "2026-10-13T19:40:00.000Z", canal: "google", navegador: "Safari no iOS", ip: "189.40.1.2", aparelho: "f0e9d8", novo: true },
+              { id: 1, em: "2026-10-10T08:02:00.000Z", canal: "senha", navegador: "Chrome no Windows", ip: "177.10.20.30", aparelho: "a1b2c3", novo: false },
+            ],
+          }}
+        />
       </Secao>
 
       <Secao titulo="Usuários — CampoMatricula (6 números desenhados no fundo) · CampoTelefone (contato institucional = WhatsApp: máscara + ícone + Ajuda compacta) · BotaoWhatsapp (wa.me, ação de linha) · UsuarioDetalhe (banner do usuário: dados com cadeado, validar dados, exigir nova senha, papel/status/excluir)">
@@ -3372,7 +3570,7 @@ export function Catalogo() {
       <Secao titulo="TabelaCruzada (comparativo do orçamento — duas colunas LIGADAS: linhas × colunas; ordenar no cabeçalho; TODAS as colunas, inclusive Unidade/Sigla/Total, se editam: arrastar com a sombra do destino, alfinete, olho, largura pela borda) + Ajuda (?) + SelectField compacto (as permitidas; as demais desabilitadas com o motivo)">
         <TabelaCruzadaDemo />
       </Secao>
-      <Secao titulo="EditorVisaoOrcamento (uma visão do orçamento: nome + dimensões em listas suspensas + prévia do Σ; avisa os PCAs que a usam e os valores que o orçamento atual não traz, com “Remover ausentes”) + VisaoOrcamentoPca (a engrenagem da aba Orçamento do PCA — no OrcamentoPca acima)">
+      <Secao titulo="EditorVisaoOrcamento (uma visão do orçamento: nome + dimensões em listas suspensas + prévia do Σ; avisa os PCAs que a usam e os valores que o orçamento atual não traz, com “Remover ausentes”) + VisaoOrcamentoPca (a engrenagem da aba Orçamento do PCA — no OrcamentoPca acima) + SeletorVisaoPca (a visão na barra do PCA × Orçamento; travado sem permissão) + AjudaVisoes (o (?) das visões) + EscopoVinculo (onde salvar um vínculo: esta visão · todas · escolher)">
         <EditorVisaoDemo />
       </Secao>
       <Secao titulo="VinculosDaUnidade (o lápis da linha do PCA × Orçamento: os vínculos que trazem orçamento à unidade — ou, na linha Sem vínculo, as unidades do orçamento a vincular — editados no mesmo editor da aba Vínculos)">
@@ -3654,6 +3852,12 @@ export function Catalogo() {
             <ThemeToggle />
           </div>
         </div>
+        <div className="mt-4 rounded-card border border-border bg-surface p-4">
+          <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            AparenciaPessoal (Perfil → Aparência: modo claro/escuro e tonalidade do escuro — grava neste navegador)
+          </span>
+          <AparenciaPessoal />
+        </div>
         <div className="mt-4">
           <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
             Progresso de importação
@@ -3682,7 +3886,7 @@ export function Catalogo() {
           <LinkCard href="#" titulo="Aparência" descricao="Cores, layout, densidade e ícones." icon={<Icons.IconPalette className="h-5 w-5" />} />
           <LinkCard href="#" titulo="Unidades" descricao="Unidades, órgão e responsáveis por DFDs." icon={<Icons.IconBuilding className="h-5 w-5" />} />
           <LinkCard href="#" titulo="Grupos" descricao="Grupos de acesso e suas unidades." icon={<Icons.IconUsers className="h-5 w-5" />} />
-          <LinkCard href="#" titulo="Permissões" descricao="Abas visíveis por grupo." icon={<Icons.IconShield className="h-5 w-5" />} />
+          <LinkCard href="#" titulo="Grupos" descricao="Telas, PCAs e unidades de cada grupo." icon={<Icons.IconShield className="h-5 w-5" />} />
           <LinkCard href="#" titulo="Usuários" descricao="Contas, papéis e status de acesso." icon={<Icons.IconUser className="h-5 w-5" />} />
         </div>
       </Secao>
@@ -3957,7 +4161,7 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Responsáveis por DFDs (planilha única: a pessoa + os vínculos — padrão/temporário, função, nomeação, período)">
+      <Secao titulo="Responsáveis por DFDs (planilha única: a pessoa com o cargo e a foto do usuário + os vínculos — padrão e temporários separados, nomeação, período)">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
@@ -3977,16 +4181,24 @@ export function Catalogo() {
             vinculos={VINCULOS_DEMO}
             irmaos={() => VINCULOS_DEMO}
             hoje="2026-06-15"
-            titulo={(v) => ({ texto: v.nome, detalhe: `Matrícula ${v.matricula}` })}
-            vazio="Nenhum responsável."
+            titulo={(v) => ({ texto: v.nome, detalhe: `Matrícula ${v.matricula}`, avatar: { nome: v.nome, foto: null } })}
+            vazio={{ padrao: "Nenhum responsável padrão.", temporario: "Sem períodos temporários." }}
+            acoes={{
+              padrao: (
+                <Button size="sm" variant="secondary" onClick={() => toast.info("Adicionar padrão")}>
+                  Adicionar padrão
+                </Button>
+              ),
+            }}
             onEditar={() => toast.info("Editar o vínculo")}
             onRemover={() => toast.info("Remover o vínculo")}
           />
         </div>
         <EditorVinculo
           abertura={vincDemo}
-          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula }))}
-          alvos={[]}
+          pessoas={VINCULOS_DEMO.map((v) => ({ id: v.responsavelId, nome: v.nome, matricula: v.matricula, cargo: v.cargo, usuarioId: null, foto: null, exoneradoEm: null, externo: false }))}
+          cargos={["Secretária", "Diretor", "Secretário Adjunto"]}
+          alvos={{ orgaos: [], unidades: [], fora: [] }}
           alvoFixo={{ rotulo: "SMS — Secretaria Municipal de Saúde · PMRV" }}
           ocupado={false}
           onCriarPessoa={async () => 99}
@@ -4508,8 +4720,8 @@ export function Catalogo() {
         <PadronizacaoDemo />
       </Secao>
 
-      <Secao titulo="OrcamentoCard + OrcamentoNovoCard (card 4:5 do orçamento — só informação: dotação atualizada, % empenhado, saldo, abrangência)">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <Secao titulo="OrcamentoCard + OrcamentoNovoCard (card do orçamento — valores completos e abreviados, composição da dotação, execução e abrangência)">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-4">
           <OrcamentoCard
             href="/painel/orcamento"
             orcamento={{
@@ -4525,13 +4737,16 @@ export function Catalogo() {
               saldo: 1_423_650_000,
               orgaos: 18,
               unidades: 39,
+              emenda: 12_500_000,
+              programas: 41,
+              acoes: 242,
             }}
           />
           <OrcamentoNovoCard onClick={() => {}} />
         </div>
       </Secao>
 
-      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (o card “Novo quadro”, na altura dos cards), SeletorFundo (o fundo do quadro como o do Trello: prévia, fotos 16:9 + pesquisa com sugestões, DEGRADÊS em círculos — predefinidos, próprio e “Sem fundo”), CapaQuadro (a capa 16:9 no card do quadro), MolduraQuadro + FaixaQuadro + PilulaVistas + MenuQuadro + MembrosQuadro (o quadro no padrão do Trello: moldura arredondada com a imagem NÍTIDA e ENQUADRÁVEL — ponto focal + zoom —, cartão com CAPA colorida, listas RECOLHÍVEIS e contagem “N de M” com filtro, faixa translúcida no topo com as fotos/filtro/menu “…”, a pílula de vistas flutuante no rodapé), TextoNoLugar (o NOME do quadro e da lista: um clique edita no lugar), ItensArquivados (os cartões e as listas arquivados — restaurar/excluir), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover/EXCLUIR a lista) + CopiarMoverLista + ExcluirLista (qualquer lista: mover os cartões para outra ou excluir tudo junto), FundoQuadro (a IMAGEM DE FUNDO do quadro por link — enquadrar arrastando + zoom, avisos de proporção/resolução e fotos sugeridas — imagem ou pin do Pinterest, sem enviar arquivo), CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o “Mudar de quadros” do Trello: busca e as MESMAS seções da tela de Tarefas, com as pastas) + SecoesDeQuadros/SecaoQuadros/GradeQuadros (Favoritos · Recentes · “Seus quadros”, minimizáveis, com o QuadroCard; arrastar em Favoritos/Recentes = ARRASTO NEGADO: o card sacode e avisa) + GradePastas/PastaQuadro (as PASTAS de quadros: o desenho de uma pasta na célula do QuadroCard — aba, folhas com as capas e a frente na cor; entreabre no hover; abre NO LUGAR empurrando os cards; ARRASTAR reordena e põe/tira quadros da pasta — no toque, segurar ~400 ms; Alt+←/→) + EditorConjunto/MenuConjunto (criar/editar/excluir a pasta) + ChipsEscolha (chips de escolha que quebram linha), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (visual do Trello: nome editável, ARRASTAR pelo cabeçalho, WIP em âmbar + Adicionar um cartão) + NovaLista (a coluna “+ Adicionar outra lista” no fim do quadro), CartaoTarefa (visual do Trello — etiquetas cheias, prazo e checklist em selo; com o mouse: contorno, círculo, editar e DUPLICAR; prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculosTarefa (vários vínculos: tarefa ↔ tarefa nos dois sentidos, protocolo/DFD/PCA/orçamento), ImportarTrello (o JSON do Trello → prévia, membros casados com as pessoas, importação em lotes retomável — botão “Importar do Trello” abaixo), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
+      <Secao titulo="Tarefas — QuadroCard (com a ESTRELA de favorito — EstrelaFavorito) + QuadroNovoCard (o card “Novo quadro”, na altura dos cards), SeletorFundo (o fundo do quadro como o do Trello: prévia, fotos 16:9 + pesquisa com sugestões, DEGRADÊS em círculos — predefinidos, próprio e “Sem fundo”), CapaQuadro (a capa 16:9 no card do quadro), MolduraQuadro + FaixaQuadro + PilulaVistas + MenuQuadro + MembrosQuadro (o quadro no padrão do Trello: moldura arredondada com a imagem NÍTIDA e ENQUADRÁVEL — ponto focal + zoom —, cartão com CAPA colorida, listas RECOLHÍVEIS e contagem “N de M” com filtro, faixa translúcida no topo com as fotos/filtro/menu “…”, a pílula de vistas flutuante no rodapé), TextoNoLugar (o NOME do quadro e da lista: um clique edita no lugar), ItensArquivados (os cartões e as listas arquivados — restaurar/excluir), MenuLista (o “…” da lista: ordenar, mover/arquivar todos os cartões, copiar/mover/EXCLUIR a lista) + CopiarMoverLista + ExcluirLista (qualquer lista: mover os cartões para outra ou excluir tudo junto), FundoQuadro (a IMAGEM DE FUNDO do quadro por link — enquadrar arrastando + zoom, avisos de proporção/resolução e fotos sugeridas — imagem ou pin do Pinterest, sem enviar arquivo), CamposPeriodo (as listas dos dias do mês), TrocarQuadro (o “Mudar de quadros” do Trello: busca e as MESMAS seções da tela de Tarefas, com as pastas) + SecoesDeQuadros/SecaoQuadros/GradeQuadros (Favoritos · Recentes · “Seus quadros”, minimizáveis, com o QuadroCard; arrastar em Favoritos/Recentes = ARRASTO NEGADO: o card sacode e avisa) + GradePastas/PastaQuadro (as PASTAS de quadros: o desenho de uma pasta na célula do QuadroCard — aba, folhas com as capas e a frente na cor; entreabre no hover; abre NO LUGAR empurrando os cards; ARRASTAR reordena e põe/tira quadros da pasta — no toque, segurar ~400 ms; Alt+←/→) + EditorConjunto/MenuConjunto (criar/editar/excluir a pasta) + ChipsEscolha (chips de escolha que quebram linha), FiltrosTarefas (busca + o painel FILTRAR: pessoas com a foto, status, prazo — até amanhã/7/30 dias —, prioridade e etiquetas, vários valores; chips removíveis), SeletorEtiquetas + ChipEtiqueta (marcar, buscar, criar e editar etiquetas), CamposPersonalizadosQuadro + CamposDaTarefa + ChipsCamposCartao (os CAMPOS personalizados: cadastro com o formato do TÍTULO AUTOMÁTICO, os editores na tarefa e os selos no cartão), ColunaTarefas (visual do Trello: nome editável, ARRASTAR pelo cabeçalho, WIP em âmbar + Adicionar um cartão) + NovaLista (a coluna “+ Adicionar outra lista” no fim do quadro), FiltroLista + PdfLista (o funil e o PDF no pé de cada lista: membros, unidade e protocolo/DFD/item), CartaoTarefa (+ ChipsVinculosMesa — os números do protocolo/DFD/item em selos; visual do Trello — etiquetas cheias, prazo e checklist em selo; com o mouse: contorno, círculo, editar e DUPLICAR; prioridade, prazo no semáforo, fotos; alça de arrasto no toque) SeletorPessoas (várias pessoas, com foto), ChecklistTarefa (otimista, em fila; rascunho na tarefa nova), MenuAdicionarCartao (o “+ Adicionar” do detalhe: metadados e blocos) + MolduraBloco (os BLOCOS do corpo — alça e ↑/↓ reordenam), EditorTexto + TextoFormatado + CampoTextoFormatado (texto formatado: negrito, listas, links, @menção — lido formatado, editado no lugar), AtividadeTarefa (comentários e atividade num fluxo, com “Mostrar detalhes”), VinculosTarefa (vários vínculos: tarefa ↔ tarefa nos dois sentidos, protocolo/DFD/PCA/orçamento), ImportarTrello (o JSON do Trello → prévia, membros casados com as pessoas, importação em lotes retomável — botão “Importar do Trello” abaixo), BarraEdicaoMassaTarefas (com Equipe +/−), ChipsAlternar (etiquetas e EQUIPES da tarefa, na cor), CirculoConcluir (conclui/reabre NO LUGAR), DatasTarefa (início, prazo com HORA e LEMBRETE), CopiarMoverTarefa (copiar · mover para outro quadro · criar template) + SeletorTemplates (criar a partir de template no pé da lista), CalendarioTarefas (por EVENTOS: Dia · Semana com grade de horas e linha do agora · Mês com faixas · Agenda; criar no horário — também pelo teclado; arrastar reagenda; a borda muda a duração; feriados; semana na segunda / sem fim de semana; atalhos D/S/M/A/T) + BarraCalendario (mini-mês, tipos + feriados, conjuntos por tarefa — RECOLHÍVEIS: a seção e cada quadro — e o cronograma do PCA, opções) + AssinaturaCalendario (baixar .ics e o link de assinatura) + EventoBanner (o banner do evento — tarefa ou DFD do PCA; os PARTICIPANTES pela tarefa — responsáveis + equipes; duplicar; prazo em dia não útil) + EventosTarefa/EditorEvento (o bloco Eventos da tarefa: vários dias, lembrete, duplicar), RecorrenciaTarefa, ItemNotificacao (o sino), AutomacoesQuadro, ModelosQuadro e DashboardTarefas (KPIs + 6 quadros com a origem dos dados)">
         <TarefasDemo />
       </Secao>
 
@@ -4599,8 +4814,8 @@ export function Catalogo() {
             },
           ]}
           vinculos={[
-            { id: 1, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 16, acoes: null, acoesFora: [] },
-            { id: 2, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 17, acoes: ["2002 VIGILANCIA"], acoesFora: [] },
+            { id: 1, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 16, acoes: null, acoesFora: [], visaoId: null },
+            { id: 2, chave: "2 - SMS", texto: "2 - SECRETARIA MUNICIPAL DE SAÚDE", alvoId: 17, acoes: ["2002 VIGILANCIA"], acoesFora: [], visaoId: null },
           ]}
         />
       </Secao>
@@ -4739,7 +4954,7 @@ export function Catalogo() {
             <div className="max-w-full rounded-[28px] border-4 border-border-2 bg-bg p-2 shadow-soft">
               <iframe
                 title="Pré-visualização responsiva"
-                src="/design-system?view=frame"
+                src="/painel/design-system?view=frame"
                 className="block rounded-[18px] border border-border bg-bg"
                 style={{ width: larguraDevice, height: 760, maxWidth: "100%" }}
               />
@@ -4850,8 +5065,8 @@ function DemoSegundoPlano() {
           naTela={new Set()}
           onDispensar={() => setLigado(false)}
           trabalhos={[
-            { id: "a", chave: "demo", titulo: "Conferir DFDs × Centi", estado: "rodando", feito: 3, total: 8, texto: "Conferir 1 DFD × Centi: 42 de 300", rota: "/design-system" },
-            { id: "b", chave: "demo", titulo: "Execução dos DFDs na CM002", estado: "concluido", feito: 6, total: 6, rota: "/design-system" },
+            { id: "a", chave: "demo", titulo: "Conferir DFDs × Centi", estado: "rodando", feito: 3, total: 8, texto: "Conferir 1 DFD × Centi: 42 de 300", rota: "/painel/design-system" },
+            { id: "b", chave: "demo", titulo: "Execução dos DFDs na CM002", estado: "concluido", feito: 6, total: 6, rota: "/painel/design-system" },
           ]}
         />
       )}
@@ -4860,6 +5075,6 @@ function DemoSegundoPlano() {
 }
 
 const VINCULOS_DEMO: VinculoComPessoa[] = [
-  { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "Secretária", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: null, fim: null, ordem: 0 },
-  { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
+  { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", cargo: "Secretária", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: "2025-01-01", fim: null, ordem: 0 },
+  { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", cargo: "Diretor", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "Secretário Adjunto", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
 ];

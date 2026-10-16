@@ -22,6 +22,7 @@ export function MultiSelectHeader({
   sortDir = null,
   align = "start",
   marcado,
+  detalhe,
 }: {
   label: string;
   options: string[];
@@ -32,6 +33,8 @@ export function MultiSelectHeader({
   align?: "start" | "end";
   /** Coluna filtrada (tópico marcado). Padrão: há seleção que não cobre todas as opções. */
   marcado?: boolean;
+  /** A 2ª linha de cada opção (ex.: o NOME da sigla da unidade) — a busca acha pelos dois. */
+  detalhe?: (opcao: string) => string | undefined;
 }) {
   const filtrado = marcado ?? (value.length > 0 && !options.every((o) => value.includes(o)));
 
@@ -41,7 +44,7 @@ export function MultiSelectHeader({
       ariaLabel={`Filtrar ${label}`}
       triggerClassName="w-full gap-1.5 px-1 py-2"
       panelClassName="p-0"
-      width={280}
+      width={detalhe ? 340 : 280}
       trigger={<GatilhoFiltro label={label} sortDir={sortDir} marcado={filtrado} />}
     >
       {(close) => (
@@ -49,6 +52,7 @@ export function MultiSelectHeader({
           label={label}
           options={options}
           value={value}
+          detalhe={detalhe}
           onApply={(s) => {
             onApply(s);
             close();
@@ -64,6 +68,7 @@ export function MultiSelectHeader({
 function Painel({
   options,
   value,
+  detalhe,
   onApply,
   onCancel,
   onSort,
@@ -71,6 +76,7 @@ function Painel({
   label: string;
   options: string[];
   value: string[];
+  detalhe?: (opcao: string) => string | undefined;
   onApply: (sel: string[]) => void;
   onCancel: () => void;
   onSort?: (dir: "asc" | "desc") => void;
@@ -82,7 +88,17 @@ function Painel({
     return new Set(value.filter((v) => ofertadas.has(v)));
   });
   const [q, setQ] = useState("");
-  const visiveis = useMemo(() => opcoesDaBusca(options, q), [q, options]);
+  // As duas linhas de cada opção, calculadas UMA vez por lista (sigla + nome).
+  const partes = useMemo(() => new Map(options.map((o) => [o, partesOpcao(o, detalhe)] as const)), [options, detalhe]);
+  const visiveis = useMemo(() => {
+    const achados = opcoesDaBusca(options, q);
+    if (!detalhe || !q.trim()) return achados;
+    // Também pelo nome (a 2ª linha): "saúde" acha a sigla FMS.
+    const segundas = options.map((o) => partes.get(o)?.[1] ?? "");
+    const peloNome = new Set(opcoesDaBusca(segundas.filter(Boolean), q));
+    const ja = new Set(achados);
+    return options.filter((o, i) => ja.has(o) || (segundas[i] !== "" && peloNome.has(segundas[i])));
+  }, [q, options, detalhe, partes]);
   const buscando = q.trim() !== "";
   // Seleção DA BUSCA, guardada com o termo: mudou a busca ⇒ os novos resultados começam todos marcados.
   const [selBusca, setSelBusca] = useState<{ q: string; set: Set<string> } | null>(null);
@@ -146,7 +162,7 @@ function Painel({
           type="checkbox"
           checked={todosMarcados}
           onChange={alternarTodos}
-          className="h-4 w-4 accent-[var(--accent)]"
+          className="caixa-marcar"
         />
         {buscando ? `Selecionar os ${visiveis.length} encontrados` : "Selecionar todos"}
       </label>
@@ -154,15 +170,25 @@ function Painel({
         {visiveis.map((o) => (
           <label
             key={o}
-            className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-[13px] text-text-2 hover:bg-surface-2"
+            className="flex cursor-pointer items-start gap-2.5 px-3 py-1.5 [&>input]:mt-0.5 text-[13px] text-text-2 hover:bg-surface-2"
           >
             <input
               type="checkbox"
               checked={marcadas.has(o)}
               onChange={() => alternar(o)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+              className="caixa-marcar"
             />
-            <span className="truncate" title={o}>{o}</span>
+            {(() => {
+              const [principal, segunda] = partes.get(o) ?? [o, undefined];
+              return segunda ? (
+                <span className="flex min-w-0 flex-col">
+                  <span className="break-words">{principal}</span>
+                  <span className="break-words text-[11px] leading-snug text-faint">{segunda}</span>
+                </span>
+              ) : (
+                <span className="min-w-0 break-words">{o}</span>
+              );
+            })()}
           </label>
         ))}
         {visiveis.length === 0 && (
@@ -191,4 +217,13 @@ function Painel({
       </div>
     </div>
   );
+}
+
+/** A opção em duas linhas: com `detalhe`, o valor + o nome; o valor já "SIGLA — Nome" também se divide (o mesmo desenho). */
+function partesOpcao(o: string, detalhe?: (opcao: string) => string | undefined): [string, string | undefined] {
+  const d = detalhe?.(o);
+  if (d) return [o, d];
+  if (!detalhe) return [o, undefined];
+  const i = o.indexOf(" — ");
+  return i > 0 ? [o.slice(0, i), o.slice(i + 3)] : [o, undefined];
 }

@@ -3,17 +3,21 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { campoVisivel, type Grafo, type Item, type NoFluxo, nomeDoNo, type PassoExec, type ResultadoExec } from "@/lib/fluxo-core";
 import { corCategoria, REGISTRO_NOS } from "@/lib/fluxo-nos";
+import { contagemDfds } from "@/lib/automacao-dfds-estado";
 import { dataHoraBR } from "@/lib/format";
+import { progressoFluxo, textoDuracao, textoPct } from "@/lib/fluxo-progresso";
 import { useAlturaTela } from "../AlturaCheia";
 import { Badge, type Tone } from "../Badge";
 import { type Column, DataTable } from "../DataTable";
 import { Progress } from "../Progress";
 import { Segmented } from "../Segmented";
 import { StatMini } from "../StatMini";
+import { TabelaMesaFluxo } from "./TabelaMesaFluxo";
 import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
+import { useEstimativa } from "./useEstimativa";
 import { CampoDoNo } from "./PainelNo";
-import { estadoDoItem, HostPainelCtx, rotuloItem, VISOES } from "./paineis";
+import { estadoDoItem, HostPainelCtx, rotuloItem, TesteProtocoloCenti, useExecutarSelecionados, VISOES } from "./paineis";
 
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
 
@@ -82,6 +86,17 @@ export function PainelFluxo({
   }, [rodando, visoes]);
 
   const feitas = etapas.filter((n) => ["ok", "erro", "ignorado"].includes(passos[n.id]?.estado ?? "")).length;
+  // O progresso REAL: cada etapa pesa o trabalho que faz (o Baixar/anexar = os DFDs) e a em curso conta pela fração medida.
+  const dfds = host?.dfds ? contagemDfds(host.dfds) : null;
+  const medida = (n: NoFluxo) => (n.tipo === "saida.dfdsCenti" && dfds && dfds.total ? { feito: dfds.concluidas, total: dfds.total } : null);
+  const fracao = progressoFluxo(
+    etapas.map((n) => {
+      const m = medida(n);
+      return { estado: passos[n.id]?.estado, fracao: m ? m.feito / m.total : null, peso: m ? m.total : 1 };
+    }),
+  );
+  const restante = useEstimativa(fracao, rodando);
+  const terminou = !rodando && etapas.length > 0 && feitas === etapas.length;
   const atual = etapas.find((n) => passos[n.id]?.estado === "rodando");
   const noAberto = visoes.find((n) => n.id === abaValida);
   const Visao = noAberto ? VISOES[noAberto.tipo].Componente : null;
@@ -109,8 +124,9 @@ export function PainelFluxo({
                     <AjudaNo def={def} />
                   </legend>
                   {campos.map((c) => (
-                    <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} somenteLeitura={rodando} />
+                    <CampoDoNo key={c.chave} campo={c} valor={n.config[c.chave] ?? c.padrao} onValor={(v) => mudar(n, c.chave, v)} config={n.config} somenteLeitura={rodando} />
                   ))}
+                  {n.tipo === "saida.dfdsCenti" && <TesteProtocoloCenti no={n} onNumero={(v) => mudar(n, "alvoNumero", v)} desabilitado={rodando} />}
                 </fieldset>
               ))}
             </div>
@@ -121,31 +137,41 @@ export function PainelFluxo({
             <h3 id="fluxo-etapas" className="text-sm font-semibold text-text">
               Etapas
             </h3>
-            <span className="text-xs tabular-nums text-muted">
+            <span className="text-xs tabular-nums text-muted" aria-live="polite">
+              {rodando || terminou ? `${textoPct(fracao, terminou)} · ` : ""}
               {feitas}/{etapas.length}
             </span>
           </div>
-          {rodando && <Progress value={(feitas / Math.max(1, etapas.length)) * 100} />}
+          {(rodando || terminou) && <Progress value={terminou ? 100 : fracao * 100} />}
+          {rodando && <p className="mt-1 text-xs tabular-nums text-muted">{restante == null ? "Calculando o tempo restante…" : `Termina em ${textoDuracao(restante)}`}</p>}
           <ol className="mt-2 space-y-1.5">
             {etapas.map((n) => {
               const def = REGISTRO_NOS.get(n.tipo);
               const p = passos[n.id];
               const e = p ? ESTADO[p.estado] : null;
               const vivos = host?.parciais[n.id]?.length ?? 0;
+              const m = medida(n);
               return (
-                <li key={n.id} className="flex items-start gap-2">
+                <li key={n.id} className={`flex items-start gap-2 rounded-md ${p?.estado === "rodando" ? "-mx-1 bg-[color-mix(in_oklab,var(--accent)_8%,transparent)] px-1 py-0.5" : ""}`}>
                   <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-white" style={{ background: def ? corCategoria(def.categoria) : "var(--muted)" }}>
                     <IconeNo nome={def?.icone ?? "alert"} className="size-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-[13px] text-text">{def?.rotulo ?? n.tipo}</span>
-                      {p && p.estado !== "fila" && <span className="text-xs tabular-nums text-muted">{p.estado === "rodando" && vivos ? vivos : p.itens}</span>}
+                      {p?.estado === "rodando" && m ? (
+                        <span className="text-xs tabular-nums text-muted">
+                          {m.feito}/{m.total}
+                        </span>
+                      ) : (
+                        p && p.estado !== "fila" && <span className="text-xs tabular-nums text-muted">{p.estado === "rodando" && vivos ? vivos : p.itens}</span>
+                      )}
                       {e && <Badge tone={e.tom}>{e.rotulo}</Badge>}
                       {def && <AjudaNo def={def} />}
                     </div>
                     {p?.estado === "erro" && <p className="text-xs text-[var(--danger)]">{p.erro}</p>}
-                    {p?.estado === "rodando" && p.aviso && <p className="truncate text-xs text-muted">{p.aviso}</p>}
+                    {p?.estado === "rodando" && m && <div className="mt-1"><Progress value={(m.feito / m.total) * 100} /></div>}
+                    {p?.estado === "rodando" && (dfds?.atual ? <p className="truncate text-xs text-muted">Agora: Planej. {dfds.atual.id}{dfds.atual.dfd ? ` · DFD ${dfds.atual.dfd}` : ""}</p> : p.aviso && <p className="truncate text-xs text-muted">{p.aviso}</p>)}
                   </div>
                 </li>
               );
@@ -159,7 +185,7 @@ export function PainelFluxo({
           {Visao && noAberto ? (
             <Visao no={noAberto} grafo={grafo} onGrafo={onGrafo} />
           ) : (
-            <AnaliseAoVivo etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} />
+            <AnaliseAoVivo grafo={grafo} etapas={etapas} passos={passos} resultado={resultado} rodando={rodando} atual={atual} ultima={ultima} />
           )}
         </div>
       </section>
@@ -170,6 +196,7 @@ export function PainelFluxo({
 /** A ANÁLISE: o andamento e cada item processado AO VIVO (o componente que processa itens um a um) e, ao terminar, os
  * apontamentos — números + tabelas exportáveis. */
 function AnaliseAoVivo({
+  grafo,
   etapas,
   passos,
   resultado,
@@ -177,6 +204,7 @@ function AnaliseAoVivo({
   atual,
   ultima,
 }: {
+  grafo: Grafo;
   etapas: NoFluxo[];
   passos: Record<string, PassoExec>;
   resultado: ResultadoExec | null;
@@ -186,11 +214,20 @@ function AnaliseAoVivo({
 }) {
   const host = useContext(HostPainelCtx);
   // O componente que processa item a item (o de agora; senão o último que processou).
+  // O Baixar/anexar DFDs não entrega parciais: o andamento dele são as linhas dos DFDs (`host.dfds`, ao vivo e no fim).
+  const noDfds = etapas.find((n) => n.tipo === "saida.dfdsCenti") ?? null;
+  const anexarDfds = !!noDfds && String(noDfds.config?.destino ?? "pasta") !== "pasta";
   const fonte = useMemo(() => {
     const comItens = etapas.filter((n) => host?.parciais[n.id]?.length);
-    return (atual && host?.parciais[atual.id]?.length ? atual : comItens[comItens.length - 1]) ?? null;
-  }, [etapas, atual, host]);
-  const itensFonte = fonte ? (host?.saidas[fonte.id] ?? host?.parciais[fonte.id] ?? []) : [];
+    if (atual && host?.parciais[atual.id]?.length) return atual;
+    if (noDfds && host?.dfds?.length && (atual?.id === noDfds.id || !comItens.length)) return noDfds;
+    return comItens[comItens.length - 1] ?? null;
+  }, [etapas, atual, host, noDfds]);
+  const itensFonte: Item[] = fonte
+    ? fonte === noDfds && host?.dfds?.length
+      ? (host.dfds as unknown as Item[])
+      : (host?.saidas[fonte.id] ?? host?.parciais[fonte.id] ?? [])
+    : [];
   const processados = useMemo<Processado[]>(
     () =>
       fonte
@@ -200,11 +237,13 @@ function AnaliseAoVivo({
               chave: String(i),
               item: rotuloItem(it),
               orgao: s(it.orgaoNome) || s(it.orgao) || (s(it.entidade) ? `Centi ${s(it.entidade)}` : ""),
-              estado: estadoDoItem(fonte.tipo, it) ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" },
+              estado: estadoDoItem(fonte.tipo, fonte === noDfds ? { ...it, anexar: anexarDfds } : it) ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" },
             }))
         : [],
-    [fonte, itensFonte],
+    [fonte, itensFonte, noDfds, anexarDfds],
   );
+  // Marcar itens do resultado e rodar o fluxo de novo só com eles (quando o fluxo os recebe).
+  const exec = useExecutarSelecionados(grafo, rodando ? [] : itensFonte, (it) => itensFonte.indexOf(it));
   // Quantos itens entram no componente (o que os anteriores entregaram) — o andamento "n de N".
   const total = fonte ? Math.max(itensFonte.length, ...etapas.filter((n) => n.x < fonte.x).map((n) => passos[n.id]?.itens ?? 0)) : 0;
   const conta = (tons: Tone[]) => processados.filter((p) => tons.includes(p.estado.tom)).length;
@@ -217,11 +256,15 @@ function AnaliseAoVivo({
       })),
     [resultado],
   );
-  const colunasVivo: Column<Processado>[] = [
-    { key: "item", header: "Item", nowrap: true, align: "left", value: (p) => p.item, render: (p) => p.item },
-    { key: "orgao", header: "Órgão", align: "left", minWidth: 160, value: (p) => p.orgao || "—", render: (p) => <span className="whitespace-normal">{p.orgao || "—"}</span> },
-    { key: "estado", header: "Estado", nowrap: true, value: (p) => p.estado.rotulo, render: (p) => <Badge tone={p.estado.tom} dot>{p.estado.rotulo}</Badge> },
-    { key: "texto", header: "Detalhe", align: "left", minWidth: 240, value: (p) => p.estado.texto, render: (p) => <span className="whitespace-normal text-muted">{p.estado.texto || "—"}</span> },
+  // A tabela ao vivo é a da MESA quando os itens são protocolos, DFDs ou itens (o toque abre o banner); o Órgão, o Estado e o
+  // Detalhe do componente vão no fim de qualquer tipo.
+  const estadoDe = (it: Item) => processados[itensFonte.indexOf(it)]?.estado ?? { rotulo: "Processado", tom: "slate" as Tone, texto: "" };
+  const orgaoDe = (it: Item) => processados[itensFonte.indexOf(it)]?.orgao ?? "";
+  const genericasVivo: Column<Item>[] = [{ key: "item", header: "Item", nowrap: true, align: "left", value: (it) => rotuloItem(it), render: (it) => rotuloItem(it) }];
+  const extrasVivo: Column<Item>[] = [
+    ...(processados.some((p) => p.orgao) ? [{ key: "orgao", header: "Órgão", align: "left" as const, minWidth: 160, value: (it: Item) => orgaoDe(it) || "—", render: (it: Item) => <span className="whitespace-normal">{orgaoDe(it) || "—"}</span> }] : []),
+    { key: "estadoEtapa", header: "Estado", nowrap: true, value: (it) => estadoDe(it).rotulo, render: (it) => <Badge tone={estadoDe(it).tom} dot>{estadoDe(it).rotulo}</Badge> },
+    { key: "detalhe", header: "Detalhe", align: "left", minWidth: 240, value: (it) => estadoDe(it).texto, render: (it) => <span className="whitespace-normal text-muted">{estadoDe(it).texto || "—"}</span> },
   ];
   const colunasAp: Column<Apontado>[] = [
     { key: "nivel", header: "Nível", nowrap: true, value: (a) => a.nivel, render: (a) => <Badge tone={a.nivel === "Erro" ? "red" : "amber"} dot>{a.nivel}</Badge> },
@@ -277,7 +320,22 @@ function AnaliseAoVivo({
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
             {fonte ? `${nomeDoNo(fonte, REGISTRO_NOS)} · ${rodando ? "ao vivo" : "resultado"}` : "Itens"}
           </h4>
-          <DataTable columns={colunasVivo} rows={processados} getKey={(r) => r.chave} density="compact" exportar={{ nome: "Itens processados" }} linhasSalvas="automacao:itens-processados" />
+          {host && (
+            <TabelaMesaFluxo
+              itens={itensFonte}
+              chave={(it) => itensFonte.indexOf(it)}
+              genericas={genericasVivo}
+              extras={extrasVivo}
+              gestao={host.gestao}
+              onAbrir={host.abrir}
+              selected={exec?.selected}
+              onSelected={exec?.onSelected}
+              acoesRodape={exec?.acao}
+              scrollInterno={false}
+              exportar={{ nome: "Itens processados" }}
+              linhasSalvas="automacao:itens-processados"
+            />
+          )}
         </div>
       )}
     </div>

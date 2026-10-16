@@ -15,6 +15,7 @@ import {
   type OrdenacaoLista,
   ROTULO_ORDENACAO,
   FILTRO_TAREFAS_PADRAO,
+  siglasDaTarefa,
   type FiltroTarefas,
   filtrarTarefas,
   contarFiltros,
@@ -50,7 +51,7 @@ import { ChipsFiltrosTarefas, FiltrosTarefas } from "./FiltrosTarefas";
 import { tokenPx } from "./espacamento";
 import { IconArquivar, IconCalendar, IconLock, IconChevronLeft, IconDashboard, IconKanban, IconList, IconPlus, IconSettings, IconTrocar } from "./icons";
 import { CopiarMoverTarefa, type ModoCopia, type ResultadoCopia } from "./CopiarMoverTarefa";
-import { CopiarMoverLista, ExcluirLista, LimiteLista, ListasDoMes, MenuLista, type ModoLista } from "./MenuLista";
+import { CopiarMoverLista, ExcluirLista, LimiteLista, ListasDoMes, MenuLista, type ModoLista, PessoaLista } from "./MenuLista";
 import { FundoQuadro } from "./FundoQuadro";
 import { Modal } from "./Modal";
 import { useConfirmacao } from "./Confirmacao";
@@ -88,6 +89,7 @@ const LOTE_MASSA = 50;
  */
 export function QuadroTarefas({
   aba,
+  permitidas,
   quadro,
   listas: listasDoServidor,
   tarefas: doServidor,
@@ -98,6 +100,7 @@ export function QuadroTarefas({
   pessoas,
   edicoes,
   automacoes,
+  automacoesMesa,
   favoritos,
   trello,
   modelosQuadro,
@@ -107,16 +110,21 @@ export function QuadroTarefas({
   eventos = [],
   calendario,
   novaInicial = null,
+  listaInicial = null,
   prazoInicial = null,
   tarefaInicial = null,
 }: DadosQuadro & {
   aba: AbaQuadro;
+  /** As abas que o papel vê (Detalhes do papel → Componentes); ausente = todas. */
+  permitidas?: readonly AbaQuadro[];
   usuarioId: number;
   /** Os EVENTOS cadastrados das tarefas deste quadro (só com a aba Calendário aberta). */
   eventos?: EventoTarefa[];
   /** As OPÇÕES da pessoa e os FERIADOS cadastrados (só com a aba Calendário aberta). */
   calendario?: { opcoes: OpcoesCalendario; feriados: FeriadoCadastro[] };
   novaInicial?: VinculoTarefa | null;
+  /** A lista da tarefa nova da chegada (a atribuída/pedida); `null` = a 1ª ativa. */
+  listaInicial?: number | null;
   prazoInicial?: string | null;
   tarefaInicial?: number | null;
 }) {
@@ -164,6 +172,7 @@ export function QuadroTarefas({
   const [copiaLista, setCopiaLista] = useState<{ modo: ModoLista; listaId: number } | null>(null);
   const [excluindoLista, setExcluindoLista] = useState<number | null>(null);
   const [limiteLista, setLimiteLista] = useState<number | null>(null);
+  const [pessoaLista, setPessoaLista] = useState<number | null>(null);
   const [verFundo, setVerFundo] = useState(false);
   const [listasDoMes, setListasDoMes] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
@@ -178,6 +187,8 @@ export function QuadroTarefas({
   useEffect(() => setSel(new Set()), [aba, mostrar]);
 
   const ativas = useMemo(() => listas.filter((l) => !l.arquivada), [listas]);
+  /** As SIGLAS das unidades dos vínculos das tarefas (as opções do filtro "Unidade"). */
+  const siglasDoQuadro = useMemo(() => [...new Set(tarefas.flatMap(siglasDaTarefa))].sort((a, b) => a.localeCompare(b, "pt-BR")), [tarefas]);
   const doGrupo = useMemo(() => {
     const m = new Set(membros);
     return pessoas.filter((p) => m.has(p.id));
@@ -213,7 +224,7 @@ export function QuadroTarefas({
     if (chegada === chegadaVista.current) return;
     chegadaVista.current = chegada;
     if (tarefaInicial) setAberto({ tipo: "editar", id: tarefaInicial });
-    else if (novaInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, vinculo: novaInicial });
+    else if (novaInicial && ativas[0]) setAberto({ tipo: "nova", listaId: listaInicial ?? ativas[0].id, vinculo: novaInicial });
     else if (prazoInicial && ativas[0]) setAberto({ tipo: "nova", listaId: ativas[0].id, prazo: prazoInicial });
     else return;
     router.replace(`${pathname}?aba=${aba}`, { scroll: false });
@@ -577,7 +588,7 @@ export function QuadroTarefas({
               <>
                 <MembrosQuadro pessoas={doGrupo} filtro={filtro} onFiltro={setFiltro} />
                 {abaAtual !== "configuracao" && (
-                  <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} buscaNoPainel />
+                  <FiltrosTarefas filtro={filtro} onChange={setFiltro} pessoas={pessoas} etiquetas={etiquetas} campos={campos} siglas={siglasDoQuadro} usuarioId={usuarioId} buscaNoPainel />
                 )}
                 <div ref={setSlot} className="flex items-center gap-1 empty:hidden" />
                 {trello && <IndicadorTrello ligacao={trello} onAbrir={() => irConfiguracao("trello")} />}
@@ -605,13 +616,13 @@ export function QuadroTarefas({
           <PilulaVistas<AbaQuadro>
             valor={abaAtual}
             onTrocar={trocarAba}
-            opcoes={[
+            opcoes={([
               { value: "quadro", label: "Quadro", icone: <IconKanban className="h-4 w-4" /> },
               { value: "lista", label: "Lista", icone: <IconList className="h-4 w-4" /> },
               { value: "calendario", label: "Calendário", icone: <IconCalendar className="h-4 w-4" /> },
               { value: "dashboard", label: "Dashboard", icone: <IconDashboard className="h-4 w-4" /> },
               { value: "configuracao", label: "Configuração", icone: <IconSettings className="h-4 w-4" /> },
-            ]}
+            ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
             extra={
               <TrocarQuadro
                 quadro={quadro}
@@ -711,6 +722,7 @@ export function QuadroTarefas({
                   onArquivarLista={() => arquivarLista(l)}
                   onExcluirLista={() => setExcluindoLista(l.id)}
                   onLimite={() => setLimiteLista(l.id)}
+                  onPessoa={() => setPessoaLista(l.id)}
                   onConcluidas={() => alternarConcluidas(l)}
                 />
                     )
@@ -732,6 +744,7 @@ export function QuadroTarefas({
             onAbrir={(id) => setAberto({ tipo: "editar", id })}
             edicoes={edicoesLista}
             nomeExportacao={`Tarefas - ${quadro.nome}`}
+            automacoes={automacoesMesa}
             selecao={podeManipular ? sel : undefined}
             onSelecao={podeManipular ? setSel : undefined}
             reservaInferior={RESERVA_PILULA + 12 + (alturaBarra > 0 ? alturaBarra + tokenPx("--gap-block", 12) : 0)}
@@ -860,6 +873,16 @@ export function QuadroTarefas({
         onFechar={() => setExcluindoLista(null)}
         onFeito={() => {
           setExcluindoLista(null);
+          router.refresh();
+        }}
+      />
+      <PessoaLista
+        lista={listas.find((x) => x.id === pessoaLista) ?? null}
+        pessoas={doGrupo}
+        usuarioId={usuarioId}
+        onFechar={() => setPessoaLista(null)}
+        onFeito={() => {
+          setPessoaLista(null);
           router.refresh();
         }}
       />

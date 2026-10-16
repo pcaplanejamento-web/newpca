@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { type Acesso, getAcesso, motivoNoQuadro, motivoRecusa } from "./acesso";
+import { type Acesso, getAcesso, motivoNoQuadro, motivoRecusa, podePca } from "./acesso";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import type { AcaoPapel, Tela } from "./papeis-core";
 
@@ -47,6 +47,13 @@ export function recusa(acesso: Acesso, tela: Tela, acao: AcaoPapel, grupoId?: nu
 export function recusaNoQuadro(acesso: Acesso, q: { grupoId: number }, acao: AcaoPapel, pelaAgenda = false): NextResponse | null {
   const error = motivoNoQuadro(acesso, q.grupoId, acao, pelaAgenda);
   return error ? NextResponse.json({ ok: false, error }, { status: 403 }) : null;
+}
+
+/** A recusa (403) quando o PCA não está entre os do GRUPO ATIVO (Grupos → PCAs do grupo); `null` = pode. O ADM, todos. */
+export async function recusaPca(pcaId: number): Promise<NextResponse | null> {
+  return podePca(await getAcesso(), pcaId)
+    ? null
+    : NextResponse.json({ ok: false, error: "Este PCA não está entre os do seu grupo — peça acesso ao administrador." }, { status: 403 });
 }
 
 /** Exige a AÇÃO numa das telas (no grupo ativo) — várias telas = basta uma permitir. */

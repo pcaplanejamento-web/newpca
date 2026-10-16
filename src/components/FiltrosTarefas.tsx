@@ -17,6 +17,7 @@ import {
   ROTULO_FILTRO_PRAZO,
   ROTULO_PRIORIDADE,
   ROTULO_STATUS_FILTRO,
+  SEM_SIGLA,
   type StatusFiltro,
 } from "@/lib/tarefas-core";
 import { Avatar } from "./Avatar";
@@ -34,7 +35,7 @@ const VISIVEIS = 8;
  * por título ou nº do ticket (vários com ":") e o botão **Filtrar** (com o número de filtros ligados) que abre o PAINEL
  * — como o do Trello: Pessoas (sem responsável · as minhas · cada pessoa, com a foto), Status (todas · não concluídas ·
  * concluídas), Prazo (atrasadas · hoje · até amanhã · 7 dias · 30 dias · sem prazo), Prioridade e Etiquetas (sem
- * etiqueta · cada uma, na cor). Vários valores numa seção = QUALQUER um; seções diferentes se combinam. O que está ligado
+ * etiqueta · cada uma, na cor) e Unidade (a SIGLA dos protocolos/DFDs/itens vinculados · sem unidade). Vários valores numa seção = QUALQUER um; seções diferentes se combinam. O que está ligado
  * aparece por extenso nos chips removíveis (`ChipsFiltrosTarefas`).
  */
 export function FiltrosTarefas({
@@ -43,6 +44,7 @@ export function FiltrosTarefas({
   pessoas,
   etiquetas,
   campos = [],
+  siglas = [],
   usuarioId,
   semBusca = false,
   semResponsavel = false,
@@ -55,6 +57,8 @@ export function FiltrosTarefas({
   etiquetas: EtiquetaTarefa[];
   /** Os campos personalizados do quadro (os de LISTA e CAIXA viram seções do painel). */
   campos?: CampoTarefa[];
+  /** As SIGLAS das unidades presentes nas tarefas (a seção Unidade só aparece com alguma). */
+  siglas?: string[];
   usuarioId: number;
   /** Sem o campo de busca (quem usa já tem a sua — o Calendário). */
   semBusca?: boolean;
@@ -100,7 +104,7 @@ export function FiltrosTarefas({
           </>
         }
       >
-        <PainelFiltro comBusca={buscaNoPainel} filtro={filtro} set={set} onLimpar={() => onChange({ ...FILTRO_TAREFAS_PADRAO, busca: filtro.busca })} pessoas={pessoas} etiquetas={etiquetas} campos={campos} usuarioId={usuarioId} semResponsavel={semResponsavel} semStatus={semStatus} />
+        <PainelFiltro comBusca={buscaNoPainel} filtro={filtro} set={set} onLimpar={() => onChange({ ...FILTRO_TAREFAS_PADRAO, busca: filtro.busca })} pessoas={pessoas} etiquetas={etiquetas} campos={campos} siglas={siglas} usuarioId={usuarioId} semResponsavel={semResponsavel} semStatus={semStatus} />
       </Dropdown>
     </>
   );
@@ -131,6 +135,7 @@ function PainelFiltro({
   pessoas,
   etiquetas,
   campos,
+  siglas,
   usuarioId,
   semResponsavel,
   semStatus,
@@ -143,6 +148,7 @@ function PainelFiltro({
   pessoas: Pessoa[];
   etiquetas: EtiquetaTarefa[];
   campos: CampoTarefa[];
+  siglas: string[];
   usuarioId: number;
   semResponsavel: boolean;
   semStatus: boolean;
@@ -222,6 +228,18 @@ function PainelFiltro({
           </Opcao>
         ))}
       </Secao>
+      {siglas.length > 0 && (
+        <Secao titulo="Unidade (sigla)">
+          <Opcao marcado={filtro.siglas.includes(SEM_SIGLA)} onAlternar={() => set({ siglas: alternarValor(filtro.siglas, SEM_SIGLA) })}>
+            Sem unidade
+          </Opcao>
+          {siglas.map((sg) => (
+            <Opcao key={sg} marcado={filtro.siglas.includes(sg)} onAlternar={() => set({ siglas: alternarValor(filtro.siglas, sg) })}>
+              {sg}
+            </Opcao>
+          ))}
+        </Secao>
+      )}
       {etiquetas.length > 0 && (
         <Secao titulo="Etiquetas">
           <Opcao marcado={filtro.etiquetas.includes("sem")} onAlternar={() => set({ etiquetas: alternarValor(filtro.etiquetas, "sem") })}>
@@ -314,6 +332,8 @@ export function ChipsFiltrosTarefas({
       rotulo: e === "sem" ? "Sem etiqueta" : `Etiqueta: ${etiquetas.find((x) => x.id === e)?.nome ?? "—"}`,
       limpar: { etiquetas: filtro.etiquetas.filter((x) => x !== e) },
     });
+  for (const sg of filtro.siglas)
+    chips.push({ chave: `sigla-${sg}`, rotulo: sg === SEM_SIGLA ? "Sem unidade" : `Unidade: ${sg}`, limpar: { siglas: filtro.siglas.filter((x) => x !== sg) } });
   for (const [id, vals] of Object.entries(filtro.campos)) {
     const c = campos.find((x) => x.id === Number(id));
     for (const v of vals)

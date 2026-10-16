@@ -1,10 +1,12 @@
 "use client";
 
 import { type MutableRefObject, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { AberturaItem } from "@/lib/fluxo-tipo-item";
 import { chaveOrgaoCenti, type ProtocoloAutomacao } from "@/lib/automacao-centi-core";
 import type { PedirExtensao } from "@/lib/arquivo-navegador";
 import { dataHoraBR } from "@/lib/format";
 import {
+  type AjudaFluxo,
   ajudaVazia,
   caminhosDosItens,
   executarFluxo,
@@ -38,14 +40,16 @@ import type { FluxoAutomacao } from "@/lib/fluxos";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
+import { createPortal } from "react-dom";
 import { useConfirmacao } from "../Confirmacao";
 import { SearchField, SelectField, TextField } from "../Field";
-import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
+import { IconChevronLeft, IconClose, IconEnquadrar, IconFluxo, IconMinus, IconOrganizar, IconParar, IconPlay, IconPlus, IconRefresh, IconSave, IconSettings, IconTrash, IconClipboard } from "../icons";
 import { JanelaFlutuante } from "../JanelaFlutuante";
 import { Modal } from "../Modal";
 import { useNaTela, useTrabalhoSegundoPlano } from "../SegundoPlano";
 import { Switch } from "../Switch";
 import { toast } from "../Toast";
+import { useAbrirDaUrl } from "../AbrirDaUrl";
 import { alturaNo, CanvasFluxo, LARGURA_NO, type Vista } from "./CanvasFluxo";
 import { organizarGrafo } from "@/lib/fluxo-layout";
 import { AjudaNo } from "./AjudaNo";
@@ -57,14 +61,15 @@ import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
 import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
 import { PainelFluxo } from "./PainelFluxo";
 import { PainelNo } from "./PainelNo";
-import { type HostPainel, HostPainelCtx } from "./paineis";
+import { type HostPainel, HostPainelCtx, type ProtocoloCenti } from "./paineis";
+import { ProblemasFluxo } from "./ProblemasFluxo";
 import { ProtocoloUploadForm } from "../ProtocoloUploadForm";
 import { CartaoPreso } from "../ArrastoCartoes";
 import { tokenPx } from "../espacamento";
 import { duracaoMotionMs } from "../Modal";
 import { SombraGrade, useArrastoGrade } from "../PastasQuadros";
 import type { GestaoAutomacao } from "../automacao/ProtocolosAutomacao";
-import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, testarAnexo } from "@/lib/automacao-dfds-motor";
+import { andamentoDfds, type ContextoEmissor, executarDfds, type LinhaDfd, opcoesDoNo, type PastaDestino, planoDosItens, previaDfds, testarAnexo } from "@/lib/automacao-dfds-motor";
 
 type Pedir = (acao: string, dados: unknown, ms: number) => Promise<Record<string, unknown> & { ok?: boolean; erro?: string; loteId?: string; interrompido?: boolean }>;
 const CARTAO = "rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring";
@@ -98,7 +103,7 @@ export function FluxosAutomacao({
   protocolos,
   gestao,
   importacao,
-  onAbrirProtocolo,
+  onAbrirMesa,
   onRodando,
   novo: pedidoNovo,
   onEditor,
@@ -115,7 +120,8 @@ export function FluxosAutomacao({
   gestao: GestaoAutomacao;
   /** O contexto da importação na Mesa (unidades, órgãos, regras, PCAs) — "Importar protocolo" e a análise completa. */
   importacao: ContextoImportacao;
-  onAbrirProtocolo: (id: number) => void;
+  /** Abre o protocolo/DFD/item na pilha de banners da Mesa. */
+  onAbrirMesa: (a: AberturaItem) => void;
   onRodando: (r: boolean) => void;
   /** Cada valor novo abre o "Novo fluxo" (o botão do cabeçalho da Automação). */
   novo: number;
@@ -127,6 +133,10 @@ export function FluxosAutomacao({
   const [publicos, setPublicos] = useState<FluxoAutomacao[]>([]);
   const [naMesa, setNaMesa] = useState<number[]>([]);
   const [aberto, setAberto] = useState<number | null>(null);
+  // A PESQUISA DO SISTEMA abre o editor da automação (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    if (fluxos?.some((f) => f.id === Number(v))) setAberto(Number(v));
+  }, fluxos != null);
   const [rodando, setRodando] = useState<number | null>(null);
   const [passos, setPassos] = useState<Record<string, PassoExec>>({});
   const [resultado, setResultado] = useState<ResultadoExec | null>(null);
@@ -138,12 +148,14 @@ export function FluxosAutomacao({
   /** FILA: executar com outro fluxo rodando o põe aqui (roda em seguida, na ordem). */
   const fila = useRef<{ f: Pick<FluxoAutomacao, "id" | "nome">; grafo: Grafo; entrada?: Item[] }[]>([]);
   const [dfds, setDfds] = useState<LinhaDfd[] | null>(null);
+  /** O destino do Baixar/anexar em curso é um protocolo da Centi (o rótulo "Anexado" × "Salvo"). */
+  const [dfdsAnexar, setDfdsAnexar] = useState(false);
   const [naFila, setNaFila] = useState(0);
   const rodandoRef = useRef<number | null>(null);
   useEffect(() => onRodando(rodando != null || naFila > 0), [rodando, naFila, onRodando]);
   // O andamento vai ao painel de SEGUNDO PLANO (minimizado fora desta tela; "Detalhes" volta ao fluxo).
   const emCurso = rodando != null;
-  const andDfds = dfds?.length ? andamentoDfds(dfds) : null;
+  const andDfds = dfds?.length ? andamentoDfds(dfds, dfdsAnexar) : null;
   useTrabalhoSegundoPlano(
     exec
       ? {
@@ -207,7 +219,7 @@ export function FluxosAutomacao({
   const [saidas, setSaidas] = useState<Record<string, Item[]>>({});
   const [parciais, setParciais] = useState<Record<string, Item[]>>({});
   // A PRÉVIA de cada seleção (o trecho só de leitura antes dela) e os itens vindos da Mesa (para a prévia usá-los também).
-  const [previas, setPrevias] = useState<Record<string, { carregando: boolean; erro?: string }>>({});
+  const [previas, setPrevias] = useState<HostPainel["previas"]>({});
   const entradaMesa = useRef<Item[] | null>(null);
   const [pasta, setPasta] = useState<PastaDestino | null>(null);
   const [podePasta, setPodePasta] = useState(false);
@@ -261,7 +273,11 @@ export function FluxosAutomacao({
       baixarDfds: async (itens: Item[], config: Record<string, unknown>) => {
         const { saida, alvo, erroAlvo } = opcoesDoNo(config);
         if (erroAlvo) return { linhas: [], erro: erroAlvo };
-        const plano = planoDosItens(itens, saida, protocolos);
+        const todo = planoDosItens(itens, saida, protocolos);
+        // "Enviar os que faltam": só os arquivos pedidos (a conferência no protocolo).
+        const so = Array.isArray(config.somenteArquivos) ? new Set(config.somenteArquivos.map(String)) : null;
+        const plano = so ? { arquivos: todo.arquivos.filter((a) => so.has(a.nome)), previa: [] as LinhaDfd[] } : todo;
+        if (so) plano.previa = previaDfds(plano.arquivos);
         if (!plano.arquivos.length) return { linhas: plano.previa as unknown as Item[], erro: "Nenhum DFD com nº de planejamento para emitir." };
         if (saida.destino === "pasta" && saida.escolherPasta && podePasta && !pastaRef.current) return { linhas: [], erro: "Escolha a pasta de destino (na aba DFDs do painel)." };
         let linhas = plano.previa;
@@ -273,7 +289,8 @@ export function FluxosAutomacao({
           setDfds(linhas);
         };
         setDfds(linhas);
-        await executarDfds(plano.arquivos, saida, alvo, {
+        setDfdsAnexar(saida.destino !== "pasta");
+        const fim = await executarDfds(plano.arquivos, saida, alvo, {
           ...emissor,
           lote,
           interrompido: () => interrompido.current || cancelar.current,
@@ -284,8 +301,12 @@ export function FluxosAutomacao({
           marcar: (chave, l) => aplicar((x) => (x.chave === chave ? l : null)),
           marcarVarias: aplicar,
         });
-        if (saida.destino !== "pasta") void carregarNaCenti();
-        return { linhas: linhas as unknown as Item[] };
+        if (saida.destino !== "pasta") {
+          void carregarNaCenti();
+          const cf = fim.confirmados;
+          if (cf) (cf.ok === cf.total ? toast.success : toast.warning)(`Conferido na Centi: ${cf.ok} de ${cf.total} arquivo(s) no protocolo.${cf.ok < cf.total ? " Use “Enviar os que faltam”." : ""}`, 10000);
+        }
+        return { linhas: linhas as unknown as Item[], erro: fim.erro };
       },
       importarProtocolo: async (it: Item, apontamentos: string[]) => {
         const lido = leituras.current.get(chaveLeitura(it.protocolo ?? it.numero, it.ano));
@@ -523,8 +544,10 @@ export function FluxosAutomacao({
     setAberto(criado.id);
   }
 
-  async function excluir(f: FluxoAutomacao) {
-    if (!(await confirmar({ titulo: `Excluir o fluxo “${f.nome}”?`, texto: "Não dá para desfazer.", confirmar: "Excluir", perigo: true }))) return;
+  async function excluir(f: FluxoAutomacao, zona?: "lixeira" | "painel") {
+    const devolver = zona === "painel";
+    const texto = devolver ? "Ele sai da sua lista (é excluído) e o modelo volta ao painel. Não dá para desfazer." : "Não dá para desfazer.";
+    if (!(await confirmar({ titulo: devolver ? `Devolver “${f.nome}” ao painel?` : `Excluir o fluxo “${f.nome}”?`, texto, confirmar: devolver ? "Devolver" : "Excluir", perigo: true }))) return;
     const r = await api(`/api/admin/automacao/fluxos/${f.id}`, { method: "DELETE" });
     if (!r.ok) return toast.error(r.error ?? "Não consegui excluir.");
     setFluxos((fs) => fs?.filter((x) => x.id !== f.id) ?? fs);
@@ -532,6 +555,14 @@ export function FluxosAutomacao({
   }
 
   const fluxo = fluxos?.find((f) => f.id === aberto) ?? null;
+  // Regravado pelo modelo: o editor remonta com o grafo novo (o estado dele nasce do fluxo).
+  const [versaoEditor, setVersaoEditor] = useState(0);
+  const modeloDoAberto = fluxo ? MODELOS_FLUXO.find((m) => m.nome === fluxo.nome) : undefined;
+  async function atualizarPeloModelo(f: FluxoAutomacao, m: ModeloFluxo) {
+    if (!(await confirmar({ titulo: `Atualizar “${f.nome}” pelo modelo?`, texto: "O diagrama, a descrição e a ajuda voltam a ser os do modelo de hoje (as alterações feitas neste fluxo se perdem).", confirmar: "Atualizar" }))) return;
+    await criar(m, m.nome, { atualizar: true });
+    setVersaoEditor((v) => v + 1);
+  }
   // A ANÁLISE COMPLETA de um protocolo lido (a mesma da importação): o PDF da memória ou lido de novo.
   const abrirAnalise = useCallback(
     async (it: Item) => {
@@ -551,10 +582,11 @@ export function FluxosAutomacao({
   );
   /** Roda SÓ o trecho de leitura antes de uma seleção e põe o que ele produziu nas saídas — a tabela já lista os itens. */
   const carregarPrevia = useCallback(
-    async (grafo: Grafo, no: string) => {
-      const sub = subgrafoAte(grafo, no);
+    async (grafo: Grafo, no: string, incluir = false) => {
+      const sub = subgrafoAte(grafo, no, incluir);
       if (!subgrafoSoLeitura(sub, REGISTRO_NOS) || rodandoRef.current != null) return;
-      setPrevias((m) => ({ ...m, [no]: { carregando: true } }));
+      setPrevias((m) => ({ ...m, [no]: { carregando: true, itens: m[no]?.itens } }));
+      let doAlvo: Item[] | undefined;
       const r = await executarFluxo(sub, REGISTRO_NOS, {
         centi: (a, d, ms) => pedir(a, d, ms),
         api,
@@ -563,9 +595,14 @@ export function FluxosAutomacao({
         aoConcluir: (id, ps) => {
           const its = Object.entries(ps).find(([k, v]) => k !== "__apontados" && k !== "__retorno" && k !== "erro" && v.length)?.[1] ?? [];
           setSaidas((m) => ({ ...m, [id]: its }));
+          // O próprio nó (a visão de um nó que lê): o que ele ENTREGA (a saída "Todos"), nunca o marcador do "fim".
+          if (incluir && id === no) doAlvo = ps.saida ?? its;
         },
       }).catch((e: unknown) => ({ estado: "falhou" as const, erro: e instanceof Error ? e.message : String(e) }));
-      setPrevias((m) => ({ ...m, [no]: { carregando: false, erro: r.estado === "falhou" ? (r.erro ?? "Não consegui carregar os itens.") : undefined } }));
+      setPrevias((m) => ({
+        ...m,
+        [no]: { carregando: false, erro: r.estado === "falhou" ? (r.erro ?? "Não consegui carregar os itens.") : undefined, itens: incluir ? (doAlvo ?? []) : undefined },
+      }));
     },
     [pedir, host],
   );
@@ -584,7 +621,7 @@ export function FluxosAutomacao({
       protocolos,
       gestao,
       naCenti,
-      abrirProtocolo: onAbrirProtocolo,
+      abrir: onAbrirMesa,
       saidas,
       parciais,
       dfds,
@@ -601,10 +638,8 @@ export function FluxosAutomacao({
       rodando: rodando != null,
       reparticoes: { ...reps, buscar: () => void buscarReparticoes() },
       conferirAlvo: async (al) => {
-        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: { numero: string; ano: string; assunto: string; descricao: string; documentos: number } };
-        return r.ok && r.protocolo
-          ? `${r.protocolo.numero}/${r.protocolo.ano} · ${r.protocolo.assunto || r.protocolo.descricao} · ${r.protocolo.documentos} documento(s)`
-          : (r.erro ?? "Não consegui abrir o protocolo na Centi.");
+        const r = (await pedir("protocolo", al, 60_000)) as { ok?: boolean; erro?: string; protocolo?: ProtocoloCenti };
+        return r.ok && r.protocolo ? { protocolo: r.protocolo } : { erro: r.erro ?? "Não consegui abrir o protocolo na Centi." };
       },
       testarAnexo: async (al, tipo) => {
         const r = await testarAnexo({ pedir: emissor.pedir, confirmar: (texto) => confirmar({ titulo: "A Centi pede confirmação", texto, confirmar: "Confirmar e anexar" }) }, al, tipo);
@@ -614,26 +649,48 @@ export function FluxosAutomacao({
       fluxoAtual: aberto,
       recomecar,
       previas,
-      carregarPrevia: (g, no) => void carregarPrevia(g, no),
+      carregarPrevia: (g, no, incluir) => void carregarPrevia(g, no, incluir),
+      executarCom: (g, itens) => {
+        const f = fluxos?.find((x) => x.id === aberto);
+        if (f) void executar(f, g, false, itens);
+      },
+      enviarArquivos: (g, noId, nomes) => {
+        const f = fluxos?.find((x) => x.id === aberto);
+        if (!f || !nomes.length) return;
+        void confirmar({
+          titulo: `Enviar ${nomes.length} arquivo(s) que faltam no protocolo?`,
+          texto: "O fluxo roda de novo emitindo e anexando SÓ os arquivos que não estão no protocolo da Centi. Cada anexo pede a sua confirmação na extensão, como sempre.",
+          confirmar: "Enviar os que faltam",
+        }).then((sim) => {
+          if (!sim) return;
+          // Só nesta execução: o "Baixar/anexar DFDs" limitado a estes arquivos (o fluxo salvo não muda).
+          const grafo = { ...g, nos: g.nos.map((n) => (n.id === noId ? { ...n, config: { ...n.config, somenteArquivos: nomes } } : n)) };
+          void executar(f, grafo);
+        });
+      },
       orgaos: importacao.orgaos as unknown as HostPainel["orgaos"],
     }),
-    [importacao.orgaos, previas, carregarPrevia, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirProtocolo, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
+    [importacao.orgaos, previas, carregarPrevia, fluxos, executar, listaFluxos, aberto, recomecar, protocolos, gestao, naCenti, onAbrirMesa, saidas, parciais, dfds, pasta, podePasta, abrirAnalise, rodando, reps, buscarReparticoes, pedir, emissor, confirmar],
   );
   return (
     <HostPainelCtx.Provider value={hostPainel}>
     <div className="min-w-0 lg:min-h-0">
       {fluxo ? (
         <EditorFluxo
-          key={fluxo.id}
+          key={`${fluxo.id}:${versaoEditor}`}
           fluxo={fluxo}
+          onAtualizarModelo={modeloDoAberto ? () => void atualizarPeloModelo(fluxo, modeloDoAberto) : undefined}
           rodando={rodando === fluxo.id}
           outroRodando={rodando != null && rodando !== fluxo.id}
           passos={exec?.id === fluxo.id ? passos : {}}
           resultado={exec?.id === fluxo.id ? resultado : null}
           onVoltar={() => {
             setAberto(null);
-            setPassos({});
-            setResultado(null);
+            // Em execução, as etapas seguem (voltar ao fluxo mostra o andamento real, não "0/3").
+            if (rodando !== fluxo.id) {
+              setPassos({});
+              setResultado(null);
+            }
           }}
           onSalvo={(f) => setFluxos((fs) => fs?.map((x) => (x.id === f.id ? f : x)) ?? fs)}
           onExecutar={(g) => void executar(fluxo, g)}
@@ -666,6 +723,7 @@ export function FluxosAutomacao({
           onNovo={() => setNovo(true)}
           onFecharNovo={() => setNovo(false)}
           onCriar={criar}
+          onExcluir={(f, zona) => void excluir(f, zona)}
           onOrdem={(lista) => {
             setFluxos(lista);
             salvarOrdem(lista);
@@ -754,12 +812,18 @@ function useDeslizar(ref: React.RefObject<HTMLDivElement | null>, versao: string
   }, [ref, versao]);
 }
 
+/** A AJUDA de um fluxo salvo: a dele; sem ela, a do modelo de mesmo nome (o fluxo criado antes da ajuda existir). */
+function ajudaDoFluxo(f: Pick<FluxoAutomacao, "ajuda" | "nome">) {
+  return ajudaVazia(f.ajuda) ? (MODELOS_FLUXO.find((m) => m.nome === f.nome)?.ajuda ?? f.ajuda) : f.ajuda;
+}
+
 /** O cartão de um fluxo salvo: frequência, estado e os números (nós · última execução · erros). */
 function cartaoDoFluxo(f: FluxoAutomacao, rodando: number | null) {
   const u = f.ultimaExecucao as { estado?: string; apontados?: number } | null;
   const ultima = !u?.estado ? "—" : u.estado === "concluido" ? "Concluída" : u.estado === "falhou" ? "Falhou" : u.estado === "cancelado" ? "Cancelada" : u.estado;
   return {
     titulo: f.nome,
+    ajuda: ajudaDoFluxo(f),
     // Sem repetir: o sobretítulo diz QUANDO roda; o selo, só o estado especial (executando/agendado).
     sobretitulo: f.ativo ? `${rotuloFrequencia(f.frequencia)}${f.proximaEm ? ` · próxima ${dataHoraBR(f.proximaEm)}` : ""}` : "Manual",
     selo:
@@ -793,7 +857,10 @@ function ListaFluxos({
   onFecharNovo,
   onCriar,
   onOrdem,
+  onExcluir,
 }: {
+  /** Arrastado até a LIXEIRA ou de volta ao PAINEL lateral: exclui o fluxo (confirma). */
+  onExcluir: (f: FluxoAutomacao, zona: "lixeira" | "painel") => void;
   fluxos: FluxoAutomacao[] | null;
   rodando: number | null;
   novo: boolean;
@@ -807,6 +874,9 @@ function ListaFluxos({
   const desktop = useDesktop();
   const area = useRef<HTMLDivElement>(null);
   const grade = useRef<HTMLDivElement>(null);
+  // A grade ROLA POR DENTRO, na altura até o fim do display (a página não rola — como o painel "Novo fluxo").
+  const rolo = useRef<HTMLDivElement>(null);
+  const alturaRolo = useAlturaTela(rolo, 320);
   const col = useColunas(area);
   // No desktop o painel ocupa a ÚLTIMA coluna (com 1 coluna só, ele vira a folha do celular).
   const lateral = desktop && !!col && col.n >= 2;
@@ -814,22 +884,25 @@ function ListaFluxos({
   const lista = fluxos ?? [];
   const { arrasto, fantasma, iniciar, foiArrasto } = useArrastoGrade({
     raiz: grade,
+    // FORA da lista (o contêiner que rola): sem sombra. Um fluxo da lista pode ir à LIXEIRA ou VOLTAR ao painel (exclui);
+    // um modelo/pública solto fora da lista volta ao painel.
+    zonas: { limite: rolo, aceita: (chave, zona) => chave.startsWith("f:") && (zona === "lixeira" || zona === "painel") },
     onSoltar: (chave, d) => {
+      if (d.fora) {
+        const f = lista.find((x) => `f:${x.id}` === chave);
+        if (f && (d.fora === "lixeira" || d.fora === "painel")) onExcluir(f, d.fora);
+        return;
+      }
       const antesDe = d.antesDe ? Number(d.antesDe.slice(2)) : null;
-      // Um MODELO arrastado do painel: cria o fluxo ali (só se soltou sobre a lista).
+      // Um MODELO arrastado do painel: cria o fluxo onde a sombra estava.
       if (chave.startsWith("m:")) {
-        const ponto = soltoEm.current;
-        const r = grade.current?.getBoundingClientRect();
-        if (!r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
         const m = MODELOS_FLUXO.find((x) => x.id === chave.slice(2)) ?? null;
         return void onCriar(m, m?.nome ?? "Novo fluxo", { antesDe });
       }
       // Um PÚBLICO arrastado do painel: a cópia entra ali.
       if (chave.startsWith("p:")) {
-        const ponto = soltoEm.current;
-        const r = grade.current?.getBoundingClientRect();
         const pub = publicos.find((x) => `p:${x.id}` === chave);
-        if (!pub || !r || !ponto || ponto.x > r.right || ponto.x < r.left) return;
+        if (!pub) return;
         return void onCriar(null, pub.nome, { antesDe, copiar: pub });
       }
       const id = Number(chave.slice(2));
@@ -840,13 +913,14 @@ function ListaFluxos({
       onOrdem([...sem.slice(0, Math.max(0, i)), f, ...sem.slice(Math.max(0, i))]);
     },
   });
-  // Onde o ponteiro estava ao soltar (o modelo só vira fluxo se cair sobre a lista).
-  const soltoEm = useRef<{ x: number; y: number } | null>(null);
-  if (arrasto) soltoEm.current = { x: arrasto.x, y: arrasto.y };
-  useDeslizar(grade, `${colunas}|${lista.map((f) => f.id).join(",")}|${arrasto?.destino.antesDe ?? ""}|${arrasto?.destino.depoisDe ?? ""}|${!!arrasto}`);
+  const fora = arrasto?.destino.fora ?? null;
+  // Um fluxo DA LISTA em arrasto: a lixeira surge e o painel aberto vira o lugar de devolver.
+  const daLista = !!arrasto?.chave.startsWith("f:") && !arrasto.pousando;
+  useDeslizar(grade, `${colunas}|${lista.map((f) => f.id).join(",")}|${arrasto?.destino.antesDe ?? ""}|${arrasto?.destino.depoisDe ?? ""}|${!!arrasto}|${!!fora}`);
 
   const estiloGrade = col ? { gridTemplateColumns: `repeat(${colunas}, ${col.largura}px)`, gap: col.vao } : undefined;
-  const sombra = arrasto && !arrasto.pousando ? <SombraGrade key="__sombra" altura={arrasto.altura} /> : null;
+  // A SOMBRA só existe com o ponteiro SOBRE a lista: é o lugar exato em que o card vai cair.
+  const sombra = arrasto && !arrasto.pousando && !fora ? <SombraGrade key="__sombra" altura={arrasto.altura} marcada /> : null;
   const itens: ReactNode[] = [];
   for (const f of lista) {
     const chave = `f:${f.id}`;
@@ -857,7 +931,8 @@ function ListaFluxos({
         data-grade-item={chave}
         role="none"
         title={f.descricao ?? undefined}
-        className={`${arrasto?.chave === chave ? "hidden" : ""} h-full touch-manipulation select-none [-webkit-touch-callout:none]`}
+        // Sobre a lista, o card sai do lugar (a sombra mostra o novo); fora dela, o lugar de origem fica esmaecido.
+        className={`${arrasto?.chave === chave ? (fora ? "opacity-30" : "hidden") : ""} h-full touch-manipulation transition-opacity select-none [-webkit-touch-callout:none]`}
         onPointerDown={(e) => iniciar(e, chave)}
         onClickCapture={(e) => {
           if (foiArrasto()) {
@@ -871,11 +946,24 @@ function ListaFluxos({
     );
   }
   if (sombra && !arrasto?.destino.antesDe) itens.push(sombra);
+  // A lista VAZIA é a MESMA grade (o lugar onde soltar um modelo existe desde o 1º cartão): o aviso ocupa a linha toda.
+  if (!lista.length && !arrasto)
+    itens.push(
+      <div key="__vazio" className={`${CARTAO} col-span-full flex flex-col items-center gap-3 py-10 text-center`}>
+        <IconFluxo className="size-8 text-accent" aria-hidden="true" />
+        <p className="text-sm text-muted">{lateral && novo ? "Nenhum fluxo ainda. Arraste um modelo do painel para cá — ou escolha e toque em Criar." : "Nenhum fluxo ainda. Comece de um modelo pronto ou do zero."}</p>
+        {!novo && (
+          <Button size="sm" onClick={onNovo}>
+            Criar o primeiro fluxo
+          </Button>
+        )}
+      </div>,
+    );
   // O cartão PRESO ao ponteiro: o próprio cartão (fluxo ou modelo), igual ao que está na grade.
   const fPreso = arrasto ? lista.find((f) => `f:${f.id}` === arrasto.chave) : undefined;
   const mPreso = arrasto && !fPreso ? [EM_BRANCO, ...MODELOS_FLUXO].find((m) => `m:${m.id}` === arrasto.chave) : undefined;
   const pPreso = arrasto ? publicos.find((p) => `p:${p.id}` === arrasto.chave) : undefined;
-  const preso = fPreso ? cartaoDoFluxo(fPreso, rodando) : mPreso ? cartaoDoModelo(mPreso, lista) : pPreso ? cartaoDoPublico(pPreso) : null;
+  const preso = fPreso ? cartaoDoFluxo(fPreso, rodando) : mPreso ? cartaoDoModelo(mPreso) : pPreso ? cartaoDoPublico(pPreso) : null;
 
   const escolha = (
     <EscolherNovoFluxo
@@ -883,27 +971,23 @@ function ListaFluxos({
       publicos={publicos}
       onFechar={onFecharNovo}
       onCriar={onCriar}
-      onAbrir={onAbrir}
       arrastar={lateral ? { iniciar, foiArrasto, chave: arrasto?.chave ?? null } : undefined}
       coluna={lateral}
     />
   );
   return (
     <div ref={area} className="flex items-start" style={{ gap: col?.vao }}>
-      <div className="min-w-0 flex-1">
+      {daLista && (
+        <p aria-live="polite" className="sr-only">
+          {fora === "lixeira" ? "Solte para excluir o fluxo" : fora === "painel" ? "Solte para devolver o fluxo ao painel" : "Arraste até a lixeira para excluir"}
+        </p>
+      )}
+      <div ref={rolo} className="-m-1 min-w-0 flex-1 overflow-y-auto overscroll-contain p-1" style={{ height: alturaRolo ?? undefined }}>
         {!fluxos || !col ? (
           <div className={GRADE_CARTOES} aria-busy="true">
             {[0, 1, 2].map((i) => (
               <SkeletonCartao key={i} linhas={3} />
             ))}
-          </div>
-        ) : !fluxos.length && !arrasto ? (
-          <div ref={grade} className={`${CARTAO} flex flex-col items-center gap-3 py-10 text-center`}>
-            <IconFluxo className="size-8 text-accent" aria-hidden="true" />
-            <p className="text-sm text-muted">Nenhum fluxo ainda. Comece de um modelo pronto ou do zero.</p>
-            <Button size="sm" onClick={onNovo}>
-              Criar o primeiro fluxo
-            </Button>
           </div>
         ) : (
           <div ref={grade} className="grid auto-rows-fr" style={estiloGrade}>
@@ -913,13 +997,11 @@ function ListaFluxos({
       </div>
       {/* DESKTOP: o painel ocupa a ÚLTIMA coluna e ENTRA da direita; os cartões deslizam para o lugar novo. */}
       {lateral && novo && (
-        <aside
-          className="animate-aba-direita sticky top-[var(--pad-canvas)] flex max-h-[calc(100dvh-var(--h-header)-var(--pad-canvas)*2)] shrink-0 flex-col"
-          style={{ width: col.largura }}
-        >
+        <PainelLateral largura={col.largura} zona={daLista} ativa={fora === "painel"}>
           {escolha}
-        </aside>
+        </PainelLateral>
       )}
+      {daLista && <LixeiraArrasto ativa={fora === "lixeira"} />}
       {!lateral && (
         <Modal open={novo} onClose={onFecharNovo} titulo="Novo fluxo">
           {escolha}
@@ -931,6 +1013,55 @@ function ListaFluxos({
         </CartaoPreso>
       )}
     </div>
+  );
+}
+
+/** O painel "Novo fluxo" na última coluna: preso ao rolar e com a altura EXATA até o fim do display (rola por dentro). */
+function PainelLateral({ largura, zona, ativa, children }: { largura: number; /** Um fluxo da lista em arrasto: o painel recebe a devolução. */ zona: boolean; ativa: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLElement>(null);
+  const altura = useAlturaTela(ref, 320);
+  return (
+    <aside
+      ref={ref}
+      data-zona-arrasto={zona ? "painel" : undefined}
+      className="animate-aba-direita sticky top-[var(--pad-canvas-y)] flex shrink-0 flex-col"
+      style={{ width: largura, height: altura ?? undefined }}
+    >
+      {children}
+      {/* DEVOLVER: com um fluxo da lista em arrasto, o painel mostra que recebe o card (e acende com ele por cima). */}
+      {zona && (
+        <div
+          aria-hidden="true"
+          className={`animate-fade-in-up pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed p-[var(--pad-card)] text-center transition-[background-color,border-color] duration-[var(--motion-duration)] ${
+            ativa ? "border-accent bg-accent/15" : "border-accent/40 bg-surface/80"
+          }`}
+        >
+          <IconFluxo className={`size-8 text-accent transition-transform duration-[var(--motion-duration)] ${ativa ? "scale-125" : ""}`} />
+          <p className="text-sm font-bold text-text">{ativa ? "Solte para devolver" : "Arraste aqui para devolver ao painel"}</p>
+          <p className="text-xs text-muted">O fluxo sai da sua lista (é excluído); o modelo volta a ficar disponível aqui.</p>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/** A LIXEIRA no centro, embaixo: surge com um fluxo da lista em arrasto; com o card por cima, acende em vermelho. */
+function LixeiraArrasto({ ativa }: { ativa: boolean }) {
+  return createPortal(
+    // Centrada por flex (a animação usa `translate` — não dá para centrar com translate-x).
+    <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[299] flex justify-center lg:bottom-8">
+      <div data-zona-arrasto="lixeira" className="animate-lixeira-entra p-3">
+      <span
+        className={`flex size-16 flex-col items-center justify-center rounded-full text-white shadow-flutuante transition-[background-color,transform] duration-[var(--motion-duration)] ${
+          ativa ? "scale-[1.2] bg-[var(--danger)]" : "bg-[color-mix(in_oklab,var(--text)_70%,transparent)]"
+        }`}
+      >
+        <IconTrash className={`size-6 transition-transform duration-[var(--motion-duration)] ${ativa ? "-rotate-12 scale-110" : ""}`} />
+      </span>
+      <span className={`mt-1.5 block text-center text-xs font-semibold transition-colors ${ativa ? "text-[var(--danger)]" : "text-muted"}`}>{ativa ? "Solte para excluir" : "Excluir"}</span>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -951,6 +1082,7 @@ function useDesktop(): boolean {
 function cartaoDoPublico(f: FluxoAutomacao) {
   return {
     titulo: f.nome,
+    ajuda: ajudaVazia(f.ajuda) ? undefined : f.ajuda,
     sobretitulo: `Pública · ${f.autor ?? "sem dono"}`,
     selo: <Badge tone="blue">Pública</Badge>,
     metricas: [
@@ -962,11 +1094,11 @@ function cartaoDoPublico(f: FluxoAutomacao) {
 }
 
 /** O cartão de um MODELO (ou "Em branco") no painel "Novo fluxo" — o mesmo desenho dos fluxos salvos. */
-function cartaoDoModelo(x: { id: string; nome: string; grafo?: Grafo; frequencia?: Frequencia }, fluxos: FluxoAutomacao[]) {
+function cartaoDoModelo(x: { id: string; nome: string; grafo?: Grafo; frequencia?: Frequencia; ajuda?: AjudaFluxo }) {
   return {
     titulo: x.nome,
+    ajuda: x.ajuda,
     sobretitulo: x.id ? "Modelo pronto" : "Do zero",
-    selo: x.id && fluxos.some((f) => f.nome === x.nome) ? <Badge tone="emerald">Já existe</Badge> : undefined,
     metricas: [
       { rotulo: "Nós", valor: String(x.grafo?.nos.length ?? 1) },
       { rotulo: "Frequência", valor: x.frequencia ? rotuloFrequencia(x.frequencia) : "Manual" },
@@ -975,15 +1107,28 @@ function cartaoDoModelo(x: { id: string; nome: string; grafo?: Grafo; frequencia
   };
 }
 
-const EM_BRANCO: { id: string; nome: string; descricao: string; grafo?: Grafo; frequencia?: Frequencia } = { id: "", nome: "Em branco", descricao: "Só o Início — monte do zero." };
+const EM_BRANCO: { id: string; nome: string; descricao: string; grafo?: Grafo; frequencia?: Frequencia; ajuda?: AjudaFluxo } = {
+  id: "",
+  nome: "Em branco",
+  descricao: "Só o Início — monte do zero.",
+  ajuda: { funciona: "Um fluxo vazio, só com o Início: você monta os componentes no diagrama.", executa: "Manual, pelo botão Executar — ou agende nas Configurações da automação.", resultado: "O que os componentes que você montar entregarem." },
+};
 
-/** "Novo fluxo": o nome + "Em branco" e TODOS os modelos no MESMO cartão da lista (o já criado pode ser aberto). */
+/** O título de uma seção do painel (o MESMO do sobretítulo dos cartões e das seções do menu). */
+function TituloSecao({ children }: { children: ReactNode }) {
+  return <h4 className="text-[11px] font-semibold uppercase tracking-wide text-faint">{children}</h4>;
+}
+
+/**
+ * "Novo fluxo": o nome + "Em branco", os MODELOS e as PÚBLICAS de outras pessoas, no MESMO cartão da lista — só o que AINDA
+ * NÃO está no painel (o modelo já criado some daqui; atualizar pelo modelo fica no próprio fluxo). Um painel só (cabeçalho,
+ * corpo que rola, rodapé) — na última coluna (desktop) ou na folha (celular).
+ */
 function EscolherNovoFluxo({
   fluxos,
   publicos,
   onFechar,
   onCriar,
-  onAbrir,
   arrastar,
   coluna = false,
 }: {
@@ -992,19 +1137,20 @@ function EscolherNovoFluxo({
   publicos: FluxoAutomacao[];
   onFechar: () => void;
   onCriar: (m: (typeof MODELOS_FLUXO)[number] | null, nome: string, opcoes?: OpcoesCriar) => Promise<void>;
-  onAbrir: (id: number) => void;
-  /** No desktop, os MODELOS se arrastam até a lista (criam o fluxo ali). */
+  /** No desktop, os cartões se arrastam até a lista (criam o fluxo ali). */
   arrastar?: { iniciar: (e: React.PointerEvent<HTMLElement>, chave: string) => void; foiArrasto: () => boolean; chave: string | null };
-  /** No desktop (a última coluna da lista): os cartões soltos na coluna, na MESMA largura dos da lista; o topo e o rodapé em cartões próprios. */
+  /** No desktop (a última coluna da lista): o painel com cabeçalho próprio; no celular, a folha já tem o título. */
   coluna?: boolean;
 }) {
   const [nome, setNome] = useState("");
   const [modelo, setModelo] = useState<string>("");
   const [criando, setCriando] = useState(false);
-  const [atualizando, setAtualizando] = useState(false);
-  const m = MODELOS_FLUXO.find((x) => x.id === modelo) ?? null;
-  const pub = publicos.find((x) => `p:${x.id}` === modelo) ?? null;
-  const existente = m ? fluxos.find((f) => f.nome === m.nome) : undefined;
+  // Só o que ainda não está no painel (pelo nome): o modelo criado e a pública já copiada somem.
+  const nomes = useMemo(() => new Set(fluxos.map((f) => f.nome)), [fluxos]);
+  const modelos = useMemo(() => [EM_BRANCO, ...MODELOS_FLUXO.filter((x) => !nomes.has(x.nome))], [nomes]);
+  const pubs = useMemo(() => publicos.filter((x) => !nomes.has(x.nome)), [publicos, nomes]);
+  const m = MODELOS_FLUXO.find((x) => x.id === modelo && !nomes.has(x.nome)) ?? null;
+  const pub = pubs.find((x) => `p:${x.id}` === modelo) ?? null;
   const criar = async () => {
     setCriando(true);
     await onCriar(m, nome.trim() || m?.nome || pub?.nome || "Fluxo", pub ? { copiar: pub } : undefined);
@@ -1012,86 +1158,61 @@ function EscolherNovoFluxo({
     setNome("");
     setModelo("");
   };
+  const cartao = (chave: string, titulo: string | undefined, conteudo: ReactNode) => (
+    <div
+      key={chave}
+      role="none"
+      title={titulo}
+      className={`touch-manipulation select-none [-webkit-touch-callout:none] transition-opacity ${arrastar ? "cursor-grab" : ""} ${arrastar?.chave === chave ? "opacity-40" : ""}`}
+      onPointerDown={arrastar ? (e) => arrastar.iniciar(e, chave) : undefined}
+      onClickCapture={(e) => {
+        if (arrastar?.foiArrasto()) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+    >
+      {conteudo}
+    </div>
+  );
+  const grade = coluna ? "grid gap-[var(--gap-block)]" : GRADE_CARTOES;
   return (
-    <div className={`flex min-h-0 flex-1 flex-col ${coluna ? "gap-[var(--gap-block)]" : ""}`}>
-      <div className={`flex items-center gap-2 px-[var(--pad-card)] py-2.5 max-lg:hidden ${coluna ? `${CARTAO} !py-2.5` : "border-b border-border"}`}>
-        <h3 className="min-w-0 flex-1 text-base font-bold text-text">Novo fluxo</h3>
-        <Button variant="icon" aria-label="Fechar" onClick={onFechar}>
-          <IconClose className="size-5" />
-        </Button>
-      </div>
-      <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto ${coluna ? "rolagem-fina -mx-1 -my-1 py-1 pl-1 pr-2.5 -mr-2.5" : "p-[var(--pad-card)]"}`}>
-        <div className={coluna ? `${CARTAO} space-y-3` : "space-y-3"}>
-          <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? pub?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
-          <p className="text-sm font-medium text-text">Começar de</p>
+    <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${coluna ? "rounded-card border border-border bg-surface shadow-ring" : ""}`}>
+      {coluna && (
+        <div className="flex items-center gap-2 border-b border-border px-[var(--pad-card)] py-2.5">
+          <h3 className="min-w-0 flex-1 text-base font-bold text-text">Novo fluxo</h3>
+          <Button size="sm" variant="icon" aria-label="Fechar" title="Fechar" onClick={onFechar}>
+            <IconClose className="size-4" />
+          </Button>
         </div>
-        <div className={coluna ? "grid gap-[var(--gap-block)]" : GRADE_CARTOES}>
-          {[EM_BRANCO, ...MODELOS_FLUXO].map((x) => (
-            <div
-              key={x.id || "branco"}
-              role="none"
-              title={x.descricao}
-              className={`touch-manipulation select-none [-webkit-touch-callout:none] transition-opacity ${arrastar?.chave === `m:${x.id}` ? "opacity-40" : ""}`}
-              onPointerDown={arrastar ? (e) => arrastar.iniciar(e, `m:${x.id}`) : undefined}
-              onClickCapture={(e) => {
-                if (arrastar?.foiArrasto()) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }
-              }}
-            >
-            <CartaoFluxo {...cartaoDoModelo(x, fluxos)} marcado={modelo === x.id} onClick={() => setModelo(x.id)} />
+      )}
+      <div className={`min-h-0 flex-1 space-y-4 overflow-y-auto ${coluna ? "p-[var(--pad-card)]" : ""}`}>
+        <TextField label="Nome" value={nome} maxLength={80} placeholder={m?.nome ?? pub?.nome ?? "Ex.: Conferir execução dos DFDs"} onChange={(e) => setNome(e.target.value)} />
+        <section className="space-y-2">
+          <TituloSecao>Modelos</TituloSecao>
+          {arrastar && <p className="text-xs text-muted">Toque para escolher ou arraste o cartão até a lista.</p>}
+          <div className={grade}>
+            {modelos.map((x) =>
+              cartao(`m:${x.id}`, x.descricao, <CartaoFluxo {...cartaoDoModelo(x)} marcado={modelo === x.id} onClick={() => setModelo(x.id)} />),
+            )}
+          </div>
+          {modelos.length === 1 && <p className="text-xs text-muted">Todos os modelos prontos já estão no seu painel.</p>}
+        </section>
+        {pubs.length > 0 && (
+          <section className="space-y-2">
+            <TituloSecao>Públicas de outras pessoas</TituloSecao>
+            <div className={grade}>
+              {pubs.map((x) =>
+                cartao(`p:${x.id}`, x.descricao ?? undefined, <CartaoFluxo {...cartaoDoPublico(x)} marcado={modelo === `p:${x.id}`} onClick={() => setModelo(`p:${x.id}`)} />),
+              )}
             </div>
-          ))}
-        </div>
-        {publicos.length > 0 && (
-          <>
-            <p className={`text-sm font-medium text-text ${coluna ? `${CARTAO} !py-2.5` : "pt-1"}`}>Públicas de outras pessoas</p>
-            <div className={coluna ? "grid gap-[var(--gap-block)]" : GRADE_CARTOES}>
-              {publicos.map((x) => (
-                <div
-                  key={x.id}
-                  role="none"
-                  title={x.descricao ?? undefined}
-                  className={`touch-manipulation select-none [-webkit-touch-callout:none] transition-opacity ${arrastar?.chave === `p:${x.id}` ? "opacity-40" : ""}`}
-                  onPointerDown={arrastar ? (e) => arrastar.iniciar(e, `p:${x.id}`) : undefined}
-                  onClickCapture={(e) => {
-                    if (arrastar?.foiArrasto()) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }
-                  }}
-                >
-                  <CartaoFluxo {...cartaoDoPublico(x)} marcado={modelo === `p:${x.id}`} onClick={() => setModelo(`p:${x.id}`)} />
-                </div>
-              ))}
-            </div>
-          </>
+          </section>
         )}
       </div>
-      <div className={`flex flex-wrap justify-end gap-2 px-[var(--pad-card)] py-2.5 ${coluna ? `${CARTAO} !py-2.5` : "border-t border-border"}`}>
-        {existente && (
-          <Button size="sm" variant="secondary" onClick={() => onAbrir(existente.id)}>
-            Abrir o existente
-          </Button>
-        )}
-        {existente && m && (
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={atualizando}
-            title="Regrava o fluxo salvo (e os que ele usa) com o modelo de hoje — a frequência e o agendamento ficam"
-            onClick={async () => {
-              setAtualizando(true);
-              await onCriar(m, m.nome, { atualizar: true });
-              setAtualizando(false);
-            }}
-          >
-            Atualizar pelo modelo
-          </Button>
-        )}
-        <Button size="sm" loading={criando} disabled={!(nome.trim() || m || pub)} onClick={() => void criar()}>
-          {pub ? "Usar (cópia no meu painel)" : existente ? "Criar outro" : "Criar"}
+      <div className={`flex justify-end gap-2 pt-3 ${coluna ? "border-t border-border px-[var(--pad-card)] pb-3" : ""}`}>
+        <Button size="sm" loading={criando} disabled={!(nome.trim() || m || pub || modelo === "")} onClick={() => void criar()}>
+          <IconPlus className="h-4 w-4" aria-hidden="true" />
+          {pub ? "Usar (cópia no meu painel)" : "Criar"}
         </Button>
       </div>
     </div>
@@ -1114,8 +1235,11 @@ function EditorFluxo({
   onExcluir,
   naMesa,
   onNaMesa,
+  onAtualizarModelo,
 }: {
   fluxo: FluxoAutomacao;
+  /** Há um modelo de mesmo nome: regrava o fluxo com o modelo de hoje. */
+  onAtualizarModelo?: () => void;
   naMesa: boolean;
   onNaMesa: (ligado: boolean) => void;
   rodando: boolean;
@@ -1137,8 +1261,8 @@ function EditorFluxo({
   const [descricao, setDescricao] = useState(fluxo.descricao ?? "");
   // A ajuda: a do fluxo; sem ela, a do modelo de mesmo nome (o fluxo criado antes da ajuda existir).
   const ajudaBase = useMemo(
-    () => (ajudaVazia(fluxo.ajuda) ? (MODELOS_FLUXO.find((m) => m.nome === fluxo.nome)?.ajuda ?? fluxo.ajuda) : fluxo.ajuda),
-    [fluxo.ajuda, fluxo.nome],
+    () => ajudaDoFluxo(fluxo),
+    [fluxo],
   );
   const [ajuda, setAjuda] = useState(ajudaBase);
   const [configAberta, setConfigAberta] = useState(false);
@@ -1155,6 +1279,14 @@ function EditorFluxo({
     JSON.stringify(grafo) !== JSON.stringify(fluxo.grafo) || nome.trim() !== fluxo.nome || JSON.stringify(freq) !== JSON.stringify(fluxo.frequencia) || ativo !== fluxo.ativo || publico !== fluxo.publico || descricao.trim() !== (fluxo.descricao ?? "") || JSON.stringify(ajuda) !== JSON.stringify(ajudaBase);
   const problemas = useMemo(() => validarGrafo(grafo, REGISTRO_NOS), [grafo]);
   const erros = problemas.filter((p) => p.nivel === "erro");
+  const nomeDoComponente = (id: string) => {
+    const n = grafo.nos.find((x) => x.id === id);
+    return n ? nomeDoNo(n, REGISTRO_NOS) : null;
+  };
+  const irAoComponente = (id: string) => {
+    setModo("diagrama");
+    setSel(id);
+  };
   const atencoes = problemas.filter((p) => p.nivel !== "erro");
   const ref = useRef<HTMLDivElement>(null);
   const altura = useAlturaTela(ref, 320) ?? 560;
@@ -1265,9 +1397,9 @@ function EditorFluxo({
           onChange={(e) => setNome(e.target.value)}
           className="min-w-0 flex-1 rounded-control bg-transparent px-2 py-1 text-base font-semibold text-text outline-none hover:bg-[var(--accent-soft)] focus:bg-surface focus:shadow-ring"
         />
-        {erros.length > 0 && <Badge tone="red" title={erros.map((p) => p.texto).join("\n")}>{erros.length} problema(s)</Badge>}
-        {/* As ATENÇÕES não impedem executar, mas ficam à vista (a lista inteira na dica). */}
-        {atencoes.length > 0 && <Badge tone="amber" title={atencoes.map((p) => p.texto).join("\n")}>{atencoes.length} atenção(ões)</Badge>}
+        {/* Os PROBLEMAS (impedem executar) e as ATENÇÕES: tocar abre a lista e leva ao componente. */}
+        <ProblemasFluxo itens={erros} nivel="erro" nomeDo={nomeDoComponente} onIr={irAoComponente} />
+        <ProblemasFluxo itens={atencoes} nivel="atencao" nomeDo={nomeDoComponente} onIr={irAoComponente} />
         <Button
           size="sm"
           variant="icon"
@@ -1310,6 +1442,11 @@ function EditorFluxo({
         <Button size="sm" variant="icon" aria-label="Configurações da automação" title="Configurações da automação (nome, frequência, ajuda)" onClick={() => setConfigAberta(true)}>
           <IconSettings className="size-4" />
         </Button>
+        {onAtualizarModelo && (
+          <Button size="sm" variant="icon" aria-label="Atualizar pelo modelo" title="Atualizar pelo modelo (volta ao diagrama do modelo de hoje)" disabled={rodando} onClick={onAtualizarModelo}>
+            <IconRefresh className="size-4" />
+          </Button>
+        )}
         <Button size="sm" variant="icon" aria-label="Excluir o fluxo" title="Excluir o fluxo" disabled={rodando} onClick={onExcluir}>
           <IconTrash className="size-4" />
         </Button>

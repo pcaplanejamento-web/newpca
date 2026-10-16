@@ -63,3 +63,23 @@ describe("filtro das LISTAS (unidade ativa do cabeçalho)", () => {
     assert.deepEqual(filtroDeLista(true, null), FILTRO_TODAS);
   });
 });
+
+describe("modo de unidades do grupo (v1.115.0)", async () => {
+  const { unidadesDoMembro, lerModoUnidades, escopoDeAcesso: esc } = await import("../src/lib/escopo-unidades-core.ts");
+  const a = { id: 1, codigo: "SMS" };
+  const b = { id: 2, codigo: "SME" };
+  const g = { id: 9, codigo: "GERAL" };
+  it("lista = as do grupo; cadastro = só a unidade da pessoa", () => {
+    assert.deepEqual(unidadesDoMembro("lista", [a, b], b), [a, b]);
+    assert.deepEqual(unidadesDoMembro("cadastro", [a, b], b), [b]);
+    assert.deepEqual(esc(false, unidadesDoMembro("cadastro", [a], b)), { tipo: "unidades", ids: [2] });
+  });
+  it("cadastro sem unidade = nenhuma; a Geral nunca vale por cadastro", () => {
+    assert.deepEqual(esc(false, unidadesDoMembro("cadastro", [g], null)), { tipo: "nenhuma" });
+    assert.deepEqual(unidadesDoMembro("cadastro", [], g), []);
+  });
+  it("modo desconhecido = lista", () => {
+    assert.equal(lerModoUnidades("x"), "lista");
+    assert.equal(lerModoUnidades("cadastro"), "cadastro");
+  });
+});

@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { orgaos, reparticoes } from "@/db/schema";
 import { exigirAdmin, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { realinharVinculos } from "@/lib/responsaveis";
 import { getDb } from "@/lib/db";
 import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -43,6 +44,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
     })
     .where(eq(reparticoes.id, id));
+  // A unidade pode ter mudado de órgão: os responsáveis dela seguem a regra de assinatura do órgão (o lugar que vale).
+  await realinharVinculos();
   await registrarAuditoria({ usuario: guard.u, acao: "editar", entidade: "reparticao", entidadeId: id, resumo: `Unidade "${corpo.data.nome}" (${corpo.data.codigo}) editada`, depois: { codigo: corpo.data.codigo, nome: corpo.data.nome } });
   return ok();
 }

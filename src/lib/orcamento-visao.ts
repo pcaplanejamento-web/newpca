@@ -60,6 +60,8 @@ export type VisaoOrcamento = {
   nome: string;
   filtros: FiltrosVisao;
   ordem: number;
+  /** As unidades do CUBO (chaves) com VÍNCULOS PRÓPRIOS nesta visão — nas demais ela segue os vínculos padrão. */
+  proprias: string[];
   /** Os PCAs que usam a visão (nome · ano) — editar/excluir a visão muda o orçamento deles. */
   pcas?: string[];
 };
@@ -230,4 +232,13 @@ export function adaptarVisao(filtros: FiltrosVisao, linhas: LinhaOrcamentoVisao[
     out[d.key] = lista;
   }
   return { filtros: out, trocas };
+}
+
+/** Os extras de uma visão na lista (`Selecao`): o resumo + quantos PCAs a usam (2ª linha) e o aviso dos valores ausentes. */
+export function atributosVisao(v: VisaoOrcamento, ausentes: number) {
+  const pcas = v.pcas?.length ?? 0;
+  return {
+    "data-detalhe": `${resumoVisao(v.filtros)}${pcas > 0 ? ` · usada em ${pcas} PCA${pcas === 1 ? "" : "s"}` : ""}`,
+    "data-aviso": ausentes > 0 ? `${ausentes} valor(es) da visão fora deste orçamento` : undefined,
+  };
 }

@@ -6,6 +6,7 @@ import {
   dfds,
   orcamentoItens,
   orcamentos,
+  orcamentoVinculos,
   orcamentoVisoes,
   orgaos,
   pcaDfds,
@@ -24,7 +25,7 @@ import { prioridadeDoDfd } from "./dfd-tratamento";
 import { normUnidadeMedida } from "./normalize";
 import { type RelatorioOrcamento, relatorioOrcamentoPca } from "./orcamento-relatorio";
 import { type AusentesVisao, aplicarVisao, coerceFiltros, type FiltrosVisao, type VisaoOrcamento, valoresAusentes } from "./orcamento-visao";
-import { comVinculos, mapaVinculos, unidadeDoLancamento } from "./orcamento-vinculo";
+import { comVinculos, lerProprias, mapaVinculos, unidadeDoLancamento, vinculosDaVisao } from "./orcamento-vinculo";
 import { listarVinculosOrcamento } from "./orcamento";
 import { tipoCurtoDfd } from "./parse-dfd-comum";
 import {
@@ -517,6 +518,8 @@ export type DashboardPca = {
   previa: { dfds: number; protocolos: number } | null;
   /** DFDs vinculados (e da prévia) que a consolidação deixou FORA da soma, com o motivo (só fonte protocolo). */
   foraDaSoma: DfdForaDaSoma[];
+  /** O nome de cada unidade pela sigla (o filtro Unidade do Dashboard). */
+  nomesUnidades?: Record<string, string>;
 };
 
 /** Um DFD fora da soma do PCA — a consolidação por nº de planejamento (`foraDaSoma`, `pca-core.ts`). */
@@ -780,6 +783,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number):
     ...ag,
     itensTexto: itensParaTexto(itens),
     dfdsLista,
+    nomesUnidades: await nomesDasUnidades([...reps.keys()]),
     protocolosLista: [...porProto.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
     unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
     unidadeId,
@@ -960,8 +964,8 @@ export async function consultaHistorico(
 // Orçamento do PCA
 // ---------------------------------------------------------------------------
 
-function paraVisao(r: { id: number; nome: string; filtros: string; ordem: number }): VisaoOrcamento {
-  return { id: r.id, nome: r.nome, ordem: r.ordem, filtros: coerceFiltros(r.filtros) };
+function paraVisao(r: { id: number; nome: string; filtros: string; ordem: number; vinculosProprios: string }): VisaoOrcamento {
+  return { id: r.id, nome: r.nome, ordem: r.ordem, filtros: coerceFiltros(r.filtros), proprias: lerProprias(r.vinculosProprios) };
 }
 
 /** As visões salvas + os PCAs que usam cada uma (a visão é GLOBAL — alterar uma muda o orçamento de todos eles). */
@@ -1002,8 +1006,10 @@ export async function atualizarVisaoOrcamento(id: number, nome: string, filtros:
     .where(eq(orcamentoVisoes.id, id));
 }
 
+/** Exclui a visão e os vínculos PRÓPRIOS dela (também pela FK cascade). */
 export async function excluirVisaoOrcamento(id: number): Promise<void> {
-  await getDb().delete(orcamentoVisoes).where(eq(orcamentoVisoes.id, id));
+  const db = getDb();
+  await db.batch([db.delete(orcamentoVinculos).where(eq(orcamentoVinculos.visaoId, id)), db.delete(orcamentoVisoes).where(eq(orcamentoVisoes.id, id))]);
 }
 
 export type LancamentoOrcamentoPca = {
@@ -1064,7 +1070,7 @@ export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnTy
  * (todas as dimensões — senão o filtro da visão não casa). A MESMA base do comparativo e do relatório da composição. */
 async function baseOrcamentoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof orcamentoDoAno>>) {
   const db = getDb();
-  const [visao, repsBrutas, orgs, vincs] = await Promise.all([
+  const [visao, repsBrutas, orgs, todosVinculos] = await Promise.all([
     pca.orcamentoVisaoId ? getVisaoOrcamento(pca.orcamentoVisaoId) : Promise.resolve(null),
     db
       .select({ id: reparticoes.id, sigla: reparticoes.codigo, nome: reparticoes.nome, orgaoId: reparticoes.orgaoId, oculta: reparticoes.oculto })
@@ -1073,6 +1079,8 @@ async function baseOrcamentoPca(pca: PcaEspaco, orc: Awaited<ReturnType<typeof o
     db.select({ id: orgaos.id, sigla: orgaos.sigla, nome: orgaos.nome }).from(orgaos),
     listarVinculosOrcamento(),
   ]);
+  // Os vínculos que VALEM na visão do PCA (os próprios dela; nas demais unidades, o padrão).
+  const vincs = vinculosDaVisao(todosVinculos, visao);
   const orgaoLista = orgs.map((o) => ({ id: o.id, sigla: (o.sigla ?? "").trim() || o.nome, nome: o.nome }));
   const siglaOrgao = new Map(orgaoLista.map((o) => [o.id, o.sigla]));
   const reps = repsBrutas.map((r) => ({
@@ -1179,13 +1187,15 @@ export async function dfdsDosProtocolos(protocoloIds: number[]): Promise<{ id: n
  * os DFDs VIGENTES (consolidados — o mesmo critério do Dashboard) com a PREVISÃO DE ENTREGA (seção 5; `previsaoDoDfd`).
  * Sem previsão, o DFD fica de fora. Falha = lista vazia (o calendário segue sem o PCA).
  */
-export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: { id: number; nome: string; ano: number }[]; dfds: DfdPrevisao[] }> {
+export async function cronogramaPcas(de: string, ate: string, permitidos: Set<number> | null = null): Promise<{ pcas: { id: number; nome: string; ano: number }[]; dfds: DfdPrevisao[] }> {
   try {
     const db = getDb();
     const a0 = Number(de.slice(0, 4));
     const a1 = Number(ate.slice(0, 4));
     const lista = (await db.select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano, fonte: pcas.fonte }).from(pcas)).filter(
-      (p): p is typeof p & { ano: number } => coerceFonte(p.fonte) === "protocolo" && p.ano != null && p.ano >= a0 && p.ano <= a1,
+      // `permitidos` = os PCAs do grupo da pessoa (null = todos).
+      (p): p is typeof p & { ano: number } =>
+        coerceFonte(p.fonte) === "protocolo" && p.ano != null && p.ano >= a0 && p.ano <= a1 && (!permitidos || permitidos.has(p.id)),
     );
     if (!lista.length) return { pcas: [], dfds: [] };
     const [vs, inativos] = await Promise.all([vinculos(lista.map((p) => p.id)), inativosPorDfd()]);
@@ -1229,4 +1239,14 @@ export async function cronogramaPcas(de: string, ate: string): Promise<{ pcas: {
     console.error("cronograma do PCA falhou", e);
     return { pcas: [], dfds: [] };
   }
+}
+
+/** Sigla → nome das unidades (o filtro Unidade do Dashboard mostra e busca pelos dois). */
+async function nomesDasUnidades(ids: number[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const lote of lotesDeIds(ids)) {
+    const linhas = await getDb().select({ codigo: reparticoes.codigo, nome: reparticoes.nome }).from(reparticoes).where(inArray(reparticoes.id, lote));
+    for (const l of linhas) if (l.codigo && l.nome && l.nome !== l.codigo) out[l.codigo] = l.nome;
+  }
+  return out;
 }

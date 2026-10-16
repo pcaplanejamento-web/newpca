@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { getAcesso, pcasDoAcesso } from "./acesso";
 import { listarPcas, type PcaResumo } from "./dfd";
 
 /**
@@ -11,10 +12,12 @@ const COOKIE_PCA = "pca_filtro";
 
 export type PcaDoFiltro = { id: number; nome: string; ano: number };
 
-/** Os PCAs do seletor do cabeçalho: os cadastrados com ano, na ordem de `listarPcas` (o ativo primeiro). `pcas` evita
- * reler o cadastro quando o chamador já o tem. */
+/** Os PCAs do seletor do cabeçalho: os cadastrados com ano QUE O GRUPO ATIVO ACESSA (Grupos → PCAs do grupo; o ADM,
+ * todos), na ordem de `listarPcas` (o ativo primeiro). `pcas` evita reler o cadastro quando o chamador já o tem. */
 export async function pcasDoFiltro(pcas?: PcaResumo[]): Promise<PcaDoFiltro[]> {
-  return (pcas ?? (await listarPcas())).flatMap((p) => (p.ano != null ? [{ id: p.id, nome: p.nome, ano: p.ano }] : []));
+  const [lista, acesso] = await Promise.all([pcas ?? listarPcas(), getAcesso()]);
+  const permitidos = pcasDoAcesso(acesso);
+  return lista.flatMap((p) => (p.ano != null && (!permitidos || permitidos.has(p.id)) ? [{ id: p.id, nome: p.nome, ano: p.ano }] : []));
 }
 
 /** O PCA escolhido no cabeçalho (`null` = todos os PCAs). */

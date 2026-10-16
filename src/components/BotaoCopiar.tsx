@@ -120,7 +120,7 @@ export function CelulaCopiavel({
             toast.success(`Copiado: ${curto(texto)}`, 2000);
           } else toast.warning(`Não foi possível copiar automaticamente. Copie: ${texto}`, 8000);
         }}
-        className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] text-faint transition-colors duration-[var(--motion-duration)] group-hover/linha:text-muted hover:bg-surface-2 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 pointer-coarse:after:absolute pointer-coarse:after:-inset-y-3 pointer-coarse:after:left-0 pointer-coarse:after:-right-3 lg:pointer-coarse:after:-inset-y-1.5"
+        className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-chip text-faint transition-colors duration-[var(--motion-duration)] group-hover/linha:text-muted hover:bg-surface-2 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 pointer-coarse:after:absolute pointer-coarse:after:-inset-y-3 pointer-coarse:after:left-0 pointer-coarse:after:-right-3 lg:pointer-coarse:after:-inset-y-1.5"
       >
         {ok ? <IconCheck className="h-3.5 w-3.5" style={{ color: "var(--ok)" }} /> : <IconCopy className="h-3.5 w-3.5" />}
       </button>

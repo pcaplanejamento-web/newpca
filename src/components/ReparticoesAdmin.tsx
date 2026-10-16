@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { conferenciaDaUnidade, vigentesDoAlvo } from "@/lib/responsaveis-planilha-core";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { AcoesCadastro } from "./AcoesCadastro";
 import { Ajuda, TopicoAjuda } from "./Ajuda";
 import { Badge } from "./Badge";
@@ -12,7 +13,7 @@ import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { type Column, DataTable } from "./DataTable";
 import { IconChevronLeft, IconEye, IconEyeOff, IconLandmark, IconLayers, IconPlus, IconTrash, IconUsers } from "./icons";
-import { CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
+import { BotaoExonerados, CelulaConferencia, PlanilhaResponsaveis, ResponsaveisDoAlvo, rotulosConferencia, usePlanilhaResponsaveis } from "./PlanilhaResponsaveis";
 import { SecaoBanner } from "./SecaoBanner";
 import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
@@ -70,9 +71,14 @@ export function ReparticoesAdmin({
   const router = useRouter();
   const ctx = usePlanilhaResponsaveis();
   const [aba, setAba] = useState<AbaUnidades>(abaInicial);
+  const [exonerados, setExonerados] = useState(false);
   const [lista, setLista] = useState<Rep[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<number | "novo" | null>(null);
+  // A PESQUISA DO SISTEMA abre o banner da unidade (`?abrir=<id>`), quando a lista chega.
+  useAbrirDaUrl((v) => {
+    if (lista?.some((u) => u.id === Number(v))) setAberto(Number(v));
+  }, lista != null);
   const [ocupado, setOcupado] = useState(false);
   const { confirmar, confirmacao } = useConfirmacao();
 
@@ -124,13 +130,13 @@ export function ReparticoesAdmin({
 
   const conf = useMemo(() => {
     const m = new Map<number, ReturnType<typeof conferenciaDaUnidade>>();
-    if (ctx.planilha) for (const u of lista ?? []) m.set(u.id, conferenciaDaUnidade(u, assinaturaUnica, ctx.grupos, ctx.hoje));
+    if (ctx.planilha) for (const u of lista ?? []) m.set(u.id, conferenciaDaUnidade(u, assinaturaUnica, ctx.grupos, ctx.hoje, ctx.planilha.cargos));
     return m;
   }, [lista, assinaturaUnica, ctx.planilha, ctx.grupos, ctx.hoje]);
 
   if (lista === null) {
     return (
-      <div className="rounded-card border border-border p-4">
+      <div className="rounded-card border border-border p-[var(--pad-card)]">
         <SkeletonLinhas linhas={6} />
       </div>
     );
@@ -301,6 +307,7 @@ export function ReparticoesAdmin({
             { value: "responsaveis", label: "Responsáveis", icone: <IconUsers className="h-4 w-4" />, dica: "Quem responde neste órgão ou nas unidades dele" },
           ]}
         />
+        {aba === "responsaveis" && <BotaoExonerados ctx={ctx} ativo={exonerados} onAlternar={() => setExonerados((x) => !x)} />}
       </div>
       {erro && <Callout kind="danger">{erro}</Callout>}
       {ctx.erro && <Callout kind="warn">{ctx.erro}</Callout>}
@@ -342,9 +349,9 @@ export function ReparticoesAdmin({
             }
           />
         ) : ctx.planilha ? (
-          <PlanilhaResponsaveis ctx={ctx} orgaoId={orgaoId} />
+          <PlanilhaResponsaveis ctx={ctx} orgaoId={orgaoId} exonerados={exonerados} />
         ) : (
-          <div className="rounded-card border border-border p-4">
+          <div className="rounded-card border border-border p-[var(--pad-card)]">
             <SkeletonLinhas linhas={6} />
           </div>
         )}

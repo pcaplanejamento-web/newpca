@@ -1,4 +1,4 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { excluirPca } from "@/lib/dfd";
@@ -13,10 +13,18 @@ export const dynamic = "force-dynamic";
  * (Preview/Publicado — publicado aparece na tela inicial), CAPA do card e a VISÃO do orçamento.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const a = await exigirAcesso("pca", "configurar");
+  // Trocar SÓ a visão do orçamento é escolher como ver o PCA, não configurá-lo: basta Visualizar o PCA.
+  const bruto = (await req
+    .clone()
+    .json()
+    .catch(() => null)) as Record<string, unknown> | null;
+  const soVisao = !!bruto && typeof bruto === "object" && Object.keys(bruto).length === 1 && "orcamentoVisaoId" in bruto;
+  const a = await exigirAcesso("pca", soVisao ? "visualizar" : "configurar");
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const semPca = await recusaPca(id);
+  if (semPca) return semPca;
   const p = await parseCorpo(editarPcaEspacoSchema, req);
   if ("resp" in p) return p.resp;
   const antes = await getPcaEspaco(id);
@@ -62,6 +70,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const semPca = await recusaPca(id);
+  if (semPca) return semPca;
   const pca = await getPcaEspaco(id);
   if (!pca) return erro("PCA não encontrado.", 404);
   await excluirPca(id);

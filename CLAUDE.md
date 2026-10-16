@@ -171,16 +171,59 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (zera ao entrar), código 10/h por IP e 6/h por e-mail, cadastro 10/h por IP, senha 20/15 min por IP, desafio 60/10 min
     por IP → **429** `{esperarS}` + `Retry-After`. Higiene no cron dos e-mails (`limparSegurancaVencida`).
   - **Só dados permitidos** (a MESMA régua na tela — filtro ao digitar — e no Zod — `cadastro-core.ts`): nome só letras/
-    espaço/apóstrofo/hífen (nome e sobrenome), **matrícula = EXATAMENTE 6 dígitos** (`DIGITOS_MATRICULA`; não só zeros — a antiga fora do padrão segue valendo até o ADM trocar), **telefone** só dígitos (DDD + 8 fixo / 9 celular começando com 9 — `telefoneValido`), usuário do e-mail `[a-z0-9._-]` sem "..",
+    espaço/apóstrofo/hífen (nome e sobrenome), **matrícula = ATÉ 7 dígitos** (v1.114.2; antes exatamente 6) (`DIGITOS_MATRICULA`; não só zeros — a antiga fora do padrão segue valendo até o ADM trocar), **telefone** só dígitos (DDD + 8 fixo / 9 celular começando com 9 — `telefoneValido`), usuário do e-mail `[a-z0-9._-]` sem "..",
     senha nova 8–128 com **letras e números**, nenhum caractere de controle/invisível (cargo, apelido), nome de cargo com
     letras/números e `( ) / , . - º ª`.
   - **Sem duplicidade:** e-mail (índice único) e **MATRÍCULA** — conferida antes de enviar o código e antes de gastar o
     código (`matriculaEmUso`, sem os zeros à esquerda: "0123" = "123") e garantida no BANCO por gatilhos (`matricula_duplicada`
     no INSERT e no UPDATE da matrícula; as repetidas antigas ficam) → 409. O ADM também não troca para uma matrícula em uso;
     a tela do ADM manda só o que MUDOU (dado antigo fora do padrão segue valendo).
+  - **SEGURANÇA DO ACESSO (v1.92.0, migração `0110`, aditiva — `sessoes.visto_em`; blob `configuracoes.seguranca`):**
+    Configurações → aba **"Segurança"** (`SegurancaAdmin` + `CamposSeguranca`; `GET/PATCH /api/admin/seguranca`,
+    `exigirAdmin`, auditoria). Núcleo puro **`seguranca-core.ts`** (testado — `tests/seguranca.test.ts`): `inatividadeMin`
+    (`OPCOES_INATIVIDADE` 0/15/30/60/120/240/480; 0 = não encerra, o padrão), `sessaoInativa`/`renovarAtividade` (a atividade
+    gravada no máximo a cada 1/4 do limite, ≤ 5 min) — aplicados no **`getUsuarioAtual`** (parada além do limite = a sessão é
+    apagada e a pessoa volta ao login; atividade = qualquer pedido ao servidor com a sessão). D1 `seguranca.ts` (cache 60 s,
+    fail-safe = padrão). **Alertas de login suspeito** (`seguranca-alertas.ts`, best-effort, aviso tipo **`seguranca`** —
+    "Login suspeito" no catálogo, sino + e-mail por padrão, aviso direto): `aposEntrar` (login por senha e Google) — o aparelho
+    = cookie httpOnly `pca_aparelho` (2 anos), o HASH guardado em `preferencias_tabela` `seguranca:aparelhos` (até 10;
+    `avaliarAparelho` — o 1º não alerta; o MESMO navegador no MESMO IP já registrado em `acessos` também não — v1.114.1, o cookie pode se perder) → aparelho novo avisa os ADMs e a própria pessoa (navegador · IP · hora,
+    `resumoNavegador`); `alertarBloqueio` — a conta acabou de ser bloqueada (8 senhas erradas) → os ADMs, um por janela de
+    15 min. A rota genérica de preferências RECUSA as chaves reservadas `cofre:`/`seguranca:`. Revisão das rotas públicas
+    (v1.92.0): o "Esqueci a senha" sem sessão responde igual com o reenvio cedo (não enumera) e a consulta pública mascara
+    objeto/setor/responsável do DFD (`dfdPublico`).
+  - **HISTÓRICO DE ACESSO (v1.93.0, migração `0111`, aditiva — tabela `acessos` + `usuarios.ultimo_acesso_em`, a ÚLTIMA
+    coluna do schema de `usuarios`: o `insert().select()` do cadastro atômico, `papeis-sql.ts`, lista todas na ordem):** cada
+    login (senha e Google — `aposEntrar`) grava data/hora, o navegador (`resumoNavegador`), o canal, o IP e o aparelho (6
+    primeiros do hash do cookie `pca_aparelho`, + "Novo") — builders **`acessos-sql.ts`** (`comandosRegistrarAcesso`: grava,
+    poda além de `MAX_ACESSOS`=50 por pessoa e marca o último acesso, num lote; testados no D1 real — `tests/acessos.test.ts`).
+    O ÚLTIMO ACESSO também anda com a atividade da sessão (`getUsuarioAtual`, no mesmo lote do `visto_em`). Núcleo puro
+    `acessos-core.ts` (`rotuloDispositivo`, `haQuanto`, `aparelhosDistintos`). Rotas `GET /api/perfil/acessos` (a própria
+    pessoa) e `GET /api/admin/usuarios/[id]/acessos` (ADM) → `historicoDeAcesso`. Tela: **`HistoricoAcessos`/`TabelaAcessos`**
+    (DS — `StatMini` Último acesso · Logins · Aparelhos + a `DataTable` compacta exportável) no Perfil ("Histórico de
+    acesso") e no banner do usuário; coluna **"Último acesso"** em Usuários.
   - **Cabeçalhos** (`next.config` `headers`): `X-Frame-Options: SAMEORIGIN` + CSP `frame-ancestors 'self'; base-uri 'self';
     object-src 'none'; form-action 'self'`, `nosniff`, HSTS (1 ano), `Referrer-Policy`, `Permissions-Policy`. **CSRF:** além do
     cookie `SameSite=Lax`, o `parseCorpo` recusa (403) a requisição com `Origin` de OUTRO site (`origemPermitida`, `origem.ts`).
+  - **PROTEÇÃO DE DADOS (v1.63.0 → v1.70.1, sem migração — blob `configuracoes`, chave `protecao`):** Configurações → aba
+    **"Proteção de dados"** (`ProtecaoDadosAdmin` + `CamposProtecao`; `GET/PATCH /api/admin/protecao`, `exigirAdmin`, papéis
+    conferidos — 422, auditoria com o diff) liga **Bloquear seleção e cópia** · **Bloquear impressão e captura** · **Ocultar
+    ao sair da janela** · **Marca d'água com quem vê**, escolhe os **papéis protegidos** (o Administrador só se marcado) e
+    **"Aplicar também na tela pública"**. Núcleo puro **`protecao-core.ts`** (`lerConfigProtecao`, `protecaoDoPapel`,
+    `protecaoPublica`, `cssProtecao`, `svgMarcaDagua` [texto escapado], `ATRIBUTO_COBRIR`, `diffProtecao`; testado em
+    `tests/protecao.test.ts`) + D1 `protecao.ts` (cache 60 s, fail-safe = desligada). Aplicação = **`ProtecaoDados`** (DS),
+    montado SÓ no layout do `/painel` (pelo `usuario.papel.id`; `quem` = nome · matrícula · hora) e na tela pública `/`
+    (`Topo`; "Consulta pública"): o `<style>` global vem no HTML do servidor (1ª pintura e banners por portal —
+    `user-select:none`, `-webkit-touch-callout:none`, campos editáveis selecionáveis — `SELETOR_CAMPO`; `@media print` em
+    branco) e os ouvintes só dos bloqueios ligados (copy/cut/selectstart/contextmenu/dragstart fora de campo —
+    `[draggable="true"]` passa). **INVISÍVEL no uso (v1.70.1) — nada aparece nem muda na tela:** a impressão sai em branco
+    com o aviso (`@media print`) e, no PrtScn, a imagem copiada é trocada por nada na área de transferência, em silêncio; a
+    cobertura nos atalhos de captura SAIU. A cobertura (`data-protecao-cobrir`, posta direto no `<html>` — `html[…]::after`)
+    só existe em "Ocultar ao sair da janela" (o único visível): o `blur`/`focus` SÓ da JANELA (`e.target === window` — na
+    captura, o blur de cada campo também passa pela janela: era o defeito da v1.63.0) e a aba oculta. **`MarcaDagua`** (DS) =
+    SVG repetido em `OPACIDADE_MARCA.tela` (abaixo do que o olho percebe; aparece ao realçar a captura) e `.papel` na
+    impressão (`[data-marca-dagua]` + `print-color-adjust:exact`), sem capturar o toque. As ferramentas que salvam a captura em
+    arquivo e a foto pelo celular nenhum site alcança — a marca d'água identifica. Os "Copiar" do sistema e as exportações (ação Exportar) seguem.
 - **REGRA FIRME:** o **admin sempre vê TODAS as abas/telas** — nunca bloqueável por
   nível de acesso (bypass na navegação e nas guardas). Preserve isso em qualquer RBAC futuro.
 - **PAPÉIS (migrações `0069`/`0072`, aditivas):** o GRUPO (permissão) decide QUAIS telas; o
@@ -229,7 +272,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   grupos (**`GruposDaPessoa`**, DS; avisa sem grupo; auditoria `aprovar` + o e-mail de acesso liberado), **Recusar** o
   cadastro pendente (exclui; o histórico diz "recusado") e **"Ver acesso"** (**`AcessoDaPessoa`**, DS — por grupo, a
   `MatrizCapacidades` só-leitura das telas que ABREM, `capacidadesEfetivas`, e as fechadas pelo papel —
-  `telasFechadasPeloPapel`). **Permissões** explica grupo × papel e lista as telas na ordem do menu. **Exportar:**
+  `telasFechadasPeloPapel`). **Exportar:**
   TODA tabela tem **XLSX** e **PDF** no rodapé (ver `DataTable.exportar`); nas telas de módulo só para quem tem a ação
   Exportar ali — a página envolve o conteúdo em **`PermissaoExportar`** (`ExportarTabelas.tsx`; a Mesa, pela Mesa em que
   está), o contexto vale também nos banners por portal. **Desfazer de importação** (a gravação que falhou no meio sai só com Importar): o
@@ -277,7 +320,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Começar de" `MODELOS_DETALHES`, linhas alteradas marcadas; sem `onChange` = só leitura), a coluna **Detalhes**
   (**`ResumoDetalhesPapel`** compacto — "N restrições") e a confirmação ao RETIRAR acesso de um papel em uso (capacidades OU
   detalhes); "Ver acesso" e o banner do usuário mostram as restrições. Zod **`detalhesPapelSchema`** aceita SÓ os detalhes já
-  aplicados (os demais são descartados — nunca gravados "de enfeite"); auditoria `papel` com `textoDiffDetalhes`. **Próximas
+  aplicados (os demais são descartados — nunca gravados "de enfeite"); auditoria `papel` com `textoDiffDetalhes`. **COMPONENTES (v1.84.0, sem migração — `detalhes.componentes` = lista NEGATIVA `{ "tela.comp": ações[] }`):** núcleo puro **`papeis-componentes-core.ts`** (`CATALOGO_COMPONENTES` por tela — abas/visões/tabelas de Mesa, PCA, Catálogo, Orçamento, Tarefas, Calendário, Verificação; `coerceComponentes` — retirar Visualizar retira tudo —, `retirado`, `alternarAcaoComponente`, `vistaPermitida`); o catálogo das telas/ações mudou para `papeis-catalogo.ts` (reexportado por `papeis-core`). Cliente: provedor **`ComponentesPapel`** (layout do painel) + `useComponente()`; servidor: `componenteLibera(acesso, chave, acao)` (as páginas de PCA/Orçamento/Tarefas só montam as abas permitidas — `permitidas`). Editor: seção "Componentes" no `DetalhesPapelEditor` (chips por ação) e (?) em cada tela/ação/componente/detalhe e na `MatrizCapacidades`. **Próximas
   entregas** (no mesmo modelo): E2 — colunas das Mesas por papel (`DataTable.ocultas`, edições sem as colunas ocultas),
   histórico em 3 níveis (não vê · sem autores · completo) e edições salvas (personalizar · publicar · moderar); E3 — o
   Manipular da Mesa dividido (sub-ações), dados pessoais mascarados e valores ocultos.
@@ -314,9 +357,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **E-mail institucional = só a parte antes do "@"**: o domínio `@rioverde.go.gov.br` fica FIXO no fim do campo
     (`TextField trailing`); colar o e-mail inteiro vale (`parteLocalEmail`/`emailDaParteLocal`, `cadastro-core.ts`).
   - **CARGOS E FUNÇÕES do ADM (migração `0070`, tabela `cargos`: nome único sem caixa + ordem; semeada com os cargos já
-    informados):** Usuários → botão **"Cargos e funções"** → `Modal` com **`CargosAdmin`** (cadastrar/renomear no campo do
+    informados):** **Configurações → "Cargos e funções"** (aba própria, `?aba=cargos`) e Usuários → botão **"Cargos e funções"** → `Modal` — o MESMO **`CargosAdmin`** (cadastrar/renomear no campo do
     topo, ↑/↓ = a ordem da lista do cadastro — `AcoesCadastro` —, excluir com `useConfirmacao`; quantas pessoas usam cada um).
-    A pessoa guarda o NOME (`usuarios.cargo`): **renomear** renomeia o das pessoas no MESMO lote (`renomearCargo`);
+    A pessoa guarda o NOME (`usuarios.cargo`; também `responsaveis.cargo` e o cargo do temporário `responsaveis_vinculos.funcao`
+    — v1.56.0): **renomear** renomeia os três no MESMO lote (`renomearCargo`; o "Uso" soma usuários + responsáveis);
     **excluir** só tira da lista (as pessoas mantêm até o ADM trocar). D1 em **`cargos.ts`** (`listarCargos`,
     `cargoCadastrado` — sem caixa, devolve o nome canônico); rotas `GET/POST /api/admin/cargos`, `PATCH/DELETE
     /api/admin/cargos/[id]`, `PATCH /api/admin/cargos/ordem` (`exigirAdmin`, `cargoSchema`, auditoria `cargo`). O **cadastro**
@@ -381,6 +425,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
       (`trocarSenha`; recusado sem o Resend — 409 — e para o próprio ADM; "Dispensar"). Seção **Acesso**: o papel do banco
       (com a confirmação), os **grupos** por cadeado (`GruposDaPessoa`), **Aprovar** (o modal com papel + grupos) / **Recusar**
       (pendente), Desativar/Reativar e **"Ver acesso"** (`AcessoDaPessoa`); Excluir no rodapé. Auditoria registra os fatos ("dados validados", "senha nova exigida").
+    - **ARQUIVAR em vez de excluir (migração `0105`, aditiva — `usuarios.arquivado_em`/`arquivado_por` [o NOME]):** o
+      "Excluir" do banner virou **Arquivar** (`DELETE /api/admin/usuarios/[id]` → `comandoArquivarUsuario`: inativo +
+      carimbo, sessões encerradas no mesmo lote, trava do último ADM ativo; tudo fica — grupos, papel, foto,
+      responsabilidades). A tabela tem **"Arquivados (N)"** no rodapé; no arquivado o banner mostra **Restaurar** (`PATCH`
+      `{restaurar:true}` → `comandoRestaurarUsuario`, volta ATIVO) e **Excluir definitivamente** (o mesmo `DELETE`, só para o
+      arquivado — e o pendente recusado). Auditoria: "arquivado (restaurável)", "restaurado", "excluído definitivamente".
     - **Troca de senha OBRIGATÓRIA:** `UsuarioSessao.trocarSenha` → o layout do `/painel` redireciona a **`/nova-senha`**
       (fora do painel: `NovaSenhaObrigatoria` = senha nova + captcha → código no e-mail → `POST /api/perfil/senha`; "Sair");
       `/api/perfil/senha` e `/api/auth/senha` zeram a exigência.
@@ -602,13 +652,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`AtividadePessoa`** (o ícone da tela + "Mesa › Protocolo … · editando") na linha de cada pessoa do "Online agora", que
   ganhou a seção **"Nesta tela"** (mesma tela + rótulo que você); a dica de cada foto do cabeçalho diz onde a pessoa está.
 
-## Grupos, Permissões, Órgãos e Unidades (RBAC por grupo)
+## Verificação (v1.75.0, sem migração)
+- Tela **`/painel/verificacao`** (`VerificacaoView`, contêiner; item "Verificação" em Módulos — `IconVerificacao`, tela PRÓPRIA do grupo
+  `verificacao` (Visualizar/Exportar no papel); o PDF do relatório, a ação Exportar nela — `PermissaoExportar`): duas `Dropzone`
+  (protocolo .pdf | DFD .pdf/.xlsx) que entregam o arquivo aos MESMOS `ProtocoloUploadForm`/`DfdUploadForm` no modo
+  **`verificacao`** (arquivo do host: `arquivo` / `arquivoHost`): analisa o arquivo COMO VEIO (sem consultar os já
+  cadastrados — `carregarExistentes`/`buscarProcesso`/sobrescrita pulados), sem Protocolar/Importar (`protocolar`/`enviar`
+  retornam) e o rodapé diz "somente consulta". Erros, navegação e relatórios = o `PainelPendencias` de sempre. Dados da
+  página = `contextoBanners` (unidades com responsáveis, regras do ADM, órgãos, PCAs). Nada é gravado; as únicas chamadas
+  são de leitura (catálogo). v1.77.1: o `Segmented` Protocolo | DFD à direita do título escolhe a `Dropzone`; com `verificacao` os banners são SÓ LEITURA (capa `leitura`, DFD `readOnly`, item sem editar, sem seleção/massa, sem excluir/restaurar/manter, PCA e unidade travados).
+
+## Grupos, Órgãos e Unidades (RBAC por grupo)
 > **Vocabulário (rename UI-only):** a antiga "Repartição" é, na interface, a **"Unidade"**; o
 > identificador de código/tabela segue `reparticao*` (não renomear). Toda **Unidade** pertence a um
 > **Órgão** (entidade nova, acima). NÃO confundir com a **Planilha (PCA)** (tabela `unidades`, arquivo
 > importado) nem com a **Unidade de medida** do item (`itens.unidade_medida`) — três conceitos distintos.
-- **Administração (Grupos/Permissões/Usuários):** PATCH com schemas PRÓPRIOS, sem os padrões da criação
-  (`grupoPatchSchema`/`permissaoPatchSchema` — o `.partial()` apagava pessoas/unidades/telas num PATCH só com o nome);
+- **Administração (Grupos/Usuários):** PATCH com schemas PRÓPRIOS, sem os padrões da criação
+  (`grupoPatchSchema` — o `.partial()` apagava pessoas/unidades/telas num PATCH só com o nome);
   gravar o grupo = UM lote (**`rbac-sql.ts`**: `comandosMembros`/`comandosUnidades` em INSERTs de ≤ 40, ids conferidos antes
   — `motivoIdsInvalidos` → 422; inexistente = 404); **excluir grupo** mostra o IMPACTO (`GET /api/admin/grupos/[id]` →
   `impactoDoGrupo`: quadros de tarefas, pastas e modelos que somem em CASCATA) e exige `?confirmar=1` (409 sem ele); a sigla
@@ -616,12 +676,48 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   sistema (`useConfirmacao`), erro dentro do modal, avisos flutuantes; trocar papel/desativar/excluir usuário confirmam.
   Mensagens padrão do Zod em pt-BR (`zod-config.ts`, importado pelo `http.ts`).
 - **Grupos** (`grupos`): um usuário pertence a vários (`usuario_grupos`); escolhe o **grupo
-  ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo tem **1 permissão** e acessa um conjunto
-  de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`, `/painel/permissoes`,
+  ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo guarda as **TELAS** que abre e os **PCAs** que acessa (abaixo) e
+  acessa um conjunto de **repartições** (`grupo_reparticoes`). **Modo das unidades (v1.115.0, migração `0112` —
+  `grupos.modo_unidades`):** `lista` (padrão = as escolhidas) | `cadastro` = cada membro acessa SÓ a unidade do PRÓPRIO
+  cadastro (`usuarios.reparticao_id`; sem ela = escopo nenhuma; a "Geral" nunca vale por cadastro) — ponto único
+  `reparticoesDoMembro` (`grupos.ts`; núcleo puro `unidadesDoMembro` em `escopo-unidades-core.ts`) dentro do
+  `getReparticaoContexto`: cabeçalho, escopo da Mesa e as rotas herdam. No `GruposAdmin`, o `Segmented` "Unidades escolhidas |
+  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. Telas admin: `/painel/grupos`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
-- **Permissões** (`permissoes.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
-  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas` · `calendario`**, na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
+- **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de
+  ids, NULL = todos; a `0106` copiou as telas da permissão que cada grupo usava; a tabela `permissoes` e a coluna
+  `grupos.permissao_id` ficam DORMENTES — o Armazenamento a marca "legado"):** a tela Permissões SAIU (`/painel/permissoes`
+  redireciona a Grupos; rotas `/api/admin/permissoes*` removidas). Os cartões dos grupos = `CartaoEspaco` (capa com os ícones das telas; Pessoas · Unidades · PCAs; excluir no canto; tocar edita). No banner do grupo (`GruposAdmin`, `Modal` com o
+  **Salvar fixo no rodapé** — `Button form=` —, sem Cancelar: o X fecha): nome · **Telas do grupo** (caixas de `ABAS`; as da
+  Administração são só do ADM) · **PCAs do grupo** (`Switch` "Todos os PCAs (também os que forem criados)" ou a lista
+  marcada) · unidades · pessoas. Zod `grupoCreateSchema`/`grupoPatchSchema` (`abas`, `pcas` null|ids), `motivoIdsInvalidos`
+  confere os PCAs (422), auditoria com "telas: … → …" e "PCAs: … → …". Acesso (`acesso.ts`): `GrupoAcesso {abas, pcas}`
+  (`lerPcasGrupo` — JSON inválido = todos), **`pcasDoAcesso(a)`** (o grupo ATIVO; ADM = null) e **`podePca(a, id)`**. Onde
+  vale: cards do módulo PCA, espaço `/painel/pca/[id]` e Mesa do PCA (`?pca=`) → `AcessoRestrito`; o seletor de Mesa; o
+  PCA do cabeçalho (`pcasDoFiltro` filtra — o cookie de um PCA fora some); o "Enviar ao PCA" da Mesa (`DfdsView.pcasAcesso`,
+  de `contextoBanners`); o cronograma do Calendário (`cronogramaPcas(de, ate, permitidos)`); e as rotas
+  `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
+  `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
+- **MÓDULOS + CHAT POR GRUPO + QUEM VÊ OS ONLINE (v1.91.0, migração `0109`, aditiva — `grupos.modulos` JSON de ids [NULL =
+  grupo antigo, pelas telas avulsas de `abas`] + `grupos.chat` [1 = liberado]):** Configurações → aba **"Módulos"**
+  (`ModulosAdmin`: nome, ↑/↓, as telas em `ChipsIcone` — uma tela em UM módulo; aviso das telas sem módulo; `GET/PATCH
+  /api/admin/modulos`, `exigirAdmin`, auditoria) no blob `configuracoes.modulos` (sem migração; `getModulos` cache 60 s + por
+  requisição). Núcleo PURO **`modulos-core.ts`** (testado): `lerModulos` (inválido = `MODULOS_PADRAO`, um módulo "Módulos" com
+  todas — o menu de antes), `telasDoGrupo` (pelos módulos; o antigo pelas avulsas que têm módulo), `modulosDasTelas` (os que o
+  antigo ganharia sem abrir nada a mais), `secoesDosModulos` (o menu: uma seção por módulo, só as abertas; o ADM vê "Outras
+  telas"), `motivoModulosInvalidos`. O ACESSO (`acesso.ts` `paraAcesso`) calcula `GrupoAcesso.abas` pelos módulos — mudar um
+  módulo muda todos os grupos que o usam; `abas` segue gravado como retrato. Menu: o layout manda `modulos` (as seções) ao
+  `AppShell` (`secoesVisiveis`) e a `BottomNav` (`telas` na ordem dos módulos). Grupos (`GruposAdmin`): **Módulos do grupo**
+  (o antigo só passa a módulos quando o ADM mexe neles — `modsTocados`; o que ganha/perde à vista — `MudancaTelas`) e
+  **"Chat liberado"** (`Switch`). Chat bloqueado no grupo: o layout não monta o chat (`ativo.chat`), o `worker.ts` manda
+  `x-chat-grupo`/`x-chat-privado` = 0 e as rotas do chat recusam (`ehMembroDoGrupo` exige `grupos.chat = 1`;
+  `quemCompartilhaGrupo` só por grupo com chat). **Papéis → Detalhes → Presença → "Ver quem está online"**
+  (`DetalhesPapel.presenca.verOnline`, padrão sim; o ADM sempre vê): desligado, o `worker.ts` manda `x-presenca-ver: 0` e o
+  `PresencaGrupo` (DO) entrega à aba a lista VAZIA (`cego` — nem presença nem "vendo"); no cabeçalho, só as conversas
+  (`PresencaGrupo verOnline={false}`; sem chat, nada é montado). A pessoa segue aparecendo para os outros.
+- **Telas** (`grupos.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =
+  **`dfd` (Mesa) · `pca` · `catalogo` · `orcamento` · `tarefas` · `calendario` · `verificacao`** (a Verificação — tela própria desde a v1.77.0, migração `0107` deu a tela aos grupos com a Mesa e Visualizar/Exportar aos papéis que a viam), na ORDEM da navegação (`ABAS`, `src/lib/abas.ts`, puro). **Admin
   ignora** (vê todas — regra firme). A navegação dos módulos sai de UMA fonte — **`NAV_MODULOS`** (`navModulos.ts`: rota +
   rótulo + ícone por aba) — na sidebar do `AppShell` e na `BottomNav` do celular, filtrada por `abasPermitidas` (o **Calendário** é um módulo como os outros, com permissão PRÓPRIA — migração `0046`).
   **Tudo na Mesa:** o antigo **Dashboard** (`/painel`) e a tela **Protocolos** legada (`/painel/protocolos`,
@@ -630,7 +726,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   antigo `/painel/protocolos` redireciona à Mesa (como `/painel/dfds`). Ninguém perde acesso: a migração **`0036`**
   (aditiva, idempotente — espelho da `0015`) dá a Mesa (`dfd`) a toda permissão que tinha `protocolos`; as chaves antigas
   (`dashboard`/`protocolos`) ficam no JSON e **`abasConhecidas`** as descarta na LEITURA (`abasPermitidas` e `GET
-  /api/admin/permissoes`) — o ADM salva a permissão sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). A permissão é
+  /api/admin/grupos`) — o ADM salva o grupo sem erro (o Zod `rbac-validation` só aceita `ABA_KEYS`). A tela do grupo é
   PORTÃO REAL: as páginas (`acessoPagina`) e as rotas (`exigirAcesso`/`recusa*` — ver "Guardas") conferem a tela aberta pelo
   grupo **e** o que o PAPEL permite nela; pela URL, a tela fechada mostra o `AcessoRestrito`. As tabelas
   `protocolos`/`protocolo_opcoes` ficam no banco **DORMENTES** (dados preservados, sem código, fora do `schema.ts`; sem
@@ -641,6 +737,48 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   órgão** (`/painel/orgaos/[id]`): a unidade herda `orgao_id` do escopo da URL, e o `GET /api/admin/reparticoes?orgaoId=`
   filtra por órgão. Unidade ativa por cookie `pca_reparticao`, entre as do grupo ativo, na ordem definida. Rotas em
   `/api/admin/reparticoes*` e `/api/reparticoes/ativo`.
+- **EXONERAÇÃO, ENCERRADOS, PRIORIDADE e VÁRIOS LUGARES por nomeação (v1.58.0, migração `0101`, aditiva —
+  `responsaveis.exonerado_em`):** `exonerado(p, hoje)` = a data já chegou; os vínculos cadastrados CONTINUAM valendo
+  (assinatura, vigentes, conferência) e **`motivoNaoVincular`** (puro, a MESMA régua na tela e nas rotas de vínculo — 409)
+  recusa vínculo NOVO de quem já foi exonerado e qualquer vínculo que comece DEPOIS da data. `PATCH
+  /api/admin/responsaveis/[id]` `{exoneradoEm | null}` (409 se algum vínculo começa depois; auditoria). Tela: no banner da
+  pessoa "Exonerar" (data) / "Desfazer exoneração" e o selo; o botão **`BotaoExonerados`** ("Exonerados (N)", à direita do
+  `Segmented` em Órgãos e Unidades) alterna a planilha para os exonerados (linhas em cinza + coluna "Exonerado em"); o
+  `EditorVinculo` não oferece quem já está exonerado. O vínculo ENCERRADO não é mais problema da Conferência
+  (`problemasDoVinculo` sem `resp.encerrado`): coluna cinza **"Encerrados"** (`CelulaLista esmaecido`); "Responde em" só os
+  não encerrados. **Ordem:** `ordenarPorPrioridade` (a posição do cargo em Configurações → Cargos e funções, sem caixa; fora
+  da lista depois; sem cargo por último; empate pelo nome) na planilha, e `separarVinculos(lista, cargos)` nas seções dos
+  vínculos. **Criar um vínculo escolhe VÁRIOS lugares** (`SeletorMultiplo` "Unidades e órgãos"): um POST por lugar com a
+  mesma nomeação/período, para no 1º erro, um aviso só. **Editar o vínculo (v1.59.0)** troca também a pessoa e ONDE
+  RESPONDE (`PATCH …/vinculos/[id]` com `orgaoId`/`reparticaoId` opcionais — sem eles fica o de antes; o alvo novo passa
+  por `motivoAlvoInvalido` + conflito no alvo novo, vai ao fim da ordem dele e conta como vínculo NOVO para a exoneração);
+  no editor, o mesmo `SeletorMultiplo` — o próprio vínculo fica onde já respondia (senão vai ao 1º escolhido) e os demais
+  lugares são criados com a mesma nomeação. **Cargo/função FORA da lista** de Cargos e funções (`cargoForaDaLista`) é ERRO
+  na Conferência — o da pessoa (`resp.cargoFora`, também no órgão/unidade onde ela responde como padrão) e o do temporário
+  (`resp.funcaoFora`); sem lista cadastrada não confere. **NOMEAÇÕES UNIFICADAS (v1.60.0):** no banner da pessoa
+  (`ListaVinculos agrupar`), os vínculos de mesma pessoa + tipo + ato de MESMO nº (`chaveNomeacao`/`numeroAtoNormal` — sem
+  espaço/caixa/zeros à esquerda; `agruparPorNomeacao`, puro e testado) viram UM cartão (`CartaoNomeacao`: o ato, o cargo, o
+  link e editar no topo; cada lugar com o estado, o período quando difere e remover). Editar a nomeação
+  (`AberturaVinculo.grupo` → `EnvioVinculo.grupo`): os lugares que ficam recebem os mesmos dados (PATCH), os que saem vão
+  para os lugares novos (o mesmo vínculo muda de lugar) e, sem lugar novo, são removidos (confirma); os novos que sobram são
+  criados.
+- **CARGO, PERÍODO DO PADRÃO e USUÁRIO do responsável (v1.56.0, migração `0100`, aditiva — `responsaveis.cargo` +
+  `responsaveis.usuario_id` FK set null, único parcial):** o CARGO/FUNÇÃO é da PESSOA (o NOME de um cargo cadastrado —
+  `cargoParaGravar`: o cadastrado, manter o atual fora da lista ou nenhum; 422 `MSG_CARGO_FORA`) e o vínculo PADRÃO segue
+  ele (`funcao` vazia; `funcaoDoVinculo`); o TEMPORÁRIO guarda o cargo PRÓPRIO do período (`funcao`, da mesma lista). O
+  PADRÃO tem PERÍODO: início obrigatório, fim opcional (em aberto = vigente até informar); `estadoDoVinculo` (agendado/
+  encerrado/inativo/vigente), `vinculoConflita` (só se os períodos se cruzam), `motivoVinculoInvalido` e a conferência
+  (`resp.semCargo`, `resp.semInicio`, `resp.padraoEncerrado`). Na assinatura, `padraoCobre` — o padrão com período só casa
+  a assinatura datada dentro dele; o padrão sem período (os antigos) segue como antes (`validarAssinatura`,
+  `responsaveisVigentes`). A pessoa pode ser LIGADA a UM usuário (`motivoUsuarioInvalido` — 404/409; sugestão pela mesma
+  matrícula — `usuarioSugerido`) e ganha a FOTO dele (`listarPlanilha` faz o join; `PlanilhaResponsaveis.usuarios`); base
+  para ver os protocolos no nome dele. **Fora do município (v1.73.0, migração `0104` — `responsaveis.externo`):** a pessoa
+  marcada não tem matrícula (`matriculaParaGravar` grava vazia; `rotuloMatricula` = "Fora do município" nas telas) e a
+  conferência não aponta `resp.matricula`; o `Switch` fica no banner da pessoa e no cadastro rápido do `EditorVinculo`. A `0100` transformou as funções digitadas em cargos cadastrados, deu à pessoa o
+  cargo mais usado nos padrões dela e ligou o usuário de matrícula ÚNICA. Telas: coluna **"Cargo/função padrão"** e o
+  `Avatar` no nome; banner da pessoa com cargo (`OpcoesCargo`) e usuário (`SeletorPessoa`) por cadeado; **`ListaVinculos`**
+  separa **Padrão | Temporários** (`separarVinculos`, cada seção com a sua ação "Adicionar…"/"Vincular…"); o `EditorVinculo`
+  mostra o cargo da pessoa no padrão e escolhe o do temporário, com Início/Fim nos dois.
 - **RESPONSÁVEIS POR DFDs numa PLANILHA ÚNICA (v1.53.0, migração `0099`, aditiva — tabelas `responsaveis` +
   `responsaveis_vinculos`; os JSON `reparticoes.responsavel_dfd`/`orgaos.responsavel_dfd` ficam DORMENTES):** a PESSOA é
   cadastrada UMA vez (`responsaveis`: nome + matrícula + `chave` = `norm(nome)`, único chave + matrícula) e VINCULADA a
@@ -665,11 +803,11 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `carregarResponsaveis`/`responsaveisPorReparticao` (`reparticoes.ts`), agora pelos vínculos. Rotas (`exigirAdmin`, Zod
   `pessoaResponsavelSchema`/`vinculoResponsavelSchema`, auditoria `responsavel`): `GET`/`POST /api/admin/responsaveis`
   (a planilha / pessoa nova — 409 se repetida), `PATCH`/`DELETE /api/admin/responsaveis/[id]` (excluir com vínculos pede
-  `?confirmar=1`), `POST /api/admin/responsaveis/vinculos` e `PATCH`/`DELETE /api/admin/responsaveis/vinculos/[id]` (o
-  alvo do vínculo é fixo; a pessoa pode trocar). Órgão/unidade não recebem mais `responsaveis` (o campo saiu dos schemas).
+  `?confirmar=1`), `POST /api/admin/responsaveis/vinculos` e `PATCH`/`DELETE /api/admin/responsaveis/vinculos/[id]` (a
+  pessoa e o alvo podem trocar — v1.59.0). Órgão/unidade não recebem mais `responsaveis` (o campo saiu dos schemas).
   **Telas:** `/painel/orgaos` = `Segmented` **Órgãos | Responsáveis** (`?aba=responsaveis`) e `/painel/orgaos/[id]` =
   **Unidades | Responsáveis** (só quem responde no órgão ou nas unidades dele) — tabelas no PADRÃO DA MESA (`DataTable
-  scrollInterno density="compact"`, filtros por coluna, XLSX/PDF, `AcoesCadastro` ↑/↓ na coluna Ordem, "Novo órgão"/"Nova
+  scrollInterno density="compact"`, filtros por coluna, XLSX/PDF, `AcoesCadastro` ↑/↓ na coluna Ordem das unidades, "Novo órgão"/"Nova
   unidade"/"Nova pessoa" + Ajuda no rodapé) com as colunas **Responsáveis vigentes** (`CelulaResponsaveis`; "Por unidade"
   / "Pelo órgão") e **Conferência** (`CelulaConferencia` = `EstadoResumo` ou "Regular"); a de órgãos tem **Unidades (N)**
   (abre a tela delas). Tocar na linha abre o BANNER (`BannerCadastro`, DS: dados por cadeado, "Salvar alterações" só com
@@ -682,11 +820,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   matrícula) ou cadastra na hora, o alvo (só os que valem), padrão/temporário, função, nomeação e período. Hook único
   `usePlanilhaResponsaveis` (dados + gravações + aviso flutuante). Peças: `VinculosResponsaveis.tsx` (`CelulaResponsaveis`,
   `ListaVinculos`, `EditorVinculo`), `SecaoBanner.tsx` (`SecaoBanner`/`ValorCampo` — também no banner do usuário).
-- **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD)+ordem, migração `0022`) —
-  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`, ↑/↓); **tocar
+- **Órgãos** (`orgaos`: nome+sigla+**orgao_entidade** (matcher do "Órgão/Entidade" do DFD), migração `0022`) —
+  entidade organizacional **ACIMA da unidade**. Tela `/painel/orgaos` (`OrgaosAdmin`, `orgaoSchema`) — **SEM ordenação
+  manual (v1.56.0):** a ordem é a do **código da Centi** (`ORDEM_ORGAOS`, `orgaos.ts`: `entidade_centi` numérico, sem
+  ele por último, depois o nome — a MESMA em todo seletor; `orgaos.ordem` DORMENTE), colunas **Código Centi · Nome
+  (inteiro em até 2 linhas, `line-clamp-2`) · Também unidade (coluna própria, sem quebra — v1.58.0) · Sigla** · Órgão/Entidade · Nº interessado · Assinatura · Responsáveis vigentes · Unidades · Conferência e a EDIÇÃO DA
+  TABELA (`DataTable.edicoes`, chave `admin:orgaos:tabela` — `CHAVE_TABELA_ORGAOS`; as chaves `admin:` — `chaveDeAdmin` —
+  só o ADM grava, `recusaNaChave`); **tocar
   numa linha** abre o banner do órgão e o botão **Unidades (N)** (na linha e no banner) leva a `/painel/orgaos/[id]` = as
   Unidades daquele órgão (`ReparticoesAdmin` escopado). Nav = um item **"Órgãos e Unidades"**. Rotas
-  `/api/admin/orgaos*` (CRUD + `/ordem`). **Toda unidade pertence a um órgão** (migração `0078` apagou as sem órgão, menos a "Geral"; `reparticaoSchema.orgaoId` obrigatório e conferido nas rotas — 422) e **excluir um órgão exclui as unidades dele** no mesmo lote (o órgão com DFD/protocolo, direto ou pelas unidades, segue só ocultável — 409). Loader
+  `/api/admin/orgaos*` (CRUD). **Toda unidade pertence a um órgão** (migração `0078` apagou as sem órgão, menos a "Geral"; `reparticaoSchema.orgaoId` obrigatório e conferido nas rotas — 422) e **excluir um órgão exclui as unidades dele** no mesmo lote (o órgão com DFD/protocolo, direto ou pelas unidades, segue só ocultável — 409). Loader
   `src/lib/orgaos.ts` (`listarOrgaos`). A migração `0022` é **aditiva** (só `ADD COLUMN`/`CREATE`) e **preserva o
   legado**: semeia a "Prefeitura Municipal de Rio Verde" e vincula as unidades atuais a ela (`orgao_id=1`).
 - **Assinatura ÚNICA por órgão (migração `0023`):** o órgão define se a assinatura (responsáveis por DFDs) é
@@ -694,8 +837,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   unidade** (padrão `=0`, cada unidade tem os seus). A regra é **pura e única** (`alvoEfetivo`,
   `responsaveis-planilha-core.ts`) aplicada nos DOIS pontos que carregam os responsáveis (`carregarResponsaveis` servidor +
   `responsaveisPorReparticao`) → toda a conferência de assinatura (`validarAssinatura`, `DfdConferir`, `POST /api/dfd`)
-  usa os responsáveis certos. Trocar a regra NÃO apaga vínculos: só muda qual alvo vale (os que deixam de valer aparecem
-  "sem efeito" na Conferência).
+  usa os responsáveis certos. **O vínculo MORA no lugar que vale (v1.72.0, migração `0103` — dados, idempotente):**
+  `alvoQueVale` (puro) leva o pedido ao alvo efetivo — a unidade de órgão com assinatura única → o órgão; o órgão por
+  unidade → a unidade própria (dual) ou recusa —, aplicado no SERVIDOR em todo POST/PATCH de vínculo (`alvoParaGravar`,
+  devolve `aviso` quando mudou — `avisoRedirecionado`). Mudar a configuração REALINHA no mesmo lote (`planoRealinhar` →
+  `comandosRealinhar` em `responsaveis-sql.ts`: mover · copiar · apagar o igual; o que conflita fica e vira "A revisar"):
+  `PATCH` do órgão (assinatura única/ocultar — órgão por unidade com várias unidades e sem própria = 409
+  `escolherUnidades`, a tela confirma e manda `destinosVinculos`), `unidade-propria`, promover, rebaixar e a unidade que
+  muda de órgão (`realinharVinculos`). A `0103` corrigiu os gravados (ex.: o responsável na unidade própria do AMMT).
+  **"Onde responde"** (`EditorVinculo`) = DUAS escolhas — **Órgãos** (só os de assinatura única) | **Unidades** (as de
+  órgãos por unidade, AGRUPADAS por órgão — `SeletorMultiplo` com `OpcaoMultipla.grupo`/`detalhe`) —, o (?) lista por que
+  os demais não aparecem (`alvosParaVincular` → `{orgaos, unidades, fora}`).
 - **"Geral" virtual:** `codigo='GERAL'` = **todas as unidades** — **escondida do CRUD de Unidades** (GET filtra;
   PATCH/DELETE recusam), **não editável**, mas continua **concedível por grupo** em `GruposAdmin` (grupos
   autorizados). Sentinela `getReparticaoFiltro()` (`codigo==='GERAL'` ⇒ `null` = sem filtro) inalterada. Em **"Geral"**,
@@ -1133,6 +1285,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     inválido não derruba a lista) → `DfdResumo.prioridade`; o item herda a do DFD (junção no cliente por `dfdId`); os banners
     do protocolo (análise e gravado) mostram a MESMA coluna (`prioridadeDoDfd(secoes)`). No celular os filtros (só ícone)
     cabem na linha das visões (descem juntos quando não cabem); todos os alvos da barra têm ≥ 44px.
+  - **MESA CONECTADA (v1.116.0, sem migração):** os filtros de coluna e a ordem de Protocolos · DFDs · Itens SOBREVIVEM à
+    troca de visão (guardados no `DfdsView` — `estadoVisoes`/`ordemMesa`; `DataTable.conexao` = `ConexaoTabela`: começa neles
+    e informa os filtros, a ordem e as chaves da BASE que passam nos PRÓPRIOS filtros) e o que passa numa visão RECORTA as
+    outras nos dois sentidos pela hierarquia — núcleo puro **`mesa-recorte.ts`** (`recorteMesa`, testado): protocolos →
+    DFDs/itens deles; DFDs → protocolos que os contêm e itens deles; itens (Normal e os filtros de atributo da Consolidada)
+    → DFDs e protocolos. A restrição vai por ids de protocolo/DFD (estáveis) e cada visão calcula o que passa SEM a restrição
+    das outras (nunca há ciclo). A ordem escolhida vale nas outras visões quando a coluna existe lá. Faixa **`RecorteMesa`**
+    (DS) acima da tabela: um chip por OUTRA visão com filtros (✕ tira) + "Limpar recorte" (zera as três e remonta a tabela).
   - **Gestão do protocolo (migração `0031`, aditiva):** **Situação** = SÓ as cadastradas pelo ADM em **Configurações →
     Situações** (`SituacoesAdmin`: nome + cor + ordem ↑/↓; excluir deixa os protocolos dela SEM situação, avisando quantos;
     tabela `protocolo_situacoes`, `src/lib/situacoes.ts`, rotas `/api/admin/situacoes*` com `exigirAdmin` + auditoria
@@ -1372,6 +1532,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     com milhares de iguais:** `mapaItensDuplicados` dá a cada índice o GRUPO compartilhado; as listas mostram até
     `MAX_IGUAIS` (10) + "+N" (`outrosDoGrupo`; `repetidosDoDfd`/`repetidosPorDfd` → `RepeticaoItem {iguais, total}`). Após
     "Unificar", o campo numérico destravado acompanha o valor novo (`NumInput` ressincroniza quando o valor muda de fora).
+  - **Quantidade FRACIONADA (`item.quantidadeFracionada`, v1.90.0)** = 0 < q < 1 (`quantidadeFracionada`): ponto próprio da Avaliação (padrão atenção), rótulo “Quantidade fracionada”; `mensagensItem(it, repetido, regras)` segue o nível do ADM. Todo ponto da Avaliação tem o (?) (`PontoAvaliacao.ajuda`).
+  - **PALAVRAS NO ITEM (`item.palavras`, v1.114.0, sem migração — `RegrasAvaliacao.palavrasItem` no blob `avaliacao`):** desligado por padrão (Ignorar). O ADM cadastra CONJUNTOS de palavras/expressões (`GrupoPalavras {id, termos, nivel?}` — `CampoLista`, várias de uma vez separadas por ";"; colar uma lista acrescenta todas) na aba Item da Avaliação (`editorPalavras`), cada um com a SUA importância (sem ela, a do ponto; `ignorar` desliga só o conjunto). Núcleo puro em `avaliacao-core.ts`: `termosDoTexto`, `chavePalavra` (sem acento/caixa/pontuação), `palavrasNoItem` (palavra INTEIRA na descrição; cache pelas regras), `coerceGruposPalavras` (importância desconhecida/não permitida cai na do ponto; conjunto vazio sai), `LIMITES_PALAVRAS` (50 conjuntos · 200 termos · 80 caracteres — a mesma régua no Zod `grupoPalavrasSchema`). Entra em `mensagensItem` (uma mensagem por conjunto, rótulo "Palavra apontada"), `mensagensDfd`/`avaliarDfd` (o pior conjunto decide — bloqueia a importação se algum bloqueia), `faltasCirurgicasDfd` (despacho), `pendenciasDoDfd` (`regras` — cada item com o status do conjunto dele, âncora `descricao` no `ItemDetalhe`) e no portão dos lotes do `POST /api/dfd`. Testes: `tests/palavras-item.test.ts`.
+  - **Quantidade AUSENTE = `semQuantidade`** (vazia, zero, negativa ou não numérica — v1.89.2; antes só a vazia era erro e o item de total R$ 0,00 passava como regular).
   - **Valor unitário AUSENTE = `semValorUnitario`** (vazio, zero, negativo ou NÃO numérico — NaN viraria `null` no JSON):
     a MESMA régua no cliente e no servidor.
   - **Conferência por LINHA única (`avaliarLinhaDfd`, `src/lib/conferencia-dfd.ts`, puro):** o ESTADO de cada DFD nas
@@ -2247,8 +2410,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`; grade fluida `auto-fill minmax(22rem)` com o card até 30rem, o texto proporcional ao card por container query e, com capa, uma faixa desfocada sob o texto) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em
-  **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO como a tela do orçamento: UMA linha de cabeçalho — voltar · nome · ano ·
-  status · fonte; a capa fica no card e na Configuração — e as abas `AbasEspaco` com as ferramentas da aba à direita; `?aba=`).
+  **`/painel/pca/[id]`** (`PcaEspacoView` — ENXUTO: UMA linha só (v1.67.0, `AbasEspaco cabecalho`) — à esquerda voltar · nome ·
+  ano (`Badge` azul com `IconCalendar`, tabular) · status (`Badge dot`; o **Preview** — `vivo`, em preparação: só o ponto
+  âmbar que RESPIRA e solta duas ondas — `.ponto-selo`, sem ícone; Publicado em verde com `IconCheck`, parado) — v1.69.1:
+  seta, nome, ano e status com a MESMA altura (`Badge tamanho="linha"` + o `h1` — v1.69.2: 24px no desktop e 26px no toque, preenchendo a linha — na mesma linha-caixa =
+  `--h-control-sm` no desktop, 44px no toque); à direita as ferramentas da aba e as abas Dashboard · Orçamento · Mesa|Importação ·
+  **Configuração só com o ícone** (`soIcone`); no celular o título numa linha e as abas na de baixo. A fonte não aparece mais
+  no cabeçalho (só nos cards). A capa fica no card e na Configuração; `?aba=`).
 - **Modelo (aditivo):** `pcas` ganhou **`fonte`** (`lista` = planilhas | `protocolo` = DFDs via protocolos), **`status`**
   (`preview`/`publicado`), **`capa`** (data-URL WebP 800×1000, `capaSchema` — só `data:image/(webp|jpeg|png)`), `publicado_em` e
   **`orcamento_visao_id`**. `unidades.pca_id` (FK cascade) — a planilha pertence a um PCA e a unicidade do código virou **por PCA**
@@ -2290,7 +2458,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   vínculo), embaixo "Incluir ações futuras desta unidade" (= "as demais"; ou a nota de quem já as leva) e as de outros
   vínculos numa linha só com cadeado ("Em outros vínculos: 2 em GGIM", a lista na dica); botões no padrão (Excluir só ícone, Cancelar/Salvar `sm`). A gravação
   é a da aba Vínculos (`useGravacaoVinculos`, `OrcamentoVinculosAba.tsx`) → `router.refresh` (o orçamento do PCA recalcula)
-  abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração) e,
+  abre **`VisaoOrcamentoPca`** — escolher a visão do PCA (grava na hora, `PATCH /api/pca/[id]`, o mesmo da Configuração; a MESMA
+  escolha fica À VISTA na barra do PCA × Orçamento — **`SeletorVisaoPca`**, `SelectField compacto` no vão entre a faixa e o
+  Relatório, travado sem Configurar no PCA; os dois gravam pelo hook único `useVisaoDoPca`) e,
   com Configurar no Orçamento, **Editar esta visão**/**Nova visão** (a nova já vira a do PCA) no `EditorVisaoOrcamento` sobre
   os lançamentos do orçamento do ano (os do Comparativo — sem consulta nova); o Comparativo acompanha a visão do PCA quando
   ela muda (`visaoInicial` re-sincroniza) e o KPI Dotação diz QUAL orçamento do ano é usado (o importado por último); KPIs Dotação <ano> (filtrada pela visão) · Planejado ·
@@ -2329,7 +2499,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cartões — travada com dados, 409 no servidor; `Switch` Publicar; travas com link p/ Configurações → Situações [`?aba=`]; visão
   do orçamento; capa com **`RecorteImagem`** — recorte 4:5 próprio, zoom + arrasto/toque, `recorte-imagem.ts` puro).
 - **Carga por ABA:** a página monta SÓ a aba ativa (`?aba=`); `PcaEspacoView` troca de aba navegando (`router.push`, sem
-  scroll) com esqueleto até chegar. O Dashboard tem o `UnitFilter` (unidade requisitante/planilha) NA LINHA DAS ABAS (`FerramentasAba`, `UnitFilter compacto`).
+  scroll) com esqueleto até chegar. O Dashboard NÃO tem mais o `UnitFilter` na linha das abas (v1.67.0 — redundante com o filtro Unidade dos `FiltrosDashboard`,
+  abaixo dos KPIs; o `?unidade=` só vale na tela pública); com a PRÉVIA ligada, a explicação fica num `Ajuda` (?) ao lado das abas.
 - **Consulta do Dashboard (tabela) — SÓ DADOS, nenhum erro apontado:** o `ItemTable` (painel e tela inicial) é o MESMO
   `DataTable` das demais telas — todas as colunas filtráveis/ordenáveis (faixa em Seq./Qtd./R$, período na data), `nowrap`,
   `density="compact"`, busca por produto/código (vários com ":"); com `origem` mostra Protocolo · Nº DFD
@@ -2360,7 +2531,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·
   Itens** (`DashboardPca.protocolosLista`/`dfdsLista`/`itens`; `PlanilhaDfds semEstado`, `ItemTable origem`) — NUNCA aponta
-  erro/aviso. Os itens são TODOS (sem teto — vão ao `DashboardPcaCliente` como UM texto COMPACTO `{c: campos, l: tuplas}` — `itensParaTexto`/`itensDoTexto`, `itens-dash-texto.ts`, testado —, montado UMA vez por versão dentro do memo do `dashboardDoPca`, `DashboardPca.itensTexto`).
+  erro/aviso. v1.70.0: o cartão da consulta NÃO tem cabeçalho (`ChartCard` sem `title`) — UMA linha com as abas + a busca dos
+  itens (`BuscaItens` compacta; `ItemTable.busca` controlada pela `ConsultaPca`) + o (?) no fim (`ConsultaPca.fim`/
+  `ItemTable.fim`, `Ajuda botao="sm"` — a explicação que era o subtítulo), todos na altura dos controles; produto, assunto e
+  motivo numa linha (`CelulaTexto`) — linhas na altura padrão. Os itens são TODOS (sem teto — vão ao `DashboardPcaCliente` como UM texto COMPACTO `{c: campos, l: tuplas}` — `itensParaTexto`/`itensDoTexto`, `itens-dash-texto.ts`, testado —, montado UMA vez por versão dentro do memo do `dashboardDoPca`, `DashboardPca.itensTexto`).
   No PAINEL, **"Fora da soma (N)"** (só com N > 0; `ConsultaDashboard.foraDaSoma`): os DFDs vinculados/da prévia que a
   consolidação tirou — núcleo puro `foraDaSoma(linhas, consolidacao)` (`pca-core.ts`, testado: vínculos − vigentes; motivo
   `substituido`/`excluido`/`exclusao` + o outro DFD) → `DashboardPca.foraDaSoma` (`DfdForaDaSoma`, motivo por extenso; o hint
@@ -2487,7 +2661,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   PCA não entram; o DFD AVULSO, sem protocolo, nunca — `isNotNull(dfds.protocoloId)`). O SERVIDOR decide pela configuração (`anoMarcadosDoPca`, `pca-espaco.ts`): `carregarMesa(u, pcaId)` →
   `listarProtocolosDoPca(pcaId, anoMarcados)` e `listarDfds`/`listarItensDfds(…, anoMarcados)` (`escopoMesa(pcaId, ano)` =
   `pca_id = P OR (pca_id IS NULL AND ano)`), e o `GET /api/dfd/itens?pca=` lê a mesma configuração. Na `MesaPca`
-  (`marcados`): a coluna **Local** (`localDoProtocolo`, `pca-core.ts` puro — `sistema`/`enviado`/`incorporado`, a fonte única
+  (`marcados`): a coluna **Local** (célula `EstadoPonto` com o texto único `rotuloLocal` — "Incorporado" sem repetir a ação; "· substitui"/"· exclui" só nesses casos; `localDoProtocolo`, `pca-core.ts` puro — `sistema`/`enviado`/`incorporado`, a fonte única
   da coluna, do escopo e das ações; dica com `motivosNaoEnviar`), o escopo **Todos | Na Mesa do sistema | Enviados |
   Incorporados** e, na seleção, **"Enviar a este PCA (n)"** (o `EnviarAoPca` com **`pcaFixo`** — sem o seletor de PCA);
   Incorporar/Devolver seguem só para os enviados. Os da Mesa do sistema seguem na Mesa principal, sem trava (`estaTravado`
@@ -2498,8 +2672,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     do PCA — "· prévia") somam como PRÉVIA os DFDs ainda não incorporados: **`vinculosPrevia`** (`pca-espaco.ts`) = os DFDs
     que não estão em NENHUM PCA dos protocolos ENVIADOS a este PCA e não incorporados + dos MARCADOS na Mesa do sistema, com a
     ação sugerida pelo assunto (`acaoSugerida`) e DEPOIS dos reais na ordem — a MESMA consolidação (`consolidarPca`) dentro de
-    `itensConsolidados` (`previa: {dfds, protocolos}` → `DashboardPca.previa`/`OrcamentoDoPca.previa` → `Callout` "Prévia do
-    PCA" no `PainelPca`/`OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
+    `itensConsolidados` (`previa: {dfds, protocolos}` → `DashboardPca.previa`/`OrcamentoDoPca.previa` → o (?) "Prévia do
+    PCA" ao lado das abas do Dashboard e o `Callout` do `OrcamentoPca`; a fonte da origem dos gráficos diz). Os banners de consulta do painel abrem os
     protocolos/DFDs da prévia (`escopoConsulta`). Nada é gravado; a tela inicial (só publicados) nunca vê a prévia; o
     Calendário (`cronogramaPcas`) segue só com o incorporado.
 - **MESA DO PCA DENTRO DA MESA DO SISTEMA (seletor de Mesa, sem migração):** o 1º item da barra da Mesa principal é o
@@ -2688,6 +2862,27 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`EditorVinculoOrcamento`** (DS, num `Modal`): unidade do orçamento, unidade cadastrada (por órgão; sigla repetida mostra o
   órgão — `useRotuloUnidade`), "Incluir as demais ações" e as ações livres (`SeletorMultiplo`), a regra na hora (trava o
   Salvar, com "Abrir o vínculo com …" — o que a regra acusa) e a prévia do que leva; Excluir. `OrcamentoVinculosAba` = o contêiner (uma gravação por vez + `router.refresh`).
+- **VÍNCULOS POR VISÃO (v1.61.0, migração `0102`, aditiva — `orcamento_vinculos.visao_id` FK cascade [NULL = o PADRÃO; os
+  gravados viraram o padrão], único `(chave, reparticao_id, IFNULL(visao_id,0))`, `orcamento_visoes.vinculos_proprios` JSON
+  das chaves):** a visão SEGUE o padrão em cada unidade do CUBO até definir a unidade por conta própria — aí valem os vínculos
+  DELA naquela unidade (inclusive nenhum). Núcleo puro (`orcamento-vinculo.ts`, testado em `tests/vinculos-por-visao.test.ts`):
+  **`vinculosDaVisao(todos, visao)`** (sem visão = o padrão — TODO leitor usa: página do orçamento, `comparativo-dados`,
+  `baseOrcamentoPca`, `OrcamentoComparativo` [refaz `comVinculos` no navegador quando a visão escolhida tem próprios]),
+  `aplicarNoEscopo` (criar/alterar pela unidade de origem/excluir com o `conflitoVinculo`), **`planoVinculos`** (por destino
+  — padrão e/ou visões —, a lista nova de cada unidade; a visão que ainda segue o padrão parte dele e, com o padrão no escopo,
+  é pulada; TUDO OU NADA com o nome da visão), `escopoEscolhido` ("esta" · "todas" · "escolher", "0" = padrão) e
+  `textoEscopo`. Gravação única **`gravarVinculosOrcamento(pedidos, escopo)`** (`orcamento.ts`; builders
+  `comandosDestinoVinculos` — apaga e reinsere a lista do destino, 14 por INSERT — e `comandoPropriasVisao`, testados no D1
+  real) e **`usarPadraoNaVisao`**; as rotas `POST/PATCH/DELETE /api/orcamento/vinculos*` aceitam `escopo` (ausente = onde o
+  vínculo está; criar = o padrão) e devolvem `{vinculos, visoes:[{id, proprias}]}` (`vinculosGravados`); `POST
+  /api/orcamento/vinculos/padrao` `{visaoId, chave}`. Excluir a visão leva os dela. Telas: **`EscopoVinculo`** (DS, em
+  `EditorVinculoOrcamento.tsx` — "Salvar em" Esta visão/Padrão · Todas · Escolher [`SeletorMultiplo`; "· própria"], selo
+  "Próprio desta visão" + "Usar o padrão") no editor do vínculo (`contexto`); aba **Vínculos** com a **Visão** na barra e a
+  coluna Origem (Padrão | Desta visão); o **banner da visão** (`EditorVisaoOrcamento`) com `Segmented` **Filtros | Vínculos**
+  (a MESMA `OrcamentoVinculos` com o contexto da visão; `FerramentasNoLugar` — a barra fica no banner); coluna **Vínculos**
+  na lista de visões; o Orçamento do PCA usa os vínculos da visão do PCA (o banner da linha pergunta onde salvar).
+  `useGravacaoVinculos(vinculos, visoes)` guarda também os `proprias` gravados (`visoesAtuais`). O (?) ÚNICO das visões =
+  **`AjudaVisoes`** (abas Visões e Vínculos, cabeçalho do banner da visão, PCA × Orçamento).
 
 ## Tarefas (quadro estilo Trello) — migração `0042`
 - **O que é:** o módulo **`tarefas`** (`ABA_KEYS`/`NAV_MODULOS`, ícone `IconKanban`; a `0042` concede a aba a quem tem a
@@ -3246,8 +3441,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     - **`PilulaVistas`** (flutuante, opaca, no rodapé — `RESERVA_PILULA`): Quadro · Lista · Calendário · Dashboard ·
       Configuração | **Mudar de quadros** (`TrocarQuadro` com `gatilho`); troca pela MESMA lógica do `AbasEspaco`
       (`useTrocaAba` + `ConteudoAba`, exportados).
-    - Conteúdo: as listas direto sobre a foto (`QuadroKanban naMoldura reservaInferior`: 272px, espaço de 12px,
-      `.rolagem-fina`, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
+    - Conteúdo: as listas direto sobre a foto (`QuadroKanban naMoldura reservaInferior`: 320px, espaço de 12px,
+      a barra de rolagem nativa, `--lista-quadro` + `--sombra-cartao`; "Adicionar outra lista" translúcido sobre a imagem —
       `group-data-[com-imagem]/moldura`); Lista/Calendário/Dashboard/Configuração num **`PainelMoldura`** opaco (a tabela e
       o calendário descontam a pílula no `reservaInferior`).
     - Cartão sem o nº do ticket na face (fica na dica/detalhe), `rounded-lg` com a sombra do Trello; ícone de template do pé
@@ -3358,6 +3553,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     **`EditorConjunto`** (nome, cor, o `Switch` "Pasta privada" na criação — travado ligado para quem não é editor — e só os
     quadros que podem entrar; avisa "sai da pasta X"/"vira privado"). O painel do "Mudar de quadros" tem as MESMAS pastas,
     regras e edição (`GET /api/tarefas/quadros` devolve `conjuntos` = `{lista, ordem}` + `ator`).
+- **LISTA COM PESSOA + TAREFA SOBRE O ITEM + EXCLUSÃO LIMPA (v1.80.0, migração `0108`, aditiva — `tarefa_listas.responsavel_id`
+  FK set null):** o menu da lista → **"Atribuir a uma pessoa…"** (`PessoaLista`, `MenuLista.tsx`; Configurar; `PATCH
+  /api/tarefas/listas/[id]` `{responsavelId|null}` — pessoa do grupo do quadro, `pessoasValidas` → 422); a foto no cabeçalho
+  da coluna (`ColunaTarefas.responsavel`) e a tarefa NOVA na lista já nasce com a pessoa como responsável (`TarefaDetalhe`,
+  rascunho). Vínculo **`item`** em `TIPOS_VINCULO` = o DFD + o Nº DO ITEM (`idVinculoItem`/`itemDoVinculo`, `dfdId × 1.000.000 +
+  nº` — estável: o id da linha muda a cada regravação); rótulo "N · DFD X", leva ao DFD na Mesa, acesso = o do DFD, busca
+  por descrição/código/nº/planejamento; o botão **Tarefas** no cabeçalho do banner do item (`useDfdGravado` modo item).
+  **Listas sugeridas:** `GET /api/tarefas/do-vinculo` devolve `listas` = as ATRIBUÍDAS ao responsável do protocolo do alvo
+  (`responsavelDoAlvo`) e à pessoa (`listasSugeridas`; o do responsável primeiro) — `TarefasDoVinculo` as mostra ("Listas
+  atribuídas", tocar cria nela: `?nova=tipo:id&lista=L`) e só os quadros do GRUPO ATIVO do cabeçalho (o grupo no seletor — v1.80.1); o quadro escolhido abre a tarefa na lista pedida ou na atribuída
+  (`listaParaAlvo` → `QuadroTarefas.listaInicial`). **Excluir a lista com as tarefas** (e excluir uma tarefa) apaga também os
+  vínculos de OUTRAS tarefas que apontavam para elas (`tarefa_vinculos` tipo `tarefa`, sem FK no alvo) no mesmo lote.
+  **SEM SAIR DA MESA (v1.81.0):** o `TarefasDoVinculo` abre o `TarefaDetalhe` COMPLETO por cima da Mesa — nova (contexto do
+  quadro por `GET /api/tarefas/quadros/[id]` → `contextoQuadro`, `tarefas-dados.ts`; título sugerido "Protocolo X: " — e os vínculos do alvo + DFD/protocolo ACIMA dele (`alvosRelacionados`, `do-vinculo` → `vinculos`); o título é editado no CABEÇALHO do `TarefaDetalhe`; o cartão mostra a unidade e os números em selos na MESMA linha do rodapé (ícones + selos que encolhem + fotos) (`ChipsVinculosMesa`, `numerosMesa`); no pé de cada lista, o FILTRO da lista (`FiltroLista`: membros, sigla, protocolo/DFD/item — `opcoesFiltroLista`, `FiltroTarefas.mesa`, só na tela) e o PDF dos cartões à vista com TODO o conteúdo de cada tarefa (`PdfLista` → `GET /api/tarefas/[id]` 4 por vez → `blocosPdfTarefas`, `tarefas-pdf.ts`, puro → `baixarDocumentoPdf`; com Exportar) —
+  `AberturaTarefa.titulo`; lista pedida › atribuída › 1ª) ou a ligada (`?contexto=1`); Abertas | Todas, concluir pelo
+  `CirculoConcluir` (o mesmo PATCH); criada, segue ABERTA para editar (`TarefaDetalhe.onCriada` → reabre como editar — v1.81.1; nada leva à tela de Tarefas); o `do-vinculo` devolve `rotulo` e `usuarioId`.
+  **v1.82.0:** a LINHA **Adicionar** (`MenuAdicionarCartao`, agora uma fileira de botões, não um menu) fica FIXA no rodapé
+  do `TarefaDetalhe`, acima das ações; a **SIGLA** da unidade vem do vínculo (`VinculoTarefa.sigla`, resolvida em
+  `rotulosVinculos` pela unidade do protocolo/DFD/DFD do item) → `siglasDaTarefa` no cartão, na coluna **Unidade** da Lista
+  e no título sugerido do `TarefasDoVinculo`; filtro **`FiltroTarefas.siglas`** (+ `SEM_SIGLA`) no painel Filtrar
+  (`FiltrosTarefas.siglas`) e nos chips. **Emitir DFDs** (só ADM): `DataTable.acoesRodape` aceita função das linhas à vista
+  → `EmitirDfdsTarefas` (`TabelaTarefas`) → `POST /api/tarefas/dfds` (`exigirAdmin`: protocolo = os DFDs dele, DFD, item =
+  o DFD) → `useRodarAutomacao` (`AutomacoesMesa.tsx`, a MESMA saída da Mesa, em segundo plano), com as automações
+  "Disponível na Mesa" (`carregarQuadro.automacoesMesa`).
+  Evento de calendário SEM tarefa ainda não existe (`tarefa_eventos.tarefa_id` é obrigatório) — previsto no ROADMAP.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
   Integrações); a seguir, o relatório de produtividade por grupo.
 
@@ -3398,7 +3618,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   UNIDADES DE MEDIDA e CLASSIFICAÇÕES de item".
 
 ## UI — Design System por tokens (`/design-system` é a FONTE ÚNICA)
-- **REGRA FIRME:** todo componente vive na biblioteca **`/design-system`** (rota pública,
+- **REGRA FIRME:** todo componente vive na biblioteca **`/painel/design-system`** (v1.79.0: SÓ o ADM — Administração →
+  Componentes; o antigo `/design-system` redireciona; a ÚNICA tela pública sem login é a consulta do PCA em `/`;
   `src/components/designsystem/Catalogo.tsx`). Ao criar QUALQUER componente (inclui botões e
   ícones), **adicione-o ao catálogo**; as telas só podem **usar componentes do design-system**
   — nada de UI ad-hoc/inline. Ícones = **lucide-react** reexportados como `Icon*` em `icons.tsx`.
@@ -3408,19 +3629,31 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `--sit-*` [KPIs do PCA, erro de campo, tons violet/orange do `Badge`, "Limpar" dos filtros], feedback `--ok/--warn/
   --danger/--info`, avatar via `avatarVar` em `src/lib/semantic.ts`); tintas
   saem por CSS `color-mix` com `--tint-target`/`--glow-target`.
-- **ESPAÇAMENTO por tokens — UMA régua para o sistema inteiro** (`globals.css`): **`--pad-canvas`** = a margem do conteúdo,
-  IGUAL no topo, nas laterais e na base (a mesma distância do cabeçalho, do menu e da borda do display — 16px; 12px no
-  celular), usada pelo `<main>` do `AppShell` (`p-[var(--pad-canvas)]`; no celular a base soma a navegação inferior + a
-  área segura), pelas laterais do cabeçalho, pela tela inicial pública (largura total) e pela margem dos modais;
+- **ESPAÇAMENTO por tokens — UMA régua para o sistema inteiro** (`globals.css`): **`--pad-canvas`** = a margem LATERAL do conteúdo
+  (a distância do menu e da borda do display — 16px; 12px no celular) e **`--pad-canvas-y`** (v1.68.1) = a margem do
+  conteúdo ao CABEÇALHO e à BASE do display — a METADE (8px; 6px compacto e no celular; 12px confortável): o primeiro e o
+  último componente já trazem o respiro dos próprios controles/cartões, e assim as 4 distâncias ficam PROPORCIONAIS. O
+  `<main>` do `AppShell` e o da tela pública usam `px-[var(--pad-canvas)] py-[var(--pad-canvas-y)]` (no celular a base soma
+  a navegação inferior + a área segura); as medidas de altura até o fim do display (`reservaAteORodape`, `ALTURA_NO_HTML`,
+  `useAlturaTela` pelo padding real do `<main>`, a `BarraSelecao` fixa, os avisos flutuantes, o painel "Novo fluxo") contam
+  o `--pad-canvas-y`; o `--pad-canvas` segue nas laterais do cabeçalho e na margem dos modais;
   **`--gap-block`** = o espaço ENTRE os componentes (raiz das telas `space-y-[var(--gap-block)]`, grades de cartões/KPIs
   `gap-[var(--gap-block)]`, vão entre os banners da pilha do `Modal`) — 12px; **`--pad-card`** = o respiro interno dos
   cartões/quadros/banners (`ChartCard`, `KpiStat`, `StatCard`, `StatMini`, `LinkCard`, seções dos banners e o corpo/
   cabeçalho/rodapé do `Modal`) — 14px; **`--h-header`** = a altura do cabeçalho (56px) — a faixa da marca na sidebar tem a
   MESMA altura (a borda de baixo continua a do cabeçalho) e os itens do menu alinham com a marca. A **densidade do ADM**
   (Aparência) muda todos juntos (compacta 12/8/12 · confortável 24/16/20). Medidas em JS leem o MESMO token
-  (`tokenPx`, `src/components/espacamento.ts`): a altura das tabelas com rolagem interna (`DataTable`: o respiro do
+  (`tokenPx`, `src/components/espacamento.ts`): a altura das tabelas com rolagem interna (`DataTable`: o respiro de baixo do
   `<main>` + a altura REAL do rodapé — sem rolar a página) e o lugar da `BarraSelecao` fixa. Nada de `space-y-6`/`p-5`
   soltos para separar blocos — o `--gap-col` antigo foi unificado no `--gap-block`.
+  **RESPIRO IGUAL NOS 4 LADOS (v1.68.0):** todo cartão/quadro/banner/seção com `rounded-card` usa `p-[var(--pad-card)]` —
+  NUNCA `px-*`/`py-*` diferentes nem um recuo extra por dentro (o `KpiStat` não tem mais `pl-2`); o cabeçalho, o corpo e o
+  rodapé do `Modal`/`JanelaFlutuante` também. Estado vazio GRANDE (ícone + texto + botão) = `p-10`. Ficam de fora só as
+  linhas/itens compactos (botões de lista, chips, avisos flutuantes, painéis de `Dropdown`), já simétricos ou de altura fixa.
+  **LINHA DE TÍTULO (v1.69.0):** a linha do título de uma tela/espaço (nome, voltar, selos, abas — a barra do `AbasEspaco` e
+  os cabeçalhos das telas de módulo/ADM) leva a classe **`.linha-topico`** (`globals.css`, sem camada): abaixo dela o
+  respiro é `--pad-canvas-y` — o MESMO que há entre o cabeçalho do app e ela —, vencendo o `space-y-[var(--gap-block)]` da
+  raiz. Toda linha de título nova usa a classe.
 - **Tema por atributo `data-theme`** (`light`/`dark`) — next-themes `attribute="data-theme"`;
   `@custom-variant dark ([data-theme="dark"] &)`. Fonte **Geist + Geist Mono** (pacote `geist`,
   `--font-sans`/`--font-mono`). Sem `.dark` de classe, sem Inter.
@@ -3446,7 +3679,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   FILTRO de alternar), **`Colunas`** (colunas verticais com grade, rótulos — no máximo ~8 no eixo, a margem do eixo cabe o rótulo
   em R$ — e dica no hover/foco/toque; com `onEscolher`, a coluna zerada só mostra a dica) e **`BarraSegmentada`** (barra empilhada/medidor com 2px de respiro) em `charts/Barras.tsx`, `FilterChip`, `Avatar`, `Dropdown` (o painel fica PRESO ao gatilho enquanto aberto — acompanha a cada quadro o gatilho e o próprio tamanho, e o lado acima/abaixo é decidido UMA vez ao abrir: marcar um item, um banner que muda de altura ou uma rolagem nunca o soltam; fecha no `pointerdown` fora — vale no toque do iOS; fechar pelo Esc ou pelo `fechar` do conteúdo (escolher, limpar, ordenar) com o foco dentro do painel o devolve ao gatilho; `className` do invólucro e `id`/`title` do
   gatilho opcionais; `papel` "menu" [padrão] | "dialog" [busca/grade — escolher pessoa ou data: `role="dialog"` com nome,
-  `aria-haspopup="dialog"`]; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
+  `aria-haspopup="dialog"`]; `"listbox"` = a lista de uma `Selecao`; `gatilho` = atributos a mais do botão — teclado, foco, `role`/`aria-*`, `disabled`; `ancora` = o elemento em que o painel se alinha; `folha` = sobe de baixo na largura da tela; `bloqueado` = o gatilho não abre [`aria-disabled`, sem perder o foco — ex.: gravando]; o
   conteúdo em função recebe `fechar` e `{teclado}` = aberto por Enter/Espaço — quem usa leva o foco para dentro do painel),
   `ColorField` (conta-gotas+swatches; `src/lib/color.ts`), **`PeriodoPicker`** (o seletor de período — gatilho no visual do
   `SelectField compacto` com o prefixo "Período", painel `dialog` com o **`PeriodoCorpo`**: atalhos Todo o período | Hoje | Esta
@@ -3502,7 +3735,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   o total repetidos em cada faixa);
   **`vazio`** = a mensagem do corpo sem nenhuma linha (com linhas escondidas pelos filtros das colunas, vale a dos filtros);
   rodapé compacto com alvos de 44px no celular (paginação, "Limpar filtros", linhas por página);
-  **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
+  **MARCAÇÃO da linha (v1.78.0):** o 1º clique MARCA a linha (fundo accent + barra accent à esquerda; sem selecionar), o 2º clique na linha marcada chama o `onRowClick` (Enter abre direto; `activeKey` chega marcada); **linhas INTERCALADAS** no token `--zebra` (Aparência → Cores, "Linhas intercaladas", claro/escuro); **visão sempre cheia (v1.78.1)** — linhas vazias (sem seleção nem clique) completam a tabela paginada com dados até o LIMITE DA VISÃO (a área que rola no `scrollInterno`, senão até o fim do display), nunca além das linhas por página; conteúdo maior que a visão não ganha nenhuma; **tabela `border-separate border-spacing-0` com as bordas nas CÉLULAS** (v1.72.1 — com `border-collapse` as células presas tremiam e a borda escorregava ao rolar de lado); a caixa de marcar é a classe **`.caixa-marcar`** (`globals.css`: o desenho do sistema com o raio `--radius-chip`, no máximo um círculo — também no `MultiSelectHeader`; o `Checkbox` usa `rounded-chip`); **coluna de MARCAÇÃO sempre presa à esquerda** (v1.71.1: `sticky left-0` em toda tabela `selectable`, com a divisa quando não há congeladas; a linha com fundo opaco) — v1.73.2: com `scrollInterno` o `thead` é `sticky top-0 z-30` (acima das células presas do corpo, z-10) e o contêiner `isolate`: o "marcar todos" fica fixo no TOPO e à esquerda); **`activeKey`** = linha ATIVA destacada, mestre-detalhe; `fillHeight` = linhas por página automáticas p/ preencher a altura do display no desktop, sem scroll do navegador;
   **`scrollInterno`** = no desktop a tabela OCUPA o espaço até o fim do display DESDE O PRIMEIRO QUADRO (altura TOTAL fixa,
   coluna flex: o CORPO rola por dentro com o `thead` `sticky`, o rodapé fica rente ao fim com qualquer nº de linhas; sem
   linhas, a mensagem fica no meio do espaço) — medida em `useLayoutEffect` (antes da pintura) com o topo pela cadeia de
@@ -3600,8 +3833,24 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`ResumoDetalhesPapel`** (as restrições: "N restrições" compacto ou por extenso), **`GruposDaPessoa`** (os grupos de uma pessoa, com as telas de cada um) e **`AcessoDaPessoa`** (o "Ver acesso": o que
   a pessoa abre e faz em cada grupo),
   `Field` (TextField/PasswordField/SearchField/**TextArea**/Checkbox [`indeterminado` = a caixa PARCIAL]/**`CampoLista`** [lista em chips — várias referências da
-  renovação]/**`SelectField`** [`<select>` nativo no MESMO visual do campo — ex.: a classificação que a unidade de medida
-  indica] — ícone + foco accent), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
+  renovação]/**`SelectField`** [a **`Selecao`** no MESMO visual do campo — ex.: a classificação que a unidade de medida
+  indica] — ícone + foco accent), **`Selecao`** (`Selecao.tsx`, v1.62.0 — o *drop-in* do `<select>`: as MESMAS props
+  [`value`, `onChange(e)` com `e.target.value`, `disabled`, `id`, `aria-*`, `onBlur`, `style`, `className` = a caixa] e os
+  MESMOS filhos [`<option>`/`<optgroup>`/componentes que os renderizam — `OpcoesUnidades`], mas a lista ABERTA é a do
+  sistema: o `Dropdown` (`papel="listbox"`) ALINHADO à caixa inteira (`ancora` — o `SelectField` passa a moldura, com o
+  rótulo do compacto dentro) e o gatilho `role="combobox"`, a escolhida em accent com o check, grupos com DIVISOR,
+  desabilitada esmaecida com o `title` na dica, BUSCA (e, na folha, o título) FIXA no topo acima de 12 opções, linhas de 32px
+  no desktop (`lg:pointer-fine`) e 44px no toque, entrada de 120 ms (`animate-selecao-entra`; parada com "reduzir
+  movimento"); numa tela estreita com mais de 8 opções a lista vira FOLHA que sobe de baixo (`Dropdown.folha`, sobre o
+  `--scrim`). Extras por `data-*` na `<option>`: `data-detalhe` (2ª linha), `data-aviso` (ponto âmbar + o motivo) e
+  `data-cor` (o ponto na cor — `corSegura`; também no gatilho); `acoes` = botões fixos no RODAPÉ da lista (`SelectField.acoes`
+  — ex.: "Editar esta visão"/"Nova visão" na Visão do PCA × Orçamento, `SeletorVisaoPca.onEditar` → `VisaoOrcamentoPca.editorPedido`;
+  `atributosVisao` em `orcamento-visao.ts` = resumo + PCAs que usam + ausentes). Teclado ↑/↓/Home/End/Enter/Espaço/Esc
+  + digitar para saltar; FECHADA, ↑/↓ abrem e digitar já troca a opção (v1.64.0). O `<select>` nativo fica ESCONDIDO depois do gatilho — a fonte das opções e
+  do valor; escolher = o setter nativo + o `change` real. O 1º desenho já traz o texto lido dos filhos (sem piscar). Núcleo
+  puro `selecao-core.ts` [`proximaHabilitada`, `typeahead`, `filtrarOpcoes`] testado. TODO select de formulário do sistema
+  usa a `Selecao` — inclusive o "Linhas por página" das tabelas; ficam nativos SÓ o `SeletorCelula` [milhares de linhas] e o
+  `SeletorFiltro` [o quadrado só-ícone]. O Biome sabe que ela é um controle [`noLabelWithoutControl.inputComponents`]), **`AcoesCadastro`** (↑/↓/editar/excluir de uma linha de cadastro ordenável — `size="xs"`),
   **`CelulaClassificacao`**/**`CelulaUnidadeCadastrada`** (`EstadoCelula.tsx` — a classificação automática e a unidade
   cadastrada do item na Mesa → Itens), **`ComparacaoUnidades`**/**`EditorUnidadeMedida`** (`UnidadesMedidaView.tsx`) e
   **`ClassificacaoDosItens`**/**`EditorClassificacao`** (`ClassificacoesView.tsx` — a padronização do Catálogo; os editores
@@ -3624,13 +3873,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Calendário por eventos — ver Tarefas FASES 5–7), **`JanelaFlutuante`** (janela ancorada ao ponto clicado, arrastável; folha no
   celular — a criação rápida do Calendário), **`AssinaturaCalendario`** (exportar/assinar `.ics`),
   **`OrcamentoCard`**/`OrcamentoNovoCard` (card 4:5 do orçamento — só indicadores, sem imagem), **`AbasEspaco`** (abas de
-  um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`) + **`FerramentasAba`** (as
+  um ESPAÇO — PCA e Orçamento: `Segmented` + morph + esqueleto; o servidor monta só a aba `?aba=`; `cabecalho` = o título do
+  espaço na MESMA linha, as abas à direita; as opções aceitam `icone`/`soIcone`; os blocos do conteúdo da aba com o espaço
+  padrão `--gap-block` — `ConteudoAba.className`) + **`FerramentasAba`** (as
   ferramentas da aba NA MESMA LINHA das abas, à direita), `SearchField compacto`/`SelectField compacto` (altura das barras de ferramentas; o select com o rótulo como prefixo),
   **`TabelaCruzada`** (tabela horizontal linhas × colunas com totais — ordenação no cabeçalho, colunas congeladas, %, mapa
   de calor e origem de cada número; TODAS as colunas iguais — com `edicao`, a própria planilha vira o editor: arrastar o
   nome com a coluna presa ao cursor e a SOMBRA do destino, alfinete, olho e largura pela borda; o Comparativo do orçamento),
   **`Ajuda`**/`TopicoAjuda` (o "(?)" — botão discreto que abre a explicação de uma tela num painel; tira o texto de
-  instrução da tela), **`SeletorEdicoes`**/**`SalvarEdicao`** + hook `useEdicoesTabela` (`EdicoesTabela.tsx` — as EDIÇÕES
+  instrução da tela; o ícone é centrado por `justify-center` — o gatilho do `Dropdown` é `inline-flex`, nunca `grid`), **`SeletorEdicoes`**/**`SalvarEdicao`** + hook `useEdicoesTabela` (`EdicoesTabela.tsx` — as EDIÇÕES
   SALVAS de uma tabela: pessoais ou públicas — quantas quiserem; todos veem e usam as públicas, até como a sua padrão; só o dono ou o ADM altera —, a padrão do usuário), **`useConfirmacao`** (`Confirmacao.tsx` — `cancelar` = o rótulo do "não"; a
   CONFIRMAÇÃO do sistema num `AvisoFlutuante` com Cancelar/Confirmar, no lugar do `confirm()` do navegador; o
   `AvisoFlutuante` ganhou `acoes`),
@@ -3647,7 +3898,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Ordenação de listas admin (Órgãos/Unidades) = `DataTable` +
   botões **↑/↓** (o antigo `ReorderTable` de arrasto foi removido). `Button` tem variante `danger`; tokens de
   feedback `--ok/--warn/--danger/--info` + `--scrim` em `globals.css`.
-  `Badge.tsx` fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA).
+  `Badge.tsx` (v1.71.1: o selo comum usa `rounded-chip` — o raio do ADM; os selos/contadores das células — `MaisN`, ABC, etiquetas da Lista, o botão de copiar — também) fornece o `Tone`/tons do `StatCard` **e** o badge de status/tag (ex.: **"Ativo"** do PCA); **`tamanho="linha"`** =
+  o selo da linha de título (a altura do botão de voltar: `--h-control-sm` no desktop, 44px no toque; o raio
+  `--radius-control` — o arredondamento dos controles definido pelo ADM em Aparência; com `vivo`, o ponto
+  `.ponto-selo` — respira e solta duas ondas, parado com "reduzir movimento").
 - **Personalização do ADM (§39):** `/painel/aparencia` (`AparenciaAdmin`, admin) edita tokens com
   preview ao vivo e persiste em `configuracoes` (D1) via `/api/admin/aparencia`; `RootLayout`
   (async, `force-dynamic`) injeta o `<style>` sem flash (`src/lib/aparencia.ts` cacheado +
@@ -4004,6 +4258,67 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `confirmsave` com o objeto direto (`Confirm: true` = a pergunta vai ao ADM; só o "sim" dele grava — nunca confirma sozinha) → `save` → só vale com `Success` e o
   documento de volta com Id real (`conferirSalvo`). O sistema nunca manda o objeto do protocolo; o protocolo é conferido
   ANTES de emitir qualquer DFD e o ADM confirma (`useConfirmacao`) antes de começar; a 1ª recusa do anexo PARA o lote (o erro diz o passo — load/confirmsave/save).
+- **LOAD DO PROTOCOLO APRENDIDO DA TELA (v1.107.12, extensão 1.22.0, protocolo 39):** a Centi deixou de devolver o protocolo pelos módulos fixos (`load?entity=102907|102908` → `Entity` nulo, sem mensagem) e a pré-verificação recusava todos os arquivos. Agora o gancho que observa as respostas da TELA (`lembrarCm002`, só pedidos da tela) guarda em `localStorage` `__pcaLoadProtocolo_v1` o modelo do pedido que trouxe um protocolo — peça pura **`loadDoProtocolo`** (`centi-anexo.js`: resposta com `Entity.Fields` Id + NrProtocolo + Documentos, só consulta de LEITURA, o Id trocado por `{id}` no caminho e `{id}`/`{id:n}` no corpo, sem segredos) — e `abrirProtocolo` tenta PRIMEIRO esse modelo (`pedidoDoLoad`), depois 102907/102908; o módulo aprendido entra nos aceitos de `conferirProtocolo(r, d, aceitos)` (Id/nº/ano seguem conferidos; protocolo que não confere para na hora). Sem nada que abra: `erroSemProtocolo` (o que cada caminho respondeu — `descreverResposta` — + "abra o protocolo UMA vez na Tela Protocolo"). No motor (`executarDfds`), com TODOS os protocolos recusados a execução devolve `erro` (UM erro do componente; as linhas ficam "Não emitido — o protocolo N não abriu na Centi").
+- **TESTAR PROTOCOLO + SÓ PELO ID (v1.108.0, extensão 1.23.0, protocolo 40):** nos Dados de entrada do "Baixar/anexar DFDs"
+  (destino Protocolo indicado) e na aba DFDs, **`TesteProtocoloCenti`** (`paineis.tsx`) abre o protocolo na Centi SÓ PARA LER
+  (`host.conferirAlvo` → `{protocolo}|{erro}`) e mostra nº, assunto, interessado e documentos; com o nº em branco oferece
+  "Usar o nº". O **nº é opcional** (`lerAlvoCenti(id, nº, soId)` → `numero: ""`): a ação `protocolo` da extensão confere só o
+  Id (`conferirProtocolo` sem nº) e o motor (`executarDfds`, `testarAnexo`) preenche nº/ano com os da Centi ANTES do anexo —
+  o `anexar` segue exigindo Id + nº.
+- **ORDEM DA TABELA + PERMISSÃO NO DROPDOWN + CÓPIA ÓRFÃ (v1.109.0, extensão 1.24.0):** saiu o "Ordenar pelo planejamento"
+  (`OpcoesSaida` sem ele; `montarArquivos` segue a ordem dos itens que chegam). A **Seleção** grava a SEQUÊNCIA da tabela no
+  nó (`DataTable.onOrdenadas` → `TabelaMesaFluxo.onOrdem` → `config.ordem` + `config.filtrada`, só quando difere da ordem
+  natural) e **`selecionados`** devolve os marcados nessa ordem (nada marcado + "todos" = as linhas à vista com filtro). A
+  **permissão de escrita** (`confirmarEscrita`, `background.js`) sai no DROPDOWN do ícone (`popup.html` → `#confirmacao`,
+  lido de `storage.session.confirmacao`; sem janela em foco, o mesmo painel numa janelinha `popup.html?janela=1&confirmar=1`)
+  — `confirmar.html` saiu; fechar o dropdown não recusa (selo "?", prazo 2 min). A **`sistema-ponte`** ÓRFÃ (extensão
+  atualizada sem F5 — `chrome.runtime.id` morto) se cala: antes gastava o token de uso único e a nova recebia "já usada".
+  No editor, **`ProblemasFluxo`** (o selo de problemas/atenções abre a lista e leva ao componente) e a Análise usa as linhas
+  do Baixar/anexar (`host.dfds`, `estadoDoItem("saida.dfdsCenti")`).
+- **CONFERÊNCIA FINAL + CONTINUAR + NOVA TENTATIVA (v1.113.0, sem migração):** no fim do `executarDfds` (anexo, extensão com
+  `docs`, sem interrupção/exceção) o motor abre de novo cada protocolo e confere cada arquivo dado como ok/já: ausente = linha
+  `falha` "Não confirmado na Centi"; `FimExecucao.confirmados {ok,total}` → aviso "Conferido na Centi: N de N". O
+  `ConferenciaNoProtocolo` confere SOZINHO quando uma execução termina (o "Enviar os que faltam" = continuar de onde parou).
+  `falhaPassageira` (rede/tempo/5xx) dá UMA nova tentativa na emissão e no anexo (a extensão confere o protocolo antes de
+  gravar — nunca duplica). O resumo no sino ao terminar já existia (aviso `centi` no `PATCH` da execução).
+- **ANDAMENTO AO VIVO (v1.112.0, sem migração):** núcleo puro **`fluxo-progresso.ts`** (testado): `progressoFluxo` = a % pelo
+  TRABALHO de cada etapa (peso = itens; o Baixar/anexar pesa os DFDs — `contagemDfds`), `registrarAmostra`/`tempoRestanteMs`
+  (o ritmo das amostras dos últimos 2 min — `JANELA_RITMO_MS`; sem 5 s e 0,5% de avanço = "Calculando…"), `textoDuracao`,
+  `textoPct` (nunca 100% antes do fim); hook **`useEstimativa`** (`fluxos/`). Etapas do `PainelFluxo`: % · n/N · "Termina em ≈
+  X" · a etapa em curso destacada com a barra própria e "Agora: Planej. …". `AnaliseDfds`: % + tempo restante; cada grupo
+  (pasta) é um botão que abre/fecha — concluído RECOLHE sozinho (a escolha da pessoa vale mais), o em curso destacado e a lista
+  rola suave (só ela; "reduzir movimento" = sem deslizar) até ele. Voltar do editor com a execução em curso não zera as etapas.
+- **CONFERIR NO PROTOCOLO + A CENTI DECIDE O "JÁ ESTAVA" + NUNCA APAGAR (v1.111.0, extensão 1.25.0, protocolo 41):** o
+  `resumoProtocolo` devolve `docs [{descricao, sequencial, id}]`. **Pré-verificação** (`executarDfds`): com os documentos da
+  Centi, ELES decidem — presente = `ja` ("Já está no protocolo da Centi (documento N)"); ausente = envia, mesmo registrado no
+  sistema (`PassoAnexo.ausenteNaCenti` → o `autorizar` ignora o `jaFeito`; a extensão segue conferindo o load ao gravar);
+  sem `docs` (extensão antiga), o registro como antes. `comandoRegistrarEscrita` = upsert que só atualiza quando o documento
+  MUDA (`setWhere … IS NOT excluded`). **Conferir no protocolo** (`ConferenciaAnexos`, DS; contêiner `ConferenciaNoProtocolo`
+  em `paineis.tsx`, aba DFDs com destino na Centi): abre cada protocolo do plano (só leitura) + `jaAnexados` → núcleo puro
+  `conferenciaAnexos`/`resumoConferencia` (`automacao-dfds-estado.ts`: anexado · falta · registrado mas ausente · sem
+  protocolo) e **"Enviar os que faltam"** → `HostPainel.enviarArquivos` (confirma; roda o fluxo com
+  `config.somenteArquivos` — o `baixarDfds` filtra o plano). **NUNCA APAGAR** (extensão): `faltamGravados` recusa o protocolo
+  aberto que não traz os documentos que o último salvar devolveu nesta aba (`__pcaUltimosSalvos_v1`, sessionStorage) — o
+  salvar mandaria a lista sem eles; `conferirSalvo(r, d, antes)` = erro se algum documento sumiu e o nº é o do documento NOVO
+  (o que não estava); depois do save, o protocolo é aberto de novo e tem de trazer o documento.
+- **ESTADO REAL DE CADA DFD + EXECUÇÃO SEMPRE FINALIZADA (v1.110.0, sem migração):** núcleo puro
+  **`automacao-dfds-estado.ts`** (testado — `tests/automacao-dfds-estado.test.ts`): `EstadoDfd` = em curso `emitindo` ·
+  `conferindo` · `unindo` · `aguardando` (a pergunta da Centi) · `anexando` | fim `ok` · `ja` (já estava no protocolo —
+  NÃO conta como anexado) · `falha` · `interrompido` | fora da conta `pulado` · `repetido`; **`contagemDfds`** = a conta ÚNICA
+  (total = concluídas + em curso + fila) da barra da Análise (`textoContagem`), do painel de segundo plano
+  (`andamentoDfds(linhas, anexar)`), da análise ao vivo (`visualEstadoDfd` em `estadoDoItem`) e do ícone da extensão (o
+  `lote` manda `feito` = concluídos, também ao FIM de cada DFD); `entidadePrevista` (cadastrada › mapa › aberta) já na fila,
+  com "?" até a emissão confirmar. O motor (`executarDfds`, imports com `.ts` — testável com a extensão e o servidor falsos)
+  marca as fases pelos callbacks `fase` de `emitirConferido`/`anexarPelaPlataforma`, roda o laço em `try/finally` (exceção =
+  as linhas em curso/fila viram `falha` com o motivo) e SEMPRE finaliza no servidor (anexar: cada arquivo não reportado
+  `falhou` com o motivo da linha; interrompido = `cancelada`; baixar: os resultados vão de 25 em 25 e, no fim, todos).
+  **Sinal de vida:** a cada `SINAL_EXECUCAO_MS` (4 min) o passo em curso vai como `executando` (`sinalPasso`; o builder só
+  troca passo pendente — nunca volta um concluído) e `pagehide` cancela a execução com `keepalive` (`cancelarAoSair`). O
+  cliente tenta UMA vez de novo a falha transitória (rede/5xx/429). **Reconciliação:** `comandosReconciliarExecucoes`
+  (`automacao-sql.ts`, D1 real) — `rodando`/`pausada` sem atividade há `MINUTOS_ABANDONO`=30 min → `falhou` com
+  `MSG_ABANDONO`, passos pendentes também, totais recontados; roda no cron dos e-mails e ao listar as execuções. O registro
+  que falha depois do anexo gravado deixa a nota "o anexo vale; não reenvie" (`notaDoAnexo` = o mesmo texto da linha e do
+  servidor). `consumir` só aceita a origem da extensão PCA (`ORIGEM_EXTENSAO_CENTI`) ou o próprio site.
 - **PLATAFORMA DE AUTOMAÇÕES CENTI — FUNDAÇÃO (migração `0076`, aditiva; plano em `docs` da conversa: fundação → extensão segura →
   ao vivo → receitas → login/descoberta → gravador de receitas).** Princípios: negado por padrão · escrita só ACRESCENTA ·
   toda escrita = AUTORIZAÇÃO DE USO ÚNICO do servidor (+ confirmação na janela da extensão, entrega 2) · ensaio antes ·
@@ -4404,6 +4719,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   paralelo e tolerâncias viraram SELEÇÃO (`opcoesNum`; o valor antigo fora das opções segue à vista). O **Comportamento** é
   montado com os MESMOS `CampoDoNo` (`CAMPOS_COMPORTAMENTO`): Repetir · Esperar (só com repetição) · Guardar o resultado
   (`nomeLista` de variáveis com "Não guardar" e o nome NOVO sugerido — `sugerirVariavel`) · Desativar.
+- **TABELAS DAS AUTOMAÇÕES = TABELAS DA MESA (v1.57.0, sem migração):** `fluxos/TabelaMesaFluxo.tsx` (DS) — o tipo dos itens
+  vem do núcleo puro **`fluxo-tipo-item.ts`** (`tipoDosItens`: protocolo · DFD · item, testado) e cada tipo usa o componente
+  da Mesa: protocolos = `COLUNAS_PROTOCOLOS` + `useColunasGestao`; DFDs = `PlanilhaDfds semEstado` (`dadosDfdDoItem`); itens =
+  **`colunasItemMesa`** (`ColunasItensMesa.tsx`, a MESMA fábrica da visão Itens da `DfdsView`); outro dado = colunas genéricas.
+  Tocar abre a pilha `BannersMesa` (`aberturaDoItem` → `HostPainel.abrir`, que substituiu o `abrirProtocolo`). Usada na
+  Seleção, na Tabela salva e na Análise ao vivo. O `GET …/execucao-dfds` traz sigla e protocolo de cada DFD.
+  **v1.70.2 — aba "Do sistema":** `VISOES["sistema.ler"]` = `VistaDoSistema` — o que o "Ler do sistema" lê, já ao abrir
+  (prévia SÓ de leitura com o próprio nó — `subgrafoAte(g, no, incluir)` + `carregarPrevia(…, incluir)`, sempre "Tudo de uma
+  vez"), sem executar e sem a extensão; o hook `usePreviaDoNo` é o mesmo da Seleção.
+- **SELEÇÃO EM TODA TABELA DO FLUXO + CARTÕES (v1.71.0, sem migração):** tabelas que ALIMENTAM a automação (Seleção,
+  "Do sistema" do `sistema.ler`, "Ler tabela salva") gravam as linhas MARCADAS no próprio nó (`config.marcados`,
+  `useMarcadosDoNo` em `paineis.tsx`; nenhuma marcada = todas passam — `filtrarMarcados`, `fluxo-dados.ts`; vindo da Mesa —
+  `__daMesa` — a seleção de lá vale); tabelas de RESULTADO (Análise ao vivo, Salvar em tabela, Protocolos lidos) ganham
+  **"Executar com N selecionado(s)"** (`useExecutarSelecionados` → `HostPainel.executarCom(g, itens)` = `executar(f, g,
+  false, itens)`), só quando o fluxo aceita aqueles itens (`aceitaItensDeFora`, `fluxo-tipo-item.ts`: o Início alimenta um
+  `sistema.ler` sem valor do MESMO tipo, ou com `{{campo}}`, ou um nó que não é da Centi); o `sistema.ler` sem valor
+  procurado restringe a leitura aos itens de fora do mesmo tipo (`restringirPelaEntrada`). O **Valor procurado** do Ler do
+  sistema = SELEÇÃO dos valores que existem (`CampoNo.valoresSistema` → `CampoValoresSistema`, `opcoesDaBusca` — planejamento,
+  nº do DFD, protocolo/Id, produto) e só aparece com "Quais" ≠ Todos (`CampoNo.visivel`, conferido por `campoVisivel`);
+  "Quais" virou dado de entrada do painel. **Cartões:** o (?) da automação no canto do `CartaoFluxo` (`ajuda` →
+  `AjudaDoFluxo`; `ajudaDoFluxo(f)` = a do fluxo ou a do modelo de mesmo nome); a grade da lista existe SEMPRE (o vazio é um
+  filho `col-span-full`) — soltar um modelo arrastado funciona com a lista vazia; o painel "Novo fluxo" (`PainelLateral`)
+  tem a altura até o fim do display (`useAlturaTela`), um cartão só (cabeçalho, Nome, Modelos, Públicas, rodapé) e NÃO lista
+  o modelo/pública cujo nome já está na lista; "Atualizar pelo modelo" mora no editor (ícone, com confirmação; o editor
+  remonta — `versaoEditor`). Selo "Sem extensão" = o do Preview do PCA (`Badge tone="amber" dot vivo tamanho="linha"`).
+  Testes: `tests/fluxo-selecao.test.ts`.
+- **LISTA DOS FLUXOS ROLA POR DENTRO (v1.73.3):** a coluna da grade dos `CartaoFluxo` (`ListaFluxos`) tem a altura até o fim do display (`useAlturaTela`, a mesma do `PainelLateral`) e `overflow-y-auto` — a página não rola; o arrasto (`useArrastoGrade` → `rolagemDe`) rola essa coluna perto das bordas.
+- **ZONAS DE SOLTURA no arrasto da grade (v1.74.0):** `useArrastoGrade({zonas: {limite, aceita}})` (`PastasQuadros.tsx`) — fora do `limite` o destino é `fora` (sem sombra); os elementos `[data-zona-arrasto="<nome>"]` sob o ponteiro viram `destino.fora = nome`; soltar numa zona que `aceita` ENCOLHE o card para dentro dela e chama `onSoltar`, senão o card VOLTA voando à origem. Na Automação (`ListaFluxos`): o fluxo da lista vai à **lixeira** (`LixeiraArrasto`, centro embaixo) ou volta ao **painel** "Novo fluxo" (`PainelLateral zona`) → `excluir(f, zona)` com confirmação; o modelo/pública arrastado só marca a `SombraGrade marcada` (tracejada) sobre a lista. Tarefas não usa `zonas` (igual a antes).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em
@@ -4446,11 +4789,34 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `OrgaosAdmin` + coluna "Centi" — vale mais que o mapa do aparelho `automacao:centi-entidades`; `mesmaEntidade`) são verificados; o POST leva `dfdIds`. A tabela desenha só
   as linhas à vista: `lerPaginaCm002` ROLA o corpo para ler todas e volta a rolagem. Testes: `tests/execucao-centi.test.ts`
   + o da tabela em `automacao-tela-centi`.
+- **ROLAGEM LEVE (v1.73.1) — regra firme:** as barras de rolagem são as NATIVAS do navegador (sem `scrollbar-width`,
+  `scrollbar-color` nem `::-webkit-scrollbar` — a barra própria é desenhada/arrastada pela thread principal e travava o
+  arrasto; a nativa é do compositor e segue o ponteiro; clara/escura pelo `color-scheme` do tema). Nada FIXO/STICKY sobre
+  conteúdo que rola leva `backdrop-filter` (o cabeçalho do `AppShell`, o da tela pública e a `BottomNav` são opacos —
+  `bg-surface`; o desfoque fica só em sobreposições paradas: scrim de modal, botões sobre capas). Variável CSS na RAIZ
+  escrita por medida (ResizeObserver/resize) só quando o valor MUDA — **`definirVarRaiz`** (`espacamento.ts`;
+  `--rodape-tabela`, `--reserva-rodape`; a `BarraSelecao` só re-renderiza quando a altura muda). Sem `will-change` em
+  elementos repetidos (a `SetaDropdown` não o tem — viraria uma camada por célula). A marca d'água fixa é `contain:strict`.
+- **COLUNAS DE UNIDADE/ÓRGÃO/SIGLA (v1.94.0; órgão na v1.96.3):** o `DataTable` passa `detalhe` ao `MultiSelectHeader` nas colunas cujo título é de unidade/órgão/sigla (**`useDetalheSigla`**, `ConfigTabelas.tsx` — o ÚNICO ponto: título da coluna → a função do nome; nunca unidade de medida) — a 2ª linha = o NOME (`nomesDasSiglas`, layout do painel → `ConfigTabelas.nomesUnidades`; as partes de cada opção calculadas uma vez no `MultiSelectHeader`) e a busca acha pelos dois; a opção que já vem "SIGLA — Nome" é dividida no MESMO desenho (`partesOpcao`).
+- **PERFIL EM ABAS (v1.96.0):** `PerfilView` = o cabeçalho (foto, nome, selos, Sair) + `Tabs layout="lateral" separado alturaTela url="aba"` (as abas rolam por dentro; a conta Google — vincular/desvincular — numa linha do cabeçalho, v1.96.1): **Conta** (Identificação) · **Segurança** (Senha; abre nela sem senha ou na volta do Google) · **Histórico de acesso** · **Aparência** · **Notificações** · **Trabalho** (Mesa, Protocolação — só com algum; a PRESENÇA saiu do Perfil na v1.96.2: só o ADM decide — ninguém fica invisível, `ConfigPresenca.invisivel` sempre falso e a preferência gravada é ignorada) · **Meu acesso**; as `SecaoPerfil` são seções separadas por linha dentro da aba (sem cartão dentro de cartão).
+- **PESQUISA DO SISTEMA (v1.100.0):** `PesquisaSistema.tsx` (DS) — `GatilhoPesquisa` fixo abaixo da logo no menu (recolhido = só a lupa) e Ctrl+K/⌘K abrem o BANNER (padrão Cloudflare): sem texto = Recentes (`pesquisa:recentes` no aparelho) + Dicas de prefixo (`protocolo:`/`dfd:`/`item:`/`tarefa:`/`pca:`/`orcamento:`/`tela:`); com texto = telas e PCAs locais + protocolos/DFDs/tarefas pela `GET /api/tarefas/vinculos` (escopo e papel da pessoa; 250 ms de espera). ↑/↓, Enter, Esc. A paleta saiu da trilha. **v1.101.0:** um pedido só — `GET /api/pesquisa?q=&tipos=&limite=` (`buscarVinculos` por tipo, `{grupos:[{tipo,total,opcoes}]}`; mapa `pesquisa` em `rotas-acesso.ts`); grupos Ações · Telas · ABAS (`ABAS_TELAS` + Perfil + cada PCA × abas) · PCAs (o do cabeçalho primeiro) · Protocolos/DFDs/Tarefas/Orçamentos com "Ver todos", `Destaque` do termo, `numeroExato` primeiro, atalhos `p:`/`d:`/`t:`/`i:`/`o:`/`pc:`/`te:`/`a:` + Tab, recentes com × e Limpar, esqueleto por grupo, erro com "Tentar de novo", prévia à direita (lg), tela cheia no celular, combobox/listbox com `aria-activedescendant`; ação "Recolher o menu" = `EVENTO_ALTERNAR_MENU`. A Mesa lê `?vista=` (dashboard/protocolos/dfds/itens). **v1.104.0 — todas as telas:** catálogo ÚNICO dos tipos em **`pesquisa-core.ts`** (`TIPOS_PESQUISA`: tipo, título, prefixo/atalho, dica — a rota e a tela usam o mesmo; testado) e **`pesquisarOutros`** (`pesquisa.ts`): lançamentos do orçamento (tela Orçamento + `orcamento.lancamentos` → `/painel/orcamento/<id>?aba=lancamentos&abrir=<id>`), itens do catálogo (`catalogo.catalogos` → `?abrir=catalogo:<cat>:<código>`), histórico de compra (`catalogo.historico` → `?abrir=historico:<cat>`), eventos do calendário (`buscarNoCalendario` — privado só de quem participa) e, SÓ ao ADM, usuários · órgãos · unidades · grupos · cadastros (papéis/cargos/situações/feriados → a aba das Configurações) · automações (as do painel da pessoa). Sem a tela/aba = nenhum resultado (`null`, o grupo some). As telas abrem o registro pelo hook **`useAbrirDaUrl`** (`AbrirDaUrl.ts`: lê o `?abrir=` uma vez, quando os dados chegam, e o tira da URL) — `OrcamentoLancamentos`, `CatalogoView`, `UsuariosAdmin` (o arquivado liga "Arquivados"), `OrgaosAdmin`, `ReparticoesAdmin`, `GruposAdmin`, `FluxosAutomacao`. **v1.105.0:** `padroesLike` (pesquisa-core — UM padrão por termo, até 5, todos têm de casar; termo ASCII ≥ 4 letras com as vogais e o "c" como `_` = sem acento; `%`/`_` digitados saem) + `casaTermos(colunas, padroes)` (`pesquisa-sql.ts`) em `pesquisarMesa`, `pesquisarOutros` e `buscarVinculos` (tarefas também pela descrição, comentários e checklist — `EXISTS`); `pontuar` ordena cada grupo na rota (palavra exata › começa › contém); **`tipoPermitido(PortaoPesquisa, tipo)`** = a régua ÚNICA de acesso por tipo, aplicada na rota ANTES de consultar e testada por perfil (`tests/pesquisa-core.test.ts`). Tela: pedido em DUAS fases sem prefixo (`FASE_1` = protocolo/DFD/item/tarefa, depois o resto — um esqueleto "Procurando nas outras telas…"), filtros rápidos (`ChipsEscolha rolar`, só das telas que a pessoa abre) e `PALAVRAS` (os ajustes de cada tela/aba das Configurações e da Administração). Papéis, cargos, situações e feriados abrem o registro (`?aba=…&abrir=<id>` + `useAbrirDaUrl`). **v1.106.0:** `padroesLike` só troca por curinga o que o português acentua ao digitar sem acento (c antes de a/o/u, "ao", "oe" — nada além: "protoco" não acha nada solto); `ehTermoNumero` + `casaTermos(colunas, padroes, numeros)` = o termo numérico casa SÓ nos campos de número (protocolo: nº/Id; DFD: nº/planejamento; item: código). Tela: o PREFIXO é um chip SÓLIDO no campo (`prefixoDe`; o input guarda só o termo; Backspace no começo ou o × tira o prefixo inteiro; digitar "p:" vira o chip) e os filtros rápidos, com a pesquisa em "Tudo" concluída, mostram só os tipos com resultado + a contagem (`relevantes`, a última contagem do MESMO termo — sem piscar); `ChipsEscolha` ganhou `conta` e, com `rolar`, a entrada `animate-chip-entra` (parada com "reduzir movimento"). **v1.106.1:** `Destaque` marca TODOS os termos em todas as ocorrências (sem acento/caixa) no rótulo, no detalhe e na prévia; pesquisando, esqueleto nos filtros (até chegar a contagem), na lista (por grupo) e na prévia. **v1.107.0 — ÍNDICE LOCAL + um pedido:** `GET /api/pesquisa/indice` (o MESMO portão `tipoPermitido`; `indiceMesa`, `tarefas.ts` = `pesquisarMesa` sem termo, até `MAX_INDICE`=5000 por tipo — acima, `completo:false` e o tipo segue pelo servidor) entrega protocolos e DFDs com os campos de busca + `versaoDados`; o `PesquisaSistema` o guarda só na MEMÓRIA da aba (`indiceMem`), confere a versão ao abrir (≤ 1 vez/min, `GET /api/dados/versao`) e procura neles por **`casaLocal`** (pesquisa-core — a MESMA régua do `casaTermos`, testada contra o SQLite). O resto vai num pedido ÚNICO (400 ms depois da última tecla, `AbortController`, resposta guardada 5 min por termo e versão, até 60). **v1.107.1:** o limite de pedidos por IP da pesquisa é uma regra de WAF da Cloudflare (passo a passo em `docs/INTEGRACOES.md`). **v1.106.2:** **`mesaDoAlvo(abrir)`** (`pesquisa.ts`) = em que Mesa o protocolo/DFD está HOJE; `/painel/mesa?abrir=` com alvo num PCA redireciona à aba Mesa do PCA (`linkDaMesa`) ANTES do portão da Mesa do sistema, e o espaço do PCA com alvo de outra Mesa redireciona a ela — favoritos/recentes/vínculos antigos nunca caem na Mesa errada. As dicas e os filtros só dos tipos acessíveis (`dicasAcesso`).
+- **IMAGENS PROTEGIDAS + SELETOR DE UNIDADE (v1.107.5):** toda `img` sem arrasto/seleção/toque longo (`globals.css`) e o `ProtegerImagens` (layout raiz) barra `dragstart`/`contextmenu` em imagens; o seletor de unidade do cabeçalho = `ListaUnidades` (`AppShell`: busca acima de 8, SIGLA em cima e o nome embaixo — o desenho do filtro de unidades das tabelas). A barra de rolagem do menu lateral fica escondida (`.menu-rolagem`, v1.107.3–4: no Windows ela cortava/encolhia os itens).
+- **NAVEGAÇÃO (v1.107.2):** os seletores do cabeçalho (grupo, unidade, PCA) mostram o nome INTEIRO (lista com quebra de linha, botão sem corte a partir de `sm`); o ícone do item do menu e da barra inferior vira spinner enquanto a tela carrega (`IconeNavegacao`, `CarregandoLink.tsx` — `useLinkStatus`); a logo leva direto a `rotaInicial` (sem o redirecionamento do `/painel`). **TRILHA COMPLETA (v1.99.0):** `TrilhaCabecalho.tsx` (DS) = Seção ⌃⌄ › Tela ⌃⌄ › PCA ⌃⌄ | nome do espaço › Aba ⌃⌄ (`ABAS_ESPACO`: PCA, orçamento, quadro — `?aba=`) › banners abertos; o armazém `trilha-store.ts` recebe o nome do espaço pelo `useOndeDetalhe` e os banners pelo `VendoAgora` (`useNivelAberto`). Listas com busca acima de 8, recentes no aparelho (`trilha:recentes`) e ↑/↓/Enter; selo "PCA ano" nas telas filtradas; Ctrl+K/⌘K = paleta "Ir para…"; no celular (≥ sm) só a Tela; níveis do meio somem antes (seção só no 2xl com níveis fundos).
+- **TRILHA DO CABEÇALHO (v1.98.0):** `TrilhaCabecalho` (`AppShell`, desktop) = Seção › Tela ⌃⌄ (as telas da mesma seção do menu — `secoesVisiveis`) e, em `/painel/pca/[id]`, › PCA ⌃⌄ (troca de espaço); ícone `IconAlternarNivel` (ChevronsUpDown). O `PcaSelect` mudou para a DIREITA do cabeçalho e só oferece “Todos os PCAs” com mais de um PCA (com um só, o gatilho mostra ele).
+- **MENU LATERAL RECOLHÍVEL (v1.97.0, sem migração):** o botão `IconRecolherMenu` no rodapé do menu (ao lado da versão) alterna o atributo `data-menu-recolhido` no `<html>` (`localStorage` `menu:recolhido`; `SCRIPT_MENU` em `menu-lateral.ts` o aplica antes da 1ª pintura). A `.menu-vaga` (sticky) troca a largura 16rem ↔ 3,75rem DE UMA VEZ e a coluna do conteúdo DESLIZA por transform (FLIP em `alternarMenu` — `Element.animate`, 300 ms; v1.97.2: nada reflui a cada quadro; a raiz tem `lg:overflow-x-clip`); no trilho o cartão do usuário mostra só a foto (`min-w-[38px]` + `overflow-hidden`); o `.menu-lateral` é absoluto dentro dela com conteúdo de largura FIXA (nada reflui, só é cortado); recolhido, com o mouse ou o foco do teclado, abre POR CIMA (sombra, 120 ms de espera) e `data-sem-peek` evita reabrir logo após recolher. Rótulos com `.menu-esconde` / `[data-marca-texto]` acompanham a largura com reticências e entram deslizando (curva `--menu-curva`, 300 ms); recolhido, o título de cada módulo vira a `.menu-linha` (separador curto centrado no trilho, v1.97.1); os ícones ficam parados (centrados no trilho). Regras em `globals.css`.
+- **TEMA DA PESSOA (v1.95.0, sem migração):** Perfil → **Aparência** (`AparenciaPessoal`, DS): modo `site`·`claro`·`escuro`·`sistema`·`horario` (18h–06h)·`personalizado` (início/fim) + tonalidade do escuro `carvao`·`azul`·`preto` (`data-escuro` no `<html>`; CSS `[data-theme="dark"][data-escuro=…]` vence as cores escuras do ADM). Neste NAVEGADOR (`localStorage` `aparencia:pessoa`); núcleo puro **`tema-pessoal-core.ts`** (`temaDoModo`, `noIntervaloEscuro`, `minutosAteTroca`) + **`SCRIPT_TEMA`** no layout ANTES do next-themes (grava a chave `theme` e o tom — sem piscar; o teste roda o script contra a mesma regra); **`TemaPessoal`** (no `ThemeProvider`) aplica e troca no minuto certo; o `ThemeToggle` grava o modo claro/escuro fixo.
 - **SETA DOS `<select>` (única):** nenhum select usa a seta nativa (varia por navegador — no Mac fica serrilhada e colada na
   borda): `globals.css` tira a aparência nativa de TODO `select` e desenha o chevron do tema (`--seta-select`, na cor de
   `--muted` do claro/escuro) a 0,75rem da borda, com `padding-right` para o texto nunca passar por baixo; dentro da moldura
   do `SelectField` a seta fica rente ao fim do select (`SETA_NA_CAIXA`). Os selects invisíveis sobre um visual próprio
-  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam.
+  (`opacity-0` — `SeletorCelula`, `SeletorFiltro`) não mudam. O gatilho da `Selecao` (`.seletor-sistema`) leva a seta como
+  ELEMENTO (`SetaDropdown`) no MESMO lugar e com o mesmo respiro — trocar um `<select>` por ela não muda a caixa.
+- **SETA DOS DROPDOWNS (v1.66.0) — `SetaDropdown`** (`SetaDropdown.tsx`, DS): a seta de TODO gatilho de dropdown (`Selecao`,
+  `PeriodoPicker`, `SeletorPessoa`, `SeletorMultiplo suspenso`, `GatilhoFiltro`, `FilterChip`, os seletores do cabeçalho e o
+  menu de vistas do Calendário) gira suave (v1.66.1: 1,75× o `--motion-duration` = 0,35 s, ease-in-out `cubic-bezier(.65,0,.35,1)`; parada com "reduzir movimento") e aponta para o lado OPOSTO
+  da lista aberta (onde tocar para fechar): aberta embaixo (e a folha) = para cima; aberta em cima = para baixo; fechada =
+  para baixo. O estado vem do `Dropdown` pelo contexto `EstadoDropdown` {aberto, acima} (o lado decidido uma vez por
+  abertura); fora de um `Dropdown`, parada. Os acordeões têm o giro próprio.
 - **Responsivo/touch mobile-first**: **tabela↔cards**, **modal↔bottom-sheet**,
   sidebar↔bottom-nav (a MESMA lista de módulos — `NAV_MODULOS`); sem overflow horizontal (conteúdo largo rola no próprio container); alvos
   ≥44px; foco visível. **Use toda a largura do desktop.** **Sem emoji.** A **sidebar do `AppShell`** é
@@ -4468,7 +4834,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `servidor`/`conexao` pedem a tela de novo (`router.refresh()` + `reset()` numa transição). Toda falha vai a `POST
   /api/erros` (os Logs do Worker).
 - **Verificação (sandbox):** dev server local é lentíssimo → verificar no **site publicado** via
-  Browser pane, claro/escuro + mobile (360/390/768); `/design-system` é a superfície de validação.
+  Browser pane, claro/escuro + mobile (360/390/768); `/painel/design-system` (ADM) é a superfície de validação.
 
 ## Testes e qualidade
 - **`node:test` + type stripping nativo** (`--experimental-strip-types`), sem dependências
@@ -4497,12 +4863,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   versão (nada fica fora do registro).
 - **Menu:** `VersaoSistema` (`Novidades.tsx`, DS) no fim do menu lateral e da gaveta — "v1.5.0"; tocar abre as Novidades no
   BANNER FLUTUANTE; o ponto accent marca a versão ainda não vista NESTE aparelho (`localStorage` `sistema:versao-vista`).
+- **Novidades filtradas pelo acesso (v1.77.0):** `AcessoNovidades` (provedor no `AppShell`, telas do grupo ativo + admin) → as Novidades mostram só `mudancasVisiveis` (versão sem mudança para a pessoa some; a atual fica).
 - **Novidades = BANNER FLUTUANTE, sem página:** **`NovidadesFlutuantes`** (DS) sobre a `JanelaFlutuante` (ao lado da âncora no
   desktop; folha no celular): todas as versões, a escolhida ABERTA e destacada, as outras recolhidas — um **`CartaoVersao`**
   (DS; `onAlternar` = recolhível pelo cabeçalho) por versão: número, título, data, selo "Atual" e cada mudança com o tipo
   (`Badge`), a área e o botão "Ver onde mudou" (o `link`; ir fecha o banner e o sino — `onIr`).
-- **Aviso aos ADMs:** tipo **`versao`** no catálogo (`CATALOGO_AVISOS`, grupo Administração — no sino, sem e-mail por padrão;
-  o ADM liga em Configurações → Notificações) — `avisoNovaVersao` DERIVADO na leitura para cada Administrador (como a versão
+- **Aviso de nova versão (a TODOS, pelas telas do grupo — v1.76.0):** tipo **`versao`** no catálogo (`CATALOGO_AVISOS`, grupo
+  Administração — no sino, sem e-mail por padrão; o ADM liga em Configurações → Notificações) — `avisoNovaVersao` DERIVADO na
+  leitura para CADA pessoa com SÓ as mudanças das telas que os grupos dela abrem (`mudancasVisiveis` + `telaDaMudanca`,
+  `versoes.ts`, puro e testado: o link da mudança → o módulo de `ABAS`, a Verificação = Mesa, as rotas da Administração = só
+  o ADM, as demais — login, perfil, tela pública — de todos; nada para a pessoa = sem aviso); o ADM recebe tudo (e a versão
   da extensão), UM por versão (`chave` `versao-sistema:<n>`; limpo, não volta): título "Nova versão N — título", o TEXTO = o
   que mudou (uma linha por mudança, até 4 + "e mais N"; o sino mostra até 4 linhas) e SEM link — tocar no aviso (ou no "Abrir"
   da prévia) abre as Novidades DAQUELA versão (`versaoDoAviso`) no banner flutuante AO LADO do sino, que CONTINUA ABERTO

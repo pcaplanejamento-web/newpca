@@ -1,4 +1,4 @@
-import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaPca, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { avisarPcaProtocolos } from "@/lib/avisos-mesa";
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloNasLinhas } from "@/lib/acesso-mesa";
@@ -35,6 +35,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ("erro" in a) return a.erro;
   const pcaId = intId((await ctx.params).id);
   if (!pcaId) return erro("ID inválido.");
+  const semPca = await recusaPca(pcaId);
+  if (semPca) return semPca;
   const pca = await getPcaEspaco(pcaId);
   if (!pca) return erro("PCA não encontrado.", 404);
   if (pca.fonte !== "protocolo") return erro("Este PCA é de lista pronta — não recebe protocolos.", 409);

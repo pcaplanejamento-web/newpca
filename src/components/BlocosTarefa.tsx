@@ -4,7 +4,6 @@ import { type ComponentType, type PointerEvent as ReactPointerEvent, type ReactN
 import { createPortal } from "react-dom";
 import { ROTULO_BLOCO, ROTULO_METADADO, type TipoBloco, type TipoMetadado } from "@/lib/tarefas-core";
 import { Button } from "./Button";
-import { Dropdown } from "./Dropdown";
 import {
   IconArrowDown,
   IconArrowUp,
@@ -169,9 +168,10 @@ export function GuiaBloco() {
 }
 
 /**
- * O MENU "+ Adicionar" do detalhe (o "Adicionar ao cartão" do Trello): os METADADOS que ainda não estão na faixa
- * (membros, etiquetas, datas, prioridade, estimativa) e os BLOCOS do corpo que ainda cabem (nota e link sempre; checklist,
- * eventos e vínculo uma vez). Escolher = o host acrescenta.
+ * A LINHA "Adicionar" do detalhe (o "Adicionar ao cartão" do Trello), FIXA acima do rodapé do banner: um botão por
+ * componente disponível — os METADADOS que ainda não estão na faixa (membros, etiquetas, datas, prioridade, estimativa) e
+ * os BLOCOS do corpo que ainda cabem (nota e link sempre; checklist, eventos e vínculo uma vez). Rola de lado no celular.
+ * Tocar = o host acrescenta.
  */
 export function MenuAdicionarCartao({
   metadados,
@@ -187,43 +187,26 @@ export function MenuAdicionarCartao({
   onBloco: (t: TipoBloco) => void;
 }) {
   if (!metadados.length && !blocos.length) return null;
-  return (
-    <Dropdown
-      width={250}
-      ariaLabel="Adicionar ao cartão"
-      triggerClassName={`h-11 gap-1.5 rounded-control border border-border bg-surface-2 px-3 text-[13px] font-semibold text-text-2 hover:bg-surface lg:h-[var(--h-control-sm)] ${disabled ? "pointer-events-none opacity-50" : ""}`}
-      trigger={
-        <>
-          <IconPlus className="h-4 w-4" />
-          Adicionar
-        </>
-      }
+  const item = (chave: string, rotulo: string, Icone: ComponentType<{ className?: string }>, fn: () => void) => (
+    <button
+      key={chave}
+      type="button"
+      disabled={disabled}
+      onClick={fn}
+      title={`Adicionar ${rotulo.toLowerCase()} à tarefa`}
+      className="flex h-11 shrink-0 items-center gap-1.5 rounded-control border border-border bg-surface-2 px-2.5 text-[12.5px] font-semibold whitespace-nowrap text-text-2 transition-colors hover:bg-surface disabled:opacity-50 lg:h-[var(--h-control-sm)]"
     >
-      {(fechar) => {
-        const item = (chave: string, rotulo: string, Icone: ComponentType<{ className?: string }>, fn: () => void) => (
-          <button
-            key={chave}
-            type="button"
-            onClick={() => {
-              fechar();
-              fn();
-            }}
-            className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9"
-          >
-            <Icone className="h-4 w-4 text-muted" />
-            {rotulo}
-          </button>
-        );
-        return (
-          <div className="space-y-0.5">
-            <p className="px-2 pt-1 pb-0.5 text-[12px] font-semibold text-muted">Adicionar ao cartão</p>
-            {metadados.map((t) => item(`m-${t}`, ROTULO_METADADO[t], ICONE_METADADO[t], () => onMetadado(t)))}
-            {metadados.length > 0 && blocos.length > 0 && <div className="my-1 border-t border-border" />}
-            {blocos.map((t) => item(`b-${t}`, ROTULO_BLOCO[t], ICONE_BLOCO[t], () => onBloco(t)))}
-          </div>
-        );
-      }}
-    </Dropdown>
+      <IconPlus className="h-3.5 w-3.5 text-muted" />
+      <Icone className="h-4 w-4 text-muted" />
+      {rotulo}
+    </button>
+  );
+  return (
+    <section aria-label="Adicionar à tarefa" className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1">
+      {metadados.map((t) => item(`m-${t}`, ROTULO_METADADO[t], ICONE_METADADO[t], () => onMetadado(t)))}
+      {metadados.length > 0 && blocos.length > 0 && <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-border" />}
+      {blocos.map((t) => item(`b-${t}`, ROTULO_BLOCO[t], ICONE_BLOCO[t], () => onBloco(t)))}
+    </section>
   );
 }
 

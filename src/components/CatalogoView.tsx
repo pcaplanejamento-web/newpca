@@ -8,6 +8,7 @@ import type { CatalogoItemRow, CatalogoResumo, ConflitoCatalogo } from "@/lib/ca
 import type { PastaCatalogo } from "@/lib/catalogo-historico";
 import { itensIguais } from "@/lib/catalogo-conferencia";
 import { membrosDoItem } from "@/lib/catalogo-membros";
+import { vistaPermitida } from "@/lib/papeis-componentes-core";
 import { exportarCatalogoXlsx, exportarModeloCatalogoXlsx } from "@/lib/exportar-catalogo";
 import type { PodeTela } from "@/lib/papeis-core";
 import { brl, num } from "@/lib/format";
@@ -16,6 +17,7 @@ import { criarCatalogoVazio, enviarCatalogoEmLotes } from "@/lib/importar-catalo
 import { parseCatalogoPdf } from "@/lib/parse-catalogo-pdf";
 import { parseCatalogoXlsx } from "@/lib/parse-catalogo-xlsx";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Badge } from "./Badge";
 import { CatalogoCard, CoresPaleta, type DadosPasta, EditorPastaCatalogo, type NumerosAgenda, PastaCatalogoCard } from "./CatalogoCards";
 import { useConfirmacao } from "./Confirmacao";
@@ -33,6 +35,7 @@ import { SearchField, SelectField, TextArea, TextField } from "./Field";
 import { IconAlert, IconChevronLeft, IconCompra, IconDownload, IconInbox, IconPasta, IconPencil, IconPlus, IconTrash, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
+import { useComponente } from "./ComponentesPapel";
 import { Segmented } from "./Segmented";
 import { SkeletonCartao } from "./Skeleton";
 import { TipoDfdPicker } from "./TipoDfdPicker";
@@ -148,7 +151,10 @@ export function CatalogoView({
   const nAgenda = catalogos.filter((c) => c.tipo === "agenda").length;
   const nHistorico = catalogos.length - nAgenda;
 
-  const [vista, setVista] = useState<Vista>("catalogo");
+  const [vistaPedida, setVista] = useState<Vista>("catalogo");
+  const libera = useComponente();
+  const CHAVE_VISTA: Record<Vista, string> = { catalogo: "catalogo.catalogos", lista: "catalogo.lista", unidades: "catalogo.unidades", classificacoes: "catalogo.classificacoes" };
+  const vista = vistaPermitida<Vista>(vistaPedida, ["catalogo", "lista", "unidades", "classificacoes"], (v) => libera(CHAVE_VISTA[v]));
   // Unidades de medida | Classificações: as visões da PADRONIZAÇÃO (sem os controles de catálogo — exportar modelo, importar).
   const padronizacao = vista === "unidades" || vista === "classificacoes";
   const [abertoId, setAbertoId] = useState<number | null>(null);
@@ -181,6 +187,16 @@ export function CatalogoView({
   const [novoTipo, setNovoTipo] = useState<TipoCatalogo>("agenda");
   const [arquivoHistorico, setArquivoHistorico] = useState<File | null>(null);
   const [historicoAberto, setHistoricoAberto] = useState<CatalogoResumo | null>(null);
+  // A PESQUISA DO SISTEMA abre um item do catálogo (`?abrir=catalogo:<id>:<código>`) ou um histórico (`historico:<id>`).
+  useAbrirDaUrl((v) => {
+    const [tipo, id, codigo] = v.split(":");
+    const c = todosCatalogos.find((x) => x.id === Number(id));
+    if (!c) return;
+    if (tipo === "historico") return setHistoricoAberto(c);
+    setAbertoId(c.id);
+    const it = codigo ? itens.find((x) => x.codigo === codigo) : undefined;
+    if (it) setPainelItem(it);
+  });
   // Edição do catálogo: cor + pasta (além de nome e tipos padrão).
   const [editCor, setEditCor] = useState<string | null>(null);
   const [editPasta, setEditPasta] = useState<number | null>(null);
@@ -779,7 +795,7 @@ export function CatalogoView({
             }
           : undefined
       }
-      onExportar={pode.exportar && c.tipo === "agenda" ? () => exportarCatalogoXlsx(c.nome, itensPorCatalogo.get(c.id) ?? []) : undefined}
+      onExportar={pode.exportar && libera("catalogo.catalogos", "exportar") && c.tipo === "agenda" ? () => exportarCatalogoXlsx(c.nome, itensPorCatalogo.get(c.id) ?? []) : undefined}
       onExcluir={pode.excluir ? () => excluir(c) : undefined}
     />
   );
@@ -789,7 +805,7 @@ export function CatalogoView({
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="linha-topico flex flex-wrap items-center justify-between gap-3">
         {pasta ? (
           <div className="flex min-w-0 items-center gap-2">
             <Link
@@ -863,8 +879,8 @@ export function CatalogoView({
             onChange={trocarVista}
             ariaLabel="Visões do catálogo"
             options={[
-              { value: "catalogo", label: "Catálogo" },
-              { value: "lista", label: "Lista de Itens", curto: "Itens" },
+              { value: "catalogo" as const, label: "Catálogo" },
+              { value: "lista" as const, label: "Lista de Itens", curto: "Itens" },
               // A padronização é GLOBAL — fica fora da tela da pasta.
               ...(pasta
                 ? []
@@ -872,7 +888,7 @@ export function CatalogoView({
                     { value: "unidades" as const, label: "Unidades de medida", curto: "Unid. medida" },
                     { value: "classificacoes" as const, label: "Classificações", curto: "Classif." },
                   ]),
-            ]}
+            ].filter((o) => libera(CHAVE_VISTA[o.value]))}
           />
         </div>
       </div>
@@ -898,7 +914,7 @@ export function CatalogoView({
           {vista === "unidades" ? <UnidadesMedidaView podeEditar={pode.configurar} /> : <ClassificacoesView podeEditar={pode.configurar} />}
         </div>
       ) : catalogos.length === 0 && (pasta || pastas.length === 0) && !podeCriar ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border-2 bg-surface p-10 text-center">
           <IconInbox className="h-10 w-10 text-faint" />
           <p className="text-sm text-muted">{pasta ? "Nenhum catálogo nesta pasta." : "Nenhum catálogo ainda."}</p>
         </div>
@@ -1116,7 +1132,7 @@ export function CatalogoView({
               </Callout>
             )}
             {identicos.length > 0 && (
-              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-4">
+              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-[13.5px] font-bold text-text">Itens idênticos ({identicos.length})</p>
@@ -1165,7 +1181,7 @@ export function CatalogoView({
               </div>
             )}
             {divergentes.length > 0 && (
-              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-4">
+              <div className="space-y-3 rounded-card border border-border-2 bg-surface-2 p-[var(--pad-card)]">
                 <div>
                   <p className="text-[13.5px] font-bold text-text">Conflitos a resolver ({divergentes.length})</p>
                   <p className="mt-0.5 text-xs text-muted">
@@ -1182,7 +1198,7 @@ export function CatalogoView({
                   const r = resolucaoDe(existente.id);
                   const setE = (patch: Partial<EdicaoConflito>) => setEdicoes((m) => new Map(m).set(existente.id, { ...v, ...patch }));
                   return (
-                    <div key={existente.id} className="rounded-card border border-border bg-surface p-3">
+                    <div key={existente.id} className="rounded-card border border-border bg-surface p-[var(--pad-card)]">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="font-mono text-[13px] font-bold text-text">{item.codigoRaw ?? item.codigo}</span>
                         <Badge tone={igual ? "emerald" : "amber"}>{igual ? "iguais" : "diferentes"}</Badge>
@@ -1226,7 +1242,7 @@ export function CatalogoView({
               </div>
             )}
 
-            <div className="rounded-card border border-border px-4 pt-3">
+            <div className="rounded-card border border-border p-[var(--pad-card)]">
               <DataTable columns={colunasPreview} rows={preview.itens} getKey={(r) => r._k} pageSize={20} minWidth={720} resumo={(l) => `${l.length} ${l.length === 1 ? "item" : "itens"}`} />
             </div>
           </div>
