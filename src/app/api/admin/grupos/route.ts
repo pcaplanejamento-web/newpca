@@ -18,11 +18,13 @@ export async function GET() {
   if ("erro" in guard) return guard.erro;
   const db = getDb();
   const [lista, listaPcas, users, reps, vincUsu, vincRep, modulos] = await Promise.all([
-    db.select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat }).from(grupos).orderBy(grupos.nome),
+    db.select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat, modoUnidades: grupos.modoUnidades }).from(grupos).orderBy(grupos.nome),
     // Os PCAs que o grupo pode escolher (o mais recente primeiro).
     db.select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano }).from(pcas).orderBy(desc(pcas.ano), desc(pcas.id)),
     // Status: a tela marca quem está pendente/inativo (não conta como acesso ativo).
-    db.select({ id: usuarios.id, nome: usuarios.nome, email: usuarios.email, status: usuarios.status }).from(usuarios).orderBy(usuarios.nome),
+    db
+      .select({ id: usuarios.id, nome: usuarios.nome, email: usuarios.email, status: usuarios.status, reparticaoId: usuarios.reparticaoId })
+      .from(usuarios).orderBy(usuarios.nome),
     // Oculta: a unidade não aparece nos documentos novos (o selo avisa); a "Geral" (código GERAL) = todas as unidades.
     db
       .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome, oculto: reparticoes.oculto })
@@ -57,6 +59,7 @@ export async function GET() {
       /** As telas que o grupo ABRE hoje (dos módulos). */
       abas: telasDoGrupo(modulos, mods, avulsas),
       chat: g.chat,
+      modoUnidades: g.modoUnidades,
       pcas: lerPcasGrupo(g.pcas),
       membros: membrosPorGrupo.get(g.id) ?? [],
       reparticoes: repsPorGrupo.get(g.id) ?? [],
@@ -83,7 +86,7 @@ export async function POST(req: Request) {
   if ("erro" in guard) return guard.erro;
   const corpo = await parseCorpo(grupoCreateSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, modulos: mods, chat, pcas: pcasGrupo, membros, reparticoes: reps } = corpo.data;
+  const { nome, modulos: mods, chat, pcas: pcasGrupo, membros, reparticoes: reps, modoUnidades } = corpo.data;
   const db = getDb();
   const modulos = await getModulosFresco();
   const invalido = motivoModulosInvalidos(mods, modulos) ?? (await motivoIdsInvalidos(db, corpo.data));
@@ -91,7 +94,7 @@ export async function POST(req: Request) {
   const abas = telasDosModulos(modulos, mods);
   const [row] = await db
     .insert(grupos)
-    .values({ nome, modulos: JSON.stringify(mods), abas: JSON.stringify(abas), chat, pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo) })
+    .values({ nome, modulos: JSON.stringify(mods), abas: JSON.stringify(abas), chat, modoUnidades, pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo) })
     .returning({ id: grupos.id });
   const grupoId = row.id;
   // Pessoas + unidades num LOTE (tudo ou nada); se falhar, o grupo recém-criado sai (nada fica pela metade).
@@ -108,8 +111,8 @@ export async function POST(req: Request) {
     acao: "criar",
     entidade: "grupo",
     entidadeId: grupoId,
-    resumo: `Grupo "${nome}" criado (${mods.length} módulo(s), ${abas.length} tela(s), chat ${chat ? "liberado" : "bloqueado"}, ${pcasGrupo == null ? "todos os PCAs" : `${pcasGrupo.length} PCA(s)`}, ${membros.length} pessoa(s), ${reps.length} unidade(s))`,
-    depois: { nome, modulos: mods, abas, chat, pcas: pcasGrupo, membros, reparticoes: reps },
+    resumo: `Grupo "${nome}" criado (${mods.length} módulo(s), ${abas.length} tela(s), chat ${chat ? "liberado" : "bloqueado"}, ${pcasGrupo == null ? "todos os PCAs" : `${pcasGrupo.length} PCA(s)`}, ${membros.length} pessoa(s), ${modoUnidades === "cadastro" ? "unidade de cadastro de cada pessoa" : `${reps.length} unidade(s)`})`,
+    depois: { nome, modulos: mods, abas, chat, pcas: pcasGrupo, membros, reparticoes: reps, modoUnidades },
   });
   return ok({ id: grupoId });
 }

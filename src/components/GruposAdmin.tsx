@@ -2,11 +2,12 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AbaKey } from "@/lib/abas";
-import { ehCodigoGeral } from "@/lib/escopo-unidades-core";
+import { ehCodigoGeral, type ModoUnidades } from "@/lib/escopo-unidades-core";
 import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
+import { Ajuda } from "./Ajuda";
 import { Avatar } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -17,6 +18,7 @@ import { IconPlus, IconSave, IconTrash, IconUsers } from "./icons";
 import { Modal } from "./Modal";
 import { NAV_MODULOS } from "./navModulos";
 import { CartaoEspaco } from "./QuadroCard";
+import { Segmented } from "./Segmented";
 import { SkeletonLinhas } from "./Skeleton";
 import { toast } from "./Toast";
 import { Switch } from "./Switch";
@@ -30,13 +32,14 @@ type Grupo = {
   /** As telas que o grupo ABRE hoje. */
   abas: AbaKey[];
   chat: boolean;
+  modoUnidades: ModoUnidades;
   pcas: number[] | null;
   membros: number[];
   reparticoes: number[];
 };
 type PcaOpt = { id: number; nome: string; ano: number | null };
 type Status = "ativo" | "pendente" | "inativo";
-type UserOpt = { id: number; nome: string; email: string; status: Status };
+type UserOpt = { id: number; nome: string; email: string; status: Status; reparticaoId: number | null };
 type RepOpt = { id: number; codigo: string; nome: string; oculto: boolean };
 
 /** Ordem alfabética do português (acentos e caixa no lugar certo — a do banco põe "Á" depois do "Z"). */
@@ -68,6 +71,7 @@ export function GruposAdmin() {
   const [pcasSel, setPcasSel] = useState<Set<number> | null>(null);
   const [membros, setMembros] = useState<Set<number>>(new Set());
   const [reps, setReps] = useState<Set<number>>(new Set());
+  const [modo, setModo] = useState<ModoUnidades>("lista");
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
@@ -106,6 +110,7 @@ export function GruposAdmin() {
     setPcasSel(null);
     setMembros(new Set());
     setReps(new Set());
+    setModo("lista");
     setBusca("");
     setErroModal(null);
   }
@@ -119,6 +124,7 @@ export function GruposAdmin() {
     setPcasSel(g.pcas == null ? null : new Set(g.pcas));
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
+    setModo(g.modoUnidades ?? "lista");
     setBusca("");
     setErroModal(null);
   }  // A PESQUISA DO SISTEMA abre o banner do grupo (`?abrir=<id>`), quando a lista chega.
@@ -149,7 +155,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps] }),
+        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps], modoUnidades: modo }),
       });
       const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -199,6 +205,9 @@ export function GruposAdmin() {
   }
 
 
+  // No modo "unidade de cadastro": quem do grupo não tem a unidade de cadastro (não verá dado nenhum).
+  const semUnidade = modo === "cadastro" ? users.filter((u) => membros.has(u.id) && u.reparticaoId == null) : [];
+
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -247,7 +256,7 @@ export function GruposAdmin() {
                 }
                 metricas={[
                   { rotulo: "Pessoas", valor: String(g.membros.length) },
-                  { rotulo: "Unidades", valor: geral && g.reparticoes.includes(geral.id) ? "Todas" : String(g.reparticoes.length) },
+                  { rotulo: "Unidades", valor: g.modoUnidades === "cadastro" ? "De cadastro" : geral && g.reparticoes.includes(geral.id) ? "Todas" : String(g.reparticoes.length) },
                   { rotulo: "PCAs", valor: g.pcas == null ? "Todos" : String(g.pcas.length) },
                 ]}
                 canto={
@@ -351,10 +360,43 @@ export function GruposAdmin() {
             )}
           </fieldset>
           <div>
-            <span className="mb-2 block text-[13.5px] font-bold text-text">
-              Unidades do grupo · {reps.size} selecionada(s)
-            </span>
-            {repsDisp.length === 0 ? (
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="text-[13.5px] font-bold text-text">
+                Unidades do grupo{modo === "lista" ? ` · ${reps.size} selecionada(s)` : ""}
+              </span>
+              <Ajuda titulo="Unidades do grupo" compacta>
+                <p>
+                  <b>Unidades escolhidas</b>: todas as pessoas do grupo veem os dados das unidades marcadas (a "Geral" = todas).
+                </p>
+                <p className="mt-2">
+                  <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só a unidade em que trabalha (o cadastro dela em
+                  Usuários). Quem não tem unidade de cadastro não vê dado nenhum. As unidades escolhidas ficam guardadas para
+                  quando voltar ao outro modo.
+                </p>
+              </Ajuda>
+            </div>
+            <Segmented
+              ariaLabel="De onde vêm as unidades"
+              value={modo}
+              onChange={setModo}
+              className="mb-2"
+              options={[
+                { value: "lista", label: "Unidades escolhidas", curto: "Escolhidas" },
+                { value: "cadastro", label: "Unidade de cadastro de cada pessoa", curto: "De cadastro" },
+              ]}
+            />
+            {modo === "cadastro" ? (
+              semUnidade.length > 0 ? (
+                <Callout kind="warn">
+                  {semUnidade.length} pessoa(s) do grupo sem unidade de cadastro não verão dado nenhum:{" "}
+                  {semUnidade.map((u) => u.nome).join(", ")}. Defina a unidade em Usuários.
+                </Callout>
+              ) : (
+                <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-muted">
+                  Cada pessoa verá os dados da unidade do próprio cadastro.
+                </p>
+              )
+            ) : repsDisp.length === 0 ? (
               <p className="rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">
                 Nenhuma unidade cadastrada. Cadastre em Órgãos e Unidades.
               </p>

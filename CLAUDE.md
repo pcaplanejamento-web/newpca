@@ -677,7 +677,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Mensagens padrão do Zod em pt-BR (`zod-config.ts`, importado pelo `http.ts`).
 - **Grupos** (`grupos`): um usuário pertence a vários (`usuario_grupos`); escolhe o **grupo
   ativo** no cabeçalho (cookie `pca_grupo`). Cada grupo guarda as **TELAS** que abre e os **PCAs** que acessa (abaixo) e
-  acessa um conjunto de **repartições** (`grupo_reparticoes`). Telas admin: `/painel/grupos`,
+  acessa um conjunto de **repartições** (`grupo_reparticoes`). **Modo das unidades (v1.115.0, migração `0112` —
+  `grupos.modo_unidades`):** `lista` (padrão = as escolhidas) | `cadastro` = cada membro acessa SÓ a unidade do PRÓPRIO
+  cadastro (`usuarios.reparticao_id`; sem ela = escopo nenhuma; a "Geral" nunca vale por cadastro) — ponto único
+  `reparticoesDoMembro` (`grupos.ts`; núcleo puro `unidadesDoMembro` em `escopo-unidades-core.ts`) dentro do
+  `getReparticaoContexto`: cabeçalho, escopo da Mesa e as rotas herdam. No `GruposAdmin`, o `Segmented` "Unidades escolhidas |
+  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. Telas admin: `/painel/grupos`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de

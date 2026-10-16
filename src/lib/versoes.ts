@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.115.0",
+    data: "2026-10-16",
+    titulo: "Grupo pela unidade de cadastro",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "O grupo escolhe de onde vêm as unidades: \u201cUnidades escolhidas\u201d (como antes) ou \u201cUnidade de cadastro de cada pessoa\u201d — cada membro vê só a unidade em que trabalha. Quem está sem unidade de cadastro é apontado no editor do grupo.", link: "/painel/grupos" },
+    ],
+  },
+  {
     versao: "1.114.2",
     data: "2026-10-16",
     titulo: "Matrícula com até 7 números",
