@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.126.0",
+    data: "2026-10-16",
+    titulo: "Relatório de variação dos preços",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Mesa",
+        texto: "Na visão Consolidada dos itens, o Relatório de variação (PDF): itens com valor inflado, valor sugerido, impacto do reajuste e a variação por código — de todos, dos filtrados, dos de variação acima de 25% ou dos escolhidos, num PDF ou um por unidade.",
+        link: "/painel/mesa?vista=itens",
+      },
+    ],
+  },
+  {
     versao: "1.125.3",
     data: "2026-10-16",
     titulo: "Correção do Orçamento do PCA",

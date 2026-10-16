@@ -30,6 +30,7 @@ import {
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, dataHoraBR, dataIsoBrasilia, dicaLista, juntarParaCopiar, num, numeroSemAno, pct } from "@/lib/format";
+import { RelatorioVariacao } from "./RelatorioVariacao";
 import { consolidarItens, distintos, estadoConsolidado, type ItemConsolidado } from "@/lib/itens-consolidados";
 import type { DfdPainel, EstadoPainel, ProtocoloPainel } from "@/lib/mesa-dashboard";
 import { FILTRO_MESA_TODOS, type FiltroMesa, filtroMesaAtivo, opcoesAssuntoMesa, PREF_DADOS_COMPLETOS, passaFiltroMesa } from "@/lib/mesa-filtros";
@@ -1498,6 +1499,7 @@ export function DfdsView({
     const ids = Object.keys(filtrosItem).length > 0 ? new Set(filtroItens.itens.map((it) => it.dfdId)) : null;
     setPassamItensCons((a) => (mesmoConjunto(a, ids) ? a : ids));
   }, [filtroItens, filtrosItem]);
+  const [consVisiveis, setConsVisiveis] = useState<ItemConsolidado<ItemDfdRow>[] | null>(null);
   const consolidados = useMemo(
     () => (filtroItens ? consolidarItens(recorte.ativo ? filtroItens.itens.filter((it) => recorte.item(it.dfdId)) : filtroItens.itens) : null),
     [filtroItens, recorte],
@@ -2105,6 +2107,8 @@ export function DfdsView({
   // total da visão Normal com os mesmos filtros de dado.
   const tabelaConsolidada = (
     <DataTable
+      onOrdenadas={(ls) => setConsVisiveis((a) => (a && a.length === ls.length && a.every((l, i) => l.chave === ls[i].chave) ? a : ls))}
+      acoesRodape={<RelatorioVariacao linhas={consolidados ?? []} visiveis={consVisiveis ?? consolidados ?? []} historico={historico} />}
       visao={visaoTabela}
       trocando={trocando}
       columns={semColUnidade(colsConsolidados)}

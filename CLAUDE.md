@@ -1488,6 +1488,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     do topo primeiro). Recarregando os itens (após salvar), o detalhe segue a MESMA linha (pelo código) com os dados novos;
     se ela sumiu (o código mudou; a linha SEM código é o próprio item, que regravado ganha outro id), fecha — nunca por
     baixo de um banner aberto: só ao voltar à Mesa.
+  - **RELATÓRIO DE VARIAÇÃO (v1.126.0, sem migração)** — botão no rodapé da Consolidada (`RelatorioVariacao`, DS; só com
+    Exportar): núcleo puro **`relatorio-variacao.ts`** (testado) sobre as linhas JÁ consolidadas — o item INFLADO = valor
+    unitário acima da REFERÊNCIA (a média da MESMA unidade — `mediaDeReferencia`; com histórico de compra, a menor entre ela
+    e o valor atual) em mais de 25%, com o valor sugerido (a referência) e o IMPACTO ((vu − ref) × qtd); a variação por
+    código (menor · mediana · médio · maior · CV · ABC · histórico; sub-linhas por unidade quando mistas) e os sem
+    comparação. Escolha: todos · filtrados na tabela (`onOrdenadas`, só quando as chaves mudam) · variação acima de 25% ·
+    escolhidos; "Só os itens a reajustar" e um PDF por sigla (`porSigla`). PDF = `documento-pdf`.
   - **PILHA DE BANNERS da Mesa (`BannersMesa`) — ORDEM FIXA Protocolo (esquerda) | DFD (centro) | Item (direita), qualquer
     que seja o banner de entrada:** linha de **Itens** abre **SÓ o banner do ITEM** (`ItemDetalhe` sobre o rascunho do DFD,
     com "Salvar alterações") — a coluna da direita; **"Ver DFD"** faz o DFD surgir À ESQUERDA dele; **"Ver protocolo"** traz

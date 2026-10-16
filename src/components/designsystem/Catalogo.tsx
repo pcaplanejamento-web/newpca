@@ -281,6 +281,7 @@ import { Segmented } from "@/components/Segmented";
 import { Switch } from "@/components/Switch";
 import { StatCard } from "@/components/StatCard";
 import { StatMini } from "@/components/StatMini";
+import { RelatorioVariacao } from "@/components/RelatorioVariacao";
 import { Tabs } from "@/components/Tabs";
 import { toast } from "@/components/Toast";
 import { TokenEditor } from "./TokenEditor";
@@ -3561,6 +3562,10 @@ export function Catalogo() {
           <StatMini label="Total de DFDs" value="104" tone="accent" />
           <StatMini label="Somatória dos DFDs" value="R$ 32.705,00" tone="warn" hint="capa diverge" />
         </div>
+      </Secao>
+
+      <Secao titulo="RelatorioVariacao (PDF da variação dos preços — Mesa → Itens → Consolidada)">
+        <RelatorioVariacao linhas={consolidarItens(ITENS_CONSOLIDADOS_DEMO)} visiveis={consolidarItens(ITENS_CONSOLIDADOS_DEMO)} />
       </Secao>
 
       <Secao titulo="RelatorioErros (banner de erros copiável — DFD/Protocolo)">
