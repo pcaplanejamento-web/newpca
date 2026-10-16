@@ -1,6 +1,7 @@
 import type { UsuarioSessao } from "./auth";
 import { protocolosParaAutomacao } from "./automacao";
 import { getGrupoAtivoId } from "./grupos";
+import { unidadeDoModulo } from "./escopo-cabecalho";
 import { contextoBanners } from "./mesa-dados";
 import { listarSituacoes } from "./situacoes";
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
@@ -9,7 +10,15 @@ import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
  * em segundo plano sem abrir a tela). Responsável = as pessoas do GRUPO ativo + as já gravadas de fora dele (só exibidas);
  * os banners da Mesa com o MESMO contexto da Mesa. */
 export async function dadosDaAutomacao(u: UsuarioSessao) {
-  const [protocolos, ctx, situacoes, grupoId] = await Promise.all([protocolosParaAutomacao(), contextoBanners(u), listarSituacoes(), getGrupoAtivoId(u)]);
+  const [todos, ctx, situacoes, grupoId, rep] = await Promise.all([
+    protocolosParaAutomacao(),
+    contextoBanners(u),
+    listarSituacoes(),
+    getGrupoAtivoId(u),
+    unidadeDoModulo("automacao", u),
+  ]);
+  // A unidade do CABEÇALHO (Configurações → Filtro da unidade): só os protocolos dela.
+  const protocolos = rep.id === null ? todos : rep.id === false ? [] : todos.filter((p) => p.reparticaoId === rep.id);
   const pessoas = await listarPessoasDoGrupo(grupoId);
   const doGrupo = new Set(pessoas.map((p) => p.id));
   const outras = await pessoasPorIds(protocolos.map((p) => p.responsavelId).filter((id) => id != null && !doGrupo.has(id)));

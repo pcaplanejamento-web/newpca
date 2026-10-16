@@ -1,3 +1,5 @@
+import { getConfigEscopo } from "./escopo-cabecalho";
+import { filtroDoModulo } from "./escopo-cabecalho-core";
 import { getAcesso, pcasDoAcesso, podeMesa } from "./acesso";
 import { escopoMesa } from "./acesso-mesa";
 import { getRegrasAvaliacao } from "./avaliacao";
@@ -85,7 +87,9 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
   // Mesa principal: a unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada). Mesa do PCA: o escopo de acesso.
   const repId = idDoFiltro(ctx.un.filtro);
   const nada = repId === false;
-  const acessivel = ctx.un.acessivel;
+  // Mesa do PCA: o escopo de acesso e, com o PCA obedecendo ao cabeçalho (Configurações → Filtro da unidade), a unidade.
+  const repPca = pcaId ? filtroDoModulo(await getConfigEscopo(), "pca", repId) : null;
+  const acessivel = (rid: number | null | undefined) => ctx.un.acessivel(rid) && (repPca == null || (repPca !== false && rid === repPca));
   // PCA do CABEÇALHO (só a Mesa principal — a do PCA já é de um PCA): filtra pelo ano do PCA do protocolo/DFD.
   // Mesa do PCA com a visão dos MARCADOS ligada (Configuração do PCA): também os do ano dele ainda na Mesa do sistema.
   const [pcaFiltro, anoMarcados] = await Promise.all([

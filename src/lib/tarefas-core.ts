@@ -124,7 +124,14 @@ export type VinculoTarefa = {
   concluida?: boolean;
   /** A SIGLA da unidade do protocolo/DFD/item vinculado (resolvida no servidor; sem unidade = ausente). */
   sigla?: string | null;
+  /** O id dessa unidade (o filtro da unidade do cabeçalho — a sigla pode repetir entre órgãos). */
+  reparticaoId?: number | null;
 };
+
+/** As UNIDADES (ids) dos protocolos/DFDs/itens a que a tarefa se liga. */
+export const unidadesDaTarefa = (t: { vinculos?: Pick<VinculoTarefa, "reparticaoId">[] }): number[] => [
+  ...new Set((t.vinculos ?? []).map((v) => v.reparticaoId).filter((x): x is number => x != null)),
+];
 
 const ORDEM_MESA: Partial<Record<TipoVinculo, number>> = { protocolo: 0, dfd: 1, item: 2 };
 /** Os NÚMEROS da Mesa a que a tarefa se liga (protocolo › DFD › item, sem repetir) — os selos do cartão. O alvo excluído

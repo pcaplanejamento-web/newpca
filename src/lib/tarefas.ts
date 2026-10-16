@@ -45,6 +45,7 @@ import { atorDe, notificar } from "./notificacoes";
 import { nomeExibicao, type Pessoa } from "./pessoa";
 import { listarPessoasDoGrupo, pessoasPorIds } from "./usuarios";
 import {
+  unidadesDaTarefa,
   type AcaoAutomacao,
   type BlocoTarefa,
   blocosParaGravar,
@@ -454,6 +455,15 @@ async function linhasVinculos(cond: SQL | undefined) {
   return [...diretas, ...reversas];
 }
 
+/** As UNIDADES de cada tarefa dos quadros (pelos protocolos/DFDs/itens vinculados) — o filtro da unidade do cabeçalho
+ * no Calendário. Tarefa sem vínculo da Mesa fica de fora do mapa. */
+export async function unidadesDasTarefas(quadroIds: number[]): Promise<Map<number, number[]>> {
+  if (quadroIds.length === 0) return new Map();
+  const ligacoes = (await porLotesDeQuadros(quadroIds, (ids) => linhasVinculos(inArray(tarefas.quadroId, ids)))).filter((l) => l.tipo !== "tarefa");
+  const vs = await vinculosRotulados(vinculosPorTarefa(ligacoes));
+  return new Map([...vs].map(([t, l]) => [t, unidadesDaTarefa({ vinculos: l })]));
+}
+
 /** Os vínculos de cada tarefa com o RÓTULO do alvo (o excluído fica sem rótulo). */
 async function vinculosRotulados(por: Map<number, { tipo: TipoVinculo; id: number }[]>): Promise<Map<number, VinculoTarefa[]>> {
   const r = await rotulosVinculos([...por.values()].flat());
@@ -473,13 +483,13 @@ export async function rotulosVinculos(vinculos: { tipo: TipoVinculo; id: number 
   const [ps, ds, di, pc, oc, ts] = await Promise.all([
     em(ids("protocolo"), (l) =>
       db
-        .select({ id: dfdProtocolos.id, r: dfdProtocolos.numero, sigla: reparticoes.codigo })
+        .select({ id: dfdProtocolos.id, r: dfdProtocolos.numero, sigla: reparticoes.codigo, rep: dfdProtocolos.reparticaoId })
         .from(dfdProtocolos)
         .leftJoin(reparticoes, eq(reparticoes.id, dfdProtocolos.reparticaoId))
         .where(inArray(dfdProtocolos.id, l)),
     ),
-    em(ids("dfd"), (l) => db.select({ id: dfds.id, r: dfds.numero, sigla: reparticoes.codigo }).from(dfds).leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId)).where(inArray(dfds.id, l))),
-    em(dfdsDosItens, (l) => db.select({ id: dfds.id, r: dfds.numero, sigla: reparticoes.codigo }).from(dfds).leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId)).where(inArray(dfds.id, l))),
+    em(ids("dfd"), (l) => db.select({ id: dfds.id, r: dfds.numero, sigla: reparticoes.codigo, rep: dfds.reparticaoId }).from(dfds).leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId)).where(inArray(dfds.id, l))),
+    em(dfdsDosItens, (l) => db.select({ id: dfds.id, r: dfds.numero, sigla: reparticoes.codigo, rep: dfds.reparticaoId }).from(dfds).leftJoin(reparticoes, eq(reparticoes.id, dfds.reparticaoId)).where(inArray(dfds.id, l))),
     em(ids("pca"), (l) => db.select({ id: pcas.id, r: pcas.nome }).from(pcas).where(inArray(pcas.id, l))),
     em(ids("orcamento"), (l) =>
       db
@@ -504,13 +514,13 @@ export async function rotulosVinculos(vinculos: { tipo: TipoVinculo; id: number 
     ),
   ]);
   const m = new Map<string, Partial<VinculoTarefa>>();
-  for (const [tipo, linhas] of [["protocolo", ps], ["dfd", ds]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r, sigla: x.sigla });
+  for (const [tipo, linhas] of [["protocolo", ps], ["dfd", ds]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r, sigla: x.sigla, reparticaoId: x.rep });
   for (const [tipo, linhas] of [["pca", pc], ["orcamento", oc]] as const) for (const x of linhas) m.set(`${tipo}:${x.id}`, { rotulo: x.r });
   const dfdDoItem = new Map(di.map((x) => [x.id, x]));
   for (const a of ids("item")) {
     const { dfdId, item } = itemDoVinculo(a);
     const d = dfdDoItem.get(dfdId);
-    if (d) m.set(`item:${a}`, { rotulo: `${item} · DFD ${d.r}`, sigla: d.sigla });
+    if (d) m.set(`item:${a}`, { rotulo: `${item} · DFD ${d.r}`, sigla: d.sigla, reparticaoId: d.rep });
   }
   for (const x of ts) m.set(`tarefa:${x.id}`, { rotulo: x.r, detalhe: x.detalhe, quadroId: x.quadroId, prazo: x.prazo, concluida: x.concluidaEm != null });
   return m;

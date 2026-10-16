@@ -929,6 +929,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `unidade` (planilha) recebe `reparticao_id` da unidade ativa no
   import (`/api/upload`; Geral → NULL, e re-import em Geral preserva a atual); `/painel/pca` lista via
   `getUnidades(rep?.id)`. O dashboard público (`/`) **não** é escopado.
+- **FILTRO DA UNIDADE DO CABEÇALHO em TODAS as telas (v1.118.0, sem migração — blob `configuracoes.escopoCabecalho`):**
+  Configurações → aba **"Filtro da unidade"** (`EscopoCabecalhoAdmin` + `CamposEscopo`; `GET/PATCH
+  /api/admin/escopo-cabecalho`, `exigirAdmin`, auditoria). Núcleo puro **`escopo-cabecalho-core.ts`** (`lerConfigEscopo`,
+  `filtroDoModulo`, `tarefaNaUnidade`, `lancamentoNaUnidade` — testado) + D1 **`escopo-cabecalho.ts`** (`getConfigEscopo`
+  cache 60 s, fail-safe = padrão; ponto ÚNICO **`unidadeDoModulo(modulo)`** e `unidadeDoCatalogo()`). Módulos (todos ligados
+  por padrão; a Mesa sempre): **PCA** (`listarPcasCards`/`dashboardDoPca`/`orcamentoDoPca` com `rep`; Mesa do PCA e `GET
+  /api/dfd/itens?pca=`), **Orçamento** (`lancamentosDaUnidade`/`resumosNaUnidade` — a aba Vínculos fica inteira; opção
+  "sem vínculo"), **Catálogo** (`usados` = `codigosDaUnidade`, subconsulta dos códigos dos DFDs da unidade | `todos`;
+  itens, histórico, padronização), **Tarefas/Calendário** (pelas UNIDADES dos vínculos — `unidadesDasTarefas`,
+  `VinculoTarefa.reparticaoId`; opção "sem vínculo") e **Automação** (os protocolos). "Geral" = sem filtro; o memo leva o
+  id da unidade na chave.
 - **PCA do CABEÇALHO — filtro GLOBAL (sem migração):** um dropdown à ESQUERDA do head (`PcaSelect`, no `AppShell`; no
   celular mostra só o ano) escolhe o PCA — cookie **`pca_filtro`** (como a unidade/grupo: `src/lib/pca-filtro.ts` —
   `pcasDoFiltro` = os PCAs cadastrados COM ano, `getPcaFiltro`, `definirPcaFiltro`; rota **`POST /api/pca/filtro`**

@@ -32,12 +32,19 @@ export async function getUnidades(reparticaoId?: number, pcaId?: number) {
     .orderBy(asc(unidades.municipio), asc(unidades.codigo));
 }
 
-/** Escopo dos itens: uma planilha (`unidadeId`) e/ou as planilhas de um PCA (`pcaId`). */
-const filtroUnidade = (unidadeId?: number, pcaId?: number) =>
-  and(
+/** O PCA dos itens: o id, ou o id + a UNIDADE do cabeçalho (só as planilhas dela). */
+export type PcaDosItens = number | { pcaId: number; reparticaoId: number };
+
+/** Escopo dos itens: uma planilha (`unidadeId`) e/ou as planilhas de um PCA (`pcaId`, opcionalmente só as da unidade). */
+const filtroUnidade = (unidadeId?: number, pca?: PcaDosItens) => {
+  const pcaId = typeof pca === "number" ? pca : pca?.pcaId;
+  const rep = typeof pca === "object" ? pca.reparticaoId : undefined;
+  return and(
     unidadeId ? eq(itens.unidadeId, unidadeId) : undefined,
     pcaId ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${unidades.pcaId} = ${pcaId})` : undefined,
+    rep ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${unidades.reparticaoId} = ${rep})` : undefined,
   );
+};
 
 // ---------------------------------------------------------------------------
 // KPIs
@@ -52,7 +59,7 @@ export type Resumo = {
   numUnidades: number;
 };
 
-export async function getResumo(unidadeId?: number, pcaId?: number): Promise<Resumo> {
+export async function getResumo(unidadeId?: number, pcaId?: PcaDosItens): Promise<Resumo> {
   const db = getDb();
   const w = filtroUnidade(unidadeId, pcaId);
 
@@ -74,7 +81,12 @@ export async function getResumo(unidadeId?: number, pcaId?: number): Promise<Res
   const [u] = await db
     .select({ n: sql<number>`COUNT(*)` })
     .from(unidades)
-    .where(pcaId ? eq(unidades.pcaId, pcaId) : undefined);
+    .where(
+      and(
+        pcaId ? eq(unidades.pcaId, typeof pcaId === "number" ? pcaId : pcaId.pcaId) : undefined,
+        typeof pcaId === "object" ? eq(unidades.reparticaoId, pcaId.reparticaoId) : undefined,
+      ),
+    );
 
   const total = Number(agg?.total ?? 0);
   const count = Number(agg?.count ?? 0);
@@ -95,7 +107,7 @@ export async function getResumo(unidadeId?: number, pcaId?: number): Promise<Res
 
 export type Fatia = { label: string; total: number; count: number };
 
-export async function getPorClassificacao(unidadeId?: number, pcaId?: number): Promise<Fatia[]> {
+export async function getPorClassificacao(unidadeId?: number, pcaId?: PcaDosItens): Promise<Fatia[]> {
   const db = getDb();
   const rows = await db
     .select({
@@ -114,7 +126,7 @@ export async function getPorClassificacao(unidadeId?: number, pcaId?: number): P
   }));
 }
 
-export async function getPorUnidadeMedida(unidadeId?: number, pcaId?: number): Promise<Fatia[]> {
+export async function getPorUnidadeMedida(unidadeId?: number, pcaId?: PcaDosItens): Promise<Fatia[]> {
   const db = getDb();
   const rows = await db
     .select({
@@ -140,7 +152,7 @@ export type PontoMensal = {
   count: number;
 };
 
-export async function getPorMes(unidadeId?: number, pcaId?: number): Promise<PontoMensal[]> {
+export async function getPorMes(unidadeId?: number, pcaId?: PcaDosItens): Promise<PontoMensal[]> {
   const db = getDb();
   const rows = await db
     .select({
@@ -174,7 +186,7 @@ export type TopItem = {
 export async function getTopItens(
   unidadeId?: number,
   limit = 10,
-  pcaId?: number,
+  pcaId?: PcaDosItens,
 ): Promise<TopItem[]> {
   const db = getDb();
   const rows = await db
@@ -233,7 +245,7 @@ export type ItemRow = {
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena
  * e pagina no CLIENTE (DataTable). Ordenado por valor desc por padrão. */
-export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?: number): Promise<ItemRow[]> {
+export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?: PcaDosItens): Promise<ItemRow[]> {
   const db = getDb();
   const q = db
     .select({

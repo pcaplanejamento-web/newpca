@@ -2,6 +2,8 @@
 
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
+import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
+import { CONFIG_ESCOPO_PADRAO, type ConfigEscopo } from "@/lib/escopo-cabecalho-core";
 import { TabelaAcessos } from "@/components/HistoricoAcessos";
 import { type ConfigSeguranca, SEGURANCA_PADRAO } from "@/lib/seguranca-core";
 import { MarcaDagua } from "@/components/ProtecaoDados";
@@ -472,6 +474,12 @@ function DemoProtecao() {
       <MarcaDagua texto="Maria Clara Souza · matrícula 045210 · 08/10/2026 14:30" inline />
     </div>
   );
+}
+
+/** FILTRO DA UNIDADE: os campos da tela do ADM (sem gravar). */
+function DemoEscopo() {
+  const [v, setV] = useState<ConfigEscopo>(CONFIG_ESCOPO_PADRAO);
+  return <CamposEscopo valor={v} onChange={setV} />;
 }
 
 /** SEGURANÇA DO ACESSO: os campos da tela do ADM (sem gravar). */
@@ -3466,6 +3474,10 @@ export function Catalogo() {
 
       <Secao titulo="Segurança do acesso — CamposSeguranca (Configurações → Segurança: encerrar a sessão inativa, alertas de aparelho novo e de conta bloqueada)">
         <DemoSeguranca />
+      </Secao>
+
+      <Secao titulo="Filtro da unidade — CamposEscopo (Configurações → Filtro da unidade: quais telas obedecem à unidade do cabeçalho)">
+        <DemoEscopo />
       </Secao>
 
       <Secao titulo="Histórico de acesso — TabelaAcessos / HistoricoAcessos (Perfil e banner do usuário: último acesso, logins, aparelhos e cada entrada com data/hora, dispositivo, canal e IP)">

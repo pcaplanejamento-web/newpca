@@ -2,6 +2,7 @@ import { PermissaoExportar } from "@/components/ExportarTabelas";
 import { CatalogoView } from "@/components/CatalogoView";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { getCatalogoItens, listarCatalogos } from "@/lib/catalogo";
+import { unidadeDoCatalogo } from "@/lib/escopo-cabecalho";
 import { listarPastasCatalogo } from "@/lib/catalogo-historico";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function CatalogoPage() {
   const r = await acessoPagina("catalogo");
   if (r.bloqueio) return r.bloqueio;
-  const [catalogos, itens, pastas] = await Promise.all([listarCatalogos(), getCatalogoItens(), listarPastasCatalogo()]);
+  const [catalogos, itens, pastas] = await Promise.all([listarCatalogos(), unidadeDoCatalogo().then((rep) => getCatalogoItens(undefined, rep)), listarPastasCatalogo()]);
   return (
     <PermissaoExportar permitido={r.pode.exportar}>
       <CatalogoView catalogos={catalogos} itens={itens} pode={r.pode} pastas={pastas} />

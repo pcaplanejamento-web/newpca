@@ -191,6 +191,8 @@ export type ProtocoloAutomacao = {
   assunto: string | null;
   interessado: string | null;
   sigla: string | null;
+  /** A unidade do protocolo (o filtro da unidade do cabeçalho). */
+  reparticaoId?: number | null;
   anoPca: number | null;
   pca: string | null;
   /** Data/hora da protocolação (criado_em). */

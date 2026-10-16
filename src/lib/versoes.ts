@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.118.0",
+    data: "2026-10-16",
+    titulo: "Todas as telas obedecem à unidade do cabeçalho",
+    mudancas: [
+      { tipo: "novo", area: "Configurações", texto: "Aba \"Filtro da unidade\": o ADM escolhe quais telas obedecem à unidade do cabeçalho e as regras do catálogo, do orçamento e das tarefas sem vínculo.", link: "/painel/configuracoes?aba=escopo" },
+      { tipo: "melhoria", area: "PCA", texto: "Com uma unidade escolhida, cards, Dashboard, Orçamento e Mesa do PCA mostram só os dados dela.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Orçamento", texto: "Cards, lançamentos, comparativo e visões só com os lançamentos que os vínculos levam à unidade.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Catálogo", texto: "Só os itens e históricos usados nos DFDs da unidade (ou o catálogo inteiro, conforme o ADM).", link: "/painel/catalogo" },
+      { tipo: "melhoria", area: "Tarefas", texto: "Quadros e calendário só com as tarefas vinculadas à unidade.", link: "/painel/tarefas" },
+      { tipo: "melhoria", area: "Calendário", texto: "Eventos e tarefas só da unidade escolhida.", link: "/painel/calendario" },
+    ],
+  },
+  {
     versao: "1.117.0",
     data: "2026-10-16",
     titulo: "Filtros e recorte da Mesa no rodapé da tabela",
