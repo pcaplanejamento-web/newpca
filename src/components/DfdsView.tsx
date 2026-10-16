@@ -64,7 +64,10 @@ import { BotaoAtualizar } from "./BotaoAtualizar";
 import { BotaoDadosCompletos, DadosCompletos } from "./DadosCompletos";
 import { PermissaoExportar } from "./ExportarTabelas";
 import { CelulaVariacao, ComposicaoItem, SeloAbc } from "./ComposicaoItem";
-import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
+import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
+import { RecorteMesa } from "./RecorteMesa";
+import { mesmoConjunto, type PassamRecorte, recorteMesa, SEM_RECORTE, type VisaoRecorte } from "@/lib/mesa-recorte";
+import type { FiltroValor } from "@/lib/tabela-filtros";
 import { DfdUploadForm } from "./DfdUploadForm";
 import { EnviarAoPca } from "./EnviarAoPca";
 import { tokenPx } from "./espacamento";
@@ -366,8 +369,6 @@ export function DfdsView({
   );
   // Listas recarregadas OU filtradas: some da seleção o que não está mais à vista (a edição em massa
   // nunca atinge uma linha escondida pelo filtro).
-  useEffect(() => setSelDfds((s) => podar(s, new Set(dfdsF.map((d) => d.id)))), [dfdsF]);
-  useEffect(() => setSelProtos((s) => podar(s, new Set(protocolosF.map((p) => p.id)))), [protocolosF]);
 
   // Visão ativa (Protocolos/DFDs/Itens) — um Segmented alterna o MESMO espaço com morph.
   const [vista, setVista] = useState<Vista>("protocolos");
@@ -469,9 +470,72 @@ export function DfdsView({
     const vis = new Set(dfdsF.map((d) => d.id));
     return itens.filter((it) => vis.has(it.dfdId));
   }, [itens, dfdsF, filtro, emPca]);
+  // MESA CONECTADA: os filtros e a ordem de cada visão SOBREVIVEM à troca de visão, e o que passa nos filtros de uma
+  // restringe as outras pela hierarquia protocolo › DFD › item, nos dois sentidos (`recorteMesa`, puro e testado).
+  type EstadoVisao = { filtros: Record<string, FiltroValor>; ordem: { key: string; dir: "asc" | "desc" } | null };
+  const [estadoVisoes, setEstadoVisoes] = useState<Partial<Record<VisaoRecorte, EstadoVisao>>>({});
+  const [ordemMesa, setOrdemMesa] = useState<EstadoVisao["ordem"]>(null);
+  const [passam, setPassam] = useState<PassamRecorte>(SEM_RECORTE);
+  // Itens: a tabela Normal e os filtros de atributo da Consolidada — ambos são da visão Itens.
+  const [passamItensNormal, setPassamItensNormal] = useState<ReadonlySet<number> | null>(null);
+  const [passamItensCons, setPassamItensCons] = useState<ReadonlySet<number> | null>(null);
+  const [versaoRecorte, setVersaoRecorte] = useState(0);
+  // Item → DFD lido NO RENDER (as tabelas informam o recorte nos efeitos delas, que rodam antes dos daqui).
+  const dfdDoItemRef = useRef(new Map<number, number>());
+  dfdDoItemRef.current = useMemo(() => new Map((itens ?? []).map((it) => [it.id, it.dfdId])), [itens]);
+  const conexaoDe = useMemo(() => {
+    const fazer =
+      (v: VisaoRecorte): ConexaoTabela<{ id: number } | { key: number } | ItemDfdRow>["onMudar"] =>
+      ({ filtros, ordem, passam: chaves }) => {
+        setEstadoVisoes((m) => {
+          const a = m[v];
+          if (a && JSON.stringify(a.filtros) === JSON.stringify(filtros) && JSON.stringify(a.ordem) === JSON.stringify(ordem)) return m;
+          return { ...m, [v]: { filtros, ordem } };
+        });
+        setOrdemMesa((o) => (JSON.stringify(o) === JSON.stringify(ordem) ? o : ordem));
+        const ids = chaves ? new Set(chaves.map(Number)) : null;
+        if (v === "itens") {
+          // Item → o DFD dele (a restrição segue por ids de DFD — estáveis numa regravação de itens).
+          const dfdsIds = ids ? new Set([...ids].map((i) => dfdDoItemRef.current.get(i)).filter((d): d is number => d != null)) : null;
+          setPassamItensNormal((a) => (mesmoConjunto(a, dfdsIds) ? a : dfdsIds));
+        } else setPassam((p) => (mesmoConjunto(p[v], ids) ? p : { ...p, [v]: ids }));
+      };
+    return { protocolos: fazer("protocolos"), dfds: fazer("dfds"), itens: fazer("itens") };
+  }, []);
+  const passamEfetivo = useMemo<PassamRecorte>(() => {
+    const a = passamItensNormal;
+    const b = passamItensCons;
+    const itensR = a && b ? new Set([...a].filter((x) => b.has(x))) : (a ?? b);
+    return { ...passam, itens: itensR };
+  }, [passam, passamItensNormal, passamItensCons]);
+  const recorte = useMemo(() => recorteMesa(passamEfetivo, dfds), [passamEfetivo, dfds]);
+  const protocolosR = useMemo(() => (recorte.ativo ? protocolosF.filter((p) => recorte.protocolo(p.id)) : protocolosF), [protocolosF, recorte]);
+  const dfdsR = useMemo(() => (recorte.ativo ? dfdsF.filter((d) => recorte.dfd(d)) : dfdsF), [dfdsF, recorte]);
+  const itensR = useMemo(() => (itensF && recorte.ativo ? itensF.filter((it) => recorte.item(it.dfdId)) : itensF), [itensF, recorte]);
+  /** Tira os filtros de uma visão (o chip ✕) — ou de todas ("Limpar recorte", que remonta a tabela aberta). */
+  const limparRecorte = (v?: VisaoRecorte) => {
+    const todas = v == null;
+    setEstadoVisoes((m) => {
+      // Vazios (não ausentes): a tabela remontada NÃO volta aos filtros da edição salva.
+      if (todas) return { protocolos: { filtros: {}, ordem: null }, dfds: { filtros: {}, ordem: null }, itens: { filtros: {}, ordem: null } };
+      const n = { ...m };
+      if (n[v]) n[v] = { ...n[v], filtros: {} };
+      return n;
+    });
+    if (todas || v === "protocolos") setPassam((p) => ({ ...p, protocolos: null }));
+    if (todas || v === "dfds") setPassam((p) => ({ ...p, dfds: null }));
+    if (todas || v === "itens") {
+      setPassamItensNormal(null);
+      setPassamItensCons(null);
+      setFiltrosItem({});
+    }
+    if (todas) setVersaoRecorte((n) => n + 1);
+  };
+  useEffect(() => setSelDfds((s) => podar(s, new Set(dfdsR.map((d) => d.id)))), [dfdsR]);
+  useEffect(() => setSelProtos((s) => podar(s, new Set(protocolosR.map((p) => p.id)))), [protocolosR]);
   useEffect(() => {
-    if (itensF) setSelItens((s) => podar(s, new Set(itensF.map((it) => it.id))));
-  }, [itensF]);
+    if (itensR) setSelItens((s) => podar(s, new Set(itensR.map((it) => it.id))));
+  }, [itensR]);
   // AUTOMAÇÕES da Mesa (só a do sistema): a visão aberta decide o alvo — protocolos, DFDs ou itens viram os DFDs deles.
   // A barra do topo = TODOS os filtrados; a barra de seleção = os SELECIONADOS. Roda em segundo plano (sem sair da Mesa).
   const rodarFora = useRodarFora();
@@ -948,6 +1012,9 @@ export function DfdsView({
       ...(modoPca ? {} : { pca: pcaDe(anoPcaDoDfd(d)) }),
     };
   });
+  // Mesa conectada: a tabela mostra só os DFDs que passam no recorte das outras visões (a base vai à conexão).
+  const idsDfdR = recorte.ativo ? new Set(dfdsR.map((d) => d.id)) : null;
+  const linhasDfdR = idsDfdR ? linhasDfdTab.filter((l) => idsDfdR.has(l.key)) : linhasDfdTab;
   const acoesDfd = (l: LinhaDfd) => {
     const d = dfdPorId.get(l.key);
     const noPca = d ? { pcaId: d.protocoloPcaId, pcaIncorporadoEm: d.protocoloPcaIncorporadoEm } : null;
@@ -1366,10 +1433,8 @@ export function DfdsView({
   // Tipo, PCA, Prioridade, Seq. PCA) — no nível do ITEM, ANTES de consolidar: a linha soma só os itens que passam e as opções de cada
   // filtro vêm dos itens que passam nos DEMAIS (conectados). Os numéricos (Qtd. total, médio, variação, total, itens) ficam
   // na tabela e valem para a linha. Zeram ao sair da visão.
+  // Ficam ao sair da visão (MESA CONECTADA): recortam as outras até "Limpar recorte".
   const [filtrosItem, setFiltrosItem] = useState<Record<string, string[]>>({});
-  useEffect(() => {
-    if (!consolidada) setFiltrosItem({});
-  }, [consolidada]);
   const filtroItens = useMemo(() => {
     if (!consolidada) return null;
     const lista = itensF ?? [];
@@ -1404,7 +1469,16 @@ export function DfdsView({
       opcoes: new Map<string, string[]>(chaves.map((k, j) => [k, res.opcoes[j] ?? []])),
     };
   }, [consolidada, itensF, atributoItem, filtrosItem, emPca, classeDoItem, unidadeDoItem]);
-  const consolidados = useMemo(() => (filtroItens ? consolidarItens(filtroItens.itens) : null), [filtroItens]);
+  // O que passa nos filtros de atributo da Consolidada recorta as outras visões (pelos DFDs dos itens).
+  useEffect(() => {
+    if (!filtroItens) return; // fora da Consolidada vale o último recorte (até "Limpar recorte")
+    const ids = Object.keys(filtrosItem).length > 0 ? new Set(filtroItens.itens.map((it) => it.dfdId)) : null;
+    setPassamItensCons((a) => (mesmoConjunto(a, ids) ? a : ids));
+  }, [filtroItens, filtrosItem]);
+  const consolidados = useMemo(
+    () => (filtroItens ? consolidarItens(recorte.ativo ? filtroItens.itens.filter((it) => recorte.item(it.dfdId)) : filtroItens.itens) : null),
+    [filtroItens, recorte],
+  );
   /** O filtro de ATRIBUTO da coluna `k` da Consolidada (controlado aqui — `Column.filtroExterno`). */
   const filtroExterno = (k: string) => ({
     opcoes: filtroItens?.opcoes.get(k) ?? [],
@@ -1944,8 +2018,9 @@ export function DfdsView({
   const tabelaProtocolos = (
     <DataTable
       columns={[...colsProto, ...(modoPca?.colunasProtocolo ?? []), ...colunasDaAutomacao<ProtocoloNaMesa>(colunasAuto, "protocolo", (r) => r.id)].filter((c) => !ocultasProto.has(c.key))}
-      rows={protocolosF}
+      rows={protocolosR}
       getKey={(r) => r.id}
+      conexao={{ base: protocolosF, filtros: estadoVisoes.protocolos?.filtros, ordem: ordemMesa, onMudar: conexaoDe.protocolos }}
       selectable={podeAqui.manipular}
       selected={selProtos}
       onSelected={setSelProtos}
@@ -1970,7 +2045,8 @@ export function DfdsView({
   );
   const tabelaDfds = (
     <PlanilhaDfds
-      linhas={linhasDfdTab}
+      linhas={linhasDfdR}
+      conexao={{ base: linhasDfdTab, filtros: estadoVisoes.dfds?.filtros, ordem: ordemMesa, onMudar: conexaoDe.dfds }}
       unica
       scrollInterno
       reservaInferior={reserva}
@@ -1994,8 +2070,9 @@ export function DfdsView({
   const tabelaItens = (
     <DataTable
       columns={[...(modoPca?.colunasItens ?? []), ...colsItens, ...colunasDaAutomacao<ItemDfdRow>(colunasAuto, "item", (r) => r.id)]}
-      rows={itensF ?? []}
+      rows={itensR ?? []}
       getKey={(r) => r.id}
+      conexao={{ base: itensF ?? [], filtros: estadoVisoes.itens?.filtros, ordem: ordemMesa, onMudar: conexaoDe.itens }}
       // Itens: a edição em massa (Manipular) e, na Mesa do PCA, "Retirar do PCA" (Excluir).
       selectable={podeAqui.manipular || (!!modoPca && podeAqui.excluir)}
       selected={selItens}
@@ -2238,8 +2315,20 @@ export function DfdsView({
 
       {/* MESMO espaço para as visões — a `key` remonta e replaya o morph (fade+escala); Normal ↔ Consolidada também. As
           tabelas mostram os DADOS COMPLETOS (texto inteiro, todas as listas) quando o botão da barra está ligado. */}
+      {vista !== "dashboard" && (
+        <RecorteMesa
+          filtros={{
+            protocolos: estadoVisoes.protocolos?.filtros,
+            dfds: estadoVisoes.dfds?.filtros,
+            itens: { ...estadoVisoes.itens?.filtros, ...filtrosItem },
+          }}
+          atual={vista === "protocolos" || vista === "dfds" || vista === "itens" ? vista : null}
+          onRemover={limparRecorte}
+          onLimpar={() => limparRecorte()}
+        />
+      )}
       <DadosCompletos value={completo}>
-        <div key={vista === "itens" ? `itens-${modoItens}` : vista} className="animate-cat-morph">
+        <div key={`${vista === "itens" ? `itens-${modoItens}` : vista}-${versaoRecorte}`} className="animate-cat-morph">
           {vista === "dashboard" && dash ? (
             <DashboardMesa
               protocolos={dash.protocolos}

@@ -17,7 +17,7 @@ import { planejamentoDfd, tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import type { DfdSobrescrito } from "@/lib/protocolo";
 import { Badge, type Tone } from "./Badge";
 import { CelulaCopiavel } from "./BotaoCopiar";
-import { type Column, DataTable, type EdicoesDaTabela } from "./DataTable";
+import { type Column, type ConexaoTabela, DataTable, type EdicoesDaTabela } from "./DataTable";
 import { EstadoPonto, EstadoProcessando, EstadoResumo } from "./EstadoCelula";
 import { IconArrowRight } from "./icons";
 import { PresencaNoItem } from "./PresencaNoItem";
@@ -147,6 +147,7 @@ export function PlanilhaDfds({
   ocultasPadrao,
   exportar,
   colunasExtras = [],
+  conexao,
 }: {
   linhas: LinhaDfd[];
   selecionavel?: boolean;
@@ -183,6 +184,8 @@ export function PlanilhaDfds({
   exportar?: { nome: string } | false;
   /** Colunas a mais no fim (antes das ações) — ex.: as criadas pelas automações na Mesa. */
   colunasExtras?: Column<LinhaDfd>[];
+  /** MESA CONECTADA — repassada à tabela principal (ver `ConexaoTabela`). */
+  conexao?: ConexaoTabela<LinhaDfd>;
 }) {
   const temSituacao = linhas.some((l) => l.situacao != null);
   const temProtocolo = linhas.some((l) => l.protocolo != null);
@@ -419,7 +422,7 @@ export function PlanilhaDfds({
   } as const;
 
   // A tabela PRINCIPAL (a única, ou a dos regulares) leva as ações do rodapé e a mensagem de vazio.
-  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao } as const;
+  const principal = { ...comum, acoesRodape, vazio, edicoes, exportar, ocultasPadrao, conexao } as const;
   // Tabela ÚNICA (já protocolado): todas as linhas juntas — o filtro da coluna Estado separa.
   if (unica || semEstado) {
     if (scrollInterno) return <DataTable rows={linhas} scrollInterno {...principal} />;

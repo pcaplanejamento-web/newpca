@@ -98,6 +98,31 @@ export type EdicoesDaTabela = {
 };
 
 type OrdemAtual = { key: string | null; dir: "asc" | "desc" };
+
+/** MESA CONECTADA (opt-in): a tabela começa nos filtros/ordem que o DONO guarda (sobrevivem à troca de visão) e informa,
+ * a cada mudança, os filtros, a ordem e as chaves das linhas da BASE (sem a restrição das outras visões) que passam nos
+ * PRÓPRIOS filtros — `null` = nenhum filtro próprio. */
+export type ConexaoTabela<R> = {
+  base: R[];
+  filtros?: Record<string, FiltroValor>;
+  ordem?: { key: string; dir: "asc" | "desc" } | null;
+  onMudar: (e: { filtros: Record<string, FiltroValor>; ordem: { key: string; dir: "asc" | "desc" } | null; passam: Key[] | null }) => void;
+};
+
+/** Os valores de cada coluna extraídos UMA vez por linha (filtro/faceta/ordenação leem daqui). */
+function extrairDados<R>(columns: Column<R>[], rows: R[]): ColunaDados[] {
+  return columns.map((c): ColunaDados => {
+    const tipo = c.filter ?? "values";
+    if (c.filtroExterno) return { tipo: "none" }; // filtrado FORA da tabela
+    if (tipo === "values") {
+      const vals = rows.map((r) => (c.valores ? c.valores(r) : c.value ? [c.value(r)] : []));
+      return { tipo, vals, ordem: c.filterOptions };
+    }
+    if (tipo === "date") return { tipo, vals: rows.map((r) => c.value?.(r) ?? "") };
+    if (tipo === "range") return { tipo, vals: rows.map((r) => c.numero?.(r) ?? null) };
+    return { tipo: "none" };
+  });
+}
 const SEM_EDICOES: EdicaoTabela[] = [];
 const SEM_PADROES: Record<string, unknown> = {};
 const larguraFixa = (px: number): CSSProperties => ({ width: px, minWidth: px, maxWidth: px });
@@ -130,6 +155,7 @@ export function DataTable<R>({
   exportar,
   ocultas,
   ocultasPadrao,
+  conexao,
 }: {
   columns: Column<R>[];
   rows: R[];
@@ -197,6 +223,8 @@ export function DataTable<R>({
   ocultas?: ReadonlySet<string>;
   /** Colunas OCULTAS no padrão do sistema (a tabela abre sem elas; a edição da tabela as mostra de volta). */
   ocultasPadrao?: readonly string[];
+  /** MESA CONECTADA — ver `ConexaoTabela`. */
+  conexao?: ConexaoTabela<R>;
 }) {
   // A chave ESTÁVEL das ocultas (o Set pode ser recriado a cada render do dono).
   const chaveOcultas = ocultas?.size ? [...ocultas].sort().join("|") : "";
@@ -226,8 +254,12 @@ export function DataTable<R>({
       setPage(1);
     },
   });
-  const [filters, setFilters] = useState<Record<string, FiltroValor>>((): Record<string, FiltroValor> => editor.salvo.filtros);
-  const [sort, setSort] = useState<OrdemAtual>((): OrdemAtual => editor.salvo.ordem ?? { key: null, dir: "asc" });
+  const [filters, setFilters] = useState<Record<string, FiltroValor>>((): Record<string, FiltroValor> => conexao?.filtros ?? editor.salvo.filtros);
+  const [sort, setSort] = useState<OrdemAtual>((): OrdemAtual => {
+    const o = conexao?.ordem;
+    if (o && todasColunas.some((c) => c.key === o.key)) return o;
+    return editor.salvo.ordem ?? { key: null, dir: "asc" };
+  });
   const [page, setPage] = useState(1);
   // scrollInterno: linhas por página escolhidas NA PRÓPRIA tabela (limita as linhas em DOM); começa na escolha do ADM.
   const linhasAdm = useLinhasTabela();
@@ -304,21 +336,7 @@ export function DataTable<R>({
   const tamPagina = scrollInterno || linhasSalvas ? limite : fillHeight ? (autoRows ?? pageSize ?? 20) : pageSize;
 
   // Valores de cada coluna extraídos UMA vez por linha (filtro/faceta/ordenação leem daqui).
-  const dados = useMemo<ColunaDados[]>(
-    () =>
-      columns.map((c): ColunaDados => {
-        const tipo = c.filter ?? "values";
-        if (c.filtroExterno) return { tipo: "none" }; // filtrado FORA da tabela
-        if (tipo === "values") {
-          const vals = rows.map((r) => (c.valores ? c.valores(r) : c.value ? [c.value(r)] : []));
-          return { tipo, vals, ordem: c.filterOptions };
-        }
-        if (tipo === "date") return { tipo, vals: rows.map((r) => c.value?.(r) ?? "") };
-        if (tipo === "range") return { tipo, vals: rows.map((r) => c.numero?.(r) ?? null) };
-        return { tipo: "none" };
-      }),
-    [columns, rows],
-  );
+  const dados = useMemo<ColunaDados[]>(() => extrairDados(columns, rows), [columns, rows]);
 
   // Filtros CONECTADOS: passa em todos + faceta de cada coluna (opções/faixa/anos) numa passada. Coluna
   // TRAVADA (hierarquia acima da tabela) não filtra.
@@ -349,6 +367,26 @@ export function DataTable<R>({
   const ativos = columns.filter((c) =>
     c.filtroExterno ? c.filtroExterno.valor.length > 0 : !c.travado && filtroAtivo(c.filter ?? "values", filters[c.key]),
   );
+
+  // MESA CONECTADA: as linhas da BASE que passam nos filtros PRÓPRIOS (sem a restrição das outras visões — nunca há ciclo).
+  const baseConexao = conexao?.base;
+  const getKeyRef = useRef(getKey);
+  getKeyRef.current = getKey;
+  const colunasRef = useRef(columns);
+  colunasRef.current = columns;
+  // As colunas costumam chegar como um array NOVO a cada render: o recálculo segue as CHAVES delas.
+  const sigColunas = columns.map((c) => c.key).join("|");
+  const passamBase = useMemo(() => {
+    const columns = colunasRef.current;
+    if (!baseConexao || !sigColunas) return null;
+    const vals = columns.map((c) => (c.travado || c.filtroExterno ? undefined : filters[c.key]));
+    if (!columns.some((c, i) => vals[i] !== undefined && filtroAtivo(c.filter ?? "values", vals[i]))) return null;
+    return aplicarFiltros(baseConexao.length, extrairDados(columns, baseConexao), vals).passam.map((i) => getKeyRef.current(baseConexao[i]));
+  }, [baseConexao, sigColunas, filters]);
+  const onMudarConexao = conexao?.onMudar;
+  useEffect(() => {
+    onMudarConexao?.({ filtros: filters, ordem: sort.key ? { key: sort.key, dir: sort.dir } : null, passam: passamBase });
+  }, [onMudarConexao, filters, sort, passamBase]);
 
   /** Grava (ou remove, com `null`) o filtro de uma coluna e volta à 1ª página. */
   function aplicarFiltro(key: string, v: FiltroValor | null) {
