@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { textoDuracao, textoPct } from "@/lib/fluxo-progresso";
 import { Button } from "./Button";
 import { IconAlert, IconAmpliar, IconChevronDown, IconCirculoCheck, IconClose, IconParar, IconSpinner } from "./icons";
 import { Progress } from "./Progress";
@@ -26,6 +27,10 @@ export type Trabalho = {
   total: number;
   /** O que está acontecendo agora (ou o desfecho). */
   texto?: string;
+  /** O ANDAMENTO REAL 0..1 (o mesmo cálculo das etapas da tela dona) — mostrado em %; sem ele, feito/total. */
+  fracao?: number;
+  /** O tempo que falta (ms), pelo ritmo recente; `null` = ainda calculando. */
+  restanteMs?: number | null;
   /** A página dona (onde os detalhes ficam). */
   rota: string;
   /** O andamento item a item (ex.: cada DFD) — visto ao expandir. */
@@ -170,7 +175,7 @@ export function useTrabalhoSegundoPlano(t: Omit<Trabalho, "chave"> | null) {
   const ctx = useContext(SegundoPlanoCtx);
   const chave = useContext(ChaveCtx) ?? "";
   const ultimo = useRef<string | null>(null);
-  const assinatura = t ? `${t.id}|${t.titulo}|${t.estado}|${t.feito}|${t.total}|${t.texto ?? ""}` : "";
+  const assinatura = t ? `${t.id}|${t.titulo}|${t.estado}|${t.feito}|${t.total}|${t.texto ?? ""}|${t.fracao == null ? "" : Math.floor(t.fracao * 100)}|${t.restanteMs == null ? "" : Math.round(t.restanteMs / 30000)}` : "";
   const ref = useRef(t);
   ref.current = t;
   // O desfecho visto NA página não vai ao painel quando a pessoa sai dela.
@@ -259,7 +264,11 @@ export function PainelSegundoPlano({
 
   if (!montado || !visivel) return null;
   const principal = trabalhos.find((t) => t.estado === "rodando") ?? trabalhos[0];
-  const pct = (t: Trabalho) => (t.total > 0 ? (t.feito / t.total) * 100 : 0);
+  const pct = (t: Trabalho) => (t.fracao != null ? t.fracao * 100 : t.total > 0 ? (t.feito / t.total) * 100 : 0);
+  // "37% · ≈ 4 min" com o andamento real; senão "3/15".
+  const andamento = (t: Trabalho) =>
+    t.fracao != null ? `${textoPct(t.fracao)}${t.restanteMs != null ? ` · ≈ ${textoDuracao(t.restanteMs)}` : ""}` : `${t.feito}/${t.total}`;
+  const temAndamento = (t: Trabalho) => t.fracao != null || t.total > 0;
   const abrir = (t: Trabalho) => {
     setAberto(false);
     router.push(t.rota);
@@ -286,9 +295,9 @@ export function PainelSegundoPlano({
                   <span className="min-w-0 flex-1 truncate text-sm font-medium" title={t.titulo}>
                     {t.titulo}
                   </span>
-                  <span className="shrink-0 text-xs text-muted tabular-nums">{t.total > 0 ? `${t.feito}/${t.total}` : ROTULO[t.estado]}</span>
+                  <span className="shrink-0 text-xs text-muted tabular-nums">{temAndamento(t) && ATIVO(t.estado) ? andamento(t) : t.total > 0 ? `${t.feito}/${t.total}` : ROTULO[t.estado]}</span>
                 </div>
-                {ATIVO(t.estado) && t.total > 0 && <Progress value={pct(t)} label={undefined} />}
+                {ATIVO(t.estado) && temAndamento(t) && <Progress value={pct(t)} label={undefined} />}
                 {t.texto && <p className="line-clamp-2 text-xs text-muted" title={t.texto}>{t.texto}</p>}
                 {!!t.itens?.length && (
                   <ul aria-label="Andamento item a item" className="max-h-40 space-y-0.5 overflow-y-auto rounded-md bg-surface-2 p-1.5 text-xs">
@@ -331,10 +340,10 @@ export function PainelSegundoPlano({
           {ICONE[principal.estado]}
           <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">{principal.titulo}</span>
           <span className="shrink-0 text-xs text-muted tabular-nums">
-            {principal.total > 0 && ATIVO(principal.estado) ? `${principal.feito}/${principal.total}` : ROTULO[principal.estado]}
+            {temAndamento(principal) && ATIVO(principal.estado) ? andamento(principal) : ROTULO[principal.estado]}
             {trabalhos.length > 1 ? ` · +${trabalhos.length - 1}` : ""}
           </span>
-          {ATIVO(principal.estado) && principal.total > 0 && (
+          {ATIVO(principal.estado) && temAndamento(principal) && (
             <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-track">
               <span className="block h-full bg-accent transition-[width] duration-300" style={{ width: `${pct(principal)}%` }} />
             </span>

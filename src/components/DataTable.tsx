@@ -34,7 +34,7 @@ import { useDetalheSigla, useLinhasTabela, useQuemExporta } from "./ConfigTabela
 import { AlturaNoHtml, FOLGA, reservaAteORodape, topoNoDocumento, useAlturaAteOFim } from "./AlturaCheia";
 import { definirVarRaiz, ehDesktop } from "./espacamento";
 import { IconFilter, IconLock } from "./icons";
-import { BotaoExportar, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
+import { BotaoExportar, EscolherColunasXlsx, type FormatoExportacao, usePodeExportar } from "./ExportarTabelas";
 import { MultiSelectHeader } from "./MultiSelectHeader";
 import { Pager } from "./Pager";
 import { RangeFilterHeader } from "./RangeFilterHeader";
@@ -425,11 +425,26 @@ export function DataTable<R>({
   const podeExportar = usePodeExportar();
   const quemExporta = useQuemExporta();
   const nomeExportar = exportar === false || !podeExportar ? null : (exportar?.nome ?? "Tabela");
-  async function exportarTabela(formato: FormatoExportacao) {
+  const [escolhaXlsx, setEscolhaXlsx] = useState(false);
+  const ordemExport = () => ordemDasColunas(chaves, lay.fixadas, lay.ordemManual);
+  // As colunas que PODEM ir ao XLSX (com cabeçalho e valor), na ordem da tabela; as visíveis = o padrão (as do PDF).
+  const colunasXlsx = () => {
+    const o = ordemExport();
+    return [...o.fixadas, ...o.livres]
+      .map((k) => columns[indice.get(k) as number])
+      .filter((c): c is Column<R> => !!c && c.header.trim() !== "" && !!(c.value || c.valores || c.numero))
+      .map((c) => ({ chave: c.key, titulo: c.header, padrao: !fora.has(c.key) }));
+  };
+  async function exportarTabela(formato: FormatoExportacao, escolhidas?: string[]) {
     if (!nomeExportar || exportando) return;
-    const o = ordemDasColunas(chaves, lay.fixadas, lay.ordemManual);
+    if (formato === "xlsx" && !escolhidas) {
+      setEscolhaXlsx(true);
+      return;
+    }
+    setEscolhaXlsx(false);
+    const o = ordemExport();
     const cols: ColunaPlanilha<R>[] = [...o.fixadas, ...o.livres]
-      .filter((k) => !fora.has(k))
+      .filter((k) => (escolhidas ? escolhidas.includes(k) : !fora.has(k)))
       .map((k) => columns[indice.get(k) as number])
       .filter((c): c is Column<R> => !!c)
       .map((c) => ({
@@ -823,7 +838,18 @@ export function DataTable<R>({
               semOcultas: lay.ocultas.length === 0,
             })}
           {nomeExportar && (
-            <BotaoExportar nome={nomeExportar} disabled={ordenadas.length === 0} carregando={exportando} onExportar={(f) => void exportarTabela(f)} />
+            <>
+              <BotaoExportar nome={nomeExportar} disabled={ordenadas.length === 0} carregando={exportando} onExportar={(f) => void exportarTabela(f)} />
+              {escolhaXlsx && (
+                <EscolherColunasXlsx
+                  aberto
+                  nome={nomeExportar}
+                  colunas={colunasXlsx()}
+                  onFechar={() => setEscolhaXlsx(false)}
+                  onBaixar={(ks) => void exportarTabela("xlsx", ks)}
+                />
+              )}
+            </>
           )}
           {typeof acoesRodape === "function" ? acoesRodape(ordenadas) : acoesRodape}
           {(scrollInterno || linhasSalvas) && (

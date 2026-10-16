@@ -162,6 +162,7 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: Pode
         ausentes: orc.ausentes,
         unidades: orc.unidades,
         orgaos: orc.orgaos,
+        grupos: orc.grupos,
       }}
       comparativo={ref && comp ? { titulo: `${ref.nome} ${ref.ano}`, visaoInicial: pca.orcamentoVisaoId, ...comp } : null}
       podeExportar={pode.exportar}

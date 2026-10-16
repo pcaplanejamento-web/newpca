@@ -2,7 +2,7 @@
 
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
-import { blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
+import { blocosElementosPca, blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
 import {
   comparativoPorOrgao,
   comparativoPorUnidade,
@@ -20,7 +20,7 @@ import {
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
 import { unidadesDoOrcamento, type VinculoOrcamento, vinculosDaVisao } from "@/lib/orcamento-vinculo";
-import { semVinculoPorAlvo, vinculosDaLinha } from "@/lib/vinculos-unidade";
+import { blocosVinculosDasLinhas, semVinculoPorAlvo, situacaoVinculos, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -46,12 +46,14 @@ import { StatMini } from "./StatMini";
 import { toast } from "./Toast";
 import { useGravacaoVinculos } from "./OrcamentoVinculosAba";
 import { DicaFlutuante } from "./DicaFlutuante";
+import { GruposOrcamento } from "./GruposOrcamento";
+import { type GrupoOrcamento, refsDosGrupos } from "@/lib/orcamento-grupos";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
 import { SeletorVisaoPca, VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 
 type Filtro = "todas" | "acima" | "dentro";
 type Vista = "comparativo" | "unidade";
-type Nivel = "unidade" | "orgao";
+type Nivel = "unidade" | "grupo" | "orgao";
 
 /** A linha da tabela "PCA × Orçamento": uma UNIDADE (o micro) ou um ÓRGÃO (a soma das unidades dele). */
 type LinhaTabela = (LinhaComparativo & { nivel: "unidade"; chave: string }) | (LinhaOrgao & { nivel: "orgao" });
@@ -81,6 +83,8 @@ export type DadosOrcamentoPca = {
   unidades: UnidadeRef[];
   /** Os órgãos (a visão "por órgão" = a soma das unidades de cada um). */
   orgaos: OrgaoRef[];
+  /** Os GRUPOS ORÇAMENTÁRIOS (unidades que compartilham o orçamento) — o "Ver por Grupo". */
+  grupos?: GrupoOrcamento[];
   /** PRÉVIA ligada (Configuração do PCA, só em Preview): os DFDs/protocolos ainda NÃO incorporados no planejado. */
   previa?: { dfds: number; protocolos: number } | null;
   /** A visão gravada no PCA (`null` = orçamento inteiro). */
@@ -109,7 +113,7 @@ const COLS_PLANILHA: Column<Planilha>[] = [
 type AbaOrigem = "orcamento" | "pca";
 
 /** ORIGEM de uma linha do comparativo: os lançamentos do CUBO e as contratações do PCA que formam os números. */
-function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; aberta: LinhaTabela | null; onClose: () => void }) {
+function OrigemLinha({ dados, aberta, onClose, unidades = dados.unidades }: { dados: DadosOrcamentoPca; aberta: LinhaTabela | null; onClose: () => void; /** No "Ver por Grupo", as unidades com o grupo no lugar do órgão. */ unidades?: DadosOrcamentoPca["unidades"] }) {
   const [aba, setAba] = useState<AbaOrigem>("orcamento");
   const [item, setItem] = useState<AberturaMesa | null>(null);
   // Mantém a última linha enquanto o banner fecha (animação) e volta à aba Orçamento a cada linha nova.
@@ -124,9 +128,9 @@ function OrigemLinha({ dados, aberta, onClose }: { dados: DadosOrcamentoPca; abe
       !linha
         ? { planejado: [], orcamento: [] }
         : linha.nivel === "orgao"
-          ? origemDoOrgao(linha.chave, dados.planejado, dados.linhas, dados.unidades)
-          : origemDaLinha(linha.unidadeId, dados.planejado, dados.linhas, dados.unidades),
-    [linha, dados],
+          ? origemDoOrgao(linha.chave, dados.planejado, dados.linhas, unidades)
+          : origemDaLinha(linha.unidadeId, dados.planejado, dados.linhas, unidades),
+    [linha, dados, unidades],
   );
   const itens = origem.planejado.flatMap((p) => (p.item ? [p.item] : []));
   const planilhas: Planilha[] = origem.planejado.flatMap((p) => (p.planilha ? [{ ...p.planilha, itens: p.itens, valor: p.valor }] : []));
@@ -414,14 +418,25 @@ export function OrcamentoPca({
     const todas = vinculosDaLinha(unidadesCubo, efetivos, null).semVinculo;
     return { porAlvo, todas };
   }, [unidadesCubo, efetivos]);
+  const pendentesDe = (l: { unidadeId: number | null }) =>
+    (l.unidadeId == null ? semVinculoPorLinha.todas : (semVinculoPorLinha.porAlvo.get(l.unidadeId) ?? [])).reduce((s, p) => s + p.acoes.length, 0);
+  const [selecao, setSelecao] = useState<Set<string>>(new Set());
+  const [gerandoVinc, setGerandoVinc] = useState(false);
+  const [gerandoElem, setGerandoElem] = useState(false);
+  const quem = useQuemExporta();
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivel, setNivel] = useState<Nivel>("unidade");
   const [aberta, setAberta] = useState<LinhaTabela | null>(null);
   const porUnidade = useMemo(() => comparativoPorUnidade(dados.planejado, dados.linhas, dados.unidades), [dados]);
+  // GRUPOS ORÇAMENTÁRIOS: as unidades recebem o grupo no lugar do órgão — a MESMA soma do órgão (a unidade sozinha fica só).
+  const refsGrupo = useMemo(() => refsDosGrupos(dados.unidades, dados.grupos ?? []), [dados.unidades, dados.grupos]);
+  const [editaGrupos, setEditaGrupos] = useState(false);
   const linhas = useMemo<LinhaTabela[]>(
     () =>
-      nivel === "orgao"
+      nivel === "grupo"
+        ? comparativoPorOrgao(comparativoPorUnidade(dados.planejado, dados.linhas, refsGrupo.unidades), refsGrupo.orgaos).map((l) => ({ ...l, nivel: "orgao" as const }))
+        : nivel === "orgao"
         ? comparativoPorOrgao(porUnidade, dados.orgaos ?? []).map((l) => ({ ...l, nivel: "orgao" as const }))
         : porUnidade.map((l) => ({ ...l, nivel: "unidade" as const, chave: l.unidadeId == null ? "sem" : `u${l.unidadeId}` })),
     [nivel, porUnidade, dados.orgaos],
@@ -454,10 +469,10 @@ export function OrcamentoPca({
   const vis = filtro === "todas" ? linhas : filtro === "acima" ? acima : linhas.filter((l) => !linhaAcima(l));
 
   const colNome: Column<LinhaTabela> =
-    nivel === "orgao"
+    nivel !== "unidade"
       ? {
           key: "orgao",
-          header: "Órgão",
+          header: nivel === "grupo" ? "Grupo" : "Órgão",
           align: "left",
           minWidth: 220,
           value: (l) => (l.nome && l.nome !== l.sigla ? `${l.sigla} — ${l.nome}` : l.sigla),
@@ -490,7 +505,7 @@ export function OrcamentoPca({
           ),
         };
   const colLado: Column<LinhaTabela> =
-    nivel === "orgao"
+    nivel !== "unidade"
       ? {
           key: "unidades",
           header: "Unidades",
@@ -563,8 +578,9 @@ export function OrcamentoPca({
     cols.push({
       key: "vinculos",
       header: "Vínculos",
-      filter: "none",
       nowrap: true,
+      total: false,
+      value: (l) => (l.nivel === "unidade" ? situacaoVinculos(l, pendentesDe(l)) : ""),
       render: (l) => {
         if (l.nivel !== "unidade") return null;
         const lista = l.unidadeId == null ? semVinculoPorLinha.todas : (semVinculoPorLinha.porAlvo.get(l.unidadeId) ?? []);
@@ -589,6 +605,50 @@ export function OrcamentoPca({
         return pend > 0 ? <DicaFlutuante conteudo={<ResumoSemVinculo titulo={rotulo} lista={lista} />}>{botao}</DicaFlutuante> : botao;
       },
     });
+
+  async function relatorioElementos() {
+    if (gerandoElem) return;
+    setGerandoElem(true);
+    try {
+      const titulo = `Elementos do orçamento · PCA ${dados.ano ?? ""}`;
+      const sub = `${dados.orcamento ? `${dados.orcamento.nome} (${dados.orcamento.ano})` : ""}${dados.visaoNome ? ` · visão ${dados.visaoNome}` : ""}`;
+      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
+      await baixarDocumentoPdf(
+        nomeArquivoPdf(titulo.replace(" · ", " - "), dataIsoBrasilia(new Date().toISOString())),
+        { titulo, blocos: blocosElementosPca({ titulo, subtitulo: sub, lancamentos: dados.linhas, linhas: porUnidade }) },
+        { usuario: quem },
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
+    } finally {
+      setGerandoElem(false);
+    }
+  }
+
+  async function relatorioVinculos(ls: LinhaTabela[]) {
+    if (gerandoVinc || !comparativo) return;
+    setGerandoVinc(true);
+    try {
+      const anoOrc = dados.orcamento ? `${dados.orcamento.nome} (${dados.orcamento.ano})` : String(dados.ano ?? "");
+      const titulo = `Vínculos do orçamento · PCA ${dados.ano ?? ""}`;
+      const linhasDoc = ls.flatMap((l) => (l.nivel !== "unidade" ? [] : [{
+        titulo: l.unidadeId == null ? "Ações sem vínculo" : `Vínculos · ${l.sigla}`,
+        nome: l.unidadeId == null ? "" : l.nome,
+        comUnidade: l.unidadeId != null,
+        v: vinculosDaLinha(unidadesCubo, efetivos, l.unidadeId, comparativo.alvos.unidades),
+      }]));
+      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
+      await baixarDocumentoPdf(
+        nomeArquivoPdf(titulo.replace(" · ", " - "), dataIsoBrasilia(new Date().toISOString())),
+        { titulo, blocos: blocosVinculosDasLinhas(titulo, anoOrc, linhasDoc) },
+        { usuario: quem },
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
+    } finally {
+      setGerandoVinc(false);
+    }
+  }
 
   if (dados.ano == null) return <Callout kind="warn">Defina o ano do PCA (aba Configuração) para cruzar com o orçamento.</Callout>;
 
@@ -699,9 +759,15 @@ export function OrcamentoPca({
               ariaLabel="Ver por"
               options={[
                 { value: "unidade", label: "Por unidade", curto: "Unidade" },
+                { value: "grupo", label: "Por grupo", curto: "Grupo" },
                 { value: "orgao", label: "Por órgão", curto: "Órgão" },
               ]}
             />
+            {nivel === "grupo" && podeConfigurarOrcamento && comparativo && (
+              <Button size="sm" variant="secondary" onClick={() => setEditaGrupos(true)} title="As unidades que compartilham o mesmo orçamento (ex.: a Secretaria e o Fundo)">
+                Grupos ({(dados.grupos ?? []).length})
+              </Button>
+            )}
             <Segmented<Filtro>
               value={filtro}
               onChange={setFiltro}
@@ -733,6 +799,17 @@ export function OrcamentoPca({
               </div>
             )}
             <div className="flex items-center gap-2 lg:ml-auto">
+              {podeExportar && dados.orcamento && (
+                <Button
+                  size="sm"
+                  variant="icon"
+                  icon={<IconFile className="h-4 w-4" />}
+                  loading={gerandoElem}
+                  aria-label="Relatório dos elementos de despesa (PDF)"
+                  title="Relatório dos elementos de despesa (PDF) — a dotação considerada por elemento, das unidades com contratações no PCA"
+                  onClick={() => void relatorioElementos()}
+                />
+              )}
               {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
               {botaoVisao}
             </div>
@@ -744,17 +821,48 @@ export function OrcamentoPca({
             scrollInterno
             density="compact"
             minWidth={900}
-            exportar={{ nome: `PCA × Orçamento ${dados.ano ?? ""} - por ${nivel === "orgao" ? "órgão" : "unidade"}` }}
+            exportar={{ nome: `PCA × Orçamento ${dados.ano ?? ""} - por ${nivel === "orgao" ? "órgão" : nivel === "grupo" ? "grupo" : "unidade"}` }}
             onRowClick={setAberta}
             activeKey={aberta?.chave ?? null}
+            selectable={editaVinculos && nivel === "unidade"}
+            selected={selecao}
+            onSelected={(n) => setSelecao(n as Set<string>)}
+            acoesRodape={
+              editaVinculos && nivel === "unidade" && podeExportar
+                ? (ls: LinhaTabela[]) => {
+                    const alvo = selecao.size ? ls.filter((l) => selecao.has(l.chave)) : ls;
+                    return (
+                      <Button
+                        size="sm"
+                        icon={<IconFile className="h-4 w-4" />}
+                        loading={gerandoVinc}
+                        disabled={!alvo.length}
+                        title={selecao.size ? "Os vínculos das linhas selecionadas" : "Os vínculos das linhas à vista (filtros da tabela)"}
+                        onClick={() => void relatorioVinculos(alvo)}
+                      >
+                        <span className="hidden sm:inline">Relatório dos vínculos</span> ({num(alvo.length)})
+                      </Button>
+                    );
+                  }
+                : undefined
+            }
             vazio={dados.orcamento ? "Nada a comparar nesta visão." : `Nenhum orçamento de ${dados.ano} importado — importe o CUBO em Orçamento para comparar.`}
             resumo={(ls) =>
-              `${ls.length} ${nivel === "orgao" ? "órgão(s)" : "unidade(s)"} · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`
+              `${ls.length} ${nivel === "orgao" ? "órgão(s)" : nivel === "grupo" ? "linha(s)" : "unidade(s)"} · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`
             }
           />
         </>
       )}
-      <OrigemLinha dados={dados} aberta={aberta} onClose={() => setAberta(null)} />
+      <OrigemLinha dados={dados} aberta={aberta} onClose={() => setAberta(null)} unidades={nivel === "grupo" ? refsGrupo.unidades.map((u) => ({ ...u, orgaoId: u.orgaoId ?? null, orgaoSigla: u.orgaoSigla ?? null, oculta: false })) : undefined} />
+      {editaGrupos && comparativo && (
+        <GruposOrcamento
+          aberto
+          onFechar={() => setEditaGrupos(false)}
+          grupos={dados.grupos ?? []}
+          unidades={dados.unidades}
+          vinculos={comparativo.vinculos.filter((v) => v.alvoId != null).map((v) => ({ chave: v.chave, alvoId: v.alvoId as number }))}
+        />
+      )}
       {editaVinculos && comparativo && (
         <VinculosDaUnidade
           unidade={vinculosDe}

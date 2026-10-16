@@ -1,3 +1,5 @@
+import { getGruposOrcamento } from "./orcamento-grupos-dados";
+import type { GrupoOrcamento } from "./orcamento-grupos";
 import { itensParaTexto } from "./itens-dash-texto";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
@@ -1045,6 +1047,8 @@ export type OrcamentoDoPca = {
   previa: { dfds: number; protocolos: number } | null;
   /** Os valores da visão que o orçamento ATUAL não traz (ex.: depois de reenviar o QDD) — vazio = visão em dia. */
   ausentes: AusentesVisao;
+  /** Os GRUPOS ORÇAMENTÁRIOS (unidades que compartilham o orçamento) — o "Ver por Grupo" do comparativo. */
+  grupos?: GrupoOrcamento[];
 };
 
 /** Orçamento (CUBO do MESMO ano) filtrado pela visão do PCA + o planejado por unidade. */
@@ -1150,7 +1154,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta, c.prioridadePorDfd) }));
     previa = c.previa;
   }
-  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa, ausentes };
+  return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa, ausentes, grupos: await getGruposOrcamento() };
 }
 
 /**

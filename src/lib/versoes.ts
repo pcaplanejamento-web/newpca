@@ -35,6 +35,18 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.115.0",
+    data: "2026-10-16",
+    titulo: "Orçamento do PCA: grupos, elementos e vínculos; XLSX com escolha de colunas",
+    mudancas: [
+      { tipo: "novo", area: "PCA › Orçamento", texto: "“Ver por Grupo”: unidades que compartilham o orçamento (ex.: a Secretaria e o Fundo de Cultura) somam numa linha só. O botão “Grupos” cadastra os grupos, com sugestões pelos vínculos.", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA › Orçamento", texto: "Relatório dos elementos de despesa (PDF): a dotação considerada por elemento, das unidades com contratações no PCA e unidade a unidade, com o planejado e o saldo.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA › Orçamento", texto: "A coluna Vínculos ganhou filtro (Vinculada · Com ações sem vínculo · Sem vínculo · Sem orçamento), e a tabela tem seleção com o “Relatório dos vínculos” das linhas marcadas (ou das filtradas).", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Tabelas", texto: "O XLSX abre a escolha das colunas antes de baixar: as do PDF vêm marcadas, e a sua escolha fica lembrada neste aparelho.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Automação", texto: "As automações em andamento mostram a % e o tempo que falta no painel de segundo plano.", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.114.2",
     data: "2026-10-16",
     titulo: "Matrícula com até 7 números",

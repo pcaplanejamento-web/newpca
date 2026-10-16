@@ -775,3 +775,88 @@ function blocosDefinicoes(b: BlocoDoc[], r: RelatorioOrcamento) {
   });
 }
 
+
+/** O elemento de despesa de um lançamento ("3.3.90.30 - MATERIAL DE CONSUMO"; sem dado, "Sem elemento"). */
+const rotuloElemento = (l: { codigoElemento: string | null; nomeElemento: string | null }) =>
+  [l.codigoElemento?.trim(), l.nomeElemento?.trim()].filter(Boolean).join(" - ") || "Sem elemento";
+
+/**
+ * O RELATÓRIO DOS ELEMENTOS DE DESPESA do orçamento do PCA (PDF A4): a dotação CONSIDERADA (visão + vínculos — os MESMOS
+ * lançamentos do comparativo) por elemento, primeiro de todas as unidades com contratações no PCA e depois unidade a
+ * unidade, com o planejado e o saldo da unidade. O PCA não liga o item a um elemento — o planejado fica no total da
+ * unidade (a nota diz). Soma dos elementos de uma unidade = o orçamento dela no comparativo.
+ */
+export function blocosElementosPca(e: {
+  titulo: string;
+  subtitulo: string;
+  lancamentos: readonly { unidadeId: number | null; codigoElemento: string | null; nomeElemento: string | null; valor: number }[];
+  linhas: readonly { unidadeId: number | null; sigla: string; nome: string; planejado: number; orcamento: number; contratacoes: number }[];
+}): BlocoDoc[] {
+  const porUnidade = new Map<number, Map<string, { valor: number; n: number }>>();
+  for (const l of e.lancamentos) {
+    if (l.unidadeId == null) continue;
+    const m = porUnidade.get(l.unidadeId) ?? new Map();
+    const k = rotuloElemento(l);
+    const cur = m.get(k) ?? { valor: 0, n: 0 };
+    cur.valor += l.valor;
+    cur.n++;
+    m.set(k, cur);
+    porUnidade.set(l.unidadeId, m);
+  }
+  const unidades = e.linhas.filter((l) => l.unidadeId != null && (l.planejado > 0 || l.orcamento > 0));
+  const comPca = unidades.filter((u) => u.planejado > 0);
+  const geral = new Map<string, { valor: number; unidades: Set<number> }>();
+  for (const u of comPca)
+    for (const [k, v] of porUnidade.get(u.unidadeId as number) ?? []) {
+      const g = geral.get(k) ?? { valor: 0, unidades: new Set() };
+      g.valor += v.valor;
+      g.unidades.add(u.unidadeId as number);
+      geral.set(k, g);
+    }
+  const ordem = <T extends { valor: number }>(xs: [string, T][]) => xs.sort((a, b) => b[1].valor - a[1].valor || a[0].localeCompare(b[0], "pt-BR"));
+  const soma = (xs: { valor: number }[]) => xs.reduce((s, x) => s + x.valor, 0);
+  const planejado = comPca.reduce((s, u) => s + u.planejado, 0);
+  const dotacao = soma([...geral.values()]);
+  const blocos: BlocoDoc[] = [
+    { tipo: "titulo", texto: e.titulo },
+    { tipo: "paragrafo", texto: e.subtitulo, cor: "muted" },
+    {
+      tipo: "destaques",
+      itens: [
+        { rotulo: "Dotação (unidades com PCA)", valor: brl(dotacao), detalhe: `${num(geral.size)} elemento(s)` },
+        { rotulo: "Planejado no PCA", valor: brl(planejado), detalhe: `${num(comPca.length)} unidade(s)` },
+        { rotulo: "Saldo", valor: brl(dotacao - planejado), cor: dotacao - planejado < 0 ? "#b91c1c" : undefined },
+      ],
+    },
+    { tipo: "nota", texto: "O PCA não liga a contratação a um elemento de despesa: o planejado e o saldo são da unidade; os elementos mostram onde está a dotação dela.", cor: "#64748b" },
+    { tipo: "secao", texto: "Elementos das unidades com contratações no PCA" },
+    {
+      tipo: "tabela",
+      colunas: [{ titulo: "Elemento de despesa", peso: 6 }, { titulo: "Unidades", peso: 1, alinhar: "right" }, { titulo: "Dotação", peso: 2, alinhar: "right" }],
+      linhas: geral.size
+        ? [...ordem([...geral]).map(([k, g]) => ({ celulas: [k, num(g.unidades.size), brl(g.valor)] })), { celulas: ["TOTAL", "", brl(dotacao)], destaque: true }]
+        : [],
+      vazio: "Nenhuma dotação vinculada às unidades com contratações.",
+    },
+    { tipo: "secao", texto: "Por unidade" },
+  ];
+  for (const u of unidades) {
+    const els = ordem([...(porUnidade.get(u.unidadeId as number) ?? new Map<string, { valor: number; n: number }>())]);
+    const total = soma(els.map((x) => x[1]));
+    blocos.push(
+      {
+        tipo: "subsecao",
+        texto: `${u.sigla} — ${u.nome}`,
+        detalhe: `PCA ${brl(u.planejado)} · orçamento ${brl(total)} · saldo ${brl(total - u.planejado)}`,
+        corDetalhe: total - u.planejado < 0 ? "#b91c1c" : undefined,
+      },
+      {
+        tipo: "tabela",
+        colunas: [{ titulo: "Elemento de despesa", peso: 6 }, { titulo: "Lançamentos", peso: 1, alinhar: "right" }, { titulo: "Dotação", peso: 2, alinhar: "right" }],
+        linhas: els.length ? [...els.map(([k, v]) => ({ celulas: [k, num(v.n), brl(v.valor)] })), { celulas: ["TOTAL", "", brl(total)], destaque: true }] : [],
+        vazio: "Sem orçamento vinculado a esta unidade.",
+      },
+    );
+  }
+  return blocos;
+}

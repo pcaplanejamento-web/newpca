@@ -213,6 +213,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
     DELETE: recurso("orcamento", "excluir", "recusa(", "o desfazer da própria importação (última hora) = Importar"),
   },
   "orcamento/[id]/substituir": { POST: tela("orcamento", "importar", "reenviar a planilha") },
+  "orcamento/grupos": { PUT: tela("orcamento", "configurar") },
   "orcamento/vinculos": { POST: tela("orcamento", "configurar") },
   "orcamento/vinculos/[id]": { PATCH: tela("orcamento", "configurar"), DELETE: tela("orcamento", "configurar") },
   "orcamento/vinculos/padrao": { POST: tela("orcamento", "configurar") },

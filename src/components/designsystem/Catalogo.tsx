@@ -96,7 +96,8 @@ import {
   type UnidadeMedida,
 } from "@/lib/padronizacao-core";
 import { BotaoAtualizar, useGiro } from "@/components/BotaoAtualizar";
-import { BotaoExportar } from "@/components/ExportarTabelas";
+import { BotaoExportar, EscolherColunasXlsx } from "@/components/ExportarTabelas";
+import { GruposOrcamento } from "@/components/GruposOrcamento";
 import { CelulaLista, CelulaTexto, MaisN } from "@/components/CelulaLista";
 import { BotaoDadosCompletos, DadosCompletos } from "@/components/DadosCompletos";
 import { CelulaExecucao } from "@/components/CelulaExecucao";
@@ -1821,6 +1822,8 @@ const ITENS_CONSOLIDADOS_DEMO: ItemComposicao[] = [
  * (BotaoDadosCompletos + o provedor DadosCompletos: CelulaTexto, CelulaLista e EstadoResumo inteiros na célula). */
 function AtualizarEDadosCompletosDemo() {
   const [ligado, setLigado] = useState(false);
+  const [colunasXlsx, setColunasXlsx] = useState(false);
+  const [gruposOrc, setGruposOrc] = useState(false);
   const [rever, setRever] = useState<number | null>(null);
   const giro = useGiro();
   return (
@@ -1867,6 +1870,42 @@ function AtualizarEDadosCompletosDemo() {
         <span className="text-[12px] text-faint">
           BotaoExportar — no rodapé de TODA tabela (DataTable e tabela cruzada): XLSX e PDF das linhas filtradas, com as colunas à vista.
         </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" variant="secondary" onClick={() => setColunasXlsx(true)}>
+          Abrir a escolha de colunas
+        </Button>
+        <EscolherColunasXlsx
+          aberto={colunasXlsx}
+          nome="demonstração"
+          colunas={[
+            { chave: "a", titulo: "Protocolo", padrao: true },
+            { chave: "b", titulo: "Assunto", padrao: true },
+            { chave: "c", titulo: "Valor", padrao: false },
+          ]}
+          onFechar={() => setColunasXlsx(false)}
+          onBaixar={() => setColunasXlsx(false)}
+        />
+        <span className="text-[12px] text-faint">EscolherColunasXlsx — antes do XLSX: as colunas do PDF marcadas; a escolha fica no aparelho.</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" variant="secondary" onClick={() => setGruposOrc(true)}>
+          Grupos orçamentários
+        </Button>
+        {gruposOrc && (
+          <GruposOrcamento
+            aberto
+            onFechar={() => setGruposOrc(false)}
+            grupos={[{ id: 1, nome: "Cultura", unidades: [1, 2] }]}
+            unidades={[
+              { id: 1, sigla: "SECULT", nome: "Secretaria de Cultura" },
+              { id: 2, sigla: "FMC", nome: "Fundo de Cultura" },
+              { id: 3, sigla: "SEMED", nome: "Educação" },
+            ]}
+            vinculos={[]}
+          />
+        )}
+        <span className="text-[12px] text-faint">GruposOrcamento — unidades que compartilham o orçamento (o “Ver por Grupo” do PCA × Orçamento).</span>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <BotaoDadosCompletos ligado={ligado} onChange={setLigado} />

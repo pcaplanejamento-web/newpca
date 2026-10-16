@@ -2495,6 +2495,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (ver "CONSULTA PÚBLICA" abaixo — a mesma no painel e na tela inicial).
 - **Situações (Configurações → Situações):** só nome + cor + ordem — NÃO interferem no PCA (o protocolo vai à Mesa do PCA
   qualquer que seja a situação).
+- **PCA × Orçamento — grupos, elementos e vínculos (v1.115.0, sem migração):** "Ver por **Unidade | Grupo | Órgão**" — o
+  GRUPO ORÇAMENTÁRIO (unidades que compartilham o orçamento, ex.: Secretaria + Fundo de Cultura; blob
+  `configuracoes.orcamentoGrupos`, `orcamento-grupos-dados.ts`; núcleo puro `orcamento-grupos.ts`: `lerGruposOrcamento`,
+  `motivoGruposInvalidos` — uma unidade em um grupo, ≥ 2 —, `refsDosGrupos` = as unidades com o grupo no lugar do órgão,
+  então `comparativoPorOrgao`/`origemDoOrgao` somam sem código novo; `sugerirGrupos` pelos vínculos) vem em
+  `orcamentoDoPca.grupos`; editor `GruposOrcamento` (botão "Grupos", Configurar no Orçamento) → `PUT /api/orcamento/grupos`
+  (auditoria). Coluna **Vínculos** filtrável (`situacaoVinculos`); **seleção** + "Relatório dos vínculos (N)" no rodapé
+  (`blocosVinculosDasLinhas`, as selecionadas ou as filtradas). Botão do **relatório dos elementos** (`blocosElementosPca`,
+  `orcamento-relatorio.ts`: a dotação considerada por elemento — das unidades com PCA e por unidade, com planejado e saldo;
+  o PCA não liga item a elemento, a nota diz). Testes: `tests/orcamento-ideias.test.ts`.
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da TELA DO ORÇAMENTO `/painel/orcamento/[id]` →
   `OrcamentoVisoes`; as visões são GLOBAIS — a prévia do Σ usa os lançamentos do orçamento aberto): nome + por dimensão
   (**`DIMENSOES_VISAO`**: Função, Programa, Elemento, Código, Ficha, Fonte — **unidade, ações e órgão NUNCA entram na
@@ -3706,7 +3716,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   — nunca `innerWidth < 1024`, que diverge do CSS com a fonte do navegador ampliada);
   **`edicoes`** (`EdicoesDaTabela`, opt-in) = EDIÇÃO da tabela no cabeçalho + EDIÇÕES SALVAS (colunas + ordenação + filtros;
   pessoais ou públicas; a padrão abre a tabela) — as tabelas da Mesa;
-  **`exportar`** (`{nome}` | `false`; padrão LIGADO, nome "Tabela") = os botões **XLSX** e **PDF** no rodapé
+  **`exportar`** (`{nome}` | `false`; padrão LIGADO, nome "Tabela") = os botões **XLSX** e **PDF** no rodapé (o XLSX abre antes a
+  escolha das colunas — `EscolherColunasXlsx`: as do PDF marcadas, a escolha no aparelho `exportar:colunas:<nome>` —
+  `colunasXlsxIniciais`; v1.115.0)
   (**`BotaoExportar`**, `ExportarTabelas.tsx`): as linhas À VISTA (filtros das colunas, na ordem, todas as páginas) e as
   colunas visíveis da edição em uso — no .xlsx o número como número, os vários valores unidos, as datas em dd/mm/aaaa
   (`linhasPlanilhaTabela`) e, no fim, a **linha TOTAL** (`linhaTotal`: a soma de cada coluna numérica — valores e quantidades —, "TOTAL" na 1ª coluna não somada; **`Column.total: false`** deixa em branco o que não se soma — valor unitário, médias, %, identificadores como Seq./Ticket); no **PDF** a MESMA linha TOTAL vai em DESTAQUE (`destaques`) e (`tabelaParaPdf` → `baixarTabelaPdf`, `exportar-pdf.ts` com o pdf-lib só no clique;
@@ -4734,6 +4746,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   Testes: `tests/fluxo-selecao.test.ts`.
 - **LISTA DOS FLUXOS ROLA POR DENTRO (v1.73.3):** a coluna da grade dos `CartaoFluxo` (`ListaFluxos`) tem a altura até o fim do display (`useAlturaTela`, a mesma do `PainelLateral`) e `overflow-y-auto` — a página não rola; o arrasto (`useArrastoGrade` → `rolagemDe`) rola essa coluna perto das bordas.
 - **ZONAS DE SOLTURA no arrasto da grade (v1.74.0):** `useArrastoGrade({zonas: {limite, aceita}})` (`PastasQuadros.tsx`) — fora do `limite` o destino é `fora` (sem sombra); os elementos `[data-zona-arrasto="<nome>"]` sob o ponteiro viram `destino.fora = nome`; soltar numa zona que `aceita` ENCOLHE o card para dentro dela e chama `onSoltar`, senão o card VOLTA voando à origem. Na Automação (`ListaFluxos`): o fluxo da lista vai à **lixeira** (`LixeiraArrasto`, centro embaixo) ou volta ao **painel** "Novo fluxo" (`PainelLateral zona`) → `excluir(f, zona)` com confirmação; o modelo/pública arrastado só marca a `SombraGrade marcada` (tracejada) sobre a lista. Tarefas não usa `zonas` (igual a antes).
+- **% no segundo plano (v1.115.0):** `Trabalho.fracao`/`restanteMs` — a pílula e a lista mostram "37% · ≈ 4 min" (o
+  `FluxosAutomacao` usa `progressoFluxo` + `useEstimativa`).
 - **AUTOMAÇÕES EM SEGUNDO PLANO (v1.38.0, sem migração) — o padrão para QUALQUER automação longa:** `SegundoPlano.tsx` (DS):
   o provedor **`SegundoPlano`** (no layout do painel, dentro do `ConfigTabelas`) + **`ManterVivo chave`** na página (o
   conteúdo é renderizado pelo PROVEDOR por portal num nó estável e só PASSA pela página — sair dela com um trabalho em

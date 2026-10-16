@@ -128,3 +128,16 @@ export async function baixarPlanilhaXlsx(arquivo: string, aba: string, linhas: (
   XLSX.utils.book_append_sheet(wb, ws, aba.replace(/[\\/?*[\]:]+/g, " ").slice(0, 31) || "Tabela");
   XLSX.writeFile(wb, arquivo);
 }
+
+/** A chave (no aparelho) da escolha de colunas do XLSX de uma tabela. */
+export const chaveColunasXlsx = (nome: string) => `exportar:colunas:${nome}`;
+
+/**
+ * As colunas MARCADAS ao abrir a escolha do XLSX: a escolha salva neste aparelho quando ainda vale (as colunas não mudaram
+ * — todas as salvas existem e sobra alguma); senão o PADRÃO = as colunas do PDF (as visíveis da edição em uso).
+ */
+export function colunasXlsxIniciais(todas: readonly string[], padrao: readonly string[], salvas: unknown): string[] {
+  const existe = new Set(todas);
+  if (Array.isArray(salvas) && salvas.length && salvas.every((k) => typeof k === "string" && existe.has(k))) return todas.filter((k) => salvas.includes(k));
+  return todas.filter((k) => padrao.includes(k));
+}

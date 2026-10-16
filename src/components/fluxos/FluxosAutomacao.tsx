@@ -60,6 +60,8 @@ import { SkeletonCartao } from "../Skeleton";
 import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
 import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
 import { PainelFluxo } from "./PainelFluxo";
+import { useEstimativa } from "./useEstimativa";
+import { progressoFluxo } from "@/lib/fluxo-progresso";
 import { PainelNo } from "./PainelNo";
 import { type HostPainel, HostPainelCtx, type ProtocoloCenti } from "./paineis";
 import { ProblemasFluxo } from "./ProblemasFluxo";
@@ -156,6 +158,11 @@ export function FluxosAutomacao({
   // O andamento vai ao painel de SEGUNDO PLANO (minimizado fora desta tela; "Detalhes" volta ao fluxo).
   const emCurso = rodando != null;
   const andDfds = dfds?.length ? andamentoDfds(dfds, dfdsAnexar) : null;
+  // O ANDAMENTO REAL (o mesmo cálculo das etapas do painel): os DFDs, quando o fluxo os processa; senão as etapas.
+  const fracaoExec = andDfds?.total
+    ? andDfds.feito / andDfds.total
+    : progressoFluxo(Array.from({ length: Math.max(exec?.total ?? 0, Object.keys(passos).length) }, (_, i) => ({ estado: Object.values(passos)[i]?.estado })));
+  const restanteExec = useEstimativa(fracaoExec, emCurso);
   useTrabalhoSegundoPlano(
     exec
       ? {
@@ -165,6 +172,8 @@ export function FluxosAutomacao({
           feito: andDfds ? andDfds.feito : Object.values(passos).filter((p) => p.estado === "ok").length,
           total: andDfds ? andDfds.total : exec.total,
           itens: andDfds?.itens,
+          fracao: emCurso ? fracaoExec : undefined,
+          restanteMs: restanteExec,
           texto: emCurso
             ? `${andDfds?.atual ?? agora}${naFila ? `${agora ? " · " : ""}${naFila} na fila` : ""}`
             : resultado?.estado === "falhou"
