@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { comandosRegistrarAcesso, consultaAcessos } from "./acessos-sql";
 import { cookies } from "next/headers";
-import { preferenciasTabela, usuarios } from "@/db/schema";
+import { acessos, preferenciasTabela, usuarios } from "@/db/schema";
 import { getDb } from "./db";
 import { idsDosAdmins } from "./email";
 import { notificar } from "./notificacoes";
@@ -39,12 +39,24 @@ export async function aposEntrar(req: Request, u: Pessoa, canal: "senha" | "Goog
     } catch {
       atual = null;
     }
-    const { novo, lista } = avaliarAparelho(lerAparelhos(atual), hash);
+    const avaliado = avaliarAparelho(lerAparelhos(atual), hash);
+    const { lista } = avaliado;
+    let { novo } = avaliado;
     await salvarPreferenciaTabela(u.id, CHAVE_APARELHOS, { ids: lista });
     // O HISTÓRICO DE ACESSO (Perfil e o banner do usuário): sempre, com ou sem alerta.
     const navegador = resumoNavegador(req.headers.get("user-agent"));
     const ip = req.headers.get("cf-connecting-ip");
     const db = getDb();
+    // O cookie pode se perder (limpeza do navegador, outro endereço do site, aba anônima): o MESMO navegador no MESMO IP
+    // já visto no histórico não é aparelho novo — evita o alerta repetido de quem usa sempre os mesmos aparelhos.
+    if (novo && ip) {
+      const [visto] = await db
+        .select({ id: acessos.id })
+        .from(acessos)
+        .where(and(eq(acessos.usuarioId, u.id), eq(acessos.navegador, navegador), eq(acessos.ip, ip)))
+        .limit(1);
+      if (visto) novo = false;
+    }
     await db.batch(comandosRegistrarAcesso(db, { usuarioId: u.id, em: new Date().toISOString(), canal: canal === "Google" ? "google" : "senha", navegador, ip, aparelho: hash.slice(0, 6), novo }));
     if (!novo || !cfg.alertaAparelho) return;
     const quando = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });

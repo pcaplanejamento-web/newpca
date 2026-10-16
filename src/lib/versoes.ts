@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.114.1",
+    data: "2026-10-16",
+    titulo: "Fim do alerta repetido de aparelho novo",
+    mudancas: [
+      { tipo: "correcao", area: "Segurança", texto: "O alerta “Login de um aparelho novo” / “Novo acesso à sua conta” não aparece mais quando o mesmo navegador entra do mesmo IP já visto no seu histórico de acesso (o cookie do aparelho pode se perder).", link: "/painel/perfil?aba=acessos" },
+    ],
+  },
+  {
     versao: "1.114.0",
     data: "2026-10-15",
     titulo: "Palavras apontadas no item",

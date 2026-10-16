@@ -187,7 +187,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     fail-safe = padrão). **Alertas de login suspeito** (`seguranca-alertas.ts`, best-effort, aviso tipo **`seguranca`** —
     "Login suspeito" no catálogo, sino + e-mail por padrão, aviso direto): `aposEntrar` (login por senha e Google) — o aparelho
     = cookie httpOnly `pca_aparelho` (2 anos), o HASH guardado em `preferencias_tabela` `seguranca:aparelhos` (até 10;
-    `avaliarAparelho` — o 1º não alerta) → aparelho novo avisa os ADMs e a própria pessoa (navegador · IP · hora,
+    `avaliarAparelho` — o 1º não alerta; o MESMO navegador no MESMO IP já registrado em `acessos` também não — v1.114.1, o cookie pode se perder) → aparelho novo avisa os ADMs e a própria pessoa (navegador · IP · hora,
     `resumoNavegador`); `alertarBloqueio` — a conta acabou de ser bloqueada (8 senhas erradas) → os ADMs, um por janela de
     15 min. A rota genérica de preferências RECUSA as chaves reservadas `cofre:`/`seguranca:`. Revisão das rotas públicas
     (v1.92.0): o "Esqueci a senha" sem sessão responde igual com o reenvio cedo (não enumera) e a consulta pública mascara
