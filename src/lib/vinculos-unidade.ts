@@ -156,33 +156,3 @@ export function situacaoVinculos(linha: { unidadeId: number | null; orcamento: n
   return linha.orcamento > 0 ? "Vinculada" : "Sem orçamento";
 }
 
-/**
- * O PDF dos vínculos de VÁRIAS linhas (as selecionadas ou as filtradas): o resumo de todas no topo e, por linha, as MESMAS
- * duas tabelas de `blocosVinculosDaLinha` (vinculadas · sem vínculo). A soma do topo = a soma das linhas.
- */
-export function blocosVinculosDasLinhas(
-  titulo: string,
-  anoOrcamento: string,
-  linhas: { titulo: string; nome: string; v: VinculosDaLinha; comUnidade: boolean }[],
-): BlocoDoc[] {
-  const vinc = linhas.reduce((s, l) => s + (l.comUnidade ? l.v.valorVinculado : 0), 0);
-  const sem = linhas.reduce((s, l) => s + l.v.valorSemVinculo, 0);
-  const out: BlocoDoc[] = [
-    { tipo: "titulo", texto: titulo },
-    { tipo: "paragrafo", texto: `${num(linhas.length)} linha(s) · orçamento ${anoOrcamento} (sem o filtro da visão)`, cor: "muted" },
-    {
-      tipo: "destaques",
-      itens: [
-        { rotulo: "Total", valor: brl(vinc + sem) },
-        { rotulo: "Vinculado", valor: brl(vinc) },
-        { rotulo: "Sem vínculo", valor: brl(sem), cor: sem > 0 ? "#b45309" : undefined },
-      ],
-    },
-  ];
-  for (const l of linhas) {
-    const b = blocosVinculosDaLinha({ titulo: l.titulo, nome: l.nome, anoOrcamento }, l.v, l.comUnidade);
-    // O título de cada linha vira SEÇÃO e as seções internas, subseções (a hierarquia do documento).
-    out.push({ tipo: "secao", texto: l.titulo }, ...b.slice(1).map((x): BlocoDoc => (x.tipo === "secao" ? { tipo: "subsecao", texto: x.texto } : x)));
-  }
-  return out;
-}

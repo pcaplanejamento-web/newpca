@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.125.2",
+    data: "2026-10-16",
+    titulo: "Relatório da composição pelas linhas filtradas",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "O Relatório da composição pode sair só com as unidades filtradas na tabela; saem os botões Elementos e Relatório dos vínculos.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.125.1",
     data: "2026-10-16",
     titulo: "Botão Elementos no rodapé da tabela",

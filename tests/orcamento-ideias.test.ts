@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { brl } from "../src/lib/format.ts";
 import { comparativoPorOrgao, comparativoPorUnidade } from "../src/lib/orcamento-comparativo.ts";
 import { lerGruposOrcamento, motivoGruposInvalidos, refsDosGrupos, sugerirGrupos } from "../src/lib/orcamento-grupos.ts";
-import { blocosElementosPca } from "../src/lib/orcamento-relatorio.ts";
 import { colunasXlsxIniciais } from "../src/lib/exportar-tabela.ts";
 import { situacaoVinculos } from "../src/lib/vinculos-unidade.ts";
 
@@ -51,19 +49,6 @@ test("situação dos vínculos da linha", () => {
   assert.equal(situacaoVinculos({ unidadeId: 1, orcamento: 5 }, 2), "Com ações sem vínculo");
   assert.equal(situacaoVinculos({ unidadeId: 1, orcamento: 5 }, 0), "Vinculada");
   assert.equal(situacaoVinculos({ unidadeId: 1, orcamento: 0 }, 0), "Sem orçamento");
-});
-
-test("relatório dos elementos: o total de cada unidade = o orçamento dela", () => {
-  const linhas = comparativoPorUnidade(planejado, orc, unidades);
-  const b = blocosElementosPca({ titulo: "T", subtitulo: "s", lancamentos: orc, linhas });
-  const tabelas = b.filter((x) => x.tipo === "tabela");
-  const geral = tabelas[0];
-  assert.ok(geral.tipo === "tabela");
-  assert.equal(geral.linhas.at(-1)?.celulas[2], brl(250));
-  const fmc = b.findIndex((x) => x.tipo === "subsecao" && x.texto.startsWith("FMC"));
-  const t = b[fmc + 1];
-  assert.ok(t.tipo === "tabela");
-  assert.equal(t.linhas.at(-1)?.celulas[2], brl(130));
 });
 
 test("colunas do XLSX: o padrão = as do PDF; a escolha salva vale enquanto as colunas existem", () => {

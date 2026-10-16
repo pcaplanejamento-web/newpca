@@ -3,7 +3,7 @@
 import { useUnidadeUnica } from "./UnidadeUnica";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
-import { blocosElementosPca, blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
+import { blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
 import {
   comparativoPorOrgao,
   comparativoPorUnidade,
@@ -21,7 +21,7 @@ import {
 } from "@/lib/orcamento-comparativo";
 import { type AusentesVisao, contarAusentes, type VisaoOrcamento } from "@/lib/orcamento-visao";
 import { unidadesDoOrcamento, type VinculoOrcamento, vinculosDaVisao } from "@/lib/orcamento-vinculo";
-import { blocosVinculosDasLinhas, semVinculoPorAlvo, situacaoVinculos, vinculosDaLinha } from "@/lib/vinculos-unidade";
+import { semVinculoPorAlvo, situacaoVinculos, vinculosDaLinha } from "@/lib/vinculos-unidade";
 import type { LancamentoOrcamentoPca, PlanejadoOrcamentoPca } from "@/lib/pca-espaco";
 import { BannersConsulta } from "./BannersConsulta";
 import type { AberturaMesa } from "./BannersMesa";
@@ -224,18 +224,19 @@ function OrigemLinha({ dados, aberta, onClose, unidades = dados.unidades }: { da
  * cada VÍNCULO atribui a cada unidade (unidade do CUBO + ações) e o que fica de fora, e gera o documento didático
  * (`blocosRelatorioOrcamento` → `baixarDocumentoPdf`). O código do PDF só é carregado no clique.
  */
-function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
+function BotaoRelatorioComposicao({ pcaId, filtradas }: { pcaId: number; /** As unidades à vista na tabela (com filtro); sem filtro, ausente. */ filtradas?: number[] }) {
   const [aberto, setAberto] = useState(false);
   const [rel, setRel] = useState<RelatorioOrcamento | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [gerando, setGerando] = useState(false);
-  const [modo, setModo] = useState<"todas" | "escolher">("todas");
+  const [modo, setModo] = useState<"todas" | "filtradas" | "escolher">("todas");
   const [escolhidas, setEscolhidas] = useState<string[]>([]);
   const [separados, setSeparados] = useState(false);
   const quem = useQuemExporta();
 
   async function abrir() {
     setAberto(true);
+    setModo(filtradas?.length ? "filtradas" : "todas");
     setCarregando(true);
     try {
       const r = await fetch(`/api/pca/${pcaId}/orcamento/relatorio`);
@@ -254,7 +255,7 @@ function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
     () => (rel?.unidades ?? []).map((u) => ({ valor: String(u.id), rotulo: `${u.sigla} — ${u.nome}`, detalhe: `${u.orgao ?? "Sem órgão"} · ${brl(u.orcamento)}` })),
     [rel],
   );
-  const ids = modo === "todas" ? [] : escolhidas.map(Number);
+  const ids = modo === "todas" ? [] : modo === "filtradas" ? (filtradas ?? []) : escolhidas.map(Number);
   const qtd = modo === "todas" ? 1 : separados ? ids.length : ids.length ? 1 : 0;
 
   async function gerar() {
@@ -308,12 +309,13 @@ function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
           <SkeletonLinhas />
         ) : (
           <div className="space-y-[var(--gap-block)]">
-            <Segmented<"todas" | "escolher">
+            <Segmented<"todas" | "filtradas" | "escolher">
               value={modo}
               onChange={setModo}
               ariaLabel="Unidades do relatório"
               options={[
                 { value: "todas", label: `Todas as unidades (${rel.unidades.length})` },
+                ...(filtradas?.length ? [{ value: "filtradas" as const, label: `Filtradas na tabela (${filtradas.length})` }] : []),
                 { value: "escolher", label: "Escolher unidades" },
               ]}
             />
@@ -321,7 +323,7 @@ function BotaoRelatorioComposicao({ pcaId }: { pcaId: number }) {
               <p className="text-[13px] text-muted">O relatório completo: a visão, todas as unidades com vínculo e o que fica de fora do orçamento.</p>
             ) : (
               <>
-                <SeletorMultiplo rotulo="Unidades" opcoes={opcoes} selecionados={escolhidas} onChange={setEscolhidas} textoVazio="Nenhuma" suspenso />
+                {modo === "escolher" && <SeletorMultiplo rotulo="Unidades" opcoes={opcoes} selecionados={escolhidas} onChange={setEscolhidas} textoVazio="Nenhuma" suspenso />}
                 <Switch
                   checked={separados}
                   onChange={setSeparados}
@@ -421,10 +423,8 @@ export function OrcamentoPca({
   }, [unidadesCubo, efetivos]);
   const pendentesDe = (l: { unidadeId: number | null }) =>
     (l.unidadeId == null ? semVinculoPorLinha.todas : (semVinculoPorLinha.porAlvo.get(l.unidadeId) ?? [])).reduce((s, p) => s + p.acoes.length, 0);
-  const [selecao, setSelecao] = useState<Set<string>>(new Set());
-  const [gerandoVinc, setGerandoVinc] = useState(false);
-  const [gerandoElem, setGerandoElem] = useState(false);
-  const quem = useQuemExporta();
+  // As linhas À VISTA na tabela (filtros incluídos) — o Relatório da composição pode sair só com elas.
+  const [visiveis, setVisiveis] = useState<LinhaTabela[]>([]);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   // A UNIDADE é o micro (recebe DFDs e orçamento); o ÓRGÃO é a soma das unidades dele.
   const [nivelEscolhido, setNivel] = useState<Nivel>("unidade");
@@ -610,50 +610,6 @@ export function OrcamentoPca({
       },
     });
 
-  async function relatorioElementos() {
-    if (gerandoElem) return;
-    setGerandoElem(true);
-    try {
-      const titulo = `Elementos do orçamento · PCA ${dados.ano ?? ""}`;
-      const sub = `${dados.orcamento ? `${dados.orcamento.nome} (${dados.orcamento.ano})` : ""}${dados.visaoNome ? ` · visão ${dados.visaoNome}` : ""}`;
-      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
-      await baixarDocumentoPdf(
-        nomeArquivoPdf(titulo.replace(" · ", " - "), dataIsoBrasilia(new Date().toISOString())),
-        { titulo, blocos: blocosElementosPca({ titulo, subtitulo: sub, lancamentos: dados.linhas, linhas: porUnidade }) },
-        { usuario: quem },
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
-    } finally {
-      setGerandoElem(false);
-    }
-  }
-
-  async function relatorioVinculos(ls: LinhaTabela[]) {
-    if (gerandoVinc || !comparativo) return;
-    setGerandoVinc(true);
-    try {
-      const anoOrc = dados.orcamento ? `${dados.orcamento.nome} (${dados.orcamento.ano})` : String(dados.ano ?? "");
-      const titulo = `Vínculos do orçamento · PCA ${dados.ano ?? ""}`;
-      const linhasDoc = ls.flatMap((l) => (l.nivel !== "unidade" ? [] : [{
-        titulo: l.unidadeId == null ? "Ações sem vínculo" : `Vínculos · ${l.sigla}`,
-        nome: l.unidadeId == null ? "" : l.nome,
-        comUnidade: l.unidadeId != null,
-        v: vinculosDaLinha(unidadesCubo, efetivos, l.unidadeId, comparativo.alvos.unidades),
-      }]));
-      const [{ baixarDocumentoPdf }, { nomeArquivoPdf }] = await Promise.all([import("@/lib/documento-pdf"), import("@/lib/exportar-pdf-core")]);
-      await baixarDocumentoPdf(
-        nomeArquivoPdf(titulo.replace(" · ", " - "), dataIsoBrasilia(new Date().toISOString())),
-        { titulo, blocos: blocosVinculosDasLinhas(titulo, anoOrc, linhasDoc) },
-        { usuario: quem },
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o PDF.");
-    } finally {
-      setGerandoVinc(false);
-    }
-  }
-
   if (dados.ano == null) return <Callout kind="warn">Defina o ano do PCA (aba Configuração) para cruzar com o orçamento.</Callout>;
 
   // A troca de vista fica no INÍCIO da linha de controles de cada vista (sem linha a mais).
@@ -803,7 +759,14 @@ export function OrcamentoPca({
               </div>
             )}
             <div className="flex items-center gap-2 lg:ml-auto">
-              {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
+              {podeExportar && dados.orcamento && <BotaoRelatorioComposicao
+                  pcaId={dados.pcaId}
+                  filtradas={
+                    nivel === "unidade" && visiveis.length < linhas.length
+                      ? visiveis.flatMap((l) => (l.nivel === "unidade" && l.unidadeId != null ? [l.unidadeId] : []))
+                      : undefined
+                  }
+                />}
               {botaoVisao}
             </div>
           </div>
@@ -817,43 +780,7 @@ export function OrcamentoPca({
             exportar={{ nome: `PCA × Orçamento ${dados.ano ?? ""} - por ${nivel === "orgao" ? "órgão" : nivel === "grupo" ? "grupo" : "unidade"}` }}
             onRowClick={setAberta}
             activeKey={aberta?.chave ?? null}
-            selectable={editaVinculos && nivel === "unidade"}
-            selected={selecao}
-            onSelected={(n) => setSelecao(n as Set<string>)}
-            acoesRodape={
-              podeExportar
-                ? (ls: LinhaTabela[]) => {
-                    const alvo = selecao.size ? ls.filter((l) => selecao.has(l.chave)) : ls;
-                    return (
-                      <>
-                        {dados.orcamento && (
-                          <Button
-                            size="sm"
-                            icon={<IconFile className="h-4 w-4" />}
-                            loading={gerandoElem}
-                            title="Relatório dos elementos de despesa (PDF) — a dotação considerada por elemento, das unidades com contratações no PCA"
-                            onClick={() => void relatorioElementos()}
-                          >
-                            Elementos
-                          </Button>
-                        )}
-                        {editaVinculos && nivel === "unidade" && (
-                          <Button
-                            size="sm"
-                            icon={<IconFile className="h-4 w-4" />}
-                            loading={gerandoVinc}
-                            disabled={!alvo.length}
-                            title={selecao.size ? "Os vínculos das linhas selecionadas" : "Os vínculos das linhas à vista (filtros da tabela)"}
-                            onClick={() => void relatorioVinculos(alvo)}
-                          >
-                            <span className="hidden sm:inline">Relatório dos vínculos</span> ({num(alvo.length)})
-                          </Button>
-                        )}
-                      </>
-                    );
-                  }
-                : undefined
-            }
+            onOrdenadas={setVisiveis}
             vazio={dados.orcamento ? "Nada a comparar nesta visão." : `Nenhum orçamento de ${dados.ano} importado — importe o CUBO em Orçamento para comparar.`}
             resumo={(ls) =>
               `${ls.length} ${nivel === "orgao" ? "órgão(s)" : nivel === "grupo" ? "linha(s)" : "unidade(s)"} · PCA ${brl(ls.reduce((s, l) => s + l.planejado, 0))} · orçamento ${brl(ls.reduce((s, l) => s + l.orcamento, 0))}`

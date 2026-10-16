@@ -2536,10 +2536,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `motivoGruposInvalidos` — uma unidade em um grupo, ≥ 2 —, `refsDosGrupos` = as unidades com o grupo no lugar do órgão,
   então `comparativoPorOrgao`/`origemDoOrgao` somam sem código novo; `sugerirGrupos` pelos vínculos) vem em
   `orcamentoDoPca.grupos`; editor `GruposOrcamento` (botão "Grupos", Configurar no Orçamento) → `PUT /api/orcamento/grupos`
-  (auditoria). Coluna **Vínculos** filtrável (`situacaoVinculos`); **seleção** + "Relatório dos vínculos (N)" no rodapé
-  (`blocosVinculosDasLinhas`, as selecionadas ou as filtradas). Botão **Elementos** no rodapé da tabela (v1.125.1; com uma unidade só, sem a tabela geral) — o **relatório dos elementos** (`blocosElementosPca`,
-  `orcamento-relatorio.ts`: a dotação considerada por elemento — das unidades com PCA e por unidade, com planejado e saldo;
-  o PCA não liga item a elemento, a nota diz). Testes: `tests/orcamento-ideias.test.ts`.
+  (auditoria). Coluna **Vínculos** filtrável (`situacaoVinculos`). O **Relatório da composição** pode sair só com as linhas FILTRADAS na tabela (v1.125.2: opção "Filtradas na tabela (N)" — `onOrdenadas` → `recortarRelatorio`; um PDF por unidade opcional). Testes: `tests/orcamento-ideias.test.ts`.
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da TELA DO ORÇAMENTO `/painel/orcamento/[id]` →
   `OrcamentoVisoes`; as visões são GLOBAIS — a prévia do Σ usa os lançamentos do orçamento aberto): nome + por dimensão
   (**`DIMENSOES_VISAO`**: Função, Programa, Elemento, Código, Ficha, Fonte — **unidade, ações e órgão NUNCA entram na
