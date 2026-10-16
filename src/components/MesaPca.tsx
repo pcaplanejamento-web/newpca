@@ -25,6 +25,7 @@ import { selectCls } from "./formStyles";
 import { IconCheck, IconTrash, IconUndo } from "./icons";
 import { useListasMesa } from "./MesaSistema";
 import { Modal } from "./Modal";
+import { useComponente } from "./ComponentesPapel";
 import { Segmented } from "./Segmented";
 import { toast } from "./Toast";
 import { useOndeDetalhe } from "./CanalGrupo";
@@ -63,6 +64,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
   const { protocolos, dfds } = useListasMesa(listas);
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
+  const verEscopo = useComponente()("pca.escopoMesa");
   useOndeDetalhe(pca.nome);
   const [incorporar, setIncorporar] = useState<ProtocoloNaMesa[] | null>(null);
   const [acoes, setAcoes] = useState<Record<number, AcaoDfdPca>>({});
@@ -85,7 +87,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     return c;
   }, [protocolos]);
   // A visão dos marcados desligada (ou recém-desligada) nunca deixa o escopo preso em "Na Mesa do sistema".
-  const escopoEf: Escopo = escopo === "sistema" && !marcados ? "todos" : escopo;
+  const escopoEf: Escopo = !verEscopo || (escopo === "sistema" && !marcados) ? "todos" : escopo;
   const protos = useMemo(
     () => (escopoEf === "todos" ? protocolos : protocolos.filter((p) => ESCOPO_DO_LOCAL[localDoProtocolo(p)] === escopoEf)),
     [protocolos, escopoEf],
@@ -237,7 +239,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
         dfds={dfdsVis}
         modoPca={{
           pcaId: pca.id,
-          ferramenta: (
+          ferramenta: verEscopo && (
             <Segmented<Escopo>
               value={escopoEf}
               onChange={setEscopo}

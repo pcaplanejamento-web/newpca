@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.121.0",
+    data: "2026-10-16",
+    titulo: "Papéis controlam presença, novidades e o escopo da Mesa do PCA",
+    mudancas: [
+      { tipo: "novo", area: "Papéis", texto: "Componente “Escopo da Mesa do PCA”: sem ele, o seletor Todos | Enviados | Incorporados some e a Mesa do PCA mostra todos.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "novo", area: "Papéis", texto: "Detalhe “Aparecer online para os outros”: só o papel decide quem é visto no “Online agora”.", link: "/painel/configuracoes?aba=papeis" },
+      { tipo: "novo", area: "Papéis", texto: "Detalhe “Ver as novidades”: sem ele, a versão do menu e o aviso de nova versão não aparecem.", link: "/painel/configuracoes?aba=papeis" },
+    ],
+  },
+  {
     versao: "1.120.0",
     data: "2026-10-16",
     titulo: "Troca de visão da Mesa mais rápida e suave",

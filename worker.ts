@@ -44,7 +44,7 @@ async function aoVivo(req: Request, env: Env): Promise<Response> {
 
 /**
  * A PRESENÇA do grupo: só do próprio site, com a presença LIGADA pelo ADM e a sessão válida de uma pessoa ATIVA que é
- * MEMBRO do grupo pedido — UMA consulta (sessão + grupo + a preferência de invisível + a config). Vai ao objeto DO GRUPO.
+ * MEMBRO do grupo pedido — UMA consulta (sessão + grupo + o status + a config + o que o PAPEL vê e se aparece). Vai ao objeto DO GRUPO.
  */
 async function presenca(req: Request, env: Env): Promise<Response> {
   if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Esperado WebSocket.", { status: 426 });
@@ -61,12 +61,14 @@ async function presenca(req: Request, env: Env): Promise<Response> {
        (SELECT CASE WHEN json_valid(c.dados) THEN json_extract(c.dados, '$.chat') END FROM configuracoes c WHERE c.id = 1) AS chat,
        (SELECT gr.chat FROM grupos gr WHERE gr.id = ?) AS chat_do_grupo,
        (SELECT CASE WHEN pa.chave = 'admin' THEN 1 WHEN json_valid(pa.detalhes) THEN COALESCE(json_extract(pa.detalhes, '$.presenca.verOnline'), 1) ELSE 1 END
-          FROM papeis pa WHERE pa.id = u.papel_id) AS ver_online
+          FROM papeis pa WHERE pa.id = u.papel_id) AS ver_online,
+       (SELECT CASE WHEN pa.chave = 'admin' THEN 1 WHEN json_valid(pa.detalhes) THEN COALESCE(json_extract(pa.detalhes, '$.presenca.visivel'), 1) ELSE 1 END
+          FROM papeis pa WHERE pa.id = u.papel_id) AS visivel
      FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id
      WHERE s.token_hash = ? AND s.expira_em > ? AND u.status = 'ativo' LIMIT 1`,
   )
     .bind(grupo, CHAVE_PREF_PRESENCA, grupo, await sha256(token), new Date().toISOString())
-    .first<{ id: number; membro: number; prefs: string | null; config: string | null; chat: string | null; chat_do_grupo: number | null; ver_online: number | null }>();
+    .first<{ id: number; membro: number; prefs: string | null; config: string | null; chat: string | null; chat_do_grupo: number | null; ver_online: number | null; visivel: number | null }>();
   if (!linha) return new Response("Sessão inválida.", { status: 401 });
   if (!linha.membro) return new Response("Fora do grupo.", { status: 403 });
   let bruto: unknown = null;
@@ -79,7 +81,8 @@ async function presenca(req: Request, env: Env): Promise<Response> {
   if (!cfg.ativo) return new Response("Presença desligada.", { status: 403 });
   const headers = new Headers(req.headers);
   headers.set("x-presenca-usuario", String(linha.id));
-  headers.set("x-presenca-invisivel", "0");
+  // INVISÍVEL = só o PAPEL decide (Papéis → Detalhes → Presença → "Aparecer online"); o Administrador sempre aparece.
+  headers.set("x-presenca-invisivel", linha.visivel === 0 ? "1" : "0");
   headers.set("x-presenca-ausente", cfg.ausente ? "1" : "0");
   headers.set("x-presenca-atividade", cfg.atividade ? "1" : "0");
   // O CHAT ao vivo (o ADM liga o do grupo e o privado — Configurações → Chat).

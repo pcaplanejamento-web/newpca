@@ -713,7 +713,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **"Chat liberado"** (`Switch`). Chat bloqueado no grupo: o layout não monta o chat (`ativo.chat`), o `worker.ts` manda
   `x-chat-grupo`/`x-chat-privado` = 0 e as rotas do chat recusam (`ehMembroDoGrupo` exige `grupos.chat = 1`;
   `quemCompartilhaGrupo` só por grupo com chat). **Papéis → Detalhes → Presença → "Ver quem está online"**
-  (`DetalhesPapel.presenca.verOnline`, padrão sim; o ADM sempre vê): desligado, o `worker.ts` manda `x-presenca-ver: 0` e o
+  (`DetalhesPapel.presenca.verOnline`, padrão sim; o ADM sempre vê) e **"Aparecer online para os outros"** (`presenca.visivel`, v1.121.0 — a ÚNICA regra de invisível: o `worker.ts` manda `x-presenca-invisivel` pelo papel); **Novidades → "Ver as novidades"** (`novidades.ver`: sem ele, o `VersaoSistema` do menu some e o aviso `versao` não é derivado); componente **`pca.escopoMesa`** (sem ele, o `MesaPca` não mostra o seletor de escopo e fica em "todos"): desligado, o `worker.ts` manda `x-presenca-ver: 0` e o
   `PresencaGrupo` (DO) entrega à aba a lista VAZIA (`cego` — nem presença nem "vendo"); no cabeçalho, só as conversas
   (`PresencaGrupo verOnline={false}`; sem chat, nada é montado). A pessoa segue aparecendo para os outros.
 - **Telas** (`grupos.abas` = JSON de keys): definem quais **abas de módulo** o grupo vê — `ABA_KEYS` =

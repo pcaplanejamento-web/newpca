@@ -1757,3 +1757,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - **v1.79.0 — Biblioteca de componentes:** só o ADM (Administração → Componentes, `/painel/design-system`); a única tela pública é a consulta do PCA.
 - **v1.115.0 — Grupos:** o grupo escolhe entre as unidades escolhidas e a unidade de cadastro de cada pessoa (migração 0112).
 - **v1.118.0 — Filtro da unidade:** PCA, Orçamento, Catálogo, Tarefas, Calendário e Automação obedecem à unidade do cabeçalho; o ADM configura em Configurações → Filtro da unidade.
+- v1.121.0: papéis controlam o escopo da Mesa do PCA, aparecer online e ver novidades.

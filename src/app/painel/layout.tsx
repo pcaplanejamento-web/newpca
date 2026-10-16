@@ -52,7 +52,7 @@ export default async function PainelLayout({
     getPcaFiltro(pcas),
     contarNaoLidas(usuario, grupos),
     // O PAPEL vê quem está online? (Papéis → Detalhes → Presença; o ADM sempre vê.)
-    presencaDoGrupo(usuario.id, ativo?.id ?? null, usuario.admin || usuario.papel.detalhes.presenca.verOnline),
+    presencaDoGrupo(usuario.id, ativo?.id ?? null, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
     getConfigChat(),
   ]);
 
@@ -92,7 +92,7 @@ export default async function PainelLayout({
 /** A PRESENÇA do grupo ativo (quem está online): só com o ADM tendo ligado e um grupo ativo — o diretório (foto + apelido)
  * vai uma vez; o canal manda só ids. Desligada = `null` (nada é montado); a leitura FALHOU = `undefined` (a tela mantém a
  * presença que já tinha — nunca derruba o canal nem as conversas por uma falha passageira). */
-async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: boolean) {
+async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: boolean, visivel: boolean) {
   if (grupoId == null) return null;
   const cfg = await getConfigPresenca();
   if (!cfg.ativo) return null;
@@ -102,7 +102,7 @@ async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: b
       pessoas,
       ver,
       whatsapp: await whatsappDe(pessoas.map((p) => p.id)),
-      invisivel: false,
+      invisivel: !visivel,
       inativoMin: cfg.inativoMin,
       status: { status: prefs.status, recado: prefs.recado, ate: prefs.ate },
     };
