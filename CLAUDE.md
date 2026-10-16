@@ -2537,7 +2537,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   então `comparativoPorOrgao`/`origemDoOrgao` somam sem código novo; `sugerirGrupos` pelos vínculos) vem em
   `orcamentoDoPca.grupos`; editor `GruposOrcamento` (botão "Grupos", Configurar no Orçamento) → `PUT /api/orcamento/grupos`
   (auditoria). Coluna **Vínculos** filtrável (`situacaoVinculos`); **seleção** + "Relatório dos vínculos (N)" no rodapé
-  (`blocosVinculosDasLinhas`, as selecionadas ou as filtradas). Botão do **relatório dos elementos** (`blocosElementosPca`,
+  (`blocosVinculosDasLinhas`, as selecionadas ou as filtradas). Botão **Elementos** no rodapé da tabela (v1.125.1; com uma unidade só, sem a tabela geral) — o **relatório dos elementos** (`blocosElementosPca`,
   `orcamento-relatorio.ts`: a dotação considerada por elemento — das unidades com PCA e por unidade, com planejado e saldo;
   o PCA não liga item a elemento, a nota diz). Testes: `tests/orcamento-ideias.test.ts`.
 - **Visões salvas do orçamento** (`orcamento_visoes`, aba **Visões** da TELA DO ORÇAMENTO `/painel/orcamento/[id]` →

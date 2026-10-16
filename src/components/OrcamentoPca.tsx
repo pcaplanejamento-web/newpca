@@ -803,17 +803,6 @@ export function OrcamentoPca({
               </div>
             )}
             <div className="flex items-center gap-2 lg:ml-auto">
-              {podeExportar && dados.orcamento && (
-                <Button
-                  size="sm"
-                  variant="icon"
-                  icon={<IconFile className="h-4 w-4" />}
-                  loading={gerandoElem}
-                  aria-label="Relatório dos elementos de despesa (PDF)"
-                  title="Relatório dos elementos de despesa (PDF) — a dotação considerada por elemento, das unidades com contratações no PCA"
-                  onClick={() => void relatorioElementos()}
-                />
-              )}
               {podeExportar && dados.orcamento && <BotaoRelatorioComposicao pcaId={dados.pcaId} />}
               {botaoVisao}
             </div>
@@ -832,20 +821,35 @@ export function OrcamentoPca({
             selected={selecao}
             onSelected={(n) => setSelecao(n as Set<string>)}
             acoesRodape={
-              editaVinculos && nivel === "unidade" && podeExportar
+              podeExportar
                 ? (ls: LinhaTabela[]) => {
                     const alvo = selecao.size ? ls.filter((l) => selecao.has(l.chave)) : ls;
                     return (
-                      <Button
-                        size="sm"
-                        icon={<IconFile className="h-4 w-4" />}
-                        loading={gerandoVinc}
-                        disabled={!alvo.length}
-                        title={selecao.size ? "Os vínculos das linhas selecionadas" : "Os vínculos das linhas à vista (filtros da tabela)"}
-                        onClick={() => void relatorioVinculos(alvo)}
-                      >
-                        <span className="hidden sm:inline">Relatório dos vínculos</span> ({num(alvo.length)})
-                      </Button>
+                      <>
+                        {dados.orcamento && (
+                          <Button
+                            size="sm"
+                            icon={<IconFile className="h-4 w-4" />}
+                            loading={gerandoElem}
+                            title="Relatório dos elementos de despesa (PDF) — a dotação considerada por elemento, das unidades com contratações no PCA"
+                            onClick={() => void relatorioElementos()}
+                          >
+                            Elementos
+                          </Button>
+                        )}
+                        {editaVinculos && nivel === "unidade" && (
+                          <Button
+                            size="sm"
+                            icon={<IconFile className="h-4 w-4" />}
+                            loading={gerandoVinc}
+                            disabled={!alvo.length}
+                            title={selecao.size ? "Os vínculos das linhas selecionadas" : "Os vínculos das linhas à vista (filtros da tabela)"}
+                            onClick={() => void relatorioVinculos(alvo)}
+                          >
+                            <span className="hidden sm:inline">Relatório dos vínculos</span> ({num(alvo.length)})
+                          </Button>
+                        )}
+                      </>
                     );
                   }
                 : undefined

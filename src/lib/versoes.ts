@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.125.1",
+    data: "2026-10-16",
+    titulo: "Botão Elementos no rodapé da tabela",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA › Orçamento", texto: "O relatório dos elementos virou o botão “Elementos” no rodapé da tabela PCA × Orçamento; com uma unidade só, o PDF não repete a tabela geral.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.125.0",
     data: "2026-10-16",
     titulo: "Orçamento do PCA: grupos, elementos e vínculos; XLSX com escolha de colunas",

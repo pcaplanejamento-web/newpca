@@ -829,6 +829,11 @@ export function blocosElementosPca(e: {
       ],
     },
     { tipo: "nota", texto: "O PCA não liga a contratação a um elemento de despesa: o planejado e o saldo são da unidade; os elementos mostram onde está a dotação dela.", cor: "#64748b" },
+  ];
+  // UMA unidade só: a tabela geral repetiria a da unidade — fica só a da unidade.
+  const varias = unidades.length > 1;
+  if (varias)
+    blocos.push(
     { tipo: "secao", texto: "Elementos das unidades com contratações no PCA" },
     {
       tipo: "tabela",
@@ -839,7 +844,7 @@ export function blocosElementosPca(e: {
       vazio: "Nenhuma dotação vinculada às unidades com contratações.",
     },
     { tipo: "secao", texto: "Por unidade" },
-  ];
+    );
   for (const u of unidades) {
     const els = ordem([...(porUnidade.get(u.unidadeId as number) ?? new Map<string, { valor: number; n: number }>())]);
     const total = soma(els.map((x) => x[1]));
