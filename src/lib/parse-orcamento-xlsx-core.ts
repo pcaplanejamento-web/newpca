@@ -1,4 +1,5 @@
 import {
+  COLUNAS_OPCIONAIS_ORCAMENTO,
   COLUNAS_ORCAMENTO,
   type ErroPlanilhaOrcamento,
   type OrcamentoItemParseado,
@@ -79,13 +80,15 @@ export function parseOrcamentoFromMatriz(aoa: unknown[][], nomeArquivo?: string)
     const valorEmpenho = val(row, "empenho");
     const saldo = val(row, "saldo");
     const valorAnulacao = val(row, "anulacao");
+    const valorReducao = val(row, "reducao");
+    const qtdEmpenho = Math.max(0, Math.round(val(row, "qtdEmpenho")));
     const temValor =
-      valorEmendaImpositiva || valorInicial || valorSuplementacao || valorEmpenho || saldo || valorAnulacao;
+      valorEmendaImpositiva || valorInicial || valorSuplementacao || valorEmpenho || saldo || valorAnulacao || valorReducao;
     // Linha vazia/espaçadora: sem órgão, sem elemento e sem nenhum valor → ignora.
     if (!orgao && !nomeElemento && !codigoElemento && !temValor) continue;
     // CONFERÊNCIA da linha (só as colunas que a planilha tem — as que faltam já travam a importação).
     const n = r + 1;
-    for (const c of COLUNAS_ORCAMENTO) {
+    for (const c of [...COLUNAS_ORCAMENTO, ...COLUNAS_OPCIONAIS_ORCAMENTO]) {
       const j = col[c.key];
       if (j === undefined) continue;
       const bruto = (row[j] ?? "").trim();
@@ -111,6 +114,8 @@ export function parseOrcamentoFromMatriz(aoa: unknown[][], nomeArquivo?: string)
       valorEmpenho,
       saldo,
       valorAnulacao,
+      valorReducao,
+      qtdEmpenho,
       sequencial: seq++,
     });
   }

@@ -47,6 +47,8 @@ export function resumoDosLancamentos(base: OrcamentoResumo, itens: OrcamentoItem
     valorInicial: soma("valorInicial"),
     suplementacao: soma("valorSuplementacao"),
     anulacao: soma("valorAnulacao"),
+    reducao: soma("valorReducao"),
+    qtdEmpenho: soma("qtdEmpenho"),
     empenho: soma("valorEmpenho"),
     saldo: soma("saldo"),
     emenda: soma("valorEmendaImpositiva"),

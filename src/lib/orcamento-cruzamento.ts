@@ -18,22 +18,27 @@ export type ValoresOrcamento = {
   valorEmpenho: number;
   saldo: number;
   valorAnulacao: number;
+  valorReducao: number;
+  qtdEmpenho: number;
 };
 
 export type LinhaCruzamento = LinhaOrcamentoVisao & ValoresOrcamento;
 
-export type MedidaOrcamento = "inicial" | "atualizada" | "suplementacao" | "anulacao" | "empenho" | "saldo" | "emenda";
+export type MedidaOrcamento = "inicial" | "atualizada" | "suplementacao" | "reducao" | "anulacao" | "empenho" | "liquido" | "qtdEmpenho" | "saldo" | "emenda";
 
 export const MEDIDAS_ORCAMENTO: { key: MedidaOrcamento; rotulo: string; valor: (l: ValoresOrcamento) => number }[] = [
   { key: "inicial", rotulo: "Dotação inicial", valor: (l) => l.valorInicial || 0 },
   {
     key: "atualizada",
     rotulo: "Dotação atualizada",
-    valor: (l) => dotacaoAtualizada({ valorInicial: l.valorInicial, suplementacao: l.valorSuplementacao, anulacao: l.valorAnulacao, empenho: 0 }),
+    valor: (l) => dotacaoAtualizada({ valorInicial: l.valorInicial, suplementacao: l.valorSuplementacao, reducao: l.valorReducao, anulacao: 0, empenho: 0 }),
   },
   { key: "suplementacao", rotulo: "Suplementação", valor: (l) => l.valorSuplementacao || 0 },
-  { key: "anulacao", rotulo: "Anulação", valor: (l) => l.valorAnulacao || 0 },
+  { key: "reducao", rotulo: "Redução", valor: (l) => l.valorReducao || 0 },
   { key: "empenho", rotulo: "Empenho", valor: (l) => l.valorEmpenho || 0 },
+  { key: "anulacao", rotulo: "Anulação de empenho", valor: (l) => l.valorAnulacao || 0 },
+  { key: "liquido", rotulo: "Empenho líquido", valor: (l) => (l.valorEmpenho || 0) - (l.valorAnulacao || 0) },
+  { key: "qtdEmpenho", rotulo: "Qtd. de empenhos", valor: (l) => l.qtdEmpenho || 0 },
   { key: "saldo", rotulo: "Saldo", valor: (l) => l.saldo || 0 },
   { key: "emenda", rotulo: "Emenda impositiva", valor: (l) => l.valorEmendaImpositiva || 0 },
 ];

@@ -24,10 +24,10 @@ import {
   semVazios,
 } from "../src/lib/orcamento-cruzamento.ts";
 
-const V = { valorEmendaImpositiva: 0, valorSuplementacao: 0, valorEmpenho: 0, saldo: 0, valorAnulacao: 0 };
+const V = { valorEmendaImpositiva: 0, valorSuplementacao: 0, valorEmpenho: 0, saldo: 0, valorAnulacao: 0, valorReducao: 0, qtdEmpenho: 0 };
 const L = [
   { ...V, unidade: "10 - SEMUS", nomeElemento: "DIÁRIAS", codigoElemento: "339014", valorInicial: 100 },
-  { ...V, unidade: "10 - SEMUS", nomeElemento: "AUXÍLIOS", codigoElemento: "339048", valorInicial: 50, valorSuplementacao: 20, valorAnulacao: 5 },
+  { ...V, unidade: "10 - SEMUS", nomeElemento: "AUXÍLIOS", codigoElemento: "339048", valorInicial: 50, valorSuplementacao: 20, valorReducao: 5 },
   { ...V, unidade: "2 - SEMED", nomeElemento: "Diárias", codigoElemento: "339014", valorInicial: 30 },
   { ...V, unidade: "2 - SEMED", nomeElemento: "OBRAS", codigoElemento: "449051", valorInicial: 0 },
   { ...V, unidade: null, nomeElemento: "DIÁRIAS", codigoElemento: "339014", valorInicial: 7 },

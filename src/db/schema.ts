@@ -900,6 +900,9 @@ export const orcamentoItens = sqliteTable(
     valorEmpenho: real("valor_empenho").notNull().default(0),
     saldo: real("saldo").notNull().default(0),
     valorAnulacao: real("valor_anulacao").notNull().default(0),
+    // CUBO novo (migração 0113): corte na dotação e quantos empenhos.
+    valorReducao: real("valor_reducao").notNull().default(0),
+    qtdEmpenho: integer("qtd_empenho").notNull().default(0),
     sequencial: integer("sequencial"), // ordem no arquivo
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   },

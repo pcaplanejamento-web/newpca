@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.127.0",
+    data: "2026-10-19",
+    titulo: "Orçamento com Redução e quantidade de empenhos",
+    mudancas: [
+      { tipo: "novo", area: "Orçamento", texto: "A importação do CUBO lê as colunas Valor Redução e Qtd Empenho; elas aparecem nos lançamentos, no detalhe do lançamento e no card do orçamento.", link: "/painel/orcamento" },
+      { tipo: "correcao", area: "Orçamento", texto: "A dotação atualizada desconta a Redução (antes, a Anulação), e o % empenhado usa o empenho líquido (empenho − anulação), como o saldo do CUBO. A coluna Qtd Empenho não é mais lida como o valor do empenho.", link: "/painel/orcamento" },
+      { tipo: "melhoria", area: "Orçamento", texto: "O Comparativo ganhou as medidas Redução, Empenho líquido e Qtd. de empenhos.", link: "/painel/orcamento" },
+    ],
+  },
+  {
     versao: "1.126.0",
     data: "2026-10-16",
     titulo: "Relatório de variação dos preços",

@@ -85,10 +85,11 @@ export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResu
       <dl className="space-y-1 text-[12px]">
         <Linha rotulo="Inicial" valor={o.valorInicial} />
         <Linha rotulo="Suplementação" valor={o.suplementacao} sinal="+" tom="text-[var(--ok)]" />
-        <Linha rotulo="Anulação" valor={o.anulacao} sinal="−" tom="text-[var(--danger)]" />
+        {o.reducao > 0 && <Linha rotulo="Redução" valor={o.reducao} sinal="−" tom="text-[var(--danger)]" />}
         {o.emenda > 0 && <Linha rotulo="Emenda impositiva" valor={o.emenda} />}
         <div className="my-1 border-t border-border" />
-        <Linha rotulo={`Empenhado (${pctTexto})`} valor={o.empenho} tom="text-text" />
+        <Linha rotulo={`Empenhado${o.qtdEmpenho ? ` · ${num(o.qtdEmpenho)} empenhos` : ""}`} valor={o.empenho} tom="text-text" />
+        {o.anulacao > 0 && <Linha rotulo="Anulação de empenho" valor={o.anulacao} sinal="−" tom="text-[var(--ok)]" />}
         <Linha rotulo="Saldo" valor={o.saldo} tom="text-text" />
       </dl>
 

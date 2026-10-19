@@ -4790,6 +4790,8 @@ export function Catalogo() {
               atualizadoEm: "2026-01-15 10:00:00",
               suplementacao: 120_000_000,
               anulacao: 40_000_000,
+              reducao: 25_000_000,
+              qtdEmpenho: 1_240,
               empenho: 610_000_000,
               saldo: 1_423_650_000,
               orgaos: 18,
@@ -4828,6 +4830,8 @@ export function Catalogo() {
               valorEmpenho: 0,
               saldo: 5000000,
               valorAnulacao: 0,
+              valorReducao: 0,
+              qtdEmpenho: 3,
               sequencial: 1,
             }}
             vinculo={{ orgao: "PMRV — Prefeitura Municipal de Rio Verde", unidade: "SME — Secretaria Municipal de Educação" }}

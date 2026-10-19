@@ -26,7 +26,7 @@ import {
  */
 
 // orcamento_itens = 17 colunas vinculadas por linha → 5×17 = 85 (< limite de 100 do D1).
-const ROWS_PER_STMT = 5;
+const ROWS_PER_STMT = 5; // 5 × 19 colunas = 95 parâmetros (≤ 100 do D1)
 
 export type OrcamentoResumo = {
   id: number;
@@ -38,6 +38,8 @@ export type OrcamentoResumo = {
   /** Σ dos lançamentos (indicadores do card e do cabeçalho — agregados no banco, sem trazer os lançamentos). */
   suplementacao: number;
   anulacao: number;
+  reducao: number;
+  qtdEmpenho: number;
   empenho: number;
   saldo: number;
   orgaos: number;
@@ -56,6 +58,8 @@ function selecionarResumos() {
       orcamentoId: orcamentoItens.orcamentoId,
       suplementacao: sql<number>`COALESCE(SUM(${orcamentoItens.valorSuplementacao}), 0)`.as("a_suplementacao"),
       anulacao: sql<number>`COALESCE(SUM(${orcamentoItens.valorAnulacao}), 0)`.as("a_anulacao"),
+      reducao: sql<number>`COALESCE(SUM(${orcamentoItens.valorReducao}), 0)`.as("a_reducao"),
+      qtdEmpenho: sql<number>`COALESCE(SUM(${orcamentoItens.qtdEmpenho}), 0)`.as("a_qtd_empenho"),
       empenho: sql<number>`COALESCE(SUM(${orcamentoItens.valorEmpenho}), 0)`.as("a_empenho"),
       saldo: sql<number>`COALESCE(SUM(${orcamentoItens.saldo}), 0)`.as("a_saldo"),
       orgaos: sql<number>`COUNT(DISTINCT ${orcamentoItens.orgao})`.as("a_orgaos"),
@@ -77,6 +81,8 @@ function selecionarResumos() {
       atualizadoEm: orcamentos.atualizadoEm,
       suplementacao: sql<number>`COALESCE(${agg.suplementacao}, 0)`,
       anulacao: sql<number>`COALESCE(${agg.anulacao}, 0)`,
+      reducao: sql<number>`COALESCE(${agg.reducao}, 0)`,
+      qtdEmpenho: sql<number>`COALESCE(${agg.qtdEmpenho}, 0)`,
       empenho: sql<number>`COALESCE(${agg.empenho}, 0)`,
       saldo: sql<number>`COALESCE(${agg.saldo}, 0)`,
       orgaos: sql<number>`COALESCE(${agg.orgaos}, 0)`,
@@ -115,6 +121,8 @@ export type OrcamentoItemRow = {
   valorEmpenho: number;
   saldo: number;
   valorAnulacao: number;
+  valorReducao: number;
+  qtdEmpenho: number;
   sequencial: number | null;
 };
 
@@ -136,6 +144,8 @@ const COLS = {
   valorEmpenho: orcamentoItens.valorEmpenho,
   saldo: orcamentoItens.saldo,
   valorAnulacao: orcamentoItens.valorAnulacao,
+  valorReducao: orcamentoItens.valorReducao,
+  qtdEmpenho: orcamentoItens.qtdEmpenho,
   sequencial: orcamentoItens.sequencial,
 };
 
@@ -210,6 +220,8 @@ function insertStmts(db: ReturnType<typeof getDb>, orcamentoId: number, itens: O
           valorEmpenho: it.valorEmpenho,
           saldo: it.saldo,
           valorAnulacao: it.valorAnulacao,
+          valorReducao: it.valorReducao,
+          qtdEmpenho: it.qtdEmpenho,
           sequencial: it.sequencial ?? null,
         })),
       ),

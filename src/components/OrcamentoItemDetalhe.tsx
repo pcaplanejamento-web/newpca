@@ -59,7 +59,13 @@ export function OrcamentoItemDetalhe({
           <Valor label="Suplementação" v={item.valorSuplementacao} />
           <Valor label="Empenho" v={item.valorEmpenho} />
           <Valor label="Emenda impositiva" v={item.valorEmendaImpositiva} />
-          <Valor label="Anulação" v={item.valorAnulacao} />
+          <Valor label="Redução" v={item.valorReducao} />
+          <Valor label="Anulação de empenho" v={item.valorAnulacao} />
+          <Valor label="Empenho líquido" v={item.valorEmpenho - item.valorAnulacao} />
+          <div>
+            <dt className="text-xs text-muted">Qtd. de empenhos</dt>
+            <dd className="mt-0.5 font-semibold tabular-nums text-text">{(item.qtdEmpenho ?? 0).toLocaleString("pt-BR")}</dd>
+          </div>
         </dl>
       </div>
     </div>

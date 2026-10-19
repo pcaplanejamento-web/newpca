@@ -159,3 +159,9 @@ describe("parseOrcamentoFromMatriz", () => {
     assert.equal(r.total, 0);
   });
 });
+
+it("CUBO novo: Valor Redução e Qtd Empenho (a quantidade não vira o valor do empenho)", () => {
+  assert.equal(rotuloColunaOrcamento("Valor Redução "), "reducao");
+  assert.equal(rotuloColunaOrcamento("Qtd Empenho "), "qtdEmpenho");
+  assert.equal(rotuloColunaOrcamento("Valor Empenho "), "empenho");
+});

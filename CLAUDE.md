@@ -2765,6 +2765,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   milhar e negativos). Validado contra o CUBO real: **1.345 lançamentos, 18 órgãos, 39 unidades** (bate com o "Qtd. total"
   do arquivo) — e o **CUBO novo** (mesmos 1.345; 17 funções, 41 programas, 242 ações, 1.141 fichas, 31 fontes; Ficha
   preserva o zero à esquerda "0624"). Fixtures (padrão antigo E novo) em `tests/parse-orcamento-xlsx.test.ts`.
+- **REDUÇÃO + QTD EMPENHO (v1.127.0, migração `0113`, aditiva — `orcamento_itens.valor_reducao`/`qtd_empenho`):** colunas OPCIONAIS do CUBO (`COLUNAS_OPCIONAIS_ORCAMENTO` — o CUBO anterior segue aceito; ausentes = 0); `rotuloColunaOrcamento` lê "Qtd…" ANTES de EMPENHO. Régua (`orcamento-indicadores.ts`, conferida no CUBO real): dotação atualizada = inicial + suplementação − **redução**; `empenhoLiquido` = empenho − anulação (o % empenhado); saldo = atualizada − líquido. Medidas novas no Comparativo (Redução · Empenho líquido · Qtd. de empenhos).
 - **Import em LOTES (`importar-orcamento.ts` → `POST /api/orcamento`):** discriminada `start-orcamento`|`append-orcamento-itens`
   (espelha `importar-catalogo`: retry de transitório, all-or-nothing — cada import cria um orçamento NOVO; falha apaga o
   parcial). Insert PURO em lotes de **5×17=85** params (< 100 do D1); recomputa `total_itens` + `valor_inicial`. `append`

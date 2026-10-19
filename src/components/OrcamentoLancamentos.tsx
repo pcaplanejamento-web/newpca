@@ -58,6 +58,17 @@ const colValor = (key: string, header: string, get: (r: Lancamento) => number, f
   render: (r) => <span className={`tabular-nums ${forte ? "font-semibold text-text" : "text-text-2"}`}>{brl(get(r))}</span>,
 });
 
+const colQtd = (key: string, header: string, get: (r: Lancamento) => number): Column<Lancamento> => ({
+  key,
+  header,
+  align: "center",
+  nowrap: true,
+  filter: "range",
+  numero: get,
+  formatarFaixa: num,
+  render: (r) => <span className="tabular-nums text-text-2">{num(get(r))}</span>,
+});
+
 /**
  * Aba LANÇAMENTOS da tela do orçamento: TODAS as colunas do CUBO (Órgão · Unidade · Função · Programa · Ação · Elemento ·
  * Código · Ficha · Fonte + os valores), a UNIDADE e o ÓRGÃO DO CADASTRO (pelos Vínculos, com as ações escolhidas — o órgão
@@ -136,7 +147,9 @@ export function OrcamentoLancamentos({
     colValor("suplement", "Suplementação", (r) => r.valorSuplementacao),
     colValor("empenho", "Empenho", (r) => r.valorEmpenho),
     colValor("saldo", "Saldo", (r) => r.saldo),
+    colValor("reducao", "Redução", (r) => r.valorReducao),
     colValor("anulacao", "Anulação", (r) => r.valorAnulacao),
+    colQtd("qtdEmpenho", "Qtd. empenhos", (r) => r.qtdEmpenho),
     // Uma coluna por VISÃO salva: o lançamento entra (Sim) ou não nela — filtrar "Sim" = os lançamentos da visão.
     ...naVisao.map(
       ({ v, ids }): Column<Lancamento> => ({

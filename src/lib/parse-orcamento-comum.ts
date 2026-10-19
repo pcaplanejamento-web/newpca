@@ -21,6 +21,9 @@ export type OrcamentoItemParseado = {
   valorEmpenho: number;
   saldo: number;
   valorAnulacao: number;
+  /** Valor Redução (corte na dotação) e Qtd Empenho (quantos empenhos) — CUBO novo; ausentes = 0. */
+  valorReducao: number;
+  qtdEmpenho: number;
   sequencial: number;
 };
 
@@ -53,7 +56,9 @@ export type ColKeyOrcamento =
   | "suplementacao"
   | "empenho"
   | "saldo"
-  | "anulacao";
+  | "anulacao"
+  | "reducao"
+  | "qtdEmpenho";
 
 /**
  * As colunas OBRIGATÓRIAS do relatório (o padrão ATUAL do CUBO), na ordem do relatório — a planilha só é aceita com
@@ -77,12 +82,20 @@ export const COLUNAS_ORCAMENTO: { key: ColKeyOrcamento; rotulo: string; texto: b
   { key: "anulacao", rotulo: "Valor Anulação", texto: false },
 ];
 
+/** Colunas OPCIONAIS (o CUBO anterior não as tem): conferidas quando presentes, sem travar a importação. */
+export const COLUNAS_OPCIONAIS_ORCAMENTO: { key: ColKeyOrcamento; rotulo: string; texto: boolean }[] = [
+  { key: "reducao", rotulo: "Valor Redução", texto: false },
+  { key: "qtdEmpenho", rotulo: "Qtd Empenho", texto: false },
+];
+
 /** Classifica um rótulo/token de cabeçalho numa coluna do orçamento (ou null). A palavra
  * DISTINTIVA decide o valor ("VALOR" sozinho não decide). */
 export function rotuloColunaOrcamento(str: string): ColKeyOrcamento | null {
   const s = norm(str); // UPPER + sem acento + espaços colapsados
   if (!s) return null;
-  // Valores.
+  // Valores. A QUANTIDADE vem antes: "Qtd Empenho" contém EMPENHO e não é o valor do empenho.
+  if (/^(QTD|QUANT)/.test(s)) return /EMPENHO/.test(s) ? "qtdEmpenho" : null;
+  if (/REDUC/.test(s)) return "reducao";
   if (/EMENDA/.test(s)) return "emenda";
   if (/INICIAL/.test(s)) return "inicial";
   if (/SUPLEMENT/.test(s)) return "suplementacao";

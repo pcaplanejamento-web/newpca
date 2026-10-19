@@ -26,6 +26,8 @@ export const orcamentoItemImportSchema = z.object({
   valorEmpenho: valor,
   saldo: valor,
   valorAnulacao: valor,
+  valorReducao: valor,
+  qtdEmpenho: z.number().int().min(0).default(0),
   sequencial: z.number().int().nullable().default(null),
 });
 export type OrcamentoItemImport = z.infer<typeof orcamentoItemImportSchema>;
