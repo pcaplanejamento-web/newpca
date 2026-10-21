@@ -40,17 +40,36 @@ export function etapasCompactacao(): EtapaCompactacao[] {
 
 export const cabe = (bytes: number): boolean => bytes > 0 && bytes <= LIMITE_DOCUMENTO;
 
-/** As porcentagens de compactação que o ADM escolhe no envio (0 = automático: só o necessário para caber). */
-export const OPCOES_COMPACTACAO = [0, 25, 50, 75, 90] as const;
-
-/** O tamanho máximo do arquivo final: (100 − pct)% do original, nunca acima do limite de 100 KB. */
-export function limiteAlvo(original: number, pct: number): number {
-  const p = Math.min(Math.max(Math.round(pct) || 0, 0), 99);
-  if (p === 0) return LIMITE_DOCUMENTO;
-  return Math.max(1, Math.min(LIMITE_DOCUMENTO, Math.ceil((original * (100 - p)) / 100)));
-}
-
 export const cabeAlvo = (bytes: number, alvo: number): boolean => bytes > 0 && bytes <= alvo;
+
+/** O ADM escolhe o tamanho final e pode passar dos 100 KB — até 1 MB (a linha do banco guarda o base64). */
+export const LIMITE_DOCUMENTO_ADM = 1024 * 1024;
+
+/**
+ * Os níveis de imagem oferecidos ao ADM, do melhor ao MÍNIMO LEGÍVEL (escala 1,25 ≈ 90 dpi, JPEG 0,5 — abaixo disso o texto
+ * pequeno começa a borrar). O controle nunca desce além do último.
+ */
+export const NIVEIS_LEGIVEIS: readonly EtapaCompactacao[] = [
+  { escala: 2, qualidade: 0.85 },
+  { escala: 1.75, qualidade: 0.75 },
+  { escala: 1.5, qualidade: 0.68 },
+  { escala: 1.35, qualidade: 0.58 },
+  { escala: 1.25, qualidade: 0.5 },
+];
+
+/** Uma versão do PDF para o ADM escolher: o tamanho e o rótulo. */
+export type VersaoTamanho = { tamanho: number; rotulo: string };
+
+/**
+ * As versões que viram pontos da barra: do MAIOR (o original) ao MENOR legível, sem as que passam do limite do ADM, sem
+ * as que não ficam menores que a anterior (≥ 98% dela) — cada passo da barra encolhe de verdade.
+ */
+export function versoesEscolhiveis<T extends VersaoTamanho>(versoes: readonly T[], limite = LIMITE_DOCUMENTO_ADM): T[] {
+  const ordem = [...versoes].filter((v) => v.tamanho > 0 && v.tamanho <= limite).sort((x, y) => y.tamanho - x.tamanho);
+  const saida: T[] = [];
+  for (const v of ordem) if (!saida.length || v.tamanho < saida[saida.length - 1].tamanho * 0.98) saida.push(v);
+  return saida;
+}
 
 /** O arquivo começa com "%PDF" (o cabeçalho de todo PDF). */
 export function ehPdf(bytes: Uint8Array): boolean {

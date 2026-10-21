@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { nomeDoDocumento, OPCOES_COMPACTACAO, tamanhoBase64 } from "@/lib/compactar-pdf-core";
+import { nomeDoDocumento, tamanhoBase64 } from "@/lib/compactar-pdf-core";
+import type { PdfCompactado, VersaoPdf } from "@/lib/compactar-pdf";
 import type { DocumentoResumo } from "@/lib/documentos";
 import { dataBR, formatBytes, num } from "@/lib/format";
 import type { PodeTela } from "@/lib/papeis-core";
@@ -13,7 +14,7 @@ import { Button } from "./Button";
 import { gradienteDe, MenuCard } from "./CatalogoCards";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { useConfirmacao } from "./Confirmacao";
-import { SearchField, SelectField, TextField } from "./Field";
+import { SearchField, TextField } from "./Field";
 import { IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
@@ -127,29 +128,89 @@ function VisualizadorPdf({ doc, onBaixar, onFechar }: { doc: DocumentoResumo; on
 }
 
 /**
+ * O ADM escolhe o TAMANHO do PDF numa barra: do original (o máximo) ao mínimo legível — cada ponto é uma versão real, com o
+ * tamanho e a prévia da 1ª página.
+ */
+export function EscolherTamanhoPdf({
+  nome,
+  original,
+  versoes,
+  onEscolher,
+  onCancelar,
+}: {
+  nome: string;
+  original: number;
+  versoes: VersaoPdf[];
+  onEscolher: (v: VersaoPdf) => void;
+  onCancelar: () => void;
+}) {
+  // A barra vai do MENOR (esquerda) ao MAIOR (direita); começa no menor.
+  const ordem = useMemo(() => [...versoes].reverse(), [versoes]);
+  const [i, setI] = useState(0);
+  const v = ordem[Math.min(i, ordem.length - 1)];
+  const reducao = original > 0 ? Math.round((1 - v.tamanho / original) * 100) : 0;
+  return (
+    <Modal
+      open
+      onClose={onCancelar}
+      size="lg"
+      titulo={`Tamanho do documento — ${nome}`}
+      rodape={
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onCancelar}>
+            Não enviar
+          </Button>
+          <Button size="sm" onClick={() => onEscolher(v)}>
+            Enviar com {formatBytes(v.tamanho)}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-[var(--gap-block)]">
+        <div className="space-y-1">
+          <div className="flex items-baseline justify-between gap-2 text-sm">
+            <span className="font-semibold text-text">{v.rotulo}</span>
+            <span className="tabular-nums text-muted">
+              {formatBytes(v.tamanho)}
+              {reducao > 0 ? ` · ${reducao}% menor` : ""}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={ordem.length - 1}
+            step={1}
+            value={i}
+            onChange={(e) => setI(Number(e.target.value))}
+            aria-label="Tamanho do documento"
+            aria-valuetext={`${v.rotulo}, ${formatBytes(v.tamanho)}`}
+            className="h-11 w-full cursor-pointer accent-[var(--accent)]"
+          />
+          <div className="flex justify-between text-xs text-muted">
+            <span>Mínimo legível · {formatBytes(ordem[0].tamanho)}</span>
+            <span>Máximo · {formatBytes(ordem[ordem.length - 1].tamanho)}</span>
+          </div>
+        </div>
+        {v.previa && (
+          <div className="overflow-hidden rounded-card border border-border bg-white">
+            {/* biome-ignore lint/performance/noImgElement: prévia local (URL de objeto) */}
+            <img src={v.previa} alt={`Prévia da 1ª página — ${v.rotulo}`} className="mx-auto max-h-[50dvh] w-auto object-contain" />
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/**
  * A tela DOCUMENTOS: subir PDFs (cada um compactado no navegador até 100 KB — `compactarPdf`), um card por documento,
  * visualizar e baixar. O que o papel não permite some (subir = Importar, baixar = Exportar, renomear = Manipular,
  * excluir = Excluir).
  */
-const CHAVE_COMPACTACAO = "documentos:compactacao";
-
 export function DocumentosView({ documentos, pode, admin = false }: { documentos: DocumentoResumo[]; pode: PodeTela; admin?: boolean }) {
   const router = useRouter();
-  // A % de compactação do envio: só o ADM escolhe (lembrada neste aparelho); os demais, automático.
-  const [compactacao, setCompactacao] = useState(0);
-  useEffect(() => {
-    if (!admin) return;
-    try {
-      const v = Number(localStorage.getItem(CHAVE_COMPACTACAO));
-      if ((OPCOES_COMPACTACAO as readonly number[]).includes(v)) setCompactacao(v);
-    } catch {}
-  }, [admin]);
-  function escolherCompactacao(v: number) {
-    setCompactacao(v);
-    try {
-      localStorage.setItem(CHAVE_COMPACTACAO, String(v));
-    } catch {}
-  }
+  // ADM: a escolha do tamanho de cada PDF (a promessa resolve com a versão escolhida, ou null = não enviar este).
+  const [escolha, setEscolha] = useState<{ nome: string; original: number; versoes: VersaoPdf[]; resolver: (v: VersaoPdf | null) => void } | null>(null);
   const [busca, setBusca] = useState("");
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; texto: string } | null>(null);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
@@ -172,12 +233,28 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
     setAviso(null);
     const ok: string[] = [];
     const falhas: string[] = [];
-    const { compactarPdf } = await import("@/lib/compactar-pdf");
+    const { compactarPdf, versoesParaEscolha } = await import("@/lib/compactar-pdf");
     for (const [i, f] of pdfs.entries()) {
       const passo = (texto: string) => setFila({ nome: f.name, atual: i + 1, total: pdfs.length, texto });
       passo("Lendo o PDF…");
       try {
-        const r = await compactarPdf(f, passo, admin ? compactacao : 0);
+        let r: PdfCompactado;
+        if (admin) {
+          // O ADM escolhe o tamanho: do original ao mínimo legível (até 1 MB); nenhuma versão cabe → a automática.
+          const v = await versoesParaEscolha(f, passo);
+          if (v.versoes.length === 0) r = await compactarPdf(f, passo);
+          else {
+            passo("Escolha o tamanho…");
+            const escolhida = await new Promise<VersaoPdf | null>((resolver) => setEscolha({ nome: f.name, original: v.original, versoes: v.versoes, resolver }));
+            setEscolha(null);
+            for (const x of v.versoes) URL.revokeObjectURL(x.previa);
+            if (!escolhida) {
+              falhas.push(`${f.name}: envio cancelado`);
+              continue;
+            }
+            r = { bytes: escolhida.bytes, paginas: v.paginas, compactado: escolhida.compactado, original: v.original };
+          }
+        } else r = await compactarPdf(f, passo);
         passo("Gravando…");
         let bin = "";
         for (let k = 0; k < r.bytes.length; k += 0x8000) bin += String.fromCharCode(...r.bytes.subarray(k, k + 0x8000));
@@ -246,18 +323,6 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
         )}
       </div>
 
-      {admin && pode.importar && (
-        <div className="w-full sm:w-80">
-          <SelectField compacto label="Compactação" value={String(compactacao)} onChange={(e) => escolherCompactacao(Number(e.target.value))}>
-            {OPCOES_COMPACTACAO.map((p) => (
-              <option key={p} value={p}>
-                {p === 0 ? "Automática (só para caber em 100 KB)" : `${p}% menor que o original`}
-              </option>
-            ))}
-          </SelectField>
-        </div>
-      )}
-
       {documentos.length === 0 && !pode.importar ? (
         <p className="rounded-card border border-border bg-surface p-10 text-center text-sm text-muted">Nenhum documento guardado ainda.</p>
       ) : visiveis.length === 0 && busca ? (
@@ -305,6 +370,16 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
               </div>
             ))}
         </div>
+      )}
+
+      {escolha && (
+        <EscolherTamanhoPdf
+          nome={escolha.nome}
+          original={escolha.original}
+          versoes={escolha.versoes}
+          onEscolher={(v) => escolha.resolver(v)}
+          onCancelar={() => escolha.resolver(null)}
+        />
       )}
 
       {vendo && <VisualizadorPdf doc={vendo} onBaixar={pode.exportar ? () => baixar(vendo) : undefined} onFechar={() => setVendo(null)} />}

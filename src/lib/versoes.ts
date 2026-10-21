@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.138.0",
+    data: "2026-10-21",
+    titulo: "Documentos: o ADM escolhe o tamanho de cada PDF",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Documentos",
+        texto:
+          "Ao enviar um PDF, o administrador escolhe o tamanho numa barra: do mínimo legível (o menor sem prejudicar a leitura) ao tamanho original do arquivo, vendo a prévia da 1ª página. O ADM pode guardar até 1 MB; os demais seguem com até 100 KB, compactados sozinhos.",
+        link: "/painel/documentos",
+      },
+    ],
+  },
+  {
     versao: "1.137.1",
     data: "2026-10-21",
     titulo: "Documentos: enviar pelo card no fim da grade",

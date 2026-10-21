@@ -142,7 +142,7 @@ import { coerceDetalhes, type DetalhesPapel, detalhesPadrao } from "@/lib/papeis
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { EsqueletoCalendario } from "@/components/CalendarioEsqueleto";
-import { DocumentoCard } from "@/components/DocumentosView";
+import { DocumentoCard, EscolherTamanhoPdf } from "@/components/DocumentosView";
 import { COLUNAS_ESPACOS, EsqueletoCartaoEspaco } from "@/components/CartaoEspacoEsqueleto";
 import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
 import { EsqueletoTitulo } from "@/components/EsqueletoTela";
@@ -4817,6 +4817,10 @@ export function Catalogo() {
         </div>
       </Secao>
 
+      <Secao titulo="Documentos — EscolherTamanhoPdf (o ADM escolhe o tamanho do PDF numa barra: do mínimo legível ao original, com a prévia da 1ª página)">
+        <EscolherTamanhoDemo />
+      </Secao>
+
       <Secao titulo="Histórico de compra × item do DFD — CelulaHistoricoCompra (a coluna “Histórico” da Mesa → Itens: o desvio do valor do item em relação ao VALOR ATUAL do histórico, na cor da régua da variação; a referência na dica) + ProdutoHistoricoDetalhe (o banner do produto no histórico — o MESMO do Catálogo e da comparação no detalhe do item, ComparacaoHistoricoCompra, que o abre com o valor do item em cima)">
         <HistoricoItemDemo />
       </Secao>
@@ -5206,3 +5210,24 @@ const VINCULOS_DEMO: VinculoComPessoa[] = [
   { id: 1, responsavelId: 1, nome: "Ana Souza", matricula: "123456", cargo: "Secretária", orgaoId: null, reparticaoId: 1, tipo: "padrao", funcao: "", atoTipo: "portaria", atoNumero: "10/2025", atoLink: "https://exemplo.gov.br/portaria-10", inicio: "2025-01-01", fim: null, ordem: 0 },
   { id: 2, responsavelId: 2, nome: "Carlos Lima", matricula: "678901", cargo: "Diretor", orgaoId: null, reparticaoId: 1, tipo: "temporario", funcao: "Secretário Adjunto", atoTipo: "decreto", atoNumero: "5/2026", atoLink: "", inicio: "2026-06-01", fim: "2026-06-30", ordem: 1 },
 ];
+
+function EscolherTamanhoDemo() {
+  const [aberto, setAberto] = useState(false);
+  const v = (tamanho: number, rotulo: string) => ({ tamanho, rotulo, bytes: new Uint8Array(), compactado: true, previa: "" });
+  return (
+    <>
+      <Button size="sm" onClick={() => setAberto(true)}>
+        Abrir a escolha do tamanho
+      </Button>
+      {aberto && (
+        <EscolherTamanhoPdf
+          nome="decreto.pdf"
+          original={900_000}
+          versoes={[v(900_000, "Original"), v(420_000, "Imagem nível 2"), v(160_000, "Mínimo legível")]}
+          onEscolher={() => setAberto(false)}
+          onCancelar={() => setAberto(false)}
+        />
+      )}
+    </>
+  );
+}

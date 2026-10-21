@@ -1775,3 +1775,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - **v1.118.0 — Filtro da unidade:** PCA, Orçamento, Catálogo, Tarefas, Calendário e Automação obedecem à unidade do cabeçalho; o ADM configura em Configurações → Filtro da unidade.
 - v1.121.0: papéis controlam o escopo da Mesa do PCA, aparecer online e ver novidades.
 - [x] v1.137.0 — Documentos: o ADM escolhe a % de compactação no envio.
+- [x] v1.138.0 — Documentos: o ADM escolhe o tamanho de cada PDF (mínimo legível → original).

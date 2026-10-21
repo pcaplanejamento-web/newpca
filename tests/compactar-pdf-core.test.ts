@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cabe, limiteAlvo, ehPdf, etapasCompactacao, LIMITE_DOCUMENTO, nomeDoDocumento, tamanhoBase64 } from "../src/lib/compactar-pdf-core.ts";
+import { cabe, NIVEIS_LEGIVEIS, versoesEscolhiveis, ehPdf, etapasCompactacao, LIMITE_DOCUMENTO, nomeDoDocumento, tamanhoBase64 } from "../src/lib/compactar-pdf-core.ts";
 
 test("limite e cabe", () => {
   assert.equal(LIMITE_DOCUMENTO, 102400);
@@ -24,9 +24,16 @@ test("nome e base64", () => {
   assert.equal(tamanhoBase64(4), 8);
 });
 
-test("limiteAlvo: % sobre o original, nunca acima de 100 KB", () => {
-  assert.equal(limiteAlvo(400_000, 0), LIMITE_DOCUMENTO);
-  assert.equal(limiteAlvo(80_000, 50), 40_000);
-  assert.equal(limiteAlvo(400_000, 50), LIMITE_DOCUMENTO);
-  assert.equal(limiteAlvo(10_000, 90), 1_000);
+test("versoesEscolhiveis: do maior ao menor, dentro do limite, cada passo menor", () => {
+  const v = versoesEscolhiveis(
+    [
+      { tamanho: 50_000, rotulo: "b" },
+      { tamanho: 2_000_000, rotulo: "grande" },
+      { tamanho: 300_000, rotulo: "a" },
+      { tamanho: 49_500, rotulo: "quase igual" },
+    ],
+    1_000_000,
+  );
+  assert.deepEqual(v.map((x) => x.rotulo), ["a", "b"]);
+  assert.equal(NIVEIS_LEGIVEIS[NIVEIS_LEGIVEIS.length - 1].escala, 1.25);
 });
