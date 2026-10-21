@@ -1752,7 +1752,7 @@ function PadronizacaoDemo() {
     setRascClass(r);
   };
   const unidDemo: RascunhoUnidade = { id: 1, sigla: "UN", nome: "UNIDADE", sinonimos: ["UND", "UNID."], classificacaoId: null };
-  const classDemo: RascunhoClassificacao = { id: 1, nome: "SERVIÇO", cor: "#2563eb", palavras: ["Serviço", "Manutenção", "Prestação de serviço"] };
+  const classDemo: RascunhoClassificacao = { id: 1, nome: "SERVIÇO", cor: "#2563eb", palavras: ["Serviço", "Manutenção", "Prestação de serviço"], dominio: "SERVIÇO" };
   return (
     <div className="space-y-[var(--gap-block)]">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-border bg-surface p-[var(--pad-card)]">

@@ -1,3 +1,5 @@
+import { reclassificarTudo } from "@/lib/reclassificacao";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { ok, parseCorpo } from "@/lib/http";
@@ -91,5 +93,6 @@ export async function POST(req: Request) {
       depois: { sinonimos: gravar.get(id)?.novos ?? [] },
     });
   }
+  depoisDaResposta(reclassificarTudo(), "reclassificar itens"); // o cadastro mudou: grava de novo a classificação/domínio dos itens
   return ok({ adicionados: total, falhas });
 }

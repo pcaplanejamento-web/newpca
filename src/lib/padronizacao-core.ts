@@ -27,7 +27,11 @@ export type UnidadeMedida = {
 };
 
 /** Classificação de item CADASTRADA. */
-export type ClassificacaoItem = { id: number; nome: string; cor: string; palavras: string[]; ordem: number };
+/** O DOMÍNIO do item: todo item é MATERIAL ou SERVIÇO (a classificação diz qual; sem ela, a descrição). */
+export const DOMINIOS = ["MATERIAL", "SERVIÇO"] as const;
+export type Dominio = (typeof DOMINIOS)[number];
+
+export type ClassificacaoItem = { id: number; nome: string; cor: string; palavras: string[]; ordem: number; dominio?: Dominio | null };
 
 /** Os dois cadastros — o que as telas de itens usam (Mesa → Itens). */
 export type Padronizacao = { unidades: UnidadeMedida[]; classificacoes: ClassificacaoItem[] };
@@ -453,4 +457,48 @@ export function totaisPorClassificacao(linhas: readonly LinhaClassificada[]): {
     }
   }
   return { porId, semClassificacao, total };
+}
+
+// ---------------------------------------------------------------------------
+// CLASSIFICAÇÃO + DOMÍNIO GRAVADOS no item (migração `0121`): a MESMA régua para os itens dos DFDs e das planilhas.
+// ---------------------------------------------------------------------------
+
+const RE_SERVICO = /^(PRESTACAO|CONTRATACAO|SERVICO|SERVICOS|MANUTENCAO|LOCACAO|ASSINATURA|CONSULTORIA|ASSESSORIA|EXECUCAO|INSTALACAO|LICENCA|LICENCIAMENTO|SEGURO|TRANSPORTE|FRETE|CURSO|TREINAMENTO|CAPACITACAO|REPARO|CONSERTO|RECARGA|LIMPEZA|VIGILANCIA|DEDETIZACAO|CALIBRACAO|AFERICAO|HOSPEDAGEM|ORGANIZACAO|ELABORACAO|PUBLICACAO|IMPRESSAO|CONFECCAO)\b/;
+
+/** O domínio pela DESCRIÇÃO (quando nem a planilha nem a classificação dizem): começa com um serviço = SERVIÇO; senão MATERIAL. */
+export function dominioPorDescricao(descricao: string | null | undefined): Dominio {
+  const t = (descricao ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+  return RE_SERVICO.test(t) ? "SERVIÇO" : "MATERIAL";
+}
+
+/** O texto de domínio de uma planilha (MATERIAL/SERVIÇO, com ou sem acento/plural) → o canônico; outro texto = null. */
+export function dominioCanonico(v: string | null | undefined): Dominio | null {
+  const t = (v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+  if (/^MATERIA/.test(t)) return "MATERIAL";
+  if (/^SERVIC/.test(t)) return "SERVIÇO";
+  return null;
+}
+
+export type ItemClassificado = { classificacao: string; dominio: Dominio };
+
+/**
+ * A classificação e o domínio GRAVADOS de um item: a classificação do Catálogo (senão a da planilha, senão "Não
+ * classificado"); o domínio da planilha, senão o da classificação, senão o da descrição — todo item tem domínio.
+ */
+export function classificarItem(classificar: Classificador, i: { descricao: string | null; unidade?: string | null; classificacaoArquivo?: string | null; dominioArquivo?: string | null }): ItemClassificado {
+  const r = classificar(i.descricao, i.unidade);
+  const classificacao = r?.classificacao.nome ?? (i.classificacaoArquivo?.trim() || NAO_CLASSIFICADO);
+  const dominio = dominioCanonico(i.dominioArquivo) ?? r?.classificacao.dominio ?? dominioPorDescricao(i.descricao);
+  return { classificacao, dominio };
+}
+
+/** A VERSÃO do cadastro (mudou uma classificação, palavra-chave, unidade ou domínio = os itens são reclassificados). */
+export function versaoPadronizacao(p: Padronizacao): string {
+  const txt = JSON.stringify([
+    p.classificacoes.map((c) => [c.id, c.nome, c.palavras, c.ordem, c.dominio ?? null]),
+    p.unidades.map((u) => [u.id, u.sigla, u.nome, u.sinonimos, u.classificacaoId]),
+  ]);
+  let h = 5381;
+  for (let i = 0; i < txt.length; i++) h = ((h * 33) ^ txt.charCodeAt(i)) >>> 0;
+  return `v1:${h.toString(36)}:${txt.length}`;
 }

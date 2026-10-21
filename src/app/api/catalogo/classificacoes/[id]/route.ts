@@ -1,3 +1,5 @@
+import { reclassificarTudo } from "@/lib/reclassificacao";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
@@ -7,7 +9,7 @@ import { classificacaoItemSchema } from "@/lib/padronizacao-validation";
 
 export const dynamic = "force-dynamic";
 
-const ROTULOS = { nome: "nome", cor: "cor", palavras: "palavras-chave" };
+const ROTULOS = { nome: "nome", cor: "cor", palavras: "palavras-chave", dominio: "domínio" };
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await exigirAcesso("catalogo", "configurar");
@@ -21,7 +23,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const pr = await prepararClassificacao(p.data, id);
   if ("erro" in pr) return erro(pr.erro, pr.status);
   await atualizarClassificacao(id, pr.dados);
-  const dd = diffCampos(antes, { ...antes, ...pr.dados }, ["nome", "cor", "palavras"], ROTULOS);
+  const dd = diffCampos(antes, { ...antes, ...pr.dados }, ["nome", "cor", "palavras", "dominio"], ROTULOS);
   await registrarAuditoria({
     usuario: g.u,
     acao: "editar",
@@ -31,6 +33,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     antes: dd.antes,
     depois: dd.depois,
   });
+  depoisDaResposta(reclassificarTudo(), "reclassificar itens"); // o cadastro mudou: grava de novo a classificação/domínio dos itens
   return ok();
 }
 
@@ -64,5 +67,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
       antes: { classificacaoId: id },
       depois: { classificacaoId: null },
     });
+  depoisDaResposta(reclassificarTudo(), "reclassificar itens"); // o cadastro mudou: grava de novo a classificação/domínio dos itens
   return ok();
 }

@@ -35,12 +35,33 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.147.0",
+    versao: "1.148.0",
     data: "2026-10-21",
     titulo: "Documentos: link do Drive sem upload",
     mudancas: [
       { tipo: "novo", area: "Documentos", texto: "“Colar link do Google” não envia mais o arquivo: guarda só o link e abre o PDF direto do Drive, sempre na versão atual.", link: "/painel/documentos" },
       { tipo: "correcao", area: "Documentos", texto: "A escolha do tamanho do PDF começa no original — o texto não some por uma compactação forte escolhida sem querer.", link: "/painel/documentos" },
+    ],
+  },
+  {
+    versao: "1.147.0",
+    data: "2026-10-21",
+    titulo: "Classificação e domínio gravados em todo item",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Itens",
+        texto: "Todo item — de protocolo ou de planilha — tem a Classificação (do cadastro do Catálogo; na planilha, a do arquivo quando o Catálogo não reconhece) e o Domínio (Material ou Serviço) gravados no banco. Mudar o cadastro regrava sozinho.",
+        link: "/painel/catalogo",
+      },
+      {
+        tipo: "novo",
+        area: "Catálogo · Classificações",
+        texto: "Cada classificação define o Domínio dos itens dela (Material, Serviço ou pela descrição).",
+        link: "/painel/catalogo",
+      },
+      { tipo: "melhoria", area: "Mesa · Itens", texto: "Coluna Domínio na visão Itens.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "PCA · Dashboard", texto: "O gráfico e o filtro de Domínio passam a valer para todos os itens, também os vindos de protocolos.", link: "/painel/pca" },
     ],
   },
   {
