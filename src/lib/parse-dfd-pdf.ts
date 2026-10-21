@@ -59,6 +59,9 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
     cMapUrl: new URL("/pdfjs/cmaps/", location.origin).href,
     cMapPacked: true,
     useSystemFonts: true,
+    // Decodificadores (JBIG2/JPEG 2000/perfis ICC) e perfis de cor: sem eles o SCAN em camadas sai quase em branco.
+    wasmUrl: new URL("/pdfjs/wasm/", location.origin).href,
+    iccUrl: new URL("/pdfjs/iccs/", location.origin).href,
   });
   let doc: Awaited<typeof task.promise>;
   try {

@@ -3,7 +3,7 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/*.css", "!public/tesseract"]
+    "includes": ["**", "!**/*.css", "!public/tesseract", "!public/pdfjs"]
   },
   "formatter": { "enabled": false },
   "assist": { "enabled": false },

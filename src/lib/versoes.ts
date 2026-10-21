@@ -35,12 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.149.1",
+    versao: "1.149.2",
     data: "2026-10-21",
     titulo: "Domínio dos itens de protocolo em toda tela",
     mudancas: [
       { tipo: "correcao", area: "PCA", texto: "O Dashboard e a consulta do PCA passam a recalcular logo depois que os itens são reclassificados — o domínio dos itens de protocolo aparece no gráfico, no filtro e na tabela.", link: "/painel/pca" },
       { tipo: "melhoria", area: "Mesa", texto: "O detalhe do item mostra o domínio (material ou serviço) gravado.", link: "/painel/mesa?vista=itens" },
+    ],
+  },
+  {
+    versao: "1.149.1",
+    data: "2026-10-21",
+    titulo: "Documentos: PDFs digitalizados com as letras",
+    mudancas: [
+      { tipo: "correcao", area: "Documentos", texto: "PDFs digitalizados (scan em camadas, como decretos) aparecem com as letras ao ver, ao compactar e pelo link do Drive.", link: "/painel/documentos" },
     ],
   },
   {
