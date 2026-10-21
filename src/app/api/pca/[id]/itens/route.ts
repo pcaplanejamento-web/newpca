@@ -1,3 +1,4 @@
+import { avisarAdmsPca } from "@/lib/avisos-mesa";
 import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { dfdNasLinhas, escopoMesa } from "@/lib/acesso-mesa";
@@ -56,6 +57,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         .join(", ")} inativo(s)`.slice(0, 500),
       depois: { retirados: alvo.map((n) => ({ sequencial: n.sequencial, dfd: n.dfdNumero })) },
     });
+    await avisarAdmsPca(a.u, pca, `${alvo.length} item(ns) retirado(s)`, `Seq. ${alvo.map((n) => n.sequencial).sort((x, y) => x - y).slice(0, 12).join(", ")}`);
   }
   return ok({ alterados: alvo.length, falhas });
 }

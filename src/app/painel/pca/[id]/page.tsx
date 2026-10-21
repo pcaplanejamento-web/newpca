@@ -12,6 +12,7 @@ import { PainelPca } from "@/components/PainelPca";
 import { PcaConfiguracao } from "@/components/PcaConfiguracao";
 import { type AbaPca, PcaEspacoView } from "@/components/PcaEspacoView";
 import { PlanilhasPca } from "@/components/PlanilhasPca";
+import { uploadsDoPca } from "@/lib/pca-uploads";
 import { Ajuda } from "@/components/Ajuda";
 import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
@@ -31,7 +32,6 @@ import {
   type PcaEspaco,
   pcaTemDados,
 } from "@/lib/pca-espaco";
-import { getUnidades } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +71,7 @@ export default async function PcaEspacoPage({
   else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, sp.abrir);
   else if (aba === "importacao")
-    conteudo = <PlanilhasPca pcaId={pca.id} planilhas={await getUnidades(undefined, pca.id)} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
+    conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;

@@ -919,6 +919,7 @@ export const TIPOS_NOTIFICACAO = [
   "protocolo",
   "situacao",
   "pca",
+  "pca-adm",
   "cadastro",
   "concluida",
   "centi",

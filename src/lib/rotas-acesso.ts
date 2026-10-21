@@ -233,7 +233,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "pca/[id]/capa": { GET: tela("pca", "visualizar") },
   "pca/[id]/orcamento/relatorio": { GET: tela("pca", "exportar") },
   "pca/[id]/itens": { POST: naMesa(tela("pca", "excluir", "retirar itens do PCA")) },
-  "pca/[id]/planilhas/[unidadeId]": { DELETE: tela("pca", "excluir") },
+  "pca/[id]/planilhas/[uploadId]": { DELETE: tela("pca", "excluir") },
   "pca/[id]/protocolos": { POST: naMesa(tela("pca", "manipular", "enviar também exige Manipular na Mesa (recusa)")) },
   "pca/[id]/consulta/dfd/[dfdId]": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },
   "pca/[id]/consulta/historico": { GET: publica("PCA publicado; em Preview, quem visualiza o PCA") },

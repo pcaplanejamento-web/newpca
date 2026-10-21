@@ -2484,6 +2484,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`chamarPadronizacao`).
 
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
+- **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0117` — tabela `pca_uploads`, `unidades.upload_id` [único
+  por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
+  cada ARQUIVO = UM cartão na Importação (`uploadsDoPca`, `pca-uploads.ts`; excluir = `DELETE /api/pca/[id]/planilhas/[uploadId]`,
+  cascata). O `/api/upload` (`start` cria o upload na 1ª unidade e recebe `uploadId` nas demais; `append`; `fim` = avisa os
+  ADMs) grava cada lote por `gravarLote`: núcleo puro **`sequencial-pca-core.ts`** (`repetidos`, `atribuirSequenciais`) +
+  builders **`pca-upload-sql.ts`** (testados no D1 real — `tests/sequencial-pca.test.ts`): o nº informado SOBRESCREVE o item
+  da planilha que o tinha (`comandoSobrescrever`, no mesmo lote), sem nº segue `MAX`+1 (planilha E `pca_itens` — o MESMO
+  `maximoDoPca` da numeração dos protocolos em `pca-itens-sql.ts`), nº de item de protocolo = 409; totais e sobras acertados
+  no lote (`comandoTotaisUnidades`/`comandosLimparVazias`). O arquivo com sequencial repetido não importa
+  (`LeituraPlanilhas.sequenciaisRepetidos` trava a `PreviaPlanilha`). A consulta do Dashboard abre do Seq. maior ao menor
+  (`DataTable.ordemInicial`). **Avisos aos ADMs:** tipo `pca-adm` ("Movimentação no PCA", configurável) — `avisarAdmsPca`
+  (`avisos-mesa.ts`) em enviar/incorporar/devolver, retirar itens, upload/exclusão de planilha e criar/alterar/excluir PCA.
 - **LISTA PRONTA TAMBÉM RECEBE PROTOCOLOS (v1.133.0, migração `0115` — `itens.dominio`/`prioridade`/`protocolo_id_externo`/
   `previsao_generica`):** a fonte é o PONTO DE PARTIDA, não exclusividade — todo PCA tem a aba **Mesa** (enviar/incorporar/
   devolver; `motivosNaoEnviar` sem a trava de fonte; seletor de Mesa e "Enviar ao PCA" listam todos); o de lista tem também

@@ -14,6 +14,22 @@ import {
  * Uma "unidade" = uma planilha de PCA importada (identificada pelo Código +
  * Município do cabeçalho). Re-importar o mesmo Código substitui os itens.
  */
+// Migração `0117`: UM upload de planilha = UM componente na Importação do PCA (a consolidada vira várias `unidades`, uma por
+// LOCAL, todas do mesmo upload; excluir o upload leva as unidades e os itens).
+export const pcaUploads = sqliteTable(
+  "pca_uploads",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    pcaId: integer("pca_id")
+      .notNull()
+      .references((): AnySQLiteColumn => pcas.id, { onDelete: "cascade" }),
+    nomeArquivo: text("nome_arquivo"),
+    criadoPor: integer("criado_por").references((): AnySQLiteColumn => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("pca_uploads_pca_idx").on(t.pcaId)],
+);
+
 export const unidades = sqliteTable(
   "unidades",
   {
@@ -33,9 +49,12 @@ export const unidades = sqliteTable(
     valorTotal: real("valor_total").default(0),
     // PCA (fonte "lista pronta") a que a planilha pertence — migração `0033`. O código é único POR PCA.
     pcaId: integer("pca_id").references((): AnySQLiteColumn => pcas.id, { onDelete: "cascade" }),
+    // O upload de onde a planilha veio (migração `0117`) — o código é único POR UPLOAD.
+    uploadId: integer("upload_id").references((): AnySQLiteColumn => pcaUploads.id, { onDelete: "cascade" }),
   },
   (t) => [
-    uniqueIndex("unidades_pca_codigo_uq").on(t.pcaId, t.codigo),
+    uniqueIndex("unidades_upload_codigo_uq").on(t.uploadId, t.codigo),
+    index("unidades_upload_idx").on(t.uploadId),
     index("unidades_reparticao_idx").on(t.reparticaoId),
     index("unidades_pca_idx").on(t.pcaId),
   ],
@@ -67,9 +86,13 @@ export const itens = sqliteTable(
     prioridade: text("prioridade"),
     protocoloIdExterno: text("protocolo_id_externo"),
     previsaoGenerica: text("previsao_generica"),
+    // Migração `0117`: o PCA do item (cópia do da unidade) — o SEQUENCIAL é ÚNICO no PCA, entre a planilha e os itens dos
+    // protocolos (`pca_itens`): gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico` no banco.
+    pcaId: integer("pca_id"),
   },
   (t) => [
     index("itens_unidade_idx").on(t.unidadeId),
+    index("itens_pca_seq_idx").on(t.pcaId, t.sequencial),
     index("itens_protocolo_externo_idx").on(t.protocoloIdExterno),
     index("itens_class_idx").on(t.classificacaoNorm),
     index("itens_periodo_idx").on(t.anoDesejado, t.mesDesejado),

@@ -1,3 +1,4 @@
+import { avisarAdmsPca } from "@/lib/avisos-mesa";
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { gerarPca } from "@/lib/dfd";
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
       resumo: `PCA "${e.data.nome}" criado (${e.data.fonte === "lista" ? "lista pronta" : "protocolos"}, ${e.data.ano})`,
       depois: e.data,
     });
+    await avisarAdmsPca(a.u, { id, nome: e.data.nome }, "PCA criado", `${e.data.fonte === "lista" ? "Lista pronta" : "Protocolos"} · ${e.data.ano}`, "configuracao");
     return ok({ id });
   }
 

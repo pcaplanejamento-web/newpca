@@ -1,3 +1,4 @@
+import { avisarAdmsPca } from "@/lib/avisos-mesa";
 import { exigirAcesso, intId, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
@@ -62,6 +63,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     antes: dd.antes,
     depois: dd.depois,
   });
+  if (dd.resumo || (d.status && d.status !== antes.status))
+    await avisarAdmsPca(a.u, { id, nome: antes.nome }, d.status && d.status !== antes.status ? (d.status === "publicado" ? "publicado" : "voltou para Preview") : "configuração alterada", dd.resumo || null, "configuracao");
   return ok();
 }
 
@@ -75,6 +78,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const pca = await getPcaEspaco(id);
   if (!pca) return erro("PCA não encontrado.", 404);
   await excluirPca(id);
+  await avisarAdmsPca(a.u, pca, "PCA excluído", null);
   await registrarAuditoria({ usuario: a.u, acao: "excluir", entidade: "pca", entidadeId: id, resumo: `PCA "${pca.nome}" excluído`, antes: { nome: pca.nome, ano: pca.ano, fonte: pca.fonte } });
   return ok();
 }
