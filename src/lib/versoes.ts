@@ -56,6 +56,15 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.146.1",
+    data: "2026-10-21",
+    titulo: "Documentos: fontes do PDF e card do link",
+    mudancas: [
+      { tipo: "correcao", area: "Documentos", texto: "As fontes do PDF passam a carregar no leitor (o texto aparece ao ver e ao compactar).", link: "/painel/documentos" },
+      { tipo: "melhoria", area: "Documentos", texto: "O link do Google virou um card próprio, “Colar link do Google”, ao lado de “Enviar PDF”.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.146.0",
     data: "2026-10-21",
     titulo: "Documentos: texto que sumia e PDF por link do Google",
