@@ -73,7 +73,7 @@ export async function POST(req: Request) {
         .from(reparticoes)
         .where(and(sql`UPPER(TRIM(${reparticoes.codigo})) = ${codigo.trim().toUpperCase()}`, eq(reparticoes.oculto, false), sql`${reparticoes.codigo} <> 'GERAL'`))
         .limit(1);
-      const repId = mesmaSigla?.id ?? (idDoFiltro((await unidadesDaSessao(auth.u)).filtro) || null);
+      const repId = mesmaSigla?.id ?? (idDoFiltro((await unidadesDaSessao(auth.u, undefined, "pca")).filtro) || null);
       const set = {
         municipio,
         nomeArquivo: nomeArquivo ?? null,

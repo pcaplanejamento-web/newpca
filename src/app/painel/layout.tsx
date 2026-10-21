@@ -10,7 +10,7 @@ import { SegundoPlano } from "@/components/SegundoPlano";
 import { getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
 import { dataHoraBR } from "@/lib/format";
-import { getReparticaoContexto } from "@/lib/grupos";
+import { getReparticaoContexto, telasTodasDoGrupo } from "@/lib/grupos";
 import { getPcaFiltro, pcasDoFiltro } from "@/lib/pca-filtro";
 import { getModulos } from "@/lib/modulos";
 import { secoesDosModulos } from "@/lib/modulos-core";
@@ -59,6 +59,11 @@ export default async function PainelLayout({
     getConfigChat(),
     getConfigEscopo(),
   ]);
+  // Grupo de "unidade de cadastro" com telas que veem TODAS as unidades: nelas o cabeçalho troca a lista (e a ativa).
+  const telasTodas = !usuario.admin && ativo ? await telasTodasDoGrupo(ativo.id) : [];
+  const contextoTodas = telasTodas.length ? await getReparticaoContexto(usuario, ativo, telasTodas[0]) : null;
+  const unidadeDe = (r: { id: number; codigo: string; nome: string } | null) =>
+    r && r.codigo !== "GERAL" ? { id: r.id, sigla: r.codigo, nome: r.nome } : null;
 
   return (
     <AppShell
@@ -70,6 +75,7 @@ export default async function PainelLayout({
       modulos={secoesDosModulos(modulos, new Set(acesso.telas), usuario.admin)}
       reparticoes={contexto.lista}
       reparticaoAtivaId={contexto.ativa?.id ?? null}
+      unidadesPorTela={contextoTodas ? { telas: telasTodas, lista: contextoTodas.lista, ativaId: contextoTodas.ativa?.id ?? null } : undefined}
       pcas={pcas}
       pcaFiltroId={pcaFiltro?.id ?? null}
       identidade={aparencia.identidade}
@@ -88,11 +94,8 @@ export default async function PainelLayout({
         <ComponentesPapel retirados={usuario.admin ? {} : usuario.papel.detalhes.componentes} exibicao={usuario.papel.detalhes.exibicao}>
           <UnidadeUnica
             modulos={escopoCab.modulos}
-            unidade={
-              contexto.ativa && contexto.ativa.codigo !== "GERAL"
-                ? { id: contexto.ativa.id, sigla: contexto.ativa.codigo, nome: contexto.ativa.nome }
-                : null
-            }
+            unidade={unidadeDe(contexto.ativa)}
+            porTela={contextoTodas ? { telas: telasTodas, unidade: unidadeDe(contextoTodas.ativa) } : undefined}
           >
             <SegundoPlano>{children}</SegundoPlano>
           </UnidadeUnica>

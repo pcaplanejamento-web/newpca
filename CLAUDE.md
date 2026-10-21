@@ -730,7 +730,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadastro (`usuarios.reparticao_id`; sem ela = escopo nenhuma; a "Geral" nunca vale por cadastro) — ponto único
   `reparticoesDoMembro` (`grupos.ts`; núcleo puro `unidadesDoMembro` em `escopo-unidades-core.ts`) dentro do
   `getReparticaoContexto`: cabeçalho, escopo da Mesa e as rotas herdam. No `GruposAdmin`, o `Segmented` "Unidades escolhidas |
-  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. Telas admin: `/painel/grupos`,
+  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. **ESCOPO POR TELA + VÁRIAS UNIDADES (v1.139.0, migração `0117`, aditiva — `grupos.escopo_telas` JSON `{tela: "todas"}` +
+  tabela `usuario_reparticoes` = as unidades ADICIONAIS da pessoa; a principal segue em `usuarios.reparticao_id`):** no modo
+  `cadastro`, o banner do grupo mostra **"Acesso de cada tela"** (`EscopoPorTela`: por tela do grupo, "Só as de cadastro" |
+  "Todas as unidades"); núcleo puro em `escopo-unidades-core.ts` (`lerEscopoTelas`, `compactarEscopoTelas`, `telaVeTodas`,
+  `telasComTodas`, `telaDaRota`; `unidadesDoMembro` aceita várias unidades, sem repetir e sem a "Geral"). A TELA desce por
+  `unidadesDaSessao(u, grupo, tela)`/`getReparticaoContexto`/`reparticoesDoMembro` (tela "todas" = `listarReparticoes()` —
+  escopo todas): Mesa (`escopoMesa`, `contextoBanners`, pesquisa/vínculos de tarefa) = `dfd` (a Mesa do PCA também), cada
+  módulo pela `TELA_DO_MODULO` de `unidadeDoModulo`, o upload = `pca`. O layout manda `unidadesPorTela` ao `AppShell` e
+  `porTela` ao `UnidadeUnica` (a lista e a ativa trocam pela rota); `POST /api/reparticoes/ativo` aceita as unidades das
+  telas "todas". **Usuários:** "Unidades em que trabalha" = `SeletorMultiplo suspenso` + a principal (`PATCH` `{reparticaoId,
+  outrasUnidades}` → `comandosOutrasUnidades`, `rbac-sql.ts`; cada nova validada por `unidadeDeTrabalhoValida`; mudar desfaz
+  a validação dos dados); `unidadesDeCadastro` (`grupos.ts`) = principal + adicionais. Telas admin: `/painel/grupos`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de

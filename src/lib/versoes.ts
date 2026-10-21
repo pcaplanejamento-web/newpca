@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.139.0",
+    data: "2026-10-21",
+    titulo: "Grupos por unidade de cadastro: acesso de cada tela e várias unidades por pessoa",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "No modo “Unidade de cadastro de cada pessoa”, cada tela do grupo escolhe: só as unidades de cadastro da pessoa ou todas as unidades.", link: "/painel/grupos" },
+      { tipo: "novo", area: "Usuários", texto: "A pessoa pode trabalhar em várias unidades: o campo “Unidades em que trabalha” marca mais de uma e escolhe a principal.", link: "/painel/usuarios" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Nas telas com todas as unidades, o seletor de unidade do cabeçalho mostra todas; nas demais, as de cadastro.", link: "/painel/grupos" },
+    ],
+  },
+  {
     versao: "1.138.0",
     data: "2026-10-21",
     titulo: "Documentos: o ADM escolhe o tamanho de cada PDF",

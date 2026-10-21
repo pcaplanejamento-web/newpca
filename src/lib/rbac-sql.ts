@@ -8,6 +8,7 @@ import {
   reparticoes,
   tarefaModelos,
   tarefaPastas,
+  usuarioReparticoes,
   tarefaQuadros,
   usuarioGrupos,
   usuarios,
@@ -48,6 +49,17 @@ export function comandosGruposDoUsuario(db: Db, usuarioId: number, grupoIds: rea
     db.delete(usuarioGrupos).where(eq(usuarioGrupos.usuarioId, usuarioId)),
     ...lotes([...new Set(grupoIds)], LINHAS_POR_INSERT).map((l) =>
       db.insert(usuarioGrupos).values(l.map((grupoId) => ({ usuarioId, grupoId }))),
+    ),
+  ];
+}
+
+/** Troca as unidades de cadastro ADICIONAIS da pessoa (a principal é `usuarios.reparticao_id`, que não entra aqui): apaga
+ * as dela e grava as escolhidas — para o `db.batch`. */
+export function comandosOutrasUnidades(db: Db, usuarioId: number, reparticaoIds: readonly number[]) {
+  return [
+    db.delete(usuarioReparticoes).where(eq(usuarioReparticoes.usuarioId, usuarioId)),
+    ...lotes([...new Set(reparticaoIds)], LINHAS_POR_INSERT).map((l) =>
+      db.insert(usuarioReparticoes).values(l.map((reparticaoId) => ({ usuarioId, reparticaoId }))),
     ),
   ];
 }

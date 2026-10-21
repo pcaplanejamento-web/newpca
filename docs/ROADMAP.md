@@ -11,6 +11,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Grupos por unidade de cadastro: acesso de cada tela + várias unidades por pessoa (v1.139.0) — entregue
+No modo "Unidade de cadastro de cada pessoa", cada tela do grupo escolhe só as unidades de cadastro ou todas; a pessoa pode
+ter várias unidades de cadastro (Usuários → "Unidades em que trabalha", com a principal). Migração `0117`.
+
 ### PCA de lista pronta recebe protocolos + planilha consolidada (v1.133.0) — entregue
 ✅ Todo PCA tem a aba **Mesa**; o de lista pronta mantém a **Importação**, que agora lê a planilha consolidada com a coluna
 LOCAL (uma planilha por unidade, domínio, prioridade, ID PROTOCOLO, prévia dos problemas). ✅ Dashboard/Orçamento/cards

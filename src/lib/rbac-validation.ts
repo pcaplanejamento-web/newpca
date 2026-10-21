@@ -21,6 +21,10 @@ const modulosSchema = z
 /** Os PCAs do grupo: `null` = todos; a lista = só esses. */
 const pcasSchema = idsSchema.nullable();
 
+/** No modo "unidade de cadastro": as telas em que o grupo vê TODAS as unidades (`{tela: "todas"}`; ausente = só as de
+ * cadastro da pessoa). A rota guarda só as telas que o grupo abre. */
+const escopoTelasSchema = z.record(z.string().regex(/^[a-z]{1,30}$/, "Tela inválida."), z.literal("todas"));
+
 export const grupoCreateSchema = z.object({
   nome: nomeGrupo,
   modulos: modulosSchema.default([]),
@@ -29,6 +33,7 @@ export const grupoCreateSchema = z.object({
   membros: idsSchema.default([]),
   reparticoes: idsSchema.default([]),
   modoUnidades: z.enum(["lista", "cadastro"]).default("lista"),
+  escopoTelas: escopoTelasSchema.default({}),
 });
 
 // PATCH explícito, SEM defaults: um campo ausente fica como está (o `.partial()` mantinha o `.default([])` — um PATCH só
@@ -41,6 +46,7 @@ export const grupoPatchSchema = z.object({
   membros: idsSchema.optional(),
   reparticoes: idsSchema.optional(),
   modoUnidades: z.enum(["lista", "cadastro"]).optional(),
+  escopoTelas: escopoTelasSchema.optional(),
 });
 
 /** Grupo ativo do cabeçalho (cookie). */
