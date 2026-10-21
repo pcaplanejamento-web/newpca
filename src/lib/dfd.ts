@@ -333,6 +333,7 @@ function consultarItensDfds(reparticaoId?: number | readonly number[], pcaId?: n
       unidade: dfdItens.unidade,
       quantidade: dfdItens.quantidade,
       valorUnitario: dfdItens.valorUnitario,
+      dominio: dfdItens.dominio,
       valorTotal: dfdItens.valorTotal,
       pcaSequencial: pcaItens.sequencial,
       pcaAtivo: pcaItens.ativo,
@@ -369,6 +370,7 @@ const colunasItem = {
   unidade: dfdItens.unidade,
   quantidade: dfdItens.quantidade,
   valorUnitario: dfdItens.valorUnitario,
+  dominio: dfdItens.dominio,
   valorTotal: dfdItens.valorTotal,
 };
 
@@ -563,6 +565,7 @@ export async function itensParaMassa(ids: number[]): Promise<(ItemMassa & { dfdI
         unidade: dfdItens.unidade,
         quantidade: dfdItens.quantidade,
         valorUnitario: dfdItens.valorUnitario,
+        dominio: dfdItens.dominio,
         valorTotal: dfdItens.valorTotal,
       })
       .from(dfdItens)
@@ -1047,6 +1050,7 @@ export async function getPca(id: number): Promise<PcaDetalhe | null> {
           unidade: dfdItens.unidade,
           quantidade: dfdItens.quantidade,
           valorUnitario: dfdItens.valorUnitario,
+          dominio: dfdItens.dominio,
           valorTotal: dfdItens.valorTotal,
         })
         .from(dfdItens)

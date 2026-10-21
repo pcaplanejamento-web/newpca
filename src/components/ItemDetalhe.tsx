@@ -13,6 +13,7 @@ import {
   veredictoLinhaCatalogo,
 } from "@/lib/dfd-tratamento";
 import { brl, num } from "@/lib/format";
+import { dominioPorDescricao } from "@/lib/padronizacao-core";
 import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 import { tipoCurtoDfd } from "@/lib/parse-dfd-comum";
 import { pendenciasDoItemSolo } from "@/lib/pendencias-core";
@@ -164,6 +165,7 @@ export function ItemDetalhe({
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <CampoCongelado label="Código" valor={item.codigo} mono />
           <CampoCongelado label="Unidade" valor={item.unidade} />
+          <CampoCongelado label="Domínio" valor={item.dominio || dominioPorDescricao(item.descricao)} />
           <CampoCongelado label="Descrição" valor={item.descricao} span />
           <CampoCongelado label="Quantidade" valor={item.quantidade != null ? num(item.quantidade) : null} />
           <CampoCongelado label="Valor unitário" valor={item.valorUnitario != null ? brl(item.valorUnitario) : null} />
@@ -201,6 +203,7 @@ export function ItemDetalhe({
       <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
         <CampoTexto label="Código" valor={item.codigo ?? ""} mono {...props("codigo")} onChange={(v) => onChange?.({ codigo: v || null })} />
         <CampoTexto label="Unidade" valor={item.unidade ?? ""} {...props("unidade")} onChange={(v) => onChange?.({ unidade: v || null })} />
+        <CampoCongelado label="Domínio" valor={item.dominio || dominioPorDescricao(item.descricao)} />
         <CampoTexto
           label="Descrição"
           ancora="descricao"

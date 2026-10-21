@@ -1,3 +1,4 @@
+import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
 import { listarPadronizacao } from "./padronizacao";
 import { classificarItem, criarClassificador, type ItemClassificado, versaoPadronizacao } from "./padronizacao-core";
@@ -37,7 +38,11 @@ export async function reclassificarPendentes(): Promise<number> {
           resultados(plan, (l) => classificarItem(classificar, { descricao: l.descricao, unidade: l.unidade, classificacaoArquivo: l.classificacao, dominioArquivo: l.dominio })),
         ),
       );
-    if (cmds.length) await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+    if (cmds.length) {
+      await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+      // Muda a VERSÃO dos dados: o Dashboard, a consulta e os cards (memoPorVersao) recalculam com o gravado.
+      await registrarAuditoria({ usuario: null, acao: "editar", entidade: "classificacao_item", resumo: `${dfd.length + plan.length} item(ns) reclassificado(s) (classificação e domínio)` });
+    }
     return dfd.length + plan.length;
   } catch (e) {
     console.error("Falha ao reclassificar itens:", e);

@@ -61,6 +61,8 @@ export type DfdVisualItem = {
   quantidade: number | null;
   valorUnitario: number | null;
   valorTotal: number | null;
+  /** O domínio GRAVADO (migração 0121); ausente = pela descrição. */
+  dominio?: string | null;
 };
 
 export type DfdVisual = {
