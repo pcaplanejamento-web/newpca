@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.149.4",
+    data: "2026-10-21",
+    titulo: "Documentos: cartão do link sem repetição",
+    mudancas: [
+      { tipo: "melhoria", area: "Documentos", texto: "O cartão do documento do Drive não repete mais “No Google Drive”: o Tamanho já diz “Drive”.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.149.3",
     data: "2026-10-21",
     titulo: "Documentos: publicação dos decodificadores de PDF",
