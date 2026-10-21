@@ -239,8 +239,10 @@ export type ItemRow = {
   anual?: boolean;
   /** A periodicidade da previsão genérica (ANUAL/SEMESTRAL/QUADRIMESTRAL/TRIMESTRAL). */
   periodo?: string | null;
-  /** Prioridade do DFD de origem (ALTA/MÉDIA/BAIXA; fonte protocolo — o gráfico de prioridade). */
+  /** Prioridade do DFD de origem (ALTA/MÉDIA/BAIXA; fonte protocolo — o gráfico de prioridade) ou a da planilha. */
   prioridade?: string | null;
+  /** Planilha consolidada: o "Id:" do protocolo de origem (a chave da união com os protocolos incorporados; não vai à tela). */
+  protocoloIdExterno?: string | null;
 };
 
 /** Todos os itens (com teto de segurança) — a tabela do dashboard filtra, ordena
@@ -263,10 +265,15 @@ export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?:
       municipio: unidades.municipio,
       ano: itens.anoDesejado,
       mes: itens.mesDesejado,
+      prioridade: itens.prioridade,
+      periodo: itens.previsaoGenerica,
+      protocoloIdExterno: itens.protocoloIdExterno,
     })
     .from(itens)
     .leftJoin(unidades, eq(itens.unidadeId, unidades.id))
     .where(filtroUnidade(unidadeId, pcaId))
     .orderBy(desc(itens.valorTotal));
-  return limite == null ? q : q.limit(limite);
+  // A previsão GENÉRICA (ANUAL/SEMESTRAL… — `0115`) vira o "anual" do Dashboard, como no PCA de protocolos.
+  const linhas = await (limite == null ? q : q.limit(limite));
+  return linhas.map((r) => (r.periodo ? { ...r, anual: true } : { ...r, periodo: undefined }));
 }

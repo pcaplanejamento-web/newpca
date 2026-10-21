@@ -39,7 +39,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (semPca) return semPca;
   const pca = await getPcaEspaco(pcaId);
   if (!pca) return erro("PCA não encontrado.", 404);
-  if (pca.fonte !== "protocolo") return erro("Este PCA é de lista pronta — não recebe protocolos.", 409);
   const p = await parseCorpo(acaoProtocolosPcaSchema, req);
   if ("resp" in p) return p.resp;
   const corpo = p.data;
@@ -75,7 +74,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           anoProtocolo: pr.anoPca,
           anoPca: pca.ano,
           totalDfds: pr.totalDfds,
-          fonteProtocolo: true,
+         
           jaEmPca: pr.pcaId != null ? (pr.pcaNome ?? "outro PCA") : null,
         });
         if (m.length) {

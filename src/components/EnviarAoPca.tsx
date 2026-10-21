@@ -47,7 +47,7 @@ export function EnviarAoPca({
   onConcluido: () => void;
 }) {
   const router = useRouter();
-  const destinos = useMemo(() => (pcaFixo ? [pcaFixo] : pcas.filter((p) => p.fonte === "protocolo")), [pcas, pcaFixo]);
+  const destinos = useMemo(() => (pcaFixo ? [pcaFixo] : pcas), [pcas, pcaFixo]);
   const [aberto, setAberto] = useState(false);
   const [pcaId, setPcaId] = useState<number | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -58,7 +58,7 @@ export function EnviarAoPca({
       anoProtocolo: p.anoPca,
       anoPca: pca?.ano ?? null,
       totalDfds: p.totalDfds,
-      fonteProtocolo: true,
+     
       jaEmPca: p.pcaId != null ? (p.pcaNome ?? "outro PCA") : null,
     });
   const elegiveis = pca ? selecionados.filter((p) => motivos(p).length === 0) : [];

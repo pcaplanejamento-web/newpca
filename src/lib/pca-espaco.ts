@@ -2,6 +2,8 @@ import { getGruposOrcamento } from "./orcamento-grupos-dados";
 import type { GrupoOrcamento } from "./orcamento-grupos";
 import { lancamentoNaUnidade } from "./escopo-cabecalho-core";
 import { itensParaTexto } from "./itens-dash-texto";
+import { agregarItensDash } from "./origem-dash";
+import { unirPlanilhaEProtocolos } from "./pca-uniao";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
   dfdItens,
@@ -295,11 +297,17 @@ async function calcularPcasCards(rep: number | false | null): Promise<PcaCard[]>
     if (l) l.push(v);
     else porPca.set(v.pcaId, [v]);
   }
-  return rows.map((r) => {
+  return Promise.all(rows.map(async (r) => {
     const p = paraEspaco(r);
     if (p.fonte === "lista") {
       const s = plan.get(p.id);
-      return { ...p, total: Number(s?.total ?? 0), itens: Number(s?.itens ?? 0), partes: Number(s?.n ?? 0), dfds: 0, previa: false };
+      const planilhas = Number(s?.n ?? 0);
+      // Também recebeu protocolos: os totais da UNIÃO (o mesmo Dashboard — o protocolo vence, sem contar duas vezes).
+      if (porPca.has(p.id) && rep !== false) {
+        const d = await dashboardDoPca(p, undefined, rep);
+        return { ...p, total: d.resumo.total, itens: d.resumo.count, partes: planilhas + d.protocolosLista.length, dfds: d.dfds, previa: previaAtiva(p) };
+      }
+      return { ...p, total: Number(s?.total ?? 0), itens: Number(s?.itens ?? 0), partes: planilhas, dfds: 0, previa: false };
     }
     const vs = porPca.get(p.id) ?? [];
     const vig = new Set(consolidarPca(vs).vigentes);
@@ -313,7 +321,7 @@ async function calcularPcasCards(rep: number | false | null): Promise<PcaCard[]>
       dfds: ativos.length,
       previa: previaAtiva(p),
     };
-  });
+  }));
 }
 
 /** PCAs PUBLICADOS (seletor da tela inicial) — o ativo primeiro, depois o ano mais recente. */
@@ -524,6 +532,9 @@ export type DashboardPca = {
   previa: { dfds: number; protocolos: number } | null;
   /** DFDs vinculados (e da prévia) que a consolidação deixou FORA da soma, com o motivo (só fonte protocolo). */
   foraDaSoma: DfdForaDaSoma[];
+  /** PCA de lista que também recebeu protocolos: as planilhas e quantas linhas delas o protocolo substituiu na soma. */
+  planilhas?: number;
+  substituidos?: number;
   /** O nome de cada unidade pela sigla (o filtro Unidade do Dashboard). */
   nomesUnidades?: Record<string, string>;
 };
@@ -585,6 +596,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
       sigla: string | null;
       protocoloId: number | null;
       protocoloNumero: string | null;
+      protocoloIdExterno: string | null;
       protocoloAssunto: string | null;
       protocoloSigla: string | null;
     }
@@ -608,6 +620,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
           sigla: reparticoes.codigo,
           protocoloId: dfds.protocoloId,
           protocoloNumero: dfdProtocolos.numero,
+          protocoloIdExterno: dfdProtocolos.idExterno,
           protocoloAssunto: dfdProtocolos.assunto,
           protocoloSigla: sql<string | null>`(SELECT r.codigo FROM reparticoes r WHERE r.id = ${dfdProtocolos.reparticaoId})`,
         })
@@ -731,6 +744,9 @@ const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status
 
 async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep?: number): Promise<DashboardPca> {
   if (pca.fonte === "lista") {
+    // O PCA de lista também recebe protocolos: com algum incorporado (ou na prévia), soma as DUAS bases.
+    const c0 = await itensConsolidados(pca);
+    if (c0.itens.length > 0) return dashboardUnido(pca, c0, unidadeIdPedida, rep);
     const us = await getUnidades(rep, pca.id);
     if (us.length === 0) return vazioDash();
     const unidadeId = unidadeIdPedida && us.some((u) => u.id === unidadeIdPedida) ? unidadeIdPedida : undefined;
@@ -757,6 +773,24 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, 
     .slice()
     .sort((a, b) => b.valorTotal - a.valorTotal)
     .map((i) => itemRowConsolidado(i, c.meta, c.prioridadePorDfd));
+  const { dfdsLista, protocolosLista } = listasDaConsulta(lista, c);
+  return {
+    ...ag,
+    itensTexto: itensParaTexto(itens),
+    dfdsLista,
+    nomesUnidades: await nomesDasUnidades([...reps.keys()]),
+    protocolosLista,
+    unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
+    unidadeId,
+    protocolos: c.protocolos,
+    dfds: new Set(lista.map((i) => i.dfdId)).size,
+    previa: c.previa,
+    foraDaSoma: dfdsForaDaSoma(c, unidadeId ?? rep),
+  };
+}
+
+/** As visões DFDs e Protocolos da consulta (dos itens ATIVOS no filtro). */
+function listasDaConsulta(lista: Consolidados["itens"], c: Consolidados): { dfdsLista: DfdDoPca[]; protocolosLista: ProtocoloDoPca[] } {
   // DFDs vigentes (dos itens ATIVOS, no filtro de unidade) — a visão "DFDs" da consulta.
   const porDfd = new Map<number, DfdDoPca>();
   for (const i of lista) {
@@ -790,18 +824,48 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, 
     pr.valor += d.valor;
     porProto.set(d.protocoloId, pr);
   }
+  return { dfdsLista, protocolosLista: [...porProto.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })) };
+}
+
+/**
+ * Dashboard do PCA de LISTA que também recebeu protocolos: as planilhas + os itens consolidados dos protocolos incorporados,
+ * sem contar o mesmo processo duas vezes (`unirPlanilhaEProtocolos` — o protocolo vence). Só leitura.
+ */
+async function dashboardUnido(pca: PcaEspaco, c0: Consolidados, unidadeIdPedida: number | undefined, rep: number | undefined): Promise<DashboardPca> {
+  const c = rep ? { ...c0, itens: c0.itens.filter((i) => i.reparticaoId === rep) } : c0;
+  const escopo = rep ? { pcaId: pca.id, reparticaoId: rep } : pca.id;
+  const [us, planilha] = await Promise.all([getUnidades(rep, pca.id), getItensTodos(undefined, undefined, escopo)]);
+  // Os Ids dos protocolos INCORPORADOS (a prévia não tira nada da planilha).
+  const incorporados = new Set<string | null>();
+  for (const [dfdId, m] of c0.meta) if (!c0.previaIds.has(dfdId)) incorporados.add(m.protocoloIdExterno);
+  const uniao = unirPlanilhaEProtocolos(planilha, c.itens, (i) => i.protocoloIdExterno, incorporados);
+  // A unidade pedida pela SIGLA (as planilhas são por sigla; o protocolo, pela unidade requisitante).
+  const siglas = new Map<number, string>();
+  for (const u of us) siglas.set(u.id, u.codigo);
+  for (const i of c.itens) if (i.reparticaoId != null && i.unidade && ![...siglas.values()].includes(i.unidade)) siglas.set(-i.reparticaoId, i.unidade);
+  const unidadeId = unidadeIdPedida && siglas.has(unidadeIdPedida) ? unidadeIdPedida : undefined;
+  const sigla = unidadeId ? siglas.get(unidadeId) : undefined;
+  const doProtocolo = uniao.protocolo.filter((i) => !sigla || i.unidade === sigla);
+  const itens: ItemRow[] = [
+    // O id da planilha NEGATIVO: nunca colide com o do item de DFD (as chaves da tabela e do maior item).
+    ...uniao.planilha.filter((i) => !sigla || i.codigo === sigla).map(({ protocoloIdExterno: _, ...i }) => ({ ...i, id: -i.id, ano: i.ano ?? (i.anual ? pca.ano : null) })),
+    ...doProtocolo.map((i) => itemRowConsolidado(i, c.meta, c.prioridadePorDfd)),
+  ].sort((a, b) => Number(b.valorTotal ?? 0) - Number(a.valorTotal ?? 0));
+  const ag = agregarItensDash(itens);
+  const { dfdsLista, protocolosLista } = listasDaConsulta(doProtocolo, c);
   return {
     ...ag,
     itensTexto: itensParaTexto(itens),
     dfdsLista,
-    nomesUnidades: await nomesDasUnidades([...reps.keys()]),
-    protocolosLista: [...porProto.values()].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true })),
-    unidades: [...reps].map(([id, sigla]) => ({ id, codigo: sigla, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
+    protocolosLista,
+    unidades: [...siglas].map(([id, codigo]) => ({ id, codigo, municipio: "" })).sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR")),
     unidadeId,
     protocolos: c.protocolos,
-    dfds: new Set(lista.map((i) => i.dfdId)).size,
+    dfds: dfdsLista.length,
     previa: c.previa,
-    foraDaSoma: dfdsForaDaSoma(c, unidadeId ?? rep),
+    foraDaSoma: dfdsForaDaSoma(c, rep),
+    planilhas: us.length,
+    substituidos: uniao.substituidos,
   };
 }
 
@@ -860,7 +924,7 @@ export type ProtocoloConsulta = {
 
 async function pcaConsultavel(pcaId: number, logado: boolean): Promise<PcaEspaco | null> {
   const pca = await getPcaEspaco(pcaId);
-  return pca && pca.fonte === "protocolo" && (logado || pca.status === "publicado") ? pca : null;
+  return pca && (logado || pca.status === "publicado") ? pca : null;
 }
 
 /**
@@ -1163,7 +1227,8 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
   // Planejado POR ORIGEM (o comparativo soma por unidade; o detalhe da linha lista a origem).
   let planejado: PlanejadoOrcamentoPca[];
   let previa: OrcamentoDoPca["previa"] = null;
-  if (pca.fonte === "lista") {
+  const c = pca.fonte === "lista" ? await itensConsolidados(pca) : null;
+  if (pca.fonte === "lista" && c && c.itens.length === 0) {
     const porSigla = new Map(reps.map((r) => [r.sigla.trim().toUpperCase(), r.id]));
     planejado = (await getUnidades(undefined, pca.id)).map((u) => ({
       unidadeId: u.reparticaoId ?? porSigla.get(u.codigo.trim().toUpperCase()) ?? null,
@@ -1171,6 +1236,30 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
       valor: Number(u.valorTotal ?? 0),
       planilha: { id: u.id, codigo: u.codigo, nome: u.municipio ?? u.nomeArquivo },
     }));
+  } else if (pca.fonte === "lista" && c) {
+    // Lista que também recebeu protocolos: as planilhas (sem as linhas dos protocolos incorporados) + os itens dos protocolos.
+    const porSigla = new Map(reps.map((r) => [r.sigla.trim().toUpperCase(), r.id]));
+    const [us, linhas] = await Promise.all([getUnidades(undefined, pca.id), getItensTodos(undefined, undefined, pca.id)]);
+    const incorporados = [...c.meta].filter(([id]) => !c.previaIds.has(id)).map(([, m]) => m.protocoloIdExterno);
+    const uniao = unirPlanilhaEProtocolos(linhas, c.itens, (i) => i.protocoloIdExterno, incorporados);
+    const somas = new Map<string, { itens: number; valor: number }>();
+    for (const i of uniao.planilha) {
+      const k = i.codigo ?? "";
+      const t = somas.get(k) ?? { itens: 0, valor: 0 };
+      t.itens += 1;
+      t.valor += Number(i.valorTotal ?? 0);
+      somas.set(k, t);
+    }
+    planejado = [
+      ...us.map((u) => ({
+        unidadeId: u.reparticaoId ?? porSigla.get(u.codigo.trim().toUpperCase()) ?? null,
+        itens: somas.get(u.codigo)?.itens ?? 0,
+        valor: somas.get(u.codigo)?.valor ?? 0,
+        planilha: { id: u.id, codigo: u.codigo, nome: u.municipio ?? u.nomeArquivo },
+      })),
+      ...uniao.protocolo.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta, c.prioridadePorDfd) })),
+    ];
+    previa = c.previa;
   } else {
     const c = await itensConsolidados(pca);
     planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta, c.prioridadePorDfd) }));

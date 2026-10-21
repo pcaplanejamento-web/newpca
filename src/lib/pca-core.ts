@@ -50,8 +50,6 @@ export type FatosEnvio = {
   anoPca: number | null;
   /** Nº de DFDs do protocolo. */
   totalDfds: number;
-  /** O PCA de destino é de fonte `protocolo`? */
-  fonteProtocolo: boolean;
   /** Nome do PCA em que o protocolo JÁ está (`null` = na Mesa principal). */
   jaEmPca: string | null;
 };
@@ -62,7 +60,6 @@ export type FatosEnvio = {
  */
 export function motivosNaoEnviar(f: FatosEnvio): string[] {
   const m: string[] = [];
-  if (!f.fonteProtocolo) m.push("O PCA é de lista pronta (não recebe protocolos)");
   if (f.jaEmPca) m.push(`Já está no ${f.jaEmPca}`);
   if (f.anoPca == null) m.push("O PCA não tem ano definido");
   else if (f.anoProtocolo == null) m.push("Protocolo sem ano do PCA");
@@ -103,7 +100,7 @@ export function motivoNaoDevolver(p: { pcaId: number | null }, pcaId: number): s
  * somam, como prévia, os enviados ainda não incorporados e esses marcados. A tela inicial (só publicados) nunca a vê.
  */
 export function previaAtiva(p: { mesaMarcados: boolean; status: StatusPca; fonte: FontePca; ano: number | null }): boolean {
-  return p.mesaMarcados && p.status === "preview" && p.fonte === "protocolo" && p.ano != null;
+  return p.mesaMarcados && p.status === "preview" && p.ano != null;
 }
 
 /** ONDE o protocolo está, visto da Mesa de um PCA: na Mesa do SISTEMA (marcado com o ano, ainda não enviado), ENVIADO à

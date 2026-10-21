@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic";
 // seguem independentes). `?abrir=protocolo:<id>|dfd:<id>` abre o banner direto (o link do vínculo de uma tarefa); o
 // acesso é conferido pela rota do banner, como no clique.
 
-/** As opções do seletor de Mesa: os PCAs de fonte Protocolos (os únicos com Mesa) que o GRUPO acessa. */
+/** As opções do seletor de Mesa: os PCAs que o GRUPO acessa (todo PCA tem Mesa — também o de lista pronta). */
 const opcoesMesa = (pcas: PcaResumo[], permitidos: Set<number> | null) =>
-  pcas.filter((p) => p.fonte === "protocolo" && (!permitidos || permitidos.has(p.id))).map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
+  pcas.filter((p) => (!permitidos || permitidos.has(p.id))).map((p) => ({ id: p.id, nome: p.nome, ano: p.ano }));
 
 export default async function MesaPage({ searchParams }: { searchParams: Promise<{ abrir?: string; pca?: string; responsavel?: string }> }) {
   const sp = await searchParams;
@@ -31,7 +31,7 @@ export default async function MesaPage({ searchParams }: { searchParams: Promise
   // com o banner pedido (`?abrir=`).
   const idPca = Number(sp.pca);
   const pca = Number.isInteger(idPca) && idPca > 0 ? await getPcaEspaco(idPca) : null;
-  if (pca && pca.fonte === "protocolo") redirect(`/painel/pca/${pca.id}?aba=mesa${sp.abrir ? `&abrir=${encodeURIComponent(sp.abrir)}` : ""}`);
+  if (pca) redirect(`/painel/pca/${pca.id}?aba=mesa${sp.abrir ? `&abrir=${encodeURIComponent(sp.abrir)}` : ""}`);
   // O alvo do `?abrir=` está na Mesa de um PCA (link antigo, favorito, vínculo): vai à aba Mesa DAQUELE PCA — que tem o
   // próprio portão de acesso. Nunca abre (nem tenta abrir) o protocolo na Mesa errada.
   if (sp.abrir && !sp.pca) {

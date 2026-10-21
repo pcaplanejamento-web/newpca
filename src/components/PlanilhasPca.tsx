@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { brlCompact, dataBR, num } from "@/lib/format";
 import { normalizarLinha } from "@/lib/normalize";
-import { parsePlanilha } from "@/lib/parse-xlsx";
+import { type LeituraPlanilhas, type PlanilhaParseada, parsePlanilhas } from "@/lib/parse-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { useConfirmacao } from "./Confirmacao";
@@ -25,9 +25,8 @@ export type PlanilhaPca = {
   atualizadoEm: string | null;
 };
 
-/** Envia UMA planilha (.xlsx) para o PCA em lotes (`/api/upload`: start + append). */
-async function enviarPlanilha(file: File, pcaId: number, onProgresso: (p: number) => void): Promise<{ codigo: string; itens: number }> {
-  const parsed = await parsePlanilha(file);
+/** Envia UMA planilha (já lida) para o PCA em lotes (`/api/upload`: start + append). */
+async function enviarPlanilha(parsed: PlanilhaParseada, pcaId: number, onProgresso: (p: number) => void): Promise<{ codigo: string; itens: number }> {
   if (parsed.rows.length === 0) throw new Error("A planilha não tem itens.");
   const total = parsed.rows.map(normalizarLinha).reduce((s, r) => s + (r.valorTotal ?? 0), 0);
   let unidadeId: number | null = null;
@@ -57,9 +56,35 @@ async function enviarPlanilha(file: File, pcaId: number, onProgresso: (p: number
   return { codigo: parsed.codigo, itens: parsed.rows.length };
 }
 
+/** A prévia da leitura (o texto da confirmação): unidades, itens, Σ e o que foi apontado. */
+function PreviaLeitura({ leitura }: { leitura: LeituraPlanilhas }) {
+  const itens = leitura.planilhas.reduce((s, p) => s + p.rows.length, 0);
+  const total = leitura.planilhas.reduce((s, p) => s + p.rows.map(normalizarLinha).reduce((t, r) => t + (r.valorTotal ?? 0), 0), 0);
+  return (
+    <div className="space-y-2 text-sm">
+      <p>
+        {leitura.formato === "consolidado" ? `Planilha consolidada: ${num(leitura.planilhas.length)} unidade(s)` : "1 planilha"} ·{" "}
+        {num(itens)} itens · {brlCompact(total)}. Reenviar uma unidade substitui a planilha dela.
+      </p>
+      {leitura.problemas.length > 0 && (
+        <ul className="max-h-48 space-y-1 overflow-y-auto">
+          {leitura.problemas.map((p) => (
+            <li key={p.tipo} title={p.exemplos.join("\n")}>
+              <span className="font-semibold" style={{ color: "var(--warn)" }}>
+                {num(p.quantidade)}
+              </span>{" "}
+              {p.tipo}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /**
  * Aba IMPORTAÇÃO do PCA de lista pronta: soltar/escolher UMA OU VÁRIAS planilhas (.xlsx — uma por
- * unidade; os itens entram direto neste PCA; reenviar o mesmo código substitui) + os cards das
+ * unidade, ou a CONSOLIDADA com a coluna LOCAL, que vira uma planilha por unidade — com a prévia antes de gravar; os itens entram direto neste PCA; reenviar o mesmo código substitui) + os cards das
  * planilhas deste PCA (itens · data · Σ); importar e excluir seguem o papel.
  */
 export function PlanilhasPca({
@@ -89,14 +114,37 @@ export function PlanilhasPca({
     setAviso(null);
     const ok: string[] = [];
     const falhas: string[] = [];
-    for (let i = 0; i < xs.length; i++) {
-      setFila({ nome: xs[i].name, atual: i + 1, total: xs.length, progresso: 0 });
+    // Lê TODOS os arquivos antes; uma planilha consolidada vira várias (uma por LOCAL).
+    const lidas: PlanilhaParseada[] = [];
+    for (const f of xs) {
       try {
-        const r = await enviarPlanilha(xs[i], pcaId, (p) => setFila((f) => (f ? { ...f, progresso: p } : f)));
+        const leitura = await parsePlanilhas(f);
+        // A prévia SEMPRE na consolidada (muitas unidades) e quando há apontamentos — nada entra sem ser visto.
+        if (leitura.formato === "consolidado" || leitura.problemas.length > 0) {
+          const sim = await confirmar({
+            titulo: `Importar ${f.name}?`,
+            texto: <PreviaLeitura leitura={leitura} />,
+            confirmar: `Importar ${num(leitura.planilhas.length)} planilha(s)`,
+          });
+          if (!sim) continue;
+        }
+        lidas.push(...leitura.planilhas);
+      } catch (e) {
+        falhas.push(`${f.name}: ${e instanceof Error ? e.message : "falha"}`);
+      }
+    }
+    for (let i = 0; i < lidas.length; i++) {
+      setFila({ nome: lidas[i].codigo, atual: i + 1, total: lidas.length, progresso: 0 });
+      try {
+        const r = await enviarPlanilha(lidas[i], pcaId, (p) => setFila((f) => (f ? { ...f, progresso: p } : f)));
         ok.push(`${r.codigo} (${num(r.itens)} itens)`);
       } catch (e) {
-        falhas.push(`${xs[i].name}: ${e instanceof Error ? e.message : "falha"}`);
+        falhas.push(`${lidas[i].codigo}: ${e instanceof Error ? e.message : "falha"}`);
       }
+    }
+    if (ok.length === 0 && falhas.length === 0) {
+      setFila(null);
+      return;
     }
     setFila(null);
     setAviso(
@@ -138,7 +186,7 @@ export function PlanilhasPca({
             className="min-h-[200px]"
             icon={<IconUpload className="h-7 w-7" />}
             titulo="Arraste a planilha do PCA ou clique para escolher"
-            dica=".xlsx · uma planilha por unidade · os itens entram direto neste PCA (reenviar a mesma unidade substitui)"
+            dica=".xlsx · uma planilha por unidade OU a consolidada com a coluna LOCAL · reenviar a mesma unidade substitui"
           />
         ))}
 

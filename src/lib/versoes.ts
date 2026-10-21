@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.133.0",
+    data: "2026-10-21",
+    titulo: "PCA de lista pronta recebe protocolos e a planilha consolidada",
+    mudancas: [
+      { tipo: "novo", area: "PCA", texto: "O PCA de lista pronta também recebe protocolos: ganhou a aba Mesa (enviar, incorporar, devolver), ao lado da Importação.", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA", texto: "A Importação aceita a planilha consolidada com a coluna LOCAL (ex.: Enviar_PCA): vira uma planilha por unidade, com domínio, prioridade e o ID do protocolo, e mostra a prévia com os problemas antes de gravar.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "PCA", texto: "Dashboard, Orçamento e cards somam planilhas e protocolos sem contar o mesmo processo duas vezes: as linhas da planilha de um protocolo incorporado dão lugar aos itens do protocolo, que nunca são alterados.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.132.0",
     data: "2026-10-21",
     titulo: "Telas guardadas por 2 horas, sem piscar",

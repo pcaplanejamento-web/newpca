@@ -11,6 +11,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### PCA de lista pronta recebe protocolos + planilha consolidada (v1.133.0) — entregue
+✅ Todo PCA tem a aba **Mesa**; o de lista pronta mantém a **Importação**, que agora lê a planilha consolidada com a coluna
+LOCAL (uma planilha por unidade, domínio, prioridade, ID PROTOCOLO, prévia dos problemas). ✅ Dashboard/Orçamento/cards
+somam planilhas + protocolos incorporados sem contar duas vezes (o protocolo vence; nunca é sobrescrito).
+🔜 **Conciliação planilha × protocolos** (Igual · Divergente campo a campo · Só na planilha · Só no protocolo) na Importação.
+
 ### Mesa conectada (v1.116.0) — entregue
 - v1.117.0: filtros e recorte no menu (funil) do rodapé da tabela; botões do rodapé só ícone.
 - v1.119.0: Protocolos, DFDs e Itens numa TABELA ÚNICA (o mesmo `DataTable`; muda colunas e linhas).

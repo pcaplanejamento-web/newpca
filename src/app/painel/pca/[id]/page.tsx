@@ -35,9 +35,10 @@ import { getUnidades } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "configuracao"];
+const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "importacao", "configuracao"];
 
-// ESPAÇO do PCA: Dashboard · Orçamento (KPIs + Comparativo) · Mesa (protocolos) | Importação (lista) · Configuração.
+// ESPAÇO do PCA: Dashboard · Orçamento (KPIs + Comparativo) · Mesa (protocolos — TODO PCA recebe) · Importação (só o de
+// lista pronta: as planilhas) · Configuração.
 export default async function PcaEspacoPage({
   params,
   searchParams,
@@ -61,14 +62,16 @@ export default async function PcaEspacoPage({
   }
   if (!podePca(acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
   // As abas que o papel vê (Detalhes do papel → Componentes); a pedida fora delas cai na 1ª permitida.
-  const permitidas = ABAS.filter((a) => componenteLibera(acesso, a === "mesa" && pca.fonte === "lista" ? "pca.importacao" : `pca.${a}`));
+  const permitidas = ABAS.filter((a) => (a !== "importacao" || pca.fonte === "lista") && componenteLibera(acesso, `pca.${a}`));
   const aba: AbaPca = permitidas.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : (permitidas[0] ?? "dashboard");
 
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
   let conteudo: ReactNode;
   if (aba === "dashboard") conteudo = await abaDashboard(pca);
   else if (aba === "orcamento") conteudo = await abaOrcamento(pca, u.id, pode, podeTela(acesso, "orcamento").configurar);
-  else if (aba === "mesa") conteudo = await abaMesa(pca, u, pode, sp.abrir);
+  else if (aba === "mesa") conteudo = await abaMesa(pca, u, sp.abrir);
+  else if (aba === "importacao")
+    conteudo = <PlanilhasPca pcaId={pca.id} planilhas={await getUnidades(undefined, pca.id)} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
   else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
@@ -104,7 +107,7 @@ async function abaDashboard(pca: PcaEspaco) {
     return (
       <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
         {pca.fonte === "lista"
-          ? "Nenhum item ainda — importe as planilhas na aba Importação."
+          ? "Nenhum item ainda — importe as planilhas na aba Importação ou incorpore protocolos na aba Mesa."
           : "Nenhum item ainda — envie protocolos pela Mesa principal e incorpore-os na aba Mesa."}
       </p>
     );
@@ -125,11 +128,11 @@ async function abaDashboard(pca: PcaEspaco) {
         nome={pca.nome}
         dados={dash}
         hintItens={
-          pca.fonte === "protocolo"
-            ? `${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs${dash.foraDaSoma.length ? ` · ${num(dash.foraDaSoma.length)} fora da soma` : ""}`
+          dash.protocolos > 0 || pca.fonte === "protocolo"
+            ? `${dash.planilhas ? `${num(dash.planilhas)} planilha(s) · ` : ""}${num(dash.protocolos)} protocolo(s) · ${num(dash.dfds)} DFDs${dash.foraDaSoma.length ? ` · ${num(dash.foraDaSoma.length)} fora da soma` : ""}`
             : undefined
         }
-        consulta={pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dash.protocolosLista, dfds: dash.dfdsLista, foraDaSoma: dash.foraDaSoma } : undefined}
+        consulta={dash.protocolos > 0 || pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dash.protocolosLista, dfds: dash.dfdsLista, foraDaSoma: dash.foraDaSoma } : undefined}
       />
     </>
   );
@@ -175,12 +178,8 @@ async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: Pode
   );
 }
 
-/** Aba MESA (fonte protocolo — só os protocolos ENVIADOS a este PCA) | IMPORTAÇÃO (fonte lista). */
-async function abaMesa(pca: PcaEspaco, u: UsuarioSessao, pode: PodeTela, abrir?: string) {
-  if (pca.fonte === "lista") {
-    const planilhas = await getUnidades(undefined, pca.id);
-    return <PlanilhasPca pcaId={pca.id} planilhas={planilhas} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
-  }
+/** Aba MESA (só os protocolos ENVIADOS a este PCA — em QUALQUER PCA, também no de lista pronta). */
+async function abaMesa(pca: PcaEspaco, u: UsuarioSessao, abrir?: string) {
   // `?abrir=protocolo:<id>|dfd:<id>` (a pesquisa do sistema, o link de uma tarefa) abre o banner direto.
   const alvo = lerVinculo(abrir);
   const abrirInicial = alvo?.tipo === "protocolo" || alvo?.tipo === "dfd" ? { tipo: alvo.tipo, id: alvo.id } : null;

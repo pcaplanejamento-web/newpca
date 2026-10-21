@@ -116,8 +116,8 @@ export default async function HomePage({
           nome={pca.nome}
           dados={dados}
           unidadeFiltrada={dados.unidadeId != null}
-          hintItens={pca.fonte === "protocolo" ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
-          consulta={pca.fonte === "protocolo" ? { pcaId: pca.id, protocolos: dados.protocolosLista, dfds: dados.dfdsLista } : undefined}
+          hintItens={pca.fonte === "protocolo" || dados.protocolos > 0 ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
+          consulta={pca.fonte === "protocolo" || dados.protocolos > 0 ? { pcaId: pca.id, protocolos: dados.protocolosLista, dfds: dados.dfdsLista } : undefined}
         />
       </main>
     </div>
