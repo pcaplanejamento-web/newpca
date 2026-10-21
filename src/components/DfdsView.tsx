@@ -200,6 +200,30 @@ function confsDaAba(usuarioId: number | null, ctx: string) {
   }
   return c;
 }
+/** Os ITENS da Mesa também ficam na MEMÓRIA DA ABA: sair e voltar à Mesa (ou à visão Itens) não busca a lista de novo
+ * enquanto nada foi gravado — a chave leva o endereço da lista (PCA/ano do cabeçalho) e `id|atualizadoEm` de cada DFD, e
+ * só vale com a MESMA versão dos dados da carga (`versaoItens`). Por PESSOA (outra pessoa na mesma aba começa vazia), até 3 listas. */
+type ItensGuardados = { versao: string | null; itens: ItemDfdRow[]; padronizacao: Padronizacao | null; historico: Record<string, ReferenciaHistorico> | null };
+const ITENS_DA_ABA = new Map<string, ItensGuardados>();
+let pessoaDosItens: number | null | undefined;
+function itensDaAba(usuarioId: number | null): Map<string, ItensGuardados> {
+  if (pessoaDosItens !== usuarioId) {
+    ITENS_DA_ABA.clear();
+    pessoaDosItens = usuarioId;
+  }
+  return ITENS_DA_ABA;
+}
+/** A lista guardada para a chave — só com a MESMA versão dos dados. */
+function itensGuardados(usuarioId: number | null, chave: string, versao: string | null) {
+  const g = itensDaAba(usuarioId).get(chave);
+  return g && g.versao === versao ? g : undefined;
+}
+function guardarItensDaAba(usuarioId: number | null, chave: string, v: ItensGuardados) {
+  const m = itensDaAba(usuarioId);
+  m.delete(chave);
+  m.set(chave, v);
+  if (m.size > 3) m.delete(m.keys().next().value as string);
+}
 /** "Protocolo 123/2026" — sem número (a falha genérica fora do escopo), nada. */
 const refNumero = (prefixo: string, numero: string | null | undefined) => (numero ? `${prefixo} ${numero}` : "");
 /** Protocolos por requisição da conferência agregada (e ~DFDs por fatia: `FATIA_CONFERENCIA`). */
@@ -233,6 +257,7 @@ export function DfdsView({
   situacoes = [],
   usuarioId = null,
   confs,
+  versaoItens = null,
   filtroInicial = FILTRO_MESA_TODOS,
   pcaFiltro = null,
   modoPca,
@@ -262,6 +287,9 @@ export function DfdsView({
   usuarioId?: number | null;
   /** Os Estados GUARDADOS que vieram com as listas (a Mesa abre sem "Conferindo…" nas linhas já conferidas). */
   confs?: ConfsGuardadas;
+  /** A VERSÃO DOS DADOS (camada `dados`) desta carga: a lista de itens guardada na aba só vale ao voltar à Mesa se nada
+   * foi gravado desde então (numeração do PCA, catálogo, padronização e histórico mudam sem mexer no DFD). */
+  versaoItens?: string | null;
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
   /** Filtro com que a Mesa ABRE (a preferência do Perfil: só os do usuário, geral ou sem responsável). */
@@ -421,9 +449,19 @@ export function DfdsView({
   const [preItens, setPreItens] = useState(false);
   const [modoPedido, setModoItens] = useState<ModoItens>("normal");
   const modoItens: ModoItens = !libera("dfd.consolidada") ? "normal" : !libera("dfd.itens") ? "consolidada" : modoPedido;
+  // DADOS PRONTOS: os itens só recarregam quando algum DFD MUDOU de fato (gravado, entrou ou saiu) — um refresh com os
+  // mesmos DFDs mantém os itens (e o estado já conferido) sem pedir de novo; e a lista fica na memória da aba
+  // (`itensDaAba`): voltar à Mesa a encontra pronta.
+  const chaveItens = useMemo(() => dfds.map((d) => `${d.id}|${d.atualizadoEm ?? ""}`).join(","), [dfds]);
+  const pcaDaMesa = modoPca?.pcaId;
+  // Mesa principal: o MESMO PCA do cabeçalho com que a página veio (explícito — o cookie pode ter mudado noutra aba).
+  const anoFiltro = pcaFiltro?.ano;
+  const urlItens = pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`;
+  const chaveAba = `${urlItens}#${chaveItens}`;
+  const guardados = itensGuardados(usuarioId, chaveAba, versaoItens);
   // Itens (lista plana): carregada SOB DEMANDA na 1ª vez que a visão Itens abre (não pesa o load
-  // inicial). `null` = ainda não buscado; recarrega quando os DFDs mudam (após import/edição).
-  const [itens, setItens] = useState<ItemDfdRow[] | null>(null);
+  // inicial). `null` = ainda não buscado.
+  const [itens, setItens] = useState<ItemDfdRow[] | null>(guardados?.itens ?? null);
   const [carregandoItens, setCarregandoItens] = useState(false);
   // REVERIFICAR TUDO (botão da barra): recarrega a lista do banco e, terminada a recarga (`listaPendente`), reconfere
   // TODOS os protocolos, DFDs e itens — em QUALQUER visão (as conferências, normalmente lazy pela visão aberta, rodam
@@ -433,33 +471,42 @@ export function DfdsView({
   const reverAtivo = rever && !listaPendente;
   // Catálogo → Unidades de medida | Classificações: o cadastro vem JUNTO com os itens (só com a visão Itens aberta) — a
   // unidade CADASTRADA de cada item e a classificação AUTOMÁTICA (as colunas só existem com o cadastro feito).
-  const [padronizacao, setPadronizacao] = useState<Padronizacao | null>(null);
+  const [padronizacao, setPadronizacao] = useState<Padronizacao | null>(guardados?.padronizacao ?? null);
   // Histórico de compra: a REFERÊNCIA de preço de cada código (vem junto com os itens) — a coluna "Histórico" (só com
   // algum código comprado) aponta o item com valor divergente.
-  const [historico, setHistorico] = useState<Record<string, ReferenciaHistorico> | null>(null);
-  // DADOS PRONTOS: os itens só recarregam quando algum DFD MUDOU de fato (gravado, entrou ou saiu) — um refresh com os
-  // mesmos DFDs mantém os itens (e o estado já conferido) sem pedir de novo.
-  const chaveItens = useMemo(() => dfds.map((d) => `${d.id}|${d.atualizadoEm ?? ""}`).join(","), [dfds]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao mudar o conteúdo dos DFDs.
+  const [historico, setHistorico] = useState<Record<string, ReferenciaHistorico> | null>(guardados?.historico ?? null);
+  // A lista mudou (outro DFD, outro PCA/ano): a guardada para ela, se houver — senão busca de novo.
+  const chaveVista = useRef(chaveAba);
   useEffect(() => {
-    setItens(null);
+    if (chaveVista.current === chaveAba) return;
+    chaveVista.current = chaveAba;
+    const g = itensGuardados(usuarioId, chaveAba, versaoItens);
+    setItens(g?.itens ?? null);
+    if (g) {
+      setPadronizacao(g.padronizacao);
+      setHistorico(g.historico);
+    }
     setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
-  }, [chaveItens]);
-  const pcaDaMesa = modoPca?.pcaId;
-  // Mesa principal: o MESMO PCA do cabeçalho com que a página veio (explícito — o cookie pode ter mudado noutra aba).
-  const anoFiltro = pcaFiltro?.ano;
+  }, [chaveAba, usuarioId, versaoItens]);
   useEffect(() => {
     if ((vista !== "itens" && !reverAtivo && !preItens) || itens !== null) return;
     const ac = new AbortController();
     setCarregandoItens(true);
-    fetch(pcaDaMesa ? `/api/dfd/itens?pca=${pcaDaMesa}` : `/api/dfd/itens${anoFiltro ? `?ano=${anoFiltro}` : ""}`, { signal: ac.signal })
+    fetch(urlItens, { signal: ac.signal })
       .then((r) => r.json() as Promise<{ ok?: boolean; itens?: ItemDfdRow[]; padronizacao?: Padronizacao | null; historico?: Record<string, ReferenciaHistorico> }>)
       .then((j) => {
         if (ac.signal.aborted) return;
         setItens(j.ok ? (j.itens ?? []) : []);
         if (j.ok) {
-          setPadronizacao(j.padronizacao ?? null);
-          setHistorico(j.historico && Object.keys(j.historico).length > 0 ? j.historico : null);
+          const v: ItensGuardados = {
+            versao: versaoItens,
+            itens: j.itens ?? [],
+            padronizacao: j.padronizacao ?? null,
+            historico: j.historico && Object.keys(j.historico).length > 0 ? j.historico : null,
+          };
+          setPadronizacao(v.padronizacao);
+          setHistorico(v.historico);
+          guardarItensDaAba(usuarioId, chaveAba, v);
         }
       })
       .catch(() => {
@@ -469,7 +516,7 @@ export function DfdsView({
         if (!ac.signal.aborted) setCarregandoItens(false);
       });
     return () => ac.abort();
-  }, [vista, itens, pcaDaMesa, anoFiltro, reverAtivo, preItens]);
+  }, [vista, itens, urlItens, chaveAba, usuarioId, versaoItens, reverAtivo, preItens]);
 
   // MÉTRICAS do Dashboard (a barra abaixo das KPIs): o filtro mora AQUI — sobrevive às trocas de visão. "Hoje" (Brasília)
   // é relido a cada abertura do Dashboard (a página pode ficar aberta de um dia para o outro).
@@ -754,6 +801,7 @@ export function DfdsView({
     confProtoRef.current = { ctx: "", m: new Map(), falhos: new Set() };
     cacheExec.current = null;
     setConfFalhou(false);
+    itensDaAba(usuarioId).delete(chaveAba);
     setItens(null);
     setRever(true);
     recarregarLista(() => router.refresh());

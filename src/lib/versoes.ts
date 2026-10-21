@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.131.2",
+    data: "2026-10-21",
+    titulo: "Itens da Mesa sem carregar de novo",
+    mudancas: [
+      { tipo: "correcao", area: "Mesa", texto: "Voltar à Mesa e abrir os Itens não carrega a lista de novo: ela fica pronta enquanto nada for gravado.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "PCA", texto: "A visão Itens da Mesa de cada PCA também volta pronta.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.131.1",
     data: "2026-10-21",
     titulo: "Estrutura da tela só quando demora",

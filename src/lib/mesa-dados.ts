@@ -14,6 +14,7 @@ import { idDoFiltro } from "./escopo-unidades-core";
 import { unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
+import { versaoDados } from "./versao-dados";
 import { listasParaTexto } from "./mesa-listas";
 import { redigirDfds, redigirProtocolos } from "./mesa-redacao";
 import { pessoasDesignaveis } from "./mesa-visao-core";
@@ -162,14 +163,22 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
  * A MESA DO SISTEMA para o cliente (`MesaSistema`): o que `montarMesa` carrega, com as listas grandes (protocolos + DFDs)
  * num ÚNICO texto (`listas` — `mesa-listas.ts`): o React não serializa milhares de linhas valor a valor (CPU do Worker).
  */
+/** A versão `dados` desta carga (memorizada por requisição — o layout já a leu): a lista de itens guardada na aba só vale
+ * com ela. Falhou = `null` (a lista é buscada de novo). */
+const versaoDosItens = () =>
+  versaoDados()
+    .then((v) => v.dados)
+    .catch(() => null);
+
 export async function carregarMesa(u: UsuarioSessao | null) {
   // As AUTOMAÇÕES que a pessoa pôs na Mesa (só a Mesa do SISTEMA; a Automação é do Administrador).
-  const [{ dfds, protocolos, ...resto }, automacoes] = await Promise.all([
+  const [{ dfds, protocolos, ...resto }, automacoes, versaoItens] = await Promise.all([
     montarMesa(u),
     u?.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
+    versaoDosItens(),
   ]);
   const confs = await confsDaMesa(protocolos, dfds, resto.regras, resto.orgaos);
-  return { ...resto, automacoes, listas: listasParaTexto({ protocolos, dfds, confs }, Date.now()) };
+  return { ...resto, automacoes, versaoItens, listas: listasParaTexto({ protocolos, dfds, confs }, Date.now()) };
 }
 
 /**
@@ -179,7 +188,7 @@ export async function carregarMesa(u: UsuarioSessao | null) {
  * em OUTRO PCA (ficam de fora da incorporação).
  */
 export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: number; nome: string; ano: number | null }) {
-  const [m, vs] = await Promise.all([montarMesa(u, pca.id), vinculosDoPca(pca.id)]);
+  const [m, vs, versaoItens] = await Promise.all([montarMesa(u, pca.id), vinculosDoPca(pca.id), versaoDosItens()]);
   const naoInc = new Set(m.protocolos.filter((p) => p.pcaIncorporadoEm == null).map((p) => p.id));
   const doNaoInc = m.dfds.filter((d) => d.protocoloId != null && naoInc.has(d.protocoloId));
   const [emOutro, confs] = await Promise.all([
@@ -201,6 +210,7 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     emOutroPcaPorProtocolo,
     acaoPorProtocolo,
     marcados: m.anoMarcados != null,
+    versaoItens,
     pode: m.pode,
     // As listas grandes num ÚNICO texto (ver `carregarMesa`).
     listas: listasParaTexto({ protocolos: m.protocolos, dfds: m.dfds, confs }, Date.now()),
