@@ -758,16 +758,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de `contextoBanners`); o cronograma do Calendário (`cronogramaPcas(de, ate, permitidos)`); e as rotas
   `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
   `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
-- **FUNÇÕES DAS TELAS + ORÇAMENTOS POR GRUPO (v1.144.0, migração `0120`, aditiva — `grupos.funcoes_off` JSON das chaves
-  "tela.funcao" desligadas + `grupos.orcamentos` JSON de ids, NULL = todos):** no banner do grupo, **Funções das telas**
-  (`FuncoesPorTela`, `GruposAdmin`: as do `CATALOGO_COMPONENTES` das telas do grupo — inclui `dfd.variacao`/`pca.variacao`
-  = o Relatório de variação) e **Orçamentos do grupo** (`ListaDoGrupo`, a mesma peça dos PCAs). A função desligada vale como
-  retirar Visualizar no papel, para o grupo ATIVO: `comFuncoesDoGrupo`/`lerFuncoesOff`/`compactarFuncoesOff`
-  (`papeis-componentes-core.ts`, testados) → `componentesDoAcesso(a)` (`acesso.ts`) — usado por `componenteLibera` e pelo
-  provedor `ComponentesPapel` do layout. Orçamentos: `orcamentosDoAcesso`/`podeOrcamento` na lista `/painel/orcamento`, no
-  espaço `[id]` (`AcessoRestrito`), em `recusaOrcamento` (`api-auth.ts`: PATCH/DELETE `/api/orcamento/[id]` e o
-  `substituir`), na pesquisa (lançamentos) e em `buscarVinculos`/`vinculoAcessivel` (também os PCAs do grupo). O orçamento
-  usado no PCA × Orçamento segue o do ano.
+- **ORÇAMENTOS POR GRUPO (v1.144.0, migração `0120` — `grupos.orcamentos` JSON de ids, NULL = todos)** — `orcamentosDoAcesso`/
+  `podeOrcamento` na lista, no espaço `[id]`, em `recusaOrcamento`, na pesquisa e nos vínculos. As "Funções das telas" saíram
+  (v1.149.0: a `0123` zerou `funcoes_off`, coluna DORMENTE).
+- **FONTE DOS DADOS POR ABA + GERAL DAS MINHAS UNIDADES (v1.149.0, migração `0123` — `grupos.fontes_abas` JSON das chaves
+  "tela.aba" em fonte ÚNICA):** `ABAS_FONTE`/`chaveFonte`/`lerFontesAbas`/`compactarFontesAbas`/`filtroDoEscopo`
+  (`escopo-unidades-core.ts`) — a aba em fonte única usa SEMPRE a soma das unidades da pessoa (ignora o cabeçalho);
+  `unidadesDaSessao(u, grupo, tela, aba)`/`unidadeDoModulo(modulo, u, grupo, aba)` aplicam. NÃO é permissão. Banner do grupo:
+  `FontesPorAba` (Selecionada | Única). **Geral virtual** (não ADM, 2+ unidades, sem a GERAL real): `ID_MINHAS_UNIDADES`=0,
+  `listaComGeral` (1ª e padrão), filtro `{tipo:"unidades", ids}` → `condUnidade` (`filtro-unidade-sql.ts`, `json_each`),
+  `passaFiltroId`/`chaveFiltroId`; o escopo de acesso vem SÓ das unidades reais.
 - **MÓDULOS + CHAT POR GRUPO + QUEM VÊ OS ONLINE (v1.91.0, migração `0109`, aditiva — `grupos.modulos` JSON de ids [NULL =
   grupo antigo, pelas telas avulsas de `abas`] + `grupos.chat` [1 = liberado]):** Configurações → aba **"Módulos"**
   (`ModulosAdmin`: nome, ↑/↓, as telas em `ChipsIcone` — uma tela em UM módulo; aviso das telas sem módulo; `GET/PATCH

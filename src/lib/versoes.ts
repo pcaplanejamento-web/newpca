@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.149.0",
+    data: "2026-10-21",
+    titulo: "Geral das minhas unidades e fonte dos dados por aba",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Cabeçalho",
+        texto: "Quem acessa mais de uma unidade ganha a opção “Geral”, já escolhida, com os dados somados de todas as suas unidades.",
+        link: "/painel/mesa",
+      },
+      {
+        tipo: "novo",
+        area: "Grupos",
+        texto: "No banner do grupo, “Fonte dos dados”: cada aba das telas usa a unidade selecionada no cabeçalho ou a fonte única (sempre a soma das unidades da pessoa). Substitui as “Funções das telas”.",
+        link: "/painel/grupos",
+      },
+    ],
+  },
+  {
     versao: "1.148.0",
     data: "2026-10-21",
     titulo: "Documentos: link do Drive sem upload",
