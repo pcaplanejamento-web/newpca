@@ -18,7 +18,7 @@ import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { useConfirmacao } from "./Confirmacao";
 import { Checkbox, SearchField, TextField } from "./Field";
 import { SeletorFiltro } from "./SeletorFiltro";
-import { IconBox, IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash, IconDesvincular } from "./icons";
+import { IconBox, IconDocumentos, IconFilter, IconDownload, IconEye, IconPencil, IconTrash, IconDesvincular } from "./icons";
 import { ListaEscolhaIds } from "./ListaEscolhaIds";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
@@ -455,7 +455,7 @@ export function DocumentosView({
           <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
             {!noPca && opcoesPca.length > 2 && (
               <SeletorFiltro
-                icone={<IconBox className="h-4 w-4" />}
+                icone={<IconFilter className="h-4 w-4" />}
                 rotulo="PCA"
                 valor={filtroValido}
                 ativo={!!filtroValido}

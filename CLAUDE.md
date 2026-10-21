@@ -3959,7 +3959,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   **`TabelaSobrescritos`** (o RASTRO cinza dos DFDs sobrescritos por outro protocolo, com o link ao protocolo atual),
   `Segmented` com **`ariaLabel`** (nome acessível do grupo — ex.: "Escolha: Objeto" na sobrescrita), **`SeletorFiltro`** (filtro de
   HIERARQUIA na linha das visões — SÓ O ÍCONE num quadrado na altura padrão, accent quando ativo; quem usa troca o ícone pelo
-  que representa a escolha, ex.: a FOTO da pessoa; o valor na dica e no nome acessível; `<select>` nativo por cima),
+  que representa a escolha, ex.: a FOTO da pessoa; o valor na dica e no nome acessível; tocar abre a lista do sistema — `Dropdown papel="listbox"`, v1.150.4),
   **`CelulaPca`**/**`CelulaPrioridade`** (`PlanilhaDfds.tsx` — as células PCA e Prioridade, as MESMAS nas tabelas de protocolos,
   DFDs e itens) + as fábricas de coluna **`colunaPlanejamento`**/**`colunaTipoDfd`** (as MESMAS "Nº Plan."/"Tipo" na planilha de
   DFDs, no rastro, na tabela de itens e no detalhe da Consolidada), **`ItemCabecalho`** (`DfdView.tsx` — o cabeçalho do banner

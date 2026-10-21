@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.150.4",
+    data: "2026-10-21",
+    titulo: "Filtros só com ícone abrem a lista do sistema",
+    mudancas: [
+      { tipo: "melhoria", area: "Documentos", texto: "O filtro de PCA usa o filtro padrão (o funil) e abre a lista do sistema.", link: "/painel/documentos" },
+      { tipo: "melhoria", area: "Mesa", texto: "Os filtros só com ícone (Assunto) abrem a lista do sistema, com a escolhida marcada.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.150.3",
     data: "2026-10-21",
     titulo: "Documentos: vínculo no selo do orçamento",

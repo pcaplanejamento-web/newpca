@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Dropdown } from "./Dropdown";
+import { IconCheck } from "./icons";
 
 /** O QUADRADO só-ícone dos filtros de hierarquia (na altura dos controles; 44px no toque) — accent quando ativo. O mesmo
  * no `SeletorPessoa` (o filtro Responsável, com a foto da escolhida). */
@@ -10,11 +12,10 @@ export const classeQuadradoFiltro = (ativo: boolean) =>
   }`;
 
 /**
- * SELETOR DE FILTRO de hierarquia (na linha das visões da Mesa — Responsável e Assunto): SÓ O ÍCONE, num quadrado na
- * ALTURA PADRÃO dos controles (`--h-control-sm` no desktop — a do `Segmented` ao lado; 44px no celular, o alvo de toque).
- * ATIVO (fora do "todos") fica em accent, e quem usa pode trocar o ícone pelo que representa a escolha (ex.: a FOTO da
- * pessoa). É um `<select>` nativo transparente sobre o visual — acessível (o nome diz o filtro e o valor escolhido), com o
- * seletor do próprio celular; a dica mostra o valor. Só tokens do design-system.
+ * SELETOR DE FILTRO de hierarquia (na linha das visões da Mesa — Responsável e Assunto; Documentos — PCA): SÓ O ÍCONE, num
+ * quadrado na ALTURA PADRÃO dos controles (`--h-control-sm` no desktop; 44px no toque). ATIVO (fora do "todos") fica em
+ * accent; quem usa pode trocar o ícone pelo que representa a escolha (ex.: a FOTO da pessoa). Tocar abre a lista do
+ * SISTEMA (`Dropdown`): a escolhida em accent com o check; o nome acessível e a dica dizem o filtro e o valor.
  */
 export function SeletorFiltro({
   icone,
@@ -37,21 +38,41 @@ export function SeletorFiltro({
   const lista = opcoes.some((o) => o.valor === valor) ? opcoes : [...opcoes, { valor, rotulo: valor }];
   const atual = lista.find((o) => o.valor === valor)?.rotulo ?? "";
   return (
-    <span className={classeQuadradoFiltro(ativo)}>
-      {icone}
-      <select
-        aria-label={`Filtro: ${rotulo} — ${atual}`}
-        title={`${rotulo}: ${atual}`}
-        value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-      >
-        {lista.map((o) => (
-          <option key={o.valor} value={o.valor}>
-            {o.rotulo}
-          </option>
-        ))}
-      </select>
-    </span>
+    <Dropdown
+      papel="listbox"
+      align="end"
+      width={260}
+      ariaLabel={`Filtro: ${rotulo} — ${atual}`}
+      title={`${rotulo}: ${atual}`}
+      triggerClassName={classeQuadradoFiltro(ativo)}
+      trigger={icone}
+    >
+      {(fechar) => (
+        <div className="max-h-80 overflow-y-auto p-1">
+          <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">{rotulo}</p>
+          {lista.map((o) => {
+            const sel = o.valor === valor;
+            return (
+              <button
+                key={o.valor}
+                type="button"
+                role="option"
+                aria-selected={sel}
+                onClick={() => {
+                  onChange(o.valor);
+                  fechar();
+                }}
+                className={`flex min-h-11 w-full items-center gap-2 rounded-control px-2.5 text-left text-[13px] lg:min-h-8 ${
+                  sel ? "font-semibold text-accent" : "text-text-2 hover:bg-surface-2"
+                }`}
+              >
+                <span className="min-w-0 flex-1 break-words">{o.rotulo}</span>
+                {sel && <IconCheck className="h-4 w-4 shrink-0" aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Dropdown>
   );
 }
