@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.143.0",
+    data: "2026-10-21",
+    titulo: "PCA: Tipo do DFD e Classificação do item separados",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA · Dashboard",
+        texto: "A Classificação dos itens vindos de protocolos mostrava o tipo do DFD. Agora a Classificação é a do item pelo cadastro do Catálogo (Classificações) e o Tipo do DFD tem coluna própria — em todos os PCAs, também no gráfico e nos filtros.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.142.0",
     data: "2026-10-21",
     titulo: "Importação do PCA em cards e itens; avisos só no sino",

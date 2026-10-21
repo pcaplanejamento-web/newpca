@@ -2495,6 +2495,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`chamarPadronizacao`).
 
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
+- **TIPO × CLASSIFICAÇÃO (v1.143.0):** no item de protocolo do PCA (`itensConsolidados`), `classificacao` = a do Catálogo
+  (`criarClassificador` sobre `listarPadronizacao`; sem casar = "Não classificado") e `tipoDfd` = o tipo do DFD (coluna
+  "Tipo" do `ItemTable` com `origem`; `ItemRow.tipoDfd`, no texto compacto). Nunca usar o tipo do DFD como classificação.
 - **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0118` — tabela `pca_uploads`, `unidades.upload_id` [único
   por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
   cada ARQUIVO = UM cartão na Importação (`CartaoEspaco` + a importação como um card do MESMO tamanho, grade `COLUNAS_ESPACOS`;

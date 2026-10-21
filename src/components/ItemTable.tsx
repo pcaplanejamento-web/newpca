@@ -113,6 +113,17 @@ export function ItemTable({
           </CelulaCopiavel>
         ),
       },
+      ...(origem
+        ? [
+            {
+              key: "tipoDfd",
+              header: "Tipo",
+              nowrap: true,
+              value: (r: ItemRow) => r.tipoDfd ?? "—",
+              render: (r: ItemRow) => <span className="text-xs text-text-2">{r.tipoDfd ?? "—"}</span>,
+            },
+          ]
+        : []),
       {
         key: "classificacao",
         header: "Classificação",

@@ -222,7 +222,10 @@ export type ItemRow = {
   quantidade: number | null;
   valorReferencia: number | null;
   valorTotal: number | null;
+  /** A classificação do ITEM (planilha: a coluna dela; DFD: pelo cadastro de classificações do Catálogo). */
   classificacao: string | null;
+  /** O TIPO do DFD de origem (DFD-O · Ordinário…) — só itens de protocolo; nunca se confunde com a classificação. */
+  tipoDfd?: string | null;
   dataDesejada: string | null;
   codigo: string | null;
   municipio: string | null;
