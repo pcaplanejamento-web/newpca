@@ -1,3 +1,4 @@
+import { confsDaMesa } from "./conferencia-cache";
 import { getConfigEscopo } from "./escopo-cabecalho";
 import { filtroDoModulo } from "./escopo-cabecalho-core";
 import { getAcesso, pcasDoAcesso, podeMesa } from "./acesso";
@@ -167,7 +168,8 @@ export async function carregarMesa(u: UsuarioSessao | null) {
     montarMesa(u),
     u?.admin ? automacoesDaMesa(u.id).catch(() => []) : Promise.resolve([]),
   ]);
-  return { ...resto, automacoes, listas: listasParaTexto({ protocolos, dfds }, Date.now()) };
+  const confs = await confsDaMesa(protocolos, dfds, resto.regras, resto.orgaos);
+  return { ...resto, automacoes, listas: listasParaTexto({ protocolos, dfds, confs }, Date.now()) };
 }
 
 /**
@@ -180,10 +182,13 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
   const [m, vs] = await Promise.all([montarMesa(u, pca.id), vinculosDoPca(pca.id)]);
   const naoInc = new Set(m.protocolos.filter((p) => p.pcaIncorporadoEm == null).map((p) => p.id));
   const doNaoInc = m.dfds.filter((d) => d.protocoloId != null && naoInc.has(d.protocoloId));
-  const emOutro = await dfdsEmOutroPca(
-    doNaoInc.map((d) => d.id),
-    pca.id,
-  );
+  const [emOutro, confs] = await Promise.all([
+    dfdsEmOutroPca(
+      doNaoInc.map((d) => d.id),
+      pca.id,
+    ),
+    confsDaMesa(m.protocolos, m.dfds, m.regras, m.orgaos),
+  ]);
   const emOutroPcaPorProtocolo: Record<number, number> = {};
   for (const d of doNaoInc)
     if (d.protocoloId != null && emOutro.has(d.id)) emOutroPcaPorProtocolo[d.protocoloId] = (emOutroPcaPorProtocolo[d.protocoloId] ?? 0) + 1;
@@ -198,7 +203,7 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     marcados: m.anoMarcados != null,
     pode: m.pode,
     // As listas grandes num ÚNICO texto (ver `carregarMesa`).
-    listas: listasParaTexto({ protocolos: m.protocolos, dfds: m.dfds }, Date.now()),
+    listas: listasParaTexto({ protocolos: m.protocolos, dfds: m.dfds, confs }, Date.now()),
     reparticoes: m.reparticoes,
     reparticaoAtivaId: m.reparticaoAtivaId,
     pcas: m.pcas,

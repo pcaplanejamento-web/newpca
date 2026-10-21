@@ -61,7 +61,7 @@ const ESCOPO_DO_LOCAL = { sistema: "sistema", enviado: "enviados", incorporado: 
  * **Local** diz onde cada um está (`localDoProtocolo`).
  */
 export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcados = false, listas, ...mesa }: Props) {
-  const { protocolos, dfds } = useListasMesa(listas);
+  const { protocolos, dfds, confs } = useListasMesa(listas);
   const router = useRouter();
   const [escopo, setEscopo] = useState<Escopo>("todos");
   const verEscopo = useComponente()("pca.escopoMesa");
@@ -237,6 +237,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
         {...mesa}
         protocolos={protos}
         dfds={dfdsVis}
+        confs={confs}
         modoPca={{
           pcaId: pca.id,
           ferramenta: verEscopo && (

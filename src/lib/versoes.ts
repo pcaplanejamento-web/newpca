@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.130.0",
+    data: "2026-10-21",
+    titulo: "Estado da Mesa sem reconferir",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "O Estado de cada protocolo e DFD é conferido uma vez e fica guardado: ao entrar na Mesa (também depois de recarregar a página) as linhas já aparecem conferidas — só o que mudou é conferido de novo.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "PCA", texto: "A Mesa de cada PCA também abre com o Estado já conferido.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Mesa", texto: "\"Reverificar tudo\" refaz a conferência completa de todas as linhas, ignorando o que estava guardado.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.129.0",
     data: "2026-10-21",
     titulo: "Trocar de tela sem recarregar",

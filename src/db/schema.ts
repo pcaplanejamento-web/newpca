@@ -1851,3 +1851,16 @@ export const automacaoTabelas = sqliteTable(
   },
   (t) => [uniqueIndex("automacao_tabelas_chave_uq").on(t.chave)],
 );
+
+/** CONFERÊNCIA GUARDADA (migração 0114): o Estado de cada DFD/protocolo da Mesa com a ASSINATURA de entrada — só vale com a mesma. */
+export const conferencias = sqliteTable(
+  "conferencias",
+  {
+    tipo: text("tipo", { enum: ["dfd", "protocolo"] }).notNull(),
+    alvoId: integer("alvo_id").notNull(),
+    assinatura: text("assinatura").notNull(),
+    resultado: text("resultado").notNull(),
+    em: text("em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [primaryKey({ columns: [t.tipo, t.alvoId] })],
+);

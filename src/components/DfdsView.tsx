@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { classificarAssunto, comportamentoNo, corImportancia, nivelDe, type RegrasAvaliacao, regrasPadrao } from "@/lib/avaliacao-core";
+import { baseDfd, baseProtocolo, type ConfLinha, type ConfProto, type ConfsGuardadas } from "@/lib/conferencia-cache-core";
 import { avaliarProtocolo } from "@/lib/conferencia-dfd";
 import type { ItemDfdRow, PcaResumo } from "@/lib/dfd";
 import type { DfdNaMesa, ProtocoloNaMesa } from "@/lib/mesa-redacao";
@@ -17,8 +18,6 @@ import {
   type AcaoMassa,
   ESTADO_ITEM_ROTULO,
   ESTADO_PROTOCOLO_ROTULO,
-  type EstadoDfd,
-  type EstadoProtocolo,
   estadoItem,
   estadoItemCor,
   estadoProtocoloCor,
@@ -115,10 +114,6 @@ type Rep = {
   responsaveis: Responsaveis;
 };
 type Orgao = { id: number; sigla: string; nome: string; orgaoEntidade: string | null; assinaturaUnica?: boolean | null };
-/** Conferência de UMA linha de DFD (vinda de `/api/dfd/conferencia` — a MESMA da análise). */
-type ConfLinha = { id: number; estado: EstadoDfd; resumo: ResumoEstado | null; validacao: "auto" | "equipe" | null };
-/** Estado AGREGADO de um protocolo (vindo de `/api/protocolo/conferencia`): capa + problemas dos DFDs/itens. */
-type ConfProto = { id: number; estado: EstadoProtocolo; resumo: ResumoEstado | null; dfdsComErro?: number; dfdsEmAtencao?: number };
 /** Campos de GESTÃO editados na célula (valem na hora, até a lista recarregar do servidor). */
 type Gestao = { responsavelId?: number | null; situacaoId?: number | null };
 
@@ -180,13 +175,31 @@ const podar = (sel: Sel, validas: Set<number>): Sel => {
   const n = new Set([...sel].filter((k) => validas.has(Number(k))));
   return n.size === sel.size ? sel : n;
 };
-/** Chave da conferência de um DFD: muda quando o DFD é gravado (atualizadoEm), troca de unidade ou a
- * categoria do protocolo muda — só esses são reconferidos depois de um `router.refresh()`. */
-const chaveConf = (d: DfdNaMesa) => `${d.id}|${d.atualizadoEm ?? ""}|${d.reparticaoId ?? ""}|${d.protocoloAssunto ?? ""}`;
-/** Chave da conferência AGREGADA de um protocolo: SÓ o que muda o estado — a capa (valor e assunto),
- * QUALQUER DFD dele gravado e o rastro dos sobrescritos. Trocar responsável/situação não reconfere nada. */
-const chaveProto = (p: ProtocoloNaMesa) =>
-  `${p.id}|${p.dfdsAtualizadoEm ?? ""}|${p.totalDfds}|${p.valorTotal}|${p.sobrescritos}|${p.valorSobrescritos}|${p.valorCapa ?? ""}|${p.assunto ?? ""}`;
+/** Chave da conferência de um DFD = a BASE da assinatura guardada no servidor (`baseDfd`): muda quando o DFD é
+ * gravado, troca de unidade, de protocolo, de assunto ou de ano — só esses são reconferidos depois de um refresh. */
+const chaveConf = (d: DfdNaMesa) => baseDfd(d);
+/** Chave da conferência AGREGADA de um protocolo (`baseProtocolo`): a capa, o assunto, o ano, QUALQUER DFD dele
+ * gravado e o rastro dos sobrescritos. Trocar responsável/situação não reconfere nada. */
+const chaveProto = (p: ProtocoloNaMesa) => baseProtocolo(p);
+type CacheConf = { ctx: string; m: Map<string, ConfLinha> };
+type CacheProto = { ctx: string; m: Map<string, ConfProto>; falhos: Set<string> };
+/** As conferências da Mesa ficam na MEMÓRIA DA ABA (não do componente): sair e voltar à Mesa não pede nada de novo.
+ * Por PESSOA (outra pessoa na mesma aba começa vazia) e por contexto (regras/órgãos/unidades), até 4 contextos. */
+const CONFS_DA_ABA = new Map<string, { dfd: { current: CacheConf }; proto: { current: CacheProto } }>();
+let pessoaDasConfs: number | null | undefined;
+function confsDaAba(usuarioId: number | null, ctx: string) {
+  if (pessoaDasConfs !== usuarioId) {
+    CONFS_DA_ABA.clear();
+    pessoaDasConfs = usuarioId;
+  }
+  let c = CONFS_DA_ABA.get(ctx);
+  if (!c) {
+    c = { dfd: { current: { ctx, m: new Map() } }, proto: { current: { ctx, m: new Map(), falhos: new Set() } } };
+    CONFS_DA_ABA.set(ctx, c);
+    if (CONFS_DA_ABA.size > 4) CONFS_DA_ABA.delete(CONFS_DA_ABA.keys().next().value as string);
+  }
+  return c;
+}
 /** "Protocolo 123/2026" — sem número (a falha genérica fora do escopo), nada. */
 const refNumero = (prefixo: string, numero: string | null | undefined) => (numero ? `${prefixo} ${numero}` : "");
 /** Protocolos por requisição da conferência agregada (e ~DFDs por fatia: `FATIA_CONFERENCIA`). */
@@ -219,6 +232,7 @@ export function DfdsView({
   outrasPessoas = [],
   situacoes = [],
   usuarioId = null,
+  confs,
   filtroInicial = FILTRO_MESA_TODOS,
   pcaFiltro = null,
   modoPca,
@@ -246,6 +260,8 @@ export function DfdsView({
   outrasPessoas?: Pessoa[];
   /** O usuário logado ("(eu)" nas opções). */
   usuarioId?: number | null;
+  /** Os Estados GUARDADOS que vieram com as listas (a Mesa abre sem "Conferindo…" nas linhas já conferidas). */
+  confs?: ConfsGuardadas;
   /** Situações cadastradas pelo ADM (Configurações → Situações) — as ÚNICAS da coluna Situação. */
   situacoes?: SituacaoCadastrada[];
   /** Filtro com que a Mesa ABRE (a preferência do Perfil: só os do usuário, geral ou sem responsável). */
@@ -602,7 +618,26 @@ export function DfdsView({
     () => JSON.stringify([regras, orgaos, reparticoes.map((r) => [r.id, r.orgaoId ?? null, r.responsaveis])]),
     [regras, orgaos, reparticoes],
   );
-  const confRef = useRef<{ ctx: string; m: Map<string, ConfLinha> }>({ ctx: "", m: new Map() });
+  const cacheAba = useMemo(() => confsDaAba(usuarioId, ctxConf), [usuarioId, ctxConf]);
+  const confRef = cacheAba.dfd;
+  const confProtoRef = cacheAba.proto;
+  // A Mesa já ABRE com os Estados GUARDADOS no servidor (só os que conferem com a assinatura atual): semeados uma
+  // vez por carga, sem sobrescrever o que já está em memória. No "Reverificar tudo" não semeia (recalcula tudo).
+  useMemo(() => {
+    if (!confs || rever) return;
+    if (confRef.current.ctx !== ctxConf) confRef.current = { ctx: ctxConf, m: new Map() };
+    if (confProtoRef.current.ctx !== ctxConf) confProtoRef.current = { ctx: ctxConf, m: new Map(), falhos: new Set() };
+    const dPorId = new Map(dfds.map((d) => [d.id, d]));
+    for (const l of confs.dfds) {
+      const d = dPorId.get(l.id);
+      if (d && !confRef.current.m.has(chaveConf(d))) confRef.current.m.set(chaveConf(d), l);
+    }
+    const pPorId = new Map(protocolos.map((p) => [p.id, p]));
+    for (const l of confs.protocolos) {
+      const p = pPorId.get(l.id);
+      if (p && !confProtoRef.current.m.has(chaveProto(p))) confProtoRef.current.m.set(chaveProto(p), l);
+    }
+  }, [confs, rever, confRef, confProtoRef, ctxConf, dfds, protocolos]);
   const [, setConfVersao] = useState(0);
   // Falha de rede/servidor na conferência: as linhas pendentes param de girar (ficam "Pendente").
   const [confFalhou, setConfFalhou] = useState(false);
@@ -621,7 +656,7 @@ export function DfdsView({
           const r = await fetch("/api/dfd/conferencia", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: faltam.slice(i, i + FATIA_CONFERENCIA).map((d) => d.id) }),
+            body: JSON.stringify({ ids: faltam.slice(i, i + FATIA_CONFERENCIA).map((d) => d.id), fresco: reverAtivo || undefined }),
             signal: ac.signal,
           });
           const j = (await r.json().catch(() => ({}))) as { ok?: boolean; linhas?: ConfLinha[] };
@@ -642,7 +677,7 @@ export function DfdsView({
       }
     })();
     return () => ac.abort();
-  }, [vista, dfds, ctxConf, reverAtivo]);
+  }, [vista, dfds, ctxConf, reverAtivo, confRef]);
   const confDe = (d: DfdNaMesa): ConfLinha | undefined =>
     confRef.current.ctx === ctxConf ? confRef.current.m.get(chaveConf(d)) : undefined;
 
@@ -653,7 +688,6 @@ export function DfdsView({
   // gravado ⇒ reconfere só ele). Até chegar, a célula gira ("Conferindo…"); a fatia que FALHA marca os seus
   // protocolos como "Não conferido" (nunca um "Regular" falso) e as demais seguem — nova tentativa quando a
   // lista recarrega ou a visão reabre.
-  const confProtoRef = useRef<{ ctx: string; m: Map<string, ConfProto>; falhos: Set<string> }>({ ctx: "", m: new Map(), falhos: new Set() });
   const [confProtoVersao, setConfProtoVersao] = useState(0);
   // Alternar entre Protocolos e Dashboard NÃO reinicia as requisições em curso (o mesmo cache serve aos dois).
   const precisaConfProto = vista === "protocolos" || vista === "dashboard" || reverAtivo;
@@ -690,7 +724,7 @@ export function DfdsView({
           const r = await fetch("/api/protocolo/conferencia", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: fatia.map((p) => p.id) }),
+            body: JSON.stringify({ ids: fatia.map((p) => p.id), fresco: reverAtivo || undefined }),
             signal: ac.signal,
           });
           const j = (await r.json().catch(() => ({}))) as { ok?: boolean; linhas?: ConfProto[] };
@@ -709,7 +743,7 @@ export function DfdsView({
       }
     })();
     return () => ac.abort();
-  }, [precisaConfProto, protocolos, ctxConf]);
+  }, [precisaConfProto, protocolos, ctxConf, reverAtivo, confProtoRef]);
   /** Estado do protocolo: o agregado do servidor. Até chegar, "Conferindo…"; se a conferência falhou, só o
    * que a CAPA já prova (problema real) — sem problema na capa é "Não conferido", nunca "Regular". */
   // REVERIFICAR TUDO: zera os caches das conferências (protocolos, DFDs), os itens e o histórico do Dashboard e recarrega

@@ -16,6 +16,6 @@ export function useListasMesa(listas: string) {
  * fino — a API da `DfdsView` não muda; só as listas chegam como texto (menos CPU no Worker).
  */
 export function MesaSistema({ listas, ...mesa }: Omit<ComponentProps<typeof DfdsView>, "protocolos" | "dfds"> & { listas: string }) {
-  const { protocolos, dfds } = useListasMesa(listas);
-  return <DfdsView {...mesa} protocolos={protocolos} dfds={dfds} />;
+  const { protocolos, dfds, confs } = useListasMesa(listas);
+  return <DfdsView {...mesa} protocolos={protocolos} dfds={dfds} confs={confs} />;
 }

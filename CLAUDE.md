@@ -68,6 +68,20 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     cada requisição) e o valor é COMPARTILHADO (quem usa só lê). Hoje: `listarDfds`, `listarItensDfds`, `listarProtocolos`,
     `listarProtocolosDoPca`, `listarPcasCards`, `dashboardDoPca`, `orcamentoDoPca`, `getOrcamentoItens`, `vinculosDoPca` e `orcamentoDoAno` (v1.128.0); o enriquecimento de `/api/dfd/itens` (catálogo/padronização/histórico) é memorizado por lista BASE (`WeakMap`) e a Mesa só zera os itens quando algum DFD muda (`id|atualizadoEm`). Spinners giram num `<span>` `.animate-girar` (o SVG com `animate-spin` travava). **Loader pesado novo = `memoPorVersao`**;
     escrita nova = `registrarAuditoria` (senão a versão não muda e só a validade recarrega).
+  - **CONFERÊNCIA GUARDADA (v1.130.0, migração `0114` — tabela `conferencias`: `tipo` dfd|protocolo + `alvo_id` (PK) +
+    `assinatura` + `resultado` JSON + `em`; sem FK):** o Estado de cada DFD/protocolo da Mesa é calculado UMA vez e guardado
+    com a ASSINATURA DE ENTRADA (núcleo puro **`conferencia-cache-core.ts`**, testado): DFD = `baseDfd` (id, atualizadoEm,
+    unidade, protocolo, assunto, ano, ano do protocolo, nº de itens — texto puro) + SHA-256 do contexto (regras do ADM +
+    órgãos — `chaveContexto`) + SHA-256 da unidade efetiva (órgão + responsáveis — `chavesUnidades`); protocolo =
+    `baseProtocolo` + contexto + SHA-256 das assinaturas dos DFDs dele. O guardado SÓ vale com a MESMA assinatura — qualquer
+    entrada que mude invalida sozinha, sem depender dos pontos de gravação (unidade desconhecida = "#?", nunca usa o
+    guardado). As rotas `POST /api/dfd/conferencia` e `POST /api/protocolo/conferencia` (mesma guarda e escopo — a
+    legibilidade é filtrada ANTES da leitura) devolvem o guardado e só recalculam o que falta, gravando best-effort
+    (`conferencia-cache.ts`; builders `conferencia-cache-sql.ts`, 24 linhas/INSERT, testados no D1 real); `fresco:true` (o
+    "Reverificar tudo") recalcula tudo, com limite `conferenciaFresca` (300/10 min por pessoa). A Mesa (`carregarMesa`/
+    `carregarMesaDoPca`) já manda os guardados válidos das linhas visíveis no texto das listas (`confsDaMesa` →
+    `ListasMesa.confs`) e a `DfdsView` os semeia no cache da ABA (`confsDaAba`: por pessoa e contexto, fora do componente —
+    sair e voltar não pede nada). As órfãs saem no cron dos e-mails. Os banners abertos e o Estado dos itens seguem ao vivo.
 - **LIMITES DO WORKER (plano gratuito: ~10 ms de CPU e 50 consultas ao D1 por requisição)** — passar deles CORTA a
   resposta no meio ("Connection closed." no navegador, sem "ref:") ou derruba a requisição. A Mesa de um PCA grande
   (milhares de linhas) chegou ao limite quando a "Geral" passou a valer todas as unidades. Regras da tela pesada:
@@ -1348,7 +1362,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     erro › atenção › regular, rótulo do principal com a contagem ("Sem prioridade (3)"), `+N` e tooltip com a lista (DFDs
     por nº + planejamento). Calculado no servidor (`POST /api/protocolo/conferencia`, fatias de ≤ 50 protocolos / ~150
     DFDs, com os DFDs COMPLETOS e as unidades reais), lazy com "Conferindo…" e CACHE pela chave `chaveProto` (gravar a capa
-    ou qualquer DFD muda a chave). A coluna é multi-valor (o filtro acha QUALQUER problema do protocolo).
+    ou qualquer DFD muda a chave) — GUARDADO no servidor por assinatura (ver "CONFERÊNCIA GUARDADA"). A coluna é multi-valor (o filtro acha QUALQUER problema do protocolo).
   - **Filtros de HIERARQUIA da Mesa (na MESMA linha de Protocolos · DFDs · Itens, à direita):** dois filtros SÓ COM O ÍCONE
     (quadrado na altura da barra; ativo = accent; o valor na dica e no nome acessível) — **Responsável** = o **`SeletorPessoa`**
     (variante `filtro`: escolhida uma PESSOA, o quadrado mostra a FOTO da pessoa; "Todos" = `IconUsers`, "sem responsável" =
@@ -3632,7 +3646,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de ≤ 5 DFDs, acao catalogo|unidade|quantidade|valorUnitario|remover}`, lote atômico por DFD) e `POST /api/protocolo`
   `start-protocolo` com **`reenvio {protocoloId, resumo}`** (sobrescrita do MESMO protocolo — 422 se nº/Id não conferem).
   IN (...) sempre em lotes de ≤ 90 ids (`LOTE_IDS`/`lotesDeIds`) — limite de 100 parâmetros do D1.
-- Gestão/histórico (migração `0031`): `POST /api/protocolo/conferencia` (`{ids ≤ 50}` → estado AGREGADO por protocolo,
+- Gestão/histórico (migração `0031`): `POST /api/protocolo/conferencia` (`{ids ≤ 50, fresco?}` → estado AGREGADO por protocolo, guardado por assinatura,
   Visualizar numa das Mesas), `PATCH /api/protocolo/[id]` também com `responsavelId`/`situacaoId` (+ `origem` banner|celula),
   `POST /api/protocolo/massa` com as ações `responsavel`/`situacao`, `GET /api/protocolo/[id]/historico` e
   `GET /api/dfd/[id]/historico` (histórico conectado, escopo por unidade), `GET`/`POST /api/admin/situacoes` +

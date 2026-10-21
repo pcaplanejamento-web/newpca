@@ -25,6 +25,8 @@ export const LIMITES_ACESSO = {
   automacaoEscrita: { max: 60, janelaS: 60 },
   /** Mensagens do CHAT PRIVADO ao vivo da MESMA pessoa (o do grupo conta no objeto do grupo, por aba). */
   chatPrivado: { max: 30, janelaS: 60 },
+  /** RECONFERÊNCIAS completas da Mesa ("Reverificar tudo" — cada fatia conta) da MESMA pessoa. */
+  conferenciaFresca: { max: 300, janelaS: 10 * 60 },
 } as const satisfies Record<string, RegraLimite>;
 
 export type TipoLimite = keyof typeof LIMITES_ACESSO;

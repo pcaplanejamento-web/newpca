@@ -10,12 +10,21 @@ describe("mesa-listas — as listas da Mesa em um texto", () => {
     { id: 1, numero: "144756/2026", responsavelId: null, valorCapa: 1234.56, assunto: "INCLUSÃO — “aspas” e \\ barra" },
     { id: 2, numero: "2/2026", responsavelId: 7, valorCapa: null, assunto: null },
   ];
+  const SEM = { dfds: [], protocolos: [] };
   const dfds = [{ id: 10, numero: "1209", assinaturaGrupos: ["centi", "dropsigner"], prioridade: "ALTA", valorTotal: 0 }];
 
   it("ida e volta: as mesmas linhas", () => {
     const t = listasParaTexto({ protocolos, dfds }, 1700000000000);
     assert.equal(typeof t, "string");
-    assert.deepEqual(listasDoTexto(t), { protocolos, dfds });
+    assert.deepEqual(listasDoTexto(t), { protocolos, dfds, confs: SEM });
+  });
+
+  it("os Estados guardados vão junto e voltam iguais", () => {
+    const confs = {
+      dfds: [{ id: 10, estado: "regular" as const, resumo: null, validacao: "auto" as const }],
+      protocolos: [{ id: 1, estado: "erro" as const, resumo: null, dfdsComErro: 1, dfdsEmAtencao: 0 }],
+    };
+    assert.deepEqual(listasDoTexto(listasParaTexto({ protocolos, dfds, confs }, 1)), { protocolos, dfds, confs });
   });
 
   it("a carga muda o texto (cada carga do servidor = listas novas no cliente)", () => {
@@ -24,8 +33,8 @@ describe("mesa-listas — as listas da Mesa em um texto", () => {
 
   it("texto inválido ou fora do formato = listas vazias", () => {
     for (const t of [null, undefined, "", "não é json", "[]", '"x"', "null", '{"protocolos":{},"dfds":"x"}']) {
-      assert.deepEqual(listasDoTexto(t), { protocolos: [], dfds: [] }, String(t));
+      assert.deepEqual(listasDoTexto(t), { protocolos: [], dfds: [], confs: SEM }, String(t));
     }
-    assert.deepEqual(listasDoTexto('{"protocolos":[{"id":1}]}'), { protocolos: [{ id: 1 }], dfds: [] });
+    assert.deepEqual(listasDoTexto('{"protocolos":[{"id":1}]}'), { protocolos: [{ id: 1 }], dfds: [], confs: SEM });
   });
 });

@@ -3,6 +3,7 @@ import { papeis, usuarios } from "@/db/schema";
 import { colunasSessao, papelDoUsuarioSql, sessaoDaLinha } from "@/lib/auth";
 import { VALIDADE_CHAT_MS } from "@/lib/chat-core";
 import { comandosLimparChat } from "@/lib/chat-sql";
+import { comandosLimparOrfas } from "@/lib/conferencia-cache-sql";
 import { reconciliarExecucoes } from "@/lib/automacao-plataforma";
 import { cronAutorizado } from "@/lib/cron";
 import { getDb } from "@/lib/db";
@@ -42,6 +43,9 @@ export async function POST(req: Request) {
   await reconciliarExecucoes();
   // O CHAT guardado por 7 dias: o que passou disso sai (sempre).
   await db.batch(comandosLimparChat(db, Date.now() - VALIDADE_CHAT_MS) as never).catch((e) => console.error("[cron] limpeza do chat:", (e as Error).message));
+  // As conferências GUARDADAS da Mesa de DFDs/protocolos que não existem mais.
+  const [o1, o2] = comandosLimparOrfas(db);
+  await db.batch([o1, o2]).catch((e) => console.error("[cron] conferências órfãs:", (e as Error).message));
   if ("erro" in (await resendDaConfig())) return ok({ ativo: false });
   const [{ n }] = await db.select({ n: count() }).from(usuarios).where(eq(usuarios.status, "ativo"));
   const total = Number(n) || 0;

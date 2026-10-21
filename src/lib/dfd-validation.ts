@@ -277,8 +277,10 @@ export const editarDfdSchema = z
 
 /** Conferência AGREGADA da lista de PROTOCOLOS da Mesa (`POST /api/protocolo/conferencia`) — em fatias
  * (o cliente limita também pelo nº de DFDs por fatia). */
-export const conferenciaProtocolosSchema = z.object({
+export const conferenciaProtocolosSchema = z.strictObject({
   ids: z.array(z.number().int().positive()).min(1).max(50),
+  /** Ignora o resultado guardado e recalcula (o "Reverificar tudo"). */
+  fresco: z.boolean().optional(),
 });
 
 /** DFDs JÁ cadastrados pelos NÚMEROS (`POST /api/dfd/existentes`) — o conflito de uma importação. */
@@ -292,8 +294,10 @@ export const existentesDfdSchema = z
   .refine((d) => d.numeros.length > 0 || d.processo != null, { message: "Informe os números ou o processo." });
 
 /** Conferência da LISTA de DFDs da Mesa (`POST /api/dfd/conferencia`) — em fatias de ids. */
-export const conferenciaDfdsSchema = z.object({
+export const conferenciaDfdsSchema = z.strictObject({
   ids: z.array(z.number().int().positive()).min(1).max(200),
+  /** Ignora o resultado guardado e recalcula (o "Reverificar tudo"). */
+  fresco: z.boolean().optional(),
 });
 
 /**
