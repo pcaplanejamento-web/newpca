@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.129.0",
+    data: "2026-10-21",
+    titulo: "Trocar de tela sem recarregar",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Voltar a uma tela já vista (Mesa, Dashboard, Orçamento, PCA) é imediato: ela fica pronta por 30 minutos e só recarrega quando alguém grava um dado novo.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Sistema", texto: "Entrar e sair do sistema não descarta mais os dados já preparados das telas pesadas.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.128.0",
     data: "2026-10-21",
     titulo: "Carregamento mais rápido",

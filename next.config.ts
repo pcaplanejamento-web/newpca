@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   // DADOS PRONTOS: as telas já vistas (abas do PCA/Orçamento/Quadro, Mesa, voltar/avançar) voltam do cache do navegador
   // por 5 min, sem refazer a página. Toda gravação já dá `router.refresh()` (limpa o cache) e o `SincronizarDados`
   // recarrega quando a VERSÃO DOS DADOS muda (gravação de outra pessoa) — nunca se vê dado velho.
-  experimental: { staleTimes: { dynamic: 300, static: 300 } },
+  experimental: { staleTimes: { dynamic: 1800, static: 1800 } },
   // CABEÇALHOS DE SEGURANÇA em toda resposta: nenhum site de fora emoldura o sistema (clickjacking — só o próprio, no
   // simulador do /design-system), o navegador não "adivinha" o tipo dos arquivos, HTTPS sempre (HSTS), sem vazar o
   // endereço completo a outros sites e sem câmera/microfone/localização. A CSP mínima trava molduras, `<base>`, plugins e

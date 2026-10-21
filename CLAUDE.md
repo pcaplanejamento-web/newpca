@@ -55,12 +55,12 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     (`insert`/`update`/`delete`/`select`, inclusive `insert().select()` + `onConflictDoUpdate` — ver `rastro-sql.ts`).
     O teste roda os builders pelo driver `drizzle-orm/d1` REAL sobre `node:sqlite` (`tests/fixtures/d1-sqlite.ts`).
 - **DADOS PRONTOS — carregar uma vez, recarregar só com dado novo (padrão do sistema inteiro):**
-  - **Versão dos dados** (`versao-dados.ts` → `versaoDados()`): `MAX(auditoria.id)` (toda escrita passa por
+  - **Versão dos dados** (`versao-dados.ts` → `versaoDados()`): `MAX(auditoria.id)` sem login/logout/sessão (toda escrita passa por
     `registrarAuditoria`) + `MAX(dfd_itens.id)` + `MAX(orcamento_itens.id)` (lotes gravados depois do registro), memorizada
     por requisição; rota `GET /api/dados/versao` (`no-store`).
-  - **Navegador:** `next.config` `experimental.staleTimes {dynamic:300}` — telas/abas já vistas voltam do cache na hora;
+  - **Navegador:** `next.config` `experimental.staleTimes {dynamic:1800}` (v1.129.0) — telas/abas já vistas voltam do cache na hora;
     toda gravação já dá `router.refresh()` (limpa o cache) e o **`SincronizarDados`** (no `AppShell`, sem UI; a versão vem do
-    layout do painel) consulta a versão ao voltar à janela e a cada navegação (≥ 10 s) e só dá `router.refresh()` quando
+    layout do painel) consulta a versão ao voltar à janela e a cada 60 s com a aba à vista (NUNCA a cada navegação) e só dá `router.refresh()` quando
     ela MUDOU (gravação de outra pessoa).
   - **Servidor:** **`memoPorVersao(chave, carregar)`** — o resultado de uma CARGA PESADA fica na memória do Worker enquanto
     a versão for a mesma (validade de segurança 5 min, até 60 entradas, a promessa compartilhada; falha não fica; núcleo

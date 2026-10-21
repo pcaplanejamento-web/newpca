@@ -13,7 +13,8 @@ import { criarMemoVersao } from "./memo-versao-core";
 export const versaoDados = cache(async (): Promise<string> => {
   const [r] = await getDb()
     .select({
-      a: sql<number | null>`MAX(${auditoria.id})`,
+      // Só o que muda DADO: login/logout e a sessão não invalidam as cargas nem o cache das telas.
+      a: sql<number | null>`MAX(CASE WHEN ${auditoria.acao} NOT IN ('login', 'logout') AND ${auditoria.entidade} <> 'sessao' THEN ${auditoria.id} END)`,
       i: sql<number | null>`(SELECT MAX(${dfdItens.id}) FROM ${dfdItens})`,
       o: sql<number | null>`(SELECT MAX(${orcamentoItens.id}) FROM ${orcamentoItens})`,
     })
