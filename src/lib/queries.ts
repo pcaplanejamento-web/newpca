@@ -1,3 +1,4 @@
+import { condUnidade } from "./filtro-unidade-sql.ts";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { itens, unidades } from "@/db/schema";
@@ -8,7 +9,7 @@ import { itens, unidades } from "@/db/schema";
 
 /** Unidades importadas (planilhas). Com `reparticaoId`, restringe às daquela repartição (visão do
  * head); com `pcaId`, às planilhas daquele PCA (fonte "lista pronta"). */
-export async function getUnidades(reparticaoId?: number, pcaId?: number) {
+export async function getUnidades(reparticaoId?: number | readonly number[], pcaId?: number) {
   const db = getDb();
   return db
     .select({
@@ -25,7 +26,7 @@ export async function getUnidades(reparticaoId?: number, pcaId?: number) {
     .from(unidades)
     .where(
       and(
-        reparticaoId ? eq(unidades.reparticaoId, reparticaoId) : undefined,
+        reparticaoId ? condUnidade(unidades.reparticaoId, reparticaoId) : undefined,
         pcaId ? eq(unidades.pcaId, pcaId) : undefined,
       ),
     )
@@ -33,7 +34,7 @@ export async function getUnidades(reparticaoId?: number, pcaId?: number) {
 }
 
 /** O PCA dos itens: o id, ou o id + a UNIDADE do cabeçalho (só as planilhas dela). */
-export type PcaDosItens = number | { pcaId: number; reparticaoId: number };
+export type PcaDosItens = number | { pcaId: number; reparticaoId: number | readonly number[] };
 
 /** Escopo dos itens: uma planilha (`unidadeId`) e/ou as planilhas de um PCA (`pcaId`, opcionalmente só as da unidade). */
 const filtroUnidade = (unidadeId?: number, pca?: PcaDosItens) => {
@@ -42,7 +43,7 @@ const filtroUnidade = (unidadeId?: number, pca?: PcaDosItens) => {
   return and(
     unidadeId ? eq(itens.unidadeId, unidadeId) : undefined,
     pcaId ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${unidades.pcaId} = ${pcaId})` : undefined,
-    rep ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${unidades.reparticaoId} = ${rep})` : undefined,
+    rep ? sql`${itens.unidadeId} IN (SELECT ${unidades.id} FROM ${unidades} WHERE ${condUnidade(unidades.reparticaoId, rep)})` : undefined,
   );
 };
 
@@ -84,7 +85,7 @@ export async function getResumo(unidadeId?: number, pcaId?: PcaDosItens): Promis
     .where(
       and(
         pcaId ? eq(unidades.pcaId, typeof pcaId === "number" ? pcaId : pcaId.pcaId) : undefined,
-        typeof pcaId === "object" ? eq(unidades.reparticaoId, pcaId.reparticaoId) : undefined,
+        typeof pcaId === "object" ? condUnidade(unidades.reparticaoId, pcaId.reparticaoId) : undefined,
       ),
     );
 

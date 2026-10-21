@@ -1,3 +1,4 @@
+import { condUnidade } from "./filtro-unidade-sql.ts";
 import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
 import { catalogoItens, catalogos, dfdItens, dfds } from "@/db/schema";
 import { comandosApagarHistorico, consultaIndicadoresHistorico } from "./catalogo-historico-sql";
@@ -110,12 +111,12 @@ export type CatalogoItemRow = {
 /** Itens na ordem do arquivo (`sequencial`). Sem `catalogoId` = de TODOS os catálogos
  * (a tela carrega tudo e agrupa no cliente, como o dashboard). */
 /** Os códigos que a UNIDADE usa: os dos itens dos DFDs dela (subconsulta — sem lista de IN). */
-export const codigosDaUnidade = (rep: number) =>
-  sql`SELECT ${dfdItens.codigo} FROM ${dfdItens} INNER JOIN ${dfds} ON ${dfds.id} = ${dfdItens.dfdId} WHERE ${dfds.reparticaoId} = ${rep} AND ${dfdItens.codigo} IS NOT NULL`;
+export const codigosDaUnidade = (rep: number | readonly number[]) =>
+  sql`SELECT ${dfdItens.codigo} FROM ${dfdItens} INNER JOIN ${dfds} ON ${dfds.id} = ${dfdItens.dfdId} WHERE ${condUnidade(dfds.reparticaoId, rep)} AND ${dfdItens.codigo} IS NOT NULL`;
 
 /** `rep` = a unidade do CABEÇALHO no modo "usados" (Configurações → Filtro da unidade): só os itens cujo código aparece
  * nos DFDs dela (`false` = nenhum; `null` = todos). */
-export async function getCatalogoItens(catalogoId?: number, rep: number | false | null = null): Promise<CatalogoItemRow[]> {
+export async function getCatalogoItens(catalogoId?: number, rep: number | readonly number[] | false | null = null): Promise<CatalogoItemRow[]> {
   if (rep === false) return [];
   const db = getDb();
   const cols = {

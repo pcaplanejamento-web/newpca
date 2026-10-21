@@ -62,7 +62,7 @@ export const grupoPatchSchema = z.object({
 /** Grupo ativo do cabeçalho (cookie). */
 export const grupoAtivoSchema = z.object({ grupoId: z.number().int().positive("Grupo inválido.") });
 /** Unidade ativa do cabeçalho (cookie). */
-export const reparticaoAtivaSchema = z.object({ reparticaoId: z.number().int().positive("Unidade inválida.") });
+export const reparticaoAtivaSchema = z.object({ reparticaoId: z.number().int().nonnegative("Unidade inválida.") });
 
 // RESPONSÁVEIS POR DFDs — a PLANILHA ÚNICA (migração 0099): a PESSOA (nome + matrícula) e o VÍNCULO dela com uma
 // unidade OU um órgão (padrão | temporário + nomeação + período; o temporário com o cargo do período). As regras do vínculo moram no núcleo puro

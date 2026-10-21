@@ -1,3 +1,5 @@
+import { condUnidade } from "./filtro-unidade-sql.ts";
+import { chaveFiltroId, passaFiltroId } from "./escopo-unidades-core.ts";
 import { getGruposOrcamento } from "./orcamento-grupos-dados";
 import type { GrupoOrcamento } from "./orcamento-grupos";
 import { lancamentoNaUnidade } from "./escopo-cabecalho-core";
@@ -268,12 +270,12 @@ async function inativosPorDfd(): Promise<Map<string, { n: number; valor: number 
 
 /** Cards da tela `/painel/pca` (totais = os itens ATIVOS dos DFDs vigentes). `rep` = a unidade do CABEÇALHO: os totais
  * só dela (`false` = zerados; `null` = todos). */
-export function listarPcasCards(rep: number | false | null = null): Promise<PcaCard[]> {
-  return memoPorVersao(`pcas-cards:${rep === false ? "x" : (rep ?? "")}`, () => calcularPcasCards(rep));
+export function listarPcasCards(rep: number | readonly number[] | false | null = null): Promise<PcaCard[]> {
+  return memoPorVersao(`pcas-cards:${chaveFiltroId(rep)}`, () => calcularPcasCards(rep));
 }
 
-async function calcularPcasCards(rep: number | false | null): Promise<PcaCard[]> {
-  const naUnidade = (rid: number | null) => rep == null || rid === rep;
+async function calcularPcasCards(rep: number | readonly number[] | false | null): Promise<PcaCard[]> {
+  const naUnidade = (rid: number | null) => passaFiltroId(rep, rid);
   const db = getDb();
   const [rows, porPlanilha, todos, inativos] = await Promise.all([
     db.select(COLS_PCA).from(pcas).orderBy(desc(pcas.ano), desc(pcas.id)),
@@ -285,7 +287,7 @@ async function calcularPcasCards(rep: number | false | null): Promise<PcaCard[]>
         total: sql<number>`COALESCE(SUM(${unidades.valorTotal}), 0)`,
       })
       .from(unidades)
-      .where(rep === false ? sql`0` : rep == null ? undefined : eq(unidades.reparticaoId, rep))
+      .where(rep === false ? sql`0` : rep == null ? undefined : condUnidade(unidades.reparticaoId, rep))
       .groupBy(unidades.pcaId),
     vinculos(),
     inativosPorDfd(),
@@ -741,15 +743,15 @@ function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados
 
 /** Dados do dashboard do PCA — o MESMO no painel e na tela inicial. `rep` = a unidade do CABEÇALHO (`unidadeDoModulo`):
  * só os itens dela (`false` = nenhum; `null`/ausente = todos). */
-export function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep: number | false | null = null): Promise<DashboardPca> {
+export function dashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep: number | readonly number[] | false | null = null): Promise<DashboardPca> {
   if (rep === false) return Promise.resolve(vazioDash());
-  return memoPorVersao(`dash:${chavePca(pca)}:${unidadeIdPedida ?? ""}:${rep ?? ""}`, () => calcularDashboardDoPca(pca, unidadeIdPedida, rep ?? undefined));
+  return memoPorVersao(`dash:${chavePca(pca)}:${unidadeIdPedida ?? ""}:${chaveFiltroId(rep)}`, () => calcularDashboardDoPca(pca, unidadeIdPedida, rep ?? undefined));
 }
 
 /** O que do PCA muda as cargas dele (a chave do `memoPorVersao`). */
 const chavePca = (p: PcaEspaco) => `${p.id}:${p.ano ?? ""}:${p.fonte}:${p.status}:${p.mesaMarcados ? 1 : 0}:${p.orcamentoVisaoId ?? ""}`;
 
-async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep?: number): Promise<DashboardPca> {
+async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, rep?: number | readonly number[]): Promise<DashboardPca> {
   if (pca.fonte === "lista") {
     // O PCA de lista também recebe protocolos: com algum incorporado (ou na prévia), soma as DUAS bases.
     const c0 = await itensConsolidados(pca);
@@ -770,7 +772,7 @@ async function calcularDashboardDoPca(pca: PcaEspaco, unidadeIdPedida?: number, 
   }
   const c0 = await itensConsolidados(pca);
   // A unidade do CABEÇALHO: só os itens dos DFDs dela (o resto não sai do servidor).
-  const c = rep ? { ...c0, itens: c0.itens.filter((i) => i.reparticaoId === rep) } : c0;
+  const c = rep ? { ...c0, itens: c0.itens.filter((i) => passaFiltroId(rep, i.reparticaoId)) } : c0;
   const reps = new Map<number, string>();
   for (const i of c.itens) if (i.reparticaoId != null && i.unidade) reps.set(i.reparticaoId, i.unidade);
   const unidadeId = unidadeIdPedida && reps.has(unidadeIdPedida) ? unidadeIdPedida : undefined;
@@ -838,8 +840,8 @@ function listasDaConsulta(lista: Consolidados["itens"], c: Consolidados): { dfds
  * Dashboard do PCA de LISTA que também recebeu protocolos: as planilhas + os itens consolidados dos protocolos incorporados,
  * sem contar o mesmo processo duas vezes (`unirPlanilhaEProtocolos` — o protocolo vence). Só leitura.
  */
-async function dashboardUnido(pca: PcaEspaco, c0: Consolidados, unidadeIdPedida: number | undefined, rep: number | undefined): Promise<DashboardPca> {
-  const c = rep ? { ...c0, itens: c0.itens.filter((i) => i.reparticaoId === rep) } : c0;
+async function dashboardUnido(pca: PcaEspaco, c0: Consolidados, unidadeIdPedida: number | undefined, rep: number | readonly number[] | undefined): Promise<DashboardPca> {
+  const c = rep ? { ...c0, itens: c0.itens.filter((i) => passaFiltroId(rep, i.reparticaoId)) } : c0;
   const escopo = rep ? { pcaId: pca.id, reparticaoId: rep } : pca.id;
   const [us, planilha] = await Promise.all([getUnidades(rep, pca.id), getItensTodos(undefined, undefined, escopo)]);
   // Os Ids dos protocolos INCORPORADOS (a prévia não tira nada da planilha).
@@ -877,7 +879,7 @@ async function dashboardUnido(pca: PcaEspaco, c0: Consolidados, unidadeIdPedida:
 }
 
 /** Os DFDs fora da soma (no filtro de unidade), com o motivo por extenso — os mais recentes primeiro. */
-function dfdsForaDaSoma(c: Consolidados, unidadeId: number | undefined): DfdForaDaSoma[] {
+function dfdsForaDaSoma(c: Consolidados, unidadeId: number | readonly number[] | undefined): DfdForaDaSoma[] {
   const porId = new Map(c.vinculos.map((v) => [v.dfdId, v]));
   const ref = (id: number | null) => {
     const v = id == null ? null : porId.get(id);
@@ -893,7 +895,7 @@ function dfdsForaDaSoma(c: Consolidados, unidadeId: number | undefined): DfdFora
           : "Exclusão sem DFD correspondente no PCA";
   return foraDaSoma(c.vinculos, c.consolidacao)
     .map((f) => ({ f, v: porId.get(f.dfdId) }))
-    .filter((x): x is { f: ReturnType<typeof foraDaSoma>[number]; v: VinculoDfd } => !!x.v && (unidadeId == null || x.v.reparticaoId === unidadeId))
+    .filter((x): x is { f: ReturnType<typeof foraDaSoma>[number]; v: VinculoDfd } => !!x.v && passaFiltroId(unidadeId ?? null, x.v.reparticaoId))
     .map(({ f, v }) => ({
       id: v.dfdId,
       protocoloId: v.protocoloId,
@@ -1148,12 +1150,12 @@ async function consultarOrcamentoDoAno(ano: number): Promise<{ id: number; nome:
 }
 
 /** A unidade do CABEÇALHO no orçamento: só os lançamentos vinculados a ela (os sem vínculo conforme o ADM) e o planejado dela. */
-export type UnidadeOrcamento = { id: number | false; semVinculo: boolean } | null;
+export type UnidadeOrcamento = { id: number | readonly number[] | false; semVinculo: boolean } | null;
 
 /** `orcDoAno` = o orçamento do ano já buscado (`orcamentoDoAno`) — evita consultá-lo de novo. */
 export async function orcamentoDoPca(pca: PcaEspaco, orcDoAno?: Awaited<ReturnType<typeof orcamentoDoAno>>, rep: UnidadeOrcamento = null): Promise<OrcamentoDoPca> {
   const orc = orcDoAno !== undefined ? orcDoAno : await orcamentoDoAno(pca.ano);
-  const chaveRep = rep ? `${rep.id === false ? "x" : rep.id}${rep.semVinculo ? "s" : ""}` : "";
+  const chaveRep = rep ? `${chaveFiltroId(rep.id)}${rep.semVinculo ? "s" : ""}` : "";
   return memoPorVersao(`orc:${chavePca(pca)}:${orc?.id ?? ""}:${chaveRep}`, () => calcularOrcamentoDoPca(pca, orc, rep));
 }
 
@@ -1205,7 +1207,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
   const { visao, orgaoLista, vincs } = base;
   // A unidade do CABEÇALHO: só ela entre as unidades, os lançamentos vinculados a ela e o planejado dela.
   const naRep = (uid: number | null) => !rep || (rep.id !== false && lancamentoNaUnidade(uid, rep.id, rep.semVinculo));
-  const reps = rep ? base.reps.filter((r) => rep.id !== false && r.id === rep.id) : base.reps;
+  const reps = rep ? base.reps.filter((r) => passaFiltroId(rep.id, r.id)) : base.reps;
   const mapaRep = mapaVinculos(vincs);
   const itens = rep ? base.itens.filter((i) => naRep(unidadeDoLancamento(mapaRep, i.unidade, i.acao))) : base.itens;
   let bruto = 0;
@@ -1272,7 +1274,7 @@ async function calcularOrcamentoDoPca(pca: PcaEspaco, orc: Awaited<ReturnType<ty
     planejado = c.itens.map((i) => ({ unidadeId: i.reparticaoId, itens: 1, valor: i.valorTotal, item: itemRowConsolidado(i, c.meta, c.prioridadePorDfd) }));
     previa = c.previa;
   }
-  if (rep) planejado = planejado.filter((p) => rep.id !== false && p.unidadeId === rep.id);
+  if (rep) planejado = planejado.filter((p) => passaFiltroId(rep.id, p.unidadeId));
   return { orcamento: orc, visao, bruto, filtrado, linhas, planejado, unidades: reps, orgaos: orgaoLista, previa, ausentes, grupos: await getGruposOrcamento() };
 }
 

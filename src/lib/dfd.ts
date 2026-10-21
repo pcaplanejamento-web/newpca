@@ -1,3 +1,4 @@
+import { condUnidade } from "./filtro-unidade-sql.ts";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
 import { cache } from "react";
 import { dfdItens, dfdProtocolos, dfds, pcaDfds, pcaItens, pcas, reparticoes } from "@/db/schema";
@@ -265,19 +266,19 @@ const { objeto: _objeto, setorRequisitante: _setor, responsavel: _responsavel, .
 
 /** DFDs (opcionalmente filtrados por repartição — Geral passa `undefined`). */
 /** `anoPca` = o PCA escolhido no CABEÇALHO (Mesa principal; `null` = todos os PCAs). */
-export function listarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdNaLista[]> {
+export function listarDfds(reparticaoId?: number | readonly number[], pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdNaLista[]> {
   return memoPorVersao(`dfds:${reparticaoId ?? ""}:${pcaId ?? ""}:${anoPca ?? ""}:${anoMarcados ?? ""}`, () =>
     consultarDfds(reparticaoId, pcaId, anoPca, anoMarcados),
   );
 }
 
-async function consultarDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdNaLista[]> {
+async function consultarDfds(reparticaoId?: number | readonly number[], pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<DfdNaLista[]> {
   const rows = await getDb()
     .select({ ...colunasDfdLista, gruposTexto: gruposAssinaturaSql })
     .from(dfds)
     .leftJoin(reparticoes, eq(dfds.reparticaoId, reparticoes.id))
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
-    .where(and(escopoMesa(pcaId, anoMarcados), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined, filtroAnoPcaDfd(anoPca)))
+    .where(and(escopoMesa(pcaId, anoMarcados), reparticaoId ? condUnidade(dfds.reparticaoId, reparticaoId) : undefined, filtroAnoPcaDfd(anoPca)))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero));
   return rows.map(({ gruposTexto, prioridadeTexto, ...resto }) => ({
     ...resto,
@@ -304,7 +305,7 @@ export async function listarDfdsDoProtocolo(protocoloId: number): Promise<DfdRes
  * (Geral ⇒ `undefined` = todos). Carregado sob demanda (lazy) só ao abrir a visão Itens.
  */
 export function listarItensDfds(
-  reparticaoId?: number,
+  reparticaoId?: number | readonly number[],
   pcaId?: number,
   anoPca?: number | null,
   anoMarcados?: number | null,
@@ -314,7 +315,7 @@ export function listarItensDfds(
   );
 }
 
-function consultarItensDfds(reparticaoId?: number, pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<ItemDfdRow[]> {
+function consultarItensDfds(reparticaoId?: number | readonly number[], pcaId?: number, anoPca?: number | null, anoMarcados?: number | null): Promise<ItemDfdRow[]> {
   return getDb()
     .select({
       id: dfdItens.id,
@@ -342,7 +343,7 @@ function consultarItensDfds(reparticaoId?: number, pcaId?: number, anoPca?: numb
     .leftJoin(dfdProtocolos, eq(dfds.protocoloId, dfdProtocolos.id))
     // O nº do item NESTE PCA (Mesa do PCA); na Mesa principal não casa nada (−1).
     .leftJoin(pcaItens, and(eq(pcaItens.dfdItemId, dfdItens.id), eq(pcaItens.pcaId, pcaId ?? -1)))
-    .where(and(escopoMesa(pcaId, anoMarcados), reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined, filtroAnoPcaDfd(anoPca)))
+    .where(and(escopoMesa(pcaId, anoMarcados), reparticaoId ? condUnidade(dfds.reparticaoId, reparticaoId) : undefined, filtroAnoPcaDfd(anoPca)))
     .orderBy(asc(reparticoes.ordem), asc(dfds.numero), asc(dfdItens.sequencial));
 }
 

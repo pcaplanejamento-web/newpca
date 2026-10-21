@@ -17,6 +17,8 @@ import {
   telaVeTodas,
   unidadeNoEscopo,
   unidadesDoMembro,
+  ID_MINHAS_UNIDADES,
+  listaComGeral,
 } from "./escopo-unidades-core";
 
 /**
@@ -143,6 +145,7 @@ export async function getReparticaoContexto(
     lista = await reparticoesDoMembro(grupo, u.id, tela);
   }
   if (lista.length === 0) return { lista, ativa: null };
+  lista = listaComGeral(!!u?.admin, lista);
   const jar = await cookies();
   const escolhida = Number(jar.get(COOKIE_REP)?.value);
   return { lista, ativa: lista.find((r) => r.id === escolhida) ?? lista[0] };
@@ -174,14 +177,15 @@ export async function unidadesDaSessao(
   const u = usuario === undefined ? await getUsuarioAtual() : usuario;
   if (!u) return { lista: [], ativa: null, escopo: ESCOPO_NENHUMA, filtro: FILTRO_NENHUMA, acessivel: () => false };
   const { lista, ativa } = await getReparticaoContexto(u, grupoAtivo, tela);
-  const escopo = escopoDeAcesso(u.admin, lista);
-  return { lista, ativa, escopo, filtro: filtroDeLista(u.admin, ativa), acessivel: (rid) => unidadeNoEscopo(escopo, rid) };
+  const reais = lista.filter((r) => r.id !== ID_MINHAS_UNIDADES);
+  const escopo = escopoDeAcesso(u.admin, reais);
+  return { lista, ativa, escopo, filtro: filtroDeLista(u.admin, ativa, reais), acessivel: (rid) => unidadeNoEscopo(escopo, rid) };
 }
 
 /** As unidades que a pessoa ACESSA, para os banners (conferência e escolha): com o escopo "todas" (o ADM ou a "Geral"),
  * todas as cadastradas; senão as do grupo. */
 export async function unidadesAcessiveis(un: UnidadesDaSessao): Promise<ReparticaoResumo[]> {
-  return un.escopo.tipo === "todas" ? listarReparticoes() : un.lista;
+  return un.escopo.tipo === "todas" ? listarReparticoes() : un.lista.filter((r) => r.id !== ID_MINHAS_UNIDADES);
 }
 
 export async function definirReparticaoAtiva(reparticaoId: number): Promise<void> {

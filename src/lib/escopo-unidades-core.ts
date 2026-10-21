@@ -104,7 +104,30 @@ export function escopoDeAcesso(admin: boolean, lista: readonly UnidadeRef[]): Es
 }
 
 /** O filtro das LISTAS (a unidade ATIVA do cabeçalho): todas · uma unidade · nenhuma (a consulta nem roda). */
-export type FiltroLista = { tipo: "todas" } | { tipo: "unidade"; id: number; codigo: string } | { tipo: "nenhuma" };
+export type FiltroLista =
+  | { tipo: "todas" }
+  | { tipo: "unidade"; id: number; codigo: string }
+  | { tipo: "unidades"; ids: number[] }
+  | { tipo: "nenhuma" };
+
+/** O filtro por unidade das consultas: um id · VÁRIOS (a "Geral" das minhas unidades) · `null` = todas · `false` = nenhuma. */
+export type FiltroId = number | readonly number[] | null | false;
+
+/** A "Geral" VIRTUAL: quem vê mais de uma unidade (sem a "Geral" real) ganha a opção que SOMA as suas — o id 0 nunca
+ * existe no banco e o código não é "GERAL" (não dá acesso a todas). */
+export const ID_MINHAS_UNIDADES = 0;
+export const CODIGO_MINHAS_UNIDADES = "Todas as minhas";
+
+/** A lista do seletor do cabeçalho: com 2+ unidades e sem a "Geral" real, a virtual vem PRIMEIRO (e é a padrão). */
+export function listaComGeral<T extends UnidadeRef & { nome: string }>(admin: boolean, lista: readonly T[]): T[] {
+  if (admin || lista.length < 2 || lista.some((r) => ehCodigoGeral(r.codigo))) return [...lista];
+  return [{ id: ID_MINHAS_UNIDADES, codigo: CODIGO_MINHAS_UNIDADES, nome: `Geral — soma das minhas ${lista.length} unidades` } as T, ...lista];
+}
+
+/** A unidade é a "Geral" (a real ou a virtual das minhas unidades)? — o cabeçalho e as telas a tratam como "todas". */
+export function ehGeral(r: UnidadeRef | null | undefined): boolean {
+  return !!r && (r.id === ID_MINHAS_UNIDADES || ehCodigoGeral(r.codigo));
+}
 
 export const FILTRO_TODAS: FiltroLista = Object.freeze({ tipo: "todas" });
 export const FILTRO_NENHUMA: FiltroLista = Object.freeze({ tipo: "nenhuma" });
@@ -113,15 +136,31 @@ export const FILTRO_NENHUMA: FiltroLista = Object.freeze({ tipo: "nenhuma" });
  * O que as LISTAS mostram: a unidade ATIVA do cabeçalho — a "Geral" = todas as que a pessoa acessa; sem unidade ativa,
  * nada (o ADM, que acessa todas, vê todas).
  */
-export function filtroDeLista(admin: boolean, ativa: UnidadeRef | null): FiltroLista {
+export function filtroDeLista(admin: boolean, ativa: UnidadeRef | null, lista: readonly UnidadeRef[] = []): FiltroLista {
   if (!ativa) return admin ? FILTRO_TODAS : FILTRO_NENHUMA;
   if (ehCodigoGeral(ativa.codigo)) return FILTRO_TODAS;
+  if (ativa.id === ID_MINHAS_UNIDADES) {
+    const ids = [...new Set(lista.filter((r) => r.id !== ID_MINHAS_UNIDADES).map((r) => r.id))];
+    return ids.length === 0 ? FILTRO_NENHUMA : ids.length === 1 ? { tipo: "unidade", id: ids[0], codigo: "" } : { tipo: "unidades", ids };
+  }
   return { tipo: "unidade", id: ativa.id, codigo: ativa.codigo };
 }
 
 /** O id para as consultas que filtram por UMA unidade: `null` = todas; `false` = nenhuma (a lista é vazia). */
-export function idDoFiltro(f: FiltroLista): number | null | false {
-  return f.tipo === "todas" ? null : f.tipo === "nenhuma" ? false : f.id;
+export function idDoFiltro(f: FiltroLista): FiltroId {
+  return f.tipo === "todas" ? null : f.tipo === "nenhuma" ? false : f.tipo === "unidades" ? f.ids : f.id;
+}
+
+/** O registro (pela unidade) passa no filtro? (`null` = todas; `false` = nenhuma). */
+export function passaFiltroId(f: FiltroId, reparticaoId: number | null | undefined): boolean {
+  if (f === null) return true;
+  if (f === false || reparticaoId == null) return false;
+  return typeof f === "number" ? f === reparticaoId : f.includes(reparticaoId);
+}
+
+/** Texto estável do filtro (chave de memória). */
+export function chaveFiltroId(f: FiltroId): string {
+  return f === null ? "todas" : f === false ? "nenhuma" : typeof f === "number" ? String(f) : [...f].sort((a, b) => a - b).join(",");
 }
 
 /**

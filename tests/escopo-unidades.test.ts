@@ -120,3 +120,31 @@ describe("escopo por tela e várias unidades de cadastro (v1.141.0)", async () =
     assert.equal(m.telaDaRota("/painel/perfil"), null);
   });
 });
+
+import * as geral from "../src/lib/escopo-unidades-core.ts";
+
+describe("Geral das minhas unidades (virtual)", () => {
+  const a = { id: 3, codigo: "SME", nome: "Educação" };
+  const b = { id: 7, codigo: "SMS", nome: "Saúde" };
+  it("aparece primeiro só com 2+ unidades, sem a Geral real e fora do ADM", () => {
+    const l = geral.listaComGeral(false, [a, b]);
+    assert.equal(l[0].id, geral.ID_MINHAS_UNIDADES);
+    assert.equal(l.length, 3);
+    assert.equal(geral.listaComGeral(false, [a]).length, 1);
+    assert.equal(geral.listaComGeral(true, [a, b]).length, 2);
+    assert.equal(geral.listaComGeral(false, [a, b, { id: 1, codigo: "GERAL", nome: "Geral" }]).length, 3);
+  });
+  it("não dá acesso a todas: filtra pela SOMA das unidades da pessoa", () => {
+    const l = geral.listaComGeral(false, [a, b]);
+    const reais = l.filter((r) => r.id !== geral.ID_MINHAS_UNIDADES);
+    assert.deepEqual(geral.escopoDeAcesso(false, reais), { tipo: "unidades", ids: [3, 7] });
+    const f = geral.filtroDeLista(false, l[0], reais);
+    assert.deepEqual(geral.idDoFiltro(f), [3, 7]);
+    assert.equal(geral.passaFiltroId([3, 7], 7), true);
+    assert.equal(geral.passaFiltroId([3, 7], 9), false);
+    assert.equal(geral.passaFiltroId([3, 7], null), false);
+    assert.equal(geral.chaveFiltroId([7, 3]), "3,7");
+    assert.equal(geral.ehGeral(l[0]), true);
+    assert.equal(geral.ehGeral(a), false);
+  });
+});

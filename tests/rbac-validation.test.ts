@@ -69,7 +69,8 @@ describe("ids e nomes", () => {
     assert.deepEqual(grupoAtivoSchema.parse({ grupoId: 4 }), { grupoId: 4 });
     assert.equal(grupoAtivoSchema.safeParse({ grupoId: "4" }).success, false);
     assert.equal(grupoAtivoSchema.safeParse({}).success, false);
-    assert.equal(reparticaoAtivaSchema.safeParse({ reparticaoId: 0 }).success, false);
+    assert.equal(reparticaoAtivaSchema.safeParse({ reparticaoId: -1 }).success, false);
+    assert.equal(reparticaoAtivaSchema.safeParse({ reparticaoId: 0 }).success, true); // a "Geral" das minhas unidades
     assert.deepEqual(reparticaoAtivaSchema.parse({ reparticaoId: 9 }), { reparticaoId: 9 });
   });
 });

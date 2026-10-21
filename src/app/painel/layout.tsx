@@ -1,3 +1,4 @@
+import { ehGeral } from "@/lib/escopo-unidades-core";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ComponentesPapel } from "@/components/ComponentesPapel";
@@ -63,7 +64,7 @@ export default async function PainelLayout({
   const telasTodas = !usuario.admin && ativo ? await telasTodasDoGrupo(ativo.id) : [];
   const contextoTodas = telasTodas.length ? await getReparticaoContexto(usuario, ativo, telasTodas[0]) : null;
   const unidadeDe = (r: { id: number; codigo: string; nome: string } | null) =>
-    r && r.codigo !== "GERAL" ? { id: r.id, sigla: r.codigo, nome: r.nome } : null;
+    r && !ehGeral(r) ? { id: r.id, sigla: r.codigo, nome: r.nome } : null;
 
   return (
     <AppShell

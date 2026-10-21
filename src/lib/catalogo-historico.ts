@@ -36,7 +36,7 @@ export async function gravarComprasHistorico(catalogoId: number, rows: readonly 
 
 /** O histórico inteiro de UM catálogo (contratos + itens na ordem do arquivo) — carregado ao abrir. */
 /** `rep` = a unidade do CABEÇALHO no modo "usados": só as compras dos códigos que ela usa (e os contratos delas). */
-export async function getHistorico(catalogoId: number, rep: number | false | null = null): Promise<{ contratos: ContratoHistorico[]; itens: CompraHistorico[] }> {
+export async function getHistorico(catalogoId: number, rep: number | readonly number[] | false | null = null): Promise<{ contratos: ContratoHistorico[]; itens: CompraHistorico[] }> {
   if (rep === false) return { contratos: [], itens: [] };
   const db = getDb();
   const [contratos, itens] = await Promise.all([

@@ -10,7 +10,7 @@ import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { automacoesDaMesa } from "./fluxos";
 import { colunasDaMesa } from "./mesa-colunas";
-import { idDoFiltro } from "./escopo-unidades-core";
+import { idDoFiltro, passaFiltroId } from "./escopo-unidades-core";
 import { unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
@@ -91,7 +91,7 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
   const nada = repId === false;
   // Mesa do PCA: o escopo de acesso e, com o PCA obedecendo ao cabeçalho (Configurações → Filtro da unidade), a unidade.
   const repPca = pcaId ? filtroDoModulo(await getConfigEscopo(), "pca", repId) : null;
-  const acessivel = (rid: number | null | undefined) => ctx.un.acessivel(rid) && (repPca == null || (repPca !== false && rid === repPca));
+  const acessivel = (rid: number | null | undefined) => ctx.un.acessivel(rid) && passaFiltroId(repPca, rid);
   // PCA do CABEÇALHO (só a Mesa principal — a do PCA já é de um PCA): filtra pelo ano do PCA do protocolo/DFD.
   // Mesa do PCA com a visão dos MARCADOS ligada (Configuração do PCA): também os do ano dele ainda na Mesa do sistema.
   const [pcaFiltro, anoMarcados] = await Promise.all([
@@ -135,7 +135,7 @@ async function montarMesa(u: UsuarioSessao | null, pcaId?: number) {
     colunasAuto,
     reparticoes: ctx.reparticoes,
     // Em "Geral" não há unidade ativa específica — Geral comporta qualquer unidade.
-    reparticaoAtivaId: repId || null,
+    reparticaoAtivaId: typeof repId === "number" ? repId : null,
     pcas: ctx.pcas,
     pcasAcesso: ctx.pcasAcesso,
     regras: ctx.regras,
@@ -234,7 +234,7 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
  * dos protocolos DA MESA — o MESMO escopo das listas (unidade ativa, PCA do cabeçalho, fora de um PCA) —, por protocolo,
  * pessoa, dia (Brasília) e tipo, em tuplas compactas.
  */
-export async function execucaoDaMesa(reparticaoId: number | null, anoPca: number | null): Promise<AtividadeTupla[]> {
+export async function execucaoDaMesa(reparticaoId: number | readonly number[] | null, anoPca: number | null): Promise<AtividadeTupla[]> {
   const linhas = await consultaExecucao(getDb(), { reparticaoId, anoPca });
   return linhas.flatMap((l): AtividadeTupla[] =>
     l.tipo === "reenvio" || l.tipo === "acao" ? [[l.protocoloId, l.usuarioId ?? null, l.dia, l.tipo, Number(l.n) || 0]] : [],

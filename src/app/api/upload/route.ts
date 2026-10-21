@@ -109,7 +109,9 @@ export async function POST(req: Request) {
         .from(reparticoes)
         .where(and(sql`UPPER(TRIM(${reparticoes.codigo})) = ${codigo.trim().toUpperCase()}`, eq(reparticoes.oculto, false), sql`${reparticoes.codigo} <> 'GERAL'`))
         .limit(1);
-      const repId = mesmaSigla?.id ?? (idDoFiltro((await unidadesDaSessao(auth.u, undefined, "pca")).filtro) || null);
+      const ativa = idDoFiltro((await unidadesDaSessao(auth.u, undefined, "pca")).filtro);
+      // Na "Geral" (a real ou a das minhas unidades) a planilha não fica numa unidade só.
+      const repId = mesmaSigla?.id ?? (typeof ativa === "number" ? ativa : null);
       const [u] = await db
         .insert(unidades)
         .values({ codigo, pcaId, uploadId, reparticaoId: repId, municipio, nomeArquivo: nomeArquivo ?? null })

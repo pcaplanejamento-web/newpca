@@ -5,7 +5,7 @@ import { referenciasHistorico } from "@/lib/catalogo-historico";
 import { type ItemDfdRow, listarItensDfds } from "@/lib/dfd";
 import { getConfigEscopo } from "@/lib/escopo-cabecalho";
 import { filtroDoModulo } from "@/lib/escopo-cabecalho-core";
-import { idDoFiltro } from "@/lib/escopo-unidades-core";
+import { idDoFiltro, passaFiltroId } from "@/lib/escopo-unidades-core";
 import { erro, ok } from "@/lib/http";
 import { redigirItens } from "@/lib/mesa-redacao";
 import { anoMarcadosDoPca } from "@/lib/pca-espaco";
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
     // E, com o PCA obedecendo ao cabeçalho (Configurações → Filtro da unidade), só os da unidade ativa.
     const rep = filtroDoModulo(await getConfigEscopo(), "pca", idDoFiltro(un.filtro));
     if (rep !== false) base = await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca));
-    itens = base.filter((it) => un.acessivel(it.reparticaoId) && (rep == null || it.reparticaoId === rep));
+    itens = base.filter((it) => un.acessivel(it.reparticaoId) && passaFiltroId(rep, it.reparticaoId));
   } else {
     const ano = Number(params.get("ano"));
     // A unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada).

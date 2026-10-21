@@ -247,8 +247,9 @@ export async function carregarQuadro(a: Acesso, id: number) {
   ]);
   // A unidade do CABEÇALHO (Configurações → Filtro da unidade): só as tarefas ligadas a ela.
   const rep = await unidadeDoModulo("tarefas", u);
+  const repId = rep.id;
   const tarefasDaUnidade =
-    rep.id === null ? dados.tarefas : rep.id === false ? [] : dados.tarefas.filter((t) => tarefaNaUnidade(unidadesDaTarefa(t), rep.id as number, rep.cfg.tarefasSemVinculo));
+    repId === null ? dados.tarefas : repId === false ? [] : dados.tarefas.filter((t) => tarefaNaUnidade(unidadesDaTarefa(t), repId, rep.cfg.tarefasSemVinculo));
   const noGrupo = new Set(membros.map((p) => p.id));
   const fora = [...new Set([...tarefasDaUnidade.flatMap((t) => t.envolvidos), ...equipes.flatMap((e) => e.membros)])].filter((p) => !noGrupo.has(p));
   const extras = fora.length ? await pessoasPorIds(fora) : [];

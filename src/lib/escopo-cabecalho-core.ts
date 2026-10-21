@@ -1,3 +1,4 @@
+import type { FiltroId } from "./escopo-unidades-core";
 /**
  * FILTRO DA UNIDADE DO CABEÇALHO — quais telas obedecem à unidade escolhida no cabeçalho (Configurações → "Filtro da
  * unidade"). Módulo PURO (cliente e servidor; testado). A Mesa sempre obedece; os demais módulos o ADM liga/desliga.
@@ -66,18 +67,18 @@ export function diffConfigEscopo(a: ConfigEscopo, b: ConfigEscopo): string[] {
  * A unidade que FILTRA um módulo: o id da unidade (`idDoFiltro`), `null` = sem filtro (Geral, ou módulo desligado) e
  * `false` = nenhuma (a lista fica vazia).
  */
-export function filtroDoModulo(cfg: ConfigEscopo, modulo: ModuloEscopo, id: number | null | false): number | null | false {
+export function filtroDoModulo(cfg: ConfigEscopo, modulo: ModuloEscopo, id: FiltroId): FiltroId {
   return cfg.modulos[modulo] ? id : null;
 }
 
 /** A tarefa entra na unidade? Pelas UNIDADES dos vínculos (protocolo/DFD/item); sem vínculo, conforme a config. */
-export function tarefaNaUnidade(unidades: readonly number[], id: number, semVinculo: boolean): boolean {
+export function tarefaNaUnidade(unidades: readonly number[], id: number | readonly number[], semVinculo: boolean): boolean {
   if (unidades.length === 0) return semVinculo;
-  return unidades.includes(id);
+  return typeof id === "number" ? unidades.includes(id) : unidades.some((u) => id.includes(u));
 }
 
 /** O lançamento do orçamento entra na unidade? Pela unidade de cadastro dele (o vínculo); sem vínculo, conforme a config. */
-export function lancamentoNaUnidade(unidadeId: number | null | undefined, id: number, semVinculo: boolean): boolean {
+export function lancamentoNaUnidade(unidadeId: number | null | undefined, id: number | readonly number[], semVinculo: boolean): boolean {
   if (unidadeId == null) return semVinculo;
-  return unidadeId === id;
+  return typeof id === "number" ? unidadeId === id : id.includes(unidadeId);
 }

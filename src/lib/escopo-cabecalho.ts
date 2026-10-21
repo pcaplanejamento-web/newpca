@@ -3,7 +3,7 @@ import { configuracoes } from "@/db/schema";
 import type { UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 import { type ConfigEscopo, filtroDoModulo, lerConfigEscopo, type ModuloEscopo } from "./escopo-cabecalho-core";
-import { idDoFiltro } from "./escopo-unidades-core";
+import { type FiltroId, idDoFiltro } from "./escopo-unidades-core";
 import { type GrupoResumo, unidadesDaSessao } from "./grupos";
 import { lerBlobConfiguracoes } from "./integracoes";
 
@@ -36,7 +36,7 @@ export async function gravarConfigEscopo(cfg: ConfigEscopo, usuarioId: number): 
 
 export type UnidadeDoModulo = {
   /** `number` = só esta unidade; `null` = sem filtro; `false` = nenhuma (vazio). */
-  id: number | null | false;
+  id: FiltroId;
   /** O código (sigla) da unidade que filtra — `null` sem filtro. */
   sigla: string | null;
   /** O nome, para o selo/aviso da tela. */
@@ -64,7 +64,7 @@ export async function unidadeDoModulo(modulo: ModuloEscopo, u?: UsuarioSessao | 
 }
 
 /** O Catálogo no modo "usados": a unidade do cabeçalho (só os itens/históricos cujo código ela usa); `todos` = sem filtro. */
-export async function unidadeDoCatalogo(): Promise<number | false | null> {
+export async function unidadeDoCatalogo(): Promise<FiltroId> {
   const r = await unidadeDoModulo("catalogo");
   return r.cfg.catalogo === "usados" ? r.id : null;
 }

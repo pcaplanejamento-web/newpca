@@ -1,3 +1,4 @@
+import { passaFiltroId } from "./escopo-unidades-core";
 import type { UsuarioSessao } from "./auth";
 import { protocolosParaAutomacao } from "./automacao";
 import { getGrupoAtivoId } from "./grupos";
@@ -18,7 +19,7 @@ export async function dadosDaAutomacao(u: UsuarioSessao) {
     unidadeDoModulo("automacao", u),
   ]);
   // A unidade do CABEÇALHO (Configurações → Filtro da unidade): só os protocolos dela.
-  const protocolos = rep.id === null ? todos : rep.id === false ? [] : todos.filter((p) => p.reparticaoId === rep.id);
+  const protocolos = rep.id === null ? todos : rep.id === false ? [] : todos.filter((p) => passaFiltroId(rep.id, p.reparticaoId));
   const pessoas = await listarPessoasDoGrupo(grupoId);
   const doGrupo = new Set(pessoas.map((p) => p.id));
   const outras = await pessoasPorIds(protocolos.map((p) => p.responsavelId).filter((id) => id != null && !doGrupo.has(id)));

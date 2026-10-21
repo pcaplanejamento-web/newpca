@@ -1,3 +1,4 @@
+import { condUnidade } from "./filtro-unidade-sql.ts";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schema from "../db/schema.ts";
@@ -33,8 +34,8 @@ END`;
 /** Dia de CALENDÁRIO em Brasília (UTC−3, sem horário de verão desde 2019) do timestamp UTC do banco. */
 const diaBrasilia = sql<string>`date(${auditoria.criadoEm}, '-3 hours')`;
 
-export function consultaExecucao(db: Db, escopo: { reparticaoId: number | null; anoPca: number | null }) {
-  const unidade = escopo.reparticaoId != null ? sql` AND p2."reparticao_id" = ${escopo.reparticaoId}` : sql``;
+export function consultaExecucao(db: Db, escopo: { reparticaoId: number | readonly number[] | null; anoPca: number | null }) {
+  const unidade = escopo.reparticaoId != null ? sql` AND ${condUnidade(sql`p2."reparticao_id"`, escopo.reparticaoId)}` : sql``;
   return db
     .select({
       protocoloId: dfdProtocolos.id,
@@ -50,7 +51,7 @@ export function consultaExecucao(db: Db, escopo: { reparticaoId: number | null; 
         inArray(auditoria.entidade, ["protocolo", "dfd"]),
         sql`${tipoAtividadeSql} IS NOT NULL`,
         isNull(dfdProtocolos.pcaId),
-        escopo.reparticaoId != null ? eq(dfdProtocolos.reparticaoId, escopo.reparticaoId) : undefined,
+        escopo.reparticaoId != null ? condUnidade(dfdProtocolos.reparticaoId, escopo.reparticaoId) : undefined,
         filtroAnoPcaProtocolo(escopo.anoPca),
         // Limite pelo protocolo MAIS ANTIGO da Mesa no escopo (nenhuma execução vem antes da protocolação): o índice
         // da data não deixa a consulta varrer o histórico inteiro.

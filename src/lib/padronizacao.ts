@@ -1,3 +1,4 @@
+import { condUnidade } from "./filtro-unidade-sql.ts";
 import { asc, eq, sql } from "drizzle-orm";
 import { catalogoItens, dfdItens, dfds, itemClassificacoes, unidadesMedida } from "@/db/schema";
 import { getDb } from "./db";
@@ -211,7 +212,7 @@ export async function reordenarClassificacoes(ids: number[]): Promise<void> {
  * USO das unidades nos itens — cada GRAFIA crua com quantos itens a usam: os de DFD no escopo da unidade ativa
  * (`reparticaoId`; sem ela = todos, como a Mesa em "Geral") e os do catálogo (base global). Duas consultas agregadas.
  */
-export async function usoDasUnidades(reparticaoId?: number | false): Promise<UsoUnidade[]> {
+export async function usoDasUnidades(reparticaoId?: number | readonly number[] | false): Promise<UsoUnidade[]> {
   const db = getDb();
   const [doDfd, doCatalogo] = await Promise.all([
     // `false` = nenhuma unidade no escopo (sem grupo): só o catálogo (global).
@@ -221,7 +222,7 @@ export async function usoDasUnidades(reparticaoId?: number | false): Promise<Uso
           .select({ texto: dfdItens.unidade, n: sql<number>`COUNT(*)` })
           .from(dfdItens)
           .innerJoin(dfds, eq(dfdItens.dfdId, dfds.id))
-          .where(reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined)
+          .where(reparticaoId ? condUnidade(dfds.reparticaoId, reparticaoId) : undefined)
           .groupBy(dfdItens.unidade),
     db.select({ texto: catalogoItens.unidade, n: sql<number>`COUNT(*)` }).from(catalogoItens).groupBy(catalogoItens.unidade),
   ]);
@@ -237,7 +238,7 @@ export async function usoDasUnidades(reparticaoId?: number | false): Promise<Uso
  * vem uma vez só). O item SEM descrição também conta (vem com descrição vazia — a unidade ainda o classifica): os
  * totais da tela batem com os itens da Mesa.
  */
-export async function descricoesDosItens(reparticaoId?: number | false): Promise<DescricaoItem[]> {
+export async function descricoesDosItens(reparticaoId?: number | readonly number[] | false): Promise<DescricaoItem[]> {
   const db = getDb();
   const [doDfd, doCatalogo] = await Promise.all([
     // `false` = nenhuma unidade no escopo (sem grupo): só o catálogo (global).
@@ -252,7 +253,7 @@ export async function descricoesDosItens(reparticaoId?: number | false): Promise
           })
           .from(dfdItens)
           .innerJoin(dfds, eq(dfdItens.dfdId, dfds.id))
-          .where(reparticaoId ? eq(dfds.reparticaoId, reparticaoId) : undefined)
+          .where(reparticaoId ? condUnidade(dfds.reparticaoId, reparticaoId) : undefined)
           .groupBy(dfdItens.descricao, dfdItens.unidade),
     db
       .select({ descricao: catalogoItens.descricao, unidade: catalogoItens.unidade, n: sql<number>`COUNT(*)` })

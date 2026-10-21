@@ -1,3 +1,4 @@
+import { condUnidade } from "./filtro-unidade-sql.ts";
 import { and, asc, desc, eq, inArray, isNull, ne, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { dfdPassagens, dfdProtocolos, dfds, pcas, reparticoes, usuarios } from "@/db/schema";
@@ -104,12 +105,12 @@ const colunasSobrescritos = {
 
 /** Protocolos da MESA PRINCIPAL (os não enviados a um PCA) — opcionalmente filtrados por repartição (Geral passa
  * `undefined`) e pelo PCA do CABEÇALHO (`anoPca`; `null` = todos os PCAs), com totais agregados ao vivo dos DFDs. */
-export function listarProtocolos(reparticaoId?: number, anoPca?: number | null): Promise<ProtocoloResumo[]> {
+export function listarProtocolos(reparticaoId?: number | readonly number[], anoPca?: number | null): Promise<ProtocoloResumo[]> {
   return memoPorVersao(`protocolos:${reparticaoId ?? ""}:${anoPca ?? ""}`, () =>
     consultaProtocolos(
       and(
         isNull(dfdProtocolos.pcaId),
-        reparticaoId ? eq(dfdProtocolos.reparticaoId, reparticaoId) : undefined,
+        reparticaoId ? condUnidade(dfdProtocolos.reparticaoId, reparticaoId) : undefined,
         filtroAnoPcaProtocolo(anoPca),
       ),
     ),

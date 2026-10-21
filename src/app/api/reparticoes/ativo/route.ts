@@ -17,8 +17,12 @@ export async function POST(req: Request) {
   // ignora a escolhida fora da lista dela e mostra a dela).
   const grupo = guard.u.admin ? null : await getGrupoAtivo(guard.u);
   const tela = grupo ? telasComTodas(grupo.modoUnidades, lerEscopoTelas(grupo.escopoTelas))[0] : undefined;
-  const { lista } = await getReparticaoContexto(guard.u, guard.u.admin ? undefined : grupo, tela);
-  if (!lista.some((r) => r.id === reparticaoId)) return erro("Unidade fora do seu grupo.", 403);
+  // O id 0 = a "Geral" das minhas unidades (vale quando a lista do cabeçalho a oferece).
+  const [{ lista }, padrao] = await Promise.all([
+    getReparticaoContexto(guard.u, guard.u.admin ? undefined : grupo, tela),
+    tela ? getReparticaoContexto(guard.u, guard.u.admin ? undefined : grupo) : null,
+  ]);
+  if (!lista.some((r) => r.id === reparticaoId) && !padrao?.lista.some((r) => r.id === reparticaoId)) return erro("Unidade fora do seu grupo.", 403);
   await definirReparticaoAtiva(reparticaoId);
   return ok();
 }

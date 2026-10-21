@@ -11,7 +11,7 @@ import { listarVisoesOrcamento } from "./pca-espaco";
  * (as dele e as públicas) com a padrão dele. Só escopo de request.
  */
 /** A unidade do CABEÇALHO: só os lançamentos vinculados a ela (pelos vínculos PADRÃO; os sem vínculo conforme o ADM). */
-export type UnidadeDosLancamentos = { id: number | false; semVinculo: boolean } | null;
+export type UnidadeDosLancamentos = { id: number | readonly number[] | false; semVinculo: boolean } | null;
 
 /** Os lançamentos da unidade (todos sem `rep`). */
 export function lancamentosDaUnidade<T extends { unidade: string | null; acao: string | null }>(
