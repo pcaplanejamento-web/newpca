@@ -8,6 +8,7 @@ import {
   conflitoPalavra,
   criarClassificador,
   type DescricaoItem,
+  type Dominio,
   LIMITES_PADRONIZACAO,
   type LinhaClassificada,
   limparPalavras,
@@ -31,11 +32,12 @@ import { CampoLista, TextField } from "./Field";
 import { IconPlus } from "./icons";
 import { Modal } from "./Modal";
 import { SkeletonCartao, SkeletonLinhas } from "./Skeleton";
+import { Segmented } from "./Segmented";
 import { StatMini } from "./StatMini";
 import { useGravacaoCadastro } from "./useGravacaoCadastro";
 
 /** O que o editor de classificação edita (`id` = a editada; `null` = nova). */
-export type RascunhoClassificacao = { id: number | null; nome: string; cor: string; palavras: string[] };
+export type RascunhoClassificacao = { id: number | null; nome: string; cor: string; palavras: string[]; dominio: Dominio | null };
 
 const URL_CLASSIFICACOES = "/api/catalogo/classificacoes";
 const COR_PADRAO = "#2563eb";
@@ -99,7 +101,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
 
   async function salvar(r: RascunhoClassificacao) {
     const nova = r.id == null;
-    const corpo = { nome: r.nome, cor: r.cor, palavras: r.palavras };
+    const corpo = { nome: r.nome, cor: r.cor, palavras: r.palavras, dominio: r.dominio };
     const gravou = await executar(async () => {
       await chamarPadronizacao(nova ? URL_CLASSIFICACOES : `${URL_CLASSIFICACOES}/${r.id}`, nova ? "POST" : "PATCH", corpo);
       return { msg: nova ? "Classificação cadastrada." : "Classificação atualizada." };
@@ -198,7 +200,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
                 ultima={(pos.get(c.id) ?? 0) === cad.classificacoes.length - 1}
                 disabled={salvando}
                 onMover={(d) => mover(c.id, d)}
-                onEditar={() => setEditando({ id: c.id, nome: c.nome, cor: c.cor, palavras: c.palavras })}
+                onEditar={() => setEditando({ id: c.id, nome: c.nome, cor: c.cor, palavras: c.palavras, dominio: c.dominio ?? null })}
                 onExcluir={() => excluir(c)}
               />
             ),
@@ -244,7 +246,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
             </p>
           </div>
           {podeEditar && (
-            <Button icon={<IconPlus className="h-4 w-4" />} disabled={salvando} onClick={() => setEditando({ id: null, nome: "", cor: COR_PADRAO, palavras: [] })}>
+            <Button icon={<IconPlus className="h-4 w-4" />} disabled={salvando} onClick={() => setEditando({ id: null, nome: "", cor: COR_PADRAO, palavras: [], dominio: null })}>
               Nova classificação
             </Button>
           )}
@@ -262,7 +264,7 @@ export function ClassificacoesView({ podeEditar }: { podeEditar: boolean }) {
             minWidth={podeEditar ? 900 : 720}
             // Consulta (sem permissão): tocar na linha abre os dados. Quem edita usa o lápis da linha (sem linha-botão com
             // botões dentro — e um toque num botão desabilitado nunca abre o editor no meio de uma gravação).
-            onRowClick={podeEditar ? undefined : (c) => setEditando({ id: c.id, nome: c.nome, cor: c.cor, palavras: c.palavras })}
+            onRowClick={podeEditar ? undefined : (c) => setEditando({ id: c.id, nome: c.nome, cor: c.cor, palavras: c.palavras, dominio: c.dominio ?? null })}
             resumo={(l) => `${num(l.length)} ${l.length === 1 ? "classificação" : "classificações"}`}
           />
         )}
@@ -535,6 +537,19 @@ export function EditorClassificacao({
           maxLength={LIMITES_PADRONIZACAO.nome}
         />
         {!somenteLeitura && <ColorField label="Cor" value={rascunho.cor} onChange={(cor) => setRascunho((r) => ({ ...r, cor }))} />}
+        <div className="space-y-1.5">
+          <span className="block text-sm font-medium text-text-2">Domínio dos itens</span>
+          <Segmented<"" | Dominio>
+            ariaLabel="Domínio dos itens desta classificação"
+            value={rascunho.dominio ?? ""}
+            onChange={(v) => !somenteLeitura && setRascunho((r) => ({ ...r, dominio: v || null }))}
+            options={[
+              { value: "", label: "Pela descrição" },
+              { value: "MATERIAL", label: "Material" },
+              { value: "SERVIÇO", label: "Serviço" },
+            ]}
+          />
+        </div>
         <div>
           <CampoLista
             label="Palavras-chave"

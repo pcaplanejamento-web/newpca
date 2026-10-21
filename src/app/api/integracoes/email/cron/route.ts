@@ -1,3 +1,4 @@
+import { reclassificarPendentes } from "@/lib/reclassificacao";
 import { asc, count, eq } from "drizzle-orm";
 import { papeis, usuarios } from "@/db/schema";
 import { colunasSessao, papelDoUsuarioSql, sessaoDaLinha } from "@/lib/auth";
@@ -46,6 +47,8 @@ export async function POST(req: Request) {
   // As conferências GUARDADAS da Mesa de DFDs/protocolos que não existem mais.
   const [o1, o2] = comandosLimparOrfas(db);
   await db.batch([o1, o2]).catch((e) => console.error("[cron] conferências órfãs:", (e as Error).message));
+  // A classificação/domínio GRAVADOS dos itens novos (um lote por passada — o resto nas próximas).
+  await reclassificarPendentes();
   if ("erro" in (await resendDaConfig())) return ok({ ativo: false });
   const [{ n }] = await db.select({ n: count() }).from(usuarios).where(eq(usuarios.status, "ativo"));
   const total = Number(n) || 0;

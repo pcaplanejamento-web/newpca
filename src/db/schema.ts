@@ -90,6 +90,10 @@ export const itens = sqliteTable(
     // Migração `0117`: o PCA do item (cópia do da unidade) — o SEQUENCIAL é ÚNICO no PCA, entre a planilha e os itens dos
     // protocolos (`pca_itens`): gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico` no banco.
     pcaId: integer("pca_id"),
+    // Migração `0121`: a classificação do Catálogo (senão a da planilha) e o domínio (o da planilha, senão o calculado).
+    classificacaoCat: text("classificacao_cat"),
+    dominioCat: text("dominio_cat"),
+    classificadoVersao: text("classificado_versao"),
   },
   (t) => [
     index("itens_unidade_idx").on(t.unidadeId),
@@ -618,6 +622,10 @@ export const dfdItens = sqliteTable(
     // Migração `0035`: o SEQUENCIAL do item no PCA (registrado no próprio item ao incorporar; ver `pcaItens`).
     pcaId: integer("pca_id").references((): AnySQLiteColumn => pcas.id, { onDelete: "set null" }),
     pcaSequencial: integer("pca_sequencial"),
+    // Migração `0121`: a CLASSIFICAÇÃO (do Catálogo) e o DOMÍNIO GRAVADOS — a versão do cadastro com que foram calculados.
+    classificacao: text("classificacao"),
+    dominio: text("dominio"),
+    classificadoVersao: text("classificado_versao"),
   },
   (t) => [index("dfd_itens_dfd_idx").on(t.dfdId)],
 );
@@ -852,6 +860,8 @@ export const itemClassificacoes = sqliteTable(
     nome: text("nome").notNull(),
     cor: text("cor").notNull().default("#64748b"),
     palavras: text("palavras").notNull().default("[]"),
+    // Migração `0121`: o DOMÍNIO (MATERIAL/SERVIÇO) que a classificação dá aos itens dela.
+    dominio: text("dominio"),
     ordem: integer("ordem").notNull().default(0),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
     atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),

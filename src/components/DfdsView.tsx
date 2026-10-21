@@ -1,5 +1,6 @@
 "use client";
 
+import { dominioPorDescricao } from "@/lib/padronizacao-core";
 import type { ColunasMesa } from "@/lib/mesa-colunas-core";
 import { colunasDaAutomacao } from "./ColunasAutomacao";
 import { useComponente } from "./ComponentesPapel";
@@ -1530,6 +1531,8 @@ export function DfdsView({
       // Só com o cadastro (senão as colunas nem existem): a sigla da unidade cadastrada e a classificação automática.
       unidCad: { valor: (r) => unidadeDoItem?.(r.unidade).rotulo ?? "—" },
       classificacao: { valor: (r) => classeDoItem?.(r)?.classificacao.nome ?? NAO_CLASSIFICADO },
+      // TODO item tem domínio: o da classificação, senão o da descrição (a MESMA régua gravada no banco — `classificarItem`).
+      dominio: { valor: (r) => classeDoItem?.(r)?.classificacao.dominio ?? dominioPorDescricao(r.descricao) },
       // Só na Consolidada: o código NORMALIZADO (o da linha) e o nº do item no PCA (a coluna da Mesa do PCA).
       codigo: { valor: (r) => normalizarCodigo(r.codigo) || "Sem código" },
       pcaSeq: { valor: (r) => (r.pcaSequencial == null ? "" : String(r.pcaSequencial)) },
@@ -1733,6 +1736,7 @@ export function DfdsView({
           },
         ]
       : []),
+    { key: "dominio", header: "Domínio", nowrap: true, value: atributoItem.dominio.valor, render: (r: ItemDfdRow) => atributoItem.dominio.valor(r) },
     ci.descricao,
     ci.unidade,
     // A unidade do item COMPARADA com o cadastro (Catálogo → Unidades de medida): a sigla cadastrada ou "Não cadastrada".

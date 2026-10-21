@@ -2,6 +2,8 @@ import { asc, eq, sql } from "drizzle-orm";
 import { catalogoItens, dfdItens, dfds, itemClassificacoes, unidadesMedida } from "@/db/schema";
 import { getDb } from "./db";
 import {
+  type Dominio,
+  dominioCanonico,
   type ClassificacaoItem,
   conflitoPalavra,
   conflitoUnidade,
@@ -49,6 +51,7 @@ const COLS_CLASSIFICACAO = {
   cor: itemClassificacoes.cor,
   palavras: itemClassificacoes.palavras,
   ordem: itemClassificacoes.ordem,
+  dominio: itemClassificacoes.dominio,
 };
 
 export async function listarUnidadesMedida(): Promise<UnidadeMedida[]> {
@@ -61,7 +64,7 @@ export async function listarClassificacoes(): Promise<ClassificacaoItem[]> {
     .select(COLS_CLASSIFICACAO)
     .from(itemClassificacoes)
     .orderBy(asc(itemClassificacoes.ordem), asc(itemClassificacoes.id));
-  return rs.map((r) => ({ ...r, palavras: listaTextos(r.palavras) }));
+  return rs.map((r) => ({ ...r, palavras: listaTextos(r.palavras), dominio: dominioCanonico(r.dominio) }));
 }
 
 /** Os dois cadastros (Mesa → Itens: a unidade comparada e a classificação de cada item). */
@@ -77,11 +80,11 @@ export async function getUnidadeMedida(id: number): Promise<UnidadeMedida | null
 
 export async function getClassificacao(id: number): Promise<ClassificacaoItem | null> {
   const [r] = await getDb().select(COLS_CLASSIFICACAO).from(itemClassificacoes).where(eq(itemClassificacoes.id, id)).limit(1);
-  return r ? { ...r, palavras: listaTextos(r.palavras) } : null;
+  return r ? { ...r, palavras: listaTextos(r.palavras), dominio: dominioCanonico(r.dominio) } : null;
 }
 
 type DadosUnidade = { sigla: string; nome: string; sinonimos: string[]; classificacaoId: number | null };
-type DadosClassificacao = { nome: string; cor: string; palavras: string[] };
+type DadosClassificacao = { nome: string; cor: string; palavras: string[]; dominio?: Dominio | null };
 type Recusa = { erro: string; status: number };
 
 /** O cadastro chegou ao limite (`LIMITES_PADRONIZACAO.ordem` — a reordenação manda a lista inteira). */
@@ -121,7 +124,7 @@ export async function prepararClassificacao(d: DadosClassificacaoItem, id: numbe
   const palavras = limparPalavras(d.palavras);
   const c = conflitoPalavra(palavras, classificacoes, id);
   if (c) return { erro: `A palavra-chave "${c.termo}" já é da classificação "${c.classificacao.nome}".`, status: 409 };
-  return { dados: { nome, cor: d.cor, palavras } };
+  return { dados: { nome, cor: d.cor, palavras, dominio: d.dominio ?? null } };
 }
 
 /** Cria no FIM da ordem. */
@@ -173,7 +176,7 @@ export async function criarClassificacao(d: DadosClassificacao): Promise<{ id: n
   const [{ max }] = await db.select({ max: sql<number>`COALESCE(MAX(${itemClassificacoes.ordem}), -1)` }).from(itemClassificacoes);
   const [row] = await db
     .insert(itemClassificacoes)
-    .values({ nome: d.nome, cor: d.cor, palavras: JSON.stringify(d.palavras), ordem: Number(max) + 1 })
+    .values({ nome: d.nome, cor: d.cor, palavras: JSON.stringify(d.palavras), dominio: d.dominio ?? null, ordem: Number(max) + 1 })
     .returning({ id: itemClassificacoes.id });
   return { id: row.id };
 }
@@ -181,7 +184,7 @@ export async function criarClassificacao(d: DadosClassificacao): Promise<{ id: n
 export async function atualizarClassificacao(id: number, d: DadosClassificacao): Promise<void> {
   await getDb()
     .update(itemClassificacoes)
-    .set({ nome: d.nome, cor: d.cor, palavras: JSON.stringify(d.palavras), atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
+    .set({ nome: d.nome, cor: d.cor, palavras: JSON.stringify(d.palavras), dominio: d.dominio ?? null, atualizadoEm: sql`(CURRENT_TIMESTAMP)` })
     .where(eq(itemClassificacoes.id, id));
 }
 

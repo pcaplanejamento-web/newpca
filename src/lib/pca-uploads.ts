@@ -66,8 +66,8 @@ export async function itensDosUploads(pcaId: number): Promise<ItemUpload[]> {
       quantidade: itens.quantidade,
       valorUnitario: itens.valorReferencia,
       valorTotal: itens.valorTotal,
-      classificacao: itens.classificacao,
-      dominio: itens.dominio,
+      classificacao: sql<string | null>`COALESCE(${itens.classificacaoCat}, ${itens.classificacao})`,
+      dominio: sql<string | null>`COALESCE(${itens.dominioCat}, ${itens.dominio})`,
     })
     .from(itens)
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))
