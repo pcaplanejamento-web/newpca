@@ -1,5 +1,6 @@
 "use client";
 
+import { textoNumeros } from "@/lib/sequencial-pca-core";
 import { useMemo } from "react";
 import { brl, dataBR, mesLabel, num } from "@/lib/format";
 import { type LeituraPlanilhas, type LinhaPrevia, linhasDaPrevia } from "@/lib/parse-xlsx-core";
@@ -50,6 +51,7 @@ export function PreviaPlanilha({
   const total = useMemo(() => linhas.reduce((s, r) => s + (r.valorTotal ?? 0), 0), [linhas]);
   const apontados = leitura.problemas.reduce((s, p) => s + p.quantidade, 0);
   const n = leitura.planilhas.length;
+  const bloqueado = leitura.sequenciaisRepetidos.length > 0;
   return (
     <Modal
       open
@@ -58,12 +60,12 @@ export function PreviaPlanilha({
       titulo={`Prévia — ${nomeArquivo}`}
       rodape={
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
-          <span className="mr-auto text-sm text-muted">Reenviar uma unidade substitui a planilha dela.</span>
+          <span className="mr-auto text-sm text-muted">Sequencial já usado no PCA sobrescreve o item; sem sequencial, segue a sequência.</span>
           <Button variant="secondary" onClick={onCancelar}>
             Cancelar
           </Button>
-          <Button onClick={onImportar} disabled={linhas.length === 0}>
-            Importar {num(n)} planilha(s)
+          <Button onClick={onImportar} disabled={linhas.length === 0 || bloqueado}>
+            Importar
           </Button>
         </div>
       }
@@ -75,6 +77,11 @@ export function PreviaPlanilha({
           <StatMini label="Valor total" value={brl(total)} tone="accent" />
           <StatMini label="Apontamentos" value={num(apontados)} tone={apontados ? "warn" : "ok"} />
         </div>
+        {bloqueado && (
+          <Callout kind="danger">
+            Sequencial repetido no arquivo: {textoNumeros(leitura.sequenciaisRepetidos)}. Cada item precisa de um sequencial único — corrija a planilha.
+          </Callout>
+        )}
         {leitura.problemas.length > 0 && (
           <Callout kind="warn">
             <ul className="max-h-40 space-y-1 overflow-y-auto">

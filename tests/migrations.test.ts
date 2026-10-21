@@ -345,10 +345,11 @@ describe("migrações D1 (drizzle/*.sql)", () => {
     const sit = nomes(db, "SELECT name FROM pragma_table_info('protocolo_situacoes')");
     for (const c of ["permite_mover_pca", "camada_pca"]) assert.ok(sit.includes(c), `coluna ausente em protocolo_situacoes: ${c}`);
     assert.ok(nomes(db, "SELECT name FROM sqlite_master WHERE type='table'").includes("orcamento_visoes"));
-    // O mesmo código de unidade pode existir em PCAs diferentes, mas não duas vezes no mesmo.
+    // Desde a 0117 o código da unidade é único POR UPLOAD (o mesmo código pode vir em uploads diferentes do mesmo PCA).
     db.exec("INSERT INTO pcas (id, nome, ano) VALUES (991, 'PCA A', 2026), (992, 'PCA B', 2027)");
-    db.exec("INSERT INTO unidades (codigo, municipio, pca_id) VALUES ('SEMED', 'RV', 991), ('SEMED', 'RV', 992)");
-    assert.throws(() => db.exec("INSERT INTO unidades (codigo, municipio, pca_id) VALUES ('SEMED', 'RV', 991)"));
+    db.exec("INSERT INTO pca_uploads (id, pca_id) VALUES (881, 991), (882, 991)");
+    db.exec("INSERT INTO unidades (codigo, municipio, pca_id, upload_id) VALUES ('SEMED', 'RV', 991, 881), ('SEMED', 'RV', 991, 882)");
+    assert.throws(() => db.exec("INSERT INTO unidades (codigo, municipio, pca_id, upload_id) VALUES ('SEMED', 'RV', 991, 881)"));
   });
 
   it("0033 legado: planilhas viram um PCA 'lista' PUBLICADO e edições com DFDs viram fonte 'protocolo'", () => {

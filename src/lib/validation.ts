@@ -22,20 +22,21 @@ export const linhaCruaSchema = z.object({
 // Limite de linhas POR REQUISIÇÃO (o cliente envia a planilha em lotes).
 const MAX_ROWS_POR_LOTE = 1000;
 
-/** Primeiro lote: cria/atualiza a unidade e substitui os itens. */
+/** Primeiro lote de UMA unidade (LOCAL) do upload: cria o upload (sem `uploadId`) e a unidade. */
 export const uploadStartSchema = z.object({
   mode: z.literal("start"),
-  /** PCA (fonte "lista pronta") que recebe a planilha — o código da unidade é único POR PCA. */
+  /** PCA (fonte "lista pronta") que recebe a planilha. */
   pcaId: z.number().int().positive("Escolha o PCA que recebe a planilha."),
+  /** O upload já criado pela 1ª unidade do mesmo arquivo (a consolidada tem várias). */
+  uploadId: z.number().int().positive().optional(),
   codigo: z.coerce.string().trim().min(1, "Código da unidade ausente na planilha."),
   municipio: z.coerce
     .string()
     .trim()
     .min(1, "Município ausente na planilha.")
     .default("MUNICÍPIO NÃO INFORMADO"),
+  /** O nome do ARQUIVO enviado (o nome do upload). */
   nomeArquivo: z.string().trim().max(255).optional().nullable(),
-  totalItens: z.number().int().nonnegative().optional(),
-  valorTotal: z.number().nonnegative().optional(),
   rows: z.array(linhaCruaSchema).min(1, "Lote vazio.").max(MAX_ROWS_POR_LOTE),
 });
 
@@ -46,9 +47,9 @@ export const uploadAppendSchema = z.object({
   rows: z.array(linhaCruaSchema).min(1, "Lote vazio.").max(MAX_ROWS_POR_LOTE),
 });
 
-export const uploadSchema = z.discriminatedUnion("mode", [
-  uploadStartSchema,
-  uploadAppendSchema,
-]);
+/** O upload terminou: avisa os administradores (uma vez por arquivo). */
+export const uploadFimSchema = z.object({ mode: z.literal("fim"), uploadId: z.number().int().positive() });
+
+export const uploadSchema = z.discriminatedUnion("mode", [uploadStartSchema, uploadAppendSchema, uploadFimSchema]);
 
 export type UploadPayload = z.infer<typeof uploadSchema>;

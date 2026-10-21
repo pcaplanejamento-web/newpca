@@ -1,4 +1,5 @@
-import { type LinhaNormalizada, normalizarLinha, stripAccents } from "./normalize.ts";
+import { type LinhaNormalizada, normalizarLinha, parseIntBR, stripAccents } from "./normalize.ts";
+import { repetidos as nsRepetidos } from "./sequencial-pca-core.ts";
 
 /**
  * Núcleo PURO da leitura das planilhas do PCA de lista pronta (a matriz de células → as planilhas). Dois formatos:
@@ -36,6 +37,8 @@ export type LeituraPlanilhas = {
   formato: "unidade" | "consolidado";
   planilhas: PlanilhaParseada[];
   problemas: ProblemaPlanilha[];
+  /** Os SEQUENCIAIS repetidos no arquivo — o sequencial é sagrado: com algum, a importação não segue. */
+  sequenciaisRepetidos: number[];
 };
 
 type Campo = keyof LinhaCruaUpload | "local";
@@ -225,7 +228,8 @@ export function lerPlanilhas(aoa: unknown[][], nomeArquivo: string): LeituraPlan
   }));
   if (planilhas.length === 0) throw new Error("Encontrei o cabeçalho, mas nenhuma linha de item preenchida.");
   planilhas.sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR"));
-  return { formato: consolidado ? "consolidado" : "unidade", planilhas, problemas: problemas.lista() };
+  const sequenciaisRepetidos = nsRepetidos(planilhas.flatMap((p) => p.rows.map((r) => parseIntBR(r.sequencial))));
+  return { formato: consolidado ? "consolidado" : "unidade", planilhas, problemas: problemas.lista(), sequenciaisRepetidos };
 }
 
 /** Uma linha da PRÉVIA da importação: a unidade (LOCAL) + o item como será gravado. */

@@ -35,6 +35,7 @@ export const VISUAL_AVISO: Record<TipoNotificacao | "acesso", { Icone: Component
   protocolo: { Icone: IconClipboard, cor: "var(--accent)", rotulo: "Protocolos" },
   situacao: { Icone: IconClipboard, cor: "var(--info)", rotulo: "Protocolo atualizado" },
   pca: { Icone: IconLayers, cor: "var(--info)", rotulo: "PCA" },
+  "pca-adm": { Icone: IconLayers, cor: "var(--accent)", rotulo: "Movimentação no PCA" },
   centi: { Icone: IconRobo, cor: "var(--accent)", rotulo: "Centi" },
   comunicado: { Icone: IconMegafone, cor: "var(--accent)", rotulo: "Comunicados" },
   versao: { Icone: IconNovidades, cor: "var(--accent)", rotulo: "Versões" },

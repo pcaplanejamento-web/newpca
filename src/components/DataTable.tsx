@@ -159,6 +159,7 @@ export function DataTable<R>({
   ocultas,
   ocultasPadrao,
   conexao,
+  ordemInicial,
   filtrosRodape,
   visao,
   trocando = false,
@@ -235,6 +236,8 @@ export function DataTable<R>({
   ocultasPadrao?: readonly string[];
   /** MESA CONECTADA — ver `ConexaoTabela`. */
   conexao?: ConexaoTabela<R>;
+  /** A ORDEM com que a tabela abre quando não há edição salva nem conexão (ex.: a consulta do PCA, do sequencial maior ao menor). */
+  ordemInicial?: { key: string; dir: "asc" | "desc" };
   /** Filtros que vêm de FORA da tabela (ex.: o Recorte da Mesa): entram no menu de filtros do rodapé (`n` soma no selo). */
   filtrosRodape?: { n: number; conteudo: ReactNode };
   /** A VISÃO da tabela única (ex.: a Mesa): ao mudar, filtros/ordem/página recomeçam pelos da visão nova, sem remontar. */
@@ -274,7 +277,7 @@ export function DataTable<R>({
   const [sort, setSort] = useState<OrdemAtual>((): OrdemAtual => {
     const o = conexao?.ordem;
     if (o && todasColunas.some((c) => c.key === o.key)) return o;
-    return editor.salvo.ordem ?? { key: null, dir: "asc" };
+    return editor.salvo.ordem ?? ordemInicial ?? { key: null, dir: "asc" };
   });
   const [page, setPage] = useState(1);
   // TABELA ÚNICA com várias visões (a Mesa: Protocolos · DFDs · Itens): trocar a `visao` não remonta — reinicia aqui os

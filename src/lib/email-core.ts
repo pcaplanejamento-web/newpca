@@ -94,6 +94,7 @@ export const ROTULO_TIPO_EMAIL: Record<TipoNotificacao, string> = {
   evento: "Evento alterado",
   protocolo: "Protocolo designado a você",
   pca: "Protocolo no PCA",
+  "pca-adm": "Movimentação no PCA",
   cadastro: "Cadastro aguardando aprovação",
   situacao: "Protocolo atualizado",
   concluida: "Tarefa concluída",
