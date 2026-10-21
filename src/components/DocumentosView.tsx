@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { nomeDoDocumento, tamanhoBase64 } from "@/lib/compactar-pdf-core";
+import { nomeDoDocumento, TAMANHO_PARTE } from "@/lib/compactar-pdf-core";
 import type { PdfCompactado, VersaoPdf } from "@/lib/compactar-pdf";
 import type { DocumentoResumo } from "@/lib/documentos";
 import { dataBR, formatBytes, num } from "@/lib/format";
@@ -240,7 +240,7 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
       try {
         let r: PdfCompactado;
         if (admin) {
-          // O ADM escolhe o tamanho: do original ao mínimo legível (até 1 MB); nenhuma versão cabe → a automática.
+          // O ADM escolhe o tamanho: do original ao mínimo legível (até 20 MB); nenhuma versão cabe → a automática.
           const v = await versoesParaEscolha(f, passo);
           if (v.versoes.length === 0) r = await compactarPdf(f, passo);
           else {
@@ -256,17 +256,23 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
           }
         } else r = await compactarPdf(f, passo);
         passo("Gravando…");
-        let bin = "";
-        for (let k = 0; k < r.bytes.length; k += 0x8000) bin += String.fromCharCode(...r.bytes.subarray(k, k + 0x8000));
-        const conteudo = btoa(bin);
-        if (conteudo.length !== tamanhoBase64(r.bytes.length)) throw new Error("Falha ao preparar o envio.");
         const res = await fetch("/api/documentos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nome: nomeDoDocumento(f.name), nomeArquivo: f.name, paginas: r.paginas, tamanhoOriginal: r.original, compactado: r.compactado, conteudo }),
+          body: JSON.stringify({ nome: nomeDoDocumento(f.name), nomeArquivo: f.name, paginas: r.paginas, tamanhoOriginal: r.original, compactado: r.compactado, tamanho: r.bytes.length }),
         });
-        const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-        if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao gravar.");
+        const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; id?: number; partes?: number };
+        if (!res.ok || !j.ok || !j.id || !j.partes) throw new Error(j.error ?? "Erro ao gravar.");
+        let completo = false;
+        for (let k = 0; k < j.partes; k++) {
+          if (j.partes > 1) passo(`Gravando (${k + 1} de ${j.partes})…`);
+          const parte = r.bytes.subarray(k * TAMANHO_PARTE, (k + 1) * TAMANHO_PARTE);
+          const rp = await fetch(`/api/documentos/${j.id}/partes?ordem=${k}`, { method: "PUT", headers: { "Content-Type": "application/octet-stream" }, body: parte.slice() });
+          const jp = (await rp.json().catch(() => ({}))) as { ok?: boolean; error?: string; completo?: boolean };
+          if (!rp.ok || !jp.ok) throw new Error(jp.error ?? "Erro ao gravar.");
+          completo = !!jp.completo;
+        }
+        if (!completo) throw new Error("O arquivo não chegou inteiro — tente de novo.");
         ok.push(r.bytes.length < r.original ? `${f.name} (${formatBytes(r.original)} → ${formatBytes(r.bytes.length)})` : f.name);
       } catch (e) {
         falhas.push(`${f.name}: ${e instanceof Error ? e.message : "falha"}`);

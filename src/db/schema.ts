@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnySQLiteColumn,
+  blob,
   index,
   integer,
   primaryKey,
@@ -1886,6 +1887,22 @@ export const documentos = sqliteTable(
     conteudo: text("conteudo").notNull(),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    /** Migração `0117`: 0 = o antigo, no `conteudo`; > 0 = em `documento_partes`. */
+    partes: integer("partes").notNull().default(0),
+    completo: integer("completo", { mode: "boolean" }).notNull().default(true),
   },
   (t) => [index("documentos_criado_em_idx").on(t.criadoEm)],
+);
+
+/** As partes binárias (≤ 1 MB) de um documento (migração `0117`). */
+export const documentoPartes = sqliteTable(
+  "documento_partes",
+  {
+    documentoId: integer("documento_id")
+      .notNull()
+      .references(() => documentos.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull(),
+    dados: blob("dados", { mode: "buffer" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.documentoId, t.ordem] })],
 );

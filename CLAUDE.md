@@ -3685,8 +3685,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `LIMITE_DOCUMENTO`=100 KB): como veio › regravado com object streams › páginas em JPEG numa escada de escala/qualidade até
   caber. O servidor recusa não-PDF e > 100 KB. **Tamanho escolhido pelo ADM (v1.138.0):** a cada PDF, o
   `EscolherTamanhoPdf` (barra) entre o MÍNIMO LEGÍVEL (`NIVEIS_LEGIVEIS`, piso escala 1,25 · JPEG 0,5) e o ORIGINAL — versões reais
-  (`versoesParaEscolha` → `versoesEscolhiveis`) com a prévia da 1ª página; o ADM grava até `LIMITE_DOCUMENTO_ADM`=1 MB (a rota
-  confere pelo papel); os demais, automática até 100 KB.
+  (`versoesParaEscolha` → `versoesEscolhiveis`) com a prévia da 1ª página; o ADM grava até `LIMITE_DOCUMENTO_ADM`=20 MB — o máximo da barra é o ORIGINAL (a rota
+  confere pelo papel); os demais, automática até 100 KB. **Em PARTES (v1.139.0, migração `0117`):** `POST /api/documentos`
+  abre o envio (`completo`=0, fora da lista) e `PUT /api/documentos/[id]/partes?ordem=N` grava cada parte binária de 1 MB
+  (`documento_partes`, `parteValida`); a última confere o total e conclui. O antigo (`partes`=0) segue no `conteudo` base64.
 - Rotas `GET/POST /api/documentos`, `PATCH/DELETE /api/documentos/[id]`, `GET /api/documentos/[id]/arquivo` (`?baixar=1`
   exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: busca + `DocumentoCard` + o card "Enviar PDF" (`QuadroNovoCard`, no fim da grade; tocar ou soltar)
   sobre `CartaoEspaco`; visualizador = páginas do pdf.js em canvas num `Modal`, sem iframe — CSP `object-src 'none'`/iOS).

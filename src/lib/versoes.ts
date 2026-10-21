@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.139.0",
+    data: "2026-10-21",
+    titulo: "Documentos: a barra vai até o tamanho do arquivo",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Documentos",
+        texto: "O ADM agora pode guardar o PDF no tamanho original (até 20 MB): o máximo da barra é o próprio arquivo. O PDF é gravado em partes.",
+        link: "/painel/documentos",
+      },
+    ],
+  },
+  {
     versao: "1.138.0",
     data: "2026-10-21",
     titulo: "Documentos: o ADM escolhe o tamanho de cada PDF",

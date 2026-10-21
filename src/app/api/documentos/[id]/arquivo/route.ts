@@ -1,6 +1,6 @@
 import { podeTela } from "@/lib/acesso";
 import { exigirAcesso, intId } from "@/lib/api-auth";
-import { getDocumento } from "@/lib/documentos";
+import { bytesDoDocumento, getDocumento } from "@/lib/documentos";
 import { erro } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const baixar = new URL(req.url).searchParams.get("baixar") === "1";
   if (baixar && !podeTela(a.acesso, "documentos").exportar) return erro("Sem permissão para baixar documentos.", 403);
   const d = await getDocumento(id);
-  if (!d) return erro("Documento não encontrado.", 404);
-  const bytes = Uint8Array.from(atob(d.conteudo), (c) => c.charCodeAt(0));
+  if (!d?.completo) return erro("Documento não encontrado.", 404);
+  const bytes = await bytesDoDocumento(d);
   const nome = d.nomeArquivo.toLowerCase().endsWith(".pdf") ? d.nomeArquivo : `${d.nomeArquivo}.pdf`;
   return new Response(bytes, {
     headers: {
