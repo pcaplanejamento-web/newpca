@@ -1156,7 +1156,7 @@
   }
 }
 .esqueleto-tela {
-  animation: esqueleto-surge 0.18s ease-out 0.3s both;
+  animation: esqueleto-surge 0.18s ease-out 0.45s both;
 }
 [data-motion="off"] .esqueleto-tela,
 [data-motion="reduced"] .esqueleto-tela {

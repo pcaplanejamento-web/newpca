@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.132.0",
+    data: "2026-10-21",
+    titulo: "Telas guardadas por 2 horas, sem piscar",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Telas e abas já abertas ficam guardadas por até 2 horas e voltam na hora; qualquer gravação continua atualizando o que mudou.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Sistema", texto: "Ao passar o mouse (ou encostar o dedo) num item do menu ou num cartão de PCA, Orçamento ou quadro, a tela já começa a carregar.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Sistema", texto: "Trocar de aba não pisca mais: a aba atual fica à vista até a nova chegar, e a estrutura de carregamento só aparece quando a espera é longa.", link: "/painel/orcamento" },
+    ],
+  },
+  {
     versao: "1.131.2",
     data: "2026-10-21",
     titulo: "Itens da Mesa sem carregar de novo",

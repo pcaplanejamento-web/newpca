@@ -55,7 +55,7 @@ function Cheia({ children }: { children: ReactNode }) {
 /**
  * ESQUELETO DE UMA TELA — o `loading.tsx` da rota: a ESTRUTURA da tela (título, barra e a moldura do conteúdo, nos mesmos
  * espaçamentos e medidas das telas reais), sem nenhum dado e sem pedir nada ao servidor. SÓ APARECE QUANDO A TELA DEMORA
- * (`.esqueleto-tela`: invisível nos primeiros 300 ms) — a que chega antes entra direto; as já vistas voltam do cache.
+ * (`.esqueleto-tela`: invisível nos primeiros 450 ms) — a que chega antes entra direto; as já vistas voltam do cache.
  */
 export function EsqueletoTela({ variante }: { variante: VarianteEsqueleto }) {
   let corpo: ReactNode;

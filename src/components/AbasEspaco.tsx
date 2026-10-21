@@ -48,8 +48,10 @@ export function useTrocaAba<T extends string>(abaServidor: T) {
 }
 
 /**
- * O CONTEÚDO da aba (com o morph) — ou o esqueleto até a aba pedida chegar; `slot` = onde vão as `FerramentasAba`;
- * `className` = o arranjo dos blocos da aba (o `AbasEspaco` põe o espaço padrão `--gap-block` entre eles).
+ * O CONTEÚDO da aba (com o morph); `slot` = onde vão as `FerramentasAba`; `className` = o arranjo dos blocos da aba (o
+ * `AbasEspaco` põe o espaço padrão `--gap-block` entre eles). Enquanto a aba pedida não chega, a aba ANTERIOR fica
+ * montada e o esqueleto só cobre o conteúdo se a espera passar do tempo do `.esqueleto-tela` — a aba que volta do
+ * cache (ou chega rápido) troca direto, sem piscar.
  */
 export function ConteudoAba({
   aba,
@@ -64,17 +66,21 @@ export function ConteudoAba({
   className?: string;
   children: ReactNode;
 }) {
-  return aba === abaServidor ? (
+  const esperando = aba !== abaServidor;
+  return (
     <SlotFerramentas.Provider value={slot}>
-      <div key={aba} className={`animate-cat-morph ${className}`}>
-        {children}
+      <div className="relative" aria-busy={esperando || undefined}>
+        <div key={abaServidor} className={`animate-cat-morph ${className}`} inert={esperando || undefined}>
+          {children}
+        </div>
+        {esperando ? (
+          <div className="esqueleto-tela absolute inset-0 z-10 space-y-[var(--gap-block)] overflow-hidden bg-surface-2">
+            <Skeleton className="h-24 w-full" />
+            <SkeletonLinhas linhas={8} />
+          </div>
+        ) : null}
       </div>
     </SlotFerramentas.Provider>
-  ) : (
-    <div className="space-y-[var(--gap-block)]" aria-busy="true">
-      <Skeleton className="h-24 w-full" />
-      <SkeletonLinhas linhas={8} />
-    </div>
   );
 }
 

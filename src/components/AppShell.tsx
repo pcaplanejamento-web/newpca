@@ -123,6 +123,7 @@ function NavLinks({
                 <Link
                   key={item.href}
                   href={item.href}
+                  unstable_dynamicOnHover
                   onClick={onNavigate}
                   className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
                     active

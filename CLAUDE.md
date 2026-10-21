@@ -63,7 +63,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     conta; catálogo, configuração e edições de tabela contam) — a do `memoPorVersao` e do índice da pesquisa. `areaDaRota`:
     Mesa/PCA/Orçamento/Catálogo/Verificação acompanham `dados`; as demais (Tarefas, Calendário, ADM, Perfil, desconhecida),
     `completa`. **Carga nova que leia tarefa/agenda numa tela da área `dados` = tirar a entidade da lista ou a tela da área.**
-  - **Navegador:** `next.config` `experimental.staleTimes {dynamic:1800}` (v1.129.0) — telas/abas já vistas voltam do cache na hora;
+  - **Navegador:** `next.config` `experimental.staleTimes {dynamic:7200, static:7200}` (v1.129.0; 2 h desde a v1.132.0) — telas/abas já vistas voltam do cache na hora;
+    os links do menu (`AppShell`, `BottomNav`) e os cartões de PCA/Orçamento/Quadro/espaço levam `unstable_dynamicOnHover` (a página
+    completa é pedida ao passar o mouse ou encostar o dedo — o clique reaproveita);
     toda gravação já dá `router.refresh()` (limpa o cache) e o **`SincronizarDados`** (no `AppShell`, sem UI; a versão vem do
     layout do painel) consulta as versões ao voltar à janela e a cada 60 s com a aba à vista (NUNCA a cada navegação) e só dá `router.refresh()` quando
     a da ÁREA da tela aberta MUDOU (gravação de outra pessoa); a mudança de outra área fica guardada e recarrega ao ir a uma
@@ -71,14 +73,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   - **Esqueleto SÓ QUANDO DEMORA (v1.131.0 → v1.131.1):** `loading.tsx` de 3 linhas (só o **`EsqueletoTela`**, sem dado,
     sem servidor) na forma REAL de cada tela — `mesa` (barra + tabela até o fim do display) · `pca`/`orcamento`/`espacos`
     (título + a grade de cartões de cada uma, nas mesmas medidas) · `calendario` · `abas` (Configurações, Perfil) · `painel`
-    (Verificação, Integrações, Aparência). Fica INVISÍVEL nos primeiros 300 ms (`.esqueleto-tela`, `globals.css`): a tela que
+    (Verificação, Integrações, Aparência). Fica INVISÍVEL nos primeiros 450 ms (`.esqueleto-tela`, `globals.css`): a tela que
     chega antes entra direto, sem piscar; as já vistas voltam do cache sem passar por ele. NUNCA em página que só redireciona,
     no `design-system`, em `[id]` nem nas telas do ADM que carregam no navegador e já têm o esqueleto delas (Usuários, Grupos,
     Auditoria, Armazenamento, Órgãos) — `tests/versao-dados-core.test.ts` confere. Trocar só o `?aba=`/
     `?mes=` não reexibe o esqueleto (a chave do Suspense não leva a busca; a navegação é transição). O `ALTURA_NO_HTML` das
-    tabelas tenta a cada quadro enquanto o bloco chega escondido pelo streaming.
+    tabelas tenta a cada quadro enquanto o bloco chega escondido pelo streaming. **Troca de ABA (`ConteudoAba`, v1.132.0):** a aba
+    anterior fica montada (`inert`) até a pedida chegar e o esqueleto só a COBRE depois dos mesmos 450 ms — aba do cache troca direto.
   - **Servidor:** **`memoPorVersao(chave, carregar)`** — o resultado de uma CARGA PESADA fica na memória do Worker enquanto
-    a versão for a mesma (validade de segurança 5 min, até 60 entradas, a promessa compartilhada; falha não fica; núcleo
+    a versão for a mesma (validade de segurança 2 h desde a v1.132.0, até 60 entradas, a promessa compartilhada; falha não fica; núcleo
     puro testado `memo-versao-core.ts`). A chave leva os ARGUMENTOS, nunca o usuário (o que depende da sessão segue lido a
     cada requisição) e o valor é COMPARTILHADO (quem usa só lê). Hoje: `listarDfds`, `listarItensDfds`, `listarProtocolos`,
     `listarProtocolosDoPca`, `listarPcasCards`, `dashboardDoPca`, `orcamentoDoPca`, `getOrcamentoItens`, `vinculosDoPca` e `orcamentoDoAno` (v1.128.0); o enriquecimento de `/api/dfd/itens` (catálogo/padronização/histórico) é memorizado por lista BASE (`WeakMap`) e a Mesa só zera os itens quando algum DFD muda (`id|atualizadoEm`); a lista de itens fica na MEMÓRIA DA ABA (`itensDaAba`, `DfdsView`: por pessoa, até 3 listas, chave = endereço da lista + `id|atualizadoEm` dos DFDs) e, ao voltar à Mesa, só vale com a MESMA versão `dados` da carga (`versaoItens`, de `carregarMesa`/`carregarMesaDoPca`) — numeração do PCA, catálogo e histórico mudam sem tocar no DFD (v1.131.2). Spinners giram num `<span>` `.animate-girar` (o SVG com `animate-spin` travava). **Loader pesado novo = `memoPorVersao`**;

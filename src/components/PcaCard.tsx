@@ -113,7 +113,7 @@ export function PcaCard({ pca, onClick, href }: { pca: PcaCardDados; onClick?: (
     "group block w-full max-w-[30rem] rounded-card text-left focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25";
   if (href)
     return (
-      <Link href={href} className={`relative ${cls}`} aria-label={`Abrir ${pca.nome}`}>
+      <Link href={href} unstable_dynamicOnHover className={`relative ${cls}`} aria-label={`Abrir ${pca.nome}`}>
         {conteudo}
         <CarregandoLink rotulo="Abrindo o PCA…" />
       </Link>

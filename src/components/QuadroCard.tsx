@@ -98,7 +98,7 @@ export function CartaoEspaco({
   return (
     <div className="relative h-full">
       {href ? (
-        <Link href={href} onClick={onClick} aria-current={atual ? "page" : undefined} aria-label={ariaLabel} className={classe}>
+        <Link href={href} unstable_dynamicOnHover onClick={onClick} aria-current={atual ? "page" : undefined} aria-label={ariaLabel} className={classe}>
           {corpo}
         </Link>
       ) : (

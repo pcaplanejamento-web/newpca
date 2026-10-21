@@ -40,6 +40,7 @@ export function OrcamentoCard({ orcamento: o, href }: { orcamento: OrcamentoResu
   return (
     <Link
       href={href}
+      unstable_dynamicOnHover
       aria-label={`Abrir ${o.nome}`}
       className="group flex h-full w-full flex-col gap-3 rounded-card border border-border bg-surface p-[var(--pad-card)] text-left shadow-ring transition-[border-color,box-shadow] duration-[var(--motion-duration)] hover:border-accent/50 hover:shadow-soft focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/25"
     >

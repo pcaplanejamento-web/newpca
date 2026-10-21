@@ -32,11 +32,11 @@ export const versaoDados = cache(async (): Promise<VersoesDados> => {
   return { completa: `${r?.a ?? 0}.${lotes}`, dados: `${r?.d ?? 0}.${lotes}` };
 });
 
-const memo = criarMemoVersao({ max: 60, ttlMs: 5 * 60_000, agora: () => Date.now() });
+const memo = criarMemoVersao({ max: 60, ttlMs: 2 * 60 * 60_000, agora: () => Date.now() });
 
 /**
  * O resultado de uma CARGA PESADA (só dados — a chave leva os argumentos, nunca o usuário) guardado na memória do Worker
- * enquanto a versão `dados` for a mesma (validade de segurança de 5 min). O valor é COMPARTILHADO: quem usa só lê.
+ * enquanto a versão `dados` for a mesma (validade de segurança de 2 h). O valor é COMPARTILHADO: quem usa só lê.
  * Se a versão não puder ser lida, carrega direto (nunca deixa de responder).
  */
 export async function memoPorVersao<T>(chave: string, carregar: () => Promise<T>): Promise<T> {
