@@ -1,5 +1,6 @@
 "use client";
 
+import { EVENTO_ALTERNAR_MENU } from "@/lib/menu-lateral";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -83,7 +84,6 @@ async function garantirIndice(): Promise<Indice | null> {
 const MAX_RECENTES = 6;
 /** Fora do banner: abrir o banner e alternar o menu lateral (a AÇÃO "Recolher o menu"). */
 export const EVENTO_ABRIR_PESQUISA = "pesquisa-sistema:abrir";
-export const EVENTO_ALTERNAR_MENU = "menu-lateral:alternar";
 
 const ICONE_TIPO: Record<string, Icone> = {
   tela: IconLayers,

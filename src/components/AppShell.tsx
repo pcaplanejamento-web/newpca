@@ -3,10 +3,9 @@
 import type { VersoesDados } from "@/lib/versao-dados-core";
 import Link from "next/link";
 import { rotaInicial } from "@/lib/abas";
-import { IconeNavegacao } from "./CarregandoLink";
 import { usePathname, useRouter } from "next/navigation";
 import { telaDaRota } from "@/lib/escopo-unidades-core";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
 import { Dropdown } from "./Dropdown";
@@ -22,7 +21,8 @@ import type { ConfigChat } from "@/lib/chat-core";
 import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { TrilhaCabecalho } from "./TrilhaCabecalho";
-import { EVENTO_ALTERNAR_MENU, GatilhoPesquisa, PesquisaSistema } from "./PesquisaSistema";
+import { GatilhoPesquisa, PesquisaSistema } from "./PesquisaSistema";
+import { GavetaMenu, ItensMenu, MenuLateral } from "./MenuLateral";
 import { toast } from "./Toast";
 import {
   IconAlternarNivel,
@@ -31,14 +31,12 @@ import {
   IconLandmark,
   IconCheck,
   IconClock,
-  IconClose,
   IconDatabase,
   IconLogout,
   IconMenu,
   IconLayers,
   IconPalette,
   IconPlug,
-  IconRecolherMenu,
   IconRobo,
   IconSettings,
   IconSpinner,
@@ -47,7 +45,6 @@ import {
 } from "./icons";
 import type { UsuarioSessao } from "@/lib/auth";
 import { nomeExibicao } from "@/lib/pessoa";
-import { ATRIBUTO_MENU, CHAVE_MENU } from "@/lib/menu-lateral";
 
 type NavItem = {
   href: string;
@@ -107,41 +104,7 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  return (
-    <div className="flex flex-col gap-4">
-      {secoesVisiveis(admin, modulos).map((secao) => (
-        <div key={secao.chave}>
-          {/* Recolhido, o título vira uma linha curta centrada no trilho (o separador do módulo). */}
-          <div className="relative mb-1.5">
-            <p className="menu-esconde truncate px-2 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-faint">{secao.titulo}</p>
-            <span aria-hidden="true" className="menu-linha pointer-events-none absolute left-[10px] top-0 h-px w-6 bg-border-2" />
-          </div>
-          <nav className="flex flex-col gap-0.5">
-            {secao.itens.map((item) => {
-              const active = itemAtivo(pathname, item);
-              const { Icon } = item;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  unstable_dynamicOnHover
-                  onClick={onNavigate}
-                  className={`flex items-center gap-[11px] whitespace-nowrap rounded-chip border px-[12px] py-2 text-[13.5px] transition-colors duration-[var(--motion-duration)] ${
-                    active
-                      ? "border-border-2 bg-sb-active font-semibold text-text"
-                      : "border-transparent font-medium text-text-2 hover:bg-surface-2 hover:text-text"
-                  }`}
-                >
-                  <IconeNavegacao Icon={Icon} className={`h-[17px] w-[17px] shrink-0 ${active ? "text-accent" : ""}`} strokeWidth={1.8} />
-                  <span className="menu-esconde min-w-0 truncate">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      ))}
-    </div>
-  );
+  return <ItensMenu secoes={secoesVisiveis(admin, modulos)} ativo={(item) => itemAtivo(pathname, item)} onNavigate={onNavigate} />;
 }
 
 function UserMenu({ usuario, onNavigate }: { usuario: UsuarioSessao; onNavigate?: () => void }) {
@@ -461,52 +424,6 @@ function semAcento(t: string): string {
 }
 
 /** O último valor VÁLIDO de uma prop do servidor: `undefined` (a leitura falhou nesta recarga) mantém o anterior. */
-/** Durante a animação do menu, as grades de cartões (auto-fill) mudam de colunas no meio do caminho: o cartão que
- *  SALTA de lugar (nova coluna/linha) desliza da posição antiga até a nova (FLIP), em vez de pular. Só nesses 340 ms. */
-function deslizarGrades() {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const m = document.documentElement.dataset.motion;
-  if (m === "off" || m === "reduced") return;
-  const itens = Array.from(document.querySelectorAll<HTMLElement>('main [class*="auto-fill"] > *'));
-  if (!itens.length) return;
-  // A posição DENTRO da grade (não na página): a coluna inteira anda com o menu — isso não é salto.
-  const naGrade = (e: HTMLElement) => {
-    const g = e.parentElement as HTMLElement;
-    const base = e.offsetParent === g ? { x: 0, y: 0 } : { x: g.offsetLeft, y: g.offsetTop };
-    return { x: e.offsetLeft - base.x, y: e.offsetTop - base.y, w: e.offsetWidth };
-  };
-  const antes = new Map(itens.map((e) => [e, { grade: naGrade(e), visual: e.getBoundingClientRect() }]));
-  const fim = performance.now() + 340;
-  const passo = () => {
-    for (const e of itens) {
-      const a = antes.get(e);
-      if (!a) continue;
-      const g = naGrade(e);
-      // SALTO = trocou de coluna/linha ou a largura mudou de uma vez (a grade ganhou/perdeu uma coluna). O que só
-      // estica/encolhe com o menu acompanha sozinho.
-      const salto = Math.abs(g.x - a.grade.x) > 40 || Math.abs(g.y - a.grade.y) > 40 || Math.abs(g.w - a.grade.w) > a.grade.w * 0.12;
-      if (salto) {
-        for (const an of e.getAnimations()) an.cancel();
-        const novo = e.getBoundingClientRect();
-        const v = a.visual;
-        e.style.transformOrigin = "0 0";
-        e.animate(
-          [
-            { transform: `translate(${v.left - novo.left}px, ${v.top - novo.top}px) scale(${v.width / novo.width || 1}, ${v.height / novo.height || 1})` },
-            { transform: "none" },
-          ],
-          { duration: Math.max(120, fim - performance.now()), easing: "cubic-bezier(.32,.72,0,1)" },
-        ).onfinish = () => {
-          e.style.transformOrigin = "";
-        };
-      }
-      antes.set(e, { grade: g, visual: e.getBoundingClientRect() });
-    }
-    if (performance.now() < fim) requestAnimationFrame(passo);
-  };
-  requestAnimationFrame(passo);
-}
-
 function useUltimoValido<T>(v: T | null | undefined): T | null {
   const ref = useRef<T | null>(v ?? null);
   if (v !== undefined) ref.current = v;
@@ -563,42 +480,7 @@ export function AppShell({
   const presenca = useUltimoValido(presencaServidor);
   const chat = useUltimoValido(chatServidor);
   const [menuAberto, setMenuAberto] = useState(false);
-  // Menu lateral recolhido (o atributo do <html> já veio do script antes da pintura; aqui só o espelho para a tela).
-  const [recolhido, setRecolhido] = useState(false);
-  // Logo depois de recolher, o ponteiro ainda está em cima: não reabre por cima até sair e voltar.
-  const [semPeek, setSemPeek] = useState(false);
-  useEffect(() => setRecolhido(document.documentElement.hasAttribute(ATRIBUTO_MENU)), []);
-  function alternarMenu() {
-    const novo = !recolhido;
-    // A vaga do menu anima a largura (CSS) e o conteúdo à direita estica/encolhe junto, na mesma curva.
-    document.documentElement.toggleAttribute(ATRIBUTO_MENU, novo);
-    deslizarGrades();
-    try {
-      localStorage.setItem(CHAVE_MENU, novo ? "1" : "0");
-    } catch {
-      /* sem armazenamento: vale nesta visita */
-    }
-    setRecolhido(novo);
-    setSemPeek(novo);
-  }
-  // A ação "Recolher ou expandir o menu" da pesquisa do sistema.
-  const alternarRef = useRef(alternarMenu);
-  alternarRef.current = alternarMenu;
-  useEffect(() => {
-    const f = () => alternarRef.current();
-    window.addEventListener(EVENTO_ALTERNAR_MENU, f);
-    return () => window.removeEventListener(EVENTO_ALTERNAR_MENU, f);
-  }, []);
   const fecharMenu = () => setMenuAberto(false);
-  // Esc fecha a gaveta (o caminho do teclado; o fundo escurecido é só do ponteiro) — menos com um diálogo por cima.
-  useEffect(() => {
-    if (!menuAberto) return;
-    const tecla = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[role='dialog']")) setMenuAberto(false);
-    };
-    document.addEventListener("keydown", tecla);
-    return () => document.removeEventListener("keydown", tecla);
-  }, [menuAberto]);
   const abasSet = new Set(abas);
   const inicio = rotaInicial(abasSet);
   // O PCA do cabeçalho filtra a Mesa, o módulo PCA e o Orçamento — sem nenhuma dessas abas, o seletor não aparece.
@@ -616,85 +498,42 @@ export function AppShell({
     <AcessoNovidades telas={abas} admin={usuario.admin}>
     <div className="min-h-dvh bg-bg text-text lg:flex lg:overflow-x-clip">
       {versaoDados != null && <SincronizarDados versoes={versaoDados} />}
-      {/* Sidebar desktop — a VAGA (sticky, altura do display) anima a largura e empurra o conteúdo; o menu dentro dela é
-          absoluto: recolhido vira o trilho de ícones e, ao passar o mouse, abre POR CIMA do conteúdo (sem empurrar). O
-          conteúdo tem largura fixa — nada reflui na animação, só é cortado. Regras em globals.css (.menu-vaga). */}
-      <div className="menu-vaga relative z-40 hidden shrink-0 lg:sticky lg:top-0 lg:block lg:h-dvh print:!hidden">
-        <aside
-          data-sem-peek={semPeek ? "" : undefined}
-          onPointerLeave={() => setSemPeek(false)}
-          className="menu-lateral absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-surface"
-        >
-          <div className="flex h-full w-full min-w-0 flex-col">
-            {/* Faixa da marca na ALTURA do cabeçalho (a borda de baixo continua a dele) */}
-            <div className="flex h-[var(--h-header)] shrink-0 items-center border-b border-border px-3">
-              <Brand identidade={identidade} inicio={inicio} />
+      <MenuLateral
+        topo={<Brand identidade={identidade} inicio={inicio} />}
+        semMarca={<GatilhoPesquisa />}
+        conteudo={<NavLinks admin={usuario.admin} modulos={modulos} />}
+        rodape={<UserMenu usuario={usuario} />}
+        extraRodape={(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema className="justify-start" />}
+      />
+
+      {/* Gaveta mobile (menu hambúrguer) — a mesma navegação do menu lateral */}
+      <GavetaMenu
+        aberto={menuAberto}
+        onFechar={fecharMenu}
+        topo={<Brand identidade={identidade} inicio={inicio} />}
+        acima={
+          (reparticoes.length > 0 || grupos.length > 0) && (
+            <div className="flex flex-wrap gap-2 px-4 pt-3 sm:hidden">
+              <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
+              <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
             </div>
-            {/* Alinhada ao conteúdo: em cima o respiro do conteúdo (--pad-canvas-y) e embaixo o vão entre componentes
-                (--gap-block) — o 1º módulo começa na mesma altura do 1º componente das telas. */}
-            <div className="shrink-0 px-2 pt-[var(--pad-canvas-y)] pb-[var(--gap-block)]">
+          )
+        }
+        conteudo={
+          <>
+            <div className="mb-3" onClickCapture={fecharMenu} role="none">
               <GatilhoPesquisa />
             </div>
-            <div className="menu-rolagem flex-1 overflow-y-auto overflow-x-hidden px-2 pt-0 pb-4">
-              <NavLinks admin={usuario.admin} modulos={modulos} />
-            </div>
-            <div className="p-2 pt-0">
-              <UserMenu usuario={usuario} />
-              <div className="mt-0.5 flex items-center">
-                <button
-                  type="button"
-                  onClick={alternarMenu}
-                  aria-pressed={recolhido}
-                  aria-label={recolhido ? "Expandir o menu" : "Recolher o menu"}
-                  title={recolhido ? "Expandir o menu" : "Recolher o menu"}
-                  className="grid h-8 w-11 shrink-0 place-items-center rounded-control text-faint transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                >
-                  <IconRecolherMenu className="menu-alternar h-[18px] w-[18px]" strokeWidth={1.8} />
-                </button>
-                <div className="menu-esconde min-w-0 flex-1">
-                  {(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema className="justify-start" />}
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      {/* Drawer mobile (menu hambúrguer) — reusa a mesma navegação da sidebar */}
-      {menuAberto && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div aria-hidden="true" className="absolute inset-0 bg-[var(--scrim)] backdrop-blur-sm" onClick={fecharMenu} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] animate-fade-in-up flex-col bg-surface shadow-soft">
-            <div className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-border pl-4 pr-1">
-              <Brand identidade={identidade} inicio={inicio} />
-              <button
-                type="button"
-                aria-label="Fechar menu"
-                onClick={fecharMenu}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-2"
-              >
-                <IconClose className="h-5 w-5" />
-              </button>
-            </div>
-            {(reparticoes.length > 0 || grupos.length > 0) && (
-              <div className="flex flex-wrap gap-2 px-4 pt-3 sm:hidden">
-                <ReparticaoSelect reparticoes={reparticoes} ativaId={reparticaoAtivaId} />
-                <GrupoSelect grupos={grupos} ativoId={grupoAtivoId} />
-              </div>
-            )}
-            <div className="flex-1 overflow-y-auto px-2 py-4">
-              <div className="mb-3" onClickCapture={fecharMenu} role="none">
-                <GatilhoPesquisa />
-              </div>
-              <NavLinks admin={usuario.admin} modulos={modulos} onNavigate={fecharMenu} />
-            </div>
-            <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">
-              <UserMenu usuario={usuario} onNavigate={fecharMenu} />
-              {(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema onNavigate={fecharMenu} />}
-            </div>
-          </aside>
-        </div>
-      )}
+            <NavLinks admin={usuario.admin} modulos={modulos} onNavigate={fecharMenu} />
+          </>
+        }
+        rodape={
+          <>
+            <UserMenu usuario={usuario} onNavigate={fecharMenu} />
+            {(usuario.admin || usuario.papel.detalhes.novidades.ver) && <VersaoSistema onNavigate={fecharMenu} />}
+          </>
+        }
+      />
 
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">

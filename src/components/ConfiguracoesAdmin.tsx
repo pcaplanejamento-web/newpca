@@ -27,6 +27,7 @@ import {
   IconReferencia,
   IconSituacoes,
   IconTelaAcesso,
+  IconWeb,
   IconLandmark,
   IconCheck,
   IconDatabase,
@@ -54,6 +55,7 @@ import { NotificacoesAdmin } from "./NotificacoesAdmin";
 import { PresencaAdmin } from "./PresencaAdmin";
 import { ProtecaoDadosAdmin } from "./ProtecaoDadosAdmin";
 import { EscopoCabecalhoAdmin } from "./EscopoCabecalhoAdmin";
+import { PublicoAdmin } from "./PublicoAdmin";
 import { SegurancaAdmin } from "./SegurancaAdmin";
 import { Tabs } from "./Tabs";
 import { toast } from "./Toast";
@@ -498,6 +500,7 @@ export function ConfiguracoesAdmin({
             { key: "escopo", label: "Filtro da unidade", icon: <IconFilter />, dica: "Quais telas obedecem à unidade escolhida no cabeçalho", content: <EscopoCabecalhoAdmin /> },
             { key: "cargos", label: "Cargos e funções", icon: <IconBriefcase />, dica: "A lista de cargos dos usuários e dos responsáveis", content: <CargosAdmin /> },
             { key: "acesso", label: "Tela de acesso", icon: <IconTelaAcesso />, dica: "Os textos da tela de login e cadastro", content: <TextosAcessoAdmin gravado={acesso} identidade={identidade} /> },
+            { key: "publico", label: "Tela pública", icon: <IconWeb />, dica: "As abas do PCA na consulta sem login", content: <PublicoAdmin /> },
             { key: "tabelas", label: "Tabelas", icon: <IconLinhas />, dica: "Quantas linhas as tabelas mostram ao abrir", content: abaTabelas },
             { key: "pcas", label: "PCAs", icon: <IconLayers />, dica: "Os PCAs cadastrados e o vigente", content: abaPcas },
             { key: "situacoes", label: "Situações", icon: <IconSituacoes />, dica: "As situações do protocolo (nome, cor, ordem)", content: <SituacoesAdmin /> },

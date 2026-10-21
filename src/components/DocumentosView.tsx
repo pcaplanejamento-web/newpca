@@ -98,14 +98,14 @@ export function DocumentoCard({
 }
 
 /** O VISUALIZADOR: as páginas do PDF desenhadas pelo pdf.js (o mesmo leitor da importação) — funciona no celular. */
-function VisualizadorPdf({ doc, onBaixar, onFechar }: { doc: DocumentoResumo; onBaixar?: () => void; onFechar: () => void }) {
+export function VisualizadorPdf({ doc, url, onBaixar, onFechar }: { doc: DocumentoResumo; /** De onde vem o PDF (a consulta pública usa a rota dela). */ url?: string; onBaixar?: () => void; onFechar: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [estado, setEstado] = useState<"carregando" | "pronto" | "erro">("carregando");
   useEffect(() => {
     let vivo = true;
     (async () => {
       try {
-        const r = await fetch(urlArquivo(doc.id));
+        const r = await fetch(url ?? urlArquivo(doc.id));
         if (!r.ok) throw new Error();
         const arquivo = new File([await r.blob()], doc.nomeArquivo, { type: "application/pdf" });
         const { abrirPdf } = await import("@/lib/parse-dfd-pdf");
@@ -131,7 +131,7 @@ function VisualizadorPdf({ doc, onBaixar, onFechar }: { doc: DocumentoResumo; on
     return () => {
       vivo = false;
     };
-  }, [doc.id, doc.nomeArquivo]);
+  }, [doc.id, doc.nomeArquivo, url]);
   return (
     <Modal
       open

@@ -3,6 +3,9 @@
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
 import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
+import { ItensMenu } from "@/components/MenuLateral";
+import { CamposPublico } from "@/components/PublicoAdmin";
+import { type ConfigPublico, PUBLICO_PADRAO } from "@/lib/publico-core";
 import { CONFIG_ESCOPO_PADRAO, type ConfigEscopo } from "@/lib/escopo-cabecalho-core";
 import { TabelaAcessos } from "@/components/HistoricoAcessos";
 import { type ConfigSeguranca, SEGURANCA_PADRAO } from "@/lib/seguranca-core";
@@ -484,6 +487,12 @@ function DemoProtecao() {
       <MarcaDagua texto="Maria Clara Souza · matrícula 045210 · 08/10/2026 14:30" inline />
     </div>
   );
+}
+
+/** TELA PÚBLICA: as abas publicadas (sem gravar). */
+function DemoPublico() {
+  const [v, setV] = useState<ConfigPublico>(PUBLICO_PADRAO);
+  return <CamposPublico valor={v} onChange={setV} />;
 }
 
 /** FILTRO DA UNIDADE: os campos da tela do ADM (sem gravar). */
@@ -3540,6 +3549,16 @@ export function Catalogo() {
 
       <Secao titulo="Segurança do acesso — CamposSeguranca (Configurações → Segurança: encerrar a sessão inativa, alertas de aparelho novo e de conta bloqueada)">
         <DemoSeguranca />
+      </Secao>
+
+      <Secao titulo="Menu lateral — MenuLateral / GavetaMenu / ItensMenu (o MESMO menu do painel e da tela pública: recolhível, abre por cima, gaveta no celular)">
+        <div className="max-w-xs rounded-card border border-border bg-surface p-2">
+          <ItensMenu secoes={[{ chave: "demo", titulo: "Consulta do PCA", itens: [{ href: "#", label: "Dashboard", Icon: IconDashboard }, { href: "#orc", label: "Orçamento", Icon: IconWallet }] }]} ativo={(i) => i.href === "#"} />
+        </div>
+      </Secao>
+
+      <Secao titulo="Tela pública — CamposPublico / PublicoAdmin (Configurações → Tela pública: as abas do PCA na consulta sem login)">
+        <DemoPublico />
       </Secao>
 
       <Secao titulo="Filtro da unidade — CamposEscopo (Configurações → Filtro da unidade: quais telas obedecem à unidade do cabeçalho)">

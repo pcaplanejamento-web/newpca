@@ -3,3 +3,6 @@
 export const CHAVE_MENU = "menu:recolhido";
 export const ATRIBUTO_MENU = "data-menu-recolhido";
 export const SCRIPT_MENU = `(function(){try{if(localStorage.getItem(${JSON.stringify(CHAVE_MENU)})==="1")document.documentElement.setAttribute(${JSON.stringify(ATRIBUTO_MENU)},"")}catch(_){}})();`;
+
+/** A ação "Recolher ou expandir o menu" (pesquisa do sistema → o menu lateral). */
+export const EVENTO_ALTERNAR_MENU = "menu-lateral:alternar";
