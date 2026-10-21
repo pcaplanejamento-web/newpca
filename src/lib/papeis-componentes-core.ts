@@ -58,6 +58,9 @@ export const CATALOGO_COMPONENTES: readonly InfoComponente[] = [
     visualizar: "Ver a visão Consolidada.",
     exportar: "Baixar a Consolidada (.xlsx/PDF).",
   }),
+  c("dfd", "variacao", "Relatório de variação", "O botão Relatório de variação na visão Consolidada da Mesa (os itens acima da média).", {
+    visualizar: "Ver e baixar o Relatório de variação.",
+  }),
   // PCA
   c("pca", "dashboard", "Dashboard do PCA", "A aba Dashboard do espaço do PCA: KPIs, gráficos e a consulta.", {
     visualizar: "Abrir o Dashboard do PCA.",
@@ -69,6 +72,9 @@ export const CATALOGO_COMPONENTES: readonly InfoComponente[] = [
   }),
   c("pca", "visaoDetalhes", "Configurações da visão", "O olho ao lado da Visão no PCA × Orçamento: abre os filtros e os vínculos da visão em uso, só para consulta.", {
     visualizar: "Ver as configurações da visão do orçamento (sem alterar).",
+  }),
+  c("pca", "variacao", "Relatório de variação (Mesa do PCA)", "O botão Relatório de variação na visão Consolidada da Mesa do PCA (os itens acima da média).", {
+    visualizar: "Ver e baixar o Relatório de variação.",
   }),
   c("pca", "mesa", "Mesa do PCA", "A aba Mesa do PCA com os protocolos enviados e incorporados (todo PCA recebe protocolos).", {
     visualizar: "Abrir a Mesa do PCA.",
@@ -210,4 +216,30 @@ export function resumoComponentes(r: ComponentesRetirados, rotuloTela: (t: Tela)
     if (!x || !acoes.length) return [];
     return [{ tela: x.tela, rotulo: `${x.rotulo} (${rotuloTela(x.tela)})`, valor: acoes.includes("visualizar") ? "Oculto" : `Sem ${acoes.map(rotuloAcao).join(", ")}` }];
   });
+}
+
+/** As FUNÇÕES desligadas pelo GRUPO (lista das chaves "tela.funcao" do catálogo; lixo = nenhuma). */
+export function lerFuncoesOff(json: string | null | undefined): string[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && POR_CHAVE.has(x)))] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Só as funções das telas que o grupo abre, na ordem do catálogo (o que é gravado). */
+export const compactarFuncoesOff = (lista: readonly string[], telas: readonly string[]): string[] =>
+  CATALOGO_COMPONENTES.filter((x) => lista.includes(x.chave) && telas.includes(x.tela)).map((x) => x.chave);
+
+/** O papel + o GRUPO: a função desligada no grupo some inteira (todas as ações), como retirar Visualizar no papel. */
+export function comFuncoesDoGrupo(r: ComponentesRetirados, funcoesOff: readonly string[]): ComponentesRetirados {
+  if (!funcoesOff.length) return r;
+  const out: ComponentesRetirados = { ...r };
+  for (const chave of funcoesOff) {
+    const x = POR_CHAVE.get(chave);
+    if (x) out[chave] = acoesDoComponente(x);
+  }
+  return out;
 }

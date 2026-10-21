@@ -30,7 +30,7 @@ import {
 } from "@/db/schema";
 import { type LinhaIndice, MAX_INDICE, padroesLike } from "./pesquisa-core";
 import { casaTermos } from "./pesquisa-sql";
-import { type Acesso, componenteLibera, podeNoQuadro, podeTela } from "./acesso";
+import { type Acesso, componenteLibera, getAcesso, orcamentosDoAcesso, pcasDoAcesso, podeNoQuadro, podeOrcamento, podePca, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
@@ -1650,10 +1650,13 @@ export async function buscarVinculos(
   }
   if (tipo === "pca" || tipo === "orcamento") {
     const t = tipo === "pca" ? pcas : orcamentos;
+    // Só os PCAs/orçamentos do grupo ativo (Grupos → "PCAs do grupo" / "Orçamentos do grupo"; null = todos).
+    const acesso = await getAcesso();
+    const doGrupo = tipo === "pca" ? pcasDoAcesso(acesso) : orcamentosDoAcesso(acesso);
     const linhas = await db
       .select({ id: t.id, nome: t.nome, ano: t.ano })
       .from(t)
-      .where(or(casaTermos([t.nome], padroes), like(sql`CAST(${t.ano} AS TEXT)`, `%${q.trim().replace(/[%_]/g, "")}%`)))
+      .where(and(doGrupo ? inArray(t.id, [...doGrupo, 0]) : undefined, or(casaTermos([t.nome], padroes), like(sql`CAST(${t.ano} AS TEXT)`, `%${q.trim().replace(/[%_]/g, "")}%`))))
       .orderBy(desc(t.id))
       .limit(LIMITE);
     // O MESMO rótulo que `rotulosVinculos` dá ao vínculo gravado (orçamento = nome + ano).
@@ -1821,6 +1824,7 @@ export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: nu
   }
   if (v.tipo === "pca" || v.tipo === "orcamento") {
     if (!podeTela(a, v.tipo).visualizar) return false;
+    if (!(v.tipo === "pca" ? podePca(a, v.id) : podeOrcamento(a, v.id))) return false;
     const t = v.tipo === "pca" ? pcas : orcamentos;
     return (await db.select({ id: t.id }).from(t).where(eq(t.id, v.id))).length > 0;
   }

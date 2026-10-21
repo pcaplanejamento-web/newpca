@@ -11,6 +11,10 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### Grupos: funções de cada tela + orçamentos do grupo (v1.144.0) — entregue
+- No banner do grupo, as funções de cada tela (abas, visões, Relatório de variação) ligam/desligam para o grupo; os
+  orçamentos do grupo seguem o modelo dos PCAs (todos ou os escolhidos) na lista, no espaço, nas rotas e na pesquisa.
+
 ### Grupos por unidade de cadastro: acesso de cada tela + várias unidades por pessoa (v1.141.0) — entregue
 No modo "Unidade de cadastro de cada pessoa", cada tela do grupo escolhe só as unidades de cadastro ou todas; a pessoa pode
 ter várias unidades de cadastro (Usuários → "Unidades em que trabalha", com a principal). Migração `0117`.

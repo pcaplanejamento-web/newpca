@@ -25,11 +25,19 @@ const pcasSchema = idsSchema.nullable();
  * cadastro da pessoa). A rota guarda só as telas que o grupo abre. */
 const escopoTelasSchema = z.record(z.string().regex(/^[a-z]{1,30}$/, "Tela inválida."), z.literal("todas"));
 
+/** As FUNÇÕES das telas desligadas no grupo (chaves "tela.funcao"; a rota guarda só as do catálogo e das telas do grupo). */
+const funcoesOffSchema = z
+  .array(z.string().regex(/^[a-z]{1,30}\.[A-Za-z]{1,40}$/, "Função inválida."))
+  .max(200)
+  .transform((a) => [...new Set(a)]);
+
 export const grupoCreateSchema = z.object({
   nome: nomeGrupo,
   modulos: modulosSchema.default([]),
   chat: z.boolean().default(true),
   pcas: pcasSchema.default(null),
+  orcamentos: pcasSchema.default(null),
+  funcoesOff: funcoesOffSchema.default([]),
   membros: idsSchema.default([]),
   reparticoes: idsSchema.default([]),
   modoUnidades: z.enum(["lista", "cadastro"]).default("lista"),
@@ -43,6 +51,8 @@ export const grupoPatchSchema = z.object({
   modulos: modulosSchema.optional(),
   chat: z.boolean().optional(),
   pcas: pcasSchema.optional(),
+  orcamentos: pcasSchema.optional(),
+  funcoesOff: funcoesOffSchema.optional(),
   membros: idsSchema.optional(),
   reparticoes: idsSchema.optional(),
   modoUnidades: z.enum(["lista", "cadastro"]).optional(),
