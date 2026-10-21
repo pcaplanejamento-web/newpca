@@ -7,6 +7,7 @@ import {
   catalogos,
   dfdProtocolos,
   dfds,
+  documentos,
   feriados,
   grupos,
   orcamentoItens,
@@ -17,7 +18,8 @@ import {
   reparticoes,
   usuarios,
 } from "@/db/schema";
-import { type Acesso, componenteLibera, orcamentosDoAcesso, podeTela } from "./acesso";
+import { type Acesso, componenteLibera, orcamentosDoAcesso, pcasDoAcesso, podeTela } from "./acesso";
+import { documentoVisivel, lerPcasDocumento } from "./documentos-core";
 import { linkEvento } from "./calendario-core";
 import { getDb } from "./db";
 import { dataIsoBrasilia, dataBR } from "./format";
@@ -109,6 +111,22 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       detalhe: `${l.catalogo} · Contrato ${l.contrato}`,
       href: `/painel/catalogo?abrir=${enc(`historico:${l.catalogoId}`)}`,
     }));
+  }
+
+  if (tipo === "documento") {
+    if (!podeTela(a, "documentos").visualizar) return null;
+    // Os do grupo: o documento só de PCAs de fora do grupo não sai (a MESMA régua da tela).
+    const permitidos = pcasDoAcesso(a);
+    const ls = await db
+      .select({ id: documentos.id, nome: documentos.nome, arquivo: documentos.nomeArquivo, pcas: documentos.pcas, link: documentos.urlExterna })
+      .from(documentos)
+      .where(and(eq(documentos.completo, true), casaTermos([documentos.nome, documentos.nomeArquivo], padroes)))
+      .orderBy(desc(documentos.id))
+      .limit(LIM * 4);
+    return ls
+      .filter((l) => documentoVisivel(lerPcasDocumento(l.pcas), permitidos))
+      .slice(0, LIM)
+      .map((l) => ({ id: l.id, rotulo: l.nome, detalhe: l.link ? "PDF · Drive" : `PDF · ${l.arquivo}`, href: `/painel/documentos?abrir=${l.id}` }));
   }
 
   if (tipo === "evento") {

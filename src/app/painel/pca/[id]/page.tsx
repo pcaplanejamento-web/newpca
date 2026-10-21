@@ -15,6 +15,10 @@ import { PlanilhasPca } from "@/components/PlanilhasPca";
 import { itensDosUploads, uploadsDoPca } from "@/lib/pca-uploads";
 import { Ajuda } from "@/components/Ajuda";
 import { componenteLibera, podePca, podeTela } from "@/lib/acesso";
+import { DocumentosView } from "@/components/DocumentosView";
+import { listarDocumentos } from "@/lib/documentos";
+import { documentoNoPca } from "@/lib/documentos-core";
+import { pcasDosDocumentos } from "@/lib/documentos-pagina";
 import { AcessoRestrito } from "@/components/AcessoRestrito";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import type { UsuarioSessao } from "@/lib/auth";
@@ -35,7 +39,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "importacao", "configuracao"];
+const ABAS: AbaPca[] = ["dashboard", "orcamento", "mesa", "importacao", "documentos", "configuracao"];
 
 // ESPAÇO do PCA: Dashboard · Orçamento (KPIs + Comparativo) · Mesa (protocolos — TODO PCA recebe) · Importação (só o de
 // lista pronta: as planilhas) · Configuração.
@@ -62,7 +66,10 @@ export default async function PcaEspacoPage({
   }
   if (!podePca(acesso, pca.id)) return <AcessoRestrito mensagem="Este PCA não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/pca", rotulo: "Ver os PCAs" }} />;
   // As abas que o papel vê (Detalhes do papel → Componentes); a pedida fora delas cai na 1ª permitida.
-  const permitidas = ABAS.filter((a) => (a !== "importacao" || pca.fonte === "lista") && componenteLibera(acesso, `pca.${a}`));
+  // Documentos: a função do PCA E a tela Documentos (o PDF é servido por ela — e o papel decide o que se faz).
+  const permitidas = ABAS.filter(
+    (a) => (a !== "importacao" || pca.fonte === "lista") && (a !== "documentos" || podeTela(acesso, "documentos").visualizar) && componenteLibera(acesso, `pca.${a}`),
+  );
   const aba: AbaPca = permitidas.includes(sp.aba as AbaPca) ? (sp.aba as AbaPca) : (permitidas[0] ?? "dashboard");
 
   // SÓ a aba ativa é montada (cada aba tem a sua carga — trocar de aba navega).
@@ -72,7 +79,20 @@ export default async function PcaEspacoPage({
   else if (aba === "mesa") conteudo = await abaMesa(pca, u, sp.abrir);
   else if (aba === "importacao")
     conteudo = <PlanilhasPca pcaId={pca.id} uploads={await uploadsDoPca(pca.id)} itens={await itensDosUploads(pca.id)} podeImportar={pode.importar} podeExcluir={pode.excluir} />;
-  else {
+  else if (aba === "documentos") {
+    const { permitidos, pcas, podeTodosPcas } = await pcasDosDocumentos(acesso);
+    const todos = await listarDocumentos(permitidos);
+    const noPca = todos.filter((d) => documentoNoPca(d.pcas, pca.id));
+    conteudo = (
+      <DocumentosView
+        documentos={noPca}
+        pode={podeTela(acesso, "documentos")}
+        pcas={pcas}
+        podeTodosPcas={podeTodosPcas}
+        noPca={{ id: pca.id, candidatos: todos.filter((d) => !documentoNoPca(d.pcas, pca.id)) }}
+      />
+    );
+  } else {
     const [visoes, dados] = await Promise.all([listarVisoesOrcamento(), pcaTemDados(pca.id)]);
     const temDados = dados.planilhas > 0 ? `${num(dados.planilhas)} planilha(s)` : dados.dfds > 0 ? `${num(dados.dfds)} DFD(s) vinculados` : null;
     conteudo = (

@@ -2,6 +2,7 @@
 // estáveis (Icon*) para manter os componentes existentes sem alterações.
 import type { SVGProps } from "react";
 import {
+  Link2Off,
   ChevronsUpDown,
   Activity,
   MessagesSquare,
@@ -166,6 +167,7 @@ export const IconBuilding = Building2;
 export const IconLandmark = Landmark;
 export const IconWallet = Wallet;
 export const IconBox = Package;
+export const IconDesvincular = Link2Off;
 export const IconTrophy = Trophy;
 export const IconTrend = TrendingUp;
 export const IconSun = Sun;

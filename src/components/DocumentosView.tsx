@@ -5,17 +5,20 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { nomeDoDocumento, TAMANHO_PARTE } from "@/lib/compactar-pdf-core";
 import type { PdfCompactado, VersaoPdf } from "@/lib/compactar-pdf";
 import type { DocumentoResumo } from "@/lib/documentos";
+import { alternarPcaDocumento, documentoNoPca, type PcasDocumento, passaFiltroPca, rotuloPcasDocumento } from "@/lib/documentos-core";
 import { dataBR, formatBytes, num } from "@/lib/format";
 import type { PodeTela } from "@/lib/papeis-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
+import { useAbrirDaUrl } from "./AbrirDaUrl";
 import { Ajuda } from "./Ajuda";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
 import { gradienteDe, MenuCard } from "./CatalogoCards";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { useConfirmacao } from "./Confirmacao";
-import { SearchField, TextField } from "./Field";
-import { IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash } from "./icons";
+import { Checkbox, SearchField, SelectField, TextField } from "./Field";
+import { IconBox, IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash, IconDesvincular } from "./icons";
+import { ListaEscolhaIds } from "./ListaEscolhaIds";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
 import { CapaQuadro, CartaoEspaco, QuadroNovoCard } from "./QuadroCard";
@@ -32,16 +35,27 @@ export function DocumentoCard({
   onBaixar,
   onRenomear,
   onExcluir,
+  onPcas,
+  onDesvincular,
+  pcasTexto,
 }: {
   doc: DocumentoResumo;
   onVer: () => void;
   onBaixar?: () => void;
   onRenomear?: () => void;
   onExcluir?: () => void;
+  /** Escolher os PCAs do documento. */
+  onPcas?: () => void;
+  /** Na aba Documentos do PCA: tirar o documento deste PCA. */
+  onDesvincular?: () => void;
+  /** Os PCAs do documento, por extenso (o sobretítulo). */
+  pcasTexto?: string;
 }) {
   const acoes = [
     { rotulo: "Visualizar", icone: <IconEye className="h-4 w-4 text-muted" />, onClick: onVer },
     onBaixar && { rotulo: "Baixar", icone: <IconDownload className="h-4 w-4 text-muted" />, onClick: onBaixar },
+    onPcas && { rotulo: "PCAs vinculados…", icone: <IconBox className="h-4 w-4 text-muted" />, onClick: onPcas },
+    onDesvincular && { rotulo: "Desvincular deste PCA", icone: <IconDesvincular className="h-4 w-4 text-muted" />, onClick: onDesvincular },
     onRenomear && { rotulo: "Renomear", icone: <IconPencil className="h-4 w-4 text-muted" />, onClick: onRenomear },
     onExcluir && { rotulo: "Excluir", icone: <IconTrash className="h-4 w-4" />, perigo: true, onClick: onExcluir },
   ].filter((a): a is NonNullable<typeof a> => !!a);
@@ -61,7 +75,7 @@ export function DocumentoCard({
           )}
         </CapaQuadro>
       }
-      sobretitulo={d.autor ? `PDF · ${d.autor}` : "PDF"}
+      sobretitulo={pcasTexto ?? (d.autor ? `PDF · ${d.autor}` : "PDF")}
       nome={d.nome}
       metricas={[
         { rotulo: "Páginas", valor: num(d.paginas) },
@@ -207,8 +221,75 @@ export function EscolherTamanhoPdf({
  * visualizar e baixar. O que o papel não permite some (subir = Importar, baixar = Exportar, renomear = Manipular,
  * excluir = Excluir).
  */
-export function DocumentosView({ documentos, pode, admin = false }: { documentos: DocumentoResumo[]; pode: PodeTela; admin?: boolean }) {
+export function DocumentosView({
+  documentos,
+  pode,
+  admin = false,
+  pcas,
+  podeTodosPcas,
+  noPca,
+}: {
+  documentos: DocumentoResumo[];
+  pode: PodeTela;
+  admin?: boolean;
+  /** Os PCAs que a pessoa acessa (os do grupo ativo) — o filtro e o vínculo. */
+  pcas: { id: number; nome: string; ano: number | null }[];
+  /** Sem restrição de PCA no grupo: pode vincular a TODOS os PCAs. */
+  podeTodosPcas: boolean;
+  /** A ABA DOCUMENTOS de um PCA: `documentos` = os vinculados; `candidatos` = os que dá para vincular. */
+  noPca?: { id: number; candidatos: DocumentoResumo[] };
+}) {
   const router = useRouter();
+  const [filtroPca, setFiltroPca] = useState("");
+  const [editPcas, setEditPcas] = useState<{ doc: DocumentoResumo; valor: Set<number> | null } | null>(null);
+  const [vincular, setVincular] = useState<Set<number> | null>(null);
+  const [gravando, setGravando] = useState(false);
+  const nomesPcas = useMemo(() => new Map(pcas.map((x) => [x.id, x.ano != null ? `PCA ${x.ano}` : x.nome])), [pcas]);
+  const idsPcas = useMemo(() => pcas.map((x) => x.id), [pcas]);
+  // O link da PESQUISA do sistema (`?abrir=<id>`) abre o documento.
+  useAbrirDaUrl((v) => {
+    const d = documentos.find((x) => x.id === Number(v));
+    if (d) setVendo(d);
+  });
+
+  // Grava os PCAs de UM documento (o servidor mantém os PCAs de fora do grupo).
+  async function gravarPcas(d: DocumentoResumo, p: PcasDocumento): Promise<boolean> {
+    const r = await fetch(`/api/documentos/${d.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pcas: p }) }).catch(() => null);
+    const j = (await r?.json().catch(() => ({}))) as { ok?: boolean; error?: string } | undefined;
+    if (!r?.ok || !j?.ok) {
+      setAviso({ kind: "danger", texto: j?.error ?? `Não foi possível alterar os PCAs de "${d.nome}".` });
+      return false;
+    }
+    return true;
+  }
+
+  async function salvarEdicaoPcas() {
+    if (!editPcas) return;
+    setGravando(true);
+    const ok = await gravarPcas(editPcas.doc, editPcas.valor == null ? "todos" : [...editPcas.valor]);
+    setGravando(false);
+    if (!ok) return;
+    setEditPcas(null);
+    router.refresh();
+  }
+
+  // Aba do PCA: vincula os escolhidos a ESTE PCA, um por vez.
+  async function salvarVinculos() {
+    if (!noPca || !vincular?.size) return;
+    setGravando(true);
+    let n = 0;
+    for (const d of noPca.candidatos.filter((x) => vincular.has(x.id))) if (await gravarPcas(d, alternarPcaDocumento(d.pcas, noPca.id, true, idsPcas))) n++;
+    setGravando(false);
+    setVincular(null);
+    if (n) setAviso({ kind: "ok", texto: `${n} documento(s) vinculado(s) a este PCA.` });
+    router.refresh();
+  }
+
+  async function desvincular(d: DocumentoResumo) {
+    if (!noPca) return;
+    if (!(await confirmar({ titulo: `Tirar "${d.nome}" deste PCA?`, texto: "O documento continua em Documentos e nos outros PCAs.", confirmar: "Desvincular" }))) return;
+    if (await gravarPcas(d, alternarPcaDocumento(d.pcas, noPca.id, false, idsPcas))) router.refresh();
+  }
   // ADM: a escolha do tamanho de cada PDF (a promessa resolve com a versão escolhida, ou null = não enviar este).
   const [escolha, setEscolha] = useState<{ nome: string; original: number; versoes: VersaoPdf[]; resolver: (v: VersaoPdf | null) => void } | null>(null);
   const [busca, setBusca] = useState("");
@@ -238,8 +319,8 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
 
   const visiveis = useMemo(() => {
     const casa = predicadoBusca(busca);
-    return casa ? documentos.filter((d) => casa([d.nome, d.nomeArquivo, d.autor])) : documentos;
-  }, [documentos, busca]);
+    return documentos.filter((d) => passaFiltroPca(d.pcas, filtroPca) && (!casa || casa([d.nome, d.nomeArquivo, d.autor])));
+  }, [documentos, busca, filtroPca]);
 
   async function enviar(files: File[]) {
     const pdfs = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
@@ -330,26 +411,50 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
 
   return (
     <div className="space-y-[var(--gap-block)]">
-      <div className="linha-topico flex flex-wrap items-center gap-2">
-        <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-          <IconDocumentos className="h-5 w-5 text-accent" />
-          Documentos
-        </h1>
+      <div className={`flex flex-wrap items-center gap-2 ${noPca ? "" : "linha-topico"}`}>
+        {!noPca && (
+          <h1 className="flex items-center gap-2 text-xl font-bold text-text">
+            <IconDocumentos className="h-5 w-5 text-accent" />
+            Documentos
+          </h1>
+        )}
         <Ajuda titulo="Documentos">
-          <p>Guarde PDFs no sistema para consultar depois. Cada documento vira um card: tocar abre o PDF; o menu "…" baixa, renomeia ou exclui.</p>
-          <p>Todo documento fica com no máximo 100 KB. Se o PDF for maior, o sistema o compacta no próprio navegador antes de enviar — as páginas viram imagem e a qualidade baixa até caber.</p>
+          {noPca ? (
+            <p>Os documentos vinculados a este PCA (ou a todos os PCAs). "Vincular documento" traz um que já está em Documentos; o menu "…" de cada um o tira daqui.</p>
+          ) : (
+            <>
+              <p>Guarde PDFs no sistema para consultar depois. Cada documento vira um card: tocar abre o PDF; o menu "…" baixa, renomeia, escolhe os PCAs ou exclui.</p>
+              <p>Um documento pode ficar em PCAs específicos ou em todos — ele aparece na aba Documentos de cada PCA. O filtro ao lado da pesquisa mostra os de um PCA.</p>
+              <p>Todo documento fica com no máximo 100 KB. Se o PDF for maior, o sistema o compacta no próprio navegador antes de enviar — as páginas viram imagem e a qualidade baixa até caber.</p>
+            </>
+          )}
         </Ajuda>
         {documentos.length > 0 && (
-          <div className="ml-auto w-full sm:w-72">
-            <SearchField compacto value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Pesquisar documentos…" aria-label="Pesquisar documentos" />
+          <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
+            {!noPca && pcas.length > 0 && (
+              <div className="w-full sm:w-56">
+                <SelectField compacto label="PCA" value={filtroPca} onChange={(e) => setFiltroPca(e.target.value)}>
+                  <option value="">Todos</option>
+                  <option value="sem">Sem PCA</option>
+                  {pcas.map((x) => (
+                    <option key={x.id} value={String(x.id)}>
+                      {x.ano != null ? `${x.ano} · ${x.nome}` : x.nome}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+            )}
+            <div className="w-full sm:w-72">
+              <SearchField compacto value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Pesquisar documentos…" aria-label="Pesquisar documentos" />
+            </div>
           </div>
         )}
       </div>
 
-      {documentos.length === 0 && !pode.importar ? (
-        <p className="rounded-card border border-border bg-surface p-10 text-center text-sm text-muted">Nenhum documento guardado ainda.</p>
-      ) : visiveis.length === 0 && busca ? (
-        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhum documento com "{busca}".</p>
+      {documentos.length === 0 && (noPca ? !pode.manipular : !pode.importar) ? (
+        <p className="rounded-card border border-border bg-surface p-10 text-center text-sm text-muted">{noPca ? "Nenhum documento vinculado a este PCA." : "Nenhum documento guardado ainda."}</p>
+      ) : visiveis.length === 0 && (busca || filtroPca) ? (
+        <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhum documento {busca ? `com "${busca}"` : "neste PCA"}.</p>
       ) : (
         <div className={`grid ${COLUNAS_ESPACOS} gap-3`}>
           {visiveis.map((d) => (
@@ -359,10 +464,14 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
               onVer={() => setVendo(d)}
               onBaixar={pode.exportar ? () => baixar(d) : undefined}
               onRenomear={pode.manipular ? () => setRenomeando({ doc: d, nome: d.nome }) : undefined}
-              onExcluir={pode.excluir ? () => excluir(d) : undefined}
+              onExcluir={!noPca && pode.excluir ? () => excluir(d) : undefined}
+              onPcas={!noPca && pode.manipular && pcas.length > 0 && (podeTodosPcas || d.pcas !== "todos") ? () => setEditPcas({ doc: d, valor: d.pcas === "todos" ? null : new Set(d.pcas.filter((x) => nomesPcas.has(x))) }) : undefined}
+              onDesvincular={noPca && pode.manipular && d.pcas !== "todos" && documentoNoPca(d.pcas, noPca.id) ? () => desvincular(d) : undefined}
+              pcasTexto={noPca ? (d.pcas === "todos" ? "Todos os PCAs" : undefined) : rotuloPcasDocumento(d.pcas, nomesPcas)}
             />
           ))}
-          {pode.importar &&
+          {noPca && pode.manipular && <QuadroNovoCard rotulo="Vincular documento" onClick={() => setVincular(new Set())} />}
+          {!noPca && pode.importar &&
             (fila ? (
               <div className="flex min-h-[14rem] flex-col justify-center rounded-card border-2 border-dashed border-accent/50 bg-accent-soft/40 p-[var(--pad-card)]">
                 <Progress value={((fila.atual - 1) / fila.total) * 100} label={`${fila.nome} (${fila.atual} de ${fila.total}) — ${fila.texto}`} />
@@ -392,7 +501,7 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
                 />
               </div>
             ))}
-          {pode.importar && !fila && <QuadroNovoCard rotulo="Colar link do Google" onClick={() => setLink({ url: "" })} />}
+          {!noPca && pode.importar && !fila && <QuadroNovoCard rotulo="Colar link do Google" onClick={() => setLink({ url: "" })} />}
         </div>
       )}
 
@@ -459,6 +568,76 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
             />
             <p className="text-xs text-muted">O arquivo precisa estar compartilhado como “Qualquer pessoa com o link”. Nada é enviado: o sistema guarda só o link e lê o PDF do Drive a cada abertura (sempre a versão atual).</p>
           </form>
+        </Modal>
+      )}
+
+      {editPcas && (
+        <Modal
+          open
+          onClose={() => !gravando && setEditPcas(null)}
+          titulo={`PCAs — ${editPcas.doc.nome}`}
+          size="md"
+          rodape={
+            <div className="flex w-full justify-end gap-2">
+              <Button variant="secondary" disabled={gravando} onClick={() => setEditPcas(null)}>
+                Cancelar
+              </Button>
+              <Button loading={gravando} onClick={salvarEdicaoPcas}>
+                Salvar
+              </Button>
+            </div>
+          }
+        >
+          <ListaEscolhaIds
+            titulo="PCAs do documento"
+            todos="Todos os PCAs (também os que forem criados)"
+            vazio="Nenhum PCA cadastrado."
+            aviso="Sem nenhum PCA, o documento fica só em Documentos."
+            opcoes={pcas}
+            valor={editPcas.valor ?? (podeTodosPcas ? null : new Set())}
+            semTodos={!podeTodosPcas}
+            onChange={(v) => setEditPcas({ ...editPcas, valor: v })}
+          />
+        </Modal>
+      )}
+
+      {noPca && vincular && (
+        <Modal
+          open
+          onClose={() => !gravando && setVincular(null)}
+          titulo="Vincular documentos a este PCA"
+          size="md"
+          rodape={
+            <div className="flex w-full justify-end gap-2">
+              <Button variant="secondary" disabled={gravando} onClick={() => setVincular(null)}>
+                Cancelar
+              </Button>
+              <Button loading={gravando} disabled={!vincular.size} onClick={salvarVinculos}>
+                Vincular {vincular.size || ""}
+              </Button>
+            </div>
+          }
+        >
+          {noPca.candidatos.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted">Todos os documentos já estão neste PCA.</p>
+          ) : (
+            <div className="max-h-[60dvh] space-y-1 overflow-y-auto">
+              {noPca.candidatos.map((d) => (
+                <div key={d.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                  <Checkbox
+                    checked={vincular.has(d.id)}
+                    onChange={() => {
+                      const n = new Set(vincular);
+                      if (n.has(d.id)) n.delete(d.id);
+                      else n.add(d.id);
+                      setVincular(n);
+                    }}
+                    label={<span className="min-w-0 truncate text-[13px] text-text">{d.nome}</span>}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </Modal>
       )}
 

@@ -1947,6 +1947,8 @@ export const documentos = sqliteTable(
     completo: integer("completo", { mode: "boolean" }).notNull().default(true),
     /** Migração `0122`: o link do Google (Docs/Drive) — o PDF NÃO é guardado, é lido de lá a cada abertura. */
     urlExterna: text("url_externa"),
+    /** Migração `0124`: os PCAs do documento — NULL = nenhum, "todos" = todos, senão o JSON dos ids. */
+    pcas: text("pcas"),
   },
   (t) => [index("documentos_criado_em_idx").on(t.criadoEm)],
 );

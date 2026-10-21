@@ -15,6 +15,7 @@ import { Callout } from "./Callout";
 import { useConfirmacao } from "./Confirmacao";
 import { Checkbox, SearchField, TextField } from "./Field";
 import { IconPlus, IconSave, IconTrash, IconUsers } from "./icons";
+import { ListaEscolhaIds } from "./ListaEscolhaIds";
 import { Modal } from "./Modal";
 import { NAV_MODULOS } from "./navModulos";
 import { CartaoEspaco } from "./QuadroCard";
@@ -342,10 +343,10 @@ export function GruposAdmin() {
           <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
           <FontesPorAba telas={telasGrupo} unicas={fontesAbas} onChange={setFontesAbas} />
           {telasGrupo.includes("pca") && (
-            <ListaDoGrupo titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
+            <ListaEscolhaIds titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
           )}
           {telasGrupo.includes("orcamento") && (
-            <ListaDoGrupo titulo="Orçamentos do grupo" todos="Todos os orçamentos (também os que forem importados)" vazio="Nenhum orçamento importado." aviso="Sem nenhum orçamento, as pessoas do grupo não veem nenhum orçamento." opcoes={orcsDisp} valor={orcsSel} onChange={setOrcsSel} />
+            <ListaEscolhaIds titulo="Orçamentos do grupo" todos="Todos os orçamentos (também os que forem importados)" vazio="Nenhum orçamento importado." aviso="Sem nenhum orçamento, as pessoas do grupo não veem nenhum orçamento." opcoes={orcsDisp} valor={orcsSel} onChange={setOrcsSel} />
           )}
           <div>
             <div className="mb-2 flex items-center gap-1.5">
@@ -450,61 +451,6 @@ export function GruposAdmin() {
       </Modal>
       {confirmacao}
     </div>
-  );
-}
-
-/** Os PCAs ou os ORÇAMENTOS do grupo: "todos" (também os novos) ou só os marcados. */
-function ListaDoGrupo({
-  titulo,
-  todos,
-  vazio,
-  aviso,
-  opcoes,
-  valor,
-  onChange,
-}: {
-  titulo: string;
-  todos: string;
-  vazio: string;
-  aviso: string;
-  opcoes: PcaOpt[];
-  valor: Set<number> | null;
-  onChange: (v: Set<number> | null) => void;
-}) {
-  return (
-    <fieldset>
-      <legend className="mb-2 block text-[13.5px] font-bold text-text">
-        {titulo} · {valor == null ? "todos" : `${valor.size} selecionado(s)`}
-      </legend>
-      <Switch checked={valor == null} onChange={(t) => onChange(t ? null : new Set(opcoes.map((p) => p.id)))} label={todos} />
-      {valor != null &&
-        (opcoes.length === 0 ? (
-          <p className="mt-2 rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">{vazio}</p>
-        ) : (
-          <div className="mt-2 max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
-            {opcoes.map((p) => (
-              <div key={p.id} className="rounded-control p-1.5 hover:bg-surface-2">
-                <Checkbox
-                  checked={valor.has(p.id)}
-                  onChange={() => {
-                    const n = new Set(valor);
-                    if (n.has(p.id)) n.delete(p.id);
-                    else n.add(p.id);
-                    onChange(n);
-                  }}
-                  label={
-                    <span className="flex items-center gap-2">
-                      {p.ano != null && <span className="font-mono text-[10.5px] text-faint">{p.ano}</span>}
-                      <span className="min-w-0 truncate text-[13px] text-text">{p.nome}</span>
-                    </span>
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        ))}
-      {valor != null && valor.size === 0 && <p className="mt-1.5 text-[12px] text-[var(--warn)]">{aviso}</p>}
-    </fieldset>
   );
 }
 

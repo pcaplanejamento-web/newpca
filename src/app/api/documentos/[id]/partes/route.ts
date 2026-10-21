@@ -1,3 +1,4 @@
+import { avisarAdmsDocumento } from "@/lib/avisos-mesa";
 import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { ehPdf, parteValida } from "@/lib/compactar-pdf-core";
@@ -22,13 +23,10 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   if (!parteValida(ordem, bytes.length, d.tamanho)) return erro("Parte do arquivo inválida.", 422);
   if (ordem === 0 && !ehPdf(bytes)) return erro("O arquivo não é um PDF.", 422);
   const completo = await gravarParte(id, ordem, bytes, d.partes, d.tamanho);
-  if (completo)
-    await registrarAuditoria({
-      usuario: a.u,
-      acao: "criar",
-      entidade: "documento",
-      entidadeId: id,
-      resumo: `Documento "${d.nome}" (${formatBytes(d.tamanho)}${d.compactado ? `, compactado de ${formatBytes(d.tamanhoOriginal)}` : ""})`,
-    });
+  if (completo) {
+    const resumo = `Documento "${d.nome}" (${formatBytes(d.tamanho)}${d.compactado ? `, compactado de ${formatBytes(d.tamanhoOriginal)}` : ""})`;
+    await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "documento", entidadeId: id, resumo });
+    await avisarAdmsDocumento(a.u, "Documento enviado", resumo, id);
+  }
   return ok({ completo });
 }

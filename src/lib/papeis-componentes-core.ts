@@ -88,6 +88,9 @@ export const CATALOGO_COMPONENTES: readonly InfoComponente[] = [
     importar: "Importar planilhas.",
     excluir: "Excluir planilhas.",
   }),
+  c("pca", "documentos", "Documentos do PCA", "A aba Documentos do PCA: os documentos vinculados a ele (também exige a tela Documentos).", {
+    visualizar: "Abrir a aba Documentos do PCA.",
+  }),
   c("pca", "configuracao", "Configuração do PCA", "A aba Configuração do espaço do PCA (nome, ano, publicar, capa, visão).", {
     visualizar: "Abrir a Configuração do PCA.",
     configurar: "Alterar a Configuração do PCA.",

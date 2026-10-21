@@ -1,3 +1,4 @@
+import { avisarAdmsDocumento } from "@/lib/avisos-mesa";
 import { z } from "zod";
 import { exigirAcesso } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -25,5 +26,6 @@ export async function POST(req: Request) {
   const nome = nomeDoLink(pdf.nome);
   const id = await criarDocumentoLink({ nome, url: p.data.url, tamanho: pdf.bytes.length, paginas: contarPaginas(pdf.bytes), criadoPor: a.u.id });
   await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "documento", entidadeId: id, resumo: `documento pelo link do Google: ${nome}` });
+  await avisarAdmsDocumento(a.u, "Documento adicionado pelo link do Drive", nome, id);
   return ok({ id });
 }

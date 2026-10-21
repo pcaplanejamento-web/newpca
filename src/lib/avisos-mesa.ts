@@ -75,6 +75,21 @@ export async function avisarProtocoloAtualizado(u: UsuarioSessao, mudancas: { re
  * MOVIMENTAÇÃO NO PCA aos ADMINISTRADORES (menos quem fez): toda interação com o PCA — protocolos, itens, planilhas e o
  * próprio PCA. O tipo `pca-adm` é configurável em Configurações → Notificações (sino/e-mail) e cada pessoa pode silenciar.
  */
+/**
+ * Aos ADMs (menos quem fez): uma movimentação em DOCUMENTOS — enviado, por link, renomeado, PCAs alterados, excluído. O tipo
+ * `documento-adm` é configurável em Configurações → Notificações (sino/e-mail) e cada pessoa pode silenciar. Best-effort.
+ */
+export async function avisarAdmsDocumento(u: UsuarioSessao, titulo: string, texto: string | null, docId?: number) {
+  try {
+    const adms = (await idsDosAdmins()).filter((id) => id !== u.id);
+    if (!adms.length) return;
+    const link = docId ? `/painel/documentos?abrir=${docId}` : "/painel/documentos";
+    await notificar(adms.map((usuarioId) => ({ usuarioId, tipo: "documento-adm" as const, titulo, texto, link, ...atorDe(u) })), u.id);
+  } catch {
+    // best-effort: o aviso nunca derruba a gravação
+  }
+}
+
 export async function avisarAdmsPca(u: UsuarioSessao, pca: { id: number; nome: string }, titulo: string, texto: string | null, aba = "dashboard") {
   try {
     const adms = (await idsDosAdmins()).filter((id) => id !== u.id);

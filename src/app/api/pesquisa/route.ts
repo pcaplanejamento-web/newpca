@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const q = (sp.get("q") ?? "").trim().slice(0, 80);
   const pedidos = (sp.get("tipos") ?? "").split(",").filter(ehTipoPesquisa);
-  const tipos: TipoPesquisa[] = pedidos.length ? pedidos.slice(0, 16) : TIPOS_PADRAO;
+  const tipos: TipoPesquisa[] = pedidos.length ? pedidos.slice(0, TIPOS_PADRAO.length) : TIPOS_PADRAO;
   const limite = Math.min(50, Math.max(1, Number(sp.get("limite")) || 8));
   if (q.length < 2) return ok({ grupos: [] });
   // A régua ÚNICA (testada por perfil): o tipo que a pessoa não abre nem é consultado.

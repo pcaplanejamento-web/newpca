@@ -12,6 +12,7 @@ export const TIPOS_PESQUISA = [
   { tipo: "lancamento", titulo: "Lançamentos do orçamento", prefixo: "lancamento:", curto: "l:", texto: "Lançamentos (ficha, ação, elemento, unidade, função, programa, fonte)" },
   { tipo: "catalogo", titulo: "Catálogo", prefixo: "catalogo:", curto: "c:", texto: "Itens do catálogo (código, descrição)" },
   { tipo: "historico", titulo: "Histórico de compra", prefixo: "historico:", curto: "h:", texto: "Histórico de compra (código, produto, contrato, processo)" },
+  { tipo: "documento", titulo: "Documentos", prefixo: "documento:", curto: "do:", texto: "Documentos (nome, arquivo)" },
   { tipo: "usuario", titulo: "Usuários", prefixo: "usuario:", curto: "u:", texto: "Usuários (nome, apelido, e-mail, matrícula) — administração" },
   { tipo: "orgao", titulo: "Órgãos", prefixo: "orgao:", curto: "og:", texto: "Órgãos (nome, sigla) — administração" },
   { tipo: "unidade", titulo: "Unidades", prefixo: "unidade:", curto: "un:", texto: "Unidades (nome, sigla) — administração" },
@@ -111,6 +112,8 @@ export function tipoPermitido(p: PortaoPesquisa, tipo: TipoPesquisa): boolean {
       return p.ve("catalogo") && p.libera("catalogo.catalogos");
     case "historico":
       return p.ve("catalogo") && p.libera("catalogo.historico");
+    case "documento":
+      return p.ve("documentos");
     default:
       return p.admin; // usuário, órgão, unidade, grupo, cadastro, automação
   }

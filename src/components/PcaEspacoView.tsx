@@ -8,7 +8,7 @@ import { Badge } from "./Badge";
 import { IconCalendar, IconCheck, IconChevronLeft, IconSettings } from "./icons";
 import { useOndeDetalhe } from "./CanalGrupo";
 
-export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "configuracao";
+export type AbaPca = "dashboard" | "orcamento" | "mesa" | "importacao" | "documentos" | "configuracao";
 
 /**
  * ESPAÇO do PCA (`/painel/pca/[id]`) — enxuto como a tela do orçamento, usando a largura toda: UMA linha (voltar · nome ·
@@ -71,6 +71,7 @@ export function PcaEspacoView({
           { value: "orcamento", label: "Orçamento" },
           { value: "mesa", label: "Mesa" },
           ...(pca.fonte === "lista" ? [{ value: "importacao", label: "Importação" } as const] : []),
+          { value: "documentos", label: "Documentos" },
           { value: "configuracao", label: "Configuração", soIcone: true, icone: <IconSettings className="h-4 w-4" aria-hidden="true" /> },
         ] as const).filter((o) => !permitidas || permitidas.includes(o.value))}
       >

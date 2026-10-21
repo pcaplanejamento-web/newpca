@@ -1,4 +1,5 @@
-import { podeTela } from "@/lib/acesso";
+import { pcasDoAcesso, podeTela } from "@/lib/acesso";
+import { documentoVisivel, lerPcasDocumento } from "@/lib/documentos-core";
 import { exigirAcesso, intId } from "@/lib/api-auth";
 import { pdfDoGoogle } from "@/lib/documento-google";
 import { bytesDoDocumento, getDocumento } from "@/lib/documentos";
@@ -15,7 +16,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const baixar = new URL(req.url).searchParams.get("baixar") === "1";
   if (baixar && !podeTela(a.acesso, "documentos").exportar) return erro("Sem permissão para baixar documentos.", 403);
   const d = await getDocumento(id);
-  if (!d?.completo) return erro("Documento não encontrado.", 404);
+  if (!d?.completo || !documentoVisivel(lerPcasDocumento(d.pcas), pcasDoAcesso(a.acesso))) return erro("Documento não encontrado.", 404);
   // Documento do Drive: lido do Google AGORA (sempre a versão atual do arquivo).
   let bytes: Uint8Array<ArrayBuffer>;
   if (d.urlExterna) {

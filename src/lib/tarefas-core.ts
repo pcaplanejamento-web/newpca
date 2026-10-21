@@ -920,6 +920,7 @@ export const TIPOS_NOTIFICACAO = [
   "situacao",
   "pca",
   "pca-adm",
+  "documento-adm",
   "cadastro",
   "concluida",
   "centi",

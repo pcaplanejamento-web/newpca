@@ -14,6 +14,7 @@ import {
   IconBuilding,
   IconCalendar,
   IconDatabase,
+  IconDocumentos,
   IconClipboard,
   IconClock,
   IconClose,
@@ -98,6 +99,7 @@ const ICONE_TIPO: Record<string, Icone> = {
   lancamento: IconWallet,
   catalogo: IconDatabase,
   historico: IconDatabase,
+  documento: IconDocumentos,
   usuario: IconUser,
   orgao: IconBuilding,
   unidade: IconBuilding,
@@ -160,7 +162,7 @@ const ABAS_PERFIL: [string, string][] = [
   ["conta", "Conta"], ["seguranca", "Segurança"], ["acessos", "Histórico de acesso"], ["aparencia", "Aparência"],
   ["notificacoes", "Notificações"], ["trabalho", "Trabalho"], ["acesso", "Meu acesso"],
 ];
-const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["configuracao", "Configuração"]];
+const ABAS_PCA: [string, string][] = [["dashboard", "Dashboard"], ["orcamento", "Orçamento"], ["mesa", "Mesa"], ["documentos", "Documentos"], ["configuracao", "Configuração"]];
 
 function lerRecentes(): Resultado[] {
   try {
@@ -541,6 +543,7 @@ export function PesquisaSistema({ telas, pcas, pcaFiltroId = null }: { telas: Te
     ...(abre("/painel/usuarios")
       ? ["usuario", "orgao", "unidade", "grupo", "cadastro", "fluxo"].map((v) => ({ value: v, label: tituloPesquisa(v) }))
       : []),
+    ...(abre("/painel/documentos") ? [{ value: "documento", label: "Documentos" }] : []),
     ...(abre("/painel/pca") ? [{ value: "pca", label: "PCAs" }] : []),
     { value: "tela", label: "Telas" },
   ];

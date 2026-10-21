@@ -1,3 +1,4 @@
+import { pcasDoAcesso } from "@/lib/acesso";
 import { exigirAcesso } from "@/lib/api-auth";
 import { cabeAlvo, LIMITE_DOCUMENTO, LIMITE_DOCUMENTO_ADM, partesDe } from "@/lib/compactar-pdf-core";
 import { criarDocumento, listarDocumentos } from "@/lib/documentos";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const a = await exigirAcesso("documentos", "visualizar");
   if ("erro" in a) return a.erro;
-  return ok({ documentos: await listarDocumentos() });
+  return ok({ documentos: await listarDocumentos(pcasDoAcesso(a.acesso)) });
 }
 
 /** Abre o envio de um PDF já compactado no navegador (os bytes vão em partes) — recusa o que passa do limite (100 KB; o

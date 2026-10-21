@@ -47,6 +47,7 @@ export const CATALOGO_AVISOS: readonly ItemCatalogoAviso[] = [
   { chave: "situacao", rotulo: "Protocolo atualizado", descricao: "Mudou a situação ou o protocolo da pessoa foi reenviado.", grupo: "Mesa e PCA", padrao: c(true, false) },
   { chave: "pca", rotulo: "Protocolo no PCA", descricao: "Um protocolo da pessoa foi enviado, incorporado ou devolvido no PCA.", grupo: "Mesa e PCA", padrao: c(true, false) },
   { chave: "pca-adm", rotulo: "Movimentação no PCA", descricao: "Aos administradores: protocolo enviado, incorporado ou devolvido, itens retirados, planilha importada ou excluída e PCA criado, publicado ou excluído.", grupo: "Mesa e PCA", padrao: c(true, false) },
+  { chave: "documento-adm", rotulo: "Movimentação em Documentos", descricao: "Aos administradores: documento enviado, adicionado por link do Drive, renomeado, com os PCAs alterados ou excluído.", grupo: "Administração", padrao: c(true, false) },
   { chave: "centi", rotulo: "Automação Centi", descricao: "Terminou (ou falhou) um lote da Automação que a pessoa iniciou.", grupo: "Administração", padrao: c(true, false) },
   { chave: "comunicado", rotulo: "Comunicado", descricao: "Um aviso enviado pelo administrador a todos ou a um grupo.", grupo: "Administração", padrao: c(true, false, true) },
   { chave: "versao", rotulo: "Nova versão do sistema", descricao: "A cada pessoa: o que mudou nas telas que o grupo dela abre (o administrador recebe tudo), com o caminho até onde mudou.", grupo: "Administração", padrao: c(true, false) },

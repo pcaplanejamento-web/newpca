@@ -4811,10 +4811,10 @@ export function Catalogo() {
         </div>
       </Secao>
 
-      <Secao titulo="Documentos — DocumentoCard (o card de um PDF guardado: o MESMO CartaoEspaco; páginas · tamanho · data, o selo “Compactado de X” e o menu Visualizar/Baixar/Renomear/Excluir conforme o papel)">
+      <Secao titulo="Documentos — DocumentoCard (o card de um PDF guardado: o MESMO CartaoEspaco; páginas · tamanho · data, o selo “Compactado de X” e o menu Visualizar/Baixar/PCAs vinculados/Renomear/Excluir conforme o papel; o sobretítulo diz os PCAs)">
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
-          <DocumentoCard doc={{ id: 1, nome: "Portaria 123-2026", nomeArquivo: "portaria.pdf", tamanho: 98000, tamanhoOriginal: 2400000, paginas: 4, link: null, compactado: true, criadoEm: "2026-10-21T12:00:00Z", autor: "Ana" }} onVer={() => {}} onBaixar={() => {}} onRenomear={() => {}} onExcluir={() => {}} />
-          <DocumentoCard doc={{ id: 2, nome: "Ofício", nomeArquivo: "oficio.pdf", tamanho: 42000, tamanhoOriginal: 42000, paginas: 1, link: "https://drive.google.com/file/d/exemplo", compactado: false, criadoEm: "2026-10-20T12:00:00Z", autor: null }} onVer={() => {}} />
+          <DocumentoCard doc={{ id: 1, nome: "Portaria 123-2026", nomeArquivo: "portaria.pdf", tamanho: 98000, tamanhoOriginal: 2400000, paginas: 4, link: null, compactado: true, criadoEm: "2026-10-21T12:00:00Z", autor: "Ana", pcas: "todos" }} pcasTexto="Todos os PCAs" onVer={() => {}} onBaixar={() => {}} onPcas={() => {}} onRenomear={() => {}} onExcluir={() => {}} />
+          <DocumentoCard doc={{ id: 2, nome: "Ofício", nomeArquivo: "oficio.pdf", tamanho: 42000, tamanhoOriginal: 42000, paginas: 1, link: "https://drive.google.com/file/d/exemplo", compactado: false, criadoEm: "2026-10-20T12:00:00Z", autor: null, pcas: [] }} pcasTexto="Nenhum PCA" onVer={() => {}} />
         </div>
       </Secao>
 

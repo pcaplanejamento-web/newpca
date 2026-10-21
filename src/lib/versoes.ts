@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.150.0",
+    data: "2026-10-21",
+    titulo: "Documentos nos PCAs, na pesquisa e no sino",
+    mudancas: [
+      { tipo: "novo", area: "Documentos", texto: "Cada documento pode ficar em PCAs específicos ou em todos — menu “…” → PCAs vinculados.", link: "/painel/documentos" },
+      { tipo: "novo", area: "Documentos", texto: "Filtro por PCA ao lado da pesquisa (também “Sem PCA”).", link: "/painel/documentos" },
+      { tipo: "novo", area: "PCA", texto: "Aba Documentos no espaço do PCA: os documentos dele, vincular e desvincular dali mesmo.", link: "/painel/pca" },
+      { tipo: "novo", area: "Pesquisa", texto: "Documentos aparecem na pesquisa rápida do menu (prefixo “documento:” ou “do:”).", link: "/painel/documentos" },
+      { tipo: "melhoria", area: "Documentos", texto: "Seguem o grupo: o documento só de PCAs de fora do seu grupo não aparece, e o papel decide o que se faz.", link: "/painel/documentos" },
+      { tipo: "novo", area: "Notificações", texto: "Os administradores recebem no sino o envio, a edição e a exclusão de documentos (configurável em Notificações).", link: "/painel/configuracoes?aba=notificacoes" },
+    ],
+  },
+  {
     versao: "1.149.4",
     data: "2026-10-21",
     titulo: "Documentos: cartão do link sem repetição",

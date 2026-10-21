@@ -22,6 +22,7 @@ const ABAS_ESPACO: { re: RegExp; padrao: string; abas: { valor: string; rotulo: 
       { valor: "dashboard", rotulo: "Dashboard" },
       { valor: "orcamento", rotulo: "Orçamento" },
       { valor: "mesa", rotulo: "Mesa" },
+      { valor: "documentos", rotulo: "Documentos" },
       { valor: "configuracao", rotulo: "Configuração" },
     ],
   },

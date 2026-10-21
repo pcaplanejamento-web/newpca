@@ -11,3 +11,7 @@ export const novoDocumentoSchema = z.object({
 });
 
 export const renomearDocumentoSchema = z.object({ nome: z.string().trim().min(1).max(120) });
+
+/** Os PCAs do documento: "todos" ou a lista (vazia = nenhum). */
+export const pcasDocumentoSchema = z.object({ pcas: z.union([z.literal("todos"), z.array(z.number().int().positive()).max(500)]) });
+export const editarDocumentoSchema = z.union([renomearDocumentoSchema.strict(), pcasDocumentoSchema.strict()]);

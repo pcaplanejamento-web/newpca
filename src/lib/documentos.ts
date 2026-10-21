@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, lt, sql } from "drizzle-orm";
 import { documentoPartes, documentos, usuarios } from "@/db/schema";
 import { getDb } from "./db";
+import { documentoVisivel, gravarPcasDocumento, lerPcasDocumento, type PcasDocumento } from "./documentos-core";
 
 /** Um documento na lista (SEM o conteúdo — o PDF só é lido ao ver/baixar). */
 export type DocumentoResumo = {
@@ -15,10 +16,16 @@ export type DocumentoResumo = {
   autor: string | null;
   /** O link do Google quando o documento fica no Drive (nada guardado aqui). */
   link: string | null;
+  /** Os PCAs em que o documento aparece. */
+  pcas: PcasDocumento;
 };
 
-export async function listarDocumentos(): Promise<DocumentoResumo[]> {
-  return getDb()
+/**
+ * Os documentos que a pessoa vê (`permitidos` = os PCAs do grupo ativo — `pcasDoAcesso`; null = sem restrição); com `pcaId`,
+ * só os vinculados àquele PCA (direto ou "todos").
+ */
+export async function listarDocumentos(permitidos: Set<number> | null, pcaId?: number): Promise<DocumentoResumo[]> {
+  const linhas = await getDb()
     .select({
       id: documentos.id,
       nome: documentos.nome,
@@ -30,11 +37,24 @@ export async function listarDocumentos(): Promise<DocumentoResumo[]> {
       criadoEm: documentos.criadoEm,
       autor: usuarios.nome,
       link: documentos.urlExterna,
+      pcas: documentos.pcas,
     })
     .from(documentos)
     .leftJoin(usuarios, eq(usuarios.id, documentos.criadoPor))
-    .where(eq(documentos.completo, true))
+    .where(
+      and(
+        eq(documentos.completo, true),
+        pcaId == null
+          ? undefined
+          : sql`(${documentos.pcas} = 'todos' OR (json_valid(${documentos.pcas}) AND EXISTS (SELECT 1 FROM json_each(${documentos.pcas}) WHERE value = ${pcaId})))`,
+      ),
+    )
     .orderBy(desc(documentos.id));
+  return linhas.map((l) => ({ ...l, pcas: lerPcasDocumento(l.pcas) })).filter((d) => documentoVisivel(d.pcas, permitidos));
+}
+
+export async function definirPcasDocumento(id: number, p: PcasDocumento) {
+  await getDb().update(documentos).set({ pcas: gravarPcasDocumento(p) }).where(eq(documentos.id, id));
 }
 
 export async function getDocumento(id: number) {
