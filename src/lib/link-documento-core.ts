@@ -37,3 +37,12 @@ export function nomeDoLink(nome: string | undefined): string {
   const n = (nome ?? "").replace(/\.pdf$/i, "").trim().slice(0, 120);
   return n || "Documento do Google";
 }
+
+/** Os bytes são de um PDF ("%PDF"). */
+export const ehPdf = (b: Uint8Array | undefined): b is Uint8Array => !!b && b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+
+/** Quantas páginas o PDF tem (contagem dos objetos /Type /Page — aproximada; 0 se não achar). */
+export function contarPaginas(b: Uint8Array): number {
+  const texto = new TextDecoder("latin1").decode(b);
+  return (texto.match(/\/Type\s*\/Page(?![a-zA-Z])/g) ?? []).length;
+}

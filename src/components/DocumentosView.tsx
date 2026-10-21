@@ -54,6 +54,11 @@ export function DocumentoCard({
           <span aria-hidden className="absolute inset-0 grid place-items-center text-white/85">
             <IconDocumentos className="h-10 w-10" />
           </span>
+          {d.link && (
+            <span className="absolute bottom-1.5 left-1.5 inline-flex items-center rounded-full bg-[var(--scrim)] px-2 py-0.5 text-[11px] font-semibold text-white">
+              No Google Drive
+            </span>
+          )}
           {d.compactado && (
             <span className="absolute bottom-1.5 left-1.5 inline-flex items-center rounded-full bg-[var(--scrim)] px-2 py-0.5 text-[11px] font-semibold text-white">
               Compactado de {formatBytes(d.tamanhoOriginal)}
@@ -65,7 +70,7 @@ export function DocumentoCard({
       nome={d.nome}
       metricas={[
         { rotulo: "Páginas", valor: num(d.paginas) },
-        { rotulo: "Tamanho", valor: formatBytes(d.tamanho) },
+        { rotulo: "Tamanho", valor: d.link ? "Drive" : formatBytes(d.tamanho) },
         { rotulo: "Enviado", valor: d.criadoEm ? dataBR(d.criadoEm) : "—", cor: "var(--text-2)" },
       ]}
       canto={
@@ -144,9 +149,9 @@ export function EscolherTamanhoPdf({
   onEscolher: (v: VersaoPdf) => void;
   onCancelar: () => void;
 }) {
-  // A barra vai do MENOR (esquerda) ao MAIOR (direita); começa no menor.
+  // A barra vai do MENOR (esquerda) ao MAIOR (direita); começa no ORIGINAL (o texto como veio).
   const ordem = useMemo(() => [...versoes].reverse(), [versoes]);
-  const [i, setI] = useState(0);
+  const [i, setI] = useState(versoes.length - 1);
   const v = ordem[Math.min(i, ordem.length - 1)];
   const reducao = original > 0 ? Math.round((1 - v.tamanho / original) * 100) : 0;
   return (
@@ -220,7 +225,7 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
   const entrada = useRef<HTMLInputElement>(null);
   const [link, setLink] = useState<{ url: string; erro?: string; baixando?: boolean } | null>(null);
 
-  // Link do Google: o servidor baixa o PDF e ele segue o MESMO envio de um arquivo (tamanho, compactação, partes).
+  // Link do Google: o documento FICA no Drive — só o link é guardado; abrir lê o PDF de lá.
   async function enviarLink(e: FormEvent) {
     e.preventDefault();
     if (!link?.url.trim()) return;
@@ -228,13 +233,12 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
     const r = await fetch("/api/documentos/link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: link.url }) }).catch(() => null);
     if (!r?.ok) {
       const j = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
-      setLink({ ...link, baixando: false, erro: j?.error ?? "Não foi possível baixar o arquivo." });
+      setLink({ ...link, baixando: false, erro: j?.error ?? "Não foi possível abrir o link." });
       return;
     }
-    const nome = decodeURIComponent(r.headers.get("x-nome") ?? "Documento do Google");
-    const arquivo = new File([await r.blob()], `${nome}.pdf`, { type: "application/pdf" });
     setLink(null);
-    enviar([arquivo]);
+    setAviso({ kind: "ok", texto: "Documento do Drive adicionado." });
+    router.refresh();
   }
 
   const visiveis = useMemo(() => {
@@ -458,7 +462,7 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
               error={link.erro}
               onChange={(e) => setLink({ url: e.target.value })}
             />
-            <p className="text-xs text-muted">O arquivo precisa estar compartilhado como “Qualquer pessoa com o link”. Ele é copiado para o sistema e abre igual a um PDF enviado.</p>
+            <p className="text-xs text-muted">O arquivo precisa estar compartilhado como “Qualquer pessoa com o link”. Nada é enviado: o sistema guarda só o link e lê o PDF do Drive a cada abertura (sempre a versão atual).</p>
           </form>
         </Modal>
       )}

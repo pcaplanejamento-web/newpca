@@ -1934,6 +1934,8 @@ export const documentos = sqliteTable(
     /** Migração `0117`: 0 = o antigo, no `conteudo`; > 0 = em `documento_partes`. */
     partes: integer("partes").notNull().default(0),
     completo: integer("completo", { mode: "boolean" }).notNull().default(true),
+    /** Migração `0121`: o link do Google (Docs/Drive) — o PDF NÃO é guardado, é lido de lá a cada abertura. */
+    urlExterna: text("url_externa"),
   },
   (t) => [index("documentos_criado_em_idx").on(t.criadoEm)],
 );

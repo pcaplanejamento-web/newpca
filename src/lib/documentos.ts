@@ -13,6 +13,8 @@ export type DocumentoResumo = {
   compactado: boolean;
   criadoEm: string | null;
   autor: string | null;
+  /** O link do Google quando o documento fica no Drive (nada guardado aqui). */
+  link: string | null;
 };
 
 export async function listarDocumentos(): Promise<DocumentoResumo[]> {
@@ -27,6 +29,7 @@ export async function listarDocumentos(): Promise<DocumentoResumo[]> {
       compactado: documentos.compactado,
       criadoEm: documentos.criadoEm,
       autor: usuarios.nome,
+      link: documentos.urlExterna,
     })
     .from(documentos)
     .leftJoin(usuarios, eq(usuarios.id, documentos.criadoPor))
@@ -87,6 +90,27 @@ export async function bytesDoDocumento(d: { id: number; partes: number; conteudo
     .where(eq(documentoPartes.documentoId, d.id))
     .orderBy(asc(documentoPartes.ordem));
   return new Uint8Array(Buffer.concat(linhas.map((l) => l.dados)));
+}
+
+/** Um documento que fica NO DRIVE: só o link + os dados lidos agora (o PDF é buscado no Google a cada abertura). */
+export async function criarDocumentoLink(dados: { nome: string; url: string; tamanho: number; paginas: number; criadoPor: number }): Promise<number> {
+  const [r] = await getDb()
+    .insert(documentos)
+    .values({
+      nome: dados.nome,
+      nomeArquivo: `${dados.nome}.pdf`,
+      tamanho: dados.tamanho,
+      tamanhoOriginal: dados.tamanho,
+      paginas: dados.paginas,
+      compactado: false,
+      conteudo: "",
+      partes: 0,
+      completo: true,
+      urlExterna: dados.url,
+      criadoPor: dados.criadoPor,
+    })
+    .returning({ id: documentos.id });
+  return r.id;
 }
 
 export async function renomearDocumento(id: number, nome: string) {
