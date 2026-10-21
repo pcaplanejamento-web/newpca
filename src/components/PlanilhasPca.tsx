@@ -1,7 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { brlCompact, dataBR, num } from "@/lib/format";
 import { normalizarLinha } from "@/lib/normalize";
 import { type LeituraPlanilhas, type PlanilhaParseada, parsePlanilhas } from "@/lib/parse-xlsx";
@@ -11,6 +12,9 @@ import { useConfirmacao } from "./Confirmacao";
 import { Dropzone } from "./Dropzone";
 import { IconFile, IconTrash, IconUpload } from "./icons";
 import { Progress } from "./Progress";
+
+/** A prévia completa só é baixada quando um arquivo é lido. */
+const PreviaPlanilha = dynamic(() => import("./PreviaPlanilha").then((m) => m.PreviaPlanilha), { ssr: false });
 
 /** Linhas por requisição — cada requisição pequena (limites do Worker/D1). */
 const CHUNK = 200;
@@ -56,35 +60,9 @@ async function enviarPlanilha(parsed: PlanilhaParseada, pcaId: number, onProgres
   return { codigo: parsed.codigo, itens: parsed.rows.length };
 }
 
-/** A prévia da leitura (o texto da confirmação): unidades, itens, Σ e o que foi apontado. */
-function PreviaLeitura({ leitura }: { leitura: LeituraPlanilhas }) {
-  const itens = leitura.planilhas.reduce((s, p) => s + p.rows.length, 0);
-  const total = leitura.planilhas.reduce((s, p) => s + p.rows.map(normalizarLinha).reduce((t, r) => t + (r.valorTotal ?? 0), 0), 0);
-  return (
-    <div className="space-y-2 text-sm">
-      <p>
-        {leitura.formato === "consolidado" ? `Planilha consolidada: ${num(leitura.planilhas.length)} unidade(s)` : "1 planilha"} ·{" "}
-        {num(itens)} itens · {brlCompact(total)}. Reenviar uma unidade substitui a planilha dela.
-      </p>
-      {leitura.problemas.length > 0 && (
-        <ul className="max-h-48 space-y-1 overflow-y-auto">
-          {leitura.problemas.map((p) => (
-            <li key={p.tipo} title={p.exemplos.join("\n")}>
-              <span className="font-semibold" style={{ color: "var(--warn)" }}>
-                {num(p.quantidade)}
-              </span>{" "}
-              {p.tipo}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /**
  * Aba IMPORTAÇÃO do PCA de lista pronta: soltar/escolher UMA OU VÁRIAS planilhas (.xlsx — uma por
- * unidade, ou a CONSOLIDADA com a coluna LOCAL, que vira uma planilha por unidade — com a prévia antes de gravar; os itens entram direto neste PCA; reenviar o mesmo código substitui) + os cards das
+ * unidade, ou a CONSOLIDADA com a coluna LOCAL, que vira uma planilha por unidade — com a PRÉVIA COMPLETA (todas as linhas) antes de gravar; os itens entram direto neste PCA; reenviar o mesmo código substitui) + os cards das
  * planilhas deste PCA (itens · data · Σ); importar e excluir seguem o papel.
  */
 export function PlanilhasPca({
@@ -104,6 +82,21 @@ export function PlanilhasPca({
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; progresso: number } | null>(null);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
+  const [previa, setPrevia] = useState<{ nome: string; leitura: LeituraPlanilhas } | null>(null);
+  const respostaPrevia = useRef<((sim: boolean) => void) | null>(null);
+
+  /** Abre a prévia completa e espera a decisão (Importar = true). */
+  function verPrevia(nome: string, leitura: LeituraPlanilhas): Promise<boolean> {
+    return new Promise((res) => {
+      respostaPrevia.current = res;
+      setPrevia({ nome, leitura });
+    });
+  }
+  function decidir(sim: boolean) {
+    respostaPrevia.current?.(sim);
+    respostaPrevia.current = null;
+    setPrevia(null);
+  }
 
   async function importar(files: File[]) {
     const xs = files.filter((f) => /\.xlsx?$/i.test(f.name));
@@ -119,15 +112,8 @@ export function PlanilhasPca({
     for (const f of xs) {
       try {
         const leitura = await parsePlanilhas(f);
-        // A prévia SEMPRE na consolidada (muitas unidades) e quando há apontamentos — nada entra sem ser visto.
-        if (leitura.formato === "consolidado" || leitura.problemas.length > 0) {
-          const sim = await confirmar({
-            titulo: `Importar ${f.name}?`,
-            texto: <PreviaLeitura leitura={leitura} />,
-            confirmar: `Importar ${num(leitura.planilhas.length)} planilha(s)`,
-          });
-          if (!sim) continue;
-        }
+        // Nada entra sem ser visto: a prévia completa de cada arquivo, antes de gravar.
+        if (!(await verPrevia(f.name, leitura))) continue;
         lidas.push(...leitura.planilhas);
       } catch (e) {
         falhas.push(`${f.name}: ${e instanceof Error ? e.message : "falha"}`);
@@ -235,6 +221,7 @@ export function PlanilhasPca({
         )}
       </section>
       {confirmacao}
+      {previa && <PreviaPlanilha nomeArquivo={previa.nome} leitura={previa.leitura} onCancelar={() => decidir(false)} onImportar={() => decidir(true)} />}
     </div>
   );
 }

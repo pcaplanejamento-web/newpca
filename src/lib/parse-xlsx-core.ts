@@ -1,4 +1,4 @@
-import { stripAccents } from "./normalize.ts";
+import { type LinhaNormalizada, normalizarLinha, stripAccents } from "./normalize.ts";
 
 /**
  * Núcleo PURO da leitura das planilhas do PCA de lista pronta (a matriz de células → as planilhas). Dois formatos:
@@ -226,4 +226,14 @@ export function lerPlanilhas(aoa: unknown[][], nomeArquivo: string): LeituraPlan
   if (planilhas.length === 0) throw new Error("Encontrei o cabeçalho, mas nenhuma linha de item preenchida.");
   planilhas.sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR"));
   return { formato: consolidado ? "consolidado" : "unidade", planilhas, problemas: problemas.lista() };
+}
+
+/** Uma linha da PRÉVIA da importação: a unidade (LOCAL) + o item como será gravado. */
+export type LinhaPrevia = LinhaNormalizada & { unidade: string; indice: number };
+
+/** Achata a leitura nas linhas que serão gravadas (a MESMA régua do servidor — `normalizarLinha`). */
+export function linhasDaPrevia(leitura: LeituraPlanilhas): LinhaPrevia[] {
+  const out: LinhaPrevia[] = [];
+  for (const p of leitura.planilhas) for (const r of p.rows) out.push({ ...normalizarLinha(r), unidade: p.codigo, indice: out.length });
+  return out;
 }
