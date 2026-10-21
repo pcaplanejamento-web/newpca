@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.131.1",
+    data: "2026-10-21",
+    titulo: "Estrutura da tela só quando demora",
+    mudancas: [
+      { tipo: "correcao", area: "Sistema", texto: "A estrutura de carregamento só aparece quando a tela demora; a que abre logo entra direto, sem piscar.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Sistema", texto: "Cada tela mostra, enquanto carrega, a mesma forma que vai ter: a Mesa, os cartões de PCA, Orçamento, Catálogo, Tarefas e Automação, o Calendário e as abas das Configurações e do Perfil.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.131.0",
     data: "2026-10-21",
     titulo: "Telas que abrem na hora",

@@ -48,7 +48,8 @@ test("loading.tsx: só o EsqueletoTela, nunca em página que só redireciona nem
     assert.deepEqual(imports, ['import { EsqueletoTela } from "@/components/EsqueletoTela";'], p);
     assert.doesNotMatch(p, /\[/, p);
   }
-  for (const r of ["dfds", "protocolos", "permissoes", "design-system"]) {
+  // Páginas que só redirecionam e as que carregam os dados no próprio navegador (já têm o esqueleto delas) ficam sem.
+  for (const r of ["dfds", "protocolos", "permissoes", "design-system", "usuarios", "grupos", "auditoria", "armazenamento", "orgaos"]) {
     assert.ok(!achados.includes(join(raiz, r, "loading.tsx")), r);
   }
   assert.ok(!achados.includes(join(raiz, "loading.tsx")));

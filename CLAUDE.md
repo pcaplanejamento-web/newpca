@@ -68,9 +68,13 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     layout do painel) consulta as versões ao voltar à janela e a cada 60 s com a aba à vista (NUNCA a cada navegação) e só dá `router.refresh()` quando
     a da ÁREA da tela aberta MUDOU (gravação de outra pessoa); a mudança de outra área fica guardada e recarrega ao ir a uma
     tela dela.
-  - **Esqueleto na hora (v1.131.0):** `loading.tsx` de 3 linhas (só o **`EsqueletoTela`** — `tabela`/`cartoes`/`calendario`,
-    sem dado, sem servidor) nas telas de lista do painel e do ADM — tocar no menu mostra a estrutura na hora. NUNCA em página
-    que só redireciona, no `design-system` nem em `[id]` (`tests/versao-dados-core.test.ts` confere). Trocar só o `?aba=`/
+  - **Esqueleto SÓ QUANDO DEMORA (v1.131.0 → v1.131.1):** `loading.tsx` de 3 linhas (só o **`EsqueletoTela`**, sem dado,
+    sem servidor) na forma REAL de cada tela — `mesa` (barra + tabela até o fim do display) · `pca`/`orcamento`/`espacos`
+    (título + a grade de cartões de cada uma, nas mesmas medidas) · `calendario` · `abas` (Configurações, Perfil) · `painel`
+    (Verificação, Integrações, Aparência). Fica INVISÍVEL nos primeiros 300 ms (`.esqueleto-tela`, `globals.css`): a tela que
+    chega antes entra direto, sem piscar; as já vistas voltam do cache sem passar por ele. NUNCA em página que só redireciona,
+    no `design-system`, em `[id]` nem nas telas do ADM que carregam no navegador e já têm o esqueleto delas (Usuários, Grupos,
+    Auditoria, Armazenamento, Órgãos) — `tests/versao-dados-core.test.ts` confere. Trocar só o `?aba=`/
     `?mes=` não reexibe o esqueleto (a chave do Suspense não leva a busca; a navegação é transição). O `ALTURA_NO_HTML` das
     tabelas tenta a cada quadro enquanto o bloco chega escondido pelo streaming.
   - **Servidor:** **`memoPorVersao(chave, carregar)`** — o resultado de uma CARGA PESADA fica na memória do Worker enquanto

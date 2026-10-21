@@ -3912,12 +3912,12 @@ export function Catalogo() {
         </div>
         <div className="mt-4 rounded-card border border-border bg-surface p-4">
           <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-            EsqueletoTela (o loading.tsx de cada tela: tabela · cartoes · calendario — só a estrutura, na hora)
+            EsqueletoTela (o loading.tsx de cada tela — mesa · pca · orcamento · espacos · calendario · abas · painel; só
+            aparece depois de 300 ms; as de altura cheia ocupam o display e não cabem aqui)
           </span>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <EsqueletoTela variante="tabela" />
-            <EsqueletoTela variante="cartoes" />
-            <EsqueletoTela variante="calendario" />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <EsqueletoTela variante="espacos" />
+            <EsqueletoTela variante="orcamento" />
           </div>
         </div>
         <div className="mt-4 rounded-card border border-border bg-surface p-4">

@@ -1145,6 +1145,29 @@
   animation: shimmer 1.6s infinite;
 }
 
+/* ESQUELETO DA TELA (o loading.tsx): só aparece quando a tela DEMORA — fica invisível nos primeiros 300 ms; a tela que
+   chega antes disso entra sem ele piscar. Com "reduzir movimento" o atraso fica (não é movimento), sem o esmaecer. */
+@keyframes esqueleto-surge {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.esqueleto-tela {
+  animation: esqueleto-surge 0.18s ease-out 0.3s both;
+}
+[data-motion="off"] .esqueleto-tela,
+[data-motion="reduced"] .esqueleto-tela {
+  animation-duration: 1ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .esqueleto-tela {
+    animation-duration: 1ms;
+  }
+}
+
 
 /* TODO <select> do sistema com a MESMA seta, sempre no mesmo lugar: sem a aparência nativa (que muda por navegador), o
    chevron do tema (--seta-select) a 0,75rem da borda direita e o texto nunca passa por baixo dela. Fora de camada (vale
