@@ -28,6 +28,19 @@ export function abaPublicaPedida(cfg: ConfigPublico, pedida: string | undefined)
   return ehAbaPublica(pedida) && cfg.abas.includes(pedida) ? pedida : "dashboard";
 }
 
+/** Os itens do MENU público: as abas publicadas + a CONSULTA DE ITENS (parte do Dashboard — sempre pública), logo depois dele. */
+export type VistaPublica = AbaPublica | "consulta";
+export const ROTULO_VISTA_PUBLICA: Record<VistaPublica, string> = { ...ROTULO_ABA_PUBLICA, consulta: "Consulta de itens" };
+
+export function vistasDoMenu(cfg: ConfigPublico): VistaPublica[] {
+  return cfg.abas.flatMap((a): VistaPublica[] => (a === "dashboard" ? ["dashboard", "consulta"] : [a]));
+}
+
+/** A vista pedida na URL → a que vale (fora do menu = o Dashboard). */
+export function vistaPublicaPedida(cfg: ConfigPublico, pedida: string | undefined): VistaPublica {
+  return pedida === "consulta" ? "consulta" : abaPublicaPedida(cfg, pedida);
+}
+
 /** A GUARDA de toda leitura pública: PCA publicado (ou visto por quem entrou — o Preview) + a aba publicada pelo ADM. */
 export function podeLerPublico(pca: { status: string } | null, cfg: ConfigPublico, aba: AbaPublica, logado: boolean): boolean {
   if (!pca) return false;

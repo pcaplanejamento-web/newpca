@@ -27,6 +27,7 @@ export function PainelPca({
   hintItens,
   consulta,
   nome,
+  vista,
 }: {
   dados: DadosPainelPca;
   unidadeFiltrada?: boolean;
@@ -35,6 +36,8 @@ export function PainelPca({
   consulta?: ConsultaDashboard;
   /** O nome do PCA (o título do relatório em PDF). */
   nome?: string;
+  /** Vista fixa (o menu da tela pública): só os gráficos ou só a consulta de itens. */
+  vista?: "graficos" | "consulta";
 }) {
   const { resumo, previa } = dados;
   return (
@@ -51,6 +54,7 @@ export function PainelPca({
       consulta={consulta}
       previa={!!previa}
       nomesUnidades={dados.nomesUnidades}
+      vista={vista}
     />
   );
 }

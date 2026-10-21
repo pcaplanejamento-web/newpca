@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.152.0",
+    data: "2026-10-21",
+    titulo: "Tela pública: filtros no cabeçalho e consulta no menu",
+    mudancas: [
+      { tipo: "melhoria", area: "Tela pública", texto: "O PCA e a unidade ficam no cabeçalho — os indicadores começam logo abaixo dele.", link: "/" },
+      { tipo: "novo", area: "Tela pública", texto: "A consulta de itens ganhou um item próprio no menu lateral; o Dashboard abre só com os gráficos.", link: "/?aba=consulta" },
+      { tipo: "correcao", area: "Tela pública", texto: "O cabeçalho é o mesmo do painel: a linha abaixo dele alinha com a do menu e o Entrar fica discreto até o toque.", link: "/" },
+    ],
+  },
+  {
     versao: "1.151.1",
     data: "2026-10-21",
     titulo: "Documentos: selo do PCA no canto da capa",

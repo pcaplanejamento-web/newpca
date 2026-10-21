@@ -3,7 +3,7 @@
 import { CamposProtecao } from "@/components/ProtecaoDadosAdmin";
 import { CamposSeguranca } from "@/components/SegurancaAdmin";
 import { CamposEscopo } from "@/components/EscopoCabecalhoAdmin";
-import { ItensMenu } from "@/components/MenuLateral";
+import { CabecalhoApp, ItensMenu } from "@/components/MenuLateral";
 import { CamposPublico } from "@/components/PublicoAdmin";
 import { type ConfigPublico, PUBLICO_PADRAO } from "@/lib/publico-core";
 import { CONFIG_ESCOPO_PADRAO, type ConfigEscopo } from "@/lib/escopo-cabecalho-core";
@@ -3554,6 +3554,12 @@ export function Catalogo() {
       <Secao titulo="Menu lateral — MenuLateral / GavetaMenu / ItensMenu (o MESMO menu do painel e da tela pública: recolhível, abre por cima, gaveta no celular)">
         <div className="max-w-xs rounded-card border border-border bg-surface p-2">
           <ItensMenu secoes={[{ chave: "demo", titulo: "Consulta do PCA", itens: [{ href: "#", label: "Dashboard", Icon: IconDashboard }, { href: "#orc", label: "Orçamento", Icon: IconWallet }] }]} ativo={(i) => i.href === "#"} />
+        </div>
+      </Secao>
+
+      <Secao titulo="Cabeçalho — CabecalhoApp (o MESMO no painel e na tela pública: altura e borda alinhadas à faixa da marca do menu)">
+        <div className="overflow-hidden rounded-card border border-border">
+          <CabecalhoApp onMenu={() => {}} inicio={<span className="text-sm font-semibold text-text">Marca</span>} direita={<span className="text-xs text-muted">controles</span>} />
         </div>
       </Secao>
 

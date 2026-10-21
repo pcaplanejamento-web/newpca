@@ -1559,7 +1559,8 @@ flash** (anti-XSS) · ✅ **Chrome do painel** (AppShell/nav/inputs) por token �
 redesign ao conteúdo das telas logadas (Protocolos [status ✅], Dashboard, Usuários, Ferramentas).
 Regras em [../CLAUDE.md](../CLAUDE.md); a `/design-system` é a **fonte única** de componentes.
 · ✅ **Tela pública com menu lateral** (v1.151.0): o mesmo menu do painel, o Entrar no rodapé e as abas do PCA
-publicadas pelo ADM (Dashboard · Orçamento · Documentos — Configurações → Tela pública).
+publicadas pelo ADM (Dashboard · Orçamento · Documentos — Configurações → Tela pública); v1.152.0: PCA e unidade no
+cabeçalho compartilhado (`CabecalhoApp`) e a consulta de itens como item do menu.
 
 ---
 

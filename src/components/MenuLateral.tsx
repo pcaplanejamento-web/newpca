@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ATRIBUTO_MENU, CHAVE_MENU, EVENTO_ALTERNAR_MENU } from "@/lib/menu-lateral";
 import { IconeNavegacao } from "./CarregandoLink";
-import { IconClose, IconRecolherMenu } from "./icons";
+import { IconClose, IconMenu, IconRecolherMenu } from "./icons";
 
 /**
  * O MENU LATERAL do sistema — UM componente para o painel (`AppShell`) e a tela pública: a VAGA (sticky, altura do display)
@@ -227,5 +227,25 @@ export function GavetaMenu({
         {rodape ? <div className="p-2 pt-0 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]">{rodape}</div> : null}
       </aside>
     </div>
+  );
+}
+
+/** O CABEÇALHO do sistema — o MESMO no painel e na tela pública: a altura de `--h-header` com a borda nela (a faixa da marca
+ *  do `MenuLateral` tem a mesma altura — as duas bordas formam UMA linha), o hambúrguer no celular, o `inicio` (marca/trilha)
+ *  e os controles à direita. */
+export function CabecalhoApp({ onMenu, inicio, direita }: { onMenu: () => void; inicio?: ReactNode; direita: ReactNode }) {
+  return (
+    <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
+      <button
+        type="button"
+        aria-label="Abrir menu"
+        onClick={onMenu}
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-surface-2 lg:hidden"
+      >
+        <IconMenu className="h-5 w-5" />
+      </button>
+      {inicio}
+      <div className="ml-auto flex min-w-0 items-center gap-1.5">{direita}</div>
+    </header>
   );
 }

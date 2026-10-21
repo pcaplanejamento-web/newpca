@@ -4,7 +4,6 @@ import { OrcamentoPca } from "@/components/OrcamentoPca";
 import { PainelPca } from "@/components/PainelPca";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { TelaPublica } from "@/components/TelaPublica";
-import { UnitFilter } from "@/components/UnitFilter";
 import { getAparencia } from "@/lib/aparencia";
 import { listarDocumentos } from "@/lib/documentos";
 import { dataHoraBR, num } from "@/lib/format";
@@ -12,7 +11,7 @@ import { dashboardDoPca, getPcaEspaco, listarPcasPublicados, orcamentoDoAno, orc
 import { getConfigProtecao } from "@/lib/protecao";
 import { protecaoPublica } from "@/lib/protecao-core";
 import { getConfigPublico } from "@/lib/publico";
-import { abaPublicaPedida, podeLerPublico } from "@/lib/publico-core";
+import { podeLerPublico, vistaPublicaPedida, vistasDoMenu } from "@/lib/publico-core";
 
 export const dynamic = "force-dynamic";
 
@@ -71,8 +70,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const escolhido = publicados.find((p) => p.id === pedido) ?? publicados[0];
   const pca = escolhido ? await getPcaEspaco(escolhido.id) : null;
   // A aba que vale: só as publicadas pelo ADM (outra na URL = o Dashboard) e só de PCA publicado.
-  const aba = abaPublicaPedida(cfg, sp.aba);
+  const pedida = vistaPublicaPedida(cfg, sp.aba);
+  const aba = pedida === "consulta" ? "dashboard" : pedida;
   const liberada = podeLerPublico(pca, cfg, aba, false);
+  const vista = liberada ? pedida : "dashboard";
+  let unidades: { lista: { id: number; codigo: string; municipio: string }[]; atual?: number } | undefined;
 
   let conteudo: React.ReactNode;
   if (!pca || !liberada) conteudo = <Vazio texto="A equipe ainda não publicou o Plano de Contratações Anual." />;
@@ -81,35 +83,27 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   else {
     const unidadePedida = sp.unidade ? Number.parseInt(sp.unidade, 10) : Number.NaN;
     const dados = await dashboardDoPca(pca, Number.isFinite(unidadePedida) ? unidadePedida : undefined);
+    unidades = { lista: dados.unidades, atual: dados.unidadeId ?? undefined };
     const comProtocolos = pca.fonte === "protocolo" || dados.protocolos > 0;
     conteudo =
       dados.resumo.count === 0 ? (
         <Vazio texto={`A equipe ainda não publicou os dados do ${pca.nome}.`} />
       ) : (
-        <>
-          {dados.unidades.length > 1 && (
-            <div className="flex justify-end">
-              <div className="w-full sm:w-80">
-                <UnitFilter unidades={dados.unidades} current={dados.unidadeId} />
-              </div>
-            </div>
-          )}
           <PainelPca
+            vista={vista === "consulta" ? "consulta" : "graficos"}
             nome={pca.nome}
             dados={dados}
             unidadeFiltrada={dados.unidadeId != null}
             hintItens={comProtocolos ? `${num(dados.protocolos)} protocolo(s) · ${num(dados.dfds)} DFDs` : undefined}
             consulta={comProtocolos ? { pcaId: pca.id, protocolos: dados.protocolosLista, dfds: dados.dfdsLista } : undefined}
           />
-        </>
       );
   }
 
   return (
     <>
       {protecao && <ProtecaoDados {...protecao} quem={`Consulta pública · ${dataHoraBR(new Date().toISOString())}`} />}
-      <TelaPublica identidade={aparencia.identidade} abas={pca ? cfg.abas : ["dashboard"]} aba={liberada ? aba : "dashboard"} pcaId={pca?.id ?? null} pcas={publicados}>
-        {pca && liberada && <h1 className="linha-topico text-xl font-bold text-text">{pca.nome}</h1>}
+      <TelaPublica identidade={aparencia.identidade} vistas={pca ? vistasDoMenu(cfg) : ["dashboard"]} vista={vista} unidades={unidades} pcaId={pca?.id ?? null} pcas={publicados}>
         {conteudo}
       </TelaPublica>
     </>

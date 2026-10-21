@@ -136,6 +136,7 @@ export function DashboardPcaCliente({
   previa = false,
   nomesUnidades,
   nome,
+  vista,
 }: {
   resumo: Resumo;
   porClassificacao: Fatia[];
@@ -153,6 +154,8 @@ export function DashboardPcaCliente({
   nomesUnidades?: Record<string, string>;
   /** O nome do PCA (o título do relatório em PDF). */
   nome?: string;
+  /** Vista FIXA escolhida fora (o menu da tela pública): sem o seletor Gráficos | Consulta — só monta a escolhida. */
+  vista?: "graficos" | "consulta";
 }) {
   const itens = useMemo(() => itensDoTexto(itensTexto), [itensTexto]);
   const [filtros, setFiltros] = useState<FiltrosDash>({});
@@ -161,7 +164,8 @@ export function DashboardPcaCliente({
   const [aberto, setAberto] = useState<AberturaMesa | null>(null);
   const [modoCrono, setModoCrono] = useState<ModoCronograma>("mensal");
   const [gerando, setGerando] = useState(false);
-  const [aba, setAba] = useState<"graficos" | "consulta">("graficos");
+  const [abaLocal, setAba] = useState<"graficos" | "consulta">("graficos");
+  const aba = vista ?? abaLocal;
   const podeExportar = usePodeExportar();
   const quem = useQuemExporta();
   const ativo = temFiltro(filtros);
@@ -545,7 +549,7 @@ export function DashboardPcaCliente({
         )}
       </section>
 
-      <Segmented
+      {!vista && <Segmented
         value={aba}
         onChange={setAba}
         ariaLabel="Gráficos ou consulta de itens"
@@ -553,7 +557,7 @@ export function DashboardPcaCliente({
           { value: "graficos", label: "Gráficos", dica: "Os gráficos do PCA — toque para filtrar, expanda para explorar" },
           { value: "consulta", label: `Consulta de itens (${num(filtrados.length)})`, curto: `Consulta (${num(filtrados.length)})`, dica: "Busque, filtre e ordene os itens (seguem os filtros acima)" },
         ]}
-      />
+      />}
 
       <div key={aba} className="animate-cat-morph">
         {aba === "graficos" ? (

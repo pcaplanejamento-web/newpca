@@ -8,12 +8,21 @@ import { Selecao } from "./Selecao";
  * Seletor (dropdown) do PCA PUBLICADO na tela inicial — troca `?pca=` e limpa o filtro de unidade
  * (as unidades são de cada PCA). Mesmo visual do `UnitFilter`.
  */
-export function PcaSeletor({ pcas, current }: { pcas: { id: number; nome: string }[]; current: number }) {
+export function PcaSeletor({
+  pcas,
+  current,
+  compacto = false,
+}: {
+  pcas: { id: number; nome: string }[];
+  current: number;
+  /** Na altura dos controles (o cabeçalho). */
+  compacto?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
   return (
-    <label className="flex items-center gap-2 rounded-control border border-border-2 bg-surface px-3 py-2 text-sm">
+    <label className={`flex items-center gap-2 rounded-control border border-border-2 bg-surface px-3 text-sm ${compacto ? "h-11 lg:h-[var(--h-control-sm)]" : "py-2"}`}>
       <IconBox className="h-[18px] w-[18px] shrink-0 text-faint" />
       <span className="hidden shrink-0 text-muted sm:inline">PCA:</span>
       <Selecao

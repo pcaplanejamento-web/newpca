@@ -22,7 +22,7 @@ import { SinoNotificacoes } from "./SinoNotificacoes";
 import { ThemeToggle } from "./ThemeToggle";
 import { TrilhaCabecalho } from "./TrilhaCabecalho";
 import { GatilhoPesquisa, PesquisaSistema } from "./PesquisaSistema";
-import { GavetaMenu, ItensMenu, MenuLateral } from "./MenuLateral";
+import { CabecalhoApp, GavetaMenu, ItensMenu, MenuLateral } from "./MenuLateral";
 import { toast } from "./Toast";
 import {
   IconAlternarNivel,
@@ -33,7 +33,6 @@ import {
   IconClock,
   IconDatabase,
   IconLogout,
-  IconMenu,
   IconLayers,
   IconPalette,
   IconPlug,
@@ -537,23 +536,20 @@ export function AppShell({
 
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[var(--h-header)] items-center gap-2 border-b border-border bg-surface px-[var(--pad-canvas)] print:hidden">
-          <button
-            type="button"
-            aria-label="Abrir menu"
-            onClick={() => setMenuAberto(true)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-surface-2 lg:hidden"
-          >
-            <IconMenu className="h-5 w-5" />
-          </button>
+        <CabecalhoApp
+          onMenu={() => setMenuAberto(true)}
+          inicio={
+            <>
           {/* Com a presença no cabeçalho, a marca sai abaixo de 400px (está no menu) — o seletor de PCA segue legível. */}
           <div className={`shrink-0 sm:hidden ${presenca ? "max-[399px]:hidden" : ""}`}>
             <Brand compact identidade={identidade} inicio={inicio} />
           </div>
           {/* Trilha (Seção › Tela ⌃⌄ › PCA ⌃⌄) — à esquerda, no desktop. */}
           <TrilhaCabecalho secoes={secoesVisiveis(usuario.admin, modulos)} pcas={pcas} pcaFiltroId={pcaFiltroId} />
-
-          <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            </>
+          }
+          direita={
+            <>
             {/* PCA do cabeçalho (filtro de todo o sistema) — à DIREITA; só para quem vê o que ele filtra (Mesa, PCA,
                 Orçamento). É o único item que ENCOLHE numa tela estreita (o rótulo trunca). */}
             {filtraPca && (
@@ -576,8 +572,9 @@ export function AppShell({
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
               <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
             </Link>
-          </div>
-        </header>
+            </>
+          }
+        />
 
         {/* Laterais = --pad-canvas (a do menu e da borda); topo e base = --pad-canvas-y (as 4 distâncias proporcionais);
             no celular, a base soma a navegação inferior (4rem + área segura). */}
