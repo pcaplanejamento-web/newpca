@@ -170,14 +170,14 @@ export function PcaConfiguracao({
             <OpcaoFonte
               ativo={pca.fonte === "lista"}
               titulo="Lista pronta"
-              texto="Importa planilhas (modelo atual). Aba Importação."
+              texto="Importa planilhas (aba Importação) e também recebe protocolos (aba Mesa)."
               disabled={ro || !!temDados || salvando != null}
               onClick={() => pca.fonte !== "lista" && salvar({ fonte: "lista" }, "fonte")}
             />
             <OpcaoFonte
               ativo={pca.fonte === "protocolo"}
               titulo="Protocolos"
-              texto="Só os DFDs dos protocolos movidos da Mesa. Aba Mesa."
+              texto="Só os DFDs dos protocolos enviados à Mesa do PCA."
               disabled={ro || !!temDados || salvando != null}
               onClick={() => pca.fonte !== "protocolo" && salvar({ fonte: "protocolo" }, "fonte")}
             />
@@ -214,7 +214,7 @@ export function PcaConfiguracao({
           />
         </section>
 
-        {pca.fonte === "protocolo" && (
+        {(
           <section className={`${CARTAO} flex flex-wrap items-center justify-between gap-3`}>
             <div className="min-w-0 flex-1">
               <h2 className="font-bold text-text">Mostrar os marcados da Mesa do sistema</h2>
@@ -241,7 +241,7 @@ export function PcaConfiguracao({
           </section>
         )}
 
-        {pca.fonte === "protocolo" && (
+        {(
           <section className={CARTAO}>
             <h2 className="mb-3 font-bold text-text">Regras da Mesa do PCA</h2>
             <ul className="space-y-2 text-sm text-text-2">

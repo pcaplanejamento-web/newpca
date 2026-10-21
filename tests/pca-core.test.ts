@@ -16,7 +16,7 @@ import {
   previsaoDoDfd,
 } from "../src/lib/pca-core.ts";
 
-const base = { anoProtocolo: 2027, anoPca: 2027, totalDfds: 3, fonteProtocolo: true, jaEmPca: null };
+const base = { anoProtocolo: 2027, anoPca: 2027, totalDfds: 3, jaEmPca: null };
 
 describe("pca-core — enviar ao PCA", () => {
   it("tudo certo ⇒ pode enviar", () => assert.deepEqual(motivosNaoEnviar(base), []));
@@ -24,10 +24,9 @@ describe("pca-core — enviar ao PCA", () => {
     assert.match(motivosNaoEnviar({ ...base, anoProtocolo: 2026 }).join(), /PCA 2026/);
     assert.match(motivosNaoEnviar({ ...base, anoProtocolo: null }).join(), /sem ano/);
   });
-  it("sem DFDs / já em PCA / PCA de lista", () => {
+  it("sem DFDs / já em PCA", () => {
     assert.match(motivosNaoEnviar({ ...base, totalDfds: 0 }).join(), /sem DFDs/);
     assert.match(motivosNaoEnviar({ ...base, jaEmPca: "PCA 2027" }).join(), /Já está no PCA 2027/);
-    assert.match(motivosNaoEnviar({ ...base, fonteProtocolo: false }).join(), /lista pronta/);
   });
 });
 
@@ -158,7 +157,7 @@ describe("previaAtiva (visão dos marcados = prévia do PCA)", () => {
     assert.equal(previaAtiva(base), true);
     assert.equal(previaAtiva({ ...base, status: "publicado" }), false);
     assert.equal(previaAtiva({ ...base, mesaMarcados: false }), false);
-    assert.equal(previaAtiva({ ...base, fonte: "lista" }), false);
+    assert.equal(previaAtiva({ ...base, fonte: "lista" }), true); // o PCA de lista também recebe protocolos
     assert.equal(previaAtiva({ ...base, ano: null }), false);
   });
 });

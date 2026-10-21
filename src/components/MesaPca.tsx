@@ -80,7 +80,7 @@ export function MesaPca({ pca, emOutroPcaPorProtocolo, acaoPorProtocolo, marcado
     motivosNaoIncorporar({ enviadoAEste: p.pcaId === pca.id, incorporado: incorporado(p), totalDfds: totalDfds(p), dfdsEmOutroPca: emOutroPcaPorProtocolo[p.id] ?? 0 });
 
   const motivosEnv = (p: ProtocoloNaMesa) =>
-    motivosNaoEnviar({ anoProtocolo: p.anoPca, anoPca: pca.ano, totalDfds: totalDfds(p), fonteProtocolo: true, jaEmPca: null });
+    motivosNaoEnviar({ anoProtocolo: p.anoPca, anoPca: pca.ano, totalDfds: totalDfds(p), jaEmPca: null });
   const contagem = useMemo(() => {
     const c = { sistema: 0, enviados: 0, incorporados: 0 };
     for (const p of protocolos) c[ESCOPO_DO_LOCAL[localDoProtocolo(p)]]++;

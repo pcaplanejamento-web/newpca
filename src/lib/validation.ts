@@ -14,6 +14,9 @@ export const linhaCruaSchema = z.object({
   valorReferencia: celula,
   classificacao: celula,
   dataDesejada: celula,
+  dominio: celula,
+  prioridade: celula,
+  protocoloIdExterno: celula,
 });
 
 // Limite de linhas POR REQUISIÇÃO (o cliente envia a planilha em lotes).

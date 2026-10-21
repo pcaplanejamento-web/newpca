@@ -114,7 +114,7 @@ export function valoresBatem(a: number | null | undefined, b: number | null | un
 
 export type DataParts = { iso: string; mes: number; ano: number } | null;
 
-/** Aceita Date (serial do Excel), "dd/mm/yyyy" ou ISO "yyyy-mm-dd". */
+/** Aceita Date (serial do Excel), "dd/mm/yyyy", "mm/aaaa" ou ISO "yyyy-mm-dd". */
 export function parseDataDesejada(v: unknown): DataParts {
   if (v == null || v === "") return null;
 
@@ -138,6 +138,10 @@ export function parseDataDesejada(v: unknown): DataParts {
   // ISO yyyy-mm-dd (ou com timestamp)
   m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return build(+m[1], +m[2], +m[3]);
+
+  // mm/aaaa (a "Data para contratação" da planilha consolidada) → dia 1.
+  m = s.match(/^(\d{1,2})[/\-.](\d{4})$/);
+  if (m) return build(+m[2], +m[1], 1);
 
   return null;
 }
@@ -285,6 +289,9 @@ export type LinhaCrua = {
   valorReferencia?: unknown;
   classificacao?: unknown;
   dataDesejada?: unknown;
+  dominio?: unknown;
+  prioridade?: unknown;
+  protocoloIdExterno?: unknown;
 };
 
 export type LinhaNormalizada = {
@@ -301,7 +308,25 @@ export type LinhaNormalizada = {
   dataDesejada: string | null;
   mesDesejado: number | null;
   anoDesejado: number | null;
+  dominio: string | null;
+  prioridade: string | null;
+  protocoloIdExterno: string | null;
+  previsaoGenerica: string | null;
 };
+
+const PERIODOS_GENERICOS = ["ANUAL", "SEMESTRAL", "QUADRIMESTRAL", "TRIMESTRAL"] as const;
+/** A previsão GENÉRICA da planilha ("ANUAL", "semestral"…) — `null` quando é um mês/data. */
+export function previsaoGenericaDe(v: unknown): string | null {
+  const s = stripAccents(String(v ?? "").trim().toUpperCase());
+  return (PERIODOS_GENERICOS as readonly string[]).includes(s) ? s : null;
+}
+
+/** Texto curto de uma célula (sem controle; vazio = `null`). */
+function textoCelula(v: unknown, max = 200): string | null {
+  if (v == null) return null;
+  const s = limparTexto(String(v)).trim();
+  return s ? s.slice(0, max) : null;
+}
 
 export function normalizarLinha(row: LinhaCrua): LinhaNormalizada {
   const quantidade = parseNumberBR(row.quantidade);
@@ -331,6 +356,11 @@ export function normalizarLinha(row: LinhaCrua): LinhaNormalizada {
     dataDesejada: data?.iso ?? null,
     mesDesejado: data?.mes ?? null,
     anoDesejado: data?.ano ?? null,
+    dominio: textoCelula(row.dominio, 120)?.toUpperCase() ?? null,
+    prioridade: normPrioridade(textoCelula(row.prioridade, 40)).valor,
+    // Só os dígitos do Id do protocolo (o "Id:" da capa).
+    protocoloIdExterno: String(row.protocoloIdExterno ?? "").replace(/\D/g, "").slice(0, 20) || null,
+    previsaoGenerica: previsaoGenericaDe(row.dataDesejada),
   };
 }
 

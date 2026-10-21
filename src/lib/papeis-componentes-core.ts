@@ -70,7 +70,7 @@ export const CATALOGO_COMPONENTES: readonly InfoComponente[] = [
   c("pca", "visaoDetalhes", "Configurações da visão", "O olho ao lado da Visão no PCA × Orçamento: abre os filtros e os vínculos da visão em uso, só para consulta.", {
     visualizar: "Ver as configurações da visão do orçamento (sem alterar).",
   }),
-  c("pca", "mesa", "Mesa do PCA", "A aba Mesa (PCA de protocolos) com os protocolos enviados e incorporados.", {
+  c("pca", "mesa", "Mesa do PCA", "A aba Mesa do PCA com os protocolos enviados e incorporados (todo PCA recebe protocolos).", {
     visualizar: "Abrir a Mesa do PCA.",
     exportar: "Baixar as tabelas da Mesa do PCA.",
   }),

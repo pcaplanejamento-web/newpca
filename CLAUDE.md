@@ -70,7 +70,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     layout do painel) consulta as versões ao voltar à janela e a cada 60 s com a aba à vista (NUNCA a cada navegação) e só dá `router.refresh()` quando
     a da ÁREA da tela aberta MUDOU (gravação de outra pessoa); a mudança de outra área fica guardada e recarrega ao ir a uma
     tela dela.
-  - **Esqueleto SÓ QUANDO DEMORA (v1.131.0 → v1.132.1) — CADA COMPONENTE TEM O SEU:** o esqueleto mora JUNTO do componente
+  - **Esqueleto SÓ QUANDO DEMORA (v1.131.0 → v1.133.1) — CADA COMPONENTE TEM O SEU:** o esqueleto mora JUNTO do componente
     (no mesmo arquivo quando ele não é "use client" — `EsqueletoPcaCard`/`GRADE_PCAS` em `PcaCard.tsx`, `EsqueletoOrcamentoCard`/
     `GRADE_ORCAMENTOS` em `OrcamentoCard.tsx`, `EsqueletoControle`/`SkeletonCartao` em `Skeleton.tsx`; senão num
     `<Componente>Esqueleto.tsx` leve ao lado — `EsqueletoTabela` (`DataTableEsqueleto`), `EsqueletoCartaoEspaco`/
@@ -2475,6 +2475,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`chamarPadronizacao`).
 
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
+- **LISTA PRONTA TAMBÉM RECEBE PROTOCOLOS (v1.133.0, migração `0115` — `itens.dominio`/`prioridade`/`protocolo_id_externo`/
+  `previsao_generica`):** a fonte é o PONTO DE PARTIDA, não exclusividade — todo PCA tem a aba **Mesa** (enviar/incorporar/
+  devolver; `motivosNaoEnviar` sem a trava de fonte; seletor de Mesa e "Enviar ao PCA" listam todos); o de lista tem também
+  a **Importação** (`AbaPca` "importacao", componente `pca.importacao`). A Importação lê a planilha **CONSOLIDADA** com a
+  coluna LOCAL (núcleo puro `parse-xlsx-core.ts` → `lerPlanilhas`: uma planilha por LOCAL, código só dígitos, data serial/
+  "mm/aaaa"/ANUAL, `problemas` na PRÉVIA — `useConfirmacao` antes de gravar); o `start` do `/api/upload` dá a planilha à
+  unidade cadastrada de MESMA SIGLA (senão a do cabeçalho); lotes 5 × 18 = 90 parâmetros. **União** (só leitura,
+  `pca-uniao.ts`, testado): com algum protocolo incorporado (ou na prévia), `dashboardUnido`/`orcamentoDoPca`/cards somam
+  as planilhas + os itens consolidados, e toda linha da planilha cujo ID PROTOCOLO é o "Id:" de um protocolo INCORPORADO sai
+  da soma — **o protocolo vence e nunca é alterado** (a planilha nunca escreve em DFD/item de DFD). Ids da planilha
+  negativos no Dashboard unido (não colidem com os itens de DFD). Testes: `tests/planilha-consolidada.test.ts`.
 - **O que é:** o PCA virou um espaço próprio. `/painel/pca` (`PcaModuleView`) mostra os planos em **cards 4:5** (`PcaCard`/
   `PcaCapa`: capa escolhida OU capa padrão = degradê accent + o **ano gigante**; `Badge` Publicado/Preview + a FONTE; nome, Σ e
   contagens sobre o véu `--veu-capa`; grade fluida `auto-fill minmax(22rem)` com o card até 30rem, o texto proporcional ao card por container query e, com capa, uma faixa desfocada sob o texto) + o card **"+" Novo PCA** (`PcaNovoCard`: nome, ano, fonte). Clicar entra em

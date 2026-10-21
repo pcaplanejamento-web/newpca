@@ -11,6 +11,12 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
+### PCA de lista pronta recebe protocolos + planilha consolidada (v1.133.0) — entregue
+✅ Todo PCA tem a aba **Mesa**; o de lista pronta mantém a **Importação**, que agora lê a planilha consolidada com a coluna
+LOCAL (uma planilha por unidade, domínio, prioridade, ID PROTOCOLO, prévia dos problemas). ✅ Dashboard/Orçamento/cards
+somam planilhas + protocolos incorporados sem contar duas vezes (o protocolo vence; nunca é sobrescrito).
+🔜 **Conciliação planilha × protocolos** (Igual · Divergente campo a campo · Só na planilha · Só no protocolo) na Importação.
+
 ### Mesa conectada (v1.116.0) — entregue
 - v1.117.0: filtros e recorte no menu (funil) do rodapé da tabela; botões do rodapé só ícone.
 - v1.119.0: Protocolos, DFDs e Itens numa TABELA ÚNICA (o mesmo `DataTable`; muda colunas e linhas).
@@ -1627,7 +1633,7 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 | ✅ | **Estado da Mesa guardado** (v1.130.0): a conferência de cada protocolo/DFD é feita uma vez e guardada com a assinatura de entrada (tabela `conferencias`); a Mesa abre com o Estado pronto e só reconfere o que mudou. |
 | ✅ | **Telas que abrem na hora** (v1.131.0): esqueleto (`loading.tsx`) nas telas de lista; versão dos dados em duas camadas (tarefas/agenda não recarregam Mesa/PCA/Orçamento/Catálogo); planilha do PCA na versão. Próximo: esqueleto dos espaços `[id]` e pré-carregamento pela intenção no menu (v1.132.0). |
 | ✅ | **Cache de 2 h e transições sem piscar** (v1.132.0): `staleTimes` e `memoPorVersao` em 2 h; troca de aba mantém a anterior até a nova chegar; esqueleto só após 450 ms; pré-carregamento pela intenção nos links do menu e nos cartões. |
-| ✅ | **Esqueleto por componente** (v1.132.1): cada componente tem o seu esqueleto junto dele (tabela, cartões de espaço/PCA/orçamento, abas laterais, calendário, Segmented); as telas só os compõem. |
+| ✅ | **Esqueleto por componente** (v1.133.1): cada componente tem o seu esqueleto junto dele (tabela, cartões de espaço/PCA/orçamento, abas laterais, calendário, Segmented); as telas só os compõem. |
 | ✅ | **Mesa de PCA grande dentro dos limites do Worker gratuito** (a falha "Algo deu errado" da Mesa do PCA 1): listas em um texto JSON, projeção enxuta, grupos de assinatura no banco, ids num parâmetro JSON — 48 → 25 consultas e ~10× menos serialização num PCA de 2.500 DFDs. |
 | 🔜 | **Workers Paid** (30 s de CPU, 1.000 consultas por requisição) — resolve de vez o limite da tela grande; decisão de faturamento. |
 | 🔜 | Tornar o type-check **bloqueante** (hoje informativo) quando o baseline de tipos estiver limpo |

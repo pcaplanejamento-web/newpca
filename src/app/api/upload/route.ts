@@ -1,9 +1,9 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { exigirAcesso, recusaPca } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
-import { itens, unidades } from "@/db/schema";
+import { itens, reparticoes, unidades } from "@/db/schema";
 import { idDoFiltro } from "@/lib/escopo-unidades-core";
 import { unidadesDaSessao } from "@/lib/grupos";
 import { normalizarLinha, type LinhaCrua } from "@/lib/normalize";
@@ -16,11 +16,11 @@ function bad(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
 }
 
-// 7 linhas x 14 colunas = 98 parâmetros (< limite de 100 do D1 por statement).
+// 5 linhas x 18 colunas = 90 parâmetros (< limite de 100 do D1 por statement).
 // O cliente envia a planilha em lotes (ex.: 200 linhas/requisição), então cada
 // requisição faz ~29 statements num único db.batch() — bem dentro dos limites
 // de sub-requisições e CPU do Worker. Assim planilhas grandes sobem inteiras.
-const ROWS_PER_STMT = 7;
+const ROWS_PER_STMT = 5;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // biome-ignore lint/suspicious/noExplicitAny: tipos encadeados do query-builder do Drizzle para db.batch() são inviáveis de anotar aqui.
@@ -65,9 +65,15 @@ export async function POST(req: Request) {
       if (semPca) return semPca;
       if (pca.fonte !== "lista") return bad("Este PCA é de protocolos — a planilha só entra num PCA de lista pronta.", 409);
 
-      // Unidade ativa no head vira dona da planilha importada. Em "Geral" (repId=null)
+      // A unidade da MESMA SIGLA, senão a ativa no head, vira dona da planilha importada. Em "Geral" (repId=null)
       // a planilha fica sem unidade dona; ao RE-importar em Geral, preserva a atual.
-      const repId = idDoFiltro((await unidadesDaSessao(auth.u)).filtro) || null;
+      // A planilha da unidade cadastrada de MESMA SIGLA (a consolidada traz a sigla em LOCAL) é dela; senão, a do cabeçalho.
+      const [mesmaSigla] = await db
+        .select({ id: reparticoes.id })
+        .from(reparticoes)
+        .where(and(sql`UPPER(TRIM(${reparticoes.codigo})) = ${codigo.trim().toUpperCase()}`, eq(reparticoes.oculto, false), sql`${reparticoes.codigo} <> 'GERAL'`))
+        .limit(1);
+      const repId = mesmaSigla?.id ?? (idDoFiltro((await unidadesDaSessao(auth.u)).filtro) || null);
       const set = {
         municipio,
         nomeArquivo: nomeArquivo ?? null,

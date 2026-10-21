@@ -61,9 +61,16 @@ export const itens = sqliteTable(
     dataDesejada: text("data_desejada"), // ISO yyyy-mm-dd
     mesDesejado: integer("mes_desejado"),
     anoDesejado: integer("ano_desejado"),
+    // Migração `0115` (planilha consolidada): domínio, prioridade (ALTA/MÉDIA/BAIXA), o Id do protocolo de origem (o "Id:"
+    // da capa — a chave da união com os protocolos incorporados ao PCA) e a previsão GENÉRICA (ANUAL/SEMESTRAL…).
+    dominio: text("dominio"),
+    prioridade: text("prioridade"),
+    protocoloIdExterno: text("protocolo_id_externo"),
+    previsaoGenerica: text("previsao_generica"),
   },
   (t) => [
     index("itens_unidade_idx").on(t.unidadeId),
+    index("itens_protocolo_externo_idx").on(t.protocoloIdExterno),
     index("itens_class_idx").on(t.classificacaoNorm),
     index("itens_periodo_idx").on(t.anoDesejado, t.mesDesejado),
   ],
