@@ -2,7 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AbaKey } from "@/lib/abas";
-import { ehCodigoGeral, type ModoUnidades } from "@/lib/escopo-unidades-core";
+import { ehCodigoGeral, type EscopoTelas, type ModoUnidades } from "@/lib/escopo-unidades-core";
 import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
@@ -33,13 +33,16 @@ type Grupo = {
   abas: AbaKey[];
   chat: boolean;
   modoUnidades: ModoUnidades;
+  /** No modo "unidade de cadastro": as telas que veem TODAS as unidades. */
+  escopoTelas: EscopoTelas;
   pcas: number[] | null;
   membros: number[];
   reparticoes: number[];
 };
 type PcaOpt = { id: number; nome: string; ano: number | null };
 type Status = "ativo" | "pendente" | "inativo";
-type UserOpt = { id: number; nome: string; email: string; status: Status; reparticaoId: number | null };
+/** `outras` = as unidades de cadastro ADICIONAIS da pessoa (Usuários). */
+type UserOpt = { id: number; nome: string; email: string; status: Status; reparticaoId: number | null; outras: number[] };
 type RepOpt = { id: number; codigo: string; nome: string; oculto: boolean };
 
 /** Ordem alfabética do português (acentos e caixa no lugar certo — a do banco põe "Á" depois do "Z"). */
@@ -72,6 +75,7 @@ export function GruposAdmin() {
   const [membros, setMembros] = useState<Set<number>>(new Set());
   const [reps, setReps] = useState<Set<number>>(new Set());
   const [modo, setModo] = useState<ModoUnidades>("lista");
+  const [escopo, setEscopo] = useState<EscopoTelas>({});
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
@@ -111,6 +115,7 @@ export function GruposAdmin() {
     setMembros(new Set());
     setReps(new Set());
     setModo("lista");
+    setEscopo({});
     setBusca("");
     setErroModal(null);
   }
@@ -125,6 +130,7 @@ export function GruposAdmin() {
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
     setModo(g.modoUnidades ?? "lista");
+    setEscopo(g.escopoTelas ?? {});
     setBusca("");
     setErroModal(null);
   }  // A PESQUISA DO SISTEMA abre o banner do grupo (`?abrir=<id>`), quando a lista chega.
@@ -155,7 +161,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps], modoUnidades: modo }),
+        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps], modoUnidades: modo, escopoTelas: escopo }),
       });
       const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -206,7 +212,9 @@ export function GruposAdmin() {
 
 
   // No modo "unidade de cadastro": quem do grupo não tem a unidade de cadastro (não verá dado nenhum).
-  const semUnidade = modo === "cadastro" ? users.filter((u) => membros.has(u.id) && u.reparticaoId == null) : [];
+  const semUnidade = modo === "cadastro" ? users.filter((u) => membros.has(u.id) && u.reparticaoId == null && u.outras.length === 0) : [];
+  // As telas do grupo (as dos módulos escolhidos): no modo "de cadastro", cada uma escolhe as unidades que vê.
+  const telasGrupo = telasDosModulos(modulosDisp, [...mods]);
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -369,8 +377,10 @@ export function GruposAdmin() {
                   <b>Unidades escolhidas</b>: todas as pessoas do grupo veem os dados das unidades marcadas (a "Geral" = todas).
                 </p>
                 <p className="mt-2">
-                  <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só a unidade em que trabalha (o cadastro dela em
-                  Usuários). Quem não tem unidade de cadastro não vê dado nenhum. As unidades escolhidas ficam guardadas para
+                  <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só as unidades em que trabalha (o cadastro dela em
+                  Usuários — pode ter várias). Em <b>Acesso de cada tela</b>, escolha as telas em que o grupo vê{" "}
+                  <b>todas as unidades</b> (ex.: o Calendário de todas e a Mesa só a de cadastro). Quem não tem unidade de
+                  cadastro não vê dado nenhum nas telas "só as de cadastro". As unidades escolhidas ficam guardadas para
                   quando voltar ao outro modo.
                 </p>
               </Ajuda>
@@ -385,6 +395,9 @@ export function GruposAdmin() {
                 { value: "cadastro", label: "Unidade de cadastro de cada pessoa", curto: "De cadastro" },
               ]}
             />
+            {modo === "cadastro" && (
+              <EscopoPorTela telas={telasGrupo} valor={escopo} onChange={setEscopo} />
+            )}
             {modo === "cadastro" ? (
               semUnidade.length > 0 ? (
                 <Callout kind="warn">
@@ -461,6 +474,35 @@ export function GruposAdmin() {
 }
 
 /** O que o grupo passa a abrir com os módulos escolhidos — o grupo ANTIGO (telas avulsas) mostra o que ganha e o que perde. */
+/** No modo "unidade de cadastro": em CADA tela do grupo, só as unidades de cadastro da pessoa (padrão) ou todas. */
+function EscopoPorTela({ telas, valor, onChange }: { telas: AbaKey[]; valor: EscopoTelas; onChange: (v: EscopoTelas) => void }) {
+  if (telas.length === 0) return <p className="mb-2 text-[12px] text-faint">Escolha os módulos do grupo para definir o acesso de cada tela.</p>;
+  return (
+    <fieldset className="mb-2 space-y-1 rounded-control border border-border p-2">
+      <legend className="px-1 text-[12.5px] font-semibold text-text">Acesso de cada tela</legend>
+      {telas.map((t) => (
+        <div key={t} className="flex flex-wrap items-center justify-between gap-2 rounded-control p-1.5 hover:bg-surface-2">
+          <span className="text-[13px] font-medium text-text">{rotuloAba(t)}</span>
+          <Segmented
+            ariaLabel={`Unidades na tela ${rotuloAba(t)}`}
+            value={valor[t] === "todas" ? "todas" : "cadastro"}
+            onChange={(v) => {
+              const n: Record<string, "todas"> = { ...valor };
+              if (v === "todas") n[t] = "todas";
+              else delete n[t];
+              onChange(n);
+            }}
+            options={[
+              { value: "cadastro", label: "Só as de cadastro", curto: "Cadastro", dica: "A pessoa vê só as unidades do cadastro dela (Usuários)." },
+              { value: "todas", label: "Todas as unidades", curto: "Todas", dica: "A pessoa vê os dados de todas as unidades nesta tela." },
+            ]}
+          />
+        </div>
+      ))}
+    </fieldset>
+  );
+}
+
 function MudancaTelas({ grupo, tocados, telas }: { grupo: Grupo | null; tocados: boolean; telas: AbaKey[] }) {
   const lista = (l: readonly AbaKey[]) => l.map(rotuloAba).join(", ");
   if (grupo && grupo.modulos == null) {

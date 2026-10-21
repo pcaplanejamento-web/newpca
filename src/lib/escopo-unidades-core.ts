@@ -24,11 +24,71 @@ export function lerModoUnidades(v: unknown): ModoUnidades {
   return v === "cadastro" ? "cadastro" : "lista";
 }
 
-/** As unidades EFETIVAS de um membro: no modo `cadastro`, só a unidade de cadastro dele (sem ela, nenhuma — e a "Geral"
- * nunca vale); no modo `lista`, as do grupo. */
-export function unidadesDoMembro<T extends UnidadeRef>(modo: ModoUnidades, doGrupo: readonly T[], cadastro: T | null): T[] {
+/** As unidades EFETIVAS de um membro: no modo `cadastro`, as unidades de cadastro dele — a principal e as adicionais,
+ * sem repetir (sem nenhuma, nada — e a "Geral" nunca vale); no modo `lista`, as do grupo. */
+export function unidadesDoMembro<T extends UnidadeRef>(modo: ModoUnidades, doGrupo: readonly T[], cadastro: T | readonly T[] | null): T[] {
   if (modo !== "cadastro") return [...doGrupo];
-  return cadastro && !ehCodigoGeral(cadastro.codigo) ? [cadastro] : [];
+  const lista = cadastro == null ? [] : Array.isArray(cadastro) ? cadastro : [cadastro as T];
+  const vistos = new Set<number>();
+  return lista.filter((r) => !ehCodigoGeral(r.codigo) && !vistos.has(r.id) && vistos.add(r.id));
+}
+
+/**
+ * ESCOPO POR TELA (modo `cadastro`): em cada tela do grupo, só as unidades de cadastro da pessoa (padrão) ou TODAS as
+ * unidades. Gravado como `{tela: "todas"}` — só o que difere do padrão.
+ */
+export const ESCOPOS_TELA = ["cadastro", "todas"] as const;
+export type EscopoTela = (typeof ESCOPOS_TELA)[number];
+export type EscopoTelas = Readonly<Record<string, "todas">>;
+
+/** Lê o JSON gravado (texto ou objeto): só as chaves com "todas" ficam; qualquer outra coisa = vazio (= de cadastro). */
+export function lerEscopoTelas(v: unknown): EscopoTelas {
+  let o: unknown = v;
+  if (typeof v === "string") {
+    try {
+      o = JSON.parse(v);
+    } catch {
+      return {};
+    }
+  }
+  if (!o || typeof o !== "object" || Array.isArray(o)) return {};
+  const r: Record<string, "todas"> = {};
+  for (const [k, val] of Object.entries(o)) if (val === "todas" && /^[a-z]{1,30}$/.test(k)) r[k] = "todas";
+  return r;
+}
+
+/** Só as telas que o grupo ABRE (uma tela que saiu do grupo não guarda escolha) — o que vai ao banco. */
+export function compactarEscopoTelas(e: EscopoTelas, telas: readonly string[]): EscopoTelas {
+  const r: Record<string, "todas"> = {};
+  for (const t of telas) if (e[t] === "todas") r[t] = "todas";
+  return r;
+}
+
+/** Nesta tela o membro vê TODAS as unidades? Só no modo `cadastro`, com a tela marcada "todas". Sem tela = não. */
+export function telaVeTodas(modo: ModoUnidades | undefined, e: EscopoTelas, tela: string | null | undefined): boolean {
+  return modo === "cadastro" && !!tela && e[tela] === "todas";
+}
+
+/** As telas marcadas "todas" (para o cabeçalho trocar a lista ao entrar nelas). Fora do modo `cadastro`, nenhuma. */
+export function telasComTodas(modo: ModoUnidades | undefined, e: EscopoTelas): string[] {
+  return modo === "cadastro" ? Object.keys(e).filter((k) => e[k] === "todas") : [];
+}
+
+/** Rotas do painel → a TELA (a chave de `ABAS`). A Mesa do PCA (`/painel/mesa?pca=`) segue a Mesa. */
+const ROTAS_TELA: readonly [string, string][] = [
+  ["/painel/mesa", "dfd"],
+  ["/painel/dfds", "dfd"],
+  ["/painel/pca", "pca"],
+  ["/painel/catalogo", "catalogo"],
+  ["/painel/orcamento", "orcamento"],
+  ["/painel/tarefas", "tarefas"],
+  ["/painel/calendario", "calendario"],
+  ["/painel/verificacao", "verificacao"],
+  ["/painel/documentos", "documentos"],
+];
+export function telaDaRota(pathname: string | null | undefined): string | null {
+  const p = pathname ?? "";
+  return ROTAS_TELA.find(([r]) => p === r || p.startsWith(`${r}/`))?.[1] ?? null;
 }
 
 export type EscopoUnidades = { tipo: "todas" } | { tipo: "unidades"; ids: readonly number[] } | { tipo: "nenhuma" };

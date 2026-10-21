@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnySQLiteColumn,
+  blob,
   index,
   integer,
   primaryKey,
@@ -49,7 +50,7 @@ export const unidades = sqliteTable(
     valorTotal: real("valor_total").default(0),
     // PCA (fonte "lista pronta") a que a planilha pertence — migração `0033`. O código é único POR PCA.
     pcaId: integer("pca_id").references((): AnySQLiteColumn => pcas.id, { onDelete: "cascade" }),
-    // O upload de onde a planilha veio (migração `0117`) — o código é único POR UPLOAD.
+    // O upload de onde a planilha veio (migração `0118`) — o código é único POR UPLOAD.
     uploadId: integer("upload_id").references((): AnySQLiteColumn => pcaUploads.id, { onDelete: "cascade" }),
   },
   (t) => [
@@ -276,6 +277,9 @@ export const grupos = sqliteTable("grupos", {
   /** De onde vêm as unidades dos membros: `lista` = as escolhidas (`grupo_reparticoes`) · `cadastro` = a unidade de
    * cadastro de cada pessoa (`usuarios.reparticao_id`) — migração 0112. */
   modoUnidades: text("modo_unidades", { enum: ["lista", "cadastro"] }).notNull().default("lista"),
+  /** No modo `cadastro`, as telas em que o grupo vê TODAS as unidades (JSON {tela: "todas"}; ausente = de cadastro) —
+   * migração 0119. */
+  escopoTelas: text("escopo_telas"),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });
@@ -411,6 +415,20 @@ export const grupoReparticoes = sqliteTable(
       .references(() => reparticoes.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.grupoId, t.reparticaoId] })],
+);
+
+/** As unidades de cadastro ADICIONAIS da pessoa (a principal é `usuarios.reparticao_id`) — migração 0119. */
+export const usuarioReparticoes = sqliteTable(
+  "usuario_reparticoes",
+  {
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    reparticaoId: integer("reparticao_id")
+      .notNull()
+      .references(() => reparticoes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.reparticaoId] })],
 );
 
 /**
@@ -1909,6 +1927,22 @@ export const documentos = sqliteTable(
     conteudo: text("conteudo").notNull(),
     criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
     criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+    /** Migração `0117`: 0 = o antigo, no `conteudo`; > 0 = em `documento_partes`. */
+    partes: integer("partes").notNull().default(0),
+    completo: integer("completo", { mode: "boolean" }).notNull().default(true),
   },
   (t) => [index("documentos_criado_em_idx").on(t.criadoEm)],
+);
+
+/** As partes binárias (≤ 1 MB) de um documento (migração `0118`). */
+export const documentoPartes = sqliteTable(
+  "documento_partes",
+  {
+    documentoId: integer("documento_id")
+      .notNull()
+      .references(() => documentos.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull(),
+    dados: blob("dados", { mode: "buffer" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.documentoId, t.ordem] })],
 );

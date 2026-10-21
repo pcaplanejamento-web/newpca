@@ -5,6 +5,7 @@ import Link from "next/link";
 import { rotaInicial } from "@/lib/abas";
 import { IconeNavegacao } from "./CarregandoLink";
 import { usePathname, useRouter } from "next/navigation";
+import { telaDaRota } from "@/lib/escopo-unidades-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { BottomNav } from "./BottomNav";
@@ -519,8 +520,9 @@ export function AppShell({
   grupoAtivoId,
   abas,
   modulos,
-  reparticoes,
-  reparticaoAtivaId,
+  reparticoes: reparticoesBase,
+  reparticaoAtivaId: ativaBase,
+  unidadesPorTela,
   pcas = [],
   pcaFiltroId = null,
   identidade,
@@ -538,6 +540,8 @@ export function AppShell({
   modulos: SecaoModulo[];
   reparticoes: ReparticaoNav[];
   reparticaoAtivaId: number | null;
+  /** Grupo de "unidade de cadastro": nas `telas` marcadas pelo ADM, o seletor mostra TODAS as unidades (`lista`). */
+  unidadesPorTela?: { telas: readonly string[]; lista: ReparticaoNav[]; ativaId: number | null };
   /** PCAs do seletor do cabeçalho (filtro global) e o escolhido (`null` = todos). */
   pcas?: PcaNav[];
   pcaFiltroId?: number | null;
@@ -552,6 +556,10 @@ export function AppShell({
   /** O CHAT AO VIVO (o do grupo e/ou o privado ligados pelo ADM; só com a presença) — `null` = sem o chat. */
   chat?: ConfigChat | null;
 }) {
+  const telaAtual = telaDaRota(usePathname());
+  const porTela = unidadesPorTela && telaAtual && unidadesPorTela.telas.includes(telaAtual) ? unidadesPorTela : null;
+  const reparticoes = porTela ? porTela.lista : reparticoesBase;
+  const reparticaoAtivaId = porTela ? porTela.ativaId : ativaBase;
   const presenca = useUltimoValido(presencaServidor);
   const chat = useUltimoValido(chatServidor);
   const [menuAberto, setMenuAberto] = useState(false);

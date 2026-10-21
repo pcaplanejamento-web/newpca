@@ -35,13 +35,36 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.140.0",
+    versao: "1.142.0",
     data: "2026-10-21",
     titulo: "Importação do PCA em cards e itens; avisos só no sino",
     mudancas: [
       { tipo: "melhoria", area: "PCA · Importação", texto: "O upload virou um card no padrão do sistema (capa, data, quem enviou, unidades, itens e valor) e a importação ocupa o tamanho de um card na grade.", link: "/painel/pca" },
       { tipo: "novo", area: "PCA · Importação", texto: "Visão Uploads | Itens, como no Catálogo: todos os itens importados numa tabela (do sequencial maior ao menor); tocar num card abre só os itens dele.", link: "/painel/pca" },
       { tipo: "melhoria", area: "Notificações", texto: "As notificações aparecem só no sino — sem o aviso flutuante na tela.", link: "/painel/perfil?aba=notificacoes" },
+    ],
+  },
+  {
+    versao: "1.141.0",
+    data: "2026-10-21",
+    titulo: "Grupos por unidade de cadastro: acesso de cada tela e várias unidades por pessoa",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "No modo “Unidade de cadastro de cada pessoa”, cada tela do grupo escolhe: só as unidades de cadastro da pessoa ou todas as unidades.", link: "/painel/grupos" },
+      { tipo: "novo", area: "Usuários", texto: "A pessoa pode trabalhar em várias unidades: o campo “Unidades em que trabalha” marca mais de uma e escolhe a principal.", link: "/painel/usuarios" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Nas telas com todas as unidades, o seletor de unidade do cabeçalho mostra todas; nas demais, as de cadastro.", link: "/painel/grupos" },
+    ],
+  },
+  {
+    versao: "1.140.0",
+    data: "2026-10-21",
+    titulo: "Documentos: a barra vai até o tamanho do arquivo",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Documentos",
+        texto: "O ADM agora pode guardar o PDF no tamanho original (até 20 MB): o máximo da barra é o próprio arquivo. O PDF é gravado em partes.",
+        link: "/painel/documentos",
+      },
     ],
   },
   {

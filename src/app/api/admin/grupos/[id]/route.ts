@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { grupoReparticoes, grupos, pcas, usuarioGrupos } from "@/db/schema";
 import { ABAS, abasConhecidas } from "@/lib/abas";
 import { lerPcasGrupo } from "@/lib/acesso";
+import { compactarEscopoTelas, type EscopoTelas, lerEscopoTelas } from "@/lib/escopo-unidades-core";
 import { getModulosFresco } from "@/lib/modulos";
 import { lerModulosGrupo, type Modulo, motivoModulosInvalidos, telasDoGrupo, telasDosModulos } from "@/lib/modulos-core";
 import { exigirAdmin, intId } from "@/lib/api-auth";
@@ -19,10 +20,13 @@ const ROTULO_MODO = { lista: "escolhidas", cadastro: "de cadastro de cada pessoa
 
 type Db = ReturnType<typeof getDb>;
 
+/** As telas marcadas "todas" por extenso (o histórico). */
+const textoEscopo = (e: EscopoTelas) => ABAS.filter((a) => e[a.key] === "todas").map((a) => a.label).join(", ") || "nenhuma";
+
 /** O grupo como está (nome, telas, PCAs, pessoas e unidades) — `null` = não existe. */
 async function lerGrupo(db: Db, id: number, modulos: Modulo[]) {
   const [l] = await db
-    .select({ nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat, modoUnidades: grupos.modoUnidades })
+    .select({ nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat, modoUnidades: grupos.modoUnidades, escopoTelas: grupos.escopoTelas })
     .from(grupos)
     .where(eq(grupos.id, id))
     .limit(1);
@@ -35,7 +39,7 @@ async function lerGrupo(db: Db, id: number, modulos: Modulo[]) {
   }
   const mods = lerModulosGrupo(l.modulos);
   // `abas` = as telas que o grupo ABRE hoje (dos módulos; o grupo antigo, das avulsas).
-  const g = { nome: l.nome, modulos: mods, abas: telasDoGrupo(modulos, mods, abas), chat: l.chat, modoUnidades: l.modoUnidades, pcas: lerPcasGrupo(l.pcas) };
+  const g = { nome: l.nome, modulos: mods, abas: telasDoGrupo(modulos, mods, abas), chat: l.chat, modoUnidades: l.modoUnidades, escopoTelas: lerEscopoTelas(l.escopoTelas), pcas: lerPcasGrupo(l.pcas) };
   const [membros, reps] = await Promise.all([
     db.select({ id: usuarioGrupos.usuarioId }).from(usuarioGrupos).where(eq(usuarioGrupos.grupoId, id)),
     db.select({ id: grupoReparticoes.reparticaoId }).from(grupoReparticoes).where(eq(grupoReparticoes.grupoId, id)),
@@ -76,7 +80,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!id) return erro("ID inválido.");
   const corpo = await parseCorpo(grupoPatchSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, modulos: mods, chat, pcas: pcasGrupo, membros, reparticoes: reps, modoUnidades } = corpo.data;
+  const { nome, modulos: mods, chat, pcas: pcasGrupo, membros, reparticoes: reps, modoUnidades, escopoTelas: escopoPedido } = corpo.data;
   const db = getDb();
   const modulos = await getModulosFresco();
   const antes = await lerGrupo(db, id, modulos);
@@ -86,6 +90,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   // As telas vêm dos módulos (gravadas também em `abas` — o retrato do momento).
   const abas = mods ? telasDosModulos(modulos, mods) : undefined;
+  // O escopo por tela guarda só as telas que o grupo ABRE (as de agora ou as novas).
+  const escopoTelas = escopoPedido !== undefined ? compactarEscopoTelas(escopoPedido, abas ?? antes.abas) : undefined;
   // Tudo num LOTE: nome/módulos/chat/PCAs + pessoas + unidades (um id inválido nunca deixa o grupo pela metade).
   const comandos = [
     db
@@ -95,6 +101,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         ...(mods !== undefined ? { modulos: JSON.stringify(mods), abas: JSON.stringify(abas) } : {}),
         ...(chat !== undefined ? { chat } : {}),
         ...(modoUnidades !== undefined ? { modoUnidades } : {}),
+        ...(escopoTelas !== undefined ? { escopoTelas: JSON.stringify(escopoTelas) } : {}),
         ...(pcasGrupo !== undefined ? { pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo) } : {}),
         atualizadoEm: sql`(CURRENT_TIMESTAMP)`,
       })
@@ -124,6 +131,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     modoUnidades !== undefined && modoUnidades !== antes.modoUnidades
       ? `unidades: ${ROTULO_MODO[antes.modoUnidades]} → ${ROTULO_MODO[modoUnidades]}`
       : null,
+    escopoTelas !== undefined && textoEscopo(escopoTelas) !== textoEscopo(antes.escopoTelas)
+      ? `telas com todas as unidades: ${textoEscopo(antes.escopoTelas)} → ${textoEscopo(escopoTelas)}`
+      : null,
   ].filter((x): x is string => !!x);
   await registrarAuditoria({
     usuario: guard.u,
@@ -141,6 +151,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       membros: membros ?? antes.membros,
       reparticoes: reps ?? antes.reparticoes,
       modoUnidades: modoUnidades ?? antes.modoUnidades,
+      escopoTelas: escopoTelas ?? antes.escopoTelas,
     },
   });
   return ok();

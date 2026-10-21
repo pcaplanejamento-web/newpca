@@ -16,7 +16,7 @@ import { cellCls } from "./formStyles";
 import { type GrupoOpcao, GruposDaPessoa } from "./GruposDaPessoa";
 import { IconArquivar, IconDesarquivar, IconBadgeCheck, IconCheck, IconSave, IconSenhaNova, IconShield, IconShieldCheck, IconTrash, IconUserCheck, IconUserX, IconWhatsapp } from "./icons";
 import { Modal } from "./Modal";
-import { OpcoesUnidades } from "./OpcoesUnidades";
+import { SeletorMultiplo } from "./SeletorMultiplo";
 import { HistoricoAcessos } from "./HistoricoAcessos";
 import { SecaoBanner, ValorCampo } from "./SecaoBanner";
 import { BotaoWhatsapp } from "./Telefone";
@@ -37,6 +37,8 @@ export type UsuarioAdmin = {
   telefoneWhatsapp: boolean;
   reparticaoId: number | null;
   unidade: string | null;
+  /** As OUTRAS unidades em que trabalha (além da principal `reparticaoId`). */
+  outrasUnidades?: number[];
   foto: string | null;
   /** O papel (Configurações → Papéis); `null` = sem papel (nenhuma tela abre). */
   papelId: number | null;
@@ -62,6 +64,7 @@ export type PatchUsuario = {
   matricula?: string;
   cargo?: string;
   reparticaoId?: number | null;
+  outrasUnidades?: number[];
   telefone?: string;
   telefoneWhatsapp?: boolean;
   papelId?: number;
@@ -84,7 +87,8 @@ export const descricaoPapel = (p: OpcaoPapel) =>
 export const mesmosIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 type Campo = "nome" | "email" | "matricula" | "telefone" | "cargo" | "unidade" | "grupos";
-type Rascunho = { nome: string; email: string; matricula: string; telefone: string; whatsapp: boolean; cargo: string; unidade: string; grupos: number[] };
+/** `unidades` = as unidades em que trabalha — a PRINCIPAL primeiro (a de `usuarios.reparticao_id`). */
+type Rascunho = { nome: string; email: string; matricula: string; telefone: string; whatsapp: boolean; cargo: string; unidades: number[]; grupos: number[] };
 
 const doUsuario = (u: UsuarioAdmin): Rascunho => ({
   nome: u.nome,
@@ -93,7 +97,7 @@ const doUsuario = (u: UsuarioAdmin): Rascunho => ({
   telefone: u.telefone ?? "",
   whatsapp: u.telefoneWhatsapp,
   cargo: u.cargo ?? "",
-  unidade: u.reparticaoId == null ? "" : String(u.reparticaoId),
+  unidades: [...(u.reparticaoId == null ? [] : [u.reparticaoId]), ...(u.outrasUnidades ?? []).filter((x) => x !== u.reparticaoId)],
   grupos: u.grupos,
 });
 
@@ -107,7 +111,10 @@ function mudancas(u: UsuarioAdmin, r: Rascunho): PatchUsuario {
   if (r.telefone !== base.telefone) p.telefone = r.telefone;
   if (r.whatsapp !== base.whatsapp) p.telefoneWhatsapp = r.whatsapp;
   if (r.cargo !== base.cargo) p.cargo = r.cargo;
-  if (r.unidade !== base.unidade) p.reparticaoId = r.unidade ? Number(r.unidade) : null;
+  // A principal (a 1ª) e as outras: cada uma só quando mudou.
+  const principal = r.unidades[0] ?? null;
+  if (principal !== (base.unidades[0] ?? null)) p.reparticaoId = principal;
+  if (!mesmosIds(r.unidades.slice(1), base.unidades.slice(1))) p.outrasUnidades = r.unidades.slice(1);
   // Os grupos vão inteiros, só quando mudaram (a rota troca todos num lote).
   if (!mesmosIds(r.grupos, base.grupos)) p.grupos = r.grupos;
   return p;
@@ -368,7 +375,17 @@ function Corpo({
   const set = (k: keyof Rascunho) => (v: string | boolean | number[]) => setR((x) => (x ? { ...x, [k]: v } : x));
   const nomesGrupos = (ids: readonly number[]) => ids.map((id) => grupos.find((g) => g.id === id)?.nome).filter((n): n is string => !!n);
   const lock = (c: Campo) => ({ editavel: true, aberto: abertos.has(c), bloqueado: false, onLock: () => alternar(c) });
-  const unidadeNome = u.reparticaoId == null ? null : (unidades.find((x) => x.id === u.reparticaoId)?.nome ?? u.unidade);
+  const nomeUnidade = (id: number) => unidades.find((x) => x.id === id)?.nome ?? (id === u.reparticaoId ? u.unidade : null) ?? `Unidade ${id}`;
+  // As opções: as unidades de trabalho + as já gravadas que hoje estão ocultas (continuam valendo).
+  const opcoesUnidades = [
+    ...doUsuario(u).unidades.filter((id) => !unidades.some((x) => x.id === id)).map((id) => ({ valor: String(id), rotulo: nomeUnidade(id) })),
+    ...unidades.map((x) => ({ valor: String(x.id), rotulo: `${x.codigo} — ${x.nome}`, grupo: x.orgao ?? undefined })),
+  ];
+  // Escolher mantém a ordem (a principal continua a 1ª enquanto marcada); as novas entram no fim.
+  const escolherUnidades = (sel: string[]) => {
+    const ids = sel.map(Number);
+    set("unidades")([...r.unidades.filter((id) => ids.includes(id)), ...ids.filter((id) => !r.unidades.includes(id))]);
+  };
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -470,18 +487,38 @@ function Corpo({
               <ValorCampo>{r.cargo || "—"}</ValorCampo>
             )}
           </LinhaCampo>
-          <LinhaCampo label="Unidade em que trabalha" {...lock("unidade")}>
+          <LinhaCampo label="Unidades em que trabalha" {...lock("unidade")}>
             {abertos.has("unidade") ? (
-              <Selecao className={cellCls} value={r.unidade} onChange={(e) => set("unidade")(e.target.value)} aria-label="Unidade em que trabalha">
-                <option value="">Nenhuma</option>
-                {/* A unidade atual continua na lista mesmo que hoje esteja oculta. */}
-                {u.reparticaoId != null && !unidades.some((x) => x.id === u.reparticaoId) && (
-                  <option value={u.reparticaoId}>{u.unidade ?? `Unidade ${u.reparticaoId}`}</option>
+              <div className="space-y-2">
+                <SeletorMultiplo
+                  suspenso
+                  rotulo="Unidades"
+                  textoVazio="Nenhuma"
+                  opcoes={opcoesUnidades}
+                  selecionados={r.unidades.map(String)}
+                  onChange={escolherUnidades}
+                />
+                {r.unidades.length > 1 && (
+                  <Selecao
+                    className={cellCls}
+                    value={String(r.unidades[0])}
+                    onChange={(e) => set("unidades")([Number(e.target.value), ...r.unidades.filter((id) => id !== Number(e.target.value))])}
+                    aria-label="Unidade principal"
+                  >
+                    {r.unidades.map((id) => (
+                      <option key={id} value={id}>
+                        Principal: {nomeUnidade(id)}
+                      </option>
+                    ))}
+                  </Selecao>
                 )}
-                <OpcoesUnidades unidades={unidades} />
-              </Selecao>
+              </div>
             ) : (
-              <ValorCampo>{(r.unidade === String(u.reparticaoId ?? "") ? unidadeNome : unidades.find((x) => String(x.id) === r.unidade)?.nome) || "—"}</ValorCampo>
+              <ValorCampo>
+                {r.unidades.length === 0
+                  ? "—"
+                  : r.unidades.map((id, i) => `${nomeUnidade(id)}${i === 0 && r.unidades.length > 1 ? " (principal)" : ""}`).join(" · ")}
+              </ValorCampo>
             )}
           </LinhaCampo>
           {/* Só leitura: o apelido é da pessoa (Perfil); a data é do sistema. */}

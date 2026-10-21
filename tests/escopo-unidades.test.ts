@@ -83,3 +83,40 @@ describe("modo de unidades do grupo (v1.115.0)", async () => {
     assert.equal(lerModoUnidades("cadastro"), "cadastro");
   });
 });
+
+describe("escopo por tela e várias unidades de cadastro (v1.141.0)", async () => {
+  const m = await import("../src/lib/escopo-unidades-core.ts");
+  const a = { id: 1, codigo: "SMS" };
+  const b = { id: 2, codigo: "SME" };
+  const g = { id: 9, codigo: "GERAL" };
+  it("várias unidades de cadastro: sem repetir e sem a Geral", () => {
+    assert.deepEqual(m.unidadesDoMembro("cadastro", [], [a, b, a, g]), [a, b]);
+    assert.deepEqual(m.escopoDeAcesso(false, m.unidadesDoMembro("cadastro", [], [a, b])), { tipo: "unidades", ids: [1, 2] });
+    assert.deepEqual(m.unidadesDoMembro("cadastro", [], []), []);
+  });
+  it("lerEscopoTelas: só 'todas' com chave válida; lixo = vazio", () => {
+    assert.deepEqual(m.lerEscopoTelas('{"dfd":"todas","pca":"cadastro","X!":"todas"}'), { dfd: "todas" });
+    assert.deepEqual(m.lerEscopoTelas("não é json"), {});
+    assert.deepEqual(m.lerEscopoTelas(null), {});
+    assert.deepEqual(m.lerEscopoTelas(["dfd"]), {});
+  });
+  it("telaVeTodas: só no modo cadastro, com a tela marcada", () => {
+    const e = { tarefas: "todas" } as const;
+    assert.equal(m.telaVeTodas("cadastro", e, "tarefas"), true);
+    assert.equal(m.telaVeTodas("cadastro", e, "dfd"), false);
+    assert.equal(m.telaVeTodas("lista", e, "tarefas"), false);
+    assert.equal(m.telaVeTodas("cadastro", e, null), false);
+    assert.deepEqual(m.telasComTodas("cadastro", e), ["tarefas"]);
+    assert.deepEqual(m.telasComTodas("lista", e), []);
+  });
+  it("compactar guarda só as telas do grupo", () => {
+    assert.deepEqual(m.compactarEscopoTelas({ dfd: "todas", pca: "todas" }, ["pca", "tarefas"]), { pca: "todas" });
+  });
+  it("telaDaRota: as rotas do painel → a tela", () => {
+    assert.equal(m.telaDaRota("/painel/mesa"), "dfd");
+    assert.equal(m.telaDaRota("/painel/pca/12"), "pca");
+    assert.equal(m.telaDaRota("/painel/tarefas/3"), "tarefas");
+    assert.equal(m.telaDaRota("/painel/pcax"), null);
+    assert.equal(m.telaDaRota("/painel/perfil"), null);
+  });
+});

@@ -1,6 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { createContext, type ReactNode, useContext } from "react";
+import { telaDaRota } from "@/lib/escopo-unidades-core";
 import type { ModuloEscopo } from "@/lib/escopo-cabecalho-core";
 
 /** A unidade ÚNICA escolhida no cabeçalho (null = "Geral" ou nenhuma). Com ela, as telas tiram as colunas, filtros e
@@ -10,8 +12,16 @@ export type UnidadeAtiva = { id: number; sigla: string; nome: string };
 type Valor = { unidade: UnidadeAtiva | null; modulos: Partial<Record<ModuloEscopo, boolean>> };
 const Ctx = createContext<Valor>({ unidade: null, modulos: {} });
 
-export function UnidadeUnica({ children, ...valor }: Valor & { children: ReactNode }) {
-  return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
+/** `porTela` = as telas em que o grupo vê TODAS as unidades (a unidade ativa delas vem da lista completa). */
+export function UnidadeUnica({
+  children,
+  unidade,
+  modulos,
+  porTela,
+}: Valor & { porTela?: { telas: readonly string[]; unidade: UnidadeAtiva | null }; children: ReactNode }) {
+  const tela = telaDaRota(usePathname());
+  const efetiva = porTela && tela && porTela.telas.includes(tela) ? porTela.unidade : unidade;
+  return <Ctx.Provider value={{ unidade: efetiva, modulos }}>{children}</Ctx.Provider>;
 }
 
 /** A unidade única do cabeçalho, ou null (Geral, fora do painel ou o módulo que NÃO obedece à unidade — Configurações →

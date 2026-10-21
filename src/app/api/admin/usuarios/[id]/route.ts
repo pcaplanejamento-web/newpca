@@ -4,7 +4,7 @@ import { emailAcessoLiberado } from "@/lib/email-core";
 import { depoisDaResposta } from "@/lib/segundo-plano";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { usuarioGrupos, usuarios } from "@/db/schema";
+import { usuarioGrupos, usuarioReparticoes, usuarios } from "@/db/schema";
 import { papelDoUsuarioSql } from "@/lib/auth";
 import { adminUsuarioSchema } from "@/lib/auth-validation";
 import { exigirAdmin, intId } from "@/lib/api-auth";
@@ -16,7 +16,7 @@ import { papelPorId } from "@/lib/papeis";
 import { comandoEncerrarSessoesSeInativo, comandoArquivarUsuario,
   comandoExcluirUsuario,
   comandoRestaurarUsuario, comandoTrocarPapel, comandoTrocarStatus } from "@/lib/papeis-sql";
-import { comandosGruposDoUsuario, idsInexistentes } from "@/lib/rbac-sql";
+import { comandosGruposDoUsuario, comandosOutrasUnidades, idsInexistentes } from "@/lib/rbac-sql";
 import { unidadeDeTrabalhoValida } from "@/lib/reparticoes";
 import { cargoCadastrado } from "@/lib/cargos";
 import { getIntegracoes } from "@/lib/integracoes";
@@ -24,6 +24,8 @@ import { resendConfigurado } from "@/lib/integracoes-core";
 import { matriculaEmUso, MSG_MATRICULA_EM_USO, violouMatriculaUnica } from "@/lib/usuarios-unicos";
 
 export const dynamic = "force-dynamic";
+
+const mesmos = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 export async function PATCH(
   req: Request,
@@ -36,7 +38,7 @@ export async function PATCH(
 
   const corpo = await parseCorpo(adminUsuarioSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, email, matricula, cargo, reparticaoId, papelId, grupos, status, telefone, telefoneWhatsapp, validar, trocarSenha, restaurar } = corpo.data;
+  const { nome, email, matricula, cargo, reparticaoId, outrasUnidades: outrasPedidas, papelId, grupos, status, telefone, telefoneWhatsapp, validar, trocarSenha, restaurar } = corpo.data;
 
   // RESTAURAR o arquivado: volta ativo com tudo o que tinha (grupos, papel, foto, responsabilidades).
   if (restaurar) {
@@ -78,7 +80,7 @@ export async function PATCH(
     if (faltam.length) return erro(`Grupo(s) não encontrado(s): ${faltam.join(", ")} — recarregue a tela.`, 422);
   }
 
-  const [[antes], gruposAntes, todosGrupos] = await Promise.all([
+  const [[antes], gruposAntes, todosGrupos, outrasAntesRows] = await Promise.all([
     db
       .select({
         nome: usuarios.nome,
@@ -99,6 +101,7 @@ export async function PATCH(
       .limit(1),
     db.select({ grupoId: usuarioGrupos.grupoId }).from(usuarioGrupos).where(eq(usuarioGrupos.usuarioId, id)),
     grupos !== undefined ? todosOsGruposComAbas() : Promise.resolve([]),
+    db.select({ id: usuarioReparticoes.reparticaoId }).from(usuarioReparticoes).where(eq(usuarioReparticoes.usuarioId, id)),
   ]);
   if (!antes) return erro("Usuário não encontrado.", 404);
   // O cargo/função: um da lista do ADM (o nome como está no cadastro), manter o atual ou "" (nenhum).
@@ -111,6 +114,12 @@ export async function PATCH(
   // A unidade de trabalho nova tem de ser escolhível (nem oculta nem a "Geral"); manter a atual sempre vale.
   if (reparticaoId != null && reparticaoId !== antes.reparticaoId && !(await unidadeDeTrabalhoValida(reparticaoId)))
     return erro("Selecione uma unidade válida.", 422);
+  // As OUTRAS unidades: sem a principal (a nova ou a que fica) e sem repetir; cada uma NOVA tem de ser escolhível.
+  const outrasAntes = outrasAntesRows.map((r) => r.id);
+  const principal = reparticaoId !== undefined ? reparticaoId : antes.reparticaoId;
+  const outras = outrasPedidas === undefined ? undefined : [...new Set(outrasPedidas)].filter((r) => r !== principal);
+  for (const r of outras ?? [])
+    if (!outrasAntes.includes(r) && !(await unidadeDeTrabalhoValida(r))) return erro("Selecione unidades válidas.", 422);
 
   // A SENHA NOVA obrigatória vale pelo código enviado ao e-mail: sem o envio (Resend), a pessoa ficaria presa.
   if (trocarSenha && !antes.trocarSenha && !resendConfigurado(await getIntegracoes()))
@@ -132,6 +141,12 @@ export async function PATCH(
     const cmds = comandosGruposDoUsuario(db, id, grupos);
     await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
   }
+  // As OUTRAS unidades num lote só (a principal saiu da lista — ela fica em `usuarios`).
+  const mudouOutras = outras !== undefined && !mesmos(outras, outrasAntes);
+  if (mudouOutras) {
+    const cmds = comandosOutrasUnidades(db, id, outras);
+    await db.batch(cmds as [(typeof cmds)[number], ...(typeof cmds)[number][]]);
+  }
   const dados = {
     ...(nome !== undefined ? { nome } : {}),
     ...(email !== undefined ? { email } : {}),
@@ -144,7 +159,7 @@ export async function PATCH(
   // Sem telefone, não há WhatsApp.
   if (dados.telefone === null) dados.telefoneWhatsapp = false;
   // VALIDAÇÃO dos dados: validar carimba quem/quando; um dado que MUDOU desfaz a validação anterior (salvo se validou junto).
-  const mudouDado = (Object.keys(dados) as (keyof typeof dados)[]).some((k) => (dados[k] ?? null) !== (antes[k] ?? null));
+  const mudouDado = mudouOutras || (Object.keys(dados) as (keyof typeof dados)[]).some((k) => (dados[k] ?? null) !== (antes[k] ?? null));
   const validacao =
     validar === true
       ? { dadosValidadosEm: sql`(CURRENT_TIMESTAMP)`, dadosValidadosPor: guard.u.nome }
@@ -199,6 +214,7 @@ export async function PATCH(
   // As ações do ADM sobre a conta (validar os dados, exigir senha nova) — só o FATO.
   const fatos = [
     validar === true ? "dados validados" : validar === false ? "validação dos dados desfeita" : mudouDado && antes.dadosValidadosEm ? "validação desfeita (dados alterados)" : "",
+    mudouOutras ? `outras unidades: ${outrasAntes.length} → ${outras?.length ?? 0}` : "",
     trocarSenha === true && !antes.trocarSenha ? "senha nova exigida" : trocarSenha === false && antes.trocarSenha ? "exigência de senha nova dispensada" : "",
   ].filter(Boolean);
   const resumoEdicao = [dd.resumo, ...fatos].filter(Boolean).join("; ");

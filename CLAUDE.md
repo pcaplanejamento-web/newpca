@@ -730,7 +730,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadastro (`usuarios.reparticao_id`; sem ela = escopo nenhuma; a "Geral" nunca vale por cadastro) — ponto único
   `reparticoesDoMembro` (`grupos.ts`; núcleo puro `unidadesDoMembro` em `escopo-unidades-core.ts`) dentro do
   `getReparticaoContexto`: cabeçalho, escopo da Mesa e as rotas herdam. No `GruposAdmin`, o `Segmented` "Unidades escolhidas |
-  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. Telas admin: `/painel/grupos`,
+  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. **ESCOPO POR TELA + VÁRIAS UNIDADES (v1.141.0, migração `0119`, aditiva — `grupos.escopo_telas` JSON `{tela: "todas"}` +
+  tabela `usuario_reparticoes` = as unidades ADICIONAIS da pessoa; a principal segue em `usuarios.reparticao_id`):** no modo
+  `cadastro`, o banner do grupo mostra **"Acesso de cada tela"** (`EscopoPorTela`: por tela do grupo, "Só as de cadastro" |
+  "Todas as unidades"); núcleo puro em `escopo-unidades-core.ts` (`lerEscopoTelas`, `compactarEscopoTelas`, `telaVeTodas`,
+  `telasComTodas`, `telaDaRota`; `unidadesDoMembro` aceita várias unidades, sem repetir e sem a "Geral"). A TELA desce por
+  `unidadesDaSessao(u, grupo, tela)`/`getReparticaoContexto`/`reparticoesDoMembro` (tela "todas" = `listarReparticoes()` —
+  escopo todas): Mesa (`escopoMesa`, `contextoBanners`, pesquisa/vínculos de tarefa) = `dfd` (a Mesa do PCA também), cada
+  módulo pela `TELA_DO_MODULO` de `unidadeDoModulo`, o upload = `pca`. O layout manda `unidadesPorTela` ao `AppShell` e
+  `porTela` ao `UnidadeUnica` (a lista e a ativa trocam pela rota); `POST /api/reparticoes/ativo` aceita as unidades das
+  telas "todas". **Usuários:** "Unidades em que trabalha" = `SeletorMultiplo suspenso` + a principal (`PATCH` `{reparticaoId,
+  outrasUnidades}` → `comandosOutrasUnidades`, `rbac-sql.ts`; cada nova validada por `unidadeDeTrabalhoValida`; mudar desfaz
+  a validação dos dados); `unidadesDeCadastro` (`grupos.ts`) = principal + adicionais. Telas admin: `/painel/grupos`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de
@@ -2484,7 +2495,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`chamarPadronizacao`).
 
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
-- **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0117` — tabela `pca_uploads`, `unidades.upload_id` [único
+- **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0118` — tabela `pca_uploads`, `unidades.upload_id` [único
   por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
   cada ARQUIVO = UM cartão na Importação (`CartaoEspaco` + a importação como um card do MESMO tamanho, grade `COLUNAS_ESPACOS`;
   `Segmented` Uploads | Itens — `itensDosUploads`, tocar no card abre os itens dele; `uploadsDoPca`, `pca-uploads.ts`; excluir = `DELETE /api/pca/[id]/planilhas/[uploadId]`,
@@ -3698,8 +3709,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `LIMITE_DOCUMENTO`=100 KB): como veio › regravado com object streams › páginas em JPEG numa escada de escala/qualidade até
   caber. O servidor recusa não-PDF e > 100 KB. **Tamanho escolhido pelo ADM (v1.138.0):** a cada PDF, o
   `EscolherTamanhoPdf` (barra) entre o MÍNIMO LEGÍVEL (`NIVEIS_LEGIVEIS`, piso escala 1,25 · JPEG 0,5) e o ORIGINAL — versões reais
-  (`versoesParaEscolha` → `versoesEscolhiveis`) com a prévia da 1ª página; o ADM grava até `LIMITE_DOCUMENTO_ADM`=1 MB (a rota
-  confere pelo papel); os demais, automática até 100 KB.
+  (`versoesParaEscolha` → `versoesEscolhiveis`) com a prévia da 1ª página; o ADM grava até `LIMITE_DOCUMENTO_ADM`=20 MB — o máximo da barra é o ORIGINAL (a rota
+  confere pelo papel); os demais, automática até 100 KB. **Em PARTES (v1.140.0, migração `0118`):** `POST /api/documentos`
+  abre o envio (`completo`=0, fora da lista) e `PUT /api/documentos/[id]/partes?ordem=N` grava cada parte binária de 1 MB
+  (`documento_partes`, `parteValida`); a última confere o total e conclui. O antigo (`partes`=0) segue no `conteudo` base64.
 - Rotas `GET/POST /api/documentos`, `PATCH/DELETE /api/documentos/[id]`, `GET /api/documentos/[id]/arquivo` (`?baixar=1`
   exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: busca + `DocumentoCard` + o card "Enviar PDF" (`QuadroNovoCard`, no fim da grade; tocar ou soltar)
   sobre `CartaoEspaco`; visualizador = páginas do pdf.js em canvas num `Modal`, sem iframe — CSP `object-src 'none'`/iOS).
@@ -4241,7 +4254,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     tira na hora e o banco só é limpo depois do **Desfazer** de 6 s — ou ao sair da página, `keepalive`) e **Configurar**
     (Perfil; o ADM, Configurações → Notificações). Rolagem infinita; ↑/↓ entre os avisos, Delete exclui; o aviso ao vivo
     MESCLA a 1ª página (`mesclarPrimeiraPagina` — as páginas carregadas ficam, o que está sendo limpo não volta). **Aviso
-    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), SEM aviso flutuante (v1.140.0 — a notificação
+    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), SEM aviso flutuante (v1.142.0 — a notificação
     aparece SÓ no sino), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
     altura recolhe); tudo respeita "reduzir movimento". Ícones novos `IconLidas`/`IconSemAvisos`/
     `IconEventoAlterado`/`IconCadastro`.

@@ -44,9 +44,20 @@ export type UnidadeDoModulo = {
   cfg: ConfigEscopo;
 };
 
+/** A TELA de cada módulo (no grupo de "unidade de cadastro", a tela marcada "todas" vê todas as unidades); a Automação
+ * mexe em protocolos — segue a Mesa. */
+const TELA_DO_MODULO: Record<ModuloEscopo, string> = {
+  pca: "pca",
+  orcamento: "orcamento",
+  catalogo: "catalogo",
+  tarefas: "tarefas",
+  calendario: "calendario",
+  automacao: "dfd",
+};
+
 /** A unidade do CABEÇALHO que filtra um módulo (a config do ADM decide se o módulo obedece). */
 export async function unidadeDoModulo(modulo: ModuloEscopo, u?: UsuarioSessao | null, grupoAtivo?: GrupoResumo | null): Promise<UnidadeDoModulo> {
-  const [un, cfg] = await Promise.all([unidadesDaSessao(u, grupoAtivo), getConfigEscopo()]);
+  const [un, cfg] = await Promise.all([unidadesDaSessao(u, grupoAtivo, TELA_DO_MODULO[modulo]), getConfigEscopo()]);
   const id = filtroDoModulo(cfg, modulo, idDoFiltro(un.filtro));
   const ativa = typeof id === "number" ? un.ativa : null;
   return { id, sigla: ativa?.codigo ?? null, nome: ativa?.nome ?? null, cfg };
