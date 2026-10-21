@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.149.1",
+    data: "2026-10-21",
+    titulo: "Documentos: PDFs digitalizados com as letras",
+    mudancas: [
+      { tipo: "correcao", area: "Documentos", texto: "PDFs digitalizados (scan em camadas, como decretos) aparecem com as letras ao ver, ao compactar e pelo link do Drive.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.149.0",
     data: "2026-10-21",
     titulo: "Geral das minhas unidades e fonte dos dados por aba",
