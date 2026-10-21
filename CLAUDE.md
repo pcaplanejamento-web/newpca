@@ -3683,7 +3683,9 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (nome, arquivo, tamanho/original, páginas, `compactado`, `conteudo` base64 ≤ 100 KB, `criado_por`).
 - **Compactação no navegador** (`compactar-pdf.ts`, import dinâmico; núcleo puro `compactar-pdf-core.ts` testado —
   `LIMITE_DOCUMENTO`=100 KB): como veio › regravado com object streams › páginas em JPEG numa escada de escala/qualidade até
-  caber. O servidor recusa não-PDF e > 100 KB.
+  caber. O servidor recusa não-PDF e > 100 KB. **Compactação do ADM (v1.137.0):** só o ADM escolhe no envio (`SelectField`
+  "Compactação", no aparelho `documentos:compactacao`) Automática · 25/50/75/90% — `limiteAlvo(original, pct)` = (100 − pct)% do
+  original, nunca acima de 100 KB; os demais, automática.
 - Rotas `GET/POST /api/documentos`, `PATCH/DELETE /api/documentos/[id]`, `GET /api/documentos/[id]/arquivo` (`?baixar=1`
   exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: Dropzone + busca + `DocumentoCard`
   sobre `CartaoEspaco`; visualizador = páginas do pdf.js em canvas num `Modal`, sem iframe — CSP `object-src 'none'`/iOS).

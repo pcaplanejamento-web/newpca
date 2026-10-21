@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { nomeDoDocumento, tamanhoBase64 } from "@/lib/compactar-pdf-core";
+import { nomeDoDocumento, OPCOES_COMPACTACAO, tamanhoBase64 } from "@/lib/compactar-pdf-core";
 import type { DocumentoResumo } from "@/lib/documentos";
 import { dataBR, formatBytes, num } from "@/lib/format";
 import type { PodeTela } from "@/lib/papeis-core";
@@ -14,7 +14,7 @@ import { gradienteDe, MenuCard } from "./CatalogoCards";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { useConfirmacao } from "./Confirmacao";
 import { Dropzone } from "./Dropzone";
-import { SearchField, TextField } from "./Field";
+import { SearchField, SelectField, TextField } from "./Field";
 import { IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash, IconUpload } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
@@ -132,8 +132,25 @@ function VisualizadorPdf({ doc, onBaixar, onFechar }: { doc: DocumentoResumo; on
  * visualizar e baixar. O que o papel não permite some (subir = Importar, baixar = Exportar, renomear = Manipular,
  * excluir = Excluir).
  */
-export function DocumentosView({ documentos, pode }: { documentos: DocumentoResumo[]; pode: PodeTela }) {
+const CHAVE_COMPACTACAO = "documentos:compactacao";
+
+export function DocumentosView({ documentos, pode, admin = false }: { documentos: DocumentoResumo[]; pode: PodeTela; admin?: boolean }) {
   const router = useRouter();
+  // A % de compactação do envio: só o ADM escolhe (lembrada neste aparelho); os demais, automático.
+  const [compactacao, setCompactacao] = useState(0);
+  useEffect(() => {
+    if (!admin) return;
+    try {
+      const v = Number(localStorage.getItem(CHAVE_COMPACTACAO));
+      if ((OPCOES_COMPACTACAO as readonly number[]).includes(v)) setCompactacao(v);
+    } catch {}
+  }, [admin]);
+  function escolherCompactacao(v: number) {
+    setCompactacao(v);
+    try {
+      localStorage.setItem(CHAVE_COMPACTACAO, String(v));
+    } catch {}
+  }
   const [busca, setBusca] = useState("");
   const [fila, setFila] = useState<{ nome: string; atual: number; total: number; texto: string } | null>(null);
   const [aviso, setAviso] = useState<{ kind: "ok" | "danger"; texto: string } | null>(null);
@@ -160,7 +177,7 @@ export function DocumentosView({ documentos, pode }: { documentos: DocumentoResu
       const passo = (texto: string) => setFila({ nome: f.name, atual: i + 1, total: pdfs.length, texto });
       passo("Lendo o PDF…");
       try {
-        const r = await compactarPdf(f, passo);
+        const r = await compactarPdf(f, passo, admin ? compactacao : 0);
         passo("Gravando…");
         let bin = "";
         for (let k = 0; k < r.bytes.length; k += 0x8000) bin += String.fromCharCode(...r.bytes.subarray(k, k + 0x8000));
@@ -235,7 +252,20 @@ export function DocumentosView({ documentos, pode }: { documentos: DocumentoResu
             <Progress value={((fila.atual - 1) / fila.total) * 100} label={`${fila.nome} (${fila.atual} de ${fila.total}) — ${fila.texto}`} />
           </div>
         ) : (
-          <Dropzone accept=".pdf,application/pdf" onFiles={enviar} icon={<IconUpload className="h-7 w-7" />} titulo="Arraste PDFs ou toque para escolher" dica="Cada documento é guardado com até 100 KB — os maiores são compactados" />
+          <div className="space-y-2">
+            {admin && (
+              <div className="w-full sm:w-72">
+                <SelectField compacto label="Compactação" value={String(compactacao)} onChange={(e) => escolherCompactacao(Number(e.target.value))}>
+                  {OPCOES_COMPACTACAO.map((p) => (
+                    <option key={p} value={p}>
+                      {p === 0 ? "Automática (só para caber em 100 KB)" : `${p}% menor que o original`}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+            )}
+            <Dropzone accept=".pdf,application/pdf" onFiles={enviar} icon={<IconUpload className="h-7 w-7" />} titulo="Arraste PDFs ou toque para escolher" dica="Cada documento é guardado com até 100 KB — os maiores são compactados" />
+          </div>
         ))}
 
       {documentos.length === 0 ? (

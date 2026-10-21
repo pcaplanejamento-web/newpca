@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function DocumentosPage() {
   const r = await acessoPagina("documentos");
   if (r.bloqueio) return r.bloqueio;
-  return <DocumentosView documentos={await listarDocumentos()} pode={r.pode} />;
+  return <DocumentosView documentos={await listarDocumentos()} pode={r.pode} admin={r.acesso.u.admin} />;
 }

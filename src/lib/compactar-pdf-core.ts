@@ -40,6 +40,18 @@ export function etapasCompactacao(): EtapaCompactacao[] {
 
 export const cabe = (bytes: number): boolean => bytes > 0 && bytes <= LIMITE_DOCUMENTO;
 
+/** As porcentagens de compactação que o ADM escolhe no envio (0 = automático: só o necessário para caber). */
+export const OPCOES_COMPACTACAO = [0, 25, 50, 75, 90] as const;
+
+/** O tamanho máximo do arquivo final: (100 − pct)% do original, nunca acima do limite de 100 KB. */
+export function limiteAlvo(original: number, pct: number): number {
+  const p = Math.min(Math.max(Math.round(pct) || 0, 0), 99);
+  if (p === 0) return LIMITE_DOCUMENTO;
+  return Math.max(1, Math.min(LIMITE_DOCUMENTO, Math.ceil((original * (100 - p)) / 100)));
+}
+
+export const cabeAlvo = (bytes: number, alvo: number): boolean => bytes > 0 && bytes <= alvo;
+
 /** O arquivo começa com "%PDF" (o cabeçalho de todo PDF). */
 export function ehPdf(bytes: Uint8Array): boolean {
   return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;

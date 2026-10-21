@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.137.0",
+    data: "2026-10-21",
+    titulo: "Documentos: compactação escolhida pelo ADM",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Documentos",
+        texto:
+          "Ao enviar um PDF, o administrador escolhe a compactação: automática (só para caber em 100 KB) ou 25%, 50%, 75% ou 90% menor que o original — sempre com no máximo 100 KB.",
+        link: "/painel/documentos",
+      },
+    ],
+  },
+  {
     versao: "1.136.0",
     data: "2026-10-21",
     titulo: "Documentos: PDFs guardados no sistema",

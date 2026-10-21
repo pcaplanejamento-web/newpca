@@ -1,4 +1,4 @@
-import { cabe, type EtapaCompactacao, etapasCompactacao } from "./compactar-pdf-core";
+import { cabeAlvo, type EtapaCompactacao, etapasCompactacao, limiteAlvo } from "./compactar-pdf-core";
 
 /** O PDF pronto para gravar: os bytes (≤ 100 KB), as páginas e se as páginas viraram imagem. */
 export type PdfCompactado = { bytes: Uint8Array; paginas: number; compactado: boolean; original: number };
@@ -10,11 +10,11 @@ const paraBlob = (c: HTMLCanvasElement, qualidade: number) =>
   new Promise<Blob>((ok, falha) => c.toBlob((b) => (b ? ok(b) : falha(new Error("Não consegui gerar a imagem da página."))), "image/jpeg", qualidade));
 
 /**
- * Deixa o PDF com até 100 KB (só no navegador; pdf.js e pdf-lib carregados aqui). 1) já cabe → como veio; 2) regravado
+ * Deixa o PDF com até 100 KB (ou o alvo da % escolhida — `limiteAlvo`) (só no navegador; pdf.js e pdf-lib carregados aqui). 1) já cabe → como veio; 2) regravado
  * pelo pdf-lib (fluxos de objetos); 3) cada página vira uma imagem JPEG, descendo a escada (escala × qualidade) até
  * caber. As páginas são renderizadas UMA vez e guardadas como JPEG — cada etapa só reduz essa imagem.
  */
-export async function compactarPdf(file: File, aoAvancar?: (texto: string) => void): Promise<PdfCompactado> {
+export async function compactarPdf(file: File, aoAvancar?: (texto: string) => void, pct = 0): Promise<PdfCompactado> {
   const original = new Uint8Array(await file.arrayBuffer());
   const { PDFDocument } = await import("pdf-lib");
   let fonte: import("pdf-lib").PDFDocument;
@@ -24,6 +24,8 @@ export async function compactarPdf(file: File, aoAvancar?: (texto: string) => vo
     throw new Error("Não consegui ler este PDF.");
   }
   const paginas = fonte.getPageCount();
+  const alvo = limiteAlvo(original.length, pct);
+  const cabe = (n: number) => cabeAlvo(n, alvo);
   if (cabe(original.length)) return { bytes: original, paginas, compactado: false, original: original.length };
 
   aoAvancar?.("Otimizando o PDF…");
