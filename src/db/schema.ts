@@ -1871,3 +1871,21 @@ export const conferencias = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.tipo, t.alvoId] })],
 );
+
+/** DOCUMENTOS (migração `0116`): PDFs guardados no sistema, até 100 KB cada (compactados no navegador); o conteúdo em base64. */
+export const documentos = sqliteTable(
+  "documentos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    nome: text("nome").notNull(),
+    nomeArquivo: text("nome_arquivo").notNull(),
+    tamanho: integer("tamanho").notNull(),
+    tamanhoOriginal: integer("tamanho_original").notNull(),
+    paginas: integer("paginas").notNull().default(0),
+    compactado: integer("compactado", { mode: "boolean" }).notNull().default(false),
+    conteudo: text("conteudo").notNull(),
+    criadoPor: integer("criado_por").references(() => usuarios.id, { onDelete: "set null" }),
+    criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => [index("documentos_criado_em_idx").on(t.criadoEm)],
+);

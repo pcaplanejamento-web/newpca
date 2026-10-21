@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.136.0",
+    data: "2026-10-21",
+    titulo: "Documentos: PDFs guardados no sistema",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Documentos",
+        texto:
+          "Módulo novo Documentos: suba PDFs (cada um vira um card), visualize e baixe. Todo documento fica com no máximo 100 KB — o sistema compacta sozinho, baixando a qualidade até caber. Permissão própria por grupo e papel.",
+        link: "/painel/documentos",
+      },
+    ],
+  },
+  {
     versao: "1.135.0",
     data: "2026-10-21",
     titulo: "Quem está online em todos os seus grupos",

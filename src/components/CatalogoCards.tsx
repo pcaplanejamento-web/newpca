@@ -24,8 +24,8 @@ import { CapaQuadro, CartaoEspaco } from "./QuadroCard";
  * capas dos catálogos dela; tocar ENTRA na tela da pasta), o menu "…" de cada um e o `EditorPastaCatalogo`.
  */
 
-/** O degradê da capa: a cor → a mesma cor mais escura (JSON do `lerGradiente`). */
-function gradienteDe(cor: string): string {
+/** O degradê da capa: a cor → a mesma cor mais escura (JSON do `lerGradiente`). Também nos cards de Documentos. */
+export function gradienteDe(cor: string): string {
   const hsv = hexToHsv(cor);
   const escura = hsv ? hsvToHex(hsv[0], Math.min(100, hsv[1] * 1.1), hsv[2] * 0.62) : cor;
   return JSON.stringify({ cores: [cor, escura], angulo: 135 });
@@ -55,7 +55,7 @@ export type NumerosAgenda = { itens: number; semTipo: number; unidades: number }
 const itemMenu = "flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left text-[13px] text-text hover:bg-surface-2 lg:min-h-9";
 
 /** O menu "…" de um card (as ações que o papel permite; sem nenhuma, não aparece). */
-function MenuCard({ nome, acoes }: { nome: string; acoes: { rotulo: string; icone: React.ReactNode; perigo?: boolean; onClick: () => void }[] }) {
+export function MenuCard({ nome, acoes }: { nome: string; acoes: { rotulo: string; icone: React.ReactNode; perigo?: boolean; onClick: () => void }[] }) {
   if (acoes.length === 0) return null;
   return (
     <Dropdown

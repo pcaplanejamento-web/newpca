@@ -3677,6 +3677,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **Próximo** (ver `docs/ROADMAP.md`): o padrão Trello está completo (F1…F9) e os avisos já saem por e-mail (Resend — ver
   Integrações); a seguir, o relatório de produtividade por grupo.
 
+## Documentos (v1.136.0, migração `0116`)
+- Módulo **`documentos`** (`ABA_KEYS`, `IconDocumentos`, ações visualizar · manipular [renomear] · importar · exportar
+  [baixar] · excluir; a `0116` deu a tela aos grupos com o Catálogo e as mesmas ações aos papéis). Tabela `documentos`
+  (nome, arquivo, tamanho/original, páginas, `compactado`, `conteudo` base64 ≤ 100 KB, `criado_por`).
+- **Compactação no navegador** (`compactar-pdf.ts`, import dinâmico; núcleo puro `compactar-pdf-core.ts` testado —
+  `LIMITE_DOCUMENTO`=100 KB): como veio › regravado com object streams › páginas em JPEG numa escada de escala/qualidade até
+  caber. O servidor recusa não-PDF e > 100 KB.
+- Rotas `GET/POST /api/documentos`, `PATCH/DELETE /api/documentos/[id]`, `GET /api/documentos/[id]/arquivo` (`?baixar=1`
+  exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: Dropzone + busca + `DocumentoCard`
+  sobre `CartaoEspaco`; visualizador = páginas do pdf.js em canvas num `Modal`, sem iframe — CSP `object-src 'none'`/iOS).
+
 ## Rotas de API (`src/app/api/**`)
 - Envelope padrão **`{ ok: true, ... }`** / **`{ ok: false, error }`**.
 - Helpers em **`src/lib/http.ts`**: `ok(data?)`, `erro(msg, status)`, `parseCorpo(schema, req)`

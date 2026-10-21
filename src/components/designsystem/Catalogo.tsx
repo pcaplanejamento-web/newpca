@@ -142,6 +142,7 @@ import { coerceDetalhes, type DetalhesPapel, detalhesPadrao } from "@/lib/papeis
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
 import { EsqueletoCalendario } from "@/components/CalendarioEsqueleto";
+import { DocumentoCard } from "@/components/DocumentosView";
 import { COLUNAS_ESPACOS, EsqueletoCartaoEspaco } from "@/components/CartaoEspacoEsqueleto";
 import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
 import { EsqueletoTitulo } from "@/components/EsqueletoTela";
@@ -4806,6 +4807,13 @@ export function Catalogo() {
         </div>
         <div className="mt-4">
           <CoresPaletaDemo />
+        </div>
+      </Secao>
+
+      <Secao titulo="Documentos — DocumentoCard (o card de um PDF guardado: o MESMO CartaoEspaco; páginas · tamanho · data, o selo “Compactado de X” e o menu Visualizar/Baixar/Renomear/Excluir conforme o papel)">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
+          <DocumentoCard doc={{ id: 1, nome: "Portaria 123-2026", nomeArquivo: "portaria.pdf", tamanho: 98000, tamanhoOriginal: 2400000, paginas: 4, compactado: true, criadoEm: "2026-10-21T12:00:00Z", autor: "Ana" }} onVer={() => {}} onBaixar={() => {}} onRenomear={() => {}} onExcluir={() => {}} />
+          <DocumentoCard doc={{ id: 2, nome: "Ofício", nomeArquivo: "oficio.pdf", tamanho: 42000, tamanhoOriginal: 42000, paginas: 1, compactado: false, criadoEm: "2026-10-20T12:00:00Z", autor: null }} onVer={() => {}} />
         </div>
       </Secao>
 

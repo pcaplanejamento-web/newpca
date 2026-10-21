@@ -124,6 +124,17 @@ export const CATALOGO_PAPEIS: Record<Tela, InfoTela> = {
       exportar: "Baixar o relatório das pendências em PDF.",
     },
   },
+  documentos: {
+    na: "em Documentos",
+    a: "a Documentos",
+    acoes: {
+      visualizar: "Abrir Documentos e ver os PDFs guardados.",
+      manipular: "Renomear documentos.",
+      importar: "Subir PDFs (compactados até 100 KB).",
+      exportar: "Baixar os PDFs.",
+      excluir: "Excluir documentos.",
+    },
+  },
 };
 
 export const rotuloTela = (tela: Tela): string => ABAS.find((a) => a.key === tela)?.label ?? tela;

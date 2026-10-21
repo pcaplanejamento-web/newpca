@@ -185,6 +185,8 @@ export const IconCheck = Check;
 export const IconMenos = Minus;
 export const IconAlert = AlertTriangle;
 export const IconFile = FileText;
+/** O módulo Documentos (os PDFs guardados no sistema). */
+export const IconDocumentos = FileText;
 export const IconUsers = Users;
 export const IconLogout = LogOut;
 export const IconActivity = Activity;

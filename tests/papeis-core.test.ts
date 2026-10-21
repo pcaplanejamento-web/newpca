@@ -201,7 +201,8 @@ describe("edição da matriz com as implicações", () => {
     const c = alternarColuna({}, "configurar", true);
     assert.equal(c.calendario, undefined);
     assert.equal(c.verificacao, undefined);
-    for (const t of ABA_KEYS.filter((x) => x !== "calendario" && x !== "verificacao")) assert.deepEqual(c[t], ["visualizar", "configurar"], t);
+    assert.equal(c.documentos, undefined);
+    for (const t of ABA_KEYS.filter((x) => x !== "calendario" && x !== "verificacao" && x !== "documentos")) assert.deepEqual(c[t], ["visualizar", "configurar"], t);
     assert.deepEqual(alternarColuna(capacidadesTudo(), "visualizar", false), {});
   });
 
