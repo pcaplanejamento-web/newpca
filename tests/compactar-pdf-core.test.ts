@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cabe, NIVEIS_LEGIVEIS, versoesEscolhiveis, ehPdf, etapasCompactacao, LIMITE_DOCUMENTO, nomeDoDocumento, tamanhoBase64 } from "../src/lib/compactar-pdf-core.ts";
+import { cabe, NIVEIS_LEGIVEIS, versoesEscolhiveis, ehPdf, etapasCompactacao, LIMITE_DOCUMENTO, nomeDoDocumento, partesDe, parteValida, TAMANHO_PARTE } from "../src/lib/compactar-pdf-core.ts";
 
 test("limite e cabe", () => {
   assert.equal(LIMITE_DOCUMENTO, 102400);
@@ -19,9 +19,23 @@ test("ehPdf pelo cabeçalho", () => {
   assert.ok(!ehPdf(new TextEncoder().encode("PK..")));
 });
 
-test("nome e base64", () => {
+test("nome do documento", () => {
   assert.ok(nomeDoDocumento("relatorio.pdf").length > 0);
-  assert.equal(tamanhoBase64(4), 8);
+});
+
+test("partes: um PDF de 3,8 MB vira 4 partes; só a última é menor", () => {
+  const total = Math.round(3.8 * 1024 * 1024);
+  assert.equal(partesDe(total), 4);
+  assert.ok(parteValida(0, TAMANHO_PARTE, total));
+  assert.ok(parteValida(3, total - 3 * TAMANHO_PARTE, total));
+  assert.ok(!parteValida(3, TAMANHO_PARTE, total));
+  assert.ok(!parteValida(4, 1, total));
+  assert.ok(parteValida(0, 500, 500));
+});
+
+test("versoesEscolhiveis: o original de 3,8 MB fica na barra (teto do ADM)", () => {
+  const v = versoesEscolhiveis([{ tamanho: 3_984_588, rotulo: "Original" }, { tamanho: 400_000, rotulo: "Mínimo" }]);
+  assert.deepEqual(v.map((x) => x.rotulo), ["Original", "Mínimo"]);
 });
 
 test("versoesEscolhiveis: do maior ao menor, dentro do limite, cada passo menor", () => {

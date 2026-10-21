@@ -42,8 +42,21 @@ export const cabe = (bytes: number): boolean => bytes > 0 && bytes <= LIMITE_DOC
 
 export const cabeAlvo = (bytes: number, alvo: number): boolean => bytes > 0 && bytes <= alvo;
 
-/** O ADM escolhe o tamanho final e pode passar dos 100 KB — até 1 MB (a linha do banco guarda o base64). */
-export const LIMITE_DOCUMENTO_ADM = 1024 * 1024;
+/** O ADM escolhe o tamanho final — do mínimo legível ao ORIGINAL, até 20 MB (teto de segurança; o PDF é gravado em partes). */
+export const LIMITE_DOCUMENTO_ADM = 20 * 1024 * 1024;
+
+/** O tamanho de cada parte gravada (uma linha do banco aguenta 2 MB). */
+export const TAMANHO_PARTE = 1024 * 1024;
+
+/** Quantas partes um PDF de N bytes tem. */
+export const partesDe = (bytes: number): number => Math.ceil(bytes / TAMANHO_PARTE);
+
+/** A parte `ordem` de um PDF de `total` bytes tem o tamanho certo (cheia; a última, o resto). */
+export function parteValida(ordem: number, bytes: number, total: number): boolean {
+  const n = partesDe(total);
+  if (!Number.isInteger(ordem) || ordem < 0 || ordem >= n) return false;
+  return bytes === (ordem < n - 1 ? TAMANHO_PARTE : total - TAMANHO_PARTE * (n - 1));
+}
 
 /**
  * Os níveis de imagem oferecidos ao ADM, do melhor ao MÍNIMO LEGÍVEL (escala 1,25 ≈ 90 dpi, JPEG 0,5 — abaixo disso o texto
@@ -84,6 +97,3 @@ export function nomeDoDocumento(arquivo: string): string {
     .trim();
   return (nome || "Documento").slice(0, 120);
 }
-
-/** O tamanho em base64 de N bytes (o que vai na requisição e no banco). */
-export const tamanhoBase64 = (bytes: number): number => Math.ceil(bytes / 3) * 4;

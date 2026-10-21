@@ -1,4 +1,5 @@
 import type { UsuarioSessao } from "./auth";
+import { idsDosAdmins } from "./email";
 import { atorDe, notificar } from "./notificacoes";
 import { nomeExibicao } from "./pessoa";
 
@@ -68,4 +69,21 @@ export async function avisarProtocoloAtualizado(u: UsuarioSessao, mudancas: { re
     })),
     u.id,
   );
+}
+
+/**
+ * MOVIMENTAÇÃO NO PCA aos ADMINISTRADORES (menos quem fez): toda interação com o PCA — protocolos, itens, planilhas e o
+ * próprio PCA. O tipo `pca-adm` é configurável em Configurações → Notificações (sino/e-mail) e cada pessoa pode silenciar.
+ */
+export async function avisarAdmsPca(u: UsuarioSessao, pca: { id: number; nome: string }, titulo: string, texto: string | null, aba = "dashboard") {
+  try {
+    const adms = (await idsDosAdmins()).filter((id) => id !== u.id);
+    if (!adms.length) return;
+    await notificar(
+      adms.map((usuarioId) => ({ usuarioId, tipo: "pca-adm" as const, titulo: `${pca.nome}: ${titulo}`, texto, link: `/painel/pca/${pca.id}?aba=${aba}`, ...atorDe(u) })),
+      u.id,
+    );
+  } catch {
+    // best-effort: o aviso nunca derruba a gravação
+  }
 }

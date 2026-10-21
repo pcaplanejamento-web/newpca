@@ -84,7 +84,7 @@ describe("modo de unidades do grupo (v1.115.0)", async () => {
   });
 });
 
-describe("escopo por tela e várias unidades de cadastro (v1.139.0)", async () => {
+describe("escopo por tela e várias unidades de cadastro (v1.141.0)", async () => {
   const m = await import("../src/lib/escopo-unidades-core.ts");
   const a = { id: 1, codigo: "SMS" };
   const b = { id: 2, codigo: "SME" };

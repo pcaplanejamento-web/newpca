@@ -193,6 +193,7 @@ export function ItemTable({
         minWidth={origem ? 1180 : showUnidade ? 980 : 900}
         onRowClick={onRowClick}
         activeKey={ativo}
+        ordemInicial={{ key: "seq", dir: "desc" }}
         resumo={(l) => `${l.length} ${l.length === 1 ? "item" : "itens"} · ${brl(l.reduce((s, r) => s + (r.valorTotal ?? 0), 0))}`}
       />
     </div>

@@ -11,9 +11,13 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ## 0. Base já pronta
 ✅ Landing pública · ✅ Login/Cadastro/Sessão · ✅ Papéis (admin/gestor/membro) + aprovação de usuários · ✅ Área da equipe protegida (`/painel`) · ✅ Importação de planilha `.xlsx` em lotes · ✅ Deploy automático · ✅ Responsivo + tema claro/escuro.
 
-### Grupos por unidade de cadastro: acesso de cada tela + várias unidades por pessoa (v1.139.0) — entregue
+### Grupos por unidade de cadastro: acesso de cada tela + várias unidades por pessoa (v1.141.0) — entregue
 No modo "Unidade de cadastro de cada pessoa", cada tela do grupo escolhe só as unidades de cadastro ou todas; a pessoa pode
 ter várias unidades de cadastro (Usuários → "Unidades em que trabalha", com a principal). Migração `0117`.
+### PCA: upload único, sequencial sagrado e avisos aos ADMs (v1.139.0) — entregue
+✅ Um cartão por arquivo enviado (migração `0119`, `pca_uploads`). ✅ Sequencial único no PCA (planilha + protocolos, gatilhos
+no banco): o nº informado sobrescreve, sem nº segue a sequência, arquivo com nº repetido não entra; a incorporação continua a
+sequência. ✅ Consulta do Dashboard em ordem decrescente. ✅ Aviso "Movimentação no PCA" aos administradores (configurável).
 
 ### PCA de lista pronta recebe protocolos + planilha consolidada (v1.133.0) — entregue
 ✅ Todo PCA tem a aba **Mesa**; o de lista pronta mantém a **Importação**, que agora lê a planilha consolidada com a coluna
@@ -1780,3 +1784,4 @@ E-mail e/ou in-app para: prazos de protocolo, cadastro pendente para o admin, at
 - v1.121.0: papéis controlam o escopo da Mesa do PCA, aparecer online e ver novidades.
 - [x] v1.137.0 — Documentos: o ADM escolhe a % de compactação no envio.
 - [x] v1.138.0 — Documentos: o ADM escolhe o tamanho de cada PDF (mínimo legível → original).
+- [x] v1.140.0 — Documentos: o máximo da barra é o arquivo original (até 20 MB); o PDF é gravado em partes de 1 MB.

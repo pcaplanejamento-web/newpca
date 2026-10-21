@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { brlCompact, dataBR, num } from "@/lib/format";
-import { normalizarLinha } from "@/lib/normalize";
+import type { UploadPca } from "@/lib/pca-uploads";
 import { type LeituraPlanilhas, type PlanilhaParseada, parsePlanilhas } from "@/lib/parse-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
@@ -19,60 +19,56 @@ const PreviaPlanilha = dynamic(() => import("./PreviaPlanilha").then((m) => m.Pr
 /** Linhas por requisição — cada requisição pequena (limites do Worker/D1). */
 const CHUNK = 200;
 
-export type PlanilhaPca = {
-  id: number;
-  codigo: string;
-  municipio: string;
-  nomeArquivo: string | null;
-  totalItens: number | null;
-  valorTotal: number | null;
-  atualizadoEm: string | null;
-};
+type RespostaUpload = { ok?: boolean; error?: string; uploadId?: number; unidadeId?: number };
 
-/** Envia UMA planilha (já lida) para o PCA em lotes (`/api/upload`: start + append). */
-async function enviarPlanilha(parsed: PlanilhaParseada, pcaId: number, onProgresso: (p: number) => void): Promise<{ codigo: string; itens: number }> {
-  if (parsed.rows.length === 0) throw new Error("A planilha não tem itens.");
-  const total = parsed.rows.map(normalizarLinha).reduce((s, r) => s + (r.valorTotal ?? 0), 0);
-  let unidadeId: number | null = null;
-  for (let i = 0; i < parsed.rows.length; i += CHUNK) {
-    const rows = parsed.rows.slice(i, i + CHUNK);
-    // Os lotes seguintes precisam do id devolvido pelo 1º (sem ele, não há onde acrescentar).
-    if (i > 0 && unidadeId == null) throw new Error("A importação não devolveu a planilha criada. Tente de novo.");
-    const body =
-      i === 0
-        ? {
-            mode: "start" as const,
-            pcaId,
-            codigo: parsed.codigo,
-            municipio: parsed.municipio,
-            nomeArquivo: parsed.nomeArquivo,
-            totalItens: parsed.rows.length,
-            valorTotal: total,
-            rows,
-          }
-        : { mode: "append" as const, unidadeId, rows };
-    const res = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; unidadeId?: number };
-    if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao importar.");
-    if (i === 0) unidadeId = j.unidadeId ?? null;
-    onProgresso(Math.round(((i + rows.length) / parsed.rows.length) * 100));
-  }
-  return { codigo: parsed.codigo, itens: parsed.rows.length };
+async function postar(body: unknown): Promise<RespostaUpload> {
+  const res = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = (await res.json().catch(() => ({}))) as RespostaUpload;
+  if (!res.ok || !j.ok) throw new Error(j.error ?? "Erro ao importar.");
+  return j;
 }
 
 /**
- * Aba IMPORTAÇÃO do PCA de lista pronta: soltar/escolher UMA OU VÁRIAS planilhas (.xlsx — uma por
- * unidade, ou a CONSOLIDADA com a coluna LOCAL, que vira uma planilha por unidade — com a PRÉVIA COMPLETA (todas as linhas) antes de gravar; os itens entram direto neste PCA; reenviar o mesmo código substitui) + os cards das
- * planilhas deste PCA (itens · data · Σ); importar e excluir seguem o papel.
+ * Envia UM arquivo (já lido) como UM upload: cada unidade (LOCAL) em lotes (`/api/upload`: start + append) e, no fim,
+ * `fim` (avisa os administradores). O servidor dá o SEQUENCIAL: o informado sobrescreve; sem ele, segue a sequência.
+ */
+async function enviarArquivo(nome: string, planilhas: PlanilhaParseada[], pcaId: number, onProgresso: (p: number) => void): Promise<number> {
+  const total = planilhas.reduce((s, p) => s + p.rows.length, 0);
+  if (total === 0) throw new Error("A planilha não tem itens.");
+  let uploadId: number | undefined;
+  let feitos = 0;
+  for (const p of planilhas) {
+    let unidadeId: number | undefined;
+    for (let i = 0; i < p.rows.length; i += CHUNK) {
+      const rows = p.rows.slice(i, i + CHUNK);
+      const j =
+        unidadeId == null
+          ? await postar({ mode: "start", pcaId, uploadId, codigo: p.codigo, municipio: p.municipio, nomeArquivo: nome, rows })
+          : await postar({ mode: "append", unidadeId, rows });
+      uploadId ??= j.uploadId;
+      unidadeId ??= j.unidadeId;
+      if (unidadeId == null) throw new Error("A importação não devolveu a planilha criada. Tente de novo.");
+      feitos += rows.length;
+      onProgresso(Math.round((feitos / total) * 100));
+    }
+  }
+  if (uploadId) await postar({ mode: "fim", uploadId }).catch(() => undefined);
+  return total;
+}
+
+/**
+ * Aba IMPORTAÇÃO do PCA: soltar/escolher UMA OU VÁRIAS planilhas (.xlsx — por unidade ou a CONSOLIDADA com a coluna LOCAL)
+ * com a PRÉVIA COMPLETA antes de gravar + UM card por UPLOAD (arquivo · unidades · itens · Σ). O SEQUENCIAL é sagrado: o
+ * informado sobrescreve o item que já o tinha; sem ele, segue a sequência. Importar e excluir seguem o papel.
  */
 export function PlanilhasPca({
   pcaId,
-  planilhas,
+  uploads,
   podeImportar,
   podeExcluir,
 }: {
   pcaId: number;
-  planilhas: PlanilhaPca[];
+  uploads: UploadPca[];
   /** O papel importa planilhas no PCA. */
   podeImportar: boolean;
   /** O papel exclui planilhas do PCA. */
@@ -107,45 +103,41 @@ export function PlanilhasPca({
     setAviso(null);
     const ok: string[] = [];
     const falhas: string[] = [];
-    // Lê TODOS os arquivos antes; uma planilha consolidada vira várias (uma por LOCAL).
-    const lidas: PlanilhaParseada[] = [];
+    // Lê TODOS os arquivos antes (a prévia de cada um); cada arquivo aprovado vira UM upload.
+    const lidos: { nome: string; planilhas: PlanilhaParseada[] }[] = [];
     for (const f of xs) {
       try {
         const leitura = await parsePlanilhas(f);
         // Nada entra sem ser visto: a prévia completa de cada arquivo, antes de gravar.
-        if (!(await verPrevia(f.name, leitura))) continue;
-        lidas.push(...leitura.planilhas);
+        if (await verPrevia(f.name, leitura)) lidos.push({ nome: f.name, planilhas: leitura.planilhas });
       } catch (e) {
         falhas.push(`${f.name}: ${e instanceof Error ? e.message : "falha"}`);
       }
     }
-    for (let i = 0; i < lidas.length; i++) {
-      setFila({ nome: lidas[i].codigo, atual: i + 1, total: lidas.length, progresso: 0 });
+    for (let i = 0; i < lidos.length; i++) {
+      setFila({ nome: lidos[i].nome, atual: i + 1, total: lidos.length, progresso: 0 });
       try {
-        const r = await enviarPlanilha(lidas[i], pcaId, (p) => setFila((f) => (f ? { ...f, progresso: p } : f)));
-        ok.push(`${r.codigo} (${num(r.itens)} itens)`);
+        const n = await enviarArquivo(lidos[i].nome, lidos[i].planilhas, pcaId, (p) => setFila((f) => (f ? { ...f, progresso: p } : f)));
+        ok.push(`${lidos[i].nome} (${num(n)} itens)`);
       } catch (e) {
-        falhas.push(`${lidas[i].codigo}: ${e instanceof Error ? e.message : "falha"}`);
+        falhas.push(`${lidos[i].nome}: ${e instanceof Error ? e.message : "falha"}`);
       }
     }
-    if (ok.length === 0 && falhas.length === 0) {
-      setFila(null);
-      return;
-    }
     setFila(null);
+    if (ok.length === 0 && falhas.length === 0) return;
     setAviso(
       falhas.length
-        ? { kind: "danger", texto: `${ok.length ? `Importadas: ${ok.join(", ")}. ` : ""}Falhas — ${falhas.join(" · ")}` }
-        : { kind: "ok", texto: `Importada(s): ${ok.join(", ")}` },
+        ? { kind: "danger", texto: `${ok.length ? `Importados: ${ok.join(", ")}. ` : ""}Falhas — ${falhas.join(" · ")}` }
+        : { kind: "ok", texto: `Importado(s): ${ok.join(", ")}` },
     );
     router.refresh();
   }
 
-  async function excluir(p: PlanilhaPca) {
+  async function excluir(p: UploadPca) {
     const sim = await confirmar({
-      titulo: `Excluir a planilha ${p.codigo}?`,
-      texto: `Os ${num(p.totalItens ?? 0)} itens saem deste PCA. Não pode ser desfeito.`,
-      confirmar: "Excluir planilha",
+      titulo: `Excluir o upload ${p.nomeArquivo ?? ""}?`,
+      texto: `Os ${num(p.totalItens)} itens dele saem deste PCA. Não pode ser desfeito.`,
+      confirmar: "Excluir upload",
       perigo: true,
     });
     if (!sim) return;
@@ -172,7 +164,7 @@ export function PlanilhasPca({
             className="min-h-[200px]"
             icon={<IconUpload className="h-7 w-7" />}
             titulo="Arraste a planilha do PCA ou clique para escolher"
-            dica=".xlsx · uma planilha por unidade OU a consolidada com a coluna LOCAL · reenviar a mesma unidade substitui"
+            dica=".xlsx · por unidade OU a consolidada com a coluna LOCAL · sequencial já usado sobrescreve; sem sequencial, segue a sequência"
           />
         ))}
 
@@ -183,37 +175,40 @@ export function PlanilhasPca({
       )}
 
       <section className="space-y-3">
-        <h2 className="text-base font-bold text-text">Planilhas deste PCA ({planilhas.length})</h2>
-        {planilhas.length === 0 ? (
+        <h2 className="text-base font-bold text-text">Uploads deste PCA ({uploads.length})</h2>
+        {uploads.length === 0 ? (
           <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhuma planilha importada ainda.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {planilhas.map((p) => (
+            {uploads.map((p) => (
               <div key={p.id} className="flex flex-col rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
                 <div className="flex items-start gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
                     <IconFile className="h-5 w-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-bold text-text">{p.codigo}</h3>
-                    <p className="truncate text-sm text-muted" title={p.nomeArquivo ?? p.municipio}>
-                      {p.nomeArquivo ?? p.municipio}
+                    <h3 className="truncate font-bold text-text" title={p.nomeArquivo ?? undefined}>
+                      {p.nomeArquivo ?? "Planilha"}
+                    </h3>
+                    <p className="line-clamp-2 text-sm text-muted" title={p.unidades.join(", ")}>
+                      {p.unidades.length === 1 ? p.unidades[0] : `${num(p.unidades.length)} unidades · ${p.unidades.join(", ")}`}
                     </p>
                   </div>
                   {podeExcluir && (
                     <Button
                       variant="ghost"
-                      aria-label={`Excluir ${p.codigo}`}
+                      aria-label={`Excluir ${p.nomeArquivo ?? "upload"}`}
                       icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
                       onClick={() => excluir(p)}
                     />
                   )}
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3 text-sm">
-                  <span className="text-muted">
-                    {num(p.totalItens ?? 0)} itens{p.atualizadoEm ? ` · ${dataBR(p.atualizadoEm)}` : ""}
+                  <span className="truncate text-muted">
+                    {num(p.totalItens)} itens{p.criadoEm ? ` · ${dataBR(p.criadoEm)}` : ""}
+                    {p.criadoPor ? ` · ${p.criadoPor}` : ""}
                   </span>
-                  <span className="font-bold text-text">{brlCompact(p.valorTotal ?? 0)}</span>
+                  <span className="font-bold text-text">{brlCompact(p.valorTotal)}</span>
                 </div>
               </div>
             ))}

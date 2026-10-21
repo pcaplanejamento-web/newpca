@@ -730,7 +730,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadastro (`usuarios.reparticao_id`; sem ela = escopo nenhuma; a "Geral" nunca vale por cadastro) — ponto único
   `reparticoesDoMembro` (`grupos.ts`; núcleo puro `unidadesDoMembro` em `escopo-unidades-core.ts`) dentro do
   `getReparticaoContexto`: cabeçalho, escopo da Mesa e as rotas herdam. No `GruposAdmin`, o `Segmented` "Unidades escolhidas |
-  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. **ESCOPO POR TELA + VÁRIAS UNIDADES (v1.139.0, migração `0117`, aditiva — `grupos.escopo_telas` JSON `{tela: "todas"}` +
+  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. **ESCOPO POR TELA + VÁRIAS UNIDADES (v1.141.0, migração `0119`, aditiva — `grupos.escopo_telas` JSON `{tela: "todas"}` +
   tabela `usuario_reparticoes` = as unidades ADICIONAIS da pessoa; a principal segue em `usuarios.reparticao_id`):** no modo
   `cadastro`, o banner do grupo mostra **"Acesso de cada tela"** (`EscopoPorTela`: por tela do grupo, "Só as de cadastro" |
   "Todas as unidades"); núcleo puro em `escopo-unidades-core.ts` (`lerEscopoTelas`, `compactarEscopoTelas`, `telaVeTodas`,
@@ -2495,6 +2495,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`chamarPadronizacao`).
 
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
+- **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0118` — tabela `pca_uploads`, `unidades.upload_id` [único
+  por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
+  cada ARQUIVO = UM cartão na Importação (`uploadsDoPca`, `pca-uploads.ts`; excluir = `DELETE /api/pca/[id]/planilhas/[uploadId]`,
+  cascata). O `/api/upload` (`start` cria o upload na 1ª unidade e recebe `uploadId` nas demais; `append`; `fim` = avisa os
+  ADMs) grava cada lote por `gravarLote`: núcleo puro **`sequencial-pca-core.ts`** (`repetidos`, `atribuirSequenciais`) +
+  builders **`pca-upload-sql.ts`** (testados no D1 real — `tests/sequencial-pca.test.ts`): o nº informado SOBRESCREVE o item
+  da planilha que o tinha (`comandoSobrescrever`, no mesmo lote), sem nº segue `MAX`+1 (planilha E `pca_itens` — o MESMO
+  `maximoDoPca` da numeração dos protocolos em `pca-itens-sql.ts`), nº de item de protocolo = 409; totais e sobras acertados
+  no lote (`comandoTotaisUnidades`/`comandosLimparVazias`). O arquivo com sequencial repetido não importa
+  (`LeituraPlanilhas.sequenciaisRepetidos` trava a `PreviaPlanilha`). A consulta do Dashboard abre do Seq. maior ao menor
+  (`DataTable.ordemInicial`). **Avisos aos ADMs:** tipo `pca-adm` ("Movimentação no PCA", configurável) — `avisarAdmsPca`
+  (`avisos-mesa.ts`) em enviar/incorporar/devolver, retirar itens, upload/exclusão de planilha e criar/alterar/excluir PCA.
 - **LISTA PRONTA TAMBÉM RECEBE PROTOCOLOS (v1.133.0, migração `0115` — `itens.dominio`/`prioridade`/`protocolo_id_externo`/
   `previsao_generica`):** a fonte é o PONTO DE PARTIDA, não exclusividade — todo PCA tem a aba **Mesa** (enviar/incorporar/
   devolver; `motivosNaoEnviar` sem a trava de fonte; seletor de Mesa e "Enviar ao PCA" listam todos); o de lista tem também
@@ -3696,8 +3708,10 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   `LIMITE_DOCUMENTO`=100 KB): como veio › regravado com object streams › páginas em JPEG numa escada de escala/qualidade até
   caber. O servidor recusa não-PDF e > 100 KB. **Tamanho escolhido pelo ADM (v1.138.0):** a cada PDF, o
   `EscolherTamanhoPdf` (barra) entre o MÍNIMO LEGÍVEL (`NIVEIS_LEGIVEIS`, piso escala 1,25 · JPEG 0,5) e o ORIGINAL — versões reais
-  (`versoesParaEscolha` → `versoesEscolhiveis`) com a prévia da 1ª página; o ADM grava até `LIMITE_DOCUMENTO_ADM`=1 MB (a rota
-  confere pelo papel); os demais, automática até 100 KB.
+  (`versoesParaEscolha` → `versoesEscolhiveis`) com a prévia da 1ª página; o ADM grava até `LIMITE_DOCUMENTO_ADM`=20 MB — o máximo da barra é o ORIGINAL (a rota
+  confere pelo papel); os demais, automática até 100 KB. **Em PARTES (v1.140.0, migração `0118`):** `POST /api/documentos`
+  abre o envio (`completo`=0, fora da lista) e `PUT /api/documentos/[id]/partes?ordem=N` grava cada parte binária de 1 MB
+  (`documento_partes`, `parteValida`); a última confere o total e conclui. O antigo (`partes`=0) segue no `conteudo` base64.
 - Rotas `GET/POST /api/documentos`, `PATCH/DELETE /api/documentos/[id]`, `GET /api/documentos/[id]/arquivo` (`?baixar=1`
   exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: busca + `DocumentoCard` + o card "Enviar PDF" (`QuadroNovoCard`, no fim da grade; tocar ou soltar)
   sobre `CartaoEspaco`; visualizador = páginas do pdf.js em canvas num `Modal`, sem iframe — CSP `object-src 'none'`/iOS).

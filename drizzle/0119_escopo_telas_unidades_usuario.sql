@@ -1,4 +1,4 @@
--- v1.139.0 — no modo "unidade de cadastro", o grupo escolhe POR TELA: só as unidades de cadastro da pessoa ou todas
+-- v1.141.0 — no modo "unidade de cadastro", o grupo escolhe POR TELA: só as unidades de cadastro da pessoa ou todas
 -- (JSON {tela: "todas"}; ausente = de cadastro). E a pessoa pode ter VÁRIAS unidades de cadastro: a principal segue em
 -- usuarios.reparticao_id e as demais nesta tabela.
 ALTER TABLE grupos ADD COLUMN escopo_telas text;

@@ -1,6 +1,6 @@
 import { exigirAcesso, intId, recusaPca, recusa } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import { avisarPcaProtocolos } from "@/lib/avisos-mesa";
+import { avisarAdmsPca, avisarPcaProtocolos } from "@/lib/avisos-mesa";
 import { escopoMesa, MSG_SEM_ACESSO_PROTOCOLO, protocoloNasLinhas } from "@/lib/acesso-mesa";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { acaoSugerida, motivoNaoDevolver, motivosNaoEnviar, motivosNaoIncorporar, ROTULO_ACAO } from "@/lib/pca-core";
@@ -125,5 +125,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   // O responsável de cada protocolo recebe UM aviso (o sino; o e-mail como o ADM configurou).
   await avisarPcaProtocolos(a.u, corpo.acao, pca, feitos);
+  if (feitos.length)
+    await avisarAdmsPca(a.u, pca, `${feitos.length === 1 ? `protocolo ${feitos[0].numero}` : `${feitos.length} protocolos`} ${{ enviar: "enviado(s)", devolver: "devolvido(s) à Mesa", incorporar: "incorporado(s)" }[corpo.acao]}`, feitos.slice(0, 8).map((p) => p.numero).join(", "), "mesa");
   return ok({ alterados, falhas });
 }

@@ -31,6 +31,10 @@ const retratoDoItem = () => ({
   baixadoEm: sql<string | null>`NULL`.as("baixado_em"),
 });
 
+/** O MAIOR sequencial do PCA — os itens dos protocolos E os da planilha (migração `0117`): um espaço só, nunca repetido. */
+const maximoDoPca = (pca: SQL) =>
+  sql`MAX((SELECT COALESCE(MAX(x.sequencial), 0) FROM pca_itens x WHERE x.pca_id = ${pca}), (SELECT COALESCE(MAX(i.sequencial), 0) FROM itens i WHERE i.pca_id = ${pca}))`;
+
 export function numerarItensDoProtocolo(db: Db, pcaId: number, protocoloId: number) {
   // As chaves na MESMA ordem das colunas da tabela (exigência do insert…select do Drizzle).
   const numerados = db
@@ -38,7 +42,7 @@ export function numerarItensDoProtocolo(db: Db, pcaId: number, protocoloId: numb
       id: sql<number>`NULL`.as("id"),
       pcaId: sql<number>`${pcaId}`.as("pca_id"),
       sequencial:
-        sql<number>`(SELECT COALESCE(MAX(x.sequencial), 0) FROM pca_itens x WHERE x.pca_id = ${pcaId}) + ROW_NUMBER() OVER (ORDER BY ${dfds.id}, ${dfdItens.sequencial}, ${dfdItens.id})`.as(
+        sql<number>`${maximoDoPca(sql`${pcaId}`)} + ROW_NUMBER() OVER (ORDER BY ${dfds.id}, ${dfdItens.sequencial}, ${dfdItens.id})`.as(
           "sequencial",
         ),
       dfdItemId: dfdItens.id,
@@ -117,7 +121,7 @@ export function numerarItensDoDfd(db: Db, dfdId: number) {
       id: sql<number>`NULL`.as("id"),
       pcaId: pcaDfds.pcaId,
       sequencial:
-        sql<number>`(SELECT COALESCE(MAX(x.sequencial), 0) FROM pca_itens x WHERE x.pca_id = ${pcaDfds.pcaId}) + ROW_NUMBER() OVER (PARTITION BY ${pcaDfds.pcaId} ORDER BY ${dfdItens.sequencial}, ${dfdItens.id})`.as(
+        sql<number>`${maximoDoPca(sql`${pcaDfds.pcaId}`)} + ROW_NUMBER() OVER (PARTITION BY ${pcaDfds.pcaId} ORDER BY ${dfdItens.sequencial}, ${dfdItens.id})`.as(
           "sequencial",
         ),
       dfdItemId: dfdItens.id,

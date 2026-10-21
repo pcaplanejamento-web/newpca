@@ -2279,6 +2279,7 @@ function PreviaPlanilhaDemo() {
       { codigo: "AMAE", municipio: "Rio Verde", nomeArquivo: "Enviar_PCA26.xlsx", rows: [{ sequencial: 1, idProduto: "524190502", nomeProduto: "CERTIFICADO DIGITAL", unidadeMedida: "UNIDADE", classificacao: "SERVIÇO", dominio: "MATERIAL", quantidade: 1, valorReferencia: 144.3, dataDesejada: "2026-03-01", prioridade: "ALTA", protocoloIdExterno: "2334977" }] },
     ],
     problemas: [{ tipo: "linhas vazias ignoradas", quantidade: 2, exemplos: ["linha 5", "linha 6"] }],
+    sequenciaisRepetidos: [],
   };
   return (
     <>
