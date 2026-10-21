@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.151.0",
+    data: "2026-10-21",
+    titulo: "Tela pública com menu lateral e abas publicadas pelo ADM",
+    mudancas: [
+      { tipo: "novo", area: "Tela pública", texto: "A consulta sem login ganhou o menu lateral do sistema (recolhível; gaveta no celular) com o Entrar fixo no rodapé.", link: "/" },
+      { tipo: "novo", area: "Configurações", texto: "Aba Tela pública: o ADM escolhe quais abas do PCA são públicas — Dashboard, Orçamento e Documentos.", link: "/painel/configuracoes?aba=publico" },
+      { tipo: "melhoria", area: "Segurança", texto: "Orçamento e documentos públicos só do PCA publicado e da aba liberada — conferidos no servidor; o resto não sai.", link: "/" },
+    ],
+  },
+  {
     versao: "1.150.4",
     data: "2026-10-21",
     titulo: "Filtros só com ícone abrem a lista do sistema",

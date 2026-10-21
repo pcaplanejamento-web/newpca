@@ -1558,6 +1558,8 @@ cores claro/escuro, raio, densidade, motion, presets; **persistido no D1** e **i
 flash** (anti-XSS) · ✅ **Chrome do painel** (AppShell/nav/inputs) por token · 🔨 Propagação do
 redesign ao conteúdo das telas logadas (Protocolos [status ✅], Dashboard, Usuários, Ferramentas).
 Regras em [../CLAUDE.md](../CLAUDE.md); a `/design-system` é a **fonte única** de componentes.
+· ✅ **Tela pública com menu lateral** (v1.151.0): o mesmo menu do painel, o Entrar no rodapé e as abas do PCA
+publicadas pelo ADM (Dashboard · Orçamento · Documentos — Configurações → Tela pública).
 
 ---
 

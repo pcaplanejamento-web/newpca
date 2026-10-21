@@ -2669,6 +2669,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   CÓDIGO (antes do " - ") ou o mesmo NOME (código novo) — ACRESCENTADO (nunca tira: a visão é global e o valor ausente não
   soma nada); ambíguo/sem equivalente = não mexe; auditoria "adaptada ao QDD novo". Excluir uma visão diz quais PCAs voltam ao orçamento
   inteiro (confirmação e auditoria).
+- **TELA PÚBLICA COM MENU + ABAS PUBLICADAS (v1.151.0, sem migração — blob `configuracoes.publico`):** o menu lateral virou
+  UM componente (**`MenuLateral`**/`GavetaMenu`/`ItensMenu`, `MenuLateral.tsx` — o `AppShell` e a tela pública usam o
+  mesmo; `EVENTO_ALTERNAR_MENU` mora em `menu-lateral.ts`). `/` = **`TelaPublica`** (marca no topo do menu, as abas
+  publicadas, "Entrar" em pílula no rodapé dentro do `menu-esconde` — some no trilho; cabeçalho com hambúrguer, `PcaSeletor`
+  e tema). Núcleo puro **`publico-core.ts`** (testado): `ABAS_PUBLICAS` FECHADA = dashboard · orcamento · documentos (Mesa,
+  Importação e Configuração nunca), `lerConfigPublico` (Dashboard sempre), `abaPublicaPedida` (fora = Dashboard),
+  **`podeLerPublico`** (PCA publicado ou logado + a aba ligada) — a guarda de toda leitura pública; D1 `publico.ts` (cache
+  60 s). Configurações → **Tela pública** (`PublicoAdmin`/`CamposPublico`; `GET/PATCH /api/admin/publico`, `exigirAdmin`,
+  auditoria). Orçamento público = `OrcamentoPca consulta` (só o PCA × Orçamento; sem Comparativo, vínculos, visões,
+  engrenagem nem relatório). Documentos públicos = `DocumentosPublicos` (sem autor/link; o `VisualizadorPdf` com `url`) lendo
+  **`GET /api/pca/[id]/consulta/documento/[docId]`** (pública: aba publicada + PCA publicado + documento do PCA e completo;
+  404 fora disso, `no-store`, sem download).
 - **Tela inicial `/`:** `PcaSeletor` (dropdown) com os PCAs **publicados** (`?pca=`; padrão = ativo, senão o mais recente) +
   `UnitFilter` (planilha na lista; unidade requisitante no protocolo); o MESMO Dashboard do painel. O `Switch` Publicar só decide se o PCA aparece ali.
 - **CONSULTA PÚBLICA (painel e tela inicial, PCA de fonte protocolo) — `ConsultaPca`:** `Segmented` **Protocolos · DFDs ·

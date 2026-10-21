@@ -53,7 +53,7 @@ export function Button({
       : size === "sm"
         ? `h-11 text-[12.5px] lg:h-[var(--h-control-sm)] ${quadrado ? "w-11 lg:w-[var(--h-control-sm)]" : "px-3"}`
         : `h-11 text-[13.5px] lg:h-[var(--h-control)] ${quadrado ? "w-11 lg:w-[var(--h-control)]" : "px-4"}`;
-  const cls = `inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold transition-[background-color,opacity,box-shadow] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-60 ${tamanho} ${VARIANT[variant]} ${className}`;
+  const cls = `inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold transition-[background-color,opacity,box-shadow,transform] duration-[var(--motion-duration)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-60 ${tamanho} ${VARIANT[variant]} ${className}`;
   const inner = loading ? (
     <IconSpinner className="h-[18px] w-[18px]" />
   ) : (

@@ -1,0 +1,41 @@
+/**
+ * TELA PÚBLICA (consulta do PCA sem login) — as abas que o ADM publica. Núcleo PURO (testado): a lista é FECHADA — só
+ * Dashboard, Orçamento e Documentos podem ser públicas (Mesa, Importação e Configuração NUNCA); o Dashboard é sempre
+ * público (é o que a tela inicial sempre mostrou).
+ */
+
+export const ABAS_PUBLICAS = ["dashboard", "orcamento", "documentos"] as const;
+export type AbaPublica = (typeof ABAS_PUBLICAS)[number];
+
+export const ROTULO_ABA_PUBLICA: Record<AbaPublica, string> = { dashboard: "Dashboard", orcamento: "Orçamento", documentos: "Documentos" };
+
+export type ConfigPublico = { abas: AbaPublica[] };
+
+export const PUBLICO_PADRAO: ConfigPublico = { abas: ["dashboard"] };
+
+const ehAbaPublica = (v: unknown): v is AbaPublica => typeof v === "string" && (ABAS_PUBLICAS as readonly string[]).includes(v);
+
+/** Qualquer JSON → a configuração válida: só as abas da lista, na ordem dela, com o Dashboard sempre. */
+export function lerConfigPublico(v: unknown): ConfigPublico {
+  const lidas = v && typeof v === "object" && Array.isArray((v as { abas?: unknown }).abas) ? (v as { abas: unknown[] }).abas : [];
+  const set = new Set(lidas.filter(ehAbaPublica));
+  set.add("dashboard");
+  return { abas: ABAS_PUBLICAS.filter((a) => set.has(a)) };
+}
+
+/** A aba pedida na URL → a que vale (fora das públicas = o Dashboard). */
+export function abaPublicaPedida(cfg: ConfigPublico, pedida: string | undefined): AbaPublica {
+  return ehAbaPublica(pedida) && cfg.abas.includes(pedida) ? pedida : "dashboard";
+}
+
+/** A GUARDA de toda leitura pública: PCA publicado (ou visto por quem entrou — o Preview) + a aba publicada pelo ADM. */
+export function podeLerPublico(pca: { status: string } | null, cfg: ConfigPublico, aba: AbaPublica, logado: boolean): boolean {
+  if (!pca) return false;
+  if (pca.status !== "publicado" && !logado) return false;
+  return cfg.abas.includes(aba);
+}
+
+export function diffPublico(antes: ConfigPublico, depois: ConfigPublico): string {
+  const r = (c: ConfigPublico) => c.abas.map((a) => ROTULO_ABA_PUBLICA[a]).join(", ");
+  return r(antes) === r(depois) ? "sem mudança" : `abas públicas: ${r(antes)} → ${r(depois)}`;
+}
