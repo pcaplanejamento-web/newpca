@@ -16,7 +16,8 @@ import { Button } from "./Button";
 import { gradienteDe, MenuCard } from "./CatalogoCards";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { useConfirmacao } from "./Confirmacao";
-import { Checkbox, SearchField, SelectField, TextField } from "./Field";
+import { Checkbox, SearchField, TextField } from "./Field";
+import { SeletorFiltro } from "./SeletorFiltro";
 import { IconBox, IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash, IconDesvincular } from "./icons";
 import { ListaEscolhaIds } from "./ListaEscolhaIds";
 import { Modal } from "./Modal";
@@ -48,7 +49,7 @@ export function DocumentoCard({
   onPcas?: () => void;
   /** Na aba Documentos do PCA: tirar o documento deste PCA. */
   onDesvincular?: () => void;
-  /** Os PCAs do documento, por extenso (o sobretítulo). */
+  /** O vínculo do documento (selo na capa): "Todos os PCAs", "PCA 2026", "3 PCAs" ou "Nenhum PCA". */
   pcasTexto?: string;
 }) {
   const acoes = [
@@ -68,6 +69,12 @@ export function DocumentoCard({
           <span aria-hidden className="absolute inset-0 grid place-items-center text-white/85">
             <IconDocumentos className="h-10 w-10" />
           </span>
+          {pcasTexto && (
+            <span className="absolute top-1.5 left-1.5 inline-flex max-w-[calc(100%-3.5rem)] items-center gap-1 rounded-full bg-[var(--scrim)] px-2 py-0.5 text-[11px] font-semibold text-white" title={`Vinculado: ${pcasTexto}`}>
+              <IconBox className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">{pcasTexto}</span>
+            </span>
+          )}
           {d.compactado && (
             <span className="absolute bottom-1.5 left-1.5 inline-flex items-center rounded-full bg-[var(--scrim)] px-2 py-0.5 text-[11px] font-semibold text-white">
               Compactado de {formatBytes(d.tamanhoOriginal)}
@@ -75,7 +82,7 @@ export function DocumentoCard({
           )}
         </CapaQuadro>
       }
-      sobretitulo={pcasTexto ?? (d.autor ? `PDF · ${d.autor}` : "PDF")}
+      sobretitulo={d.autor ? `PDF · ${d.autor}` : "PDF"}
       nome={d.nome}
       metricas={[
         { rotulo: "Páginas", valor: num(d.paginas) },
@@ -317,10 +324,24 @@ export function DocumentosView({
     router.refresh();
   }
 
+  // O filtro de PCA se adapta: só as opções que mostram algum documento (com o número), e some com menos de duas.
+  const opcoesPca = useMemo(() => {
+    const conta = (f: string) => documentos.filter((d) => passaFiltroPca(d.pcas, f)).length;
+    const lista = [
+      { valor: "sem", rotulo: "Sem PCA" },
+      ...pcas.map((x) => ({ valor: String(x.id), rotulo: x.ano != null ? `${x.ano} · ${x.nome}` : x.nome })),
+    ]
+      .map((o) => ({ ...o, n: conta(o.valor) }))
+      .filter((o) => o.n > 0);
+    return lista.length ? [{ valor: "", rotulo: `Todos os documentos (${documentos.length})` }, ...lista.map((o) => ({ valor: o.valor, rotulo: `${o.rotulo} (${o.n})` }))] : [];
+  }, [documentos, pcas]);
+  // A escolha que deixou de existir (documento desvinculado/excluído) volta a "todos".
+  const filtroValido = opcoesPca.some((o) => o.valor === filtroPca) ? filtroPca : "";
+
   const visiveis = useMemo(() => {
     const casa = predicadoBusca(busca);
-    return documentos.filter((d) => passaFiltroPca(d.pcas, filtroPca) && (!casa || casa([d.nome, d.nomeArquivo, d.autor])));
-  }, [documentos, busca, filtroPca]);
+    return documentos.filter((d) => passaFiltroPca(d.pcas, filtroValido) && (!casa || casa([d.nome, d.nomeArquivo, d.autor])));
+  }, [documentos, busca, filtroValido]);
 
   async function enviar(files: File[]) {
     const pdfs = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
@@ -430,21 +451,18 @@ export function DocumentosView({
           )}
         </Ajuda>
         {documentos.length > 0 && (
-          <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
-            {!noPca && pcas.length > 0 && (
-              <div className="w-full sm:w-56">
-                <SelectField compacto label="PCA" value={filtroPca} onChange={(e) => setFiltroPca(e.target.value)}>
-                  <option value="">Todos</option>
-                  <option value="sem">Sem PCA</option>
-                  {pcas.map((x) => (
-                    <option key={x.id} value={String(x.id)}>
-                      {x.ano != null ? `${x.ano} · ${x.nome}` : x.nome}
-                    </option>
-                  ))}
-                </SelectField>
-              </div>
+          <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
+            {!noPca && opcoesPca.length > 2 && (
+              <SeletorFiltro
+                icone={<IconBox className="h-4 w-4" />}
+                rotulo="PCA"
+                valor={filtroValido}
+                ativo={!!filtroValido}
+                onChange={setFiltroPca}
+                opcoes={opcoesPca}
+              />
             )}
-            <div className="w-full sm:w-72">
+            <div className="min-w-0 flex-1 sm:w-72 sm:flex-none">
               <SearchField compacto value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Pesquisar documentos…" aria-label="Pesquisar documentos" />
             </div>
           </div>
@@ -453,7 +471,7 @@ export function DocumentosView({
 
       {documentos.length === 0 && (noPca ? !pode.manipular : !pode.importar) ? (
         <p className="rounded-card border border-border bg-surface p-10 text-center text-sm text-muted">{noPca ? "Nenhum documento vinculado a este PCA." : "Nenhum documento guardado ainda."}</p>
-      ) : visiveis.length === 0 && (busca || filtroPca) ? (
+      ) : visiveis.length === 0 && (busca || filtroValido) ? (
         <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhum documento {busca ? `com "${busca}"` : "neste PCA"}.</p>
       ) : (
         <div className={`grid ${COLUNAS_ESPACOS} gap-3`}>
@@ -467,7 +485,7 @@ export function DocumentosView({
               onExcluir={!noPca && pode.excluir ? () => excluir(d) : undefined}
               onPcas={!noPca && pode.manipular && pcas.length > 0 && (podeTodosPcas || d.pcas !== "todos") ? () => setEditPcas({ doc: d, valor: d.pcas === "todos" ? null : new Set(d.pcas.filter((x) => nomesPcas.has(x))) }) : undefined}
               onDesvincular={noPca && pode.manipular && d.pcas !== "todos" && documentoNoPca(d.pcas, noPca.id) ? () => desvincular(d) : undefined}
-              pcasTexto={noPca ? (d.pcas === "todos" ? "Todos os PCAs" : undefined) : rotuloPcasDocumento(d.pcas, nomesPcas)}
+              pcasTexto={rotuloPcasDocumento(d.pcas, nomesPcas)}
             />
           ))}
           {noPca && pode.manipular && <QuadroNovoCard rotulo="Vincular documento" onClick={() => setVincular(new Set())} />}
