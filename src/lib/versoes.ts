@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.146.0",
+    data: "2026-10-21",
+    titulo: "Documentos: texto que sumia e PDF por link do Google",
+    mudancas: [
+      { tipo: "correcao", area: "Documentos", texto: "As letras de PDFs com fontes não embutidas (Word, Google Docs) não somem mais ao ver nem ao compactar.", link: "/painel/documentos" },
+      { tipo: "novo", area: "Documentos", texto: "“Usar link do Google”: cole o link do Docs ou do Drive e o PDF é copiado e guardado como um enviado.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.145.0",
     data: "2026-10-21",
     titulo: "PCA: Domínio dos itens no Dashboard",
