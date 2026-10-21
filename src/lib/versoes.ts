@@ -35,6 +35,72 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.145.0",
+    data: "2026-10-21",
+    titulo: "PCA: Domínio dos itens no Dashboard",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA · Dashboard",
+        texto: "O Domínio do item (material, serviço…) entra no Dashboard: gráfico “Domínio dos Itens”, filtro no topo, coluna na consulta e no relatório — só quando há dados. A Classificação segue com o próprio gráfico.",
+        link: "/painel/pca",
+      },
+      { tipo: "melhoria", area: "PCA · Importação", texto: "A visão Itens mostra também o Domínio.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.144.0",
+    data: "2026-10-21",
+    titulo: "Grupos: funções de cada tela e orçamentos do grupo",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Grupos",
+        texto: "No banner do grupo, “Funções das telas” liga ou desliga as partes de cada tela para o grupo — ex.: no PCA, o Dashboard, o Orçamento, a Mesa do PCA e o Relatório de variação.",
+        link: "/painel/grupos",
+      },
+      {
+        tipo: "novo",
+        area: "Grupos · Orçamento",
+        texto: "“Orçamentos do grupo”: como os PCAs, o grupo vê todos os orçamentos ou só os escolhidos — na lista, na tela do orçamento, na pesquisa e nos vínculos de tarefa.",
+        link: "/painel/grupos",
+      },
+    ],
+  },
+  {
+    versao: "1.143.0",
+    data: "2026-10-21",
+    titulo: "PCA: Tipo do DFD e Classificação do item separados",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "PCA · Dashboard",
+        texto: "A Classificação dos itens vindos de protocolos mostrava o tipo do DFD. Agora a Classificação é a do item pelo cadastro do Catálogo (Classificações) e o Tipo do DFD tem coluna própria — em todos os PCAs, também no gráfico e nos filtros.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
+    versao: "1.142.0",
+    data: "2026-10-21",
+    titulo: "Importação do PCA em cards e itens; avisos só no sino",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA · Importação", texto: "O upload virou um card no padrão do sistema (capa, data, quem enviou, unidades, itens e valor) e a importação ocupa o tamanho de um card na grade.", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA · Importação", texto: "Visão Uploads | Itens, como no Catálogo: todos os itens importados numa tabela (do sequencial maior ao menor); tocar num card abre só os itens dele.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Notificações", texto: "As notificações aparecem só no sino — sem o aviso flutuante na tela.", link: "/painel/perfil?aba=notificacoes" },
+    ],
+  },
+  {
+    versao: "1.141.0",
+    data: "2026-10-21",
+    titulo: "Grupos por unidade de cadastro: acesso de cada tela e várias unidades por pessoa",
+    mudancas: [
+      { tipo: "novo", area: "Grupos", texto: "No modo “Unidade de cadastro de cada pessoa”, cada tela do grupo escolhe: só as unidades de cadastro da pessoa ou todas as unidades.", link: "/painel/grupos" },
+      { tipo: "novo", area: "Usuários", texto: "A pessoa pode trabalhar em várias unidades: o campo “Unidades em que trabalha” marca mais de uma e escolhe a principal.", link: "/painel/usuarios" },
+      { tipo: "melhoria", area: "Cabeçalho", texto: "Nas telas com todas as unidades, o seletor de unidade do cabeçalho mostra todas; nas demais, as de cadastro.", link: "/painel/grupos" },
+    ],
+  },
+  {
     versao: "1.140.0",
     data: "2026-10-21",
     titulo: "Documentos: a barra vai até o tamanho do arquivo",

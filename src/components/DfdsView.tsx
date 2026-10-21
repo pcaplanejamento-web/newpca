@@ -2193,7 +2193,7 @@ export function DfdsView({
   const tabelaConsolidada = (
     <DataTable
       onOrdenadas={(ls) => setConsVisiveis((a) => (a && a.length === ls.length && a.every((l, i) => l.chave === ls[i].chave) ? a : ls))}
-      acoesRodape={<RelatorioVariacao linhas={consolidados ?? []} visiveis={consVisiveis ?? consolidados ?? []} historico={historico} />}
+      acoesRodape={libera(modoPca ? "pca.variacao" : "dfd.variacao") && <RelatorioVariacao linhas={consolidados ?? []} visiveis={consVisiveis ?? consolidados ?? []} historico={historico} />}
       visao={visaoTabela}
       trocando={trocando}
       columns={semColUnidade(colsConsolidados)}

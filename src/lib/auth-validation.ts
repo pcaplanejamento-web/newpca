@@ -123,6 +123,8 @@ export const adminUsuarioSchema = z.object({
   cargo: textoLimpo(80).optional(),
   // A unidade em que a pessoa trabalha (`null` = nenhuma).
   reparticaoId: z.number().int().positive().nullable().optional(),
+  // As OUTRAS unidades em que trabalha (além da principal) — a lista inteira, troca todas de uma vez.
+  outrasUnidades: z.array(z.number().int().positive()).max(200, "Até 200 unidades.").optional(),
   // O PAPEL (o que a pessoa faz nas telas) — um dos cadastrados em Configurações → Papéis.
   papelId: z.number().int().positive().optional(),
   // Os GRUPOS da pessoa (as telas que ela abre e as unidades que vê) — a lista inteira: troca todos de uma vez.

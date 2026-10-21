@@ -9,7 +9,6 @@ import { MAX_AVISOS_NA_TELA, dataHoraCompleta, mesclarPrimeiraPagina, secoesDeAv
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
 import type { TipoNotificacao } from "@/lib/tarefas-core";
 import { versaoDoAviso } from "@/lib/versoes";
-import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { ChipsIcone } from "./ChipsIcone";
@@ -681,7 +680,7 @@ function PainelNotificacoes({
 /**
  * O estado do sino: o número de NÃO LIDAS (vem do layout), o canal AO VIVO (WebSocket → a caixa da pessoa: cada aviso
  * novo, lido ou limpo chega na hora — em qualquer aba ou aparelho) e, sem o canal, a consulta de reserva (a cada 60 s
- * com a aba à vista). O aviso NOVO dá a prévia flutuante, balança o sino e é anunciado ao leitor de tela.
+ * com a aba à vista). O aviso NOVO aparece SÓ no sino (sem aviso flutuante): balança o sino e é anunciado ao leitor de tela.
  */
 function useCaixa(inicial: number) {
   const pathname = usePathname();
@@ -717,7 +716,7 @@ function useCaixa(inicial: number) {
     [router],
   );
 
-  /** Confere o aviso mais recente: o de id maior que o último visto vira a PRÉVIA (o 1º só marca a base). */
+  /** Confere o aviso mais recente: o de id maior que o último visto balança o sino (o 1º só marca a base). */
   const conferirNovo = useCallback(async () => {
     try {
       const j = await chamar<PaginaNotificacoes>("/api/notificacoes?filtro=nao-lidas&limite=1");
@@ -895,16 +894,15 @@ function useCaixa(inicial: number) {
     [enviarLimpeza],
   );
 
-  return { caixa: { naoLidas, setNaoLidas, versao, ocultos, limpar } as Caixa, aoVivo, novo, fecharNovo: () => setNovo(null), toque };
+  return { caixa: { naoLidas, setNaoLidas, versao, ocultos, limpar } as Caixa, aoVivo, novo, toque };
 }
 
 /**
  * O SINO do cabeçalho: o número de NÃO LIDAS (o selo anima a troca) e, ao abrir, o painel das notificações — no desktop
- * um painel preso ao sino; no celular uma folha de baixo. Avisos novos chegam AO VIVO (prévia flutuante + o sino balança).
+ * um painel preso ao sino; no celular uma folha de baixo. Avisos novos chegam AO VIVO (só no sino: ele balança e o selo conta).
  */
 export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/painel/perfil" }: { naoLidas?: number; configurarHref?: string }) {
-  const router = useRouter();
-  const { caixa, novo, fecharNovo, toque, aoVivo } = useCaixa(inicial);
+  const { caixa, novo, toque, aoVivo } = useCaixa(inicial);
   const [folha, setFolha] = useState(false);
   // As NOVIDADES de uma versão no banner flutuante (aberto pelo aviso — o sino segue aberto; ir até uma mudança fecha os dois).
   const [novidades, setNovidades] = useState<{ versao: string; ancora: Ancora | null } | null>(null);
@@ -961,37 +959,6 @@ export function SinoNotificacoes({ naoLidas: inicial = 0, configurarHref = "/pai
       <span className="sr-only" aria-live="polite">
         {novo ? `Nova notificação: ${novo.titulo}` : ""}
       </span>
-      {novo && (
-        <AvisoFlutuante
-          kind="info"
-          titulo={novo.titulo}
-          duracao={6000}
-          onClose={fecharNovo}
-          acoes={
-            abrivel(novo) ? (
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  const alvo = novo;
-                  const ancora = ancoraDe(e.currentTarget);
-                  fecharNovo();
-                  void chamar("/api/notificacoes", "PATCH", { ids: [alvo.id], lida: true })
-                    .then(() => caixa.setNaoLidas((c) => Math.max(0, c - 1)))
-                    .catch(() => {});
-                  if (alvo.tipo === "versao") {
-                    fecharSino.current = () => {};
-                    setNovidades({ versao: versaoDoAviso(alvo.titulo), ancora });
-                  } else if (alvo.link) router.push(alvo.link);
-                }}
-              >
-                Abrir
-              </Button>
-            ) : undefined
-          }
-        >
-          {novo.texto}
-        </AvisoFlutuante>
-      )}
     </>
   );
 }

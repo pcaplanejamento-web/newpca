@@ -2,8 +2,9 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AbaKey } from "@/lib/abas";
-import { ehCodigoGeral, type ModoUnidades } from "@/lib/escopo-unidades-core";
+import { ehCodigoGeral, type EscopoTelas, type ModoUnidades } from "@/lib/escopo-unidades-core";
 import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
+import { componentesDaTela } from "@/lib/papeis-componentes-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
@@ -33,13 +34,20 @@ type Grupo = {
   abas: AbaKey[];
   chat: boolean;
   modoUnidades: ModoUnidades;
+  /** No modo "unidade de cadastro": as telas que veem TODAS as unidades. */
+  escopoTelas: EscopoTelas;
   pcas: number[] | null;
+  /** Os ORÇAMENTOS do grupo (`null` = todos). */
+  orcamentos: number[] | null;
+  /** As FUNÇÕES das telas desligadas no grupo ("tela.funcao"). */
+  funcoesOff: string[];
   membros: number[];
   reparticoes: number[];
 };
 type PcaOpt = { id: number; nome: string; ano: number | null };
 type Status = "ativo" | "pendente" | "inativo";
-type UserOpt = { id: number; nome: string; email: string; status: Status; reparticaoId: number | null };
+/** `outras` = as unidades de cadastro ADICIONAIS da pessoa (Usuários). */
+type UserOpt = { id: number; nome: string; email: string; status: Status; reparticaoId: number | null; outras: number[] };
 type RepOpt = { id: number; codigo: string; nome: string; oculto: boolean };
 
 /** Ordem alfabética do português (acentos e caixa no lugar certo — a do banco põe "Á" depois do "Z"). */
@@ -55,6 +63,7 @@ async function lerJson<T>(r: Response): Promise<T & { ok?: boolean; error?: stri
 export function GruposAdmin() {
   const [grupos, setGrupos] = useState<Grupo[] | null>(null);
   const [pcasDisp, setPcasDisp] = useState<PcaOpt[]>([]);
+  const [orcsDisp, setOrcsDisp] = useState<PcaOpt[]>([]);
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [repsDisp, setRepsDisp] = useState<RepOpt[]>([]);
   const [modulosDisp, setModulosDisp] = useState<Modulo[]>([]);
@@ -69,9 +78,12 @@ export function GruposAdmin() {
   const [chat, setChat] = useState(true);
   // null = TODOS os PCAs (sem restrição); o conjunto = só esses.
   const [pcasSel, setPcasSel] = useState<Set<number> | null>(null);
+  const [orcsSel, setOrcsSel] = useState<Set<number> | null>(null);
+  const [funcoesOff, setFuncoesOff] = useState<Set<string>>(new Set());
   const [membros, setMembros] = useState<Set<number>>(new Set());
   const [reps, setReps] = useState<Set<number>>(new Set());
   const [modo, setModo] = useState<ModoUnidades>("lista");
+  const [escopo, setEscopo] = useState<EscopoTelas>({});
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
@@ -81,11 +93,12 @@ export function GruposAdmin() {
     setErro(null);
     try {
       const r = await fetch("/api/admin/grupos");
-      const j = await lerJson<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
+      const j = await lerJson<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; orcamentos?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
       setGrupos([...(j.grupos ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setModulosDisp(j.modulos ?? []);
       setPcasDisp(j.pcas ?? []);
+      setOrcsDisp(j.orcamentos ?? []);
       setUsers([...(j.usuarios ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setRepsDisp(j.reparticoes ?? []);
     } catch (e) {
@@ -108,9 +121,12 @@ export function GruposAdmin() {
     setModsTocados(true);
     setChat(true);
     setPcasSel(null);
+    setOrcsSel(null);
+    setFuncoesOff(new Set());
     setMembros(new Set());
     setReps(new Set());
     setModo("lista");
+    setEscopo({});
     setBusca("");
     setErroModal(null);
   }
@@ -122,9 +138,12 @@ export function GruposAdmin() {
     setModsTocados(g.modulos != null);
     setChat(g.chat);
     setPcasSel(g.pcas == null ? null : new Set(g.pcas));
+    setOrcsSel(g.orcamentos == null ? null : new Set(g.orcamentos));
+    setFuncoesOff(new Set(g.funcoesOff ?? []));
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
     setModo(g.modoUnidades ?? "lista");
+    setEscopo(g.escopoTelas ?? {});
     setBusca("");
     setErroModal(null);
   }  // A PESQUISA DO SISTEMA abre o banner do grupo (`?abrir=<id>`), quando a lista chega.
@@ -155,7 +174,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps], modoUnidades: modo }),
+        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], orcamentos: orcsSel == null ? null : [...orcsSel], funcoesOff: [...funcoesOff], membros: [...membros], reparticoes: [...reps], modoUnidades: modo, escopoTelas: escopo }),
       });
       const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -206,7 +225,9 @@ export function GruposAdmin() {
 
 
   // No modo "unidade de cadastro": quem do grupo não tem a unidade de cadastro (não verá dado nenhum).
-  const semUnidade = modo === "cadastro" ? users.filter((u) => membros.has(u.id) && u.reparticaoId == null) : [];
+  const semUnidade = modo === "cadastro" ? users.filter((u) => membros.has(u.id) && u.reparticaoId == null && u.outras.length === 0) : [];
+  // As telas do grupo (as dos módulos escolhidos): no modo "de cadastro", cada uma escolhe as unidades que vê.
+  const telasGrupo = telasDosModulos(modulosDisp, [...mods]);
 
   return (
     <div className="space-y-[var(--gap-block)]">
@@ -320,45 +341,13 @@ export function GruposAdmin() {
             <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
           </fieldset>
           <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
-          <fieldset>
-            <legend className="mb-2 block text-[13.5px] font-bold text-text">
-              PCAs do grupo · {pcasSel == null ? "todos" : `${pcasSel.size} selecionado(s)`}
-            </legend>
-            <Switch
-              checked={pcasSel == null}
-              onChange={(todos) => setPcasSel(todos ? null : new Set(pcasDisp.map((p) => p.id)))}
-              label="Todos os PCAs (também os que forem criados)"
-            />
-            {pcasSel != null &&
-              (pcasDisp.length === 0 ? (
-                <p className="mt-2 rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">Nenhum PCA cadastrado.</p>
-              ) : (
-                <div className="mt-2 max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
-                  {pcasDisp.map((p) => (
-                    <div key={p.id} className="rounded-control p-1.5 hover:bg-surface-2">
-                      <Checkbox
-                        checked={pcasSel.has(p.id)}
-                        onChange={() => setPcasSel((s) => {
-                          const n = new Set(s ?? []);
-                          if (n.has(p.id)) n.delete(p.id);
-                          else n.add(p.id);
-                          return n;
-                        })}
-                        label={
-                          <span className="flex items-center gap-2">
-                            {p.ano != null && <span className="font-mono text-[10.5px] text-faint">{p.ano}</span>}
-                            <span className="min-w-0 truncate text-[13px] text-text">{p.nome}</span>
-                          </span>
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              ))}
-            {pcasSel != null && pcasSel.size === 0 && (
-              <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA.</p>
-            )}
-          </fieldset>
+          <FuncoesPorTela telas={telasGrupo} desligadas={funcoesOff} onChange={setFuncoesOff} />
+          {telasGrupo.includes("pca") && (
+            <ListaDoGrupo titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
+          )}
+          {telasGrupo.includes("orcamento") && (
+            <ListaDoGrupo titulo="Orçamentos do grupo" todos="Todos os orçamentos (também os que forem importados)" vazio="Nenhum orçamento importado." aviso="Sem nenhum orçamento, as pessoas do grupo não veem nenhum orçamento." opcoes={orcsDisp} valor={orcsSel} onChange={setOrcsSel} />
+          )}
           <div>
             <div className="mb-2 flex items-center gap-1.5">
               <span className="text-[13.5px] font-bold text-text">
@@ -369,8 +358,10 @@ export function GruposAdmin() {
                   <b>Unidades escolhidas</b>: todas as pessoas do grupo veem os dados das unidades marcadas (a "Geral" = todas).
                 </p>
                 <p className="mt-2">
-                  <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só a unidade em que trabalha (o cadastro dela em
-                  Usuários). Quem não tem unidade de cadastro não vê dado nenhum. As unidades escolhidas ficam guardadas para
+                  <b>Unidade de cadastro de cada pessoa</b>: cada pessoa vê só as unidades em que trabalha (o cadastro dela em
+                  Usuários — pode ter várias). Em <b>Acesso de cada tela</b>, escolha as telas em que o grupo vê{" "}
+                  <b>todas as unidades</b> (ex.: o Calendário de todas e a Mesa só a de cadastro). Quem não tem unidade de
+                  cadastro não vê dado nenhum nas telas "só as de cadastro". As unidades escolhidas ficam guardadas para
                   quando voltar ao outro modo.
                 </p>
               </Ajuda>
@@ -385,6 +376,9 @@ export function GruposAdmin() {
                 { value: "cadastro", label: "Unidade de cadastro de cada pessoa", curto: "De cadastro" },
               ]}
             />
+            {modo === "cadastro" && (
+              <EscopoPorTela telas={telasGrupo} valor={escopo} onChange={setEscopo} />
+            )}
             {modo === "cadastro" ? (
               semUnidade.length > 0 ? (
                 <Callout kind="warn">
@@ -460,7 +454,135 @@ export function GruposAdmin() {
   );
 }
 
+/** Os PCAs ou os ORÇAMENTOS do grupo: "todos" (também os novos) ou só os marcados. */
+function ListaDoGrupo({
+  titulo,
+  todos,
+  vazio,
+  aviso,
+  opcoes,
+  valor,
+  onChange,
+}: {
+  titulo: string;
+  todos: string;
+  vazio: string;
+  aviso: string;
+  opcoes: PcaOpt[];
+  valor: Set<number> | null;
+  onChange: (v: Set<number> | null) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 block text-[13.5px] font-bold text-text">
+        {titulo} · {valor == null ? "todos" : `${valor.size} selecionado(s)`}
+      </legend>
+      <Switch checked={valor == null} onChange={(t) => onChange(t ? null : new Set(opcoes.map((p) => p.id)))} label={todos} />
+      {valor != null &&
+        (opcoes.length === 0 ? (
+          <p className="mt-2 rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">{vazio}</p>
+        ) : (
+          <div className="mt-2 max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
+            {opcoes.map((p) => (
+              <div key={p.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                <Checkbox
+                  checked={valor.has(p.id)}
+                  onChange={() => {
+                    const n = new Set(valor);
+                    if (n.has(p.id)) n.delete(p.id);
+                    else n.add(p.id);
+                    onChange(n);
+                  }}
+                  label={
+                    <span className="flex items-center gap-2">
+                      {p.ano != null && <span className="font-mono text-[10.5px] text-faint">{p.ano}</span>}
+                      <span className="min-w-0 truncate text-[13px] text-text">{p.nome}</span>
+                    </span>
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        ))}
+      {valor != null && valor.size === 0 && <p className="mt-1.5 text-[12px] text-[var(--warn)]">{aviso}</p>}
+    </fieldset>
+  );
+}
+
+/** As FUNÇÕES de cada tela do grupo (abas, visões, relatórios): marcada = ligada. Desligar some com ela para todas as
+ * pessoas do grupo (o papel de cada uma ainda pode retirar mais). */
+function FuncoesPorTela({ telas, desligadas, onChange }: { telas: AbaKey[]; desligadas: Set<string>; onChange: (v: Set<string>) => void }) {
+  const comFuncoes = telas.filter((t) => componentesDaTela(t).length > 0);
+  if (!comFuncoes.length) return null;
+  const n = [...desligadas].filter((c) => comFuncoes.some((t) => c.startsWith(`${t}.`))).length;
+  return (
+    <fieldset>
+      <legend className="mb-2 flex items-center gap-1.5 text-[13.5px] font-bold text-text">
+        Funções das telas{n ? ` · ${n} desligada(s)` : " · todas ligadas"}
+        <Ajuda titulo="Funções das telas" compacta>
+          <p>
+            Ligue ou desligue as partes de cada tela para este grupo — ex.: no PCA, o Dashboard, o Orçamento, a Mesa do PCA e o
+            Relatório de variação. A função desligada some para todas as pessoas do grupo; o papel de cada pessoa ainda decide o
+            que ela faz nas que ficam.
+          </p>
+        </Ajuda>
+      </legend>
+      <div className="space-y-2 rounded-control border border-border p-2">
+        {comFuncoes.map((t) => (
+          <div key={t} className="rounded-control p-1.5">
+            <span className="mb-1 block text-[12.5px] font-semibold text-text">{rotuloAba(t)}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {componentesDaTela(t).map((x) => (
+                <Checkbox
+                  key={x.chave}
+                  checked={!desligadas.has(x.chave)}
+                  onChange={() => {
+                    const s = new Set(desligadas);
+                    if (s.has(x.chave)) s.delete(x.chave);
+                    else s.add(x.chave);
+                    onChange(s);
+                  }}
+                  label={<span className="text-[13px] text-text" title={x.descricao}>{x.rotulo}</span>}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 /** O que o grupo passa a abrir com os módulos escolhidos — o grupo ANTIGO (telas avulsas) mostra o que ganha e o que perde. */
+/** No modo "unidade de cadastro": em CADA tela do grupo, só as unidades de cadastro da pessoa (padrão) ou todas. */
+function EscopoPorTela({ telas, valor, onChange }: { telas: AbaKey[]; valor: EscopoTelas; onChange: (v: EscopoTelas) => void }) {
+  if (telas.length === 0) return <p className="mb-2 text-[12px] text-faint">Escolha os módulos do grupo para definir o acesso de cada tela.</p>;
+  return (
+    <fieldset className="mb-2 space-y-1 rounded-control border border-border p-2">
+      <legend className="px-1 text-[12.5px] font-semibold text-text">Acesso de cada tela</legend>
+      {telas.map((t) => (
+        <div key={t} className="flex flex-wrap items-center justify-between gap-2 rounded-control p-1.5 hover:bg-surface-2">
+          <span className="text-[13px] font-medium text-text">{rotuloAba(t)}</span>
+          <Segmented
+            ariaLabel={`Unidades na tela ${rotuloAba(t)}`}
+            value={valor[t] === "todas" ? "todas" : "cadastro"}
+            onChange={(v) => {
+              const n: Record<string, "todas"> = { ...valor };
+              if (v === "todas") n[t] = "todas";
+              else delete n[t];
+              onChange(n);
+            }}
+            options={[
+              { value: "cadastro", label: "Só as de cadastro", curto: "Cadastro", dica: "A pessoa vê só as unidades do cadastro dela (Usuários)." },
+              { value: "todas", label: "Todas as unidades", curto: "Todas", dica: "A pessoa vê os dados de todas as unidades nesta tela." },
+            ]}
+          />
+        </div>
+      ))}
+    </fieldset>
+  );
+}
+
 function MudancaTelas({ grupo, tocados, telas }: { grupo: Grupo | null; tocados: boolean; telas: AbaKey[] }) {
   const lista = (l: readonly AbaKey[]) => l.map(rotuloAba).join(", ");
   if (grupo && grupo.modulos == null) {

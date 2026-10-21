@@ -83,7 +83,7 @@ export const escopoMesa = cache(async (): Promise<EscopoMesa | null> => {
   const acesso = await getAcesso();
   if (!acesso) return null;
   const vis = visaoDoAcesso(acesso);
-  const [un, meus] = await Promise.all([unidadesDaSessao(acesso.u), vis.linhas === "meus" ? carregarMeus(acesso.u.id) : null]);
+  const [un, meus] = await Promise.all([unidadesDaSessao(acesso.u, acesso.grupoAtivo, "dfd"), vis.linhas === "meus" ? carregarMeus(acesso.u.id) : null]);
   return { acesso, un, acessivel: un.acessivel, vis, meus };
 });
 

@@ -39,7 +39,7 @@ describe("PATCH de grupo não injeta padrões", () => {
   });
 
   it("criação com os padrões: sem módulos, chat liberado, todos os PCAs, sem pessoas/unidades", () => {
-    assert.deepEqual(grupoCreateSchema.parse({ nome: "Novo" }), { nome: "Novo", modulos: [], chat: true, pcas: null, membros: [], reparticoes: [], modoUnidades: "lista" });
+    assert.deepEqual(grupoCreateSchema.parse({ nome: "Novo" }), { nome: "Novo", modulos: [], chat: true, pcas: null, orcamentos: null, funcoesOff: [], membros: [], reparticoes: [], modoUnidades: "lista", escopoTelas: {} });
   });
 });
 

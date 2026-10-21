@@ -17,6 +17,8 @@ const CAMPOS = [
   "valorReferencia",
   "valorTotal",
   "classificacao",
+  "tipoDfd",
+  "dominio",
   "dataDesejada",
   "codigo",
   "municipio",

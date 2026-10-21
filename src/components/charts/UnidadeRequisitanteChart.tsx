@@ -17,10 +17,16 @@ export function UnidadeRequisitanteChart({
   data,
   onSelecionar,
   ativos,
+  dim = "unidade",
+  semValor = "Sem unidade",
 }: {
   data: Fatia[];
   onSelecionar?: (r: RecorteDash, rotulo: string) => void;
   ativos?: string[];
+  /** A dimensão filtrada pelo toque (a unidade, ou o DOMÍNIO do item — o mesmo desenho). */
+  dim?: "unidade" | "dominio";
+  /** O rótulo do valor vazio ("—"). */
+  semValor?: string;
 }) {
   if (!data.length) return <ChartEmpty />;
   const sorted = [...data].sort((a, b) => b.total - a.total);
@@ -39,8 +45,8 @@ export function UnidadeRequisitanteChart({
   const linhas = [
     ...top.map((f) => ({
       chave: f.label,
-      rotulo: f.label === "—" ? "Sem unidade" : f.label,
-      titulo: `${f.label === "—" ? "Sem unidade" : f.label}: ${brl(f.total)} · ${num(f.count)} itens`,
+      rotulo: f.label === "—" ? semValor : f.label,
+      titulo: `${f.label === "—" ? semValor : f.label}: ${brl(f.total)} · ${num(f.count)} itens`,
       segmentos: [{ chave: "v", valor: f.total, cor: "var(--accent)", rotulo: f.label }],
       valor: brlCompact(f.total),
       detalhe: `${num(f.count)} itens`,
@@ -64,7 +70,7 @@ export function UnidadeRequisitanteChart({
   ];
   return (
     <BarrasH
-      ariaLabel="Valor por unidade"
+      ariaLabel={dim === "dominio" ? "Valor por domínio" : "Valor por unidade"}
       linhas={linhas}
       ativa={onSelecionar ? ativa : undefined}
       acao="filtrar o Dashboard"
@@ -72,8 +78,8 @@ export function UnidadeRequisitanteChart({
         onSelecionar
           ? (c) =>
               c === OUTRAS
-                ? onSelecionar({ dim: "unidade", labels: rest.map((r) => r.label) }, `Outras ${rest.length}`)
-                : onSelecionar({ dim: "unidade", labels: [String(c)] }, String(c) === "—" ? "Sem unidade" : String(c))
+                ? onSelecionar({ dim, labels: rest.map((r) => r.label) }, `Outras ${rest.length}`)
+                : onSelecionar({ dim, labels: [String(c)] }, String(c) === "—" ? semValor : String(c))
           : undefined
       }
     />

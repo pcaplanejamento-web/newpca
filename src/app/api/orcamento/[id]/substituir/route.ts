@@ -1,4 +1,4 @@
-import { exigirAcesso, intId } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaOrcamento } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { num } from "@/lib/format";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -20,6 +20,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const foraDoGrupo = await recusaOrcamento(id);
+  if (foraDoGrupo) return foraDoGrupo;
   const p = await parseCorpo(substituirOrcamentoSchema, req);
   if ("resp" in p) return p.resp;
   if (p.data.origemId === id) return erro("A planilha nova precisa vir de outro envio.", 422);

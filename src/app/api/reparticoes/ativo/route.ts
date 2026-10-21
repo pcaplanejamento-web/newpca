@@ -1,5 +1,6 @@
 import { exigirUsuario } from "@/lib/api-auth";
-import { definirReparticaoAtiva, getReparticaoContexto } from "@/lib/grupos";
+import { lerEscopoTelas, telasComTodas } from "@/lib/escopo-unidades-core";
+import { definirReparticaoAtiva, getGrupoAtivo, getReparticaoContexto } from "@/lib/grupos";
 import { erro, ok, parseCorpo } from "@/lib/http";
 import { reparticaoAtivaSchema } from "@/lib/rbac-validation";
 
@@ -12,7 +13,11 @@ export async function POST(req: Request) {
   const corpo = await parseCorpo(reparticaoAtivaSchema, req);
   if ("resp" in corpo) return corpo.resp;
   const { reparticaoId } = corpo.data;
-  const { lista } = await getReparticaoContexto(guard.u);
+  // No grupo de "unidade de cadastro" com telas que veem TODAS, vale qualquer unidade dessas telas (a tela de cadastro
+  // ignora a escolhida fora da lista dela e mostra a dela).
+  const grupo = guard.u.admin ? null : await getGrupoAtivo(guard.u);
+  const tela = grupo ? telasComTodas(grupo.modoUnidades, lerEscopoTelas(grupo.escopoTelas))[0] : undefined;
+  const { lista } = await getReparticaoContexto(guard.u, guard.u.admin ? undefined : grupo, tela);
   if (!lista.some((r) => r.id === reparticaoId)) return erro("Unidade fora do seu grupo.", 403);
   await definirReparticaoAtiva(reparticaoId);
   return ok();

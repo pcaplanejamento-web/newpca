@@ -30,7 +30,7 @@ import {
 } from "@/db/schema";
 import { type LinhaIndice, MAX_INDICE, padroesLike } from "./pesquisa-core";
 import { casaTermos } from "./pesquisa-sql";
-import { type Acesso, componenteLibera, podeNoQuadro, podeTela } from "./acesso";
+import { type Acesso, componenteLibera, getAcesso, orcamentosDoAcesso, pcasDoAcesso, podeNoQuadro, podeOrcamento, podePca, podeTela } from "./acesso";
 import type { UsuarioSessao } from "./auth";
 import { registrarAuditoria } from "./auditoria";
 import { getDb } from "./db";
@@ -1650,10 +1650,13 @@ export async function buscarVinculos(
   }
   if (tipo === "pca" || tipo === "orcamento") {
     const t = tipo === "pca" ? pcas : orcamentos;
+    // Só os PCAs/orçamentos do grupo ativo (Grupos → "PCAs do grupo" / "Orçamentos do grupo"; null = todos).
+    const acesso = await getAcesso();
+    const doGrupo = tipo === "pca" ? pcasDoAcesso(acesso) : orcamentosDoAcesso(acesso);
     const linhas = await db
       .select({ id: t.id, nome: t.nome, ano: t.ano })
       .from(t)
-      .where(or(casaTermos([t.nome], padroes), like(sql`CAST(${t.ano} AS TEXT)`, `%${q.trim().replace(/[%_]/g, "")}%`)))
+      .where(and(doGrupo ? inArray(t.id, [...doGrupo, 0]) : undefined, or(casaTermos([t.nome], padroes), like(sql`CAST(${t.ano} AS TEXT)`, `%${q.trim().replace(/[%_]/g, "")}%`))))
       .orderBy(desc(t.id))
       .limit(LIMITE);
     // O MESMO rótulo que `rotulosVinculos` dá ao vínculo gravado (orçamento = nome + ano).
@@ -1663,7 +1666,7 @@ export async function buscarVinculos(
   }
   // O escopo de unidades da pessoa (o ADM e a "Geral" = todas; sem grupo/unidade = nenhuma) e as LINHAS dela ("só os meus",
   // detalhe do papel: os protocolos em que é Responsável ou que protocolou, e os DFDs deles).
-  const { escopo: esc } = await unidadesDaSessao(u);
+  const { escopo: esc } = await unidadesDaSessao(u, undefined, "dfd");
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
   const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";
@@ -1821,6 +1824,7 @@ export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: nu
   }
   if (v.tipo === "pca" || v.tipo === "orcamento") {
     if (!podeTela(a, v.tipo).visualizar) return false;
+    if (!(v.tipo === "pca" ? podePca(a, v.id) : podeOrcamento(a, v.id))) return false;
     const t = v.tipo === "pca" ? pcas : orcamentos;
     return (await db.select({ id: t.id }).from(t).where(eq(t.id, v.id))).length > 0;
   }
@@ -1833,7 +1837,7 @@ export async function vinculoAcessivel(a: Acesso, v: { tipo: TipoVinculo; id: nu
   const cond = soMeus ? (v.tipo === "protocolo" ? condMeuProtocolo(u.id) : condMeuDfd(db, u.id)) : undefined;
   const [r] = await db.select({ rep: t.reparticaoId }).from(t).where(and(eq(t.id, v.id), cond));
   if (!r) return false;
-  return (await unidadesDaSessao(u)).acessivel(r.rep);
+  return (await unidadesDaSessao(u, undefined, "dfd")).acessivel(r.rep);
 }
 
 // ─── Fase 3: avisos · recorrência · automações · modelos ─────────────────────────────────────────────────────
@@ -2586,7 +2590,7 @@ async function pesquisarNaMesa(a: Acesso, tipo: "protocolo" | "dfd" | "item", q:
   const db = getDb();
   const u = a.u;
   const padroes = indice ? [] : padroesLike(q);
-  const { escopo: esc } = await unidadesDaSessao(u);
+  const { escopo: esc } = await unidadesDaSessao(u, undefined, "dfd");
   const escopo = (col: typeof dfdProtocolos.reparticaoId | typeof dfds.reparticaoId) =>
     esc.tipo === "todas" ? undefined : esc.tipo === "nenhuma" ? sql`0 = 1` : or(sql`${col} IS NULL`, inArray(col, esc.ids.slice(0, 90)));
   const soMeus = visaoMesa(u.papel.detalhes, u.admin).linhas === "meus";

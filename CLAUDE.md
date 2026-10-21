@@ -730,7 +730,18 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   cadastro (`usuarios.reparticao_id`; sem ela = escopo nenhuma; a "Geral" nunca vale por cadastro) — ponto único
   `reparticoesDoMembro` (`grupos.ts`; núcleo puro `unidadesDoMembro` em `escopo-unidades-core.ts`) dentro do
   `getReparticaoContexto`: cabeçalho, escopo da Mesa e as rotas herdam. No `GruposAdmin`, o `Segmented` "Unidades escolhidas |
-  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. Telas admin: `/painel/grupos`,
+  Unidade de cadastro de cada pessoa" (a lista escolhida fica guardada) e o aviso dos membros sem unidade de cadastro. **ESCOPO POR TELA + VÁRIAS UNIDADES (v1.141.0, migração `0119`, aditiva — `grupos.escopo_telas` JSON `{tela: "todas"}` +
+  tabela `usuario_reparticoes` = as unidades ADICIONAIS da pessoa; a principal segue em `usuarios.reparticao_id`):** no modo
+  `cadastro`, o banner do grupo mostra **"Acesso de cada tela"** (`EscopoPorTela`: por tela do grupo, "Só as de cadastro" |
+  "Todas as unidades"); núcleo puro em `escopo-unidades-core.ts` (`lerEscopoTelas`, `compactarEscopoTelas`, `telaVeTodas`,
+  `telasComTodas`, `telaDaRota`; `unidadesDoMembro` aceita várias unidades, sem repetir e sem a "Geral"). A TELA desce por
+  `unidadesDaSessao(u, grupo, tela)`/`getReparticaoContexto`/`reparticoesDoMembro` (tela "todas" = `listarReparticoes()` —
+  escopo todas): Mesa (`escopoMesa`, `contextoBanners`, pesquisa/vínculos de tarefa) = `dfd` (a Mesa do PCA também), cada
+  módulo pela `TELA_DO_MODULO` de `unidadeDoModulo`, o upload = `pca`. O layout manda `unidadesPorTela` ao `AppShell` e
+  `porTela` ao `UnidadeUnica` (a lista e a ativa trocam pela rota); `POST /api/reparticoes/ativo` aceita as unidades das
+  telas "todas". **Usuários:** "Unidades em que trabalha" = `SeletorMultiplo suspenso` + a principal (`PATCH` `{reparticaoId,
+  outrasUnidades}` → `comandosOutrasUnidades`, `rbac-sql.ts`; cada nova validada por `unidadeDeTrabalhoValida`; mudar desfaz
+  a validação dos dados); `unidadesDeCadastro` (`grupos.ts`) = principal + adicionais. Telas admin: `/painel/grupos`,
   `/painel/orgaos` (Órgãos → clique numa linha → Unidades daquele órgão). Helpers em **`src/lib/grupos.ts`** (`getGrupoAtivo/Id`, `abasPermitidas`,
   `getReparticaoContexto`, `definirGrupoAtivo/ReparticaoAtiva`); abas gerenciáveis em `src/lib/abas.ts`.
 - **TELAS E PCAs NO PRÓPRIO GRUPO (v1.76.0, migração `0106`, aditiva — `grupos.abas` JSON de keys + `grupos.pcas` JSON de
@@ -747,6 +758,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de `contextoBanners`); o cronograma do Calendário (`cronogramaPcas(de, ate, permitidos)`); e as rotas
   `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
   `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
+- **FUNÇÕES DAS TELAS + ORÇAMENTOS POR GRUPO (v1.144.0, migração `0120`, aditiva — `grupos.funcoes_off` JSON das chaves
+  "tela.funcao" desligadas + `grupos.orcamentos` JSON de ids, NULL = todos):** no banner do grupo, **Funções das telas**
+  (`FuncoesPorTela`, `GruposAdmin`: as do `CATALOGO_COMPONENTES` das telas do grupo — inclui `dfd.variacao`/`pca.variacao`
+  = o Relatório de variação) e **Orçamentos do grupo** (`ListaDoGrupo`, a mesma peça dos PCAs). A função desligada vale como
+  retirar Visualizar no papel, para o grupo ATIVO: `comFuncoesDoGrupo`/`lerFuncoesOff`/`compactarFuncoesOff`
+  (`papeis-componentes-core.ts`, testados) → `componentesDoAcesso(a)` (`acesso.ts`) — usado por `componenteLibera` e pelo
+  provedor `ComponentesPapel` do layout. Orçamentos: `orcamentosDoAcesso`/`podeOrcamento` na lista `/painel/orcamento`, no
+  espaço `[id]` (`AcessoRestrito`), em `recusaOrcamento` (`api-auth.ts`: PATCH/DELETE `/api/orcamento/[id]` e o
+  `substituir`), na pesquisa (lançamentos) e em `buscarVinculos`/`vinculoAcessivel` (também os PCAs do grupo). O orçamento
+  usado no PCA × Orçamento segue o do ano.
 - **MÓDULOS + CHAT POR GRUPO + QUEM VÊ OS ONLINE (v1.91.0, migração `0109`, aditiva — `grupos.modulos` JSON de ids [NULL =
   grupo antigo, pelas telas avulsas de `abas`] + `grupos.chat` [1 = liberado]):** Configurações → aba **"Módulos"**
   (`ModulosAdmin`: nome, ↑/↓, as telas em `ChipsIcone` — uma tela em UM módulo; aviso das telas sem módulo; `GET/PATCH
@@ -2484,9 +2505,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   (`chamarPadronizacao`).
 
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
+- **TIPO × CLASSIFICAÇÃO (v1.143.0):** no item de protocolo do PCA (`itensConsolidados`), `classificacao` = a do Catálogo
+  (`criarClassificador` sobre `listarPadronizacao`; sem casar = "Não classificado") e `tipoDfd` = o tipo do DFD (coluna
+  "Tipo" do `ItemTable` com `origem`; `ItemRow.tipoDfd`, no texto compacto). Nunca usar o tipo do DFD como classificação.
+  **Domínio (v1.145.0):** `ItemRow.dominio` (a coluna da planilha) → dimensão `dominio` do `origem-dash` (filtro do topo,
+  gráfico "Domínio dos Itens" = `UnidadeRequisitanteChart dim="dominio"`, relatório, coluna do `ItemTable`) só com dados.
 - **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0118` — tabela `pca_uploads`, `unidades.upload_id` [único
   por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
-  cada ARQUIVO = UM cartão na Importação (`uploadsDoPca`, `pca-uploads.ts`; excluir = `DELETE /api/pca/[id]/planilhas/[uploadId]`,
+  cada ARQUIVO = UM cartão na Importação (`CartaoEspaco` + a importação como um card do MESMO tamanho, grade `COLUNAS_ESPACOS`;
+  `Segmented` Uploads | Itens — `itensDosUploads`, tocar no card abre os itens dele; `uploadsDoPca`, `pca-uploads.ts`; excluir = `DELETE /api/pca/[id]/planilhas/[uploadId]`,
   cascata). O `/api/upload` (`start` cria o upload na 1ª unidade e recebe `uploadId` nas demais; `append`; `fim` = avisa os
   ADMs) grava cada lote por `gravarLote`: núcleo puro **`sequencial-pca-core.ts`** (`repetidos`, `atribuirSequenciais`) +
   builders **`pca-upload-sql.ts`** (testados no D1 real — `tests/sequencial-pca.test.ts`): o nº informado SOBRESCREVE o item
@@ -4242,8 +4269,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     tira na hora e o banco só é limpo depois do **Desfazer** de 6 s — ou ao sair da página, `keepalive`) e **Configurar**
     (Perfil; o ADM, Configurações → Notificações). Rolagem infinita; ↑/↓ entre os avisos, Delete exclui; o aviso ao vivo
     MESCLA a 1ª página (`mesclarPrimeiraPagina` — as páginas carregadas ficam, o que está sendo limpo não volta). **Aviso
-    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), a **prévia flutuante** com
-    "Abrir" (6 s), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
+    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), SEM aviso flutuante (v1.142.0 — a notificação
+    aparece SÓ no sino), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
     altura recolhe); tudo respeita "reduzir movimento". Ícones novos `IconLidas`/`IconSemAvisos`/
     `IconEventoAlterado`/`IconCadastro`.
   - **Avisos novos (tipos `vence_hoje`, `evento`, `protocolo`, `pca`, `cadastro`):** **Mesa** — o responsável designado a um

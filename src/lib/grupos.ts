@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { grupoReparticoes, grupos, reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
+import { grupoReparticoes, grupos, reparticoes, usuarioGrupos, usuarioReparticoes, usuarios } from "@/db/schema";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import { getDb } from "./db";
 import {
@@ -11,7 +11,10 @@ import {
   FILTRO_NENHUMA,
   type FiltroLista,
   filtroDeLista,
+  lerEscopoTelas,
   type ModoUnidades,
+  telasComTodas,
+  telaVeTodas,
   unidadeNoEscopo,
   unidadesDoMembro,
 } from "./escopo-unidades-core";
@@ -25,13 +28,13 @@ import {
 const COOKIE_GRUPO = "pca_grupo";
 const COOKIE_REP = "pca_reparticao";
 
-export type GrupoResumo = { id: number; nome: string; modoUnidades?: ModoUnidades };
+export type GrupoResumo = { id: number; nome: string; modoUnidades?: ModoUnidades; escopoTelas?: string | null };
 export type ReparticaoResumo = { id: number; codigo: string; nome: string };
 
 /** Grupos aos quais o usuário pertence (ordenados por nome). */
 export async function gruposDoUsuario(usuarioId: number): Promise<GrupoResumo[]> {
   return getDb()
-    .select({ id: grupos.id, nome: grupos.nome, modoUnidades: grupos.modoUnidades })
+    .select({ id: grupos.id, nome: grupos.nome, modoUnidades: grupos.modoUnidades, escopoTelas: grupos.escopoTelas })
     .from(usuarioGrupos)
     .innerJoin(grupos, eq(usuarioGrupos.grupoId, grupos.id))
     .where(eq(usuarioGrupos.usuarioId, usuarioId))
@@ -75,25 +78,39 @@ export async function reparticoesDoGrupo(grupoId: number): Promise<ReparticaoRes
     .orderBy(asc(reparticoes.ordem), asc(reparticoes.id));
 }
 
-/** A unidade de CADASTRO da pessoa (`usuarios.reparticao_id`) — o grupo no modo `cadastro`. */
-export async function unidadeDeCadastro(usuarioId: number): Promise<ReparticaoResumo | null> {
-  const [r] = await getDb()
-    .select({ id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome })
-    .from(usuarios)
-    .innerJoin(reparticoes, eq(usuarios.reparticaoId, reparticoes.id))
-    .where(eq(usuarios.id, usuarioId))
-    .limit(1);
-  return r ?? null;
+/** As unidades de CADASTRO da pessoa — a principal (`usuarios.reparticao_id`) primeiro e as adicionais
+ * (`usuario_reparticoes`) na ordem da tela de unidades — o grupo no modo `cadastro`. */
+export async function unidadesDeCadastro(usuarioId: number): Promise<ReparticaoResumo[]> {
+  const db = getDb();
+  const cols = { id: reparticoes.id, codigo: reparticoes.codigo, nome: reparticoes.nome };
+  const [principal, extras] = await Promise.all([
+    db.select(cols).from(usuarios).innerJoin(reparticoes, eq(usuarios.reparticaoId, reparticoes.id)).where(eq(usuarios.id, usuarioId)).limit(1),
+    db
+      .select(cols)
+      .from(usuarioReparticoes)
+      .innerJoin(reparticoes, eq(usuarioReparticoes.reparticaoId, reparticoes.id))
+      .where(eq(usuarioReparticoes.usuarioId, usuarioId))
+      .orderBy(asc(reparticoes.ordem), asc(reparticoes.id)),
+  ]);
+  return [...principal, ...extras];
 }
 
-/** As unidades de um MEMBRO no grupo: as escolhidas (modo `lista`) ou a unidade de cadastro dele (modo `cadastro`). */
-export async function reparticoesDoMembro(grupo: GrupoResumo, usuarioId: number): Promise<ReparticaoResumo[]> {
+/**
+ * As unidades de um MEMBRO no grupo: as escolhidas (modo `lista`) ou as unidades de cadastro dele (modo `cadastro`). No
+ * modo `cadastro`, a TELA marcada "todas" pelo ADM dá todas as unidades (a "Geral" junto — escopo todas).
+ */
+export async function reparticoesDoMembro(grupo: GrupoResumo, usuarioId: number, tela?: string | null): Promise<ReparticaoResumo[]> {
   let modo = grupo.modoUnidades;
-  if (!modo) {
-    const [g] = await getDb().select({ m: grupos.modoUnidades }).from(grupos).where(eq(grupos.id, grupo.id)).limit(1);
+  let escopoTelas = grupo.escopoTelas;
+  if (!modo || escopoTelas === undefined) {
+    const [g] = await getDb().select({ m: grupos.modoUnidades, e: grupos.escopoTelas }).from(grupos).where(eq(grupos.id, grupo.id)).limit(1);
     modo = g?.m ?? "lista";
+    escopoTelas = g?.e ?? null;
   }
-  if (modo === "cadastro") return unidadesDoMembro(modo, [], await unidadeDeCadastro(usuarioId));
+  if (modo === "cadastro") {
+    if (telaVeTodas(modo, lerEscopoTelas(escopoTelas), tela)) return listarReparticoes();
+    return unidadesDoMembro(modo, [], await unidadesDeCadastro(usuarioId));
+  }
   return reparticoesDoGrupo(grupo.id);
 }
 
@@ -114,6 +131,7 @@ export const listarReparticoes = cache(async (): Promise<ReparticaoResumo[]> => 
 export async function getReparticaoContexto(
   usuario?: UsuarioSessao | null,
   grupoAtivo?: GrupoResumo | null,
+  tela?: string | null,
 ): Promise<{ lista: ReparticaoResumo[]; ativa: ReparticaoResumo | null }> {
   const u = usuario === undefined ? await getUsuarioAtual() : usuario;
   let lista: ReparticaoResumo[];
@@ -122,7 +140,7 @@ export async function getReparticaoContexto(
   } else {
     const grupo = grupoAtivo === undefined ? await getGrupoAtivo(u) : grupoAtivo;
     if (!grupo || !u) return { lista: [], ativa: null };
-    lista = await reparticoesDoMembro(grupo, u.id);
+    lista = await reparticoesDoMembro(grupo, u.id, tela);
   }
   if (lista.length === 0) return { lista, ativa: null };
   const jar = await cookies();
@@ -147,10 +165,15 @@ export type UnidadesDaSessao = {
  * As UNIDADES da sessão numa chamada (antes, "sem unidade" virava `null` = sem filtro: quem não tinha grupo via a Mesa
  * inteira, e a "Geral" valia na lista mas era recusada no detalhe).
  */
-export async function unidadesDaSessao(usuario?: UsuarioSessao | null, grupoAtivo?: GrupoResumo | null): Promise<UnidadesDaSessao> {
+export async function unidadesDaSessao(
+  usuario?: UsuarioSessao | null,
+  grupoAtivo?: GrupoResumo | null,
+  /** A TELA dos dados (a chave de `ABAS`): no grupo de "unidade de cadastro", a tela marcada "todas" vê todas. */
+  tela?: string | null,
+): Promise<UnidadesDaSessao> {
   const u = usuario === undefined ? await getUsuarioAtual() : usuario;
   if (!u) return { lista: [], ativa: null, escopo: ESCOPO_NENHUMA, filtro: FILTRO_NENHUMA, acessivel: () => false };
-  const { lista, ativa } = await getReparticaoContexto(u, grupoAtivo);
+  const { lista, ativa } = await getReparticaoContexto(u, grupoAtivo, tela);
   const escopo = escopoDeAcesso(u.admin, lista);
   return { lista, ativa, escopo, filtro: filtroDeLista(u.admin, ativa), acessivel: (rid) => unidadeNoEscopo(escopo, rid) };
 }
@@ -170,4 +193,10 @@ export async function definirReparticaoAtiva(reparticaoId: number): Promise<void
     path: "/",
     maxAge: 30 * 86_400,
   });
+}
+
+/** As telas em que o grupo (no modo "unidade de cadastro") vê TODAS as unidades — o cabeçalho troca a lista nelas. */
+export async function telasTodasDoGrupo(grupoId: number): Promise<string[]> {
+  const [g] = await getDb().select({ m: grupos.modoUnidades, e: grupos.escopoTelas }).from(grupos).where(eq(grupos.id, grupoId)).limit(1);
+  return g ? telasComTodas(g.m, lerEscopoTelas(g.e)) : [];
 }

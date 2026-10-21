@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   automacaoFluxos,
   cargos,
@@ -17,7 +17,7 @@ import {
   reparticoes,
   usuarios,
 } from "@/db/schema";
-import { type Acesso, componenteLibera, podeTela } from "./acesso";
+import { type Acesso, componenteLibera, orcamentosDoAcesso, podeTela } from "./acesso";
 import { linkEvento } from "./calendario-core";
 import { getDb } from "./db";
 import { dataIsoBrasilia, dataBR } from "./format";
@@ -40,6 +40,7 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
 
   if (tipo === "lancamento") {
     if (!podeTela(a, "orcamento").visualizar || !componenteLibera(a, "orcamento.lancamentos")) return null;
+    const orcs = orcamentosDoAcesso(a);
     const ls = await db
       .select({
         id: orcamentoItens.id,
@@ -54,7 +55,10 @@ export async function pesquisarOutros(a: Acesso, tipo: TipoPesquisa, q: string, 
       .from(orcamentoItens)
       .innerJoin(orcamentos, eq(orcamentos.id, orcamentoItens.orcamentoId))
       .where(
-        casaTermos([orcamentoItens.ficha, orcamentoItens.acao, orcamentoItens.nomeElemento, orcamentoItens.codigoElemento, orcamentoItens.unidade, orcamentoItens.orgao, orcamentoItens.funcao, orcamentoItens.programa, orcamentoItens.fonte], padroes),
+        and(
+          orcs ? inArray(orcamentoItens.orcamentoId, [...orcs, 0]) : undefined,
+          casaTermos([orcamentoItens.ficha, orcamentoItens.acao, orcamentoItens.nomeElemento, orcamentoItens.codigoElemento, orcamentoItens.unidade, orcamentoItens.orgao, orcamentoItens.funcao, orcamentoItens.programa, orcamentoItens.fonte], padroes),
+        ),
       )
       .orderBy(desc(orcamentos.ano), orcamentoItens.sequencial)
       .limit(LIM);

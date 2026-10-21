@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { reparticoes, usuarioGrupos, usuarios } from "@/db/schema";
+import { reparticoes, usuarioGrupos, usuarioReparticoes, usuarios } from "@/db/schema";
 import { todosOsGruposComAbas } from "@/lib/acesso";
 import { exigirAdmin } from "@/lib/api-auth";
 import { papelDoUsuarioSql } from "@/lib/auth";
@@ -19,7 +19,7 @@ export async function GET() {
   if ("erro" in guard) return guard.erro;
 
   const db = getDb();
-  const [lista, vinculos, unidades, cargosLista, papeis, grupos, integ] = await Promise.all([
+  const [lista, vinculos, unidades, cargosLista, papeis, grupos, integ, outrasRows] = await Promise.all([
     db
       .select({
         id: usuarios.id,
@@ -58,7 +58,11 @@ export async function GET() {
     opcoesPapel(),
     todosOsGruposComAbas(),
     getIntegracoes(),
+    // As unidades ADICIONAIS de cada pessoa (a principal vem em `reparticaoId`).
+    db.select({ usuarioId: usuarioReparticoes.usuarioId, reparticaoId: usuarioReparticoes.reparticaoId }).from(usuarioReparticoes),
   ]);
+  const outrasDe = new Map<number, number[]>();
+  for (const v of outrasRows) outrasDe.set(v.usuarioId, [...(outrasDe.get(v.usuarioId) ?? []), v.reparticaoId]);
 
   // Os grupos de cada pessoa (ids, na ordem do nome do grupo — a lista de grupos já vem ordenada).
   const ordem = new Map(grupos.map((g, i) => [g.id, i]));
@@ -72,6 +76,7 @@ export async function GET() {
       emailVerificado: !!emailVerificado,
       foto: urlFoto(u.id, !!temFoto, versao),
       grupos: gruposDe.get(u.id) ?? [],
+      outrasUnidades: (outrasDe.get(u.id) ?? []).filter((r) => r !== u.reparticaoId),
     })),
     unidades,
     cargos: cargosLista,

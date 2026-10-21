@@ -1,4 +1,4 @@
-import { retirado } from "./papeis-componentes-core";
+import { comFuncoesDoGrupo, type ComponentesRetirados, lerFuncoesOff, retirado } from "./papeis-componentes-core";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
@@ -36,7 +36,17 @@ import {
 const COOKIE_GRUPO = "pca_grupo";
 
 /** O grupo com as TELAS que abre e os PCAs que acessa (`pcas` null = todos). */
-export type GrupoAcesso = { id: number; nome: string; abas: Tela[]; pcas: number[] | null; chat: boolean };
+export type GrupoAcesso = {
+  id: number;
+  nome: string;
+  abas: Tela[];
+  pcas: number[] | null;
+  /** Os ORÇAMENTOS do grupo (`null` = todos). */
+  orcamentos: number[] | null;
+  /** As FUNÇÕES das telas desligadas no grupo ("tela.funcao"). */
+  funcoesOff: string[];
+  chat: boolean;
+};
 
 export type Acesso = {
   u: UsuarioSessao;
@@ -65,15 +75,17 @@ function lerAbas(json: string | null): Tela[] {
   }
 }
 
-const COLUNAS_GRUPO = { id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat };
+const COLUNAS_GRUPO = { id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat, orcamentos: grupos.orcamentos, funcoesOff: grupos.funcoesOff };
 
 /** As TELAS do grupo vêm dos MÓDULOS dele (o grupo antigo, das telas avulsas — `telasDoGrupo`). */
-function paraAcesso(linhas: { id: number; nome: string; abas: string; pcas: string | null; modulos: string | null; chat: boolean }[], modulos: Modulo[]): GrupoAcesso[] {
+function paraAcesso(linhas: { id: number; nome: string; abas: string; pcas: string | null; modulos: string | null; chat: boolean; orcamentos: string | null; funcoesOff: string | null }[], modulos: Modulo[]): GrupoAcesso[] {
   return linhas.map((g) => ({
     id: g.id,
     nome: g.nome,
     abas: telasDoGrupo(modulos, lerModulosGrupo(g.modulos), lerAbas(g.abas)),
     pcas: lerPcasGrupo(g.pcas),
+    orcamentos: lerPcasGrupo(g.orcamentos),
+    funcoesOff: lerFuncoesOff(g.funcoesOff),
     chat: g.chat,
   }));
 }
@@ -145,6 +157,25 @@ export function podePca(a: Acesso | null, pcaId: number): boolean {
   return s == null || s.has(pcaId);
 }
 
+/** Os ORÇAMENTOS que a pessoa acessa no grupo ATIVO — `null` = todos (o ADM, ou o grupo sem restrição). */
+export function orcamentosDoAcesso(a: Acesso | null): Set<number> | null {
+  if (!a || a.u.admin) return null;
+  const lista = a.grupoAtivo?.orcamentos;
+  return lista == null ? null : new Set(lista);
+}
+
+/** O orçamento está entre os que a pessoa acessa no grupo ativo? */
+export function podeOrcamento(a: Acesso | null, orcamentoId: number): boolean {
+  const s = orcamentosDoAcesso(a);
+  return s == null || s.has(orcamentoId);
+}
+
+/** Os componentes retirados pelo PAPEL + as funções desligadas no GRUPO ATIVO (o ADM = nenhum). */
+export function componentesDoAcesso(a: Acesso): ComponentesRetirados {
+  if (a.u.admin) return {};
+  return comFuncoesDoGrupo(a.u.papel.detalhes.componentes, a.grupoAtivo?.funcoesOff ?? []);
+}
+
 /** As ações que a tela CALENDÁRIO também libera nas tarefas de um quadro (a tarefa e os eventos se mexem por ela). */
 const PELA_AGENDA: readonly AcaoPapel[] = ["visualizar", "manipular", "excluir"];
 
@@ -198,7 +229,7 @@ export function podeMesa(a: Acesso): PodeMesa {
 
 /** O componente da tela deixa a ação? (o Administrador sempre — regra firme). Junte com `podeTela` para o efetivo. */
 export function componenteLibera(a: Acesso, chave: string, acao: AcaoPapel = "visualizar"): boolean {
-  return !retirado(a.u.papel.detalhes.componentes, chave, acao, a.u.admin);
+  return !retirado(componentesDoAcesso(a), chave, acao, a.u.admin);
 }
 
 /** Os DETALHES do papel resolvidos para as Mesas (o Administrador = tudo, regra firme). */

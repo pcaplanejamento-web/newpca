@@ -277,6 +277,13 @@ export const grupos = sqliteTable("grupos", {
   /** De onde vêm as unidades dos membros: `lista` = as escolhidas (`grupo_reparticoes`) · `cadastro` = a unidade de
    * cadastro de cada pessoa (`usuarios.reparticao_id`) — migração 0112. */
   modoUnidades: text("modo_unidades", { enum: ["lista", "cadastro"] }).notNull().default("lista"),
+  /** No modo `cadastro`, as telas em que o grupo vê TODAS as unidades (JSON {tela: "todas"}; ausente = de cadastro) —
+   * migração 0119. */
+  escopoTelas: text("escopo_telas"),
+  /** As FUNÇÕES desligadas nas telas do grupo (JSON string[] de chaves "tela.funcao"; NULL = todas) — migração 0120. */
+  funcoesOff: text("funcoes_off"),
+  /** Os ORÇAMENTOS do grupo (JSON number[]; NULL = todos) — migração 0120. */
+  orcamentos: text("orcamentos"),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),
   atualizadoEm: text("atualizado_em").default(sql`(CURRENT_TIMESTAMP)`),
 });
@@ -412,6 +419,20 @@ export const grupoReparticoes = sqliteTable(
       .references(() => reparticoes.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.grupoId, t.reparticaoId] })],
+);
+
+/** As unidades de cadastro ADICIONAIS da pessoa (a principal é `usuarios.reparticao_id`) — migração 0119. */
+export const usuarioReparticoes = sqliteTable(
+  "usuario_reparticoes",
+  {
+    usuarioId: integer("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    reparticaoId: integer("reparticao_id")
+      .notNull()
+      .references(() => reparticoes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.reparticaoId] })],
 );
 
 /**

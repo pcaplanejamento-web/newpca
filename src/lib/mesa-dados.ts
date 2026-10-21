@@ -48,7 +48,7 @@ export async function contextoBanners(u: UsuarioSessao | null) {
   // O acesso já foi lido pela página (memorizado na requisição): o GRUPO ATIVO dele evita reler os grupos da pessoa.
   const acesso = await getAcesso();
   // As unidades ACESSÍVEIS (com a "Geral" no grupo ou o ADM, todas — os banners conferem e editam o de qualquer uma).
-  const un = await unidadesDaSessao(u, acesso ? acesso.grupoAtivo : undefined);
+  const un = await unidadesDaSessao(u, acesso ? acesso.grupoAtivo : undefined, "dfd");
   const lista = await unidadesAcessiveis(un);
   const ids = lista.map((r) => r.id);
   const [respMap, matchMap, pcas, regras, orgaos] = await Promise.all([

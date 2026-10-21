@@ -24,6 +24,8 @@ import { historicoDfd, historicoProtocolo } from "./auditoria";
 import type { DfdPrevisao } from "./calendario-core";
 import type { LinhaHistorico } from "./auditoria-core";
 import { TIPO_DFD_ROTULO, TIPOS_DFD } from "./avaliacao-core";
+import { listarPadronizacao } from "./padronizacao";
+import { criarClassificador, NAO_CLASSIFICADO } from "./padronizacao-core";
 import { getDb } from "./db";
 import { getDfd } from "./dfd";
 import { prioridadeDoDfd } from "./dfd-tratamento";
@@ -576,11 +578,13 @@ const vazioDash = (): DashboardPca => ({
  */
 export async function itensConsolidados(pca: PcaEspaco) {
   const db = getDb();
-  const [reais, previa, numeros] = await Promise.all([
+  const [reais, previa, numeros, padr] = await Promise.all([
     vinculosDoPca(pca.id),
     vinculosPrevia(pca),
     db.select({ dfdItemId: pcaItens.dfdItemId, sequencial: pcaItens.sequencial, ativo: pcaItens.ativo }).from(pcaItens).where(eq(pcaItens.pcaId, pca.id)),
-  ]);
+    listarPadronizacao().catch(() => ({ unidades: [], classificacoes: [] })),
+  ]);  const classificar = criarClassificador(padr.classificacoes, padr.unidades);
+
   // Com a PRÉVIA, os DFDs ainda não incorporados entram depois dos reais (a MESMA consolidação); sem ela, `previa` = [].
   const vs = [...reais, ...previa];
   const cons = consolidarPca(vs);
@@ -601,7 +605,7 @@ export async function itensConsolidados(pca: PcaEspaco) {
       protocoloSigla: string | null;
     }
   >();
-  const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null; itemNumero: number | null })[] = [];
+  const itens: (ItemDashboard & { dfdId: number; reparticaoId: number | null; itemNumero: number | null; tipoDfd: string | null })[] = [];
   // Os lotes em PARALELO (cada um: os DFDs + os itens com SÓ as colunas usadas); a PREVISÃO sai UMA vez por DFD (o JSON
   // das seções pode ser grande — lido por item, milhares de itens estouravam a CPU do Worker).
   const previsaoPorDfd = new Map<number, ReturnType<typeof previsaoDoDfd>>();
@@ -678,7 +682,9 @@ export async function itensConsolidados(pca: PcaEspaco) {
         quantidade: it.quantidade,
         valorUnitario: it.valorUnitario,
         valorTotal: Number(it.valorTotal ?? 0),
-        classificacao: curto && (TIPOS_DFD as readonly string[]).includes(curto) ? TIPO_DFD_ROTULO[curto as (typeof TIPOS_DFD)[number]] : "Sem tipo",
+        // CLASSIFICAÇÃO = a do item pelo cadastro do Catálogo (palavra-chave/unidade); o TIPO é o do DFD — campos distintos.
+        classificacao: classificar(it.descricao, it.unidade)?.classificacao.nome ?? NAO_CLASSIFICADO,
+        tipoDfd: curto && (TIPOS_DFD as readonly string[]).includes(curto) ? TIPO_DFD_ROTULO[curto as (typeof TIPOS_DFD)[number]] : null,
         previsao: previsaoPorDfd.get(it.dfdId) ?? previsaoDoDfd([], pca.ano),
         unidade: d?.sigla ?? null,
         origem: d ? `DFD ${d.numero}` : null,
@@ -717,6 +723,7 @@ function itemRowConsolidado(i: Consolidados["itens"][number], meta: Consolidados
     valorReferencia: i.valorUnitario,
     valorTotal: i.valorTotal,
     classificacao: i.classificacao,
+    tipoDfd: i.tipoDfd,
     dataDesejada: p && !("anual" in p) ? `${p.ano}-${String(p.mes).padStart(2, "0")}-01` : null,
     codigo: i.unidade,
     municipio: i.origem,
