@@ -1,5 +1,12 @@
-import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoGradeEspacos } from "@/components/CartaoEspacoEsqueleto";
+import { EsqueletoTela, EsqueletoTitulo } from "@/components/EsqueletoTela";
 
+/** A Automação: o título e a grade dos cards dos fluxos. */
 export default function Carregando() {
-  return <EsqueletoTela variante="espacos" />;
+  return (
+    <EsqueletoTela>
+      <EsqueletoTitulo />
+      <EsqueletoGradeEspacos quantos={6} />
+    </EsqueletoTela>
+  );
 }

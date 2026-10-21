@@ -8,7 +8,7 @@ import { Modal } from "./Modal";
 import { EditorConjunto, GradeQuadros, SecoesDeQuadros, useConjuntosQuadros } from "./SecoesQuadros";
 import type { QuadroCard as QuadroCardDados } from "@/lib/tarefas";
 import { chamarPadronizacao as chamar } from "@/lib/padronizacao-cliente";
-import { Skeleton } from "./Skeleton";
+import { EsqueletoGradeEspacos } from "./CartaoEspacoEsqueleto";
 import { toast } from "./Toast";
 
 /** O que o painel carrega: os quadros, as PASTAS que a pessoa vê (+ a ordem dela) e quem ela é (as regras das pastas). */
@@ -81,10 +81,8 @@ function PainelQuadros({
 
   if (!dados)
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3" aria-busy="true">
-        {Array.from({ length: 8 }, (_, i) => (
-          <Skeleton key={i} className="h-60 w-full" />
-        ))}
+      <div aria-busy="true">
+        <EsqueletoGradeEspacos espaco="gap-3" />
       </div>
     );
   return <ConteudoPainel quadros={dados.quadros} pastasIniciais={dados.conjuntos} ator={dados.ator} aoMudar={carregar} grade={{ favoritos, onFavorito, atual, aba, onAbrir: onEscolhido }} />;

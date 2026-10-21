@@ -70,10 +70,17 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     layout do painel) consulta as versões ao voltar à janela e a cada 60 s com a aba à vista (NUNCA a cada navegação) e só dá `router.refresh()` quando
     a da ÁREA da tela aberta MUDOU (gravação de outra pessoa); a mudança de outra área fica guardada e recarrega ao ir a uma
     tela dela.
-  - **Esqueleto SÓ QUANDO DEMORA (v1.131.0 → v1.131.1):** `loading.tsx` de 3 linhas (só o **`EsqueletoTela`**, sem dado,
-    sem servidor) na forma REAL de cada tela — `mesa` (barra + tabela até o fim do display) · `pca`/`orcamento`/`espacos`
-    (título + a grade de cartões de cada uma, nas mesmas medidas) · `calendario` · `abas` (Configurações, Perfil) · `painel`
-    (Verificação, Integrações, Aparência). Fica INVISÍVEL nos primeiros 450 ms (`.esqueleto-tela`, `globals.css`): a tela que
+  - **Esqueleto SÓ QUANDO DEMORA (v1.131.0 → v1.132.1) — CADA COMPONENTE TEM O SEU:** o esqueleto mora JUNTO do componente
+    (no mesmo arquivo quando ele não é "use client" — `EsqueletoPcaCard`/`GRADE_PCAS` em `PcaCard.tsx`, `EsqueletoOrcamentoCard`/
+    `GRADE_ORCAMENTOS` em `OrcamentoCard.tsx`, `EsqueletoControle`/`SkeletonCartao` em `Skeleton.tsx`; senão num
+    `<Componente>Esqueleto.tsx` leve ao lado — `EsqueletoTabela` (`DataTableEsqueleto`), `EsqueletoCartaoEspaco`/
+    `EsqueletoGradeEspacos`/`COLUNAS_ESPACOS` (`CartaoEspacoEsqueleto` — a grade dos quadros, catálogos e automações vem
+    daqui), `EsqueletoTabsLaterais` (`TabsEsqueleto`), `EsqueletoCalendario` (`CalendarioEsqueleto`), `EsqueletoSegmented`
+    (`SegmentedEsqueleto`), como o `DashboardMesaEsqueleto`) e usa as MESMAS classes/medidas/grade do componente: mudou o
+    componente, muda o esqueleto. O `loading.tsx` de cada tela só COMPÕE esses esqueletos dentro do **`EsqueletoTela`** (a
+    moldura: atraso + `aria-busy`; `cheia` = até o fim do display) + `EsqueletoTitulo`; o teste exige que ele importe só de
+    arquivos sem "use client" (o esqueleto vem no HTML na hora, sem baixar o código da tela). Esqueleto de componente novo
+    = no lugar dele, nunca medidas copiadas numa tela. Fica INVISÍVEL nos primeiros 450 ms (`.esqueleto-tela`, `globals.css`): a tela que
     chega antes entra direto, sem piscar; as já vistas voltam do cache sem passar por ele. NUNCA em página que só redireciona,
     no `design-system`, em `[id]` nem nas telas do ADM que carregam no navegador e já têm o esqueleto delas (Usuários, Grupos,
     Auditoria, Armazenamento, Órgãos) — `tests/versao-dados-core.test.ts` confere. Trocar só o `?aba=`/

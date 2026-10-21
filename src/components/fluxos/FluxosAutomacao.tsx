@@ -56,7 +56,7 @@ import { AjudaNo } from "./AjudaNo";
 import { IconeNo } from "./IconeNo";
 import { Ajuda } from "../Ajuda";
 import { useAlturaTela } from "../AlturaCheia";
-import { SkeletonCartao } from "../Skeleton";
+import { EsqueletoGradeEspacos } from "../CartaoEspacoEsqueleto";
 import { CartaoFluxo, GRADE_CARTOES, LARGURA_CARTAO } from "./CartaoFluxo";
 import { AjudaDoFluxo, ConfigFluxo } from "./ConfigFluxo";
 import { PainelFluxo } from "./PainelFluxo";
@@ -993,10 +993,8 @@ function ListaFluxos({
       )}
       <div ref={rolo} className="-m-1 min-w-0 flex-1 overflow-y-auto overscroll-contain p-1" style={{ height: alturaRolo ?? undefined }}>
         {!fluxos || !col ? (
-          <div className={GRADE_CARTOES} aria-busy="true">
-            {[0, 1, 2].map((i) => (
-              <SkeletonCartao key={i} linhas={3} />
-            ))}
+          <div aria-busy="true">
+            <EsqueletoGradeEspacos quantos={3} />
           </div>
         ) : (
           <div ref={grade} className="grid auto-rows-fr" style={estiloGrade}>

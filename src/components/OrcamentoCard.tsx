@@ -3,6 +3,10 @@ import { brl, dataBR, num } from "@/lib/format";
 import type { OrcamentoResumo } from "@/lib/orcamento";
 import { dotacaoAtualizada, pctEmpenhado } from "@/lib/orcamento-indicadores";
 import { IconPlus, IconWallet } from "./icons";
+import { Skeleton } from "./Skeleton";
+
+/** A GRADE dos cards de orçamento (`auto-fill`, card de no mínimo 20rem) — a MESMA na tela e no esqueleto. */
+export const GRADE_ORCAMENTOS = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-[var(--gap-block)]";
 
 /** Uma linha "rótulo ........ valor completo" — o valor nunca é cortado: sem espaço, desce para a linha de baixo. */
 function Linha({ rotulo, valor, sinal, tom }: { rotulo: string; valor: number; sinal?: "+" | "−"; tom?: string }) {
@@ -120,5 +124,39 @@ export function OrcamentoNovoCard({ onClick }: { onClick: () => void }) {
       </span>
       <span className="text-sm font-semibold">Importar orçamento</span>
     </button>
+  );
+}
+
+/**
+ * Esqueleto do `OrcamentoCard` — a MESMA moldura e os mesmos blocos: ícone + nome + ano, a dotação atualizada, a barra da
+ * execução, a composição e os números da abrangência.
+ */
+export function EsqueletoOrcamentoCard() {
+  return (
+    <div className="flex h-full w-full flex-col gap-3 rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
+      <div className="flex items-start gap-3">
+        <Skeleton className="h-10 w-10 shrink-0 rounded-control" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Skeleton className="h-2.5 w-20 rounded-sm" />
+          <Skeleton className="h-4 w-4/5 rounded-sm" />
+        </div>
+        <Skeleton className="h-8 w-14 shrink-0 rounded-control" />
+      </div>
+      <div className="space-y-1.5">
+        <Skeleton className="h-3 w-28 rounded-sm" />
+        <Skeleton className="h-6 w-2/3 rounded-sm" />
+      </div>
+      <Skeleton className="h-2 w-full rounded-full" />
+      <div className="space-y-1.5">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-3 w-full rounded-sm" />
+        ))}
+      </div>
+      <div className="mt-auto grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-1.5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-11 rounded-control" />
+        ))}
+      </div>
+    </div>
   );
 }

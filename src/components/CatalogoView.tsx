@@ -24,6 +24,7 @@ import { useConfirmacao } from "./Confirmacao";
 import { HistoricoCompraModal } from "./HistoricoCompraView";
 import { ImportarHistorico } from "./ImportarHistorico";
 import { QuadroNovoCard } from "./QuadroCard";
+import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { StatMini } from "./StatMini";
 import { CelulaCopiavel } from "./BotaoCopiar";
 import { Button } from "./Button";
@@ -75,7 +76,7 @@ type Preview = {
 };
 
 /** A grade dos cards — a MESMA de Tarefas (colunas de no mínimo 15rem: o card nunca muda de forma). */
-const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3";
+const GRADE = `grid ${COLUNAS_ESPACOS} gap-3`;
 
 /**
  * Módulo CATÁLOGO. Quatro visões (Segmented, com transição suave): **Catálogo** (cards
