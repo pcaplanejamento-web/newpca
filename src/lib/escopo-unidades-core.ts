@@ -172,3 +172,66 @@ export function unidadeNoEscopo(escopo: EscopoUnidades, reparticaoId: number | n
   if (escopo.tipo === "nenhuma") return false;
   return reparticaoId == null || escopo.ids.includes(reparticaoId);
 }
+
+// ---------------------------------------------------------------- FONTE DOS DADOS de cada aba (por grupo)
+
+/** De onde vêm os dados de uma aba: `unica` = SEMPRE a soma de todas as unidades que a pessoa acessa (ignora a unidade
+ * escolhida no cabeçalho) · `selecionada` = a unidade do cabeçalho (o padrão). Não é permissão — só a fonte dos dados. */
+export type FonteAba = "unica" | "selecionada";
+
+/** As abas de cada tela cujos dados seguem a unidade do cabeçalho (chave = "tela.aba"). */
+export const ABAS_FONTE: Readonly<Record<string, readonly { aba: string; rotulo: string }[]>> = {
+  dfd: [{ aba: "mesa", rotulo: "Mesa (protocolos, DFDs e itens)" }],
+  pca: [
+    { aba: "lista", rotulo: "Cards dos PCAs" },
+    { aba: "dashboard", rotulo: "Dashboard" },
+    { aba: "orcamento", rotulo: "Orçamento" },
+    { aba: "mesa", rotulo: "Mesa do PCA" },
+  ],
+  orcamento: [
+    { aba: "lista", rotulo: "Cards dos orçamentos" },
+    { aba: "lancamentos", rotulo: "Lançamentos" },
+    { aba: "comparativo", rotulo: "Comparativo" },
+  ],
+  catalogo: [{ aba: "itens", rotulo: "Itens e histórico" }],
+  tarefas: [{ aba: "quadros", rotulo: "Tarefas dos quadros" }],
+  calendario: [{ aba: "agenda", rotulo: "Agenda" }],
+};
+
+/** A chave da aba (sem aba = a 1ª da tela). `null` = a tela não tem aba com fonte. */
+export function chaveFonte(tela: string | null | undefined, aba?: string | null): string | null {
+  const abas = tela ? ABAS_FONTE[tela] : undefined;
+  if (!abas?.length) return null;
+  const a = aba && abas.some((x) => x.aba === aba) ? aba : abas[0].aba;
+  return `${tela}.${a}`;
+}
+
+const CHAVES_FONTE = new Set(Object.entries(ABAS_FONTE).flatMap(([t, abas]) => abas.map((a) => `${t}.${a.aba}`)));
+
+/** As abas em fonte ÚNICA (JSON gravado no grupo; inválido = nenhuma). */
+export function lerFontesAbas(json: string | null | undefined): string[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? [...new Set(v.filter((c): c is string => typeof c === "string" && CHAVES_FONTE.has(c)))] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Só as chaves conhecidas das telas do grupo, sem repetir, em ordem. */
+export const compactarFontesAbas = (lista: readonly string[], telas: readonly string[]): string[] =>
+  [...new Set(lista)].filter((c) => CHAVES_FONTE.has(c) && telas.includes(c.split(".")[0])).sort();
+
+/** O filtro da SOMA de todas as unidades que a pessoa acessa (a fonte única). */
+export function filtroDoEscopo(escopo: EscopoUnidades): FiltroLista {
+  if (escopo.tipo === "todas") return FILTRO_TODAS;
+  if (escopo.tipo === "nenhuma") return FILTRO_NENHUMA;
+  return escopo.ids.length === 1 ? { tipo: "unidade", id: escopo.ids[0], codigo: "" } : { tipo: "unidades", ids: [...escopo.ids] };
+}
+
+/** O rótulo "Tela · Aba" de uma chave de fonte (auditoria). */
+export function rotuloFonte(chave: string): string {
+  const [t, a] = chave.split(".");
+  return ABAS_FONTE[t]?.find((x) => x.aba === a)?.rotulo ?? chave;
+}

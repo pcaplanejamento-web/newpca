@@ -13,7 +13,7 @@ export default async function PcaPage() {
   const r = await acessoPagina("pca");
   if (r.bloqueio) return r.bloqueio;
   // A unidade do CABEÇALHO: os totais dos cards só dela (Configurações → Filtro da unidade).
-  const rep = await unidadeDoModulo("pca");
+  const rep = await unidadeDoModulo("pca", undefined, undefined, "lista");
   const [todos, filtro] = await Promise.all([listarPcasCards(rep.id), getPcaFiltro()]);
   // Só os PCAs do GRUPO ATIVO (Grupos → PCAs do grupo; o ADM, todos).
   const permitidos = pcasDoAcesso(r.acesso);

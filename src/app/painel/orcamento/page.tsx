@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function OrcamentoPage() {
   const r = await acessoPagina("orcamento");
   if (r.bloqueio) return r.bloqueio;
-  const [filtro, cadastrados, rep] = await Promise.all([getPcaFiltro(), listarOrcamentos(), unidadeDoModulo("orcamento")]);
+  const [filtro, cadastrados, rep] = await Promise.all([getPcaFiltro(), listarOrcamentos(), unidadeDoModulo("orcamento", undefined, undefined, "lista")]);
   // Só os orçamentos do grupo ativo (Grupos → "Orçamentos do grupo"; null = todos).
   const doGrupo = orcamentosDoAcesso(r.acesso);
   const todos = doGrupo ? cadastrados.filter((o) => doGrupo.has(o.id)) : cadastrados;

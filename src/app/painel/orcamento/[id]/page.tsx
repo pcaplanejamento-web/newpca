@@ -36,7 +36,7 @@ export default async function OrcamentoEspacoPage({
   const { pode, acesso } = r;
   const id = Number((await params).id);
   const sp = await searchParams;
-  const [orcBanco, rep] = await Promise.all([Number.isInteger(id) && id > 0 ? getOrcamento(id) : null, unidadeDoModulo("orcamento")]);
+  const [orcBanco, rep] = await Promise.all([Number.isInteger(id) && id > 0 ? getOrcamento(id) : null, unidadeDoModulo("orcamento", undefined, undefined, sp.aba === "comparativo" ? "comparativo" : "lancamentos")]);
   if (!orcBanco) notFound();
   if (!podeOrcamento(acesso, orcBanco.id))
     return <AcessoRestrito mensagem="Este orçamento não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/orcamento", rotulo: "Ver os orçamentos" }} />;

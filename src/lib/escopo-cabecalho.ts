@@ -56,8 +56,14 @@ const TELA_DO_MODULO: Record<ModuloEscopo, string> = {
 };
 
 /** A unidade do CABEÇALHO que filtra um módulo (a config do ADM decide se o módulo obedece). */
-export async function unidadeDoModulo(modulo: ModuloEscopo, u?: UsuarioSessao | null, grupoAtivo?: GrupoResumo | null): Promise<UnidadeDoModulo> {
-  const [un, cfg] = await Promise.all([unidadesDaSessao(u, grupoAtivo, TELA_DO_MODULO[modulo]), getConfigEscopo()]);
+export async function unidadeDoModulo(
+  modulo: ModuloEscopo,
+  u?: UsuarioSessao | null,
+  grupoAtivo?: GrupoResumo | null,
+  /** A aba da tela (a fonte dos dados dela pode ser a soma de todas as unidades — Grupos → "Fonte dos dados"). */
+  aba?: string,
+): Promise<UnidadeDoModulo> {
+  const [un, cfg] = await Promise.all([unidadesDaSessao(u, grupoAtivo, TELA_DO_MODULO[modulo], aba), getConfigEscopo()]);
   const id = filtroDoModulo(cfg, modulo, idDoFiltro(un.filtro));
   const ativa = typeof id === "number" ? un.ativa : null;
   return { id, sigla: ativa?.codigo ?? null, nome: ativa?.nome ?? null, cfg };

@@ -1,11 +1,10 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { grupoReparticoes, grupos, orcamentos, pcas, reparticoes, usuarioGrupos, usuarioReparticoes, usuarios } from "@/db/schema";
-import { compactarEscopoTelas, lerEscopoTelas } from "@/lib/escopo-unidades-core";
+import { compactarEscopoTelas, compactarFontesAbas, lerEscopoTelas, lerFontesAbas } from "@/lib/escopo-unidades-core";
 import { abasConhecidas } from "@/lib/abas";
 import { getModulosFresco } from "@/lib/modulos";
 import { lerModulosGrupo, motivoModulosInvalidos, telasDoGrupo, telasDosModulos } from "@/lib/modulos-core";
 import { lerPcasGrupo } from "@/lib/acesso";
-import { compactarFuncoesOff, lerFuncoesOff } from "@/lib/papeis-componentes-core";
 import { exigirAdmin } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { getDb } from "@/lib/db";
@@ -20,7 +19,7 @@ export async function GET() {
   if ("erro" in guard) return guard.erro;
   const db = getDb();
   const [lista, listaPcas, listaOrcs, users, reps, vincUsu, vincRep, modulos, extras] = await Promise.all([
-    db.select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat, modoUnidades: grupos.modoUnidades, escopoTelas: grupos.escopoTelas, orcamentos: grupos.orcamentos, funcoesOff: grupos.funcoesOff }).from(grupos).orderBy(grupos.nome),
+    db.select({ id: grupos.id, nome: grupos.nome, abas: grupos.abas, pcas: grupos.pcas, modulos: grupos.modulos, chat: grupos.chat, modoUnidades: grupos.modoUnidades, escopoTelas: grupos.escopoTelas, orcamentos: grupos.orcamentos, fontesAbas: grupos.fontesAbas }).from(grupos).orderBy(grupos.nome),
     // Os PCAs que o grupo pode escolher (o mais recente primeiro).
     db.select({ id: pcas.id, nome: pcas.nome, ano: pcas.ano }).from(pcas).orderBy(desc(pcas.ano), desc(pcas.id)),
     db.select({ id: orcamentos.id, nome: orcamentos.nome, ano: orcamentos.ano }).from(orcamentos).orderBy(desc(orcamentos.ano), desc(orcamentos.id)),
@@ -68,7 +67,7 @@ export async function GET() {
       escopoTelas: lerEscopoTelas(g.escopoTelas),
       pcas: lerPcasGrupo(g.pcas),
       orcamentos: lerPcasGrupo(g.orcamentos),
-      funcoesOff: lerFuncoesOff(g.funcoesOff),
+      fontesAbas: lerFontesAbas(g.fontesAbas),
       membros: membrosPorGrupo.get(g.id) ?? [],
       reparticoes: repsPorGrupo.get(g.id) ?? [],
       };
@@ -95,17 +94,17 @@ export async function POST(req: Request) {
   if ("erro" in guard) return guard.erro;
   const corpo = await parseCorpo(grupoCreateSchema, req);
   if ("resp" in corpo) return corpo.resp;
-  const { nome, modulos: mods, chat, pcas: pcasGrupo, orcamentos: orcsGrupo, funcoesOff: funcoesPedidas, membros, reparticoes: reps, modoUnidades, escopoTelas: escopoPedido } = corpo.data;
+  const { nome, modulos: mods, chat, pcas: pcasGrupo, orcamentos: orcsGrupo, fontesAbas: funcoesPedidas, membros, reparticoes: reps, modoUnidades, escopoTelas: escopoPedido } = corpo.data;
   const db = getDb();
   const modulos = await getModulosFresco();
   const invalido = motivoModulosInvalidos(mods, modulos) ?? (await motivoIdsInvalidos(db, corpo.data));
   if (invalido) return erro(invalido, 422);
   const abas = telasDosModulos(modulos, mods);
   const escopoTelas = compactarEscopoTelas(escopoPedido, abas);
-  const funcoesOff = compactarFuncoesOff(funcoesPedidas, abas);
+  const fontesAbas = compactarFontesAbas(funcoesPedidas, abas);
   const [row] = await db
     .insert(grupos)
-    .values({ nome, modulos: JSON.stringify(mods), abas: JSON.stringify(abas), chat, modoUnidades, escopoTelas: JSON.stringify(escopoTelas), pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo), orcamentos: orcsGrupo == null ? null : JSON.stringify(orcsGrupo), funcoesOff: funcoesOff.length ? JSON.stringify(funcoesOff) : null })
+    .values({ nome, modulos: JSON.stringify(mods), abas: JSON.stringify(abas), chat, modoUnidades, escopoTelas: JSON.stringify(escopoTelas), pcas: pcasGrupo == null ? null : JSON.stringify(pcasGrupo), orcamentos: orcsGrupo == null ? null : JSON.stringify(orcsGrupo), fontesAbas: fontesAbas.length ? JSON.stringify(fontesAbas) : null })
     .returning({ id: grupos.id });
   const grupoId = row.id;
   // Pessoas + unidades num LOTE (tudo ou nada); se falhar, o grupo recém-criado sai (nada fica pela metade).
@@ -122,8 +121,8 @@ export async function POST(req: Request) {
     acao: "criar",
     entidade: "grupo",
     entidadeId: grupoId,
-    resumo: `Grupo "${nome}" criado (${mods.length} módulo(s), ${abas.length} tela(s), chat ${chat ? "liberado" : "bloqueado"}, ${pcasGrupo == null ? "todos os PCAs" : `${pcasGrupo.length} PCA(s)`}, ${orcsGrupo == null ? "todos os orçamentos" : `${orcsGrupo.length} orçamento(s)`}, ${funcoesOff.length} função(ões) desligada(s), ${membros.length} pessoa(s), ${modoUnidades === "cadastro" ? "unidade de cadastro de cada pessoa" : `${reps.length} unidade(s)`})`,
-    depois: { nome, modulos: mods, abas, chat, pcas: pcasGrupo, orcamentos: orcsGrupo, funcoesOff, membros, reparticoes: reps, modoUnidades, escopoTelas },
+    resumo: `Grupo "${nome}" criado (${mods.length} módulo(s), ${abas.length} tela(s), chat ${chat ? "liberado" : "bloqueado"}, ${pcasGrupo == null ? "todos os PCAs" : `${pcasGrupo.length} PCA(s)`}, ${orcsGrupo == null ? "todos os orçamentos" : `${orcsGrupo.length} orçamento(s)`}, ${fontesAbas.length} aba(s) em fonte única, ${membros.length} pessoa(s), ${modoUnidades === "cadastro" ? "unidade de cadastro de cada pessoa" : `${reps.length} unidade(s)`})`,
+    depois: { nome, modulos: mods, abas, chat, pcas: pcasGrupo, orcamentos: orcsGrupo, fontesAbas, membros, reparticoes: reps, modoUnidades, escopoTelas },
   });
   return ok({ id: grupoId });
 }

@@ -286,6 +286,7 @@ export const grupos = sqliteTable("grupos", {
   escopoTelas: text("escopo_telas"),
   /** As FUNÇÕES desligadas nas telas do grupo (JSON string[] de chaves "tela.funcao"; NULL = todas) — migração 0120. */
   funcoesOff: text("funcoes_off"),
+    fontesAbas: text("fontes_abas"),
   /** Os ORÇAMENTOS do grupo (JSON number[]; NULL = todos) — migração 0120. */
   orcamentos: text("orcamentos"),
   criadoEm: text("criado_em").default(sql`(CURRENT_TIMESTAMP)`),

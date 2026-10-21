@@ -102,7 +102,7 @@ export default async function PcaEspacoPage({
  * Dashboard (abaixo dos KPIs). Com a PRÉVIA ligada, a explicação fica no (?) ao lado das abas.
  */
 async function abaDashboard(pca: PcaEspaco) {
-  const dash = await dashboardDoPca(pca, undefined, (await unidadeDoModulo("pca")).id);
+  const dash = await dashboardDoPca(pca, undefined, (await unidadeDoModulo("pca", undefined, undefined, "dashboard")).id);
   if (dash.resumo.count === 0)
     return (
       <p className="rounded-card border border-dashed border-border-2 bg-surface p-10 text-center text-sm text-muted">
@@ -143,7 +143,7 @@ async function abaDashboard(pca: PcaEspaco) {
  * tela do orçamento (na visão da Configuração do PCA, trocável) e o PCA × Orçamento por unidade. Um só orçamento do ano.
  */
 async function abaOrcamento(pca: PcaEspaco, usuarioId: number | null, pode: PodeTela, podeConfigurarOrcamento: boolean) {
-  const [ref, rep] = await Promise.all([orcamentoDoAno(pca.ano), unidadeDoModulo("pca")]);
+  const [ref, rep] = await Promise.all([orcamentoDoAno(pca.ano), unidadeDoModulo("pca", undefined, undefined, "orcamento")]);
   const repOrc = rep.id === null ? null : { id: rep.id, semVinculo: rep.cfg.orcamentoSemVinculo };
   // As visões vêm com o comparativo; sem orçamento do ano, só a lista (a engrenagem ainda escolhe a visão).
   const [orc, comp, visoesSemOrc] = await Promise.all([

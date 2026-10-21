@@ -2,9 +2,8 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AbaKey } from "@/lib/abas";
-import { ehCodigoGeral, type EscopoTelas, type ModoUnidades } from "@/lib/escopo-unidades-core";
+import { ABAS_FONTE, ehCodigoGeral, type EscopoTelas, type ModoUnidades } from "@/lib/escopo-unidades-core";
 import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
-import { componentesDaTela } from "@/lib/papeis-componentes-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
@@ -40,7 +39,7 @@ type Grupo = {
   /** Os ORÇAMENTOS do grupo (`null` = todos). */
   orcamentos: number[] | null;
   /** As FUNÇÕES das telas desligadas no grupo ("tela.funcao"). */
-  funcoesOff: string[];
+  fontesAbas: string[];
   membros: number[];
   reparticoes: number[];
 };
@@ -79,7 +78,7 @@ export function GruposAdmin() {
   // null = TODOS os PCAs (sem restrição); o conjunto = só esses.
   const [pcasSel, setPcasSel] = useState<Set<number> | null>(null);
   const [orcsSel, setOrcsSel] = useState<Set<number> | null>(null);
-  const [funcoesOff, setFuncoesOff] = useState<Set<string>>(new Set());
+  const [fontesAbas, setFontesAbas] = useState<Set<string>>(new Set());
   const [membros, setMembros] = useState<Set<number>>(new Set());
   const [reps, setReps] = useState<Set<number>>(new Set());
   const [modo, setModo] = useState<ModoUnidades>("lista");
@@ -122,7 +121,7 @@ export function GruposAdmin() {
     setChat(true);
     setPcasSel(null);
     setOrcsSel(null);
-    setFuncoesOff(new Set());
+    setFontesAbas(new Set());
     setMembros(new Set());
     setReps(new Set());
     setModo("lista");
@@ -139,7 +138,7 @@ export function GruposAdmin() {
     setChat(g.chat);
     setPcasSel(g.pcas == null ? null : new Set(g.pcas));
     setOrcsSel(g.orcamentos == null ? null : new Set(g.orcamentos));
-    setFuncoesOff(new Set(g.funcoesOff ?? []));
+    setFontesAbas(new Set(g.fontesAbas ?? []));
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
     setModo(g.modoUnidades ?? "lista");
@@ -174,7 +173,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], orcamentos: orcsSel == null ? null : [...orcsSel], funcoesOff: [...funcoesOff], membros: [...membros], reparticoes: [...reps], modoUnidades: modo, escopoTelas: escopo }),
+        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], orcamentos: orcsSel == null ? null : [...orcsSel], fontesAbas: [...fontesAbas], membros: [...membros], reparticoes: [...reps], modoUnidades: modo, escopoTelas: escopo }),
       });
       const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -341,7 +340,7 @@ export function GruposAdmin() {
             <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
           </fieldset>
           <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
-          <FuncoesPorTela telas={telasGrupo} desligadas={funcoesOff} onChange={setFuncoesOff} />
+          <FontesPorAba telas={telasGrupo} unicas={fontesAbas} onChange={setFontesAbas} />
           {telasGrupo.includes("pca") && (
             <ListaDoGrupo titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
           )}
@@ -511,40 +510,49 @@ function ListaDoGrupo({
 
 /** As FUNÇÕES de cada tela do grupo (abas, visões, relatórios): marcada = ligada. Desligar some com ela para todas as
  * pessoas do grupo (o papel de cada uma ainda pode retirar mais). */
-function FuncoesPorTela({ telas, desligadas, onChange }: { telas: AbaKey[]; desligadas: Set<string>; onChange: (v: Set<string>) => void }) {
-  const comFuncoes = telas.filter((t) => componentesDaTela(t).length > 0);
-  if (!comFuncoes.length) return null;
-  const n = [...desligadas].filter((c) => comFuncoes.some((t) => c.startsWith(`${t}.`))).length;
+function FontesPorAba({ telas, unicas, onChange }: { telas: AbaKey[]; unicas: Set<string>; onChange: (v: Set<string>) => void }) {
+  const comAbas = telas.filter((t) => ABAS_FONTE[t]?.length);
+  if (!comAbas.length) return null;
+  const n = [...unicas].filter((c) => comAbas.includes(c.split(".")[0] as AbaKey)).length;
   return (
     <fieldset>
       <legend className="mb-2 flex items-center gap-1.5 text-[13.5px] font-bold text-text">
-        Funções das telas{n ? ` · ${n} desligada(s)` : " · todas ligadas"}
-        <Ajuda titulo="Funções das telas" compacta>
+        Fonte dos dados{n ? ` · ${n} em fonte única` : " · todas pela unidade selecionada"}
+        <Ajuda titulo="Fonte dos dados" compacta>
           <p>
-            Ligue ou desligue as partes de cada tela para este grupo — ex.: no PCA, o Dashboard, o Orçamento, a Mesa do PCA e o
-            Relatório de variação. A função desligada some para todas as pessoas do grupo; o papel de cada pessoa ainda decide o
-            que ela faz nas que ficam.
+            Para cada aba: <b>Selecionada</b> = os dados seguem a unidade escolhida no cabeçalho; <b>Única</b> = sempre a soma de
+            todas as unidades que a pessoa acessa, qualquer que seja a do cabeçalho. Não muda o que a pessoa pode fazer — só de
+            onde vêm os dados.
           </p>
         </Ajuda>
       </legend>
       <div className="space-y-2 rounded-control border border-border p-2">
-        {comFuncoes.map((t) => (
+        {comAbas.map((t) => (
           <div key={t} className="rounded-control p-1.5">
             <span className="mb-1 block text-[12.5px] font-semibold text-text">{rotuloAba(t)}</span>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {componentesDaTela(t).map((x) => (
-                <Checkbox
-                  key={x.chave}
-                  checked={!desligadas.has(x.chave)}
-                  onChange={() => {
-                    const s = new Set(desligadas);
-                    if (s.has(x.chave)) s.delete(x.chave);
-                    else s.add(x.chave);
-                    onChange(s);
-                  }}
-                  label={<span className="text-[13px] text-text" title={x.descricao}>{x.rotulo}</span>}
-                />
-              ))}
+            <div className="space-y-1.5">
+              {ABAS_FONTE[t].map((x) => {
+                const chave = `${t}.${x.aba}`;
+                return (
+                  <div key={chave} className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[13px] text-text">{x.rotulo}</span>
+                    <Segmented
+                      ariaLabel={`Fonte dos dados: ${x.rotulo}`}
+                      value={unicas.has(chave) ? "unica" : "selecionada"}
+                      onChange={(v) => {
+                        const s = new Set(unicas);
+                        if (v === "unica") s.add(chave);
+                        else s.delete(chave);
+                        onChange(s);
+                      }}
+                      options={[
+                        { value: "selecionada", label: "Selecionada" },
+                        { value: "unica", label: "Única" },
+                      ]}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}

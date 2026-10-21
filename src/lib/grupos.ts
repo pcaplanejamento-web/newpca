@@ -19,6 +19,9 @@ import {
   unidadesDoMembro,
   ID_MINHAS_UNIDADES,
   listaComGeral,
+  chaveFonte,
+  filtroDoEscopo,
+  lerFontesAbas,
 } from "./escopo-unidades-core";
 
 /**
@@ -30,18 +33,18 @@ import {
 const COOKIE_GRUPO = "pca_grupo";
 const COOKIE_REP = "pca_reparticao";
 
-export type GrupoResumo = { id: number; nome: string; modoUnidades?: ModoUnidades; escopoTelas?: string | null };
+export type GrupoResumo = { id: number; nome: string; modoUnidades?: ModoUnidades; escopoTelas?: string | null; fontesAbas?: string | null };
 export type ReparticaoResumo = { id: number; codigo: string; nome: string };
 
 /** Grupos aos quais o usuário pertence (ordenados por nome). */
-export async function gruposDoUsuario(usuarioId: number): Promise<GrupoResumo[]> {
-  return getDb()
-    .select({ id: grupos.id, nome: grupos.nome, modoUnidades: grupos.modoUnidades, escopoTelas: grupos.escopoTelas })
+export const gruposDoUsuario = cache(async (usuarioId: number): Promise<GrupoResumo[]> =>
+  getDb()
+    .select({ id: grupos.id, nome: grupos.nome, modoUnidades: grupos.modoUnidades, escopoTelas: grupos.escopoTelas, fontesAbas: grupos.fontesAbas })
     .from(usuarioGrupos)
     .innerJoin(grupos, eq(usuarioGrupos.grupoId, grupos.id))
     .where(eq(usuarioGrupos.usuarioId, usuarioId))
-    .orderBy(grupos.nome);
-}
+    .orderBy(grupos.nome),
+);
 
 /** Grupo ativo: cookie validado contra os grupos do usuário; senão o primeiro. */
 export async function getGrupoAtivo(usuario?: UsuarioSessao | null): Promise<GrupoResumo | null> {
@@ -173,13 +176,18 @@ export async function unidadesDaSessao(
   grupoAtivo?: GrupoResumo | null,
   /** A TELA dos dados (a chave de `ABAS`): no grupo de "unidade de cadastro", a tela marcada "todas" vê todas. */
   tela?: string | null,
+  /** A ABA da tela: no grupo que a pôs em "fonte única", os dados são a soma de todas as unidades da pessoa. */
+  aba?: string | null,
 ): Promise<UnidadesDaSessao> {
   const u = usuario === undefined ? await getUsuarioAtual() : usuario;
   if (!u) return { lista: [], ativa: null, escopo: ESCOPO_NENHUMA, filtro: FILTRO_NENHUMA, acessivel: () => false };
   const { lista, ativa } = await getReparticaoContexto(u, grupoAtivo, tela);
   const reais = lista.filter((r) => r.id !== ID_MINHAS_UNIDADES);
   const escopo = escopoDeAcesso(u.admin, reais);
-  return { lista, ativa, escopo, filtro: filtroDeLista(u.admin, ativa, reais), acessivel: (rid) => unidadeNoEscopo(escopo, rid) };
+  const grupo = grupoAtivo && "fontesAbas" in grupoAtivo ? grupoAtivo : await getGrupoAtivo(u);
+  const chave = chaveFonte(tela, aba);
+  const unica = !!chave && lerFontesAbas(grupo?.fontesAbas).includes(chave);
+  return { lista, ativa, escopo, filtro: unica ? filtroDoEscopo(escopo) : filtroDeLista(u.admin, ativa, reais), acessivel: (rid) => unidadeNoEscopo(escopo, rid) };
 }
 
 /** As unidades que a pessoa ACESSA, para os banners (conferência e escolha): com o escopo "todas" (o ADM ou a "Geral"),

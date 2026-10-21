@@ -217,29 +217,3 @@ export function resumoComponentes(r: ComponentesRetirados, rotuloTela: (t: Tela)
     return [{ tela: x.tela, rotulo: `${x.rotulo} (${rotuloTela(x.tela)})`, valor: acoes.includes("visualizar") ? "Oculto" : `Sem ${acoes.map(rotuloAcao).join(", ")}` }];
   });
 }
-
-/** As FUNÇÕES desligadas pelo GRUPO (lista das chaves "tela.funcao" do catálogo; lixo = nenhuma). */
-export function lerFuncoesOff(json: string | null | undefined): string[] {
-  if (!json) return [];
-  try {
-    const v = JSON.parse(json);
-    return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && POR_CHAVE.has(x)))] : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Só as funções das telas que o grupo abre, na ordem do catálogo (o que é gravado). */
-export const compactarFuncoesOff = (lista: readonly string[], telas: readonly string[]): string[] =>
-  CATALOGO_COMPONENTES.filter((x) => lista.includes(x.chave) && telas.includes(x.tela)).map((x) => x.chave);
-
-/** O papel + o GRUPO: a função desligada no grupo some inteira (todas as ações), como retirar Visualizar no papel. */
-export function comFuncoesDoGrupo(r: ComponentesRetirados, funcoesOff: readonly string[]): ComponentesRetirados {
-  if (!funcoesOff.length) return r;
-  const out: ComponentesRetirados = { ...r };
-  for (const chave of funcoesOff) {
-    const x = POR_CHAVE.get(chave);
-    if (x) out[chave] = acoesDoComponente(x);
-  }
-  return out;
-}
