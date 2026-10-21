@@ -81,6 +81,19 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.149.1",
+    data: "2026-10-21",
+    titulo: "Geral com o número de unidades",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Cabeçalho",
+        texto: "A opção da soma das unidades agora se chama “Geral (N unidades)”, vem escolhida e aparece para todos que acessam mais de uma unidade.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.149.0",
     data: "2026-10-21",
     titulo: "Geral das minhas unidades e fonte dos dados por aba",

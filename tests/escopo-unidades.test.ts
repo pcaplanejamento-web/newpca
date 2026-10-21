@@ -126,16 +126,16 @@ import * as geral from "../src/lib/escopo-unidades-core.ts";
 describe("Geral das minhas unidades (virtual)", () => {
   const a = { id: 3, codigo: "SME", nome: "Educação" };
   const b = { id: 7, codigo: "SMS", nome: "Saúde" };
-  it("aparece primeiro só com 2+ unidades, sem a Geral real e fora do ADM", () => {
-    const l = geral.listaComGeral(false, [a, b]);
+  it("aparece primeiro só com 2+ unidades, sem a Geral real, para todos", () => {
+    const l = geral.listaComGeral([a, b]);
     assert.equal(l[0].id, geral.ID_MINHAS_UNIDADES);
     assert.equal(l.length, 3);
-    assert.equal(geral.listaComGeral(false, [a]).length, 1);
-    assert.equal(geral.listaComGeral(true, [a, b]).length, 2);
-    assert.equal(geral.listaComGeral(false, [a, b, { id: 1, codigo: "GERAL", nome: "Geral" }]).length, 3);
+    assert.equal(geral.listaComGeral([a]).length, 1);
+    assert.equal(l[0].codigo, "Geral (2 unidades)");
+    assert.equal(geral.listaComGeral([a, b, { id: 1, codigo: "GERAL", nome: "Geral" }]).length, 3);
   });
   it("não dá acesso a todas: filtra pela SOMA das unidades da pessoa", () => {
-    const l = geral.listaComGeral(false, [a, b]);
+    const l = geral.listaComGeral([a, b]);
     const reais = l.filter((r) => r.id !== geral.ID_MINHAS_UNIDADES);
     assert.deepEqual(geral.escopoDeAcesso(false, reais), { tipo: "unidades", ids: [3, 7] });
     const f = geral.filtroDeLista(false, l[0], reais);

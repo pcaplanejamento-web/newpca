@@ -116,12 +116,11 @@ export type FiltroId = number | readonly number[] | null | false;
 /** A "Geral" VIRTUAL: quem vê mais de uma unidade (sem a "Geral" real) ganha a opção que SOMA as suas — o id 0 nunca
  * existe no banco e o código não é "GERAL" (não dá acesso a todas). */
 export const ID_MINHAS_UNIDADES = 0;
-export const CODIGO_MINHAS_UNIDADES = "Todas as minhas";
 
 /** A lista do seletor do cabeçalho: com 2+ unidades e sem a "Geral" real, a virtual vem PRIMEIRO (e é a padrão). */
-export function listaComGeral<T extends UnidadeRef & { nome: string }>(admin: boolean, lista: readonly T[]): T[] {
-  if (admin || lista.length < 2 || lista.some((r) => ehCodigoGeral(r.codigo))) return [...lista];
-  return [{ id: ID_MINHAS_UNIDADES, codigo: CODIGO_MINHAS_UNIDADES, nome: `Geral — soma das minhas ${lista.length} unidades` } as T, ...lista];
+export function listaComGeral<T extends UnidadeRef & { nome: string }>(lista: readonly T[]): T[] {
+  if (lista.length < 2 || lista.some((r) => ehCodigoGeral(r.codigo))) return [...lista];
+  return [{ id: ID_MINHAS_UNIDADES, codigo: `Geral (${lista.length} unidades)`, nome: `Geral (${lista.length} unidades)` } as T, ...lista];
 }
 
 /** A unidade é a "Geral" (a real ou a virtual das minhas unidades)? — o cabeçalho e as telas a tratam como "todas". */

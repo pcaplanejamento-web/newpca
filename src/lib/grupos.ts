@@ -148,7 +148,7 @@ export async function getReparticaoContexto(
     lista = await reparticoesDoMembro(grupo, u.id, tela);
   }
   if (lista.length === 0) return { lista, ativa: null };
-  lista = listaComGeral(!!u?.admin, lista);
+  lista = listaComGeral(lista);
   const jar = await cookies();
   const escolhida = Number(jar.get(COOKIE_REP)?.value);
   return { lista, ativa: lista.find((r) => r.id === escolhida) ?? lista[0] };
