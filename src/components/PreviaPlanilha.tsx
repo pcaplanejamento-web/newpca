@@ -9,7 +9,8 @@ import { type Column, DataTable } from "./DataTable";
 import { Modal } from "./Modal";
 import { StatMini } from "./StatMini";
 
-const COLUNAS: Column<LinhaPrevia>[] = [
+/** A `DataTable` desenha a célula pelo `render`; o `value` é filtro/ordem — aqui os dois são o mesmo texto. */
+const COLUNAS: Column<LinhaPrevia>[] = ([
   { key: "unidade", header: "Unidade", value: (r) => r.unidade, nowrap: true },
   { key: "seq", header: "Seq.", value: (r) => String(r.sequencial ?? ""), numero: (r) => r.sequencial, nowrap: true, total: false, formatarFaixa: num },
   { key: "codigo", header: "Código", value: (r) => r.idProduto ?? "—", nowrap: true },
@@ -28,7 +29,7 @@ const COLUNAS: Column<LinhaPrevia>[] = [
   },
   { key: "prioridade", header: "Prioridade", value: (r) => r.prioridade ?? "—", nowrap: true },
   { key: "protocolo", header: "ID protocolo", value: (r) => r.protocoloIdExterno ?? "—", nowrap: true },
-];
+] as Column<LinhaPrevia>[]).map((c) => ({ ...c, render: c.value }));
 
 /**
  * PRÉVIA COMPLETA da planilha do PCA antes de importar: o resumo, o que foi apontado na leitura e TODAS as linhas

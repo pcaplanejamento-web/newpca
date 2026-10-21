@@ -49,6 +49,12 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.134.1",
+    data: "2026-10-21",
+    titulo: "Prévia da planilha mostra os dados",
+    mudancas: [{ tipo: "correcao", area: "PCA", texto: "A tabela da prévia da planilha agora mostra os dados de cada linha (antes as linhas vinham em branco).", link: "/painel/pca" }],
+  },
+  {
     versao: "1.134.0",
     data: "2026-10-21",
     titulo: "Prévia completa da planilha do PCA",
