@@ -54,9 +54,11 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
   // Fontes padrão e CMaps servidos pelo site (`public/pdfjs`): sem eles, o texto em fonte NÃO embutida some no canvas.
   const task = pdfjs.getDocument({
     data: new Uint8Array(buf),
-    standardFontDataUrl: "/pdfjs/standard_fonts/",
-    cMapUrl: "/pdfjs/cmaps/",
+    // URLs ABSOLUTAS: o worker do pdf.js não resolve caminho relativo.
+    standardFontDataUrl: new URL("/pdfjs/standard_fonts/", location.origin).href,
+    cMapUrl: new URL("/pdfjs/cmaps/", location.origin).href,
     cMapPacked: true,
+    useSystemFonts: true,
   });
   let doc: Awaited<typeof task.promise>;
   try {
@@ -118,7 +120,6 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
       canvas.height = Math.ceil(viewport.height);
       // pdf.js 6: passar o `canvas` (o `canvasContext` é legado).
       await page.render({ canvas, viewport }).promise;
-      page.cleanup();
       return canvas;
     },
     destroy: () => task.destroy(),

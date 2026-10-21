@@ -379,9 +379,6 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
                 }}
               >
                 <QuadroNovoCard rotulo="Enviar PDF" onClick={() => entrada.current?.click()} />
-                <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => setLink({ url: "" })}>
-                  Usar link do Google
-                </Button>
                 <input
                   ref={entrada}
                   type="file"
@@ -396,6 +393,7 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
                 />
               </div>
             ))}
+          {pode.importar && !fila && <QuadroNovoCard rotulo="Colar link do Google" onClick={() => setLink({ url: "" })} />}
         </div>
       )}
 
