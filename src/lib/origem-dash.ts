@@ -12,6 +12,8 @@ export type RecorteDash =
   | { dim: "unidadeMedida"; labels: string[] }
   | { dim: "prioridade"; labels: string[] }
   | { dim: "unidade"; labels: string[] }
+  /** O DOMÍNIO do item (MATERIAL/SERVIÇO — a coluna da planilha). */
+  | { dim: "dominio"; labels: string[] }
   /** A DEFINIÇÃO da previsão: "Mês definido", a periodicidade genérica ("Anual"…) ou "Sem previsão" (`previsaoDoItem`). */
   | { dim: "previsao"; labels: string[] }
   /** Os itens com o MÊS definido (os genéricos ficam fora — têm a dimensão `previsao`); `extras` = vários meses. */
@@ -33,6 +35,8 @@ export type ItemRecortavel = {
   prioridade?: string | null;
   /** Sigla da unidade (requisitante ou planilha). */
   codigo?: string | null;
+  /** O domínio do item (MATERIAL/SERVIÇO). */
+  dominio?: string | null;
 };
 
 const chave = (v: string | null | undefined) => v || "—";
@@ -67,6 +71,7 @@ const CAMPO = {
   unidadeMedida: (i: ItemRecortavel) => i.unidadeMedida,
   prioridade: (i: ItemRecortavel) => i.prioridade,
   unidade: (i: ItemRecortavel) => i.codigo,
+  dominio: (i: ItemRecortavel) => i.dominio,
   previsao: previsaoDoItem,
 };
 
@@ -165,7 +170,7 @@ export function agregarItensDash(itens: ItemAgregavel[]) {
 }
 
 /** Fatias por um campo (rótulo vazio = "—"), pelo valor. */
-export function fatiasDash(itens: ItemAgregavel[], dim: "prioridade" | "unidade" | "previsao") {
+export function fatiasDash(itens: ItemAgregavel[], dim: "prioridade" | "unidade" | "previsao" | "dominio") {
   const m = new Map<string, { label: string; total: number; count: number }>();
   for (const i of itens) {
     const k = chave(CAMPO[dim](i));
@@ -251,7 +256,7 @@ export const mesesDoRecorte = (r: RecorteDash | undefined): string[] =>
 // conectadas, com a contagem) e a escolha de VÁRIOS valores vira UM recorte da dimensão.
 // ---------------------------------------------------------------------------
 
-export type DimTopo = "classificacao" | "mes" | "previsao" | "prioridade" | "unidade" | "unidadeMedida";
+export type DimTopo = "classificacao" | "mes" | "previsao" | "prioridade" | "unidade" | "unidadeMedida" | "dominio";
 export type OpcaoDash = { chave: string; count: number };
 
 /** A chave do mês de um item no filtro do topo: "AAAA-M"; o genérico e o sem data = null (filtram-se pela Previsão). */

@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.144.0",
+    data: "2026-10-21",
+    titulo: "PCA: Domínio dos itens no Dashboard",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA · Dashboard",
+        texto: "O Domínio do item (material, serviço…) entra no Dashboard: gráfico “Domínio dos Itens”, filtro no topo, coluna na consulta e no relatório — só quando há dados. A Classificação segue com o próprio gráfico.",
+        link: "/painel/pca",
+      },
+      { tipo: "melhoria", area: "PCA · Importação", texto: "A visão Itens mostra também o Domínio.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.143.0",
     data: "2026-10-21",
     titulo: "PCA: Tipo do DFD e Classificação do item separados",

@@ -86,6 +86,7 @@ const COLUNAS_ITENS: Column<ItemUpload>[] = [
   { key: "vu", header: "Vlr. unit.", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorUnitario, total: false, value: (r) => String(r.valorUnitario ?? 0), render: (r) => brl(r.valorUnitario ?? 0) },
   { key: "vt", header: "Vlr. total", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorTotal, value: (r) => String(r.valorTotal ?? 0), render: (r) => brl(r.valorTotal ?? 0) },
   { key: "class", header: "Classificação", nowrap: true, value: (r) => r.classificacao ?? "", render: (r) => r.classificacao ?? "—" },
+  { key: "dominio", header: "Domínio", nowrap: true, value: (r) => r.dominio ?? "", render: (r) => r.dominio ?? "—" },
   { key: "arquivo", header: "Upload", minWidth: 180, value: (r) => r.arquivo ?? "", render: (r) => <CelulaTexto texto={r.arquivo ?? "—"} /> },
 ];
 

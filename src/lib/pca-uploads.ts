@@ -48,6 +48,7 @@ export type ItemUpload = {
   valorUnitario: number | null;
   valorTotal: number | null;
   classificacao: string | null;
+  dominio: string | null;
 };
 
 /** Os itens das planilhas do PCA, do sequencial maior ao menor (os recém-adicionados primeiro). */
@@ -66,6 +67,7 @@ export async function itensDosUploads(pcaId: number): Promise<ItemUpload[]> {
       valorUnitario: itens.valorReferencia,
       valorTotal: itens.valorTotal,
       classificacao: itens.classificacao,
+      dominio: itens.dominio,
     })
     .from(itens)
     .innerJoin(unidades, eq(unidades.id, itens.unidadeId))

@@ -70,6 +70,7 @@ const TITULO: Record<Grafico, string> = {
   unidadeMedida: "Unidades de Medida",
   prioridade: "Prioridade dos DFDs",
   unidade: "Valor por Unidade",
+  dominio: "Domínio dos Itens",
 };
 
 /** O ranking do gráfico de itens (o explorador também — o resto fica na Consulta de itens). */
@@ -84,7 +85,7 @@ function rotuloOpcao(dim: DimTopo, chave: string): string {
   if (dim === "previsao") return chave;
   if (dim === "prioridade") return rotuloPrioridade(chave);
   if (chave !== "—") return chave;
-  return dim === "classificacao" ? "Sem classificação" : "Sem unidade";
+  return dim === "classificacao" ? "Sem classificação" : dim === "dominio" ? "Sem domínio" : "Sem unidade";
 }
 
 /** O nome curto de cada filtro no chip. */
@@ -96,6 +97,7 @@ const TITULO_CHIP: Record<DimDash, string> = {
   unidadeMedida: "Unidade de medida",
   prioridade: "Prioridade",
   unidade: "Unidade",
+  dominio: "Domínio",
 };
 
 /** A ordem dos menus do topo e o nome de cada um. */
@@ -105,6 +107,7 @@ const DIMS_TOPO: { dim: DimTopo; rotulo: string }[] = [
   { dim: "previsao", rotulo: "Previsão" },
   { dim: "prioridade", rotulo: "Prioridade" },
   { dim: "unidade", rotulo: "Unidade" },
+  { dim: "dominio", rotulo: "Domínio" },
   { dim: "unidadeMedida", rotulo: "Unidade de medida" },
 ];
 
@@ -229,6 +232,8 @@ export function DashboardPcaCliente({
   const prioridades = useMemo(() => fatiasDash(filtrarItensDash(itens, filtros, "prioridade"), "prioridade"), [itens, filtros]);
   const unidades = useMemo(() => fatiasDash(filtrarItensDash(itens, filtros, "unidade"), "unidade"), [itens, filtros]);
   const temPrioridade = useMemo(() => itens.some((i) => i.prioridade), [itens]);
+  const dominios = useMemo(() => fatiasDash(filtrarItensDash(itens, filtros, "dominio"), "dominio"), [itens, filtros]);
+  const temDominio = useMemo(() => itens.some((i) => i.dominio), [itens]);
   const temUnidades = unidades.filter((f) => f.label !== "—").length > 1 || filtros.unidade != null;
   // A previsão (fonte protocolo): o mês definido × a definição genérica — cada quadro SEM o filtro da própria dimensão.
   const temPrevisao = useMemo(() => itens.some((i) => i.ano != null), [itens]);
@@ -248,7 +253,7 @@ export function DashboardPcaCliente({
   const corPeriodo = (chave: string) => PREVISOES_DASH.find((p) => p.chave === chave)?.cor ?? "var(--faint)";
 
   const filtrar = (r: RecorteDash, rotulo: string) => setFiltros((f) => alternarFiltro(f, r, rotulo));
-  const labels = (dim: "classificacao" | "unidadeMedida" | "prioridade" | "unidade" | "previsao") => {
+  const labels = (dim: "classificacao" | "unidadeMedida" | "prioridade" | "unidade" | "previsao" | "dominio") => {
     const r = filtros[dim]?.recorte;
     return r && r.dim === dim ? r.labels : undefined;
   };
@@ -261,13 +266,13 @@ export function DashboardPcaCliente({
   // Os menus do topo: as opções CONECTADAS (os demais filtros valem) com o texto de cada uma.
   const campos: CampoFiltroDash[] = useMemo(
     () =>
-      DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades : d.dim === "previsao" ? temPrevisao : true)).map((d) => ({
+      DIMS_TOPO.filter((d) => (d.dim === "prioridade" ? temPrioridade : d.dim === "unidade" ? temUnidades : d.dim === "previsao" ? temPrevisao : d.dim === "dominio" ? temDominio : true)).map((d) => ({
         dim: d.dim,
         rotulo: d.dim === "unidade" ? rotuloUnidade : d.rotulo,
         opcoes: opcoesDash(itens, filtros, d.dim).map((o) => ({ ...o, rotulo: rotuloOpcao(d.dim, o.chave), detalhe: d.dim === "unidade" ? nomesUnidades?.[o.chave] : undefined })),
         selecionados: chavesDoFiltro(filtros, d.dim),
       })),
-    [itens, filtros, temPrioridade, temUnidades, temPrevisao, rotuloUnidade, nomesUnidades],
+    [itens, filtros, temPrioridade, temUnidades, temPrevisao, temDominio, rotuloUnidade, nomesUnidades],
   );
   function mudarTopo(dim: string, chaves: string[]) {
     const d = dim as DimTopo;
@@ -309,9 +314,10 @@ export function DashboardPcaCliente({
     if (explorar === "unidadeMedida") return unids.map((f) => ({ chave: f.label, rotulo: f.label, valor: f.count }));
     if (explorar === "prioridade") return prioridades.map((f) => ({ chave: f.label, rotulo: rotuloPrioridade(f.label), valor: f.total, count: f.count }));
     if (explorar === "unidade") return unidades.map((f) => ({ chave: f.label, rotulo: f.label === "—" ? "Sem unidade" : f.label, valor: f.total, count: f.count }));
+    if (explorar === "dominio") return dominios.map((f) => ({ chave: f.label, rotulo: f.label === "—" ? "Sem domínio" : f.label, valor: f.total, count: f.count }));
     if (explorar === "item") return ordenados.map((i) => ({ chave: String(i.id), rotulo: i.nomeProduto ?? `Item ${i.id}`, valor: i.valorTotal ?? 0 }));
     return [];
-  }, [explorar, classes, cronograma, modoCrono, definicao, periodicos, unids, prioridades, unidades, itens, filtros, ativo, ordenados]);
+  }, [explorar, classes, cronograma, modoCrono, definicao, periodicos, unids, prioridades, unidades, dominios, itens, filtros, ativo, ordenados]);
 
   async function relatorio() {
     if (gerando) return;
@@ -335,6 +341,7 @@ export function DashboardPcaCliente({
               ...(periodicos.length ? [{ titulo: TITULO.periodo, rotulo: "Periodicidade", fatias: periodicos }] : []),
               ...(temPrioridade ? [{ titulo: TITULO.prioridade, rotulo: "Prioridade", fatias: prioridades.map((f) => ({ ...f, label: rotuloPrioridade(f.label) })) }] : []),
               ...(temUnidades ? [{ titulo: `Valor por ${rotuloUnidade}`, rotulo: rotuloUnidade, fatias: unidades.map((f) => ({ ...f, label: f.label === "—" ? "Sem unidade" : f.label })) }] : []),
+              ...(temDominio ? [{ titulo: TITULO.dominio, rotulo: "Domínio", fatias: dominios.map((f) => ({ ...f, label: f.label === "—" ? "Sem domínio" : f.label })) }] : []),
               { titulo: TITULO.unidadeMedida, rotulo: "Unidade de medida", fatias: unids },
               { titulo: TITULO.item, rotulo: "Item", fatias: tops.map((t) => ({ label: t.nome ?? "—", total: t.valor, count: 1 })) },
             ],
@@ -353,6 +360,7 @@ export function DashboardPcaCliente({
     if (explorar === "classificacao") filtrar({ dim: "classificacao", labels: [chave] }, chave);
     else if (explorar === "unidadeMedida") filtrar({ dim: "unidadeMedida", labels: [chave] }, chave);
     else if (explorar === "prioridade") filtrar({ dim: "prioridade", labels: [chave] }, rotuloPrioridade(chave));
+    else if (explorar === "dominio") filtrar({ dim: "dominio", labels: [chave] }, chave === "—" ? "Sem domínio" : chave);
     else if (explorar === "unidade") filtrar({ dim: "unidade", labels: [chave] }, chave === "—" ? "Sem unidade" : chave);
     else if (explorar === "mes") {
       const [a, m] = chave.split("-").map(Number);
@@ -367,7 +375,7 @@ export function DashboardPcaCliente({
     }
   }
   const ativaExplorar =
-    explorar === "classificacao" || explorar === "unidadeMedida" || explorar === "prioridade" || explorar === "unidade"
+    explorar === "classificacao" || explorar === "unidadeMedida" || explorar === "prioridade" || explorar === "unidade" || explorar === "dominio"
       ? (labels(explorar)?.length === 1 ? labels(explorar)?.[0] : null) ?? null
       : explorar === "periodo"
         ? (labels("previsao")?.length === 1 ? labels("previsao")?.[0] : null) ?? null
@@ -581,6 +589,11 @@ export function DashboardPcaCliente({
               temPrioridade ? (
                 <ChartCard key="prioridade" title={TITULO.prioridade} subtitle="Valor dos itens pela prioridade do DFD — toque para filtrar" onExpandir={() => setExplorar("prioridade")}>
                   <PrioridadeChart data={prioridades} onSelecionar={filtrar} ativos={labels("prioridade")} />
+                </ChartCard>
+              ) : null,
+              temDominio ? (
+                <ChartCard key="dominio" title={TITULO.dominio} subtitle="Valor dos itens por domínio (material, serviço…) — toque para filtrar" onExpandir={() => setExplorar("dominio")}>
+                  <UnidadeRequisitanteChart dim="dominio" semValor="Sem domínio" data={dominios} onSelecionar={filtrar} ativos={labels("dominio")} />
                 </ChartCard>
               ) : null,
               temUnidades ? (

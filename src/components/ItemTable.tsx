@@ -47,6 +47,7 @@ export function ItemTable({
     return casa ? rows.filter((r) => casa([r.nomeProduto, r.idProduto])) : rows;
   }, [rows, q]);
 
+  const temDominio = useMemo(() => rows.some((r) => r.dominio), [rows]);
   const colunas = useMemo<Column<ItemRow>[]>(() => {
     const cols: Column<ItemRow>[] = [
       {
@@ -132,6 +133,14 @@ export function ItemTable({
         render: (r) => <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-xs text-text-2">{r.classificacao ?? "—"}</span>,
       },
     );
+    if (temDominio)
+      cols.push({
+        key: "dominio",
+        header: "Domínio",
+        nowrap: true,
+        value: (r) => r.dominio ?? "—",
+        render: (r) => <span className="text-xs text-text-2">{r.dominio ?? "—"}</span>,
+      });
     if (showUnidade)
       cols.push({
         key: "codigo",
@@ -185,7 +194,7 @@ export function ItemTable({
       },
     );
     return cols;
-  }, [showUnidade, origem]);
+  }, [showUnidade, origem, temDominio]);
 
   return (
     <div className="space-y-[var(--gap-block)]">

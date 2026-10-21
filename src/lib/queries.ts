@@ -226,6 +226,8 @@ export type ItemRow = {
   classificacao: string | null;
   /** O TIPO do DFD de origem (DFD-O · Ordinário…) — só itens de protocolo; nunca se confunde com a classificação. */
   tipoDfd?: string | null;
+  /** O DOMÍNIO do item (MATERIAL/SERVIÇO — a coluna da planilha consolidada). */
+  dominio?: string | null;
   dataDesejada: string | null;
   codigo: string | null;
   municipio: string | null;
@@ -269,6 +271,7 @@ export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?:
       ano: itens.anoDesejado,
       mes: itens.mesDesejado,
       prioridade: itens.prioridade,
+      dominio: itens.dominio,
       periodo: itens.previsaoGenerica,
       protocoloIdExterno: itens.protocoloIdExterno,
     })
