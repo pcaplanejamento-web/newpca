@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.137.1",
+    data: "2026-10-21",
+    titulo: "Documentos: enviar pelo card no fim da grade",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Documentos",
+        texto: "O envio de PDFs virou o card \"Enviar PDF\", no tamanho dos demais e logo depois do último documento (tocar escolhe; arrastar solta nele).",
+        link: "/painel/documentos",
+      },
+    ],
+  },
+  {
     versao: "1.137.0",
     data: "2026-10-21",
     titulo: "Documentos: compactação escolhida pelo ADM",

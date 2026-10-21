@@ -3687,7 +3687,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Compactação", no aparelho `documentos:compactacao`) Automática · 25/50/75/90% — `limiteAlvo(original, pct)` = (100 − pct)% do
   original, nunca acima de 100 KB; os demais, automática.
 - Rotas `GET/POST /api/documentos`, `PATCH/DELETE /api/documentos/[id]`, `GET /api/documentos/[id]/arquivo` (`?baixar=1`
-  exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: Dropzone + busca + `DocumentoCard`
+  exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: busca + `DocumentoCard` + o card "Enviar PDF" (`QuadroNovoCard`, no fim da grade; tocar ou soltar)
   sobre `CartaoEspaco`; visualizador = páginas do pdf.js em canvas num `Modal`, sem iframe — CSP `object-src 'none'`/iOS).
 
 ## Rotas de API (`src/app/api/**`)

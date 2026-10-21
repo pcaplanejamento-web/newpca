@@ -13,12 +13,11 @@ import { Button } from "./Button";
 import { gradienteDe, MenuCard } from "./CatalogoCards";
 import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { useConfirmacao } from "./Confirmacao";
-import { Dropzone } from "./Dropzone";
 import { SearchField, SelectField, TextField } from "./Field";
-import { IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash, IconUpload } from "./icons";
+import { IconDocumentos, IconDownload, IconEye, IconPencil, IconTrash } from "./icons";
 import { Modal } from "./Modal";
 import { Progress } from "./Progress";
-import { CapaQuadro, CartaoEspaco } from "./QuadroCard";
+import { CapaQuadro, CartaoEspaco, QuadroNovoCard } from "./QuadroCard";
 import { Skeleton } from "./Skeleton";
 
 /** A cor da capa dos documentos (o vermelho do PDF). */
@@ -157,6 +156,7 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
   const [vendo, setVendo] = useState<DocumentoResumo | null>(null);
   const [renomeando, setRenomeando] = useState<{ doc: DocumentoResumo; nome: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
+  const entrada = useRef<HTMLInputElement>(null);
 
   const visiveis = useMemo(() => {
     const casa = predicadoBusca(busca);
@@ -246,31 +246,21 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
         )}
       </div>
 
-      {pode.importar &&
-        (fila ? (
-          <div className="rounded-card border-2 border-dashed border-accent/50 bg-accent-soft/40 p-[var(--pad-card)]">
-            <Progress value={((fila.atual - 1) / fila.total) * 100} label={`${fila.nome} (${fila.atual} de ${fila.total}) — ${fila.texto}`} />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {admin && (
-              <div className="w-full sm:w-72">
-                <SelectField compacto label="Compactação" value={String(compactacao)} onChange={(e) => escolherCompactacao(Number(e.target.value))}>
-                  {OPCOES_COMPACTACAO.map((p) => (
-                    <option key={p} value={p}>
-                      {p === 0 ? "Automática (só para caber em 100 KB)" : `${p}% menor que o original`}
-                    </option>
-                  ))}
-                </SelectField>
-              </div>
-            )}
-            <Dropzone accept=".pdf,application/pdf" onFiles={enviar} icon={<IconUpload className="h-7 w-7" />} titulo="Arraste PDFs ou toque para escolher" dica="Cada documento é guardado com até 100 KB — os maiores são compactados" />
-          </div>
-        ))}
+      {admin && pode.importar && (
+        <div className="w-full sm:w-80">
+          <SelectField compacto label="Compactação" value={String(compactacao)} onChange={(e) => escolherCompactacao(Number(e.target.value))}>
+            {OPCOES_COMPACTACAO.map((p) => (
+              <option key={p} value={p}>
+                {p === 0 ? "Automática (só para caber em 100 KB)" : `${p}% menor que o original`}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+      )}
 
-      {documentos.length === 0 ? (
+      {documentos.length === 0 && !pode.importar ? (
         <p className="rounded-card border border-border bg-surface p-10 text-center text-sm text-muted">Nenhum documento guardado ainda.</p>
-      ) : visiveis.length === 0 ? (
+      ) : visiveis.length === 0 && busca ? (
         <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhum documento com "{busca}".</p>
       ) : (
         <div className={`grid ${COLUNAS_ESPACOS} gap-3`}>
@@ -284,6 +274,36 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
               onExcluir={pode.excluir ? () => excluir(d) : undefined}
             />
           ))}
+          {pode.importar &&
+            (fila ? (
+              <div className="flex min-h-[14rem] flex-col justify-center rounded-card border-2 border-dashed border-accent/50 bg-accent-soft/40 p-[var(--pad-card)]">
+                <Progress value={((fila.atual - 1) / fila.total) * 100} label={`${fila.nome} (${fila.atual} de ${fila.total}) — ${fila.texto}`} />
+              </div>
+            ) : (
+              <div
+                role="none"
+                className="h-full"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  enviar(Array.from(e.dataTransfer.files));
+                }}
+              >
+                <QuadroNovoCard rotulo="Enviar PDF" onClick={() => entrada.current?.click()} />
+                <input
+                  ref={entrada}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    const f = Array.from(e.target.files ?? []);
+                    e.target.value = "";
+                    if (f.length) enviar(f);
+                  }}
+                />
+              </div>
+            ))}
         </div>
       )}
 
