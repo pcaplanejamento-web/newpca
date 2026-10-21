@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.150.3",
+    data: "2026-10-21",
+    titulo: "Documentos: vínculo no selo do orçamento",
+    mudancas: [
+      { tipo: "melhoria", area: "Documentos", texto: "O PCA vinculado aparece no cartão com o mesmo selo do ano usado nos cartões de orçamento.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.150.2",
     data: "2026-10-21",
     titulo: "Documentos: vínculo no cartão e filtro de PCA compacto",
