@@ -253,3 +253,20 @@ describe("presença — nível profissional (ausente desde, carência, sinal)", 
     assert.ok(VARREDURA_MS < SEM_SINAL_MS);
   });
 });
+
+import { gruposDasPessoas, juntarPresencas, juntarVistos } from "../src/lib/presenca-core.ts";
+
+it("presença de vários grupos: online vence ausente, a pessoa aparece uma vez", () => {
+  const a = new Map([[1, { estado: "ausente" as const, status: "disponivel" as const, recado: "", desde: 10 }]]);
+  const b = new Map([
+    [1, { estado: "online" as const, status: "ocupado" as const, recado: "" }],
+    [2, { estado: "ausente" as const, status: "disponivel" as const, recado: "", desde: 5 }],
+  ]);
+  const j = juntarPresencas([a, b]);
+  assert.equal(j.size, 2);
+  assert.equal(j.get(1)?.estado, "online");
+  const c = new Map([[2, { estado: "ausente" as const, status: "disponivel" as const, recado: "", desde: 9 }]]);
+  assert.equal(juntarPresencas([b, c]).get(2)?.desde, 9);
+  assert.deepEqual([...juntarVistos([new Map([[3, 5]]), new Map([[3, 8], [4, 1]])])], [[3, 8], [4, 1]]);
+  assert.deepEqual(gruposDasPessoas([{ id: 1, membros: [1, 2] }, { id: 2, membros: [2] }]).get(2), [1, 2]);
+});

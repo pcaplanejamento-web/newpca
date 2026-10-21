@@ -421,3 +421,32 @@ export function textoAtividade(a: Atividade): string {
   const item = a.vendo[0];
   return `${a.rotulo}${item ? ` › ${item}${a.vendo.length > 1 ? ` +${a.vendo.length - 1}` : ""}` : ""}${a.editando ? " · editando" : ""}`;
 }
+
+/** Quantos OUTROS grupos (além do ativo) a aba acompanha ao mesmo tempo — um socket leve "observador" por grupo. */
+export const MAX_GRUPOS_OBSERVADOS = 8;
+
+/** A presença de VÁRIOS grupos numa lista só (a pessoa em mais de um grupo aparece uma vez): online vence ausente; entre
+ * dois ausentes, o ausente há MENOS tempo (o `desde` maior). */
+export function juntarPresencas(listas: readonly ReadonlyMap<number, InfoPresenca>[]): Map<number, InfoPresenca> {
+  const out = new Map<number, InfoPresenca>();
+  for (const m of listas)
+    for (const [id, info] of m) {
+      const ant = out.get(id);
+      if (!ant || (ant.estado !== "online" && (info.estado === "online" || (info.desde ?? 0) > (ant.desde ?? 0)))) out.set(id, info);
+    }
+  return out;
+}
+
+/** O "visto por último" de vários grupos: o mais recente de cada pessoa. */
+export function juntarVistos(listas: readonly ReadonlyMap<number, number>[]): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const m of listas) for (const [id, em] of m) out.set(id, Math.max(out.get(id) ?? 0, em));
+  return out;
+}
+
+/** Em quais dos grupos (na ordem dada) cada pessoa está: pessoa → ids dos grupos. */
+export function gruposDasPessoas(grupos: readonly { id: number; membros: readonly number[] }[]): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  for (const g of grupos) for (const id of g.membros) out.set(id, [...(out.get(id) ?? []), g.id]);
+  return out;
+}

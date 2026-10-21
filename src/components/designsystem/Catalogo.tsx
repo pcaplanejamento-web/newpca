@@ -3677,6 +3677,11 @@ export function Catalogo() {
             grupoNome: "Planejamento",
             pessoas: PESSOAS_DEMO,
             whatsapp: { 4: "64999990000" },
+            // Vários grupos: o painel junta os online de todos e marca cada pessoa com os grupos dela.
+            grupos: [
+              { id: 1, nome: "Planejamento", membros: PESSOAS_DEMO.map((p) => p.id) },
+              { id: 2, nome: "Compras", membros: [PESSOAS_DEMO[0].id, 7] },
+            ],
             invisivel: false,
             chatGrupo: true,
             chatPrivado: true,

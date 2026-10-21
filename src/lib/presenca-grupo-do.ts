@@ -27,6 +27,9 @@ type Anexo = ConexaoPresenca & {
   /** O PAPEL não vê quem está online (Papéis → Detalhes → Presença): a aba recebe as listas VAZIAS — ela segue aparecendo
    * para os outros e conversando. */
   cego?: boolean;
+  /** Aba OBSERVADORA (a pessoa está noutro grupo ativo): só conta como presente e recebe a lista de presença — nada de
+   * "vendo agora", onde, nem chat (o `worker.ts` desliga o chat dela). */
+  observador?: boolean;
   janela?: { inicio: number; n: number };
   dig?: number;
   /** O que a aba está vendo (os banners abertos) e onde tem alteração não salva. */
@@ -127,6 +130,7 @@ export class PresencaGrupo {
       chatPrivado: req.headers.get("x-chat-privado") === "1",
       atividade: req.headers.get("x-presenca-atividade") === "1",
       cego: req.headers.get("x-presenca-ver") === "0",
+      observador: req.headers.get("x-presenca-observar") === "1",
     };
     anexo.desde = Date.now();
     servidor.serializeAttachment(anexo);
@@ -224,6 +228,7 @@ export class PresencaGrupo {
     }
     const agora = Date.now();
     if (m.t === "vendo" || m.t === "onde") {
+      if (anexo.observador) return;
       // Abrir/fechar banners e trocar de tela é rápido: até 60 por minuto por aba (vendo + onde).
       const conta = contarNaJanela(anexo.janelaVendo, agora, 60);
       if (!conta.ok) return;
@@ -254,6 +259,7 @@ export class PresencaGrupo {
 
   /** O CHAT (só ao vivo): mensagem do grupo, "digitando" e "lida". */
   private chat(ws: WebSocket, anexo: Anexo, texto: string | ArrayBuffer) {
+    if (anexo.observador) return;
     const m = lerMensagemChatAba(texto);
     if (!m) return;
     const agora = Date.now();
@@ -313,7 +319,10 @@ export class PresencaGrupo {
     const msg = JSON.stringify(atividade ? { t: "vendo", m: listaVendo(anexos), a: listaAtividade(anexos) } : { t: "vendo", m: listaVendo(anexos) });
     const mudou = msg !== this.ultimoVendo;
     this.ultimoVendo = msg;
-    const vendem = (ws: WebSocket) => (ws.deserializeAttachment() as Anexo | null)?.cego !== true;
+    const vendem = (ws: WebSocket) => {
+      const a = ws.deserializeAttachment() as Anexo | null;
+      return a?.cego !== true && a?.observador !== true;
+    };
     if (mudou) enviarA(this.state.getWebSockets().filter((o) => o !== saindo && vendem(o)), JSON.parse(msg));
     else if (nova && vendem(nova)) enviarA([nova], JSON.parse(msg));
   }

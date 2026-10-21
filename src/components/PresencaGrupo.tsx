@@ -18,6 +18,7 @@ import {
 } from "@/lib/presenca-core";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { Avatar } from "./Avatar";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { EVENTO_ABRIR_CHAT, type MeuStatus, useCanalGrupo } from "./CanalGrupo";
 import { ConversasDoChat, useChatAoVivo } from "./ChatAoVivo";
@@ -83,7 +84,7 @@ function useChegadas(ids: number[], nomes: Map<number, string>) {
   return { novos, anuncio };
 }
 
-type Linha = { pessoa: Pessoa; info: InfoPresenca | null; voce: boolean; visto: number | null };
+type Linha = { pessoa: Pessoa; info: InfoPresenca | null; voce: boolean; visto: number | null; /** Os grupos (acompanhados) da pessoa. */ grupos: number[] };
 
 /**
  * QUEM DO GRUPO ESTÁ ONLINE, AO VIVO, no cabeçalho (lê o `CanalGrupo`): no desktop as fotos com o ponto que PULSA, em
@@ -115,18 +116,20 @@ export function PresencaGrupo({
   }, [pedido]);
   const linhas = useMemo<Linha[]>(() => {
     if (!c) return [];
-    const comVoce = new Map(c.estados);
+    // TODOS os grupos da pessoa juntos (a pessoa em vários aparece uma vez, com os grupos dela).
+    const comVoce = new Map(c.estadosTodos);
     if (!comVoce.has(c.usuarioId)) comVoce.set(c.usuarioId, { estado: "online", ...statusVigente(c.meuStatus) });
-    const presentes: Linha[] = ordenarPresenca(c.pessoas, comVoce, c.usuarioId).map((l) => ({ pessoa: l.pessoa, info: comVoce.get(l.pessoa.id) ?? null, voce: l.voce, visto: null }));
+    const gr = (id: number) => c.gruposDe.get(id) ?? [];
+    const presentes: Linha[] = ordenarPresenca(c.todasPessoas, comVoce, c.usuarioId).map((l) => ({ pessoa: l.pessoa, info: comVoce.get(l.pessoa.id) ?? null, voce: l.voce, visto: null, grupos: gr(l.pessoa.id) }));
     const ids = new Set(presentes.map((l) => l.pessoa.id));
-    const recentes: Linha[] = c.pessoas
-      .filter((p) => !ids.has(p.id) && c.vistos.has(p.id))
-      .map((p) => ({ pessoa: p, info: null, voce: false, visto: c.vistos.get(p.id) as number }))
+    const recentes: Linha[] = c.todasPessoas
+      .filter((p) => !ids.has(p.id) && c.vistosTodos.has(p.id))
+      .map((p) => ({ pessoa: p, info: null, voce: false, visto: c.vistosTodos.get(p.id) as number, grupos: gr(p.id) }))
       .sort((a, b) => (b.visto ?? 0) - (a.visto ?? 0));
     return [...presentes, ...recentes];
   }, [c]);
   const outros = useMemo(() => linhas.filter((l) => !l.voce && l.info), [linhas]);
-  const nomes = useMemo(() => new Map((c?.pessoas ?? []).map((p) => [p.id, nomeExibicao(p)])), [c?.pessoas]);
+  const nomes = useMemo(() => new Map((c?.todasPessoas ?? []).map((p) => [p.id, nomeExibicao(p)])), [c?.todasPessoas]);
   const { novos, anuncio } = useChegadas(
     outros.map((l) => l.pessoa.id),
     nomes,
@@ -135,9 +138,10 @@ export function PresencaGrupo({
 
   const online = outros.filter((l) => l.info?.estado === "online").length;
   const ausentes = outros.length - online;
+  const varios = c.grupos.length > 1;
   const rotulo = !c.aoVivo
     ? "Quem está online — conectando"
-    : `Quem está online${c.grupoNome ? ` em ${c.grupoNome}` : ""} — ${outros.length ? `${online} online${ausentes ? `, ${ausentes} ausente${ausentes === 1 ? "" : "s"}` : ""}` : "só você"}`;
+    : `Quem está online${varios ? " nos seus grupos" : c.grupoNome ? ` em ${c.grupoNome}` : ""} — ${outros.length ? `${online} online${ausentes ? `, ${ausentes} ausente${ausentes === 1 ? "" : "s"}` : ""}` : "só você"}`;
   const naoLidas = chatV?.naoLidas ?? 0;
   const rotuloGatilho = !verOnline
     ? `Conversas${naoLidas ? `: ${naoLidas} mensage${naoLidas === 1 ? "m" : "ns"} não lida${naoLidas === 1 ? "" : "s"}` : ""}`
@@ -172,7 +176,7 @@ export function PresencaGrupo({
                     return {
                       id: pessoa.id,
                       foto: <Avatar nome={pessoa.nome} foto={pessoa.foto} size="sm" presenca={info?.estado} pulsar={info?.estado === "online"} />,
-                      titulo: `${nomeExibicao(pessoa)}${info?.estado === "ausente" ? ` — ${rotuloAusente(info)}` : ""}${a ? ` — ${textoAtividade(a)}` : ""}`,
+                      titulo: `${nomeExibicao(pessoa)}${varios ? ` (${nomesGrupos(c.grupos, c.gruposDe.get(pessoa.id))})` : ""}${info?.estado === "ausente" ? ` — ${rotuloAusente(info)}` : ""}${a ? ` — ${textoAtividade(a)}` : ""}`,
                       novo: novos.has(pessoa.id),
                     };
                   })}
@@ -200,7 +204,7 @@ export function PresencaGrupo({
           </span>
         )}
       </button>
-      <Modal open={folha} onClose={() => setFolha(false)} titulo={`Ao vivo${c.grupoNome ? ` · ${c.grupoNome}` : ""}`} size="md">
+      <Modal open={folha} onClose={() => setFolha(false)} titulo={`Ao vivo${varios ? " · seus grupos" : c.grupoNome ? ` · ${c.grupoNome}` : ""}`} size="md">
         {folha && <PainelAoVivo linhas={linhas} verMesa={verMesa} verOnline={verOnline} aba={aba} onAba={setAba} onFechar={() => setFolha(false)} celular />}
       </Modal>
     </>
@@ -253,7 +257,7 @@ function PainelAoVivo({
         {!celular && (
           <div className="flex items-center gap-2">
             <IconUsers className="h-4 w-4 text-accent" />
-            <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">Ao vivo{c.grupoNome ? ` · ${c.grupoNome}` : ""}</p>
+            <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text">Ao vivo{c.grupos.length > 1 ? " · seus grupos" : c.grupoNome ? ` · ${c.grupoNome}` : ""}</p>
             <SeloAoVivo aoVivo={c.aoVivo} />
           </div>
         )}
@@ -264,7 +268,7 @@ function PainelAoVivo({
             ariaLabel="Ao vivo"
             className="w-full [&>button]:flex-1"
             options={[
-              { value: "online", label: `Online (${online})`, icone: <IconUsers className="h-4 w-4" />, dica: "Quem do grupo está com o sistema aberto" },
+              { value: "online", label: `Online (${online})`, icone: <IconUsers className="h-4 w-4" />, dica: c.grupos.length > 1 ? "Quem dos seus grupos está com o sistema aberto" : "Quem do grupo está com o sistema aberto" },
               { value: "conversas", label: n ? `Conversas (${n})` : "Conversas", icone: <IconChat className="h-4 w-4" />, dica: "As conversas do chat ao vivo (nada é salvo)" },
             ]}
           />
@@ -299,6 +303,7 @@ function PainelOnline({
 }) {
   const c = useCanalGrupo();
   const [busca, setBusca] = useState("");
+  const [grupo, setGrupo] = useState("todos");
   const [aberta, setAberta] = useState<number | null>(null);
   // O "ausente há X min" e o "visto há X min" andam sozinhos com o painel aberto.
   const [, setRelogio] = useState(0);
@@ -308,7 +313,10 @@ function PainelOnline({
   }, []);
   if (!c) return null;
   const passa = predicadoBusca(busca);
-  const filtradas = passa ? linhas.filter((l) => l.voce || passa([l.pessoa.nome, l.pessoa.apelido])) : linhas;
+  // Com vários grupos: os chips filtram pelo grupo (a pessoa em mais de um aparece em cada um deles).
+  const varios = c.grupos.length > 1;
+  const doGrupo = varios && grupo !== "todos" ? Number(grupo) : null;
+  const filtradas = linhas.filter((l) => l.voce || ((doGrupo == null || l.grupos.includes(doGrupo)) && (!passa || passa([l.pessoa.nome, l.pessoa.apelido]))));
   // "Nesta tela": quem está na MESMA tela que você (o mesmo quadro, a mesma Mesa…) — primeiro, fora das outras seções.
   const aqui = (l: Linha) => {
     const a = !l.voce && l.info ? c.atividade?.get(l.pessoa.id) : undefined;
@@ -331,6 +339,20 @@ function PainelOnline({
         </div>
       )}
       <MeuStatusEditor />
+      {varios && (
+        <div className="px-3 pt-2">
+          <ChipsEscolha
+            ariaLabel="Filtrar pelo grupo"
+            rolar
+            valor={grupo}
+            onEscolher={setGrupo}
+            opcoes={[
+              { value: "todos", label: "Todos", conta: linhas.filter((l) => !l.voce && l.info).length },
+              ...c.grupos.map((g) => ({ value: String(g.id), label: g.nome, conta: linhas.filter((l) => !l.voce && l.info && l.grupos.includes(g.id)).length })),
+            ]}
+          />
+        </div>
+      )}
       {linhas.length > BUSCA_A_PARTIR && (
         <div className="px-3 pt-2">
           <SearchField compacto value={busca} onChange={(e) => setBusca(e.target.value)} onClear={() => setBusca("")} placeholder="Buscar pessoa…" aria-label="Buscar pessoa" />
@@ -359,7 +381,7 @@ function PainelOnline({
               </section>
             ),
         )}
-        {outros === 0 && <p className="px-3 py-2 text-[12.5px] text-muted">{c.aoVivo ? "Ninguém mais do grupo está online agora." : "Conectando à presença do grupo…"}</p>}
+        {outros === 0 && <p className="px-3 py-2 text-[12.5px] text-muted">{c.aoVivo ? (varios ? "Ninguém mais dos seus grupos está online agora." : "Ninguém mais do grupo está online agora.") : "Conectando à presença do grupo…"}</p>}
       </div>
       {semTitulo && !embutido && (
         <div className="border-t border-border px-3 py-2">
@@ -397,6 +419,15 @@ function LinhaPessoa({ l, aberta, onAlternar, verMesa, onNavegar }: { l: Linha; 
           </span>
         )}
         {atividade && <AtividadePessoa atividade={atividade} />}
+        {!voce && c && c.grupos.length > 1 && l.grupos.length > 0 && (
+          <span className="mt-0.5 flex flex-wrap gap-1" title={`Grupos: ${nomesGrupos(c.grupos, l.grupos)}`}>
+            {l.grupos.map((g) => (
+              <Badge key={g} tone={g === c.grupoId ? "blue" : "slate"} className="max-w-[9rem] truncate !text-[10.5px]">
+                {c.grupos.find((x) => x.id === g)?.nome}
+              </Badge>
+            ))}
+          </span>
+        )}
       </span>
       <span className={`shrink-0 text-[12px] ${inv ? "text-muted" : info?.estado === "online" ? "text-[var(--ok)]" : info ? "text-[var(--warn)]" : "text-faint"}`}>
         {inv ? "Invisível" : info ? (info.estado === "online" ? "Online" : rotuloAusente(info).replace(/^a/, "A")) : ""}
@@ -516,6 +547,11 @@ function MeuStatusEditor() {
       </div>
     </div>
   );
+}
+
+/** Os nomes dos grupos de uma pessoa ("Planejamento, Compras"). */
+function nomesGrupos(grupos: readonly { id: number; nome: string }[], ids: readonly number[] | undefined) {
+  return (ids ?? []).map((id) => grupos.find((g) => g.id === id)?.nome).filter(Boolean).join(", ");
 }
 
 /** O estado de uma pessoa por extenso (a dica das fotos fora do painel). */

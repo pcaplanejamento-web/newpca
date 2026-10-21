@@ -12,6 +12,9 @@ import {
   lerAtividade,
   lerListaMensagem,
   lerVendoMensagem,
+  gruposDasPessoas,
+  juntarPresencas,
+  juntarVistos,
   MAX_VENDO,
   ondeDaRota,
   type StatusPresenca,
@@ -36,7 +39,12 @@ export type PresencaShell = {
   /** Minutos parado até virar "ausente" (0 = só a aba em segundo plano). */
   inativoMin: number;
   status: MeuStatus;
+  /** Os OUTROS grupos da pessoa (com o papel vendo quem está online): a aba acompanha a presença de cada um (socket leve). */
+  outros: GrupoPresenca[];
+  /** Quem está só nos outros grupos (foto + apelido). */
+  diretorio: Pessoa[];
 };
+export type GrupoPresenca = { id: number; nome: string; membros: number[] };
 export type MeuStatus = { status: StatusPresenca; recado: string; ate: string | null };
 
 /** O estado de presença POR PESSOA, num armazém com assinatura: cada `usePresencaDe(id)` só re-renderiza quando o estado
@@ -128,6 +136,14 @@ export type CanalGrupoValor = {
   definirDetalheOnde: (texto: string) => () => void;
   armazem: Armazem;
   armazemVendo: ArmazemVendo;
+  /** TODOS os grupos acompanhados (o ativo primeiro) e as pessoas deles — o painel junta os online de todos. */
+  grupos: GrupoPresenca[];
+  /** Pessoa → os grupos (entre os acompanhados) em que ela está. */
+  gruposDe: Map<number, number[]>;
+  todasPessoas: Pessoa[];
+  /** A presença de todos os grupos juntos (a pessoa em vários aparece uma vez). */
+  estadosTodos: Map<number, InfoPresenca>;
+  vistosTodos: Map<number, number>;
 };
 
 const Ctx = createContext<CanalGrupoValor | null>(null);
@@ -215,7 +231,7 @@ export function CanalGrupo({
   );
 }
 
-const PRESENCA_VAZIA: PresencaShell = { pessoas: [], ver: false, whatsapp: {}, invisivel: false, inativoMin: 0, status: { status: "disponivel", recado: "", ate: null } };
+const PRESENCA_VAZIA: PresencaShell = { pessoas: [], ver: false, whatsapp: {}, invisivel: false, inativoMin: 0, status: { status: "disponivel", recado: "", ate: null }, outros: [], diretorio: [] };
 
 function CanalAtivo({
   presenca: presencaOuNada,
@@ -243,6 +259,13 @@ function CanalAtivo({
   const [meuStatus, setMeuStatus] = useState<MeuStatus>(presenca.status);
   const armazem = useMemo(criarArmazem, []);
   const ws = useRef<WebSocket | null>(null);
+  // Os sockets OBSERVADORES (um por outro grupo) e o último estado mandado (vale também para eles).
+  const observadores = useRef(new Map<number, WebSocket>());
+  const estadoMsg = useRef("");
+  const difundir = useCallback((texto: string) => {
+    for (const o of observadores.current.values()) if (o.readyState === WebSocket.OPEN) o.send(texto);
+  }, []);
+  const [porGrupo, setPorGrupo] = useState<Map<number, { estados: Map<number, InfoPresenca>; vistos: Map<number, number> }>>(() => new Map());
   const ouvintes = useRef(new Map<string, Set<Ouvinte>>());
   const { invisivel, inativoMin } = presenca;
   const [vendo, setVendo] = useState<Map<string, { id: number; editando: boolean }[]>>(() => new Map());
@@ -359,7 +382,10 @@ function CanalAtivo({
       if (e !== enviado && ws.current?.readyState === WebSocket.OPEN) {
         // Ao virar "ausente", diz há quanto tempo está parada (o "ausente há 12 min" dos outros conta desde então).
         const ha = e === "ausente" && document.visibilityState === "visible" ? Date.now() - ultimaAtividade : 0;
-        ws.current.send(JSON.stringify(ha > 0 ? { t: "estado", estado: e, ha } : { t: "estado", estado: e }));
+        const texto = JSON.stringify(ha > 0 ? { t: "estado", estado: e, ha } : { t: "estado", estado: e });
+        ws.current.send(texto);
+        estadoMsg.current = e === "online" ? "" : texto;
+        difundir(texto);
         enviado = e;
       }
     };
@@ -385,6 +411,7 @@ function CanalAtivo({
         setAoVivo(true);
         // O servidor começa "online": a aba aberta em segundo plano (ou parada) avisa logo.
         enviado = "online";
+        estadoMsg.current = "";
         conferir();
         // O que esta aba está vendo vale de novo na conexão nova.
         ultimoVendo.current = "";
@@ -408,7 +435,6 @@ function CanalAtivo({
         if (lista) {
           setEstados(lista.estados);
           setVistos(lista.vistos);
-          armazem.definir(lista.estados);
           return;
         }
         try {
@@ -463,13 +489,99 @@ function CanalAtivo({
       ws.current?.close();
       ws.current = null;
     };
-  }, [ativo, grupoId, invisivel, inativoMin, armazem, armazemVendo, mandarVendo, mandarOnde]);
+  }, [ativo, grupoId, invisivel, inativoMin, armazem, armazemVendo, mandarVendo, mandarOnde, difundir]);
+
+  // Os OUTROS grupos: um socket OBSERVADOR por grupo (`observar=1`) — conta como presente lá e recebe só a lista de presença
+  // (sem chat, "vendo" nem "onde"); mesma batida e reconexão do principal. Só com o papel vendo quem está online.
+  const outrosChave = presenca.outros.map((g) => g.id).join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a chave em texto representa os grupos; `invisivel` só reconecta.
+  useEffect(() => {
+    setPorGrupo(new Map());
+    if (!ativo || !presenca.ver || !outrosChave) return;
+    let vivo = true;
+    const paradas: (() => void)[] = [];
+    for (const g of outrosChave.split(",").map(Number)) {
+      let tentativa = 0;
+      let timer = 0;
+      let batida = 0;
+      let semPong = 0;
+      let s: WebSocket | null = null;
+      const agendar = () => {
+        if (vivo) timer = window.setTimeout(conectar, esperaReconexao(tentativa++));
+      };
+      function conectar() {
+        if (!vivo) return;
+        try {
+          s = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/presenca/ao-vivo?grupo=${g}&observar=1`);
+        } catch {
+          agendar();
+          return;
+        }
+        const sock = s;
+        sock.onopen = () => {
+          tentativa = 0;
+          observadores.current.set(g, sock);
+          if (estadoMsg.current) sock.send(estadoMsg.current);
+          batida = window.setInterval(() => {
+            if (sock.readyState !== WebSocket.OPEN) return;
+            sock.send("ping");
+            window.clearTimeout(semPong);
+            semPong = window.setTimeout(() => sock.close(), 10_000);
+          }, 45_000);
+        };
+        sock.onmessage = (e) => {
+          if (e.data === "pong") {
+            window.clearTimeout(semPong);
+            return;
+          }
+          const lista = lerListaMensagem(e.data);
+          if (lista) setPorGrupo((m) => new Map(m).set(g, lista));
+        };
+        sock.onclose = (e) => {
+          if (observadores.current.get(g) === sock) observadores.current.delete(g);
+          window.clearInterval(batida);
+          window.clearTimeout(semPong);
+          setPorGrupo((m) => {
+            if (!m.has(g)) return m;
+            const n = new Map(m);
+            n.delete(g);
+            return n;
+          });
+          if (e.code !== 4000) agendar();
+        };
+      }
+      conectar();
+      paradas.push(() => {
+        window.clearTimeout(timer);
+        window.clearInterval(batida);
+        window.clearTimeout(semPong);
+        s?.close();
+      });
+    }
+    return () => {
+      vivo = false;
+      for (const p of paradas) p();
+      observadores.current.clear();
+    };
+  }, [ativo, presenca.ver, outrosChave, invisivel]);
+
+  // A presença de TODOS os grupos juntos: as fotos do sistema (armazém) e o painel "Online agora".
+  const estadosTodos = useMemo(() => (porGrupo.size ? juntarPresencas([estados, ...[...porGrupo.values()].map((g) => g.estados)]) : estados), [estados, porGrupo]);
+  const vistosTodos = useMemo(() => (porGrupo.size ? juntarVistos([vistos, ...[...porGrupo.values()].map((g) => g.vistos)]) : vistos), [vistos, porGrupo]);
+  useEffect(() => armazem.definir(estadosTodos), [armazem, estadosTodos]);
+  const grupos = useMemo<GrupoPresenca[]>(
+    () => [{ id: grupoId, nome: grupoNome ?? "Grupo", membros: presenca.pessoas.map((p) => p.id) }, ...presenca.outros],
+    [grupoId, grupoNome, presenca.pessoas, presenca.outros],
+  );
+  const gruposDe = useMemo(() => gruposDasPessoas(grupos), [grupos]);
+  const todasPessoas = useMemo(() => (presenca.diretorio.length ? [...presenca.pessoas, ...presenca.diretorio] : presenca.pessoas), [presenca.pessoas, presenca.diretorio]);
 
   const definirStatus = useCallback(
     async (s: MeuStatus) => {
       const antes = meuStatus;
       setMeuStatus(s);
       enviar({ t: "status", ...s });
+      difundir(JSON.stringify({ t: "status", ...s }));
       try {
         const r = await fetch("/api/perfil/presenca", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
         const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
@@ -477,10 +589,11 @@ function CanalAtivo({
       } catch (e) {
         setMeuStatus(antes);
         enviar({ t: "status", ...antes });
+        difundir(JSON.stringify({ t: "status", ...antes }));
         throw e;
       }
     },
-    [meuStatus, enviar],
+    [meuStatus, enviar, difundir],
   );
 
   const valor = useMemo<CanalGrupoValor>(
@@ -507,8 +620,18 @@ function CanalAtivo({
       definirDetalheOnde,
       armazem,
       armazemVendo,
+      grupos,
+      gruposDe,
+      todasPessoas,
+      estadosTodos,
+      vistosTodos,
     }),
     [
+      grupos,
+      gruposDe,
+      todasPessoas,
+      estadosTodos,
+      vistosTodos,
       chatGrupo,
       chatPrivado,
       usuarioId,
@@ -546,7 +669,12 @@ export function CanalGrupoDemo({
   valor,
   children,
 }: {
-  valor: Omit<CanalGrupoValor, "armazem" | "armazemVendo" | "ouvir" | "enviar" | "definirStatus" | "registrarVendo" | "vendo" | "atividade" | "meuOnde" | "definirDetalheOnde"> & {
+  valor: Omit<
+    CanalGrupoValor,
+    "armazem" | "armazemVendo" | "ouvir" | "enviar" | "definirStatus" | "registrarVendo" | "vendo" | "atividade" | "meuOnde" | "definirDetalheOnde" | "grupos" | "gruposDe" | "todasPessoas" | "estadosTodos" | "vistosTodos"
+  > & {
+    /** Os grupos acompanhados (padrão: só o ativo, com todas as pessoas). */
+    grupos?: GrupoPresenca[];
     vendo?: CanalGrupoValor["vendo"];
     atividade?: CanalGrupoValor["atividade"];
     meuOnde?: CanalGrupoValor["meuOnde"];
@@ -568,6 +696,11 @@ export function CanalGrupoDemo({
       meuStatus,
       armazem,
       armazemVendo,
+      grupos: valor.grupos ?? [{ id: valor.grupoId, nome: valor.grupoNome ?? "Grupo", membros: valor.pessoas.map((p) => p.id) }],
+      gruposDe: gruposDasPessoas(valor.grupos ?? [{ id: valor.grupoId, membros: valor.pessoas.map((p) => p.id) }]),
+      todasPessoas: valor.pessoas,
+      estadosTodos: valor.estados,
+      vistosTodos: valor.vistos,
       ouvir: () => () => {},
       enviar: () => false,
       registrarVendo: () => () => {},

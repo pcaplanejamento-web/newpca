@@ -49,7 +49,10 @@ async function aoVivo(req: Request, env: Env): Promise<Response> {
 async function presenca(req: Request, env: Env): Promise<Response> {
   if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Esperado WebSocket.", { status: 426 });
   if (!origemDoProprioSite(req.headers.get("Origin"), req.url)) return new Response("Origem recusada.", { status: 403 });
-  const grupo = Number(new URL(req.url).searchParams.get("grupo"));
+  const busca = new URL(req.url).searchParams;
+  const grupo = Number(busca.get("grupo"));
+  // OBSERVAR = a aba está noutro grupo ativo: só a presença deste (o papel tem de ver quem está online; sem chat).
+  const observar = busca.get("observar") === "1";
   if (!Number.isInteger(grupo) || grupo <= 0) return new Response("Grupo inválido.", { status: 400 });
   const token = lerCookie(req.headers.get("Cookie"), "pca_session");
   if (!token) return new Response("Sem sessão.", { status: 401 });
@@ -71,6 +74,7 @@ async function presenca(req: Request, env: Env): Promise<Response> {
     .first<{ id: number; membro: number; prefs: string | null; config: string | null; chat: string | null; chat_do_grupo: number | null; ver_online: number | null; visivel: number | null }>();
   if (!linha) return new Response("Sessão inválida.", { status: 401 });
   if (!linha.membro) return new Response("Fora do grupo.", { status: 403 });
+  if (observar && linha.ver_online === 0) return new Response("O papel não vê quem está online.", { status: 403 });
   let bruto: unknown = null;
   try {
     bruto = linha.config ? JSON.parse(linha.config) : null;
@@ -95,8 +99,9 @@ async function presenca(req: Request, env: Env): Promise<Response> {
   const cfgChat = lerConfigChat(chat);
   // O GRUPO também libera (ou não) o chat — Grupos → "Chat liberado".
   const chatDoGrupo = linha.chat_do_grupo !== 0;
-  headers.set("x-chat-grupo", cfgChat.grupo && chatDoGrupo ? "1" : "0");
-  headers.set("x-chat-privado", cfgChat.privado && chatDoGrupo ? "1" : "0");
+  headers.set("x-chat-grupo", cfgChat.grupo && chatDoGrupo && !observar ? "1" : "0");
+  headers.set("x-chat-privado", cfgChat.privado && chatDoGrupo && !observar ? "1" : "0");
+  headers.set("x-presenca-observar", observar ? "1" : "0");
   // O PAPEL vê quem está online? (Papéis → Detalhes → Presença; o Administrador sempre vê.)
   headers.set("x-presenca-ver", linha.ver_online === 0 ? "0" : "1");
   // O status gravado (Ocupado, Em reunião…) — a aba o atualiza depois pelo próprio socket.

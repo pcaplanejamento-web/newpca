@@ -18,6 +18,7 @@ import { getConfigProtecao } from "@/lib/protecao";
 import { protecaoDoPapel } from "@/lib/protecao-core";
 import { contarNaoLidas } from "@/lib/notificacoes";
 import { getConfigChat, getConfigPresenca, prefsPresencaDe, whatsappDe } from "@/lib/presenca";
+import { MAX_GRUPOS_OBSERVADOS } from "@/lib/presenca-core";
 import { chatLigado } from "@/lib/chat-core";
 import { linhasTabela } from "@/lib/theme";
 import { listarPessoasDoGrupo } from "@/lib/usuarios";
@@ -54,7 +55,7 @@ export default async function PainelLayout({
     getPcaFiltro(pcas),
     contarNaoLidas(usuario, grupos),
     // O PAPEL vê quem está online? (Papéis → Detalhes → Presença; o ADM sempre vê.)
-    presencaDoGrupo(usuario.id, ativo?.id ?? null, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
+    presencaDoGrupo(usuario.id, ativo?.id ?? null, grupos, usuario.admin || usuario.papel.detalhes.presenca.verOnline, usuario.admin || usuario.papel.detalhes.presenca.visivel),
     getConfigChat(),
     getConfigEscopo(),
   ]);
@@ -104,16 +105,34 @@ export default async function PainelLayout({
 /** A PRESENÇA do grupo ativo (quem está online): só com o ADM tendo ligado e um grupo ativo — o diretório (foto + apelido)
  * vai uma vez; o canal manda só ids. Desligada = `null` (nada é montado); a leitura FALHOU = `undefined` (a tela mantém a
  * presença que já tinha — nunca derruba o canal nem as conversas por uma falha passageira). */
-async function presencaDoGrupo(usuarioId: number, grupoId: number | null, ver: boolean, visivel: boolean) {
+async function presencaDoGrupo(usuarioId: number, grupoId: number | null, grupos: { id: number; nome: string }[], ver: boolean, visivel: boolean) {
   if (grupoId == null) return null;
   const cfg = await getConfigPresenca();
   if (!cfg.ativo) return null;
   try {
-    const [pessoas, prefs] = await Promise.all([listarPessoasDoGrupo(grupoId), prefsPresencaDe(usuarioId)]);
+    // Os OUTROS grupos da pessoa (só quando o papel vê quem está online): os membros de cada um — o painel junta os online de
+    // todos, cada pessoa marcada com os grupos dela. Só os grupos em que a pessoa É membro (o ADM vê, mas não observa os demais).
+    const outrosIds = ver ? grupos.filter((g) => g.id !== grupoId).slice(0, MAX_GRUPOS_OBSERVADOS) : [];
+    const [pessoas, prefs, membrosOutros] = await Promise.all([
+      listarPessoasDoGrupo(grupoId),
+      prefsPresencaDe(usuarioId),
+      Promise.all(outrosIds.map((g) => listarPessoasDoGrupo(g.id))),
+    ]);
+    const ativos = new Set(pessoas.map((p) => p.id));
+    const diretorio = new Map<number, (typeof pessoas)[number]>();
+    const outros = outrosIds.flatMap((g, i) => {
+      const membros = membrosOutros[i];
+      if (!membros.some((p) => p.id === usuarioId)) return [];
+      for (const p of membros) if (!ativos.has(p.id)) diretorio.set(p.id, p);
+      return [{ id: g.id, nome: g.nome, membros: membros.map((p) => p.id) }];
+    });
+    const extras = [...diretorio.values()];
     return {
       pessoas,
       ver,
-      whatsapp: await whatsappDe(pessoas.map((p) => p.id)),
+      outros,
+      diretorio: extras,
+      whatsapp: await whatsappDe([...pessoas, ...extras].map((p) => p.id)),
       invisivel: !visivel,
       inativoMin: cfg.inativoMin,
       status: { status: prefs.status, recado: prefs.recado, ate: prefs.ate },
