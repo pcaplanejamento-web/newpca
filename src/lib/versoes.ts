@@ -35,6 +35,14 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.149.3",
+    data: "2026-10-21",
+    titulo: "Documentos: publicação dos decodificadores de PDF",
+    mudancas: [
+      { tipo: "correcao", area: "Documentos", texto: "A correção dos PDFs digitalizados chega ao ar: só os decodificadores necessários são publicados.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.149.2",
     data: "2026-10-21",
     titulo: "Domínio dos itens de protocolo em toda tela",
