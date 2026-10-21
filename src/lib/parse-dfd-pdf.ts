@@ -51,7 +51,13 @@ export async function abrirPdf(file: File): Promise<PdfDoc> {
   }
 
   // O `destroy` fica na LOADING TASK (não no PDFDocumentProxy) — guardamos a task.
-  const task = pdfjs.getDocument({ data: new Uint8Array(buf) });
+  // Fontes padrão e CMaps servidos pelo site (`public/pdfjs`): sem eles, o texto em fonte NÃO embutida some no canvas.
+  const task = pdfjs.getDocument({
+    data: new Uint8Array(buf),
+    standardFontDataUrl: "/pdfjs/standard_fonts/",
+    cMapUrl: "/pdfjs/cmaps/",
+    cMapPacked: true,
+  });
   let doc: Awaited<typeof task.promise>;
   try {
     doc = await task.promise;

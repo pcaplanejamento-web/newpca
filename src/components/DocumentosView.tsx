@@ -218,6 +218,24 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
   const [renomeando, setRenomeando] = useState<{ doc: DocumentoResumo; nome: string } | null>(null);
   const { confirmar, confirmacao } = useConfirmacao();
   const entrada = useRef<HTMLInputElement>(null);
+  const [link, setLink] = useState<{ url: string; erro?: string; baixando?: boolean } | null>(null);
+
+  // Link do Google: o servidor baixa o PDF e ele segue o MESMO envio de um arquivo (tamanho, compactação, partes).
+  async function enviarLink(e: FormEvent) {
+    e.preventDefault();
+    if (!link?.url.trim()) return;
+    setLink({ ...link, erro: undefined, baixando: true });
+    const r = await fetch("/api/documentos/link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: link.url }) }).catch(() => null);
+    if (!r?.ok) {
+      const j = (await r?.json().catch(() => ({}))) as { error?: string } | undefined;
+      setLink({ ...link, baixando: false, erro: j?.error ?? "Não foi possível baixar o arquivo." });
+      return;
+    }
+    const nome = decodeURIComponent(r.headers.get("x-nome") ?? "Documento do Google");
+    const arquivo = new File([await r.blob()], `${nome}.pdf`, { type: "application/pdf" });
+    setLink(null);
+    enviar([arquivo]);
+  }
 
   const visiveis = useMemo(() => {
     const casa = predicadoBusca(busca);
@@ -361,6 +379,9 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
                 }}
               >
                 <QuadroNovoCard rotulo="Enviar PDF" onClick={() => entrada.current?.click()} />
+                <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => setLink({ url: "" })}>
+                  Usar link do Google
+                </Button>
                 <input
                   ref={entrada}
                   type="file"
@@ -409,6 +430,37 @@ export function DocumentosView({ documentos, pode, admin = false }: { documentos
         >
           <form id="renomear-documento" onSubmit={renomear}>
             <TextField label="Nome" value={renomeando.nome} maxLength={120} autoFocus onChange={(e) => setRenomeando({ ...renomeando, nome: e.target.value })} />
+          </form>
+        </Modal>
+      )}
+
+      {link && (
+        <Modal
+          open
+          onClose={() => !link.baixando && setLink(null)}
+          titulo="PDF por link do Google"
+          size="md"
+          rodape={
+            <div className="flex w-full justify-end gap-2">
+              <Button variant="secondary" disabled={link.baixando} onClick={() => setLink(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" form="link-documento" loading={link.baixando} disabled={!link.url.trim()}>
+                Buscar
+              </Button>
+            </div>
+          }
+        >
+          <form id="link-documento" onSubmit={enviarLink} className="space-y-2">
+            <TextField
+              label="Link do Google Docs ou do Drive"
+              value={link.url}
+              autoFocus
+              placeholder="https://docs.google.com/…"
+              error={link.erro}
+              onChange={(e) => setLink({ url: e.target.value })}
+            />
+            <p className="text-xs text-muted">O arquivo precisa estar compartilhado como “Qualquer pessoa com o link”. Ele é copiado para o sistema e abre igual a um PDF enviado.</p>
           </form>
         </Modal>
       )}

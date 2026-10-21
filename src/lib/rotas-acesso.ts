@@ -157,6 +157,7 @@ export const ROTAS_ACESSO: Record<string, Partial<Record<Metodo, RegraRota>>> = 
   "catalogo/[id]/historico": { GET: tela("catalogo", "visualizar", "o histórico de compra de um catálogo") },
   "catalogo/historico/produto": { GET: tela(["dfd", "pca", "catalogo", "verificacao"], "visualizar", "o histórico de compra de um produto — a comparação com o item") },
   documentos: { GET: tela("documentos", "visualizar"), POST: tela("documentos", "importar", "abre o envio (≤ 100 KB; o ADM, 20 MB)") },
+  "documentos/link": { POST: tela("documentos", "importar", "baixa o PDF de um link do Google") },
   "documentos/[id]/partes": { PUT: tela("documentos", "importar", "uma parte do PDF (de quem abriu o envio)") },
   "documentos/[id]": { PATCH: tela("documentos", "manipular", "renomear"), DELETE: tela("documentos", "excluir") },
   "documentos/[id]/arquivo": { GET: tela("documentos", "visualizar", "ver o PDF; baixar (?baixar=1) exige Exportar") },
