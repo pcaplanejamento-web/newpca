@@ -525,6 +525,15 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     gratuito: 100 mil requisições de DO/dia; mensagens que chegam em 20:1; as que saem e a auto-resposta não contam): ~4–5
     mil/dia para 50 pessoas × 2 abas × 8 h.
 
+- **VÁRIOS GRUPOS AO MESMO TEMPO (v1.135.0, sem migração):** com o papel vendo quem está online, o layout manda também os
+  OUTROS grupos de que a pessoa é membro (`PresencaShell.outros` {id, nome, membros} + `diretorio`, até
+  `MAX_GRUPOS_OBSERVADOS`=8) e o `CanalGrupo` abre um socket OBSERVADOR por grupo (`?grupo=X&observar=1` → `worker.ts`
+  recusa sem `verOnline` e desliga o chat; o DO marca `observador` — conta como presente lá, recebe só a lista de presença,
+  sem "vendo"/"onde"/chat). O estado ausente e o status vão também aos observadores. `juntarPresencas`/`juntarVistos`/
+  `gruposDasPessoas` (`presenca-core.ts`, testados) juntam tudo (`estadosTodos`, `gruposDe`, `todasPessoas`): as fotos do
+  sistema e o painel "Online agora" mostram cada pessoa UMA vez com os selos dos grupos dela (o ativo em azul) e os chips
+  "Todos · grupo…" filtram. "Nesta tela"/atividade seguem só do grupo ativo.
+
 ## Chat ao vivo (v1.11.0; GUARDADO POR 7 DIAS desde a v1.15.0 — ver a seção própria)
 - **Regra do usuário (v1.15.0): as conversas ficam GUARDADAS por 7 DIAS** (antes eram só ao vivo) — sem auditoria do conteúdo;
   a limpeza do cron apaga o que passou disso. Configurações → **"Presença e chat"** (`PresencaAdmin`

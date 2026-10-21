@@ -35,6 +35,20 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.135.0",
+    data: "2026-10-21",
+    titulo: "Quem está online em todos os seus grupos",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Presença",
+        texto:
+          "O painel Ao vivo mostra quem está online em TODOS os grupos de que você faz parte ao mesmo tempo — cada pessoa com os grupos dela marcados e filtro por grupo. Vale para quem o papel permite ver quem está online.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.134.0",
     data: "2026-10-21",
     titulo: "Prévia completa da planilha do PCA",
