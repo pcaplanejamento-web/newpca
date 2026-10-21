@@ -2473,7 +2473,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   devolver; `motivosNaoEnviar` sem a trava de fonte; seletor de Mesa e "Enviar ao PCA" listam todos); o de lista tem também
   a **Importação** (`AbaPca` "importacao", componente `pca.importacao`). A Importação lê a planilha **CONSOLIDADA** com a
   coluna LOCAL (núcleo puro `parse-xlsx-core.ts` → `lerPlanilhas`: uma planilha por LOCAL, código só dígitos, data serial/
-  "mm/aaaa"/ANUAL, `problemas` na PRÉVIA — `useConfirmacao` antes de gravar); o `start` do `/api/upload` dá a planilha à
+  "mm/aaaa"/ANUAL, `problemas` na PRÉVIA — **`PreviaPlanilha`** (DS, `next/dynamic`): `Modal` full com StatMini, os apontamentos e TODAS as linhas normalizadas (`linhasDaPrevia`) numa `DataTable` compacta exportável; só "Importar" grava); o `start` do `/api/upload` dá a planilha à
   unidade cadastrada de MESMA SIGLA (senão a do cabeçalho); lotes 5 × 18 = 90 parâmetros. **União** (só leitura,
   `pca-uniao.ts`, testado): com algum protocolo incorporado (ou na prévia), `dashboardUnido`/`orcamentoDoPca`/cards somam
   as planilhas + os itens consolidados, e toda linha da planilha cujo ID PROTOCOLO é o "Id:" de um protocolo INCORPORADO sai

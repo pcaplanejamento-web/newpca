@@ -15,6 +15,8 @@ Legenda: ✅ pronto · 🔨 parcial · 🔜 recomendado a seguir · 💡 possív
 ✅ Todo PCA tem a aba **Mesa**; o de lista pronta mantém a **Importação**, que agora lê a planilha consolidada com a coluna
 LOCAL (uma planilha por unidade, domínio, prioridade, ID PROTOCOLO, prévia dos problemas). ✅ Dashboard/Orçamento/cards
 somam planilhas + protocolos incorporados sem contar duas vezes (o protocolo vence; nunca é sobrescrito).
+✅ **Prévia completa da planilha (v1.134.0)** — banner com todas as linhas e colunas antes de importar.
+
 🔜 **Conciliação planilha × protocolos** (Igual · Divergente campo a campo · Só na planilha · Só no protocolo) na Importação.
 
 ### Mesa conectada (v1.116.0) — entregue

@@ -67,6 +67,7 @@ import { type Column, DataTable } from "@/components/DataTable";
 import { DfdCabecalho, DfdView, type DfdVisualItem, ItemCabecalho } from "@/components/DfdView";
 import { PcaCompilacaoView } from "@/components/PcaCompilacaoView";
 import { PcaPicker } from "@/components/PcaPicker";
+import { PreviaPlanilha } from "@/components/PreviaPlanilha";
 import { type CapaValores, ProtocoloCabecalho, ProtocoloView } from "@/components/ProtocoloView";
 import { BarraEdicaoMassa, BarraEdicaoMassaItens, BarraEdicaoMassaProtocolos } from "@/components/BarraEdicaoMassa";
 import { TabelaMesaFluxo } from "@/components/fluxos/TabelaMesaFluxo";
@@ -2264,6 +2265,23 @@ function TipoDfdPickerDemo() {
 }
 
 /** Demo do seletor de PCA (controlado) — pré-selecionado pela detecção "PCA 2026". */
+function PreviaPlanilhaDemo() {
+  const [aberta, setAberta] = useState(false);
+  const leitura = {
+    formato: "consolidado" as const,
+    planilhas: [
+      { codigo: "AMAE", municipio: "Rio Verde", nomeArquivo: "Enviar_PCA26.xlsx", rows: [{ sequencial: 1, idProduto: "524190502", nomeProduto: "CERTIFICADO DIGITAL", unidadeMedida: "UNIDADE", classificacao: "SERVIÇO", dominio: "MATERIAL", quantidade: 1, valorReferencia: 144.3, dataDesejada: "2026-03-01", prioridade: "ALTA", protocoloIdExterno: "2334977" }] },
+    ],
+    problemas: [{ tipo: "linhas vazias ignoradas", quantidade: 2, exemplos: ["linha 5", "linha 6"] }],
+  };
+  return (
+    <>
+      <Button onClick={() => setAberta(true)}>Abrir prévia</Button>
+      {aberta && <PreviaPlanilha nomeArquivo="Enviar_PCA26.xlsx" leitura={leitura} onCancelar={() => setAberta(false)} onImportar={() => setAberta(false)} />}
+    </>
+  );
+}
+
 function PcaPickerDemo() {
   const [ano, setAno] = useState<number | null>(2026);
   return (
@@ -4629,6 +4647,10 @@ export function Catalogo() {
           do banner (<span className="font-mono">ProtocoloView.topo</span>); cada DFD tem o painel "Diferenças" ao lado; só
           o que mudou é regravado ao sobrescrever.
         </p>
+      </Secao>
+
+      <Secao titulo="PreviaPlanilha (prévia COMPLETA da planilha do PCA antes de importar — todas as linhas como serão gravadas)">
+        <PreviaPlanilhaDemo />
       </Secao>
 
       <Secao titulo="PcaPicker (definição do PCA do processo — obrigatório)">

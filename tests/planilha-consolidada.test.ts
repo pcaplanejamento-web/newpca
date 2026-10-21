@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { normalizarLinha, parseDataDesejada } from "../src/lib/normalize.ts";
-import { lerPlanilhas } from "../src/lib/parse-xlsx-core.ts";
+import { lerPlanilhas, linhasDaPrevia } from "../src/lib/parse-xlsx-core.ts";
 import { chaveProtocoloExterno, unirPlanilhaEProtocolos } from "../src/lib/pca-uniao.ts";
 
 const CAB = ["LOCAL", "SEQUENCIAL", "CÓDIGO", "PRODUTO", "UNIDADES (DIVERSOS) DE MEDIDA", "CLASSIFICAÇÃO", "DOMÍNIO", "QUANTIDADE", "VALOR UNITÁRIO", "DATA PARA CONTRATAÇÃO", "VALOR TOTAL", "PRIORIDADE", "ID PROTOCOLO", "DFD"];
@@ -17,6 +17,14 @@ describe("planilha consolidada (Enviar_PCA)", () => {
     [null, null, null, null],
   ];
   const l = lerPlanilhas(aoa, "Enviar_PCA26.xlsx");
+  it("prévia = todas as linhas normalizadas, com a unidade", () => {
+    const pv = linhasDaPrevia(l);
+    assert.equal(pv.length, 3);
+    assert.deepEqual(pv.map((r) => r.unidade), ["AMAE", "AMAE", "FEMBOM"]);
+    assert.equal(Math.round(pv.reduce((s, r) => s + (r.valorTotal ?? 0), 0) * 100), Math.round((144.3 + 2 * 1198.06 + 4 * 124.67) * 100));
+    assert.equal(pv[1].previsaoGenerica, "ANUAL");
+    assert.equal(pv[1].prioridade, "ALTA");
+  });
   it("uma planilha por LOCAL", () => {
     assert.equal(l.formato, "consolidado");
     assert.deepEqual(l.planilhas.map((p) => [p.codigo, p.rows.length]), [["AMAE", 2], ["FEMBOM", 1]]);

@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.134.0",
+    data: "2026-10-21",
+    titulo: "Prévia completa da planilha do PCA",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "PCA",
+        texto: "Antes de importar, a planilha abre num banner com o resumo, os apontamentos e TODAS as linhas e colunas como serão gravadas (filtros, total e exportar). Só “Importar” grava.",
+        link: "/painel/pca",
+      },
+    ],
+  },
+  {
     versao: "1.133.0",
     data: "2026-10-21",
     titulo: "PCA de lista pronta recebe protocolos e a planilha consolidada",
