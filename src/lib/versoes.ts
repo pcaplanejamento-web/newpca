@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.150.1",
+    data: "2026-10-21",
+    titulo: "Geral com o número de unidades",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Cabeçalho",
+        texto: "A opção da soma das unidades agora se chama “Geral (N unidades)”, vem escolhida e aparece para todos que acessam mais de uma unidade.",
+        link: "/painel/mesa",
+      },
+    ],
+  },
+  {
     versao: "1.150.0",
     data: "2026-10-21",
     titulo: "Documentos nos PCAs, na pesquisa e no sino",
@@ -78,19 +91,6 @@ export const VERSOES: readonly Versao[] = [
     titulo: "Documentos: PDFs digitalizados com as letras",
     mudancas: [
       { tipo: "correcao", area: "Documentos", texto: "PDFs digitalizados (scan em camadas, como decretos) aparecem com as letras ao ver, ao compactar e pelo link do Drive.", link: "/painel/documentos" },
-    ],
-  },
-  {
-    versao: "1.149.1",
-    data: "2026-10-21",
-    titulo: "Geral com o número de unidades",
-    mudancas: [
-      {
-        tipo: "correcao",
-        area: "Cabeçalho",
-        texto: "A opção da soma das unidades agora se chama “Geral (N unidades)”, vem escolhida e aparece para todos que acessam mais de uma unidade.",
-        link: "/painel/mesa",
-      },
     ],
   },
   {
