@@ -56,12 +56,23 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     O teste roda os builders pelo driver `drizzle-orm/d1` REAL sobre `node:sqlite` (`tests/fixtures/d1-sqlite.ts`).
 - **DADOS PRONTOS — carregar uma vez, recarregar só com dado novo (padrão do sistema inteiro):**
   - **Versão dos dados** (`versao-dados.ts` → `versaoDados()`): `MAX(auditoria.id)` sem login/logout/sessão (toda escrita passa por
-    `registrarAuditoria`) + `MAX(dfd_itens.id)` + `MAX(orcamento_itens.id)` (lotes gravados depois do registro), memorizada
-    por requisição; rota `GET /api/dados/versao` (`no-store`).
+    `registrarAuditoria`) + `MAX(dfd_itens.id)` + `MAX(orcamento_itens.id)` + `MAX(itens.id)` (lotes gravados depois do
+    registro — o `itens` é o append da planilha do PCA, v1.131.0), memorizada por requisição; rota `GET /api/dados/versao`
+    (`no-store`, `{versao: completa, dados}`). **Duas camadas (v1.131.0, núcleo puro `versao-dados-core.ts`):** `completa` =
+    toda escrita; **`dados`** = sem as entidades de TAREFAS e AGENDA (`FORA_DOS_DADOS` — lista de EXCLUSÃO: entidade nova
+    conta; catálogo, configuração e edições de tabela contam) — a do `memoPorVersao` e do índice da pesquisa. `areaDaRota`:
+    Mesa/PCA/Orçamento/Catálogo/Verificação acompanham `dados`; as demais (Tarefas, Calendário, ADM, Perfil, desconhecida),
+    `completa`. **Carga nova que leia tarefa/agenda numa tela da área `dados` = tirar a entidade da lista ou a tela da área.**
   - **Navegador:** `next.config` `experimental.staleTimes {dynamic:1800}` (v1.129.0) — telas/abas já vistas voltam do cache na hora;
     toda gravação já dá `router.refresh()` (limpa o cache) e o **`SincronizarDados`** (no `AppShell`, sem UI; a versão vem do
-    layout do painel) consulta a versão ao voltar à janela e a cada 60 s com a aba à vista (NUNCA a cada navegação) e só dá `router.refresh()` quando
-    ela MUDOU (gravação de outra pessoa).
+    layout do painel) consulta as versões ao voltar à janela e a cada 60 s com a aba à vista (NUNCA a cada navegação) e só dá `router.refresh()` quando
+    a da ÁREA da tela aberta MUDOU (gravação de outra pessoa); a mudança de outra área fica guardada e recarrega ao ir a uma
+    tela dela.
+  - **Esqueleto na hora (v1.131.0):** `loading.tsx` de 3 linhas (só o **`EsqueletoTela`** — `tabela`/`cartoes`/`calendario`,
+    sem dado, sem servidor) nas telas de lista do painel e do ADM — tocar no menu mostra a estrutura na hora. NUNCA em página
+    que só redireciona, no `design-system` nem em `[id]` (`tests/versao-dados-core.test.ts` confere). Trocar só o `?aba=`/
+    `?mes=` não reexibe o esqueleto (a chave do Suspense não leva a busca; a navegação é transição). O `ALTURA_NO_HTML` das
+    tabelas tenta a cada quadro enquanto o bloco chega escondido pelo streaming.
   - **Servidor:** **`memoPorVersao(chave, carregar)`** — o resultado de uma CARGA PESADA fica na memória do Worker enquanto
     a versão for a mesma (validade de segurança 5 min, até 60 entradas, a promessa compartilhada; falha não fica; núcleo
     puro testado `memo-versao-core.ts`). A chave leva os ARGUMENTOS, nunca o usuário (o que depende da sessão segue lido a

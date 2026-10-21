@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.131.0",
+    data: "2026-10-21",
+    titulo: "Telas que abrem na hora",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Ao tocar num item do menu, a estrutura da tela aparece na hora e os dados entram logo em seguida.", link: "/painel/mesa" },
+      { tipo: "melhoria", area: "Mesa", texto: "Gravações de Tarefas e do Calendário não fazem mais a Mesa, o PCA, o Orçamento e o Catálogo recalcularem nem recarregarem.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "PCA", texto: "O Dashboard de um PCA por planilhas acompanha na hora as planilhas importadas.", link: "/painel/pca" },
+    ],
+  },
+  {
     versao: "1.130.0",
     data: "2026-10-21",
     titulo: "Estado da Mesa sem reconferir",

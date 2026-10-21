@@ -28,7 +28,7 @@ export async function GET() {
     const linhas = await indiceMesa(a.acesso, tipo);
     grupos.push({ tipo, completo: linhas.length < MAX_INDICE, linhas: linhas.length < MAX_INDICE ? linhas : [] });
   }
-  const r = ok({ versao: await versaoDados(), grupos });
+  const r = ok({ versao: (await versaoDados()).dados, grupos });
   r.headers.set("Cache-Control", "private, no-store");
   return r;
 }

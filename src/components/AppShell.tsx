@@ -1,5 +1,6 @@
 "use client";
 
+import type { VersoesDados } from "@/lib/versao-dados-core";
 import Link from "next/link";
 import { rotaInicial } from "@/lib/abas";
 import { IconeNavegacao } from "./CarregandoLink";
@@ -542,8 +543,8 @@ export function AppShell({
   identidade?: Identidade;
   /** Notificações NÃO LIDAS (o número do sino). */
   notificacoes?: number;
-  /** A VERSÃO DOS DADOS do servidor (`versaoDados`) — o `SincronizarDados` só recarrega quando ela muda. */
-  versaoDados?: string;
+  /** As VERSÕES DOS DADOS do servidor (`versaoDados`) — o `SincronizarDados` só recarrega quando a da tela muda. */
+  versaoDados?: VersoesDados;
   /** A PRESENÇA do grupo ativo (quem está online) — só quando o ADM a ligou; `null` = nada é montado; `undefined` = a
    * leitura falhou (mantém a que já estava — o canal e as conversas nunca caem por uma falha passageira). */
   presenca?: PresencaShell | null;
@@ -605,7 +606,7 @@ export function AppShell({
     {/* As Novidades mostram só as mudanças das telas que o grupo abre (o ADM vê tudo). */}
     <AcessoNovidades telas={abas} admin={usuario.admin}>
     <div className="min-h-dvh bg-bg text-text lg:flex lg:overflow-x-clip">
-      {versaoDados != null && <SincronizarDados versao={versaoDados} />}
+      {versaoDados != null && <SincronizarDados versoes={versaoDados} />}
       {/* Sidebar desktop — a VAGA (sticky, altura do display) anima a largura e empurra o conteúdo; o menu dentro dela é
           absoluto: recolhido vira o trilho de ícones e, ao passar o mouse, abre POR CIMA do conteúdo (sem empurrar). O
           conteúdo tem largura fixa — nada reflui na animação, só é cortado. Regras em globals.css (.menu-vaga). */}

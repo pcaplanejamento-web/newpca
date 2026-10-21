@@ -140,6 +140,7 @@ import { CAPACIDADES_MEMBRO, type Capacidades } from "@/lib/papeis-core";
 import { coerceDetalhes, type DetalhesPapel, detalhesPadrao } from "@/lib/papeis-detalhes-core";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
+import { EsqueletoTela } from "@/components/EsqueletoTela";
 import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AparenciaPessoal } from "@/components/AparenciaPessoal";
@@ -3907,6 +3908,16 @@ export function Catalogo() {
           <div className="flex items-center justify-center gap-3 rounded-card border border-border bg-surface p-4">
             <span className="text-[13px] text-text-2">Alternador de tema</span>
             <ThemeToggle />
+          </div>
+        </div>
+        <div className="mt-4 rounded-card border border-border bg-surface p-4">
+          <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            EsqueletoTela (o loading.tsx de cada tela: tabela · cartoes · calendario — só a estrutura, na hora)
+          </span>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <EsqueletoTela variante="tabela" />
+            <EsqueletoTela variante="cartoes" />
+            <EsqueletoTela variante="calendario" />
           </div>
         </div>
         <div className="mt-4 rounded-card border border-border bg-surface p-4">

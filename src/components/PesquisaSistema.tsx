@@ -59,8 +59,8 @@ async function garantirIndice(): Promise<Indice | null> {
   carregandoIndice ??= (async () => {
     try {
       if (indiceMem) {
-        const v = (await (await fetch("/api/dados/versao", { cache: "no-store" })).json()) as { versao?: string };
-        if (v.versao === indiceMem.versao) {
+        const v = (await (await fetch("/api/dados/versao", { cache: "no-store" })).json()) as { dados?: string };
+        if (v.dados === indiceMem.versao) {
           indiceMem = { ...indiceMem, conferido: Date.now() };
           return indiceMem;
         }

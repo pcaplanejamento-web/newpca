@@ -61,10 +61,11 @@ export function useAlturaAteOFim(ref: RefObject<HTMLElement | null>, ativo: bool
 /**
  * Altura cheia JÁ no HTML do SERVIDOR (F5 / 1º acesso): o navegador roda este trecho ao LER o bloco — antes da 1ª
  * pintura — com a MESMA conta do hook (o topo pela cadeia de `offsetTop` até o fim do display, menos o respiro do
- * `<main>` e a folga; só no desktop). A hidratação assume depois e o trecho sai do DOM. Na navegação pelo app o React não
+ * `<main>` e a folga; só no desktop). Chegando ESCONDIDO pelo streaming (atrás do esqueleto do `loading.tsx`, ainda sem
+ * posição), tenta de novo a cada quadro — antes da pintura — até a troca (no máximo 120). A hidratação assume depois e o trecho sai do DOM. Na navegação pelo app o React não
  * roda scripts — lá o `useLayoutEffect` já mede antes de pintar. Texto FIXO (nenhum dado do usuário).
  */
-const ALTURA_NO_HTML = `(function(s){var t=s&&s.parentElement;if(!t||!matchMedia("(min-width: 64rem)").matches)return;var y=0;for(var n=t;n;n=n.offsetParent)y+=n.offsetTop;if(y<=0)return;var p=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pad-canvas-y"));t.style.height=Math.max(240,Math.floor(innerHeight-y-(p>=0?p:8)-${FOLGA}))+"px"})(document.currentScript)`;
+const ALTURA_NO_HTML = `(function(s){var t=s&&s.parentElement;if(!t||!matchMedia("(min-width: 64rem)").matches)return;(function f(k){var y=0;for(var n=t;n;n=n.offsetParent)y+=n.offsetTop;if(y<=0){if(k<120)requestAnimationFrame(function(){f(k+1)});return}var p=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pad-canvas-y"));t.style.height=Math.max(240,Math.floor(innerHeight-y-(p>=0?p:8)-${FOLGA}))+"px"})(0)})(document.currentScript)`;
 
 const semAssinatura = () => () => {};
 /** `true` só na renderização do SERVIDOR e na hidratação dela; em seguida (e em toda renderização no cliente), `false`. */
