@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { type Acesso, getAcesso, motivoNoQuadro, motivoRecusa, podePca } from "./acesso";
+import { type Acesso, getAcesso, motivoNoQuadro, motivoRecusa, podeOrcamento, podePca } from "./acesso";
 import { getUsuarioAtual, type UsuarioSessao } from "./auth";
 import type { AcaoPapel, Tela } from "./papeis-core";
 
@@ -54,6 +54,13 @@ export async function recusaPca(pcaId: number): Promise<NextResponse | null> {
   return podePca(await getAcesso(), pcaId)
     ? null
     : NextResponse.json({ ok: false, error: "Este PCA não está entre os do seu grupo — peça acesso ao administrador." }, { status: 403 });
+}
+
+/** O orçamento está fora dos do grupo ativo → 403 (Grupos → "Orçamentos do grupo"). */
+export async function recusaOrcamento(orcamentoId: number): Promise<NextResponse | null> {
+  return podeOrcamento(await getAcesso(), orcamentoId)
+    ? null
+    : NextResponse.json({ ok: false, error: "Este orçamento não está entre os do seu grupo — peça acesso ao administrador." }, { status: 403 });
 }
 
 /** Exige a AÇÃO numa das telas (no grupo ativo) — várias telas = basta uma permitir. */

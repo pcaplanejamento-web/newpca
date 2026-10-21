@@ -35,7 +35,7 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
-    versao: "1.144.0",
+    versao: "1.145.0",
     data: "2026-10-21",
     titulo: "PCA: Domínio dos itens no Dashboard",
     mudancas: [
@@ -46,6 +46,25 @@ export const VERSOES: readonly Versao[] = [
         link: "/painel/pca",
       },
       { tipo: "melhoria", area: "PCA · Importação", texto: "A visão Itens mostra também o Domínio.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.144.0",
+    data: "2026-10-21",
+    titulo: "Grupos: funções de cada tela e orçamentos do grupo",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Grupos",
+        texto: "No banner do grupo, “Funções das telas” liga ou desliga as partes de cada tela para o grupo — ex.: no PCA, o Dashboard, o Orçamento, a Mesa do PCA e o Relatório de variação.",
+        link: "/painel/grupos",
+      },
+      {
+        tipo: "novo",
+        area: "Grupos · Orçamento",
+        texto: "“Orçamentos do grupo”: como os PCAs, o grupo vê todos os orçamentos ou só os escolhidos — na lista, na tela do orçamento, na pesquisa e nos vínculos de tarefa.",
+        link: "/painel/grupos",
+      },
     ],
   },
   {

@@ -758,6 +758,16 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   de `contextoBanners`); o cronograma do Calendário (`cronogramaPcas(de, ate, permitidos)`); e as rotas
   `/api/pca/[id]*`, `/api/pca/[id]/planilhas/*` e o `start` do `/api/upload` → **`recusaPca`** (`api-auth.ts`, 403). O
   `PcaPicker` (o ano do PCA de um protocolo/DFD) segue com todos os PCAs cadastrados — é dado do documento, não acesso.
+- **FUNÇÕES DAS TELAS + ORÇAMENTOS POR GRUPO (v1.144.0, migração `0120`, aditiva — `grupos.funcoes_off` JSON das chaves
+  "tela.funcao" desligadas + `grupos.orcamentos` JSON de ids, NULL = todos):** no banner do grupo, **Funções das telas**
+  (`FuncoesPorTela`, `GruposAdmin`: as do `CATALOGO_COMPONENTES` das telas do grupo — inclui `dfd.variacao`/`pca.variacao`
+  = o Relatório de variação) e **Orçamentos do grupo** (`ListaDoGrupo`, a mesma peça dos PCAs). A função desligada vale como
+  retirar Visualizar no papel, para o grupo ATIVO: `comFuncoesDoGrupo`/`lerFuncoesOff`/`compactarFuncoesOff`
+  (`papeis-componentes-core.ts`, testados) → `componentesDoAcesso(a)` (`acesso.ts`) — usado por `componenteLibera` e pelo
+  provedor `ComponentesPapel` do layout. Orçamentos: `orcamentosDoAcesso`/`podeOrcamento` na lista `/painel/orcamento`, no
+  espaço `[id]` (`AcessoRestrito`), em `recusaOrcamento` (`api-auth.ts`: PATCH/DELETE `/api/orcamento/[id]` e o
+  `substituir`), na pesquisa (lançamentos) e em `buscarVinculos`/`vinculoAcessivel` (também os PCAs do grupo). O orçamento
+  usado no PCA × Orçamento segue o do ano.
 - **MÓDULOS + CHAT POR GRUPO + QUEM VÊ OS ONLINE (v1.91.0, migração `0109`, aditiva — `grupos.modulos` JSON de ids [NULL =
   grupo antigo, pelas telas avulsas de `abas`] + `grupos.chat` [1 = liberado]):** Configurações → aba **"Módulos"**
   (`ModulosAdmin`: nome, ↑/↓, as telas em `ChipsIcone` — uma tela em UM módulo; aviso das telas sem módulo; `GET/PATCH
@@ -2498,7 +2508,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 - **TIPO × CLASSIFICAÇÃO (v1.143.0):** no item de protocolo do PCA (`itensConsolidados`), `classificacao` = a do Catálogo
   (`criarClassificador` sobre `listarPadronizacao`; sem casar = "Não classificado") e `tipoDfd` = o tipo do DFD (coluna
   "Tipo" do `ItemTable` com `origem`; `ItemRow.tipoDfd`, no texto compacto). Nunca usar o tipo do DFD como classificação.
-  **Domínio (v1.144.0):** `ItemRow.dominio` (a coluna da planilha) → dimensão `dominio` do `origem-dash` (filtro do topo,
+  **Domínio (v1.145.0):** `ItemRow.dominio` (a coluna da planilha) → dimensão `dominio` do `origem-dash` (filtro do topo,
   gráfico "Domínio dos Itens" = `UnidadeRequisitanteChart dim="dominio"`, relatório, coluna do `ItemTable`) só com dados.
 - **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0118` — tabela `pca_uploads`, `unidades.upload_id` [único
   por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**

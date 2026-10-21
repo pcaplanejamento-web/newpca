@@ -1,4 +1,4 @@
-import { exigirAcesso, intId, recusa } from "@/lib/api-auth";
+import { exigirAcesso, intId, recusaOrcamento, recusa } from "@/lib/api-auth";
 import { criadoPorImportacaoRecente, registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
 import { erro, ok, parseCorpo } from "@/lib/http";
@@ -13,6 +13,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const foraDoGrupo = await recusaOrcamento(id);
+  if (foraDoGrupo) return foraDoGrupo;
   const p = await parseCorpo(patchOrcamentoSchema, req);
   if ("resp" in p) return p.resp;
   const antes = await getOrcamento(id);
@@ -44,6 +46,8 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if ("erro" in a) return a.erro;
   const id = intId((await ctx.params).id);
   if (!id) return erro("ID inválido.");
+  const foraDoGrupo = await recusaOrcamento(id);
+  if (foraDoGrupo) return foraDoGrupo;
   const desfazer = new URL(req.url).searchParams.get("origem") === "desfazer" && (await criadoPorImportacaoRecente("orcamento", id, a.u.id));
   const negado = recusa(a.acesso, "orcamento", desfazer ? "importar" : "excluir");
   if (negado) return negado;

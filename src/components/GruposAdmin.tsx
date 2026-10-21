@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import type { AbaKey } from "@/lib/abas";
 import { ehCodigoGeral, type EscopoTelas, type ModoUnidades } from "@/lib/escopo-unidades-core";
 import { type Modulo, modulosDasTelas, rotuloAba, telasDosModulos } from "@/lib/modulos-core";
+import { componentesDaTela } from "@/lib/papeis-componentes-core";
 import { MAX_NOME_RBAC } from "@/lib/rbac-validation";
 import { predicadoBusca } from "@/lib/tabela-filtros";
 import { useAbrirDaUrl } from "./AbrirDaUrl";
@@ -36,6 +37,10 @@ type Grupo = {
   /** No modo "unidade de cadastro": as telas que veem TODAS as unidades. */
   escopoTelas: EscopoTelas;
   pcas: number[] | null;
+  /** Os ORÇAMENTOS do grupo (`null` = todos). */
+  orcamentos: number[] | null;
+  /** As FUNÇÕES das telas desligadas no grupo ("tela.funcao"). */
+  funcoesOff: string[];
   membros: number[];
   reparticoes: number[];
 };
@@ -58,6 +63,7 @@ async function lerJson<T>(r: Response): Promise<T & { ok?: boolean; error?: stri
 export function GruposAdmin() {
   const [grupos, setGrupos] = useState<Grupo[] | null>(null);
   const [pcasDisp, setPcasDisp] = useState<PcaOpt[]>([]);
+  const [orcsDisp, setOrcsDisp] = useState<PcaOpt[]>([]);
   const [users, setUsers] = useState<UserOpt[]>([]);
   const [repsDisp, setRepsDisp] = useState<RepOpt[]>([]);
   const [modulosDisp, setModulosDisp] = useState<Modulo[]>([]);
@@ -72,6 +78,8 @@ export function GruposAdmin() {
   const [chat, setChat] = useState(true);
   // null = TODOS os PCAs (sem restrição); o conjunto = só esses.
   const [pcasSel, setPcasSel] = useState<Set<number> | null>(null);
+  const [orcsSel, setOrcsSel] = useState<Set<number> | null>(null);
+  const [funcoesOff, setFuncoesOff] = useState<Set<string>>(new Set());
   const [membros, setMembros] = useState<Set<number>>(new Set());
   const [reps, setReps] = useState<Set<number>>(new Set());
   const [modo, setModo] = useState<ModoUnidades>("lista");
@@ -85,11 +93,12 @@ export function GruposAdmin() {
     setErro(null);
     try {
       const r = await fetch("/api/admin/grupos");
-      const j = await lerJson<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
+      const j = await lerJson<{ grupos?: Grupo[]; modulos?: Modulo[]; pcas?: PcaOpt[]; orcamentos?: PcaOpt[]; usuarios?: UserOpt[]; reparticoes?: RepOpt[] }>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao carregar.");
       setGrupos([...(j.grupos ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setModulosDisp(j.modulos ?? []);
       setPcasDisp(j.pcas ?? []);
+      setOrcsDisp(j.orcamentos ?? []);
       setUsers([...(j.usuarios ?? [])].sort((a, b) => COLLATOR.compare(a.nome, b.nome)));
       setRepsDisp(j.reparticoes ?? []);
     } catch (e) {
@@ -112,6 +121,8 @@ export function GruposAdmin() {
     setModsTocados(true);
     setChat(true);
     setPcasSel(null);
+    setOrcsSel(null);
+    setFuncoesOff(new Set());
     setMembros(new Set());
     setReps(new Set());
     setModo("lista");
@@ -127,6 +138,8 @@ export function GruposAdmin() {
     setModsTocados(g.modulos != null);
     setChat(g.chat);
     setPcasSel(g.pcas == null ? null : new Set(g.pcas));
+    setOrcsSel(g.orcamentos == null ? null : new Set(g.orcamentos));
+    setFuncoesOff(new Set(g.funcoesOff ?? []));
     setMembros(new Set(g.membros));
     setReps(new Set(g.reparticoes));
     setModo(g.modoUnidades ?? "lista");
@@ -161,7 +174,7 @@ export function GruposAdmin() {
       const r = await fetch(novo ? "/api/admin/grupos" : `/api/admin/grupos/${(editando as Grupo).id}`, {
         method: novo ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], membros: [...membros], reparticoes: [...reps], modoUnidades: modo, escopoTelas: escopo }),
+        body: JSON.stringify({ nome, ...(modsTocados ? { modulos: [...mods] } : {}), chat, pcas: pcasSel == null ? null : [...pcasSel], orcamentos: orcsSel == null ? null : [...orcsSel], funcoesOff: [...funcoesOff], membros: [...membros], reparticoes: [...reps], modoUnidades: modo, escopoTelas: escopo }),
       });
       const j = await lerJson<object>(r);
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Erro ao salvar.");
@@ -328,45 +341,13 @@ export function GruposAdmin() {
             <MudancaTelas grupo={editando === "novo" ? null : editando} tocados={modsTocados} telas={telasDosModulos(modulosDisp, [...mods])} />
           </fieldset>
           <Switch checked={chat} onChange={setChat} label="Chat liberado no grupo" dica="Sem ele, as pessoas não conversam pelo chat ao vivo neste grupo (nem no privado, se não tiverem outro grupo com o chat). O chat também precisa estar ligado em Configurações → Presença e chat." />
-          <fieldset>
-            <legend className="mb-2 block text-[13.5px] font-bold text-text">
-              PCAs do grupo · {pcasSel == null ? "todos" : `${pcasSel.size} selecionado(s)`}
-            </legend>
-            <Switch
-              checked={pcasSel == null}
-              onChange={(todos) => setPcasSel(todos ? null : new Set(pcasDisp.map((p) => p.id)))}
-              label="Todos os PCAs (também os que forem criados)"
-            />
-            {pcasSel != null &&
-              (pcasDisp.length === 0 ? (
-                <p className="mt-2 rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">Nenhum PCA cadastrado.</p>
-              ) : (
-                <div className="mt-2 max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
-                  {pcasDisp.map((p) => (
-                    <div key={p.id} className="rounded-control p-1.5 hover:bg-surface-2">
-                      <Checkbox
-                        checked={pcasSel.has(p.id)}
-                        onChange={() => setPcasSel((s) => {
-                          const n = new Set(s ?? []);
-                          if (n.has(p.id)) n.delete(p.id);
-                          else n.add(p.id);
-                          return n;
-                        })}
-                        label={
-                          <span className="flex items-center gap-2">
-                            {p.ano != null && <span className="font-mono text-[10.5px] text-faint">{p.ano}</span>}
-                            <span className="min-w-0 truncate text-[13px] text-text">{p.nome}</span>
-                          </span>
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              ))}
-            {pcasSel != null && pcasSel.size === 0 && (
-              <p className="mt-1.5 text-[12px] text-[var(--warn)]">Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA.</p>
-            )}
-          </fieldset>
+          <FuncoesPorTela telas={telasGrupo} desligadas={funcoesOff} onChange={setFuncoesOff} />
+          {telasGrupo.includes("pca") && (
+            <ListaDoGrupo titulo="PCAs do grupo" todos="Todos os PCAs (também os que forem criados)" vazio="Nenhum PCA cadastrado." aviso="Sem nenhum PCA, as pessoas do grupo não veem nenhum PCA." opcoes={pcasDisp} valor={pcasSel} onChange={setPcasSel} />
+          )}
+          {telasGrupo.includes("orcamento") && (
+            <ListaDoGrupo titulo="Orçamentos do grupo" todos="Todos os orçamentos (também os que forem importados)" vazio="Nenhum orçamento importado." aviso="Sem nenhum orçamento, as pessoas do grupo não veem nenhum orçamento." opcoes={orcsDisp} valor={orcsSel} onChange={setOrcsSel} />
+          )}
           <div>
             <div className="mb-2 flex items-center gap-1.5">
               <span className="text-[13.5px] font-bold text-text">
@@ -470,6 +451,105 @@ export function GruposAdmin() {
       </Modal>
       {confirmacao}
     </div>
+  );
+}
+
+/** Os PCAs ou os ORÇAMENTOS do grupo: "todos" (também os novos) ou só os marcados. */
+function ListaDoGrupo({
+  titulo,
+  todos,
+  vazio,
+  aviso,
+  opcoes,
+  valor,
+  onChange,
+}: {
+  titulo: string;
+  todos: string;
+  vazio: string;
+  aviso: string;
+  opcoes: PcaOpt[];
+  valor: Set<number> | null;
+  onChange: (v: Set<number> | null) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 block text-[13.5px] font-bold text-text">
+        {titulo} · {valor == null ? "todos" : `${valor.size} selecionado(s)`}
+      </legend>
+      <Switch checked={valor == null} onChange={(t) => onChange(t ? null : new Set(opcoes.map((p) => p.id)))} label={todos} />
+      {valor != null &&
+        (opcoes.length === 0 ? (
+          <p className="mt-2 rounded-control border border-dashed border-border-2 p-3 text-[12px] text-faint">{vazio}</p>
+        ) : (
+          <div className="mt-2 max-h-[200px] space-y-1 overflow-y-auto rounded-control border border-border p-2">
+            {opcoes.map((p) => (
+              <div key={p.id} className="rounded-control p-1.5 hover:bg-surface-2">
+                <Checkbox
+                  checked={valor.has(p.id)}
+                  onChange={() => {
+                    const n = new Set(valor);
+                    if (n.has(p.id)) n.delete(p.id);
+                    else n.add(p.id);
+                    onChange(n);
+                  }}
+                  label={
+                    <span className="flex items-center gap-2">
+                      {p.ano != null && <span className="font-mono text-[10.5px] text-faint">{p.ano}</span>}
+                      <span className="min-w-0 truncate text-[13px] text-text">{p.nome}</span>
+                    </span>
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        ))}
+      {valor != null && valor.size === 0 && <p className="mt-1.5 text-[12px] text-[var(--warn)]">{aviso}</p>}
+    </fieldset>
+  );
+}
+
+/** As FUNÇÕES de cada tela do grupo (abas, visões, relatórios): marcada = ligada. Desligar some com ela para todas as
+ * pessoas do grupo (o papel de cada uma ainda pode retirar mais). */
+function FuncoesPorTela({ telas, desligadas, onChange }: { telas: AbaKey[]; desligadas: Set<string>; onChange: (v: Set<string>) => void }) {
+  const comFuncoes = telas.filter((t) => componentesDaTela(t).length > 0);
+  if (!comFuncoes.length) return null;
+  const n = [...desligadas].filter((c) => comFuncoes.some((t) => c.startsWith(`${t}.`))).length;
+  return (
+    <fieldset>
+      <legend className="mb-2 flex items-center gap-1.5 text-[13.5px] font-bold text-text">
+        Funções das telas{n ? ` · ${n} desligada(s)` : " · todas ligadas"}
+        <Ajuda titulo="Funções das telas" compacta>
+          <p>
+            Ligue ou desligue as partes de cada tela para este grupo — ex.: no PCA, o Dashboard, o Orçamento, a Mesa do PCA e o
+            Relatório de variação. A função desligada some para todas as pessoas do grupo; o papel de cada pessoa ainda decide o
+            que ela faz nas que ficam.
+          </p>
+        </Ajuda>
+      </legend>
+      <div className="space-y-2 rounded-control border border-border p-2">
+        {comFuncoes.map((t) => (
+          <div key={t} className="rounded-control p-1.5">
+            <span className="mb-1 block text-[12.5px] font-semibold text-text">{rotuloAba(t)}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {componentesDaTela(t).map((x) => (
+                <Checkbox
+                  key={x.chave}
+                  checked={!desligadas.has(x.chave)}
+                  onChange={() => {
+                    const s = new Set(desligadas);
+                    if (s.has(x.chave)) s.delete(x.chave);
+                    else s.add(x.chave);
+                    onChange(s);
+                  }}
+                  label={<span className="text-[13px] text-text" title={x.descricao}>{x.rotulo}</span>}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

@@ -7,7 +7,7 @@ import { getConfigEscopo } from "@/lib/escopo-cabecalho";
 import { nomesDasSiglas } from "@/lib/reparticoes";
 import { ProtecaoDados } from "@/components/ProtecaoDados";
 import { SegundoPlano } from "@/components/SegundoPlano";
-import { getAcesso } from "@/lib/acesso";
+import { componentesDoAcesso, getAcesso } from "@/lib/acesso";
 import { getAparencia } from "@/lib/aparencia";
 import { dataHoraBR } from "@/lib/format";
 import { getReparticaoContexto, telasTodasDoGrupo } from "@/lib/grupos";
@@ -91,7 +91,7 @@ export default async function PainelLayout({
       {/* As tabelas da área logada abrem com as linhas por página escolhidas pelo ADM (Configurações → Tabelas). */}
       <ConfigTabelas linhas={linhasTabela(aparencia)} nomesUnidades={nomesSiglas} quem={`${usuario.nome}${usuario.matricula ? ` (matrícula ${usuario.matricula})` : ""}`}>
         {/* Trabalhos em segundo plano (automações): seguem ao trocar de tela, minimizados no canto inferior direito. */}
-        <ComponentesPapel retirados={usuario.admin ? {} : usuario.papel.detalhes.componentes} exibicao={usuario.papel.detalhes.exibicao}>
+        <ComponentesPapel retirados={componentesDoAcesso(acesso)} exibicao={usuario.papel.detalhes.exibicao}>
           <UnidadeUnica
             modulos={escopoCab.modulos}
             unidade={unidadeDe(contexto.ativa)}

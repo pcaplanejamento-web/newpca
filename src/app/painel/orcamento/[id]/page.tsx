@@ -6,7 +6,8 @@ import { OrcamentoComparativo } from "@/components/OrcamentoComparativo";
 import { OrcamentoLancamentos } from "@/components/OrcamentoLancamentos";
 import { OrcamentoVinculosAba } from "@/components/OrcamentoVinculosAba";
 import { OrcamentoVisoes } from "@/components/OrcamentoVisoes";
-import { componenteLibera } from "@/lib/acesso";
+import { AcessoRestrito } from "@/components/AcessoRestrito";
+import { componenteLibera, podeOrcamento } from "@/lib/acesso";
 import { acessoPagina } from "@/lib/acesso-pagina";
 import { dadosComparativo, lancamentosDaUnidade, resumoDosLancamentos } from "@/lib/comparativo-dados";
 import { unidadeDoModulo } from "@/lib/escopo-cabecalho";
@@ -37,6 +38,8 @@ export default async function OrcamentoEspacoPage({
   const sp = await searchParams;
   const [orcBanco, rep] = await Promise.all([Number.isInteger(id) && id > 0 ? getOrcamento(id) : null, unidadeDoModulo("orcamento")]);
   if (!orcBanco) notFound();
+  if (!podeOrcamento(acesso, orcBanco.id))
+    return <AcessoRestrito mensagem="Este orçamento não está entre os do seu grupo — peça acesso ao administrador." voltar={{ href: "/painel/orcamento", rotulo: "Ver os orçamentos" }} />;
   // A unidade do CABEÇALHO (Configurações → Filtro da unidade): Lançamentos, Comparativo, Visões e o cabeçalho só com os
   // lançamentos vinculados a ela. Os Vínculos (a configuração) seguem com o orçamento inteiro.
   const repOrc = rep.id === null ? null : { id: rep.id, semVinculo: rep.cfg.orcamentoSemVinculo };

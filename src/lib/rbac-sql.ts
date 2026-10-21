@@ -4,6 +4,7 @@ import type * as schema from "../db/schema.ts";
 import {
   grupoReparticoes,
   grupos,
+  orcamentos,
   pcas,
   reparticoes,
   tarefaModelos,
@@ -78,6 +79,7 @@ const TABELAS = {
   usuarios: { tabela: usuarios, id: usuarios.id },
   reparticoes: { tabela: reparticoes, id: reparticoes.id },
   pcas: { tabela: pcas, id: pcas.id },
+  orcamentos: { tabela: orcamentos, id: orcamentos.id },
   grupos: { tabela: grupos, id: grupos.id },
 } as const;
 
@@ -97,13 +99,15 @@ export async function idsInexistentes(db: Db, qual: keyof typeof TABELAS, ids: r
  * recusa (422) ANTES de gravar qualquer coisa. */
 export async function motivoIdsInvalidos(
   db: Db,
-  dados: { pcas?: readonly number[] | null; membros?: readonly number[]; reparticoes?: readonly number[] },
+  dados: { pcas?: readonly number[] | null; orcamentos?: readonly number[] | null; membros?: readonly number[]; reparticoes?: readonly number[] },
 ): Promise<string | null> {
-  const [semPca, semPessoa, semUnidade] = await Promise.all([
+  const [semPca, semPessoa, semUnidade, semOrc] = await Promise.all([
     idsInexistentes(db, "pcas", dados.pcas ?? []),
     idsInexistentes(db, "usuarios", dados.membros ?? []),
     idsInexistentes(db, "reparticoes", dados.reparticoes ?? []),
+    idsInexistentes(db, "orcamentos", dados.orcamentos ?? []),
   ]);
+  if (semOrc.length) return `Orçamento(s) não encontrado(s): ${semOrc.join(", ")} — recarregue a tela.`;
   if (semPca.length) return `PCA(s) não encontrado(s): ${semPca.join(", ")} — recarregue a tela.`;
   if (semPessoa.length) return `Pessoa(s) não encontrada(s): ${semPessoa.join(", ")} — recarregue a tela.`;
   if (semUnidade.length) return `Unidade(s) não encontrada(s): ${semUnidade.join(", ")} — recarregue a tela.`;
