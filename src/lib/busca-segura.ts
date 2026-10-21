@@ -9,14 +9,15 @@ import { urlAgendaValida } from "./ics-core";
 const TEMPO_MS = 8000;
 const MAX_REDIRECIONAMENTOS = 3;
 
-export type Baixado = { texto: string; tipo: string; url: string };
+/** `bytes` = o corpo cru (só com `binario`); `nome` = o arquivo do Content-Disposition. */
+export type Baixado = { texto: string; tipo: string; url: string; bytes?: Uint8Array; nome?: string };
 
-export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string }): Promise<Baixado> {
+export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes: number; quem: string; binario?: boolean; tempoMs?: number }): Promise<Baixado> {
   const url = urlAgendaValida(bruta);
   if (!url) throw new Error("Link inválido: use um endereço https:// público.");
   const grande = `${o.quem} é grande demais (máx. ${Math.round(o.maxBytes / 1_000_000) || 1} MB).`;
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), TEMPO_MS);
+  const t = setTimeout(() => ctl.abort(), o.tempoMs ?? TEMPO_MS);
   let destino = url;
   let texto = "";
   try {
@@ -41,6 +42,7 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
     const leitor = r.body?.getReader();
     if (!leitor) throw new Error(`${o.quem} respondeu sem conteúdo.`);
     const dec = new TextDecoder();
+    const partes: Uint8Array[] = [];
     let lidos = 0;
     for (;;) {
       const { done, value } = await leitor.read();
@@ -50,7 +52,19 @@ export async function baixarSeguro(bruta: string, o: { accept: string; maxBytes:
         await leitor.cancel();
         throw new Error(grande);
       }
-      texto += dec.decode(value, { stream: true });
+      if (o.binario) partes.push(value);
+      else texto += dec.decode(value, { stream: true });
+    }
+    if (o.binario) {
+      const bytes = new Uint8Array(lidos);
+      let i = 0;
+      for (const p of partes) {
+        bytes.set(p, i);
+        i += p.byteLength;
+      }
+      const disp = r.headers.get("content-disposition") ?? "";
+      const nome = /filename\*=UTF-8''([^;]+)/i.exec(disp)?.[1] ?? /filename="?([^";]+)"?/i.exec(disp)?.[1];
+      return { texto: "", tipo, url: destino, bytes, nome: nome ? decodeURIComponent(nome) : undefined };
     }
     texto += dec.decode();
     return { texto, tipo, url: destino };
