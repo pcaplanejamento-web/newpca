@@ -28,3 +28,11 @@ test("nome do documento", () => {
   assert.equal(nomeDoLink("Relatório.pdf"), "Relatório");
   assert.equal(nomeDoLink(undefined), "Documento do Google");
 });
+
+test("ehPdf e contarPaginas", async () => {
+  const { ehPdf, contarPaginas } = await import("../src/lib/link-documento-core.ts");
+  const b = new TextEncoder().encode("%PDF-1.7 /Type /Pages /Type /Page /Type/Page");
+  assert.equal(ehPdf(b), true);
+  assert.equal(ehPdf(new TextEncoder().encode("<html>")), false);
+  assert.equal(contarPaginas(b), 2);
+});

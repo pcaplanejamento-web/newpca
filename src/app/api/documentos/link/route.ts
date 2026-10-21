@@ -1,33 +1,29 @@
 import { z } from "zod";
 import { exigirAcesso } from "@/lib/api-auth";
-import { baixarSeguro } from "@/lib/busca-segura";
-import { LIMITE_DOCUMENTO_ADM } from "@/lib/compactar-pdf-core";
-import { erro, parseCorpo } from "@/lib/http";
-import { nomeDoLink, urlPdfDoGoogle } from "@/lib/link-documento-core";
+import { registrarAuditoria } from "@/lib/auditoria";
+import { pdfDoGoogle } from "@/lib/documento-google";
+import { criarDocumentoLink } from "@/lib/documentos";
+import { erro, ok, parseCorpo } from "@/lib/http";
+import { contarPaginas, nomeDoLink } from "@/lib/link-documento-core";
 
 export const dynamic = "force-dynamic";
 
 const linkSchema = z.object({ url: z.string().trim().min(1).max(2000) });
 
-/** Baixa o PDF de um link do Google (Docs/Drive, compartilhado com o link) e devolve os bytes — a tela segue o MESMO
- * envio de um arquivo (tamanho, compactação, partes). Importar em Documentos. */
+/** Cadastra um documento que FICA NO DRIVE: confere que o link entrega um PDF e guarda só o link. Importar em Documentos. */
 export async function POST(req: Request) {
   const a = await exigirAcesso("documentos", "importar");
   if ("erro" in a) return a.erro;
   const p = await parseCorpo(linkSchema, req);
   if ("resp" in p) return p.resp;
-  const url = urlPdfDoGoogle(p.data.url);
-  if (!url) return erro("Use um link do Google Docs ou do Google Drive.", 422);
-  let r: Awaited<ReturnType<typeof baixarSeguro>>;
+  let pdf: Awaited<ReturnType<typeof pdfDoGoogle>>;
   try {
-    r = await baixarSeguro(url, { accept: "application/pdf", maxBytes: LIMITE_DOCUMENTO_ADM, quem: "O Google", binario: true, tempoMs: 30000 });
+    pdf = await pdfDoGoogle(p.data.url);
   } catch (e) {
-    return erro(e instanceof Error ? e.message : "Não foi possível baixar o arquivo.", 422);
+    return erro(e instanceof Error ? e.message : "Não foi possível abrir o link.", 422);
   }
-  const b = r.bytes;
-  const ehPdf = !!b && b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
-  if (!ehPdf) return erro("O link não entregou um PDF — compartilhe como “Qualquer pessoa com o link” (ou envie um PDF do Drive).", 422);
-  return new Response(new Uint8Array(b), {
-    headers: { "content-type": "application/pdf", "x-nome": encodeURIComponent(nomeDoLink(r.nome)), "cache-control": "no-store" },
-  });
+  const nome = nomeDoLink(pdf.nome);
+  const id = await criarDocumentoLink({ nome, url: p.data.url, tamanho: pdf.bytes.length, paginas: contarPaginas(pdf.bytes), criadoPor: a.u.id });
+  await registrarAuditoria({ usuario: a.u, acao: "criar", entidade: "documento", entidadeId: id, resumo: `documento pelo link do Google: ${nome}` });
+  return ok({ id });
 }

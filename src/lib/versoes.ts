@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.148.0",
+    data: "2026-10-21",
+    titulo: "Documentos: link do Drive sem upload",
+    mudancas: [
+      { tipo: "novo", area: "Documentos", texto: "“Colar link do Google” não envia mais o arquivo: guarda só o link e abre o PDF direto do Drive, sempre na versão atual.", link: "/painel/documentos" },
+      { tipo: "correcao", area: "Documentos", texto: "A escolha do tamanho do PDF começa no original — o texto não some por uma compactação forte escolhida sem querer.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.147.0",
     data: "2026-10-21",
     titulo: "Classificação e domínio gravados em todo item",
