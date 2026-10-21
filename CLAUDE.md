@@ -2486,7 +2486,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
 ## PCA como ESPAÇO (card 4:5 → Dashboard · Orçamento · Mesa/Importação · Configuração) — migração `0033`
 - **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0117` — tabela `pca_uploads`, `unidades.upload_id` [único
   por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
-  cada ARQUIVO = UM cartão na Importação (`uploadsDoPca`, `pca-uploads.ts`; excluir = `DELETE /api/pca/[id]/planilhas/[uploadId]`,
+  cada ARQUIVO = UM cartão na Importação (`CartaoEspaco` + a importação como um card do MESMO tamanho, grade `COLUNAS_ESPACOS`;
+  `Segmented` Uploads | Itens — `itensDosUploads`, tocar no card abre os itens dele; `uploadsDoPca`, `pca-uploads.ts`; excluir = `DELETE /api/pca/[id]/planilhas/[uploadId]`,
   cascata). O `/api/upload` (`start` cria o upload na 1ª unidade e recebe `uploadId` nas demais; `append`; `fim` = avisa os
   ADMs) grava cada lote por `gravarLote`: núcleo puro **`sequencial-pca-core.ts`** (`repetidos`, `atribuirSequenciais`) +
   builders **`pca-upload-sql.ts`** (testados no D1 real — `tests/sequencial-pca.test.ts`): o nº informado SOBRESCREVE o item
@@ -4240,8 +4241,8 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     tira na hora e o banco só é limpo depois do **Desfazer** de 6 s — ou ao sair da página, `keepalive`) e **Configurar**
     (Perfil; o ADM, Configurações → Notificações). Rolagem infinita; ↑/↓ entre os avisos, Delete exclui; o aviso ao vivo
     MESCLA a 1ª página (`mesclarPrimeiraPagina` — as páginas carregadas ficam, o que está sendo limpo não volta). **Aviso
-    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), a **prévia flutuante** com
-    "Abrir" (6 s), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
+    novo:** o sino balança (`animate-sino-tocar`), o selo dá um "pop" (`animate-selo-pop`), SEM aviso flutuante (v1.140.0 — a notificação
+    aparece SÓ no sino), o **título da aba** com "(N)" (`tituloComContagem`) e `aria-live`. Saída animada (`.aviso-linha` — a
     altura recolhe); tudo respeita "reduzir movimento". Ícones novos `IconLidas`/`IconSemAvisos`/
     `IconEventoAlterado`/`IconCadastro`.
   - **Avisos novos (tipos `vence_hoje`, `evento`, `protocolo`, `pca`, `cadastro`):** **Mesa** — o responsável designado a um

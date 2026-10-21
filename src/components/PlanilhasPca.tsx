@@ -2,9 +2,16 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import { brlCompact, dataBR, num } from "@/lib/format";
-import type { UploadPca } from "@/lib/pca-uploads";
+import { useMemo, useRef, useState } from "react";
+import { brl, brlCompact, dataBR, num } from "@/lib/format";
+import type { ItemUpload, UploadPca } from "@/lib/pca-uploads";
+import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
+import { CelulaCopiavel } from "./BotaoCopiar";
+import { CelulaTexto } from "./CelulaLista";
+import { type Column, DataTable } from "./DataTable";
+import { FilterChip } from "./FilterChip";
+import { CartaoEspaco } from "./QuadroCard";
+import { Segmented } from "./Segmented";
 import { type LeituraPlanilhas, type PlanilhaParseada, parsePlanilhas } from "@/lib/parse-xlsx";
 import { AvisoFlutuante } from "./AvisoFlutuante";
 import { Button } from "./Button";
@@ -56,6 +63,32 @@ async function enviarArquivo(nome: string, planilhas: PlanilhaParseada[], pcaId:
   return total;
 }
 
+/** A CAPA 16:9 do card do upload: o arquivo e as unidades que ele trouxe. */
+function CapaUpload({ upload }: { upload: UploadPca }) {
+  return (
+    <div className="relative grid aspect-video place-items-center overflow-hidden rounded-[calc(var(--radius-card)-4px)] bg-accent-soft text-accent">
+      <IconFile className="h-10 w-10" />
+      <span className="absolute bottom-2 left-2 right-2 truncate text-center text-[11px] font-semibold" title={upload.unidades.join(", ")}>
+        {upload.unidades.join(" · ")}
+      </span>
+    </div>
+  );
+}
+
+/** As colunas da visão ITENS (o sequencial é sagrado — único no PCA). */
+const COLUNAS_ITENS: Column<ItemUpload>[] = [
+  { key: "seq", header: "Seq.", nowrap: true, numero: (r) => r.sequencial, value: (r) => String(r.sequencial ?? ""), render: (r) => r.sequencial ?? "—", total: false },
+  { key: "unidade", header: "Unidade", nowrap: true, value: (r) => r.unidade, render: (r) => r.unidade },
+  { key: "codigo", header: "Código", nowrap: true, value: (r) => r.codigo ?? "", render: (r) => (r.codigo ? <CelulaCopiavel copiar={r.codigo} rotulo="código">{r.codigo}</CelulaCopiavel> : "—") },
+  { key: "produto", header: "Produto", minWidth: 260, value: (r) => r.produto ?? "", render: (r) => <CelulaTexto texto={r.produto ?? "—"} /> },
+  { key: "um", header: "Unid.", nowrap: true, value: (r) => r.unidadeMedida ?? "", render: (r) => r.unidadeMedida ?? "—" },
+  { key: "qtd", header: "Qtd.", nowrap: true, filter: "range", numero: (r) => r.quantidade, formatarFaixa: num, value: (r) => String(r.quantidade ?? 0), render: (r) => num(r.quantidade ?? 0) },
+  { key: "vu", header: "Vlr. unit.", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorUnitario, total: false, value: (r) => String(r.valorUnitario ?? 0), render: (r) => brl(r.valorUnitario ?? 0) },
+  { key: "vt", header: "Vlr. total", align: "right", nowrap: true, filter: "range", numero: (r) => r.valorTotal, value: (r) => String(r.valorTotal ?? 0), render: (r) => brl(r.valorTotal ?? 0) },
+  { key: "class", header: "Classificação", nowrap: true, value: (r) => r.classificacao ?? "", render: (r) => r.classificacao ?? "—" },
+  { key: "arquivo", header: "Upload", minWidth: 180, value: (r) => r.arquivo ?? "", render: (r) => <CelulaTexto texto={r.arquivo ?? "—"} /> },
+];
+
 /**
  * Aba IMPORTAÇÃO do PCA: soltar/escolher UMA OU VÁRIAS planilhas (.xlsx — por unidade ou a CONSOLIDADA com a coluna LOCAL)
  * com a PRÉVIA COMPLETA antes de gravar + UM card por UPLOAD (arquivo · unidades · itens · Σ). O SEQUENCIAL é sagrado: o
@@ -64,11 +97,14 @@ async function enviarArquivo(nome: string, planilhas: PlanilhaParseada[], pcaId:
 export function PlanilhasPca({
   pcaId,
   uploads,
+  itens,
   podeImportar,
   podeExcluir,
 }: {
   pcaId: number;
   uploads: UploadPca[];
+  /** Os itens das planilhas (a visão Itens), do sequencial maior ao menor. */
+  itens: ItemUpload[];
   /** O papel importa planilhas no PCA. */
   podeImportar: boolean;
   /** O papel exclui planilhas do PCA. */
@@ -147,26 +183,26 @@ export function PlanilhasPca({
     router.refresh();
   }
 
+  const [visao, setVisao] = useState<"cards" | "itens">("cards");
+  const [doUpload, setDoUpload] = useState<UploadPca | null>(null);
+  const linhas = useMemo(() => (doUpload ? itens.filter((i) => i.uploadId === doUpload.id) : itens), [itens, doUpload]);
+
   return (
     <div className="space-y-[var(--gap-block)]">
-      {podeImportar &&
-        (fila ? (
-          <div className="rounded-card border-2 border-dashed border-accent/50 bg-accent-soft/40 p-8">
-            <Progress
-              value={fila.progresso}
-              label={`Importando ${fila.nome} (${fila.atual} de ${fila.total})… ${fila.progresso}%`}
-            />
-          </div>
-        ) : (
-          <Dropzone
-            accept=".xlsx,.xls"
-            onFiles={importar}
-            className="min-h-[200px]"
-            icon={<IconUpload className="h-7 w-7" />}
-            titulo="Arraste a planilha do PCA ou clique para escolher"
-            dica=".xlsx · por unidade OU a consolidada com a coluna LOCAL · sequencial já usado sobrescreve; sem sequencial, segue a sequência"
-          />
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented
+          ariaLabel="Visão da importação"
+          value={visao}
+          onChange={setVisao}
+          options={[
+            { value: "cards", label: `Uploads (${uploads.length})` },
+            { value: "itens", label: `Itens (${num(itens.length)})` },
+          ]}
+        />
+        {visao === "itens" && doUpload && (
+          <FilterChip active label={`${doUpload.nomeArquivo ?? "Upload"} ✕`} onClick={() => setDoUpload(null)} />
+        )}
+      </div>
 
       {aviso && (
         <AvisoFlutuante kind={aviso.kind} titulo={aviso.kind === "ok" ? "Importação concluída" : "Atenção"} onClose={() => setAviso(null)} duracao={aviso.kind === "ok" ? 6000 : undefined}>
@@ -174,47 +210,74 @@ export function PlanilhasPca({
         </AvisoFlutuante>
       )}
 
-      <section className="space-y-3">
-        <h2 className="text-base font-bold text-text">Uploads deste PCA ({uploads.length})</h2>
-        {uploads.length === 0 ? (
-          <p className="rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhuma planilha importada ainda.</p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div key={visao} className="animate-cat-morph">
+        {visao === "cards" ? (
+          <div className={`grid gap-[var(--gap-block)] ${COLUNAS_ESPACOS}`}>
+            {podeImportar &&
+              (fila ? (
+                <div className="flex aspect-[4/5] flex-col justify-center rounded-card border-2 border-dashed border-accent/50 bg-accent-soft/40 p-[var(--pad-card)] sm:aspect-auto sm:h-full">
+                  <Progress value={fila.progresso} label={`Importando ${fila.nome} (${fila.atual} de ${fila.total})… ${fila.progresso}%`} />
+                </div>
+              ) : (
+                <Dropzone
+                  accept=".xlsx,.xls"
+                  onFiles={importar}
+                  className="min-h-[15rem] !p-[var(--pad-card)]"
+                  icon={<IconUpload className="h-7 w-7" />}
+                  titulo="Importar planilha"
+                  dica=".xlsx · por unidade ou consolidada (LOCAL)"
+                />
+              ))}
             {uploads.map((p) => (
-              <div key={p.id} className="flex flex-col rounded-card border border-border bg-surface p-[var(--pad-card)] shadow-ring">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-                    <IconFile className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-bold text-text" title={p.nomeArquivo ?? undefined}>
-                      {p.nomeArquivo ?? "Planilha"}
-                    </h3>
-                    <p className="line-clamp-2 text-sm text-muted" title={p.unidades.join(", ")}>
-                      {p.unidades.length === 1 ? p.unidades[0] : `${num(p.unidades.length)} unidades · ${p.unidades.join(", ")}`}
-                    </p>
-                  </div>
-                  {podeExcluir && (
-                    <Button
-                      variant="ghost"
-                      aria-label={`Excluir ${p.nomeArquivo ?? "upload"}`}
-                      icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
-                      onClick={() => excluir(p)}
-                    />
-                  )}
-                </div>
-                <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3 text-sm">
-                  <span className="truncate text-muted">
-                    {num(p.totalItens)} itens{p.criadoEm ? ` · ${dataBR(p.criadoEm)}` : ""}
-                    {p.criadoPor ? ` · ${p.criadoPor}` : ""}
-                  </span>
-                  <span className="font-bold text-text">{brlCompact(p.valorTotal)}</span>
-                </div>
-              </div>
+              <CartaoEspaco
+                key={p.id}
+                ariaLabel={`Ver os itens de ${p.nomeArquivo ?? "upload"}`}
+                onClick={() => {
+                  setDoUpload(p);
+                  setVisao("itens");
+                }}
+                capa={<CapaUpload upload={p} />}
+                sobretitulo={`${p.criadoEm ? dataBR(p.criadoEm) : "Upload"}${p.criadoPor ? ` · ${p.criadoPor}` : ""}`}
+                nome={p.nomeArquivo ?? "Planilha"}
+                metricas={[
+                  { rotulo: "Unidades", valor: num(p.unidades.length) },
+                  { rotulo: "Itens", valor: num(p.totalItens) },
+                  { rotulo: "Valor", valor: brlCompact(p.valorTotal), cor: "var(--accent)" },
+                ]}
+                canto={
+                  podeExcluir && (
+                    <span className="absolute top-3 right-3">
+                      <Button
+                        variant="icon"
+                        size="sm"
+                        aria-label={`Excluir ${p.nomeArquivo ?? "upload"}`}
+                        title="Excluir o upload"
+                        icon={<IconTrash className="h-4 w-4" style={{ color: "var(--danger)" }} />}
+                        onClick={() => excluir(p)}
+                      />
+                    </span>
+                  )
+                }
+              />
             ))}
+            {uploads.length === 0 && !podeImportar && (
+              <p className="col-span-full rounded-card border border-border bg-surface p-[var(--pad-card)] text-center text-sm text-muted">Nenhuma planilha importada ainda.</p>
+            )}
           </div>
+        ) : (
+          <DataTable
+            columns={COLUNAS_ITENS}
+            rows={linhas}
+            getKey={(r) => r.id}
+            density="compact"
+            scrollInterno
+            ordemInicial={{ key: "seq", dir: "desc" }}
+            exportar={{ nome: doUpload?.nomeArquivo ?? "Itens importados" }}
+            vazio="Nenhum item importado."
+            resumo={(l) => `${num(l.length)} itens · ${brl(l.reduce((t, r) => t + (r.valorTotal ?? 0), 0))}`}
+          />
         )}
-      </section>
+      </div>
       {confirmacao}
       {previa && <PreviaPlanilha nomeArquivo={previa.nome} leitura={previa.leitura} onCancelar={() => decidir(false)} onImportar={() => decidir(true)} />}
     </div>

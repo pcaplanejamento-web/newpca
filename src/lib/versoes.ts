@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.140.0",
+    data: "2026-10-21",
+    titulo: "Importação do PCA em cards e itens; avisos só no sino",
+    mudancas: [
+      { tipo: "melhoria", area: "PCA · Importação", texto: "O upload virou um card no padrão do sistema (capa, data, quem enviou, unidades, itens e valor) e a importação ocupa o tamanho de um card na grade.", link: "/painel/pca" },
+      { tipo: "novo", area: "PCA · Importação", texto: "Visão Uploads | Itens, como no Catálogo: todos os itens importados numa tabela (do sequencial maior ao menor); tocar num card abre só os itens dele.", link: "/painel/pca" },
+      { tipo: "melhoria", area: "Notificações", texto: "As notificações aparecem só no sino — sem o aviso flutuante na tela.", link: "/painel/perfil?aba=notificacoes" },
+    ],
+  },
+  {
     versao: "1.139.0",
     data: "2026-10-21",
     titulo: "PCA: upload único, sequencial sagrado e avisos aos administradores",
