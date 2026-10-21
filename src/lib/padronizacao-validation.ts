@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { chavePalavra, chaveUnidade, LIMITES_PADRONIZACAO as L } from "./padronizacao-core.ts";
+import { chavePalavra, chaveUnidade, DOMINIOS, LIMITES_PADRONIZACAO as L } from "./padronizacao-core.ts";
 
 /**
  * Validação (Zod) da PADRONIZAÇÃO (Catálogo → Unidades de medida | Classificações) — fonte única cliente+servidor.
@@ -44,6 +44,8 @@ export const classificacaoItemSchema = z.object({
     .array(z.string().max(L.palavra, `Cada palavra-chave tem no máximo ${L.palavra} caracteres.`))
     .max(L.palavras, `No máximo ${L.palavras} palavras-chave.`)
     .default([]),
+  /** O DOMÍNIO que a classificação dá aos itens dela (MATERIAL/SERVIÇO; vazio = pela descrição). */
+  dominio: z.enum(DOMINIOS).nullable().default(null),
 });
 export type DadosClassificacaoItem = z.infer<typeof classificacaoItemSchema>;
 

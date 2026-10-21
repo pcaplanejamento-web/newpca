@@ -2510,6 +2510,14 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   "Tipo" do `ItemTable` com `origem`; `ItemRow.tipoDfd`, no texto compacto). Nunca usar o tipo do DFD como classificação.
   **Domínio (v1.145.0):** `ItemRow.dominio` (a coluna da planilha) → dimensão `dominio` do `origem-dash` (filtro do topo,
   gráfico "Domínio dos Itens" = `UnidadeRequisitanteChart dim="dominio"`, relatório, coluna do `ItemTable`) só com dados.
+  **GRAVADOS NO BANCO (v1.147.0, migração `0121` — `dfd_itens.classificacao/dominio/classificado_versao`,
+  `itens.classificacao_cat/dominio_cat/classificado_versao`, `item_classificacoes.dominio`):** `classificarItem`
+  (`padronizacao-core.ts`, puro) = classificação do Catálogo › a da planilha › "Não classificado"; domínio = o da planilha
+  (`dominioCanonico`) › o da classificação › `dominioPorDescricao` (todo item tem). `reclassificarPendentes`
+  (`reclassificacao.ts`; builders `reclassificacao-sql.ts` — UM UPDATE por tabela com o resultado num JSON, testados no D1
+  real) grava os itens cuja `classificado_versao` ≠ `versaoPadronizacao(cadastro)`: no cron dos e-mails (1500 por tabela) e
+  `reclassificarTudo` depois de importar planilha e de mudar classificações/unidades de medida. As leituras usam o gravado
+  (`COALESCE` na planilha; `itensConsolidados` com a mesma régua enquanto não gravado); a Mesa → Itens tem a coluna Domínio.
 - **UPLOAD ÚNICO + SEQUENCIAL SAGRADO (v1.139.0, migração `0118` — tabela `pca_uploads`, `unidades.upload_id` [único
   por upload + código; saiu o único por PCA], `itens.pca_id` + gatilhos `itens_sequencial_unico`/`pca_itens_sequencial_unico`):**
   cada ARQUIVO = UM cartão na Importação (`CartaoEspaco` + a importação como um card do MESMO tamanho, grade `COLUNAS_ESPACOS`;
@@ -3728,7 +3736,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   confere pelo papel); os demais, automática até 100 KB. **Em PARTES (v1.140.0, migração `0118`):** `POST /api/documentos`
   abre o envio (`completo`=0, fora da lista) e `PUT /api/documentos/[id]/partes?ordem=N` grava cada parte binária de 1 MB
   (`documento_partes`, `parteValida`); a última confere o total e conclui. O antigo (`partes`=0) segue no `conteudo` base64.
-- **Fontes do pdf.js (v1.146.0):** `abrirPdf` usa `standardFontDataUrl`/`cMapUrl` servidos de `public/pdfjs/` (copiados por `node scripts/copiar-pdfjs.mjs` — rode ao atualizar o pdfjs-dist); sem eles o texto em fonte não embutida sumia no visualizador e na compactação. **Link do Google:** `POST /api/documentos/link` (`urlPdfDoGoogle`, `link-documento-core.ts`; `baixarSeguro` com `binario`) devolve o PDF de um link do Docs/Drive e a tela o envia pelo MESMO fluxo de um arquivo.
+- **Fontes do pdf.js (v1.146.0):** `abrirPdf` usa `standardFontDataUrl`/`cMapUrl` servidos de `public/pdfjs/` (copiados por `node scripts/copiar-pdfjs.mjs` — rode ao atualizar o pdfjs-dist); sem eles o texto em fonte não embutida sumia no visualizador e na compactação. **Link do Google:** `POST /api/documentos/link` (`urlPdfDoGoogle`, `link-documento-core.ts`; `baixarSeguro` com `binario`) devolve o PDF de um link do Docs/Drive e a tela (card "Colar link do Google") o envia pelo MESMO fluxo de um arquivo; as URLs das fontes vão ABSOLUTAS (o worker não resolve relativas).
 - Rotas `GET/POST /api/documentos`, `PATCH/DELETE /api/documentos/[id]`, `GET /api/documentos/[id]/arquivo` (`?baixar=1`
   exige Exportar); auditoria `documento`. Tela `/painel/documentos` (`DocumentosView`: busca + `DocumentoCard` + o card "Enviar PDF" (`QuadroNovoCard`, no fim da grade; tocar ou soltar)
   sobre `CartaoEspaco`; visualizador = páginas do pdf.js em canvas num `Modal`, sem iframe — CSP `object-src 'none'`/iOS).

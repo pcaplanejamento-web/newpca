@@ -35,6 +35,36 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.147.0",
+    data: "2026-10-21",
+    titulo: "Classificação e domínio gravados em todo item",
+    mudancas: [
+      {
+        tipo: "novo",
+        area: "Itens",
+        texto: "Todo item — de protocolo ou de planilha — tem a Classificação (do cadastro do Catálogo; na planilha, a do arquivo quando o Catálogo não reconhece) e o Domínio (Material ou Serviço) gravados no banco. Mudar o cadastro regrava sozinho.",
+        link: "/painel/catalogo",
+      },
+      {
+        tipo: "novo",
+        area: "Catálogo · Classificações",
+        texto: "Cada classificação define o Domínio dos itens dela (Material, Serviço ou pela descrição).",
+        link: "/painel/catalogo",
+      },
+      { tipo: "melhoria", area: "Mesa · Itens", texto: "Coluna Domínio na visão Itens.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "PCA · Dashboard", texto: "O gráfico e o filtro de Domínio passam a valer para todos os itens, também os vindos de protocolos.", link: "/painel/pca" },
+    ],
+  },
+  {
+    versao: "1.146.1",
+    data: "2026-10-21",
+    titulo: "Documentos: fontes do PDF e card do link",
+    mudancas: [
+      { tipo: "correcao", area: "Documentos", texto: "As fontes do PDF passam a carregar no leitor (o texto aparece ao ver e ao compactar).", link: "/painel/documentos" },
+      { tipo: "melhoria", area: "Documentos", texto: "O link do Google virou um card próprio, “Colar link do Google”, ao lado de “Enviar PDF”.", link: "/painel/documentos" },
+    ],
+  },
+  {
     versao: "1.146.0",
     data: "2026-10-21",
     titulo: "Documentos: texto que sumia e PDF por link do Google",

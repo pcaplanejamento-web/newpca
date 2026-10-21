@@ -1,3 +1,5 @@
+import { reclassificarTudo } from "@/lib/reclassificacao";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { exigirAcesso, recusaPca } from "@/lib/api-auth";
@@ -81,6 +83,7 @@ export async function POST(req: Request) {
         .select({ n: sql<number>`COALESCE(SUM(${unidades.totalItens}), 0)`, v: sql<number>`COALESCE(SUM(${unidades.valorTotal}), 0)` })
         .from(unidades)
         .where(eq(unidades.uploadId, up.id));
+      depoisDaResposta(reclassificarTudo(), "reclassificar itens");
       if (pca) await avisarAdmsPca(auth.u, pca, `Planilha importada: ${up.nomeArquivo ?? "sem nome"}`, `${num(t?.n ?? 0)} itens · ${brl(t?.v ?? 0)}`, "importacao");
       return NextResponse.json({ ok: true });
     }

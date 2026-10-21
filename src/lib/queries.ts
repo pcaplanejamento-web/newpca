@@ -1,4 +1,5 @@
 import { condUnidade } from "./filtro-unidade-sql.ts";
+import { dominioCanonico, dominioPorDescricao } from "./padronizacao-core";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { itens, unidades } from "@/db/schema";
@@ -106,19 +107,23 @@ export async function getResumo(unidadeId?: number, pcaId?: PcaDosItens): Promis
 // Agregações para gráficos
 // ---------------------------------------------------------------------------
 
+/** A classificação do item da planilha: a GRAVADA (do Catálogo, senão a da planilha — `reclassificacao.ts`); ainda não
+ * gravada, a da planilha. */
+const classificacaoDoItem = sql<string | null>`COALESCE(${itens.classificacaoCat}, ${itens.classificacaoNorm})`;
+
 export type Fatia = { label: string; total: number; count: number };
 
 export async function getPorClassificacao(unidadeId?: number, pcaId?: PcaDosItens): Promise<Fatia[]> {
   const db = getDb();
   const rows = await db
     .select({
-      label: itens.classificacaoNorm,
+      label: classificacaoDoItem,
       total: sql<number>`COALESCE(SUM(${itens.valorTotal}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
     .from(itens)
     .where(filtroUnidade(unidadeId, pcaId))
-    .groupBy(itens.classificacaoNorm)
+    .groupBy(classificacaoDoItem)
     .orderBy(desc(sql`SUM(${itens.valorTotal})`));
   return rows.map((r) => ({
     label: r.label ?? "—",
@@ -265,14 +270,14 @@ export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?:
       quantidade: itens.quantidade,
       valorReferencia: itens.valorReferencia,
       valorTotal: itens.valorTotal,
-      classificacao: itens.classificacaoNorm,
+      classificacao: classificacaoDoItem,
       dataDesejada: itens.dataDesejada,
       codigo: unidades.codigo,
       municipio: unidades.municipio,
       ano: itens.anoDesejado,
       mes: itens.mesDesejado,
       prioridade: itens.prioridade,
-      dominio: itens.dominio,
+      dominio: sql<string | null>`COALESCE(${itens.dominioCat}, ${itens.dominio})`,
       periodo: itens.previsaoGenerica,
       protocoloIdExterno: itens.protocoloIdExterno,
     })
@@ -282,5 +287,9 @@ export async function getItensTodos(unidadeId?: number, limite?: number, pcaId?:
     .orderBy(desc(itens.valorTotal));
   // A previsão GENÉRICA (ANUAL/SEMESTRAL… — `0115`) vira o "anual" do Dashboard, como no PCA de protocolos.
   const linhas = await (limite == null ? q : q.limit(limite));
-  return linhas.map((r) => (r.periodo ? { ...r, anual: true } : { ...r, periodo: undefined }));
+  // Todo item tem domínio: o ainda não gravado sai pela descrição (a mesma régua da gravação).
+  return linhas.map((r) => {
+    const l = { ...r, dominio: r.dominio ? (dominioCanonico(r.dominio) ?? r.dominio) : dominioPorDescricao(r.nomeProduto) };
+    return l.periodo ? { ...l, anual: true } : { ...l, periodo: undefined };
+  });
 }

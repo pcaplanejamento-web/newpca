@@ -1,3 +1,5 @@
+import { reclassificarTudo } from "@/lib/reclassificacao";
+import { depoisDaResposta } from "@/lib/segundo-plano";
 import { exigirAcesso, intId } from "@/lib/api-auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { diffCampos } from "@/lib/auditoria-core";
@@ -31,6 +33,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     antes: dd.antes,
     depois: dd.depois,
   });
+  depoisDaResposta(reclassificarTudo(), "reclassificar itens"); // o cadastro mudou: grava de novo a classificação/domínio dos itens
   return ok();
 }
 
@@ -51,5 +54,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     resumo: `Unidade de medida ${antes.sigla} (${antes.nome}) excluída`,
     antes,
   });
+  depoisDaResposta(reclassificarTudo(), "reclassificar itens"); // o cadastro mudou: grava de novo a classificação/domínio dos itens
   return ok();
 }
