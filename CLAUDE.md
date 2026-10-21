@@ -66,7 +66,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
     a versão for a mesma (validade de segurança 5 min, até 60 entradas, a promessa compartilhada; falha não fica; núcleo
     puro testado `memo-versao-core.ts`). A chave leva os ARGUMENTOS, nunca o usuário (o que depende da sessão segue lido a
     cada requisição) e o valor é COMPARTILHADO (quem usa só lê). Hoje: `listarDfds`, `listarItensDfds`, `listarProtocolos`,
-    `listarProtocolosDoPca`, `listarPcasCards`, `dashboardDoPca` e `orcamentoDoPca`. **Loader pesado novo = `memoPorVersao`**;
+    `listarProtocolosDoPca`, `listarPcasCards`, `dashboardDoPca`, `orcamentoDoPca`, `getOrcamentoItens`, `vinculosDoPca` e `orcamentoDoAno` (v1.128.0); o enriquecimento de `/api/dfd/itens` (catálogo/padronização/histórico) é memorizado por lista BASE (`WeakMap`) e a Mesa só zera os itens quando algum DFD muda (`id|atualizadoEm`). Spinners giram num `<span>` `.animate-girar` (o SVG com `animate-spin` travava). **Loader pesado novo = `memoPorVersao`**;
     escrita nova = `registrarAuditoria` (senão a versão não muda e só a validade recarrega).
 - **LIMITES DO WORKER (plano gratuito: ~10 ms de CPU e 50 consultas ao D1 por requisição)** — passar deles CORTA a
   resposta no meio ("Connection closed." no navegador, sem "ref:") ou derruba a requisição. A Mesa de um PCA grande

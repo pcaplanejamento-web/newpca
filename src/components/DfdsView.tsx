@@ -421,11 +421,14 @@ export function DfdsView({
   // Histórico de compra: a REFERÊNCIA de preço de cada código (vem junto com os itens) — a coluna "Histórico" (só com
   // algum código comprado) aponta o item com valor divergente.
   const [historico, setHistorico] = useState<Record<string, ReferenciaHistorico> | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao trocar a referência de `dfds`.
+  // DADOS PRONTOS: os itens só recarregam quando algum DFD MUDOU de fato (gravado, entrou ou saiu) — um refresh com os
+  // mesmos DFDs mantém os itens (e o estado já conferido) sem pedir de novo.
+  const chaveItens = useMemo(() => dfds.map((d) => `${d.id}|${d.atualizadoEm ?? ""}`).join(","), [dfds]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset intencional ao mudar o conteúdo dos DFDs.
   useEffect(() => {
     setItens(null);
     setSelItens(new Set()); // os ids dos itens podem mudar ao regravar um DFD
-  }, [dfds]);
+  }, [chaveItens]);
   const pcaDaMesa = modoPca?.pcaId;
   // Mesa principal: o MESMO PCA do cabeçalho com que a página veio (explícito — o cookie pode ter mudado noutra aba).
   const anoFiltro = pcaFiltro?.ano;

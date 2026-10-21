@@ -254,9 +254,14 @@ export const IconDashboard = LayoutDashboard;
 /** Copiar o texto de uma célula (nº do protocolo, DFD, código, descrição…). */
 export const IconCopy = Copy;
 
-/** Spinner com rotação automática (mantém o comportamento do ícone anterior). */
+/** Spinner com rotação automática — a rotação vai num <span> HTML (`.animate-girar`, no compositor): o SVG girando
+ * pelo `animate-spin` parava com a página ocupada. */
 export function IconSpinner({ className, ...props }: LucideProps) {
-  return <Loader2 {...props} className={`animate-spin ${className ?? ""}`} />;
+  return (
+    <span aria-hidden="true" className={`inline-flex shrink-0 animate-girar ${className ?? ""}`}>
+      <Loader2 {...props} className="h-full w-full" />
+    </span>
+  );
 }
 export const IconKanban = SquareKanban;
 /** Cartão com "+" (criar a partir de TEMPLATE — o ícone do pé da lista, como no Trello). */

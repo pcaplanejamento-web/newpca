@@ -74,7 +74,8 @@ export function BotaoAtualizar({
       }`}
     >
       {ativo && (
-        <svg viewBox="0 0 36 36" aria-hidden="true" className={`absolute inset-0.5 ${progresso == null ? "animate-spin" : ""}`}>
+        <span aria-hidden="true" className={`absolute inset-0.5 ${progresso == null ? "animate-girar" : ""}`}>
+        <svg viewBox="0 0 36 36" aria-hidden="true" className="h-full w-full">
           <circle cx="18" cy="18" r={R} fill="none" stroke="var(--border)" strokeWidth="2.5" />
           <circle
             cx="18"
@@ -90,8 +91,11 @@ export function BotaoAtualizar({
             style={{ transition: "stroke-dashoffset var(--motion-duration, 200ms) ease" }}
           />
         </svg>
+        </span>
       )}
-      <IconRefresh className={`relative h-4 w-4 ${ativo ? "animate-spin" : ""}`} />
+      <span aria-hidden="true" className={`relative inline-flex ${ativo ? "animate-girar" : ""}`}>
+        <IconRefresh className="h-4 w-4" />
+      </span>
     </button>
   );
 }

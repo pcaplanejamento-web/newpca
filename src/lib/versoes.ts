@@ -35,6 +35,16 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.128.0",
+    data: "2026-10-21",
+    titulo: "Carregamento mais rápido",
+    mudancas: [
+      { tipo: "melhoria", area: "Mesa", texto: "Os itens já conferidos ficam salvos: voltar à visão Itens não verifica tudo de novo — só o que mudou. \"Reverificar tudo\" refaz a verificação completa.", link: "/painel/mesa?vista=itens" },
+      { tipo: "melhoria", area: "PCA", texto: "Orçamento, Mesa do PCA e o comparativo abrem mais rápido: os dados ficam prontos enquanto nada muda.", link: "/painel/pca" },
+      { tipo: "correcao", area: "Sistema", texto: "O círculo de carregamento gira sempre, mesmo com a página ocupada.", link: "/painel/mesa" },
+    ],
+  },
+  {
     versao: "1.127.0",
     data: "2026-10-19",
     titulo: "Orçamento com Redução e quantidade de empenhos",

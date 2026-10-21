@@ -14,6 +14,35 @@ import { normalizarCodigo } from "@/lib/parse-catalogo-comum";
 
 export const dynamic = "force-dynamic";
 
+type Enriquecido = {
+  catalogo: Map<number, Awaited<ReturnType<typeof conformidadeDosItens>>[number]>;
+  padronizacao: Awaited<ReturnType<typeof listarPadronizacao>> | null;
+  historico: Awaited<ReturnType<typeof referenciasHistorico>>;
+};
+// DADOS PRONTOS: a lista BASE vem do `memoPorVersao` (a MESMA referência enquanto a versão não muda) — o enriquecimento
+// (catálogo, padronização, histórico) é calculado UMA vez por lista e reusado; dado novo = lista nova = recalcula.
+const enriquecidos = new WeakMap<ItemDfdRow[], Promise<Enriquecido>>();
+function enriquecer(base: ItemDfdRow[]): Promise<Enriquecido> {
+  const pronto = enriquecidos.get(base);
+  if (pronto) return pronto;
+  // Auxiliares: uma falha na conferência do catálogo, no cadastro da padronização ou no histórico de compra nunca derruba
+  // a lista (a coluna fica "—"; as da padronização e a do histórico só não aparecem).
+  const p = Promise.all([
+    conformidadeDosItens(base).catch(() => base.map(() => null)),
+    listarPadronizacao().catch((e) => {
+      console.error("[itens] padronização indisponível:", e);
+      return null;
+    }),
+    referenciasHistorico(base.map((it) => normalizarCodigo(it.codigo))).catch((e) => {
+      console.error("[itens] histórico de compra indisponível:", e);
+      return {};
+    }),
+  ]).then(([cat, padronizacao, historico]) => ({ catalogo: new Map(base.map((it, i) => [it.id, cat[i]])), padronizacao, historico }));
+  enriquecidos.set(base, p);
+  p.catch(() => enriquecidos.delete(base));
+  return p;
+}
+
 // Lista PLANA dos itens dos DFDs em escopo (visão "Itens" da Mesa), carregada SOB DEMANDA pelo cliente ao
 // abrir a visão. Mesa principal: escopada pela unidade ativa (Geral ⇒ todos) e pelo PCA do CABEÇALHO — `?ano=AAAA`, o
 // ano com que a PÁGINA foi carregada (os itens casam com os protocolos/DFDs dela, mesmo que o PCA troque noutra aba;
@@ -33,6 +62,7 @@ export async function GET(req: Request) {
   const negado = recusa(g.acesso, doPca ? "pca" : "dfd", "visualizar");
   if (negado) return negado;
   let itens: ItemDfdRow[];
+  let base: ItemDfdRow[] = [];
   const esc = await escopoMesa();
   if (!esc) return erro("Faça login.", 401);
   const un = esc.un;
@@ -40,30 +70,17 @@ export async function GET(req: Request) {
     // Com a visão dos MARCADOS ligada no PCA (o servidor decide), também os itens do ano dele ainda na Mesa do sistema.
     // E, com o PCA obedecendo ao cabeçalho (Configurações → Filtro da unidade), só os da unidade ativa.
     const rep = filtroDoModulo(await getConfigEscopo(), "pca", idDoFiltro(un.filtro));
-    itens =
-      rep === false
-        ? []
-        : (await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca))).filter((it) => un.acessivel(it.reparticaoId) && (rep == null || it.reparticaoId === rep));
+    if (rep !== false) base = await listarItensDfds(undefined, pca, null, await anoMarcadosDoPca(pca));
+    itens = base.filter((it) => un.acessivel(it.reparticaoId) && (rep == null || it.reparticaoId === rep));
   } else {
     const ano = Number(params.get("ano"));
     // A unidade ATIVA (a "Geral" = todas; sem grupo/unidade = nada).
     const repId = idDoFiltro(un.filtro);
-    itens = repId === false ? [] : await listarItensDfds(repId ?? undefined, undefined, Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : null);
+    if (repId !== false) base = await listarItensDfds(repId ?? undefined, undefined, Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : null);
+    itens = base;
   }
   // As LINHAS da pessoa ("só os meus", detalhe do papel): só os itens dos DFDs dela.
   itens = redigirItens(itens, esc.meus);
-  // Auxiliares: uma falha na conferência do catálogo, no cadastro da padronização ou no histórico de compra nunca derruba
-  // a lista (a coluna fica "—"; as da padronização e a do histórico só não aparecem).
-  const [catalogo, padronizacao, historico] = await Promise.all([
-    conformidadeDosItens(itens).catch(() => itens.map(() => null)),
-    listarPadronizacao().catch((e) => {
-      console.error("[itens] padronização indisponível:", e);
-      return null;
-    }),
-    referenciasHistorico(itens.map((it) => normalizarCodigo(it.codigo))).catch((e) => {
-      console.error("[itens] histórico de compra indisponível:", e);
-      return {};
-    }),
-  ]);
-  return ok({ itens: itens.map((it, i) => ({ ...it, catalogo: catalogo[i] })), padronizacao, historico });
+  const { catalogo, padronizacao, historico } = await enriquecer(base);
+  return ok({ itens: itens.map((it) => ({ ...it, catalogo: catalogo.get(it.id) ?? null })), padronizacao, historico });
 }

@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { comandoPropriasVisao, comandosDestinoVinculos, comandosSubstituirLancamentos } from "./orcamento-sql";
 import { ORDEM_ORGAOS } from "./orgaos";
 import { lotesDeIds } from "./reparticoes";
+import { memoPorVersao } from "./versao-dados";
 import type { OrcamentoItemImport } from "./orcamento-validation";
 import {
   type AlvosVinculo,
@@ -150,12 +151,15 @@ const COLS = {
 };
 
 /** Lançamentos de UM orçamento, na ordem do arquivo (`sequencial`) — a tela do orçamento. */
-export async function getOrcamentoItens(orcamentoId: number): Promise<OrcamentoItemRow[]> {
-  return getDb()
-    .select(COLS)
-    .from(orcamentoItens)
-    .where(eq(orcamentoItens.orcamentoId, orcamentoId))
-    .orderBy(asc(orcamentoItens.sequencial), asc(orcamentoItens.id));
+// DADOS PRONTOS: os lançamentos ficam na memória do Worker enquanto a versão dos dados não muda (quem usa só lê).
+export function getOrcamentoItens(orcamentoId: number): Promise<OrcamentoItemRow[]> {
+  return memoPorVersao(`orcamento-itens:${orcamentoId}`, () =>
+    getDb()
+      .select(COLS)
+      .from(orcamentoItens)
+      .where(eq(orcamentoItens.orcamentoId, orcamentoId))
+      .orderBy(asc(orcamentoItens.sequencial), asc(orcamentoItens.id)),
+  );
 }
 
 /** Um orçamento pelo id (resumo do card/cabeçalho) — também valida o alvo de uma operação. `null` se não existe. */

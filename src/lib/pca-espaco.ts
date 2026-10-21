@@ -199,8 +199,8 @@ async function vinculos(pcaIds?: number[]): Promise<VinculoDfd[]> {
   }));
 }
 
-export async function vinculosDoPca(pcaId: number): Promise<VinculoDfd[]> {
-  return vinculos([pcaId]);
+export function vinculosDoPca(pcaId: number): Promise<VinculoDfd[]> {
+  return memoPorVersao(`vinculos-pca:${pcaId}`, () => vinculos([pcaId]));
 }
 
 /**
@@ -1064,6 +1064,9 @@ export type OrcamentoDoPca = {
 /** O orçamento do ANO (o importado por último) — o que o PCA daquele ano usa. Sem ano/sem orçamento ⇒ `null`. */
 export async function orcamentoDoAno(ano: number | null): Promise<{ id: number; nome: string; ano: number } | null> {
   if (ano == null) return null;
+  return memoPorVersao(`orcamento-ano:${ano}`, () => consultarOrcamentoDoAno(ano));
+}
+async function consultarOrcamentoDoAno(ano: number): Promise<{ id: number; nome: string; ano: number } | null> {
   const [orc] = await getDb()
     .select({ id: orcamentos.id, nome: orcamentos.nome, ano: orcamentos.ano })
     .from(orcamentos)
