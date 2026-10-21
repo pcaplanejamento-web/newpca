@@ -69,19 +69,17 @@ export function DocumentoCard({
           <span aria-hidden className="absolute inset-0 grid place-items-center text-white/85">
             <IconDocumentos className="h-10 w-10" />
           </span>
+          {pcasTexto && (
+            <span className="absolute top-1.5 left-1.5 max-w-[calc(100%-3.5rem)] truncate rounded-control bg-accent px-2 py-1 text-[12px] font-bold leading-none tabular-nums tracking-tight text-white shadow-soft" title={`Vinculado: ${pcasTexto}`}>
+              {pcasTexto}
+            </span>
+          )}
           {d.compactado && (
             <span className="absolute bottom-1.5 left-1.5 inline-flex items-center rounded-full bg-[var(--scrim)] px-2 py-0.5 text-[11px] font-semibold text-white">
               Compactado de {formatBytes(d.tamanhoOriginal)}
             </span>
           )}
         </CapaQuadro>
-      }
-      selo={
-        pcasTexto && (
-          <span className="shrink-0 rounded-control bg-accent px-2.5 py-1.5 text-[15px] font-bold leading-none tabular-nums tracking-tight text-white shadow-soft" title={`Vinculado: ${pcasTexto}`}>
-            {pcasTexto}
-          </span>
-        )
       }
       sobretitulo={d.autor ? `PDF · ${d.autor}` : "PDF"}
       nome={d.nome}
