@@ -26,3 +26,11 @@ export function SkeletonCartao({ linhas = 6 }: { linhas?: number }) {
     </div>
   );
 }
+
+/**
+ * Esqueleto de um CONTROLE (botão, seletor, campo) na ALTURA PADRÃO dos controles — `--h-control-sm` no desktop, 44px no
+ * toque. `quadrado` = o botão só com ícone; senão a largura vem em `className`.
+ */
+export function EsqueletoControle({ quadrado = false, className = "" }: { quadrado?: boolean; className?: string }) {
+  return <Skeleton className={`h-11 rounded-control lg:h-[var(--h-control-sm)] ${quadrado ? "aspect-square" : ""} ${className}`} />;
+}

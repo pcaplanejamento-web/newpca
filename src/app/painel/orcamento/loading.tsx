@@ -1,5 +1,16 @@
-import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoTela, EsqueletoTitulo } from "@/components/EsqueletoTela";
+import { EsqueletoOrcamentoCard, GRADE_ORCAMENTOS } from "@/components/OrcamentoCard";
 
+/** Os orçamentos: o título e a grade dos cards. */
 export default function Carregando() {
-  return <EsqueletoTela variante="orcamento" />;
+  return (
+    <EsqueletoTela>
+      <EsqueletoTitulo acao={false} />
+      <div className={GRADE_ORCAMENTOS}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <EsqueletoOrcamentoCard key={i} />
+        ))}
+      </div>
+    </EsqueletoTela>
+  );
 }

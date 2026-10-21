@@ -1,5 +1,12 @@
-import { EsqueletoTela } from "@/components/EsqueletoTela";
+import { EsqueletoGradeEspacos } from "@/components/CartaoEspacoEsqueleto";
+import { EsqueletoTela, EsqueletoTitulo } from "@/components/EsqueletoTela";
 
+/** Tarefas: o título e a grade dos cards dos quadros. */
 export default function Carregando() {
-  return <EsqueletoTela variante="espacos" />;
+  return (
+    <EsqueletoTela>
+      <EsqueletoTitulo />
+      <EsqueletoGradeEspacos espaco="gap-3" />
+    </EsqueletoTela>
+  );
 }

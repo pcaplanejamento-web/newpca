@@ -29,6 +29,7 @@ import { IconChevronRight, IconClock, IconEstrela, IconLayers, IconLock, IconMai
 import { Modal } from "./Modal";
 import { GradePastas } from "./PastasQuadros";
 import { QuadroCard } from "./QuadroCard";
+import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { segurar } from "./segurar";
 import { Switch } from "./Switch";
 import { toast } from "./Toast";
@@ -63,7 +64,7 @@ export function GradeQuadros({
 }) {
   const { negado, iniciar, foiArrasto } = useArrastoNegado();
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
+    <div className={`grid ${COLUNAS_ESPACOS} gap-3`}>
       {quadros.map((q) => (
         <div
           key={q.id}

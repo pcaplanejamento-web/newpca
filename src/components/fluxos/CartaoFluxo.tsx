@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 import type { AjudaFluxo } from "@/lib/fluxo-core";
 import { IconFluxo } from "../icons";
 import { AjudaDoFluxo } from "./ConfigFluxo";
+import { COLUNAS_ESPACOS } from "../CartaoEspacoEsqueleto";
 import { CapaQuadro, CartaoEspaco, type MetricaCartao } from "../QuadroCard";
 
 /** A largura MÍNIMA do cartão — a MESMA dos quadros de Tarefas (a grade `auto-fill minmax(15rem)`). */
 export const LARGURA_CARTAO = "15rem";
 
 /** A grade simples dos cartões (o esqueleto e o painel "Novo fluxo"); a lista mede as colunas em JS (`useColunas`). */
-export const GRADE_CARTOES = "grid gap-[var(--gap-block)] [grid-template-columns:repeat(auto-fill,minmax(min(100%,15rem),1fr))]";
+export const GRADE_CARTOES = `grid gap-[var(--gap-block)] ${COLUNAS_ESPACOS}`;
 
 
 /**

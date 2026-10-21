@@ -5,7 +5,7 @@ import { num } from "@/lib/format";
 import type { OrcamentoResumo } from "@/lib/orcamento";
 import { IconInbox } from "./icons";
 import { ImportarOrcamento } from "./ImportarOrcamento";
-import { OrcamentoCard, OrcamentoNovoCard } from "./OrcamentoCard";
+import { GRADE_ORCAMENTOS, OrcamentoCard, OrcamentoNovoCard } from "./OrcamentoCard";
 
 /**
  * Módulo ORÇAMENTO (relatório CUBO) — a LISTA: um card por orçamento importado (`OrcamentoCard`: ano, nome,
@@ -47,7 +47,7 @@ export function OrcamentoView({
           <p className="text-sm text-muted">{filtro ? `Nenhum orçamento do ano do ${filtro}.` : "Nenhum orçamento ainda."}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-[var(--gap-block)]">
+        <div className={GRADE_ORCAMENTOS}>
           {orcamentos.map((o) => (
             <OrcamentoCard key={o.id} orcamento={o} href={`/painel/orcamento/${o.id}`} />
           ))}

@@ -4,6 +4,10 @@ import { brlCompact, num } from "@/lib/format";
 import { type FontePca, ROTULO_FONTE, ROTULO_STATUS, type StatusPca } from "@/lib/pca-core";
 import { CarregandoLink } from "./CarregandoLink";
 import { IconDatabase, IconFile, IconPlus } from "./icons";
+import { Skeleton } from "./Skeleton";
+
+/** A GRADE dos cards de PCA (`auto-fill`, card de no mínimo 22rem) — a MESMA na tela e no esqueleto. */
+export const GRADE_PCAS = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] gap-[var(--gap-block)]";
 
 /**
  * CAPA do PCA na proporção 4:5 — a imagem escolhida (recorte WebP 800×1000) ou a CAPA PADRÃO
@@ -138,5 +142,22 @@ export function PcaNovoCard({ onClick }: { onClick: () => void }) {
       </span>
       <span className="text-sm font-semibold">Novo PCA</span>
     </button>
+  );
+}
+
+/** Esqueleto do `PcaCard` — a MESMA capa 4:5 (até 30rem), as duas pílulas no topo e o nome · Σ · contagens na base. */
+export function EsqueletoPcaCard() {
+  return (
+    <div className="relative aspect-[4/5] w-full max-w-[30rem] overflow-hidden rounded-card bg-surface-2 shadow-ring [container-type:inline-size]">
+      <div className="absolute inset-x-[4cqw] top-[4cqw] flex justify-between">
+        <Skeleton className="h-6 w-24 rounded-full" />
+        <Skeleton className="h-6 w-28 rounded-full" />
+      </div>
+      <div className="absolute inset-x-[5cqw] bottom-[4.5cqw] space-y-2">
+        <Skeleton className="h-4 w-2/3 rounded-sm" />
+        <Skeleton className="h-8 w-1/2 rounded-sm" />
+        <Skeleton className="h-3 w-3/5 rounded-sm" />
+      </div>
+    </div>
   );
 }

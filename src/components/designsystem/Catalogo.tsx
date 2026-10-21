@@ -21,7 +21,7 @@ import { type UsuarioAdmin, UsuarioDetalhe } from "@/components/UsuarioDetalhe";
 import { MarcaSistema } from "@/components/MarcaSistema";
 import { OpcoesUnidades } from "@/components/OpcoesUnidades";
 import { OrcamentoPca } from "@/components/OrcamentoPca";
-import { PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
+import { EsqueletoPcaCard, PcaCapa, PcaCard, PcaNovoCard } from "@/components/PcaCard";
 import { RecorteImagem } from "@/components/RecorteImagem";
 import { SeletorBusca } from "@/components/SeletorBusca";
 import { SeletorMultiplo } from "@/components/SeletorMultiplo";
@@ -141,8 +141,13 @@ import { CAPACIDADES_MEMBRO, type Capacidades } from "@/lib/papeis-core";
 import { coerceDetalhes, type DetalhesPapel, detalhesPadrao } from "@/lib/papeis-detalhes-core";
 import { FilterChip } from "@/components/FilterChip";
 import { Progress } from "@/components/Progress";
-import { EsqueletoTela } from "@/components/EsqueletoTela";
-import { Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
+import { EsqueletoCalendario } from "@/components/CalendarioEsqueleto";
+import { COLUNAS_ESPACOS, EsqueletoCartaoEspaco } from "@/components/CartaoEspacoEsqueleto";
+import { EsqueletoTabela } from "@/components/DataTableEsqueleto";
+import { EsqueletoTitulo } from "@/components/EsqueletoTela";
+import { EsqueletoSegmented } from "@/components/SegmentedEsqueleto";
+import { EsqueletoTabsLaterais } from "@/components/TabsEsqueleto";
+import { EsqueletoControle, Skeleton, SkeletonCartao, SkeletonLinhas } from "@/components/Skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AparenciaPessoal } from "@/components/AparenciaPessoal";
 import * as Icons from "@/components/icons";
@@ -185,7 +190,7 @@ import { historicoDasLinhas, produtosDoHistorico, referenciaDoProduto } from "@/
 import { CatalogoItemDetalhe } from "@/components/CatalogoItemDetalhe";
 import { type EscopoHistorico, Historico, HistoricoDoItem } from "@/components/Historico";
 import { BotaoCopiar, CelulaCopiavel } from "@/components/BotaoCopiar";
-import { OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
+import { EsqueletoOrcamentoCard, GRADE_ORCAMENTOS, OrcamentoCard, OrcamentoNovoCard } from "@/components/OrcamentoCard";
 import { AssinaturaCalendario } from "@/components/AssinaturaCalendario";
 import { BarraCalendario } from "@/components/BarraCalendario";
 import { MenuAdicionarCartao, MolduraBloco } from "@/components/BlocosTarefa";
@@ -3930,12 +3935,28 @@ export function Catalogo() {
         </div>
         <div className="mt-4 rounded-card border border-border bg-surface p-4">
           <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-            EsqueletoTela (o loading.tsx de cada tela — mesa · pca · orcamento · espacos · calendario · abas · painel; só
-            aparece depois de 300 ms; as de altura cheia ocupam o display e não cabem aqui)
+            Esqueletos dos componentes (cada componente tem o seu, junto dele; o loading.tsx de cada tela os compõe dentro do
+            EsqueletoTela — que só aparece depois de 450 ms)
           </span>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <EsqueletoTela variante="espacos" />
-            <EsqueletoTela variante="orcamento" />
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <EsqueletoTitulo />
+              <EsqueletoSegmented itens={4} />
+              <EsqueletoControle quadrado />
+            </div>
+            <EsqueletoTabela linhas={4} colunas={5} />
+            <div className={`grid ${COLUNAS_ESPACOS} gap-3`}>
+              <EsqueletoCartaoEspaco />
+              <EsqueletoCartaoEspaco />
+            </div>
+            <div className={GRADE_ORCAMENTOS}>
+              <EsqueletoOrcamentoCard />
+              <EsqueletoPcaCard />
+            </div>
+            <EsqueletoTabsLaterais abas={4} linhas={3} />
+            <div className="h-[34rem]">
+              <EsqueletoCalendario />
+            </div>
           </div>
         </div>
         <div className="mt-4 rounded-card border border-border bg-surface p-4">

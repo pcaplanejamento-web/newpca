@@ -48,6 +48,15 @@ export const VERSOES: readonly Versao[] = [
     ],
   },
   {
+    versao: "1.133.1",
+    data: "2026-10-21",
+    titulo: "Cada parte da tela com a sua estrutura de carregamento",
+    mudancas: [
+      { tipo: "melhoria", area: "Sistema", texto: "Enquanto uma tela demora, cada parte dela — tabela, cartões, abas, calendário — mostra a própria forma, igual à que vai aparecer.", link: "/painel/mesa" },
+      { tipo: "correcao", area: "Tarefas", texto: "Os quadros de Tarefas, os catálogos e as automações carregam com a mesma forma de cartão que têm prontos.", link: "/painel/tarefas" },
+    ],
+  },
+  {
     versao: "1.133.0",
     data: "2026-10-21",
     titulo: "PCA de lista pronta recebe protocolos e a planilha consolidada",

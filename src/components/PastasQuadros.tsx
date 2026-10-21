@@ -10,11 +10,12 @@ import { CartaoPreso } from "./ArrastoCartoes";
 import { IconClose, IconLock, IconNenhum, IconPasta, IconPastaAberta } from "./icons";
 import { duracaoMotionMs } from "./Modal";
 import { CapaQuadro, QuadroCard } from "./QuadroCard";
+import { COLUNAS_ESPACOS } from "./CartaoEspacoEsqueleto";
 import { segurar } from "./segurar";
 import { toast } from "./Toast";
 
 /** A grade das pastas/quadros: colunas de no mínimo 15rem (a MESMA da `GradeQuadros` — o card nunca muda de forma). */
-const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3";
+const GRADE = `grid ${COLUNAS_ESPACOS} gap-3`;
 
 /** Os ângulos das FOLHAS em leque (a de trás primeiro). */
 const LEQUE = [-2.5, 2, 0];

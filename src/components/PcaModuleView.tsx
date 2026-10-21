@@ -8,7 +8,7 @@ import { Button } from "./Button";
 import { TextField } from "./Field";
 import { IconInbox } from "./icons";
 import { Modal } from "./Modal";
-import { PcaCard, type PcaCardDados, PcaNovoCard } from "./PcaCard";
+import { GRADE_PCAS, PcaCard, type PcaCardDados, PcaNovoCard } from "./PcaCard";
 import { Segmented } from "./Segmented";
 
 /**
@@ -75,7 +75,7 @@ export function PcaModuleView({
           <p className="text-sm text-muted">Nenhum PCA cadastrado ainda.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] gap-[var(--gap-block)]">
+        <div className={GRADE_PCAS}>
           {pcas.map((p) => (
             <PcaCard key={p.id} pca={p} href={`/painel/pca/${p.id}`} />
           ))}
