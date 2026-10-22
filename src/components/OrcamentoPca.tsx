@@ -50,6 +50,7 @@ import { DicaFlutuante } from "./DicaFlutuante";
 import { GruposOrcamento } from "./GruposOrcamento";
 import { type GrupoOrcamento, refsDosGrupos } from "@/lib/orcamento-grupos";
 import { ResumoSemVinculo, type UnidadeDaLinha, VinculosDaUnidade } from "./VinculosDaUnidade";
+import { orcamentoNaVisao } from "@/lib/orcamento-pca-visao";
 import { SeletorVisaoPca, VisaoOrcamentoPca } from "./VisaoOrcamentoPca";
 
 type Filtro = "todas" | "acima" | "dentro";
@@ -369,7 +370,7 @@ function BarraPct({ l }: { l: Pick<LinhaComparativo, "percentual" | "planejado" 
  * unidade pelos Vínculos do Orçamento; o que não tem vínculo vira "Sem vínculo"). Sem orçamento do ano, só o por unidade.
  */
 export function OrcamentoPca({
-  dados,
+  dados: dadosServidor,
   comparativo = null,
   podeExportar = true,
   podePublicar = false,
@@ -392,6 +393,19 @@ export function OrcamentoPca({
   podePublicar?: boolean;
 }) {
   const [vista, setVista] = useState<Vista>("unidade");
+  // A VISÃO À VISTA é só desta tela (barra e Comparativo, a mesma): recalculada NO NAVEGADOR com os lançamentos já
+  // carregados — nada é gravado nem pedido ao servidor. A padrão do PCA (engrenagem) é o ponto de partida.
+  const [visaoTela, setVisaoTela] = useState<number | null>(dadosServidor.visaoId ?? null);
+  const [visaoBase, setVisaoBase] = useState(dadosServidor.visaoId ?? null);
+  if (visaoBase !== (dadosServidor.visaoId ?? null)) {
+    setVisaoBase(dadosServidor.visaoId ?? null);
+    setVisaoTela(dadosServidor.visaoId ?? null);
+  }
+  const dados = useMemo<DadosOrcamentoPca>(() => {
+    if (!comparativo || visaoTela === (dadosServidor.visaoId ?? null)) return dadosServidor;
+    const v = (comparativo.visoes ?? visoes).find((x) => x.id === visaoTela) ?? null;
+    return { ...dadosServidor, ...orcamentoNaVisao(comparativo.itens, comparativo.vinculos ?? [], v, comparativo.alvos) };
+  }, [dadosServidor, comparativo, visaoTela, visoes]);
   // As edições salvas do Comparativo ficam AQUI (trocar de vista remonta a tabela — ela volta com as edições novas).
   const [edicoesComp, setEdicoesComp] = useState(() => (comparativo ? { lista: comparativo.edicoes, padroes: comparativo.padroes } : null));
   // A tela recarregou (router.refresh) com edições novas do servidor — elas valem.
@@ -644,12 +658,12 @@ export function OrcamentoPca({
           realce
           completo
           emLinha
-          label={`Dotação ${dados.ano}${dados.visaoNome ? ` · visão ${dados.visaoNome}` : ""}`}
+          label={`Dotação ${dados.ano}`}
           value={brl(dados.filtrado)}
           detalhes={[
-            ...(dados.visaoNome ? [{ rotulo: "Dotação bruta", valor: brl(dados.bruto) }, { rotulo: "Retirado pela visão", valor: brl(dados.bruto - dados.filtrado) }] : []),
+            { rotulo: "Visão", valor: dados.visaoNome ?? "Orçamento inteiro" },
+            { rotulo: "Retirado pela visão", valor: brl(dados.bruto - dados.filtrado) },
             { rotulo: "Sem vínculo", valor: brl(ind.semVinculo), cor: ind.semVinculo > 0 ? "var(--warn)" : undefined },
-            { rotulo: "Orçamento", valor: dados.orcamento?.nome ?? "—" },
           ]}
         />
         <KpiStat
@@ -663,7 +677,6 @@ export function OrcamentoPca({
             { rotulo: "Contratações", valor: num(ind.contratacoes) },
             { rotulo: "Unidades com contratações", valor: num(ind.unidadesComPlanejado) },
             { rotulo: "Sem orçamento vinculado", valor: brl(ind.planejadoSemOrcamento), cor: ind.planejadoSemOrcamento > 0 ? "var(--danger)" : undefined },
-            ...(dados.previa ? [{ rotulo: "Prévia (DFDs)", valor: num(dados.previa.dfds) }] : []),
           ]}
         />
         <KpiStat
@@ -701,6 +714,8 @@ export function OrcamentoPca({
       {comparativo && vista === "comparativo" ? (
         <OrcamentoComparativo
           {...comparativo}
+          visaoInicial={visaoTela}
+          onVisao={setVisaoTela}
           edicoes={edicoesComp?.lista ?? comparativo.edicoes}
           padroes={edicoesComp?.padroes ?? comparativo.padroes}
           onMudarEdicoes={(lista, padroes) => setEdicoesComp({ lista, padroes })}
@@ -745,8 +760,8 @@ export function OrcamentoPca({
               <div className="flex w-full min-w-[12rem] items-center gap-2 sm:w-auto sm:max-w-sm sm:flex-1">
                 <div className="min-w-0 flex-1">
                   <SeletorVisaoPca
-                    pcaId={dados.pcaId}
-                    visaoId={dados.visaoId ?? null}
+                    visaoId={visaoTela}
+                    onEscolher={setVisaoTela}
                     visoes={visoes}
                     podeEscolher
                     itens={linhasVisao}
@@ -764,7 +779,7 @@ export function OrcamentoPca({
             <div className="flex items-center gap-2 lg:ml-auto">
               {podeExportar && dados.orcamento && <BotaoRelatorioComposicao
                   pcaId={dados.pcaId}
-                  visaoId={dados.visaoId ?? null}
+                  visaoId={visaoTela}
                   filtradas={
                     nivel === "unidade" && visiveis.length < linhas.length
                       ? visiveis.flatMap((l) => (l.nivel === "unidade" && l.unidadeId != null ? [l.unidadeId] : []))

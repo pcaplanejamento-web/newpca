@@ -78,6 +78,7 @@ export function OrcamentoComparativo({
   edicoes,
   padroes,
   visaoInicial = null,
+  onVisao,
   inicio,
   fim,
   onMudarEdicoes,
@@ -96,6 +97,8 @@ export function OrcamentoComparativo({
   padroes: Record<string, unknown>;
   /** A visão com que abre (ex.: a do PCA) — trocável; inexistente ⇒ todos os lançamentos. */
   visaoInicial?: number | null;
+  /** A visão escolhida AQUI (só na tela — o host acompanha; nada é gravado). */
+  onVisao?: (id: number | null) => void;
   /** Controles do HOST no início da linha dos seletores (ex.: a troca de visão da aba Orçamento do PCA). */
   inicio?: ReactNode;
   /** Controles do HOST no FIM da linha, à direita (ex.: a engrenagem da visão do orçamento do PCA). */
@@ -389,7 +392,10 @@ export function OrcamentoComparativo({
               label="Visão"
               value={visaoId ?? ""}
               onChange={(e) => {
-                setVisaoId(e.target.value ? Number(e.target.value) : null);
+                const id = e.target.value ? Number(e.target.value) : null;
+                setVisaoId(id);
+                setVisaoHost(id);
+                onVisao?.(id);
                 setAberto(null);
               }}
             >

@@ -35,6 +35,25 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.3",
+    data: "2026-10-22",
+    titulo: "Visão do orçamento instantânea e KPIs fixas",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "PCA",
+        texto: "Trocar a visão no PCA × Orçamento e no Comparativo é um filtro instantâneo: recalcula com os dados já carregados, sem ir ao servidor e sem gravar nada. As duas ficam na mesma visão.",
+        link: "/painel/pca?aba=orcamento",
+      },
+      {
+        tipo: "correcao",
+        area: "PCA",
+        texto: "As KPIs do Orçamento do PCA não mudam mais de tamanho ao trocar a visão.",
+        link: "/painel/pca?aba=orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.158.2",
     data: "2026-10-22",
     titulo: "Visão do PCA × Orçamento só para quem vê",

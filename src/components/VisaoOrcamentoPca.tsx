@@ -62,39 +62,22 @@ export function useVisaoDoPca(pcaId: number, visaoId: number | null) {
 }
 
 /**
- * A visão escolhida na BARRA vale só para esta tela: troca o `?visao=` da URL (o servidor recalcula com ela, memorizado) — não
- * grava no PCA nem muda a visão padrão dos outros. A padrão do PCA segue pela engrenagem/Configuração.
- */
-function useVisaoNaTela(visaoId: number | null) {
-  const router = useRouter();
-  const [escolha, setEscolha] = useState<number | null>(visaoId);
-  const [gravando, iniciar] = useTransition();
-  useEffect(() => setEscolha(visaoId), [visaoId]);
-  function ver(id: number | null) {
-    setEscolha(id);
-    const u = new URL(window.location.href);
-    u.searchParams.set("visao", String(id ?? 0));
-    iniciar(() => router.replace(`${u.pathname}${u.search}`, { scroll: false }));
-  }
-  return { escolha, gravando, ver };
-}
-
-/**
  * A VISÃO do orçamento do PCA NA BARRA do PCA × Orçamento (à vista, sem abrir a engrenagem): `SelectField compacto` com o
- * orçamento inteiro e as visões salvas (o resumo de cada uma na dica); escolher grava na hora no PCA (`useVisaoDoPca`). Sem
+ * orçamento inteiro e as visões salvas (o resumo de cada uma na dica); escolher vale só nesta tela (sem gravar). Sem
  * `podeEscolher`, mostra a visão em uso travada. Editar/criar visões segue pela engrenagem.
  */
 export function SeletorVisaoPca({
-  pcaId,
   visaoId,
+  onEscolher,
   visoes,
   podeEscolher,
   itens,
   onEditar,
   onVer,
 }: {
-  pcaId: number;
   visaoId: number | null;
+  /** Escolher a visão só NESTA tela (o host recalcula com os dados já carregados — nada é gravado). */
+  onEscolher: (id: number | null) => void;
   visoes: VisaoOrcamento[];
   /** Pode trocar a visão do PCA (quem visualiza o PCA — escolher como ver não é configurar). */
   podeEscolher: boolean;
@@ -105,7 +88,7 @@ export function SeletorVisaoPca({
   /** Ver as configurações da visão em uso (filtros e vínculos), só leitura — o olho ao lado; ausente = sem o olho. */
   onVer?: (v: VisaoOrcamento) => void;
 }) {
-  const { escolha, gravando, ver } = useVisaoNaTela(visaoId);
+  const escolha = visaoId;
   const atual = visoes.find((v) => v.id === escolha) ?? null;
   const dica = atual ? `${atual.nome} — ${resumoVisao(atual.filtros)}` : "Orçamento inteiro (sem visão)";
   const ausentes = useMemo(() => new Map(visoes.map((v) => [v.id, itens ? contarAusentes(valoresAusentes(itens, v.filtros)) : 0])), [visoes, itens]);
@@ -122,10 +105,9 @@ export function SeletorVisaoPca({
         compacto
         label="Visão"
         value={escolha ?? ""}
-        disabled={!podeEscolher || gravando}
-        aria-busy={gravando || undefined}
+        disabled={!podeEscolher}
         acoes={acoes}
-        onChange={(e) => ver(e.target.value ? Number(e.target.value) : null)}
+        onChange={(e) => onEscolher(e.target.value ? Number(e.target.value) : null)}
       >
         <option value="" data-detalhe="Todos os lançamentos do orçamento do ano">
           Orçamento inteiro
@@ -146,7 +128,7 @@ export function SeletorVisaoPca({
           size="sm"
           variant="icon"
           icon={<IconEye className="h-4 w-4" />}
-          disabled={!atual || gravando}
+          disabled={!atual}
           aria-label={atual ? `Ver as configurações da visão ${atual.nome}` : "Ver as configurações da visão"}
           title={atual ? `Ver as configurações da visão "${atual.nome}" (só consulta)` : "Orçamento inteiro — sem filtros nem vínculos próprios"}
           onClick={() => atual && onVer(atual)}

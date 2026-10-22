@@ -1285,7 +1285,7 @@ function EditorVisaoDemo() {
       <EditorVisaoOrcamento aberta={aberta} itens={LINHAS_VISAO_DEMO} podeEditar onFechar={() => setAberta(null)} onSalva={() => setAberta(null)} />
       {/* SeletorVisaoPca — a visão do PCA na barra do PCA × Orçamento (aqui travado: sem permissão não troca). */}
       <div className="w-full sm:w-72">
-        <SeletorVisaoPca pcaId={0} visaoId={VISOES_DEMO[0].id} visoes={VISOES_DEMO} podeEscolher={false} />
+        <SeletorVisaoPca onEscolher={() => {}} visaoId={VISOES_DEMO[0].id} visoes={VISOES_DEMO} podeEscolher={false} />
       </div>
       {/* AjudaVisoes — o (?) único das visões (tela do orçamento e orçamento do PCA). */}
       <AjudaVisoes botao="sm" />
