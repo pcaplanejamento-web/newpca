@@ -1252,18 +1252,18 @@ select:not([multiple]):not([size]) {
 .menu-lateral .menu-alternar { transition: transform 300ms var(--menu-curva); }
 html[data-menu-recolhido] .menu-vaga, html[data-menu-recolhido] .menu-lateral { width: 3.75rem; }
 html[data-menu-recolhido] .menu-lateral .menu-alternar { transform: rotate(180deg); }
-html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) :is(.menu-esconde, [data-marca-texto]) {
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible), :has([aria-expanded="true"]))) :is(.menu-esconde, [data-marca-texto]) {
   opacity: 0; transform: translateX(-6px); transition-delay: 0ms; transition-duration: 120ms, 300ms;
 }
-html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-linha {
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible), :has([aria-expanded="true"]))) .menu-linha {
   opacity: 1; transform: none; transition-delay: 80ms, 0ms;
 }
-html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible))) .menu-sair { width: 0; margin-left: 0; }
+html[data-menu-recolhido] .menu-lateral:is([data-sem-peek], :not(:hover, :has(:focus-visible), :has([aria-expanded="true"]))) .menu-sair { width: 0; margin-left: 0; }
 /* No Windows a barra de rolagem é FIXA (~17px): no trilho de 60px cortava os botões e, ao abrir o menu, aparecia de uma
    vez — a seleção encolhia e depois esticava. A lista do menu rola pela roda/toque/teclado, sem a barra. */
 .menu-lateral .menu-rolagem { scrollbar-width: none; }
 .menu-lateral .menu-rolagem::-webkit-scrollbar { display: none; }
-html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:focus-visible)) {
+html[data-menu-recolhido] .menu-lateral:not([data-sem-peek]):is(:hover, :has(:focus-visible), :has([aria-expanded="true"])) {
   width: 16rem; box-shadow: var(--sombra-flutuante); transition-delay: 100ms;
 }
 @media (prefers-reduced-motion: reduce) {

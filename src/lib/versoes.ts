@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.159.2",
+    data: "2026-10-22",
+    titulo: "Menu recolhido estável com as contas abertas",
+    mudancas: [
+      {
+        tipo: "correcao",
+        area: "Conta",
+        texto: "Com o menu recolhido, abrir as contas pelo cartão do usuário deixava o menu abrindo e fechando (a sombra e o cursor piscavam). Agora o menu fica aberto enquanto a lista de contas está aberta.",
+        link: "/painel/perfil",
+      },
+    ],
+  },
+  {
     versao: "1.159.1",
     data: "2026-10-22",
     titulo: "Contas do navegador mais compactas",
