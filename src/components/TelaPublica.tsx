@@ -35,7 +35,7 @@ export function TelaPublica({
   children,
 }: {
   /** Logado: o botão do cabeçalho que volta ao sistema (Configurações para o ADM). */
-  painel?: { href: string; rotulo: string } | null;
+  painel?: { href: string; rotulo: string; dica: string } | null;
   identidade?: Identidade;
   /** Os itens do menu (as abas publicadas pelo ADM + a consulta de itens) — `vistasDoMenu`. */
   vistas: readonly VistaPublica[];
@@ -98,10 +98,13 @@ export function TelaPublica({
                   }}
                 />
               )}
-              {painel && (
-                <Button href={painel.href} variant="icon" size="sm" aria-label={painel.rotulo} title={painel.rotulo} icon={<IconSettings className="h-4 w-4" />} />
-              )}
               <ThemeToggle />
+              {/* O último item: volta ao sistema (no celular, só o ícone). */}
+              {painel && (
+                <Button href={painel.href} variant="secondary" size="sm" aria-label={painel.dica} title={painel.dica} icon={<IconSettings className="h-4 w-4" />}>
+                  <span className="hidden sm:inline">{painel.rotulo}</span>
+                </Button>
+              )}
             </>
           }
         />

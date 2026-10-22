@@ -489,12 +489,15 @@ export function AppShell({
                 <PresencaGrupo verMesa={abasSet.has("dfd")} verOnline={presenca.ver} />
               </ChatAoVivo>
             )}
-            <Button href="/" variant="icon" size="sm" aria-label="Página pública" title="Página pública" icon={<IconWeb className="h-4 w-4" />} />
             <SinoNotificacoes naoLidas={notificacoes} configurarHref={usuario.admin ? "/painel/configuracoes?aba=notificacoes" : "/painel/perfil"} />
             <ThemeToggle />
             <Link href="/painel/perfil" aria-label="Meu perfil" className="inline-flex h-11 w-11 items-center justify-center rounded-control lg:hidden">
               <Avatar nome={usuario.nome} foto={usuario.foto} size="sm" />
             </Link>
+            {/* O último item: atalho para a página pública (no celular, só o ícone). */}
+            <Button href="/" variant="secondary" size="sm" aria-label="Abrir a página pública" title="Abrir a página pública" icon={<IconWeb className="h-4 w-4" />}>
+              <span className="hidden sm:inline">Site</span>
+            </Button>
             </>
           }
         />

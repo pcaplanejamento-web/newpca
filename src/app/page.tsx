@@ -72,7 +72,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     getUsuarioAtual().catch(() => null),
   ]);
   // Logado: o atalho do cabeçalho — o ADM vai às Configurações; os demais, ao painel (as Configurações são só do ADM).
-  const painel = usuario ? (usuario.admin ? { href: "/painel/configuracoes", rotulo: "Configurações" } : { href: "/painel", rotulo: "Ir ao painel" }) : null;
+  const painel = usuario ? (usuario.admin ? { href: "/painel/configuracoes", rotulo: "Configurar", dica: "Ir para as Configurações" } : { href: "/painel", rotulo: "Sistema", dica: "Ir para o sistema" }) : null;
   const protecao = protecaoPublica(protecaoCfg);
 
   // PCA escolhido no dropdown (só os PUBLICADOS); padrão = o ativo, senão o mais recente.
