@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 41;
+  const PROTOCOLO = 42;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -184,6 +184,7 @@
   // corpo, sem segredos) para o sistema repeti-la sem paginação, sem mexer na tela. No localStorage da Centi.
   const CM002 = "__pcaCm002_v1";
   const TELA = "__pcaTelaProtocolo_v1";
+  const DIAG_TELA = "__pcaAprendizTela_v1";
   // Como a TELA abre um protocolo (o load aprendido — ver `loadDoProtocolo`).
   const LOAD_PROTOCOLO = "__pcaLoadProtocolo_v1";
   function loadAprendido() {
@@ -223,7 +224,27 @@
       }
       // Tela Protocolo: a lista da aba "Em Análise" (com situação, só a que traz algum "em análise"; sem ela, a última pedida).
       const p = A.protocolosTela(j);
-      if (p && (!p.situacao || p.linhas.some((x) => A.emAnalise(x.situacao)))) localStorage.setItem(TELA, forma);
+      if (p) {
+        // Grava sempre que reconhece a lista; entre duas do mesmo endereço, vale a com "Em análise" e depois a de mais linhas.
+        const analise = p.linhas.some((x) => A.emAnalise(x.situacao));
+        let atual = null;
+        try {
+          atual = JSON.parse(localStorage.getItem(TELA) || "null");
+        } catch {}
+        const melhor = !atual || atual.caminho !== c.caminho || (analise && !atual.analise) || (analise === !!atual.analise && p.linhas.length >= (atual.linhas || 0));
+        if (melhor) localStorage.setItem(TELA, JSON.stringify({ ...JSON.parse(forma), linhas: p.linhas.length, analise, em: new Date().toISOString() }));
+        return;
+      }
+      // Diagnóstico: por que esta resposta (com lista) não é a da Tela Protocolo — só os nomes das colunas.
+      const nt = A.motivoNaoTela?.(j);
+      if (nt && nt.motivo !== "sem lista") {
+        let d = [];
+        try {
+          d = JSON.parse(sessionStorage.getItem(DIAG_TELA) || "[]");
+        } catch {}
+        d = [{ caminho: c.caminho.slice(0, 120), ...nt, em: new Date().toISOString() }, ...d.filter((x) => x.caminho !== c.caminho.slice(0, 120))].slice(0, 5);
+        sessionStorage.setItem(DIAG_TELA, JSON.stringify(d));
+      }
     } catch {}
   }
   const textoDoXhr = (x) => {
@@ -853,6 +874,24 @@
 
   // TELA PROTOCOLO pela API (só LEITURA): repete a lista "Em Análise" guardada SEM paginação — todas as linhas, sem tocar
   // na tela. Com situação na lista, só as "em análise". Sem a lista guardada, a leitura pela tela a ensina UMA vez.
+  function diagTela() {
+    try {
+      return JSON.parse(sessionStorage.getItem(DIAG_TELA) || "[]");
+    } catch {
+      return [];
+    }
+  }
+  function aprendidos() {
+    const ler = (k) => {
+      try {
+        const v = JSON.parse(localStorage.getItem(k) || "null");
+        return v ? { ok: true, em: v.em || null } : { ok: false };
+      } catch {
+        return { ok: false };
+      }
+    };
+    return { telaProtocolo: ler(TELA), cm002: ler(CM002), loadProtocolo: ler(LOAD_PROTOCOLO) };
+  }
   async function telaApi(d) {
     if (!A) return { ok: false, erro: "Extensão incompleta na aba da Centi — aperte F5 nela." };
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão." };
@@ -860,7 +899,7 @@
     try {
       g = JSON.parse(localStorage.getItem(TELA) || "null");
     } catch {}
-    if (!g?.caminho) return { ok: false, semConsulta: true, erro: "A consulta da Tela Protocolo ainda não foi aprendida." };
+    if (!g?.caminho) return { ok: false, semConsulta: true, erro: "A consulta da Tela Protocolo ainda não foi aprendida.", diagnostico: diagTela() };
     if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, semConsulta: true, erro: "Consulta guardada inválida." };
     const p = A.semPaginacao(g.caminho, g.corpo);
     // As repartições pedidas vão NO PRÓPRIO pedido (Data.Reparticoes.selected) — a Centi devolve só as delas.
@@ -914,7 +953,7 @@
     try {
       resposta =
         acao === "estado"
-          ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual(), operacao: operacaoTela }
+          ? { ok: true, logado: !!cabecalhos, entidade: entidadeAtual(), operacao: operacaoTela, aprendido: aprendidos() }
           : Object.hasOwn(ACOES, acao)
             ? await ACOES[acao](dados)
             : { ok: false, erro: "Ação desconhecida." };

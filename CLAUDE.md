@@ -4967,6 +4967,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   bolhas do chat (`BolhasChat` `tela().base`) e os avisos flutuantes ficam acima; respeita `--reserva-rodape`. Usado pela
   Automação (`page.tsx` → `ManterVivo chave="automacao"`); os fluxos (`FluxosAutomacao`) informam o andamento e têm FILA
   (executar com outro rodando enfileira — roda em seguida; o agendador também).
+- **APRENDIZADO DA TELA PROTOCOLO (v1.162.1, extensão 1.26.0, protocolo 42):** o `lembrarCm002` grava a consulta da PO011 em QUALQUER pesquisa reconhecida (antes só com linha "Em análise"; entre duas do mesmo endereço vale a com "Em análise", depois a de mais linhas); a lista vista e não reconhecida vai ao diagnóstico (`motivoNaoTela`, só os nomes das colunas — `sessionStorage __pcaAprendizTela_v1`), devolvido pelo `telaApi` sem consulta; o `estado` traz `aprendido` {telaProtocolo, cm002, loadProtocolo}; os nós `centi.protocolos`/`centi.reparticoes` mostram o passo a passo + o diagnóstico (`erroSemConsulta`).
 - **TELA PROTOCOLO pela API (extensão 1.14.0, protocolo 35):** o `centi-main.js` guarda a consulta que a PRÓPRIA tela da PO011
   faz ao listar (o mesmo `lembrarCm002`, chave `__pcaTelaProtocolo_v1`; reconhecida pela FORMA — `protocolosTela`: protocolo +
   ano + interessado; com situação na lista, só a que traz "em análise") e a ação **`telaApi`** a repete sem paginação (só

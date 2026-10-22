@@ -36,3 +36,12 @@ test("Tela Protocolo pela API: a lista reconhecida pela forma, todas as linhas e
   assert.equal(protocolosTela({ Items: [{ Id: 1, Situacao: "x", Finalidade: "y" }] }), null, "a lista da CM002 não é a da Tela Protocolo");
 });
 
+
+test("Tela Protocolo: o motivo de uma lista não reconhecida (só os nomes das colunas)", () => {
+  const { motivoNaoTela } = pecas() as unknown as { motivoNaoTela: (j: unknown) => { motivo: string; colunas: string[] } | null };
+  assert.equal(motivoNaoTela({ a: 1 })?.motivo, "sem lista");
+  const r = motivoNaoTela({ Data: { Items: [{ Id: 1, Protocolo: "123", Nome: "X" }] } });
+  assert.equal(r?.motivo, "sem ano, interessado");
+  assert.ok(r?.colunas.includes("Protocolo"));
+  assert.equal(motivoNaoTela({ Data: { Items: [{ Id: 1, Protocolo: "123", Ano: 2026, Interessado: { Nome: "A" } }] } }), null);
+});

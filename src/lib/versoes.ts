@@ -35,6 +35,15 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.162.1",
+    data: "2026-10-22",
+    titulo: "Automação: Tela Protocolo aprendida com mais facilidade",
+    mudancas: [
+      { tipo: "correcao", area: "Automação", texto: "A extensão (1.26.0) passa a aprender a consulta da Tela Protocolo em qualquer pesquisa da PO011 — antes só valia se a lista tivesse algum protocolo “Em análise”.", link: "/painel/automacao" },
+      { tipo: "melhoria", area: "Automação", texto: "Quando a consulta ainda não foi aprendida, o erro diz exatamente o que fazer e quais listas a extensão viu sem reconhecer (só os nomes das colunas).", link: "/painel/automacao" },
+    ],
+  },
+  {
     versao: "1.162.0",
     data: "2026-10-22",
     titulo: "Excluídos da Mesa",

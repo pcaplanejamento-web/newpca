@@ -507,6 +507,7 @@ const respostaLogada = async (r) => ({
   logado: true,
   entidade: r.estado?.entidade ?? null,
   operacao: r.estado?.operacao ?? null,
+  aprendido: r.estado?.aprendido ?? null,
   atividade: await lerAtividade(),
 });
 

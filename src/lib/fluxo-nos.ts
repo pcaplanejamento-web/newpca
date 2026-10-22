@@ -72,7 +72,18 @@ const obj = (v: unknown): Item => (v && typeof v === "object" && !Array.isArray(
 
 /** As automações são SÓ API: a consulta é reconhecida quando a própria Centi a faz (a extensão observa, sem tocar na tela). */
 const COMO_ENSINAR_TELA =
-  "Na Centi, abra a Tela Protocolo (PO011) e pesquise uma vez — a extensão reconhece a consulta e daí em diante tudo vai só pela API.";
+  "Para ensinar: na Centi, abra a Tela Protocolo (PO011), escolha a repartição, clique na lupa (Pesquisar) e abra a aba “Em Análise” — uma vez só; a extensão reconhece a consulta e daí em diante tudo vai pela API. Depois execute o fluxo de novo.";
+
+/** O erro do "não aprendido" com o diagnóstico da extensão (as respostas vistas que não eram a lista da Tela Protocolo). */
+function erroSemConsulta(r: { erro?: unknown; diagnostico?: unknown }): string {
+  const base = `${typeof r.erro === "string" && r.erro ? r.erro : "A Centi não respondeu."} ${COMO_ENSINAR_TELA}`;
+  const d = Array.isArray(r.diagnostico) ? r.diagnostico : [];
+  const vistas = d
+    .slice(0, 3)
+    .map((x: { caminho?: unknown; motivo?: unknown }) => `${String(x?.caminho ?? "?")} (${String(x?.motivo ?? "?")})`)
+    .join("; ");
+  return vistas ? `${base} Listas vistas e não reconhecidas: ${vistas}.` : `${base} Nenhuma pesquisa da Tela Protocolo foi vista nesta aba ainda.`;
+}
 
 const CAMPO_CONDICAO: CampoNo[] = [
   { chave: "campo", rotulo: "Campo", tipo: "caminho", obrigatorio: true, ajuda: "O dado de cada item que será testado (ex.: situacao)." },
@@ -213,7 +224,7 @@ const NOS: DefNo[] = [
       ctx.aviso("Lendo as repartições na Centi…");
       const r = await ctx.centi("reparticoesApi", null, 30_000);
       if (r.interrompido) throw new Error("Interrompido na extensão.");
-      if (!r.ok) throw new Error(`${r.erro || "A Centi não respondeu."}${r.semConsulta ? ` ${COMO_ENSINAR_TELA}` : ""}`);
+      if (!r.ok) throw new Error(r.semConsulta ? erroSemConsulta(r) : `${r.erro || "A Centi não respondeu."}`);
       const filtros = lista(c.filtro).map(normTexto);
       const deps = (Array.isArray(r.departamentos) ? r.departamentos : []).filter((d): d is string => typeof d === "string" && !!d.trim());
       return { saida: deps.filter((d) => !filtros.length || filtros.some((f) => normTexto(d).includes(f))).map((reparticao) => ({ reparticao })) };
@@ -260,9 +271,7 @@ const NOS: DefNo[] = [
       const r = await ctx.centi("telaApi", { situacao: sit, reparticoes: reps }, 180_000);
       if (r.interrompido) throw new Error("Interrompido na extensão.");
       if (!r.ok) {
-        throw new Error(
-          `${r.erro || "A Centi não respondeu."}${r.semConsulta ? ` ${COMO_ENSINAR_TELA}` : ""}`,
-        );
+        throw new Error(r.semConsulta ? erroSemConsulta(r) : `${r.erro || "A Centi não respondeu."}`);
       }
       if (sit && r.filtro !== sit) throw new Error("A extensão da Centi está desatualizada (1.15.0 ou maior filtra por situação) — baixe a nova.");
       const linhas = normalizar(r.protocolos);

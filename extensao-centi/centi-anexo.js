@@ -4,7 +4,7 @@
 // O nome leva a VERSÃO do protocolo: uma cópia antiga que ficou na aba (de uma versão anterior da extensão) nunca é
 // reaproveitada pela nova.
 (() => {
-  const NOME = "__pcaCentiAnexo_p41";
+  const NOME = "__pcaCentiAnexo_p42";
   if (globalThis[NOME]) return;
   // O protocolo abre por um destes módulos: 102907 (PO002 - Protocolo) ou 102908 (PO011 - Tela Protocolo). O protocolo
   // que entrou na tramitação ("Em análise") a Centi só devolve pelo 102908 — o 102907 responde Entity nulo, sem mensagem.
@@ -612,6 +612,21 @@
         .filter((x) => x.protocolo),
     };
   }
+  /** Por que a resposta NÃO é a lista da Tela Protocolo (null = é): o diagnóstico do aprendizado — só os NOMES das colunas,
+   * nunca os valores. */
+  function motivoNaoTela(j) {
+    const l = acharLista(j);
+    if (!l) return { motivo: "sem lista", colunas: [] };
+    const amostra = l.itens.slice(0, 20).map(linhaPlana);
+    const colunas = [...new Set(amostra.flatMap((x) => Object.keys(x)))].slice(0, 40);
+    if (protocolosTela(j)) return null;
+    const tem = (re) => colunas.some((k) => re.test(ULTIMO(k)));
+    const falta = [];
+    if (!tem(/^(protocolo|numero|numeroprotocolo|nrprotocolo|numprotocolo|codigo)$/i)) falta.push("protocolo");
+    if (!tem(/^(ano|exercicio)$/i)) falta.push("ano");
+    if (!colunas.some((k) => /interessad/i.test(k))) falta.push("interessado");
+    return { motivo: falta.length ? `sem ${falta.join(", ")}` : "colunas sem valor", colunas };
+  }
   /** "Em análise" (sem acento/caixa). */
   const emAnalise = (s) => /ANALISE/.test(String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase());
   const RE_TAMANHO = /^(take|pagesize|page_size|limit|top|rows|rowsperpage|itensperpage|itemsperpage|itensporpagina|registros|quantidade|qtd|maxresults|count)$/i;
@@ -710,7 +725,7 @@
   }
 
   globalThis[NOME] = Object.freeze({
-    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, comPagina, protocolosTela, emAnalise,
+    comReparticoes, planejamentosCm002, semPaginacao, totalDaResposta, comPagina, protocolosTela, motivoNaoTela, emAnalise,
     caminhoDaApi, consultaPermitida, registroDoAprendiz, TRAVAS, resumoResposta, linhaPlana, acharLista, chaveOperacao,
     comTokenNovo,
     operacaoDoCorpo,
