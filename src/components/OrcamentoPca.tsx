@@ -1,7 +1,7 @@
 "use client";
 
 import { useUnidadeUnica } from "./UnidadeUnica";
-import { type ComponentProps, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, startTransition, useEffect, useMemo, useState } from "react";
 import { brl, brlCompact, dataIsoBrasilia, num } from "@/lib/format";
 import { blocosRelatorioOrcamento, recortarRelatorio, type RelatorioOrcamento } from "@/lib/orcamento-relatorio";
 import {
@@ -715,7 +715,7 @@ export function OrcamentoPca({
         <OrcamentoComparativo
           {...comparativo}
           visaoInicial={visaoTela}
-          onVisao={setVisaoTela}
+          onVisao={(id) => startTransition(() => setVisaoTela(id))}
           edicoes={edicoesComp?.lista ?? comparativo.edicoes}
           padroes={edicoesComp?.padroes ?? comparativo.padroes}
           onMudarEdicoes={(lista, padroes) => setEdicoesComp({ lista, padroes })}
@@ -761,7 +761,7 @@ export function OrcamentoPca({
                 <div className="min-w-0 flex-1">
                   <SeletorVisaoPca
                     visaoId={visaoTela}
-                    onEscolher={setVisaoTela}
+                    onEscolher={(id) => startTransition(() => setVisaoTela(id))}
                     visoes={visoes}
                     podeEscolher
                     itens={linhasVisao}

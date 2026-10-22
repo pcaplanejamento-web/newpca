@@ -1,7 +1,7 @@
 "use client";
 
 import { useUnidadeUnica } from "./UnidadeUnica";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, startTransition, useMemo, useState } from "react";
 import { alternarOculta, comLargura, comOrdem, ordemDasColunas } from "@/lib/colunas-layout";
 import { exportarCruzamentoXlsx } from "@/lib/exportar-orcamento";
 import { nomeArquivoPdf } from "@/lib/exportar-pdf-core";
@@ -393,8 +393,11 @@ export function OrcamentoComparativo({
               value={visaoId ?? ""}
               onChange={(e) => {
                 const id = e.target.value ? Number(e.target.value) : null;
-                setVisaoId(id);
-                setVisaoHost(id);
+                // Transição: o seletor responde na hora e a tabela recalcula em seguida (só no navegador).
+                startTransition(() => {
+                  setVisaoId(id);
+                  setVisaoHost(id);
+                });
                 onVisao?.(id);
                 setAberto(null);
               }}

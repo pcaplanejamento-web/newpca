@@ -35,6 +35,19 @@ export type Versao = {
 /** Mais recente PRIMEIRO. */
 export const VERSOES: readonly Versao[] = [
   {
+    versao: "1.158.6",
+    data: "2026-10-22",
+    titulo: "Troca de visão fluida",
+    mudancas: [
+      {
+        tipo: "melhoria",
+        area: "Orçamento",
+        texto: "Trocar a visão no Comparativo (tela do orçamento e do PCA) e no PCA × Orçamento responde na hora e a tabela recalcula em seguida, só no navegador — nada é gravado nem pedido ao servidor.",
+        link: "/painel/orcamento",
+      },
+    ],
+  },
+  {
     versao: "1.158.5",
     data: "2026-10-22",
     titulo: "Aba Orçamento do PCA sem estourar o servidor",
