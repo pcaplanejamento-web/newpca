@@ -114,6 +114,13 @@ describe("escopo por tela e várias unidades de cadastro (v1.141.0)", async () =
     assert.equal(m.telaVeTodas(e, "pca", "mesa"), true);
     assert.equal(m.telaVeTodas(e, "pca", "dashboard"), true);
   });
+  it("siglasDoCabecalho: a escolhida; a Geral das minhas = as do grupo; a Geral real = sem filtro", () => {
+    const lista = [{ id: 0, codigo: "Geral (2 unidades)" }, { id: 1, codigo: "SMS" }, { id: 2, codigo: "SME" }];
+    assert.deepEqual(m.siglasDoCabecalho(lista, lista[1]), ["SMS"]);
+    assert.deepEqual(m.siglasDoCabecalho(lista, lista[0]), ["SMS", "SME"]);
+    assert.deepEqual(m.siglasDoCabecalho(lista, { id: 9, codigo: "GERAL" }), []);
+    assert.deepEqual(m.siglasDoCabecalho(lista, null), []);
+  });
   it("chaveDaRota: a aba da URL decide", () => {
     assert.equal(m.chaveDaRota("/painel/pca/3", { aba: "mesa" }), "pca.mesa");
     assert.equal(m.chaveDaRota("/painel/pca/3", {}), "pca.dashboard");

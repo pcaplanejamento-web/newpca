@@ -766,7 +766,7 @@ Node **>= 20** (CI usa 22; veja `.nvmrc`). pt-BR em código, comentários e UI.
   seletor do cabeçalho TRAVA: `AppShell.travadas` → `SeletorUnidade travado`) · **Todas** (`escopo_telas` `{"pca.mesa":"todas"}`,
   nos dois modos): SÓ os dados da aba — `unidadesDaSessao` devolve escopo/filtro todas; o cabeçalho segue com as unidades do
   grupo (`reparticoesDoMembro`/`getReparticaoContexto` não olham a aba) e a coluna Unidade fica à vista
-  (`UnidadeUnica todasAsUnidades`). Núcleo: `chaveDaRota(path, {aba, pca})`, `acessoDaAba`, `partesDaChave`,
+  (`UnidadeUnica todasAsUnidades`). v1.161.2: ao ENTRAR, a Mesa do PCA abre com a coluna Unidade FILTRADA pela unidade do cabeçalho (`siglasDaMesaDoPca` em `carregarMesaDoPca` → `siglasDoCabecalho`: a escolhida; a Geral das minhas = as do grupo; a GERAL real = sem filtro; em Soma, sem filtro) → `DfdsView.siglasIniciais` semeia os filtros das 3 visões. Núcleo: `chaveDaRota(path, {aba, pca})`, `acessoDaAba`, `partesDaChave`,
   `telaVeTodas(e, tela, aba)`; a chave legada só de tela vale em todas as abas dela. `acessosDoGrupo` (layout); as rotas de
   grupo tiram da Soma a aba em Todas. O banner do grupo é organizado em blocos (identificação · módulos · pessoas · unidades
   · acesso por aba · PCAs e orçamentos).

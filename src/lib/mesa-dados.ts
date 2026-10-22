@@ -9,8 +9,8 @@ import { getDb } from "./db";
 import { carregarEdicoes } from "./edicoes-tabela";
 import { automacoesDaMesa } from "./fluxos";
 import { colunasDaMesa } from "./mesa-colunas";
-import { idDoFiltro, passaFiltroId } from "./escopo-unidades-core";
-import { unidadesAcessiveis, unidadesDaSessao } from "./grupos";
+import { chaveFonte, idDoFiltro, lerFontesAbas, passaFiltroId, siglasDoCabecalho } from "./escopo-unidades-core";
+import { getGrupoAtivo, getReparticaoContexto, unidadesAcessiveis, unidadesDaSessao } from "./grupos";
 import { consultaExecucao } from "./mesa-execucao-sql";
 import { FILTRO_MESA_TODOS, filtroInicialMesa, PREF_DADOS_COMPLETOS } from "./mesa-filtros";
 import { versaoDados } from "./versao-dados";
@@ -187,7 +187,7 @@ export async function carregarMesa(u: UsuarioSessao | null) {
  * em OUTRO PCA (ficam de fora da incorporação).
  */
 export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: number; nome: string; ano: number | null }) {
-  const [m, vs, versaoItens] = await Promise.all([montarMesa(u, pca.id), vinculosDoPca(pca.id), versaoDosItens()]);
+  const [m, vs, versaoItens, siglasIniciais] = await Promise.all([montarMesa(u, pca.id), vinculosDoPca(pca.id), versaoDosItens(), siglasDaMesaDoPca(u)]);
   const naoInc = new Set(m.protocolos.filter((p) => p.pcaIncorporadoEm == null).map((p) => p.id));
   const doNaoInc = m.dfds.filter((d) => d.protocoloId != null && naoInc.has(d.protocoloId));
   const [emOutro, confs] = await Promise.all([
@@ -225,7 +225,18 @@ export async function carregarMesaDoPca(u: UsuarioSessao | null, pca: { id: numb
     edicoes: m.edicoes,
     dadosCompletos: m.dadosCompletos,
     colunasAuto: m.colunasAuto,
+    siglasIniciais,
   };
+}
+
+/** A Mesa do PCA abre FILTRADA pela unidade do cabeçalho (na coluna Unidade — a pessoa pode trocar), também com a aba em
+ * "Todas"; na "Geral" das minhas unidades, as unidades do grupo. Na aba em "Soma" os dados já são a soma: sem filtro. */
+async function siglasDaMesaDoPca(u: UsuarioSessao | null): Promise<string[]> {
+  if (!u) return [];
+  const grupo = u.admin ? null : await getGrupoAtivo(u);
+  if (lerFontesAbas(grupo?.fontesAbas).includes(chaveFonte("pca", "mesa") ?? "")) return [];
+  const { lista, ativa } = await getReparticaoContexto(u, grupo ?? undefined);
+  return siglasDoCabecalho(lista, ativa);
 }
 
 /**

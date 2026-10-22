@@ -278,3 +278,11 @@ export function rotuloFonte(chave: string): string {
   const [t, a] = chave.split(".");
   return ABAS_FONTE[t]?.find((x) => x.aba === a)?.rotulo ?? chave;
 }
+
+/** As siglas da unidade do CABEÇALHO para pré-filtrar uma tabela pela coluna Unidade: a unidade escolhida; a "Geral" das
+ * minhas unidades = as unidades da lista; a "Geral" real (todas) ou nada = sem filtro (`[]`). */
+export function siglasDoCabecalho(lista: readonly UnidadeRef[], ativa: UnidadeRef | null): string[] {
+  if (!ativa || ehCodigoGeral(ativa.codigo)) return [];
+  if (ativa.id !== ID_MINHAS_UNIDADES) return [ativa.codigo];
+  return lista.filter((r) => r.id !== ID_MINHAS_UNIDADES && !ehCodigoGeral(r.codigo)).map((r) => r.codigo);
+}

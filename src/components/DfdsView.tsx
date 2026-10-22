@@ -264,6 +264,7 @@ export function DfdsView({
   modoPca,
   edicoes,
   abrirInicial = null,
+  siglasIniciais,
   dadosCompletos = false,
   seletorMesa,
   colunasAuto,
@@ -305,6 +306,8 @@ export function DfdsView({
   edicoes?: { prefixo: string; lista: EdicaoTabela[]; padroes: Record<string, unknown> };
   /** O banner que a Mesa ABRE ao chegar (`?abrir=protocolo:<id>|dfd:<id>` — o link do vínculo de uma tarefa). */
   abrirInicial?: AberturaMesa | null;
+  /** A Mesa ABRE filtrada por estas unidades (siglas) na coluna Unidade — a do cabeçalho; a pessoa pode trocar o filtro. */
+  siglasIniciais?: string[];
   /** As tabelas abrem com os DADOS COMPLETOS (a preferência do usuário — o botão da barra a troca e a guarda). */
   dadosCompletos?: boolean;
   /** O SELETOR DE MESA (Mesa do sistema | Mesa de um PCA) — 1º item da barra, só na Mesa principal (`SeletorMesa`). */
@@ -572,7 +575,15 @@ export function DfdsView({
   // MESA CONECTADA: os filtros e a ordem de cada visão SOBREVIVEM à troca de visão, e o que passa nos filtros de uma
   // restringe as outras pela hierarquia protocolo › DFD › item, nos dois sentidos (`recorteMesa`, puro e testado).
   type EstadoVisao = { filtros: Record<string, FiltroValor>; ordem: { key: string; dir: "asc" | "desc" } | null };
-  const [estadoVisoes, setEstadoVisoes] = useState<Partial<Record<VisaoRecorte, EstadoVisao>>>({});
+  const [estadoVisoes, setEstadoVisoes] = useState<Partial<Record<VisaoRecorte, EstadoVisao>>>(() =>
+    siglasIniciais?.length
+      ? {
+          protocolos: { filtros: { reparticao: siglasIniciais }, ordem: null },
+          dfds: { filtros: { sigla: siglasIniciais }, ordem: null },
+          itens: { filtros: { sigla: siglasIniciais }, ordem: null },
+        }
+      : {},
+  );
   const [ordemMesa, setOrdemMesa] = useState<EstadoVisao["ordem"]>(null);
   const [passam, setPassam] = useState<PassamRecorte>(SEM_RECORTE);
   // Itens: a tabela Normal e os filtros de atributo da Consolidada — ambos são da visão Itens.
