@@ -5,7 +5,7 @@
 // é o ANEXO ("anexar"): abre o protocolo pelo load da própria Centi, confere Id + número, acrescenta UM documento novo
 // (centi-anexo.js) e salva — o sistema nunca manda o objeto do protocolo.
 (() => {
-  const PROTOCOLO = 42;
+  const PROTOCOLO = 43;
   const MARCA = `__pcaCentiMain_p${PROTOCOLO}`;
   if (window[MARCA]) return;
   window[MARCA] = true;
@@ -201,11 +201,18 @@
       const A = globalThis[`__pcaCentiAnexo_p${PROTOCOLO}`];
       const c = A?.caminhoDaApi(url);
       const m = String(metodo || "GET").toUpperCase();
-      if (!c || !A.consultaPermitida(c.caminho, m)) return;
-      const j = JSON.parse(texto);
+      if (!c) return;
       let b = null;
-      if (typeof corpo === "string" && corpo) b = JSON.parse(corpo);
-      else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
+      try {
+        if (typeof corpo === "string" && corpo) b = JSON.parse(corpo);
+        else if (corpo && typeof corpo === "object" && Object.getPrototypeOf(corpo) === Object.prototype) b = corpo;
+      } catch {}
+      const j = JSON.parse(texto);
+      if (!A.consultaPermitida(c.caminho, m, b)) {
+        // Diagnóstico: uma lista que veio por um pedido que a trava não aceita como leitura.
+        if (A.protocolosTela(j)) diagnosticar({ caminho: c.caminho.slice(0, 120), motivo: `não aceito como consulta (${m})`, colunas: [] });
+        return;
+      }
       const lp = A.loadDoProtocolo(url, m, b, j);
       if (lp) {
         localStorage.setItem(LOAD_PROTOCOLO, JSON.stringify({ ...lp, em: new Date().toISOString() }));
@@ -238,12 +245,7 @@
       // Diagnóstico: por que esta resposta (com lista) não é a da Tela Protocolo — só os nomes das colunas.
       const nt = A.motivoNaoTela?.(j);
       if (nt && nt.motivo !== "sem lista") {
-        let d = [];
-        try {
-          d = JSON.parse(sessionStorage.getItem(DIAG_TELA) || "[]");
-        } catch {}
-        d = [{ caminho: c.caminho.slice(0, 120), ...nt, em: new Date().toISOString() }, ...d.filter((x) => x.caminho !== c.caminho.slice(0, 120))].slice(0, 5);
-        sessionStorage.setItem(DIAG_TELA, JSON.stringify(d));
+        diagnosticar({ caminho: c.caminho.slice(0, 120), ...nt });
       }
     } catch {}
   }
@@ -754,7 +756,7 @@
     if (!cabecalhos) return { ok: false, erro: "Centi sem sessão: na aba da Centi já logada, clique em Pesquisar." };
     const metodo = String(d?.metodo || "").toUpperCase();
     const caminho = String(d?.caminho || "");
-    if (!A.consultaPermitida(caminho, metodo)) return { ok: false, erro: "Só consultas (leitura) da Centi podem ser repetidas." };
+    if (!A.consultaPermitida(caminho, metodo, d?.corpo)) return { ok: false, erro: "Só consultas (leitura) da Centi podem ser repetidas." };
     const corpo = metodo === "POST" ? (d.corpo ?? null) : null;
     if (corpo !== null && (typeof corpo !== "object" || JSON.stringify(corpo).length > 65536)) return { ok: false, erro: "Consulta inválida." };
     // Numa ENTIDADE da Centi (cabeçalho Company só neste pedido) — ex.: o load do planejamento antes do Emitir DFD.
@@ -784,7 +786,7 @@
       g = JSON.parse(localStorage.getItem(CM002) || "null");
     } catch {}
     if (!g?.caminho) return { ok: false, semConsulta: true, erro: "Abra a CM002 - Planejamento na Centi e clique em Pesquisar UMA vez — o sistema aprende a consulta e passa a ler tudo pela API." };
-    if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, erro: "Consulta guardada inválida." };
+    if (!A.consultaPermitida(g.caminho, g.metodo, g.corpo)) return { ok: false, erro: "Consulta guardada inválida." };
     const ent = d?.entidade == null || d.entidade === "" ? orgaoFixo() : String(d.entidade);
     if (ent !== null && !/^[\w.-]{1,40}$/.test(ent)) return { ok: false, erro: "Órgão inválido." };
     // Um pedido: o corpo/caminho já montados → {linhas, total} | {status} | {forma}.
@@ -874,6 +876,13 @@
 
   // TELA PROTOCOLO pela API (só LEITURA): repete a lista "Em Análise" guardada SEM paginação — todas as linhas, sem tocar
   // na tela. Com situação na lista, só as "em análise". Sem a lista guardada, a leitura pela tela a ensina UMA vez.
+  function diagnosticar(x) {
+    try {
+      let d = JSON.parse(sessionStorage.getItem(DIAG_TELA) || "[]");
+      d = [{ ...x, em: new Date().toISOString() }, ...d.filter((y) => y.caminho !== x.caminho)].slice(0, 5);
+      sessionStorage.setItem(DIAG_TELA, JSON.stringify(d));
+    } catch {}
+  }
   function diagTela() {
     try {
       return JSON.parse(sessionStorage.getItem(DIAG_TELA) || "[]");
@@ -900,7 +909,7 @@
       g = JSON.parse(localStorage.getItem(TELA) || "null");
     } catch {}
     if (!g?.caminho) return { ok: false, semConsulta: true, erro: "A consulta da Tela Protocolo ainda não foi aprendida.", diagnostico: diagTela() };
-    if (!A.consultaPermitida(g.caminho, g.metodo)) return { ok: false, semConsulta: true, erro: "Consulta guardada inválida." };
+    if (!A.consultaPermitida(g.caminho, g.metodo, g.corpo)) return { ok: false, semConsulta: true, erro: "Consulta guardada inválida." };
     const p = A.semPaginacao(g.caminho, g.corpo);
     // As repartições pedidas vão NO PRÓPRIO pedido (Data.Reparticoes.selected) — a Centi devolve só as delas.
     const pedidas = Array.isArray(d?.reparticoes) ? d.reparticoes.filter((x) => typeof x === "string" && x.trim()) : [];
